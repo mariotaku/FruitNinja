@@ -1,8 +1,9 @@
-// AboutScreen — credits/about page launched from DojoScreen.
-// Binary refs: ctor 0x0012ecb8, LoadContent 0x0012ec14,
-//              Update 0x0012f020, Draw 0x0012f394
-//
-// Analysed: 2026-04-25T10:00
+// AboutScreen -- credits/about page launched from DojoScreen.
+// v1.6.1 binary refs:
+//   ctor         0x0015b764  (AboutScreen::AboutScreen(DojoScreen*))
+//   LoadContent  0x0015b6d4  (static)
+//   Draw         0x0015a654  (board panel + sensei quads)
+//   NewDraw      0x0015a264  (BakedStringBox credit text pass)
 
 #include "AboutScreen.h"
 #include "DojoScreen.h"
@@ -16,8 +17,13 @@
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
+#include "render/BakedStringBox.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
 #include "math/Colour.h"
+#include "math/Vec2.h"
 #include "audio/GameSound.h"
+#include "util/StringTable.h"
 #include <cstdio>
 #include "game/GameWork.h"
 
@@ -27,115 +33,104 @@
 
 // Transition alpha thresholds / rates
 // DAT_0012f2fc = 0.9990  (alpha-in done)
-// DAT_0012f2f8 = 480.0   (button pos)
 // 0.125 = step (from decompile: 1/8 = 0.125)
 // DAT_0012f328 = 0x3A83126F = 0.001 (decay done threshold)
-static const float ALPHA_LERP_IN  = 0.125f;     // DAT derived
-static const float ALPHA_IN_DONE  = 0.9990f;    // DAT_0012f2fc
-static const float ALPHA_DECAY    = 0.75f;      // from decompile
-static const float ALPHA_OUT_DONE = 0.001f;     // DAT_0012f328
+static const float ALPHA_LERP_IN  = 0.125f;
+static const float ALPHA_IN_DONE  = 0.9990f;
+static const float ALPHA_DECAY    = 0.75f;
+static const float ALPHA_OUT_DONE = 0.001f;
 
 // Back button position  (DAT_0012f300 = 185.0, DAT_0012f304 = -106.0)
-// Post-Init, the binary scales m_TargetSize and fruit piece by 0.825
-// via Vec3_ScaleConst @ 0x0012e6bc (DAT_0012e6e8 = 0.825).
 static const Vec3 POS_BACK_BUTTON(185.0f, -106.0f, 0.0f);
-static const float BACK_SCALE = 0.825f;   // DAT_0012e6e8
+static const float BACK_SCALE = 0.825f;
 
-// OFN button position. Binary @ 0x0012f04e-0x0012f060 builds Vec3(480, 0, 0)
-// (s0=480, s1=0, s2=0) — off-screen right. Stub in port (defunct OFN).
+// OFN button position -- off-screen right, defunct
 static const Vec3 POS_OFN_BUTTON(480.0f, 0.0f, 0.0f);
 
 // ---- Draw constants ----
 
-// Background panel (field_0x74 = haiku tex):
-//   Y_start    = DAT_0012f690(160) + tex_h * 0.5   (one-time cached)
-//   Y_drawn    = Y_start - (Y_start - DAT_0012f694(63)) * alpha
-//   X = DAT_0012f698 = -50
-//   Z = DAT_0012f69c = 0
-static const float BG_X         = -50.0f;   // DAT_0012f698
-static const float BG_Y_CACHE   = 160.0f;   // DAT_0012f690  (added to tex_h*0.5)
-static const float BG_Y_REST    =  63.0f;   // DAT_0012f694
+// Background panel (haiku tex):
+//   Y_start = BG_Y_CACHE(160) + texH * 0.5
+//   Y_drawn = Y_start - (Y_start - BG_Y_REST(63)) * alpha
+//   X = BG_X = -50
+// ASM-spec v1.6.1 AboutScreen::Draw @0x0015a654: panel slide formula unchanged.
+static const float BG_X         = -50.0f;
+static const float BG_Y_CACHE   = 160.0f;
+static const float BG_Y_REST    =  63.0f;
 
-// OFN button follows the panel, offset by:
-//   DAT_0012f6a0 = 132.0, DAT_0012f6a4 = 70.0 (added to BG pos)
-static const float OFN_OFFSET_X = 132.0f;   // DAT_0012f6a0
-static const float OFN_OFFSET_Y =  70.0f;   // DAT_0012f6a4
+// OFN button follows the panel (defunct)
+static const float OFN_OFFSET_X = 132.0f;
+static const float OFN_OFFSET_Y =  70.0f;
 
-// Haiku text draw (font, version string):
-//   Y = BG_Y_drawn + DAT_0012f6a8(97) - 10
-//   (two font draws: haiku string [RTTI garbage in binary] and GetVersionString())
-//   font scale = DAT_0012f6ac = -200.0 (used as left x position for DrawString)
-//   max_width  = DAT_0012f6b0 = 200.0
-//   colour     = RGB(0x74, 0x5D, 0x3C)  (from binary MakeColour_RGB calls)
-static const float FONT_TEXT_Y_OFFSET = 97.0f;   // DAT_0012f6a8
-static const float FONT_X            = -200.0f;  // DAT_0012f6ac (left edge)
-static const float FONT_MAX_W        =  200.0f;  // DAT_0012f6b0
-// Version string X offset: -(str_width * 14.0) where str_width = MeasureString
-// DAT_0012f6b4 = 0.3   (used as: 0.3*bgW - 50 for sensei overlay X)
-static const float SENSEI_FRAC  = 0.3f;     // DAT_0012f6b4
-static const float SENSEI_X_OFS = 50.0f;    // DAT_0012f6b8
-
-// Credits tex (block 3 — slides up from below):
-//   Y_start = tex_h * -0.5 - DAT_0012f8d8(160)   (one-time cached)
-//   Y_drawn = Y_start - (Y_start + DAT_0012f8dc(96)) * alpha
-//   X = DAT_0012f8e0 = -50
-//   Z = DAT_0012f8e4 = 0
-static const float CREDITS_X        = -50.0f;   // DAT_0012f8e0
-static const float CREDITS_Y_CACHE  = 160.0f;   // DAT_0012f8d8
-static const float CREDITS_Y_TARGET = -96.0f;   // at alpha=1: Y_start - (Y_start+96) = -96
-static const float CREDITS_Y_OFS    =  96.0f;   // DAT_0012f8dc (added to cached Y)
-
-// Sensei / haiku tex (block 4 — slides in from right):
-//   X_start = DAT_0012f8e8(240) + tex_w * 0.5   (one-time cached)
-//   X_drawn = X_start - (X_start - DAT_0012f8ec(155)) * alpha
-//   Y = DAT_0012f8f0 = 56
-//   Z = DAT_0012f8e4 = 0
-static const float SENSEI2_X_CACHE  = 240.0f;   // DAT_0012f8e8
-static const float SENSEI2_X_REST   = 155.0f;   // DAT_0012f8ec
-static const float SENSEI2_Y        =  56.0f;   // DAT_0012f8f0
+// Sensei tex (block D -- slides in from right):
+//   X_start = SENSEI2_X_CACHE(240) + texW * 0.5
+//   X_drawn = X_start - (X_start - SENSEI2_X_REST(155)) * alpha
+//   Y = SENSEI2_Y = 56
+static const float SENSEI_FRAC   = 0.3f;
+static const float SENSEI_X_OFS  = 50.0f;
+static const float SENSEI2_X_CACHE = 240.0f;
+static const float SENSEI2_X_REST  = 155.0f;
+static const float SENSEI2_Y       =  56.0f;
 
 // -----------------------------------------------------------------------
 // Static storage
 // -----------------------------------------------------------------------
+// v1.6.1: s_TexCredits REMOVED -- binary no longer loads credits.tex
+// (v1.5.1 had credits.tex in LoadContent and drew it in block C; that
+//  is gone in v1.6.1 which uses BakedStringBox text instead.)
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;
-Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon;
 bool AboutScreen::s_bContentLoaded = false;
 
 // -----------------------------------------------------------------------
-// GetVersionString — returns a C string for the version number.
-// Binary: Game::SelfVersion @ 0x0010d9ec returns the literal at .rodata
-// 0x001B9938 ("1.5.1"). GetVersionString @ 0x0010d594 reads the same
-// constant via the MortarGame::m_VersionStr slot populated by SetVersion.
+// GetVersionString
+// ASM-spec v1.6.1 Game::SelfVersion @0x0011fbd8: returns literal "1.6.1".
+// DIFFERS: v1.5.1 port had "1.5.1"; updated to match v1.6.1 binary.
 // -----------------------------------------------------------------------
 static const char* GetVersionString()
 {
-    return "1.5.1";
+    return "1.6.1";
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::LoadContent  @ 0x0012ec14
-// Loads 3 textures into static storage (once per process).
+// GetAboutTTFFont
+// The binary reads the shared gangofchinese.ttf face from a global slot.
+// Port mirrors the pattern used by FruitFactPage/BSButton: file-static
+// SmartPtr<Font> + FontTTFRegistry lookup.
+// DIFFERS: original = *(g_GameData+0x614) shared face; port uses a
+//   file-local SmartPtr<Font> + FontTTFRegistry because game_work has not
+//   been extended past 0x610 to carry the +0x614 slot.
+// -----------------------------------------------------------------------
+static Mortar::FontCacheObjectTTF* GetAboutTTFFont()
+{
+    static Mortar::SmartPtr<Mortar::Font> s_Font =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_Font.IsValid()) {
+        return 0;
+    }
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+}
+
+// -----------------------------------------------------------------------
+// AboutScreen::LoadContent  @ 0x0015b6d4
+// v1.6.1: loads haiku + sensei only (credits.tex gone).
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::LoadContent()
 {
     if (s_bContentLoaded) return;
 
-    // Binary order: haikus.tex, credits.tex, sensei.tex
-    // (string addrs 0x001BAE10, 0x001BAE1B, 0x001BB4D7)
-    s_TexHaiku   = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
-    s_TexCredits = Mortar::TextureManager::LoadLocalisedTexture("credits.tex");
-    s_TexSensei  = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
-    // Port specific: binary reads back_icon from game->field_0x17c (a global
-    // slot loaded once at game init). Port loads it locally so the back-button
-    // ring renders on the AboutScreen back-bomb. Same path as DojoScreen.
-    if (!s_TexBackIcon.IsValid())
-        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    // ASM-spec v1.6.1 AboutScreen::LoadContent @0x0015b6d4:
+    //   loads haikus.tex and sensei.tex (credits.tex NOT loaded in v1.6.1).
+    s_TexHaiku  = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
+    s_TexSensei = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
 
-    // Binary also loads openfeint_gamecenter.tex into its own SmartPtr slot
-    // (offset DAT_0012eca0 area). Port skips — OFN is defunct (online-services-audit).
+    // Port specific: binary reads back_icon from game->field_0x17c.
+    // Port loads it locally so the back-button ring renders.
+    if (!s_TexBackIcon.IsValid()) {
+        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    }
 
     s_bContentLoaded = true;
 }
@@ -147,49 +142,128 @@ void AboutScreen::LoadContent()
 void AboutScreen::UnLoadContent()
 {
     s_TexHaiku.SetNull();
-    s_TexCredits.SetNull();
     s_TexSensei.SetNull();
     s_TexBackIcon.SetNull();
     s_bContentLoaded = false;
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::AboutScreen  @ 0x0012ecb8
-// Binary ctor: AboutScreen(DojoScreen*) — no Game& parameter.
+// AboutScreen::AboutScreen  @ 0x0015b764
+// v1.6.1 ctor: creates 9 BakedStringBox objects for title/heading/version
+// and 6 credit lines.
 // -----------------------------------------------------------------------
 AboutScreen::AboutScreen(DojoScreen* parent)
-    : m_TransitionAlpha(0.0f)   // DAT_0012ed88 = 0.0
+    : m_TransitionAlpha(0.0f)
     , m_pBackButton(nullptr)
     , m_pParent(parent)
     , m_pOFNButton(nullptr)
-    , m_State(0)                // field21_0x9c initial value = 0
+    , m_State(0)
+    , m_TitleBox(0)
+    , m_HeadingBox(0)
+    , m_VersionBox(0)
+    , m_CreditLine0(0)
+    , m_CreditLine1(0)
+    , m_CreditLine2(0)
+    , m_CreditLine3(0)
+    , m_CreditLine4(0)
+    , m_CreditLine5(0)
 {
-    // Binary: lazy-load content if not yet loaded (checks static flag)
     LoadContent();
 
-    // field40_0x34 = 0x80 (layer flags, matches all other screens)
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
-
-    // field_0x32 = 0 (m_bNoDestructor)
     m_bNoDestructor = 0;
-
-    // Copy s_TexHaiku SmartPtr into base HUDControl3d::m_Texture @ +0x74
-    // (per-instance texture for dimension queries and Draw).
-    // Binary: SmartPtr::operator=(this->base.m_Texture, *(static_ptr))
     m_Texture = s_TexHaiku;
 
-    // m_TexOFNOverlay stays null — OFN defunct.
-    // m_reserved[] is zero-initialised by HUDControl3d base ctor.
+    // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764:
+    // Creates BakedStringBox objects for all credit text. The binary uses
+    // OS_SPrintf(buf, 0x200, "%s %s", "V", ver) for the version string.
+
+    // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: per-box BakedStringBox(fontSize,width,align)
+    Mortar::FontCacheObjectTTF* font = GetAboutTTFFont();
+    if (font) {
+        // Title box -- LSTR 0x3c3
+        // fontSize 20, width 0xa0(160), align 0xf, height 30, maxLines 1
+        // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
+        m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160.0f, 30.0f, 0xf, 1, 0.0f);
+        m_TitleBox->SetText(Mortar::GETSTRING(LSTR_ABOUT_TITLE, 0));
+        m_TitleBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
+
+        // Heading box -- LSTR 0x349
+        // fontSize 20, width 0x64(100), align 0xf, height 30, maxLines 1
+        // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
+        // Constructed for layout parity; NOT drawn in NewDraw (binary never positions/draws it).
+        m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100.0f, 30.0f, 0xf, 1, 0.0f);
+        m_HeadingBox->SetText(Mortar::GETSTRING(LSTR_ABOUT_HEADING, 0));
+        m_HeadingBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
+
+        // Version box -- "V <ver>"
+        // fontSize 10, width 0x50(80), align 1, height 30, maxLines 1
+        // Colour RGB(0x74, 0x5D, 0x3C), setBase=1
+        // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764:
+        //   OS_SPrintf(buf, 0x200, "%s %s", "V", GetVersionString())
+        char vbuf[32];
+        snprintf(vbuf, sizeof(vbuf), "%s %s", "V", GetVersionString());
+        m_VersionBox = new Mortar::BakedStringBox(font, 10.0f, 80.0f, 30.0f, 1, 1, 0.0f);
+        m_VersionBox->SetText(vbuf);
+        m_VersionBox->SetColour(Colour(0x74, 0x5D, 0x3C, 255), 1);
+        m_VersionBox->SetHorizontalLineSpacing(-1.0f);
+
+        // Credit lines 0..5 -- LSTR 0x34b..0x350
+        // fontSize 12, width 0x140(320), align 0xf, height 30, maxLines 1
+        // Colour: game_work.m_RingColours[14] (binary game_work+0x6a0), setBase=0
+        // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: credit line colour + per-box SetHorizontalLineSpacing(-1)
+        const Colour& creditColour = game_work.m_RingColours[14];
+
+        m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine0->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT0, 0));
+        m_CreditLine0->SetColour(creditColour, 0);
+        m_CreditLine0->SetHorizontalLineSpacing(-1.0f);
+
+        m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine1->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT1, 0));
+        m_CreditLine1->SetColour(creditColour, 0);
+        m_CreditLine1->SetHorizontalLineSpacing(-1.0f);
+
+        m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine2->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT2, 0));
+        m_CreditLine2->SetColour(creditColour, 0);
+        m_CreditLine2->SetHorizontalLineSpacing(-1.0f);
+
+        m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine3->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT3, 0));
+        m_CreditLine3->SetColour(creditColour, 0);
+        m_CreditLine3->SetHorizontalLineSpacing(-1.0f);
+
+        m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine4->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT4, 0));
+        m_CreditLine4->SetColour(creditColour, 0);
+        m_CreditLine4->SetHorizontalLineSpacing(-1.0f);
+
+        m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
+        m_CreditLine5->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT5, 0));
+        m_CreditLine5->SetColour(creditColour, 0);
+        m_CreditLine5->SetHorizontalLineSpacing(-1.0f);
+
+        // TODO: v1.6.1 AboutScreen ctor @0x0015b764 -- min-fontSize equalization pass across credit boxes not ported (no BakedStringBox font-size getter)
+    }
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::~AboutScreen  @ 0x0012eee0
+// AboutScreen::~AboutScreen
 // -----------------------------------------------------------------------
 AboutScreen::~AboutScreen()
 {
     Release();
-    // SmartPtr dtor for m_TexOFNOverlay called implicitly.
-    // base HUDControl3d::m_Texture (haiku panel) released by base dtor.
+
+    delete m_TitleBox;    m_TitleBox    = 0;
+    delete m_HeadingBox;  m_HeadingBox  = 0;
+    delete m_VersionBox;  m_VersionBox  = 0;
+    delete m_CreditLine0; m_CreditLine0 = 0;
+    delete m_CreditLine1; m_CreditLine1 = 0;
+    delete m_CreditLine2; m_CreditLine2 = 0;
+    delete m_CreditLine3; m_CreditLine3 = 0;
+    delete m_CreditLine4; m_CreditLine4 = 0;
+    delete m_CreditLine5; m_CreditLine5 = 0;
 }
 
 // -----------------------------------------------------------------------
@@ -204,7 +278,6 @@ void AboutScreen::Init()
 
 // -----------------------------------------------------------------------
 // HUDControl::Release  override
-// Called from dtor and on demand.
 // -----------------------------------------------------------------------
 void AboutScreen::Release()
 {
@@ -217,28 +290,14 @@ void AboutScreen::Release()
 }
 
 // -----------------------------------------------------------------------
-// CreateBackButton — lazily creates back button at state-0 completion.
-// Binary: Update @ 0x0012f020, second block when alpha > DAT_0012f2fc.
+// CreateBackButton
 // -----------------------------------------------------------------------
 void AboutScreen::CreateBackButton()
 {
     if (m_pBackButton) return;
 
-    // Texture: binary reads game->field_0x17c (a Texture* to back_icon.tex).
-    // Port: use DojoScreen's static s_TexBackIcon if accessible, else skip.
-    // DIFFERS: binary gets texture from game->field_0x17c; port accesses
-    //          DojoScreen::s_TexBackIcon (same texture, different path).
-    // Note: AboutScreen has its own s_TexBackIcon copy loaded in LoadContent;
-    //       field_0x17c is a shared global slot not yet in Game struct.
-
-    // Fruit type: binary reads *(int**)(update_base + DAT_0012f324) which is
-    // the bomb-threshold (FruitInfo_GetCount()). Matches DojoScreen pattern.
     const int bombFruitType = FruitInfo_GetCount();
 
-    // Binary @ 0x0012f1a0..0x0012f242: caller does NOT pre-set size from
-    // texture dims. MenuButton::Init's bomb-branch writes:
-    //   m_TargetSize = (1,1,1) * 2 * FruitInfo_GetBombSize() = (110,110,110)
-    // which the post-Init *= 0.825 then scales to (90.75, 90.75, 90.75).
     m_pBackButton = new MenuButton();
     if (s_TexBackIcon.IsValid()) {
         m_pBackButton->m_Texture = s_TexBackIcon;
@@ -250,13 +309,6 @@ void AboutScreen::CreateBackButton()
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
 
-    // Binary @ 0x0012f2a8-0x0012f2ea step order:
-    //   1. virtual Init (already covered by Init() above — vtable[2] is empty)
-    //   2. strb 1 at button+0x138 = m_bRespondsToBackKey
-    //   3. game_work.mHud->AddControl(button)
-    //   4. TutorialControl::ResetTutePos(button)
-    //   5. scale m_TargetSize *= 0.825
-    //   6. scale m_pFruitPiece->scale *= 0.825
     m_pBackButton->m_bRespondsToBackKey = 1;
     game_work.mHud->AddControl(m_pBackButton);
 
@@ -283,37 +335,20 @@ void AboutScreen::RemoveBackButton()
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::Update  @ 0x0012f020
-// ASM-verified: 2026-04-29 binary @ 0x0012f020..0x0012f360 (asm-inspector)
-// State machine + transitions + animation formulas all match.
+// AboutScreen::Update
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float /*dt*/)
 {
-    // ---- OFN button creation (defunct — OpenFeint/GameCenter) ----
-    // Binary: if (s_TexSensei valid AND m_pOFNButton == nullptr):
-    //   create OFN button at (480, 0, 0) with AskUserToChoosePreferredNetwork
-    //   callback and openfeint_gamecenter.tex texture.
-    // Port: s_TexSensei is the sensei animation tex, not the OFN tex.
-    //       OFN is defunct so we never create this button.
-    //       The check still gates on s_TexSensei validity in binary.
-    // DIFFERS: port stubs this block. No OFN button is created.
+    // OFN button creation stub (defunct -- OpenFeint/GameCenter)
     if (s_TexSensei.IsValid() && m_pOFNButton == nullptr) {
-        // Note: OpenFeint/GameCenter button is omitted (defunct per online-services-audit).
-        // Binary creates MenuButton at POS_OFN_BUTTON with AskUserToChoosePreferredNetwork
-        // callback; port intentionally skips. Guard re-entry via m_pOFNButton sentinel below.
         (void)POS_OFN_BUTTON;
     }
 
-    // ---- State machine ----
     switch (m_State) {
 
     case 0: {
-        // Lerp alpha toward 1.0 exponentially
         m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
 
-        // When alpha crosses 0.9990 (DAT_0012f2fc): create back button,
-        // clamp alpha to 1.0, advance to state 1.
-        // ARM idiom: vcmpe / vmrs / ble — fires when alpha > ALPHA_IN_DONE
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
             CreateBackButton();
@@ -323,21 +358,12 @@ void AboutScreen::Update(float /*dt*/)
     }
 
     case 1:
-        // Idle — buttons are interactive, nothing to do per-frame.
         break;
 
     case 2: {
-        // Fade-out: alpha *= 0.75 each frame
         m_TransitionAlpha *= ALPHA_DECAY;
 
-        // When alpha < 0.001 (DAT_0012f328):
-        // Binary ARM idiom: bpl 0x0012f35a fires when NOT (alpha < 0.001),
-        // so the block runs when alpha IS < 0.001 i.e. fade complete.
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
-            // Binary @ 0x0012f350: parent->vtable[+0x10] = Reset().
-            // DojoScreen::Reset @ 0x0013767c writes only the BaseScreen
-            // m_State field to 0, bringing DojoScreen back to its state 0
-            // (re-fade-in). ASM-verified 2026-04-29.
             if (m_pParent) {
                 m_pParent->Reset();
             }
@@ -352,48 +378,112 @@ void AboutScreen::Update(float /*dt*/)
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::Draw  @ 0x0012f394
-// Four render passes:
-//   A) haiku background panel   (field_0x74 = s_TexHaiku) — slides down from top
-//   B) OFN/GameCenter overlay   (field_0x98 = null in port) — on top of panel
-//   C) credits tex              (s_TexCredits) — slides up from bottom
-//   D) sensei tex               (s_TexSensei)  — slides in from right
+// AboutScreen::NewDraw  @ 0x0015a264
+// Draws BakedStringBox credit text over the haiku board panel.
+// Called from Draw() after the textured quads, passing yDrawn (the
+// panel's animated Y position).
+//
+// ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: SetTranslation flag 0, credit y-deltas.
+//   base coords: x0 = (int)(BG_X - 160) = -210, y0 = (int)(yDrawn + 64)
+//   CreditLine0:  SetTranslation(x0,       y0,         0), flag=0
+//   CreditLine1:  SetTranslation(x0,       y0-0x14,    0), flag=0  (y0-20)
+//   CreditLine2:  SetTranslation(x0,       y0-0x28,    0), flag=0  (y0-40)
+//   CreditLine3:  SetTranslation(x0,       y0-0x4b,    0), flag=0  (y0-75)
+//   CreditLine4:  SetTranslation(x0,       y0-0x5f,    0), flag=0  (y0-95)
+//   CreditLine5:  SetTranslation(x0,       y0-0x73,    0), flag=0  (y0-115)
+//   TitleBox:     SetTranslation(x0+0x50,  y0+0x1a,    0), flag=0  (x0+80, y0+26)
+//   HeadingBox:   NOT positioned or drawn (binary never calls SetTranslation/Draw for it)
+//   VersionBox:   SetTranslation(x0+5,     y0+0x15,    0), flag=0  (x0+5, y0+21)
+//   Each box is drawn with Draw(0, Vec2(1,1), 1).
+//   Marquee (alpha < 0.6): TODO -- not yet RE'd.
 // -----------------------------------------------------------------------
-// ASM-verified: 2026-04-29 binary @ 0x0012f394..0x0012f8d2 (asm-inspector)
-// All 4 draw blocks (haiku panel / OFN overlay / credits slide / sensei
-// slide) and their Y/X interpolation formulas match the binary.
+void AboutScreen::NewDraw(float yDrawn)
+{
+    const int x0 = (int)(BG_X - 160.0f);    // -210
+    const int y0 = (int)(yDrawn + 64.0f);
+
+    // Credit lines
+    if (m_CreditLine0) {
+        m_CreditLine0->SetTranslation(Vec3((float)x0, (float)y0,            0.0f), 0);
+        m_CreditLine0->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+    if (m_CreditLine1) {
+        m_CreditLine1->SetTranslation(Vec3((float)x0, (float)(y0 - 0x14),   0.0f), 0);
+        m_CreditLine1->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+    if (m_CreditLine2) {
+        m_CreditLine2->SetTranslation(Vec3((float)x0, (float)(y0 - 0x28),   0.0f), 0);
+        m_CreditLine2->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+    if (m_CreditLine3) {
+        m_CreditLine3->SetTranslation(Vec3((float)x0, (float)(y0 - 0x4b),   0.0f), 0);
+        m_CreditLine3->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+    if (m_CreditLine4) {
+        m_CreditLine4->SetTranslation(Vec3((float)x0, (float)(y0 - 0x5f),   0.0f), 0);
+        m_CreditLine4->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+    if (m_CreditLine5) {
+        m_CreditLine5->SetTranslation(Vec3((float)x0, (float)(y0 - 0x73),   0.0f), 0);
+        m_CreditLine5->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // Title box
+    if (m_TitleBox) {
+        m_TitleBox->SetTranslation(Vec3((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
+        m_TitleBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // HeadingBox: constructed for layout parity; binary never positions or draws it.
+
+    // Version box
+    if (m_VersionBox) {
+        m_VersionBox->SetTranslation(Vec3((float)(x0 + 5), (float)(y0 + 0x15), 0.0f), 0);
+        m_VersionBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // TODO: v1.6.1 0x0015a264 (AboutScreen::NewDraw) -- DrawMarquee/m_Marquees
+    //       scrolling credits (alpha < 0.6) not yet RE'd.
+}
+
+// -----------------------------------------------------------------------
+// AboutScreen::Draw  @ 0x0015a654
+// Two render passes (v1.6.1):
+//   A) haiku background panel (m_Texture = s_TexHaiku) -- slides down from top
+//      Note: the port calls this texture s_TexHaiku; the binary calls it
+//            s_boardTexture. Same texture, different port-side name.
+//   B) OFN/GameCenter overlay (null in port, defunct)
+//   C) credits.tex REMOVED in v1.6.1
+//   D) sensei.tex -- slides in from right
+//   E) NewDraw() -- BakedStringBox credit text
+//
+// ASM-spec v1.6.1 AboutScreen::Draw @0x0015a654: blocks A, B (null skip),
+// D unchanged from v1.5.1; block C (credits.tex) is absent; NewDraw call added.
+// -----------------------------------------------------------------------
 void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 {
-    // Layer check and alpha guard
     if (m_TransitionAlpha <= 0.0f) return;
 
     MatrixManager& mm  = MatrixManager::GetInstance();
     const float alpha = m_TransitionAlpha;
 
     // ================================================================
-    // Block A: haiku background panel (base HUDControl3d::m_Texture @ +0x74)
+    // Block A: haiku background panel (s_TexHaiku / binary: s_boardTexture)
     // ================================================================
+    float yDrawn = 0.0f;
     if (m_Texture.IsValid()) {
         const float texW = (float)m_Texture->m_Width;
         const float texH = (float)m_Texture->m_Height;
 
-        // Binary computes Y_start once (one-time cached in BSS guard).
-        // Port recomputes each frame — same result, avoids BSS guard pattern.
         // Y_start = BG_Y_CACHE(160) + texH * 0.5
-        const float yStart = BG_Y_CACHE + texH * 0.5f;
-
         // Y_drawn = yStart - (yStart - BG_Y_REST(63)) * alpha
-        const float yDrawn = yStart - (yStart - BG_Y_REST) * alpha;
+        const float yStart = BG_Y_CACHE + texH * 0.5f;
+        yDrawn = yStart - (yStart - BG_Y_REST) * alpha;
 
-        // Position the OFN button to follow the panel (if created)
         if (m_pOFNButton) {
-            m_pOFNButton->pos = Vec3(
-                BG_X + OFN_OFFSET_X,
-                yDrawn + OFN_OFFSET_Y,
-                0.0f);
+            m_pOFNButton->pos = Vec3(BG_X + OFN_OFFSET_X, yDrawn + OFN_OFFSET_Y, 0.0f);
         }
 
-        // Draw background quad
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 1.0f);
         mat.GlobalTranslate44(Vec3(BG_X, yDrawn, 0.0f));
@@ -404,52 +494,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         m_Texture->UnSet();
 
-        // ---- Font draws (version text "V1.5.1") ----
-        // Binary draws two Font::DrawString calls back-to-back:
-        //   1. "V" — 1-char literal at .rodata 0x001BAE40 (drawn at FONT_X)
-        //   2. GetVersionString() — "1.5.1" at .rodata 0x001B9938 (drawn
-        //      immediately right of "V" via MeasureString("V") * scale)
-        // Both share scale=14.0f, maxWidth=FONT_MAX_W(200), colour
-        // RGB(0x74,0x5D,0x3C). pFontMain comes from game (+0x54).
-        // Net displayed text: "V1.5.1".
-        if (game_work.pFontMain.IsValid()) {
-            // Reset the world matrix before Font::DrawString. The haiku
-            // quad draw above left a Scale(texW+1, texH+1, 1) on the
-            // stack; Font::DrawString does Push+Scale(scale,scale,1) and
-            // would multiply into that existing scale, blowing up the
-            // glyphs by ~256-512x. Binary: each Draw block resets the
-            // matrix before its own draw.
-            mm.GetWorldStack().Reset();
-            mm.UploadModelViewOnly();
-
-            // ASM-verified: 2026-05-17 binary @ 0x0012f49a..0x0012f4f0 (re-analyst).
-            // Scale = 14.0f (vmov.f32 s3,#0x41600000 inline immediate).
-            const float versionScale = 14.0f;
-            const float fontY = yDrawn + FONT_TEXT_Y_OFFSET - 10.0f;
-            const Colour fontColour(0x74, 0x5D, 0x3C, 255);
-
-            const char* kVerPrefix = "V";
-            game_work.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
-                                       kVerPrefix,
-                                       Vec3(FONT_X, fontY, 0.0f),
-                                       fontColour, Mortar::FONT_ALIGN_LEFT);
-
-            // Binary caches MeasureString("V") * 14 in BSS via __cxa_guard
-            // one-time init; port recomputes each frame (same numeric result).
-            // DIFFERS: port skips the one-time-init guard.
-            const float prefixW = game_work.pFontMain->MeasureString(kVerPrefix) * versionScale;
-            game_work.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
-                                       GetVersionString(),
-                                       Vec3(prefixW - FONT_MAX_W, fontY, 0.0f),
-                                       fontColour, Mortar::FONT_ALIGN_LEFT);
-        }
-
         // ================================================================
-        // Block B: OFN overlay texture (field_0x98) — null in port
+        // Block B: OFN overlay texture (null in port -- OFN defunct)
         // ================================================================
-        // Binary: if (field_0x98.IsValid()):
-        //   draw at (SENSEI_FRAC(0.3)*texW - SENSEI_X_OFS(50), yDrawn + SENSEI_FRAC*texH, 0)
-        // Port: m_TexOFNOverlay is always null (OFN defunct), block is a no-op.
         if (m_TexOFNOverlay.IsValid()) {
             const float ovW = (float)m_TexOFNOverlay->m_Width;
             const float ovH = (float)m_TexOFNOverlay->m_Height;
@@ -467,40 +514,18 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         }
     }
 
-    // ================================================================
-    // Block C: credits.tex — slides up from below screen
-    // ================================================================
-    if (s_TexCredits.IsValid()) {
-        const float texH = (float)s_TexCredits->m_Height;
-
-        // Y_start = texH * -0.5 - CREDITS_Y_CACHE(160)  (off bottom)
-        // Y_drawn = Y_start - (Y_start + CREDITS_Y_OFS(96)) * alpha
-        const float yStart = texH * -0.5f - CREDITS_Y_CACHE;
-        const float yDrawn = yStart - (yStart + CREDITS_Y_OFS) * alpha;
-
-        mm.GetWorldStack().Reset();
-        const float texW = (float)s_TexCredits->m_Width;
-        Matrix44 mat = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(CREDITS_X, yDrawn, 0.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        s_TexCredits->Set();
-        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
-        s_TexCredits->UnSet();
-    }
+    // Block C: credits.tex REMOVED in v1.6.1
+    // (v1.5.1 had a sliding credits.tex quad here; v1.6.1 uses BakedStringBox
+    //  text drawn by NewDraw() instead. The s_TexCredits static and its draw
+    //  block have been removed from this port.)
 
     // ================================================================
-    // Block D: sensei.tex — slides in from the right
+    // Block D: sensei.tex -- slides in from right
     // ================================================================
-    // Binary uses Mesh::DrawQuadUnCached for this block (not DrawQuad_Colour_Draw).
-    // Port uses r->DrawQuad — same net effect.
     if (s_TexSensei.IsValid()) {
         const float texW = (float)s_TexSensei->m_Width;
         const float texH = (float)s_TexSensei->m_Height;
 
-        // X_start = SENSEI2_X_CACHE(240) + texW * 0.5  (off right edge)
-        // X_drawn = X_start - (X_start - SENSEI2_X_REST(155)) * alpha
         const float xStart = SENSEI2_X_CACHE + texW * 0.5f;
         const float xDrawn = xStart - (xStart - SENSEI2_X_REST) * alpha;
 
@@ -514,31 +539,34 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexSensei->UnSet();
     }
+
+    // ================================================================
+    // Block E: NewDraw -- BakedStringBox credit text
+    // ASM-spec v1.6.1 AboutScreen::Draw @0x0015a654: calls NewDraw after quads.
+    // ================================================================
+    NewDraw(yDrawn);
 }
 
 // -----------------------------------------------------------------------
-// BackCallback — pressed back button starts fade-out
-// Binary: Mortar::Delegate0<void>::QCallee<AboutScreen> wrapping this method
+// BackCallback
 // -----------------------------------------------------------------------
 void AboutScreen::BackCallback()
 {
     m_State = 2;
 }
 
-// Binary @ 0x0012eb30 (re-analyst 2026-05-18). Plays menu-bomb SFX,
-// transitions to fade-out state 2, repositions tutorial ninja to a
-// random off-screen point. Mirrors the binary's exit handler when the
-// player taps the AboutScreen's quit/back-out button.
+// -----------------------------------------------------------------------
+// QuitGameCallback
+// Binary @ 0x0012eb30 (re-analyst 2026-06-07).
+// -----------------------------------------------------------------------
 void AboutScreen::QuitGameCallback() {
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
     m_State = 2;
     if (game_work.m_TutorialControl) {
-        // Binary randomises off-screen target via RandFloat5() (≈ [0,5)).
-        // Simple rand() fallback -- the exact distribution is cosmetic.
-        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;   // [5, 10)
-        float ry = -((float)(rand() % 500) / 100.0f);          // (-5, 0]
+        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
+        float ry = -((float)(rand() % 500) / 100.0f);
         game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
     }
 }

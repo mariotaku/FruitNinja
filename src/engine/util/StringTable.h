@@ -67,6 +67,16 @@ enum LocalizedString {
     LSTR_BONUS_PAGE_TITLE                 = 0x412, // T_1035 @ 0x00173d84 -- page title for FruitFactBonusFactPage (GETSTRING(0x412,0))
     LSTR_LEADERBOARD_GLOBAL               = 0x7b,  // FruitFactLeaderboard title (global/top scores); binary GETSTRING(0x7b,0) @ 0x00176980
     LSTR_LEADERBOARD_FRIENDS              = 0x363, // FruitFactLeaderboard title (friends scores);  binary GETSTRING(0x363,0) @ 0x00176980
+
+    // AboutScreen v1.6.1 string IDs (AboutScreen ctor @0x0015b764)
+    LSTR_ABOUT_HEADING   = 0x349, // id 841  -- AboutScreen heading text
+    LSTR_ABOUT_CREDIT0   = 0x34b, // id 843  -- credit line 0
+    LSTR_ABOUT_CREDIT1   = 0x34c, // id 844  -- credit line 1
+    LSTR_ABOUT_CREDIT2   = 0x34d, // id 845  -- credit line 2
+    LSTR_ABOUT_CREDIT3   = 0x34e, // id 846  -- credit line 3
+    LSTR_ABOUT_CREDIT4   = 0x34f, // id 847  -- credit line 4
+    LSTR_ABOUT_CREDIT5   = 0x350, // id 848  -- credit line 5
+    LSTR_ABOUT_TITLE     = 0x3c3, // id 963  -- AboutScreen title text
 };
 
 // --- StringEntry (12 bytes) ---
