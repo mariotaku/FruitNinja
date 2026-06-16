@@ -509,12 +509,17 @@ void MenuButton::Update(float dt) {
                 static_cast<Fruit*>(entity)->m_SecondPos = GetAdjustedPos();
                 Fruit* f = static_cast<Fruit*>(m_pEntity);
                 if (f && f->m_bSliced) {     // +0xb8 sliced sentinel
+                    // Binary @0x0019aa44: the slice gate is VELOCITY-based, not position.
+                    // Fruit::Slice writes vel=halfVelB (+0x1c) and m_SecondVel=halfVelA (+0xd4),
+                    // which diverge after a real slice. pos/m_SecondPos are BOTH re-anchored to
+                    // GetAdjustedPos() every frame, so a pos delta is always 0 -- the old bug
+                    // that left m_ClickCallback unfired (no screen change) on a sliced menu fruit.
                     Vec3 d;
-                    d.x = f->pos.x - f->m_SecondPos.x;
-                    d.y = f->pos.y - f->m_SecondPos.y;
-                    d.z = f->pos.z - f->m_SecondPos.z;
+                    d.x = f->vel.x - f->m_SecondVel.x;
+                    d.y = f->vel.y - f->m_SecondVel.y;
+                    d.z = f->vel.z - f->m_SecondVel.z;
                     float magSqr = d.x*d.x + d.y*d.y + d.z*d.z;
-                    if (magSqr >= 0.001f) {   // SLICE_EPS
+                    if (magSqr > 0.001f) {   // SLICE_EPS @0x0019ac50 (binary ble-skip => strictly >)
                         m_ClickCallback();
                         // TODO: 0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
                         entity->scale = m_BaseScale;
