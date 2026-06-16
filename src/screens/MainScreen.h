@@ -81,10 +81,15 @@ public:
     // Direct state writer used by child screens.
     void SetState(MainScreenState s);
 
-    // SetStateTimer: sets m_StateTimer (= bounce velocity accumulator in v1.6.1).
-    // Binary @ 0x00169e80 (QuitToMenu + PauseScreen quit) writes 0.5f here to seed
-    // the logo bounce animation on menu return. NOT a transition countdown.
+    // SetStateTimer: sets m_StateTimer (+0xF8 port / +0x110 binary) = bounce velocity accumulator.
+    // Binary @ 0x00169e80 (QuitToMenu @0x00169e50) writes 0.5f here to seed the logo
+    // bounce animation on gameplay->menu return. NOT a transition countdown.
     void SetStateTimer(float t) { m_StateTimer = t; }
+
+    // SetMoreGamesTimer: seeds m_MoreGamesF0 (the intro-slide hold countdown).
+    // Binary QuitToMenu @0x001cb6e4 writes 0.5f to +0x11C to hold the slide off-screen
+    // for ~0.5s before the intro plays on gameplay->menu return.
+    void SetMoreGamesTimer(float t) { m_MoreGamesF0 = t; }
 
     // Used by EndRetryLevel to emulate GameInit step 11 (fresh MainScreen ctor).
     void ResetTimers() { m_StateTimer = 0.0f; m_Timer2 = 0.0f; }
@@ -186,9 +191,24 @@ private:
     int m_State;          // +0x100 (binary +0x118)
 
     // +0x104 (binary +0x11C): SmartPtr<Texture> m_TexMoreGames
-    // OVERLOADED: .f0 reinterpreted as a float bomb-hit countdown in states 0/8/0x13.
-    // Do NOT split — preserve union semantic.
+    // In the binary (ARM32) this 4-byte slot is also overloaded as the intro-slide f0
+    // countdown (MoreGames texture is defunct -- always null). The port keeps this as
+    // a normal live SmartPtr and stores f0 in the dedicated m_MoreGamesF0 below.
+    // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide;
+    //   when f0 > 0.0f the slide is held off-screen and ticked down; settle branch increments
+    //   m_Timer2 and ramps m_GameDt toward -1 (slide-in). QuitToMenu @0x001cb6e4 seeds
+    //   f0=0.5f so gameplay->menu return holds off-screen for ~0.5s before sliding in.
     Mortar::SmartPtr<Mortar::Texture> m_TexMoreGames;   // +0x104 (binary +0x11C)
+
+    // DIFFERS: binary overloads m_TexMoreGames's 4-byte slot (+0x11c) as the intro f0 countdown
+    // (ARM32 4-byte ptr, MoreGames texture defunct -- v1.6.1 MainScreen::Update @0x00197430).
+    // The x64 port's SmartPtr is 8 bytes and m_TexMoreGames is a live pointer, so aliasing a
+    // float onto it corrupts the pointer and crashes ~SmartPtr at shutdown -- use a dedicated
+    // float field instead. Functional behaviour of the f0 hold/settle/exit logic is identical.
+    float m_MoreGamesF0;                                 // ARM32 alias of +0x11C; port-private float
+
+    float& TexMoreGamesF0() { return m_MoreGamesF0; }
+    float  TexMoreGamesF0() const { return m_MoreGamesF0; }
 
     // +0x108 (binary +0x120): SmartPtr<Texture> m_Tex120 (music.tex)
     Mortar::SmartPtr<Mortar::Texture> m_Tex120;         // +0x108 (binary +0x120)

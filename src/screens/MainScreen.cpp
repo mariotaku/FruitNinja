@@ -93,6 +93,7 @@ MainScreen::MainScreen(Game& g)
       m_StateTimer(0.0f),
       m_Field114(0.0f),
       m_State(STATE_CAMERA_ZOOM),
+      m_MoreGamesF0(0.0f),
       m_Timer2(0.0f),
       m_TimeRemainingDisplay(-1.0f),
       m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
@@ -127,7 +128,8 @@ MainScreen::MainScreen(Game& g)
     // m_TexBc (was m_TexCommingSoon)
     m_TexBc = Mortar::TextureManager::LoadLocalisedTexture("comming_soon.tex");
 
-    // m_TexMoreGames loaded as a texture; .f0 is also read as a float countdown by some states.
+    // m_TexMoreGames: texture slot (defunct in binary; port loads it as a normal SmartPtr).
+    // The intro-slide f0 countdown is stored in m_MoreGamesF0 (initialized above).
     m_TexMoreGames = Mortar::TextureManager::LoadLocalisedTexture("more_games.tex");
 
     // Load verdana.fnt into m_pFont (+0x110 port, binary +0x128).
@@ -223,25 +225,23 @@ void MainScreen::Update(float dt) {
 
     switch (m_State) {
     case STATE_CAMERA_ZOOM: {
-        // ASM-verified: 2026-05-20 binary @ 0x0014b278 case 0 (re-analyst)
-        // Two-phase: while (bombHitTimer > 0.7), just lerp the camera and idle.
-        // Once elapsed, start incrementing m_Timer2 and clear levelTransitionFlag.
+        // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide.
+        // Binary case-0 sub-block: read m_TexMoreGames.f0; if f0>0 OR bombHitTimer>1.45,
+        // tick the countdown and hold the camera; otherwise settle branch: gameMode=0,
+        // m_Timer2 += dt, ramp m_GameDt toward -1. Advance to state 1 when camera
+        // settled (m_GameDt < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
-        //
-        // Reset seed: GameInit writes m_GameDt=-1.0 as a one-frame UpdateMusic cue
-        // (selects menu song by sign of m_GameDt on frame 1). UpdateMusic runs
-        // BEFORE MainScreen::Update each frame, so by the time we reach here on
-        // frame 1 the music cue has already fired. Reset to 0.0 now so the
-        // CAMERA_ZOOM lerp ramps from 0.0 -> -1.0 (visible ~25-30 frame intro)
-        // instead of starting pre-settled at -1.0.
-        if (m_Timer2 == 0.0f && game_work.m_GameDt == -1.0f) {
-            game_work.m_GameDt = 0.0f;
-        }
-        const bool flashActive = (game_work.m_BombHitTimer > 0.7f);
-        if (flashActive) {
+        float f0 = TexMoreGamesF0();
+        if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
+            // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
+            TexMoreGamesF0() = f0 - dt;
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
+            if (game_work.m_GameDt < 0.0f) {
+                game_work.m_GameDt = 0.0f;
+            }
         } else {
+            // Settle branch: clear gameMode, advance timer, ramp camera toward -1.
             // Binary @ 0x0014b60e: writes 0 to g_GameData+0x04 (gameMode).
             game_work.gameMode = 0;
             m_Timer2 += dt;
@@ -251,7 +251,7 @@ void MainScreen::Update(float dt) {
         // Binary: CreateButtons called unconditionally every frame; gate inside CreatePlayDojo.
         CreatePlayDojo();
 
-        if (game_work.m_GameDt < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
+        if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt >= 0.0f) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
         }
@@ -337,13 +337,15 @@ void MainScreen::Update(float dt) {
             posAlpha = m_Timer2;
         } else {
             m_Timer2 += dt;
+
             if (m_Timer2 > STATE_8_DURATION) {
+                // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c case-8 exit:
+                // binary sets m_Timer2=0.15f, m_TexMoreGames.f0=0.0f, m_State=STATE_CAMERA_ZOOM.
+                // Does NOT touch m_GameDt/flM_PauseAmount on this path.
+                // f0=0.0f means case-0's hold branch is skipped immediately on the next tick,
+                // so the slide-in animation starts right away on return.
                 m_Timer2 = STATE_8_RESET_TIMER;
-                // Binary does NOT call HitMenuBomb here. Only the QUIT-bomb path (STATE_QUIT_WAIT
-                // qs==2) calls HitMenuBomb; the SLIDE_IN->CAMERA_ZOOM return just sets m_Timer2
-                // and transitions. flM_BombHitTimer is ~0 at this point (decayed during the
-                // sub-screen), so CreatePlayDojo's gate (< 1.45) passes immediately on the
-                // next CAMERA_ZOOM tick and fruit re-appear without an intro flash.
+                TexMoreGamesF0() = 0.0f;
                 LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/SLIDE_IN hold expired");
                 m_State = STATE_CAMERA_ZOOM;
             }

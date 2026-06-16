@@ -159,6 +159,9 @@ static void DoQuitToMenu() {
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);       // 0x169e7c -> m_State = 0
         game_work.mMainScreen->SetStateTimer(0.5f);               // 0x169e80 -> m_StateTimer = 0.5f
+        // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- seed m_TexMoreGames.f0=0.5f on gameplay->menu return.
+        // That binary function (distinct from 0x00169e50) also writes 0.5f to +0x11c so the
+        // case-0 hold branch runs for ~0.5s before sliding in. Needs re-analyst pass.
     }
 
     // 0x169e84/0x169e86: dismiss the active HUD overlay if any.

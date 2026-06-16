@@ -152,6 +152,10 @@ static void QuitToMenu() {
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
         game_work.mMainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
+        // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- seed m_TexMoreGames.f0=0.5f on gameplay->menu return.
+        // That binary function (distinct from 0x00169e50) also writes 0.5f to +0x11c so the
+        // case-0 hold branch runs for ~0.5s before sliding in. Not yet confirmed whether
+        // 0x001cb6e4 is a second QuitToMenu variant or a wrapper; needs re-analyst pass.
         // DIFFERS: binary does NOT call DeleteMenuButtons here. Binary's
         // menu fruit/bomb entities survive gameplay (ResetGameEntities
         // re-chucks them, doesn't destroy them, per re-analyst
