@@ -175,6 +175,18 @@ void GameInitialise() {
         if (musicOffCount != 0)
             game_work.m_SaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
     }
+#ifdef __EMSCRIPTEN__
+    // Port specific: web audio init (#73) -- SFX shows ON from boot so the sound
+    // button renders in the ON state immediately; no visible flip on first touch.
+    // The AudioContext is suspended by the browser until first user gesture, but
+    // Emscripten's SDL2 backend resumes it automatically on that gesture -- no
+    // manual ctx.resume() or gesture hook needed.  GameInit step 23 calls
+    // SoundManager::Initialise + SetSFXVolume(0.5f) (because m_bSoundOn=true
+    // here), so SFX volume is already correct when the AudioContext resumes.
+    // Music stays OFF / opt-in; the user enables it via the in-game music toggle.
+    game_work.m_bSoundOn = true;
+    game_work.m_bMusicOn = false;
+#endif
 
     // InitialiseData step 12: per-power-up slash colour table
     SlashEntity::InitModColours();
