@@ -5,11 +5,6 @@
 #include <cstring>
 #include <new>
 
-// TEMP: touch-stack debug session; remove when done
-#ifndef FN_DEBUG_TOUCH
-#define FN_DEBUG_TOUCH 1
-#endif
-
 #ifdef FN_DEBUG_TOUCH
 #include "debug/Logger.h"
 #endif
@@ -95,9 +90,9 @@ void Touch::_Update() {
 #ifdef FN_DEBUG_TOUCH
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (states1[i].extId != 0) {
-            LOG_INFO("TOUCH", "slot[%d] extId=%u touchId=%u phase=%d x=%d y=%d\n",
-                     i, states1[i].extId, states1[i].touchId,
-                     states1[i].phase, states1[i].currX, states1[i].currY);
+            LOG_DEBUG("TOUCH", "slot[%d] extId=%u touchId=%u phase=%d x=%d y=%d\n",
+                      i, states1[i].extId, states1[i].touchId,
+                      states1[i].phase, states1[i].currX, states1[i].currY);
         }
     }
 #endif
@@ -132,7 +127,7 @@ void Touch::__UpdateInternal(uint32_t extId, bool isActive, float x, float y, fl
     ev.timestamp = t;
     eventBuffer.m_eventTail++;
 #ifdef FN_DEBUG_TOUCH
-    LOG_INFO("TOUCH", "ring-push extId=%u active=%d x=%g y=%g tail=%d\n",
+    LOG_DEBUG("TOUCH", "ring-push extId=%u active=%d x=%g y=%g tail=%d\n",
              extId, (int)isActive, x, y, eventBuffer.m_eventTail);
 #endif
 }
@@ -143,7 +138,7 @@ void Touch::__UpdateInternal(uint32_t extId, bool isActive, float x, float y, fl
 // Binary @ 0x00195314 -- free slot predicate is extId==0, NOT phase>=1.
 void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
 #ifdef FN_DEBUG_TOUCH
-    LOG_INFO("TOUCH", "drain extId=%u active=%d x=%g y=%g\n",
+    LOG_DEBUG("TOUCH", "drain extId=%u active=%d x=%g y=%g\n",
              extId, (int)isActive, x, y);
 #endif
     int firstFree = -1;
@@ -158,7 +153,7 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
                 states2[idx].phase = 1;
             }
 #ifdef FN_DEBUG_TOUCH
-            LOG_INFO("TOUCH", "  matched slot=%d touchId=%u extId=%u phase=%d\n",
+            LOG_DEBUG("TOUCH", "  matched slot=%d touchId=%u extId=%u phase=%d\n",
                      idx, states2[idx].touchId, extId, states2[idx].phase);
 #endif
             return;
@@ -179,7 +174,7 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
         states2[firstFree].currY  = (int32_t)y;
         states2[firstFree].phase  = -1;
 #ifdef FN_DEBUG_TOUCH
-        LOG_INFO("TOUCH", "  claimed slot=%d touchId=%u extId=%u phase=-1 (new press)\n",
+        LOG_DEBUG("TOUCH", "  claimed slot=%d touchId=%u extId=%u phase=-1 (new press)\n",
                  firstFree, states2[firstFree].touchId, extId);
 #endif
     }
