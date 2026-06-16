@@ -32,6 +32,7 @@ Errors if build-web/ is missing or fruit-ninja.html is absent.
 
 import argparse
 import os
+import re
 import shutil
 import sys
 
@@ -45,17 +46,41 @@ SRC_BUILD_WEB   = os.path.join(REPO_ROOT, "build-web")
 SRC_MODELS_DIR  = os.path.join(REPO_ROOT, "docs", "gallery", "models")
 SRC_TEX_DIR     = os.path.join(REPO_ROOT, "docs", "gallery", "textures")
 
-# Files we copy from build-web/ into pages/game/
-GAME_FILES = [
-    "fruit-ninja.js",
-    "fruit-ninja.wasm",
-    "fruit-ninja.data",
-    # Shell image assets (WebP, decoded from authentic FruitNinjaBada assets).
-    "splash.webp",
+# Non-hashed extra assets copied from build-web/ into pages/game/ as-is.
+# These are NOT referenced by name in HTML/JS so they don't need hashing.
+GAME_EXTRA_FILES = [
     "play_button.webp",
     "sound.webp",
     "sound_cross.webp",
 ]
+
+# Hashed file patterns: stem -> (pattern, ext)
+# web-hash-assets.py renames canonical files to stem-<8hex>.ext.
+# We discover whichever hash is present.
+_HASHED_STEMS = [
+    ("fruit-ninja", "js"),
+    ("fruit-ninja", "wasm"),
+    ("fruit-ninja", "data"),
+    ("splash",      "webp"),
+]
+
+
+def find_hashed_file(build_web_dir, stem, ext):
+    """
+    Return the filename of the single hashed file matching stem-<8hex>.ext
+    in build_web_dir, or None if not found.  Warns if multiple matches exist.
+    """
+    pattern = re.compile(r"^{}-([0-9a-f]{{8}})\.{}$".format(re.escape(stem), re.escape(ext)))
+    matches = [name for name in os.listdir(build_web_dir) if pattern.match(name)]
+    if not matches:
+        # Fall back to unhashed canonical name (build without hash step).
+        canonical = "{}.{}".format(stem, ext)
+        if os.path.isfile(os.path.join(build_web_dir, canonical)):
+            return canonical
+        return None
+    if len(matches) > 1:
+        print("WARNING: multiple hashed files for {}.{}: {}".format(stem, ext, matches))
+    return matches[0]
 
 # Files we copy from docs/gallery/models/ into pages/models/
 MODELS_FILES = [
@@ -131,10 +156,19 @@ def main():
         die("build-web/fruit-ninja.html not found -- build-web/ exists but "
             "build may be incomplete.")
 
-    for gf in GAME_FILES:
-        p = os.path.join(SRC_BUILD_WEB, gf)
-        if not os.path.isfile(p):
-            print("WARNING: expected game file missing:", gf)
+    # Discover hashed game files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
+    hashed_game_files = []
+    for stem, ext in _HASHED_STEMS:
+        name = find_hashed_file(SRC_BUILD_WEB, stem, ext)
+        if name:
+            hashed_game_files.append(name)
+        else:
+            print("WARNING: hashed game file not found for {}.{}".format(stem, ext))
+
+    for gf in GAME_EXTRA_FILES:
+        p_path = os.path.join(SRC_BUILD_WEB, gf)
+        if not os.path.isfile(p_path):
+            print("WARNING: expected extra game file missing:", gf)
 
     if not os.path.isdir(SRC_MODELS_DIR):
         die("docs/gallery/models/ not found at: " + SRC_MODELS_DIR)
@@ -174,7 +208,15 @@ def main():
     sz = copy_file(game_html_src, os.path.join(game_dir, "index.html"))
     summary.append(("pages/game/index.html (from fruit-ninja.html)", sz))
 
-    for gf in GAME_FILES:
+    # Hashed files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
+    for gf in hashed_game_files:
+        src_path = os.path.join(SRC_BUILD_WEB, gf)
+        if os.path.isfile(src_path):
+            sz = copy_file(src_path, os.path.join(game_dir, gf))
+            summary.append(("pages/game/" + gf, sz))
+
+    # Non-hashed extra assets (not referenced by name in HTML/JS).
+    for gf in GAME_EXTRA_FILES:
         src_path = os.path.join(SRC_BUILD_WEB, gf)
         if os.path.isfile(src_path):
             sz = copy_file(src_path, os.path.join(game_dir, gf))

@@ -303,6 +303,17 @@ if (EMSCRIPTEN)
         COMMENT "Copying shell image assets (splash) to web build output"
         VERBATIM
     )
+    # Port specific: content-hash web output files to defeat browser/mobile caching.
+    # Renames fruit-ninja.{wasm,data,js} and splash.webp to name-<sha8>.ext,
+    # rewrites all internal cross-references (wasm/data refs in js, js/splash refs
+    # in html), and prunes stale hashed files from prior builds.
+    # fruit-ninja.html stays unhashed (stable entry point).
+    add_custom_command(TARGET fruit-ninja POST_BUILD
+        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web-hash-assets.py
+                        ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Content-hashing web output files (cache busting)"
+        VERBATIM
+    )
 else()
     # Native desktop/webOS entry point.
     add_executable(fruit-ninja src/mainSDL.cpp)
