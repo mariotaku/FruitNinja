@@ -284,11 +284,34 @@ void ShopScreen::Init() {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::Release
-// Binary: called from dtor. Marks buy/equip buttons pending-removal.
+// Binary ShopScreen::Release @0x001b498c removes only m_pShopList synchronously
+// and relies on the equip button self-removing via ShrinkBuyButton (shop state 1).
+// The port's state machine does not reliably reach that self-removal before
+// teardown, so m_pBuyButton/m_pEquipButton are removed synchronously here.
+// This prevents the equip hit-region (pos 145,104) leaking onto MainScreen.
+// Re-entrancy: Release() is called from ~ShopScreen() inside HUD::Update's
+// deletion block; std::list::remove() on a different element does not
+// invalidate the iterator currently held by HUD::Update, so this is safe.
+// DIFFERS: binary ShopScreen::Release @0x001b498c removes only m_pShopList
+//          and relies on the equip button self-removing in shop state 1;
+//          port removes m_pBuyButton/m_pEquipButton synchronously here because
+//          the port state machine does not reliably reach state-1 self-removal
+//          before teardown -- prevents the equip hit-region (pos 145,104)
+//          leaking onto MainScreen.
 // ---------------------------------------------------------------------------
 void ShopScreen::Release() {
-    RemoveBuyButton();
-    RemoveEquipButton();
+    // Snapshot before RemoveControl fires DeletedMenuItem (which nulls the ptrs).
+    MenuButton* buy = m_pBuyButton;
+    MenuButton* eq  = m_pEquipButton;
+
+    if (buy && game_work.mHud) {
+        game_work.mHud->RemoveControl(buy);  // fires DeletedMenuItem -> nulls m_pBuyButton
+        if (!buy->m_bNoDestructor) delete buy;
+    }
+    if (eq && game_work.mHud) {
+        game_work.mHud->RemoveControl(eq);   // fires DeletedMenuItem -> nulls m_pEquipButton
+        if (!eq->m_bNoDestructor) delete eq;
+    }
 
     if (m_pShopList) {
         m_pShopList->SetPendingRemoval();
