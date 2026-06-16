@@ -855,6 +855,25 @@ void MainScreen::CreatePlayDojo() {
             pDojoButton->m_RestScale = pDojoButton->m_RestScale * 1.05f;
         }
     }
+
+    // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: quit-bomb recreated every frame
+    // via if(pX==nullptr) guard (binary runs CreateButtons per-frame; port folds quit-bomb
+    // into CreatePlayDojo per-frame path).
+    if (pLeaderboardBtn == nullptr) {
+        CreateQuitButton();
+    } else if (pLeaderboardBtn->m_pEntity == nullptr) {
+        pLeaderboardBtn->CreateFruit();
+        pLeaderboardBtn->m_GrowInTimer = 0.25f;
+        {
+            Mortar::SmartPtr<Mortar::Texture> texQuit =
+                Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
+            if (texQuit.IsValid()) {
+                pLeaderboardBtn->m_RestScale.x = (float)(texQuit->m_Width  + 1);
+                pLeaderboardBtn->m_RestScale.y = (float)(texQuit->m_Height + 1);
+                pLeaderboardBtn->m_RestScale.z = 1.0f;
+            }
+        }
+    }
 }
 
 void MainScreen::CreateQuitButton() {
