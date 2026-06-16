@@ -603,6 +603,10 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #endif
 
     m_State = 1;
+    // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
+    // TouchDown event arrives so DrawSlice's latch sees an active fuse.
+    // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
+    m_SwipeFuse |= 1;
 }
 
 void SlashEntity::OnTouchReleased() {
@@ -1955,7 +1959,10 @@ void SlashEntity::SetModColours(
 
 // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
 bool SlashEntity::TouchDown(InputEvent* event) {
-    if (m_SwipeEndEdge == 0 && m_State == 0) {
+    // Binary @ 0x1ea420: gate is (m_BladeActive == 0), i.e. m_SwipeFuse == 0.
+    // DrawSlice drives m_SwipeFuse to 0 within <=2 frames of lift via the
+    // bit0 latch, independently of trail length / m_PointCount.
+    if (m_SwipeEndEdge == 0 && m_SwipeFuse == 0) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);
