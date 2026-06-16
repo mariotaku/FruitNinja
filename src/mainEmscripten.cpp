@@ -11,7 +11,6 @@
 #include "render/Renderer.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
-#include "engine/audio/SoundManager.h"
 
 // Port specific: Game instance lives as a file-static so the C callback
 // can reach it.  Must outlive the emscripten main loop.
@@ -33,29 +32,18 @@ static const int    EM_MAX_STEPS   = 5;      // spiral-of-death guard
 static double       g_accumulator  = 0.0;    // unprocessed ms carried between RAFs
 static double       g_lastTime     = -1.0;   // last RAF timestamp (emscripten_get_now)
 
-// Port specific: Phase 5 audio-gesture fallback.
-// If the TAP TO START overlay is bypassed (e.g. autoplay policy already
-// allowed audio, or the overlay was dismissed before SDL audio opened),
-// the first in-game SDL_FINGERDOWN still tries to resume the AudioContext.
-// Best-effort only -- the game runs with or without audio.
-static volatile int g_audio_gesture_done = 0;
-
-// Port specific: set to 1 by fn_disable_audio() when the user chose the
-// "tap to start without audio" path.  Prevents the first-touch fallback
-// from re-resuming the AudioContext after a deliberate silent start.
-static volatile int g_audio_disabled = 0;
-
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
 // Written from JS via Module._fn_idbfs_ready() (EMSCRIPTEN_KEEPALIVE below).
 static volatile int g_idbfs_ready = 0;
 
-// Port specific: tap-to-start gate flag.
-// 0 = user has not tapped yet; 1 = user confirmed start via the TAP TO START
-// overlay.  BootWait waits for BOTH g_idbfs_ready AND g_tap_started before
-// calling g_game.init(), so the game never initialises behind the splash.
-// IDBFS syncfs(true) runs in parallel during the tap-wait so it is ready
-// (or already done) by the time the user taps.
+// Port specific: web autoplay -- boot-start gate flag.
+// 0 = JS has not yet signalled start; 1 = JS called fn_user_started().
+// BootWait waits for BOTH g_idbfs_ready AND g_tap_started before calling
+// g_game.init().  In the boot-direct shell (no tap overlay), JS calls
+// fn_user_started() immediately when Module.calledRun fires, so the gate
+// is cleared as soon as loading completes with no user interaction required.
+// IDBFS syncfs(true) runs in parallel so it is typically done by then.
 static volatile int g_tap_started = 0;
 
 // Port specific: called from JS once the initial syncfs(true) callback fires.
@@ -66,39 +54,12 @@ EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
     g_idbfs_ready = 1;
 }
 
-// Port specific: called from JS when the user taps either "TAP TO START"
-// button on the overlay.  Both the audio and silent paths call this so
-// BootWait can proceed regardless of audio choice.
+// Port specific: called from JS when the user taps the "TAP TO START"
+// button on the overlay.  Kept for the tap-overlay path (JS still calls it);
+// now also used by boot-direct path where JS calls it immediately on load.
+// BootWait requires g_tap_started=1 before calling g_game.init().
 EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
     g_tap_started = 1;
-}
-
-// Port specific: called from JS when the user taps "tap to start without
-// audio".  Disables both music and SFX via exactly the same paths the in-game
-// toggle buttons use, so the music-note and speaker icons render their off
-// state as soon as MainScreen is shown.
-// Called after the game runtime is up and game_work has been populated by
-// GameInitialise, so null-checking game_work.m_SaveData is sufficient to
-// confirm managers are ready.
-// Note on persistence: SoundCallback/MusicCallback do NOT write to save data
-// (the binary confirmed: neither callback calls AddToTotal).  The
-// sound_off/music_off save-totals are reset to 0 on every load by
-// GameInitialise (lines 172-175 of GameInitialise.cpp).  Therefore disabling
-// here is session-only -- it will NOT persist to the next page load.
-EMSCRIPTEN_KEEPALIVE void fn_disable_audio(void) {
-    // Guard: if game_work is not yet initialized, do nothing.
-    if (!game_work.m_SaveData) return;
-
-    // Disable SFX -- mirrors SoundCallback() exactly.
-    game_work.m_bSoundOn = false;
-    Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
-
-    // Disable music -- mirrors MusicCallback() exactly.
-    // UpdateMusic reads m_bMusicOn each frame and ramps the volume to 0.
-    game_work.m_bMusicOn = false;
-
-    // Suppress the first-touch AudioContext auto-resume fallback.
-    g_audio_disabled = 1;
 }
 } // extern "C"
 
@@ -136,39 +97,29 @@ static void EmscriptenFrame(void* arg) {
     }
     g_accumulator += elapsed;
 
-    // Port specific: Phase 5 audio-gesture fallback.
-    // SDL_PeepEvents (SDL_PEEKEVENT, no removal) lets us detect the first
-    // touch without consuming the event before frameTick's SDL_PollEvent loop.
-    // Skipped when g_audio_disabled is set (user chose "tap to start without
-    // audio") so the silent choice is not reversed on the first slice.
-    if (!g_audio_gesture_done && !g_audio_disabled) {
-        SDL_Event peekBuf[4];
-        int found = SDL_PeepEvents(peekBuf, 4, SDL_PEEKEVENT,
-                                   SDL_FINGERDOWN, SDL_FINGERDOWN);
-        if (found > 0) {
-            g_audio_gesture_done = 1;
-            // Best-effort resume of the WebAudio context that emcc SDL2
-            // created. SDL2.audioContext confirmed by grepping the generated
-            // fruit-ninja.js (see shell.html comment). Wrapped in try/catch
-            // so any failure is non-fatal; game runs without audio.
-            EM_ASM({
-                try {
-                    var ctx = (typeof Module !== 'undefined' && Module.SDL2)
-                              ? Module.SDL2.audioContext : null;
-                    if (!ctx && typeof SDL2 !== 'undefined') ctx = SDL2.audioContext;
-                    if (ctx && ctx.state === 'suspended') {
-                        ctx.resume().catch(function(e){});
-                    }
-                } catch(e) {}
-            });
-        }
-    }
-
     int steps = 0;
     while (g_accumulator >= EM_FRAME_MS && steps < EM_MAX_STEPS) {
         game->frameTick();
         g_accumulator -= EM_FRAME_MS;
         ++steps;
+    }
+
+    // Port specific: web (#73) -- fade the DOM loading splash out once the game has
+    // actually rendered a few frames.  The shell keeps the splash fully opaque over
+    // the canvas during runtime load + game init (when the canvas is still blank);
+    // deferring the fade until real content is on screen (the game draws its own
+    // in-game HB_logo splash, identical to the DOM splash) avoids the few-frame
+    // blank/white flash a fade-on-load-complete produced.  One-shot.
+    static int  s_renderedFrames = 0;
+    static bool s_splashFaded    = false;
+    if (!s_splashFaded) {
+        s_renderedFrames += steps;
+        if (s_renderedFrames >= 3) {
+            s_splashFaded = true;
+            EM_ASM({
+                if (typeof window._fnFadeSplash === 'function') { window._fnFadeSplash(); }
+            });
+        }
     }
 }
 
@@ -186,12 +137,12 @@ static BootArgs g_bootArgs;
 
 static void BootWait(void* arg) {
     if (!g_idbfs_ready || !g_tap_started) {
-        // Still waiting for IDBFS syncfs(true) and/or the user's tap.
-        // Both must be ready before init: IDBFS runs in parallel during the
-        // tap-wait so it is typically done by the time the user taps.
+        // Still waiting for IDBFS syncfs(true) and/or fn_user_started() from JS.
+        // With the boot-direct shell, fn_user_started() fires on load-complete
+        // with no user gesture required -- typically at the same time as IDBFS.
         return;
     }
-    // Both IDBFS load and user tap are done.  Cancel this boot loop before
+    // Both IDBFS load and start signal are done.  Cancel this boot loop before
     // calling init so that emscripten_set_main_loop below replaces it cleanly.
     emscripten_cancel_main_loop();
 
@@ -200,6 +151,33 @@ static void BootWait(void* arg) {
         fprintf(stderr, "Failed to init game\n");
         return;
     }
+
+    // Port specific: web audio (#73) -- resume the suspended AudioContext on the
+    // first user gesture, called SYNCHRONOUSLY inside the gesture handler.  Mobile
+    // browsers (notably mobile Firefox) only honour AudioContext.resume() within the
+    // gesture's transient-activation window; a resume deferred to the RAF callback
+    // (the previous SDL_PeepEvents approach) works on desktop but is silently
+    // rejected on mobile FF.  A one-shot JS listener that calls resume() directly in
+    // the handler works on every browser.  Listeners are capture+passive so the same
+    // tap still reaches the SDL canvas and registers as a slice -- input is not
+    // consumed.  SDL2 stores the context at Module.SDL2.audioContext (verified in the
+    // generated fruit-ninja.js).  The audio device was opened during g_game.init()
+    // above, so the context already exists; resume() on a running context is a no-op,
+    // so leaving the listeners installed is harmless.
+    EM_ASM({
+        var fnWakeAudio = function() {
+            try {
+                var ctx = (typeof Module !== 'undefined' && Module.SDL2 && Module.SDL2.audioContext)
+                          ? Module.SDL2.audioContext
+                          : (typeof SDL2 !== 'undefined' ? SDL2.audioContext : null);
+                if (ctx && ctx.state === 'suspended') { ctx.resume(); }
+            } catch (e) {}
+        };
+        var evs = 'touchstart mousedown pointerdown keydown'.split(' ');
+        for (var i = 0; i < evs.length; ++i) {
+            window.addEventListener(evs[i], fnWakeAudio, true);
+        }
+    });
 
     // Port specific: hand control to the browser event loop.
     // fps=0 lets the browser decide (requestAnimationFrame).

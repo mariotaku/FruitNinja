@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <!-- Port specific: Custom Emscripten shell for Fruit Ninja web build.
-     Phase 5 (audio gesture-resume) + Phase 7 (shell polish) combined.
-     Letterboxed 3:2 canvas, loading progress bar, TAP TO START overlay
-     that doubles as the required browser audio-gesture unlock.
+     Boot-direct: game starts immediately on load-complete (no tap-to-play cushion).
+     Audio starts muted; SFX is enabled on the first in-game gesture (see
+     mainEmscripten.cpp one-shot hook); music remains opt-in via in-game toggle.
+     Letterboxed 3:2 canvas, loading progress bar, splash image.
      Required Emscripten placeholder: {{{ SCRIPT }}} -->
 <html lang="en">
 <head>
@@ -42,6 +43,10 @@
        TransformTouchNormalized receives raw co-ordinates. */
     #canvas {
       display: block;
+      /* Black backing so any empty/blank canvas frame (before WebGL draws, or a
+         transparent GL clear) shows black -- not the white some browsers paint
+         for an uninitialised canvas. */
+      background: #000;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
@@ -69,8 +74,7 @@
        The black letterbox bars outside #viewport's flex-centered child area are
        #viewport's own black background -- the splash never bleeds past the
        canvas rect.
-       z-index 10 sits above the canvas (which has no explicit z-index) but
-       below the tap-overlay (z-index 20). */
+       z-index 10 sits above the canvas (which has no explicit z-index). */
     #splash-img {
       position: absolute;
       display: block;
@@ -123,31 +127,9 @@
       transition: width 0.15s ease;
     }
 
-    /* --- TAP TO START overlay: absolutely positioned inside #viewport so it
-       is clipped to the game viewport rectangle (same area as the canvas).
-       JS sets its position/size to match the canvas rect.
-       display:none initially; JS shows it (opacity 0 -> 1 fade) when runtime
-       is ready, and fades it out (opacity 1 -> 0) on dismiss before removeChild.
-       Sits above the splash (z-index 20) so the splash image shows behind it
-       as a backdrop -- visually: splash + TAP TO START. --- */
-    #tap-overlay {
-      position: absolute;
-      background: rgba(0, 0, 0, 0.72);
-      display: none; /* shown by JS once runtime ready */
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 20;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      gap: 1.4em;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-
     /* --- ERROR overlay: shown when the load fails or stalls.
        Fixed full-viewport so it is always visible regardless of canvas size.
-       z-index 30 sits above tap-overlay (20) so it cannot be obscured. --- */
+       z-index 30 ensures it sits above everything. --- */
     #error-overlay {
       position: fixed;
       inset: 0;
@@ -193,46 +175,8 @@
       outline: none;
     }
 
-    /* Game-asset launch UI -- no modern text.  #tap-play is the in-game white
-       play button (textures/play_button.tex) reused as the single "tap to
-       start" button.  Audio on/off is chosen via #sound-toggle (top-right),
-       mirroring the in-game menu.  JS resize() sets pixel sizes relative to the
-       canvas height. */
-    #tap-play {
-      display: block;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.55));
-      transition: transform 0.12s ease, filter 0.12s ease;
-    }
-    #tap-play:hover, #tap-play:focus {
-      transform: scale(1.06);
-      filter: drop-shadow(0 4px 18px rgba(255,255,255,0.35));
-      outline: none;
-    }
-
-    /* Sound toggle: absolutely positioned at the overlay's top-right, like the
-       in-game menu's audio buttons.  Swaps sound.png (on) <-> sound_cross.png
-       (off); its state decides whether the game starts with audio. */
-    #sound-toggle {
-      position: absolute;
-      display: block;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
-      transition: transform 0.12s ease;
-    }
-    #sound-toggle:hover, #sound-toggle:focus {
-      transform: scale(1.08);
-      outline: none;
-    }
-
     /* Port specific: full-screen toggle button.  A corner overlay in the
-       top-right of the window, sitting ABOVE the canvas (z-index 25) and above
-       the tap-overlay's own top-right sound toggle area is irrelevant because
-       this lives outside the viewport, fixed to the window corner.  Fixed
+       top-right of the window, sitting ABOVE the canvas (z-index 25).  Fixed
        positioning keeps it pinned regardless of letterbox bars; pointer-events
        are its own so taps here never reach the canvas/game.  Semi-transparent
        dark pill with an inline-SVG glyph that JS swaps between enter/exit. */
@@ -276,11 +220,10 @@
   </style>
 </head>
 <body>
-  <!-- Port specific: splash, progress bar, and tap-overlay all live INSIDE
+  <!-- Port specific: splash, progress bar, and canvas all live INSIDE
        the viewport div so they are naturally clipped to the game-viewport
        rectangle (scale*960 x scale*640, flex-centered with black letterbox bars
-       outside). resize() sets explicit CSS dimensions on the canvas, splash, and
-       tap-overlay so they all coincide. -->
+       outside). resize() sets explicit CSS dimensions so they all coincide. -->
   <div id="viewport">
     <!-- Canvas: id="canvas" is what Emscripten looks up.  Backing size is
          960x640 (set by SDL_CreateWindow in mainEmscripten.cpp); JS resize()
@@ -308,23 +251,6 @@
       <div id="progress-bar"></div>
     </div>
 
-    <!-- TAP TO START overlay: absolute sibling of canvas inside the viewport div.
-         resize() sizes/positions it to match the canvas rect.
-         Primary button resumes AudioContext (audio-gesture unlock) then starts.
-         Secondary button skips audio resume and calls fn_disable_audio() so
-         the in-game music/sfx toggles display as off from the first frame.
-         Both buttons call fn_user_started() so BootWait can proceed.
-         After dismiss the overlay is removed from DOM. -->
-    <div id="tap-overlay" aria-modal="true" role="dialog" aria-label="Start game">
-      <!-- Sound toggle (top-right, like the in-game menu). Default ON; tapping
-           it flips the icon and the audio-start choice. -->
-      <img id="sound-toggle" src="sound.webp" role="button" tabindex="0"
-           aria-label="Toggle sound" alt="Sound on" draggable="false">
-      <!-- Single play button: starts the game with audio on/off per the toggle. -->
-      <img id="tap-play" src="play_button.webp" role="button" tabindex="0"
-           alt="Tap to start" draggable="false">
-    </div>
-
     <!-- Error overlay: shown by _showError() when the load fails or stalls.
          Positioned fixed (full viewport) so it is always visible above everything.
          Hidden by default; _showError() sets display:flex. -->
@@ -338,7 +264,7 @@
          window corner, above the canvas (z-index 25).  Its own click/touch
          handler toggles fullscreen on #viewport (so the letterboxed canvas +
          black bars fill the screen) and requests landscape orientation.
-         Hidden until the game starts (shown by _dismissPlay).  The inline SVG
+         Hidden until the game starts (shown by _startDirectly).  The inline SVG
          starts as the ENTER-fullscreen glyph; JS swaps it to the EXIT glyph on
          fullscreenchange.  pointer-events on the SVG are off so the button div
          is the event target; the handler stops propagation so the tap never
@@ -354,9 +280,8 @@
 
   <script>
   /* Port specific: all overlay elements are inside the viewport div as absolute
-     siblings of the canvas.  resize() sizes them to match the canvas's
-     letterboxed CSS rect so splash/tap-overlay cover exactly the game
-     viewport, and the progress bar sits in the lower portion of that rect.
+     siblings of the canvas.  resize() sizes the canvas, splash, loading cover,
+     and progress bar to the letterboxed CSS rect.
      Black letterbox bars outside the 3:2 area are the viewport div's background. */
   (function () {
     var GAME_W = 960, GAME_H = 640;
@@ -364,9 +289,6 @@
     var splashImg    = document.getElementById('splash-img');
     var loadingCover = document.getElementById('loading-cover');
     var progressWrap = document.getElementById('progress-bar-wrap');
-    var tapOverlay   = document.getElementById('tap-overlay');
-    var tapPlay      = document.getElementById('tap-play');
-    var soundToggle  = document.getElementById('sound-toggle');
 
     function resize() {
       var ww = window.innerWidth, wh = window.innerHeight;
@@ -385,32 +307,6 @@
         splashImg.style.height = ch + 'px';
         splashImg.style.left   = Math.floor((ww - cw) / 2) + 'px';
         splashImg.style.top    = Math.floor((wh - ch) / 2) + 'px';
-      }
-
-      /* Tap-overlay: same rect as splash/canvas. */
-      if (tapOverlay) {
-        tapOverlay.style.width  = cw + 'px';
-        tapOverlay.style.height = ch + 'px';
-        tapOverlay.style.left   = Math.floor((ww - cw) / 2) + 'px';
-        tapOverlay.style.top    = Math.floor((wh - ch) / 2) + 'px';
-      }
-
-      /* Game-asset launch UI: sizes scale with the canvas height.  The play
-         button is 2x the previous size (0.40 of canvas height).  The square
-         sound toggle sits at the overlay's top-right corner (a small inset),
-         mirroring the in-game menu's audio buttons. */
-      if (tapPlay) {
-        var playSz = Math.round(ch * 0.40);
-        tapPlay.style.width  = playSz + 'px';
-        tapPlay.style.height = playSz + 'px';
-      }
-      if (soundToggle) {
-        var sndSz = Math.max(Math.round(ch * 0.11), 28);
-        var sndPad = Math.round(ch * 0.045);
-        soundToggle.style.width  = sndSz + 'px';
-        soundToggle.style.height = sndSz + 'px';
-        soundToggle.style.top    = sndPad + 'px';
-        soundToggle.style.right  = sndPad + 'px';
       }
 
       /* Loading cover + progress bar: both centre on the splash's baked
@@ -483,16 +379,15 @@
   var _progressWrap = document.getElementById('progress-bar-wrap');
   var _loadingCover = document.getElementById('loading-cover');
   var _splashImg    = document.getElementById('splash-img');
-  var _tapOverlay   = document.getElementById('tap-overlay');
-  var _tapPlay      = document.getElementById('tap-play');
-  var _soundToggle  = document.getElementById('sound-toggle');
   var _fullscreenBtn = document.getElementById('fullscreen-btn');
   var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
   var _errorDetail  = document.getElementById('error-detail');
-  var _audioOn      = true;   /* sound-toggle state; decides audio-on at start */
   var _runtimeReady = false;
   var _loadFailed   = false;
+  /* Guard so the splash fade runs once even if both the C++ first-frame hook and
+     the _startDirectly safety-timeout call it. */
+  var _splashFadeStarted = false;
   /* Anchored at script parse time; updated by Module.setStatus on each progress
      tick.  The stall watchdog compares Date.now() against this value. */
   var _lastProgressTime = Date.now();
@@ -500,30 +395,32 @@
      decide whether the download completed before giving up. */
   var _lastProgressPct  = 0;
 
-  /* Called when Module.calledRun is true (runtime loaded, BEFORE game init).
-     Hides the progress bar, keeps the splash visible as backdrop for the
-     TAP TO START buttons, and fades the tap-overlay in (opacity 0 -> 1). */
-  function _showTapOverlay() {
+  /* Port specific: web autoplay -- boot-direct start.
+     Called when Module.calledRun is true (runtime loaded, BEFORE game init).
+     Hides the loading UI (progress bar + cover + splash), then immediately
+     signals fn_user_started() so BootWait proceeds without any tap overlay.
+     Audio starts muted (both flags OFF via GameInitialise.cpp web guard);
+     the first in-game gesture enables SFX via the one-shot in mainEmscripten.cpp. */
+  function _startDirectly() {
     if (_runtimeReady) return;
     _runtimeReady = true;
-    /* Hide progress bar AND its black loading-cover strip -- download done.
-       The cover only blanketed the splash's baked "Loading..." text while the
-       bar replaced it; with the bar gone the cover is an orphan black stripe,
-       so hide it here too. Splash stays as tap-overlay backdrop. */
+    /* Hide the loading bar + cover (download complete) but KEEP the splash up.
+       The splash stays fully opaque over the still-blank canvas through game init
+       until the game has actually rendered its first frames, at which point the
+       C++ first-frame hook (mainEmscripten.cpp) calls window._fnFadeSplash().
+       Fading on load-complete (the previous behaviour) uncovered the canvas while
+       it was still blank for a few frames -> visible flash; deferring the fade to
+       the first rendered frame (the game draws its own identical in-game HB_logo
+       splash) makes the hand-off seamless. */
     if (_progressWrap) _progressWrap.style.display = 'none';
     if (_loadingCover) _loadingCover.style.display = 'none';
-    if (_tapOverlay) {
-      /* Reliable fade-in: set display:flex and opacity:0 together so the
-         element enters layout with an established opacity:0 state, then
-         force a synchronous reflow so the browser commits that state before
-         we flip opacity to 1. Without the reflow the display change and the
-         opacity change land in the same frame and no transition fires. */
-      _tapOverlay.style.display = 'flex';
-      _tapOverlay.style.opacity = '0';
-      void _tapOverlay.offsetHeight; /* force reflow */
-      _tapOverlay.style.opacity = '1';
-      if (_tapPlay) _tapPlay.focus();
-    }
+    /* Reveal the fullscreen toggle now that the game is starting. */
+    if (_fullscreenBtn) _fullscreenBtn.style.display = 'flex';
+    /* Signal BootWait to proceed -- no tap required. */
+    _notifyUserStarted();
+    /* Safety net: if the first-frame hook never fires (e.g. init stalls), fade the
+       splash anyway after 3s so it cannot linger forever over a running game. */
+    setTimeout(_removeOverlayFade, 3000);
   }
 
   /* Show the error overlay with a detail message.  Guards against being called
@@ -533,7 +430,6 @@
     if (_runtimeReady || _loadFailed) return;
     _loadFailed = true;
     if (_progressWrap) _progressWrap.style.display = 'none';
-    if (_tapOverlay)   _tapOverlay.style.display   = 'none';
     if (_errorDetail)  _errorDetail.textContent     = msg || '';
     if (_errorOverlay) _errorOverlay.style.display  = 'flex';
     var reloadBtn = document.getElementById('error-reload');
@@ -551,51 +447,43 @@
     });
   })();
 
-  function _resumeAudioContext() {
-    try {
-      var ctx = null;
-      if (typeof Module !== 'undefined' && Module.SDL2) ctx = Module.SDL2.audioContext;
-      if (!ctx && typeof SDL2 !== 'undefined') ctx = SDL2.audioContext;
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume().then(function () {
-          console.log('[audio] AudioContext resumed via tap gesture');
-        }).catch(function (e) {
-          console.warn('[audio] AudioContext.resume() rejected:', e);
-        });
-      }
-    } catch (e) {
-      console.warn('[audio] resume exception (non-fatal):', e);
-    }
-  }
-
   function _removeOverlayNow() {
     /* Immediate DOM removal -- called after fade-out transition completes.
        The loading cover is removed alongside the splash so the baked
        "Loading..." text it hid never reappears as the splash is torn down. */
-    if (_tapOverlay && _tapOverlay.parentNode) _tapOverlay.parentNode.removeChild(_tapOverlay);
     if (_loadingCover && _loadingCover.parentNode) _loadingCover.parentNode.removeChild(_loadingCover);
     if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
   }
 
   function _removeOverlayFade() {
-    /* Fade out the overlay (opacity 1 -> 0), then remove from DOM.
-       pointer-events:none is set immediately so a fading overlay cannot
+    /* Fade out the splash (opacity 1 -> 0), then remove from DOM.
+       Idempotent: guarded so the C++ first-frame hook and the _startDirectly
+       safety-timeout can both call it without double-fading.
+       pointer-events:none is set immediately so the fading splash cannot
        intercept input during the transition.
        transitionend fires once; setTimeout fallback covers browsers that
        suppress transitionend when the element is already gone or hidden. */
-    if (!_tapOverlay) { _removeOverlayNow(); return; }
-    _tapOverlay.style.pointerEvents = 'none';
-    _tapOverlay.style.opacity = '0';
+    if (_splashFadeStarted) return;
+    _splashFadeStarted = true;
+    if (!_splashImg) { _removeOverlayNow(); return; }
+    _splashImg.style.pointerEvents = 'none';
+    _splashImg.style.transition = 'opacity 0.3s ease';
+    _splashImg.style.opacity = '0';
     var _done = false;
     function _onFadeDone() {
       if (_done) return;
       _done = true;
       _removeOverlayNow();
     }
-    _tapOverlay.addEventListener('transitionend', _onFadeDone);
+    _splashImg.addEventListener('transitionend', _onFadeDone);
     /* 350ms fallback: slightly longer than the 0.3s CSS transition. */
     setTimeout(_onFadeDone, 350);
   }
+
+  /* Port specific: web (#73) -- exposed so the C++ first-frame hook
+     (mainEmscripten.cpp EmscriptenFrame) can trigger the splash fade once the
+     canvas has actually rendered content, masking the few-frame blank flash. */
+  window._fnFadeSplash = _removeOverlayFade;
 
   function _notifyUserStarted() {
     try {
@@ -603,54 +491,6 @@
     } catch (ex) {
       console.warn('[boot] fn_user_started exception (non-fatal):', ex);
     }
-  }
-
-  /* Sound toggle: flip the audio-start choice and swap the icon. Does NOT
-     start the game -- only the play button dismisses the overlay. */
-  function _toggleSound(e) {
-    e.stopPropagation(); e.preventDefault();
-    _audioOn = !_audioOn;
-    if (_soundToggle) {
-      _soundToggle.src = _audioOn ? 'sound.webp' : 'sound_cross.webp';
-      _soundToggle.setAttribute('aria-label', _audioOn ? 'Sound on' : 'Sound off');
-    }
-  }
-
-  /* Single play button: start with audio on/off per the sound toggle. */
-  function _dismissPlay(e) {
-    e.stopPropagation(); e.preventDefault();
-    if (_audioOn) {
-      /* Resume the suspended AudioContext via this user gesture. */
-      _resumeAudioContext();
-    } else {
-      /* Mark the game muted so the in-game music/sfx toggles read off. */
-      try {
-        if (typeof Module !== 'undefined' && Module._fn_disable_audio) Module._fn_disable_audio();
-      } catch (ex) {
-        console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
-      }
-    }
-    /* Fire game callbacks immediately -- don't wait for the fade. */
-    _notifyUserStarted();
-    /* Reveal the full-screen toggle now that the game is running. */
-    if (_fullscreenBtn) _fullscreenBtn.style.display = 'flex';
-    /* Fade out overlay; DOM removal happens after transition completes. */
-    _removeOverlayFade();
-  }
-
-  if (_tapPlay) {
-    _tapPlay.addEventListener('click',      _dismissPlay);
-    _tapPlay.addEventListener('touchstart', _dismissPlay, {passive: false});
-    _tapPlay.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') _dismissPlay(e);
-    });
-  }
-  if (_soundToggle) {
-    _soundToggle.addEventListener('click',      _toggleSound);
-    _soundToggle.addEventListener('touchstart', _toggleSound, {passive: false});
-    _soundToggle.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') _toggleSound(e);
-    });
   }
 
   /* Port specific: full-screen toggle + landscape-orientation request.
@@ -839,13 +679,16 @@
   };
 
   (function () {
-    /* Poll every 100ms: success path -- calledRun means the runtime started. */
+    /* Port specific: web autoplay -- boot-direct poll.
+       Poll every 100ms: success path -- calledRun means the runtime started.
+       _startDirectly() hides the loading UI and immediately calls fn_user_started()
+       so BootWait proceeds without waiting for a tap. */
     var _pollInterval = setInterval(function () {
       if (typeof Module !== 'undefined' && Module.calledRun) {
         clearInterval(_pollInterval);
         clearTimeout(_absoluteTimeout);
         clearInterval(_stallWatchdog);
-        _showTapOverlay();
+        _startDirectly();
       }
     }, 100);
 
@@ -869,15 +712,15 @@
 
     /* Absolute 45s fallback: by now the download should have finished.
        If calledRun was missed but the progress bar reached ~100% (download
-       succeeded), show the tap overlay so the user can still start.
+       succeeded), start directly so the game still runs.
        If the download never completed, show the error overlay instead. */
     var _absoluteTimeout = setTimeout(function () {
       clearInterval(_pollInterval);
       clearInterval(_stallWatchdog);
       if (_runtimeReady || _loadFailed) return;
       if (_lastProgressPct >= 99) {
-        console.warn('[shell] absolute fallback: download complete, calledRun not observed -- showing tap overlay');
-        _showTapOverlay();
+        console.warn('[shell] absolute fallback: download complete, calledRun not observed -- starting directly');
+        _startDirectly();
       } else {
         console.warn('[shell] absolute fallback: download incomplete after 45s');
         _showError('Loading timed out. Check your connection and reload.');
