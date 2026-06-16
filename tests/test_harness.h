@@ -67,11 +67,19 @@ struct TestHarness {
           interactive(false), screenshot(false),
           window(NULL), gl(NULL),
           initFrames(5),
+          m_interactiveDefault(false),
           m_glReadPixels(NULL)
     {
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     }
+
+    // Port specific: standalone scene tool.
+    // Call before ParseFlags() to opt a scene into visible-by-default mode.
+    // With interactiveDefault=true: the window starts visible unless --screenshot
+    // or --headless is passed. The standard test workflow (no flags = headless
+    // assertions) is unchanged for callers that never call this.
+    void SetInteractiveDefault(bool v) { m_interactiveDefault = v; }
 
     ~TestHarness() {
         Shutdown();
@@ -83,12 +91,21 @@ struct TestHarness {
     void SetInitFrames(int n) { initFrames = n; }
 
     // -------- arg parsing --------
-    // Parses --interactive / --screenshot; ignores unknown flags so the
-    // caller's main can do its own parsing pass. Call once before Init().
+    // Parses --interactive / --screenshot / --headless.
+    // Ignores unknown flags so the caller's main can do its own parsing pass.
+    // Call once before Init().
+    //
+    // Flag semantics:
+    //   default (no flags)     -- interactive=m_interactiveDefault, screenshot=false
+    //   --interactive          -- force visible window (overrides --headless)
+    //   --screenshot           -- headless one-shot: run hidden, dump PPM, exit
+    //   --headless             -- force hidden window, no screenshot dump
     bool ParseFlags() {
+        interactive = m_interactiveDefault;
         for (int i = 1; i < argc; ++i) {
-            if      (std::strcmp(argv[i], "--interactive") == 0) interactive = true;
-            else if (std::strcmp(argv[i], "--screenshot")  == 0) screenshot  = true;
+            if      (std::strcmp(argv[i], "--interactive") == 0) { interactive = true;  screenshot = false; }
+            else if (std::strcmp(argv[i], "--screenshot")  == 0) { screenshot  = true;  interactive = false; }
+            else if (std::strcmp(argv[i], "--headless")    == 0) { interactive = false; }
         }
         return true;
     }
@@ -257,6 +274,7 @@ struct TestHarness {
     int          initFrames;
 
 private:
+    bool m_interactiveDefault;
     // Per-instance glReadPixels pointer. Loaded lazily via
     // SDL_GL_GetProcAddress on first use; cached for subsequent calls.
     PFN_glReadPixels m_glReadPixels;
