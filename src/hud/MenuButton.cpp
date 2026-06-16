@@ -180,6 +180,10 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bHasHitArea    = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f ? 1 : 0;
     m_bInteractive   = 1;
     m_bAcceptsTouch  = 1;
+    // TODO: v1.6.1 MenuButton::Init @0x0019b994 -- binary sets m_bBackdropActive=0 here;
+    // DojoScreen::CreateButtons then writes 1 for the back button specifically.
+    // Port defaults to 1 (ring visible for all buttons). Functionally harmless since
+    // Draw doesn't gate the ring on this field, but the field is inverted vs binary.
     m_bBackdropActive = 1;
     m_GrowInTimer    = 0.0f;
     m_AnimPhase      = 0;
@@ -282,9 +286,17 @@ void MenuButton::CreateFruit() {
     } else {
         Bomb* bomb = static_cast<Bomb*>(e);
         bomb->m_bMovement = 0;
+        // NOTE: bomb->scale.x here is bombSize*0.01 (~0.55), NOT the raw bombSize (~55).
+        // The binary @0x0019b8c8 uses the raw FruitInfo bomb size (2.0*bombBaseSize=110)
+        // for m_RestScale, equivalent to bomb->scale*200 (same as the fruit branch pattern).
+        // We use FruitInfo_GetBombSize()*2.0f to match the binary's unscaled formula directly.
+        const float bombRawSize = FruitInfo_GetBombSize();   // ~55 from fruitlist.xml
         bomb->scale = bomb->scale * BOMB_MENU_SCALE;
         bomb->SetCallback(m_ClickCallback, this);
         bomb->m_ZPosition = FRUIT_ZPOS;
+        // Binary v1.6.1 MenuButton::CreateFruit @0x0019b8c8: m_RestScale = 2.0 * bombBaseSize
+        m_RestScale = Vec3(bombRawSize * 2.0f, bombRawSize * 2.0f, bombRawSize * 2.0f);
+        m_bHasHitArea = 1;
     }
 
     // Random rotation speed (8-12 deg/frame, random direction)
