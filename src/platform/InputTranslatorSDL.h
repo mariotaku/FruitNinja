@@ -37,10 +37,21 @@ public:
     // Initialize action hashes (call once after StringHash is available)
     void Init();
 
-    // Process an SDL event → dispatch InputEvents via InputManager
+    // Process an SDL event -> dispatch InputEvents via InputManager
     void ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
+    // Port specific: per-frame shim pump -- call once after SDL_PollEvent drains
+    // and before SystemManager::Update consumes the ring buffer.
+    // Internally re-dispatches TouchDown_N for held fingers so
+    // SlashEntity::OnTouchActive emits a blade point every frame (binary cadence).
+    void BeginFrame();
+
 private:
+    // Port specific: SDL is event-driven; Bada polled touch every frame.
+    // Re-dispatch TouchDown_N each frame for held fingers so
+    // SlashEntity::OnTouchActive emits a blade point per frame (binary cadence)
+    // -- fixes slow-slice blade dashing. Press-edge (==2) stays first-frame-only.
+    void PollHeldFingers();
     // Convert normalized SDL touch coords to game coords (centred ortho).
     void TransformTouchNormalized(float nx, float ny, float& gx, float& gy);
 
