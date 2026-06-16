@@ -362,9 +362,13 @@ void MenuButton::Remove() {
     m_pTrackedFruit = nullptr;
 }
 
-// Binary @ 0x0014e5cc
+// Binary @ 0x0019a7f8 (PLT thunk @0x001071c0 -> real body)
 bool MenuButton::TouchReleased() {
-    if (m_FruitType < 0) {
+    // Binary gate requires BOTH m_FruitType<0 AND m_bRespondsToBackKey. Toggle
+    // buttons (sound/music) set m_bRespondsToBackKey=0, so release fires only
+    // m_DeletedCallback, NOT m_ClickCallback -- otherwise the press-edge toggle
+    // reverts on lift (the double-toggle bug). #65.
+    if (m_FruitType < 0 && m_bRespondsToBackKey) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
         Game* game = Game::GetInstance();
