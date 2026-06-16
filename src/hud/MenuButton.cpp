@@ -188,7 +188,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_ShakeTimer     = 0.0f;
     m_NewBouncePhase = 0.0f;
     m_LabelExtraAlpha = 0.0f;
-    m_bClearsMenuItems = 0;
+    m_bClearsMenuItems = 1;  // binary Init @0x19b9f8 sets 1 for EVERY button: slicing any
+                             // menu button clears all menu fruits (ClearMenuItems) so the
+                             // type-0 entity count reaches 0 and the target screen can open.
     m_bDragCancel    = 0;
     m_bRespondsToBackKey = 0;
     m_fieldD4        = static_cast<int>(0xffffffff);

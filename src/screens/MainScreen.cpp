@@ -314,11 +314,17 @@ void MainScreen::Update(float dt) {
         const float tt_d = sizeY_d * m_Timer2;
         pos.y = (sizeY_d + 320.0f - 2.0f * tt_d) * 0.5f;
 
-        if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.001f) {
+        // Binary gates ONLY on entity-count==0 AND (m_Timer2 != 0 && m_Timer2 < 0.001).
+        // The port-only !m_pDojoScreen guard was a stale-latch bug that suppressed re-creation.
+        if (fruitCount == 0 && m_Timer2 != 0.0f && m_Timer2 < 0.001f) {
             m_Timer2 = 0.0f;
-            m_pDojoScreen = new DojoScreen(game);
-            m_pDojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
-            game_work.mHud->AddControl(m_pDojoScreen);
+            DojoScreen* dojoScreen = new DojoScreen(game);
+            dojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
+            // Binary @ 0x197494: vtable->Init(scr) is called BEFORE HUD::AddControl.
+            // HUD::AddControl only appends to list; it does NOT call Init internally.
+            dojoScreen->Init();
+            game_work.mHud->AddControl(dojoScreen);
+            m_pDojoScreen = dojoScreen;
         }
         break;
     }
