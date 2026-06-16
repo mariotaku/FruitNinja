@@ -491,13 +491,14 @@ void MenuButton::Update(float dt) {
                 }
             }
 
-            // grow-in quarter-sine ease-out (phase decrement toward 0)
+            // shrink-out quarter-sine ease (phase decrement toward 0 after entity nulled by slice)
             // ASM-spec: DAT_0019ac68=109216 / clamp 16380 @ MenuButton::Update
+            // ASM-spec v1.6.1 MenuButton::Update @0x0019acbc: shrink-out complete (phase<=0, entity gone) -> m_bPendingRemoval=1 (self-removal)
             pos.z = -5.0f;
             int nextPhase = (int)m_AnimPhase - (int)(dt * 109216.0f);
             if (nextPhase < 1) {
                 m_AnimPhase = 0;
-                m_GrowShrinkDone = 1;
+                m_bPendingRemoval = 1;
             } else {
                 m_AnimPhase = (uint16_t)nextPhase;
             }
