@@ -207,6 +207,14 @@ endif()
 add_test(NAME bonus_screen COMMAND test_bonus_screen)
 set_tests_properties(bonus_screen PROPERTIES TIMEOUT 60)
 
+# ---- Standalone scene test harnesses (visual dev tools, NOT CTest tests) ----
+# scene_fruit_scene.exe  -- single watermelon in a ballistic arc
+# scene_slash_scene.exe  -- blade trail driven by mouse/touch drag
+# Port specific: standalone entity test harness; excluded from asm-verify/symbol-diff.
+if (NOT EMSCRIPTEN)
+    add_subdirectory(scenes)
+endif()
+
 # Per-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn with
 # full pos/vel/gravity parameters plus per-wave spawner config so
 # divergences vs. binary expectations are readable line-by-line. Always
