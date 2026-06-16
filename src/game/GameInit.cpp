@@ -575,6 +575,12 @@ void GameUpdate(float dt, bool active) {
             // path is dead in the port too.
         }
     }
+
+    // Binary @ 0x11a328: m_bFrameDirty cleared unconditionally at end of each
+    // tick. It is a one-frame back/pause-input latch set by RegressMenuCallback
+    // (binary @ 0x168e9c) and ShowPauseMenuCallback (binary @ 0x168e6c) and
+    // consumed within the same tick by MenuButton::Update (binary @ 0x19ad14).
+    game_work.m_bFrameDirty = false;
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame.

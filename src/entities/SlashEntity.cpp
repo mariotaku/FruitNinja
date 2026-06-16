@@ -1316,7 +1316,8 @@ void SlashEntity::Update(float dt) {
     if (m_Scale < 0.0f) m_Scale = 0.0f;
 
     bool slicedThisFrame = false;
-    if (m_PointCount >= 2 && m_State != 0 && !bombHitActive
+    // ASM-spec binary @0x1e87ac: outer gate is m_PointCount >= 4 (not >= 2).
+    if (m_PointCount >= 4 && m_State != 0 && !bombHitActive
         && !menuDragActive && !gamePaused) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
@@ -1333,7 +1334,8 @@ void SlashEntity::Update(float dt) {
                     if (!e->IsActive()) continue;
                     if (!e->m_Col) continue;
                     ColSphere* cs = static_cast<ColSphere*>(e->m_Col);
-                    if (cs->radius <= 0.0f) continue;
+                    // ASM-spec binary @0x1e8810-0x1e8838: no radius<=0 skip -- binary
+                    // has no such guard; removed port-side addition.
 
                     Vec3 bladeVel;
                     if (CollideWithSphere(*cs, bladeVel)) {

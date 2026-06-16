@@ -578,7 +578,19 @@ void MenuButton::Update(float dt) {
     // ---- touch handling ----
     // m_bTouchHeld (compat): port-side gate equivalent to binary's +0x131 guard in v1.0.
     if (m_bAcceptsTouch && m_bTouchHeld && m_bEnabled) {
-        // TODO: 0x0019a860 -- Game::m_BackKeyPressed(+0x610) check + m_bBackdropActive gate
+        // ASM-spec binary @0x0019ad14 -- BACK-KEY force-slice path.
+        // The menu fruit IS reached by the ActorManager blade-vs-sphere loop normally;
+        // this block is the binary's separate back-key / pause-input forced slice
+        // (m_bFrameDirty = back/pause input latch, set by RegressMenuCallback/ShowPauseMenuCallback).
+        // It drives CollisionResponse directly, independently of the blade geometry test.
+        if (game_work.m_bFrameDirty && m_bBackdropActive) {
+            if (m_pEntity == nullptr) {
+                TouchReleased();
+            } else {
+                Vec3 blade(1.0f, 0.0f, 0.0f);
+                m_pEntity->CollisionResponse(nullptr, 0, 0, &blade);
+            }
+        }
         // TODO: 0x0019a860 -- GetWorldPos() for rect origin; using pos directly for now
 
         float hw = m_RestScale.x * 0.5f;
