@@ -4,10 +4,6 @@
 // sizeof(SlashEntity) = 0x188 (392). See SlashEntity.h for field/method addresses.
 //
 
-#ifndef FN_DEBUG_TOUCH
-#define FN_DEBUG_TOUCH 1   // TEMP: touch-stack debug session; remove when done
-#endif
-
 #include "SlashEntity.h"
 #include "math/MathUtil.h"
 #include "debug/Logger.h"
@@ -532,8 +528,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
         : (MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE);
 
 #ifdef FN_DEBUG_TOUCH
-    LOG_DEBUG("SLASH", "OnTouchActive[%d]: pos=(%.2f,%.2f) isSeed=%d distSq=%.2f thresh=%.2f tail_x=%.1f",
-             m_FingerId, x, y, (int)isSeed, distSq, thresh, m_TailPos.x);
+    LOG_DEBUG("SLASH", "OnTouchActive[%d]: pos=(%.2f,%.2f) isSeed=%d distSq=%.2f thresh=%.2f state=%d",
+              m_FingerId, x, y, (int)isSeed, distSq, thresh, m_State);
 #endif
 
     if (distSq < thresh && !isSeed) {
@@ -630,7 +626,6 @@ void SlashEntity::OnTouchReleased() {
 //   and set m_PointCount = m_SplitPoint-4.
 // ---------------------------------------------------------------------------
 void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) {
-    (void)pressure;
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
     if (!center || !dir) return;
 
@@ -643,18 +638,17 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
         return;
     }
 
-    // ORIGINAL_SLASH constants.
-    static const float kEndW      = 1.0f;    // endW   @ SlashModInfo+0x6c / 0x2D8D78
-    static const float kStartW    = 0.0f;    // startW @ SlashModInfo+0x70 / 0x332BCC
-    static const float kDt        = 1.0f / 60.0f;  // fixed ARM32 timestep
+    // Head half-width (binary AddPoint @0x1e9bf4): param_1 * 9.0 * ModSlashThickness.
+    //   param_1 = pressure (caller passes 1.0); ModSlashThickness = g_Scale1 (runtime 1.0).
+    // [SLASH-CFG]-confirmed runtime config: g_Scale1=1.0 (Thickness), g_Scale2=0.0 (EndThickness),
+    // g_Scale3=1.0 (Length). Port previously used dt*10*1.0 = 0.167 -> below the UpdatePoints
+    // shrink rate (45*dt) -> every point retired -> empty blade.
+    const float halfWidth = pressure * 9.0f * g_Scale1;
 
-    // Head half-width: dt*10*endW (binary @ 0x1e9c08 s16 = param_1 * 10.0).
-    const float halfWidth = kDt * 10.0f * kEndW;
-
-    // Point-spacing gate: segLen > dt*10*(endW+(startW-endW)*0.6) = dt*10*0.4.
-    // Applied only when trail already has at least one point.
-    // DAT_001e9eb0 = 0.6 (binary @ 0x1e9be8..0x1e9c70).
-    static const float kSpacingThresh = kDt * 10.0f * (kEndW + (kStartW - kEndW) * 0.6f);
+    // Point-spacing gate (binary): param_1 * 9.0 * (ModSlashEndThickness + (ModSlashThickness - ModSlashEndThickness)*0.6)
+    //   = pressure * 9.0 * (g_Scale1 + (g_Scale2 - g_Scale1)*0.6). DAT_001e9eb0 = 0.6.
+    // Applied only when the trail already has at least one point.
+    const float kSpacingThresh = pressure * 9.0f * (g_Scale2 + (g_Scale1 - g_Scale2) * 0.6f);
     if (m_PointCount > 0) {
         float dx = center->x - m_HeadPos.x;
         float dy = center->y - m_HeadPos.y;
@@ -775,296 +769,484 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
     m_PointCount += 2;
 
 #ifdef FN_DEBUG_TOUCH
-    LOG_DEBUG("SLASH", "AddPoint[%d]: ADDED center=(%.2f,%.2f) halfW=%.3f idx=%d -> pointCount=%d",
-             m_FingerId, center->x, center->y, halfWidth, centerIdx, m_PointCount);
+    LOG_DEBUG("SLASH", "AddPoint[%d]: ADDED center=(%.2f,%.2f) halfW=%.3f -> pointCount=%d",
+              m_FingerId, center->x, center->y, halfWidth, m_PointCount);
 #endif
 
     m_PrevHeadPos = m_HeadPos;
     m_HeadPos     = *center;
 }
 
+// Global slash-active frame counter (binary BSS; incremented each frame
+// a head-cap vertex is emitted by UpdatePoints @ 0x1e6914).
+static int s_slashes = 0;
+
 // ---------------------------------------------------------------------------
 // UpdatePoints -- binary @ 0x1e6914 (v1.6.1)
-// Per-frame full geometry rebuild: miter vectors from segment lengths, arc-length
-// U mapping, head cap.
+// ASM-verified: 2026-06-15T00:00 binary @ 0x1e6914 (user Ghidra decompile)
 //
-// ORIGINAL_SLASH constants (hardcoded; SetEquipped path not yet ported):
-//   startW (cfgA) = 0.0 @ 0x332BCC, endW (cfgB) = 1.0 @ 0x2D8D78, cfgDiv = 1.0 @ 0x2D8D74
+// Mod globals (decompiler name -> port global):
+//   ModSlashThickness            -> g_Scale1  (startThick; 0.0 ctor default, 1.0 after ResetModScales)
+//   ModSlashEndThickness         -> g_Scale2  (endThick;   1.0 ctor default)
+//   ModSlashLength               -> g_Scale3  (scaleLen;   0.0 ctor default, 1.0 after ResetModScales)
+//   ModSlashUVNormalLength       -> g_Scale4  (uvLen;      1.0 ctor default)
+//   ModSlashUVFlipWhenUpsideDown -> g_ScaleFlag2 (loop;    1 ctor default)
+//   ModSlashPointUVsTaper        -> g_ScaleFlag1 (flipUD;  0 ctor default)
+//   ModColourType                -> g_ColourType
+//   ModColourTime                -> g_PaletteProgress
 //
-// Body point half-width (binary @ 0x1e6914, aging coefficient DAT_001e6f20 = -45.0f):
-//   halfWidth = segLen + (timeScale * -45.0f * (cfgB - cfgA)) / cfgDiv
-// For default config (cfgB-cfgA)=1.0, cfgDiv=1.0:
-//   halfWidth = segLen - 45.0f * timeScale
-// where timeScale = dt (1/60) for normal points, 2*dt when (m_SplitPoint*2 <= pointIndex).
-// segLen = distance between CONSECUTIVE trail centers (stride-1 in points, stride-2 in vertices).
-// Speed-proportional ribbon: faster swipe = wider, slower = thinner, slightly tapered with age.
+// Binary field mapping:
+//   m_TrailShiftA -> m_field_0x138 (+0x138, Init: -1)
+//   m_TrailShiftB -> m_field_0x13c (+0x13c, Init: -1)
+//   m_BombHitEdge -> m_SwipeEndEdge (+0x4c)
+//   m_BladeActive -> (m_State != 0) in port (binary byte field, no standalone port equivalent)
+//   DAT_002d928c  -> 0.0f (BSS zero-init: default m_BladeDir.y on reset)
+//   DAT_002d9290  -> 0.0f (BSS zero-init: default m_BladeDir.z on reset)
 //
-// unitPerp = Normalise(Cross(segDir, +Z)) = (-segDir.y, segDir.x, 0) -- must be unit-length.
-// Edge offset = center +/- unitPerp * halfWidth (half on each side, full width = 2*halfWidth).
+// VectorSignedToFloat(v, rounding) -> (float)v (ARM VCVT.F32.S32).
 //
-// Retract (m_BladeActive off): retire oldest point pair each frame.
-// TODO: 0x1e6914 -- exact tail-retire trigger: rate TBD from binary; current
-//   implementation retires 2 vertices per frame while !m_BladeActive (m_State==0),
-//   giving ~trail_len/120 s drain time at 60fps. Tune against binary when RE'd.
+// Buffer layout per pair k (k=0,2,4,...):
+//   m_pLeftBuffer[k]   = center vertex (spine)
+//   m_pLeftBuffer[k+1] = left edge vertex (center - perp*halfWidth)
+//   m_pRightBuffer[k]  = center vertex (spine, same pos as left)
+//   m_pRightBuffer[k+1]= right edge vertex (center + perp*halfWidth)
+//   Pair byte stride = 0x48 = 2 * sizeof(QUADCUSTOMVERTEX).
 // ---------------------------------------------------------------------------
 void SlashEntity::UpdatePoints(float dt) {
-    (void)dt;
-    if (!m_pLeftBuffer || !m_pRightBuffer) return;
+    // -----------------------------------------------------------------------
+    // TOP GATE:
+    //   if (dt != 0.0f) OR (game_work.flM_BombHitTimer <= 0.0f): run main body.
+    //   else (dt == 0 AND BombHitTimer > 0): bomb-flash path.
+    // Binary FPSCR: uVar29[30] = (dt==0.0); gate = NOT(dt==0 AND BombHitTimer>0).
+    // -----------------------------------------------------------------------
+    const bool dtIsZero = (dt == 0.0f);
+    const bool bombHitPositive = (game_work.m_BombHitTimer > 0.0f);
 
-    // Sync m_Angle from m_AngleIndex (binary @ 0x1e6914 early).
-    m_Angle = (uint16_t)m_AngleIndex;
-
-    // Validity gate: m_PointCount < 4 or !m_BladeActive -> reset trail/shift fields.
-    // m_BladeActive in binary = blade is being stroked (AddPoint feeding). Port uses
-    // m_State == 1 (actively stroking) as the equivalent.
-    if (m_PointCount < 4 || m_State != 1) {
-        m_field_0x138 = -1;
-        m_field_0x13c = -1;
-        m_SegLenSq    = -1.0f;
-        m_BladeDir    = Vec3(0.0f, 0.0f, 0.0f);
-    } else {
-        // Update ColLine collision segment from trail anchors (binary @ 0x1e6914).
-        if (m_Col) {
-            ColLine* cl = static_cast<ColLine*>(m_Col);
-            cl->a() = m_TailPos;
-            cl->b   = m_HeadPos;
-        }
-        Vec3 segDiff(m_HeadPos.x - m_TailPos.x,
-                     m_HeadPos.y - m_TailPos.y,
-                     m_HeadPos.z - m_TailPos.z);
-        m_SegLenSq = segDiff.MagnitudeSqr();
-    }
-
-    if (m_PointCount < 4) {
-        // Retract: drain oldest pair when blade is released (m_State != 1).
-        if (m_State != 1 && m_PointCount >= 2) {
-            int keep = m_PointCount - 2;
-            if (keep > 0) {
-                memmove(m_pLeftBuffer,  m_pLeftBuffer  + 2, keep * sizeof(QUADCUSTOMVERTEX));
-                memmove(m_pRightBuffer, m_pRightBuffer + 2, keep * sizeof(QUADCUSTOMVERTEX));
+    if (dtIsZero && bombHitPositive) {
+        // BOMB-FLASH PATH: if m_BombHitEdge (m_SwipeEndEdge) set, paint all verts red.
+        // Binary: Colour::Colour(&CStack_3c, (Colour*)&Colour::Red); two-pass loop
+        // (pSVar24 iterates over this and this+4, hitting m_pLeftBuffer and m_pRightBuffer
+        // via the 4-byte struct pointer shift trick).
+        if (m_SwipeEndEdge != 0) {
+            uint32_t redPacked = Colour::Red.PlatformColour();
+            // Binary: for i = 0..m_PointCount inclusive, stride iVar14 += 0x24.
+            // Paints both the center and edge verts of each pair PLUS the head-cap slot.
+            for (int i = 0; i <= m_PointCount; i++) {
+                if (m_pLeftBuffer)  m_pLeftBuffer[i].colour  = redPacked;
+                if (m_pRightBuffer) m_pRightBuffer[i].colour = redPacked;
             }
-            m_PointCount = keep;
         }
+        m_SegLenSq = -1.0f;
         return;
     }
 
-    // Derive m_BaseColour from m_Scale / m_HighlightColour envelope
-    // (m_Scale decays at -2/s in Update; drives highlight/critical tint).
-    if (g_ColourType == 1) {
-        UpdateModColour(&m_HighlightColour, -2.0f / (float)m_PointCount);
-    }
-    if (m_Scale > 0.0f) {
-        const float blend = 1.0f - m_Scale;
-        m_BaseColour.r = (uint8_t)(255.0f + (float)((int)m_HighlightColour.r - 255) * blend);
-        m_BaseColour.g = (uint8_t)(255.0f + (float)((int)m_HighlightColour.g - 255) * blend);
-        m_BaseColour.b = (uint8_t)(255.0f + (float)((int)m_HighlightColour.b - 255) * blend);
-        m_BaseColour.a = (uint8_t)(255.0f + (float)((int)m_HighlightColour.a - 255) * blend);
+    // -----------------------------------------------------------------------
+    // MAIN BODY: copy m_AngleIndex into Entity base angle bytes.
+    // Binary: b_pad_36 = low byte, b_pad_37 = high byte of m_AngleIndex.
+    // -----------------------------------------------------------------------
+    m_Angle = (uint16_t)m_AngleIndex;
+
+    // -----------------------------------------------------------------------
+    // COLLISION LINE UPDATE (gated by PointCount, BladeActive, TrailShifts).
+    // Binary: if any gate fires -> reset TrailShifts + SegLenSq.
+    // else -> FruitCamera::TranslatePos(m_HeadPos) + TranslatePos(m_TailPos),
+    //   midPt = (headT + tailT) * 0.5, write ColLine endpoints, compute SegLenSq.
+    // -----------------------------------------------------------------------
+    const bool bladeActive = (m_State != 0);
+    if (m_PointCount < 4 || !bladeActive || m_field_0x138 == -1 || m_field_0x13c == -1) {
+        m_field_0x13c = -1;
+        m_field_0x138 = -1;
+        m_SegLenSq    = -1.0f;
     } else {
-        m_BaseColour = m_HighlightColour;
-    }
-    // ASM-spec UpdatePoints alpha (v1.5.1 @0x17b92c == v1.6.1 @0x1e6914, IDENTICAL):
-    // vertex alpha=0xff, RGB=m_BaseColour(m_Scale-blended); fade is texture-alpha via
-    // U=(i/PointCount)*0.98 ramp + GL_COMBINE; the per-vertex alpha ramp was a
-    // v1.5.1-port fabrication.
-    // binary forces vertex alpha 0xff @0x1e6914; transparency is texture-alpha via GL_COMBINE
-    m_BaseColour.a = 0xFF;
+        // TODO: 0x1e6914 -- FruitCamera::TranslatePos not yet ported; use raw positions.
+        // Binary transforms m_HeadPos/m_TailPos through the camera before computing ColLine.
+        Vec3 headT = m_HeadPos;
+        Vec3 tailT = m_TailPos;
+        Vec3 midPt((headT.x + tailT.x) * 0.5f,
+                   (headT.y + tailT.y) * 0.5f,
+                   (headT.z + tailT.z) * 0.5f);
 
-    // Retract when blade released: retire oldest pair each frame.
-    if (m_State != 1 && m_PointCount >= 2) {
-        int keep = m_PointCount - 2;
-        if (keep > 0) {
-            memmove(m_pLeftBuffer,  m_pLeftBuffer  + 2, keep * sizeof(QUADCUSTOMVERTEX));
-            memmove(m_pRightBuffer, m_pRightBuffer + 2, keep * sizeof(QUADCUSTOMVERTEX));
+        ColLine* pLine = static_cast<ColLine*>(m_Col);
+        if (pLine) {
+            pLine->a() = midPt;
+            pLine->b   = tailT;
         }
-        m_PointCount = keep;
-        if (m_PointCount < 4) return;
+
+        float dx = midPt.x - tailT.x;
+        float dy = midPt.y - tailT.y;
+        m_SegLenSq = dx * dx + dy * dy;
     }
 
-    // MAIN geometry rebuild loop (binary @ 0x1e6914).
-    // Iterates pairs at step 2 (center@k, edge@k+1). For each pair:
-    //   halfWidth = segLen - 45.0f * timeScale  (aging coefficient DAT_001e6f20 = -45.0f)
-    //   timeScale = dt, or 2*dt when (m_SplitPoint*2 <= pointIndex) (binary @0x1e6c40).
-    //   unitPerp = Normalise(Cross(segDir, +Z)) = (-segDir.y, segDir.x, 0) -- always unit-length.
-    //   edge offset = center +/- unitPerp * halfWidth.
-    //   For the very first pair (k==0) use angle table halfWidth = dt*10 (no prev center).
-    // V coordinate = (i / (pairCount-1)) * 0.98 (from 0=tail to 0.98=head).
-    // After loop: U-remap pass (arc-length parameterized, 0.98*arc[k]/arc[last]).
+    // -----------------------------------------------------------------------
+    // m_BladeDir RESET when PointCount < 4.
+    // DAT_002d928c = 0.0f, DAT_002d9290 = 0.0f (BSS zero-init).
+    // -----------------------------------------------------------------------
+    if (m_PointCount < 4) {
+        m_BladeDir.x = 0.0f;
+        m_BladeDir.y = 0.0f;  // DAT_002d928c
+        m_BladeDir.z = 0.0f;  // DAT_002d9290
+    }
 
-    static const int MAX_PAIRS = 80;
-    float arcLen[MAX_PAIRS + 1];
+    // ModColourType==0: reset ModColourTime (g_PaletteProgress) to 0.
+    if (g_ColourType == 0) {
+        g_PaletteProgress = 0.0f;
+    }
+
+    // -----------------------------------------------------------------------
+    // REBUILD LOOP
+    // Binary: if (m_BladeActive == '\0') || m_PointCount > 2: run loop.
+    // Note: binary condition is (bladeActive==0 OR pointCount>2); the loop
+    // only does meaningful work when pointCount>2. With bladeActive==0 and
+    // pointCount<=2 the loop body never fires (loop range [0..pointCount) is empty).
+    // -----------------------------------------------------------------------
+    // arc length accumulator (local_310[100])
+    float arcLen[100];
     arcLen[0] = 0.0f;
 
-    static const float kAgingCoeff = -45.0f;   // DAT_001e6f20
-    static const float kCfgB       =  1.0f;    // endThick  @ 0x2D8D78
-    static const float kCfgA       =  0.0f;    // startThick @ 0x332BCC
-    static const float kCfgDiv     =  1.0f;    // @ 0x2D8D74
-    static const float kBodyDt     =  1.0f / 60.0f;
+    if (!bladeActive || m_PointCount > 2) {
+        Colour* pBaseColour = &m_BaseColour;
+        int local_31c = 0;   // count of RETIRED pairs (stride 2)
+        int iVar14    = 0;   // arc-length array index (advances for BODY pairs only)
 
-    int pairCount = m_PointCount / 2;
-    if (pairCount > MAX_PAIRS) pairCount = MAX_PAIRS;
+        for (int local_320 = 0; local_320 < m_PointCount; local_320 += 2) {
+            // ------------------------------------------------------------------
+            // READ existing stored center and left-edge positions.
+            // Binary pointer arithmetic: iVar25 byte offset from buffer[0] / buffer[1].
+            // center = m_pLeftBuffer[local_320], edgeL = m_pLeftBuffer[local_320+1].
+            // ------------------------------------------------------------------
+            Vec3 center(m_pLeftBuffer[local_320].x,
+                        m_pLeftBuffer[local_320].y,
+                        0.0f);
+            Vec3 edgeL(m_pLeftBuffer[local_320 + 1].x,
+                       m_pLeftBuffer[local_320 + 1].y,
+                       0.0f);
 
-    for (int pi = 0; pi < pairCount; ++pi) {
-        int k = pi * 2;
+            // Recover stored half-width: magnitude of (edgeL - center) before normalizing.
+            Vec3 hwVec(edgeL.x - center.x, edgeL.y - center.y, 0.0f);
+            float fVar30 = hwVec.Normalise();   // returns original magnitude
 
-        float cx = m_pLeftBuffer[k].x;
-        float cy = m_pLeftBuffer[k].y;
-        float cz = m_pLeftBuffer[k].z;
+            // ------------------------------------------------------------------
+            // AGE half-width.
+            // fVar31 = dt (doubled for pairs past m_SplitPoint * 2).
+            // fVar35 = ModSlashEndThickness (SSM: no-op in SP since IsSameScreenMultiplayer()=false).
+            // AGE: fVar30 += (fVar31 * -45 * (ModSlashThickness - ModSlashEndThickness)) / ModSlashLength
+            // ModSlashLength guard: if 0, use 1 (prevents div-by-zero in default ctor state).
+            // ------------------------------------------------------------------
+            float fVar31 = dt;
+            if (m_SplitPoint * 2 <= local_320) fVar31 = dt + dt;
 
-        // Body halfWidth = segLen - 45.0f * timeScale.
-        // timeScale doubles for older tail points (binary @0x1e6c40: vmovlt/vaddge).
-        // First pair uses angle table (no prev center).
-        float halfWidth;
-        float miterX, miterY;
-        if (pi > 0) {
-            float px = m_pLeftBuffer[k - 2].x;
-            float py = m_pLeftBuffer[k - 2].y;
-            float ddx = cx - px;
-            float ddy = cy - py;
-            float segLen = sqrtf(ddx * ddx + ddy * ddy);
+            // TODO: 0x1e6914 -- SSM flM_PauseAmount adjust for fVar35 not ported (IsSameScreenMultiplayer() is always false in SP).
+            // Runtime-confirmed mapping ([SLASH-CFG]): g_Scale1 = ModSlashThickness (1.0),
+            // g_Scale2 = ModSlashEndThickness (0.0), g_Scale3 = ModSlashLength (1.0).
+            float fVar35 = g_Scale2;  // ModSlashEndThickness
 
-            // timeScale doubles for points past the split boundary (binary @0x1e6c40).
-            float timeScale = (m_SplitPoint * 2 <= k) ? (2.0f * kBodyDt) : kBodyDt;
+            float modSlashLen = g_Scale3;
+            if (modSlashLen == 0.0f) modSlashLen = 1.0f;
 
-            halfWidth = segLen + (timeScale * kAgingCoeff * (kCfgB - kCfgA)) / kCfgDiv;
+            // (ModSlashThickness - ModSlashEndThickness) = (g_Scale1 - g_Scale2).
+            fVar30 = fVar30 + (fVar31 * -45.0f * (g_Scale1 - g_Scale2)) / modSlashLen;
 
-            // unitPerp = Normalise(Cross(segDir, +Z)) = (-segDir.y, segDir.x, 0).
-            // segDir = (ddx, ddy) / segLen. unitPerp = (-ddy/segLen, ddx/segLen).
-            float tlen = (segLen > 1e-6f) ? segLen : 1e-6f;
-            float unitPerpX = -ddy / tlen;
-            float unitPerpY =  ddx / tlen;
-            miterX = unitPerpX * halfWidth;
-            miterY = unitPerpY * halfWidth;
+            // ------------------------------------------------------------------
+            // RETIRE DECISION (binary FPSCR compare chain).
+            //
+            // The binary's outer if condition enters the "keep/body" block when:
+            //   (ModSlashThickness <= ModSlashEndThickness)  [i.e. g_Scale1 <= g_Scale2]
+            //   OR
+            //   (fVar30 > fVar35 * 9.0f * m_HeadThickScale)  [still wider than max]
+            //
+            // Inside that block, a secondary goto-retire fires when:
+            //   (ModSlashThickness < ModSlashEndThickness) AND (fVar30 < ModSlashEndThickness)
+            //
+            // The else of the outer if = RETIRE directly.
+            //
+            // Summary:
+            //   RETIRE_A = (g_Scale1 > g_Scale2) AND (fVar30 <= maxHW)
+            //   RETIRE_B = (g_Scale1 < g_Scale2) AND (fVar30 < g_Scale2)  [inner goto]
+            //   KEEP     = everything else
+            // ------------------------------------------------------------------
+            float maxHW = fVar35 * 9.0f * m_HeadThickScale;
+
+            // Mapping: Thickness=g_Scale1 (1.0), EndThickness=g_Scale2 (0.0) -- runtime-confirmed.
+            bool retire = false;
+            if (g_Scale1 > g_Scale2) {
+                // Thickness > EndThickness -> RETIRE_A when no longer wider than maxHW.
+                if (fVar30 <= maxHW) retire = true;
+            } else {
+                // Thickness <= EndThickness.
+                // Inner goto-retire (RETIRE_B): only when strictly less-than.
+                if (g_Scale1 < g_Scale2 && fVar30 < g_Scale2) retire = true;
+            }
+
+            if (retire) {
+                // LAB_001e6d04: count this pair as retired, advance byte offset.
+                local_31c += 2;
+                continue;
+            }
+
+            // ------------------------------------------------------------------
+            // WRITE DESTINATION INDICES (compact retired pairs from front).
+            // ------------------------------------------------------------------
+            int dstCtr  = local_320 - local_31c;       // destination center index
+            int dstEdge = dstCtr + 1;                  // destination edge index
+
+            // ------------------------------------------------------------------
+            // HEAD-CAP vs BODY discriminator.
+            // Binary: (m_PointCount < 3) || (m_PointCount <= local_320 + 3) -> HEAD-CAP.
+            // ------------------------------------------------------------------
+            if (m_PointCount < 3 || m_PointCount <= local_320 + 3) {
+                // ==============================================================
+                // HEAD-CAP PATH: perp from angle look-up table.
+                // perpVec = (CosIdx(m_Angle), SinIdx(m_Angle), 0) * fVar30.
+                // ==============================================================
+                uint16_t ang = (uint16_t)m_AngleIndex;
+                float cosA = Math::CosIdx(ang);
+                float sinA = Math::SinIdx(ang);
+                Vec3 perp(cosA * fVar30, sinA * fVar30, 0.0f);
+
+                // UV.x = 0.98 for both slots.
+                m_pLeftBuffer[dstCtr].u  = 0.98f;
+                m_pLeftBuffer[dstEdge].u = 0.98f;
+
+                // Inner do/while runs twice: iter=0 -> left side, iter=1 -> right side.
+                // pSVar24 advances by 4 bytes each iteration to toggle which buffer is
+                // written: iter0 writes m_pLeftBuffer, iter1 writes m_pRightBuffer.
+                for (int iter = 0; iter < 2; iter++) {
+                    QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
+
+                    // Edge position: iter==0 -> center - perp (left), iter==1 -> center + perp (right).
+                    Vec3 ePos;
+                    if (iter == 0) { ePos = Vec3(center.x - perp.x, center.y - perp.y, 0.0f); }
+                    else           { ePos = Vec3(center.x + perp.x, center.y + perp.y, 0.0f); }
+
+                    // UV.y: ModSlashUVFlipWhenUpsideDown (g_ScaleFlag2) controls V assignment.
+                    // Binary SP path (IsSameScreenMultiplayer() == false):
+                    //   if g_ScaleFlag2 == 0: v=0 (iter==0), v=1 (iter==1).
+                    //   else: check perp.y < 0 -> flip assignment.
+                    //     perp.y >= 0: v=1 (iter==0), v=0 (iter==1)  [edge verts]
+                    //     perp.y <  0: v=0 (iter==0), v=1 (iter==1)
+                    // (TODO: SSM branch flips based on center.x sign -- not ported.)
+                    float vVal = 0.0f;
+                    if (g_ScaleFlag2 == 0) {
+                        vVal = (iter != 0) ? 1.0f : 0.0f;
+                    } else {
+                        bool perpYNeg = (perp.y < 0.0f);
+                        if (perpYNeg) {
+                            vVal = (iter != 0) ? 1.0f : 0.0f;
+                        } else {
+                            vVal = (iter == 0) ? 1.0f : 0.0f;
+                        }
+                    }
+
+                    buf[dstCtr].x  = center.x;
+                    buf[dstCtr].y  = center.y;
+                    buf[dstEdge].x = ePos.x;
+                    buf[dstEdge].y = ePos.y;
+                    buf[dstEdge].v = vVal;
+
+                    uint32_t col = pBaseColour->PlatformColour();
+                    buf[dstCtr].colour  = col;
+                    buf[dstEdge].colour = col;
+                }
+                // iVar14 (arc index) stays unchanged for head-cap pairs (no arc accumulation).
+
+            } else {
+                // ==============================================================
+                // BODY PATH: perp from Cross(Normalise(nextCenter - center), +Z).
+                // ==============================================================
+                Vec3 nextCtr(m_pLeftBuffer[local_320 + 2].x,
+                             m_pLeftBuffer[local_320 + 2].y,
+                             0.0f);
+
+                Vec3 segDir(nextCtr.x - center.x, nextCtr.y - center.y, 0.0f);
+                float segLen = segDir.Normalise();
+
+                // Cross(segDir, Z_hat) = (segDir.y, -segDir.x, 0).
+                Vec3 zHat(0.0f, 0.0f, 1.0f);
+                Vec3 perpDir = Vec3::Cross(segDir, zHat);
+                Vec3 perp(perpDir.x * fVar30, perpDir.y * fVar30, 0.0f);
+
+                // Accumulate arc length for this segment.
+                float prevArc = arcLen[iVar14];
+
+                // ModColourType==0: UpdateModColour + blend toward CRITICAL_COLOUR.
+                // Decompiler: UpdateModColour(&m_HighlightColour, pCVar15, -2.0/fVar32)
+                // where fVar32 = VectorSignedToFloat(m_PointCount) = (float)m_PointCount.
+                float pointCountF = (float)m_PointCount;
+                if (g_ColourType == 0) {
+                    UpdateModColour(&m_HighlightColour, -2.0f / pointCountF);
+
+                    float blendScale = m_Scale;
+                    if (blendScale <= 0.0f) {
+                        // No hit-flash: m_BaseColour = copy of current (i.e. keep existing).
+                        // Binary: Colour::operator=(&CStack_44, this_00) where this_00=pBaseColour.
+                        // This writes m_BaseColour = *pBaseColour (i.e. identity, already there).
+                    } else {
+                        // Hit-flash blend: toward Fruit::CRITICAL_COLOUR.
+                        float t = 1.0f - blendScale;
+                        float cr = (float)(int)Fruit::CRITICAL_COLOUR.r;
+                        float cg = (float)(int)Fruit::CRITICAL_COLOUR.g;
+                        float cb = (float)(int)Fruit::CRITICAL_COLOUR.b;
+                        float hr = (float)(int)m_HighlightColour.r;
+                        float hg = (float)(int)m_HighlightColour.g;
+                        float hb = (float)(int)m_HighlightColour.b;
+
+                        float nr = cr + (hr - cr) * t;
+                        float ng = cg + (hg - cg) * t;
+                        float nb = cb + (hb - cb) * t;
+
+                        m_BaseColour.r = (nr > 0.0f) ? (uint8_t)(int)nr : 0;
+                        m_BaseColour.g = (ng > 0.0f) ? (uint8_t)(int)ng : 0;
+                        m_BaseColour.b = (nb > 0.0f) ? (uint8_t)(int)nb : 0;
+                        m_BaseColour.a = 0xff;
+                    }
+                }
+
+                // UV.x = (VectorSignedToFloat(local_320) / VectorSignedToFloat(m_PointCount)) * 0.98
+                float uVal = ((float)local_320 / pointCountF) * 0.98f;
+
+                // Inner do/while runs twice: iter=0 -> left buffer, iter=1 -> right buffer.
+                for (int iter = 0; iter < 2; iter++) {
+                    QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
+
+                    // Edge: iter==0 -> center - perp (left), iter==1 -> center + perp (right).
+                    Vec3 ePos;
+                    if (iter == 0) { ePos = Vec3(center.x - perp.x, center.y - perp.y, 0.0f); }
+                    else           { ePos = Vec3(center.x + perp.x, center.y + perp.y, 0.0f); }
+
+                    // UV.y: same flip logic as head-cap path.
+                    // Binary uses local_e4 (= perpDir * fVar30 = perp) for the sign check.
+                    float vVal = 0.0f;
+                    if (g_ScaleFlag2 == 0) {
+                        vVal = (iter != 0) ? 1.0f : 0.0f;
+                    } else {
+                        bool perpYNeg = (perp.y < 0.0f);
+                        if (perpYNeg) {
+                            vVal = (iter != 0) ? 1.0f : 0.0f;
+                        } else {
+                            vVal = (iter == 0) ? 1.0f : 0.0f;
+                        }
+                    }
+
+                    buf[dstCtr].x  = center.x;
+                    buf[dstCtr].y  = center.y;
+                    buf[dstEdge].x = ePos.x;
+                    buf[dstEdge].y = ePos.y;
+                    buf[dstEdge].v = vVal;
+
+                    // UV.x written after the inner loop in binary (via iVar27 byte offset).
+                    // Write now to both slots -- arc-length remap will overwrite after the loop.
+                    buf[dstCtr].u  = uVal;
+                    buf[dstEdge].u = uVal;
+
+                    uint32_t col = pBaseColour->PlatformColour();
+                    buf[dstCtr].colour  = col;
+                    buf[dstEdge].colour = col;
+                }
+
+                // Accumulate arc for this segment.
+                arcLen[iVar14 + 1] = prevArc + segLen;
+                iVar14++;
+            }
+        } // end rebuild loop
+
+        // -----------------------------------------------------------------------
+        // ARC-LENGTH U REMAP
+        // Binary: if (ModSlashUVNormalLength > 0): normFactor = arcLen[iVar14] / uvLen,
+        //                                          fVar35 (normFactor) = arcLen[last] / uvLen.
+        //         else: fVar35 = 1.0.
+        // Then for each pair i (step 2), arcIdx = min(i/2, iVar14):
+        //   U = 0.98 - (1 - (arcLen[arcIdx]*0.98/arcLen[iVar14])) * normFactor
+        // Apply to BOTH left and right buffers (binary outer do/while iterates twice).
+        // -----------------------------------------------------------------------
+        float normFactor;
+        if (g_Scale4 > 0.0f) {
+            normFactor = (iVar14 > 0) ? (arcLen[iVar14] / g_Scale4) : 1.0f;
         } else {
-            // First pair: fallback to head angle table (binary @ 0x1e6914 head path).
-            // halfWidth matches AddPoint head half-width: dt*10 (binary @ 0x1e9c08).
-            halfWidth = kBodyDt * 10.0f;
-            // unitPerp from angle table: (CosIdx, SinIdx) is unit-length by definition.
-            miterX = CosIdx(m_Angle) * halfWidth;
-            miterY = SinIdx(m_Angle) * halfWidth;
+            normFactor = 1.0f;
         }
 
-        // U texcoord along-trail ramp: tail U~0, head U~0.98.
-        // Binary main loop writes U = (i / m_PointCount) * 0.98 (DAT_001e6f5c = 0.98),
-        // then arc-length tail pass remaps it. We compute arc-length U in the pass below;
-        // initial U here is overwritten -- value doesn't matter.
-        float vCoord = (pairCount > 1)
-            ? ((float)pi / (float)(pairCount - 1)) * 0.98f
-            : 0.0f;
-
-        // vertex colour: full m_BaseColour (alpha=0xff forced above); texture-alpha provides fade.
-        uint32_t col = m_BaseColour.PlatformColour();
-
-        // Center (spine) vertex -- identical for both buffers.
-        m_pLeftBuffer[k].colour = col;
-        m_pLeftBuffer[k].u      = vCoord;   // U will be overwritten by arc-length pass
-        m_pLeftBuffer[k].v      = 0.5f;
-
-        m_pRightBuffer[k].colour = col;
-        m_pRightBuffer[k].u      = vCoord;
-        m_pRightBuffer[k].v      = 0.5f;
-
-        // Edge (miter) vertices: left = center - miter, right = center + miter.
-        // V maps ACROSS ribbon width: left-edge=0.0, center=0.5, right-edge=1.0.
-        m_pLeftBuffer[k+1].x      = cx - miterX;
-        m_pLeftBuffer[k+1].y      = cy - miterY;
-        m_pLeftBuffer[k+1].z      = cz;
-        m_pLeftBuffer[k+1].colour = col;
-        m_pLeftBuffer[k+1].u      = vCoord;
-        m_pLeftBuffer[k+1].v      = 0.0f;
-
-        m_pRightBuffer[k+1].x      = cx + miterX;
-        m_pRightBuffer[k+1].y      = cy + miterY;
-        m_pRightBuffer[k+1].z      = cz;
-        m_pRightBuffer[k+1].colour = col;
-        m_pRightBuffer[k+1].u      = vCoord;
-        m_pRightBuffer[k+1].v      = 1.0f;
-
-        // Accumulate arc length for U-remap pass.
-        float segArc = 0.0f;
-        if (pi > 0) {
-            float px = m_pLeftBuffer[k - 2].x;
-            float py = m_pLeftBuffer[k - 2].y;
-            float ddx = cx - px;
-            float ddy = cy - py;
-            segArc = sqrtf(ddx * ddx + ddy * ddy);
-        }
-        arcLen[pi + 1] = arcLen[pi] + segArc;
-    }
-
-    // U-remap pass: U = 0.98 * arc[k] / arc[last] (tail U~0, head U~0.98).
-    // DAT_001e6f5c = 0.98 (binary @ 0x1e6914 u-taper constant).
-    {
-        float totalArc = (pairCount > 0) ? arcLen[pairCount] : 1.0f;
-        if (totalArc < 1e-6f) totalArc = 1.0f;
-        for (int pi = 0; pi < pairCount; ++pi) {
-            float u = 0.98f * arcLen[pi] / totalArc;
-            int k = pi * 2;
-            m_pLeftBuffer[k].u    = u;
-            m_pLeftBuffer[k+1].u  = u;
-            m_pRightBuffer[k].u   = u;
-            m_pRightBuffer[k+1].u = u;
-        }
-    }
-
-    // HEAD CAP (binary @ 0x1e6914 cap path): gate m_PointCount > 2.
-    // Appends a single apex vertex at lastCenter +/- capEdge with U=1.0, V=0.5.
-    // capEdge = Cross(tipDir, +Z) * 2.5 (DAT 2.5 from binary).
-    if (m_PointCount > 2) {
-        const int n = m_PointCount;
-        // Last pair: center at [n-2], edge at [n-1].
-        float lastCX = m_pLeftBuffer[n - 2].x;
-        float lastCY = m_pLeftBuffer[n - 2].y;
-        float lastCZ = m_pLeftBuffer[n - 2].z;
-
-        // tipDir = normalize(lastCenter - prevCenter).
-        float tipDirX = 0.0f, tipDirY = 0.0f;
-        if (n >= 4) {
-            float prevCX = m_pLeftBuffer[n - 4].x;
-            float prevCY = m_pLeftBuffer[n - 4].y;
-            float tdx = lastCX - prevCX;
-            float tdy = lastCY - prevCY;
-            float tlen = sqrtf(tdx * tdx + tdy * tdy);
-            if (tlen > 1e-6f) { tipDirX = tdx / tlen; tipDirY = tdy / tlen; }
-        } else {
-            tipDirX = CosIdx(m_Angle);
-            tipDirY = SinIdx(m_Angle);
+        for (int bufPass = 0; bufPass < 2; bufPass++) {
+            QUADCUSTOMVERTEX* buf = (bufPass == 0) ? m_pLeftBuffer : m_pRightBuffer;
+            int byteOff = 0;
+            for (int i = 0; i < m_PointCount; i += 2) {
+                int arcIdx = i / 2;
+                if (arcIdx > iVar14) arcIdx = iVar14;
+                float arcTotal = (iVar14 > 0) ? arcLen[iVar14] : 1.0f;
+                float uRemap = 0.98f - (1.0f - (arcLen[arcIdx] * 0.98f) / arcTotal) * normFactor;
+                // byteOff is the byte offset into the buffer; slot = byteOff / 0x24.
+                int slot = byteOff / (int)sizeof(QUADCUSTOMVERTEX);
+                buf[slot].u     = uRemap;
+                buf[slot + 1].u = uRemap;
+                byteOff += 0x48;
+            }
         }
 
-        // capEdge = Cross(tipDir, +Z) * 2.5 = (-tipDir.y, tipDir.x, 0) * 2.5.
-        float capX = -tipDirY * 2.5f;
-        float capY =  tipDirX * 2.5f;
+        // -----------------------------------------------------------------------
+        // COMPACT: subtract retired count from m_PointCount.
+        // Binary: iVar13 = iVar13 - local_31c; this->m_PointCount = iVar13.
+        // -----------------------------------------------------------------------
+        m_PointCount = m_PointCount - local_31c;
 
-        uint32_t capCol = m_BaseColour.PlatformColour();
+        // -----------------------------------------------------------------------
+        // HEAD-CAP SPIKE APPEND (binary: if m_PointCount > 2).
+        // Appends a single spike vertex at [m_PointCount] (one-past the last pair).
+        //
+        //   lastEdge = m_pLeftBuffer[m_PointCount-1]   (edge slot of head pair)
+        //   prevCtr  = m_pLeftBuffer[m_PointCount-2]   (center slot of head pair)
+        //   dir      = Normalise(lastEdge - prevCtr), then Cross(dir, Z) * 2.5
+        //   capPos   = prevCtr - capOffset             (same for left and right)
+        //   U = 1.0; V from ModSlashPointUVsTaper (g_ScaleFlag1) or 0.5.
+        //   slashes += 1.
+        // -----------------------------------------------------------------------
+        if (m_PointCount > 2) {
+            s_slashes++;
 
-        // Left cap: lastCenter - capEdge; right cap: lastCenter + capEdge.
-        m_pLeftBuffer[n].x      = lastCX - capX;
-        m_pLeftBuffer[n].y      = lastCY - capY;
-        m_pLeftBuffer[n].z      = lastCZ;
-        m_pLeftBuffer[n].colour = capCol;
-        m_pLeftBuffer[n].u      = 1.0f;
-        m_pLeftBuffer[n].v      = 0.5f;
+            Vec3 lastEdge(m_pLeftBuffer[m_PointCount - 1].x,
+                          m_pLeftBuffer[m_PointCount - 1].y,
+                          m_pLeftBuffer[m_PointCount - 1].z);
+            Vec3 prevCtr(m_pLeftBuffer[m_PointCount - 2].x,
+                         m_pLeftBuffer[m_PointCount - 2].y,
+                         m_pLeftBuffer[m_PointCount - 2].z);
 
-        m_pRightBuffer[n].x      = lastCX + capX;
-        m_pRightBuffer[n].y      = lastCY + capY;
-        m_pRightBuffer[n].z      = lastCZ;
-        m_pRightBuffer[n].colour = capCol;
-        m_pRightBuffer[n].u      = 1.0f;
-        m_pRightBuffer[n].v      = 0.5f;
+            Vec3 hDir(lastEdge.x - prevCtr.x, lastEdge.y - prevCtr.y, 0.0f);
+            hDir.Normalise();
 
-        // Bump global head-cap frame counter (blade-mod +0xbc @ 0x00332b34).
-        g_HeadCapFrameCounter += 1;
-    }
+            // Cross(hDir, Z_hat) * 2.5 -- binary local_48 = 2.5f.
+            static const float kCapScale = 2.5f;
+            Vec3 zHat(0.0f, 0.0f, 1.0f);
+            Vec3 capOff = Vec3::Cross(hDir, zHat) * kCapScale;
 
-    // Update head/tail tracking from surviving spine vertices (even indices).
-    if (m_PointCount >= 2) {
-        m_TailPos.x = m_pLeftBuffer[0].x;
-        m_TailPos.y = m_pLeftBuffer[0].y;
-        m_TailPos.z = m_pLeftBuffer[0].z;
-        int headSpine = m_PointCount - 2;
-        if (headSpine < 0) headSpine = 0;
-        m_HeadPos.x = m_pLeftBuffer[headSpine].x;
-        m_HeadPos.y = m_pLeftBuffer[headSpine].y;
-        m_HeadPos.z = m_pLeftBuffer[headSpine].z;
+            // capPos.x = prevCtr.x - capOff.x  (both buffers get the same position).
+            float capX = prevCtr.x - capOff.x;
+            float capY = prevCtr.y - capOff.y;
+
+            m_pLeftBuffer[m_PointCount].x  = capX;
+            m_pLeftBuffer[m_PointCount].y  = capY;
+            m_pRightBuffer[m_PointCount].x = capX;
+            m_pRightBuffer[m_PointCount].y = capY;
+
+            // V: if ModSlashPointUVsTaper (g_ScaleFlag1), copy from last edge slot;
+            //    else 0.5 for center.
+            float leftV, rightV;
+            if (g_ScaleFlag1 != 0) {
+                leftV  = m_pLeftBuffer[m_PointCount - 1].v;
+                rightV = m_pRightBuffer[m_PointCount - 1].v;
+            } else {
+                leftV  = 0.5f;
+                rightV = 0.5f;
+            }
+            m_pLeftBuffer[m_PointCount].v  = leftV;
+            m_pRightBuffer[m_PointCount].v = rightV;
+
+            // U = 1.0.
+            m_pLeftBuffer[m_PointCount].u  = 1.0f;
+            m_pRightBuffer[m_PointCount].u = 1.0f;
+
+            // Colour.
+            uint32_t col = pBaseColour->PlatformColour();
+            m_pLeftBuffer[m_PointCount].colour  = col;
+            m_pRightBuffer[m_PointCount].colour = col;
+        }
     }
 }
 

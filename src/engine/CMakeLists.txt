@@ -7,6 +7,7 @@ add_library(mortar_engine STATIC
     math/Random.cpp
     math/MathUtil.cpp
     math/Math.cpp
+    math/Colour.cpp
     compression/LZ8.cpp
     util/Immutable.cpp
     util/StringHash.cpp

@@ -68,6 +68,12 @@ public:
     // Binary @ 0x00183f98 -- snprintf "%d, %d, %d, %d (argb)" (a,r,g,b) into a
     //   static 0x100 buffer and return it.
     char* ToString() const;
+
+    // Binary static colour constants (BSS, zero-init then set by static ctors).
+    // TODO: 0x001eb618 -- verify exact binary addresses for Red/White/Black via Ghidra xref.
+    static const Colour Red;    // Colour::Red   = Colour(255,0,0,255)
+    static const Colour White;  // Colour::White = Colour(255,255,255,255)
+    static const Colour Black;  // Colour::Black = Colour(0,0,0,255)
 };
 
 #endif
