@@ -42,5 +42,7 @@ void PreloadRings() {
     game_work.m_RingColours[11] = Colour(0xEC, 0xAC, 0x05, 255);
     game_work.m_RingColours[12] = Colour(0xD9, 0xD9, 0xD9, 255);
     game_work.m_RingColours[13] = Colour(0x5C, 0x5C, 0x5C, 255);
+    // binary PreloadRings @0x0011cd44: m_RingColours[14] (GameWork+0x6a0) = Colour(0x6f,0x46,0x1e) -- brown,
+    // used by the "SLICE FRUIT TO BEGIN" text (MainScreen ctor @0x001982fc SetColour).
     game_work.m_RingColours[14] = Colour(0x6F, 0x46, 0x1E, 255);
 }
