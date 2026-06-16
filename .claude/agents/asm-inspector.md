@@ -137,7 +137,7 @@ tmp/asm-compare/<name>_test.cpp
 
 ## Verified-comment line (if Confirmed)
 - For `implementer` to paste above the verified function/block:
-  `// ASM-verified: <ISO-8601 to the minute, UTC> binary @ 0x<addr>[..0x<addr>] (asm-inspector)`
+  `// ASM-verified: <ISO-8601 to the minute, UTC> v1.6.1 <Symbol> @ 0x<addr>[..0x<addr>] (asm-inspector)`  (the `v1.6.1 <Symbol>` is mandatory — a version-less marker is treated as outdated/stale-v1.5.x)
 ```
 
 Keep prose under 400 words. The diff itself is the evidence — let it speak.

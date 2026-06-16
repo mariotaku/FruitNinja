@@ -42,7 +42,7 @@ Write code that faithfully matches the binary. Do NOT optimise, simplify, or "im
 
 ## Source-side comment grammar
 
-Three markers carry meaning. Keep them greppable.
+Three markers carry meaning. Keep them greppable. **Every binary-referencing marker MUST include the binary VERSION + SYMBOL + ADDRESS** — `v1.6.1 <Symbol> @0x<addr>`. A marker with an address but **no version is treated as OUTDATED** (presumed stale v1.5.x — re-verify against v1.6.1 before trusting it; the port migrated v1.5.1→v1.6.1 and most addresses moved). **When you finish porting/verifying a function, update its marker to this versioned form.**
 
 ### `// TODO: <addr or descriptor> — <gap>`
 Marks an unimplemented sub-block. Treat it as the canonical spec for that gap. Examples currently in the tree:
@@ -53,8 +53,8 @@ Marks an unimplemented sub-block. Treat it as the canonical spec for that gap. E
 ```
 When you close the gap, **delete** the TODO line — don't leave it as a tombstone. If the binary address is named, the closed implementation should be greppable by the new function/method name.
 
-### `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)`
-Pasted only after a `Confirmed` verdict from `asm-inspector`. A guarantee, not a wish list. Inventory: `grep -rn 'ASM-verified:' src/`.
+### `// ASM-verified: <ISO-time> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)`
+Pasted only after a `Confirmed` verdict from `asm-inspector`. A guarantee, not a wish list. Must carry the `v1.6.1 <Symbol> @0x<addr>` triple (a version-less marker reads as outdated). Inventory: `grep -rn 'ASM-verified:' src/`.
 
 If your edit changes any instruction-emitting code in a function carrying this marker, re-dispatch `asm-inspector` to re-verify, or remove the marker.
 
