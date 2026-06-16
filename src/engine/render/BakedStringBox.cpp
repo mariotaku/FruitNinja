@@ -74,10 +74,15 @@ void BakedStringBox::SetHorizontalLineSpacing(float spacing) {
 }
 
 void BakedStringBox::SetTranslation(const Vec3& pos, int flag) {
-    m_Pos = pos;
+    Vec3 p = pos;
     if (flag) {
-        m_Dirty = true;
+        // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: flag!=0 pre-shifts
+        // -(boxW/2) in X, +(boxH/2) in Y, using SIGNED INT /2 (truncates: 75/2=37, not 37.5).
+        // m_BoxWidth/m_BoxHeight are float in the port; cast to int first to match truncation.
+        p.x -= (float)((int)m_BoxWidth  / 2);
+        p.y += (float)((int)m_BoxHeight / 2);
     }
+    if (p != m_Pos) { m_Pos = p; m_Dirty = true; }
 }
 
 void BakedStringBox::FitIntoVerticalBounds() {
@@ -401,25 +406,39 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     // World-space anchor.
     Vec3 anchor = m_Pos;
 
-    // Fix 2: vertical centering from binary RebuildAlignments @ 0x00245c78 (align&0xc==0xc):
-    //   y0 = ( -(step/2) - boxH/2 - maxLineH/2 + (step*nLines)/2 ) - minBound
-    // maxLineH == step (per binary); minBound == minDescent (<=0).
-    // Relative to box centre (m_Pos). Only apply when vertical-centre bit set (align&0xc == 0xc).
+    // Vertical alignment from binary RebuildAlignments @ 0x00245c78.
+    // Three branches on (m_Align & 0xc):
+    //   0xc (centre-V): existing formula -- unchanged.
+    //   0x0..0x3 (top-anchored, (m_Align&0x8)==0): line0 baseline = -(ascentSpan/2) - step/2 - descent.
+    //   0x8..0xb (bottom-anchored, (m_Align&0x8)!=0): baseline = boxH.
+    // NOTE: sign of descent term has not been ASM-pinned visually; flip if version box lands wrong side.
     float baselineY = 0.0f;
     const int vertAlign = m_Align & 0xc;
     if (vertAlign == 0xc) {
         // step == maxLineH per binary; minDescent == minBound (<=0).
         baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
                      + (step * (float)nLines) * 0.5f) - minDescent;
+    } else if ((m_Align & 0x8) == 0) {
+        // Top-anchored: binary RebuildAlignments @0x00245c78.
+        // ascentSpan = maxBearingY - minBottom (total glyph cap-to-descent span, >0).
+        // descent    = -minBottom (descent magnitude, >=0, since minBottom<=0).
+        const BakedStringBoxLine& l0 = m_Lines[0];
+        float ascentSpan = l0.maxBearingY - l0.minBottom;
+        float descent    = -l0.minBottom;
+        baselineY = -(ascentSpan * 0.5f) - step * 0.5f - descent;
+    } else {
+        // Bottom-anchored: binary RebuildAlignments @0x00245c78.
+        baselineY = m_BoxHeight;
     }
 
-    // Fix 3: binary SetTranslation @ 0x00246238 (center=1) converts box centre->internal-TL:
-    //   anchor.x -= boxW/2 ; anchor.y += boxH/2  (+Y up). Glyph X coords run [0, boxW] from
-    //   the box left edge; the baselineY V-centre formula's -boxH/2 term is cancelled by this
-    //   +boxH/2, leaving the block centred. Omitting the Y shift left the text boxH/2 too low.
+    // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20: center recenters only the scale-shrink
+    // delta (0 at scale=1); per-line centering is in Layout/RebuildAlignments.
+    //   anchor.x += boxW*0.5 - boxW*scale.x*0.5
+    //   anchor.y -= boxH*0.5 - boxH*scale.y*0.5
+    // At scale=(1,1) both correction terms are 0 -> anchor == m_Pos.
     if (center) {
-        anchor.x -= m_BoxWidth * 0.5f;
-        anchor.y += m_BoxHeight * 0.5f;
+        anchor.x += m_BoxWidth  * 0.5f - m_BoxWidth  * scale.x * 0.5f;
+        anchor.y -= m_BoxHeight * 0.5f - m_BoxHeight * scale.y * 0.5f;
     }
 
     // Use identity world matrix so vertex transforms are in world space.
