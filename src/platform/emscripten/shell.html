@@ -49,9 +49,23 @@
     /* Port specific: splash image sits inside #viewport as an absolute sibling
        of the canvas.  resize() sets its CSS width/height to the same letterboxed
        dimensions as the canvas (scale*960 x scale*640), so the splash always
-       covers exactly the game viewport rectangle.  object-fit:cover scales the
-       authentic 800x480 (5:3) splash up to fill that 3:2 rect, cropping the
-       left/right edges as needed.
+       covers exactly the game viewport rectangle.
+
+       object-fit:fill (NOT cover) matches how the GAME renders its in-game
+       splash: DrawStartFade (src/game/StartupEffects.cpp) draws a unit quad
+       scaled to FN_SCREEN_W x FN_SCREEN_H (480x320) under the game ortho
+       (SetupOrtho(160,-160,-240,240,...)), so the splash quad spans the ENTIRE
+       480x320 logical area = the ENTIRE 960x640 canvas, with no preserved
+       aspect (the texture is stretched to fill the whole 3:2 rect).  The shell
+       splash.webp IS the same asset the game draws: the visible logo region of
+       Data/textures/HB_logo.tex (the v1.6.1 game splash texture) cropped to the
+       game's UV rect (u 0.03125..0.96875, v 0.1875..0.8125 of the 512x512 tex
+       = a 480x320 3:2 region) and re-encoded as WebP.  Earlier this file shipped
+       an unrelated 800x480 (5:3) "(c) 2010 Halfbrick" image; HB_logo.tex reads
+       "(c) 2011 Halfbrick", so the shell and the in-game splash showed two
+       different copyright lines at the WebGL hand-off.  object-fit:fill maps the
+       whole image onto the whole canvas rect exactly like the game's quad, so
+       the hand-off is seamless.
        The black letterbox bars outside #viewport's flex-centered child area are
        #viewport's own black background -- the splash never bleeds past the
        canvas rect.
@@ -60,7 +74,7 @@
     #splash-img {
       position: absolute;
       display: block;
-      object-fit: cover;
+      object-fit: fill;
       z-index: 10;
       pointer-events: none;
       user-select: none;
@@ -214,6 +228,51 @@
       transform: scale(1.08);
       outline: none;
     }
+
+    /* Port specific: full-screen toggle button.  A corner overlay in the
+       top-right of the window, sitting ABOVE the canvas (z-index 25) and above
+       the tap-overlay's own top-right sound toggle area is irrelevant because
+       this lives outside the viewport, fixed to the window corner.  Fixed
+       positioning keeps it pinned regardless of letterbox bars; pointer-events
+       are its own so taps here never reach the canvas/game.  Semi-transparent
+       dark pill with an inline-SVG glyph that JS swaps between enter/exit. */
+    #fullscreen-btn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      z-index: 25;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      transition: background 0.15s ease, transform 0.12s ease;
+    }
+    #fullscreen-btn:hover, #fullscreen-btn:focus {
+      background: rgba(0, 0, 0, 0.62);
+      transform: scale(1.06);
+      outline: none;
+    }
+    #fullscreen-btn svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+      pointer-events: none; /* let the button receive the event, not the glyph */
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
   </style>
 </head>
 <body>
@@ -273,6 +332,23 @@
       <div id="error-msg">Couldn't load the game.</div>
       <div id="error-detail"></div>
       <button id="error-reload" tabindex="0">Reload</button>
+    </div>
+
+    <!-- Port specific: full-screen toggle button.  Fixed to the top-right
+         window corner, above the canvas (z-index 25).  Its own click/touch
+         handler toggles fullscreen on #viewport (so the letterboxed canvas +
+         black bars fill the screen) and requests landscape orientation.
+         Hidden until the game starts (shown by _dismissPlay).  The inline SVG
+         starts as the ENTER-fullscreen glyph; JS swaps it to the EXIT glyph on
+         fullscreenchange.  pointer-events on the SVG are off so the button div
+         is the event target; the handler stops propagation so the tap never
+         reaches the canvas/game as a slice. -->
+    <div id="fullscreen-btn" role="button" tabindex="0"
+         aria-label="Toggle full screen" title="Full screen" style="display:none;">
+      <svg id="fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <!-- Enter-fullscreen glyph: four outward corner brackets. -->
+        <path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"></path>
+      </svg>
     </div>
   </div>
 
@@ -339,30 +415,33 @@
 
       /* Loading cover + progress bar: both centre on the splash's baked
          "Loading..." label so the bar visually replaces that text.
-         The splash is the authentic 800x480 Bada loading screen (the device's
-         480x800 portrait Res/Splash.png rotated 90deg to landscape).  fLabel is
-         the "Loading..." text centre as a fraction of the splash height.
-         Map through object-fit:cover: the image is scaled by
-         max(cw/IMG_W, ch/IMG_H) so it fully covers the canvas rect, then
-         centred.  For this 5:3 splash in a 3:2 canvas the height fills exactly
-         and the left/right edges crop, so the label lands at fLabel down. */
-      var IMG_W = 800, IMG_H = 480;
+         The splash is now the cropped HB_logo.tex region (480x320, 3:2) the game
+         itself draws -- the SAME asset, baked "Loading..." text and all.  fLabel
+         is the "Loading..." text centre as a fraction of the splash height.
+         The splash uses object-fit:fill (see #splash-img comment) to match the
+         in-game splash quad, so the whole 480x320 image is mapped onto the whole
+         canvas rect with no crop: the image rect IS the canvas rect.  Both axes
+         scale linearly, so the source-pixel measurements below scale by cw/IMG_W
+         and ch/IMG_H. */
+      var IMG_W = 480, IMG_H = 320;
       var canvasLeft = Math.floor((ww - cw) / 2);
       var canvasTop  = Math.floor((wh - ch) / 2);
-      var imgScale   = Math.max(cw / IMG_W, ch / IMG_H);
-      var imgH       = IMG_H * imgScale;
-      var imgTop     = canvasTop + (ch - imgH) / 2;
+      /* fill: image covers the canvas rect exactly, so the per-axis scale for
+         positioning the cover/bar (which are measured in source-image pixels)
+         is cw/IMG_W horizontally and ch/IMG_H vertically. */
+      var imgScaleX  = cw / IMG_W;
+      var imgScaleY  = ch / IMG_H;
       var fLabel     = 0.85;   /* "Loading..." text centre in the 800x480 splash */
-      var labelCenterY = Math.round(imgTop + fLabel * imgH);
+      var labelCenterY = Math.round(canvasTop + fLabel * ch);
 
       /* Black feathered cover over the baked "Loading..." text.  Sized from the
-         measured text box in the 800x480 splash -- the "Loading..." glyphs span
-         153x30 px centred at y~0.85 -- plus margin, then scaled by imgScale so
+         measured text box in the 480x320 splash -- the "Loading..." glyphs span
+         ~92x18 px centred at y~0.85 -- plus margin, then scaled per-axis so
          the cover tracks the splash at every viewport size and always fully
          blankets the text.  The box-shadow feather (CSS) extends further still. */
       if (loadingCover) {
-        var coverW = Math.round(221 * imgScale);  /* 153px text + ~34px margin/side */
-        var coverH = Math.round(56  * imgScale);  /* 30px text  + ~13px margin/side */
+        var coverW = Math.round(133 * imgScaleX);  /* 92px text + ~20px margin/side */
+        var coverH = Math.round(34  * imgScaleY);  /* 18px text + ~8px margin/side */
         var coverTop = labelCenterY - Math.floor(coverH / 2);
         loadingCover.style.width  = coverW + 'px';
         loadingCover.style.height = coverH + 'px';
@@ -394,6 +473,10 @@
 
     resize();
     window.addEventListener('resize', resize);
+    /* Port specific: expose resize() so the fullscreen/orientation handler
+       (a separate script block / IIFE) can re-letterbox the canvas after the
+       viewport changes on enter/exit fullscreen and on orientation change. */
+    window._fnResize = resize;
   })();
 
   var _progressBar  = document.getElementById('progress-bar');
@@ -403,6 +486,8 @@
   var _tapOverlay   = document.getElementById('tap-overlay');
   var _tapPlay      = document.getElementById('tap-play');
   var _soundToggle  = document.getElementById('sound-toggle');
+  var _fullscreenBtn = document.getElementById('fullscreen-btn');
+  var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
   var _errorDetail  = document.getElementById('error-detail');
   var _audioOn      = true;   /* sound-toggle state; decides audio-on at start */
@@ -543,6 +628,8 @@
     }
     /* Fire game callbacks immediately -- don't wait for the fade. */
     _notifyUserStarted();
+    /* Reveal the full-screen toggle now that the game is running. */
+    if (_fullscreenBtn) _fullscreenBtn.style.display = 'flex';
     /* Fade out overlay; DOM removal happens after transition completes. */
     _removeOverlayFade();
   }
@@ -561,6 +648,139 @@
       if (e.key === 'Enter' || e.key === ' ') _toggleSound(e);
     });
   }
+
+  /* Port specific: full-screen toggle + landscape-orientation request.
+     -----------------------------------------------------------------------
+     - The element we fullscreen is #viewport (the container wrapping the
+       canvas + black letterbox bars), so the whole game rectangle fills the
+       screen.
+     - On ENTER we best-effort lock landscape via screen.orientation.lock();
+       it rejects on desktop and where unsupported, so both the synchronous
+       throw (try/catch) and the async promise rejection (.catch) are handled
+       so it NO-OPS gracefully -- never throws, never blocks.
+     - On EXIT we best-effort screen.orientation.unlock() in try/catch.
+     - After any fullscreen/orientation change we re-call the shell resize()
+       so the canvas re-letterboxes to the new viewport.
+     - The button has its own handler that stopPropagation()/preventDefault()s
+       so the tap never reaches the canvas as a game slice. */
+  (function () {
+    if (!_fullscreenBtn) return;
+
+    /* Enter-fullscreen glyph (outward corners) vs exit glyph (inward corners). */
+    var ENTER_PATH = 'M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15';
+    var EXIT_PATH  = 'M9 4 V9 H4 M20 9 H15 V4 M4 15 H9 V20 M15 20 V15 H20';
+
+    function _isFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
+    function _reLetterbox() {
+      /* Re-letterbox to the new viewport.  Defer one frame so the browser has
+         committed the new innerWidth/innerHeight after the fullscreen swap. */
+      if (typeof window._fnResize === 'function') {
+        window._fnResize();
+        setTimeout(window._fnResize, 60);
+      }
+    }
+
+    function _lockLandscape() {
+      try {
+        if (screen && screen.orientation && typeof screen.orientation.lock === 'function') {
+          var p = screen.orientation.lock('landscape');
+          if (p && typeof p.then === 'function') {
+            p.then(function () {
+              _reLetterbox();
+            }).catch(function (e) {
+              /* Rejects on desktop / unsupported -- harmless no-op. */
+              console.log('[fullscreen] orientation.lock rejected (non-fatal):', e && e.message);
+            });
+          }
+        }
+      } catch (e) {
+        console.log('[fullscreen] orientation.lock threw (non-fatal):', e && e.message);
+      }
+    }
+
+    function _unlockOrientation() {
+      try {
+        if (screen && screen.orientation && typeof screen.orientation.unlock === 'function') {
+          screen.orientation.unlock();
+        }
+      } catch (e) {
+        console.log('[fullscreen] orientation.unlock threw (non-fatal):', e && e.message);
+      }
+    }
+
+    function _requestFullscreen(el) {
+      try {
+        if (el.requestFullscreen)            return el.requestFullscreen();
+        if (el.webkitRequestFullscreen)      return el.webkitRequestFullscreen();
+      } catch (e) {
+        console.log('[fullscreen] requestFullscreen threw (non-fatal):', e && e.message);
+      }
+      return null;
+    }
+
+    function _exitFullscreen() {
+      try {
+        if (document.exitFullscreen)         return document.exitFullscreen();
+        if (document.webkitExitFullscreen)   return document.webkitExitFullscreen();
+      } catch (e) {
+        console.log('[fullscreen] exitFullscreen threw (non-fatal):', e && e.message);
+      }
+      return null;
+    }
+
+    function _toggleFullscreen(e) {
+      /* CRITICAL: stop the tap from reaching the canvas/game as a slice. */
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      var viewport = document.getElementById('viewport');
+      if (!viewport) return;
+      if (!_isFullscreen()) {
+        var p = _requestFullscreen(viewport);
+        /* Lock orientation after the request resolves where possible, else
+           immediately (fullscreenchange also fires and re-letterboxes). */
+        if (p && typeof p.then === 'function') {
+          p.then(_lockLandscape).catch(function (err) {
+            console.log('[fullscreen] requestFullscreen rejected (non-fatal):', err && err.message);
+          });
+        } else {
+          _lockLandscape();
+        }
+      } else {
+        _unlockOrientation();
+        _exitFullscreen();
+      }
+    }
+
+    function _onFullscreenChange() {
+      var fs = _isFullscreen();
+      if (_fullscreenIcon) {
+        var path = _fullscreenIcon.querySelector('path');
+        if (path) path.setAttribute('d', fs ? EXIT_PATH : ENTER_PATH);
+      }
+      _fullscreenBtn.setAttribute('aria-label', fs ? 'Exit full screen' : 'Toggle full screen');
+      _fullscreenBtn.setAttribute('title',      fs ? 'Exit full screen' : 'Full screen');
+      if (!fs) {
+        /* Left fullscreen by any means (Esc, system gesture) -- release lock. */
+        _unlockOrientation();
+      }
+      _reLetterbox();
+    }
+
+    _fullscreenBtn.addEventListener('click',      _toggleFullscreen);
+    _fullscreenBtn.addEventListener('touchstart', _toggleFullscreen, {passive: false});
+    _fullscreenBtn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _toggleFullscreen(e);
+    });
+    document.addEventListener('fullscreenchange',       _onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
+    /* Re-letterbox on orientation change too (the viewport dims swap). */
+    if (screen && screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', _reLetterbox);
+    }
+    window.addEventListener('orientationchange', _reLetterbox);
+  })();
 
   window.onerror = function (msg, src, line, col, err) {
     console.error('[onerror]', msg, src, line, col, err);
