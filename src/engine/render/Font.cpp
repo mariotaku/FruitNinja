@@ -877,7 +877,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                 if (horizAlign == 3) lineOffset *= 0.5f;
             }
             cursorX = 0.0f;
-            cursorY -= maxWH.y;  // binary @ 0x00198fc0: cursorY -= maxWH.y (per-line pitch)
+            cursorY -= yLineFactor;
             continue;
         }
 
@@ -910,7 +910,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                     if (horizAlign == 3) lineOffset *= 0.5f;
                 }
                 cursorX = 0.0f;
-                cursorY -= maxWH.y;  // binary: same pitch as \n branch
+                cursorY -= yLineFactor;
                 continue;
             }
         }
