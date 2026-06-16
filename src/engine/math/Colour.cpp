@@ -41,6 +41,13 @@ Colour* Colour::Lerp(Colour a, Colour b, float t) {
     return this;
 }
 
+// Static colour constants -- binary has these as BSS-zero-init statics,
+// set by a global ctor. Port defines them const for safety.
+// TODO: verify exact binary addresses / ctor site via Ghidra.
+const Colour Colour::Red(255, 0, 0, 255);
+const Colour Colour::White(255, 255, 255, 255);
+const Colour Colour::Black(0, 0, 0, 255);
+
 // Binary @ 0x00183f98 -- Colour::ToString() const
 // snprintf into a single shared 0x100 static buffer; format is
 // "%d, %d, %d, %d (argb)" with args (a, r, g, b). Returns the buffer.

@@ -39,6 +39,11 @@
 #include <vector>
 #include "game/GameWork.h"
 
+// Binary static: critical/charged fruit blend-target colour for blade flash.
+// Used by SlashEntity::UpdatePoints colour-blend path (binary @ 0x1e6914).
+// TODO: 0x1e6914 -- verify exact RGB from Ghidra (binary blends toward this when m_Scale>0).
+const Colour Fruit::CRITICAL_COLOUR(255, 128, 0, 255);
+
 // File-scope global: multicast event fired on every fruit slice.
 // Binary: file-static in Fruit.cpp, ctor'd in global.ctors @ 0x1e2404.
 // GOT-resolved address: 0x00332a34.
