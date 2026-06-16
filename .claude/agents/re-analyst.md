@@ -25,8 +25,14 @@ You **may** update the small set of load-bearing reference docs (formats, init o
 - **GhidraMCP tools** (mcp__GhidraMCP__*): `decompile_function`, `search_functions`, `read_memory`, `get_struct_layout`, `get_function_by_address`, `search_data_types`, `get_xrefs_to`, `force_decompile`, etc. All `mcp__GhidraMCP__*` tools are auto-approved.
 - **Read/Grep/Glob**: to check existing source for context and verify what's already been ported.
 
+## Compare the binary AGAINST the port — this IS the deliverable (MANDATORY)
+
+You are NOT done when you understand the binary. You are done when you have **READ the port's current code** for the same function/field and stated the **exact divergence**: "the port does X at `file:line`; the binary does Y." Every report's port-divergence finding MUST cite the actual port lines you read — never describe the binary and then GUESS or assume what the port does. A binary-only finding (or one that hand-waves the port side) is **incomplete**: it sends the implementer to fix code neither of you has compared, which has repeatedly caused wrong fixes and re-dispatch. The binary tells you what SHOULD happen; only reading the port tells you WHY it doesn't — and the fix lives in that gap. If you genuinely cannot locate the port code, say so explicitly rather than assuming it exists/behaves a certain way.
+
+Concretely, before you conclude: open the port file(s) for the symbol, find the corresponding lines, and write the side-by-side delta. If your "fix spec" references port behavior you did not actually read (e.g. "the port's CreateButtons guards on X" without having opened it), that is the failure mode this rule exists to stop.
+
 ## Where to look first
-1. **`src/`** — the port. If the function/struct already has a port-side definition, that's the current best understanding. Read it before re-RE'ing from scratch.
+1. **`src/`** — the port. ALWAYS read the existing port-side definition of whatever you're RE'ing and diff it against the binary; that diff is your primary output, not the binary description.
 2. **GhidraMCP** — ground-truth on the binary. Always cross-check against `disassemble_function` if the decompile looks suspicious.
 3. **`docs/` (load-bearing only)** — the small surviving set: file formats, init order, coordinate system, intentional-skip lists. Don't search for per-class RE docs; they've been removed.
 

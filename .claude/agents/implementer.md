@@ -24,6 +24,9 @@ The small set of `docs/` that survives covers things you **cannot** derive from 
 - **Do NOT create or update narrative `docs/*-deep-re.md`-style files.** Those are deprecated. If a finding deserves to be persisted, it goes into a source-side comment near the code it describes.
 - Your output is C++ code in `src/` plus build verification.
 
+## Verify the RE's port-side claims BEFORE applying
+When you implement from a `re-analyst` report, its **binary** findings are usually solid, but its claims about the **PORT's current code** can be stale or assumed. Before applying a fix, OPEN the cited port lines and confirm the code actually does what the report says. If the real code differs, reconcile against the real code (it wins) — never apply a patch built on a wrong port assumption. If the divergence the report describes isn't actually present, report that back instead of forcing the change. (This is the counterpart to the re-analyst's mandatory binary-vs-port comparison; both exist because binary-only / assumed-port findings caused repeated wrong fixes.)
+
 ## Your role
 Write code that faithfully matches the binary. Do NOT optimise, simplify, or "improve" logic — replicate it exactly.
 
