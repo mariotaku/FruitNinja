@@ -36,7 +36,6 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "engine/util/StringTable.h"
-#include <cstdio>
 #include <cmath>
 #include "game/GameWork.h"
 
@@ -229,6 +228,16 @@ void MainScreen::Update(float dt) {
         // Once elapsed, start incrementing m_Timer2 and clear levelTransitionFlag.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
+        //
+        // Reset seed: GameInit writes m_GameDt=-1.0 as a one-frame UpdateMusic cue
+        // (selects menu song by sign of m_GameDt on frame 1). UpdateMusic runs
+        // BEFORE MainScreen::Update each frame, so by the time we reach here on
+        // frame 1 the music cue has already fired. Reset to 0.0 now so the
+        // CAMERA_ZOOM lerp ramps from 0.0 -> -1.0 (visible ~25-30 frame intro)
+        // instead of starting pre-settled at -1.0.
+        if (m_Timer2 == 0.0f && game_work.m_GameDt == -1.0f) {
+            game_work.m_GameDt = 0.0f;
+        }
         const bool flashActive = (game_work.m_BombHitTimer > 0.7f);
         if (flashActive) {
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
