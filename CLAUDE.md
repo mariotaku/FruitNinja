@@ -8,7 +8,7 @@
 
 ## Defunct features — stub, never skip
 
-Defunct features (OpenFeint, GameCenter, P2P multiplayer, online news, online leaderboards, etc.) are **stubbed**, never skipped. The shape — class, struct fields, vtable, public-API methods, call sites — is **preserved as if the feature were ported**, with method bodies as no-ops that return safe defaults. Each stub carries `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>` so it's greppable.
+Defunct features (OpenFeint, GameCenter, P2P multiplayer, online news, online leaderboards, etc.) are **stubbed**, never skipped. The shape — class, struct fields, vtable, public-API methods, call sites — is **preserved as if the feature were ported**, with method bodies as no-ops that return safe defaults. Each stub carries `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>` so it's greppable.
 
 Why: skipping breaks the call graph and causes cascading port-side workarounds at every call site. Stubbing keeps the call graph identical to the binary, isolates the "this is a no-op" decision to one spot, and lets the asm-verify pass treat the call sites as cosmetic-only divergences rather than real bugs.
 
@@ -89,9 +89,9 @@ Keep tests minimal and deterministic; they must not require GPU/platform state o
 The port treats **source code as the canonical RE record**:
 - Struct layouts live in headers (`src/**/*.h`).
 - Function logic lives in `.cpp`.
-- Each unimplemented sub-block carries a `// TODO: <binary addr> — <what's missing>` comment that **is the spec** for that gap.
-- `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)` markers list functions ASM-checked against the binary.
-- `// DIFFERS: original = X from DAT_addr, using Y because <reason>` flags deliberate deviations.
+- Each unimplemented sub-block carries a `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` comment that **is the spec** for that gap.
+- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` markers list functions ASM-checked against the binary.
+- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @0x<addr>), using Y because <reason>` flags deliberate deviations.
 
 This replaces the prior practice of authoring large `docs/*-deep-re.md` / `docs/structs/*.md` / per-class narratives. Those have been removed; only a small reference set survives — file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance.
 
