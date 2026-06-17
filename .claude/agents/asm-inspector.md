@@ -53,9 +53,9 @@ If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
 - `Tag_FP_arch: VFPv3` -> `-mfpu=vfpv3`
 - **`Tag_ABI_VFP_args: VFP registers` -> `-mfloat-abi=hard`** (NOT softfp -- floats are passed/returned in `s0`/`s1` etc., not `r0`/`r1`).
 
-Default invocation, single TU, ad-hoc:
+Compile a single TU ad-hoc:
 ```sh
-docker run --rm -v "$(pwd):/work" fnverify -c "
+docker run --rm -v "$(pwd):/work" fnverify bash -c "
   cp /work/tmp/asm-compare/<name>_test.cpp /tmp/t.cpp
   arm-none-eabi-g++ -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
     -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti -S \
@@ -76,15 +76,15 @@ inlining, no `-Os` size pressure).
 
 ### 5. Compare instruction-by-instruction
 
-Use the Bada SDK's objdump for the binary side, `g++ -S` for the test side, then diff manually.
+Use the container's `arm-none-eabi-objdump` for the binary side, `g++ -S` for the test side, then diff manually.
 
 Workflow:
-1. Find the original ELF at `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB ELF32 ARM, not stripped).
+1. Find the original ELF at `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB ELF32 ARM, not stripped) — accessible inside the container at `/work/FruitNinjaBada/Bin/FruitNinja.exe`.
 2. Dump the binary range:
    ```
-   bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-objdump.exe \
+   docker run --rm -v "$(pwd):/work" fnverify arm-none-eabi-objdump \
      -d --start-address=0x<begin> --stop-address=0x<end> \
-     FruitNinjaBada/Bin/FruitNinja.exe \
+     /work/FruitNinjaBada/Bin/FruitNinja.exe \
      > tmp/asm-compare/<name>_binary.s
    ```
 3. Compile the test with `-S` to get `tmp/asm-compare/<name>_test.s` (see step 4).
@@ -176,7 +176,7 @@ When the question involves a function with **two-or-more args of the same type**
 
 3. **Cross-check with another caller.** Find at least one other caller of the same function in the binary (`get_xrefs_to`). Decode its literal pool the same way, and verify the *role* assignment is consistent — e.g. if FruitCamera passes `top=160` and another caller passes `top=halfH`, the convention is consistent; if one passes `top` and the other passes `bottom` in the same slot, you've mis-identified the slot. Single-caller verification is intrinsically weaker; flag it as such in the verdict.
 
-4. **Compile-and-byte-diff the call site.** Emit a tiny TU that calls the port's function with your proposed args, compile with the Bada toolchain (`-O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 -mfloat-abi=hard`), and byte-compare the call-site bytes against the binary at the original address. Hard-float ABI puts each float in `s0..s15` in order, so a swap in arg order produces a different `vldr / vmov` sequence — instantly visible. `SetupLookAt(eye, up, at)` vs `SetupLookAt(eye, at, up)` differ in which Vec3 lands in which register triple. This is the same compile+diff loop step §4 already runs for whole-function verifications; just narrow it to the call site of interest.
+4. **Compile-and-byte-diff the call site.** Emit a tiny TU that calls the port's function with your proposed args, compile with the container toolchain (`docker run --rm -v "$(pwd):/work" fnverify` + `arm-none-eabi-g++ -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 -mfloat-abi=hard`), and byte-compare the call-site bytes against the binary at the original address. Hard-float ABI puts each float in `s0..s15` in order, so a swap in arg order produces a different `vldr / vmov` sequence — instantly visible. `SetupLookAt(eye, up, at)` vs `SetupLookAt(eye, at, up)` differ in which Vec3 lands in which register triple. This is the same compile+diff loop step §4 already runs for whole-function verifications; just narrow it to the call site of interest.
 
 5. **Treat "non-standard convention" claims as red flags.** When your verdict says "binary uses non-std (eye, up, target)" or "binary's near/far is swapped from GL convention" or anything that contradicts a long-established API contract, *stop*. That is the moment to require checks 1+2+3+4 to all pass before accepting. A non-standard claim with only one supporting line of evidence is a swap bug ~50% of the time. Standard conventions exist for a reason — the prior is that the binary follows them.
 
@@ -206,7 +206,6 @@ In the report:
 
 - **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`. See `tools/asm-verify/Dockerfile`.
 - **In-image binutils**: `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}` on `$PATH`. Use these for binary disassembly so output matches the cross-build's printing style for cleaner side-by-side diffs.
-- **Bada SDK toolchain** (legacy fallback, GCC 4.5.3 on Win): `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-g++.exe` — only use if Docker is unavailable. Codegen drifts ~5% (notably tail-call elision).
 - **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
 - **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop, see `tools/asm-verify/README.md`). For ad-hoc single-symbol questions compile your own minimal TU as in §4; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
 - Compile-unit workdir: `tmp/asm-compare/` (Win-side OK for source; stage into `/tmp/` inside the container before invoking i386 cc1plus).
