@@ -77,7 +77,7 @@ template<int N>
 void UpdateBinding(float time, AnimBindings::Vector const& v);
 
 // Mortar::AnimationState -- per-instance playback state for an animation.
-// Binary @ 0x001ad150 ctor; vtable @ 0x001ebd00; sizeof 0x40.
+// Binary @ 0x0026f0b4 ctor; vtable @ 0x001ebd00; sizeof 0x40.
 // Field layout (verified against v1.6.1 SetTime @ 0x0026ee84 / RebindAnim @ 0x0026f1ac):
 //   +0x00  ReferenceCounter (vptr + refcounts, 12B)
 //   +0x0C  SmartPtr<Model> m_Mesh

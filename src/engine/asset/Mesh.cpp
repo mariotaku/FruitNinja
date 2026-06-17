@@ -43,7 +43,8 @@ Mesh::~Mesh() {
 // Matches Mesh::SetBones (0x001b1340)
 // Resizes m_BoneBindings and copies each entry
 void Mesh::SetBones(const BoneBinding* bones, unsigned long count) {
-    m_BoneBindings.resize(count);
+    BoneBinding temp;
+    m_BoneBindings.resize(count, temp);
     for (unsigned long i = 0; i < count; i++) {
         m_BoneBindings[i] = bones[i];
     }
@@ -172,10 +173,6 @@ bool Mesh::HasDiffuseTexture() const {
 // defunct-stubbed (no-op) but call shape preserved. Bone branch + 4-matrix composition
 // + geometry loop order all match binary.
 void Mesh::Draw(const Matrix44& worldTransform) {
-    if (m_Geometries.empty()) return;
-
-    if (!Renderer::GetInstance()) return;
-
     // Matches Mesh::Draw single-bone branch (0x001b0c3c, line ~8):
     //   if (boneCount == 1): finalWorld = vertMat * worldMatrix
     //   else: finalWorld = worldMatrix
@@ -203,16 +200,14 @@ void Mesh::Draw(const Matrix44& worldTransform) {
     TrySetMatrix_EffectProp(m_WorldProp, &finalWorld);
     TrySetMatrix_EffectProp(m_ViewProp,  &camView);
     TrySetMatrix_EffectProp(m_ProjProp,  &camProj);
+
+    // WVP = Proj * (View * World) — column-vector convention, matches binary
+    // which composes (View * finalWorld) first then (Proj * that).
+    Matrix44 vw  = camView * finalWorld;
+    Matrix44 wvp = camProj * vw;
     if (m_WVPProp != NULL) {
-        // WVP = Proj * (View * World) — column-vector convention, matches binary
-        // which composes (View * finalWorld) first then (Proj * that).
-        Matrix44 vw  = camView * finalWorld;
-        Matrix44 wvp = camProj * vw;
         TrySetMatrix_EffectProp(m_WVPProp, &wvp);
     }
-
-    // Port specific: compute MVP via MatrixManager (replaces Effect property system)
-    Matrix44 mvp = mm.GetMVP();
 
     // Render all geometries, each with its own material.
     // Binary @ 0x001b0c3c: walks m_Geometries calling Geometry::Render per entry.
@@ -226,7 +221,7 @@ void Mesh::Draw(const Matrix44& worldTransform) {
                                   ? m_Materials[matIdx]
                                   : (m_Materials.empty() ? MeshMaterial() : m_Materials[0]);
 
-        g->Render(mat, mvp);
+        g->Render(mat, wvp);
     }
 }
 
