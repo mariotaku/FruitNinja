@@ -118,17 +118,14 @@ public:
 
     // Allocate the pool, construct each slot, register all with the HUD,
     // set m_bNoDestructor=1 per slot AFTER AddControl.
-    // Binary signature: static CreatePool(int count, HUD* hud); ABI r0=count, r1=hud.
-    // Three statics live consecutively in BSS at 0x00231230..0x00231238:
-    //   sm_pPool / sm_PoolCount / sm_AllocIndex
-    // (Port DIFFERS: uses fixed-size s_Pool[12] array instead of binary's
-    //  operator new[] with [slotSize][count] header. Functionally equivalent
-    //  for trivially-destructible MissControl.)
-    // ASM-verified: 2026-05-24 binary @ 0x001512d8 (re-analyst)
+    // v1.6.1 MissControl::CreatePool @0x0019ef44
+    // Flat contiguous block: operator new[](count*sizeof(MissControl)+8);
+    // 8-byte [slotSize][count] header, then count placement-newed objects.
+    // Pool globals: s_pPool @0x003164a8, s_PoolCount @0x003164ac, s_CurentFree @0x003164b0.
     static void CreatePool(int count, HUD* hud);
 
-    // 0x00150da4 -- round-robin through pool returning first non-busy slot.
-    // binary leaves cursor at the FOUND slot (not +1). Port DIFFERS was advancing past.
+    // v1.6.1 MissControl::GetFree @0x0019dcd8
+    // Round-robin through pool; cursor left at FOUND slot (not +1).
     static MissControl* GetFree();
 
     // 0x00151764 -- activate critical-hit label at a slice point.
@@ -170,11 +167,13 @@ public:
     // shifts the AABB to the top-right cluster where the X markers render.
     Vec3 GetDrawPos() const override;
 
-    // Binary @ 0x0019dd74 — snap every busy pool slot's m_FadeAlpha to the 0.06917 ceiling
-    // so all on-screen miss/critical/combo markers immediately finish fading out.
+    // v1.6.1 MissControl::MakeEmAllDissappear @0x0019dd74
+    // Contiguous walk: clamp busy slots' m_FadeAlpha to 0.06917 ceiling.
     static void MakeEmAllDissappear();
 
-    // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit.
+    // v1.6.1 MissControl::CleanPool @0x0019de80
+    // Backward dtor loop + single operator delete[] on header-prefixed block.
+    // s_PoolCount reset is unconditional even when pool was null.
     static void CleanPool();
 
     // Accessor for the file-static `s_TexCross` (hud_cross.tex). Used by
