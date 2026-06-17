@@ -1,6 +1,6 @@
 ---
 name: asm-inspector
-description: ASM-level verification agent. Use when port behavior diverges from the binary and you need to confirm what the binary actually does at the instruction level. Compiles a small C++ test unit with the Sourcery 2010q1 (GCC 4.4.1) toolchain to produce ARM Thumb-2 ASM -- this is the upstream of Samsung's "Sourcery G++ 4.4-157" that built FruitNinja.exe, so codegen matches closely. Diffs against Ghidra disassembly. Returns concrete evidence (specific instructions, addresses, register values) rather than inference.
+description: ASM-level verification agent. Use when port behavior diverges from the binary and you need to confirm what the binary actually does at the instruction level. Compiles the port's actual .cpp file with the Sourcery 2010q1 (GCC 4.4.1) toolchain via compile-one.sh to produce ARM Thumb-2 ASM, diffs against annotated Ghidra disassembly (resolves bl targets to function names via ReferenceManager). Returns concrete evidence (specific instructions, addresses, register values) rather than inference.
 model: opus
 ---
 
@@ -29,7 +29,34 @@ If the question is too broad ("is the spin loop correct?") refuse to start until
 
 Target program in Ghidra: `FruitNinja_v1_6_1.exe`. Ghidra addresses are VAs = ELF offset + `0x10000` (e.g. nm shows `0x0016b71c`, Ghidra uses `0x0017b71c`).
 
-Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save `disassemble_function` output to `tmp/asm-compare/<name>_binary.s`. This is the binary-side ground truth — no separate objdump step needed. (Note: on this fork `decompile_function` now resolves PIC/GOT-indirected named globals — patched 2026-06-16; upstream's bare DecompInterface with "Respect Read-Only Flags" OFF still shows them as opaque `DAT_`, where `run_script_inline` with `opts.grabFromProgram(currentProgram)` is the fallback. Either way, genuinely-unnamed `DAT_` float constants in the literal pool are still decoded via `read_memory` per the steps below.)
+Use GhidraMCP to locate the function's address range. Then get **annotated disassembly** via `run_script_inline` — this resolves `bl`/`b` targets to function names via Ghidra's `ReferenceManager`:
+
+```java
+// AnnotatedDisasm: dump function at cursor with "; -> TargetName" comments.
+Function func = getFunctionContaining(currentAddress);
+AddressSetView body = func.getBody();
+Listing listing = currentProgram.getListing();
+ReferenceManager refMgr = currentProgram.getReferenceManager();
+CodeUnitIterator it = listing.getCodeUnits(body, true);
+while (it.hasNext() && !monitor.isCancelled()) {
+    CodeUnit cu = it.next();
+    Address addr = cu.getAddress();
+    Reference[] refs = refMgr.getFlowReferencesFrom(addr);
+    String comment = "";
+    if (refs.length > 0) {
+        Address target = refs[0].getToAddress();
+        if (target.getOffset() > 0x100000) {
+            Function targetFunc = getFunctionAt(target);
+            if (targetFunc != null) comment = "  ; -> " + targetFunc.getName();
+        }
+    }
+    printf("%08x: %s%s\n", addr.getOffset(), cu.toString(), comment);
+}
+```
+
+Save this output to `tmp/asm-compare/<name>_binary.s`. The `; -> Name` annotations let the normalizer resolve `bl 0xADDR` to `bl <Name>`, matching the port objdump's `bl <Name>` format.
+
+Also save `decompile_function` output alongside for human reference. (Note: on this fork `decompile_function` resolves PIC/GOT-indirected named globals — patched 2026-06-16.)
 
 ### 3. Compile the port source with the era-correct toolchain
 
