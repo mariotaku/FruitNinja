@@ -53,26 +53,34 @@ SRCFILE=src/<path>/<ClassName>.cpp   # the port file containing the function
 FUNC=_ZN...<mangled-name>...          # mangled symbol from nm or Ghidra
 NAME=<short-tag>                      # e.g. "slash_reset"
 
-docker run --rm -v "$(pwd):/work" fnverify bash -c "
-  cp /work/$SRCFILE /tmp/t.cpp
-  arm-none-eabi-g++ -c -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
-    -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti \
-    -fshort-enums -fshort-wchar -D__bada__ \
-    -include /work/tools/asm-verify/cross-headers/fn-cxx11-shims.h \
-    -I/work/src -I/work/src/engine -I/work/src/game \
-    -I/work/src/screens -I/work/src/hud -I/work/src/entities \
-    -I/work/src/platform -I/work/src/debug \
-    -I/work/tools/asm-verify/cross-headers \
-    -I/work/build/_deps/tinyxml2-src \
-    -o /tmp/t.o /tmp/t.cpp 2>&1
-  arm-none-eabi-objdump -d /tmp/t.o \
-    | sed -n '/<$FUNC>:/,/^$/p' \
-    > /work/tmp/asm-compare/${NAME}_port.s
+docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c "
+mkdir -p /tmp/portsrc/tinyxml2
+rsync -aq /work/src/ /tmp/portsrc/src/
+rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
+cp /work/build/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
+cp /work/tools/asm-verify/cross-headers/fn-cxx11-shims.h /tmp/portsrc/
+
+arm-none-eabi-g++ -c -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
+  -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti \
+  -fshort-enums -fshort-wchar -D__bada__ -fpermissive \
+  -include /tmp/portsrc/fn-cxx11-shims.h \
+  -I/tmp/portsrc/src -I/tmp/portsrc/src/engine -I/tmp/portsrc/src/game \
+  -I/tmp/portsrc/src/screens -I/tmp/portsrc/src/hud -I/tmp/portsrc/src/entities \
+  -I/tmp/portsrc/src/platform -I/tmp/portsrc/src/debug \
+  -I/tmp/portsrc/cross-headers -I/tmp/portsrc -I/tmp/portsrc/tinyxml2 \
+  -o /tmp/t.o /tmp/portsrc/src/<ClassName>.cpp 2>&1
+echo EXIT:\$?
+arm-none-eabi-objdump -d /tmp/t.o \
+  | sed -n '/<$FUNC>:/,/^\$/p' \
+  > /work/tmp/asm-compare/${NAME}_port.s
 "
 ```
 
-The `cp` to `/tmp/` is required because the toolchain's i386 cc1plus can't
-stat() the bind-mounted `/work` (drvfs / 9p inode overflow).
+The rsync to `/tmp/portsrc/` is required because the toolchain's i386 cc1plus
+can't stat() the bind-mounted `/work` (drvfs / 9p inode overflow). All
+source, headers, and cross-headers must be staged into `/tmp/` first.
+`-fpermissive` downgrades the `strncasecmp` redeclaration and offsetof
+warnings that GCC 4.4.1 otherwise treats as errors.
 
 If the file compiles cleanly, this produces the port's actual ASM for the
 target function — no manual TU authorship, no risk of drift between a test
@@ -187,7 +195,7 @@ When the question involves a function with **two-or-more args of the same type**
 
 3. **Cross-check with another caller.** Find at least one other caller of the same function in the binary (`get_xrefs_to`). Decode its literal pool the same way, and verify the *role* assignment is consistent — e.g. if FruitCamera passes `top=160` and another caller passes `top=halfH`, the convention is consistent; if one passes `top` and the other passes `bottom` in the same slot, you've mis-identified the slot. Single-caller verification is intrinsically weaker; flag it as such in the verdict.
 
-4. **Compile-and-byte-diff the call site.** Emit a tiny TU that calls the port's function with your proposed args, compile with the container toolchain (`docker run --rm -v "$(pwd):/work" fnverify` + `arm-none-eabi-g++ -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 -mfloat-abi=hard`), and byte-compare the call-site bytes against the binary at the original address. Hard-float ABI puts each float in `s0..s15` in order, so a swap in arg order produces a different `vldr / vmov` sequence — instantly visible. `SetupLookAt(eye, up, at)` vs `SetupLookAt(eye, at, up)` differ in which Vec3 lands in which register triple. This is the same compile+diff loop step §4 already runs for whole-function verifications; just narrow it to the call site of interest.
+4. **Compile-and-byte-diff the call site.** Emit a tiny TU that calls the port's function with your proposed args, compile with the container toolchain (`docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c "arm-none-eabi-g++ ...`), and byte-compare the call-site bytes against the binary at the original address. Hard-float ABI puts each float in `s0..s15` in order, so a swap in arg order produces a different `vldr / vmov` sequence — instantly visible. `SetupLookAt(eye, up, at)` vs `SetupLookAt(eye, at, up)` differ in which Vec3 lands in which register triple. This is the same compile+diff loop step §4 already runs for whole-function verifications; just narrow it to the call site of interest.
 
 5. **Treat "non-standard convention" claims as red flags.** When your verdict says "binary uses non-std (eye, up, target)" or "binary's near/far is swapped from GL convention" or anything that contradicts a long-established API contract, *stop*. That is the moment to require checks 1+2+3+4 to all pass before accepting. A non-standard claim with only one supporting line of evidence is a swap bug ~50% of the time. Standard conventions exist for a reason — the prior is that the binary follows them.
 
