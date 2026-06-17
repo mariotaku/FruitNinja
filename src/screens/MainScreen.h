@@ -75,8 +75,9 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     int GetType() override { return 1; }                // vtable slot 12 (base default)
 
-    // UpdateScreenElements — vtable slot 15 @ 0x0014AD3C (extension slot beyond base 15)
-    void UpdateScreenElements(float cameraTransition, float time);
+    // UpdateScreenElements — vtable slot 15; v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
+    // Binary signature: (float dt, float stateVar) — dt drives physics, stateVar gates settle.
+    void UpdateScreenElements(float dt, float transitionTimer);
 
     // Direct state writer used by child screens.
     void SetState(MainScreenState s);

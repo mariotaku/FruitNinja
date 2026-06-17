@@ -1,7 +1,8 @@
 //
 // MainScreen — reimplemented from docs/screens/main.md
-// Original: ctor 0x0014c430 (159 lines), Update 0x0014b278 (677 lines),
-//           Draw 0x0014d4ec (171 lines)
+// v1.6.1 addresses:
+//   ctor 0x0019811c, Update 0x00196e1c, Draw 0x001993ac,
+//   UpdateScreenElements 0x00195a58
 // v1.6.1 struct re-layout applied: m_StateTimer=bounce velocity, m_Timer2=transition timer,
 //   m_BounceY=bounce position, m_LogoPos=fruit_text draw pos, etc.
 //
@@ -509,7 +510,10 @@ void MainScreen::Update(float dt) {
         pMusicToggle->pos.y += slideOffset;
     }
 
-    UpdateScreenElements(elapsedTime, m_Time);
+    // Binary @ 0x00195a58: UpdateScreenElements(dt, stateVar).
+    // dt = frame delta (used for bounce physics integration and tute gate).
+    // stateVar = transition timer (used for settle condition: time > 0.99).
+    UpdateScreenElements(dt, elapsedTime);
 }
 
 // Binary @ 0x0014b278: Game+0x0c is the camera-transition timer.
@@ -619,10 +623,17 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     }
 }
 
-// Matches 0x0014ad3c — logo integrator (v1.6.1 semantics)
+// ASM-verified: v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
 //
-// arg1 = cameraTransition = ct = -game_work.m_GameDt, clamped to 0.04
-// arg2 = time = m_Time (accumulated seconds, used for the settle gate time > 0.99)
+// Binary signature: (float dt, float stateVar)
+//   dt       = frame delta (used for bounce physics integration and tute gate).
+//              Bounce: vel += dt * -55; pos += vel * dt * 15.
+//              Since dt ≈ 0.0167, these are small per-frame increments.
+//   stateVar = state-dependent timer (used for settle gate: stateVar > 0.99).
+//              Menu idle: stateVar = -m_GameDt ≈ 1.0 → settle active.
+//              Transitions: stateVar = m_Timer2 (decays from 1.0) → settle only early.
+//   tute = static local; set to 1.0 when dt > 0 (always during gameplay), set to 0.0
+//          ONLY by the floor-bounce settle path. NEVER reset to 0 when dt drops to 0.
 //
 // v1.6.1 field semantics:
 //   m_StateTimer (+0xF8 port / +0x110 binary) = BOUNCE VELOCITY accumulator
@@ -635,21 +646,21 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 //   m_Lean       (+0xDC port / +0xF4 binary)  = logo lean lerp (init 1.0)
 //   m_LogoPos    (+0xD0 port / +0xE8 binary)  = fruit_text + sliceInstrBox draw pos
 //
-// Binary constants (literal pool at 0x14aec4):
-//   CLAMP_THRESHOLD    = 0.04   (DAT_0014aec4)
-//   BOUNCE_GRAVITY     = -55.0  (DAT_0014aecc)
-//   ELAPSED_THRESHOLD  = 0.99   (DAT_0014aed8)
+// Binary constants (literal pool):
+//   CLAMP_THRESHOLD    = 0.04   (clamp dt to max 0.04)
+//   BOUNCE_GRAVITY     = -55.0  (gravity per unit of dt)
+//   ELAPSED_THRESHOLD  = 0.99   (settle gate on stateVar)
 //
-void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
-    static const float MAX_CT            = 0.04f;    // DAT_0014aec4 — MAX clamp (not min)
-    static const float BOUNCE_GRAVITY    = -55.0f;   // DAT_0014aecc
-    static const float ELAPSED_THRESHOLD = 0.99f;    // DAT_0014aed8
+void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
+    static const float MAX_DT            = 0.04f;    // Clamp dt to max 0.04
+    static const float BOUNCE_GRAVITY    = -55.0f;   // Gravity per unit of dt
+    static const float ELAPSED_THRESHOLD = 0.99f;    // Settle gate on stateVar
 
-    if (cameraTransition > MAX_CT) {
-        cameraTransition = MAX_CT;
+    if (dt > MAX_DT) {
+        dt = MAX_DT;
     }
 
-    // m_NinjaTextZ and m_field10C = 0.0 (binary DAT_0014aec8)
+    // m_NinjaTextZ and m_field10C = 0.0
     m_NinjaTextZ = 0.0f;
     m_field10C   = 0.0f;
 
@@ -659,13 +670,12 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     // m_BounceVel = 60.0 decorative (set per-frame; also used as ninja_text X in Draw)
     m_BounceVel = 60.0f;
 
-    // Bounce physics:
-    // m_StateTimer = VELOCITY accumulator
-    // m_BounceY    = POSITION integrator
-    float newVel = m_StateTimer + cameraTransition * BOUNCE_GRAVITY;
+    // Bounce physics: per-frame integration with dt.
+    // m_StateTimer = VELOCITY accumulator; m_BounceY = POSITION integrator.
+    float newVel = m_StateTimer + dt * BOUNCE_GRAVITY;
     m_StateTimer = newVel;
 
-    float newPos = m_BounceY + newVel * cameraTransition * 15.0f;
+    float newPos = m_BounceY + newVel * dt * 15.0f;
     m_BounceY = newPos;
 
     float floorPos = pos.y + 18.0f;
@@ -673,12 +683,14 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     // fruit_text Y = pos.y + 18 (the floor level)
     m_NinjaTextY = floorPos;
 
-    // tute = 1.0 while ct > 0, else 0.0
-    if (cameraTransition > 0.0f) {
+    // Binary: tute = 1.0 while dt > 0 (which is always true during gameplay).
+    // tute is a static local — it is NEVER reset to 0 when dt drops to 0.
+    // The only path to tute = 0 is the floor-bounce settle below.
+    if (dt > 0.0f) {
         m_GlobalAlphaTarget = 1.0f;
-    } else {
-        m_GlobalAlphaTarget = 0.0f;
     }
+    // NOTE: No else branch. Binary's static tute keeps its last value when dt <= 0,
+    // unlike the old port code which incorrectly reset m_GlobalAlphaTarget to 0.
 
     // Bounce floor: floorLimit = pos.y + 18 - 15 = pos.y + 3
     float floorLimit = floorPos - 15.0f;
@@ -686,22 +698,23 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
         m_BounceY    = floorLimit;
         m_StateTimer = newVel * BOUNCE_LOSS;
 
+        // Settle: floor hit + low velocity + stateVar settled + dt active
         if (fabsf(newVel * BOUNCE_LOSS) < BOUNCE_SETTLE &&
-            time > ELAPSED_THRESHOLD &&
-            cameraTransition > 0.0f) {
+            transitionTimer > ELAPSED_THRESHOLD &&
+            dt > 0.0f) {
             m_StateTimer = 0.0f;
             m_GlobalAlphaTarget = 0.0f;
         }
     }
 
     // m_Lean lerp: m_Lean += (tute - m_Lean) * 0.25
-    // tute = m_GlobalAlphaTarget (1.0 when ct > 0, else 0.0)
+    // tute = m_GlobalAlphaTarget
     m_Lean += (m_GlobalAlphaTarget - m_Lean) * ALPHA_LERP_RATE * FN::g_DebugTimeScale;
 
     // m_LogoPos = (-175, 26, 0) + (-120, -17, 0) * m_Lean * 2.0
-    // fruit_text + sliceInstrBox draw position (binary @ 0x0014ad3c end)
-    Vec3 base(-175.0f, 26.0f, 0.0f);      // DAT_0014aedc, 26.0, DAT_0014aec8
-    Vec3 offset(-120.0f, -17.0f, 0.0f);   // DAT_0014aed4, -17.0, DAT_0014aec8
+    // fruit_text + sliceInstrBox draw position (binary @ 0x00195a58)
+    Vec3 base(-175.0f, 26.0f, 0.0f);
+    Vec3 offset(-120.0f, -17.0f, 0.0f);
     m_LogoPos = base + offset * m_Lean * 2.0f;
 }
 
