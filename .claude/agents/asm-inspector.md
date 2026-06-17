@@ -46,41 +46,25 @@ upstream of Samsung's `Sourcery G++ 4.4-157` that built the binary (per its
 - **`Tag_ABI_VFP_args: VFP registers` -> `-mfloat-abi=hard`**
 - **`-fshort-enums -fshort-wchar`** — ABI parity with binary's `Tag_ABI_enum_size: small` + `Tag_ABI_PCS_wchar_t: 2`
 
-Compile the port's source file to a `.o`, then objdump the target function:
+Compile the port's source file and extract the target function's ASM:
 
 ```sh
-SRCFILE=src/<path>/<ClassName>.cpp   # the port file containing the function
-FUNC=_ZN...<mangled-name>...          # mangled symbol from nm or Ghidra
-NAME=<short-tag>                      # e.g. "slash_reset"
-
-docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c "
-mkdir -p /tmp/portsrc/tinyxml2
-rsync -aq /work/src/ /tmp/portsrc/src/
-rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
-cp /work/build/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
-cp /work/tools/asm-verify/cross-headers/fn-cxx11-shims.h /tmp/portsrc/
-
-arm-none-eabi-g++ -c -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
-  -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti \
-  -fshort-enums -fshort-wchar -D__bada__ -fpermissive \
-  -include /tmp/portsrc/fn-cxx11-shims.h \
-  -I/tmp/portsrc/src -I/tmp/portsrc/src/engine -I/tmp/portsrc/src/game \
-  -I/tmp/portsrc/src/screens -I/tmp/portsrc/src/hud -I/tmp/portsrc/src/entities \
-  -I/tmp/portsrc/src/platform -I/tmp/portsrc/src/debug \
-  -I/tmp/portsrc/cross-headers -I/tmp/portsrc -I/tmp/portsrc/tinyxml2 \
-  -o /tmp/t.o /tmp/portsrc/src/<ClassName>.cpp 2>&1
-echo EXIT:\$?
-arm-none-eabi-objdump -d /tmp/t.o \
-  | sed -n '/<$FUNC>:/,/^\$/p' \
-  > /work/tmp/asm-compare/${NAME}_port.s
-"
+bash tools/asm-verify/compile-one.sh \
+  src/<path>/<ClassName>.cpp \       # port source file
+  _ZN...<mangled-name>... \           # mangled symbol
+  <short-tag>                         # e.g. "slash_reset"
 ```
 
-The rsync to `/tmp/portsrc/` is required because the toolchain's i386 cc1plus
-can't stat() the bind-mounted `/work` (drvfs / 9p inode overflow). All
-source, headers, and cross-headers must be staged into `/tmp/` first.
-`-fpermissive` downgrades the `strncasecmp` redeclaration and offsetof
-warnings that GCC 4.4.1 otherwise treats as errors.
+This stages the full `src/` tree into `/tmp/portsrc/` (required to avoid
+drvfs inode overflow with the i386 cc1plus), cross-compiles with the
+Sourcery 2010q1 toolchain (+`-fpermissive -D__bada__ -fshort-enums
+-fshort-wchar`), and writes the target function's disassembly to
+`tmp/asm-compare/<tag>_port.s`.
+
+If the file fails to compile (C++11 features GCC 4.4.1 cannot parse, or
+missing GL/SDL headers), **stop and report to the orchestrator**:
+"`<file>` cannot cross-compile — `<reason>`. Needs `<fix>` before
+asm-verify can verify it." Do NOT write a fallback TU.
 
 If the file compiles cleanly, this produces the port's actual ASM for the
 target function — no manual TU authorship, no risk of drift between a test
@@ -139,7 +123,7 @@ For "Diverges", you may suggest the corrected port code, but you do NOT edit `sr
 src/<path>/<ClassName>.cpp (compiled with container toolchain)
 
 ## Compile command
-<exact docker run + arm-none-eabi-g++ invocation>
+bash tools/asm-verify/compile-one.sh src/<path>/<File>.cpp <mangled-symbol> <tag>
 
 ## Findings
 1. <finding>
@@ -223,11 +207,12 @@ In the report:
 
 ## Tooling reference
 
-- **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`. See `tools/asm-verify/Dockerfile`.
-- **In-image binutils**: `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}` on `$PATH`. Use these for binary disassembly so output matches the cross-build's printing style for cleaner side-by-side diffs.
+- **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`.
+- **`tools/asm-verify/compile-one.sh`**: single-file compile + objdump wrapper. Usage: `bash tools/asm-verify/compile-one.sh src/path/File.cpp _ZmangledName tag`. Writes to `tmp/asm-compare/<tag>_port.s`. Handles staging, C++11→C++03 sed, ABI flags.
+- **In-image binutils**: `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}` on `$PATH`.
 - **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
-- **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop, see `tools/asm-verify/README.md`). For ad-hoc single-symbol questions compile your own minimal TU as in §4; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
-- Compile-unit workdir: `tmp/asm-compare/` (Win-side OK for source; stage into `/tmp/` inside the container before invoking i386 cc1plus).
+- **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop). For ad-hoc single-function verification use `compile-one.sh` as in §3; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
+- Compile-unit workdir: `tmp/asm-compare/`.
 - One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): prefer `run_script_inline`; if too large, save to `tmp/ghidra_scripts/` (gitignored, disposable).
 - VFP immediate encoding cheat-sheet: 0.5=#96, 1.0=#112, 1.5=#120, 2.0=#0, 3.0=#16, -1.5=#248. Single-precision: `fconsts s_n, #N`. Full table in ARM ARM A8.6.339.
 - GhidraMCP: `disassemble_function`, `decompile_function`, `get_xrefs_to`, `read_memory`.
