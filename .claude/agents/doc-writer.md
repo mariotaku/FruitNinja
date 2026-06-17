@@ -10,9 +10,9 @@ You write reverse-engineering reference documentation for a Fruit Ninja binary p
 
 The port treats **source code as the canonical RE record**. Per-class, per-screen, and per-function RE narratives previously lived under `docs/structs/`, `docs/entities/`, `docs/screens/`, `docs/functions/`, and as `docs/engine/*-deep-re.md` / `docs/engine/*-asm-audit.md` / `docs/engine/*-asm-verify.md` files. **Those have been removed.** Findings are persisted as source-side comments instead:
 
-- `// TODO: <addr> — <gap>` — unimplemented sub-block, with binary address as the spec.
-- `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)` — confirmed by ASM diff.
-- `// DIFFERS: original = X from DAT_addr, using Y because <reason>` — deliberate deviation.
+- `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` — unimplemented sub-block, with binary address as the spec.
+- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` — confirmed by ASM diff.
+- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @ 0x<addr>), using Y because <reason>` — deliberate deviation.
 
 Do not recreate the deprecated narrative docs. Do not write new per-class / per-screen markdown.
 
