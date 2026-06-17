@@ -2,33 +2,42 @@
 #define FN_ENTITIES_BOMB_FLASH_H
 
 //
-// BombFlash — pooled standalone (NOT a Mortar::Entity subclass). Has its own vtable.
-// Size: 0x44 bytes (68 bytes). Confirmed via BombFlash::CreatePool(0x20) -> 32-element pool.
+// BombFlash -- pooled standalone (NOT a Mortar::Entity subclass). Has its own vtable.
+// Size: 0x44 bytes (68 bytes). Binary pool size: 0x20 (32) entries.
 // White flash sprite spawned on bomb hit. Quadratic scale + alpha animation over a short
 // lifetime, then deactivates and returns to the pool.
 //
-// Binary addresses:
-//   ctor (real)         0x00171a14
-//   ctor (alias)        0x00171a50
-//   dtor (regular)      0x00171f38
-//   dtor (deleting)     0x00171fb8
-//   CreatePool          0x00170f84  (stub in binary -- returns param; real pool via static array)
-//   MakeFlash           0x001723f4
-//   Update (instance)   0x00171038
-//   UpdateActiveFlashes 0x00171028  (static)
-//   DrawActiveFlashes   0x0017102c  (static)
-//   RemoveAllFlashes    0x00170fe4  (static)
-//   CleanUp             0x00171f64  (static)
+// DEFUNCT in v1.6.1: CreatePool / UpdateActiveFlashes / DrawActiveFlashes are bx-lr stubs
+// in the binary. The pool is never allocated. Call sites in GameInit / GameUpdate / GameDraw
+// are preserved for call-shape parity; they hit no-op stubs.
 //
-// Note: BombFlashFull @ 0x00168f24 is a separate variant referenced by Bomb code.
+// The visible bomb flash on bomb kill is Bomb::BombFlashFull / m_BombHitTimer -- a separate
+// path that is NOT stubbed here.
+//
+// v1.6.1 binary addresses:
+//   vtable              _ZTV9BombFlash @0x002ce838
+//   ctor (real)         BombFlash::BombFlash @0x001d5fa8
+//   dtor (regular)      BombFlash::~BombFlash @0x001d5b80
+//   dtor (deleting)     BombFlash::~BombFlash @0x001d5ac0
+//   Init                BombFlash::Init @0x001d4dbc       (binary body: empty)
+//   DrawUpdate          BombFlash::DrawUpdate @0x001d4dc0 (binary body: empty)
+//   Update (instance)   BombFlash::Update @0x001d4dd4
+//   Draw (instance)     BombFlash::Draw @0x001d6910
+//   CreatePool          BombFlash::CreatePool @0x001d4cc0 (bx lr -- DEFUNCT)
+//   GetFree             BombFlash::GetFree @0x001d4cc4
+//   UpdateActiveFlashes BombFlash::UpdateActiveFlashes @0x001d4dc4 (bx lr -- DEFUNCT)
+//   DrawActiveFlashes   BombFlash::DrawActiveFlashes @0x001d4dc8   (bx lr -- DEFUNCT)
+//   RemoveAllFlashes    BombFlash::RemoveAllFlashes @0x001d4d64
+//   MakeFlash           BombFlash::MakeFlash @0x001d5bf0
+//   CleanUp             BombFlash::CleanUp @0x001d5afc
 //
 // Binary layout (root polymorphic class, no base):
 //   +0x00: vptr (4B in binary, implicit)
 //   +0x04: m_Timer      float
 //   +0x08: m_Colour0    Colour (4B BGRA; alpha byte at +0x0B is m_MaxAlpha per Ghidra struct)
 //   +0x0C: m_Colour1    Colour (4B BGRA; alpha byte at +0x0F is m_CurrentAlpha per Ghidra struct)
-//   +0x10: m_SinAngle   float  (MakeFlash @0x1723f4 writes SinIdx(angleIdx) here)
-//   +0x14: m_CosAngle   float  (MakeFlash @0x1723f4 writes CosIdx(angleIdx) here)
+//   +0x10: m_SinAngle   float  (MakeFlash @0x1d5bf0 writes SinIdx(angleIdx) here)
+//   +0x14: m_CosAngle   float  (MakeFlash @0x1d5bf0 writes CosIdx(angleIdx) here)
 //   +0x18: m_pTexture   SmartPtr<Texture> (4B)
 //   +0x1C: m_Pos        Vec3   (MakeFlash: = pos + dir*5; .x clamped to +/-240)
 //   +0x28: m_Dir        Vec3   (MakeFlash: copy of dir; used for Atan2Idx angle)
@@ -94,37 +103,43 @@ public:
     virtual ~BombFlash();
 
     // Instance update (quadratic scale + alpha anim). Called by UpdateActiveFlashes.
-    // @ 0x00171038
+    // v1.6.1 BombFlash::Update @0x001d4dd4
     void Update(float dt);
 
     // --- Static pool API ---
 
-    // @ 0x00170f84 -- stub in binary (returns param unchanged). Pool backed by static array.
+    // v1.6.1 BombFlash::CreatePool @0x001d4cc0 -- bx lr stub in binary; DEFUNCT.
+    // GameInit calls BombFlash::CreatePool(0x20); that call is preserved for call-shape
+    // parity and hits this no-op.
     static int CreatePool(int n);
 
-    // @ 0x001723f4 -- activate a pooled flash slot.
+    // v1.6.1 BombFlash::MakeFlash @0x001d5bf0 -- activate a pooled flash slot.
+    // Pool is never allocated (CreatePool is a no-op), so GetFree() returns null and
+    // this is effectively a no-op at runtime, but the full body is preserved.
     static void MakeFlash(Colour col, Vec3* pos, Vec3* dir,
                           Mortar::SmartPtr<Mortar::Texture>* tex);
 
-    // @ 0x00171028 -- iterate pool, call Update on active slots.
+    // v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 -- bx lr stub in binary; DEFUNCT.
+    // GameUpdate calls this per-frame; preserved for call-shape parity.
     static void UpdateActiveFlashes(float dt);
 
-    // @ 0x0017102c -- iterate pool, call Draw on active slots.
+    // v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8 -- bx lr stub in binary; DEFUNCT.
+    // GameDraw calls this per-frame; preserved for call-shape parity.
     static void DrawActiveFlashes();
 
-    // @ 0x00170fe4 -- deactivate every pool slot (called on game reset).
+    // v1.6.1 BombFlash::RemoveAllFlashes @0x001d4d64 -- deactivate every pool slot.
     static void RemoveAllFlashes();
 
-    // @ 0x00171f64 -- destructs each pool entry, frees backing memory.
+    // v1.6.1 BombFlash::CleanUp @0x001d5afc -- destructs each pool entry, frees backing memory.
     static void CleanUp();
 
-    // Binary @ 0x00171B54 -- render one active flash sprite (textured quad, animated alpha).
+    // v1.6.1 BombFlash::Draw @0x001d6910 -- render one active flash sprite.
     void Draw();
-    // Binary @ 0x00171024 -- per-frame draw-state advance for one flash. Binary body is empty.
+    // v1.6.1 BombFlash::DrawUpdate @0x001d4dc0 -- per-frame draw-state advance. Binary body is empty.
     void DrawUpdate(float);
-    // Binary @ 0x00170F88 -- return next free pool slot for MakeFlash (rotating-index search).
+    // v1.6.1 BombFlash::GetFree @0x001d4cc4 -- return next free pool slot for MakeFlash.
     static BombFlash* GetFree();
-    // Binary @ 0x00171020 -- initialise a flash slot. Binary body is empty (no-op).
+    // v1.6.1 BombFlash::Init @0x001d4dbc -- initialise a flash slot. Binary body is empty (no-op).
     void Init(void*, int, Vec3*);
 };
 
