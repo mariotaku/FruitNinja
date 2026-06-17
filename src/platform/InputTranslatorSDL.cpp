@@ -108,7 +108,16 @@ void InputTranslatorSDL::PollHeldFingers() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
+    // TEMP #71: track per-channel previous held state to detect state changes.
+    static bool s_pollWasHeld[16] = {false};
+
     for (int ch = 0; ch < 16; ch++) {
+        // TEMP #71: log when a channel starts being polled (was not held last frame).
+        if (fingerActive[ch] && !s_pollWasHeld[ch]) {
+            printf("[71] poll holding ch=%d pos=(%.1f,%.1f)\n", ch, fingerX[ch], fingerY[ch]);
+        }
+        s_pollWasHeld[ch] = fingerActive[ch];
+
         if (!fingerActive[ch]) continue;
 
         // Keep Touch ring-buffer current for this frame (move = held, not new press).
@@ -261,7 +270,43 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         ie.x = gx; ie.y = gy;
         mgr->DispatchEvent(&ie);
 
+        // TEMP #71
+        printf("[71] lift FINGERUP ch=%d fingerActive->0\n", ch);
         ReleaseFingerId(ev.tfinger.fingerId);
+        break;
+    }
+
+    // Port specific: safety-net for web -- on some browsers / SDL-Emscripten builds,
+    // SDL_HINT_MOUSE_TOUCH_EVENTS=1 synthesizes SDL_FINGERDOWN/MOTION but the UP
+    // arrives as SDL_MOUSEBUTTONUP only, leaving fingerActive set.  Explicitly release
+    // the channel mapped to SDL_TOUCH_MOUSEID here so PollHeldFingers doesn't keep
+    // re-dispatching TouchDown_N at the frozen lift position.
+    // TEMP #71
+    case SDL_MOUSEBUTTONUP: {
+        // Find any active finger mapped to SDL_TOUCH_MOUSEID (the synthetic ID
+        // SDL uses when converting mouse events to touch events).
+        SDL_FingerID mouseId = (SDL_FingerID)SDL_TOUCH_MOUSEID;
+        int ch = -1;
+        for (int i = 0; i < 16; i++) {
+            if (fingerActive[i] && fingerMap[i] == mouseId) {
+                ch = i; break;
+            }
+        }
+        if (ch < 0) break;  // not our mouse-as-touch finger, ignore
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+        }
+
+        ie.actionHash = hashTouchUp[ch];
+        ie.actionFlags = INPUT_ACTION_UP;
+        ie.fingerId = ch;
+        ie.x = fingerX[ch];
+        ie.y = fingerY[ch];
+        mgr->DispatchEvent(&ie);
+
+        printf("[71] lift MOUSEBUTTONUP ch=%d fingerActive->0\n", ch);
+        ReleaseFingerId(mouseId);
         break;
     }
 

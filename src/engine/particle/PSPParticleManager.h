@@ -6,6 +6,7 @@
 #include "math/Vec3.h"
 #include "math/Vec2.h"
 #include "util/SmartPtr.h"
+#include "util/MemoryPool.h"
 #include "asset/Texture.h"
 #include "core/Singleton.h"
 #include <cstdint>
@@ -107,13 +108,30 @@ struct PSPParticleSet {
 // Port uses a std::vector<PSPParticleSet> for the sets list, so the sets are
 // heap-allocated rather than inlined — the binary logic (lookup by hash,
 // iterate sets) is preserved.
+//
+// Binary template+0x14: int m_ParticleCount — number of live particles whose
+// m_NextLink chain hangs off this template.
+// Binary template+0x18: uint16 m_ParticleHead — 1-based index into m_pParticles
+// free-list / live-list (0 = empty).
+// Both fields initialised to 0 in LoadFile (after the 1024-slot buffer is built);
+// reset by ClearEmitters.
+// ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: template+0x14 count,
+// template+0x18 head.
 // ----------------------------------------------------------------------------
 struct PSPEmitterTemplate {
     char     m_Name[0x40];         // +0x00  name attr strcpy'd (64 bytes)
     uint32_t m_Hash;               // +0x40  StringHash(name) — stored as float in bin but used as u32
     float    m_MaxLifetime;        // +0x44  <life>/60
-    uint8_t  m_NumSets;             // +0x4B  number of particleSets
+    int      m_ParticleCount;      // +0x14 (binary); port: particle live-list count for this template
+    uint16_t m_ParticleHead;       // +0x18 (binary); port: 1-based head idx into m_pParticles live-list
+    uint8_t  m_NumSets;            // +0x4B  number of particleSets
     std::vector<PSPParticleSet> m_Sets;
+
+    PSPEmitterTemplate()
+        : m_Hash(0), m_MaxLifetime(0.0f), m_ParticleCount(0), m_ParticleHead(0), m_NumSets(0)
+    {
+        m_Name[0] = '\0';
+    }
 };
 
 // ----------------------------------------------------------------------------
@@ -127,14 +145,19 @@ struct PSPEmitterTemplate {
 // Ghidra; all others are left uninitialised by the default ctor).
 // Ctors: default 0x00117650, copy 0x00117710.
 //
-// Fields at 0x24..0x34 and 0x40 use integer moves in copy-ctor (ldr/ldm)
-// but may be float in practice -- ARM ldr works for both. Declared as float
-// here (same 4-byte, 4-byte-aligned layout) to match port simulation usage.
+// Fields at 0x24..0x34 use integer moves in copy-ctor (ldr/ldm) but may be
+// float in practice -- ARM ldr works for both.
+//
+// +0x40: binary = uint16 1-based link index (m_NextLink). When the slot is
+// free: next-free-slot index (0 = end of free list). When live: next-live
+// index in the template's particle list (0 = end of list). Stride 0xA4.
+// ASM-spec v1.6.1 PSPParticleManager::AddParticle @0x13c554: +0x40 is m_NextLink.
 //
 // Port repurposes m_field44 (+0xA0, binary zeroes in default ctor) as the
 // particle-set index within the owning emitter's template m_Sets array.
-// This is the only per-particle routing field we need and it fits in int32.
-// All colour data is looked up at draw time via the set's PSPParticleTemplate.
+// Port repurposes m_field0x58 (+0x58, vldr copy-ctor) as m_SpinEnd (float
+// rad/sec) since +0x40 is now m_NextLink. No binary field at +0x58 is
+// currently used by the port simulation.
 // ----------------------------------------------------------------------------
 struct PSPParticle {
     Vec3     m_Pos;             // +0x00  _Vector3<float> member-ctor
@@ -147,15 +170,16 @@ struct PSPParticle {
     float    m_SizeEnd;         // +0x34  integer move in copy-ctor (may be float)
     float    m_Rotation;        // +0x38  vldr in copy-ctor
     float    m_SpinStart;       // +0x3C  vldr in copy-ctor
-    float    m_SpinEnd;         // +0x40  integer move in copy-ctor (may be float)
-    uint16_t m_field0x44;       // +0x44  ldrh/strh in copy-ctor
+    uint16_t m_NextLink;        // +0x40  1-based index: free-next (free) / live-next (live); 0=end
+    uint16_t _pad42;            // +0x42  alignment pad
+    uint16_t m_field0x44;       // +0x44  ldrh/strh in copy-ctor (wM_RotAngle in binary)
     uint16_t m_pad46;           // +0x46  alignment pad (uint16 -> next 4-byte slot)
     float    m_RotCycleRate;    // +0x48  vldr in copy-ctor
     float    m_RotCyclePhase;   // +0x4C  vldr in copy-ctor
     uint16_t m_field0x50;       // +0x50  ldrh/strh in copy-ctor
     uint16_t m_pad52;           // +0x52  alignment pad
     float    m_RotCycleAmp;     // +0x54  vldr in copy-ctor
-    float    m_field0x58;       // +0x58  vldr in copy-ctor
+    float    m_SpinEnd;         // +0x58  port: spin-end rate (rad/sec); binary: unused vldr field
     uint16_t m_field0x5c;       // +0x5C  ldrh/strh in copy-ctor
     uint16_t m_pad5e;           // +0x5E  alignment pad
     float    m_CycleXRate;      // +0x60  vldr in copy-ctor
@@ -181,11 +205,12 @@ struct PSPParticle {
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
         , m_Age(0), m_Life(0)
         , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
-        , m_Rotation(0), m_SpinStart(0), m_SpinEnd(0)
+        , m_Rotation(0), m_SpinStart(0)
+        , m_NextLink(0), _pad42(0)
         , m_field0x44(0), m_pad46(0)
         , m_RotCycleRate(0), m_RotCyclePhase(0)
         , m_field0x50(0), m_pad52(0)
-        , m_RotCycleAmp(0), m_field0x58(0)
+        , m_RotCycleAmp(0), m_SpinEnd(0)
         , m_field0x5c(0), m_pad5e(0)
         , m_CycleXRate(0), m_CycleXPhase(0)
         , m_CycleYRate(0), m_CycleYPhase(0)
@@ -207,10 +232,12 @@ static_assert(__builtin_offsetof(PSPParticle, m_Age)          == 0x24, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Life)         == 0x28, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Rotation)     == 0x38, "");
 static_assert(__builtin_offsetof(PSPParticle, m_SpinStart)    == 0x3C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_NextLink)     == 0x40, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x44)    == 0x44, "");
 static_assert(__builtin_offsetof(PSPParticle, m_RotCycleRate) == 0x48, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x50)    == 0x50, "");
 static_assert(__builtin_offsetof(PSPParticle, m_RotCycleAmp)  == 0x54, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SpinEnd)      == 0x58, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x5c)    == 0x5C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_CycleXRate)   == 0x60, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x7c)    == 0x7C, "");
@@ -290,13 +317,14 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4
 
 // ----------------------------------------------------------------------------
 // Singleton manager
-// ctor @ 0x13bf40, dtor @ 0x13d064 / 0x13d080 (v1.6.1 addresses)
+// v1.6.1 PSPParticleManager::PSPParticleManager @0x0013bf40
+// v1.6.1 PSPParticleManager::~PSPParticleManager @0x0013d064 / thunk @0x0013d080
 // ----------------------------------------------------------------------------
 class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
     friend class Mortar::Singleton<PSPParticleManager>;
 
 public:
-    // Binary @ 0x13c1b8 — pop from pool, init defaults, prepend to active list.
+    // v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8 — pop from pool, init defaults, prepend to active list.
     // ppRef (optional) is filled with the returned pointer for caller cleanup;
     // it is cleared to nullptr if template lookup fails.
     // updateWhenPaused maps directly to e.m_bUpdateWhenPaused (binary third arg).
@@ -306,32 +334,33 @@ public:
 
     // Explicitly release an emitter. Clears the caller back-pointer and marks
     // the emitter for removal on next tick.
-    // Binary @ 0x00114934 — find by ptr, unlink, clear back-ref, return to pool
+    // v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088 — find by ptr, unlink, clear back-ref, return to pool
     void ClearEmitter(PSPParticleEmitter* emitter);
 
-    // Binary @ 0x00115ed8 — update all active emitters; skip when paused &&
+    // v1.6.1 PSPParticleManager::Update @0x0013cee8 — update all active emitters; skip when paused &&
     // !emitter->m_bUpdateWhenPaused.
     void Update(float dt, bool paused = false);
 
-    // Binary @ 0x00114c64 — fused integrate+render. Port splits into Update/Draw;
-    // ABI signature kept as (dt, paused, layer). dt and paused are unused in Draw.
+    // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
+    // Port splits into Update/Draw; dt and paused are unused in Draw body.
     void Draw(float dt, bool paused, int layer = 0);
 
-    // Binary @ 0x00115f60 — load particle templates from XML. texCategory is
-    // prepended to texture filenames: snprintf("%s/%s.tex", texCategory, name).
-    // outNames (optional) receives a copy of each <particleTemplate name="...">
-    // string (caller-allocated array). Returns true on success.
+    // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c — load particle templates
+    // from XML. texCategory is prepended to texture filenames:
+    // snprintf("%s/%s.tex", texCategory, name). outNames (optional) receives a
+    // copy of each <particleTemplate name="..."> string (caller-allocated array).
+    // Allocates the 1024-slot particle buffer and emitter MemoryPool on first call.
+    // Returns true on success.
     bool LoadFile(const char* texCategory, const char* xmlPath, char** outNames = nullptr);
 
-    // Binary @ 0x001155d0 — release tex refs, ClearEmitters, free 3 owned blocks.
+    // v1.6.1 PSPParticleManager::Destroy @0x0013cfb8 — release tex refs, ClearEmitters, free 3 owned blocks.
     void Destroy();
 
     void Clear();
 
-    // Binary @ 0x0016cf74 area — deactivate all live emitters (called from GameExit).
-    // Binary @ 0x00114974 — drain active list + reset particle free-list + zero
-    // per-template live-list heads. Port collapses 2-3 since particles live
-    // in the manager's parallel list. // DIFFERS: binary uses 3 separate lists; port uses vector
+    // v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk) — drain
+    // m_pActiveEmitters to pool; reset m_FreeHead=1 + re-thread the free-list;
+    // zero every template's m_ParticleHead/m_ParticleCount.
     void ClearEmitters();
 
     // Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
@@ -360,15 +389,17 @@ private:
     std::vector<PSPParticleTemplate> m_ParticleTemplates;
     std::vector<PSPEmitterTemplate>  m_EmitterTemplates;
 
-    // Raw-pointer vector: each entry is owned (new'd in AddEmitter, deleted in
-    // Clear/ClearEmitter/dtor). Addresses are stable across appends because
-    // emitters are heap-allocated, not inline — same stability guarantee as
-    // unique_ptr but without <memory> / typeid dependency (GCC 4.4 / -fno-rtti).
-    std::vector<PSPParticleEmitter*>          m_Emitters;
-    // Parallel per-emitter particle lists. Index i owns the particles for m_Emitters[i].
-    // DIFFERS: binary uses a global flat particle pool; port uses per-emitter std::vector
-    // kept in the manager to preserve binary struct sizes.
-    std::vector<std::vector<PSPParticle> >    m_ParticleLists;
+    // v1.6.1 PSPParticleManager struct field layout (binary-faithful):
+    //   +0x14  PSPParticle*                  m_pParticles      — flat 1024-slot buffer
+    //   +0x18  uint16_t                      m_FreeHead        — 1-based head of free list (0=none)
+    //   +0x20  PSPParticleEmitter*           m_pActiveEmitters — intrusive list head
+    //   +0x34  MemoryPool<PSPParticleEmitter>* m_pEmitterPool  — 120-slot pool
+    // ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: buffer 1024 slots,
+    // MemoryPool::Create(120), free-list threaded 1..1023, sentinel at slot 0.
+    PSPParticle*                              m_pParticles;      // +0x14
+    uint16_t                                  m_FreeHead;        // +0x18  1-based free-list head
+    PSPParticleEmitter*                       m_pActiveEmitters; // +0x20
+    Mortar::MemoryPool<PSPParticleEmitter>*   m_pEmitterPool;    // +0x34
 };
 
 #endif

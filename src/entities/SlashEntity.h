@@ -33,7 +33,7 @@
 //   TouchMoveX      0x17C50C
 //   TouchMoveY      0x17C490
 //   PlaySwipe       0x17CCDC
-//   GetHeadThicknessScale 0x17B87C
+//   GetHeadThicknessScale v1.6.1 0x1e684c
 //   CreateGhost     0x17B82C
 //   MissControlDeleted    0x17B388
 //   Draw            0x17B3B8  (1-instruction BX lr stub)
@@ -106,7 +106,7 @@ public:
     // Binary @ 0x17CCDC -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
     void PlaySwipe();
 
-    // Binary @ 0x17B87C -- derive head taper scale.
+    // v1.6.1 @ 0x1e684c -- derive head taper scale.
     float GetHeadThicknessScale() const;
 
     // Binary @ 0x17B82C -- push next ghost slot, snapshot blade vertex strips.
@@ -155,10 +155,11 @@ private:
     // +0x48  Colour  m_HighlightColour   current palette-cycle output colour
     Colour m_HighlightColour;
 
-    // +0x4c  uint8_t  m_SwipeEndEdge   bomb-hit one-shot. Set in Update when
-    // bomb[0x68]!=0 && bomb[0x88]==0. NOT the swipe fuse (see m_SwipeFuse @+0x140).
+    // +0x4c  uint8_t  m_BombHitEdge   bomb-hit one-shot. Set in Update when
+    // bomb[0x68]!=0 && bomb[0x88]==0. NOT the swipe fuse (see m_BladeActive @+0x140).
+    // Ghidra-authoritative name: m_BombHitEdge.
     // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
-    uint8_t m_SwipeEndEdge;
+    uint8_t m_BombHitEdge;
     uint8_t _pad4d[3];
 
     // +0x50  int32_t  m_SplitPoint  InitPoints capacity (160 from Init).
@@ -166,8 +167,8 @@ private:
     // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
     int m_SplitPoint;
 
-    // +0x54  int32_t  unknown field
-    int _field_0x54;
+    // +0x54  int32_t  m_ComboBaseIdx  combo base index
+    int m_ComboBaseIdx;
 
     // +0x58  int32_t  m_PointCount  count of live vertex pairs in the strips.
     int m_PointCount;
@@ -244,16 +245,18 @@ private:
     // +0x134  float  field_0x134  (Init: 0.0f)
     float m_field_0x134;
 
-    // +0x138  int32_t  m_field_0x138  counter, decremented by 2 in AddPoint capacity shift; Init: -1
-    int m_field_0x138;
+    // +0x138  int32_t  m_TrailShiftA  counter, decremented by 2 in AddPoint capacity shift; Init: -1
+    int m_TrailShiftA;
 
-    // +0x13c  int32_t  m_field_0x13c  Init: -1
-    int m_field_0x13c;
+    // +0x13c  int32_t  m_TrailShiftB  Init: -1
+    int m_TrailShiftB;
 
-    // +0x140  int32_t  m_SwipeFuse  DrawSlice shift-register for swipe ghost/SFX burst.
-    // DISTINCT from m_SwipeEndEdge (+0x4c, bomb one-shot).
-    // DrawSlice: b = m_SwipeFuse & 1; m_SwipeFuse = b<<1; if b==0 -> fire.
-    int m_SwipeFuse;
+    // +0x140  binary m_BladeActive (uchar + 3 pad); port stores int -- latch math masks to low bits. v1.6.1
+    // DrawSlice shift-register for swipe ghost/SFX burst.
+    // DISTINCT from m_BombHitEdge (+0x4c, bomb one-shot).
+    // DrawSlice: old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) fire; }
+    // OnTouchActive re-arms with |= 1 each active frame.
+    int m_BladeActive;
 
     // +0x144  float  m_field_0x144  Init: 6.0f
     float m_field_0x144;
@@ -375,7 +378,7 @@ public:
         float uvNormalLen
     );
 
-    // ColoursChanged @ 0x0017c41c. Per-instance live-update.
+    // ColoursChanged v1.6.1 @ 0x1e76fc. Per-instance live-update.
     void ColoursChanged();
 
     // @ 0x0016ba84 -- blade pre-pass.
@@ -413,8 +416,8 @@ public:
 
     // InitPoints -- v1.6.1 @ 0x1e75d0. Heap-allocates m_pLeftBuffer /
     // m_pRightBuffer (each m_SplitPoint+2 = 162 QUADCUSTOMVERTEX records)
-    // and fills with zeroed pos/normal, u=1.0f, white colour.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    // and fills with zeroed pos/normal.xy, normal.z=1.0, u=0.0, v=0.0, white colour.
+    // ASM-verified: 2026-05-18 v1.6.1 InitPoints @ 0x1e75d0 (re-analyst)
     void InitPoints(long count);
 
     // Binary non-const Colour* overload of SetModColours (@ 0x17CA0C).
@@ -458,7 +461,7 @@ static_assert(offsetof(SlashEntity, m_TrailEmitter)            == 0x3c,  "SlashE
 static_assert(offsetof(SlashEntity, m_Scale)                   == 0x40,  "SlashEntity::m_Scale");
 static_assert(offsetof(SlashEntity, m_BaseColour)              == 0x44,  "SlashEntity::m_BaseColour");
 static_assert(offsetof(SlashEntity, m_HighlightColour)         == 0x48,  "SlashEntity::m_HighlightColour");
-static_assert(offsetof(SlashEntity, m_SwipeEndEdge)            == 0x4c,  "SlashEntity::m_SwipeEndEdge");
+static_assert(offsetof(SlashEntity, m_BombHitEdge)             == 0x4c,  "SlashEntity::m_BombHitEdge");
 static_assert(offsetof(SlashEntity, m_SplitPoint)              == 0x50,  "SlashEntity::m_SplitPoint");
 static_assert(offsetof(SlashEntity, m_PointCount)              == 0x58,  "SlashEntity::m_PointCount");
 static_assert(offsetof(SlashEntity, m_pLeftBuffer)             == 0x5c,  "SlashEntity::m_pLeftBuffer");
@@ -483,9 +486,9 @@ static_assert(offsetof(SlashEntity, m_field_0x118)             == 0x118, "SlashE
 static_assert(offsetof(SlashEntity, m_SlicePos)                == 0x11c, "SlashEntity::m_SlicePos");
 static_assert(offsetof(SlashEntity, m_field_0x130)             == 0x130, "SlashEntity::m_field_0x130");
 static_assert(offsetof(SlashEntity, m_field_0x134)             == 0x134, "SlashEntity::m_field_0x134");
-static_assert(offsetof(SlashEntity, m_field_0x138)             == 0x138, "SlashEntity::m_field_0x138");
-static_assert(offsetof(SlashEntity, m_field_0x13c)             == 0x13c, "SlashEntity::m_field_0x13c");
-static_assert(offsetof(SlashEntity, m_SwipeFuse)               == 0x140, "SlashEntity::m_SwipeFuse");
+static_assert(offsetof(SlashEntity, m_TrailShiftA)             == 0x138, "SlashEntity::m_TrailShiftA");
+static_assert(offsetof(SlashEntity, m_TrailShiftB)             == 0x13c, "SlashEntity::m_TrailShiftB");
+static_assert(offsetof(SlashEntity, m_BladeActive)             == 0x140, "SlashEntity::m_BladeActive");
 static_assert(offsetof(SlashEntity, m_field_0x144)             == 0x144, "SlashEntity::m_field_0x144");
 static_assert(offsetof(SlashEntity, m_field_0x148)             == 0x148, "SlashEntity::m_field_0x148");
 static_assert(offsetof(SlashEntity, m_field_0x14c)             == 0x14c, "SlashEntity::m_field_0x14c");

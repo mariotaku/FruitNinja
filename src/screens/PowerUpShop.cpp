@@ -350,6 +350,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
                 barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
 
                 barTex.Set();
+                TexEnvModulate();  // Set owns tex-env (binary model); port Set() doesn't set it.
                 Mortar::Mesh::DrawTriStrip(barVerts, 4, true, NULL);
                 barTex.UnSet();
             }

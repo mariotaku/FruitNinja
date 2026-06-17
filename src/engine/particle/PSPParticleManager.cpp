@@ -44,8 +44,8 @@ static void ParseColourBGRA(const char* s, uint8_t out[4]) {
     out[3] = (uint8_t)(a * scale); // A
 }
 
-// GL blend enum from string. Matches LoadFile: "SrcAlpha"→0x302,
-// "InvSrcAlpha"→0x303, "One"→0x01.
+// GL blend enum from string. Matches LoadFile: "SrcAlpha"->0x302,
+// "InvSrcAlpha"->0x303, "One"->0x01.
 static uint16_t ParseBlendEnum(const char* s) {
     if (!s) return 0;
     if (!strcmp(s, "SourceAlpha") || !strcmp(s, "SrcAlpha")) return 0x302;
@@ -54,19 +54,16 @@ static uint16_t ParseBlendEnum(const char* s) {
     return 0;
 }
 
-// Directory containing the XML, used to locate sibling .tex files.
-static std::string DirOf(const char* path) {
-    std::string p(path);
-    size_t pos = p.find_last_of("/\\");
-    return (pos == std::string::npos) ? std::string(".") : p.substr(0, pos);
-}
-
-// Binary @ 0x13bf40 — manager ctor. Sets m_GlobalTimeScale=1.0; m_GlobalTimeMod and
-// m_GlobalOrigin initialised from a DAT default (ctor leaves them at default / zero).
+// v1.6.1 PSPParticleManager::PSPParticleManager @0x0013bf40 — manager ctor.
+// Sets m_GlobalTimeScale=1.0; NULLs the owned pointers (buffer + pool).
 PSPParticleManager::PSPParticleManager()
     : m_GlobalTimeMod(0.0f)
     , m_GlobalTimeScale(1.0f)
     , m_GlobalOrigin(0.0f, 0.0f, 0.0f)
+    , m_pParticles(0)
+    , m_FreeHead(0)
+    , m_pActiveEmitters(0)
+    , m_pEmitterPool(0)
 {
 }
 
@@ -74,7 +71,8 @@ PSPParticleManager::~PSPParticleManager() {
     Destroy();
 }
 
-// Binary @ 0x001155d0 — release tex refs, ClearEmitters, free 3 owned blocks.
+// v1.6.1 PSPParticleManager::Destroy @0x0013cfb8 — release tex refs, ClearEmitters,
+// free the particle buffer, delete the emitter pool.
 void PSPParticleManager::Destroy() {
     // 1. Release texture SmartPtr refs on all particle templates
     //    (binary: SmartPtr::SetNull on each template+0xAC).
@@ -83,8 +81,23 @@ void PSPParticleManager::Destroy() {
     }
     // 2. Drain active emitters (matches binary step 2: ClearEmitters).
     ClearEmitters();
-    // 3. Free owned storage blocks (binary: free m_pTemplates, m_pParticleArray-8,
-    //    m_EmitterPool). Port equivalent: clear the owning vectors.
+    // 3. Free the 1024-slot particle buffer. Binary: free(m_pParticles - 8)
+    //    because binary uses an 8-byte cookie prefix. Port allocates with
+    //    new PSPParticle[1024] so free with delete[].
+    //    // DIFFERS: binary alloc = operator new[](0x29008) with 8-byte cookie
+    //    prefix; port uses new PSPParticle[1024] + delete[] for simplicity.
+    if (m_pParticles) {
+        delete[] m_pParticles;
+        m_pParticles = 0;
+    }
+    // 4. Delete emitter MemoryPool (binary: delete m_pEmitterPool).
+    if (m_pEmitterPool) {
+        delete m_pEmitterPool;
+        m_pEmitterPool = 0;
+    }
+    m_FreeHead = 0;
+    m_pActiveEmitters = 0;
+    // 5. Free emitter template array (binary: free m_pTemplates).
     m_ParticleTemplates.clear();
     m_EmitterTemplates.clear();
 }
@@ -109,18 +122,16 @@ PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
     return &m_EmitterTemplates[(size_t)idx];
 }
 
-// Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList.
+// v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8 — pop from pool, init defaults,
+// prepend to m_pActiveEmitters intrusive list.
+// Admit predicate: InUseCount()+1 < 120 (at most 119 live emitters).
+// Pool-full path returns nullptr WITHOUT zeroing *ppRef; binary only zeros
+// *ppRef on hash-miss inside the pool-OK branch.
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
                                                    bool updateWhenPaused) {
-    // Binary pool capacity is 120 (Create(this, 0x78) at 0x00115fc0); admit
-    // predicate is `used + 1 < cap` -> at most 119 live emitters. Pool-full
-    // path returns nullptr WITHOUT zeroing *ppRef; binary only zeros *ppRef
-    // on hash-miss inside the pool-OK branch.
-    // DIFFERS-BY-DESIGN: binary uses MemoryPool<PSPParticleEmitter>; port
-    // uses std::vector but mirrors the same admit/return semantics.
-    static const size_t POOL_CAPACITY = 119;
-    if (m_Emitters.size() >= POOL_CAPACITY) {
+    if (!m_pEmitterPool) return nullptr;
+    if (m_pEmitterPool->InUseCount() + 1 >= 120) {
         return nullptr;
     }
 
@@ -130,45 +141,53 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
         return nullptr;
     }
 
-    m_Emitters.push_back(new PSPParticleEmitter());
-    m_ParticleLists.push_back(std::vector<PSPParticle>());
-    PSPParticleEmitter& e = *m_Emitters.back();
-    // All defaults match the binary's explicit init block (AddEmitter @ 0x13c1b8):
-    //   +0x00=0, +0x08..0x1C=0 (Pos,Vel), +0x04(bStarted u16)=1
-    //   +0x20(RateScale)=1.0, +0x24(SizeBias)=1.0, +0x28(SpinScale)=1.0, +0x2C(TimeScale)=1.0
-    //   +0x30(DirCos)=1.0, +0x34(DirSin)=0, +0x38(VelScale)=1.0, +0x3C(bMirrorX)=0
-    //   +0x40(pTemplate)=tmpl, +0x44(Next)=oldHead, +0x48(pRefPtr)=ppRef
-    //   +0x4D(bTrailStarted)=0
-    e.m_Timer = 0.0f;
-    e.m_Pos = Vec3(0, 0, 0);
-    e.m_Vel = Vec3(0, 0, 0);
-    e.m_DirSin = 0.0f;
-    e.m_RateScale = 1.0f;
-    e.m_SizeBias = 1.0f;
-    e.m_SpinScale = 1.0f;
-    e.m_TimeScale = 1.0f;
-    e.m_DirCos = 1.0f;
-    e.m_VelScale = 1.0f;
-    e.m_bMirrorX = 0;
-    e.m_bStarted = 1;
-    e.m_bUpdateWhenPaused = updateWhenPaused;
-    e.m_pTemplate = tmpl;
-    e.m_pRefPtr = ppRef;
-    if (ppRef) *ppRef = &e;
-    return &e;
+    PSPParticleEmitter* e = m_pEmitterPool->Pop();
+    if (!e) return nullptr;
+
+    // Reset emitter state — all defaults match the binary's explicit init block
+    // (AddEmitter @ 0x13c1b8):
+    //   +0x00(Timer)=0, +0x08..+0x1C(Pos,Vel)=0, +0x04(bStarted u16)=1
+    //   +0x20(RateScale)=1.0, +0x24(SizeBias)=1.0, +0x28(SpinScale)=1.0,
+    //   +0x2C(TimeScale)=1.0, +0x30(DirCos)=1.0, +0x34(DirSin)=0,
+    //   +0x38(VelScale)=1.0, +0x3C(bMirrorX)=0, +0x4D(bTrailStarted)=0.
+    e->m_Timer = 0.0f;
+    e->m_bStarted = 1;
+    e->m_Pos = Vec3(0, 0, 0);
+    e->m_Vel = Vec3(0, 0, 0);
+    e->m_RateScale = 1.0f;
+    e->m_SizeBias = 1.0f;
+    e->m_SpinScale = 1.0f;
+    e->m_TimeScale = 1.0f;
+    e->m_DirCos = 1.0f;
+    e->m_DirSin = 0.0f;
+    e->m_VelScale = 1.0f;
+    e->m_bMirrorX = 0;
+    e->m_bUpdateWhenPaused = updateWhenPaused ? 1 : 0;
+    e->m_bTrailStarted = 0;
+    e->m_pTemplate = tmpl;
+    e->m_pRefPtr = ppRef;
+
+    // Prepend to active intrusive list (binary: e->m_Next = m_pActiveEmitters; m_pActiveEmitters = e).
+    e->m_Next = m_pActiveEmitters;
+    m_pActiveEmitters = e;
+
+    if (ppRef) *ppRef = e;
+    return e;
 }
 
-// Binary @ 0x00114934 — find by ptr, unlink, clear back-ref, return to pool.
+// v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088 — unlink the node from
+// m_pActiveEmitters (head or prev->m_Next fixup), null *m_pRefPtr, pool->Push.
 void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
     if (!emitter) return;
-    for (size_t i = 0; i < m_Emitters.size(); ++i) {
-        if (m_Emitters[i] == emitter) {
+    PSPParticleEmitter** cur = &m_pActiveEmitters;
+    while (*cur) {
+        if (*cur == emitter) {
+            *cur = emitter->m_Next;
             if (emitter->m_pRefPtr) *emitter->m_pRefPtr = nullptr;
-            delete m_Emitters[i];
-            m_Emitters.erase(m_Emitters.begin() + i);
-            m_ParticleLists.erase(m_ParticleLists.begin() + i);
+            if (m_pEmitterPool) m_pEmitterPool->Push(emitter);
             return;
         }
+        cur = &(*cur)->m_Next;
     }
 }
 
@@ -198,23 +217,26 @@ static inline float QuadrantMirror(float v) {
     return 0.0f;
 }
 
-// Matches AddParticle (0x115644) — spawn one particle from (emitter, set).
-// setIdx is the index of the set in emitter.m_pTemplate->m_Sets; stored in
-// p.m_field44 so the draw pass can look up the per-particle PSPParticleTemplate
-// without a per-particle pointer field (which would exceed binary struct size).
-static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set,
-                          std::vector<PSPParticle>& particles, int32_t setIdx) {
-    const PSPParticleTemplate* tmpl = set.m_pTemplate;
+// v1.6.1 PSPParticleManager::AddParticle @0x13c554 — pop a free slot from
+// m_FreeHead, init the particle, link into the template's live-list.
+// Returns 0 on failure (no free slots).
+static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
+                             PSPEmitterTemplate* tmpl,
+                             PSPParticleEmitter& emitter, const PSPParticleSet& set,
+                             int32_t setIdx) {
+    // Pop from free list.
+    uint16_t idx = freeHead;
+    if (idx == 0) return 0; // no free slots
+    freeHead = buf[idx].m_NextLink;
 
-    PSPParticle p;
-    p.m_Pos = emitter.m_Pos;
+    PSPParticle& p = buf[idx];
     p.m_field44 = setIdx;
+    p.m_Pos = emitter.m_Pos;
 
     // Velocity: set-level min/max (randomized per component), halved, then
     // added to emitter vel. The `* 0.5f` matches the binary AddParticle
     // @ 0x115644: after picking the random set-level velocity it does an
     // unconditional `local_78.xyz *= 0.5f` before storing onto the particle.
-    // Applies to all shape modes (not just two-player as originally guessed).
     float vx = RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]) * 0.5f;
     float vy = RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]) * 0.5f;
     float vz = RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
@@ -229,73 +251,55 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     float rvy = vy * cosA - sinA * vx;
     float rvz = vz;
 
-    if (tmpl) {
+    const PSPParticleTemplate* ptmpl = set.m_pTemplate;
+
+    if (ptmpl) {
         // NOTE: template m_VelocityMin/Max are NOT an initial-velocity range;
         // they are a per-component per-frame velocity LERP (damping) factor
-        // applied each tick during UpdateEmitter integration. See binary
-        // Draw @ 0x114c64.
+        // applied each tick during UpdateEmitter integration.
 
-        p.m_Gravity.x = RandRange(tmpl->m_GravityMin[0], tmpl->m_GravityMax[0]);
-        p.m_Gravity.y = RandRange(tmpl->m_GravityMin[1], tmpl->m_GravityMax[1]);
-        p.m_Gravity.z = RandRange(tmpl->m_GravityMin[2], tmpl->m_GravityMax[2]);
+        p.m_Gravity.x = RandRange(ptmpl->m_GravityMin[0], ptmpl->m_GravityMax[0]);
+        p.m_Gravity.y = RandRange(ptmpl->m_GravityMin[1], ptmpl->m_GravityMax[1]);
+        p.m_Gravity.z = RandRange(ptmpl->m_GravityMin[2], ptmpl->m_GravityMax[2]);
 
-        p.m_Life = tmpl->m_StartTime;  // template's "<life>/60" seconds
+        p.m_Life = ptmpl->m_StartTime;
+        p.m_Age  = 0.0f;
 
-        // Two-segment size lerp — random per stop so each particle gets its
-        // own variation on start/mid/end.
-        p.m_SizeStart = RandRange((float)tmpl->m_SizeStartMin, (float)tmpl->m_SizeStartMax);
-        p.m_SizeMid   = RandRange((float)tmpl->m_SizeMidMin,   (float)tmpl->m_SizeMidMax);
-        p.m_SizeEnd   = RandRange((float)tmpl->m_SizeEndMin,   (float)tmpl->m_SizeEndMax);
+        // Two-segment size lerp — random per stop so each particle gets its own.
+        p.m_SizeStart = RandRange((float)ptmpl->m_SizeStartMin, (float)ptmpl->m_SizeStartMax);
+        p.m_SizeMid   = RandRange((float)ptmpl->m_SizeMidMin,   (float)ptmpl->m_SizeMidMax);
+        p.m_SizeEnd   = RandRange((float)ptmpl->m_SizeEndMin,   (float)ptmpl->m_SizeEndMax);
 
         // Spin rate lerp: template has start/end min/max int16 ranges.
         // Binary AddParticle @ 0x115644 multiplies the LERP'd int16 by
         // DAT_00115b64 = 182.0f (degrees -> 16-bit angle-index: 65536/360 ~= 182)
-        // and stores it as an int16 angle-table index that is added to
-        // field_0x28 each 1/60s tick. Convert to rad/sec for the port's
-        // float-radian integration:
+        // and stores it as an int16 angle-table index added to field_0x28 each 1/60s tick.
+        // Convert to rad/sec for the port's float-radian integration:
         //   rad_per_sec = int16 * (182/65536) * 2pi * 60
         //              = int16 * 6.28318 * 60 / 360
         //              = int16 * 1.0472
-        // Each particle gets its own random start/end rate.
         static const float SPIN_INT16_TO_RAD_PER_SEC =
             (182.0f / 65536.0f) * 6.2831853f * 60.0f;
-        p.m_SpinStart = RandRange((float)tmpl->m_SpinStartMin,
-                                  (float)tmpl->m_SpinStartMax) * SPIN_INT16_TO_RAD_PER_SEC;
-        p.m_SpinEnd   = RandRange((float)tmpl->m_SpinEndMin,
-                                  (float)tmpl->m_SpinEndMax)   * SPIN_INT16_TO_RAD_PER_SEC;
-        p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
+        p.m_SpinStart = RandRange((float)ptmpl->m_SpinStartMin,
+                                  (float)ptmpl->m_SpinStartMax) * SPIN_INT16_TO_RAD_PER_SEC;
+        p.m_SpinEnd   = RandRange((float)ptmpl->m_SpinEndMin,
+                                  (float)ptmpl->m_SpinEndMax)   * SPIN_INT16_TO_RAD_PER_SEC;
+        p.m_Rotation = RandRange(ptmpl->m_AngleMin, ptmpl->m_AngleMax);
 
-        // RotCycle -- oscillating rotation offset. speedStart/End from
-        // rotateCycle XML (stored in m_FrictionSpeed*). Amplitude lerps
-        // from start to end base.
-        p.m_RotCycleRate  = 0.5f * (tmpl->m_FrictionSpeedStart +
-                                    tmpl->m_FrictionSpeedEnd);
-        p.m_RotCycleAmp   = tmpl->m_FrictionOffsetMin * (3.14159265f / 180.0f);
+        // RotCycle -- oscillating rotation offset.
+        p.m_RotCycleRate  = 0.5f * (ptmpl->m_FrictionSpeedStart +
+                                    ptmpl->m_FrictionSpeedEnd);
+        p.m_RotCycleAmp   = ptmpl->m_FrictionOffsetMin * (3.14159265f / 180.0f);
         p.m_RotCyclePhase = Rand01() * 6.2831853f;
 
-        // CycleX / CycleY — size modulation rates. m_CycleXStart/End are
-        // int16 "cycles/sec" values parsed from <cycleX startMin endMin>.
-        p.m_CycleXRate  = 0.5f * ((float)tmpl->m_CycleXStart + (float)tmpl->m_CycleXEnd);
-        p.m_CycleYRate  = 0.5f * ((float)tmpl->m_CycleYStart + (float)tmpl->m_CycleYEnd);
+        // CycleX / CycleY — size modulation rates.
+        p.m_CycleXRate  = 0.5f * ((float)ptmpl->m_CycleXStart + (float)ptmpl->m_CycleXEnd);
+        p.m_CycleYRate  = 0.5f * ((float)ptmpl->m_CycleYStart + (float)ptmpl->m_CycleYEnd);
         p.m_CycleXPhase = Rand01() * 6.2831853f;
         p.m_CycleYPhase = Rand01() * 6.2831853f;
 
         // Quadrant-mirror branch (AddParticle @ 0x001157ae). Gated on the
-        // emitter's m_bMirrorX, NOT on the template shape -- the binary's
-        // AddParticle has no shape==3 path; the "Angular" type parsed in
-        // LoadFile only affects size/gridlock, never this branch. m_bMirrorX is
-        // set non-zero by the split-touch two-player layout so each player's
-        // emitter sprays particles mirrored about the screen centre line.
-        //
-        // Binary sequence:
-        //   swap(gravity.x, gravity.y)
-        //   gravity.x *= QuadrantMirror(particle.pos.x)   // = emitter.pos.x here
-        //   gravity   *= m_TimeScale (+0x2C)
-        //   swap(vel.x, vel.y)                            // rotated set velocity
-        //   vel.x     *= QuadrantMirror(emitter.pos.x)
-        //   vel       *= m_TimeScale (+0x2C)
-        // particle.pos was written from emitter.pos earlier, so both sign
-        // sources read emitter.pos.x.
+        // emitter's m_bMirrorX, NOT on the template shape.
         if (emitter.m_bMirrorX != 0) {
             float gtmp = p.m_Gravity.x;
             p.m_Gravity.x = p.m_Gravity.y;
@@ -314,32 +318,28 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
             rvz *= emitter.m_TimeScale;
         }
 
-        // Finalise velocity: add emitter velocity to the (possibly mirrored)
-        // rotated set velocity. Binary stores the *0.5-scaled set velocity into
-        // the particle (vx/vy/vz already carry the 0.5 factor).
         p.m_Vel.x = emitter.m_Vel.x + rvx;
         p.m_Vel.y = emitter.m_Vel.y + rvy;
         p.m_Vel.z = emitter.m_Vel.z + rvz;
 
         // Shape-type branching (matches AddParticle 0x115644):
-        //   0 = Point     -- no extra init (pos = emitter.pos, vel = rotated set vel)
+        //   0 = Point     -- no extra init
         //   1 = Vertex    -- start half a velocity step behind the emitter
         //   2 = Direction -- rotate particle to face its own velocity
-        // (shape==3 "Angular" has no AddParticle branch; see m_bMirrorX above)
-        switch (tmpl->m_Shape) {
-            case 1: // Vertex
+        switch (ptmpl->m_Shape) {
+            case 1:
                 p.m_Pos.x -= p.m_Vel.x;
                 p.m_Pos.y -= p.m_Vel.y;
                 p.m_Pos.z -= p.m_Vel.z;
                 break;
-            case 2: // Direction
+            case 2:
                 p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
                 break;
             default:
                 break;
         }
     } else {
-        // No template: still finalise velocity from the rotated set velocity.
+        p.m_Age  = 0.0f;
         p.m_Vel.x = emitter.m_Vel.x + rvx;
         p.m_Vel.y = emitter.m_Vel.y + rvy;
         p.m_Vel.z = emitter.m_Vel.z + rvz;
@@ -347,13 +347,39 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_SizeStart = p.m_SizeMid = p.m_SizeEnd = 8.0f;
     }
 
-    particles.push_back(p);
+    // Prepend to template live-list:
+    //   p.m_NextLink = template->m_ParticleHead (old head);
+    //   template->m_ParticleHead = idx;
+    //   ++template->m_ParticleCount.
+    p.m_NextLink = tmpl->m_ParticleHead;
+    tmpl->m_ParticleHead = idx;
+    ++tmpl->m_ParticleCount;
+
+    return idx;
 }
 
-// Matches PSPParticleEmitter::Update (0x115d9c).
-static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPParticle>& particles) {
+// Matches PSPEmitterTemplate::Ends (0x00114884). Returns true if the
+// template is "naturally terminating" — i.e. every set either has a positive
+// TimeStop (finite window) OR zero continuous spawn rate (burst-only).
+static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
+    if (!t) return true;
+    for (std::vector<PSPParticleSet>::const_iterator cit = t->m_Sets.begin(); cit != t->m_Sets.end(); ++cit) {
+        if (cit->m_TimeStop <= 0.0f && cit->m_PerSec > 0.0f) return false;
+    }
+    return true;
+}
+
+// Matches PSPParticleEmitter::Update (0x115d9c) — spawn pass + advance emitter timer.
+// Particle physics pass (aging, death, integration) is done in the template
+// live-list walk during Draw/Update, NOT per-emitter, because orphan particles
+// from reaped emitters must continue to drain naturally.
+static void UpdateEmitter(PSPParticleEmitter& e, float dt,
+                          PSPParticle* buf, uint16_t& freeHead) {
     const PSPEmitterTemplate* et = e.m_pTemplate;
     if (!et) return;
+
+    // Non-const pointer needed to update template live-list head/count.
+    PSPEmitterTemplate* etMut = const_cast<PSPEmitterTemplate*>(et);
 
     const float currentTime = e.m_Timer;
     // Binary Update @0x13cd70: dtScaled = dt * m_TimeScale[+0x2c];
@@ -373,150 +399,146 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPPartic
             if (rate > 0.0f) {
                 int desired = (int)(rate * ((currentTime + dtScaled * e.m_RateScale) - startT))
                             - (int)(rate * (currentTime - startT));
-                for (int i = 0; i < desired; ++i) SpawnParticle(e, set, particles, si);
+                for (int i = 0; i < desired; ++i)
+                    AddParticle(buf, freeHead, etMut, e, set, si);
             }
         }
 
         // Burst on first frame crossing startT
         if (currentTime <= startT && startT < newTime) {
-            for (int i = 0; i < (int)set.m_InitCount; ++i) SpawnParticle(e, set, particles, si);
+            for (int i = 0; i < (int)set.m_InitCount; ++i)
+                AddParticle(buf, freeHead, etMut, e, set, si);
             if (e.m_RateScale == 0.0f) e.m_Timer += dt;
         }
     }
 
-    // Physics pass -- age + integrate all particles
-    for (size_t i = 0; i < particles.size(); ) {
-        PSPParticle& p = particles[i];
-        p.m_Age += dt;
-        if (p.m_Age >= p.m_Life) {
-            particles[i] = particles.back();
-            particles.pop_back();
-            continue;
-        }
-        // Binary Draw @ 0x114c64 integration:
-        //   vel = (vel + gravity*dt) * lerp(tmpl.velMin, tmpl.velMax, t)
-        //   pos = pos + vel*dt
-        // The template's velMin/Max fields are a per-component per-frame
-        // LERP (damping) factor -- NOT an initial velocity range.
-        const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
-        p.m_Vel += p.m_Gravity * dt;
-        // Look up particle template from set index stored in m_field44.
-        if (p.m_field44 >= 0 && (size_t)p.m_field44 < et->m_Sets.size()) {
-            const PSPParticleTemplate* pt = et->m_Sets[(size_t)p.m_field44].m_pTemplate;
-            if (pt) {
-                const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
-                const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
-                const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
-                p.m_Vel.x *= dampX;
-                p.m_Vel.y *= dampY;
-                p.m_Vel.z *= dampZ;
-            }
-        }
-        p.m_Pos += p.m_Vel * dt;
-        // Spin rate lerp start->end over life, then integrate.
-        const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
-        p.m_Rotation += spin * dt;
-        // Cycle accumulators (RotCycle + CycleX/Y). Rates are in cycles/s so
-        // convert to radians by *2pi.
-        p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
-        p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
-        p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
-        ++i;
-    }
-
-    // Advance emitter state (matches binary)
+    // Advance emitter timer and position.
     e.m_Timer = newTime;
     e.m_Pos += e.m_Vel;
 }
 
-// Matches PSPEmitterTemplate::Ends (0x00114884). Returns true if the
-// template is "naturally terminating" — i.e. every set either has a positive
-// TimeStop (finite window) OR zero continuous spawn rate (burst-only). Used
-// by Manager::Update to reap infinite-lifetime emitters whose sets have all
-// wound down. NOTE: this is a *static* property of the template, not runtime
-// state — it does not look at timer or particle counts.
-static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
-    if (!t) return true;
-    for (std::vector<PSPParticleSet>::const_iterator cit = t->m_Sets.begin(); cit != t->m_Sets.end(); ++cit) {
-        if (cit->m_TimeStop <= 0.0f && cit->m_PerSec > 0.0f) return false;
-    }
-    return true;
-}
-
-// Binary @ 0x00115ed8 / v1.6.1 @ 0x0013cee8 — update all active emitters;
-// skip when paused && !emitter->m_bUpdateWhenPaused.
-// DIFFERS: original = intrusive linked list (m_pActiveEmitters+0x20 / m_Next+0x44)
-// + MemoryPool reap; port uses std::vector<PSPParticleEmitter*> + parallel
-// std::vector<std::vector<PSPParticle>> with '|| !particles.empty()' keep-alive
-// added in both reap branches (forced: binary keeps live particles in a
-// per-template index list at emitterTemplate+0x04 that survives emitter reap;
-// port has no such separation). Binary addr: 0x0013cee8.
-// TODO: wire paused from PauseScreen when that's ported (callers pass false for now).
+// v1.6.1 PSPParticleManager::Update @0x0013cee8 — update all active emitters;
+// reap on timer vs lifetime; orphan particles drain via template live-list.
+// Uses address-of-link cursor for safe in-place removal from intrusive list.
 void PSPParticleManager::Update(float dt, bool paused) {
-    for (size_t i = 0; i < m_Emitters.size(); ) {
-        PSPParticleEmitter& e = *m_Emitters[i];
-        const PSPEmitterTemplate* et = e.m_pTemplate;
-        std::vector<PSPParticle>& particles = m_ParticleLists[i];
+    if (!m_pParticles || !m_pEmitterPool) return;
 
-        // Tick active emitters; binary Manager::Update gates on m_RateScale != 0 (not m_TimeScale)
-        if (e.m_bStarted != 0 && e.m_RateScale != 0.0f &&
-            (!paused || e.m_bUpdateWhenPaused)) {
-            UpdateEmitter(e, dt, particles);
+    PSPParticleEmitter** cur = &m_pActiveEmitters;
+    while (*cur) {
+        PSPParticleEmitter* node = *cur;
+        const PSPEmitterTemplate* et = node->m_pTemplate;
+
+        // Tick: binary gates on m_bStarted && m_RateScale != 0.
+        if (node->m_bStarted != 0 && node->m_RateScale != 0.0f &&
+            (!paused || node->m_bUpdateWhenPaused)) {
+            UpdateEmitter(*node, dt, m_pParticles, m_FreeHead);
         }
 
-        // Keep-alive rule from binary Manager::Update:
+        // Keep-alive rule (binary Manager::Update @0x0013cee8):
         //   keep if timer < maxLifetime
-        //        OR (maxLifetime <= 0 AND !Ends(template))
-        // Meaning: finite-lifetime emitters die at maxLifetime; infinite
-        // emitters (maxLifetime <= 0) only die when the template itself
-        // signals termination (i.e. no set spawns continuously forever).
-        // Bomb_smoke has an infinite set (TimeStop=0, PerSec=50), so
-        // Ends()==false and it stays alive until explicit ClearEmitter.
-        // Port addition: also keep alive while live particles remain, so
-        // dying emitters finish playing out their last spawn.
+        //   OR  (maxLifetime <= 0 AND !Ends(template))
+        // Binary reaps on lifetime only, never on particle count.
         bool keep = true;
         if (et) {
             const bool naturallyInfinite = !EmitterTemplateEnds(et);
             if (et->m_MaxLifetime > 0.0f) {
-                keep = (e.m_Timer < et->m_MaxLifetime) || !particles.empty();
+                keep = (node->m_Timer < et->m_MaxLifetime);
             } else {
-                keep = naturallyInfinite || !particles.empty();
+                keep = naturallyInfinite;
             }
         }
+
         if (!keep) {
-            // Binary @ 0x00115ed8 reap path: null the caller back-pointer so callers
-            // that passed &member (Coin, ScreenEffect, etc.) see nullptr on next access.
-            // Fruit passes nullptr for ppRef and relies on naturally-infinite templates
-            // (see Note comments in Fruit.cpp CollisionResponse / SetTrailParticles).
-            if (e.m_pRefPtr) *e.m_pRefPtr = nullptr;
-            delete m_Emitters[i];
-            m_Emitters.erase(m_Emitters.begin() + i);
-            m_ParticleLists.erase(m_ParticleLists.begin() + i);
-            continue;
+            // Reap: unlink, null caller back-pointer, return to pool.
+            // Do NOT touch particles — orphan particles drain naturally via
+            // the template live-list walk in Draw/Update particle-aging pass.
+            *cur = node->m_Next;
+            if (node->m_pRefPtr) *node->m_pRefPtr = nullptr;
+            m_pEmitterPool->Push(node);
+        } else {
+            cur = &node->m_Next;
         }
-        ++i;
+    }
+
+    // Particle aging + death: walk every emitter template's live-list.
+    // Removes dead particles, pushes their slots back to the free-list.
+    for (size_t ti = 0; ti < m_EmitterTemplates.size(); ++ti) {
+        PSPEmitterTemplate& tmpl = m_EmitterTemplates[ti];
+        if (tmpl.m_ParticleHead == 0) continue;
+
+        // Cursor: pointer to the link field of the predecessor (head or prev->m_NextLink).
+        // We iterate the chain and unlink dead particles in-place.
+        uint16_t* prevLink = &tmpl.m_ParticleHead;
+        while (*prevLink != 0) {
+            uint16_t idx = *prevLink;
+            PSPParticle& p = m_pParticles[idx];
+            p.m_Age += dt;
+
+            if (p.m_Age >= p.m_Life) {
+                // Unlink from live-list and push to free-list.
+                *prevLink = p.m_NextLink;
+                p.m_NextLink = m_FreeHead;
+                m_FreeHead = idx;
+                --tmpl.m_ParticleCount;
+                continue;
+            }
+
+            // Physics integration (matches binary Draw @ 0x0013eccc).
+            const float life = (p.m_Life > 0.0f) ? p.m_Life : 1.0f;
+            const float t = p.m_Age / life;
+
+            p.m_Vel += p.m_Gravity * dt;
+
+            // Per-particle template velocity damping (from set index in m_field44).
+            if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
+                const PSPParticleTemplate* pt = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
+                if (pt) {
+                    const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
+                    const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
+                    const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
+                    p.m_Vel.x *= dampX;
+                    p.m_Vel.y *= dampY;
+                    p.m_Vel.z *= dampZ;
+                }
+            }
+
+            p.m_Pos += p.m_Vel * dt;
+
+            // Spin: lerp start->end over life, then integrate.
+            const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
+            p.m_Rotation += spin * dt;
+
+            // Cycle accumulators (RotCycle + CycleX/Y). Rates in cycles/s -> radians.
+            p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
+            p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
+            p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
+
+            prevLink = &p.m_NextLink;
+        }
     }
 }
 
 // -----------------------------------------------------------------------------
-// Draw — matches PSPParticleManager::Draw (0x00114c64, ~382 lines).
-// Simplified port: for each emitter with particles, build a textured quad per
-// particle into a scratch vertex buffer, then DrawTriList. Blend mode comes
-// from template->m_BlendMode (destination factor; source is GL_SRC_ALPHA).
-// Per-particle state uses the simpler struct from task #8 (not the full
-// 0xA4-byte binary layout — see docs/engine/particles.md).
+// Draw — v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
+// Port separates integrate (Update) from render (Draw); dt and paused are
+// unused in this body.
+// DIFFERS: original @ 0x0013eccc = fused integrate+render over intrusive
+// pool (m_NumEmitterTemplates templates, stride 0xB8, per-template index list
+// at template+0x04, PSPParticle 0xA4 bytes, Math::SinIdx/CosIdx 16-bit
+// angle tables, Mesh::DrawTriList+TextureAtlasPage); port separates
+// integrate(Update)/render(Draw) over template live-lists with reduced
+// PSPParticle, replaces angle-index trig with cosf/sinf radians, replaces
+// Mesh::DrawTriList+TextureAtlasPage with Renderer::DrawTriList+GL.
+// No glBlendFunc state restore at function exit -- binary leaves blend
+// state at whatever the last template configured.
 // -----------------------------------------------------------------------------
 static inline uint32_t PackBGRA(const uint8_t c[4]) {
-    // QUADCUSTOMVERTEX.colour is read as 4 × GL_UNSIGNED_BYTE in the shader
-    // (normalized). Memory order matches the vertex attrib — so we pack the
-    // bytes in the same BGRA order as the template's colour fields.
     return (uint32_t)c[0]
          | ((uint32_t)c[1] << 8)
          | ((uint32_t)c[2] << 16)
          | ((uint32_t)c[3] << 24);
 }
 
-// Lerp each component of an 8-bit BGRA tuple. `t` in [0,1], 0=start.
 static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
                               float t, uint8_t out[4]) {
     for (int i = 0; i < 4; ++i) {
@@ -541,23 +563,10 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
     verts.clear();
 }
 
-// ASM-verified: 2026-05-06T16:00 binary @ 0x00114c64 (asm-inspector)
-// Binary @ 0x00114c64 / v1.6.1 @ 0x0013eccc — fused integrate+render.
-// Port splits into Update/Draw; dt and paused are unused in the Draw body
-// (integration happens in Update).
-// DIFFERS: original @ 0x0013eccc = fused integrate+render over intrusive
-// pool (m_NumEmitterTemplates templates, stride 0xB8, per-template index list
-// at template+0x04, PSPParticle 0xA4 bytes, Math::SinIdx/CosIdx 16-bit
-// angle tables, Mesh::DrawTriList+TextureAtlasPage); port separates
-// integrate(Update)/render(Draw) over std::vector with reduced PSPParticle,
-// replaces angle-index trig with cosf/sinf radians, replaces
-// Mesh::DrawTriList+TextureAtlasPage with Renderer::DrawTriList+GL.
-// No glBlendFunc state restore at function exit -- binary leaves blend
-// state at whatever the last template configured.
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
     (void)dt;
     (void)paused;
-    if (m_Emitters.empty()) return;
+    if (!m_pParticles) return;
 
     // Reset world matrix + upload MVP so DrawTriList uses the current ortho.
     // Matches binary Draw 0x114c64: "MatrixStack::Reset + UploadCurrentMatrices".
@@ -568,26 +577,28 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
     static std::vector<QUADCUSTOMVERTEX> s_verts;
     const PSPParticleTemplate* curTmpl = nullptr;
 
-    for (size_t ei = 0; ei < m_Emitters.size(); ++ei) {
-        PSPParticleEmitter& e = *m_Emitters[ei];
-        std::vector<PSPParticle>& particles = m_ParticleLists[ei];
-        if (particles.empty()) continue;
-        const PSPEmitterTemplate* et = e.m_pTemplate;
-
-        for (std::vector<PSPParticle>::iterator pit = particles.begin(); pit != particles.end(); ++pit) {
-            PSPParticle& p = *pit;
+    // Iterate per-template live-lists (replaces binary's per-emitter-list loop).
+    for (size_t ti = 0; ti < m_EmitterTemplates.size(); ++ti) {
+        const PSPEmitterTemplate& tmpl = m_EmitterTemplates[ti];
+        uint16_t idx = tmpl.m_ParticleHead;
+        while (idx != 0) {
+            PSPParticle& p = m_pParticles[idx];
+            uint16_t nextIdx = p.m_NextLink;
 
             // Resolve per-particle template via set index stored in m_field44.
             const PSPParticleTemplate* pTmpl = 0;
-            if (et && p.m_field44 >= 0 && (size_t)p.m_field44 < et->m_Sets.size()) {
-                pTmpl = et->m_Sets[(size_t)p.m_field44].m_pTemplate;
+            if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
+                pTmpl = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
             }
 
             // Layer filter: binary draws only particles whose template's
             // m_UseDepth matches the requested layer.
-            if (pTmpl && pTmpl->m_UseDepth != layer) continue;
+            if (pTmpl && pTmpl->m_UseDepth != layer) {
+                idx = nextIdx;
+                continue;
+            }
 
-            // Group flush on template change (batches DrawTriList per texture)
+            // Group flush on template change (batches DrawTriList per texture).
             if (pTmpl != curTmpl) {
                 FlushParticleVerts(s_verts, curTmpl);
                 curTmpl = pTmpl;
@@ -598,8 +609,7 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
 
             // Two-segment colour + size lerp: start->mid for t in [0,0.5),
-            // mid->end for t in [0.5,1]. Matches binary Draw piecewise linear.
-            // Colour looked up from template (ColourStartMin/MidMin/EndMin).
+            // mid->end for t in [0.5,1].
             uint8_t col[4];
             float size;
             if (pTmpl) {
@@ -623,11 +633,11 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             float hx = size * 0.5f * aspect;
             float hy = size * 0.5f;
 
-            // CycleX / CycleY size modulation — cos wave per axis
+            // CycleX / CycleY size modulation.
             if (p.m_CycleXRate != 0.0f) hx *= cosf(p.m_CycleXPhase);
             if (p.m_CycleYRate != 0.0f) hy *= cosf(p.m_CycleYPhase);
 
-            // RotCycle oscillation — sin wave adds to base rotation
+            // RotCycle oscillation.
             float effectiveRot = p.m_Rotation;
             if (p.m_RotCycleAmp != 0.0f)
                 effectiveRot += p.m_RotCycleAmp * sinf(p.m_RotCyclePhase);
@@ -637,14 +647,11 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             const float dxX =  ca * hx, dxY = sa * hx;
             const float dyX = -sa * hy, dyY = ca * hy;
 
-            // Positions are in the binary-centred ortho space.
             float px = p.m_Pos.x;
             float py = p.m_Pos.y;
             const float pz = p.m_Pos.z;
 
-            // Grid-lock: snap pos to cell centres when the template declares
-            // non-zero cell sizes. Used by rim_spark (menu rim flash).
-            // Matches binary Draw 0x114c64 gridLock block.
+            // Grid-lock: snap pos to cell centres.
             if (curTmpl) {
                 const float gx = curTmpl->m_GridLockStart;
                 const float gy = curTmpl->m_GridLockEnd;
@@ -668,18 +675,22 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
                 v.u = c.u; v.v = c.v;
                 s_verts.push_back(v);
             }
+
+            idx = nextIdx;
         }
     }
     FlushParticleVerts(s_verts, curTmpl);
-    // Binary leaves blend state at whatever the last template set; subsequent
-    // draws are responsible for configuring their own. Don't restore here.
 }
 
-// Binary @ 0x00115f60 — load particle templates from XML.
+// v1.6.1 PSPParticleManager::LoadFile @0x0013d09c — load particle templates from XML.
 // texCategory is prepended to texture filenames: snprintf("%s/%s.tex", texCategory, name).
 // outNames (optional): caller-allocated array receiving each <particleTemplate name="...">;
 // strings are strcpy'd in parse order.
+// Initialises the 1024-slot particle buffer and 120-slot emitter MemoryPool on first call
+// (guarded on null -- ctor only NULLs the pointers).
 // Returns true on success.
+// ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: 1024-slot particle buffer +
+// free-list (m_NextLink, 1-based) + MemoryPool::Create(120).
 bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, char** outNames) {
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError xerr = doc.LoadFile(xmlPath);
@@ -696,11 +707,32 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
     tinyxml2::XMLElement* body = root->FirstChildElement("body");
     if (!body) return false;
 
+    // (a) Allocate 1024-slot particle buffer on first call (guarded on null).
+    // Binary: operator new[](0x29008) = 8-byte cookie + 1024*0xa4; m_pParticles=blk+8.
+    // Port uses new PSPParticle[1024] (delete[] in Destroy) for simplicity.
+    // // DIFFERS: binary alloc = cookie-prefixed block (stride/count in cookie[0/1]);
+    //    port uses plain new[]. Semantics (1024 slots, free-list, Destroy frees) match.
+    if (!m_pParticles) {
+        m_pParticles = new PSPParticle[1024];
+        // (b) Thread the free-list: slot 0 is sentinel (never allocated).
+        // Slots 1..1023: p[i].m_NextLink = i+1; p[1023].m_NextLink = 0 (terminator).
+        for (int i = 1; i <= 1022; ++i) {
+            m_pParticles[i].m_NextLink = (uint16_t)(i + 1);
+        }
+        m_pParticles[1023].m_NextLink = 0;
+        m_FreeHead = 1;
+    }
+
+    // (c) Create emitter MemoryPool(120) on first call (guarded on null).
+    if (!m_pEmitterPool) {
+        m_pEmitterPool = new Mortar::MemoryPool<PSPParticleEmitter>();
+        m_pEmitterPool->Create(120);
+    }
+
     m_ParticleTemplates.clear();
     m_EmitterTemplates.clear();
 
     // texCategory is prepended to texture filenames per binary snprintf pattern.
-    // DIFFERS: binary uses texCategory/"texName".tex; old port used DirOf(xmlPath).
     const std::string texCatStr(texCategory ? texCategory : "");
 
     // --- First loop: <particleTemplate> --------------------------------------
@@ -711,11 +743,9 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
          pt = pt->NextSiblingElement("particleTemplate")) {
 
         PSPParticleTemplate tmpl = {};
-        // m_VelocityMin/Max on the TEMPLATE are not initial-velocity — they
-        // are a per-component per-frame velocity LERP (damping/amplification)
-        // factor used by UpdateEmitter integration. Default to identity (1.0)
-        // so templates that omit <velocity> get no damping. See binary Draw
-        // @ 0x114c64 integration.
+        // m_VelocityMin/Max on the TEMPLATE are a per-component per-frame velocity
+        // LERP (damping) factor. Default to identity (1.0) so templates that omit
+        // <velocity> get no damping.
         tmpl.m_VelocityMin[0] = 1.0f; tmpl.m_VelocityMin[1] = 1.0f; tmpl.m_VelocityMin[2] = 1.0f;
         tmpl.m_VelocityMax[0] = 1.0f; tmpl.m_VelocityMax[1] = 1.0f; tmpl.m_VelocityMax[2] = 1.0f;
 
@@ -726,13 +756,13 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         { int _v = 0; pt->QueryIntAttribute("useDepth", &_v); tmpl.m_UseDepth = (int32_t)_v; }
 
         // <life> — stored as seconds after divide by 60
-        if (auto* e = pt->FirstChildElement("life")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("life")) {
             const char* t = e->GetText();
             tmpl.m_StartTime = t ? (float)(atof(t) / 60.0) : 0.0f;
         }
 
         // <type> — 0=Point, 1=Vertex, 2=Direction, 3=Angular
-        if (auto* e = pt->FirstChildElement("type")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("type")) {
             const char* t = e->GetText();
             if (t) {
                 if      (!strcmp(t, "Point"))     tmpl.m_Shape = 0;
@@ -742,28 +772,28 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
         // <system> — 0=Local, 1=Global
-        if (auto* e = pt->FirstChildElement("system")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("system")) {
             const char* t = e->GetText();
             if (t && !strcmp(t, "Global")) tmpl.m_CoordSystem = 1;
         }
 
         // <gravity> — "x y z" (default min, max falls back to min)
-        if (auto* e = pt->FirstChildElement("gravity")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("gravity")) {
             ParseVec3(e->GetText(), tmpl.m_GravityMin);
             memcpy(tmpl.m_GravityMax, tmpl.m_GravityMin, sizeof(tmpl.m_GravityMin));
         }
-        if (auto* e = pt->FirstChildElement("gravity_max")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("gravity_max")) {
             ParseVec3(e->GetText(), tmpl.m_GravityMax);
         }
 
         // <velocity min="..." max="..."/>
-        if (auto* e = pt->FirstChildElement("velocity")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("velocity")) {
             ParseVec3(e->Attribute("min"), tmpl.m_VelocityMin);
             ParseVec3(e->Attribute("max"), tmpl.m_VelocityMax);
         }
 
         // <color startMin="R G B A" startMax=".." endMin=".." endMax=".."/>
-        if (auto* e = pt->FirstChildElement("color")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("color")) {
             ParseColourBGRA(e->Attribute("startMin"), tmpl.m_ColourStartMin);
             ParseColourBGRA(e->Attribute("startMax"), tmpl.m_ColourStartMax);
             ParseColourBGRA(e->Attribute("endMin"),   tmpl.m_ColourEndMin);
@@ -778,7 +808,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
 
         // <size startMin=".." startMax=".." endMin=".." endMax=".."/>
-        if (auto* e = pt->FirstChildElement("size")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("size")) {
             int v = 0;
             if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeStartMin = (uint8_t)v;
             if (e->QueryIntAttribute("startMax", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeStartMax = (uint8_t)v;
@@ -789,7 +819,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
 
         // <spin startMin=".." startMax=".." endMin=".." endMax=".."/>
-        if (auto* e = pt->FirstChildElement("spin")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("spin")) {
             int v = 0;
             if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinStartMin = (int16_t)v;
             if (e->QueryIntAttribute("startMax", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinStartMax = (int16_t)v;
@@ -798,22 +828,18 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
 
         // <cycleX startMin="a" startMax="b" endMin="c" endMax="d"/>
-        // Rate range: start rate lerp [startMin, startMax], end rate lerp
-        // [endMin, endMax]. Modulates size_x via cos(phase) in Draw.
-        if (auto* e = pt->FirstChildElement("cycleX")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("cycleX")) {
             int v = 0;
             if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXStart = (int16_t)v;
             if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXEnd   = (int16_t)v;
         }
-        if (auto* e = pt->FirstChildElement("cycleY")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("cycleY")) {
             int v = 0;
             if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYStart = (int16_t)v;
             if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYEnd   = (int16_t)v;
         }
 
-        // <gridLock x="16" y="16"/> -- snap-to-grid lock per axis, applied in Draw.
-        // Binary @ 0x00115f60 reads element attrs into template +0x64 / +0x68.
-        // Used by pixel_blade and rim_spark templates.
+        // <gridLock x="16" y="16"/> -- snap-to-grid lock per axis.
         // ASM-verified: 2026-05-09 binary @ 0x00115f60 (re-analyst)
         {
             tinyxml2::XMLElement* e = pt->FirstChildElement("gridLock");
@@ -823,11 +849,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
 
-        // <friction start="x y z" end="x y z"/> -- per-component per-frame velocity
-        // LERP factor (damping). Binary stores into template +0x08..+0x1C
-        // (m_VelocityMin/Max) -- the same slots the port's UpdateEmitter integration
-        // already reads. Templates that omit this keep the identity defaults set above.
-        // pixel_1/2/3 use start="1 1 0" end="0 0 0" -> fast decel to stop.
+        // <friction start="x y z" end="x y z"/> -- velocity LERP damping factor.
         {
             tinyxml2::XMLElement* e = pt->FirstChildElement("friction");
             if (e) {
@@ -837,17 +859,14 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
 
         // <rotateCycle start="base" end="endBase" speedStart="rate1" speedEnd="rate2"/>
-        // Quadratic rotation accumulator modulating m_Rotation with sin.
-        // Port stores the four parameters in the m_Friction* float slots so
-        // we don't need to add new template fields.
-        if (auto* e = pt->FirstChildElement("rotateCycle")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("rotateCycle")) {
             float fv = 0.0f;
             if (e->QueryFloatAttribute("speedStart", &fv) == tinyxml2::XML_SUCCESS)
                 tmpl.m_FrictionSpeedStart = fv;
             if (e->QueryFloatAttribute("speedEnd",   &fv) == tinyxml2::XML_SUCCESS)
                 tmpl.m_FrictionSpeedEnd   = fv;
             if (e->QueryFloatAttribute("start",      &fv) == tinyxml2::XML_SUCCESS)
-                tmpl.m_FrictionOffsetMin  = fv;   // amplitude base
+                tmpl.m_FrictionOffsetMin  = fv;
             if (e->QueryFloatAttribute("end",        &fv) == tinyxml2::XML_SUCCESS)
                 tmpl.m_FrictionOffsetMax  = fv;
             else
@@ -855,17 +874,16 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
 
         // <SourceBlend>, <DestinationBlend>
-        if (auto* e = pt->FirstChildElement("SourceBlend"))
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("SourceBlend"))
             tmpl.m_BlendMode = ParseBlendEnum(e->GetText());
-        if (auto* e = pt->FirstChildElement("DestinationBlend"))
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("DestinationBlend"))
             tmpl.m_BlendMode = ParseBlendEnum(e->GetText());
 
         // <texture name="..."/> — load via TextureManager
-        if (auto* e = pt->FirstChildElement("texture")) {
+        if (tinyxml2::XMLElement* e = pt->FirstChildElement("texture")) {
             const char* texName = e->Attribute("name");
             if (texName && *texName) {
                 char buf[256];
-                // Binary @ 0x115f60: snprintf("%s/%s.tex", texCategory, texName)
                 snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
                 tmpl.m_Texture = Mortar::TextureManager::GetInstance().Load(buf);
                 if (tmpl.m_Texture.IsValid()) {
@@ -876,7 +894,6 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
 
-        // outNames: if provided, strcpy the template name into outNames[i].
         if (outNames && name) {
             strcpy(outNames[m_ParticleTemplates.size()], name);
         }
@@ -888,7 +905,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
          em != nullptr;
          em = em->NextSiblingElement("emitter")) {
 
-        PSPEmitterTemplate tmpl = {};
+        PSPEmitterTemplate tmpl;
         const char* name = em->Attribute("name");
         if (name) {
             strncpy(tmpl.m_Name, name, sizeof(tmpl.m_Name) - 1);
@@ -907,10 +924,10 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             PSPParticleSet set = {};
             set.m_pTemplate = nullptr;
 
-            // Store template index encoded as a pointer — patched below after
+            // Store template index encoded as a pointer -- patched below after
             // all emitter templates are built (mirrors binary post-load patch).
             if (const char* psName = ps->Attribute("name")) {
-                auto it = nameToIndex.find(StringHash(psName));
+                std::unordered_map<uint32_t, size_t>::iterator it = nameToIndex.find(StringHash(psName));
                 if (it != nameToIndex.end()) {
                     set.m_pTemplate = reinterpret_cast<PSPParticleTemplate*>(
                         static_cast<uintptr_t>(it->second + 1)); // +1 so 0 == "none"
@@ -942,8 +959,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
     }
 
     // Post-load patch: replace encoded index (as pointer) with real pointers
-    // into the now-stable m_ParticleTemplates vector. Matches binary flow:
-    // "*word0 = m_pTemplates + index * 0xB8".
+    // into the now-stable m_ParticleTemplates vector.
     for (std::vector<PSPEmitterTemplate>::iterator eit = m_EmitterTemplates.begin(); eit != m_EmitterTemplates.end(); ++eit) {
         PSPEmitterTemplate& emit = *eit;
         for (std::vector<PSPParticleSet>::iterator sit = emit.m_Sets.begin(); sit != emit.m_Sets.end(); ++sit) {
@@ -963,16 +979,33 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
 }
 
 void PSPParticleManager::Clear() {
-    for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
-    m_Emitters.clear();
-    m_ParticleLists.clear();
+    ClearEmitters();
 }
 
-// Binary @ 0x00114974 — drain active list + reset particle free-list + zero
-// per-template live-list heads. Port collapses 2-3 since particles live
-// in the manager's parallel list. // DIFFERS: binary uses 3 separate lists; port uses vector.
+// v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk) — drain
+// m_pActiveEmitters to pool; reset m_FreeHead=1 + re-thread free-list;
+// zero every template's m_ParticleHead/m_ParticleCount.
 void PSPParticleManager::ClearEmitters() {
-    for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
-    m_Emitters.clear();
-    m_ParticleLists.clear();
+    // Drain the active emitter list back to pool, null all caller back-pointers.
+    while (m_pActiveEmitters) {
+        PSPParticleEmitter* node = m_pActiveEmitters;
+        m_pActiveEmitters = node->m_Next;
+        if (node->m_pRefPtr) *node->m_pRefPtr = nullptr;
+        if (m_pEmitterPool) m_pEmitterPool->Push(node);
+    }
+
+    // Re-thread the particle free-list (slots 1..1023; sentinel at 0).
+    if (m_pParticles) {
+        for (int i = 1; i <= 1022; ++i) {
+            m_pParticles[i].m_NextLink = (uint16_t)(i + 1);
+        }
+        m_pParticles[1023].m_NextLink = 0;
+        m_FreeHead = 1;
+    }
+
+    // Zero per-template live-list heads and counts.
+    for (size_t i = 0; i < m_EmitterTemplates.size(); ++i) {
+        m_EmitterTemplates[i].m_ParticleHead  = 0;
+        m_EmitterTemplates[i].m_ParticleCount = 0;
+    }
 }

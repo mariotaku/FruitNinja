@@ -31,6 +31,8 @@ Forbidden patterns:
 - **Empirical try-this-might-work patches** — guessing at fix values without RE'ing the binary's actual semantic.
 - **"Good enough for now" workarounds** that drift from binary behaviour without an explicit `// DIFFERS:` marker explaining why fidelity is intentionally sacrificed.
 
+**Prefer the binary's actual implementation over `std::` / self-substitutions.** When the binary uses a custom structure — `Mortar::MemoryPool`, an intrusive linked list (`Mortar::List<T>`), a fixed/flat object pool — port **that**, not a `std::vector`/`std::map` stand-in. The substitution is the single biggest asm-verify divergence inflator and tends to *force* band-aids (e.g. a `std::vector` reap that truncates orphan particles, then a `!empty()` workaround to hide it — exactly what #76's `std::vector`→`MemoryPool` rework had to undo, dropping `ClearEmitter` 724%→164%). Layout-faithful `std::` uses are fine where the container's byte layout already matches the binary (`std::list` = 8 bytes, `std::map` = 24 bytes); the rule targets *custom* binary structures replaced with std containers. Verify the win with `tools/asm-verify/run.sh --class <X>`.
+
 Required workflow when a port-side bug surfaces:
 1. **RE the binary** to find what the binary actually does at the relevant function/field. This is non-negotiable — every fix starts here.
 2. **Identify the port's divergence** against that binary baseline — a missing call site, an inverted gate, a wrong field offset, a missing struct member, a swapped argument.
