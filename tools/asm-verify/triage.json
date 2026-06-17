@@ -1337,10 +1337,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11ItemManager12LoadItemDataEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 29400,
-    "reason": "ItemManager method stub/divergence. Score 64977/28800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 69844/28800 -> 63193/29400]",
-    "score": 63193,
+    "reason": "DIFFERS: uses tinyxml2 instead of Mortar TiXml (unported); documented with DIFFERS marker in LoadItemData. Score 64977/28800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 69844/28800 -> 63193/29400] [2026-06-17: score 63153/29400, DIFFERS marker added]",
+    "score": 63153,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11ItemManager12SaveItemInfoEv": {
@@ -1820,10 +1820,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity10InitPointsEl": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 7500,
-    "reason": "SlashEntity::InitPoints — binary dynamically allocates m_pLeftBuffer/m_pRightBuffer arrays sized for count point pairs; port uses fixed-size arrays and just resets m_NumPoints=0. Documented at src/entities/SlashEntity.cpp:1133 // Binary @ 0x17C340 -- allocates m_pLeftBuffer/m_pRightBuffer ... Port uses fixed-size arrays; just reset point count. Score 7815/7700. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 16125/7700 -> 17800/7500]",
-    "score": 17800,
+    "reason": "InitPoints: normal.z=1.0 fix applied. Remaining: binary uses unrolled Duff's-device loop with ARM32 GOT pointer to fill 160 records while port uses simple nested for-loops; different codegen pattern but identical result. Score 237% structural difference from loop unrolling. [2026-06-17 blade-trail fixes]",
+    "score": 17805,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity10TouchMoveXEP10InputEvent": {
@@ -1876,10 +1876,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity14ColoursChangedEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 4600,
-    "reason": "ColoursChanged: port expanded with PSPParticleManager singleton guard + extra colour stores. See src/entities/SlashEntity.h:281 // TODO: implement when particle manager wiring lands. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 11460/4500 -> 11025/4600]",
-    "score": 11025,
+    "reason": "ColoursChanged: band-aid snap removed; binary order restored (ClearEmitter -> m_State guard -> m_PointCount=0 -> ColourType==2 UpdateModColour -> AddEmitter). Score 227%->209%. Remaining: GOT/PIC global access + PSPParticleManager singleton guard. [2026-06-17 blade-trail fixes]",
+    "score": 9645,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity14InitModColoursEv": {
@@ -1968,10 +1968,10 @@
   },
   "_ZN11SlashEntity9DrawSliceEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "SlashEntity::DrawSlice -- score 19000/8100 (grew from 17495 after R8/R9/R10). Tier-2 entity-draw divergence (sprite batch setup, MatrixManager calls, std::list traversal). ACCEPT-deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 20190,
+    "reason": "DrawSlice: latch fix applied (inverted AND&1 -> correct (uchar)<<1 release-edge). Score 252%->213%. Remaining: GOT/PIC global load patterns + MatrixManager singleton vs binary's direct GOT access + strb vs str.w for uchar field. [2026-06-17 blade-trail fixes]",
+    "score": 18995,
     "max_score": 8900,
-    "decided_at": "2026-06-14T05:55Z"
+    "decided_at": "2026-06-17T00:00Z"
   },
   "_ZN11SlashEntity9PlaySwipeEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4837,24 +4837,24 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager10AddEmitterEmPP18PSPParticleEmitterb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 6300,
-    "reason": "PSPParticleManager method stub/divergence. Score 10585/6100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12120/6100 -> 14255/6300]",
-    "score": 14255,
+    "reason": "PSPParticleManager::AddEmitter: MemoryPool-based faithful rewrite (R#76). Score 8710/6300 (138% diff). Port calls FindTemplate + MemoryPool::Pop + prepend intrusive list. Main diff: binary inlines template search in the emitter-loop body vs port call. [PSP storage rewrite 2026-06-17]",
+    "score": 8710,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager12ClearEmitterEP18PSPParticleEmitter": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 3000,
-    "reason": "PSPParticleManager method stub/divergence. Score 10320/3000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 21540/3000 -> 21725/3000]",
-    "score": 21725,
+    "reason": "PSPParticleManager::ClearEmitter: intrusive-list cursor rewrite. Score 4930/3000 (164% diff). Port address-of-link cursor matches binary walk; diff from MemoryPool::Push template expansion vs binary blx. [PSP storage rewrite 2026-06-17]",
+    "score": 4930,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager13ClearEmittersEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 4600,
-    "reason": "PSPParticleManager method stub/divergence. Score 5885/4600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 9050/4600 -> 9795/4600]",
-    "score": 9795,
+    "reason": "PSPParticleManager::ClearEmitters: drain intrusive list, re-thread 1024 free-list slots, zero template heads. Score 13260/4600 (288% diff). Port re-threads via counted loop; binary uses partial-unroll + fixed stride arithmetic. Port also iterates std::vector for template head/count zeroing. [PSP storage rewrite 2026-06-17]",
+    "score": 13260,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager13EmitterExistsEm": {
@@ -4872,24 +4872,24 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager4DrawEfbi": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 80900,
-    "reason": "PSPParticleManager method stub/divergence. Score 142790/70700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 143840/70700 -> 152273/80900]",
-    "score": 152273,
+    "reason": "PSPParticleManager::Draw: template live-list walk replaces per-emitter vector. Score 151135/80900 (186% diff). Inherent diff: port cosf/sinf radians vs binary SinIdx/CosIdx 16-bit angle tables; port Renderer::DrawTriList vs binary Mesh::DrawTriList+TextureAtlasPage; port separates Update/Draw. [PSP storage rewrite 2026-06-17]",
+    "score": 151135,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager6UpdateEfb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 5200,
-    "reason": "PSPParticleManager method stub/divergence. Score 39330/4800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 60305/4800 -> 60905/5200]",
-    "score": 60905,
+    "reason": "PSPParticleManager::Update: score improved 60905->49865/5200. Intrusive list walk with address-of-link cursor + template live-list particle aging pass. Significant diff remains from std::vector<PSPEmitterTemplate> iteration in aging pass. [PSP storage rewrite 2026-06-17]",
+    "score": 49865,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager7DestroyEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 4300,
-    "reason": "PSPParticleManager method stub/divergence. Score 24125/3900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 24125/3900 -> 25050/4300]",
-    "score": 25050,
+    "reason": "PSPParticleManager::Destroy: score 27145/4300. delete[] m_pParticles + delete m_pEmitterPool (MemoryPool dtor inlined by compiler) vs binary free(cookie_buf)+blx. Std::vector template lists clear adds overhead. [PSP storage rewrite 2026-06-17]",
+    "score": 27145,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager8LoadFileEPKcS1_PPc": {
@@ -4900,31 +4900,31 @@
     "decided_at": "2026-06-14T06:00Z"
   },
   "_ZN18PSPParticleManagerC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 2300,
-    "reason": "PSPParticleManager method stub/divergence. Score 1015/600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 1115/600 -> 3305/2300]",
-    "score": 3305,
+    "reason": "PSPParticleManager ctor: score 3200/2300 (139% diff). Port initialises m_pParticles/m_FreeHead/m_pActiveEmitters/m_pEmitterPool (null/0) plus std::vector members; binary zeroes only the 3 owned pointer fields. [PSP storage rewrite 2026-06-17]",
+    "score": 3200,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManagerC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 2300,
-    "reason": "PSPParticleManager method stub/divergence. Score 1015/600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 1115/600 -> 3305/2300]",
-    "score": 3305,
+    "reason": "PSPParticleManager ctor: score 3200/2300 (139% diff). Port initialises m_pParticles/m_FreeHead/m_pActiveEmitters/m_pEmitterPool (null/0) plus std::vector members; binary zeroes only the 3 owned pointer fields. [PSP storage rewrite 2026-06-17]",
+    "score": 3200,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManagerD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 700,
-    "reason": "PSPParticleManager method stub/divergence. Score 19970/500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 25570/500 -> 25370/700]",
-    "score": 25370,
+    "reason": "PSPParticleManager dtor: score 19670/700 (2810% diff). Port dtor inlines MemoryPool<T>::~MemoryPool + std::vector<PSPEmitterTemplate/PSPParticleTemplate> destructors; binary dtor = 3 insns (Destroy + SmartPtr cleanup). Inherent C++ template/vector overhead -- not a logic bug. [PSP storage rewrite 2026-06-17]",
+    "score": 19670,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManagerD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 700,
-    "reason": "PSPParticleManager method stub/divergence. Score 19970/500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 25570/500 -> 25370/700]",
-    "score": 25370,
+    "reason": "PSPParticleManager dtor: score 19670/700 (2810% diff). Port dtor inlines MemoryPool<T>::~MemoryPool + std::vector<PSPEmitterTemplate/PSPParticleTemplate> destructors; binary dtor = 3 insns (Destroy + SmartPtr cleanup). Inherent C++ template/vector overhead -- not a logic bug. [PSP storage rewrite 2026-06-17]",
+    "score": 19670,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN19NotificationControl4InitEv": {
@@ -6090,17 +6090,17 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11MeshManager10InitialiseEi": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Binary: push/blx-reserve/pop (direct call). Port: b.w vector::reserve + nop padding (tail-call encoding). Same call to std::vector::reserve, different branch form. Score 700/300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 700/300 -> 500/100]",
-    "score": 500,
+    "reason": "Port Initialise is now a no-op (intrusive List grows per-node; no pre-allocation). Binary calls a GOT thunk (List capacity reserve?). Score 600/100. ACCEPT-cosmetic: binary reserve is internal List setup; port node-per-alloc is semantically equivalent. [score refreshed 2026-06-17: List.h intrusive rewrite; was 500/100 with std::vector reserve]",
+    "score": 600,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11MeshManager10ReleaseAllEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Binary calls one small intrusive-list-clear helper (2 instructions). Port calls std::vector::clear on m_Models which, for SmartPtr<Model> elements, inlines the full ref-count teardown loop (~320 bytes). Container divergence: std::vector vs binary's intrusive List. See src/engine/asset/MeshManager.h:28 (m_Models field) and MeshManager.cpp:26. Score 13805/300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 13805/300 -> 13800/100]",
-    "score": 13800,
+    "reason": "Binary tail-calls List::Clear (2-byte branch instruction). Port inlines List::Clear template body via call to m_Models.Clear() -- GCC 4.4.1 does not tail-call the template member. Score 4300/100. ACCEPT-deferred: the inlined body is semantically identical to the binary's tail-call; template inlining is the only difference. [score refreshed 2026-06-17: List.h intrusive rewrite; was 13800/100 with std::vector]",
+    "score": 4300,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManager18InitialiseInternalEv": {
@@ -6111,45 +6111,45 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11MeshManager7DestroyEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Port has bx lr stub vs binary has destroy code. ACCEPT-deferred. Score 800/300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 800/300 -> 500/100]",
+    "reason": "Port Destroy calls ReleaseAll which inlines List::Clear (template). Binary Destroy tail-calls ReleaseAll. Score 500/100. ACCEPT-deferred: semantically faithful. [score refreshed 2026-06-17: List.h intrusive rewrite; was 500/100]",
     "score": 500,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManager7ReleaseERKNS_8SmartPtrINS_5ModelEEE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 2100,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2700/2200 -> 26495/2100]",
-    "score": 26495,
+    "reason": "Port now calls m_Models.Remove(model) via List<SmartPtr<Model>>::Remove (intrusive forward-scan unlink). Binary v1.6.1 @0x00236908 does the same. Remaining divergence: binary SmartPtr is 8 bytes (separate RefCounter*); port SmartPtr is 4 bytes (intrusive). Refcount operations differ in number of loads. Score 6245/2100. ACCEPT-deferred: structure correct, refcount-size divergence is fundamental SmartPtr layout delta. [score refreshed 2026-06-17: List.h intrusive rewrite; was 26495/2100 stub]",
+    "score": 6245,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 1500,
-    "reason": "Binary calls PIC vtable-based sub-object ctors for the List sentinel; port zero-inits the std::vector triple (begin/end/cap at [r0,#0/4/8]) directly. Container divergence: std::vector vs intrusive List. See src/engine/asset/MeshManager.h:28 and MeshManager.cpp:12-14. Score 2600/1300. [score refreshed 2026-05-17T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3000/1300 -> 2820/1500]",
-    "score": 2820,
+    "reason": "Port ctor zero-inits List fields + stores s_instance. Binary ctor zero-inits fields then calls Clear() then stores s_instance. Remaining delta: s_instance store order vs Clear() call; port stores s_instance via List ctor inline before the last fields. Score 2835/1500. ACCEPT-deferred: field init order minor, semantically identical at function exit. [score refreshed 2026-06-17: List.h intrusive rewrite; was 2820/1500 with std::vector divergence]",
+    "score": 2835,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 1500,
-    "reason": "C2 alias of C1; same container-divergence root cause as MeshManagerC1Ev. Score 2600/1300. [score refreshed 2026-05-17T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3000/1300 -> 2820/1500]",
-    "score": 2820,
+    "reason": "C2 alias of C1; same List-ctor inline + s_instance store order divergence as MeshManagerC1Ev. Score 2835/1500. [score refreshed 2026-06-17: List.h intrusive rewrite]",
+    "score": 2835,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 1000,
-    "reason": "Stale refresh: score improved 28335->15550/1300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15550/1300 -> 15275/1000]",
-    "score": 15275,
+    "reason": "Port dtor inlines List::Clear + List::Destroy via member dtor; binary dtor at 0x002368a4 inlines the Clear walk + OwnsFreeList check directly. Divergence: port's s_instance null check happens mid-dtor; binary checks s_instance at top then falls through to Clear inline. Score 5910/1000. ACCEPT-deferred: semantically correct, structural inlining/reorder differences. [score refreshed 2026-06-17: List.h intrusive rewrite; was 15275/1000]",
+    "score": 5910,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 1000,
-    "reason": "Stale refresh: score improved 28335->15550/1300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15550/1300 -> 15275/1000]",
-    "score": 15275,
+    "reason": "D2 alias of D1; same dtor inline divergence. Score 5910/1000. [score refreshed 2026-06-17: List.h intrusive rewrite; was 15275/1000]",
+    "score": 5910,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MortarSound12InternalLoadEPKc": {
@@ -8169,11 +8169,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash10CreatePoolEi": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Score 3600/100. Port has full pool creation; binary has bx lr (binary is stub). Inverted: binary is simpler, port implements. See src/entities/BombFlash.cpp:19-25 (TODO: real impl pending). [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3600/100 -> 4100/100]",
-    "score": 4100,
-    "verdict": "ACCEPT-deferred"
+    "reason": "Score 400/100. Binary is bx lr (DEFUNCT stub); port is now a matching no-op stub. Trailing nops are alignment padding -- same cosmetic pattern as DrawUpdate. Defunct: BombFlash pool disabled in v1.6.1 BombFlash::CreatePool @0x001d4cc0.",
+    "score": 400,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash10DrawUpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8190,18 +8190,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash17DrawActiveFlashesEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 400/100 -> 6600/100]",
-    "score": 6600,
+    "reason": "Score 400/100. Binary is bx lr (DEFUNCT stub); port is now a matching no-op stub. Trailing nops are alignment padding. Defunct: BombFlash pool disabled in v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8.",
+    "score": 400,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash19UpdateActiveFlashesEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 100,
-    "reason": "Score 7200/100. Port has full update loop; binary has bx lr stub. See src/entities/BombFlash.cpp:35-47 (TODO: real impl pending). [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences]",
-    "score": 7000,
-    "verdict": "ACCEPT-deferred"
+    "reason": "Score 400/100. Binary is bx lr (DEFUNCT stub); port is now a matching no-op stub. Trailing nops are alignment padding. Defunct: BombFlash pool disabled in v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4.",
+    "score": 400,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash4DrawEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8428,10 +8428,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK11SlashEntity21GetHeadThicknessScaleEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 5000,
-    "reason": "GetHeadThicknessScale: binary @ 0x17B87C computes from m_pLeftBuffer vertex geometry; port is stub. See src/entities/SlashEntity.h:248 // TODO. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5810/5700 -> 5310/5000]",
-    "score": 5310,
+    "reason": "GetHeadThicknessScale: ASM-verified ported at v1.6.1 @0x1e684c. Score 139% structural divergence from GOT/PIC global load vs port's direct global reference, and sqrt codegen difference (binary uses VFP vsqrt.f64 via cast, port uses direct vsqrt.f32). Semantically identical. [2026-06-17 blade-trail fixes]",
+    "score": 6980,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK11TimeControl12GetCountDownEv": {
@@ -8498,17 +8498,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar11MeshManager4FindERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 2500,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4000/3500 -> 5155/2500]",
-    "score": 5155,
+    "reason": "Port walks List<SmartPtr<Model>> node chain comparing m_name via AsciiString::operator==. Binary v1.6.1 @0x0023695c does the same. Remaining divergence: port SmartPtr is 4 bytes so no separate RefCounter load; binary has 8-byte SmartPtr and an AddRef on the return value using vtable dispatch. Score 3160/2500. ACCEPT-deferred: logic correct, SmartPtr-size-driven refcount difference. [score refreshed 2026-06-17: List.h intrusive rewrite; was 5155/2500 stub]",
+    "score": 3160,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar11MeshManager4FindERKNS_8SmartPtrINS_5ModelEEE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-17T00:00Z",
     "max_score": 2100,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3800/3300 -> 7010/2100]",
-    "score": 7010,
+    "reason": "Port walks List<SmartPtr<Model>> node chain comparing Get() pointer identity. Binary v1.6.1 @0x002369c0 does the same. Remaining divergence: binary SmartPtr has separate RefCounter* at +4; port SmartPtr is 4 bytes (intrusive), so AddRef on return uses fewer loads. Score 3950/2100. ACCEPT-deferred: logic correct, SmartPtr-size-driven refcount difference. [score refreshed 2026-06-17: List.h intrusive rewrite; was 7010/2100 stub]",
+    "score": 3950,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar11StringTable7GetInfoEPKc": {

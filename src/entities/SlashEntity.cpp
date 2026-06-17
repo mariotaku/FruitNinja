@@ -229,9 +229,9 @@ SlashEntity::SlashEntity()
     , m_Scale(0.0f)
     , m_BaseColour(255, 255, 255, 255)
     , m_HighlightColour(255, 255, 255, 255)
-    , m_SwipeEndEdge(0)
+    , m_BombHitEdge(0)
     , m_SplitPoint(0)
-    , _field_0x54(0)
+    , m_ComboBaseIdx(0)
     , m_PointCount(0)
     , m_pLeftBuffer(nullptr)
     , m_pRightBuffer(nullptr)
@@ -254,9 +254,9 @@ SlashEntity::SlashEntity()
     , m_SlicePos(0, 0, 0)
     , m_field_0x130(0)
     , m_field_0x134(0.0f)
-    , m_field_0x138(-1)
-    , m_field_0x13c(-1)
-    , m_SwipeFuse(0)
+    , m_TrailShiftA(-1)
+    , m_TrailShiftB(-1)
+    , m_BladeActive(0)
     , m_field_0x144(0.0f)
     , m_field_0x148(-1)
     , m_field_0x14c(-1)
@@ -448,7 +448,7 @@ void SlashEntity::PlaySwipe() {
     m_SwipeSoundTimer = 6.0f;
 }
 
-// ASM-verified: 2026-06-16 binary @ 0x1e684c (re-analyst). Head thickness scale =
+// ASM-verified: 2026-06-16 v1.6.1 GetHeadThicknessScale @ 0x1e684c (re-analyst). Head thickness scale =
 // half the L/R edge separation at the LAST stored vertex, normalized by the nominal
 // full half-width (ModSlashThickness*9). Range [0,1]. Consumed by OnTouchActive
 // (binary UpdateTouchDown @0x1e9f08) as per-point taper pressure.
@@ -610,7 +610,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
     // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
     // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
-    m_SwipeFuse |= 1;
+    m_BladeActive |= 1;
 }
 
 void SlashEntity::OnTouchReleased() {
@@ -619,6 +619,18 @@ void SlashEntity::OnTouchReleased() {
     LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended state=%d pointCount=%d",
              m_FingerId, (int)m_State, m_PointCount);
 #endif
+    // TEMP #71
+    printf("[71] OnTouchReleased[%d] emitter=%p\n", m_FingerId, (void*)m_TrailEmitter);
+
+    // DIFFERS: original defers trail-emitter teardown to the next TouchDown
+    // via the !bladeActive branch in Update; port clears on the release edge
+    // so the emitter cannot stream at a frozen lift position when PollHeldFingers
+    // keeps the finger "held" (e.g. web MOUSEBUTTONUP without matching FINGERUP).
+    // Safe now that the &m_TrailEmitter ppRef fix keeps m_TrailEmitter valid.
+    if (m_TrailEmitter) {
+        PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        m_TrailEmitter = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -723,7 +735,7 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
             memmove(m_pRightBuffer, m_pRightBuffer + 2, newCount * sizeof(QUADCUSTOMVERTEX));
         }
         m_PointCount = (newCount > 0) ? newCount : 0;
-        m_field_0x138 -= 2;
+        m_TrailShiftA -= 2;
     }
 
     // Reset head-thickness scale to 1.0 each AddPoint (binary @ 0x1e9bf4).
@@ -793,8 +805,8 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
 static int s_slashes = 0;
 
 // ---------------------------------------------------------------------------
-// UpdatePoints -- binary @ 0x1e6914 (v1.6.1)
-// ASM-verified: 2026-06-15T00:00 binary @ 0x1e6914 (user Ghidra decompile)
+// UpdatePoints -- v1.6.1 @ 0x1e6914
+// ASM-verified: 2026-06-15T00:00 v1.6.1 UpdatePoints @ 0x1e6914 (user Ghidra decompile)
 //
 // Mod globals (decompiler name -> port global):
 //   ModSlashThickness            -> g_Scale1  (SetModScales p2; default 1.0 @ 0x2D8D78)
@@ -806,11 +818,11 @@ static int s_slashes = 0;
 //   ModColourType                -> g_ColourType
 //   ModColourTime                -> g_PaletteProgress
 //
-// Binary field mapping:
-//   m_TrailShiftA -> m_field_0x138 (+0x138, Init: -1)
-//   m_TrailShiftB -> m_field_0x13c (+0x13c, Init: -1)
-//   m_BombHitEdge -> m_SwipeEndEdge (+0x4c)
-//   m_BladeActive -> (m_State != 0) in port (binary byte field, no standalone port equivalent)
+// Binary field mapping (port name -> binary offset):
+//   m_TrailShiftA +0x138 (Init: -1)
+//   m_TrailShiftB +0x13c (Init: -1)
+//   m_BombHitEdge +0x4c  (bomb-hit one-shot)
+//   m_BladeActive +0x140 (uchar shift-register; port stores int, low byte used)
 //   DAT_002d928c  -> 0.0f (BSS zero-init: default m_BladeDir.y on reset)
 //   DAT_002d9290  -> 0.0f (BSS zero-init: default m_BladeDir.z on reset)
 //
@@ -834,11 +846,11 @@ void SlashEntity::UpdatePoints(float dt) {
     const bool bombHitPositive = (game_work.m_BombHitTimer > 0.0f);
 
     if (dtIsZero && bombHitPositive) {
-        // BOMB-FLASH PATH: if m_BombHitEdge (m_SwipeEndEdge) set, paint all verts red.
+        // BOMB-FLASH PATH: if m_BombHitEdge (m_BombHitEdge) set, paint all verts red.
         // Binary: Colour::Colour(&CStack_3c, (Colour*)&Colour::Red); two-pass loop
         // (pSVar24 iterates over this and this+4, hitting m_pLeftBuffer and m_pRightBuffer
         // via the 4-byte struct pointer shift trick).
-        if (m_SwipeEndEdge != 0) {
+        if (m_BombHitEdge != 0) {
             uint32_t redPacked = Colour::Red.PlatformColour();
             // Binary: for i = 0..m_PointCount inclusive, stride iVar14 += 0x24.
             // Paints both the center and edge verts of each pair PLUS the head-cap slot.
@@ -864,12 +876,12 @@ void SlashEntity::UpdatePoints(float dt) {
     //   midPt = (headT + tailT) * 0.5, write ColLine endpoints, compute SegLenSq.
     // -----------------------------------------------------------------------
     const bool bladeActive = (m_State != 0);
-    if (m_PointCount < 4 || !bladeActive || m_field_0x138 == -1 || m_field_0x13c == -1) {
-        m_field_0x13c = -1;
-        m_field_0x138 = -1;
+    if (m_PointCount < 4 || !bladeActive || m_TrailShiftA == -1 || m_TrailShiftB == -1) {
+        m_TrailShiftA = -1;
+        m_TrailShiftB = -1;
         m_SegLenSq    = -1.0f;
     } else {
-        // TODO: 0x1e6914 -- FruitCamera::TranslatePos not yet ported; use raw positions.
+        // TODO: v1.6.1 0x1e6914 -- FruitCamera::TranslatePos not yet ported; use raw positions.
         // Binary transforms m_HeadPos/m_TailPos through the camera before computing ColLine.
         Vec3 headT = m_HeadPos;
         Vec3 tailT = m_TailPos;
@@ -1279,6 +1291,8 @@ void SlashEntity::Update(float dt) {
             m_TrailEmitter->m_Pos = m_RawTouchPos;
         }
     } else if (!bladeActive && m_TrailEmitter) {
+        // TEMP #71
+        printf("[71] bladeActive->0 ClearEmitter[%d]\n", m_FingerId);
         pm.ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
@@ -1398,7 +1412,7 @@ void SlashEntity::Update(float dt) {
                             g_HitLatch        = 1;
                             g_HitResetCounter = 0;
                             if (bomb->m_bHit && !bomb->m_bMenuBombHit) {
-                                m_SwipeEndEdge = 1;
+                                m_BombHitEdge = 1;
                             }
                         }
                         slicedThisFrame = true;
@@ -1590,36 +1604,42 @@ void SlashEntity::Draw(Renderer& /*r*/) {
 }
 
 // ---------------------------------------------------------------------------
-// DrawSlice -- binary @ 0x1e83b0 (v1.6.1)
+// DrawSlice -- v1.6.1 @ 0x1e83b0
 // Called from GameDraw's 16-slot loop, NOT from ActorManager::Draw.
 //
-// m_BladeActive (m_SwipeFuse) latch: tmp = m_SwipeFuse & 1; m_SwipeFuse = tmp*2.
-// On the 1->2 transition (tmp==1, was set) spawn ghost/contact emitter burst.
+// m_BladeActive latch (binary @ 0x1e83b0):
+//   old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) burst; }
+//   s_slashes=0; // unconditional after the latch block
+// OnTouchActive re-arms m_BladeActive |= 1 every active frame.
+// Sequence: held -> old=1, nv=2, no burst; released -> old=2, nv=0, burst fires ONCE.
+// Burst emitter is ModParticlesReleaseHash (g_SecondHash), NOT the contact hash.
 // Draw if m_PointCount > 3: reset+upload modelview, bind blade.tex, DrawTriStrip
 // both buffers with count = m_PointCount + 1 (includes head-cap vertex).
 // ---------------------------------------------------------------------------
 void SlashEntity::DrawSlice() {
-    // m_BladeActive latch (binary @ 0x1e83b0):
-    //   tmp = m_SwipeFuse & 1; m_SwipeFuse = tmp * 2.
-    //   On 1->0 transition (tmp was set): fire ghost/contact burst.
+    // m_BladeActive latch (v1.6.1 DrawSlice @0x1e83b0).
     {
-        int tmp = m_SwipeFuse & 1;
-        m_SwipeFuse = tmp * 2;
-        if (tmp != 0) {
-            // Transition: blade was active last draw, now latching to 2.
-            // Clear slashes counter (binary @ 0x00332b34).
-            // movgt/strgt @ 0x1e8444/0x1e8448: only when > 0.
-            if (s_slashes > 0) {
-                s_slashes = 0;
-            }
-            if (g_ScaleFlag1) CreateGhost();
-            if (g_ContactHash != 0) {
-                PSPParticleEmitter* eBurst =
-                    PSPParticleManager::GetInstance().AddEmitter(
-                        g_ContactHash, nullptr, /*persistent=*/false);
-                if (eBurst) eBurst->m_Pos = pos;
+        unsigned char old = (unsigned char)m_BladeActive;
+        if (old != 0) {
+            int nv = (old << 1) & 2;
+            m_BladeActive = nv;
+            if (nv == 0) {
+                // old==2 -> release edge: fire burst ONCE.
+                if (g_ScaleFlag1) CreateGhost();
+                // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
+                // ASM-spec v1.6.1 DrawSlice @0x1e8400: burst uses ModParticlesReleaseHash.
+                if (g_SecondHash != 0) {
+                    PSPParticleEmitter* eBurst =
+                        PSPParticleManager::GetInstance().AddEmitter(
+                            g_SecondHash, nullptr, /*persistent=*/false);
+                    if (eBurst) eBurst->m_Pos = pos;
+                }
             }
         }
+    }
+    // Unconditional clamp: binary @ 0x1e8444 runs after the latch block every DrawSlice.
+    if (s_slashes > 0) {
+        s_slashes = 0;
     }
 
     // Gate: m_PointCount > 3 (binary @ 0x1e83b0).
@@ -1646,9 +1666,10 @@ void SlashEntity::DrawSlice() {
     mm.UploadModelViewOnly();
 
     // Vertex count = m_PointCount + 1 (includes head-cap vertex at [m_PointCount]).
-    // binary @0x229788: blade tex-env GL_COMBINE RGB=REPLACE<-PRIMARY_COLOR, alpha=MODULATE.
-    // RGB comes entirely from vertex colour (blade tint); alpha = tex.a * vertex.a (fade).
-    TexEnvCombineReplaceRGB();
+    // ASM-verified v1.6.1 Texture2D_Bada::Set @0x229788: blade tex-env RGB=MODULATE (texture.rgb
+    // x vertex.rgb); ALPHA=REPLACE from GL_PRIMARY_COLOR (vertex.alpha). blade.tex alpha is
+    // uniformly opaque so REPLACE-alpha == MODULATE-alpha here; plain TexEnvModulate is equivalent.
+    TexEnvModulate();
     bladeTex->Set();
     Mortar::Mesh::DrawTriStrip(m_pLeftBuffer,  m_PointCount + 1, false, NULL);
     Mortar::Mesh::DrawTriStrip(m_pRightBuffer, m_PointCount + 1, false, NULL);
@@ -1714,7 +1735,7 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_ComboTimerRef() = 0.1f;   // per-swipe accumulator (DAT_0017c764)
     m_ComboCountRef() = 0;
     m_ComboEntityType = 0;
-    m_SwipeEndEdge    = 0;
+    m_BombHitEdge    = 0;
     m_Angle           = 0;
 
     // 8. 11-entry combo-slice array, all -1.
@@ -1727,8 +1748,8 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
 // InitPoints -- v1.6.1 @ 0x1e75d0
 // Allocates m_pLeftBuffer/m_pRightBuffer each as (count+2) QUADCUSTOMVERTEX.
 // Binary: 162 * 36 = 5832 bytes per buffer for count=160.
-// Fills elements with sentinel/white.
-// ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+// Fills elements with zeroed pos/normal.xy, normal.z=1.0, uv=(0,0), white colour.
+// ASM-verified: 2026-05-18 v1.6.1 InitPoints @ 0x1e75d0 (re-analyst)
 // ---------------------------------------------------------------------------
 void SlashEntity::InitPoints(long count) {
     Colour whiteColour(255, 255, 255, 255);
@@ -1751,8 +1772,9 @@ void SlashEntity::InitPoints(long count) {
     m_pRightBuffer = new QUADCUSTOMVERTEX[count + 2];
 
     // Fill m_SplitPoint (=160) records (not count+2) per binary @ 0x1e75d0.
-    // DAT_001e76ec = 0.0f: pos.xyz = 0, normal.xyz = 0, uv.u = 0, uv.v = 0; colour = white.
-    // re-analyst confirmed binary InitPoints @0x1e75d0 writes per-vertex uv=(0,0).
+    // DAT_001e76ec = 0.0f: pos.xyz = 0, normal.xy = 0, normal.z = 1.0, uv = (0,0); colour = white.
+    // Binary InitPoints @0x1e75d0 writes normal.z = 1.0f per binary fill.
+    // (Overwritten later by AddPoint, but binary fill sets 1.0 here.)
     for (int side = 0; side < 2; ++side) {
         QUADCUSTOMVERTEX* buf = (side == 0) ? m_pLeftBuffer : m_pRightBuffer;
         for (int i = 0; i < m_SplitPoint; ++i) {
@@ -1761,7 +1783,7 @@ void SlashEntity::InitPoints(long count) {
             buf[i].z  = 0.0f;
             buf[i].nx = 0.0f;
             buf[i].ny = 0.0f;
-            buf[i].nz = 0.0f;
+            buf[i].nz = 1.0f;
             buf[i].colour = whitePacked;
             buf[i].u  = 0.0f;
             buf[i].v  = 0.0f;
@@ -1885,36 +1907,33 @@ void SlashEntity::ResetModScales() {
     g_ScaleFlag2 = 1;
 }
 
-// ColoursChanged @ 0x0017c41c.
-// DIFFERS: binary @ 0x0017C41C does NOT snap m_HighlightColour here
-// (per asm-inspector 2026-05-10). The binary refreshes m_HighlightColour
-// only via PreUpdate (PER_SLASH) or the m_bDirty UpdateModColour branch
-// (PER_SWIPE/g_ColourType==2); NONE leaves it untouched. Port snaps to
-// g_Palette[0] here because the PER_SLASH/PER_SWIPE refresh paths are not
-// yet ported, so stale bytes would persist through a blade-type swap.
-// TODO: remove this snap once PreUpdate colour refresh (binary @ 0x17C3C4)
-//   and the m_bDirty UpdateModColour branch are ported.
+// ColoursChanged v1.6.1 @ 0x1e76fc.
+// Binary order: (1) ClearEmitter if non-null; (2) if m_BladeActive==0 return;
+// (3) m_PointCount=0; (4) if ColourType==2 UpdateModColour(&m_HighlightColour,1.0f);
+// (5) AddEmitter(g_TrailHash) if g_DirectionalFlag+g_TrailHash.
+// Port uses m_State instead of m_BladeActive -- semantically equivalent.
 void SlashEntity::ColoursChanged() {
-    if (g_ColourCount > 0) {
-        m_HighlightColour = g_Palette[0];
-    } else {
-        m_HighlightColour = Colour(255, 255, 255, 255);
-    }
-    m_BaseColour = m_HighlightColour;
-
     if (m_TrailEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
-    if (m_State != 0) {
-        m_PointCount = 0;
+    if (m_State == 0) {
+        return;
+    }
+    m_PointCount = 0;
 
-        if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
-            m_TrailEmitter = PSPParticleManager::GetInstance()
-                .AddEmitter(g_TrailHash, /*ppRef=*/nullptr, /*persistent=*/true);
-            if (m_TrailEmitter) {
-                m_TrailEmitter->m_bUpdateWhenPaused = true;
-            }
+    if (g_ColourType == 2) {
+        UpdateModColour(&m_HighlightColour, 1.0f);
+    }
+
+    if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
+        // ASM-spec v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8
+        // auto-null contract: ppRef=&m_TrailEmitter so reap/ClearEmitter nulls it
+        // (binary ColoursChanged @~0x1e76fc + SlashEntity::Update :1280 site).
+        m_TrailEmitter = PSPParticleManager::GetInstance()
+            .AddEmitter(g_TrailHash, &m_TrailEmitter, /*persistent=*/true);
+        if (m_TrailEmitter) {
+            m_TrailEmitter->m_bUpdateWhenPaused = true;
         }
     }
 }
@@ -1959,10 +1978,10 @@ void SlashEntity::SetModColours(
 
 // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
 bool SlashEntity::TouchDown(InputEvent* event) {
-    // Binary @ 0x1ea420: gate is (m_BladeActive == 0), i.e. m_SwipeFuse == 0.
-    // DrawSlice drives m_SwipeFuse to 0 within <=2 frames of lift via the
+    // Binary @ 0x1ea420: gate is (m_BladeActive == 0), i.e. m_BladeActive == 0.
+    // DrawSlice drives m_BladeActive to 0 within <=2 frames of lift via the
     // bit0 latch, independently of trail length / m_PointCount.
-    if (m_SwipeEndEdge == 0 && m_SwipeFuse == 0) {
+    if (m_BombHitEdge == 0 && m_BladeActive == 0) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);

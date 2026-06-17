@@ -1,10 +1,9 @@
 //
 // State 2 handlers: GameInit, GameUpdate, GameDraw, GameExit
-// Original: GameInit 0x16c644 (274 lines), GameUpdate 0x16bed0 (359 lines),
-//           GameDraw 0x16b888 (211 lines), GameExit 0x16cf74 (98 lines)
+// Binary: GameInit v1.6.1 @ 0x001ce1c0 (18 steps), GameUpdate @ 0x0016bed0 (359 lines),
+//         GameDraw @ 0x16b888 (211 lines), GameExit @ 0x16cf74 (98 lines)
 //
-// Currently: simplified versions that create HUD + MainScreen.
-// Will grow to match full 274/359/211/98 line originals as port progresses.
+// GameInit rewritten 2026-06-17 to match v1.6.1 binary step order.
 //
 
 #include "GameTaskState.h"
@@ -52,112 +51,194 @@
 #include "debug/Logger.h"
 #include "game/GameWork.h"
 #include "game/PowerUpManager.h"
+#include "game/ItemManager.h"
 
-// Matches GameInit (0x16c644, 274 lines) — per-session setup.
-// Call order matches binary 23-step sequence (see inline step comments).
+// ASM-spec v1.6.1 GameInit @ 0x001ce1c0 — 18-step sequence.
+// Each step annotated with binary behaviour. Order matches binary 1:1.
 void GameInit(unsigned long) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    // Guard matches binary 0x0016c660: g_TaskState->initComplete (+0x112) tested at entry.
-    // Without this, re-entering State 2 (GameTaskUpdate state-change path) re-runs
-    // the entire 274-line setup, leaking heap + duplicating MainScreen/PauseScreen.
     GameTaskState* ts = GetTaskState();
     if (ts->initComplete) return;
-    // step 1: HUD allocation (Game+0x3c)
+
+    // ================================================================
+    // Binary v1.6.1 GameInit @ 0x001ce1c0 — steps match 1:1
+    // ================================================================
+
+    // Step 1: HUD allocation + Release (post-ctor housekeeping)
+    // Binary: if (game_work.mHud == null) { new HUD(); }
     if (!game_work.mHud) {
         game_work.mHud = new HUD();
     }
+    // DIFFERS: binary calls HUD::Release(hud) here. Port's HUD::Release
+    // iterates the control list and deletes entries -- nuking any HUDControl
+    // already added by GameInitialise. Skipped until binary semantics RE'd.
+    // TODO: RE binary v1.6.1 HUD::Release semantics, then re-add.
 
-    // step 2: HUD::Release post-construction housekeeping
-    // Binary calls HUD::Release(hud) immediately after ctor — no-op in port
-    // (HUD ctor already initialises cleanly).
-
-    // step 3: 3x visible MissControl widgets + 12-entry pool.
-    // Source: docs/structs/miss-control-init.md §2. Binary do-loop at 0x0016c694..0x0016c742
-    // reads from GOT+0x30 table at 0x001F3DAC (3 rows x 16 bytes, stride=4 floats).
-    // field_0x2c = m_Timer (rotation), field_0x30 = m_Active, field_0x34 = m_LayerFlags.
-    //
-    // ASM-verified table dump @ 0x001F3DAC (read_memory 2026-05-10):
-    //   row 0: x_tbl= 79.0  y_tbl= 10.0  rot_tbl= -5.0  scale= 0.75
-    //   row 1: x_tbl= 52.0  y_tbl= 13.0  rot_tbl= +5.0  scale= 1.00
-    //   row 2: x_tbl= 20.0  y_tbl= 18.0  rot_tbl=+10.0  scale= 1.20
-    //
-    // Binary code (0x0016c6c2..0x0016c744) NEGATES x, y, and rot before
-    // storing into the MissControl: vnmul.f32 with 1.0 multiplier.
-    // Vec3 ctor receives (-x_tbl, -y_tbl, 50.0); m_Timer receives -rot_tbl.
-    // The negative-stored pos values are offsets from a (480, 320, 0) screen
-    // anchor that MissControl::Draw adds at translate-time -- yielding the
-    // top-right cluster (480-79=401, 320-10=310) in binary FB coords.
+    // Step 2: 3x MissControl widgets + CreatePool(12)
+    // Binary read table @ 0x001F3DAC (3 rows x 4 floats: x, y, rot, scale).
     {
         static const struct { float x_tbl, y_tbl, rot_tbl, scale; } kMC[3] = {
-            {  79.0f,  10.0f,  -5.0f, 0.75f },   // iter 0, m_AnimState=0
-            {  52.0f,  13.0f,  +5.0f, 1.00f },   // iter 1, m_AnimState=1
-            {  20.0f,  18.0f, +10.0f, 1.20f },   // iter 2, m_AnimState=2
+            {  79.0f,  10.0f,  -5.0f, 0.75f },
+            {  52.0f,  13.0f,  +5.0f, 1.00f },
+            {  20.0f,  18.0f, +10.0f, 1.20f },
         };
-        // DIFFERS: binary calls HUD::Release(hud) before this loop. In the
-        // port, HUD::Release iterates the control list and `delete`s every
-        // entry -- nuking any HUDControl already added by GameInitialise
-        // (TutorialControl, etc.) and leaving dangling pointers in Game.
-        // The binary's HUD::Release does something different (likely a
-        // per-control state-reset hook). Skipping the call until the
-        // binary's real semantics are RE'd.
-        // TODO: RE binary HUD::Release real body, then re-add a port-safe
-        // version.
         for (int i = 0; i < 3; ++i) {
             MissControl* mc = new MissControl();
-            mc->m_Active    = 1;                                // field_0x30 = 1
-            // Binary @ 0x0016c6f6 / 0x0016c6d6 / 0x0016c738 negate the table values.
-            mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f); // DAT_0016c9ac = 50.0
-            mc->m_HudScale  = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
-            mc->m_Timer     = -kMC[i].rot_tbl;                  // field_0x2c (rotation, negated)
-            mc->m_AnimState = i;                                // stored before tmp++ in binary
-            mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)
-            // size = (32, 32, 32) * row_scale per binary @ 0x0016c712..0x0016c75e
-            // (asm-inspector 2026-05-10): base Vec3(32, 32, 32) from
-            // DAT_0016c9b4 = 0x42000000 = 32.0f, multiplied by the row's
-            // 4th column scalar, then by 1.0f (no-op). Rendered as
-            // 2*size = 64x64*row_scale quad after the [-1..+1] vertex emit.
+            mc->m_Active    = 1;
+            mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f);
+            mc->m_HudScale  = Vec3(0.5f, 0.5f, 0.0f);
+            mc->m_Timer     = -kMC[i].rot_tbl;
+            mc->m_AnimState = i;
+            mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
             const float sz = 32.0f * kMC[i].scale;
             mc->size = Vec3(sz, sz, sz);
-            // DIFFERS: bind m_Texture eagerly to hud_cross.tex here so
-            // MissControl::Draw doesn't early-return. Binary's exact bind
-            // path (likely inside ctor/Init pulling from a static slot
-            // table) hasn't been pinned down; this matches the visual
-            // outcome.
             mc->m_Texture = MissControl::GetCrossTexture();
             game_work.mHud->AddControl(mc);
         }
     }
-    // step 3b: 12-entry pool (binary: MissControl::CreatePool(0xc, hud)).
-    // ASM-verified: 2026-05-24 binary @ 0x0016c7a0 caller (re-analyst)
     MissControl::CreatePool(12, game_work.mHud);
 
-    // step 4: ScoreControl (size 0x100) + AddControl
-    ScoreControl* sc = new ScoreControl();
-    game_work.mHud->AddControl(sc);
-
-    // step 5: CoinCounter (size 0xD4) + AddControl -> game_work.mCoinCounter (Game+0x178)
-    CoinCounter* cc = new CoinCounter();
-    game_work.mHud->AddControl(cc);
-    game_work.mCoinCounter = cc;
-
-    // step 6: TimeControl (size 0x108) + CountDown(90.9f) + AddControl -> game_work.mCountDown (Game+0x180)
-    // DAT_0016c9cc = 90.9 (Zen mode initial countdown time)
-    TimeControl* tc = new TimeControl();
-    tc->CountDown(90.9f);
-    game_work.mCountDown = tc;
-    game_work.mHud->AddControl(tc);
-
-    // step 7: Background load (gb_game.tex / gb_game_sml.tex IsFastHardware branch)
-    // Binary GameInit @ 0x..: same call shape (ChangeBackground(NULL) -> default "gb_game" + suffix).
-    if (GetCurrentBackground() == nullptr) {
-        ChangeBackground(nullptr);
+    // Step 3: ScoreControl (sizeof 0x108 = 264 bytes)
+    {
+        ScoreControl* sc = new ScoreControl();
+        // Binary loads three textures into specific slots.
+        sc->m_Texture          = Mortar::TextureManager::LoadLocalisedTexture("score_fruit.tex");
+        sc->m_ScoreIconTex     = Mortar::TextureManager::LoadLocalisedTexture("score_icon.tex");
+        sc->m_HighscoreBannerTex = Mortar::TextureManager::LoadLocalisedTexture("high_score_banner.tex");
+        // size = Vec3::One * 64.0
+        sc->size               = Vec3(64.0f, 64.0f, 64.0f);
+        // pos: binary uses GetScreenWidth/GetScreenHeight
+        // Formula: size.x*0.35 + screenW*-7/15, size.y*(-0.35) + screenH*7/15
+        {
+            Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
+            const float screenW = static_cast<float>(dm.GetWindowSize().Width());
+            const float screenH = static_cast<float>(dm.GetWindowSize().Height());
+            sc->pos.x = 64.0f * 0.35f + screenW * (-7.0f / 15.0f);
+            sc->pos.y = 64.0f * (-0.35f) + screenH * (7.0f / 15.0f);
+            sc->pos.z = 0.0f;
+        }
+        game_work.mHud->AddControl(sc, false);
     }
 
-    // step 8: MeshManager loads (0x0016c97c..0x0016c9a8)
-    // Binary: MeshManager::Load x2, results -> g_TaskState +0xbc / +0xc0.
+    // Step 4: CoinCounter (sizeof 0xD4 = 212 bytes)
     {
-        GameTaskState* ts = GetTaskState();
+        CoinCounter* cc = new CoinCounter();
+        game_work.mCoinCounter = cc;
+        cc->Init();           // vtable slot 2 (binary empty no-op)
+        game_work.mHud->AddControl(cc, false);
+    }
+
+    // Step 5: TimeControl (sizeof 0x108 = 264 bytes)
+    {
+        TimeControl* tc = new TimeControl();
+        game_work.mCountDown = tc;
+        tc->Init();           // vtable slot 2 (forwards to Reset)
+        tc->CountDown(90.9f); // DAT_0016c9cc: Zen mode initial countdown
+        game_work.mHud->AddControl(tc, false);
+    }
+
+    // Step 6: Background load + flag init
+    {
+        if (GetCurrentBackground() == nullptr) {
+            game->IsFastHardware();  // call but ignore result (binary side-effect call)
+            // DIFFERS: binary loads "gb_game.tex" into file-static backgroundTexture
+            // directly; port uses ChangeBackground(0) which appends suffix.
+            // Functionally equivalent with the port's always-fast IsFastHardware.
+            ChangeBackground(nullptr);
+        }
+        // Binary also assigns: hud_font = pM_Fonts[1]; unpause_game = 0;
+        // clearInput = 0; game_work.bM_Mode = 0
+        game_work.m_Paused = false;
+        game_work.gameMode = 0;
+    }
+
+    // Step 7: Entity system — HeapCreate + ActorManager 7-type init
+    {
+        ts->initComplete = true;  // one-shot guard (binary: initialised = 1)
+        Mortar::Entity::HeapCreate(0x20000);
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        // Binary uses 7 types (port previously had 5). Matches v1.6.1 @ 0x001ce1c0.
+        am->Initialise(7, 0x2000);
+        am->RegisterFactory(&CreateEntity);
+        // DIFFERS: binary registers HashTypeConvert delegate; port passes
+        // nullptr (hash converter only used by LoadEntity, which is defunct).
+        am->RegisterHashConverter(nullptr);
+    }
+
+    // Step 8: TutorialControl (sizeof 0xA0 = 160 bytes)
+    {
+        TutorialControl* tutCtrl = new TutorialControl();
+        tutCtrl->Init();       // vtable slot 2
+        game_work.m_TutorialControl = tutCtrl;
+    }
+
+    // Step 9: MainScreen (binary sizeof 0x12C = 300 bytes; port 0x114)
+    {
+        MainScreen* mainScreen = new MainScreen(*game);
+        // DIFFERS: binary stores s_mainScreen file-static; port uses
+        // game_work.mMainScreen exclusively.
+        mainScreen->Init();    // vtable slot 2
+        game_work.mMainScreen = mainScreen;
+        mainScreen->m_bNoDestructor = 1;  // HUD::Release skips delete
+    }
+
+    // Step 10: PauseScreen (binary sizeof 0xDC = 220 bytes)
+    {
+        PauseScreen* pauseScreen = new PauseScreen();
+        ts->pPauseScreen = pauseScreen;
+        pauseScreen->Init();   // vtable slot 2 (forwards to Reset)
+        // Binary: game_work.bM_bPaused = 1; game_work.flM_PauseAmount = -1.0;
+        game_work.m_Paused = true;
+        game_work.m_GameDt = -1.0f;
+    }
+
+    // Step 11: AddControls to HUD (order: MainScreen, PauseScreen, TutorialControl)
+    game_work.mHud->AddControl(game_work.mMainScreen, false);
+    game_work.mHud->AddControl(ts->pPauseScreen, false);
+    game_work.mHud->AddControl(game_work.m_TutorialControl, false);
+
+    // Step 12: WaveManager::GetInstance + Init
+    WaveManager::GetInstance()->Init();
+
+    // Step 13: GameTaskInitInput (16 touch regions + input callbacks)
+    GameTaskInitInput();
+
+    // Step 14: Pre-spawn 30x (types 0=Fruit, 1=Bomb, 4=Splat)
+    {
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        for (int i = 0; i < 30; ++i) {
+            if (Mortar::Entity* e0 = am->Add(0, true)) e0->flags |= 0x11;
+            if (Mortar::Entity* e1 = am->Add(1, true)) e1->flags |= 0x11;
+            if (Mortar::Entity* e4 = am->Add(4, true)) e4->flags |= 0x11;
+        }
+    }
+
+    // Step 15: SplatEntity::CreatePool(0x100 = 256)
+    SplatEntity::CreatePool(0x100);
+
+    // Step 16: WaveManager::Resume (restores wave state from save)
+    WaveManager::GetInstance()->Resume();
+
+    // Step 17: BombFlash::CreatePool(0x20 = 32)
+    BombFlash::CreatePool(0x20);
+
+    // Step 18: SoundManager init + volume
+    {
+        Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
+        sm.Initialise("assets/sound");
+        const float sfxVol = game_work.m_bSoundOn ? 0.5f : 0.0f;
+        sm.SetSFXVolume(sfxVol);
+    }
+
+    // ================================================================
+    // Port-specific additions (not present in v1.6.1 binary GameInit
+    // @ 0x001ce1c0, but required by the port's infrastructure until
+    // the relevant init paths are ported from elsewhere in the binary).
+    // ================================================================
+
+    // MeshManager loads (binary: loaded in a different init function)
+    {
         Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
         if (mm) {
             ts->sliceFxMesh     = mm->Load("models/fruit/slice_fx.mmd");
@@ -165,153 +246,23 @@ void GameInit(unsigned long) {
         }
     }
 
-    // step 9: SliceEffect list/pool init (0x0016c9a8..0x0016ca90)
-    // Binary: List<SliceEffect> ctor + MemoryPool::Create(100).
-    // Results -> g_TaskState +0x64 / +0xc8.
+    // SliceEffect list + pool (binary: initialized elsewhere)
     FN::SliceEffect_CreateList(100);
 
-    // step 10: Flag init (0x0016ca8e..0x0016caa8)
-    // Binary stores: g_TaskState+0x114 = g_GameData+0x54 (copy),
-    //   +0x112 = 1 (re-entry guard), +0x111 = 0, +0x0c = 0 (first frame).
-    {
-        GameTaskState* ts = GetTaskState();
-        ts->pAppState_x54 = nullptr;  // g_GameData+0x54 -- TODO: map this field (RE gap, step 10)
-        ts->initComplete  = true;     // +0x112: prevents re-running GameInit
-        ts->field_0x111   = false;    // +0x111: semantics TBD (RE gap, step 10)
-        ts->firstFrame    = false;    // +0x0c: "first frame after init" flag
-    }
-
-    // step 11: MainScreen allocation
-    MainScreen* mainScreen = new MainScreen(*game);
-    game_work.mMainScreen = mainScreen;
-    // step 12: PauseScreen allocation (0x0016cad8..0x0016caf8)
-    // Binary: operator new(0xd8), PauseScreen::PauseScreen, vtable[2] (Init).
-    // Stored at g_TaskState +0x04.
-    {
-        PauseScreen* pauseScreen = new PauseScreen();
-        pauseScreen->Init();
-        GetTaskState()->pPauseScreen = pauseScreen;
-    }
-
-    // step 13: TutorialControl allocation (0x0016caf8..0x0016cb1e)
-    // Binary: operator new(0xa0), TutorialControl::TutorialControl, vtable[2] (Init).
-    // Also sets g_GameData+0x05 = 1 and g_GameData+0x0c = -1.0f.
-    // Binary unconditionally re-allocs g_GameData+0x168, leaking the previous ptr.
-    // Port matches fidelity: delete existing and re-alloc here.
-    // DIFFERS: port deletes the previous ptr; binary leaks it (no free before re-alloc).
-    if (game_work.m_TutorialControl) {
-        delete game_work.m_TutorialControl;
-        game_work.m_TutorialControl = nullptr;
-    }
-    {
-        TutorialControl* tc = new TutorialControl();
-        tc->Init();
-        game_work.m_TutorialControl = tc;
-        game_work.m_LevelTransitionFlag      = 1;      // g_GameData+0x05 = 1
-        game_work.m_GameDt = -1.0f; // g_GameData+0x0c = -1.0f
-    }
-
-    // step 14: AddControl x3 batch (MainScreen + PauseScreen + TutorialControl)
-    // Binary: HUD::AddControl x3 in order: MainScreen, PauseScreen, TutorialControl.
-    game_work.mHud->AddControl(mainScreen);
-    game_work.mHud->AddControl(GetTaskState()->pPauseScreen);
-    game_work.mHud->AddControl(game_work.m_TutorialControl);
-
-    // ASM-spec: binary @ 0x0016b234 (Bomb::HitMenuBomb) is invoked on MainScreen
-    // entry to prime the CreateButtons gate. The port's GameInit omits the splash
-    // menu-bomb sequence, so prime the timer directly here to match the binary's
-    // timing: ~0.55s delay (2.0 - 1.45 = 0.55s @ dt=1/60) before buttons appear.
-    // Matches binary: Bomb::HitMenuBomb sets m_BombHitTimer = 2.0f and
-    // m_bMenuBombFlashFlag = 1. The port sets the timer only; the flash flag is
-    // intentionally left 0 so GameUpdate's cross-1.5 GameOver trigger is armed
-    // (flagging 0 means a bomb-hit on the menu won't suppress game-over, which
-    // is correct since there's no actual gameplay bomb here).
-    game_work.m_BombHitTimer = 2.0f;  // prime: CreateButtons gate (binary @ 0x0016b234)
-
-    // step 15: Mortar::Entity::HeapCreate (0x0016cb48..0x0016cb4e)
-    // Binary: Mortar::Entity::HeapCreate(0x20000) @ 0x000fd500 (PLT thunk).
-    // 0x20000 = 128 KB Mortar::Entity LinkedHeap arena; must run before step 16.
-    // DIFFERS: port stub is a no-op (std new, no fixed arena). See Entity.h.
-    Mortar::Entity::HeapCreate(0x20000);
-
-    // step 16: Mortar::ActorManager full init (0x0016cb50..0x0016cc06)
-    // Binary: 16a Initialise(5, 0x2000), 16b RegisterFactory(delegate),
-    //         16c RegisterHashConverter(delegate).
-    // Factory + hash delegates reference GOT slots [0x0016ccb4..0x0016ccc0] --
-    // RE-gap: addresses not yet resolved. Pass nullptr stubs for now.
-    // NOTE: Mortar::ActorManager::Initialise already called in GameInitialise; binary
-    // calls it again here (per-session reset). Matching binary call order.
-    {
-        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-        // 16a: Mortar::ActorManager::Initialise @ 0x000f7d04 (PLT thunk)
-        am->Initialise(5, 0x2000);
-        // 16b: Mortar::ActorManager::RegisterFactory @ 0x00107c34 (PLT thunk)
-        // CreateEntity @ 0x0017421c — maps entityType int -> new Fruit/Bomb/etc.
-        am->RegisterFactory(&CreateEntity);
-        // 16c: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk)
-        // HashTypeConvert @ 0x0017414c maps "fruit"/"bomb"/etc StringHash -> entityType.
-        // Only consumer is LoadEntity (unported level deserialisation; dead in live port).
-        // Keep nullptr until LoadEntity is ported.
-        am->RegisterHashConverter(nullptr);
-    }
-
-    // step 17: WaveManager::Init()
-    WaveManager::GetInstance()->Init();
-
-    // step 18: GameTaskInitInput() (0x0016cc0a..0x0016cc0e)
-    // Binary: single call to GameTaskInitInput() @ 0x00169670 (357 lines).
-    // Sets up 16 rotated touch regions and global input callbacks.
-    GameTaskInitInput();
-
-    // step 19: 30x prespawn loop (0x0016cc0e..0x0016cc4e)
-    // Binary: do/while x30 — three Mortar::ActorManager::Add calls per iteration
-    //   (entityType 0=Fruit, 1=Bomb, 4=Splat), then flags |= 0x11.
-    // flags |= 0x11 = ENT_INACTIVE(0x01) | ENT_KILLED(0x10) = pre-spawned pool slot.
-    {
-        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-        for (int i = 0; i < 30; ++i) {
-            // Mortar::ActorManager::Add @ 0x00108084 (PLT thunk -> PTR_Add_001f2f7c)
-            if (Mortar::Entity* e0 = am->Add(0, true)) e0->flags |= 0x11;
-            if (Mortar::Entity* e1 = am->Add(1, true)) e1->flags |= 0x11;
-            if (Mortar::Entity* e4 = am->Add(4, true)) e4->flags |= 0x11;
-        }
-    }
-
-    // step 20: SplatEntity::CreatePool(0x80) (0x0016cc52..0x0016cc56)
-    // Binary: SplatEntity::CreatePool(128) @ 0x001042a4 (PLT thunk -> 0x0017ef34).
-    // Allocates 128 SplatEntity slots (0xf drops per splat).
-    SplatEntity::CreatePool(0x80);
-
-    // step 21: WaveManager::Resume() — MUST come AFTER prespawn + SplatEntity pool
-    // Binary: WaveManager::Resume (0x00124b1c) — restores wave state from save.
-    WaveManager::GetInstance()->Resume();
-
-    // step 22: BombFlash::CreatePool(0x20)
-    BombFlash::CreatePool(0x20);
-
-    // step 23: SoundManager::Initialise + SetSFXVolume (0x0016cc64..0x0016cc94)
-    // Binary: SoundManager::Initialise(basePath) then SetSFXVolume based on Game+0x44.
-    //   if (m_bSoundOn == 0) volume = 0.0f  else volume = 0.5f
-    // basePath in binary = "Sound/Win32Project/Win/FruitNinja" (0x001BC978).
-    // DIFFERS: Bada path replaced with port assets path. See SoundManager::Initialise stub.
-    {
-        Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
-        sm.Initialise("assets/sound");  // DIFFERS: original = "Sound/Win32Project/Win/FruitNinja"
-        const float sfxVol = game_work.m_bSoundOn ? 0.5f : 0.0f;
-        sm.SetSFXVolume(sfxVol);
-    }
-    // Per-finger SlashEntity array (binary SlashEntity[16] @ BSS, registered
-    // by GameTaskInitInput @ 0x00169670). Each instance handles one of 16
-    // SDL fingers / Bada touch slots and registers its own per-finger
-    // TouchDown_n / TouchMove_*n / TouchUp_n callbacks on InputManager.
-    // Binary: ActorManager::Add(3, true) — CreateEntity case 3 — for each slot.
+    // Per-finger SlashEntity array (binary: allocated by GameTaskInitInput)
     for (int i = 0; i < 16; ++i) {
         if (!g_pSlashEntities[i]) {
             g_pSlashEntities[i] = static_cast<SlashEntity*>(game->actorManager->Add(3, true));
             g_pSlashEntities[i]->Init(i);
         }
     }
-    g_pSlashEntity = g_pSlashEntities[0];  // backward-compat alias
+    g_pSlashEntity = g_pSlashEntities[0];
+
+    // Re-apply equipped blade now that SlashEntities exist
+    {
+        ItemManager* im = ItemManager::GetInstance();
+        im->SetEquippedItem(0, im->GetEquipped(0));
+    }
 }
 
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
@@ -332,12 +283,16 @@ void GameUpdate(float dt, bool active) {
 
     // === Splash phase (g_TaskState +0x1C, init = 1.5f) ===
     // Binary @ 0x0016BED0: gated on splashFadeTimer > 0.
+    // DIFFERS: binary draws splash exclusively during loading (LoadingJob::CanBoot gate);
+    //   port draws game underneath with splash on top. Binary does NOT freeze dt — game
+    //   logic (camera zoom, etc.) runs behind the splash so the menu is already in place
+    //   when the splash fades out. The port previously set dt=0 here, freezing the camera
+    //   zoom and causing a visible "fade in from white" after the splash ended.
     GameTaskState* splashTs = GetTaskState();
     if (splashTs->splashFadeTimer > 0.0f) {
         if (!game->pSplashTex) {
             game->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
         }
-        game_work.dt = 0.0f;
         splashTs->splashFadeTimer -= dt * 2.0f;
         if (splashTs->splashFadeTimer <= 0.0f) {
             splashTs->splashFadeTimer = 0.0f;
@@ -750,8 +705,16 @@ void GameDraw(float dt, bool active) {
         game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);
 
         // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
-        // bombFlash > 0
-        Bomb::DrawBombHit();
+        // bombFlash > 0. Binary gates on LoadingJob::CanBoot() — when splash
+        // is exclusive (CanBoot false), DrawBombHit is never reached. Port
+        // always draws game content, so suppress bomb flash while the splash
+        // is active.
+        {
+            GameTaskState* splashTs = GetTaskState();
+            if (splashTs->splashFadeTimer <= 0.0f) {
+                Bomb::DrawBombHit();
+            }
+        }
 
         // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
         game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);

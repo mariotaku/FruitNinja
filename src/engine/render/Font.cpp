@@ -730,6 +730,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
     // Bind the atlas GL texture directly (it's not a Mortar::Texture wrapper).
     glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
     glEnable(GL_TEXTURE_2D);
+    TexEnvModulate();  // Set owns tex-env (binary model); raw bind skips Set(), so set it here.
 
     Renderer* renderer = Renderer::GetInstance();
     if (renderer) {
@@ -1147,6 +1148,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             Page* page = GetPage(pg);
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
+            TexEnvModulate();  // Set owns tex-env (binary model); port Set() doesn't set it.
             renderer->DrawTriStrip(
                 &m_PageVerts[pg][0],
                 perPageCount[pg] * 6);

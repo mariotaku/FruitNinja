@@ -34,15 +34,15 @@ DisplayManager::DisplayManager()
     m_ScreenRotationMatrix.Identity();
 }
 
-// Matches DisplayManagerBada::BeginFrame (0x0019dfec) — GL call order
-// is a strict 1:1 port of the binary, including the redundant second
-// glEnable(GL_BLEND) / glDisable(GL_CULL_FACE) and the dual clearColor.
+// v1.6.1 Mortar::DisplayManagerBada::BeginFrame @ 0x00256b64
+// Binary calls glDepthMask(1) + glClear(0x4100). No glClearColor — default
+// clear is transparent black. Port diverged by setting white clear color,
+// causing a white flash during/after the splash phase.
 void DisplayManager::BeginFrame() {
-    glEnable(GL_BLEND);                                   // 0xb57
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);                 // DAT_0019e124 = 0
-    glDisable(GL_CULL_FACE);                              // 0xb44
-    glDisable(GL_DEPTH_TEST);                             // 0xb71
-    glDepthFunc(GL_LESS);                                 // 0x201
+    glEnable(GL_BLEND);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
 
     // Port specific: re-enable depth-buffer write before glClear. The
     // previous frame ends with `dm.SetDepthBufferWrite(false)` for the HUD
@@ -58,7 +58,6 @@ void DisplayManager::BeginFrame() {
     // around the clear either; this is a desktop-GL spec divergence).
     glDepthMask(GL_TRUE);
 
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);                 // DAT_0019e128 = 255 (clamps to 1)
     glClearDepthf(1.0f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    // 0x302, 0x303

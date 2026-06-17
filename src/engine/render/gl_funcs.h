@@ -72,8 +72,11 @@ bool gl_check_runtime();    // MS software-ICD diagnostic — prints to stderr
 // Sets GL_TEXTURE_ENV_MODE = GL_MODULATE on the currently active texture unit.
 // The binary uses glTexEnvf((GLfloat)GL_MODULATE), which is the canonical form
 // on ES1/desktop GL. Emscripten's LEGACY_GL_EMULATION only implements the integer
-// variant glTexEnvi for GL_TEXTURE_ENV_MODE (glTexEnvf with an enum pname spams
-// "WARNING: Unhandled pname" 10,000+ times/frame under WebGL).
+// ASM-verified v1.6.1 Texture2D_Bada::Set @0x229788: blade (and default) tex-env is
+// GL_COMBINE with COMBINE_RGB default = MODULATE (texture.rgb x vertex.rgb) and
+// COMBINE_ALPHA(0x8572)=REPLACE, SRC0_ALPHA(0x8588)=GL_PRIMARY_COLOR (vertex.alpha).
+// blade.tex alpha is uniformly opaque so REPLACE-alpha == MODULATE-alpha for the blade;
+// plain GL_MODULATE is the correct equivalent for all other callers too.
 // DIFFERS: binary uses glTexEnvf((GLfloat)GL_MODULATE); glTexEnvi is used here
 // on Emscripten builds only -- the only variant LEGACY_GL_EMULATION handles for GL_TEXTURE_ENV_MODE.
 inline void TexEnvModulate() {
@@ -81,25 +84,6 @@ inline void TexEnvModulate() {
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 #else
     glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
-#endif
-}
-
-// Sets blade tex-env: RGB = GL_REPLACE from GL_PRIMARY_COLOR (vertex RGB drives
-// the blade colour), alpha channel keeps default MODULATE (tex.a * vertex.a).
-// binary @0x229788: blade tex-env GL_COMBINE RGB=REPLACE<-PRIMARY_COLOR, alpha=MODULATE.
-// Call before blade DrawTriStrip calls; restore with TexEnvModulate() after.
-inline void TexEnvCombineReplaceRGB() {
-#if defined(__EMSCRIPTEN__)
-    // Port specific: WebGL/GLES2 has no fixed-function GL_COMBINE texenv, and
-    // emcc LEGACY_GL_EMULATION only handles GL_MODULATE for GL_TEXTURE_ENV_MODE.
-    // Fall back to MODULATE on web -- the blade renders with texture*vertex RGB
-    // instead of the binary's REPLACE-from-vertex, an acceptable web-only diff
-    // (translucency still comes from the texture alpha * vertex alpha).
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-#else
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
-    glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB,      GL_REPLACE);
-    glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB,         GL_PRIMARY_COLOR);
 #endif
 }
 

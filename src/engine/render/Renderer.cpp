@@ -252,7 +252,10 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    TexEnvModulate();
+    // ASM-spec v1.6.1 Mesh::DrawTris @0x240c30 does not set tex-env; per-texture Set()
+    // at v1.6.1 Texture2D_Bada::Set @0x229788 owns it (REPLACE for blade, MODULATE for normal).
+    // Do NOT call TexEnvModulate() here -- it clobbers caller-set REPLACE for the blade path.
+    // Callers that need MODULATE must set it before reaching DrawTriStrip.
     glDisable(GL_LIGHTING);
     glColor4ub(255, 255, 255, 255);
 
