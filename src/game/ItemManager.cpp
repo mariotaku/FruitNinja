@@ -1,11 +1,12 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemManager — binary-faithful implementation.
-// Binary: ctor 0x001121d0, LoadItemData 0x001131f4, GetInstance 0x00112c34,
-//         IsEquipped 0x0015fa6c, SetEquippedItem 0x0011307c,
-//         BuyItem 0x00112498, GetNumNewItems 0x00112048,
-//         AreNewItems 0x0011200c, SaveItemInfo 0x00112210.
-// See docs/structs/items.md for full pseudocode.
+// v1.6.1: ctor 0x00138568, LoadItemData 0x00139d68, GetInstance 0x00139534,
+//         IsEquipped 0x0015fa6c, SetEquippedItem 0x00139b1c,
+//         BuyItem 0x001389c4, GetNumNewItems 0x00138380,
+//         AreNewItems 0x00138320, SaveItemInfo 0x00138610,
+//         UnLoadItemData 0x00138a64, GetItemSavePath 0x001382e0,
+//         UnlockItem 0x0013842c.
 //
 
 #include "ItemManager.h"
@@ -37,14 +38,11 @@ static FruitSaveData* GetSaveData() {
     return g ? game_work.m_SaveData : nullptr;
 }
 
-// g_SetEquippedItemFuncCalls @ 0x1f3cec — static call-guard for SetEquippedItem.
-static int g_SetEquippedItemFuncCalls = 0;
-
 // ItemManager::EquippedSlashModCount @ .bss 0x0022ece4
 int ItemManager::EquippedSlashModCount = 0;
 
 // -----------------------------------------------------------------------
-// ItemManager ctor @ 0x001121d0
+// ItemManager ctor @ v1.6.1 0x00138568
 // -----------------------------------------------------------------------
 ItemManager::ItemManager() {
     m_DefaultItems[0] = nullptr;
@@ -62,7 +60,7 @@ ItemManager::~ItemManager() {
 }
 
 // -----------------------------------------------------------------------
-// GetInstance @ 0x00112c34 — C++ static-local singleton
+// GetInstance @ v1.6.1 0x00139534 — C++ static-local singleton
 // -----------------------------------------------------------------------
 ItemManager* ItemManager::GetInstance() {
     static ItemManager s_instance;
@@ -70,8 +68,7 @@ ItemManager* ItemManager::GetInstance() {
 }
 
 // -----------------------------------------------------------------------
-// GetItemSavePath @ 0x00111fd8 — binary: returns "ItemSave.xml" (rodata 0x001b9e40)
-// DIFFERS from original: port had "Data/xml/ItemSave.xml" — fixed to match binary.
+// GetItemSavePath @ v1.6.1 0x001382e0 — binary: returns "ItemSave.xml" (rodata 0x001b9e40)
 // -----------------------------------------------------------------------
 const char* ItemManager::GetItemSavePath() const {
     return "ItemSave.xml";
@@ -91,8 +88,10 @@ static std::string BuildItemSaveFullPath() {
 }
 
 // -----------------------------------------------------------------------
-// LoadItemData @ 0x001131f4
+// LoadItemData @ v1.6.1 0x00139d68
 // Parse itemlist.xml, then load ItemSave.xml for persistence.
+// DIFFERS: original = Mortar TiXml (operator new(0x48)) (v1.6.1 LoadItemData @0x00139d68),
+//   using tinyxml2 because the TiXml subsystem is unported -- container/iteration logic matches.
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
     Game* game = Game::GetInstance();
@@ -241,17 +240,18 @@ void ItemManager::LoadItemData() {
     // No error log on missing save — expected on first run.
 
     // Phase 3: Apply equipped items for all 4 types
-    // Binary: field_0x8 = 0 (reset counter); then loop SetEquippedItem for i=0..3
-    // Note: field_0x8 in the binary overlaps m_DefaultItems (see spec note on +0x0c).
-    // The "reset counter" is g_SetEquippedItemFuncCalls, not a struct field.
-    g_SetEquippedItemFuncCalls = 0;
+    // Binary @0x00139d68: zeroes m_DefaultItems[2] (the UPSELL equipped slot, +0x08
+    // relative to m_DefaultItems[0]) right before the SetEquippedItem re-apply loop.
+    // This resets the UPSELL slot so SetEquippedItem(ITEM_TYPE_UPSELL, ...) fires
+    // without short-circuiting via the funcCalls guard.
+    m_DefaultItems[2] = nullptr;
     for (int i = 0; i < 4; i++) {
         SetEquippedItem(i, m_DefaultItems[i]);
     }
 }
 
 // -----------------------------------------------------------------------
-// IsEquipped @ 0x0015fa6c
+// IsEquipped @ 0x0015fa6c (address not re-verified for v1.6.1)
 // -----------------------------------------------------------------------
 int ItemManager::IsEquipped(ItemInfo* item) const {
     if (item == nullptr) return 0;
@@ -259,13 +259,16 @@ int ItemManager::IsEquipped(ItemInfo* item) const {
 }
 
 // -----------------------------------------------------------------------
-// SetEquippedItem @ 0x0011307c
+// SetEquippedItem @ v1.6.1 0x00139b1c
+// Binary: funcCalls is a function-local static inside SetEquippedItem, NOT a
+// struct field or file-scope global. It is never reset by LoadItemData;
+// LoadItemData instead zeroes m_DefaultItems[2] before calling the loop.
 // -----------------------------------------------------------------------
 void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
-    int* funcCalls = &g_SetEquippedItemFuncCalls;
+    static int funcCalls = 0;
 
     if (type == ITEM_TYPE_BACKGROUND) {
-        if (*funcCalls > 0) {
+        if (funcCalls > 0) {
             // Binary: Mortar::SmartPtr<Texture> curBG; GetCurrentBackground(&curBG);
             // equal = SmartPtr::operator_cast_to_bool(&curBG);
             // if equal != 0 goto DONE;
@@ -276,17 +279,18 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
         const char* texName = (item != nullptr) ? item->m_pTextureName : nullptr;  // +0x30
         ChangeBackground(texName);  // defined in MenuBackground.cpp; binary 0x0016ae8c
     } else if (type == ITEM_TYPE_UPSELL) {
-        if (*funcCalls >= 1) {
-            (*funcCalls)--;
+        if (funcCalls >= 1) {
+            funcCalls--;
             return;
         }
     } else if (type == ITEM_TYPE_BLADE) {
-        // Binary: SlashEntity* slash = (*(*this))->GetSlashEntity()
-        // if item == NULL: SlashEntity::InitModColours + SetModScales
-        // else: virtual call item->SetEquipped()
+        // TODO: v1.6.1 0x00139b1c (SetEquippedItem) -- binary uses virtual GetSlashEntity
+        // on the currently-equipped item ((*m_DefaultItems[0])->vtable[+8]() = GetSlashEntity),
+        // then passes the result to SlashEntity::InitModColours(slash). Port uses static call
+        // (g_pSlashEntity directly) pending GetSlashEntity virtual being ported to ItemInfo.
         if (item == nullptr) {
             // Binary: SlashEntity::InitModColours(slash) + SetModScales(defaults)
-            // slash is obtained from (*(*this))->GetSlashEntity() — port uses g_pSlashEntity directly.
+            // slash obtained from (*m_DefaultItems[0])->GetSlashEntity(); port uses global.
             SlashEntity::InitModColours();
             SlashEntity::SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f);
         } else {
@@ -294,13 +298,13 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
         }
     }
     // DONE:
-    if (*funcCalls > 0) (*funcCalls)--;
+    if (funcCalls > 0) funcCalls--;
     m_DefaultItems[type] = item;
     if (item != nullptr) item->m_bSeen = true;  // mark as seen when equipped
 }
 
 // -----------------------------------------------------------------------
-// BuyItem @ 0x00112498
+// BuyItem @ v1.6.1 0x001389c4
 // Returns 1 on success, 0 if not found or insufficient coins.
 // -----------------------------------------------------------------------
 int ItemManager::BuyItem(uint32_t hash) {
@@ -314,7 +318,10 @@ int ItemManager::BuyItem(uint32_t hash) {
 
     // ARM idiom: "if (-1 < cost && cost <= coins)" = if (cost >= 0 && cost <= coins)
     if (cost >= 0 && cost <= coins) {
-        // AddCoins(-cost): deduct from game_work balance (binary @ 0x0010a3bc).
+        // TODO: v1.6.1 0x001389c4 (BuyItem) -- binary calls AddCoins(-cost) @0x0010a3bc.
+        // AddCoins is not yet ported as a separate callable; inline the balance deduction.
+        // For negative delta, AddCoins only adjusts m_CoinsBalance (no m_CoinsTotalEarned
+        // update), so this inline is functionally equivalent.
         game_work.m_CoinsBalance -= cost;
         item->m_Cost = -1;  // mark purchased
         return 1;
@@ -323,7 +330,7 @@ int ItemManager::BuyItem(uint32_t hash) {
 }
 
 // -----------------------------------------------------------------------
-// GetNumNewItems @ 0x00112048
+// GetNumNewItems @ v1.6.1 0x00138380
 // -----------------------------------------------------------------------
 int ItemManager::GetNumNewItems() {
     int count = 0;
@@ -334,7 +341,7 @@ int ItemManager::GetNumNewItems() {
 }
 
 // -----------------------------------------------------------------------
-// AreNewItems @ 0x0011200c
+// AreNewItems @ v1.6.1 0x00138320
 // -----------------------------------------------------------------------
 bool ItemManager::AreNewItems() {
     for (std::vector<ItemInfo*>::const_iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
@@ -344,7 +351,7 @@ bool ItemManager::AreNewItems() {
 }
 
 // -----------------------------------------------------------------------
-// GetItem @ 0x00112084 — lookup by hash in m_ByHash
+// GetItem @ 0x00112084 (address not re-verified for v1.6.1) — lookup by hash in m_ByHash
 // -----------------------------------------------------------------------
 ItemInfo* ItemManager::GetItem(uint32_t hash) {
     std::map<uint32_t, ItemInfo*>::const_iterator it = m_ByHash.find(hash);
@@ -353,7 +360,7 @@ ItemInfo* ItemManager::GetItem(uint32_t hash) {
 }
 
 // -----------------------------------------------------------------------
-// SaveItemInfo @ 0x00112210
+// SaveItemInfo @ v1.6.1 0x00138610
 // -----------------------------------------------------------------------
 void ItemManager::SaveItemInfo() {
     Game* game = Game::GetInstance();
@@ -410,12 +417,10 @@ void ItemManager::SaveItemInfo() {
 }
 
 // -----------------------------------------------------------------------
-// UnLoadItemData @ 0x001124fc — frees ItemInfo objects via virtual deleting dtor.
+// UnLoadItemData @ v1.6.1 0x00138a64 — frees ItemInfo objects via virtual deleting dtor.
 // Maps are NOT cleared; LoadItemData re-clears on next load. Caller:
-// GameDestroy @ 0x0010b7ec, between AchievementManager::UnLoadAchievementInfo
-// and HUD teardown.
+// GameDestroy, between AchievementManager::UnLoadAchievementInfo and HUD teardown.
 // -----------------------------------------------------------------------
-// Binary @ 0x001124fc
 void ItemManager::UnLoadItemData() {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.begin();
     for (; it != m_ByHash.end(); ++it) {
@@ -428,11 +433,9 @@ void ItemManager::UnLoadItemData() {
 }
 
 // -----------------------------------------------------------------------
-// UnlockItem @ 0x001120b4 — achievement-driven unlock for items keyed by hash.
-// Caller: FruitSaveData::Update @ 0x0012b3dc when a non-numeric achievement
-// key fires.
+// UnlockItem @ v1.6.1 0x0013842c — achievement-driven unlock for items keyed by hash.
+// Caller: FruitSaveData::Update when a non-numeric achievement key fires.
 // -----------------------------------------------------------------------
-// Binary @ 0x001120b4
 bool ItemManager::UnlockItem(uint32_t hash) {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
     if (it == m_ByHash.end()) return false;
@@ -476,7 +479,7 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 // ---- Additional ItemManager public API (binary missing-symbol set) ----
 
 // -----------------------------------------------------------------------
-// EquipItem @ 0x00103198 (ELF) / 0x00113198 (Ghidra)
+// EquipItem @ 0x00103198 (address not re-verified for v1.6.1)
 // Equip item by hash. Returns 1 on success, 0 if not found or not purchased.
 // Binary: lookup m_ByHash; gate on m_Cost < 0; UnEquip current slot; SetEquippedItem.
 // ASM-verified: 2026-05-23 binary @ 0x00103198 (re-analyst)
@@ -497,7 +500,7 @@ int ItemManager::EquipItem(unsigned int hash) {
 }
 
 // -----------------------------------------------------------------------
-// UnequipItem @ 0x0010314c (ELF) / 0x0011314c (Ghidra)
+// UnequipItem @ 0x0010314c (address not re-verified for v1.6.1)
 // Unequip item by hash. Returns true if item was found.
 // Binary: lookup m_ByHash; if found, UnEquip() + SetEquippedItem(type, nullptr).
 // ASM-verified: 2026-05-23 binary @ 0x0010314c (re-analyst)
@@ -511,14 +514,14 @@ bool ItemManager::UnequipItem(unsigned int hash) {
     return true;
 }
 
-// PlayAlternateComboSound @ 0x0011303c
+// PlayAlternateComboSound @ v1.6.1 0x00139aac
 bool ItemManager::PlayAlternateComboSound(int comboIdx) {
     SlashModInfo* m = static_cast<SlashModInfo*>(m_DefaultItems[0]);
     if (!m) return false;
     return m->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f);
 }
 // -----------------------------------------------------------------------
-// PlayAlternateImpactSound @ 0x00113054
+// PlayAlternateImpactSound @ v1.6.1 0x00139ac4
 // Binary: *(int*)this == m_DefaultItems[0] (first field = blade slot pointer).
 // Dereferences to SlashModInfo, calls m_ImpactSounds.PlaySound(-1, vol, pitch).
 // ASM-verified: 2026-05-23 binary @ 0x00113054 / 0x00113068 (re-analyst)
@@ -530,7 +533,7 @@ bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
 }
 
 // -----------------------------------------------------------------------
-// PlayAlternateSwipeSound @ 0x00113068
+// PlayAlternateSwipeSound @ v1.6.1 0x00139ad8
 // Binary: *(int*)this == m_DefaultItems[0]; calls m_SwipeSounds.PlaySound(-1, vol, pitch).
 // -----------------------------------------------------------------------
 bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
@@ -539,11 +542,10 @@ bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     return mod->m_SwipeSounds.PlaySound(-1, volume, pitch);
 }
 // -----------------------------------------------------------------------
-// SetSwipeLoodVol @ 0x00111ffc
+// SetSwipeLoodVol @ v1.6.1 0x00138308
 // Binary: field0_0x0 is the equipped blade mod (m_DefaultItems[0], typed
 // SlashModInfo*). If non-null, forward the volume to its looping-swipe sound.
 //   if (m_DefaultItems[0]) m_DefaultItems[0]->m_LoopingSound.SetLoopDesiredVol(vol);
-// Binary @ 0x00111ffc
 // -----------------------------------------------------------------------
 void ItemManager::SetSwipeLoodVol(float vol) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
@@ -553,10 +555,9 @@ void ItemManager::SetSwipeLoodVol(float vol) {
 }
 
 // -----------------------------------------------------------------------
-// Update @ 0x00112fc8 — per-frame update of equipped blade mod sounds.
+// Update @ v1.6.1 0x00139a38 — per-frame update of equipped blade mod sounds.
 // Binary: field0_0x0 is m_DefaultItems[0] (SlashModInfo*); if non-null,
 // SlashModInfo::UpdateSounds(m_DefaultItems[0], dt).
-// Binary @ 0x00112fc8
 // -----------------------------------------------------------------------
 void ItemManager::Update(float dt) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
