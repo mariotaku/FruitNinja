@@ -21,14 +21,16 @@
 #include "game/GameWork.h"
 
 // Pool size: binary CreatePool(0xC, hud) = 12 slots. DIFFERS: was 9.
-// binary @ 0x001512d8
 static constexpr int MISS_POOL_SIZE = 12;
 
-// Round-robin cursor. Binary: leaves cursor at the FOUND slot index.
-static int s_NextSlot = 0;
-
-static MissControl* s_Pool[MISS_POOL_SIZE] = { nullptr };
-static bool s_PoolAllocated = false;
+// Flat contiguous object pool matching the binary's operator new[](count*sizeof+8) block.
+// Layout: [int slotSize][int count] header, then count MissControl objects placement-newed
+// end-to-end. s_pPool points at header+8 (first object). s_pPool[-1 word] = count.
+// Globals mirror binary BSS: pool @0x003164a8, poolCount @0x003164ac, curentFree @0x003164b0.
+// Binary's typo "curent" (single 'r') is preserved in s_CurentFree.
+static MissControl* s_pPool      = 0;  // points to first object (base+8)
+static int          s_PoolCount  = 0;  // mirrors binary poolCount @0x003164ac
+static int          s_CurentFree = 0;  // round-robin cursor; binary's typo "curent"
 
 static Mortar::SmartPtr<Mortar::Texture> s_TexCritical;
 static Mortar::SmartPtr<Mortar::Texture> s_TexRare;
@@ -238,50 +240,39 @@ void MissControl::LoadContent() {
 
 // --- Pool allocation -------------------------------------------------------
 
-// ASM-verified: 2026-05-24 binary @ 0x001512d8 (re-analyst)
-// Tear down existing pool, alloc new array, ctor each slot, register every
-// slot with HUD, then set m_bNoDestructor=1 per slot AFTER AddControl.
-//
-// DIFFERS: binary heap-allocates `count * 0x94 + 8` bytes with an 8-byte
-//   [slotSize][count] header. Port uses fixed-size s_Pool[MISS_POOL_SIZE]
-//   array (trivially-destructible, functionally equivalent). The `count`
-//   arg is checked against MISS_POOL_SIZE; mismatch is a programmer error.
+// v1.6.1 MissControl::CreatePool @0x0019ef44
+// One contiguous operator new[](count*sizeof(MissControl)+8) block:
+//   header[0] = (int)sizeof(MissControl); header[1] = count;
+//   s_pPool = (MissControl*)(block+8);
+// Placement-new each slot, then register with HUD + set m_bNoDestructor.
+// x64 caveat: use sizeof(MissControl) for stride/header, NOT the binary literal 0x94
+// (vtable ptr + SmartPtr widen the struct on x64).
 void MissControl::CreatePool(int count, HUD* hud) {
-    // Step 1: tear down existing pool, if any (binary @ 0x001512ee..0x0015131a)
-    if (s_PoolAllocated) {
-        for (int i = 0; i < MISS_POOL_SIZE; ++i) {
-            delete s_Pool[i];
-            s_Pool[i] = nullptr;
-        }
-        s_PoolAllocated = false;
-    }
+    // Step 1: tear down existing pool (mirrors binary @ 0x0019ef44 CleanPool path)
+    CleanPool();
 
-    // Step 2: alloc + construct each slot.
-    // Port: static array; count must match MISS_POOL_SIZE.
-    if (count != MISS_POOL_SIZE) {
-        LOG_WARN("MissControl", "CreatePool: count=%d != MISS_POOL_SIZE=%d "
-                                "(port uses fixed-size array)",
-                 count, MISS_POOL_SIZE);
-        // Continue anyway, clamped to MISS_POOL_SIZE.
-    }
-    const int n = (count < MISS_POOL_SIZE) ? count : MISS_POOL_SIZE;
+    // Step 2: allocate flat block with 8-byte [slotSize][count] header.
+    char* blk = reinterpret_cast<char*>(::operator new[](
+        static_cast<size_t>(count) * sizeof(MissControl) + 8));
+    reinterpret_cast<int*>(blk)[0] = static_cast<int>(sizeof(MissControl));
+    reinterpret_cast<int*>(blk)[1] = count;
+    s_pPool = reinterpret_cast<MissControl*>(blk + 8);
 
-    for (int i = 0; i < n; ++i) {
-        s_Pool[i] = new MissControl();
+    // Step 3: placement-new each slot end-to-end.
+    for (int i = 0; i < count; ++i) {
+        new (&s_pPool[i]) MissControl();
     }
-    s_NextSlot     = 0;   // round-robin cursor (binary sm_AllocIndex @ BSS 0x00231238)
-    s_PoolAllocated = true;
+    s_PoolCount  = count;
+    s_CurentFree = 0;
 
-    // Step 3: register each slot with HUD, THEN set m_bNoDestructor (binary order).
-    if (hud) {
-        for (int i = 0; i < n; ++i) {
-            hud->AddControl(s_Pool[i], false);  // pushFront = false per binary
-            s_Pool[i]->m_bNoDestructor = 1;     // base+0x32; AFTER AddControl
-        }
+    // Step 4: register each slot with HUD, THEN set m_bNoDestructor (binary order).
+    for (int i = 0; i < count; ++i) {
+        hud->AddControl(&s_pPool[i], false);  // pushFront = false per binary
+        s_pPool[i].m_bNoDestructor = 1;       // base+0x32; AFTER AddControl
     }
 
     LOG_DEBUG("MissControl", "CreatePool: %d slots registered to HUD %p",
-              n, static_cast<void*>(hud));
+              count, static_cast<void*>(hud));
 }
 
 const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
@@ -290,60 +281,52 @@ const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
 
 // --- MakeEmAllDissappear ---------------------------------------------------
 
-// Binary @ 0x0019dd74 -- MissControl::MakeEmAllDissappear.
-// Snap every busy pool slot's fade alpha to the 0.06917 ceiling so all
-// on-screen miss/critical/combo markers immediately finish fading out.
-// DIFFERS: binary walks flat object pool (base+i*0x94, globals sm_pPool/
-//   sm_PoolCount @ 0x3164a8/0x3164ac); port walks s_Pool[] pointer array.
+// v1.6.1 MissControl::MakeEmAllDissappear @0x0019dd74
+// Contiguous walk: for i<s_PoolCount, clamp busy slots' m_FadeAlpha to 0.06917 ceiling.
+// DAT_0019ddd4=0x3d8da741 exact IEEE-754 value.
 void MissControl::MakeEmAllDissappear() {
-    if (!s_PoolAllocated) return;
-    for (int i = 0; i < MISS_POOL_SIZE; ++i) {
-        MissControl* mc = s_Pool[i];
-        if (mc && mc->m_Active != 0) {           // base +0x30
-            if (mc->m_FadeAlpha >= 0.06916667f)   // +0x80; DAT_0019ddd4=0x3d8da741 exact
-                mc->m_FadeAlpha = 0.06916667f;
+    for (int i = 0; i < s_PoolCount; ++i) {
+        if (s_pPool[i].m_Active != 0) {
+            if (s_pPool[i].m_FadeAlpha >= 0.06916667f)
+                s_pPool[i].m_FadeAlpha = 0.06916667f;
         }
     }
 }
 
 // --- CleanPool -------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 binary @ 0x00150e74 (re-analyst)
-// Tear down the pool. Only caller is GameExit @ 0x0016d086.
-//
-// Binary semantics: reads pool[-1] for slot count (heap header), iterates
-// BACKWARD calling vtable[0] (deleting-dtor) per slot, then one
-// operator delete[] on the whole [slotSize][count]-prefixed block. Binary
-// also unconditionally writes sm_PoolCount = 0 even when sm_pPool was null.
-//
-// Port DIFFERS (all cosmetic, already documented in CreatePool):
-//   - fixed-size s_Pool[MISS_POOL_SIZE] with N independent new/delete pairs
-//   - forward iteration (~MissControl is trivial, no inter-slot side-effects)
-//   - no separate sm_PoolCount field
-//
-// Binary does NOT call HUD::RemoveControl per slot — HUD list teardown
-// happens elsewhere in GameExit. Port matches.
+// v1.6.1 MissControl::CleanPool @0x0019de80
+// Iterates BACKWARD (per binary), explicitly dtors each slot, then one
+// operator delete[] on the whole header-prefixed block (base - 8).
+// s_PoolCount reset is UNCONDITIONAL even when s_pPool was null (binary does this).
 void MissControl::CleanPool() {
-    if (!s_PoolAllocated) return;
-    for (int i = 0; i < MISS_POOL_SIZE; i++) {
-        delete s_Pool[i];
-        s_Pool[i] = nullptr;
+    if (s_pPool) {
+        for (int i = s_PoolCount - 1; i >= 0; --i) {
+            s_pPool[i].~MissControl();
+        }
+        ::operator delete[](reinterpret_cast<char*>(s_pPool) - 8);
+        s_pPool = 0;
     }
-    s_PoolAllocated = false;
+    s_PoolCount = 0;  // unconditional per binary
 }
 
 // --- GetFree ---------------------------------------------------------------
 
-// binary @ 0x00150da4: cursor left at FOUND slot index, not idx+1.
+// v1.6.1 MissControl::GetFree @0x0019dcd8
+// Round-robin: cursor left at FOUND slot (not +1). On exhaustion: cursor
+// left at last-tried idx, return that slot anyway (evict).
 MissControl* MissControl::GetFree() {
-    if (!s_PoolAllocated) return nullptr;
-    int idx = s_NextSlot;
-    for (int tries = 0; tries < MISS_POOL_SIZE; ++tries) {
-        if (s_Pool[idx] && s_Pool[idx]->m_Active == 0) break;
-        idx = (idx + 1) % MISS_POOL_SIZE;
+    if (!s_pPool) return 0;
+    int idx = s_CurentFree;
+    for (int tries = 0; tries <= s_PoolCount; ++tries) {
+        if (!s_pPool[idx].m_Active) {
+            s_CurentFree = idx;
+            return &s_pPool[idx];
+        }
+        idx = (idx + 1) % s_PoolCount;
     }
-    s_NextSlot = idx;  // binary leaves cursor at found slot, not +1
-    return s_Pool[idx];
+    s_CurentFree = idx;
+    return &s_pPool[idx];
 }
 
 // --- Make* -----------------------------------------------------------------
@@ -588,9 +571,10 @@ void MissControl::Update(float dt) {
         //   binary's BSS layout, and that ShopScreen field is irrelevant here.
         float accX = s_DtMod;
         float accY = 1.0f;
-        for (int k = 0; k < MISS_POOL_SIZE; ++k) {
-            MissControl* other = s_Pool[k];
-            if (!other || other == this || !other->m_Active) continue;
+        // TODO: v1.6.1 0x0019e1e4 (MissControl::Update) -- binary scales radius by FruitCamera::m_Zoom*70 (distSq < (m_Zoom*70)^2); hardcoded 4900/70 assumes zoom==1. See task #82.
+        for (int k = 0; k < s_PoolCount; ++k) {
+            MissControl* other = &s_pPool[k];
+            if (other == this || !other->m_Active) continue;
             float dx = other->pos.x - pos.x;
             float dy = other->pos.y - pos.y;
             float distSq = dx*dx + dy*dy;
