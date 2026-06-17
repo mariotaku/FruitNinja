@@ -31,59 +31,73 @@ Target program in Ghidra: `FruitNinja_v1_6_1.exe`. Ghidra addresses are VAs = EL
 
 Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save `disassemble_function` output to `tmp/asm-compare/<name>_binary.s`. This is the binary-side ground truth — no separate objdump step needed. (Note: on this fork `decompile_function` now resolves PIC/GOT-indirected named globals — patched 2026-06-16; upstream's bare DecompInterface with "Respect Read-Only Flags" OFF still shows them as opaque `DAT_`, where `run_script_inline` with `opts.grabFromProgram(currentProgram)` is the fallback. Either way, genuinely-unnamed `DAT_` float constants in the literal pool are still decoded via `read_memory` per the steps below.)
 
-### 3. Write a minimal compile unit
-
-In `tmp/asm-compare/<name>_test.cpp`, write the smallest C++ that exercises the same logic. Rules:
-- Use plain `struct Vec3 { float x, y, z; };` (Mortar Vec3 layout per Ghidra). No std headers.
-- Stub external calls as `extern "C" float SinIdx(unsigned short)` etc. so the compiler emits real `blx` instructions.
-- Replicate the logic literally — don't simplify. Mirror sign-flips, casts, branch order from the spec under test.
-- Keep functions small: one branch / formula per function.
-- File header comment cites the binary address range under test.
-
-### 4. Compile with the era-correct toolchain
+### 3. Compile the port source with the era-correct toolchain
 
 The cross toolchain is **Sourcery G++ Lite 2010q1-188 (GCC 4.4.1)** -- the
 upstream of Samsung's `Sourcery G++ 4.4-157` that built the binary (per its
 `.comment` section). It's baked into the `fnverify` Docker image at
-`/opt/sourcery-2010q1/` (= `$FN_TOOLCHAIN_DIR` inside the container).
-If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
+`/opt/sourcery-2010q1/`. If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
 
 **Authoritative flags** (extracted from the binary's ARM build attributes via `readelf -A`):
 - `Tag_CPU_name: CORTEX-A8` -> `-mcpu=cortex-a8`
 - `Tag_CPU_arch: v7 / Application` -> covered by `-mcpu=cortex-a8`
 - `Tag_THUMB_ISA_use: Thumb-2` -> `-mthumb`
 - `Tag_FP_arch: VFPv3` -> `-mfpu=vfpv3`
-- **`Tag_ABI_VFP_args: VFP registers` -> `-mfloat-abi=hard`** (NOT softfp -- floats are passed/returned in `s0`/`s1` etc., not `r0`/`r1`).
+- **`Tag_ABI_VFP_args: VFP registers` -> `-mfloat-abi=hard`**
+- **`-fshort-enums -fshort-wchar`** — ABI parity with binary's `Tag_ABI_enum_size: small` + `Tag_ABI_PCS_wchar_t: 2`
 
-Compile a single TU ad-hoc:
+Compile the port's source file to a `.o`, then objdump the target function:
+
 ```sh
+SRCFILE=src/<path>/<ClassName>.cpp   # the port file containing the function
+FUNC=_ZN...<mangled-name>...          # mangled symbol from nm or Ghidra
+NAME=<short-tag>                      # e.g. "slash_reset"
+
 docker run --rm -v "$(pwd):/work" fnverify bash -c "
-  cp /work/tmp/asm-compare/<name>_test.cpp /tmp/t.cpp
-  arm-none-eabi-g++ -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
-    -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti -S \
-    -o /tmp/t.s /tmp/t.cpp
-  cat /tmp/t.s > /work/tmp/asm-compare/<name>_test.s
+  cp /work/$SRCFILE /tmp/t.cpp
+  arm-none-eabi-g++ -c -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
+    -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti \
+    -fshort-enums -fshort-wchar -D__bada__ \
+    -include /work/tools/asm-verify/cross-headers/fn-cxx11-shims.h \
+    -I/work/src -I/work/src/engine -I/work/src/game \
+    -I/work/src/screens -I/work/src/hud -I/work/src/entities \
+    -I/work/src/platform -I/work/src/debug \
+    -I/work/tools/asm-verify/cross-headers \
+    -I/work/build/_deps/tinyxml2-src \
+    -o /tmp/t.o /tmp/t.cpp 2>&1
+  arm-none-eabi-objdump -d /tmp/t.o \
+    | sed -n '/<$FUNC>:/,/^$/p' \
+    > /work/tmp/asm-compare/${NAME}_port.s
 "
 ```
 
 The `cp` to `/tmp/` is required because the toolchain's i386 cc1plus can't
-stat() the bind-mounted `/work` (drvfs / 9p inode overflow). The bulk
-verifier (`tools/asm-verify/run.sh`) handles staging automatically; for
-ad-hoc one-off TUs you stage manually as above.
+stat() the bind-mounted `/work` (drvfs / 9p inode overflow).
 
-If the asm comes out tiny / wrong, try `-O3` or `-Os` — the binary's exact
-`-O` level isn't recorded in the file (gcc 4.4 didn't embed it), but `-O2`
-is the strongest signal from the compiled code style (no aggressive
-inlining, no `-Os` size pressure).
+If the file compiles cleanly, this produces the port's actual ASM for the
+target function — no manual TU authorship, no risk of drift between a test
+harness and the real code.
 
-### 5. Compare instruction-by-instruction
+If the file **doesn't compile** (C++11 lambdas, range-for, `auto`, `enum class`,
+etc. that GCC 4.4.1 cannot parse), **stop and report to the orchestrator**:
+"`<file>` uses C++11 `<feature>` at line N — needs C++0x rewrite before
+asm-verify can compile it." Do NOT write a fallback TU — the port source IS
+the test; fix the port source.
 
-Binary-side ground truth is the Ghidra disassembly already saved in step 2. Compile the test with `-S` to get `tmp/asm-compare/<name>_test.s` (step 4). Diff the two:
+If the asm comes out tiny / wrong with `-O2`, try `-O3` or `-Os` — the
+binary's exact `-O` level isn't recorded, but `-O2` is the strongest signal
+from the compiled code style (no aggressive inlining, no `-Os` size pressure).
+
+### 4. Diff against the binary
+
+Binary-side ground truth is the Ghidra disassembly saved in step 2
+(`tmp/asm-compare/<name>_binary.s`). Port-side ASM is the objdump output
+from step 3 (`tmp/asm-compare/<name>_port.s`).
 
 ```sh
 diff -y --suppress-common-lines \
   tmp/asm-compare/<name>_binary.s \
-  tmp/asm-compare/<name>_test.s
+  tmp/asm-compare/<name>_port.s
 ```
 
 Look for:
@@ -95,7 +109,7 @@ Look for:
 
 Note any divergence as a numbered finding with: source line, binary line, what differs, what it implies for port behavior.
 
-### 6. Decide and report
+### 5. Decide and report
 
 End with a **verdict** in three categories:
 - **Confirmed binary-faithful**: ASM matches; the claim under test is correct.
