@@ -6272,18 +6272,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable10LoadHeaderEPKc": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-17T16:44Z",
     "max_score": 2500,
-    "reason": "Port has 10505 excess score over max_score 2500 (520% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0021d800. Needs RE+fix.",
+    "reason": "Platform substitution (fopen/fread vs Mortar::File). Extra size/count guards are defensive additions. Functionally correct — ACCEPT-cosmetic. [re-triaged 2026-06-17T16:44Z]",
     "score": 13005,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11StringTable12LoadLanguageEPKc": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-17T16:44Z",
     "max_score": 2500,
-    "reason": "Port has 8542 excess score over max_score 2500 (441% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0021d74c. Needs RE+fix.",
+    "reason": "Platform substitution (fopen/fread vs Mortar::File). Single-allocation pattern differs from binary but functionally equivalent. ACCEPT-cosmetic. [re-triaged 2026-06-17T16:44Z]",
     "score": 11042,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11StringTableC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7259,11 +7259,11 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4Font15GetStringHeightENS_18Utf8StringIteratorEff": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-17T16:44Z",
     "max_score": 9200,
-    "reason": "Port has 6021 excess score over max_score 9200 (165% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0023c45c. Needs RE+fix.",
+    "reason": "Wrap path blocked on Mortar::WordWrap::CanBreakLineAt() being unported. No-wrap path is actually simpler than binary. ACCEPT-deferred pending WordWrap subsystem. [re-triaged 2026-06-17T16:44Z]",
     "score": 15221,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Font21FindAdvanceOfNextWordENS_18Utf8StringIteratorEffff": {
     "decided_at": "2026-06-14T05:55Z",

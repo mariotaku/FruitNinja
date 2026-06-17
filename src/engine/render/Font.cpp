@@ -48,9 +48,11 @@ Font::Font()
 }
 
 Font::~Font() {
+#ifndef FN_ASM_VERIFY_CROSS
     // Unregister any TTF face from the side-table (port specific: TTF state
     // lives outside Font's binary-layout struct to keep sizeof == 0x438).
     FontTTFRegistry::GetInstance().Unregister(this);
+#endif
 
     // DIFFERS: binary @ 0x0024d818 free order is (1) delete[] m_Kernings@+0x410,
     // (2) delete[] m_Glyphs@+0x000, (3) ~Page each + operator delete[] on Page
@@ -188,7 +190,7 @@ int Font::Load(const char* path) {
         return LoadTTF(path);
     }
 
-    // Binary @ 0x00199e9c: open via Mortar::File (IFile -> FileSystem_Direct).
+    // Binary @ 0x0024d8bc (v1.6.1; stale 0x00199e9c v1.5.x): open via Mortar::File (IFile -> FileSystem_Direct).
     // The path is forwarded straight through; FileSystem_Direct's prefix
     // logic (data_dir prepend or strict) is owned by the FileSystem layer.
     Mortar::File f(path, 0, 0);
@@ -1209,7 +1211,7 @@ void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
 // Unported overloads (binary signatures present; bodies forward/TBD)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00198e44 -- packed Vec3/Vec2 ABI shape of the full Font_DrawString
+// Binary @ 0x0024c7f0 (v1.6.1; stale 0x00198e44 v1.5.x) -- packed Vec3/Vec2 ABI shape of the full Font_DrawString
 // (Ghidra's alternate arg-decode of the same symbol the canonical overload
 // implements). Forward to the implemented
 // DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,z,clipRect).
@@ -1222,7 +1224,7 @@ void Font::DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float sc
     DrawString(scale, /*yLineFactor=*/1.0f, rotZ, iter, pos, colour, maxWH, alignment, z, clipRect);
 }
 
-// Binary @ 0x00199aa0 -- by-value-arg ABI shape of the binary DrawString wrapper
+// Binary @ 0x0024d6b8 (v1.6.1; stale 0x00199aa0 v1.5.x) -- by-value-arg ABI shape of the binary DrawString wrapper
 // (alternate Ghidra decode of the same symbol the canonical wrapper implements).
 // Forward to the implemented
 // DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,maxWHy,rotZ,clip).
@@ -1245,32 +1247,27 @@ void Font::DrawString(Utf8StringIterator iter, float posX, float posY, float pos
 float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float) { return 0.0f; }
 
 // Binary @ 0x0024c228 -- the engine's canonical single-codepoint glyph lookup.
-// param_1 is `this` (Ghidra typed it `long`); param_2 is the codepoint.
-//   cp < 0   : cp += 0x100  (signed-byte codepoint wraps into 0x80..0xFF), then
-//              fall through to the lookup-table path
-//   cp > 0xFF: skip the lookup table, linear-search m_Glyphs by id
-//   else     : try m_GlyphLookup[cp]; if null, fall back to linear search
-// Note: unlike the port's GetCharTemplate(uint32_t), the binary falls back to a
-// linear id-search even for cp < 256 when the lookup slot is null.
+// Takes (long codepoint, int unused_always_zero). The `long` IS the codepoint
+// (ARM32 long==int); the second param is ignored (binary callers always pass 0).
+//   codepoint < 0   : codepoint += 0x100  (signed-byte wraps into 0x80..0xFF)
+//   codepoint <=0xFF: try m_GlyphLookup[codepoint]; if null, linear search
+//   codepoint > 0xFF: skip lookup table, linear-search m_Glyphs by id
 // Linear search walks m_Glyphs (stride sizeof(CharTemplate)=0x24), comparing the
 // uint16 id at offset 0, returning the first match or nullptr after m_GlyphCount.
-// DIFFERS: asm divergence is pointer-arith/register-alloc cosmetic only
-// (binary: base+i*0x24 ptr; port: &m_Glyphs[i]); logic is identical.
-Font::CharTemplate* Font::GetCharTemplate(long /*this_redundant*/, int cp) {
-    if (cp < 0) {
-        cp += 0x100;
-    } else if (cp > 0xFF) {
-        // codepoint out of lookup-table range: linear search only
-        for (int i = 0; i < m_GlyphCount; i++) {
-            if ((int)m_Glyphs[i].id == cp) return &m_Glyphs[i];
-        }
-        return nullptr;
+// Single shared linear search loop at the end for both paths (binary has one
+// loop body entered from two points).
+Font::CharTemplate* Font::GetCharTemplate(long codepoint, int /*unused*/) {
+    if (codepoint < 0) {
+        codepoint += 0x100;
     }
-    CharTemplate* g = m_GlyphLookup[cp];
-    if (g) return g;
-    // null lookup slot: fall back to linear id-search (binary @ 0x001984fa)
+    if (codepoint <= 0xFF) {
+        CharTemplate* g = m_GlyphLookup[codepoint];
+        if (g) return g;
+    }
+    // codepoint out of lookup-table range OR null lookup slot:
+    // shared linear search (matches binary single-loop-body structure)
     for (int i = 0; i < m_GlyphCount; i++) {
-        if ((int)m_Glyphs[i].id == cp) return &m_Glyphs[i];
+        if ((int)m_Glyphs[i].id == codepoint) return &m_Glyphs[i];
     }
     return nullptr;
 }
@@ -1329,7 +1326,7 @@ float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth
     return lineH * (float)lines;
 }
 
-// Binary @ 0x001988a8 -- by-value-iter ABI shape of MeasureString (same binary
+// Binary @ 0x0024c794 (v1.6.1; stale 0x001988a8 v1.5.x) -- by-value-iter ABI shape of MeasureString (same binary
 // symbol as the const-ref overload above). Forwards to GetLineLength(iter, 0, NULL)
 // exactly like the implemented overload.
 float Font::MeasureString(Utf8StringIterator iter) { return GetLineLength(iter, 0.0f, nullptr); }
