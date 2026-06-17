@@ -181,7 +181,7 @@ public:
     float MeasureWidth(float scale, const char* text) const;
     float MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const;
 
-    // Binary @ 0x001988a8. Single-line measure: stops at newline or end.
+    // Binary @ 0x0024c794 (v1.6.1; stale 0x001988a8 v1.5.x). Single-line measure: stops at newline or end.
     // Returns total xadvance in lineHeight-normalized units.
     float MeasureString(const Mortar::Utf8StringIterator& iterIn) const;
     float MeasureString(const char* str) const;
@@ -211,12 +211,12 @@ private:
 
 public:
     // ---- Binary-shape ABI overloads (forward to the canonical overloads) ----
-    // Binary @ 0x00198e44 -- packed Vec3/Vec2 ABI shape of the full Font_DrawString;
+    // Binary @ 0x0024c7f0 (v1.6.1; stale 0x00198e44 v1.5.x) -- packed Vec3/Vec2 ABI shape of the full Font_DrawString;
     // forwards to DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,
     // z,clipRect) with yLineFactor pinned to 1.0 (binary @ 0x00199b1c).
     void DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
                     Vec2 maxWH, int alignment, float rotZ, MortarRectangleDec* clipRect, float z);
-    // Binary @ 0x00199aa0 -- by-value-arg ABI shape of the binary DrawString wrapper;
+    // Binary @ 0x0024d6b8 (v1.6.1; stale 0x00199aa0 v1.5.x) -- by-value-arg ABI shape of the binary DrawString wrapper;
     // forwards to DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,
     // maxWHy,rotZ,clip).
     void DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
@@ -242,7 +242,7 @@ public:
     // `lineH + n*lineH`. When `maxWidth > 0`: word-wrap path using
     // FindAdvanceOfNextWord (DIFFERS: space-heuristic until WordWrap lands).
     float GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth);
-    // Binary @ 0x001988a8 -- by-value-iter ABI shape of MeasureString (same binary
+    // Binary @ 0x0024c794 (v1.6.1; stale 0x001988a8 v1.5.x) -- by-value-iter ABI shape of MeasureString (same binary
     // symbol as the const-ref overload above); forwards to GetLineLength(iter,0,NULL).
     float MeasureString(Utf8StringIterator);
     // ---- end unported overloads ----

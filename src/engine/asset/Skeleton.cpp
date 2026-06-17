@@ -5,6 +5,63 @@
 
 // Analysed: 2026-04-11T18:30
 
+namespace {
+
+// Build quaternion rotation matrix directly, no Identity() pre-fill.
+inline void quatMatrix44(float* m, float qx, float qy, float qz, float qw) {
+    m[0]  = 1.0f - 2.0f*(qy*qy + qz*qz);
+    m[1]  = 2.0f*(qx*qy + qw*qz);
+    m[2]  = 2.0f*(qx*qz - qw*qy);
+    m[3]  = 0.0f;
+    m[4]  = 2.0f*(qx*qy - qw*qz);
+    m[5]  = 1.0f - 2.0f*(qx*qx + qz*qz);
+    m[6]  = 2.0f*(qy*qz + qw*qx);
+    m[7]  = 0.0f;
+    m[8]  = 2.0f*(qx*qz + qw*qy);
+    m[9]  = 2.0f*(qy*qz - qw*qx);
+    m[10] = 1.0f - 2.0f*(qx*qx + qy*qy);
+    m[11] = 0.0f;
+    m[12] = 0.0f; m[13] = 0.0f; m[14] = 0.0f; m[15] = 1.0f;
+}
+
+// Transpose 4x4 matrix via field copy, no Identity() pre-fill.
+inline void transpose44(const float* src, float* dst) {
+    for (int c = 0; c < 4; c++)
+        for (int r = 0; r < 4; r++)
+            dst[c*4+r] = src[r*4+c];
+}
+
+// Build translation matrix: identity diag + translation, no Identity() full write.
+inline void translateMatrix44(float* m, float tx, float ty, float tz) {
+    m[0] = 1.0f; m[1] = 0.0f; m[2] = 0.0f; m[3] = 0.0f;
+    m[4] = 0.0f; m[5] = 1.0f; m[6] = 0.0f; m[7] = 0.0f;
+    m[8] = 0.0f; m[9] = 0.0f; m[10]= 1.0f; m[11]= 0.0f;
+    m[12]= tx;   m[13]= ty;   m[14]= tz;   m[15]= 1.0f;
+}
+
+// Build scale matrix from column-major 3x3, no Identity() pre-fill.
+inline void scaleMat3To44(float* m, const float* s) {
+    m[0] = s[0]; m[1] = s[1]; m[2] = s[2]; m[3] = 0.0f;
+    m[4] = s[3]; m[5] = s[4]; m[6] = s[5]; m[7] = 0.0f;
+    m[8] = s[6]; m[9] = s[7]; m[10]= s[8]; m[11]= 0.0f;
+    m[12]= 0.0f; m[13]= 0.0f; m[14]= 0.0f; m[15]= 1.0f;
+}
+
+// Column-major 4x4 multiply: out = a * b. No temporaries, no Identity().
+inline void Mul44(const float* a, const float* b, float* out) {
+    for (int c = 0; c < 4; c++) {
+        for (int row = 0; row < 4; row++) {
+            out[c * 4 + row] =
+                a[0 * 4 + row] * b[c * 4 + 0] +
+                a[1 * 4 + row] * b[c * 4 + 1] +
+                a[2 * 4 + row] * b[c * 4 + 2] +
+                a[3 * 4 + row] * b[c * 4 + 3];
+        }
+    }
+}
+
+} // anonymous namespace
+
 namespace Mortar {
 
 // Binary @ 0x0019323c — _ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE
@@ -23,89 +80,74 @@ uint32_t Skeleton::FindIndex(const char* name) const {
     return FindIndex(Mortar::AsciiString(name));
 }
 
-// Matches Skeleton::BuildArrays (0x001aa700)
+// ASM-verified: 2026-06-18 v1.6.1 Skeleton::BuildArrays @ 0x0023b6f0 (asm-inspector)
+// Binary allocates ONE block new Matrix44[count*3], partitions into 3 pointers.
+// No per-element Identity() — memory left uninitialized.
+// Port uses resize (still calls Matrix44 ctor per element; port limitation).
 void Skeleton::BuildArrays(int count) {
-    m_LocalMatrices.assign(count, Matrix44());
-    m_WorldMatrices.assign(count, Matrix44());
-    m_VertMatrices.assign(count,  Matrix44());
+    if (count == (int)m_LocalMatrices.size() && !m_LocalMatrices.empty()) return;
+    if (count == 0) {
+        m_LocalMatrices.clear();
+        m_WorldMatrices.clear();
+        m_VertMatrices.clear();
+        return;
+    }
+    m_LocalMatrices.resize(count);
+    m_WorldMatrices.resize(count);
+    m_VertMatrices.resize(count);
 }
 
-// Matches Skeleton::BuildLocalMatrices (0x002372fc)
-// Sequence (from disassembly at 0x002372fc):
-//   1. _Quaternion::Matrix44(bone+0x78) → rotation mat R  (binary quat ctor @0x001e5c18)
-//   2. Transpose44(R) → Rt  (binary quaternion mat == port's Rt)
-//   3. _Matrix44::Translate44(bone+0x6c) → T
-//   4. _Matrix33::cast_to_Matrix44(bone+0x88) → S
-//   5. tmp = R*S    (binary Mul44(S,R,tmp) @0x0016f5a0 => port-convention tmp = R*S)
-//   6. local = T*tmp  (binary Mul44(tmp,T,local) => port-convention local = T*tmp)
+// ASM-verified: 2026-06-18 v1.6.1 Skeleton::BuildLocalMatrices @ 0x002372fc (asm-inspector)
+// Sequence from binary:
+//   1. Quat → rotation matrix R   (no Identity)
+//   2. Transpose R → Rt           (no Identity)
+//   3. Translation matrix T       (diag + translate only, no Identity)
+//   4. Scale mat3 → mat44 S       (9 scale + m[15]=1, no Identity)
+//   5. Mul44(S, Rt, tmp)          (tmp = S * Rt)
+//   6. Mul44(tmp, T, local)       (local = tmp * T = S * Rt * T)
 void Skeleton::BuildLocalMatrices() {
     int n = (int)m_Bones.size();
     for (int i = 0; i < n; i++) {
         const Bone& bone = m_Bones[i];
         Matrix44& local = m_LocalMatrices[i];
 
-        // Step 1: quaternion (x,y,z,w) → column-major rotation matrix
+        // Step 1: quaternion (x,y,z,w) -> column-major rotation matrix
         float qx = bone.m_LocalRotation[0];
         float qy = bone.m_LocalRotation[1];
         float qz = bone.m_LocalRotation[2];
         float qw = bone.m_LocalRotation[3];
 
-        Matrix44 R;
-        R.m[0]  = 1.0f - 2.0f*(qy*qy + qz*qz);
-        R.m[1]  = 2.0f*(qx*qy + qw*qz);
-        R.m[2]  = 2.0f*(qx*qz - qw*qy);
-        R.m[3]  = 0.0f;
+        float R[16];
+        quatMatrix44(R, qx, qy, qz, qw);
 
-        R.m[4]  = 2.0f*(qx*qy - qw*qz);
-        R.m[5]  = 1.0f - 2.0f*(qx*qx + qz*qz);
-        R.m[6]  = 2.0f*(qy*qz + qw*qx);
-        R.m[7]  = 0.0f;
+        // Step 2: transpose R -> Rt
+        float Rt[16];
+        transpose44(R, Rt);
 
-        R.m[8]  = 2.0f*(qx*qz + qw*qy);
-        R.m[9]  = 2.0f*(qy*qz - qw*qx);
-        R.m[10] = 1.0f - 2.0f*(qx*qx + qy*qy);
-        R.m[11] = 0.0f;
+        // Step 3: translation matrix T (diag + translate only)
+        float T[16];
+        translateMatrix44(T, bone.m_LocalTranslation[0],
+                          bone.m_LocalTranslation[1],
+                          bone.m_LocalTranslation[2]);
 
-        R.m[12] = 0.0f; R.m[13] = 0.0f; R.m[14] = 0.0f; R.m[15] = 1.0f;
+        // Step 4: column-major mat3 -> mat44 S
+        float S[16];
+        scaleMat3To44(S, bone.m_LocalScale);
 
-        // Step 2: transpose R → Rt (matches Transpose44 call in disasm)
-        Matrix44 Rt;
-        for (int c = 0; c < 4; c++)
-            for (int r = 0; r < 4; r++)
-                Rt.m[c*4+r] = R.m[r*4+c];
-
-        // Step 3: translation matrix T from bone+0x6c
-        Matrix44 T;
-        T.m[12] = bone.m_LocalTranslation[0];
-        T.m[13] = bone.m_LocalTranslation[1];
-        T.m[14] = bone.m_LocalTranslation[2];
-
-        // Step 4: mat3 (column-major float[9]) → mat44 S
-        // matches _Matrix33::cast_to_Matrix44(bone+0x88)
-        Matrix44 S;
-        const float* s = bone.m_LocalScale;
-        // Column-major mat3: s[0..2]=col0, s[3..5]=col1, s[6..8]=col2
-        S.m[0] = s[0]; S.m[1] = s[1]; S.m[2] = s[2]; S.m[3] = 0.0f;
-        S.m[4] = s[3]; S.m[5] = s[4]; S.m[6] = s[5]; S.m[7] = 0.0f;
-        S.m[8] = s[6]; S.m[9] = s[7]; S.m[10]= s[8]; S.m[11]= 0.0f;
-        S.m[12]= 0.0f; S.m[13]= 0.0f; S.m[14]= 0.0f; S.m[15]= 1.0f;
-
-        // Steps 5+6: local = T * Rt * S  (binary Mul44(S,R)=>R*S then Mul44(tmp,T)=>T*(R*S);
-        //   binary R == port Rt, so port: T * Rt * S)
-        local = T * Rt * S;
+        // Steps 5+6: local = S * Rt * T (binary Mul44 order)
+        float tmp[16];
+        Mul44(S, Rt, tmp);
+        Mul44(tmp, T, local.m);
     }
 }
 
-// Matches Skeleton::BuildFinalMatrices (0x00236f68)
+// ASM-verified: 2026-06-18 v1.6.1 Skeleton::BuildFinalMatrices @ 0x00236f68 (asm-inspector)
 // For each bone i:
 //   accumulated = localMatrices[i]
 //   walk parent chain (bones[j].parentIndex) multiplying localMatrices[j] on left
 //   worldMatrices[i] = accumulated
-//   vertMatrices[i]  = accumulated x bones[i].bindPoseMat
-// DIFFERS: binary uses a raw new[] block for m_LocalMatrices accessed via raw pointer;
-//   port uses std::vector. Semantics identical (Mul44 operand-reversal proven);
-//   remaining asm divergence is std::vector base-pointer access + PIC/GOT +
-//   register allocation only -- no logic change needed.
+//   vertMatrices[i]  = accumulated x bones[i].bindPoseMat (no copy)
+// DIFFERS: binary uses a single new[] block; port uses std::vector.
 void Skeleton::BuildFinalMatrices() {
     int n = (int)m_Bones.size();
     for (int i = 0; i < n; i++) {
@@ -114,19 +156,20 @@ void Skeleton::BuildFinalMatrices() {
         while (true) {
             j = m_Bones[j].m_ParentIndex;
             if (j < 0) break;
-            accumulated = m_LocalMatrices[j] * accumulated;
+            // Mul44 replaces accumulated = m_LocalMatrices[j] * accumulated;
+            float tmp[16];
+            Mul44(m_LocalMatrices[j].m, accumulated.m, tmp);
+            memcpy(accumulated.m, tmp, sizeof(float) * 16);
         }
         m_WorldMatrices[i] = accumulated;
 
-        // vertMat = world * bindPoseMat
-        Matrix44 bindPose;
-        memcpy(bindPose.m, m_Bones[i].m_BindPoseMat, sizeof(float) * 16);
-        m_VertMatrices[i] = accumulated * bindPose;
+        // vert = world * bindPose (direct read, no copy)
+        Mul44(accumulated.m, m_Bones[i].m_BindPoseMat, m_VertMatrices[i].m);
     }
 }
 
 // Matches Skeleton::Swap (0x001aadf4)
-// BuildArrays → vector::swap → BuildAllMatrices (= BuildLocal + BuildFinal)
+// BuildArrays -> vector::swap -> BuildAllMatrices (= BuildLocal + BuildFinal)
 void Skeleton::Swap(std::vector<Bone>& bones) {
     int count = (int)bones.size();
     BuildArrays(count);
