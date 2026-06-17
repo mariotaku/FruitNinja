@@ -33,7 +33,7 @@ MortarCamera::MortarCamera()
     m_viewportRect.bottom = 0;
 }
 
-// Vtable slot 2 (0x0019e9f0)
+// Vtable slot 2 (0x00257720)
 void MortarCamera::Init(float fovOrNear, float farPlane, float fovX, float fovY) {
     m_fovOrNear = fovOrNear;
     m_farPlane = farPlane;
@@ -95,10 +95,10 @@ void MortarCamera::SetupOrtho() {
         // Cache projection
         m_projOrtho = mm.GetProjectionStack().m_Current;
 
-        // Binary NEVER writes m_bInitialized here; ctor/Init set it=1 once.
-        // Cache path fires on every subsequent call (m_bInitialized stays 0
-        // after the first recompute sets the cache).  Removed spurious
-        // 'm_bInitialized=false' that the old port had here.
+        // NOTE: Binary NEVER clears m_bInitialized after ctor/Init, so the
+        // ortho cache guard (!m_bInitialized) always fails -- cache path is dead
+        // code in both binary and port.  The cached matrices m_orthoView/m_orthoProj
+        // are written each frame but never read.
     }
 
     // Always write cache and reset world stack

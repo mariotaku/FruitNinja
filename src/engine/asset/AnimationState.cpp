@@ -82,7 +82,7 @@ void UpdateBinding<5>(float time, AnimBindings::Vector const& v) {
 // AnimationState methods
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x001ad150
+// Binary @ 0x0026f0b4 ctor
 AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
     if (list.IsValid()) {
         m_AnimList = list;
@@ -90,10 +90,8 @@ AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
         m_AnimList = GetDummyAnimList();
     }
     m_CurrentIter = m_AnimList->m_Anims.end();
-    m_Pad_0x30 = 0;
     m_Time  = 0.0f;
     m_Speed = 1.0f;
-    m_Loop  = false;
 }
 
 // Binary D1/D2 @ 0x0026f010, D0 @ 0x0026f098
@@ -112,21 +110,21 @@ AnimationState::AnimConstIter AnimationState::GetAnimIter(const AsciiString& nam
     return m_AnimList->m_Anims.find(name);
 }
 
-// Binary @ 0x001ace2c -- iterate map.begin() forward idx times, bounds-checked
+// Binary @ 0x0026eb80 -- upfront size check, then iterate
 AnimationState::AnimIter AnimationState::GetAnimIter(unsigned long idx) {
-    AnimIter it  = m_AnimList->m_Anims.begin();
-    AnimIter end = m_AnimList->m_Anims.end();
-    for (unsigned long i = 0; i < idx && it != end; ++i) {
+    if (idx >= m_AnimList->m_Anims.size()) return m_AnimList->m_Anims.end();
+    AnimIter it = m_AnimList->m_Anims.begin();
+    for (unsigned long i = 0; i < idx; ++i) {
         ++it;
     }
     return it;
 }
 
-// Binary @ 0x001acd8c -- const overload
+// Binary @ 0x0026ec3c -- const overload
 AnimationState::AnimConstIter AnimationState::GetAnimIter(unsigned long idx) const {
-    AnimConstIter it  = m_AnimList->m_Anims.begin();
-    AnimConstIter end = m_AnimList->m_Anims.end();
-    for (unsigned long i = 0; i < idx && it != end; ++i) {
+    if (idx >= m_AnimList->m_Anims.size()) return m_AnimList->m_Anims.end();
+    AnimConstIter it = m_AnimList->m_Anims.begin();
+    for (unsigned long i = 0; i < idx; ++i) {
         ++it;
     }
     return it;
