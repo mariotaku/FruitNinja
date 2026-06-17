@@ -96,18 +96,45 @@ MNEM_REWRITES = [
     (re.compile(r"\bb\.[wn]\b"), "b"),
 ]
 
-# Collapse pop register list -- {r3, lr} vs {r4, lr} is register-alloc noise.
+# --- Pre-normalization: canonicalise representations that differ between
+# --- Ghidra disassembly (binary) and objdump -d (port .o).
+
+# Ghidra prints 'cpy r4, r0' for mov-register; objdump prints 'mov r4, r0'.
+CPY_RE = re.compile(r"\bcpy\b")
+
+# Ghidra's ARM v7 disasm prints VFP size suffixes (.32/.64); objdump omits them.
+VFP_SZ_RE = re.compile(r"\b(vldr|vstr|vldm|vstm)\.(32|64)\b")
+
+# Objdump appends .w to wide Thumb-2 encodings; Ghidra sometimes omits it.
+W_SUFFIX_RE = re.compile(r"\.w\b")
+
+# Annotated disassembly: Ghidra can append "; -> FuncName" to bl/b targets.
+# Resolve the name so binary "bl 0xADDR ; -> Name" matches port "bl <Name>".
+ANNOTATED_TARGET_RE = re.compile(
+    r"\b(blx?|b\w*)\s+0x[0-9a-f]+\s*;\s*->\s*(\S+)")
+
+# Ghidra prints stmdb/ldmia for stack ops; objdump prints push/pop.
+STACK_STM_RE = re.compile(r"\bstmdb\s+sp!,\s*(\{[^}]*\})")
+STACK_LDM_RE = re.compile(r"\bldmia(?:\.w)?\s+sp!,\s*(\{[^}]*\})")
+
+# Multi-register ldm/stm: collapse register lists like we do for push/pop.
+LDM_RE = re.compile(r"\bldm(?:ia|db|\.w)?\s+r\d+,\s*\{[^}]*\}")
+STM_RE = re.compile(r"\bstm(?:ia|db|\.w)?\s+r\d+,\s*\{[^}]*\}")
+
+# Collapse pop/push register lists.
 POP_RE   = re.compile(r"\bpop\b\s*\{[^}]*\}")
 PUSH_RE  = re.compile(r"\bpush\b\s*\{[^}]*\}")
+
+# Collapse single mov rN, rN for register-allocation noise.
 MOVR_RE  = re.compile(r"\bmov\s+r\d+,\s*r\d+")
 
-# Within a remaining line, masking patterns:
-#   - leading hex address ("  111f74:") -> "ADDR:"
+# --- After pre-normalization, mask remaining literals / addresses ---
+#   - leading hex address ("  111f74:") -> ""
 #   - branch target labels (".L\d+", "<sym+0xNN>") -> "LBL"
 #   - literal-pool offsets (e.g. "[pc, #0x28]") -> "[pc, #IMM]"
 #   - bl/blx target addresses ("blx 0x123") -> "blx LBL"
 LINE_PATTERNS = [
-    (re.compile(r"^\s*[0-9a-f]+:\s*"), ""),                              # objdump addr prefix
+    (re.compile(r"^\s*[0-9a-f]+:\s*"), ""),
     (re.compile(r"<\S+\+0x[0-9a-f]+>"), "<+OFF>"),
     (re.compile(r"<\S+>"), "<SYM>"),
     (re.compile(r"\.L\d+"), ".LX"),
@@ -131,10 +158,22 @@ def normalize(text: str) -> list[str]:
         if DROP_RE.match(raw) or PREAMBLE_RE.match(raw):
             continue
         line = raw
+        # -- pre-normalization: canonicalise Ghidra vs objdump surface forms --
+        line = ANNOTATED_TARGET_RE.sub(r'\1 <\2>', line)   # bl 0xADDR ; -> Name → bl <Name>
+        line = CPY_RE.sub('mov', line)                      # cpy → mov
+        line = VFP_SZ_RE.sub(r'\1', line)                   # vldr.32 → vldr
+        line = W_SUFFIX_RE.sub('', line)                    # strb.w → strb
+        line = STACK_STM_RE.sub(r'push \1', line)           # stmdb sp!, {regs} → push {regs}
+        line = STACK_LDM_RE.sub(r'pop \1', line)            # ldmia sp!, {regs} → pop {regs}
+        # -- address/immediate masking --
         for pat, repl in LINE_PATTERNS:
             line = pat.sub(repl, line)
+        # -- mnemonic unification --
         for pat, repl in MNEM_REWRITES:
             line = pat.sub(repl, line)
+        # -- register-list collapse --
+        line = LDM_RE.sub("ldm rN, {REGS}", line)
+        line = STM_RE.sub("stm rN, {REGS}", line)
         line = PUSH_RE.sub("push {REGS}", line)
         line = POP_RE.sub("pop {REGS}", line)
         line = MOVR_RE.sub("mov rN, rN", line)
