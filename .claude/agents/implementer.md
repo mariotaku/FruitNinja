@@ -11,9 +11,9 @@ You are an implementation agent for a Fruit Ninja reverse-engineering port (C++1
 Per project policy, the port treats **source code as the canonical RE record**:
 - Struct layouts live in headers (`src/**/*.h`).
 - Function logic lives in `.cpp`.
-- Each unimplemented sub-block carries a `// TODO: <binary addr> — <what's missing>` comment that **is the spec** for that gap.
-- `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)` markers list functions that have been ASM-checked and must not silently drift.
-- `// DIFFERS: original = X from DAT_addr` flags any deliberate deviation from binary values.
+- Each unimplemented sub-block carries a `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` comment that **is the spec** for that gap.
+- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` markers list functions that have been ASM-checked and must not silently drift.
+- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @ 0x<addr>), using Y because <reason>` flags any deliberate deviation from binary values.
 
 You implement against this, not against per-class doc dumps. The narrative `docs/*-deep-re.md` / `docs/structs/*.md` / `docs/entities/*.md` files have been removed; do not look for them.
 
@@ -44,12 +44,12 @@ Write code that faithfully matches the binary. Do NOT optimise, simplify, or "im
 
 Three markers carry meaning. Keep them greppable. **Every binary-referencing marker MUST include the binary VERSION + SYMBOL + ADDRESS** — `v1.6.1 <Symbol> @0x<addr>`. A marker with an address but **no version is treated as OUTDATED** (presumed stale v1.5.x — re-verify against v1.6.1 before trusting it; the port migrated v1.5.1→v1.6.1 and most addresses moved). **When you finish porting/verifying a function, update its marker to this versioned form.**
 
-### `// TODO: <addr or descriptor> — <gap>`
-Marks an unimplemented sub-block. Treat it as the canonical spec for that gap. Examples currently in the tree:
+### `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>`
+Marks an unimplemented sub-block. Treat it as the canonical spec for that gap. Examples:
 ```cpp
-// TODO: 0x001255b8 — re-enter paused game state.
-// TODO: HUD::ResetControls (binary address unknown) — not yet ported.
-// TODO: clear global slash-power mask: *(uint32_t*)(GOT + 0x7740) = 0
+// TODO: v1.6.1 0x001255b8 (GameModeScreen::ReEnterPaused) — re-enter paused game state.
+// TODO: v1.6.1 0x<addr> HUDControl::ResetControls — not yet ported.
+// TODO: v1.6.1 PowerUpManager::SetDefaults @ 0x00123456 — clear global slash-power mask.
 ```
 When you close the gap, **delete** the TODO line — don't leave it as a tombstone. If the binary address is named, the closed implementation should be greppable by the new function/method name.
 
@@ -61,7 +61,7 @@ If your edit changes any instruction-emitting code in a function carrying this m
 ### `// DIFFERS: original = X from DAT_addr, using Y because <reason>`
 A deliberate deviation. Always cite the original value and a one-line reason.
 
-### `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>`
+### `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`
 A defunct feature stub. The class, vtable, struct fields, and public method shape are preserved as if the feature were ported; bodies are no-ops that return safe defaults. Used for permanently-dead subsystems (OpenFeint, GameCenter, P2P MP, online leaderboards, NetworkManager, OnlineNewsRenderer). Inventory: `grep -rn 'Defunct:' src/`.
 
 The point: keep the call graph identical to the binary so call sites don't need to be guarded or deleted. One marker per stubbed method body — not one per call site.
@@ -79,7 +79,7 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - **Preserve function boundaries** — if a function exists as a symbol in the binary, port it as its own function. Don't inline its body even if it's one line. This keeps RE landmarks and `grep`-ability.
 - **Stub un-ported deps, don't skip the call** — create a header + stub .cpp with the RE'd public API. Singletons' `GetInstance()` must return a valid (possibly empty) object so the call graph compiles.
 - **RE+port the base class first** — vtable slot indices matter. `ActorManager::Update` walks vtable +0x10 / +0x18 unconditionally.
-- **Stub defunct features, never skip them.** "Defunct" = permanently-dead subsystems (OpenFeint, GameCenter, P2P multiplayer, online leaderboards, online news, NetworkManager). The class, struct fields, vtable layout (slot order + count), and public-API methods are **preserved as if the feature were ported**. Method bodies are no-ops returning safe defaults (`0`, `false`, `nullptr`). Each stubbed method body carries `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>`. Singletons' `GetInstance()` returns a valid empty instance. Network packet structs and handler interfaces are declared so call sites compile. **Do not skip the call site itself, do not `#ifdef` it out, do not delete the class.** The call graph must match the binary so asm-verify can treat call-site differences as cosmetic-only.
+- **Stub defunct features, never skip them.** "Defunct" = permanently-dead subsystems (OpenFeint, GameCenter, P2P multiplayer, online leaderboards, online news, NetworkManager). The class, struct fields, vtable layout (slot order + count), and public-API methods are **preserved as if the feature were ported**. Method bodies are no-ops returning safe defaults (`0`, `false`, `nullptr`). Each stubbed method body carries `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`. Singletons' `GetInstance()` returns a valid empty instance. Network packet structs and handler interfaces are declared so call sites compile. **Do not skip the call site itself, do not `#ifdef` it out, do not delete the class.** The call graph must match the binary so asm-verify can treat call-site differences as cosmetic-only.
 - **No empirical / "looks-right" fixes.** If a port element is visually wrong (off-position, wrong size, wrong colour, mistimed), do NOT add a port-specific offset, multiplier, or hard-coded tweak to compensate. Empirical fixes hide the root cause and accumulate drift. Instead: RE the responsible binary function (font baseline math, matrix-stack convention, alignment-flag semantics, etc.) and port it correctly. If the RE is incomplete, file a TODO and revert to "wrong-but-binary-faithful" rather than commit a fudge. The only allowed deviations are GL ES 1->2 translation and clearly-marked `// Port specific:` workarounds for genuine platform-API differences (SDL audio backend, file I/O paths) — never for game-logic positioning, sizing, timing, or colours. If you can't determine the root cause from the existing source-side spec, return a gap list with the specific binary function to RE next; don't fudge.
 
 **ARM idioms:**

@@ -137,7 +137,7 @@ tmp/asm-compare/<name>_test.cpp
 
 ## Verified-comment line (if Confirmed)
 - For `implementer` to paste above the verified function/block:
-  `// ASM-verified: <ISO-8601 to the minute, UTC> v1.6.1 <Symbol> @ 0x<addr>[..0x<addr>] (asm-inspector)`  (the `v1.6.1 <Symbol>` is mandatory — a version-less marker is treated as outdated/stale-v1.5.x)
+  `// ASM-verified: <ISO-8601 to the minute, UTC> v1.6.1 <Symbol> @ 0x<addr>[..0x<end-addr>] (asm-inspector)`  (the `v1.6.1 <Symbol>` is mandatory — a version-less marker is treated as outdated/stale-v1.5.x)
 ```
 
 Keep prose under 400 words. The diff itself is the evidence — let it speak.
@@ -147,12 +147,12 @@ Keep prose under 400 words. The diff itself is the evidence — let it speak.
 When a verdict is **Confirmed**, supply a single-line comment for the implementer to paste above the verified function (or, for sub-block verifications, immediately above the verified block):
 
 ```
-// ASM-verified: 2026-04-28T15:30 binary @ 0x001aaba8 (asm-inspector)
+// ASM-verified: 2026-04-28T15:30Z v1.6.1 SlashModifier::UpdateSpecific @ 0x001aaba8 (asm-inspector)
 ```
 
 Format:
-- ISO-8601 timestamp **to the minute, UTC** -- same format as the existing `// Analysed:` comments.
-- `binary @ 0x<addr>` for a single-function verification, or `0x<start>..0x<end>` for a range.
+- ISO-8601 timestamp **to the minute, UTC** with `Z` suffix.
+- `v1.6.1 <Symbol> @ 0x<addr>` for a single-function verification, or `0x<start>..0x<end>` for a range.
 - Always include the trailing `(asm-inspector)` so the comments are greppable as an inventory: `grep -rn 'ASM-verified:' src/` lists every binary-truth-checked method.
 
 Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comment is a guarantee, not a wish list. Speculative or pending verifications stay un-commented; the implementer adds the line only after the spec applies cleanly and the function (in the form they've now written) matches the binary that was diffed.
@@ -210,7 +210,7 @@ In the report:
 - **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
 - **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop, see `tools/asm-verify/README.md`). For ad-hoc single-symbol questions compile your own minimal TU as in §4; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
 - Compile-unit workdir: `tmp/asm-compare/` (Win-side OK for source; stage into `/tmp/` inside the container before invoking i386 cc1plus).
-- One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): save to `tmp/ghidra_scripts/`, NOT to the project's `ghidra_scripts/` (that's reserved for persistent / reusable scripts).
+- One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): prefer `run_script_inline`; if too large, save to `tmp/ghidra_scripts/` (gitignored, disposable).
 - VFP immediate encoding cheat-sheet: 0.5=#96, 1.0=#112, 1.5=#120, 2.0=#0, 3.0=#16, -1.5=#248. Single-precision: `fconsts s_n, #N`. Full table in ARM ARM A8.6.339.
 - GhidraMCP: `disassemble_function`, `decompile_function`, `get_xrefs_to`, `read_memory`.
 

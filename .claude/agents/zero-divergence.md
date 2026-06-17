@@ -62,7 +62,7 @@ vs binary semantics, propose ONE definitive resolution. Be decisive.
 Output format: tmp/symdiff/<classname>-spec.md with:
   - Field layout table with definitive offsets
   - Per-function: binary pseudocode + port-side spec (with
-    `// ASM-verified: <ISO-date> binary @ 0xADDR (re-analyst)` markers)
+    `// ASM-verified: <ISO-date> v1.6.1 <Symbol> @ 0xADDR (re-analyst)` markers)
     + notes
   - For phase-broken large methods (e.g. Update with touch physics):
     break into named phases with each phase's complete pseudo-C body.
@@ -94,16 +94,15 @@ intermediate state. You decide splits based on data flow.
 
 For EACH change:
   - Match spec's pseudo-C exactly — no liberties.
-  - Add `// ASM-verified: <ISO-date> binary @ 0xADDR (re-analyst)`
+  - Add `// ASM-verified: <ISO-date> v1.6.1 <Symbol> @ 0xADDR (re-analyst)`
     markers per function.
   - Build must stay clean (cmake --build build -j$(nproc) --target
     fruit-ninja).
-  - Where spec has unresolved item, leave precise `// TODO: <binary
-    addr> -- <gap>` marker rather than guessing.
+  - Where spec has unresolved item, leave precise `// TODO: v1.6.1 0x<addr> (<Symbol>) -- <gap>` marker rather than guessing.
 
 Verification at end:
   - Final clean build.
-  - grep -rn "TODO: 0x" src/<path>/<ClassName>.{cpp,h} should be 0
+  - grep -rn "TODO: v1.6.1" src/<path>/<ClassName>.{cpp,h} should be 0
     (or list intentional deferrals).
 
 Report under 500 words. List each commit's SHA + one-line summary
@@ -117,7 +116,7 @@ After implementer reports commit SHA(s):
 ```bash
 cmake --build build -j$(nproc) --target fruit-ninja
 grep -rn "// ASM-verified.*re-analyst" src/<path>/<ClassName>.{cpp,h} | wc -l
-grep -rn "TODO: 0x" src/<path>/<ClassName>.{cpp,h}
+grep -rn "TODO: v1.6.1" src/<path>/<ClassName>.{cpp,h}
 ```
 
 If the user originally reported a specific buggy behaviour, ask them to

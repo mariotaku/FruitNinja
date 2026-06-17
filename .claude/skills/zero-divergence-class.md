@@ -71,7 +71,7 @@ every field. Resolve any port-side ambiguities.
 Output format: tmp/symdiff/<classname>-spec.md with:
   - Field layout table with definitive offsets
   - Per-function: binary pseudocode + port-side spec (with
-    `// ASM-verified: <ISO-date> binary @ 0xADDR (re-analyst)` markers)
+    `// ASM-verified: <ISO-date> v1.6.1 <Symbol> @ 0xADDR (re-analyst)` markers)
     + notes
 
 Use GhidraMCP decompile_function and disassemble_function heavily. Cite
@@ -111,16 +111,15 @@ intermediate state. The implementer decides splits based on data flow.
 
 For EACH change:
   - Match spec's pseudo-C exactly — no liberties.
-  - Add `// ASM-verified: <ISO-date> binary @ 0xADDR (re-analyst)`
+  - Add `// ASM-verified: <ISO-date> v1.6.1 <Symbol> @ 0xADDR (re-analyst)`
     markers per function.
   - Build must stay clean (`cmake --build build -j$(nproc) --target
     fruit-ninja`).
-  - Where spec has unresolved item, leave precise `// TODO: <binary
-    addr> -- <gap>` marker rather than guessing.
+  - Where spec has unresolved item, leave precise `// TODO: v1.6.1 0x<addr> (<Symbol>) -- <gap>` marker rather than guessing.
 
 Verification at end:
   - Final clean build.
-  - `grep -rn "TODO: 0x" src/<path>/<ClassName>.{cpp,h}` should be 0
+  - `grep -rn "TODO: v1.6.1" src/<path>/<ClassName>.{cpp,h}` should be 0
     (or list intentional deferrals).
 
 Report under 500 words. List each commit's SHA + one-line summary
@@ -132,7 +131,7 @@ Report under 500 words. List each commit's SHA + one-line summary
 ```bash
 cmake --build build -j$(nproc) --target fruit-ninja  # must be clean
 grep -rn "// ASM-verified.*re-analyst" src/<path>/<ClassName>.{cpp,h}
-grep -rn "TODO: 0x" src/<path>/<ClassName>.{cpp,h}   # only intentional deferrals
+grep -rn "TODO: v1.6.1" src/<path>/<ClassName>.{cpp,h}   # only intentional deferrals
 ```
 
 Then ideally re-run asm-verify to confirm the previously-DIVERGE rows
