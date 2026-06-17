@@ -99,6 +99,19 @@ MNEM_REWRITES = [
 # --- Pre-normalization: canonicalise representations that differ between
 # --- Ghidra disassembly (binary) and objdump -d (port .o).
 
+# Objdump prints raw instruction bytes before the mnemonic; Ghidra doesn't.
+# "f7ff fffe  bl 0 <Name>" -> "bl 0 <Name>"
+OBJDUMP_BYTES_RE = re.compile(r"^\s*([0-9a-f]{4}\s+)+")
+
+# Objdump appends "; 0xNN" offset comments to ldr/str instructions; Ghidra doesn't.
+# "ldrb r6, [r0, #320]  ; 0x140" -> "ldrb r6, [r0, #320]"
+OBJDUMP_OFFSET_COMMENT_RE = re.compile(r"\s*;\s*0x[0-9a-f]+\s*$")
+
+# Objdump produces "bl 0 <Name>" (relative offset in unlinked .o);
+# Ghidra produces "bl <Name>" (after annotation resolution).
+# "bl 0 <Name>" -> "bl <Name>"
+CALL_ZERO_OFFSET_RE = re.compile(r"\b(blx?)\s+0\s+<")
+
 # Ghidra prints 'cpy r4, r0' for mov-register; objdump prints 'mov r4, r0'.
 CPY_RE = re.compile(r"\bcpy\b")
 
@@ -158,15 +171,23 @@ def normalize(text: str) -> list[str]:
         if DROP_RE.match(raw) or PREAMBLE_RE.match(raw):
             continue
         line = raw
+        # -- step 0: strip address prefix so subsequent regexes see clean text --
+        # Ghidra format: "001e83b0: ..."  /  objdump format: "   0:\t..."
+        line = LINE_PATTERNS[0][0].sub(LINE_PATTERNS[0][1], line)
         # -- pre-normalization: canonicalise Ghidra vs objdump surface forms --
+        line = OBJDUMP_BYTES_RE.sub('', line)               # strip raw hex bytes (objdump only)
+        line = OBJDUMP_OFFSET_COMMENT_RE.sub('', line)      # strip "; 0xNN" offset comments
         line = ANNOTATED_TARGET_RE.sub(r'\1 <\2>', line)   # bl 0xADDR ; -> Name → bl <Name>
+        line = CALL_ZERO_OFFSET_RE.sub(r'\1 <', line)      # bl 0 <Name> → bl <Name>
         line = CPY_RE.sub('mov', line)                      # cpy → mov
         line = VFP_SZ_RE.sub(r'\1', line)                   # vldr.32 → vldr
         line = W_SUFFIX_RE.sub('', line)                    # strb.w → strb
         line = STACK_STM_RE.sub(r'push \1', line)           # stmdb sp!, {regs} → push {regs}
         line = STACK_LDM_RE.sub(r'pop \1', line)            # ldmia sp!, {regs} → pop {regs}
-        # -- address/immediate masking --
-        for pat, repl in LINE_PATTERNS:
+        # Collapse whitespace (tabs/spaces) so diffs are token-level only.
+        line = re.sub(r'\s+', ' ', line)
+        # -- address/immediate masking (skip [0] since already stripped above) --
+        for pat, repl in LINE_PATTERNS[1:]:
             line = pat.sub(repl, line)
         # -- mnemonic unification --
         for pat, repl in MNEM_REWRITES:
