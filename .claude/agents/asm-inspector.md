@@ -27,7 +27,9 @@ If the question is too broad ("is the spin loop correct?") refuse to start until
 
 ### 2. Locate the binary range
 
-Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save the raw disassembly to `tmp/asm-compare/<name>_binary.s`. Lines should be `addr: opcode mnemonic operands`. (Note: on this fork `decompile_function` now resolves PIC/GOT-indirected named globals — patched 2026-06-16; upstream's bare DecompInterface with "Respect Read-Only Flags" OFF still shows them as opaque `DAT_`, where `run_script_inline` with `opts.grabFromProgram(currentProgram)` is the fallback. Either way, genuinely-unnamed `DAT_` float constants in the literal pool are still decoded via `read_memory` per the steps below.)
+Target program in Ghidra: `FruitNinja_v1_6_1.exe`. Ghidra addresses are VAs = ELF offset + `0x10000` (e.g. nm shows `0x0016b71c`, Ghidra uses `0x0017b71c`).
+
+Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save `disassemble_function` output to `tmp/asm-compare/<name>_binary.s`. This is the binary-side ground truth — no separate objdump step needed. (Note: on this fork `decompile_function` now resolves PIC/GOT-indirected named globals — patched 2026-06-16; upstream's bare DecompInterface with "Respect Read-Only Flags" OFF still shows them as opaque `DAT_`, where `run_script_inline` with `opts.grabFromProgram(currentProgram)` is the fallback. Either way, genuinely-unnamed `DAT_` float constants in the literal pool are still decoded via `read_memory` per the steps below.)
 
 ### 3. Write a minimal compile unit
 
@@ -76,19 +78,13 @@ inlining, no `-Os` size pressure).
 
 ### 5. Compare instruction-by-instruction
 
-Use the container's `arm-none-eabi-objdump` for the binary side, `g++ -S` for the test side, then diff manually.
+Binary-side ground truth is the Ghidra disassembly already saved in step 2. Compile the test with `-S` to get `tmp/asm-compare/<name>_test.s` (step 4). Diff the two:
 
-Workflow:
-1. Find the original ELF at `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB ELF32 ARM, not stripped) — accessible inside the container at `/work/FruitNinjaBada/Bin/FruitNinja.exe`.
-2. Dump the binary range:
-   ```
-   docker run --rm -v "$(pwd):/work" fnverify arm-none-eabi-objdump \
-     -d --start-address=0x<begin> --stop-address=0x<end> \
-     /work/FruitNinjaBada/Bin/FruitNinja.exe \
-     > tmp/asm-compare/<name>_binary.s
-   ```
-3. Compile the test with `-S` to get `tmp/asm-compare/<name>_test.s` (see step 4).
-4. Side-by-side diff: open both in your editor, or `diff -y --suppress-common-lines`.
+```sh
+diff -y --suppress-common-lines \
+  tmp/asm-compare/<name>_binary.s \
+  tmp/asm-compare/<name>_test.s
+```
 
 Look for:
 - **Same VFP constant immediates** (`fconsts s15, #N` where N encodes the float). 0.5f → #96; 1.5f → #120; 1.0f → #112; -1.5f → #248. Verify the compiler picks the same encoding the binary uses.
@@ -217,7 +213,7 @@ In the report:
 
 Q: Does the binary produce `compA*1.5` with sign retained, or `|compA*1.5|`?
 
-Binary (from `disassemble_function 0x00177578`):
+Binary (v1.6.1, from `disassemble_function 0x00177578`):
 ```
 00177578: vmov.f32  s15, 0x3fc00000   ; s15 = 1.5
 0017757c: vmul.f32  s0,  s17, s15     ; s0  = compA * 1.5
