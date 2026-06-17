@@ -125,13 +125,13 @@ For "Diverges", you may suggest the corrected port code, but you do NOT edit `sr
 <one-sentence claim under test>
 
 ## Binary range
-<address range, function name>
+<address range, function name, v1.6.1>
 
-## Compile unit
-tmp/asm-compare/<name>_test.cpp
+## Port source
+src/<path>/<ClassName>.cpp (compiled with container toolchain)
 
 ## Compile command
-<exact arm-bada-eabi-g++ invocation>
+<exact docker run + arm-none-eabi-g++ invocation>
 
 ## Findings
 1. <finding>
@@ -143,11 +143,12 @@ tmp/asm-compare/<name>_test.cpp
 - <one-paragraph summary>
 
 ## Port-side action (if Diverges)
-- <file:line> currently does X; should do Y per binary @ 0x...
+- <file:line> currently does X; should do Y per v1.6.1 @ 0x<addr>
 
 ## Verified-comment line (if Confirmed)
 - For `implementer` to paste above the verified function/block:
-  `// ASM-verified: <ISO-8601 to the minute, UTC> v1.6.1 <Symbol> @ 0x<addr>[..0x<end-addr>] (asm-inspector)`  (the `v1.6.1 <Symbol>` is mandatory — a version-less marker is treated as outdated/stale-v1.5.x)
+  `// ASM-verified: <ISO-8601 to the minute, UTC> v1.6.1 <Symbol> @ 0x<addr>[..0x<end-addr>] (asm-inspector)`
+  (the `v1.6.1 <Symbol>` is mandatory — a version-less marker is treated as outdated/stale-v1.5.x)
 ```
 
 Keep prose under 400 words. The diff itself is the evidence — let it speak.
