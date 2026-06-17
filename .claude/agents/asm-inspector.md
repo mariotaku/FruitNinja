@@ -25,38 +25,26 @@ State the discrepancy as a single concrete claim, e.g.:
 
 If the question is too broad ("is the spin loop correct?") refuse to start until it's narrowed.
 
-### 2. Locate the binary range
+### 2. Extract binary ASM with the SAME objdump
 
-Target program in Ghidra: `FruitNinja_v1_6_1.exe`. Ghidra addresses are VAs = ELF offset + `0x10000` (e.g. nm shows `0x0016b71c`, Ghidra uses `0x0017b71c`).
+Use the container's `arm-none-eabi-objdump` to dump the binary function. Both
+binary and port sides come from the same disassembler — no cross-tool
+formatting differences.
 
-Use GhidraMCP to locate the function's address range. Then get **annotated disassembly** via `run_script_inline` — this resolves `bl`/`b` targets to function names via Ghidra's `ReferenceManager`:
+First, find the ELF address range via GhidraMCP (`get_function_by_address`).
+The binary ELF is at `FruitNinjaBada/Bin/FruitNinja.exe` inside the container
+at `/work/FruitNinjaBada/Bin/FruitNinja.exe`.
 
-```java
-// AnnotatedDisasm: dump function at cursor with "; -> TargetName" comments.
-Function func = getFunctionContaining(currentAddress);
-AddressSetView body = func.getBody();
-Listing listing = currentProgram.getListing();
-ReferenceManager refMgr = currentProgram.getReferenceManager();
-CodeUnitIterator it = listing.getCodeUnits(body, true);
-while (it.hasNext() && !monitor.isCancelled()) {
-    CodeUnit cu = it.next();
-    Address addr = cu.getAddress();
-    Reference[] refs = refMgr.getFlowReferencesFrom(addr);
-    String comment = "";
-    if (refs.length > 0) {
-        Address target = refs[0].getToAddress();
-        if (target.getOffset() > 0x100000) {
-            Function targetFunc = getFunctionAt(target);
-            if (targetFunc != null) comment = "  ; -> " + targetFunc.getName();
-        }
-    }
-    printf("%08x: %s%s\n", addr.getOffset(), cu.toString(), comment);
-}
+```sh
+docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c "
+  arm-none-eabi-objdump -d --start-address=0x<begin> --stop-address=0x<end> \
+    /work/FruitNinjaBada/Bin/FruitNinja.exe \
+    > /work/tmp/asm-compare/<name>_binary.s
+"
 ```
 
-Save this output to `tmp/asm-compare/<name>_binary.s`. The `; -> Name` annotations let the normalizer resolve `bl 0xADDR` to `bl <Name>`, matching the port objdump's `bl <Name>` format.
-
-Also save `decompile_function` output alongside for human reference. (Note: on this fork `decompile_function` resolves PIC/GOT-indirected named globals — patched 2026-06-16.)
+Save to `tmp/asm-compare/<name>_binary.s`. Both sides now use identical
+objdump output format — no Ghidra-specific normalization needed.
 
 ### 3. Compile the port source with the era-correct toolchain
 

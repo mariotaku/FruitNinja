@@ -93,7 +93,11 @@ find /tmp/portsrc/src -name "*.h" -o -name "*.cpp" | xargs sed -i \
     -e "s/explicit operator bool/operator bool/g" \
     -e "s|using \([A-Za-z_][A-Za-z_0-9]*\) = \(.*\);|typedef \2 \1;|g"
 
-CXXFLAGS="-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar"
+# Default Thumb-2; pass --arm for ARM-mode functions (binary uses both).
+MODE_FLAG="-mthumb"
+if [[ "${1:-}" == "--arm" ]]; then MODE_FLAG="-marm"; shift; fi
+
+CXXFLAGS="$MODE_FLAG -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar"
 CXXFLAGS="$CXXFLAGS -std=gnu++0x -O2 -fno-exceptions -fno-rtti"
 CXXFLAGS="$CXXFLAGS -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables"
 CXXFLAGS="$CXXFLAGS -fpermissive -include /tmp/portsrc/cross-headers/fn-cxx11-shims.h -D__bada__ -DFN_ASM_VERIFY_CROSS"
