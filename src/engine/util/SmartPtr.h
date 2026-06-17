@@ -44,6 +44,9 @@ public:
     bool IsValid() const { return m_ptr != nullptr; }
     operator bool() const { return m_ptr != nullptr; }
 
+    bool operator==(const SmartPtr& o) const { return m_ptr == o.m_ptr; }
+    bool operator!=(const SmartPtr& o) const { return m_ptr != o.m_ptr; }
+
     // Binary @ 0x001020a8 (SetPtr<AnimationList>) -- thin wrapper over SetPtrCast<ReferenceCounter>;
     // at the source level identical to operator=(raw).
     void SetPtr(T* raw) { *this = raw; }

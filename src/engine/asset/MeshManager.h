@@ -6,13 +6,12 @@
 #include "asset/ResourceLoader.h"
 #include "util/SmartPtr.h"
 #include "util/List.h"
-#include <string>
 
 namespace Mortar {
 
-// Matches original MeshManager (20 bytes)
-// List-based cache of loaded Models, accessed via GetInstance()
-// Ref: docs/engine/texture-mesh-manager.md
+// MeshManager -- v1.6.1 ctor @0x002368cc, dtor @0x002368b8
+// 20-byte body: single List<SmartPtr<Model>> m_Models field (List = 20 bytes).
+// Singleton accessed via GetInstance().
 class MeshManager {
 public:
     MeshManager();
@@ -21,29 +20,34 @@ public:
     static MeshManager* GetInstance() { return s_instance; }
     static MeshManager* s_instance;
 
+    // v1.6.1 Load @0x00236874
     Mortar::SmartPtr<Model> Load(const char* path);
+    // v1.6.1 ReleaseAll @0x0023689c -- GOT-thunk tail-call to List<SmartPtr<Model>>::Clear.
     void ReleaseAll();
     void Initialise(int capacity = 32);
 
 private:
     List<Mortar::SmartPtr<Model>> m_Models;
 
-    // Matches LoadMeshInternal (0x001a8518) + LoadModel (0x001a8468) + LoadMesh (0x001a7c90)
+    // v1.6.1 LoadMeshInternal @0x00238644 -- registers IVertexStream/IIndexStream/Model/Mesh
+    // loaders + ResourceLoader::Load<Model>. Does NOT touch m_Models directly.
+    // DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
+    //   v1.6.1 LoadMeshInternal @0x00238644.
     Mortar::SmartPtr<Model> LoadMeshInternal(const char* path);
 
 public:
-    // Binary @ 0x001929BC -- tail-calls ReleaseAll().
+    // v1.6.1 dtor (D1) @0x002368b8 -- calls Destroy (-> ReleaseAll -> List::Clear) then List::Destroy.
     void Destroy();
-    // Binary @ 0x00192BA8 -- linear scan; returns the cached Model whose m_name
-    // matches, else an empty SmartPtr.
+    // v1.6.1 Find(AsciiString const&) @0x0023695c -- linear scan; returns the cached Model
+    // whose m_name matches, else an empty SmartPtr.
     Mortar::SmartPtr<Model> Find(AsciiString const& name) const;
-    // Binary @ 0x00192B54 -- linear scan by handle (SmartPtr ==); returns the
-    // matching cached entry, else an empty SmartPtr.
+    // v1.6.1 Find(SmartPtr<Model> const&) @0x002369c0 -- linear scan by pointer identity;
+    // returns the matching cached entry, else an empty SmartPtr.
     Mortar::SmartPtr<Model> Find(SmartPtr<Model> const& model) const;
-    // Binary @ 0x001A74B8 -- empty in the binary (one-time hook, no body).
+    // v1.6.1 InitialiseInternal @0x001A74B8 -- empty in the binary (one-time hook, no body).
     void InitialiseInternal();
-    // No distinct v1_6_1 symbol (0x00192B1C is v1.5.1-only); inlined List::Remove semantics.
-    // DIFFERS: std::vector erase-by-identity reproduces refcount-drop; see MeshManager.cpp.
+    // v1.6.1 Release(SmartPtr<Model> const&) @0x00236908 -- calls List::Remove to unlink
+    // and drop refcount on the matching node.
     void Release(SmartPtr<Model> const& model);
 };
 

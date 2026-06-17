@@ -4,54 +4,59 @@
 #include "asset/TextureManager.h"
 #include "debug/Logger.h"
 #include <cstring>
-
-// Analysed: 2026-04-12T00:00
+#include <string>
 
 namespace Mortar {
 
 MeshManager* MeshManager::s_instance = nullptr;
 
+// v1.6.1 MeshManager ctor @0x002368cc: zero-initialises m_Models (List ctor does this),
+// sets s_instance. Port specific: s_instance assignment has no binary counterpart
+// (binary uses a fixed GOT slot @ 0x002d9a28).
 MeshManager::MeshManager() {
     s_instance = this;
 }
 
-// Binary @ 0x002368a4 (single D1 dtor; no separate D0/D2 -- singleton is function-local static).
-// Binary calls Destroy (-> ReleaseAll -> List::Clear) then List::Destroy @ 0x00236c5c.
-// List::Destroy's FreeList-teardown branch is a no-op for the m_pFreeList==0 singleton;
-// std::vector member dtor handles the storage free (replaces List::Destroy's storage path).
-// DIFFERS: binary 2nd call List::Destroy @ 0x00236c5c is a no-op for this singleton and
-//   otherwise frees intrusive-List/FreeList storage subsumed by std::vector dtor.
-//   s_instance=nullptr below has no binary counterpart. // Port specific: singleton bookkeeping.
+// v1.6.1 MeshManager dtor (D1) @0x002368b8: calls Destroy (-> ReleaseAll -> List::Clear),
+// then calls List::Destroy @0x00236c5c to tear down the FreeList if owned.
+// For the singleton path m_pFreeList==0, so List::Destroy's FreeList branch is a no-op;
+// List<T>::~List() calls Destroy() which handles both paths.
+// Port specific: s_instance=nullptr below has no binary counterpart.
 MeshManager::~MeshManager() {
-    ReleaseAll();
-    if (s_instance == this) s_instance = nullptr; // Port specific: no binary counterpart (binary uses global slot @ 0x002d9a28, not zeroed on teardown).
+    Destroy();
+    if (s_instance == this) s_instance = nullptr;
 }
 
-void MeshManager::Initialise(int capacity) {
-    m_Models.reserve(capacity);
+void MeshManager::Initialise(int /*capacity*/) {
+    // No-op: binary list grows dynamically via operator new per node; no pre-allocation.
 }
 
-// Binary @ 0x0023689c -- GOT-thunk tail-call to List<SmartPtr<Model>>::Clear @ 0x00236be0.
-// List::Clear: gate on m_Active(+0x12)==1, walk intrusive 12B-node singly-linked chain via
-//   node[+8], call SmartPtr<Model>::Clear (refcount drop) + operator delete(node) per node,
-//   then zero m_Count/m_pHead/m_pTail/m_Active.
-// DIFFERS: binary List::Clear walks an intrusive linked list + frees nodes + zeros flags;
-//   m_Models.clear() reproduces the observable refcount-drop semantics via std::vector element
-//   dtor (~SmartPtr). Container walk + node-free + flag-zeroing differ due to List.h substitution.
+// v1.6.1 MeshManager::ReleaseAll @0x0023689c -- GOT-thunk tail-call to
+// List<SmartPtr<Model>>::Clear @0x00236be0.
+// List::Clear gates on m_Active==1, walks the singly-linked node chain, calls
+// SmartPtr<Model>::~SmartPtr (refcount drop) per node, operator delete(node) per node,
+// then zeros m_Count/m_pHead/m_pTail/m_Active.
 void MeshManager::ReleaseAll() {
-    m_Models.clear();
+    m_Models.Clear();
 }
 
+// v1.6.1 MeshManager::Load @0x00236874
+// DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
+//   v1.6.1 LoadMeshInternal @0x00238644 does NOT touch m_Models (registers loaders +
+//   calls ResourceLoader::Load<Model>). The port's Find+Add here is a port invention.
 Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
-    for (int i = 0; i < m_Models.size(); i++) {
-        if (m_Models[i].IsValid() && m_Models[i]->m_name == path) {
-            return m_Models[i];
+    AsciiString apath(path);
+    Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
+    while (node) {
+        if (node->value.IsValid() && node->value->m_name == apath) {
+            return node->value;
         }
+        node = node->next;
     }
 
     Mortar::SmartPtr<Model> model = LoadMeshInternal(path);
     if (model.IsValid()) {
-        m_Models.push_back(model);
+        m_Models.Add(model);
     }
     return model;
 }
@@ -98,14 +103,14 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geom
     //          + texFmt * 2
     //          + weightFmt
     // For bomb/fruit decl=0x120001ff: texFmt=3, weightFmt=7, colorFmt=3,
-    // normalFmt=3, posFmt=0, morphCount=0 → stride = 8+4+12+12+0 = 36.
+    // normalFmt=3, posFmt=0, morphCount=0 -> stride = 8+4+12+12+0 = 36.
     //
-    // IMPORTANT — the stride formula's "weight" / "color" naming does
+    // IMPORTANT -- the stride formula's "weight" / "color" naming does
     // not match what the binary actually samples from each slot. User-
     // confirmed via side-by-side: the 4 bytes at offset 8 (the "weight"
     // slot per the formula) are read by glColorPointer as 4-byte RGBA
     // vertex colour. The 12 bytes at offset 12 (the "color" slot per
-    // the formula) hold the surface normal direction — unused by GL
+    // the formula) hold the surface normal direction -- unused by GL
     // when IsLit=false (the common case). The 12 bytes at offset 24
     // (the "normal" slot per the formula) hold the actual 3D position,
     // which is what glVertexPointer binds when posFmt=0.
@@ -133,12 +138,12 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geom
     VertexLayout layout;
     memset(&layout, 0, sizeof(layout));
 
-    // tex: FmtSize(texFmt) * 2 — 2-component UV.
+    // tex: FmtSize(texFmt) * 2 -- 2-component UV.
     int texBytes = FmtSize(texFmt) * 2;
     layout.texOffset = offset; layout.texSize = texBytes; offset += texBytes;
 
     // "weight" slot per the binary's stride math. In practice the binary
-    // reads these bytes as a 4-byte RGBA vertex colour (fmt=3 → size=4,
+    // reads these bytes as a 4-byte RGBA vertex colour (fmt=3 -> size=4,
     // type=GL_UNSIGNED_BYTE) modulated with the texture sample. Set up
     // the color attribute here so DrawGeometry enables GL_COLOR_ARRAY
     // at this offset.
@@ -151,19 +156,19 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geom
     }
     offset += weightBytes;
 
-    // "color" slot per the binary's stride math — allocated 12 bytes
+    // "color" slot per the binary's stride math -- allocated 12 bytes
     // for fmt=3. Data-wise this holds the surface normal direction; unused
     // by GL when lighting is off.
     int colorSlotBytes = FmtSize(colorFmt) * 3;
     // Stride reserves these bytes but no client array binds them.
     offset += colorSlotBytes;
 
-    // "normal" slot per the formula — 12 bytes for fmt=3. Data-wise this
+    // "normal" slot per the formula -- 12 bytes for fmt=3. Data-wise this
     // holds the 3D position (since posFmt=0 below has no dedicated slot).
     int normalBytes = FmtSize(normalFmt) * 3;
     layout.normalOffset = offset; layout.normalSize = normalBytes; offset += normalBytes;
 
-    // Dedicated pos slot per the formula — 0 bytes when posFmt=0.
+    // Dedicated pos slot per the formula -- 0 bytes when posFmt=0.
     int posBytes = FmtSize(posFmt) * (morphCount + 1);
     layout.posOffset = offset; layout.posSize = posBytes; offset += posBytes;
 
@@ -201,8 +206,8 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     size_t pos = 2; // skip 2-byte padding
     uint8_t idxFlags = data[pos++];
     // Hi nibble -> Mortar::PrimType -> GL enum (via Geometry::
-    // _NativePrimitiveType at 0x00141ed8). Confirmed empirically against
-    // the WebGL model gallery — a "native TRIANGLE_STRIP" render produces
+    // _NativePrimitiveType at 0x001a3ec8). Confirmed empirically against
+    // the WebGL model gallery -- a "native TRIANGLE_STRIP" render produces
     // visible triangle artefacts on every mesh, while "as TRIANGLES"
     // renders every fruit and bomb correctly. The binary's switch:
     //   0x20 -> PrimType 3 -> case 3 -> GL value 4 = GL_TRIANGLES
@@ -214,7 +219,7 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     // actually exercised; the others are here for completeness. The old
     // port mapped 0x20 -> GL_TRIANGLE_STRIP which explained all of the
     // "mirror through fuse hole" / "triangle holes on fruit" artefacts
-    // we chased — strip rendering of a triangle-list index buffer.
+    // we chased -- strip rendering of a triangle-list index buffer.
     switch (idxFlags & 0xF0) {
         case 0x20: geom.m_PrimType = GL_TRIANGLES;      break;
         case 0x40: geom.m_PrimType = GL_TRIANGLE_STRIP; break;
@@ -222,10 +227,10 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     }
     // Low nibble = PSP GE_INDEX_TYPE: 0 none / 1 uint16 / 2 uint32.
     // Binary LoadIndexStreamPSP (0x001a799c) branches on `(nibble - 1)`;
-    // nibble==1 → 2-byte indices, nibble==2 → 4-byte indices. Every mesh
+    // nibble==1 -> 2-byte indices, nibble==2 -> 4-byte indices. Every mesh
     // shipped in FruitNinja's Bada asset dump uses nibble=1 (uint16), so
     // `idxCount * 2` below is correct for this title. glDrawElements in
-    // Geometry::Render @ 0x001a3ec8 also hardcodes GL_UNSIGNED_SHORT —
+    // Geometry::Render @ 0x001a3ec8 also hardcodes GL_UNSIGNED_SHORT --
     // the uint32 path is never exercised. TODO: wire nibble==2 if a
     // future asset dump needs it.
     if (pos + 4 > dataSize) return false;
@@ -245,7 +250,11 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     return true;
 }
 
-// Matches LoadMeshInternal (0x001a8518) + LoadModel (0x001a8468) + LoadMesh (0x001a7c90)
+// v1.6.1 LoadMeshInternal @0x00238644
+// Registers IVertexStream/IIndexStream/Model/Mesh loaders + calls ResourceLoader::Load<Model>.
+// Does NOT touch m_Models directly -- the binary caches via ResourceLoader.
+// DIFFERS: port caches in m_Models manually (in Load above); binary caches in ResourceLoader.
+//   v1.6.1 LoadMeshInternal @0x00238644.
 //
 // The root ResourceLoader maps to both the Model and Mesh scope:
 //   LoadModel reads: model name, Read<Skeleton> (skipped), meshCount
@@ -255,7 +264,7 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
 //   children[0..N]: material and geometry sub-resources referenced by 1-based index
 //
 // Material child rawData: matName(ReadString), texIdx(ReadSubResourceLookup),
-//   4×u32 colors, float specular, unused ReadSubResourceLookup
+//   4xU32 colors, float specular, unused ReadSubResourceLookup
 // Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
 // Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
 Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
@@ -271,7 +280,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     loader.ResetReadPos();
 
     // --- LoadModel portion ---
-    // ReadString → model name (stored in Model, mesh name read again below)
+    // ReadString -> model name (stored in Model, mesh name read again below)
     AsciiString modelName = loader.ReadString();
 
     // Read<Skeleton> (0x001a8468): parse skeleton and bind to all meshes via UpdateBoneLinks
@@ -294,12 +303,12 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     for (uint32_t mi = 0; mi < meshCount; mi++) {
         Mesh* mesh = new Mesh();
 
-        // ReadString → mesh name
+        // ReadString -> mesh name
         if (loader.m_ReadPos + 2 > loader.DataSize()) break;
         AsciiString meshName = loader.ReadString();
         mesh->m_Name = meshName.CStr();
 
-        // Read<ulong> → boneCount + per-bone BoneBinding data
+        // Read<ulong> -> boneCount + per-bone BoneBinding data
         if (loader.m_ReadPos + 4 > loader.DataSize()) break;
         uint32_t boneCount = loader.Read<uint32_t>();
         if (boneCount > 0 && boneCount < 256) {
@@ -316,12 +325,12 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             mesh->SetBones(bones.data(), (unsigned long)boneCount);
         }
 
-        // Read<ulong> → materialCount + per-material sub-resource
+        // Read<ulong> -> materialCount + per-material sub-resource
         if (loader.m_ReadPos + 4 > loader.DataSize()) break;
         uint32_t matCount = loader.Read<uint32_t>();
 
         for (uint32_t i = 0; i < matCount; i++) {
-            // ReadSubResourceLookup → material child (1-based index into loader.m_Children)
+            // ReadSubResourceLookup -> material child (1-based index into loader.m_Children)
             ResourceLoader* matChild = loader.ReadSubResourceLookup();
             if (!matChild) continue;
 
@@ -332,7 +341,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             AsciiString matName = matChild->ReadString();
             mat.m_Name = matName.CStr();
 
-            // ReadSubResourceLookup → texture grandchild
+            // ReadSubResourceLookup -> texture grandchild
             ResourceLoader* texChild = matChild->ReadSubResourceLookup();
             if (texChild) {
                 texChild->ResetReadPos();
@@ -351,7 +360,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             if (matChild->m_ReadPos + 20 <= matChild->DataSize()) {
                 uint32_t color0 = matChild->Read<uint32_t>(); // Ambience property
                 uint32_t color1 = matChild->Read<uint32_t>(); // Diffuse property
-                (void)matChild->Read<uint32_t>(); // color2 / uStack_224 — unused in binary
+                (void)matChild->Read<uint32_t>(); // color2 / uStack_224 -- unused in binary
                 uint32_t color3 = matChild->Read<uint32_t>(); // SelfIllum property
                 float specular  = matChild->Read<float>();
 
@@ -364,13 +373,13 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
                 mat.m_IsLit = false;
             }
 
-            // ReadSubResourceLookup → additional sub-resource (unused in port)
+            // ReadSubResourceLookup -> additional sub-resource (unused in port)
             matChild->ReadSubResourceLookup();
 
             mesh->m_Materials.push_back(mat);
         }
 
-        // Read<ulong> → geometryCount + per-geometry sub-resource + matIndex
+        // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
         if (loader.m_ReadPos + 4 > loader.DataSize()) {
             model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
             continue;
@@ -378,10 +387,10 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         uint32_t geomCount = loader.Read<uint32_t>();
 
         for (uint32_t i = 0; i < geomCount; i++) {
-            // ReadSubResourceLookup → geometry child (rawData = index+vertex streams)
+            // ReadSubResourceLookup -> geometry child (rawData = index+vertex streams)
             ResourceLoader* geomChild = loader.ReadSubResourceLookup();
 
-            // Read<u16> matIndex — from mesh loader (not geomChild), matches LoadMesh binary
+            // Read<u16> matIndex -- from mesh loader (not geomChild), matches LoadMesh binary
             uint16_t matIndex = 0;
             if (loader.m_ReadPos + 2 <= loader.DataSize()) {
                 matIndex = loader.Read<uint16_t>();
@@ -425,7 +434,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         return Mortar::SmartPtr<Model>();
     }
 
-    // Matches Model::SwapSkeleton → UpdateBoneLinks (0x001aaba8, 0x00193010):
+    // Matches Model::SwapSkeleton -> UpdateBoneLinks (0x001aaba8, 0x00193010):
     // Skeleton was parsed above; now that all meshes are loaded, bind it to each mesh.
     if (model->m_skeleton.IsValid()) {
         model->UpdateBoneLinks();
@@ -438,53 +447,49 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
 namespace Mortar {
 
-// Binary @ 0x001929BC -- tail-calls ReleaseAll() to drop every cached Model.
+// v1.6.1 MeshManager::Destroy @0x002368b8 (D1 dtor path) -- calls ReleaseAll (-> List::Clear).
 void MeshManager::Destroy() {
     ReleaseAll();
 }
 
-// Binary @ 0x00192BA8 -- iterate the cached-Model list; for each entry compare
-// its Model::m_name (offset +0xc) against `name` via AsciiString::Equals. Return
-// the first matching SmartPtr<Model>, or an empty SmartPtr on miss.
+// v1.6.1 MeshManager::Find(AsciiString const&) @0x0023695c
+// Iterate node chain; compare node->value->m_name (Model::m_name) against `name`
+// via AsciiString::operator==. Return first matching SmartPtr<Model>, or empty on miss.
 Mortar::SmartPtr<Model> MeshManager::Find(AsciiString const& name) const {
-    for (int i = 0; i < m_Models.size(); i++) {
-        if (m_Models[i].IsValid() && m_Models[i]->m_name == name) {
-            return m_Models[i];
+    Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
+    while (node) {
+        if (node->value.IsValid() && node->value->m_name == name) {
+            return node->value;
         }
+        node = node->next;
     }
     return Mortar::SmartPtr<Model>();
 }
 
-// Binary @ 0x00192B54 -- iterate the cached-Model list comparing each entry to
-// `model` via SmartPtr<Model>::operator== (pointer identity). Return the matching
-// SmartPtr<Model>, or an empty SmartPtr on miss.
+// v1.6.1 MeshManager::Find(SmartPtr<Model> const&) @0x002369c0
+// Iterate node chain comparing each node->value pointer identity against `model`.
+// Return first matching SmartPtr<Model>, or empty on miss.
 Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
-    for (int i = 0; i < m_Models.size(); i++) {
-        if (m_Models[i].Get() == model.Get()) {
-            return m_Models[i];
+    Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
+    while (node) {
+        if (node->value.Get() == model.Get()) {
+            return node->value;
         }
+        node = node->next;
     }
     return Mortar::SmartPtr<Model>();
 }
 
-// Binary @ 0x001A74B8 -- empty in the binary (one-time hook reserved for cache
-// capacity setup; the shipped build performs no work here).
+// v1.6.1 InitialiseInternal @0x001A74B8 -- empty in the binary (one-time hook, no body).
 void MeshManager::InitialiseInternal() {
 }
 
-// No distinct Release symbol in v1_6_1 (search_functions_enhanced confirms only ctor/dtor/thunk).
-// 0x00192B1C is a v1.5.1-only symbol; in v1_6_1 this would be an inlined List::Remove
-// (find equal SmartPtr by pointer identity, unlink 12B node, drop refcount, free/pool node).
-// DIFFERS: no v1_6_1 binary symbol; std::vector erase-by-identity reproduces List::Remove's
-//   refcount-drop semantics but cannot asm-match an intrusive-list node removal.
+// v1.6.1 MeshManager::Release(SmartPtr<Model> const&) @0x00236908
+// Calls List<SmartPtr<Model>>::Remove to find the matching node by pointer identity,
+// unlink it, call ~SmartPtr<Model> (refcount drop), and free the node.
 void MeshManager::Release(SmartPtr<Model> const& model) {
     if (model.IsValid()) {
-        for (int i = 0; i < m_Models.size(); i++) {
-            if (m_Models[i].Get() == model.Get()) {
-                m_Models.erase(i);
-                break;
-            }
-        }
+        m_Models.Remove(model);
     }
 }
 
