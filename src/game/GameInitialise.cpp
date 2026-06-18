@@ -232,7 +232,7 @@ void GameInitialise() {
     // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
     game_work.m_TutorialControl = new TutorialControl();
     game_work.m_TutorialControl->Init();
-    game_work.mHud->AddControl(game_work.m_TutorialControl);
+    if (game_work.mHud) game_work.mHud->AddControl(game_work.m_TutorialControl);
 
     // Binary GameInit @ 0x0016cb2a: writes -1.0f to g_GameData+0x0c
     // (m_TransitionTimer) immediately after the TutorialControl block.
