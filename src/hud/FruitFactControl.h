@@ -14,8 +14,8 @@
 //   BeginDraw  0x0013a0bc
 //   Update     0x0013b604
 //   DrawOrder  0x0013b95c  (vtable slot 9)
-//   LoadContent   0x001399fc
-//   UnLoadContent 0x00139f84
+//   LoadContent   0x00170b1c  (v1.6.1)
+//   UnLoadContent 0x00171a4c  (v1.6.1)
 //   UpdateLeaderboard 0x0013afbc
 //   DrawLeaderboard   0x0013aac0
 //   DrawDownloadIcon  0x001395d0
@@ -141,8 +141,8 @@ public:
     // Binary @ 0x00139440 -- Defunct: online-services -- no-op stub; binary @ 0x00139440
     void ConnectPressed();
 
-    static void LoadContent();    // Binary @ 0x001399fc
-    static void UnLoadContent();  // Binary @ 0x00139f84
+    static void LoadContent();    // Binary @ 0x00170b1c (v1.6.1)
+    static void UnLoadContent();  // Binary @ 0x00171a4c (v1.6.1)
 
 private:
     void UpdateLeaderboard(float dt);  // Binary @ 0x0013afbc

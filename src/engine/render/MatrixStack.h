@@ -7,22 +7,34 @@
 
 // Matches original MatrixStack (0x848 = 2120 bytes)
 // 32-deep matrix stack with dirty-tracking version counter
+// DIFFERS from binary ctor @ 0x00171734: binary copies from a static identity
+// constant via ldmia/vstm into m_Current and m_Stack[0]; the port uses
+// Matrix44::Identity() on those two instead. m_Stack[1..31] use trivial
+// char storage to avoid redundant Identity() calls (124 per MatrixManager
+// construction eliminated: 31 per stack x 4 stacks).
 struct MatrixStack {
-    Matrix44 m_Stack[32]; // +0x000, 2048 bytes
+    // Trivial char storage with Matrix44 alignment: default ctor does NOT fire,
+    // avoiding 31 redundant Identity() calls per stack at construction time.
+    // Binary only initializes m_Stack[0] and m_Current.
+    alignas(Matrix44) char m_StackStorage[sizeof(Matrix44) * 32]; // +0x000, 2048 bytes
     Matrix44 m_Current;   // +0x800, 64 bytes
     int m_Depth;          // +0x840
     int m_Version;        // +0x844
 
+    Matrix44& StackAt(int idx) {
+        return reinterpret_cast<Matrix44&>(m_StackStorage[idx * sizeof(Matrix44)]);
+    }
+    const Matrix44& StackAt(int idx) const {
+        return reinterpret_cast<const Matrix44&>(m_StackStorage[idx * sizeof(Matrix44)]);
+    }
+
     // ASM-spec v1.6.1 MatrixStack ctor @ 0x00171734: binary loads from a global
-    // identity constant (ldmia) into m_Current and m_Stack[0], rather than
-    // calling Matrix44::Identity() which writes 16 floats individually. The
-    // port's _Matrix44<T>() default ctor also calls Identity(), so
-    // m_Current and m_Stack[0] are already identity-initialized before the
-    // ctor body runs. Removing the redundant body calls saves ~160 stores per
-    // MatrixManager construction (4 stacks x 2 redundant Identity() x 20 stores).
-    // DIFFERS: original = body copies from static identity matrix via ldmia/vstm;
-    // port relies on Matrix44 default ctor + member initialization chain instead.
-    MatrixStack() {
+    // identity constant (ldmia) into m_Current and m_Stack[0], then sets
+    // Depth=0, Version=1. m_Stack[1..31] are left uninitialized.
+    MatrixStack()
+        : m_Current()  // Identity via default ctor (matches binary: m_Current = identity)
+    {
+        StackAt(0).Identity();  // Only init m_Stack[0]; binary does the same via ldmia.
         m_Depth = 0;
         m_Version = 1;
     }
