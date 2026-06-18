@@ -2163,14 +2163,14 @@ static int s_TotalAvail      = 0;
 static int s_TotalCrit       = 0;
 static int s_TotalCritAvail  = 0;
 
-// ASM-spec v1.6.1 Fruit::RandomFruit @ 0x00176564 (decompile)
+// ASM-spec v1.6.1 Fruit::RandomFruit @ 0x001dc5d8 (decompile)
 int Fruit::RandomFruit(bool includeOnSide) {
+    const int cnt = FruitInfo_GetCount();
     if (s_TotalWeight < 1) {
         s_TotalWeight     = 0;
         s_TotalAvail      = 0;
         s_TotalCrit       = 0;
         s_TotalCritAvail  = 0;
-        const int cnt = FruitInfo_GetCount();
         FruitInfoData* fi = FruitInfo_GetArray();
         for (int i = 0; i < cnt; ++i, ++fi) {
             s_TotalWeight += fi->m_Chance;
@@ -2187,16 +2187,16 @@ int Fruit::RandomFruit(bool includeOnSide) {
     }
     bool isCrit = WaveManager::GetInstance()->CriticalMode(0);
     Math::Random* rng = &WaveManager::GetInstance()->m_Random;
-    const int cnt = FruitInfo_GetCount();
+    FruitInfoData* fruitInfoData = FruitInfo_GetArray();
     if (!isCrit) {
         if (includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalWeight);
-            FruitInfoData* fi = FruitInfo_GetArray();
+            FruitInfoData* fi = fruitInfoData;
             for (int i = 0; i < cnt; ++i, ++fi)
                 if (r < (uint32_t)fi->m_CumWeight) return i;
         } else {
             uint32_t r = rng->Rand32((uint32_t)s_TotalAvail);
-            FruitInfoData* fi = FruitInfo_GetArray();
+            FruitInfoData* fi = fruitInfoData;
             int acc = 0;
             for (int i = 0; i < cnt; ++i, ++fi) {
                 if (fi->m_CoinsMax < 1) {
@@ -2208,12 +2208,12 @@ int Fruit::RandomFruit(bool includeOnSide) {
     } else {
         if (includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalCrit);
-            FruitInfoData* fi = FruitInfo_GetArray();
+            FruitInfoData* fi = fruitInfoData;
             for (int i = 0; i < cnt; ++i, ++fi)
                 if (r < (uint32_t)fi->m_CumCritWeight) return i;
         } else {
             uint32_t r = rng->Rand32((uint32_t)s_TotalCritAvail);
-            FruitInfoData* fi = FruitInfo_GetArray();
+            FruitInfoData* fi = fruitInfoData;
             int acc = 0;
             for (int i = 0; i < cnt; ++i, ++fi) {
                 if (fi->m_CoinsMax < 1 && fi->m_bScorable) {
