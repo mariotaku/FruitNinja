@@ -165,6 +165,16 @@ static Quaternion RandomStartAngle() {
     return q;
 }
 
+// SetupLighting @ 0x00175018 — single `bx lr`, a genuine no-op stub in
+// the shipped binary. Both Bomb::LoadContent (0x001727d8) and
+// Fruit::LoadFruitModels (0x001e08ec) reach it via PLT trampoline.
+// No material / mesh / GL state is touched.
+// NOTE: this is a separate file-local in Fruit.cpp (Bomb.cpp has its own
+// static copy; the binary's single function serves both TUs via PLT).
+static Mortar::SmartPtr<Mortar::Model>& SetupLighting(Mortar::SmartPtr<Mortar::Model>& model) {
+    return model;
+}
+
 Fruit::Fruit()
     : m_FruitType(0)
     , m_bNoPowerUp(0)
@@ -1857,60 +1867,194 @@ void Fruit::LoadInfo() {
 // --- FruitModelInfo global array ---------------------------------------
 //
 // Binary allocates a flat FruitModelInfo[fruitCount] array at
-// LoadFruitModels time and stores the pointer in the FRUIT_INFO
-// header block at +0xc8. Port keeps it as a module-local vector
-// sized once by LoadFruitModels.
+// LoadFruitModels time using operator_new(count * 0x24 + 8). Layout:
+//   [0] uint32_t elemSize (0x24)
+//   [4] uint32_t count
+//   [8] FruitModelInfo[count]  -- 0x24 per entry
+//
+// The header stores [elemSize, count] so the "next element" stride is
+// runtime-configurable. Port mirrors this raw-allocation + placement-new
+// pattern to match v1.6.1 binary @ 0x001e08ec.
+// The element pointer is stored alongside the raw base for accessor use.
+//
+// Static slice-effect models (loaded after per-fruit loop).
+// v1.6.1 binary loads slice_fx.mmd / slice_fx_crit.mmd into file-scope globals.
 
-static std::vector<FruitModelInfo> s_FruitModels;
-static bool s_FruitModelsLoaded = false;
+static uint8_t* s_FruitModelsRaw = nullptr;          // raw allocation base (header + elements)
+static FruitModelInfo* s_FruitModels = nullptr;      // -> raw + 8 (first element)
+static int s_FruitModelCount = 0;                    // number of elements
 
-// Matches Fruit::LoadFruitModels (v1.6.1 0x001e08ec). Walks every FRUIT_INFO
-// entry and loads `<name>_<c>_piece_1.mmd` + `_piece_2.mmd` via
-// MeshManager. The format string was resolved from DAT_0017986c at
-// 0x001bcd43: "models/Fruit/%s_%c_piece_%d.mmd" where %c is the first
-// letter of the fruit name.
+static Mortar::SmartPtr<Mortar::Model> s_SliceFxModel;
+static Mortar::SmartPtr<Mortar::Model> s_SliceFxCritModel;
+
+// Matches Fruit::LoadFruitModels (v1.6.1 0x001e08ec). Replicates the binary's
+// raw-allocation + header pattern, followed by per-fruit model loading with
+// SetupLighting, GetProperty extraction, T_2044 attachment, and shared
+// slice-effect / atlas-texture extraction.
+//
+// Binary structure:
+//   1. operator_new(count * 0x24 + 8), write header [0]=0x24, [1]=count
+//   2. placement-new FruitModelInfo ctor on each slot (i = 0..count-1)
+//   3. For each fruit i:
+//      a. Load half-pieces 1/2, whole, outline from "models/Fruit/<name>_%c_..."
+//      b. File::Exists guard before single.mmd
+//      c. Per loaded model: SetupLighting + GetNode(0)->Geometry::GetProperty(0x2843d1)
+//      d. T_2044(effect, model) when whole valid AND FruitInfo[i]+0x334 != 0
+//   4. Load slice_fx.mmd / slice_fx_crit.mmd into static globals
+//   5. Extract fruit atlas texture from s_fruitModels[0].m_pWholeEffect
 void Fruit::LoadFruitModels() {
-    if (s_FruitModelsLoaded) return;
+    if (s_FruitModels) return;  // already loaded
 
-    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    const int count = FruitInfo_GetCount();
+    if (count <= 0) return;
 
-    const int n = FruitInfo_GetCount();
-    s_FruitModels.clear();
-    s_FruitModels.resize((size_t)n);
+    // Step 1: Allocate raw array with header (matches binary: operator_new(count*0x24 + 8))
+    const size_t elemSize = sizeof(FruitModelInfo);  // 0x24
+    const size_t allocSize = 8 + (size_t)count * elemSize;
+    uint8_t* raw = static_cast<uint8_t*>(::operator new(allocSize));
 
-    for (int i = 0; i < n; ++i) {
-        const FruitInfoData* info = FruitInfo_Get(i);
-        if (!info || !info->m_ModelName[0]) continue;
+    // Write header: [0] = elemSize, [1] = count
+    *reinterpret_cast<uint32_t*>(raw + 0) = static_cast<uint32_t>(elemSize);
+    *reinterpret_cast<uint32_t*>(raw + 4) = static_cast<uint32_t>(count);
 
-        const char* name = info->m_ModelName;
-        const char  c    = name[0];
-        char path[256];
+    // Element array starts at raw + 8
+    FruitModelInfo* models = reinterpret_cast<FruitModelInfo*>(raw + 8);
 
-        // Whole-fruit model (<name>_single.mmd)
-        snprintf(path, sizeof(path), "models/Fruit/%s_single.mmd", name);
-        if (Mortar::File::Exists(path, 0)) {
-            s_FruitModels[i].m_Whole = meshMgr->Load(path);
-        }
-
-        // Half-piece models (<name>_<c>_piece_1.mmd + _piece_2.mmd)
-        for (int piece = 1; piece <= 2; ++piece) {
-            // logical path; FileSystem_Direct prepends data_dir
-            snprintf(path, sizeof(path),
-                     "models/Fruit/%s_%c_piece_%d.mmd",
-                     name, c, piece);
-            Mortar::SmartPtr<Mortar::Model> m = meshMgr->Load(path);
-            if (piece == 1) s_FruitModels[i].m_HalfA = m;
-            else            s_FruitModels[i].m_HalfB = m;
-        }
-
+    // Step 2: Placement-construct each FruitModelInfo slot
+    for (int i = 0; i < count; ++i) {
+        new (&models[i]) FruitModelInfo();
     }
 
-    s_FruitModelsLoaded = true;
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    if (!meshMgr) {
+        for (int i = 0; i < count; ++i) {
+            models[i].~FruitModelInfo();
+        }
+        ::operator delete(raw);
+        return;
+    }
+
+    // Step 3: Per-fruit model loading (ALL indices, no skip for missing names)
+    for (int i = 0; i < count; ++i) {
+        const FruitInfoData* info = FruitInfo_Get(i);
+        if (!info) continue;
+
+        const char* name = info->m_ModelName;
+        if (!name[0]) continue;
+
+        const char firstChar = name[0];
+
+        // ---- Half-piece 1/2: "<name>_<c>_piece_1.mmd" / "_piece_2.mmd" ----
+        for (int piece = 1; piece <= 2; ++piece) {
+            char path[256];
+            snprintf(path, sizeof(path), "models/Fruit/%s_%c_piece_%d.mmd",
+                     name, firstChar, piece);
+            Mortar::SmartPtr<Mortar::Model> model = meshMgr->Load(path);
+            if (!model.IsValid()) continue;
+
+            // Binary @ 0x001e0a2c: SetupLighting(model)
+            SetupLighting(model);
+
+            // Binary @ 0x001e0a50+: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty(0x2843d1)
+            // 0x2843d1 = StringHash("DiffuseMap"). The EffectProperty* subsystem is
+            // defunct-stubbed (Geometry::GetProperty returns nullptr), so this resolves
+            // to nullptr. The value is stored in the FruitModelInfo EffectProperty slot
+            // for future atlas-texture resolution.
+            Mortar::EffectProperty* prop = nullptr;
+            {
+                Mortar::Mesh* node0 = model->GetNode(0UL).Get();
+                // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
+                //   node0->GetGeometryEntry(0)->GetProperty(0x2843d1);
+                (void)node0;
+            }
+
+            if (piece == 1) {
+                models[i].m_HalfA = model;
+                models[i].m_pHalfEffectA = prop;
+            } else {
+                models[i].m_HalfB = model;
+                models[i].m_pHalfEffectB = prop;
+            }
+        }
+
+        // ---- Whole-fruit model: "<name>_single.mmd" (File::Exists guard) ----
+        {
+            char path[256];
+            snprintf(path, sizeof(path), "models/Fruit/%s_single.mmd", name);
+            Mortar::SmartPtr<Mortar::Model> wholeModel;
+            if (Mortar::File::Exists(path, 0)) {
+                wholeModel = meshMgr->Load(path);
+            }
+
+            if (wholeModel.IsValid()) {
+                // Binary @ 0x001e0a2c: SetupLighting(model)
+                SetupLighting(wholeModel);
+
+                Mortar::EffectProperty* prop = nullptr;
+                {
+                    Mortar::Mesh* node0 = wholeModel->GetNode(0UL).Get();
+                    // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
+                    (void)node0;
+                }
+
+                models[i].m_Whole = wholeModel;
+                models[i].m_pWholeEffect = prop;
+
+                // TODO: v1.6.1 T_2044 @ 0x001e0b3c
+                // Binary: calls T_2044(effect, model) when wholeModel is valid AND
+                // FruitInfo[i]+0x334 != 0. T_2044 attaches the diffuse-map texture
+                // from the model to the whole-fruit EffectProperty for shared atlas
+                // management. Stub: no-op until EffectProperty is wired.
+            }
+        }
+
+        // ---- Outline/MP model: "<name>_outline.mmd" ----
+        {
+            char path[256];
+            snprintf(path, sizeof(path), "models/Fruit/%s_outline.mmd", name);
+            Mortar::SmartPtr<Mortar::Model> outlineModel = meshMgr->Load(path);
+            if (outlineModel.IsValid()) {
+                SetupLighting(outlineModel);
+
+                Mortar::EffectProperty* prop = nullptr;
+                {
+                    Mortar::Mesh* node0 = outlineModel->GetNode(0UL).Get();
+                    // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
+                    (void)node0;
+                }
+
+                models[i].m_pMpModel = outlineModel;
+                models[i].m_pMpEffect = prop;
+            }
+        }
+    }
+
+    // Step 4: Load slice-effect models into static globals
+    // Binary @ 0x001e0b50+: load slice_fx.mmd and slice_fx_crit.mmd
+    s_SliceFxModel = meshMgr->Load("models/Fruit/slice_fx.mmd");
+    s_SliceFxCritModel = meshMgr->Load("models/Fruit/slice_fx_crit.mmd");
+
+    // Step 5: Extract fruit atlas texture from first fruit's whole-effect
+    // Binary @ 0x001e0b78+: reads DiffuseMap from s_fruitModels[0].m_pWholeEffect
+    // and caches the GL texture ID as the shared fruit_atlas.tex.
+    // TODO: v1.6.1 extract fruit atlas texture @LoadFruitModels
+    //   if (models[0].m_pWholeEffect) {
+    //       EffectTexture2D tex;
+    //       if (models[0].m_pWholeEffect->m_Owner->TryGetValue<EffectTexture2D>(
+    //               EffectDataTypes::Type_Texture2D, 0, tex)) {
+    //           ... cache tex.id as fruit atlas ...
+    //       }
+    //   }
+    // Stub: m_pWholeEffect is always nullptr until GetProperty is wired.
+
+    s_FruitModelsRaw = raw;
+    s_FruitModels = models;
+    s_FruitModelCount = count;
 }
 
 const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
-    if (!s_FruitModelsLoaded) return nullptr;
-    if (fruitType < 0 || fruitType >= (int)s_FruitModels.size()) return nullptr;
+    if (!s_FruitModels) return nullptr;
+    if (fruitType < 0 || fruitType >= s_FruitModelCount) return nullptr;
     return &s_FruitModels[fruitType];
 }
 
@@ -2373,8 +2517,21 @@ void Fruit::UpdateBombAvoidance(float dt) {
 
 // Binary @ 0x0017911c — releases the FruitModelInfo[] array.
 void Fruit::DestroyFruitModels() {
-    s_FruitModels.clear();
-    s_FruitModelsLoaded = false;
+    // Release slice-effect globals
+    s_SliceFxModel = Mortar::SmartPtr<Mortar::Model>();
+    s_SliceFxCritModel = Mortar::SmartPtr<Mortar::Model>();
+
+    // Release raw allocation (header + elements) with proper destructor calls
+    if (s_FruitModelsRaw) {
+        const int count = s_FruitModelCount;
+        for (int i = 0; i < count; ++i) {
+            s_FruitModels[i].~FruitModelInfo();
+        }
+        ::operator delete(s_FruitModelsRaw);
+        s_FruitModelsRaw = nullptr;
+        s_FruitModels = nullptr;
+        s_FruitModelCount = 0;
+    }
 }
 
 // ============================================================

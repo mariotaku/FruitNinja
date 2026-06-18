@@ -97,6 +97,16 @@ public:
     int Capacity()  const { return m_MaxCount; }
     int InUseCount() const { return m_MaxCount - m_FreeCount; }
 
+    // Reset free list to contain all backing slots (bulk clear).
+    // Matches the binary pattern used by RemoveAllSplats which iterates
+    // all slots calling D1 dtor (no-op) without updating the free list.
+    void Reset() {
+        m_FreeCount = m_MaxCount;
+        for (int i = 0; i < m_MaxCount; ++i) {
+            m_FreeList[i] = &m_Backing[i];
+        }
+    }
+
 private:
     // Non-copyable — owning the backing buffer.
     MemoryPool(const MemoryPool&);
