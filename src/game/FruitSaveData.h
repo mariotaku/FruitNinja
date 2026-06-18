@@ -379,7 +379,7 @@ public:
     // Binary @ 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash).
     bool TotalExists(char const* name);
     // Binary @ 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals.
-    bool TotalExists(unsigned int hash);
+    bool TotalExists(unsigned long hash);
 };
 
 #ifdef __bada__

@@ -22,17 +22,11 @@ public:
     uint8_t  m_field24;   // +0x24 -- initialised to 0
     uint8_t  _pad25[3];
 
-    // Defunct: online multiplayer -- no-op stub; binary @ 0x0012dd94
+    // Defunct: online multiplayer -- no-op stub; binary nm confirms:
+    //   WaveSyncPacket()                   @ 0x00149430
+    //   WaveSyncPacket(long, long, float)  @ 0x00149360
     WaveSyncPacket();
-
-    // Defunct: online multiplayer -- no-op stub; binary @ 0x0012dddc
-    WaveSyncPacket(long waveIdx);
-
-    // Defunct: online multiplayer -- no-op stub; binary @ 0x0012de24
-    WaveSyncPacket(long waveIdx, float score);
-
-    // Defunct: online multiplayer -- no-op stub; binary @ 0x0012de64
-    WaveSyncPacket(long waveIdx, float score, long field18);
+    WaveSyncPacket(long waveIdx, long field18, float score);
 
     virtual ~WaveSyncPacket() {}
 };

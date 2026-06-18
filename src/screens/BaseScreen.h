@@ -27,6 +27,8 @@
 #include "math/Vec3.h"
 #include <list>
 
+namespace Mortar { class BakedStringBox; }
+
 // DIFFERS: binary vtable slot 10 (Update) = __cxa_pure_virtual (0x360434) — BaseScreen is abstract.
 // v1.6.1 ctor @ 0x16cd40; Release @ 0x160d90; Reset @ 0x161860; D0 @ 0x161bb0; D1 @ 0x161b20.
 class BaseScreen : public HUDControl3d {
@@ -45,11 +47,16 @@ public:
     static void UnloadContent();
 
     // DrawBorders @ 0x00130230 — shade triangles + deco quad.
-    // DIFFERS: original = takes BakedStringBox* (v1.6.1 @ 0x00130230),
-    // using SmartPtr<Texture> because ES 2.0 port uses textured-quad rendering
-    // instead of the binary's BakedStringBox mesh. Functional equivalent
-    // (both draw a texture at the secondary position with alpha slide).
+    // Binary has two overloads:
+    //   DrawBorders(Mortar::SmartPtr<Mortar::Texture>, ...) @ 0x0014fcec
+    //   DrawBorders(Mortar::BakedStringBox*, ...) @ 0x0014f878
     void DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
+                     float alpha, Vec3 secondaryTexPos);
+
+    // v1.6.1 BakedStringBox* overload @ 0x0014f878.
+    // DIFFERS: BakedStringBox does not expose a Texture; this overload
+    // is a no-op stub. The Texture overload does the real rendering.
+    void DrawBorders(Mortar::BakedStringBox* box,
                      float alpha, Vec3 secondaryTexPos);
 
     // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.

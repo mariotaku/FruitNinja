@@ -738,7 +738,7 @@ bool FruitSaveData::TotalExists(char const* name) {
 
 // Binary @ 0x00129bb4 -- TotalExists(hash): true if hash is present in
 // m_Totals (+0x00) or m_SessionTotals (+0x18).
-bool FruitSaveData::TotalExists(unsigned int hash) {
+bool FruitSaveData::TotalExists(unsigned long hash) {
     if (m_Totals.find(hash) != m_Totals.end()) return true;
     return m_SessionTotals.find(hash) != m_SessionTotals.end();
 }
