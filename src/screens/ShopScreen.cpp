@@ -148,13 +148,13 @@ static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x0015cb08
-// Loads 11 textures into static slots.
+// Loads 10 textures into static slots (binary-faithful: no guard, no s_TexBackIcon).
 // Binary pattern: LoadLocalisedTexture(name) -> store in static slot.
 // Conditional at end: if LowResBackgrounds() load BG_store_sml.tex else BG_store.tex.
 // ---------------------------------------------------------------------------
 void ShopScreen::LoadContent() {
-    if (s_bContentLoaded) return;
-
+    // Binary @ 0x0015cb08 has NO singleton guard — loads unconditionally,
+    // then sets s_isContentLoaded = 1 at the end.
     // Corrected slot order from LoadContent @ 0x0015cb08 disasm + string reads.
     // Slot +0x14: locked.tex          DAT_0015ccb8 -> 0x001bc15e
     s_TexLocked          = Mortar::TextureManager::LoadLocalisedTexture("locked.tex");
@@ -178,11 +178,6 @@ void ShopScreen::LoadContent() {
     // Binary: if (LowResBackgrounds()) load BG_store_sml.tex else BG_store.tex
     // LowResBackgrounds() stub -- always false in port
     s_TexBGStore         = Mortar::TextureManager::LoadLocalisedTexture("BG_store.tex");
-
-    // Port-only: back-icon for the back/quit button. Binary reads this
-    // from a per-task slot (*(GameTask + 0x17c)); port loads back_icon.tex
-    // directly (matches DojoScreen back-button texture).
-    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 
     s_bContentLoaded = true;
 }
@@ -823,6 +818,8 @@ void ShopScreen::Update(float dt) {
                 const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
                 // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
+                if (!s_TexBackIcon.IsValid())
+                    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
                 m_pBuyButton->m_Texture = (s_TexBackIcon);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
@@ -1011,6 +1008,8 @@ void ShopScreen::Update(float dt) {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
             // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
+            if (!s_TexBackIcon.IsValid())
+                s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
             m_pBuyButton->m_Texture = (s_TexBackIcon);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),

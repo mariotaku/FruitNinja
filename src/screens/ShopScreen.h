@@ -211,7 +211,7 @@ public:
     // (*(GameTask + 0x17c) for back, *(GameTask + ...) for equip) which
     // aren't yet ported. Loaded by LoadContent alongside the others.
     static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
-    static bool s_bContentLoaded;                           // +0x4c: one-time init guard
+    static bool s_bContentLoaded;                           // +0x4c: set =1 at end of LoadContent, =0 in UnLoadContent
 
     // ShopScreen::GetDescriptionTextXPos @ 0x0015c520
     // Returns the X anchor for description text, sliding with m_TransitionAlpha.
