@@ -1,7 +1,7 @@
 #ifndef FN_WAVE_STRUCTS_H
 #define FN_WAVE_STRUCTS_H
 
-namespace tinyxml2 { class XMLElement; }
+#include "engine/xml/TiXmlElement.h"
 namespace Math { class Random; }
 
 // Wave data structs — binary layouts from docs/structs/wave.md and
@@ -355,7 +355,7 @@ struct PROBABILITY_OVERIDE {
     }
 
     // Parse XML attributes into this struct. binary @ 0x001231d8
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
 
     // Binary @ 0x00122b44. Populates m_TypeQueue[] from m_Types names.
     // Three lazy-init guarded statics: BOMB_HASH, BOMB_PINEAPPLE_HASH, RANDOM_HASH.

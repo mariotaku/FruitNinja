@@ -125,13 +125,13 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
     // packing 0x00 in the high byte, making every per-award entry.m_Colour
     // alpha=0 -- which made the star quad, award name text, and award score
     // text all invisible. (re-analyst)
-    static const uint32_t k_TierColours[3] = {
-        // BGRA packed: B=0xAD, G=0x7E, R=0x00, A=0xFF
-        (0xAD) | (0x7E << 8) | (0x00 << 16) | (0xFFu << 24),  // gold
-        // B=0xA0, G=0x05, R=0x05, A=0xFF
-        (0xA0) | (0x05 << 8) | (0x05 << 16) | (0xFFu << 24),  // red
-        // B=0x01, G=0x5C, R=0x95, A=0xFF
-        (0x01) | (0x5C << 8) | (0x95 << 16) | (0xFFu << 24),  // blue
+    static const Colour k_TierColours[3] = {
+        // BGRA: B=0xAD, G=0x7E, R=0x00, A=0xFF
+        Colour(0x00, 0x7E, 0xAD, 0xFF),  // gold
+        // BGRA: B=0xA0, G=0x05, R=0x05, A=0xFF
+        Colour(0x05, 0x05, 0xA0, 0xFF),  // red
+        // BGRA: B=0x01, G=0x5C, R=0x95, A=0xFF
+        Colour(0x95, 0x5C, 0x01, 0xFF),  // blue
     };
 
     // Gather best bonus from each type.
@@ -158,8 +158,8 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
         int idx = 0;
         for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
              it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
-            uint32_t colour = k_TierColours[idx];
-            screen->AddAward(colour, it->m_StarTexture, it->m_DisplayName, it->m_Tier);
+            screen->AddAward(k_TierColours[idx], it->m_StarTexture,
+                             it->m_DisplayName, it->m_Tier);
         }
     }
 }

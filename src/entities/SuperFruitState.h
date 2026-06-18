@@ -12,7 +12,7 @@
 
 #include <cstdint>
 
-namespace tinyxml2 { class XMLElement; }
+#include "engine/xml/TiXmlElement.h"
 
 struct SuperFruitState {
     float m_Timer;       // +0x00: elapsed controller time
@@ -25,10 +25,10 @@ struct SuperFruitState {
     {}
 
     // Binary @ 0x001b9acc. Reads "timer"/"lifetime"/"slices"/"spin" XML attrs.
-    void Parse(tinyxml2::XMLElement* elem);
+    void Parse(TiXmlElement* elem);
 
     // Binary @ 0x001b9a10. Writes the fields as XML attributes on elem.
-    void WriteToElement(tinyxml2::XMLElement* elem) const;
+    void WriteToElement(TiXmlElement* elem) const;
 };
 
 #endif // FN_SUPER_FRUIT_STATE_H

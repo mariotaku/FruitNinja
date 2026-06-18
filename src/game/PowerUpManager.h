@@ -50,8 +50,7 @@
 #include "math/Vec3.h"
 
 class PowerUp;
-namespace tinyxml2 { class XMLElement; }
-typedef tinyxml2::XMLElement TiXmlElement;
+#include "engine/xml/TiXmlElement.h"
 
 // std::list is 8 bytes (Sourcery 2010q1 pre-C++11). Offsets below are binary-verified.
 

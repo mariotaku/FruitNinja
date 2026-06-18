@@ -49,9 +49,9 @@ int main(int argc, char* argv[]) {
 
     bs->pos = Vec3(0.0f, -20.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> noTex;
-    bs->AddAward((uint32_t)0xFFAD7E00u, noTex, "ALL_APPLES",   150);
-    bs->AddAward((uint32_t)0xFF00AD7Eu, noTex, "STRAIGHT_3",   300);
-    bs->AddAward((uint32_t)0xFF7EAD00u, noTex, "FRUIT_FRENZY", 500);
+    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), noTex, "ALL_APPLES",   150);
+    bs->AddAward(Colour(0x00, 0xAD, 0x7E, 0xFF), noTex, "STRAIGHT_3",   300);
+    bs->AddAward(Colour(0x7E, 0xAD, 0x00, 0xFF), noTex, "FRUIT_FRENZY", 500);
     if (bs->m_Awards.size() != 3) {
         std::fprintf(stderr, "FAIL: m_Awards.size()=%zu expected 3\n", bs->m_Awards.size());
         return 3;

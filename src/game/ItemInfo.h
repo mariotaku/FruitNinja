@@ -93,7 +93,7 @@ public:
     virtual void SetEquipped();
 
     // vtable[+0x10] Parse @ 0x0011293c — parse <item> TiXmlElement
-    virtual void Parse(tinyxml2::XMLElement* e);
+    virtual void Parse(TiXmlElement* e);
 
     // IsLocked @ 0x0015fa60 — return m_Cost > 0
     bool IsLocked() const;
@@ -132,7 +132,7 @@ struct SlashSoundMods {
     SlashSoundMods();
 
     // Parse — mirrors binary @ 0x00112568
-    void Parse(tinyxml2::XMLElement* elem);
+    void Parse(TiXmlElement* elem);
 
     // Reset — called from Parse and from SlashModInfo::SetEquipped
     void Reset();
@@ -166,7 +166,7 @@ struct LoopingSound {
 
     // Parse — mirrors binary @ 0x0011253c
     // Reads "loop" attr from elem (the <swipeSounds> element).
-    void Parse(tinyxml2::XMLElement* elem);
+    void Parse(TiXmlElement* elem);
 
     // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424)
     void Reset();

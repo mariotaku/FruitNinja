@@ -18,6 +18,7 @@
 #include "asset/ReloadableTexture.h"
 #include <cstdint>
 #include <tinyxml2.h>
+#include "engine/xml/TiXmlElement.h"
 
 class PurchaseInfo {
 public:
@@ -49,7 +50,7 @@ public:
     Mortar::ReloadableTexture& GetGreyTexture()  { return m_GreyTexture;  }
 
     // Binary @ 0x00118474 — parse <purchase_info> XML element.
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
 
     // Binary @ 0x001183d4 — load m_Texture / m_InUseTexture / m_GreyTexture.
     void LoadTextures();

@@ -29,8 +29,7 @@
 
 #include <cstdint>
 
-namespace tinyxml2 { class XMLElement; }
-typedef tinyxml2::XMLElement TiXmlElement;
+#include "engine/xml/TiXmlElement.h"
 
 class PowerUp;
 

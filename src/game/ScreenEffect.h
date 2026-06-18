@@ -24,7 +24,7 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/asset/ReloadableTexture.h"
-#include <tinyxml2.h>
+#include "engine/xml/TiXmlElement.h"
 
 namespace Mortar {
     class MortarSound;
@@ -43,7 +43,7 @@ struct Emmiter {
     Vec3                              m_VelocityScale; // +0x14
 
     Emmiter() : m_NameHash(0), m_pHandle(nullptr), m_Offset(0,0,0), m_VelocityScale(1,1,1) {}
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
 };
 
 // 124 bytes; derives from Mortar::ReloadableTexture (8 bytes at +0x00).
@@ -146,7 +146,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
 #endif
     }
 
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
     void LoadTextures();
 };
 
@@ -183,7 +183,7 @@ struct ScreenTint {
         , m_ColourTo(1,1,1), m_ColourFrom(1,1,1)
     {}
 
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
 };
 
 // 44 bytes
@@ -197,7 +197,7 @@ struct SoundEffect {
         memset(m_SoundName, 0, sizeof(m_SoundName));
     }
 
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
 };
 
 // sizeof = 0x50 = 80 bytes; NO virtual methods.
@@ -228,7 +228,7 @@ public:
     ScreenEffect& operator=(const ScreenEffect& rhs);
 
     // Binary @ 0x0011e150
-    void Parse(tinyxml2::XMLElement* xml);
+    void Parse(TiXmlElement* xml);
     // Binary @ 0x0011dbb8
     void Activate();
     // Binary @ 0x00148844

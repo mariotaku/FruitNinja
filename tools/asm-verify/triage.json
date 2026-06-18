@@ -8722,10 +8722,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "__tcf_0": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:59Z",
     "max_score": 1500,
     "reason": "C++ atexit cleanup for WaveManager::k_BlitzSpawners static array. Port uses std::string members (generates _ZNSs4_Rep10_M_destroyERKSaIcE calls per element in unrolled loop); binary used char arrays (2 simple blx ea6f8 calls). Container divergence: std::string vs char[] in SPAWNER_INFO. Score 15470/1700. [score refreshed 2026-05-17T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15680/1700 -> 15470/1500]",
-    "score": 15470,
+    "score": 4050,
     "verdict": "ACCEPT-deferred"
   },
   "__tcf_1": {
