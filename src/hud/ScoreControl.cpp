@@ -197,12 +197,9 @@ void ScoreControl::Update(float dt) {
                 if (m_DigitAlpha[i] > 1.0f) m_DigitAlpha[i] = 1.0f;
             }
         } else {
-            bool allFaded = true;
             for (int i = 0; i < 16; i++) {
                 m_DigitAlpha[i] -= 16.0f * dt;
                 if (m_DigitAlpha[i] < 0.0f) m_DigitAlpha[i] = 0.0f;
-                if (i == 0 && m_DigitAlpha[0] > 0.0f) allFaded = false;
-                else if (i > 0) allFaded = false;
             }
             if (m_DigitAlpha[0] <= 0.0f) {
                 m_LastDigitCount = digitsActive;
@@ -305,11 +302,12 @@ void ScoreControl::Update(float dt) {
             char scoreBuf[32];
             snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
             float measW = game_work.pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
-            Vec3 drawStart(pos.x + 24.0f, pos.y, pos.z);
-            Vec3 anchor(-160.0f - measW * 0.5f, 80.0f, 0.0f);
-            m_DrawPosX = drawStart.x + (anchor.x - drawStart.x) * waveTimer;
-            m_DrawPosY = drawStart.y + (anchor.y - drawStart.y) * waveTimer;
-            m_DrawPosZ = drawStart.z + (anchor.z - drawStart.z) * waveTimer;
+            float anchorX = -160.0f - measW * 0.5f;
+            float anchorY = 80.0f;
+            float drawStartX = pos.x + 24.0f;
+            m_DrawPosX = drawStartX + (anchorX - drawStartX) * waveTimer;
+            m_DrawPosY = pos.y + (anchorY - pos.y) * waveTimer;
+            m_DrawPosZ = pos.z + (0.0f - pos.z) * waveTimer;
             // Verified binary-faithful: hardware-render drift is asset-dependent.
             // MeasureString returns advance-sum; if FontNumbers.fnt digits have non-zero
             // left-bearing the visible glyphs shift right of the SCORE wordmark centre.
