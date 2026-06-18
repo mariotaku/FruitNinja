@@ -644,6 +644,44 @@ void Bomb::KillBomb() {
     }
 }
 
+// Binary @ 0x00105ea0: IsMultiplayer thunk; impl always returns false (v1.6.1).
+// Not yet ported for same-screen MP.
+static bool IsMultiplayer() { return false; }
+
+// ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
+float Bomb::GetHeighestBomb() {
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    Mortar::Entity* e = am->GetEntity(1L, 0UL);
+    float best = -10000.0f;
+    unsigned long index = 1;
+    if (!e) return best;
+
+    do {
+        float metric = e->pos.y;
+        if (IsMultiplayer()) {
+            metric = e->pos.x;
+            if (metric < 0.0f) {
+                metric += 240.0f;
+            } else {
+                metric = 240.0f - metric;
+            }
+        } else {
+            metric += 160.0f;
+        }
+
+        Bomb* b = static_cast<Bomb*>(e);
+        if (b->m_bMenuBombHit == 0 && best < metric) {
+            best = metric;
+        }
+
+        am = Mortar::ActorManager::GetInstance();
+        e = am->GetEntity(1L, index);
+        index++;
+    } while (e != nullptr);
+
+    return best;
+}
+
 // Binary @ 0x0017280c — vtable slot 9. Returns 0.
 // Three branches:
 //   1. m_bMenuBombHit == 0, Classic/Zen: HitBomb — bombHitTimer = 3.2,
@@ -714,30 +752,6 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
     return 0;
 }
 
-// Matches Bomb::GetNumActiveForPlayer (0x00171250).
-// Binary @ 0x00171250: counts bombs by m_BombVariant, not playerIdx.
-// playerIdx==-1 matches "regular bombs" (variant <= 0); playerIdx 1/2 matches MP-zone-tagged bombs.
-// countPrespawn=false: count prespawn bombs (countdown > 0 and not yet hit) of any variant.
-// countPrespawn=true:  count bombs filtered by variant (no countdown filter).
-// ASM-verified: 2026-05-03 binary @ 0x00171250 (asm-inspector)
-// ASM-verified: 2026-05-18 binary @ 0x001712c8 (re-analyst).
-// Used by GameUpdate fuse-vol block. SP-only path: iterate ActorManager
-// type-1 bomb list, return max (pos.y + 160) across bombs whose
-// m_bMenuBombHit == 0. Returns -10000.0f sentinel when no qualifying
-// bomb exists -- caller treats `<= 0.0f` as "no audible bomb".
-float Bomb::GetHeighestBomb() {
-    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (!am) return -10000.0f;
-    float best = -10000.0f;
-    std::list<Mortar::Entity*>::iterator it;
-    for (Mortar::Entity* e = am->GetEntityFirst(1, it); e; e = am->GetEntityNext(1, it)) {
-        Bomb* b = static_cast<Bomb*>(e);
-        if (b->m_bMenuBombHit != 0) continue;
-        const float metric = b->pos.y + 160.0f;
-        if (metric > best) best = metric;
-    }
-    return best;
-}
 
 int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
