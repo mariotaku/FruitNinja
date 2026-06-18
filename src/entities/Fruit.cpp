@@ -28,6 +28,7 @@
 #include "game/FruitSaveData.h"
 #include "util/StringHash.h"
 #include "Game.h"
+#include "engine/asset/File.h"
 #include "audio/GameSound.h"
 #include "math/math3d.h"
 #include "math/MathUtil.h"
@@ -1863,7 +1864,7 @@ void Fruit::LoadInfo() {
 static std::vector<FruitModelInfo> s_FruitModels;
 static bool s_FruitModelsLoaded = false;
 
-// Matches Fruit::LoadFruitModels (0x1794e0). Walks every FRUIT_INFO
+// Matches Fruit::LoadFruitModels (v1.6.1 0x001e08ec). Walks every FRUIT_INFO
 // entry and loads `<name>_<c>_piece_1.mmd` + `_piece_2.mmd` via
 // MeshManager. The format string was resolved from DAT_0017986c at
 // 0x001bcd43: "models/Fruit/%s_%c_piece_%d.mmd" where %c is the first
@@ -1872,20 +1873,11 @@ void Fruit::LoadFruitModels() {
     if (s_FruitModelsLoaded) return;
 
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
-    if (!meshMgr) return;
 
     const int n = FruitInfo_GetCount();
     s_FruitModels.clear();
     s_FruitModels.resize((size_t)n);
 
-    static Mortar::SmartPtr<Mortar::Texture> s_fruitAtlas;
-    if (!s_fruitAtlas.IsValid()) {
-        // logical path; FileSystem_Direct prepends data_dir
-        s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(
-            "models/fruit/textures/fruit_atlas.tex");
-    }
-
-    int loaded = 0;
     for (int i = 0; i < n; ++i) {
         const FruitInfoData* info = FruitInfo_Get(i);
         if (!info || !info->m_ModelName[0]) continue;
@@ -1896,7 +1888,9 @@ void Fruit::LoadFruitModels() {
 
         // Whole-fruit model (<name>_single.mmd)
         snprintf(path, sizeof(path), "models/Fruit/%s_single.mmd", name);
-        s_FruitModels[i].m_Whole = meshMgr->Load(path);
+        if (Mortar::File::Exists(path, 0)) {
+            s_FruitModels[i].m_Whole = meshMgr->Load(path);
+        }
 
         // Half-piece models (<name>_<c>_piece_1.mmd + _piece_2.mmd)
         for (int piece = 1; piece <= 2; ++piece) {
@@ -1909,33 +1903,9 @@ void Fruit::LoadFruitModels() {
             else            s_FruitModels[i].m_HalfB = m;
         }
 
-        if (s_FruitModels[i].m_HalfA.IsValid()) {
-            ++loaded;
-        }
-
-        // Assign fruit_atlas texture to all three model slots
-        if (s_fruitAtlas.IsValid()) {
-            Mortar::Model* slots[3] = {
-                s_FruitModels[i].m_Whole.Get(),
-                s_FruitModels[i].m_HalfA.Get(),
-                s_FruitModels[i].m_HalfB.Get()
-            };
-            for (int s = 0; s < 3; ++s) {
-                Mortar::Model* mod = slots[s];
-                if (!mod) continue;
-                for (size_t m = 0; m < mod->m_nodes.size(); ++m) {
-                    if (mod->m_nodes[m].IsValid() &&
-                        !mod->m_nodes[m]->HasDiffuseTexture())
-                    {
-                        mod->m_nodes[m]->SetDiffuseTexture(s_fruitAtlas);
-                    }
-                }
-            }
-        }
     }
 
     s_FruitModelsLoaded = true;
-    (void)loaded;
 }
 
 const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
