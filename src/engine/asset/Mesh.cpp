@@ -232,7 +232,7 @@ void Mesh::Draw(const Matrix44& worldTransform) {
 // port stubs Contains()->true and GetProperty()->nullptr (defunct subsystem). Shape,
 // field writes, def array (World/SceneCamera.View/SceneCamera.Projection/WorldViewProjection,
 // type=3, count=1), Contains() fast-path branch, and 4x GetProperty cache calls all match.
-Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& name)
+Mesh::Mesh(SmartPtr<SharedEffectProperties> parent, AsciiString const& name)
     : m_Skeleton(NULL)
     , m_WorldProp(NULL), m_ViewProp(NULL), m_ProjProp(NULL), m_WVPProp(NULL)
 {
@@ -272,7 +272,7 @@ void Mesh::BindSkeleton(Skeleton const& skeleton) {
 }
 
 // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
-void Mesh::AddGeometry(SmartPtr<Geometry> const& geom) {
+void Mesh::AddGeometry(SmartPtr<Geometry> geom) {
     m_Geometries.push_back(geom);
 }
 

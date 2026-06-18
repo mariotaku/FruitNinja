@@ -185,7 +185,7 @@ public:
     // GetProperty(string&) @ 0x001b6820 — forwards to char* overload.
     EffectProperty* GetProperty(const std::string& name) const;
 
-    void SetParent(const SmartPtr<SharedEffectProperties>& parent) {
+    void SetParent(SmartPtr<SharedEffectProperties> parent) {
         m_Parent = parent;
     }
 
@@ -193,7 +193,7 @@ public:
     // Template body lives in header so it can be instantiated for any iterator.
     template <typename Iter>
     void InitPropertyList(Iter begin, Iter end,
-                          const SmartPtr<SharedEffectProperties>& parent);
+                          SmartPtr<SharedEffectProperties> parent);
 
 private:
     // Comparator for lower_bound / sort: compares EffectProperty* by name vs char*.
@@ -229,7 +229,7 @@ public:
     // Range ctor @ 0x001b2708.
     SharedEffectProperties(const EffectPropertyDefinition* begin,
                            const EffectPropertyDefinition* end,
-                           const SmartPtr<SharedEffectProperties>& parent);
+                           SmartPtr<SharedEffectProperties> parent);
 
     EffectPropertyList& GetList() { return m_List; }
     const EffectPropertyList& GetList() const { return m_List; }
@@ -245,7 +245,7 @@ private:
 // Binary @ 0x001b25b4.
 template <typename Iter>
 void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
-                                          const SmartPtr<SharedEffectProperties>& parent) {
+                                          SmartPtr<SharedEffectProperties> parent) {
     m_Parent = parent;
 
     // Pass 1: tally per-bucket bytes needed for new defs only (those not already

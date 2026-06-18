@@ -466,10 +466,10 @@ Mortar::SmartPtr<Model> MeshManager::Find(AsciiString const& name) const {
     return Mortar::SmartPtr<Model>();
 }
 
-// v1.6.1 MeshManager::Find(SmartPtr<Model> const&) @0x002369c0
+// v1.6.1 MeshManager::Find(SmartPtr<Model>) @0x002369c0
 // Iterate node chain comparing each node->value pointer identity against `model`.
 // Return first matching SmartPtr<Model>, or empty on miss.
-Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
+Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> model) const {
     Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
     while (node) {
         if (node->value.Get() == model.Get()) {
@@ -484,10 +484,10 @@ Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
 void MeshManager::InitialiseInternal() {
 }
 
-// v1.6.1 MeshManager::Release(SmartPtr<Model> const&) @0x00236908
+// v1.6.1 MeshManager::Release(SmartPtr<Model>) @0x00236908
 // Calls List<SmartPtr<Model>>::Remove to find the matching node by pointer identity,
 // unlink it, call ~SmartPtr<Model> (refcount drop), and free the node.
-void MeshManager::Release(SmartPtr<Model> const& model) {
+void MeshManager::Release(SmartPtr<Model> model) {
     if (model.IsValid()) {
         m_Models.Remove(model);
     }

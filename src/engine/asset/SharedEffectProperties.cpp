@@ -108,7 +108,7 @@ bool EffectPropertyList::Contains(const EffectPropertyDefinition* begin,
 SharedEffectProperties::SharedEffectProperties(
         const EffectPropertyDefinition* begin,
         const EffectPropertyDefinition* end,
-        const SmartPtr<SharedEffectProperties>& parent) {
+        SmartPtr<SharedEffectProperties> parent) {
     m_List.InitPropertyList(begin, end, parent);
 }
 
@@ -116,7 +116,7 @@ SharedEffectProperties::SharedEffectProperties(
 // iterator so the symbol emits from this TU.
 template void EffectPropertyList::InitPropertyList<const EffectPropertyDefinition*>(
     const EffectPropertyDefinition*, const EffectPropertyDefinition*,
-    const SmartPtr<SharedEffectProperties>&);
+    SmartPtr<SharedEffectProperties>);
 
 // Explicit template instantiations so the out-of-line specialisations emit
 // symbols. GCC 4.4.1 (cross-build) requires explicit instantiation for
