@@ -2,6 +2,7 @@
 #define MORTAR_TEXTURE_MANAGER_H
 
 #include "asset/Texture.h"
+#include "asset/TextureSource.h"
 #include "util/SmartPtr.h"
 #include "util/StringHash.h"
 #include "core/Singleton.h"
@@ -18,7 +19,9 @@ class TextureManager : public Singleton<TextureManager> {
 public:
     // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
-    Mortar::SmartPtr<Texture> Load(const char* path);
+    // DIFFERS: binary has second SmartPtr<TextureSource> param (0x00188ca4).
+    Mortar::SmartPtr<Texture> Load(const char* path,
+        Mortar::SmartPtr<Mortar::TextureSource> source = Mortar::SmartPtr<Mortar::TextureSource>());
 
     // Matches LoadLocalisedTexture (0x0010a758)
     // Loads texture by name from the data/textures/ directory.

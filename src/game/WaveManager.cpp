@@ -738,7 +738,7 @@ void WaveManager::Resume() {
         m_Speed[0]           = sd->m_Speed_P0_alias;
         m_Speed[1]           = sd->m_Speed_P0_alias;
         // Binary: hash of "blitz_bonus" — same key AddSpeed increments.
-        m_BlitzBonus[0] = sd->GetTotal(StringHash("blitz_bonus"));
+        m_BlitzBonus[0] = sd->GetTotal("blitz_bonus");
 
         ResetWaveChances();
 

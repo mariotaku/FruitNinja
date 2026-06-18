@@ -294,7 +294,10 @@ public:
                    bool trackSession = false, bool sendNetPacket = false);
     int AddToTotal(const char* name, int count);
 
-    // 0x0012a110. Map lookup by hash; 0 if missing.
+    // Binary @ 0x00152e58 -- hashes name, delegates to GetTotal(hash).
+    int GetTotal(const char* name);
+    // Binary @ 0x00152760. Map lookup by hash; 0 if missing.
+    // Checks m_Totals first, then falls back to m_SessionTotals.
     int GetTotal(uint32_t hash);
 
     // Binary @ 0x00153ebc (via PauseScreen::QuitGameCallback) -- wipes entire m_Totals map.

@@ -13,18 +13,8 @@
 #include "HUDControl3d.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
+#include "hud/LocalizedString.h"
 #include <cstdint>
-
-// LocalizedString — port stub for the binary's BakedString-based localised
-// string type used by the CheckBox(Vec3, Vec3, LocalizedString) overload.
-// Full RE is not yet complete; this minimal wrapper lets the overload compile.
-// Binary @ 0x00134D98 (LocalizedString ctor delegates to char* ctor with
-// possible binary-side bug — see TODO below).
-struct LocalizedString {
-    const char* str;
-    explicit LocalizedString(const char* s) : str(s) {}
-    operator const char*() const { return str; }
-};
 
 class CheckBox : public HUDControl3d {
 public:

@@ -74,8 +74,8 @@ MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch) {
     return SFXPlay(name, vol, pitch, Mortar::Delegate1<bool, MortarSound*>());
 }
 
-// Binary @ 0x00129100
-bool GameSound::IsPlaying(uint32_t hash) {
+// Binary @ 0x00151aa8
+bool GameSound::IsPlaying(int hash) {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (!m_Slots[i].isFree && m_Slots[i].id == hash) {
             // Early exit: slot matched but sound is NULL

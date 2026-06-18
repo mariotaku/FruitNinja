@@ -58,8 +58,9 @@ public:
                                  Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback);
     Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
 
-    // Binary @ 0x00129100
-    bool IsPlaying(uint32_t hash);
+    // Binary @ 0x00151aa8
+    bool IsPlaying(int hash);
+    // Binary @ 0x00151ae4 -- hashes name, delegates to IsPlaying(int).
     bool IsPlaying(const char* name);
 
     // Binary @ 0x00129138

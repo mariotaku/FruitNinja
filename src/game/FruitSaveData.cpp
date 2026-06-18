@@ -117,10 +117,17 @@ int FruitSaveData::AddToTotal(const char* name, int count) {
     return AddToTotal(name, StringHash(name), count, false, false);
 }
 
-// GetTotal @ 0x0012a110.
+// Binary @ 0x00152e58 -- hashes name, delegates.
+int FruitSaveData::GetTotal(const char* name) {
+    return GetTotal(StringHash(name));
+}
+
+// GetTotal @ 0x00152760.
 int FruitSaveData::GetTotal(uint32_t hash) {
-    auto it = m_Totals.find(hash);
-    return (it != m_Totals.end()) ? it->second.count : 0;
+    std::map<uint32_t, SliceTotal>::iterator it = m_Totals.find(hash);
+    if (it != m_Totals.end()) return it->second.count;
+    it = m_SessionTotals.find(hash);
+    return (it != m_SessionTotals.end()) ? it->second.count : 0;
 }
 
 // ClearTotals -- wipes the entire m_Totals map.
@@ -344,7 +351,7 @@ bool FruitSaveData::PlayedModeToday(int gameMode) {
     if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
     char buf[68];
     snprintf(buf, sizeof(buf), "%s_today", k_ModeNames[gameMode]);
-    return GetTotal(StringHash(buf)) > 0;
+    return GetTotal(buf) > 0;
 }
 
 // ----------------------------------------------------------------------
@@ -714,13 +721,12 @@ void FruitSaveData::DownloadedTweakValue(char const*, int) {}
 void FruitSaveData::PublishUnlockedAchievements() {}
 
 // Binary @ 0x0012b2b0 -- SetTotal.
-// hash = StringHash(name); old = GetTotal(hash);
-// AddToTotal(name, hash, value-old, trackSession, sendNetPacket); return old.
+// old = GetTotal(name); AddToTotal(name, hash, value-old, ...); return old.
 // The delta (value - old) makes the cumulative total settle at exactly `value`.
 unsigned int FruitSaveData::SetTotal(char const* name, int value,
                                      bool trackSession, bool sendNetPacket) {
+    unsigned int old = (unsigned int)GetTotal(name);
     uint32_t hash = StringHash(name);
-    unsigned int old = (unsigned int)GetTotal(hash);
     AddToTotal(name, hash, value - (int)old, trackSession, sendNetPacket);
     return old;
 }

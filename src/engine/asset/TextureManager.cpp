@@ -24,7 +24,8 @@ TextureManager::~TextureManager() {
     s_TextureManagerDestroyed = true;
 }
 
-Mortar::SmartPtr<Texture> TextureManager::Load(const char* path) {
+Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
+    Mortar::SmartPtr<Mortar::TextureSource> /*source*/) {
     uint32_t hash = StringHash(path);
 
     // Check cache first
