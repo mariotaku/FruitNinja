@@ -36,7 +36,7 @@
 // cross-build does not set. Provide a portable shim so Font.cpp compiles.
 #if defined(__GNUC__) && defined(__arm__)
 #  include <string.h>
-static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
+inline int strncasecmp(const char* s1, const char* s2, size_t n) {
     for (; n; --n, ++s1, ++s2) {
         unsigned char a = (unsigned char)*s1;
         unsigned char b = (unsigned char)*s2;
