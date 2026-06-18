@@ -3,7 +3,7 @@
 // ASM-verified: 2026-05-09 binary @ 0x001175d4 (asm-inspector)
 void MatrixStack::Reset() {
     m_Current.Identity();
-    StackAt(0).Identity();
+    m_Stack[0).Identity();
     m_Depth = 0;
     m_Version++;
 }
@@ -14,7 +14,7 @@ void MatrixStack::Reset() {
 // the C++ stack.
 void MatrixStack::Push() {
     // assert(m_Depth < 31);
-    StackAt(m_Depth) = m_Current;
+    m_Stack[m_Depth) = m_Current;
     m_Depth++;
     m_Version++;
 }
@@ -22,7 +22,7 @@ void MatrixStack::Push() {
 void MatrixStack::Pop() {
     // assert(m_Depth > 0);
     m_Depth--;
-    m_Current = StackAt(m_Depth);
+    m_Current = m_Stack[m_Depth);
     m_Version++;
 }
 
