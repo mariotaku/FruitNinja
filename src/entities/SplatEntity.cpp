@@ -825,14 +825,9 @@ void SplatEntity::DrawActiveSplats() {
     // Binary @ 0x00180356: *s_NumActiveSplats = 0 before the loop.
     s_NumActiveSplats = 0;
 
-    // Fetch world tint from HUD::scales[3..5] and store in s_CurrentTintRGB.
-    // DrawSplat reads this directly rather than receiving it as an argument.
-    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
     s_CurrentTintRGB = Colour::IdentityTint();
-    if (Game* game = Game::GetInstance()) {
-        if (game_work.mHud) {
-            s_CurrentTintRGB = &game_work.mHud->scales[3];
-        }
+    if (game_work.mHud) {
+        s_CurrentTintRGB = &game_work.mHud->scales[3];
     }
 
     const int N = s_Pool.Capacity();
@@ -848,9 +843,7 @@ void SplatEntity::DrawActiveSplats() {
         ++s_NumActiveSplats;
     }
 
-    const int count = s_NumActiveSplats;
-
-    if (count == 0) return;
+    if (s_NumActiveSplats == 0) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -863,7 +856,7 @@ void SplatEntity::DrawActiveSplats() {
     // stays in effect. SplatEntity::Draw must NOT mutate it -- doing so leaves
     // depth-test OFF for subsequent same-bucket draws and breaks the fruit
     // -occludes-backdrop sort order on the menu screen.
-    Mortar::Mesh::DrawTriList(s_SplatVerts, count * 6, false, NULL);
+    Mortar::Mesh::DrawTriList(s_SplatVerts, s_NumActiveSplats * 6, false, NULL);
 
     s_SplatTex->UnSet();
 }

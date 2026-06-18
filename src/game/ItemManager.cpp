@@ -14,29 +14,18 @@
 #include "FruitSaveData.h"
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
-#include "engine/util/PathCI.h"
 #include "engine/MenuBackground.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
-#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #endif
 
-// External: g_FruitSaveData singleton — binary GOT @ 0x1f3ac0.
-// Port: exposed via FruitSaveData.h (the instance lives in Game::pSaveData).
-// We access it through the Game singleton here.
 #include "Game.h"
 #include "game/GameWork.h"
-static FruitSaveData* GetSaveData() {
-    Game* g = Game::GetInstance();
-    return g ? game_work.m_SaveData : nullptr;
-}
 
 // ItemManager::EquippedSlashModCount @ .bss 0x0022ece4
 int ItemManager::EquippedSlashModCount = 0;
@@ -48,8 +37,6 @@ ItemManager::ItemManager() {
     m_DefaultItems[0] = nullptr;
     m_DefaultItems[1] = nullptr;
     m_DefaultItems[2] = nullptr;
-    m_DefaultItems[3] = nullptr;
-    // Binary: also clears +0x0c separately (overlaps m_DefaultItems[3])
     m_DefaultItems[3] = nullptr;
 }
 
@@ -92,22 +79,16 @@ static std::string BuildItemSaveFullPath() {
 // Parse itemlist.xml, then load ItemSave.xml for persistence.
 // DIFFERS: original = Mortar TiXml (operator new(0x48)) (v1.6.1 LoadItemData @0x00139d68),
 //   using tinyxml2 because the TiXml subsystem is unported -- container/iteration logic matches.
+// DIFFERS: original = hardcoded "xml/itemList.xml" path (v1.6.1 @0x00139d68); port uses
+//   Game::data_dir for platform-relative asset access (build-configurable data directory).
+// DIFFERS: original = saves at GetItemSavePath() return ("ItemSave.xml", same directory);
+//   port uses BuildItemSaveFullPath() which routes to /save/ on Emscripten.
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     // Phase 1: Parse itemlist.xml
-    // Binary literal is "xml/itemList.xml" @ 0x1ba064 (capital L), shipped
-    // asset is "itemlist.xml". Bada's tinyxml resolves CI; the SDL port
-    // matches via Mortar::ResolvePathCI fallback below.
-    std::string xmlPath = game->data_dir + "/xml/itemList.xml";
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(xmlPath.c_str());
-    if (err != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(xmlPath.c_str());
-        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
-    }
+    tinyxml2::XMLError err = doc.LoadFile(
+        (Game::GetInstance()->data_dir + "/xml/itemList.xml").c_str());
 
     m_ByHash.clear();
     m_Items.clear();
@@ -121,38 +102,28 @@ void ItemManager::LoadItemData() {
                  e;
                  e = e.NextSiblingElement("item")) {
 
-                // Allocate typed item
                 const char* typeStr = e.Attribute("type");  // 0x1b9372
-                int type = ParseItemType(typeStr);            // 0=SLASH_MODIFIER..3=REMOVEADS
+                int type = ParseItemType(typeStr);
 
                 ItemInfo* item;
                 if (type == 0) {
-                    item = new SlashModInfo();  // 0x110 bytes
+                    item = new SlashModInfo();
                 } else {
-                    item = new ItemInfo();      // 0x40 bytes
+                    item = new ItemInfo();
                 }
                 item->m_Type = (int8_t)type;
-                // Virtual dispatch to ItemInfo::Parse or ParseSlashModInfo
                 item->Parse(&e);
 
-                // Achievement-gate check (binary: LoadItemData inner block)
-                FruitSaveData* sd = GetSaveData();
-                if (sd != nullptr) {
-                    int unlocked = sd->IsAchievementUnlocked(item->m_Hash);
-                    if (unlocked == 0) {
-                        AchievementManager* am = AchievementManager::GetInstance();
-                        int exists = am->AchievementExists(item->m_Hash);
-                        if (exists == 0 && item->m_Cost > 0) {
-                            // Not found in achievement system + positive cost
-                            // → mark as new/free
-                            item->m_bSeen = false;   // "new item" badge
-                            item->m_Cost = -1;       // make it free
-                            // ShopScreen::NewItem() — sets ShopScreen new-item float flag.
-                            ShopScreen::s_NewItemAlpha = 1.0f;
-                        }
-                    } else {
-                        // Achievement already unlocked → auto-unlock item
+                // Achievement-gate check (binary: game_work.pM_SaveData directly, no null guard)
+                FruitSaveData* sd = game_work.m_SaveData;
+                if (sd->IsAchievementUnlocked(item->m_Hash)) {
+                    item->m_Cost = -1;
+                } else {
+                    AchievementManager* am = AchievementManager::GetInstance();
+                    if (!am->AchievementExists(item->m_Hash) && item->m_Cost > 0) {
+                        item->m_bSeen = false;
                         item->m_Cost = -1;
+                        ShopScreen::s_NewItemAlpha = 1.0f;
                     }
                 }
 
@@ -160,37 +131,25 @@ void ItemManager::LoadItemData() {
                 m_ByHash[item->m_Hash] = item;
                 m_ByHashType[type][item->m_Hash] = item;
 
-                // Set default item for this type (first seen wins; type==3 excluded)
                 if (m_DefaultItems[type] == nullptr && type != 3) {
                     m_DefaultItems[type] = item;
                 }
             }
         }
-    } else {
-        LOG_ERROR("ITEM/LoadItemData", "failed to open '%s' (error %d)",
-                  xmlPath.c_str(), (int)err);
     }
 
     // Phase 2: Load save state from ItemSave.xml
-    // Binary: GetItemSavePath() returns "ItemSave.xml" (flat, no subdir).
-    // Port: use BuildItemSaveFullPath() which routes to /save on Emscripten.
     std::string saveFullPath = BuildItemSaveFullPath();
     tinyxml2::XMLDocument save;
     tinyxml2::XMLError saveErr = save.LoadFile(saveFullPath.c_str());
-    if (saveErr != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(saveFullPath.c_str());
-        if (!ci.empty()) saveErr = save.LoadFile(ci.c_str());
-    }
 
     if (saveErr == tinyxml2::XML_SUCCESS) {
         tinyxml2::XMLElement* root = save.FirstChildElement("item_save_file");  // 0x1b9e4d
         if (root != nullptr) {
-            // Coin balance lives in game_work (+0x20/+0x24/+0x28), not FruitSaveData.
             root->QueryIntAttribute("coins",           &game_work.m_CoinsBalance);
             root->QueryIntAttribute("coinsTotal",      &game_work.m_CoinsTotalEarned);
             root->QueryIntAttribute("levelStartCoins", &game_work.m_CoinsAtGameStart);
 
-            // <boughtItems> section
             tinyxml2::XMLElement* bought = root->FirstChildElement("boughtItems");  // 0x1b9e89
             if (bought != nullptr) {
                 for (tinyxml2::XMLElement* e = bought->FirstChildElement("item");  // 0x1b9e95
@@ -202,24 +161,14 @@ void ItemManager::LoadItemData() {
                         std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
                         if (it != m_ByHash.end()) {
                             ItemInfo* itm = it->second;
-                            itm->m_Cost = -1;  // mark purchased
-
+                            itm->m_Cost = -1;
                             const char* seenVal = e->Attribute("seen");  // 0x1b9ea5
-                            bool isSeen;
-                            if (!seenVal || !*seenVal) {
-                                isSeen = false;
-                            } else {
-                                // ARM idiom: cmp = strcmp(seenVal, "true"); isSeen = (cmp == 0)
-                                int cmp = strcmp(seenVal, "true");  // 0x1b9ea0
-                                isSeen = (cmp == 0);
-                            }
-                            itm->m_bSeen = isSeen ? true : false;
+                            itm->m_bSeen = (seenVal && *seenVal && strcmp(seenVal, "true") == 0);
                         }
                     }
                 }
             }
 
-            // <equippedItems> section
             tinyxml2::XMLElement* equipped = root->FirstChildElement("equippedItems");  // 0x1b9eaa
             if (equipped != nullptr) {
                 for (tinyxml2::XMLElement* e = equipped->FirstChildElement("item");  // 0x1b9e95
@@ -237,13 +186,10 @@ void ItemManager::LoadItemData() {
             }
         }
     }
-    // No error log on missing save — expected on first run.
 
     // Phase 3: Apply equipped items for all 4 types
-    // Binary @0x00139d68: zeroes m_DefaultItems[2] (the UPSELL equipped slot, +0x08
-    // relative to m_DefaultItems[0]) right before the SetEquippedItem re-apply loop.
-    // This resets the UPSELL slot so SetEquippedItem(ITEM_TYPE_UPSELL, ...) fires
-    // without short-circuiting via the funcCalls guard.
+    // Binary: zeros m_DefaultItems[2] @ +8 before SetEquippedItem loop so the
+    // UPSELL slot doesn't short-circuit via funcCalls guard.
     m_DefaultItems[2] = nullptr;
     for (int i = 0; i < 4; i++) {
         SetEquippedItem(i, m_DefaultItems[i]);
