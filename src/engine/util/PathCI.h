@@ -15,8 +15,9 @@ namespace Mortar {
 // case-insensitive). Use this as a fallback when a raw fopen / SDL
 // SDL_RWFromFile / tinyxml2::XMLDocument::LoadFile call returns ENOENT.
 //
-// FileSystem_Direct uses an internal copy of this logic; this helper
-// exists for the file open paths that bypass the IFile chain
+// FileSystem_Direct also uses this helper (via Mortar::ResolvePathCI
+// calls in FileSystemPosix.cpp and FileSystemWin32.cpp).  External
+// callers include file open paths that bypass the IFile chain
 // (tinyxml2 in *Manager.cpp loaders, Localisation, raw fopen).
 std::string ResolvePathCI(const char* absPath);
 

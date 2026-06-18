@@ -1020,9 +1020,6 @@ void WaveManager::Update(float dt) {
 static bool s_PreSpawnTickedThisFrame = false;
 
 void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     // Binary @ 0x001253b0: clear the wave-end gate flag at function entry.
     s_PreSpawnTickedThisFrame = false;
 
@@ -1189,42 +1186,13 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // early-trigger short-circuit (line 1167). Without this fix the
                 // Arcade special-banana overrides (freeze/frenzy/scorex2) never rolled.
                 if (!overrides.empty()) {
-                    int totalChance = 0;
-                    for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
-                         oit != overrides.end(); ++oit)
-                    {
-                        PROBABILITY_OVERIDE& po = *oit;
-                        // Gate: perWave cap
-                        if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
-                        // ASM-verified: 2026-05-27 binary @ 0x00125606..0x00125622 (re-analyst).
-                        // Skip this PROBABILITY_OVERIDE when the player has not reached the override's
-                        // required wave count. Subject is m_WaveCount[playerIdx], NOT m_BlitzBonus[0].
-                        // Negative wave count (Reset sentinel) bypasses the override entirely.
-                        if (m_WaveCount[playerIdx] >= 0
-                                && po.m_PerWaveCount > 0
-                                && m_WaveCount[playerIdx] < po.m_PerWaveCount) continue;
-                        // Gate: disableWhenPowered — binary @ 0x00117b38
-                        // GetActiveProgression returns 2.0 when no power active, [0..1] otherwise.
-                        // ASM-verified: 2026-05-18 binary @ 0x00125390 (re-analyst)
-                        if (po.m_DisableWhenPowered > 0.0f) {
-                            float prog = PowerUpManager::GetInstance()
-                                             ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
-                                             : 2.0f;
-                            if (po.m_DisableWhenPowered >= prog) continue;
-                        }
-                        int pc = po.m_PercentChance;
-                        if (field_0x23d > 5) pc >>= 1;
-                        totalChance += pc;
-                    }
-
                     // Roll source per binary @ 0x00125568: Rand32(wave+0x70) =
-                    // Rand32(m_OverideProbabilityPool), NOT Rand32(totalChance).
-                    // Pool defaults to 100 (WAVE_INFO ctor); per-entry m_PercentChance
-                    // expresses percent-of-pool. Override only wins if the cumulative
-                    // sum surpasses the roll -- if all entries miss, fall-through
-                    // returns chosenType=-1 and the spawn defaults to RandomFruit.
+                    // Rand32(m_OverideProbabilityPool), the override pool size.
+                    // Per-entry m_PercentChance expresses percent-of-pool. Override
+                    // only wins if the cumulative sum surpasses the roll -- if all
+                    // entries miss, fall-through returns chosenType=-1 and the spawn
+                    // defaults to RandomFruit.
                     if (wave->m_OverideProbabilityPool > 0) {
-                        (void)totalChance;
                         int roll = (int)m_Random.Rand32((uint32_t)wave->m_OverideProbabilityPool);
                         int cumulative = 0;
                         for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
