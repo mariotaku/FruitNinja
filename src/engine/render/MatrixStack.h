@@ -13,11 +13,18 @@ struct MatrixStack {
     int m_Depth;          // +0x840
     int m_Version;        // +0x844
 
+    // ASM-spec v1.6.1 MatrixStack ctor @ 0x00171734: binary loads from a global
+    // identity constant (ldmia) into m_Current and m_Stack[0], rather than
+    // calling Matrix44::Identity() which writes 16 floats individually. The
+    // port's _Matrix44<T>() default ctor also calls Identity(), so
+    // m_Current and m_Stack[0] are already identity-initialized before the
+    // ctor body runs. Removing the redundant body calls saves ~160 stores per
+    // MatrixManager construction (4 stacks x 2 redundant Identity() x 20 stores).
+    // DIFFERS: original = body copies from static identity matrix via ldmia/vstm;
+    // port relies on Matrix44 default ctor + member initialization chain instead.
     MatrixStack() {
         m_Depth = 0;
         m_Version = 1;
-        m_Current.Identity();
-        m_Stack[0].Identity();
     }
 
     // ASM-verified: 2026-05-09 binary @ 0x001175d4 (asm-inspector)

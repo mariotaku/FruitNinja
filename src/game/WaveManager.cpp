@@ -19,6 +19,16 @@
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
 #include "debug/Logger.h"
+
+// Port-only debug logging: the binary has no equivalent. Suppressed in non-debug
+// builds to avoid inflating asm-verify diffs (already no-ops under __bada__).
+#ifndef DEBUG
+#undef LOG_DEBUG
+#undef LOG_INFO
+#define LOG_DEBUG(...) ((void)0)
+#define LOG_INFO(...)  ((void)0)
+#endif
+
 #include <tinyxml2.h>
 #include <cstring>
 #include <cstdlib>
