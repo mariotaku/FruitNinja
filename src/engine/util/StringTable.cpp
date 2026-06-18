@@ -124,11 +124,11 @@ bool Mortar::StringTable::LoadHeader(const char* path) {
     // key_ptr in each entry points into the key blob tail.
     uint32_t key_blob_size = raw_size - count * kHeaderEntrySize;
     size_t final_size = count * sizeof(HeaderLookup) + key_blob_size;
-    uint8_t* final = (uint8_t*)malloc(final_size);
-    if (!final) { free(raw); return false; }
+    uint8_t* buf = (uint8_t*)malloc(final_size);
+    if (!buf) { free(raw); return false; }
 
-    HeaderLookup* entries = (HeaderLookup*)final;
-    char* key_blob = (char*)(final + count * sizeof(HeaderLookup));
+    HeaderLookup* entries = (HeaderLookup*)buf;
+    char* key_blob = (char*)(buf + count * sizeof(HeaderLookup));
 
     // Copy key blob.
     memcpy(key_blob, raw + count * kHeaderEntrySize, key_blob_size);
