@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE="${ASM_VERIFY_IMAGE:-fnverify}"
+IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
 
 # Normalise project root to a docker-friendly path. On Git Bash / MSYS the
 # CWD looks like /c/Users/..., but docker (Rancher Desktop / Docker Desktop
