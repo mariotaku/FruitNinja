@@ -115,6 +115,11 @@ public:
     // Accessor for m_PropList (used by Fruit::LoadFruitModels for DiffuseMap property extraction).
     EffectPropertyList* GetPropList() const { return m_PropList; }
 
+    // Binary @ 0x0025ee7c — 3-instruction wrapper; nameHash is cast to const char*
+    // for the binary's interned-string lookup (port's m_PropList is null while
+    // BuildPropList is defunct, so this always returns null in the current port).
+    EffectProperty* GetProperty(uint32_t nameHash);
+
     // === port-only fields populated by MeshManager loader; appended after the
     //     binary fields so m_ActiveBindingIdx/m_Binding/m_PropList stay at
     //     canonical offsets ===
