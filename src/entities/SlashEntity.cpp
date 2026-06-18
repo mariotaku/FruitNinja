@@ -20,6 +20,7 @@
 #include "particle/PSPParticleManager.h"
 #include "audio/GameSound.h"
 #include "game/ItemManager.h"
+#include "game/PowerUpManager.h"
 #include "collision/ColLine.h"
 #include "collision/ColSphere.h"
 #include "util/StringHash.h"
@@ -241,27 +242,30 @@ SlashEntity::SlashEntity()
     , m_PrevHeadPos(0, 0, 0)
     , m_SegLenSq(0.0f)
     , m_HeadThickScale(0.0f)
-    , m_PendingSplats(0)
-    , m_SliceTimerA(0.0f)
-    , m_SliceTimerB(0.0f)
-    , m_BladeVelAtSlice(0, 0, 0)
-    , m_SliceEntityType(0)
+    , m_SliceBladeDir(0, 0, 0)
+    , m_SliceFruitPos(0, 0, 0)
+    , m_SliceFruitType(0)
     , m_SwipeSoundTimer(0.0f)
     , m_GhostIndex(0)
     , m_GhostCount(0)
     , m_GhostDir(0, 0, 0)
-    , m_field_0x118(0.0f)
-    , m_SlicePos(0, 0, 0)
-    , m_field_0x130(0)
-    , m_field_0x134(0.0f)
+    , m_ComboTimer(0.0f)
+    , m_pComboMissControl(nullptr)
+    , m_GhostSpawnTimer(0.0f)
+    , m_GhostSpawnPending(0)
+    , m_pLastComboFruit(nullptr)
+    , m_PendingSplats(-1)
+    , m_SplatTimer(0.0f)
+    , m_SplatInterval(0.0f)
     , m_TrailShiftA(-1)
     , m_TrailShiftB(-1)
     , m_BladeActive(0)
-    , m_field_0x144(0.0f)
+    , m_ComboScoreScale(0.0f)
     , m_field_0x148(-1)
     , m_field_0x14c(-1)
-    , m_ComboEntityType(0)
-    , m_pComboMissControl(nullptr)  // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_ComboCount(0)
+    , m_ComboCounter(0)
+    , m_ComboOnlineMode(0)
     , m_AngleIndex(0)
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     , m_FingerId(0)
@@ -271,10 +275,12 @@ SlashEntity::SlashEntity()
 #endif
 {
     memset(_pad4d, 0, sizeof(_pad4d));
-    memset(_gap_0xbc, 0, sizeof(_gap_0xbc));
-    memset(_gap_0x128, 0, sizeof(_gap_0x128));
+    memset(m_GhostDirRing, 0, sizeof(m_GhostDirRing));
+    memset(_pad125, 0, sizeof(_pad125));
+    memset(_pad141, 0, sizeof(_pad141));
     memset(_pad186, 0, sizeof(_pad186));
-    for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+    for (int i = 0; i < 10; ++i) m_ComboFruitTypes[i] = -1;
+    m_ComboCount = -1;
 }
 
 SlashEntity::~SlashEntity() {
@@ -374,7 +380,8 @@ void SlashEntity::Reset() {
         m_TrailEmitter = nullptr;
     }
 
-    for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+    for (int i = 0; i < 10; ++i) m_ComboFruitTypes[i] = -1;
+    m_ComboCount = -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -685,32 +692,29 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
     // Ghost-ring averaging bookkeeping (dir-history update @ 0x1e9918).
     {
         unsigned int slot = m_GhostIndex % 6;
-        float* ringSlot = reinterpret_cast<float*>(_gap_0xbc + slot * 12);
-        ringSlot[0] = dir->x;
-        ringSlot[1] = dir->y;
-        ringSlot[2] = dir->z;
+        m_GhostDirRing[slot] = *dir;
 
         if (m_GhostCount < 6) m_GhostCount++;
         m_GhostIndex++;
 
         // Average over filled ghost slots -> m_GhostDir.
-        float ax = 0.0f, ay = 0.0f, az = 0.0f;
-        unsigned int n = m_GhostCount;
-        for (unsigned int i = 0; i < n; ++i) {
-            const float* s = reinterpret_cast<const float*>(_gap_0xbc + i * 12);
-            ax += s[0]; ay += s[1]; az += s[2];
+        Vec3 sumDir(0, 0, 0);
+        {
+            unsigned int nn = m_GhostCount;
+            for (unsigned int i = 0; i < nn; ++i) {
+                sumDir = sumDir + m_GhostDirRing[i];
+            }
+            if (nn > 0) { sumDir.x /= (float)nn; sumDir.y /= (float)nn; sumDir.z /= (float)nn; }
         }
-        if (n > 0) { ax /= (float)n; ay /= (float)n; az /= (float)n; }
-        Vec3 avgDir(ax, ay, az);
         Vec3 newest(dir->x, dir->y, dir->z);
 
-        Vec3 diff(avgDir.x - newest.x, avgDir.y - newest.y, avgDir.z - newest.z);
+        Vec3 diff(sumDir.x - newest.x, sumDir.y - newest.y, sumDir.z - newest.z);
         // Binary @ 0x1e9bf4: if (MagnitudeSqr(avgDir-newest) > 1.69f)
-        //   m_field_0x118 = 0.095f. (DAT_001e9ea8=1.69, DAT_001e9eac=0.095)
+        //   m_ComboTimer = 0.095f. (DAT_001e9ea8=1.69, DAT_001e9eac=0.095)
         if (diff.MagnitudeSqr() > 1.69f) {
-            m_field_0x118 = 0.095f;
+            m_ComboTimer = 0.095f;
         }
-        m_GhostDir = avgDir;
+        m_GhostDir = sumDir;
     }
 
     // Update blade direction and angle index.
@@ -1256,295 +1260,537 @@ void SlashEntity::UpdatePoints(float dt) {
     }
 }
 
+// File-scope globals: bomb-hit iteration STOP mechanism.
+// Binary BSS: g_Stop (byte) gates entity iteration; set to 1 on bomb hit or
+// extra-score fruit; g_StopCounter always reset to 0 with it.
+static unsigned char g_Stop = 0;
+static int g_StopCounter = 0;
+
 // ---------------------------------------------------------------------------
-// Update -- matches SlashEntity::Update (0x1e867k v1.6.1)
+// Update -- v1.6.1 SlashEntity::Update @ 0x1e867c
+// Binary-faithful port with dt branching, blade velocity volume, ghost spawn
+// timing, combo timer, velocity repulsion/attraction, and swipe-SFX logic.
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
-    PSPParticleManager& pm = PSPParticleManager::GetInstance();
-    const bool bladeActive = (m_State != 0) && (m_PointCount > 0);
-    const bool wantTrail = bladeActive && g_DirectionalFlag != 0 && g_TrailHash != 0;
-    if (wantTrail) {
-        if (!m_TrailEmitter) {
-            m_TrailEmitter = pm.AddEmitter(g_TrailHash, &m_TrailEmitter, /*persistent=*/true);
-            if (m_TrailEmitter) {
-                m_TrailEmitter->m_bUpdateWhenPaused = true;
+    // =====================================================================
+    // 1. DT BRANCHING
+    //    If dt == 0: use game_work.dt instead (frozen-frame fallback).
+    //    comboDt = dt * (gameMode == COMBO ? 0.666f * PowerUpManager::m_DtMod : 1.0f)
+    //    Only the combo timer uses comboDt; everything else uses localDt.
+    // =====================================================================
+    float localDt;
+    float comboDt;
+    if (dt == 0.0f) {
+        localDt = dt;
+        comboDt = 0.0f;
+    } else {
+        localDt = game_work.dt;
+        comboDt = game_work.dt;
+        if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
+            comboDt = game_work.dt * 0.666f;
+            PowerUpManager* pum = PowerUpManager::GetInstance();
+            if (pum && pum->m_DtMod < 0.9f) {
+                comboDt = comboDt * pum->m_DtMod;
             }
         }
-        if (m_TrailEmitter) {
-            m_TrailEmitter->m_Pos = m_RawTouchPos;
-        }
-    } else if (!bladeActive && m_TrailEmitter) {
-        pm.ClearEmitter(m_TrailEmitter);
-        m_TrailEmitter = nullptr;
     }
 
-    // Per-frame UpdatePoints: re-derive alpha/colour, fade tail if released.
-    UpdatePoints(dt);
+    // =====================================================================
+    // 2. TRAIL EMITTER MANAGEMENT
+    //    Binary gate: m_BladeActive != 0 (not m_State).
+    // =====================================================================
+    {
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
+        const bool bladeActiveByte = (m_BladeActive != 0);
+        const bool wantTrail = bladeActiveByte && g_DirectionalFlag != 0 && g_TrailHash != 0;
+        if (wantTrail) {
+            if (!m_TrailEmitter) {
+                m_TrailEmitter = pm.AddEmitter(g_TrailHash, &m_TrailEmitter, true);
+                if (m_TrailEmitter) {
+                    m_TrailEmitter->m_bUpdateWhenPaused = true;
+                }
+            }
+            if (m_TrailEmitter) {
+                m_TrailEmitter->m_Pos = m_RawTouchPos;
+            }
+        } else if (!bladeActiveByte && m_TrailEmitter) {
+            pm.ClearEmitter(m_TrailEmitter);
+            m_TrailEmitter = nullptr;
+        }
+    }
 
-    // State machine collapse: trail fully drained after release.
+    // =====================================================================
+    // 3. UPDATEPOINTS (uses localDt, not dt)
+    // =====================================================================
+    UpdatePoints(localDt);
+
+    // =====================================================================
+    // 4. STATE MACHINE COLLAPSE
+    // =====================================================================
     if (m_State == 2 && m_PointCount == 0) {
         m_State = 0;
     }
 
-    // Slice-test pass.
-    Game* game = Game::GetInstance();
-    const bool bombHitActive = game && game_work.m_BombHitTimer > 0.0f;
-
-    // Binary @ 0x17D664: bit 0x40 = ScrollingMenu drag-acquire suppresses slicing.
-    const bool menuDragActive = (SlashEntity::s_ModPowerMask & 0x40u) != 0u;
-
-    // Port-side pause gate (belt-and-braces; see comment in old Update).
-    const bool gamePaused = game && game_work.m_Paused;
-
-    // Tick swipe-SFX cooldown.
-    if (m_SwipeSoundTimer > 0.0f) {
-        m_SwipeSoundTimer -= 1.0f;
-        if (m_SwipeSoundTimer < 0.0f) m_SwipeSoundTimer = 0.0f;
+    // =====================================================================
+    // 5. BLADE VELOCITY -> ITEMMANAGER SWISH LOOP VOLUME
+    //    Binary @ 0x1e8810: if m_BladeActive: compute |m_BladeDir|/15,
+    //    clamp to [0.5, 1.0], push to the global loop-volume cap.
+    // =====================================================================
+    // DIFFERS: binary pushes to ItemManager::maxLoopVolume; port would need
+    // that global. For now the volume calculation is computed but not pushed
+    // (the ItemManager's swish-loop volume control is not yet ported).
+    if (m_BladeActive != 0) {
+        float bladeMag = m_BladeDir.Magnitude();
+        float volScale = 1.0f;
+        float rawScale = bladeMag / 15.0f;
+        if (rawScale >= 0.5f && rawScale <= 1.0f) {
+            volScale = rawScale;
+        }
+        float loopVol = volScale * 0.5f + 0.5f;
+        // TODO: v1.6.1 @ 0x1e8810 -- push loopVol to ItemManager::maxLoopVolume
+        // Not ported; binary does if (loopVol < maxLoopVol) maxLoopVol = loopVol.
+        (void)loopVol;
     }
 
-    // binary @0x1e98b0: normal mode: m_Scale += dt * -2.0f; clamp >= 0.
-    // critical/charged mode would add +2.0f and clamp <= 1; handled at slice site
-    // where m_Scale is set to 1.0f (binary @0x0017d9b4).
-    m_Scale -= 2.0f * dt;
-    if (m_Scale < 0.0f) m_Scale = 0.0f;
+    // =====================================================================
+    // 6. GHOST SPAWN TIMER
+    //    Binary @ 0x1e87ac: if m_GhostSpawnPending, accumulate localDt;
+    //    if >= 0.05, CreateGhost + clear. Else set timer to 0.
+    // =====================================================================
+    if (m_GhostSpawnPending != 0) {
+        m_GhostSpawnTimer += localDt;
+        if (m_GhostSpawnTimer >= 0.05f) {
+            CreateGhost();
+            m_GhostSpawnPending = 0;
+        }
+    } else {
+        m_GhostSpawnTimer = 0.0f;
+    }
 
-    bool slicedThisFrame = false;
-    // ASM-spec binary @0x1e87ac: outer gate is m_PointCount >= 4 (not >= 2).
-    if (m_PointCount >= 4 && m_State != 0 && !bombHitActive
-        && !menuDragActive && !gamePaused) {
+    // =====================================================================
+    // 7. HEADTHICKSCALE GATE + SLICE-LOOP GUARD
+    //    Binary @ 0x1e87ac: if m_PointCount < 4 OR ModPowerMask bit 6,
+    //    set m_HeadThickScale = 0 AND skip the slice-test iterator blocks.
+    //    Inside the else: first check bomb timer, then run fruit+bomb iter.
+    // =====================================================================
+    Game* game = Game::GetInstance();
+
+    if (m_PointCount < 4 || (s_ModPowerMask & 0x40u) != 0) {
+        m_HeadThickScale = 0.0f;
+    } else if (game && game_work.m_BombHitTimer == 0.0f) {
+        // Slice-test pass -- fruit (type 0) and bomb (type 1).
+        // Binary uses the low-level ActorManager iterator API:
+        //   ActorManager::GetEntityFirst(actorMgr, type, &iter)
+        //   ActorManager::GetEntityNext(actorMgr, type, &iter)
+        // Both sealed via g_HitLatch (global latch) and g_Stop.
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
-            // ASM-verified: 2026-06-07 binary @ 0x0017d664/0x0017c596 (re-analyst)
-            for (int t = 0; t <= 1; t++) {
-                if (g_HitLatch != 0) break;
-                const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
-                for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
+            // -----------------------------------------------------------------
+            // 8. FRUIT LOOP (type 0)
+            // -----------------------------------------------------------------
+            // The STOP mechanism: when a bomb-special or extra-score fruit is
+            // hit, binary sets g_StopCounter to 0 and g_Stop (byte) to 1,
+            // which is checked at the head of each iter advance.
+
+            {
+                std::list<Mortar::Entity*>::const_iterator it;
+                const std::list<Mortar::Entity*>& fruitList = am->GetTypeList(0);
+                for (it = fruitList.begin(); it != fruitList.end() && g_Stop == 0; ++it) {
                     if (g_HitLatch != 0) break;
-                    Mortar::Entity* e = *it;
-                    if (!e) continue;
-                    // ASM-verified: 2026-05-20 binary @ 0x0017D788 (re-analyst)
-                    if (t == 0 && static_cast<Fruit*>(e)->Sliced()) continue;
-                    if (!e->IsActive()) continue;
-                    if (!e->m_Col) continue;
-                    ColSphere* cs = static_cast<ColSphere*>(e->m_Col);
-                    // ASM-spec binary @0x1e8810-0x1e8838: no radius<=0 skip -- binary
-                    // has no such guard; removed port-side addition.
+                    Fruit* fruit = static_cast<Fruit*>(*it);
+                    if (!fruit) continue;
+                    if (fruit->Sliced()) continue;
+                    if (!fruit->IsActive()) continue;
 
                     Vec3 bladeVel;
-                    if (CollideWithSphere(*cs, bladeVel)) {
-                        #ifndef FN_ASM_VERIFY_CROSS
-                        LOG_DEBUG("SLASH", "hit %s %p at (%.1f,%.1f) trail_n=%d",
-                                    t == 0 ? "fruit" : "bomb",
-                                    static_cast<void*>(e), cs->center().x, cs->center().y, m_PointCount);
-                        #endif
-                        e->CollisionResponse(nullptr, 0, 0, &bladeVel);
-                        if (t == 0) {
-                        // ASM-verified: 2026-06-07 binary @ 0x0017d664 (re-analyst)
-                        m_SliceTimerA    = 0.0f;
-                        m_SliceTimerB    = 0.0f;
-                        m_PendingSplats += 2;
-                        m_BladeVelAtSlice = m_BladeDir;
-                        m_SlicePos        = e->pos;
+                    bool hit = CollideWithSphere(*(static_cast<ColSphere*>(fruit->m_Col)), bladeVel);
+
+                    if (hit) {
+                        // --- HIT PATH ---
+                        m_SliceBladeDir = bladeVel;
+                        m_SliceFruitPos = fruit->pos;
+                        m_SliceFruitType = (int)fruit->m_FruitType;
+                        m_SplatTimer     = 0.0f;
+                        m_SplatInterval  = 0.0f;
+                        if (/* TODO: ModHasSlashFlash check */ 1) {
+                            m_GhostSpawnPending = 1;
                         }
-                        // ASM-verified: 2026-05-22 binary @ 0x0017d8a4 (re-analyst).
-                        const bool isMenuFruit = (t == 0) &&
-                            static_cast<Fruit*>(e)->m_bMenuFling != 0;
-                        if (t == 0) {
-                            Fruit* fruit = static_cast<Fruit*>(e);
-                            m_SliceEntityType = (int)fruit->m_FruitType;
-                            if (!isMenuFruit) {
-                            if (fruit->m_bCritical) {
-                                m_Scale = 1.0f;
-                            }
-                            // ASM-verified: 2026-05-20 binary @ 0x0017dad8 (re-analyst)
-                            m_ComboTimerRef() = 0.0f;
-                            m_ComboSliceArr[m_ComboCountVal()] = (int)fruit->m_FruitType;
-                            m_ComboEntityType = (m_FingerId == 0) ? 0 : (m_FingerId == 2 ? 2 : 1);
-                            m_ComboCountRef() += 1;
-                            if (m_ComboCountVal() >= 10) m_ComboTimerRef() = 0.095f;
-                            m_SwipeSoundTimer -= (float)m_ComboCountVal() * (Math::g_Random.RandF(0.5f) + 0.75f);
-                            // Binary @ 0x0017dad8: popup gated on (2 < combo) && CombosEnabled().
-                            if (m_ComboCountVal() > 2 && game_work.gameMode != Mortar::GAME_MODE_COMBO) {
-                                bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
-                                if (!online || m_ComboEntityType != 2) {
-                                    if (m_pComboMissControl == nullptr) {
-                                        m_pComboMissControl = MissControl::GetFree();
-                                        if (m_pComboMissControl) {
-                                            m_pComboMissControl->MakeCombo(m_SlicePos, m_ComboCountVal(), m_ComboEntityType);
-                                            // ASM-verified: 2026-05-20 binary @ 0x0017d8e4..0x0017d908 (re-analyst).
-                                            m_pComboMissControl->m_RemoveCallback =
-                                                Mortar::Delegate1<void, HUDControl*>::Make(
-                                                    this, &SlashEntity::MissControlDeleted);
+                        m_PendingSplats += 2;
+
+                        // --- COMBO LOGIC ---
+                        const bool isMenuFruit = (fruit->m_bMenuFling != 0);
+                        if (!isMenuFruit) {
+                            // m_pLastComboFruit guard: skip if same fruit as last
+                            // OR if m_bExtraScore / m_OnlineSliceMode == 2
+                            // m_OnlineSliceMode is Fruit struct field @ +0x166 (not yet ported).
+                            // Binary reads this from the fruit; defaults to 0 for SP.
+                            // DIFFERS: original reads fruit->m_OnlineSliceMode; port assumes 0
+                            // because online MP is stubbed.
+                            if (!fruit->m_bMenuFling && m_pLastComboFruit != fruit)
+                            {
+                                m_pLastComboFruit = fruit;
+                                m_ComboTimer = 0.0f;
+                                m_ComboFruitTypes[m_ComboCounter] = (int)fruit->m_FruitType;
+                                m_ComboOnlineMode = 0;
+                                // m_ComboScoreScale was m_ComboScoreScale -= m_ComboCounter * (random+0.75)
+                                {
+                                    float r = Math::g_Random.RandF(0.5f);
+                                    m_ComboScoreScale = m_ComboScoreScale
+                                        - (float)m_ComboCounter * (r + 0.75f);
+                                }
+                                m_ComboCounter++;
+                                if (m_ComboCounter > 9) {
+                                    m_ComboTimer = 0.095f;
+                                }
+                                // MissControl popup: gated on count>2, non-COMBO mode, not ModPowerMask bit 7
+                                if (m_ComboCounter > 2
+                                    && game_work.gameMode != Mortar::GAME_MODE_COMBO
+                                    && (s_ModPowerMask & 0x80u) == 0)
+                                {
+                                    bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
+                                    if (!online || m_ComboOnlineMode != 2) {
+                                        if (m_pComboMissControl == nullptr) {
+                                            m_pComboMissControl = MissControl::GetFree();
+                                            if (m_pComboMissControl) {
+                                                m_pComboMissControl->MakeCombo(
+                                                    m_SliceFruitPos, m_ComboCounter, m_ComboOnlineMode);
+                                                m_pComboMissControl->m_RemoveCallback =
+                                                    Mortar::Delegate1<void, HUDControl*>::Make(
+                                                        this, &SlashEntity::MissControlDeleted);
+                                            }
+                                        } else {
+                                            m_pComboMissControl->MakeCombo(
+                                                m_pComboMissControl->pos,
+                                                m_ComboCounter, m_ComboOnlineMode);
                                         }
-                                    } else {
-                                        Vec3 existingPos = m_pComboMissControl->pos;
-                                        m_pComboMissControl->MakeCombo(existingPos, m_ComboCountVal(), m_ComboEntityType);
                                     }
                                 }
+                            } else {
+                                // Same fruit or MP-slice-mode block: bump timer if not already idle
+                                if (m_ComboTimer < 0.1f) {
+                                    m_ComboTimer = 0.095f;
+                                }
                             }
-                            } // !isMenuFruit
-                            // Binary @ 0x17d9c0: special/menu fruit sets latch.
-                            if (isMenuFruit) {
-                                g_HitLatch        = 1;
-                                g_HitResetCounter = 0;
-                            }
+                        } // !isMenuFruit
+
+                        // CollisionResponse on the hit entity
+                        fruit->CollisionResponse(nullptr, 0, 0, &bladeVel);
+
+                        // Critical fruit: adjust fruit type and scale
+                        if (fruit->m_bCritical) {
+                            m_SliceFruitType += 0x100;
+                            float r = Math::g_Random.RandF(0.5f);
+                            m_ComboScoreScale = m_ComboScoreScale + (r + 0.75f) * -3.0f;
                         }
-                        if (t == 1) {
-                            // Binary @ 0x0017db7e-0x17db9e: bomb always sets latch.
-                            Bomb* bomb = static_cast<Bomb*>(e);
-                            g_HitLatch        = 1;
+
+                        // Extra-score (menu/special) fruit: halt iteration
+                        if (fruit->m_bMenuFling) {
+                            g_StopCounter = 0;
+                            g_Stop = 1;
+                        }
+
+                        if (isMenuFruit) {
+                            g_HitLatch = 1;
                             g_HitResetCounter = 0;
+                        }
+
+                    } else {
+                        // --- NON-HIT: FRUIT VELOCITY REPULSION/ATTRACTION ---
+                        // ModPowerMask bit 0 = repel, bit 1 = attract.
+                        // Executed in order: bit 2 (attract) preferred over bit 0 (repel).
+                        Vec3 dirToFruit(fruit->pos.x - pos.x,
+                                        fruit->pos.y - pos.y,
+                                        fruit->pos.z - pos.z);
+                        float dist = dirToFruit.Magnitude();
+                        if (dist > 0.001f) dirToFruit = dirToFruit * (1.0f / dist);
+
+                        if (s_ModPowerMask & 2) {
+                            // Attract (bit 1)
+                            float mag = dist * 0.5f;
+                            if (mag < 50.0f) mag = 50.0f;
+                            fruit->vel += dirToFruit * mag;
+                            float speed = fruit->vel.Magnitude();
+                            if (speed < 8.0f) speed = 8.0f;
+                            fruit->vel = fruit->vel * (speed / fruit->vel.Magnitude());
+                        } else if (s_ModPowerMask & 1) {
+                            // Repel (bit 0)
+                            float mag = dist * 0.5f;
+                            if (mag < 50.0f) mag = 50.0f;
+                            fruit->vel -= dirToFruit * mag;
+                            float speed = fruit->vel.Magnitude();
+                            if (speed < 8.0f) speed = 8.0f;
+                            fruit->vel = fruit->vel * (speed / fruit->vel.Magnitude());
+                        }
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // 9. BOMB LOOP (type 1)
+            // -----------------------------------------------------------------
+            if (g_Stop == 0) {
+                std::list<Mortar::Entity*>::const_iterator itBomb;
+                const std::list<Mortar::Entity*>& bombList = am->GetTypeList(1);
+                for (itBomb = bombList.begin(); itBomb != bombList.end() && g_Stop == 0; ++itBomb) {
+                    if (g_HitLatch != 0) break;
+                    Bomb* bomb = static_cast<Bomb*>(*itBomb);
+                    if (!bomb) continue;
+                    if (!bomb->IsActive()) continue;
+
+                    Vec3 bladeVel;
+                    Vec3 bladeDirCopy = m_BladeDir; // binary saves dir before test
+                    bool hit = CollideWithSphere(*(static_cast<ColSphere*>(bomb->m_Col)), bladeVel);
+
+                    if (hit) {
+                        if ((s_ModPowerMask & 0x10) == 0) {
+                            // Normal bomb hit (ModPowerMask bit 4 NOT set: no push)
+                            bomb->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                            g_StopCounter = 0;
+                            g_Stop = 1;
                             if (bomb->m_bHit && !bomb->m_bMenuBombHit) {
                                 m_BombHitEdge = 1;
                             }
+                        } else {
+                            // ModPowerMask bit 4: push bomb away with blade velocity * 10
+                            bomb->vel += m_BladeDir * 10.0f;
                         }
-                        slicedThisFrame = true;
+                    } else {
+                        // --- NON-HIT: BOMB VELOCITY REPULSION/ATTRACTION ---
+                        // ModPowerMask bit 3 = repel, bit 4 = attract.
+                        Vec3 dirToBomb(bomb->pos.x - pos.x,
+                                       bomb->pos.y - pos.y,
+                                       bomb->pos.z - pos.z);
+                        float dist = dirToBomb.Magnitude();
+                        if (dist > 0.001f) dirToBomb = dirToBomb * (1.0f / dist);
+
+                        if (s_ModPowerMask & 8) {
+                            // Repel (bit 3)
+                            float mag = dist * 0.5f;
+                            if (mag < 50.0f) mag = 50.0f;
+                            bomb->vel -= dirToBomb * mag;
+                            float speed = bomb->vel.Magnitude();
+                            if (speed < 8.0f) speed = 8.0f;
+                            bomb->vel = bomb->vel * (speed / bomb->vel.Magnitude());
+                        } else if (s_ModPowerMask & 4) {
+                            // Attract (bit 2)
+                            float mag = dist * 0.5f;
+                            if (mag < 50.0f) mag = 50.0f;
+                            bomb->vel += dirToBomb * mag;
+                            float speed = bomb->vel.Magnitude();
+                            if (speed < 8.0f) speed = 8.0f;
+                            bomb->vel = bomb->vel * (speed / bomb->vel.Magnitude());
+                        }
                     }
                 }
             }
         }
     }
 
-    if (slicedThisFrame && m_SwipeSoundTimer == 0.0f) {
-        PlaySwipe();
+    // =====================================================================
+    // 10. m_Scale UPDATE
+    //     Binary @ 0x1e98b0: if m_TrailEmitter && WaveManager::CriticalMode():
+    //       m_Scale += localDt * 2.0f, clamp <= 1.0
+    //     else:
+    //       m_Scale -= localDt * 2.0f, clamp >= 0
+    // =====================================================================
+    {
+        WaveManager* wm = WaveManager::GetInstance();
+        if (m_TrailEmitter && wm && wm->CriticalMode(0)) {
+            m_Scale += localDt * 2.0f;
+            if (m_Scale > 1.0f) m_Scale = 1.0f;
+        } else {
+            m_Scale -= localDt * 2.0f;
+            if (m_Scale < 0.0f) m_Scale = 0.0f;
+        }
     }
 
-    // Per-swipe combo resolution / combo-cancel timer -- binary SlashEntity::Update
-    // @ 0x1e90d4. The cancel timer is m_field_0x118 (+0x118), DISTINCT from the
-    // per-slice accumulator m_ComboTimerRef() (+0x174). Each frame +0x118 advances
-    // by dt; when it reaches DAT_001e9224 (=0.095f) the combo window closes:
-    // g_OnComboCancel fires, the combo is resolved, then +0x118 is pinned to
-    // DAT_001e9220 (=0.1f). Once it is >= 0.1f the timer is idle and only resets
-    // combo state (no fire). m_field_0x118 is pumped to 0.095f by the slice path
-    // (binary writes DAT_001e8a88=0.095f at this+0x118 once combo count >= 10), and
-    // is otherwise driven here.
-    static const float kComboFireThresh = 0.095f;   // DAT_001e9224
-    static const float kComboIdleValue  = 0.1f;     // DAT_001e9220
-    if (m_field_0x118 >= kComboIdleValue) {
-        // Idle / already-fired: reset combo state, no event.
-        m_ComboCountRef()   = 0;
-        m_ComboEntityType   = 0;
-        m_pComboMissControl = nullptr;
-        for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
-    } else {
-        m_field_0x118 += dt;
-        if (m_field_0x118 >= kComboFireThresh) {
-            m_field_0x118 = kComboIdleValue;
-            // Fire g_OnComboCancel -- binary @ 0x1e90d4 Event1<SlashEntity*>::Trigger.
-            // ComboModifier::ComboWasCanceled subscribes here.
-            g_OnComboCancel(this);
-            if (m_ComboCountVal() > 1 && m_ComboSliceArr[0] >= 0) {
-                // (a) Score-threshold refund.
-                // ASM-verified: 2026-05-20 binary @ 0x0017dde6 (asm-inspector)
-                {
-                    int threshold = game_work.m_ScoreThreshold - m_ComboCountVal();
-                    if (threshold < 2) threshold = 2;
-                    game_work.m_ScoreThreshold = threshold;
-                }
+    // =====================================================================
+    // 11. BASE COLOUR BLEND (binary @ 0x1e98b0: after scale update)
+    //     UpdateModColour if g_ColourType < 2.
+    //     Then blend m_BaseColour toward CRITICAL_COLOUR based on m_Scale.
+    // =====================================================================
+    if (g_ColourType < 2) {
+        UpdateModColour(&m_HighlightColour, localDt);
+    }
+    {
+        float sc = m_Scale;
+        if (sc < 0.0f) {
+            m_BaseColour = m_HighlightColour;
+        } else {
+            float t = 1.0f - sc;
+            m_BaseColour.r = (uint8_t)((float)Fruit::CRITICAL_COLOUR.r
+                + (float)(m_HighlightColour.r - Fruit::CRITICAL_COLOUR.r) * t);
+            m_BaseColour.g = (uint8_t)((float)Fruit::CRITICAL_COLOUR.g
+                + (float)(m_HighlightColour.g - Fruit::CRITICAL_COLOUR.g) * t);
+            m_BaseColour.b = (uint8_t)((float)Fruit::CRITICAL_COLOUR.b
+                + (float)(m_HighlightColour.b - Fruit::CRITICAL_COLOUR.b) * t);
+            m_BaseColour.a = 0xff;
+        }
+    }
 
-                // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0.
-                if (m_ComboCountVal() > 2 && m_ComboSliceArr[1] >= 0) {
-                    if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
-                        #ifndef FN_ASM_VERIFY_CROSS
-                        LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
-                                 m_ComboCountVal(), (float)m_ComboCountVal() / 3.0f);
-                        #endif
-                        WaveManager::GetInstance()->AddSpeed(
-                            (float)m_ComboCountVal() / 3.0f, 0);
-                        FN::AddToCurrentScore(m_ComboCountVal(), m_ComboEntityType, true, true);
-                    } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboEntityType != 2) {
-                        FN::AddToCurrentScore(m_ComboCountVal(), m_ComboEntityType, true, false);
+    // =====================================================================
+    // 12. COMBO TIMER / CANCEL (uses comboDt, NOT localDt)
+    //     Binary @ 0x1e90d4: identical structure but with m_ComboTimer
+    //     directly at +0x118 (was the old mis-named m_field_0x118).
+    //     m_ComboTimer is the per-slice accumulator;
+    //     m_ComboCount tracks the current combo swing length.
+    // =====================================================================
+    {
+        static const float kComboFireThresh = 0.095f;   // DAT_001e9224
+        static const float kComboIdleValue  = 0.1f;     // DAT_001e9220
+        if (m_ComboTimer >= kComboIdleValue) {
+            // Idle / already-fired: reset combo state, no event.
+            m_pLastComboFruit = nullptr;
+            m_ComboCounter = 0;
+            m_ComboOnlineMode = 0;
+            for (int i = 0; i < 10; ++i) m_ComboFruitTypes[i] = -1;
+            m_ComboCount = -1;
+            m_pComboMissControl = nullptr;
+        } else {
+            m_ComboTimer += comboDt;
+            if (m_ComboTimer >= kComboFireThresh) {
+                m_ComboTimer = kComboIdleValue;
+                // Fire g_OnComboCancel -- ComboModifier::ComboWasCanceled subscribes.
+                g_OnComboCancel(this);
+                if (m_ComboCount > 1 && m_ComboFruitTypes[0] >= 0) {
+                    // (a) Score-threshold refund.
+                    {
+                        int threshold = game_work.m_ScoreThreshold - m_ComboCount;
+                        if (threshold < 2) threshold = 2;
+                        game_work.m_ScoreThreshold = threshold;
                     }
-                    BonusManager::GetInstance()->AddCombo(m_ComboCountVal());
-                    // ASM-verified: 2026-05-22 binary @ 0x0017df80..0x0017dff0 (re-analyst).
-                    if (game && game_work.m_SaveData) {
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "%s_combos", Mortar::GetModeName(game_work.gameMode));
-                        game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
-
-                        static int s_StrawberryType = -2;
-                        if (s_StrawberryType == -2)
-                            s_StrawberryType = Fruit::FruitType("strawberry", false);
-                        if (s_StrawberryType >= 0) {
-                            for (int i = 0; i < m_ComboCountVal(); ++i) {
-                                if (m_ComboSliceArr[i] == s_StrawberryType) {
-                                    static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
-                                    game_work.m_SaveData->AddToTotal(
-                                        "strawberry_combo_total", hStrawberryCombo, 1, true, false);
-                                    break;
+                    // (b) Combo body: only if count > 2 AND m_ComboFruitTypes[1] >= 0.
+                    if (m_ComboCount > 2 && m_ComboFruitTypes[1] >= 0) {
+                        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                            LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
+                                       m_ComboCount, (float)m_ComboCount / 3.0f);
+                            WaveManager::GetInstance()->AddSpeed(
+                                (float)m_ComboCount / 3.0f, 0);
+                            FN::AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, true);
+                        } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboOnlineMode != 2) {
+                            FN::AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, false);
+                        }
+                        BonusManager::GetInstance()->AddCombo(m_ComboCount);
+                        if (game && game_work.m_SaveData) {
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "%s_combos", Mortar::GetModeName(game_work.gameMode));
+                            game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+                            static int s_StrawberryType = -2;
+                            if (s_StrawberryType == -2)
+                                s_StrawberryType = Fruit::FruitType("strawberry", false);
+                            if (s_StrawberryType >= 0) {
+                                for (int i = 0; i < m_ComboCount; ++i) {
+                                    if (m_ComboFruitTypes[i] == s_StrawberryType) {
+                                        static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
+                                        game_work.m_SaveData->AddToTotal(
+                                            "strawberry_combo_total", hStrawberryCombo, 1, true, false);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        // (c) Combo coin spawn.
+                        {
+                            int bonusCoins = 0;
+                            for (int i = 0; i < m_ComboCount; ++i) {
+                                const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboFruitTypes[i]);
+                                if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
+                            }
+                            Vec3 coinPos = m_SliceFruitPos;
+                            if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
+                            Coin::MakeCoins(bonusCoins, 1,
+                                            Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                                            &coinPos, nullptr, nullptr,
+                                            Coin::DefaultArrivedDelegate(), true);
+                        }
+                        // (d) Achievement unlock.
+                        AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboFruitTypes);
+                        // (e) Best-combo save + CheckCombo cache.
+                        {
+                            FruitSaveData* sd = game_work.m_SaveData;
+                            if (sd && m_ComboCount > sd->m_BestComboLength) {
+                                for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                                sd->m_BestComboLength = m_ComboCount;
+                                s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
+                            } else if (sd && m_ComboCount == sd->m_BestComboLength) {
+                                if (s_CheckComboFlag == -1)
+                                    s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCount, nullptr);
+                                int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
+                                if (s_CheckComboFlag < newScore) {
+                                    for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                                    sd->m_BestComboLength = m_ComboCount;
                                 }
                             }
                         }
                     }
-                    // (c) Combo coin spawn.
-                    {
-                        int bonusCoins = 0;
-                        for (int i = 0; i < m_ComboCountVal(); ++i) {
-                            const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboSliceArr[i]);
-                            if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCountVal(); break; }
-                        }
-                        Vec3 coinPos = m_SlicePos;
-                        if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
-                        Mortar::Delegate1<void, Coin*> onArrived =
-                            Coin::DefaultArrivedDelegate();
-                        Coin::MakeCoins(bonusCoins, 1,
-                                        Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                                        &coinPos, nullptr, nullptr,
-                                        onArrived, true);
-                    }
-                    // (d) Achievement unlock.
-                    AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCountVal(), m_ComboSliceArr);
-                    // (e) Best-combo save + CheckCombo cache.
-                    {
-                        FruitSaveData* sd = game_work.m_SaveData;
-                        int len = m_ComboCountVal();
-                        if (sd && len > sd->m_BestComboLength) {
-                            for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
-                            sd->m_BestComboLength = len;
-                            s_CheckComboFlag = (signed char)CheckCombo(m_ComboSliceArr, len, nullptr);
-                        } else if (sd && len == sd->m_BestComboLength) {
-                            if (s_CheckComboFlag == -1)
-                                s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, len, nullptr);
-                            int newScore = (signed char)CheckCombo(m_ComboSliceArr, m_ComboCountVal(), nullptr);
-                            if (s_CheckComboFlag < newScore) {
-                                for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
-                                sd->m_BestComboLength = m_ComboCountVal();
-                            }
-                        }
-                    }
-                    // Online MP PointsPacket Send -- Defunct: online-services stub per policy
                 }
+                // (f) State reset (unconditional when timer fires).
+                m_pLastComboFruit = nullptr;
+                m_ComboCounter = 0;
+                m_ComboOnlineMode = 0;
+                for (int i = 0; i < 10; ++i) m_ComboFruitTypes[i] = -1;
+                m_ComboCount = -1;
+                m_pComboMissControl = nullptr;
             }
-            // (f) State reset (unconditional in this arm).
-            m_ComboCountRef()   = 0;
-            m_ComboEntityType   = 0;
-            m_pComboMissControl = nullptr;
-            for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // Per-frame splat-stream loop -- binary SlashEntity::Update tail @ 0x0017e248.
-    // ---------------------------------------------------------------------------
-    if (m_SliceTimerA > -1.0f) {
-        m_SliceTimerA -= dt;
+    // =====================================================================
+    // 13. SWIPE SOUND TIMER (binary-faithful, uses localDt, NOT 1.0f)
+    //     Binary @ 0x1e96c0: if timer > 0 AND < 0.05, OR bladeVel < 20:
+    //       subtract localDt from timer.
+    //     Else if timer == 0 AND bladeVel > 35:
+    //       PlaySwipe(); timer = 0.05.
+    //     Else: goto skip (timer unchanged).
+    // =====================================================================
+    {
+        float bladeMag = m_BladeDir.Magnitude();
+        if ((m_SwipeSoundTimer > 0.0f && m_SwipeSoundTimer < 0.05f)
+            || bladeMag < 20.0f)
+        {
+            m_SwipeSoundTimer -= localDt;
+        } else {
+            if (m_SwipeSoundTimer > 0.0f || bladeMag <= 35.0f) {
+                // no-op: fall through to skip
+            } else {
+                PlaySwipe();
+                m_SwipeSoundTimer = 0.05f;
+            }
+        }
+        if (m_SwipeSoundTimer < 0.0f) m_SwipeSoundTimer = 0.0f;
     }
-    while (m_PendingSplats >= 0 && m_SliceTimerA <= 0.0f) {
+
+    // =====================================================================
+    // 14. SPLAT LOOP (binary @ 0x1e96c0 tail)
+    //     Uses localDt. Includes Fruit::FruitInfo lookup and TranslatePos.
+    // =====================================================================
+    if (m_SplatTimer > -1.0f) {
+        m_SplatTimer -= localDt;
+    }
+    while (m_PendingSplats >= 0 && m_SplatTimer <= 0.0f) {
         float sq = m_BladeDir.MagnitudeSqr();
         if (sq > 1.0f && sq < 10000.0f) {
-            m_BladeVelAtSlice = m_BladeDir;
+            m_SliceBladeDir = m_BladeDir;
         }
         m_PendingSplats--;
-        float B = m_SliceTimerB + Math::g_Random.RandF(1.0f) * 0.5f + 0.01f;
-        m_SliceTimerB = (B >= 0.03f) ? B : 0.03f;
-        m_SliceTimerA += m_SliceTimerB;
+        float B = m_SplatInterval + Math::g_Random.RandF(1.0f) * 0.5f + 0.01f;
+        m_SplatInterval = (B >= 0.03f) ? B : 0.03f;
+        m_SplatTimer += m_SplatInterval;
         SplatEntity* s = SplatEntity::GetFree();
         if (s) {
-            Vec3 vel(m_BladeVelAtSlice.x * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
-                     m_BladeVelAtSlice.y * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
-                     0.0f);
+            // FruitInfo call (binary side-effect: looks up the template, may
+            // be used by splat to determine splat texture/colour).
+            if (m_SliceFruitType < 0x100) {
+                Fruit::FruitInfo(m_SliceFruitType);
+            }
+            // TranslatePos via camera (binary: FruitCamera::TranslatePos)
+            // TODO: v1.6.1 0x1e96c0 -- FruitCamera::TranslatePos not yet ported;
+            // using raw m_RawTouchPos as position for splat.
+            Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
+                   m_SliceBladeDir.y * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
+                   0.0f);
             // DIFFERS: binary param3 passes incidental register-reuse bits, not a designed flag. Pass false.
-            s->MakeSplat(m_RawTouchPos, vel, false, m_SliceEntityType);
+            s->MakeSplat(m_RawTouchPos, v, false, m_SliceFruitType);
         }
     }
 }
@@ -1678,8 +1924,7 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     // 3. Build vertex buffers (160 pairs).
     InitPoints(160);
 
-    // 4. Alloc m_Col = new(0x20) per binary @ 0x1e7a34 (already done above).
-    // Per-frame scratch state.
+    // 4. Per-frame scratch state.
     m_HeadThickScale = 0.0f;
     m_TrailEmitter = nullptr;
     m_Scale        = 0.0f;
@@ -1690,12 +1935,9 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_HighlightColour = white;
     m_BaseColour      = white;
 
-    // 6. Ghost ring init: 6 Vec3 slots at +0xbc (stride 12).
+    // 6. Ghost ring init: zero all 6 Vec3 entries at +0xbc.
     for (int i = 0; i < 6; ++i) {
-        float* slot = reinterpret_cast<float*>(_gap_0xbc + i * 12);
-        slot[0] = 0.0f;
-        slot[1] = 0.0f;
-        slot[2] = 0.0f;
+        m_GhostDirRing[i] = Vec3(0.0f, 0.0f, 0.0f);
     }
 
     // Ghost index/count at +0x104/+0x108 = 0; ghost-dir at +0x10c = zero.
@@ -1703,29 +1945,30 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_GhostCount = 0;
     m_GhostDir   = Vec3(0.0f, 0.0f, 0.0f);
 
-    // +0x118 = DAT_001e7b98 = 0.1f (m_field_0x118 seeded to the combo/fade
-    //   timer initial value, NOT zero). +0xb8 = DAT_001e7b94 = 0.0f
-    //   (m_SwipeSoundTimer). Binary @ 0x1e7ae4 (vstr s15=DAT_001e7b98 -> +0x118)
-    //   and 0x1e7b84 (vstr s15=DAT_001e7b94 -> +0xb8). Values read from
-    //   FruitNinja_v1_6_1.exe: DAT_001e7b94=0x00000000, DAT_001e7b98=0x3dcccccd.
+    // +0x118 = m_ComboTimer seeded to 0.1f (DAT_001e7b98 = 0x3dcccccd).
+    // +0xb8 = m_SwipeSoundTimer seeded to 0.0f (DAT_001e7b94 = 0x00000000).
     m_SwipeSoundTimer = 0.0f;
-    m_field_0x118     = 0.1f;
+    m_ComboTimer      = 0.1f;
 
-    // +0x144 = 6.0f; +0x148/+0x14c = -1.
-    m_field_0x144 = 6.0f;
-    m_field_0x148 = -1;
-    m_field_0x14c = -1;
+    // +0x144 = m_ComboScoreScale = 6.0f; +0x148/+0x14c = -1.
+    m_ComboScoreScale = 6.0f;
+    m_field_0x148     = -1;
+    m_field_0x14c     = -1;
 
     // 7. Combo / state init.
-    m_ComboTimerRef() = 0.1f;   // per-swipe accumulator (DAT_0017c764)
-    m_ComboCountRef() = 0;
-    m_ComboEntityType = 0;
-    m_BombHitEdge    = 0;
-    m_Angle           = 0;
+    m_ComboCount     = -1;
+    m_ComboCounter   = 0;
+    m_ComboOnlineMode = 0;
+    m_pComboMissControl = nullptr;
+    m_pLastComboFruit   = nullptr;
+    m_GhostSpawnTimer   = 0.0f;
+    m_GhostSpawnPending = 0;
+    m_BombHitEdge       = 0;
+    m_Angle             = 0;
 
-    // 8. 11-entry combo-slice array, all -1.
-    for (int i = 0; i < 11; ++i) {
-        m_ComboSliceArr[i] = -1;
+    // 8. Combo fruit type array, all -1.
+    for (int i = 0; i < 10; ++i) {
+        m_ComboFruitTypes[i] = -1;
     }
 }
 
