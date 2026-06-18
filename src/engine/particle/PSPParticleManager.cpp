@@ -62,6 +62,7 @@ PSPParticleManager::PSPParticleManager()
     , m_GlobalOrigin(0.0f, 0.0f, 0.0f)
     , m_pParticles(0)
     , m_FreeHead(0)
+    , m_DrawnParticleCount(0)
     , m_pActiveEmitters(0)
     , m_pEmitterPool(0)
 {

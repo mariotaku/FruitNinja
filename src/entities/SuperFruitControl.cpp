@@ -154,7 +154,7 @@ void SuperFruitControl::Update(float dt)
 
     // pre-roll slowdown: while Timer < Lifetime+0.5
     if (m_Timer < m_Lifetime + 0.5f) {
-        WaveManager::GetInstance()->field_0x78 = 0.1f;  // DAT_001bcd98 = 0.1; SetAbsoluteDtMod
+        WaveManager::GetInstance()->m_SpeedScale = 0.1f;  // DAT_001bcd98 = 0.1; SetAbsoluteDtMod
         MissControl::MakeEmAllDissappear();
     }
 
@@ -250,7 +250,7 @@ void SuperFruitControl::Update(float dt)
         float modeBias2 = (game_work.gameMode == 2) ? 1.5f : 0.5f;
         float tEnd = m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias2 + 0.15f;  // DAT_001bcda8=0.15
         if (m_Timer > tEnd) {
-            WaveManager::GetInstance()->field_0x78 = 1.0f;  // SetAbsoluteDtMod(1.0)
+            WaveManager::GetInstance()->m_SpeedScale = 1.0f;  // SetAbsoluteDtMod(1.0)
             // TODO: 0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
             WaveManager::GetInstance()->GetNextWave(0);
             PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
@@ -657,7 +657,7 @@ void SuperFruitControl::SaveSuperFruitState(tinyxml2::XMLElement* parent)
 // WaveManager/PSPParticleManager reset.
 void SuperFruitControl::Reset()
 {
-    WaveManager::GetInstance()->field_0x78 = 1.0f;   // SetAbsoluteDtMod(1.0)
+    WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
     // TODO: 0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
     PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
     PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;

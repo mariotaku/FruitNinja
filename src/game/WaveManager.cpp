@@ -102,7 +102,8 @@ WaveManager::WaveManager()
     , field_0x64(1.0f)
     , field_0x6c(1.0f)
     , field_0x74(1.0f)
-    , field_0x78(1.0f)
+    , m_SpeedAccum(1.0f)
+    , m_SpeedScale(1.0f), m_ComboSpeedDivisor(1.0f)
     , field_0x234(0.0f), field_0x238(0.0f)
     , field_0x23c(0), field_0x23d(0), field_0x23e(0), _pad23f(0)
     , field_0x240(0.0f)
@@ -536,7 +537,7 @@ void WaveManager::Reset(bool fullReset) {
     // 8. Final per-mode speed-multiplier defaults.
     // Binary @ 0x00125eb8: dead-code MP sync flag cleared to 0.
     game_work.m_bP2PReady = 0;
-    field_0x78 = 1.0f;
+    m_SpeedScale = 1.0f;
     field_0x74 = m_SpeedClampStart[game_work.gameMode];
 
     if (fullReset)
@@ -788,7 +789,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
     sd->m_blitzForceSpawnedCounter = field_0x23e;
 
     // Binary @ 0x001254b0 writes WaveManager+0x78 into FruitSaveData::m_WaveScalar_v161.
-    sd->m_WaveScalar_v161 = field_0x78;
+    sd->m_WaveScalar_v161 = m_SpeedScale;
 
     sd->m_WaveStates.clear();
 
@@ -930,24 +931,24 @@ void WaveManager::Update(float dt) {
 
     // Reset per-frame multipliers.
     m_CritChanceMult = 1.0f;
-    field_0x78 = 1.0f;
+    m_SpeedScale = 1.0f;
     field_0x64 = 1.0f;
     spawnLevel = 1.0f;
     field_0x6c = 1.0f;
 
-    // Skip PowerUpManager::Update — not ported. field_0x78 stays 1.0.
+    // Skip PowerUpManager::Update — not ported. m_SpeedScale stays 1.0.
 
     // Wave speed accumulator — binary @ 0x125ba2-0x125aa6.
     // Binary uses TWO per-mode arrays: field_0x8c[4] (lower bound) and field_0x9c[4] (upper bound).
     // TODO: per-mode bounds need RE — initialised to {1.0,1.0,1.0,1.0} / {100.0,...} as placeholders.
     {
         int mode = game_work.gameMode;
-        // Use m_DtIncPerMode (+0x7c[mode]). DIFFERS: was m_SpeedMultPerMode (+0x8c, wrong field).
-        // binary @ 0x00125ac4: speed = field_0x74 + dt * *(float*)(&this->field_0x7c + gameMode*4)
-        float s = field_0x74 + dt * m_DtIncPerMode[mode];
+        // Binary @ 0x001267a0: accumulator is at +0x78 (m_SpeedAccum), NOT +0x74.
+        // binary @ 0x00125ac4: speed = m_SpeedAccum + dt * *(float*)(&this->m_DtIncPerMode + gameMode*4)
+        float s = m_SpeedAccum + dt * m_DtIncPerMode[mode];
         float lo = m_SpeedClampStart[mode];
         float hi = m_SpeedClampMax[mode];
-        field_0x74 = (s < lo) ? lo : (s < hi) ? s : hi;
+        m_SpeedAccum = (s < lo) ? lo : (s < hi) ? s : hi;
     }
 
     // Time accumulator — game->field_0x1ac not mapped in port Game struct.
@@ -1045,7 +1046,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     for (int s = 0; s < wave->m_SpawnerCount; ++s) {
         SPAWNER_INFO& spawner = wave->m_pSpawners[s];
 
-        float dtMod = field_0x78;
+        float dtMod = m_SpeedScale;
         if (dtMod < 1.0f) dtMod = 1.0f;
 
         spawner.m_SpawnTimer -= dt * dtMod;
@@ -1852,7 +1853,7 @@ float WaveManager::GetWavedt(int playerIdx) {
           + w->m_WaveDtInc * w->field_0x34
           + w->m_WaveDtSpInc * m_Speed[playerIdx];
 
-    float dtMod = (playerIdx == 0) ? field_0x74 * field_0x78 : 1.0f;
+    float dtMod = (playerIdx == 0) ? field_0x74 * m_SpeedScale : 1.0f;
     float result = waveDt * dtMod;
     if (result <= 0.0f) return 0.0f;
     if (result < 100.0f) return result;

@@ -390,16 +390,18 @@ private:
     std::vector<PSPEmitterTemplate>  m_EmitterTemplates;
 
     // v1.6.1 PSPParticleManager struct field layout (binary-faithful):
-    //   +0x14  PSPParticle*                  m_pParticles      — flat 1024-slot buffer
-    //   +0x18  uint16_t                      m_FreeHead        — 1-based head of free list (0=none)
-    //   +0x20  PSPParticleEmitter*           m_pActiveEmitters — intrusive list head
-    //   +0x34  MemoryPool<PSPParticleEmitter>* m_pEmitterPool  — 120-slot pool
+    //   +0x14  PSPParticle*                  m_pParticles            — flat 1024-slot buffer
+    //   +0x18  uint16_t                      m_FreeHead              — 1-based head of free list (0=none)
+    //   +0x1c  int                           m_DrawnParticleCount    — reset to 0 at Draw start
+    //   +0x20  PSPParticleEmitter*           m_pActiveEmitters       — intrusive list head
+    //   +0x34  MemoryPool<PSPParticleEmitter>* m_pEmitterPool        — 120-slot pool
     // ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: buffer 1024 slots,
     // MemoryPool::Create(120), free-list threaded 1..1023, sentinel at slot 0.
-    PSPParticle*                              m_pParticles;      // +0x14
-    uint16_t                                  m_FreeHead;        // +0x18  1-based free-list head
-    PSPParticleEmitter*                       m_pActiveEmitters; // +0x20
-    Mortar::MemoryPool<PSPParticleEmitter>*   m_pEmitterPool;    // +0x34
+    PSPParticle*                              m_pParticles;              // +0x14
+    uint16_t                                  m_FreeHead;                // +0x18  1-based free-list head
+    int                                       m_DrawnParticleCount;      // +0x1c  reset to 0 at Draw start
+    PSPParticleEmitter*                       m_pActiveEmitters;         // +0x20
+    Mortar::MemoryPool<PSPParticleEmitter>*   m_pEmitterPool;            // +0x34
 };
 
 #endif
