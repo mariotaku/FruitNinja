@@ -38,7 +38,7 @@ Effect::~Effect() {
 //   } else {
 //       m_Effects.insert(it, effect);
 //   }
-void EffectGroup::AddEffect(const SmartPtr<Effect>& effect) {
+void EffectGroup::AddEffect(SmartPtr<Effect> effect) {
     if (!effect.IsValid()) return;
 
     EffectLessThanCompare cmp;

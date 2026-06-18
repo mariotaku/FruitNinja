@@ -212,16 +212,16 @@ public:
 
     // ---- STUBS (binary) ----
 
-    // Defunct: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x002730ac
+    // Defunct: Mesh(SmartPtr<SharedEffectProperties>, AsciiString const&) -- binary @ 0x002730ac
     // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
-    Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
+    Mesh(SmartPtr<SharedEffectProperties> props, AsciiString const& name);
 
     // Binary @ 0x001b0948 — const-ref BindSkeleton overload (distinct mangled symbol);
     // resolves m_SkeletonIndex per BoneBinding identically to the ptr overload.
     void BindSkeleton(Skeleton const& skeleton);
 
     // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
-    void AddGeometry(SmartPtr<Geometry> const& geom);
+    void AddGeometry(SmartPtr<Geometry> geom);
 
     // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x00272c98
     // Shape-preserved: returns ptr-to-SmartPtr in m_GroupsByName (matching binary return type).

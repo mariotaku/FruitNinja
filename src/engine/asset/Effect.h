@@ -118,7 +118,7 @@ public:
 // Used by EffectGroup::AddEffect's std::lower_bound call to keep
 // m_Effects sorted by name.
 struct EffectLessThanCompare {
-    bool operator()(const SmartPtr<Effect>& a, const SmartPtr<Effect>& b) const {
+    bool operator()(SmartPtr<Effect> a, SmartPtr<Effect> b) const {
         return a->m_Name.compare(b->m_Name) < 0;
     }
 };
@@ -153,7 +153,7 @@ public:
     EffectGroup() {}
 
     // Binary @ 0x001a0274 — sorted-set insert by name; merge on dup.
-    void AddEffect(const SmartPtr<Effect>& effect);
+    void AddEffect(SmartPtr<Effect> effect);
 
     // Binary @ 0x001a2030 — fold each property def in `props` into
     // m_MergedDefs at its lower_bound position. Incoming `props` is the

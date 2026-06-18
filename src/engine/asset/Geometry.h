@@ -95,8 +95,8 @@ struct VertexLayout {
 class Geometry : public ReferenceCounter {
 public:
     // Binary @ 0x001a3c50 (C1) / 0x001a3cc4 (C2)
-    Geometry(SmartPtr<GeometryBinding> const& binding,
-             SmartPtr<SharedEffectProperties> const& props);
+    Geometry(SmartPtr<GeometryBinding> binding,
+             SmartPtr<SharedEffectProperties> props);
     virtual ~Geometry();
 
     // Binary @ 0x001a3e98 -- non-virtual member; called directly by Mesh::Draw.
@@ -125,7 +125,7 @@ public:
 
 private:
     // Binary @ 0x001a3c00
-    void BuildPropList(SmartPtr<SharedEffectProperties> const& props);
+    void BuildPropList(SmartPtr<SharedEffectProperties> props);
 
     // === binary fields (offsets +0x0C..+0x14 from ReferenceCounter base) ===
     uint32_t                          m_ActiveBindingIdx;  // +0x0c
