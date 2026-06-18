@@ -336,9 +336,6 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
 // ASM-verified: 2026-05-23 binary @ 0x001729FC (re-analyst) -- Throw-bomb SFX on countdown negative-going edge via bFuseSfxFiredThisFrame gate.
 // Matches Bomb::Update (0x001729fc, 195 lines).
 void Bomb::Update(float /*dt*/) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     const float gameDt  = game_work.dt;
     const float scaledDt = gameDt * m_SpeedMult;
     const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
