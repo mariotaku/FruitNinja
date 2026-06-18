@@ -57,7 +57,6 @@
 // Each step annotated with binary behaviour. Order matches binary 1:1.
 void GameInit(unsigned long) {
     Game* game = Game::GetInstance();
-    if (!game) return;
     GameTaskState* ts = GetTaskState();
     if (ts->initComplete) return;
 
@@ -268,14 +267,13 @@ void GameInit(unsigned long) {
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
 void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     // Gap 1: drain deferred HUDControl queued via HUD::QueueDeferredAdd path.
     // Binary @ GameUpdate entry: reads g_TaskState->pDeferredControl (+0x100);
     // if non-null, AddControl(ctrl, false) then clears the slot.
     {
         GameTaskState* ts = GetTaskState();
-        if (ts->pDeferredControl && game_work.mHud) {
+        if (ts->pDeferredControl) {
             game_work.mHud->AddControl(ts->pDeferredControl, /*atFront=*/false);
             ts->pDeferredControl = nullptr;
         }
@@ -380,9 +378,9 @@ void GameUpdate(float dt, bool active) {
     // pump permanently when pausedFlag stayed set after pause->resume.
     WaveManager::GetInstance()->Update(active ? gameplayDt : 0.0f);
 
-    if (game_work.m_SaveData) game_work.m_SaveData->Update(dt, game_work.mHud);
+    game_work.m_SaveData->Update(dt, game_work.mHud);
 
-    if (game_work.mGameSound) game_work.mGameSound->Update(dt);
+    game_work.mGameSound->Update(dt);
     UpdateMusic(dt);
 
     {
@@ -466,8 +464,8 @@ void GameUpdate(float dt, bool active) {
             }
         }
     }
-    if (game_work.mHud) game_work.mHud->Update(dt);
-    if (game_work.m_FruitCamera) game_work.m_FruitCamera->UpdateCamera(dt);
+    game_work.mHud->Update(dt);
+    game_work.m_FruitCamera->UpdateCamera(dt);
 
     // ASM-spec for bomb-fuse SFX (binary @ 0x0016c4c8..0x0016c5ca, GameUpdate):
     //   metric = Bomb::GetHeighestBomb()   (binary @ 0x001712c8)
@@ -567,12 +565,10 @@ void GameUpdate(float dt, bool active) {
 // and pm.Draw(1) draws LATER (foreground, over logo).
 void GameDraw(float dt, bool active) {
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     GameTaskState* ts = GetTaskState();
     // 1. Camera projection
-    if (game_work.m_FruitCamera)
-        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, false);
+    game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, false);
 
     MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -613,8 +609,7 @@ void GameDraw(float dt, bool active) {
     const bool wireframe = FN::g_DebugWireframe && glPolygonMode != nullptr;
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
-    if (game->actorManager)
-        game->actorManager->Draw(game->renderer);
+    game->actorManager->Draw(game->renderer);
 #if !defined(__bada__) && !defined(__EMSCRIPTEN__)
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 #endif
@@ -625,7 +620,7 @@ void GameDraw(float dt, bool active) {
     //   SetDepthBufferWrite(0)  — writes OFF for HUD/splats/bomb blasts
     dm.SetDepthBuffer(true);
     dm.SetDepthBufferWrite(false);
-    if (game_work.mHud) {
+    {
         game_work.mHud->BeginDraw(dt);
 
         // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
@@ -680,7 +675,7 @@ void GameDraw(float dt, bool active) {
     FN::SliceEffect_Draw(dt);
 
     // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
-    if (game_work.mHud) game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
+    game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
     // pm.Draw(1) — foreground particles @ 0x0016bb6a
     pm.Draw(0.0f, false, 1);
@@ -689,12 +684,12 @@ void GameDraw(float dt, bool active) {
     WaveManager::GetInstance()->Draw(0);
 
     // === 5. HUD overlay layers + flash effects ===
-    if (game_work.mHud) {
+    {
         // HUD::Draw(0x08) — buttons @ 0x0016bba8
         game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
         // MainScreen::DrawPostEffects @ 0x0016bbb0
-        if (game_work.mMainScreen) game_work.mMainScreen->DrawPostEffects();
+        game_work.mMainScreen->DrawPostEffects();
 
         // DrawCritHit (CriticalFlash) @ 0x0016bbd2 — gated on
         // critFlash > 0 && IsFastHardware. Port has CriticalFlash
@@ -747,9 +742,6 @@ void GameDraw(float dt, bool active) {
 //   6. InputManager Destroy/Init reset.
 //   7. Entity::HeapDestroy (free the entity pool itself).
 void GameExit_Handler() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     LOG_INFO("GAMEINIT", "GameExit: cleaning up");
 
     // Release background texture (shared MenuBackground slot)
@@ -761,7 +753,7 @@ void GameExit_Handler() {
     // Release HUD (destroys all controls including MainScreen).
     // MenuButton::Release does NOT delete its m_pEntity (entities are
     // ActorManager-owned); ActorManager::Clear below handles entity deletion.
-    if (game_work.mHud) {
+    {
         game_work.mHud->Release();
         delete game_work.mHud;
         game_work.mHud = nullptr;
@@ -791,7 +783,8 @@ void GameExit_Handler() {
     FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; matches binary @ 0x0016ccc8
     WaveManager::GetInstance()->Destroy();  // frees per-session wave state; matches binary @ 0x00121bf0
     PSPParticleManager::GetInstance().ClearEmitters();
-    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
+    {
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         am->Clear();
         am->Destroy();
     }
@@ -803,7 +796,8 @@ void GameExit_Handler() {
         g_pSlashEntities[i] = nullptr;
     }
     g_pSlashEntity = nullptr;
-    if (Mortar::InputManager* im = Mortar::InputManager::GetInstance()) {
+    {
+        Mortar::InputManager* im = Mortar::InputManager::GetInstance();
         // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
         im->Destroy();
         im->Init(0);

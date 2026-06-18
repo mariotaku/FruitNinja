@@ -59,8 +59,6 @@
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
 void GamePreInitialise() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
     // Original: CpuFill8(game, 0, 0x608)
     // For port: zero the gameplay fields (not the SDL/port fields)
@@ -83,7 +81,6 @@ void GamePreInitialise() {
 // See docs/functions/game-loop.md for full 25-step init order.
 void GameInitialise() {
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     LOG_INFO("GAMEINIT", "GameInitialise: booting engine");
 
@@ -235,7 +232,7 @@ void GameInitialise() {
     // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
     game_work.m_TutorialControl = new TutorialControl();
     game_work.m_TutorialControl->Init();
-    if (game_work.mHud) game_work.mHud->AddControl(game_work.m_TutorialControl);
+    game_work.mHud->AddControl(game_work.m_TutorialControl);
 
     // Binary GameInit @ 0x0016cb2a: writes -1.0f to g_GameData+0x0c
     // (m_TransitionTimer) immediately after the TutorialControl block.
@@ -363,7 +360,6 @@ void GameInitialise() {
 // Order follows the binary exactly; unported steps are stubbed with TODO.
 void GameDestroy() {
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     LOG_INFO("GAMEINIT", "GameDestroy: shutting down");
 
@@ -388,7 +384,7 @@ void GameDestroy() {
     ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
     // --- 4. HUD ---
-    if (game_work.mHud) {
+    {
         delete game_work.mHud;
         game_work.mHud = nullptr;
     }
@@ -397,7 +393,7 @@ void GameDestroy() {
     game_work.mCountDown = nullptr;        // owned by HUD; nulled here after HUD Release
 
     // --- 5. FruitCamera ---
-    if (game_work.m_FruitCamera) { delete game_work.m_FruitCamera; game_work.m_FruitCamera = nullptr; }
+    { delete game_work.m_FruitCamera; game_work.m_FruitCamera = nullptr; }
     // TutorialControl is a HUDControl — destroyed by HUD teardown above.
     game_work.m_TutorialControl = nullptr;
 
@@ -427,10 +423,10 @@ void GameDestroy() {
     game_work.pFontReserved0.SetNull();   // always null
 
     // --- 7. FruitSaveData ---
-    if (game_work.m_SaveData) { delete game_work.m_SaveData; game_work.m_SaveData = nullptr; }
+    { delete game_work.m_SaveData; game_work.m_SaveData = nullptr; }
 
     // --- 8. GameSound ---
-    if (game_work.mGameSound) { delete game_work.mGameSound; game_work.mGameSound = nullptr; }
+    { delete game_work.mGameSound; game_work.mGameSound = nullptr; }
 
     // --- 9. SmartPtr clear (field_0x17c) ---
     // TODO: SmartPtr::SetNull(&game->field_0x17c)
@@ -442,8 +438,8 @@ void GameDestroy() {
     // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
-    if (game->inputManager) { delete game->inputManager; game->inputManager = nullptr; }
-    if (game->actorManager) { delete game->actorManager; game->actorManager = nullptr; }
+    { delete game->inputManager; game->inputManager = nullptr; }
+    { delete game->actorManager; game->actorManager = nullptr; }
 
     // --- 12. Engine singletons ---
     // Note: Mortar::InputManager::Destroy -- SDL2 replacement cleaned up above.
