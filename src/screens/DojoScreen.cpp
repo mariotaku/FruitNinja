@@ -156,19 +156,20 @@ void DojoScreen::Reset() {
 // ===================================================================
 // HUDControl::Release override
 // Matches the Release() called from ~DojoScreen @ 0x00137cf4
-// Binary Release @ 0x0016c7f8: calls BaseScreen::RemoveButtons() (for m_ScreenButtons
-// teardown), then marks m_pPlayButton/m_pShopButton/m_pAboutButton pending-removal.
-// Port was missing the RemoveButtons() call -- harmless for DojoScreen since
-// m_ScreenButtons is always empty, but it ensures parity with the binary's teardown
-// order and prevents the back-button leak if the button were ever registered there.
+// Binary Release @ 0x0016c7f8: calls BaseScreen::RemoveButtons() then cleans up 4
+// pointer fields at offsets +0xa0..+0xac (m_pAboutScreen + 3 unknown pointers).
+// The port's three button fields at +0x94..+0x9c are NOT touched in the binary's
+// Release — they are handled through other mechanisms (base destructor, HUD).
 // ===================================================================
 void DojoScreen::Release() {
-    // Binary @ 0x0016c7f8: calls BaseScreen::RemoveButtons() before clearing field ptrs.
     BaseScreen::RemoveButtons();
 
-    if (m_pPlayButton)  { m_pPlayButton->SetPendingRemoval();  m_pPlayButton  = nullptr; }
-    if (m_pShopButton)  { m_pShopButton->SetPendingRemoval();  m_pShopButton  = nullptr; }
-    if (m_pAboutButton) { m_pAboutButton->SetPendingRemoval(); m_pAboutButton = nullptr; }
+    // Binary: cleans fields at +0xa0..+0xac (each: set flag byte +0x33, null ptr).
+    // Port only has m_pAboutScreen at +0xa0; the +0xa4..+0xac fields are unported.
+    if (m_pAboutScreen) {
+        m_pAboutScreen->SetPendingRemoval();
+        m_pAboutScreen = nullptr;
+    }
 }
 
 // ===================================================================
