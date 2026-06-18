@@ -59,6 +59,7 @@ echo "=== [3/4] discover + export ==="
 python3 "$SRC/tools/asm-verify/discover-symbols.py"
 python3 "$SRC/tools/asm-verify/export-binary-symbols.py"
 
+mkdir -p "$ASM_VERIFY_REPORT_DIR"
 echo "=== [4/4] asm-verify ==="
 # Optional filter from host: ASM_VERIFY_FILTER (glob on mangled name).
 if [[ -n "${ASM_VERIFY_FILTER:-}" ]]; then
