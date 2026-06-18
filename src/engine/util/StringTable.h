@@ -131,8 +131,8 @@ struct StringTableFileData {
 // Ctors: 0x0018a374 (C1) / 0x0018a394 (C2) — identical bodies.
 // Dtor:  0x0018a324 — destroys two FileData members in reverse.
 // Binary methods:
-//   LoadHeader   @ 0x0018a490
-//   LoadLanguage @ 0x0018a41c
+//   LoadHeader   @ 0x0022d800
+//   LoadLanguage @ 0x0022d74c
 //   GetInfo      @ 0x0018a2cc (binary search by key)
 //   GetString    @ 0x0011fec8
 class StringTable {
@@ -141,14 +141,12 @@ public:
     ~StringTable();
 
     // Instance methods.
-    // Binary @ 0x0018a490 LoadHeader(char*) -> opens File, delegates to
-    //   LoadHeader(File&) @ 0x0018a460: File::Read<FileHeader>(0x48 bytes),
-    //   FileHeader::Check (magic/GUID), FileData<HeaderLookup>::Load.
-    // Binary @ 0x0018a41c LoadLanguage(char*) -> opens File, delegates to
-    //   LoadLanguage(File&) @ 0x0018a3ec: same header read + Check, then
-    //   FileData<StringEntry>::Load.
-    // Returns true on success (binary returns the Check result; Load only runs
-    // when Check passed).
+    // Binary @ 0x0022d800 LoadHeader(char*) — File(path,0,0), Open, Read 76-byte
+    //   header, CheckHeader (magic/GUID), single allocation for entries + blob,
+    //   fixup key_ptr absolute pointers in-place.
+    // Binary @ 0x0022d74c LoadLanguage(char*) — same File pattern, single
+    //   allocation, fixup str_offset to absolute pointer in-place.
+    // Returns true on success.
     bool LoadHeader(const char* path);
     bool LoadLanguage(const char* path);
 
@@ -186,14 +184,6 @@ public:
     static bool IsLoaded();
     static const HeaderLookup* GetInfoS(const char* key);
 
-    // Port-only static state (not in binary; held by the static array globals)
-    // These are used by the port's static Load/Unload implementation.
-    // Guard with !defined(__bada__) so the cross-build sizeof assert is accurate.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    static bool    s_loaded;
-    static char*   s_key_blob;
-    static char*   s_str_blob;
-#endif
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
