@@ -32,7 +32,7 @@ struct MatrixStack {
     MatrixStack()
         : m_Current()  // Identity via default ctor (matches binary: m_Current = identity)
     {
-        StackAt(0).Identity();  // Only init m_Stack[0]; binary does the same via ldmia.
+        m_Stack[0].Identity();  // Only init m_Stack[0]; binary does the same via ldmia.
         m_Depth = 0;
         m_Version = 1;
     }
