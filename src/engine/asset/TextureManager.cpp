@@ -48,7 +48,7 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
 
 Mortar::SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
     std::map<uint32_t, CacheEntry>::const_iterator it = m_Cache.find(hash);
-    if (it != m_Cache.end() && it->second.ptr != nullptr) {
+    if (it != m_Cache.end()) {
         return Mortar::SmartPtr<Texture>(it->second.ptr);
     }
     return Mortar::SmartPtr<Texture>();
