@@ -1,40 +1,22 @@
-# Cross-compile toolchain for ARM Thumb-2 / VFPv3 hard-float, run inside
-# Linux (WSL Debian). Uses Sourcery G++ Lite 2010q1-188 (= GCC 4.4.1, the
-# upstream of Samsung's Sourcery G++ 4.4-157 that built FruitNinja.exe).
-#
-# The toolchain binaries are i386 ELF and can't stat() WSL drvfs (/c/...)
-# files due to 32-bit inode overflow, so they MUST live on ext4 (e.g.
-# ~/fnverify-toolchain/sourcery-2010q1/). Bootstrap with
-# tools/asm-verify/setup.sh, which pulls the upstream tarball straight
-# into ext4.
-#
-# Override the install path via FN_TOOLCHAIN_DIR if you keep the toolchain
-# elsewhere -- e.g. a system-wide /opt/sourcery-2010q1/.
+# Cross-compile toolchain for ARM Thumb-2 / VFPv3 hard-float.
+# Uses Samsung Sourcery G++ 4.4-157 (= GCC 4.4.1, the ACTUAL compiler
+# that built FruitNinja.exe). The bada-sdk:1.0.0 Docker image provides
+# this toolchain at /opt/codesourcery/.
 
 set(CMAKE_SYSTEM_NAME       Generic)
 set(CMAKE_SYSTEM_PROCESSOR  arm)
 
-if(DEFINED ENV{FN_TOOLCHAIN_DIR})
-    set(_TC "$ENV{FN_TOOLCHAIN_DIR}")
-else()
-    set(_TC "$ENV{HOME}/fnverify-toolchain/sourcery-2010q1")
-endif()
+set(_TC "/opt/codesourcery")
 
-if(NOT EXISTS "${_TC}/bin/arm-none-eabi-gcc")
-    message(FATAL_ERROR "Sourcery 2010q1 toolchain missing at ${_TC}. "
-        "Run tools/asm-verify/setup.sh once to bootstrap, or set "
-        "FN_TOOLCHAIN_DIR to your existing install path.")
-endif()
-
-set(CMAKE_C_COMPILER    "${_TC}/bin/arm-none-eabi-gcc")
-set(CMAKE_CXX_COMPILER  "${_TC}/bin/arm-none-eabi-g++")
-set(CMAKE_AR            "${_TC}/bin/arm-none-eabi-ar"      CACHE FILEPATH "")
-set(CMAKE_RANLIB        "${_TC}/bin/arm-none-eabi-ranlib"  CACHE FILEPATH "")
-set(CMAKE_OBJCOPY       "${_TC}/bin/arm-none-eabi-objcopy" CACHE FILEPATH "")
-set(CMAKE_OBJDUMP       "${_TC}/bin/arm-none-eabi-objdump" CACHE FILEPATH "")
-set(CMAKE_NM            "${_TC}/bin/arm-none-eabi-nm"      CACHE FILEPATH "")
-set(CMAKE_STRIP         "${_TC}/bin/arm-none-eabi-strip"   CACHE FILEPATH "")
-set(CMAKE_ASM_COMPILER  "${_TC}/bin/arm-none-eabi-as"      CACHE FILEPATH "")
+set(CMAKE_C_COMPILER    "${_TC}/bin/arm-samsung-nucleuseabi-gcc")
+set(CMAKE_CXX_COMPILER  "${_TC}/bin/arm-samsung-nucleuseabi-g++")
+set(CMAKE_AR            "${_TC}/bin/arm-samsung-nucleuseabi-ar"      CACHE FILEPATH "")
+set(CMAKE_RANLIB        "${_TC}/bin/arm-samsung-nucleuseabi-ranlib"  CACHE FILEPATH "")
+set(CMAKE_OBJCOPY       "${_TC}/bin/arm-samsung-nucleuseabi-objcopy" CACHE FILEPATH "")
+set(CMAKE_OBJDUMP       "${_TC}/bin/arm-samsung-nucleuseabi-objdump" CACHE FILEPATH "")
+set(CMAKE_NM            "${_TC}/bin/arm-samsung-nucleuseabi-nm"      CACHE FILEPATH "")
+set(CMAKE_STRIP         "${_TC}/bin/arm-samsung-nucleuseabi-strip"   CACHE FILEPATH "")
+set(CMAKE_ASM_COMPILER  "${_TC}/bin/arm-samsung-nucleuseabi-as"      CACHE FILEPATH "")
 
 set(CMAKE_C_COMPILER_WORKS    1)
 set(CMAKE_CXX_COMPILER_WORKS  1)

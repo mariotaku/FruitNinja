@@ -36,8 +36,8 @@ cp -u "$PROJECT/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/"
 
 # Pipeline env (Python tools read these).
 export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja_v1_6_1.exe"
-export ASM_VERIFY_NM="$FN_TOOLCHAIN_DIR/bin/arm-none-eabi-nm"
-export ASM_VERIFY_OBJDUMP="$FN_TOOLCHAIN_DIR/bin/arm-none-eabi-objdump"
+export ASM_VERIFY_NM="${FN_TOOLCHAIN_DIR:-/opt/codesourcery}/bin/arm-samsung-nucleuseabi-nm"
+export ASM_VERIFY_OBJDUMP="${FN_TOOLCHAIN_DIR:-/opt/codesourcery}/bin/arm-samsung-nucleuseabi-objdump"
 export ASM_VERIFY_BUILD_DIR="$BUILD"
 export ASM_VERIFY_BIN_SYMBOL_DIR="/cache/symbols"
 export ASM_VERIFY_REPORT_DIR="$SRC/tmp/asm-verify"
