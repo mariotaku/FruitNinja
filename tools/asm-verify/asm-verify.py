@@ -151,38 +151,88 @@ MAJOR_TOKENS = re.compile(
 )
 
 
-def normalize(text: str) -> list[str]:
-    """Return canonical-form list of mnemonic lines."""
-    out = []
-    for raw in text.splitlines():
-        if DROP_RE.match(raw) or PREAMBLE_RE.match(raw):
+# ==== Semantic normalization (Phase B) ====
+
+ARM_COND_CODES_RE = r'(eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)'
+ARM_TO_CANON = {
+    'stmdb': 'push', 'stmfd': 'push', 'ldmia': 'pop', 'ldmfd': 'pop',
+    'fstmias': 'vpush', 'fstmiad': 'vpush',
+    'fldmias': 'vpop',  'fldmiad': 'vpop',
+    'vstmia': 'vstm', 'vldmia': 'vldm',
+}
+
+def _parse_instr(line):
+    """Extract instruction text from objdump line; None for non-instructions."""
+    line = line.strip()
+    if not line or 'Disassembly' in line or 'file format' in line:
+        return None
+    if ';' in line:
+        line = line.split(';')[0].strip()
+    parts = line.split('\t')
+    if len(parts) < 2:
+        return None
+    if len(parts) == 2 and ':' in parts[0] and not parts[1].strip():
+        return None
+    return parts[2].strip() if len(parts) >= 3 else parts[1].strip()
+
+def _norm_instr(instr):
+    """Normalize one instruction to canonical form."""
+    if not instr:
+        return None
+    parts = instr.split(None, 1)
+    mnem = parts[0].lower() if parts else ''
+    ops = parts[1] if len(parts) > 1 else ''
+
+    # VFP size suffixes
+    mnem = re.sub(r'(vldr|vstr)\.32', r'\1', mnem)
+    mnem = re.sub(r'(vadd|vsub|vmul|vdiv|vneg|vabs|vsqrt|vcmp|vcmpe|vmov)\.f32', r'\1', mnem)
+    mnem = re.sub(r'\.(32|64|f32|f64|s32|s64|u32|u64)\b', '', mnem)
+
+    # Strip ARM condition codes
+    mnem = re.sub(ARM_COND_CODES_RE + r'$', '', mnem)
+    # Strip Thumb .w/.n
+    mnem = re.sub(r'\.w$', '', mnem)
+    mnem = re.sub(r'\.n$', '', mnem)
+    # ARM->canonical
+    mnem = ARM_TO_CANON.get(mnem, mnem)
+    # Flag-setting: adds->add etc.
+    if mnem.endswith('s') and len(mnem) > 2:
+        base = mnem[:-1]
+        if base in ARM_TO_CANON or base in ('add','sub','mov','and','orr','eor','bic','mul','lsl','lsr','asr','ror','adc','sbc','rsb','cmp','cmn','tst','teq'):
+            mnem = ARM_TO_CANON.get(base, base)
+
+    # Register canonicalization
+    ops = re.sub(r'\bs(\d+)\b', r'V\1', ops)
+    ops = re.sub(r'\bd(\d+)\b', r'D\1', ops)
+    ops = re.sub(r'\br(1[3-5])\b', r'G\1', ops)
+    ops = re.sub(r'\br([0-9]|1[0-2])\b', r'G\1', ops)
+    ops = ops.replace('sp', 'SP').replace('lr', 'LR').replace('pc', 'PC')
+    # Mask immediates and addresses
+    ops = re.sub(r'#-?\d+', '#N', ops)
+    ops = re.sub(r'#0x[0-9a-f]+', '#N', ops)
+    ops = re.sub(r'\b0x[0-9a-f]+\b', 'ADDR', ops)
+    ops = re.sub(r'\.L\d+', '.LX', ops)
+    ops = re.sub(r'<\S+>', '<SYM>', ops)
+    ops = re.sub(r'\s+', ' ', ops).strip()
+    return f"{mnem} {ops}".strip()
+
+def normalize(text):
+    """Semantic normalization: strip encoding noise, keep structural signal."""
+    result = []
+    for line in text.strip().split('\n'):
+        stripped = line.strip()
+        if not stripped:
             continue
-        line = raw
-        # -- step 0: strip address prefix so byte stripping works --
-        line = LINE_PATTERNS[0][0].sub(LINE_PATTERNS[0][1], line)
-        # -- pre-normalization: strip objdump surface noise --
-        line = OBJDUMP_BYTES_RE.sub('', line)               # raw hex bytes
-        line = OBJDUMP_OFFSET_COMMENT_RE.sub('', line)      # "; 0xNN" comments
-        line = CALL_OFFSET_RE.sub(r'\1 <', line)            # bl 0xNN <Name> → bl <Name>
-        line = W_SUFFIX_RE.sub('', line)                    # strb.w → strb
-        line = re.sub(r'\s+', ' ', line)                    # collapse whitespace
-        # -- address/immediate masking (skip [0] already stripped above) --
-        for pat, repl in LINE_PATTERNS[1:]:
-            line = pat.sub(repl, line)
-        # -- mnemonic unification --
-        for pat, repl in MNEM_REWRITES:
-            line = pat.sub(repl, line)
-        # -- register-list collapse --
-        line = LDM_RE.sub("ldm rN, {REGS}", line)
-        line = STM_RE.sub("stm rN, {REGS}", line)
-        line = PUSH_RE.sub("push {REGS}", line)
-        line = POP_RE.sub("pop {REGS}", line)
-        line = MOVR_RE.sub("mov rN, rN", line)
-        line = line.strip()
-        if not line:
+        # Skip directives, labels, function headers
+        if re.match(r'^\s*(\.(ident|size|thumb_func|align|section|global|type|file|cpu|fpu|eabi_attribute|thumb|syntax|text|bss|data)\s|Disassembly|file format|^\s*[0-9a-f]+\s*<.*>:\s*$)', stripped):
             continue
-        out.append(line)
-    return out
+        instr = _parse_instr(line)
+        if instr is None:
+            continue
+        norm = _norm_instr(instr)
+        if norm:
+            result.append(norm)
+    return result
 
 
 def disasm_port_symbol(obj_path: pathlib.Path, mangled: str) -> str:
@@ -287,18 +337,53 @@ def render_asm_differ_text(d: dict) -> list[str]:
     return out
 
 
-def classify(diff_lines: list[str]) -> tuple[str, str]:
-    """Classify a unified diff hunk into a verdict + 1-line reason."""
-    if not diff_lines:
-        return "MATCH", "0 normalized lines differ"
-    add_remove = [l for l in diff_lines if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))]
-    if not add_remove:
-        return "MATCH", "all hunks were context-only"
-    # Promote to SUSPICIOUS if any major opcode appears in adds/removes.
-    for l in add_remove:
-        if MAJOR_TOKENS.search(l):
-            return "SUSPICIOUS", f"major opcode delta ({len(add_remove)} +/- lines)"
-    return "COSMETIC", f"non-control-flow lines only ({len(add_remove)} +/- lines)"
+def classify_lcs(port_lines, bin_lines):
+    """Classify based on normalized LCS similarity.
+    Returns (verdict, reason, score, max_score, diff_lines)."""
+    p_count = len(port_lines)
+    b_count = len(bin_lines)
+
+    # LCS scoring
+    m, n = p_count, b_count
+    if max(m, n) == 0:
+        sim = 100.0
+    else:
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(m):
+            for j in range(n):
+                if port_lines[i] == bin_lines[j]:
+                    dp[i+1][j+1] = dp[i][j] + 1
+                else:
+                    dp[i+1][j+1] = max(dp[i+1][j], dp[i][j+1])
+        sim = dp[m][n] / max(m, n) * 100
+
+    score = int(1000 * (1.0 - sim / 100.0) * max(b_count, 1))
+    max_score = max(b_count, 1)
+
+    if sim >= 95:
+        verdict = "MATCH"
+    elif sim >= 85:
+        verdict = "COSMETIC"
+    elif sim >= 60:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "DIVERGE"
+    reason = f"{sim:.1f}% LCS ({p_count}p vs {b_count}b)"
+
+    # Pseudo-diff for report
+    diff_lines = []
+    for i in range(max(p_count, b_count)):
+        p = port_lines[i] if i < p_count else ""
+        b = bin_lines[i] if i < b_count else ""
+        if p == b:
+            diff_lines.append(f"  {p}")
+        else:
+            if i < b_count:
+                diff_lines.append(f"- {b}")
+            if i < p_count:
+                diff_lines.append(f"+ {p}")
+
+    return verdict, reason, score, max_score, diff_lines
 
 
 def verify_one(s: dict) -> dict:
@@ -311,17 +396,7 @@ def verify_one(s: dict) -> dict:
     if not bin_asm_path.exists():
         return {**s, "verdict": "UNPAIRED", "reason": f"binary asm missing: {bin_asm_path.name}", "diff": []}
 
-    # Preferred path: asm-differ. Better register-rename + reloc handling.
-    if USE_ASM_DIFFER and port_obj_path.exists():
-        ad = run_asm_differ(port_obj_path, bin_asm_path, name)
-        if ad:
-            verdict, reason = classify_asm_differ(ad)
-            diff = render_asm_differ_text(ad)
-            return {**s, "verdict": verdict, "reason": reason, "diff": diff,
-                    "score": ad.get("current_score"),
-                    "max_score": ad.get("max_score")}
-
-    # Fallback: toy normalizer + difflib.
+    # Semantic normalize + LCS scoring (primary path).
     try:
         port_text = disasm_port_symbol(port_obj_path, name)
     except Exception as e:
@@ -332,15 +407,10 @@ def verify_one(s: dict) -> dict:
     bin_lines = normalize(bin_asm_path.read_text())
     port_lines = normalize(port_text)
 
-    diff = list(difflib.unified_diff(
-        bin_lines, port_lines,
-        fromfile=f"binary:{name}", tofile=f"port:{name}",
-        lineterm="",
-        n=2,
-    ))
-    verdict, reason = classify(diff)
+    verdict, reason, score, max_score, diff = classify_lcs(port_lines, bin_lines)
     return {**s, "verdict": verdict, "reason": reason, "diff": diff,
-            "bin_norm": bin_lines, "port_norm": port_lines}
+            "score": score, "max_score": max_score,
+            "port_norm": port_lines, "bin_norm": bin_lines}
 
 
 def load_triage() -> dict:
