@@ -230,10 +230,6 @@ private:
     // m_pBonusScreen / m_pSlot9c / m_pNoticeCtrl; clears slot, forces state=6 where applicable.
     void DeletedControl(HUDControl* ctrl);
 
-    // Port-internal helper: body of STATE_MAIN_DISPLAY, extracted so case 7
-    // can fall through into it in the same tick (binary uses goto). Not a
-    // binary symbol -- call-shape matches the binary's fall-through exactly.
-    void RunStateMainDisplay(int prevState);
 };
 
 #endif // FN_GAME_OVER_SCREEN_H

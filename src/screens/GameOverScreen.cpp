@@ -918,168 +918,6 @@ static const char* GetComboName(int starType) {
     return g_ComboNameTable[starType];
 }
 
-// ---------------------------------------------------------------------------
-// RunStateMainDisplay — body of STATE_MAIN_DISPLAY, extracted so case 7 can
-// fall through into it in the same tick (binary uses goto switchD...caseD_6).
-// Not a binary symbol; call-shape matches the binary's fall-through exactly.
-// ---------------------------------------------------------------------------
-void GameOverScreen::RunStateMainDisplay(int prevState) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-    // 1) Create FruitFactControl on first entry
-    if (m_pFruitFact == nullptr) {
-        m_pFruitFact = new FruitFactControl();
-        // Position: DAT_00142120=183.0, y=12.0, z=DAT_00142118=0.0
-        m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
-        m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
-        m_pFruitFact->pos.z = 0.0f;
-        m_pFruitFact->m_TabIndex  = (uint8_t)m_TabIndex;
-        m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
-        if (game_work.mHud) game_work.mHud->AddControl(m_pFruitFact, false);
-        m_pFruitFact->Init();
-    }
-
-    // 2) Pop-in animation: game.alpha (m_TransitionTimer) ramps toward 1.0
-    float& alpha = game_work.m_GameDt; // game[+0xC] = alpha
-    const float ALPHA_THRESH = 0.999f; // DAT_00142124
-    if (alpha < ALPHA_THRESH) {
-        m_ProgressCounter = 0;
-        alpha += (1.0f - alpha) * 0.125f;
-        if (alpha < 0.75f) game_work.m_bSlowMotion = 1; // suppress entity processing
-        if (alpha >= ALPHA_THRESH) alpha = 1.0f;
-        m_FruitFactAlpha = alpha;
-    } else {
-        if (m_FruitFactAlpha < 1.0f)
-            m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
-        if (m_ProgressCounter < 11) m_ProgressCounter++;
-    }
-
-    // 3) On frame 10 (single-shot via m_bScoreSubmitted): commit scores
-    if (m_ProgressCounter == 10) {
-        m_ProgressCounter = 11; // latch
-        if (m_bScoreSubmitted == 0) {
-            int score = GetCurrentScore(0);
-            m_bScoreSubmitted = 1;
-
-            // Score submission tail (§8): most calls are no-ops until subsystems are ported
-            FruitSaveData* save = game_work.m_SaveData;
-            if (save) {
-                // Binary @ 0x00142092: pSaveData[+0x12D] = 0 hoists to
-                // the FIRST write in the m_bScoreSubmitted == 0 block,
-                // before any AddToTotal / Achievement calls.
-                save->secondaryFlag = 0;
-
-                // Lifetime totals
-                save->AddToTotal("FruitsCollected", 1);
-                save->AddToTotal("TotalScore", score);
-                save->UnlockTotals();  // no-op stub until AchievementManager is ported
-
-                AchievementManager::GetInstance()->UnlockScoreAchievement(score);
-                // Binary @ 0x00141fe6: passes game+0x174 (fruitTotal = last AddToTotal result).
-                AchievementManager::GetInstance()->UnlockTotalFruitAchievement(game_work.fruitTotal);
-                // Binary @ 0x00142000: second arg is current-mode highscore fetched just before.
-                AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, GetCurrentModeHighscore());
-
-                // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
-                // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
-
-                // Binary @ 0x00142048: combo-star achievement -- gate on
-                // m_pFruitFact != null (NOT m_pBonusScreen; the prior TODO
-                // misattributed the +0xC0/+0xD0/+0xE0 fields to BonusScreen,
-                // they actually live on FruitFactControl per re-analyst
-                // 2026-05-18). Zen-mode gameplay only; valid star type
-                // is m_ComboType in [0, 25).
-                if (m_pFruitFact && game_work.gameMode == Mortar::GAME_MODE_ZEN) {
-                    int comboType = (int8_t)m_pFruitFact->m_ComboType;  // +0xE0
-                    if (comboType >= 0 && comboType < 25) {
-                        int comboLen = m_pFruitFact->m_ComboLength;     // +0xD0
-                        // ASM-verified: 2026-05-20 binary @ 0x001421e8 (re-analyst).
-                        // StringHash(GetComboName(comboType)) is the per-star-variant key
-                        // used to look up the achievement in
-                        // AchievementManager::m_AchievementsByHash (this+0xd8).
-                        AchievementManager::GetInstance()->UnlockComboStarAchievement(
-                            comboLen, StringHash(GetComboName(comboType)));
-                    }
-                }
-
-                int hi = GetCurrentModeHighscore();
-                if (hi / 2 < score) {
-                    // Binary @ 0x00142228:
-                    //   pSaveData[+0x12C] = (uint8_t)SetCurrentModeHighscore(score);
-                    save->newBestThisGame =
-                        save->SetCurrentModeHighscore(score) ? 1 : 0;
-                }
-
-                // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
-
-                // Arcade-only post-game achievement
-                if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
-                    // Binary @ 0x0014230c -- calls BonusManager::UnlockPostGameAchievements.
-                    // Port previously called AchievementManager::UnlockPostGameAchievements
-                    // in error; corrected to match binary.
-                    BonusManager::GetInstance()->UnlockPostGameAchievements();
-                }
-
-                save->FinishedGame();
-                save->ClearTotals();
-                FruitNinja_SaveCurrentData(false);
-            }
-
-            // Binary @ 0x00141fae loads "comming_soon_highscore.tex" into
-            // m_CommingSoonHighscoreTex (+0x114). The asset isn't shipped --
-            // LoadLocalisedTexture returns a null SmartPtr and the PreDraw
-            // overlay's IsValid() gate then skips the quad. This is the
-            // intended behaviour (Defunct: "coming soon" highscore-leaderboard
-            // placeholder for an unreleased feature). Earlier port loaded
-            // "gameover.tex" -- a shipped asset that DOES exist -- so the
-            // overlay rendered on the retry button when the binary doesn't.
-            // Binary @ 0x00131fae loads inline here, NOT in LoadContent.
-            // Stores to per-instance field +0x114 (m_CommingSoonHighscoreTex).
-            // Asset isn't shipped so the SmartPtr stays null and PreDraw's
-            // IsValid() gate skips the overlay. Defunct: "coming soon"
-            // highscore-leaderboard placeholder.
-            m_CommingSoonHighscoreTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
-        }
-
-        game_work.m_GameDt = 1.0f;
-
-        // Spawn retry/quit buttons only when allowed AND entering from state 6
-        // Binary @ 0x00141f3a: gates on (prevState == 6) && IsAllowedToExit()
-        if (prevState == 6 && IsAllowedToExit()) {
-            CreateRetryButton();
-        }
-        if (m_pQuitBtn == nullptr && prevState == 6 && IsAllowedToExit()) {
-            CreateQuitButton();
-        }
-    }
-
-    // 6) Vertical "settle" -- title slides up off-screen while shrinking.
-    // ASM-verified: 2026-05-12 binary @ 0x001422fc..0x0014235e (asm-inspector).
-    //   gate    = pos.y < 212.8f          (DAT_00142614)
-    //   driver  = Game[+0x0c] = m_TransitionTimer (eased above at lines 920-924
-    //             via `timer += (1 - timer) * 0.125`, asymptotic 0 -> 1)
-    //   size    = m_TitleSize * lerp(2.0, 1.0, alpha)        (sf = 2 - alpha)
-    //   pos.y   = lerp(0.0, 224.0, alpha) = 224 * alpha     (DAT_00142618=224)
-    //   pos.x/z = 0
-    // The prior `m_TitleSlideProgress (+0x138)` interpretation was incorrect --
-    // the binary uses Game[+0x0c] (m_TransitionTimer) directly as the driver.
-    if (pos.y < 212.8f) {
-        float a = game_work.m_GameDt;
-        float sf = 2.0f + (1.0f - 2.0f) * a;   // lerp(2, 1, a) = 2 - a
-        size.x = m_TitleSizeX * sf;
-        size.y = m_TitleSizeY * sf;
-        pos.x = 0.0f;
-        pos.y = 224.0f * a;
-        pos.z = 0.0f;
-    }
-
-    // Do NOT write m_State = STATE_MAIN_DISPLAY here. Case 7 (retry-prepare)
-    // bounces into this body and MUST re-enter case 7 next frame until
-    // entities clear -- writing m_State=6 here would lock the screen into
-    // case 6 after the first bounce and the reset path would never fire.
-    // (Earlier "unconditional m_State=6 at 0x00142298" claim was inconsistent
-    // with the bounce-loop semantics that the binary clearly relies on.)
-}
 
 // ---------------------------------------------------------------------------
 // Update (vtable slot 10, 0x00141b34) — main state machine (529 lines)
@@ -1100,7 +938,6 @@ void GameOverScreen::RunStateMainDisplay(int prevState) {
 //     (int8_t); hash via StringHash(GetComboName(starType)).
 void GameOverScreen::Update(float dt) {
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     // Default m_LayerFlags for the frame (binary @ 0x00141b40, before
     // the state switch). Case 0 overrides to 1 for the entry animation.
@@ -1241,41 +1078,124 @@ void GameOverScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // State 6: main display + score submission
-    // -----------------------------------------------------------------------
-    case STATE_MAIN_DISPLAY: {
-        const int prevState = m_State;   // Binary: r9 = m_State at 0x00141f3e (saved BEFORE any writes)
-        RunStateMainDisplay(prevState);
-        break;
-    }
-
-    // -----------------------------------------------------------------------
     // State 7: retry — guard entities & reset wave & flag pause
     // -----------------------------------------------------------------------
     case STATE_RETRY_PREPARE: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
-            // Entities still on screen — snap alpha and fall through into
-            // STATE_MAIN_DISPLAY in the SAME tick (binary: goto case 6).
-            // ASM-verified 2026-05-22 binary @ 0x001425fc (re-analyst):
-            // binary does NOT write m_State here; prevState passed to case 6
-            // body is the unchanged STATE_RETRY_PREPARE (r9 = m_State = 7).
-            // Case 7 re-enters next frame until entities drain; per-frame
-            // bounce ticks m_ProgressCounter inside the case-6 body and the
-            // counter==10 path writes m_State=6 only after 10 bounce-frames
-            // -- so retry/quit buttons are not recreated on bounce.
             game_work.m_GameDt = 1.0f;
-            RunStateMainDisplay(/*prevState=*/STATE_RETRY_PREPARE);
+            // Fall through to STATE_MAIN_DISPLAY (m_State is still 7)
+        } else {
+            game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
+            WaveManager::GetInstance()->Reset(false);
+            game_work.m_LevelTransitionFlag = 1;
+            m_State = STATE_RETRY_FADE;
             break;
         }
-        // ASM-verified: 2026-05-13 binary @ state-7 tail (re-analyst).
-        //   game[+0x28] = game[+0x20] re-snapshots the start-balance for
-        //   the retry run so the "YOU JUST EARNT %i COINS" delta resets.
-        //   Earlier port comment mislabelled these as wave fields.
-        game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
-        WaveManager::GetInstance()->Reset(false);
-        game_work.m_LevelTransitionFlag = 1; // will be cleared in state 8
-        m_State = STATE_RETRY_FADE;
+    }
+    // Fall-through from STATE_RETRY_PREPARE
+    // -----------------------------------------------------------------------
+    // State 6: main display + score submission
+    // -----------------------------------------------------------------------
+    case STATE_MAIN_DISPLAY:
+    {
+        const int prevState = m_State;
+
+        // 1) Create FruitFactControl on first entry
+        if (m_pFruitFact == nullptr) {
+            m_pFruitFact = new FruitFactControl();
+            m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
+            m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
+            m_pFruitFact->pos.z = 0.0f;
+            m_pFruitFact->m_TabIndex  = (uint8_t)m_TabIndex;
+            m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
+            if (game_work.mHud) game_work.mHud->AddControl(m_pFruitFact, false);
+            m_pFruitFact->Init();
+        }
+
+        // 2) Pop-in animation: game.alpha ramps toward 1.0
+        float& alpha = game_work.m_GameDt;
+        const float ALPHA_THRESH = 0.999f;
+        if (alpha < ALPHA_THRESH) {
+            m_ProgressCounter = 0;
+            alpha += (1.0f - alpha) * 0.125f;
+            if (alpha < 0.75f) game_work.m_bSlowMotion = 1;
+            if (alpha >= ALPHA_THRESH) alpha = 1.0f;
+            m_FruitFactAlpha = alpha;
+        } else {
+            if (m_FruitFactAlpha < 1.0f)
+                m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
+            if (m_ProgressCounter < 11) m_ProgressCounter++;
+        }
+
+        // 3) On frame 10 (single-shot via m_bScoreSubmitted): commit scores
+        if (m_ProgressCounter == 10) {
+            m_ProgressCounter = 11;
+            if (m_bScoreSubmitted == 0) {
+                int score = GetCurrentScore(0);
+                m_bScoreSubmitted = 1;
+
+                FruitSaveData* save = game_work.m_SaveData;
+                if (save) {
+                    save->secondaryFlag = 0;
+
+                    save->AddToTotal("FruitsCollected", 1);
+                    save->AddToTotal("TotalScore", score);
+                    save->UnlockTotals();
+
+                    AchievementManager::GetInstance()->UnlockScoreAchievement(score);
+                    AchievementManager::GetInstance()->UnlockTotalFruitAchievement(game_work.fruitTotal);
+                    AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, GetCurrentModeHighscore());
+
+                    if (m_pFruitFact && game_work.gameMode == Mortar::GAME_MODE_ZEN) {
+                        int comboType = (int8_t)m_pFruitFact->m_ComboType;
+                        if (comboType >= 0 && comboType < 25) {
+                            int comboLen = m_pFruitFact->m_ComboLength;
+                            AchievementManager::GetInstance()->UnlockComboStarAchievement(
+                                comboLen, StringHash(GetComboName(comboType)));
+                        }
+                    }
+
+                    int hi = GetCurrentModeHighscore();
+                    if (hi / 2 < score) {
+                        save->newBestThisGame =
+                            save->SetCurrentModeHighscore(score) ? 1 : 0;
+                    }
+
+                    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        BonusManager::GetInstance()->UnlockPostGameAchievements();
+                    }
+
+                    save->FinishedGame();
+                    save->ClearTotals();
+                    FruitNinja_SaveCurrentData(false);
+                }
+
+                // Defunct: "coming soon" highscore-leaderboard placeholder
+                m_CommingSoonHighscoreTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
+            }
+
+            game_work.m_GameDt = 1.0f;
+
+            // Spawn retry/quit buttons only when entering from state 6
+            if (prevState == 6 && IsAllowedToExit()) {
+                CreateRetryButton();
+            }
+            if (m_pQuitBtn == nullptr && prevState == 6 && IsAllowedToExit()) {
+                CreateQuitButton();
+            }
+        }
+
+        // 6) Vertical "settle"
+        if (pos.y < 212.8f) {
+            float a = game_work.m_GameDt;
+            float sf = 2.0f - a;
+            size.x = m_TitleSizeX * sf;
+            size.y = m_TitleSizeY * sf;
+            pos.x = 0.0f;
+            pos.y = 224.0f * a;
+            pos.z = 0.0f;
+        }
         break;
     }
 
@@ -1355,10 +1275,7 @@ void GameOverScreen::Update(float dt) {
             m_Timer = 0.0f;       // transient -- overwritten below
         }
         m_State = STATE_MAIN_DISPLAY;
-        {
-            Game* g = Game::GetInstance();
-            if (g) game_work.m_bUpdatesSuspended = 0;  // BYTE @ Game+0x195
-        }
+        game_work.m_bUpdatesSuspended = 0;
         if (prevSlot9c == 0) m_ProgressCounter = 0;
         m_Timer = 2.0f;           // FINAL unconditional write
         break;
