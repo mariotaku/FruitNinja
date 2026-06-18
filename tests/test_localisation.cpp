@@ -9,6 +9,8 @@
 //   cd build && ctest --output-on-failure -R localisation
 
 #include "util/StringTable.h"
+#include "asset/FileManager.h"
+#include "asset/FileSystem_Direct.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -43,6 +45,13 @@ int main(int argc, char** argv) {
     const int   lang    = (argc > 2) ? std::atoi(argv[2]) : 0;  // english_us
 
     printf("test_localisation: dataDir='%s' languageFlag=%d\n", dataDir, lang);
+
+    // Set up FileSystem for Mortar::File (matches GameInitialise's CreateFileSystems step).
+    {
+        Mortar::FileSystem_Direct* fs = new Mortar::FileSystem_Direct();
+        fs->Initialise(dataDir, /*writable=*/false);
+        FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
+    }
 
     Mortar::StringTable::Load(dataDir, lang);
 
