@@ -126,10 +126,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z10GameUpdatefb": {
-    "decided_at": "2026-06-18T02:22Z",
+    "decided_at": "2026-06-18T02:55Z",
     "max_score": 61600,
     "reason": "GameUpdate -- port adds MortarGame::GetInstance null-guard, GetTaskState indirection, GameSound::SFXPlay call. Score 101087/62200 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 101087/62200 -> 105722/61600]",
-    "score": 105057,
+    "score": 104917,
     "verdict": "ACCEPT-deferred"
   },
   "_Z10SplashDrawfb": {
@@ -2401,10 +2401,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager6ResumeEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:55Z",
     "max_score": 38400,
     "reason": "Stale refresh: score improved 53228->51720. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 50268/35500 -> 54230/38400]",
-    "score": 54230,
+    "score": 54505,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager6UpdateEf": {
@@ -2548,10 +2548,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager8AddComboEi": {
-    "decided_at": "2026-06-18T02:22Z",
+    "decided_at": "2026-06-18T02:55Z",
     "max_score": 8400,
     "reason": "game_work offsets MATCH: game_work loaded via GOT+0x14c; [r0,#0x50] FruitSaveData access same as binary. Score 15375/8400. Residual: port adds MortarGame singleton guard (cbz r3) + game_work null-guard; BonusManager uses cxa_guard singleton init for string hashes (binary uses GOT-relative guard). ASM-verified combo payout index logic. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 15380/8400 2026-06-14T05:55Z]",
-    "score": 11535,
+    "score": 11255,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManagerC1Ev": {
@@ -3213,17 +3213,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveData8GetTotalEm": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:55Z",
     "max_score": 3400,
     "reason": "FruitSaveData method stub/divergence. Score 5725/3200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5725/3200 -> 5355/3400]",
-    "score": 5355,
+    "score": 8095,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveData8SetTotalEPKcibb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:55Z",
     "max_score": 2100,
     "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 2700/2200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2700/2200 -> 1345/2100]",
-    "score": 1345,
+    "score": 1840,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveDataC1Ev": {
@@ -8937,5 +8937,33 @@
     "score": 7569,
     "max_score": 4600,
     "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN13FruitSaveData8GetTotalEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 700/800. [auto 2026-06-18T02:55Z]",
+    "score": 700,
+    "max_score": 800,
+    "decided_at": "2026-06-18T02:55Z"
+  },
+  "_ZN13SliderControlC1E8_Vector3IfES1_15LocalizedStringlltl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 10150/6000. [auto 2026-06-18T02:55Z]",
+    "score": 10150,
+    "max_score": 6000,
+    "decided_at": "2026-06-18T02:55Z"
+  },
+  "_ZN13SliderControlC2E8_Vector3IfES1_15LocalizedStringlltl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 10150/6000. [auto 2026-06-18T02:55Z]",
+    "score": 10150,
+    "max_score": 6000,
+    "decided_at": "2026-06-18T02:55Z"
+  },
+  "_ZN9GameSound9IsPlayingEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 7165/1500. [auto 2026-06-18T02:55Z]",
+    "score": 7165,
+    "max_score": 1500,
+    "decided_at": "2026-06-18T02:55Z"
   }
 }
