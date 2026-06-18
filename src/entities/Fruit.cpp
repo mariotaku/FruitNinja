@@ -2504,23 +2504,21 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
 // Chunk D: UpdateBombAvoidance + DestroyFruitModels
 // ============================================================
 
-// Binary @ 0x00175988 — push bombs away from this fruit on the X axis.
+// Binary @ 0x001db190 — push bombs away from this fruit on the X axis.
 // ASM-verified: re-analyst 2026-05-16 confirmed DAT_00175a5c=4900.0f,
 // DAT_00175a60=56.25f, multiplier=12.0f; dist check is MagnitudeSqr(diff)<4900.
+// Binary re-fetches ActorManager::GetInstance() each iteration. No null guard.
 void Fruit::UpdateBombAvoidance(float dt) {
     if (m_bSliced != 0) return;
 
-    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (!am) return;
-
     std::list<Mortar::Entity*>::iterator it;
-    Mortar::Entity* e = am->GetEntityFirst(1, it);   // entity type 1 = bomb
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    Mortar::Entity* e = am->GetEntityFirst(1, it);
     while (e) {
         Bomb* bomb = static_cast<Bomb*>(e);
         if (bomb->IsActive() && bomb->m_Col != NULL) {
             Vec3 diff = bomb->pos - pos;
-            float distSqr = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
-            if (distSqr < 4900.0f) {   // DAT_00175a5c = 4900.0 (70^2)
+            if (diff.MagnitudeSqr() < 4900.0f) {   // DAT_00175a5c = 4900.0 (70^2)
                 float dvx = vel.x - bomb->vel.x;
                 float dvy = vel.y - bomb->vel.y;
                 if (dvx * dvx + dvy * dvy < 56.25f) {   // DAT_00175a60 = 56.25 (7.5^2)
@@ -2529,6 +2527,7 @@ void Fruit::UpdateBombAvoidance(float dt) {
                 }
             }
         }
+        am = Mortar::ActorManager::GetInstance();
         e = am->GetEntityNext(1, it);
     }
 }
