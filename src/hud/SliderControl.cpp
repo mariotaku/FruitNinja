@@ -73,6 +73,41 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
     m_LayerFlags = Mortar::HUD_LAYER_SLIDER;
 }
 
+// Binary @ 0x00160268 — LocalizedString overload
+SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
+                             LocalizedString locLabel,
+                             int32_t minValue, int32_t maxValue,
+                             uint16_t fontSize, int32_t initialValue)
+    : HUDControl3d()
+    , m_MinValue(minValue)
+    , m_MaxValue(maxValue)
+    , m_FontSize(fontSize)
+    , _pad86(0)
+    , m_CurrentValue(initialValue)
+    , m_TrackWidth(0.0f)
+    , m_TrackHeight(0.0f)
+    , m_ThumbWidth(0.0f)
+    , m_ThumbHeight(0.0f)
+    , m_TouchId(-1)
+    , m_TouchPos(0.0f, 0.0f, 0.0f)
+{
+    pos  = inPos;
+    size = inSize;
+
+    // Binary @ 0x00160268: label copied via Mortar::Utf8StringIterator ctor.
+    // Port: plain strncpy into char[28] placeholder.
+    const char* label = static_cast<const char*>(locLabel);
+    if (label) {
+        strncpy(m_Label, label, sizeof(m_Label) - 1);
+        m_Label[sizeof(m_Label) - 1] = '\0';
+    } else {
+        m_Label[0] = '\0';
+    }
+
+    // Binary @ 0x00160268: m_LayerFlags = 0x200
+    m_LayerFlags = Mortar::HUD_LAYER_SLIDER;
+}
+
 // Destructor chain -- Binary @ 0x001601a8 (D2) / 0x00160140 (D1/deleting)
 // D1/D2 call Release(), ~Mortar::Delegate0, ~Mortar::Utf8StringIterator, ~HUDControl3d.
 SliderControl::~SliderControl() {

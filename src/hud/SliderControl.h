@@ -9,6 +9,7 @@
 #include "HUDControl3d.h"
 #include "engine/math/Vec3.h"
 #include "engine/util/Delegate.h"
+#include "hud/LocalizedString.h"
 #include <cstdint>
 
 class SliderControl : public HUDControl3d {
@@ -59,9 +60,14 @@ public:
     // Binary nm confirms two ctor overloads:
     //   SliderControl(Vec3, Vec3, LocalizedString, long, long, ushort, long)
     //   SliderControl(Vec3, Vec3, char const*,    long, long, ushort, long)
-    // Port uses const char* to match the binary's char* version.
     SliderControl(Vec3 inPos, Vec3 inSize,
                   const char* label,
+                  int32_t minValue, int32_t maxValue,
+                  uint16_t fontSize, int32_t initialValue);
+
+    // Binary @ 0x00160268 — LocalizedString overload matching second binary ctor
+    SliderControl(Vec3 inPos, Vec3 inSize,
+                  LocalizedString locLabel,
                   int32_t minValue, int32_t maxValue,
                   uint16_t fontSize, int32_t initialValue);
 

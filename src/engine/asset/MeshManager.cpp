@@ -469,7 +469,7 @@ Mortar::SmartPtr<Model> MeshManager::Find(AsciiString const& name) const {
 // v1.6.1 MeshManager::Find(SmartPtr<Model>) @0x002369c0
 // Iterate node chain comparing each node->value pointer identity against `model`.
 // Return first matching SmartPtr<Model>, or empty on miss.
-Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> model) const {
+Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
     Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
     while (node) {
         if (node->value.Get() == model.Get()) {
