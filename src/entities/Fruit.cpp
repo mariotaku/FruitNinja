@@ -2568,7 +2568,7 @@ void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
     float mirrorY = 0.0f;   // DAT_00176160
     if (m_PlayerIdx >= 1 && Fruit_IsSameScreenMultiplayer()) {
         mirrorX = 0.0f;
-        mirrorY = (pos.x < 0.0f) ? -1.0f : 1.0f;
+        mirrorY = (pos.x < 0.0f) ? 1.0f : -1.0f;
     }
 
     // Quad 1: spawn-fade whole-fruit shadow (active while m_MenuGrowFade < 1).
@@ -2577,9 +2577,7 @@ void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
         int a = (int)((1.0f - m_MenuGrowFade) * 230.0f);  // DAT_00176164
         uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
         float hs = 82.0f * scale.x;                        // DAT_00176168
-        float ox = mirrorY * hs * -0.65f;                  // DAT_0017616c
-        float oy = mirrorX * hs * -0.65f;
-        AddQuad(out, pos.x + ox, pos.y + oy, hs, hs, Colour(255, 255, 255, al));
+        AddQuad(out, pos.x + mirrorY * hs * -0.65f, pos.y + mirrorX * hs * -0.65f, hs, hs, Colour(255, 255, 255, al));
         ++(*outCount);
     }
 
@@ -2588,31 +2586,22 @@ void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
         int a = (int)(m_MenuGrowFade * 100.0f);            // DAT_00176170
         uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
         float hs = scale.x * 50.0f;                      // DAT_00176174
-        Vec3 axis(0.0f, 0.0f, 1.0f);                    // DAT_00176180 BSS singleton (0,0,1)
 
-        float ox = mirrorY * hs * -0.45f;                // DAT_00176178
-        float oy = mirrorX * hs * -0.45f;
-
-        // Binary calls Quaternion::Matrix33Unit on each rot, then multiplies axis.
-        // Port uses ToMatrix44() and extracts the 3x3 rotation applied to axis.
-        // For axis=(0,0,1): rotated = col2 of the rotation matrix = (m[8], m[9], m[10]).
+        // Binary calls Quaternion::Matrix33Unit on each rot, then multiplies axis (0,0,1).
+        // Port uses ToMatrix44() and extracts column 2 directly: (m[8], m[9], m[10]).
         {
             Matrix44 mat1 = m_Rot1.ToMatrix44();
-            Vec3 anchorA = pos + Vec3(
-                mat1.m[0]*axis.x + mat1.m[4]*axis.y + mat1.m[8]*axis.z,
-                mat1.m[1]*axis.x + mat1.m[5]*axis.y + mat1.m[9]*axis.z,
-                mat1.m[2]*axis.x + mat1.m[6]*axis.y + mat1.m[10]*axis.z
-            ) * 0.5f;
-            AddQuad(out, anchorA.x + ox, anchorA.y + oy, hs, hs, Colour(255, 255, 255, al));
+            AddQuad(out,
+                pos.x + mat1.m[8] * 0.5f + mirrorY * hs * -0.45f,
+                pos.y + mat1.m[9] * 0.5f + mirrorX * hs * -0.45f,
+                hs, hs, Colour(255, 255, 255, al));
             ++(*outCount);
 
             Matrix44 mat2 = m_Rot2.ToMatrix44();
-            Vec3 anchorB = m_SecondPos + Vec3(
-                mat2.m[0]*axis.x + mat2.m[4]*axis.y + mat2.m[8]*axis.z,
-                mat2.m[1]*axis.x + mat2.m[5]*axis.y + mat2.m[9]*axis.z,
-                mat2.m[2]*axis.x + mat2.m[6]*axis.y + mat2.m[10]*axis.z
-            ) * 0.5f;
-            AddQuad(out, anchorB.x + ox, anchorB.y + oy, hs, hs, Colour(255, 255, 255, al));
+            AddQuad(out,
+                m_SecondPos.x + mat2.m[8] * 0.5f + mirrorY * hs * -0.45f,
+                m_SecondPos.y + mat2.m[9] * 0.5f + mirrorX * hs * -0.45f,
+                hs, hs, Colour(255, 255, 255, al));
             ++(*outCount);
         }
     }
