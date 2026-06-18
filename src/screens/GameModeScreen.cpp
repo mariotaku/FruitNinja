@@ -410,7 +410,9 @@ void GameModeScreen::Update(float dt) {
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
             if (!m_bSetupLevelFired && camT > -0.9f) {
+                #ifndef FN_ASM_VERIFY_CROSS
                 LOG_INFO("MODESEL", "SetupLevel called; game_work.gameMode=%d", (int)game_work.gameMode);
+                #endif
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
@@ -419,8 +421,10 @@ void GameModeScreen::Update(float dt) {
                 if (game_work.mGameSound) {
                     game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
+                #ifndef FN_ASM_VERIFY_CROSS
                 LOG_INFO("MODESEL", "%d -> STATE_CAMERA_FADE (camT done; levelTransitionFlag=%d gameMode=%d)",
                          (int)m_State, (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
+                #endif
                 // ASM-verified: 2026-05-22 binary @ 0x0013f366..0x0013f386
                 // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
                 //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
@@ -623,12 +627,16 @@ void GameModeScreen::SetupLevel() {
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MODESEL/Classic", "callback fired; setting gameMode=0; m_State=3");
+    #endif
     m_bSetupLevelFired = false;
     m_State = 3;
     game_work.gameMode = 0;
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MODESEL/Classic", "after writes: gameMode=%d m_State=%d m_bSetupLevelFired=%d",
              (int)game_work.gameMode, (int)m_State, (int)m_bSetupLevelFired);
+    #endif
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
