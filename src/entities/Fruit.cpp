@@ -2016,9 +2016,9 @@ void Fruit::LoadFruitModels() {
                 // the shared atlas extraction step can read it back.
                 // Port: prop is always null while EffectProperty/BuildPropList
                 // is defunct. The texture is already loaded by MeshManager
-                // during .mmd parsing into Mesh::m_Materials, so no additional
+                // during .mmd parsing into Geometry::m_DiffuseTex, so no additional
                 // work is required for rendering. The atlas extraction below
-                // uses a direct fallback from model mesh materials instead.
+                // uses a direct fallback from model mesh geometries instead.
                 if (info->m_bIsSuperFruit) {
                     // TODO: wire prop->SetValue(EffectTexture2D{...}, 0)
                     // when BuildPropList is reactivated. EffectProperty::SetValue
@@ -2081,8 +2081,11 @@ void Fruit::LoadFruitModels() {
                     ? models[0].m_Whole->GetNode(0UL)
                     : (models[0].m_HalfA.IsValid() ? models[0].m_HalfA->GetNode(0UL)
                                                    : Mortar::SmartPtr<Mortar::Mesh>());
-                if (node0.IsValid() && node0->HasDiffuseTexture()) {
-                    sharedAtlas = node0->m_Materials[0].m_Texture;
+                if (node0.IsValid() && node0->GetGeometryCount() > 0) {
+                    Mortar::Geometry* g0 = node0->GetGeometryEntry(0);
+                    if (g0 && g0->m_DiffuseTex.IsValid()) {
+                        sharedAtlas = g0->m_DiffuseTex;
+                    }
                 }
             }
         }
@@ -2099,16 +2102,19 @@ void Fruit::LoadFruitModels() {
                 if (!probeModels[pm]) continue;
                 for (int n = 0; n < probeModels[pm]->NodeCount(); ++n) {
                     Mortar::SmartPtr<Mortar::Mesh> mesh = probeModels[pm]->GetNode((unsigned long)n);
-                    if (mesh.IsValid() && mesh->HasDiffuseTexture()) {
-                        sharedAtlas = mesh->m_Materials[0].m_Texture;
-                        break;
+                    if (mesh.IsValid() && mesh->GetGeometryCount() > 0) {
+                        Mortar::Geometry* g0 = mesh->GetGeometryEntry(0);
+                        if (g0 && g0->m_DiffuseTex.IsValid()) {
+                            sharedAtlas = g0->m_DiffuseTex;
+                            break;
+                        }
                     }
                 }
             }
         }
 
-        // Assign shared atlas to all fruit models' meshes.
-        // SetDiffuseTexture only fills slots whose texture is null, so this
+        // Assign shared atlas to all fruit models' mesh geometries.
+        // Only fills geometries whose m_DiffuseTex is null, so this
         // is a safe no-op when the model already has a texture from .mmd.
         if (sharedAtlas.IsValid()) {
             for (int i = 0; i < count; ++i) {
@@ -2121,7 +2127,13 @@ void Fruit::LoadFruitModels() {
                     if (!assignModels[am]) continue;
                     for (int n = 0; n < assignModels[am]->NodeCount(); ++n) {
                         Mortar::SmartPtr<Mortar::Mesh> mesh = assignModels[am]->GetNode((unsigned long)n);
-                        if (mesh.IsValid()) mesh->SetDiffuseTexture(sharedAtlas);
+                        if (!mesh.IsValid()) continue;
+                        for (int gi = 0; gi < mesh->GetGeometryCount(); ++gi) {
+                            Mortar::Geometry* g = mesh->GetGeometryEntry(gi);
+                            if (g && !g->m_DiffuseTex.IsValid()) {
+                                g->m_DiffuseTex = sharedAtlas;
+                            }
+                        }
                     }
                 }
             }

@@ -1,6 +1,6 @@
 #include "asset/Geometry.h"
-#include "asset/Mesh.h"
 #include "asset/SharedEffectProperties.h"
+#include "asset/Texture.h"
 #include "render/Renderer.h"
 #include <cstring>
 
@@ -35,7 +35,8 @@ Geometry::~Geometry() {
 //   calling PassBinding::Apply (glVertexPointer/etc.) then glDrawArrays/Elements
 //   via the IIndexStream vtable. Port renders directly from the loader-cached
 //   m_Vbo/m_Ibo/m_Layout because GLES2 has no fixed-pipeline client state.
-void Geometry::Render(MeshMaterial const& mat, Matrix44 const& mvp) {
+//   Port uses m_DiffuseTex instead of MeshMaterial for texture binding.
+void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
     // CULL_FACE: do NOT enable. The binary's Geometry::Render @ 0x001a3ec8
@@ -58,31 +59,19 @@ void Geometry::Render(MeshMaterial const& mat, Matrix44 const& mvp) {
     glPushMatrix();
     glLoadIdentity();
 
-    if (mat.m_Texture.IsValid()) {
-        mat.m_Texture->Set();
+    if (m_DiffuseTex.IsValid()) {
+        m_DiffuseTex->Set();
         TexEnvModulate();
     } else {
         glDisable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    // Material. Field names in MeshMaterial are inverted vs binary:
-    //   m_Diffuse  = GetColourRGB(color0) stored as "Ambience" prop
-    //   m_Ambience = GetColourRGB(color1) stored as "Diffuse"  prop
-    // LoadMesh always sets m_IsLit = false in the current port, so this
-    // path usually short-circuits to glDisable(GL_LIGHTING) + white colour.
-    if (mat.m_IsLit) {
-        glEnable(GL_LIGHTING);
-        const GLfloat amb[4] = { mat.m_Ambience.x, mat.m_Ambience.y, mat.m_Ambience.z, 1.0f };
-        const GLfloat dif[4] = { mat.m_Diffuse.x,  mat.m_Diffuse.y,  mat.m_Diffuse.z,  1.0f };
-        const GLfloat emi[4] = { mat.m_SelfIllum.x, mat.m_SelfIllum.y, mat.m_SelfIllum.z, 1.0f };
-        glMaterialfv(GL_AMBIENT,  GL_AMBIENT,  amb);
-        glMaterialfv(GL_DIFFUSE,  GL_DIFFUSE,  dif);
-        glMaterialfv(GL_EMISSION, GL_EMISSION, emi);
-    } else {
-        glDisable(GL_LIGHTING);
-        glColor4ub(255, 255, 255, 255);
-    }
+    // Always unlit. All meshes in FruitNinja have IsLit=false, so the
+    // former MeshMaterial material-colour branch (ambient/diffuse/emission)
+    // is hardcoded to the unlit path.
+    glDisable(GL_LIGHTING);
+    glColor4ub(255, 255, 255, 255);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_Vbo);
     if (m_Ibo) {
