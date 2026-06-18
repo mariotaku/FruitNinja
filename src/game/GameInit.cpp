@@ -1,6 +1,6 @@
 //
 // State 2 handlers: GameInit, GameUpdate, GameDraw, GameExit
-// Binary: GameInit v1.6.1 @ 0x001ce1c0 (18 steps), GameUpdate @ 0x0016bed0 (359 lines),
+// Binary: GameInit v1.6.1 @ 0x001ce1c0 (18 steps), GameUpdate @ 0x001CF534,
 //         GameDraw @ 0x16b888 (211 lines), GameExit @ 0x16cf74 (98 lines)
 //
 // GameInit rewritten 2026-06-17 to match v1.6.1 binary step order.
@@ -264,28 +264,33 @@ void GameInit(unsigned long) {
     }
 }
 
-// Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
+// ASM-verified: 2026-06-18 v1.6.1 GameUpdate @ 0x001CF534 (asm-inspector)
+//
+// slowTime/slowTimeSpeed/slowTimeTime globals -- bss/data statics from the
+// binary's GameTask.cpp translation unit (SlowTime sets slowTimeTime=1).
+// quickener is the wave-stress multiplier, equivalent to the previously
+// port-centric g_PUM_WaveStress. These replace the earlier g_DtModDecayTimer
+// based dt-scaling approach.
+static float slowTime      = 1.0f;    // _ZL8slowTime @ 0x002d8c84 (ST .data 0x3f800000)
+static float slowTimeSpeed = 1.0f;    // _ZL13slowTimeSpeed @ 0x002d8c88 (ST .data 0x3f800000)
+static float slowTimeTime  = 0.0f;    // _ZL12slowTimeTime @ 0x00316704 (.bss -- zero; SlowTime sets to 1.0)
+static float quickener     = 1.0f;    // _ZL9quickener @ 0x002d8cd8 (ST .data 0x3f800000)
+
 void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
 
-    // Gap 1: drain deferred HUDControl queued via HUD::QueueDeferredAdd path.
-    // Binary @ GameUpdate entry: reads g_TaskState->pDeferredControl (+0x100);
-    // if non-null, AddControl(ctrl, false) then clears the slot.
+    // --- Gap 1: deferred control drain (0x001cf558..0x001cf57c) ---
     {
         GameTaskState* ts = GetTaskState();
         if (ts->pDeferredControl) {
-            game_work.mHud->AddControl(ts->pDeferredControl, /*atFront=*/false);
+            game_work.mHud->AddControl(ts->pDeferredControl, false);
             ts->pDeferredControl = nullptr;
         }
     }
 
-    // === Splash phase (g_TaskState +0x1C, init = 1.5f) ===
-    // Binary @ 0x0016BED0: gated on splashFadeTimer > 0.
-    // DIFFERS: binary draws splash exclusively during loading (LoadingJob::CanBoot gate);
-    //   port draws game underneath with splash on top. Binary does NOT freeze dt — game
-    //   logic (camera zoom, etc.) runs behind the splash so the menu is already in place
-    //   when the splash fades out. The port previously set dt=0 here, freezing the camera
-    //   zoom and causing a visible "fade in from white" after the splash ended.
+    // === Splash phase (0x001cf580..0x001cf634) ===
+    // DIFFERS: binary draws splash exclusively during loading with a
+    // LoadingJob::CanBoot gate; port draws game underneath with splash on top.
     GameTaskState* splashTs = GetTaskState();
     if (splashTs->splashFadeTimer > 0.0f) {
         if (!game->pSplashTex) {
@@ -297,160 +302,57 @@ void GameUpdate(float dt, bool active) {
             game->pSplashTex.SetNull();
         }
     } else {
-        Mortar::Touch::GetInstance().Update(0.0f);  // dt=0 drains all pending events
+        Mortar::Touch::GetInstance().Update(dt);
     }
 
-    // Binary @ 0x0016bf90..0x0016bfce -- per-frame slot-array re-snap.
+    // --- Common update block: sound + music (0x001cf6b8..0x001cf7d0) ---
+    // Binary gates this on LoadingJob::IsLoaded(); port calls unconditionally.
+    game_work.mGameSound->Update(dt);
+    UpdateMusic(dt);
+
+    // --- Per-frame slot-array re-snap + touch-released dispatch (0x001cf63c..0x001cf6a8) ---
     game_work.m_bTouchDownThisFrame = 0;
     game_work.m_bTouchUpThisFrame   = 0;
     for (int i = 0; i < 16; ++i) {
         float& z = game_work.m_FingerSpawnPos[i].z;
-        if (z == 0.0f) z = -1.0f;
-        // z > 0 or z < 0: left unchanged
-    }
-
-    // ASM-verified: 2026-05-22 binary @ 0x0016c020..0x0016c08c (re-analyst).
-    // m_DtMod consumer + wave-stress decay. Without this, Freeze powerup
-    // (and any TimeModifier that scales m_DtMod) has no effect on gameplay
-    // because nothing reads m_DtMod for dt scaling.
-    float gameplayDt = dt;
-    float waveStress = 1.0f;
-    if (active) {
-        PowerUpManager* pum = PowerUpManager::GetInstance();
-        float effectiveDt = 1.0f;
-        if (g_DtModDecayTimer > 0.0f) {
-            g_DtModDecayTimer -= dt * g_DtModDecayRate;
-            if (pum) effectiveDt = (pum->m_DtMod - 1.0f) * g_DtModDecayTimer + 1.0f;
-            if (g_DtModDecayTimer < 0.0f) g_DtModDecayTimer = 0.0f;
-        }
-
-        // Wave-stress decay (binary 0x16c020): drains 10x/sec (5x in slow-mo).
-        const float decay = game_work.m_bSlowMotion ? 5.0f : 10.0f;
-        waveStress = g_PUM_WaveStress - dt * decay;
-        if (waveStress < 1.0f) waveStress = 1.0f;
-        g_PUM_WaveStress = waveStress;
-
-        // THE gameplay-dt consumer: scaled dt for entities/waves/particles.
-        gameplayDt = dt * waveStress * effectiveDt;
-        game_work.m_GameDt *= waveStress * effectiveDt;
-    }
-
-    // ASM-verified: 2026-05-20 binary @ 0x0016bed0 GameUpdate (re-analyst)
-    // Binary gates the bomb-hit timer drain + UpdateBombHit + GameOver cross-1.5
-    // trigger on `if (active)`. When `active == false` (menu, pause, quit
-    // transition), the bomb-flash timer set by HitMenuBomb sits at 2.0f
-    // untouched until MainScreen STATE 0x18's BombFlashFull() poll picks it up.
-    // Without this gate, the port fires UpdateBombHit -> ResetGameEntities ->
-    // force-slices menu fruits on the Quit-from-Pause transition, causing
-    // phantom GameModeCallback / AboutCallback fires.
-    if (active) {
-        const float prevBombTimer = game_work.m_BombHitTimer;
-        if (game_work.m_BombHitTimer > 0.0f) {
-            game_work.m_BombHitTimer -= gameplayDt;
-            if (game_work.m_BombHitTimer < 0.0f) game_work.m_BombHitTimer = 0.0f;
-        }
-        Bomb::UpdateBombHit(prevBombTimer);
-
-        // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
-        // ASM-verified: 2026-05-20 binary @ 0x0016c2bc (re-analyst) -- taskState+0xf8 gate
-        {
-            GameTaskState* ts = GetTaskState();
-            if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f &&
-                !game_work.m_LevelTransitionFlag &&
-                (!ts || ts->m_bMenuBombFlashFlag == 0)) {
-                FN::GameOver(-1, -1.0f, -1);
+        if (z > 0.0f) {
+            z = 0.0f;
+        } else if (z == 0.0f) {
+            if (game_work.m_pActiveTouchSink) {
+                // TODO: InputSink not yet ported; TouchReleased stub skipped.
+                // Binary: InputSink::TouchReleased(sink, nullptr, &pos)
             }
+            z = -1.0f;
         }
+        // z < 0.0f (i.e., -1.0f): left unchanged
     }
 
-    // ASM-verified: 2026-05-16 binary GameUpdate @ 0x0016bed0 (re-analyst).
-    // ActorManager::Update (binary @ 0x16c2c0) is active-branch only.
-    if (active && game->actorManager)
-        game->actorManager->Update(gameplayDt);
-
-    if (active)
-        BombFlash::UpdateActiveFlashes(gameplayDt);
-
-    // Binary @ 0x16c244 (active path passes scaledDt) / @ 0x16c39c (frozen
-    // path passes 0.0f) -- WaveManager::Update is called EVERY frame; the
-    // frozen branch just feeds dt=0 so the spawn pump quiesces naturally.
-    // Earlier port wholesale-gated this on `active`, which silenced the
-    // pump permanently when pausedFlag stayed set after pause->resume.
-    WaveManager::GetInstance()->Update(active ? gameplayDt : 0.0f);
-
-    game_work.m_SaveData->Update(dt, game_work.mHud);
-
-    game_work.mGameSound->Update(dt);
-    UpdateMusic(dt);
-
-    {
-        WaveManager* wm = WaveManager::GetInstance();
-        float particleDt = gameplayDt;
-        if (active && wm) {
-            const float wavedt = wm->GetWavedt(0);
-            const float renorm = (wavedt > 0.0f && (1.0f / wavedt) > 1.0f) ? (1.0f / wavedt) : 1.0f;
-            particleDt = gameplayDt / renorm;
-        }
-        PSPParticleManager::GetInstance().Update(active ? particleDt : dt, false);
-    }
-
-    FN::UpdateCriticalFlash(dt);
-
-    // ASM-verified: 2026-06-01 binary @ 0x0016bed0 GameUpdate (asm-inspector)
-    // Binary passes `scaledDt` (the UNSCALED clamped frame dt) to
-    // SplatEntity::UpdateActiveSplats, NOT the wave-scaled `fVar8`
-    // (= scaledDt * fVar9 * fVar8) it feeds to WaveManager/ActorManager.
-    // The two call sites sit one after another in the active branch:
-    //   fVar8 = scaledDt * fVar9 * fVar8;          // wave-scaled
-    //   SlashEntity::PreUpdate(this_02, scaledDt); // unscaled
-    //   SplatEntity::UpdateActiveSplats(scaledDt); // unscaled  <-- this
-    //   WaveManager::Update(waveMgr, fVar8);       // wave-scaled
-    // Splat life decays in real time on all screens; the wave-scaled dt
-    // shrinks toward 0 on the shop/menu, which previously froze m_Life and
-    // left splats lingering forever.
-    // Binary @ 0x0016bed0: SlashEntity::PreUpdate(scaledDt) is called ONCE
-    // in the active branch (before SplatEntity::UpdateActiveSplats). The prior
-    // port comment claiming "ActorManager handles this" was wrong -- ActorManager
-    // only calls Update+PostUpdate, not PreUpdate. Without this call the per-frame
-    // hit-latch counter never increments during active gameplay, so g_HitLatch
-    // set on the first hit is never cleared -> all subsequent slices blocked.
-    if (active) {
-        for (int i = 0; i < 16; ++i) {
-            if (g_pSlashEntities[i]) {
-                g_pSlashEntities[i]->PreUpdate(dt);
-                break;
-            }
-        }
-        SplatEntity::UpdateActiveSplats(dt);
-    }
-    // ASM-verified: 2026-05-17 binary @ 0x0016c378 inactive branch (re-analyst).
-    // Binary calls SlashEntity::PreUpdate(0.0f) ONCE then loops 16x calling
-    // Update(scaledDt) + PostUpdate(scaledDt) with the REAL dt (not zero).
-    // Active Update+PostUpdate is handled by ActorManager::Update above.
-    // Inactive PreUpdate uses dt=0 to freeze palette/ghost tick while paused;
-    // Update/PostUpdate get real dt so the trail ages and fades normally.
+    // --- Main active/inactive dispatch (0x001cf7d4) ---
+    float fVar9  = dt;   // scaled gameplay dt
+    float fVar10 = dt;   // camera/HUD dt (varies by bomb-hit phase)
+    float fVar11 = 0.0f; // BombFlash/ActorManager dt
     if (!active) {
-        // ASM-verified: 2026-05-20 binary @ 0x0016c31a..0x0016c35e GameUpdate else-branch (re-analyst)
-        // Entry to the else-branch unconditionally clears m_bSlowMotion, then if
-        // |m_TransitionTimer| exceeds 0.99896961f it also clears pausedFlag. This is the
-        // recovery PauseScreen QUIT_EXIT (m_TransitionTimer = -1.0f) relies on to escape
-        // BOMB_FLASH: clears pausedFlag -> next frame active=true -> bombHitTimer drains
-        // -> BombFlashFull returns true -> state 1 -> 0.
+        // ================================================================
+        // INACTIVE BRANCH (0x001cfa9c)
+        // ================================================================
+
+        // Clear slow-motion flag, then pause-threshold check
+        game_work.m_bSlowMotion = false;
         {
-            static const float GAME_CAMERA_TRANSITION_THRESHOLD = 0.99896961f;  // DAT_0x0016c574/8 = 0x3f7fbe77
-            game_work.m_bSlowMotion = false;
+            static const float THR = 0.99896961f;  // DAT_0x001cfe74
             const float tt = game_work.m_GameDt;
             const bool unpause = (tt < 0.0f)
-                ? (tt < -GAME_CAMERA_TRANSITION_THRESHOLD)
-                : (tt >  GAME_CAMERA_TRANSITION_THRESHOLD);
+                ? (tt < -THR)
+                : (tt >  THR);
             if (unpause) game_work.m_Paused = false;
         }
 
-        // Binary @ 0x0016c378 calls PreUpdate once (on the first valid
-        // SlashEntity) with dt=0 before the Update/PostUpdate loop. The
-        // dt=0 freezes the per-frame palette cycle / ghost ring tick
-        // while paused; only the per-instance Update/PostUpdate gets
-        // real dt to let the trail age and fade.
+        // SaveData active-game flag: set when paused
+        if (game_work.m_Paused) {
+            game_work.m_SaveData->m_bHasActiveGame = 1;
+        }
+
+        // SlashEntity: one PreUpdate(dt=0), then per-instance Update+PostUpdate
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) {
                 g_pSlashEntities[i]->PreUpdate(0.0f);
@@ -463,105 +365,227 @@ void GameUpdate(float dt, bool active) {
                 g_pSlashEntities[i]->PostUpdate(dt);
             }
         }
-    }
-    game_work.mHud->Update(dt);
-    game_work.m_FruitCamera->UpdateCamera(dt);
 
-    // ASM-spec for bomb-fuse SFX (binary @ 0x0016c4c8..0x0016c5ca, GameUpdate):
-    //   metric = Bomb::GetHeighestBomb()   (binary @ 0x001712c8)
-    //   if (NoSFX || metric <= 0 || paused): mute existing handle (SetVolume 0)
-    //   else: lazy SFXPlay("Bomb-Fuse", vol=0, pitch=1) and store in
-    //         GameTaskState+0xD8; per-frame SetVolume((metric/100)*master).
-    // Bomb-Fuse wav loops forever (loopStart=12736); binary never explicitly
-    // Releases the handle -- silent-when-no-bomb is achieved via SetVolume(0).
+        // WaveManager frozen (dt=0) while inactive
+        WaveManager::GetInstance()->Update(0.0f);
+
+        fVar9  = dt;
+        fVar10 = dt;
+
+    } else {
+        // ================================================================
+        // ACTIVE BRANCH (0x001cf7e0)
+        // ================================================================
+
+        // --- dt scaling: slowTime + quickener inline globals ---
+        float slowMod;
+        if (slowTimeTime > 0.0f) {
+            slowTimeTime -= dt * slowTimeSpeed;
+            if (slowTimeTime < 0.0f) slowTimeTime = 0.0f;
+            slowMod = (slowTime - 1.0f) * slowTimeTime + 1.0f;
+        } else {
+            slowMod = 1.0f;
+        }
+
+        // Crit timer drain
+        if (game_work.m_CritTimer > 0.0f) {
+            game_work.m_CritTimer -= dt;
+        }
+
+        // Clear active-game flag (re-set below in normal-play path)
+        game_work.m_SaveData->m_bHasActiveGame = 0;
+
+        // Quickener (wave-stress) decay
+        {
+            const float decay = game_work.m_bSlowMotion ? 5.0f : 10.0f;
+            const float newQuickener = quickener - dt * decay;
+            quickener = 1.0f;
+            if (newQuickener > 1.0f) quickener = newQuickener;
+        }
+
+        game_work.m_bSlowMotion = false;
+        fVar9 = dt * quickener * slowMod;            // scaled gameplay dt
+        game_work.dt *= quickener * slowMod;          // accumulate scaled frame time
+
+        // SlashEntity::PreUpdate(dt) once, then SplatEntity update
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) {
+                g_pSlashEntities[i]->PreUpdate(dt);
+                break;
+            }
+        }
+        SplatEntity::UpdateActiveSplats(dt);
+
+        // --- Bomb-hit timer dispatch ---
+        {
+            const float prevBombTimer = game_work.m_BombHitTimer;
+            if (game_work.m_BombHitTimer <= 0.0f) {
+                // No bomb hit -- normal gameplay with WaveManager active
+                game_work.m_SaveData->m_bHasActiveGame = 1;
+                WaveManager::GetInstance()->Update(fVar9);
+
+                float wavedt = WaveManager::GetInstance()->GetWavedt(0);
+                fVar11 = fVar9 * wavedt;
+                fVar10 = fVar9;
+            } else {
+                // Bomb hit active
+                GameTaskState* ts = GetTaskState();
+                if (ts && ts->m_bMenuBombFlashFlag == 0) {
+                    game_work.m_bSlowMotion = true;
+                }
+
+                game_work.m_BombHitTimer -= fVar9;
+
+                // Double-drain in Arcade mode during pause transition
+                if (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f) {
+                    game_work.m_BombHitTimer -= fVar9;
+                }
+
+                if (prevBombTimer > 1.55f) {
+                    fVar10 = -fVar9;              // reverse camera
+                } else {
+                    Bomb::UpdateBombHit(prevBombTimer);
+                    fVar10 = fVar9 + fVar9;       // double-speed camera
+                }
+
+                // Cross-1.5 GameOver trigger
+                if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f &&
+                    game_work.m_LevelTransitionFlag == 0 &&
+                    (!ts || ts->m_bMenuBombFlashFlag == 0)) {
+                    FN::GameOver(-1, -1.0f, -1);
+                }
+
+                if (game_work.m_BombHitTimer < 0.0f) {
+                    game_work.m_BombHitTimer = 0.0f;
+                }
+
+                // BombFlash+ActorManager frozen (dt=0) during bomb hit,
+                // unless in pause transition where m_GameDt < 0.
+                fVar11 = 0.0f;
+                if (game_work.m_GameDt < 0.0f) {
+                    fVar11 = fVar9;
+                }
+            }
+        }
+
+        BombFlash::UpdateActiveFlashes(fVar11);
+        if (game->actorManager)
+            game->actorManager->Update(fVar11);
+    }
+
+    // ================================================================
+    // COMMON TAIL (0x001cfb8c)
+    // ================================================================
+
+    // --- PSPParticleManager ---
+    {
+        float particleDtNorm = 1.0f;
+        WaveManager* wm = WaveManager::GetInstance();
+        float wavedt = wm->GetWavedt(0);
+        if (wavedt != 0.0f) {
+            particleDtNorm = 1.0f / wavedt;
+        }
+        if (!game_work.m_Paused && particleDtNorm < 1.0f) {
+            particleDtNorm = 1.0f;
+        }
+        PSPParticleManager::GetInstance().Update(fVar9 / particleDtNorm, false);
+    }
+
+    // --- FruitCamera::Update(fVar10) -- varies by bomb-hit phase ---
+    game_work.m_FruitCamera->UpdateCamera(fVar10);
+
+    // --- HUD::Update -- dt subdivided into 1/60 ticks during slow-mo ---
+    if (!game_work.m_bSlowMotion) {
+        game_work.mHud->Update(fVar10);
+    } else {
+        // HUD ticks at real-time rate even in slow-mo
+        float remaining = fVar9;
+        if (remaining == 0.0f) {
+            game_work.mHud->Update(0.0f);
+        } else {
+            static const float HUD_TICK = 1.0f / 60.0f;
+            for (; remaining > 0.0f; remaining -= HUD_TICK) {
+                float step = HUD_TICK;
+                if (step > remaining) step = remaining;
+                game_work.mHud->Update(step);
+            }
+        }
+    }
+
+    // --- Post-HUD quickener recovery (binary: gated on IsSingleTouchPressed) ---
+    // TODO: v1.6.1 0x001CF534 (GameUpdate) -- quickener recovery from touch state.
+
+    // --- Bomb fuse sound (0x001cfd08..0x001cfe2c) ---
     {
         GameTaskState* ts = GetTaskState();
         GameSound* gs = game_work.mGameSound;
         const bool noSfx  = (game_work.m_LevelTransitionFlag != 0);
         const bool paused = game_work.m_Paused;
-        const float metric = Bomb::GetHeighestBomb();   // -10000 when no bomb
+        const float metric = Bomb::GetHeighestBomb();
+        Mortar::MortarSound* fuse = ts->m_pBombFuseSound;
         float vol;
-        Mortar::MortarSound* fuse;
         if (noSfx || metric <= 0.0f || paused) {
-            fuse = ts->m_pBombFuseSound;
             vol = 0.0f;
         } else {
             if (!ts->m_pBombFuseSound && gs) {
                 ts->m_pBombFuseSound = gs->SFXPlay("Bomb-Fuse", 0.0f, 1.0f);
             }
-            fuse = ts->m_pBombFuseSound;
-            float t = metric / 100.0f;                  // GAME_BOMB_SFX_RANGE
+            float t = metric / 100.0f;
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
-            const float master = gs ? gs->m_MasterVolume : 1.0f;
-            vol = t * master;
+            vol = t * (gs ? gs->m_MasterVolume : 1.0f);
         }
         if (fuse) fuse->SetVolume(vol);
     }
 
-    // Retry dispatch tail -- binary @ 0x0016c5ca..0x0016c5fe (GameUpdate).
-    // When retryFlag is set (by RetryLevel), drain retryTimer each frame,
-    // calling RetryUpdate to shrink entities. Once retryTimer reaches zero,
-    // fire EndRetryLevel which resets the game state and clears retryFlag.
+    // --- Retry dispatch (0x001cfe2c..0x001cfe70) ---
     if (game_work.retryFlag != 0) {
         if (game_work.retryTimer > 0.0f) {
-            FN::RetryUpdate(dt);
-            game_work.retryTimer -= dt;
+            FN::RetryUpdate(fVar9);
+            game_work.retryTimer -= fVar9;
         } else {
-            // Binary: blx EndRetryLevel @ 0x0016a208 (clears retryFlag internally).
             FN::EndRetryLevel();
         }
     }
 
-    // m_QuitTransitionTimer ramp -- binary @ 0x0016c5fe..0x0016c626 (re-analyst
-    // 2026-05-10). Vestigial in the shipped binary: nothing arms +0x1A8 to a
-    // positive value, so this branch never fires in normal play. Kept for
-    // structural parity in case a future RE pass identifies a code path that
-    // does arm it (e.g. delayed-quit from a popup the port hasn't traced).
-    // Ramp uses RAW dt (s17 saved at function entry), not the wave-scaled dt.
+    // --- Quit transition timer (0x001cfe70..0x001cfeac) ---
+    // Uses RAW dt (function param), not the scaled fVar9.
     if (game_work.m_QuitTransitionTimer > 0.0f) {
         game_work.m_QuitTransitionTimer -= dt;
         if (game_work.m_QuitTransitionTimer <= 0.0f) {
-            // Binary @ 0x0016c622: blx CleanupAndReturnToMainMenu (0x0016b2dc).
-            // Port body lives in PauseScreen.cpp QuitToMenu (and GameOverScreen
-            // QuitCallback for the alternate path); both fire the same writes
-            // synchronously when the user clicks Quit, so the delayed dispatch
-            // path is dead in the port too.
+            // Binary: blx CleanupAndReturnToMainMenu (0x0016b2dc).
         }
     }
 
-    // Binary @ 0x11a328: m_bFrameDirty cleared unconditionally at end of each
-    // tick. It is a one-frame back/pause-input latch set by RegressMenuCallback
-    // (binary @ 0x168e9c) and ShowPauseMenuCallback (binary @ 0x168e6c) and
-    // consumed within the same tick by MenuButton::Update (binary @ 0x19ad14).
+    // --- Per-frame dirty flag clear ---
     game_work.m_bFrameDirty = false;
 }
 
-// Matches GameDraw (0x16b888, 211 lines) — full render frame.
+// Matches GameDraw (0x16b888, 211 lines) -- full render frame.
 //
 // Binary draw order (verified from decompile, see comments inline):
 //   1.  Camera + background quad
-//   2.  Mortar::ActorManager::Draw (3D entities — fruit, bomb, SlashEntity)
+//   2.  Mortar::ActorManager::Draw (3D entities -- fruit, bomb, SlashEntity)
 //   3.  HUD::BeginDraw
 //   4.  HUD::Draw(0x40)
 //   5.  SplatEntity::DrawActiveSplats / Fruit::DrawShadows /
 //       SlashEntity::PreDraw / BombBlast::DrawActiveBlasts /
 //       BombFlash::DrawActiveFlashes            [not yet ported]
 //   6.  HUD::Draw(0x80)
-//   7.  pm.Draw(-1)   — "background" particles (useDepth=-1, earliest)
+//   7.  pm.Draw(-1)   -- "background" particles (useDepth=-1, earliest)
 //   8.  SlashEntity::DrawSlice x16 via g_pSlashEntities vtable loop
-//   9.  pm.Draw(0)    — "mid" particles
-//   10. DrawSlices    — SlashEntity::DrawSlice blade ribbon
-//   11. HUD::Draw(0x01) — MainScreen (logo + shade). Drawn AFTER slash
+//   9.  pm.Draw(0)    -- "mid" particles
+//   10. DrawSlices    -- SlashEntity::DrawSlice blade ribbon
+//   11. HUD::Draw(0x01) -- MainScreen (logo + shade). Drawn AFTER slash
 //       so logo appears in front of the blade.
-//   12. pm.Draw(1)    — "foreground" particles (drawn over logo,
+//   12. pm.Draw(1)    -- "foreground" particles (drawn over logo,
 //       under buttons)
 //   13. WaveManager::Draw                       [not yet ported]
-//   14. HUD::Draw(0x08) — buttons
+//   14. HUD::Draw(0x08) -- buttons
 //   15. HUD::Draw(0x100) + DrawBombHit + HUD::Draw(0x200)
 //   16. HUD::Draw(0x400)
 //
 // Key insight: the particle layer indices map differently from what the
-// layer names imply — pm.Draw(-1) actually draws EARLIEST (background)
+// layer names imply -- pm.Draw(-1) actually draws EARLIEST (background)
 // and pm.Draw(1) draws LATER (foreground, over logo).
 void GameDraw(float dt, bool active) {
     Game* game = Game::GetInstance();
@@ -596,10 +620,10 @@ void GameDraw(float dt, bool active) {
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
-    // === 1. Mortar::ActorManager::Draw — 3D fruit/bomb/slash entities ===
+    // === 1. Mortar::ActorManager::Draw -- 3D fruit/bomb/slash entities ===
     // Binary @ 0x0016ba10: SetDepthBufferWrite(1) + SetDepthBuffer(1)
     // just before Mortar::ActorManager::Draw. Depth func stays at GL_LESS set
-    // by BeginFrame — binary never overrides it.
+    // by BeginFrame -- binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
 #if !defined(__bada__) && !defined(__EMSCRIPTEN__)
@@ -616,14 +640,14 @@ void GameDraw(float dt, bool active) {
 
     // === 2. HUD::BeginDraw + post-actor block ===
     // Binary @ 0x0016ba10 right after Mortar::ActorManager::Draw:
-    //   SetDepthBuffer(1)       — depth test still ON
-    //   SetDepthBufferWrite(0)  — writes OFF for HUD/splats/bomb blasts
+    //   SetDepthBuffer(1)       -- depth test still ON
+    //   SetDepthBufferWrite(0)  -- writes OFF for HUD/splats/bomb blasts
     dm.SetDepthBuffer(true);
     dm.SetDepthBufferWrite(false);
     {
         game_work.mHud->BeginDraw(dt);
 
-        // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
+        // 2a. HUD::Draw(0x40) -- menu button sprites @ 0x0016ba5a
         game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);
 
         // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
@@ -632,13 +656,13 @@ void GameDraw(float dt, bool active) {
         // 2c. Fruit::DrawShadows @ 0x0016ba6e
         Fruit::DrawShadows();
 
-        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — blade pre-pass for each
+        // 2d. SlashEntity::PreDraw @ 0x0016ba84 -- blade pre-pass for each
         //     of 16 finger slots (binary loops over SlashEntity[16]).
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) g_pSlashEntities[i]->PreDraw();
         }
 
-        // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 — drawn HERE in
+        // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 -- drawn HERE in
         //     the binary, NOT inside the 0x200 layer. Shockwave rings
         //     belong to this post-actor block.
         BombBlast::DrawActiveBlasts();
@@ -646,12 +670,12 @@ void GameDraw(float dt, bool active) {
         // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0
         BombFlash::DrawActiveFlashes();
 
-        // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
+        // 2g. HUD::Draw(0x80) -- DojoScreen / AboutScreen @ 0x0016baf8
         game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
     }
 
     // === 3. Background particles ===
-    // Binary pm.Draw(-1) @ 0x0016bb02 — drawn BEHIND the logo/shade.
+    // Binary pm.Draw(-1) @ 0x0016bb02 -- drawn BEHIND the logo/shade.
     pm.Draw(0.0f, false, -1);
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
@@ -671,36 +695,36 @@ void GameDraw(float dt, bool active) {
     // Binary pm.Draw(0) @ 0x0016bb4a
     pm.Draw(0.0f, false, 0);
 
-    // DrawSlices @ 0x0016bb52 — slash-line pool
+    // DrawSlices @ 0x0016bb52 -- slash-line pool
     FN::SliceEffect_Draw(dt);
 
-    // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
+    // HUD::Draw(0x01) -- MainScreen logo / shade @ 0x0016bb5a
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
-    // pm.Draw(1) — foreground particles @ 0x0016bb6a
+    // pm.Draw(1) -- foreground particles @ 0x0016bb6a
     pm.Draw(0.0f, false, 1);
 
-    // WaveManager::Draw(0) @ 0x0016bb98 — stubbed (wave-banner overlay).
+    // WaveManager::Draw(0) @ 0x0016bb98 -- stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
 
     // === 5. HUD overlay layers + flash effects ===
     {
-        // HUD::Draw(0x08) — buttons @ 0x0016bba8
+        // HUD::Draw(0x08) -- buttons @ 0x0016bba8
         game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
         // MainScreen::DrawPostEffects @ 0x0016bbb0
         game_work.mMainScreen->DrawPostEffects();
 
-        // DrawCritHit (CriticalFlash) @ 0x0016bbd2 — gated on
+        // DrawCritHit (CriticalFlash) @ 0x0016bbd2 -- gated on
         // critFlash > 0 && IsFastHardware. Port has CriticalFlash
         // implemented as FN::DrawCriticalFlash.
         FN::DrawCriticalFlash();
 
-        // HUD::Draw(0x100) — overlays @ 0x0016bbde
+        // HUD::Draw(0x100) -- overlays @ 0x0016bbde
         game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);
 
-        // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
-        // bombFlash > 0. Binary gates on LoadingJob::CanBoot() — when splash
+        // DrawBombHit @ 0x0016bbe6 -- bomb-hit white flash, gated on
+        // bombFlash > 0. Binary gates on LoadingJob::CanBoot() -- when splash
         // is exclusive (CanBoot false), DrawBombHit is never reached. Port
         // always draws game content, so suppress bomb flash while the splash
         // is active.
@@ -711,20 +735,20 @@ void GameDraw(float dt, bool active) {
             }
         }
 
-        // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
+        // HUD::Draw(0x200) -- bomb-hit overlay layer @ 0x0016bbec
         game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);
 
         // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12
         FN::DrawNews();
         FN::DrawStartFade();
 
-        // Debug overlay — fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
+        // Debug overlay -- fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
 #ifndef __bada__
         FN::DebugHitbox_Draw();
         FN::DebugHUDBounds_Draw();
 #endif
 
-        // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
+        // HUD::Draw(0x400) -- top layer @ 0x0016bd7c, ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
         game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
     }
