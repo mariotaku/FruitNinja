@@ -32,12 +32,6 @@
 
 // Analysed: 2026-04-29T00:00
 
-// Per-bomb physics trace for the test_bomb_spawn diagnostic. Off by
-// default; enable with -DFRUITNINJA_BOMB_TRACE=ON at cmake config time.
-#ifndef MORTAR_BOMB_TRACE
-#  define MORTAR_BOMB_TRACE 0
-#endif
-
 // --- Constants from binary (docs/entities/bomb.md) ---
 static const float SPAWN_TIMER_INIT  = 0.6f;     // DAT_001726ac
 static const float DEFAULT_CHUCK_DELAY = 0.2f;    // DAT_00170f80
@@ -346,66 +340,44 @@ void Bomb::Update(float /*dt*/) {
             // Early-kill: if a bomb just exploded (bombHitTimer>0) or game
             // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
             // so it expires on the OOB check below. Binary resets countdown
-            // to 0 (DAT_00172f28) and pos.y to -320 (DAT_00172cb0).
+            // to 0 and pushes vel = (0, -1, 0) — gentle downward drift.
             if (game_work.m_BombHitTimer > 0.0f || game_work.m_LevelTransitionFlag != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
-                vel = Vec3(HIT_COL_POS, -1.0f, HIT_COL_POS);
+                vel = Vec3(0.0f, -1.0f, 0.0f);
             }
 
             const float prevCountdown = m_Countdown;
-            // Tick countdown using GAME dt (not entity scaledDt) — but only
-            // when game is active (!pausedFlag).
+            // Tick countdown using GAME dt — but only when game is active.
             if (!game_work.m_Paused) {
                 m_Countdown -= gameDt;
             }
 
             // Binary @ 0x001729FC: "Throw-bomb" SFX fires on the negative-going
-            // edge of countdown crossing DAT_00172CA0 (0.2f). Gate is
-            // g_bombData.bFuseSfxFiredThisFrame (+0x08), which Bomb::Draw
-            // clears every frame. Set non-zero here to prevent re-fire within
-            // the same frame across multiple bombs.
+            // edge of countdown crossing DAT_00172CA0 (0.2f). Gated by
+            // g_bombData.bFuseSfxFiredThisFrame and m_LevelTransitionFlag.
             static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
-            if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD) {
-                if (!g_bombData.bFuseSfxFiredThisFrame) {
-                    g_bombData.bFuseSfxFiredThisFrame = 1;
-                    if (game_work.mGameSound)
-                        game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
-                }
+            if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD
+                && !g_bombData.bFuseSfxFiredThisFrame
+                && game_work.m_LevelTransitionFlag == 0) {
+                g_bombData.bFuseSfxFiredThisFrame = 1;
+                if (game_work.mGameSound)
+                    game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
             }
-
-            // DIFFERS (port-side simplification): the binary @ 0x00172bd8
-            // fires a per-bomb "Bomb-Fuse" SFXPlay here (gated by
-            // bFuseSfxFiredThisFrame on Bomb global +0x08). The Bomb-Fuse
-            // wav loops indefinitely (loopStart=12736 in the .wav.pcm hdr)
-            // and the binary never explicitly stops these per-bomb slots --
-            // they accumulate over time as silent-when-no-bomb but the
-            // SetVolume-based mute lives in GameUpdate (see GameInit.cpp's
-            // Bomb-Fuse block). Port omits this redundant call because we
-            // don't currently slot-age stale looping SFX; the GameUpdate
-            // channel is the dominant audible fuse hiss anyway. Removing
-            // this fixes the user-reported "fuse hiss doesn't stop after
-            // explosion" by ensuring the only Bomb-Fuse handle is the one
-            // GameUpdate volume-modulates to 0 when no bombs are present.
-            (void)prevCountdown;
 
             if (m_Countdown > 0.0f) return;
 
-            // Countdown expired — chain-bomb spawning.
-            // Binary: iVar7 = (int)WaveManager::spawnLevel, with a random
-            // ceil based on the fractional part (rand100 < frac*100 -> +1).
-            //   if (iVar7 < 1): countdown = 0; pos.y = -320; vel = (0,-1,0);
-            //   else if (iVar7 != 1): WaveManager::SpawnBomb(iVar7 - 1, 0, nullptr, ...);
-            // WaveManager::SpawnBomb is currently a stub (no-op), so chain
-            // bombs produce no visible effect yet — the control flow is
-            // wired so it lights up for free once spawning is ported.
+            // Countdown expired — chain-bomb spawning. Binary only
+            // randomizes the round-up when frac > 0.01 (FP-noise guard).
             {
                 WaveManager* wm = WaveManager::GetInstance();
                 const float sl = wm->spawnLevel;
                 int iVar7 = (int)sl;
                 const float frac = sl - (float)iVar7;
-                const int rand100 = rand() % 100;
-                if ((float)rand100 < frac * 100.0f) iVar7++;
+                if (frac > 0.01f) {
+                    const int rand100 = rand() % 100;
+                    if ((float)rand100 < frac * 100.0f) iVar7++;
+                }
                 if (iVar7 < 1) {
                     m_Countdown = 0.0f;
                     pos.y = OFFSCREEN_Y;
@@ -417,11 +389,6 @@ void Bomb::Update(float /*dt*/) {
         }
 
         // Physics — always runs in alive branch after countdown check.
-        // Binary Bomb::Update (0x001729fc): velocity uses scaledDt, but
-        // POSITION uses dtNorm (= scaledDt / DT_NORMALIZE = scaledDt * 60).
-        // The ×60 factor is the binary's pos-integration tuning fudge,
-        // identical to Fruit::Update's DAT_00177d00. Without it bombs
-        // drift roughly 1/60th the expected speed.
         if (m_bMovement) {
             vel += m_AccelForce * scaledDt;
             AccelGrowth(vel, m_AccelForce, dtNorm);
@@ -435,28 +402,8 @@ void Bomb::Update(float /*dt*/) {
         StepBombRotation(m_RotY, m_RotVelY);
 #endif
 
-#if MORTAR_BOMB_TRACE
-        // Skip still bombs (menu / pre-throw): vel exactly 0 means the
-        // entity isn't moving this frame, so the trace would be the same
-        // pos/vel/accel line spamming every tick. Once physics imparts
-        // any velocity (slice, gravity integration, chuck-launch) the
-        // trace lights up.
-        if (vel.x != 0.0f || vel.y != 0.0f) {
-            unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            LOG_VERBOSE("BOMB", "%03x pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
-                   "accel=(%5.2f,%6.2f) scl.y=%.3f bMv=%d bHit=%d "
-                   "cd=%.3f dt=%.4f",
-                   id, pos.x, pos.y, vel.x, vel.y,
-                   m_AccelForce.x, m_AccelForce.y,
-                   scale.y,
-                   (int)m_bMovement, (int)m_bHit,
-                   m_Countdown, gameDt);
-        }
-#endif
-
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
-        // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
-        // center = (pos.x, pos.y, 0).
+        // overwrites center.z with 0.0 — center = (pos.x, pos.y, 0).
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
@@ -475,8 +422,7 @@ void Bomb::Update(float /*dt*/) {
                 m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
             }
         } else {
-            // Menu-hit: same physics as alive branch (vel uses scaledDt,
-            // pos uses dtNorm). Critical for back-bomb fly-out animation.
+            // Menu-hit: same physics as alive branch.
             if (m_bMovement) {
                 vel += m_AccelForce * scaledDt;
                 AccelGrowth(vel, m_AccelForce, dtNorm);
@@ -491,7 +437,7 @@ void Bomb::Update(float /*dt*/) {
 #endif
         }
 
-        // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
+        // Hide collision — relocate sphere far off-playfield.
         if (m_Col) {
             ColSphere* cs = static_cast<ColSphere*>(m_Col);
             cs->center() = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
@@ -499,27 +445,15 @@ void Bomb::Update(float /*dt*/) {
         }
     }
 
-    // OOB check — kill if off-playfield, else (and only else) lazy-create
-    // the fuse emitter. Binary uses `else if` so a killed bomb never gets
-    // an emitter attached in the same frame.
+    // OOB check — kill if off-playfield, else lazy-create the fuse emitter.
     if (pos.y <= BOUNDS_MIN_Y || pos.y >= BOUNDS_MAX_Y ||
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
-#if MORTAR_BOMB_TRACE
-        {
-            unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            LOG_VERBOSE("BOMB", "%03x OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)",
-                   id, pos.x, pos.y, vel.x, vel.y);
-        }
-#endif
         KillBomb();
     } else if (!m_pEmitter) {
         const int variant = (m_BombVariant == 0) ? 0 : 1;
-        const uint32_t hash = g_bombData.fuseHash[variant];
-        if (hash != 0) {
-            PSPParticleManager::GetInstance().AddEmitter(
-                hash, &m_pEmitter,
-                /*paused*/ gameDt == 0.0f);
-        }
+        m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
+            g_bombData.fuseHash[variant], nullptr,
+            /*updateWhenPaused*/ game_work.m_GameDt == 0.0f);
         if (m_pEmitter) {
             // Binary writes raw bomb.pos to emitter pos once at creation
             // (0x00172f12) — no per-frame update, no fuse-tip offset.

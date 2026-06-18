@@ -249,7 +249,6 @@ void BaseScreen::UpdateButtons(float dt) {
                 // Init's fruitType<0 text-button branch reads m_Texture to
                 // auto-size m_TargetSize/size. m_Texture is set for Draw.
                 btn->m_Texture = sb.m_tex;
-                btn->m_Texture      = sb.m_tex;
             }
             if (sb.m_clickCb) {
                 btn->Init(sb.m_pos, sb.m_clickCb,
@@ -276,9 +275,8 @@ void BaseScreen::UpdateButtons(float dt) {
                 }
             }
 
-            Game* game = Game::GetInstance();
-            if (game && game_work.mHud) game_work.mHud->AddControl(btn);
-            if (sb.m_tutorID >= 0 && game && game_work.m_TutorialControl)
+            game_work.mHud->AddControl(btn, false);
+            if (sb.m_tutorID >= 0)
                 game_work.m_TutorialControl->ResetTutePos(btn);
 
             // First-frame update call with -1.0f
@@ -326,9 +324,8 @@ void BaseScreen::Release() {
     m_HUDControls.clear();
 
     // 2. Disable ScreenButton MenuButtons + clear delegates
-    // Binary: guarded by *(char*)(gameState + 0x34) != 0
-    Game* game = Game::GetInstance();
-    if (game && game_work.field_0x34 != 0) {
+    // Binary: guarded by game_work.field_0x34 != 0 (direct check, no Game::GetInstance)
+    if (game_work.field_0x34 != 0) {
         for (std::list<ScreenButton>::iterator it = m_ScreenButtons.begin(); it != m_ScreenButtons.end(); ++it) {
             ScreenButton& sb = *it;
             if (sb.m_pButton) {
