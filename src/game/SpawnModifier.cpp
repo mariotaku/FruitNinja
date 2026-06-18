@@ -72,19 +72,19 @@ int SpawnModifier::UpdateSpecific(float dt) {
 void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
     if (!xml) return;
 
-    for (tinyxml2::XMLElement* sp = xml->FirstChildElement("spawner");
-         sp; sp = sp->NextSiblingElement("spawner")) {
+    for (TiXmlElement sp = xml->FirstChildElement("spawner");
+         sp; sp = sp.NextSiblingElement("spawner")) {
 
         SPAWNER_INFO* s = new SPAWNER_INFO();
 
-        sp->QueryFloatAttribute("min",      &s->m_SpawnMin);
-        sp->QueryFloatAttribute("max",      &s->m_SpawnMax);
-        sp->QueryFloatAttribute("mininc",   &s->m_GrowthInc);
-        sp->QueryFloatAttribute("maxinc",   &s->m_GrowthInc);
-        sp->QueryFloatAttribute("delay",    &s->m_Delay);
-        sp->QueryFloatAttribute("delayinc", &s->m_DelayInc);
+        sp.QueryFloatAttribute("min",      &s->m_SpawnMin);
+        sp.QueryFloatAttribute("max",      &s->m_SpawnMax);
+        sp.QueryFloatAttribute("mininc",   &s->m_GrowthInc);
+        sp.QueryFloatAttribute("maxinc",   &s->m_GrowthInc);
+        sp.QueryFloatAttribute("delay",    &s->m_Delay);
+        sp.QueryFloatAttribute("delayinc", &s->m_DelayInc);
 
-        const char* grav = sp->Attribute("gravity");
+        const char* grav = sp.Attribute("gravity");
         if (grav && *grav) {
             // @ 0x0014f5a0 ParseVector(const char*): starts from a zero-default
             // Vec3 (static .bss default @ 0x002d9288 == {0,0,0}), parses x with

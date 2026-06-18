@@ -31,7 +31,7 @@ static bool IsFastHardware() {
 
 // ---- Emmiter::Parse (binary @ 0x0011e150 child "emmiter" block) ---------------
 
-void Emmiter::Parse(XMLElement* xml) {
+void Emmiter::Parse(TiXmlElement* xml) {
     if (!xml) return;
     const char* name = xml->Attribute("name");
     if (name) m_NameHash = StringHash(name);
@@ -53,7 +53,7 @@ void Emmiter::Parse(XMLElement* xml) {
 
 // ---- EffectImage::Parse -------------------------------------------------------
 
-void EffectImage::Parse(XMLElement* xml) {
+void EffectImage::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
     const char* tex = xml->Attribute("texture");
@@ -101,7 +101,7 @@ void EffectImage::Parse(XMLElement* xml) {
     const char* mode = xml->Attribute("transition");
     m_TransitionHash = (mode && *mode) ? StringHash(mode) : 0u;
 
-    xml->QueryUnsignedAttribute("group", &m_GroupMask);
+    xml->GetRaw()->QueryUnsignedAttribute("group", &m_GroupMask);
 
     const char* freq = xml->Attribute("freq");
     if (freq) m_Freq = (float)atof(freq);
@@ -167,7 +167,7 @@ void EffectImage::LoadTextures() {
 
 // ---- ScreenTint::Parse -------------------------------------------------------
 
-void ScreenTint::Parse(XMLElement* xml) {
+void ScreenTint::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
     // TODO: "length" attribute not present in current powerUpList.xml; may exist
@@ -201,7 +201,7 @@ void ScreenTint::Parse(XMLElement* xml) {
 
 // ---- SoundEffect::Parse -------------------------------------------------------
 
-void SoundEffect::Parse(XMLElement* xml) {
+void SoundEffect::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
     const char* name = xml->Attribute("name");
@@ -285,7 +285,7 @@ ScreenEffect& ScreenEffect::operator=(const ScreenEffect& rhs) {
 
 // ---- ScreenEffect::Parse (binary @ 0x0011e150) --------------------------------
 
-void ScreenEffect::Parse(XMLElement* xml) {
+void ScreenEffect::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
     const char* name = xml->Attribute("name");
@@ -302,14 +302,14 @@ void ScreenEffect::Parse(XMLElement* xml) {
             m_RemainingTime = m_TotalDuration;
     }
 
-    for (XMLElement* child = xml->FirstChildElement();
-         child; child = child->NextSiblingElement()) {
-        const char* tag = child->Name();
+    for (TiXmlElement child = xml->FirstChildElement();
+         child; child = child.NextSiblingElement()) {
+        const char* tag = child.Name();
         if (!tag) continue;
 
         // Hardware filter — "fast" = IsFastHardware() must be true;
         // "slow" = IsFastHardware() must be false.
-        const char* hw = child->Attribute("hardware");
+        const char* hw = child.Attribute("hardware");
         if (hw) {
             bool needFast = (strcmp(hw, "fast") == 0);
             bool needSlow = (strcmp(hw, "slow") == 0);
@@ -319,19 +319,19 @@ void ScreenEffect::Parse(XMLElement* xml) {
 
         if (strcmp(tag, "emmiter") == 0) {
             Emmiter em;
-            em.Parse(child);
+            em.Parse(&child);
             m_Emmiters.push_back(em);
         } else if (strcmp(tag, "image") == 0) {
             EffectImage img;
-            img.Parse(child);
+            img.Parse(&child);
             m_Images.push_back(img);
         } else if (strcmp(tag, "tint") == 0) {
             ScreenTint tint;
-            tint.Parse(child);
+            tint.Parse(&child);
             m_Tints.push_back(tint);
         } else if (strcmp(tag, "sound") == 0) {
             SoundEffect sfx;
-            sfx.Parse(child);
+            sfx.Parse(&child);
             m_Sounds.push_back(sfx);
         }
     }

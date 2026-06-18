@@ -34,7 +34,7 @@ PurchaseInfo::~PurchaseInfo() {
 }
 
 // Binary @ 0x00118474
-void PurchaseInfo::Parse(tinyxml2::XMLElement* el) {
+void PurchaseInfo::Parse(TiXmlElement* el) {
     char buf[64];
     const char* s;
 
@@ -66,9 +66,9 @@ void PurchaseInfo::Parse(tinyxml2::XMLElement* el) {
     strncpy(m_TextureFilenames[2], buf, sizeof(m_TextureFilenames[2]) - 1);
     m_TextureFilenames[2][sizeof(m_TextureFilenames[2]) - 1] = '\0';
 
-    tinyxml2::XMLElement* desc = el->FirstChildElement("description");
+    TiXmlElement desc = el->FirstChildElement("description");
     if (desc) {
-        const char* t = desc->GetText();
+        const char* t = desc.GetText();
         if (t && *t) {
             strncpy(m_Description, t, sizeof(m_Description) - 1);
             m_Description[sizeof(m_Description) - 1] = '\0';

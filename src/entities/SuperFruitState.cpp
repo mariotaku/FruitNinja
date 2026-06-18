@@ -5,7 +5,7 @@
 
 // Binary @ 0x001b9acc: QueryFloatAttribute("timer"), ("lifetime"), ("spin");
 // QueryIntAttribute("slices").
-void SuperFruitState::Parse(tinyxml2::XMLElement* elem)
+void SuperFruitState::Parse(TiXmlElement* elem)
 {
     if (!elem) return;
     elem->QueryFloatAttribute("timer",    &m_Timer);
@@ -15,7 +15,7 @@ void SuperFruitState::Parse(tinyxml2::XMLElement* elem)
 }
 
 // Binary @ 0x001b9a10: SetAttribute("timer"), ("lifetime"), ("slices"), ("spin").
-void SuperFruitState::WriteToElement(tinyxml2::XMLElement* elem) const
+void SuperFruitState::WriteToElement(TiXmlElement* elem) const
 {
     if (!elem) return;
     elem->SetAttribute("timer",    m_Timer);

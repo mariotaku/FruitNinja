@@ -66,21 +66,21 @@ bool ItemInfo::IsLocked() const {
 }
 
 // ItemInfo::Parse @ 0x0011293c
-void ItemInfo::Parse(tinyxml2::XMLElement* e) {
+void ItemInfo::Parse(TiXmlElement* e) {
     // --- Parse <requirements> child element (optional) ---
-    tinyxml2::XMLElement* req = e->FirstChildElement("requirements");  // 0x1b9fc4
-    if (req != nullptr) {
+    TiXmlElement req = e->FirstChildElement("requirements");  // 0x1b9fc4
+    if (req) {
         m_Cost = 1;  // default if present but no coins attr
-        req->QueryIntAttribute("coins", &m_Cost);  // 0x1b9e68
+        req.QueryIntAttribute("coins", &m_Cost);  // 0x1b9e68
 
-        const char* descAttr = req->Attribute("description");  // 0x1b92d1
+        const char* descAttr = req.Attribute("description");  // 0x1b92d1
         CloneString(&m_pLockedText, descAttr);
         if (m_pLockedText == nullptr) {
-            const char* text = GETSTRING_CAST_0_STR(req->GetText());
+            const char* text = GETSTRING_CAST_0_STR(req.GetText());
             CloneString(&m_pLockedText, text);
         }
 
-        const char* progressAttr = req->Attribute("singular");  // 0x1b9fd1
+        const char* progressAttr = req.Attribute("singular");  // 0x1b9fd1
         CloneString(&m_pProgressFmt, progressAttr);
         if (m_pProgressFmt != nullptr) {
             const char* localised = GETSTRING_CAST_0_STR(m_pProgressFmt);
@@ -90,24 +90,24 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
         }
 
         const char* trueStr = "true";  // 0x1b9ea0
-        const char* upsideDown = req->Attribute("showIfUpsideDown");  // 0x1b9fda
+        const char* upsideDown = req.Attribute("showIfUpsideDown");  // 0x1b9fda
         if (CompareWords(trueStr, upsideDown) != 0) {
             m_RequirementType = 1;
         } else {
-            const char* playedToday = req->Attribute("showIfPlayedToday");  // 0x1b9feb
+            const char* playedToday = req.Attribute("showIfPlayedToday");  // 0x1b9feb
             if (CompareWords(trueStr, playedToday) != 0) {
                 m_RequirementType = 2;
             } else {
-                const char* joinButtons = req->Attribute("showJoinButtons");  // 0x1b9ffd
+                const char* joinButtons = req.Attribute("showJoinButtons");  // 0x1b9ffd
                 if (CompareWords(trueStr, joinButtons) != 0) {
                     m_RequirementType = 3;
                 }
             }
         }
 
-        req->QueryIntAttribute("countDownFrom", &m_CountDownFrom);  // 0x1ba00d
+        req.QueryIntAttribute("countDownFrom", &m_CountDownFrom);  // 0x1ba00d
 
-        const char* totalAttr = req->Attribute("total");  // 0x1bd00d
+        const char* totalAttr = req.Attribute("total");  // 0x1bd00d
         CloneString(&m_pTotalStatKey, totalAttr);
     }
 
@@ -119,9 +119,9 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
     const char* titleStr = GETSTRING_CAST_0_STR(titleAttr);
     CloneString(&m_pTitle, titleStr);
 
-    tinyxml2::XMLElement* desc = e->FirstChildElement("description");  // 0x1b92d1
-    if (desc != nullptr) {
-        const char* descText = GETSTRING_CAST_0_STR(desc->GetText());
+    TiXmlElement desc = e->FirstChildElement("description");  // 0x1b92d1
+    if (desc) {
+        const char* descText = GETSTRING_CAST_0_STR(desc.GetText());
         CloneString(&m_pDescText, descText);
     }
 
@@ -156,15 +156,15 @@ SlashSoundMods::SlashSoundMods()
 }
 
 // SlashSoundMods::Parse @ 0x00112568
-void SlashSoundMods::Parse(tinyxml2::XMLElement* elem) {
-    if (elem == nullptr) return;
+void SlashSoundMods::Parse(TiXmlElement* elem) {
+    if (!elem) return;
 
     // Count <sound> children
     int count = 0;
-    tinyxml2::XMLElement* snd = elem->FirstChildElement("sound");
-    while (snd != nullptr) {
+    TiXmlElement snd = elem->FirstChildElement("sound");
+    while (snd) {
         count++;
-        snd = snd->NextSiblingElement("sound");
+        snd = snd.NextSiblingElement("sound");
     }
     m_SoundCount = count;
 
@@ -178,16 +178,16 @@ void SlashSoundMods::Parse(tinyxml2::XMLElement* elem) {
 
         int idx = 0;
         snd = elem->FirstChildElement("sound");
-        while (snd != nullptr) {
-            const char* text = snd->GetText();
+        while (snd) {
+            const char* text = snd.GetText();
             m_SoundNames[idx] = (text != nullptr) ? strdup(text) : strdup("");
 
             float vol = defaultVol;
-            snd->QueryFloatAttribute("vol", &vol);
+            snd.QueryFloatAttribute("vol", &vol);
             m_SoundVolumes[idx] = vol;
 
             idx++;
-            snd = snd->NextSiblingElement("sound");
+            snd = snd.NextSiblingElement("sound");
         }
     }
 
@@ -298,8 +298,8 @@ LoopingSound::LoopingSound()
 }
 
 // LoopingSound::Parse @ 0x0011253c
-void LoopingSound::Parse(tinyxml2::XMLElement* elem) {
-    if (elem != nullptr) {
+void LoopingSound::Parse(TiXmlElement* elem) {
+    if (elem) {
         CloneString(&m_pLoopName, elem->Attribute("loop"));
     }
 }
@@ -393,16 +393,16 @@ void SlashModInfo::SetEquipped() {
 }
 
 // ParseSlashModInfo @ 0x001126c0
-void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
+void SlashModInfo::Parse(TiXmlElement* e) {
     ItemInfo::Parse(e);
 
-    tinyxml2::XMLElement* smi = e->FirstChildElement("slashModInfo");
-    if (smi == nullptr) return;
+    TiXmlElement smi = e->FirstChildElement("slashModInfo");
+    if (!smi) return;
 
     const char* trueStr = "true";
 
     // `type` attr -> m_ColourType
-    const char* typeStr = smi->Attribute("type");
+    const char* typeStr = smi.Attribute("type");
     if (typeStr) {
         if (CompareWords(typeStr, "PER_SLASH") != 0)      m_ColourType = 1;
         else if (CompareWords(typeStr, "PER_SWIPE") != 0) m_ColourType = 2;
@@ -410,47 +410,47 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     }
 
     // `texture` attr in <slashModInfo>
-    const char* tex2 = smi->Attribute("texture");
+    const char* tex2 = smi.Attribute("texture");
     CloneString(&m_pTextureName2, tex2);
 
     // `speed` attr (float); default 1.0f already set in ctor
-    smi->QueryFloatAttribute("speed", &m_Speed);
+    smi.QueryFloatAttribute("speed", &m_Speed);
 
     // `particles_directional` attr
-    const char* dirPart = smi->Attribute("particles_directional");
+    const char* dirPart = smi.Attribute("particles_directional");
     m_bDirectionalParticles = (CompareWords(trueStr, dirPart) != 0);
 
     // `particles` attr — stored verbatim; SetModColours looks up by StringHash
-    const char* particles = smi->Attribute("particles");
+    const char* particles = smi.Attribute("particles");
     if (particles != nullptr && particles[0] != '\0') {
         free(m_pParticlePath);
         m_pParticlePath = strdup(particles);
     }
 
     // `contact_particles` attr
-    const char* contactPart = smi->Attribute("contact_particles");
+    const char* contactPart = smi.Attribute("contact_particles");
     CloneString(&m_pContactParticle, contactPart);
 
     // `release_particles` attr
-    const char* releasePart = smi->Attribute("release_particles");
+    const char* releasePart = smi.Attribute("release_particles");
     CloneString(&m_pReleaseParticle, releasePart);
 
     // `slash_flash` attr
-    const char* slashFlash = smi->Attribute("slash_flash");
+    const char* slashFlash = smi.Attribute("slash_flash");
     m_bSlashFlash = (CompareWords(trueStr, slashFlash) != 0);
 
     // `flipForUpsideDown` attr
-    const char* flip = smi->Attribute("flipForUpsideDown");
+    const char* flip = smi.Attribute("flipForUpsideDown");
     m_bFlipForUpsideDown = (CompareWords(trueStr, flip) != 0);
 
     // <scales> child element
-    tinyxml2::XMLElement* scales = smi->FirstChildElement("scales");
-    if (scales != nullptr) {
-        scales->QueryFloatAttribute("start_thickness", &m_ScaleStartThickness);
-        scales->QueryFloatAttribute("end_thickness",   &m_ScaleEndThickness);
-        scales->QueryFloatAttribute("length",          &m_ScaleLength);
-        scales->QueryFloatAttribute("point_scale",     &m_ScalePointScale);
-        scales->QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
+    TiXmlElement scales = smi.FirstChildElement("scales");
+    if (scales) {
+        scales.QueryFloatAttribute("start_thickness", &m_ScaleStartThickness);
+        scales.QueryFloatAttribute("end_thickness",   &m_ScaleEndThickness);
+        scales.QueryFloatAttribute("length",          &m_ScaleLength);
+        scales.QueryFloatAttribute("point_scale",     &m_ScalePointScale);
+        scales.QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
     }
 
     // <colour>R,G,B</colour> children -> m_pColours array.
@@ -459,40 +459,40 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     // not
     //   <colour value="255,43,78"/>
     int count = 0;
-    tinyxml2::XMLElement* c = smi->FirstChildElement("colour");
-    while (c != nullptr) {
+    TiXmlElement c = smi.FirstChildElement("colour");
+    while (c) {
         count++;
-        c = c->NextSiblingElement("colour");
+        c = c.NextSiblingElement("colour");
     }
     m_ColourCount = count;
     if (count > 0) {
         delete[] m_pColours;
         m_pColours = new Colour[count];
         int idx = 0;
-        c = smi->FirstChildElement("colour");
-        while (c != nullptr) {
-            const char* cval = c->GetText();
+        c = smi.FirstChildElement("colour");
+        while (c) {
+            const char* cval = c.GetText();
             if (cval) ParseColour(&m_pColours[idx], cval);
             idx++;
-            c = c->NextSiblingElement("colour");
+            c = c.NextSiblingElement("colour");
         }
     }
 
     // Sound sections — binary calls SlashSoundMods::Parse for each child.
-    tinyxml2::XMLElement* swipeElem = smi->FirstChildElement("swipeSounds");
-    if (swipeElem != nullptr) {
-        m_SwipeSounds.Parse(swipeElem);
-        m_LoopingSound.Parse(swipeElem);  // "loop" attr lives on the same element
+    TiXmlElement swipeElem = smi.FirstChildElement("swipeSounds");
+    if (swipeElem) {
+        m_SwipeSounds.Parse(&swipeElem);
+        m_LoopingSound.Parse(&swipeElem);  // "loop" attr lives on the same element
     }
 
-    tinyxml2::XMLElement* impactElem = smi->FirstChildElement("impactSounds");
-    if (impactElem != nullptr) {
-        m_ImpactSounds.Parse(impactElem);
+    TiXmlElement impactElem = smi.FirstChildElement("impactSounds");
+    if (impactElem) {
+        m_ImpactSounds.Parse(&impactElem);
     }
 
-    tinyxml2::XMLElement* comboElem = smi->FirstChildElement("comboSounds");
-    if (comboElem != nullptr) {
-        m_ComboSounds.Parse(comboElem);
+    TiXmlElement comboElem = smi.FirstChildElement("comboSounds");
+    if (comboElem) {
+        m_ComboSounds.Parse(&comboElem);
     }
 }
 

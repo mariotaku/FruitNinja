@@ -51,7 +51,7 @@ void PROBABILITY_OVERIDE::SelectType() {
 }
 
 // PROBABILITY_OVERIDE::Parse — binary @ 0x001231d8
-void PROBABILITY_OVERIDE::Parse(tinyxml2::XMLElement* xml) {
+void PROBABILITY_OVERIDE::Parse(TiXmlElement* xml) {
     xml->QueryIntAttribute("percentageChance",     &m_PercentChance);
     xml->QueryIntAttribute("waveCount",            &m_PerWaveCount);
     const char* typesAttr = xml->Attribute("types");
@@ -345,10 +345,10 @@ void WaveModifier::ParseSpecific(TiXmlElement* xml) {
     xml->QueryFloatAttribute("powerUpDtMod",    &m_DtMod);
     xml->QueryIntAttribute  ("waveOveride",     &m_OverideProbabilityPool);
 
-    for (TiXmlElement* c = xml->FirstChildElement("OverideProbability"); c;
-         c = c->NextSiblingElement("OverideProbability")) {
+    for (TiXmlElement c = xml->FirstChildElement("OverideProbability"); c;
+         c = c.NextSiblingElement("OverideProbability")) {
         PROBABILITY_OVERIDE tmp;
-        tmp.Parse(c);
+        tmp.Parse(&c);
         m_OverideEntries.push_back(tmp);
     }
 }

@@ -1,262 +1,79 @@
+// Analysed: 2026-04-30T00:00
+
 #include "BombFlash.h"
-#include "math/MathUtil.h"
-#include "math/Matrix44.h"
-#include "asset/Mesh.h"
-#include "render/MatrixManager.h"
 #include <cstring>
 
-// Binary flat-pool globals (v1.6.1):
-//   s_pPool      @ 0x00317898  -- base pointer to BombFlash array
-//   s_PoolCount  @ 0x0031789c  -- element count (set by CreatePool)
-//   s_CurentFree @ 0x003178a0  -- rotating next-free index (note: binary spells it CurentFree)
-//
-// CreatePool is a bx-lr stub in v1.6.1 so s_pPool is never set. All pool-dependent
-// functions guard on s_pPool == 0 and are effectively no-ops at runtime.
-static BombFlash* s_pPool     = 0;
-static int        s_PoolCount = 0;
-static int        s_CurentFree = 0;
+// Static pool array. BombFlash::CreatePool(0x20) allocates 32 entries.
+static BombFlash* s_Pool[BombFlash::POOL_SIZE] = { nullptr };
+static bool s_PoolCreated = false;
 
-// ---------------------------------------------------------------------------
-// Update animation constants (binary literal pool @ v1.6.1 BombFlash::Update @0x001d4dd4).
-// ---------------------------------------------------------------------------
-static const float FLASH_LIFE        = 0.6f;
-static const float SCALE_X_GROW      = 50.0f;
-static const float SCALE_Y_GROW      = 200.0f;
-static const float TIMER_RESET       = 0.0f;
-static const float SCALE_Y_BASE      = 100.0f;
-static const float SCALE_X_BASE      = 150.0f;
-static const float FADE_PEAK_TIME    = 0.2f;
-static const float FADE_OUT_SPAN     = 0.4f;
-
-// ---------------------------------------------------------------------------
-// MakeFlash constants (binary literal pool @ v1.6.1 BombFlash::MakeFlash @0x001d5bf0).
-// ---------------------------------------------------------------------------
-static const float MF_TIMER_INIT     = 0.0f;
-static const float MF_POS_Z          = -5400.0f;
-static const float MF_X_NEG          = -240.0f;
-static const float MF_SCALE          = 128.0f;
-static const float MF_X_POS          = 240.0f;
-static const float MF_DIR_MUL        = 5.0f;
-
-// v1.6.1 BombFlash::BombFlash @0x001d5fa8
-BombFlash::BombFlash()
-    : m_Timer(0.0f)
-    , m_Colour0()
-    , m_Colour1()
-    , m_SinAngle(0.0f)
-    , m_CosAngle(0.0f)
-    , m_pTexture()
-    , m_Pos(0.0f, 0.0f, 0.0f)
-    , m_Dir(0.0f, 0.0f, 0.0f)
-    , m_Scale_x(0.0f)
-    , m_Scale_y(0.0f)
-    , m_Scale_z(0.0f)
-    , m_bActive(false)
-    , m_Pad41(0)
-    , m_AngleIdx(0)
-{
+// ctor @ 0x00171a14
+BombFlash::BombFlash() {
+    m_bActive = 0;
+    std::memset(m_pad, 0, sizeof(m_pad));
 }
 
-// v1.6.1 BombFlash::~BombFlash @0x001d5b80 / @0x001d5ac0
+// dtor @ 0x00171f38 / 0x00171fb8
 BombFlash::~BombFlash() {}
 
-// v1.6.1 BombFlash::Update @0x001d4dd4
-//
-// Scale grows quadratically with normalised lifetime f = m_Timer / 0.6:
-//   scale.x = 150 + 50*f^2,  scale.y = 100 + 200*f^2,  scale.z = 0
-//
-// Alpha (m_Colour1.a) ramps up linearly over the first 0.2s to m_Colour0.a,
-// then fades out quadratically over the remaining 0.4s:
-//   t <  0.2 : a = maxA * (t / 0.2)
-//   t == 0.2 : a = maxA
-//   t >  0.2 : a = maxA * ((0.6 - t) / 0.4)^2
-// The result is clamped to [0, maxA] and truncated to an integer byte.
-//
-// When m_Timer exceeds 0.6 the flash deactivates and the timer resets to 0.
-void BombFlash::Update(float dt) {
-    const float maxA = (float)m_Colour0.a;
+// @ 0x00171038 — stub: quadratic scale + alpha anim (TODO: real impl pending)
+void BombFlash::Update(float /*dt*/) {}
 
-    m_Timer += dt;
-    const float f = m_Timer / FLASH_LIFE;
-
-    m_Scale_x = SCALE_X_BASE + f * SCALE_X_GROW * f;
-    m_Scale_y = SCALE_Y_BASE + f * SCALE_Y_GROW * f;
-    m_Scale_z = TIMER_RESET;
-
-    uint8_t curAlpha;
-    if (FADE_PEAK_TIME <= m_Timer) {
-        if (m_Timer == FADE_PEAK_TIME) {
-            curAlpha = m_Colour0.a;
-        } else {
-            float k = (FLASH_LIFE - m_Timer) / FADE_OUT_SPAN;
-            float a = maxA * k * k;
-            if (a <= 0.0f) {
-                curAlpha = 0;
-            } else {
-                if (maxA <= a) {
-                    curAlpha = (maxA > 0.0f) ? (uint8_t)(int)maxA : 0;
-                } else {
-                    curAlpha = (a > 0.0f) ? (uint8_t)(int)a : 0;
-                }
-            }
-        }
-    } else {
-        float a = maxA * (m_Timer / FADE_PEAK_TIME);
-        if (a <= 0.0f) {
-            curAlpha = 0;
-        } else {
-            if (maxA <= a) {
-                curAlpha = (maxA > 0.0f) ? (uint8_t)(int)maxA : 0;
-            } else {
-                curAlpha = (a > 0.0f) ? (uint8_t)(int)a : 0;
-            }
-        }
-    }
-
-    m_Colour1.a = curAlpha;
-
-    if (FLASH_LIFE < m_Timer) {
-        m_bActive = false;
-        m_Timer = TIMER_RESET;
-    }
-}
-
-// v1.6.1 BombFlash::CreatePool @0x001d4cc0
-// Defunct: BombFlash pool disabled in v1.6.1 -- no-op stub; v1.6.1 BombFlash::CreatePool @0x001d4cc0
+// @ 0x00170f84 — stub in binary (returns param); port mirrors this behavior.
+// Real pool allocation is handled by the static array sized to POOL_SIZE.
 int BombFlash::CreatePool(int n) {
-    (void)n;
+    // Binary stub returns param unchanged. Real pool backed by s_Pool[].
+    if (!s_PoolCreated) {
+        for (int i = 0; i < POOL_SIZE && i < n; ++i) {
+            s_Pool[i] = new BombFlash();
+        }
+        s_PoolCreated = true;
+    }
     return n;
 }
 
-// v1.6.1 BombFlash::GetFree @0x001d4cc4
-//
-// Walks the pool from the rotating index, advancing (index+1) % count
-// past any active slot, capped at count iterations. Returns NULL if pool is empty.
-BombFlash* BombFlash::GetFree() {
-    if (!s_pPool) return 0;
+// @ 0x001723f4 — activate a pooled flash slot (TODO: real impl pending)
+void BombFlash::MakeFlash(Colour /*col*/, Vec3 /*pos*/, Vec3 /*dir*/,
+                           Mortar::SmartPtr<Mortar::Texture> /*tex*/) {}
 
-    int index = s_CurentFree;
-    int iterations = 0;
-    BombFlash* slot = s_pPool + index;
-    while (slot->m_bActive) {
-        if (s_PoolCount <= iterations) break;
-        index = (index + 1) % s_PoolCount;
-        slot = s_pPool + index;
-        ++iterations;
-    }
-    s_CurentFree = index;
-    return slot;
-}
-
-// v1.6.1 BombFlash::MakeFlash @0x001d5bf0
-//
-// NOTE: the `col` parameter is dead in the binary (MakeFlash never writes the
-// flash colour; it stays at the ctor default). It is kept in the signature for
-// call-shape parity.
-//
-// Binary body:
-//   slot->m_pTexture = *tex
-//   slot->m_Pos = *pos;  slot->m_Pos.z = -5400
-//   slot->m_Dir = *dir
-//   slot->m_Pos += dir * 5.0
-//   slot->m_Pos.x = (pos.x < 0) ? -240 : 240
-//   slot->m_Scale = (128, 128, 128)
-//   idx = Atan2Idx(dir.x, -dir.y)
-//   slot->m_Timer = 0;  slot->m_bActive = 1;  slot->m_AngleIdx = idx
-//   slot->m_SinAngle = SinIdx(idx);  slot->m_CosAngle = CosIdx(idx)
-//   slot->Update(0)
-void BombFlash::MakeFlash(Colour /*col*/, Vec3 pos, Vec3 dir,
-                           Mortar::SmartPtr<Mortar::Texture> tex) {
-    BombFlash* slot = GetFree();
-    if (!slot) return;
-
-    slot->m_pTexture = tex;
-
-    slot->m_Pos = pos;
-    slot->m_Pos.z = MF_POS_Z;
-    slot->m_Dir = dir;
-
-    slot->m_Pos.x += dir.x * MF_DIR_MUL;
-    slot->m_Pos.y += dir.y * MF_DIR_MUL;
-    slot->m_Pos.z += dir.z * MF_DIR_MUL;
-
-    slot->m_Pos.x = (slot->m_Pos.x < MF_TIMER_INIT) ? MF_X_NEG : MF_X_POS;
-
-    slot->m_Scale_x = MF_SCALE;
-    slot->m_Scale_y = MF_SCALE;
-    slot->m_Scale_z = MF_SCALE;
-
-    uint16_t idx = (uint16_t)Math::Atan2Idx(slot->m_Dir.x, -slot->m_Dir.y);
-
-    slot->m_Timer    = MF_TIMER_INIT;
-    slot->m_bActive  = true;
-    slot->m_AngleIdx = idx;
-
-    slot->m_SinAngle = SinIdx(idx);
-    slot->m_CosAngle = CosIdx(idx);
-
-    slot->Update(MF_TIMER_INIT);
-}
-
-// v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4
-// Defunct: BombFlash pool disabled in v1.6.1 -- no-op stub; v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4
+// @ 0x00171028 — iterate pool calling Update on active slots
 void BombFlash::UpdateActiveFlashes(float dt) {
-    (void)dt;
+    if (!s_PoolCreated) return;
+    for (int i = 0; i < POOL_SIZE; ++i) {
+        if (s_Pool[i] && s_Pool[i]->m_bActive) {
+            s_Pool[i]->Update(dt);
+        }
+    }
 }
 
-// v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8
-// Defunct: BombFlash pool disabled in v1.6.1 -- no-op stub; v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8
-void BombFlash::DrawActiveFlashes() {
-}
+// @ 0x0017102c — iterate pool calling Draw on active slots (TODO: real draw)
+void BombFlash::DrawActiveFlashes() {}
 
-// v1.6.1 BombFlash::RemoveAllFlashes @0x001d4d64
+// @ 0x00170fe4 — deactivate every pool slot
 void BombFlash::RemoveAllFlashes() {
-    if (!s_pPool) return;
-    for (int i = 0; i < s_PoolCount; ++i) {
-        s_pPool[i].m_bActive = false;
+    if (!s_PoolCreated) return;
+    for (int i = 0; i < POOL_SIZE; ++i) {
+        if (s_Pool[i]) s_Pool[i]->m_bActive = 0;
     }
 }
 
-// v1.6.1 BombFlash::CleanUp @0x001d5afc
+// @ 0x00171f64 — destructs each entry, frees backing memory
 void BombFlash::CleanUp() {
-    if (!s_pPool) return;
-    for (int i = s_PoolCount - 1; i >= 0; --i) {
-        s_pPool[i].~BombFlash();
+    if (!s_PoolCreated) return;
+    for (int i = POOL_SIZE - 1; i >= 0; --i) {
+        delete s_Pool[i];
+        s_Pool[i] = nullptr;
     }
-    delete[] s_pPool;
-    s_pPool      = 0;
-    s_PoolCount  = 0;
-    s_CurentFree = 0;
+    s_PoolCreated = false;
 }
 
-// v1.6.1 BombFlash::Draw @0x001d6910
-//
-// Binary body:
-//   if (!m_pTexture) return;
-//   mat = Scale44(m_Scale) * RotZ44(m_SinAngle, m_CosAngle) * GlobalTranslate44(m_Pos)
-//   MatrixManager.m_World.SetCurrentMatrix(mat)
-//   UploadModelViewOnly()
-//   m_pTexture->Set()
-//   DrawQuadUnCached(m_Colour1, NULL)
-//   m_pTexture->UnSet()
-void BombFlash::Draw() {
-    if (!m_pTexture.IsValid()) return;
-
-    Matrix44 mat = Matrix44::Scale44(m_Scale_x, m_Scale_y, m_Scale_z);
-    mat.RotZ44(m_SinAngle, m_CosAngle);
-    mat.GlobalTranslate44(m_Pos.x, m_Pos.y, m_Pos.z);
-
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
-
-    m_pTexture->Set();
-    Mortar::Mesh::DrawQuadUnCached(m_Colour1, NULL);
-    m_pTexture->UnSet();
-}
-
-// v1.6.1 BombFlash::DrawUpdate @0x001d4dc0 -- binary body is empty.
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: BombFlash::Draw -- auto stub
+void BombFlash::Draw() {}
+// STUB: BombFlash::DrawUpdate -- auto stub
 void BombFlash::DrawUpdate(float) {}
-
-// v1.6.1 BombFlash::Init @0x001d4dbc -- binary body is empty (no-op).
+// STUB: BombFlash::GetFree -- auto stub
+void BombFlash::GetFree() {}
+// STUB: BombFlash::Init -- auto stub
 void BombFlash::Init(void*, long, Vec3*) {}
+// ---- end AUTO-STUB MERGE ----

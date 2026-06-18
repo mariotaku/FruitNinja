@@ -69,7 +69,7 @@ PowerUp::~PowerUp() {
 }
 
 // Step 3: Parse (binary @ 0x001194f0)
-void PowerUp::Parse(tinyxml2::XMLElement* elem) {
+void PowerUp::Parse(TiXmlElement* elem) {
     if (!elem) return;
 
     // "name" attr — sets m_Name and m_DisplayName (first char uppercased)
@@ -126,20 +126,20 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
     }
 
     // Iterate child elements
-    for (tinyxml2::XMLElement* child = elem->FirstChildElement();
-         child; child = child->NextSiblingElement()) {
-        const char* tag = child->Name();
+    for (TiXmlElement child = elem->FirstChildElement();
+         child; child = child.NextSiblingElement()) {
+        const char* tag = child.Name();
         if (!tag) continue;
 
         if (strcmp(tag, "purchase_info") == 0) {
             // Presence of <purchase_info> forces purchasable regardless of attr.
             m_bIsPurchasable = true;
             m_pPurchaseInfo = new PurchaseInfo();
-            m_pPurchaseInfo->Parse(child);
+            m_pPurchaseInfo->Parse(&child);
         } else if (strcmp(tag, "effect") == 0) {
             m_pScreenEffect = new ScreenEffect();
             m_pScreenEffect->m_pOwnerPowerUp = this;
-            m_pScreenEffect->Parse(child);
+            m_pScreenEffect->Parse(&child);
         } else {
             // Modifier factory — binary @ 0x00142388.
             // String-compare element name and new the matching modifier subclass,
@@ -163,7 +163,7 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
                 mod = new ExplodyFruitModifier();
             }
             if (mod) {
-                mod->Parse(child);
+                mod->Parse(&child);
                 AddModifier(mod);
             }
         }

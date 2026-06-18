@@ -119,23 +119,23 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
     }
 
     // <slash_power type="..."/> children
-    for (TiXmlElement* sp = xml->FirstChildElement("slash_power"); sp;
-         sp = sp->NextSiblingElement("slash_power")) {
-        const char* maskAttr = sp->Attribute("type");
+    for (TiXmlElement sp = xml->FirstChildElement("slash_power"); sp;
+         sp = sp.NextSiblingElement("slash_power")) {
+        const char* maskAttr = sp.Attribute("type");
         if (maskAttr) m_PowerMask |= ParseSlashPowerMask(maskAttr);
     }
 
     // <colour>...</colour> children — first pass count, then alloc, then parse
     int colourCount = 0;
-    for (TiXmlElement* c = xml->FirstChildElement("colour"); c;
-         c = c->NextSiblingElement("colour")) ++colourCount;
+    for (TiXmlElement c = xml->FirstChildElement("colour"); c;
+         c = c.NextSiblingElement("colour")) ++colourCount;
     if (colourCount > 0) {
         m_NumColours = colourCount;
         m_pColours = new Colour[colourCount + 2];
         int idx = 0;
-        for (TiXmlElement* c = xml->FirstChildElement("colour"); c;
-             c = c->NextSiblingElement("colour"), ++idx) {
-            ParseColour(&m_pColours[idx], c->GetText());
+        for (TiXmlElement c = xml->FirstChildElement("colour"); c;
+             c = c.NextSiblingElement("colour"), ++idx) {
+            ParseColour(&m_pColours[idx], c.GetText());
         }
     } else if (m_pTexture1 || m_pTexture2) {
         // Fallback: 1-element Colour::White array

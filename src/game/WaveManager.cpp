@@ -31,7 +31,7 @@
 // Forward-declare; defined in CoinChanceinator.cpp.
 // WaveStructs.h has the full COIN_CHANCEINATOR layout; CoinChanceinator.h
 // conflicts (empty struct re-definition). Include neither -- just declare.
-void ParseCoinChanceinator(COIN_CHANCEINATOR* pDst, tinyxml2::XMLElement* pElem);
+void ParseCoinChanceinator(COIN_CHANCEINATOR* pDst, TiXmlElement* pElem);
 
 // Analysed: 2026-04-30T00:00
 
@@ -222,7 +222,7 @@ void WaveManager::Init() {
                 el->QueryFloatAttribute("speedLoss",      &def.m_SpeedLoss);
                 el->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
             } else if (strcmp(elName, "coin_chances") == 0) {
-                ParseCoinChanceinator(&m_CoinChanceinator[mode], el);
+                { TiXmlElement ccElem(el); ParseCoinChanceinator(&m_CoinChanceinator[mode], &ccElem); }
             } else if (strcmp(elName, "OverideProbability") == 0) {
                 PROBABILITY_OVERIDE po;
                 const char* types = el->Attribute("types");
