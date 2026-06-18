@@ -280,15 +280,15 @@ int main(int argc, char* argv[]) {
     // Tracking fields on the WaveManager that drive the Arcade blitz state
     // machine -- expose via reflection-style direct access. WaveManager
     // member offsets/types are declared in the public header.
-    // field_0x23d: global blitz counter
-    // field_0x23e: phase counter
-    // field_0x240: gate timer
+    // m_BlitzSpawnCount: global blitz counter
+    // m_BlitzState: phase counter
+    // m_NextBlitzTime: gate timer
 
     for (int frame = 1; frame <= frameCount; ++frame) {
         // Snapshot blitz counters BEFORE tick to detect changes.
-        int blitzBefore = (int)wm->field_0x23d;
-        int phaseBefore = (int)wm->field_0x23e;
-        float gateBefore = wm->field_0x240;
+        int blitzBefore = (int)wm->m_BlitzSpawnCount;
+        int phaseBefore = (int)wm->m_BlitzState;
+        float gateBefore = wm->m_NextBlitzTime;
 
         h.RunHeadless(1);
 
@@ -301,9 +301,9 @@ int main(int argc, char* argv[]) {
         }
 
         // Blitz state-machine event log (Arcade-only state).
-        int blitzAfter = (int)wm->field_0x23d;
-        int phaseAfter = (int)wm->field_0x23e;
-        float gateAfter = wm->field_0x240;
+        int blitzAfter = (int)wm->m_BlitzSpawnCount;
+        int phaseAfter = (int)wm->m_BlitzState;
+        float gateAfter = wm->m_NextBlitzTime;
         if (blitzAfter != blitzBefore || phaseAfter != phaseBefore || gateAfter != gateBefore) {
             printf("[BLITZ @f=%d] counter %d->%d phase %d->%d gate %.2f->%.2f\n",
                    frame, blitzBefore, blitzAfter,

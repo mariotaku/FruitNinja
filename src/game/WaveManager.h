@@ -3,11 +3,11 @@
 
 // WaveManager — wave spawning subsystem.
 //
-// Full class at 0x0022ee80 (singleton). Binary function table and field
-// offsets are documented in docs/functions/wave.md, docs/systems/wave-system.md,
-// docs/structs/wave.md, docs/systems/wave-system-impl.md.
+// Binary class at 0x0022ee80 (singleton), 752 bytes (0x2f0).
+// Port extends beyond binary region with m_pWaveQue/m_pWaveQueItem.
 //
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-04-30T00:00 (updated 2026-06-18: corrected array offsets,
+// renamed fields to match binary, added missing tail fields).
 
 #include "math/Random.h"
 #include "game/WaveStructs.h"
@@ -104,96 +104,122 @@ public:
 
     // +0x84: per-mode dtInc (speed accumulator increment). Parsed from <defaults> "globalDtInc".
     // binary @ 0x00125ac4: speed = m_SpeedAccum + dt * m_DtIncPerMode[mode]
-    float m_DtIncPerMode[4];      // +0x84 (was +0x7c)
+    float m_DtIncPerMode[4];      // +0x84
     // +0x94: per-mode globalDtStart lower bound. Parsed from <defaults> "globalDtStart".
     // DIFFERS: original values unknown; using 1.0f per mode as placeholder.
-    float m_SpeedClampStart[4];   // +0x94 (was +0x8c)
+    // v1.6.1 WaveManager field @ 0x00125ac4
+    float m_SpeedClampStart[4];   // +0x94
     // +0xa4: per-mode speed upper bound. Parsed from <defaults> "globalDtMax".
     // DIFFERS: original values unknown; using 100.0f per mode as placeholder.
-    float m_SpeedClampMax[4];     // +0xa4 (was +0x9c)
+    // v1.6.1 WaveManager field @ 0x00125ac4
+    float m_SpeedClampMax[4];     // +0xa4
 
-    // +0xac: 4 vectors of WAVE_INFO* (one per game mode). Binary stride 0xc per mode.
-    std::vector<WAVE_INFO*> m_WaveInfo[4];      // +0xac
+    // +0xb4: 4 vectors of WAVE_INFO* (one per game mode). Binary stride 0xc per mode.
+    // Binary ctor @ 0x00123ef8: field at +0xb4.
+    // WAS WRONG comment: +0xac. Actual __bada__ offset: +0xb4.
+    std::vector<WAVE_INFO*> m_WaveInfo[4];      // +0xb4
 
-    // +0xdc: per-mode default wave parameters (64 bytes each).
-    DEFAULT_WAVE_INFO m_DefaultWaveInfo[4];     // +0xdc
+    // +0xe4: per-mode default wave parameters (64 bytes each).
+    // WAS WRONG comment: +0xdc. Actual __bada__ offset: +0xe4.
+    DEFAULT_WAVE_INFO m_DefaultWaveInfo[4];     // +0xe4
 
-    // +0x1dc: per-mode coin chance tables (8 bytes each).
-    COIN_CHANCEINATOR m_CoinChanceinator[4];    // +0x1dc
+    // +0x1e4: per-mode coin chance tables (8 bytes each).
+    // WAS WRONG comment: +0x1dc. Actual __bada__ offset: +0x1e4.
+    COIN_CHANCEINATOR m_CoinChanceinator[4];    // +0x1e4
 
-    // +0x1fc: per-mode probability override lists (12 bytes each).
-    std::vector<PROBABILITY_OVERIDE> m_ProbabilityOverride[4];  // +0x1fc
+    // +0x204: per-mode probability override lists (12 bytes each on __bada__).
+    // WAS WRONG comment: +0x1fc. Actual __bada__ offset: +0x204.
+    std::vector<PROBABILITY_OVERIDE> m_ProbabilityOverride[4];  // +0x204
 
-    // +0x22c: current wave pointer per player.
-    // Binary @ 0x0022ee80+0x22c: in the 32-bit binary, m_pCurrentWave[0] and
-    // m_WaveCount[0] occupy the SAME 4-byte slot (the binary re-uses the pointer
-    // slot as a sequential wave counter, then overwrites it with the selected
-    // WAVE_INFO* at the end of GetNextWave). On the 64-bit host a pointer is 8
-    // bytes and a 4-byte int cannot alias it correctly -- the union would corrupt
-    // m_pCurrentWave[0]'s high 4 bytes every time m_WaveCount[1] is written.
-    // DIFFERS: binary aliases m_pCurrentWave[2] and m_WaveCount[2] in one 8-byte
-    // slot (+0x22c). On 32-bit (binary ABI: ptr==int==4) the union is faithful and
-    // keeps the 736-byte layout. On the 64-bit host the union would overlap (ptr=8,
-    // int=4) and corrupt -- e6d26e6 crash -- so the host uses separate fields. The
-    // asm-verify cross-build (__bada__) is compile-only (never runs), so the union's
-    // aliasing semantics are irrelevant there; only the 736-byte layout must match.
+    // +0x234: Per-player aliased region.
+    // In the 32-bit binary, m_pCurrentWave[2] (8 bytes) at +0x234 is aliased
+    // with m_WaveCount[2]. On __bada__, both arrays occupy the same 8 bytes:
+    //   m_pCurrentWave[0] at +0x234 (pointer)
+    //   m_pCurrentWave[1] / m_WaveCount[0] at +0x238 (aliased)
+    //   m_WaveCount[1] at +0x23c (last 4 bytes of union)
+    // The floats at +0x23c and +0x240 are separate (not part of the union),
+    // but in the binary they alias m_WaveCount[1] / m_NextWaveDelay[0].
+    // On the 64-bit host a pointer is 8 bytes and a 4-byte int cannot alias
+    // it correctly -- the union would corrupt m_pCurrentWave[0]'s high 4 bytes
+    // every time m_WaveCount[1] is written. Host uses separate fields.
+    // ASM-verified: 2026-06-18 v1.6.1 WaveManager ctor @ 0x00123ef8
 #if defined(__bada__)
     union {
-        WAVE_INFO* m_pCurrentWave[2];   // +0x22c: P0 and P1 current wave pointers
-        int        m_WaveCount[2];      // aliased: wave-sequence counter per player
+        WAVE_INFO* m_pCurrentWave[2];   // +0x234 (P0), +0x238 (P1) — 8 bytes on __bada__
+        int        m_WaveCount[2];      // +0x238 (P0, aliases pCurrentWave[1]), +0x23c (P1)
     };
 #else
-    WAVE_INFO* m_pCurrentWave[2];  // +0x22c: P0 and P1 current wave pointers
-    int        m_WaveCount[2];     // host-only extra 8 bytes (past binary region, no union)
+    WAVE_INFO* m_pCurrentWave[2];       // host: 16 bytes (8 per ptr)
+    int        m_WaveCount[2];          // host: 8 bytes
 #endif
 
-    // +0x234..+0x2d3: binary unnamed region (160 bytes).
-    // Fields below are port-derived names for binary offsets within this range.
+    // +0x23c: P0 pre-spawn delay timer ("delay" XML attr).
+    // Binary @ 0x0012598c reads [+0x23c]; GetNextWave @ 0x001251ee writes [+0x23c].
+    // WAS field_0x234 (wrong offset in comment). Actual __bada__ offset: +0x23c.
+    // Binary aliases this slot with m_WaveCount[1] at +0x23c.
+    float m_NextWaveDelay_P0;           // +0x23c (was field_0x234)
 
-    // +0x234: P0 pre-spawn delay timer ("delay" XML attr).
-    // Binary @ 0x0012598c reads [+0x234]; GetNextWave @ 0x001251ee writes [+0x234].
-    float field_0x234;        // +0x234
+    // +0x240: P0 wave-end wait timer ("wait" XML attr).
+    // Binary @ 0x00125956 reads [+0x240]; GetNextWave @ 0x00125224 writes [+0x240].
+    // WAS field_0x238 (wrong offset in comment). Actual __bada__ offset: +0x240.
+    // Binary uses this as P1's m_NextWaveDelay[1] in multiplayer aliasing.
+    float m_NextWaveDelay_P1;           // +0x240 (was field_0x238)
 
-    // +0x238: P0 wave-end wait timer ("wait" XML attr).
-    // Binary @ 0x00125956 reads [+0x238]; GetNextWave @ 0x00125224 writes [+0x238].
-    // (Binary also uses +0x238 as P1 delay alias and +0x23c as P1 wait alias, but
-    //  SP always uses P0 only.)
-    float field_0x238;        // +0x238
+    // +0x244: wave-was-spawned flag (IsWaveProcessing reads this).
+    // WAS field_0x23c (wrong offset in comment). Actual __bada__ offset: +0x244.
+    uint8_t field_0x244;                // +0x244 (was field_0x23c)
+    // +0x245: blitz spawned-this-game counter (byte).
+    // v1.6.1 @ 0x00125be4 / 0x00124cf4
+    uint8_t m_BlitzSpawnCount;          // +0x245 (was field_0x23d)
+    // +0x246: blitz force-spawned counter (byte).
+    // v1.6.1 @ 0x00125be4 / 0x00124cf4
+    uint8_t m_BlitzState;              // +0x246 (was field_0x23e)
+    uint8_t _pad247;                    // +0x247 (was _pad23f)
 
-    // +0x23c: wave-was-spawned flag (IsWaveProcessing reads this).
-    uint8_t field_0x23c;      // +0x23c
-    // +0x23d: blitz spawned-this-game counter (byte).
-    uint8_t field_0x23d;      // +0x23d
-    // +0x23e: blitz force-spawned counter (byte).
-    uint8_t field_0x23e;      // +0x23e
-    uint8_t _pad23f;          // +0x23f
+    // +0x248: blitz spawn time (float).
+    // WAS field_0x240 (wrong offset in comment). Actual __bada__ offset: +0x248.
+    float m_NextBlitzTime;              // +0x248 (was field_0x240)
 
-    // +0x240: blitz spawn time (float).
-    float field_0x240;        // +0x240
-
-    // +0x244..+0x2c3: fruit type queue, P0 only, 32 ints (-1 = empty slot).
+    // +0x24c..+0x2cb: fruit type queue, P0 only, 32 ints (-1 = empty slot).
     // Binary @ 0x00124cf4/0x0016cd08: 128-byte (0x80) queue for P0.
-    int m_FruitQueue[32];     // +0x244
+    // WAS WRONG comment: +0x244. Actual __bada__ offset: +0x24c.
+    int m_FruitQueue[32];               // +0x24c
 
-    // +0x2c4: P0 fruit queue active entry count.
-    // +0x2c8: P1/secondary fruit queue active entry count (binary field_0x2c8).
-    // Binary Reset @ 0x00125be4 clears both (was noted "not in port struct" -- now named).
-    int m_FruitQueueSize[2];  // +0x2c4 (P0), +0x2c8 (P1)
+    // +0x2cc: max wave id for P0 (int).
+    // Binary: single int, NO aliasing with P1 count.
+    // WAS m_FruitQueueSize[0]. Actual __bada__ offset: +0x2cc.
+    // v1.6.1 WaveManager field @ 0x00125be4
+    int m_MaxWaveIdP0;                  // +0x2cc (was m_FruitQueueSize[0])
 
-    // +0x2cc: misc counter (binary unnamed; reset to 0 in Reset).
-    int field_0x2cc;          // +0x2cc
-    // +0x2d0: misc counter (binary unnamed; reset to 0 in Reset).
-    int field_0x2d0;          // +0x2d0
+    // +0x2d0: recent-fruit backtrack queue size per player [2].
+    // Binary: two int counters for P0 and P1 fruit history.
+    // WAS m_FruitQueueSize[1] at +0x2d0 and field_0x2cc at +0x2d4.
+    // v1.6.1 WaveManager Reset @ 0x00125be4
+    int m_RecentFruitCount[2];          // +0x2d0 ([0] was m_FruitQueueSize[1], [1] was field_0x2cc)
 
-    // +0x2d4: wave-step accumulator (fixed timestep, init 0.0f).
-    float field_0x2d4;        // +0x2d4
+    // +0x2d8: misc counter (binary unnamed; reset to 0 in Reset).
+    int field_0x2d8;                    // +0x2d8 (was field_0x2d0)
 
-    // Port specific: WaveQue state pointers — not in the binary WaveManager struct
-    // (binary survival/combo mode stores these differently). Declared after the binary
-    // layout so the static_assert below fires correctly for binary-identical offsets.
-    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=736.
-    WaveQue*     m_pWaveQue;      // port-only, beyond +0x2d8
-    WaveQueItem* m_pWaveQueItem;  // port-only
+    // +0x2dc: fixed-timestep accumulator (init 0.0f).
+    float m_StepAccumulator;            // +0x2dc (was field_0x2d4)
+
+    // +0x2e0: misc counter (int, NOT a pointer — port had m_pWaveQue here!).
+    // Binary unnamed field; reset to 0 in binary @ 0x00125be4.
+    int field_0x2e0;                    // +0x2e0 (NEW)
+
+    // +0x2e4: global probability override list (12 bytes on __bada__).
+    // Binary field at +0x2e4 (12 bytes = std::vector<void*> on 32-bit).
+    // DIFFERS: port uses void* because element type is not yet RE'd.
+    // v1.6.1 WaveManager field @ 0x00125be4
+    std::vector<void*> m_GlobalProbabilityOverride;  // +0x2e4 (NEW)
+
+    // --- Binary region END: +0x2f0 (752 bytes) --------------------------
+
+    // Port extensions (beyond binary region):
+    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=752.
+    // Moved from +0x2e0 (which was a bug — that's binary field_0x2e0).
+    WaveQue*     m_pWaveQue;            // port-only
+    WaveQueItem* m_pWaveQueItem;        // port-only
 
     // --- Construction / singleton --------------------------------------
 
@@ -352,13 +378,13 @@ private:
     static SpawnPlacement ParsePlacement(const char* side);
 };
 
-// Binary WaveManager is 736 bytes (0x2e0). Port adds m_pWaveQue/m_pWaveQueItem
-// beyond that, so the full port sizeof is 744. The assert below checks that
-// m_pWaveQue sits exactly at offset 736 (= binary boundary), verifying all
-// binary-named members landed at the right offsets.
+// Binary WaveManager is 752 bytes (0x2f0). Port adds m_pWaveQue/m_pWaveQueItem
+// beyond that. The assert below checks that m_pWaveQue sits exactly at offset
+// 752 (= binary boundary), verifying all binary-named members landed at the
+// right offsets. v1.6.1 binary struct @ 0x00123ef8 ctor + GetNextWave/SetCurrentWave
 #ifdef __bada__
-static_assert(offsetof(WaveManager, m_pWaveQue) == 736,
-              "WaveManager binary-region layout mismatch (expect 736 bytes before port extensions)");
+static_assert(offsetof(WaveManager, m_pWaveQue) == 752,
+              "WaveManager binary-region layout mismatch (expect 752 bytes before port extensions)");
 #endif
 
 #endif  // FN_WAVE_MANAGER_H
