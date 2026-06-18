@@ -142,9 +142,9 @@ public:
     // Binary signature: (int x, int y, int w, int h).
     uint32_t GetTouchInReigion(int x, int y, int w, int h);
 
-    // Binary @ 0x00195764 (v1.5.1) / 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks(InputDevice* dev).
-    // 8x: emit AxisEvent for X/Y, ButtonPressed for press/held/release/up.
-    // Action codes: 0x89+i (button), 0x99+i (X axis), 0xa9+i (Y axis), i in 0..7.
+    // Binary @ 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks(InputDevice* dev).
+    // Pointer-walks states1, emits AxisEvent/ButtonPressed per slot.
+    // Action codes 0x89..0x90 (button), 0x99..0xa0 (X axis), 0xa9..0xb0 (Y axis).
     // Wired via InputDeviceBada::Update -> Touch::GetInstance().SendIndividualTouchCallbacks(this).
     void SendIndividualTouchCallbacks(InputDevice* dev);
 

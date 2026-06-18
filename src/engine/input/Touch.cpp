@@ -248,39 +248,41 @@ uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) {
     return 0;
 }
 
-// Binary @ 0x00195764 (v1.5.1) / 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks.
-// Per slot i in 0..7 (action code = 0x89+i, X-axis = 0x99+i, Y-axis = 0xa9+i):
-//   if phase < 1 (active):
-//     AxisEvent(0x99+i, 0x20, currX, currX-prevX, 0, 0)
-//     AxisEvent(0xa9+i, 0x20, currY, currY-prevY, 0, 0)
-//     if phase == -1: ButtonPressed(0x89+i, 1, 1.0f, 0, 0)  // press-edge
-//     ButtonPressed(0x89+i, 2, 1.0f, 0, 0)                  // held
-//   else (inactive):
-//     if extId != 0 && touchId != 0: ButtonPressed(0x89+i, 4, 1.0f, 0, 0)  // release
-//     ButtonPressed(0x89+i, 8, 1.0f, 0, 0)                  // up
-// Arg order matches binary signatures @ 0x0027582c (AxisEvent) / 0x00275864 (ButtonPressed).
+// Binary @ 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks.
+// Pointer-walks states1, codes 0x89..0x90 via running counter.
+// Active (phase<1):
+//   AxisEvent(code+0x10, 0x20, currX,  deltaX,   0, 0)
+//   AxisEvent(code+0x20, 0x20, currY,  deltaY,   0, 0)
+//   if phase==-1: ButtonPressed(code, 1, 1.0f, 0, 0)  // press-edge
+//   mask=2
+// Inactive (phase>=1):
+//   if extId!=0 && touchId!=0: ButtonPressed(code, 4, 1.0f, 0, 0)  // release
+//   mask=8
+// Post-if: ButtonPressed(code, mask, 1.0f, 0, 0)   // held or up
 void Touch::SendIndividualTouchCallbacks(InputDevice* dev) {
-    for (int i = 0; i < MAX_SLOTS; i++) {
-        const TouchState& s = states1[i];
-        unsigned long code = (unsigned long)(0x89 + i);
+    TouchState* s = states1;
+    unsigned long code = 0x89;
+    do {
         unsigned long mask;
-        if (s.phase < 1) {
+        if (s->phase < 1) {
             dev->AxisEvent((long)(code + 0x10), 0x20,
-                           (float)s.currX, (float)(s.currX - s.prevX), 0, 0);
+                           (float)s->currX, (float)(s->currX - s->prevX), 0, 0);
             dev->AxisEvent((long)(code + 0x20), 0x20,
-                           (float)s.currY, (float)(s.currY - s.prevY), 0, 0);
-            if (s.phase == -1) {
+                           (float)s->currY, (float)(s->currY - s->prevY), 0, 0);
+            if (s->phase == -1) {
                 dev->ButtonPressed(code, 1, 1.0f, 0, 0);
             }
             mask = 2;
         } else {
-            if (s.extId != 0 && s.touchId != 0) {
+            if (s->extId != 0 && s->touchId != 0) {
                 dev->ButtonPressed(code, 4, 1.0f, 0, 0);
             }
             mask = 8;
         }
         dev->ButtonPressed(code, mask, 1.0f, 0, 0);
-    }
+        s++;
+        code++;
+    } while (code != 0x91);
 }
 
 // Tier A slot-returning region scan. Mirrors binary's free function
