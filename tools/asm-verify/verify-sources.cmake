@@ -1,0 +1,153 @@
+# Shared source list for asm-verify cross-build.
+# Included by tools/asm-verify/cross-build/CMakeLists.txt.
+#
+# Only files known to cross-compile under Sourcery 2010q1 (GCC 4.4.1,
+# arm-none-eabi) are listed here. When a new port file is ready for
+# verification, add it to this list.
+#
+# Excluded by convention:
+#   *SDL.cpp, *Posix.cpp, *Win32.cpp — platform glue (no binary counterpart)
+#   FreeType/TTF files — port-only additions
+#   DebugFlags.cpp — guarded by #ifndef __bada__
+#
+# This file is the single source of truth; the old duplicated list in
+# cross-build/CMakeLists.txt has been removed.
+
+set(VERIFY_SOURCES
+    "${_ASM_VERIFY}/cross-build/demos/gameover_demo.cpp"
+
+    # Top-level
+    "${_PROJECT_ROOT}/src/Game.cpp"
+
+    # Engine: asset / audio / collision / compression / core / input /
+    #         math / network / particle / render / util
+    "${_PROJECT_ROOT}/src/engine/MenuBackground.cpp"
+    "${_PROJECT_ROOT}/src/engine/Renderer.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/AnimationState.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/File.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/FileManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/IFile.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/IFileSystem.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/IFile_Direct.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Mesh.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/MeshManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Model.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Effect.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/ResourceLoader.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Skeleton.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Texture.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/TextureManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/audio/GameSound.cpp"
+    "${_PROJECT_ROOT}/src/engine/audio/MortarSound.cpp"
+    "${_PROJECT_ROOT}/src/engine/collision/Col.cpp"
+    "${_PROJECT_ROOT}/src/engine/collision/ColAABB.cpp"
+    "${_PROJECT_ROOT}/src/engine/collision/ColLine.cpp"
+    "${_PROJECT_ROOT}/src/engine/collision/ColSphere.cpp"
+    "${_PROJECT_ROOT}/src/engine/compression/LZ8.cpp"
+    "${_PROJECT_ROOT}/src/engine/core/MortarGame.cpp"
+    "${_PROJECT_ROOT}/src/engine/core/SystemManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/input/InputDeviceBada.cpp"
+    "${_PROJECT_ROOT}/src/engine/input/InputManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/input/Touch.cpp"
+    "${_PROJECT_ROOT}/src/engine/math/Math.cpp"
+    "${_PROJECT_ROOT}/src/engine/math/MathUtil.cpp"
+    "${_PROJECT_ROOT}/src/engine/math/Random.cpp"
+    "${_PROJECT_ROOT}/src/engine/network/NetworkManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/particle/PSPParticleManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/BakedString.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/DisplayManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/Font.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/MatrixManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/MortarCamera.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/Utf8StringIterator.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/StringTable.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/StringHash.cpp"
+
+    # Entities
+    "${_PROJECT_ROOT}/src/entities/ActorManager.cpp"
+    "${_PROJECT_ROOT}/src/entities/Bomb.cpp"
+    "${_PROJECT_ROOT}/src/entities/BombBlast.cpp"
+    "${_PROJECT_ROOT}/src/entities/BombFlash.cpp"
+    "${_PROJECT_ROOT}/src/entities/Coin.cpp"
+    "${_PROJECT_ROOT}/src/entities/Entity.cpp"
+    "${_PROJECT_ROOT}/src/entities/EntityFactory.cpp"
+    "${_PROJECT_ROOT}/src/entities/Fruit.cpp"
+    "${_PROJECT_ROOT}/src/entities/FruitInfo.cpp"
+    "${_PROJECT_ROOT}/src/entities/SlashEntity.cpp"
+    "${_PROJECT_ROOT}/src/entities/SplatEntity.cpp"
+
+    # Game
+    "${_PROJECT_ROOT}/src/game/AchievementManager.cpp"
+    "${_PROJECT_ROOT}/src/game/BombHit.cpp"
+    "${_PROJECT_ROOT}/src/game/Bonus.cpp"
+    "${_PROJECT_ROOT}/src/game/BonusManager.cpp"
+    "${_PROJECT_ROOT}/src/game/FrontendTask.cpp"
+    "${_PROJECT_ROOT}/src/game/FruitCamera.cpp"
+    "${_PROJECT_ROOT}/src/game/FruitSaveData.cpp"
+    "${_PROJECT_ROOT}/src/game/GameInit.cpp"
+    "${_PROJECT_ROOT}/src/game/GameInitialise.cpp"
+    "${_PROJECT_ROOT}/src/game/GameOver.cpp"
+    "${_PROJECT_ROOT}/src/game/GameTaskInput.cpp"
+    "${_PROJECT_ROOT}/src/game/GameTaskState.cpp"
+    "${_PROJECT_ROOT}/src/game/ItemInfo.cpp"
+    "${_PROJECT_ROOT}/src/game/ItemManager.cpp"
+    "${_PROJECT_ROOT}/src/game/PowerUp.cpp"
+    "${_PROJECT_ROOT}/src/game/PowerUpManager.cpp"
+    "${_PROJECT_ROOT}/src/game/PreloadSounds.cpp"
+    "${_PROJECT_ROOT}/src/game/ScoreDelegate.cpp"
+    "${_PROJECT_ROOT}/src/game/ScoreModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/ScoreState.cpp"
+    "${_PROJECT_ROOT}/src/game/ScreenEffect.cpp"
+    "${_PROJECT_ROOT}/src/game/SetupGameWork.cpp"
+    "${_PROJECT_ROOT}/src/game/SlashModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/SpecificOrder.cpp"
+    "${_PROJECT_ROOT}/src/game/SplashTask.cpp"
+    "${_PROJECT_ROOT}/src/game/StartupEffects.cpp"
+    "${_PROJECT_ROOT}/src/game/TimeModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/UpdateMusic.cpp"
+    "${_PROJECT_ROOT}/src/game/WaveManager.cpp"
+    "${_PROJECT_ROOT}/src/game/WaveModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/WaveSyncPacket.cpp"
+
+    # HUD
+    "${_PROJECT_ROOT}/src/hud/CheckBox.cpp"
+    "${_PROJECT_ROOT}/src/hud/CoinCounter.cpp"
+    "${_PROJECT_ROOT}/src/hud/ComboControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/FruitFactControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/HUD.cpp"
+    "${_PROJECT_ROOT}/src/hud/HUDControl3d.cpp"
+    "${_PROJECT_ROOT}/src/hud/MenuButton.cpp"
+    "${_PROJECT_ROOT}/src/hud/MissControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/NotificationControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/ProgressionTimerControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/ScoreControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/ScreenFadeControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/ScrollingMenu.cpp"
+    "${_PROJECT_ROOT}/src/hud/ScrollingMenuItem.cpp"
+    "${_PROJECT_ROOT}/src/hud/ShopListItem.cpp"
+    "${_PROJECT_ROOT}/src/hud/SliceEffect.cpp"
+    "${_PROJECT_ROOT}/src/hud/SliderControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/SpeedControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/TimeControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/TutorialControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/VerticalScroller.cpp"
+
+    # Screens
+    "${_PROJECT_ROOT}/src/screens/AboutScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/BaseScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/BonusScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/DojoScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/GameModeScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/GameOverScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/MainScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/PauseScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/PowerUpShop.cpp"
+    "${_PROJECT_ROOT}/src/screens/ScreenButton.cpp"
+    "${_PROJECT_ROOT}/src/screens/ShopScreen.cpp"
+
+    # Debug + platform-portable
+    "${_PROJECT_ROOT}/src/debug/CrashHandler.cpp"
+    "${_PROJECT_ROOT}/src/platform/InputManager.cpp"
+)

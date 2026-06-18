@@ -247,27 +247,13 @@ endif()
 
 else()
 # FN_ASM_VERIFY=ON: stub INTERFACE targets. Cross-headers provide replacement
-# headers; no SDL2/GL/FreeType libraries are linked.
+# headers; no SDL2/GL/FreeType libraries are linked. tinyxml2 headers are
+# copied by verify.sh from the host build into build/_deps/tinyxml2-src.
 foreach(_tgt SDL2::SDL2 SDL2::SDL2main)
     if(NOT TARGET ${_tgt})
         add_library(${_tgt} INTERFACE IMPORTED)
     endif()
 endforeach()
-# tinyxml2: fetch headers only (no .cpp compilation for verify).
-FetchContent_Declare(
-    tinyxml2
-    GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
-    GIT_TAG        10.0.0
-)
-FetchContent_GetProperties(tinyxml2)
-if(NOT tinyxml2_POPULATED)
-    FetchContent_Populate(tinyxml2)
-endif()
-if(NOT TARGET tinyxml2::tinyxml2)
-    add_library(tinyxml2::tinyxml2 INTERFACE IMPORTED)
-    set_target_properties(tinyxml2::tinyxml2 PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${tinyxml2_SOURCE_DIR}")
-endif()
 if(NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype INTERFACE IMPORTED)
 endif()
@@ -288,49 +274,28 @@ else()
     file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
 endif()
 
-if(FN_ASM_VERIFY)
-    add_library(fruit-ninja-game OBJECT src/Game.cpp)
-else()
+if(NOT FN_ASM_VERIFY)
     add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
-endif()
-target_include_directories(fruit-ninja-game PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
-if(FN_ASM_VERIFY)
-    target_include_directories(fruit-ninja-game BEFORE PRIVATE
-        ${FN_ASM_VERIFY_TOOLS}/cross-headers)
+    target_include_directories(fruit-ninja-game PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_BINARY_DIR}
+    )
 endif()
 
 if(NOT FN_ASM_VERIFY)
     configure_file(src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY)
-else()
-    target_compile_definitions(fruit-ninja-game PRIVATE FN_DATA_DIR="/FruitNinjaBada/Data")
 endif()
 
 # --- Subsystems ---
-add_subdirectory(src/engine)
-add_subdirectory(src/hud)
-add_subdirectory(src/screens)
-add_subdirectory(src/platform)
-add_subdirectory(src/entities)
-add_subdirectory(src/game)
-add_subdirectory(src/debug)
+if(NOT FN_ASM_VERIFY)
+    add_subdirectory(src/engine)
+    add_subdirectory(src/hud)
+    add_subdirectory(src/screens)
+    add_subdirectory(src/platform)
+    add_subdirectory(src/entities)
+    add_subdirectory(src/game)
+    add_subdirectory(src/debug)
 
-if(FN_ASM_VERIFY)
-    # ASM verify: no linking. Each subsystem's OBJECT library produces .o
-    # files independently; asm-verify.py collects from all output dirs.
-    # Force-recompile key TUs on every build (matching old cross-build).
-    add_custom_target(force_struct_recompile ALL
-        COMMAND "${CMAKE_COMMAND}" -E touch
-            "${CMAKE_CURRENT_LIST_DIR}/src/game/PowerUp.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/src/game/WaveManager.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/src/game/ScoreModifier.cpp"
-        COMMENT "Touching struct-dep TUs to ensure recompile after header edits"
-    )
-    add_dependencies(fruit-ninja-game force_struct_recompile)
-    add_dependencies(mortar_engine force_struct_recompile)
-else()
     target_link_libraries(fruit-ninja-game PUBLIC
         SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
     )
