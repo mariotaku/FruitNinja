@@ -52,8 +52,6 @@
 //
 
 #include "BaseScreen.h"
-#include "asset/Texture.h"
-#include "util/SmartPtr.h"
 #include <cstdint>
 
 class MenuButton;
@@ -140,27 +138,11 @@ private:
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     // Binary accesses Game via GOT; port stores a reference here.
     Game& game;
-    // Button-created latch (port-only guard; binary doesn't need it due to state gating).
-    bool m_bButtonsCreated;
     // One-shot latch for SetupLevel call (port-only idempotency guard).
     bool m_bSetupLevelFired;
     // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
     MenuButton* m_pOnlineMpButton;
 #endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-
-    // Static textures (binary: module-level globals, loaded in LoadContent)
-    static Mortar::SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
-    static Mortar::SmartPtr<Mortar::Texture> s_TexModeSelect;   // mode_select.tex: borders
-    static Mortar::SmartPtr<Mortar::Texture> s_TexClassic;      // classic.tex: Classic button panel
-    static Mortar::SmartPtr<Mortar::Texture> s_TexMode2;        // mode_2.tex: Zen button panel
-    static Mortar::SmartPtr<Mortar::Texture> s_TexArcadeMode;   // arcade_mode.tex: Arcade button panel
-    static Mortar::SmartPtr<Mortar::Texture> s_TexComingSoon;   // coming_soon.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexZenSign;      // zen_sign.tex: connect animation
-    // Port specific: binary reads back-button texture from Game+0x17c
-    // (a global SmartPtr — back_icon.tex, matching DojoScreen's back button
-    // which reads the same slot). Until we mirror that Game field, load it
-    // here so the back button has the correct back-arrow visual.
-    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;     // back_icon.tex: back button (btn 1)
 
     void CreateControls();
     void RemoveButtons();

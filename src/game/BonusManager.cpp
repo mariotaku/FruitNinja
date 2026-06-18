@@ -6,6 +6,7 @@
 #include "FruitSaveData.h"
 #include "Game.h"
 #include "engine/asset/TextureManager.h"
+#include "engine/math/Random.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/PathCI.h"
 #include "screens/BonusScreen.h"
@@ -14,13 +15,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <algorithm>
 
 using Mortar::TextureManager;
-
-static bool BonusTierDescending(const Bonus* a, const Bonus* b) {
-    return a->m_Tier > b->m_Tier;
-}
 
 // ---------------------------------------------------------------------------
 // Singleton

@@ -370,29 +370,29 @@ void PowerUpManager::ClearScreenEffects() {
     m_ActiveScreenEffects.clear();
 }
 
-// @ 0x00117df8
+// @ 0x001403a0 (v1.6.1) — save active power-up state to XML
 void PowerUpManager::SaveActivePowerUps(TiXmlElement* parent) {
     for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {
         PowerUp* p = *it;
-        tinyxml2::XMLElement* el = parent->GetDocument()->NewElement("active");
-        el->SetAttribute("name",        p->m_Name);
-        el->SetAttribute("currentTime", (double)p->m_LongestRemaining);
-        el->SetAttribute("totalTime",   (double)p->m_TotalTime);
-        el->SetAttribute("onScreenAmt", (double)p->m_BarRamp);
+        tinyxml2::XMLElement* el = parent->GetDocument()->NewElement("power");
+        el->SetAttribute("name",         p->m_Name);
+        el->SetAttribute("time",         (double)p->m_LongestRemaining);
+        el->SetAttribute("totalTime",    (double)p->m_TotalTime);
+        el->SetAttribute("osa",          (double)p->m_BarRamp);
         if (p->m_DeferredPoints >= 0) {
-            el->SetAttribute("score",   (double)p->m_DeferredPoints);
+            el->SetAttribute("deferedPoints", (double)p->m_DeferredPoints);
         }
         parent->LinkEndChild(el);
     }
 }
 
-// @ 0x001199d4
+// @ 0x00142c44 (v1.6.1) — restore active power-up state from XML
 void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
-    for (TiXmlElement el = parent->FirstChildElement("active");
-         el; el = el.NextSiblingElement("active")) {
+    for (TiXmlElement el = parent->FirstChildElement("power");
+         el; el = el.NextSiblingElement("power")) {
         float curTime = 0.0f;
-        el.QueryFloatAttribute("currentTime", &curTime);
+        el.QueryFloatAttribute("time", &curTime);
         const char* nameStr = el.Attribute("name");
         if (!nameStr) continue;
         uint32_t hash = StringHash(nameStr);
@@ -416,13 +416,13 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         if (!p) continue;
         p->SetCurrentTime(curTime);
         float tmp = curTime;
-        el.QueryFloatAttribute("totalTime",   &tmp); p->SetTotalTime(tmp);
+        el.QueryFloatAttribute("totalTime",    &tmp); p->SetTotalTime(tmp);
         tmp = curTime;
-        el.QueryFloatAttribute("onScreenAmt", &tmp); p->SetOnScreenAmt(tmp);
-        int score = -1;
-        el.QueryIntAttribute("score", &score);
-        if (score >= 0) {
-            FN::AddToCurrentScore(score, 0, false, false);
+        el.QueryFloatAttribute("osa",          &tmp); p->SetOnScreenAmt(tmp);
+        int deferedPoints = -1;
+        el.QueryIntAttribute("deferedPoints", &deferedPoints);
+        if (deferedPoints >= 0) {
+            FN::AddToCurrentScore(deferedPoints, 0, false, false);
         }
     }
 }
