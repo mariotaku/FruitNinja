@@ -2192,12 +2192,13 @@ void Fruit::Disable(Fruit* f) {
     f->m_bNoPowerUp = 1;
 }
 
-// Matches Fruit::DrawShadows (0x00178f28) + AddShadow (0x00175ea0).
+// Matches Fruit::DrawShadows (0x001dea40) + AddShadow (0x001dbbe8).
 // Texture: fruit_shadow.tex (loaded by FruitInfo_Load step 0).
-// Geometry: 1 fade-out quad while spawning, 2 half-quads when active.
-// Buffer: 64 fruits * 3 quads max * 6 verts = 1152 verts (binary uses 18432 stack).
-static const int SHADOW_MAX_FRUITS = 64;
-static QUADCUSTOMVERTEX s_ShadowVerts[SHADOW_MAX_FRUITS * 3 * 6];
+// Geometry: up to 3 quads per fruit (1 spawn-fade + 2 half-shadows when active).
+// DrawTriStrip with 6*N-1 verts: each quad is 6 vertices (4 distinct + 2 degenerate padding).
+// Strip draws 2 triangles per quad (indices 0..3) then the padding (v4=v3, v5=v2)
+// creates degenerate triangles separating adjacent quads.
+static QUADCUSTOMVERTEX s_ShadowVerts[1152];   // 64 fruits * 3 quads * 6 verts
 
 void Fruit::DrawShadows() {
     Mortar::Texture* shadowTex = FruitInfo_GetShadowTex();
@@ -2207,12 +2208,16 @@ void Fruit::DrawShadows() {
     int count = 0;
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (!am) return;
     std::list<Mortar::Entity*>::iterator it;
     Mortar::Entity* e = am->GetEntityFirst(0, it);
-    while (e && count + 3 <= SHADOW_MAX_FRUITS * 3) {
+    while (e) {
         Fruit* f = static_cast<Fruit*>(e);
-        if (f->scale.x > 0.0f) f->AddShadow(&w, &count);
+        // Binary @ 0x001deaa4: gate on scale.x > 0 AND (flags & 0x01) == 0
+        if (f->scale.x > 0.0f && (f->flags & ENT_INACTIVE) == 0) {
+            f->AddShadow(&w, &count);
+        }
+        // Binary calls GetInstance before GetEntityNext (loop @ 0x001dead8)
+        am = Mortar::ActorManager::GetInstance();
         e = am->GetEntityNext(0, it);
     }
     if (count == 0) return;
@@ -2222,12 +2227,13 @@ void Fruit::DrawShadows() {
     mm.UploadModelViewOnly();
 
     shadowTex->Set();
-    Mortar::Mesh::DrawTriList(s_ShadowVerts, count * 6, false, NULL);
+    // Binary @ 0x001deb64: DrawTriStrip(verts, count*6-1, 0, false, null, texPage)
+    Mortar::Mesh::DrawTriStrip(s_ShadowVerts, count * 6 - 1, false, NULL);
     shadowTex->UnSet();
 }
 
 // Writes up to 3 quads (shadow geometry) for one fruit into the shared buffer.
-// Matches Fruit::AddShadow @ 0x00175ea0.
+// Matches Fruit::AddShadow @ 0x001dbbe8.
 //
 // Binary DAT constants:
 //   DAT_00176164 = 230.0f  (spawn-fade alpha mult)
@@ -2239,10 +2245,12 @@ void Fruit::DrawShadows() {
 //   DAT_00176180 = Vec3(0,0,1)  (slice-plane axis BSS singleton, never reassigned)
 //   DAT_00175e9c = -5000.0f    (shadow Z, written by AddQuad)
 static void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h, Colour col) {
-    // Corner layout:
-    //   v0: (cx-w, cy-h)    v3: (cx+w, cy-h)
-    //   v1: (cx-w, cy+h)    v4: (cx-w, cy+h)
-    //   v2: (cx+w, cy-h)    v5: (cx+w, cy+h)
+    // Strip-compatible vertex order: TL, BL, BR, TR, TR, BR
+    //   v0: (cx-w, cy-h)    v3: (cx+w, cy-h)  -- TR (also degenerate padding v4)
+    //   v1: (cx-w, cy+h)    v5: (cx+w, cy+h)  -- BR (also degenerate padding v5)
+    //   v2: (cx+w, cy+h)    -- BR
+    // First 4 distinct vertices (v0..v3) produce 2 valid triangles covering the quad.
+    // v4 (same as v3) and v5 (same as v2) are degenerate to separate adjacent quads.
     // All verts: z = -5000 (DAT_00175e9c), normal (0,0,1), u in {0,1}, v in {0,1}.
     const float z    = -5000.0f;   // DAT_00175e9c
     const uint32_t c = ((uint32_t)col.a << 24)
@@ -2254,9 +2262,9 @@ static void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h
 
     v[0] = { cx - w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 0.0f };
     v[1] = { cx - w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 1.0f };
-    v[2] = { cx + w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 0.0f };
+    v[2] = { cx + w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 1.0f };
     v[3] = { cx + w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 0.0f };
-    v[4] = { cx - w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 1.0f };
+    v[4] = { cx + w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 0.0f };
     v[5] = { cx + w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 1.0f };
 
     *out += 6;
