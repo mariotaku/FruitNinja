@@ -139,9 +139,6 @@ public:
     static void LoadContent();
     static void UnLoadContent();
 
-    // Default ctor (binary shape)
-    GameOverScreen();
-
     // Parameterised ctor @ 0x00142900:
     //   param2/param3 are state/timer overrides for fast-skip path, NOT endReason/endScore.
     //   Score is read via GetCurrentScore(0) in state 6.

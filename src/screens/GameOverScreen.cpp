@@ -202,7 +202,8 @@ static void DoQuitToMenu() {
 // "arcade_time_up.tex" (offset +7); "leaderboards.tex" is a substring
 // pointer of "gc_leaderboards.tex" (offset +3).
 void GameOverScreen::LoadContent() {
-    if (g_LoadContentGuard) return;  // binary: cxa-guard on a static flag
+    if (g_LoadContentGuard) return;
+    char acStack_bc[128];  // function-scope buffer, matching binary's stack frame
     g_ArcadeTimeUpTitleTex   = TextureManager::LoadLocalisedTexture("arcade_time_up.tex");
     g_GameOverTitleTex       = TextureManager::LoadLocalisedTexture("gameover.tex");
     g_TimeUpTitleTex         = TextureManager::LoadLocalisedTexture("time_up.tex");
@@ -211,15 +212,17 @@ void GameOverScreen::LoadContent() {
     // Array-of-2 at GOT+0x740c -- stored adjacently.
     g_LeaderboardsTexPair[0] = TextureManager::LoadLocalisedTexture("leaderboards.tex");
     g_LeaderboardsTexPair[1] = TextureManager::LoadLocalisedTexture("gc_leaderboards.tex");
-    for (int i = 0; i < 3; ++i) {
-        char buf[128];
-        // Binary loop order: sensei_head FIRST (slot 0x7160), then
-        // sensei_body (slot 0x7abc). Port keeps the same order so the
-        // GOT slot order in asm-verify matches.
-        snprintf(buf, sizeof(buf), "sensei_head_0%d.tex", i + 1);
-        g_ExpressionTexArr[i] = TextureManager::LoadLocalisedTexture(buf);
-        snprintf(buf, sizeof(buf), "sensei_body_0%d.tex", i + 1);
-        g_BgPatternTexArr[i]  = TextureManager::LoadLocalisedTexture(buf);
+    {
+        // Binary uses iVar2=0 do{...}while(iVar1!=3) with pre-declared counter.
+        int i = 0;
+        do {
+            int iVar1 = i + 1;
+            snprintf(acStack_bc, 0x80, "sensei_head_0%d.tex", iVar1);
+            g_ExpressionTexArr[i] = TextureManager::LoadLocalisedTexture(acStack_bc);
+            snprintf(acStack_bc, 0x80, "sensei_body_0%d.tex", iVar1);
+            g_BgPatternTexArr[i]  = TextureManager::LoadLocalisedTexture(acStack_bc);
+            i = iVar1;
+        } while (i != 3);
     }
     g_LoadContentGuard = true;
 }
@@ -263,48 +266,6 @@ void GameOverScreen::UnLoadContent() {
     NullTex(&s_DeadTex_7af8);
     NullTex(&s_DeadTex_75f4);
     NullTex(&s_DeadTex_7a88);
-}
-
-// ---------------------------------------------------------------------------
-// Default ctor (binary shape)
-// ---------------------------------------------------------------------------
-
-GameOverScreen::GameOverScreen()
-    : HUDControl3d(),
-      field_0x7c(0.0f),
-      m_State(0),
-      m_Timer(0.0f),
-      m_TitleSizeX(0.0f),
-      m_TitleSizeY(0.0f),
-      m_TitleSizeZ(0.0f),
-      field_0x94(0),
-      m_pRetryBtn(nullptr),
-      m_pSlot9c(nullptr),
-      field_0xa0(0),
-      m_pQuitBtn(nullptr),
-      m_pSlotA8(nullptr),
-      m_AnimCounter(0),
-      m_OffsetPosX(0.0f),
-      m_OffsetPosY(0.0f),
-      m_OffsetPosZ(0.0f),
-      m_pFruitFact(nullptr),
-      m_pSlotC0(nullptr),
-      m_pBonusScreen(nullptr),
-      m_pNoticeCtrl(nullptr),
-      m_PostOk(0),
-      m_PostInProgress(0),
-      m_ProgressCounter(0),
-      field_0x118(0),
-      m_MostFruitCount(-1),
-      m_bScoreSubmitted(0),
-      m_ExpressionIdx(0),
-      m_BgPatternIdx(0),
-      m_TabIndex(0),
-      m_StarCount(0),
-      m_bIsClassic(0),
-      m_FruitFactAlpha(0.0f)
-{
-    memset(m_CoinsEarnedLabel, 0, sizeof(m_CoinsEarnedLabel));
 }
 
 // ---------------------------------------------------------------------------
