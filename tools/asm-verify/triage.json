@@ -6272,18 +6272,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable10LoadHeaderEPKc": {
-    "decided_at": "2026-06-17T16:44Z",
+    "decided_at": "2026-06-18T00:46Z",
     "max_score": 2500,
-    "reason": "Platform substitution (fopen/fread vs Mortar::File). Extra size/count guards are defensive additions. Functionally correct — ACCEPT-cosmetic. [re-triaged 2026-06-17T16:44Z]",
-    "score": 13005,
-    "verdict": "ACCEPT-cosmetic"
+    "reason": "Rewrite uses Mortar::File per binary pattern (single alloc, bulk read, in-place fixup). Score increased 13005->17990 because port File implementation diverges from binary Bada File at instruction level (virtual dispatch, IFile delegation, malloc vs op_new). Architectural match is correct; ASM convergence blocked on faithful File subsystem port. [re-triaged 2026-06-18T00:46Z]",
+    "score": 17990,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable12LoadLanguageEPKc": {
-    "decided_at": "2026-06-17T16:44Z",
+    "decided_at": "2026-06-18T00:46Z",
     "max_score": 2500,
-    "reason": "Platform substitution (fopen/fread vs Mortar::File). Single-allocation pattern differs from binary but functionally equivalent. ACCEPT-cosmetic. [re-triaged 2026-06-17T16:44Z]",
-    "score": 11042,
-    "verdict": "ACCEPT-cosmetic"
+    "reason": "Rewrite uses Mortar::File per binary pattern. Score 11042->10350 (slight improvement). Remaining excess is File::Read/Open call overhead vs binary direct Bada IFile calls. Blocked on faithful File subsystem port. [re-triaged 2026-06-18T00:46Z]",
+    "score": 10350,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTableC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
