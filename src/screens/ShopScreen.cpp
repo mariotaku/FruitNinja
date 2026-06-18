@@ -462,8 +462,10 @@ void ShopScreen::ShrinkBuyButton() {
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
+    #endif
     fruit->m_bSliced           = true;  // *(fruit+0xb8) = 1
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
     m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
@@ -672,9 +674,11 @@ void ShopScreen::QuitShopCallback() {
 //     ItemManager::SetEquippedItem; play equip SFX
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_DEBUG("Shop", "EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p",
               (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
               m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
+    #endif
     if (!m_pEquipButton) return;
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
@@ -712,13 +716,17 @@ void ShopScreen::EquipCallback() {
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
+        #ifndef FN_ASM_VERIFY_CROSS
         LOG_DEBUG("Shop", "EquipCallback user-path: type=%d name='%s' im=%p",
                   (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
+        #endif
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
                       (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
                       im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
+            #endif
 
             // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
@@ -736,7 +744,9 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_DEBUG("Shop", "EquipCallback SaveItemInfo done");
+            #endif
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")

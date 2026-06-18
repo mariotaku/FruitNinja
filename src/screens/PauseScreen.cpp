@@ -143,7 +143,9 @@ bool PauseScreen::IsEnabled() {
 // QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
+    #endif
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -426,7 +428,9 @@ bool PauseScreen::SetToMultiplayerState() {
 void PauseScreen::PauseGameCallback() {
     Game* game = Game::GetInstance();
     if (m_State == PAUSE_STATE_HIDDEN) {
+        #ifndef FN_ASM_VERIFY_CROSS
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
+        #endif
         m_State = PAUSE_STATE_FADE_IN;
         PauseGame();
         // SFX "Pause"
@@ -434,7 +438,9 @@ void PauseScreen::PauseGameCallback() {
             game_work.mGameSound->SFXPlay("Pause", 1.0f);
         }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
+        #ifndef FN_ASM_VERIFY_CROSS
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "PauseGameCallback");
+        #endif
         m_State = PAUSE_STATE_RESUME_EXIT;
         // SFX "Unpause"
         if (game && game_work.mGameSound) {
@@ -467,7 +473,9 @@ void PauseScreen::QuitGameCallback() {
     if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     if (game) game_work.m_bTutorialShown = 0;
     m_LastHitButton = 0;
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
+    #endif
     m_State = PAUSE_STATE_QUIT_EXIT;
 }
 
@@ -509,7 +517,9 @@ void PauseScreen::RetryGameCallback() {
     if (game) game_work.m_bTutorialShown = 0;
     if (game && game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
+    #endif
     m_State = PAUSE_STATE_RETRY_EXIT;
 }
 
@@ -645,7 +655,9 @@ void PauseScreen::Update(float dt) {
             m_Alpha           = 1.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
+            #endif
             m_State = PAUSE_STATE_HIDDEN;
             game_work.m_GameDt = -1.0f;
         }
@@ -659,7 +671,9 @@ void PauseScreen::Update(float dt) {
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_ACTIVE), "Update/FADE_IN alpha settled");
+            #endif
             m_State = PAUSE_STATE_ACTIVE;
         }
         break;
@@ -677,7 +691,9 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RESUME_EXIT faded");
+            #endif
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
@@ -699,7 +715,9 @@ void PauseScreen::Update(float dt) {
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
+            #endif
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             // Binary calls RetryLevel (0x0016b008), NOT EndRetryLevel (0x0016a208).
@@ -717,15 +735,19 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x00169e50", "QUIT_EXIT faded");
+            #endif
             QuitToMenu();
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
                 Bomb::HitMenuBomb(m_QuitButton->pos);
+                #ifndef FN_ASM_VERIFY_CROSS
                 LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
                          m_QuitButton->pos.x, m_QuitButton->pos.y,
                          game ? game_work.m_BombHitTimer : -1.0f);
+                #endif
             }
             // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
             // Earlier port wrote 0.0 which left the buttons at full opacity
@@ -735,7 +757,9 @@ void PauseScreen::Update(float dt) {
             // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
             // in case 1 is what produces the visible white flash and tears
             // down the gameplay HUD; jumping straight to HIDDEN skipped both.
+            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_BOMB_FLASH), "Update/QUIT_EXIT faded");
+            #endif
             m_State = PAUSE_STATE_BOMB_FLASH;
             m_Alpha = 1.0f;
             FruitNinja_SaveCurrentData(false);
@@ -920,7 +944,9 @@ void PauseScreen::SkipTo() {
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "ContinueGameCallback @ 0x00153fe8");
+    #endif
     m_State = PAUSE_STATE_RESUME_EXIT;
     Game* g = Game::GetInstance();
     if (!g) return;

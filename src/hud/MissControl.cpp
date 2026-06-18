@@ -234,8 +234,10 @@ void MissControl::LoadContent() {
         }
     }
     s_TexturesLoaded = true;
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_DEBUG("MissControl", "LoadContent: critical=%d rare=%d cross=%d",
               s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
+    #endif
 }
 
 // --- Pool allocation -------------------------------------------------------
@@ -271,8 +273,10 @@ void MissControl::CreatePool(int count, HUD* hud) {
         s_pPool[i].m_bNoDestructor = 1;       // base+0x32; AFTER AddControl
     }
 
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_DEBUG("MissControl", "CreatePool: %d slots registered to HUD %p",
               count, static_cast<void*>(hud));
+    #endif
 }
 
 const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
@@ -334,8 +338,10 @@ MissControl* MissControl::GetFree() {
 // ASM-verified: 2026-05-24 binary @ 0x00151764 (re-analyst)
 // binary @ 0x00151764: Init() first, then tex + flags, then half/clamp/restore size.
 void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MissControl", "MakeCritical pos=(%.1f,%.1f,%.1f) player=%d this=%p",
              pos.x, pos.y, pos.z, playerIdx, static_cast<void*>(this));
+    #endif
     Init();
     m_Texture      = s_TexCritical;
     m_FadeAlpha    = MISS_FADE_INIT;
@@ -370,8 +376,10 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
 // binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_AlphaScale=0.5,
 // and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MissControl", "MakeRare pos=(%.1f,%.1f,%.1f) this=%p",
              pos.x, pos.y, pos.z, static_cast<void*>(this));
+    #endif
     Init();
     m_Texture      = s_TexRare;
     m_FadeAlpha    = MISS_FADE_INIT;
@@ -407,8 +415,10 @@ void MissControl::MakeRare(Vec3 pos) {
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
 // Sets m_bComboActive=1, m_bUseSound=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
 void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
              pos.x, pos.y, pos.z, comboCount, entityType, static_cast<void*>(this));
+    #endif
     Init();
     // Texture pick uses CALLER's comboCount (before arcade override).
     // binary @ 0x001515a4: idx computed before arcade m_ComboCount override.
@@ -464,9 +474,11 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
 // Common prefix: Init() first, then m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
                                 Mortar::SmartPtr<Mortar::Texture> tex) {
+    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MissControl", "MakeDisappear pos=(%.1f,%.1f,%.1f) sizeMult=%d tex=%d this=%p",
              inPos.x, inPos.y, inPos.z, sizeMult,
              tex.IsValid() ? 1 : 0, static_cast<void*>(this));
+    #endif
     Init();
     m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix, binary @ 0x00151d94)
     pos = inPos;

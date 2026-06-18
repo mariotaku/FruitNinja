@@ -1351,9 +1351,11 @@ void SlashEntity::Update(float dt) {
 
                     Vec3 bladeVel;
                     if (CollideWithSphere(*cs, bladeVel)) {
+                        #ifndef FN_ASM_VERIFY_CROSS
                         LOG_DEBUG("SLASH", "hit %s %p at (%.1f,%.1f) trail_n=%d",
                                     t == 0 ? "fruit" : "bomb",
                                     static_cast<void*>(e), cs->center().x, cs->center().y, m_PointCount);
+                        #endif
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                         if (t == 0) {
                         // ASM-verified: 2026-06-07 binary @ 0x0017d664 (re-analyst)
@@ -1462,8 +1464,10 @@ void SlashEntity::Update(float dt) {
                 // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0.
                 if (m_ComboCountVal() > 2 && m_ComboSliceArr[1] >= 0) {
                     if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        #ifndef FN_ASM_VERIFY_CROSS
                         LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
                                  m_ComboCountVal(), (float)m_ComboCountVal() / 3.0f);
+                        #endif
                         WaveManager::GetInstance()->AddSpeed(
                             (float)m_ComboCountVal() / 3.0f, 0);
                         FN::AddToCurrentScore(m_ComboCountVal(), m_ComboEntityType, true, true);
