@@ -99,9 +99,9 @@ private:
     // Allocates matrix arrays for N bones.
     void BuildArrays(int count);
 
-    // Matches Skeleton::BuildLocalMatrices (0x00193064)
-    // Converts per-bone TRS (quaternion + vec3 + mat3) → local Matrix44.
-    // Sequence from disassembly: Mul44(scale_mat44, rotation_transpose, tmp); Mul44(tmp, translate, local)
+    // Matches Skeleton::BuildLocalMatrices @ 0x002372fc
+    // Converts per-bone TRS (quaternion + vec3 + mat3) -> local Matrix44.
+    // Sequence: scale * rot_transpose * translate (Matrix44::operator*).
     void BuildLocalMatrices();
 
     // Matches Skeleton::BuildFinalMatrices (0x00192e0c)
