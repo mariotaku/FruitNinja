@@ -7,6 +7,16 @@ target_include_directories(test_localisation PRIVATE
 )
 add_test(NAME localisation COMMAND test_localisation)
 
+# MatrixManager singleton + matrix math correctness.
+# Pure math: no GPU, no SDL, no audio. Catches singleton pattern regressions.
+add_executable(test_matrix_manager test_matrix_manager.cpp)
+target_link_libraries(test_matrix_manager PRIVATE mortar_engine)
+target_include_directories(test_matrix_manager PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME matrix_manager COMMAND test_matrix_manager)
+
 # ResourceLoader / DataReader / VectorDataReader parser unit test.
 # Pure in-memory (no file I/O, no GPU, no audio). Uses two deterministic
 # byte vectors: (a) real apple.mad header trace, (b) hand-built 1-child

@@ -4,16 +4,20 @@
 #include "render/MatrixStack.h"
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
-#include "core/Singleton.h"
 
 // Binary MatrixManager: 8500 bytes, polymorphic (vtable @ 0x001eb528, 3 vfn slots).
 // Layout: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
 // Port adds m_CachedProjView + m_ProjVersionUploaded for the GLES2 shader path
 // (DIFFERS, marked below). Binary size applies only under __bada__.
-class MatrixManager : public Mortar::Singleton<MatrixManager> {
-    friend class Mortar::Singleton<MatrixManager>;
-
+//
+// ASM-spec v1.6.1 MatrixManager::m_instance @ ram:0x0035ced4:
+// Binary uses a class-static global instance (namespace-scope, no lazy init,
+// no guard variable). All 89 callers access it via direct GOT load.
+// Port matches this with a class-static s_instance defined in the .cpp.
+class MatrixManager {
 public:
+    // Binary @ ram:0x0035ced4 — direct global access, no guard.
+    static MatrixManager& GetInstance() { return s_instance; }
     // vptr at +0x00 (emitted by the virtual dtor below; matches binary vtable @ 0x001eb528)
     MatrixStack m_Projection;  // +0x004, 0x848 bytes
     MatrixStack m_View;        // +0x84C, 0x848 bytes
@@ -100,6 +104,11 @@ private:
     void _UploadCurrentMatrices(bool skipProjection);
 
     MatrixManager();
+
+    // ASM-spec v1.6.1 @ ram:0x0035ced4: class-static global instance.
+    // Initialized during static init via global constructors keyed to
+    // MatrixManager.cpp @ 0x002573b0. No guard variable, no lazy init.
+    static MatrixManager s_instance;
 };
 
 #ifdef __bada__
