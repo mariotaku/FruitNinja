@@ -104,17 +104,22 @@ void BonusManager::ClearBestBonuses() {
 // ---------------------------------------------------------------------------
 // SetUpBonusScreen -- Binary @ 0x0010e404
 //
-// For each BonusType, calls GetBest() to get the best matching Bonus, sorts
-// the results descending by tier, trims to top 3, then calls
-// screen->AddAward(colour, texture, name, tier) for each.
+// Binary flow:
+//   1. ClearBestBonuses()
+//   2. Build shuffled index vector [0, 1, ..., N-1] using Math::g_random
+//   3. For each shuffled index: GetBest() -> push_back into m_BestBonuses
+//   4. m_BestBonuses.sort() (ascending by tier per operator<)
+//   5. Trim from front until size <= 3 (keeps highest-tier items)
+//   6. Iterate, call BonusScreen::AddAward for each with tier colour
 //
+// Port: step 2 shuffle not yet implemented; iteration is in-order.
 // Hardcoded award colours (BGRA):
-//   tier 0 (gold):   BGRA(0xAD, 0x7E, 0x00, 0x00)
-//   tier 1 (red):    BGRA(0xA0, 0x05, 0x05, 0x00)
-//   tier 2 (blue):   BGRA(0x01, 0x5C, 0x95, 0x00)
+//   tier 0: BGRA(0xAD, 0x7E, 0x00, 0x00)  gold
+//   tier 1: BGRA(0xA0, 0x05, 0x05, 0x00)  red
+//   tier 2: BGRA(0x01, 0x5C, 0x95, 0x00)  blue
 // ---------------------------------------------------------------------------
 void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
-    if (!screen) return;
+    ClearBestBonuses();
 
     // Hardcoded tier colours matching binary constants.
     static const Colour k_TierColours[3] = {
@@ -126,31 +131,30 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
         Colour(0x95, 0x5C, 0x01, 0x00),  // blue
     };
 
-    // Gather best bonus from each type.
-    std::vector<Bonus*> candidates;
+    // Get best from each BonusType and push directly into m_BestBonuses.
+    // TODO: v1.6.1 0x0010e404 (SetUpBonusScreen) — shuffle indices via
+    // Math::g_random before iterating (Fisher-Yates), matching binary.
     for (size_t i = 0; i < m_AllBonuses.size(); ++i) {
         Bonus* b = m_AllBonuses[i].GetBest();
-        if (b) candidates.push_back(b);
+        if (b) m_BestBonuses.push_back(*b);
     }
 
-    // Sort descending by tier (higher tier = better award).
-    std::sort(candidates.begin(), candidates.end(), BonusTierDescending);
+    // Sort ascending by tier (lowest tier first, matching binary operator<).
+    m_BestBonuses.sort();
 
-    // Trim to top 3.
-    if (candidates.size() > 3) candidates.resize(3);
-
-    // Store in m_BestBonuses.
-    m_BestBonuses.clear();
-    for (size_t i = 0; i < candidates.size(); ++i) {
-        m_BestBonuses.push_back(*candidates[i]);
+    // Trim to top 3: erase lowest-tier items from front.
+    while (m_BestBonuses.size() > 3) {
+        m_BestBonuses.erase(m_BestBonuses.begin());
     }
 
-    // Call AddAward on BonusScreen for each.
-    int idx = 0;
-    for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
-         it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
-        screen->AddAward(k_TierColours[idx], it->m_StarTexture,
-                         it->m_DisplayName, it->m_Tier);
+    // Call AddAward for each (binary null-checks screen around the loop only).
+    if (screen) {
+        int idx = 0;
+        for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
+             it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
+            screen->AddAward(k_TierColours[idx], it->m_StarTexture,
+                             it->m_DisplayName, it->m_Tier);
+        }
     }
 }
 

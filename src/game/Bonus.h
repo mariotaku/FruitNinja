@@ -40,7 +40,7 @@ public:
     void Parse(TiXmlElement* e, const char* parentTexName = NULL); // Binary @ 0x0010e61c
     int  IsAchieved(int score, std::map<uint64_t, int>& fruitCounts); // Binary @ 0x0010df38
 
-    bool operator<(const Bonus& rhs) const { return m_Tier > rhs.m_Tier; } // descending sort
+    bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (binary @ 0x0010ed2c)
 };
 
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
