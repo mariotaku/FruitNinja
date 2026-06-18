@@ -1926,13 +1926,6 @@ void Fruit::LoadFruitModels() {
     }
 
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
-    if (!meshMgr) {
-        for (int i = 0; i < count; ++i) {
-            models[i].~FruitModelInfo();
-        }
-        ::operator delete(raw);
-        return;
-    }
 
     // Step 3: Per-fruit model loading (ALL indices, no skip for missing names)
     for (int i = 0; i < count; ++i) {
@@ -2017,8 +2010,7 @@ void Fruit::LoadFruitModels() {
                 // Port: prop is always null while EffectProperty/BuildPropList
                 // is defunct. The texture is already loaded by MeshManager
                 // during .mmd parsing into Geometry::m_DiffuseTex, so no additional
-                // work is required for rendering. The atlas extraction below
-                // uses a direct fallback from model mesh geometries instead.
+                // work is required for rendering.
                 if (info->m_bIsSuperFruit) {
                     // TODO: wire prop->SetValue(EffectTexture2D{...}, 0)
                     // when BuildPropList is reactivated. EffectProperty::SetValue
@@ -2059,84 +2051,21 @@ void Fruit::LoadFruitModels() {
     s_SliceFxModel = meshMgr->Load("models/Fruit/slice_fx.mmd");
     s_SliceFxCritModel = meshMgr->Load("models/Fruit/slice_fx_crit.mmd");
 
-    // Step 5: Extract shared fruit atlas texture and assign to all models.
+    // Step 5: Extract shared fruit atlas texture from first model's EffectProperty.
     // Binary @ 0x001e0b78: s_fruitModels[0].m_pWholeEffect->m_Owner
     //   ->TryGetValue<EffectTexture2D>(Type_Texture2D, 0).
-    // Primary (binary-faithful): reads from EffectPropertyValues buffer.
-    // Fallback (port-specific): extract from first loaded model's mesh material,
-    // which was populated by MeshManager during .mmd parsing.
+    // EffectProperty path is defunct in the port (BuildPropList not wired), so this
+    // is a no-op here. Each geometry's m_DiffuseTex is already set by MeshManager
+    // during model loading from the .mmd material table (shared atlas fruit_atlas.tex
+    // -> FruitNinja.png).  No fallback or assignment loop needed.
+    // DIFFERS: original reads atlas from EffectProperty after loading all models;
+    // using per-geometry m_DiffuseTex from MeshManager because BuildPropList is
+    // defunct (port).  Fruit atlas is the same texture either way.
     {
-        Mortar::SmartPtr<Mortar::Texture> sharedAtlas;
-
-        // Primary: EffectProperty path (binary @ 0x001e0b78).
-        // Requires a live EffectPropertyValues buffer (BuildPropList wired).
         if (count > 0 && models[0].m_pWholeEffect && models[0].m_pWholeEffect->m_Owner) {
             Mortar::EffectTexture2D texId;
-            if (models[0].m_pWholeEffect->m_Owner->TryGetValue<Mortar::EffectTexture2D>(
-                    Mortar::EffectDataTypes::Type_Texture2D, 0, texId)) {
-                // EffectTexture2D stores raw GL uint32_t. In the port, look up
-                // the Texture object from the first model's mesh material by name.
-                // The portal texture is cached in TextureManager under its file path.
-                Mortar::SmartPtr<Mortar::Mesh> node0 = models[0].m_Whole.IsValid()
-                    ? models[0].m_Whole->GetNode(0UL)
-                    : (models[0].m_HalfA.IsValid() ? models[0].m_HalfA->GetNode(0UL)
-                                                   : Mortar::SmartPtr<Mortar::Mesh>());
-                if (node0.IsValid() && node0->GetGeometryCount() > 0) {
-                    Mortar::Geometry* g0 = node0->GetGeometryEntry(0);
-                    if (g0 && g0->m_DiffuseTex.IsValid()) {
-                        sharedAtlas = g0->m_DiffuseTex;
-                    }
-                }
-            }
-        }
-
-        // Fallback: extract from first loaded model's mesh material.
-        // Covers the defunct-BuildPropList scenario in the port.
-        if (!sharedAtlas.IsValid() && count > 0) {
-            Mortar::Model* const probeModels[3] = {
-                models[0].m_Whole.Get(),
-                models[0].m_HalfA.Get(),
-                models[0].m_HalfB.Get()
-            };
-            for (int pm = 0; pm < 3 && !sharedAtlas.IsValid(); ++pm) {
-                if (!probeModels[pm]) continue;
-                for (int n = 0; n < probeModels[pm]->NodeCount(); ++n) {
-                    Mortar::SmartPtr<Mortar::Mesh> mesh = probeModels[pm]->GetNode((unsigned long)n);
-                    if (mesh.IsValid() && mesh->GetGeometryCount() > 0) {
-                        Mortar::Geometry* g0 = mesh->GetGeometryEntry(0);
-                        if (g0 && g0->m_DiffuseTex.IsValid()) {
-                            sharedAtlas = g0->m_DiffuseTex;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Assign shared atlas to all fruit models' mesh geometries.
-        // Only fills geometries whose m_DiffuseTex is null, so this
-        // is a safe no-op when the model already has a texture from .mmd.
-        if (sharedAtlas.IsValid()) {
-            for (int i = 0; i < count; ++i) {
-                Mortar::Model* assignModels[3] = {
-                    models[i].m_Whole.Get(),
-                    models[i].m_HalfA.Get(),
-                    models[i].m_HalfB.Get()
-                };
-                for (int am = 0; am < 3; ++am) {
-                    if (!assignModels[am]) continue;
-                    for (int n = 0; n < assignModels[am]->NodeCount(); ++n) {
-                        Mortar::SmartPtr<Mortar::Mesh> mesh = assignModels[am]->GetNode((unsigned long)n);
-                        if (!mesh.IsValid()) continue;
-                        for (int gi = 0; gi < mesh->GetGeometryCount(); ++gi) {
-                            Mortar::Geometry* g = mesh->GetGeometryEntry(gi);
-                            if (g && !g->m_DiffuseTex.IsValid()) {
-                                g->m_DiffuseTex = sharedAtlas;
-                            }
-                        }
-                    }
-                }
-            }
+            models[0].m_pWholeEffect->m_Owner->TryGetValue<Mortar::EffectTexture2D>(
+                Mortar::EffectDataTypes::Type_Texture2D, 0, texId);
         }
     }
 
