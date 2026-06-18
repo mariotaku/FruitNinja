@@ -1863,7 +1863,9 @@ float WaveManager::GetWavedt(int playerIdx) {
           + w->m_WaveDtInc * w->field_0x34
           + w->m_WaveDtSpInc * m_Speed[playerIdx];
 
-    float dtMod = (playerIdx == 0) ? field_0x74 * m_SpeedScale : 1.0f;
+    // ASM-verified: 2026-06-18 v1.6.1 WaveManager::GetWavedt @ 0x001218dc (asm-inspector)
+    // Binary reads +0x78 = m_SpeedAccum, NOT +0x7c = m_SpeedScale.
+    float dtMod = (playerIdx == 0) ? field_0x74 * m_SpeedAccum : 1.0f;
     float result = waveDt * dtMod;
     if (result <= 0.0f) return 0.0f;
     if (result < 100.0f) return result;
