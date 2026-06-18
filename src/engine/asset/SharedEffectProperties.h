@@ -105,6 +105,17 @@ struct EffectProperty {
     EffectPropertyDefinition  m_Def;    // +0x00, 12 bytes
     EffectPropertyValues*     m_Owner;  // +0x0c, 4 bytes
     unsigned long             m_Offset; // +0x10, 4 bytes
+
+    // Binary @ 0x0023fc9c: SetValue<SmartPtr<Texture2D>> specialization.
+    // Original stores a SmartPtr<Texture2D> (4-byte pointer) via
+    // TrySetValue<SmartPtr<Texture2D>>. Port stores EffectTexture2D (uint32_t GL ID)
+    // in the bucket; this wrapper converts to the bucket-compatible type.
+    // Index is added to m_Offset for the per-element position within the bucket.
+    void SetValue(const EffectTexture2D& value, unsigned long index) {
+        if (!m_Owner) return;
+        m_Owner->TrySetValue<EffectTexture2D>(
+            static_cast<EffectDataTypes::Type>(m_Def.m_Type), index + m_Offset, value);
+    }
 };
 
 // Free helper @ binary 0x001b0c28.

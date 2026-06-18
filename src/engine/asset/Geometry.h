@@ -12,6 +12,7 @@ namespace Mortar {
 
 class SharedEffectProperties;
 class EffectPropertyList;
+struct EffectProperty;
 struct MeshMaterial;
 
 // GeometryBinding -- shape-preserved defunct stub.

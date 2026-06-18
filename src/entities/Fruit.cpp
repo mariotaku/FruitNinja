@@ -1958,13 +1958,15 @@ void Fruit::LoadFruitModels() {
             // ASM-spec v1.6.1 @ 0x001e0a50: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty(0x2843d1)
             // 0x2843d1 = StringHash("DiffuseMap"). Stores the EffectProperty* into the
             // FruitModelInfo EffectProperty slot for shared atlas-texture resolution.
+            // Port: Geometry::GetProperty returns nullptr while BuildPropList is
+            // defunct (m_PropList always null), so this currently always null.
             Mortar::EffectProperty* prop = nullptr;
             {
                 Mortar::Mesh* node0 = model->GetNode(0UL).Get();
                 if (node0) {
                     Mortar::Geometry* geom = node0->GetGeometryEntry(0);
-                    if (geom && geom->GetPropList()) {
-                        prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                    if (geom) {
+                        prop = geom->GetProperty(0x2843d1);
                     }
                 }
             }
@@ -1997,8 +1999,8 @@ void Fruit::LoadFruitModels() {
                     // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
                     if (node0) {
                         Mortar::Geometry* geom = node0->GetGeometryEntry(0);
-                        if (geom && geom->GetPropList()) {
-                            prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                        if (geom) {
+                            prop = geom->GetProperty(0x2843d1);
                         }
                     }
                 }
@@ -2018,8 +2020,9 @@ void Fruit::LoadFruitModels() {
                 // work is required for rendering. The atlas extraction below
                 // uses a direct fallback from model mesh materials instead.
                 if (info->m_bIsSuperFruit) {
-                    // TODO: wire TrySetValue<EffectTexture2D>(...)
-                    // when BuildPropList is reactivated.
+                    // TODO: wire prop->SetValue(EffectTexture2D{...}, 0)
+                    // when BuildPropList is reactivated. EffectProperty::SetValue
+                    // added at SharedEffectProperties.h (v1.6.1 @ 0x0023fc9c).
                     // Port: texture already available via model's mesh materials.
                 }
             }
@@ -2039,8 +2042,8 @@ void Fruit::LoadFruitModels() {
                     // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
                     if (node0) {
                         Mortar::Geometry* geom = node0->GetGeometryEntry(0);
-                        if (geom && geom->GetPropList()) {
-                            prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                        if (geom) {
+                            prop = geom->GetProperty(0x2843d1);
                         }
                     }
                 }
