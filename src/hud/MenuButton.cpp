@@ -255,8 +255,10 @@ void MenuButton::CreateFruit() {
     e->flags &= ~0x10;
     m_pEntity = e;
     m_pTrackedFruit = static_cast<Fruit*>(e);
+#ifndef FN_ASM_VERIFY_CROSS
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
+#endif
 
     if (entityType == 0) {
         Fruit* fruit = static_cast<Fruit*>(e);
@@ -468,8 +470,10 @@ void MenuButton::Update(float dt) {
         }
 
         Mortar::Entity* entity = m_pEntity;  // +0x80
+#ifndef FN_ASM_VERIFY_CROSS
         LOG_DEBUG("MENUBTN", "Update: m_pEntity=%p m_pTrackedFruit=%p",
                   static_cast<void*>(entity), static_cast<void*>(m_pTrackedFruit));
+#endif
 
         if (entity == nullptr) {
             // ---- SPAWN / no live entity branch ----

@@ -13,12 +13,10 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
-#include "engine/util/PathCI.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
 #include "hud/TimeControl.h"
 
-#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstring>
 #include "game/GameWork.h"
@@ -51,7 +49,6 @@ AchievementInfo::AchievementInfo()
     m_Description[0] = '\0';
     m_Name[0]        = '\0';
     m_LongText[0]    = '\0';
-    _pad[0] = _pad[1] = _pad[2] = 0;
 }
 
 AchievementInfo::~AchievementInfo() {
@@ -92,34 +89,12 @@ void AchievementManager::LoadAchievementInfo() {
     // TODO: DAT_001096ac -- load second preamble texture (identity not yet RE'd).
     // TODO: DAT_001096b0 -- load third preamble texture (identity not yet RE'd).
 
-    // Binary: parses Data/xml/achievementlist.xml
-    // Root: <achievementManagerFile> -> <achievement> children
-    std::string path;
-    const char* dataDir = TextureManager::GetDataDir();
-    if (dataDir && dataDir[0]) {
-        path = dataDir;
-        path += "/xml/achievementlist.xml";
-    } else {
-        path = "xml/achievementlist.xml";
-    }
-
+    // Binary @ 0x00109200: TiXmlDocument("xml/achievementList.xml")
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(path.c_str());
-    if (err != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(path.c_str());
-        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
-    }
-    if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("ACHIEVEMENT/LoadAchievementInfo", "failed to open '%s' (error %d)",
-               path.c_str(), (int)err);
-        return;
-    }
+    if (doc.LoadFile("xml/achievementList.xml") != tinyxml2::XML_SUCCESS) return;
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
-    if (!root) {
-        LOG_WARN("ACHIEVEMENT/LoadAchievementInfo", "no <achievementManagerFile> root");
-        return;
-    }
+    if (!root) return;
 
     // Autoincrement counter used for SCORE and SCORE_UNSULLIED type secondary keys
     // (types 1,2 — keyed by load order rather than a field value)
@@ -134,12 +109,8 @@ void AchievementManager::LoadAchievementInfo() {
 
         uint32_t nameHash = StringHash(nameAttr);
 
-        // Skip if already unlocked (check through save data instance)
-        {
-            Game* g_chk = Game::GetInstance();
-            FruitSaveData* sd_chk = g_chk ? game_work.m_SaveData : 0;
-            if (sd_chk && sd_chk->IsAchievementUnlocked(nameHash) != 0) continue;
-        }
+        // Skip if already unlocked (binary: game_work.m_SaveData->IsAchievementUnlocked)
+        if (game_work.m_SaveData && game_work.m_SaveData->IsAchievementUnlocked(nameHash)) continue;
 
         // Skip if already loaded (duplicate in XML)
         if (m_All.find(nameHash) != m_All.end()) continue;

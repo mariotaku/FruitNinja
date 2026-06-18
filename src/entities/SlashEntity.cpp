@@ -619,9 +619,6 @@ void SlashEntity::OnTouchReleased() {
     LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended state=%d pointCount=%d",
              m_FingerId, (int)m_State, m_PointCount);
 #endif
-    // TEMP #71
-    printf("[71] OnTouchReleased[%d] emitter=%p\n", m_FingerId, (void*)m_TrailEmitter);
-
     // DIFFERS: original defers trail-emitter teardown to the next TouchDown
     // via the !bladeActive branch in Update; port clears on the release edge
     // so the emitter cannot stream at a frozen lift position when PollHeldFingers
@@ -1125,18 +1122,13 @@ void SlashEntity::UpdatePoints(float dt) {
                 for (int iter = 0; iter < 2; iter++) {
                     QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
 
-                    // Edge: iter==0 -> center - perp (left), iter==1 -> center + perp (right).
-                    Vec3 ePos;
-                    if (iter == 0) { ePos = Vec3(center.x - perp.x, center.y - perp.y, 0.0f); }
-                    else           { ePos = Vec3(center.x + perp.x, center.y + perp.y, 0.0f); }
-
                     // UV.y: same flip logic as head-cap path.
                     // Binary uses local_e4 (= perpDir * fVar30 = perp) for the sign check.
                     float vVal = 0.0f;
                     if (g_ScaleFlag2 == 0) {
                         vVal = (iter != 0) ? 1.0f : 0.0f;
                     } else {
-                        bool perpYNeg = (perp.y < 0.0f);
+                        bool perpYNeg = (perpY < 0.0f);
                         if (perpYNeg) {
                             vVal = (iter != 0) ? 1.0f : 0.0f;
                         } else {
@@ -1144,10 +1136,12 @@ void SlashEntity::UpdatePoints(float dt) {
                         }
                     }
 
+                    float ePosX = (iter == 0) ? (center.x - perpX) : (center.x + perpX);
+                    float ePosY = (iter == 0) ? (center.y - perpY) : (center.y + perpY);
                     buf[dstCtr].x  = center.x;
                     buf[dstCtr].y  = center.y;
-                    buf[dstEdge].x = ePos.x;
-                    buf[dstEdge].y = ePos.y;
+                    buf[dstEdge].x = ePosX;
+                    buf[dstEdge].y = ePosY;
                     buf[dstEdge].v = vVal;
 
                     // UV.x written after the inner loop in binary (via iVar27 byte offset).
@@ -1218,24 +1212,20 @@ void SlashEntity::UpdatePoints(float dt) {
         if (m_PointCount > 2) {
             s_slashes++;
 
-            Vec3 lastEdge(m_pLeftBuffer[m_PointCount - 1].x,
-                          m_pLeftBuffer[m_PointCount - 1].y,
-                          m_pLeftBuffer[m_PointCount - 1].z);
-            Vec3 prevCtr(m_pLeftBuffer[m_PointCount - 2].x,
-                         m_pLeftBuffer[m_PointCount - 2].y,
-                         m_pLeftBuffer[m_PointCount - 2].z);
+            float hdx = m_pLeftBuffer[m_PointCount - 1].x - m_pLeftBuffer[m_PointCount - 2].x;
+            float hdy = m_pLeftBuffer[m_PointCount - 1].y - m_pLeftBuffer[m_PointCount - 2].y;
+            float hMag = sqrtf(hdx * hdx + hdy * hdy);
 
-            Vec3 hDir(lastEdge.x - prevCtr.x, lastEdge.y - prevCtr.y, 0.0f);
-            hDir.Normalise();
-
-            // Cross(hDir, Z_hat) * 2.5 -- binary local_48 = 2.5f.
+            // Cross(unit(hDir), Z_hat) * 2.5 -- binary local_48 = 2.5f.
+            // unit = (hdx/hMag, hdy/hMag, 0). Cross(unit, Z) = (unit.y, -unit.x, 0).
+            // cap = unitDirCross * 2.5.
             static const float kCapScale = 2.5f;
-            Vec3 zHat(0.0f, 0.0f, 1.0f);
-            Vec3 capOff = Vec3::Cross(hDir, zHat) * kCapScale;
+            float capOffX = (hdy / hMag) * kCapScale;
+            float capOffY = (-hdx / hMag) * kCapScale;
 
-            // capPos.x = prevCtr.x - capOff.x  (both buffers get the same position).
-            float capX = prevCtr.x - capOff.x;
-            float capY = prevCtr.y - capOff.y;
+            // capPos = prevCtr - capOff (both buffers get the same position).
+            float capX = m_pLeftBuffer[m_PointCount - 2].x - capOffX;
+            float capY = m_pLeftBuffer[m_PointCount - 2].y - capOffY;
 
             m_pLeftBuffer[m_PointCount].x  = capX;
             m_pLeftBuffer[m_PointCount].y  = capY;
@@ -1285,8 +1275,6 @@ void SlashEntity::Update(float dt) {
             m_TrailEmitter->m_Pos = m_RawTouchPos;
         }
     } else if (!bladeActive && m_TrailEmitter) {
-        // TEMP #71
-        printf("[71] bladeActive->0 ClearEmitter[%d]\n", m_FingerId);
         pm.ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
