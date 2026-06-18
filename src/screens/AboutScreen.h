@@ -4,12 +4,11 @@
 //
 // AboutScreen : HUDControl3d  (no BaseScreen, direct subclass)
 //
-// v1.6.1 binary refs (re-architected from v1.5.1):
+// v1.6.1 binary refs:
 //   Constructor      0x0015b764  (AboutScreen(DojoScreen*))
-//   LoadContent      0x0015b6d4  (static, loads textures)
-//   Destructor       -- (not yet RE'd for v1.6.1)
-//   Update           -- (not yet RE'd for v1.6.1)
-//   Draw             0x0015a654  (board panel + sensei quads)
+//   LoadContent      0x0012ec14  (static, loads textures)
+//   UnLoadContent    0x0012efd8  (static, releases texture SmartPtrs)
+//   Draw             0x0012f394  (board panel + credits + sensei quads)
 //   NewDraw          0x0015a264  (BakedStringBox credit text pass)
 //
 // Credits / about page shown as a child of DojoScreen.
@@ -17,8 +16,8 @@
 //
 // Textures (static, loaded by LoadContent):
 //   haikus.tex     -> s_TexHaiku   (background panel, assigned to base m_Texture in ctor)
+//   credits.tex    -> s_TexCredits (sliding credits quad, v1.6.1 still loaded)
 //   sensei.tex     -> s_TexSensei  (slides in from right in Draw block D)
-//   (credits.tex REMOVED in v1.6.1 -- binary no longer loads it)
 //
 // Binary layout (HUDControl3d base = 0x7C bytes):
 //   +0x7C  float              m_TransitionAlpha   0->1 lerp / decay  (ctor=0.0f)
@@ -66,9 +65,9 @@ public:
 
     ~AboutScreen() override;
 
-    // v1.6.1 AboutScreen::LoadContent @ 0x0015b6d4
-    // Loads haikus.tex, sensei.tex into static storage (credits.tex removed).
-    // Called lazily from ctor if not yet loaded.
+    // v1.6.1 AboutScreen::LoadContent @ 0x0012ec14
+    // Loads haikus.tex, credits.tex, sensei.tex into static storage.
+    // Called from ctor; binary has no early-return guard.
     static void LoadContent();
 
     // Matches AboutScreen::UnLoadContent (companion to LoadContent).
@@ -131,9 +130,9 @@ private:
 
 private:
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
-    // v1.6.1: s_TexCredits REMOVED -- binary no longer loads credits.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex (binary: s_boardTexture)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (binary: m_creditsTexture)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex (binary: m_senseiTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
 
     // One-time init guard

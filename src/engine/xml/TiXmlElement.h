@@ -115,6 +115,11 @@ public:
         return m_element ? m_element->InsertFirstChild(node) : nullptr;
     }
 
+    // SetDoubleAttribute — TinyXML-1 API compatibility; delegates to SetAttribute.
+    void SetDoubleAttribute(const char* name, double value) {
+        if (m_element) m_element->SetAttribute(name, value);
+    }
+
     // --- Conversion ---
 
     operator bool() const { return m_element != nullptr; }
