@@ -180,9 +180,6 @@ void ScoreControl::Update(float dt) {
         return;
     }
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     // Stage 1: per-digit alpha cascade
     // ASM-verified gate at 0x001585A8: gameMode == 1.
     // Non-gameMode-1: static-timer driven (0.25s gate) same rates.

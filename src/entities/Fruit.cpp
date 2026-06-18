@@ -2163,44 +2163,43 @@ static int s_TotalAvail      = 0;
 static int s_TotalCrit       = 0;
 static int s_TotalCritAvail  = 0;
 
-// ASM-verified: 2026-05-03T09:42 binary @ 0x00176564..0x001766f4 (asm-inspector)
+// ASM-spec v1.6.1 Fruit::RandomFruit @ 0x00176564 (decompile)
 int Fruit::RandomFruit(bool includeOnSide) {
     if (s_TotalWeight < 1) {
-        int wT = 0, wA = 0, wC = 0, wCA = 0;
-        const int count = FruitInfo_GetCount();
-        FruitInfoData* arr = FruitInfo_GetArray();
-        for (int i = 0; i < count; ++i) {
-            FruitInfoData* fi = &arr[i];
-            wT += fi->m_Chance;
-            fi->m_CumWeight = wT;
-            if (fi->m_CoinsMax < 1) wA += fi->m_Chance;       // binary +0x328
-            if (fi->m_bScorable) {                             // binary +0x318
-                wC += fi->m_Chance;
-                if (fi->m_CoinsMax < 1) wCA += fi->m_Chance;  // binary +0x328
+        s_TotalWeight     = 0;
+        s_TotalAvail      = 0;
+        s_TotalCrit       = 0;
+        s_TotalCritAvail  = 0;
+        const int cnt = FruitInfo_GetCount();
+        FruitInfoData* fi = FruitInfo_GetArray();
+        for (int i = 0; i < cnt; ++i, ++fi) {
+            s_TotalWeight += fi->m_Chance;
+            fi->m_CumWeight = s_TotalWeight;
+            if (fi->m_CoinsMax < 1)
+                s_TotalAvail += fi->m_Chance;
+            if (fi->m_bScorable) {
+                s_TotalCrit += fi->m_Chance;
+                if (fi->m_CoinsMax < 1)
+                    s_TotalCritAvail += fi->m_Chance;
             }
-            fi->m_CumCritWeight = wC;
+            fi->m_CumCritWeight = s_TotalCrit;
         }
-        s_TotalWeight    = wT;
-        s_TotalAvail     = wA;
-        s_TotalCrit      = wC;
-        s_TotalCritAvail = wCA;
     }
-
     bool isCrit = WaveManager::GetInstance()->CriticalMode(0);
     Math::Random* rng = &WaveManager::GetInstance()->m_Random;
-    const int count = FruitInfo_GetCount();
-
+    const int cnt = FruitInfo_GetCount();
     if (!isCrit) {
         if (includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalWeight);
-            for (int i = 0; i < count; ++i)
-                if (r < (uint32_t)FruitInfo_Get(i)->m_CumWeight) return i;
+            FruitInfoData* fi = FruitInfo_GetArray();
+            for (int i = 0; i < cnt; ++i, ++fi)
+                if (r < (uint32_t)fi->m_CumWeight) return i;
         } else {
             uint32_t r = rng->Rand32((uint32_t)s_TotalAvail);
+            FruitInfoData* fi = FruitInfo_GetArray();
             int acc = 0;
-            for (int i = 0; i < count; ++i) {
-                const FruitInfoData* fi = FruitInfo_Get(i);
-                if (fi->m_CoinsMax < 1) {                      // binary +0x328
+            for (int i = 0; i < cnt; ++i, ++fi) {
+                if (fi->m_CoinsMax < 1) {
                     acc += fi->m_Chance;
                     if (r < (uint32_t)acc) return i;
                 }
@@ -2209,21 +2208,22 @@ int Fruit::RandomFruit(bool includeOnSide) {
     } else {
         if (includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalCrit);
-            for (int i = 0; i < count; ++i)
-                if (r < (uint32_t)FruitInfo_Get(i)->m_CumCritWeight) return i;
+            FruitInfoData* fi = FruitInfo_GetArray();
+            for (int i = 0; i < cnt; ++i, ++fi)
+                if (r < (uint32_t)fi->m_CumCritWeight) return i;
         } else {
             uint32_t r = rng->Rand32((uint32_t)s_TotalCritAvail);
+            FruitInfoData* fi = FruitInfo_GetArray();
             int acc = 0;
-            for (int i = 0; i < count; ++i) {
-                const FruitInfoData* fi = FruitInfo_Get(i);
-                if (fi->m_CoinsMax < 1 && fi->m_bScorable) {   // binary +0x328, +0x318
+            for (int i = 0; i < cnt; ++i, ++fi) {
+                if (fi->m_CoinsMax < 1 && fi->m_bScorable) {
                     acc += fi->m_Chance;
                     if (r < (uint32_t)acc) return i;
                 }
             }
         }
     }
-    return (int)rng->Rand32((uint32_t)(count - 1));
+    return (int)rng->Rand32((uint32_t)(cnt - 1));
 }
 
 // ASM-verified: 2026-05-20 binary @ 0x00175928 (re-analyst).

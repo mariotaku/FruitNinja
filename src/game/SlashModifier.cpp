@@ -91,31 +91,30 @@ void SlashModifier::RemoveModifier() {
     }
 }
 
-// Matches SlashModifier::ParseSpecific (0x0011f464). Reads:
-//   speed        -> m_ColourSpeed (default 1.0)
-//   type         -> m_ColourType via ParseSlashModColourType
-//   particles    -> m_pTexture1 (CloneString)
-//   texture      -> m_pTexture2 (new char[0x40], snprintf — note binary
-//                  size arg is 4, which truncates — preserved as-is)
-//   <slash_power type="..."/> children -> m_PowerMask |= ParseSlashPowerMask
-//   <colour>text</colour> children     -> m_pColours[i] = ParseColour
+// Matches SlashModifier::ParseSpecific (0x0011f464). Binary:
+//   - NO GameModifier::ParseSpecific call
+//   - speed -> m_ColourSpeed (default 1.0) via QueryDoubleAttribute
+//   - type -> ParseSlashModColourType (unconditional, null-safe)
+//   - particles -> CloneString (unconditional, null-safe)
+//   - texture -> new char[0x40], snprintf (if non-null AND non-empty)
+//   - <slash_power type="..."/> children -> m_PowerMask OR
+//   - <colour> children counted directly into m_NumColours, then
+//     alloc m_NumColours+2 colours, then ParseColour each via GetText
 void SlashModifier::ParseSpecific(TiXmlElement* xml) {
-    GameModifier::ParseSpecific(xml);
+    if (xml == nullptr) return;
 
     double speed = 1.0;
     if (xml->QueryDoubleAttribute("speed", &speed) == tinyxml2::XML_SUCCESS)
         m_ColourSpeed = (float)speed;
 
-    const char* type = xml->Attribute("type");
-    if (type) m_ColourType = ParseSlashModColourType(type);
+    m_ColourType = ParseSlashModColourType(xml->Attribute("type"));
 
-    const char* particles = xml->Attribute("particles");
-    if (particles) CloneString(&m_pTexture1, particles);
+    CloneString(&m_pTexture1, xml->Attribute("particles"));
 
     const char* texture = xml->Attribute("texture");
-    if (texture) {
+    if (texture && texture[0]) {
         m_pTexture2 = new char[0x40];
-        snprintf(m_pTexture2, 4, "%s.tex", texture);   // binary truncates at 3 chars + NUL
+        snprintf(m_pTexture2, 4, "%s.tex", texture);
     }
 
     // <slash_power type="..."/> children
@@ -125,22 +124,25 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
         if (maskAttr) m_PowerMask |= ParseSlashPowerMask(maskAttr);
     }
 
-    // <colour>...</colour> children — first pass count, then alloc, then parse
-    int colourCount = 0;
+    // <colour> children — single count pass increments m_NumColours directly
+    m_NumColours = 0;
     for (TiXmlElement c = xml->FirstChildElement("colour"); c;
-         c = c.NextSiblingElement("colour")) ++colourCount;
-    if (colourCount > 0) {
-        m_NumColours = colourCount;
-        m_pColours = new Colour[colourCount + 2];
+         c = c.NextSiblingElement("colour")) {
+        ++m_NumColours;
+    }
+
+    if (m_NumColours > 0) {
+        m_pColours = new Colour[m_NumColours + 2];
         int idx = 0;
         for (TiXmlElement c = xml->FirstChildElement("colour"); c;
              c = c.NextSiblingElement("colour"), ++idx) {
             ParseColour(&m_pColours[idx], c.GetText());
         }
     } else if (m_pTexture1 || m_pTexture2) {
-        // Fallback: 1-element Colour::White array
+        // Fallback: binary allocates 12 bytes = 3 Colour slots (8B hdr + 1 colour).
+        // Port uses new Colour[3] for same capacity.
         m_NumColours = 1;
-        m_pColours = new Colour[1];
+        m_pColours = new Colour[3];
         m_pColours[0] = Colour(255, 255, 255, 255);
     }
 }
