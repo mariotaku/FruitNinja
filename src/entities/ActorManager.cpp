@@ -31,9 +31,10 @@ ActorManager::ActorManager()
     , m_FactoryDelegate(nullptr)
     , m_HashDelegate(nullptr)
 {
-    std::memset(m_FreePool, 0, sizeof(m_FreePool));
-    std::memset(m_PendingDeact, 0, sizeof(m_PendingDeact));
-    s_Instance = this;
+    // Binary ctor @ 0x00170500: constructs delegates then clears m_Listeners.
+    // Port delegates are raw fnptrs (set to nullptr above); m_Listeners was
+    // default-constructed by the compiler; clear() matches binary epilogue.
+    m_Listeners.clear();
 }
 
 ActorManager::~ActorManager() {
@@ -43,9 +44,11 @@ ActorManager::~ActorManager() {
 }
 
 ActorManager* ActorManager::GetInstance() {
-    // Binary: Meyers static local at 0x0022ee80-like slot. Port uses a raw
-    // pointer set by the ctor — GameInitialise `new ActorManager()` is the
-    // only constructor call, so s_Instance is stable after startup.
+    // Binary: Meyers singleton at 0x001705f0 with __cxa_guard_acquire.
+    // Port: lazy-init via static pointer (single-thread SDL, no guard needed).
+    if (s_Instance == nullptr) {
+        s_Instance = new ActorManager();
+    }
     return s_Instance;
 }
 
