@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+Discover which port source files contain ARM-mode binary functions,
+so the cross-build can compile them with -marm (matching the binary)
+instead of -mthumb (default), eliminating ARM-vs-Thumb false positives
+in asm-verify scores.
+
+Workflow:
+  1. Run a Ghidra script that checks TMode for each symbol in the
+     asm-verify manifest, outputting ARM-mode symbols to stdout.
+  2. This script reads that output and produces a CMake fragment
+     setting COMPILE_FLAGS "-marm ..." for the affected files.
+
+Usage:
+  # Phase 1 (Ghidra MCP): run the inline script from this file
+  # Phase 2 (host):
+  python tools/asm-verify/discover-arm-mode.py
+
+Pre-requisite:
+  - asm-verify has been run at least once (manifest.generated.toml exists)
+  - Ghidra MCP connected, FruitNinja_v1_6_1.exe open
+"""
+
+import json
+import os
+import re
+import sys
+from collections import defaultdict
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+
+MANIFEST_PATH = os.path.join(SCRIPT_DIR, "manifest.generated.toml")
+SURVEY_PATH = os.path.join(PROJECT_ROOT, "tmp", "arm-thumb-survey.json")
+OUTPUT_CMDS = os.path.join(SCRIPT_DIR, "arm-mode-files.cmake")
+
+
+# ---- Ghidra inline script (for run_script_inline) ----
+
+GHIDRA_SURVEY_SCRIPT = r"""
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.FunctionManager;
+
+public class ArmThumbManifestSurvey extends GhidraScript {
+    @Override
+    public void run() throws Exception {
+        FunctionManager fm = currentProgram.getFunctionManager();
+        var ctx = currentProgram.getProgramContext();
+        var tmodeReg = ctx.getRegister("TMode");
+
+        // Symbol list is passed via a file in tmp/
+        // For now, iterate all functions and output mode
+        var it = fm.getFunctions(true);
+        int armCount = 0, thumbCount = 0;
+
+        while (it.hasNext() && !monitor.isCancelled()) {
+            Function f = it.next();
+            boolean isThumb = false;
+            if (tmodeReg != null) {
+                var val = ctx.getValue(tmodeReg, f.getEntryPoint(), false);
+                if (val != null) isThumb = val.longValue() != 0;
+            }
+            String mode = isThumb ? "thumb" : "arm";
+            if (isThumb) thumbCount++; else armCount++;
+
+            // Output all functions: MODE\tNAME\tADDR
+            printf("%s\t%s\t0x%x\n", mode, f.getName(), f.getEntryPoint().getOffset());
+        }
+        printf("\nSUMMARY: arm=%d thumb=%d\n", armCount, thumbCount);
+    }
+}
+"""
+
+
+def parse_manifest():
+    """Parse manifest.generated.toml to get {addr: {mangled, file}}."""
+    if not os.path.exists(MANIFEST_PATH):
+        print(f"ERROR: {MANIFEST_PATH} not found. Run asm-verify first.", file=sys.stderr)
+        sys.exit(1)
+
+    entries = {}
+    current = {}
+    with open(MANIFEST_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("[[symbol]]"):
+                if current and "addr" in current and "port" in current:
+                    m = re.search(r"(src/[^/]+/[^/]+\.cpp)\.obj", current["port"])
+                    if m:
+                        current["file"] = m.group(1)
+                        entries[current["addr"]] = {
+                            "mangled": current.get("mangled", "?"),
+                            "file": m.group(1),
+                        }
+                current = {}
+            elif "=" in line and current is not None:
+                k, v = line.split("=", 1)
+                current[k.strip()] = v.strip().strip('"')
+        # Last entry
+        if current and "addr" in current and "port" in current:
+            m = re.search(r"(src/[^/]+/[^/]+\.cpp)\.obj", current["port"])
+            if m:
+                current["file"] = m.group(1)
+                entries[current["addr"]] = {
+                    "mangled": current.get("mangled", "?"),
+                    "file": m.group(1),
+                }
+    return entries
+
+
+def process_survey(survey_data, manifest_entries):
+    """Cross-reference survey output with manifest entries."""
+    # Build {addr: mode} from survey
+    survey_by_addr = {}
+    for entry in survey_data:
+        addr = entry.get("addr", "")
+        mode = entry.get("mode", "thumb")
+        survey_by_addr[addr] = mode
+
+    # Cross-reference
+    arm_files = defaultdict(list)  # {file: [(mangled, addr, name)]}
+
+    for addr, info in manifest_entries.items():
+        mode = survey_by_addr.get(addr, "thumb")
+        if mode == "arm":
+            arm_files[info["file"]].append((info["mangled"], addr))
+        else:
+            pass  # Thumb - no action needed
+
+    return arm_files
+
+
+def write_cmake_fragment(arm_files):
+    """Write CMake set_source_files_properties fragment."""
+    if not arm_files:
+        print("No ARM-mode files found in manifest. Nothing to do.")
+        return
+
+    with open(OUTPUT_CMDS, "w") as f:
+        f.write("# Auto-generated by tools/asm-verify/discover-arm-mode.py\n")
+        f.write("# Compile these files with -marm to match the binary's ARM-mode\n")
+        f.write("# functions, eliminating ARM-vs-Thumb false positives.\n")
+        f.write("#\n")
+        f.write("# Add this block after add_library(fnverify OBJECT ...) in\n")
+        f.write("# tools/asm-verify/cross-build/CMakeLists.txt\n\n")
+
+        for src_file in sorted(arm_files.keys()):
+            funcs = arm_files[src_file]
+            proj_path = f"${{_PROJECT_ROOT}}/{src_file}"
+            func_list = ", ".join(f"{m}" for m, _ in funcs[:5])
+            f.write(f"# {len(funcs)} ARM fn(s): {func_list}\n")
+            f.write(f"set_source_files_properties({proj_path}\n")
+            f.write(f'    PROPERTIES COMPILE_FLAGS "-marm -mcpu=cortex-a8'
+                    f' -mfloat-abi=hard -mfpu=vfpv3")\n')
+            f.write("\n")
+
+    print(f"Wrote {OUTPUT_CMDS} ({len(arm_files)} file(s) with ARM-mode functions)")
+
+
+def print_ghidra_instructions():
+    """Print instructions for the Ghidra phase."""
+    print("""
+=== ARM/Thumb Discovery — Ghidra Phase ===
+
+The inline Ghidra script (GHIDRA_SURVEY_SCRIPT in this file) needs to be
+run via Ghidra MCP's run_script_inline tool. It outputs all functions with
+their TMode to stdout.
+
+Steps:
+  1. In a Ghidra MCP session with FruitNinja_v1_6_1.exe open,
+     run the ArmThumbManifestSurvey script (copy from this file's
+     GHIDRA_SURVEY_SCRIPT constant, paste into run_script_inline).
+
+  2. Save stdout to: tmp/arm-thumb-survey.txt
+
+  3. Re-run this script:
+     python tools/asm-verify/discover-arm-mode.py
+
+Or, for a quick targeted check, use this heuristic:
+  - Functions at addresses 0x102xxx-0x119xxx are mostly Thumb PLT thunks
+  - Only functions at 0x001xxxxx-0x002xxxxx are actual game code
+  - Most game code is Thumb; confirmed ARM exceptions: ColAABB (0x00275ccc)
+""")
+
+
+if __name__ == "__main__":
+    manifest_entries = parse_manifest()
+    print(f"Manifest entries with source file: {len(manifest_entries)}")
+
+    if os.path.exists(SURVEY_PATH):
+        with open(SURVEY_PATH) as f:
+            survey_data = json.load(f)
+        print(f"Survey data: {len(survey_data.get('arm', []))} ARM, "
+              f"{len(survey_data.get('thumb', []))} Thumb")
+
+        arm_files = process_survey(
+            survey_data.get("arm", []) + survey_data.get("thumb", []),
+            manifest_entries)
+
+        write_cmake_fragment(arm_files)
+
+        print(f"\nARM-mode files to add -marm: {len(arm_files)}")
+        for fname, funcs in sorted(arm_files.items()):
+            print(f"  {fname}: {len(funcs)} fn(s)")
+            for mangled, addr in funcs[:5]:
+                print(f"    {mangled} @ {addr}")
+    else:
+        print(f"Survey data not found at {SURVEY_PATH}")
+        print_ghidra_instructions()
+        print()
+        print("For now, known ARM-mode files (from manual RE):")
+        print("  src/engine/collision/ColAABB.cpp  (ColAABB::UpdateVertices @ 0x00275ccc)")

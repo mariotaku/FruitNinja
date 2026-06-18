@@ -1,20 +1,21 @@
 ---
 name: asm-fix-loop
-description: Autonomous find→fix→verify→triage loop. Iterates over top asm-verify excess scores, dispatches implementer agents in parallel, commits precise file sets, re-runs asm-verify, syncs triage. Use for batch mechanical/structural divergence reduction.
+description: Autonomous find→fix→verify→triage loop. Addresses BOTH positive excess (bloat) and negative excess (missing code) in asm-verify scores. Dispatches implementer and re-analyst agents, commits precise file sets, re-runs asm-verify. Use for batch divergence reduction across the port.
 user_invocable: true
 ---
 
 # ASM Fix Loop
 
-Autonomous loop that chips at asm-verify divergences by dispatching
-implementer agents in parallel, committing their changes precisely,
-re-running asm-verify, and syncing triage. Each round: pick top excess
-targets → dispatch → commit → verify → repeat.
+Autonomous loop that chips at asm-verify divergences in **both directions**:
+- **Positive excess** (port has MORE code than binary) → mechanical trimming or structural fix
+- **Negative excess** (port has LESS code than binary) → RE the gap, port the missing code, or empty-and-rebuild from binary spec
+
+Each round: scan both directions → dispatch → commit → verify → repeat.
 
 ## When to invoke
 
 - After a fresh `bash tools/asm-verify/run.sh` produces a report with
-  actionable divergences (port-only guards, identity bloat, dead code).
+  actionable divergences (port-only guards, identity bloat, dead code, missing code).
 - When you want to run unattended: `/loop asm-fix-loop` self-paces.
 - For a fixed-cadence sweep: `/loop 5m asm-fix-loop`.
 
@@ -25,22 +26,38 @@ targets → dispatch → commit → verify → repeat.
 
 ## Workflow
 
-### 1. Scan targets
+### 1. Scan targets — both directions
 
+**Positive excess (bloat — port has extra code):**
 ```sh
 python -c "
 import json
 d = json.load(open('tmp/asm-verify/report.json'))
-syms = [s for s in d['symbols'] if s.get('score')]
+syms = [s for s in d['symbols'] if s.get('score') and s['score'] - s['max_score'] > 1000]
 syms.sort(key=lambda s: s['score'] - s['max_score'], reverse=True)
 for s in syms[:15]:
-    print(f'{s[\"score\"]-s[\"max_score\"]:+6d} {s[\"score\"]:>6}/{s[\"max_score\"]:<6} {s[\"mangled\"][:70]}')
+    print(f'{s[\"score\"]-s[\"max_score\"]:+6d} {s[\"score\"]:>6}/{s[\"max_score\"]:<6} {s[\"mangled\"][:80]}')
+"
+```
+
+**Negative excess (missing — port has LESS code than binary):**
+```sh
+python -c "
+import json
+d = json.load(open('tmp/asm-verify/report.json'))
+syms = [s for s in d['symbols'] if s.get('score') and s['score'] - s['max_score'] < -500]
+# filter known false-positives
+syms = [s for s in syms if not s['mangled'].startswith('_GLOBAL__I_')]
+syms.sort(key=lambda s: s['score'] - s['max_score'])
+for s in syms[:15]:
+    pct = s['score']/s['max_score']*100 if s['max_score'] > 0 else 0
+    print(f'{s[\"score\"]-s[\"max_score\"]:+6d} {s[\"score\"]:>6}/{s[\"max_score\"]:<6} ({pct:.0f}%) {s[\"mangled\"][:80]}')
 "
 ```
 
 ### 2. Categorize targets
 
-Pick targets by pattern (most effective to least):
+#### Bloat (positive excess) — priority order:
 
 | Priority | Pattern | Why |
 |----------|---------|-----|
@@ -52,10 +69,17 @@ Pick targets by pattern (most effective to least):
 | 6 | Singleton `GetInstance()` → direct `m_instance` | Removes guard-variable overhead |
 | 7 | Container patterns (std::vector → raw arrays) | Structural, needs RE |
 
-### 3. Dispatch implementer agents
+#### Missing (negative excess) — severity-driven:
 
-For each target, launch an `implementer` agent with a specific prompt:
+- **Critical** (< 50% of binary): function is seriously incomplete. Dispatch `re-analyst` to RE the gap; if the port implementation is too divergent, **empty it and rebuild from the binary spec**.
+- **Moderate** (50-80%): RE what's missing, fill the gap.
+- **Minor** (80-99%): likely a few missing branches or statements. Quick RE + patch.
 
+### 3. Dispatch agents
+
+#### For bloat (> 0 excess):
+
+Launch `implementer` agent directly:
 ```
 Fix <ClassName>::<Function> (score <N>/<M>, <ratio>% ratio).
 File: <path>. Check for port-only patterns: singleton guards,
@@ -63,7 +87,19 @@ LOG calls, redundant field writes. Trim mechanical bloat.
 Build: cmake --build build -j$(nproc)
 ```
 
-- **Run in parallel**: dispatch 2-4 agents simultaneously for independent files.
+#### For missing (< 0 excess):
+
+**Two-phase approach:**
+1. **First:** dispatch `re-analyst` to decompile the binary function, diff against port, produce a gap report with:
+   - Complete binary pseudocode
+   - What the port has vs. what's missing
+   - Verdict: patch the gaps, or empty-and-rebuild (if port diverged too far)
+2. **Then:** dispatch `implementer` with the RE spec, or if empty-and-rebuild: re-port from scratch matching binary.
+
+For critical cases (port has < 50% of binary code), the `re-analyst` should default to recommending empty-and-rebuild unless the missing pieces are clearly isolated.
+
+- **Run 2-3 agents per round** — mix 2 bloat + 1 missing, or 1 bloat + 2 missing depending on what's available.
+- **Run in parallel**: dispatch agents simultaneously for independent files.
 - **Background**: set `run_in_background: true` so the loop keeps moving.
 - Each agent reports changed files at the end of its response.
 
@@ -81,19 +117,18 @@ git commit -m "WaveManager: <one-line summary>"
 - If multiple agents complete simultaneously, commit each one separately.
 - Commit message format: `ClassName: <what changed>`
 
-### 5. Re-verify periodically
+### 5. Re-verify after every round
 
-After each batch of 3-5 commits, run a checkpoint:
+After all agents in a round complete and are committed, re-run:
 
 ```sh
 bash tools/asm-verify/run.sh
-python -c "..."  # sync triage scores
 ```
 
 Check for:
 - Regressions (score went UP)
-- New DIVERGE entries
 - Cross-build breakage (compile errors in verify.sh output)
+- Missing gaps that didn't close (may need empty-and-rebuild)
 
 ### 6. Triage
 
@@ -103,9 +138,10 @@ with current scores for any DIVERGE/SUSPICIOUS entries.
 ### 7. Repeat
 
 Go back to step 1 with fresh scores. Stop when:
-- Mechanical wins are exhausted (remaining excess is structural/compiler artifacts)
+- Both bloat and missing targets are exhausted (remaining divergence is structural/compiler artifacts)
 - Cross-build breaks and can't be quickly fixed
 - User says stop
+- Round count reached (if specified)
 
 ## Anti-patterns
 
@@ -127,3 +163,10 @@ Go back to step 1 with fresh scores. Stop when:
   changing the container
 - `SmartPtr<T> const&` vs `SmartPtr<T>` — ARM32 ABI identical but different mangling;
   fix only when confirmed by binary nm that binary uses the other form
+- **ARM vs Thumb mode mismatch** — some binary functions are ARM mode (4-byte insns)
+  but cross-build compiles everything in Thumb-2 mode. The asm-differ sees different
+  encoding + scheduling for semantically identical code. Before dispatching on a
+  negative-excess target, check: does the binary function end with `bx lr` (Thumb,
+  `0x4770`) or ARM `bx lr` (`0xe12fff1e`)? If ARM mode and the port's compiled output
+  has the same instruction count (~37 vs ~37), it's a mode-mismatch false positive.
+  Verdict: `ACCEPT-cosmetic`.
