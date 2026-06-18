@@ -157,46 +157,48 @@ def main():
     filtered_count = 0
     binary_keys = set()
 
+    # Build binary-key -> params list index
+    binary_by_key: dict[str, list[str]] = defaultdict(list)
     for s in binary:
         k = method_key(s)
         if k:
+            bp = param_sig(s) or "?"
+            binary_by_key[k].append(bp)
             binary_keys.add(k)
-            if k in port_keys:
-                b_params = param_sig(s) or "?"
-                p_sigs = [(param_sig(ps) or "?", ps) for ps in port_keys[k]]
-                # If ANY port overload has identical normalized params → matched
-                if any(b_params == pp for pp, _ in p_sigs):
-                    continue
-                # No exact match → try known-alias filter, else flag
-                flagged = False
-                for pp, _ in p_sigs:
-                    if _is_known_alias(k, b_params, pp):
-                        filtered_count += 1
-                        flagged = True
-                if flagged:
-                    continue
-                # Report: best-effort, collapse multiple port overloads
-                pp_str = p_sigs[0][0] if len(p_sigs) == 1 else f"[{', '.join(pp for pp,_ in p_sigs[:3])}]"
-                mismatches.append((k, b_params, pp_str))
 
-    # Second pass: port-only symbols whose method key exists in binary
-    for s in port:
-        k = method_key(s)
-        if k and k in binary_keys:
-            already_flagged = any(k == mk for mk, _, _ in mismatches)
-            if already_flagged:
-                continue
-            binary_has_match = any(
-                method_key(bs) == k and param_sig(bs) == param_sig(s)
-                for bs in binary
-            )
-            if not binary_has_match:
-                p_params = param_sig(s) or "?"
-                b_params = next((param_sig(bs) for bs in binary if method_key(bs) == k), "?")
-                if _is_known_alias(k, b_params, p_params):
+    # Stable overload comparison: sort both sides by (param_count, alphabetical),
+    # then 1:1 compare. Unpaired leftovers become mismatches.
+    for k in binary_keys & set(port_keys.keys()):
+        b_sigs = sorted(binary_by_key[k], key=lambda p: (p.count(',') + 1, p))
+        p_sigs = sorted([param_sig(ps) or "?" for ps in port_keys[k]],
+                        key=lambda p: (p.count(',') + 1, p))
+
+        for i in range(max(len(b_sigs), len(p_sigs))):
+            bp = b_sigs[i] if i < len(b_sigs) else "?"
+            pp = p_sigs[i] if i < len(p_sigs) else "?"
+            if bp != pp:
+                if _is_known_alias(k, bp, pp):
                     filtered_count += 1
                     continue
-                mismatches.append((k, b_params, p_params))
+                # Only flag if it's a real difference (not just missing on one side
+                # due to different overload count — those go through second pass)
+                if bp != "?" and pp != "?":
+                    mismatches.append((k, bp, pp))
+
+    # Second pass: unmatched overloads (different counts on either side)
+    for k in binary_keys & set(port_keys.keys()):
+        b_count = len(binary_by_key[k])
+        p_count = len(port_keys[k])
+        if b_count != p_count:
+            # Already flagged any pairwise mismatches above.
+            # Flag the unpaired extras.
+            b_sigs = sorted(binary_by_key[k], key=lambda p: (p.count(',') + 1, p))
+            p_sigs = sorted([param_sig(ps) or "?" for ps in port_keys[k]],
+                            key=lambda p: (p.count(',') + 1, p))
+            extra = b_sigs[min(b_count, p_count):] + p_sigs[min(b_count, p_count):]
+            for ep in extra:
+                if not any(k == mk and ep == mp for mk, mp, _ in mismatches):
+                    mismatches.append((k, f"binary:{b_count}", f"port:{p_count}"))
 
     # Group by class
     by_class: dict[str, list] = defaultdict(list)
