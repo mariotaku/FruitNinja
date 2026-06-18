@@ -84,10 +84,10 @@ docker run --rm \
     "$IMAGE" -c 'bash /work/tools/asm-verify/verify.sh'
 
 # verify.sh writes the report into /staging/tmp; lift it back out via a
-# scratch container.
+# scratch container that mounts the named volume read-only.
 docker run --rm \
     -v "$PROJECT_ROOT_DOCKER:/work" \
-    --tmpfs /staging:exec,size=2G \
+    -v fnverify-src:/staging:ro \
     "$IMAGE" -c '
         mkdir -p /work/tmp/asm-verify
         cp /staging/tmp/asm-verify/report.md   /work/tmp/asm-verify/report.md
