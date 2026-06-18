@@ -5,108 +5,86 @@
 #include "asset/IFile.h"
 #include <cstdint>
 
-// Mortar::File — polymorphic file handle (sizeof 0x40 on 32-bit ARM).
-// Binary: abstract base; concrete vtable installed by derived subclass.
-// Ctor @ 0x0019b970 writes vptr=0 (derived subclass installs real vtable).
-// Virtual methods: Open, Size, Read, Close dispatched through vtable PTR slots.
+// Mortar::File — concrete file handle (sizeof 0x40 on 32-bit ARM).
+// NOT polymorphic: +0x00 is IFile* m_pIFile (delegate pointer), NOT a vptr.
 //
-// Binary field layout (confirmed from ctor + Font::Load stack array of 64 File instances):
-//   +0x00  void**        vptr         (installed by derived class; ctor writes 0)
-//   +0x04  unsigned long m_size       (ctor arg3; binary "unsigned long size")
-//   +0x08  AsciiString   m_path       (40B SSO; ctor constructs in-place)
-//   +0x30  uint32_t      m_position   (zeroed by ctor)
-//   +0x34  bool          m_field34    (ctor: false)
-//   +0x35  bool          m_field35    (ctor: false)
-//   +0x36  bool          m_field36    (ctor: false)
-//   +0x37  bool          m_field37    (ctor: true -- default=1)
-//   +0x38  uint32_t      m_field38    (zeroed by ctor)
-//   +0x3C  int           m_mode       (ctor arg2)
+// Binary field layout (confirmed from ctor @ 0x00251604, v1.6.1):
+//   +0x00  IFile*         m_pIFile        = NULL
+//   +0x04  unsigned long  m_systemID      = systemID param (ctor arg3)
+//   +0x08  AsciiString    m_path          = path param (ctor arg1)
+//   +0x30  void*          m_pData         = NULL
+//   +0x34  bool           m_bIsOpen       = false
+//   +0x35  bool           m_bLocked       = false
+//   +0x36  bool           m_bIsLoaded     = false
+//   +0x37  bool           m_bOwnsBuffer   = true
+//   +0x38  unsigned long  m_sizeCache     = 0
+//   +0x3C  int            m_mode          = mode param (ctor arg2)
 // Total: 0x40 (64)
-//
-// Port-only members (tail, guarded #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)):
-//   m_pIFile, m_systemID, m_pData, m_bOwnsBuffer
-//
-// POLYMORPHIC: vptr at +0x00. Virtual methods: Open, Size, Read, Close.
-// The port's concrete implementation uses IFile delegation via the tail m_pIFile field.
 
 namespace Mortar {
 
-// FileSeekMode — values match binary IFile::Seek() convention.
+// FileSeekMode — values match IFile::Seek() / POSIX fseek convention.
 // Binary @ 0x0019b7c4
 enum FileSeekMode : int { FSEEK_SET = 0, FSEEK_CUR = 1, FSEEK_END = 2 };
 
 class File {
 public:
-    // Binary @ 0x0019b970 — record path/mode/size; defer all I/O to Open()/Load()
-    // Ctor writes vptr=0; derived subclass ctor installs real vtable.
+    // Binary @ 0x00251604 — record path/mode/systemID; defer all I/O to Open()/Load()
     File(const char* path, int openMode, unsigned long systemID);
-    // Binary @ 0x0019b948 — Unload() then dtor the embedded AsciiString
-    virtual ~File();
+    // Binary @ 0x002519ac — Unload() then dtor the embedded AsciiString
+    ~File();
 
-    // Binary @ vtbl+0x08 — open via FileManager; cache size from IFile::Size()
-    virtual bool Open();
-    // Binary @ vtbl+0x0c — cached size
-    virtual unsigned long Size() const;
-    // Binary @ vtbl+0x10 — read from IFile
-    virtual bool Read(void* dst, unsigned long n);
-    // Binary @ vtbl+0x14 — virtual close
-    virtual void Close();
+    // Binary @ 0x00251810 — open via IFileSystem* or FileManager; cache size from IFile::Size()
+    bool Open(IFileSystem* pFileSystem = 0);
+    // Binary @ 0x002517f0 — returns m_sizeCache
+    unsigned long Size() const;
+    // Binary @ 0x002519d8 — delegate to m_pIFile->Read()
+    bool Read(void* dst, unsigned long n);
+    // Binary @ 0x00251914 — close and delete m_pIFile
+    void Close();
 
-    // Non-virtual accessors
-    // Binary @ 0x0019b7dc
-    bool IsLoaded() const;
-    // Binary @ 0x0019b7ec
-    bool IsOpen() const;
-    // Binary @ 0x0019b7f4
-    bool CanWrite() const;
-    // Binary @ 0x0019b778
-    void* Data() const;
-    // Binary @ 0x0019b77c
-    const AsciiString& FileName() const;
-
-    // Binary @ 0x0019b7b8
-    bool Write(const void* src, unsigned long n);
-    // Binary @ 0x0019b7c4
-    bool Seek(FileSeekMode mode, long offset);
-
-    // Binary @ 0x0019b8c0
+    // Binary @ 0x0025168c — load via FileManager::GetFileData (not via Open/Read)
     bool Load(void* userBuffer, unsigned long userBufferSize);
-    // Binary @ 0x0019b890
+    // Binary @ 0x00251964 — free buffer, close, reset state
     void Unload();
 
-    // Binary @ 0x0019b808
+    // Binary @ 0x002519f0 — write to IFile (normal path, encryption defunct)
+    bool Write(const void* src, unsigned long n);
+    // Binary @ 0x002224ac — write C string; delegates to Write(str, strlen(str))
+    bool Write(const char* str);
+
+    // Binary @ 0x00251a7c — delegate to m_pIFile->Seek(mode, offset); no mode conversion
+    bool Seek(FileSeekMode mode, long offset);
+
+    // Non-virtual accessors
+    bool IsLoaded() const;     // Binary @ 0x002517a6
+    bool IsOpen() const;       // Binary @ 0x002517aa
+    bool CanWrite() const;     // Binary @ 0x002517b2
+    void* Data() const;        // Binary @ 0x002517b6
+    const AsciiString& FileName() const;  // Binary @ 0x002517ba
+    bool IsLocked() const;     // Binary @ 0x002517a0
+    void Lock(bool locked);    // Binary @ 0x0025179c
+
+    unsigned int GetPosition() const;  // Binary @ 0x00251ac8 — m_pIFile->Tell()
+    unsigned int Hash() const;         // Binary @ 0x00251808 — m_path.Hash()
+
+    // Static helpers
+    // Binary @ 0x0025164c
     static bool Exists(const char* path, unsigned long systemID);
-    // Binary @ 0x0019b90c
+    // Binary @ 0x0025166c
     static long SizeOfFile(const char* path, unsigned long systemID);
 
-    // Binary @ 0x0019b7fc — tail-call IFile vtable slot +0x1c (Tell); returns current position
-    unsigned int GetPosition() const;
-    // Binary @ 0x0019b884 — delegate to AsciiString::Hash on m_path (+0x08)
-    unsigned int Hash() const;
-    // Binary @ 0x0019b7e4 — return m_field35 (+0x35), the lock flag
-    bool IsLocked() const;
-    // Binary @ 0x0019b76c — set m_field35 (+0x35) lock flag from arg
-    void Lock(bool locked);
-
-    // --- Binary-faithful field layout (+0x04..+0x3F after vptr at +0x00) ---
-    unsigned long   m_size;         // +0x04  (binary ctor arg3)
+    // --- Binary-faithful field layout (+0x00..+0x3F) ---
+    IFile*          m_pIFile;       // +0x00  (NOT a vptr — File is concrete)
+    unsigned long   m_systemID;     // +0x04  (ctor arg3; original "unsigned long systemID")
     AsciiString     m_path;         // +0x08  (40B SSO)
-    uint32_t        m_position;     // +0x30
-    bool            m_field34;      // +0x34  (port: m_bIsOpen)
-    bool            m_field35;      // +0x35  (port: m_bSaved)
-    bool            m_field36;      // +0x36  (port: m_bIsLoaded)
-    bool            m_field37;      // +0x37  (default=1 in binary ctor)
-    uint32_t        m_field38;      // +0x38
+    void*           m_pData;        // +0x30
+    bool            m_bIsOpen;      // +0x34
+    bool            m_bLocked;      // +0x35
+    bool            m_bIsLoaded;    // +0x36
+    bool            m_bOwnsBuffer;  // +0x37  (default = true in binary ctor)
+    unsigned long   m_sizeCache;    // +0x38
     int             m_mode;         // +0x3C
-
-    // --- Port-only tail fields (not present in binary at these offsets) ---
-    // Placed after the binary-faithful fields; excluded from the cross-build sizeof.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    IFile*        m_pIFile;
-    unsigned long m_systemID;
-    void*         m_pData;
-    bool          m_bOwnsBuffer;
-#endif
 
 #ifdef __bada__
     friend struct FileLayoutAssert;
@@ -115,12 +93,17 @@ public:
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 struct FileLayoutAssert {
-    static_assert(offsetof(File, m_size)     == 0x04, "File::m_size offset");
-    static_assert(offsetof(File, m_path)     == 0x08, "File::m_path offset");
-    static_assert(offsetof(File, m_position) == 0x30, "File::m_position offset");
-    static_assert(offsetof(File, m_field34)  == 0x34, "File::m_field34 offset");
-    static_assert(offsetof(File, m_mode)     == 0x3C, "File::m_mode offset");
-    static_assert(sizeof(File) == 0x40,               "File sizeof");
+    static_assert(offsetof(File, m_pIFile)     == 0x00, "File::m_pIFile offset");
+    static_assert(offsetof(File, m_systemID)   == 0x04, "File::m_systemID offset");
+    static_assert(offsetof(File, m_path)       == 0x08, "File::m_path offset");
+    static_assert(offsetof(File, m_pData)      == 0x30, "File::m_pData offset");
+    static_assert(offsetof(File, m_bIsOpen)    == 0x34, "File::m_bIsOpen offset");
+    static_assert(offsetof(File, m_bLocked)    == 0x35, "File::m_bLocked offset");
+    static_assert(offsetof(File, m_bIsLoaded)  == 0x36, "File::m_bIsLoaded offset");
+    static_assert(offsetof(File, m_bOwnsBuffer)== 0x37, "File::m_bOwnsBuffer offset");
+    static_assert(offsetof(File, m_sizeCache)  == 0x38, "File::m_sizeCache offset");
+    static_assert(offsetof(File, m_mode)       == 0x3C, "File::m_mode offset");
+    static_assert(sizeof(File) == 0x40,                  "File::sizeof");
 };
 #endif
 
