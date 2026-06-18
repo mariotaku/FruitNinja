@@ -154,11 +154,12 @@ void AnimationState::LinkMesh(const Mortar::SmartPtr<Model>& m) {
     RebindAnim();
 }
 
-// Binary @ 0x001ad370
+// v1.6.1 AnimationState::PlayAnim @ 0x0026f3a8
 void AnimationState::PlayAnim(const AsciiString& name, float time, bool loop) {
-    m_CurrentIter = GetAnimIter(name);
+    AnimIter it = GetAnimIter(name);
     m_Loop  = loop;
     m_Time  = time;
+    m_CurrentIter = it;
     RebindAnim();
 }
 
