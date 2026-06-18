@@ -320,6 +320,36 @@ void LoopingSound::SetLoopDesiredVol(float vol) {
 }
 
 // -----------------------------------------------------------------------
+// ParseSlashModColourType @ v1.6.1 0x0017b4a8
+// Maps XML `type` attr string to ColourType enum. Static-local StringHash
+// cache compared against: NONE(0), LERP(1), PER_SLASH(2), CONTINUOUS(3).
+// Default return 0 (NONE) for null/empty/unmatched.
+// -----------------------------------------------------------------------
+static int ParseSlashModColourType(const char* str) {
+    // Static local hashes (one-time init)
+    static uint32_t hashNone = 0;
+    static uint32_t hashLerp = 0;
+    static uint32_t hashPerSlash = 0;
+    static uint32_t hashContinuous = 0;
+    static bool hashesInitialised = false;
+    if (!hashesInitialised) {
+        hashNone       = StringHash("NONE");
+        hashLerp       = StringHash("LERP");
+        hashPerSlash   = StringHash("PER_SLASH");
+        hashContinuous = StringHash("CONTINUOUS");
+        hashesInitialised = true;
+    }
+
+    if (str == NULL || str[0] == '\0') return 0;
+    uint32_t h = StringHash(str);
+    if (h == hashNone)       return 0;
+    if (h == hashLerp)       return 1;
+    if (h == hashPerSlash)   return 2;
+    if (h == hashContinuous) return 3;
+    return 0;
+}
+
+// -----------------------------------------------------------------------
 // SlashModInfo
 // -----------------------------------------------------------------------
 
@@ -351,9 +381,17 @@ SlashModInfo::SlashModInfo()
     _pad76[0] = _pad76[1] = 0;
 }
 
-// SlashModInfo dtor
+// SlashModInfo dtor @ v1.6.1 0x00113ddc / 0x00113f24
+// Binary frees m_pColours via operator_delete(m_pColours - 8) because the
+// allocation header (element_size=4, count) sits at the allocation start,
+// with m_pColours pointing 8 bytes past it.
 SlashModInfo::~SlashModInfo() {
-    delete[] m_pColours;
+    // BC: binary frees with operator_delete((void*)(m_pColours - 8)), sets to NULL.
+    // Use free() which corresponds to operator_delete under the port's toolchain.
+    if (m_pColours != nullptr) {
+        free((char*)m_pColours - 8);
+        m_pColours = nullptr;
+    }
     free(m_pTextureName2);
     free(m_pParticlePath);
     free(m_pContactParticle);
@@ -393,6 +431,11 @@ void SlashModInfo::SetEquipped() {
 }
 
 // ParseSlashModInfo @ 0x001126c0
+// DIFFERS: binary ParseSlashModInfo does NOT call ItemInfo::Parse and reads
+// slash-specific attributes directly from the root element (no child wrapper).
+// Port adaptation keeps ItemInfo::Parse + <slashModInfo> child navigation
+// because the asset XML schema nests slash attributes in a child element
+// (v1.6.1 ParseSlashModInfo @0x001126c0).
 void SlashModInfo::Parse(TiXmlElement* e) {
     ItemInfo::Parse(e);
 
@@ -401,15 +444,13 @@ void SlashModInfo::Parse(TiXmlElement* e) {
 
     const char* trueStr = "true";
 
-    // `type` attr -> m_ColourType
+    // `type` attr -> m_ColourType via ParseSlashModColourType
     const char* typeStr = smi.Attribute("type");
-    if (typeStr) {
-        if (CompareWords(typeStr, "PER_SLASH") != 0)      m_ColourType = 1;
-        else if (CompareWords(typeStr, "PER_SWIPE") != 0) m_ColourType = 2;
-        else                                               m_ColourType = 0;
-    }
+    m_ColourType = ParseSlashModColourType(typeStr);
 
-    // `texture` attr in <slashModInfo>
+    // DIFFERS: binary allocates 64-byte buffer + snprintf("%s.tex") for m_pTextureName2.
+    // Port stores the raw attribute value directly because the asset XML may or may not
+    // include ".tex" in the attribute value (v1.6.1 ParseSlashModInfo @0x001126c0).
     const char* tex2 = smi.Attribute("texture");
     CloneString(&m_pTextureName2, tex2);
 
@@ -454,26 +495,30 @@ void SlashModInfo::Parse(TiXmlElement* e) {
     }
 
     // <colour>R,G,B</colour> children -> m_pColours array.
-    // The XML uses element TEXT, not a value attribute -- e.g.
-    //   <colour>255,43,78</colour>     (disco palette entry)
-    // not
-    //   <colour value="255,43,78"/>
+    // Binary @ 0x001127ee-0x0011287a: counts <colour> children (storing to
+    // m_ColourCount each iteration), then allocates (count+2)*4 bytes with
+    // a header: [element_size=4, count], storing the data pointer at offset +8.
     int count = 0;
     TiXmlElement c = smi.FirstChildElement("colour");
     while (c) {
         count++;
+        m_ColourCount = count;
         c = c.NextSiblingElement("colour");
     }
-    m_ColourCount = count;
+    count = m_ColourCount;
     if (count > 0) {
-        delete[] m_pColours;
-        m_pColours = new Colour[count];
-        int idx = 0;
+        // Allocate header + data: two ints (element_size, count) then Colour array
+        int* raw = (int*)malloc((count + 2) * 4);
+        raw[0] = 4;               // element size = sizeof(Colour)
+        raw[1] = count;           // element count
+        Colour* colourPtr = (Colour*)(raw + 2);
+        m_pColours = colourPtr;
+
         c = smi.FirstChildElement("colour");
         while (c) {
             const char* cval = c.GetText();
-            if (cval) ParseColour(&m_pColours[idx], cval);
-            idx++;
+            if (cval) ParseColour(colourPtr, cval);
+            colourPtr++;
             c = c.NextSiblingElement("colour");
         }
     }
