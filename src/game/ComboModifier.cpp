@@ -88,7 +88,7 @@ void ComboModifier::FruitWasSliced(Fruit* fruit, int /*score*/, Mortar::Entity* 
 void ComboModifier::ComboWasCanceled(SlashEntity* slash) {
     uint8_t* s = reinterpret_cast<uint8_t*>(slash);
 
-    // slash->m_ComboEntityType (+0x17c) is reused as the live combo count.
+    // slash->m_ComboCounter (+0x17c) = the live combo count.
     int* pCount = reinterpret_cast<int*>(s + 0x17c);
     *pCount = 0;
 
@@ -101,7 +101,7 @@ void ComboModifier::ComboWasCanceled(SlashEntity* slash) {
 
     // Accumulate average slice position. Binary seeds from a zero global Vec3.
     Vec3 sum(0.0f, 0.0f, 0.0f);
-    int* comboArr = reinterpret_cast<int*>(s + 0x150); // m_ComboSliceArr[11]
+    int* comboArr = reinterpret_cast<int*>(s + 0x150); // m_ComboFruitTypes[10]
 
     std::list<Fruit*>::iterator it = m_SlicedFruit.begin();
     while (it != m_SlicedFruit.end()) {
@@ -123,8 +123,11 @@ void ComboModifier::ComboWasCanceled(SlashEntity* slash) {
     sum /= (float)(*pCount);
 
     MissControl* mc = MissControl::GetFree();
-    MissControl** pCombo = reinterpret_cast<MissControl**>(s + 0x180); // m_pComboMissControl
-    mc->MakeCombo(sum, *pCount, reinterpret_cast<int>(*pCombo));
+    // DIFFERS: original = reads from +0x180 via MissControl** cast (old m_pComboMissControl);
+    // new layout has m_ComboOnlineMode at +0x180 (the int value that MakeCombo expects).
+    // Binary offset +0x180 shifted from pointer to int — read as int directly.
+    int onlineMode = *reinterpret_cast<int*>(s + 0x180);
+    mc->MakeCombo(sum, *pCount, onlineMode);
 }
 
 void ComboModifier::ParseSpecific(TiXmlElement* /*xml*/) {}

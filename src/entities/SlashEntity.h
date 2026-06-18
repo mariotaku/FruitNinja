@@ -196,30 +196,20 @@ private:
     float m_SegLenSq;
     // +0x98  float  m_HeadThickScale  head thickness scale
     float m_HeadThickScale;
-    // +0x9c  int32_t  m_PendingSplats  signed splat-stream counter
-    int   m_PendingSplats;
+    // +0x9c  _Vector3<float>  m_SliceBladeDir  blade direction at slice (for splat velocity)
+    Vec3 m_SliceBladeDir;
 
-    // +0xa0  float  m_SliceTimerA
-    float m_SliceTimerA;
+    // +0xa8  _Vector3<float>  m_SliceFruitPos  position of most recently sliced entity
+    Vec3 m_SliceFruitPos;
 
-    // +0xa4  float  m_SliceTimerB
-    float m_SliceTimerB;
+    // +0xb4  int32_t  m_SliceFruitType  fruit type of most recently sliced entity
+    int m_SliceFruitType;
 
-    // +0xa8  _Vector3<float>  m_BladeVelAtSlice
-    Vec3 m_BladeVelAtSlice;
-
-    // +0xb4  int32_t  m_SliceEntityType  entity type of the most recently hit entity
-    int m_SliceEntityType;
-
-    // +0xb8  float  m_SwipeSoundTimer  cooldown between swipe SFX firings (Init: DAT seed)
+    // +0xb8  float  m_SwipeSoundTimer  cooldown between swipe SFX firings
     float m_SwipeSoundTimer;
 
-    // +0xbc..+0x103  Ghost direction ring: 6-entry Vec3 ring (stride 0xc = 12).
-    // Init zeroes 6 entries. AddPoint writes into slot (m_GhostIndex % 6).
-    // +0xbc: ghost ring slot 0 (Vec3)
-    // +0xc8: ghost ring slot 1 (Vec3)
-    // ... +0xf8: ghost ring slot 5 (Vec3) -- ends at +0x103
-    uint8_t _gap_0xbc[72];   // ghost ring storage: 6 * Vec3(12 bytes) = 72 bytes
+    // +0xbc  Vec3[6]  m_GhostDirRing  6-entry ghost direction ring (stride 0xc = 12)
+    Vec3 m_GhostDirRing[6];
 
     // +0x104  uint32_t  m_GhostIndex  current ghost ring-buffer write index
     unsigned int m_GhostIndex;
@@ -230,20 +220,31 @@ private:
     // +0x10c  _Vector3<float>  m_GhostDir  averaged ghost blade direction
     Vec3 m_GhostDir;
 
-    // +0x118  float  (DAT seed -- Init writes from DAT; used in UpdatePoints fade calc)
-    float m_field_0x118;
+    // +0x118  float  m_ComboTimer  per-swipe combo window accumulator (fractional seconds)
+    //         Reset to 0 on slice; fires at 0.095 to close combo window.
+    float m_ComboTimer;
 
-    // +0x11c  Vec3  m_SlicePos  position of most recently sliced entity (for splat/combo)
-    Vec3 m_SlicePos;
+    // +0x11c  MissControl*  m_pComboMissControl  combo popup control (or nullptr)
+    MissControl* m_pComboMissControl;
 
-    // +0x128..+0x12f  8-byte gap
-    uint8_t _gap_0x128[8];
+    // +0x120  float  m_GhostSpawnTimer  accumulator for ghost-spawn delay
+    float m_GhostSpawnTimer;
 
-    // +0x130  int32_t  m_field_0x130
-    int m_field_0x130;
+    // +0x124  uint8_t  m_GhostSpawnPending  one-shot flag to spawn ghost on next Update
+    uint8_t m_GhostSpawnPending;
+    uint8_t _pad125[3];
 
-    // +0x134  float  field_0x134  (Init: 0.0f)
-    float m_field_0x134;
+    // +0x128  Fruit*  m_pLastComboFruit  pointer to last fruit added to combo (for same-fruit skip)
+    Fruit* m_pLastComboFruit;
+
+    // +0x12c  int32_t  m_PendingSplats  signed splat-stream counter
+    int m_PendingSplats;
+
+    // +0x130  float  m_SplatTimer  accumulator between splat emissions (floored at -1.0)
+    float m_SplatTimer;
+
+    // +0x134  float  m_SplatInterval  inter-splat random delay interval
+    float m_SplatInterval;
 
     // +0x138  int32_t  m_TrailShiftA  counter, decremented by 2 in AddPoint capacity shift; Init: -1
     int m_TrailShiftA;
@@ -251,15 +252,15 @@ private:
     // +0x13c  int32_t  m_TrailShiftB  Init: -1
     int m_TrailShiftB;
 
-    // +0x140  binary m_BladeActive (uchar + 3 pad); port stores int -- latch math masks to low bits. v1.6.1
-    // DrawSlice shift-register for swipe ghost/SFX burst.
-    // DISTINCT from m_BombHitEdge (+0x4c, bomb one-shot).
-    // DrawSlice: old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) fire; }
-    // OnTouchActive re-arms with |= 1 each active frame.
-    int m_BladeActive;
+    // +0x140  uint8_t  m_BladeActive  binary uchar shift-register for swipe ghost/SFX burst.
+    //         DrawSlice latch: old=m_BladeActive; if(old){ nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) fire; }
+    //         OnTouchActive re-arms |= 1 each active frame.
+    //         DISTINCT from m_BombHitEdge (+0x4c, bomb one-shot).
+    uint8_t m_BladeActive;
+    uint8_t _pad141[3];
 
-    // +0x144  float  m_field_0x144  Init: 6.0f
-    float m_field_0x144;
+    // +0x144  float  m_ComboScoreScale  combo scale factor (swipe sound timing); Init: 6.0f
+    float m_ComboScoreScale;
 
     // +0x148  int32_t  m_field_0x148  Init: -1
     int m_field_0x148;
@@ -267,30 +268,20 @@ private:
     // +0x14c  int32_t  m_field_0x14c  Init: -1
     int m_field_0x14c;
 
-    // +0x150  int32_t[11]  m_ComboSliceArr  11-entry combo storage.
-    // v1.6.1 confirmed binary field. Init fills all 11 entries with -1 (0xFFFFFFFF).
-    //   [0]..[8]  = fruit types for current combo swipe (int)
-    //   [9]       = m_ComboTimer: per-swipe window accumulator (float reinterpret)  +0x174
-    //   [10]      = m_ComboCount: fruits sliced in current swipe (int)              +0x178
-    // Access [9] as float via m_ComboTimerRef() helper; [10] directly as int.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
-    int m_ComboSliceArr[11];
+    // +0x150  int32_t[10]  m_ComboFruitTypes  10-entry combo fruit type history.
+    //         v1.6.1 binary-faithful: fruit type indices. Init fills all 10 with -1.
+    //         Written at m_ComboCounter before increment.
+    //         ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    int m_ComboFruitTypes[10];
 
-    // Inline helper: returns a reference to m_ComboSliceArr[9] reinterpreted as float.
-    // m_ComboTimer (+0x174) aliases element [9] in the binary layout.
-    float& m_ComboTimerRef() { return *reinterpret_cast<float*>(&m_ComboSliceArr[9]); }
-    float  m_ComboTimerVal() const { return *reinterpret_cast<const float*>(&m_ComboSliceArr[9]); }
+    // +0x178  int32_t  m_ComboCount  number of fruits sliced in current combo swing
+    int m_ComboCount;
 
-    // m_ComboCount (+0x178) is element [10] directly.
-    int& m_ComboCountRef()  { return m_ComboSliceArr[10]; }
-    int  m_ComboCountVal()  const { return m_ComboSliceArr[10]; }
+    // +0x17c  int32_t  m_ComboCounter  next-write index into m_ComboFruitTypes (also live count)
+    int m_ComboCounter;
 
-    // +0x17c  int32_t  m_ComboEntityType  entity type of most recently combo'd fruit
-    int m_ComboEntityType;
-
-    // +0x180  void*  m_pComboMissControl  pointer to the MissControl combo-popup slot.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
-    MissControl* m_pComboMissControl;
+    // +0x180  int32_t  m_ComboOnlineMode  online MP mode for current combo (0/1/2)
+    int m_ComboOnlineMode;
 
     // +0x184  int16_t  m_AngleIndex  blade angle index (Atan2Idx result).
     // High 2 bytes unused. Init does NOT init this (seeded on first AddPoint).
@@ -472,29 +463,32 @@ static_assert(offsetof(SlashEntity, m_HeadPos)                 == 0x7c,  "SlashE
 static_assert(offsetof(SlashEntity, m_PrevHeadPos)             == 0x88,  "SlashEntity::m_PrevHeadPos");
 static_assert(offsetof(SlashEntity, m_SegLenSq)                == 0x94,  "SlashEntity::m_SegLenSq");
 static_assert(offsetof(SlashEntity, m_HeadThickScale)          == 0x98,  "SlashEntity::m_HeadThickScale");
-static_assert(offsetof(SlashEntity, m_PendingSplats)           == 0x9c,  "SlashEntity::m_PendingSplats");
-static_assert(offsetof(SlashEntity, m_SliceTimerA)             == 0xa0,  "SlashEntity::m_SliceTimerA");
-static_assert(offsetof(SlashEntity, m_SliceTimerB)             == 0xa4,  "SlashEntity::m_SliceTimerB");
-static_assert(offsetof(SlashEntity, m_BladeVelAtSlice)         == 0xa8,  "SlashEntity::m_BladeVelAtSlice");
-static_assert(offsetof(SlashEntity, m_SliceEntityType)         == 0xb4,  "SlashEntity::m_SliceEntityType");
+static_assert(offsetof(SlashEntity, m_SliceBladeDir)           == 0x9c,  "SlashEntity::m_SliceBladeDir");
+static_assert(offsetof(SlashEntity, m_SliceFruitPos)           == 0xa8,  "SlashEntity::m_SliceFruitPos");
+static_assert(offsetof(SlashEntity, m_SliceFruitType)          == 0xb4,  "SlashEntity::m_SliceFruitType");
 static_assert(offsetof(SlashEntity, m_SwipeSoundTimer)         == 0xb8,  "SlashEntity::m_SwipeSoundTimer");
-static_assert(offsetof(SlashEntity, _gap_0xbc)                 == 0xbc,  "SlashEntity::ghost ring");
+static_assert(offsetof(SlashEntity, m_GhostDirRing)            == 0xbc,  "SlashEntity::m_GhostDirRing");
 static_assert(offsetof(SlashEntity, m_GhostIndex)              == 0x104, "SlashEntity::m_GhostIndex");
 static_assert(offsetof(SlashEntity, m_GhostCount)              == 0x108, "SlashEntity::m_GhostCount");
 static_assert(offsetof(SlashEntity, m_GhostDir)                == 0x10c, "SlashEntity::m_GhostDir");
-static_assert(offsetof(SlashEntity, m_field_0x118)             == 0x118, "SlashEntity::m_field_0x118");
-static_assert(offsetof(SlashEntity, m_SlicePos)                == 0x11c, "SlashEntity::m_SlicePos");
-static_assert(offsetof(SlashEntity, m_field_0x130)             == 0x130, "SlashEntity::m_field_0x130");
-static_assert(offsetof(SlashEntity, m_field_0x134)             == 0x134, "SlashEntity::m_field_0x134");
+static_assert(offsetof(SlashEntity, m_ComboTimer)              == 0x118, "SlashEntity::m_ComboTimer");
+static_assert(offsetof(SlashEntity, m_pComboMissControl)       == 0x11c, "SlashEntity::m_pComboMissControl");
+static_assert(offsetof(SlashEntity, m_GhostSpawnTimer)         == 0x120, "SlashEntity::m_GhostSpawnTimer");
+static_assert(offsetof(SlashEntity, m_GhostSpawnPending)       == 0x124, "SlashEntity::m_GhostSpawnPending");
+static_assert(offsetof(SlashEntity, m_pLastComboFruit)         == 0x128, "SlashEntity::m_pLastComboFruit");
+static_assert(offsetof(SlashEntity, m_PendingSplats)           == 0x12c, "SlashEntity::m_PendingSplats");
+static_assert(offsetof(SlashEntity, m_SplatTimer)              == 0x130, "SlashEntity::m_SplatTimer");
+static_assert(offsetof(SlashEntity, m_SplatInterval)           == 0x134, "SlashEntity::m_SplatInterval");
 static_assert(offsetof(SlashEntity, m_TrailShiftA)             == 0x138, "SlashEntity::m_TrailShiftA");
 static_assert(offsetof(SlashEntity, m_TrailShiftB)             == 0x13c, "SlashEntity::m_TrailShiftB");
 static_assert(offsetof(SlashEntity, m_BladeActive)             == 0x140, "SlashEntity::m_BladeActive");
-static_assert(offsetof(SlashEntity, m_field_0x144)             == 0x144, "SlashEntity::m_field_0x144");
+static_assert(offsetof(SlashEntity, m_ComboScoreScale)         == 0x144, "SlashEntity::m_ComboScoreScale");
 static_assert(offsetof(SlashEntity, m_field_0x148)             == 0x148, "SlashEntity::m_field_0x148");
 static_assert(offsetof(SlashEntity, m_field_0x14c)             == 0x14c, "SlashEntity::m_field_0x14c");
-static_assert(offsetof(SlashEntity, m_ComboSliceArr)           == 0x150, "SlashEntity::m_ComboSliceArr");
-static_assert(offsetof(SlashEntity, m_ComboEntityType)         == 0x17c, "SlashEntity::m_ComboEntityType");
-static_assert(offsetof(SlashEntity, m_pComboMissControl)       == 0x180, "SlashEntity::m_pComboMissControl");
+static_assert(offsetof(SlashEntity, m_ComboFruitTypes)         == 0x150, "SlashEntity::m_ComboFruitTypes");
+static_assert(offsetof(SlashEntity, m_ComboCount)              == 0x178, "SlashEntity::m_ComboCount");
+static_assert(offsetof(SlashEntity, m_ComboCounter)            == 0x17c, "SlashEntity::m_ComboCounter");
+static_assert(offsetof(SlashEntity, m_ComboOnlineMode)         == 0x180, "SlashEntity::m_ComboOnlineMode");
 static_assert(offsetof(SlashEntity, m_AngleIndex)              == 0x184, "SlashEntity::m_AngleIndex");
 #endif
 
