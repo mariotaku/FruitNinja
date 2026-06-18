@@ -86,19 +86,31 @@ public:
     float field_0x6c;         // +0x6c
     // +0x70: critical chance multiplier
     float m_CritChanceMult;   // +0x70
-    // +0x74: global speed accumulator (Reset loads m_SpeedClampStart[gameMode])
-    float field_0x74;         // +0x74
-    // +0x78: dtMod from PowerUpManager (default 1.0)
-    float field_0x78;         // +0x78
-    // +0x7c: per-mode dtInc (speed accumulator increment). Parsed from <defaults> "dtInc".
-    // binary @ 0x00125ac4: speed = field_0x74 + dt * m_DtIncPerMode[mode]
-    float m_DtIncPerMode[4];      // +0x7c
-    // +0x8c: per-mode globalDtStart lower bound. Parsed from <defaults> "globalDtStart".
+    // +0x74: globalDt base (set in ResetGlobalDt to dt; Reset to m_SpeedClampStart[gameMode]).
+    float field_0x74;             // +0x74
+
+    // +0x78: speed accumulator (increment base for dtInc). Binary @ 0x001267a0
+    // accumulates into +0x78; NOT a dtMod from PowerUpManager (that's at +0x7c).
+    float m_SpeedAccum;           // +0x78 (was field_0x78)
+
+    // +0x7c: dtMod from PowerUpManager (default 1.0 speed multiplier).
+    // Binary: PowerUpManager::Update writes dtMod into +0x7c.
+    // v1.6.1 WaveManager field @ 0x001267a0
+    float m_SpeedScale;           // +0x7c
+
+    // +0x80: dt * combo divisor for PowerUpManager::Update.
+    // v1.6.1 WaveManager field @ 0x001267a0
+    float m_ComboSpeedDivisor;    // +0x80
+
+    // +0x84: per-mode dtInc (speed accumulator increment). Parsed from <defaults> "globalDtInc".
+    // binary @ 0x00125ac4: speed = m_SpeedAccum + dt * m_DtIncPerMode[mode]
+    float m_DtIncPerMode[4];      // +0x84 (was +0x7c)
+    // +0x94: per-mode globalDtStart lower bound. Parsed from <defaults> "globalDtStart".
     // DIFFERS: original values unknown; using 1.0f per mode as placeholder.
-    float m_SpeedClampStart[4];   // +0x8c
-    // +0x9c: per-mode speed upper bound. Parsed from <defaults> "globalDtMax".
+    float m_SpeedClampStart[4];   // +0x94 (was +0x8c)
+    // +0xa4: per-mode speed upper bound. Parsed from <defaults> "globalDtMax".
     // DIFFERS: original values unknown; using 100.0f per mode as placeholder.
-    float m_SpeedClampMax[4];     // +0x9c
+    float m_SpeedClampMax[4];     // +0xa4 (was +0x9c)
 
     // +0xac: 4 vectors of WAVE_INFO* (one per game mode). Binary stride 0xc per mode.
     std::vector<WAVE_INFO*> m_WaveInfo[4];      // +0xac
@@ -121,10 +133,10 @@ public:
     // m_pCurrentWave[0]'s high 4 bytes every time m_WaveCount[1] is written.
     // DIFFERS: binary aliases m_pCurrentWave[2] and m_WaveCount[2] in one 8-byte
     // slot (+0x22c). On 32-bit (binary ABI: ptr==int==4) the union is faithful and
-    // keeps the 728-byte layout. On the 64-bit host the union would overlap (ptr=8,
+    // keeps the 736-byte layout. On the 64-bit host the union would overlap (ptr=8,
     // int=4) and corrupt -- e6d26e6 crash -- so the host uses separate fields. The
     // asm-verify cross-build (__bada__) is compile-only (never runs), so the union's
-    // aliasing semantics are irrelevant there; only the 728-byte layout must match.
+    // aliasing semantics are irrelevant there; only the 736-byte layout must match.
 #if defined(__bada__)
     union {
         WAVE_INFO* m_pCurrentWave[2];   // +0x22c: P0 and P1 current wave pointers
@@ -179,7 +191,7 @@ public:
     // Port specific: WaveQue state pointers — not in the binary WaveManager struct
     // (binary survival/combo mode stores these differently). Declared after the binary
     // layout so the static_assert below fires correctly for binary-identical offsets.
-    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=728.
+    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=736.
     WaveQue*     m_pWaveQue;      // port-only, beyond +0x2d8
     WaveQueItem* m_pWaveQueItem;  // port-only
 
@@ -340,13 +352,13 @@ private:
     static SpawnPlacement ParsePlacement(const char* side);
 };
 
-// Binary WaveManager is 728 bytes (0x2d8). Port adds m_pWaveQue/m_pWaveQueItem
-// beyond that, so the full port sizeof is 736. The assert below checks that
-// m_pWaveQue sits exactly at offset 728 (= binary boundary), verifying all
+// Binary WaveManager is 736 bytes (0x2e0). Port adds m_pWaveQue/m_pWaveQueItem
+// beyond that, so the full port sizeof is 744. The assert below checks that
+// m_pWaveQue sits exactly at offset 736 (= binary boundary), verifying all
 // binary-named members landed at the right offsets.
 #ifdef __bada__
-static_assert(offsetof(WaveManager, m_pWaveQue) == 728,
-              "WaveManager binary-region layout mismatch (expect 728 bytes before port extensions)");
+static_assert(offsetof(WaveManager, m_pWaveQue) == 736,
+              "WaveManager binary-region layout mismatch (expect 736 bytes before port extensions)");
 #endif
 
 #endif  // FN_WAVE_MANAGER_H
