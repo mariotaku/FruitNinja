@@ -1,28 +1,31 @@
 #ifndef FN_ENTITIES_BOMB_FLASH_H
 #define FN_ENTITIES_BOMB_FLASH_H
 
-// Analysed: 2026-04-30T00:00
-//
 // BombFlash — pooled standalone (NOT an Mortar::Entity subclass). Has its own vtable.
-// Size: 0x44 bytes (68 bytes). Confirmed via BombFlash::CreatePool(0x20) -> 32-element pool.
+// Size: 0x44 bytes (68 bytes). Entry stride 0x44.
 // White flash sprite spawned on bomb hit. Quadratic scale + alpha animation over a short
 // lifetime, then deactivates and returns to the pool.
-// See docs/entities/bomb-flash.md for full RE.
 //
-// Binary addresses:
-//   ctor (real)         0x00171a14
-//   ctor (alias)        0x00171a50
-//   dtor (regular)      0x00171f38
-//   dtor (deleting)     0x00171fb8
-//   CreatePool          0x00170f84  (stub in binary — returns param; real pool via static array)
-//   MakeFlash           0x001723f4
-//   Update (instance)   0x00171038
-//   UpdateActiveFlashes 0x00171028  (static)
-//   DrawActiveFlashes   0x0017102c  (static)
-//   RemoveAllFlashes    0x00170fe4  (static)
-//   CleanUp             0x00171f64  (static)
+// Pool model (v1.6.1): contiguous heap allocation `pool` with `poolCount` entries.
+// `currentFree` tracks the next candidate index (circular probe via modulo).
 //
-// Note: BombFlashFull @ 0x00168f24 is a separate variant referenced by Bomb code.
+// v1.6.1 Binary addresses:
+//   BombFlash          0x001d5fa8 / 0x001d5ff4  (ctor)
+//   ~BombFlash          0x001d5ac0 / 0x001d5b80  (dtor)
+//   Init                0x001d4dbc
+//   Update              0x001d4dd4
+//   Draw                0x001d6910
+//   DrawUpdate          0x001d4dc0
+//   CreatePool          0x001d4cc0  (DEFUNCT — bx lr)
+//   GetFree             0x001d4cc4
+//   MakeFlash           0x001d5bf0
+//   UpdateActiveFlashes 0x001d4dc4  (DEFUNCT — bx lr)
+//   DrawActiveFlashes   0x001d4dc8  (DEFUNCT — bx lr)
+//   RemoveAllFlashes    0x001d4d64
+//   CleanUp             0x001d5afc
+//   Destroy             0x001d773c  (private — sets m_bActive = false)
+//
+// Note: BombFlashFull @ 0x001ca40c is a separate variant referenced by Bomb code.
 
 #include "math/Vec3.h"
 #include "math/Colour.h"
@@ -32,69 +35,47 @@
 
 class BombFlash {
 public:
-    // Pool size matches CreatePool(0x20) argument.
-    static const int POOL_SIZE = 32;
-
     // +0x00: vtable pointer (implicit)
-    // +0x04: active flag
+    // +0x04..+0x3f: colour, texture, position, direction, scale, angles, timer
+    uint8_t m_padBefore[0x3C];
+    // +0x40: active flag (read by GetFree stride 0x44)
     uint8_t m_bActive;
-    // Remaining fields (0x44 - vtptr - 1 pad): position, lifetime, colour, texture, dir.
-    // Not fully laid out — pad to binary size for informational correctness.
-    uint8_t m_pad[0x3F];
+    // +0x41..+0x43: padding to size 0x44
+    uint8_t m_padAfter[0x03];
 
     BombFlash();
     virtual ~BombFlash();
 
-    // Instance update (quadratic scale + alpha anim). Called by UpdateActiveFlashes.
-    // @ 0x00171038
+    // Virtual dispatch slots (vtable: Init, Update, Draw, DrawUpdate)
+    void Init(void*, long, Vec3*);
     void Update(float dt);
+    void Draw();
+    void DrawUpdate(float);
 
     // --- Static pool API ---
 
-    // @ 0x00170f84 — stub in binary (returns param unchanged). Pool backed by static array.
+    // v1.6.1 BombFlash::CreatePool @0x001d4cc0 — DEFUNCT (bx lr).
+    // Port allocates contiguous pool.
     static int CreatePool(int n);
 
-    // @ 0x001723f4 — activate a pooled flash slot.
+    // v1.6.1 BombFlash::GetFree @0x001d4cc4 — find free slot via circular probe.
+    static BombFlash* GetFree();
+
+    // v1.6.1 BombFlash::MakeFlash @0x001d5bf0 — activate a pooled flash slot.
     static void MakeFlash(Colour col, Vec3 pos, Vec3 dir,
                           Mortar::SmartPtr<Mortar::Texture> tex);
 
-    // @ 0x00171028 — iterate pool, call Update on active slots.
+    // v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 — DEFUNCT (bx lr).
     static void UpdateActiveFlashes(float dt);
 
-    // @ 0x0017102c — iterate pool, call Draw on active slots.
+    // v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8 — DEFUNCT (bx lr).
     static void DrawActiveFlashes();
 
-    // @ 0x00170fe4 — deactivate every pool slot (called on game reset).
+    // v1.6.1 BombFlash::RemoveAllFlashes @0x001d4d64 — deactivates every slot.
     static void RemoveAllFlashes();
 
-    // @ 0x00171f64 — destructs each pool entry, frees backing memory.
+    // v1.6.1 BombFlash::CleanUp @0x001d5afc — destructs entries backward, frees heap block.
     static void CleanUp();
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: BombFlash::Draw -- auto stub from binary missing-symbol set
-    void Draw();
-    // STUB: BombFlash::DrawUpdate -- auto stub from binary missing-symbol set
-    void DrawUpdate(float);
-    // STUB: BombFlash::GetFree -- auto stub from binary missing-symbol set
-    void GetFree();
-    // STUB: BombFlash::Init -- auto stub from binary missing-symbol set
-    void Init(void*, long, Vec3*);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_ENTITIES_BOMB_FLASH_H
