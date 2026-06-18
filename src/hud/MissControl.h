@@ -57,41 +57,41 @@ public:
     // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
     // +0x74: Mortar::SmartPtr<Texture> bound texture (HUDControl3d base)
     // +0x7c: uint8   m_AnimState  (0=idle, 3=active fade)
-    // +0x7d: uint8   m_bVisible (visibility-on-screen, gates jitter)
-    // +0x7e: uint16  jitter shake counter (decremented in Draw)
-    // +0x80: float   m_FadeAlpha (init 1.81)
+    // +0x7d: uint8   m_bFlashing (gates jitter + particle spawn)
+    // +0x7e: uint16  m_FlashTimer (decremented in Draw)
+    // +0x80: float   m_LifeTimer (init 1.81)
     // +0x84: uint8   m_bComboActive
-    // +0x85: uint8   m_bUseSound flag
+    // +0x85: uint8   m_bUseComboSound flag
     // +0x88: int32   m_ComboCount
-    // +0x8c: uint8   unknown flag (Init writes 1)  [not modelled in port]
-    // +0x90: float   m_AlphaScale (1.0 critical, 0.5 rare)
+    // +0x8c: uint8   m_bPlaySound (Init writes 1)
+    // +0x90: float   m_DragScale (1.0 critical, 0.5 rare)
 
     // +0x7c: animation state (0=idle, 3=active fade)
     uint8_t m_AnimState;
 
-    // +0x7d: visible on screen (set when anim starts, gates jitter)
-    uint8_t m_bVisible;
+    // +0x7d: flashing/gates jitter + particle spawn
+    uint8_t m_bFlashing;
 
-    // +0x7e: jitter shake counter (decremented each Draw; adds rand offset)
-    uint16_t m_JitterTimer;
+    // +0x7e: flash timer (decremented each Draw; adds rand offset)
+    uint16_t m_FlashTimer;
 
-    // +0x80: fade alpha. Init = 1.81 (DAT_001518b8). DIFFERS: was 0.808.
-    float m_FadeAlpha;
+    // +0x80: life timer. Init = 1.81 (DAT_001518b8). DIFFERS: was 0.808.
+    float m_LifeTimer;
 
     // +0x84: combo indicator active flag
     uint8_t m_bComboActive;
 
-    // +0x85: "use sound" flag (gates SFXPlay in Update)
-    uint8_t m_bUseSound;
+    // +0x85: "use combo sound" flag (gates combo SFXPlay in Update)
+    uint8_t m_bUseComboSound;
 
     // +0x88: combo count (determines which combo_N.tex to use)
     int m_ComboCount;
 
-    // +0x8c: unknown flag written by Init (binary Init writes 1 to this+0x8c)
-    uint8_t field_0x8c;
+    // +0x8c: play-sound flag (binary Init writes 1 to this+0x8c)
+    uint8_t m_bPlaySound;
 
-    // +0x90: alpha scale multiplier (1.0 critical, 0.5 rare)
-    float m_AlphaScale;
+    // +0x90: drag scale multiplier (1.0 critical, 0.5 rare)
+    float m_DragScale;
 
     MissControl();
     ~MissControl() override;
@@ -192,11 +192,13 @@ public:
 
 #ifdef __bada__
 static_assert(__builtin_offsetof(MissControl, m_AnimState)    == 0x7C, "MissControl m_AnimState offset");
-static_assert(__builtin_offsetof(MissControl, m_bVisible)     == 0x7D, "MissControl m_bVisible offset");
-static_assert(__builtin_offsetof(MissControl, m_JitterTimer)  == 0x7E, "MissControl m_JitterTimer offset");
-static_assert(__builtin_offsetof(MissControl, m_FadeAlpha)    == 0x80, "MissControl m_FadeAlpha offset");
+static_assert(__builtin_offsetof(MissControl, m_bFlashing)    == 0x7D, "MissControl m_bFlashing offset");
+static_assert(__builtin_offsetof(MissControl, m_FlashTimer)   == 0x7E, "MissControl m_FlashTimer offset");
+static_assert(__builtin_offsetof(MissControl, m_LifeTimer)    == 0x80, "MissControl m_LifeTimer offset");
 static_assert(__builtin_offsetof(MissControl, m_bComboActive) == 0x84, "MissControl m_bComboActive offset");
-static_assert(__builtin_offsetof(MissControl, m_AlphaScale)   == 0x90, "MissControl m_AlphaScale offset");
+static_assert(__builtin_offsetof(MissControl, m_bUseComboSound) == 0x85, "MissControl m_bUseComboSound offset");
+static_assert(__builtin_offsetof(MissControl, m_bPlaySound)  == 0x8C, "MissControl m_bPlaySound offset");
+static_assert(__builtin_offsetof(MissControl, m_DragScale)    == 0x90, "MissControl m_DragScale offset");
 static_assert(sizeof(MissControl) == 0x94, "MissControl sizeof mismatch");
 #endif
 

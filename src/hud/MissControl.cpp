@@ -82,13 +82,13 @@ Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 
 MissControl::MissControl()
     : m_AnimState(0)
-    , m_bVisible(0)
-    , m_JitterTimer(0)
-    , m_FadeAlpha(0.0f)
+    , m_bFlashing(0)
+    , m_FlashTimer(0)
+    , m_LifeTimer(0.0f)
     , m_bComboActive(0)
-    , m_bUseSound(0)
+    , m_bUseComboSound(0)
     , m_ComboCount(0)
-    , m_AlphaScale(1.0f)
+    , m_DragScale(1.0f)
 {
     m_Active        = 0;   // pool slot starts free; Init/Make* sets to 1
     // m_bNoDestructor is NOT set here -- binary writes it in CreatePool AFTER
@@ -114,7 +114,7 @@ void MissControl::Init() {
     m_bComboActive = 0;
     m_Active       = 1;   // binary field_0x30 = 1; marks slot as busy/active
     m_Timer        = 0.0f;  // rotation (+0x2c)
-    field_0x8c     = 1;   // +0x8c = 1 (sound-enable gate)
+    m_bPlaySound     = 1;   // +0x8c = 1 (sound-enable gate)
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_AnimState    = 0;
@@ -123,12 +123,12 @@ void MissControl::Init() {
     // This is the red X used by path 2 of MakeDisappear (fruit-miss penalty).
     // MakeCritical/MakeRare/MakeCombo override with their respective textures.
     m_Texture      = s_TexCross;
-    m_FadeAlpha    = 0.0f;
+    m_LifeTimer    = 0.0f;
     m_Active       = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
     m_bPendingRemoval = 0;  // +0x33 = 0 (binary Init @ 0x00150ff6)
-    m_bUseSound    = 0;
-    m_AlphaScale   = 1.0f;
+    m_bUseComboSound    = 0;
+    m_DragScale   = 1.0f;
     // DIFFERS: binary calls GetWidth() twice (not GetHeight) -- visually incorrect but binary-faithful.
     // Port uses (W+1, H+1, 0) for visual correctness.
     // DIFFERS: original = (GetWidth()>>1)+1, (GetWidth()>>1)+1 from Init @ 0x00150fa4;
@@ -149,9 +149,9 @@ void MissControl::Init() {
 void MissControl::Reset() {
     m_DrawColour   = Colour(255, 255, 255, 255);  // restore RGBA tint from DAT_00150f7c
     m_DrawColour.a = 0xff;
-    m_JitterTimer  = 0;
-    m_bVisible     = 0;
-    if (m_FadeAlpha > 0.0f) {
+    m_FlashTimer  = 0;
+    m_bFlashing     = 0;
+    if (m_LifeTimer > 0.0f) {
         m_Active       = 0;   // binary field_0x30 = 0; frees slot
         m_DrawColour.a = 0;
     }
@@ -174,7 +174,7 @@ int MissControl::SetPlayer(int player) {
 // Jitter term is omitted (non-deterministic RandUint; short-lived and cosmetic).
 Vec3 MissControl::GetDrawPos() const {
     Vec3 p = pos;
-    if (m_FadeAlpha <= 0.0f) {
+    if (m_LifeTimer <= 0.0f) {
         Game* g = Game::GetInstance();
         if (g) {
             const bool failureEnabled =
@@ -198,9 +198,9 @@ void MissControl::Skip() {
     // binary @ 0x00150e3c: ldrb r3,[r2,#0x14]; cmp r3,r4 (r4 = m_AnimState)
     uint8_t cap = game_work.missCount;
     if (m_AnimState < cap) {
-        m_JitterTimer  = 0;
+        m_FlashTimer  = 0;
         m_DrawColour.a = 0xff;
-        m_bVisible     = 1;
+        m_bFlashing     = 1;
     }
 }
 
@@ -286,13 +286,13 @@ const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
 // --- MakeEmAllDissappear ---------------------------------------------------
 
 // v1.6.1 MissControl::MakeEmAllDissappear @0x0019dd74
-// Contiguous walk: for i<s_PoolCount, clamp busy slots' m_FadeAlpha to 0.06917 ceiling.
+// Contiguous walk: for i<s_PoolCount, clamp busy slots' m_LifeTimer to 0.06917 ceiling.
 // DAT_0019ddd4=0x3d8da741 exact IEEE-754 value.
 void MissControl::MakeEmAllDissappear() {
     for (int i = 0; i < s_PoolCount; ++i) {
         if (s_pPool[i].m_Active != 0) {
-            if (s_pPool[i].m_FadeAlpha >= 0.06916667f)
-                s_pPool[i].m_FadeAlpha = 0.06916667f;
+            if (s_pPool[i].m_LifeTimer >= 0.06916667f)
+                s_pPool[i].m_LifeTimer = 0.06916667f;
         }
     }
 }
@@ -344,13 +344,13 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     #endif
     Init();
     m_Texture      = s_TexCritical;
-    m_FadeAlpha    = MISS_FADE_INIT;
-    m_bVisible     = 1;
+    m_LifeTimer    = MISS_FADE_INIT;
+    m_bFlashing     = 1;
     m_DrawColour.a = 0xff;
     m_AnimState    = 3;
     this->pos      = pos;
     m_bComboActive = 1;
-    m_JitterTimer  = 0;
+    m_FlashTimer  = 0;
     if (s_TexCritical.IsValid()) {
         uint32_t w = s_TexCritical->m_Width;
         uint32_t h = s_TexCritical->m_Height;
@@ -373,7 +373,7 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
 }
 
 // ASM-verified: 2026-05-24 binary @ 0x001518d8 (re-analyst)
-// binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_AlphaScale=0.5,
+// binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_DragScale=0.5,
 // and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
     #ifndef FN_ASM_VERIFY_CROSS
@@ -382,20 +382,20 @@ void MissControl::MakeRare(Vec3 pos) {
     #endif
     Init();
     m_Texture      = s_TexRare;
-    m_FadeAlpha    = MISS_FADE_INIT;
-    m_bVisible     = 1;
+    m_LifeTimer    = MISS_FADE_INIT;
+    m_bFlashing     = 1;
     m_DrawColour.a = 0xff;
     m_AnimState    = 3;
     this->pos      = pos;
     m_bComboActive = 1;
-    m_JitterTimer  = 0;
+    m_FlashTimer  = 0;
     if (s_TexRare.IsValid()) {
         uint32_t w = s_TexRare->m_Width;
         uint32_t h = s_TexRare->m_Height;
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
         size.z = 0.0f;  // DAT_00151a30 = 0.0
-        m_AlphaScale = 0.5f;  // written between size init and HalfScale (binary @ 0x001518d8)
+        m_DragScale = 0.5f;  // written between size init and HalfScale (binary @ 0x001518d8)
         size.x *= 0.5f;
         size.y *= 0.5f;
         // Screen clamps use HALF size (binary @ 0x00151a2c..0x00151a40)
@@ -413,7 +413,7 @@ void MissControl::MakeRare(Vec3 pos) {
 // ASM-verified: 2026-05-24 binary @ 0x001515a4 (re-analyst)
 // binary @ 0x001515a4
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
-// Sets m_bComboActive=1, m_bUseSound=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
+// Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.811, anim=3, visible=1.
 void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
@@ -429,8 +429,8 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     if (s_ComboTextures[idx].IsValid()) {
         m_Texture = s_ComboTextures[idx];
     }
-    // m_bUseSound = 1 (binary @ 0x001515a4, written BEFORE arcade override)
-    m_bUseSound    = 1;
+    // m_bUseComboSound = 1 (binary @ 0x001515a4, written BEFORE arcade override)
+    m_bUseComboSound    = 1;
     m_bComboActive = 1;
     m_ComboCount   = comboCount;  // caller's value stored first
     // Arcade-mode override: after storing caller's comboCount and picking texture,
@@ -442,11 +442,11 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
         if (wm) m_ComboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }
     m_DrawColour.a = 0xff;
-    m_FadeAlpha    = MISS_FADE_INIT;  // DAT_00151740 = 1.81f
+    m_LifeTimer    = MISS_FADE_INIT;  // DAT_00151740 = 1.81f
     m_AnimState    = 3;
-    m_bVisible     = 1;
+    m_bFlashing     = 1;
     this->pos      = pos;
-    m_JitterTimer  = 0;
+    m_FlashTimer  = 0;
     // Size: (w+1, h+1, 0), halved for clamp, then restored
     if (s_ComboTextures[idx].IsValid()) {
         uint32_t w = s_ComboTextures[idx]->m_Width;
@@ -485,12 +485,12 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
     if (tex.IsValid()) {
         // Path 1: zen-bomb X overlay (valid SmartPtr supplied).
         // binary @ 0x00151d94 path 1
-        field_0x8c     = 0;   // +0x8c = 0 (sound-gate cleared)
+        m_bPlaySound     = 0;   // +0x8c = 0 (sound-gate cleared)
         m_Texture      = tex;
-        m_bVisible     = 1;
+        m_bFlashing     = 1;
         m_AnimState    = 3;
-        m_FadeAlpha    = MISS_FADE_INIT;  // DAT_00151f40 = 1.81f
-        m_JitterTimer  = 0;
+        m_LifeTimer    = MISS_FADE_INIT;  // DAT_00151f40 = 1.81f
+        m_FlashTimer  = 0;
         m_bComboActive = 1;
         uint32_t w = tex->m_Width;
         uint32_t h = tex->m_Height;
@@ -505,10 +505,10 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         // The red X comes from Init()'s default `m_Texture = s_TexCross`
         // (binary @ 0x00150fc0). Path 2 just updates pose / size / alpha /
         // anim-state; the texture binding from Init carries through.
-        m_JitterTimer  = (sizeMult >= 1) ? 0x1e : 0;
-        m_FadeAlpha    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
+        m_FlashTimer  = (sizeMult >= 1) ? 0x1e : 0;
+        m_LifeTimer    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
         m_AnimState    = 3;
-        m_bVisible     = 1;
+        m_bFlashing     = 1;
         // size = (*pHudScale) * 62.0f, where pHudScale is the global Vec3 loaded
         // from GOT+0x77CC (DAT_00151f5c = 0x77cc GOT offset). That global is
         // _Vector3<float>::One @ BSS 0x001f4334, constructed to (1,1,1) by the
@@ -548,15 +548,15 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
     // Their m_AnimState is 0/1/2 (slot index); m_Active stays 0.
-    // Toggle m_bVisible based on game_work.missCount vs m_AnimState -- when the
+    // Toggle m_bFlashing based on game_work.missCount vs m_AnimState -- when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. binary @ 0x00151a60 lines 1-10.
     Game* game = Game::GetInstance();
     uint8_t missCount = (game ? game_work.missCount : 0);
-    if (!m_bVisible && m_AnimState < missCount) {
-        m_JitterTimer  = 0x1e;
+    if (!m_bFlashing && m_AnimState < missCount) {
+        m_FlashTimer  = 0x1e;
         m_DrawColour.a = 0xff;
-        m_bVisible     = 1;
+        m_bFlashing     = 1;
     }
 
     // Combo separation force: if m_bComboActive, repel busy neighbours within 70px.
@@ -616,18 +616,18 @@ void MissControl::Update(float dt) {
         pos.x += accX;
         pos.y += accY;
         // Scale dt by combo modifier
-        dt = dt * s_DtMod * m_AlphaScale;
+        dt = dt * s_DtMod * m_DragScale;
     }
 
-    if (m_FadeAlpha <= 0.0f) {
+    if (m_LifeTimer <= 0.0f) {
         // Passive deactivation: if missCount went DOWN below this slot
         // (e.g. between rounds when the counter resets), turn the X off.
         // binary @ 0x00151c08..0x00151d28
-        if (!m_bVisible) return;
+        if (!m_bFlashing) return;
         if (m_AnimState < missCount) return;
-        m_JitterTimer  = 0x1e;
+        m_FlashTimer  = 0x1e;
         m_DrawColour.a = 0xff;
-        m_bVisible     = 0;
+        m_bFlashing     = 0;
         return;
     }
 
@@ -637,21 +637,21 @@ void MissControl::Update(float dt) {
 
     pos.z = 0.0f;
 
-    bool wasAboveThresh = (m_FadeAlpha >= SOUND_THRESH);
-    m_FadeAlpha -= dt;
+    bool wasAboveThresh = (m_LifeTimer >= SOUND_THRESH);
+    m_LifeTimer -= dt;
 
     // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
     // ASM-verified: 2026-05-18 binary @ 0x00151a60 (re-analyst)
-    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive && field_0x8c) {
+    if (wasAboveThresh && m_LifeTimer < SOUND_THRESH && m_bComboActive && m_bPlaySound) {
         char buf[0x40];
         bool altPlayed = false;
-        if (m_bUseSound != 0) {
+        if (m_bUseComboSound != 0) {
             ItemManager* im = ItemManager::GetInstance();
             altPlayed = im ? im->PlayAlternateComboSound(m_ComboCount - 3) : false;
         }
 
         if (!altPlayed) {
-            if (m_bUseSound == 0) {
+            if (m_bUseComboSound == 0) {
                 std::strcpy(buf, "New-best-score");  // literal 0x001b96ba (DAT_00151d88)
             } else {
                 int n;
@@ -670,9 +670,9 @@ void MissControl::Update(float dt) {
     }
 
     // Slot release when fully faded. binary @ 0x00151d0a..0x00151d28.
-    if (m_FadeAlpha <= 0.0f) {
+    if (m_LifeTimer <= 0.0f) {
         // Binary fires m_RemoveCallback BEFORE writing m_Active = 0.
-        // Binary does NOT clear m_FadeAlpha or m_bComboActive here.
+        // Binary does NOT clear m_LifeTimer or m_bComboActive here.
         // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
         m_RemoveCallback(this);
         m_Active = 0;
@@ -689,9 +689,9 @@ void MissControl::Update(float dt) {
 //
 //   drawPos derivation:
 //     init from _Vector3<float>::Zero (DAT_001522c4, binary @ 0x001f4328) = Vec3(0,0,0)
-//     if (m_JitterTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
+//     if (m_FlashTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_FlashTimer--
 //
-//     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
+//     if (m_LifeTimer <= 0.0f):               // passive miss-marker path only
 //         if (FailureEnabled() && !IsMultiplayer()):
 //             drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
 //         else:
@@ -701,7 +701,7 @@ void MissControl::Update(float dt) {
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
-    // m_bVisible -- those are UV-pickers later in the function, not gates.
+    // m_bFlashing -- those are UV-pickers later in the function, not gates.
     // The disappear mechanism for finished combo popups is the m_Active=0
     // write in Update's slot-release tail (binary @ MissControl::Update);
     // HUD::Draw filters on m_Active (src/hud/HUD.cpp:88) so this Draw
@@ -713,17 +713,17 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     Vec3 drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
-    // binary @ 0x00151f94..0x00151fe0: drawPos = Vec3(rx-4, ry-4, 0); --m_JitterTimer
-    if (m_JitterTimer > 0) {
+    // binary @ 0x00151f94..0x00151fe0: drawPos = Vec3(rx-4, ry-4, 0); --m_FlashTimer
+    if (m_FlashTimer > 0) {
         int rx = (int)(uint8_t)(rand() % 8);
         int ry = (int)(uint8_t)(rand() % 8);
         drawPos.x = (float)(rx - 4);
         drawPos.y = (float)(ry - 4);
         drawPos.z = 0.0f;  // DAT_00152294 = 0.0
-        m_JitterTimer--;
+        m_FlashTimer--;
     }
 
-    // m_FadeAlpha branch ladder (binary @ 0x00151f60):
+    // m_LifeTimer branch ladder (binary @ 0x00151f60):
     //   > 1.66f (SOUND_THRESH)  -> early return (popup invisible during the
     //                              0.15s spawn-grace from MakeCritical's 1.81 init)
     //   > 0                      -> pulse-scale animation: scale = |SinIdx(phase)|
@@ -731,12 +731,12 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     //   <= 0                     -> y-position jiggle for failure-feedback animation;
     //                              draw still proceeds (visual = passive miss markers)
     float pulseScale = 1.0f;
-    if (m_FadeAlpha > 0.0f) {
-        if (m_FadeAlpha > SOUND_THRESH) return;
+    if (m_LifeTimer > 0.0f) {
+        if (m_LifeTimer > SOUND_THRESH) return;
         // Pulse-scale: phase factor is exactly 182.0f (DAT_001522a0 = 0x43360000).
-        // binary @ 0x00151fe4: phase = (m_FadeAlpha / 1.66) * 360.0 * 6.0 * 182.0
+        // binary @ 0x00151fe4: phase = (m_LifeTimer / 1.66) * 360.0 * 6.0 * 182.0
         const float phase_f =
-            (m_FadeAlpha / SOUND_THRESH) * 360.0f * 6.0f * 182.0f;
+            (m_LifeTimer / SOUND_THRESH) * 360.0f * 6.0f * 182.0f;
         const uint16_t pidx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
         pulseScale = std::fabs(SinIdx(pidx));
         // Clamp ladder (binary @ 0x00152034..0x00152088):
@@ -753,7 +753,7 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             }
         }
     } else {
-        // m_FadeAlpha <= 0 -- passive miss-marker path: y-shift
+        // m_LifeTimer <= 0 -- passive miss-marker path: y-shift
         // Binary has NO Game::GetInstance gate here -- reads game_work directly.
         // ASM-verified: 2026-05-24 binary @ 0x00151fe4 (re-analyst)
         const bool failureEnabled =
@@ -809,7 +809,7 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             else                      tint.a = (uint8_t)aScaled;
         }
     }
-    // UV crop based on m_bComboActive / m_bVisible.
+    // UV crop based on m_bComboActive / m_bFlashing.
     // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
     //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
@@ -817,7 +817,7 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     float u0, v0, du, dv;
     if (m_bComboActive) {
         u0 = 0.0f; v0 = 0.0f;  du = 1.0f; dv = 1.0f;
-    } else if (!m_bVisible) {
+    } else if (!m_bFlashing) {
         u0 = 0.0f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     } else {
         u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
