@@ -940,13 +940,11 @@ void SlashEntity::UpdatePoints(float dt) {
             Vec3 center(m_pLeftBuffer[local_320].x,
                         m_pLeftBuffer[local_320].y,
                         0.0f);
-            Vec3 edgeL(m_pLeftBuffer[local_320 + 1].x,
-                       m_pLeftBuffer[local_320 + 1].y,
-                       0.0f);
 
             // Recover stored half-width: magnitude of (edgeL - center) before normalizing.
-            Vec3 hwVec(edgeL.x - center.x, edgeL.y - center.y, 0.0f);
-            float fVar30 = hwVec.Normalise();   // returns original magnitude
+            float dx = m_pLeftBuffer[local_320 + 1].x - center.x;
+            float dy = m_pLeftBuffer[local_320 + 1].y - center.y;
+            float fVar30 = sqrtf(dx * dx + dy * dy);
 
             // ------------------------------------------------------------------
             // AGE half-width.
@@ -1022,9 +1020,8 @@ void SlashEntity::UpdatePoints(float dt) {
                 // perpVec = (CosIdx(m_Angle), SinIdx(m_Angle), 0) * fVar30.
                 // ==============================================================
                 uint16_t ang = (uint16_t)m_AngleIndex;
-                float cosA = Math::CosIdx(ang);
-                float sinA = Math::SinIdx(ang);
-                Vec3 perp(cosA * fVar30, sinA * fVar30, 0.0f);
+                float cosA = Math::CosIdx(ang) * fVar30;
+                float sinA = Math::SinIdx(ang) * fVar30;
 
                 // UV.x = 0.98 for both slots.
                 m_pLeftBuffer[dstCtr].u  = 0.98f;
@@ -1035,11 +1032,6 @@ void SlashEntity::UpdatePoints(float dt) {
                 // written: iter0 writes m_pLeftBuffer, iter1 writes m_pRightBuffer.
                 for (int iter = 0; iter < 2; iter++) {
                     QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
-
-                    // Edge position: iter==0 -> center - perp (left), iter==1 -> center + perp (right).
-                    Vec3 ePos;
-                    if (iter == 0) { ePos = Vec3(center.x - perp.x, center.y - perp.y, 0.0f); }
-                    else           { ePos = Vec3(center.x + perp.x, center.y + perp.y, 0.0f); }
 
                     // UV.y: ModSlashUVFlipWhenUpsideDown (g_ScaleFlag2) controls V assignment.
                     // Binary SP path (IsSameScreenMultiplayer() == false):
@@ -1052,7 +1044,7 @@ void SlashEntity::UpdatePoints(float dt) {
                     if (g_ScaleFlag2 == 0) {
                         vVal = (iter != 0) ? 1.0f : 0.0f;
                     } else {
-                        bool perpYNeg = (perp.y < 0.0f);
+                        bool perpYNeg = (sinA < 0.0f);
                         if (perpYNeg) {
                             vVal = (iter != 0) ? 1.0f : 0.0f;
                         } else {
@@ -1060,10 +1052,12 @@ void SlashEntity::UpdatePoints(float dt) {
                         }
                     }
 
+                    float ePosX = (iter == 0) ? (center.x - cosA) : (center.x + cosA);
+                    float ePosY = (iter == 0) ? (center.y - sinA) : (center.y + sinA);
                     buf[dstCtr].x  = center.x;
                     buf[dstCtr].y  = center.y;
-                    buf[dstEdge].x = ePos.x;
-                    buf[dstEdge].y = ePos.y;
+                    buf[dstEdge].x = ePosX;
+                    buf[dstEdge].y = ePosY;
                     buf[dstEdge].v = vVal;
 
                     uint32_t col = pBaseColour->PlatformColour();
@@ -1076,17 +1070,17 @@ void SlashEntity::UpdatePoints(float dt) {
                 // ==============================================================
                 // BODY PATH: perp from Cross(Normalise(nextCenter - center), +Z).
                 // ==============================================================
-                Vec3 nextCtr(m_pLeftBuffer[local_320 + 2].x,
-                             m_pLeftBuffer[local_320 + 2].y,
-                             0.0f);
+                float nextCx = m_pLeftBuffer[local_320 + 2].x;
+                float nextCy = m_pLeftBuffer[local_320 + 2].y;
 
-                Vec3 segDir(nextCtr.x - center.x, nextCtr.y - center.y, 0.0f);
-                float segLen = segDir.Normalise();
+                float segDx = nextCx - center.x;
+                float segDy = nextCy - center.y;
+                float segLen = sqrtf(segDx * segDx + segDy * segDy);
 
-                // Cross(segDir, Z_hat) = (segDir.y, -segDir.x, 0).
-                Vec3 zHat(0.0f, 0.0f, 1.0f);
-                Vec3 perpDir = Vec3::Cross(segDir, zHat);
-                Vec3 perp(perpDir.x * fVar30, perpDir.y * fVar30, 0.0f);
+                // Cross(unit, Z_hat) = (unit.y, -unit.x, 0).
+                float invSegLen = 1.0f / segLen;
+                float perpX = segDy * invSegLen * fVar30;
+                float perpY = -segDx * invSegLen * fVar30;
 
                 // Accumulate arc length for this segment.
                 float prevArc = arcLen[iVar14];
