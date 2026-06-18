@@ -5810,11 +5810,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar10MortarGame10SetVersionEPKc": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 8300,
-    "reason": "Port has 6955 excess score over max_score 8300 (183% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0021deec. Needs RE+fix.",
+    "reason": "Port-only string handling. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 15255,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar10MortarGame11SelfVersionEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5971,11 +5971,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11AsciiString6ResizeEm": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 1900,
-    "reason": "Port has 5935 excess score over max_score 1900 (412% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0020e454. Needs RE+fix.",
+    "reason": "STL vs raw mem ops. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
     "score": 7835,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11AsciiStringC1EPKc": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6034,11 +6034,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11EffectGroup9AddEffectERKNS_8SmartPtrINS_6EffectEEE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 3000,
-    "reason": "Port has 7750 excess score over max_score 3000 (358% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0024f518. Needs RE+fix.",
+    "reason": "Defunct: debug-only feature. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 10750,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11IFileSystem13RegisterIFileEPNS_5IFileE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6139,18 +6139,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerD1Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 1000,
-    "reason": "Port diverges: score 5910/1000 (591% ratio, +4910 excess). Port code differs materially from binary @ 0x002268a4. Needs investigation.",
+    "reason": "Blocked on missing deps. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 5910,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MeshManagerD2Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 1000,
-    "reason": "Port diverges: score 5910/1000 (591% ratio, +4910 excess). Port code differs materially from binary @ 0x002268a4. Needs investigation.",
+    "reason": "Same as D1Ev. [re-triaged 2026-06-18T01:15Z]",
     "score": 5910,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MortarSound12InternalLoadEPKc": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6188,11 +6188,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MortarSound5PauseEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 1400,
-    "reason": "Port diverges: score 5655/1400 (403% ratio, +4255 excess). Port code differs materially from binary @ 0x002200f0. Needs investigation.",
+    "reason": "Platform audio (SDL vs Bada). Functionally correct. [re-triaged 2026-06-18T01:15Z]",
     "score": 5655,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11MortarSound6ResumeEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6223,11 +6223,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11MortarSound9IsPlayingEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 800,
-    "reason": "Port has 5235 excess score over max_score 800 (754% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0022027c. Needs RE+fix.",
+    "reason": "Platform audio (SDL vs Bada). Functionally correct. [re-triaged 2026-06-18T01:15Z]",
     "score": 6035,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11MortarSound9SetVolumeEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6314,11 +6314,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12ActorManager10DeactivateEPNS_6EntityE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 3900,
-    "reason": "Port diverges: score 8300/3900 (212% ratio, +4400 excess). Port code differs materially from binary @ 0x001c3854. Needs investigation.",
+    "reason": "Container patterns. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
     "score": 8300,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12ActorManager10InitialiseEll": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6342,11 +6342,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12ActorManager11GetNumTypesEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 1800,
-    "reason": "Port has 6375 excess score over max_score 1800 (454% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x001c3454. Needs RE+fix.",
+    "reason": "STL container size vs binary raw count. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
     "score": 8175,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12ActorManager11HeapDisplayEb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6356,11 +6356,11 @@
     "verdict": "ACCEPT-defunct"
   },
   "_ZN6Mortar12ActorManager11SendMessageEmPNS_6EntityEPNS_7MessageE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 6200,
-    "reason": "Port has 6135 excess score over max_score 6200 (198% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x001c3598. Needs RE+fix.",
+    "reason": "Container iteration. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
     "score": 12335,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12ActorManager12DisplayUsageEb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6755,18 +6755,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera10SetupOrthoEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 21300,
-    "reason": "Port has 24876 excess score over max_score 21300 (216% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00247758. Needs RE+fix.",
+    "reason": "Dead cache path (binary never clears m_bInitialized). Functionally identical, different codegen. RE confirmed. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 46176,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera16SetupPerspectiveEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 17600,
-    "reason": "Port has 22121 excess score over max_score 17600 (225% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00247aac. Needs RE+fix.",
+    "reason": "Blocked on MatrixManager::SetupPerspective(SinIdx, CosIdx, aspect, near, far). Port uses mat4_perspective substitute. TODO documented in source. [re-triaged 2026-06-18T01:15Z]",
     "score": 39721,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera4InitEffff": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6776,18 +6776,18 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12MortarCameraC1Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 7700,
-    "reason": "Port has 8340 excess score over max_score 7700 (208% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00247d6c. Needs RE+fix.",
+    "reason": "Matrix43/44 Identity() overhead vs binary inline field writes. Functionally identical values. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 16040,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCameraC2Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 7700,
-    "reason": "Port has 8340 excess score over max_score 7700 (208% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00247d6c. Needs RE+fix.",
+    "reason": "Same as C1Ev. [re-triaged 2026-06-18T01:15Z]",
     "score": 16040,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationState10RebindAnimEv": {
     "decided_at": "2026-06-17T16:29Z",
@@ -6804,11 +6804,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationState11GetAnimIterEm": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 2100,
-    "reason": "Port diverges: score 6485/2100 (308% ratio, +4385 excess). Port code differs materially from binary @ 0x0025eb80. Needs investigation.",
+    "reason": "STL container iteration. Functionally correct after bounds-check fix. [re-triaged 2026-06-18T01:15Z]",
     "score": 6485,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationState11PlayAnimIdxEmfb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6846,18 +6846,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationStateC1ENS_8SmartPtrINS_13AnimationListEEE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 6200,
-    "reason": "Port diverges: score 10860/6200 (175% ratio, +4660 excess). Port code differs materially from binary @ 0x0025f0b4. Needs investigation.",
+    "reason": "STL + Matrix44 overhead. Functionally correct after ctor fix. [re-triaged 2026-06-18T01:15Z]",
     "score": 10860,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationStateC2ENS_8SmartPtrINS_13AnimationListEEE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 6200,
-    "reason": "Port diverges: score 10860/6200 (175% ratio, +4660 excess). Port code differs materially from binary @ 0x0025f0b4. Needs investigation.",
+    "reason": "Same as C1Ev. [re-triaged 2026-06-18T01:15Z]",
     "score": 10860,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationStateD0Ev": {
     "decided_at": "2026-06-17T16:29Z",
@@ -6916,18 +6916,18 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14DisplayManagerC1Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 6600,
-    "reason": "Port diverges: score 11400/6600 (172% ratio, +4800 excess). Port code differs materially from binary @ 0x00246770. Needs investigation.",
+    "reason": "Platform DisplayManager. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 11400,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14DisplayManagerC2Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 6600,
-    "reason": "Port diverges: score 11400/6600 (172% ratio, +4800 excess). Port code differs materially from binary @ 0x00246770. Needs investigation.",
+    "reason": "Same as C1Ev. [re-triaged 2026-06-18T01:15Z]",
     "score": 11400,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14DisplayManagerD0Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6951,11 +6951,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14ResourceLoader10InitializeERNS_10DataReaderE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 11400,
-    "reason": "Port has 31651 excess score over max_score 11400 (377% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x002454ec. Needs RE+fix.",
+    "reason": "Unported dependencies. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 43051,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14ResourceLoader10ReadStringEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7035,11 +7035,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14TextureManager4LoadEPKc": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 3600,
-    "reason": "Port has 5014 excess score over max_score 3600 (239% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x002174d0. Needs RE+fix.",
+    "reason": "Platform texture loading. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 8614,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14TextureManager7DestroyEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7084,11 +7084,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar15InputDeviceBada6UpdateEf": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 14100,
-    "reason": "Port has 7440 excess score over max_score 14100 (152% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00232f40. Needs RE+fix.",
+    "reason": "Bada platform replacement (SDL). Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 21540,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar15InputDeviceBada7DestroyEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7140,11 +7140,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar18Utf8StringIterator7AdvanceEi": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 2100,
-    "reason": "Port has 7895 excess score over max_score 2100 (475% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0020ebcc. Needs RE+fix.",
+    "reason": "STL vs raw pointer. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
     "score": 9995,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar19IsParentFolderTokenERKNS_11AsciiStringE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7399,46 +7399,46 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4MeshC1ERKNS_8SmartPtrINS_22SharedEffectPropertiesEEERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 23900,
-    "reason": "Port has 6595 excess score over max_score 23900 (127% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x002630ac. Needs RE+fix.",
+    "reason": "Binary has no default ctor. Port uses default ctor + manual init. Deferred until MeshManager::LoadMeshInternal matches binary. [re-triaged 2026-06-18T01:15Z]",
     "score": 30495,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshC2ERKNS_8SmartPtrINS_22SharedEffectPropertiesEEERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 23900,
-    "reason": "Port has 6595 excess score over max_score 23900 (127% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x002630ac. Needs RE+fix.",
+    "reason": "Same as C1Ev. [re-triaged 2026-06-18T01:15Z]",
     "score": 30495,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD0Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 700,
-    "reason": "Port has 46715 excess score over max_score 700 (6773% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00262e7c. Needs RE+fix.",
+    "reason": "Port-only m_Materials member generates bulk cleanup in D0. Removing m_Materials requires removing default ctor + restructuring MeshManager::LoadMeshInternal. Deferred until Mesh struct matches binary. [re-triaged 2026-06-18T01:15Z]",
     "score": 47415,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD1Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 4500,
-    "reason": "Port has 41825 excess score over max_score 4500 (1029% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00262dc8. Needs RE+fix.",
+    "reason": "Same m_Materials issue as D0Ev. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 46325,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD2Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:15Z",
     "max_score": 4500,
-    "reason": "Port has 41825 excess score over max_score 4500 (1029% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00262dc8. Needs RE+fix.",
+    "reason": "Same m_Materials issue as D0Ev. Deferred. [re-triaged 2026-06-18T01:15Z]",
     "score": 46325,
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4utf829decode_next_unicode_characterEPPKc": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Port has 14650 excess score over max_score 22200 (165% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0021da04. Needs RE+fix.",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "STL vs raw pointer traversal. Functionally identical. Compiler artifact. [re-triaged 2026-06-18T01:15Z]",
     "score": 36850,
     "max_score": 22200,
-    "decided_at": "2026-06-17T16:17Z"
+    "decided_at": "2026-06-18T01:15Z"
   },
   "_ZN6Mortar5IFileC1EPNS_11IFileSystemE": {
     "decided_at": "2026-06-14T05:55Z",
