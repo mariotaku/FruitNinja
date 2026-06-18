@@ -126,10 +126,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z10GameUpdatefb": {
-    "decided_at": "2026-06-18T03:11Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 61600,
     "reason": "GameUpdate -- port adds MortarGame::GetInstance null-guard, GetTaskState indirection, GameSound::SFXPlay call. Score 101087/62200 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 101087/62200 -> 105722/61600]",
-    "score": 105057,
+    "score": 104917,
     "verdict": "ACCEPT-deferred"
   },
   "_Z10SplashDrawfb": {
@@ -2450,10 +2450,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11WaveManager9GetWavedtEi": {
-    "decided_at": "2026-06-18T05:57Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 4600,
     "reason": "Pre-existing WaveManager layout divergences (m_pCurrentWave +0x22c vs binary +0x234; m_Speed +0x54 vs binary +0x58; dtMod fields +0x74/+0x78 vs binary +0x78/+0x7c). Score 3875->6750 is a recompile-artifact hash-change from GameWork.h ring fix ([13]->[15] at +0x668, non-POD from m_RingTex SmartPtr zero-init): no WaveManager field offset moved, no game_work access in this function, no new logic divergence introduced. Same inherent residual, raw-DIVERGE only because score drifted past threshold on recompile. [ring-fix retriage 2026-06-14]",
-    "score": 6745,
+    "score": 6750,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManagerC1Ev": {
@@ -5637,9 +5637,9 @@
   "_ZN5Fruit15LoadFruitModelsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit::LoadFruitModels -- score 105125/34700 (essentially unchanged; +65 from prior 105060). Very large content-loader method (sub sp,#0x1ac stack frame). SmartPtr chains, FruitInfo enumeration, model/texture loading. Tier-2 content-pipeline deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 109305,
+    "score": 99585,
     "max_score": 48600,
-    "decided_at": "2026-06-18T05:57Z"
+    "decided_at": "2026-06-18T07:20Z"
   },
   "_ZN5Fruit16FruitFactTextureEl": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7364,10 +7364,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh4DrawERK9_Matrix44IfE": {
-    "decided_at": "2026-06-18T05:57Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 7600,
     "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
-    "score": 72840,
+    "score": 62550,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh8DrawCubeEfff6ColourPNS_19DrawEffectContainerE": {
@@ -7413,24 +7413,24 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD0Ev": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 700,
     "reason": "Port-only m_Materials member generates bulk cleanup in D0. Removing m_Materials requires removing default ctor + restructuring MeshManager::LoadMeshInternal. Deferred until Mesh struct matches binary. [re-triaged 2026-06-18T01:15Z]",
-    "score": 47415,
+    "score": 22910,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD1Ev": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 4500,
     "reason": "Same m_Materials issue as D0Ev. Deferred. [re-triaged 2026-06-18T01:15Z]",
-    "score": 46325,
+    "score": 22340,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4MeshD2Ev": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 4500,
     "reason": "Same m_Materials issue as D0Ev. Deferred. [re-triaged 2026-06-18T01:15Z]",
-    "score": 46325,
+    "score": 22340,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4utf829decode_next_unicode_characterEPPKc": {
@@ -8652,17 +8652,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4Mesh21GetBoneLocalTransformEm": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 4000,
     "reason": "Stale refresh: score 6790->8975/4600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 9375/4600 -> 8895/4000]",
-    "score": 8895,
+    "score": 6395,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4Mesh21GetBoneWorldTransformEm": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T07:20Z",
     "max_score": 4000,
     "reason": "Binary uses blx e3b94 (GetWorld matrix copy helper) after FindIndex walk. Port zero-inits a stack Matrix44 via memset, then does vector size-check and memmove from Skeleton::GetWorld result. Same BoneBinding container divergence as GetBoneVertTransform. See src/engine/asset/Mesh.cpp:58-65. Score 6715/4600. [score refreshed 2026-05-17T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 7655/4600 -> 8380/4000]",
-    "score": 8380,
+    "score": 7090,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4Mesh9GetBoundsEv": {
