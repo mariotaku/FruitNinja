@@ -865,11 +865,9 @@ void ShopScreen::Update(float dt) {
         if (m_BuyDelay > 0.0f) {
             m_BuyDelay -= dt;   // decrements toward zero
         } else {
-            // Binary (0x0015e438..0x0015e442): the ONLY gate is m_bTouchProcessed.
-            //   if (m_pShopList->m_bTouchProcessed == 0): ShrinkBuyButton
-            //   else: equip-button creation branch
-            // ShrinkBuyButton's own internal guards handle idempotency.
-            if (!m_pShopList || !m_pShopList->m_bTouchProcessed) {
+            // Binary (0x0015e438..0x0015e442): only gate is m_bTouchProcessed
+            // (m_pShopList is always non-null after Init).
+            if (!m_pShopList->m_bTouchProcessed) {
                 // List is settled (not being tapped): shrink/retract the equip button.
                 // Fires every frame; ShrinkBuyButton's Fruit::Sliced() guard makes it safe.
                 ShrinkBuyButton();  // binary @ 0x0015e442 beq to shrink
@@ -880,27 +878,20 @@ void ShopScreen::Update(float dt) {
                 // Check if item is equipped/locked — hide tutorial arrow if so
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
-                    bool equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo) != 0;
-                    bool locked   = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
+                    int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
+                    bool locked  = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
                     if (equipped || locked) {
                         // Binary: TutorialControl::ResetTutePos(tute, null) — hide arrow
                         if (game_work.m_TutorialControl)
                             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
                     }
-                }
-
-                // Create equip button if item is not equipped and button doesn't exist.
-                // Binary: guarded by (m_pEquipButton == null) — single-shot creation.
-                if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
-                    ItemManager* im = ItemManager::GetInstance();
-                    int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
-                    // Selection-ring ramp-up gate: binary keeps
-                    // `param = +dt` only when IsEquipped != 0 (current
-                    // loadout). Equip-button creation below runs in
-                    // the mutually-exclusive `equipped == 0` branch.
+                    // Selection-ring ramp-up gate: binary keeps ringSignedDt = +dt
+                    // only when IsEquipped != 0 (current loadout).
                     if (equipped != 0) {
                         ringSignedDt = dt;
                     }
+                    // Create equip button if item is not equipped and button doesn't exist.
+                    // Binary: guarded by (m_pEquipButton == null) — single-shot creation.
                     if (equipped == 0 && !m_pEquipButton) {
                         // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
                         const int equipFruitType =
@@ -932,7 +923,6 @@ void ShopScreen::Update(float dt) {
                         // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
                         m_pEquipButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
                     }
-                    // (if m_pEquipButton already exists: no action — single-shot guard)
                 }
             }
             // LAB_0015e68a: update animation frame counter (runs regardless of above)
@@ -1071,10 +1061,10 @@ void ShopScreen::Update(float dt) {
             if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                 ItemInfo* info = m_pSelectedItem->m_pItemInfo;
                 char type = info->m_Type;
-                if ((int)type < 4) {
+                if (type < 4) {
                     // Binary: if cached slot item != selected item,
                     //   call ItemManager::SetEquippedItem(type, old_slot_item->ItemInfo)
-                    ShopListItem* slotItem = ((unsigned)type < 4) ? m_pSlotItems[(int)type] : nullptr;
+                    ShopListItem* slotItem = m_pSlotItems[(int)type];
                     if (slotItem != m_pSelectedItem) {
                         ItemManager* im = ItemManager::GetInstance();
                         ItemInfo* prevInfo = slotItem ? slotItem->m_pItemInfo : nullptr;
