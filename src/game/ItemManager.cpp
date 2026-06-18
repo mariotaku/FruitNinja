@@ -68,9 +68,7 @@ static std::string BuildItemSaveFullPath() {
 #if defined(__EMSCRIPTEN__)
     return std::string("/save/ItemSave.xml");
 #else
-    Game* game = Game::GetInstance();
-    if (!game) return std::string("ItemSave.xml");
-    return game->data_dir + "/ItemSave.xml";
+    return Game::GetInstance()->data_dir + "/ItemSave.xml";
 #endif
 }
 
@@ -309,9 +307,6 @@ ItemInfo* ItemManager::GetItem(uint32_t hash) {
 // SaveItemInfo @ v1.6.1 0x00138610
 // -----------------------------------------------------------------------
 void ItemManager::SaveItemInfo() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     tinyxml2::XMLDocument doc;
 
     // Build root <item_save_file version="1.0" coins=N coinsTotal=N levelStartCoins=N>
