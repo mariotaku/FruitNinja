@@ -72,10 +72,11 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     m_Texture->UnSet();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x001443f4 (re-analyst)
-// HUDControl::HUDControl(); SmartPtr<Tex>::SetNull(+0x74); SmartPtr<Model>::SetNull(+0x78); m_Timer = 0.
+// ASM-verified: 2026-05-24 binary @ 0x00144434 (HUDControl3d::HUDControl3d)
+// Structure: base ctor (implicit) → vtable (implicit) → SetNull(m_Texture) → SetNull(m_Model) → m_Timer = 0.
 HUDControl3d::HUDControl3d() {
-    // m_Texture / m_Model default-construct to null SmartPtrs (binary calls SetNull).
+    m_Texture.SetNull();
+    m_Model.SetNull();
     m_Timer = 0.0f;
 }
 
