@@ -313,9 +313,9 @@ static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
             rvx = rvy;
             rvy = vtmp;
             rvx *= QuadrantMirror(emitter.m_Pos.x);
-            rvx *= emitter.m_TimeScale;
-            rvy *= emitter.m_TimeScale;
-            rvz *= emitter.m_TimeScale;
+            rvx *= emitter.m_VelScale;
+            rvy *= emitter.m_VelScale;
+            rvz *= emitter.m_VelScale;
         }
 
         p.m_Vel.x = emitter.m_Vel.x + rvx;
@@ -755,10 +755,11 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
 
         { int _v = 0; pt->QueryIntAttribute("useDepth", &_v); tmpl.m_UseDepth = (int32_t)_v; }
 
-        // <life> — stored as seconds after divide by 60
+        // <life> — stored as seconds after divide by 78.0
+        // Binary @ 0x0013d558 uses divisor 78.0 (DAT 0x404e000000000000).
         if (tinyxml2::XMLElement* e = pt->FirstChildElement("life")) {
             const char* t = e->GetText();
-            tmpl.m_StartTime = t ? (float)(atof(t) / 60.0) : 0.0f;
+            tmpl.m_StartTime = t ? (float)(atof(t) / 78.0f) : 0.0f;
         }
 
         // <type> — 0=Point, 1=Vertex, 2=Direction, 3=Angular
@@ -914,7 +915,8 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
 
         if (tinyxml2::XMLElement* life = em->FirstChildElement("life")) {
             const char* t = life->GetText();
-            tmpl.m_MaxLifetime = t ? (float)(atof(t) / 60.0) : 0.0f;
+            // Binary @ 0x0013d558 uses divisor 78.0 (DAT 0x404e000000000000).
+            tmpl.m_MaxLifetime = t ? (float)(atof(t) / 78.0f) : 0.0f;
         }
 
         for (tinyxml2::XMLElement* ps = em->FirstChildElement("particleSet");
