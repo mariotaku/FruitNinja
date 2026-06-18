@@ -76,28 +76,23 @@ const Matrix44* Mesh::GetBoneVertTransform(unsigned long index) const {
 // Returns world matrix for binding[index] through skeleton. Identity when
 // no skeleton bound or bone unbound.
 Matrix44 Mesh::GetBoneWorldTransform(unsigned long index) const {
-    Matrix44 identity;
-    if (!m_Skeleton) return identity;
-    if (index >= m_BoneBindings.size()) return identity;
+    if (!m_Skeleton || index >= m_BoneBindings.size())
+        return Matrix44();
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
-    if (skelIdx < 0) return identity;
+    if (skelIdx < 0)
+        return Matrix44();
     return *m_Skeleton->GetWorld((uint32_t)skelIdx);
 }
 
 // Binary @ 0x001b0778 — has no callers; emitted for API parity.
 //                    Mirrors GetBoneVertTransform / GetBoneWorldTransform.
 Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
-    Matrix44 out;
     if (m_Skeleton != NULL) {
         const BoneBinding& bind = m_BoneBindings[idx];
-        if (bind.m_SkeletonIndex >= 0) {
-            const Matrix44* src = m_Skeleton->GetLocal((uint32_t)bind.m_SkeletonIndex);
-            memcpy(&out, src, sizeof(Matrix44));
-            return out;
-        }
+        if (bind.m_SkeletonIndex >= 0)
+            return *m_Skeleton->GetLocal((uint32_t)bind.m_SkeletonIndex);
     }
-    out = Matrix44();
-    return out;
+    return Matrix44();
 }
 
 // Matches Mesh::GetBounds (0x00272b48).
