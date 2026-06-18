@@ -9,22 +9,29 @@
 // 32-deep matrix stack with dirty-tracking version counter
 // DIFFERS from binary ctor @ 0x00171734: binary copies from a static identity
 // constant via ldmia/vstm into m_Current and m_Stack[0]; the port uses
-// Matrix44::Identity() on those two instead. m_Stack[1..31] use trivial
-// char storage to avoid redundant Identity() calls (124 per MatrixManager
+// Matrix44::Identity() on those two instead. m_Stack[1..31] use char
+// storage to avoid redundant Identity() calls (124 per MatrixManager
 // construction eliminated: 31 per stack x 4 stacks).
 struct MatrixStack {
-    // Trivial char storage with Matrix44 alignment: default ctor does NOT fire,
-    // avoiding 31 redundant Identity() calls per stack at construction time.
-    // Binary only initializes m_Stack[0] and m_Current.
-    // DIFFERS: binary treats Matrix44 as POD with no default init. Port's
-    // Matrix44 default ctor calls Identity() on all 16 floats, so 31 unused
-    // stack slots incur 31 redundant Identity() calls per MatrixStack ctor.
-    // Acceptable divergence — sizeof and field offsets still match binary.
-    Matrix44 m_Stack[32];     // +0x000, 2048 bytes
+    static const int STACK_SIZE = 32;
+
+    // Char storage: default ctor does NOT fire on individual slots, avoiding
+    // 31 redundant Identity() calls per stack at construction time. Binary only
+    // initializes m_Stack[0] and m_Current. The port's Matrix44 default ctor
+    // would Identity() all 64 floats of unused slots if this were Matrix44[32];
+    // char storage prevents that. Natural struct alignment >= 4 is sufficient
+    // for 4-byte-aligned float access matching binary behavior.
+    char m_StackData[sizeof(Matrix44) * STACK_SIZE]; // +0x000, 2048 bytes
     Matrix44 m_Current;   // +0x800, 64 bytes
     int m_Depth;          // +0x840
     int m_Version;        // +0x844
 
+    Matrix44& StackAt(int i) {
+        return *reinterpret_cast<Matrix44*>(m_StackData + i * sizeof(Matrix44));
+    }
+    const Matrix44& StackAt(int i) const {
+        return *reinterpret_cast<const Matrix44*>(m_StackData + i * sizeof(Matrix44));
+    }
 
     // ASM-spec v1.6.1 MatrixStack ctor @ 0x00171734: binary loads from a global
     // identity constant (ldmia) into m_Current and m_Stack[0], then sets
@@ -32,7 +39,7 @@ struct MatrixStack {
     MatrixStack()
         : m_Current()  // Identity via default ctor (matches binary: m_Current = identity)
     {
-        m_Stack[0].Identity();  // Only init m_Stack[0]; binary does the same via ldmia.
+        StackAt(0).Identity();  // Only init m_Stack[0]; binary does the same via ldmia.
         m_Depth = 0;
         m_Version = 1;
     }
