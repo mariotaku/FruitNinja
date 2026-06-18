@@ -356,6 +356,6 @@ void WaveModifier::ParseSpecific(TiXmlElement* xml) {
 GameModifier* WaveModifier::Clone() {
     WaveModifier* c = new WaveModifier();
     *c = *this;
-    c->m_OverideEntries.clear();
+    c->m_bConfigured = false;
     return c;
 }

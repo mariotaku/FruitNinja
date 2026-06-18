@@ -20,6 +20,7 @@ add_library(mortar_engine STATIC
     render/gl_funcsSDL.cpp
     render/gl_funcsWin32.cpp
     render/MatrixManager.cpp
+    render/MatrixStack.cpp
     render/DisplayManager.cpp
     render/DisplayManagerSDL.cpp
     # Phase 3 — Rendering

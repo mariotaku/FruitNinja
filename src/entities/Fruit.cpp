@@ -1955,17 +1955,18 @@ void Fruit::LoadFruitModels() {
             // Binary @ 0x001e0a2c: SetupLighting(model)
             SetupLighting(model);
 
-            // Binary @ 0x001e0a50+: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty(0x2843d1)
-            // 0x2843d1 = StringHash("DiffuseMap"). The EffectProperty* subsystem is
-            // defunct-stubbed (Geometry::GetProperty returns nullptr), so this resolves
-            // to nullptr. The value is stored in the FruitModelInfo EffectProperty slot
-            // for future atlas-texture resolution.
+            // ASM-spec v1.6.1 @ 0x001e0a50: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty(0x2843d1)
+            // 0x2843d1 = StringHash("DiffuseMap"). Stores the EffectProperty* into the
+            // FruitModelInfo EffectProperty slot for shared atlas-texture resolution.
             Mortar::EffectProperty* prop = nullptr;
             {
                 Mortar::Mesh* node0 = model->GetNode(0UL).Get();
-                // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
-                //   node0->GetGeometryEntry(0)->GetProperty(0x2843d1);
-                (void)node0;
+                if (node0) {
+                    Mortar::Geometry* geom = node0->GetGeometryEntry(0);
+                    if (geom && geom->GetPropList()) {
+                        prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                    }
+                }
             }
 
             if (piece == 1) {
@@ -1993,18 +1994,27 @@ void Fruit::LoadFruitModels() {
                 Mortar::EffectProperty* prop = nullptr;
                 {
                     Mortar::Mesh* node0 = wholeModel->GetNode(0UL).Get();
-                    // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
-                    (void)node0;
+                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
+                    if (node0) {
+                        Mortar::Geometry* geom = node0->GetGeometryEntry(0);
+                        if (geom && geom->GetPropList()) {
+                            prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                        }
+                    }
                 }
 
                 models[i].m_Whole = wholeModel;
                 models[i].m_pWholeEffect = prop;
 
-                // TODO: v1.6.1 T_2044 @ 0x001e0b3c
-                // Binary: calls T_2044(effect, model) when wholeModel is valid AND
-                // FruitInfo[i]+0x334 != 0. T_2044 attaches the diffuse-map texture
-                // from the model to the whole-fruit EffectProperty for shared atlas
-                // management. Stub: no-op until EffectProperty is wired.
+                // ASM-spec v1.6.1 T_2044 @ 0x001e0b3c:
+                // EffectProperty::SetValue<Texture2D>(prop, modelSmartPtr).
+                // Only called when info->m_bIsSuperFruit is set. T_2044 would share the
+                // diffuse-map texture across fruit instances via the EffectProperty system.
+                // Stub: no-op until EffectProperty SetValue<Texture2D> is wired.
+                if (info->m_bIsSuperFruit) {
+                    // T_2044: EffectProperty::SetValue<SmartPtr<Texture2D>>(prop, wholeModel)
+                    (void)prop;
+                }
             }
         }
 
@@ -2019,8 +2029,13 @@ void Fruit::LoadFruitModels() {
                 Mortar::EffectProperty* prop = nullptr;
                 {
                     Mortar::Mesh* node0 = outlineModel->GetNode(0UL).Get();
-                    // TODO: v1.6.1 Geometry::GetProperty(0x2843d1) @LoadFruitModels
-                    (void)node0;
+                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
+                    if (node0) {
+                        Mortar::Geometry* geom = node0->GetGeometryEntry(0);
+                        if (geom && geom->GetPropList()) {
+                            prop = geom->GetPropList()->GetProperty("DiffuseMap");
+                        }
+                    }
                 }
 
                 models[i].m_pMpModel = outlineModel;

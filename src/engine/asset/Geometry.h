@@ -112,6 +112,9 @@ public:
     // Binary @ 0x001a3e5c
     bool SetActiveEffect(uint32_t idx);
 
+    // Accessor for m_PropList (used by Fruit::LoadFruitModels for DiffuseMap property extraction).
+    EffectPropertyList* GetPropList() const { return m_PropList; }
+
     // === port-only fields populated by MeshManager loader; appended after the
     //     binary fields so m_ActiveBindingIdx/m_Binding/m_PropList stay at
     //     canonical offsets ===
