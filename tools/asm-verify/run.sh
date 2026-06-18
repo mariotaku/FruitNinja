@@ -71,15 +71,14 @@ USAGE
     esac
 done
 
-# Bind-mount project (read-only) + tmpfs for ext4-backed build/staging.
-# Bind-mounts on Docker-Desktop / WSL2 still go through 9p drvfs, so we
-# stage the source into a tmpfs from inside the container (verify.sh rsync).
-# /build, /staging, and /cache are all tmpfs — nothing persists between runs,
-# guaranteeing every verify sees the latest source.
+# Bind-mount project (read-only) + tmpfs for build/cache.
+# /staging uses a named volume (ext4) solely for the report extraction
+# step — the source rsync inside verify.sh is fresh each run. /build and
+# /cache are tmpfs, guaranteeing no stale .o files between runs.
 docker run --rm \
     -e "ASM_VERIFY_FILTER=$FILTER" \
     -v "$PROJECT_ROOT_DOCKER:/work:ro" \
-    --tmpfs /staging:exec,size=2G \
+    -v fnverify-src:/staging \
     --tmpfs /build:exec,size=2G \
     --tmpfs /cache:exec,size=256M \
     "$IMAGE" -c 'bash /work/tools/asm-verify/verify.sh'
