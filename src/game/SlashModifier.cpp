@@ -91,15 +91,19 @@ void SlashModifier::RemoveModifier() {
     }
 }
 
-// Matches SlashModifier::ParseSpecific (0x0011f464). Binary:
-//   - NO GameModifier::ParseSpecific call
+// ASM-spec v1.6.1 SlashModifier::ParseSpecific @ 0x0011f464:
+//   - Binary wraps whole body in if (xml != null) { ... }; port early-returns.
 //   - speed -> m_ColourSpeed (default 1.0) via QueryDoubleAttribute
 //   - type -> ParseSlashModColourType (unconditional, null-safe)
 //   - particles -> CloneString (unconditional, null-safe)
-//   - texture -> new char[0x40], snprintf (if non-null AND non-empty)
+//   - texture -> new char[0x40], snprintf( ,4,"%s.tex", ) (confirmed at 0x0011f4d4)
 //   - <slash_power type="..."/> children -> m_PowerMask OR
-//   - <colour> children counted directly into m_NumColours, then
-//     alloc m_NumColours+2 colours, then ParseColour each via GetText
+//   - <colour> children: binary reads m_NumColours directly (no zero reset),
+//     increments each iteration, then uses post-loop value for alloc.
+//   - alloc (N+2)*4 raw bytes + custom 8B header [4, N]; port uses new[].
+// DIFFERS: Colour allocation uses raw operator_new + custom header [type=4, count]
+//   (binary @ 0x0011f544); port uses new Colour[m_NumColours+2]. m_pColours points
+//   to first Colour in both cases. Downstream (SetModColours) only reads palette data.
 void SlashModifier::ParseSpecific(TiXmlElement* xml) {
     if (xml == nullptr) return;
 
@@ -124,14 +128,16 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
         if (maskAttr) m_PowerMask |= ParseSlashPowerMask(maskAttr);
     }
 
-    // <colour> children — single count pass increments m_NumColours directly
-    m_NumColours = 0;
+    // <colour> children: binary reads m_NumColours directly (no zero reset),
+    // increments each iteration.
     for (TiXmlElement c = xml->FirstChildElement("colour"); c;
          c = c.NextSiblingElement("colour")) {
         ++m_NumColours;
     }
 
     if (m_NumColours > 0) {
+        // DIFFERS: binary = raw operator_new((N+2)*4) + 8B header [4, N] + per-element
+        // Colour::Colour() ctor; port uses new Colour[m_NumColours+2] (default-ctors all).
         m_pColours = new Colour[m_NumColours + 2];
         int idx = 0;
         for (TiXmlElement c = xml->FirstChildElement("colour"); c;
@@ -139,8 +145,8 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
             ParseColour(&m_pColours[idx], c.GetText());
         }
     } else if (m_pTexture1 || m_pTexture2) {
-        // Fallback: binary allocates 12 bytes = 3 Colour slots (8B hdr + 1 colour).
-        // Port uses new Colour[3] for same capacity.
+        // DIFFERS: binary = 12B raw alloc + 8B header [4,1] + 1 Colour; port uses
+        // new Colour[3] (2 extra Colour slots, unused downstream).
         m_NumColours = 1;
         m_pColours = new Colour[3];
         m_pColours[0] = Colour(255, 255, 255, 255);
