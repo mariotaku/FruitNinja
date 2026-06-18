@@ -46,21 +46,28 @@ bool IFile_Direct::Read(void* dst, unsigned long n) {
     return fread(dst, 1, (size_t)n, m_fp) == n;
 }
 
-// Binary @ IFile vtbl+0x14 (IFile_Direct slot 5)
+// Binary @ IFile vtbl+0x14 (IFile_Direct slot 5) — encryption path; defunct, delegate to Write
+bool IFile_Direct::WriteEncrypted(const void* src, unsigned long n) {
+    // Defunct: encryption — WriteEncrypted; v1.6.1 IFile_Direct @ 0x001eb3b8 +0x14
+    // DIFFERS: original may encrypt, using plain Write because encryption is defunct.
+    return Write(src, n);
+}
+
+// Binary @ IFile vtbl+0x18 (IFile_Direct slot 6)
 bool IFile_Direct::Write(const void* src, unsigned long n) {
     if (!m_fp || !src) return false;
     return fwrite(src, 1, (size_t)n, m_fp) == n;
 }
 
-// Binary @ IFile vtbl+0x18 (IFile_Direct slot 6)
-// whence: 0=SEEK_SET, 1=SEEK_CUR, 2=SEEK_END (matches POSIX / IFile convention)
-int IFile_Direct::Seek(unsigned long newPos, long whence, bool) {
+// Binary @ IFile vtbl+0x1c (IFile_Direct slot 7)
+// mode: 0=SEEK_SET, 1=SEEK_CUR, 2=SEEK_END (matches POSIX / FileSeekMode)
+int IFile_Direct::Seek(int mode, long offset) {
     if (!m_fp) return -1;
     int posixWhence;
-    if (whence == 0)      posixWhence = SEEK_SET;
-    else if (whence == 1) posixWhence = SEEK_CUR;
-    else                  posixWhence = SEEK_END;
-    int result = fseek(m_fp, (long)newPos, posixWhence);
+    if (mode == 0)      posixWhence = SEEK_SET;
+    else if (mode == 1) posixWhence = SEEK_CUR;
+    else                posixWhence = SEEK_END;
+    int result = fseek(m_fp, offset, posixWhence);
     if (result == 0) {
         long pos = ftell(m_fp);
         if (pos >= 0) m_cursor = (unsigned long)pos;
@@ -68,7 +75,7 @@ int IFile_Direct::Seek(unsigned long newPos, long whence, bool) {
     return result;
 }
 
-// Binary @ IFile vtbl+0x1c (IFile_Direct slot 7)
+// Binary @ IFile vtbl+0x20 (IFile_Direct slot 8)
 unsigned int IFile_Direct::Tell() {
     if (!m_fp) return m_cursor;
     long pos = ftell(m_fp);

@@ -1,215 +1,182 @@
-// Analysed: 2026-05-04T00:00
+// Analysed: 2026-06-18
+// v1.6.1 binary faithful implementation. File is NOT polymorphic — +0x00 is IFile* delegate.
 #include "asset/File.h"
 #include "asset/FileManager.h"
 #include "asset/IFile.h"
+#include "asset/IFileSystem.h"
 
 #include <cstring>
 
 namespace Mortar {
 
-// Binary @ 0x0019b970
-// Args: path -> m_path (+0x08), openMode -> m_mode (+0x3C), systemID -> m_size (+0x04).
-// Ctor writes vptr=0; derived class installs the real vtable.
-// Port tail fields m_pIFile/m_systemID/m_pData/m_bOwnsBuffer are port-only.
+// Binary @ 0x00251604
 File::File(const char* path, int openMode, unsigned long systemID)
-    : m_size(systemID)         // +0x04
+    : m_pIFile(0)            // +0x00
+    , m_systemID(systemID)   // +0x04
     , m_path(path ? path : "") // +0x08
-    , m_position(0)            // +0x30
-    , m_field34(false)         // +0x34: m_bIsOpen
-    , m_field35(false)         // +0x35: m_bSaved
-    , m_field36(false)         // +0x36: m_bIsLoaded
-    , m_field37(true)          // +0x37: default=1 in binary ctor
-    , m_field38(0)             // +0x38
-    , m_mode(openMode)         // +0x3C
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    , m_pIFile(0)
-    , m_systemID(systemID)
-    , m_pData(0)
-    , m_bOwnsBuffer(false)
-#endif
+    , m_pData(0)             // +0x30
+    , m_bIsOpen(false)       // +0x34
+    , m_bLocked(false)       // +0x35
+    , m_bIsLoaded(false)     // +0x36
+    , m_bOwnsBuffer(true)    // +0x37  (default=true in binary ctor)
+    , m_sizeCache(0)         // +0x38
+    , m_mode(openMode)       // +0x3C
 {
 }
 
-// Binary @ 0x0019b948
+// Binary @ 0x002519ac
 File::~File() {
     Unload();
-    // m_path dtor runs via AsciiString dtor
+    // m_path AsciiString dtor runs automatically
 }
 
-// Binary @ vtbl+0x08 (virtual Open)
-bool File::Open() {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    if (!m_field34) {
-        if ((m_mode & 1) == 0 && !Exists(m_path.CStr(), m_systemID)) {
-            return false;
-        }
-        unsigned long flags = 0;
-        if (m_mode == 1)      flags = 1;
-        else if (m_mode == 2) flags = 1 | 2;
+// Binary @ 0x00251810
+bool File::Open(IFileSystem* pFileSystem) {
+    if (m_bIsOpen) return true;
 
-        IFile* ifile = FileManager::GetInstance().OpenFile(
-            m_path.CStr(), flags, (unsigned int)m_systemID);
-
-        if (ifile) {
-            m_pIFile  = ifile;
-            m_field34 = true;
-            m_size    = ifile->Size();
+    if (pFileSystem) {
+        if (!pFileSystem->FileExists(m_path.CStr())) {
+            if ((m_mode & 1) == 0) return false;
+            // File doesn't exist on the given filesystem but write mode is set;
+            // fall through to try FileManager.
+        } else {
+            m_pIFile = pFileSystem->OpenFile(m_path.CStr(), (unsigned long)m_mode);
+            if (m_pIFile) {
+                m_bIsOpen = true;
+                m_sizeCache = m_pIFile->Size();
+            }
+            return m_bIsOpen;
         }
     }
-    return m_field34;
-#else
-    return false;
-#endif
-}
 
-// Binary @ vtbl+0x0c (virtual Size)
-unsigned long File::Size() const {
-    return m_size;
-}
-
-// Binary @ vtbl+0x10 (virtual Read)
-bool File::Read(void* dst, unsigned long n) {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    if (!m_field34 || !m_pIFile) return false;
-    return m_pIFile->Read(dst, n);
-#else
-    return false;
-#endif
-}
-
-// Binary @ vtbl+0x14 (virtual Close)
-void File::Close() {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    // use FileManager (either because pFileSystem was NULL, or write-mode fallback)
+    FileManager& fm = FileManager::GetInstance();
+    if (!pFileSystem && !fm.FileExists(m_path.CStr(), m_systemID)) {
+        if ((m_mode & 1) == 0) return false;
+    }
+    m_pIFile = fm.OpenFile(m_path.CStr(), (unsigned long)m_mode, m_systemID);
     if (m_pIFile) {
+        m_bIsOpen = true;
+        m_sizeCache = m_pIFile->Size();
+    }
+    return m_bIsOpen;
+}
+
+// Binary @ 0x002517f0
+unsigned long File::Size() const {
+    return m_sizeCache;
+}
+
+// Binary @ 0x002519d8
+bool File::Read(void* dst, unsigned long n) {
+    if (!m_bIsOpen || !m_pIFile) return false;
+    return m_pIFile->Read(dst, n);
+}
+
+// Binary @ 0x00251914
+void File::Close() {
+    if (m_bIsOpen && m_pIFile) {
         m_pIFile->Close();
         delete m_pIFile;
         m_pIFile = 0;
     }
-    m_field34 = false;
-#endif
+    m_bIsOpen = false;
+    m_sizeCache = 0;
 }
 
-// Binary @ 0x0019b7b8
+// Binary @ 0x002519f0 — normal Write path only (encryption defunct)
 bool File::Write(const void* src, unsigned long n) {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    if (!m_field34 || !m_pIFile) return false;
+    if (!m_bIsOpen || !m_pIFile) return false;
     return m_pIFile->Write(src, n);
-#else
-    return false;
-#endif
 }
 
-// Binary @ 0x0019b7c4
+// Binary @ 0x002224ac
+bool File::Write(const char* str) {
+    return Write(str, std::strlen(str));
+}
+
+// Binary @ 0x00251a7c — passes mode+offset directly; no conversion (mode values already match POSIX)
 bool File::Seek(FileSeekMode mode, long offset) {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    if (!m_field34 || !m_pIFile) return false;
-    long whence;
-    if (mode == FSEEK_SET)       whence = 0;
-    else if (mode == FSEEK_CUR)  whence = 1;
-    else                         whence = 2;
-    return m_pIFile->Seek((unsigned long)offset, whence, false) == 0;
-#else
-    return false;
-#endif
+    if (!m_bIsOpen || !m_pIFile) return false;
+    return m_pIFile->Seek(static_cast<int>(mode), offset) == 0;
 }
 
-// Binary @ 0x0019b8c0
+// Binary @ 0x0025168c — loads via FileManager::GetFileData (NOT via Open/Read path)
 bool File::Load(void* userBuffer, unsigned long userBufferSize) {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    if (m_field36) return true;
-    if (!Open()) return false;
+    if (m_bIsLoaded) return true;
 
-    if (userBuffer && userBufferSize >= m_size) {
+    if (userBuffer) {
         m_pData = userBuffer;
-        m_bOwnsBuffer = false;
+        m_sizeCache = userBufferSize;
     } else {
-        m_pData = new unsigned char[m_size];
-        m_bOwnsBuffer = true;
+        m_pData = 0;
+        m_sizeCache = 0;
     }
 
-    m_pIFile->Seek(0, 0, false);
-    bool ok = m_pIFile->Read(m_pData, m_size);
-    if (!ok) {
-        if (m_bOwnsBuffer) {
-            delete[] (unsigned char*)m_pData;
-            m_pData = 0;
-            m_bOwnsBuffer = false;
-        }
-        return false;
-    }
+    m_mode = 0;
 
-    m_field36 = true;
-    return true;
-#else
-    return false;
-#endif
+    FileManager& fm = FileManager::GetInstance();
+    // DIFFERS: binary's GetFileData may reuse *outBuf (userBuffer) if non-null;
+    // our port always allocates, so userBuffer is effectively overwritten.
+    m_bIsLoaded = fm.GetFileData(m_path.CStr(), &m_pData, &m_sizeCache,
+                                  m_systemID, m_bOwnsBuffer);
+    return m_bIsLoaded;
 }
 
-// Binary @ 0x0019b890
+// Binary @ 0x00251964
 void File::Unload() {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    // DIFFERS: binary uses ::operator delete; port uses delete[] to match
+    // our GetFileData implementations (FileSystem_Direct uses new[]).
     if (m_bOwnsBuffer && m_pData) {
-        delete[] (unsigned char*)m_pData;
-        m_bOwnsBuffer = false;
+        delete[] static_cast<unsigned char*>(m_pData);
     }
     m_pData = 0;
-    m_field36 = false;
     Close();
-#endif
+    m_bLocked = false;
+    m_bIsLoaded = false;
+    m_bIsOpen = false;
+    m_sizeCache = 0;
 }
 
-// Binary @ 0x0019b808
+// Binary @ 0x0025164c
 bool File::Exists(const char* path, unsigned long systemID) {
     if (!path) return false;
-    return FileManager::GetInstance().FileExists(path, (unsigned int)systemID);
+    return FileManager::GetInstance().FileExists(path, systemID);
 }
 
-// Binary @ 0x0019b90c
+// Binary @ 0x0025166c
 long File::SizeOfFile(const char* path, unsigned long systemID) {
     if (!path) return -1L;
-    unsigned int sz = FileManager::GetInstance().FileSize(path, (unsigned int)systemID);
+    unsigned int sz = FileManager::GetInstance().FileSize(path, systemID);
     if (sz == 0xFFFFFFFFu) return -1L;
     return (long)sz;
 }
 
-// Binary @ 0x0019b7ec
-bool File::IsOpen() const { return m_field34; }
-// Binary @ 0x0019b7dc
-bool File::IsLoaded() const { return m_field36; }
-// Binary @ 0x0019b7f4
+// Binary @ 0x002517aa
+bool File::IsOpen() const { return m_bIsOpen; }
+// Binary @ 0x002517a6
+bool File::IsLoaded() const { return m_bIsLoaded; }
+// Binary @ 0x002517b2
 bool File::CanWrite() const { return (m_mode & 1) != 0; }
-// Binary @ 0x0019b778
-void* File::Data() const {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    return m_pData;
-#else
-    return 0;
-#endif
-}
-// Binary @ 0x0019b77c
+// Binary @ 0x002517b6
+void* File::Data() const { return m_pData; }
+// Binary @ 0x002517ba
 const AsciiString& File::FileName() const { return m_path; }
 
-// Binary @ 0x0019b7fc — tail-calls IFile vtable slot +0x1c (Tell) and returns the result.
-// Binary loads *this (the open IFile handle) and dispatches its Tell() slot; the port keeps
-// that handle in m_pIFile. Decompiler shows void return because it's a tail call, but the
-// callee (IFile::Tell @ vtbl+0x1c) yields the current position as unsigned int.
+// Binary @ 0x00251ac8 — tail-calls IFile vtable slot +0x20 (Tell) and returns result.
 unsigned int File::GetPosition() const {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     return m_pIFile ? m_pIFile->Tell() : 0u;
-#else
-    return 0u;
-#endif
 }
 
-// Binary @ 0x0019b884 — delegates to AsciiString::Hash on m_path (+0x08) and returns it.
+// Binary @ 0x00251808 — delegates to AsciiString::Hash on m_path.
 unsigned int File::Hash() const {
     return m_path.Hash();
 }
 
-// Binary @ 0x0019b7e4 — return m_field35 (+0x35), the lock flag.
-bool File::IsLocked() const { return m_field35; }
+// Binary @ 0x002517a0
+bool File::IsLocked() const { return m_bLocked; }
 
-// Binary @ 0x0019b76c — set m_field35 (+0x35) lock flag from arg.
-void File::Lock(bool locked) { m_field35 = locked; }
+// Binary @ 0x0025179c
+void File::Lock(bool locked) { m_bLocked = locked; }
 
 }  // namespace Mortar

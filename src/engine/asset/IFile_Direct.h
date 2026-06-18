@@ -16,12 +16,13 @@ public:
     IFile_Direct(IFileSystem* sys, FILE* fp, unsigned long size);
     virtual ~IFile_Direct();
 
-    // IFile overrides (slots 2..7) — Binary @ 0x001eb3b8 vtable
+    // IFile overrides (slots 2..8) — Binary @ 0x001eb3b8 vtable
     virtual unsigned int Size() override;
     virtual void         Close() override;
     virtual bool         Read(void* dst, unsigned long n) override;
+    virtual bool         WriteEncrypted(const void* src, unsigned long n) override;
     virtual bool         Write(const void* src, unsigned long n) override;
-    virtual int          Seek(unsigned long newPos, long whence, bool) override;
+    virtual int          Seek(int mode, long offset) override;
     virtual unsigned int Tell() override;
 
 private:

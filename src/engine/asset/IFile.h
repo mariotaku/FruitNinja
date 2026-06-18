@@ -2,6 +2,15 @@
 #define FN_ENGINE_ASSET_IFILE_H
 
 // Binary @ 0x001eb380 (vtable), sizeof(IFile) == 8 on 32-bit ARM
+// v1.6.1 vtable layout:
+//   +0x04 dtor
+//   +0x08 Size
+//   +0x0C Close
+//   +0x10 Read
+//   +0x14 WriteEncrypted
+//   +0x18 Write
+//   +0x1C Seek
+//   +0x20 Tell
 
 namespace Mortar {
 
@@ -13,17 +22,19 @@ public:
     // Binary @ 0x0019baa8 (D2), 0x0019bb1c (D0)
     virtual ~IFile();
 
-    // Binary @ vtbl+0x08 — pure
+    // Binary @ vtbl+0x08
     virtual unsigned int Size() = 0;
-    // Binary @ vtbl+0x0c — pure
+    // Binary @ vtbl+0x0c
     virtual void Close() = 0;
-    // Binary @ vtbl+0x10 — pure
+    // Binary @ vtbl+0x10
     virtual bool Read(void* dst, unsigned long n) = 0;
-    // Binary @ vtbl+0x14 — pure
+    // Binary @ vtbl+0x14 — encryption path (defunct on port)
+    virtual bool WriteEncrypted(const void* src, unsigned long n) = 0;
+    // Binary @ vtbl+0x18
     virtual bool Write(const void* src, unsigned long n) = 0;
-    // Binary @ vtbl+0x18 — pure; whence: 0=SET,1=CUR,2=END (matching POSIX)
-    virtual int Seek(unsigned long newPos, long whence, bool) = 0;
-    // Binary @ vtbl+0x1c — pure
+    // Binary @ vtbl+0x1c — mode: 0=SET, 1=CUR, 2=END (matches FileSeekMode / POSIX)
+    virtual int Seek(int mode, long offset) = 0;
+    // Binary @ vtbl+0x20
     virtual unsigned int Tell() = 0;
 
 protected:
