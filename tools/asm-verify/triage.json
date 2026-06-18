@@ -399,10 +399,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10DojoScreen6UpdateEf": {
-    "decided_at": "2026-06-14T07:00Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 18300,
     "reason": "game_work offsets MATCH: port reads game_work via GOT at +0x278; accesses [r6/r4,#0x8c] (camera-shake timer), [r3,#0x50] (FruitSaveData) -- same offsets as binary. Score 42600/18300 -- large inherent divergence: port adds ShopScreen ctor call inline, expands tbb jump table with more states, adds stack frame, extra bounds checking. Binary accesses game_work via direct GOT-indirect. DojoScreen.cpp:328 defunct network states still present. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 42745/18300 2026-06-14T05:55Z]",
-    "score": 42600,
+    "score": 41955,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreen7ReleaseEv": {
@@ -476,10 +476,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen15NewGameCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 6000,
     "reason": "Score 5144/6000. Structural port differences, Defunct online stubs. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 5153/6000 -> 5158/6000]",
-    "score": 5158,
+    "score": 6623,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen16GameModeCallbackEv": {
@@ -1724,9 +1724,9 @@
   "_ZN11PowerUpShop12ButtonSlicedEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Removed port-only m_PurchasablePowerUps.empty() guard the binary lacks; residual is structural (12-reg push, TODO-gapped body). [recover 2026-06-14]",
-    "score": 10580,
+    "score": 11270,
     "max_score": 7900,
-    "decided_at": "2026-06-14T06:00Z"
+    "decided_at": "2026-06-18T02:35Z"
   },
   "_ZN11PowerUpShop13ButtonDeletedEP10HUDControl": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2830,9 +2830,9 @@
   "_ZN12ScreenEffect6UpdateEfff": {
     "verdict": "ACCEPT-deferred",
     "reason": "ScreenEffect::Update (binary @ 0x00138844) -- 3 real logic fixes confirmed present: (a) sin-phase constant 65536->32764.0f (src/game/ScreenEffect.cpp:440, binary DAT_00148adc); (b) emitter cull rewritten: m_RateScale=0 when remaining<0.8f, no destroy (src/game/ScreenEffect.cpp:500-502, binary @ 0x00148d24); (c) sound loop forward iteration with fired-marker m_StartT=100.0f, vol=0.6599f, Delegate1 overload (src/game/ScreenEffect.cpp:513-521, binary @ 0x00148d84). Residual divergence is CALLEE-GAP: binary list-iteration vs port vector-iteration codegen, inlined HUD spawn and PSP particle manager calls vs still-stubbed subsystems. Documented TODO at src/game/ScreenEffect.cpp:522 (0x00148e3c erase+m_EndT<0 corner). FIX-NEEDED: no. [score re-anchored 2026-06-14 post close-top-50 fixes: 67490/43300]",
-    "score": 67490,
+    "score": 69146,
     "max_score": 43300,
-    "decided_at": "2026-06-14T10:00Z"
+    "decided_at": "2026-06-18T02:35Z"
   },
   "_ZN12ScreenEffect8ActivateEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2947,10 +2947,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 7000,
     "reason": "SpeedControl::SoundNeedsLooping — binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7724/7100 -> 9239/7000]",
-    "score": 9239,
+    "score": 8763,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12SpeedControl4InitEv": {
@@ -2975,10 +2975,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN12SpeedControl6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 31800,
     "reason": "SpeedControl::Update -- port has PSPParticleManager::ClearEmitter guard plus singleton-init pattern; binary uses direct blx GOT chain. Structural differences from fuller port particle/sound management. Score 43856/33000. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 43856/33000 -> 43925/31800]",
-    "score": 43925,
+    "score": 44390,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12SpeedControlC1Ev": {
@@ -3913,10 +3913,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14GameOverScreen13RetryCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 9500,
     "reason": "Port uses MortarGame singleton gate + GetTaskState call; binary uses full GOT-resolved path. Same core flow (state check, ClearCombo, state=5) but port missing binary's SaveCurrentData call (blx e6e04) at entry. Tier-2 save path. See src/screens/GameOverScreen.cpp. Score 10195/9700. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9915/9700 -> 10900/9500]",
-    "score": 10900,
+    "score": 11675,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14GameOverScreen13UnLoadContentEv": {
@@ -4207,10 +4207,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14PowerUpManager5ResetEb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 16000,
     "reason": "PowerUpManager::Reset. Score 27853->27703 (-0.5%) -- negligible. Defunct online-services teardown path. ACCEPT-defunct. [rerun 2026-05-24T09:50Z] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 28023/15600 -> 24050/16000]",
-    "score": 24050,
+    "score": 24570,
     "verdict": "ACCEPT-defunct"
   },
   "_ZN14PowerUpManager6UpdateEf": {
@@ -4368,10 +4368,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl10LeftButtonEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 5400,
     "reason": "FruitFactControl method stub/divergence. Score 7680/6200. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7680/6200 -> 7108/5400]",
-    "score": 7108,
+    "score": 8340,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl11DownPressedEP10InputEvent": {
@@ -4396,10 +4396,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl11RightButtonEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 5500,
     "reason": "FruitFactControl method stub/divergence. Score 7262/6200. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7262/6200 -> 7264/5500]",
-    "score": 7264,
+    "score": 7900,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl12RightPressedEP10InputEvent": {
@@ -4424,10 +4424,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 26900,
     "reason": "FruitFactControl::Update -- score improved 31102->30462/27600 [refreshed 2026-05-24 post R9]. Defunct online-services branches. See src/hud/FruitFactControl.cpp:570-645. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 30462/27600 -> 40530/26900]",
-    "score": 40530,
+    "score": 42334,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl7ReleaseEv": {
@@ -5656,10 +5656,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:35Z",
     "max_score": 102500,
     "reason": "Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: score None/None -> None/0] [fresh-sweep 2026-06-14T05:19Z: score None/None -> 151280/102500]",
-    "score": 151280,
+    "score": 151770,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN5Fruit17SetTrailParticlesEm": {
@@ -8829,9 +8829,9 @@
   "_ZN14PowerUpManager18LoadActivePowerUpsEP12TiXmlElementi": {
     "verdict": "ACCEPT-deferred",
     "reason": "New symbol (TiXmlElement signature match). Score 15836/11300. [auto-triaged 2026-06-18T02:22Z]",
-    "score": 15836,
+    "score": 16035,
     "max_score": 11300,
-    "decided_at": "2026-06-18T02:22Z"
+    "decided_at": "2026-06-18T02:35Z"
   },
   "_ZN14PowerUpManager18SaveActivePowerUpsEP12TiXmlElement": {
     "verdict": "ACCEPT-deferred",
@@ -8888,5 +8888,54 @@
     "score": 24155,
     "max_score": 10200,
     "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN10BaseScreen11DrawBordersEN6Mortar8SmartPtrINS0_7TextureEEEf8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 64799/31400. [auto 2026-06-18T02:35Z]",
+    "score": 64799,
+    "max_score": 31400,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN10ShopScreenC1EP10DojoScreen": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 6990/5200. [auto 2026-06-18T02:35Z]",
+    "score": 6990,
+    "max_score": 5200,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN10ShopScreenC2EP10DojoScreen": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 6990/5200. [auto 2026-06-18T02:35Z]",
+    "score": 6990,
+    "max_score": 5200,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN11ItemManager11UnequipItemEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 5450/3200. [auto 2026-06-18T02:35Z]",
+    "score": 5450,
+    "max_score": 3200,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN14PowerUpManager13ActivatePowerEm8_Vector3IfEPf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 29360/19600. [auto 2026-06-18T02:35Z]",
+    "score": 29360,
+    "max_score": 19600,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN18AchievementManager28UnlockConsecutiveAchievementEij": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 14103/7200. [auto 2026-06-18T02:35Z]",
+    "score": 14103,
+    "max_score": 7200,
+    "decided_at": "2026-06-18T02:35Z"
+  },
+  "_ZN18AchievementManager30UnlockSpecificFruitAchievementEij": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol. Score 7569/4600. [auto 2026-06-18T02:35Z]",
+    "score": 7569,
+    "max_score": 4600,
+    "decided_at": "2026-06-18T02:35Z"
   }
 }
