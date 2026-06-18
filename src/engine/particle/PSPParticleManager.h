@@ -337,12 +337,14 @@ public:
     // v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088 — find by ptr, unlink, clear back-ref, return to pool
     void ClearEmitter(PSPParticleEmitter* emitter);
 
-    // v1.6.1 PSPParticleManager::Update @0x0013cee8 — update all active emitters; skip when paused &&
-    // !emitter->m_bUpdateWhenPaused.
+    // v1.6.1 PSPParticleManager::Update @0x00105ed8 — update all active emitters,
+    // reap on lifetime; binary fuses particle physics in Draw.
     void Update(float dt, bool paused = false);
 
     // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
-    // Port splits into Update/Draw; dt and paused are unused in Draw body.
+    // Port matches binary: particle physics (aging, death, integration) is
+    // performed at the start of the render pass, then surviving particles
+    // are rendered.
     void Draw(float dt, bool paused, int layer = 0);
 
     // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c — load particle templates

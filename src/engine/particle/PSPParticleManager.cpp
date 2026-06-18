@@ -417,8 +417,9 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt,
     e.m_Pos += e.m_Vel;
 }
 
-// v1.6.1 PSPParticleManager::Update @0x0013cee8 — update all active emitters;
-// reap on timer vs lifetime; orphan particles drain via template live-list.
+// v1.6.1 PSPParticleManager::Update @0x00105ed8 — update all active emitters;
+// reap on timer vs lifetime; particle physics integration is fused into
+// Draw (matching binary) so orphan particles drain during the render pass.
 // Uses address-of-link cursor for safe in-place removal from intrusive list.
 void PSPParticleManager::Update(float dt, bool paused) {
     if (!m_pParticles || !m_pEmitterPool) return;
@@ -434,7 +435,7 @@ void PSPParticleManager::Update(float dt, bool paused) {
             UpdateEmitter(*node, dt, m_pParticles, m_FreeHead);
         }
 
-        // Keep-alive rule (binary Manager::Update @0x0013cee8):
+        // Keep-alive rule (binary Manager::Update @0x00105ed8):
         //   keep if timer < maxLifetime
         //   OR  (maxLifetime <= 0 AND !Ends(template))
         // Binary reaps on lifetime only, never on particle count.
@@ -451,7 +452,7 @@ void PSPParticleManager::Update(float dt, bool paused) {
         if (!keep) {
             // Reap: unlink, null caller back-pointer, return to pool.
             // Do NOT touch particles — orphan particles drain naturally via
-            // the template live-list walk in Draw/Update particle-aging pass.
+            // the template live-list walk in Draw.
             *cur = node->m_Next;
             if (node->m_pRefPtr) *node->m_pRefPtr = nullptr;
             m_pEmitterPool->Push(node);
@@ -459,78 +460,18 @@ void PSPParticleManager::Update(float dt, bool paused) {
             cur = &node->m_Next;
         }
     }
-
-    // Particle aging + death: walk every emitter template's live-list.
-    // Removes dead particles, pushes their slots back to the free-list.
-    for (size_t ti = 0; ti < m_EmitterTemplates.size(); ++ti) {
-        PSPEmitterTemplate& tmpl = m_EmitterTemplates[ti];
-        if (tmpl.m_ParticleHead == 0) continue;
-
-        // Cursor: pointer to the link field of the predecessor (head or prev->m_NextLink).
-        // We iterate the chain and unlink dead particles in-place.
-        uint16_t* prevLink = &tmpl.m_ParticleHead;
-        while (*prevLink != 0) {
-            uint16_t idx = *prevLink;
-            PSPParticle& p = m_pParticles[idx];
-            p.m_Age += dt;
-
-            if (p.m_Age >= p.m_Life) {
-                // Unlink from live-list and push to free-list.
-                *prevLink = p.m_NextLink;
-                p.m_NextLink = m_FreeHead;
-                m_FreeHead = idx;
-                --tmpl.m_ParticleCount;
-                continue;
-            }
-
-            // Physics integration (matches binary Draw @ 0x0013eccc).
-            const float life = (p.m_Life > 0.0f) ? p.m_Life : 1.0f;
-            const float t = p.m_Age / life;
-
-            p.m_Vel += p.m_Gravity * dt;
-
-            // Per-particle template velocity damping (from set index in m_field44).
-            if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
-                const PSPParticleTemplate* pt = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
-                if (pt) {
-                    const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
-                    const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
-                    const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
-                    p.m_Vel.x *= dampX;
-                    p.m_Vel.y *= dampY;
-                    p.m_Vel.z *= dampZ;
-                }
-            }
-
-            p.m_Pos += p.m_Vel * dt;
-
-            // Spin: lerp start->end over life, then integrate.
-            const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
-            p.m_Rotation += spin * dt;
-
-            // Cycle accumulators (RotCycle + CycleX/Y). Rates in cycles/s -> radians.
-            p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
-            p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
-            p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
-
-            prevLink = &p.m_NextLink;
-        }
-    }
 }
 
 // -----------------------------------------------------------------------------
 // Draw — v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
-// Port separates integrate (Update) from render (Draw); dt and paused are
-// unused in this body.
-// DIFFERS: original @ 0x0013eccc = fused integrate+render over intrusive
-// pool (m_NumEmitterTemplates templates, stride 0xB8, per-template index list
-// at template+0x04, PSPParticle 0xA4 bytes, Math::SinIdx/CosIdx 16-bit
-// angle tables, Mesh::DrawTriList+TextureAtlasPage); port separates
-// integrate(Update)/render(Draw) over template live-lists with reduced
-// PSPParticle, replaces angle-index trig with cosf/sinf radians, replaces
-// Mesh::DrawTriList+TextureAtlasPage with Renderer::DrawTriList+GL.
+// Binary fuses integrate+render into Draw; port matches this by performing
+// particle physics integration (aging, death, integration) at the start of
+// the render pass, then emitting vertices for surviving particles.
 // No glBlendFunc state restore at function exit -- binary leaves blend
 // state at whatever the last template configured.
+// DIFFERS: port replaces binary's Math::SinIdx/CosIdx 16-bit angle tables
+// with cosf/sinf radians, Mesh::DrawTriList+TextureAtlasPage with
+// Renderer::DrawTriList+GL.
 // -----------------------------------------------------------------------------
 static inline uint32_t PackBGRA(const uint8_t c[4]) {
     return (uint32_t)c[0]
@@ -564,7 +505,6 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
 }
 
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
-    (void)dt;
     (void)paused;
     if (!m_pParticles) return;
 
@@ -574,40 +514,81 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
+    m_DrawnParticleCount = 0;
+
     static std::vector<QUADCUSTOMVERTEX> s_verts;
     const PSPParticleTemplate* curTmpl = nullptr;
 
-    // Iterate per-template live-lists (replaces binary's per-emitter-list loop).
+    // Fused integrate+render pass over per-template live-lists (matching binary
+    // Draw @0x13eccc). Each particle is aged, integrated, then rendered.
     for (size_t ti = 0; ti < m_EmitterTemplates.size(); ++ti) {
-        const PSPEmitterTemplate& tmpl = m_EmitterTemplates[ti];
-        uint16_t idx = tmpl.m_ParticleHead;
-        while (idx != 0) {
-            PSPParticle& p = m_pParticles[idx];
-            uint16_t nextIdx = p.m_NextLink;
+        PSPEmitterTemplate& tmpl = m_EmitterTemplates[ti];
+        if (tmpl.m_ParticleHead == 0) continue;
 
-            // Resolve per-particle template via set index stored in m_field44.
+        uint16_t* prevLink = &tmpl.m_ParticleHead;
+        while (*prevLink != 0) {
+            uint16_t idx = *prevLink;
+            PSPParticle& p = m_pParticles[idx];
+
+            // --- Integrate ---
+            p.m_Age += dt;
+            if (p.m_Age >= p.m_Life) {
+                // Particle died: unlink from live-list and return to free-list.
+                *prevLink = p.m_NextLink;
+                p.m_NextLink = m_FreeHead;
+                m_FreeHead = idx;
+                --tmpl.m_ParticleCount;
+                continue;
+            }
+
+            // Physics integration (gravity, damping, position, spin, cycles).
+            const float life = (p.m_Life > 0.0f) ? p.m_Life : 1.0f;
+            const float t = p.m_Age / life;
+
+            p.m_Vel += p.m_Gravity * dt;
+
+            // Resolve per-particle template (once, shared by damping + render).
             const PSPParticleTemplate* pTmpl = 0;
             if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
                 pTmpl = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
             }
 
-            // Layer filter: binary draws only particles whose template's
-            // m_UseDepth matches the requested layer.
+            // Velocity damping from particle template (per-component lerp over life).
+            if (pTmpl) {
+                const float dampX = pTmpl->m_VelocityMin[0]
+                    + (pTmpl->m_VelocityMax[0] - pTmpl->m_VelocityMin[0]) * t;
+                const float dampY = pTmpl->m_VelocityMin[1]
+                    + (pTmpl->m_VelocityMax[1] - pTmpl->m_VelocityMin[1]) * t;
+                const float dampZ = pTmpl->m_VelocityMin[2]
+                    + (pTmpl->m_VelocityMax[2] - pTmpl->m_VelocityMin[2]) * t;
+                p.m_Vel.x *= dampX;
+                p.m_Vel.y *= dampY;
+                p.m_Vel.z *= dampZ;
+            }
+
+            p.m_Pos += p.m_Vel * dt;
+
+            const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
+            p.m_Rotation += spin * dt;
+
+            p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
+            p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
+            p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
+
+            // --- Layer filter ---
             if (pTmpl && pTmpl->m_UseDepth != layer) {
-                idx = nextIdx;
+                ++m_DrawnParticleCount;
+                prevLink = &p.m_NextLink;
                 continue;
             }
 
-            // Group flush on template change (batches DrawTriList per texture).
+            // --- Group flush on template change (batches DrawTriList per texture) ---
             if (pTmpl != curTmpl) {
                 FlushParticleVerts(s_verts, curTmpl);
                 curTmpl = pTmpl;
             }
 
-            const float life = p.m_Life > 0.0f ? p.m_Life : 1.0f;
-            float t = p.m_Age / life;
-            if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
-
+            // --- Render ---
             // Two-segment colour + size lerp: start->mid for t in [0,0.5),
             // mid->end for t in [0.5,1].
             uint8_t col[4];
@@ -676,7 +657,8 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
                 s_verts.push_back(v);
             }
 
-            idx = nextIdx;
+            ++m_DrawnParticleCount;
+            prevLink = &p.m_NextLink;
         }
     }
     FlushParticleVerts(s_verts, curTmpl);
