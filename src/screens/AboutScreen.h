@@ -133,10 +133,6 @@ private:
     static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex (binary: s_boardTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (binary: m_creditsTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex (binary: m_senseiTexture)
-    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
-
-    // One-time init guard
-    static bool s_bContentLoaded;
 
     // Back button callback -> start fade-out (state 2)
     void BackCallback();

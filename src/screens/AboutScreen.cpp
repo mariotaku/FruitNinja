@@ -78,8 +78,8 @@ static const float SENSEI2_Y       =  56.0f;
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;    // binary: s_boardTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;  // binary: m_creditsTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;   // binary: m_senseiTexture
-Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon; // port-only; binary reads game->field_0x17c
-bool AboutScreen::s_bContentLoaded = false;
+// s_TexBackIcon: not ported (binary reads from game_work shared slot)
+// s_bContentLoaded: not ported (redundant — never read)
 
 // -----------------------------------------------------------------------
 // GetVersionString
@@ -113,26 +113,19 @@ static Mortar::FontCacheObjectTTF* GetAboutTTFFont()
 // -----------------------------------------------------------------------
 // AboutScreen::LoadContent  @ 0x0012ec14
 // Binary loads haikus.tex, credits.tex, sensei.tex unconditionally
-// (no early-return guard).  s_bContentLoaded flag is set at the end
-// for external queries but is NOT checked at entry.
+// (no early-return guard).
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::LoadContent()
 {
-    s_TexHaiku    = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
-    s_TexCredits  = Mortar::TextureManager::LoadLocalisedTexture("credits.tex");
-    s_TexSensei   = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
-
-    // Port specific: binary reads back_icon from game->field_0x17c.
-    // Port loads it locally so the back-button ring renders.
-    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-
-    s_bContentLoaded = true;
+    s_TexHaiku   = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
+    s_TexCredits = Mortar::TextureManager::LoadLocalisedTexture("credits.tex");
+    s_TexSensei  = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
 }
 
 // -----------------------------------------------------------------------
 // AboutScreen::UnLoadContent  @ 0x0012efd8
-// Binary nulls all three static texture SmartPtrs and clears the flag.
+// Binary nulls all three static texture SmartPtrs.
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::UnLoadContent()
@@ -140,8 +133,6 @@ void AboutScreen::UnLoadContent()
     s_TexHaiku.SetNull();
     s_TexCredits.SetNull();
     s_TexSensei.SetNull();
-    s_TexBackIcon.SetNull();
-    s_bContentLoaded = false;
 }
 
 // -----------------------------------------------------------------------
@@ -296,9 +287,6 @@ void AboutScreen::CreateBackButton()
     const int bombFruitType = FruitInfo_GetCount();
 
     m_pBackButton = new MenuButton();
-    if (s_TexBackIcon.IsValid()) {
-        m_pBackButton->m_Texture = s_TexBackIcon;
-    }
 
     m_pBackButton->Init(POS_BACK_BUTTON,
                         Mortar::Delegate0<void>::Make(this, &AboutScreen::BackCallback),
