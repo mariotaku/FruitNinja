@@ -13,7 +13,7 @@ namespace Mortar {
 class SharedEffectProperties;
 class EffectPropertyList;
 struct EffectProperty;
-struct MeshMaterial;
+class Texture;
 
 // GeometryBinding -- shape-preserved defunct stub.
 // Binary @ 0x001a3990..0x001a40c0 (ctor/PassBinding::Apply chain).
@@ -77,8 +77,6 @@ public:
 // Vertex attribute layout (from PSP vertex declaration).
 // Port specific: replaces the original Effect/Geometry/GeometryBinding system.
 // Defined here (in Geometry.h) so Geometry can embed it by value.
-// Mesh.h includes Geometry.h and provides MeshMaterial; both are accessible
-// to any TU that includes either header.
 struct VertexLayout {
     int posOffset;    int posSize;     // 3 floats typically
     int normalOffset; int normalSize;  // 3 floats or 3 shorts
@@ -105,7 +103,8 @@ public:
     //   calling PassBinding::Apply (glVertexPointer/etc.) then glDrawArrays/Elements
     //   via the IIndexStream vtable. Port renders directly from the loader-cached
     //   m_Vbo/m_Ibo/m_Layout because GLES2 has no fixed-pipeline client state.
-    void Render(MeshMaterial const& mat, Matrix44 const& mvp);
+    //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
+    void Render(Matrix44 const& mvp);
 
     // Binary @ 0x001a3e7c
     bool HasActiveEffect() const;
@@ -131,6 +130,7 @@ public:
     GLenum       m_PrimType;
     int          m_MaterialIndex;
     VertexLayout m_Layout;
+    SmartPtr<Texture> m_DiffuseTex;  // Port: diffuse texture (formerly in MeshMaterial)
 
 private:
     // Binary @ 0x001a3c00

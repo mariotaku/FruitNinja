@@ -61,15 +61,6 @@ Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     return model;
 }
 
-// Matches GetColourRGB (0x001a74bc)
-// Extracts RGB floats from uint32: byte0=R, byte1=G, byte2=B
-static Vec3 GetColourRGB(uint32_t color) {
-    float r = (float)(color & 0xFF) / 255.0f;
-    float g = (float)((color >> 8) & 0xFF) / 255.0f;
-    float b = (float)((color >> 16) & 0xFF) / 255.0f;
-    return Vec3(r, g, b);
-}
-
 static int FmtSize(int fmt) {
     switch (fmt) {
         case 0: return 0;
@@ -329,23 +320,31 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         if (loader.m_ReadPos + 4 > loader.DataSize()) break;
         uint32_t matCount = loader.Read<uint32_t>();
 
+        // Local vector to hold textures indexed by material index.
+        // Each geometry references a material index; the texture is
+        // assigned directly to Geometry::m_DiffuseTex below.
+        std::vector<Mortar::SmartPtr<Mortar::Texture> > matTextures;
+        matTextures.reserve(matCount);
+
         for (uint32_t i = 0; i < matCount; i++) {
             // ReadSubResourceLookup -> material child (1-based index into loader.m_Children)
             ResourceLoader* matChild = loader.ReadSubResourceLookup();
-            if (!matChild) continue;
+            if (!matChild) {
+                matTextures.push_back(Mortar::SmartPtr<Mortar::Texture>());
+                continue;
+            }
 
-            MeshMaterial mat;
             matChild->ResetReadPos();
 
             // Read material name (Material_Old = just AsciiString in rawData)
-            AsciiString matName = matChild->ReadString();
-            mat.m_Name = matName.CStr();
+            matChild->ReadString(); // material name, unused
 
             // ReadSubResourceLookup -> texture grandchild
+            Mortar::SmartPtr<Mortar::Texture> loadedTexture;
             ResourceLoader* texChild = matChild->ReadSubResourceLookup();
             if (texChild) {
                 texChild->ResetReadPos();
-                AsciiString texName = texChild->ReadString();    // e.g. "Map #1" (unused)
+                /* AsciiString texName = */ texChild->ReadString();   // e.g. "Map #1" (unused)
                 AsciiString texRelPath = texChild->ReadString();  // e.g. "textures\fruit_atlas.tex"
 
                 std::string texPath = texRelPath.CStr();
@@ -353,30 +352,23 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
                     if (texPath[j] == '\\') texPath[j] = '/';
 
                 std::string fullPath = std::string(loader.BasePathGet().CStr()) + texPath;
-                mat.m_Texture = TextureManager::GetInstance().Load(fullPath.c_str());
+                loadedTexture = TextureManager::GetInstance().Load(fullPath.c_str());
             }
 
-            // Read 4 color u32 + float specular (matches LoadMesh material loop)
+            // Read 4 color u32 + float specular (advancing read pos through file format)
+            // Values are not stored since IsLit==false for all meshes.
             if (matChild->m_ReadPos + 20 <= matChild->DataSize()) {
-                uint32_t color0 = matChild->Read<uint32_t>(); // Ambience property
-                uint32_t color1 = matChild->Read<uint32_t>(); // Diffuse property
-                (void)matChild->Read<uint32_t>(); // color2 / uStack_224 -- unused in binary
-                uint32_t color3 = matChild->Read<uint32_t>(); // SelfIllum property
-                float specular  = matChild->Read<float>();
-
-                color0 |= 0xFF000000; // force full alpha (matches binary)
-
-                mat.m_Diffuse = GetColourRGB(color0);
-                mat.m_Ambience = GetColourRGB(color1);
-                mat.m_SelfIllum = GetColourRGB(color3);
-                mat.m_SpecularStrength = specular;
-                mat.m_IsLit = false;
+                (void)matChild->Read<uint32_t>(); // color0
+                (void)matChild->Read<uint32_t>(); // color1
+                (void)matChild->Read<uint32_t>(); // color2
+                (void)matChild->Read<uint32_t>(); // color3
+                (void)matChild->Read<float>();    // specular
             }
 
             // ReadSubResourceLookup -> additional sub-resource (unused in port)
             matChild->ReadSubResourceLookup();
 
-            mesh->m_Materials.push_back(mat);
+            matTextures.push_back(loadedTexture);
         }
 
         // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
@@ -402,6 +394,11 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
                 new Mortar::Geometry(Mortar::SmartPtr<Mortar::GeometryBinding>(),
                                      Mortar::SmartPtr<Mortar::SharedEffectProperties>()));
             g->m_MaterialIndex = (int)matIndex;
+
+            // Assign diffuse texture from material index to geometry.
+            if (matIndex < (uint16_t)matTextures.size()) {
+                g->m_DiffuseTex = matTextures[matIndex];
+            }
 
             if (geomChild) {
                 const uint8_t* d = geomChild->DataPtr();

@@ -52,28 +52,17 @@ struct SharedPropsInfo {
 // VertexLayout is declared in Geometry.h (included above) so it can be
 // embedded by value in Geometry. Mesh.h transitively provides it.
 
-// Material properties parsed from .mmd file
-// Extracted from LoadMesh material loop (0x001a7c90)
-// Original stored via EffectPropertyList/SharedEffectProperties;
-// port stores directly for GLES2 shader use
-struct MeshMaterial {
-    std::string m_Name;             // Material name (e.g. "fruit_atlas")
-    Mortar::SmartPtr<Texture> m_Texture;    // DiffuseMap texture
-    Vec3 m_Diffuse;                 // GetColourRGB(color0) — set as "Ambience" property
-    Vec3 m_Ambience;                // GetColourRGB(color1) — set as "Diffuse" property
-    Vec3 m_SelfIllum;               // GetColourRGB(color3) — set as "SelfIllum" property
-    float m_SpecularStrength;       // Specular strength float
-    bool m_IsLit;                   // IsLit flag (always false in LoadMesh)
-
-    MeshMaterial() : m_SpecularStrength(0.0f), m_IsLit(false) {}
-};
+// MeshMaterial has been removed. Per-material diffuse textures are stored
+// directly on Geometry::m_DiffuseTex (port field). Material colour/lit
+// properties were unused (IsLit==false for all meshes).
 
 
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
 // Inherits: Mortar::ReferenceCounter → IModelNode → Mesh
+// Binary sizeof(Mesh) = 0x7C.
 // Port specific: skips Effect/Geometry/SharedEffectProperties system,
 // uses direct GLES2 calls via Renderer::setup_3d_shader()
-// Ref: docs/engine/mesh.md — struct layout, vtable, Draw behavior
+// Per-geometry diffuse texture is stored on Geometry::m_DiffuseTex.
 class Mesh : public IModelNode {
 public:
     // Matches original Mortar::Mesh::BoneBinding (0x44 = 68 bytes)
@@ -116,10 +105,8 @@ public:
     EffectProperty* m_ProjProp;   // +0x74
     EffectProperty* m_WVPProp;    // +0x78
 
-    // Port-specific: material array for GLES2 rendering; no binary equivalent.
-    // (Binary uses m_GroupsByName + SharedEffectProperties for per-material data.)
-    // Indexed by Geometry::m_MaterialIndex.
-    std::vector<MeshMaterial> m_Materials;  // +0x7c (port-specific)
+    // (Binary stores material data via SharedEffectProperties system.
+    // Port stores per-geometry diffuse texture on Geometry::m_DiffuseTex.)
 
     Mesh();
     virtual ~Mesh();
@@ -166,12 +153,9 @@ public:
         return NULL;
     }
 
-    // Port helper: assign texture to all materials that have none.
-    // Used by Fruit.cpp to assign fruit_atlas when loaded externally.
-    void SetDiffuseTexture(const Mortar::SmartPtr<Texture>& tex);
-
-    // Port helper: true if any material has a valid texture.
-    bool HasDiffuseTexture() const;
+    // SetDiffuseTexture and HasDiffuseTexture have been removed.
+    // Per-geometry m_DiffuseTex is assigned directly in MeshManager
+    // and Fruit::LoadFruitModels.
 
     // Subsystem status (post Phase 5):
     //   Geometry         -- PORTED as real class (src/engine/asset/Geometry.{h,cpp});
@@ -194,10 +178,10 @@ public:
     // machinery. Mesh::Draw iterates m_Geometries[] and calls Geometry::Render per
     // submesh.
     //
-    // Defunct: SharedEffectProperties machinery -- port stores parsed values
-    // directly in MeshMaterial; field shape (m_OwnGroup, m_GroupsByName, m_WorldProp,
-    // m_ViewProp, m_ProjProp, m_WVPProp) is preserved at binary offsets so
-    // sizeof(Mesh) == 0x7c + sizeof(m_Materials port extension). Binary @:
+    // Defunct: SharedEffectProperties machinery -- port stores per-geometry
+    // diffuse texture on Geometry::m_DiffuseTex; field shape (m_OwnGroup,
+    // m_GroupsByName, m_WorldProp, m_ViewProp, m_ProjProp, m_WVPProp) is
+    // preserved at binary offsets so sizeof(Mesh) == 0x7c. Binary @:
     //   0x00272c98 -- GetPropertiesGroup(name) const               [shape-preserved]
     //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end) [shape-preserved]
     //   0x001aab94 -- GetPropertiesGroup<9>(name, defs[9])

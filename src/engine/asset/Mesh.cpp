@@ -34,7 +34,7 @@ Mesh::Mesh()
 // (_Rb_tree::_M_erase(m_GroupsByName), m_OwnGroup.Clear(), ~vector(m_Geometries),
 // ~vector(m_BoneBindings), ~AsciiString(m_Name)) -- port relies on implicit member
 // dtors in reverse-declaration order (same members, same logical order; std::map vs
-// _Rb_tree, std::string vs AsciiString, plus port-only m_Materials appended last).
+// _Rb_tree, std::string vs AsciiString).
 Mesh::~Mesh() {
     // VBO/IBO cleanup now handled by Geometry::~Geometry (each SmartPtr<Geometry>
     // will Release() here as m_Geometries is destroyed).
@@ -150,22 +150,6 @@ Bounds3D Mesh::GetBounds() const {
     return out;
 }
 
-void Mesh::SetDiffuseTexture(const Mortar::SmartPtr<Texture>& tex) {
-    for (int i = 0; i < (int)m_Materials.size(); i++) {
-        if (!m_Materials[i].m_Texture.IsValid()) {
-            m_Materials[i].m_Texture = tex;
-        }
-    }
-}
-
-bool Mesh::HasDiffuseTexture() const {
-    for (int i = 0; i < (int)m_Materials.size(); i++) {
-        if (m_Materials[i].m_Texture.IsValid()) return true;
-    }
-    return false;
-}
-
-
 // Binary @ 0x00272e98
 // DIFFERS: binary @ 0x00272e98 Geometry::Render uses fixed-pipeline GL ES 1.x
 // (glLoadMatrixf / glDrawArrays); port uses GLES2 setup_3d_shader + Renderer::DrawGeometry.
@@ -209,19 +193,13 @@ void Mesh::Draw(const Matrix44& worldTransform) {
         TrySetMatrix_EffectProp(m_WVPProp, &wvp);
     }
 
-    // Render all geometries, each with its own material.
+    // Render all geometries. Each Geometry stores its own diffuse texture
+    // in m_DiffuseTex (port field, assigned during mesh loading).
     // Binary @ 0x001b0c3c: walks m_Geometries calling Geometry::Render per entry.
     for (int i = 0; i < (int)m_Geometries.size(); i++) {
         Geometry* g = m_Geometries[i].Get();
         if (!g) continue;
-        int matIdx = g->m_MaterialIndex;
-
-        // Fallback: use first material if index out of range
-        const MeshMaterial& mat = (matIdx >= 0 && matIdx < (int)m_Materials.size())
-                                  ? m_Materials[matIdx]
-                                  : (m_Materials.empty() ? MeshMaterial() : m_Materials[0]);
-
-        g->Render(mat, wvp);
+        g->Render(wvp);
     }
 }
 
