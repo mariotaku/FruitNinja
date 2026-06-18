@@ -2,6 +2,12 @@
 #include "render/gl_funcs.h"
 #include "math/math3d.h"
 
+// ASM-spec v1.6.1 MatrixManager::m_instance @ ram:0x0035ced4:
+// Class-static global, initialized during static init via
+// global.constructors.keyed.to.MatrixManager.cpp @ 0x002573b0.
+// No guard variable, no lazy init. Matches binary's direct GOT access.
+MatrixManager MatrixManager::s_instance;
+
 // Binary ctor @ 0x00256f3c (C2) / 0x0010a520 (C1 = PLT thunk -> C2):
 // calls MatrixStack::MatrixStack() on each of the 4 member stacks (= Reset()+version=1),
 // then str-zeroes the 4 trailing version ints at +0x2124..+0x2130.
