@@ -1,5 +1,5 @@
 // FruitFactControl implementation
-// Binary: ctor 0x0013cb60, Init 0x0013a278, Release 0x00139d24, etc.
+// Binary: ctor 0x00170c78 (v1.6.1 FruitFactControl::FruitFactControl), Init 0x0017160c, etc.
 
 #include "hud/FruitFactControl.h"
 #include "game/GameMode.h"
@@ -201,8 +201,8 @@ unsigned int FruitFact::GetComboStarText(uint8_t comboType) {
 }
 
 // ---------------------------------------------------------------------------
-// Static (class-level) content -- 17 shared textures.
-// Binary @ 0x001399fc (LoadContent), 0x00139f84 (UnLoadContent).
+// Static (class-level) content -- 3 shared textures (matching binary).
+// Binary @ 0x00170b1c (LoadContent), 0x00171a4c (UnLoadContent).
 // ---------------------------------------------------------------------------
 
 static bool s_bLoaded = false;
@@ -220,46 +220,20 @@ static bool s_bLoaded = false;
 // ---------------------------------------------------------------------------
 static char s_BakedFactTitle[128] = {0};
 
-// Slot order matches binary @ 0x001399fc
-static Mortar::SmartPtr<Mortar::Texture> s_PanelTexClassic;      // slot1  "fact_board.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_PanelTexZen;           // slot2  "diolog_box_big.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_ComboDescTex;          // slot3  "combo_description.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_SenseiHeadTex;         // slot4  "sensei_head.tex"  -- used as LoadContent proxy in BeginDraw
-static Mortar::SmartPtr<Mortar::Texture> s_BlurryBackingTex;      // slot5  "blurry_backing.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_ArcadeArrowTex;        // slot6  "arcade_results_arrow.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_ArcadeScoreBoxTex;     // slot7  "arcade_results_score_box.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_PanelTexArcade;        // slot8  "arcade_results_diolog_box.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_ArcadeBonusBoxTex;     // slot9  "arcade_results_bonus_box.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_OFTitleTex;            // slot10 "op_title.tex"           -- Defunct: OpenFeint
-static Mortar::SmartPtr<Mortar::Texture> s_OFConnectTex;          // slot11 "op_connect_button.tex"  -- Defunct: OpenFeint
-static Mortar::SmartPtr<Mortar::Texture> s_OFAddFriendsTex;       // slot12 "op_add_friends_button.tex" -- Defunct: OpenFeint
-static Mortar::SmartPtr<Mortar::Texture> s_GCTitleTex;            // slot13 "gc_title.tex"           -- Defunct: GameCenter
-static Mortar::SmartPtr<Mortar::Texture> s_GCConnectTex;          // slot14 "gc_connect_button.tex"  -- Defunct: GameCenter
-static Mortar::SmartPtr<Mortar::Texture> s_GCNoScoreTex;          // slot15 "gc_no_score_this_week.tex" -- Defunct: GameCenter
-static Mortar::SmartPtr<Mortar::Texture> s_ScoreYouTex;           // slot16 "score_you.tex"
-static Mortar::SmartPtr<Mortar::Texture> s_NoScoreThisWeekTex;    // slot17 "no_score_this_week.tex"
+// Binary: FruitFactControl::LoadContent @ 0x00170b1c (v1.6.1)
+// Maps to binary: s_boardTexture (fact_board.tex), s_senseiHead (sensei_head.tex),
+// s_buttonTexture (arcade_results_arrow.tex). Only 3 textures loaded by this function.
+static Mortar::SmartPtr<Mortar::Texture> s_PanelTexClassic;  // binary: s_boardTexture, "fact_board.tex"
+static Mortar::SmartPtr<Mortar::Texture> s_SenseiHeadTex;     // binary: s_senseiHead, "sensei_head.tex"
+static Mortar::SmartPtr<Mortar::Texture> s_ArcadeArrowTex;    // binary: s_buttonTexture, "arcade_results_arrow.tex"
 
 void FruitFactControl::LoadContent() {
     if (s_bLoaded) return;
     s_bLoaded = true;
 
-    s_PanelTexClassic   = TextureManager::LoadLocalisedTexture("fact_board.tex");
-    s_PanelTexZen       = TextureManager::LoadLocalisedTexture("diolog_box_big.tex");
-    s_ComboDescTex      = TextureManager::LoadLocalisedTexture("combo_description.tex");
-    s_SenseiHeadTex     = TextureManager::LoadLocalisedTexture("sensei_head.tex");
-    s_BlurryBackingTex  = TextureManager::LoadLocalisedTexture("blurry_backing.tex");
-    s_ArcadeArrowTex    = TextureManager::LoadLocalisedTexture("arcade_results_arrow.tex");
-    s_ArcadeScoreBoxTex = TextureManager::LoadLocalisedTexture("arcade_results_score_box.tex");
-    s_PanelTexArcade    = TextureManager::LoadLocalisedTexture("arcade_results_diolog_box.tex");
-    s_ArcadeBonusBoxTex = TextureManager::LoadLocalisedTexture("arcade_results_bonus_box.tex");
-    s_OFTitleTex        = TextureManager::LoadLocalisedTexture("op_title.tex");
-    s_OFConnectTex      = TextureManager::LoadLocalisedTexture("op_connect_button.tex");
-    s_OFAddFriendsTex   = TextureManager::LoadLocalisedTexture("op_add_friends_button.tex");
-    s_GCTitleTex        = TextureManager::LoadLocalisedTexture("gc_title.tex");
-    s_GCConnectTex      = TextureManager::LoadLocalisedTexture("gc_connect_button.tex");
-    s_GCNoScoreTex      = TextureManager::LoadLocalisedTexture("gc_no_score_this_week.tex");
-    s_ScoreYouTex       = TextureManager::LoadLocalisedTexture("score_you.tex");
-    s_NoScoreThisWeekTex= TextureManager::LoadLocalisedTexture("no_score_this_week.tex");
+    s_PanelTexClassic = TextureManager::LoadLocalisedTexture("fact_board.tex");
+    s_SenseiHeadTex   = TextureManager::LoadLocalisedTexture("sensei_head.tex");
+    s_ArcadeArrowTex  = TextureManager::LoadLocalisedTexture("arcade_results_arrow.tex");
 }
 
 void FruitFactControl::UnLoadContent() {
@@ -267,22 +241,8 @@ void FruitFactControl::UnLoadContent() {
     s_bLoaded = false;
 
     s_PanelTexClassic.SetNull();
-    s_PanelTexZen.SetNull();
-    s_ComboDescTex.SetNull();
     s_SenseiHeadTex.SetNull();
-    s_BlurryBackingTex.SetNull();
     s_ArcadeArrowTex.SetNull();
-    s_ArcadeScoreBoxTex.SetNull();
-    s_PanelTexArcade.SetNull();
-    s_ArcadeBonusBoxTex.SetNull();
-    s_OFTitleTex.SetNull();
-    s_OFConnectTex.SetNull();
-    s_OFAddFriendsTex.SetNull();
-    s_GCTitleTex.SetNull();
-    s_GCConnectTex.SetNull();
-    s_GCNoScoreTex.SetNull();
-    s_ScoreYouTex.SetNull();
-    s_NoScoreThisWeekTex.SetNull();
 }
 
 // ---------------------------------------------------------------------------
@@ -364,25 +324,17 @@ void FruitFactControl::Init() {
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game_work.gameMode : 0;
 
-    // Per-mode backplate stored in m_Texture (binary @ 0x0013a2a6..0x0013a2ba)
-    if (gameMode == 2) {
-        if (s_PanelTexArcade.IsValid()) m_Texture = s_PanelTexArcade;
-    } else if (gameMode == 3) {
-        if (s_PanelTexZen.IsValid()) m_Texture = s_PanelTexZen;
-    } else {
-        if (s_PanelTexClassic.IsValid()) m_Texture = s_PanelTexClassic;
-    }
-    if (m_Texture.IsValid()) {
-        size.x = (float)(m_Texture->m_Width + 1);
-        size.y = (float)(m_Texture->m_Height + 1);
-        size.z = 0.0f;
-        // ASM-verified: 2026-05-11 binary @ 0x0013a31e (re-analyst)
-        // 1.37f scale (DAT_0013a500) applies only in Classic (gameMode == 0).
-        if (gameMode == 0) {
-            size.x *= 1.37f;
-            size.y *= 1.37f;
-            size.z *= 1.37f;
-        }
+    // ASM-verified: 2026-05-11 binary @ 0x0017160c (v1.6.1 FruitFactControl::Init)
+    // Binary always assigns s_boardTexture (fact_board.tex) to m_Texture, no per-mode branching.
+    m_Texture = s_PanelTexClassic;
+    size.x = (float)(m_Texture->m_Width + 1);
+    size.y = (float)(m_Texture->m_Height + 1);
+    size.z = 0.0f;
+    // 1.37f scale applies when gameMode == 0 (Classic) — binary @ 0x0017160c
+    if (gameMode == 0) {
+        size.x *= 1.37f;
+        size.y *= 1.37f;
+        size.z *= 1.37f;
     }
 
     // ASM-verified: 2026-05-18 binary @ 0x0013a34e..0x0013a3ac (re-analyst)
