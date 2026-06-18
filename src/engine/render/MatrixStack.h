@@ -16,7 +16,7 @@ struct MatrixStack {
     // Trivial char storage with Matrix44 alignment: default ctor does NOT fire,
     // avoiding 31 redundant Identity() calls per stack at construction time.
     // Binary only initializes m_Stack[0] and m_Current.
-    alignas(Matrix44) char m_StackStorage[sizeof(Matrix44) * 32]; // +0x000, 2048 bytes
+    char m_StackStorage[sizeof(Matrix44) * 32] __attribute__((aligned(sizeof(Matrix44)))); // +0x000, 2048 bytes
     Matrix44 m_Current;   // +0x800, 64 bytes
     int m_Depth;          // +0x840
     int m_Version;        // +0x844
