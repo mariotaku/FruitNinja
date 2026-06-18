@@ -33,7 +33,6 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
-#include "debug/Logger.h"
 #include <cstring>
 #include <algorithm>
 #include <cstdlib>
@@ -74,9 +73,8 @@ static Mortar::SmartPtr<Mortar::Texture> g_LeaderboardsTexPair[2];      // 0: le
 static Mortar::SmartPtr<Mortar::Texture> g_ExpressionTexArr[3];         // sensei_head_01..03.tex
 static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];          // sensei_body_01..03.tex
 
-// blurry_backing.tex is shared with MenuButton + DrawLoadingSymbol; binary
-// loads it from MenuButton::LoadContent, NOT GameOverScreen::LoadContent.
-// Kept here for safety -- duplicate SmartPtr refcount is harmless.
+// blurry_backing.tex is NOT loaded here — binary loads it from MenuButton::LoadContent.
+// This static stays null; DrawOrder checks IsValid() and early-returns if not loaded.
 static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;
 
 // Defunct: binary @ 0x00140f68 — 3 dead-texture SmartPtr statics at .bss
@@ -223,9 +221,6 @@ void GameOverScreen::LoadContent() {
         snprintf(buf, sizeof(buf), "sensei_body_0%d.tex", i + 1);
         g_BgPatternTexArr[i]  = TextureManager::LoadLocalisedTexture(buf);
     }
-    // blurry_backing.tex is loaded by MenuButton::LoadContent in the binary;
-    // port loads it here too as a safety net (duplicate refcount harmless).
-    g_StarburstTex            = TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     g_LoadContentGuard = true;
 }
 
@@ -264,7 +259,6 @@ void GameOverScreen::UnLoadContent() {
         NullTex(&g_ExpressionTexArr[i]);
         NullTex(&g_BgPatternTexArr[i]);
     }
-    // blurry_backing.tex shared with MenuButton; null here too.
     NullTex(&g_StarburstTex);
     NullTex(&s_DeadTex_7af8);
     NullTex(&s_DeadTex_75f4);
@@ -1156,13 +1150,6 @@ void GameOverScreen::Update(float dt) {
     m_AnimCounter = (int)(((float)m_AnimCounter + dt * 1000.0f));
     if (m_AnimCounter >= 1000) m_AnimCounter -= 1000;
 
-#ifndef __bada__
-    // Statics for edge-triggered BONUS_PHASE_STALL logging.
-    static int s_lastBonusState     = -1;
-    static int s_bonusStallLogFrame = 0;
-    static int s_bonusEntryFrame    = 0;
-#endif
-
     switch (m_State) {
 
     // -----------------------------------------------------------------------
@@ -1232,70 +1219,6 @@ void GameOverScreen::Update(float dt) {
     // tmp/bonus-phase-stall-spec.md for full RE.
     case STATE_BONUS_PHASE: {
         Mortar::ActorManager* am = game->actorManager;
-#ifndef __bada__
-        {
-            int nf = am ? am->GetNumEntities(0) : 0;
-            int nb = am ? am->GetNumEntities(1) : 0;
-
-            // ENTRY edge: first tick in STATE_BONUS_PHASE.
-            if (s_lastBonusState != STATE_BONUS_PHASE) {
-                s_bonusEntryFrame = s_bonusStallLogFrame;
-                LOG_DEBUG("BONUS_PHASE_STALL", "ENTRY frame=%d entities=(%d,%d)",
-                          s_bonusStallLogFrame, nf, nb);
-            }
-
-            if (am && (nf != 0 || nb != 0)) {
-                ++s_bonusStallLogFrame;
-                if (s_bonusStallLogFrame % 60 == 1) {
-                    LOG_DEBUG("BONUS_PHASE_STALL", "timer=%.3f fruits=%d bombs=%d",
-                              m_Timer, nf, nb);
-                    // Walk Fruit list (type 0)
-                    const std::list<Mortar::Entity*>& fruits = am->GetTypeList(0);
-                    std::list<Mortar::Entity*>::const_iterator it;
-                    for (it = fruits.begin(); it != fruits.end(); ++it) {
-                        Mortar::Entity* e = *it;
-                        if (!e) continue;
-                        Fruit* f = static_cast<Fruit*>(e);
-                        LOG_DEBUG("BONUS_PHASE_STALL",
-                                  "  Fruit type=%d flags=0x%02x"
-                                  " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
-                                  " sliced=%d spawnDelay=%.3f sliceTimer=%.3f",
-                                  (int)f->m_FruitType, (unsigned)f->flags,
-                                  f->pos.x, f->pos.y, f->pos.z,
-                                  f->vel.x, f->vel.y, f->vel.z,
-                                  (int)f->m_bSliced, f->m_SpawnDelay, f->m_SliceTimer);
-                    }
-                    // Walk Bomb list (type 1)
-                    const std::list<Mortar::Entity*>& bombs = am->GetTypeList(1);
-                    for (it = bombs.begin(); it != bombs.end(); ++it) {
-                        Mortar::Entity* e = *it;
-                        if (!e) continue;
-                        Bomb* b = static_cast<Bomb*>(e);
-                        LOG_DEBUG("BONUS_PHASE_STALL",
-                                  "  Bomb flags=0x%02x"
-                                  " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
-                                  " hit=%d movement=%d",
-                                  (unsigned)b->flags,
-                                  b->pos.x, b->pos.y, b->pos.z,
-                                  b->vel.x, b->vel.y, b->vel.z,
-                                  (int)b->m_bHit, (int)b->m_bMovement);
-                    }
-                }
-            }
-        }
-#endif
-#ifndef __bada__
-        // TEMP DEBUG: BonusScreen black block
-        {
-            static int s_DbgBonusEntFrame = 0;
-            if (++s_DbgBonusEntFrame % 60 == 0) {
-                LOG_INFO("BONUS/Entities",
-                    "fruits=%d bombs=%d",
-                    am ? am->GetNumEntities(0) : -1,
-                    am ? am->GetNumEntities(1) : -1);
-            }
-        }
-#endif
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
             if (!m_pBonusScreen) {
                 FindMostOfFruit();
@@ -1484,17 +1407,6 @@ void GameOverScreen::Update(float dt) {
         // Unhandled states (2..5, 12, 13, 15+): do nothing (matches binary)
         break;
     }
-
-#ifndef __bada__
-    // EXIT edge: state just left STATE_BONUS_PHASE this tick.
-    if (s_lastBonusState == STATE_BONUS_PHASE && m_State != STATE_BONUS_PHASE) {
-        int framesBlocked = s_bonusStallLogFrame - s_bonusEntryFrame;
-        LOG_DEBUG("BONUS_PHASE_STALL", "EXIT after=%d frames", framesBlocked);
-        s_bonusStallLogFrame = 0;
-        s_bonusEntryFrame    = 0;
-    }
-    s_lastBonusState = m_State;
-#endif
 
     // -----------------------------------------------------------------------
     // Common layout block (runs every frame after switch).

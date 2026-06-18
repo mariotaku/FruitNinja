@@ -880,14 +880,12 @@ void ShopScreen::Update(float dt) {
                 // Check if item is equipped/locked — hide tutorial arrow if so
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
-                    if (im) {
-                        bool equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo) != 0;
-                        bool locked   = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
-                        if (equipped || locked) {
-                            // Binary: TutorialControl::ResetTutePos(tute, null) — hide arrow
-                            if (game_work.m_TutorialControl)
-                                game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
-                        }
+                    bool equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo) != 0;
+                    bool locked   = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
+                    if (equipped || locked) {
+                        // Binary: TutorialControl::ResetTutePos(tute, null) — hide arrow
+                        if (game_work.m_TutorialControl)
+                            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
                     }
                 }
 
@@ -895,52 +893,46 @@ void ShopScreen::Update(float dt) {
                 // Binary: guarded by (m_pEquipButton == null) — single-shot creation.
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
-                    if (im) {
-                        int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
-                        // Selection-ring ramp-up gate: binary keeps
-                        // `param = +dt` only when IsEquipped != 0 (current
-                        // loadout). Equip-button creation below runs in
-                        // the mutually-exclusive `equipped == 0` branch.
-                        if (equipped != 0) {
-                            ringSignedDt = dt;
-                        }
-                        if (equipped == 0 && !m_pEquipButton) {
-                            // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
-                            const int equipFruitType =
-                                Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
-                            m_pEquipButton = new MenuButton();
-                            // DIFFERS: binary uses *(GameTask + slot+0x14); port
-                            // uses select_item.tex (same slot the binary assigns in SetSelected).
-                            m_pEquipButton->m_Texture = (s_TexSelectItem);
-                            m_pEquipButton->Init(POS_EQUIP_BUTTON,
-                                Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
-                                equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-                            // Binary (0x0015e5f6): m_bEnabled = 0
-                            m_pEquipButton->m_bEnabled = 0;
-                            // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
-                            SetSelected(m_pSelectedItem);
-                            if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
-                            // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
-                            m_pEquipButton->m_RemoveCallback =
-                                Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
-                            if (game_work.m_TutorialControl)
-                                game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
-                            // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
-                            m_bShrinking = false;
-                            // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
-                            m_pEquipButton->m_RestScale =
-                                m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
-                            if (m_pEquipButton->m_pFruitPiece) {
-                                m_pEquipButton->m_pFruitPiece->scale =
-                                    m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
-                            }
-                            // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
-                            if (m_pEquipButton->m_pFruitPiece) {
-                                m_pEquipButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
-                            }
-                        }
-                        // (if m_pEquipButton already exists: no action — single-shot guard)
+                    int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
+                    // Selection-ring ramp-up gate: binary keeps
+                    // `param = +dt` only when IsEquipped != 0 (current
+                    // loadout). Equip-button creation below runs in
+                    // the mutually-exclusive `equipped == 0` branch.
+                    if (equipped != 0) {
+                        ringSignedDt = dt;
                     }
+                    if (equipped == 0 && !m_pEquipButton) {
+                        // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
+                        const int equipFruitType =
+                            Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
+                        m_pEquipButton = new MenuButton();
+                        // DIFFERS: binary uses *(GameTask + slot+0x14); port
+                        // uses select_item.tex (same slot the binary assigns in SetSelected).
+                        m_pEquipButton->m_Texture = (s_TexSelectItem);
+                        m_pEquipButton->Init(POS_EQUIP_BUTTON,
+                            Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
+                            equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+                        // Binary (0x0015e5f6): m_bEnabled = 0
+                        m_pEquipButton->m_bEnabled = 0;
+                        // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
+                        SetSelected(m_pSelectedItem);
+                        if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
+                        // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
+                        m_pEquipButton->m_RemoveCallback =
+                            Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
+                        if (game_work.m_TutorialControl)
+                            game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
+                        // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
+                        m_bShrinking = false;
+                        // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
+                        m_pEquipButton->m_RestScale =
+                            m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
+                        m_pEquipButton->m_pFruitPiece->scale =
+                            m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
+                        // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
+                        m_pEquipButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+                    }
+                    // (if m_pEquipButton already exists: no action — single-shot guard)
                 }
             }
             // LAB_0015e68a: update animation frame counter (runs regardless of above)
@@ -1073,8 +1065,8 @@ void ShopScreen::Update(float dt) {
         // Binary: wait until Mortar::ActorManager has no active entities (both pools)
         // Then equip selected item via ItemManager.
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-        int nLayer1 = am ? am->GetNumEntities(1) : 0;
-        int nLayer0 = am ? am->GetNumEntities(0) : 0;
+        int nLayer1 = am->GetNumEntities(1);
+        int nLayer0 = am->GetNumEntities(0);
         if (nLayer1 == 0 && nLayer0 == 0) {
             if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                 ItemInfo* info = m_pSelectedItem->m_pItemInfo;
