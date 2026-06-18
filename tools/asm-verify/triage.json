@@ -280,10 +280,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_Z8GameDrawfb": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 44800,
     "reason": "game_work offsets MATCH: game_work loaded via GOT+offset; HUD accessed at [r6,#0x40] in port matching [r3,#0x40] binary. Score 54980/44800 -- large inherent divergence: port adds GetTaskState indirection, MortarGame guard, MatrixManager/PSPParticleManager/DisplayManager singleton guards (port uses cxa_guard; binary uses GOT init pattern), SlashEntity array direct iteration. No game_work field at wrong offset. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 54990/44800 2026-06-14T05:55Z]",
-    "score": 57290,
+    "score": 55065,
     "verdict": "ACCEPT-deferred"
   },
   "_Z8GameInitm": {
@@ -1969,9 +1969,9 @@
   "_ZN11SlashEntity9DrawSliceEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "DrawSlice: latch fix applied (inverted AND&1 -> correct (uchar)<<1 release-edge). Score 252%->213%. Remaining: GOT/PIC global load patterns + MatrixManager singleton vs binary's direct GOT access + strb vs str.w for uchar field. [2026-06-17 blade-trail fixes]",
-    "score": 18995,
+    "score": 17070,
     "max_score": 8900,
-    "decided_at": "2026-06-17T00:00Z"
+    "decided_at": "2026-06-18T01:41Z"
   },
   "_ZN11SlashEntity9PlaySwipeEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2067,9 +2067,9 @@
   "_ZN11SplatEntity16DrawActiveSplatsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "SplatEntity::DrawActiveSplats -- score 19305/8900 (grew from 19193 after R8/R9/R10). Entity Draw method with iteration through active list, MatrixManager, sprite-batch. Tier-2 deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 18736,
+    "score": 17479,
     "max_score": 9300,
-    "decided_at": "2026-06-14T05:55Z"
+    "decided_at": "2026-06-18T01:41Z"
   },
   "_ZN11SplatEntity18UpdateActiveSplatsEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2520,10 +2520,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager16SetUpBonusScreenEP11BonusScreen": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 19600,
-    "reason": "BonusManager::SetUpBonusScreen. Score 41175->41675 (+1.2%) -- minor. Same std::map/list iteration pattern divergence. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [fresh-sweep 2026-06-14T05:19Z: score 41675/20100 -> 40799/19600]",
-    "score": 40474,
+    "reason": "Score REGRESSED 40474->40799. BonusManager::SetUpBonusScreen. Score 41175->41675 (+1.2%) -- minor. Same std::map/list iteration pattern divergence. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [fresh-sweep 2026-06-14T05:19Z: score 41675/20100 -> 40799/19600]",
+    "score": 40799,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager17GetFirstBestBonusERSt14_List_iteratorI5BonusE": {
@@ -4872,10 +4872,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager4DrawEfbi": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 80900,
     "reason": "PSPParticleManager::Draw: template live-list walk replaces per-emitter vector. Score 151135/80900 (186% diff). Inherent diff: port cosf/sinf radians vs binary SinIdx/CosIdx 16-bit angle tables; port Renderer::DrawTriList vs binary Mesh::DrawTriList+TextureAtlasPage; port separates Update/Draw. [PSP storage rewrite 2026-06-17]",
-    "score": 151135,
+    "score": 150960,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager6UpdateEfb": {
@@ -5567,9 +5567,9 @@
   "_ZN5Fruit11DrawShadowsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit::DrawShadows -- score 18251/7700 (grew from 17452 after R8/R9/R10). Calls FruitInfo_GetShadowTex + ActorManager::GetEntityFirst loop. Tier-2 entity-draw divergence. ACCEPT-deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 17013,
+    "score": 15381,
     "max_score": 8500,
-    "decided_at": "2026-06-14T05:55Z"
+    "decided_at": "2026-06-18T01:41Z"
   },
   "_ZN5Fruit11RandomFruitEb": {
     "verdict": "ACCEPT-deferred",
@@ -5705,10 +5705,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit5SliceEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 60000,
     "reason": "Fruit::Slice -- branch fix/slice-juice-mechanics rewrote the function with RE-derived logic: angle-straddle cross-product (vnmls/vadd/fabsf), crit x1.75 (sl+=2 + vmul s19), rand-select via Math::Random::Rand32 vs binary blx f3650, sinf/cosf spread, SplatEntity::GetFree+MakeSplat juice loop. Score 128492->125113/73900 (slight improvement; still above max_score due to GOT chain vs direct-call structural diff and full function size). Branch changes are intentional RE-derived; not a regression. ACCEPT-deferred pending full Fruit::Slice RE pass to close remaining gap. [score updated 2026-05-31: branch fix/slice-juice-mechanics] [fresh-sweep 2026-06-14T05:19Z: score 125113/73900 -> 88987/60000]",
-    "score": 88987,
+    "score": 87852,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit6UpdateEf": {
@@ -6755,17 +6755,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera10SetupOrthoEv": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 21300,
     "reason": "Dead cache path (binary never clears m_bInitialized). Functionally identical, different codegen. RE confirmed. Deferred. [re-triaged 2026-06-18T01:15Z]",
-    "score": 46176,
+    "score": 42403,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera16SetupPerspectiveEv": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 17600,
     "reason": "Blocked on MatrixManager::SetupPerspective(SinIdx, CosIdx, aspect, near, far). Port uses mat4_perspective substitute. TODO documented in source. [re-triaged 2026-06-18T01:15Z]",
-    "score": 39721,
+    "score": 38585,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar12MortarCamera4InitEffff": {
@@ -7364,10 +7364,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh4DrawERK9_Matrix44IfE": {
-    "decided_at": "2026-06-18T01:28Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 7600,
     "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
-    "score": 81360,
+    "score": 77915,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh8DrawCubeEfff6ColourPNS_19DrawEffectContainerE": {
@@ -7385,10 +7385,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4Mesh8DrawQuadE6ColourNS_8SmartPtrINS_7TextureEEERK8_Vector3IfES8_fffffPNS_19DrawEffectContainerE": {
-    "decided_at": "2026-06-18T01:28Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 6700,
     "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
-    "score": 19325,
+    "score": 17404,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh8SetBonesEPKNS0_11BoneBindingEm": {
@@ -7931,10 +7931,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7PowerUp7DrawBarEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 10700,
     "reason": "PowerUp::DrawBar. Score 17108->16095 (-6%) -- mild improvement post-scope-iii. Same PowerUp struct drift. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 16450/11800 -> 14464/10700]",
-    "score": 14464,
+    "score": 11139,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7PowerUp7ReleaseEv": {
@@ -8108,9 +8108,9 @@
   "_ZN9BombBlast16DrawActiveBlastsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "BombBlast::DrawActiveBlasts -- score 31610/6800 (grew from 31055 after R8/R9/R10 MeshDraw consolidation). Large entity Draw method with multiple SmartPtr/GOT/MatrixManager interactions and full sprite-batch state setup. Tier-2 entity-draw divergence. ACCEPT-deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 18345,
+    "score": 16870,
     "max_score": 8100,
-    "decided_at": "2026-06-14T05:55Z"
+    "decided_at": "2026-06-18T01:41Z"
   },
   "_ZN9BombBlast4InitEPvlP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8204,10 +8204,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash4DrawEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 5200,
     "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Draw. See src/entities/BombFlash.cpp:71. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5400/5100 -> 12323/5200]",
-    "score": 12323,
+    "score": 10423,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash6UpdateEf": {
@@ -8309,10 +8309,10 @@
     "decided_at": "2026-06-14T00:00Z"
   },
   "_ZN9ColSphere9DrawDebugEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:41Z",
     "max_score": 4300,
     "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 5000/4700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5000/4700 -> 12585/4300]",
-    "score": 12585,
+    "score": 11785,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9ColSphereC1E8_Vector3IfEf": {
