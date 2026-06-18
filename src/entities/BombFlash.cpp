@@ -1,79 +1,96 @@
-// Analysed: 2026-04-30T00:00
-
 #include "BombFlash.h"
-#include <cstring>
+#include <new>
 
-// Static pool array. BombFlash::CreatePool(0x20) allocates 32 entries.
-static BombFlash* s_Pool[BombFlash::POOL_SIZE] = { nullptr };
-static bool s_PoolCreated = false;
+// Contiguous pool allocation (matches v1.6.1 binary model).
+// Managed by CreatePool / CleanUp. Each entry is 0x44 bytes.
+static BombFlash* pool = nullptr;
+static int poolCount = 0;
+static int currentFree = 0;
 
-// ctor @ 0x00171a14
+// v1.6.1 BombFlash ctor @0x001d5fa8
 BombFlash::BombFlash() {
+    // ctor initializes vtable, Colour fields, SmartPtr, sets m_bActive = 0.
+    // m_padBefore and m_padAfter are uninitialized junk at construction time.
     m_bActive = 0;
-    std::memset(m_pad, 0, sizeof(m_pad));
 }
 
-// dtor @ 0x00171f38 / 0x00171fb8
+// v1.6.1 BombFlash dtor @0x001d5ac0 / 0x001d5b80
 BombFlash::~BombFlash() {}
 
-// @ 0x00171038 — stub: quadratic scale + alpha anim (TODO: real impl pending)
+// v1.6.1 BombFlash::Init @0x001d4dbc — stub (real init logic not yet ported)
+void BombFlash::Init(void*, long, Vec3*) {}
+
+// v1.6.1 BombFlash::Update @0x001d4dd4 — stub (quadratic scale + alpha anim not yet ported)
 void BombFlash::Update(float /*dt*/) {}
 
-// @ 0x00170f84 — stub in binary (returns param); port mirrors this behavior.
-// Real pool allocation is handled by the static array sized to POOL_SIZE.
+// v1.6.1 BombFlash::Draw @0x001d6910 — stub (draw not yet ported)
+void BombFlash::Draw() {}
+
+// v1.6.1 BombFlash::DrawUpdate @0x001d4dc0 — stub
+void BombFlash::DrawUpdate(float) {}
+
+// v1.6.1 BombFlash::CreatePool @0x001d4cc0 — DEFUNCT (bx lr).
+// Port still needs a pool; allocate contiguous block of n entries.
 int BombFlash::CreatePool(int n) {
-    // Binary stub returns param unchanged. Real pool backed by s_Pool[].
-    if (!s_PoolCreated) {
-        for (int i = 0; i < POOL_SIZE && i < n; ++i) {
-            s_Pool[i] = new BombFlash();
+    if (pool == nullptr && n > 0) {
+        void* mem = ::operator new[](static_cast<size_t>(n) * sizeof(BombFlash));
+        pool = static_cast<BombFlash*>(mem);
+        poolCount = n;
+        currentFree = 0;
+        for (int i = 0; i < n; ++i) {
+            new (&pool[i]) BombFlash();
         }
-        s_PoolCreated = true;
     }
     return n;
 }
 
-// @ 0x001723f4 — activate a pooled flash slot (TODO: real impl pending)
+// v1.6.1 BombFlash::GetFree @0x001d4cc4 — circular probe from currentFree.
+// Returns a free (inactive) slot, or the currentFree slot if none free.
+BombFlash* BombFlash::GetFree() {
+    if (!pool) return nullptr;
+
+    int idx = currentFree;
+    for (int i = 0; ; ++i) {
+        BombFlash* entry = &pool[idx];
+        if (entry->m_bActive == 0) {
+            currentFree = idx;
+            return entry;
+        }
+        if (i >= poolCount) {
+            currentFree = idx;
+            return entry;
+        }
+        idx = (idx + 1) % poolCount;
+    }
+}
+
+// v1.6.1 BombFlash::MakeFlash @0x001d5bf0 — stub (not yet ported)
 void BombFlash::MakeFlash(Colour /*col*/, Vec3 /*pos*/, Vec3 /*dir*/,
                            Mortar::SmartPtr<Mortar::Texture> /*tex*/) {}
 
-// @ 0x00171028 — iterate pool calling Update on active slots
-void BombFlash::UpdateActiveFlashes(float dt) {
-    if (!s_PoolCreated) return;
-    for (int i = 0; i < POOL_SIZE; ++i) {
-        if (s_Pool[i] && s_Pool[i]->m_bActive) {
-            s_Pool[i]->Update(dt);
-        }
-    }
-}
+// v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 — DEFUNCT (bx lr).
+void BombFlash::UpdateActiveFlashes(float /*dt*/) {}
 
-// @ 0x0017102c — iterate pool calling Draw on active slots (TODO: real draw)
+// v1.6.1 BombFlash::DrawActiveFlashes @0x001d4dc8 — DEFUNCT (bx lr).
 void BombFlash::DrawActiveFlashes() {}
 
-// @ 0x00170fe4 — deactivate every pool slot
+// v1.6.1 BombFlash::RemoveAllFlashes @0x001d4d64 — deactivates every pool slot.
 void BombFlash::RemoveAllFlashes() {
-    if (!s_PoolCreated) return;
-    for (int i = 0; i < POOL_SIZE; ++i) {
-        if (s_Pool[i]) s_Pool[i]->m_bActive = 0;
+    for (int i = 0; i < poolCount; ++i) {
+        pool[i].m_bActive = 0;
     }
 }
 
-// @ 0x00171f64 — destructs each entry, frees backing memory
+// v1.6.1 BombFlash::CleanUp @0x001d5afc — destructs entries backward, frees the heap block.
 void BombFlash::CleanUp() {
-    if (!s_PoolCreated) return;
-    for (int i = POOL_SIZE - 1; i >= 0; --i) {
-        delete s_Pool[i];
-        s_Pool[i] = nullptr;
+    if (pool != nullptr) {
+        BombFlash* it = pool + poolCount;
+        while (it != pool) {
+            --it;
+            it->~BombFlash();
+        }
+        ::operator delete[](static_cast<void*>(pool));
+        pool = nullptr;
     }
-    s_PoolCreated = false;
+    poolCount = 0;
 }
-
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: BombFlash::Draw -- auto stub
-void BombFlash::Draw() {}
-// STUB: BombFlash::DrawUpdate -- auto stub
-void BombFlash::DrawUpdate(float) {}
-// STUB: BombFlash::GetFree -- auto stub
-void BombFlash::GetFree() {}
-// STUB: BombFlash::Init -- auto stub
-void BombFlash::Init(void*, long, Vec3*) {}
-// ---- end AUTO-STUB MERGE ----
