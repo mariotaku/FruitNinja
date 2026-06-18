@@ -1510,7 +1510,7 @@ void Fruit::Slice() {
 
     // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse and the
     // configured juice-burst count. Binary @ 0x00176f4e..0x00176f72.
-    if (info && info->m_Score == 0x32) {
+    if (info->m_Score == 0x32) {
         impulse *= 1.5f;
         splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
     }
@@ -1531,7 +1531,6 @@ void Fruit::Slice() {
     // with a ×60 fudge factor (matching binary 0x00177d00), which
     // means velocities should also stay in the binary's per-frame
     // scale — no extra ×50 multiplier needed here.
-    const float imp_screen = impulse;
     for (int i = 0; i < splatCount; ++i) {
         const uint16_t angle16 = (uint16_t)(Math::g_Random.Rand32(0x10000) & 0xFFF0);
         const float r          = Math::g_Random.RandF(0.5f);
@@ -1579,7 +1578,7 @@ void Fruit::Slice() {
     // Default 0.75 for all shipped fruits; coconut = 0.9 (from hitInfluence XML attr).
     // Used as: halfVel = dir*(impulse*sliceFactor) + fruitVel*(1-sliceFactor)
     // and:     off = rand * (1-sliceFactor) * 4.0
-    const float sliceFactor = (info ? info->m_HitInfluence : 0.75f);
+    const float sliceFactor = info->m_HitInfluence;
 
     // Binary @ 0x001771b6: SELECT pattern — use const 10912.0f when randVal<=0x2aa8,
     // recompute Rand32(0x5550) when >0x2aa8. Not a retry-if-small loop.
@@ -1605,9 +1604,9 @@ void Fruit::Slice() {
     Vec3 dirA(sinf(radA), cosf(radA), 0.0f);
     Vec3 dirB(sinf(radB), cosf(radB), 0.0f);
 
-    Vec3 halfVelA = dirA * (imp_screen * sliceFactor) +
+    Vec3 halfVelA = dirA * (impulse * sliceFactor) +
                     vel  * (1.0f - sliceFactor);
-    Vec3 halfVelB = dirB * (imp_screen * sliceFactor) +
+    Vec3 halfVelB = dirB * (impulse * sliceFactor) +
                     vel  * (1.0f - sliceFactor);
 
     m_SecondPos = pos;
@@ -1622,13 +1621,13 @@ void Fruit::Slice() {
     // The crit override uses raw m_SliceArcAngle (NOT the offset-baked radA) with
     // ±0x3ffc / 0xc004, int32 truncation on each velocity component, and a
     // ×1.75 scale (DAT 0x3fe00000 @ 0x001773c6 / 0x0017742a).
-    if (isCritical || (info && info->m_Score == 0x32)) {
+    if (isCritical || info->m_Score == 0x32) {
         const float critRadA = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0x3ffc) * (6.2831853f / 65536.0f);
         const float critRadB = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0xc004) * (6.2831853f / 65536.0f);
-        halfVelA = Vec3((float)(int)(sinf(critRadA) * imp_screen),
-                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 1.75f;
-        halfVelB = Vec3((float)(int)(sinf(critRadB) * imp_screen),
-                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 1.75f;
+        halfVelA = Vec3((float)(int)(sinf(critRadA) * impulse),
+                        (float)(int)(cosf(critRadA) * impulse), 0.0f) * 1.75f;
+        halfVelB = Vec3((float)(int)(sinf(critRadB) * impulse),
+                        (float)(int)(cosf(critRadB) * impulse), 0.0f) * 1.75f;
     } else if (!m_bMenuFling) {
         // Binary @ 0x00177444..0x0017744e — only on the plain slice path and
         // only when this fruit was NOT spawned by a critical splash / menu-fling.
@@ -1650,7 +1649,7 @@ void Fruit::Slice() {
     // and m_Rot1/2. sliceDirFlag = flipSide ? 1 : 0 (binary param_2 select).
     {
         const FruitInfoData* sliceInfo = FruitInfo_Get((long)m_FruitType);
-        bool isSuperFruit = (sliceInfo && sliceInfo->m_bIsSuperFruit);
+        bool isSuperFruit = sliceInfo->m_bIsSuperFruit;
         SetupSliceRotations(isSuperFruit, flipSide ? 1 : 0);
     }
 
