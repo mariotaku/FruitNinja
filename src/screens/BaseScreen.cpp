@@ -91,8 +91,8 @@ void BaseScreen::UnloadContent() {
 //   3. Optional secondary texture with vertical slide + offset
 // All geometry at Z=0.0.
 // ===================================================================
-void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryTex,
-                             float alpha, const Vec3& secondaryTexPos) {
+void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
+                             float alpha, Vec3 secondaryTexPos) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---

@@ -43,7 +43,7 @@ int GameSound::FindFree() {
 // DIFFERS: binary @ 0x... calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
-                                 const Mortar::Delegate1<bool, MortarSound*>& finishCallback) {
+                                 Mortar::Delegate1<bool, MortarSound*> finishCallback) {
     int i = FindFree();
     if (i == -1) {
         LOG_INFO("SFX", "SFXPlay('%s', vol=%.2f, pitch=%.2f) -- NO FREE SLOT",

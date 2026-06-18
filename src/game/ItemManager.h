@@ -128,7 +128,7 @@ public:
     // m_LoopingSound.SetLoopDesiredVol(vol).
     void SetSwipeLoodVol(float);
     // UnequipItem @ 0x0010314c — unequip item by hash; returns true if found.
-    bool UnequipItem(unsigned int hash);
+    bool UnequipItem(unsigned long hash);
     // Update @ v1.6.1 0x00139a38 — per-frame update of equipped blade mod sounds:
     // if m_DefaultItems[0], call SlashModInfo::UpdateSounds(dt).
     void Update(float);

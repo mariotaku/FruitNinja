@@ -25,6 +25,24 @@ BINARY_DEMANGLED = PROJECT / "tmp" / "symbol-diff" / "binary_symbols_demangled.t
 PORT_DEMANGLED    = PROJECT / "tmp" / "symbol-diff" / "port_full_demangled.txt"
 OUTPUT = PROJECT / "tmp" / "asm-verify" / "signature-mismatches.md"
 
+# Known intentional signature divergences — port faithfully adapts binary's
+# opaque pointer/reference patterns into typed equivalents. These are NOT
+# signature bugs; they are documented // Port-specific: refactorings.
+KNOWN_SIGNATURE_ALIASES = {
+    # Binary: Draw(float*) passes a Vec3* HUD scale as opaque float pointer.
+    # Port:   Draw(Vec3 const&, int) types the scale + formalizes the layer
+    #         mask that flows through from DrawOrder's vtable dispatch in r2.
+    # RE confirmed v1.6.1: float* is Vec3* HUD scale, int is implicit reg.
+    # Applies to: CheckBox, BonusScreen, AboutScreen, MainScreen, PauseScreen,
+    # ShopScreen, DojoScreen, GameOverScreen, GameModeScreen, MissControl,
+    # ProgressionTimerControl, and any other HUDControl subclass.
+    ('::Draw', 'float*', '_Vector3<float> const&, int'),
+    ('::Draw', 'float*', 'Renderer&'),
+    # Binary: PreDraw(float*) passes Vec3* HUD scale.
+    # Port:   PreDraw(Vec3 const&) types it. Same reasoning as Draw.
+    ('::PreDraw', 'float*', '_Vector3<float> const&'),
+}
+
 def method_key(demangled: str) -> str | None:
     """Extract 'Class::Method' (without params) from a demangled symbol."""
     # Strip leading return type: "void Foo::bar(...)" -> "Foo::bar(...)"
@@ -43,6 +61,14 @@ def load_demangled(path: pathlib.Path) -> set[str]:
     with open(path, encoding='utf-8', errors='ignore') as f:
         return {line.strip() for line in f if line.strip() and not line.startswith('#')}
 
+def _is_known_alias(method: str, bin_params: str, port_params: str) -> bool:
+    """Check if a signature mismatch matches a known intentional divergence."""
+    for suffix, bin_pat, port_pat in KNOWN_SIGNATURE_ALIASES:
+        if method.endswith(suffix) and bin_pat in bin_params and port_pat in port_params:
+            return True
+    return False
+
+
 def main():
     binary = load_demangled(BINARY_DEMANGLED)
     port   = load_demangled(PORT_DEMANGLED)
@@ -56,6 +82,7 @@ def main():
 
     # Find binary symbols whose method key exists in port (different mangled name!)
     mismatches: list[tuple[str, str, str]] = []  # (key, binary_sig, port_sig)
+    filtered_count = 0
     port_only_with_binary_key: dict[str, list[str]] = defaultdict(list)
 
     binary_keys = set()
@@ -70,6 +97,10 @@ def main():
                 for ps in port_keys[k]:
                     p_params = param_sig(ps) or "?"
                     if b_params != p_params:  # different parameters = signature mismatch
+                        # Filter: skip known intentional signature aliases
+                        if _is_known_alias(k, b_params, p_params):
+                            filtered_count += 1
+                            continue
                         mismatches.append((k, b_params, p_params))
 
     # Also find port-only symbols whose key exists in binary (potentially wrong param)
@@ -103,9 +134,11 @@ def main():
         f.write("# Signature Mismatches: Binary vs Port\n\n")
         f.write(f"- Binary symbols: **{len(binary)}**\n")
         f.write(f"- Port symbols: **{len(port)}**\n")
-        f.write(f"- Signature mismatches: **{len(mismatches)}**\n\n")
+        f.write(f"- Signature mismatches: **{len(mismatches)}**\n")
+        f.write(f"- Filtered (known intentional): **{filtered_count}**\n\n")
         f.write("Functions where Class::Method names match but parameter types differ.\n")
-        f.write("These are INVISIBLE to asm-verify (different mangled names → never compared).\n\n")
+        f.write("These are INVISIBLE to asm-verify (different mangled names → never compared).\n")
+        f.write("Filtered entries are known // Port-specific: refactorings (e.g. Draw(float*)→Draw(Vec3&,int)).\n\n")
 
         for cls in sorted(by_class):
             items = by_class[cls]
@@ -119,7 +152,7 @@ def main():
                 f.write(f"| `{method}` | `{bp}` | `{pp}` |\n")
             f.write("\n")
 
-    print(f"Found {len(mismatches)} signature mismatches in {len(by_class)} classes")
+    print(f"Found {len(mismatches)} signature mismatches in {len(by_class)} classes ({filtered_count} filtered as known intentional)")
     for cls in sorted(by_class)[:10]:
         print(f"  {cls}: {len(by_class[cls])} mismatch(es)")
     print(f"\nFull report: {OUTPUT}")

@@ -98,11 +98,11 @@ public:
     // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
-    int  UnlockConsecutiveAchievement(int count, uint32_t fruitTypeHash);
+    int  UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash);
     int  UnlockEndScoreAchievement(int score, int hiScore);
     int  UnlockScoreAchievement(int score);
     int  UnlockScoreUnsulliedAchievement(int score);
-    int  UnlockSpecificFruitAchievement(int32_t fruitTypeHash, uint32_t count);
+    int  UnlockSpecificFruitAchievement(int fruitTypeHash, unsigned int count);
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
     int  UnlockTotalFruitAchievement(int total);
 

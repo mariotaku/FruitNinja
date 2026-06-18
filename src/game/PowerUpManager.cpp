@@ -230,7 +230,7 @@ void PowerUpManager::Reset(bool fullReset) {
                 PowerUp* tpl = it2->second;
                 if (tpl && tpl->m_bIsSpecial) {
                     Vec3 zero(0.0f, 0.0f, 0.0f);
-                    ActivatePower(tpl->m_NameHash, &zero, NULL);
+                    ActivatePower(tpl->m_NameHash, zero, NULL);
                 }
             }
         }
@@ -260,7 +260,7 @@ void PowerUpManager::ClearTimedPowers() {
 }
 
 // @ 0x001197c4
-PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* purchaseExtra) {
+PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purchaseExtra) {
     std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.find(hash);
     if (it == m_AllPowerUps.end()) return 0;
 
@@ -271,7 +271,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
         // (A) Already active -> re-activate same instance with new position/extra.
         PowerUp* existing = byHash->second;
         existing->GetLongestMod();   // observed call in binary; result discarded
-        Vec3 posCopy(*position);
+        Vec3 posCopy(position);
         existing->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         clone = existing;
     } else {
@@ -289,7 +289,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
 
         if (skipPurge) {
             // (B1) Single activate, don't purge other specials.
-            Vec3 posCopy(*position);
+            Vec3 posCopy(position);
             clone->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         } else {
             // (B2) Purge-other-specials path.
@@ -314,7 +314,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
                     (*pit)->Activate(false, false, gp, NULL);
                 }
             }
-            Vec3 posCopy(*position);
+            Vec3 posCopy(position);
             clone->Activate(true, false, posCopy, NULL);
         }
 
@@ -412,7 +412,7 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         if (skip) continue;
 
         Vec3 pos(0.0f, 0.0f, 0.0f);
-        PowerUp* p = ActivatePower(hash, &pos, &curTime);
+        PowerUp* p = ActivatePower(hash, pos, &curTime);
         if (!p) continue;
         p->SetCurrentTime(curTime);
         float tmp = curTime;

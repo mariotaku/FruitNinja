@@ -74,7 +74,7 @@ public:
     void ClearTimedPowers();
 
     // @ 0x001197c4 — 3-arg form; returns active clone (or nullptr)
-    PowerUp* ActivatePower(uint32_t hash, Vec3* position, float* purchaseExtra);
+    PowerUp* ActivatePower(uint32_t hash, Vec3 position, float* purchaseExtra);
 
     // @ 0x001193d0 — re-arm a purchased PowerUp from its template
     void ActivatePurchase(PowerUp* p);

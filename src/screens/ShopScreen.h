@@ -85,7 +85,6 @@ class MenuButton;
 class DojoScreen;
 class ScrollingMenu;
 class ShopListItem;
-struct Game;
 class HUD;
 
 class ShopScreen : public HUDControl3d {
@@ -93,8 +92,7 @@ public:
     // Matches ShopScreen::ShopScreen(DojoScreen*) @ 0x0015cdac
     // Binary: calls HUDControl3d ctor, calls LoadContent if not loaded,
     //         initialises all fields, computes m_ScrollOffset from item count.
-    // Port: adds Game& for HUD/GameSound access (binary uses GOT navigation).
-    ShopScreen(Game& g, DojoScreen* parent);
+    ShopScreen(DojoScreen* parent);
 
     // Matches ~ShopScreen @ 0x0015ce98
     ~ShopScreen() override;
@@ -178,10 +176,6 @@ private:
     // Port-specific trailing fields (not in the 188-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xbc.
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    // Port specific: binary accesses Game via GOT; port stores a reference here,
-    // declared after all binary-faithful fields so it does not displace them.
-    Game& game;
-
     // Mirrors the static BSS bool at .got + 0x451b4 set by
     // ShrinkBuyButton @ 0x0015c4cc and read by EquipCallback /
     // DeletedMenuItem / Move. Tracks "the equip-button fruit piece

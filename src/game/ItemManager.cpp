@@ -505,7 +505,7 @@ int ItemManager::EquipItem(unsigned int hash) {
 // Binary: lookup m_ByHash; if found, UnEquip() + SetEquippedItem(type, nullptr).
 // ASM-verified: 2026-05-23 binary @ 0x0010314c (re-analyst)
 // -----------------------------------------------------------------------
-bool ItemManager::UnequipItem(unsigned int hash) {
+bool ItemManager::UnequipItem(unsigned long hash) {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
     if (it == m_ByHash.end()) return false;
     ItemInfo* item = it->second;

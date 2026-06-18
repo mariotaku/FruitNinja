@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
         DojoScreen* dojo = new DojoScreen(h.game);
         dojo->m_Active = 0;
         game_work.mHud->AddControl(dojo);
-        ShopScreen* s = new ShopScreen(h.game, dojo);
+        ShopScreen* s = new ShopScreen(dojo);
         game_work.mHud->AddControl(s, false);
         s->Init();
     } else if (strcmp(screenName, "gamemode") == 0) {
