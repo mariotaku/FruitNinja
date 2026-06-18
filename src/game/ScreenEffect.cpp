@@ -288,53 +288,41 @@ ScreenEffect& ScreenEffect::operator=(const ScreenEffect& rhs) {
 // ---- ScreenEffect::Parse (binary @ 0x0011e150) --------------------------------
 
 void ScreenEffect::Parse(TiXmlElement* xml) {
-    if (!xml) return;
-
     const char* name = xml->Attribute("name");
-    if (name) {
-        strncpy(m_Name, name, sizeof(m_Name) - 1);
-        m_Name[sizeof(m_Name) - 1] = '\0';
-        m_NameHash = StringHash(m_Name);
-    }
+    if (!name) name = "void";
+    strcpy(m_Name, name);
+    m_NameHash = StringHash(m_Name);
 
-    const char* length = xml->Attribute("length");
-    if (length) {
-        m_TotalDuration = (float)atof(length);
-        if (m_TotalDuration > 0.0f)
-            m_RemainingTime = m_TotalDuration;
-    }
+    xml->QueryFloatAttribute("length", &m_TotalDuration);
+    if (m_TotalDuration > 0.0f)
+        m_RemainingTime = m_TotalDuration;
 
     for (TiXmlElement child = xml->FirstChildElement();
          child; child = child.NextSiblingElement()) {
         const char* tag = child.Name();
-        if (!tag) continue;
 
         // Hardware filter — "fast" = IsFastHardware() must be true;
         // "slow" = IsFastHardware() must be false.
         const char* hw = child.Attribute("hardware");
-        if (hw) {
-            bool needFast = (strcmp(hw, "fast") == 0);
-            bool needSlow = (strcmp(hw, "slow") == 0);
-            if (needFast && !IsFastHardware()) continue;
-            if (needSlow && IsFastHardware()) continue;
-        }
-
-        if (strcmp(tag, "emmiter") == 0) {
-            Emmiter em;
-            em.Parse(&child);
-            m_Emmiters.push_back(em);
-        } else if (strcmp(tag, "image") == 0) {
-            EffectImage img;
-            img.Parse(&child);
-            m_Images.push_back(img);
-        } else if (strcmp(tag, "tint") == 0) {
-            ScreenTint tint;
-            tint.Parse(&child);
-            m_Tints.push_back(tint);
-        } else if (strcmp(tag, "sound") == 0) {
-            SoundEffect sfx;
-            sfx.Parse(&child);
-            m_Sounds.push_back(sfx);
+        if (!hw || ((strcmp(hw, "fast") != 0 || IsFastHardware()) &&
+                    (strcmp(hw, "slow") != 0 || !IsFastHardware()))) {
+            if (strcmp(tag, "image") == 0) {
+                EffectImage img;
+                img.Parse(&child);
+                m_Images.push_back(img);
+            } else if (strcmp(tag, "emmiter") == 0) {
+                Emmiter em;
+                em.Parse(&child);
+                m_Emmiters.push_back(em);
+            } else if (strcmp(tag, "tint") == 0) {
+                ScreenTint tint;
+                tint.Parse(&child);
+                m_Tints.push_back(tint);
+            } else if (strcmp(tag, "sound") == 0) {
+                SoundEffect sfx;
+                sfx.Parse(&child);
+                m_Sounds.push_back(sfx);
+            }
         }
     }
 }
