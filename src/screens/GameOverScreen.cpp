@@ -75,6 +75,7 @@ static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];          // sense
 
 // blurry_backing.tex is NOT loaded here — binary loads it from MenuButton::LoadContent.
 // This static stays null; DrawOrder checks IsValid() and early-returns if not loaded.
+// NOT nulled in UnLoadContent (binary's UnLoadContent has no GOT entry for it).
 static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;
 
 // Defunct: binary @ 0x00140f68 — 3 dead-texture SmartPtr statics at .bss
@@ -243,29 +244,34 @@ static FN_NOINLINE void NullTex(Mortar::SmartPtr<Mortar::Texture>* p) {
 }
 #undef FN_NOINLINE
 
-// Binary @ 0x00130f68: 16 NullTex calls covering 8 individuals + array-of-2
-// + 2 arrays-of-3. Order matches the GOT-slot order observed in the
-// disassembly (objdump-verified 2026-05-16). Plus 3 dead-texture statics
-// (never assigned; see s_DeadTex_* above).
+// ASM-spec v1.6.1 GameOverScreen::UnLoadContent @0x00185e68:
+//   - 16 NullTex calls in GOT-slot order (8 individuals + 1 array-of-2
+//     + 2 arrays-of-3). 3 extra GOT slots (dead statics, never assigned)
+//     are interleaved among the ordinal textures, NOT appended at the end.
+//   - Order matches the binary's literal pool entries @0x00185f48..0x00185f70.
+//   - No g_StarburstTex -- the starburst lives in MenuButton's statics.
+//   - s_DeadTex_* names are from the old v1.5.1 addresses; the v1.6.1 GOT
+//     offsets are 0x79d8/0x73b8/0x7938 but these are internal statics so
+//     only ORDER matters for asm-verify, not the name.
 void GameOverScreen::UnLoadContent() {
     g_LoadContentGuard = false;
-    NullTex(&g_ArcadeTimeUpTitleTex);  // 0x75d8
-    NullTex(&g_GameOverTitleTex);      // 0x7800
-    NullTex(&g_TimeUpTitleTex);        // 0x76f0
-    NullTex(&g_RetryTex);              // 0x7310
-    NullTex(&g_QuitTex);               // 0x73fc
-    // Array-of-2 at 0x740c
-    NullTex(&g_LeaderboardsTexPair[0]);
-    NullTex(&g_LeaderboardsTexPair[1]);
-    // Array-of-3 sensei_head at 0x7160; array-of-3 sensei_body at 0x7abc.
+    NullTex(&g_GameOverTitleTex);            // GOT 0x761c -- gameover.tex (2nd loaded)
+    NullTex(&g_TimeUpTitleTex);              // GOT 0x74ec -- time_up.tex (3rd loaded)
+    NullTex(&g_RetryTex);                    // GOT 0x700c -- retry.tex (4th loaded)
+    // Array-of-2 at GOT 0x713c
+    NullTex(&g_LeaderboardsTexPair[0]);      // leaderboards.tex
+    NullTex(&g_LeaderboardsTexPair[1]);      // gc_leaderboards.tex
+    NullTex(&g_QuitTex);                     // GOT 0x7128 -- quit
+    NullTex(&s_DeadTex_7af8);                // GOT 0x79d8 (DEAD)
+    NullTex(&g_ArcadeTimeUpTitleTex);        // GOT 0x7390 -- arcade_time_up
+    NullTex(&s_DeadTex_75f4);                // GOT 0x73b8 (DEAD)
+    NullTex(&s_DeadTex_7a88);                // GOT 0x7938 (DEAD)
+    // 2x3-element arrays interleaved: head[0],body[0],head[1],body[1],head[2],body[2]
+    // GOT 0x6dbc (sensei_head), GOT 0x798c (sensei_body)
     for (int i = 0; i < 3; ++i) {
         NullTex(&g_ExpressionTexArr[i]);
         NullTex(&g_BgPatternTexArr[i]);
     }
-    NullTex(&g_StarburstTex);
-    NullTex(&s_DeadTex_7af8);
-    NullTex(&s_DeadTex_75f4);
-    NullTex(&s_DeadTex_7a88);
 }
 
 // ---------------------------------------------------------------------------
