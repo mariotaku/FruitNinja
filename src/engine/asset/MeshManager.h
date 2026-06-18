@@ -41,9 +41,9 @@ public:
     // v1.6.1 Find(AsciiString const&) @0x0023695c -- linear scan; returns the cached Model
     // whose m_name matches, else an empty SmartPtr.
     Mortar::SmartPtr<Model> Find(AsciiString const& name) const;
-    // v1.6.1 Find(SmartPtr<Model>) @0x002369c0 -- linear scan by pointer identity;
+    // v1.6.1 Find(SmartPtr<Model> const&) @0x002369c0 -- linear scan by pointer identity;
     // returns the matching cached entry, else an empty SmartPtr.
-    Mortar::SmartPtr<Model> Find(SmartPtr<Model> model) const;
+    Mortar::SmartPtr<Model> Find(SmartPtr<Model> const& model) const;
     // v1.6.1 InitialiseInternal @0x001A74B8 -- empty in the binary (one-time hook, no body).
     void InitialiseInternal();
     // v1.6.1 Release(SmartPtr<Model>) @0x00236908 -- calls List::Remove to unlink

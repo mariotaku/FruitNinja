@@ -1,5 +1,6 @@
 // Analysed: 2026-05-03T00:00
 #include "MissControl.h"
+#include "particle/PSPParticleManager.h"
 #include "HUD.h"
 #include "HUDLayer.h"
 #include "asset/TextureManager.h"
@@ -342,7 +343,14 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     LOG_INFO("MissControl", "MakeCritical pos=(%.1f,%.1f,%.1f) player=%d this=%p",
              pos.x, pos.y, pos.z, playerIdx, static_cast<void*>(this));
     #endif
-    Init();
+    // Init fields (binary inlines Init, does not call virtual Init())
+    m_Active       = 1;
+    m_Timer        = 0.0f;
+    m_bPlaySound   = 1;
+    m_bPendingRemoval = 0;
+    m_bUseComboSound = 0;
+    m_ComboCount   = 0;
+    m_DragScale    = 1.0f;
     m_Texture      = s_TexCritical;
     m_LifeTimer    = MISS_FADE_INIT;
     m_bFlashing     = 1;
@@ -380,7 +388,14 @@ void MissControl::MakeRare(Vec3 pos) {
     LOG_INFO("MissControl", "MakeRare pos=(%.1f,%.1f,%.1f) this=%p",
              pos.x, pos.y, pos.z, static_cast<void*>(this));
     #endif
-    Init();
+    // Init fields (binary inlines Init, does not call virtual Init())
+    m_Active       = 1;
+    m_Timer        = 0.0f;
+    m_bPlaySound   = 1;
+    m_bPendingRemoval = 0;
+    m_bUseComboSound = 0;
+    m_ComboCount   = 0;
+    m_DragScale    = 1.0f;  // overwritten to 0.5f below
     m_Texture      = s_TexRare;
     m_LifeTimer    = MISS_FADE_INIT;
     m_bFlashing     = 1;
@@ -419,7 +434,12 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
              pos.x, pos.y, pos.z, comboCount, entityType, static_cast<void*>(this));
     #endif
-    Init();
+    // Init fields (binary inlines Init, does not call virtual Init())
+    m_Active       = 1;
+    m_Timer        = 0.0f;
+    m_bPlaySound   = 1;
+    m_bPendingRemoval = 0;
+    m_DragScale    = 1.0f;
     // Texture pick uses CALLER's comboCount (before arcade override).
     // binary @ 0x001515a4: idx computed before arcade m_ComboCount override.
     int idx;
@@ -471,7 +491,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
 
 // ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
-// Common prefix: Init() first, then m_DrawColour.a=0xff, then pos.
+// Common prefix: Init fields inline (binary does not call virtual Init()), then m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
                                 Mortar::SmartPtr<Mortar::Texture> tex) {
     #ifndef FN_ASM_VERIFY_CROSS
@@ -479,7 +499,16 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
              inPos.x, inPos.y, inPos.z, sizeMult,
              tex.IsValid() ? 1 : 0, static_cast<void*>(this));
     #endif
-    Init();
+    // Init fields (binary inlines Init, does not call virtual Init())
+    m_Active       = 1;
+    m_Timer        = 0.0f;
+    m_bPlaySound   = 1;
+    m_bPendingRemoval = 0;
+    m_bUseComboSound = 0;
+    m_ComboCount   = 0;
+    m_DragScale    = 1.0f;
+    m_bComboActive = 0;
+    m_Texture      = s_TexCross;  // path 2 relies on this (no texture arg supplied)
     m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix, binary @ 0x00151d94)
     pos = inPos;
     if (tex.IsValid()) {
@@ -628,6 +657,11 @@ void MissControl::Update(float dt) {
         m_FlashTimer  = 0x1e;
         m_DrawColour.a = 0xff;
         m_bFlashing     = 0;
+        // Binary @ 0x0019e53c: spawn particle emitter on fade-expire (0x281ecb hash, count 9)
+        {
+            PSPParticleManager& ppm = PSPParticleManager::GetInstance();
+            ppm.AddEmitter(0x281ecb, nullptr, false);
+        }
         return;
     }
 
