@@ -335,8 +335,14 @@ int WaveModifier::UpdateSpecific(float /*dt*/) {
     return 0;
 }
 
-// @ 0x00150768 (v1.6.1 WaveModifier::ParseSpecific)
-// ASM-verified: 2026-06-18T08:17Z v1.6.1 @ 0x00150768 (decompile)
+// ASM-spec v1.6.1 WaveModifier::ParseSpecific @ 0x00150768 —
+// (1) 6 QueryAttribute calls: fruitMultiplyer→m_Params[2], bombMultiplyer→m_Params[0],
+//     bombScale→m_Params[1], criticalChance→m_Param5, powerUpDtMod→m_Params[3],
+//     waveOveride→m_TargetWave
+// (2) Loop: TiXmlNode::FirstChildElement("OverideProbability") on the base xml node,
+//     then iterate via TiXmlNode::NextSiblingElement.
+// (3) Per-iteration: construct PROBABILITY_OVERIDE on stack, Parse it,
+//     m_OverrideCount+=1, push_back into m_Overrides, destruct.
 void WaveModifier::ParseSpecific(TiXmlElement* xml) {
     xml->QueryFloatAttribute("fruitMultiplyer", &m_FruitMult);
     xml->QueryFloatAttribute("bombMultiplyer",  &m_BombMult);
@@ -345,14 +351,13 @@ void WaveModifier::ParseSpecific(TiXmlElement* xml) {
     xml->QueryFloatAttribute("powerUpDtMod",    &m_DtMod);
     xml->QueryIntAttribute  ("waveOveride",     &m_OverideProbabilityPool);
 
-    tinyxml2::XMLElement* raw = xml->GetRaw();
-    for (tinyxml2::XMLElement* child = raw ? raw->FirstChildElement("OverideProbability") : nullptr;
-         child; child = child->NextSiblingElement("OverideProbability")) {
+    for (TiXmlElement child = xml->FirstChildElement("OverideProbability");
+         child;
+         child = child.NextSiblingElement("OverideProbability")) {
         PROBABILITY_OVERIDE tmp;
-        TiXmlElement childElem(child);
-        tmp.Parse(&childElem);
+        tmp.Parse(&child);
+        m_OverrideCount = m_OverrideCount + 1;
         m_OverideEntries.push_back(tmp);
-        ++m_OverrideCount;
     }
 }
 
