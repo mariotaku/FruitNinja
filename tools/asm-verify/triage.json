@@ -7350,10 +7350,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh18GetPropertiesGroupERKNS_11AsciiStringEPKNS_24EffectPropertyDefinitionES6_": {
-    "decided_at": "2026-06-18T01:28Z",
+    "decided_at": "2026-06-18T03:37Z",
     "max_score": 5500,
     "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
-    "score": 19240,
+    "score": 20915,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh21RebuildEffectBindingsEv": {
