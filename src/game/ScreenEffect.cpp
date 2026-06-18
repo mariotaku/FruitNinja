@@ -467,32 +467,29 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     }
 
     // Per-tint colour multiply on HUD scales
-    Game* game = Game::GetInstance();
-    HUD*  hud  = game ? game_work.mHud : nullptr;
-    if (hud) {
-        for (size_t i = 0; i < m_Tints.size(); ++i) {
-            ScreenTint& t = m_Tints[i];
-            t.m_CurrentT += dt;
+    HUD* hud = game_work.mHud;
+    for (size_t i = 0; i < m_Tints.size(); ++i) {
+        ScreenTint& t = m_Tints[i];
+        t.m_CurrentT += dt;
 
-            float tval = 0.0f;
-            if (t.m_Length > 0.0f)
-                tval = Clamp(t.m_CurrentT / t.m_Length, 0.0f, 1.0f);
+        float tval = 0.0f;
+        if (t.m_Length > 0.0f)
+            tval = Clamp(t.m_CurrentT / t.m_Length, 0.0f, 1.0f);
 
-            // Fade-in ramp over m_FadeIn seconds
-            float fade = 1.0f;
-            if (t.m_FadeIn > 0.0f)
-                fade = Clamp(t.m_CurrentT / t.m_FadeIn, 0.0f, 1.0f);
+        // Fade-in ramp over m_FadeIn seconds
+        float fade = 1.0f;
+        if (t.m_FadeIn > 0.0f)
+            fade = Clamp(t.m_CurrentT / t.m_FadeIn, 0.0f, 1.0f);
 
-            Vec3 col;
-            col.x = Lerp(t.m_ColourFrom.x, t.m_ColourTo.x, tval) * fade;
-            col.y = Lerp(t.m_ColourFrom.y, t.m_ColourTo.y, tval) * fade;
-            col.z = Lerp(t.m_ColourFrom.z, t.m_ColourTo.z, tval) * fade;
+        Vec3 col;
+        col.x = Lerp(t.m_ColourFrom.x, t.m_ColourTo.x, tval) * fade;
+        col.y = Lerp(t.m_ColourFrom.y, t.m_ColourTo.y, tval) * fade;
+        col.z = Lerp(t.m_ColourFrom.z, t.m_ColourTo.z, tval) * fade;
 
-            // Multiply into HUD scales[0..2]
-            hud->scales[0] *= col.x;
-            hud->scales[1] *= col.y;
-            hud->scales[2] *= col.z;
-        }
+        // Multiply into HUD scales[0..2]
+        hud->scales[0] *= col.x;
+        hud->scales[1] *= col.y;
+        hud->scales[2] *= col.z;
     }
 
     // RE-ported: binary @ 0x00148d24 (v1.6.1, re-analyst spec) — when remaining time < 0.8f,
@@ -509,14 +506,13 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     // m_StartT as fired-marker; stores SFXPlay return in m_VoiceHandle; vol=0.6599f, pitch=1.0f,
     // empty Delegate1 callback (DAT_00148cc0=0.0f is the 4th float arg to SFXPlay).
     {
-        Game* g = Game::GetInstance();
-        GameSound* gs = g ? game_work.mGameSound : nullptr;
+        GameSound* gs = game_work.mGameSound;
 
         for (size_t si = 0; si < m_Sounds.size(); ++si) {
             SoundEffect& sfx = m_Sounds[si];
             if (currentLongest > maxTotal * sfx.m_StartT) continue;
             sfx.m_StartT = 100.0f;
-            if (!sfx.m_VoiceHandle && gs) {
+            if (!sfx.m_VoiceHandle) {
                 Mortar::Delegate1<bool, Mortar::MortarSound*> emptyDelegate;
                 sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.6599f, 1.0f, emptyDelegate);
             }
