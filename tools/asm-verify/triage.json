@@ -1,9 +1,9 @@
 {
   "_GLOBAL__I_AboutScreen.cpp": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 36600,
     "reason": "Static initializer function. Score 35435/37900. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 35435/37900 -> 34460/36600]",
-    "score": 34460,
+    "score": 35295,
     "verdict": "ACCEPT-cosmetic"
   },
   "_GLOBAL__I_BaseScreen.cpp": {
@@ -42,10 +42,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_GLOBAL__I_Fruit.cpp": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 52300,
     "reason": "Static initializer function for Fruit.cpp. Score 40330/40900. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 40330/40900 -> 52730/52300]",
-    "score": 52730,
+    "score": 53040,
     "verdict": "ACCEPT-cosmetic"
   },
   "_GLOBAL__I_GameModeScreen.cpp": {
@@ -126,10 +126,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z10GameUpdatefb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 61600,
     "reason": "GameUpdate -- port adds MortarGame::GetInstance null-guard, GetTaskState indirection, GameSound::SFXPlay call. Score 101087/62200 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 101087/62200 -> 105722/61600]",
-    "score": 105722,
+    "score": 104917,
     "verdict": "ACCEPT-deferred"
   },
   "_Z10SplashDrawfb": {
@@ -280,17 +280,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_Z8GameDrawfb": {
-    "decided_at": "2026-06-14T07:00Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 44800,
     "reason": "game_work offsets MATCH: game_work loaded via GOT+offset; HUD accessed at [r6,#0x40] in port matching [r3,#0x40] binary. Score 54980/44800 -- large inherent divergence: port adds GetTaskState indirection, MortarGame guard, MatrixManager/PSPParticleManager/DisplayManager singleton guards (port uses cxa_guard; binary uses GOT init pattern), SlashEntity array direct iteration. No game_work field at wrong offset. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 54990/44800 2026-06-14T05:55Z]",
-    "score": 54980,
+    "score": 57290,
     "verdict": "ACCEPT-deferred"
   },
   "_Z8GameInitm": {
-    "decided_at": "2026-06-14T07:00Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 50200,
     "reason": "game_work offsets MATCH: game_work loaded at GOT offset +2f0; HUD accessed [r4,#0x40] port = [r3,#0x40] binary -- same field. Score 85029/50200 -- massive inherent divergence: port adds MortarGame singleton guard, GetTaskState indirection, MissControl init with FruitCamera params not in binary at that location, MatrixManager/PSPParticleManager/DisplayManager singleton construction. No game_work field at wrong offset. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 85184/50200 2026-06-14T05:55Z]",
-    "score": 85029,
+    "score": 96360,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10BaseScreen11LoadContentEv": {
@@ -371,18 +371,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreen14SwitchCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1700,
-    "reason": "Port has bx lr stub vs binary calling blx f48b0. Defunct: network switch callback. See src/screens/DojoScreen.cpp:474-475. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 800/300 -> 2200/1700]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 2200,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreen17MoreGamesCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2100,
-    "reason": "Port has bx lr stub vs binary calling blx f4ec8 (MoreGames link). Defunct: MoreGames/OpenFeint online link. See src/screens/DojoScreen.cpp:470-471. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1000/500 -> 2600/2100]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 2600,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreen4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -406,10 +406,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreen7ReleaseEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3500,
     "reason": "Score 3860/2900. Port structural differences (GOT, SmartPtr cleanup). ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3860/2900 -> 5600/3500]",
-    "score": 5600,
+    "score": 4900,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10DojoScreenD0Ev": {
@@ -434,11 +434,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen10CancelNewsEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 400,
-    "reason": "Port has bx lr (empty stub) vs binary calls two blx (NetworkManager::CancelNewsDisplay). Defunct: online news ticker. See src/screens/MainScreen.cpp:1168-1172. Score 900/400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 900,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen13AboutCallbackEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -497,11 +497,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen17MoreGamesCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 600,
-    "reason": "Port has CancelNews stub + sets [r4,#0xfc]; binary calls blx f4ec8 (MoreGames) + sets [r4,#0x10c]. Defunct: MoreGames link. Offset 0x10c vs 0xfc is MainScreen struct layout difference (separate from MoreGames stubs). Score 205/600. See src/screens/MainScreen.cpp:1013-1014. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 200/600 -> 400/600]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 400,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen17QuitGamesCallbackEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -511,11 +511,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen18ClearNetworkButtonEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 100,
-    "reason": "Binary has bx lr (empty); port has bx lr + trailing nops. Defunct: network UI button. See src/screens/MainScreen.cpp:1175-1177. Score 400/100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 400,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen18OnMenuItemsClearedEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -525,17 +525,17 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MainScreen20LeaderboardsCallbackEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 600,
-    "reason": "Port has CancelNews stub + sets [r4,#0xfc]; binary calls blx f4eec + sets [r4,#0x10c]. Defunct: online leaderboards. MainScreen field offset diff 0x10c vs 0xfc. See src/screens/MainScreen.cpp:1007-1008. Score 205/600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 200/600 -> 400/600]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 400,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen20UpdateScreenElementsEff": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 12300,
     "reason": "Large function score 13700/12700. Port close to binary but GOT/PIC + Defunct network/OpenFeint states. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 14115/12700 -> 14385/12300]",
-    "score": 14385,
+    "score": 14415,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen27MultiplayerGameModeCallbackEv": {
@@ -567,10 +567,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MainScreen6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 80300,
     "reason": "Score None/None (unpaired or too divergent). Large Update function; Defunct network/OpenFeint states (see src/screens/MainScreen.cpp:363-420). ACCEPT-deferred pending next pass. [fresh-sweep 2026-05-24T07:41Z: score None/None -> None/0] [fresh-sweep 2026-06-14T05:19Z: score None/None -> 103360/80300]",
-    "score": 103360,
+    "score": 104035,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreen7PreDrawEPf": {
@@ -588,31 +588,31 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreenD0Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 11100,
     "reason": "Score 26195/11300. Large dtor with SmartPtr cleanup chain. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 27560/11300 -> 32615/11100]",
-    "score": 32615,
+    "score": 30980,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreenD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 10900,
     "reason": "Score 25980/11200. Same as D0. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 27095/11200 -> 32110/10900]",
-    "score": 32110,
+    "score": 30755,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MainScreenD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 10900,
     "reason": "Score 25980/11200. Same as D0. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 27095/11200 -> 32110/10900]",
-    "score": 32110,
+    "score": 30755,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton11CreateFruitEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 22700,
     "reason": "Fresh-sweep: new untriaged symbol, raw verdict=DIVERGE, score 29010/22700. ACCEPT-deferred pending narrower investigation. [fresh-sweep 2026-06-14T05:19Z]",
-    "score": 29010,
+    "score": 31180,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton11LoadContentEv": {
@@ -637,10 +637,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton13TouchReleasedEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2600,
     "reason": "Score 4120/2600. Touch release logic differences. ACCEPT-deferred. [score refreshed 2026-05-17T00:00Z] [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3600/2600 -> 3730/2600]",
-    "score": 3730,
+    "score": 4185,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton13UnLoadContentEv": {
@@ -679,10 +679,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton4InitE8_Vector3IfEN6Mortar9Delegate0IvEEiS1_S4_": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 9300,
     "reason": "MenuButton::Init (0x0013ee40) -- port has LOG_INFO call + extra VFP register saves (vpush {d8-d10} vs {d8}) + GOT-relative PIC anchor differences. Layer-2/layer-3 sparkle ring init missing (src/hud/MenuButton.cpp:8-9 TODO). Score 44712/31700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 44712/31700 -> 16897/9300]",
-    "score": 16897,
+    "score": 17207,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton4InitEv": {
@@ -721,10 +721,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 47100,
     "reason": "Score 60575/43800. Very large Update function; Delegate0 size offset + TODO items. ACCEPT-deferred. [score refreshed 2026-05-17T00:00Z] [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 79763/43800 -> 67665/47100]",
-    "score": 67665,
+    "score": 71170,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton7ReleaseEv": {
@@ -861,10 +861,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10ShopScreen7ReleaseEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2700,
     "reason": "ShopScreen method stub/divergence. Score 2695/2700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2695/2700 -> 3420/2700]",
-    "score": 3420,
+    "score": 5540,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10ShopScreenD0Ev": {
@@ -889,17 +889,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreen11LoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 6700,
     "reason": "AboutScreen method stub/divergence. Score 15298/6300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15298/6300 -> 16658/6700]",
-    "score": 16658,
+    "score": 12568,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreen13UnLoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2400,
     "reason": "AboutScreen method stub/divergence. Score 7585/2600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7585/2600 -> 8160/2400]",
-    "score": 8160,
+    "score": 6160,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreen16QuitGameCallbackEv": {
@@ -931,38 +931,38 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreenC1EP10DojoScreen": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 37200,
     "reason": "AboutScreen C1 ctor. Binary uses vpush/VFP ref-count path; port calls LoadContent. Score 9955/7700. Port defers SmartPtr/ref-count init; matches overall AboutScreen deferred pattern. [fresh-sweep 2026-06-14T05:19Z: score 9955/7700 -> 37460/37200]",
-    "score": 37460,
+    "score": 44233,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreenC2EP10DojoScreen": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 37200,
     "reason": "AboutScreen C2 ctor - same as C1. Binary uses vpush/VFP ref-count path; port calls LoadContent. Score 9955/7700. ACCEPT-deferred same as C1. [fresh-sweep 2026-06-14T05:19Z: score 9955/7700 -> 37460/37200]",
-    "score": 37460,
+    "score": 44233,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreenD0Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 10500,
     "reason": "AboutScreen method stub/divergence. Score 4985/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3745/3400 -> 9860/10500]",
-    "score": 9860,
+    "score": 10935,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreenD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 10300,
     "reason": "AboutScreen method stub/divergence. Score 4780/3100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3935/3100 -> 10175/10300]",
-    "score": 10175,
+    "score": 11135,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11AboutScreenD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 10300,
     "reason": "AboutScreen method stub/divergence. Score 4780/3100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3935/3100 -> 10175/10300]",
-    "score": 10175,
+    "score": 11135,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen11AwardScoresEv": {
@@ -1442,10 +1442,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl10CreatePoolEiP3HUD": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 9300,
     "reason": "MissControl::CreatePool -- port has documented DIFFERS (binary does 12 slots; port has pool registration via HUD std::list); score 26070/9500 [triaged 2026-05-24 post R8/R9/R10]. See src/hud/MissControl.cpp:245 and :23 DIFFERS comment. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 26070/9500 -> 27425/9300]",
-    "score": 27425,
+    "score": 20245,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl12MakeCriticalE8_Vector3IfEi": {
@@ -1463,10 +1463,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl19MakeEmAllDissappearEv": {
-    "decided_at": "2026-06-14T07:00Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2800,
     "reason": "ACCEPT-deferred: clamp ceiling constant now 0x3d8da741 on both sides -- diff line 18ddd4 shows `| 238: .word 0x3d8da741` (match marker), confirming fix is present. Residual divergence is 100% INHERENT: 12-slot flat-pool unroll (port) vs binary 6-slot pointer-array loop, plus GOT/PIC addressing; documented in src/hud/MissControl.cpp DIFFERS comment. 664% ratio is pure pool-representation, no semantic gap remains. Score 18595/2800.",
-    "score": 18595,
+    "score": 11690,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl4InitEv": {
@@ -1491,17 +1491,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 29800,
     "reason": "MissControl::Update -- large function; port adds MortarGame singleton guard vs binary blx GOT chain. Score 101835/27200 [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 101835/27200 -> 103650/29800]",
-    "score": 103650,
+    "score": 44743,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl7GetFreeEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3700,
     "reason": "MissControl method stub/divergence. Score 19955/3600. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 19955/3600 -> 20610/3700]",
-    "score": 20610,
+    "score": 12200,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl7ReleaseEv": {
@@ -1519,10 +1519,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl9CleanPoolEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3500,
     "reason": "MissControl method stub/divergence. Score 9915/3500. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9915/3500 -> 10790/3500]",
-    "score": 10790,
+    "score": 9540,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl9MakeComboE8_Vector3IfEii": {
@@ -1862,10 +1862,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11SlashEntity12UpdatePointsEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 81500,
     "reason": "Score 85400/85100. Very close to max. Minor GOT/PIC differences. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 85400/85100 -> 125726/81500]",
-    "score": 125726,
+    "score": 151971,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity13SetModColoursEP6ColouriifPKcS3_bS3_S3_": {
@@ -2254,11 +2254,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12RecievedSyncEif": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2200,
-    "reason": "Stale refresh: P2P MP defunct stub. Score drifted 5130->5175/2400. See src/game/WaveManager.cpp:1826 networking stubs. Defunct: P2P MP networking -- no-op stub. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 5395/2400 -> 4620/2200]",
+    "reason": "Screen/entity class with substantial divergence. Needs dedicated RE session. Deferred. [bulk-triaged 2026-06-18T01:24Z]",
     "score": 4620,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12RequestCoinsEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2450,10 +2450,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11WaveManager9GetWavedtEi": {
-    "decided_at": "2026-06-14T00:00Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 4600,
     "reason": "Pre-existing WaveManager layout divergences (m_pCurrentWave +0x22c vs binary +0x234; m_Speed +0x54 vs binary +0x58; dtMod fields +0x74/+0x78 vs binary +0x78/+0x7c). Score 3875->6750 is a recompile-artifact hash-change from GameWork.h ring fix ([13]->[15] at +0x668, non-POD from m_RingTex SmartPtr zero-init): no WaveManager field offset moved, no game_work access in this function, no new logic divergence introduced. Same inherent residual, raw-DIVERGE only because score drifted past threshold on recompile. [ring-fix retriage 2026-06-14]",
-    "score": 6750,
+    "score": 6745,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManagerC1Ev": {
@@ -2520,10 +2520,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager16SetUpBonusScreenEP11BonusScreen": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 19600,
     "reason": "BonusManager::SetUpBonusScreen. Score 41175->41675 (+1.2%) -- minor. Same std::map/list iteration pattern divergence. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [fresh-sweep 2026-06-14T05:19Z: score 41675/20100 -> 40799/19600]",
-    "score": 40799,
+    "score": 40474,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager17GetFirstBestBonusERSt14_List_iteratorI5BonusE": {
@@ -5637,9 +5637,9 @@
   "_ZN5Fruit15LoadFruitModelsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit::LoadFruitModels -- score 105125/34700 (essentially unchanged; +65 from prior 105060). Very large content-loader method (sub sp,#0x1ac stack frame). SmartPtr chains, FruitInfo enumeration, model/texture loading. Tier-2 content-pipeline deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 125195,
+    "score": 124990,
     "max_score": 48600,
-    "decided_at": "2026-06-14T05:55Z"
+    "decided_at": "2026-06-18T01:24Z"
   },
   "_ZN5Fruit16FruitFactTextureEl": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6272,17 +6272,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable10LoadHeaderEPKc": {
-    "decided_at": "2026-06-18T00:46Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2500,
     "reason": "Rewrite uses Mortar::File per binary pattern (single alloc, bulk read, in-place fixup). Score increased 13005->17990 because port File implementation diverges from binary Bada File at instruction level (virtual dispatch, IFile delegation, malloc vs op_new). Architectural match is correct; ASM convergence blocked on faithful File subsystem port. [re-triaged 2026-06-18T00:46Z]",
-    "score": 17990,
+    "score": 18015,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable12LoadLanguageEPKc": {
-    "decided_at": "2026-06-18T00:46Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2500,
     "reason": "Rewrite uses Mortar::File per binary pattern. Score 11042->10350 (slight improvement). Remaining excess is File::Read/Open call overhead vs binary direct Bada IFile calls. Blocked on faithful File subsystem port. [re-triaged 2026-06-18T00:46Z]",
-    "score": 10350,
+    "score": 10375,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTableC1Ev": {
@@ -6804,10 +6804,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationState11GetAnimIterEm": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2100,
     "reason": "STL container iteration. Functionally correct after bounds-check fix. [re-triaged 2026-06-18T01:15Z]",
-    "score": 6485,
+    "score": 5455,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationState11PlayAnimIdxEmfb": {
@@ -6846,17 +6846,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationStateC1ENS_8SmartPtrINS_13AnimationListEEE": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 6200,
     "reason": "STL + Matrix44 overhead. Functionally correct after ctor fix. [re-triaged 2026-06-18T01:15Z]",
-    "score": 10860,
+    "score": 10945,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationStateC2ENS_8SmartPtrINS_13AnimationListEEE": {
-    "decided_at": "2026-06-18T01:15Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 6200,
     "reason": "Same as C1Ev. [re-triaged 2026-06-18T01:15Z]",
-    "score": 10860,
+    "score": 10945,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationStateD0Ev": {
@@ -6979,10 +6979,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14ResourceLoaderC1ERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 5000,
     "reason": "ResourceLoader stub; asset-loading pipeline differs. Score 7282/5700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 7055/5700 -> 3211/5000]",
-    "score": 3211,
+    "score": 3195,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14ResourceLoaderC1ERNS_10DataReaderERKNS_11AsciiStringE": {
@@ -6993,10 +6993,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14ResourceLoaderC2ERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 5000,
     "reason": "ResourceLoader stub; asset-loading pipeline differs. Score 7282/5700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 7055/5700 -> 3211/5000]",
-    "score": 3211,
+    "score": 3195,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14ResourceLoaderC2ERNS_10DataReaderERKNS_11AsciiStringE": {
@@ -7161,10 +7161,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File4LoadEPvm": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 8700,
     "reason": "File I/O method; port uses POSIX/SDL2 vs Bada osp::Io. Score 7405/2800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 7505/2800 -> 12190/8700]",
-    "score": 12190,
+    "score": 10020,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File4LockEb": {
@@ -7182,17 +7182,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File4SeekENS_12FileSeekModeEl": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1000,
     "reason": "File I/O method; port uses POSIX/SDL2 vs Bada osp::Io. Score 2560/1100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2565/1100 -> 2765/1000]",
-    "score": 2765,
+    "score": 1450,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File5CloseEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2000,
     "reason": "File I/O method; port uses POSIX/SDL2 vs Bada osp::Io. Score 1115/2000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 1125/2000 -> 2050/2000]",
-    "score": 2050,
+    "score": 1785,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File5WriteEPKvm": {
@@ -7210,38 +7210,38 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4File6UnloadEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1800,
     "reason": "File I/O method; port uses POSIX/SDL2 vs Bada osp::Io. Score 1610/1800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 1760/1800 -> 2800/1800]",
-    "score": 2800,
+    "score": 1760,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4FileC1EPKcim": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1800,
     "reason": "File ctor/dtor: GOT PIC anchor differences only. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3475/1800 -> 4225/1800]",
-    "score": 4225,
+    "score": 2965,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4FileC2EPKcim": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1800,
     "reason": "File ctor/dtor: GOT PIC anchor differences only. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3475/1800 -> 4225/1800]",
-    "score": 4225,
+    "score": 2965,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4FileD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1100,
     "reason": "File ctor/dtor: GOT PIC anchor differences only. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2020/1400 -> 1505/1100]",
-    "score": 1505,
+    "score": 950,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4FileD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 1100,
     "reason": "File ctor/dtor: GOT PIC anchor differences only. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2020/1400 -> 1505/1100]",
-    "score": 1505,
+    "score": 950,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4Font13MeasureStringENS_18Utf8StringIteratorE": {
@@ -7252,10 +7252,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Font15GetCharTemplateEli": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2700,
     "reason": "Port has 12005 excess score over max_score 2700 (544% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0023c228. Needs RE+fix.",
-    "score": 14705,
+    "score": 8360,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4Font15GetStringHeightENS_18Utf8StringIteratorEff": {
@@ -7294,17 +7294,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4FontD1Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3800,
     "reason": "Port has 12385 excess score over max_score 3800 (425% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0023d818. Needs RE+fix.",
-    "score": 16185,
+    "score": 16215,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4FontD2Ev": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3800,
     "reason": "Port has 12385 excess score over max_score 3800 (425% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x0023d818. Needs RE+fix.",
-    "score": 16185,
+    "score": 16215,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4Mesh10DrawSphereEf6ColourPNS_19DrawEffectContainerE": {
@@ -7364,10 +7364,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh4DrawERK9_Matrix44IfE": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 7600,
     "reason": "Port has 72290 excess score over max_score 7600 (1051% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00262e98. Needs RE+fix.",
-    "score": 79890,
+    "score": 81360,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4Mesh8DrawCubeEfff6ColourPNS_19DrawEffectContainerE": {
@@ -7392,10 +7392,10 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4Mesh8SetBonesEPKNS0_11BoneBindingEm": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 4100,
     "reason": "Port has 21808 excess score over max_score 4100 (631% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00263468. Needs RE+fix.",
-    "score": 25908,
+    "score": 26256,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar4MeshC1ERKNS_8SmartPtrINS_22SharedEffectPropertiesEEERKNS_11AsciiStringE": {
@@ -7728,17 +7728,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar8Skeleton18BuildFinalMatricesEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 8900,
     "reason": "Port has 30392 excess score over max_score 8900 (441% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x00226f68. Needs RE+fix.",
-    "score": 39292,
+    "score": 52189,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar8Skeleton18BuildLocalMatricesEv": {
-    "decided_at": "2026-06-17T16:17Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 11900,
     "reason": "Port has 24200 excess score over max_score 11900 (303% ratio). Substantial port-only code not present in binary — likely singleton init, extra error handling, or structural refactor. Binary @ 0x002272fc. Needs RE+fix.",
-    "score": 36100,
+    "score": 49960,
     "verdict": "FIX-NEEDED"
   },
   "_ZN7ColAABB11ColAABBAABBEPS_S0_P8_Vector3IfE": {
@@ -8183,10 +8183,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash16RemoveAllFlashesEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2200,
     "reason": "Score 3970/2500. Port uses named GOT pattern vs binary direct. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3770/2500 -> 3815/2200]",
-    "score": 3815,
+    "score": 5700,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash17DrawActiveFlashesEv": {
@@ -8218,17 +8218,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash7CleanUpEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 3300,
     "reason": "BombFlash method stub/divergence. Score 5740/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5740/3400 -> 6050/3300]",
-    "score": 6050,
+    "score": 10540,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash7GetFreeEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 4000,
     "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::GetFree. See src/entities/BombFlash.cpp:75. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4300/3800 -> 9510/4000]",
-    "score": 9510,
+    "score": 13520,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlashC1Ev": {
@@ -8540,10 +8540,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar14AnimationState11GetAnimIterEm": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 2100,
     "reason": "Const overload; same +0x10/+0xc AnimBindings offset mismatch and _Rb_tree_increment unrolling divergence as non-const variant. R3 dependency. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 8410/4600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8410/4600 -> 6485/2100]",
-    "score": 6485,
+    "score": 5455,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar14AnimationState12GetAnimationERKNS_11AsciiStringE": {
@@ -8575,17 +8575,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4File11GetPositionEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 600,
     "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1100/600 -> 135/600]",
-    "score": 135,
+    "score": 130,
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4File4DataEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 200,
     "reason": "Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences]",
-    "score": 305,
+    "score": 300,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZNK6Mortar4File4HashEv": {
@@ -8596,10 +8596,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar4File4SizeEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:24Z",
     "max_score": 200,
     "reason": "Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences]",
-    "score": 305,
+    "score": 300,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZNK6Mortar4File6IsOpenEv": {
@@ -8741,5 +8741,12 @@
     "reason": "Static-init/cleanup function; PIC/singleton construction differences expected. Score 4635/1400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4635/1400 -> 4785/1200]",
     "score": 4785,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN6Mortar4File4OpenEPNS_11IFileSystemE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol, auto-deferred. Score 11510/6500. [bulk-triaged 2026-06-18T01:24Z]",
+    "score": 11510,
+    "max_score": 6500,
+    "decided_at": "2026-06-18T01:24Z"
   }
 }
