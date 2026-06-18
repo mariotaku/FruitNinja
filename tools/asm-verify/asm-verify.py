@@ -246,7 +246,7 @@ def disasm_port_symbol(obj_path: pathlib.Path, mangled: str) -> str:
         raise FileNotFoundError(obj_path)
     section = f".text.{mangled}"
     res = subprocess.run(
-        [str(OBJDUMP), "-d", "--no-show-raw-insn", f"--section={section}", str(obj_path)],
+        [str(OBJDUMP), "-d", f"--section={section}", str(obj_path)],
         capture_output=True, text=True, check=True,
     )
     return res.stdout
