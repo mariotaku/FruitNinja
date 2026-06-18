@@ -18,9 +18,9 @@
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
 #include "render/MatrixManager.h"
-#include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "debug/DebugFlags.h"
 #include "util/StringHash.h"
 #include "game/FruitSaveData.h"
 #include <cmath>
@@ -169,7 +169,6 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pChallengeDesc(nullptr)     // +0xd4
     , m_pChallengeInfo(nullptr)     // +0xd8
     , game(g)
-    , m_bButtonsCreated(false)
     , m_bSetupLevelFired(false)
     , m_pOnlineMpButton(nullptr)
 {
@@ -317,7 +316,6 @@ void GameModeScreen::RemoveButtons() {
     if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = nullptr; }
     if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = nullptr; }
     if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = nullptr; }
-    m_bButtonsCreated = false;
 }
 
 // ===================================================================
