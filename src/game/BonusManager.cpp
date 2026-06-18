@@ -187,7 +187,7 @@ void BonusManager::AddCombo(int comboLen) {
     FruitSaveData* sd = game_work.m_SaveData;
     sd->AddToTotal(keyTotal, StringHash(keyTotal), 1, false, false);
 
-    int existing = sd->GetTotal(StringHash(keyBest));
+    int existing = sd->GetTotal(keyBest);
     if (comboLen > existing) {
         int delta = comboLen - existing;
         sd->AddToTotal(keyBest, StringHash(keyBest), delta, false, false);

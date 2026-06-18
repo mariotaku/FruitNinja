@@ -45,6 +45,10 @@ public:
     static void UnloadContent();
 
     // DrawBorders @ 0x00130230 — shade triangles + deco quad.
+    // DIFFERS: original = takes BakedStringBox* (v1.6.1 @ 0x00130230),
+    // using SmartPtr<Texture> because ES 2.0 port uses textured-quad rendering
+    // instead of the binary's BakedStringBox mesh. Functional equivalent
+    // (both draw a texture at the secondary position with alpha slide).
     void DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
                      float alpha, Vec3 secondaryTexPos);
 

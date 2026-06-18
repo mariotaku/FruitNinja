@@ -7,6 +7,7 @@
 // code unused. Class shape preserved per stub-don't-skip policy.
 
 #include "HUDControl3d.h"
+#include "hud/LocalizedString.h"
 #include "engine/math/Vec3.h"
 #include "engine/util/Delegate.h"
 #include <cstdint>
@@ -56,10 +57,10 @@ public:
     Mortar::Delegate0<void> m_OnValueChanged;
 
     // Binary @ 0x00160268 (master ctor)
-    // Signature: (Vec3 pos, Vec3 size, const char* label,
+    // Signature: (Vec3 pos, Vec3 size, LocalizedString label,
     //             long min_val, long max_val, ushort font_size, long initial_value)
     SliderControl(Vec3 inPos, Vec3 inSize,
-                  const char* label,
+                  LocalizedString label,
                   int32_t minValue, int32_t maxValue,
                   uint16_t fontSize, int32_t initialValue);
 

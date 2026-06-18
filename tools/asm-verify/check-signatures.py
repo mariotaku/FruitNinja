@@ -104,9 +104,31 @@ def method_key(demangled: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _arm32_normalize(params: str) -> str:
+    """Canonicalize ARM32-equivalent types and C++ surface variations."""
+    # ARM32 integer sizes: int=long=unsigned=4 bytes
+    for pat, repl in [
+        (r'\bunsigned long long\b', 'uint64'),
+        (r'\blong long\b', 'int64'),
+        (r'\bunsigned long\b', 'uint32'),
+        (r'\bunsigned int\b', 'uint32'),
+        (r'\bunsigned short\b', 'uint16'),
+        (r'\blong\b', 'int32'),
+        (r'\bint\b', 'int32'),
+        # Collapse std::map allocator/comparator noise
+        (r'(std::map<[^,]+),\s*std::less[^>]+>,\s*std::allocator[^>]+>>', r'\1>'),
+    ]:
+    # NOTE: const and const& are NOT normalized — they produce real mangling
+    # differences. They are ABI-identical on ARM32 (both pass a pointer) but
+    # should be fixed in the port to match binary signatures.
+        params = re.sub(pat, repl, params)
+    params = re.sub(r'\s+', '', params)  # collapse all whitespace
+    return params
+
+
 def param_sig(demangled: str) -> str | None:
     m = re.search(r'\((.*)\)', demangled)
-    return m.group(1) if m else None
+    return _arm32_normalize(m.group(1)) if m else None
 
 
 def _is_known_alias(method: str, bin_params: str, port_params: str) -> bool:
@@ -141,13 +163,21 @@ def main():
             binary_keys.add(k)
             if k in port_keys:
                 b_params = param_sig(s) or "?"
-                for ps in port_keys[k]:
-                    p_params = param_sig(ps) or "?"
-                    if b_params != p_params:
-                        if _is_known_alias(k, b_params, p_params):
-                            filtered_count += 1
-                            continue
-                        mismatches.append((k, b_params, p_params))
+                p_sigs = [(param_sig(ps) or "?", ps) for ps in port_keys[k]]
+                # If ANY port overload has identical normalized params → matched
+                if any(b_params == pp for pp, _ in p_sigs):
+                    continue
+                # No exact match → try known-alias filter, else flag
+                flagged = False
+                for pp, _ in p_sigs:
+                    if _is_known_alias(k, b_params, pp):
+                        filtered_count += 1
+                        flagged = True
+                if flagged:
+                    continue
+                # Report: best-effort, collapse multiple port overloads
+                pp_str = p_sigs[0][0] if len(p_sigs) == 1 else f"[{', '.join(pp for pp,_ in p_sigs[:3])}]"
+                mismatches.append((k, b_params, pp_str))
 
     # Second pass: port-only symbols whose method key exists in binary
     for s in port:
