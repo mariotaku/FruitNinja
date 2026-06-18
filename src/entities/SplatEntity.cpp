@@ -689,13 +689,16 @@ void SplatEntity::UpdateActiveSplats(float dt) {
 }
 
 void SplatEntity::RemoveAllSplats() {
+    // Binary @0x0017eea4: iterates ALL pool slots by raw stride 0x78,
+    // calls D1 dtor (no-op) on each. No m_bAlive check, no pool-return
+    // since the binary MemoryPool does not maintain a separate free list.
+    // Port: clear per-slot alive flag + bulk-reset the pool's free list
+    // to match the "all slots freed" semantics.
     const int N = s_Pool.Capacity();
     for (int i = 0; i < N; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->m_bAlive) continue;
-        s->m_bAlive = 0;
-        s_Pool.Push(s);
+        s_Pool.SlotAt(i)->m_bAlive = 0;
     }
+    s_Pool.Reset();
 }
 
 void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {

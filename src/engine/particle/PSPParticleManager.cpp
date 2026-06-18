@@ -96,11 +96,10 @@ void PSPParticleManager::Destroy() {
         delete m_pEmitterPool;
         m_pEmitterPool = 0;
     }
-    m_FreeHead = 0;
-    m_pActiveEmitters = 0;
-    // 5. Free emitter template array (binary: free m_pTemplates).
-    m_ParticleTemplates.clear();
-    m_EmitterTemplates.clear();
+    // 5. In the binary, template arrays are flat operator_new[] blocks whose
+    //    memory was already freed in step 3/4. The port's std::vector members
+    //    will be destructed by ~PSPParticleManager and LoadFile calls clear()
+    //    explicitly before re-loading — no explicit clear needed here.
 }
 
 const PSPEmitterTemplate* PSPParticleManager::FindTemplate(uint32_t hash) const {

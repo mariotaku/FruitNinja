@@ -42,18 +42,13 @@ static int ParseCSV(const char* str, int* out, int maxCount)
     return count;
 }
 
-// Stub: LoadFruitModels — called at end of LoadInfo
-// Original loads 3D mesh for each fruit type using MeshManager
+// No-op: LoadFruitModels — called at end of LoadInfo
+// Real implementation is Fruit::LoadFruitModels() (v1.6.1 0x001e08ec),
+// called from GameInitialise step 25. Guard inside the real function
+// prevents double execution.
+// v1.6.1 binary also calls LoadFruitModels from within LoadInfo; when
+// both the binary and GameInitialise call it, the guard handles it.
 static void LoadFruitModels() {
-    // TODO: implement Fruit::LoadFruitModels (binary @ 0x001794e0).
-    //   - Operates on a parallel FruitModelInfo[] array (size 0x24 per entry,
-    //     allocated by g_FruitInfoCount), NOT on FRUIT_INFO itself.
-    //   - Per fruit: 4 mesh loads via Mortar::MeshManager::GetInstance()->Load:
-    //     "models/Fruit/%s_%c_piece_%d.mmd"  (piece 1, 2 -- required)
-    //     "models/Fruit/%s_single.mmd"       (optional)
-    //     "models/Fruit/%s_outline.mmd"      (optional)
-    //   - Followed per-mesh by GetNode + GetProperty("DiffuseMap") + SetupLighting.
-    //   - Blocked on Mortar::MeshManager port (3D model pipeline).
 }
 
 // --- Fruit::LoadInfo implementation (matches 0x17987c, 509 lines) ---
