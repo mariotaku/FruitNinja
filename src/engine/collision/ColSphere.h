@@ -43,9 +43,9 @@ public:
     bool Contains(const Vec3& p) const;
 
     // Binary @ 0x0019fdec -- sphere-vs-line penetration; returns 1 on hit.
-    int ColSphereLine(ColSphere*, ColLine*, Vec3*);
+    static int ColSphereLine(ColSphere*, ColLine*, Vec3*);
     // Binary @ 0x0019fc90 -- sphere-vs-sphere penetration; returns 1 on hit.
-    int ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
+    static int ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
 };
 
 #ifdef __bada__
