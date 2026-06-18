@@ -880,20 +880,22 @@ void SlashEntity::UpdatePoints(float dt) {
     } else {
         // TODO: v1.6.1 0x1e6914 -- FruitCamera::TranslatePos not yet ported; use raw positions.
         // Binary transforms m_HeadPos/m_TailPos through the camera before computing ColLine.
-        Vec3 headT = m_HeadPos;
-        Vec3 tailT = m_TailPos;
-        Vec3 midPt((headT.x + tailT.x) * 0.5f,
-                   (headT.y + tailT.y) * 0.5f,
-                   (headT.z + tailT.z) * 0.5f);
+        float midX = (m_HeadPos.x + m_TailPos.x) * 0.5f;
+        float midY = (m_HeadPos.y + m_TailPos.y) * 0.5f;
+        float midZ = (m_HeadPos.z + m_TailPos.z) * 0.5f;
 
         ColLine* pLine = static_cast<ColLine*>(m_Col);
         if (pLine) {
-            pLine->a() = midPt;
-            pLine->b   = tailT;
+            pLine->a().x = midX;
+            pLine->a().y = midY;
+            pLine->a().z = midZ;
+            pLine->b.x   = m_TailPos.x;
+            pLine->b.y   = m_TailPos.y;
+            pLine->b.z   = m_TailPos.z;
         }
 
-        float dx = midPt.x - tailT.x;
-        float dy = midPt.y - tailT.y;
+        float dx = midX - m_TailPos.x;
+        float dy = midY - m_TailPos.y;
         m_SegLenSq = dx * dx + dy * dy;
     }
 
@@ -934,13 +936,12 @@ void SlashEntity::UpdatePoints(float dt) {
             // Binary pointer arithmetic: iVar25 byte offset from buffer[0] / buffer[1].
             // center = m_pLeftBuffer[local_320], edgeL = m_pLeftBuffer[local_320+1].
             // ------------------------------------------------------------------
-            Vec3 center(m_pLeftBuffer[local_320].x,
-                        m_pLeftBuffer[local_320].y,
-                        0.0f);
+            float centerX = m_pLeftBuffer[local_320].x;
+            float centerY = m_pLeftBuffer[local_320].y;
 
             // Recover stored half-width: magnitude of (edgeL - center) before normalizing.
-            float dx = m_pLeftBuffer[local_320 + 1].x - center.x;
-            float dy = m_pLeftBuffer[local_320 + 1].y - center.y;
+            float dx = m_pLeftBuffer[local_320 + 1].x - centerX;
+            float dy = m_pLeftBuffer[local_320 + 1].y - centerY;
             float fVar30 = sqrtf(dx * dx + dy * dy);
 
             // ------------------------------------------------------------------
@@ -1027,6 +1028,7 @@ void SlashEntity::UpdatePoints(float dt) {
                 // Inner do/while runs twice: iter=0 -> left side, iter=1 -> right side.
                 // pSVar24 advances by 4 bytes each iteration to toggle which buffer is
                 // written: iter0 writes m_pLeftBuffer, iter1 writes m_pRightBuffer.
+                uint32_t headCol = pBaseColour->PlatformColour();
                 for (int iter = 0; iter < 2; iter++) {
                     QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
 
@@ -1036,7 +1038,7 @@ void SlashEntity::UpdatePoints(float dt) {
                     //   else: check perp.y < 0 -> flip assignment.
                     //     perp.y >= 0: v=1 (iter==0), v=0 (iter==1)  [edge verts]
                     //     perp.y <  0: v=0 (iter==0), v=1 (iter==1)
-                    // (TODO: SSM branch flips based on center.x sign -- not ported.)
+                    // (TODO: SSM branch flips based on centerX sign -- not ported.)
                     float vVal = 0.0f;
                     if (g_ScaleFlag2 == 0) {
                         vVal = (iter != 0) ? 1.0f : 0.0f;
@@ -1049,17 +1051,16 @@ void SlashEntity::UpdatePoints(float dt) {
                         }
                     }
 
-                    float ePosX = (iter == 0) ? (center.x - cosA) : (center.x + cosA);
-                    float ePosY = (iter == 0) ? (center.y - sinA) : (center.y + sinA);
-                    buf[dstCtr].x  = center.x;
-                    buf[dstCtr].y  = center.y;
+                    float ePosX = (iter == 0) ? (centerX - cosA) : (centerX + cosA);
+                    float ePosY = (iter == 0) ? (centerY - sinA) : (centerY + sinA);
+                    buf[dstCtr].x  = centerX;
+                    buf[dstCtr].y  = centerY;
                     buf[dstEdge].x = ePosX;
                     buf[dstEdge].y = ePosY;
                     buf[dstEdge].v = vVal;
 
-                    uint32_t col = pBaseColour->PlatformColour();
-                    buf[dstCtr].colour  = col;
-                    buf[dstEdge].colour = col;
+                    buf[dstCtr].colour  = headCol;
+                    buf[dstEdge].colour = headCol;
                 }
                 // iVar14 (arc index) stays unchanged for head-cap pairs (no arc accumulation).
 
@@ -1070,8 +1071,8 @@ void SlashEntity::UpdatePoints(float dt) {
                 float nextCx = m_pLeftBuffer[local_320 + 2].x;
                 float nextCy = m_pLeftBuffer[local_320 + 2].y;
 
-                float segDx = nextCx - center.x;
-                float segDy = nextCy - center.y;
+                float segDx = nextCx - centerX;
+                float segDy = nextCy - centerY;
                 float segLen = sqrtf(segDx * segDx + segDy * segDy);
 
                 // Cross(unit, Z_hat) = (unit.y, -unit.x, 0).
@@ -1119,6 +1120,7 @@ void SlashEntity::UpdatePoints(float dt) {
                 float uVal = ((float)local_320 / pointCountF) * 0.98f;
 
                 // Inner do/while runs twice: iter=0 -> left buffer, iter=1 -> right buffer.
+                uint32_t bodyCol = pBaseColour->PlatformColour();
                 for (int iter = 0; iter < 2; iter++) {
                     QUADCUSTOMVERTEX* buf = (iter == 0) ? m_pLeftBuffer : m_pRightBuffer;
 
@@ -1136,10 +1138,10 @@ void SlashEntity::UpdatePoints(float dt) {
                         }
                     }
 
-                    float ePosX = (iter == 0) ? (center.x - perpX) : (center.x + perpX);
-                    float ePosY = (iter == 0) ? (center.y - perpY) : (center.y + perpY);
-                    buf[dstCtr].x  = center.x;
-                    buf[dstCtr].y  = center.y;
+                    float ePosX = (iter == 0) ? (centerX - perpX) : (centerX + perpX);
+                    float ePosY = (iter == 0) ? (centerY - perpY) : (centerY + perpY);
+                    buf[dstCtr].x  = centerX;
+                    buf[dstCtr].y  = centerY;
                     buf[dstEdge].x = ePosX;
                     buf[dstEdge].y = ePosY;
                     buf[dstEdge].v = vVal;
@@ -1149,9 +1151,8 @@ void SlashEntity::UpdatePoints(float dt) {
                     buf[dstCtr].u  = uVal;
                     buf[dstEdge].u = uVal;
 
-                    uint32_t col = pBaseColour->PlatformColour();
-                    buf[dstCtr].colour  = col;
-                    buf[dstEdge].colour = col;
+                    buf[dstCtr].colour  = bodyCol;
+                    buf[dstEdge].colour = bodyCol;
                 }
 
                 // Accumulate arc for this segment.
@@ -1178,17 +1179,15 @@ void SlashEntity::UpdatePoints(float dt) {
 
         for (int bufPass = 0; bufPass < 2; bufPass++) {
             QUADCUSTOMVERTEX* buf = (bufPass == 0) ? m_pLeftBuffer : m_pRightBuffer;
-            int byteOff = 0;
+            // byteOff always equals i * sizeof(QUADCUSTOMVERTEX) because both
+            // advance in lockstep (i by 2, byteOff by 2*0x24=0x48). Use i directly.
             for (int i = 0; i < m_PointCount; i += 2) {
                 int arcIdx = i / 2;
                 if (arcIdx > iVar14) arcIdx = iVar14;
                 float arcTotal = (iVar14 > 0) ? arcLen[iVar14] : 1.0f;
                 float uRemap = 0.98f - (1.0f - (arcLen[arcIdx] * 0.98f) / arcTotal) * normFactor;
-                // byteOff is the byte offset into the buffer; slot = byteOff / 0x24.
-                int slot = byteOff / (int)sizeof(QUADCUSTOMVERTEX);
-                buf[slot].u     = uRemap;
-                buf[slot + 1].u = uRemap;
-                byteOff += 0x48;
+                buf[i].u     = uRemap;
+                buf[i + 1].u = uRemap;
             }
         }
 
