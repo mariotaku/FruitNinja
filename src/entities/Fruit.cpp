@@ -112,6 +112,12 @@ static Colour g_FruitTint2(0, 0, 255, 255);      // DAT_0017a670: blue
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
 static const float SLICE_TIMER_BASE    = 0.03f;   // DAT_001784dc
 static const float SLICE_BLADE_SCALE   = 0.1f;    // DAT_001784e0
+
+// Bomb-hit cinematic window: LTF in {2,3} and timer in (-0.1f, 0.95f).
+// Shared by both the power-up-activation gate and the score+save gate
+// in CollisionResponse. Binary @ 0x001788f4 (same game_work GOT entry).
+static const float kBombHitMax = 0.95f;
+static const float kBombHitMin = -0.1f;
 static const float SLICE_CLAMP_MIN_NRM = 4.0f;    // normal fruit clamp
 static const float SLICE_CLAMP_MAX     = 8.0f;
 // Fruit::SetFruitType (0x0017621c) collision radius formula — verified
@@ -214,8 +220,6 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     }
     m_SpinPhase = 0;
     m_bBallisticEnable = 1;
-    LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
-             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = 0;
     m_bDrawWhole = 0;
     m_bCritical = 0;
@@ -833,8 +837,6 @@ void Fruit::Draw(Renderer& r) {
     // play the SFX, but the flag re-arms on the next frame.
     s_FruitThrowSfxFiredThisFrame = false;
 
-    (void)r;
-#ifndef __bada__
     if (!IsActive() || m_SpawnDelay > 0.0f) return;
 
     const FruitModelInfo* fmi = GetFruitModelInfo(m_FruitType);
@@ -873,7 +875,6 @@ void Fruit::Draw(Renderer& r) {
         DrawOneModel(halfA, drawPosA, m_Rot1, s);
         DrawOneModel(halfB, drawPosB, m_Rot2, s);
     }
-#endif
 }
 
 // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
@@ -1117,8 +1118,6 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
                               Vec3* bladeVelPtr) {
-    LOG_INFO("FRUIT", "CollisionResponse entry: entity=%p pos=(%.1f,%.1f) type=%d bSliced=%d",
-             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType, (int)m_bSliced);
     // Guard: already sliced or slice timer is positive -> double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return 1;
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
@@ -1298,12 +1297,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // ASM-verified: 2026-06-07 binary @ 0x001780b0 +0x6c0..+0x6f4 (re-analyst).
     int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
     {
-        static const float kBombHitMaxG = 0.95f;
-        static const float kBombHitMinG = -0.1f;
         const uint8_t ltfGate = (uint8_t)game_work.m_LevelTransitionFlag;
         const bool bombHitWindowGate = (uint8_t)(ltfGate - 2u) < 2u
-            && game_work.m_BombHitTimer < kBombHitMaxG
-            && game_work.m_BombHitTimer > kBombHitMinG;
+            && game_work.m_BombHitTimer < kBombHitMax
+            && game_work.m_BombHitTimer > kBombHitMin;
         if (game_work.retryFlag == 0
             && hitter != nullptr
             && !m_bNoPowerUp
@@ -1384,8 +1381,6 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
         // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
         // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
-        static const float kBombHitMax = 0.95f;
-        static const float kBombHitMin = -0.1f;
         const uint8_t ltf = (uint8_t)game_work.m_LevelTransitionFlag;
         const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
             && game_work.m_BombHitTimer < kBombHitMax
@@ -1475,7 +1470,7 @@ void Fruit::Slice() {
     float impulse = m_SliceArcImpulse;
     // Binary @ 0x00176e88 — base splatCount = Rand32(2) + 2 (= 2 or 3). Uses
     // the same Math::g_Random singleton (GOT+DAT_00177058) as every other draw
-    // in Slice; the old `rand()` was a libc band-aid that desynced the stream.
+    // in Slice; the splat-count draw uses Math::g_Random.Rand32(2U) + 2.
     int   splatCount = (int)Math::g_Random.Rand32(2U) + 2;
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
@@ -1520,8 +1515,8 @@ void Fruit::Slice() {
     }
 
     // --- Splat spawn ---
-    // Per-splat speed = (impulse + rand(0.5)*impulse) * (i*0.2 + 5).
-    // Per-splat angle = Rand16(0xFFF0).
+    // Per-splat speed = (impulse + RandF(0.5)*impulse) * (i*0.2 + 5).
+    // Per-splat angle = Rand32(0x10000) & 0xFFF0.
     //
     // Binary uses raw impulse values directly (4..8 range from
     // CollisionResponse clamp). The port's Update integrates pos
@@ -1530,8 +1525,8 @@ void Fruit::Slice() {
     // scale — no extra ×50 multiplier needed here.
     const float imp_screen = impulse;
     for (int i = 0; i < splatCount; ++i) {
-        const uint16_t angle16 = (uint16_t)(rand() & 0xFFF0);
-        const float r          = ((float)rand() / (float)RAND_MAX) * 0.5f;
+        const uint16_t angle16 = (uint16_t)(Math::g_Random.Rand32(0x10000) & 0xFFF0);
+        const float r          = Math::g_Random.RandF(0.5f);
         const float speed      = (impulse + r * impulse) *
                                  ((float)i * 0.2f + 5.0f);
         const float a          = (float)angle16 * (6.2831853f / 65536.0f);
@@ -1636,9 +1631,7 @@ void Fruit::Slice() {
     m_SecondVel = halfVelA;
     vel         = halfVelB;
 
-    LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
-             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
-    m_bSliced = true;
+        m_bSliced = true;
 
     // NOTE: binary Fruit::Slice (0x176d58..0x0017766f) does NOT write
     // m_Gravity (+0xA0) anywhere -- no str/vstr to [this,#0xa0] in the
