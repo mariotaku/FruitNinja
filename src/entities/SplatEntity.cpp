@@ -9,7 +9,6 @@
 #include "ActorManager.h"
 #include "Fruit.h"
 #include "FruitInfo.h"
-#include "Game.h"
 #include "hud/HUD.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
@@ -566,10 +565,7 @@ void SplatEntity::PlaySplat(int splatSize) {
     };
     const char* name = kPairs[sz][RandInt(2)];
 
-    Game* game = Game::GetInstance();
-    if (game && game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
-    }
+    game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
 
     s_SplatSfxGate[sz] = 0.5f;
 }
@@ -644,10 +640,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         s_PulpDripGate -= dt;
         if (s_PulpDripGate <= 0.0f) {
             const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
-            Game* game = Game::GetInstance();
-            if (game && game_work.mGameSound) {
-                game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
-            }
+            game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
         }
     }
 
@@ -658,10 +651,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
     //   if raw <= 0:   spring = 1.25
     //   elif raw >= 3: spring = 4.25
     //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
-    int totalEntities = 0;
-    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
-        totalEntities = am->GetNumEntities();
-    }
+    int totalEntities = Mortar::ActorManager::GetInstance()->GetNumEntities();
     {
         const float raw = (float)(totalEntities + s_NumActiveSplats) / 15.0f - 0.15f;
         if (raw <= 0.0f)      s_SpringRate = 1.25f;
@@ -675,7 +665,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
     int activeCount = 0;
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->m_bAlive) continue;
+        if (!s->m_bAlive) continue;
 
         s->UpdateSplat(dt);
 
