@@ -470,7 +470,7 @@ unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
 // UnlockSpecificFruitAchievement  (Binary @ 0x00108a88)
 // ---------------------------------------------------------------------------
 
-int AchievementManager::UnlockSpecificFruitAchievement(int32_t fruitTypeHash, uint32_t count) {
+int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsigned int count) {
     // Binary: looks up m_ByType[SPECIFIC] by fruitTypeHash;
     // threshold (as uint32_t) <= count
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC];
@@ -487,7 +487,7 @@ int AchievementManager::UnlockSpecificFruitAchievement(int32_t fruitTypeHash, ui
 // UnlockConsecutiveAchievement  (Binary @ 0x00108c40)
 // ---------------------------------------------------------------------------
 
-int AchievementManager::UnlockConsecutiveAchievement(int count, uint32_t fruitTypeHash) {
+int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash) {
     // Binary @ 0x00108c40: two bucket lookups.
     // Bucket CONSECUTIVE (5): keyed by fruitTypeHash; threshold <= count + mode gate.
     // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Threshold == count).

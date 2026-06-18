@@ -209,7 +209,7 @@ void ShopScreen::UnLoadContent() {
 // ---------------------------------------------------------------------------
 // ShopScreen::ShopScreen(DojoScreen*) @ 0x0015cdac
 // ---------------------------------------------------------------------------
-ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
+ShopScreen::ShopScreen(DojoScreen* parent)
     : HUDControl3d()
     , m_TransitionAlpha(0.0f)
     // m_LayerFlagsAlt drives the panel's draw layer (copied into m_LayerFlags each
@@ -228,7 +228,6 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
-    , game(g)
     , m_bShrinking(false)
     , m_SelCounter(0)
 {

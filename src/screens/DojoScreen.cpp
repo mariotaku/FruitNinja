@@ -324,7 +324,7 @@ void DojoScreen::Update(float dt) {
             //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
             //   HUD::AddControl(hud, shop, false); shop->Init();
             if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
-            ShopScreen* shop = new ShopScreen(game, this);
+            ShopScreen* shop = new ShopScreen(this);
             game_work.mHud->AddControl(shop, false);
             shop->Init();
             return;

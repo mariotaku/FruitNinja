@@ -606,7 +606,7 @@ void PowerUpShop::ButtonSliced() {
     // r2 AND r3 both point to the same Vec3 -- ActivatePower treats the float* as Vec3*.
     Vec3 localOrigin = g_Origin;
     PowerUpManager* pum = PowerUpManager::GetInstance();
-    pum->ActivatePower(hash, &localOrigin, reinterpret_cast<float*>(&localOrigin));
+    pum->ActivatePower(hash, localOrigin, reinterpret_cast<float*>(&localOrigin));
 
     PowerUp* singleActive = PowerUpManager::GetInstance()->GetActiveSingle(hash);
     if (singleActive != NULL) {

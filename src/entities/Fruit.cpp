@@ -1389,7 +1389,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             && (ltf == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();
             Vec3 localPos = pos;
-            PowerUpManager::GetInstance()->ActivatePower(hash, &localPos, reinterpret_cast<float*>(&localPos));
+            PowerUpManager::GetInstance()->ActivatePower(hash, localPos, reinterpret_cast<float*>(&localPos));
         }
 
         // Combo counter increment — binary @ 0x001787a8..0x001787b0.

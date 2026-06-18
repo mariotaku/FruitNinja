@@ -55,7 +55,7 @@ public:
 
     // Binary @ 0x00129270 -- 4-arg form; 3-arg overload omits finishCallback.
     Mortar::MortarSound* SFXPlay(const char* name, float vol, float pitch,
-                                 const Mortar::Delegate1<bool, Mortar::MortarSound*>& finishCallback);
+                                 Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback);
     Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
 
     // Binary @ 0x00129100

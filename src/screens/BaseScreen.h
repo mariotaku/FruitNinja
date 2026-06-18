@@ -45,8 +45,8 @@ public:
     static void UnloadContent();
 
     // DrawBorders @ 0x00130230 — shade triangles + deco quad.
-    void DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryTex,
-                     float alpha, const Vec3& secondaryTexPos);
+    void DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
+                     float alpha, Vec3 secondaryTexPos);
 
     // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.
     void UpdateButtons(float dt);
