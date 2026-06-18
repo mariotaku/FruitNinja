@@ -1,6 +1,6 @@
 # Mortar Engine static library
 
-add_library(mortar_engine STATIC
+add_library(mortar_engine ${FN_LIB_TYPE}
     # Phase 1 — Foundation
     core/SystemManager.cpp
     core/MortarGame.cpp
@@ -17,12 +17,18 @@ add_library(mortar_engine STATIC
     util/PathCI.cpp
     util/LinkedHeap.cpp
     # Phase 2 — Core Singletons
-    render/gl_funcsSDL.cpp
-    render/gl_funcsWin32.cpp
     render/MatrixManager.cpp
     render/MatrixStack.cpp
     render/DisplayManager.cpp
-    render/DisplayManagerSDL.cpp
+)
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE
+        render/gl_funcsSDL.cpp
+        render/gl_funcsWin32.cpp
+        render/DisplayManagerSDL.cpp
+    )
+endif()
+target_sources(mortar_engine PRIVATE
     # Phase 3 — Rendering
     render/Renderer.cpp
     render/MortarCamera.cpp
@@ -30,9 +36,15 @@ add_library(mortar_engine STATIC
     asset/IFile.cpp
     asset/IFileSystem.cpp
     asset/IFile_Direct.cpp
-    asset/FileSystemPosix.cpp
-    asset/FileSystemWin32.cpp
     asset/File.cpp
+)
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE
+        asset/FileSystemPosix.cpp
+        asset/FileSystemWin32.cpp
+    )
+endif()
+target_sources(mortar_engine PRIVATE
     asset/FileManager.cpp
     asset/Texture.cpp
     asset/ReloadableTexture.cpp
@@ -61,8 +73,14 @@ add_library(mortar_engine STATIC
     input/InputDeviceBada.cpp
     # Phase 6 — Audio
     audio/MortarSound.cpp
-    audio/SoundManagerSDL.cpp
     audio/GameSound.cpp
+)
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE
+        audio/SoundManagerSDL.cpp
+    )
+endif()
+target_sources(mortar_engine PRIVATE
     # Phase 7 — Particles
     # Entity + ActorManager live in src/entities/ (game-namespace port),
     # not the mortar_engine lib — the engine-namespace stubs that used to
@@ -90,28 +108,35 @@ add_library(mortar_engine STATIC
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
     # Debug logger (SDL_Log backend)
-    ${CMAKE_SOURCE_DIR}/src/debug/LoggerSDL.cpp
 )
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../debug/LoggerSDL.cpp)
+endif()
 target_include_directories(mortar_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/..
 )
-
-# GL backend link target. find_package(OpenGL) covers desktop GL_COMPAT
-# (libGL on Linux/Mesa; opengl32 on Windows); the ES1 / ES2 paths are
-# wired separately by FRUIT_GL_API.
-if (FRUIT_GL_API STREQUAL "GL_COMPAT")
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
-elseif (FRUIT_GL_API STREQUAL "ES1")
-    # webOS / embedded Linux. libGLESv1_CM + libEGL.
-    target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
-elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
-    # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1
-    # -sGL_FFP_ONLY=1). No system GL library to link; the flags live on the
-    # fruit-ninja executable target (root CMakeLists.txt).
-    # No target_link_libraries call needed here.
+if(FN_ASM_VERIFY)
+    target_include_directories(mortar_engine BEFORE PRIVATE
+        ${FN_ASM_VERIFY_TOOLS}/cross-headers)
 endif()
 
-target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
+if(NOT FN_ASM_VERIFY)
+    # GL backend link target. find_package(OpenGL) covers desktop GL_COMPAT
+    # (libGL on Linux/Mesa; opengl32 on Windows); the ES1 / ES2 paths are
+    # wired separately by FRUIT_GL_API.
+    if (FRUIT_GL_API STREQUAL "GL_COMPAT")
+        find_package(OpenGL REQUIRED)
+        target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
+    elseif (FRUIT_GL_API STREQUAL "ES1")
+        # webOS / embedded Linux. libGLESv1_CM + libEGL.
+        target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
+    elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
+        # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1
+        # -sGL_FFP_ONLY=1). No system GL library to link; the flags live on the
+        # fruit-ninja executable target (root CMakeLists.txt).
+        # No target_link_libraries call needed here.
+    endif()
+    target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
+endif()
 target_compile_features(mortar_engine PUBLIC cxx_std_11)
