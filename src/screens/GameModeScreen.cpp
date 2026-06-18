@@ -2,8 +2,6 @@
 // GameModeScreen — mode select child screen (Classic / Zen / Arcade).
 // See GameModeScreen.h for binary refs.
 //
-// Analysed: 2026-04-18T01:00
-//
 
 #include "GameModeScreen.h"
 #include "MainScreen.h"
@@ -23,8 +21,6 @@
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
-#include "debug/DebugFlags.h"
-#include "debug/Logger.h"
 #include "util/StringHash.h"
 #include "game/FruitSaveData.h"
 #include <cmath>
@@ -96,18 +92,16 @@ static const char* FRUIT_ARCADE  = "banana";
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
 
-// --- Static texture storage ---
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSensei;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSelect;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexClassic;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexMode2;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexArcadeMode;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexComingSoon;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexZenSign;
-Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexBackIcon;
-
-static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
-    return tex.IsValid() ? tex->m_TexId : 0;
+// --- Static texture storage (file-scope statics matching binary's module-level globals) ---
+namespace {
+    Mortar::SmartPtr<Mortar::Texture> s_TexModeSensei;
+    Mortar::SmartPtr<Mortar::Texture> s_TexModeSelect;
+    Mortar::SmartPtr<Mortar::Texture> s_TexClassic;
+    Mortar::SmartPtr<Mortar::Texture> s_TexMode2;
+    Mortar::SmartPtr<Mortar::Texture> s_TexArcadeMode;
+    Mortar::SmartPtr<Mortar::Texture> s_TexComingSoon;
+    Mortar::SmartPtr<Mortar::Texture> s_TexZenSign;
+    Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
 }
 
 // ===================================================================
@@ -227,10 +221,6 @@ void GameModeScreen::Release() {
 //                -> AddControl
 // ===================================================================
 void GameModeScreen::CreateControls() {
-    // Port specific: guards not in binary.
-    if (m_bButtonsCreated) return;
-    if (!game_work.mHud) return;
-
     // --- Button 1: BACK (back_icon.tex, bomb fruit, QuitCallback) ---
     // Binary texture: Game+0x17c = back_icon.tex (same global slot used
     // by DojoScreen's back/play button).
@@ -320,8 +310,6 @@ void GameModeScreen::CreateControls() {
             Vec3(0.0f, 1.0f, 0.0f));
     }
     game_work.mHud->AddControl(m_pArcadeButton);
-
-    m_bButtonsCreated = true;
 }
 
 void GameModeScreen::RemoveButtons() {
@@ -410,9 +398,6 @@ void GameModeScreen::Update(float dt) {
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
             if (!m_bSetupLevelFired && camT > -0.9f) {
-                #ifndef FN_ASM_VERIFY_CROSS
-                LOG_INFO("MODESEL", "SetupLevel called; game_work.gameMode=%d", (int)game_work.gameMode);
-                #endif
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
@@ -421,10 +406,6 @@ void GameModeScreen::Update(float dt) {
                 if (game_work.mGameSound) {
                     game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
-                #ifndef FN_ASM_VERIFY_CROSS
-                LOG_INFO("MODESEL", "%d -> STATE_CAMERA_FADE (camT done; levelTransitionFlag=%d gameMode=%d)",
-                         (int)m_State, (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
-                #endif
                 // ASM-verified: 2026-05-22 binary @ 0x0013f366..0x0013f386
                 // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
                 //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
@@ -627,16 +608,9 @@ void GameModeScreen::SetupLevel() {
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
-    LOG_INFO("MODESEL/Classic", "callback fired; setting gameMode=0; m_State=3");
-    #endif
     m_bSetupLevelFired = false;
     m_State = 3;
     game_work.gameMode = 0;
-    #ifndef FN_ASM_VERIFY_CROSS
-    LOG_INFO("MODESEL/Classic", "after writes: gameMode=%d m_State=%d m_bSetupLevelFired=%d",
-             (int)game_work.gameMode, (int)m_State, (int)m_bSetupLevelFired);
-    #endif
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
