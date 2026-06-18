@@ -370,20 +370,20 @@ void PowerUpManager::ClearScreenEffects() {
     m_ActiveScreenEffects.clear();
 }
 
-// @ 0x001403a0 (v1.6.1) — save active power-up state to XML
+// v1.6.1 SaveActivePowerUps @ 0x00117df8 — save active power-up state to XML
 void PowerUpManager::SaveActivePowerUps(TiXmlElement* parent) {
     for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {
         PowerUp* p = *it;
-        tinyxml2::XMLElement* el = parent->GetDocument()->NewElement("power");
-        el->SetAttribute("name",         p->m_Name);
-        el->SetAttribute("time",         (double)p->m_LongestRemaining);
-        el->SetAttribute("totalTime",    (double)p->m_TotalTime);
-        el->SetAttribute("osa",          (double)p->m_BarRamp);
+        TiXmlElement el(parent->GetDocument()->NewElement("power"));
+        el.SetAttribute("name", p->m_Name);
+        el.SetDoubleAttribute("time", (double)p->m_LongestRemaining);
+        el.SetDoubleAttribute("totalTime", (double)p->m_TotalTime);
+        el.SetDoubleAttribute("osa", (double)p->m_BarRamp);
         if (p->m_DeferredPoints >= 0) {
-            el->SetAttribute("deferedPoints", (double)p->m_DeferredPoints);
+            el.SetDoubleAttribute("deferedPoints", (double)p->m_DeferredPoints);
         }
-        parent->LinkEndChild(el);
+        parent->LinkEndChild(el.m_element);
     }
 }
 

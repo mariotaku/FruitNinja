@@ -335,8 +335,8 @@ int WaveModifier::UpdateSpecific(float /*dt*/) {
     return 0;
 }
 
-// @ 0x0012836c
-// ASM-verified: 2026-05-03T00:00 binary @ 0x0012836c..0x00128424 (asm-inspector)
+// @ 0x00150768 (v1.6.1 WaveModifier::ParseSpecific)
+// ASM-verified: 2026-06-18T08:17Z v1.6.1 @ 0x00150768 (decompile)
 void WaveModifier::ParseSpecific(TiXmlElement* xml) {
     xml->QueryFloatAttribute("fruitMultiplyer", &m_FruitMult);
     xml->QueryFloatAttribute("bombMultiplyer",  &m_BombMult);
@@ -345,11 +345,14 @@ void WaveModifier::ParseSpecific(TiXmlElement* xml) {
     xml->QueryFloatAttribute("powerUpDtMod",    &m_DtMod);
     xml->QueryIntAttribute  ("waveOveride",     &m_OverideProbabilityPool);
 
-    for (TiXmlElement c = xml->FirstChildElement("OverideProbability"); c;
-         c = c.NextSiblingElement("OverideProbability")) {
+    tinyxml2::XMLElement* raw = xml->GetRaw();
+    for (tinyxml2::XMLElement* child = raw ? raw->FirstChildElement("OverideProbability") : nullptr;
+         child; child = child->NextSiblingElement("OverideProbability")) {
         PROBABILITY_OVERIDE tmp;
-        tmp.Parse(&c);
+        TiXmlElement childElem(child);
+        tmp.Parse(&childElem);
         m_OverideEntries.push_back(tmp);
+        ++m_OverrideCount;
     }
 }
 

@@ -75,12 +75,10 @@ static const float SENSEI2_Y       =  56.0f;
 // -----------------------------------------------------------------------
 // Static storage
 // -----------------------------------------------------------------------
-// v1.6.1: s_TexCredits REMOVED -- binary no longer loads credits.tex
-// (v1.5.1 had credits.tex in LoadContent and drew it in block C; that
-//  is gone in v1.6.1 which uses BakedStringBox text instead.)
-Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;
-Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;
-Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon;
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;    // binary: s_boardTexture
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;  // binary: m_creditsTexture
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;   // binary: m_senseiTexture
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon; // port-only; binary reads game->field_0x17c
 bool AboutScreen::s_bContentLoaded = false;
 
 // -----------------------------------------------------------------------
@@ -113,35 +111,34 @@ static Mortar::FontCacheObjectTTF* GetAboutTTFFont()
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::LoadContent  @ 0x0015b6d4
-// v1.6.1: loads haiku + sensei only (credits.tex gone).
+// AboutScreen::LoadContent  @ 0x0012ec14
+// Binary loads haikus.tex, credits.tex, sensei.tex unconditionally
+// (no early-return guard).  s_bContentLoaded flag is set at the end
+// for external queries but is NOT checked at entry.
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::LoadContent()
 {
-    if (s_bContentLoaded) return;
-
-    // ASM-spec v1.6.1 AboutScreen::LoadContent @0x0015b6d4:
-    //   loads haikus.tex and sensei.tex (credits.tex NOT loaded in v1.6.1).
-    s_TexHaiku  = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
-    s_TexSensei = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
+    s_TexHaiku    = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
+    s_TexCredits  = Mortar::TextureManager::LoadLocalisedTexture("credits.tex");
+    s_TexSensei   = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
 
     // Port specific: binary reads back_icon from game->field_0x17c.
     // Port loads it locally so the back-button ring renders.
-    if (!s_TexBackIcon.IsValid()) {
-        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-    }
+    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 
     s_bContentLoaded = true;
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::UnLoadContent
+// AboutScreen::UnLoadContent  @ 0x0012efd8
+// Binary nulls all three static texture SmartPtrs and clears the flag.
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::UnLoadContent()
 {
     s_TexHaiku.SetNull();
+    s_TexCredits.SetNull();
     s_TexSensei.SetNull();
     s_TexBackIcon.SetNull();
     s_bContentLoaded = false;
@@ -514,10 +511,10 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         }
     }
 
-    // Block C: credits.tex REMOVED in v1.6.1
-    // (v1.5.1 had a sliding credits.tex quad here; v1.6.1 uses BakedStringBox
-    //  text drawn by NewDraw() instead. The s_TexCredits static and its draw
-    //  block have been removed from this port.)
+    // Block C: credits.tex sliding quad (v1.6.1 still present; loaded into
+    // s_TexCredits in LoadContent but not yet drawn in this port.)
+    // TODO: v1.6.1 0x0012f394 (AboutScreen::Draw) -- credits.tex quad block
+    //       using creditStart static (texH*-0.5 - 160) animated by m_TransitionAlpha.
 
     // ================================================================
     // Block D: sensei.tex -- slides in from right
