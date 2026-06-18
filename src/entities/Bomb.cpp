@@ -47,6 +47,9 @@ static const float BOMBBLAST_INTERVAL = 0.05f;    // DAT_00172c9c
 static const float HIT_COL_RADIUS     = 0.01f;    // DAT_00172cac
 static const float HIT_COL_POS        = 1000.0f;  // DAT_00172ca4
 
+// Throw-bomb SFX threshold: countdown crossing this value triggers Fuse SFX.
+static const float FUSE_SFX_THRESHOLD = 0.2f;     // DAT_00172ca0
+
 // Fixed tilt for draw: 0xBFF4 in 16-bit angle ≈ -83 degrees
 static const int16_t DRAW_TILT_ANGLE  = (int16_t)0xBFF4;
 // 0xB6 = 182 = ~1 degree in 16-bit (65536/360 ≈ 182)
@@ -353,10 +356,9 @@ void Bomb::Update(float /*dt*/) {
                 m_Countdown -= gameDt;
             }
 
-            // Binary @ 0x001729FC: "Throw-bomb" SFX fires on the negative-going
-            // edge of countdown crossing DAT_00172CA0 (0.2f). Gated by
+            // Bomb fuse SFX fires on the negative-going edge of countdown
+            // crossing FUSE_SFX_THRESHOLD (0.2f). Gated by
             // g_bombData.bFuseSfxFiredThisFrame and m_LevelTransitionFlag.
-            static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
             if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD
                 && !g_bombData.bFuseSfxFiredThisFrame
                 && game_work.m_LevelTransitionFlag == 0) {
@@ -412,12 +414,10 @@ void Bomb::Update(float /*dt*/) {
             // Non-menu hit: spawn a BombBlast every 0.05s using GAME dt.
             m_SpawnTimer -= gameDt;
             if (m_SpawnTimer < 0.0f) {
-                if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
-                    Mortar::Entity* e = am->Add(4, true);   // type 4 = BombBlast
-                    if (e) {
-                        e->pos = pos;
-                        e->Init(nullptr, 0, nullptr);
-                    }
+                Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(4, true);   // type 4 = BombBlast
+                if (e) {
+                    e->pos = pos;
+                    e->Init(nullptr, 0, nullptr);
                 }
                 m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
             }
@@ -454,11 +454,9 @@ void Bomb::Update(float /*dt*/) {
         m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
             g_bombData.fuseHash[variant], nullptr,
             /*updateWhenPaused*/ game_work.m_GameDt == 0.0f);
-        if (m_pEmitter) {
-            // Binary writes raw bomb.pos to emitter pos once at creation
-            // (0x00172f12) — no per-frame update, no fuse-tip offset.
-            m_pEmitter->m_Pos = pos;
-        }
+        // Binary writes raw bomb.pos to emitter pos once at creation
+        // (0x00172f12) — no per-frame update, no fuse-tip offset.
+        m_pEmitter->m_Pos = pos;
     }
 }
 
