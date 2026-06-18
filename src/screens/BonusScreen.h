@@ -83,12 +83,6 @@ public:
     // vtable -- inherits HUDControl3d::GetType which returns 1. Prior port
     // value of 8 collided with TYPE_SCROLLING_MENU and corrupted state on pause.
 
-    // Port convenience overload — colour as packed BGRA uint32_t (matching the
-    // BonusManager call site). Unpacks to Colour and delegates to the canonical
-    // binary AddAward(Colour, ...) below.
-    void AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
-                  const char* name, int tier);
-
     // Binary @ 0x00133664 — real binary AddAward signature (Colour). Carries the
     // canonical logic; called by BonusManager::SetUpBonusScreen in the binary.
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,

@@ -120,7 +120,7 @@ public:
     ~PowerUp();
 
     // @ 0x001194f0 — parse <powerup> XML element
-    void Parse(tinyxml2::XMLElement* elem);
+    void Parse(TiXmlElement* elem);
 
     // @ 0x00119134 — activate this power-up clone
     // ASM-verified: 2026-05-18 binary @ 0x00119134 (re-analyst)

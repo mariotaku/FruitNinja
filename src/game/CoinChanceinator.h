@@ -7,9 +7,7 @@
 
 #include "game/WaveStructs.h"
 
-#include <tinyxml2.h>
-
-typedef tinyxml2::XMLElement TiXmlElement;
+#include "engine/xml/TiXmlElement.h"
 
 // Defunct: coin chance system -- no-op stub; binary @ 0x001230f0
 void ParseCoinChanceinator(COIN_CHANCEINATOR* pDst, TiXmlElement* pElem);

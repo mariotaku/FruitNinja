@@ -116,8 +116,8 @@ public:
     // v1.6.1 BombFlash::MakeFlash @0x001d5bf0 -- activate a pooled flash slot.
     // Pool is never allocated (CreatePool is a no-op), so GetFree() returns null and
     // this is effectively a no-op at runtime, but the full body is preserved.
-    static void MakeFlash(Colour col, Vec3* pos, Vec3* dir,
-                          Mortar::SmartPtr<Mortar::Texture>* tex);
+    static void MakeFlash(Colour col, Vec3 pos, Vec3 dir,
+                          Mortar::SmartPtr<Mortar::Texture> tex);
 
     // v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 -- bx lr stub in binary; DEFUNCT.
     // GameUpdate calls this per-frame; preserved for call-shape parity.
@@ -140,7 +140,7 @@ public:
     // v1.6.1 BombFlash::GetFree @0x001d4cc4 -- return next free pool slot for MakeFlash.
     static BombFlash* GetFree();
     // v1.6.1 BombFlash::Init @0x001d4dbc -- initialise a flash slot. Binary body is empty (no-op).
-    void Init(void*, int, Vec3*);
+    void Init(void*, long, Vec3*);
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

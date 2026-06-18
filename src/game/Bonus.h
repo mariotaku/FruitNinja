@@ -12,7 +12,7 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 
-namespace tinyxml2 { class XMLElement; }
+#include "engine/xml/TiXmlElement.h"
 
 // ---------------------------------------------------------------------------
 // Bonus
@@ -37,7 +37,7 @@ public:
     ~Bonus();                                           // Binary @ 0x0010fa40
     Bonus& operator=(const Bonus& rhs);
 
-    void Parse(tinyxml2::XMLElement* e, const char* parentTexName = NULL); // Binary @ 0x0010e61c
+    void Parse(TiXmlElement* e, const char* parentTexName = NULL); // Binary @ 0x0010e61c
     int  IsAchieved(int score, std::map<uint64_t, int>& fruitCounts); // Binary @ 0x0010df38
 
     bool operator<(const Bonus& rhs) const { return m_Tier > rhs.m_Tier; } // descending sort
@@ -81,7 +81,7 @@ public:
     ~BonusType();
     BonusType& operator=(const BonusType& rhs);
 
-    void   Parse(tinyxml2::XMLElement* e);       // Binary @ 0x0010e7ec
+    void   Parse(TiXmlElement* e);       // Binary @ 0x0010e7ec
     Bonus* GetBest();                            // Binary @ 0x0010e094
     bool   UnlockAchievements();                 // Binary @ 0x0010e12c
 };

@@ -152,7 +152,7 @@ public:
     static bool SpawnFinalPomegranate();
 
     // Binary @ 0x001ba73c. Serializes the active super-fruit state to XML for save.
-    static void SaveSuperFruitState(tinyxml2::XMLElement* parent);
+    static void SaveSuperFruitState(TiXmlElement* parent);
 
     // Binary @ 0x001bb52c. Resets global time scale to 1.0, re-enables input,
     // flags all type-6 entities with kill-flag, clears SuperFruitControls map.

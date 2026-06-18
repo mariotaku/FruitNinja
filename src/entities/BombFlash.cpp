@@ -165,20 +165,20 @@ BombFlash* BombFlash::GetFree() {
 //   slot->m_Timer = 0;  slot->m_bActive = 1;  slot->m_AngleIdx = idx
 //   slot->m_SinAngle = SinIdx(idx);  slot->m_CosAngle = CosIdx(idx)
 //   slot->Update(0)
-void BombFlash::MakeFlash(Colour /*col*/, Vec3* pos, Vec3* dir,
-                           Mortar::SmartPtr<Mortar::Texture>* tex) {
+void BombFlash::MakeFlash(Colour /*col*/, Vec3 pos, Vec3 dir,
+                           Mortar::SmartPtr<Mortar::Texture> tex) {
     BombFlash* slot = GetFree();
     if (!slot) return;
 
-    slot->m_pTexture = *tex;
+    slot->m_pTexture = tex;
 
-    slot->m_Pos = *pos;
+    slot->m_Pos = pos;
     slot->m_Pos.z = MF_POS_Z;
-    slot->m_Dir = *dir;
+    slot->m_Dir = dir;
 
-    slot->m_Pos.x += dir->x * MF_DIR_MUL;
-    slot->m_Pos.y += dir->y * MF_DIR_MUL;
-    slot->m_Pos.z += dir->z * MF_DIR_MUL;
+    slot->m_Pos.x += dir.x * MF_DIR_MUL;
+    slot->m_Pos.y += dir.y * MF_DIR_MUL;
+    slot->m_Pos.z += dir.z * MF_DIR_MUL;
 
     slot->m_Pos.x = (slot->m_Pos.x < MF_TIMER_INIT) ? MF_X_NEG : MF_X_POS;
 
@@ -259,4 +259,4 @@ void BombFlash::Draw() {
 void BombFlash::DrawUpdate(float) {}
 
 // v1.6.1 BombFlash::Init @0x001d4dbc -- binary body is empty (no-op).
-void BombFlash::Init(void*, int, Vec3*) {}
+void BombFlash::Init(void*, long, Vec3*) {}

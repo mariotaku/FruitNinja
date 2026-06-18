@@ -178,24 +178,6 @@ BonusScreen::~BonusScreen() {
 // AddAward (binary @ 0x00133664)
 // ---------------------------------------------------------------------------
 
-// Port convenience overload: BonusManager (and the binary's SetUpBonusScreen)
-// carry the award colour as a packed BGRA uint32_t. Unpack into the engine
-// Colour and delegate to the canonical binary AddAward(Colour, ...) below.
-// (b,g,r,a byte order matches Colour's field layout.)
-void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
-                           const char* name, int tier) {
-    Colour c;
-    c.b = (uint8_t)((colour >>  0) & 0xFF);
-    c.g = (uint8_t)((colour >>  8) & 0xFF);
-    c.r = (uint8_t)((colour >> 16) & 0xFF);
-    c.a = (uint8_t)((colour >> 24) & 0xFF);
-    AddAward(c, tex, name, tier);
-}
-
-// ---------------------------------------------------------------------------
-// STUBS (binary methods not yet ported)
-// ---------------------------------------------------------------------------
-
 // Binary @ 0x00133664 -- BonusScreen::AddAward(Colour, SmartPtr<Texture>, char const*, int).
 // Default-constructs a BonusAwardHud, copies the name, assigns the star texture,
 // credits m_TotalScore += tier, sets m_TierBase = tier, m_DisplayedScore = 0,
