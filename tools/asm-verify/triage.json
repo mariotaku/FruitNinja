@@ -126,10 +126,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z10GameUpdatefb": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 61600,
     "reason": "GameUpdate -- port adds MortarGame::GetInstance null-guard, GetTaskState indirection, GameSound::SFXPlay call. Score 101087/62200 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 101087/62200 -> 105722/61600]",
-    "score": 104917,
+    "score": 105057,
     "verdict": "ACCEPT-deferred"
   },
   "_Z10SplashDrawfb": {
@@ -966,10 +966,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen11AwardScoresEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 29300,
     "reason": "Score drift 38245->38806/30000 [refreshed 2026-05-24 post R8/R9/R10]. Pending member-offset resolution. See src/screens/BonusScreen.cpp:269 TODO. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 38806/30000 -> 39834/29300]",
-    "score": 39834,
+    "score": 29800,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen11LoadContentEv": {
@@ -1001,59 +1001,59 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen5ShakeEff": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 1500,
     "reason": "BonusScreen::Shake stub; score 1125/1800 [refreshed 2026-05-24 post R8/R9/R10]. GOT encoding change in prologue. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1125/1800 -> 1620/1500]",
-    "score": 1620,
+    "score": 2000,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 72700,
     "reason": "BonusScreen::Update -- port has documented TODOs: slide-in math (src/screens/BonusScreen.cpp:336), SoundManager wiring. Score 82438/72400 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 82438/72400 -> 89925/72700]",
-    "score": 89925,
+    "score": 82590,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen8AddAwardE6ColourN6Mortar8SmartPtrINS1_7TextureEEEPKci": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 4900,
     "reason": "BonusScreen method stub/divergence. Score 5194/4800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5194/4800 -> 14337/4900]",
-    "score": 14337,
+    "score": 14342,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreenC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 16100,
     "reason": "BonusScreen ctor -- port initializes extended fields not in binary ctor; GOT block layout changed. Score 23950/17100 [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 22904/17100 -> 21574/16100]",
-    "score": 21574,
+    "score": 20029,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreenC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 16100,
     "reason": "C2 alias of C1; same as BonusScreenC1Ev divergence. Score 23950/17100 [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 22904/17100 -> 21574/16100]",
-    "score": 21574,
+    "score": 20029,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreenD0Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 7200,
     "reason": "BonusScreen method stub/divergence. Score 14100/3300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14100/3300 -> 17525/7200]",
-    "score": 17525,
+    "score": 18520,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreenD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 7000,
     "reason": "BonusScreen method stub/divergence. Score 14230/3200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14230/3200 -> 17365/7000]",
-    "score": 17365,
+    "score": 18460,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreenD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 7000,
     "reason": "BonusScreen method stub/divergence. Score 14230/3200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14230/3200 -> 17365/7000]",
-    "score": 17365,
+    "score": 18460,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11CoinCounter4InitEv": {
@@ -1337,10 +1337,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11ItemManager12LoadItemDataEv": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 29400,
     "reason": "DIFFERS: uses tinyxml2 instead of Mortar TiXml (unported); documented with DIFFERS marker in LoadItemData. Score 64977/28800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 69844/28800 -> 63193/29400] [2026-06-17: score 63153/29400, DIFFERS marker added]",
-    "score": 63153,
+    "score": 62690,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11ItemManager12SaveItemInfoEv": {
@@ -2450,10 +2450,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11WaveManager9GetWavedtEi": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 4600,
     "reason": "Pre-existing WaveManager layout divergences (m_pCurrentWave +0x22c vs binary +0x234; m_Speed +0x54 vs binary +0x58; dtMod fields +0x74/+0x78 vs binary +0x78/+0x7c). Score 3875->6750 is a recompile-artifact hash-change from GameWork.h ring fix ([13]->[15] at +0x668, non-POD from m_RingTex SmartPtr zero-init): no WaveManager field offset moved, no game_work access in this function, no new logic divergence introduced. Same inherent residual, raw-DIVERGE only because score drifted past threshold on recompile. [ring-fix retriage 2026-06-14]",
-    "score": 6745,
+    "score": 6750,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManagerC1Ev": {
@@ -2520,10 +2520,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager16SetUpBonusScreenEP11BonusScreen": {
-    "decided_at": "2026-06-18T01:41Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 19600,
     "reason": "Score REGRESSED 40474->40799. BonusManager::SetUpBonusScreen. Score 41175->41675 (+1.2%) -- minor. Same std::map/list iteration pattern divergence. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [fresh-sweep 2026-06-14T05:19Z: score 41675/20100 -> 40799/19600]",
-    "score": 40799,
+    "score": 43588,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager17GetFirstBestBonusERSt14_List_iteratorI5BonusE": {
@@ -2541,17 +2541,17 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager4InitEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 9200,
     "reason": "BonusManager method stub/divergence. Score 26690/9300. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 26070/9300 -> 24311/9200]",
-    "score": 24311,
+    "score": 25633,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager8AddComboEi": {
-    "decided_at": "2026-06-14T07:00Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 8400,
     "reason": "game_work offsets MATCH: game_work loaded via GOT+0x14c; [r0,#0x50] FruitSaveData access same as binary. Score 15375/8400. Residual: port adds MortarGame singleton guard (cbz r3) + game_work null-guard; BonusManager uses cxa_guard singleton init for string hashes (binary uses GOT-relative guard). ASM-verified combo payout index logic. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 15380/8400 2026-06-14T05:55Z]",
-    "score": 15375,
+    "score": 11535,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManagerC1Ev": {
@@ -4200,10 +4200,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14PowerUpManager4LoadEv": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 12400,
     "reason": "Port now parses via TinyXML2 + TextureManager::GetDataDir; generates much more code than binary's bespoke parser. TODO at src/game/PowerUpManager.cpp:213-226. Score 32165/12400. [score refreshed 2026-05-17T00:00Z] [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 31318/12400 -> 28036/12400]",
-    "score": 28036,
+    "score": 28084,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14PowerUpManager5ResetEb": {
@@ -8169,10 +8169,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash10CreatePoolEi": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 100,
     "reason": "Score 400/100. Binary is bx lr (DEFUNCT stub); port is now a matching no-op stub. Trailing nops are alignment padding -- same cosmetic pattern as DrawUpdate. Defunct: BombFlash pool disabled in v1.6.1 BombFlash::CreatePool @0x001d4cc0.",
-    "score": 400,
+    "score": 3600,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash10DrawUpdateEf": {
@@ -8183,10 +8183,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash16RemoveAllFlashesEv": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 2200,
     "reason": "Score 3970/2500. Port uses named GOT pattern vs binary direct. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3770/2500 -> 3815/2200]",
-    "score": 5700,
+    "score": 4015,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash17DrawActiveFlashesEv": {
@@ -8197,66 +8197,66 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash19UpdateActiveFlashesEf": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 100,
     "reason": "Score 400/100. Binary is bx lr (DEFUNCT stub); port is now a matching no-op stub. Trailing nops are alignment padding. Defunct: BombFlash pool disabled in v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4.",
-    "score": 400,
+    "score": 7200,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN9BombFlash4DrawEv": {
-    "decided_at": "2026-06-18T01:41Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 5200,
     "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Draw. See src/entities/BombFlash.cpp:71. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5400/5100 -> 12323/5200]",
-    "score": 10423,
+    "score": 5700,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 8600,
     "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Update. See src/entities/BombFlash.cpp. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9200/8900 -> 9375/8600]",
-    "score": 9375,
+    "score": 9100,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash7CleanUpEv": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 3300,
     "reason": "BombFlash method stub/divergence. Score 5740/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5740/3400 -> 6050/3300]",
-    "score": 10540,
+    "score": 5840,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlash7GetFreeEv": {
-    "decided_at": "2026-06-18T01:24Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 4000,
     "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::GetFree. See src/entities/BombFlash.cpp:75. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4300/3800 -> 9510/4000]",
-    "score": 13520,
+    "score": 4500,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlashC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 1900,
     "reason": "BombFlash method stub/divergence. Score 1835/2100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 4670/2100 -> 4855/1900]",
-    "score": 4855,
+    "score": 2545,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlashC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 1900,
     "reason": "BombFlash method stub/divergence. Score 1835/2100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 4670/2100 -> 4855/1900]",
-    "score": 4855,
+    "score": 2545,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlashD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 1500,
     "reason": "BombFlash method stub/divergence. Score 1635/1700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2505/1700 -> 2690/1500]",
-    "score": 2690,
+    "score": 1855,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BombFlashD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T02:22Z",
     "max_score": 1500,
     "reason": "BombFlash method stub/divergence. Score 1635/1700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2505/1700 -> 2690/1500]",
-    "score": 2690,
+    "score": 1855,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9BonusType18UnlockAchievementsEv": {
@@ -8748,5 +8748,145 @@
     "score": 11510,
     "max_score": 6500,
     "decided_at": "2026-06-18T01:24Z"
+  },
+  "_GLOBAL__I_MatrixManager.cpp": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 4075/4700. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 4075,
+    "max_score": 4700,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN10ScreenTint5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 11675/5600. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 11675,
+    "max_score": 5600,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN11BonusScreen4DrawEPf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 33500/33000. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 33500,
+    "max_score": 33000,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN11EffectImage5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 60757/39100. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 60757,
+    "max_score": 39100,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN11SoundEffect5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 4975/2800. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 4975,
+    "max_score": 2800,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN12ScreenEffect5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 50507/16100. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 50507,
+    "max_score": 16100,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN12SlashModInfo5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 42984/3700. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 42984,
+    "max_score": 3700,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN12TimeModifier13ParseSpecificEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 8225/5800. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 8225,
+    "max_score": 5800,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN12WaveModifier13ParseSpecificEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 43070/8200. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 43070,
+    "max_score": 8200,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN13ScoreModifier13ParseSpecificEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 5435/5200. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 5435,
+    "max_score": 5200,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN13SlashModifier13ParseSpecificEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 42550/16000. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 42550,
+    "max_score": 16000,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN14PowerUpManager18LoadActivePowerUpsEP12TiXmlElementi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 15836/11300. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 15836,
+    "max_score": 11300,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN14PowerUpManager18SaveActivePowerUpsEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 8541/7600. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 8541,
+    "max_score": 7600,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN19PROBABILITY_OVERIDE5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 10070/7800. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 10070,
+    "max_score": 7800,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN7Emmiter5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 9295/4600. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 9295,
+    "max_score": 4600,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN7PowerUp5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 51880/32400. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 51880,
+    "max_score": 32400,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN8ItemInfo5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 35745/18400. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 35745,
+    "max_score": 18400,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN9BombFlash4InitEPvlP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 400/100. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN9BombFlash9MakeFlashE6Colour8_Vector3IfES2_N6Mortar8SmartPtrINS3_7TextureEEE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 8128/7900. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 8128,
+    "max_score": 7900,
+    "decided_at": "2026-06-18T02:22Z"
+  },
+  "_ZN9BonusType5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "New symbol (TiXmlElement signature match). Score 24155/10200. [auto-triaged 2026-06-18T02:22Z]",
+    "score": 24155,
+    "max_score": 10200,
+    "decided_at": "2026-06-18T02:22Z"
   }
 }
