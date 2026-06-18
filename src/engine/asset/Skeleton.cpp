@@ -141,12 +141,12 @@ void Skeleton::BuildLocalMatrices() {
     }
 }
 
-// ASM-verified: 2026-06-18 v1.6.1 Skeleton::BuildFinalMatrices @ 0x00236f68 (asm-inspector)
-// For each bone i:
+// ASM-spec v1.6.1 Skeleton::BuildFinalMatrices @ 0x00192e0c:
 //   accumulated = localMatrices[i]
-//   walk parent chain (bones[j].parentIndex) multiplying localMatrices[j] on left
+//   walk parent chain: accumulated = localMatrices[j] * accumulated  (parent * child)
 //   worldMatrices[i] = accumulated
-//   vertMatrices[i]  = accumulated x bones[i].bindPoseMat (no copy)
+//   vertMatrices[i]  = accumulated * bindPose  (world * bindPose)
+// Binary calls operator* (library function) + ldm/stm float copy (no memcpy, no inline Mul44).
 // DIFFERS: binary uses a single new[] block; port uses std::vector.
 void Skeleton::BuildFinalMatrices() {
     int n = (int)m_Bones.size();
@@ -156,15 +156,12 @@ void Skeleton::BuildFinalMatrices() {
         while (true) {
             j = m_Bones[j].m_ParentIndex;
             if (j < 0) break;
-            // Mul44 replaces accumulated = m_LocalMatrices[j] * accumulated;
-            float tmp[16];
-            Mul44(m_LocalMatrices[j].m, accumulated.m, tmp);
-            memcpy(accumulated.m, tmp, sizeof(float) * 16);
+            accumulated = m_LocalMatrices[j] * accumulated;
         }
         m_WorldMatrices[i] = accumulated;
 
-        // vert = world * bindPose (direct read, no copy)
-        Mul44(accumulated.m, m_Bones[i].m_BindPoseMat, m_VertMatrices[i].m);
+        // reinterpret_cast safe: _Matrix44 is float[16] with no vtable, layout-compatible.
+        m_VertMatrices[i] = accumulated * reinterpret_cast<const Matrix44&>(m_Bones[i].m_BindPoseMat);
     }
 }
 
