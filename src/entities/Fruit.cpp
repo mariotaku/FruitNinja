@@ -1134,7 +1134,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
 
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-    const bool isSpecial  = (info && info->m_Score == 0x32);
+    const bool isSpecial  = (info->m_Score == 0x32);
 
     // ASM-verified: 2026-04-29T00:00Z binary @ 0x001780f0 (asm-inspector)
     // Critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8).
@@ -1150,7 +1150,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     static const int kCritResetBase  = 30;  // DAT_00178504
 
     // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
-    const bool canCritFruit = info && info->m_bScorable;
+    const bool canCritFruit = info->m_bScorable;
 
     // ASM-verified: 2026-05-20 binary @ 0x001780f0 (re-analyst).
     // Critical-hit ladder gates on game_work fields at +0x05 (m_LevelTransitionFlag)
@@ -1221,7 +1221,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // AddParticle 0x00115644. Negative-angle sign flip mirrors the binary:
     //   e->m_DirCos =  CosIdx(-sliceAngle);
     //   e->m_DirSin = -SinIdx(-sliceAngle);  = SinIdx(sliceAngle)
-    if (info) {
+    {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         const float sliceRad = (float)(int16_t)m_SliceArcAngle *
                                (6.2831853f / 65536.0f);
@@ -1329,38 +1329,35 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
         // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
         // when used in this score path; same fields, dual-purpose semantics.
-        if (info) {
-            Game* g = Game::GetInstance();
-            if (g) {
-                int score = info->m_Score;
-                if (m_bCritical) score += 5;
-                if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
-                    const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
-                    score = info->m_CoinsMin
-                          + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
-                }
-                if (m_bCritical) score *= 2;  // g_CritScoreMul / 2 = 2
-                g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
-                FN::AddToCurrentScore(score, (int)m_PlayerIdx,
-                                      /*trackFruit=*/true, /*sendNetPacket=*/false);
+        {
+            int score = info->m_Score;
+            if (m_bCritical) score += 5;
+            if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
+                const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
+                score = info->m_CoinsMin
+                      + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
+            }
+            if (m_bCritical) score *= 2;  // g_CritScoreMul / 2 = 2
+            g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
+            FN::AddToCurrentScore(score, (int)m_PlayerIdx,
+                                  /*trackFruit=*/true, /*sendNetPacket=*/false);
 
-                // Per-fruit-name save totals.
-                if (game_work.m_SaveData) {
-                    game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
-                                             /*trackSession=*/false, false);
-                    game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
-                                             /*trackSession=*/true, false);
+            // Per-fruit-name save totals.
+            if (game_work.m_SaveData) {
+                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                                         /*trackSession=*/false, false);
+                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
+                                         /*trackSession=*/true, false);
 
-                    // On critical hit, record crit totals.
-                    if (isCritical) {
-                        static const uint32_t hCrit      = StringHash("crit");
-                        static const uint32_t hCritTotal = StringHash("crits_total");
-                        game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
-                        game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
-                        char critBuf[128];
-                        snprintf(critBuf, 128, "%scrit", info->m_Name);
-                        game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
-                    }
+                // On critical hit, record crit totals.
+                if (isCritical) {
+                    static const uint32_t hCrit      = StringHash("crit");
+                    static const uint32_t hCritTotal = StringHash("crits_total");
+                    game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                    game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                    char critBuf[128];
+                    snprintf(critBuf, 128, "%scrit", info->m_Name);
+                    game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
                 }
             }
         }
@@ -1370,9 +1367,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
         //                                               slice ever (savefile-wide).
         //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
-        if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
             WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
-            if (game_work.m_SaveData && info) {
+            if (game_work.m_SaveData) {
                 static const uint32_t hFirstFruit = StringHash("first_fruit");
                 static const uint32_t hLastFruit  = StringHash("last_fruit");
                 const int newVal = (int)m_FruitType + 1;
@@ -1396,7 +1393,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
             && game_work.m_BombHitTimer < kBombHitMax
             && game_work.m_BombHitTimer > kBombHitMin;
-        if (info && info->m_pPowers && !m_bNoPowerUp
+        if (info->m_pPowers && !m_bNoPowerUp
             && (ltf == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();
             Vec3 localPos = pos;
