@@ -138,11 +138,10 @@ void GameInitialise() {
     // Zero g_GameData fields (matches step 15 continued)
     game_work.worldPos = Vec3(0.0f, 0.0f, 0.0f);
 
-    // Mortar::ActorManager (needed for entity creation). Binary Initialise is
-    // called with (numTypes=5, heapSize=0x2000) from GameInit — see
-    // docs/engine/actor-manager.md. Factory is the free function
-    // CreateEntity (binary 0x0017421c) — see EntityFactory.h.
-    game->actorManager = new Mortar::ActorManager();
+    // Mortar::ActorManager (needed for entity creation). Binary uses Meyers
+    // singleton in GetInstance @ 0x001705f0; port also lazy-inits via GetInstance.
+    // Factory is the free function CreateEntity (binary 0x0017421c) — see EntityFactory.h.
+    game->actorManager = Mortar::ActorManager::GetInstance();
     game->actorManager->Initialise(5, 0x2000);
     game->actorManager->RegisterFactory(&CreateEntity);
 
