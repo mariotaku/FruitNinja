@@ -470,10 +470,6 @@ void MenuButton::Update(float dt) {
         }
 
         Mortar::Entity* entity = m_pEntity;  // +0x80
-#ifndef FN_ASM_VERIFY_CROSS
-        LOG_DEBUG("MENUBTN", "Update: m_pEntity=%p m_pTrackedFruit=%p",
-                  static_cast<void*>(entity), static_cast<void*>(m_pTrackedFruit));
-#endif
 
         if (entity == nullptr) {
             // ---- SPAWN / no live entity branch ----
@@ -553,9 +549,8 @@ void MenuButton::Update(float dt) {
                                   && fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
                             fruit->m_bDrawWhole = 1;
                         }
-                        // m_bEnabled (compat field) gates ClearMenuItems cascade
-                        // per binary @ 0x0014e7e0; maps to v1.6.1 m_bClearsMenuItems gate.
-                        if (m_bClearsMenuItems && m_bEnabled) {
+                        // m_bClearsMenuItems gate: cascades to clear menu fruits.
+                        if (m_bClearsMenuItems) {
                             FN::ClearMenuItems();
                             if (game_work.mMainScreen) {
                                 game_work.mMainScreen->OnMenuItemsCleared();
@@ -604,8 +599,7 @@ void MenuButton::Update(float dt) {
     }
 
     // ---- touch handling ----
-    // m_bTouchHeld (compat): port-side gate equivalent to binary's +0x131 guard in v1.0.
-    if (m_bAcceptsTouch && m_bTouchHeld && m_bEnabled) {
+    if (m_bAcceptsTouch) {
         // ASM-spec binary @0x0019ad14 -- BACK-KEY force-slice path.
         // The menu fruit IS reached by the ActorManager blade-vs-sphere loop normally;
         // this block is the binary's separate back-key / pause-input forced slice
@@ -668,22 +662,11 @@ void MenuButton::Update(float dt) {
                 // TODO: 0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
             }
         }
-        // fruitType<0 toggles: keep size == m_RestScale unless drag-cancel shrank it.
-        // The else-if below only fires when the touch-accept gate is false,
-        // so without this the size is never written on the interactive path.
-        if (m_FruitType < 0 && !m_bDragCancel) {
-            size.x = m_RestScale.x;
-            size.y = m_RestScale.y;
-        }
-    } else if (m_FruitType < 0) {
-        size.x = m_RestScale.x;
-        size.y = m_RestScale.y;
     }
 
     // ---- per-frame derived ----
     // m_BackdropScale @ +0xEC = curScale.x * 1.125 * m_ShakeScale.x (+0x154)
-    // m_AnimScale (compat, v1.0 = 1.0f / 0.5f for big NEW GAME button) also applied.
-    m_BackdropScale = size.x * 1.125f * m_ShakeScale.x * m_AnimScale;  // @0x19af70
+    m_BackdropScale = size.x * 1.125f * m_ShakeScale.x;  // @0x19af70
 
     if (m_ShakeTimer > 0.0f) {
         m_ShakeTimer -= dt;
