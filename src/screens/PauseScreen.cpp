@@ -529,9 +529,6 @@ void PauseScreen::RetryGameCallback() {
 // Tier-1: SP path only (IsSameScreenMultiplayer() branch skipped)
 // -------------------------------------------------------------------------
 void PauseScreen::Update(float dt) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     // --- Lazy button creation (SP path only) ---
     // ASM-verified: 2026-05-06T00:00 binary @ 0x00154468..0x001545fc (asm-inspector)
     // Each of the three create blocks is gated only on null-on-self
@@ -571,10 +568,8 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()     // TODO: bind HUD::g_DeleteControlDelegate
         );
 
-        if (game_work.mHud) {
-            game_work.mHud->AddControl(m_ResumeButton);
-            m_ResumeButton->SetSingular();
-        }
+        game_work.mHud->AddControl(m_ResumeButton);
+        m_ResumeButton->SetSingular();
 
         // ASM-verified post-Init override (binary @ 0x001545d8..0x00154604):
         //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64,64,64)
@@ -597,10 +592,8 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()
         );
 
-        if (game_work.mHud) {
-            game_work.mHud->AddControl(m_QuitButton);
-            m_QuitButton->SetSingular();
-        }
+        game_work.mHud->AddControl(m_QuitButton);
+        m_QuitButton->SetSingular();
     }
 
     if (!m_RetryButton) {
@@ -616,10 +609,8 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()
         );
 
-        if (game_work.mHud) {
-            game_work.mHud->AddControl(m_RetryButton);
-            m_RetryButton->SetSingular();
-        }
+        game_work.mHud->AddControl(m_RetryButton);
+        m_RetryButton->SetSingular();
     }
 
     // --- State machine ---
@@ -704,7 +695,7 @@ void PauseScreen::Update(float dt) {
             // only) so GameUpdate resumes ticking. QUIT_EXIT and RETRY_EXIT leave
             // pausedFlag set -- binary-faithful -- so active=false holds through
             // BOMB_FLASH and the 1.5f GameOver-cross check skips.
-            if (game) game_work.m_Paused = false;
+            game_work.m_Paused = false;
         }
         break;
 
@@ -746,7 +737,7 @@ void PauseScreen::Update(float dt) {
                 #ifndef FN_ASM_VERIFY_CROSS
                 LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
                          m_QuitButton->pos.x, m_QuitButton->pos.y,
-                         game ? game_work.m_BombHitTimer : -1.0f);
+                         game_work.m_BombHitTimer);
                 #endif
             }
             // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
