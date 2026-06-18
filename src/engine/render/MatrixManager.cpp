@@ -102,24 +102,26 @@ void MatrixManager::UploadModelViewOnly() {
 // Port shaders currently sample with raw a_uv and ignore the texture matrix,
 // but the upload is preserved for binary-call-graph fidelity.
 void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
-    // If NOT skipping projection: recompute cached projection * view
     if (!skipProjection) {
+        // Proj or view changed: recompute ProjView *once* and mark both uploaded.
         if (m_Projection.m_Version != m_ProjVersionUploaded ||
             m_View.m_Version != m_ViewVersionUploaded) {
             m_CachedProjView = m_Projection.m_Current * m_View.m_Current;
             m_ProjVersionUploaded = m_Projection.m_Version;
+            m_ViewVersionUploaded = m_View.m_Version;
+            m_WorldVersionUploaded = m_World.m_Version;
+        } else if (m_World.m_Version != m_WorldVersionUploaded) {
+            // Only world changed — no matrix multiply needed for this path.
+            m_WorldVersionUploaded = m_World.m_Version;
         }
-    }
-
-    // ModelView dirty check
-    if (m_View.m_Version != m_ViewVersionUploaded) {
-        // View changed — must recompute ProjView too
-        m_CachedProjView = m_Projection.m_Current * m_View.m_Current;
-        m_ViewVersionUploaded = m_View.m_Version;
-        m_WorldVersionUploaded = m_World.m_Version;
-    } else if (m_World.m_Version != m_WorldVersionUploaded) {
-        // Only world changed
-        m_WorldVersionUploaded = m_World.m_Version;
+    } else {
+        // ModelView-only path: projection is never touched.
+        if (m_View.m_Version != m_ViewVersionUploaded) {
+            m_ViewVersionUploaded = m_View.m_Version;
+            m_WorldVersionUploaded = m_World.m_Version;
+        } else if (m_World.m_Version != m_WorldVersionUploaded) {
+            m_WorldVersionUploaded = m_World.m_Version;
+        }
     }
 
     // Binary @ 0x00257018 (v1.6.1 _UploadCurrentMatrices): texture-matrix dirty
