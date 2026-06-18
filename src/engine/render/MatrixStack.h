@@ -28,54 +28,22 @@ struct MatrixStack {
     }
 
     // ASM-verified: 2026-05-09 binary @ 0x001175d4 (asm-inspector)
-    // Binary copies a global identity matrix into both m_Stack[0] and
-    // m_Current. Calling Identity() on each is functionally equivalent.
-    // (Binary stores m_Depth as a single byte (strb.w) -- port uses
-    // 32-bit store; upper 3 bytes are unused either way.)
-    void Reset() {
-        m_Current.Identity();
-        m_Stack[0].Identity();
-        m_Depth = 0;
-        m_Version++;
-    }
+    void Reset();
 
-    // Port specific: per-stack Push/Pop. The binary has no MatrixStack
-    // method by this name -- GL push/pop happens via glPushMatrix/
-    // glPopMatrix inside MatrixManager::_UploadCurrentMatrices, not on
-    // the C++ stack. Port keeps this client-side abstraction so callers
-    // (Font, HUD, etc.) can save/restore m_Current without touching GL
-    // directly. Functionally a strict superset of the binary's flow.
-    void Push() {
-        assert(m_Depth < 31);
-        m_Stack[m_Depth] = m_Current;
-        m_Depth++;
-        m_Version++;
-    }
-
-    void Pop() {
-        assert(m_Depth > 0);
-        m_Depth--;
-        m_Current = m_Stack[m_Depth];
-        m_Version++;
-    }
+    // Port specific: no binary equivalent (GL push/pop happens inside
+    // MatrixManager::_UploadCurrentMatrices). Port keeps this abstraction
+    // so callers can save/restore m_Current without touching GL directly.
+    void Push();
+    void Pop();
 
     // ASM-verified: 2026-05-09 binary @ 0x0012fa34 (asm-inspector)
-    void Scale(const Vec3& s) {
-        m_Current.ApplyScale(s.x, s.y, s.z);
-        m_Version++;
-    }
+    void Scale(const Vec3& s);
 
     // ASM-verified: 2026-05-09 binary @ 0x0012f97c (asm-inspector)
-    void Translate(const Vec3& t) {
-        m_Current.GlobalTranslate44(t);
-        m_Version++;
-    }
+    void Translate(const Vec3& t);
 
     // ASM-verified: 2026-05-09 binary @ 0x0011a130 (asm-inspector)
-    void SetCurrentMatrix(const Matrix44& mat) {
-        m_Current = mat;
-        m_Version++;
-    }
+    void SetCurrentMatrix(const Matrix44& mat);
 };
 
 #ifdef __bada__

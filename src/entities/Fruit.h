@@ -30,10 +30,10 @@ struct PSPParticleEmitter;
 // g_MPModelsLoaded is NOT a FruitModelInfo field -- it lives at
 // GameTaskState+0xc4 and gates the LoadFruitModels MP load path.
 struct FruitModelInfo {
-    void*  m_pHalfEffectA;                       // +0x00 EffectProperty* (unported)
-    void*  m_pHalfEffectB;                       // +0x04 EffectProperty* (unported)
-    void*  m_pWholeEffect;                       // +0x08 EffectProperty* (unported)
-    void*  m_pMpEffect;                          // +0x0c EffectProperty* (unported)
+    Mortar::EffectProperty*  m_pHalfEffectA;                       // +0x00
+    Mortar::EffectProperty*  m_pHalfEffectB;                       // +0x04
+    Mortar::EffectProperty*  m_pWholeEffect;                       // +0x08
+    Mortar::EffectProperty*  m_pMpEffect;                          // +0x0c
     Mortar::SmartPtr<Mortar::Model> m_HalfA;    // +0x10 piece 1
     Mortar::SmartPtr<Mortar::Model> m_HalfB;    // +0x14 piece 2
     Mortar::SmartPtr<Mortar::Model> m_Whole;    // +0x18 whole fruit (<name>_single.mmd)
