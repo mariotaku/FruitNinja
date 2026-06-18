@@ -25,6 +25,8 @@
 #include <cstdint>
 #include <cstddef>
 
+namespace Mortar { class File; }
+
 // languageFlag enum values (from g_GameData+0x03):
 //   0  = english_us (default / fallback)
 //   1  = german
@@ -147,8 +149,14 @@ public:
     // Binary @ 0x0022d74c LoadLanguage(char*) — same File pattern, single
     //   allocation, fixup str_offset to absolute pointer in-place.
     // Returns true on success.
+    //
+    // Binary also has File& overloads:
+    //   LoadHeader(Mortar::File&) @ 0x0021d7b0
+    //   LoadLanguage(Mortar::File&) @ 0x0021d6fc
     bool LoadHeader(const char* path);
+    bool LoadHeader(Mortar::File& file);
     bool LoadLanguage(const char* path);
+    bool LoadLanguage(Mortar::File& file);
 
     // Mirrors Mortar::StringTableData::FileHeader::Check @ 0x0018a3b4.
     // file_guid points at the 64-byte token field (file offset +4) of the

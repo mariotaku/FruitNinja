@@ -16,6 +16,7 @@
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
+#include "render/BakedStringBox.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include <cmath>
@@ -214,6 +215,17 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         secondaryTex->UnSet();
     }
+}
+
+// ===================================================================
+// BakedStringBox* overload of DrawBorders. Binary @ 0x0014f878 (v1.6.1).
+// DIFFERS: no-op stub because BakedStringBox does not expose a renderable
+// Texture in the port. The SmartPtr<Texture> overload handles rendering.
+void BaseScreen::DrawBorders(Mortar::BakedStringBox* /*box*/,
+                             float /*alpha*/, Vec3 /*secondaryTexPos*/) {
+    // Binary: creates a textured quad from the BakedStringBox's baked mesh
+    // data (same geometry as the secondary texture path). Port does not
+    // have a BakedStringBox→Texture conversion path, so this is a no-op.
 }
 
 // ===================================================================

@@ -94,9 +94,17 @@ bool Mortar::StringTable::CheckHeader(uint32_t magic, const uint8_t* file_guid) 
 // HeaderLookup[] into m_HeaderLookup. Binary @ 0x0022d800.
 // Uses Mortar::File for I/O: single allocation for entries + key blob,
 // then fixup each entry's key_offset to an absolute key_ptr.
+//
+// char* overload opens the file and delegates to File& overload.
 bool Mortar::StringTable::LoadHeader(const char* path) {
     File file(path, 0, 0);
     if (!file.Open()) return false;
+    return LoadHeader(file);
+}
+
+// File& overload -- binary @ 0x0021d7b0. Reads from an already-opened file
+// (positioned at offset 0, immediately after Open).
+bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
 
     // Read FileHeader: magic(4) + token[64] + blob_byte_size(4) + count(4) = 76 bytes.
     uint8_t hdr[76];
@@ -165,9 +173,16 @@ bool Mortar::StringTable::LoadHeader(const char* path) {
 // fits in 4 bytes); port stores alloc-relative offset for x64 safety.
 // Equivalent on ARM32 since alloc base is the same as absolute via
 // m_StringEntries.m_pData + entry->str_offset.
+//
+// char* overload opens the file and delegates to File& overload.
 bool Mortar::StringTable::LoadLanguage(const char* path) {
     File file(path, 0, 0);
     if (!file.Open()) return false;
+    return LoadLanguage(file);
+}
+
+// File& overload -- binary @ 0x0021d6fc. Reads from an already-opened file.
+bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
 
     // Read FileHeader: magic(4) + token[64] + blob_byte_size(4) + count(4) = 76 bytes.
     uint8_t hdr[76];
