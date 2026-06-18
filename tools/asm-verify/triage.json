@@ -4025,7 +4025,7 @@
   "_ZN14GameOverScreen6UpdateEf": {
     "decided_at": "2026-06-14T07:00Z",
     "max_score": 102500,
-    "reason": "game_work offsets MATCH: game_work loaded via GOT+0x30c; accesses [r1,#4] gameMode same; [r3,#0x138] GameOverScreen internal timer field same. Score 126915/102500. Residual: massive inherent divergence -- port adds MortarGame guard; binary uses 15-entry ARM jump table (addls pc,pc,r2,lsl#2), port uses 15-entry tbh; binary starts with inline vcvt animation tick; port uses separate RunStateMainDisplayEi call. Documented TODOs at src/screens/GameOverScreen.cpp:522,527,586. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 128495/102500 2026-06-14T05:55Z]",
+    "reason": "game_work offsets MATCH. FIXED 2026-06-18: removed port-only MortarGame guard and inlined RunStateMainDisplay (now goto fall-through matching binary). Residual: ARM 15-entry jump table (addls pc,pc,r2,lsl#2) vs port 15-entry tbh; binary vcvt animation tick at entry vs port after state table. Expected score reduction ~24415. Needs asm-verify re-sweep. [prior score 126915/102500]",
     "score": 126915,
     "verdict": "ACCEPT-deferred"
   },
