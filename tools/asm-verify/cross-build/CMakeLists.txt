@@ -46,6 +46,14 @@ target_include_directories(fnverify PRIVATE
 
 set_target_properties(fnverify PROPERTIES LINKER_LANGUAGE CXX)
 
+# ColAABB functions are ARM mode in the binary (confirmed 2026-06-18:
+# UpdateVertices @ 0x00275ccc, ColAABBAABB @ 0x00275d60 both end with
+# ARM bx lr = e12fff1e). Compile with -marm to eliminate mode mismatch
+# false positive in asm-verify scores.
+set_source_files_properties(
+    "${_PROJECT_ROOT}/src/engine/collision/ColAABB.cpp"
+    PROPERTIES COMPILE_FLAGS "-marm -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3")
+
 # Force recompilation of key TUs on every cmake --build run.
 add_custom_target(force_struct_recompile ALL
     COMMAND "${CMAKE_COMMAND}" -E touch
