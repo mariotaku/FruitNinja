@@ -78,7 +78,7 @@ docker run --rm \
     -e "ASM_VERIFY_FILTER=$FILTER" \
     -v "$PROJECT_ROOT_DOCKER:/work:ro" \
     -v fnverify-src:/staging \
-    -v fnverify-build:/build \
+    --tmpfs /build:exec,size=2G \
     -v fnverify-cache:/cache \
     "$IMAGE" -c 'bash /work/tools/asm-verify/verify.sh'
 

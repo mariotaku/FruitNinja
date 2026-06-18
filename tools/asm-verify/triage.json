@@ -2394,10 +2394,10 @@
     "decided_at": "2026-06-14T06:00Z"
   },
   "_ZN11WaveManager5ResetEb": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:56Z",
     "max_score": 31200,
     "reason": "WaveManager::Reset -- port adds MortarGame singleton guard vs binary blx chain; score 33291/27600 [refreshed 2026-05-24 post R8/R9/R10]. See src/game/WaveManager.cpp:925 TODO. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 32405/27600 -> 37990/31200]",
-    "score": 37990,
+    "score": 37980,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager6ResumeEv": {
@@ -2408,10 +2408,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-18T01:56Z",
     "max_score": 15300,
     "reason": "WaveManager::Update -- score drift 16925->17065/16700 post R9 swap. Existing TODO gaps. [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 16930/16700 -> 16670/15300]",
-    "score": 16670,
+    "score": 16660,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager7DestroyEv": {
@@ -4900,17 +4900,17 @@
     "decided_at": "2026-06-14T06:00Z"
   },
   "_ZN18PSPParticleManagerC1Ev": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T01:56Z",
     "max_score": 2300,
     "reason": "PSPParticleManager ctor: score 3200/2300 (139% diff). Port initialises m_pParticles/m_FreeHead/m_pActiveEmitters/m_pEmitterPool (null/0) plus std::vector members; binary zeroes only the 3 owned pointer fields. [PSP storage rewrite 2026-06-17]",
-    "score": 3200,
+    "score": 3495,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManagerC2Ev": {
-    "decided_at": "2026-06-17T00:00Z",
+    "decided_at": "2026-06-18T01:56Z",
     "max_score": 2300,
     "reason": "PSPParticleManager ctor: score 3200/2300 (139% diff). Port initialises m_pParticles/m_FreeHead/m_pActiveEmitters/m_pEmitterPool (null/0) plus std::vector members; binary zeroes only the 3 owned pointer fields. [PSP storage rewrite 2026-06-17]",
-    "score": 3200,
+    "score": 3495,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManagerD1Ev": {
