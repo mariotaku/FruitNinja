@@ -182,6 +182,10 @@ static Colour   g_Palette[16] = {
     Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
     Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
 };                                            // 0x0024D878
+// Binary colourOut global @ 0x0024D77C — persistent computed colour output,
+// written by every code path (count==1, snapped, lerp). BSS zero-init.
+// Consumed by the epilogue which copies to *outColour if non-null.
+static Colour   g_ModColourOut(0, 0, 0, 0);
 static int      g_ColourType        = 0;      // 0x0024D8B8 (0=static, 1=per-frame, 2=per-swipe)
 static uint8_t  g_DirectionalFlag   = 0;      // 0x0024D8BC
 static uint32_t g_TrailHash         = 0;      // 0x0024D8C0
@@ -479,42 +483,102 @@ void SlashEntity::CreateGhost() {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateModColour -- binary @ 0x17B0F4
-// ASM-verified: 2026-05-09 binary @ 0x0017B0F4 (re-analyst)
+// UpdateModColour -- v1.6.1 binary @ 0x0017b0f4
+//
+// Binary-faithful implementation. The function ALWAYS updates g_ModColourOut
+// (the persistent colour global at 0x0024D77C) and optionally writes to
+// *outColour if non-null. Three paths:
+//
+//   count==1: g_ModColourOut = g_Palette[0]
+//   snapped:  g_ModColourOut = g_Palette[(int)(progress+0.5) % count]
+//   lerp:     g_ModColourOut = lerp(g_Palette[i0], g_Palette[i1], t)
+//
+// Callers control colour type by the dt they pass:
+//   type 0 (static): -2.0f/pointCountF  from UpdatePoints body
+//   type 1 (cycle):  localDt            from Update / PreUpdate
+//   type 2 (swipe):  1.0f               from ColoursChanged / TouchDown
+//
+// Negative progress recovery depends on ColourType:
+//   type 0: backward-wrap (add count until >= 0)
+//   other:  clamp to 0
+//
+// Zero-clamping on lerp results matches the binary's VCVT.U32.F32 + positive guard.
+//
+// Binary epilogue uses a custom Colour::operator= (r1=dest, r2=src convention
+// at 0x0010c488) to copy colourOut to *outColour.
 // ---------------------------------------------------------------------------
 void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
     if (dt == 0.0f) return;
 
     const int count = g_ColourCount;
 
-    if (g_ColourType == 1 /* PER_SLASH */) {
+    if (count == 1) {
+        // Count==1 path: copy first palette entry to colourOut (no animation).
+        // Binary: operator=(&colourOut, &ModColours[0]) with custom convention.
+        g_ModColourOut = g_Palette[0];
+    } else {
+        // Advance palette progress.
         g_PaletteProgress += dt * g_LifeScale;
-        while (g_PaletteProgress >= (float)count) g_PaletteProgress -= (float)count;
-        while (g_PaletteProgress <  0.0f)         g_PaletteProgress += (float)count;
 
-        if (outColour) {
-            const float snapHalf = (float)(int)(g_PaletteProgress + 0.5f);
-            const float frac = g_PaletteProgress - snapHalf;
-            const bool inSnap = (frac > -0.01f) && (frac < 0.01f);
+        const float countF = (float)count;
 
-            if (inSnap) {
-                *outColour = g_Palette[(int)snapHalf % count];
+        // Wrap to [0, count).
+        while (g_PaletteProgress >= countF) {
+            g_PaletteProgress -= countF;
+        }
+
+        // Handle negative progress.
+        if (g_PaletteProgress < 0.0f) {
+            if (g_ColourType == 0) {
+                // Type 0: wrap backward (add count until >= 0).
+                while (g_PaletteProgress < 0.0f) {
+                    g_PaletteProgress += countF;
+                }
             } else {
-                const int i0 = (int)g_PaletteProgress;
-                const int i1 = (i0 + 1) % count;
-                const float t = g_PaletteProgress - (float)i0;
-                outColour->r = (uint8_t)((float)g_Palette[i0].r + (float)(g_Palette[i1].r - g_Palette[i0].r) * t);
-                outColour->g = (uint8_t)((float)g_Palette[i0].g + (float)(g_Palette[i1].g - g_Palette[i0].g) * t);
-                outColour->b = (uint8_t)((float)g_Palette[i0].b + (float)(g_Palette[i1].b - g_Palette[i0].b) * t);
-                outColour->a = (uint8_t)((float)g_Palette[i0].a + (float)(g_Palette[i1].a - g_Palette[i0].a) * t);
+                // Type 1 or 2: clamp to 0.
+                g_PaletteProgress = 0.0f;
             }
         }
-    } else if (g_ColourType == 2 /* PER_SWIPE */) {
-        if (outColour && count > 0) {
-            *outColour = g_Palette[(int)g_PaletteProgress % count];
+
+        // Snap check: progress within +/-0.01 of a palette entry index.
+        const int snapInt = (int)(g_PaletteProgress + 0.5f);
+        const float frac = g_PaletteProgress - (float)snapInt;
+        const bool inSnap = (frac > -0.01f) && (frac < 0.01f);
+
+        if (inSnap) {
+            // Snapped: copy the exact palette entry to colourOut.
+            // Binary: snapHalf % count via __aeabi_idivmod.
+            g_ModColourOut = g_Palette[snapInt % count];
+        } else {
+            // Not snapped: lerp between consecutive palette entries.
+            const int i0 = (int)g_PaletteProgress;
+            const int i1 = (i0 + 1) % count;
+            const float t = g_PaletteProgress - (float)i0;
+
+            // Binary uses VCVT.U32.F32 (unsigned conversion) with a positive
+            // guard to zero-clamp negative results.
+            float rResult = (float)g_Palette[i0].r
+                + ((float)g_Palette[i1].r - (float)g_Palette[i0].r) * t;
+            float gResult = (float)g_Palette[i0].g
+                + ((float)g_Palette[i1].g - (float)g_Palette[i0].g) * t;
+            float bResult = (float)g_Palette[i0].b
+                + ((float)g_Palette[i1].b - (float)g_Palette[i0].b) * t;
+            float aResult = (float)g_Palette[i0].a
+                + ((float)g_Palette[i1].a - (float)g_Palette[i0].a) * t;
+
+            // Zero-clamp: (0.0 < val) ? (uint8_t)(int)val : 0.
+            g_ModColourOut.r = (rResult > 0.0f) ? (uint8_t)(int)rResult : 0;
+            g_ModColourOut.g = (gResult > 0.0f) ? (uint8_t)(int)gResult : 0;
+            g_ModColourOut.b = (bResult > 0.0f) ? (uint8_t)(int)bResult : 0;
+            g_ModColourOut.a = (aResult > 0.0f) ? (uint8_t)(int)aResult : 0;
         }
     }
-    // ColourType 0 (NONE): no animation, no write.
+
+    // Epilogue: copy colourOut to output pointer if non-null.
+    // Binary uses custom operator= at 0x0010c488 (r1=dest, r2=src convention).
+    if (outColour) {
+        *outColour = g_ModColourOut;
+    }
 }
 
 // ---------------------------------------------------------------------------
