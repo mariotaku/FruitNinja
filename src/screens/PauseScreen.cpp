@@ -98,8 +98,6 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
 //   TaskState+0x0C (byte) = 0 -- isPaused = 0 (transition entering pause)
 //   TaskState+0x08 (float) = 0.25f -- pause transition timer
 void PauseScreen::PauseGame() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
     GameTaskState* ts = GetTaskState();
     game_work.m_Paused = true;
     ts->isPaused = 0;
@@ -132,8 +130,6 @@ void PauseScreen::UnpauseGame() {
 // started mirroring the camera transition (settles to 0 during gameplay),
 // the inversion hid the pause button entirely.
 bool PauseScreen::IsEnabled() {
-    Game* g = Game::GetInstance();
-    if (!g) return false;
     if (fabsf(game_work.m_GameDt) >= 0.001f) return false;  // [+0xc] epsilon
     if (game_work.m_BombHitTimer > 0.0f)                return false;  // [+0x10]
     return (game_work.m_LevelTransitionFlag ^ 1) != 0;                           // [+0x05] XOR 1
@@ -147,8 +143,6 @@ static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
     #endif
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
-    Game* game = Game::GetInstance();
-    if (!game) return;
     game_work.m_LevelTransitionFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
 
     if (game_work.mMainScreen) {
@@ -426,7 +420,6 @@ bool PauseScreen::SetToMultiplayerState() {
 //   State 0 -> 2 (pause from gameplay)
 //   State 3 -> 4 (resume)
 void PauseScreen::PauseGameCallback() {
-    Game* game = Game::GetInstance();
     if (m_State == PAUSE_STATE_HIDDEN) {
         #ifndef FN_ASM_VERIFY_CROSS
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
@@ -434,7 +427,7 @@ void PauseScreen::PauseGameCallback() {
         m_State = PAUSE_STATE_FADE_IN;
         PauseGame();
         // SFX "Pause"
-        if (game && game_work.mGameSound) {
+        if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("Pause", 1.0f);
         }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
@@ -443,7 +436,7 @@ void PauseScreen::PauseGameCallback() {
         #endif
         m_State = PAUSE_STATE_RESUME_EXIT;
         // SFX "Unpause"
-        if (game && game_work.mGameSound) {
+        if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("Unpause", 1.0f);
         }
     }
@@ -468,10 +461,9 @@ void PauseScreen::PauseGameCallback2() {
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
-    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    if (game) game_work.m_bTutorialShown = 0;
+    if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
+    if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
+    game_work.m_bTutorialShown = 0;
     m_LastHitButton = 0;
     #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
@@ -488,8 +480,7 @@ void PauseScreen::QuitGameCallback() {
 void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
     m_LastHitButton = 1;
-    Game* game = Game::GetInstance();
-    if (game) game_work.m_bTutorialShown = 0;
+    game_work.m_bTutorialShown = 0;
 }
 
 // ASM-verified: 2026-05-08T00:00 binary @ 0x00153f68 (re-analyst)
@@ -503,8 +494,7 @@ void PauseScreen::QuitGameCallback2() {
 //   m_State = 5;
 void PauseScreen::RetryGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_ElapsedGameTime < 10.5f && game_work.m_SaveData) {
+    if (game_work.m_ElapsedGameTime < 10.5f && game_work.m_SaveData) {
         // String resolved from binary DAT_00153fe4 -> 0x001ba98f.
         const char* kKey = "retries_in_a_row";
         game_work.m_SaveData->AddToTotal(kKey, ::StringHash(kKey),
@@ -513,10 +503,10 @@ void PauseScreen::RetryGameCallback() {
     // Binary @ 0x00153f20: re-seed Mortar::Random g_Random with frame
     // counter so retried runs are deterministic-from-frame-state rather
     // than boot-clock-seeded. Re-analyst confirmed g_Random @ 0x0026C8B0.
-    if (game) Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
-    if (game) game_work.m_bTutorialShown = 0;
-    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
-    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
+    Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
+    game_work.m_bTutorialShown = 0;
+    if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
+    if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
     #endif
@@ -935,12 +925,7 @@ void PauseScreen::SkipTo() {
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
-    #ifndef FN_ASM_VERIFY_CROSS
-    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "ContinueGameCallback @ 0x00153fe8");
-    #endif
     m_State = PAUSE_STATE_RESUME_EXIT;
-    Game* g = Game::GetInstance();
-    if (!g) return;
     if (game_work.m_bTutorialShown != 0) {
         // Binary @ 0x00153f20: re-seed g_Random; see RetryGameCallback notes.
         Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
