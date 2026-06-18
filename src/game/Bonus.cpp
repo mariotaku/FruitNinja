@@ -95,7 +95,7 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 // Inner text -> m_NameTemplate (stripped)
 // parentTexName: fallback texture from parent <bonusType texture="...">; may be NULL.
 // ---------------------------------------------------------------------------
-void Bonus::Parse(tinyxml2::XMLElement* e, const char* parentTexName) {
+void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
     if (!e) return;
 
     e->QueryIntAttribute("min",      &m_MinSliced);
@@ -127,7 +127,7 @@ void Bonus::Parse(tinyxml2::XMLElement* e, const char* parentTexName) {
     }
 
     // Walk all attributes to pick up "min-<fruit>" and "max-<fruit>" prefixes.
-    for (const tinyxml2::XMLAttribute* attr = e->FirstAttribute();
+    for (const tinyxml2::XMLAttribute* attr = e->m_element->FirstAttribute();
          attr; attr = attr->Next()) {
         const char* aname = attr->Name();
         if (!aname) continue;
@@ -284,7 +284,7 @@ BonusType& BonusType::operator=(const BonusType& rhs) {
 //   "texture" attr                         -> parent texture passed to Bonus::Parse
 //   <bonus> children                       -> m_Bonuses
 // ---------------------------------------------------------------------------
-void BonusType::Parse(tinyxml2::XMLElement* e) {
+void BonusType::Parse(TiXmlElement* e) {
     if (!e) return;
 
     // Parent-level texture fallback for child <bonus> elements that omit texture=.
@@ -308,10 +308,10 @@ void BonusType::Parse(tinyxml2::XMLElement* e) {
         }
     }
 
-    for (tinyxml2::XMLElement* child = e->FirstChildElement("bonus");
-         child; child = child->NextSiblingElement("bonus")) {
+    for (TiXmlElement child = e->FirstChildElement("bonus");
+         child; child = child.NextSiblingElement("bonus")) {
         Bonus b;
-        b.Parse(child, parentTex);
+        b.Parse(&child, parentTex);
         if (b.m_AchievementHash != 0) m_HasAchievement = true;
         m_Bonuses.push_back(b);
     }

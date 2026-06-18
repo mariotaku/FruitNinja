@@ -9,12 +9,12 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/PathCI.h"
 #include "screens/BonusScreen.h"
-#include "debug/Logger.h"
 #include <tinyxml2.h>
+#include "game/GameWork.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
-#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -68,32 +68,32 @@ void BonusManager::Init() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("BONUS/Init", "failed to open '%s' (error %d)",
+        printf("BonusManager::Init -- failed to open '%s' (error %d)\n",
                path.c_str(), (int)err);
         return;
     }
 
-    tinyxml2::XMLElement* root = doc.FirstChildElement("bonusAwardsFile");
+    TiXmlElement root(doc.FirstChildElement("bonusAwardsFile"));
     if (!root) {
-        LOG_WARN("BONUS/Init", "no <bonusAwardsFile> root in '%s'",
+        printf("BonusManager::Init -- no <bonusAwardsFile> root in '%s'\n",
                path.c_str());
         return;
     }
 
-    for (tinyxml2::XMLElement* child = root->FirstChildElement();
-         child; child = child->NextSiblingElement()) {
-        const char* tag = child->Name();
+    for (TiXmlElement child = root.FirstChildElement();
+         child; child = child.NextSiblingElement()) {
+        const char* tag = child.Name();
         if (!tag) continue;
 
         if (strcmp(tag, "bonusType") == 0) {
             BonusType bt;
-            bt.Parse(child);
+            bt.Parse(&child);
             m_AllBonuses.push_back(bt);
-        } else if (strcmp(tag, "combo") == 0) {
-            // <combo length="N" bonus="B" /> -- bonus value for combos of that length.
-            int bonus = 0;
-            child->QueryIntAttribute("bonus", &bonus);
-            m_ComboTotalsByLevel.push_back(bonus);
+        } else if (strcmp(tag, "l") == 0) {
+            // <l N="value"> combo level entry
+            int val = 0;
+            child.QueryIntAttribute("N", &val);
+            m_ComboTotalsByLevel.push_back(val);
         }
     }
 }
@@ -116,22 +116,18 @@ void BonusManager::ClearBestBonuses() {
 //   tier 0 (gold):   BGRA(0xAD, 0x7E, 0x00, 0x00)
 //   tier 1 (red):    BGRA(0xA0, 0x05, 0x05, 0x00)
 //   tier 2 (blue):   BGRA(0x01, 0x5C, 0x95, 0x00)
-// ASM-verified: 2026-05-18 binary @ 0x0010e404 (re-analyst) -- screen null-guard
-// wraps ONLY the AddAward loop; the cache-rebuild prefix runs unconditionally.
 // ---------------------------------------------------------------------------
 void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
-    // ASM-verified: 2026-05-22 binary @ 0x0010e1f0 (MakeColour_BGRA 3-arg
-    // overload) hardcodes alpha = 0xFF (`strb 0xff,[r0,#0x3]`). Port was
-    // packing 0x00 in the high byte, making every per-award entry.m_Colour
-    // alpha=0 -- which made the star quad, award name text, and award score
-    // text all invisible. (re-analyst)
+    if (!screen) return;
+
+    // Hardcoded tier colours matching binary constants.
     static const Colour k_TierColours[3] = {
-        // BGRA: B=0xAD, G=0x7E, R=0x00, A=0xFF
-        Colour(0x00, 0x7E, 0xAD, 0xFF),  // gold
-        // BGRA: B=0xA0, G=0x05, R=0x05, A=0xFF
-        Colour(0x05, 0x05, 0xA0, 0xFF),  // red
-        // BGRA: B=0x01, G=0x5C, R=0x95, A=0xFF
-        Colour(0x95, 0x5C, 0x01, 0xFF),  // blue
+        // BGRA: B=0xAD, G=0x7E, R=0x00, A=0x00
+        Colour(0x00, 0x7E, 0xAD, 0x00),  // gold
+        // BGRA: B=0xA0, G=0x05, R=0x05, A=0x00
+        Colour(0x05, 0x05, 0xA0, 0x00),  // red
+        // BGRA: B=0x01, G=0x5C, R=0x95, A=0x00
+        Colour(0x95, 0x5C, 0x01, 0x00),  // blue
     };
 
     // Gather best bonus from each type.
@@ -153,46 +149,49 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
         m_BestBonuses.push_back(*candidates[i]);
     }
 
-    // Call AddAward on BonusScreen for each -- only when screen is non-null.
-    if (screen) {
-        int idx = 0;
-        for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
-             it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
-            screen->AddAward(k_TierColours[idx], it->m_StarTexture,
-                             it->m_DisplayName, it->m_Tier);
-        }
+    // Call AddAward on BonusScreen for each.
+    int idx = 0;
+    for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
+         it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
+        screen->AddAward(k_TierColours[idx], it->m_StarTexture,
+                         it->m_DisplayName, it->m_Tier);
     }
 }
 
-// ASM-verified: 2026-05-22 binary @ 0x0010de24 (re-analyst).
-// param: comboLen (>= 3 from caller gate).
-// Two persistent counters: combo_bonus (payout sum) + best_combo (max length).
+// ---------------------------------------------------------------------------
+// AddCombo -- Binary @ 0x0010de24
+//
+// Records a combo event (comboLen >= 3) into per-mode save totals.
+// Key strings (TODO: verify from binary @ 0x0010def4 / 0x0010defc):
+//   "CombosTotal-%s" / "BestCombo-%s" where %s = GetModeName(currentMode).
+// ---------------------------------------------------------------------------
 void BonusManager::AddCombo(int comboLen) {
+    if (comboLen < 3) return;
+
     Game* game = Game::GetInstance();
     if (!game || !game_work.m_SaveData) return;
 
-    static const uint32_t hComboBonus = StringHash("combo_bonus");
-    static const uint32_t hBestCombo  = StringHash("best_combo");
+    // Mode name table per binary GetModeName @ 0x0010b15c.
+    static const char* k_ModeNames[4] = { "Classic", "Casino", "Arcade", "Zen" };
+    int mode = (int)game_work.gameMode;
+    if (mode < 0 || mode > 3) mode = 0;
+    const char* modeName = k_ModeNames[mode];
 
-    // ASM-verified: 2026-05-22 binary @ 0x0010de24 (re-analyst).
-    // Indexed lookup into m_ComboTotalsByLevel (parsed from <combo bonus="N"/>).
-    int payout = 0;
-    if (!m_ComboTotalsByLevel.empty()) {
-        int idx = (comboLen < 4) ? 0 : (comboLen - 3);
-        int last = (int)m_ComboTotalsByLevel.size() - 1;
-        if (idx > last) idx = last;
-        if (idx < 0) idx = 0;
-        payout = m_ComboTotalsByLevel[idx];
+    // TODO: resolve exact format strings from binary DAT_0010def4 / DAT_0010defc.
+    // Likely "CombosTotal-%s" and "BestCombo-%s" with GetModeName() suffix.
+    char keyTotal[64];
+    char keyBest[64];
+    snprintf(keyTotal, sizeof(keyTotal), "CombosTotal-%s", modeName);
+    snprintf(keyBest,  sizeof(keyBest),  "BestCombo-%s",   modeName);
+
+    FruitSaveData* sd = game_work.m_SaveData;
+    sd->AddToTotal(keyTotal, StringHash(keyTotal), 1, false, false);
+
+    int existing = sd->GetTotal(StringHash(keyBest));
+    if (comboLen > existing) {
+        int delta = comboLen - existing;
+        sd->AddToTotal(keyBest, StringHash(keyBest), delta, false, false);
     }
-
-    game_work.m_SaveData->AddToTotal("combo_bonus", hComboBonus,
-                                     payout, false, false);
-
-    int currentBest = game_work.m_SaveData->GetTotal(hBestCombo);
-    int delta = comboLen - currentBest;
-    if (delta < 0) delta = 0;
-    game_work.m_SaveData->AddToTotal("best_combo", hBestCombo,
-                                     delta, false, false);
 }
 
 // ---------------------------------------------------------------------------

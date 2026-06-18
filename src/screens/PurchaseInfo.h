@@ -17,7 +17,6 @@
 
 #include "asset/ReloadableTexture.h"
 #include <cstdint>
-#include <tinyxml2.h>
 #include "engine/xml/TiXmlElement.h"
 
 class PurchaseInfo {

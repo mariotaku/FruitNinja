@@ -20,6 +20,16 @@ public:
     TiXmlElement() : m_element(nullptr) {}
     explicit TiXmlElement(tinyxml2::XMLElement* e) : m_element(e) {}
 
+    // --- Element name ---
+
+    const char* Name() const {
+        return m_element ? m_element->Name() : nullptr;
+    }
+
+    const char* Value() const {
+        return m_element ? m_element->Value() : nullptr;
+    }
+
     // --- Read API ---
 
     const char* Attribute(const char* name) const {
@@ -55,16 +65,22 @@ public:
 
     // --- Child/sibling navigation ---
 
-    TiXmlElement FirstChildElement(const char* name = "") const {
+    // DIFFERS: tinyxml2 FirstChildElement(nullptr) returns all children regardless of name;
+    // using nullptr as default to match tinyxml2 behavior (was previously "" which filtered
+    // to empty-name children only).
+    TiXmlElement FirstChildElement(const char* name = nullptr) const {
         return TiXmlElement(m_element ? m_element->FirstChildElement(name) : nullptr);
     }
-    TiXmlElement NextSiblingElement(const char* name = "") const {
+    TiXmlElement NextSiblingElement(const char* name = nullptr) const {
         return TiXmlElement(m_element ? m_element->NextSiblingElement(name) : nullptr);
     }
 
     bool NoChildren() const {
         return m_element ? m_element->NoChildren() : true;
     }
+
+    // Returns underlying tinyxml2 pointer for use with raw tinyxml2 APIs.
+    tinyxml2::XMLElement* GetRaw() const { return m_element; }
 
     tinyxml2::XMLDocument* GetDocument() const {
         return m_element ? m_element->GetDocument() : nullptr;
@@ -88,6 +104,10 @@ public:
         if (m_element) m_element->SetAttribute(name, value);
     }
 
+    // LinkEndChild / InsertEndChild — tinyxml API compatibility.
+    tinyxml2::XMLNode* LinkEndChild(tinyxml2::XMLNode* node) {
+        return m_element ? m_element->LinkEndChild(node) : nullptr;
+    }
     tinyxml2::XMLNode* InsertEndChild(tinyxml2::XMLNode* node) {
         return m_element ? m_element->InsertEndChild(node) : nullptr;
     }

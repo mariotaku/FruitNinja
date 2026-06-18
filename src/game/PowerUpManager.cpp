@@ -389,11 +389,11 @@ void PowerUpManager::SaveActivePowerUps(TiXmlElement* parent) {
 
 // @ 0x001199d4
 void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
-    for (tinyxml2::XMLElement* el = parent->FirstChildElement("active");
-         el; el = el->NextSiblingElement("active")) {
+    for (TiXmlElement el = parent->FirstChildElement("active");
+         el; el = el.NextSiblingElement("active")) {
         float curTime = 0.0f;
-        el->QueryFloatAttribute("currentTime", &curTime);
-        const char* nameStr = el->Attribute("name");
+        el.QueryFloatAttribute("currentTime", &curTime);
+        const char* nameStr = el.Attribute("name");
         if (!nameStr) continue;
         uint32_t hash = StringHash(nameStr);
 
@@ -416,11 +416,11 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         if (!p) continue;
         p->SetCurrentTime(curTime);
         float tmp = curTime;
-        el->QueryFloatAttribute("totalTime",   &tmp); p->SetTotalTime(tmp);
+        el.QueryFloatAttribute("totalTime",   &tmp); p->SetTotalTime(tmp);
         tmp = curTime;
-        el->QueryFloatAttribute("onScreenAmt", &tmp); p->SetOnScreenAmt(tmp);
+        el.QueryFloatAttribute("onScreenAmt", &tmp); p->SetOnScreenAmt(tmp);
         int score = -1;
-        el->QueryIntAttribute("score", &score);
+        el.QueryIntAttribute("score", &score);
         if (score >= 0) {
             FN::AddToCurrentScore(score, 0, false, false);
         }
@@ -453,7 +453,7 @@ void PowerUpManager::Load() {
     // Real XML uses <powerInfoFile> root + <power> children -- not the
     // <powers>+<powerup> the port guessed. Same fix-pattern as
     // BonusManager's bonusawards.xml schema mismatch.
-    tinyxml2::XMLElement* root = doc.FirstChildElement("powerInfoFile");
+    TiXmlElement root(doc.FirstChildElement("powerInfoFile"));
     if (!root) {
         LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in '%s'", path.c_str());
         return;
@@ -462,14 +462,14 @@ void PowerUpManager::Load() {
     m_AllPowerUps.clear();
     m_PurchasablePowers.clear();
 
-    for (tinyxml2::XMLElement* child = root->FirstChildElement();
-         child; child = child->NextSiblingElement()) {
-        const char* tag = child->Name();
+    for (TiXmlElement child = root.FirstChildElement();
+         child; child = child.NextSiblingElement()) {
+        const char* tag = child.Name();
         if (!tag) continue;
 
         if (strcmp(tag, "power") == 0) {
             PowerUp* pu = new PowerUp();
-            pu->Parse(child);
+            pu->Parse(&child);
             if (pu->m_NameHash == 0) {
                 delete pu;
                 continue;
@@ -479,12 +479,12 @@ void PowerUpManager::Load() {
                 m_PurchasablePowers.push_back(pu);
             }
         } else if (strcmp(tag, "effect") == 0) {
-            const char* nameAttr = child->Attribute("name");
+            const char* nameAttr = child.Attribute("name");
             if (!nameAttr) continue;
             uint32_t hash = StringHash(nameAttr);
             ScreenEffect& se = m_ScreenEffectPool[hash];
             se.m_NameHash = hash;
-            se.Parse(child);
+            se.Parse(&child);
         }
     }
 }

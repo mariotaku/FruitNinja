@@ -35,7 +35,7 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "math/Vec3.h"
-#include <tinyxml2.h>
+#include "engine/xml/TiXmlElement.h"
 
 #include "screens/PurchaseInfo.h"
 

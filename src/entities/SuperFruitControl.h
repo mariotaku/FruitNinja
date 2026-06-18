@@ -40,7 +40,7 @@ class SlashEntity;
 class SuperFruitGlow;
 struct SuperFruitState;
 struct Renderer;
-namespace tinyxml2 { class XMLElement; }
+#include "engine/xml/TiXmlElement.h"
 
 class SuperFruitControl : public Mortar::Entity {
 public:

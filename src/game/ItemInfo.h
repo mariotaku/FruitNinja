@@ -14,7 +14,7 @@
 #include "engine/math/Colour.h"
 #include "ItemParseUtil.h"
 #include <cstdint>
-#include <tinyxml2.h>
+#include "engine/xml/TiXmlElement.h"
 
 // ItemType — matches m_Type byte values documented in binary.
 // 0=SLASH_MODIFIER, 1=BACKGROUND, 2=UPSELL, 3=REMOVEADS
@@ -238,7 +238,7 @@ public:
     // vtable[+0x0c] SetEquipped @ 0x00112430 — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset
     virtual void SetEquipped() override;
     // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
-    virtual void Parse(tinyxml2::XMLElement* e) override;
+    virtual void Parse(TiXmlElement* e) override;
 
     // TODO: UpdateSounds (binary address unknown) — per-frame update for the mod's looping
     // ambient sound; called from ItemManager::Update. Full behavior requires RE of the

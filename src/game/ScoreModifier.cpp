@@ -66,14 +66,14 @@ void ScoreModifier::RemoveModifier() {
 // @ 0x0011ccb0
 // ASM-verified: 2026-05-03T00:00 binary @ 0x0011ccb0..0x0011cd20 (asm-inspector)
 void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
-    TiXmlElement* mult = xml->FirstChildElement("multiplier");
+    TiXmlElement mult = xml->FirstChildElement("multiplier");
     ResetSpecific();
     if (mult) {
-        mult->QueryIntAttribute("gainAdd",      &m_GainAdd);
-        mult->QueryIntAttribute("gainMultiply", &m_GainMultiply);
-        mult->QueryIntAttribute("lossAdd",      &m_LossAdd);
-        mult->QueryIntAttribute("lossMultiply", &m_LossMultiply);
-        const char* defer = mult->Attribute("deferPoints");
+        mult.QueryIntAttribute("gainAdd",      &m_GainAdd);
+        mult.QueryIntAttribute("gainMultiply", &m_GainMultiply);
+        mult.QueryIntAttribute("lossAdd",      &m_LossAdd);
+        mult.QueryIntAttribute("lossMultiply", &m_LossMultiply);
+        const char* defer = mult.Attribute("deferPoints");
         m_bDeferPoints = (defer && CompareWords(defer, "true"));
     }
 }

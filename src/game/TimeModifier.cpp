@@ -94,10 +94,10 @@ void TimeModifier::ParseSpecific(TiXmlElement* xml) {
     m_DtScale        = 1.0f;   // binary @ 0x0012015e, vstr +0x20
     m_CurrentDtMod   = 1.0f;   // binary @ 0x00120162, vstr +0x28  -- previously missing
 
-    TiXmlElement* dt = xml->FirstChildElement("dt_speed");
+    TiXmlElement dt = xml->FirstChildElement("dt_speed");
     if (dt) {
-        dt->QueryFloatAttribute("transitionTime", &m_TransitionRate);
-        dt->QueryFloatAttribute("dt",             &m_DtScale);
+        dt.QueryFloatAttribute("transitionTime", &m_TransitionRate);
+        dt.QueryFloatAttribute("dt",             &m_DtScale);
     }
 }
 

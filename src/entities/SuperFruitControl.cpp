@@ -623,7 +623,7 @@ bool SuperFruitControl::SpawnFinalPomegranate()
 }
 
 // Binary @ 0x001ba73c. Serializes active super-fruit state to XML.
-void SuperFruitControl::SaveSuperFruitState(tinyxml2::XMLElement* parent)
+void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
 {
     if (!parent) return;
     if (SuperFruitControls.empty()) return;
@@ -648,7 +648,10 @@ void SuperFruitControl::SaveSuperFruitState(tinyxml2::XMLElement* parent)
     // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
     // controller's own scale.y as the saved spin/rotation value.
     state.m_Spin       = ctrl->scale.y;
-    state.WriteToElement(elem);
+    {
+        TiXmlElement welem(elem);
+        state.WriteToElement(&welem);
+    }
 
     parent->InsertEndChild(elem);
 }

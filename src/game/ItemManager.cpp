@@ -115,14 +115,14 @@ void ItemManager::LoadItemData() {
     m_DefaultItems[0] = m_DefaultItems[1] = m_DefaultItems[2] = m_DefaultItems[3] = nullptr;
 
     if (err == tinyxml2::XML_SUCCESS) {
-        tinyxml2::XMLElement* root = doc.FirstChildElement("itemManagerFile");  // 0x1ba075
-        if (root != nullptr) {
-            for (tinyxml2::XMLElement* e = root->FirstChildElement("item");  // 0x1b9e95
-                 e != nullptr;
-                 e = e->NextSiblingElement("item")) {
+        TiXmlElement root(doc.FirstChildElement("itemManagerFile"));  // 0x1ba075
+        if (root) {
+            for (TiXmlElement e = root.FirstChildElement("item");  // 0x1b9e95
+                 e;
+                 e = e.NextSiblingElement("item")) {
 
                 // Allocate typed item
-                const char* typeStr = e->Attribute("type");  // 0x1b9372
+                const char* typeStr = e.Attribute("type");  // 0x1b9372
                 int type = ParseItemType(typeStr);            // 0=SLASH_MODIFIER..3=REMOVEADS
 
                 ItemInfo* item;
@@ -133,7 +133,7 @@ void ItemManager::LoadItemData() {
                 }
                 item->m_Type = (int8_t)type;
                 // Virtual dispatch to ItemInfo::Parse or ParseSlashModInfo
-                item->Parse(e);
+                item->Parse(&e);
 
                 // Achievement-gate check (binary: LoadItemData inner block)
                 FruitSaveData* sd = GetSaveData();
