@@ -26,8 +26,8 @@ void Random::Seed(uint64_t seed) {
     m_State = seed;
 }
 
-// ASM-verified: 2026-05-06T13:42 binary @ 0x00117588 (asm-inspector)
-// ASM-verified: 2026-05-18 binary @ 0x00117588 (re-analyst) — gate is max in [1,0xFFFFFFFE]; Rand32(1) returns 0.
+// ASM-verified: 2026-06-19T00:00Z v1.6.1 Math::Random::Rand32 @ 0x00121c2c..0x00121c74 (asm-inspector)
+// gate is max in [1,0xFFFFFFFE]; Rand32(1) returns 0.
 // Binary: add r12,r1,#-1; cmn r12,#3; it ls; umull.ls r2,r3,r1,r3; mov r0,r3
 uint32_t Random::Rand32(uint32_t max) {
     // 64-bit LCG step
