@@ -4,10 +4,11 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemInfo — base class for shop items (blade skins, backgrounds, upsells,
-// remove-ads IAPs).  Binary vtable @ 0x001e8c50; ctor @ 0x00113910.
-// Size: 0x40 bytes.
+// remove-ads IAPs).  Binary vtable @ 0x001e8c50; ctor @ 0x0013a714 (thunk 0x001145a0).
+// In-place dtor @ 0x0013adb8; deleting dtor @ 0x0013b098.
+// Size: 0x48 bytes (72 bytes).
 //
-// Derived class SlashModInfo (0x110 bytes) extends for SLASH_MODIFIER items.
+// Derived class SlashModInfo (0x118 bytes) extends for SLASH_MODIFIER items.
 // Ctor @ 0x00113d58; ParseSlashModInfo @ 0x001126c0.
 //
 
@@ -37,7 +38,7 @@ inline int ParseItemType(const char* str) {
 }
 
 // -----------------------------------------------------------------------
-// ItemInfo (0x40 bytes)
+// ItemInfo (0x48 bytes)
 // -----------------------------------------------------------------------
 class ItemInfo {
 public:
@@ -73,17 +74,23 @@ public:
     Colour   m_Colour1;
     // +0x38  Colour     m_Colour2        second colour slot; init copy of Colour1
     Colour   m_Colour2;
-    // +0x3c  bool       m_bSeen          1=seen in shop; 0="new item" badge visible
+    // +0x3c  bool       m_bSeen          1=owned/seen; ctor default 1
     bool     m_bSeen;
-    // +0x3d  (3 bytes padding to 0x40)
+    // +0x3d  (3 bytes padding)
     uint8_t  _pad3d[3];
+    // +0x40  float      m_Scale          ctor default 0.125f (v1.6.1 ItemInfo::ItemInfo @0x0013a714)
+    float    m_Scale;
+    // +0x44  bool       m_IsNew          "new item" badge flag; ctor default 0; +3 pad -> sizeof 0x48
+    bool     m_IsNew;
+    // +0x45  (3 bytes padding to 0x48)
+    uint8_t  _pad45[3];
 
     // --- vtable-equivalent virtuals (C++ vtable handles dispatch) -------
 
-    // ctor @ 0x00113910 — sets defaults documented in items.md
+    // ctor @ 0x0013a714 (thunk 0x001145a0) — sets defaults per binary
     ItemInfo();
 
-    // dtor (in-place) @ 0x00113c70; (delete) @ 0x00113ea8
+    // dtor (in-place) @ 0x0013adb8; (delete) @ 0x0013b098
     virtual ~ItemInfo();
 
     // vtable[+0x08] UnEquip @ 0x00113974 — no-op
@@ -178,62 +185,62 @@ struct LoopingSound {
 };
 
 // -----------------------------------------------------------------------
-// SlashModInfo : ItemInfo (0x110 bytes)
+// SlashModInfo : ItemInfo (0x118 bytes)
 // Extends ItemInfo for SLASH_MODIFIER items.
 // Binary vtable overrides Parse at slot +0x10 with ParseSlashModInfo.
 // ctor @ 0x00113d58; parse @ 0x001126c0.
 // -----------------------------------------------------------------------
 class SlashModInfo : public ItemInfo {
 public:
-    // +0x40  Colour*    m_pColours          heap array of <colour> entries; NULL if count==0
+    // +0x48  Colour*    m_pColours          heap array of <colour> entries; NULL if count==0
     Colour*  m_pColours;
-    // +0x44  int        m_ColourCount        number of <colour> child elements parsed
+    // +0x4c  int        m_ColourCount        number of <colour> child elements parsed
     int      m_ColourCount;
-    // +0x48  int        m_ColourType         ParseSlashModColourType result (0=NONE, 1=PER_SLASH, 2=PER_SWIPE)
+    // +0x50  int        m_ColourType         ParseSlashModColourType result (0=NONE, 1=PER_SLASH, 2=PER_SWIPE)
     int      m_ColourType;
-    // +0x4c  float      m_Speed              XML `speed` attr (float); default 1.0f
+    // +0x54  float      m_Speed              XML `speed` attr (float); default 1.0f
     float    m_Speed;
-    // +0x50  bool       m_bDirectionalParticles  `particles_directional` CompareWords "true"
+    // +0x58  bool       m_bDirectionalParticles  `particles_directional` CompareWords "true"
     bool     m_bDirectionalParticles;
-    // +0x51  (3 bytes padding)
+    // +0x59  (3 bytes padding)
     uint8_t  _pad51[3];
-    // +0x54  char*      m_pParticlePath      XML `particles` verbatim (trail emitter key)
+    // +0x5c  char*      m_pParticlePath      XML `particles` verbatim (trail emitter key)
     char*    m_pParticlePath;
-    // +0x58  char*      m_pTextureName2      `texture` in <slashModInfo>; blade overlay texture
+    // +0x60  char*      m_pTextureName2      `texture` in <slashModInfo>; blade overlay texture
     char*    m_pTextureName2;
-    // +0x5c  char*      m_pContactParticle   `contact_particles` attr; verbatim CloneString
+    // +0x64  char*      m_pContactParticle   `contact_particles` attr; verbatim CloneString
     char*    m_pContactParticle;
-    // +0x60  char*      m_pReleaseParticle   `release_particles` attr; verbatim CloneString
+    // +0x68  char*      m_pReleaseParticle   `release_particles` attr; verbatim CloneString
     char*    m_pReleaseParticle;
-    // +0x64  float      m_ScaleStartThickness  <scales start_thickness=>; SetModScales p2 (thickness); default 1.0f
+    // +0x6c  float      m_ScaleStartThickness  <scales start_thickness=>; SetModScales p2 (thickness); default 1.0f
     float    m_ScaleStartThickness;
-    // +0x68  float      m_ScaleEndThickness    <scales end_thickness=>; SetModScales p3 (endThickness); default 0.0f
+    // +0x70  float      m_ScaleEndThickness    <scales end_thickness=>; SetModScales p3 (endThickness); default 0.0f
     float    m_ScaleEndThickness;
-    // +0x6c  float      m_ScaleLength          <scales length=>; SetModScales p1 (length); default 1.0f
+    // +0x74  float      m_ScaleLength          <scales length=>; SetModScales p1 (length); default 1.0f
     float    m_ScaleLength;
-    // +0x70  float      m_ScalePointScale      <scales point_scale=>; SetModScales p4 (pointScale); default 1.0f
+    // +0x78  float      m_ScalePointScale      <scales point_scale=>; SetModScales p4 (pointScale); default 1.0f
     float    m_ScalePointScale;
-    // +0x74  bool       m_bSlashFlash          `slash_flash` CompareWords "true"; SetModScales p6 (loop)
+    // +0x7c  bool       m_bSlashFlash          `slash_flash` CompareWords "true"; SetModScales p6 (loop)
     bool     m_bSlashFlash;
-    // +0x75  bool       m_bFlipForUpsideDown   `flipForUpsideDown` CompareWords "true"; SetModScales p5 (flipUD)
+    // +0x7d  bool       m_bFlipForUpsideDown   `flipForUpsideDown` CompareWords "true"; SetModScales p5 (flipUD)
     bool     m_bFlipForUpsideDown;
-    // +0x76  (2 bytes padding)
+    // +0x7e  (2 bytes padding)
     uint8_t  _pad76[2];
-    // +0x78  float      m_ScaleUVLength        <scales UV_length=>; SetModScales param_7; default 0.0f
+    // +0x80  float      m_ScaleUVLength        <scales UV_length=>; SetModScales param_7; default 0.0f
     float    m_ScaleUVLength;
-    // +0x7c  SlashSoundMods  m_SwipeSounds    from <swipeSounds>
+    // +0x84  SlashSoundMods  m_SwipeSounds    from <swipeSounds>
     SlashSoundMods m_SwipeSounds;
-    // +0xa8  SlashSoundMods  m_ImpactSounds   from <impactSounds>
+    // +0xb0  SlashSoundMods  m_ImpactSounds   from <impactSounds>
     SlashSoundMods m_ImpactSounds;
-    // +0xd4  SlashSoundMods  m_ComboSounds    from <comboSounds>
+    // +0xdc  SlashSoundMods  m_ComboSounds    from <comboSounds>
     SlashSoundMods m_ComboSounds;
-    // +0x100 LoopingSound    m_LoopingSound   "loop" attr from <swipeSounds> element
+    // +0x108 LoopingSound    m_LoopingSound   "loop" attr from <swipeSounds> element
     LoopingSound   m_LoopingSound;
 
     SlashModInfo();
     virtual ~SlashModInfo() override;
 
-    // vtable[+0x08] UnEquip @ 0x00112424 — calls LoopingSound::Reset() on m_LoopingSound (+0x100)
+    // vtable[+0x08] UnEquip @ 0x00112424 — calls LoopingSound::Reset() on m_LoopingSound (+0x108)
     virtual void UnEquip() override;
     // vtable[+0x0c] SetEquipped @ 0x00112430 — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset
     virtual void SetEquipped() override;
@@ -254,7 +261,10 @@ static_assert(offsetof(SlashSoundMods, m_LastPitch)          == 0x1c, "SlashSoun
 static_assert(sizeof(LoopingSound)                           == 0x10, "LoopingSound size");
 static_assert(offsetof(LoopingSound, m_pLoopName)            == 0x08, "LoopingSound::m_pLoopName @ +0x08");
 static_assert(offsetof(LoopingSound, m_State)                == 0x0c, "LoopingSound::m_State @ +0x0c");
-static_assert(sizeof(SlashModInfo)                           == 0x110, "SlashModInfo size");
+static_assert(sizeof(ItemInfo)                               == 0x48, "ItemInfo size");
+static_assert(offsetof(ItemInfo, m_Scale)                    == 0x40, "ItemInfo::m_Scale");
+static_assert(offsetof(ItemInfo, m_IsNew)                    == 0x44, "ItemInfo::m_IsNew");
+static_assert(sizeof(SlashModInfo)                           == 0x118, "SlashModInfo size");
 #endif
 
 #endif // FN_ITEM_INFO_H
