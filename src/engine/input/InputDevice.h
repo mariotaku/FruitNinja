@@ -28,54 +28,59 @@ enum InputDeviceTypes {
 
 namespace Mortar {
 
-// Binary @ 0x001b356c — InputActionMapper.
-// Non-polymorphic, 40 bytes.
-// Ctor signature (per binary): InputActionMapper(InputEvent, Delegate1<bool,InputEvent*>,
-//   unsigned long, unsigned long).
-// ActionMappers are held by pointer in InputDevice::actionMappers
-// (std::list<InputActionMapper*>). CheckActions @ 0x001b36b0 iterates the
-// list and calls ProcessEvent per element.
+// TODO: v1.6.1 InputActionMapper::InputActionMapper — confirm ctor addr, resolve
+//   v1.6.1 addresses for ProcessEvent and CheckActions (stale v1.5.x markers removed).
 //
-// DIFFERS: binary sizeof = 40 (m_callback is an 8-byte BaseDelegate in the
-//   binary's Delegate1 implementation); port Delegate1 is 36 bytes so port
-//   sizeof != 40. InputActionMapper is only ever used through pointers in
-//   the port — no by-value allocation — so the divergence is contained.
-//   The static_assert fires only under __bada__ where sizes match.
+// Mortar::InputActionMapper — non-polymorphic action-filter node.
+// Binary sizeof = 0x44 (68 bytes). True binary layout (from ctor field stores):
+//   +0x00  bool      m_Enabled
+//   +0x04  uint32_t  m_ActionHash        (OR'd action+flag word, ctor param)
+//   +0x08  uint32_t  m_ConfigSourceHash
+//   +0x0c  uint32_t  m_ActionMask
+//   +0x10  uint32_t  m_MatchValue        (hi16 = keycode/finger discriminator)
+//   +0x14  uint32_t  m_KeyMask
+//   +0x18  uint32_t  m_Param4
+//   +0x1c  uint32_t  m_Param5
+//   +0x20  32-byte   m_callback          (binary: StackAllocatedPointer<BaseDelegate,32ul>)
+//   +0x40  bool      m_Flag40
+// Port Delegate1 is 36 bytes (0x24), so it spans +0x20..+0x43 and the total
+// is already 0x44 with no room for a separate m_Flag40.
+// DIFFERS: binary m_callback = 32-byte inline StackAllocatedPointer<BaseDelegate,32ul>
+//   with m_Flag40 bool at +0x40; port Delegate1 is 36 bytes so m_Flag40 (+0x40
+//   in binary) is overlaid by the port Delegate1's trailing m_bEmpty/pad bytes.
+//   InputActionMapper is only ever used through pointers so no ABI mismatch at
+//   call sites. Total sizeof matches: both binary and port = 0x44.
+// ActionMappers are held by pointer in InputDevice::actionMappers
+// (std::list<InputActionMapper*>). CheckActions iterates the list and calls
+// ProcessEvent per element.
 class InputActionMapper {
 public:
-    // Binary @ 0x001b356c — ctor.
+    // TODO: v1.6.1 InputActionMapper::InputActionMapper — confirm v1.6.1 ctor addr.
     // Params: InputEvent ev, Delegate1<bool,InputEvent*> cb,
     //         unsigned long, unsigned long.
     InputActionMapper();
 
-    // Binary @ 0x001b3508 — ProcessEvent.
+    // TODO: v1.6.1 InputActionMapper::ProcessEvent — confirm v1.6.1 addr.
     // Called by InputDevice::CheckActions per mapper in actionMappers list.
     // Compares the incoming event against this mapper's filter template and
     // fires m_callback(event) on a match.
     void ProcessEvent(InputEvent* event);
 
-    // Fields per binary ctor writes (0x001b356c). The ctor copies an InputEvent
-    // "template" into the mapper so it acts as an action filter:
-    //   m_actionFilter = template.eventWord   (+0xc, from InputEvent +0x00)
-    //   m_matchValue   = template.matchWord   (+0x10, from InputEvent +0x04;
-    //                    high 16 bits = keycode/finger discriminator)
-    //   m_matchMapper  = template.m_mapper    (+0x14, from InputEvent +0x08)
-    bool      m_enabled;       // +0x00  strb r12 = 1 at ctor @0x001b358a
-    uint32_t  field4_0x4;     // +0x04  <- ctor param_4
-    uint32_t  field5_0x8;     // +0x08  <- ctor in_stack (5th word)
-    uint32_t  m_actionFilter; // +0x0c  action-type (hi16) | device-mask (lo16)
-    uint32_t  m_matchValue;   // +0x10  hi16 = keycode/finger to match (MOVE/UP)
-    uint32_t  m_matchMapper;  // +0x14  InputActionMapper* matched for DOWN events
-    uint32_t  field9_0x18;    // +0x18  <- ctor param_2.super.fns
-    uint32_t  field10_0x1c;   // +0x1c  <- ctor param_2._4_4_
-    // Binary: m_callback is Delegate1<bool,InputEvent*> at +0x20, 8 bytes
-    // in the binary's implementation. Port uses our 36-byte Delegate1 here.
-    InputDeviceCallback m_callback;  // +0x20
+    bool      m_Enabled;           // +0x00  strb #1 in ctor
+    uint32_t  m_ActionHash;        // +0x04  OR'd action+flag word (ctor param)
+    uint32_t  m_ConfigSourceHash;  // +0x08
+    uint32_t  m_ActionMask;        // +0x0c
+    uint32_t  m_MatchValue;        // +0x10  hi16 = keycode/finger discriminator
+    uint32_t  m_KeyMask;           // +0x14
+    uint32_t  m_Param4;            // +0x18
+    uint32_t  m_Param5;            // +0x1c
+    // DIFFERS: binary = 32-byte StackAllocatedPointer<BaseDelegate,32ul> (+0x20..+0x3f)
+    //   followed by bool m_Flag40 at +0x40. Port Delegate1 is 36 bytes (+0x20..+0x43),
+    //   overlaying binary's m_Flag40 position. Total size still matches: 0x44.
+    InputDeviceCallback m_callback; // +0x20  36 bytes in port, 32+1 in binary
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    // Binary sizeof = 40; port sizeof diverges due to Delegate1 size difference.
-    // Suppress for now — InputActionMapper only used through pointers in port.
-    // static_assert(sizeof(InputActionMapper) == 40, "InputActionMapper size mismatch");
+    static_assert(sizeof(InputActionMapper) == 0x44, "InputActionMapper size mismatch");
 #endif
 };
 
@@ -122,11 +127,12 @@ public:
     void AxisEvent(long, unsigned long, float, float, unsigned long, long);
     void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
 
-    // Binary @ 0x001b36b0 — CheckActions: iterate actionMappers, call ProcessEvent.
+    // TODO: v1.6.1 InputDevice::CheckActions — confirm v1.6.1 addr (stale 0x001b36b0 was v1.5.x).
+    // Iterates actionMappers, calls ProcessEvent per element.
     void CheckActions(InputEvent* event);
     // ---- end STUBS ----
 
-    // Binary @ 0x001b3794 — data members:
+    // TODO: v1.6.1 InputDevice — confirm v1.6.1 data-layout addr (stale 0x001b3794 was v1.5.x).
     // +0x00: implicit vptr (port) / explicit fns* (binary) — layout equivalent
     // +0x04: std::list<InputActionMapper*> actionMappers (8 bytes, Sourcery 2010q1)
     std::list<InputActionMapper*> actionMappers;  // +0x04

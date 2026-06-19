@@ -3,13 +3,13 @@
 
 // Analysed: 2026-05-02T00:00
 //
-// PauseScreen : HUDControl3d (size = 0xd8)
+// PauseScreen : HUDControl3d (size = 0xdc)
 //
 // Binary refs:
-//   ctor   PauseScreen::PauseScreen @ 0x00155460
+//   ctor   PauseScreen::PauseScreen @ 0x001a7204 (thunk @ 0x001102e4)
 //   Init   vtable[2] @ 0x00153e28 -- forwards to Reset() / HUDControl::Reset
 //   Update vtable[10] @ 0x00154468
-//   size   operator_new(0xd8)
+//   size   operator_new(0xdc)
 //   stored at g_TaskState +0x04
 //
 // Full layout confirmed via ctor + Update write analysis.
@@ -27,8 +27,9 @@
 #include <cstddef>
 
 class MenuButton;
+namespace Mortar { class BakedStringBox; }
 
-// PauseScreen state machine. m_State is `int` (binary +0xd4 layout); values
+// PauseScreen state machine. m_State is `int` (binary +0xd8 layout); values
 // are 0..6. ABI-compatible -- enum integer rank is int by default.
 enum PauseScreenState {
     PAUSE_STATE_HIDDEN          = 0,  // idle / not active
@@ -42,7 +43,7 @@ enum PauseScreenState {
 
 class PauseScreen : public HUDControl3d {
 public:
-    // === PauseScreen-specific fields (+0x7c..+0xd4) ===
+    // === PauseScreen-specific fields (+0x7c..+0xd8) ===
     // Offsets verified by static_assert below.
 
     // +0x7c: primary fade alpha [0..1]; ctor = 0.0
@@ -99,13 +100,19 @@ public:
     // +0xd0: counts down after exit; gates Resume re-enable; ctor = 0.0
     float m_RevealTimer;
 
-    // +0xd4: state machine [0..6]; ctor = 0
+    // +0xd4: "PAUSED" baked text box.
+    // Binary ctor: operator_new(200); BakedStringBox(box, game_work[+0x614], 100, 0x1e);
+    //   SetHorizontalLineSpacing(-1); SetText(GETSTRING(0x3c8)); SetColour(game_work[+0x6a0], true).
+    // v1.6.1 PauseScreen::PauseScreen @ 0x001a7204.
+    Mortar::BakedStringBox* m_PausedText;   // role: paused-overlay text box
+
+    // +0xd8: state machine [0..6]; ctor = 0
     int m_State;
 
-    // sizeof == 0xd8 (216 bytes) here — matches binary.
+    // sizeof == 0xdc (220 bytes) here — matches binary.
 
-    // Port-specific trailing fields (not in the 216-byte binary struct).
-    // Excluded on the __bada__ production build so sizeof stays at 0xd8.
+    // Port-specific trailing fields (not in the 220-byte binary struct).
+    // Excluded on the __bada__ production build so sizeof stays at 0xdc.
     // Binary reads texture dimensions from SmartPtr<Texture>->m_Width/m_Height
     // each time they are needed. Port caches them after load to avoid holding
     // SmartPtrs in Update.
@@ -192,15 +199,16 @@ public:
 //   m_LastHitButton  +0xc8
 //   m_PressIndex     +0xcc
 //   m_RevealTimer    +0xd0
-//   m_State          +0xd4
+//   m_PausedText     +0xd4
+//   m_State          +0xd8
 //
 // Field ordering is verified by the compiler (struct member order).
-// Binary size = 0xd8 (216 bytes). Port-specific trailing floats (m_TitleTexW etc.)
+// Binary size = 0xdc (220 bytes). Port-specific trailing floats (m_TitleTexW etc.)
 // are after the binary-faithful region; only the binary fields are asserted here.
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 #include <cstddef>
-static_assert(sizeof(PauseScreen) == 0xd8, "PauseScreen size must match binary");
+static_assert(sizeof(PauseScreen) == 0xdc, "PauseScreen size must match binary");
 static_assert(offsetof(PauseScreen, m_Alpha)          == 0x7c, "m_Alpha offset");
 static_assert(offsetof(PauseScreen, m_TitleSize)      == 0x80, "m_TitleSize offset");
 static_assert(offsetof(PauseScreen, m_ButtonOriginPos)== 0x8c, "m_ButtonOriginPos offset");
@@ -208,7 +216,9 @@ static_assert(offsetof(PauseScreen, m_ResumeButton)   == 0x98, "m_ResumeButton o
 static_assert(offsetof(PauseScreen, m_ButtonFadeAlpha)== 0xb4, "m_ButtonFadeAlpha offset");
 static_assert(offsetof(PauseScreen, m_PauseButtonTex) == 0xb8, "m_PauseButtonTex offset");
 static_assert(offsetof(PauseScreen, m_LastHitButton)  == 0xc8, "m_LastHitButton offset");
-static_assert(offsetof(PauseScreen, m_State)          == 0xd4, "m_State offset");
+static_assert(offsetof(PauseScreen, m_RevealTimer)    == 0xd0, "m_RevealTimer offset");
+static_assert(offsetof(PauseScreen, m_PausedText)     == 0xd4, "m_PausedText offset");
+static_assert(offsetof(PauseScreen, m_State)          == 0xd8, "m_State offset");
 #endif
 
 #endif  // FN_PAUSE_SCREEN_H

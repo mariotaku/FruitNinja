@@ -5,14 +5,14 @@ namespace Mortar {
 
 // Binary @ 0x001b356c — InputActionMapper ctor.
 InputActionMapper::InputActionMapper()
-    : m_enabled(true)
-    , field4_0x4(0)
-    , field5_0x8(0)
-    , m_actionFilter(0)
-    , m_matchValue(0)
-    , m_matchMapper(0)
-    , field9_0x18(0)
-    , field10_0x1c(0)
+    : m_Enabled(true)
+    , m_ActionHash(0)
+    , m_ConfigSourceHash(0)
+    , m_ActionMask(0)
+    , m_MatchValue(0)
+    , m_KeyMask(0)
+    , m_Param4(0)
+    , m_Param5(0)
 {
 }
 
@@ -46,25 +46,25 @@ void InputActionMapper::ProcessEvent(InputEvent* event) {
     uint32_t eventWord = event->actionFlags;
     uint32_t typeBits  = eventWord & 0xffff0000u;
 
-    if ((typeBits & m_actionFilter) == 0) {
+    if ((typeBits & m_ActionMask) == 0) {
         return;
     }
-    if ((eventWord & m_actionFilter & 0xffffu) == 0) {
+    if ((eventWord & m_ActionMask & 0xffffu) == 0) {
         return;
     }
 
     bool match;
     if (typeBits == INPUT_ACTION_MOVE) {            // 0x20000
-        uint16_t kc = (uint16_t)(m_matchValue >> 16);
+        uint16_t kc = (uint16_t)(m_MatchValue >> 16);
         if (kc < 0x89) {
             match = ((kc & (uint16_t)event->keycode) != 0);
         } else {
             match = ((uint16_t)event->keycode == kc);
         }
     } else if (typeBits == INPUT_ACTION_UP) {       // 0x80000
-        match = ((uint16_t)event->keycode == (uint16_t)(m_matchValue >> 16));
+        match = ((uint16_t)event->keycode == (uint16_t)(m_MatchValue >> 16));
     } else if (typeBits == INPUT_ACTION_DOWN) {     // 0x10000
-        match = ((uint32_t)(uintptr_t)event->m_mapper == this->m_matchMapper);
+        match = ((uint32_t)(uintptr_t)event->m_mapper == this->m_KeyMask);
     } else {
         return;
     }
