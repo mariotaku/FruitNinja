@@ -37,7 +37,30 @@ set(CMAKE_CXX_COMPILER_WORKS  1)
 # relocations is the dominant source of asm-differ noise across nearly
 # every Class::function pair. -fpic switches the cross-build to emit the
 # same GOT-relative pattern, eliminating that whole diff cluster.
-set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar -fpic")
+# Default mode is ARM: the binary is ~94% ARM ($a=7951) vs ~6% Thumb ($t=486),
+# so -marm matches the original for the vast majority of functions. Switching the
+# old -mthumb default to -marm lifted BinDiff near-identical matches 1144 -> 1395
+# (encoding skew + predication were the dominant small-function noise source).
+#
+# No selective per-file -mthumb: (1) GCC 4.4.1 does NOT support per-function mode
+# selection -- __attribute__((target("thumb"))) and "#pragma GCC target" both emit
+# "target attribute is not supported on this machine" and have zero effect, so the
+# only granularity is per-translation-unit; (2) the binary's Thumb code is almost
+# entirely platform (*Bada, excluded), third-party libs (FreeType, libstdc++
+# templates), and scattered template instantiations -- no cross-build .cpp is
+# homogeneously Thumb, so flipping a whole file to -mthumb would regress its ARM
+# functions to recover the odd Thumb one. The small Thumb residual is accepted.
+#
+# FN_ARM_MODE env override: the twin-build pipeline (bindiff-pipeline.sh) sets this
+# to -mthumb to compile a second "Thumb twin" .so, so each function can be diffed
+# in the binary's actual mode (mode-matched merge). Default stays -marm so a plain
+# asm-verify run is unaffected.
+if(DEFINED ENV{FN_ARM_MODE})
+  set(_FN_ARM_MODE "$ENV{FN_ARM_MODE}")
+else()
+  set(_FN_ARM_MODE "-marm")
+endif()
+set(_BADA_FLAGS "${_FN_ARM_MODE} -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar -fpic")
 
 # -include cross-headers/fn-cxx11-shims.h: maps post-4.5 keywords (noexcept,
 # override, final, nullptr) to era-correct equivalents and forward-declares
