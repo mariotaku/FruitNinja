@@ -222,6 +222,7 @@ PauseScreen::PauseScreen()
       m_LastHitButton(-1),
       m_PressIndex(0),
       m_RevealTimer(0.0f),
+      m_PausedText(nullptr),
       m_State(PAUSE_STATE_HIDDEN),
       m_TitleTexW(0.0f), m_TitleTexH(0.0f),
       m_PauseButtonTexW(0.0f), m_PauseButtonTexH(0.0f),
