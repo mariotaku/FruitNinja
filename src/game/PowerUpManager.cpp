@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include "game/GameWork.h"
+#include "hud/HUD.h"
 
 // Binary file-static globals at 0x001f3d84..0x001f3da8.
 // Port-side: hoisted out of PowerUpManager so the binary-faithful 0x90
@@ -83,7 +84,7 @@ void PowerUpManager::Release() {
     m_ActiveScreenEffects.clear();
 }
 
-// @ 0x00117a80
+// ASM-verified: 2026-06-19T00:00Z v1.6.1 PowerUpManager::SetDefaults @ 0x0013feb8 (asm-inspector)
 void PowerUpManager::SetDefaults() {
     m_HighestActiveProgress = 0.0f;
     m_StopClockAccum        = 0.0f;
@@ -93,7 +94,13 @@ void PowerUpManager::SetDefaults() {
     m_SlowClockMult         = 1.0f;
     ClearScoreMultipliers();
     SlashEntity::s_ModPowerMask = 0;
-    SlashEntity::ResetModScales();
+    HUD* pHud = game_work.mHud;
+    pHud->scales[0] = 1.0f;
+    pHud->scales[1] = 1.0f;
+    pHud->scales[2] = 1.0f;
+    pHud->scales[3] = 1.0f;
+    pHud->scales[4] = 1.0f;
+    pHud->scales[5] = 1.0f;
 }
 
 // @ 0x0011a218
