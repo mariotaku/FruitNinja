@@ -1,7 +1,8 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemInfo + SlashModInfo — method implementations.
-// Binary: ItemInfo::ctor 0x00113910, ItemInfo::Parse 0x0011293c,
+// Binary: ItemInfo::ctor 0x0013a714 (thunk 0x001145a0), ItemInfo::Parse 0x0011293c,
+//         ItemInfo in-place dtor 0x0013adb8, deleting dtor 0x0013b098,
 //         SlashModInfo::ctor 0x00113d58, ParseSlashModInfo 0x001126c0,
 //         SlashSoundMods::Parse 0x00112568, LoopingSound::Parse 0x0011253c.
 
@@ -20,7 +21,7 @@
 // ItemInfo
 // -----------------------------------------------------------------------
 
-// ItemInfo::ItemInfo ctor @ 0x00113910
+// ItemInfo::ItemInfo ctor @ 0x0013a714 (thunk 0x001145a0)
 ItemInfo::ItemInfo()
     : m_pName(nullptr)
     , m_Hash(0)
@@ -36,14 +37,17 @@ ItemInfo::ItemInfo()
     , m_pTextureName(nullptr)
     , m_Colour1()             // default-constructed Colour()
     , m_Colour2(m_Colour1)    // copy of Colour1 default (binary: copy-init)
-    , m_bSeen(true)           // 1 = starts "seen" (not new) per ctor
+    , m_bSeen(true)           // 1 = owned/seen; ctor default per binary
+    , m_Scale(0.125f)         // +0x40  ctor default 0.125f (v1.6.1 ItemInfo::ItemInfo @0x0013a714)
+    , m_IsNew(false)          // +0x44  ctor default 0
 {
     _pad11[0] = _pad11[1] = _pad11[2] = 0;
     _pad25[0] = _pad25[1] = _pad25[2] = 0;
     _pad3d[0] = _pad3d[1] = _pad3d[2] = 0;
+    _pad45[0] = _pad45[1] = _pad45[2] = 0;
 }
 
-// ItemInfo dtor @ 0x00113c70 (in-place) / 0x00113ea8 (delete)
+// ItemInfo dtor @ 0x0013adb8 (in-place) / 0x0013b098 (delete)
 ItemInfo::~ItemInfo() {
     free(m_pName);
     free(m_pTitle);
@@ -365,13 +369,13 @@ SlashModInfo::SlashModInfo()
     , m_pTextureName2(nullptr)
     , m_pContactParticle(nullptr)
     , m_pReleaseParticle(nullptr)
-    , m_ScaleStartThickness(1.0f)   // +0x64  default 1.0f
-    , m_ScaleEndThickness(0.0f)     // +0x68  default 0.0f
-    , m_ScaleLength(1.0f)           // +0x6c  default 1.0f
-    , m_ScalePointScale(1.0f)       // +0x70  default 1.0f
-    , m_bSlashFlash(false)          // +0x74
-    , m_bFlipForUpsideDown(false)   // +0x75
-    , m_ScaleUVLength(0.0f)         // +0x78  default 0.0f
+    , m_ScaleStartThickness(1.0f)   // +0x6c  default 1.0f
+    , m_ScaleEndThickness(0.0f)     // +0x70  default 0.0f
+    , m_ScaleLength(1.0f)           // +0x74  default 1.0f
+    , m_ScalePointScale(1.0f)       // +0x78  default 1.0f
+    , m_bSlashFlash(false)          // +0x7c
+    , m_bFlipForUpsideDown(false)   // +0x7d
+    , m_ScaleUVLength(0.0f)         // +0x80  default 0.0f
     , m_SwipeSounds()
     , m_ImpactSounds()
     , m_ComboSounds()
@@ -406,28 +410,28 @@ void SlashModInfo::UnEquip() {
 // SlashModInfo::SetEquipped @ 0x00112430 (vtable slot +0x0c)
 void SlashModInfo::SetEquipped() {
     SlashEntity::SetModColours(
-        m_pColours,               // +0x40
-        m_ColourCount,            // +0x44
-        m_ColourType,             // +0x48
-        m_Speed,                  // +0x4c
-        m_pParticlePath,          // +0x54 -- trail emitter name
-        m_pTextureName2,          // +0x58 -- blade overlay texture
-        m_bDirectionalParticles,  // +0x50
-        m_pContactParticle,       // +0x5c
-        m_pReleaseParticle        // +0x60
+        m_pColours,               // +0x48
+        m_ColourCount,            // +0x4c
+        m_ColourType,             // +0x50
+        m_Speed,                  // +0x54
+        m_pParticlePath,          // +0x5c -- trail emitter name
+        m_pTextureName2,          // +0x60 -- blade overlay texture
+        m_bDirectionalParticles,  // +0x58
+        m_pContactParticle,       // +0x64
+        m_pReleaseParticle        // +0x68
     );
     SlashEntity::SetModScales(
-        m_ScaleLength,           // +0x6c  length      -> g_Scale3
-        m_ScaleStartThickness,   // +0x64  thickness   -> g_Scale1
-        m_ScaleEndThickness,     // +0x68  endThick    -> g_Scale2
-        m_ScalePointScale,       // +0x70  pointScale  -> g_Scale4
-        m_bFlipForUpsideDown,    // +0x75  flipUD      -> g_ScaleFlag1
-        m_bSlashFlash,           // +0x74  loop        -> g_ScaleFlag2
-        m_ScaleUVLength          // +0x78  uvNormalLen -> g_Scale5
+        m_ScaleLength,           // +0x74  length      -> g_Scale3
+        m_ScaleStartThickness,   // +0x6c  thickness   -> g_Scale1
+        m_ScaleEndThickness,     // +0x70  endThick    -> g_Scale2
+        m_ScalePointScale,       // +0x78  pointScale  -> g_Scale4
+        m_bFlipForUpsideDown,    // +0x7d  flipUD      -> g_ScaleFlag1
+        m_bSlashFlash,           // +0x7c  loop        -> g_ScaleFlag2
+        m_ScaleUVLength          // +0x80  uvNormalLen -> g_Scale5
     );
-    m_SwipeSounds.Reset();   // +0x7c
-    m_ImpactSounds.Reset();  // +0xa8
-    m_ComboSounds.Reset();   // +0xd4
+    m_SwipeSounds.Reset();   // +0x84
+    m_ImpactSounds.Reset();  // +0xb0
+    m_ComboSounds.Reset();   // +0xdc
 }
 
 // ParseSlashModInfo @ 0x001126c0
