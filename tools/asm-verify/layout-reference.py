@@ -20,27 +20,64 @@ import argparse, glob, json, os, re
 
 
 def parse_port(src_dirs):
-    """Returns (declared_size{leaf:int}, base{leaf:leaf}, where{leaf:file})."""
+    """Returns (declared_size{leaf:int}, base{leaf:leaf}, where{leaf:file}).
+
+    The binary is the ARM32 cross-build (__bada__), so we take ONLY the
+    static_assert that is live when __bada__ is defined -- the desktop-x64 mirror
+    (under #ifndef __bada__ / #else) is intentionally stride-inflated and would
+    produce false mismatches. We track __bada__ preprocessor state line-by-line.
+    """
     declared, base, where = {}, {}, {}
     sa = re.compile(r"static_assert\s*\(\s*sizeof\s*\(\s*([\w:]+)\s*\)\s*==\s*"
                     r"(0[xX][0-9a-fA-F]+|\d+)")
     inh = re.compile(r"\b(?:class|struct)\s+(\w+)\s*:\s*"
                      r"(?:public\s+|private\s+|protected\s+)?([\w:]+)")
+    bada_re = re.compile(r"defined\s*\(\s*__bada__\s*\)|__bada__")
     for d in src_dirs:
         for f in glob.glob(os.path.join(d, "**", "*.h"), recursive=True) + \
                  glob.glob(os.path.join(d, "**", "*.cpp"), recursive=True):
             try:
-                txt = open(f, encoding="utf-8", errors="ignore").read()
+                lines = open(f, encoding="utf-8", errors="ignore").read().splitlines()
             except OSError:
                 continue
-            for m in sa.finditer(txt):
-                leaf = m.group(1).split("::")[-1]
-                declared[leaf] = int(m.group(2), 0)
-                where.setdefault(leaf, os.path.relpath(f))
-            for m in inh.finditer(txt):
-                child, parent = m.group(1), m.group(2).split("::")[-1]
-                base[child] = parent
-                where.setdefault(child, os.path.relpath(f))
+            rel = os.path.relpath(f)
+            stack = []        # per #if level: True=live-when-bada, False=dead-when-bada, None=unrelated
+            for ln in lines:
+                s = ln.strip()
+                if s.startswith("#if"):
+                    if s.startswith("#ifndef") and bada_re.search(s):
+                        stack.append(False)
+                    elif (s.startswith("#ifdef") or s.startswith("#if")) and bada_re.search(s):
+                        stack.append(True)
+                    else:
+                        stack.append(None)
+                    continue
+                if s.startswith("#elif"):
+                    if stack:
+                        stack[-1] = True if bada_re.search(s) else (
+                            None if stack[-1] is None else False)
+                    continue
+                if s.startswith("#else"):
+                    if stack and stack[-1] in (True, False):
+                        stack[-1] = not stack[-1]
+                    continue
+                if s.startswith("#endif"):
+                    if stack:
+                        stack.pop()
+                    continue
+                bada_live = all(v is not False for v in stack)   # not in a #ifndef-bada / #else region
+                if not bada_live:
+                    continue
+                m = sa.search(ln)
+                if m:
+                    leaf = m.group(1).split("::")[-1]
+                    declared[leaf] = int(m.group(2), 0)
+                    where.setdefault(leaf, rel)
+                im = inh.search(ln)
+                if im:
+                    child, parent = im.group(1), im.group(2).split("::")[-1]
+                    base[child] = parent
+                    where.setdefault(child, rel)
     return declared, base, where
 
 
