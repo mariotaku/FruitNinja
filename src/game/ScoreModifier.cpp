@@ -14,31 +14,31 @@ ScoreModifier::ScoreModifier()
     , m_GainMultiply(1)
     , m_LossAdd(0)
     , m_LossMultiply(1)
-    , m_RepeatCount(0)
+    , m_ApplyCount(0)
     , m_bDeferPoints(false)
     , _pad35{0, 0, 0}
-    , m_ApplyCount(0)
+    , m_DeferAccum(0)
 {}
 
-// @ 0x0011cb44
+// @ 0x00147830
 // Binary writes: [r0,#0x28]=0 (m_LossAdd), [r0,#0x2c]=1 (m_LossMultiply),
 //                [r0,#0x20]=0 (m_GainAdd),  [r0,#0x24]=1 (m_GainMultiply).
-// m_bDeferPoints (+0x34) is NOT reset here — binary @ 0x0011cb44 has no strb.
+// m_bDeferPoints (+0x34) is NOT reset here — binary @ 0x00147830 has no strb.
 void ScoreModifier::ResetSpecific() {
     m_LossAdd      = 0;
     m_LossMultiply = 1;
     m_GainAdd      = 0;
     m_GainMultiply = 1;
-    // Binary @ 0x0011cb44 -- m_bDeferPoints NOT reset here.
+    // Binary @ 0x00147830 -- m_bDeferPoints NOT reset here.
 }
 
-// @ 0x0011cb70 — per-frame multiply into PowerUpManager score slots
+// @ 0x001478e0 — per-frame multiply into PowerUpManager score slots
 int ScoreModifier::UpdateSpecific(float /*dt*/) {
     if (!m_bDeferPoints) {
         PowerUpManager* m = PowerUpManager::GetInstance();
-        m->AddToScoreGainAdd(m_RepeatCount * m_GainAdd);
-        m->AddToScoreLossAdd(m_RepeatCount * m_LossAdd);
-        for (int i = 0; i < m_RepeatCount; ++i) {
+        m->AddToScoreGainAdd(m_ApplyCount * m_GainAdd);
+        m->AddToScoreLossAdd(m_ApplyCount * m_LossAdd);
+        for (int i = 0; i < m_ApplyCount; ++i) {
             m->AddToScoreGainMultiply(m_GainMultiply);
             m->AddToScoreLossMultiply(m_LossMultiply);
         }
@@ -46,7 +46,8 @@ int ScoreModifier::UpdateSpecific(float /*dt*/) {
     return 0;
 }
 
-// @ 0x0011cbe8
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 ScoreModifier::ApplyModifier @ 0x0014798c (asm-inspector/re-analyst) -- increments m_ApplyCount@+0x30
+// @ 0x0014798c
 void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_bDeferPoints) {
@@ -56,15 +57,15 @@ void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     ++m_ApplyCount;
 }
 
-// @ 0x0011cd44
+// TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
 void ScoreModifier::RemoveModifier() {
     if (m_bDeferPoints) {
         SetDefaultScoreDelegate();       // Global<int,int>(&DefaultScoreDelegate) (binary L11cda4)
     }
 }
 
-// @ 0x0011ccb0
 // ASM-verified: 2026-05-03T00:00 binary @ 0x0011ccb0..0x0011cd20 (asm-inspector)
+// TODO: v1.6.1 0x???? (ScoreModifier::ParseSpecific) — refresh stale v1.5.x addr
 void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
     TiXmlElement mult = xml->FirstChildElement("multiplier");
     ResetSpecific();
@@ -78,16 +79,17 @@ void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
     }
 }
 
-// @ 0x0011cc6c
+// TODO: v1.6.1 0x???? (ScoreModifier::Clone) — refresh stale v1.5.x addr
 GameModifier* ScoreModifier::Clone() {
     ScoreModifier* c = new ScoreModifier();
     *c = *this;
     return c;
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x0011cb58 (re-analyst)
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 ScoreModifier::DeferPoints @ 0x001478b8 (re-analyst) -- accumulates into m_DeferAccum@+0x38
+// @ 0x001478b8
 int ScoreModifier::DeferPoints(int points) {
     static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(points);
-    m_ApplyCount += points;   // +0x38 in binary: apply/score accumulator
+    m_DeferAccum += points;
     return 0;
 }

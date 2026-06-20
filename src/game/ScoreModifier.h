@@ -7,12 +7,13 @@
 // Binary size 0x3c. GetType() == 2.
 // vtable @ 0x001e8d00.
 //
-// Binary addresses:
-//   ctor            0x0011ca8c
-//   ResetSpecific   0x0011cb44
-//   UpdateSpecific  0x0011cb70
-//   ApplyModifier   0x0011cbe8
-//   RemoveModifier  0x0011cd44
+// Binary addresses (v1.6.1):
+//   ctor            0x001477d8
+//   ResetSpecific   0x00147830
+//   UpdateSpecific  0x001478e0
+//   DeferPoints     0x001478b8
+//   ApplyModifier   0x0014798c
+//   RemoveModifier  // TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
 //   GetType         0x0011d134  (returns 2)
 //   ParseSpecific   0x0011ccb0
 //   Clone           0x0011cc6c
@@ -33,28 +34,28 @@ public:
     // +0x2c: XML lossMultiply="N" (default 1)
     int m_LossMultiply;
 
-    // +0x30: loop count used as multiplier in UpdateSpecific (ctor=0; set by ParseSpecific/stacking)
-    int m_RepeatCount;
+    // +0x30: apply/repeat counter — ApplyModifier @0x14798c increments; UpdateSpecific @0x1478e0 reads as loop bound
+    int m_ApplyCount;
 
     // +0x34: XML deferPoints="true" — defers AddToCurrentScore via delegate
     bool m_bDeferPoints;
     uint8_t _pad35[3];
 
-    // +0x38: apply counter — incremented by ApplyModifier (and by DeferPoints as accumulator)
-    int m_ApplyCount;
+    // +0x38: deferred-points accumulator — DeferPoints @0x1478b8 does ldr/add/str [r4,#0x38]
+    int m_DeferAccum;
 
     ScoreModifier();
 
-    // @ 0x0011cb44
+    // @ 0x00147830
     void ResetSpecific() override;
 
-    // @ 0x0011cb70
+    // @ 0x001478e0
     int UpdateSpecific(float dt) override;
 
-    // @ 0x0011cbe8
+    // @ 0x0014798c
     void ApplyModifier(bool isPurchased, float* extra) override;
 
-    // @ 0x0011cd44
+    // TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
     void RemoveModifier() override;
 
     int GetType() override { return 2; }
