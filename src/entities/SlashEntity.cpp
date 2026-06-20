@@ -200,8 +200,9 @@ static float    g_Scale4            = 1.0f;   // 0x001F3E64 (UV length)
 static float    g_Scale5            = 0.0f;   // 0x0024D8D4 (loop UV length)
 static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost())
 static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror branch)
-static uint8_t  g_HitLatch          = 0;      // 0x0024D840 frame-hit latch
-static int32_t  g_HitResetCounter   = 0;      // 0x0024D83C reset cooldown
+// ASM-spec v1.6.1 game_work+0xc4 STOP / +0xc0 STOP_COUNTER (slice debounce)
+static unsigned char g_Stop        = 0;      // game_work+0xc4
+static int32_t       g_StopCounter = 0;      // game_work+0xc0
 
 
 static uint32_t ResolveEmitterHash(const char* path) {
@@ -420,13 +421,11 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 
 void SlashEntity::PostUpdate(float /*dt*/) {}
 
-// ASM-verified: 2026-05-10 binary @ 0x0017C584 (asm-inspector)
+// ASM-spec v1.6.1 SlashEntity::PreUpdate @0x1e7920
 void SlashEntity::PreUpdate(float dt) {
-    if (g_HitResetCounter < 5) {
-        g_HitResetCounter += 1;
-    } else {
-        g_HitLatch = 0;
-    }
+    // ASM-spec v1.6.1 SlashEntity::PreUpdate @0x1e7920: STOP debounce countdown
+    if (g_StopCounter < 5) g_StopCounter += 1;
+    else                   g_Stop = 0;
     // Port specific: SlashEntityGhost ring (8 slots) deferred.
     // Port specific: ItemManager::PushSwipeLoopVolume deferred.
     if (g_ColourType == 1 /* PER_SLASH */) {
@@ -1324,12 +1323,6 @@ void SlashEntity::UpdatePoints(float dt) {
     }
 }
 
-// File-scope globals: bomb-hit iteration STOP mechanism.
-// Binary BSS: g_Stop (byte) gates entity iteration; set to 1 on bomb hit or
-// extra-score fruit; g_StopCounter always reset to 0 with it.
-static unsigned char g_Stop = 0;
-static int g_StopCounter = 0;
-
 // ---------------------------------------------------------------------------
 // Update -- v1.6.1 SlashEntity::Update @ 0x1e867c
 // Binary-faithful port with dt branching, blade velocity volume, ghost spawn
@@ -1446,7 +1439,7 @@ void SlashEntity::Update(float dt) {
         // Binary uses the low-level ActorManager iterator API:
         //   ActorManager::GetEntityFirst(actorMgr, type, &iter)
         //   ActorManager::GetEntityNext(actorMgr, type, &iter)
-        // Both sealed via g_HitLatch (global latch) and g_Stop.
+        // Both loops guarded by g_Stop == 0 (re-checked each iteration).
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
             // -----------------------------------------------------------------
@@ -1460,7 +1453,6 @@ void SlashEntity::Update(float dt) {
                 std::list<Mortar::Entity*>::const_iterator it;
                 const std::list<Mortar::Entity*>& fruitList = am->GetTypeList(0);
                 for (it = fruitList.begin(); it != fruitList.end() && g_Stop == 0; ++it) {
-                    if (g_HitLatch != 0) break;
                     Fruit* fruit = static_cast<Fruit*>(*it);
                     if (!fruit) continue;
                     if (fruit->Sliced()) continue;
@@ -1547,15 +1539,10 @@ void SlashEntity::Update(float dt) {
                             m_ComboScoreScale = m_ComboScoreScale + (r + 0.75f) * -3.0f;
                         }
 
-                        // Extra-score (menu/special) fruit: halt iteration
+                        // Extra-score fruit: halt iteration (binary @0x1e8b00, predicate m_bExtraScore==m_bMenuFling +0x164)
                         if (fruit->m_bMenuFling) {
                             g_StopCounter = 0;
                             g_Stop = 1;
-                        }
-
-                        if (isMenuFruit) {
-                            g_HitLatch = 1;
-                            g_HitResetCounter = 0;
                         }
 
                     } else {
@@ -1596,7 +1583,6 @@ void SlashEntity::Update(float dt) {
                 std::list<Mortar::Entity*>::const_iterator itBomb;
                 const std::list<Mortar::Entity*>& bombList = am->GetTypeList(1);
                 for (itBomb = bombList.begin(); itBomb != bombList.end() && g_Stop == 0; ++itBomb) {
-                    if (g_HitLatch != 0) break;
                     Bomb* bomb = static_cast<Bomb*>(*itBomb);
                     if (!bomb) continue;
                     if (!bomb->IsActive()) continue;
