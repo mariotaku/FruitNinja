@@ -71,47 +71,56 @@ static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 
 void MainScreen::SetState(MainScreenState s) {
-    #ifndef FN_ASM_VERIFY_CROSS
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
-    #endif
     m_State = s;
+#ifndef __bada__
     if (s == STATE_CAMERA_ZOOM) {
         // Port specific: m_pDojoScreen is a weak pointer to a child screen managed
         // by HUD. Its removal callback can race the state transition. Forcibly clear
         // it here so STATE_CAMERA_ZOOM doesn't keep a stale pointer.
         m_pDojoScreen = nullptr;
     }
+#endif // !defined(__bada__)
 }
 
-// Matches ctor at 0x0014c430 (159 lines)
+// Matches ctor at 0x0019811c
 MainScreen::MainScreen(Game& g)
-    : pPlayButton(nullptr), pDojoButton(nullptr),
+    : m_bFlag7c(false),
+      pPlayButton(nullptr), pDojoButton(nullptr),
       pLeaderboardBtn(nullptr), pMoreGamesBtn(nullptr),
       pToggleA(nullptr), pToggleB(nullptr),
       pMusicToggle(nullptr), pSoundToggle(nullptr),
-      _pad_0xA8(0),
+      _pad_c4(0), _pad_c8(0),
       m_Lean(1.0f),
       m_NinjaTextX(0.0f), m_NinjaTextY(0.0f), m_NinjaTextZ(0.0f),
       m_BounceVel(0.0f), m_BounceY(0.0f), m_field10C(0.0f),
       m_StateTimer(0.0f),
       m_Field114(0.0f),
       m_State(STATE_CAMERA_ZOOM),
-      m_MoreGamesF0(0.0f),
       m_Timer2(0.0f),
-      m_TimeRemainingDisplay(-1.0f),
-      m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
-      m_bGameStartReset(false),
-      m_pDojoScreen(nullptr),
-      game(g),
       m_pSliceInstrBox(nullptr)
+#ifndef __bada__
+      , m_MoreGamesF0(0.0f)
+      , m_TimeRemainingDisplay(-1.0f)
+      , m_GlobalAlphaTarget(1.0f), m_Time(0.0f)
+      , m_bGameStartReset(false)
+      , m_pDojoScreen(nullptr)
+      , game(g)
+#endif
 {
+#ifdef __bada__
+    (void)g;
+#endif
+
     // Load global textures (assigned to globals via GOT in original)
+#ifndef __bada__
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     m_fruitTextTex     = Mortar::TextureManager::LoadLocalisedTexture("fruit_text.tex");
     m_ninjaTextTex     = Mortar::TextureManager::LoadLocalisedTexture("ninja_text.tex");
 
     // m_TexFruitText mirrors m_fruitTextTex (fruit_text.tex at binary +0xE4)
     m_TexFruitText = m_fruitTextTex;
+#endif // !defined(__bada__)
 
     // Load slice_fruit parchment frame
     m_TexSliceFruit = Mortar::TextureManager::LoadLocalisedTexture("slice_fruit.tex");
@@ -142,9 +151,10 @@ MainScreen::MainScreen(Game& g)
 
     // v1.6.1: Load TTF font for the "SLICE FRUIT TO BEGIN" BakedStringBox.
     // Binary: FontCacheObjectTTF over "fontstruetype/gangofchinese.ttf" (256x256 atlas).
-    // m_BakedStrSmart holds the SmartPtr to the font (binary +0xDC / port +0xC4).
-    // m_pSliceInstrBox holds the BakedStringBox* (binary +0xE0 / port +0xC8).
+    // m_BakedStrSmart (port-only SmartPtr<Font>) holds the font ref for the BakedStringBox.
+    // m_pSliceInstrBox holds the BakedStringBox* (binary +0xe0).
     // TODO: if the port later adds Arabic language support, swap to "fontstruetype/arabic.ttf".
+#ifndef __bada__
     {
         m_BakedStrSmart = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     }
@@ -171,6 +181,7 @@ MainScreen::MainScreen(Game& g)
             m_pSliceInstrBox->FitIntoVerticalBounds();
         }
     }
+#endif // !defined(__bada__)
 
     // Set size = (480.0, 138.0, 1.0)
     size = Vec3(480.0f, 138.0f, 1.0f);
@@ -182,10 +193,12 @@ MainScreen::MainScreen(Game& g)
     // Binary ctor @ 0x0014c430: calls ninja_text_tex->GetHeight() (vtable +0x18)
     // -> shifts right by 1 -> adds 160.0.
     // m_BounceY is the bounce POSITION; starts at top of screen and falls into place.
+#ifndef __bada__
     const float ninjaH = m_ninjaTextTex.IsValid()
                        ? (float)(m_ninjaTextTex->m_Height / 2)
                        : 0.0f;
     m_BounceY = ninjaH + 160.0f;
+#endif // !defined(__bada__)
 }
 
 MainScreen::~MainScreen() {
@@ -218,7 +231,9 @@ void MainScreen::Release() {
 
 // Matches Update at 0x0014b278 (677 lines) — state machine
 void MainScreen::Update(float dt) {
+#ifndef __bada__
     m_Time += dt;
+#endif
 
     // Binary @ 0x0014b2a4: toggle null-check + create runs at the top of Update,
     // before the state switch, so destroyed toggles are recreated in any state.
@@ -235,6 +250,7 @@ void MainScreen::Update(float dt) {
         // settled (m_GameDt < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
+#ifndef __bada__
         float f0 = TexMoreGamesF0();
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
@@ -244,12 +260,15 @@ void MainScreen::Update(float dt) {
                 game_work.m_GameDt = 0.0f;
             }
         } else {
+#endif // !defined(__bada__)
             // Settle branch: clear gameMode, advance timer, ramp camera toward -1.
             // Binary @ 0x0014b60e: writes 0 to g_GameData+0x04 (gameMode).
             game_work.gameMode = 0;
             m_Timer2 += dt;
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
+#ifndef __bada__
         }
+#endif // !defined(__bada__)
 
         // Binary: CreateButtons called unconditionally every frame; gate inside CreatePlayDojo.
         CreatePlayDojo();
@@ -282,19 +301,21 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_GAME_START: {
+#ifndef __bada__
         if (-game_work.m_GameDt > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
             game_work.m_LevelTransitionFlag = 1;
         }
+#endif // !defined(__bada__)
         game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(game_work.m_GameDt) < 0.001f) {
             game_work.m_GameDt = 0.0f;
-            #ifndef FN_ASM_VERIFY_CROSS
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Update/GAME_START camera settled");
-            #endif
             m_State = STATE_CAMERA_FADE;
+#ifndef __bada__
             m_bGameStartReset = false;
+#endif // !defined(__bada__)
             game_work.m_LevelTransitionFlag = 0;
         }
 
@@ -325,6 +346,7 @@ void MainScreen::Update(float dt) {
         // The port-only !m_pDojoScreen guard was a stale-latch bug that suppressed re-creation.
         if (fruitCount == 0 && m_Timer2 != 0.0f && m_Timer2 < 0.001f) {
             m_Timer2 = 0.0f;
+#ifndef __bada__
             DojoScreen* dojoScreen = new DojoScreen(game);
             dojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
             // Binary @ 0x197494: vtable->Init(scr) is called BEFORE HUD::AddControl.
@@ -332,6 +354,7 @@ void MainScreen::Update(float dt) {
             dojoScreen->Init();
             game_work.mHud->AddControl(dojoScreen);
             m_pDojoScreen = dojoScreen;
+#endif // !defined(__bada__)
         }
         break;
     }
@@ -352,10 +375,10 @@ void MainScreen::Update(float dt) {
                 // f0=0.0f means case-0's hold branch is skipped immediately on the next tick,
                 // so the slide-in animation starts right away on return.
                 m_Timer2 = STATE_8_RESET_TIMER;
+#ifndef __bada__
                 TexMoreGamesF0() = 0.0f;
-                #ifndef FN_ASM_VERIFY_CROSS
+#endif // !defined(__bada__)
                 LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/SLIDE_IN hold expired");
-                #endif
                 m_State = STATE_CAMERA_ZOOM;
             }
             posAlpha = 1.0f;
@@ -404,8 +427,10 @@ void MainScreen::Update(float dt) {
         pos.y = (sizeY + 320.0f - 2.0f * tt) * 0.5f;
 
         if (oldTimer2 > STATE_0E_THRESHOLD && m_Timer2 <= STATE_0E_THRESHOLD) {
+#ifndef __bada__
             GameModeScreen* gms = new GameModeScreen(game, false);
             game_work.mHud->AddControl(gms);
+#endif // !defined(__bada__)
         }
         break;
     }
@@ -475,7 +500,9 @@ void MainScreen::Update(float dt) {
         }
         if (Bomb::BombFlashFull()) {
             SystemManager::GetInstance().QuitGame();
+#ifndef __bada__
             game.running = false;
+#endif // !defined(__bada__)
         }
         break;
     }
@@ -556,6 +583,7 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
 //   port uses Draw(Vec3&, int) for ergonomic param-passing.
 void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
+#ifndef __bada__
 
     if (m_State == STATE_CAMERA_FADE) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
@@ -641,6 +669,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         game.renderer.DrawQuad(m_DrawColour);
         m_TexBc->UnSet();
     }
+#endif // !defined(__bada__)
 }
 
 // ASM-verified: v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
@@ -706,11 +735,13 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
     // Binary: tute = 1.0 while dt > 0 (which is always true during gameplay).
     // tute is a static local — it is NEVER reset to 0 when dt drops to 0.
     // The only path to tute = 0 is the floor-bounce settle below.
+#ifndef __bada__
     if (dt > 0.0f) {
         m_GlobalAlphaTarget = 1.0f;
     }
     // NOTE: No else branch. Binary's static tute keeps its last value when dt <= 0,
     // unlike the old port code which incorrectly reset m_GlobalAlphaTarget to 0.
+#endif // !defined(__bada__)
 
     // Bounce floor: floorLimit = pos.y + 18 - 15 = pos.y + 3
     float floorLimit = floorPos - 15.0f;
@@ -723,13 +754,17 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
             transitionTimer > ELAPSED_THRESHOLD &&
             dt > 0.0f) {
             m_StateTimer = 0.0f;
+#ifndef __bada__
             m_GlobalAlphaTarget = 0.0f;
+#endif // !defined(__bada__)
         }
     }
 
     // m_Lean lerp: m_Lean += (tute - m_Lean) * 0.25
     // tute = m_GlobalAlphaTarget
+#ifndef __bada__
     m_Lean += (m_GlobalAlphaTarget - m_Lean) * ALPHA_LERP_RATE * FN::g_DebugTimeScale;
+#endif // !defined(__bada__)
 
     // m_LogoPos = (-175, 26, 0) + (-120, -17, 0) * m_Lean * 2.0
     // fruit_text + sliceInstrBox draw position (binary @ 0x00195a58)
@@ -1047,6 +1082,7 @@ void MainScreen::DrawPostEffects() {
 
 // Binary @ 0x0014D1F8 — 8-segment radial loading spinner.
 void MainScreen::DrawLoadingSymbol(const float* hudScale) {
+#ifndef __bada__
     if (!m_blurryBackingTex.IsValid()) return;
 
     int idx   = (int)m_Field114 & 7;  // DAT_0014D4B8
@@ -1129,6 +1165,9 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
     game.renderer.DrawTriList(s_verts, 48);
 
     m_blurryBackingTex->UnSet();
+#else
+    (void)hudScale;
+#endif // !defined(__bada__)
 }
 
 // Defunct: vtable PreDraw — no-op stub; binary @ 0x0014AC94
