@@ -28,12 +28,11 @@ public:
     static Delegate Make(T*, R (T::*)(Args...)) { return Delegate(); }
     static Delegate MakeFree(R (*)(Args...)) { return Delegate(); }
 private:
-    // Match real port-side Delegate.h layout: 36 bytes on ARM32 (this is what
-    // every other layout-asserting class -- HUDControl, MenuButton,
-    // FruitFactControl, etc. -- is calibrated to). NOTE: GameSound RE doc
-    // says binary is 32 bytes; the 4B discrepancy is a known port-vs-binary
-    // drift that GameSound's sizeof(Slot)==0x38 asserts have been disabled
-    // for. See src/engine/audio/GameSound.h TODO.
+    // Layout matches port-side Delegate.h exactly: 32B inline buffer + 1B flag@+0x20 + 3B pad = 0x24 (36B).
+    // This also matches the binary (StackAllocatedPointer<Concept,32>): size=0x24 was ASM-verified via
+    // asm-inspector. The "32" is the inline-buffer CAPACITY (kInlineSize), not the struct size.
+    // There is NO port-vs-binary drift on Delegate layout.
+    // v1.6.1 StackAllocatedPointer ctor@0x15d2a8 / Resolve@0x15d298 (asm-inspector 2026-06-21).
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
     unsigned char                                          _tag;
     unsigned char                                          _pad[3];
