@@ -7,13 +7,13 @@
 
 #include "FruitInfo.h"
 #include "util/StringHash.h"
-#include "util/PathCI.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "game/PowerUpManager.h"
 #include "game/WaveManager.h"
 #include "math/Random.h"
 #include "debug/Logger.h"
+#include "xml/XmlLoad.h"
 #include <tinyxml2.h>
 #include <cstdlib>
 #include <cstring>
@@ -69,14 +69,7 @@ void FruitInfo_Load(const char* xmlPath)
     }
 
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(xmlPath);
-    if (err != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(xmlPath);
-        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
-    }
-    if (err != tinyxml2::XML_SUCCESS)
-    {
-        LOG_ERROR("FRUITINFO/LoadInfo", "failed to open '%s' (error %d)", xmlPath, err);
+    if (FN::LoadXmlCI(doc, xmlPath) != tinyxml2::XML_SUCCESS) {
         return;
     }
     tinyxml2::XMLElement* root = doc.FirstChildElement("fruitInfoFile");
