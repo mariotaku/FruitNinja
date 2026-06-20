@@ -16,7 +16,8 @@
 #   --skip-build : reuse existing tmp/fnverify.{arm,thumb}.so (stages 2-4 only)
 #
 # Env overrides (Windows + Docker Desktop defaults):
-#   GHIDRA/BINDIFF/PY paths, BUILD_IMAGE=fnverify-bada, EXPORT_IMAGE=binexport-cli
+#   GHIDRA/BINDIFF/PY paths, BUILD_IMAGE=fnverify-bada,
+#   EXPORT_IMAGE=ghcr.io/mariotaku/binexport-cli:arm
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +29,7 @@ mkdir -p "$OUTDIR"
 BINARY_EXE="$TMP/FruitNinja_v1_6_1.exe"
 BINARY_BX="$TMP/binary.cli.BinExport"          # cached binary export (reused)
 : "${BUILD_IMAGE:=fnverify-bada}"
-: "${EXPORT_IMAGE:=binexport-cli:latest}"
+: "${EXPORT_IMAGE:=ghcr.io/mariotaku/binexport-cli:arm}"
 : "${BINDIFF:=/c/Program Files/BinDiff/bin/bindiff.exe}"
 : "${PY:=py}"
 export MSYS_NO_PATHCONV=1
