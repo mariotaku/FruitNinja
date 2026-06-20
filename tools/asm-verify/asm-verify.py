@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """asm-verify: per-symbol asm comparison between cross-build .o and binary.
 
-Phase A:
 - Reads tools/asm-verify-manifest.toml.
 - For each [[symbol]]:
     * Disassembles the symbol from the cross-build .o (port side).
     * Reads the corresponding pre-exported binary asm from bada-binary/symbols/.
-    * Normalizes both sides (strips literal addresses, ident strings, .L
-      label numbering, branch-target offsets).
-    * Diffs and classifies: MATCH / COSMETIC / SUSPICIOUS / DIVERGE / UNPAIRED.
-- Writes tmp/asm-verify/report.md.
+    * Normalizes both sides at the OPERAND level (_norm_instr): abstracts
+      reg-alloc / reloc-model codegen noise, keeps immediates, struct offsets
+      and predication (real signal). See _parse_instr's block comment.
+    * Diffs (LCS) and classifies: MATCH / COSMETIC / SUSPICIOUS / DIVERGE /
+      UNPAIRED, with an LCS-aligned -/+ body in the report.
+- Writes tmp/asm-verify/report.md (+ report.json for the asm-triager agent).
 
-Phase B will swap the toy normalizer + line differ here for asm-differ proper.
+Operand-level scoring was validated once bada-sdk was confirmed to be the
+binary's exact compiler (task #55); a standalone asm-differ integration that
+once stood in for this was removed (task #63) in favour of the in-house
+operand normalizer.
 """
 import argparse
 import difflib
+import hashlib
 import os
 import pathlib
 import re
@@ -38,15 +43,12 @@ OUT_DIR = pathlib.Path(os.environ.get(
 BINARY_SYMBOL_DIR = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BIN_SYMBOL_DIR",
     PROJECT_ROOT / "bada-binary" / "symbols"))
-ASM_DIFFER = pathlib.Path(os.environ.get(
-    "ASM_VERIFY_ASM_DIFFER",
-    "/opt/asm-differ/diff.py"))
-USE_ASM_DIFFER = ASM_DIFFER.exists()
 
 # Triage sidecar: sticky decisions that downgrade SUSPICIOUS/DIVERGE rows
 # the user (or asm-triager agent) has already classified as "accept". Keyed
-# by the symbol's mangled name; an entry is invalidated when the diff content
-# changes (we hash the asm-differ score+max as a cheap proxy).
+# by the symbol's mangled name; an entry is invalidated when the normalized
+# asm content changes (we store a sha256 of the normalized port+binary lines,
+# so cosmetic scorer tweaks don't silently wipe human triage decisions).
 TRIAGE_PATH = pathlib.Path(os.environ.get(
     "ASM_VERIFY_TRIAGE_PATH",
     ASM_VERIFY_DIR / "triage.json"))
@@ -344,91 +346,6 @@ def disasm_port_symbol(obj_path: pathlib.Path, mangled: str) -> str:
     return res.stdout
 
 
-def run_asm_differ(obj_path: pathlib.Path, bin_asm_path: pathlib.Path,
-                   mangled: str) -> dict:
-    """Invoke asm-differ in JSON mode for one symbol.
-
-    Returns the parsed JSON dict on success, or {} on failure (lets the
-    fall-back toy differ take over).
-    """
-    if not USE_ASM_DIFFER or not ASM_DIFFER.exists():
-        return {}
-    settings_src = ASM_VERIFY_DIR / "diff_settings.py"
-    work = pathlib.Path("/tmp") / "asm-differ-work"
-    work.mkdir(parents=True, exist_ok=True)
-    # asm-differ reads diff_settings.py from cwd at startup.
-    if not (work / "diff_settings.py").exists():
-        try:
-            (work / "diff_settings.py").write_text(settings_src.read_text())
-        except Exception:
-            return {}
-    try:
-        res = subprocess.run(
-            [
-                "python3", str(ASM_DIFFER),
-                "-o",                                # diff .o files (recommended)
-                "--no-pager",
-                "--format=json",
-                "-B",                                # don't visualise branches in output
-                "-R",                                # don't show .rodata refs
-                "-I",                                # ignore address differences
-                "-i",                                # ignore large immediates
-                "-j", f".text.{mangled}",            # restrict to per-fn section
-                "--base-asm", str(bin_asm_path),     # pre-extracted binary asm
-                "--file", str(obj_path),             # cross-build .o
-                mangled,
-            ],
-            capture_output=True, text=True, cwd=str(work), timeout=30,
-        )
-    except Exception:
-        return {}
-    if res.returncode != 0 or not res.stdout.strip():
-        return {}
-    try:
-        import json
-        return json.loads(res.stdout)
-    except Exception:
-        return {}
-
-
-def classify_asm_differ(d: dict) -> tuple[str, str]:
-    """Convert asm-differ JSON result into our verdict + reason.
-
-    Score is roughly proportional to Levenshtein edit cost on the asm token
-    sequence -- ~50 score per single-line edit. Use absolute thresholds, not
-    percent-of-max: max_score scales with function length, but a function
-    with 5 missed lines is "small diff" regardless of total length.
-    """
-    score = d.get("current_score")
-    max_score = d.get("max_score") or 0
-    if score is None or max_score == 0:
-        return "UNPAIRED", "asm-differ produced no score"
-    pct = (score * 100) // max_score if max_score else 0
-    if score == 0:
-        return "MATCH", f"asm-differ {score}/{max_score} (identical)"
-    if score < 50:
-        return "COSMETIC", f"asm-differ {score}/{max_score} ({pct}% diff)"
-    if score < 1500:
-        return "SUSPICIOUS", f"asm-differ {score}/{max_score} ({pct}% diff)"
-    return "DIVERGE", f"asm-differ {score}/{max_score} ({pct}% diff)"
-
-
-def render_asm_differ_text(d: dict) -> list[str]:
-    """Render an asm-differ JSON row list as plain-text diff lines."""
-    out = []
-    for row in d.get("rows", []):
-        base = (row.get("base") or {}).get("text") or []
-        cur  = (row.get("current") or {}).get("text") or []
-        # Each text segment is {"text": "...", "format": "..."}.
-        base_text = "".join(s.get("text", "") for s in base).rstrip()
-        cur_text  = "".join(s.get("text", "") for s in cur).rstrip()
-        # Skip pure-source-display rows (no asm).
-        if not base_text and not cur_text:
-            continue
-        out.append(f"{base_text:<50} | {cur_text}")
-    return out
-
-
 def classify_lcs(port_lines, bin_lines):
     """Classify based on normalized LCS similarity.
     Returns (verdict, reason, score, max_score, diff_lines).
@@ -475,18 +392,23 @@ def classify_lcs(port_lines, bin_lines):
         verdict = "DIVERGE"
     reason = f"{sim:.1f}% LCS ({p_count}p vs {b_count}b)"
 
-    # Pseudo-diff for report
+    # Aligned diff for the report. A naive positional zip (port[i] vs bin[i])
+    # mis-renders: one inserted line shifts every following line and shows them
+    # all as changed even on a high-LCS MATCH, which misleads triage. Use the
+    # same longest-common-subsequence alignment the SCORE is based on
+    # (difflib.SequenceMatcher) so the displayed -/+ hunks match the verdict.
+    # `- ` = binary-only, `+ ` = port-only, `  ` = common.
     diff_lines = []
-    for i in range(max(p_count, b_count)):
-        p = port_lines[i] if i < p_count else ""
-        b = bin_lines[i] if i < b_count else ""
-        if p == b:
-            diff_lines.append(f"  {p}")
-        else:
-            if i < b_count:
-                diff_lines.append(f"- {b}")
-            if i < p_count:
-                diff_lines.append(f"+ {p}")
+    sm = difflib.SequenceMatcher(a=bin_lines, b=port_lines, autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for line in bin_lines[i1:i2]:
+                diff_lines.append(f"  {line}")
+        else:  # replace / delete / insert
+            for line in bin_lines[i1:i2]:
+                diff_lines.append(f"- {line}")
+            for line in port_lines[j1:j2]:
+                diff_lines.append(f"+ {line}")
 
     return verdict, reason, score, max_score, diff_lines
 
@@ -513,8 +435,15 @@ def verify_one(s: dict) -> dict:
     port_lines = normalize(port_text)
 
     verdict, reason, score, max_score, diff = classify_lcs(port_lines, bin_lines)
+    # Content hash of the NORMALIZED asm -- the triage staleness key. Keying on
+    # this (not the score) means a cosmetic scorer/threshold tweak that leaves
+    # the normalized instruction streams unchanged preserves human triage; only
+    # an actual change to the compared asm invalidates a decision.
+    asm_hash = hashlib.sha256(
+        ("\n".join(bin_lines) + "\x00" + "\n".join(port_lines)).encode("utf-8")
+    ).hexdigest()[:16]
     return {**s, "verdict": verdict, "reason": reason, "diff": diff,
-            "score": score, "max_score": max_score,
+            "score": score, "max_score": max_score, "asm_hash": asm_hash,
             "port_norm": port_lines, "bin_norm": bin_lines}
 
 
@@ -531,15 +460,18 @@ def load_triage() -> dict:
 
 def apply_triage(results: list[dict], triage: dict) -> list[dict]:
     """Replace SUSPICIOUS/DIVERGE verdicts with the agent's sticky decision
-    when the asm-differ score still matches the triaged hash.
+    when the normalized asm still hashes to the triaged value.
     """
     for r in results:
         name = r.get("mangled")
         entry = triage.get(name)
         if not entry:
             continue
-        # Invalidate if score has drifted from the triage record.
-        if r.get("score") != entry.get("score") or r.get("max_score") != entry.get("max_score"):
+        # Invalidate if the normalized-asm hash has drifted from the triage
+        # record. Entries written before asm_hash existed (only score/max_score)
+        # are treated as stale -- re-triage against the current baseline.
+        entry_hash = entry.get("asm_hash")
+        if entry_hash is None or r.get("asm_hash") != entry_hash:
             r["triage_stale"] = True
             continue
         # Sticky verdict from triage -- prefix verdict with "(t)" so it's clear.
@@ -581,7 +513,7 @@ def write_report(results: list[dict]) -> pathlib.Path:
             stale = r.get("triage_stale", False)
             if stale:
                 lines.append("")
-                lines.append("⚠ triage entry stale (score drifted since last triage)")
+                lines.append("WARNING: triage entry stale (normalized asm changed since last triage)")
             lines.append("")
             lines.append("Notes: " + r.get("notes", ""))
             if r.get("score") is not None:
@@ -604,6 +536,7 @@ def write_report(results: list[dict]) -> pathlib.Path:
             "reason":  r.get("reason"),
             "score":   r.get("score"),
             "max_score": r.get("max_score"),
+            "asm_hash": r.get("asm_hash"),
             "diff":    r.get("diff", []),
             "triage_stale": r.get("triage_stale", False),
         })
