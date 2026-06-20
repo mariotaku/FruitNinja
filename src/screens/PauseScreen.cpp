@@ -545,10 +545,6 @@ void PauseScreen::Update(float dt) {
     // before/after Init since Init doesn't manage those slots.
     if (!m_ResumeButton) {
         m_ResumeButton = new MenuButton();
-        // Binary passes texture via ctor arg -> m_Texture; Init's
-        // fruitType<0 text-button branch reads m_Texture to auto-size
-        // m_TargetSize and size from texture dims. m_Texture is set for
-        // HUDControl3d::Draw rendering.
         m_ResumeButton->m_Texture = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
@@ -572,7 +568,7 @@ void PauseScreen::Update(float dt) {
 
     if (!m_QuitButton) {
         m_QuitButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
+        // v1.6.1 PauseScreen::Update @0x001a5ebc: texture via ctor arg -> m_Texture.
         m_QuitButton->m_Texture = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
@@ -582,6 +578,10 @@ void PauseScreen::Update(float dt) {
             Vec3(0.0f, 0.0f, 0.0f),
             Mortar::Delegate0<void>()
         );
+        // DIFFERS: binary Quit is a BSButton sized by ReshapeBounds(54,20); this MenuButton
+        // stand-in uses that text-box as m_RestScale (v1.6.1 PauseScreen::Update @0x001a5ebc).
+        // TODO: port m_QuitButton as a proper BSButton (see task: PauseScreen Quit BSButton).
+        m_QuitButton->m_RestScale = Vec3(54.0f, 20.0f, 0.0f);
 
         game_work.mHud->AddControl(m_QuitButton);
         m_QuitButton->SetSingular();
@@ -589,7 +589,6 @@ void PauseScreen::Update(float dt) {
 
     if (!m_RetryButton) {
         m_RetryButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
         m_RetryButton->m_Texture = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(

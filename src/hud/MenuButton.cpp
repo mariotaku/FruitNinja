@@ -220,18 +220,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bTouchHeld     = 1;
     m_bScoreSubmitted = 0;
 
-    // Toggle-button (fruitType < 0): auto-size from texture if no hitBounds
-    if (fruitType < 0 && !m_bHasHitArea && m_Texture.IsValid()) {
-        Mortar::Texture* tex = m_Texture.Get();
-        if (tex) {
-            float w = (float)(tex->m_Width  + 1);
-            float h = (float)(tex->m_Height + 1);
-            m_RestScale.x = w;
-            m_RestScale.y = h;
-            size.x = w;
-            size.y = h;
-        }
-    }
+    // ASM-spec v1.6.1 MenuButton::Init @0x0019b994: m_RestScale (+0x13C) is set ONLY
+    // from the caller's hitBounds/size Vec3 (param_4). Binary has NO texture-pixel
+    // auto-size; do not derive size from m_Texture->m_Width/Height.
 
     // Create fruit entity if fruitType >= 0
     if (fruitType >= 0) {
