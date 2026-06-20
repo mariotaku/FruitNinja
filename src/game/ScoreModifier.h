@@ -9,14 +9,15 @@
 //
 // Binary addresses (v1.6.1):
 //   ctor            0x001477d8
-//   ResetSpecific   0x00147830
+//   ~ScoreModifier  0x00147830  (D1 dtor)
+//   ResetSpecific   0x00147898
 //   UpdateSpecific  0x001478e0
 //   DeferPoints     0x001478b8
 //   ApplyModifier   0x0014798c
-//   RemoveModifier  // TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
-//   GetType         0x0011d134  (returns 2)
-//   ParseSpecific   0x0011ccb0
-//   Clone           0x0011cc6c
+//   Clone           0x00147a58
+//   ParseSpecific   0x00147abc
+//   RemoveModifier  0x00147b8c
+//   GetType         0x001480e0  (returns 2)
 
 #include "GameModifier.h"
 
@@ -46,7 +47,7 @@ public:
 
     ScoreModifier();
 
-    // @ 0x00147830
+    // @ 0x00147898
     void ResetSpecific() override;
 
     // @ 0x001478e0
@@ -55,18 +56,18 @@ public:
     // @ 0x0014798c
     void ApplyModifier(bool isPurchased, float* extra) override;
 
-    // TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
+    // @ 0x00147b8c
     void RemoveModifier() override;
 
     int GetType() override { return 2; }
 
-    // @ 0x0011ccb0
+    // @ 0x00147abc
     void ParseSpecific(TiXmlElement* xml) override;
 
-    // @ 0x0011cc6c
+    // @ 0x00147a58
     GameModifier* Clone() override;
 
-    // @ 0x0011cb58 — score delegate target when m_bDeferPoints is active
+    // @ 0x001478b8 — score delegate target when m_bDeferPoints is active
     int DeferPoints(int points);
 };
 

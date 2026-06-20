@@ -20,16 +20,12 @@ ScoreModifier::ScoreModifier()
     , m_DeferAccum(0)
 {}
 
-// @ 0x00147830
-// Binary writes: [r0,#0x28]=0 (m_LossAdd), [r0,#0x2c]=1 (m_LossMultiply),
-//                [r0,#0x20]=0 (m_GainAdd),  [r0,#0x24]=1 (m_GainMultiply).
-// m_bDeferPoints (+0x34) is NOT reset here — binary @ 0x00147830 has no strb.
+// ASM-spec v1.6.1 ScoreModifier::ResetSpecific @ 0x00147898: writes m_LossAdd=0, m_LossMultiply=1, m_GainAdd=0, m_GainMultiply=1; m_bDeferPoints NOT reset (no strb in binary).
 void ScoreModifier::ResetSpecific() {
     m_LossAdd      = 0;
     m_LossMultiply = 1;
     m_GainAdd      = 0;
     m_GainMultiply = 1;
-    // Binary @ 0x00147830 -- m_bDeferPoints NOT reset here.
 }
 
 // @ 0x001478e0 — per-frame multiply into PowerUpManager score slots
@@ -51,21 +47,20 @@ int ScoreModifier::UpdateSpecific(float /*dt*/) {
 void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_bDeferPoints) {
-        static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(0);   // clears -1 sentinel (binary L11790c)
-        SetScoreDelegate(this);           // Callee<ScoreModifier> trampoline (binary L11cc1c)
+        static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(0);   // clears -1 sentinel
+        SetScoreDelegate(this);           // Callee<ScoreModifier> trampoline (v1.6.1 SetScoreDelegate @ 0x0011a440)
     }
     ++m_ApplyCount;
 }
 
-// TODO: v1.6.1 0x???? (ScoreModifier::RemoveModifier) — refresh stale v1.5.x addr
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 ScoreModifier::RemoveModifier @ 0x00147b8c (re-analyst)
 void ScoreModifier::RemoveModifier() {
     if (m_bDeferPoints) {
-        SetDefaultScoreDelegate();       // Global<int,int>(&DefaultScoreDelegate) (binary L11cda4)
+        SetDefaultScoreDelegate();       // Global<int,int>(&DefaultScoreDelegate) (SetDefaultScoreDelegate addr unresolved in v1.6.1 .symtab)
     }
 }
 
-// ASM-verified: 2026-05-03T00:00 binary @ 0x0011ccb0..0x0011cd20 (asm-inspector)
-// TODO: v1.6.1 0x???? (ScoreModifier::ParseSpecific) — refresh stale v1.5.x addr
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 ScoreModifier::ParseSpecific @ 0x00147abc (re-analyst)
 void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
     TiXmlElement mult = xml->FirstChildElement("multiplier");
     ResetSpecific();
@@ -79,10 +74,11 @@ void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
     }
 }
 
-// TODO: v1.6.1 0x???? (ScoreModifier::Clone) — refresh stale v1.5.x addr
+// ASM-spec v1.6.1 ScoreModifier::Clone @ 0x00147a58: memberwise-copy all fields then force clone m_bConfigured=0
 GameModifier* ScoreModifier::Clone() {
     ScoreModifier* c = new ScoreModifier();
     *c = *this;
+    c->m_bConfigured = 0;
     return c;
 }
 
