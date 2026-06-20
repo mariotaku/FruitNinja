@@ -13,6 +13,18 @@
 #include <cmath>
 #include <vector>
 
+// GCC 4.4.1 (C++03) forbids local types as template arguments (C++11 lifted
+// this restriction). WordToken must be at file scope so std::vector<WordToken>
+// compiles under the Sourcery 2010q1 cross-build.
+namespace {
+struct WordToken {
+    const char* start;
+    int         len;
+    float       advance; // in world units
+    bool        hardBreak; // true = this word is followed by a forced line break
+};
+} // anonymous namespace
+
 namespace Mortar {
 
 BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
@@ -188,12 +200,6 @@ void BakedStringBox::Layout() {
     // Tokenise into logical lines split by '\n', then words within each line.
     // Binary SetText splits on '\n' into separate lines before word-wrapping.
     // FitIntoVerticalBounds @0x00246fbc then shrinks until all fit within box.
-    struct WordToken {
-        const char* start;
-        int         len;
-        float       advance; // in world units
-        bool        hardBreak; // true = this word is followed by a forced line break
-    };
     std::vector<WordToken> words;
     {
         const char* p = m_Text;
