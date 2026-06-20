@@ -31,4 +31,6 @@ RUN apt-get update \
 RUN arm-samsung-nucleuseabi-g++ --version | head -1
 
 WORKDIR /work
-ENTRYPOINT ["/bin/bash"]
+# No ENTRYPOINT: every caller (run.sh, compile-one.sh, bindiff-pipeline.sh)
+# passes an explicit `bash <script>` / `bash -c '...'` command. A bash entrypoint
+# would prepend a second bash -> "cannot execute binary file" (exit 126).
