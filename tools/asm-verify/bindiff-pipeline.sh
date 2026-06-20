@@ -59,8 +59,11 @@ build_twin() {  # $1=mode flag  $2=output .so name
 
 export_bx() {  # $1=input .so/.exe (in tmp)  $2=output .BinExport (in tmp)
   echo ">> exporting $(basename "$1") -> $(basename "$2")"
+  # prepend-namespace: emit Class::Method qualified names (94% vs 0.6% bare leaf),
+  # which breaks BinDiff's structural ties correctly -> fewer low-conf mis-pairs.
+  # (resolve-bindiff-names.py still recovers full signatures by address-join.)
   docker run --rm -v "$(win "$TMP")":/work "$EXPORT_IMAGE" \
-    "/work/$1" "/work/$2" 2>&1 | grep -E "Wrote|error:" | tail -1
+    "/work/$1" "/work/$2" prepend-namespace 2>&1 | grep -iE "wrote|error:" | tail -1
 }
 
 diff_one() {  # $1=secondary .BinExport (in tmp)  $2=output basename
