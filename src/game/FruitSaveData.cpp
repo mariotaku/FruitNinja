@@ -143,9 +143,12 @@ void FruitSaveData::ClearTotal(uint32_t hash) {
     m_Totals.erase(hash);
 }
 
-// ClearCombo @ 0x00129b94 -- clears the in-session map.
+// ClearCombo -- resets the all-time best-combo record.
+// v1.6.1 FruitSaveData::ClearCombo @ 0x001526c0 (thunk 0x001106b0):
+//   m_BestComboLength = 0 (+0x210); m_BestComboFruits[0..10] = -1 (+0x214..+0x23c).
 void FruitSaveData::ClearCombo() {
-    m_SessionTotals.clear();
+    m_BestComboLength = 0;
+    for (int i = 0; i < 11; i++) m_BestComboFruits[i] = -1;
 }
 
 // FinishedGame @ 0x0012a034. Decays all m_ModeScoreHistory survivor values by 1.
