@@ -530,7 +530,21 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             uint16_t idx = *prevLink;
             PSPParticle& p = m_pParticles[idx];
 
-            // --- Integrate ---
+            // --- Resolve per-particle template (needed for layer check) ---
+            const PSPParticleTemplate* pTmpl = 0;
+            if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
+                pTmpl = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
+            }
+
+            // --- Layer filter (binary gate @0x13ed54: in_r2 == template[+0x2d]) ---
+            // Only the matched-layer Draw pass ages/integrates/renders this particle.
+            // Non-matching passes skip it entirely -- no aging here.
+            if (!pTmpl || pTmpl->m_UseDepth != layer) {
+                prevLink = &p.m_NextLink;
+                continue;
+            }
+
+            // --- Integrate (only for matched layer) ---
             p.m_Age += dt;
             if (p.m_Age >= p.m_Life) {
                 // Particle died: unlink from live-list and return to free-list.
@@ -547,14 +561,8 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 
             p.m_Vel += p.m_Gravity * dt;
 
-            // Resolve per-particle template (once, shared by damping + render).
-            const PSPParticleTemplate* pTmpl = 0;
-            if (p.m_field44 >= 0 && (size_t)p.m_field44 < tmpl.m_Sets.size()) {
-                pTmpl = tmpl.m_Sets[(size_t)p.m_field44].m_pTemplate;
-            }
-
             // Velocity damping from particle template (per-component lerp over life).
-            if (pTmpl) {
+            {
                 const float dampX = pTmpl->m_VelocityMin[0]
                     + (pTmpl->m_VelocityMax[0] - pTmpl->m_VelocityMin[0]) * t;
                 const float dampY = pTmpl->m_VelocityMin[1]
@@ -574,13 +582,6 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
             p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
             p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
-
-            // --- Layer filter ---
-            if (pTmpl && pTmpl->m_UseDepth != layer) {
-                ++m_DrawnParticleCount;
-                prevLink = &p.m_NextLink;
-                continue;
-            }
 
             // --- Group flush on template change (batches DrawTriList per texture) ---
             if (pTmpl != curTmpl) {
