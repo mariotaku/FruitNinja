@@ -797,15 +797,21 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
     }
 }
 
+// Helper: get texture size as Vec3, fallback to default
+static Vec3 TexSize(const Mortar::SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
+    if (tex.IsValid() && tex->m_Width > 0)
+        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
+    return Vec3(defW, defH, 1.0f);
+}
+
 void MainScreen::CreateToggles() {
     if (!game_work.mHud) return;
 
-    // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c: toggle size is literal (32,32,1), not texture px.
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
-        Vec3(32.0f, 32.0f, 1.0f), nullptr);
+        TexSize(m_TexSoundOn, 32.0f, 32.0f), nullptr);
     pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game_work.mHud->AddControl(pSoundToggle);
 
@@ -813,7 +819,7 @@ void MainScreen::CreateToggles() {
     pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
-        Vec3(32.0f, 32.0f, 1.0f), nullptr);
+        TexSize(m_TexMusicOn, 32.0f, 32.0f), nullptr);
     pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game_work.mHud->AddControl(pMusicToggle);
 }
