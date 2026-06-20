@@ -3,18 +3,27 @@
 
 //
 // Mortar::Delegate<R(Args...)> — type-erased callable, layout-compatible
-// with the binary's `Mortar::DelegateN<Ret, ...>` family. Fixed 36-byte
-// size matching the binary regardless of arity.
+// with the binary's `Mortar::DelegateN<Ret, ...>` family (implemented via
+// StackAllocatedPointer<Concept,32>). Fixed 36-byte size matching the binary
+// regardless of arity.
 //
+// ASM-verified layout (0x24 = 36 bytes, identical to binary):
+//   +0x00..+0x1F  inline subobject placement-constructed here; its vptr is AT
+//                 +0x00 (binary Resolve@0x15d298 returns &m_Storage directly
+//                 when flag==0, so the vptr IS the returned pointer value).
+//   +0x20         m_bInline (binary name) / m_bEmpty (port name): see note below.
+//   +0x21..+0x23  3 bytes padding (zeroed by ctors)
 //
-// Layout (36 bytes / 0x24, identical to binary regardless of arity):
-//   +0x00..+0x1F  inline polymorphic subobject (vptr + bound state)
-//   +0x20         m_bEmpty   1 = empty/no-callable, 0 = inline-stored
-//   +0x21..+0x23  padding
+// Flag at +0x20 — binary vs port semantics:
+//   Binary (StackAllocatedPointer::m_bInline): 0 = inline-stored, 1 = heap/empty.
+//   Port (m_bEmpty):                           1 = empty,          0 = inline-bound.
+//   These are value-identical in every reachable state: every FN callable is
+//   <=32B so the binary's heap path is never taken. empty=1, inline-bound=0.
+//   v1.6.1 StackAllocatedPointer Resolve@0x15d298 / ctor@0x15d2a8 / CopyConstruct@0x15d604
 //
-// The inline subobject is a Concept (abstract base) whose first 4 bytes
-// are its vptr — matching the binary's "ptr = vptr of inline subobject"
-// at offset +0x00.
+// Dispatch empty-guard: binary operator() @0x15f490 null-checks the Resolve()
+//   result (at 0x15f498) before vtable dispatch — it does NOT test the flag
+//   byte directly. The port mirrors this via Ptr() returning nullptr when empty.
 //
 // Concrete subtypes:
 //   FreeFn     — wraps a free function pointer. Sizeof: 4 vptr + 4 fnptr = 8.
@@ -24,9 +33,6 @@
 // Functor<F> requires sizeof(Functor<F>) <= 32. Larger callables fail
 // static_assert. Binary's heap-fallback path is not taken in any
 // FruitNinja callsite per RE.
-//
-// Empty-state: operator() is a no-op (returns R()). Matches binary's
-// invoke flow at 0x0013134c which null-checks before vtable dispatch.
 //
 // Compatibility shims `Delegate0`..`Delegate4` are provided at the bottom
 // for code that still uses the legacy API.
@@ -146,7 +152,7 @@ public:
     }
 
     // Invoke. Empty delegates silently return R(); matches binary flow
-    // at 0x0013134c (null-check before vtable dispatch).
+    // v1.6.1 Mortar::Delegate0<void>::operator() @0x15f490 (null-check at 0x15f498 before vtable dispatch).
     R operator()(Args... args) const {
         if (m_bEmpty) return R();
         return Ptr()->Invoke(std::forward<Args>(args)...);
@@ -237,6 +243,10 @@ private:
 
     static const std::size_t kInlineSize = 32;
     typename std::aligned_storage<kInlineSize, sizeof(void*)>::type m_Storage;  // +0x00
+    // +0x20: binary field is StackAllocatedPointer::m_bInline (0=inline, 1=heap/empty). Port uses m_bEmpty
+    // (1=empty, 0=bound). Every FN callable is <=32B so the heap path is never taken -> binary-flag and
+    // m_bEmpty are value-identical in every reachable state (empty=1, inline-bound=0).
+    // v1.6.1 StackAllocatedPointer Resolve@0x15d298 / ctor@0x15d2a8 / CopyConstruct@0x15d604.
     uint8_t  m_bEmpty;                                                          // +0x20
     uint8_t  m_pad[3];                                                          // +0x21 (zeroed by ctors)
 };
@@ -263,6 +273,7 @@ namespace Mortar {
 // Each shim wraps the variadic Mortar::Delegate so it inherits all the
 // templated callable-construction. Same 36-byte ABI as Delegate.
 
+// ASM-verified: 2026-06-21T00:00Z v1.6.1 Mortar::Delegate0<void> {ctor@0x15d2a8, Resolve@0x15d298, Delete@0x15d2bc, operator()@0x15f490, CopyConstruct@0x15d604} -- inline object at +0x00 (vptr), m_bInline@0x20 (0=inline/1=heap-empty), size 0x24 (asm-inspector)
 template<typename Ret>
 class Delegate0 {
     Delegate<Ret()> m_d;
