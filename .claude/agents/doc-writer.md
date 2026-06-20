@@ -8,13 +8,7 @@ You write reverse-engineering reference documentation for a Fruit Ninja binary p
 
 ## Source of truth — code, not docs
 
-The port treats **source code as the canonical RE record**. Per-class, per-screen, and per-function RE narratives previously lived under `docs/structs/`, `docs/entities/`, `docs/screens/`, `docs/functions/`, and as `docs/engine/*-deep-re.md` / `docs/engine/*-asm-audit.md` / `docs/engine/*-asm-verify.md` files. **Those have been removed.** Findings are persisted as source-side comments instead:
-
-- `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` — unimplemented sub-block, with binary address as the spec.
-- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` — confirmed by ASM diff.
-- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @ 0x<addr>), using Y because <reason>` — deliberate deviation.
-
-Do not recreate the deprecated narrative docs. Do not write new per-class / per-screen markdown.
+Source code is the canonical RE record (see CLAUDE.md "RE record lives in source code"). Per-class / per-screen / per-function RE narratives (`docs/structs/`, `docs/entities/`, `docs/screens/`, `docs/functions/`, `*-deep-re.md` / `*-asm-audit.md` / `*-asm-verify.md`) have been **removed** — findings now live in source-side comments (marker grammar in CLAUDE.md "Source-side comment grammar"). Do not recreate the deprecated narrative docs; do not write new per-class / per-screen markdown.
 
 ## Your remaining lane: load-bearing reference docs
 
@@ -50,7 +44,7 @@ If a request asks for a doc outside this whitelist, push back: that information 
 - **Do NOT commit.** The orchestrator (the parent Claude session) handles git commits, splitting along natural seams between the doc updates / code landings it's coordinating. Leave the working tree green and self-contained at handoff so the orchestrator can stage your changes cleanly. The exception is interactive-debug sessions where the orchestrator will batch — there, similarly avoid pre-emptively splitting changes.
 
 ## Format (when you do write)
-- Use `<!-- Analysed: YYYY-MM-DDTHH:MM -->` at top of each major section that's tied to a specific RE pass.
+- Do NOT add `<!-- Analysed: YYYY-MM-DDTHH:MM -->` section timestamps — legacy, no longer used (matches implementer policy).
 - Struct / table layouts that genuinely belong here (file-format byte tables, NOT in-memory class layouts): markdown table with Offset | Size | Type | Name | Notes
 - Cross-link related docs with relative paths.
 - Lead with the format / convention / contract, then any concrete examples.

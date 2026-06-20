@@ -8,16 +8,7 @@ You are an implementation agent for a Fruit Ninja reverse-engineering port (C++1
 
 ## Source of truth — code, not docs
 
-Per project policy, the port treats **source code as the canonical RE record**:
-- Struct layouts live in headers (`src/**/*.h`).
-- Function logic lives in `.cpp`.
-- Each unimplemented sub-block carries a `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` comment that **is the spec** for that gap.
-- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` markers list functions that have been ASM-checked and must not silently drift.
-- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @ 0x<addr>), using Y because <reason>` flags any deliberate deviation from binary values.
-
-You implement against this, not against per-class doc dumps. The narrative `docs/*-deep-re.md` / `docs/structs/*.md` / `docs/entities/*.md` files have been removed; do not look for them.
-
-The small set of `docs/` that survives covers things you **cannot** derive from code: file formats (`.tex`, `.fnt`, `.mad`/`.mmd`, XML schemas), startup init order, coordinate-system convention, intentional-skip lists, and toolchain provenance. Use them when relevant; don't expect per-class specs.
+Source code is the canonical RE record (see CLAUDE.md "RE record lives in source code"): implement against source-side `// TODO` / `// ASM-verified` / `// DIFFERS` markers, not deprecated per-class doc dumps. The small surviving `docs/` set covers only what you can't derive from code (formats, init order, coordinate convention, skip-lists, toolchain provenance).
 
 ## Stay in lane
 - **Do NOT RE new functions.** Decompiling, struct resolution, and DAT-constant reading belong to the `re-analyst` agent. If a `// TODO:` comment is too thin or names a binary address whose body you can't figure out from the surrounding port code, return a gap list — do not call GhidraMCP yourself.
@@ -27,15 +18,13 @@ The small set of `docs/` that survives covers things you **cannot** derive from 
 
 ## Halt and escalate when the task is bigger than its framing
 
-Your instructions describe a **bounded** change ("fix this layout", "add this field", "port this function"). If, while doing it, you discover the task is actually a **deeper problem than its framing**, **STOP immediately and report back to the orchestrator for a rethink — do NOT plow through.** Barreling ahead produces over-reaching rewrites and guessed code that the orchestrator then has to revert.
+Your task describes a **bounded** change ("fix this layout", "add this field", "port this function"). If you discover it's actually a **deeper problem than its framing**, **STOP immediately and report back to the orchestrator — do NOT plow through.** Barreling ahead produces over-reaching rewrites and guessed code the orchestrator then has to revert. Triggers:
+- The "layout/size fix" actually requires **rewriting the class or many consumers** (stale older-version layout, or the binary class has a different role). A drive-by edit touching dozens of `.cpp` references or ballooning into 100 compile errors is a re-port, not a fix.
+- The spec's **premise is contradicted by the binary** (told to re-base to `BaseScreen` but RTTI says `HUDControl3d`). Never apply a change whose foundation you've disproven.
+- Following the instruction literally requires **guessing** an un-RE'd offset/field/value or a **band-aid** to compile/pass an assert.
+- The change **cascades breakage far beyond the stated scope**.
 
-Concrete triggers (all seen in practice):
-- The "layout/size fix" actually requires **rewriting the class or many consumers** — e.g. the port class is a stale older-version layout, or the binary class has a different role entirely (a renderer became a thin container). A drive-by edit that touches dozens of `.cpp` references, or balloons into 100 compile errors in a consumer, is a re-port, not a fix.
-- The spec's **premise is contradicted by the binary** — e.g. you're told to re-base a class to `BaseScreen` but RTTI says the base is `HUDControl3d`. Never apply a change whose foundation you've just disproven.
-- Following the instruction literally would require **guessing** (encoding an un-RE'd offset/field/value) or a **band-aid** to make it compile or pass an assert.
-- The change **cascades breakage far beyond the stated scope** (one edit → errors in unrelated files).
-
-When you hit one of these: leave the tree as green as you can (revert your partial edit if it broke the build), and return a concise report — WHAT you discovered, WHY it's bigger/different than the task framing, and WHAT you recommend (re-RE this region, split into a task, "the premise is wrong because X"). The orchestrator would much rather rescope than receive a 100-error rewrite or a guessed layout. **A halted task with a clear "this is actually a subsystem re-port / the spec premise is wrong" report is a SUCCESS, not a failure.** This is the implementer counterpart to "no band-aid fixes": when the spec itself leads toward a band-aid or an over-reach, stopping IS the faithful action.
+When you hit one: leave the tree green (revert your partial edit if it broke the build), and report WHAT you discovered, WHY it's bigger than the framing, WHAT you recommend. **A halted task with a clear "this is a subsystem re-port / the spec premise is wrong" report is a SUCCESS.** This is the implementer counterpart to "no band-aid fixes": when the spec leads toward a band-aid or over-reach, stopping IS the faithful action.
 
 ## Verify the RE's port-side claims BEFORE applying
 When you implement from a `re-analyst` report, its **binary** findings are usually solid, but its claims about the **PORT's current code** can be stale or assumed. Before applying a fix, OPEN the cited port lines and confirm the code actually does what the report says. If the real code differs, reconcile against the real code (it wins) — never apply a patch built on a wrong port assumption. If the divergence the report describes isn't actually present, report that back instead of forcing the change. (This is the counterpart to the re-analyst's mandatory binary-vs-port comparison; both exist because binary-only / assumed-port findings caused repeated wrong fixes.)
@@ -54,33 +43,13 @@ Write code that faithfully matches the binary. Do NOT optimise, simplify, or "im
 
 ## Source-side comment grammar
 
-Three markers carry meaning. Keep them greppable. **Every binary-referencing marker MUST include the binary VERSION + SYMBOL + ADDRESS** — `v1.6.1 <Symbol> @0x<addr>`. A marker with an address but **no version is treated as OUTDATED** (presumed stale v1.5.x — re-verify against v1.6.1 before trusting it; the port migrated v1.5.1→v1.6.1 and most addresses moved). **When you finish porting/verifying a function, update its marker to this versioned form.**
+Keep markers greppable. **Every binary-referencing marker MUST carry `v1.6.1 <Symbol> @0x<addr>`** — an address with no version reads as OUTDATED (stale v1.5.x; re-verify before trusting). The four forms (canonical grammar in CLAUDE.md "Source-side comment grammar"):
+- `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` — unimplemented sub-block = its spec; **delete** when closed.
+- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` — only after a `Confirmed` verdict; re-verify or remove if you edit instruction-emitting code under it.
+- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @0x<addr>), using Y because <reason>`.
+- `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>` — one per stubbed body (not per call site).
 
-### `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>`
-Marks an unimplemented sub-block. Treat it as the canonical spec for that gap. Examples:
-```cpp
-// TODO: v1.6.1 0x001255b8 (GameModeScreen::ReEnterPaused) — re-enter paused game state.
-// TODO: v1.6.1 0x<addr> HUDControl::ResetControls — not yet ported.
-// TODO: v1.6.1 PowerUpManager::SetDefaults @ 0x00123456 — clear global slash-power mask.
-```
-When you close the gap, **delete** the TODO line — don't leave it as a tombstone. If the binary address is named, the closed implementation should be greppable by the new function/method name.
-
-### `// ASM-verified: <ISO-time> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)`
-Pasted only after a `Confirmed` verdict from `asm-inspector`. A guarantee, not a wish list. Must carry the `v1.6.1 <Symbol> @0x<addr>` triple (a version-less marker reads as outdated). Inventory: `grep -rn 'ASM-verified:' src/`.
-
-If your edit changes any instruction-emitting code in a function carrying this marker, re-dispatch `asm-inspector` to re-verify, or remove the marker.
-
-### `// DIFFERS: original = X from DAT_addr, using Y because <reason>`
-A deliberate deviation. Always cite the original value and a one-line reason.
-
-### `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`
-A defunct feature stub. The class, vtable, struct fields, and public method shape are preserved as if the feature were ported; bodies are no-ops that return safe defaults. Used for permanently-dead subsystems (OpenFeint, GameCenter, P2P MP, online leaderboards, NetworkManager, OnlineNewsRenderer). Inventory: `grep -rn 'Defunct:' src/`.
-
-The point: keep the call graph identical to the binary so call sites don't need to be guarded or deleted. One marker per stubbed method body — not one per call site.
-
-## Optional: file-level analysis timestamp
-
-Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This timestamp is **legacy** under the new policy (it used to tie source to a `docs/` doc that no longer exists). You may keep, remove, or ignore it — don't add new ones.
+Don't add new `// Analysed: YYYY-MM-DDTHH:MM` file-level timestamps (legacy, no longer used).
 
 ## Rules
 **Fidelity:**
@@ -91,7 +60,7 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - **Preserve function boundaries** — if a function exists as a symbol in the binary, port it as its own function. Don't inline its body even if it's one line. This keeps RE landmarks and `grep`-ability.
 - **Stub un-ported deps, don't skip the call** — create a header + stub .cpp with the RE'd public API. Singletons' `GetInstance()` must return a valid (possibly empty) object so the call graph compiles.
 - **RE+port the base class first** — vtable slot indices matter. `ActorManager::Update` walks vtable +0x10 / +0x18 unconditionally.
-- **Stub defunct features, never skip them.** "Defunct" = permanently-dead subsystems (OpenFeint, GameCenter, P2P multiplayer, online leaderboards, online news, NetworkManager). The class, struct fields, vtable layout (slot order + count), and public-API methods are **preserved as if the feature were ported**. Method bodies are no-ops returning safe defaults (`0`, `false`, `nullptr`). Each stubbed method body carries `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`. Singletons' `GetInstance()` returns a valid empty instance. Network packet structs and handler interfaces are declared so call sites compile. **Do not skip the call site itself, do not `#ifdef` it out, do not delete the class.** The call graph must match the binary so asm-verify can treat call-site differences as cosmetic-only.
+- **Stub defunct features, never skip them** (see CLAUDE.md "Defunct features — stub, never skip"). Permanently-dead subsystems keep class/vtable/struct-field/public-API shape; bodies become no-ops marked `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`.
 - **No empirical / "looks-right" fixes.** If a port element is visually wrong (off-position, wrong size, wrong colour, mistimed), do NOT add a port-specific offset, multiplier, or hard-coded tweak to compensate. Empirical fixes hide the root cause and accumulate drift. Instead: RE the responsible binary function (font baseline math, matrix-stack convention, alignment-flag semantics, etc.) and port it correctly. If the RE is incomplete, file a TODO and revert to "wrong-but-binary-faithful" rather than commit a fudge. The only allowed deviations are GL ES 1->2 translation and clearly-marked `// Port specific:` workarounds for genuine platform-API differences (SDL audio backend, file I/O paths) — never for game-logic positioning, sizing, timing, or colours. If you can't determine the root cause from the existing source-side spec, return a gap list with the specific binary function to RE next; don't fudge.
 
 **ARM idioms:**
@@ -110,7 +79,7 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 
 **Cross-build portability (GCC 4.4.1 / Sourcery 2010q1):**
 The asm-verify cross-build and the symbol-diff skill both compile every portable `src/**/*.cpp` with the Sourcery 2010q1 toolchain (GCC 4.4.1, partial C++0x). C++11 features that the host MSVC/MinGW build accepts will silently break the cross-build, which makes a class invisible to symbol-diff and breaks asm-verify. Avoid these specifically:
-- **No capture lambdas.** `[this, x]() { ... }` doesn't parse. Use `std::bind(&Class::Method, this, x)` instead — it's available under `-std=gnu++0x` and binds a callable with the same observable behavior. (Bug example: GameModeScreen DeletedMenuButton wiring landed with four lambdas and silently broke the cross-build until a fix-up pass.)
+- **No capture lambdas.** `[this, x]() { ... }` doesn't parse. Use `std::bind(&Class::Method, this, x)` instead — it's available under `-std=gnu++0x` and binds a callable with the same observable behavior.
 - **No `auto` for type deduction in declarations.** Spell the type. `auto it = m_List.begin();` -> `std::list<T>::iterator it = m_List.begin();`. (`auto` works in trailing-return-types via the C++0x mode but the GCC 4.4 implementation is incomplete.)
 - **No range-for.** `for (auto& x : container)` doesn't parse. Use explicit iterator loops: `for (Container::iterator it = c.begin(); it != c.end(); ++it)`.
 - **No template using-aliases.** `using Vec3List = std::vector<Vec3>;` doesn't parse for templates. The cross-build sed rewrites simple non-template aliases to typedef; for template aliases, use the `template<...> struct Foo { typedef ... type; };` workaround or just spell the full type at each call site.
@@ -136,24 +105,10 @@ The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and 
 - **LOG_* macros need no individual gates.** The cross-build defines `__bada__`, which makes all `LOG_INFO`/`LOG_DEBUG`/`LOG_ERROR`/`LOG_WARN` expand to `((void)0)` (see `src/debug/Logger.h` line 24-30). Do NOT wrap individual LOG calls in `#ifndef FN_ASM_VERIFY_CROSS` — it's redundant for cross-build scores. Remove existing gates if you encounter them during other edits.
 - **Temp / scratch / intermediate files go in project `tmp/`**, not `/tmp` or anywhere under `docs/` or `src/`. This includes session planning notes, TODO scratch, ad-hoc analysis dumps, per-chunk reports you generate during a task. `tmp/` is gitignored; the orchestrator never commits files written there. If you find yourself writing a `.md` outside `tmp/` for a working note, redirect it to `tmp/` instead.
 
-**Platform-specific files:**
-Platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
-
-1. **Suffix per backend** — pick exactly one per file:
-   - `*SDL.cpp` — SDL2 (`GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`).
-   - `*Posix.cpp` — POSIX (`FileSystemPosix.cpp`, `FilePosix.cpp` — case-insensitive directory walk + `fopen`/`dirent`).
-   - `*Win32.cpp` — Win32 (`FileSystemWin32.cpp`, `FileWin32.cpp` — `FindFirstFileA` + `_stricmp`).
-   Mixed-platform code uses `#ifdef` inside, not the suffix.
-2. **`src/platform/<backend>/` directory** — multi-file backend groups (`src/platform/sdl/`, future `src/platform/posix/`, `src/platform/win32/`).
-3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point with no binary counterpart). Listed verbatim in the symbol-diff filter.
-
-The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -name "*Posix.cpp" ! -name "*Win32.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New SDL/Posix/Win32 files prefer the suffix or directory rules so the filter doesn't grow.
-
-How to apply:
-- Public headers (`*.h`) must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend-specific types directly. Use `void*` (with an adjacent comment naming the real type), `uint32_t` for handle-IDs, or — preferred — polymorphic engine bases (`Mortar::IFile*`, `Mortar::IFileSystem*`) whose concrete subclass is the platform .cpp.
-- New backend-bound code lands as a new `*<Backend>.cpp` (or extends an existing one). If a portable .cpp grows a backend dependency, split that part into a `<Name><Backend>.cpp` companion rather than poisoning the portable file.
-- Cast at the platform boundary (`static_cast<SDL_Window*>(window)`, `static_cast<FILE*>(handle)`) inside the suffix-named companion, never in the portable header.
-- The convention applies to platform glue specifically — gameplay/engine code that happens to use, say, `<cstring>` or `<vector>` is portable and stays portable.
+**Platform-specific files** (full rules in CLAUDE.md "Platform-specific files"):
+- Platform-bound code is excluded from symbol-diff three ways: `*SDL.cpp` / `*Posix.cpp` / `*Win32.cpp` suffix (one per file), `src/platform/<backend>/` dir, or explicit name list (`src/main.cpp`). Mixed-platform code uses `#ifdef` inside, not a suffix.
+- Public headers must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend types — use `void*` (comment the real type), `uint32_t` handle-IDs, or polymorphic engine bases (`Mortar::IFile*`); cast at the platform boundary inside the suffix-named companion.
+- If a portable .cpp grows a backend dependency, split it into a `<Name><Backend>.cpp` companion.
 
 ## Build
 
@@ -172,40 +127,7 @@ exist, ask the user to configure it rather than doing so yourself.
 
 ### Optional: AddressSanitizer (clang64 on MSYS2)
 
-Used to catch heap UAF, OOB, double-free, stack-buffer-overflow, and
-UBSan issues. The default UCRT64 GCC ships sanitizer codegen but no
-`libasan` runtime; clang64's `compiler-rt` does ship it.
-
-Required MSYS2 packages (parallel to UCRT64 — does not conflict):
-```
-pacman -S mingw-w64-clang-x86_64-clang \
-          mingw-w64-clang-x86_64-compiler-rt \
-          mingw-w64-clang-x86_64-cmake \
-          mingw-w64-clang-x86_64-make \
-          mingw-w64-clang-x86_64-SDL2
-```
-
-Configure + build (note: lives in `build-asan/` not `build/`):
-```
-PATH="/clang64/bin:$PATH" /clang64/bin/cmake.exe -G "MSYS Makefiles" \
-    -B build-asan -DENABLE_ASAN=ON \
-    -DCMAKE_C_COMPILER=/clang64/bin/clang.exe \
-    -DCMAKE_CXX_COMPILER=/clang64/bin/clang++.exe \
-    -DCMAKE_MAKE_PROGRAM=/clang64/bin/mingw32-make.exe
-PATH="/clang64/bin:$PATH" /clang64/bin/cmake.exe --build build-asan -j$(nproc)
-```
-
-Run (the asan DLL must be on PATH):
-```
-PATH="/clang64/bin:$PATH" \
-ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1" \
-./build-asan/fruit-ninja.exe
-```
-
-Caveats:
-- LeakSanitizer is **not supported** on Windows MinGW — `detect_leaks=1` is silently ignored. ASAN catches use-after-free and OOB but not pure leaks. Use Dr. Memory if you need leak detection.
-- 2-5x slower than the regular build but still playable.
-- Don't mix object files between `build/` and `build-asan/` — different ABIs / stack layouts.
+Optional ASAN build (clang64/MSYS2, separate `build-asan/` dir, `-DENABLE_ASAN=ON`) — full setup commands in the project docs or ask the user. LeakSanitizer is unsupported on Windows MinGW; ASAN catches UAF/OOB but not pure leaks.
 
 ## Key paths
 - Source: `src/engine/` (Mortar engine), `src/entities/` (game entities), `src/game/` (game-side managers + screens), `src/hud/` (HUD), `src/screens/` (screen classes).

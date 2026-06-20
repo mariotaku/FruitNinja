@@ -128,10 +128,10 @@ SUSPICIOUS+ items (see `.claude/agents/asm-inspector.md`).
 - **Phase A** — pipeline plumbing. ✓ done.
 - **Phase B** — auto-discovery, parallel, cached. ✓ done.
 - **Phase C** — full GCC 4.4.1 via WSL. ✓ done.
-- **Phase D** — operand-level normalizer. ✓ done. The in-house `_norm_instr`
-  abstracts reg-alloc + reloc model, keeps immediates/offsets/predication; the
-  separate `asm-differ` integration was dropped in favour of it (the compiler is
-  confirmed identical, #55, so operand divergence is real signal).
+- **Phase D** — operand-level normalizer. ✓ done. In-house `_norm_instr`
+  abstracts reg-alloc + reloc model, keeps immediates/offsets/predication. The
+  compiler is confirmed identical to the binary's, so operand divergence is real
+  signal; the separate `asm-differ` integration was dropped in favour of it.
 - **Phase E** — `asm-triager` agent that takes the SUSPICIOUS/DIVERGE
   hunks (already pre-extracted) and classifies as
   ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED.
