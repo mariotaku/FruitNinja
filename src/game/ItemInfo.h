@@ -9,7 +9,7 @@
 // Size: 0x48 bytes (72 bytes).
 //
 // Derived class SlashModInfo (0x118 bytes) extends for SLASH_MODIFIER items.
-// Ctor @ 0x00113d58; ParseSlashModInfo @ 0x001126c0.
+// Ctor @ 0x0013ae78; ParseSlashModInfo @ 0x001126c0.
 //
 
 #include "engine/math/Colour.h"
@@ -188,7 +188,7 @@ struct LoopingSound {
 // SlashModInfo : ItemInfo (0x118 bytes)
 // Extends ItemInfo for SLASH_MODIFIER items.
 // Binary vtable overrides Parse at slot +0x10 with ParseSlashModInfo.
-// ctor @ 0x00113d58; parse @ 0x001126c0.
+// ctor @ 0x0013ae78; parse @ 0x001126c0.
 // -----------------------------------------------------------------------
 class SlashModInfo : public ItemInfo {
 public:

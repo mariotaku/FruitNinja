@@ -3,7 +3,7 @@
 // ItemInfo + SlashModInfo — method implementations.
 // Binary: ItemInfo::ctor 0x0013a714 (thunk 0x001145a0), ItemInfo::Parse 0x0011293c,
 //         ItemInfo in-place dtor 0x0013adb8, deleting dtor 0x0013b098,
-//         SlashModInfo::ctor 0x00113d58, ParseSlashModInfo 0x001126c0,
+//         SlashModInfo::ctor 0x0013ae78, ParseSlashModInfo 0x001126c0,
 //         SlashSoundMods::Parse 0x00112568, LoopingSound::Parse 0x0011253c.
 
 #include "ItemInfo.h"
@@ -21,6 +21,7 @@
 // ItemInfo
 // -----------------------------------------------------------------------
 
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 ItemInfo::ItemInfo @ 0x0013a714 (asm-inspector)
 // ItemInfo::ItemInfo ctor @ 0x0013a714 (thunk 0x001145a0)
 ItemInfo::ItemInfo()
     : m_pName(nullptr)
@@ -357,7 +358,8 @@ static int ParseSlashModColourType(const char* str) {
 // SlashModInfo
 // -----------------------------------------------------------------------
 
-// SlashModInfo ctor @ 0x00113d58
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 SlashModInfo::SlashModInfo @ 0x0013ae78 (asm-inspector)
+// SlashModInfo ctor @ 0x0013ae78
 SlashModInfo::SlashModInfo()
     : ItemInfo()
     , m_pColours(nullptr)
