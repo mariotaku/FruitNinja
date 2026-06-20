@@ -436,10 +436,10 @@ void Fruit::Update(float dt) {
             const float prevSpawnDelay = m_SpawnDelay;
 
             const bool gate =
-                !game_work.m_Paused
+                !game_work.bM_Mode
                 && game_work.m_BombHitTimer <= 0.0f
                 && (   (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f)
-                    ||  game_work.m_LevelTransitionFlag == 0);
+                    ||  game_work.bM_bPaused == 0);
             if (gate) {
                 m_SpawnDelay -= game_work.dt;   // +0x38, NOT dt*m_TimeScale
             }
@@ -448,7 +448,7 @@ void Fruit::Update(float dt) {
             if (prevSpawnDelay > THROW_FRUIT_SFX_THRESHOLD
                 && m_SpawnDelay <= THROW_FRUIT_SFX_THRESHOLD
                 && !s_FruitThrowSfxFiredThisFrame
-                && game_work.m_LevelTransitionFlag == 0)
+                && game_work.bM_bPaused == 0)
             {
                 s_FruitThrowSfxFiredThisFrame = true;
                 if (game_work.mGameSound)
@@ -930,17 +930,22 @@ void Fruit::KillFruit(bool doMissPenalty) {
                     }
                 } else if (Mortar::FailureEnabled(game_work.gameMode)) {
                     // Classic / Combo miss penalty (Zen falls through to no-op).
-                    if (MissControl* mc = MissControl::GetFree()) {
-                        Mortar::SmartPtr<Mortar::Texture> defTex;
-                        mc->MakeDisappear(pos, 0, defTex);
-                    }
-                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
-                    game_work.missCount++;
-                    if (game_work.missCount > 2) {
-                        // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
-                        g_ComboCount  = 0;
-                        g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
-                        FN::GameOver(-1, -1.0f, -1);
+                    // bM_bPaused gate: binary GameUpdate @0x1cf9c4 `ldrb r3,[gctx,#0x5]; cmp; bne`
+                    // suppresses miss penalty+gank+GameOver on the menu (bM_bPaused=1).
+                    // ASM-spec v1.6.1 GameUpdate @ 0x001cf534 / 0x001cf9c4 (asm-inspector)
+                    if (game_work.bM_bPaused == 0) {
+                        if (MissControl* mc = MissControl::GetFree()) {
+                            Mortar::SmartPtr<Mortar::Texture> defTex;
+                            mc->MakeDisappear(pos, 0, defTex);
+                        }
+                        if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
+                        game_work.missCount++;
+                        if (game_work.missCount > 2) {
+                            // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
+                            g_ComboCount  = 0;
+                            g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
+                            FN::GameOver(-1, -1.0f, -1);
+                        }
                     }
                 }
             }
@@ -1153,7 +1158,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     const bool canCritFruit = info->m_bScorable;
 
     // ASM-verified: 2026-05-20 binary @ 0x001780f0 (re-analyst).
-    // Critical-hit ladder gates on game_work fields at +0x05 (m_LevelTransitionFlag)
+    // Critical-hit ladder gates on game_work fields at +0x05 (bM_bPaused)
     // and +0x10 (m_BombHitTimer) -- the same "non-interactive cinematic" pair used
     // by GameOver, bomb-hit, level-transition. Previously mislabelled as "frenzy"
     // gating, but it's just the existing transition-gate + bomb-hit-timer pair.
@@ -1161,7 +1166,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 
     if (score >= 2
         && canCritFruit
-        && game_work.m_LevelTransitionFlag == 0   // +0x05
+        && game_work.bM_bPaused == 0   // +0x05
         && game_work.m_BombHitTimer       <= 0.0f // +0x10
        ) {
         int& thresh = game_work.m_ScoreThreshold;
@@ -1300,7 +1305,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //   && slash (hitter) != null                    -- real blade hit, not an
     //                                                   internal re-slice
     //   && m_bNoPowerUp == 0
-    //   && ( GameTaskState+0x05 (m_LevelTransitionFlag) == 0   -- normal play
+    //   && ( GameTaskState+0x05 (bM_bPaused) == 0   -- normal play
     //        || bombHitWindow )                       -- or inside the bomb-hit
     //                                                   cinematic window
     // The bomb-hit window is `(LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f`.
@@ -1308,7 +1313,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // ASM-verified: 2026-06-07 binary @ 0x001780b0 +0x6c0..+0x6f4 (re-analyst).
     int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
     {
-        const uint8_t ltfGate = (uint8_t)game_work.m_LevelTransitionFlag;
+        const uint8_t ltfGate = (uint8_t)game_work.bM_bPaused;
         const bool bombHitWindowGate = (uint8_t)(ltfGate - 2u) < 2u
             && game_work.m_BombHitTimer < kBombHitMax
             && game_work.m_BombHitTimer > kBombHitMin;
@@ -1389,7 +1394,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
         // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
         // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
-        const uint8_t ltf = (uint8_t)game_work.m_LevelTransitionFlag;
+        const uint8_t ltf = (uint8_t)game_work.bM_bPaused;
         const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
             && game_work.m_BombHitTimer < kBombHitMax
             && game_work.m_BombHitTimer > kBombHitMin;

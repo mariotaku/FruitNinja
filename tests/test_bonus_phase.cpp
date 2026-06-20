@@ -140,7 +140,7 @@ int main(int argc, char* argv[])
     gos->m_Timer = -0.333f;  // match state-0 -> state-1 initial timer (DAT_00141db0)
     game_work.pGameOverScreen = gos;
     game_work.mHud->AddControl(gos);
-    game_work.m_LevelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
+    game_work.bM_bPaused = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
     printf("[bonus_phase] GameOverScreen created in STATE_BONUS_PHASE (%d)\n",
            GameOverScreen::STATE_BONUS_PHASE);
@@ -334,7 +334,7 @@ int main(int argc, char* argv[])
             /*starCount=*/0);
         game_work.pGameOverScreen = gos2;
         game_work.mHud->AddControl(gos2);
-        game_work.m_LevelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
+        game_work.bM_bPaused = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
         // Settle to create the quit button (no entity drain -- same reason as above).
         printf("[bonus_phase]   settling %d frames for gos2 buttons...\n", SETTLE_FRAMES);

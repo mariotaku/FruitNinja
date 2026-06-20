@@ -130,7 +130,7 @@ static void DoSetTerminate() {
 
 // ASM-spec for QuitToMenu (binary @ 0x00169e50):
 //   ResetGlobalDt(1.0f)
-//   game_work.m_LevelTransitionFlag = 1                        // +0x05
+//   game_work.bM_bPaused = 1                        // +0x05
 //   mainScreen->m_State      = STATE_CAMERA_ZOOM (0)           // +0x10c
 //   mainScreen->m_StateTimer = 0.5f                            // +0x110
 //   if (game_work.m_pActiveHUDControl) m_pActiveHUDControl->m_bPendingRemoval = 1
@@ -153,7 +153,7 @@ static void DoQuitToMenu() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    game_work.m_LevelTransitionFlag = 1;                          // 0x169e6e
+    game_work.bM_bPaused = 1;                          // 0x169e6e
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);       // 0x169e7c -> m_State = 0
@@ -1094,7 +1094,7 @@ void GameOverScreen::Update(float dt) {
         } else {
             game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
             WaveManager::GetInstance()->Reset(false);
-            game_work.m_LevelTransitionFlag = 1;
+            game_work.bM_bPaused = 1;
             m_State = STATE_RETRY_FADE;
             break;
         }
@@ -1217,7 +1217,7 @@ void GameOverScreen::Update(float dt) {
         if (alpha < ALPHA_LOW) {
             WaveManager::GetInstance()->Reset(false);
             alpha = 0.0f;
-            game_work.m_LevelTransitionFlag = 0;
+            game_work.bM_bPaused = 0;
             m_FruitFactAlpha = 0.0f;
             WaveManager::NewGame();
             SetTerminate();

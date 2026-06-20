@@ -22,9 +22,9 @@ void GameOver(int endReason, float endScore, int endParam) {
     if (!game) return;
 
     // re-entry guard: levelTransitionFlag at g_GameData+0x05
-    if (game_work.m_LevelTransitionFlag != 0) return;
+    if (game_work.bM_bPaused != 0) return;
 
-    game_work.m_LevelTransitionFlag = 1;
+    game_work.bM_bPaused = 1;
 
     WaveManager::GetInstance()->ClearUnspawned();
 

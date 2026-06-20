@@ -36,10 +36,10 @@ struct GameWork {
     // +0x00..+0x38: UNCHANGED from v1.5.1 baseline.
     uint8_t taskStateIndex;        // +0x00: 0=Splash, 1=Frontend, 2=Game
     uint8_t field_0x01;            // +0x01
-    bool    m_Paused;              // +0x02: user-pause flag (see Game.h for full xref list)
+    bool    bM_Mode;               // +0x02: gameplay-mode-active gate (binary: bM_Mode); 0=active, non-zero=paused/inactive
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
     uint8_t gameMode;              // +0x04: GAME_MODE enum stored as uint8_t
-    uint8_t m_LevelTransitionFlag; // +0x05: non-interactive transition gate
+    uint8_t bM_bPaused;           // +0x05: pause/inactive gate (binary: bM_bPaused); 1=paused/suppressed
     uint8_t retryFlag;             // +0x06
     uint8_t field_0x07;            // +0x07
     float   retryTimer;            // +0x08
@@ -195,9 +195,9 @@ extern uint32_t g_GameFrameFlags;
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(GameWork, m_Paused)              == 0x02,  "GameWork::m_Paused");
+static_assert(offsetof(GameWork, bM_Mode)               == 0x02,  "GameWork::bM_Mode");
 static_assert(offsetof(GameWork, gameMode)              == 0x04,  "GameWork::gameMode");
-static_assert(offsetof(GameWork, m_LevelTransitionFlag) == 0x05,  "GameWork::m_LevelTransitionFlag");
+static_assert(offsetof(GameWork, bM_bPaused)            == 0x05,  "GameWork::bM_bPaused");
 static_assert(offsetof(GameWork, retryFlag)             == 0x06,  "GameWork::retryFlag");
 static_assert(offsetof(GameWork, m_GameDt)              == 0x0c,  "GameWork::m_GameDt");
 static_assert(offsetof(GameWork, m_BombHitTimer)        == 0x10,  "GameWork::m_BombHitTimer");

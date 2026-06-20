@@ -407,7 +407,7 @@ void GameModeScreen::Update(float dt) {
                 // ASM-verified: 2026-05-22 binary @ 0x0013f366..0x0013f386
                 // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
                 //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
-                //   g_GameData->byte_0x5 = 0;                 // m_LevelTransitionFlag
+                //   g_GameData->byte_0x5 = 0;                 // bM_bPaused
                 //   this->m_bPendingRemoval = 1;
                 //   g_GameData->pMainScreen->m_State = 0x11;  // STATE_CAMERA_FADE
                 //   if (IsSameScreenMultiplayer()) for-each-Slash: ColoursChanged
@@ -426,7 +426,7 @@ void GameModeScreen::Update(float dt) {
                 // ready_set_go / arcade_60seconds / arcade_go fire on
                 // arcade start. See Claude task #10.
                 game_work.mMainScreen->SetCameraTransition(0.0f);
-                game_work.m_LevelTransitionFlag = 0;
+                game_work.bM_bPaused = 0;
                 m_bPendingRemoval = 1;
                 game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped

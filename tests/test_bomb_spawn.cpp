@@ -289,7 +289,7 @@ int main(int argc, char* argv[]) {
     }
     game_work.gameMode = 0;
     FN::PrepareForLevelStart();
-    game_work.m_LevelTransitionFlag = 0;
+    game_work.bM_bPaused = 0;
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
         // test_screen.cpp's "classic" path leaves the menu buttons in

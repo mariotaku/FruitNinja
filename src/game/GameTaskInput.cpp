@@ -163,7 +163,7 @@ static bool PauseGameCallback(InputEvent* ev) {
     if (!ev) return true;
     Game* game = Game::GetInstance();
     if (!game) return true;
-    if (!game_work.m_Paused) {
+    if (!game_work.bM_Mode) {
         PauseScreen::PauseGame();
     } else {
         PauseScreen::UnpauseGame();
@@ -194,7 +194,7 @@ static bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
-    if (game_work.m_GameDt == 0.0f && !game_work.m_Paused) {
+    if (game_work.m_GameDt == 0.0f && !game_work.bM_Mode) {
         game_work.m_bFrameDirty = 1;
     }
     return true;

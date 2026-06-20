@@ -345,7 +345,7 @@ void EndRetryLevel() {
 
     game_work.retryFlag            = 0;                // 0x16a26e [+0x06]
     game_work.m_GameDt             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
-    game_work.m_LevelTransitionFlag = 0;               // 0x16a274 [+0x05]
+    game_work.bM_bPaused = 0;               // 0x16a274 [+0x05]
 
     // ASM-spec: GameInit binary @ 0x0016ca7c steps 11/13 creates a fresh
     // MainScreen (m_State=0) and sets m_GameDt = -1.0f. Port collapses
@@ -374,8 +374,8 @@ void RetryLevel() {
     // game+0x06 = retryFlag: arms the retry-update dispatch in GameUpdate.
     game_work.retryFlag = 1;
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
-    // game+0x05 = m_LevelTransitionFlag: suppresses GameOver cross-check + fuse SFX.
-    game_work.m_LevelTransitionFlag = 1;
+    // game+0x05 = bM_bPaused: suppresses GameOver cross-check + fuse SFX.
+    game_work.bM_bPaused = 1;
 
     // ASM-verified: 2026-05-20 binary @ 0x0016b040 (re-analyst follow-up)
     // Iterates WaveManager's wave-list (std::vector<WAVE_INFO*>, stride 0x78),

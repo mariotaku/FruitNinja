@@ -76,12 +76,12 @@ void SpeedControl::Update(float dt) {
     GameSound* gs = game_work.mGameSound;
 
     // ASM-verified: 2026-05-20 binary @ 0x00160de4 ldrb r3,[r3,#0x2] (re-analyst)
-    // Gate reads game_work+0x02 = m_Paused, NOT +0x05 = m_LevelTransitionFlag.
-    // Wrong gate caused Arcade-entry white-line flash: m_LevelTransitionFlag=1
+    // Gate reads game_work+0x02 = bM_Mode, NOT +0x05 = bM_bPaused.
+    // Wrong gate caused Arcade-entry white-line flash: bM_bPaused=1
     // at Arcade start, port returned early, default opaque-white m_DrawColour
     // (from HUDControl base ctor) persisted, HUDControl3d::Draw rendered the
     // quad for a frame or two until LTF cleared.
-    if (game_work.m_Paused) return;
+    if (game_work.bM_Mode) return;
 
     float deltaTarget, volTarget;
     if (m_DisplayedSpeed == 0.0f) {

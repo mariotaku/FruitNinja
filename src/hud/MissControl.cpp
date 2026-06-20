@@ -665,9 +665,9 @@ void MissControl::Update(float dt) {
         return;
     }
 
-    // Pause guard: binary reads game_work.m_Paused (+0x2), NOT m_LevelTransitionFlag (+0x5).
+    // Pause guard: binary reads game_work.bM_Mode (+0x2), NOT bM_bPaused (+0x5).
     // binary @ 0x00151c18..0x00151c20
-    if (game && game_work.m_Paused) return;
+    if (game && game_work.bM_Mode) return;
 
     pos.z = 0.0f;
 

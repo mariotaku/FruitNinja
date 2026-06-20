@@ -153,8 +153,8 @@ void TimeControl::Update(float dt) {
     // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
     // Three conditions suppress the timer tick (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
     // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
-    bool suppress = game_work.m_Paused
-                 || game_work.m_LevelTransitionFlag
+    bool suppress = game_work.bM_Mode
+                 || game_work.bM_bPaused
                  || (game_work.m_bMPRetryPending && !game_work.m_bP2PReady);
 
     if (!suppress) {

@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
         }
         game_work.gameMode = 0;
         FN::PrepareForLevelStart();
-        game_work.m_LevelTransitionFlag = 0;
+        game_work.bM_bPaused = 0;
         // Simulate the GameModeScreen state-6 snap (binary @ 0x0013f2b0):
         //   game_work.m_GameDt = 0.0f
         //   mainScreen.m_State    = STATE_CAMERA_FADE (0x11)

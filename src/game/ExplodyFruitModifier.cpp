@@ -105,8 +105,8 @@ ExplodyFruitModifier::FruitSplosion::~FruitSplosion()
 // RE-ported: 0x001352A0 — timer + radius collision push + alpha fade.
 void ExplodyFruitModifier::FruitSplosion::Update(float dt)
 {
-    // RE-ported: 0x1352a0 — pause guard (game_work.m_Paused at +0x02)
-    if (game_work.m_Paused) return;
+    // RE-ported: 0x1352a0 — pause guard (game_work.bM_Mode at +0x02)
+    if (game_work.bM_Mode) return;
 
     float wdt = WaveManager::GetInstance()->GetWavedt(0);
     float thr = m_p2;  // forceMax = EXPAND-phase end threshold

@@ -111,7 +111,7 @@ void SuperFruitGlow::DrawOrder(const Vec3& hudScale, int layerMask) {
 // out (-2*dt->0, release sound, set m_Dead +0x33); copy Fruit pos->+0x08;
 // z = fruit(+0x9c) - 40; colour alpha = trunc(75*m_Fade); set sound volume from m_Fade.
 void SuperFruitGlow::Update(float dt) {
-    bool paused = game_work.m_Paused;
+    bool paused = game_work.bM_Mode;
 
     if (!paused) {
         // Spin advance (m_Timer is the spin accumulator inherited from HUDControl)
