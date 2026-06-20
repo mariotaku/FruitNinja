@@ -161,29 +161,35 @@ ARM_TO_CANON = {
     'vstmia': 'vstm', 'vldmia': 'vldm',
 }
 
-# asm-verify is intentionally MNEMONIC-LEVEL: _parse_instr returns only the
-# mnemonic column (parts[2]), so classify_lcs compares instruction-MNEMONIC
-# sequences -- it is blind to operands (registers, struct offsets, constants).
+# asm-verify is now OPERAND-LEVEL (task #34/#56, ENABLED 2026-06-21).
 #
-# TODO(operand-level -- blocked on the exact compiler, task #34): making this
-#   operand-aware (return mnem + ops, i.e. ' '.join(parts[2:])) would let it catch
-#   wrong field-offset and wrong magic-number bugs. It was tried and REVERTED: the
-#   cross-build uses Sourcery G++ 4.4.1, but the binary was built with 4.4-261 --
-#   different compiler BUILDS schedule and select instructions differently, so
-#   operand-level LCS floods with codegen noise that no normalization fixes (a
-#   faithful class, Bomb, went 36 -> 40+ DIVERGE even with regalloc-tolerant
-#   register abstraction + selective immediate de-norm). The de-norm design (keep
-#   struct displacements [r0-r10,#off] + mov/movw constants, flatten the rest) is
-#   in git history (commit df6aadd). RE-ENABLE once the cross-build uses the
-#   binary's exact 4.4-261 compiler. Until then, operand-level precision comes from
-#   the size-net (static_asserts) and the asm-inspector agent (LLM reading ASM),
-#   not from this score.
+# Previously _parse_instr/_norm_instr returned only the mnemonic column so
+# classify_lcs was blind to operands (registers, struct offsets, constants).
+# Operand-level was tried+reverted once (commit df6aadd) because the cross-build
+# compiler wasn't confirmed to match the binary's, so operand LCS flooded with
+# codegen noise. Task #55 REMOVED that blocker: it empirically confirmed
+# bada-sdk == the binary's exact compiler (Samsung Sourcery G++ 4.4-261 /
+# "Sourcery 4.4-157" upstream) -- Bomb::Chuck compiled BYTE-IDENTICAL, and a
+# controlled clamp-idiom test reproduced the binary's exact vcmpe / it pl /
+# vmovpl predicated-move encoding. With the compiler confirmed, operand-level
+# divergence is REAL SIGNAL (wrong struct offset / wrong magic constant /
+# missing predication-clamp), not codegen skew.
+#
+# _norm_instr now NORMALIZES only codegen noise and KEEPS real signal:
+#   NORMALIZE (noise): register names (s/d/r -> VREG/DREG/GREG, sp/lr/pc kept),
+#     symbol/.LANCHOR/.L refs -> <SYM>, .w/.n + VFP type suffixes, [pc,#off]
+#     pool-slot offset -> [pc,#POOL], bl/blx -> CALL.
+#   KEEP STRICT (signal): immediates / movw|movt constants, struct displacement
+#     [GREG,#off], condition-code predication suffixes (vmovls/movne/it ls/...),
+#     literal-pool .word values, branch direction (beq/bne/...).
 def _parse_instr(line):
-    """Extract the instruction MNEMONIC from an objdump line; None for
-    non-instructions. (Mnemonic-only by design -- see the TODO above.)"""
+    """Extract the instruction (mnemonic + operands) from an objdump line;
+    None for non-instructions. (Operand-level -- see the block comment above.)"""
     line = line.strip()
     if not line or 'Disassembly' in line or 'file format' in line:
         return None
+    # Strip objdump's trailing "; <comment>" (pool target, redundant hex of an
+    # immediate, etc.) -- but keep the instruction + operand columns intact.
     if ';' in line:
         line = line.split(';')[0].strip()
     parts = line.split('\t')
@@ -191,46 +197,101 @@ def _parse_instr(line):
         return None
     if len(parts) == 2 and ':' in parts[0] and not parts[1].strip():
         return None
-    return parts[2].strip() if len(parts) >= 3 else parts[1].strip()
+    # objdump column layout: [addr:][raw-bytes][mnemonic][operands].
+    # Operand-level: return mnemonic + operands joined (parts[2:]), not just the
+    # mnemonic column. For lines without a raw-bytes column, fall back to parts[1:].
+    if len(parts) >= 3:
+        return ' '.join(p.strip() for p in parts[2:]).strip()
+    return parts[1].strip()
+
 
 def _norm_instr(instr):
-    """Normalize one instruction to canonical form."""
+    """Normalize ONE instruction to canonical operand-level form.
+
+    Strips codegen noise (reg-alloc, reloc model, encoding-size choices) but
+    KEEPS real signal (immediates, struct offsets, predication). See the block
+    comment above _parse_instr for the full NORMALIZE/KEEP policy (task #55)."""
     if not instr:
         return None
     parts = instr.split(None, 1)
     mnem = parts[0].lower() if parts else ''
     ops = parts[1] if len(parts) > 1 else ''
 
-    # VFP size suffixes
-    mnem = re.sub(r'(vldr|vstr)\.32', r'\1', mnem)
-    mnem = re.sub(r'(vadd|vsub|vmul|vdiv|vneg|vabs|vsqrt|vcmp|vcmpe|vmov)\.f32', r'\1', mnem)
-    mnem = re.sub(r'\.(32|64|f32|f64|s32|s64|u32|u64)\b', '', mnem)
+    # Drop nop / alignment padding. The PORT side disassembles the whole
+    # .text.<sym> section, whose tail includes inter-function alignment `nop`s
+    # (objdump renders them as `nop`, `nop.w`, `nop {0}`); the BINARY side is an
+    # exact byte-range extract with no padding, so these are pure noise that
+    # inflates the port line count. (asm-differ drops nops the same way.)
+    if mnem in ('nop', 'nop.w', 'nop.n') or mnem.startswith('nop'):
+        return None
 
-    # Strip ARM condition codes
-    mnem = re.sub(ARM_COND_CODES_RE + r'$', '', mnem)
-    # Strip Thumb .w/.n
-    mnem = re.sub(r'\.w$', '', mnem)
-    mnem = re.sub(r'\.n$', '', mnem)
-    # ARM->canonical
+    # --- bl/blx -> CALL (logical call; keep direction-less) ---
+    if mnem in ('bl', 'blx'):
+        return 'CALL <SYM>'
+
+    # --- VFP / size type suffixes are an encoding choice: strip (rule 3) ---
+    mnem = re.sub(r'\.(8|16|32|64|f16|f32|f64|s8|s16|s32|s64|u8|u16|u32|u64|i8|i16|i32|i64|p8)\b', '', mnem)
+    # --- Thumb width suffix .w/.n (rule 3) ---
+    mnem = re.sub(r'\.[wn]$', '', mnem)
+
+    # --- ARM<->Thumb push/pop/vpush/vpop canonicalisation ---
     mnem = ARM_TO_CANON.get(mnem, mnem)
-    # Flag-setting: adds->add etc.
-    if mnem.endswith('s') and len(mnem) > 2:
-        base = mnem[:-1]
-        if base in ARM_TO_CANON or base in ('add','sub','mov','and','orr','eor','bic','mul','lsl','lsr','asr','ror','adc','sbc','rsb','cmp','cmn','tst','teq'):
-            mnem = ARM_TO_CANON.get(base, base)
 
-    # Register canonicalization
-    ops = re.sub(r'\bs(\d+)\b', r'V\1', ops)
-    ops = re.sub(r'\bd(\d+)\b', r'D\1', ops)
-    ops = re.sub(r'\br(1[3-5])\b', r'G\1', ops)
-    ops = re.sub(r'\br([0-9]|1[0-2])\b', r'G\1', ops)
-    ops = ops.replace('sp', 'SP').replace('lr', 'LR').replace('pc', 'PC')
-    # Mask immediates and addresses
-    ops = re.sub(r'#-?\d+', '#N', ops)
-    ops = re.sub(r'#0x[0-9a-f]+', '#N', ops)
-    ops = re.sub(r'\b0x[0-9a-f]+\b', 'ADDR', ops)
-    ops = re.sub(r'\.L\d+', '.LX', ops)
-    ops = re.sub(r'<\S+>', '<SYM>', ops)
+    # KEEP predication suffixes (rule 8): do NOT strip condition codes. The
+    # clamp idiom (vmovls / vmovpl / bxle / it pl ...) is real port-faithfulness
+    # signal -- #55 proved a `>`-max vs binary `<`-min clamp surfaces here.
+
+    # Register canonicalization (rule 1): abstract reg-alloc, keep sp/lr/pc.
+    # VFP single s0..s31 -> VREG, double d0..d31 -> DREG, GP r0..r12 -> GREG.
+    ops = re.sub(r'\bs([0-9]|[12][0-9]|3[01])\b', 'VREG', ops)
+    ops = re.sub(r'\bd([0-9]|[12][0-9]|3[01])\b', 'DREG', ops)
+    ops = re.sub(r'\br([0-9]|1[0-2])\b', 'GREG', ops)
+    # r13/r14/r15 are sp/lr/pc -- keep them DISTINCT, not GREG.
+    ops = re.sub(r'\br13\b', 'sp', ops)
+    ops = re.sub(r'\br14\b', 'lr', ops)
+    ops = re.sub(r'\br15\b', 'pc', ops)
+    # GP register aliases objdump sometimes prints instead of rN: ip=r12,
+    # fp=r11, sl=r10, sb=r9, and the ATPCS a1-a4 / v1-v8 names. All are GP
+    # reg-alloc -> GREG (rule 1). (Order matters: these run after r0-r12.)
+    ops = re.sub(r'\b(ip|fp|sl|sb)\b', 'GREG', ops)
+    ops = re.sub(r'\b(a[1-4]|v[1-8])\b', 'GREG', ops)
+
+    # PC-relative literal-pool load offset is a slot index, not semantic (rule 4):
+    #   [pc, #28] / [pc, #0x1c] -> [pc, #POOL]   (must run BEFORE keep-imm logic,
+    #   and must NOT touch [GREG, #off] which is a struct displacement -- rule 7).
+    ops = re.sub(r'\[pc,\s*#-?(?:0x[0-9a-f]+|\d+)\]', '[pc, #POOL]', ops)
+
+    # Symbol / anchor / local-label relocation model -> ONE canonical ref (rule 2).
+    #   <_ZN..>, <name+0x4>, .LANCHOR3+0x8, .L12  all collapse to <SYM>.
+    ops = re.sub(r'<[^>]*>', '<SYM>', ops)
+    ops = re.sub(r'\.LANCHOR\d+(?:\s*\+\s*0x[0-9a-f]+)?', '<SYM>', ops)
+    ops = re.sub(r'\.L\d+', '<SYM>', ops)
+    # Branch-target form "b<cc> <addr> <SYM>" -- objdump prints the target
+    # address (no 0x prefix) before the symbol. In the linked binary that's a
+    # real address; in the unlinked port .o it's a placeholder `0` (the reloc
+    # isn't applied yet). Either way it's reloc-model noise (rule 2); the <SYM>
+    # already carries the destination. Match 1+ hex digits to catch both.
+    ops = re.sub(r'\b[0-9a-f]+\s+<SYM>', '<SYM>', ops)
+
+    # KEEP immediates strict (rules 6/7/9): canonicalise hex<->dec so disassembler
+    # formatting (0x48 vs 72) never trips, but PRESERVE the literal value.
+    def _canon_imm(m):
+        try:
+            return '#%d' % int(m.group(1), 0)
+        except ValueError:
+            return m.group(0)
+    ops = re.sub(r'#(-?0x[0-9a-f]+)\b', _canon_imm, ops)
+    ops = re.sub(r'#(-?\d+)\b', _canon_imm, ops)
+
+    # KEEP literal-pool .word values strict (rule 9): canonicalise the hex.
+    if mnem == '.word':
+        ops = re.sub(r'\b(0x[0-9a-f]+|\d+)\b',
+                     lambda m: '0x%x' % int(m.group(1), 0), ops)
+    else:
+        # Bare residual addresses (shouldn't remain after the above, but any
+        # stray 0x.... that isn't a kept immediate is an address -> flatten).
+        ops = re.sub(r'\b0x[0-9a-f]+\b', 'ADDR', ops)
+
     ops = re.sub(r'\s+', ' ', ops).strip()
     return f"{mnem} {ops}".strip()
 
@@ -250,6 +311,19 @@ def normalize(text):
         norm = _norm_instr(instr)
         if norm:
             result.append(norm)
+
+    # PIC/GOT literal-pool relocation words are reloc-model noise (rule 2), NOT
+    # data constants. In the unlinked port .o they're tiny unresolved offsets
+    # (.word 0x8 / 0x0); in the linked binary they're real GOT/anchor addresses
+    # (.word 0x186138). They pair with the PC-relative base idiom
+    # `add GREG, pc, GREG`. If a function uses that idiom, flatten its `.word`
+    # pool entries to `.word PICOFF` so the offset mismatch doesn't mask the real
+    # instruction-stream comparison. Functions WITHOUT the idiom (e.g. a leaf
+    # clamp like Bomb::Chuck) keep `.word 0x3e4ccccd` strict (rule 9) -- those
+    # are genuine float/int data constants and a real bug signal.
+    is_pic = any(re.match(r'add GREG, pc, GREG\b', l) for l in result)
+    if is_pic:
+        result = [re.sub(r'^\.word .*$', '.word PICOFF', l) for l in result]
     return result
 
 
@@ -357,7 +431,20 @@ def render_asm_differ_text(d: dict) -> list[str]:
 
 def classify_lcs(port_lines, bin_lines):
     """Classify based on normalized LCS similarity.
-    Returns (verdict, reason, score, max_score, diff_lines)."""
+    Returns (verdict, reason, score, max_score, diff_lines).
+
+    Thresholds (operand-level baseline, task #56): MATCH >=95, COSMETIC >=85,
+    SUSPICIOUS >=60, else DIVERGE. These were RE-VALIDATED after the move to
+    operand-level normalization (_norm_instr) -- a byte-identical function
+    (Bomb::Chuck, #55) lands MATCH 100%, and a single wrong-struct-offset line
+    in a short function (WaveManager::GetCriticalChance #116-vs-#112) lands
+    COSMETIC, so the cutoffs still separate faithful from divergent at the new
+    granularity. KNOWN residual noise: global-heavy functions diverge on the
+    linked-binary-vs-unlinked-.o GOT idiom (linked: `add GREG,pc,GREG` +
+    `ldr GREG,[GREG,GREG]`; unlinked -fpic: a longer GOT-address build). That's
+    a multi-instruction reloc-model mismatch rule 2 only partially absorbs, so
+    such functions over-weight toward DIVERGE -- but they were already escalated
+    (SUSPICIOUS) at mnemonic-level, never MATCH, so no real bug is hidden."""
     p_count = len(port_lines)
     b_count = len(bin_lines)
 
