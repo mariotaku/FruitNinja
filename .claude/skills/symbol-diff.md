@@ -105,7 +105,7 @@ cp /tmp/compile_failures.txt /work/tmp/symbol-diff/compile_failures.txt
 '
 ```
 
-Expected: ~67/99 TUs compile (the 32 failures use C++11 lambdas / range-for / shared_ptr-via-`<memory>` that GCC 4.4.1 cannot parse — fix `Delegate.h` template-aliases and replace lambdas with free functions to lift this).
+Expected: most TUs compile (count varies; failures use C++11 lambdas / range-for / shared_ptr-via-`<memory>` that GCC 4.4.1 cannot parse — see `compile_failures.txt`). Replace lambdas with free functions and fix template-aliases to lift these.
 
 ### 3. Generate the organized report
 
@@ -147,11 +147,9 @@ BADA = {'BadaSound','DisplayManagerBada','MAMAudioThread','MAMAudioController','
         'EditField','InputDeviceBada','GeometryBinding_Bada','IIndexStream_Bada','IVertexStream_Bada',
         'IndexStreamBasic_Bada','VertexStreamBasic_Bada','BadaTextureData','VertexElement_Bada',
         'FileSystem_Direct','IFile_Direct',
-        # SoundManager itself is portable in the binary, but the port's implementation
-        # lives entirely in src/engine/audio/SoundManagerSDL.cpp (excluded by *SDL.cpp
-        # filter) and uses simplified signatures (e.g. SFXPlay(name, sound) vs binary
-        # SFXPlay(name, ulong, MortarSound*, uchar, long)). Classified Bada-platform here
-        # until the SoundManager.cpp / SoundManagerSDL.cpp split + signature audit lands.
+        # SoundManager: port impl lives in SoundManagerSDL.cpp (excluded) w/ simplified
+        # signatures; classified Bada until the split + signature audit lands. See
+        # docs/engine/online-services-audit.md.
         'SoundManager'}
 LIBRARY = {'TiXmlNode','TiXmlElement','TiXmlDocument','TiXmlAttribute','TiXmlBase','TiXmlComment',
            'TiXmlDeclaration','TiXmlText','TiXmlUnknown','TiXmlHandle','TiXmlPrinter','TiXmlString',
@@ -212,7 +210,7 @@ PY
 Read `tmp/symbol-diff/missing_organized.md` and present:
 - Per-category class+method counts (False positives / Bada / tinyxml2 / Defunct / Phantom / Real)
 - Top 10-20 real gameplay gaps for next-priority planning
-- Compile-failure caveat (32 TUs typically blocked on C++11 features)
+- Compile-failure caveat (count varies; see compile_failures.txt — TUs blocked on C++11 features)
 
 ## Output
 - Files in `tmp/symbol-diff/`:

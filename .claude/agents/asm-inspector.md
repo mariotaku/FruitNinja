@@ -49,7 +49,7 @@ objdump output format — no Ghidra-specific normalization needed.
 ### 3. Compile the port source with the era-correct toolchain
 
 The cross toolchain is **Sourcery G++ Lite 2010q1-188 (GCC 4.4.1)** -- the
-upstream of Samsung's `Sourcery G++ 4.4-157` that built the binary (per its
+upstream of Samsung's `Sourcery G++ 4.4-261` that built the binary (per its
 `.comment` section). It's baked into the `fnverify` Docker image at
 `/opt/sourcery-2010q1/`. If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
 
@@ -80,16 +80,6 @@ If the file fails to compile (C++11 features GCC 4.4.1 cannot parse, or
 missing GL/SDL headers), **stop and report to the orchestrator**:
 "`<file>` cannot cross-compile — `<reason>`. Needs `<fix>` before
 asm-verify can verify it." Do NOT write a fallback TU.
-
-If the file compiles cleanly, this produces the port's actual ASM for the
-target function — no manual TU authorship, no risk of drift between a test
-harness and the real code.
-
-If the file **doesn't compile** (C++11 lambdas, range-for, `auto`, `enum class`,
-etc. that GCC 4.4.1 cannot parse), **stop and report to the orchestrator**:
-"`<file>` uses C++11 `<feature>` at line N — needs C++0x rewrite before
-asm-verify can compile it." Do NOT write a fallback TU — the port source IS
-the test; fix the port source.
 
 If the asm comes out tiny / wrong with `-O2`, try `-O3` or `-Os` — the
 binary's exact `-O` level isn't recorded, but `-O2` is the strongest signal
@@ -192,7 +182,7 @@ Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comm
 
 ## Anti-swap checklist (multi-arg functions)
 
-When the question involves a function with **two-or-more args of the same type** (e.g. `SetupOrtho(top, bottom, left, right, near, far)`, `SetupLookAt(eye, target, up)`, anything taking multiple `Vec3*` / `float`), it is the highest-risk shape for an LLM-RE swap bug — adjacent registers / VLDR slots look identical, and confident-but-wrong role assignment (`near` vs `far`, `target` vs `up`) is the failure mode that has bitten this port repeatedly. Before issuing a verdict on such a function, run **all five** of these checks:
+When the question involves a function with **two-or-more args of the same type** (e.g. `SetupOrtho(top, bottom, left, right, near, far)`, `SetupLookAt(eye, target, up)`, anything taking multiple `Vec3*` / `float`), it is the highest-risk shape for an LLM-RE swap bug — adjacent registers / VLDR slots look identical, and confident-but-wrong role assignment (`near` vs `far`, `target` vs `up`) is a known failure mode. Before a verdict on such a function, run **all five** checks:
 
 1. **Decode the literal pool, don't infer roles.** For each float-arg slot, follow the `VLDR.32 sN, [pc, #imm]` to its DAT_ address and decode the 4-byte little-endian IEEE-754 value. Report the actual decimal number per slot, not the role you guessed it played. If you write `s4=2000.0, s5=-6000.0`, you have a fact; if you write `near=2000, far=-6000`, you have a hypothesis.
 
@@ -212,7 +202,7 @@ In the report, distinguish:
 
 ## Anti-overcorrection checklist (join points + early returns)
 
-When the question involves a function with **branch reconvergence (join) points where vel/pos components are mixed with a sign mask Vec3**, OR a function with a **"wait then act" structure** (e.g. chuck-delay, cooldown, retry-loop) where the binary may early-return mid-function, surface decompile reads can produce a "DIVERGE -> remove this line" verdict that is itself the bug. Two real over-corrections in this project (`415ffc7` removed `* signX` on vel.x; `9d23834` removed an early return — both reverted in follow-up commits) came from skipping the checks below. Run **both** before issuing a verdict that REMOVES a sign multiplier or REMOVES an early-return:
+When the question involves a function with **branch reconvergence (join) points where vel/pos components are mixed with a sign mask Vec3**, OR a function with a **"wait then act" structure** (e.g. chuck-delay, cooldown, retry-loop) where the binary may early-return mid-function, surface decompile reads can produce a "DIVERGE -> remove this line" verdict that is itself the bug (removing a `* signX` sign multiplier or an early return are real over-corrections). Run **both** before a verdict that REMOVES a sign multiplier or an early-return:
 
 1. **Trace VFP registers past the join, not just within the arm.** For a switch / if-else that computes vel/pos components, follow each output register (e.g. `s17`/`s18` for vel.x/vel.y) from the per-arm computation through the branch-reconvergence point ALL THE WAY to the final `Vector3` ctor or entity field write (`stm r?, {r0,r1,r2}` at `entity+0x10` / `+0x1c`). Note any `vmul.f32 s?, s?, [sp, #M]` at the join that applies a sign/mask Vec3 (e.g. `local_70 = Vec3(±1,1,1)`). The per-arm formula is one factor; the join-side Vec3 multiply is another. Skipping the join-side trace produces "binary doesn't apply sign here" claims that are wrong.
 
@@ -228,42 +218,10 @@ In the report:
 
 ## Tooling reference
 
-- **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`.
-- **`tools/asm-verify/compile-one.sh`**: single-file compile + objdump wrapper. Usage: `bash tools/asm-verify/compile-one.sh src/path/File.cpp _ZmangledName tag`. Writes to `tmp/asm-compare/<tag>_port.s`. Handles staging, C++11→C++03 sed, ABI flags.
-- **In-image binutils**: `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}` on `$PATH`.
-- **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
-- **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop). For ad-hoc single-function verification use `compile-one.sh` as in §3; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
-- Compile-unit workdir: `tmp/asm-compare/`.
+- **`fnverify` Docker image**: Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/` + cmake/python3/rsync/i386 multilib + in-image `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}`. Build via `bash tools/asm-verify/setup.sh`.
+- **`compile-one.sh`** (§3): single-function verify. **`run.sh`**: bulk verifier — "did my last commit drift any verified symbols?"
+- **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — C++-mangled symbols). Compile-unit workdir: `tmp/asm-compare/`.
 - One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): prefer `run_script_inline`; if too large, save to `tmp/ghidra_scripts/` (gitignored, disposable).
 - VFP immediate encoding cheat-sheet: 0.5=#96, 1.0=#112, 1.5=#120, 2.0=#0, 3.0=#16, -1.5=#248. Single-precision: `fconsts s_n, #N`. Full table in ARM ARM A8.6.339.
 - GhidraMCP: `disassemble_function`, `decompile_function`, `get_xrefs_to`, `read_memory`.
-
-## Worked example: spin-loop "oneBig" branch
-
-Q: Does the binary produce `compA*1.5` with sign retained, or `|compA*1.5|`?
-
-Binary (v1.6.1, from `disassemble_function 0x00177578`):
-```
-00177578: vmov.f32  s15, 0x3fc00000   ; s15 = 1.5
-0017757c: vmul.f32  s0,  s17, s15     ; s0  = compA * 1.5
-00177580: vcmpe.f32 s0,  #0
-00177584: vmrs      apsr, fpscr
-00177588: bpl       0x0017765e         ; branch if positive (no flip)
-0017758a: vmov.f32  s15, 0xbfc00000   ; s15 = -1.5
-0017758e: vmul.f32  s0,  s17, s15     ; s0  = compA * -1.5  (sign flip)
-00177592: b         0x0017765e
-```
-
-Test (`tmp/asm-compare/spin_test.cpp`):
-```cpp
-extern "C" float test_oneBig_abs(float compA) {
-    float big = compA * 1.5f;
-    if (big < 0.0f) big = -big;
-    return big;
-}
-extern "C" float test_oneBig_signed(float compA) {
-    return compA * 1.5f;
-}
-```
-
-Compile and inspect: only `test_oneBig_abs` produces the same `vcmpe / bpl / vmul-by-negative` pattern. `test_oneBig_signed` produces a single `vmul`. **Verdict: binary is `|compA*1.5|`. Port's original `if(big<0)big=-big` was correct.**
+- Disambiguate signed-vs-abs / etc. by compiling BOTH candidate C forms and matching which emits the binary's pattern (e.g. `vcmpe / bpl / vmul-by-negative` = signed, vs a single `vmul` = plain multiply).

@@ -146,30 +146,14 @@ Go back to step 1 with fresh scores. Stop when:
 - User says stop
 - Round count reached (if specified)
 
-## Anti-patterns
+## Anti-patterns / known false-positives (don't fix)
 
-- **Don't rewrite during mechanical sweeps.** Mechanical trimming (guards, LOGs, dead code)
-  is fast and safe. Structural rewrites (container changes, algorithm changes) need
-  dedicated RE sessions.
-- **Don't change signatures casually.** Even `const&` → by-value changes need binary
-  nm verification first — they produce different mangled names.
-- **Don't touch platform files.** `*SDL.cpp`, `*Posix.cpp`, `*Win32.cpp` are excluded
-  from asm-verify and won't affect scores.
-- **Don't ignore cross-build breakage.** The cross-build uses GCC 4.4.1 (`-std=gnu++0x`).
-  C++11 features (`alignas`, `auto`, range-for, lambdas) silently break it.
-
-## Known false-positive patterns (don't fix)
-
-- `_GLOBAL__I_*` static initializers — always cosmetic (PIC anchor register diff)
-- GL 1.x vs GLES2 pipeline in Draw functions — structural, not mechanical
-- Compiler-generated std::vector/std::map destructor code — can't change without
-  changing the container
-- `SmartPtr<T> const&` vs `SmartPtr<T>` — ARM32 ABI identical but different mangling;
-  fix only when confirmed by binary nm that binary uses the other form
-- **ARM vs Thumb mode mismatch** — some binary functions are ARM mode (4-byte insns)
-  but cross-build compiles everything in Thumb-2 mode. The diff shows different
-  encoding + scheduling for semantically identical code. Before dispatching on a
-  negative-excess target, check: does the binary function end with `bx lr` (Thumb,
-  `0x4770`) or ARM `bx lr` (`0xe12fff1e`)? If ARM mode and the port's compiled output
-  has the same instruction count (~37 vs ~37), it's a mode-mismatch false positive.
-  Verdict: `ACCEPT-cosmetic`.
+- **Don't rewrite during mechanical sweeps.** Trimming (guards, LOGs, dead code) is fast/safe; structural rewrites (container/algorithm changes) need dedicated RE sessions.
+- **Don't change signatures casually.** Even `const&` → by-value needs binary nm verification first — different mangled names.
+- **Don't touch platform files.** `*SDL.cpp` / `*Posix.cpp` / `*Win32.cpp` are excluded from asm-verify.
+- **Don't ignore cross-build breakage.** GCC 4.4.1 (`-std=gnu++0x`); C++11 features (`alignas`, `auto`, range-for, lambdas) silently break it.
+- `_GLOBAL__I_*` static initializers — always cosmetic (PIC anchor register diff).
+- GL 1.x vs GLES2 pipeline in Draw functions — structural, not mechanical.
+- Compiler-generated std::vector/std::map destructor code — can't change without changing the container.
+- `SmartPtr<T> const&` vs `SmartPtr<T>` — ARM32 ABI identical but different mangling; fix only when binary nm confirms the other form.
+- **ARM vs Thumb mode mismatch** — some binary functions are ARM mode (4-byte insns) but the cross-build compiles everything Thumb-2; the diff shows different encoding/scheduling for identical semantics. Before dispatching on a negative-excess target, check whether the binary fn ends with Thumb `bx lr` (`0x4770`) or ARM `bx lr` (`0xe12fff1e`); if ARM mode and instruction counts match (~37 vs ~37), it's a false positive → `ACCEPT-cosmetic`.

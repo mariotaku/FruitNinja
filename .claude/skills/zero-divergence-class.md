@@ -8,8 +8,7 @@ user_invocable: true
 
 A two-phase workflow that takes a single class from "probably mostly ported"
 to "byte-faithful against binary" with explicit verification of every method
-and field. Originated from the ScrollingMenu + HUDControl passes
-(commits 40b5135, 712decb, 13b4bc5).
+and field.
 
 ## When to invoke
 
@@ -50,8 +49,7 @@ grep -E "^[0-9a-f]+ [TWtw] <ClassName>::" tmp/symdiff/binary-text.txt | sort -u
 
 Note: Ghidra addresses = ELF addresses + `0x10000`. nm dump shows ELF
 offsets; GhidraMCP expects VAs. Don't confuse the two — failing to apply
-the rebase has caused multiple wasted RE passes (e.g. mis-locating
-ProgressionTimerControl as ScrollingMenu).
+the rebase has caused multiple wasted RE passes.
 
 ### Step 1 — Phase 1 (re-analyst spec)
 
@@ -152,15 +150,9 @@ flip to MATCH or are at least classified ACCEPT-cosmetic by the triager.
    that would leave incorrect intermediate state (e.g. field-swap C1
    must include all readers' updates). The implementer decides.
 
-4. **"Weak inline" accessors**: 1-3 instruction functions like
-   `GetWidth`. These are often correct in port; don't waste RE budget
-   re-deriving — the field offset is all you need.
+4. **"Weak inline" accessors** (1-3 instr like `GetWidth`): usually correct in port; don't re-derive — the field offset is all you need.
 
-5. **Phase-broken methods**: large functions like `Update(float)` with
-   physics state machines need phase-by-phase decomposition. Ask Phase
-   1 to break into named phases (touch acquire, drag tracking,
-   velocity integration, item layout, click callback, scroll bounds,
-   spring-back, etc.) with each phase as a sub-spec.
+5. **Phase-broken methods**: large physics-state-machine functions (`Update(float)`) need phase-by-phase decomposition; ask Phase 1 to break into named sub-specs.
 
 6. **Vtable slot vs symbol address**: callers via vtable+0xNN may
    resolve to different addresses than the symbol's nm-listed address.
@@ -173,17 +165,3 @@ flip to MATCH or are at least classified ACCEPT-cosmetic by the triager.
 - N git commits applying the spec, each with ASM-verified markers.
 - Updated `tools/asm-verify/triage.json` after re-running asm-verify
   (separate skill).
-
-## Example invocations
-
-ScrollingMenu pass — `tmp/symdiff/scrollmenu-spec.md` (844 lines, 23
-functions), landed as commits 40b5135 + 712decb. Phase 1: ~8 min.
-Phase 2: ~7 min, 1 atomic commit (split would have left wrong
-intermediate state on field swap).
-
-HUDControl pass — `tmp/symdiff/hudcontrol-spec.md` (17 functions),
-landed as commit 13b4bc5. Phase 1: ~5 min. Phase 2: ~9 min, 1 commit
-covering 6 fixes.
-
-Both passes flipped from DIVERGE-heavy to MATCH/ACCEPT-cosmetic after
-the next asm-verify run.
