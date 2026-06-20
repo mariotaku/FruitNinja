@@ -128,7 +128,9 @@ void TimeControl::Update(float dt) {
     Game* game = Game::GetInstance();
     if (!game) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
+#ifndef __bada__
         if (game_work.mMainScreen) game_work.mMainScreen->m_TimeRemainingDisplay = -1.0f;
+#endif // !defined(__bada__)
         return;
     }
     // ASM-verified: 2026-05-27 binary @ 0x001624ec (re-analyst)
@@ -236,9 +238,11 @@ void TimeControl::Update(float dt) {
     // Write HUD-side timer mirror every frame (binary @ 0x00162830).
     // ASM-verified: 2026-05-18 binary @ 0x00162830 (re-analyst)
     LAB_00162818:
+#ifndef __bada__
     if (game_work.mMainScreen) {
         game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
+#endif // !defined(__bada__)
     // ASM-verified: 2026-05-27 binary @ 0x00162830 (re-analyst)
     // Mirror live time to game_work.m_SaveData->m_TimeRemainingSave so other
     // subsystems (e.g. Fruit::Chuck power-fruit abort gate) can read the
