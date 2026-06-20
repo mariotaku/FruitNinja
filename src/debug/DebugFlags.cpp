@@ -17,6 +17,8 @@
 #include "render/gl_funcs.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
+#include "game/GameWork.h"
+#include "engine/system/PowerManager.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -153,6 +155,40 @@ void DebugHitbox_Draw() {
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
+
+    // Port specific: periodic diagnostic log (~1/s) to help debug "slicing
+    // doesn't cut" in the tutorial. Logs the active-gate state so we can see
+    // whether the collision gate is open or closed, and the number of entities
+    // with live collision spheres.
+    {
+        static int s_diagFrames = 0;
+        static const int DIAG_INTERVAL = 60; // ~1 second at 60 ticks/s
+        ++s_diagFrames;
+        if (s_diagFrames >= DIAG_INTERVAL) {
+            s_diagFrames = 0;
+
+            uint8_t bm  = game_work.bM_Mode ? 1 : 0;
+            uint32_t pm = Mortar::PowerManager::GetInstance()->GetState();
+            int active  = (bm == 0 && pm == 0) ? 1 : 0;
+
+            // Count entities with live ColSpheres.
+            int sphereCount = 0;
+            for (int t = 0; t <= 1; t++) {
+                const std::list<Mortar::Entity*>& lst = am->GetTypeList(t);
+                for (std::list<Mortar::Entity*>::const_iterator it2 = lst.begin();
+                     it2 != lst.end(); ++it2) {
+                    Mortar::Entity* e2 = *it2;
+                    if (e2 && e2->IsActive() && e2->m_Col) {
+                        ColSphere* cs2 = static_cast<ColSphere*>(e2->m_Col);
+                        if (cs2->radius > 0.0f) ++sphereCount;
+                    }
+                }
+            }
+
+            printf("[DebugHitbox] bM_Mode=%u pmState=%u active=%d colSpheres=%d\n",
+                   (unsigned)bm, (unsigned)pm, active, sphereCount);
+        }
+    }
 
     EnsureWhiteTex();
 
