@@ -13,7 +13,7 @@
 // Defunct: P2P packet hierarchy -- no-op stub; binary @ 0x157b20
 Mortar::NetworkPacket* PacketFactory::Create(Mortar::NetworkPacket* src) {
     if (!src) return 0;
-    switch (src->m_typeId) {
+    switch (src->m_PacketType) {
         case 100: return new PointsPacket();
         case 101: return new FruitSlicedPacket();
         case 102: return new StartGamePacket();

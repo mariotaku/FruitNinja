@@ -1,13 +1,13 @@
 #include "game/StartGamePacket.h"
 
-// Defunct: P2P MP game-start packet -- no-op stub; binary @ 0x157b20 (id=103 / case 0x67)
+// Defunct: P2P MP game-start packet -- no-op stub; binary @ 0x00158dc0
 StartGamePacket::StartGamePacket()
-    : m_GameMode(0), m_field18(0)
+    : m_Flags(0x18bb8), m_GameSeed(0), m_field18(0)
 {
 }
 
 // Defunct: P2P MP game-start packet -- no-op stub; binary @ 0x157b20 (id=103 / case 0x67)
-StartGamePacket::StartGamePacket(int gameMode)
-    : m_GameMode(gameMode), m_field18(0)
+StartGamePacket::StartGamePacket(int flags)
+    : m_Flags(flags), m_GameSeed(0), m_field18(0)
 {
 }
