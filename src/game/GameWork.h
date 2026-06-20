@@ -92,8 +92,10 @@ struct GameWork {
     uint8_t _pad_0x88;             // +0x88
     uint8_t m_bTutorialShown;      // +0x89
     uint8_t _pad_0x8a[2];          // +0x8A..+0x8B
-    float   field_0x8c;            // +0x8C: fruitBaseGravity / Fruit scale factor (Ghidra: flFruitBaseGravity). SetupGameWork writes 50.0f.
-    uint8_t _pad_0x90[4];          // +0x90..+0x93
+    // v1.6.1 GameContext+0x8C flM_BombSize: bomb/fruit display scale (CreateFruit@0x0019b8fc, Bomb::Init@0x001d6b90; SetupGameWork writes 50.0f). NOT gravity.
+    float   flM_BombSize;          // +0x8C
+    // +0x90 v1.6.1 Bomb::Init@0x001d6a80: ColSphere.m_Radius = flM_BombCollision*0.5*scale
+    float   flM_BombCollision;     // +0x90
     // +0x94/+0x98: dual-purpose -- GameDraw light direction AND global pointer X/Y
     Vec3    worldPos;              // +0x94
     uint8_t m_bTouchDownThisFrame; // +0xA0: edge flag set by PointerDownCallback; cleared at GameUpdate top
@@ -109,6 +111,7 @@ struct GameWork {
     HUDControl* m_pActiveHUDControl; // +0x170: currently-active dismissible HUD overlay
     uint8_t m_bMPRetryPending;     // +0x174
     uint8_t _pad_0x175[3];         // +0x175..+0x177
+    // TODO: v1.6.1 0x002d931c+0x178 (GameContext::pM_pLastScoredSaveEntry) — port has int fruitTotal; binary is void*; confirm role.
     int     fruitTotal;            // +0x178
     CoinCounter* mCoinCounter;     // +0x17C
     Mortar::SmartPtr<Mortar::Texture> m_CountdownTex; // +0x180: countdown background texture (Ghidra: m_CountdownTex)
@@ -179,9 +182,9 @@ struct GameWork {
     // Populated by PreloadRings() (binary @ 0x11c644), called from GameInitialise.
     Mortar::SmartPtr<Mortar::Texture> m_RingTex[17];   // +0x624..+0x668 (17 ring textures)
 
-    // +0x668..+0x6A3: Colour[15] ring colour table (60 bytes = 15x4).
-    // Populated by PreloadRings() (binary @ 0x11c644). 15 entries confirmed from binary.
-    Colour  m_RingColours[15];     // +0x668..+0x6a4 (15 ring colours)
+    Colour  m_RingColours[13];      // +0x668..+0x69B  v1.6.1 PreloadRings@0x0011cd00 writes pM_Colours[0..12]
+    Colour  m_Colour69C;            // +0x69C  spare standalone Colour (PreloadRings sets 0x5C5C5C grey)
+    Colour  m_TitleColour;          // +0x6A0  Zen-plate metallic title colour (PreloadRings sets 0x6F461E)
 };
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised
@@ -208,6 +211,8 @@ static_assert(offsetof(GameWork, m_bMusicOn)            == 0x49,  "GameWork::m_b
 static_assert(offsetof(GameWork, m_FruitCamera)         == 0x4c,  "GameWork::m_FruitCamera");
 static_assert(offsetof(GameWork, m_SaveData)            == 0x50,  "GameWork::m_SaveData");
 static_assert(offsetof(GameWork, m_bTutorialShown)      == 0x89,  "GameWork::m_bTutorialShown");
+static_assert(offsetof(GameWork, flM_BombSize)          == 0x8c,  "GameWork::flM_BombSize");
+static_assert(offsetof(GameWork, flM_BombCollision)     == 0x90,  "GameWork::flM_BombCollision");
 static_assert(offsetof(GameWork, worldPos)              == 0x94,  "GameWork::worldPos");
 static_assert(offsetof(GameWork, m_FingerSpawnPos)      == 0xa4,  "GameWork::m_FingerSpawnPos");
 static_assert(offsetof(GameWork, mMainScreen)           == 0x164, "GameWork::mMainScreen");
@@ -223,6 +228,8 @@ static_assert(offsetof(GameWork, m_ElapsedGameTime)     == 0x1b8, "GameWork::m_E
 static_assert(offsetof(GameWork, m_bFrameDirty)         == 0x610, "GameWork::m_bFrameDirty");
 static_assert(offsetof(GameWork, m_RingTex)             == 0x624, "GameWork::m_RingTex");
 static_assert(offsetof(GameWork, m_RingColours)         == 0x668, "GameWork::m_RingColours");
+static_assert(offsetof(GameWork, m_Colour69C)           == 0x69c, "GameWork::m_Colour69C");
+static_assert(offsetof(GameWork, m_TitleColour)         == 0x6a0, "GameWork::m_TitleColour");
 static_assert(sizeof(GameWork) == 0x6a4, "GameWork must be 1700 bytes (binary @ 0x002d931c)");
 #endif
 

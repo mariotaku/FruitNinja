@@ -57,9 +57,9 @@ void SetupGameWork() {
     // +0x034: field_0x34 = 0.
     game_work.field_0x34 = 0;
 
-    // +0x08C: field_0x8c = 50.0f.
+    // +0x08C: flM_BombSize = 50.0f.
     // DAT_0010b578 confirmed = 0x42480000 = 50.0f.
-    game_work.field_0x8c = 50.0f;
+    game_work.flM_BombSize = 50.0f;
 
     // +0x160: mainScreen = 0 (clear pointer).
     game_work.mMainScreen = nullptr;

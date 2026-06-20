@@ -198,9 +198,9 @@ AboutScreen::AboutScreen(DojoScreen* parent)
 
         // Credit lines 0..5 -- LSTR 0x34b..0x350
         // fontSize 12, width 0x140(320), align 0xf, height 30, maxLines 1
-        // Colour: game_work.m_RingColours[14] (binary game_work+0x6a0), setBase=0
+        // Colour: game_work.m_TitleColour (binary game_work+0x6a0), setBase=0
         // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: credit line colour + per-box SetHorizontalLineSpacing(-1)
-        const Colour& creditColour = game_work.m_RingColours[14];
+        const Colour& creditColour = game_work.m_TitleColour;
 
         m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
         m_CreditLine0->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT0, 0));

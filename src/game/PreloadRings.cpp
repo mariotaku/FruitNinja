@@ -1,5 +1,6 @@
 // PreloadRings -- binary @ 0x11c644
-// Loads ring textures and colours into game_work.m_RingTex[17] / m_RingColours[15].
+// Loads ring textures and colours into game_work.m_RingTex[17] / m_RingColours[0..12],
+// m_Colour69C (grey), and m_TitleColour (brown Zen metallic).
 // Called from GameInitialise (binary @ 0x11d22c).
 
 #include "PreloadRings.h"
@@ -41,8 +42,8 @@ void PreloadRings() {
     game_work.m_RingColours[10] = Colour(0xFF, 0xE4, 0x00, 255);
     game_work.m_RingColours[11] = Colour(0xEC, 0xAC, 0x05, 255);
     game_work.m_RingColours[12] = Colour(0xD9, 0xD9, 0xD9, 255);
-    game_work.m_RingColours[13] = Colour(0x5C, 0x5C, 0x5C, 255);
-    // binary PreloadRings @0x0011cd44: m_RingColours[14] (GameWork+0x6a0) = Colour(0x6f,0x46,0x1e) -- brown,
+    game_work.m_Colour69C   = Colour(0x5C, 0x5C, 0x5C, 255);   // GameWork+0x69C
+    // binary PreloadRings @0x0011cd44: GameWork+0x6a0 = Colour(0x6f,0x46,0x1e) -- brown,
     // used by the "SLICE FRUIT TO BEGIN" text (MainScreen ctor @0x001982fc SetColour).
-    game_work.m_RingColours[14] = Colour(0x6F, 0x46, 0x1E, 255);
+    game_work.m_TitleColour = Colour(0x6F, 0x46, 0x1E, 255);   // GameWork+0x6A0
 }
