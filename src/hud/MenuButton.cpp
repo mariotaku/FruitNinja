@@ -90,6 +90,7 @@ void FN::ClearMenuItems() {
 // Constants from binary
 static const float FRUIT_ROTVEL_MULT = 0.2f;       // DAT_0014f194
 static const float FRUIT_ZPOS        = 150.0f;     // DAT_0014f198
+static const float BOMB_MENU_SCALE   = 0.85f;      // DAT_0014f1a0
 static const float ROT_CLAMP_X      = 0.75f;
 static const float ROT_CLAMP_Y      = 0.5f;
 
@@ -283,11 +284,7 @@ void MenuButton::CreateFruit() {
         // for m_RestScale, equivalent to bomb->scale*200 (same as the fruit branch pattern).
         // We use FruitInfo_GetBombSize()*2.0f to match the binary's unscaled formula directly.
         const float bombRawSize = FruitInfo_GetBombSize();   // ~55 from fruitlist.xml
-        // ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b608 (bomb branch 0x0019b8a4):
-        //   entity->scale (+0x28) *= 200.0 (literal @0x19b978); Bomb::Draw uses scale directly.
-        //   Old BOMB_MENU_SCALE=0.85 (DAT_0014f194, stale v1.5.x) made the menu bomb ~235x
-        //   too small (invisible). 200.0 matches the fruit-branch's *200 pattern.
-        bomb->scale = bomb->scale * 200.0f;
+        bomb->scale = bomb->scale * BOMB_MENU_SCALE;
         bomb->SetCallback(m_ClickCallback, this);
         bomb->m_ZPosition = FRUIT_ZPOS;
         // Binary v1.6.1 MenuButton::CreateFruit @0x0019b8c8: m_RestScale = 2.0 * bombBaseSize
