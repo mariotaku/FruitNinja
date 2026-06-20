@@ -59,8 +59,8 @@ def export_one(name: str, addr_hex: str, size_bytes: int) -> pathlib.Path:
     end = addr + size_bytes
     out = OUT_DIR / f"{_safe(name)}.s"
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Keep raw hex bytes; asm-differ's post-processor needs them to detect
-    # data pools and immediates correctly.
+    # Keep raw hex bytes (objdump default). asm-verify.py normalize() strips
+    # them, but they cost nothing and keep the .s files self-documenting.
     cmd = [
         str(OBJDUMP),
         "-d",
@@ -79,7 +79,7 @@ def _safe(name: str) -> str:
 
 
 def _normalize_objdump(text: str, name: str, addr: int) -> str:
-    """Trim objdump preamble; drop line numbers asm-differ doesn't care about."""
+    """Trim objdump preamble; drop line numbers the asm comparison ignores."""
     lines = text.splitlines()
     out = [
         f"# Binary: {BINARY.name}",
