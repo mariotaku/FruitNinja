@@ -11,9 +11,12 @@ and both binaries are symboled -- so we recover the real name by address:
     port_name   = port_so.symtab.lookup( address2 - IMAGE_BASE )
 
 IMAGE_BASE is Ghidra's ELF image base (0x10000 for this binary -- the binexport
-addresses are .symtab link-time addr + 0x10000; verified empirically). Mangled
-names are demangled in bulk via the toolchain c++filt inside the fnverify-bada
-image (one docker call); falls back to mangled if --image is 'none'.
+addresses are .symtab link-time addr + 0x10000). It is section-layout dependent,
+so rather than trust the 0x10000 default blindly we CALIBRATE it: score a small
+candidate set (provided, ELF imagebase, 0x10000, 0x8000, 0) against the real
+symtab and use whichever resolves the most symbols, warning if the default was
+wrong. Mangled names are demangled in bulk via the toolchain c++filt inside the
+fnverify-bada image (one docker call); falls back to mangled if --image is 'none'.
 
 Output (sorted by similarity, deduped by binary link-time addr):
   similarity,confidence,instructions,binary_mode,binary_addr,binary_name,port_addr,port_name
@@ -46,6 +49,44 @@ def addr2name(path):
         if n and s.value and not (len(n) == 2 and n[0] == "$"):
             m.setdefault(s.value & ~1, n)
     return m
+
+
+def elf_imagebase(path):
+    """ELF load base (lowest PT_LOAD p_vaddr) via LIEF; None on failure."""
+    try:
+        b = lief.parse(path)
+        return None if b is None else int(b.imagebase)
+    except Exception:
+        return None
+
+
+def hit_rate(addrs, base, sym):
+    """How many binexport addresses land on a real symbol under this base.
+
+    binexport rebases by + base, so (addr - base) is the symtab link-time addr.
+    Tolerate the thumb bit on either side.
+    """
+    hits = 0
+    for a in addrs:
+        la = (a - base) & ~1
+        if la in sym or (la + 1) in sym:
+            hits += 1
+    return hits
+
+
+def calibrate_base(addrs, sym, provided, elf_base):
+    """Pick the IMAGE_BASE that resolves the most symbols.
+
+    The assumed base (0x10000) is section-layout dependent and silently breaks
+    if the binary's layout changes. Score a small candidate set against the real
+    symtab and return (best_base, scored) so the caller can warn / auto-heal.
+    """
+    cand = []
+    for b in (provided, elf_base, 0x10000, 0x8000, 0):
+        if b is not None and b not in cand:
+            cand.append(b)
+    scored = sorted(((hit_rate(addrs, b, sym), b) for b in cand), reverse=True)
+    return scored[0][1], scored
 
 
 def bulk_demangle(names, image):
@@ -90,8 +131,10 @@ def main():
     psym = addr2name(a.port_so) if os.path.exists(a.port_so) else {}
     print("binary symbols: %d   port symbols: %d" % (len(bsym), len(psym)))
 
-    # gather rows from all DBs; keep the lowest-similarity row per binary addr
-    best = {}   # link-time binary addr -> (sim, conf, ins, a1, a2)
+    # gather rows from all DBs; keep the lowest-similarity row per binary addr.
+    # Key by the RAW binexport address (address1) so IMAGE_BASE can be calibrated
+    # AFTER all rows are in -- the link-time addr is derived later, post-base.
+    best = {}   # raw binexport binary addr (address1) -> (sim, conf, ins, a1, a2)
     dbs = glob.glob(a.dbs)
     if not dbs:
         sys.exit("error: no DBs matched %s" % a.dbs)
@@ -100,19 +143,41 @@ def main():
             c = sqlite3.connect(db)
             for a1, a2, sim, conf, ins in c.execute(
                     "select address1,address2,similarity,confidence,instructions from function"):
-                la = (a1 - base) & ~1                      # binary link-time addr
-                cur = best.get(la)
+                cur = best.get(a1)
                 if cur is None or sim < cur[0]:
-                    best[la] = (sim, conf, ins, a1, a2)
+                    best[a1] = (sim, conf, ins, a1, a2)
             c.close()
         except Exception as e:
             sys.stderr.write("warn: %s: %s\n" % (db, e))
+
+    # Calibrate IMAGE_BASE against the real symtab before resolving names.
+    addr1_all = list(best.keys())
+    elf_base = elf_imagebase(a.binary)
+    best_base, scored = calibrate_base(addr1_all, bsym, base, elf_base)
+    total = max(len(addr1_all), 1)
+    if best_base != base:
+        sys.stderr.write(
+            "warn: IMAGE_BASE 0x%x resolves %d/%d (%.0f%%) symbols, but 0x%x resolves "
+            "%d/%d (%.0f%%) -- switching to 0x%x (ELF imagebase=%s). Pass --image-base to pin.\n"
+            % (base, hit_rate(addr1_all, base, bsym), total,
+               100.0 * hit_rate(addr1_all, base, bsym) / total,
+               best_base, hit_rate(addr1_all, best_base, bsym), total,
+               100.0 * hit_rate(addr1_all, best_base, bsym) / total,
+               best_base, ("0x%x" % elf_base) if elf_base is not None else "?"))
+        base = best_base
+    elif hit_rate(addr1_all, base, bsym) < 0.5 * total:
+        sys.stderr.write(
+            "warn: IMAGE_BASE 0x%x only resolves %d/%d (%.0f%%) of binary symbols -- "
+            "names may be unreliable; verify the binary's image base.\n"
+            % (base, hit_rate(addr1_all, base, bsym), total,
+               100.0 * hit_rate(addr1_all, base, bsym) / total))
 
     # resolve names by address
     rows = []
     bresolved = presolved = 0
     wanted_names = set()
-    for la, (sim, conf, ins, a1, a2) in best.items():
+    for a1, (sim, conf, ins, _a1, a2) in best.items():
+        la = (a1 - base) & ~1                          # binary link-time addr
         bn = bsym.get(la) or bsym.get(la + 1) or ""
         pn = psym.get((a2 - base) & ~1) or psym.get(((a2 - base) & ~1) + 1) or ""
         if bn:
