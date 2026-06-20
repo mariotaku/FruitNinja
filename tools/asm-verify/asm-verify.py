@@ -161,8 +161,26 @@ ARM_TO_CANON = {
     'vstmia': 'vstm', 'vldmia': 'vldm',
 }
 
+# asm-verify is intentionally MNEMONIC-LEVEL: _parse_instr returns only the
+# mnemonic column (parts[2]), so classify_lcs compares instruction-MNEMONIC
+# sequences -- it is blind to operands (registers, struct offsets, constants).
+#
+# TODO(operand-level -- blocked on the exact compiler, task #34): making this
+#   operand-aware (return mnem + ops, i.e. ' '.join(parts[2:])) would let it catch
+#   wrong field-offset and wrong magic-number bugs. It was tried and REVERTED: the
+#   cross-build uses Sourcery G++ 4.4.1, but the binary was built with 4.4-261 --
+#   different compiler BUILDS schedule and select instructions differently, so
+#   operand-level LCS floods with codegen noise that no normalization fixes (a
+#   faithful class, Bomb, went 36 -> 40+ DIVERGE even with regalloc-tolerant
+#   register abstraction + selective immediate de-norm). The de-norm design (keep
+#   struct displacements [r0-r10,#off] + mov/movw constants, flatten the rest) is
+#   in git history (commit df6aadd). RE-ENABLE once the cross-build uses the
+#   binary's exact 4.4-261 compiler. Until then, operand-level precision comes from
+#   the size-net (static_asserts) and the asm-inspector agent (LLM reading ASM),
+#   not from this score.
 def _parse_instr(line):
-    """Extract instruction text from objdump line; None for non-instructions."""
+    """Extract the instruction MNEMONIC from an objdump line; None for
+    non-instructions. (Mnemonic-only by design -- see the TODO above.)"""
     line = line.strip()
     if not line or 'Disassembly' in line or 'file format' in line:
         return None
@@ -207,46 +225,10 @@ def _norm_instr(instr):
     ops = re.sub(r'\br(1[3-5])\b', r'G\1', ops)
     ops = re.sub(r'\br([0-9]|1[0-2])\b', r'G\1', ops)
     ops = ops.replace('sp', 'SP').replace('lr', 'LR').replace('pc', 'PC')
-    # Mask immediates and addresses. SELECTIVE de-normalization (conservative
-    # first pass): KEEP only the MOST-CONFIDENT semantic immediates so that wrong
-    # field-offset and wrong magic-number bugs become visible to the LCS score,
-    # while still flattening the cosmetic ones (which the old blanket #N hid):
-    #   KEEP  struct-member displacement on an object register: [G0..G10, #off]
-    #         (the object pointer lives in r0-r10; excludes fp/ip/sp/pc = G11..G15
-    #         which are frame / literal-pool bases, i.e. cosmetic).
-    #   KEEP  move-immediate constants: mov/movw/mvn rN, #imm  (a literal value --
-    #         magic number, size, flag). movt is EXCLUDED (its high-half is usually
-    #         a PIC address, not a value).
-    #   FLATTEN everything else -> #N (stack/frame/pc offsets, add/sub/cmp/shift
-    #         and branch immediates -- ambiguous or cosmetic in this pass).
-    # Kept immediates are canonicalized (0x48 == 72) so disassembler formatting
-    # differences never cause a spurious mismatch.
-    #
-    # TODO(de-norm validation -- DO THIS BEFORE TRUSTING THE NEW SCORES, task #34):
-    #   re-baseline tools/asm-verify/triage.json on a SAMPLE of currently-MATCH
-    #   functions and confirm PIC/GOT ([PC,#off] / register-offset) does NOT falsely
-    #   trip. Only after that sample shows a low false-positive rate, expand the
-    #   KEEP set to add/sub/cmp immediates (and reconsider movt).
-    _kept = []
-    def _stash(imm):                       # '#0x48'/'#72'/'#-4' -> canonical token
-        try:
-            n = int(imm.lstrip('#'), 0)
-        except ValueError:
-            return imm
-        _kept.append('#%d' % n)
-        return '\x00%d\x00' % (len(_kept) - 1)
-    # KEEP struct-member displacement on an object register (r0-r10)
-    ops = re.sub(r'\[(G(?:10|[0-9])), (#-?(?:0x[0-9a-f]+|\d+))\]',
-                 lambda m: '[%s, %s]' % (m.group(1), _stash(m.group(2))), ops)
-    # KEEP move-immediate constants
-    if mnem in ('mov', 'movw', 'mvn'):
-        ops = re.sub(r'#-?(?:0x[0-9a-f]+|\d+)', lambda m: _stash(m.group(0)), ops)
-    # FLATTEN the rest (hex BEFORE decimal so '#0x8' -> '#N' cleanly, not '#Nx8')
-    ops = re.sub(r'#-?0x[0-9a-f]+', '#N', ops)
+    # Mask immediates and addresses
     ops = re.sub(r'#-?\d+', '#N', ops)
+    ops = re.sub(r'#0x[0-9a-f]+', '#N', ops)
     ops = re.sub(r'\b0x[0-9a-f]+\b', 'ADDR', ops)
-    # restore the kept (canonicalized) semantic immediates
-    ops = re.sub(r'\x00(\d+)\x00', lambda m: _kept[int(m.group(1))], ops)
     ops = re.sub(r'\.L\d+', '.LX', ops)
     ops = re.sub(r'<\S+>', '<SYM>', ops)
     ops = re.sub(r'\s+', ' ', ops).strip()
