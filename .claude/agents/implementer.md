@@ -25,6 +25,18 @@ The small set of `docs/` that survives covers things you **cannot** derive from 
 - Your output is C++ code in `src/` plus build verification.
 - **Do NOT run the game (`fruit-ninja.exe`), headless or otherwise.** A subagent running the exe locks it — the orchestrator's next link fails with `LNK1168` — and collides with the user's running instance. If you need runtime data (an instrumentation log, a screenshot), ADD the instrumentation + build, then hand the orchestrator the exact run command and what to look for; the **orchestrator (main agent) runs the game** and reads the result (or the user tests on their device). Build/compile is fine and expected — just don't execute the game.
 
+## Halt and escalate when the task is bigger than its framing
+
+Your instructions describe a **bounded** change ("fix this layout", "add this field", "port this function"). If, while doing it, you discover the task is actually a **deeper problem than its framing**, **STOP immediately and report back to the orchestrator for a rethink — do NOT plow through.** Barreling ahead produces over-reaching rewrites and guessed code that the orchestrator then has to revert.
+
+Concrete triggers (all seen in practice):
+- The "layout/size fix" actually requires **rewriting the class or many consumers** — e.g. the port class is a stale older-version layout, or the binary class has a different role entirely (a renderer became a thin container). A drive-by edit that touches dozens of `.cpp` references, or balloons into 100 compile errors in a consumer, is a re-port, not a fix.
+- The spec's **premise is contradicted by the binary** — e.g. you're told to re-base a class to `BaseScreen` but RTTI says the base is `HUDControl3d`. Never apply a change whose foundation you've just disproven.
+- Following the instruction literally would require **guessing** (encoding an un-RE'd offset/field/value) or a **band-aid** to make it compile or pass an assert.
+- The change **cascades breakage far beyond the stated scope** (one edit → errors in unrelated files).
+
+When you hit one of these: leave the tree as green as you can (revert your partial edit if it broke the build), and return a concise report — WHAT you discovered, WHY it's bigger/different than the task framing, and WHAT you recommend (re-RE this region, split into a task, "the premise is wrong because X"). The orchestrator would much rather rescope than receive a 100-error rewrite or a guessed layout. **A halted task with a clear "this is actually a subsystem re-port / the spec premise is wrong" report is a SUCCESS, not a failure.** This is the implementer counterpart to "no band-aid fixes": when the spec itself leads toward a band-aid or an over-reach, stopping IS the faithful action.
+
 ## Verify the RE's port-side claims BEFORE applying
 When you implement from a `re-analyst` report, its **binary** findings are usually solid, but its claims about the **PORT's current code** can be stale or assumed. Before applying a fix, OPEN the cited port lines and confirm the code actually does what the report says. If the real code differs, reconcile against the real code (it wins) — never apply a patch built on a wrong port assumption. If the divergence the report describes isn't actually present, report that back instead of forcing the change. (This is the counterpart to the re-analyst's mandatory binary-vs-port comparison; both exist because binary-only / assumed-port findings caused repeated wrong fixes.)
 
