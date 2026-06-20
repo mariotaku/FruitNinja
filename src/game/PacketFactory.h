@@ -11,7 +11,7 @@ namespace Mortar { class NetworkPacket; }
 class PacketFactory {
 public:
     // Defunct: P2P packet hierarchy -- no-op stub; binary @ 0x157b20
-    // Allocates a subclass based on packet->m_typeId. Returns nullptr for unknown ids.
+    // Allocates a subclass based on packet->m_PacketType. Returns nullptr for unknown ids.
     static Mortar::NetworkPacket* Create(Mortar::NetworkPacket* src);
 
 private:
