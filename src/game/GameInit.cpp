@@ -676,9 +676,26 @@ void GameDraw(float dt, bool active) {
         game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
     }
 
+    // Particle dt: binary GameDraw recomputes s0=frameDt/wavedt before each
+    // pm.Draw call (0x1cda20/0x1cdafc/0x1cdbc4). Mirror the same derivation
+    // used by the Update path (GameInit.cpp lines 484-493).
+    float particleDt;
+    {
+        float particleDtNorm = 1.0f;
+        WaveManager* wm = WaveManager::GetInstance();
+        float wavedt = wm->GetWavedt(0);
+        if (wavedt != 0.0f) {
+            particleDtNorm = 1.0f / wavedt;
+        }
+        if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
+            particleDtNorm = 1.0f;
+        }
+        particleDt = dt / particleDtNorm;
+    }
+
     // === 3. Background particles ===
-    // Binary pm.Draw(-1) @ 0x0016bb02 -- drawn BEHIND the logo/shade.
-    pm.Draw(0.0f, false, -1);
+    // Binary pm.Draw(-1) @ 0x1cda34 -- drawn BEHIND the logo/shade.
+    pm.Draw(particleDt, false, -1);
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
     // depth test off before the SlashEntity DrawSlice loop x16 and all
@@ -694,8 +711,8 @@ void GameDraw(float dt, bool active) {
     }
 
     // === 4. Mid particles + slice lines + main-screen logo ===
-    // Binary pm.Draw(0) @ 0x0016bb4a
-    pm.Draw(0.0f, false, 0);
+    // Binary pm.Draw(0) @ 0x1cdb10
+    pm.Draw(particleDt, false, 0);
 
     // DrawSlices @ 0x0016bb52 -- slash-line pool
     FN::SliceEffect_Draw(dt);
@@ -703,8 +720,8 @@ void GameDraw(float dt, bool active) {
     // HUD::Draw(0x01) -- MainScreen logo / shade @ 0x0016bb5a
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
-    // pm.Draw(1) -- foreground particles @ 0x0016bb6a
-    pm.Draw(0.0f, false, 1);
+    // pm.Draw(1) -- foreground particles @ 0x1cdbd8
+    pm.Draw(particleDt, false, 1);
 
     // WaveManager::Draw(0) @ 0x0016bb98 -- stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
