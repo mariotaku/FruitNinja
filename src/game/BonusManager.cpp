@@ -8,7 +8,7 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/math/Random.h"
 #include "engine/util/StringHash.h"
-#include "engine/util/PathCI.h"
+#include "engine/xml/XmlLoad.h"
 #include "screens/BonusScreen.h"
 #include <tinyxml2.h>
 #include "game/GameWork.h"
@@ -58,14 +58,7 @@ void BonusManager::Init() {
     }
 
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(path.c_str());
-    if (err != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(path.c_str());
-        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
-    }
-    if (err != tinyxml2::XML_SUCCESS) {
-        printf("BonusManager::Init -- failed to open '%s' (error %d)\n",
-               path.c_str(), (int)err);
+    if (FN::LoadXmlCI(doc, path) != tinyxml2::XML_SUCCESS) {
         return;
     }
 

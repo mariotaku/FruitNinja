@@ -10,11 +10,13 @@
 //
 
 #include "ItemManager.h"
+#include "debug/Logger.h"
 #include "ItemParseUtil.h"
 #include "FruitSaveData.h"
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/MenuBackground.h"
+#include "engine/xml/XmlLoad.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
 #include <tinyxml2.h>
@@ -78,22 +80,23 @@ static std::string BuildItemSaveFullPath() {
 // DIFFERS: original = Mortar TiXml (operator new(0x48)) (v1.6.1 LoadItemData @0x00139d68),
 //   using tinyxml2 because the TiXml subsystem is unported -- container/iteration logic matches.
 // DIFFERS: original = hardcoded "xml/itemList.xml" path (v1.6.1 @0x00139d68); port uses
-//   Game::data_dir for platform-relative asset access (build-configurable data directory).
+//   Game::data_dir + "/xml/itemlist.xml" (lowercase) for platform-relative asset access.
+//   Lowercase is required: Emscripten MEMFS and webOS/Linux are case-sensitive; the
+//   on-disk asset is lowercase (matching siblings fruitlist.xml, poweruplist.xml).
 // DIFFERS: original = saves at GetItemSavePath() return ("ItemSave.xml", same directory);
 //   port uses BuildItemSaveFullPath() which routes to /save/ on Emscripten.
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
     // Phase 1: Parse itemlist.xml
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(
-        (Game::GetInstance()->data_dir + "/xml/itemList.xml").c_str());
+    std::string itemListPath = Game::GetInstance()->data_dir + "/xml/itemlist.xml";
 
     m_ByHash.clear();
     m_Items.clear();
     for (int i = 0; i < 4; i++) m_ByHashType[i].clear();
     m_DefaultItems[0] = m_DefaultItems[1] = m_DefaultItems[2] = m_DefaultItems[3] = nullptr;
 
-    if (err == tinyxml2::XML_SUCCESS) {
+    if (FN::LoadXmlCI(doc, itemListPath) == tinyxml2::XML_SUCCESS) {
         TiXmlElement root(doc.FirstChildElement("itemManagerFile"));  // 0x1ba075
         if (root) {
             for (TiXmlElement e = root.FirstChildElement("item");  // 0x1b9e95
@@ -139,9 +142,7 @@ void ItemManager::LoadItemData() {
     // Phase 2: Load save state from ItemSave.xml
     std::string saveFullPath = BuildItemSaveFullPath();
     tinyxml2::XMLDocument save;
-    tinyxml2::XMLError saveErr = save.LoadFile(saveFullPath.c_str());
-
-    if (saveErr == tinyxml2::XML_SUCCESS) {
+    if (FN::LoadXmlCI(save, saveFullPath) == tinyxml2::XML_SUCCESS) {
         tinyxml2::XMLElement* root = save.FirstChildElement("item_save_file");  // 0x1b9e4d
         if (root != nullptr) {
             root->QueryIntAttribute("coins",           &game_work.m_CoinsBalance);

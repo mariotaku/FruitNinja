@@ -13,6 +13,7 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
+#include "engine/xml/XmlLoad.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
 #include "hud/TimeControl.h"
@@ -91,7 +92,7 @@ void AchievementManager::LoadAchievementInfo() {
 
     // Binary @ 0x00109200: TiXmlDocument("xml/achievementList.xml")
     tinyxml2::XMLDocument doc;
-    if (doc.LoadFile("xml/achievementList.xml") != tinyxml2::XML_SUCCESS) return;
+    if (FN::LoadXmlCI(doc, std::string("xml/achievementList.xml")) != tinyxml2::XML_SUCCESS) return;
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
     if (!root) return;

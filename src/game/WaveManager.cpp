@@ -12,7 +12,7 @@
 #include "hud/HUD.h"
 #include "math/MathUtil.h"
 #include "util/StringHash.h"
-#include "util/PathCI.h"
+#include "xml/XmlLoad.h"
 #include "GameOver.h"
 #include "PowerUpManager.h"
 #include "hud/TimeControl.h"
@@ -176,14 +176,7 @@ void WaveManager::Init() {
 
         std::string path = game->data_dir + "/" + s_WaveXML[mode];
         tinyxml2::XMLDocument doc;
-        tinyxml2::XMLError xerr = doc.LoadFile(path.c_str());
-        if (xerr != tinyxml2::XML_SUCCESS) {
-            // POSIX case-insensitive fallback (no-op on Windows; NTFS CI).
-            std::string ci = Mortar::ResolvePathCI(path.c_str());
-            if (!ci.empty()) xerr = doc.LoadFile(ci.c_str());
-        }
-        if (xerr != tinyxml2::XML_SUCCESS) {
-            LOG_WARN("WaveManager", "Init: failed to load %s", path.c_str());
+        if (FN::LoadXmlCI(doc, path) != tinyxml2::XML_SUCCESS) {
             continue;
         }
 

@@ -102,6 +102,8 @@ target_sources(mortar_engine PRIVATE
     render/BakedStringBox.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
+    # XML loading helper (CI fallback for case-sensitive filesystems)
+    xml/XmlLoad.cpp
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
     network/P2PMessageHandling.cpp

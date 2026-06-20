@@ -64,6 +64,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringTable.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringHash.cpp"
+    "${_PROJECT_ROOT}/src/engine/xml/XmlLoad.cpp"
 
     # Entities
     "${_PROJECT_ROOT}/src/entities/ActorManager.cpp"
