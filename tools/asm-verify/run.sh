@@ -81,14 +81,14 @@ docker run --rm \
     -v fnverify-src:/staging \
     --tmpfs /build:exec,size=2G \
     --tmpfs /cache:exec,size=256M \
-    "$IMAGE" -c 'bash /work/tools/asm-verify/verify.sh'
+    "$IMAGE" bash /work/tools/asm-verify/verify.sh
 
 # verify.sh writes the report into /staging/tmp; lift it back out via a
 # scratch container that mounts the named volume read-only.
 docker run --rm \
     -v "$PROJECT_ROOT_DOCKER:/work" \
     -v fnverify-src:/staging:ro \
-    "$IMAGE" -c '
+    "$IMAGE" bash -c '
         mkdir -p /work/tmp/asm-verify
         cp /staging/tmp/asm-verify/report.md   /work/tmp/asm-verify/report.md
         cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
