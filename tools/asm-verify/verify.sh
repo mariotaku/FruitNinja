@@ -36,8 +36,8 @@ cp -u "$PROJECT/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/"
 
 # Pipeline env (Python tools read these).
 export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja_v1_6_1.exe"
-# Use Samsung Sourcery 4.4-157 (binary's actual compiler) from bada-sdk.
-# Override FN_TOOLCHAIN_DIR baked into the fnverify Dockerfile.
+# Use Samsung Sourcery 4.4-157 (binary's actual compiler) from the
+# ghcr.io/mariotaku/bada-sdk:1.1.0 base baked into the fnverify-bada image.
 export FN_TOOLCHAIN_DIR=/opt/codesourcery
 export ASM_VERIFY_NM="${FN_TOOLCHAIN_DIR}/bin/arm-samsung-nucleuseabi-nm"
 export ASM_VERIFY_OBJDUMP="${FN_TOOLCHAIN_DIR}/bin/arm-samsung-nucleuseabi-objdump"

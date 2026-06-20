@@ -1,7 +1,7 @@
 # Cross-compile toolchain for ARM Thumb-2 / VFPv3 hard-float.
 # Uses Samsung Sourcery G++ 4.4-157 (= GCC 4.4.1, the ACTUAL compiler
-# that built FruitNinja.exe). The bada-sdk:1.0.0 Docker image provides
-# this toolchain at /opt/codesourcery/.
+# that built FruitNinja.exe). The ghcr.io/mariotaku/bada-sdk:1.1.0 Docker
+# image provides this toolchain at /opt/codesourcery/.
 
 set(CMAKE_SYSTEM_NAME       Generic)
 set(CMAKE_SYSTEM_PROCESSOR  arm)

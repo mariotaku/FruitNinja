@@ -1,58 +1,34 @@
-# Image for the asm-verify pipeline.
+# Image for the asm-verify pipeline (build tag: fnverify-bada).
 #
-# Contains:
-#   - Sourcery G++ Lite 2010q1-188 (= GCC 4.4.1, the upstream of Samsung's
-#     Sourcery G++ 4.4-157 that built FruitNinja.exe)
-#   - cmake, python3, rsync, git, build-essential
-#   - i386 multilib runtime for the toolchain's 32-bit ELF binaries
+# Base: ghcr.io/mariotaku/bada-sdk:1.1.0 -- Debian bookworm carrying Samsung
+# Sourcery G++ 4.4.1 (arm-samsung-nucleuseabi -- the binary's actual compiler
+# family) at /opt/codesourcery, already on PATH. This image only layers the
+# build tooling (cmake/make/python3/rsync/git) on top.
 #
 # Build:
-#   docker build -t fnverify tools/asm-verify
+#   docker build -t fnverify-bada tools/asm-verify
 #
-# Run (driven by tools/asm-verify/run.sh):
-#   docker run --rm -v "$(pwd):/work" fnverify /work/tools/asm-verify/verify.sh
+# Run (driven by tools/asm-verify/run.sh and bindiff-pipeline.sh):
+#   docker run --rm -v "$(pwd):/work" fnverify-bada /work/tools/asm-verify/verify.sh
 
-FROM --platform=linux/amd64 debian:bookworm-slim
+FROM ghcr.io/mariotaku/bada-sdk:1.1.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# i386 multilib for the Sourcery toolchain (i386 ELF binaries).
-RUN dpkg --add-architecture i386 \
- && apt-get update \
+# Build tooling on top of the SDK toolchain base.
+RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         cmake make rsync git ca-certificates \
         python3 python3-pip \
-        libc6:i386 libstdc++6:i386 zlib1g:i386 \
  && rm -rf /var/lib/apt/lists/*
 
-# Toolchain. Pulled at build time from the Khadas mirror (the original
-# Mentor URL is dead). Strip .git to keep the image small.
-ARG TC_REPO=https://github.com/khadas/buildroot_toolchain_gcc_linux-x86_arm_Sourcery_Gpp_Lite-2010q1.git
-RUN git clone --depth 1 "$TC_REPO" /opt/sourcery-2010q1 \
- && rm -rf /opt/sourcery-2010q1/.git
-
-ENV FN_TOOLCHAIN_DIR=/opt/sourcery-2010q1
-ENV PATH=/opt/sourcery-2010q1/bin:$PATH
-
-# std::list patch removed in R4 W1 -- binary uses Sourcery 2010q1's pre-C++11
-# 8-byte std::list (sentinel prev/next only), NOT Bada's 12-byte layout.
-# The toolchain runs unpatched; static_assert(offsetof) for list-containing structs
-# use 8-byte list offsets to match the binary. See tmp/re-stdlist-sizing.md.
-
-# asm-differ: Simon Lindholm's tool for normalised asm comparison with
-# register-rename heuristics. Python-only, no native deps. Pin to a
-# specific commit for reproducibility.
-ARG ASM_DIFFER_REV=dd7f9f0c021063eadfbdff7f31097f7039c3a5a7
-RUN git clone https://github.com/simonlindholm/asm-differ /opt/asm-differ \
- && cd /opt/asm-differ \
- && git checkout "$ASM_DIFFER_REV" \
- && rm -rf .git \
- && pip3 install --break-system-packages --no-cache-dir colorama watchdog levenshtein cxxfilt
-ENV PATH=/opt/asm-differ:$PATH
-ENV PYTHONPATH=/opt/asm-differ:${PYTHONPATH:-}
+# Toolchain comes from the base image at /opt/codesourcery (already on PATH).
+# Note: asm-verify.py runs its homegrown mnemonic-level LCS scorer; asm-differ is
+# intentionally NOT installed here (USE_ASM_DIFFER stays false). See the TODO in
+# tools/asm-verify/asm-verify.py for why operand-level diffing is blocked.
 
 # Sanity-check at build time so a broken image fails fast.
-RUN /opt/sourcery-2010q1/bin/arm-none-eabi-g++ --version | head -1
+RUN arm-samsung-nucleuseabi-g++ --version | head -1
 
 WORKDIR /work
 ENTRYPOINT ["/bin/bash"]
