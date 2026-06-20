@@ -284,6 +284,10 @@ void MenuButton::CreateFruit() {
         // for m_RestScale, equivalent to bomb->scale*200 (same as the fruit branch pattern).
         // We use FruitInfo_GetBombSize()*2.0f to match the binary's unscaled formula directly.
         const float bombRawSize = FruitInfo_GetBombSize();   // ~55 from fruitlist.xml
+        // ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b8b4: bomb entity->scale *= 0.85
+        //   (const @0x19b8ac), NOT *200. bomb.mmd half-extent 48.7 (== fruit meshes); size 55
+        //   -> 0.55*0.85 = 0.4675 -> renders 22.8u, fruit-sized. The *200 is the FRUIT branch's
+        //   m_RestScale grow-target, never applied to the bomb entity scale.
         bomb->scale = bomb->scale * BOMB_MENU_SCALE;
         bomb->SetCallback(m_ClickCallback, this);
         bomb->m_ZPosition = FRUIT_ZPOS;
@@ -587,6 +591,15 @@ void MenuButton::Update(float dt) {
                 m_pEntity->scale = m_BaseScale * ratio;
             }
         }
+    }
+
+    // ASM-spec v1.6.1 MenuButton::Update @0x0019af54: m_FruitType<0 (toggle) buttons
+    //   copy m_RestScale(+0x13C) -> size(+0x20) each frame; icon is scaled from size in
+    //   HUDControl3d::Draw. Without this, size stays 0 and the toggle icon vanishes.
+    //   Touch paths below (drag-cancel, TODO held-press) may override size after this point.
+    if (m_FruitType < 0) {
+        size.x = m_RestScale.x;
+        size.y = m_RestScale.y;
     }
 
     // ---- touch handling ----
