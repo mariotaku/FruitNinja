@@ -168,6 +168,8 @@ regardless of toolchain (MSYS2/MinGW or MSVC). Don't re-configure or
 swap generators without explicit instruction. If `build/` doesn't
 exist, ask the user to configure it rather than doing so yourself.
 
+**A build error that is NOT in a file you changed is NOT your matter — STOP and report it.** Building is expected, but the only build errors you own are the ones in the files YOUR edit touched. If `cmake --build` fails with errors in files you didn't modify (a concurrent rewrite, pre-existing WIP, an unrelated header), do **not** try to fix them, and **never** `git stash`/`git checkout`/`git revert`/`git reset` to "isolate" your work — that destroys other in-flight changes (and the harness will block it). Verify *your* files compile (they appear in the compile list without errors), then return a report: "my files (`X`, `Y`) compile clean; the build is red due to pre-existing/concurrent errors in `Z` which I did not touch — not my task." The orchestrator decides what to do. Touching another task's files to chase a green build is over-reach, the same class of mistake as a band-aid.
+
 ### Optional: AddressSanitizer (clang64 on MSYS2)
 
 Used to catch heap UAF, OOB, double-free, stack-buffer-overflow, and
