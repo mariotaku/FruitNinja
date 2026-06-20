@@ -50,31 +50,34 @@ You operate on the JSON. Your final output is an updated `triage.json`.
 Filter `report.json["symbols"]` for entries where verdict is one of
 `SUSPICIOUS`, `DIVERGE`, or `UNPAIRED`. (MATCH and COSMETIC don't need
 triage.) Also re-triage any rows marked `triage_stale: true` — these are
-symbols whose score drifted since their previous triage.
+symbols whose **normalized asm changed** since their previous triage (the
+entry's `asm_hash` no longer matches the current run).
 
 ### 2. For each escalated symbol
 
-Read its diff block:
+Read its diff block (in `report.md`, a `\`\`\`diff` body). It is the
+LCS-aligned normalized-asm diff:
 
-- The "TARGET" / "CURRENT" columns side-by-side. Each row is one
-  instruction pair (or one-only).
-- Lines marked `<` are present in binary but missing from port.
-- Lines marked `>` are extra in port (not in binary).
-- Lines marked `|` differ between the two.
+- `  ` (two spaces) — line common to binary and port.
+- `- ` — present in binary, missing from port.
+- `+ ` — extra in port, not in binary.
+
+The scorer is operand-level: the normalizer pre-absorbs reg-alloc, branch-size,
+`bl`/`blx`, pool-slot offsets, GOT/`.LANCHOR` reloc, and `nop`s — so classic
+"cosmetic" rows no longer reach the diff. What survives is likely real signal
+(struct offset, immediate, predication, call-graph edge); the cosmetic bucket
+is now small.
 
 Classify:
 
-#### ACCEPT-cosmetic indicators
-- Pure register rename (`mov r4, r0` vs `mov r5, r0` with consistent
-  follow-up).
-- Branch encoding (`b.n` vs `b.w` for the same target).
-- Literal-pool offset (`[pc, #0x28]` vs `[pc, #0x30]` — the constant
-  itself is the same, just stored at a different pool offset).
-- `bl` (port, direct call) vs `blx` (binary, vtable indirect) when the
-  function isn't actually overridden.
-- Trailing `nop` for alignment.
-- Different VFP immediate encoding (`vmov.f32 s0, #1.0` vs
-  `fconsts s0, #112` — same instruction, same bytes, different syntax).
+#### ACCEPT-cosmetic indicators (rare now — most are pre-normalized away)
+- A residual reloc-model artifact the normalizer only partially absorbs:
+  GOT-idiom-heavy functions (linked binary `add GREG,pc,GREG`+`ldr [GREG,GREG]`
+  vs the unlinked `-fpic` `.o`'s longer GOT-address build). The block comment
+  in `classify_lcs` documents this as known residual noise.
+- Instruction scheduling: the SAME set of `[GREG,#off]` stores/loads in a
+  different order (compiler reordered independent ops) — verify the offset SET
+  is identical, only the sequence differs.
 
 #### ACCEPT-deferred indicators
 - Find the corresponding port source (search `src/` for the mangled name
@@ -119,8 +122,7 @@ For each symbol you classified, add or update an entry:
   "_ZN14PowerUpManager11SetDefaultsEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Tier-2 stub: SlashEntityState reset trailing block. See src/game/PowerUpManager.cpp:46 // TODO: clear global slash-power mask.",
-    "score": 3445,
-    "max_score": 3400,
+    "asm_hash": "a1b2c3d4e5f60718",
     "decided_at": "2026-05-03T09:00Z"
   }
 }
@@ -128,8 +130,10 @@ For each symbol you classified, add or update an entry:
 
 Keep existing entries you didn't re-evaluate. Do NOT remove anything.
 
-`score` and `max_score` mirror what `report.json` had at decision time;
-asm-verify.py invalidates the entry if the next run's score differs.
+`asm_hash` is copied verbatim from the symbol's `report.json` entry. Staleness
+keys on it: the entry stays sticky until the normalized asm changes. (Legacy
+entries with `score`/`max_score` and no `asm_hash` are stale — copy the new
+`asm_hash` when re-triaging.)
 
 ### 4. Report
 

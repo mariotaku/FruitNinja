@@ -121,7 +121,13 @@ Note any divergence as a numbered finding with: source line, binary line, what d
 End with a **verdict** in three categories:
 - **Confirmed binary-faithful**: ASM matches; the claim under test is correct.
 - **Diverges**: which port-side line(s) are wrong; what the correct logic should be (cite binary address + instruction).
-- **Inconclusive**: ASM differs in ways that may or may not matter (compiler version skew, instruction reordering, register allocation). Spell out the residual uncertainty.
+- **Inconclusive**: ASM differs in ways that may or may not matter (instruction reordering / scheduling, register allocation). Spell out the residual uncertainty.
+
+> The cross-build toolchain (bada-sdk, Sourcery G++ 4.4-261) is the binary's
+> exact compiler, so "compiler skew" is NOT a valid excuse for divergence.
+> Differing immediates, struct offsets, predication, or pool constants are real
+> port bugs. Only register allocation, scheduling, and the GOT/reloc model are
+> benign residuals.
 
 For "Diverges", you may suggest the corrected port code, but you do NOT edit `src/`. That's the implementer's job. Hand over a precise spec.
 
