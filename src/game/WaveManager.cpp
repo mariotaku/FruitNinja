@@ -432,6 +432,7 @@ void WaveManager::Destroy() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::Reset(bool fullReset) {
+    // v1.6.1 WaveManager::Reset @ 0x0012ba78
     Game* game = Game::GetInstance();
     if (!game) return;
 
@@ -546,7 +547,8 @@ void WaveManager::Reset(bool fullReset) {
     // Binary @ 0x00125eb8: dead-code MP sync flag cleared to 0.
     game_work.m_bP2PReady = 0;
     m_SpeedScale = 1.0f;
-    field_0x74 = m_SpeedClampStart[game_work.gameMode];
+    // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
+    m_SpeedAccum = m_SpeedClampStart[game_work.gameMode];
 
     if (fullReset)
         NewGame();
@@ -585,8 +587,7 @@ static void SkipToGameOver(int /*goState*/, float /*goTimer*/,
     // TODO: implement once MainScreen::Hide is exposed; full spec above.
 }
 
-// ASM-verified: not yet — implementation from spec A7 @ 0x00124b1c.
-// Analysed: 2026-04-30T00:00
+// v1.6.1 WaveManager::Resume @ 0x0012bf58
 void WaveManager::Resume() {
     // Resume is only called on restore-from-save, never on cold boot.
     // Cold boot uses WaveManager::NewGame() -> Reset(true) -> GetNextWave(0).
@@ -734,7 +735,8 @@ void WaveManager::Resume() {
         m_NextBlitzTime        = sd->m_blitzSpawnTime;
         m_NextWaveDelay_P0     = sd->m_WaveDelay;
         m_NextWaveDelay_P1     = sd->m_WaveWait;
-        field_0x74           = sd->m_ProbabilityOverideFlag;
+        // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
+        m_SpeedAccum         = sd->m_ProbabilityOverideFlag;
         // sd->m_pCurrentWave_P1 (FruitSaveData+0x140) stores the SAVED WAVE INDEX
         // (uint), used to look up via the WaveState restore loop. The field name
         // inherited from earlier RE was misleading.
@@ -785,7 +787,7 @@ void WaveManager::Resume() {
 }
 
 int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
-    // Binary @ 0x001247f0.
+    // v1.6.1 WaveManager::SaveWaveInfo @ 0x001254b0
     if (!sd) return 0;
 
     sd->m_Speed_P0       = 0.0f;
@@ -812,7 +814,8 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
     if ((!splitPlayer || m_WaveCount[1] < 0)
         && !m_WaveInfo[game_work.gameMode].empty())
     {
-        sd->m_ProbabilityOverideFlag = field_0x74;  // m_GlobalDt
+        // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
+        sd->m_ProbabilityOverideFlag = m_SpeedAccum;
 
         static const int MAX_CAND = 20;
         WAVE_INFO* candidates[MAX_CAND];
@@ -895,7 +898,8 @@ bool WaveManager::PowersEnabled() {
 }
 
 void WaveManager::ResetGlobalDt(float dt) {
-    // Binary @ 0x00121ed8. Walks m_ProbabilityOverride[gameMode], erasing entries
+    // v1.6.1 WaveManager::ResetGlobalDt @ 0x0012b770
+    // Walks m_ProbabilityOverride[gameMode], erasing entries
     // with m_SelectedType >= 0; advances past those with m_SelectedType < 0.
     // DIVERGES fix: binary checks *(it+0x74) = m_SelectedType, not m_PerWaveCount (+0x70).
     // Binary @ 0x00121ee8 confirms ldr from offset +0x74 of PROBABILITY_OVERIDE.
@@ -910,7 +914,8 @@ void WaveManager::ResetGlobalDt(float dt) {
             }
         }
     }
-    field_0x74          = dt;      // m_GlobalDt (+0x74)
+    // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
+    m_SpeedAccum        = dt;
     m_StepAccumulator   = 0.0f;   // m_StepAccumulator (+0x2dc)
 }
 
@@ -1807,6 +1812,7 @@ float WaveManager::GetSpeed(int playerIdx) {
 }
 
 float WaveManager::GetWavedt(int playerIdx) {
+    // ASM-verified-spec: v1.6.1 WaveManager::GetWavedt @0x00123050
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
     float waveDt = (w == nullptr)
         ? 1.0f
@@ -1814,13 +1820,11 @@ float WaveManager::GetWavedt(int playerIdx) {
           + w->m_WaveDtInc * w->field_0x34
           + w->m_WaveDtSpInc * m_Speed[playerIdx];
 
-    // ASM-verified: 2026-06-18 v1.6.1 WaveManager::GetWavedt @ 0x001218dc (asm-inspector)
-    // Binary reads +0x78 = m_SpeedAccum, NOT +0x7c = m_SpeedScale.
-    float dtMod = (playerIdx == 0) ? field_0x74 * m_SpeedAccum : 1.0f;
-    float result = waveDt * dtMod;
-    if (result <= 0.0f) return 0.0f;
-    if (result < 100.0f) return result;
-    return 100.0f;
+    float dtMod = (playerIdx == 0) ? (m_SpeedAccum * m_SpeedScale) : 1.0f;
+    float result = waveDt * dtMod * m_ComboSpeedDivisor;
+    if (result <= -100.0f) return -100.0f;
+    if (result >= 100.0f) return 100.0f;
+    return result;
 }
 
 float WaveManager::GetCriticalChance(int playerIdx) {
@@ -1843,9 +1847,11 @@ bool WaveManager::CriticalMode(int playerIdx) {
 }
 
 float WaveManager::GetComboBonusProgression(int playerIdx) {
-    // Binary @ 0x00121840.
-    float progress = (float)m_BlitzBonus[playerIdx] / -2.5f + 1.0f;
-    if (progress < 0.0f) progress = 0.0f;
+    // ASM-verified-spec: v1.6.1 WaveManager::GetComboBonusProgression @0x00122fb0 — blitz(int)+cold(float) are distinct fields
+    // DIFFERS: binary indexes cold timer by playerIdx but port only has m_ColdTimer[1] (P0 cold only);
+    // using m_ColdTimer[0] unconditionally. Port shape mismatch — layout task will add [2] array if needed.
+    float progress = m_ColdTimer[0] / -2.5f + 1.0f;
+    if (!(progress >= 0.0f)) progress = 0.0f;  // NaN-safe lower clamp
     if (progress > 1.0f) progress = 1.0f;
     float result = ((float)m_BlitzBonus[playerIdx] + progress) / 6.0f;
     if (result > 1.0f) result = 1.0f;
