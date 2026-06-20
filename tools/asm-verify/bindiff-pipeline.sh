@@ -62,19 +62,34 @@ export_bx() {  # $1=input .so/.exe (in tmp)  $2=output .BinExport (in tmp)
   # prepend-namespace: emit Class::Method qualified names (94% vs 0.6% bare leaf),
   # which breaks BinDiff's structural ties correctly -> fewer low-conf mis-pairs.
   # (resolve-bindiff-names.py still recovers full signatures by address-join.)
-  docker run --rm -v "$(win "$TMP")":/work "$EXPORT_IMAGE" \
-    "/work/$1" "/work/$2" prepend-namespace 2>&1 | grep -iE "wrote|error:" | tail -1
+  # Capture to a log + check exit code + assert the artifact exists: a piped
+  # `| grep | tail` returns tail's status (0) and would mask a failed export.
+  local log="$TMP/export-$2.log"
+  if ! docker run --rm -v "$(win "$TMP")":/work "$EXPORT_IMAGE" \
+        "/work/$1" "/work/$2" prepend-namespace > "$log" 2>&1; then
+    echo "  EXPORT FAILED (docker exit) -- see tmp/$(basename "$log")" >&2
+    grep -iE "error|exception|traceback" "$log" | tail -5 >&2 || true
+    exit 1
+  fi
+  grep -iE "wrote|error:" "$log" | tail -1 || true
+  [ -f "$TMP/$2" ] || { echo "  EXPORT FAILED -- $2 not produced -- see tmp/$(basename "$log")" >&2; tail -5 "$log" >&2; exit 1; }
 }
 
 diff_one() {  # $1=secondary .BinExport (in tmp)  $2=output basename
   echo ">> bindiff binary vs $(basename "$1")"
   rm -f "$OUTDIR/$2.BinDiff"
-  "$BINDIFF" --primary="$(win "$BINARY_BX")" --secondary="$(win "$TMP/$1")" \
-             --output_dir="$(win "$OUTDIR")" --output_format=bin \
-    2>&1 | grep -iE "^matched|Similarity" | tail -2
+  local log="$TMP/bindiff-$2.log"
+  if ! "$BINDIFF" --primary="$(win "$BINARY_BX")" --secondary="$(win "$TMP/$1")" \
+             --output_dir="$(win "$OUTDIR")" --output_format=bin > "$log" 2>&1; then
+    echo "  BINDIFF FAILED (exit) -- see tmp/$(basename "$log")" >&2
+    tail -5 "$log" >&2 || true
+    exit 1
+  fi
+  grep -iE "^matched|Similarity" "$log" | tail -2 || true
   # bindiff names output <primary>_vs_<secondary>.BinDiff; normalize to $2
   local produced="$OUTDIR/$(basename "$BINARY_BX" .BinExport)_vs_$(basename "$1" .BinExport).BinDiff"
   [ -f "$produced" ] && mv -f "$produced" "$OUTDIR/$2.BinDiff"
+  [ -f "$OUTDIR/$2.BinDiff" ] || { echo "  BINDIFF FAILED -- $2.BinDiff not produced -- see tmp/$(basename "$log")" >&2; tail -5 "$log" >&2; exit 1; }
 }
 
 echo "=== stage 1: build twins ==="
