@@ -18,10 +18,16 @@
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
 #include "render/MatrixManager.h"
+#include "render/BakedStringBox.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
+#include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "math/Vec2.h"
 #include "debug/DebugFlags.h"
 #include "util/StringHash.h"
+#include "util/StringTable.h"
 #include "game/FruitSaveData.h"
 #include <cmath>
 #include <cstdio>
@@ -91,6 +97,18 @@ static const char* FRUIT_ARCADE  = "banana";
 
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
+
+// Shared TTF face (gangofchinese.ttf) for BakedStringBox text on the Zen sign plate.
+// DIFFERS: original = *(g_GameData+0x614) shared face; using a file-local lookup
+//   because the port has not extended game_work past 0x608.
+static Mortar::FontCacheObjectTTF* GetGameModeTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_Font =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_Font.IsValid()) {
+        return 0;
+    }
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+}
 
 // --- Static texture storage (file-scope statics matching binary's module-level globals) ---
 namespace {
@@ -165,26 +183,84 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
     , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
     , m_pArcadeButton(nullptr)      // +0xcc
-    , m_pChallengeTitle(nullptr)    // +0xd0
-    , m_pChallengeDesc(nullptr)     // +0xd4
-    , m_pChallengeInfo(nullptr)     // +0xd8
+    , m_pTitleBox(nullptr)          // +0xd0
+    , m_pDescBox(nullptr)           // +0xd4
+    , m_pInfoBox(nullptr)           // +0xd8
     , game(g)
     , m_bSetupLevelFired(false)
     , m_pOnlineMpButton(nullptr)
 {
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw
-    // Binary ctor @ 0x00182da0 (v1.6.1): m_State(+0x90)=0, m_TransAlpha(+0x8c)=0.0,
-    // enabled-flag(+0x34)=1. Base ctors (BaseScreen, HUDControl) already cover
-    // these, but we set them explicitly so the screen is active from construction
-    // without requiring Init() to be called -- matching binary ctor semantics.
     m_State           = 0;
     m_TransitionAlpha = 0.0f;
     m_Active          = 1;
+
+    // Binary ctor @0x00182da0 (v1.6.1 GameModeScreen): constructs three BakedStringBoxes
+    // for the text drawn over the zen_sign board quad.
+    // Metallic gradient for DescBox / InfoBox approximated as gold-bronze two-stop.
+    Mortar::FontCacheObjectTTF* font = GetGameModeTTFFont();
+    if (font) {
+        // m_pTitleBox: 3-line feature list "NO BOMBS!\nNO LIVES!\n90 SECS!"
+        // fontSize=12, w=73, h=53, align=0xf (centre+fit), maxLines=3, lineSpacing=0
+        Mortar::BakedStringBox* tbox = new Mortar::BakedStringBox(
+            font, 12.0f, 73.0f, 53.0f, 0xf, 3, 0.0f);
+        {
+            const char* s0 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3be); // "NO BOMBS!"
+            const char* s1 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3bf); // "NO LIVES!"
+            const char* s2 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3c0); // "90 SECS!"
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s\n%s\n%s",
+                     s0 ? s0 : "", s1 ? s1 : "", s2 ? s2 : "");
+            tbox->SetText(buf);
+        }
+        // ASM-spec v1.6.1: game_work+0x6a0 (PreloadRings @0x0011cd44) = #6F461E
+        tbox->SetColour(Colour(111, 70, 30, 255), 0);
+        tbox->SetHorizontalLineSpacing(-1.0f);
+        tbox->FitIntoVerticalBounds();
+        m_pTitleBox = tbox;
+
+        // m_pDescBox: single-line "MODE SELECT"
+        // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
+        Mortar::BakedStringBox* dbox = new Mortar::BakedStringBox(
+            font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
+        dbox->SetText(Mortar::GETSTRING_CAST_0((LocalizedString)0x3ba)); // "MODE SELECT"
+        // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
+        // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
+        // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+        dbox->SetMetallicGradient(
+            Colour(120, 178, 42, 255),
+            Colour(200, 223, 84, 255),
+            Colour(121, 183, 20, 255),
+            Colour(96,  116, 14, 255),
+            false);
+        dbox->SetHorizontalLineSpacing(-1.0f);
+        m_pDescBox = dbox;
+
+        // m_pInfoBox: single-line "MULTIPLAYER"
+        // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
+        Mortar::BakedStringBox* ibox = new Mortar::BakedStringBox(
+            font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
+        ibox->SetText(Mortar::GETSTRING_CAST_0((LocalizedString)0x39f)); // "MULTIPLAYER"
+        // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
+        // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
+        // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+        ibox->SetMetallicGradient(
+            Colour(175, 90,  48, 255),
+            Colour(231, 50,  35, 255),
+            Colour(170, 9,   19, 255),
+            Colour(141, 1,   22, 255),
+            false);
+        ibox->SetHorizontalLineSpacing(-1.0f);
+        m_pInfoBox = ibox;
+    }
 }
 
 GameModeScreen::~GameModeScreen() {
     RemoveButtons();
+    delete m_pTitleBox; m_pTitleBox = nullptr;
+    delete m_pDescBox;  m_pDescBox  = nullptr;
+    delete m_pInfoBox;  m_pInfoBox  = nullptr;
 }
 
 // Binary Init @ 0x00181060 (v1.6.1) forwards to vtable+0x10 = Reset @ 0x00181074,
@@ -558,7 +634,24 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexZenSign->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
+
+        // Draw the feature-bullet text over the zen board quad.
+        // Binary @0x0013f8c8 (GameModeScreen::Draw): m_pTitleBox drawn at
+        // logoPos + (8, 3, 0), rotation 0 degrees, scale (1,1), centered.
+        if (m_pTitleBox) {
+            m_pTitleBox->SetTranslation(logoPos + Vec3(8.0f, 3.0f, 0.0f), 1);
+            m_pTitleBox->Draw(-9.0f, Vec2(1.0f, 1.0f), 1);
+        }
     }
+
+    // TODO: v1.6.1 GameModeScreen::Draw @0x00183ac8 -- m_pDescBox needs BaseScreen::DrawBorders
+    //   anchor return (port DrawBorders is void; binary returns the border anchor Vec3 used here).
+    //   Binary draws m_pDescBox at DrawBorders_anchor + (-24, 11, 0), rotation -7.
+    //   Cannot wire without re-RE'ing / changing DrawBorders signature (touches other screens).
+    //   m_pDescBox is constructed and ready but left undrawn until anchor is available.
+
+    // TODO: confirm m_pInfoBox draw site (MP/challenge path?)
+    //   m_pInfoBox is constructed but its Draw site is unconfirmed -- left undrawn.
 }
 
 // --- Button callbacks ---

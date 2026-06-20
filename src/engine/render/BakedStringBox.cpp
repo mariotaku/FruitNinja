@@ -40,7 +40,10 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_ShadowFlag(false)
     , m_GradTop(255, 255, 255, 255)
     , m_GradBottom(255, 255, 255, 255)
+    , m_GradCol2(255, 255, 255, 255)
+    , m_GradCol3(255, 255, 255, 255)
     , m_GradMode(0)
+    , m_MetallicFlag(false)
     , m_GradFlag(false)
     , m_StrokeWidth(0.0f)
     , m_StrokeCount(0)
@@ -174,18 +177,22 @@ void BakedStringBox::Layout() {
     {
         const char* p = m_Text;
         while (*p) {
-            m_Font->GetGlyph((uint32_t)(unsigned char)*p, requestedSize);
+            if (*p != '\n')
+                m_Font->GetGlyph((uint32_t)(unsigned char)*p, requestedSize);
             p++;
         }
     }
     FontInterface* atlas = m_Font->GetAtlas();
     if (atlas) atlas->BuildPendingTextures();
 
-    // Tokenise into words (split on ASCII space).
+    // Tokenise into logical lines split by '\n', then words within each line.
+    // Binary SetText splits on '\n' into separate lines before word-wrapping.
+    // FitIntoVerticalBounds @0x00246fbc then shrinks until all fit within box.
     struct WordToken {
         const char* start;
         int         len;
         float       advance; // in world units
+        bool        hardBreak; // true = this word is followed by a forced line break
     };
     std::vector<WordToken> words;
     {
@@ -193,12 +200,25 @@ void BakedStringBox::Layout() {
         while (*p) {
             while (*p == ' ') p++;
             if (!*p) break;
+            if (*p == '\n') {
+                // Hard line break: emit a zero-width sentinel so the greedy
+                // loop below sees a forced end-of-line at this position.
+                WordToken tok;
+                tok.start     = p;
+                tok.len       = 0;
+                tok.advance   = 0.0f;
+                tok.hardBreak = true;
+                words.push_back(tok);
+                p++;
+                continue;
+            }
             const char* ws = p;
-            while (*p && *p != ' ') p++;
+            while (*p && *p != ' ' && *p != '\n') p++;
             WordToken tok;
-            tok.start   = ws;
-            tok.len     = (int)(p - ws);
-            tok.advance = MeasureWord(m_Font, ws, tok.len, requestedSize);
+            tok.start     = ws;
+            tok.len       = (int)(p - ws);
+            tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
+            tok.hardBreak = false;
             words.push_back(tok);
         }
     }
@@ -206,15 +226,26 @@ void BakedStringBox::Layout() {
 
     const float spAdv = SpaceAdvance(m_Font, requestedSize);
 
-    // Greedy line-fill loop.
+    // Greedy line-fill loop. '\n' sentinels force a line break immediately.
     size_t wi = 0;
     while (wi < words.size()) {
+        // Skip leading hard-break sentinels (bare '\n' at start of a "line").
+        if (words[wi].hardBreak) {
+            wi++;
+            continue;
+        }
         size_t lineStart = wi;
 
-        // Measure how many words fit in world units vs wrapLimit.
+        // Measure how many words fit in world units vs wrapLimit,
+        // stopping early on a hard line-break sentinel.
         float lineWidth = 0.0f;
         size_t lineEnd  = lineStart;
         while (lineEnd < words.size()) {
+            if (words[lineEnd].hardBreak) {
+                // Hard break: consume the sentinel and end line here.
+                lineEnd++;
+                break;
+            }
             float needed = words[lineEnd].advance;
             if (lineEnd > lineStart) needed += spAdv;
             if (lineWidth + needed > wrapLimit && lineEnd > lineStart) {
@@ -248,8 +279,11 @@ void BakedStringBox::Layout() {
         float lineMaxBearingY = 0.0f;   // max bearingY across glyphs (above baseline)
         float lineMinBottom   = 0.0f;   // min (bearingY - height) across glyphs (below baseline, negative)
 
+        bool firstWordOnLine = true;
         for (size_t wj = lineStart; wj < lineEnd; wj++) {
-            if (wj > lineStart) curX += spAdv;
+            if (words[wj].hardBreak) continue; // skip '\n' sentinels
+            if (!firstWordOnLine) curX += spAdv;
+            firstWordOnLine = false;
             const char* wp = words[wj].start;
             for (int c = 0; c < words[wj].len; c++) {
                 uint32_t cp = (uint32_t)(unsigned char)wp[c];
@@ -315,6 +349,28 @@ void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
             m_Dirty = true;
         }
     }
+}
+
+// SetMetallicGradient  binary @ 0x002458e0
+// Stores 4 fill colours + sets m_GradMode=4 + m_MetallicFlag=1 + dirty.
+// Port renders 2-stop (top/bottom) in Draw; full 4-stop metallic path pending.
+// TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag) {
+    if (m_GradTop.r    != top.r    || m_GradTop.g    != top.g    || m_GradTop.b    != top.b    || m_GradTop.a    != top.a    ||
+        m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
+        m_GradCol2.r   != c2.r     || m_GradCol2.g   != c2.g     || m_GradCol2.b   != c2.b     || m_GradCol2.a   != c2.a     ||
+        m_GradCol3.r   != c3.r     || m_GradCol3.g   != c3.g     || m_GradCol3.b   != c3.b     || m_GradCol3.a   != c3.a     ||
+        m_GradMode != 4 || m_MetallicFlag != true) {
+        m_GradMode      = 4;
+        m_MetallicFlag  = true;
+        m_GradTop       = top;
+        m_GradBottom    = bottom;
+        m_GradCol2      = c2;
+        m_GradCol3      = c3;
+        m_GradFlag      = false;
+        m_Dirty         = true;
+    }
+    (void)flag;
 }
 
 // SetShadow  binary @ 0x002462c0
@@ -450,6 +506,21 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
 
     Renderer* renderer = Renderer::GetInstance();
 
+    // Gradient: compute total text block Y range (local, pre-rotation) for lerp.
+    // Top of block = baselineY + line0.maxBearingY; bottom = last-line baseline + minDescent.
+    // m_GradMode >= 2: apply 2-stop top/bottom gradient (m_GradTop / m_GradBottom).
+    const bool doGrad = (m_GradMode >= 2);
+    float gradYTop    = 0.0f;
+    float gradYBot    = 0.0f;
+    float gradYRange  = 0.0f;
+    if (doGrad) {
+        gradYTop = baselineY + m_Lines[0].maxBearingY;
+        float lastBaseline = baselineY - (float)(nLines - 1) * step;
+        gradYBot = lastBaseline + minDescent; // minDescent <= 0 so this is below baseline
+        gradYRange = gradYTop - gradYBot;
+        if (gradYRange < 0.001f) gradYRange = 0.001f;
+    }
+
     // Render lines. Line 0 baseline at baselineY (relative to box centre / anchor.y),
     // each subsequent line step lower (decreasing Y).
     for (size_t li = 0; li < m_Lines.size(); li++) {
@@ -469,6 +540,20 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
             float ly = (wv[i].y + localBaseY) * scale.y;
             wv[i].x = cosT * lx - sinT * ly + anchor.x;
             wv[i].y = sinT * lx + cosT * ly + anchor.y;
+
+            if (doGrad) {
+                // Lerp t=0 at top (gradYTop), t=1 at bottom (gradYBot).
+                // Use pre-transform layout Y: line.verts[i].y + localBaseY.
+                float layoutY = line.verts[i].y + localBaseY;
+                float t = (gradYTop - layoutY) / gradYRange;
+                if (t < 0.0f) t = 0.0f;
+                if (t > 1.0f) t = 1.0f;
+                uint8_t r = (uint8_t)(m_GradTop.r + (int)((m_GradBottom.r - m_GradTop.r) * t));
+                uint8_t g = (uint8_t)(m_GradTop.g + (int)((m_GradBottom.g - m_GradTop.g) * t));
+                uint8_t b = (uint8_t)(m_GradTop.b + (int)((m_GradBottom.b - m_GradTop.b) * t));
+                uint8_t a = (uint8_t)(m_GradTop.a + (int)((m_GradBottom.a - m_GradTop.a) * t));
+                wv[i].colour = Colour(r, g, b, a).PlatformColour();
+            }
         }
 
         // Wire degenerate connector between glyphs in the tri-strip.

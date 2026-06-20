@@ -108,9 +108,9 @@ private:
     //   +0xc4  m_LayerFlagsAlt    (0x80; int32)
     //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
     //   +0xcc  m_pArcadeButton    (arcade_mode.tex, banana)
-    //   +0xd0  m_pChallengeTitle  (BakedStringBox* from LocalizedString 0x3be/0x3bf/0x3c0)
-    //   +0xd4  m_pChallengeDesc   (BakedStringBox* from LocalizedString 0x3ba)
-    //   +0xd8  m_pChallengeInfo   (BakedStringBox* from LocalizedString 0x39f)
+    //   +0xd0  m_pTitleBox  (BakedStringBox* from LocalizedString 0x3be/0x3bf/0x3c0)
+    //   +0xd4  m_pDescBox   (BakedStringBox* from LocalizedString 0x3ba)
+    //   +0xd8  m_pInfoBox   (BakedStringBox* from LocalizedString 0x39f)
 
     // +0x94: 12-byte gap between BaseScreen tail and first own member.
     uint8_t _pad_0x94[12];
@@ -129,9 +129,9 @@ private:
     int     m_LayerFlagsAlt;         // +0xc4: = 0x80
     float   m_FrameTimer;            // +0xc8: drives DrawConnectTexture animation
     MenuButton* m_pArcadeButton;     // +0xcc: arcade_mode.tex, banana, ArcadeModeCallback
-    Mortar::BakedStringBox* m_pChallengeTitle;  // +0xd0: challenge title text (LocalizedString 0x3be/0x3bf/0x3c0)
-    Mortar::BakedStringBox* m_pChallengeDesc;   // +0xd4: challenge description text (LocalizedString 0x3ba)
-    Mortar::BakedStringBox* m_pChallengeInfo;   // +0xd8: challenge info text (LocalizedString 0x39f)
+    Mortar::BakedStringBox* m_pTitleBox;  // +0xd0: mode text (LocalizedString 0x3be/0x3bf/0x3c0 three-liner)
+    Mortar::BakedStringBox* m_pDescBox;   // +0xd4: desc text (LocalizedString 0x3ba = "MODE SELECT")
+    Mortar::BakedStringBox* m_pInfoBox;   // +0xd8: info text (LocalizedString 0x39f = "MULTIPLAYER")
 
     // Port-specific trailing fields (not in the 220-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xdc.
@@ -205,9 +205,9 @@ static_assert(offsetof(GameModeScreen, m_pChallengeData)     == 0xc0, "m_pChalle
 static_assert(offsetof(GameModeScreen, m_LayerFlagsAlt)      == 0xc4, "m_LayerFlagsAlt offset");
 static_assert(offsetof(GameModeScreen, m_FrameTimer)         == 0xc8, "m_FrameTimer offset");
 static_assert(offsetof(GameModeScreen, m_pArcadeButton)      == 0xcc, "m_pArcadeButton offset");
-static_assert(offsetof(GameModeScreen, m_pChallengeTitle)    == 0xd0, "m_pChallengeTitle offset");
-static_assert(offsetof(GameModeScreen, m_pChallengeDesc)     == 0xd4, "m_pChallengeDesc offset");
-static_assert(offsetof(GameModeScreen, m_pChallengeInfo)     == 0xd8, "m_pChallengeInfo offset");
+static_assert(offsetof(GameModeScreen, m_pTitleBox)          == 0xd0, "m_pTitleBox offset");
+static_assert(offsetof(GameModeScreen, m_pDescBox)           == 0xd4, "m_pDescBox offset");
+static_assert(offsetof(GameModeScreen, m_pInfoBox)           == 0xd8, "m_pInfoBox offset");
 static_assert(sizeof(GameModeScreen)                         == 0xdc, "GameModeScreen size must match binary");
 #endif
 

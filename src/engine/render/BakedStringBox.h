@@ -96,6 +96,13 @@ public:
     // perGlyph==0 uses the lazy dirty path; perGlyph==1 applies per-line immediately.
     void SetGradient(Colour top, Colour bottom, bool perGlyph);
 
+    // SetMetallicGradient  binary @ 0x002458e0
+    // 4-stop metallic fill: m_ColourMode=4, m_MetallicFlag=1.
+    // Fields: m_FillTop/Bottom at 0x7c/0x80, m_FillCol2/Col3 at 0x84/0x88.
+    // Port renders 2-stop (top/bottom) pending full 4-stop metallic path.
+    // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+    void SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag);
+
     // SetShadow  binary @ 0x002462c0
     // Sets the shadow parameters (scale, colour, offset, enable flag).
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
@@ -130,10 +137,13 @@ private:
     Colour  m_ShadowCol;          // binary field 0x74
     bool    m_ShadowFlag;         // binary field 0x78
 
-    // Gradient fields (binary @ 0x7c..0x8c, 0x90):
-    Colour  m_GradTop;            // binary field 0x7c
-    Colour  m_GradBottom;         // binary field 0x80
-    int     m_GradMode;           // binary field 0x8c (2 = gradient enabled)
+    // Gradient fields (binary @ 0x7c..0x90):
+    Colour  m_GradTop;            // binary field 0x7c (m_FillTop)
+    Colour  m_GradBottom;         // binary field 0x80 (m_FillBottom)
+    Colour  m_GradCol2;           // binary field 0x84 (m_FillCol2, metallic c2)
+    Colour  m_GradCol3;           // binary field 0x88 (m_FillCol3, metallic c3)
+    int     m_GradMode;           // binary field 0x8c (2=gradient, 4=metallic)
+    bool    m_MetallicFlag;       // binary field 0x8e (m_MetallicFlag; SetMetallicGradient=1)
     bool    m_GradFlag;           // binary field 0x90
 
     // Stroke/outline fields (binary v1.6.1 @ 0x54..0x64):
