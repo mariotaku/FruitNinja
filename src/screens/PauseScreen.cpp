@@ -99,13 +99,13 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
 //   TaskState+0x08 (float) = 0.25f -- pause transition timer
 void PauseScreen::PauseGame() {
     GameTaskState* ts = GetTaskState();
-    game_work.m_Paused = true;
+    game_work.bM_Mode = true;
     ts->isPaused = 0;
     ts->pauseTransitionTimer = 0.25f;
 }
 
 // ASM-verified: 2026-05-20 binary @ 0x00168fb0 UnpauseGame (re-analyst)
-// Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game_work.m_Paused.
+// Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game_work.bM_Mode.
 // pausedFlag stays set through QUIT_EXIT/RETRY_EXIT/BOMB_FLASH so the dispatcher's
 // `active = !pausedFlag && pmState == 0` evaluates to false during those transitions,
 // which makes UpdateBombHit and GameOver-cross-1.5 skip. The port's RESUME_EXIT case
@@ -132,7 +132,7 @@ void PauseScreen::UnpauseGame() {
 bool PauseScreen::IsEnabled() {
     if (fabsf(game_work.m_GameDt) >= 0.001f) return false;  // [+0xc] epsilon
     if (game_work.m_BombHitTimer > 0.0f)                return false;  // [+0x10]
-    return (game_work.m_LevelTransitionFlag ^ 1) != 0;                           // [+0x05] XOR 1
+    return (game_work.bM_bPaused ^ 1) != 0;                           // [+0x05] XOR 1
 }
 
 // -------------------------------------------------------------------------
@@ -143,7 +143,7 @@ static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
     #endif
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
-    game_work.m_LevelTransitionFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
+    game_work.bM_bPaused = 1;                               // 0x169e6e: strb 1, [+0x05]
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
@@ -649,7 +649,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha += (1.0f - m_Alpha) * FADE_IN_RATE;
 
         // Force game pause flag each frame while fading in (SP path only)
-        game_work.m_Paused = true;
+        game_work.bM_Mode = true;
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
@@ -662,7 +662,7 @@ void PauseScreen::Update(float dt) {
 
     case PAUSE_STATE_ACTIVE:
         // Force game pause flag each frame (SP path only)
-        game_work.m_Paused = true;
+        game_work.bM_Mode = true;
 
         // Enable hit detection on Resume and Retry
         if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
@@ -686,7 +686,7 @@ void PauseScreen::Update(float dt) {
             // only) so GameUpdate resumes ticking. QUIT_EXIT and RETRY_EXIT leave
             // pausedFlag set -- binary-faithful -- so active=false holds through
             // BOMB_FLASH and the 1.5f GameOver-cross check skips.
-            game_work.m_Paused = false;
+            game_work.bM_Mode = false;
         }
         break;
 

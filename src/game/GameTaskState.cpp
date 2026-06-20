@@ -1,6 +1,6 @@
 //
 // GameTaskState — 3-state dispatcher
-// Reimplemented from GameTaskUpdate (0x10a5d4, 87 lines)
+// Reimplemented from GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
 //
 
 #include "GameTaskState.h"
@@ -30,7 +30,7 @@ static bool s_stateChangeRequested = false;
 
 GameTaskState* GetTaskState() { return &s_taskState; }
 
-// Matches GameTaskUpdate (0x10a5d4, 87 lines)
+// Matches GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
 void GameTaskUpdate(float rawDt) {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -63,11 +63,12 @@ void GameTaskUpdate(float rawDt) {
         }
 
         if (stateIdx == s_taskState.prevState) {
-            // Binary @ 0x0010a5d4: combined gate is
-            //   active = (!pausedFlag) && (PowerManager::GetState() == 0)
+            // ASM-verified: 2026-06-20T00:00Z v1.6.1 GameTaskUpdate @ 0x0011a290 (asm-inspector)
+            // gate: param_2(active) = (PowerManager::GetState()==0 && game_work.bM_Mode[+0x02]==0)
+            // bM_Mode[+0x02]=0 means gameplay-active; non-zero means paused/inactive.
             Mortar::PowerManager::GetInstance()->Update();
             uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
-            bool canUpdate = (!game_work.m_Paused) && (pmState == 0);
+            bool canUpdate = (!game_work.bM_Mode) && (pmState == 0);
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new

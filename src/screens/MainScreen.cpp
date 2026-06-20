@@ -305,7 +305,7 @@ void MainScreen::Update(float dt) {
         if (-game_work.m_GameDt > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
-            game_work.m_LevelTransitionFlag = 1;
+            game_work.bM_bPaused = 1;
         }
 #endif // !defined(__bada__)
         game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
@@ -316,7 +316,7 @@ void MainScreen::Update(float dt) {
 #ifndef __bada__
             m_bGameStartReset = false;
 #endif // !defined(__bada__)
-            game_work.m_LevelTransitionFlag = 0;
+            game_work.bM_bPaused = 0;
         }
 
         const float sizeY_2 = size.y;
@@ -441,7 +441,7 @@ void MainScreen::Update(float dt) {
             game_work.m_GameDt *= 0.75f;
             if (game_work.m_GameDt > -0.001f) {
                 game_work.m_GameDt = 0.0f;
-                game_work.m_LevelTransitionFlag = 0;
+                game_work.bM_bPaused = 0;
                 #ifndef FN_ASM_VERIFY_CROSS
                 LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to 0.0f, levelTransitionFlag cleared");
                 #endif

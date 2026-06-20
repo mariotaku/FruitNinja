@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
     // binary clears it from MainScreen::Update case 2-end / case 0x11
     // once the camera has zoomed into gameplay; the unit test bypasses
     // that state machine, so clear it manually to enable the spawn pump.
-    game_work.m_LevelTransitionFlag = 0;
+    game_work.bM_bPaused = 0;
 
     if (h.IsInteractive()) {
         // After SetupLevel, keep ticking until ESC so the tester can watch

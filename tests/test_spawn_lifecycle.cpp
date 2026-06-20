@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
     }
     game_work.gameMode = (uint8_t)gameMode;
     FN::PrepareForLevelStart();
-    game_work.m_LevelTransitionFlag = 0;  // bypass MainScreen camera-fade gate
+    game_work.bM_bPaused = 0;  // bypass MainScreen camera-fade gate
     // Let the flung menu items physics-die before we start counting spawns.
     h.RunHeadless(120);
 

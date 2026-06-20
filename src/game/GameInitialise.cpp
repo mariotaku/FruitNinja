@@ -63,9 +63,9 @@ void GamePreInitialise() {
     // Original: CpuFill8(game, 0, 0x608)
     // For port: zero the gameplay fields (not the SDL/port fields)
     game_work.taskStateIndex = 0;
-    game_work.m_Paused = false;
+    game_work.bM_Mode = false;
     game_work.gameMode = 0;
-    game_work.m_LevelTransitionFlag = 0;
+    game_work.bM_bPaused = 0;
     game_work.m_GameDt = 0;
     game_work.m_BombHitTimer = 0;
     game_work.dt = 0;

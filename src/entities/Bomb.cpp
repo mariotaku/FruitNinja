@@ -344,7 +344,7 @@ void Bomb::Update(float /*dt*/) {
             // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
             // so it expires on the OOB check below. Binary resets countdown
             // to 0 and pushes vel = (0, -1, 0) — gentle downward drift.
-            if (game_work.m_BombHitTimer > 0.0f || game_work.m_LevelTransitionFlag != 0) {
+            if (game_work.m_BombHitTimer > 0.0f || game_work.bM_bPaused != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
                 vel = Vec3(0.0f, -1.0f, 0.0f);
@@ -352,16 +352,16 @@ void Bomb::Update(float /*dt*/) {
 
             const float prevCountdown = m_Countdown;
             // Tick countdown using GAME dt — but only when game is active.
-            if (!game_work.m_Paused) {
+            if (!game_work.bM_Mode) {
                 m_Countdown -= gameDt;
             }
 
             // Bomb fuse SFX fires on the negative-going edge of countdown
             // crossing FUSE_SFX_THRESHOLD (0.2f). Gated by
-            // g_bombData.bFuseSfxFiredThisFrame and m_LevelTransitionFlag.
+            // g_bombData.bFuseSfxFiredThisFrame and bM_bPaused.
             if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD
                 && !g_bombData.bFuseSfxFiredThisFrame
-                && game_work.m_LevelTransitionFlag == 0) {
+                && game_work.bM_bPaused == 0) {
                 g_bombData.bFuseSfxFiredThisFrame = 1;
                 if (game_work.mGameSound)
                     game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);

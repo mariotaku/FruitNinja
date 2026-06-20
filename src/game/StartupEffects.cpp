@@ -85,7 +85,7 @@ void PrepareForLevelStart() {
     LOG_DEBUG("FN", "PrepareForLevelStart: firing -> WaveManager::Reset(false)");
     WaveManager::GetInstance()->Reset(false);
     Game* game = Game::GetInstance();
-    if (game) game_work.m_LevelTransitionFlag = 1;
+    if (game) game_work.bM_bPaused = 1;
 }
 
 } // namespace FN

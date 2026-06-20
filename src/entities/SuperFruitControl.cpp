@@ -132,7 +132,7 @@ void SuperFruitControl::Release()
 // DAT constants from literal pool @ 0x1bcd64 / 0x1bd488 — see spec.
 void SuperFruitControl::Update(float dt)
 {
-    bool paused = game_work.m_Paused;
+    bool paused = game_work.bM_Mode;
 
     if (!paused) {
         m_Timer += dt;                              // +0x88 advance

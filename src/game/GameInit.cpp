@@ -148,7 +148,7 @@ void GameInit(unsigned long) {
         }
         // Binary also assigns: hud_font = pM_Fonts[1]; unpause_game = 0;
         // clearInput = 0; game_work.bM_Mode = 0
-        game_work.m_Paused = false;
+        game_work.bM_Mode = false;
         game_work.gameMode = 0;
     }
 
@@ -187,9 +187,11 @@ void GameInit(unsigned long) {
         PauseScreen* pauseScreen = new PauseScreen();
         ts->pPauseScreen = pauseScreen;
         pauseScreen->Init();   // vtable slot 2 (forwards to Reset)
-        // Binary: game_work.bM_bPaused = 1; game_work.flM_PauseAmount = -1.0;
-        game_work.m_Paused = true;
-        game_work.m_GameDt = -1.0f;
+        // Binary GameInit @0x1ce1c0 tail: bM_Mode[+0x02]=0, bM_bPaused[+0x05]=1, flM_PauseAmount[+0x0C]=-1.0.
+        // ASM-verified: 2026-06-20T00:00Z v1.6.1 GameInit @ 0x001ce1c0 (asm-inspector)
+        game_work.bM_Mode   = false;      // +0x02: gameplay-mode gate = inactive (menu)
+        game_work.bM_bPaused = 1;         // +0x05: pause/inactive gate = suppressed
+        game_work.m_GameDt  = -1.0f;     // +0x0C: flM_PauseAmount
     }
 
     // Step 11: AddControls to HUD (order: MainScreen, PauseScreen, TutorialControl)
@@ -344,11 +346,11 @@ void GameUpdate(float dt, bool active) {
             const bool unpause = (tt < 0.0f)
                 ? (tt < -THR)
                 : (tt >  THR);
-            if (unpause) game_work.m_Paused = false;
+            if (unpause) game_work.bM_Mode = false;
         }
 
         // SaveData active-game flag: set when paused
-        if (game_work.m_Paused) {
+        if (game_work.bM_Mode) {
             game_work.m_SaveData->m_bHasActiveGame = 1;
         }
 
@@ -450,7 +452,7 @@ void GameUpdate(float dt, bool active) {
 
                 // Cross-1.5 GameOver trigger
                 if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f &&
-                    game_work.m_LevelTransitionFlag == 0 &&
+                    game_work.bM_bPaused == 0 &&
                     (!ts || ts->m_bMenuBombFlashFlag == 0)) {
                     FN::GameOver(-1, -1.0f, -1);
                 }
@@ -485,7 +487,7 @@ void GameUpdate(float dt, bool active) {
         if (wavedt != 0.0f) {
             particleDtNorm = 1.0f / wavedt;
         }
-        if (!game_work.m_Paused && particleDtNorm < 1.0f) {
+        if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
             particleDtNorm = 1.0f;
         }
         PSPParticleManager::GetInstance().Update(fVar9 / particleDtNorm, false);
@@ -519,8 +521,8 @@ void GameUpdate(float dt, bool active) {
     {
         GameTaskState* ts = GetTaskState();
         GameSound* gs = game_work.mGameSound;
-        const bool noSfx  = (game_work.m_LevelTransitionFlag != 0);
-        const bool paused = game_work.m_Paused;
+        const bool noSfx  = (game_work.bM_bPaused != 0);
+        const bool paused = game_work.bM_Mode;
         const float metric = Bomb::GetHeighestBomb();
         Mortar::MortarSound* fuse = ts->m_pBombFuseSound;
         float vol;

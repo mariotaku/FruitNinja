@@ -47,7 +47,7 @@ void ResetGameEntities(bool killAll);
 // Matches EndRetryLevel @ 0x0016a208. Resets game state after the retry
 // shrink animation completes (retryTimer -> 0). Clears retryFlag, resets
 // score/save fields, calls ResetGameEntities(false), resets WaveManager,
-// clears m_LevelTransitionFlag, and sets MainScreen to CAMERA_FADE state.
+// clears bM_bPaused, and sets MainScreen to CAMERA_FADE state.
 void EndRetryLevel();
 
 // Matches RetryLevel @ 0x0016b008. Called from PauseScreen RETRY_EXIT.
