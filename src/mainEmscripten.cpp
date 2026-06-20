@@ -9,6 +9,7 @@
 #include "render/gl_funcs.h"
 #include "Game.h"
 #include "render/Renderer.h"
+#include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
 
@@ -147,6 +148,48 @@ static void BootWait(void* arg) {
     emscripten_cancel_main_loop();
 
     BootArgs* ba = static_cast<BootArgs*>(arg);
+
+    // Port specific: parse URL query parameters to set debug flags on web.
+    // Enables the hitbox overlay without a physical keyboard (no F1 on mobile).
+    // Supported params:
+    //   ?hitbox=1  or  ?hitboxes=1  -- enables g_DebugHitboxes (same as F1 on desktop)
+    //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
+    {
+        // hitbox / hitboxes=1
+        int hitboxParam = EM_ASM_INT({
+            try {
+                var qs = window.location.search;
+                if (!qs) return 0;
+                var params = new URLSearchParams(qs);
+                if (params.get('hitbox') === '1' || params.get('hitboxes') === '1') return 1;
+            } catch(e) {}
+            return 0;
+        });
+        if (hitboxParam) {
+            FN::g_DebugHitboxes = true;
+            LOG_INFO("Debug", "URL param: hitbox overlay ON");
+        }
+
+        // timescale=<float>
+        double tsParam = EM_ASM_DOUBLE({
+            try {
+                var qs = window.location.search;
+                if (!qs) return -1.0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('timescale');
+                if (v !== null) {
+                    var f = parseFloat(v);
+                    if (!isNaN(f) && f > 0.0) return f;
+                }
+            } catch(e) {}
+            return -1.0;
+        });
+        if (tsParam > 0.0) {
+            FN::g_DebugTimeScale = (float)tsParam;
+            LOG_INFO("Debug", "URL param: timescale = %.3f", FN::g_DebugTimeScale);
+        }
+    }
+
     if (!g_game.init(ba->window, ba->gl)) {
         fprintf(stderr, "Failed to init game\n");
         return;
