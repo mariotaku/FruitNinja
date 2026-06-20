@@ -8,11 +8,12 @@
 #include <tinyxml2.h>
 #include "game/GameWork.h"
 
+// ASM-verified: 2026-06-20T00:00Z v1.6.1 TimeModifier::TimeModifier @ 0x143808 (asm-inspector)
 TimeModifier::TimeModifier()
     : GameModifier()
     , m_DtScale(1.0f)
     , m_TransitionRate(0.0f)
-    , m_CurrentDtMod(0.0f)
+    , m_CurrentDtMod(1.0f)
     , m_bStopClock(false)
     , _pad2d{0, 0, 0}
     , m_TimeSlow(1.0f)
