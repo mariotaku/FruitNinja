@@ -308,7 +308,8 @@ public:
     // Clears a single entry in m_Totals by hash (binary addr TBD; called by ResetSpeed/AddSpeed).
     void ClearTotal(uint32_t hash);
 
-    // 0x00129b94. Clears m_SessionTotals.
+    // v1.6.1 FruitSaveData::ClearCombo @ 0x001526c0 -- resets best-combo record:
+    // m_BestComboLength = 0, m_BestComboFruits[0..10] = -1.
     void ClearCombo();
 
     // 0x0012a034. Decrements modifier counters at end of round.
