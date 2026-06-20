@@ -30,52 +30,36 @@
 #include "game/GameWork.h"
 #include "game/GameTaskState.h"
 
-// Analysed: 2026-04-29T00:00
+// --- Constants from binary ---
+static const float SPAWN_TIMER_INIT  = 0.6f;       // DAT_001726ac
+static const float DEFAULT_CHUCK_DELAY = 0.2f;     // DAT_00170f80
+static const float GRAVITY_Y          = -12.0f;    // literal in Init
+static const float DT_NORMALIZE       = 1.0f / 60.0f;
+static const float ACCEL_GROWTH_RATE  = 0.2f;      // DAT_00172f30
+static const float OFFSCREEN_Y        = -320.0f;   // DAT_00172cb0
+static const float BOUNDS_MIN_Y       = -240.0f;   // DAT_00172f34
+static const float BOUNDS_MAX_Y       =  240.0f;   // DAT_00172f38
+static const float BOUNDS_MIN_X       = -360.0f;   // DAT_00172f3c
+static const float BOUNDS_MAX_X       =  360.0f;   // DAT_00172f40
+static const float BOMBBLAST_INTERVAL = 0.05f;     // DAT_00172c9c
+static const float HIT_COL_RADIUS     = 0.01f;     // DAT_00172cac
+static const float HIT_COL_POS        = 1000.0f;   // DAT_00172ca4
+static const float FUSE_SFX_THRESHOLD = 0.2f;      // DAT_00172ca0
 
-// --- Constants from binary (docs/entities/bomb.md) ---
-static const float SPAWN_TIMER_INIT  = 0.6f;     // DAT_001726ac
-static const float DEFAULT_CHUCK_DELAY = 0.2f;    // DAT_00170f80
-static const float GRAVITY_Y          = -12.0f;   // literal in Init
-static const float DT_NORMALIZE       = 1.0f / 60.0f; // DAT_00172c98
-static const float ACCEL_GROWTH_RATE  = 0.2f;     // DAT_00172f30
-static const float OFFSCREEN_Y        = -320.0f;  // DAT_00172cb0
-static const float BOUNDS_MIN_Y       = -240.0f;  // DAT_00172f34
-static const float BOUNDS_MAX_Y       =  240.0f;  // DAT_00172f38
-static const float BOUNDS_MIN_X       = -360.0f;  // DAT_00172f3c
-static const float BOUNDS_MAX_X       =  360.0f;  // DAT_00172f40
-static const float BOMBBLAST_INTERVAL = 0.05f;    // DAT_00172c9c
-static const float HIT_COL_RADIUS     = 0.01f;    // DAT_00172cac
-static const float HIT_COL_POS        = 1000.0f;  // DAT_00172ca4
-
-// Throw-bomb SFX threshold: countdown crossing this value triggers Fuse SFX.
-static const float FUSE_SFX_THRESHOLD = 0.2f;     // DAT_00172ca0
-
-// Fixed tilt for draw: 0xBFF4 in 16-bit angle ≈ -83 degrees
+// Fixed tilt for draw: 0xBFF4 in 16-bit angle
 static const int16_t DRAW_TILT_ANGLE  = (int16_t)0xBFF4;
-// 0xB6 = 182 = ~1 degree in 16-bit (65536/360 ≈ 182)
+// 0xB6 = 182 ~ 1 degree in 16-bit (65536/360 ~ 182)
 static const int16_t ANGLE_SCALE      = 0xB6;
 
-// Global bomb data (matches BombGlobalData at GOT+0x464A0, loaded by LoadContent)
-// See docs/entities/bomb.md for full struct layout.
-// Binary field offsets (kept as comments for reference; port layout may
-// differ since we store Mortar::SmartPtr<Texture> separately in g_BombTexture):
-//   +0x00  Bomb*            pTrackedBomb
-//   +0x04  Mortar::SmartPtr<Texture> tex_02   (bomb_explode.tex — in g_BombTexture)
-//   +0x08  uint8_t           bFuseSfxFiredThisFrame
-//   +0x0C  Mortar::SmartPtr<Model>[3] model
-//   +0x24  Mortar::SmartPtr<Texture> texMinus10
-//   +0x28  bool              loaded
-//   +0x2C  uint32_t          fuseHash[2]
+// Global bomb data (BombGlobalData at GOT+0x464A0, loaded by LoadContent)
 struct BombGlobalData {
-    // +0x00: last qualifying bomb drawn this frame. Bomb::Draw sets it
-    // if (this != prev && !menuHit && pos.y > -1000). Write-only in the
-    // shipped binary — no visible reader. Preserved for byte-level fidelity.
+    // +0x00: last qualifying bomb drawn this frame (highestBomb tracker).
+    // Bomb::Draw sets it when this != prev && !m_bMenuBombHit && pos.y > -1000.
+    // Release clears it when this == pTrackedBomb.
     Bomb* pTrackedBomb;
 
     // +0x08: per-frame gate for "Bomb-Fuse" SFX. Cleared at top of every
-    // Bomb::Draw; set by Bomb::Update on the frame a bomb's countdown
-    // crosses 0.2s downward. Prevents every chained bomb from spamming the
-    // SFX in one frame.
+    // Bomb::Draw; set by Bomb::Update when countdown crosses 0.2s downward.
     uint8_t bFuseSfxFiredThisFrame;
 
     Mortar::SmartPtr<Mortar::Model> model[3];
@@ -90,30 +74,22 @@ struct BombGlobalData {
 };
 static BombGlobalData g_bombData;
 
-// Global blast / flash texture. Binary stores at `g_bombData->tex_02`
-// (+0x04). Despite the name, this is NOT the bomb mesh texture (that
-// comes from the .mmd embedded `fruit_atlas.tex`) — it's the
-// `bomb_explode.tex` used by BombBlast::DrawBlast for the shockwave
-// quads. BombBlast.cpp references it via `extern`.
+// Binary stores at g_bombData->tex_02 (+0x04). Not the bomb mesh texture --
+// this is bomb_explode.tex used by BombBlast::DrawBlast for shockwave quads.
+// BombBlast.cpp references it via extern.
 Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
 
-
-// SetupLighting @ 0x00175018 — single `bx lr`, a genuine no-op stub in
-// the shipped binary. Both Bomb::LoadContent (0x001727d8) and
-// Fruit::LoadFruitModels (0x00179654/0x00179718/0x001797d6) reach it
-// via PLT trampoline 0x000fb820 → GOT[0x1eecb0] → 0x00175018. No
-// material / mesh / GL state is touched.
-//
-// We keep the call in LoadContent for shape-fidelity — when (if) Mortar
-// lighting is revisited, the implementation lands here for free.
+// SetupLighting @ 0x00175018 -- single `bx lr`, genuine no-op stub in binary.
+// Both Bomb::LoadContent and Fruit::LoadFruitModels reach it via PLT trampoline.
 static Mortar::SmartPtr<Mortar::Model>& SetupLighting(Mortar::SmartPtr<Mortar::Model>& model) {
     return model;
 }
 
-// --- Bomb::LoadContent (0x1726c8) — called once from GameInitialise ---
+// --- Bomb::LoadContent / CleanupBomb ---
 
+// ASM-spec v1.6.1 Bomb::LoadContent @ 0x1d6dd4
 void Bomb::LoadContent() {
-    if (g_bombData.loaded) return;  // +0x28 guard
+    if (g_bombData.loaded) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -121,46 +97,14 @@ void Bomb::LoadContent() {
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (!meshMgr) return;
 
-    // Model[0]: binary string "models/Fruit/Bomb.mmd" (0x1BCBDB)
-    // Bada filesystem was case-insensitive; actual file is lowercase.
-    // NOTE: this Bada asset dump's fruit_atlas.tex has a solid red
-    // oval at bomb.mmd's UV region (lower-left quadrant), not the
-    // dark-body + red-X art seen in iOS/Steam ports. Rendering as
-    // red is faithful to the shipped Bada atlas. The other available
-    // mesh files (bomb_blue.mmd, bomb_red.mmd, bomb_purple.mmd) all
-    // sample different (blue/magenta/etc.) atlas regions in this
-    // asset dump -- not the dark-red variant. To restore the
-    // iconic dark-body bomb, the atlas texture itself needs to be
-    // replaced with a version that has the correct art at these UVs.
-    {
-        // logical path; FileSystem_Direct prepends data_dir
-        g_bombData.model[0] = meshMgr->Load("models/Fruit/bomb.mmd");
-    }
+    g_bombData.model[0] = meshMgr->Load("models/Fruit/bomb.mmd");
+    g_bombData.model[1] = meshMgr->Load("models/Fruit/bomb_purple.mmd");
 
-    // Model[1]: binary string "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
-    {
-        // logical path; FileSystem_Direct prepends data_dir
-        g_bombData.model[1] = meshMgr->Load("models/Fruit/bomb_purple.mmd");
-    }
-
-    // Original LoadContent (0x001726e8) does NOT assign textures to bomb meshes.
-    // Textures are loaded from the .mmd file's embedded texture reference
-    // (fruit_atlas.tex) by MeshManager::LoadMeshInternal automatically.
-
-    // Model[2]: not loaded in LoadContent (may be loaded elsewhere for multiplayer)
-
-    // Texture: "minus_10.tex" (0x1BCC0E) — zen mode -10 score indicator
     g_bombData.texMinus10 = Mortar::TextureManager::LoadLocalisedTexture("minus_10.tex");
 
-    // Precompute fuse particle emitter hashes (matches binary LoadContent)
     g_bombData.fuseHash[0] = StringHash("bomb_smoke");
     g_bombData.fuseHash[1] = StringHash("purple_bomb_smoke");
 
-    // Setup lighting on both models (binary 0x001727c4..0x001727e0). The
-    // loop guards on SmartPtr::operator bool before each call — matches
-    // the disassembly byte-for-byte, and the SetupLighting body is a
-    // `bx lr` so the whole block is effectively a null-safe walk over
-    // the two SmartPtr slots.
     for (int i = 0; i < 2; i++) {
         if (g_bombData.model[i].IsValid())
             SetupLighting(g_bombData.model[i]);
@@ -169,8 +113,20 @@ void Bomb::LoadContent() {
     g_bombData.loaded = true;
 }
 
+// ASM-spec v1.6.1 Bomb::CleanupBomb @ 0x1d6758
+void Bomb::CleanupBomb() {
+    for (int i = 0; i < 3; i++)
+        g_bombData.model[i] = Mortar::SmartPtr<Mortar::Model>();
+    g_bombData.texMinus10 = Mortar::SmartPtr<Mortar::Texture>();
+    g_BombTexture = Mortar::SmartPtr<Mortar::Texture>();
+    g_bombData.loaded = false;
+    g_bombData.fuseHash[0] = 0;
+    g_bombData.fuseHash[1] = 0;
+}
+
 // --- Bomb implementation ---
 
+// ASM-spec v1.6.1 Bomb::Bomb (C1) @ 0x1d55c0 / (C2) @ 0x1d5610
 Bomb::Bomb()
     : m_SpawnTimer(0.0f),
       m_BombVariant(0),
@@ -178,109 +134,95 @@ Bomb::Bomb()
       m_ZPosition(0.0f),
       m_RotVelX(0), m_RotVelY(0),
       m_RotX(0), m_RotY(0),
-#ifndef __bada__
-      m_RotAccumX(0.0f), m_RotAccumY(0.0f),
-#endif
       m_bCollisionGuard(0),
       m_pEmitter(nullptr),
       m_bMovement(0),
       m_pOwnerButton(nullptr),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
-      m_SpeedMult(1.0f)
+      m_SpeedMult(1.0f),
+      m_Field_0xAC(0.0f)
 {
     entityType = 1;  // Bomb
 }
 
+// ASM-spec v1.6.1 Bomb::~Bomb (D1) @ 0x1d5794 / (D0) @ 0x1d5810 / (D2) @ 0x1d5884
+// Binary: __vptr; Release(this); ~Delegate0(&m_HitCallback); ~Entity. NO delete m_Col.
 Bomb::~Bomb() {
     Release();
-    delete m_Col;
-    m_Col = nullptr;
 }
 
-// Matches Bomb::Release (0x171764) — drops fuse emitter; called from dtor.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x00171764 (asm-inspector)
+// ASM-spec v1.6.1 Bomb::Release @ 0x1d5720
+// Drops fuse emitter; clears owner-button m_pTrackedFruit backref;
+// clears highestBomb (pTrackedBomb) if this; calls Entity::Release (base).
 void Bomb::Release() {
     if (m_pEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
+    if (m_pOwnerButton && m_pOwnerButton->m_pTrackedFruit == reinterpret_cast<Fruit*>(this)) {
+        m_pOwnerButton->m_pTrackedFruit = nullptr;
+    }
+    if (g_bombData.pTrackedBomb == this) {
+        g_bombData.pTrackedBomb = nullptr;
+    }
+    Mortar::Entity::Release();
 }
 
-// ASM-verified: 2026-04-28T00:00 binary @ 0x00172504 (asm-inspector)
-// Binary @ 0x00172504 — vtable slot 2. p1/p2 unused; p3=scale (nullable, default 1.0).
-void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
-
+// ASM-spec v1.6.1 Bomb::Init @ 0x1d69e0
+// p1/p2 unused; p3 = scale Vec3* (nullable, default 1.0)
+void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     float scaleFactor = 1.0f;
-    // Original: if (p3 != nullptr) scaleFactor = *(float*)p3;
+    if (scaleOrNull) scaleFactor = scaleOrNull->x;
 
-    // Lazy-load bomb texture
     if (!g_BombTexture.IsValid()) {
         g_BombTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
     }
 
-    // Initial state (matches binary exactly)
-    m_SpawnTimer = SPAWN_TIMER_INIT;
     m_BombVariant = 0;
     m_bCollisionGuard = 0;
-    m_bHit = 0;
     // ASM-verified: 2026-05-27 binary @ 0x001725ce (re-analyst)
     // orr r2,r2,#0x2 ; bfi r2,r3,#0x4,#0x1 (r3 = 0)
     flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
+    m_bHit = 0;
     m_bMovement = 1;
     m_SpeedMult = 1.0f;
+    m_Field_0xAC = 0.0f;
+    m_SpawnTimer = SPAWN_TIMER_INIT;
 
-    // Random rotation for 2 axes (matches binary loop)
-    m_RotVelX = (int16_t)(rand() % 7 + 1);  // 1..8
-    m_RotX    = (int16_t)(rand() % 360);     // 0..359
+    // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot)
+    m_RotVelX = (int16_t)(rand() % 7 + 1);
+    m_RotX    = (int16_t)(rand() % 0x167);
     m_RotVelY = (int16_t)(rand() % 7 + 1);
-    m_RotY    = (int16_t)(rand() % 360);
-#ifndef __bada__
-    m_RotAccumX = 0.0f;
-    m_RotAccumY = 0.0f;
-#endif
+    m_RotY    = (int16_t)(rand() % 0x167);
 
     m_bMenuBombHit = 0;
+    m_pEmitter = nullptr;
     m_pOwnerButton = nullptr;
-    m_pEmitter = nullptr;  // lazy-created in Update
 
-    // Scale + collision sphere: matches binary multiply chain at 0x172504.
-    // Binary reads <bomb size="..." collision="..."/> from fruitlist.xml
-    // into g_pFruitInfo+0x88/+0x8C and uses both here. The port parses
-    // those into FruitInfo_GetBombSize/Collision during FruitInfo_Load.
-    //   scale  = Vec3::One * size * 0.01 * scaleFactor
-    //   radius = collision * 0.5 * scaleFactor
     const float bombSize = FruitInfo_GetBombSize();
     const float bombCol  = FruitInfo_GetBombCollision();
-    static const float VISUAL_SCALE_MULT = 0.01f; // DAT_001726b0
+    static const float VISUAL_SCALE_MULT = 0.01f;  // DAT_001726b0
     Vec3 computedScale = Vec3::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
 
-    // Binary allocates ColSphere at +0x38 in Init if the pointer is null
-    // (verified: "allocated at +0x38 if NULL" in bomb_init_binary.s).
     if (!m_Col) m_Col = new ColSphere();
     {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center() = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = bombCol * 0.5f * scaleFactor;
     }
+
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;
     m_AccelForce = Vec3(0.0f, GRAVITY_Y, 0.0f);
     m_ZPosition = Bomb::GetBombZPosition();
 
-    // Activate — same intent as the binary's flag clear at Init start.
     flags &= ~ENT_SKIP_MASK;
-
-    // Use pre-loaded model from g_bombData (loaded by LoadContent in GameInitialise)
-    // Draw indexes as g_bombData.model[m_BombVariant]; no per-instance mesh load.
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x0017121c (asm-inspector)
-// Matches Bomb::SetCallback (0x0017121c) — sets the menu-bomb marker flag,
-// installs the hit callback, and overwrites rotation fields so menu bombs
-// spin slowly (one axis moving, one locked) rather than with the random
-// 1..7 velocities from Bomb::Init.
+// Matches Bomb::SetCallback (0x0017121c)
 void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
     m_bMenuBombHit   = 1;
     m_HitCallback    = cb;
@@ -291,31 +233,9 @@ void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
     m_RotVelY = 0;      // Y axis locked
 }
 
-// Binary: rot += vel once per frame. Port adds a fractional accumulator so
-// the F7 debug timescale slows rotation proportionally. Under __bada__ the
-// accumulator fields are absent; the binary-faithful path is used instead.
-#ifndef __bada__
-static inline void StepBombRotation(int16_t& rot, int16_t vel,
-                                    float& accum, float scaledDt) {
-    if (scaledDt <= 0.0f) return;
-    accum += (float)vel * scaledDt * 60.0f;  // 60 = 1/dt at normal speed
-    int whole = (int)accum;
-    if (whole != 0) {
-        rot   = (int16_t)(rot + whole);
-        accum -= (float)whole;
-    }
-}
-#else
-static inline void StepBombRotation(int16_t& rot, int16_t vel) {
-    rot = (int16_t)(rot + vel);
-}
-#endif
-
-// Helper: accel-growth block shared by alive-branch and menu-hit-branch in
-// binary Bomb::Update. When velocity and accelForce are componentwise
-// aligned, the accel-force magnitude grows by (0.2 * dtNorm * 2) per frame.
-//   DAT_00172f30 = 0.2   (ACCEL_GROWTH_RATE)
-//   DAT_00172ca0 = 0.2   (same value used in menu-hit branch — coincidental)
+// Helper: accel-growth block shared by alive-branch and menu-hit-branch in Update.
+// When velocity and accelForce are componentwise aligned, grow accel magnitude
+// by (0.2 * dtNorm * 2) per frame. DAT_00172f30 = 0.2
 static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
     const bool alignedY = (accel.y < 0.0f && vel.y < 0.0f) ||
                           (accel.y > 0.0f && vel.y > 0.0f);
@@ -328,22 +248,16 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
     accel *= (newLen / len);
 }
 
-// ASM-verified: 2026-04-28T00:00 binary @ 0x001729fc (asm-inspector)
-// ASM-verified: 2026-05-20 binary @ Bomb::Update (re-analyst) -- no IsActive early-return; tail OOB-kill must always fire.
-// ASM-verified: 2026-05-23 binary @ 0x001729FC (re-analyst) -- Throw-bomb SFX on countdown negative-going edge via bFuseSfxFiredThisFrame gate.
-// Matches Bomb::Update (0x001729fc, 195 lines).
+// ASM-spec v1.6.1 Bomb::Update @ 0x1d6098
 void Bomb::Update(float /*dt*/) {
-    const float gameDt  = game_work.dt;
+    const float gameDt   = game_work.dt;
     const float scaledDt = gameDt * m_SpeedMult;
     const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
 
     if (m_bHit == 0) {
         // === ALIVE BRANCH ===
         if (m_Countdown > 0.0f) {
-            // Early-kill: if a bomb just exploded (bombHitTimer>0) or game
-            // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
-            // so it expires on the OOB check below. Binary resets countdown
-            // to 0 and pushes vel = (0, -1, 0) — gentle downward drift.
+            // Early-kill: bomb-hit-in-progress or transitioning out
             if (game_work.m_BombHitTimer > 0.0f || game_work.bM_bPaused != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
@@ -351,14 +265,11 @@ void Bomb::Update(float /*dt*/) {
             }
 
             const float prevCountdown = m_Countdown;
-            // Tick countdown using GAME dt — but only when game is active.
             if (!game_work.bM_Mode) {
                 m_Countdown -= gameDt;
             }
 
-            // Bomb fuse SFX fires on the negative-going edge of countdown
-            // crossing FUSE_SFX_THRESHOLD (0.2f). Gated by
-            // g_bombData.bFuseSfxFiredThisFrame and bM_bPaused.
+            // Fuse SFX on negative-going edge of countdown crossing 0.2s
             if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD
                 && !g_bombData.bFuseSfxFiredThisFrame
                 && game_work.bM_bPaused == 0) {
@@ -369,8 +280,7 @@ void Bomb::Update(float /*dt*/) {
 
             if (m_Countdown > 0.0f) return;
 
-            // Countdown expired — chain-bomb spawning. Binary only
-            // randomizes the round-up when frac > 0.01 (FP-noise guard).
+            // Countdown expired: chain-bomb spawning
             {
                 WaveManager* wm = WaveManager::GetInstance();
                 const float sl = wm->spawnLevel;
@@ -390,54 +300,43 @@ void Bomb::Update(float /*dt*/) {
             }
         }
 
-        // Physics — always runs in alive branch after countdown check.
+        // Physics
         if (m_bMovement) {
             vel += m_AccelForce * scaledDt;
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
-#ifndef __bada__
-        StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
-        StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
-#else
-        StepBombRotation(m_RotX, m_RotVelX);
-        StepBombRotation(m_RotY, m_RotVelY);
-#endif
+        // Binary: plain int16 add each frame, no fractional accumulator
+        m_RotX = (int16_t)(m_RotX + m_RotVelX);
+        m_RotY = (int16_t)(m_RotY + m_RotVelY);
 
-        // Update collision sphere to follow bomb. Binary writes pos.xyz then
-        // overwrites center.z with 0.0 — center = (pos.x, pos.y, 0).
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
         if (m_bMenuBombHit == 0) {
-            // Non-menu hit: spawn a BombBlast every 0.05s using GAME dt.
+            // Non-menu hit: spawn a BombBlast every 0.05s
             m_SpawnTimer -= gameDt;
             if (m_SpawnTimer < 0.0f) {
-                Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(4, true);   // type 4 = BombBlast
+                Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(4, true);
                 if (e) {
                     e->pos = pos;
                     e->Init(nullptr, 0, nullptr);
                 }
-                m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
+                m_SpawnTimer = BOMBBLAST_INTERVAL;
             }
         } else {
-            // Menu-hit: same physics as alive branch.
+            // Menu-hit: keep physics alive so bomb falls off-screen
             if (m_bMovement) {
                 vel += m_AccelForce * scaledDt;
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * dtNorm;
-#ifndef __bada__
-            StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
-            StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
-#else
-            StepBombRotation(m_RotX, m_RotVelX);
-            StepBombRotation(m_RotY, m_RotVelY);
-#endif
+            m_RotX = (int16_t)(m_RotX + m_RotVelX);
+            m_RotY = (int16_t)(m_RotY + m_RotVelY);
         }
 
-        // Hide collision — relocate sphere far off-playfield.
+        // Hide collision sphere
         if (m_Col) {
             ColSphere* cs = static_cast<ColSphere*>(m_Col);
             cs->center() = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
@@ -445,35 +344,25 @@ void Bomb::Update(float /*dt*/) {
         }
     }
 
-    // OOB check — kill if off-playfield, else lazy-create the fuse emitter.
+    // OOB check: kill if off-playfield, else lazy-create fuse emitter
     if (pos.y <= BOUNDS_MIN_Y || pos.y >= BOUNDS_MAX_Y ||
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
         KillBomb();
     } else if (!m_pEmitter) {
-        const int variant = (m_BombVariant == 0) ? 0 : 1;
+        // ASM-spec v1.6.1 Bomb::Update @ 0x1d6098: index particleHash directly by m_BombVariant
+        const int variant = m_BombVariant;
+        const uint32_t hash = g_bombData.fuseHash[(variant != 0) ? 1 : 0];
         m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
-            g_bombData.fuseHash[variant], nullptr,
+            hash, nullptr,
             /*updateWhenPaused*/ game_work.m_GameDt == 0.0f);
-        // Binary writes raw bomb.pos to emitter pos once at creation
-        // (0x00172f12) — no per-frame update, no fuse-tip offset.
-        m_pEmitter->m_Pos = pos;
+        if (m_pEmitter)
+            m_pEmitter->m_Pos = pos;
     }
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x001714e4 (asm-inspector).
-// Matches Bomb::DrawUpdate -- pure 2D circle in XY using m_RotY only:
-//   angle       = m_RotY * -0xB6
-//   offset.x    = sin(angle) * 0.9 * scale.x * 100.0
-//   offset.y    = cos(angle) * 0.9 * scale.x * 100.0
-//   offset.z    = 5.0
-//   emitter.pos = bomb.pos + offset
-//   m_DirCos    =  cos(angle)
-//   m_DirSin    = -sin(angle)
-// Earlier port commit extended this with a full RotX*RotY*RotZ chain
-// (and DRAW_TILT_ANGLE) to "track the visible fuse tip" as the bomb
-// tumbles -- but the binary literally ignores m_RotX and the X-tilt
-// here. Reverted to the binary-faithful 2D circle so the smoke /
-// sparks orbit on the same path as the original.
+// ASM-verified: 2026-05-09 binary @ 0x001714e4 (asm-inspector)
+// ASM-spec v1.6.1 Bomb::DrawUpdate (PostUpdate) @ 0x1d53a0
+// Pure 2D circle in XY using m_RotY only; emitter tip + direction cosines.
 void Bomb::PostUpdate(float /*dt*/) {
     if (!m_pEmitter) return;
 
@@ -493,39 +382,16 @@ void Bomb::PostUpdate(float /*dt*/) {
     m_pEmitter->m_DirSin  = -s;
 }
 
-// Matches Bomb::Draw (0x171be8).
-// Binary shape:
-//   if (countdown <= 0) {
-//     // tracking side-effect on highest-bomb pointer (stubbed)
-//     if (model[variant].IsValid()) {
-//       Scale44(scaleMat, s, s, s)
-//       RotX44(rotMat, SinIdx(0xBFF4), CosIdx(0xBFF4))
-//       RotY44(rotMat, SinIdx(m_RotX * 0xB6), CosIdx(m_RotX * 0xB6))
-//       RotZ44(rotMat, SinIdx(m_RotY * 0xB6), CosIdx(m_RotY * 0xB6))
-//       translate = zOffsetVec * zMult + pos
-//       Translate44(rotMat, translate)
-//       combined = scaleMat * rotMat
-//       Model::Draw(model[variant], combined)
-//     }
-//   }
-//
-// See the PORT QUIRK note inside the function body near the
-// modelPtr->Draw(mat) call for the "bomb is a white ball" z-fight
-// workaround (depth test disabled for the bomb mesh only).
+// ASM-spec v1.6.1 Bomb::Draw @ 0x1d6c30
 void Bomb::Draw(Renderer& r) {
     (void)r;
 
-    // Binary @ 0x171be8: clears the per-frame fuse-SFX gate at the top of
-    // EVERY Bomb::Draw (before the countdown check). Set later by
-    // Bomb::Update when a bomb's countdown crosses 0.2s downward.
+    // Clear per-frame fuse-SFX gate at top of every Draw (before countdown check)
     g_bombData.bFuseSfxFiredThisFrame = 0;
 
     if (m_Countdown > 0.0f) return;
 
-    // Binary @ 0x171be8: update "tracked bomb" pointer. Written iff this
-    // bomb isn't the previously-tracked one, isn't menu-hit, and is on the
-    // playfield (pos.y > -1000). No visible reader in the shipped binary,
-    // but mirrored for fidelity.
+    // Track highest-drawn bomb (highestBomb pointer = g_bombData.pTrackedBomb)
     static const float TRACKED_BOMB_MIN_Y = -1000.0f;  // DAT_00171d30
     if (this != g_bombData.pTrackedBomb &&
         m_bMenuBombHit == 0 &&
@@ -536,22 +402,10 @@ void Bomb::Draw(Renderer& r) {
     Mortar::SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[m_BombVariant];
     if (!modelPtr.IsValid()) return;
 
-    // Matrix order must match Fruit::Draw (which renders correctly): build
-    //   final = Translate * Rotate * Scale
-    // so a vertex v becomes final*v = R*S*v + T_col. Mesh origin lands at
-    // T_col (the bomb's world position).
-    //
-    // Binary decomp LOOKS like Stack_88 = S * RotX * RotY * RotZ then
-    // combined = Stack_88 * Translate, which would give mesh-origin =
-    // S*R*(pos + zoff*m_ZPos) — scaled-and-rotated translation, placing
-    // the mesh far from its intended button slot. Our port previously
-    // mirrored that literal order and the bomb rendered near the play
-    // button instead of the quit button. Matching Fruit's proven order
-    // fixes it. The discrepancy with the decomp's apparent chain is
-    // unresolved; leaving the Fruit-style order here since it produces
-    // the visually correct result on both this Bada asset set and the
-    // binary's intended layout.
-    Matrix44 mat = Matrix44::Scale44(scale);     // mat = S
+    // Matrix order: R*S then GlobalTranslate (matches Fruit::Draw, correct visual result).
+    // Binary decomp appears to show S * R * T, but Fruit::Draw is verified-correct and
+    // uses the same chain; preserve this ordering.
+    Matrix44 mat = Matrix44::Scale44(scale);
 
     Matrix44 rotMat;
     rotMat.RotX44(SinIdx((uint16_t)DRAW_TILT_ANGLE),
@@ -561,91 +415,41 @@ void Bomb::Draw(Renderer& r) {
     rotMat.RotZ44(SinIdx((uint16_t)(m_RotY * ANGLE_SCALE)),
                   CosIdx((uint16_t)(m_RotY * ANGLE_SCALE)));
 
-    mat = rotMat * mat;                          // mat = R * S
-    mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
+    mat = rotMat * mat;
+    mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));
 
-    // DIFFERS: original = CULL_FACE off, port = CULL_FACE on for bomb only.
-    //
-    // Verified end-to-end via asm-inspector (2026-05-06):
-    //  - DisplayManagerBada::BeginFrame @ 0x0019dfec disables GL_CULL_FACE
-    //    twice per frame via raw glDisable (bypasses any shadow byte).
-    //  - Geometry::Render's CULL_FACE one-shot guard @ 0x001a3f32 reads
-    //    a *global* shadow byte at 0x0027488c (resolved via GOT slot
-    //    DAT_001a4050) -- the guard fires exactly once on frame 0 and
-    //    never re-enables CULL_FACE again. After frame 0, cull stays OFF.
-    //  - Bomb::Draw @ 0x00171be8 makes zero GL state calls -- only matrix
-    //    builds + Model::Draw.
-    //  - bomb.mmd genuinely ships with a duplicated back-face interior
-    //    shell: 314 triangles, 238 vertices, 176 unique XYZ positions,
-    //    44 positions duplicated with opposite-winding triangles
-    //    (156 outward / 158 inward, ~50/50). All bomb_*.mmd variants
-    //    are identical. Not a port mis-load.
-    //
-    // How the Bada original gets away without cull: Z-fighting determinism.
-    // The two shells share identical XYZ, so glDepthFunc(GL_LESS) rejects
-    // the second-drawn equal-Z fragment. The first 156 triangles in the
-    // index stream are predominantly outward, so the outer (textured) shell
-    // wins on Bada's specific GLES1 driver. GLES2 drivers don't tie-break
-    // equal-Z fragments the same way -- "first writes, second rejected"
-    // isn't guaranteed by the spec, and on desktop GL the inner shell
-    // sometimes wins, producing the pure-white sphere.
-    //
-    // Workaround: enable GL_CULL_FACE just for Bomb::Draw. The mesh's
-    // GL_BACK / GL_CCW front-face convention drops the inverted-winding
-    // interior shell wholesale, leaving the outer shell visible regardless
-    // of Z-tie ordering. Scoped to bomb only because every other mesh in
-    // the game (fruits, slash blades, splats) matches the binary's
-    // cull-off behavior fine -- only bomb has the duplicated-shell layout.
-    //
-    // Regression history (this workaround has been dropped + restored
-    // multiple times):
-    //   e93669c  added the bomb-only glEnable(GL_CULL_FACE) workaround
-    //   (later) DrawGeometry held cull on globally; bomb cover-fix moot
-    //   (this branch's earlier commit) DrawGeometry stops culling to
-    //                                  match binary; bomb white sphere
-    //                                  reappears -- analog to gallery
-    //                                  commit 6785a58 stripping a
-    //                                  "redundant" Y<->Z toggle that
-    //                                  was actually load-bearing
-    //   this commit  restore the bomb-only cull (analog to f721ed0)
+    // DIFFERS: original = GL_CULL_FACE off (Bada driver's Z-tie breaks deterministically
+    // for the outer shell); port = scoped GL_CULL_FACE on for bomb only.
+    // bomb.mmd ships with a duplicate back-face interior shell (156 outward / 158 inward
+    // winding, ~50/50). GLES2 drivers don't guarantee Z-tie ordering the same way as
+    // the Bada GLES1 driver, so the inner shell sometimes wins (white sphere). Enabling
+    // GL_CULL_FACE drops the inverted-winding interior shell regardless of Z ordering.
+    // Scoped to bomb only: all other meshes in the game are fine with cull off.
     glEnable(GL_CULL_FACE);
     modelPtr->Draw(mat);
     glDisable(GL_CULL_FACE);
 }
 
-// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
-// Drops the fuse emitter before the entity returns to the free pool.
-void Bomb::Deactivate() {
-    Release();
-}
-
-// Matches Bomb::Chuck (0x170f68)
-void Bomb::Chuck(float delay) {
-    if (delay <= 0.0f)
-        delay = DEFAULT_CHUCK_DELAY;  // 0.2
-    m_Countdown = delay;
-}
-
-// ASM-verified: 2026-05-03 binary @ 0x001716e8..0x0017171a (asm-inspector)
-// Matches Bomb::KillBomb (0x1716e8)
+// ASM-spec v1.6.1 Bomb::KillBomb @ 0x1d5660
 void Bomb::KillBomb() {
     flags |= ENT_KILLED;
+    if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pFruitPiece) == static_cast<void*>(this)) {
+        m_pOwnerButton->m_pFruitPiece = nullptr;
+    }
     if (m_pEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
-    // MenuButton owns either a Fruit or a Bomb at +0x134; clear if ours.
-    // No ET_RemoveEntity here (Bomb::Update's hit branch handles tracker removal).
-    // No active-bomb counter analog to Fruit's g_PowerFruitCount.
-    // m_pFruitPiece is Fruit* but the binary stores either a Fruit or a Bomb
-    // at this slot; compare by raw address (the stored Bomb pointer IS this).
-    if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pFruitPiece) == static_cast<void*>(this)) {
-        m_pOwnerButton->m_pFruitPiece = nullptr;
-    }
 }
 
-// Binary @ 0x00105ea0: IsMultiplayer thunk; impl always returns false (v1.6.1).
-// Not yet ported for same-screen MP.
+// ASM-spec v1.6.1 Bomb::Chuck @ 0x1d4ca4
+void Bomb::Chuck(float delay) {
+    if (delay <= 0.0f)
+        delay = DEFAULT_CHUCK_DELAY;
+    m_Countdown = delay;
+}
+
+// Binary @ 0x00105ea0: IsMultiplayer thunk; always returns false (v1.6.1).
 static bool IsMultiplayer() { return false; }
 
 // ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
@@ -682,77 +486,58 @@ float Bomb::GetHeighestBomb() {
     return best;
 }
 
-// Binary @ 0x0017280c — vtable slot 9. Returns 0.
-// Three branches:
-//   1. m_bMenuBombHit == 0, Classic/Zen: HitBomb — bombHitTimer = 3.2,
-//      camera shake (1.6, 2.0), explosion SFX. Game-over fires via
-//      GameUpdate's cross-1.5 trigger when m_bMenuBombFlashFlag == 0.
-//   2. m_bMenuBombHit == 0, Arcade mode (gameMode == 2): HitMenuBomb —
-//      bombHitTimer = 2.0, camera shake (2.0, 3.0), -10 score, clear
-//      timed power-ups. HitMenuBomb sets m_bMenuBombFlashFlag = 1
-//      (binary @ 0x0016b270) which suppresses GameUpdate's cross-1.5
-//      GameOver trigger, so arcade survives the bomb hit. Marks
-//      m_bMenuBombHit=1 so subsequent Update keeps the physics alive
-//      and the bomb falls off-screen instead of exploding.
-//   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
+// ASM-spec v1.6.1 Bomb::CollisionResponse @ 0x1d5d4c
+// Returns 0. Three branches: arcade bomb hit / classic+zen bomb hit / menu-bomb re-hit.
 int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
                              unsigned long /*flagsA*/,
                              unsigned long /*flagsB*/,
                              Vec3* /*bladeVelocity*/) {
-
-    if (m_bCollisionGuard != 0) return 0;   // +0x78 processed guard
-    m_bCollisionGuard = 1;
+    // Guard: DO NOT set guard=1 here; Disable() sets it
+    if (m_bCollisionGuard != 0) return 0;
 
     Game* game = Game::GetInstance();
 
     if (m_bMenuBombHit == 0 && game != nullptr) {
-        // ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst) — gate is
-        // gameMode == ARCADE (literal cmp #0x2).
         const bool isArcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
-        // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
-        // Binary intensities: Arcade = 2.0/3.0, Classic/Zen = 1.6/2.0.
-        if (game_work.m_FruitCamera) {
-            if (isArcade)
-                game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
-            else
-                game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
-        }
-
         if (isArcade) {
-            Bomb::HitMenuBomb(pos);  // timer=2.0, "menu-bomb" SFX, flash-flag=1
+            // Arcade path: stat first, then ResetSpeed FIRST, then HitMenuBomb, shake, score, powers
+            if (game_work.m_SaveData)
+                game_work.m_SaveData->AddToTotal("bombs_hit", 1);
+            WaveManager::GetInstance()->ResetSpeed(0);
+            m_bMenuBombHit = 1;
+            Bomb::HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
+            if (game_work.m_FruitCamera)
+                game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             FN::AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
-            WaveManager::GetInstance()->ResetSpeed(0);
             if (MissControl* mc = MissControl::GetFree()) {
                 Mortar::SmartPtr<Mortar::Texture> noTex;
                 mc->MakeDisappear(pos, 0x200, noTex);
             }
-            m_bMenuBombHit = 1;
         } else {
+            // Classic/Zen path: HitBomb handles shake internally (v1.6.1 @ 0x1cf27c)
+            if (game_work.bM_bPaused) return 0;
             Bomb::HitBomb(pos);
         }
     } else if (m_bMenuBombHit != 0) {
-        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00172826..0x0017283c (asm-inspector)
-        // Binary: gate at +0x123 (MenuButton::m_bEnabled) only guards ClearMenuItems.
-        // Callback is always unconditional.
-        if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bEnabled != 0) {
+        // Menu-bomb re-hit: gate ClearMenuItems on m_bClearsMenuItems
+        // TODO: v1.6.1 0x1d5d4c (Bomb::CollisionResponse) -- verify exact MenuButton gate
+        // field at binary +0x13A matches m_bClearsMenuItems (spec says m_bClearsMenuItems;
+        // port previously used m_bEnabled which is a v1.0 compat field)
+        if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bClearsMenuItems != 0) {
             FN::ClearMenuItems();
         }
         if (m_HitCallback) {
-            LOG_INFO("BUTTON", "Bomb::CollisionResponse fires m_HitCallback re-hit (owner=%p enabled=%d pos=(%.1f,%.1f))",
-                     static_cast<void*>(m_pOwnerButton),
-                     m_pOwnerButton ? (int)m_pOwnerButton->m_bEnabled : -1,
-                     pos.x, pos.y);
             m_HitCallback();
         }
     }
 
-    m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
+    m_bHit = 1;
     return 0;
 }
 
-
+// ASM-spec v1.6.1 Bomb::GetNumActiveForPlayer @ 0x1d5074
 int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return 0;
@@ -760,9 +545,6 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     std::list<Mortar::Entity*>::iterator it;
     Mortar::Entity* e = am->GetEntityFirst(1, it);
     if (!countPrespawn) {
-        // Active pre-spawn bombs (countdown still ticking, not yet hit).
-        // Binary GetWait() returns m_Countdown when !m_bHit, else m_SpawnTimer;
-        // combined with the m_bHit==0 guard the test reduces to:
         while (e) {
             Bomb* b = static_cast<Bomb*>(e);
             if (b->m_Countdown > 0.0f && b->m_bHit == 0)
@@ -770,9 +552,6 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
             e = am->GetEntityNext(1, it);
         }
     } else {
-        // Variant-filtered count (no countdown filter):
-        //   playerIdx == -1: any bomb with m_BombVariant <= 0
-        //   else:            m_BombVariant == playerIdx
         while (e) {
             Bomb* b = static_cast<Bomb*>(e);
             if ((playerIdx == -1 && b->m_BombVariant <= 0) ||
@@ -786,6 +565,7 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
 }
 
 // ASM-verified: 2026-05-18 binary @ 0x0017171c (re-analyst)
+// ASM-spec v1.6.1 Bomb::ClearUnspawned @ 0x1d56b4
 void Bomb::ClearUnspawned() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -801,60 +581,43 @@ void Bomb::ClearUnspawned() {
 }
 
 // ASM-verified-via-RE: 2026-05-03 binary @ 0x00126384
+// ASM-spec v1.6.1 Bomb::SetHit @ 0x00126384
 void Bomb::SetHit(Bomb* b, float speed) {
     if (!b) return;
-    b->m_SpawnTimer = speed;   // Bomb+0xC8 (blast interval, sets the hit-branch timer)
-    b->m_bHit       = 1;       // Bomb+0x68 (triggers hit branch in Update)
+    b->m_SpawnTimer = speed;
+    b->m_bHit       = 1;
 }
 
 // ASM-verified: 2026-05-03 binary @ 0x00126390 (asm-inspector)
-// Binary @ 0x00126390: single store, no other state.
-// Spawn-time assignment from WaveManager::SpawnBomb @ 0x00121fa8:
-//   - Singleplayer split-screen co-op (gameMode == 2): SetForPlayer(b, 1) only.
-//   - Multiplayer: bomb spawns twice (left+right zones); first gets variant 1,
-//     second mirrored gets variant 2 (X-position negated, velocity flipped).
+// ASM-spec v1.6.1 Bomb::SetForPlayer @ 0x00126390
 void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
     b->m_BombVariant = playerIdx;
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x00171d78..0x00171ee8 (asm-inspector, field stores only)
-// ASM-verified: 2026-05-23 binary @ 0x00171E9E (re-analyst) -- "player-bomb-launch" SFX fires unconditionally in !skipSpawnFx branch.
-// Binary @ 0x00171d78: bomb-multiplier-powerup upgrade. Fires when default-spawner
-// bomb is created with bomb-multiplier active (playerIdx>0 from SpawnBomb).
-// Trigger condition in WaveManager::SpawnBomb post-spawn branch:
-//   if (type == 0 && pBomb != nullptr && playerIdx > 0)
-//       Bomb::MakeFat(pBomb, false);
+// ASM-spec v1.6.1 Bomb::MakeFat @ 0x1d6fd4
+// TODO: v1.6.1 0x1d6fd4 (Bomb::MakeFat) -- pin exact DAT constants (spec gap: 1.33002 vs 1.33 / 0.66597 vs 0.666)
 void Bomb::MakeFat(bool skipSpawnFx) {
-    m_SpeedMult = 0.66597f;                    // DAT_00171eec
-    scale      *= 1.33002f;                    // DAT_00171ef0
-    m_OrigScale = scale;                       // binary writes field_0x98/9c/a0 (m_OrigScale)
-    if (m_Col) static_cast<ColSphere*>(m_Col)->radius *= 1.33002f;   // DAT_00171ef0
+    m_SpeedMult = 0.66597f;                 // DAT_00171eec
+    scale      *= 1.33002f;                 // DAT_00171ef0
+    m_OrigScale = scale;
+    if (m_Col) static_cast<ColSphere*>(m_Col)->radius *= 1.33002f;
     if (!skipSpawnFx) {
-        // Binary @ 0x00171E9E: "player-bomb-launch" SFX fires unconditionally.
         if (game_work.mGameSound)
             game_work.mGameSound->SFXPlay("player-bomb-launch", 1.0f, 1.0f);
-        // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
-        // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
-        // TODO: PSPParticleManager::AddEmitter wiring when those callbacks land.
-        Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
+        // TODO: v1.6.1 0x1d6fd4 (Bomb::MakeFat) -- AddEmitter at +/-240 X anchor (emitter hash variant)
+        Chuck(0.25f);
     }
 }
 
-// --- Bomb-hit overlay static methods (binary @ Bomb:: namespace) ---
+// --- Static helper methods ---
 
-// s_BombHitPos tracks the world position of the last bomb hit, used by DrawBombHit
-// to centre the flash quad. Set by HitBomb / HitMenuBomb; also exposed to BombHit.cpp
-// via FN::SetBombHitPos (which writes here).
-Vec3 g_BombHitPos(0.0f, 0.0f, 0.0f);
-
-// Binary @ 0x00169080. Cycles the global spawn-z counter: decrements by 50
-// each call; wraps back to -10 when it drops below -400. Each fresh bomb gets
-// a unique z layer so overlapping bombs sort correctly.
-static float s_BombZCounter = -10.0f;
+// ASM-spec v1.6.1 Bomb::GetBombZPosition @ 0x1ca5c8
+// Static counter init 0.0f; first call decrements -> -50; wraps at -400 -> -10.
+static float s_BombZCounter = 0.0f;
 float Bomb::GetBombZPosition() {
-    static const float STEP  =  50.0f;   // DAT_001690bc
-    static const float FLOOR = -400.0f;  // DAT_001690c0
-    static const float RESET = -10.0f;   // 0xc1200000
+    static const float STEP  =  50.0f;
+    static const float FLOOR = -400.0f;
+    static const float RESET = -10.0f;
     s_BombZCounter -= STEP;
     if (s_BombZCounter < FLOOR) {
         s_BombZCounter = RESET;
@@ -862,37 +625,45 @@ float Bomb::GetBombZPosition() {
     return s_BombZCounter;
 }
 
-// Binary @ 0x00168f24.
+// ASM-spec v1.6.1 Bomb::BombFlashFull @ 0x00168f24
 bool Bomb::BombFlashFull() {
     return game_work.m_BombHitTimer < 1.0f;
 }
 
-// Binary @ 0x0016b0fc. Called from Bomb::CollisionResponse for Classic/Zen paths.
-// Camera shake is already fired by the caller before this function.
+// ASM-spec v1.6.1 Bomb::HitBomb @ 0x1cf27c
+// Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
 void Bomb::HitBomb(const Vec3& pos) {
-    g_BombHitPos = pos;
-    if (GameTaskState* ts = GetTaskState()) {
-        ts->m_bMenuBombFlashFlag = 0;   // binary @ 0x0016b154
-    }
-    game_work.m_BombHitTimer = 3.2f;    // DAT_0016b218
-    if (game_work.mGameSound)
-        game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
+    if (game_work.bM_bPaused) return;
     if (game_work.m_SaveData)
         game_work.m_SaveData->AddToTotal("bomb", 1);
+    game_work.m_BombHitTimer = 3.2f;
+    if (game_work.m_FruitCamera)
+        game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+    g_BombHitPos = pos;
+    if (GameTaskState* ts = GetTaskState()) {
+        ts->m_bMenuBombFlashFlag = 0;
+    }
+    if (game_work.mGameSound)
+        game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
 }
 
-// Binary @ 0x0016b234.
+// ASM-spec v1.6.1 Bomb::HitMenuBomb @ 0x1cf42c
+// Arcade/menu bomb hit: timer=2.0, flash-flag=1, SFX, store hit pos.
+// TODO: v1.6.1 0x1cf42c (Bomb::HitMenuBomb) -- body not fully decompiled; keeping port semantics
 void Bomb::HitMenuBomb(const Vec3& pos) {
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {
-        ts->m_bMenuBombFlashFlag = 1;   // binary @ 0x0016b270
+        ts->m_bMenuBombFlashFlag = 1;
     }
     game_work.m_BombHitTimer = 2.0f;
     if (game_work.mGameSound)
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
 }
 
-// Binary @ 0x0016b73c.
+// --- Bomb-hit overlay ---
+
+Vec3 g_BombHitPos(0.0f, 0.0f, 0.0f);
+
 static const float BOMB_FLASH_START     = 1.55f;   // DAT_0016b864
 static const float BOMB_FLASH_DUR_RECIP = -0.45f;  // DAT_0016b868
 static const float BOMB_FLASH_MAX_SCALE = 20000.0f; // DAT_0016b870
@@ -901,6 +672,7 @@ static const float BOMB_FLASH_THRESHOLD = 2.0f;
 
 static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
 
+// ASM-spec v1.6.1 Bomb::DrawBombHit @ 0x0016b73c
 void Bomb::DrawBombHit() {
     const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;
@@ -911,12 +683,12 @@ void Bomb::DrawBombHit() {
     }
 
     const float t = (timer - BOMB_FLASH_START) / BOMB_FLASH_DUR_RECIP + 1.0f;
-    float scale;
-    if (t <= 0.0f)      scale = 0.0f;
-    else if (t < 1.0f)  scale = t * BOMB_FLASH_MAX_SCALE;
-    else                scale = BOMB_FLASH_MAX_SCALE;
+    float flashScale;
+    if (t <= 0.0f)      flashScale = 0.0f;
+    else if (t < 1.0f)  flashScale = t * BOMB_FLASH_MAX_SCALE;
+    else                flashScale = BOMB_FLASH_MAX_SCALE;
 
-    if (scale <= 0.0f) return;
+    if (flashScale <= 0.0f) return;
 
     int a = (int)(BOMB_FLASH_ALPHA_MUL * timer);
     if (a < 0)   a = 0;
@@ -925,7 +697,7 @@ void Bomb::DrawBombHit() {
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
+    Matrix44 mat = Matrix44::MakeScale(flashScale, flashScale, 1.0f);
     mat.GlobalTranslate44(g_BombHitPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
@@ -935,10 +707,10 @@ void Bomb::DrawBombHit() {
     s_BombFlashTex->UnSet();
 }
 
-// Binary @ 0x0016a1a8.
 static const float BOMB_BLAST_PURGE_THR = 1.55f;  // DAT_0016a1fc
 static const float BOMB_BLAST_RESET_THR = 1.5f;
 
+// ASM-spec v1.6.1 Bomb::UpdateBombHit @ 0x0016a1a8
 void Bomb::UpdateBombHit(float prevTimer) {
     const float currentTimer = game_work.m_BombHitTimer;
 
