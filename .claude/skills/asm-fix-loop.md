@@ -12,7 +12,10 @@ Autonomous loop that chips at asm-verify divergences in **both directions**:
 
 Each round: scan both directions → dispatch → commit → verify → repeat.
 
-## When to invoke
+> Scoring is operand-level: a surviving divergence is a real operand difference
+> (wrong struct offset / immediate / predication / call-graph), not codegen skew
+> — reg-alloc and reloc noise are pre-absorbed. Prioritise single-line
+> `[GREG,#off]` / `#imm` diffs. Triage staleness keys on `asm_hash`, not score.
 
 - After a fresh `bash tools/asm-verify/run.sh` produces a report with
   actionable divergences (port-only guards, identity bloat, dead code, missing code).
@@ -164,7 +167,7 @@ Go back to step 1 with fresh scores. Stop when:
 - `SmartPtr<T> const&` vs `SmartPtr<T>` — ARM32 ABI identical but different mangling;
   fix only when confirmed by binary nm that binary uses the other form
 - **ARM vs Thumb mode mismatch** — some binary functions are ARM mode (4-byte insns)
-  but cross-build compiles everything in Thumb-2 mode. The asm-differ sees different
+  but cross-build compiles everything in Thumb-2 mode. The diff shows different
   encoding + scheduling for semantically identical code. Before dispatching on a
   negative-excess target, check: does the binary function end with `bx lr` (Thumb,
   `0x4770`) or ARM `bx lr` (`0xe12fff1e`)? If ARM mode and the port's compiled output
