@@ -5,9 +5,9 @@
 #include "PowerUpManager.h"
 
 // TODO: read game-state byte at GameTaskState+0x4 (current state-machine slot).
-// == 2 means "playing". For now unconditionally applies multipliers.
+// == 2 means "playing". Binary gates the gain/loss multiply on play-state; port applies unconditionally.
 
-// binary @ 0x0010a598
+// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c: gates multiply on game-state==2; port applies unconditionally (TODO above).
 int DefaultScoreDelegate(int n) {
     if (n > 0)  return n * PowerUpManager::GetInstance()->GetScoreGainMultiplier();
     if (n <= 0) return n * PowerUpManager::GetInstance()->GetScoreLossMultiplier();
@@ -19,13 +19,13 @@ static ScoreModifier* s_activeMod = nullptr;
 
 ScoreDelegateFn g_ScoreDelegate = &DefaultScoreDelegate;
 
-// binary @ 0x0011cc1c
+// ASM-spec v1.6.1 SetScoreDelegate @ 0x0011a440: installs Callee<ScoreModifier> trampoline
 void SetScoreDelegate(ScoreModifier* m) {
     s_activeMod  = m;
     g_ScoreDelegate = &TrampolineCall;
 }
 
-// binary @ 0x0011cda4
+// ASM-spec v1.6.1 SetDefaultScoreDelegate: installs Global<int,int>(&DefaultScoreDelegate) — addr unresolved in v1.6.1 .symtab
 void SetDefaultScoreDelegate() {
     s_activeMod  = nullptr;
     g_ScoreDelegate = &DefaultScoreDelegate;

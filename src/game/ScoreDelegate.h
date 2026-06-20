@@ -20,13 +20,13 @@ typedef int (*ScoreDelegateFn)(int);
 // binary @ 0x001fa388 (StackAllocatedPointer<BaseDelegate,32>)
 extern ScoreDelegateFn g_ScoreDelegate;
 
-// binary @ 0x0010a598
+// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c
 int DefaultScoreDelegate(int n);
 
-// Installs Callee<ScoreModifier> trampoline — binary @ 0x0011cc1c
+// ASM-spec v1.6.1 SetScoreDelegate @ 0x0011a440: installs Callee<ScoreModifier> trampoline
 void SetScoreDelegate(ScoreModifier* m);
 
-// Installs Global<int,int>(&DefaultScoreDelegate) — binary @ 0x0011cda4
+// Installs Global<int,int>(&DefaultScoreDelegate) — addr unresolved in v1.6.1 .symtab
 void SetDefaultScoreDelegate();
 
 #endif // FN_GAME_SCORE_DELEGATE_H
