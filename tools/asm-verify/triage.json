@@ -2477,8 +2477,8 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveQueItem14PerformCatchupEii": {
-    "verdict": "FIX-NEEDED",
-    "reason": "WaveQueItem::PerformCatchup -- binary allocates 200-byte stack array (sub sp,sp,#200) for per-wave-slot catchup arrays; port has no such allocation and completely different logic. Missing per-slot array iteration. Binary ldr [GREG,#32] vs port direct branch. Score 45704/55 (831x). RE PerformCatchup to port the 200-byte slot structure.",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "FALSE POSITIVE (re-analyst #90e, 2026-06-21): port is behaviorally bit-identical. The 'sub sp,#0xc8' 200-byte stack is a flat int[50] scratch buffer of candidate slot INDICES (not a per-slot struct array). Binary collects matching indices then Rand32(count) picks one; port collapses collect+pick into count + re-scan-to-pick: same RNG draw count, same slot flipped, same return value. Only m_SlotList (vector<int> @ +0x00) touched; no WaveQueItem layout gap. The int[50] is pure local codegen the weight heuristic flagged (cf. #89).",
     "asm_hash": "5f171fcadffa20c3",
     "decided_at": "2026-06-21T00:00Z"
   },
@@ -4848,8 +4848,8 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager18GetEmitterTemplateEi": {
-    "verdict": "FIX-NEEDED",
-    "reason": "PSPParticleManager::GetEmitterTemplate -- binary reads m_EmitterTemplates at [this,#44/48] (=0x2C/0x30); port reads [this,#32/36] (=0x20/0x24). Port is 12 bytes low. Singleton base or undeclared field before m_EmitterTemplates in src/engine/particle/PSPParticleManager.h adds 12 bytes in binary that port lacks. Score 15000/17 (882x).",
+    "verdict": "ACCEPT-deferred",
+    "reason": "REAL but STRUCTURAL (re-analyst #90b, 2026-06-21): port front-loads two std::vector members (m_ParticleTemplates @ +0x14, m_EmitterTemplates @ +0x20) where the binary has a flat 0xB8-stride template blob: m_NumEmitterTemplates@+0x24, m_pTemplates@+0x28, m_NumEmitterTemplates2@+0x2C, m_pEmitterTemplates@+0x30 (=m_pTemplates+nPart*0xB8); emitter templates are VARIABLE-stride (0x4C + tmpl[0x4B]*0x30). So GetEmitterTemplate reads container at +0x20/+0x24 vs binary +0x2C/+0x30. The vector substitution is inherent; reordering won't fix it. Faithful-impl-over-std blob port tracked as a task. GetEmitterTemplate logic is semantically correct. DIFFERS marker added in src.",
     "asm_hash": "d8526bfa8ee72f34",
     "decided_at": "2026-06-21T00:00Z"
   },
@@ -8974,8 +8974,8 @@
     "decided_at": "2026-06-18T03:11Z"
   },
   "_ZN6Mortar14BakedStringBox11SetGradientE6ColourS1_b": {
-    "verdict": "FIX-NEEDED",
-    "reason": "BakedStringBox::SetGradient -- binary loads gradient fields as 4-byte words at [this,#124/128/140/144] (=0x7C/0x80/0x8C/0x90, matching m_GradTop/Bottom/Mode/GradFlag) with change-detect; port stores individual colour bytes at [this,#77..84] in a completely different layout. Port reimplementation of SetGradient in src/engine/render/BakedStringBox.h does not match binary access pattern at 0x0024566c. Score 61000/69 (884x).",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "FALSE POSITIVE (re-analyst #90c, 2026-06-21): the SetGradient .cpp is already correct (rewritten + ASM-verified 2026-06-13): 4-byte Colour-word storage + change-detection at m_FillTop@0x7C/m_FillBottom@0x80/m_ColourMode@0x8C/m_MetallicFlag@0x90. The 'byte storage at ~0x4D' evidence does not match current source. Only divergence: the port omits the binary's perGlyph!=0 immediate FancyBakedString::ApplyGradient branch (port re-applies in Draw) -- intentional port-specific (no FancyBakedString). Header-comment offsets corrected + DIFFERS marker added in src.",
     "asm_hash": "57dade4603a2e833",
     "decided_at": "2026-06-21T00:00Z"
   }
