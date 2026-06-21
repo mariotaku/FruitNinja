@@ -339,12 +339,15 @@ void PauseScreen::Reset() {
 }
 
 // -------------------------------------------------------------------------
-// vtable[5]: BeginDraw -- asserts m_LayerFlags = 8
-// Binary: 0x00153e44
+// vtable[5]: BeginDraw
+// ASM-spec v1.6.1 PauseScreen::BeginDraw @ 0x001a557c: writes m_LayerFlags (+0x34)
+//   = 0x108 (HUD_LAYER_BUTTONS 0x08 | HUD_LAYER_P2_SCORE 0x100) -- overlay drawn in
+//   BOTH HUD::Draw(0x08) and HUD::Draw(0x100) passes. Port previously wrote only 8,
+//   dropping the pause overlay from the 0x100 (P1-score) pass.
 // -------------------------------------------------------------------------
 void PauseScreen::BeginDraw(float dt) {
     (void)dt;
-    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS | Mortar::HUD_LAYER_P2_SCORE;
 }
 
 // -------------------------------------------------------------------------
