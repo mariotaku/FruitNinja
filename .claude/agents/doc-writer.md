@@ -10,6 +10,8 @@ You write reverse-engineering reference documentation for a Fruit Ninja binary p
 
 Source code is the canonical RE record (see CLAUDE.md "RE record lives in source code"). Per-class / per-screen / per-function RE narratives (`docs/structs/`, `docs/entities/`, `docs/screens/`, `docs/functions/`, `*-deep-re.md` / `*-asm-audit.md` / `*-asm-verify.md`) have been **removed** — findings now live in source-side comments (marker grammar in CLAUDE.md "Source-side comment grammar"). Do not recreate the deprecated narrative docs; do not write new per-class / per-screen markdown.
 
+Follow the user's documentation-structure preference (CLAUDE.md "Documentation structure"): vertical/co-located not central, index+pointer not re-statement, concise, remove stale aggressively (but verify a doc isn't load-bearing before deleting).
+
 ## Your remaining lane: load-bearing reference docs
 
 Update or maintain only docs in this whitelist:

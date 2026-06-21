@@ -95,6 +95,16 @@ The port treats **source code as the canonical RE record**:
 
 This replaces the prior practice of authoring large `docs/*-deep-re.md` / `docs/structs/*.md` / per-class narratives. Those have been removed; only a small reference set survives — file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance.
 
+## Documentation structure (user preference)
+
+When writing or maintaining any doc (READMEs, the load-bearing `docs/` set, agent/skill files):
+
+- **Vertical, not central.** Docs live co-located with the tree they describe — a `README.md` per directory, plus source-side comments — NOT one central overview doc. (The asm-verify pipeline is documented in `tools/asm-verify/README.md`, not a `docs/re-pipeline.md`; web tooling + its runbook in `tools/web/README.md`.) Each level is an entry point that links *down*.
+- **Index + pointer, never re-statement.** A doc links to the canonical source for detail; it does not duplicate it. One source of truth per fact (e.g. the web asset hashes live only in `pages.yml`). Cross-file duplication of a rule → keep one copy + a one-line pointer.
+- **Concise.** READMEs are short, index-style. Instruction docs (agents/skills) state *rules*, not changelog/log narrative — no dated `task #N, <date>` framing, war-stories, commit-SHA provenance, or "now ENABLED" prose (that belongs in commit messages).
+- **Remove stale aggressively.** Outdated / deprecated / day-1 / dangling-reference docs get deleted, not kept "just in case" (git history preserves them). But *verify before deleting* a doc you didn't create — if `src/` cites it as a spec, it's load-bearing, not stale.
+- (See also: RE backlog → Claude tasks not repo files; narrative RE → source comments.)
+
 ## Subagents (in `.claude/agents/`)
 
 Specialised agents handle distinct phases of the RE+port workflow. **Each agent stays in its own lane** — see the "do not do" line in each agent file. Detailed RE rules / GhidraMCP usage live in `re-analyst.md`; detailed implementation rules / coordinate system / fidelity policy live in `implementer.md`.
