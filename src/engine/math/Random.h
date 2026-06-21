@@ -6,7 +6,6 @@
 namespace Math {
 
 // 64-bit LCG with Knuth MMIX multiplier, matching original Math::Random (24 bytes)
-// See docs/engine/rng.md for full analysis
 class Random {
     uint64_t m_State;
     uint64_t m_Mult;

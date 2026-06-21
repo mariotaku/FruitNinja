@@ -64,7 +64,7 @@ void SliceEffect_DestroyPool();
 // wires them into g_TaskState +0x64 / +0xc8.
 // Port stub is a no-op; the C-array pool above serves the same purpose until
 // the entity-backed pool is fully ported.
-// TODO: implement -- see docs/systems/gameinit-todos.md step 9.
+// TODO: implement.
 void SliceEffect_CreateList(int capacity);
 
 // Append a new slice line. Matches AddSlice (0x0016b480).

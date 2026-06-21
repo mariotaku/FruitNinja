@@ -4,13 +4,12 @@
 #include "engine/xml/TiXmlElement.h"
 namespace Math { class Random; }
 
-// Wave data structs — binary layouts from docs/structs/wave.md and
-// docs/systems/wave-system.md.
+// Wave data structs — binary layouts (RE'd).
 //
-// WAVE_INFO      : 0x78 bytes (docs §WAVE_INFO table)
-// SPAWNER_INFO   : 0x64 bytes (docs §SPAWNER_INFO table)
-// DEFAULT_WAVE_INFO : 0x40 bytes (docs §DEFAULT_WAVE_INFO table)
-// COIN_CHANCEINATOR : 0x08 bytes (docs §wave.md)
+// WAVE_INFO         : 0x78 bytes
+// SPAWNER_INFO      : 0x64 bytes
+// DEFAULT_WAVE_INFO : 0x40 bytes
+// COIN_CHANCEINATOR : 0x08 bytes
 //
 // Analysed: 2026-04-30T00:00
 // Struct offsets realigned per wavemanager-init-asm-audit.md 2026-04-30.

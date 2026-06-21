@@ -2,7 +2,7 @@
 
 namespace Math {
 
-// Constants from original binary (see docs/engine/rng.md)
+// Constants from original binary
 static const uint64_t kDefaultSeed  = 0x00000000DEADBEEFULL;
 static const uint64_t kMultiplier   = 0x5D588B656C078965ULL; // Knuth MMIX LCG
 static const uint64_t kIncrement    = 0x0000000000269EC3ULL;

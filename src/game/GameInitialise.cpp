@@ -145,8 +145,7 @@ void GameInitialise() {
     game->actorManager->Initialise(5, 0x2000);
     game->actorManager->RegisterFactory(&CreateEntity);
 
-    // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor — see
-    // docs/structs/game.md and docs/systems/save-system.md. Binary
+    // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor. Binary
     // InitialiseData @ 0x0010b66c follows the ctor with a LoadGame call
     // so persistent state is restored before the rest of init runs.
     game_work.m_SaveData = new FruitSaveData();
@@ -200,7 +199,7 @@ void GameInitialise() {
     // Music: no boot-time SongPlay. The binary has no separate boot call;
     // UpdateMusic (0x0016a68c) is the sole issuer of SongPlay. On the first
     // frame after loading completes, UpdateMusic's slow-ramp path fires
-    // SongPlay("background"). See docs/systems/music-state.md -> Initial Seed Call.
+    // SongPlay("background").
 
     // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
     // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
@@ -237,7 +236,7 @@ void GameInitialise() {
     // (m_TransitionTimer) immediately after the TutorialControl block.
     // This is the seed value that puts UpdateMusic into the transition
     // branch on its first eligible frame, so SongPlay("Music-menu") fires
-    // first instead of SongPlay("background"). See docs/systems/music-state.md.
+    // first instead of SongPlay("background").
     game_work.m_GameDt = -1.0f;
 
     // Note: PowerUpManager::Load is called above (step 11). LeaderboardManager is defunct.

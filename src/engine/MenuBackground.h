@@ -14,7 +14,6 @@
 // g_BackgroundTexture (file-static) — binary BSS 0x231500
 //   (_ZL17backgroundTexture = Mortar::SmartPtr<Mortar::Texture>)
 //
-// See docs/structs/items.md §ChangeBackground for full RE notes.
 
 #ifndef FN_MENU_BACKGROUND_H
 #define FN_MENU_BACKGROUND_H

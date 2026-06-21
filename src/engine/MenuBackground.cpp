@@ -4,7 +4,6 @@
 // Binary: ChangeBackground @ 0x0016ae8c, GetCurrentBackground @ 0x0016af28.
 // File-static g_BackgroundTexture (Mortar::SmartPtr<Mortar::Texture>) at BSS 0x231500
 //   (_ZL17backgroundTexture, GOT+0x000452d4+0xfc).
-// See docs/structs/items.md §ChangeBackground for full RE notes.
 
 #include "MenuBackground.h"
 #include "asset/TextureManager.h"

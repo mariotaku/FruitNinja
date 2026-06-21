@@ -4,8 +4,7 @@
 // Analysed: 2026-04-30T00:00
 //
 // CoinCounter : HUDControl3d (size = 0xD4)
-// Struct size confirmed: operator_new(0xd4) in GameInit. (Note: docs/structs/ui-widgets.md
-// estimated ~0x94 as a lower bound; binary allocation is ground truth: 0xD4.)
+// Struct size confirmed: operator_new(0xd4) in GameInit (binary allocation is ground truth: 0xD4).
 // Coin count display HUD. Stored at Game+0x178. Created in GameInit step 5.
 // Update is a true no-op (immediate return @ 0x00135580); all visual logic in Draw @ 0x0013569c.
 //

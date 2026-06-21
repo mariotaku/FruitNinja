@@ -79,7 +79,7 @@ public:
     static const std::list<HUDControl*>& GetActiveControls();
 #endif
 
-    // Vtable matches docs/structs/hud.md:
+    // Vtable:
     // +0x00/+0x04: dtors (handled by C++ vtable)
     // +0x08: Init
     // +0x0c: Release

@@ -1,7 +1,6 @@
 //
 // FRUIT_INFO loader — parses Data/xml/fruitlist.xml
 // Matches Fruit::LoadInfo (0x17987c, 509 lines)
-// See docs/structs/data.md for full struct layout
 //
 // Analysed: 2026-04-10T13:00
 

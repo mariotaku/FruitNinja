@@ -30,7 +30,6 @@ The remaining docs cover information that **isn't derivable from `src/`**:
 - [`engine/binary-static-init.md`](engine/binary-static-init.md) — pre-`OspMain` static-init order across translation units.
 - [`engine/binary-build-evidence.md`](engine/binary-build-evidence.md) — toolchain / ABI provenance (Sourcery 4.4.1, hard-float).
 - [`engine/online-services-audit.md`](engine/online-services-audit.md) — what we intentionally skip and why.
-- [`engine/audio-internals.md`](engine/audio-internals.md) — MAM audio callback threading model (cross-thread, not in any single source file).
 
 ### File / data formats
 - [`engine/string-hash.md`](engine/string-hash.md) — Jenkins lookup3 variant (constants + folding).
@@ -39,12 +38,7 @@ The remaining docs cover information that **isn't derivable from `src/`**:
 - [`engine/font.md`](engine/font.md) — `.fnt` bitmap-font format + g_GameData font slots.
 - [`engine/particles.md`](engine/particles.md) — particle XML schema + 0xA4-byte template layout.
 - [`engine/mesh.md`](engine/mesh.md) — `.mad` / `.mmd` mesh format (HBR0 container).
-- [`engine/sound.md`](engine/sound.md) — Mortar audio backend public-API spec (transitional; un-ported subsystem).
 - [`engine/formats/`](engine/formats/) — `audio.md`, `fonts.md`, `models.md`, `textures.md` (raw asset format docs).
-
-### Active spec for un-ported gaps
-- [`systems/gameinit-todos.md`](systems/gameinit-todos.md) — spec block per still-open `// TODO:` in `GameInit` / `GameInitialise`. Transitional; deleted as those TODOs close.
-- [`systems/music-state.md`](systems/music-state.md) — `UpdateMusic` 1:1 spec. Transitional.
 
 ### Asset gallery
 - [`gallery/models/README.md`](gallery/models/README.md) — interactive `.mmd` viewer.

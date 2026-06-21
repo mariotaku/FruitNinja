@@ -384,7 +384,7 @@ int ActorManager::GetEntityIdx(Entity* entity) {
 // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
 // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
 // Stores the hash-converter delegate into m_HashDelegate.
-// TODO: implement full delegate -- see docs/systems/gameinit-todos.md step 16.
+// TODO: implement full delegate.
 void ActorManager::RegisterHashConverter(HashFn fn) {
     m_HashDelegate = fn;
 }
