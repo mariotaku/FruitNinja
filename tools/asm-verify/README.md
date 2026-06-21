@@ -30,7 +30,7 @@ source-side comments (spec) -- [2] --> [3] implementer -> src/
                                               v
                                   [6] asm-verify.py -> report.json
                                               v
-                          [7] classify-divergences.py -> shortlist.md
+                          [7] classify-divergences.py -> report.json (cause/likelihood)
                                               v
                           [8] asm-triager -> triage.json (sticky) --(fix loop back to [3])
 
@@ -45,7 +45,7 @@ parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
 | Cross-build manifest | `manifest.generated.toml` | No (gitignored) |
 | Triage verdicts (sticky per `asm_hash`) | `triage.json` | **Yes** (fidelity record) |
 | asm-verify report | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |
-| Shortlist (triager input) | `tmp/asm-verify/shortlist.md` | No (gitignored) |
+| Classification (triager input) | `report.json` `cause`/`likelihood` fields + `tmp/asm-verify/suggested-triage.json` | No (gitignored) |
 | BinDiff CSV | `tmp/bindiff-out/` | No (gitignored) |
 | Class-size / typeinfo reference | `tmp/binary-class-sizes.json`, `tmp/typeinfo-tree.json` | No (gitignored) |
 
@@ -85,7 +85,7 @@ compile-one.sh / check-tu.sh -- single-TU helpers (asm-inspector / preflight)
 discover-symbols.py       -- nm intersection -> manifest.generated.toml
 export-binary-symbols.py  -- objdump per symbol -> bada-binary/symbols/<sym>.s
 asm-verify.py             -- operand-level diff + classify + report writer
-classify-divergences.py   -- rank divergences (HIGH/MED/LOW) -> shortlist.md
+classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
 asm-verify-hook.sh        -- pre-commit hook entry
 manifest.toml             -- hand-written overrides (precedence)

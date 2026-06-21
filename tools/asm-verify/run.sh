@@ -94,10 +94,11 @@ docker run --rm \
         cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
     '
 
-# Host-side: classify divergences into a precision-ranked shortlist
-# (cause + real-bug-likelihood per row; writes tmp/asm-verify/shortlist.md +
-# suggested-triage.json). Non-fatal — the raw report is the source of truth.
-# Run from PROJECT_ROOT with a RELATIVE script path in a subshell: native
+# Host-side: classify divergences and ENRICH report.json in place with a
+# per-symbol cause + real-bug-likelihood (HIGH/MED/LOW), plus write
+# tmp/asm-verify/suggested-triage.json. The ranked shortlist is printed to
+# stdout below (no markdown product). Non-fatal — report.json is the source of
+# truth. Run from PROJECT_ROOT with a RELATIVE script path in a subshell: native
 # Windows Python mangles an MSYS-absolute "/c/..." arg, but resolves a relative
 # path against the (correct) OS cwd. Cross-platform (no path translation).
 (
@@ -111,4 +112,4 @@ docker run --rm \
 
 echo
 echo "Report:    tmp/asm-verify/report.md"
-echo "Shortlist: tmp/asm-verify/shortlist.md  (HIGH/MED real-bug candidates first)"
+echo "report.json enriched with per-symbol cause + likelihood (ranked shortlist printed above)."
