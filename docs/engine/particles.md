@@ -715,5 +715,4 @@ Layout derived from:
 
 ## See Also
 
-- [Particle functions](../functions/particles.md) -- emitter/particle pseudocode
 - [Resources](../resources.md) -- particles XML files

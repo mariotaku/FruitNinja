@@ -266,9 +266,3 @@ The fruit meshes are simple (each half is ~100-200 triangles) so the vertex data
 | ResourceLoader::Load | 0x001aa684 | 17 | HBR0 container loading entry point |
 | Texture2DFromFile_Bada ctor | 0x00189c1c | 65 | Loads .tex file (fully decompiled) |
 
----
-
-## See Also
-
-- [Asset functions](../assets.md) -- LoadVertexStreamPSP pseudocode
-- [Rendering detail system](../rendering-detail.md) -- mesh pipeline

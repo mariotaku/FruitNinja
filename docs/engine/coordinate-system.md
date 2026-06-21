@@ -278,9 +278,6 @@ After Fix 1 (pre-multiply rewrite), the bomb's draw chain composes the same way 
 
 ## See Also
 
-- [`camera.md`](camera.md) — `MortarCamera` / `FruitCamera` struct layouts and method addresses
-- [`rendering-functions.md`](rendering-functions.md) — `HUDControl3d::Draw` full pseudocode
-- [`display-manager.md`](display-manager.md) — `BeginFrame`, `m_ScreenRotationMatrix`
 - Port: `src/game/FruitCamera.cpp` — `SetupPerspective`
 - Port: `src/hud/HUDControl3d.cpp` — the dead `(480, 320) * hudScale` offset
 - Port: `src/screens/MainScreen.cpp` — `SetupQuadMatrix`, `UpdateScreenElements` (values need audit)

@@ -215,7 +215,7 @@ Each fruit has multiple model variants:
 
 ## Resource Loading Flow
 
-Full order from GameInitialise (0x0010bdfc). See [game-loop.md](functions/game-loop.md) for detail.
+Full order from GameInitialise (0x0010bdfc).
 
 ```
 GameInitialise(displaySurface, dataPath):
@@ -257,5 +257,3 @@ Note: `WaveManager::Init()` and `Fruit::LoadFruitModels()` are called later in *
 - [Audio format](engine/formats/audio.md) -- .wav.pcm file format
 - [Model format](engine/formats/models.md) -- HBR0 container, vertex streams
 - [Font format](engine/formats/fonts.md) -- BMFont .fnt files
-- [Wave system](systems/wave-system.md) -- wavelist XML parsing
-- [Power-ups system](systems/power-ups.md) -- poweruplist.xml
