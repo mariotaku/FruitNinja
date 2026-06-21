@@ -271,17 +271,58 @@ void BakedStringBox::Layout() {
             lineEnd   = lineStart + 1;
         }
 
+        // ASM-verified: 2026-06-21T00:00Z v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (re-analyst):
+        // per-line align uses ink extent (GetBounds.right-left), NOT advance sum; X truncated to int.
+        //
+        // Pre-pass: compute ink extent for this line. Pen starts at 0 (lineOffsetX not yet known).
+        // inkLeft  = penX_atFirstGlyph + firstGlyph.bearingX
+        // inkRight = penX_atLastGlyph  + lastGlyph.bearingX + lastGlyph.width
+        float lineInkWidth = 0.0f;
+        {
+            float penX = 0.0f;
+            bool firstInkGlyph = true;
+            float inkLeft  = 0.0f;
+            float inkRight = 0.0f;
+            bool firstWordInk = true;
+            for (size_t wj = lineStart; wj < lineEnd; wj++) {
+                if (words[wj].hardBreak) continue;
+                if (!firstWordInk) penX += spAdv;
+                firstWordInk = false;
+                const char* wp = words[wj].start;
+                for (int c = 0; c < words[wj].len; c++) {
+                    uint32_t cp = (uint32_t)(unsigned char)wp[c];
+                    const GlyphAtlasEntry* g = m_Font->GetGlyph(cp, requestedSize);
+                    if (!g) continue;
+                    if (g->width > 0.0f) {
+                        float gLeft  = penX + g->bearingX;
+                        float gRight = gLeft + g->width;
+                        if (firstInkGlyph) {
+                            inkLeft  = gLeft;
+                            inkRight = gRight;
+                            firstInkGlyph = false;
+                        } else {
+                            if (gRight > inkRight) inkRight = gRight;
+                        }
+                    }
+                    penX += g->advanceX + 1.0f;
+                }
+            }
+            lineInkWidth = firstInkGlyph ? lineWidth : (inkRight - inkLeft);
+        }
+
         // Fix (d): horizontal alignment.
-        // Binary low-2-bits: 3=centre-H, 2=right, 0/1=left.
+        // Binary RebuildAlignments @0x00245c78 low-2-bits: 3=centre-H, 2=right, 0/1=left.
+        // Uses ink extent (lineInkWidth), NOT advance sum. Result truncated to int.
         float lineOffsetX = 0.0f;
         {
             const int horizAlign = m_Align & 0x3;
             if (horizAlign == 3) {
-                lineOffsetX = (wrapLimit - lineWidth) * 0.5f;
+                lineOffsetX = wrapLimit * 0.5f - lineInkWidth * 0.5f;
             } else if (horizAlign == 2) {
-                lineOffsetX = wrapLimit - lineWidth;
+                lineOffsetX = wrapLimit - lineInkWidth;
             }
             // 0 or 1: left-justified, lineOffsetX = 0.
+            lineOffsetX = (float)(int)lineOffsetX;
         }
 
         BakedStringBoxLine line;
