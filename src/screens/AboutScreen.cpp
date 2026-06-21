@@ -690,11 +690,12 @@ void AboutScreen::CreateCreditsMarquee()
 // AboutScreen::DrawMarquee  @ 0x0015a138
 // Draws each m_Marquees item translated by the transition offset,
 // plus the heading box rotated 90 degrees.
-// ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138:
+// ASM-verified: 2026-06-21T00:00Z v1.6.1 AboutScreen::DrawMarquee @0x0015a138 (re-analyst):
 //   transOffset = Vec3(0, -416 + 320*alpha, 0)
 //   per item: m_pBox->SetTranslation(pos + transOffset, 0); m_pBox->Draw(0, Vec2(1,1), 1)
 //   heading: m_HeadingBox->SetTranslation(Vec3(-191, transOffset.y - 67, 0), 1)
-//             m_HeadingBox->SetRotation(90.0f); m_HeadingBox->Draw(0, Vec2(1,1), 1)
+//            T_1164(90.0, m_HeadingBox) @0x0015a0e8 = Draw(box, 90.0f, Vec2(1,1), center=1).
+//            Binary has NO SetRotation; rotation is Draw's first arg (Draw @0x00246e20 applies theta=arg*pi/180).
 // -----------------------------------------------------------------------
 void AboutScreen::DrawMarquee()
 {
@@ -710,8 +711,7 @@ void AboutScreen::DrawMarquee()
 
     if (m_HeadingBox) {
         m_HeadingBox->SetTranslation(Vec3(-191.0f, transY - 67.0f, 0.0f), 1);
-        m_HeadingBox->SetRotation(90.0f);
-        m_HeadingBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_HeadingBox->Draw(90.0f, Vec2(1.0f, 1.0f), 1);
     }
 }
 

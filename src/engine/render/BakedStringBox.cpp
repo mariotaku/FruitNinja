@@ -64,10 +64,9 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_StrokeCol2(0, 0, 0, 255)
     , m_ClipX0(0.0f)
     , m_ClipY0(0.0f)
-    , m_ClipX1(0.0f)
-    , m_ClipY1(0.0f)
+    , m_ClipW(0.0f)
+    , m_ClipH(0.0f)
     , m_HasClip(false)
-    , m_StoredRotation(0.0f)
     , m_Dirty(true)
     , m_BaseFontSize(fontSize)
 {
@@ -533,6 +532,37 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         if (gradYRange < 0.001f) gradYRange = 0.001f;
     }
 
+    // Apply worldspace scissor clip if set.
+    // DIFFERS: original = CPU ClipAgainstPlanes geometry clip (v1.6.1 BakedStringBox::ClipToRectangle
+    //   @0x00246358 / RebuildClipping @0x002464d0), using glScissor because GLES2 has no
+    //   fixed-function user clip planes and per-glyph CPU mesh clipping isn't ported.
+    // Mapping: ortho SetupOrtho(top=160,bottom=-160,left=-240,right=240) gives:
+    //   NDC_x = wx * 2/480;  pixel_x = (NDC_x+1)/2 * vpW + vpX = (wx+240)/480 * vpW + vpX
+    //   NDC_y = wy * 2/320;  pixel_y_gl = (NDC_y+1)/2 * vpH + vpY = (wy+160)/320 * vpH + vpY
+    //   glScissor uses GL bottom-left origin; clip rect: left=m_ClipX0, right=m_ClipX0+m_ClipW,
+    //   top=m_ClipY0, bottom=m_ClipY0-m_ClipH (decreasing Y = downward in worldspace).
+    if (m_HasClip) {
+        GLint vp[4];
+        glGetIntegerv(GL_VIEWPORT, vp);
+        const GLint vpX = vp[0], vpY = vp[1];
+        const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
+        // Worldspace ortho: right-left=480, top-bottom=320 (fixed game constants).
+        const float orthoW = 480.0f;
+        const float orthoH = 320.0f;
+        const float clipL = m_ClipX0;
+        const float clipR = m_ClipX0 + m_ClipW;
+        const float clipTop_ws  = m_ClipY0;
+        const float clipBot_ws  = m_ClipY0 - m_ClipH;
+        GLint sx = (GLint)((clipL + orthoW * 0.5f) / orthoW * (float)vpW) + vpX;
+        GLint sy = (GLint)((clipBot_ws + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+        GLint sw = (GLint)((clipR - clipL) / orthoW * (float)vpW);
+        GLint sh = (GLint)((clipTop_ws - clipBot_ws) / orthoH * (float)vpH);
+        if (sw < 0) sw = 0;
+        if (sh < 0) sh = 0;
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(sx, sy, sw, sh);
+    }
+
     // Render lines. Line 0 baseline at baselineY (relative to box centre / anchor.y),
     // each subsequent line step lower (decreasing Y).
     for (size_t li = 0; li < m_Lines.size(); li++) {
@@ -613,17 +643,21 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
+    if (m_HasClip) {
+        glDisable(GL_SCISSOR_TEST);
+    }
+
     world.Pop();
 }
 
 // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site @0x0015aaf0)
 // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args (-240, -46, 400, 108).
-// TODO: v1.6.1 0x0015ab58 (BakedStringBox::SetWorldspaceClipping) -- clip impl not RE'd; stored only.
-void BakedStringBox::SetWorldspaceClipping(float x0, float y0, float x1, float y1) {
+// Args: x0/y0 = top-left corner in worldspace; w/h = width/height (not far corner).
+void BakedStringBox::SetWorldspaceClipping(float x0, float y0, float w, float h) {
     m_ClipX0 = x0;
     m_ClipY0 = y0;
-    m_ClipX1 = x1;
-    m_ClipY1 = y1;
+    m_ClipW  = w;
+    m_ClipH  = h;
     m_HasClip = true;
 }
 
@@ -631,13 +665,6 @@ void BakedStringBox::SetWorldspaceClipping(float x0, float y0, float x1, float y
 // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: called after SetWorldspaceClipping.
 void BakedStringBox::Update() {
     if (m_Dirty) Layout();
-}
-
-// SetRotation  binary @ 0x0015a1c4 (DrawMarquee call site @0x0015a138)
-// ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138: m_HeadingBox->SetRotation(90.0f).
-// TODO: v1.6.1 0x0015a1c4 (BakedStringBox::SetRotation) -- exact binary field offset not RE'd.
-void BakedStringBox::SetRotation(float degrees) {
-    m_StoredRotation = degrees;
 }
 
 // ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
