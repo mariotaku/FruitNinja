@@ -104,7 +104,7 @@ public:
     AnimMap m_Anims;  // +0x0C (24B std::map with cached _M_node_count)
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(BSplineKnots)   == 0x14, "BSplineKnots sizeof mismatch");
 static_assert(sizeof(VectorTrack)    == 0x3c, "VectorTrack sizeof mismatch");
 static_assert(sizeof(AnimTrackGroup) == 0x34, "AnimTrackGroup sizeof mismatch");

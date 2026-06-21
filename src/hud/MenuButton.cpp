@@ -130,7 +130,7 @@ MenuButton::MenuButton()
       m_fieldReserved(100.0f),
       m_NewBouncePhase(0.0f),
       m_ShakeTimer(0.0f)
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_bEnabled(1),
       m_AnimScale(1.0f),
       m_BounceParams(0.85f, 0.85f, 0.0f),
@@ -212,7 +212,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // m_fieldReserved @ +0x16C: Init writes 100.0f (DAT_0019baf8 = 0x42c80000).
     m_fieldReserved  = 100.0f;
     // compat fields (excluded from cross-build)
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     m_bEnabled       = 1;
     m_AnimScale      = 1.0f;
     m_BounceParams   = Vec3(0.85f, 0.85f, 0.0f);
@@ -246,7 +246,7 @@ void MenuButton::CreateFruit() {
     e->flags &= ~0x10;
     m_pEntity = e;
     m_pTrackedFruit = static_cast<Fruit*>(e);
-#ifndef FN_ASM_VERIFY_CROSS
+#ifndef __bada__
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
 #endif
@@ -815,8 +815,13 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
         if (sizeScale.z == 0.0f) sizeScale.z = 1.0f;
         const float uSpan = c->m_UVRight  - c->m_UVLeft;
         const float vSpan = c->m_UVBottom - c->m_UVTop;
+#if !defined(__bada__)
         const float texW  = tex.IsValid() ? (float)tex->m_Width  : 0.0f;
         const float texH  = tex.IsValid() ? (float)tex->m_Height : 0.0f;
+#else
+        const float texW  = 0.0f;
+        const float texH  = 0.0f;
+#endif
         sizeScale = Vec3(texW * uSpan * sizeScale.z,
                          texH * vSpan * sizeScale.z,
                          0.0f);

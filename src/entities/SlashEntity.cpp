@@ -272,7 +272,7 @@ SlashEntity::SlashEntity()
     , m_ComboCounter(0)
     , m_ComboOnlineMode(0)
     , m_AngleIndex(0)
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_FingerId(0)
     , m_RawTouchPos(0, 0, 0)
     , m_State(0)
@@ -295,12 +295,17 @@ SlashEntity::~SlashEntity() {
 // Port-only convenience: stores fingerId, calls binary-faithful 3-arg Init,
 // then registers per-finger input callbacks.
 void SlashEntity::Init(int fingerId) {
+#if !defined(__bada__)
     m_FingerId = fingerId;
+#else
+    (void)fingerId;
+#endif
     Init(static_cast<void*>(nullptr), 0L, static_cast<Vec3*>(nullptr));
     RegisterInputCallbacks();
 }
 
 void SlashEntity::RegisterInputCallbacks() {
+#if !defined(__bada__)
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
@@ -320,6 +325,7 @@ void SlashEntity::RegisterInputCallbacks() {
     snprintf(buf, sizeof(buf), "TouchUp_%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));
+#endif
 }
 
 // ASM-verified: 2026-06-13T00:00 binary @ 0x001e79b0 (asm-inspector)
@@ -350,7 +356,9 @@ void SlashEntity::Release() {
 // ---------------------------------------------------------------------------
 void SlashEntity::Reset() {
     m_PointCount = 0;
+#if !defined(__bada__)
     m_State      = 0;
+#endif
 
     // Binary @ 0x1e6688: re-arm the anchor sentinel on every touch-down
     // (do/while i!=3 writes (-65535,-65535,-65535) to +0x70/+0x7c/+0x88).
@@ -585,7 +593,9 @@ void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
 // ---------------------------------------------------------------------------
 void SlashEntity::OnTouchActive(float x, float y) {
     Vec3 newPos(x, y, 0.0f);
+#if !defined(__bada__)
     m_RawTouchPos = newPos;
+#endif
 
     const Vec3 lastCenter = m_TailPos;
     const Vec3 distVec(newPos.x - lastCenter.x, newPos.y - lastCenter.y, 0.0f);
@@ -597,9 +607,13 @@ void SlashEntity::OnTouchActive(float x, float y) {
 
     // Distance threshold: active blade uses MOVE_THRESH_ACTIVE^2, inactive uses MOVE_THRESH_INACTIVE^2.
     // Binary: (this[0x140] & bit0) ? 25.0 : 2500.0.
+#if !defined(__bada__)
     const float thresh = (m_State != 0)
         ? (MOVE_THRESH_ACTIVE   * MOVE_THRESH_ACTIVE)
         : (MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE);
+#else
+    const float thresh = MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE;
+#endif
 
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "OnTouchActive[%d]: pos=(%.2f,%.2f) isSeed=%d distSq=%.2f thresh=%.2f state=%d",
@@ -623,7 +637,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
         m_HeadPos     = newPos;
         m_PrevHeadPos = newPos;
         m_PointCount  = 0;
+#if !defined(__bada__)
         m_State       = 1;
+#endif
         m_BladeDir    = Vec3(1.0f, 0.0f, 0.0f); // non-zero seed so AddPoint guard passes
         // Binary computes seed direction from DAT_001ea41c (global ref vec) - tail.
         // Using (1,0,0) matches binary's "non-degenerate first direction" intent.
@@ -676,7 +692,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
              m_PointCount);
 #endif
 
+#if !defined(__bada__)
     m_State = 1;
+#endif
     // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
     // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
@@ -684,7 +702,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
 }
 
 void SlashEntity::OnTouchReleased() {
+#if !defined(__bada__)
     if (m_State == 1) m_State = 2;
+#endif
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended state=%d pointCount=%d",
              m_FingerId, (int)m_State, m_PointCount);
@@ -939,7 +959,11 @@ void SlashEntity::UpdatePoints(float dt) {
     // else -> FruitCamera::TranslatePos(m_HeadPos) + TranslatePos(m_TailPos),
     //   midPt = (headT + tailT) * 0.5, write ColLine endpoints, compute SegLenSq.
     // -----------------------------------------------------------------------
+#if !defined(__bada__)
     const bool bladeActive = (m_State != 0);
+#else
+    const bool bladeActive = (m_BladeActive != 0);
+#endif
     if (m_PointCount < 4 || !bladeActive || m_TrailShiftA == -1 || m_TrailShiftB == -1) {
         m_TrailShiftA = -1;
         m_TrailShiftB = -1;
@@ -1368,7 +1392,9 @@ void SlashEntity::Update(float dt) {
                 }
             }
             if (m_TrailEmitter) {
+#if !defined(__bada__)
                 m_TrailEmitter->m_Pos = m_RawTouchPos;
+#endif
             }
         } else if (!bladeActiveByte && m_TrailEmitter) {
             pm.ClearEmitter(m_TrailEmitter);
@@ -1384,9 +1410,11 @@ void SlashEntity::Update(float dt) {
     // =====================================================================
     // 4. STATE MACHINE COLLAPSE
     // =====================================================================
+#if !defined(__bada__)
     if (m_State == 2 && m_PointCount == 0) {
         m_State = 0;
     }
+#endif
 
     // =====================================================================
     // 5. BLADE VELOCITY -> ITEMMANAGER SWISH LOOP VOLUME
@@ -1840,7 +1868,11 @@ void SlashEntity::Update(float dt) {
                    m_SliceBladeDir.y * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
                    0.0f);
             // DIFFERS: binary param3 passes incidental register-reuse bits, not a designed flag. Pass false.
+#if !defined(__bada__)
             s->MakeSplat(m_RawTouchPos, v, false, m_SliceFruitType);
+#else
+            s->MakeSplat(Vec3(0,0,0), v, false, m_SliceFruitType);
+#endif
         }
     }
 }
@@ -1852,7 +1884,12 @@ void SlashEntity::Update(float dt) {
 // ---------------------------------------------------------------------------
 bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
                                      Vec3& outBladeVel) const {
-    if (m_State == 0 || m_PointCount < 2) {
+#if !defined(__bada__)
+    const bool bladeInactive = (m_State == 0);
+#else
+    const bool bladeInactive = (m_BladeActive == 0);
+#endif
+    if (bladeInactive || m_PointCount < 2) {
         outBladeVel = Vec3(0, 0, 0);
         return false;
     }
@@ -2195,9 +2232,15 @@ void SlashEntity::ColoursChanged() {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
+#if !defined(__bada__)
     if (m_State == 0) {
         return;
     }
+#else
+    if (m_BladeActive == 0) {
+        return;
+    }
+#endif
     m_PointCount = 0;
 
     if (g_ColourType == 2) {
@@ -2273,7 +2316,11 @@ bool SlashEntity::TouchDown(InputEvent* event) {
 bool SlashEntity::TouchMoveX(InputEvent* event) {
     Game* g = Game::GetInstance();
     if (g && game_work.m_BombHitTimer > 0.0f) return false;
+#if !defined(__bada__)
     m_RawTouchPos.x = event->x;
+#else
+    (void)event;
+#endif
     return true;
 }
 
@@ -2281,7 +2328,11 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 bool SlashEntity::TouchMoveY(InputEvent* event) {
     Game* g = Game::GetInstance();
     if (g && game_work.m_BombHitTimer > 0.0f) return false;
+#if !defined(__bada__)
     m_RawTouchPos.y = event->y;
+#else
+    (void)event;
+#endif
     return true;
 }
 
@@ -2294,7 +2345,9 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     // Binary @ 0x17D3AC short-circuits when bombHitTimer > 0.
     Game* g = Game::GetInstance();
     if (g && game_work.m_BombHitTimer > 0.0f) return;
+#if !defined(__bada__)
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
+#endif
 }
 
 // Port-only release handler.

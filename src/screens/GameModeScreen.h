@@ -90,7 +90,7 @@ public:
     // Public: called from BtnDeletedFn helper in GameModeScreen.cpp.
     void DeletedMenuButton(MenuButton* btn);
 
-private:
+public:
     // Binary struct layout (0xDC = 220 bytes total):
     //   BaseScreen base 0x00..0x93 (148 bytes)
     //   +0x94..+0x9F  12-byte gap (BaseScreen tail / alignment; Ghidra-confirmed)
@@ -135,14 +135,14 @@ private:
 
     // Port-specific trailing fields (not in the 220-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xdc.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
-    // Binary accesses Game via GOT; port stores a reference here.
-    Game& game;
+#if !defined(__bada__)
+    // Binary accesses Game via GOT; port stores a pointer here.
+    Game* m_pGame;
     // One-shot latch for SetupLevel call (port-only idempotency guard).
     bool m_bSetupLevelFired;
     // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
     MenuButton* m_pOnlineMpButton;
-#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#endif // !defined(__bada__)
 
     void CreateControls();
     void RemoveButtons();
@@ -189,7 +189,7 @@ private:
 
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(offsetof(GameModeScreen, _pad_0x94)            == 0x94, "_pad_0x94 offset");
 static_assert(offsetof(GameModeScreen, m_pBackButton)        == 0xa0, "m_pBackButton offset");

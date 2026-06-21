@@ -21,7 +21,7 @@ private:
     uint8_t pad[kPadSize];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(KeyboardControl) == 212, "KeyboardControl size mismatch");
 #endif
 

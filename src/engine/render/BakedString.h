@@ -76,7 +76,7 @@ private:
     float               m_Height;          // +0x18
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(BakedString) == 0x1C, "BakedString sizeof mismatch");
 #endif
 

@@ -68,7 +68,7 @@ public:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 namespace { struct _TextureLoaderLayoutCheck {
     static_assert(offsetof(Mortar::TextureLoader, m_Path)       == 0x1c,
                   "TextureLoader::m_Path offset");

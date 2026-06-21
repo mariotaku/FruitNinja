@@ -78,10 +78,6 @@ public:
     //   followed by bool m_Flag40 at +0x40. Port Delegate1 is 36 bytes (+0x20..+0x43),
     //   overlaying binary's m_Flag40 position. Total size still matches: 0x44.
     InputDeviceCallback m_callback; // +0x20  36 bytes in port, 32+1 in binary
-
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    static_assert(sizeof(InputActionMapper) == 0x44, "InputActionMapper size mismatch");
-#endif
 };
 
 class InputDevice {
@@ -136,12 +132,13 @@ public:
     // +0x00: implicit vptr (port) / explicit fns* (binary) — layout equivalent
     // +0x04: std::list<InputActionMapper*> actionMappers (8 bytes, Sourcery 2010q1)
     std::list<InputActionMapper*> actionMappers;  // +0x04
-
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    static_assert(sizeof(InputDevice) == 12, "InputDevice size mismatch");
-#endif
 };
 
 } // namespace Mortar
+
+#if defined(__bada__)
+static_assert(sizeof(Mortar::InputActionMapper) == 0x44, "InputActionMapper size mismatch");
+static_assert(sizeof(Mortar::InputDevice) == 12, "InputDevice size mismatch");
+#endif
 
 #endif // FN_ENGINE_INPUT_INPUTDEVICE_H

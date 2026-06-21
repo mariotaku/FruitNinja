@@ -142,9 +142,11 @@ Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
 
 // Port-only helpers (mirror DojoScreen pattern).
+#if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x0015cb08
@@ -223,8 +225,10 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
+#if !defined(__bada__)
     , m_bShrinking(false)
     , m_SelCounter(0)
+#endif
 {
     // Binary: call LoadContent if guard not set
     LoadContent();
@@ -457,13 +461,15 @@ void ShopScreen::ShrinkBuyButton() {
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
     #endif
     fruit->m_bSliced           = true;  // *(fruit+0xb8) = 1
+#if !defined(__bada__)
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
-#if !defined(FN_ASM_VERIFY_CROSS)
+#endif
+#if !defined(__bada__)
     m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0 (v1.0 compat field)
 #endif
     fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
@@ -499,7 +505,11 @@ void ShopScreen::ShrinkBuyButton() {
 // ---------------------------------------------------------------------------
 void ShopScreen::DeletedMenuItem(HUDControl* removed) {
     if (removed == m_pEquipButton) {
+#if !defined(__bada__)
         if (m_bShrinking) {
+#else
+        if (false) {
+#endif
             // Kick the fruit off-screen when the button was shrunk programmatically.
             // Binary @ 0x0015d14c writes (re-RE'd 2026-05-09 by re-analyst):
             //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
@@ -671,15 +681,17 @@ void ShopScreen::QuitShopCallback() {
 //     ItemManager::SetEquippedItem; play equip SFX
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
-    LOG_DEBUG("Shop", "EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p",
-              (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
+    LOG_DEBUG("Shop", "EquipCallback fired: m_pEquipButton=%p m_pSelectedItem=%p info=%p",
+              (void*)m_pEquipButton, (void*)m_pSelectedItem,
               m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
-    #endif
     if (!m_pEquipButton) return;
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
+#if !defined(__bada__)
     if (m_bShrinking) {
+#else
+    if (false) {
+#endif
         // Programmatic-shrink path (EquipCallback @ 0x0015d649):
         // Copy current entity pos to m_HalfB_pos, then set all three
         // velocity fields from g_ShopFlingVec (SHOP_FLING_VEC = (0,1,0)).
@@ -713,13 +725,13 @@ void ShopScreen::EquipCallback() {
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_DEBUG("Shop", "EquipCallback user-path: type=%d name='%s' im=%p",
                   (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
         #endif
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
                       (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
                       im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
@@ -741,7 +753,7 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_DEBUG("Shop", "EquipCallback SaveItemInfo done");
             #endif
         }
@@ -780,12 +792,18 @@ void ShopScreen::Update(float dt) {
     // Binary: __aeabi_idivmod(counter+1, 10) unconditionally, gate on counter==0.
     if (m_pShopList) {
         ShopListItem* closest = static_cast<ShopListItem*>(m_pShopList->GetItemClosestToZero());
+#if !defined(__bada__)
         if (closest != m_pSelectedItem && m_SelCounter == 0) {
+#else
+        if (closest != m_pSelectedItem) {
+#endif
             SetSelected(closest);
         }
     }
+#if !defined(__bada__)
     // Increment unconditionally (binary: (m_SelCounter+1) % 10 every frame)
     m_SelCounter = (m_SelCounter + 1) % 10;
+#endif
 
     // Sync layer flags from alt (binary copies field_0x80 to field_0x34 each frame)
     m_LayerFlags = (uint32_t)m_LayerFlagsAlt;
@@ -826,7 +844,7 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
                 m_pBuyButton->m_bEnabled = 1;
 #endif
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
@@ -905,7 +923,7 @@ void ShopScreen::Update(float dt) {
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                         // Binary (0x0015e5f6): m_bEnabled = 0
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
                         m_pEquipButton->m_bEnabled = 0;
 #endif
                         // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
@@ -917,7 +935,9 @@ void ShopScreen::Update(float dt) {
                         if (game_work.m_TutorialControl)
                             game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
                         // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
+#if !defined(__bada__)
                         m_bShrinking = false;
+#endif
                         // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
                         m_pEquipButton->m_RestScale =
                             m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
@@ -1020,7 +1040,7 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
             m_pBuyButton->m_bEnabled = 1;
 #endif
             if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
@@ -1271,8 +1291,13 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         if (s_TexDialogBox.IsValid()) {
             // Get dialog box dimensions via vtable GetWidth/GetHeight.
             // Binary: *(int**)(static_block+0x34)->vtable[5]/[6]
+#if !defined(__bada__)
             float texW = (float)(s_TexDialogBox->m_Width);
             float texH = (float)(s_TexDialogBox->m_Height);
+#else
+            float texW = 0.0f;
+            float texH = 0.0f;
+#endif
 
             // Scale Vec3 = (texW+1, texH+1, 0) * 1.0f (identity multiply)
             // The decompile multiplies by local_44=1.0f via _Vector3::operator* — no-op.
@@ -1343,8 +1368,13 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     // Binary: __cxa_guard_acquire(static_block+0x74), then init Vec3 at +0x78.
     // Port: plain bool guard (equivalent lifetime).
     if (!s_RingVecInited && s_TexSelected.IsValid()) {
+#if !defined(__bada__)
         float w = (float)(s_TexSelected->m_Width);
         float h = (float)(s_TexSelected->m_Height);
+#else
+        float w = 0.0f;
+        float h = 0.0f;
+#endif
         // z = 1.0f  (local_44 = 0x3f800000 from binary stack)
         s_RingVec = Vec3(w + 1.0f, h + 1.0f, 1.0f);
         s_RingVecInited = true;

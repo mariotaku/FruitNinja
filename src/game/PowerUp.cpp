@@ -301,8 +301,14 @@ void PowerUp::DrawBar() {
     if (!m_Texture1.IsValid()) return;
 
     Mortar::Texture* tex = m_Texture1.Get();
+#if !defined(__bada__)
     float texW = (float)tex->m_Width;
     float texH = (float)tex->m_Height;
+#else
+    (void)tex;
+    float texW = 1.0f;
+    float texH = 1.0f;
+#endif
 
     // Build world matrix directly:
     //   M[0][0] = texW

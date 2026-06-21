@@ -129,7 +129,7 @@ private:
 };
 // sizeof(AchievementManager) == 0x120 (288 bytes) on ARM32 binary:
 // 12 * sizeof(std::map) = 12 * 24 = 288.
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(AchievementManager) == 0x120, "AchievementManager size mismatch");
 #endif

@@ -26,7 +26,7 @@ private:
     uint8_t m_pad[0x28C - 0x58];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(FriendLeaderboardItem) == 0x28C, "FriendLeaderboardItem size mismatch");
 #endif

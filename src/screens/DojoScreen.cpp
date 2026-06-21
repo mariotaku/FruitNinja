@@ -62,9 +62,11 @@ static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 
 // Helpers
+#if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
+#endif
 
 // --- Static texture storage (binary: GOT-relative globals) ---
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
@@ -83,7 +85,7 @@ DojoScreen::DojoScreen(Game& g)
     , m_pAboutScreen(nullptr)     // field_0xa0
     , game(g)
 {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x00137b90");
     #endif
     LoadContent();
@@ -96,7 +98,7 @@ DojoScreen::DojoScreen(Game& g)
 // Binary: set vtable, call Release(), call ~BaseScreen()
 // ===================================================================
 DojoScreen::~DojoScreen() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "destroy", "DojoScreen::~DojoScreen @ 0x00137cf4");
     #endif
     Release();
@@ -132,7 +134,7 @@ void DojoScreen::UnLoadContent() {
 // HUDControl::Init override
 // ===================================================================
 void DojoScreen::Init() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Init");
     #endif
     m_State = 0;
@@ -147,7 +149,7 @@ void DojoScreen::Init() {
 // at the AboutScreen-state-2 callsite the alpha is already <0.001 and
 // m_Active was never cleared, so Init's extras are no-ops there.
 void DojoScreen::Reset() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0013767c");
     #endif
     m_State = 0;
@@ -245,12 +247,14 @@ void DojoScreen::Update(float dt) {
                 // shrank the ring to ~57.5% of tex size -- wrong. 0.575
                 // is the bounce multiplier, not a size multiplier.
                 if (s_TexShop.IsValid()) {
+#if !defined(__bada__)
                     m_pShopButton->m_RestScale = Vec3(
                         (float)s_TexShop->m_Width + 1.0f,
                         (float)s_TexShop->m_Height + 1.0f,
                         1.0f);
+#endif
                 }
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
                 m_pShopButton->m_AnimScale = 0.5f;
                 // TODO: m_BounceParams *= SHOP_SCALE. The port doesn't
                 // read m_BounceParams yet (MenuButton rework reverted),
@@ -284,7 +288,7 @@ void DojoScreen::Update(float dt) {
         // Transition to state 1 when fully faded in
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 1, "Update/state-0 alpha settled");
             #endif
             m_State = 1;
@@ -346,7 +350,7 @@ void DojoScreen::Update(float dt) {
         if (prevState == 4) {
             // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada (no
             // button creates it). Binary state-4 body kept for vtable parity.
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(prevState), 0, "Update/state-4 defunct");
             #endif
             m_State = 0;
@@ -362,7 +366,7 @@ void DojoScreen::Update(float dt) {
 
         // Binary: if (alpha < 0.001) → mark for removal
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "pending-removal", "state-6 alpha faded");
             #endif
             m_bPendingRemoval = 1;
@@ -391,6 +395,7 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     // Slides in from left (horizontal slide): X -= texW * (1 - alpha).
     if (s_TexSensei.IsValid()) {
         MatrixManager& mm = MatrixManager::GetInstance();
+#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexSensei->m_Width + 1.0f,
@@ -398,6 +403,11 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
             1.0f);
         const float slideX = -(float)s_TexSensei->m_Width * (1.0f - m_TransitionAlpha);
         mat.GlobalTranslate44(Vec3(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
+#else
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(0.0f, 0.0f, 1.0f);
+        mat.GlobalTranslate44(POS_DOJO_BG);
+#endif
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -424,7 +434,7 @@ void DojoScreen::PlayCallback() {
     }
 
     // 2. State 6 (quit fade-out)
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 6, "PlayCallback @ 0x001389f4");
     #endif
     m_State = 6;
@@ -450,7 +460,7 @@ void DojoScreen::PlayCallback() {
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     #endif
     m_State = 2;
@@ -473,7 +483,7 @@ void DojoScreen::ShopCallback() {
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     #endif
     m_State = 3;

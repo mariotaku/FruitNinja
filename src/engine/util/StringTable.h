@@ -197,7 +197,7 @@ public:
 
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(StringTable) == 0x50, "StringTable sizeof mismatch");
 #endif
 

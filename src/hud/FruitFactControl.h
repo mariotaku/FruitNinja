@@ -150,11 +150,10 @@ private:
     void DrawDownloadIcon();           // Binary @ 0x001395d0
 };
 
-// Layout lock: m_LocalScore at binary offset 0x104.
-// Valid only on ARM32 (4-byte pointers, SmartPtr=4B, padding matches binary).
-// Skipped in asm-verify cross-build: arm-none-eabi Delegate stub (36B) vs
-// binary Delegate0 (32B) shifts base-class offsets; real Bada toolchain passes.
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if 0
+// TODO(#74): FruitFactControl layout unported; 0x204 is stale v1.5.x binary size,
+// real v1.6.1 binary size is 0xb8 (task #74). offsetof(m_LocalScore)==0x104 is also
+// stale v1.5.x. Re-enable with correct layout values when task #74 lands.
 static_assert(offsetof(FruitFactControl, m_LocalScore) == 0x104,
               "FruitFactControl::m_LocalScore offset mismatch");
 static_assert(sizeof(FruitFactControl) == 0x204,

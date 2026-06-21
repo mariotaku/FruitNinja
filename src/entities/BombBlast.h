@@ -40,11 +40,11 @@ public:
     // +0x6C: seconds since spawn — kills at 3.0s
     float m_Lifetime;
 
+#if !defined(__bada__)
     // Port-only growth accumulator (no binary counterpart). Placed after all
     // binary members so it does not shift binary offsets in the cross-build.
-    // Not guarded by __bada__ so BombBlast.cpp can use it unconditionally;
-    // the cross-build sizeof assert excludes this field via the guard below.
     float m_BlastRadius;
+#endif
 
     BombBlast();
     ~BombBlast();
@@ -82,7 +82,7 @@ public:
     void DrawUpdate(float);
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 // Binary-faithful offsets (32-bit Bada cross-build). Binary total = 0x70 (112 bytes).
 static_assert(__builtin_offsetof(BombBlast, m_PosA)    == 0x3C, "m_PosA binary offset wrong");
 static_assert(__builtin_offsetof(BombBlast, m_PosB)    == 0x48, "m_PosB binary offset wrong");

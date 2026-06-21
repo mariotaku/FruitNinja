@@ -10,7 +10,7 @@
 
 namespace Mortar {
 
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
 GLuint Texture::s_LastBoundTexId = 0;
 #endif
 
@@ -19,7 +19,7 @@ GLuint Texture::s_LastBoundTexId = 0;
 bool Texture::UseAlternativeTextureLoader = false;
 
 Texture::Texture()
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     : m_TexId(0)
     , m_Width(0)
     , m_Height(0)
@@ -34,7 +34,7 @@ Texture::~Texture() {
     // hash would return a dangling pointer.
     TextureManager::GetInstance().OnTextureDestroyed(this);
 
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
         m_TexId = 0;
@@ -44,6 +44,7 @@ Texture::~Texture() {
 
 // Matches Bada::Texture2DFromFile_Bada::Set (0x001897c0).
 void Texture::Set() {
+#if !defined(__bada__)
     if (m_TexId == 0) {
         static bool s_warned = false;
         if (!s_warned) {
@@ -58,16 +59,20 @@ void Texture::Set() {
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
     s_LastBoundTexId = m_TexId;
+#endif
 }
 
 // Matches Bada::Texture2DFromFile_Bada::UnSet (0x00189790).
 void Texture::UnSet() {
+#if !defined(__bada__)
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     s_LastBoundTexId = 0;
+#endif
 }
 
 void Texture::UploadRGBA(int width, int height, const void* pixels) {
+#if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
     }
@@ -85,10 +90,14 @@ void Texture::UploadRGBA(int width, int height, const void* pixels) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+#else
+    (void)width; (void)height; (void)pixels;
+#endif
 }
 
 void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType,
                            const void* pixels) {
+#if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
     }
@@ -106,6 +115,9 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
     glTexImage2D(GL_TEXTURE_2D, 0, glFormat, width, height, 0,
                  glFormat, glType, pixels);
+#else
+    (void)width; (void)height; (void)glFormat; (void)glType; (void)pixels;
+#endif
 }
 
 // Upload a parsed Tex1Data to GL. Called by Load() and LoadFromMemory().
@@ -214,7 +226,9 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         if (!result.IsValid()) {
             delete t;
         } else {
+#if !defined(__bada__)
             t->m_Path = path;
+#endif
         }
     } else {
         // TODO: 0x0022bc6c -- Tex3 full decode + GL upload.

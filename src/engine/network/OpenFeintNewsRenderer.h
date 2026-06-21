@@ -49,7 +49,7 @@ private:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(Mortar::OpenFeintNewsRenderer) == 0x10D8,
     "Mortar::OpenFeintNewsRenderer must be 0x10D8 bytes on ARM32/Bada");
 #endif

@@ -259,6 +259,7 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
 // Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
 // Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
 Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
+#if !defined(__bada__)
     ResourceLoader loader(path);
     if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
         LOG_ERROR("MeshManager", "failed to load '%s'", path);
@@ -438,6 +439,10 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     }
 
     return Mortar::SmartPtr<Model>(model);
+#else
+    (void)path;
+    return Mortar::SmartPtr<Model>();
+#endif
 }
 
 } // namespace Mortar

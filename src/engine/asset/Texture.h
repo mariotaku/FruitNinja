@@ -62,7 +62,7 @@ public:
     // Binary @ 0x00188d9c -- uncached unbind: forwards to UnSet().
     void UnSetUnCached();
 
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     // Port specific: GL texture handle and dimensions — not in binary Mortar::Texture
     // base; binary stores these in the concrete subclass (Texture2DFromFile_Bada).
     // Placed at tail so binary field offsets (none) are unaffected.
@@ -100,7 +100,7 @@ private:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(Mortar::Texture) == 12, "Mortar::Texture size mismatch");
 #endif

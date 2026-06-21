@@ -46,8 +46,10 @@ SpeedControl::SpeedControl()
     if (tex.IsValid()) {
         // Binary ctor @ 0x0016133c writes +0x74 (m_Texture). HUDControl3d::Draw base reads +0x74.
         m_Texture = tex;
+#if !defined(__bada__)
         texW = tex->m_Width;
         texH = tex->m_Height;
+#endif
     }
 
     // 8-frame vertical atlas: use 1/8 height per frame.

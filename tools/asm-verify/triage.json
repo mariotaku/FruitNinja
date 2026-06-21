@@ -625,7 +625,7 @@
   "_ZN10MenuButton12HasNewSymbolEv": {
     "decided_at": "2026-06-21T00:00Z",
     "max_score": 6,
-    "reason": "MATCH 100% LCS after sizeof fix (FN_ASM_VERIFY_CROSS guard removed, cross-build now enforces static_assert(sizeof==0x178)). m_NewIndicatorTimer at [r0,#0xfc] (+0xFC). Score 0/6.",
+    "reason": "MATCH 100% LCS after sizeof fix (__bada__ guard on compat fields, cross-build enforces static_assert(sizeof==0x178)). m_NewIndicatorTimer at [r0,#0xfc] (+0xFC). Score 0/6.",
     "score": 0,
     "verdict": "ACCEPT-cosmetic"
   },

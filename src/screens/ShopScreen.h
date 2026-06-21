@@ -122,7 +122,7 @@ public:
     // Releases all static textures.
     static void UnLoadContent();
 
-private:
+public:
     // +0x7C: transition alpha (0->1 lerp-in, *= 0.75 fade-out)
     // field_0x74 (inherited HUDControl3d::m_Texture / Mortar::SmartPtr<Texture>) is zeroed by
     // HUDControl3d ctor and not used further in ShopScreen; not re-declared here.
@@ -153,7 +153,6 @@ public:
     // Read-only accessor used by ShopListItem::Move to ramp m_CostAlpha
     // toward 1 only on the centered row (description-text fade-in).
     ShopListItem* GetSelectedItem() const { return m_pSelectedItem; }
-private:
 
     // +0x9C..+0xAB: per-slot cached selection (4 entries, ItemType 0-3)
     // Type 3 = REMOVEADS (defunct IAP). Binary: Init explicitly zeroes field_0xa8.
@@ -175,7 +174,7 @@ private:
 
     // Port-specific trailing fields (not in the 188-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xbc.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     // Mirrors the static BSS bool at .got + 0x451b4 set by
     // ShrinkBuyButton @ 0x0015c4cc and read by EquipCallback /
     // DeletedMenuItem / Move. Tracks "the equip-button fruit piece
@@ -189,7 +188,7 @@ private:
     // every frame (mod 10), SetSelected fires only when counter == 0.
     // Binary: __aeabi_idivmod(counter + 1, 10) every frame unconditionally.
     int m_SelCounter;
-#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#endif // !defined(__bada__)
 
     // --- Static textures (GOT-relative globals in binary) ---
     // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
@@ -284,7 +283,7 @@ public:
     void ConfirmCallback();
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
 static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");

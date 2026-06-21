@@ -152,8 +152,13 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         if (s_banner.IsValid()) {
             Mortar::Texture* bannerTex = s_banner.Get();
             if (bannerTex) {
+#if !defined(__bada__)
                 float bw = (float)bannerTex->m_Width;
                 float bh = (float)bannerTex->m_Height;
+#else
+                float bw = 0.0f;
+                float bh = 0.0f;
+#endif
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(bw, bh, 1.0f);
                 mat.GlobalTranslate44(pos);
@@ -209,8 +214,13 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         if (s_unlockBanner.IsValid()) {
             Mortar::Texture* bannerTex = s_unlockBanner.Get();
             if (bannerTex) {
+#if !defined(__bada__)
                 float bw = (float)bannerTex->m_Width;
                 float bh = (float)bannerTex->m_Height;
+#else
+                float bw = 0.0f;
+                float bh = 0.0f;
+#endif
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(bw, bh, 1.0f);
                 mat.GlobalTranslate44(pos);

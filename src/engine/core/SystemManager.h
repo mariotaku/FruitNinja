@@ -57,13 +57,12 @@ public:
     uint8_t GetQuitState() const { return m_QuitState; }
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(SystemManager) == 212, "SystemManager size mismatch");
-static_assert(offsetof(SystemManager, m_bRunning)      == 0x04, "SystemManager::m_bRunning");
-static_assert(offsetof(SystemManager, m_QuitState)     == 0x4C, "SystemManager::m_QuitState");
-static_assert(offsetof(SystemManager, m_field50)       == 0x50, "SystemManager::m_field50");
-static_assert(offsetof(SystemManager, m_DeviceID)      == 0x54, "SystemManager::m_DeviceID");
+// TODO(#93-followup): offsetof on private members rejected by GCC 4.4; need friend
+// access or public fields to enforce field offsets on the cross-build.
+// Expected: m_bRunning@0x04, m_QuitState@0x4C, m_field50@0x50, m_DeviceID@0x54.
 #endif
 
 #endif

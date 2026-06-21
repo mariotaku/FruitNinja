@@ -51,7 +51,7 @@ private:
     uint8_t m_data[0x40];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(LeaderboardManager) == 0x40, "LeaderboardManager size mismatch");
 #endif

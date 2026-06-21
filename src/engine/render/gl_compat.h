@@ -9,7 +9,7 @@
 // collide on enum values and function typedefs when mixed. This file
 // is the single point of truth.
 
-#if defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
     // asm-verify cross-build: arm-none-eabi has no system GL headers and
     // the verify .o files don't link against GL anyway. Provide a minimal
     // stub of just the GL types + constants the port code touches.

@@ -58,9 +58,11 @@ static const float PAUSE_VISIBILITY    = 0.01f;
 static const float SOUND_VOLUME_ON     = 0.5f;
 
 // Helper: get GLuint from Mortar::SmartPtr<Texture>
+#if !defined(__bada__)
 static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
+#endif
 
 // Button positions (verified from read_memory, docs/screens/main.md)
 static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, 0.0f);
@@ -274,7 +276,7 @@ void MainScreen::Update(float dt) {
         CreatePlayDojo();
 
         if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt >= 0.0f) {
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             #endif
             m_State = STATE_CREATE_BUTTONS;
@@ -394,7 +396,7 @@ void MainScreen::Update(float dt) {
     case STATE_MATCHMAKER:      // binary case 0x10
         // Defunct — OpenFeint / GameCenter / matchmaker states.
         // Binary resets m_StateTimer = 0 (bounce velocity cleared) and m_Timer2 = -0.85.
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
         #endif
         m_State = STATE_CAMERA_ZOOM;
@@ -407,7 +409,7 @@ void MainScreen::Update(float dt) {
     case STATE_NEWS:            // binary case 0xb
         // Defunct — NetworkManager::UpdateNews.
         // Binary: m_StateTimer=0, m_State=1, m_Timer2=-0.85.
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
         #endif
         m_State = STATE_CREATE_BUTTONS;
@@ -442,7 +444,7 @@ void MainScreen::Update(float dt) {
             if (game_work.m_GameDt > -0.001f) {
                 game_work.m_GameDt = 0.0f;
                 game_work.bM_bPaused = 0;
-                #ifndef FN_ASM_VERIFY_CROSS
+                #ifndef __bada__
                 LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to 0.0f, levelTransitionFlag cleared");
                 #endif
             }
@@ -456,7 +458,7 @@ void MainScreen::Update(float dt) {
         if (m_Field114 >= 8.0f) {
             m_Field114 = 0.0f;
         }
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
         #endif
         m_State = STATE_CAMERA_ZOOM;
@@ -477,13 +479,13 @@ void MainScreen::Update(float dt) {
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
             Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             #endif
             m_State = STATE_QUIT_BOMB;
             m_StateTimer = 0.0f;
         } else if (qs == 3) {
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/QUIT_WAIT qs==3 cancelled");
             #endif
             m_State = STATE_CAMERA_ZOOM;
@@ -617,8 +619,12 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         m_TexFruitText->Set();
         Vec3 fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
+#if !defined(__bada__)
             (float)m_TexFruitText->m_Width * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->m_Height * FRUIT_TEXT_SCALE,
+#else
+            0.0f, 0.0f,
+#endif
             fruitTextDrawPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_TexFruitText->UnSet();
@@ -631,7 +637,11 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_field10C);
         m_ninjaTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
+#if !defined(__bada__)
             (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
+#else
+            0.0f, 0.0f,
+#endif
             ninjaDrawPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_ninjaTextTex->UnSet();
@@ -641,7 +651,11 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     if (m_TexSliceFruit.IsValid()) {
         m_TexSliceFruit->Set();
         SetupQuadMatrix(mm, hudScale,
+#if !defined(__bada__)
             (float)m_TexSliceFruit->m_Width, (float)m_TexSliceFruit->m_Height,
+#else
+            0.0f, 0.0f,
+#endif
             m_LogoPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
@@ -659,8 +673,13 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // 6. m_TexBc (comming_soon overlay) — drawn when valid AND pPlayButton exists.
     if (m_TexBc.IsValid() && pPlayButton != NULL) {
+#if !defined(__bada__)
         float csW = (float)m_TexBc->m_Width;
         float csH = (float)m_TexBc->m_Height;
+#else
+        float csW = 0.0f;
+        float csH = 0.0f;
+#endif
         float scaleX = csW * 0.5f;
         float scaleY = csH * 0.5f * (csW > 0.0f ? (csH / csW) : 1.0f);
         Vec3 csPos(0.0f, 7.0f, 0.0f);
@@ -783,7 +802,7 @@ void MainScreen::DeleteMenuButtons() {
 
 // Matches 0x0014ad04 (7 lines)
 void MainScreen::Hide() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     #endif
     m_State = STATE_CAMERA_FADE;
@@ -843,9 +862,11 @@ void MainScreen::CreatePlayDojo() {
         // TODO: 0x0014b782 -- RE whether play block truly overrides m_RestScale to texWidth+1
         //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
+#if !defined(__bada__)
             pPlayButton->m_RestScale.x = (float)(texNewGame->m_Width  + 1);
             pPlayButton->m_RestScale.y = (float)(texNewGame->m_Height + 1);
             pPlayButton->m_RestScale.z = 1.0f;
+#endif
         }
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
@@ -853,7 +874,7 @@ void MainScreen::CreatePlayDojo() {
         // ASM-verified: 2026-05-09 binary @ 0x0014b818..0x0014b82c (re-analyst).
         pPlayButton->m_HitInsetY  = -50.0f;
         pPlayButton->m_HitInsetX  = -50.0f;
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         pPlayButton->m_AnimScale  = 0.5f;
 #endif
         pPlayButton->m_GrowInTimer = 0.25f;
@@ -875,9 +896,11 @@ void MainScreen::CreatePlayDojo() {
             Mortar::SmartPtr<Mortar::Texture> texNewGame =
                 Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
             if (texNewGame.IsValid()) {
+#if !defined(__bada__)
                 pPlayButton->m_RestScale.x = (float)(texNewGame->m_Width  + 1);
                 pPlayButton->m_RestScale.y = (float)(texNewGame->m_Height + 1);
                 pPlayButton->m_RestScale.z = 1.0f;
+#endif
             }
         }
     }
@@ -936,9 +959,11 @@ void MainScreen::CreatePlayDojo() {
             Mortar::SmartPtr<Mortar::Texture> texQuit =
                 Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
             if (texQuit.IsValid()) {
+#if !defined(__bada__)
                 pLeaderboardBtn->m_RestScale.x = (float)(texQuit->m_Width  + 1);
                 pLeaderboardBtn->m_RestScale.y = (float)(texQuit->m_Height + 1);
                 pLeaderboardBtn->m_RestScale.z = 1.0f;
+#endif
             }
         }
     }
@@ -960,9 +985,11 @@ void MainScreen::CreateQuitButton() {
     pLeaderboardBtn->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     if (texQuit.IsValid()) {
+#if !defined(__bada__)
         pLeaderboardBtn->m_RestScale.x = (float)(texQuit->m_Width  + 1);
         pLeaderboardBtn->m_RestScale.y = (float)(texQuit->m_Height + 1);
         pLeaderboardBtn->m_RestScale.z = 1.0f;
+#endif
     }
     game_work.mHud->AddControl(pLeaderboardBtn);
 }
@@ -979,7 +1006,7 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 
 // Matches 0x0014b068
 void MainScreen::GameModeCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
     #endif
     m_State = STATE_MODE_SELECT;
@@ -997,7 +1024,7 @@ void MainScreen::GameModeCallback() {
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
     #endif
     m_State = STATE_GAME_START;
@@ -1013,7 +1040,7 @@ void MainScreen::NewGameCallback() {
 // Matches 0x0014afc4
 void MainScreen::AboutCallback() {
     CancelNews();  // defunct stub
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
     #endif
     m_State = STATE_DOJO_WAIT_B;
@@ -1037,7 +1064,7 @@ void MainScreen::MusicCallback() {
 // Matches 0x0014b010
 void MainScreen::LeaderboardsCallback() {
     CancelNews();  // defunct stub
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_LEADERBOARD), "LeaderboardsCallback");
     #endif
     m_State = STATE_LEADERBOARD;
@@ -1046,7 +1073,7 @@ void MainScreen::LeaderboardsCallback() {
 // Matches 0x0014b000
 void MainScreen::MoreGamesCallback() {
     CancelNews();  // defunct stub
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MORE_GAMES), "MoreGamesCallback");
     #endif
     m_State = STATE_MORE_GAMES;
@@ -1063,7 +1090,7 @@ void MainScreen::QuitGamesCallback() {
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);
     }
 
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
     #endif
     m_State = STATE_QUIT_WAIT;
@@ -1194,7 +1221,7 @@ void MainScreen::OnMenuItemsCleared() {
 
 // Binary @ 0x0014B0AC — multiplayer variant of GameModeCallback (state 0xF).
 void MainScreen::MultiplayerGameModeCallback() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT_2), "MultiplayerGameModeCallback");
     #endif
     m_State = STATE_MODE_SELECT_2;

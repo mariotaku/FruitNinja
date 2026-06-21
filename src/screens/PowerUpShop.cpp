@@ -510,7 +510,7 @@ void PowerUpShop::Update(float dt) {
                                      fruitType, &restPos, &removeCb);
         m_BuyButton->Init();
         // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         m_BuyButton->m_bEnabled = 0;
 #endif
 
@@ -545,7 +545,7 @@ void PowerUpShop::Update(float dt) {
 
             // Binary: set Fruit vel = pushVec (origin), field_0x123 = 0, m_BuyTriggered = 1.
             m_BuyButton->m_pFruitPiece->vel = g_Origin;
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
             m_BuyButton->m_bEnabled = 0;    // field_0x123 -> m_bEnabled port analogue
 #endif
             m_BuyTriggered = 1;

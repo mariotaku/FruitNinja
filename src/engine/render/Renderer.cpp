@@ -145,6 +145,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
     // to default texture 0, which samples white -- modulating the tint then
     // produces a stray white quad. Tracked via Mortar::Texture::s_LastBound.
     // Once-warn + skip-draw so callers can identify the bug from logs.
+#if !defined(__bada__)
     if (Mortar::Texture::s_LastBoundTexId == 0) {
         static bool s_warned = false;
         if (!s_warned) {
@@ -155,6 +156,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
         }
         return;
     }
+#endif
 
     // Caller already bound the texture via Texture::Set (which
     // glBindTexture's to TEXTURE_2D unit 0); re-enable TEXTURE_2D and

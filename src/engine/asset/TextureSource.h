@@ -98,7 +98,7 @@ struct DataInfo {
     {}
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 namespace { struct _DataInfoSizeCheck {
     static_assert(sizeof(DataInfo) == 0x20, "TextureInfo::DataInfo size mismatch");
     static_assert(offsetof(DataInfo, numberFormat) == 0x0c, "DataInfo::numberFormat offset");
@@ -193,7 +193,7 @@ public:
     Event1<long> m_OnDataChanged;
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 namespace { struct _TextureSourceLayoutCheck {
     static_assert(sizeof(TextureSource) == 0x1c,
                   "TextureSource size mismatch (must be 0x1c)");

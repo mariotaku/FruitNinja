@@ -56,7 +56,7 @@ private:
     static Mortar::SmartPtr<Mortar::Texture> s_unchecked;
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(CheckBox) == 136, "CheckBox size mismatch");
 #endif
 

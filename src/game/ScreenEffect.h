@@ -108,7 +108,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // ReloadableTexture::LoadTextures trampolines to ReloadableTexture::Load @
     // 0x001213b8 which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex").
     // Port specific: mirrors the base's SmartPtr slot using port-side texture handle.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     Mortar::SmartPtr<Mortar::Texture> m_Texture;
     // Port specific: texture asset name from XML "texture" attr (binary stores
     // in base ReloadableTexture::m_pName char*; port base has char m_Name[4]
@@ -139,7 +139,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
         , m_Tint(255,255,255,255)
         , m_FlagBits(0), m_bLowEndOnly(false)
     {
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         m_TexName[0] = '\0';
         m_VelOut = Vec3(0,0,0);
         m_TransitionHash = 0;
@@ -150,7 +150,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
     void LoadTextures();
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(EffectImage)                        == 0x7c, "EffectImage size");
 static_assert(offsetof(EffectImage, m_pHudCtrl)          == 0x08, "EffectImage::m_pHudCtrl @ +0x08");

@@ -116,12 +116,12 @@ public:
     // Binary reads texture dimensions from SmartPtr<Texture>->m_Width/m_Height
     // each time they are needed. Port caches them after load to avoid holding
     // SmartPtrs in Update.
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     float m_TitleTexW, m_TitleTexH;
     float m_PauseButtonTexW, m_PauseButtonTexH;
     float m_QuitTitleTexW, m_QuitTitleTexH;
     float m_RetryButtonTexW, m_RetryButtonTexH;
-#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#endif // !defined(__bada__)
 
     PauseScreen();
     ~PauseScreen();
@@ -206,7 +206,7 @@ public:
 // Binary size = 0xdc (220 bytes). Port-specific trailing floats (m_TitleTexW etc.)
 // are after the binary-faithful region; only the binary fields are asserted here.
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(PauseScreen) == 0xdc, "PauseScreen size must match binary");
 static_assert(offsetof(PauseScreen, m_Alpha)          == 0x7c, "m_Alpha offset");
