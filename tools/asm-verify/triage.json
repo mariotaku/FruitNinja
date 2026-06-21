@@ -3171,8 +3171,8 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveData21IsAchievementUnlockedEm": {
-    "verdict": "FIX-NEEDED",
-    "reason": "FruitSaveData::IsAchievementUnlocked -- binary add #348 (0x15C) for m_PendingUnlocks and #372 (0x174) for m_UnlockedAchievements; port generates #352 (0x160) and #380 (0x17C). Both fields shifted +4 bytes vs binary. A 4-byte extra field before m_PendingUnlocks in src/game/FruitSaveData.h -- check around m_WaveScalar_v161 (+0x150)/m_WaveStates (+0x154). Score 29413/33 (891x).",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "FALSE POSITIVE (re-analyst #89, 2026-06-21): NO spurious field. Compiling the real src/game/FruitSaveData.h with Sourcery 4.4.1 gives offsetof(m_PendingUnlocks)=0x15C, m_UnlockedAchievements=0x174, sizeof=0x240 -- all byte-exact to binary. The add#352/#380 (=0x15C+4 / 0x174+4) is the port INLINING std::map::find (first deref is base+4 = _Rb_tree _M_header), where the binary CALLs find out-of-line (passes map base 0x15C/0x174). Pure libstdc++ inline-vs-outofline; layout identical. Sibling to the accepted GetTotal std::map ABI row. Classifier wrong-field heuristic mis-fired on the base+4 header deref.",
     "asm_hash": "d28864066fd5b0cf",
     "decided_at": "2026-06-21T00:00Z"
   },
