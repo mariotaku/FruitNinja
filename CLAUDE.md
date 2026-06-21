@@ -161,6 +161,8 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
   - **Per-agent output captures**, `compile_failures.txt`, ad-hoc analysis dumps.
   - **Compile/build logs**, `tmp/symbol-diff/*`, `tmp/asm-verify/*` reports.
 
+  **Namespace every tmp/ write under a per-tool subdir** — `tmp/<tool>/…` (e.g. `tmp/asm-verify/`, `tmp/bindiff-out/`, `tmp/symbol-diff/`), never a loose file at `tmp/` root. Any script that emits to `tmp/` must write into its own subdir so the tree stays reviewable and one tool's output can be wiped without touching another's. Loose `tmp/foo.json` at root is a bug — give it a home.
+
   Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/HANDOVER*.md` / `docs/port-plan.md` which capture project-wide policy that survives across sessions). Anything else — drafts, working notes, gap-survey snapshots, dispatch-shape proposals — belongs in `tmp/`. **RE backlog lives in Claude tasks (`TaskCreate`/`TaskList`), NOT in any `docs/` file.** The intentional-skip list lives in `docs/engine/online-services-audit.md`.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
