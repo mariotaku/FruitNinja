@@ -1292,7 +1292,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     }
 
     // White slice-line visual — matches AddSlice call in binary
-    // CollisionResponse at 0x17821c. Binary builds sliceInfo as:
+    // v1.6.1 Fruit::CollisionResponse @0x001dd500. Binary builds sliceInfo as:
     //   x = m_SliceArcAngle / -182.0 + 90.0   (degrees-offset)
     //   y = bladeSpeed * 0.4                   (impulse length)
     const float sliceAngleDeg = (float)(int16_t)m_SliceArcAngle / -182.0f + 90.0f;
@@ -1300,7 +1300,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
     // Score, save totals, powerup, combo and achievements are gated exactly as
-    // the binary does (Fruit::CollisionResponse @ 0x001780b0):
+    // the binary does (v1.6.1 Fruit::CollisionResponse @0x001dd500):
     //   GameTaskState+0x06 (retryFlag) == 0          -- outer "interactive" gate
     //   && slash (hitter) != null                    -- real blade hit, not an
     //                                                   internal re-slice
@@ -1308,21 +1308,23 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //   && ( GameTaskState+0x05 (bM_bPaused) == 0   -- normal play
     //        || bombHitWindow )                       -- or inside the bomb-hit
     //                                                   cinematic window
-    // The bomb-hit window is `(LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f`.
-    // Binary @ 0x001788f4 = same game_work GOT entry as the crit-ladder gate.
-    // ASM-verified: 2026-06-07 binary @ 0x001780b0 +0x6c0..+0x6f4 (re-analyst).
+    // The bomb-hit window: (gameMode - 2u) < 2u && m_GameDt < 0.95f && m_GameDt > -0.1f.
+    // Binary field gameMode (+0x04) for window, bM_bPaused (+0x05) for outer gate.
+    // ASM-verified: 2026-06-07 v1.6.1 Fruit::CollisionResponse @0x001dd500 (re-analyst).
     int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
     {
-        const uint8_t ltfGate = (uint8_t)game_work.bM_bPaused;
-        const bool bombHitWindowGate = (uint8_t)(ltfGate - 2u) < 2u
-            && game_work.m_BombHitTimer < kBombHitMax
-            && game_work.m_BombHitTimer > kBombHitMin;
+        // v1.6.1 Fruit::CollisionResponse @0x001dd500:
+        // OUTER gate uses bM_bPaused (+0x05); bomb-window uses gameMode (+0x04) and
+        // m_GameDt (+0x0C = flM_PauseAmount in binary), NOT m_BombHitTimer (+0x10).
+        const bool bombHitWindowGate = (uint8_t)(game_work.gameMode - 2u) < 2u
+            && game_work.m_GameDt < kBombHitMax
+            && game_work.m_GameDt > kBombHitMin;
         if (game_work.retryFlag == 0
             && hitter != nullptr
             && !m_bNoPowerUp
-            && (ltfGate == 0 || bombHitWindowGate)) {
-        // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
-        // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
+            && (game_work.bM_bPaused == 0 || bombHitWindowGate)) {
+        // Matches CollisionResponse score+save dispatch (binary @ 0x001de40c, inside 0x001dd500).
+        // ASM-verified: 2026-05-10 binary @ 0x001dd500 (re-analyst).
         // Formula:
         //   score = info->m_Score                               // FRUIT_INFO+0x314
         //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
@@ -1386,33 +1388,34 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             }
         }
 
-        // ASM-verified: 2026-05-22 binary @ 0x001780b0 ~+0x360 (re-analyst).
+        // ASM-verified: 2026-05-22 binary @ 0x001dd500 ~+0x360 (re-analyst).
         // Powerup-fruit slice activates the modifier polymorphism chain. Without
         // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
-        // ASM-verified: 2026-05-22 binary @ 0x00178c30 (re-analyst).
-        // Powerup-fruit slice fires either during normal gameplay (LTF==0) OR
-        // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
-        // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
-        // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
-        const uint8_t ltf = (uint8_t)game_work.bM_bPaused;
-        const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
-            && game_work.m_BombHitTimer < kBombHitMax
-            && game_work.m_BombHitTimer > kBombHitMin;
+        // ASM-verified: 2026-05-22 binary @ 0x001dd500 (re-analyst).
+        // Powerup-fruit slice fires either during normal gameplay (bM_bPaused==0) OR
+        // inside the bomb-hit cinematic window (gameMode in {2,3} = timed-game modes
+        // AND m_GameDt in (-0.1f, 0.95f)). Binary field: gameMode (+0x04) for window,
+        // bM_bPaused (+0x05) for outer; m_GameDt (+0x0C = flM_PauseAmount in binary).
+        // v1.6.1 Fruit::CollisionResponse @0x001dd500
+        const bool bombHitWindow = (uint8_t)(game_work.gameMode - 2u) < 2u
+            && game_work.m_GameDt < kBombHitMax
+            && game_work.m_GameDt > kBombHitMin;
         if (info->m_pPowers && !m_bNoPowerUp
-            && (ltf == 0 || bombHitWindow)) {
+            && (game_work.bM_bPaused == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();
             Vec3 localPos = pos;
             PowerUpManager::GetInstance()->ActivatePower(hash, localPos, reinterpret_cast<float*>(&localPos));
         }
 
-        // Combo counter increment — binary @ 0x001787a8..0x001787b0.
-        // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x84).
+        // Combo counter increment.
+        // TODO: re-verify combo addr -- v1.5.x @ 0x001787a8..0x001787b0 are stale;
+        // combo counter moved into SlashEntity::Update @0x001e867c in v1.6.1.
         int slasher = (int)m_PlayerIdx;
         if (g_LastSlasher != slasher) {
-            g_ComboCount  = 0;   // binary @ 0x0017873a: different-player branch
+            g_ComboCount  = 0;
             g_LastSlasher = slasher;
         }
-        g_ComboCount += 1;       // binary @ 0x001787b0
+        g_ComboCount += 1;
         }
     }
 
