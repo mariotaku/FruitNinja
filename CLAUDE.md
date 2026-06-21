@@ -158,6 +158,8 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 
 The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
 
+- `docs/README.md` — index for the below.
+- `docs/re-pipeline.md` — end-to-end RE + port pipeline stage map (start here).
 - `docs/HANDOVER.md` — onboarding context.
 - `docs/port-plan.md` — high-level port intent.
 - `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).
@@ -168,7 +170,6 @@ The canonical RE record is in `src/`. The surviving `docs/` set is small and loa
 - `docs/engine/online-services-audit.md` — what we intentionally skip and why.
 - `docs/engine/string-hash.md`, `docs/engine/font.md`, `docs/engine/particles.md`, `docs/engine/mesh.md`, `docs/engine/baked-string.md`, `docs/engine/localisation.md`, `docs/engine/formats/` — file/data formats.
 - `docs/gallery/` — extracted models / textures.
-- `docs/README.md` — index for the above.
 - `tools/asm-verify/triage.json` — sticky verdicts for asm-verify divergences.
 
 Per-class struct layouts, per-function pseudocode, per-screen RE notes, and `*-deep-re.md` / `*-asm-audit.md` / `*-asm-verify.md` session artifacts have been removed; their content lives in source comments (or has been folded into the surviving format/init docs).

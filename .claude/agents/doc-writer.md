@@ -19,6 +19,7 @@ Update or maintain only docs in this whitelist:
 | `docs/README.md` | Index + policy statement |
 | `docs/HANDOVER.md` | Onboarding context |
 | `docs/port-plan.md` | High-level port intent |
+| `docs/re-pipeline.md` | End-to-end RE + port verification pipeline stage map (start here) |
 | `docs/resources.md` | Asset directory layout + XML schemas (data, not derivable from code) |
 | `docs/source-files.md` | Maps port file names to binary symbols (cross-reference index) |
 | `docs/engine/coordinate-system.md` | Cross-cutting convention; not in any single source file |
