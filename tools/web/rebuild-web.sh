@@ -12,9 +12,14 @@
 # POSIX/bash; works in MSYS2 (Windows) and on Linux.
 set -u
 
-PROJ="$(cd "$(dirname "$0")/.." && pwd)"
+PROJ="$(cd "$(dirname "$0")/../.." && pwd)"   # script is tools/web/ -> repo root is two up
 BUILD_WEB="$PROJ/build/web"
-WASM="$BUILD_WEB/fruit-ninja.wasm"
+# The build emits fruit-ninja.wasm, then web-hash-assets.py RENAMES it to
+# fruit-ninja-<hash>.wasm, so the un-hashed name never persists. Gate the
+# staleness check on the newest hashed wasm (fall back to the un-hashed name
+# when nothing has been built yet -> forces a first build).
+WASM="$(ls -t "$BUILD_WEB"/fruit-ninja-*.wasm 2>/dev/null | head -1)"
+[ -n "$WASM" ] || WASM="$BUILD_WEB/fruit-ninja.wasm"
 TMP="$PROJ/tmp"
 LOG="$TMP/web-rebuild.log"
 LOCK="$TMP/web-rebuild.lock"
