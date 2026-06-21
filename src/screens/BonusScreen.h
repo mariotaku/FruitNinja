@@ -30,7 +30,7 @@ struct BonusAwardHud {
     // Port: no ARM padding needed for asserts — see static_assert below gated on ARM.
 
     BonusAwardHud()
-        : m_TierBase(0), m_Multiplier(0), _pad48(0), m_DisplayedScore(0),
+        : m_TierBase(0), m_Multiplier(1), _pad48(0), m_DisplayedScore(0),
           m_Scale(1.0f), _pad58(0) {
         m_Name[0] = '\0';
     }

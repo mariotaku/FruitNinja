@@ -7,6 +7,7 @@
 #include "hud/HUD.h"
 #include "Game.h"
 #include "engine/audio/MortarSound.h"
+#include "engine/audio/SoundManager.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/math/MathUtil.h"
 #include <cstring>
@@ -53,20 +54,28 @@ BonusScreen::BonusScreen()
 {
     m_Awards.reserve(3);
 
-    // Load background texture into m_SecondaryTex.
-    // TODO: resolve exact texture name from binary literal pool 0x00132210
+    // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162d1c: loads "arcade_diolog_box.tex"
+    // (rodata @0x00281e4c); size = (tex+0x24 width, tex+0x28 height).
+    // TODO: v1.6.1 0x00162d5c (BonusScreen::BonusScreen) — binary caches backing tex in a load-once static
     Mortar::SmartPtr<Mortar::Texture> bgTex =
-        TextureManager::LoadLocalisedTexture("dialog-box-big.tex");
+        TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
     m_SecondaryTex = bgTex;
+    if (bgTex.IsValid()) {
+        size = Vec3((float)bgTex->m_Width, (float)bgTex->m_Height, 0.0f);
+    }
 
-    // PreLoadSound calls — clip names at literal pool 0x00132210..0x00132224.
-    // TODO: resolve clip names from binary literal pool 0x00132210..0x00132224
-    // TODO: PreLoadSound("BonusRush");
-    // TODO: PreLoadSound("BonusStar1");
-    // TODO: PreLoadSound("BonusStar2");
-    // TODO: PreLoadSound("BonusStar3");
-    // TODO: PreLoadSound("BonusFinale");
-    // TODO: PreLoadSound("BonusCount");
+    // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162ea4: preloads
+    // Bonus-Firework-Explode, Bonus-drum-roll(count=1), equip-unlock,
+    // Bonus-Explosion-1/3/5.
+    Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
+    sm.PreLoadSound("Bonus-Firework-Explode");   // rodata 0x00281e13
+    // DIFFERS: binary uses the count=1 preload variant for "Bonus-drum-roll"
+    // (PreLoadSoundEx slot1, count arg=1); port maps this to PreLoadSoundEx(name, true).
+    sm.PreLoadSoundEx("Bonus-drum-roll", true);  // rodata 0x00281e62
+    sm.PreLoadSound("equip-unlock");             // rodata 0x0027f955
+    sm.PreLoadSound("Bonus-Explosion-1");        // rodata 0x00281e72
+    sm.PreLoadSound("Bonus-Explosion-3");        // rodata 0x00281e84
+    sm.PreLoadSound("Bonus-Explosion-5");        // rodata 0x00281e96
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +101,6 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
     }
     entry.m_StarTex        = tex;
     entry.m_TierBase       = tier;
-    entry.m_Multiplier     = 0;
     entry.m_DisplayedScore = 0;
     entry.m_Colour         = colour;
     entry.m_Scale          = 1.0f;
