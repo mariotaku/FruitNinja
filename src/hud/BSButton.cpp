@@ -345,10 +345,13 @@ void BSButton::SetPosition(const Vec3& p) {
 }
 
 // BSButton::SetTextOffset
-// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: writes .y->.z of o into
-//   m_DrawRotation.y (+0xb4) and m_DrawRotation.z (+0xb8).
-// Draw reads m_DrawRotation.y/.z as the label translate offset.
+// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: the offset Vec3 (-29,3) is
+//   stored at m_DrawRotation.y (+0xb4) and m_DrawRotation.z (+0xb8). Draw uses
+//   Vec3(m_DrawRotation.y, m_DrawRotation.z, 0) as the label translate, so the
+//   offset's X (the -29 horizontal pull onto the bomb) must land in .y and the
+//   Y (3) in .z -- i.e. take o.x/o.y, NOT o.y/o.z. (The old o.y/o.z mapping
+//   dropped the -29, leaving "QUIT" off-screen to the right of the bomb.)
 void BSButton::SetTextOffset(const Vec3& o) {
-    m_DrawRotation.y = o.y;
-    m_DrawRotation.z = o.z;
+    m_DrawRotation.y = o.x;
+    m_DrawRotation.z = o.y;
 }
