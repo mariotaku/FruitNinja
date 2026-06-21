@@ -31,7 +31,7 @@
 #include "util/StringHash.h"
 #include "debug/Logger.h"
 #include <map>
-#include <tinyxml2.h>
+
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -634,9 +634,9 @@ void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
 
     SuperFruitControl* ctrl = it->second;
 
-    tinyxml2::XMLDocument* doc = parent->GetDocument();
+    TiXmlDocument doc = parent->GetDocument();
     if (!doc) return;
-    tinyxml2::XMLElement* elem = doc->NewElement("superFruit");
+    TiXmlElement elem = doc.NewElement("superFruit");
     if (!elem) return;
 
     SuperFruitState state;
@@ -648,10 +648,7 @@ void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
     // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
     // controller's own scale.y as the saved spin/rotation value.
     state.m_Spin       = ctrl->scale.y;
-    {
-        TiXmlElement welem(elem);
-        state.WriteToElement(&welem);
-    }
+    state.WriteToElement(&elem);
 
     parent->InsertEndChild(elem);
 }

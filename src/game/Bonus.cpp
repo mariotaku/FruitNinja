@@ -10,7 +10,6 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
 #include "engine/asset/TextureManager.h"
-#include <tinyxml2.h>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -105,7 +104,7 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
 
     // "equals" sets an exact-match range on the total.
     int equalsVal = -1;
-    if (e->QueryIntAttribute("equals", &equalsVal) == tinyxml2::XML_SUCCESS) {
+    if (e->QueryIntAttribute("equals", &equalsVal) == TIXML_SUCCESS) {
         m_MinSliced = equalsVal;
         m_MaxSliced = equalsVal;
     }
@@ -127,21 +126,20 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
     }
 
     // Walk all attributes to pick up "min-<fruit>" and "max-<fruit>" prefixes.
-    for (const tinyxml2::XMLAttribute* attr = e->m_element->FirstAttribute();
-         attr; attr = attr->Next()) {
-        const char* aname = attr->Name();
+    for (TiXmlAttribute attr = e->FirstAttribute(); attr; attr = attr.Next()) {
+        const char* aname = attr.Name();
         if (!aname) continue;
         if (strncmp(aname, "min-", 4) == 0) {
             const char* fruitName = aname + 4;
             if (fruitName[0]) {
                 uint64_t key = (uint64_t)StringHash(fruitName);
-                m_MinFruit[key] = atoi(attr->Value());
+                m_MinFruit[key] = atoi(attr.Value());
             }
         } else if (strncmp(aname, "max-", 4) == 0) {
             const char* fruitName = aname + 4;
             if (fruitName[0]) {
                 uint64_t key = (uint64_t)StringHash(fruitName);
-                m_MaxFruit[key] = atoi(attr->Value());
+                m_MaxFruit[key] = atoi(attr.Value());
             }
         }
     }
