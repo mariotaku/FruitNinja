@@ -213,9 +213,9 @@ void DojoScreen::Update(float dt) {
                 if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pPlayButton);
                 // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
                 m_pPlayButton->m_RestScale = m_pPlayButton->m_RestScale * BACK_SCALE;
-                if (m_pPlayButton->m_pFruitPiece) {
-                    m_pPlayButton->m_pFruitPiece->scale =
-                        m_pPlayButton->m_pFruitPiece->scale * BACK_SCALE;
+                if (m_pPlayButton->m_pTrackedFruit) {
+                    m_pPlayButton->m_pTrackedFruit->scale =
+                        m_pPlayButton->m_pTrackedFruit->scale * BACK_SCALE;
                 }
             }
 
@@ -424,13 +424,13 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
-    //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pFruitPiece
+    //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pTrackedFruit
     //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (aliases
     //    Bomb::m_bMovement / Fruit+0x80 unknown field), then writes
     //    Vec3(r1+5, -r2, 0) to piece->vel. Port omits the byte write since
     //    Fruit+0x80 has no reader and the Bomb write is to a different class.
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        Fruit* piece = m_pPlayButton->m_pFruitPiece;
+    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
+        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
@@ -447,11 +447,11 @@ void DojoScreen::ShopCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
-    // Binary @ 0x00137864: m_pPlayButton->m_pFruitPiece (+0x134), set
+    // Binary @ 0x00137864: m_pPlayButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        Fruit* piece = m_pPlayButton->m_pFruitPiece;
+    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
+        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
@@ -468,11 +468,11 @@ void DojoScreen::AboutCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 
-    // Binary @ 0x001378e0: m_pPlayButton->m_pFruitPiece (+0x134), set
+    // Binary @ 0x001378e0: m_pPlayButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        Fruit* piece = m_pPlayButton->m_pFruitPiece;
+    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
+        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);

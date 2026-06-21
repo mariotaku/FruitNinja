@@ -1057,9 +1057,9 @@ void MainScreen::MoreGamesCallback() {
 void MainScreen::QuitGamesCallback() {
     SystemManager::GetInstance().RequestQuit();
 
-    if (pLeaderboardBtn && pLeaderboardBtn->m_pFruitPiece) {
+    if (pLeaderboardBtn && pLeaderboardBtn->m_pTrackedFruit) {
         Bomb* bomb = static_cast<Bomb*>(
-            static_cast<Mortar::Entity*>(pLeaderboardBtn->m_pFruitPiece));
+            static_cast<Mortar::Entity*>(pLeaderboardBtn->m_pTrackedFruit));
         bomb->m_bMovement = 1;
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);
     }

@@ -183,8 +183,7 @@ void PowerUpShop::Init() {
 void PowerUpShop::Release() {
     // Binary @ 0x0015685c: tear down dynamic buy-fruit MenuButton.
     if (m_BuyButton != NULL) {
-        // MenuButton stores Fruit* at +0x134 (m_pFruitPiece).
-        Fruit* fruit = m_BuyButton->m_pFruitPiece;
+        Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit != NULL) {
             // Binary: sets Fruit::m_bSliced=1 and zeroes velocity/spin vectors.
             LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in PowerUpShop teardown)",
@@ -521,30 +520,30 @@ void PowerUpShop::Update(float dt) {
         Math::g_Random.Rand32(524287);
         Math::g_Random.Rand32(2);
 
-        if (m_BuyButton->m_pFruitPiece != NULL) {
-            m_BuyButton->m_pFruitPiece->m_RotVel1.x *= 0.85f;
-            m_BuyButton->m_pFruitPiece->m_RotVel1.y *= 0.85f;
+        if (m_BuyButton->m_pTrackedFruit != NULL) {
+            m_BuyButton->m_pTrackedFruit->m_RotVel1.x *= 0.85f;
+            m_BuyButton->m_pTrackedFruit->m_RotVel1.y *= 0.85f;
             // ASM-verified: 2026-05-20 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
-            m_BuyButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+            m_BuyButton->m_pTrackedFruit->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
         }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
         // Binary: move button to fixed position + set fruit vel.x = m_PulseScale.
         m_BuyButton->pos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
-        if (m_BuyButton->m_pFruitPiece != NULL) {
-            m_BuyButton->m_pFruitPiece->vel.x = m_PulseScale;
+        if (m_BuyButton->m_pTrackedFruit != NULL) {
+            m_BuyButton->m_pTrackedFruit->vel.x = m_PulseScale;
         }
 
         // Binary: if last selected index changed and fruit alive and not sliced,
         // get push vector from origin, set fruit vel, trigger re-spawn.
         if ((m_LastSelectedIndex != m_SelectedIndex) &&
             (m_BuyTriggered == 0) &&
-            (m_BuyButton->m_pFruitPiece != NULL) &&
-            !m_BuyButton->m_pFruitPiece->Sliced()) {
+            (m_BuyButton->m_pTrackedFruit != NULL) &&
+            !m_BuyButton->m_pTrackedFruit->Sliced()) {
 
             // Binary: set Fruit vel = pushVec (origin), field_0x123 = 0, m_BuyTriggered = 1.
-            m_BuyButton->m_pFruitPiece->vel = g_Origin;
+            m_BuyButton->m_pTrackedFruit->vel = g_Origin;
 #if !defined(__bada__)
             m_BuyButton->m_bEnabled = 0;    // field_0x123 -> m_bEnabled port analogue
 #endif
@@ -592,7 +591,7 @@ void PowerUpShop::ButtonSliced() {
     if (m_BuyTriggered != 0) {
         // Already-purchased "spit fruit out" branch (binary @ 0x00155b80)
         if (m_BuyButton == NULL) return;
-        Fruit* fruit = m_BuyButton->m_pFruitPiece;
+        Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit == NULL) return;
         // 3-float ldmia/stmia copy block: freeze both halves at current position.
         fruit->m_SecondPos = fruit->pos;       // +0xB8 <- +0x10
@@ -631,8 +630,8 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
     if (deletedCtrl != m_BuyButton) {
         return;
     }
-    if (m_BuyTriggered != 0 && m_BuyButton->m_pFruitPiece != NULL) {
-        Fruit* fruit = m_BuyButton->m_pFruitPiece;
+    if (m_BuyTriggered != 0 && m_BuyButton->m_pTrackedFruit != NULL) {
+        Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         // Binary @ 0x00156aac (instruction-traced):
         //   0xc3f00000 = -480.0f (DAT_00156b04); 0xc1200000 = -10.0f.
         // Kick the falling buy-fruit piece off-screen:

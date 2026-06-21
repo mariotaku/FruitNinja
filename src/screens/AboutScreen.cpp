@@ -325,9 +325,9 @@ void AboutScreen::CreateBackButton()
     }
 
     m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
-    if (m_pBackButton->m_pFruitPiece) {
-        m_pBackButton->m_pFruitPiece->scale =
-            m_pBackButton->m_pFruitPiece->scale * BACK_SCALE;
+    if (m_pBackButton->m_pTrackedFruit) {
+        m_pBackButton->m_pTrackedFruit->scale =
+            m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
     }
 }
 

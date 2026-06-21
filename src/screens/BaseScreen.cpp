@@ -353,12 +353,12 @@ void BaseScreen::UpdateButtons(float dt) {
             btn->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(&sb, &ScreenButton::ControlDeleted);
 
             // Apply fruit piece scale + optional rotation
-            if (btn->m_pFruitPiece) {
-                btn->m_pFruitPiece->scale =
-                    btn->m_pFruitPiece->scale * sb.m_scaleB;
-                if (!btn->m_pFruitPiece->m_bSliced &&
+            if (btn->m_pTrackedFruit) {
+                btn->m_pTrackedFruit->scale =
+                    btn->m_pTrackedFruit->scale * sb.m_scaleB;
+                if (!btn->m_pTrackedFruit->m_bSliced &&
                     (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f) {
-                    btn->m_pFruitPiece->RotateFacingUp(
+                    btn->m_pTrackedFruit->RotateFacingUp(
                         true, Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
                 }
             }
@@ -375,7 +375,7 @@ void BaseScreen::UpdateButtons(float dt) {
             bool remove = sb.m_updateCb(sb.m_pButton, dt, sb);
             if (remove) {
                 MenuButton* btn = sb.m_pButton;
-                if (btn->m_pFruitPiece && !btn->m_pFruitPiece->m_bSliced) {
+                if (btn->m_pTrackedFruit && !btn->m_pTrackedFruit->m_bSliced) {
                     // Fruit alive: disable taps + redirect tap to shrink-call
 #if !defined(__bada__)
                     btn->m_bEnabled = 0;

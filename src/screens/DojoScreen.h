@@ -108,7 +108,7 @@ public:
     // NOTE on 0x001389f4: that address is NOT a distinct QuitCallback. It is the
     // click delegate the binary installs on the Play button (field +0x94) in
     // DojoScreen::Update @ 0x001384a8 (delegate fn-ptr = 0x001389f4). Its logic
-    // -- SFXPlay("menu-bomb",1,1); m_State=6; set m_pPlayButton->m_pFruitPiece
+    // -- SFXPlay("menu-bomb",1,1); m_State=6; set m_pPlayButton->m_pTrackedFruit
     // visible (+0x80=1) and fling it Vec3(rand[0,5)+5, -rand[0,5), 0); then
     // TutorialControl::ResetTutePos(0) -- is already ported faithfully as
     // DojoScreen::PlayCallback() (DojoScreen.cpp). z velocity = DAT_00138acc = 0.0f.

@@ -319,9 +319,9 @@ void GameModeScreen::CreateControls() {
     m_pBackButton->m_bRespondsToBackKey = 1;
     game_work.mHud->AddControl(m_pBackButton);
     m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_TARGET_SCALE;
-    if (m_pBackButton->m_pFruitPiece) {
-        m_pBackButton->m_pFruitPiece->scale =
-            m_pBackButton->m_pFruitPiece->scale * BACK_FRUIT_SCALE;
+    if (m_pBackButton->m_pTrackedFruit) {
+        m_pBackButton->m_pTrackedFruit->scale =
+            m_pBackButton->m_pTrackedFruit->scale * BACK_FRUIT_SCALE;
     }
 
     // --- Button 2: CLASSIC (classic.tex, watermelon, ClassicModeCallback) ---
@@ -340,9 +340,9 @@ void GameModeScreen::CreateControls() {
     }
     game_work.mHud->AddControl(m_pClassicButton);
     m_pClassicButton->m_RestScale = m_pClassicButton->m_RestScale * CLASSIC_TARGET_SCALE;
-    if (m_pClassicButton->m_pFruitPiece) {
-        m_pClassicButton->m_pFruitPiece->scale =
-            m_pClassicButton->m_pFruitPiece->scale * CLASSIC_FRUIT_SCALE;
+    if (m_pClassicButton->m_pTrackedFruit) {
+        m_pClassicButton->m_pTrackedFruit->scale =
+            m_pClassicButton->m_pTrackedFruit->scale * CLASSIC_FRUIT_SCALE;
     }
     // Binary computes classicBtn->m_RestScale * 0.85 and stores to a module-level
     // global. Zen and Arcade buttons receive this as an absolute assignment (NOT
@@ -361,9 +361,9 @@ void GameModeScreen::CreateControls() {
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     m_pZenButton->m_RestScale = sharedTargetSize;
-    if (m_pZenButton->m_pFruitPiece) {
-        m_pZenButton->m_pFruitPiece->scale =
-            m_pZenButton->m_pFruitPiece->scale * ZEN_FRUIT_SCALE;
+    if (m_pZenButton->m_pTrackedFruit) {
+        m_pZenButton->m_pTrackedFruit->scale =
+            m_pZenButton->m_pTrackedFruit->scale * ZEN_FRUIT_SCALE;
     }
     game_work.mHud->AddControl(m_pZenButton);
 
@@ -382,10 +382,10 @@ void GameModeScreen::CreateControls() {
                               Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     m_pArcadeButton->m_RestScale = sharedTargetSize;
-    if (m_pArcadeButton->m_pFruitPiece) {
-        m_pArcadeButton->m_pFruitPiece->scale =
-            m_pArcadeButton->m_pFruitPiece->scale * ARCADE_FRUIT_SCALE;
-        m_pArcadeButton->m_pFruitPiece->RotateFacingUp(
+    if (m_pArcadeButton->m_pTrackedFruit) {
+        m_pArcadeButton->m_pTrackedFruit->scale =
+            m_pArcadeButton->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
+        m_pArcadeButton->m_pTrackedFruit->RotateFacingUp(
             false,
             Vec3(0.0f, 1.0f, 0.0f));
     }
