@@ -138,13 +138,19 @@ private:
     bool    m_ShadowFlag;         // binary field 0x78
 
     // Gradient fields (binary @ 0x7c..0x90):
-    Colour  m_GradTop;            // binary field 0x7c (m_FillTop)
+    // ASM-spec v1.6.1 BakedStringBox::SetGradient @ 0x0024566c: change-detect on
+    // {m_FillTop[0x7C], m_FillBottom[0x80], m_ColourMode[0x8C]!=2, m_MetallicFlag[0x90]!=0};
+    // on change set mode=2, store top/bottom, metallic=0; bool perGlyph==0 -> m_DirtyMesh=1
+    // (lazy), perGlyph!=0 -> per-line FancyBakedString::ApplyGradient.
+    // DIFFERS: port omits the perGlyph!=0 immediate per-line ApplyGradient branch
+    // (no FancyBakedString in port; gradient re-applied in Draw). v1.6.1 SetGradient @ 0x0024566c
+    Colour  m_GradTop;            // binary field 0x7C (m_FillTop)
     Colour  m_GradBottom;         // binary field 0x80 (m_FillBottom)
     Colour  m_GradCol2;           // binary field 0x84 (m_FillCol2, metallic c2)
     Colour  m_GradCol3;           // binary field 0x88 (m_FillCol3, metallic c3)
-    int     m_GradMode;           // binary field 0x8c (2=gradient, 4=metallic)
-    bool    m_MetallicFlag;       // binary field 0x8e (m_MetallicFlag; SetMetallicGradient=1)
-    bool    m_GradFlag;           // binary field 0x90
+    int     m_GradMode;           // binary field 0x8C (m_ColourMode: 2=gradient, 4=metallic)
+    bool    m_MetallicFlag;       // binary field 0x90 (int m_MetallicFlag; SetMetallicGradient sets 1, SetGradient clears to 0)
+    bool    m_GradFlag;           // PORT-ONLY (no binary field); models clearing m_MetallicFlag@0x90
 
     // Stroke/outline fields (binary v1.6.1 @ 0x54..0x64):
     float   m_StrokeWidth;        // binary 0x54

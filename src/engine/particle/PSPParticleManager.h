@@ -368,8 +368,15 @@ public:
     // Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
     bool EmitterExists(uint32_t hash);
 
-    // Binary @ 0x0011490c — index lookup into m_EmitterTemplates[idx].
-    // Returns nullptr if idx is out of range.
+    // ASM-spec v1.6.1 PSPParticleManager @ 0x0013bf40 (size 0x38),
+    // GetEmitterTemplate @ 0x0013c044: binary fields m_NumEmitterTemplates@+0x24,
+    // m_pTemplates@+0x28 (blob base), m_NumEmitterTemplates2@+0x2C,
+    // m_pEmitterTemplates@+0x30 (=m_pTemplates+nPart*0xB8); emitter templates
+    // VARIABLE-stride (0x4C + tmpl[0x4B]*0x30), NOT array[idx].
+    // DIFFERS: port uses std::vector m_ParticleTemplates/m_EmitterTemplates
+    // (front-loaded +0x14/+0x20) so GetEmitterTemplate reads container at
+    // +0x20/+0x24 vs binary +0x30/+0x2C. Logical reimpl; faithful flat-blob
+    // port tracked in task #92.
     PSPEmitterTemplate* GetEmitterTemplate(int idx);
 
     // Template lookup — used by AddEmitter and unit tests.

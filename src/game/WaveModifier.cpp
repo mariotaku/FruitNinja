@@ -179,6 +179,11 @@ bool WaveQueItem::PopPlayer(int* out) {
 // If |leftCount - rightCount| > 5 and Rand32(100) < 60:
 //   scan m_SlotList for the majority side's entry and randomly flip one.
 // Returns 1 if it flipped, 0 otherwise.
+// ASM-spec v1.6.1 WaveQueItem::PerformCatchup @ 0x0012cdb0: binary uses a local
+// int[50] scratch buffer of candidate slot INDICES (sub sp,#0xc8=200B) then
+// Rand32(count) picks one; port collapses collect+pick into count + re-scan-to-pick
+// -- bit-identical (same RNG draws, same flip, same return). int[50] is local
+// codegen only. findOp=(left>right)?2:1; left==right unreachable.
 int WaveQueItem::PerformCatchup(int leftCount, int rightCount) {
     int diff = leftCount - rightCount;
     if (diff < 0) diff = -diff;
