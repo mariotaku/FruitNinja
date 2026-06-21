@@ -208,7 +208,7 @@ static int32_t       g_StopCounter = 0;      // game_work+0xc0
 static uint32_t ResolveEmitterHash(const char* path) {
     if (!path || path[0] == '\0') return 0;
     uint32_t h = StringHash(path);
-    const PSPEmitterTemplate* t =
+    const uint8_t* t =
         PSPParticleManager::GetInstance().FindTemplate(h);
     return t ? h : 0;
 }

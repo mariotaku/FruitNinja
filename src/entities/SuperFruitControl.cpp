@@ -253,7 +253,6 @@ void SuperFruitControl::Update(float dt)
             WaveManager::GetInstance()->m_SpeedScale = 1.0f;  // SetAbsoluteDtMod(1.0)
             // TODO: 0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
             WaveManager::GetInstance()->GetNextWave(0);
-            PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
             PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
             // TODO: 0x001bca10 -- *(game_work+0x40)->+0x24 = 1.0 time-scale restore (game_work._pad_0x40 unresolved)
             flags |= ENT_KILLED;                    // this->done(+0x33) = 1
@@ -659,7 +658,6 @@ void SuperFruitControl::Reset()
 {
     WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
     // TODO: 0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
-    PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
     PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
     // TODO: 0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
     // TODO: 0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)

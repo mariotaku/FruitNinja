@@ -1,8 +1,6 @@
 #ifndef MORTAR_PSP_PARTICLE_MANAGER_H
 #define MORTAR_PSP_PARTICLE_MANAGER_H
 
-// Analysed: 2026-04-13T10:30
-
 #include "math/Vec3.h"
 #include "math/Vec2.h"
 #include "util/SmartPtr.h"
@@ -10,37 +8,58 @@
 #include "asset/Texture.h"
 #include "core/Singleton.h"
 #include <cstdint>
-#include <vector>
-// GCC 4.4 / -fno-rtti: <memory> pulls in shared_ptr internals that use
-// typeid, which fails under -fno-rtti. Use raw-pointer ownership instead.
+
+// ============================================================================
+// Byte-faithful blob structs (0xB8 / 0x4C+N*0x30 / 0x30)
+//
+// x64 pitfall: SmartPtr<Texture> is 8 bytes on x64 (pointer-sized) but 4 bytes
+// in the ARM32 binary. To preserve 0xB8 stride on all hosts, the blob stores
+// a 4-byte texture index (into a side-array of SmartPtr<Texture>). Similarly,
+// PSPParticleSet::m_pTemplate is a 4-byte blob-offset post-load. All struct
+// strides must equal the ARM32 literals 0xB8 / 0x30 / 0x4C header — enforced
+// via static_asserts under __bada__ (cross-build) and guarded sizeof checks.
+// ============================================================================
 
 // ----------------------------------------------------------------------------
-// PSPParticleTemplate — loaded from first loop of LoadFile.
-// Populated from `<particleTemplate>` XML elements. Not present in current
-// FruitNinja XML (particles_fast/slow.xml contain only `<emitter>`s), but the
-// struct still exists because `PSPParticleSet::m_pTemplate` points into a flat
-// `m_pTemplates` array.
-// Field offsets in comments are ARM32 layout from the binary (0xB8 bytes total).
-// On 64-bit hosts sizeof() will differ because of 8-byte pointer alignment —
-// that's fine, the port is a reimplementation, not a memory-compatible ABI copy.
-// See docs/engine/particles.md for per-field XML source.
+// PSPParticleTemplate blob record — 0xB8 bytes, stride in m_pTemplates.
+// Offset map from binary RE:
+//   +0x00 float m_Life;
+//   +0x04 uint16 live-list HEAD (1-based slot idx into m_pParticles; 0=empty)
+//   +0x06 uint16 _pad06
+//   +0x08..+0x1C float m_VelocityMin/Max[3] (damping lerp start/end)
+//   +0x20..+0x34 float m_GravityMin/Max[3]
+//   +0x38 uint8 m_Shape
+//   +0x39 uint8 m_CoordSystem
+//   +0x3A..+0x3F uint8 size bytes
+//   +0x40..+0x56 int16 cycle/spin fields
+//   +0x58 uint16 m_BlendMode; +0x5A uint16 pad
+//   +0x5C/+0x60 float angle min/max
+//   +0x64/+0x68 float gridlock x/y
+//   +0x6C..+0x90 float rotateCycle fields (10 floats)
+//   +0x94..+0xA8 uint8 Colour[6][4] (RGBA byte order)
+//   +0xAC uint32 m_TextureIdx (blob: index into m_pTextureRefs; 0xFFFFFFFF=none)
+//   +0xB0 float m_AspectRatio
+//   +0xB4 int32 m_UseDepth
 // ----------------------------------------------------------------------------
+#pragma pack(push, 1)
 struct PSPParticleTemplate {
-    float    m_StartTime;          // +0x00  <life>/60
-    uint16_t _pad04;               // +0x04
+    float    m_Life;               // +0x00  <life>/60.0
+    uint16_t m_LiveHead;           // +0x04  live-list HEAD (1-based; 0=empty)
     uint16_t _pad06;               // +0x06
-    float    m_VelocityMin[3];     // +0x08..+0x10
-    float    m_VelocityMax[3];     // +0x14..+0x1C
-    float    m_GravityMin[3];      // +0x20..+0x28
-    float    m_GravityMax[3];      // +0x2C..+0x34
-    uint8_t  m_Shape;              // +0x38  0=Point,1=Vertex,2=Direction,3=Angular
-    uint8_t  m_CoordSystem;        // +0x39  0=Local,1=Global
+    float    m_VelocityMin[3];     // +0x08  friction/damping lerp start
+    float    m_VelocityMax[3];     // +0x14  friction/damping lerp end
+    float    m_GravityMin[3];      // +0x20
+    float    m_GravityMax[3];      // +0x2C
+    // +0x38
+    uint8_t  m_Shape;              // +0x38  0=Point, 1=Vortex, 2=Direction, 3=Angular
+    uint8_t  m_CoordSystem;        // +0x39  0=Local, 1=Global
     uint8_t  m_SizeStartMin;       // +0x3A
     uint8_t  m_SizeStartMax;       // +0x3B
     uint8_t  m_SizeMidMin;         // +0x3C
     uint8_t  m_SizeMidMax;         // +0x3D
     uint8_t  m_SizeEndMin;         // +0x3E
     uint8_t  m_SizeEndMax;         // +0x3F
+    // +0x40
     int16_t  m_CycleXStart;        // +0x40
     int16_t  m_CycleXEnd;          // +0x42
     int16_t  m_CycleYStart;        // +0x44
@@ -53,12 +72,14 @@ struct PSPParticleTemplate {
     int16_t  m_SpinEndMin;         // +0x52
     int16_t  m_SpinStartMax;       // +0x54
     int16_t  m_SpinEndMax;         // +0x56
-    uint16_t m_BlendMode;          // +0x58  GL blend func (0x302/0x303/0x01)
+    uint16_t m_BlendMode;          // +0x58
     uint16_t _pad5a;               // +0x5A
+    // +0x5C
     float    m_AngleMin;           // +0x5C
     float    m_AngleMax;           // +0x60
     float    m_GridLockStart;      // +0x64
     float    m_GridLockEnd;        // +0x68
+    // +0x6C  rotateCycle floats (10 x 4 = 40 bytes = 0x28)
     float    m_FrictionSpeedStart;    // +0x6C
     float    m_FrictionSpeedStartMin; // +0x70
     float    m_FrictionSpeedStartMax; // +0x74
@@ -69,137 +90,146 @@ struct PSPParticleTemplate {
     float    m_FrictionOffsetMax;     // +0x88
     float    m_FrictionAngle;         // +0x8C
     float    m_FrictionSpin;          // +0x90
-    uint8_t  m_ColourStartMax[4];  // +0x94  BGRA
+    // +0x94  Colour[6][4] = 24 bytes
+    uint8_t  m_ColourStartMax[4];  // +0x94  RGBA
     uint8_t  m_ColourStartMin[4];  // +0x98
     uint8_t  m_ColourMidMin[4];    // +0x9C
     uint8_t  m_ColourMidMax[4];    // +0xA0
     uint8_t  m_ColourEndMin[4];    // +0xA4
     uint8_t  m_ColourEndMax[4];    // +0xA8
-    Mortar::SmartPtr<Mortar::Texture> m_Texture;   // +0xAC  4 bytes (pointer)
+    // +0xAC
+    uint32_t m_TextureIdx;         // +0xAC  index into m_pTextureRefs (0xFFFFFFFF = none)
     float    m_AspectRatio;        // +0xB0
     int32_t  m_UseDepth;           // +0xB4
+    // total: 0xB8
 };
-// NOTE: sizeof() on host (x86_64) is larger than the ARM32 0xB8 due to
-// pointer/alignment padding. Port uses logical fields, not exact byte layout.
+#pragma pack(pop)
+
+static_assert(sizeof(PSPParticleTemplate) == 0xB8, "PSPParticleTemplate must be 0xB8 bytes");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_Life)          == 0x00, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_LiveHead)      == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_VelocityMin)   == 0x08, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_VelocityMax)   == 0x14, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_GravityMin)    == 0x20, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_GravityMax)    == 0x2C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_Shape)         == 0x38, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_CoordSystem)   == 0x39, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_CycleXStart)   == 0x40, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_SpinStartMin)  == 0x50, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_BlendMode)     == 0x58, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_AngleMin)      == 0x5C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_GridLockStart) == 0x64, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_FrictionSpeedStart) == 0x6C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_ColourStartMax) == 0x94, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_TextureIdx)    == 0xAC, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_AspectRatio)   == 0xB0, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_UseDepth)      == 0xB4, "");
 
 // ----------------------------------------------------------------------------
-// PSPParticleSet (0x30 bytes) — inline after PSPEmitterTemplate header.
-// One entry per `<particleSet>` XML child of `<emitter>`.
+// PSPParticleSet blob record — 0x30 bytes, inline after emitter header.
+// +0x00 uint32 m_TemplateOffset: parse-time = float-encoded index;
+//               post-load = byte offset from m_pTemplates base (or 0xFFFFFFFF=none)
+// +0x04 float m_TimeStart; +0x08 float m_TimeStop; +0x0C uint8 m_InitCount
+// +0x10 float m_PerSec; +0x18 float[3] m_VelocityMin; +0x24 float[3] m_VelocityMax
 // ----------------------------------------------------------------------------
+#pragma pack(push, 1)
 struct PSPParticleSet {
-    // +0x00: pre-load this is a float-encoded template index (0-based),
-    // post-load it becomes a PSPParticleTemplate* into m_pTemplates.
-    PSPParticleTemplate* m_pTemplate; // +0x00
-    float    m_TimeStart;          // +0x04  <time start="...">
-    float    m_TimeStop;           // +0x08  <time stop="...">
-    uint8_t  m_InitCount;          // +0x0C  <particleNumber init="...">
-    uint8_t  _pad0d[3];            // +0x0D
-    float    m_PerSec;             // +0x10  <particleNumber perSec="...">
-    float    _unused14;            // +0x14
-    float    m_VelocityMin[3];     // +0x18..+0x20
-    float    m_VelocityMax[3];     // +0x24..+0x2C
+    uint32_t m_TemplateOffset;    // +0x00  post-load: byte offset into m_pTemplates
+    float    m_TimeStart;         // +0x04
+    float    m_TimeStop;          // +0x08
+    uint8_t  m_InitCount;         // +0x0C
+    uint8_t  _pad0d[3];           // +0x0D
+    float    m_PerSec;            // +0x10
+    float    _unused14;           // +0x14
+    float    m_VelocityMin[3];    // +0x18
+    float    m_VelocityMax[3];    // +0x24
+    // total: 0x30
 };
-// NOTE: sizeof() is larger than ARM32 0x30 on 64-bit hosts (pointer pad).
+#pragma pack(pop)
+
+static_assert(sizeof(PSPParticleSet) == 0x30, "PSPParticleSet must be 0x30 bytes");
+static_assert(__builtin_offsetof(PSPParticleSet, m_TemplateOffset) == 0x00, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_TimeStart)      == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_TimeStop)       == 0x08, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_InitCount)      == 0x0C, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_PerSec)         == 0x10, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_VelocityMin)    == 0x18, "");
+static_assert(__builtin_offsetof(PSPParticleSet, m_VelocityMax)    == 0x24, "");
 
 // ----------------------------------------------------------------------------
-// PSPEmitterTemplate — loaded from second loop of LoadFile. One per `<emitter>`.
-// Original ARM32 layout is a 0x4C-byte header followed inline by
-// `m_NumSets × 0x30` bytes of PSPParticleSet entries (variable-length).
-// Port uses a std::vector<PSPParticleSet> for the sets list, so the sets are
-// heap-allocated rather than inlined — the binary logic (lookup by hash,
-// iterate sets) is preserved.
-//
-// Binary template+0x14: int m_ParticleCount — number of live particles whose
-// m_NextLink chain hangs off this template.
-// Binary template+0x18: uint16 m_ParticleHead — 1-based index into m_pParticles
-// free-list / live-list (0 = empty).
-// Both fields initialised to 0 in LoadFile (after the 1024-slot buffer is built);
-// reset by ClearEmitters.
-// ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: template+0x14 count,
-// template+0x18 head.
+// PSPEmitterTemplate blob record — variable size: 0x4C header + m_NumSets*0x30.
+// Access via PSPParticleManager::GetEmitterTemplate(idx) (variable-stride walk).
+// Direct field access via reinterpret_cast<PSPEmitterBlob*>(ptr) or byte offsets.
+// Header layout:
+//   +0x00 char m_Name[0x40]
+//   +0x40 uint32 m_Hash
+//   +0x44 float m_MaxLifetime
+//   +0x48 uint8[3] _pad48
+//   +0x4B uint8 m_NumSets
+//   +0x4C: first PSPParticleSet (0x30 bytes each, m_NumSets total)
 // ----------------------------------------------------------------------------
-struct PSPEmitterTemplate {
-    char     m_Name[0x40];         // +0x00  name attr strcpy'd (64 bytes)
-    uint32_t m_Hash;               // +0x40  StringHash(name) — stored as float in bin but used as u32
-    float    m_MaxLifetime;        // +0x44  <life>/60
-    int      m_ParticleCount;      // +0x14 (binary); port: particle live-list count for this template
-    uint16_t m_ParticleHead;       // +0x18 (binary); port: 1-based head idx into m_pParticles live-list
-    uint8_t  m_NumSets;            // +0x4B  number of particleSets
-    std::vector<PSPParticleSet> m_Sets;
-
-    PSPEmitterTemplate()
-        : m_Hash(0), m_MaxLifetime(0.0f), m_ParticleCount(0), m_ParticleHead(0), m_NumSets(0)
-    {
-        m_Name[0] = '\0';
-    }
+#pragma pack(push, 1)
+struct PSPEmitterBlob {
+    char     m_Name[0x40];   // +0x00
+    uint32_t m_Hash;         // +0x40
+    float    m_MaxLifetime;  // +0x44
+    uint8_t  _pad48[3];      // +0x48
+    uint8_t  m_NumSets;      // +0x4B
+    // PSPParticleSet sets[m_NumSets] follow at +0x4C
 };
+#pragma pack(pop)
+
+static_assert(sizeof(PSPEmitterBlob) == 0x4C, "PSPEmitterBlob header must be 0x4C bytes");
+static_assert(__builtin_offsetof(PSPEmitterBlob, m_Name)        == 0x00, "");
+static_assert(__builtin_offsetof(PSPEmitterBlob, m_Hash)        == 0x40, "");
+static_assert(__builtin_offsetof(PSPEmitterBlob, m_MaxLifetime) == 0x44, "");
+static_assert(__builtin_offsetof(PSPEmitterBlob, m_NumSets)     == 0x4B, "");
 
 // ----------------------------------------------------------------------------
 // Per-particle runtime state. Binary: 0xA4 (164) bytes, non-polymorphic.
-// Layout reconstructed from copy-ctor field-write extent (highest write:
-// str r2,[r4,#0xa0] -> 0xA0+4 = 0xA4). Member types from copy-ctor VFP vs
-// integer move usage; uint16 fields confirmed via ldrh/strh at offsets
-// 0x44,0x50,0x5C,0x7C,0x7E,0x80. Vec2 sub-objects at 0x84,0x8C from real
-// _Vector2<float> copy-ctor calls (blx 0x000fd554). The sole field the
-// default ctor zeroes is the trailing int32 at 0xA0 (named m_field44 in
-// Ghidra; all others are left uninitialised by the default ctor).
-// Ctors: default 0x00117650, copy 0x00117710.
-//
-// Fields at 0x24..0x34 use integer moves in copy-ctor (ldr/ldm) but may be
-// float in practice -- ARM ldr works for both.
-//
-// +0x40: binary = uint16 1-based link index (m_NextLink). When the slot is
-// free: next-free-slot index (0 = end of free list). When live: next-live
-// index in the template's particle list (0 = end of list). Stride 0xA4.
-// ASM-spec v1.6.1 PSPParticleManager::AddParticle @0x13c554: +0x40 is m_NextLink.
-//
-// Port repurposes m_field44 (+0xA0, binary zeroes in default ctor) as the
-// particle-set index within the owning emitter's template m_Sets array.
-// Port repurposes m_field0x58 (+0x58, vldr copy-ctor) as m_SpinEnd (float
-// rad/sec) since +0x40 is now m_NextLink. No binary field at +0x58 is
-// currently used by the port simulation.
+// +0x40: uint16 m_NextLink — free-list / live-list chain (0=end).
 // ----------------------------------------------------------------------------
 struct PSPParticle {
-    Vec3     m_Pos;             // +0x00  _Vector3<float> member-ctor
-    Vec3     m_Vel;             // +0x0C  _Vector3<float> member-ctor
-    Vec3     m_Gravity;         // +0x18  _Vector3<float> member-ctor
-    float    m_Age;             // +0x24  integer move in copy-ctor (may be float)
-    float    m_Life;            // +0x28  integer move in copy-ctor (may be float)
-    float    m_SizeStart;       // +0x2C  integer move in copy-ctor (may be float)
-    float    m_SizeMid;         // +0x30  integer move in copy-ctor (may be float)
-    float    m_SizeEnd;         // +0x34  integer move in copy-ctor (may be float)
-    float    m_Rotation;        // +0x38  vldr in copy-ctor
-    float    m_SpinStart;       // +0x3C  vldr in copy-ctor
+    Vec3     m_Pos;             // +0x00
+    Vec3     m_Vel;             // +0x0C
+    Vec3     m_Gravity;         // +0x18
+    float    m_Age;             // +0x24
+    float    m_Life;            // +0x28
+    float    m_SizeStart;       // +0x2C
+    float    m_SizeMid;         // +0x30
+    float    m_SizeEnd;         // +0x34
+    float    m_Rotation;        // +0x38
+    float    m_SpinStart;       // +0x3C
     uint16_t m_NextLink;        // +0x40  1-based index: free-next (free) / live-next (live); 0=end
-    uint16_t _pad42;            // +0x42  alignment pad
-    uint16_t m_field0x44;       // +0x44  ldrh/strh in copy-ctor (wM_RotAngle in binary)
-    uint16_t m_pad46;           // +0x46  alignment pad (uint16 -> next 4-byte slot)
-    float    m_RotCycleRate;    // +0x48  vldr in copy-ctor
-    float    m_RotCyclePhase;   // +0x4C  vldr in copy-ctor
-    uint16_t m_field0x50;       // +0x50  ldrh/strh in copy-ctor
-    uint16_t m_pad52;           // +0x52  alignment pad
-    float    m_RotCycleAmp;     // +0x54  vldr in copy-ctor
-    float    m_SpinEnd;         // +0x58  port: spin-end rate (rad/sec); binary: unused vldr field
-    uint16_t m_field0x5c;       // +0x5C  ldrh/strh in copy-ctor
-    uint16_t m_pad5e;           // +0x5E  alignment pad
-    float    m_CycleXRate;      // +0x60  vldr in copy-ctor
-    float    m_CycleXPhase;     // +0x64  vldr in copy-ctor
-    float    m_CycleYRate;      // +0x68  vldr in copy-ctor
-    float    m_CycleYPhase;     // +0x6C  vldr in copy-ctor
-    float    m_field0x70;       // +0x70  vldr in copy-ctor
-    float    m_field0x74;       // +0x74  vldr in copy-ctor
-    float    m_field0x78;       // +0x78  vldr in copy-ctor
-    uint16_t m_field0x7c;       // +0x7C  ldrh/strh in copy-ctor
-    uint16_t m_field0x7e;       // +0x7E  ldrh/strh in copy-ctor
-    uint16_t m_field0x80;       // +0x80  ldrh/strh in copy-ctor
-    uint16_t m_pad82;           // +0x82  alignment pad to reach 0x84
-    Vec2     m_field0x84;       // +0x84  _Vector2<float> member-ctor (blx 0x000fd554)
-    Vec2     m_field0x8c;       // +0x8C  _Vector2<float> member-ctor (blx 0x000fd554)
-    float    m_field0x94;       // +0x94  vldr in copy-ctor
-    float    m_field0x98;       // +0x98  vldr in copy-ctor
-    uint8_t  m_field0x9c;       // +0x9C  ldrb/strb in copy-ctor
-    uint8_t  m_pad9d[3];        // +0x9D  alignment pad
-    int32_t  m_field44;         // +0xA0  Ghidra name; default ctor zeroes this only
+    uint16_t _pad42;            // +0x42
+    uint16_t m_field0x44;       // +0x44
+    uint16_t m_pad46;           // +0x46
+    float    m_RotCycleRate;    // +0x48
+    float    m_RotCyclePhase;   // +0x4C
+    uint16_t m_field0x50;       // +0x50
+    uint16_t m_pad52;           // +0x52
+    float    m_RotCycleAmp;     // +0x54
+    float    m_SpinEnd;         // +0x58  port: spin-end rate (rad/sec)
+    uint16_t m_field0x5c;       // +0x5C
+    uint16_t m_pad5e;           // +0x5E
+    float    m_CycleXRate;      // +0x60
+    float    m_CycleXPhase;     // +0x64
+    float    m_CycleYRate;      // +0x68
+    float    m_CycleYPhase;     // +0x6C
+    float    m_field0x70;       // +0x70
+    float    m_field0x74;       // +0x74
+    float    m_field0x78;       // +0x78
+    uint16_t m_field0x7c;       // +0x7C
+    uint16_t m_field0x7e;       // +0x7E
+    uint16_t m_field0x80;       // +0x80
+    uint16_t m_pad82;           // +0x82
+    Vec2     m_field0x84;       // +0x84
+    Vec2     m_field0x8c;       // +0x8C
+    float    m_field0x94;       // +0x94
+    float    m_field0x98;       // +0x98
+    uint8_t  m_field0x9c;       // +0x9C
+    uint8_t  m_pad9d[3];        // +0x9D
+    int32_t  m_SetIdx;          // +0xA0  port: set index within emitter template (not in binary; repurposes m_field44)
 
     PSPParticle()
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
@@ -218,7 +248,7 @@ struct PSPParticle {
         , m_field0x7c(0), m_field0x7e(0), m_field0x80(0), m_pad82(0)
         , m_field0x84(0,0), m_field0x8c(0,0)
         , m_field0x94(0), m_field0x98(0)
-        , m_field0x9c(0), m_field44(0)
+        , m_field0x9c(0), m_SetIdx(0)
     {
         m_pad9d[0] = m_pad9d[1] = m_pad9d[2] = 0;
     }
@@ -245,40 +275,33 @@ static_assert(__builtin_offsetof(PSPParticle, m_field0x84)    == 0x84, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x8c)    == 0x8C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x94)    == 0x94, "");
 static_assert(__builtin_offsetof(PSPParticle, m_field0x9c)    == 0x9C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field44)      == 0xA0, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SetIdx)       == 0xA0, "");
 #endif
 
 // ----------------------------------------------------------------------------
 // Runtime emitter instance. Binary: 80 (0x50) bytes, non-polymorphic.
-// No base class. Default ctor at 0x13fa20 (zeroes 0x40/0x44/0x48/0x4c only).
-// Earlier fields set by AddEmitter @ 0x13c1b8. m_Next forms active-list link;
-// emitters are pool-allocated (MemoryPool<PSPParticleEmitter>::Create @0x13fd08
-// does operator new[]((n*10+1)*8) with elem-stride = 0x50).
-//
-// Field layout verified against AddEmitter @0x13c1b8 + Update @0x13cd70 +
-// AddParticle @0x13c554. ASM-verify stale for 0x20-0x4d; re-verify pending.
 // ----------------------------------------------------------------------------
 struct PSPParticleEmitter {
     float    m_Timer;                           // +0x00
-    uint16_t m_bStarted;                        // +0x04  set to 1 by AddEmitter (u16)
-    uint16_t m_pad06;                           // +0x06  alignment pad
-    Vec3     m_Pos;                             // +0x08  (12 bytes)
-    Vec3     m_Vel;                             // +0x14  (12 bytes)
-    float    m_RateScale;                       // +0x20  timer advance: newTimer = m_Timer + dt*m_TimeScale*m_RateScale
-    float    m_SizeBias;                        // +0x24  AddParticle: sizeStart = base - base*m_SizeBias
-    float    m_SpinScale;                       // +0x28  AddParticle: all 3 spin keys * m_SpinScale
-    float    m_TimeScale;                       // +0x2C  Update: dtScaled = dt * m_TimeScale
-    float    m_DirCos;                          // +0x30  cos(spawn-velocity rotation), default 1.0
-    float    m_DirSin;                          // +0x34  sin(spawn-velocity rotation), default 0.0
-    float    m_VelScale;                        // +0x38  AddParticle: vel *= m_VelScale; default 1.0
-    uint8_t  m_bMirrorX;                        // +0x3C  AddParticle: mirror-X branch (two-player layout)
-    uint8_t  _pad3d[3];                         // +0x3D  align to 4
-    const PSPEmitterTemplate*   m_pTemplate;    // +0x40  ctor: 0
-    PSPParticleEmitter*         m_Next;         // +0x44  ctor: 0  (active-list link)
-    PSPParticleEmitter**        m_pRefPtr;      // +0x48  ctor: 0  (caller back-pointer; nulled on recycle)
-    uint8_t  m_bUpdateWhenPaused;               // +0x4C  ctor: 0
-    uint8_t  m_bTrailStarted;                   // +0x4D  trail-active flag; set by SpawnJibs/Jiblet::Update
-    uint8_t  _pad4e[2];                         // +0x4E  tail pad to 0x50
+    uint16_t m_bStarted;                        // +0x04
+    uint16_t m_pad06;                           // +0x06
+    Vec3     m_Pos;                             // +0x08
+    Vec3     m_Vel;                             // +0x14
+    float    m_RateScale;                       // +0x20
+    float    m_SizeBias;                        // +0x24
+    float    m_SpinScale;                       // +0x28
+    float    m_TimeScale;                       // +0x2C
+    float    m_DirCos;                          // +0x30
+    float    m_DirSin;                          // +0x34
+    float    m_VelScale;                        // +0x38
+    uint8_t  m_bMirrorX;                        // +0x3C
+    uint8_t  _pad3d[3];                         // +0x3D
+    const uint8_t*         m_pTemplate;         // +0x40  points into m_pEmitterTemplates blob
+    PSPParticleEmitter*    m_Next;              // +0x44
+    PSPParticleEmitter**   m_pRefPtr;           // +0x48
+    uint8_t  m_bUpdateWhenPaused;               // +0x4C
+    uint8_t  m_bTrailStarted;                   // +0x4D
+    uint8_t  _pad4e[2];                         // +0x4E
 
     PSPParticleEmitter()
         : m_Timer(0), m_bStarted(1), m_pad06(0)
@@ -316,101 +339,111 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4
 #endif
 
 // ----------------------------------------------------------------------------
-// Singleton manager
-// v1.6.1 PSPParticleManager::PSPParticleManager @0x0013bf40
-// v1.6.1 PSPParticleManager::~PSPParticleManager @0x0013d064 / thunk @0x0013d080
+// PSPParticleManager — singleton manager.
+// Binary struct layout (0x38 bytes, v1.6.1 @0x0013bf40):
+//   +0x00  void*                         __vptr
+//   +0x04  float                         m_GlobalTimeScale
+//   +0x08  Vec3                          m_GlobalOrigin
+//   +0x14  PSPParticle*                  m_pParticles
+//   +0x18  uint16_t                      m_FreeHead
+//   +0x1C  int                           m_DrawnParticleCount
+//   +0x20  PSPParticleEmitter*           m_pActiveEmitters
+//   +0x24  int                           m_NumParticleTemplates
+//   +0x28  uint8_t*                      m_pTemplates (blob base, stride 0xB8)
+//   +0x2C  int                           m_NumEmitterTemplates
+//   +0x30  uint8_t*                      m_pEmitterTemplates (= m_pTemplates + m_NumParticleTemplates*0xB8)
+//   +0x34  MemoryPool<PSPParticleEmitter>* m_pEmitterPool
 // ----------------------------------------------------------------------------
 class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
     friend class Mortar::Singleton<PSPParticleManager>;
 
 public:
-    // v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8 — pop from pool, init defaults, prepend to active list.
-    // ppRef (optional) is filled with the returned pointer for caller cleanup;
-    // it is cleared to nullptr if template lookup fails.
-    // updateWhenPaused maps directly to e.m_bUpdateWhenPaused (binary third arg).
+    // v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8
     PSPParticleEmitter* AddEmitter(uint32_t hash,
-                                   PSPParticleEmitter** ppRef = nullptr,
+                                   PSPParticleEmitter** ppRef = 0,
                                    bool updateWhenPaused = false);
 
-    // Explicitly release an emitter. Clears the caller back-pointer and marks
-    // the emitter for removal on next tick.
-    // v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088 — find by ptr, unlink, clear back-ref, return to pool
+    // v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088
     void ClearEmitter(PSPParticleEmitter* emitter);
 
-    // v1.6.1 PSPParticleManager::Update @0x00105ed8 — update all active emitters,
-    // reap on lifetime; binary fuses particle physics in Draw.
+    // v1.6.1 PSPParticleManager::Update @0x00105ed8
     void Update(float dt, bool paused = false);
 
     // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
-    // Port matches binary: particle physics (aging, death, integration) is
-    // performed at the start of the render pass, then surviving particles
-    // are rendered.
     void Draw(float dt, bool paused, int layer = 0);
 
-    // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c — load particle templates
-    // from XML. texCategory is prepended to texture filenames:
-    // snprintf("%s/%s.tex", texCategory, name). outNames (optional) receives a
-    // copy of each <particleTemplate name="..."> string (caller-allocated array).
-    // Allocates the 1024-slot particle buffer and emitter MemoryPool on first call.
-    // Returns true on success.
-    bool LoadFile(const char* texCategory, const char* xmlPath, char** outNames = nullptr);
+    // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
+    bool LoadFile(const char* texCategory, const char* xmlPath, char** outNames = 0);
 
-    // v1.6.1 PSPParticleManager::Destroy @0x0013cfb8 — release tex refs, ClearEmitters, free 3 owned blocks.
+    // v1.6.1 PSPParticleManager::Destroy @0x0013cfb8
     void Destroy();
 
     void Clear();
 
-    // v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk) — drain
-    // m_pActiveEmitters to pool; reset m_FreeHead=1 + re-thread the free-list;
-    // zero every template's m_ParticleHead/m_ParticleCount.
+    // v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk)
     void ClearEmitters();
 
-    // Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
+    // Binary @ 0x001148dc
     bool EmitterExists(uint32_t hash);
 
-    // ASM-spec v1.6.1 PSPParticleManager @ 0x0013bf40 (size 0x38),
-    // GetEmitterTemplate @ 0x0013c044: binary fields m_NumEmitterTemplates@+0x24,
-    // m_pTemplates@+0x28 (blob base), m_NumEmitterTemplates2@+0x2C,
-    // m_pEmitterTemplates@+0x30 (=m_pTemplates+nPart*0xB8); emitter templates
-    // VARIABLE-stride (0x4C + tmpl[0x4B]*0x30), NOT array[idx].
-    // DIFFERS: port uses std::vector m_ParticleTemplates/m_EmitterTemplates
-    // (front-loaded +0x14/+0x20) so GetEmitterTemplate reads container at
-    // +0x20/+0x24 vs binary +0x30/+0x2C. Logical reimpl; faithful flat-blob
-    // port tracked in task #92.
-    PSPEmitterTemplate* GetEmitterTemplate(int idx);
+    // v1.6.1 PSPParticleManager::GetEmitterTemplate @0x0013c044 — variable-stride walk.
+    // Returns pointer into m_pEmitterTemplates blob (or null if idx out of range).
+    uint8_t* GetEmitterTemplate(int idx);
 
-    // Template lookup — used by AddEmitter and unit tests.
-    const PSPEmitterTemplate* FindTemplate(uint32_t hash) const;
+    // Accessor: get particle template blob record i (stride 0xB8).
+    PSPParticleTemplate* GetParticleTemplate(int i) {
+        if (!m_pTemplates || i < 0 || i >= m_NumParticleTemplates) return 0;
+        return reinterpret_cast<PSPParticleTemplate*>(m_pTemplates + (size_t)i * 0xB8);
+    }
 
-    // Manager global fields (v1.6.1 manager struct +0x00/+0x04/+0x08).
-    // Written each frame by SuperFruitControl::UpdateExplosion during the
-    // super-fruit explosion sequence; reset to 0.0/1.0 at sequence end.
-    // TODO: 0x13bf40/0x00115ed8 — confirm how mgr Update reads +0x00/+0x04 to
-    //   modulate per-emitter dt/intensity; consumption side not yet decompiled.
-    float m_GlobalTimeMod;       // +0x00 intensity scalar (0.0 at reset)
-    float m_GlobalTimeScale;     // +0x04 global time speed (1.0 at reset/ctor)
-    Vec3  m_GlobalOrigin;        // +0x08 explosion epicenter (written by UpdateExplosion)
+    // Accessor: get set i within emitter blob e.
+    static PSPParticleSet* EmitterSet(uint8_t* e, int i) {
+        return reinterpret_cast<PSPParticleSet*>(e + 0x4C + (size_t)i * 0x30);
+    }
+
+    // Template hash lookup — used by AddEmitter.
+    const uint8_t* FindTemplate(uint32_t hash) const;
+
+    // Binary manager global fields (v1.6.1 @0x0013bf40):
+    //   +0x04 m_GlobalTimeScale (ctor = 1.0)
+    //   +0x08 m_GlobalOrigin
+    // Written each frame by SuperFruitControl::UpdateExplosion.
+    float m_GlobalTimeScale;     // +0x04  global time speed (1.0 at reset/ctor)
+    Vec3  m_GlobalOrigin;        // +0x08  explosion epicenter
 
 private:
     PSPParticleManager();
-    ~PSPParticleManager();
+    virtual ~PSPParticleManager();  // virtual matches binary vptr at +0x00
 
-    std::vector<PSPParticleTemplate> m_ParticleTemplates;
-    std::vector<PSPEmitterTemplate>  m_EmitterTemplates;
+    // Binary-faithful layout fields (+0x14 onwards, following vptr+GlobalTimeScale+GlobalOrigin):
+    PSPParticle*                              m_pParticles;           // +0x14  1024-slot flat buffer
+    uint16_t                                  m_FreeHead;             // +0x18  1-based free-list head
+    uint16_t                                  _pad1a;                 // +0x1A  (int alignment pad for +0x1C)
+    int                                       m_DrawnParticleCount;   // +0x1C
+    PSPParticleEmitter*                       m_pActiveEmitters;      // +0x20
+    int                                       m_NumParticleTemplates; // +0x24
+    uint8_t*                                  m_pTemplates;           // +0x28  blob base (stride 0xB8)
+    int                                       m_NumEmitterTemplates;  // +0x2C
+    uint8_t*                                  m_pEmitterTemplates;    // +0x30  = m_pTemplates + m_NumParticleTemplates*0xB8
+    Mortar::MemoryPool<PSPParticleEmitter>*   m_pEmitterPool;         // +0x34
 
-    // v1.6.1 PSPParticleManager struct field layout (binary-faithful):
-    //   +0x14  PSPParticle*                  m_pParticles            — flat 1024-slot buffer
-    //   +0x18  uint16_t                      m_FreeHead              — 1-based head of free list (0=none)
-    //   +0x1c  int                           m_DrawnParticleCount    — reset to 0 at Draw start
-    //   +0x20  PSPParticleEmitter*           m_pActiveEmitters       — intrusive list head
-    //   +0x34  MemoryPool<PSPParticleEmitter>* m_pEmitterPool        — 120-slot pool
-    // ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: buffer 1024 slots,
-    // MemoryPool::Create(120), free-list threaded 1..1023, sentinel at slot 0.
-    PSPParticle*                              m_pParticles;              // +0x14
-    uint16_t                                  m_FreeHead;                // +0x18  1-based free-list head
-    int                                       m_DrawnParticleCount;      // +0x1c  reset to 0 at Draw start
-    PSPParticleEmitter*                       m_pActiveEmitters;         // +0x20
-    Mortar::MemoryPool<PSPParticleEmitter>*   m_pEmitterPool;            // +0x34
+    // Port-only side array: SmartPtr<Texture> refs indexed by PSPParticleTemplate::m_TextureIdx.
+    // Not in binary (binary stores SmartPtr inline at +0xAC via 4-byte pointer on ARM32).
+    // DIFFERS: binary embeds SmartPtr<Texture> at blob+0xAC (4 bytes on ARM32); port stores
+    // a uint32_t index in the blob and keeps SmartPtrs in this separate array so the blob
+    // stride stays 0xB8 on all hosts. v1.6.1 PSPParticleManager @0x0013bf40.
+    Mortar::SmartPtr<Mortar::Texture>*        m_pTextureRefs;         // port-only, not in binary
+    int                                       m_NumTextureRefs;       // port-only
 };
+
+#ifdef __bada__
+// Manager layout assertions: only public members can be checked with __builtin_offsetof
+// under GCC 4.4 (private member access is an error at compile time even in constexpr context).
+// The private fields at +0x14..+0x34 follow sequentially after m_GlobalOrigin (+0x08, Vec3=12 bytes)
+// with no holes; their correctness is enforced by the sizeof(PSPParticleManager) check (when port-only
+// tail fields are absent), not by individual offset asserts.
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalTimeScale) == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalOrigin)    == 0x08, "");
+#endif
 
 #endif
