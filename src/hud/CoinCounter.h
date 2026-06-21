@@ -1,57 +1,66 @@
 #ifndef FN_HUD_COIN_COUNTER_H
 #define FN_HUD_COIN_COUNTER_H
 
-// Analysed: 2026-04-30T00:00
-//
-// CoinCounter : HUDControl3d (size = 0xD4)
-// Struct size confirmed: operator_new(0xd4) in GameInit (binary allocation is ground truth: 0xD4).
-// Coin count display HUD. Stored at Game+0x178. Created in GameInit step 5.
-// Update is a true no-op (immediate return @ 0x00135580); all visual logic in Draw @ 0x0013569c.
-//
-// Binary addresses:
-//   ctor (real)    0x00135600
-//   ctor (alias)   0x00135644
-//   ctor thunk     0x000f43d4
-//   dtor (regular) 0x0013558c
-//   dtor (inplace) 0x001355b8
-//   dtor (deleting)0x001355dc
-//   Reset          0x00135548
-//   Update         0x00135580  (no-op — empty body)
-//   Draw           0x0013569c
-//
-// m_CoinCount at offset +0x7C (uint16_t). Written directly by external callers.
-// Note: Coin::ClearCoins @ 0x001731b8 is a Coin:: entity static, NOT CoinCounter::
+// ASM-spec v1.6.1 CoinCounter @ 0x0016765c — size 0xD4:
+//   +0x7C uint16_t m_Flags    (ctor=0)
+//   +0x7E (2 bytes pad to align +0x80)
+//   +0x80 float    m_Field80  (ctor=0.0f; semantics unknown)
+//   +0x84 int      m_CoinCount (ctor=0; written by external callers)
+//   +0x88 float    m_Field88  (ctor=0.0f; semantics unknown)
+//   +0x8C float    m_AnimScale (Reset clamps to [0,1]; vldr s15,[r0,#0x8c])
+//   +0x90 float    m_ScaleReset (Reset sets 1.0f; vstr s14,[r0,#0x90])
+//   +0x94 char[64] m_CountText (render buffer; Font::DrawString in Draw)
+// Binary: ctor @0x0016765c, dtor @0x001675f4, Reset @0x00167574, Draw @0x00167730.
+// (Previous marker addresses were stale v1.5.x; restamped to v1.6.1 here.)
 
 #include "HUDControl3d.h"
 #include <cstdint>
 
 class CoinCounter : public HUDControl3d {
 public:
-    // +0x7C: coin count displayed. Written by external callers directly.
-    uint16_t m_CoinCount;
+    // +0x7C
+    uint16_t m_Flags;       // ctor=0
+    uint8_t  _pad7E[2];     // alignment pad to reach +0x80
 
-    // Remaining subclass fields: 0xD4 - 0x7C - 2 = 0x56 bytes (layout not yet fully RE'd).
-    // Reset() touches field_0x8C (float, [0,1] clamp) and field_0x90 (float, =1.0f).
-    uint8_t  m_fields_7e[0x56];
+    // +0x80
+    float    m_Field80;     // ctor=0.0f (semantics unknown)
+
+    // +0x84
+    int      m_CoinCount;   // ctor=0; written by external callers
+
+    // +0x88
+    float    m_Field88;     // ctor=0.0f (semantics unknown)
+
+    // +0x8C
+    // ASM-spec v1.6.1 CoinCounter::Reset @ 0x00167574:
+    //   clamp m_AnimScale(+0x8C) to [0,1]; m_ScaleReset(+0x90) = 1.0f.
+    //   Disasm: vldr s15,[r0,#0x8c]; clamp; vstr s14(=1.0),[r0,#0x90].
+    float    m_AnimScale;   // clamped [0,1] by Reset
+
+    // +0x90
+    float    m_ScaleReset;  // Reset sets 1.0f
+
+    // +0x94
+    char     m_CountText[64]; // render buffer; used by Draw via Font::DrawString
 
     CoinCounter();
     ~CoinCounter() override;
 
-    void Init() override;       // 0x00135544: binary body is an empty no-op (immediate return); faithful
-    void Reset() override;      // 0x00135548: clamps field_0x8C to [0,1], sets field_0x90=1.0f
-    void Update(float dt) override;  // 0x00135580: no-op
-    void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
+    void Init() override;       // v1.6.1 @0x00167568: binary body is empty no-op (immediate return)
+    void Reset() override;      // v1.6.1 @0x00167574
+    void Update(float dt) override;  // v1.6.1 @0x001675e8: no-op
+    void Draw(const Vec3& hudScale, int layerMask) override; // v1.6.1 @0x00167730
 
-    int GetType() override { return 3; }  // binary @ 0x00135AF4
+    int GetType() override { return 3; }  // v1.6.1 @0x00167b5c
 
-    // ---- Faithful empty no-op overrides (binary bodies are immediate returns) ----
-    // Release @ 0x0013557c -- binary body is an empty no-op (immediate return); faithful
-    void Release() override;
-    // PreDraw @ 0x00135584 -- binary body is an empty no-op (immediate return); faithful
-    void PreDraw(const Vec3& hudScale) override;
-    // Skip @ 0x00135588 -- binary body is an empty no-op (immediate return); faithful
-    void Skip() override;
-    // ---- end faithful no-op overrides ----
+    // Faithful empty no-op overrides (binary bodies are immediate returns):
+    void Release() override;      // v1.6.1 @0x0016756c
+    void PreDraw(const Vec3& hudScale) override;  // v1.6.1 @0x001675e4
+    void Skip() override;         // v1.6.1 @0x001675e8 (shares address range with Update nop)
 };
+
+#ifdef __bada__
+static_assert(sizeof(CoinCounter) == 0xD4, "CoinCounter size must be 0xD4 (v1.6.1 CoinCounter @0x0016765c)");
+#endif
 
 #endif // FN_HUD_COIN_COUNTER_H

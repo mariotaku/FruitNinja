@@ -79,6 +79,9 @@ enum LocalizedString {
     LSTR_ABOUT_CREDIT4   = 0x34f, // id 847  -- credit line 4
     LSTR_ABOUT_CREDIT5   = 0x350, // id 848  -- credit line 5
     LSTR_ABOUT_TITLE     = 0x3c3, // id 963  -- AboutScreen title text
+
+    // ScoreControl v1.6.1 string IDs (ScoreControl ctor @0x001ad5fc)
+    LSTR_SCORE           = 0x323, // "SCORE" -- ScoreControl m_pScoreBox label
 };
 
 // --- StringEntry (12 bytes) ---
