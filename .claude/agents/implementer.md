@@ -87,7 +87,7 @@ The asm-verify cross-build and the symbol-diff skill both compile every portable
 - **No `decltype` in template default-args** (parse bugs in 4.4); `decltype` at statement level is fine.
 - **`nullptr` / `override` / `final` / `noexcept`** are macro-shimmed by `tools/asm-verify/cross-headers/fn-cxx11-shims.h` — these DO work via the shim, no special action needed.
 - **`explicit operator bool`** has its `explicit` stripped by the build-script sed; you can write it normally.
-- Quick check before landing a chunk: `cmake --build build/host` (host) AND optionally `bash tools/asm-verify/run.sh` (cross). If you suspect a C++11 feature, search the codebase for an existing pattern that does the same thing without it — usually exists.
+- Quick check before landing a chunk: `cmake --build build/host` (host only — do NOT run the cross-build/`run.sh`; the orchestrator runs analysis, see "## Build"). If you suspect a C++11 feature, search the codebase for an existing pattern that does the same thing without it — usually exists.
 
 **Binary fidelity for tooling:**
 The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and binary-faithful struct layouts. Get either wrong and the tooling can't tell port code from missing code.
@@ -124,6 +124,15 @@ container for all build trees: `build/host`, `build/web`, `build/asan`,
 `build/bada-cross`.) Don't re-configure or swap generators without
 explicit instruction. If `build/host` doesn't exist, ask the user to
 configure it rather than doing so yourself.
+
+**Do NOT run analysis — only compile (and, if relevant, regression tests).**
+Your verification is `cmake --build build/host` and, when your change could
+alter behavior, the affected `ctest` cases. Do **not** run `tools/asm-verify/run.sh`
+(or `compile-one.sh`/`check-tu.sh`/`symbol-diff`) — that slow Docker analysis
+is the orchestrator's job. Report your file/symbol changes and let the parent
+run asm-verify and read the divergence. If you need to confirm a chunk is
+cross-build-safe, reason from the C++11/GCC-4.4.1 rules above rather than
+invoking the cross-build yourself.
 
 **A build error that is NOT in a file you changed is NOT your matter — STOP and report it.** Building is expected, but the only build errors you own are the ones in the files YOUR edit touched. If `cmake --build` fails with errors in files you didn't modify (a concurrent rewrite, pre-existing WIP, an unrelated header), do **not** try to fix them, and **never** `git stash`/`git checkout`/`git revert`/`git reset` to "isolate" your work — that destroys other in-flight changes (and the harness will block it). Verify *your* files compile (they appear in the compile list without errors), then return a report: "my files (`X`, `Y`) compile clean; the build is red due to pre-existing/concurrent errors in `Z` which I did not touch — not my task." The orchestrator decides what to do. Touching another task's files to chase a green build is over-reach, the same class of mistake as a band-aid.
 
