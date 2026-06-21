@@ -97,9 +97,7 @@ void SliceEffect_CreatePool(int capacity) {
             #endif
         }
     }
-    #ifndef __bada__
     LOG_DEBUG("SliceEffect", "CreatePool: capacity=%d", capacity);
-    #endif
 }
 
 void SliceEffect_DestroyPool() {
