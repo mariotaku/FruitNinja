@@ -98,6 +98,16 @@ Classify:
 - Different immediate constants in computations (`vcmp #0` vs `vcmp #1`).
 - Inverted condition codes (`bgt` where binary has `ble`, etc.).
 
+**Not a FIX-NEEDED — the inlined-std-container `base+4` trap.** If a `wrong-field`
+row shows the binary `add GREG, #N; bl <SYM>` (taking `&container`, calling
+out-of-line) while the port reads `[GREG, #N+4]` (often plus a node-count load),
+the port merely *inlined* `std::map/set/list::find` and its first deref is the
+`_Rb_tree _M_header` / list sentinel at `base+4` — `offsetof` is identical, NOT a
+layout bug. Mark `ACCEPT-cosmetic` (confirm by compiling the real header with the
+Sourcery toolchain if unsure, as #89 `FruitSaveData::IsAchievementUnlocked` did).
+This must stay a manual check — a mechanical detector was tried and reverted
+(over-fires; the diff normalizes the callee to `<SYM>`).
+
 When uncertain between ACCEPT-deferred and FIX-NEEDED, lean toward
 FIX-NEEDED. The user can re-triage as ACCEPT later, but a hidden bug
 left as ACCEPT for months is the worst case.
