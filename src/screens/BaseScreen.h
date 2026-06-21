@@ -9,7 +9,7 @@
 //   Destructor D0    0x00161bb0 (deleting)
 //   Destructor D1    0x00161b20 (non-deleting)
 //   LoadContent      0x001305cc (loads sml_title.tex + blurry_backing.tex)
-//   DrawBorders      0x00130230 (shade triangles + deco quad + optional secondary tex)
+//   DrawBorders(SmartPtr)       0x0015fcec / DrawBorders(BakedStringBox*) 0x0015f878
 //   UpdateButtons    0x00130ab4 (lazy ScreenButton creation + update loop)
 //   Release          0x00160d90 (marks HUD controls pending-removal)
 //   Reset            0x00161860
@@ -46,18 +46,20 @@ public:
     static void LoadContent();     // 0x001305cc
     static void UnloadContent();
 
-    // DrawBorders @ 0x00130230 — shade triangles + deco quad.
+    // DrawBorders — shade triangles + deco quad.
     // Binary has two overloads:
-    //   DrawBorders(Mortar::SmartPtr<Mortar::Texture>, ...) @ 0x0014fcec
-    //   DrawBorders(Mortar::BakedStringBox*, ...) @ 0x0014f878
+    //   DrawBorders(Mortar::SmartPtr<Mortar::Texture>, ...) @ v1.6.1 @0x0015fcec
+    //   DrawBorders(Mortar::BakedStringBox*, ...) @ v1.6.1 @0x0015f878
     void DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
                      float alpha, Vec3 secondaryTexPos);
 
-    // v1.6.1 BakedStringBox* overload @ 0x0014f878.
-    // DIFFERS: BakedStringBox does not expose a Texture; this overload
-    // is a no-op stub. The Texture overload does the real rendering.
-    void DrawBorders(Mortar::BakedStringBox* box,
-                     float alpha, Vec3 secondaryTexPos);
+    // v1.6.1 BakedStringBox* overload @ 0x0015f878.
+    // Draws shade triangles + sml_title deco (same geometry as SmartPtr overload,
+    // no secondary texture). If box != nullptr, calls box->SetTranslation/Draw.
+    // Returns the anchor Vec3 used to position the box.
+    // ASM-verified lhs-rhs: v1.6.1 @0x15fc80
+    Vec3 DrawBorders(Mortar::BakedStringBox* box,
+                     float alpha, Vec3 arg3);
 
     // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.
     void UpdateButtons(float dt);
