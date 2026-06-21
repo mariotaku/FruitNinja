@@ -10,7 +10,7 @@
 #   3. diff           : BinDiff binary-vs-arm, binary-vs-thumb
 #   4. merge          : mode-matched ranked divergence list (+ CSV)
 #
-# Usage:  tools/asm-verify/bindiff-pipeline.sh [--twins-only] [--skip-build]
+# Usage:  tools/asm-verify/bindiff/bindiff-pipeline.sh [--twins-only] [--skip-build]
 #   --twins-only : stop after stage 2 (build + export the twins; the user's
 #                  "twins and their binexport in one execution" minimum)
 #   --skip-build : reuse existing tmp/fnverify.{arm,thumb}.so (stages 2-4 only)
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 TMP="$ROOT/tmp"
 OUTDIR="$TMP/bindiff-out"
 mkdir -p "$OUTDIR"
@@ -53,7 +53,7 @@ build_twin() {  # $1=mode flag  $2=output .so name
     -v "$(win "$ROOT")":/work \
     -v fnverify-src:/staging \
     --tmpfs /build:exec,size=2G \
-    "$BUILD_IMAGE" bash /work/tools/asm-verify/build-so.sh > "$TMP/build-$name.log" 2>&1
+    "$BUILD_IMAGE" bash /work/tools/asm-verify/bindiff/build-so.sh > "$TMP/build-$name.log" 2>&1
   grep -E "saved to" "$TMP/build-$name.log" || { echo "  BUILD FAILED -- see tmp/build-$name.log" >&2; tail -5 "$TMP/build-$name.log" >&2; exit 1; }
 }
 

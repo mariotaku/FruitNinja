@@ -176,7 +176,7 @@ jobs:
           python-version: "3.12"
 
       - name: Assemble pages/
-        run: python tools/build_pages.py
+        run: python tools/web/build_pages.py
 
       - name: Verify pages/ structure
         run: |

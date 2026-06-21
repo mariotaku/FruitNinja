@@ -2,7 +2,7 @@
 """Convert .tex files from FruitNinjaBada to PNG and generate index.html.
 
 Usage:
-    python tools/convert_tex.py [INPUT_DIR] [OUTPUT_DIR]
+    python tools/assets/convert_tex.py [INPUT_DIR] [OUTPUT_DIR]
 
 Defaults:
     INPUT_DIR  = FruitNinjaBada  (relative to project root)

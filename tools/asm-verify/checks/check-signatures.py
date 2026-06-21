@@ -5,7 +5,7 @@ Extracts symbols directly from the binary ELF (via Docker nm) and from
 the asm-verify cross-build manifest. No pre-computed symbol-diff data needed.
 
 Usage:
-    python tools/asm-verify/check-signatures.py
+    python tools/asm-verify/checks/check-signatures.py
 """
 import pathlib
 import re
@@ -18,7 +18,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
-PROJECT = pathlib.Path(__file__).resolve().parent.parent.parent
+PROJECT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 BINARY   = "FruitNinjaBada/Bin/FruitNinja.exe"  # rel to project, at /work in container
 OUTPUT   = PROJECT / "tmp" / "asm-verify" / "signature-mismatches.md"
 IMAGE    = "fnverify"

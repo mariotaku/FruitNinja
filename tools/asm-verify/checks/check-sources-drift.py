@@ -13,7 +13,7 @@ in silently:
 
 Run standalone, or as a non-fatal preflight before run.sh:
 
-    python3 tools/asm-verify/check-sources-drift.py
+    python3 tools/asm-verify/checks/check-sources-drift.py
 
 Exit status: 1 if any STALE entry is found, else 0.
 """
@@ -22,7 +22,7 @@ import pathlib
 import re
 import sys
 
-ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
+ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent.parent
 PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
 CMAKE = ASM_VERIFY_DIR / "verify-sources.cmake"
 

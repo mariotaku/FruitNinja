@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-tools/web-hash-assets.py -- Content-hash web output files to defeat browser caching.
+tools/web/web-hash-assets.py -- Content-hash web output files to defeat browser caching.
 
 Usage:
-    python3 tools/web-hash-assets.py <build-web-dir>
+    python3 tools/web/web-hash-assets.py <build-web-dir>
 
 Pipeline (order matters -- nested references):
   1. Hash wasm + data + splash.webp.  Rename to name-<sha8>.ext.

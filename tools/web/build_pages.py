@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-tools/build_pages.py -- assemble the GitHub Pages output directory.
+tools/web/build_pages.py -- assemble the GitHub Pages output directory.
 
 Usage:
-    python tools/build_pages.py [--out <dir>]
+    python tools/web/build_pages.py [--out <dir>]
 
 Output layout (default: pages/):
     pages/
@@ -39,7 +39,7 @@ import sys
 # ---------------------------------------------------------------------------
 # Paths (relative to repo root, which is the cwd at run-time)
 # ---------------------------------------------------------------------------
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 SRC_LANDING     = os.path.join(REPO_ROOT, "web", "index.html")
 SRC_BUILD_WEB   = os.path.join(REPO_ROOT, "build-web")
