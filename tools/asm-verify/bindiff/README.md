@@ -1,6 +1,6 @@
 # asm-verify/bindiff/
 
-Whole-program BinDiff track — **stage 9** of [`docs/re-pipeline.md`](../../../docs/re-pipeline.md) (rare, architecture-confidence deep dives). See that stage for context; this is just the script index.
+Whole-program BinDiff track — **stage 9** of [the pipeline](../README.md#pipeline) (rare, architecture-confidence deep dives). See that stage for context; this is just the script index.
 
 Entry: `bash tools/asm-verify/bindiff/bindiff-pipeline.sh [--twins-only] [--skip-build]`.
 
