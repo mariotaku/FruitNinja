@@ -88,7 +88,7 @@ static void DrainEntities(Game& game)
 // Tick one frame while keeping the entity pool drained (fruit and bomb types).
 // Pass drainEntities=false once in STATE_MAIN_DISPLAY to let MenuButton
 // fruit entities live; DeactivateAllEntities(0) would kill them immediately,
-// triggering DeletedControl and nulling m_pRetryBtn/m_pQuitBtn.
+// triggering DeletedControl and nulling m_pSlotB0/m_pQuitBtn.
 static void TickFrame(Game& game, bool drainEntities = true)
 {
     if (drainEntities) {
@@ -260,7 +260,7 @@ int main(int argc, char* argv[])
         for (int i = 0; i < SETTLE_FRAMES; ++i) {
             // Do NOT drain entities: MenuButton::Init spawns a fruit entity
             // (type 0). DeactivateAllEntities(0) would kill it, triggering
-            // DeletedControl and nulling m_pRetryBtn/m_pQuitBtn.
+            // DeletedControl and nulling m_pSlotB0/m_pQuitBtn.
             TickFrame(h.game, /*drainEntities=*/false);
             // If state drifted out of MAIN_DISPLAY during settle, stop.
             if (gos->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
@@ -273,18 +273,18 @@ int main(int argc, char* argv[])
         // Ensure m_TransitionTimer satisfies RetryCallback's alpha gate.
         game_work.m_GameDt = 1.0f;
 
-        // ---- Sub-test A: RetryCallback via m_pRetryBtn click delegate ----
+        // ---- Sub-test A: RetryCallback via retry button (m_pSlotB0) click delegate ----
         printf("[bonus_phase] Sub-test A: RetryCallback\n");
-        printf("[bonus_phase]   state before = %d, m_pRetryBtn = %p\n",
-               gos->m_State, (void*)gos->m_pRetryBtn);
+        printf("[bonus_phase]   state before = %d, m_pSlotB0 (retry) = %p\n",
+               gos->m_State, (void*)gos->m_pSlotB0);
 
         if (gos->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
             fprintf(stderr,
                 "SKIP (A): not in MAIN_DISPLAY (%d) before retry injection\n",
                 gos->m_State);
-        } else if (gos->m_pRetryBtn == nullptr) {
+        } else if (gos->m_pSlotB0 == nullptr) {
             fprintf(stderr,
-                "FAIL (A): m_pRetryBtn is NULL after %d settle frames -- "
+                "FAIL (A): retry button (m_pSlotB0) is NULL after %d settle frames -- "
                 "RetryCallback cannot be injected via button delegate\n",
                 SETTLE_FRAMES);
             failures++;
@@ -296,7 +296,7 @@ int main(int argc, char* argv[])
             // on the next tick if entities are still alive (the wave manager
             // keeps spawning during settle frames), so we cannot rely on a
             // post-tick observation.
-            gos->m_pRetryBtn->m_ClickCallback();
+            gos->m_pSlotB0->m_ClickCallback();
             const int stateAfterTap = gos->m_State;
 
             if (stateAfterTap == GameOverScreen::STATE_MAIN_DISPLAY) {

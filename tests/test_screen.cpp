@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
             }
 
             // 4b. FruitFactControl pos animated in from off-screen.
-            //     Final pos.x = m_OffsetPosX + 183.0 = -18 + 183 = 165.
+            //     Final pos.x = m_OffsetPos.x + 183.0 = -18 + 183 = 165.
             if (s->m_pFruitFact->pos.x > 200.0f) {
                 fprintf(stderr,
                     "FAIL: FruitFactControl should slide in (pos.x = %f, expected ~165)\n",
@@ -349,11 +349,11 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // 5. m_OffsetPosX should have animated from 368 -> ~-18.
-        if (s->m_OffsetPosX > 50.0f) {
+        // 5. m_OffsetPos.x should have animated from 368 -> ~-18.
+        if (s->m_OffsetPos.x > 50.0f) {
             fprintf(stderr,
-                "FAIL: m_OffsetPosX should animate to ~-18, got %f\n",
-                s->m_OffsetPosX);
+                "FAIL: m_OffsetPos.x should animate to ~-18, got %f\n",
+                s->m_OffsetPos.x);
             failures++;
         }
 
@@ -372,8 +372,8 @@ int main(int argc, char* argv[]) {
         }
 
         // 7. Retry/Quit buttons should spawn after m_ProgressCounter == 10.
-        if (!s->m_pRetryBtn) {
-            fprintf(stderr, "FAIL: m_pRetryBtn should be spawned in state 6\n");
+        if (!s->m_pSlotB0) {
+            fprintf(stderr, "FAIL: retry button (m_pSlotB0) should be spawned in state 6\n");
             failures++;
         }
         if (!s->m_pQuitBtn) {
@@ -410,7 +410,7 @@ int main(int argc, char* argv[]) {
                         "(state=%d, alpha=%f, fact=%s, retry=%s, quit=%s)\n",
                 s->m_State, game_work.m_GameDt,
                 (s->m_pFruitFact && s->m_pFruitFact->m_pCurFactString) ? "ok" : "MISSING",
-                s->m_pRetryBtn ? "ok" : "MISSING",
+                s->m_pSlotB0 ? "ok" : "MISSING",
                 s->m_pQuitBtn ? "ok" : "MISSING");
         return h.Shutdown();
     } else {

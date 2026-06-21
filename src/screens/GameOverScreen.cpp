@@ -1,7 +1,7 @@
-// Analysed: 2026-05-02T00:00
-// GameOverScreen -- binary ctor 0x00142900, Initialise 0x00142674, Update 0x00141b34
-// PreDrawOrder 0x0014171c, DrawOrder 0x00141448.
+// GameOverScreen -- binary ctor 0x001882a0, Initialise 0x00187c90, Update 0x00141b34
+// PreDrawOrder 0x0014171c, DrawOrder 0x00141448, Release 0x00185970, dtor 0x00185d40.
 // No per-class Draw -- inherits HUDControl3d::Draw (0x0014428c).
+// Size 0x160 (operator new at GameOver @ 0x001cb788).
 
 #include "GameOverScreen.h"
 #include "BonusScreen.h"
@@ -84,8 +84,12 @@ static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_7af8;   // .bss 0x001e9f50 --
 static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_75f4;   // .bss 0x0018d5c0
 static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_7a88;   // .bss 0x0011cb58
 
-// comming_soon_highscore.tex (+0x114) is loaded by Update state-6 first-entry,
-// NOT by LoadContent. Kept as instance field m_CommingSoonHighscoreTex.
+// TODO: v1.6.1 0x00184d2c (PostCallback) -- comming_soon_highscore.tex was a struct
+// member m_CommingSoonHighscoreTex (+0x114) in the old port layout but is NOT a struct
+// field in the binary (no slot at +0x114 in the corrected 0x160 layout). The binary
+// loads it transiently in Update state-6 tail. Tracking it in a file-static for now
+// so the call shape (LoadLocalisedTexture + IsValid + Set/UnSet) is preserved.
+static Mortar::SmartPtr<Mortar::Texture> g_CommingSoonHighscoreTex;
 
 static bool g_LoadContentGuard = false;
 
@@ -301,40 +305,46 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
                                int expressionIdx, int bgPatternIdx,
                                int tabIndex, int starCount)
     : HUDControl3d(),
-      field_0x7c(0.0f),
+      m_pCtrl7C(nullptr),
+      m_pCtrl80(nullptr),
+      m_LinkedScreen(nullptr),
+      m_TitleSizeX(0.0f),
       m_State(0),
       m_Timer(0.0f),
-      m_TitleSizeX(0.0f),
-      m_TitleSizeY(0.0f),
-      m_TitleSizeZ(0.0f),
-      field_0x94(0),
-      m_pRetryBtn(nullptr),
-      m_pSlot9c(nullptr),
+      m_TitleSize(0.0f, 0.0f, 0.0f),
       field_0xa0(0),
       m_pQuitBtn(nullptr),
       m_pSlotA8(nullptr),
       m_AnimCounter(0),
-      m_OffsetPosX(0.0f),
-      m_OffsetPosY(0.0f),
-      m_OffsetPosZ(0.0f),
+      m_pSlotB0(nullptr),
+      m_pSlotB4(nullptr),
+      m_AnimTimeMs(0),
+      m_OffsetPos(0.0f, 0.0f, 0.0f),
       m_pFruitFact(nullptr),
-      m_pSlotC0(nullptr),
-      m_pBonusScreen(nullptr),
+      m_pZenPage(nullptr),
+      m_pBonusFactPage(nullptr),
+      m_pClassicFactPage(nullptr),
+      field_0xd8(0),
+      field_0xdc(0),
       m_pNoticeCtrl(nullptr),
+      m_pBonusScreen(nullptr),
+      field_0xe8(0),
       m_PostOk(0),
       m_PostInProgress(0),
-      m_ProgressCounter(0),
-      field_0x118(0),
+      m_StarCount(starCount),
+      m_pTitleString(nullptr),
+      m_ScoreAccum(0),
       m_MostFruitCount(-1),
-      m_bScoreSubmitted(0),
+      m_ProgressCounter(0),
+      m_bScoreSubmitted(1),
       m_ExpressionIdx(expressionIdx),
       m_BgPatternIdx(bgPatternIdx),
       m_TabIndex(tabIndex),
-      m_StarCount(starCount),
+      m_StarCountArg(starCount),
       m_bIsClassic(0),
       m_FruitFactAlpha(0.0f)
 {
-    memset(m_CoinsEarnedLabel, 0, sizeof(m_CoinsEarnedLabel));
+    memset(m_DaysLeftLabel, 0, sizeof(m_DaysLeftLabel));
     Initialise(modeName, param2, param3, expressionIdx, bgPatternIdx, tabIndex, starCount);
 }
 
@@ -362,11 +372,11 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // Defunct: NetworkManager.InvalidatePublishTextCallback -- no-op stub; binary @ 0x0014268c
     // Single call, no return value used; safe to skip on the SDL port.
 
-    m_pNoticeCtrl    = nullptr; // +0xC8
+    m_pNoticeCtrl    = nullptr; // +0xE0
     m_TabIndex       = tabIndex;
     m_Timer          = 0.0f;
     m_MostFruitCount = -1;
-    field_0x118      = 0;
+    m_ScoreAccum     = 0;
     m_StarCount      = starCount;
 
     Game* game = Game::GetInstance();
@@ -395,36 +405,40 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             bgTex = g_GameOverTitleTex;
         m_Texture = bgTex;
         if (bgTex) {
-            m_TitleSizeX = (float)bgTex->m_Width;
-            m_TitleSizeY = (float)bgTex->m_Height;
+            m_TitleSizeX     = (float)bgTex->m_Width;
+            m_TitleSize.x    = (float)bgTex->m_Width;
+            m_TitleSize.y    = (float)bgTex->m_Height;
         } else {
             // DIFFERS: binary skips the m_TitleSize write when the texture
             // load fails (leaving stale data) -- port substitutes a hard-coded
             // 256x128 fallback so the state-0 grow animation has sensible
             // dimensions even when the localised .tex is missing.
-            m_TitleSizeX = 256.0f;
-            m_TitleSizeY = 128.0f;
+            m_TitleSizeX     = 256.0f;
+            m_TitleSize.x    = 256.0f;
+            m_TitleSize.y    = 128.0f;
         }
-        m_TitleSizeZ = 0.0f;
+        m_TitleSize.z = 0.0f;
     }
 
     m_State          = STATE_ENTRY_ANIM;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
-    m_CommingSoonHighscoreTex.SetNull();   // +0x114 binary nulls in Initialise; loaded later in Update case-6 tail
+    g_CommingSoonHighscoreTex.SetNull();   // binary nulls transient tex in Initialise; loaded later in Update case-6 tail
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx   = bgPatternIdx;
-    field_0x94       = 0;
+    m_TitleSize.z    = 0.0f;
     m_pBonusScreen   = nullptr;
     m_FruitFactAlpha = game ? game_work.m_GameDt : 0.0f; // game[+0xC] = game.alpha (m_TransitionTimer)
     m_ExpressionIdx  = expressionIdx;
     field_0xa0       = 0;
-    m_pSlot9c        = nullptr;
+    m_pSlotB4        = nullptr;
     m_bIsClassic     = (gameMode == Mortar::GAME_MODE_CLASSIC) ? 1 : 0;
     m_pQuitBtn       = nullptr;
     m_pSlotA8        = nullptr;
-    m_pRetryBtn      = nullptr;
-    field_0x7c       = 0.0f;
+    m_pSlotB0        = nullptr;
+    m_pCtrl7C        = nullptr;
+    m_pCtrl80        = nullptr;
+    m_LinkedScreen   = nullptr;
 
     // Randomise expression when caller passed -1
     if (expressionIdx < 1) {
@@ -443,19 +457,19 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     pos.x = 0.0f; pos.y = 0.0f; pos.z = 0.0f;
     // Initial off-screen offset (DAT_001428d0=184.0, DAT_001428d4=75.0)
-    m_OffsetPosX = 184.0f;
-    m_OffsetPosY = 75.0f;
-    m_OffsetPosZ = 0.0f;
+    m_OffsetPos.x = 184.0f;
+    m_OffsetPos.y = 75.0f;
+    m_OffsetPos.z = 0.0f;
 
     m_ProgressCounter  = 0;
     m_pFruitFact       = nullptr;
-    m_pSlotC0          = nullptr;
+    m_pClassicFactPage = nullptr;
     m_PostOk           = 0;
     m_PostInProgress   = 0;
 
     // Format the coin-earned label.
     // ASM-verified: 2026-05-08 binary @ 0x00142810 (re-analyst):
-    //   sprintf(m_CoinsEarnedLabel, "YOU JUST EARNT %i COINS",
+    //   sprintf(m_DaysLeftLabel, "YOU JUST EARNT %i COINS",
     //           game_work.m_CoinsBalance - game_work.m_CoinsAtGameStart)
     // The "X days left" placeholder string was a mis-guess; the real
     // format string at DAT_001428fc / 0x001bb926 is "YOU JUST EARNT %i
@@ -465,7 +479,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     {
         const int coinsEarned = game
             ? (game_work.m_CoinsBalance - game_work.m_CoinsAtGameStart) : 0;
-        snprintf(m_CoinsEarnedLabel, sizeof(m_CoinsEarnedLabel),
+        snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel),
                  "YOU JUST EARNT %d COINS", coinsEarned);
     }
 
@@ -481,9 +495,9 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         float waveAlpha = game ? game_work.m_GameDt : 0.0f;
         if (param2 > 5 && waveAlpha > kWaveAlphaGate) {
             if (game) game_work.m_GameDt = kWaveAlphaSet;
-            m_State           = STATE_MAIN_DISPLAY;
-            m_bScoreSubmitted = 1;
-            m_FruitFactAlpha  = 1.0f;
+            m_State              = STATE_MAIN_DISPLAY;
+            m_bScoreSubmitted    = 1;
+            m_FruitFactAlpha     = 1.0f;
             // Immediate state-6 invocation
             Update(0.0f);
         }
@@ -523,9 +537,9 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 // Release (vtable slot 3, 0x00140d98)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00140d98
+// Binary @ 0x00185970
 void GameOverScreen::Release() {
-    m_CommingSoonHighscoreTex.SetNull();
+    g_CommingSoonHighscoreTex.SetNull();
 
     Game* game = Game::GetInstance();
     if (game && game_work.pGameOverScreen == this) {
@@ -542,12 +556,13 @@ void GameOverScreen::Release() {
     }
 
     // Remove and free 4 aux HUDControls.
-    // ASM-verified: 2026-05-02 binary @ 0x00140e14..0x00140e58 -- order: +0x9C, +0xBC, +0xC0, +0xA8
+    // TODO: v1.6.1 0x00185970 (Release) -- re-verify exact slot order + offsets in binary Release
+    // (old RE was against v1.5.x offsets; the corrected layout moves these pointers)
     if (game && game_work.mHud) {
         HUDControl* slots[4] = {
-            m_pSlot9c,
+            m_pSlotB4,
             (HUDControl*)m_pFruitFact,
-            (HUDControl*)m_pSlotC0,
+            (HUDControl*)m_pClassicFactPage,
             m_pSlotA8
         };
         for (int i = 0; i < 4; ++i) {
@@ -560,10 +575,10 @@ void GameOverScreen::Release() {
             }
         }
     }
-    m_pFruitFact = nullptr;
-    m_pSlotC0    = nullptr;
-    m_pSlot9c    = nullptr;
-    m_pSlotA8    = nullptr;
+    m_pFruitFact       = nullptr;
+    m_pClassicFactPage = nullptr;
+    m_pSlotB4          = nullptr;
+    m_pSlotA8          = nullptr;
 
     BonusManager::GetInstance()->ClearBestBonuses();
 }
@@ -653,9 +668,9 @@ void GameOverScreen::LeaderboardsCallback() {
 // On removal, clears the slot and (for bonusScreen+noticeCtrl) forces state=6.
 void GameOverScreen::DeletedControl(HUDControl* ctrl) {
     if (ctrl == (HUDControl*)m_pBonusScreen) { m_pBonusScreen = nullptr; m_State = STATE_MAIN_DISPLAY; }
-    // Binary @ 0x00140558: middle slot is m_pRetryBtn (+0x98), not m_pSlot9c (+0x9c).
-    // No state change in this branch -- just clear the pointer.
-    if (ctrl == (HUDControl*)m_pRetryBtn)    { m_pRetryBtn = nullptr; }
+    // TODO: v1.6.1 0x00140558 (DeletedControl) -- re-verify which binary slot is the retry button pointer
+    // (old RE was against v1.5.x layout; m_pSlotB0 is the corrected-layout candidate)
+    if (ctrl == (HUDControl*)m_pSlotB0)      { m_pSlotB0 = nullptr; }
     // Binary @ 0x00141408 wires quit to the same DeletedControl -- clear m_pQuitBtn on removal.
     if (ctrl == (HUDControl*)m_pQuitBtn)     { m_pQuitBtn = nullptr; }
     if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = STATE_MAIN_DISPLAY; }
@@ -714,7 +729,10 @@ void GameOverScreen::FindMostOfFruit() {
 
     // Step 5: write result
     if (bestCount > 0) {
-        field_0x118      = bestIdx;   // most-eaten fruit type index
+        // TODO: v1.6.1 0x00141a18 (FindMostOfFruit) -- re-verify which binary field stores the most-fruit type index
+        // (old port used field_0x118 which no longer exists in the corrected 0x160 layout;
+        // m_ScoreAccum at +0x13C is the closest unnamed int slot)
+        m_ScoreAccum     = bestIdx;   // most-eaten fruit type index (slot TBD)
         m_MostFruitCount = bestCount;
     }
 }
@@ -725,7 +743,7 @@ void GameOverScreen::FindMostOfFruit() {
 
 // Binary @ 0x00141188
 void GameOverScreen::CreateRetryButton() {
-    if (m_pRetryBtn != nullptr) return;
+    if (m_pSlotB0 != nullptr) return;
 
     Game* game = Game::GetInstance();
     if (!game || !game_work.mHud) return;
@@ -752,14 +770,14 @@ void GameOverScreen::CreateRetryButton() {
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);  // HUD::g_GlobalCenterVec; HUD::Init sets to (0,0,0)
     Mortar::SmartPtr<Mortar::Texture> tex = g_RetryTex;  // GOT+0x7310
 
-    m_pRetryBtn = new MenuButton();
+    m_pSlotB0 = new MenuButton();
     // m_Texture (+0x74) is the binary's used slot: binary ctor writes ring tex
     // to +0x74, HUDControl3d::Draw Phase B reads it from +0x74. No divergence.
-    m_pRetryBtn->m_Texture    = tex;
+    m_pSlotB0->m_Texture    = tex;
     // Binary CreateRetryButton @ 0x00141188 does NOT explicitly write +0x34;
     // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (here 0).
-    m_pRetryBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-    m_pRetryBtn->Init(
+    m_pSlotB0->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+    m_pSlotB0->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked),
         /*fruitType=*/0,
@@ -769,10 +787,10 @@ void GameOverScreen::CreateRetryButton() {
         Mortar::Delegate0<void>()
     );
 
-    game_work.mHud->AddControl(m_pRetryBtn, false);
+    game_work.mHud->AddControl(m_pSlotB0, false);
     // Binary @ 0x001412a0: wires HUD-removal callback to DeletedControl.
-    // Without this, HUD::Remove leaves a dangling pointer in m_pRetryBtn.
-    m_pRetryBtn->m_RemoveCallback =
+    // Without this, HUD::Remove leaves a dangling pointer in m_pSlotB0.
+    m_pSlotB0->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
 }
 
@@ -782,9 +800,9 @@ void GameOverScreen::RetryCallback() {
     if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
-    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). STATE_BONUS_PHASE intentionally excluded -- binary silent-absorbs taps during the bonus animation; the real "tap doesn't work" symptom is BONUS_PHASE stalling, tracked separately.
+    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). STATE_BONUS_PHASE intentionally excluded.
     if (game_work.m_GameDt <= 0.989945f) return;
-    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). m_TransitionTimer > 0.989945f gate matches DAT_00141158; floating-point literal reproduced exactly from binary rodata.
+    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). m_TransitionTimer > 0.989945f gate.
     CancelHUDProgressionTimer();
     // Binary @ 0x001410a8..0x001410d2: inlined SeedGlobalRng equivalent --
     // same 6-word PRNG reseed that PauseScreen::RetryGameCallback bl's at
@@ -872,8 +890,8 @@ void GameOverScreen::CreateQuitButton() {
 
     // Binary @ 0x001413d2: copy 12 bytes from retry button at +0x124..+0x12c.
     // MenuButton+0x124 is m_TargetSize (Vec3).
-    if (m_pRetryBtn) {
-        m_pQuitBtn->m_RestScale = m_pRetryBtn->m_RestScale;
+    if (m_pSlotB0) {
+        m_pQuitBtn->m_RestScale = m_pSlotB0->m_RestScale;
     }
     // Binary @ 0x00141400: byte at MenuButton+0x138 = 1.
     // +0x138 is m_bRespondsToBackKey -- quit button captures the back-key.
@@ -881,7 +899,7 @@ void GameOverScreen::CreateQuitButton() {
     // Binary @ 0x0014141e: TutorialControl::ResetTutePos UNCONDITIONALLY
     // (with retry-or-quit arg).
     if (game_work.m_TutorialControl) {
-        MenuButton* tutBtn = m_pRetryBtn ? m_pRetryBtn : m_pQuitBtn;
+        MenuButton* tutBtn = m_pSlotB0 ? m_pSlotB0 : m_pQuitBtn;
         game_work.m_TutorialControl->ResetTutePos(tutBtn);
     }
 }
@@ -987,12 +1005,12 @@ void GameOverScreen::Update(float dt) {
             float full = SinIdx(0x4E34);
             float scaleF = (full != 0.0f) ? (curr / full) : 0.0f;
             size.x = m_TitleSizeX * scaleF * 2.0f;
-            size.y = m_TitleSizeY * scaleF * 2.0f;
-            size.z = m_TitleSizeZ * scaleF * 2.0f;
+            size.y = m_TitleSize.y * scaleF * 2.0f;
+            size.z = m_TitleSize.z * scaleF * 2.0f;
         } else {
             size.x = m_TitleSizeX * 2.0f;
-            size.y = m_TitleSizeY * 2.0f;
-            size.z = m_TitleSizeZ * 2.0f;
+            size.y = m_TitleSize.y * 2.0f;
+            size.z = m_TitleSize.z * 2.0f;
         }
 
         if (m_Timer > ENTRY_DURATION) {
@@ -1037,7 +1055,7 @@ void GameOverScreen::Update(float dt) {
                 // GO screen tracks bonus position for layout alignment.
                 // ASM-spec for binary @ 0x00141bd0..0x00141bf0 (re-analyst):
                 //   ny = bonus.pos.y + bonus[+0xC0] + 135.0f   (DAT_00141DC8)
-                //   then m_OffsetPosY = max(m_OffsetPosY, ny)
+                //   then m_OffsetPos.y = max(m_OffsetPos.y, ny)
                 //   plus a size_factor = pos.y / -224.0f + 1.0f rescale
                 //   (DAT_00141DCC) on the row above.
                 // bonus[+0xC0] is BonusScreen::m_PosOffset.y (Vec3 starts at
@@ -1045,7 +1063,7 @@ void GameOverScreen::Update(float dt) {
                 // previously misread as m_PhaseTimer). The 135.0f bias is
                 // DAT_00141DC8.
                 float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PosOffset.y + 135.0f;
-                m_OffsetPosY = std::max(m_OffsetPosY, ny);
+                m_OffsetPos.y = std::max(m_OffsetPos.y, ny);
 
                 // Binary @ 0x00141d??: pos.y rescale + size = m_TitleSize * scale.
                 //   fVar23 = bonus->size.y + bonus->pos.y + DAT_00141dc8 (small bias)
@@ -1063,8 +1081,8 @@ void GameOverScreen::Update(float dt) {
                 pos.y = newPosY;
                 const float scaleFactor = pos.y / divisor + 1.0f;
                 size.x = m_TitleSizeX * scaleFactor;
-                size.y = m_TitleSizeY * scaleFactor;
-                size.z = m_TitleSizeZ * scaleFactor;
+                size.y = m_TitleSize.y * scaleFactor;
+                size.z = m_TitleSize.z * scaleFactor;
 
                 // When BonusScreen sets m_bPendingRemoval, transition to main display.
                 if (m_pBonusScreen->m_bPendingRemoval) {
@@ -1088,7 +1106,7 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     case STATE_RETRY_PREPARE: {
         Mortar::ActorManager* am = game->actorManager;
-        if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
+        if (am && am->GetNumEntities(0) != 0 && m_pSlotB4 == nullptr) {
             game_work.m_GameDt = 1.0f;
             // Fall through to STATE_MAIN_DISPLAY (m_State is still 7)
         } else {
@@ -1110,8 +1128,8 @@ void GameOverScreen::Update(float dt) {
         // 1) Create FruitFactControl on first entry
         if (m_pFruitFact == nullptr) {
             m_pFruitFact = new FruitFactControl();
-            m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
-            m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
+            m_pFruitFact->pos.x = 183.0f + m_OffsetPos.x;
+            m_pFruitFact->pos.y = 12.0f + m_OffsetPos.y;
             m_pFruitFact->pos.z = 0.0f;
             m_pFruitFact->m_TabIndex  = (uint8_t)m_TabIndex;
             m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
@@ -1178,7 +1196,8 @@ void GameOverScreen::Update(float dt) {
                 }
 
                 // Defunct: "coming soon" highscore-leaderboard placeholder
-                m_CommingSoonHighscoreTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
+                // (binary loads transiently; tracked via file-static, not struct field)
+                g_CommingSoonHighscoreTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
             }
 
             game_work.m_GameDt = 1.0f;
@@ -1197,7 +1216,7 @@ void GameOverScreen::Update(float dt) {
             float a = game_work.m_GameDt;
             float sf = 2.0f - a;
             size.x = m_TitleSizeX * sf;
-            size.y = m_TitleSizeY * sf;
+            size.y = m_TitleSize.y * sf;
             pos.x = 0.0f;
             pos.y = 224.0f * a;
             pos.z = 0.0f;
@@ -1256,7 +1275,7 @@ void GameOverScreen::Update(float dt) {
         // Note: NetworkManager::LaunchDashboard() -- defunct (online-services-audit).
         m_ProgressCounter = 0;
         m_pQuitBtn        = nullptr;
-        m_pRetryBtn       = nullptr;
+        m_pSlotB0         = nullptr;
         field_0xa0        = 0;
         m_State           = STATE_MAIN_DISPLAY;
         break;
@@ -1275,7 +1294,7 @@ void GameOverScreen::Update(float dt) {
     // State 14: quick-restart hot path (binary @ 0x001423b4-0x001423f8)
     // -----------------------------------------------------------------------
     case STATE_QUICK_RESTART: {
-        const int prevSlot9c = (m_pSlot9c != nullptr) ? 1 : 0;  // saved before zero-out
+        const int prevSlot9c = (m_pSlotB4 != nullptr) ? 1 : 0;  // saved before zero-out
         m_Timer += dt * 8.0f;
         if (m_Timer >= 8.0f) {
             m_Timer = 0.0f;       // transient -- overwritten below
@@ -1321,10 +1340,10 @@ void GameOverScreen::Update(float dt) {
     //   0x00142620 = -20.0  (unused in shipping layout; earlier port used as BonusScreen.y)
     //   0x00142624 =  75.0  (Arcade-Zen FruitFact x base)
     //   0x00142628 = 480.0  (Arcade-Zen FruitFact x slide coeff)
-    //   0x0014262c = -102.0 (Arcade-Zen m_OffsetPosX delta from fruitFact.x)
+    //   0x0014262c = -102.0 (Arcade-Zen m_OffsetPos.x delta from fruitFact.x)
     //   0x00142630 = -386.0 (Classic FruitFact slide coeff)
-    //   0x00142634 = 368.0  (Classic m_OffsetPosX base)
-    //   0x00142638 =  55.0  (Classic m_OffsetPosY)
+    //   0x00142634 = 368.0  (Classic m_OffsetPos.x base)
+    //   0x00142638 =  55.0  (Classic m_OffsetPos.y)
     //   0x0014263c = 183.0  (Classic FruitFact +x offset)
     //   0x0014264c = 190.0  (Retry/Quit X)
     //   0x00142650 = -50.0  (Retry Y base)
@@ -1342,40 +1361,38 @@ void GameOverScreen::Update(float dt) {
         m_pFruitFact->pos.y = 53.0f;
         m_pFruitFact->pos.z = 0.0f;
         // m_OffsetPos = fruitFact->pos + (-102, 4, 0)
-        m_OffsetPosX = ffX - 102.0f;
-        m_OffsetPosY = 53.0f + 4.0f;   // = 57.0f
-        m_OffsetPosZ = 0.0f;
+        m_OffsetPos.x = ffX - 102.0f;
+        m_OffsetPos.y = 53.0f + 4.0f;   // = 57.0f
+        m_OffsetPos.z = 0.0f;
     } else {
         // Classic / single-player layout
-        m_OffsetPosX = 368.0f + (-386.0f) * m_FruitFactAlpha;
-        m_OffsetPosY = 55.0f;
-        m_OffsetPosZ = 0.0f;
+        m_OffsetPos.x = 368.0f + (-386.0f) * m_FruitFactAlpha;
+        m_OffsetPos.y = 55.0f;
+        m_OffsetPos.z = 0.0f;
         if (m_pFruitFact) {
-            m_pFruitFact->pos.x = m_OffsetPosX + 183.0f;
-            m_pFruitFact->pos.y = m_OffsetPosY + 12.0f;
+            m_pFruitFact->pos.x = m_OffsetPos.x + 183.0f;
+            m_pFruitFact->pos.y = m_OffsetPos.y + 12.0f;
             m_pFruitFact->pos.z = 0.0f;
         }
-        // Binary @ 0x001424b4..0x001424d8 — m_pSlotC0 slides vertically when set.
+        // Binary @ 0x001424b4..0x001424d8 — m_pClassicFactPage slides vertically when set.
         // Z = -5000 puts it far behind the camera (the binary uses this to hide it
-        // when m_FruitFactAlpha is low / ramping up). The earlier port comment
-        // claiming -5000 was an unused sentinel was incorrect.
+        // when m_FruitFactAlpha is low / ramping up).
         // DAT_00142640 = -5000.0f, DAT_00142644 = 65.0f, DAT_00142648 = 300.0f.
-        if (m_pSlotC0) {
-            m_pSlotC0->pos.x = 0.0f;
-            m_pSlotC0->pos.y = (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f;
-            m_pSlotC0->pos.z = -5000.0f;
+        if (m_pClassicFactPage) {
+            ((HUDControl*)m_pClassicFactPage)->pos.x = 0.0f;
+            ((HUDControl*)m_pClassicFactPage)->pos.y = (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f;
+            ((HUDControl*)m_pClassicFactPage)->pos.z = -5000.0f;
         }
         // Binary @ 0x001424ec..0x00142520: retry+quit slide in from off-screen-right
         // via pos.x = 190 + (1 - m_FruitFactAlpha) * 120.0f. The +120 UnitX term IS
-        // the slide formula -- earlier port comment conflating it with the unused
-        // g_JitterVec3 was incorrect. The pos.y is fixed (-50 for retry, -125 for
-        // quit). DAT_0014264c = 190.0f, DAT_00142654 = 120.0f, DAT_00142650 = -50.0f,
+        // the slide formula. The pos.y is fixed (-50 for retry, -125 for quit).
+        // DAT_0014264c = 190.0f, DAT_00142654 = 120.0f, DAT_00142650 = -50.0f,
         // DAT_00142658 = -125.0f.
         const float slideX = 190.0f + (1.0f - m_FruitFactAlpha) * 120.0f;
-        if (m_pSlot9c) {
-            m_pSlot9c->pos.x = slideX;
-            m_pSlot9c->pos.y = -50.0f;
-            m_pSlot9c->pos.z = 0.0f;
+        if (m_pSlotB4) {
+            m_pSlotB4->pos.x = slideX;
+            m_pSlotB4->pos.y = -50.0f;
+            m_pSlotB4->pos.z = 0.0f;
         }
         if (m_pQuitBtn) {
             m_pQuitBtn->pos.x = slideX;
@@ -1401,7 +1418,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
     // -----------------------------------------------------------------
     if ((layerMask & Mortar::HUD_LAYER_POST_ACTOR) != 0) {
         Game* game = Game::GetInstance();
-        if (m_pRetryBtn && game && game_work.m_SaveData &&
+        if (m_pSlotB0 && game && game_work.m_SaveData &&
             game_work.m_SaveData->m_highscore > 0)
         {
             char buf[16];
@@ -1409,11 +1426,11 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 
             const Vec3 daysPos(-163.0f, -96.0f, 0.0f);  // DAT_001419e0/4/8
             // ASM-verified: 2026-05-11 binary @ 0x00141790..0x001417d0 (asm-inspector)
-            //   ldr r1,[r4,#0x98]    ; r1 = m_pRetryBtn
-            //   vldr s14,[r1,#0x20]  ; s14 = m_pRetryBtn->size.x
+            //   ldr r1,[r4,#0x98]    ; r1 = retry btn slot
+            //   vldr s14,[r1,#0x20]  ; s14 = retry btn size.x
             //   vmul s0,s14,0.5      ; s0 = size.x * 0.5
             //   font = pFontNumbers (Game+0x58), align 0xF, white.
-            const float scaleArg = m_pRetryBtn->size.x * 0.5f;
+            const float scaleArg = m_pSlotB0->size.x * 0.5f;
             if (game_work.pFontNumbers.IsValid()) {
                 game_work.pFontNumbers->DrawString(scaleArg, 1.0f, 0.0f,
                     buf, daysPos,
@@ -1421,30 +1438,29 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     0xF);
             }
 
-            // Overlay quad (comming_soon_highscore.tex via
-            // m_CommingSoonHighscoreTex) -- only when texture is valid AND
-            // the retry button's size.x is in (0, 600]. DAT_001419ec = 600.0f.
-            // Asset isn't shipped so IsValid() is always false in practice;
+            // Overlay quad (comming_soon_highscore.tex via g_CommingSoonHighscoreTex) --
+            // only when texture is valid AND the retry button's size.x is in (0, 600].
+            // DAT_001419ec = 600.0f. Asset isn't shipped so IsValid() is always false;
             // the gate keeps the call-shape parity with the binary.
-            const float btnScaleX = m_pRetryBtn->size.x;
-            if (m_CommingSoonHighscoreTex.IsValid() &&
+            const float btnScaleX = m_pSlotB0->size.x;
+            if (g_CommingSoonHighscoreTex.IsValid() &&
                 btnScaleX > 0.0f && btnScaleX < 600.0f)
             {
-                m_CommingSoonHighscoreTex->Set();
+                g_CommingSoonHighscoreTex->Set();
 
                 MatrixManager& mm = MatrixManager::GetInstance();
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(
-                    m_pRetryBtn->size.x,
-                    m_pRetryBtn->size.y,
-                    m_pRetryBtn->size.z);
+                    m_pSlotB0->size.x,
+                    m_pSlotB0->size.y,
+                    m_pSlotB0->size.z);
                 mat.GlobalTranslate44(daysPos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
                 Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
 
-                m_CommingSoonHighscoreTex->UnSet();
+                g_CommingSoonHighscoreTex->UnSet();
             }
         }
     }
@@ -1495,7 +1511,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                         257.0f * hudScale.y,
                         0.0f);
                     mat.GlobalTranslate44(Vec3(
-                        m_OffsetPosX, m_OffsetPosY, m_OffsetPosZ));
+                        m_OffsetPos.x, m_OffsetPos.y, m_OffsetPos.z));
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
@@ -1517,9 +1533,9 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                         129.0f * hudScale.y,
                         0.0f);
                     mat.GlobalTranslate44(Vec3(
-                        9.0f * hudScale.x + m_OffsetPosX,
-                        40.0f * hudScale.y + m_OffsetPosY,
-                        m_OffsetPosZ));
+                        9.0f * hudScale.x + m_OffsetPos.x,
+                        40.0f * hudScale.y + m_OffsetPos.y,
+                        m_OffsetPos.z));
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
