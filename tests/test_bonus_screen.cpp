@@ -6,10 +6,10 @@
 // dismiss flag fires, and bright + dark pixels show in the readback.
 //
 // Run via:
-//   ctest --test-dir build -R bonus_screen --output-on-failure
-//   ./build/tests/Debug/test_bonus_screen.exe              # headless
-//   ./build/tests/Debug/test_bonus_screen.exe --interactive  # visible window
-//   ./build/tests/Debug/test_bonus_screen.exe --screenshot   # dump PPM
+//   ctest --test-dir build/host -R bonus_screen --output-on-failure
+//   ./build/host/tests/Debug/test_bonus_screen.exe              # headless
+//   ./build/host/tests/Debug/test_bonus_screen.exe --interactive  # visible window
+//   ./build/host/tests/Debug/test_bonus_screen.exe --screenshot   # dump PPM
 
 #include "test_harness.h"
 #include "screens/BonusScreen.h"

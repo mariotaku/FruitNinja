@@ -5,7 +5,7 @@
 // divide-by-zero that the home-screen run never exercised.
 //
 // Run via:
-//   cd build && ctest --output-on-failure -R screen_
+//   cd build/host && ctest --output-on-failure -R screen_
 //
 // Each ctest entry passes a different screen name.
 

@@ -110,7 +110,7 @@ Launch `implementer` agent directly:
 Fix <ClassName>::<Function> (score <N>/<M>, <ratio>% ratio).
 File: <path>. Check for port-only patterns: singleton guards,
 LOG calls, redundant field writes. Trim mechanical bloat.
-Build: cmake --build build -j$(nproc)
+Build: cmake --build build/host -j$(nproc)
 ```
 
 #### For missing (< 0 excess):

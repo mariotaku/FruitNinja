@@ -111,7 +111,7 @@ For EACH change:
   - Match spec's pseudo-C exactly — no liberties.
   - Add `// ASM-verified: <ISO-date> v1.6.1 <Symbol> @ 0xADDR (re-analyst)`
     markers per function.
-  - Build must stay clean (`cmake --build build -j$(nproc) --target
+  - Build must stay clean (`cmake --build build/host -j$(nproc) --target
     fruit-ninja`).
   - Where spec has unresolved item, leave precise `// TODO: v1.6.1 0x<addr> (<Symbol>) -- <gap>` marker rather than guessing.
 
@@ -127,7 +127,7 @@ Report under 500 words. List each commit's SHA + one-line summary
 ### Step 3 — verify
 
 ```bash
-cmake --build build -j$(nproc) --target fruit-ninja  # must be clean
+cmake --build build/host -j$(nproc) --target fruit-ninja  # must be clean
 grep -rn "// ASM-verified.*re-analyst" src/<path>/<ClassName>.{cpp,h}
 grep -rn "TODO: v1.6.1" src/<path>/<ClassName>.{cpp,h}   # only intentional deferrals
 ```

@@ -8,7 +8,7 @@
 #   bash tools/asm-verify/check-tu.sh src/engine/util/AsciiString.cpp
 #
 # Pre-requisite: bash tools/asm-verify/setup.sh (one-time fnverify image build)
-#                + native build/_deps/tinyxml2-src/tinyxml2.h (cmake -B build).
+#                + native build/host/_deps/tinyxml2-src/tinyxml2.h (cmake -B build).
 #
 # Use cases:
 #   - asm-verify or symbol-diff fails on TU X; want a focused error trace.
@@ -71,8 +71,8 @@ if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
     exit 1
 fi
 
-if [[ ! -f "$PROJECT_ROOT/build/_deps/tinyxml2-src/tinyxml2.h" ]]; then
-    echo "ERROR: build/_deps/tinyxml2-src/tinyxml2.h missing." >&2
+if [[ ! -f "$PROJECT_ROOT/build/host/_deps/tinyxml2-src/tinyxml2.h" ]]; then
+    echo "ERROR: build/host/_deps/tinyxml2-src/tinyxml2.h missing." >&2
     echo "       Run cmake -B build at least once." >&2
     exit 1
 fi
@@ -91,7 +91,7 @@ set -e
 mkdir -p /tmp/portsrc/src /tmp/portsrc/cross-headers /tmp/portsrc/tinyxml2
 rsync -aq /work/src/ /tmp/portsrc/src/
 rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
-cp /work/build/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
+cp /work/build/host/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
 
 # C++11 -> C++03 sed transforms (same as full sym-diff/asm-verify).
 find /tmp/portsrc/src -name "*.h" -o -name "*.cpp" | xargs sed -i \

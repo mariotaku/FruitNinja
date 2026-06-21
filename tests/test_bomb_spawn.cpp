@@ -10,15 +10,15 @@
 // the no-leak postcondition.
 //
 // Run via:
-//   ctest --test-dir build -R bomb_spawn --output-on-failure
+//   ctest --test-dir build/host -R bomb_spawn --output-on-failure
 //
 // Or with trace enabled:
-//   cmake -DFRUITNINJA_BOMB_TRACE=ON -B build && cmake --build build
-//   ctest --test-dir build -R bomb_spawn --output-on-failure
+//   cmake -DFRUITNINJA_BOMB_TRACE=ON -B build/host && cmake --build build/host
+//   ctest --test-dir build/host -R bomb_spawn --output-on-failure
 //
 // Interactive (visible window, watchable pacing, post-run idle loop):
-//   ./build/tests/Debug/test_bomb_spawn.exe --interactive
-//   ./build/tests/Debug/test_bomb_spawn.exe all --interactive
+//   ./build/host/tests/Debug/test_bomb_spawn.exe --interactive
+//   ./build/host/tests/Debug/test_bomb_spawn.exe all --interactive
 
 #include "test_harness.h"
 #include "game/WaveManager.h"

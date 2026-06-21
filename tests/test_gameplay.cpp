@@ -5,7 +5,7 @@
 // (c) at least one fruit spawns within the run window.
 //
 // Run via:
-//   cd build && ctest --output-on-failure -R gameplay_
+//   cd build/host && ctest --output-on-failure -R gameplay_
 //
 // Modes:
 //   gameplay_classic  -> mode 0, expects classic XML waves to spawn

@@ -3,11 +3,11 @@
 ## Repo state
 
 - **Branch**: `bomb-offscreen-fix` (active feature branch, clean).
-- **Build**: clean. Both MSYS2/MinGW and MSVC (VS Build Tools 2022) configurations work via the single `build/` dir.
-  - MSYS2 configure: `cmake -G "MSYS Makefiles" -B build`
-  - MSVC configure: `cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug` (in Developer Cmd Prompt or after `vcvars64.bat`)
-  - Build (any toolchain): `cmake --build build -j$(nproc)`
-  - Run: `./build/fruit-ninja.exe` (MSYS2) or `./build/Debug/fruit-ninja.exe` (MSVC)
+- **Build**: clean. Both MSYS2/MinGW and MSVC (VS Build Tools 2022) configurations work via the host build dir `build/host` (`build/` is a gitignored container for all build trees: `build/host`, `build/web`, `build/asan`, `build/bada-cross`).
+  - MSYS2 configure: `cmake -G "MSYS Makefiles" -B build/host`
+  - MSVC configure: `cmake -S . -B build/host -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug` (in Developer Cmd Prompt or after `vcvars64.bat`)
+  - Build (any toolchain): `cmake --build build/host -j$(nproc)`
+  - Run: `./build/host/fruit-ninja.exe` (MSYS2) or `./build/host/Debug/fruit-ninja.exe` (MSVC)
 
 ## Recent commits (newest first, last ~10)
 

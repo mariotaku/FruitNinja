@@ -248,7 +248,7 @@ endif()
 else()
 # FN_ASM_VERIFY=ON: stub INTERFACE targets. Cross-headers provide replacement
 # headers; no SDL2/GL/FreeType libraries are linked. tinyxml2 headers are
-# copied by verify.sh from the host build into build/_deps/tinyxml2-src.
+# copied by verify.sh from the host build into build/host/_deps/tinyxml2-src.
 foreach(_tgt SDL2::SDL2 SDL2::SDL2main)
     if(NOT TARGET ${_tgt})
         add_library(${_tgt} INTERFACE IMPORTED)
