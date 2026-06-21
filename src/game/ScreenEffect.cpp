@@ -56,8 +56,12 @@ void EffectImage::Parse(TiXmlElement* xml) {
 
     const char* tex = xml->Attribute("texture");
     if (tex) {
+#if !defined(__bada__)
         strncpy(m_TexName, tex, sizeof(m_TexName) - 1);
         m_TexName[sizeof(m_TexName) - 1] = '\0';
+#else
+        (void)tex;
+#endif
     }
 
     const char* multi = xml->Attribute("multiplyer");
@@ -82,9 +86,13 @@ void EffectImage::Parse(TiXmlElement* xml) {
     // transitionMoveOut="X,Y" -- exit velocity (Vec3).
     const char* moveOut = xml->Attribute("transitionMoveOut");
     if (moveOut) {
+#if !defined(__bada__)
         float x = 0.0f, y = 0.0f, z = 0.0f;
         sscanf(moveOut, "%f,%f,%f", &x, &y, &z);
         m_VelOut = Vec3(x, y, z);
+#else
+        (void)moveOut;
+#endif
     }
 
     // transitionTime drives m_FadeRate (seconds for fade-in/out).
@@ -97,7 +105,11 @@ void EffectImage::Parse(TiXmlElement* xml) {
 
     // transition="fade"|"slide" -- animation mode (port-side trailing field).
     const char* mode = xml->Attribute("transition");
+#if !defined(__bada__)
     m_TransitionHash = (mode && *mode) ? StringHash(mode) : 0u;
+#else
+    (void)mode;
+#endif
 
     xml->QueryUnsignedAttribute("group", &m_GroupMask);
 
@@ -156,11 +168,13 @@ void EffectImage::LoadTextures() {
     // which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex"). XML
     // attribute values omit the .tex suffix (e.g. `texture="arcade_60seconds"`
     // -> file `arcade_60seconds.tex`). Mirror the binary's name+".tex" append.
+#if !defined(__bada__)
     if (m_TexName[0] == '\0') return;
     if (m_Texture.IsValid()) return;  // already loaded
     char texPath[80];
     snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
     m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
+#endif
 }
 
 // ---- ScreenTint::Parse -------------------------------------------------------
@@ -366,7 +380,9 @@ void ScreenEffect::Activate() {
         // no texture and HUDControl3d::Draw's `if (m_Texture)` gate skips
         // rendering -- which is the root cause of arcade_60seconds /
         // arcade_go / blitz_1..6 / ice_cover never appearing on screen.
+#if !defined(__bada__)
         ctrl->m_Texture = img.m_Texture;
+#endif
         // Binary @ 0x0011dd2e: `str r1, [r2, #0x34]` -- raw copy of
         // EffectImage::m_GroupMask, no `?: 1` fallback. If data has 0,
         // the binary writes 0 (HUD_LAYER_NONE -> the control is filtered

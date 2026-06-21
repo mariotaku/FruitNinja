@@ -464,8 +464,13 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
     // ================================================================
     float yDrawn = 0.0f;
     if (m_Texture.IsValid()) {
+#if !defined(__bada__)
         const float texW = (float)m_Texture->m_Width;
         const float texH = (float)m_Texture->m_Height;
+#else
+        const float texW = 0.0f;
+        const float texH = 0.0f;
+#endif
 
         // Y_start = BG_Y_CACHE(160) + texH * 0.5
         // Y_drawn = yStart - (yStart - BG_Y_REST(63)) * alpha
@@ -490,8 +495,13 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         // Block B: OFN overlay texture (null in port -- OFN defunct)
         // ================================================================
         if (m_TexOFNOverlay.IsValid()) {
+#if !defined(__bada__)
             const float ovW = (float)m_TexOFNOverlay->m_Width;
             const float ovH = (float)m_TexOFNOverlay->m_Height;
+#else
+            const float ovW = 0.0f;
+            const float ovH = 0.0f;
+#endif
             mm.GetWorldStack().Reset();
             Matrix44 mOv = Matrix44::MakeScale(ovW + 1.0f, ovH + 1.0f, 1.0f);
             mOv.GlobalTranslate44(Vec3(
@@ -515,8 +525,13 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
     // Block D: sensei.tex -- slides in from right
     // ================================================================
     if (s_TexSensei.IsValid()) {
+#if !defined(__bada__)
         const float texW = (float)s_TexSensei->m_Width;
         const float texH = (float)s_TexSensei->m_Height;
+#else
+        const float texW = 0.0f;
+        const float texH = 0.0f;
+#endif
 
         const float xStart = SENSEI2_X_CACHE + texW * 0.5f;
         const float xDrawn = xStart - (xStart - SENSEI2_X_REST) * alpha;

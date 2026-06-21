@@ -39,7 +39,7 @@ private:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(Mortar::PowerManager) == 8,
     "Mortar::PowerManager must be 8 bytes on ARM32/Bada");
 #endif

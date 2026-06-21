@@ -284,7 +284,7 @@ public:
 // The binary's canonical name is Mortar::Mesh::BoneBinding.
 typedef Mesh::BoneBinding BoneBinding;
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(Mortar::Mesh::BoneBinding)                   == 0x44, "Mortar::Mesh::BoneBinding size");
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_BoneName)    == 0x00, "BoneBinding::m_BoneName offset");

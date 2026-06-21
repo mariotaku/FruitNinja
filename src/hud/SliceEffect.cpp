@@ -83,7 +83,7 @@ void SliceEffect_CreatePool(int capacity) {
         if (!s_SliceFxNormal.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxNormal = meshMgr->Load("models/fruit/slice_fx.mmd");
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_DEBUG("SliceEffect", "slice_fx.mmd valid=%d",
                       s_SliceFxNormal.IsValid());
             #endif
@@ -91,13 +91,13 @@ void SliceEffect_CreatePool(int capacity) {
         if (!s_SliceFxCrit.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxCrit = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_DEBUG("SliceEffect", "slice_fx_crit.mmd valid=%d",
                       s_SliceFxCrit.IsValid());
             #endif
         }
     }
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_DEBUG("SliceEffect", "CreatePool: capacity=%d", capacity);
     #endif
 }

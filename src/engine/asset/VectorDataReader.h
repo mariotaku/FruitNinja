@@ -43,7 +43,7 @@ public:
     size_t m_pos;
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(VectorDataReader) == 0x14, "VectorDataReader sizeof mismatch");
 static_assert(offsetof(VectorDataReader, m_buf) == 0x04, "VectorDataReader::m_buf offset");
 static_assert(offsetof(VectorDataReader, m_pos) == 0x10, "VectorDataReader::m_pos offset");

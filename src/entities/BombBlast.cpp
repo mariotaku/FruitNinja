@@ -64,7 +64,9 @@ BombBlast::BombBlast()
     , m_Vel1(0, 0, 0)
     , m_Vel2(0, 0, 0)
     , m_Lifetime(0.0f)
+#if !defined(__bada__)
     , m_BlastRadius(0.0f)
+#endif
 {
     entityType = 4;
     m_Angle = 0;  // inherited from Mortar::Entity base at +0x36
@@ -114,7 +116,9 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
     m_PosA = m_Vel1;
     m_PosB = m_Vel2;
 
+#if !defined(__bada__)
     m_BlastRadius = 0.0f;
+#endif
     m_Lifetime = 0.0f;
 
     // m_Col stays null (inherited from Mortar::Entity ctor) — BombBlast doesn't collide.
@@ -124,13 +128,17 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
 void BombBlast::Update(float dt) {
     if (!IsActive()) return;
 
+#if !defined(__bada__)
     m_BlastRadius += dt * RADIUS_GROWTH;
+#endif
     m_Lifetime    += dt;
 
     // Binary re-multiplies m_PosA/m_PosB by a growing factor each frame.
     // Use the lifetime-scaled blast radius so the quad expands outward.
+#if !defined(__bada__)
     m_PosA = m_Vel1 * m_BlastRadius;
     m_PosB = m_Vel2 * m_BlastRadius;
+#endif
 
     if (m_Lifetime >= BLAST_LIFE) {
         flags |= ENT_KILLED;

@@ -18,7 +18,7 @@ public:
     int m_Rank;  // +0x5c  ctor: str r5,[r4,#0x5c] = param_2 (rank, 1-based; -1 on ERROR path)
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(LeaderboardItem) == 0x60, "LeaderboardItem size mismatch");
 #endif

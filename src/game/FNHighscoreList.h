@@ -51,7 +51,7 @@ private:
     // +0x0D..+0x0F: tail padding (compiler-generated)
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(FNHighscoreList) == 16, "FNHighscoreList size mismatch");
 static_assert(offsetof(FNHighscoreList, m_flag8)    == 0x08, "FNHighscoreList::m_flag8");

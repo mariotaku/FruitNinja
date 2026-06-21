@@ -191,10 +191,6 @@ public:
 
     int32_t nextTouchId;              // +0x1d0  init 1
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    static_assert(sizeof(Touch) == 468, "Touch size mismatch");
-#endif
-
     // Port-specific rotating cursor for ___UpdateInternal slot claim.
     // Binary stores this in a BSS global at GOT+0x80798; port uses a
     // file-static in Touch.cpp for identical behaviour (Touch is a singleton).
@@ -217,5 +213,9 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 int IsTouchDown(int slot);
 
 } // namespace Mortar
+
+#if defined(__bada__)
+static_assert(sizeof(Mortar::Touch) == 468, "Touch size mismatch");
+#endif
 
 #endif // MORTAR_TOUCH_H

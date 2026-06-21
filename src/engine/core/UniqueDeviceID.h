@@ -17,7 +17,7 @@ private:
     uint8_t m_data[128];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(UniqueDeviceID) == 128, "UniqueDeviceID size mismatch");
 #endif

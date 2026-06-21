@@ -48,7 +48,7 @@ Font::Font()
 }
 
 Font::~Font() {
-#ifndef FN_ASM_VERIFY_CROSS
+#ifndef __bada__
     // Unregister any TTF face from the side-table (port specific: TTF state
     // lives outside Font's binary-layout struct to keep sizeof == 0x438).
     FontTTFRegistry::GetInstance().Unregister(this);

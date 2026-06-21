@@ -236,9 +236,8 @@ public:
     float           m_ShakeTimer;          // +0x174
 
     // === v1.0 compat fields (port-side only; binary offset unknown in v1.6.1) ===
-    // Excluded from the cross-build (FN_ASM_VERIFY_CROSS) so sizeof == 0x178 is
-    // enforceable by the static_assert below. The Bada production build does NOT
-    // define FN_ASM_VERIFY_CROSS, so these fields remain visible there too.
+    // Excluded from the cross-build (__bada__) so sizeof == 0x178 is
+    // enforceable by the static_assert below.
     // DIFFERS: original v1.0 had these at known offsets; v1.6.1 layout unknown.
     //   m_bEnabled:        v1.0 +0x123; disables ClearMenuItems + touch input.
     //   m_AnimScale:       v1.0 +0x13C; maps to m_ShakeScale.x in v1.6.1 (backdrop scale factor).
@@ -246,7 +245,7 @@ public:
     //   m_bTouchHeld:      v1.0 +0x131; touch-held gate for Update and Init.
     //   m_bScoreSubmitted: v1.0 +0x120; TutorialControl flip direction.
     // TODO: 0x0019b994 -- RE v1.6.1 binary to locate each field's offset and remove these
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     uint8_t         m_bEnabled;            // port-compat; v1.0 +0x123
     float           m_AnimScale;           // port-compat; v1.0 +0x13C -> v1.6.1 m_ShakeScale.x
     Vec3            m_BounceParams;        // port-compat; v1.0 +0x140 -> v1.6.1 hardcoded 0.85
@@ -339,9 +338,8 @@ private:
     void UpdateTouchPosition();
 };
 
-// Layout asserts. FN_ASM_VERIFY_CROSS guard REMOVED so the cross-build also enforces
-// these (v1.6.1 MenuButton ctor @0x0019bb08, sizeof=0x178).
-// The compat fields below the asserts are wrapped in #if !defined(__bada__) so they
+// Layout asserts under __bada__ (v1.6.1 MenuButton ctor @0x0019bb08, sizeof=0x178).
+// The compat fields above are wrapped in #if !defined(__bada__) so they
 // do not inflate the cross-build sizeof past 0x178.
 #if defined(__bada__)
 static_assert(__builtin_offsetof(MenuButton, m_pEntity)           == 0x80,  "MenuButton m_pEntity offset");

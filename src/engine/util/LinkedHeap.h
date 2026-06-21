@@ -165,7 +165,7 @@ private:
 // __builtin_offsetof on private members from outside the class body, and
 // in-class static_assert can't use sizeof(incomplete_type) in C++0x mode.
 // The real Bada toolchain sees complete private-member access and passes.
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(Mortar::LinkedHeap) == 0x24, "LinkedHeap size mismatch (expected 0x24)");
 #endif
 

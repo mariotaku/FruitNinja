@@ -353,7 +353,7 @@ private:
     uint8_t m_pad[664];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(NetworkManager) == 668,
     "Mortar::NetworkManager must be 668 bytes on ARM32/Bada");
 #endif

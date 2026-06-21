@@ -80,8 +80,13 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
                                                          int* outH = nullptr) {
     Mortar::SmartPtr<Mortar::Texture> t = Mortar::TextureManager::LoadLocalisedTexture(name);
     if (t.IsValid()) {
+#if !defined(__bada__)
         if (outW) *outW = t->m_Width;
         if (outH) *outH = t->m_Height;
+#else
+        if (outW) *outW = 0;
+        if (outH) *outH = 0;
+#endif
     } else {
         if (outW) *outW = 0;
         if (outH) *outH = 0;
@@ -139,7 +144,7 @@ bool PauseScreen::IsEnabled() {
 // QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
     #endif
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
@@ -223,11 +228,13 @@ PauseScreen::PauseScreen()
       m_PressIndex(0),
       m_RevealTimer(0.0f),
       m_PausedText(nullptr),
-      m_State(PAUSE_STATE_HIDDEN),
-      m_TitleTexW(0.0f), m_TitleTexH(0.0f),
-      m_PauseButtonTexW(0.0f), m_PauseButtonTexH(0.0f),
-      m_QuitTitleTexW(0.0f), m_QuitTitleTexH(0.0f),
-      m_RetryButtonTexW(0.0f), m_RetryButtonTexH(0.0f)
+      m_State(PAUSE_STATE_HIDDEN)
+#if !defined(__bada__)
+    , m_TitleTexW(0.0f), m_TitleTexH(0.0f)
+    , m_PauseButtonTexW(0.0f), m_PauseButtonTexH(0.0f)
+    , m_QuitTitleTexW(0.0f), m_QuitTitleTexH(0.0f)
+    , m_RetryButtonTexW(0.0f), m_RetryButtonTexH(0.0f)
+#endif
 {
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
@@ -240,16 +247,20 @@ PauseScreen::PauseScreen()
         Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
         m_Texture      = tex;     // +0x74 slot (PauseScreen::DrawOrder uses its own path)
         m_Texture = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
+#if !defined(__bada__)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
+#endif
     }
 
     // +0xb8 m_PauseButtonTex: pause_button.tex (in-game pause icon)
     {
         int w = 0, h = 0;
         m_PauseButtonTex = LoadTex("pause_button.tex", &w, &h);
+#if !defined(__bada__)
         m_PauseButtonTexW = (float)w;
         m_PauseButtonTexH = (float)h;
+#endif
     }
 
     // +0xbc m_PlayButtonTex: play_button.tex (resume icon)
@@ -261,8 +272,10 @@ PauseScreen::PauseScreen()
     {
         int w = 0, h = 0;
         m_QuitTitleTex = LoadTex("quit_title.tex", &w, &h);
+#if !defined(__bada__)
         m_QuitTitleTexW = (float)w;
         m_QuitTitleTexH = (float)h;
+#endif
     }
 
     // +0xc4 m_RetryButtonTex: retry_button.tex
@@ -270,10 +283,13 @@ PauseScreen::PauseScreen()
     {
         int w = 0, h = 0;
         m_RetryButtonTex = LoadTex("retry_button.tex", &w, &h);
+#if !defined(__bada__)
         m_RetryButtonTexW = (float)w;
         m_RetryButtonTexH = (float)h;
+#endif
     }
 
+#if !defined(__bada__)
     // Title size stored in m_TitleSize for slide-in math (doc section 4 #6)
     m_TitleSize = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
 
@@ -283,6 +299,7 @@ PauseScreen::PauseScreen()
 
     // size for HUDControl3d::Draw quad
     size = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
+#endif
 }
 
 PauseScreen::~PauseScreen() {}
@@ -330,7 +347,7 @@ void PauseScreen::Release() {
 // -------------------------------------------------------------------------
 void PauseScreen::Reset() {
     if (m_RetryButton) {
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         m_RetryButton->m_bTouchHeld = 1;
 #endif
         m_RetryButton->m_Texture = m_RetryButtonTex;
@@ -427,7 +444,7 @@ bool PauseScreen::SetToMultiplayerState() {
 //   State 3 -> 4 (resume)
 void PauseScreen::PauseGameCallback() {
     if (m_State == PAUSE_STATE_HIDDEN) {
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
         #endif
         m_State = PAUSE_STATE_FADE_IN;
@@ -437,7 +454,7 @@ void PauseScreen::PauseGameCallback() {
             game_work.mGameSound->SFXPlay("Pause", 1.0f);
         }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
-        #ifndef FN_ASM_VERIFY_CROSS
+        #ifndef __bada__
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "PauseGameCallback");
         #endif
         m_State = PAUSE_STATE_RESUME_EXIT;
@@ -471,7 +488,7 @@ void PauseScreen::QuitGameCallback() {
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     game_work.m_bTutorialShown = 0;
     m_LastHitButton = 0;
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
     #endif
     m_State = PAUSE_STATE_QUIT_EXIT;
@@ -513,7 +530,7 @@ void PauseScreen::RetryGameCallback() {
     game_work.m_bTutorialShown = 0;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
     #endif
     m_State = PAUSE_STATE_RETRY_EXIT;
@@ -624,7 +641,7 @@ void PauseScreen::Update(float dt) {
             // writes `m_ResumeButton->m_bTouchHeld = 1` here (re-analyst
             // confirmed no `= 0` write to +0x131 exists anywhere in
             // PauseScreen::Update). Mirror that exactly.
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
             if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
 #endif
         }
@@ -643,7 +660,7 @@ void PauseScreen::Update(float dt) {
             m_Alpha           = 1.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
             #endif
             m_State = PAUSE_STATE_HIDDEN;
@@ -659,7 +676,7 @@ void PauseScreen::Update(float dt) {
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_ACTIVE), "Update/FADE_IN alpha settled");
             #endif
             m_State = PAUSE_STATE_ACTIVE;
@@ -671,7 +688,7 @@ void PauseScreen::Update(float dt) {
         game_work.bM_Mode = true;
 
         // Enable hit detection on Resume and Retry
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
         if (m_RetryButton)  m_RetryButton->m_bTouchHeld  = 1;
 #endif
@@ -681,7 +698,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RESUME_EXIT faded");
             #endif
             m_State = PAUSE_STATE_HIDDEN;
@@ -705,7 +722,7 @@ void PauseScreen::Update(float dt) {
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
             #endif
             m_State = PAUSE_STATE_HIDDEN;
@@ -725,7 +742,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x00169e50", "QUIT_EXIT faded");
             #endif
             QuitToMenu();
@@ -733,7 +750,7 @@ void PauseScreen::Update(float dt) {
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
                 Bomb::HitMenuBomb(m_QuitButton->pos);
-                #ifndef FN_ASM_VERIFY_CROSS
+                #ifndef __bada__
                 LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
                          m_QuitButton->pos.x, m_QuitButton->pos.y,
                          game_work.m_BombHitTimer);
@@ -747,7 +764,7 @@ void PauseScreen::Update(float dt) {
             // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
             // in case 1 is what produces the visible white flash and tears
             // down the gameplay HUD; jumping straight to HIDDEN skipped both.
-            #ifndef FN_ASM_VERIFY_CROSS
+            #ifndef __bada__
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_BOMB_FLASH), "Update/QUIT_EXIT faded");
             #endif
             m_State = PAUSE_STATE_BOMB_FLASH;
@@ -815,8 +832,13 @@ void PauseScreen::Update(float dt) {
     // button 80 units further off-screen and centered on x=0 instead of
     // the right edge.
     if (m_QuitButton && m_Alpha > FADE_CLAMP && m_PressIndex < 2) {
+#if !defined(__bada__)
         const float qSizeY = m_QuitTitleTexH;
         const float qSizeX = m_QuitTitleTexW;
+#else
+        const float qSizeY = 0.0f;
+        const float qSizeX = 0.0f;
+#endif
         float quitY = -((TITLE_SLIDE_BASE - qSizeY * 0.5f - 5.0f)
                         + (1.0f - m_Alpha) * (qSizeY + 10.0f));
         float quitX = SCREEN_RIGHT_X - qSizeX * 0.5f;

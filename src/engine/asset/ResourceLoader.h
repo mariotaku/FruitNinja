@@ -25,7 +25,7 @@ public:
     std::vector<uint8_t> m_Data;            // +0x2C (raw data bytes)
     std::vector<ResourceLoader> m_Children; // +0x38 (nested child loaders)
 
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     // Port specific: sequential read cursor; no binary equivalent (binary uses DataReader).
     size_t m_ReadPos;
 #endif
@@ -44,7 +44,15 @@ public:
     // Port convenience: wraps data+size in a VectorDataReader and calls Initialize(DataReader&)
     void Initialize(const uint8_t* data, size_t dataSize);
 
-    // Sequential read methods
+    const AsciiString& BasePathGet() const { return m_BasePath; }
+    void BasePathSet(const AsciiString& path) { m_BasePath = path; }
+
+    size_t DataSize() const { return m_Data.size(); }
+    const uint8_t* DataPtr() const { return m_Data.data(); }
+    size_t ChildCount() const { return m_Children.size(); }
+
+#if !defined(__bada__)
+    // Sequential read methods (port specific: use m_ReadPos cursor).
     template<typename T>
     T Read() {
         T val;
@@ -56,13 +64,6 @@ public:
     void ReadBytes(void* dest, unsigned long count);
     AsciiString ReadString();
     ResourceLoader* ReadSubResourceLookup();
-
-    const AsciiString& BasePathGet() const { return m_BasePath; }
-    void BasePathSet(const AsciiString& path) { m_BasePath = path; }
-
-    size_t DataSize() const { return m_Data.size(); }
-    const uint8_t* DataPtr() const { return m_Data.data(); }
-    size_t ChildCount() const { return m_Children.size(); }
 
     void ResetReadPos() { m_ReadPos = 0; }
 
@@ -114,6 +115,7 @@ public:
             m_ReadPos += 132;
         }
     }
+#endif // !defined(__bada__)
 
     // ---- binary symbol map ----
     // Binary @ 0x002554A0 -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
@@ -125,7 +127,7 @@ public:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(Mortar::ResourceLoader)                   == 0x44, "ResourceLoader size mismatch");
 static_assert(offsetof(Mortar::ResourceLoader, m_flag)        == 0x00, "ResourceLoader::m_flag offset");

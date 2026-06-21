@@ -40,7 +40,7 @@ public:
     bool m_open;
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(FileDataReader) == 0x48, "FileDataReader sizeof mismatch");
 static_assert(offsetof(FileDataReader, m_file) == 0x04, "FileDataReader::m_file offset");
 static_assert(offsetof(FileDataReader, m_open) == 0x44, "FileDataReader::m_open offset");

@@ -101,12 +101,12 @@ public:
     bool m_inUpdate;                         // +0x05
     // +0x06..0x07 padding (implicit)
     std::list<InputDevice*> m_inputDevices;  // +0x08 (8B, Sourcery 2010q1 pre-C++11)
-
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    static_assert(sizeof(InputManager) == 16, "InputManager size mismatch");
-#endif
 };
 
 } // namespace Mortar
+
+#if defined(__bada__)
+static_assert(sizeof(Mortar::InputManager) == 16, "InputManager size mismatch");
+#endif
 
 #endif // FN_ENGINE_INPUT_INPUTMANAGER_H

@@ -135,9 +135,13 @@ void MissControl::Init() {
     // DIFFERS: original = (GetWidth()>>1)+1, (GetWidth()>>1)+1 from Init @ 0x00150fa4;
     //          port uses (W+1, H+1) -- see spec note 1 for Init.
     if (s_TexCritical.IsValid()) {
+#if !defined(__bada__)
         size = Vec3((float)(s_TexCritical->m_Width >> 1) + 1,
                     (float)(s_TexCritical->m_Width >> 1) + 1,
                     0.0f);
+#else
+        size = Vec3(0.0f, 0.0f, 0.0f);
+#endif
     } else {
         size = Vec3(0.0f, 0.0f, 0.0f);
     }
@@ -235,7 +239,7 @@ void MissControl::LoadContent() {
         }
     }
     s_TexturesLoaded = true;
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_DEBUG("MissControl", "LoadContent: critical=%d rare=%d cross=%d",
               s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
     #endif
@@ -274,7 +278,7 @@ void MissControl::CreatePool(int count, HUD* hud) {
         s_pPool[i].m_bNoDestructor = 1;       // base+0x32; AFTER AddControl
     }
 
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_DEBUG("MissControl", "CreatePool: %d slots registered to HUD %p",
               count, static_cast<void*>(hud));
     #endif
@@ -339,7 +343,7 @@ MissControl* MissControl::GetFree() {
 // ASM-verified: 2026-05-24 binary @ 0x00151764 (re-analyst)
 // binary @ 0x00151764: Init() first, then tex + flags, then half/clamp/restore size.
 void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("MissControl", "MakeCritical pos=(%.1f,%.1f,%.1f) player=%d this=%p",
              pos.x, pos.y, pos.z, playerIdx, static_cast<void*>(this));
     #endif
@@ -360,8 +364,13 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     m_bComboActive = 1;
     m_FlashTimer  = 0;
     if (s_TexCritical.IsValid()) {
+#if !defined(__bada__)
         uint32_t w = s_TexCritical->m_Width;
         uint32_t h = s_TexCritical->m_Height;
+#else
+        uint32_t w = 0;
+        uint32_t h = 0;
+#endif
         // size = (w+1, h+1, 0), halved for clamp, then restored
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
@@ -384,7 +393,7 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
 // binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_DragScale=0.5,
 // and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("MissControl", "MakeRare pos=(%.1f,%.1f,%.1f) this=%p",
              pos.x, pos.y, pos.z, static_cast<void*>(this));
     #endif
@@ -405,8 +414,13 @@ void MissControl::MakeRare(Vec3 pos) {
     m_bComboActive = 1;
     m_FlashTimer  = 0;
     if (s_TexRare.IsValid()) {
+#if !defined(__bada__)
         uint32_t w = s_TexRare->m_Width;
         uint32_t h = s_TexRare->m_Height;
+#else
+        uint32_t w = 0;
+        uint32_t h = 0;
+#endif
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
         size.z = 0.0f;  // DAT_00151a30 = 0.0
@@ -430,7 +444,7 @@ void MissControl::MakeRare(Vec3 pos) {
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
 // Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.811, anim=3, visible=1.
 void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
              pos.x, pos.y, pos.z, comboCount, entityType, static_cast<void*>(this));
     #endif
@@ -469,8 +483,13 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     m_FlashTimer  = 0;
     // Size: (w+1, h+1, 0), halved for clamp, then restored
     if (s_ComboTextures[idx].IsValid()) {
+#if !defined(__bada__)
         uint32_t w = s_ComboTextures[idx]->m_Width;
         uint32_t h = s_ComboTextures[idx]->m_Height;
+#else
+        uint32_t w = 0;
+        uint32_t h = 0;
+#endif
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
         size.z = 0.0f;  // DAT_00151744 = 0.0
@@ -494,7 +513,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
 // Common prefix: Init fields inline (binary does not call virtual Init()), then m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
                                 Mortar::SmartPtr<Mortar::Texture> tex) {
-    #ifndef FN_ASM_VERIFY_CROSS
+    #ifndef __bada__
     LOG_INFO("MissControl", "MakeDisappear pos=(%.1f,%.1f,%.1f) sizeMult=%d tex=%d this=%p",
              inPos.x, inPos.y, inPos.z, sizeMult,
              tex.IsValid() ? 1 : 0, static_cast<void*>(this));
@@ -521,8 +540,13 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         m_LifeTimer    = MISS_FADE_INIT;  // DAT_00151f40 = 1.81f
         m_FlashTimer  = 0;
         m_bComboActive = 1;
+#if !defined(__bada__)
         uint32_t w = tex->m_Width;
         uint32_t h = tex->m_Height;
+#else
+        uint32_t w = 0;
+        uint32_t h = 0;
+#endif
         size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
         // ASM-verified: 2026-05-24 binary @ 0x00151e40 (re-analyst v2)
         // Binary: `mov r0,r4; mov r1,r7; blx 0x000f6c30` -- r7 was saved from

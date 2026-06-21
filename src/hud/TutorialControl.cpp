@@ -132,7 +132,7 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
 #else
         m_bFlipX = (pos.x > 0.0f);
@@ -169,7 +169,7 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
-#if !defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
         m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
 #else
         m_bFlipX = (pos.x > 0.0f);

@@ -186,10 +186,15 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pTitleBox(nullptr)          // +0xd0
     , m_pDescBox(nullptr)           // +0xd4
     , m_pInfoBox(nullptr)           // +0xd8
-    , game(g)
+#if !defined(__bada__)
+    , m_pGame(&g)
     , m_bSetupLevelFired(false)
     , m_pOnlineMpButton(nullptr)
+#endif
 {
+#if defined(__bada__)
+    (void)g;
+#endif
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw
     m_State           = 0;
@@ -471,10 +476,12 @@ void GameModeScreen::Update(float dt) {
             // toward 0 from -1 (main menu zoom-in), so the actual gate is
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
+#if !defined(__bada__)
             if (!m_bSetupLevelFired && camT > -0.9f) {
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
+#endif
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
                 if (game_work.mGameSound) {
@@ -594,6 +601,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     // Mode_sensei panel — same pattern as DojoScreen's dojo_sensei:
     // bottom-left position (-188, -32) with horizontal slide from left.
     if (s_TexModeSensei.IsValid()) {
+#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexModeSensei->m_Width + 1.0f,
@@ -607,6 +615,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexModeSensei->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexModeSensei->UnSet();
+#endif
     }
 
     // --- 2. Borders (BaseScreen::DrawBorders BakedStringBox* overload, NULL box) ---
@@ -634,12 +643,13 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     // SRC=(314,14,10) (past +240 X edge), as alpha->1 it slides in to
     // rest at DST=(194,29,10) on-screen.
     if (s_TexZenSign.IsValid()) {
+        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
+#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->m_Width + 1.0f,
             (float)s_TexZenSign->m_Height + 1.0f,
             1.0f);
-        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
         mat.GlobalTranslate44(logoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -647,6 +657,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexZenSign->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
+#endif
 
         // Draw the feature-bullet text over the zen board quad.
         // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
@@ -706,14 +717,18 @@ void GameModeScreen::SetupLevel() {
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
+#if !defined(__bada__)
     m_bSetupLevelFired = false;
+#endif
     m_State = 3;
     game_work.gameMode = 0;
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
 void GameModeScreen::ZenModeCallback() {
+#if !defined(__bada__)
     m_bSetupLevelFired = false;
+#endif
     m_State = 6;
     game_work.gameMode = 3;
 }
@@ -721,7 +736,9 @@ void GameModeScreen::ZenModeCallback() {
 // Matches ArcadeModeCallback @ 0x0013e19c
 // Binary: FruitSaveData::AddToTotal("coming_soon", ..., 10) — skipped
 void GameModeScreen::ArcadeModeCallback() {
+#if !defined(__bada__)
     m_bSetupLevelFired = false;
+#endif
     m_State = 5;
     game_work.gameMode = 2;
 }
@@ -754,10 +771,12 @@ void GameModeScreen::DeletedMenuButton(MenuButton* btn) {
     if (btn == m_pClassicButton) { m_pClassicButton = nullptr; return; }
     if (btn == m_pZenButton)     { m_pZenButton     = nullptr; return; }
     if (btn == m_pArcadeButton)  { m_pArcadeButton  = nullptr; return; }
+#if !defined(__bada__)
     if (btn == m_pOnlineMpButton) {
         m_pOnlineMpButton = nullptr;
         // Defunct: online-MP detached fruit fling (binary @ 0x0013f6ac)
     }
+#endif
 }
 
 // Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets gameMode=1, m_State=4 + NetworkManager flag

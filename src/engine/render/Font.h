@@ -250,7 +250,7 @@ public:
 
 } // namespace Mortar
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 #include <cstddef>
 static_assert(sizeof(Mortar::Font) == 0x438,
               "Mortar::Font size mismatch (binary @ 0x00198534, operator-new not found, size derived from ctor)");

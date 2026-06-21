@@ -90,7 +90,7 @@ public:
     static UpsellScreen* MakeModeUpsellScreen(Mortar::Delegate0<void> onDone, int mode);
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(UpsellScreen) == 0x1EC,
     "UpsellScreen must be 492 bytes on ARM32/Bada");
 #endif
@@ -235,7 +235,7 @@ private:
     uint8_t                  m_pad_after[924 - 0x150 - 8];
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(UpsellScreenElement) == 0x39C,
     "UpsellScreenElement must be 924 bytes on ARM32/Bada");
 #endif

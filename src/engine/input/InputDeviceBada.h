@@ -65,14 +65,10 @@ public:
     uint32_t field_0x14;   // +0x14  last touch Y
     uint32_t field_0x18;   // +0x18  event stamp counter
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-    static_assert(sizeof(InputDeviceBada) == 28, "InputDeviceBada size mismatch");
-#endif
-
     // Port-only fields (tail; not counted in binary sizeof).
     // These implement the port-side callback dispatch path which in the
     // binary goes through InputActionMapper::ProcessEvent (not yet ported).
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     Mortar::Touch*                m_touch;
     std::list<InputDeviceBinding> m_bindings;
     bool                          m_queueUntilUpdate;
@@ -81,5 +77,9 @@ public:
 };
 
 } // namespace Mortar
+
+#if defined(__bada__)
+static_assert(sizeof(Mortar::InputDeviceBada) == 28, "InputDeviceBada size mismatch");
+#endif
 
 #endif // FN_ENGINE_INPUT_INPUTDEVICEBADA_H

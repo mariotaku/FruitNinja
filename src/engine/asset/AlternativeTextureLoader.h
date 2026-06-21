@@ -99,7 +99,7 @@ public:
     uint16_t       m_ApparentH;          // +0x26
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 namespace { struct _SubstLayoutCheck {
     static_assert(sizeof(SubstituteApparentSizeTextureSource) == 0x28,
                   "SubstituteApparentSizeTextureSource size mismatch");

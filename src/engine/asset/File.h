@@ -91,7 +91,7 @@ public:
 #endif
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 struct FileLayoutAssert {
     static_assert(offsetof(File, m_pIFile)     == 0x00, "File::m_pIFile offset");
     static_assert(offsetof(File, m_systemID)   == 0x04, "File::m_systemID offset");

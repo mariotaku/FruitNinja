@@ -152,7 +152,9 @@ void DrawCriticalFlash() {
     // Sync s_LastBoundTexId since the white-pixel is procedural (no
     // Mortar::Texture wrapper), and Renderer::DrawQuad would otherwise
     // skip the draw thinking nothing is bound.
+#if !defined(__bada__)
     Mortar::Texture::s_LastBoundTexId = s_WhitePx;
+#endif
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -163,7 +165,9 @@ void DrawCriticalFlash() {
 
     Mortar::Mesh::DrawQuadUnCached(tint, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
+#if !defined(__bada__)
     Mortar::Texture::s_LastBoundTexId = 0;
+#endif
 }
 
 // Matches ResetGameEntities (binary 0x0016a058, 40 lines).
@@ -208,7 +212,9 @@ void ResetGameEntities(bool killAll) {
     int count_non_null = 0;
     for (int i = 0; i < 16; ++i) {
         if (g_pSlashEntities[i]) {
+#if !defined(__bada__)
             if (g_pSlashEntities[i]->IsBladeActive()) count_non_null++;
+#endif
             g_pSlashEntities[i]->Reset();
         }
     }

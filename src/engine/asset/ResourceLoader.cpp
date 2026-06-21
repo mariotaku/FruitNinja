@@ -34,7 +34,7 @@ static AsciiString PathGetParent(const AsciiString& path)
 // Default ctor (no binary equivalent; port convenience for m_Children push_back).
 ResourceLoader::ResourceLoader()
     : m_flag(0)
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_ReadPos(0)
 #endif
 {
@@ -48,7 +48,7 @@ ResourceLoader::ResourceLoader()
 //   fr.~FileDataReader();
 ResourceLoader::ResourceLoader(const AsciiString& filePath)
     : m_flag(0)
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_ReadPos(0)
 #endif
 {
@@ -60,7 +60,7 @@ ResourceLoader::ResourceLoader(const AsciiString& filePath)
 // Port convenience wrapper: const char* path ctor delegates to the AsciiString ctor.
 ResourceLoader::ResourceLoader(const char* filePath)
     : m_flag(0)
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_ReadPos(0)
 #endif
 {
@@ -78,7 +78,7 @@ ResourceLoader::ResourceLoader(const char* filePath)
 //   Initialize(r);
 ResourceLoader::ResourceLoader(DataReader& reader, const AsciiString& basePath)
     : m_flag(0)
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+#if !defined(__bada__)
     , m_ReadPos(0)
 #endif
 {
@@ -128,6 +128,7 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize)
     Initialize(vr);
 }
 
+#if !defined(__bada__)
 // Binary @ 0x001b45bc -- if (count != 0) { memcpy(dest, &m_Data[cursor], count); cursor += count; }
 // The binary's read cursor lives at this+0x00 (m_flag); the port uses m_ReadPos.
 // DIFFERS: original = no upper-bound check (only count != 0), using extra
@@ -175,12 +176,11 @@ ResourceLoader* ResourceLoader::ReadSubResourceLookup()
     if (index > 0 && index - 1 < (uint32_t)m_Children.size()) {
         ResourceLoader* child = &m_Children[index - 1];
         child->m_flag = 0;
-#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
         child->m_ReadPos = 0;   // binary cursor is m_flag; port cursor is m_ReadPos
-#endif
         return child;
     }
     return nullptr;
 }
+#endif // !defined(__bada__)
 
 } // namespace Mortar

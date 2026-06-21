@@ -497,7 +497,9 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
                                              : GL_ONE_MINUS_SRC_ALPHA;
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, dstFactor);
+#if !defined(__bada__)
         glBindTexture(GL_TEXTURE_2D, tmpl->m_Texture->m_TexId);
+#endif
         if (Renderer* r = Renderer::GetInstance()) {
             r->DrawTriList(verts.data(), (int)verts.size());
         }
@@ -908,9 +910,11 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
                     snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
                     tmpl.m_Texture = Mortar::TextureManager::GetInstance().Load(buf);
                     if (tmpl.m_Texture.IsValid()) {
+#if !defined(__bada__)
                         const float tw = (float)tmpl.m_Texture->m_Width;
                         const float th = (float)tmpl.m_Texture->m_Height;
                         if (th > 0.0f) tmpl.m_AspectRatio = tw / th;
+#endif
                     }
                 }
             }

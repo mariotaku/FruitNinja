@@ -638,8 +638,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
     // ASM-verified: 2026-05-03T00:00 binary @ 0x00159726..0x00159770 (asm-inspector)
     if (m_ScoreIconTex.IsValid() && transTimer > 0.0f) {
         Mortar::Texture* tex = m_ScoreIconTex.Get();
+#if !defined(__bada__)
         float texW = (tex && tex->m_Width  > 0) ? (float)tex->m_Width  : 64.0f;
         float texH = (tex && tex->m_Height > 0) ? (float)tex->m_Height : 16.0f;
+#else
+        float texW = 64.0f;
+        float texH = 16.0f;
+#endif
 
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
@@ -664,8 +669,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
     // ASM-verified: 2026-05-03T00:00 binary @ 0x00159842..0x0015990c (asm-inspector)
     if (m_HighscoreBannerTex.IsValid() && m_BannerScaleTime > 0.0f) {
         Mortar::Texture* tex = m_HighscoreBannerTex.Get();
+#if !defined(__bada__)
         float texW = (tex && tex->m_Width  > 0) ? (float)tex->m_Width  + 1.0f : 65.0f;
         float texH = (tex && tex->m_Height > 0) ? (float)tex->m_Height + 1.0f : 17.0f;
+#else
+        float texW = 65.0f;
+        float texH = 17.0f;
+#endif
 
         // Binary @ 0x00159740..0x0015975c
         float k = m_BannerScaleTime * SCORE_BANNER_SIN_RATE2;

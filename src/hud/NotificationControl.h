@@ -61,7 +61,7 @@ public:
     // ---- end lifecycle overrides ----
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(NotificationControl) == 276, "NotificationControl size mismatch");
 #endif
 

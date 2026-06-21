@@ -405,9 +405,15 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             bgTex = g_GameOverTitleTex;
         m_Texture = bgTex;
         if (bgTex) {
+#if !defined(__bada__)
             m_TitleSizeX     = (float)bgTex->m_Width;
             m_TitleSize.x    = (float)bgTex->m_Width;
             m_TitleSize.y    = (float)bgTex->m_Height;
+#else
+            m_TitleSizeX     = 256.0f;
+            m_TitleSize.x    = 256.0f;
+            m_TitleSize.y    = 128.0f;
+#endif
         } else {
             // DIFFERS: binary skips the m_TitleSize write when the texture
             // load fails (leaving stale data) -- port substitutes a hard-coded

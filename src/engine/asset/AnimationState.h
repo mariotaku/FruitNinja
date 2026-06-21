@@ -57,7 +57,7 @@ struct AnimBindings {
     std::vector<Vector> m_Vectors;  // +0x0C (12B)
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(AnimBindings::Vector::Binding) == 0x0c,
               "AnimBindings::Vector::Binding sizeof mismatch (expected 0x0c)");
 static_assert(sizeof(AnimBindings::Vector) == 16,

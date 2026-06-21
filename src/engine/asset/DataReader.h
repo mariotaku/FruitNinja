@@ -54,7 +54,7 @@ public:
     }
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#if defined(__bada__)
 static_assert(sizeof(DataReader) == 4, "DataReader sizeof mismatch (vptr-only abstract base)");
 #endif
 
