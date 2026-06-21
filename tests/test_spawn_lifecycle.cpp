@@ -23,12 +23,12 @@
 // binary should produce. Always returns 0 unless setup fails.
 //
 // Run:
-//   ./build/tests/Debug/test_spawn_lifecycle.exe                   # arcade, 65s default
-//   ./build/tests/Debug/test_spawn_lifecycle.exe --mode=classic    # classic, 35s default
-//   ./build/tests/Debug/test_spawn_lifecycle.exe --mode=zen        # zen, 95s default
-//   ./build/tests/Debug/test_spawn_lifecycle.exe --frames=600      # override frame count
-//   ./build/tests/Debug/test_spawn_lifecycle.exe --trace=30        # log entity pos/vel every 30 frames
-//   ./build/tests/Debug/test_spawn_lifecycle.exe --interactive     # visible window
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe                   # arcade, 65s default
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe --mode=classic    # classic, 35s default
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe --mode=zen        # zen, 95s default
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe --frames=600      # override frame count
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe --trace=30        # log entity pos/vel every 30 frames
+//   ./build/host/tests/Debug/test_spawn_lifecycle.exe --interactive     # visible window
 //
 // Lifecycle entries are tagged [SPAWN-N], [WAVE], [BLITZ], [TRACE], [KILL]
 // so users can grep easily.

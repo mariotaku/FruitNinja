@@ -13,7 +13,7 @@
 #   bash tools/symbol-diff/run.sh
 #
 # Pre-requisite: bash tools/asm-verify/setup.sh (one-time fnverify image build)
-#                + native build/_deps/tinyxml2-src/tinyxml2.h (i.e. cmake -B build
+#                + native build/host/_deps/tinyxml2-src/tinyxml2.h (i.e. cmake -B build
 #                has been configured at least once).
 #
 # Notes:
@@ -53,8 +53,8 @@ if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
     exit 1
 fi
 
-if [[ ! -f "$PROJECT_ROOT/build/_deps/tinyxml2-src/tinyxml2.h" ]]; then
-    echo "ERROR: build/_deps/tinyxml2-src/tinyxml2.h missing." >&2
+if [[ ! -f "$PROJECT_ROOT/build/host/_deps/tinyxml2-src/tinyxml2.h" ]]; then
+    echo "ERROR: build/host/_deps/tinyxml2-src/tinyxml2.h missing." >&2
     echo "       Run cmake -B build at least once before symbol-diff." >&2
     exit 1
 fi
@@ -81,7 +81,7 @@ arm-none-eabi-nm --demangle /work/FruitNinjaBada/Bin/FruitNinja.exe \
 mkdir -p /tmp/portsrc/src /tmp/portsrc/cross-headers /tmp/portsrc/tinyxml2
 rsync -aq /work/src/ /tmp/portsrc/src/
 rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
-cp /work/build/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
+cp /work/build/host/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
 
 # C++11 -> C++03 sed transforms (GCC 4.4.1 cannot parse these).
 find /tmp/portsrc/src -name "*.h" -o -name "*.cpp" | xargs sed -i \

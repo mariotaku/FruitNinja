@@ -53,17 +53,18 @@ When a deviation is intentional and binary fidelity is sacrificed (e.g. SDL2 rep
 
 ## Building & Running
 
-The project's single configured build dir is `build/`. Configure once with the toolchain you want, then build incrementally with:
+`build/` is a gitignored CONTAINER holding all build trees — `build/host` (the single configured native host build), `build/web` (emscripten), `build/asan` (sanitizer), `build/bada-cross` (asm-verify cross-build). Configure the host build once with the toolchain you want, then build incrementally with:
 
 ```
-cmake --build build -j$(nproc)
-./build/fruit-ninja.exe
+cmake --build build/host -j$(nproc)
+./build/host/fruit-ninja.exe          # MSYS2/MinGW
+./build/host/Debug/fruit-ninja.exe    # MSVC
 ```
 
-Initial configure (one of):
+Initial host configure (one of):
 
-- **MSYS2 / MinGW**: `cmake -G "MSYS Makefiles" -B build`
-- **MSVC** (from a Developer Cmd Prompt or after `vcvars64.bat`): `cmake -S . -B build -G "CodeBlocks - NMake Makefiles" -DCMAKE_BUILD_TYPE=Release`
+- **MSYS2 / MinGW**: `cmake -G "MSYS Makefiles" -B build/host`
+- **MSVC** (from a Developer Cmd Prompt or after `vcvars64.bat`): `cmake -S . -B build/host -G "CodeBlocks - NMake Makefiles" -DCMAKE_BUILD_TYPE=Release`
 
 Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implementer.md`.
 

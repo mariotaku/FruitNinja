@@ -19,10 +19,10 @@
 // that m_State advances out of STATE_MAIN_DISPLAY for each.
 //
 // Run via:
-//   ctest --test-dir build -R bonus_phase --output-on-failure
+//   ctest --test-dir build/host -R bonus_phase --output-on-failure
 // or:
-//   ./build/tests/Debug/test_bonus_phase.exe
-//   ./build/tests/Debug/test_bonus_phase.exe --interactive
+//   ./build/host/tests/Debug/test_bonus_phase.exe
+//   ./build/host/tests/Debug/test_bonus_phase.exe --interactive
 
 #include "test_harness.h"
 #include "screens/GameOverScreen.h"

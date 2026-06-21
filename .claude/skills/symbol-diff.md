@@ -15,7 +15,7 @@ Produce a binary-vs-port symbol coverage report by cross-compiling every `src/**
 
 ## Pre-requisites
 - `fnverify` Docker image built: `bash tools/asm-verify/setup.sh` (one-time).
-- The port's MSVC `build/` exists with `tinyxml2.h` available at `build/_deps/tinyxml2-src/tinyxml2.h`.
+- The port's MSVC `build/` exists with `tinyxml2.h` available at `build/host/_deps/tinyxml2-src/tinyxml2.h`.
 
 ## Steps
 
@@ -45,7 +45,7 @@ docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c '
 mkdir -p /tmp/portsrc/src /tmp/portsrc/cross-headers /tmp/portsrc/tinyxml2
 rsync -aq /work/src/ /tmp/portsrc/src/
 rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
-cp /work/build/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
+cp /work/build/host/_deps/tinyxml2-src/tinyxml2.h /tmp/portsrc/tinyxml2/
 
 # C++11 -> C++03 patches:
 # 1. `explicit operator bool` is C++11; strip explicit

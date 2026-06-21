@@ -39,9 +39,9 @@ target_include_directories(fnverify PRIVATE
     "${_ASM_VERIFY}/cross-headers"
     "${_PROJECT_ROOT}/src"
     "${_PROJECT_ROOT}/src/engine"
-    # verify.sh copies host build/_deps/tinyxml2-src into the Docker
+    # verify.sh copies host build/host/_deps/tinyxml2-src into the Docker
     # staging area, so this path exists even without FetchContent.
-    "${_PROJECT_ROOT}/build/_deps/tinyxml2-src"
+    "${_PROJECT_ROOT}/build/host/_deps/tinyxml2-src"
 )
 
 set_target_properties(fnverify PROPERTIES LINKER_LANGUAGE CXX)

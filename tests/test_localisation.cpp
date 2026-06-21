@@ -6,7 +6,7 @@
 // expected strings (see kExpect[] below).
 //
 // Run via:
-//   cd build && ctest --output-on-failure -R localisation
+//   cd build/host && ctest --output-on-failure -R localisation
 
 #include "util/StringTable.h"
 #include "asset/FileManager.h"

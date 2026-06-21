@@ -10,11 +10,11 @@
 # entity types, ActorManager, Renderer, etc.) and SDL2.
 #
 # Build alongside the main fruit-ninja target:
-#   cmake --build build -j
+#   cmake --build build/host -j
 #
 # Run (GPU required):
-#   ./build/tests/scenes/scene_fruit_scene.exe   --interactive
-#   ./build/tests/scenes/scene_slash_scene.exe   --interactive
+#   ./build/host/tests/scenes/scene_fruit_scene.exe   --interactive
+#   ./build/host/tests/scenes/scene_slash_scene.exe   --interactive
 
 # Port specific: standalone entity test harness -- excluded from asm-verify /
 # symbol-diff scope because the files are under tests/ not src/.
