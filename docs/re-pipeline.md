@@ -18,8 +18,8 @@ Both feed the same triage bottleneck (`tools/asm-verify/triage.json`). The asm-v
 | 6 | **ASM-level diff** | `asm-verify.py` (Docker) | fnverify.a vs binary (per symbol) → report.json | Compare operand-by-operand; score common%, reason each divergence | `tools/asm-verify/asm-verify.py` line ~27 |
 | 7 | **Auto-classify** | `classify-divergences.py` (host) | report.json → shortlist.md + suggested-triage.json | Rank divergences by LIKELIHOOD (HIGH/MED/LOW) + CAUSE (control-flow, register naming, call-site shape, etc.) | `tools/asm-verify/classify-divergences.py` lines 1-24 |
 | 8 | **Triage + fix** | asm-triager (agent) → implementer (agent) → re-run stage 4-7 | shortlist.md → `tools/asm-verify/triage.json` (sticky verdicts) → code fixes | Classify each HIGH/MED divergence as ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED; apply root fixes; iterate | `.claude/agents/asm-triager.md` + `.claude/agents/implementer.md` |
-| 9 | **Whole-program BinDiff** | `bindiff-pipeline.sh` (rare, for architecture confidence) | binary vs fnverify.{arm,thumb}.so → BinDiff + CSV | Full-program similarity by function; ranks structural divergences | `tools/asm-verify/bindiff-pipeline.sh` + `resolve-bindiff-names.py` + `triage-prefilter.py` |
-| 10 | **Layout reference** | `infer-class-sizes.py` / `layout-reference.py` / `extract-typeinfo.py` | binary → tmp/binary-class-sizes.json, tmp/typeinfo-tree.json | Snapshot binary class layouts + typeinfo; used for struct correctness spot-checks | `tools/asm-verify/` (scripts at lines 1-50) |
+| 9 | **Whole-program BinDiff** | `bindiff-pipeline.sh` (rare, for architecture confidence) | binary vs fnverify.{arm,thumb}.so → BinDiff + CSV | Full-program similarity by function; ranks structural divergences | `tools/asm-verify/bindiff/bindiff-pipeline.sh` + `bindiff/resolve-bindiff-names.py` + `bindiff/triage-prefilter.py` |
+| 10 | **Layout reference** | `layout/infer-class-sizes.py` / `layout/layout-reference.py` / `layout/extract-typeinfo.py` | binary → tmp/binary-class-sizes.json, tmp/typeinfo-tree.json | Snapshot binary class layouts + typeinfo; used for struct correctness spot-checks | `tools/asm-verify/layout/` (scripts at lines 1-50) |
 | 11 | **Single-function verification** | asm-inspector (agent + `compile-one.sh` Docker) | a claim (e.g. "is the loop unrolled?") → ASM-level verdict | Compile a minimal test unit with Bada toolchain; diff assembly to settle decompiler doubts | `.claude/agents/asm-inspector.md` |
 
 ## Data Flow Diagram (text)
@@ -100,7 +100,7 @@ Every symbol under `manifest.generated.toml` (several minutes in Docker).
 
 ### Whole-program BinDiff (deep architecture review)
 ```bash
-bash tools/asm-verify/bindiff-pipeline.sh
+bash tools/asm-verify/bindiff/bindiff-pipeline.sh
 ```
 Stages 4, 9 (build twins, export, BinDiff). ~30–60 min including Ghidra + BinDiff host-side. Output in `tmp/bindiff-out/`.
 

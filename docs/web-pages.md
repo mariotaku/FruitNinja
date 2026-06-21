@@ -82,7 +82,7 @@ preload step embeds them into `fruit-ninja.data`).
 ### Assembling pages/
 
 ```sh
-python tools/build_pages.py
+python tools/web/build_pages.py
 ```
 
 The script is idempotent: it removes and recreates `pages/` each run.

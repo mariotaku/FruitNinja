@@ -348,7 +348,7 @@ if (EMSCRIPTEN)
     # in html), and prunes stale hashed files from prior builds.
     # fruit-ninja.html stays unhashed (stable entry point).
     add_custom_command(TARGET fruit-ninja POST_BUILD
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web-hash-assets.py
+        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/web-hash-assets.py
                         ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Content-hashing web output files (cache busting)"
         VERBATIM
