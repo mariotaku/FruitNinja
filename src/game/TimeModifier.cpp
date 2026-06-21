@@ -5,7 +5,6 @@
 #include "Game.h"
 #include "hud/TimeControl.h"
 #include "ItemParseUtil.h"
-#include <tinyxml2.h>
 #include "game/GameWork.h"
 
 // ASM-verified: 2026-06-20T00:00Z v1.6.1 TimeModifier::TimeModifier @ 0x143808 (asm-inspector)

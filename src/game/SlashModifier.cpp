@@ -4,7 +4,6 @@
 #include "ItemParseUtil.h"
 #include "entities/SlashEntity.h"
 #include "engine/math/Colour.h"
-#include <tinyxml2.h>
 #include <cstdio>
 #include <cstring>
 #include "util/StringHash.h"
@@ -108,7 +107,7 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
     if (xml == nullptr) return;
 
     double speed = 1.0;
-    if (xml->QueryDoubleAttribute("speed", &speed) == tinyxml2::XML_SUCCESS)
+    if (xml->QueryDoubleAttribute("speed", &speed) == TIXML_SUCCESS)
         m_ColourSpeed = (float)speed;
 
     m_ColourType = ParseSlashModColourType(xml->Attribute("type"));

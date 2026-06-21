@@ -5,7 +5,6 @@
 #include "SpawnModifier.h"
 #include "WaveManager.h"
 #include "GameWork.h"
-#include <tinyxml2.h>
 #include <cmath>
 #include <cstdio>
 

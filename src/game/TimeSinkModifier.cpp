@@ -7,7 +7,6 @@
 #include "entities/Fruit.h"
 #include "hud/TimeControl.h"
 #include "engine/util/Delegate.h"
-#include <tinyxml2.h>
 
 TimeSinkModifier::TimeSinkModifier()
     : GameModifier()

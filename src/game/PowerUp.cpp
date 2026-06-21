@@ -20,7 +20,6 @@
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
-#include <tinyxml2.h>
 #include <cstring>
 #include <cctype>
 #include <cstdio>
