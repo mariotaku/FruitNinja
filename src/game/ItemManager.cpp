@@ -16,7 +16,7 @@
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/MenuBackground.h"
-#include "engine/xml/XmlLoad.h"
+#include "engine/xml/TiXml.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
 #include <tinyxml2.h>
@@ -88,7 +88,6 @@ static std::string BuildItemSaveFullPath() {
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
     // Phase 1: Parse itemlist.xml
-    tinyxml2::XMLDocument doc;
     std::string itemListPath = Game::GetInstance()->data_dir + "/xml/itemlist.xml";
 
     m_ByHash.clear();
@@ -96,89 +95,94 @@ void ItemManager::LoadItemData() {
     for (int i = 0; i < 4; i++) m_ByHashType[i].clear();
     m_DefaultItems[0] = m_DefaultItems[1] = m_DefaultItems[2] = m_DefaultItems[3] = nullptr;
 
-    if (FN::LoadXmlCI(doc, itemListPath) == tinyxml2::XML_SUCCESS) {
-        TiXmlElement root(doc.FirstChildElement("itemManagerFile"));  // 0x1ba075
-        if (root) {
-            for (TiXmlElement e = root.FirstChildElement("item");  // 0x1b9e95
-                 e;
-                 e = e.NextSiblingElement("item")) {
+    {
+        TiXmlDocument doc;
+        if (doc.LoadFile(itemListPath.c_str())) {
+            TiXmlElement root = doc.FirstChildElement("itemManagerFile");  // 0x1ba075
+            if (root) {
+                for (TiXmlElement e = root.FirstChildElement("item");  // 0x1b9e95
+                     e;
+                     e = e.NextSiblingElement("item")) {
 
-                const char* typeStr = e.Attribute("type");  // 0x1b9372
-                int type = ParseItemType(typeStr);
+                    const char* typeStr = e.Attribute("type");  // 0x1b9372
+                    int type = ParseItemType(typeStr);
 
-                ItemInfo* item;
-                if (type == 0) {
-                    item = new SlashModInfo();
-                } else {
-                    item = new ItemInfo();
-                }
-                item->m_Type = (int8_t)type;
-                item->Parse(&e);
-
-                // Achievement-gate check (binary: game_work.pM_SaveData directly, no null guard)
-                FruitSaveData* sd = game_work.m_SaveData;
-                if (sd->IsAchievementUnlocked(item->m_Hash)) {
-                    item->m_Cost = -1;
-                } else {
-                    AchievementManager* am = AchievementManager::GetInstance();
-                    if (!am->AchievementExists(item->m_Hash) && item->m_Cost > 0) {
-                        item->m_bSeen = false;
-                        item->m_Cost = -1;
-                        ShopScreen::s_NewItemAlpha = 1.0f;
+                    ItemInfo* item;
+                    if (type == 0) {
+                        item = new SlashModInfo();
+                    } else {
+                        item = new ItemInfo();
                     }
-                }
+                    item->m_Type = (int8_t)type;
+                    item->Parse(&e);
 
-                m_Items.push_back(item);
-                m_ByHash[item->m_Hash] = item;
-                m_ByHashType[type][item->m_Hash] = item;
+                    // Achievement-gate check (binary: game_work.pM_SaveData directly, no null guard)
+                    FruitSaveData* sd = game_work.m_SaveData;
+                    if (sd->IsAchievementUnlocked(item->m_Hash)) {
+                        item->m_Cost = -1;
+                    } else {
+                        AchievementManager* am = AchievementManager::GetInstance();
+                        if (!am->AchievementExists(item->m_Hash) && item->m_Cost > 0) {
+                            item->m_bSeen = false;
+                            item->m_Cost = -1;
+                            ShopScreen::s_NewItemAlpha = 1.0f;
+                        }
+                    }
 
-                if (m_DefaultItems[type] == nullptr && type != 3) {
-                    m_DefaultItems[type] = item;
+                    m_Items.push_back(item);
+                    m_ByHash[item->m_Hash] = item;
+                    m_ByHashType[type][item->m_Hash] = item;
+
+                    if (m_DefaultItems[type] == nullptr && type != 3) {
+                        m_DefaultItems[type] = item;
+                    }
                 }
             }
         }
     }
 
     // Phase 2: Load save state from ItemSave.xml
-    std::string saveFullPath = BuildItemSaveFullPath();
-    tinyxml2::XMLDocument save;
-    if (FN::LoadXmlCI(save, saveFullPath) == tinyxml2::XML_SUCCESS) {
-        tinyxml2::XMLElement* root = save.FirstChildElement("item_save_file");  // 0x1b9e4d
-        if (root != nullptr) {
-            root->QueryIntAttribute("coins",           &game_work.m_CoinsBalance);
-            root->QueryIntAttribute("coinsTotal",      &game_work.m_CoinsTotalEarned);
-            root->QueryIntAttribute("levelStartCoins", &game_work.m_CoinsAtGameStart);
+    {
+        std::string saveFullPath = BuildItemSaveFullPath();
+        TiXmlDocument save;
+        if (save.LoadFile(saveFullPath.c_str())) {
+            TiXmlElement root = save.FirstChildElement("item_save_file");  // 0x1b9e4d
+            if (root) {
+                root.QueryIntAttribute("coins",           &game_work.m_CoinsBalance);
+                root.QueryIntAttribute("coinsTotal",      &game_work.m_CoinsTotalEarned);
+                root.QueryIntAttribute("levelStartCoins", &game_work.m_CoinsAtGameStart);
 
-            tinyxml2::XMLElement* bought = root->FirstChildElement("boughtItems");  // 0x1b9e89
-            if (bought != nullptr) {
-                for (tinyxml2::XMLElement* e = bought->FirstChildElement("item");  // 0x1b9e95
-                     e != nullptr;
-                     e = e->NextSiblingElement("item")) {
-                    const char* nameVal = e->Attribute("name");  // 0x1c3173
-                    if (nameVal && *nameVal) {
-                        uint32_t hash = StringHash(nameVal);
-                        std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
-                        if (it != m_ByHash.end()) {
-                            ItemInfo* itm = it->second;
-                            itm->m_Cost = -1;
-                            const char* seenVal = e->Attribute("seen");  // 0x1b9ea5
-                            itm->m_bSeen = (seenVal && *seenVal && strcmp(seenVal, "true") == 0);
+                TiXmlElement bought = root.FirstChildElement("boughtItems");  // 0x1b9e89
+                if (bought) {
+                    for (TiXmlElement e = bought.FirstChildElement("item");  // 0x1b9e95
+                         e;
+                         e = e.NextSiblingElement("item")) {
+                        const char* nameVal = e.Attribute("name");  // 0x1c3173
+                        if (nameVal && *nameVal) {
+                            uint32_t hash = StringHash(nameVal);
+                            std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
+                            if (it != m_ByHash.end()) {
+                                ItemInfo* itm = it->second;
+                                itm->m_Cost = -1;
+                                const char* seenVal = e.Attribute("seen");  // 0x1b9ea5
+                                itm->m_bSeen = (seenVal && *seenVal && strcmp(seenVal, "true") == 0);
+                            }
                         }
                     }
                 }
-            }
 
-            tinyxml2::XMLElement* equipped = root->FirstChildElement("equippedItems");  // 0x1b9eaa
-            if (equipped != nullptr) {
-                for (tinyxml2::XMLElement* e = equipped->FirstChildElement("item");  // 0x1b9e95
-                     e != nullptr;
-                     e = e->NextSiblingElement("item")) {
-                    const char* nameVal = e->Attribute("name");  // 0x1c3173
-                    if (nameVal && *nameVal) {
-                        uint32_t hash = StringHash(nameVal);
-                        ItemInfo* itm = GetItem(hash);
-                        if (itm != nullptr) {
-                            m_DefaultItems[(int)itm->m_Type] = itm;
+                TiXmlElement equipped = root.FirstChildElement("equippedItems");  // 0x1b9eaa
+                if (equipped) {
+                    for (TiXmlElement e = equipped.FirstChildElement("item");  // 0x1b9e95
+                         e;
+                         e = e.NextSiblingElement("item")) {
+                        const char* nameVal = e.Attribute("name");  // 0x1c3173
+                        if (nameVal && *nameVal) {
+                            uint32_t hash = StringHash(nameVal);
+                            ItemInfo* itm = GetItem(hash);
+                            if (itm != nullptr) {
+                                m_DefaultItems[(int)itm->m_Type] = itm;
+                            }
                         }
                     }
                 }

@@ -12,7 +12,7 @@
 #include "hud/HUD.h"
 #include "math/MathUtil.h"
 #include "util/StringHash.h"
-#include "xml/XmlLoad.h"
+#include "xml/TiXml.h"
 #include "GameOver.h"
 #include "PowerUpManager.h"
 #include "hud/TimeControl.h"
@@ -29,7 +29,6 @@
 #define LOG_INFO(...)  ((void)0)
 #endif
 
-#include <tinyxml2.h>
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
@@ -175,12 +174,12 @@ void WaveManager::Init() {
         m_WaveInfo[mode].clear();
 
         std::string path = game->data_dir + "/" + s_WaveXML[mode];
-        tinyxml2::XMLDocument doc;
-        if (FN::LoadXmlCI(doc, path) != tinyxml2::XML_SUCCESS) {
+        TiXmlDocument doc;
+        if (!doc.LoadFile(path.c_str())) {
             continue;
         }
 
-        tinyxml2::XMLElement* root = doc.RootElement();
+        TiXmlElement root = doc.RootElement();
         if (!root) continue;
 
         // ASM-verified: 2026-05-27 binary @ 0x00113a4c..0x0011428e (asm-inspector)
@@ -191,10 +190,10 @@ void WaveManager::Init() {
         // from a prior Init() call's state).
         m_DefaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
         int waveIndex = 0;
-        for (tinyxml2::XMLElement* el = root->FirstChildElement();
-             el; el = el->NextSiblingElement())
+        for (TiXmlElement el = root.FirstChildElement();
+             el; el = el.NextSiblingElement())
         {
-            const char* elName = el->Name();
+            const char* elName = el.Name();
             if (!elName) continue;
 
             if (strcmp(elName, "defaults") == 0) {
@@ -202,42 +201,42 @@ void WaveManager::Init() {
                 // Binary calls DEFAULT_WAVE_INFO::Reset (placement-new via ctor).
                 m_DefaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
                 DEFAULT_WAVE_INFO& def = m_DefaultWaveInfo[mode];
-                el->QueryIntAttribute("waveChance",       &def.m_WaveChance);
+                el.QueryIntAttribute("waveChance",       &def.m_WaveChance);
                 // DIFFERS: binary reads "waveChanceRegrowth"; shipping XML uses "waveChanceGrowth".
                 // Neither key matches the other; binary default 0.25 covers both. Parse both for safety.
-                el->QueryFloatAttribute("waveChanceRegrowth", &def.m_WaveChanceRegrowth);
-                el->QueryFloatAttribute("waveChanceGrowth",   &def.m_WaveChanceRegrowth);
-                el->QueryFloatAttribute("dt",             &def.m_SpawnTimeScale);
-                el->QueryFloatAttribute("criticalChance", &def.m_CritChanceVal);
+                el.QueryFloatAttribute("waveChanceRegrowth", &def.m_WaveChanceRegrowth);
+                el.QueryFloatAttribute("waveChanceGrowth",   &def.m_WaveChanceRegrowth);
+                el.QueryFloatAttribute("dt",             &def.m_SpawnTimeScale);
+                el.QueryFloatAttribute("criticalChance", &def.m_CritChanceVal);
                 // globalDtInc -> per-mode WaveManager speed accumulator (binary key is "globalDtInc", not "dtInc").
-                el->QueryFloatAttribute("globalDtInc",   &m_DtIncPerMode[mode]);
+                el.QueryFloatAttribute("globalDtInc",   &m_DtIncPerMode[mode]);
                 // globalDtStart/globalDtMax -> per-mode speed clamp bounds.
-                el->QueryFloatAttribute("globalDtStart", &m_SpeedClampStart[mode]);
-                el->QueryFloatAttribute("globalDtMax",   &m_SpeedClampMax[mode]);
+                el.QueryFloatAttribute("globalDtStart", &m_SpeedClampStart[mode]);
+                el.QueryFloatAttribute("globalDtMax",   &m_SpeedClampMax[mode]);
                 // Additional <defaults> attrs written to DEFAULT_WAVE_INFO per binary audit.
-                el->QueryFloatAttribute("dtInc",          &def.m_DtInc);
-                el->QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
-                el->QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
-                el->QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
-                el->QueryFloatAttribute("nextDelay",      &def.m_NextDelay);
-                el->QueryFloatAttribute("nextDelayInc",   &def.m_NextDelayInc);
-                el->QueryFloatAttribute("nextDelaySpInc", &def.m_NextDelaySpInc);
-                if (const char* wfe = el->Attribute("waitForEntities"))
+                el.QueryFloatAttribute("dtInc",          &def.m_DtInc);
+                el.QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
+                el.QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
+                el.QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
+                el.QueryFloatAttribute("nextDelay",      &def.m_NextDelay);
+                el.QueryFloatAttribute("nextDelayInc",   &def.m_NextDelayInc);
+                el.QueryFloatAttribute("nextDelaySpInc", &def.m_NextDelaySpInc);
+                if (const char* wfe = el.Attribute("waitForEntities"))
                     def.m_bWaitForEntities = (strcmp(wfe, "false") != 0) ? 1 : 0;
-                if (const char* wfp = el->Attribute("waitForProcessing"))
+                if (const char* wfp = el.Attribute("waitForProcessing"))
                     def.m_bWaitForProcessing = (strcmp(wfp, "false") != 0) ? 1 : 0;
-                el->QueryFloatAttribute("speedLoss",      &def.m_SpeedLoss);
-                el->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
+                el.QueryFloatAttribute("speedLoss",      &def.m_SpeedLoss);
+                el.QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
             } else if (strcmp(elName, "coin_chances") == 0) {
-                { TiXmlElement ccElem(el); ParseCoinChanceinator(&m_CoinChanceinator[mode], &ccElem); }
+                ParseCoinChanceinator(&m_CoinChanceinator[mode], &el);
             } else if (strcmp(elName, "OverideProbability") == 0) {
                 PROBABILITY_OVERIDE po;
-                const char* types = el->Attribute("types");
+                const char* types = el.Attribute("types");
                 if (types) po.m_field68 = SplitWords(types, po.m_Types);
-                el->QueryIntAttribute("percentageChance", &po.m_PercentChance);
-                el->QueryIntAttribute("perWave", &po.m_PerWave);
-                el->QueryIntAttribute("waveCount", &po.m_PerWaveCount);
-                el->QueryFloatAttribute("disableWhenPowered", &po.m_DisableWhenPowered);
+                el.QueryIntAttribute("percentageChance", &po.m_PercentChance);
+                el.QueryIntAttribute("perWave", &po.m_PerWave);
+                el.QueryIntAttribute("waveCount", &po.m_PerWaveCount);
+                el.QueryFloatAttribute("disableWhenPowered", &po.m_DisableWhenPowered);
                 m_ProbabilityOverride[mode].push_back(po);
             } else if (strcmp(elName, "WaveInfo") == 0) {
                 WAVE_INFO* wi = new WAVE_INFO();
@@ -250,7 +249,7 @@ void WaveManager::Init() {
 
                 // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
                 // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
-                const char* waveNoStr = el->Attribute("waveNo");
+                const char* waveNoStr = el.Attribute("waveNo");
                 if (waveNoStr) {
                     if (strcmp(waveNoStr, "forever") == 0)
                         wi->m_WaveNumber = -2;
@@ -260,10 +259,10 @@ void WaveManager::Init() {
                 wi->m_ScoreThreshold = wi->m_WaveNumber;
 
                 // overideProbabiltyPool at +0x70 — typo matches binary literal. Writes same slot as waveNo in binary.
-                el->QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
+                el.QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
 
                 // until attr -> m_EndScore (+0x04).
-                const char* untilStr = el->Attribute("until");
+                const char* untilStr = el.Attribute("until");
                 if (untilStr) {
                     if (strcmp(untilStr, "forever") == 0)
                         wi->m_EndScore = -2;
@@ -274,77 +273,83 @@ void WaveManager::Init() {
                 }
 
                 // "chance" -> m_Chance (+0x3c). "chanceRegrowth" -> m_ChanceRegrowth (+0x44).
-                el->QueryIntAttribute("chance",           &wi->m_Chance);
-                el->QueryFloatAttribute("chanceRegrowth", &wi->m_ChanceRegrowth);
+                el.QueryIntAttribute("chance",           &wi->m_Chance);
+                el.QueryFloatAttribute("chanceRegrowth", &wi->m_ChanceRegrowth);
                 wi->m_CurrentChance   = wi->m_Chance;
                 wi->m_CurrentRegrowth = wi->m_ChanceRegrowth;
 
                 // criticalChance -> m_CriticalChance (+0x64).
-                el->QueryFloatAttribute("criticalChance", &wi->m_CriticalChance);
+                el.QueryFloatAttribute("criticalChance", &wi->m_CriticalChance);
 
                 // "games" / "gamesMin" -> m_GamesMin (+0x4c); "gamesMax" -> m_GamesMax (+0x50).
                 // Binary reads "games" first (overwrites +0x4c), then "gamesMin" overwrites same slot.
-                el->QueryIntAttribute("games",    &wi->m_GamesMin);
-                el->QueryIntAttribute("gamesMin", &wi->m_GamesMin);
-                el->QueryIntAttribute("gamesMax", &wi->m_GamesMax);
+                el.QueryIntAttribute("games",    &wi->m_GamesMin);
+                el.QueryIntAttribute("gamesMin", &wi->m_GamesMin);
+                el.QueryIntAttribute("gamesMax", &wi->m_GamesMax);
                 // Binary post-process: if GamesMin < 0: GamesMin = GamesMax; if GamesMax < 0: GamesMax = GamesMin.
                 if (wi->m_GamesMin < 0) wi->m_GamesMin = wi->m_GamesMax;
                 if (wi->m_GamesMax < 0) wi->m_GamesMax = wi->m_GamesMin;
 
                 // <ChooseFrom> child -> m_SpecialFruits (+0x54); m_field60 always cleared to 0.
-                tinyxml2::XMLElement* cfEl = el->FirstChildElement("ChooseFrom");
-                if (cfEl) {
-                    wi->m_SpecialFruits.clear();
-                    wi->m_field60 = 0;
-                    const char* types = cfEl->Attribute("types");
-                    if (types) SplitWords(types, wi->m_SpecialFruits);
+                {
+                    TiXmlElement cfEl = el.FirstChildElement("ChooseFrom");
+                    if (cfEl) {
+                        wi->m_SpecialFruits.clear();
+                        wi->m_field60 = 0;
+                        const char* types = cfEl.Attribute("types");
+                        if (types) SplitWords(types, wi->m_SpecialFruits);
+                    }
                 }
 
                 // <Wave_dt> child.
-                tinyxml2::XMLElement* dtEl = el->FirstChildElement("Wave_dt");
-                if (dtEl) {
-                    dtEl->QueryFloatAttribute("dt",    &wi->m_WaveDt);
-                    dtEl->QueryFloatAttribute("inc",   &wi->m_WaveDtInc);
-                    dtEl->QueryFloatAttribute("spinc", &wi->m_WaveDtSpInc);
+                {
+                    TiXmlElement dtEl = el.FirstChildElement("Wave_dt");
+                    if (dtEl) {
+                        dtEl.QueryFloatAttribute("dt",    &wi->m_WaveDt);
+                        dtEl.QueryFloatAttribute("inc",   &wi->m_WaveDtInc);
+                        dtEl.QueryFloatAttribute("spinc", &wi->m_WaveDtSpInc);
+                    }
                 }
 
                 // <NextWaveDelay> child.
-                tinyxml2::XMLElement* ndEl = el->FirstChildElement("NextWaveDelay");
-                if (ndEl) {
-                    ndEl->QueryFloatAttribute("wait",      &wi->m_NextWaveWait);
-                    ndEl->QueryFloatAttribute("waitSpinc", &wi->m_NextWaveWaitSpInc);
-                    ndEl->QueryFloatAttribute("speedLoss", &wi->m_NextWaveSpeedLoss);
-                    // Binary: if (wait > 0) { delay = 0; inc = 0; } then read delay/inc.
-                    if (wi->m_NextWaveWait > 0.0f) {
-                        wi->m_NextWaveDelay    = 0.0f;
-                        wi->m_NextWaveDelayInc = 0.0f;
+                {
+                    TiXmlElement ndEl = el.FirstChildElement("NextWaveDelay");
+                    if (ndEl) {
+                        ndEl.QueryFloatAttribute("wait",      &wi->m_NextWaveWait);
+                        ndEl.QueryFloatAttribute("waitSpinc", &wi->m_NextWaveWaitSpInc);
+                        ndEl.QueryFloatAttribute("speedLoss", &wi->m_NextWaveSpeedLoss);
+                        // Binary: if (wait > 0) { delay = 0; inc = 0; } then read delay/inc.
+                        if (wi->m_NextWaveWait > 0.0f) {
+                            wi->m_NextWaveDelay    = 0.0f;
+                            wi->m_NextWaveDelayInc = 0.0f;
+                        }
+                        ndEl.QueryFloatAttribute("delay", &wi->m_NextWaveDelay);
+                        ndEl.QueryFloatAttribute("inc",   &wi->m_NextWaveDelayInc);
+                        // waitForEntities: 1 if attr absent OR != "false"; 0 if "false".
+                        if (const char* wfe = ndEl.Attribute("waitForEntities"))
+                            wi->m_bWaitForEntities = (strcmp(wfe, "false") != 0) ? 1 : 0;
+                        // waitForProcessing: stored as (CompareWords == 0 => 1; else 0).
+                        if (const char* wfp = ndEl.Attribute("waitForProcessing"))
+                            wi->m_bWaitForProcessing = (strcmp(wfp, "false") != 0) ? 1 : 0;
                     }
-                    ndEl->QueryFloatAttribute("delay", &wi->m_NextWaveDelay);
-                    ndEl->QueryFloatAttribute("inc",   &wi->m_NextWaveDelayInc);
-                    // waitForEntities: 1 if attr absent OR != "false"; 0 if "false".
-                    if (const char* wfe = ndEl->Attribute("waitForEntities"))
-                        wi->m_bWaitForEntities = (strcmp(wfe, "false") != 0) ? 1 : 0;
-                    // waitForProcessing: stored as (CompareWords == 0 => 1; else 0).
-                    if (const char* wfp = ndEl->Attribute("waitForProcessing"))
-                        wi->m_bWaitForProcessing = (strcmp(wfp, "false") != 0) ? 1 : 0;
                 }
 
                 // <Spawn> children — collect spawners.
                 int spawnerCount = 0;
-                for (tinyxml2::XMLElement* sp = el->FirstChildElement("Spawn");
-                     sp; sp = sp->NextSiblingElement("Spawn"))
+                for (TiXmlElement sp = el.FirstChildElement("Spawn");
+                     sp; sp = sp.NextSiblingElement("Spawn"))
                     ++spawnerCount;
 
                 if (spawnerCount > 0) {
                     wi->m_pSpawners = new SPAWNER_INFO[spawnerCount];
                     wi->m_SpawnerCount = spawnerCount;
                     int si = 0;
-                    for (tinyxml2::XMLElement* sp = el->FirstChildElement("Spawn");
-                         sp; sp = sp->NextSiblingElement("Spawn"), ++si)
+                    for (TiXmlElement sp = el.FirstChildElement("Spawn");
+                         sp; sp = sp.NextSiblingElement("Spawn"), ++si)
                     {
                         SPAWNER_INFO& s = wi->m_pSpawners[si];
 
-                        const char* types = sp->Attribute("type");
+                        const char* types = sp.Attribute("type");
                         if (types) {
                             SplitWords(types, s.m_FruitTypeNames);
                             s.m_FruitTypeCount = (int)s.m_FruitTypeNames.size();
@@ -363,17 +368,17 @@ void WaveManager::Init() {
                             }
                         }
 
-                        sp->QueryFloatAttribute("min", &s.m_SpawnMin);
-                        sp->QueryFloatAttribute("max", &s.m_SpawnMax);
+                        sp.QueryFloatAttribute("min", &s.m_SpawnMin);
+                        sp.QueryFloatAttribute("max", &s.m_SpawnMax);
                         // mininc and maxinc both write to +0x44 (single slot); maxinc wins.
-                        sp->QueryFloatAttribute("mininc", &s.m_GrowthInc);
-                        sp->QueryFloatAttribute("maxinc", &s.m_GrowthInc);
+                        sp.QueryFloatAttribute("mininc", &s.m_GrowthInc);
+                        sp.QueryFloatAttribute("maxinc", &s.m_GrowthInc);
                         // "delay" -> m_Delay (+0x48, chuck delay base).
-                        sp->QueryFloatAttribute("delay",    &s.m_Delay);
-                        sp->QueryFloatAttribute("delayinc", &s.m_DelayInc);
+                        sp.QueryFloatAttribute("delay",    &s.m_Delay);
+                        sp.QueryFloatAttribute("delayinc", &s.m_DelayInc);
                         // "gravity" attr -> Vec3 at +0x18..+0x20 (binary ParseVector).
                         {
-                            const char* grav = sp->Attribute("gravity");
+                            const char* grav = sp.Attribute("gravity");
                             if (grav) {
                                 float gx = 0.0f, gy = 0.0f, gz = 0.0f;
                                 sscanf(grav, "%f,%f,%f", &gx, &gy, &gz);
@@ -383,19 +388,19 @@ void WaveManager::Init() {
                             }
                         }
                         // velscale -> copies to both +0x24 and +0x28; then velXscale/velYscale override.
-                        sp->QueryFloatAttribute("velscale",  &s.m_VelXScale);
+                        sp.QueryFloatAttribute("velscale",  &s.m_VelXScale);
                         s.m_VelYScale = s.m_VelXScale;
-                        sp->QueryFloatAttribute("velXscale", &s.m_VelXScale);
-                        sp->QueryFloatAttribute("velYscale", &s.m_VelYScale);
+                        sp.QueryFloatAttribute("velXscale", &s.m_VelXScale);
+                        sp.QueryFloatAttribute("velYscale", &s.m_VelYScale);
                         // horizmin -> +0x2c; horizmax -> +0x30.
-                        sp->QueryFloatAttribute("horizmin", &s.m_HorizMin);
-                        sp->QueryFloatAttribute("horizmax", &s.m_HorizMax);
+                        sp.QueryFloatAttribute("horizmin", &s.m_HorizMin);
+                        sp.QueryFloatAttribute("horizmax", &s.m_HorizMax);
                         // mirror at +0x60: cleared to 0 when attr absent (movs r3,#0 path in binary).
                         s.m_bMirror = 0;
-                        if (const char* mir = sp->Attribute("mirror"))
+                        if (const char* mir = sp.Attribute("mirror"))
                             s.m_bMirror = (strcmp(mir, "false") != 0) ? 1 : 0;
 
-                        const char* placement = sp->Attribute("placement");
+                        const char* placement = sp.Attribute("placement");
                         if (placement) s.m_SpawnType = ParsePlacement(placement);
 
                         // Total weight contribution.

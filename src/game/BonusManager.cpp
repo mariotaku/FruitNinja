@@ -8,9 +8,8 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/math/Random.h"
 #include "engine/util/StringHash.h"
-#include "engine/xml/XmlLoad.h"
+#include "engine/xml/TiXml.h"
 #include "screens/BonusScreen.h"
-#include <tinyxml2.h>
 #include "game/GameWork.h"
 #include <cstdio>
 #include <cstdlib>
@@ -57,12 +56,12 @@ void BonusManager::Init() {
         path = "xml/bonusAwards.xml";
     }
 
-    tinyxml2::XMLDocument doc;
-    if (FN::LoadXmlCI(doc, path) != tinyxml2::XML_SUCCESS) {
+    TiXmlDocument doc;
+    if (!doc.LoadFile(path.c_str())) {
         return;
     }
 
-    TiXmlElement root(doc.FirstChildElement("bonusAwardsFile"));
+    TiXmlElement root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
         printf("BonusManager::Init -- no <bonusAwardsFile> root in '%s'\n",
                path.c_str());
