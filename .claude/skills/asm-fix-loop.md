@@ -31,6 +31,15 @@ Each round: scan both directions → dispatch → commit → verify → repeat.
 
 ### 1. Scan targets — both directions
 
+PREFER `tmp/asm-verify/shortlist.md` (written by classify-divergences.py at the
+end of run.sh): rows are pre-ranked by real-bug-likelihood (HIGH/MED) with a
+cause tag, and ~200 benign rows (std-inline / port-guard / GOT / static-init /
+sched) are already demoted out. Dispatch on HIGH first, then MED `wrong-offset`/
+`wrong-const`/`call-graph`. Treat `wrong-offset` as MED-confidence (a real
+field-offset bug and a benign embedder-shift look identical in the diff — confirm
+against the struct layout before fixing). The raw score-delta scans below are the
+fallback when no shortlist exists.
+
 **Positive excess (bloat — port has extra code):**
 ```sh
 python -c "

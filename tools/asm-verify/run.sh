@@ -94,5 +94,15 @@ docker run --rm \
         cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
     '
 
+# Host-side: classify divergences into a precision-ranked shortlist
+# (cause + real-bug-likelihood per row; writes tmp/asm-verify/shortlist.md +
+# suggested-triage.json). Non-fatal — the raw report is the source of truth.
+if command -v python > /dev/null 2>&1; then
+    python "$SCRIPT_DIR/classify-divergences.py" || true
+elif command -v py > /dev/null 2>&1; then
+    py "$SCRIPT_DIR/classify-divergences.py" || true
+fi
+
 echo
-echo "Report: tmp/asm-verify/report.md"
+echo "Report:    tmp/asm-verify/report.md"
+echo "Shortlist: tmp/asm-verify/shortlist.md  (HIGH/MED real-bug candidates first)"
