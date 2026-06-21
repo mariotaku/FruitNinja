@@ -97,11 +97,17 @@ docker run --rm \
 # Host-side: classify divergences into a precision-ranked shortlist
 # (cause + real-bug-likelihood per row; writes tmp/asm-verify/shortlist.md +
 # suggested-triage.json). Non-fatal — the raw report is the source of truth.
-if command -v python > /dev/null 2>&1; then
-    python "$SCRIPT_DIR/classify-divergences.py" || true
-elif command -v py > /dev/null 2>&1; then
-    py "$SCRIPT_DIR/classify-divergences.py" || true
-fi
+# Run from PROJECT_ROOT with a RELATIVE script path in a subshell: native
+# Windows Python mangles an MSYS-absolute "/c/..." arg, but resolves a relative
+# path against the (correct) OS cwd. Cross-platform (no path translation).
+(
+    cd "$PROJECT_ROOT" || exit 0
+    if command -v python > /dev/null 2>&1; then
+        python tools/asm-verify/classify-divergences.py
+    elif command -v py > /dev/null 2>&1; then
+        py tools/asm-verify/classify-divergences.py
+    fi
+) || true
 
 echo
 echo "Report:    tmp/asm-verify/report.md"
