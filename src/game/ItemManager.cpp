@@ -19,7 +19,6 @@
 #include "engine/xml/TiXml.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
-#include <tinyxml2.h>
 #include <cstring>
 #include <string>
 #if defined(__EMSCRIPTEN__)
@@ -312,49 +311,49 @@ ItemInfo* ItemManager::GetItem(uint32_t hash) {
 // SaveItemInfo @ v1.6.1 0x00138610
 // -----------------------------------------------------------------------
 void ItemManager::SaveItemInfo() {
-    tinyxml2::XMLDocument doc;
+    TiXmlDocument doc;
 
     // Build root <item_save_file version="1.0" coins=N coinsTotal=N levelStartCoins=N>
     // Coin balance lives in game_work (+0x20/+0x24/+0x28), not FruitSaveData.
-    tinyxml2::XMLElement* root = doc.NewElement("item_save_file");  // 0x1b9e4d
-    root->SetAttribute("version", "1.0");  // 0x1b9e5c / 0x1b9e64
-    root->SetAttribute("coins",           (int)game_work.m_CoinsBalance);
-    root->SetAttribute("coinsTotal",      (int)game_work.m_CoinsTotalEarned);
-    root->SetAttribute("levelStartCoins", (int)game_work.m_CoinsAtGameStart);
+    TiXmlElement root = doc.NewElement("item_save_file");  // 0x1b9e4d
+    root.SetAttribute("version", "1.0");  // 0x1b9e5c / 0x1b9e64
+    root.SetAttribute("coins",           (int)game_work.m_CoinsBalance);
+    root.SetAttribute("coinsTotal",      (int)game_work.m_CoinsTotalEarned);
+    root.SetAttribute("levelStartCoins", (int)game_work.m_CoinsAtGameStart);
 
     // <boughtItems> section: all items with m_Cost < 0 (purchased)
-    tinyxml2::XMLElement* bought = doc.NewElement("boughtItems");  // 0x1b9e89
+    TiXmlElement bought = doc.NewElement("boughtItems");  // 0x1b9e89
     for (std::vector<ItemInfo*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         ItemInfo* item = *it;
-        if (item->m_Cost < 0) {  // cost == -1 → purchased
-            tinyxml2::XMLElement* e = doc.NewElement("item");  // 0x1b9e95
-            e->SetAttribute("name", item->m_pName);            // 0x1c3173 / +0x04
+        if (item->m_Cost < 0) {  // cost == -1 — purchased
+            TiXmlElement e = doc.NewElement("item");  // 0x1b9e95
+            e.SetAttribute("name", item->m_pName);    // 0x1c3173 / +0x04
             // Binary: "false" if m_bSeen==0, "true" otherwise
             const char* seenVal = (!item->m_bSeen) ? "false" : "true";  // 0x1b9e9a/0x1b9ea0
-            e->SetAttribute("seen", seenVal);                  // 0x1b9ea5
-            bought->InsertEndChild(e);
+            e.SetAttribute("seen", seenVal);           // 0x1b9ea5
+            bought.InsertEndChild(e);
         }
     }
-    root->InsertEndChild(bought);
+    root.InsertEndChild(bought);
 
     // <equippedItems> section: m_DefaultItems[0..3] with m_Cost <= 0 (free or purchased)
-    tinyxml2::XMLElement* equip = doc.NewElement("equippedItems");  // 0x1b9eaa
+    TiXmlElement equip = doc.NewElement("equippedItems");  // 0x1b9eaa
     for (int i = 0; i < 4; i++) {
         ItemInfo* item = m_DefaultItems[i];
         if (item != nullptr && item->m_Cost < 1) {  // cost <= 0 = owned
-            tinyxml2::XMLElement* e = doc.NewElement("item");  // 0x1b9e95
-            e->SetAttribute("name", item->m_pName);            // 0x1c3173
-            equip->InsertEndChild(e);
+            TiXmlElement e = doc.NewElement("item");  // 0x1b9e95
+            e.SetAttribute("name", item->m_pName);    // 0x1c3173
+            equip.InsertEndChild(e);
         }
     }
-    root->InsertEndChild(equip);
+    root.InsertEndChild(equip);
 
     doc.InsertEndChild(root);
 
     // Build full save path — binary uses flat "ItemSave.xml" (no subdir).
     // Port: use BuildItemSaveFullPath() which routes to /save on Emscripten.
     std::string saveFullPath = BuildItemSaveFullPath();
-    doc.SaveFile(saveFullPath.c_str());  // tinyxml2::XMLDocument::SaveFile uses fopen directly
+    doc.SaveFile(saveFullPath.c_str());
 #if defined(__EMSCRIPTEN__)
     // Port specific: flush the IDBFS /save mount to IndexedDB after each
     // write so data survives page reload/close.

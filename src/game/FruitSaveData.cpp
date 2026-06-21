@@ -14,7 +14,6 @@
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
 
-#include <tinyxml2.h>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -363,77 +362,77 @@ bool FruitSaveData::PlayedModeToday(int gameMode) {
 void FruitNinja_SaveGame(FruitSaveData* save) {
     if (!save) return;
 
-    tinyxml2::XMLDocument doc;
-    tinyxml2::XMLElement* root = doc.NewElement("save_file");
+    TiXmlDocument doc;
+    TiXmlElement root = doc.NewElement("save_file");
 
     // Top-level scalar attributes (per binary writer order).
     char buf[64];
     snprintf(buf, sizeof(buf), "%d.%d.%d", k_SaveVersion, 0, 0);
-    root->SetAttribute("version", buf);
-    root->SetAttribute("highscore", save->m_highscore);
+    root.SetAttribute("version", buf);
+    root.SetAttribute("highscore", save->m_highscore);
 
     // Per-mode attrs: "<MODE>highscore", "<MODE>_unposted" (combo, only
     // if > 0), "<MODE>_dolg" (play count).
     char attrName[32];
     for (int m = 0; m < 4; m++) {
         MakeModeAttr(attrName, sizeof(attrName), m, "highscore");
-        root->SetAttribute(attrName, save->m_ModeHighScores[m]);
+        root.SetAttribute(attrName, save->m_ModeHighScores[m]);
 
         if (save->m_ModeBestCombos[m] > 0) {
             MakeModeAttr(attrName, sizeof(attrName), m, "_unposted");
-            root->SetAttribute(attrName, save->m_ModeBestCombos[m]);
+            root.SetAttribute(attrName, save->m_ModeBestCombos[m]);
         }
 
         MakeModeAttr(attrName, sizeof(attrName), m, "_dolg");
-        root->SetAttribute(attrName, save->m_LastPlayedDay[m]);
+        root.SetAttribute(attrName, save->m_LastPlayedDay[m]);
     }
 
-    root->SetAttribute("critical_chance", save->m_CriticalChance);
-    root->SetAttribute("rated",         save->m_bDojoBGUnlocked ? "true" : "false");
-    root->SetAttribute("p2pCancelled",  save->field_0x3c        ? "true" : "false");
+    root.SetAttribute("critical_chance", save->m_CriticalChance);
+    root.SetAttribute("rated",         save->m_bDojoBGUnlocked ? "true" : "false");
+    root.SetAttribute("p2pCancelled",  save->field_0x3c        ? "true" : "false");
 
     // SliceTotal elements: cumulative totals first, then session-only.
     // Range-for replaced with iterator form for GCC 4.4 (asm-verify cross
     // toolchain) parser compatibility; same semantics in both compilers.
     for (std::map<uint32_t, SliceTotal>::iterator it = save->m_Totals.begin();
          it != save->m_Totals.end(); ++it) {
-        tinyxml2::XMLElement* e = doc.NewElement("SliceTotal");
-        e->SetAttribute("name",  it->second.name.c_str());
-        e->SetAttribute("count", it->second.count);
-        root->InsertEndChild(e);
+        TiXmlElement e = doc.NewElement("SliceTotal");
+        e.SetAttribute("name",  it->second.name.c_str());
+        e.SetAttribute("count", it->second.count);
+        root.InsertEndChild(e);
     }
     for (std::map<uint32_t, SliceTotal>::iterator it = save->m_SessionTotals.begin();
          it != save->m_SessionTotals.end(); ++it) {
-        tinyxml2::XMLElement* e = doc.NewElement("SliceTotal");
-        e->SetAttribute("u", "true");
-        e->SetAttribute("name",  it->second.name.c_str());
-        e->SetAttribute("count", it->second.count);
-        root->InsertEndChild(e);
+        TiXmlElement e = doc.NewElement("SliceTotal");
+        e.SetAttribute("u", "true");
+        e.SetAttribute("name",  it->second.name.c_str());
+        e.SetAttribute("count", it->second.count);
+        root.InsertEndChild(e);
     }
 
     // Pending unlocks map ("unlocked" container with timer attr).
     if (!save->m_PendingUnlocks.empty()) {
-        tinyxml2::XMLElement* ach = doc.NewElement("unlocked");
+        TiXmlElement ach = doc.NewElement("unlocked");
         for (std::map<uint32_t, AchievementItem>::iterator it = save->m_PendingUnlocks.begin();
              it != save->m_PendingUnlocks.end(); ++it) {
-            tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", it->second.m_Name);
-            e->SetAttribute("timer", it->second.m_Timer);
-            ach->InsertEndChild(e);
+            TiXmlElement e = doc.NewElement("achievement");
+            e.SetAttribute("name", it->second.m_Name);
+            e.SetAttribute("timer", it->second.m_Timer);
+            ach.InsertEndChild(e);
         }
-        root->InsertEndChild(ach);
+        root.InsertEndChild(ach);
     }
 
     // Unlocked achievements ("achievements" container).
     if (!save->m_UnlockedAchievements.empty()) {
-        tinyxml2::XMLElement* unl = doc.NewElement("achievements");
+        TiXmlElement unl = doc.NewElement("achievements");
         for (std::map<uint32_t, AchievementItem>::iterator it = save->m_UnlockedAchievements.begin();
              it != save->m_UnlockedAchievements.end(); ++it) {
-            tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", it->second.m_Name);
-            unl->InsertEndChild(e);
+            TiXmlElement e = doc.NewElement("achievement");
+            e.SetAttribute("name", it->second.m_Name);
+            unl.InsertEndChild(e);
         }
-        root->InsertEndChild(unl);
+        root.InsertEndChild(unl);
     }
 
     // Per-mode score history (<wave_counts_MODE> blocks).
@@ -441,15 +440,15 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         if (save->m_ModeScoreHistory[m].empty()) continue;
         char tag[48];
         snprintf(tag, sizeof(tag), "wave_counts_%s", k_ModeNames[m]);
-        tinyxml2::XMLElement* container = doc.NewElement(tag);
+        TiXmlElement container = doc.NewElement(tag);
         for (std::map<int, int>::iterator it = save->m_ModeScoreHistory[m].begin();
              it != save->m_ModeScoreHistory[m].end(); ++it) {
-            tinyxml2::XMLElement* e = doc.NewElement("game_count");
-            e->SetAttribute("score",   it->first);
-            e->SetAttribute("waveIdx", it->second);
-            container->InsertEndChild(e);
+            TiXmlElement e = doc.NewElement("game_count");
+            e.SetAttribute("score",   it->first);
+            e.SetAttribute("waveIdx", it->second);
+            container.InsertEndChild(e);
         }
-        root->InsertEndChild(container);
+        root.InsertEndChild(container);
     }
 
     // ActiveGame <que> block: only when m_bHasActiveGame is set.
@@ -457,42 +456,42 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
     // the scalar resume fields so resume coordinates persist across
     // a non-clean exit.
     if (save->m_bHasActiveGame) {
-        tinyxml2::XMLElement* que = doc.NewElement("que");
-        que->SetAttribute("mode",            k_ModeNames[save->m_GameMode <= 3 ? save->m_GameMode : 0]);
-        que->SetAttribute("hasDropped",      save->m_bWasGameOver ? "true" : "false");
-        que->SetAttribute("count",           save->m_CurrentScore);
-        que->SetAttribute("misses",          save->m_CurrentMissCount);
-        que->SetAttribute("count1",          save->m_ComboCount);
-        que->SetAttribute("count2",          save->m_LastSlasher);
-        que->SetAttribute("timer",           save->m_TimeRemainingSave);
-        que->SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
-        que->SetAttribute("go_state",        save->m_GameOverScreenState);
-        que->SetAttribute("go_time",         save->m_GameOverTimer);
-        que->SetAttribute("go_bombHitTime",  save->m_BombHitTimer);
-        que->SetAttribute("go_body",         save->m_GameOverField1);
-        que->SetAttribute("go_head",         save->m_GameOverField2);
-        que->SetAttribute("go_fruit",        save->m_GameOverField3);
-        que->SetAttribute("go_fact",         save->m_GameOverField4);
-        que->SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
-        que->SetAttribute("go_setScore",     save->secondaryFlag ? "true" : "false");
-        que->SetAttribute("nextComboBonus",  save->m_field134);
-        que->SetAttribute("shake_time",      save->m_ShakeIntensity);
-        que->SetAttribute("shake_max_time",  save->m_ShakeDecay);
+        TiXmlElement que = doc.NewElement("que");
+        que.SetAttribute("mode",            k_ModeNames[save->m_GameMode <= 3 ? save->m_GameMode : 0]);
+        que.SetAttribute("hasDropped",      save->m_bWasGameOver ? "true" : "false");
+        que.SetAttribute("count",           save->m_CurrentScore);
+        que.SetAttribute("misses",          save->m_CurrentMissCount);
+        que.SetAttribute("count1",          save->m_ComboCount);
+        que.SetAttribute("count2",          save->m_LastSlasher);
+        que.SetAttribute("timer",           save->m_TimeRemainingSave);
+        que.SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
+        que.SetAttribute("go_state",        save->m_GameOverScreenState);
+        que.SetAttribute("go_time",         save->m_GameOverTimer);
+        que.SetAttribute("go_bombHitTime",  save->m_BombHitTimer);
+        que.SetAttribute("go_body",         save->m_GameOverField1);
+        que.SetAttribute("go_head",         save->m_GameOverField2);
+        que.SetAttribute("go_fruit",        save->m_GameOverField3);
+        que.SetAttribute("go_fact",         save->m_GameOverField4);
+        que.SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
+        que.SetAttribute("go_setScore",     save->secondaryFlag ? "true" : "false");
+        que.SetAttribute("nextComboBonus",  save->m_field134);
+        que.SetAttribute("shake_time",      save->m_ShakeIntensity);
+        que.SetAttribute("shake_max_time",  save->m_ShakeDecay);
 
         // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
         // Using "waveScalar" as placeholder; round-trip is self-consistent regardless.
-        que->SetAttribute("waveScalar", save->m_WaveScalar_v161);
+        que.SetAttribute("waveScalar", save->m_WaveScalar_v161);
 
-        tinyxml2::XMLElement* wi = doc.NewElement("wave_info");
-        wi->SetAttribute("waveCount",                save->m_pCurrentWave_P1);
-        wi->SetAttribute("waveDelay",                save->m_WaveDelay);
-        wi->SetAttribute("waveWait",                 save->m_WaveWait);
-        wi->SetAttribute("blitzSpawnedThisGame",     save->m_blitzSpawnedThisGame);
-        wi->SetAttribute("blitzForceSpawnedCounter", save->m_blitzForceSpawnedCounter);
-        wi->SetAttribute("blitzSpawnTime",           save->m_blitzSpawnTime);
-        que->InsertEndChild(wi);
+        TiXmlElement wi = doc.NewElement("wave_info");
+        wi.SetAttribute("waveCount",                save->m_pCurrentWave_P1);
+        wi.SetAttribute("waveDelay",                save->m_WaveDelay);
+        wi.SetAttribute("waveWait",                 save->m_WaveWait);
+        wi.SetAttribute("blitzSpawnedThisGame",     save->m_blitzSpawnedThisGame);
+        wi.SetAttribute("blitzForceSpawnedCounter", save->m_blitzForceSpawnedCounter);
+        wi.SetAttribute("blitzSpawnTime",           save->m_blitzSpawnTime);
+        que.InsertEndChild(wi);
 
-        root->InsertEndChild(que);
+        root.InsertEndChild(que);
     }
 
     doc.InsertEndChild(root);
