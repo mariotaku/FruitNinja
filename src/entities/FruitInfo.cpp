@@ -12,8 +12,7 @@
 #include "game/WaveManager.h"
 #include "math/Random.h"
 #include "debug/Logger.h"
-#include "xml/XmlLoad.h"
-#include <tinyxml2.h>
+#include "xml/TiXml.h"
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -61,17 +60,19 @@ static Mortar::SmartPtr<Mortar::Texture> g_FruitShadowTex;
 void FruitInfo_Load(const char* xmlPath)
 {
     // --- Step 0: fruit_shadow.tex (before XML, fast hardware only) ---
-    // Original: if (IsFastHardware()) LoadLocalisedTexture("fruit_shadow.tex") → global+0xC0
+    // Original: if (IsFastHardware()) LoadLocalisedTexture("fruit_shadow.tex") -> global+0xC0
     // Port specific: always load (IsFastHardware not meaningful for port)
     if (!g_FruitShadowTex.IsValid()) {
         g_FruitShadowTex = Mortar::TextureManager::LoadLocalisedTexture("fruit_shadow.tex");
     }
 
-    tinyxml2::XMLDocument doc;
-    if (FN::LoadXmlCI(doc, xmlPath) != tinyxml2::XML_SUCCESS) {
+    TiXmlDocument doc;
+    if (!doc.LoadFile(xmlPath)) {
         return;
     }
-    tinyxml2::XMLElement* root = doc.FirstChildElement("fruitInfoFile");
+    // ASM-spec v1.6.1 Fruit::LoadInfo @0x0017987c:
+    // doc.FirstChildElement("fruitInfoFile") is how binary walks to root.
+    TiXmlElement root = doc.FirstChildElement("fruitInfoFile");
     if (!root)
     {
         LOG_ERROR("FRUITINFO/LoadInfo", "no <fruitInfoFile> root element");
@@ -79,9 +80,9 @@ void FruitInfo_Load(const char* xmlPath)
     }
 
     // --- Parse <critical> element (global game settings) ---
-    // Original: "colour" CSV → global bytes, 5× QueryIntAttribute, 3× QueryFloatAttribute
+    // Original: "colour" CSV -> global bytes, 5x QueryIntAttribute, 3x QueryFloatAttribute
     // These go to game globals (not per-fruit FRUIT_INFO).
-    tinyxml2::XMLElement* critElem = root->FirstChildElement("critical");
+    TiXmlElement critElem = root.FirstChildElement("critical");
     if (critElem)
     {
         // Binary 0x179914-0x179a10 (<critical> element):
@@ -96,17 +97,17 @@ void FruitInfo_Load(const char* xmlPath)
     }
 
     // --- Parse <bomb> element (global bomb settings) ---
-    // Original: reads 2 float attrs → globals at g_pFruitInfo+0x88/+0x8C
-    tinyxml2::XMLElement* bombElem = root->FirstChildElement("bomb");
+    // Original: reads 2 float attrs -> globals at g_pFruitInfo+0x88/+0x8C
+    TiXmlElement bombElem = root.FirstChildElement("bomb");
     if (bombElem)
     {
-        bombElem->QueryFloatAttribute("size",      &s_BombSize);
-        bombElem->QueryFloatAttribute("collision", &s_BombCollision);
+        bombElem.QueryFloatAttribute("size",      &s_BombSize);
+        bombElem.QueryFloatAttribute("collision", &s_BombCollision);
     }
     // --- Count <FruitInfo> elements ---
     s_FruitInfoCount = 0;
-    for (tinyxml2::XMLElement* e = root->FirstChildElement("FruitInfo");
-         e; e = e->NextSiblingElement("FruitInfo"))
+    for (TiXmlElement e = root.FirstChildElement("FruitInfo");
+         e; e = e.NextSiblingElement("FruitInfo"))
     {
         s_FruitInfoCount++;
     }
@@ -114,9 +115,9 @@ void FruitInfo_Load(const char* xmlPath)
         s_FruitInfoCount = FRUIT_INFO_MAX;
     // --- Parse each <FruitInfo> element ---
     int idx = 0;
-    for (tinyxml2::XMLElement* elem = root->FirstChildElement("FruitInfo");
+    for (TiXmlElement elem = root.FirstChildElement("FruitInfo");
          elem && idx < s_FruitInfoCount;
-         elem = elem->NextSiblingElement("FruitInfo"), idx++)
+         elem = elem.NextSiblingElement("FruitInfo"), idx++)
     {
         FruitInfo& fi = s_FruitInfos[idx];
         memset(&fi, 0, sizeof(fi));
@@ -132,8 +133,8 @@ void FruitInfo_Load(const char* xmlPath)
         fi.m_CollisionScale = 25.0f; // ctor default 0x41C80000
         fi.m_bScorable    = 1;     // ctor default; cleared if noCritical="true" or alpha=0
 
-        // --- "name" attr (required) → +0x000 ---
-        const char* name = elem->Attribute("name");
+        // --- "name" attr (required) -> +0x000 ---
+        const char* name = elem.Attribute("name");
         if (!name || !*name) continue;
         strncpy(fi.m_Name, name, 63);
 
@@ -170,7 +171,7 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_DropsHash = StringHash(fi.m_DropsKey); // +0x268
         }
 
-        // --- Textures: hud_%s.tex → +0x300, zen_%s.tex → +0x304 ---
+        // --- Textures: hud_%s.tex -> +0x300, zen_%s.tex -> +0x304 ---
         {
             char texName[64];
             snprintf(texName, 64, "hud_%s.tex", name);
@@ -181,39 +182,39 @@ void FruitInfo_Load(const char* xmlPath)
         }
 
         // --- String attrs with fallbacks ---
-        // "plural" → +0x100 (fallback: "%ss")
-        const char* plural = elem->Attribute("plural");
+        // "plural" -> +0x100 (fallback: "%ss")
+        const char* plural = elem.Attribute("plural");
         if (plural && *plural)
             strncpy(fi.m_Plural, plural, 63);
         else
             snprintf(fi.m_Plural, 64, "%ss", fi.m_Name);
 
-        // "factTexture" → +0x278 (optional; empty if missing)
-        const char* factTex = elem->Attribute("factTexture");
+        // "factTexture" -> +0x278 (optional; empty if missing)
+        const char* factTex = elem.Attribute("factTexture");
         if (factTex && *factTex)
             strncpy(fi.m_FactTexture, factTex, 63);
 
-        // "modelName" → +0x200 (fallback: m_Name)
-        const char* modelName = elem->Attribute("modelName");
+        // "modelName" -> +0x200 (fallback: m_Name)
+        const char* modelName = elem.Attribute("modelName");
         strncpy(fi.m_ModelName, (modelName && *modelName) ? modelName : fi.m_Name, 63);
 
-        // "singular" → +0x0C0 (fallback: m_Name)
-        const char* singular = elem->Attribute("singular");
+        // "singular" -> +0x0C0 (fallback: m_Name)
+        const char* singular = elem.Attribute("singular");
         strncpy(fi.m_Singular, (singular && *singular) ? singular : fi.m_Name, 63);
 
-        // "pluralEnglish" → +0x080 (fallback: sprintf("%ss", m_Name))
-        const char* pluralEng = elem->Attribute("pluralEnglish");
+        // "pluralEnglish" -> +0x080 (fallback: sprintf("%ss", m_Name))
+        const char* pluralEng = elem.Attribute("pluralEnglish");
         if (pluralEng && *pluralEng)
             strncpy(fi.m_PluralEnglish, pluralEng, 63);
         else
             snprintf(fi.m_PluralEnglish, 64, "%ss", fi.m_Name);
 
-        // "singularEnglish" → +0x040 (fallback: m_Name)
-        const char* singularEng = elem->Attribute("singularEnglish");
+        // "singularEnglish" -> +0x040 (fallback: m_Name)
+        const char* singularEng = elem.Attribute("singularEnglish");
         strncpy(fi.m_SingularEnglish, (singularEng && *singularEng) ? singularEng : fi.m_Name, 63);
 
-        // --- Colour: "colour" → +0x240 (R,G,B,A → BGRA bytes) ---
-        const char* colourStr = elem->Attribute("colour");
+        // --- Colour: "colour" -> +0x240 (R,G,B,A -> BGRA bytes) ---
+        const char* colourStr = elem.Attribute("colour");
         if (colourStr && *colourStr)
         {
             int rgba[4] = {0, 0, 0, 0};
@@ -224,8 +225,8 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_FruitColour[3] = (uint8_t)rgba[3]; // A
         }
 
-        // --- factColour: "factColour" → +0x2F8 (R,G,B → BGRA with A=0xFF) ---
-        const char* factColStr = elem->Attribute("factColour");
+        // --- factColour: "factColour" -> +0x2F8 (R,G,B -> BGRA with A=0xFF) ---
+        const char* factColStr = elem.Attribute("factColour");
         if (factColStr && *factColStr)
         {
             int rgb[3] = {0, 0, 0};
@@ -239,48 +240,48 @@ void FruitInfo_Load(const char* xmlPath)
         // ASM-verified: 2026-05-03 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
         // --- Float attrs with defaults ---
         // Floats (defaults already applied at top of loop via ctor mirror).
-        elem->QueryFloatAttribute("collision", &fi.m_CollisionScale);
-        elem->QueryFloatAttribute("scale", &fi.m_Scale);
-        elem->QueryFloatAttribute("hitInfluence", &fi.m_HitInfluence);
+        elem.QueryFloatAttribute("collision", &fi.m_CollisionScale);
+        elem.QueryFloatAttribute("scale", &fi.m_Scale);
+        elem.QueryFloatAttribute("hitInfluence", &fi.m_HitInfluence);
 
         // --- Int attrs (defaults applied at top of loop via ctor mirror) ---
-        elem->QueryIntAttribute("chance", &fi.m_Chance);
-        elem->QueryIntAttribute("score", &fi.m_Score);
+        elem.QueryIntAttribute("chance", &fi.m_Chance);
+        elem.QueryIntAttribute("score", &fi.m_Score);
         fi.m_CoinsMax = fi.m_CoinsMin; // original: copy before override
-        elem->QueryIntAttribute("coinsMin", &fi.m_CoinsMin);
-        elem->QueryIntAttribute("coinsMax", &fi.m_CoinsMax);
+        elem.QueryIntAttribute("coinsMin", &fi.m_CoinsMin);
+        elem.QueryIntAttribute("coinsMax", &fi.m_CoinsMax);
 
         // --- Bool attrs (strcmp "true") ---
-        const char* hasSplat = elem->Attribute("hasSplatSeeds");
+        const char* hasSplat = elem.Attribute("hasSplatSeeds");
         fi.m_bHasSplatSeeds = (hasSplat && strcmp(hasSplat, "true") == 0) ? 1 : 0;
 
-        const char* onSide = elem->Attribute("onSide");
-        if (!onSide) onSide = elem->Attribute("onside");
+        const char* onSide = elem.Attribute("onSide");
+        if (!onSide) onSide = elem.Attribute("onside");
         fi.m_bOnSide = (onSide && strcmp(onSide, "true") == 0) ? 1 : 0;
 
         // m_bScorable: 1 = fruit can receive a critical hit, 0 = cannot.
         // XML "noCritical"="true" means NO critical, so m_bScorable=0 when attr is "true".
         // LoadInfo @ 0x0017987c: store sequence sets field to 1 unless "noCritical"=="true",
         // then clears it if colour alpha == 0.
-        const char* noCrit = elem->Attribute("noCritical");
+        const char* noCrit = elem.Attribute("noCritical");
         fi.m_bScorable = (noCrit && strcmp(noCrit, "true") == 0) ? 0 : 1;
         if (fi.m_FruitColour[3] == 0) fi.m_bScorable = 0;
 
-        // "onlySprinkle" → +0x319 (QueryIntAttribute == 1)
+        // "onlySprinkle" -> +0x319 (QueryIntAttribute == 1)
         int sprinkle = 0;
-        elem->QueryIntAttribute("onlySprinkle", &sprinkle);
+        elem.QueryIntAttribute("onlySprinkle", &sprinkle);
         fi.m_bSpecial = (sprinkle == 1) ? 1 : 0;
 
-        // "superFruit" → +0x330: v1.6.1 super-fruit (pomegranate) gate.
+        // "superFruit" -> +0x330: v1.6.1 super-fruit (pomegranate) gate.
         // Binary: SuperFruitControl::SuperFruitThrown @ 0x001bbf48 reads this byte.
         int superFruitVal = 0;
-        elem->QueryIntAttribute("superFruit", &superFruitVal);
+        elem.QueryIntAttribute("superFruit", &superFruitVal);
         fi.m_bIsSuperFruit = (superFruitVal != 0) ? 1 : 0;
 
-        // --- <fact> child elements → +0x270/+0x274 ---
+        // --- <fact> child elements -> +0x270/+0x274 ---
         fi.m_FactCount = 0;
-        for (tinyxml2::XMLElement* f = elem->FirstChildElement("fact"); f;
-             f = f->NextSiblingElement("fact"))
+        for (TiXmlElement f = elem.FirstChildElement("fact"); f;
+             f = f.NextSiblingElement("fact"))
         {
             fi.m_FactCount++;
         }
@@ -288,19 +289,19 @@ void FruitInfo_Load(const char* xmlPath)
         {
             fi.m_pFacts = (char**)malloc(fi.m_FactCount * sizeof(char*));
             int i = 0;
-            for (tinyxml2::XMLElement* f = elem->FirstChildElement("fact"); f && i < fi.m_FactCount;
-                 f = f->NextSiblingElement("fact"), i++)
+            for (TiXmlElement f = elem.FirstChildElement("fact"); f && i < fi.m_FactCount;
+                 f = f.NextSiblingElement("fact"), i++)
             {
                 fi.m_pFacts[i] = (char*)calloc(256, 1);
-                const char* text = f->GetText();
+                const char* text = f.GetText();
                 if (text) strncpy(fi.m_pFacts[i], text, 255);
             }
         }
 
-        // --- <impact_sound> child elements → +0x31C/+0x320 ---
+        // --- <impact_sound> child elements -> +0x31C/+0x320 ---
         fi.m_SoundCount = 0;
-        for (tinyxml2::XMLElement* s = elem->FirstChildElement("impact_sound"); s;
-             s = s->NextSiblingElement("impact_sound"))
+        for (TiXmlElement s = elem.FirstChildElement("impact_sound"); s;
+             s = s.NextSiblingElement("impact_sound"))
         {
             fi.m_SoundCount++;
         }
@@ -309,13 +310,13 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_pSounds = (ImpactSound*)calloc(fi.m_SoundCount, sizeof(ImpactSound));
             int i = 0;
             int cumWeight = 0;
-            for (tinyxml2::XMLElement* s = elem->FirstChildElement("impact_sound");
-                 s && i < fi.m_SoundCount; s = s->NextSiblingElement("impact_sound"), i++)
+            for (TiXmlElement s = elem.FirstChildElement("impact_sound");
+                 s && i < fi.m_SoundCount; s = s.NextSiblingElement("impact_sound"), i++)
             {
-                s->QueryIntAttribute("chance", &fi.m_pSounds[i].m_Weight);
+                s.QueryIntAttribute("chance", &fi.m_pSounds[i].m_Weight);
                 cumWeight += fi.m_pSounds[i].m_Weight;
                 fi.m_pSounds[i].m_CumulativeWeight = cumWeight;
-                const char* sndName = s->GetText();
+                const char* sndName = s.GetText();
                 if (sndName)
                 {
                     fi.m_pSounds[i].m_SoundName = (char*)malloc(strlen(sndName) + 1);
@@ -330,16 +331,16 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_pSounds = (ImpactSound*)calloc(1, sizeof(ImpactSound));
             size_t nameLen = strlen(fi.m_Name);
             fi.m_pSounds[0].m_SoundName = (char*)malloc(nameLen + 9);
-            // "Impact-%c%s" — uppercase first char + rest of name
+            // "Impact-%c%s" -- uppercase first char + rest of name
             char upper = fi.m_Name[0];
             if (upper >= 'a' && upper <= 'z') upper -= 0x20;
             sprintf(fi.m_pSounds[0].m_SoundName, "Impact-%c%s", upper, fi.m_Name + 1);
         }
 
-        // --- <power> child elements → +0x32C ---
+        // --- <power> child elements -> +0x32C ---
         int powerCount = 0;
-        for (tinyxml2::XMLElement* p = elem->FirstChildElement("power"); p;
-             p = p->NextSiblingElement("power"))
+        for (TiXmlElement p = elem.FirstChildElement("power"); p;
+             p = p.NextSiblingElement("power"))
         {
             powerCount++;
         }
@@ -350,13 +351,13 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_pPowers->m_pArray = (FruitPower*)calloc(powerCount, sizeof(FruitPower));
             int i = 0;
             uint32_t cumWeight = 0;
-            for (tinyxml2::XMLElement* p = elem->FirstChildElement("power");
-                 p && i < powerCount; p = p->NextSiblingElement("power"), i++)
+            for (TiXmlElement p = elem.FirstChildElement("power");
+                 p && i < powerCount; p = p.NextSiblingElement("power"), i++)
             {
-                const char* pname = p->Attribute("name");
+                const char* pname = p.Attribute("name");
                 if (pname && *pname)
                     fi.m_pPowers->m_pArray[i].m_PowerHash = StringHash(pname);
-                p->QueryIntAttribute("chance", (int*)&fi.m_pPowers->m_pArray[i].m_Weight);
+                p.QueryIntAttribute("chance", (int*)&fi.m_pPowers->m_pArray[i].m_Weight);
                 cumWeight += fi.m_pPowers->m_pArray[i].m_Weight;
                 fi.m_pPowers->m_pArray[i].m_CumulativeWeight = cumWeight;
             }
@@ -400,7 +401,7 @@ Mortar::Texture* FruitInfo_GetShadowTex()
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
 }
 
-// FRUIT_POWERS::AnyActivePowers — binary @ 0x00175714
+// FRUIT_POWERS::AnyActivePowers -- binary @ 0x00175714
 // Returns true if any power in m_pArray is currently active via PowerUpManager.
 // ASM-verified: 2026-05-18 binary @ 0x00175714 (re-analyst)
 bool FRUIT_POWERS::AnyActivePowers() const {

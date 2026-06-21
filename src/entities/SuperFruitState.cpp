@@ -1,7 +1,6 @@
 // SuperFruitState — binary @ 0x001b9acc (Parse), 0x001b9a10 (WriteToElement)
 
 #include "SuperFruitState.h"
-#include <tinyxml2.h>
 
 // Binary @ 0x001b9acc: QueryFloatAttribute("timer"), ("lifetime"), ("spin");
 // QueryIntAttribute("slices").

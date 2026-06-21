@@ -104,6 +104,13 @@ target_sources(mortar_engine PRIVATE
     MenuBackground.cpp
     # XML loading helper (CI fallback for case-sensitive filesystems)
     xml/XmlLoad.cpp
+)
+# TiXml.cpp is the sole tinyxml2 TU for the TiXml-1 shim.
+# Excluded from asm-verify cross-build: no binary counterpart in this form.
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE xml/TiXml.cpp)
+endif()
+target_sources(mortar_engine PRIVATE
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
     network/P2PMessageHandling.cpp

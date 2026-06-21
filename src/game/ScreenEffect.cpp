@@ -11,14 +11,12 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Texture.h"
 #include "Game.h"
-#include <tinyxml2.h>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
 #include "game/GameWork.h"
 
-using namespace tinyxml2;
 using namespace Mortar;
 
 // Binary @ 0x0011e150 area — check particle hardware flag.
@@ -101,7 +99,7 @@ void EffectImage::Parse(TiXmlElement* xml) {
     const char* mode = xml->Attribute("transition");
     m_TransitionHash = (mode && *mode) ? StringHash(mode) : 0u;
 
-    xml->GetRaw()->QueryUnsignedAttribute("group", &m_GroupMask);
+    xml->QueryUnsignedAttribute("group", &m_GroupMask);
 
     const char* freq = xml->Attribute("freq");
     if (freq) m_Freq = (float)atof(freq);
