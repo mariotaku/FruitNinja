@@ -192,6 +192,16 @@ void DebugHitbox_Draw() {
 
     EnsureWhiteTex();
 
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // Re-establish the scene projection + view before drawing. DebugHitbox_Draw
+    // runs after all HUD::Draw passes (GameInit.cpp:766), which leave the HUD
+    // matrix active in MatrixManager. Entity ColSphere centers are in scene
+    // world space, so we must restore the scene ortho + identity view to
+    // project them identically to how the fruit/bomb models were drawn.
+    r->SetupGameOrtho();
+
     // Reset world matrix — entity m_Col centres are already in world
     // space, so we draw at identity transform.
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -201,11 +211,8 @@ void DebugHitbox_Draw() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
 
-    // Scratch vertex buffer: ring (32×6=192) + crosshair (4×6=24) = 216 verts/entity.
+    // Scratch vertex buffer: ring (32*6=192) + crosshair (4*6=24) = 216 verts/entity.
     static QUADCUSTOMVERTEX s_Verts[216];
-
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     int drawn = 0;
     // Only fruits (0) and bombs (1) — same set the slash collision
@@ -296,15 +303,23 @@ void DebugHUDBounds_Draw() {
     EnsureWhiteTex();
     EnsureDebugFont();
 
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // Re-establish the scene projection + view before drawing. DebugHUDBounds_Draw
+    // runs after all HUD::Draw passes (GameInit.cpp:767), which leave the HUD
+    // matrix active in MatrixManager. HUDControl::GetDrawPos() returns positions
+    // in centered scene world space (same coordinate space as the scene ortho),
+    // so we must restore the scene projection to align the AABB overlays with
+    // the visible HUD controls.
+    r->SetupGameOrtho();
+
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
-
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     // Magenta at 80% alpha (BGRA: B=0xFF G=0x00 R=0xFF A=0xCC).
     static const uint32_t kHUDBoxColour = 0xCCFF00FF;
