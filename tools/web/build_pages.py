@@ -10,7 +10,7 @@ Output layout (default: pages/):
       .nojekyll
       index.html          <- web/index.html
       game/
-        index.html        <- build-web/fruit-ninja.html (renamed)
+        index.html        <- build/web/fruit-ninja.html (renamed)
         fruit-ninja.js
         fruit-ninja.wasm
         fruit-ninja.data
@@ -27,7 +27,7 @@ Output layout (default: pages/):
         Data/             <- docs/gallery/textures/Data/ (recursive)
 
 Run from the repository root.  Idempotent: clears pages/ before each run.
-Errors if build-web/ is missing or fruit-ninja.html is absent.
+Errors if build/web/ is missing or fruit-ninja.html is absent.
 """
 
 import argparse
@@ -42,11 +42,11 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 SRC_LANDING     = os.path.join(REPO_ROOT, "web", "index.html")
-SRC_BUILD_WEB   = os.path.join(REPO_ROOT, "build-web")
+SRC_BUILD_WEB   = os.path.join(REPO_ROOT, "build", "web")
 SRC_MODELS_DIR  = os.path.join(REPO_ROOT, "docs", "gallery", "models")
 SRC_TEX_DIR     = os.path.join(REPO_ROOT, "docs", "gallery", "textures")
 
-# Non-hashed extra assets copied from build-web/ into pages/game/ as-is.
+# Non-hashed extra assets copied from build/web/ into pages/game/ as-is.
 # These are NOT referenced by name in HTML/JS so they don't need hashing.
 GAME_EXTRA_FILES = [
     "play_button.webp",
@@ -148,12 +148,12 @@ def main():
 
     game_html_src = os.path.join(SRC_BUILD_WEB, "fruit-ninja.html")
     if not os.path.isdir(SRC_BUILD_WEB):
-        die("build-web/ directory not found.\n"
+        die("build/web/ directory not found.\n"
             "       Run the Emscripten build first:\n"
-            "         emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release\n"
-            "         cmake --build build-web -j")
+            "         emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release\n"
+            "         cmake --build build/web -j")
     if not os.path.isfile(game_html_src):
-        die("build-web/fruit-ninja.html not found -- build-web/ exists but "
+        die("build/web/fruit-ninja.html not found -- build/web/ exists but "
             "build may be incomplete.")
 
     # Discover hashed game files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).

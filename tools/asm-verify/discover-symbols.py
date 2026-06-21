@@ -28,7 +28,7 @@ NM     = pathlib.Path(os.environ.get(
     PROJECT_ROOT / "tools" / "toolchain" / "sourcery-2010q1" / "bin" / "arm-none-eabi-nm"))
 CROSS  = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BUILD_DIR",
-    PROJECT_ROOT / "build-bada-cross"))
+    PROJECT_ROOT / "build" / "bada-cross"))
 OUT    = pathlib.Path(os.environ.get(
     "ASM_VERIFY_MANIFEST_OUT",
     ASM_VERIFY_DIR / "manifest.generated.toml"))
@@ -85,7 +85,7 @@ def run_nm(target: pathlib.Path) -> dict[str, tuple[int, int]]:
 
 
 def walk_cross_objs() -> dict[str, pathlib.Path]:
-    """Return {mangled: obj_path} for every text symbol in build-bada-cross."""
+    """Return {mangled: obj_path} for every text symbol in build/bada-cross."""
     obj_files = list(CROSS.rglob("*.obj")) + list(CROSS.rglob("*.o"))
     out: dict[str, pathlib.Path] = {}
     for obj in obj_files:

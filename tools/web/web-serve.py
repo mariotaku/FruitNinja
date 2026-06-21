@@ -11,7 +11,7 @@ Caching policy (matches the project's hashed-asset scheme from web-hash-assets.p
 Also forces `application/wasm` (streaming compile), gzips compressible bodies for
 faster first-load over Wi-Fi, binds 0.0.0.0, and prints the LAN URL.
 
-Usage: web-serve.py [--dir build-web] [--port 8000] [--bind 0.0.0.0]
+Usage: web-serve.py [--dir build/web] [--port 8000] [--bind 0.0.0.0]
 """
 import argparse, functools, gzip, http.server, io, os, re, socket, sys
 
@@ -79,7 +79,7 @@ def lan_ip():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", default="build-web")
+    ap.add_argument("--dir", default="build/web")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--bind", default="0.0.0.0")
     a = ap.parse_args()

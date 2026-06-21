@@ -48,14 +48,14 @@ endif()
 # MSYS2 clang64 ships libclang_rt.asan_dynamic-x86_64.dll which works.
 #
 # Build:
-#   cmake -G "MSYS Makefiles" -B build-asan -DENABLE_ASAN=ON \
+#   cmake -G "MSYS Makefiles" -B build/asan -DENABLE_ASAN=ON \
 #         -DCMAKE_C_COMPILER=/clang64/bin/clang.exe \
 #         -DCMAKE_CXX_COMPILER=/clang64/bin/clang++.exe
-#   cmake --build build-asan -j$(nproc)
+#   cmake --build build/asan -j$(nproc)
 #
 # Run (the asan DLL must be on PATH — clang64/bin already has it
 # if you launch from the MSYS2 CLANG64 shell, otherwise prefix:):
-#   PATH="/clang64/bin:$PATH" ./build-asan/fruit-ninja.exe
+#   PATH="/clang64/bin:$PATH" ./build/asan/fruit-ninja.exe
 #
 # Useful runtime flags:
 #   ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1
