@@ -1558,7 +1558,11 @@ void SlashEntity::Update(float dt) {
                         } // !isMenuFruit
 
                         // CollisionResponse on the hit entity
-                        fruit->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                        // v1.6.1 SlashEntity::Update @0x001e867c: hitter MUST be the SlashEntity (this) --
+                        // nullptr made Fruit::CollisionResponse @0x001dd500 take the early-return path and never
+                        // reach AddToCurrentScore @0x0011a4c0 -> zero score (#100).
+                        // TODO: v1.6.1 -- binary's 4th arg (bladeVel) may be null; confirm via asm-inspector before changing.
+                        fruit->CollisionResponse(this, 0, 0, &bladeVel);
 
                         // Critical fruit: adjust fruit type and scale
                         if (fruit->m_bCritical) {
@@ -1622,7 +1626,7 @@ void SlashEntity::Update(float dt) {
                     if (hit) {
                         if ((s_ModPowerMask & 0x10) == 0) {
                             // Normal bomb hit (ModPowerMask bit 4 NOT set: no push)
-                            bomb->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                            bomb->CollisionResponse(this, 0, 0, &bladeVel);
                             g_StopCounter = 0;
                             g_Stop = 1;
                             if (bomb->m_bHit && !bomb->m_bMenuBombHit) {
