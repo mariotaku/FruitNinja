@@ -1,41 +1,53 @@
-// Analysed: 2026-04-30T00:00
+// v1.6.1 CoinCounter @0x0016765c
 
 #include "CoinCounter.h"
 #include <cstring>
 
-// ctor @ 0x00135600
+// ctor @ v1.6.1 0x0016765c
 CoinCounter::CoinCounter()
-    : m_CoinCount(0) {
-    std::memset(m_fields_7e, 0, sizeof(m_fields_7e));
+    : m_Flags(0)
+    , _pad7E{0, 0}
+    , m_Field80(0.0f)
+    , m_CoinCount(0)
+    , m_Field88(0.0f)
+    , m_AnimScale(0.0f)
+    , m_ScaleReset(0.0f)
+{
+    std::memset(m_CountText, 0, sizeof(m_CountText));
 }
 
-// dtor @ 0x0013558c / 0x001355b8 / 0x001355dc
+// dtor @ v1.6.1 0x001675f4
 CoinCounter::~CoinCounter() {}
 
-// Init @ 0x00135544 -- binary body is an empty no-op (immediate return); faithful.
+// Init @ v1.6.1 0x00167568 — binary body is an empty no-op (immediate return)
 void CoinCounter::Init() {}
 
-// Update @ 0x00135580: no-op
+// Update @ v1.6.1 0x001675e8: no-op
 void CoinCounter::Update(float dt) { (void)dt; }
 
-// Reset @ 0x00135548
-// Binary: clamps field_0x8C (float at this+0x8C) to [0,1.0]; sets field_0x90 (float at this+0x90) = 1.0f.
-// Offsets relative to CoinCounter base (0x7C from HUDControl3d start):
-//   field_0x8C is at local offset 0x8C - 0x7C = 0x10 within m_fields_7e
-//   field_0x90 is at local offset 0x90 - 0x7C = 0x14 within m_fields_7e
+// Reset @ v1.6.1 0x00167574
+// ASM-spec v1.6.1 CoinCounter::Reset @ 0x00167574:
+//   clamp m_AnimScale(+0x8C) to [0,1]; m_ScaleReset(+0x90) = 1.0f.
+//   Disasm: vldr s15,[r0,#0x8c]; clamp path; vstr s14(=1.0),[r0,#0x90].
 void CoinCounter::Reset() {
-    float* f8c = reinterpret_cast<float*>(m_fields_7e + 0x10);
-    float* f90 = reinterpret_cast<float*>(m_fields_7e + 0x14);
-    if (*f8c < 0.0f) *f8c = 0.0f;
-    if (*f8c > 1.0f) *f8c = 1.0f;
-    *f90 = 1.0f;
+    if (m_AnimScale < 0.0f) m_AnimScale = 0.0f;
+    if (m_AnimScale > 1.0f) m_AnimScale = 1.0f;
+    m_ScaleReset = 1.0f;
 }
 
-// Release @ 0x0013557c -- binary body is an empty no-op (immediate return); faithful.
+// Draw @ v1.6.1 0x00167730
+// TODO: v1.6.1 0x00167730 (CoinCounter::Draw) — full draw body not yet RE'd;
+//   uses m_CoinCount (+0x84) and m_CountText (+0x94) for Font::DrawString render.
+void CoinCounter::Draw(const Vec3& hudScale, int layerMask) {
+    (void)hudScale;
+    (void)layerMask;
+}
+
+// Release @ v1.6.1 0x0016756c — binary body is an empty no-op (immediate return)
 void CoinCounter::Release() {}
 
-// PreDraw @ 0x00135584 -- binary body is an empty no-op (immediate return); faithful.
+// PreDraw @ v1.6.1 0x001675e4 — binary body is an empty no-op (immediate return)
 void CoinCounter::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
-// Skip @ 0x00135588 -- binary body is an empty no-op (immediate return); faithful.
+// Skip @ v1.6.1 0x001675e8 — binary body is an empty no-op (immediate return)
 void CoinCounter::Skip() {}

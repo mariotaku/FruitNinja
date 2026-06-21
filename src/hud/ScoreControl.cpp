@@ -9,6 +9,9 @@
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
+#include "render/BakedStringBox.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
 #include "math/MathUtil.h"
 #include "math/Matrix44.h"
 #include "audio/GameSound.h"
@@ -20,6 +23,20 @@
 #include <cstring>
 #include <algorithm>
 #include "game/GameWork.h"
+
+// Shared TTF face for BakedStringBox labels in ScoreControl.
+// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext;
+//   using a file-local SmartPtr<Font> + FontTTFRegistry::Lookup because
+//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+//   v1.6.1 ScoreControl::ScoreControl @0x001ad5fc.
+static Mortar::FontCacheObjectTTF* GetScoreControlTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_Font =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_Font.IsValid()) {
+        return 0;
+    }
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+}
 
 using Mortar::TextureManager;
 
@@ -77,7 +94,7 @@ static int GetCurrentModeHighscore() {
     return 0;
 }
 
-// ctor @ 0x00158c7c
+// ctor @ v1.6.1 0x001ad5fc
 ScoreControl::ScoreControl()
     : m_bDirty(1)
     , _pad7D(0)
@@ -96,8 +113,10 @@ ScoreControl::ScoreControl()
     , m_DigitCount(0)
     , m_LastDigitCount(0)
     , m_PlayerIdx(0)
+    , m_pStringBox100(0)
+    , m_pScoreBox(0)
 {
-    m_Timer = 0.0f;  // super.m_Timer = 0.0f (DAT_00158d3c)
+    m_Timer = 0.0f;  // super.m_Timer = 0.0f (DAT_001ad6c8)
 
     // Load hud_fruit.tex into m_FruitDigitTex (+0xF8)
     m_FruitDigitTex = TextureManager::LoadLocalisedTexture("hud_fruit.tex");
@@ -112,11 +131,49 @@ ScoreControl::ScoreControl()
 
     for (int i = 0; i < 16; i++) m_DigitAlpha[i] = 0.0f;
 
+    // m_pStringBox100 (+0x100): ctor sets 0 (lazy-alloc elsewhere).
+    // m_pScoreBox (+0x104): v1.6.1 @0x001ad5fc — operator new(200);
+    //   BakedStringBox(font=*(g_GameData+0x614), size=(0x8C,0x1E));
+    //   SetGradient(0xFFFC5A, 0xE78308, perGlyph=0);
+    //   SetText(GETSTRING(0x323="SCORE")); SetHorizontalLineSpacing(-1).
+    // TODO: v1.6.1 0x001ad5fc (ScoreControl::ScoreControl) — font resolved from
+    //   game_work+0x614 (FontCacheObjectTTF* at GameWork+1556), not yet in port's
+    //   game_work struct; using file-local GetScoreControlTTFFont() as DIFFERS stand-in.
+    // TODO: v1.6.1 0x001ad5fc (ScoreControl::ScoreControl) — BakedStringBox fontSize arg
+    //   not RE'd from binary; spec gives only box dimensions (width=0x8C, height=0x1E).
+    //   Using fontSize=10.0f as stand-in until the float register at ctor entry is confirmed.
+    Mortar::FontCacheObjectTTF* font = GetScoreControlTTFFont();
+    if (font) {
+        m_pScoreBox = new Mortar::BakedStringBox(
+            font, 10.0f, (float)0x8C, (float)0x1E, 0xf, 1, 0.0f);
+        m_pScoreBox->SetGradient(
+            Colour(0xFF, 0xFC, 0x5A, 255),
+            Colour(0xE7, 0x83, 0x08, 255),
+            false);
+        m_pScoreBox->SetText(Mortar::GETSTRING_CAST_0(LSTR_SCORE));
+        m_pScoreBox->SetHorizontalLineSpacing(-1.0f);
+    }
+
     Reset();
 }
 
-// dtor @ 0x00158418 / 0x00158394
-ScoreControl::~ScoreControl() {}
+// ~ScoreControl @ v1.6.1 0x001ac3e0 (D1) / 0x001ac454 (D0)
+// ASM-spec v1.6.1 ~ScoreControl @ 0x001ac3e0: delete m_pStringBox100 (+0x100),
+//   delete m_pScoreBox (+0x104); then ~SmartPtr m_FruitDigitTex/Banner/Icon; then base.
+ScoreControl::~ScoreControl() {
+    if (m_pStringBox100) {
+        m_pStringBox100->~BakedStringBox();
+        operator delete(m_pStringBox100);
+        m_pStringBox100 = 0;
+    }
+    if (m_pScoreBox) {
+        m_pScoreBox->~BakedStringBox();
+        operator delete(m_pScoreBox);
+        m_pScoreBox = 0;
+    }
+    // SmartPtr members (m_FruitDigitTex, m_HighscoreBannerTex, m_ScoreIconTex)
+    // are destroyed by their own dtors after this body, matching binary order.
+}
 
 // Init @ 0x00158190 — dispatches to Reset (vtable[+0x10])
 void ScoreControl::Init() {

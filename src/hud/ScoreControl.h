@@ -1,20 +1,22 @@
 #ifndef FN_HUD_SCORE_CONTROL_H
 #define FN_HUD_SCORE_CONTROL_H
 
-// Analysed: 2026-04-30T00:00
+// ASM-spec v1.6.1 ScoreControl @ 0x001ad5fc — size 0x108:
+//   +0x100 BakedStringBox* m_pStringBox100 (ctor=0; dtor: ~BakedStringBox+delete, null)
+//   +0x104 BakedStringBox* m_pScoreBox     (ctor: new(200); BakedStringBox(font,0x8C,0x1E);
+//                                           SetGradient(0xFFFC5A,0xE78308); SetText("SCORE");
+//                                           SetHorizontalLineSpacing(-1); dtor: delete)
+// ~ScoreControl @ 0x001ac3e0: delete m_pStringBox100, m_pScoreBox; then ~SmartPtr
+//   m_FruitDigitTex/Banner/Icon; then base.
+// (Previous addresses in this header were stale v1.5.x; restamped to v1.6.1.)
 //
-// ScoreControl : HUDControl3d (size = 0x100)
-// Struct size confirmed: operator_new(0x100) in GameInit.
-// Main score HUD: 16-digit display with per-digit alpha animation, sin-wobble
-// pulse on score change, scale pulse driven by combo timer, new-highscore banner.
-//
-// Binary addresses:
-//   ctor (real)     0x00158c7c
-//   ctor (alias)    0x00158d4c
+// Binary addresses (v1.6.1):
+//   ctor (real)     0x001ad5fc
+//   ctor (alias)    0x001ad6cc
 //   ctor thunk      0x000f6bdc
-//   dtor (in-place) 0x00158418
-//   dtor (deleting) 0x00158394
-//   Reset           0x001582e4
+//   dtor (in-place) 0x001ac3e0
+//   dtor (deleting) 0x001ac454
+//   Reset           0x001ac1c8
 //   Update          0x0015853c
 //   PreDraw         0x00158e1c
 //   Draw            0x001581d4
@@ -23,6 +25,7 @@
 #include "HUDControl3d.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+#include "render/BakedStringBox.h"
 #include <cstdint>
 
 class ScoreControl : public HUDControl3d {
@@ -63,6 +66,14 @@ public:
     // +0xFC
     int      m_PlayerIdx;          // 0 = P1, 1 = P2
 
+    // +0x100
+    // ASM-spec v1.6.1 ScoreControl @ 0x001ad5fc — size 0x108:
+    //   +0x100 BakedStringBox* m_pStringBox100 (ctor=0; dtor: ~BakedStringBox+delete, null)
+    //   +0x104 BakedStringBox* m_pScoreBox     (ctor: new(200); gradient; SetText "SCORE";
+    //                                           SetHorizontalLineSpacing(-1); dtor: delete)
+    Mortar::BakedStringBox* m_pStringBox100;  // raw pointer; ctor=0; lazy-alloc elsewhere
+    Mortar::BakedStringBox* m_pScoreBox;      // raw pointer; ctor new(200) BakedStringBox
+
     ScoreControl();
     ~ScoreControl() override;
 
@@ -78,5 +89,9 @@ public:
     // Binary @ 0x0015819c -- single instruction (bx lr); returns its argument unchanged.
     int AddMultipliyer(int v);
 };
+
+#ifdef __bada__
+static_assert(sizeof(ScoreControl) == 0x108, "ScoreControl size must be 0x108 (v1.6.1 ScoreControl @0x001ad5fc)");
+#endif
 
 #endif // FN_HUD_SCORE_CONTROL_H
