@@ -12,7 +12,7 @@
 #include "ItemManager.h"
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
-#include "engine/xml/XmlLoad.h"
+#include "engine/xml/TiXml.h"
 
 #include <tinyxml2.h>
 #include <cstdio>
@@ -510,49 +510,49 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
 bool FruitNinja_LoadGame(FruitSaveData* save) {
     if (!save) return false;
 
-    tinyxml2::XMLDocument doc;
+    TiXmlDocument doc;
     std::string sp = GetSavePath();
-    if (FN::LoadXmlCI(doc, sp) != tinyxml2::XML_SUCCESS) {
+    if (!doc.LoadFile(sp.c_str())) {
         return false;  // expected on first run
     }
 
-    tinyxml2::XMLElement* root = doc.FirstChildElement("save_file");
+    TiXmlElement root = doc.FirstChildElement("save_file");
     if (!root) return false;
 
     save->m_EntityStates.clear();
     save->m_WaveStates.clear();
 
     // Top-level scalar attributes.
-    root->QueryIntAttribute("highscore", &save->m_highscore);
+    root.QueryIntAttribute("highscore", &save->m_highscore);
 
     char attrName[32];
     for (int m = 0; m < 4; m++) {
         snprintf(attrName, sizeof(attrName), "%shighscore", k_ModeNames[m]);
-        root->QueryIntAttribute(attrName, &save->m_ModeHighScores[m]);
+        root.QueryIntAttribute(attrName, &save->m_ModeHighScores[m]);
 
         snprintf(attrName, sizeof(attrName), "%s_unposted", k_ModeNames[m]);
-        root->QueryIntAttribute(attrName, &save->m_ModeBestCombos[m]);
+        root.QueryIntAttribute(attrName, &save->m_ModeBestCombos[m]);
 
         snprintf(attrName, sizeof(attrName), "%s_dolg", k_ModeNames[m]);
-        root->QueryIntAttribute(attrName, &save->m_LastPlayedDay[m]);
+        root.QueryIntAttribute(attrName, &save->m_LastPlayedDay[m]);
     }
 
-    root->QueryIntAttribute("critical_chance", &save->m_CriticalChance);
+    root.QueryIntAttribute("critical_chance", &save->m_CriticalChance);
 
-    const char* ratedAttr = root->Attribute("rated");
+    const char* ratedAttr = root.Attribute("rated");
     if (ratedAttr) save->m_bDojoBGUnlocked = (strcmp(ratedAttr, "true") == 0) ? 1 : 0;
 
-    const char* p2pAttr = root->Attribute("p2pCancelled");
+    const char* p2pAttr = root.Attribute("p2pCancelled");
     if (p2pAttr) save->field_0x3c = (strcmp(p2pAttr, "true") == 0) ? 1 : 0;
 
     // SliceTotal elements (cumulative + session).
-    for (tinyxml2::XMLElement* e = root->FirstChildElement("SliceTotal"); e;
-         e = e->NextSiblingElement("SliceTotal")) {
-        const char* name = e->Attribute("name");
+    for (TiXmlElement e = root.FirstChildElement("SliceTotal"); e;
+         e = e.NextSiblingElement("SliceTotal")) {
+        const char* name = e.Attribute("name");
         if (!name || !*name) continue;
         int count = 0;
-        e->QueryIntAttribute("count", &count);
-        const char* uAttr = e->Attribute("u");
+        e.QueryIntAttribute("count", &count);
+        const char* uAttr = e.Attribute("u");
         bool isSession = (uAttr && strcmp(uAttr, "true") == 0);
 
         uint32_t hash = StringHash(name);
@@ -564,29 +564,35 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
     }
 
     // Pending unlocks: <unlocked> container (with timer attr).
-    if (tinyxml2::XMLElement* progress = root->FirstChildElement("unlocked")) {
-        for (tinyxml2::XMLElement* e = progress->FirstChildElement("achievement"); e;
-             e = e->NextSiblingElement("achievement")) {
-            const char* name = e->Attribute("name");
-            if (!name || !*name) continue;
-            AchievementItem item;
-            strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
-            item.m_Name[sizeof(item.m_Name) - 1] = '\0';
-            e->QueryFloatAttribute("timer", &item.m_Timer);
-            save->m_PendingUnlocks[StringHash(name)] = item;
+    {
+        TiXmlElement progress = root.FirstChildElement("unlocked");
+        if (progress) {
+            for (TiXmlElement e = progress.FirstChildElement("achievement"); e;
+                 e = e.NextSiblingElement("achievement")) {
+                const char* name = e.Attribute("name");
+                if (!name || !*name) continue;
+                AchievementItem item;
+                strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
+                item.m_Name[sizeof(item.m_Name) - 1] = '\0';
+                e.QueryFloatAttribute("timer", &item.m_Timer);
+                save->m_PendingUnlocks[StringHash(name)] = item;
+            }
         }
     }
 
     // Unlocked achievements: <achievements> container.
-    if (tinyxml2::XMLElement* unl = root->FirstChildElement("achievements")) {
-        for (tinyxml2::XMLElement* e = unl->FirstChildElement("achievement"); e;
-             e = e->NextSiblingElement("achievement")) {
-            const char* name = e->Attribute("name");
-            if (!name || !*name) continue;
-            AchievementItem item;
-            strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
-            item.m_Name[sizeof(item.m_Name) - 1] = '\0';
-            save->m_UnlockedAchievements[StringHash(name)] = item;
+    {
+        TiXmlElement unl = root.FirstChildElement("achievements");
+        if (unl) {
+            for (TiXmlElement e = unl.FirstChildElement("achievement"); e;
+                 e = e.NextSiblingElement("achievement")) {
+                const char* name = e.Attribute("name");
+                if (!name || !*name) continue;
+                AchievementItem item;
+                strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
+                item.m_Name[sizeof(item.m_Name) - 1] = '\0';
+                save->m_UnlockedAchievements[StringHash(name)] = item;
+            }
         }
     }
 
@@ -594,62 +600,66 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
     for (int m = 0; m < 4; m++) {
         char tag[48];
         snprintf(tag, sizeof(tag), "wave_counts_%s", k_ModeNames[m]);
-        tinyxml2::XMLElement* container = root->FirstChildElement(tag);
+        TiXmlElement container = root.FirstChildElement(tag);
         if (!container) continue;
-        for (tinyxml2::XMLElement* e = container->FirstChildElement("game_count"); e;
-             e = e->NextSiblingElement("game_count")) {
+        for (TiXmlElement e = container.FirstChildElement("game_count"); e;
+             e = e.NextSiblingElement("game_count")) {
             int score = 0, waveIdx = 0;
-            e->QueryIntAttribute("score",   &score);
-            e->QueryIntAttribute("waveIdx", &waveIdx);
+            e.QueryIntAttribute("score",   &score);
+            e.QueryIntAttribute("waveIdx", &waveIdx);
             save->m_ModeScoreHistory[m][score] = waveIdx;
         }
     }
 
     // ActiveGame <que> block.
-    if (tinyxml2::XMLElement* que = root->FirstChildElement("que")) {
-        save->m_bHasActiveGame = 1;
-        const char* mode = que->Attribute("mode");
-        if (mode) {
-            for (int m = 0; m < 4; m++) {
-                if (strcmp(mode, k_ModeNames[m]) == 0) {
-                    save->m_GameMode = (uint32_t)m;
-                    break;
+    {
+        TiXmlElement que = root.FirstChildElement("que");
+        if (que) {
+            save->m_bHasActiveGame = 1;
+            const char* mode = que.Attribute("mode");
+            if (mode) {
+                for (int m = 0; m < 4; m++) {
+                    if (strcmp(mode, k_ModeNames[m]) == 0) {
+                        save->m_GameMode = (uint32_t)m;
+                        break;
+                    }
                 }
             }
-        }
-        const char* hasDropped = que->Attribute("hasDropped");
-        if (hasDropped) save->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
-        que->QueryIntAttribute("count",   &save->m_CurrentScore);
-        que->QueryIntAttribute("misses",  &save->m_CurrentMissCount);
-        que->QueryIntAttribute("count1",  &save->m_ComboCount);
-        que->QueryIntAttribute("count2",  &save->m_LastSlasher);
-        que->QueryFloatAttribute("timer",          &save->m_TimeRemainingSave);
-        que->QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
-        que->QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
-        que->QueryFloatAttribute("go_time",        &save->m_GameOverTimer);
-        que->QueryFloatAttribute("go_bombHitTime", &save->m_BombHitTimer);
-        que->QueryIntAttribute("go_body",          &save->m_GameOverField1);
-        que->QueryIntAttribute("go_head",          &save->m_GameOverField2);
-        que->QueryIntAttribute("go_fruit",         &save->m_GameOverField3);
-        que->QueryIntAttribute("go_fact",          &save->m_GameOverField4);
-        const char* showHs = que->Attribute("go_showHighScore");
-        if (showHs) save->newBestThisGame = (strcmp(showHs, "true") == 0) ? 1 : 0;
-        const char* setScore = que->Attribute("go_setScore");
-        if (setScore) save->secondaryFlag = (strcmp(setScore, "true") == 0) ? 1 : 0;
-        que->QueryFloatAttribute("nextComboBonus", &save->m_field134);
-        que->QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
-        que->QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
-        // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
-        // ParseSaveFile @ 0x154c8c loads it as a float; using "waveScalar" as placeholder.
-        que->QueryFloatAttribute("waveScalar", &save->m_WaveScalar_v161);
+            const char* hasDropped = que.Attribute("hasDropped");
+            if (hasDropped) save->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
+            que.QueryIntAttribute("count",   &save->m_CurrentScore);
+            que.QueryIntAttribute("misses",  &save->m_CurrentMissCount);
+            que.QueryIntAttribute("count1",  &save->m_ComboCount);
+            que.QueryIntAttribute("count2",  &save->m_LastSlasher);
+            que.QueryFloatAttribute("timer",          &save->m_TimeRemainingSave);
+            que.QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
+            que.QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
+            que.QueryFloatAttribute("go_time",        &save->m_GameOverTimer);
+            que.QueryFloatAttribute("go_bombHitTime", &save->m_BombHitTimer);
+            que.QueryIntAttribute("go_body",          &save->m_GameOverField1);
+            que.QueryIntAttribute("go_head",          &save->m_GameOverField2);
+            que.QueryIntAttribute("go_fruit",         &save->m_GameOverField3);
+            que.QueryIntAttribute("go_fact",          &save->m_GameOverField4);
+            const char* showHs = que.Attribute("go_showHighScore");
+            if (showHs) save->newBestThisGame = (strcmp(showHs, "true") == 0) ? 1 : 0;
+            const char* setScore = que.Attribute("go_setScore");
+            if (setScore) save->secondaryFlag = (strcmp(setScore, "true") == 0) ? 1 : 0;
+            que.QueryFloatAttribute("nextComboBonus", &save->m_field134);
+            que.QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
+            que.QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
+            // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
+            // ParseSaveFile @ 0x154c8c loads it as a float; using "waveScalar" as placeholder.
+            que.QueryFloatAttribute("waveScalar", &save->m_WaveScalar_v161);
 
-        if (tinyxml2::XMLElement* wi = que->FirstChildElement("wave_info")) {
-            wi->QueryIntAttribute("waveCount",   &save->m_pCurrentWave_P1);
-            wi->QueryFloatAttribute("waveDelay", &save->m_WaveDelay);
-            wi->QueryFloatAttribute("waveWait",  &save->m_WaveWait);
-            wi->QueryIntAttribute("blitzSpawnedThisGame",     &save->m_blitzSpawnedThisGame);
-            wi->QueryIntAttribute("blitzForceSpawnedCounter", &save->m_blitzForceSpawnedCounter);
-            wi->QueryFloatAttribute("blitzSpawnTime",         &save->m_blitzSpawnTime);
+            TiXmlElement wi = que.FirstChildElement("wave_info");
+            if (wi) {
+                wi.QueryIntAttribute("waveCount",   &save->m_pCurrentWave_P1);
+                wi.QueryFloatAttribute("waveDelay", &save->m_WaveDelay);
+                wi.QueryFloatAttribute("waveWait",  &save->m_WaveWait);
+                wi.QueryIntAttribute("blitzSpawnedThisGame",     &save->m_blitzSpawnedThisGame);
+                wi.QueryIntAttribute("blitzForceSpawnedCounter", &save->m_blitzForceSpawnedCounter);
+                wi.QueryFloatAttribute("blitzSpawnTime",         &save->m_blitzSpawnTime);
+            }
         }
     }
 

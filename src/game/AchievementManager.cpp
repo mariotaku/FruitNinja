@@ -13,12 +13,11 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
-#include "engine/xml/XmlLoad.h"
+#include "engine/xml/TiXml.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
 #include "hud/TimeControl.h"
 
-#include <tinyxml2.h>
 #include <cstring>
 #include "game/GameWork.h"
 
@@ -91,21 +90,21 @@ void AchievementManager::LoadAchievementInfo() {
     // TODO: DAT_001096b0 -- load third preamble texture (identity not yet RE'd).
 
     // Binary @ 0x00109200: TiXmlDocument("xml/achievementList.xml")
-    tinyxml2::XMLDocument doc;
-    if (FN::LoadXmlCI(doc, std::string("xml/achievementList.xml")) != tinyxml2::XML_SUCCESS) return;
+    TiXmlDocument doc;
+    if (!doc.LoadFile("xml/achievementList.xml")) return;
 
-    tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
+    TiXmlElement root = doc.FirstChildElement("achievementManagerFile");
     if (!root) return;
 
     // Autoincrement counter used for SCORE and SCORE_UNSULLIED type secondary keys
     // (types 1,2 — keyed by load order rather than a field value)
     int autoKey = 0;
 
-    for (tinyxml2::XMLElement* e = root->FirstChildElement("achievement");
-         e; e = e->NextSiblingElement("achievement"))
+    for (TiXmlElement e = root.FirstChildElement("achievement");
+         e; e = e.NextSiblingElement("achievement"))
     {
         // Read "name" attribute — also the save-key string
-        const char* nameAttr = e->Attribute("name");
+        const char* nameAttr = e.Attribute("name");
         if (!nameAttr || nameAttr[0] == '\0') continue;
 
         uint32_t nameHash = StringHash(nameAttr);
@@ -124,7 +123,7 @@ void AchievementManager::LoadAchievementInfo() {
         info->m_NameHash = nameHash;
 
         // description (localised)
-        const char* descAttr = e->Attribute("description");
+        const char* descAttr = e.Attribute("description");
         if (descAttr) {
             const char* localised = GETSTRING_CAST_0_STR(descAttr);
             strncpy(info->m_Description, localised ? localised : descAttr,
@@ -133,9 +132,9 @@ void AchievementManager::LoadAchievementInfo() {
         }
 
         // long text (optional element child text)
-        tinyxml2::XMLElement* longElem = e->FirstChildElement("longText");
+        TiXmlElement longElem = e.FirstChildElement("longText");
         if (longElem) {
-            const char* txt = longElem->GetText();
+            const char* txt = longElem.GetText();
             if (txt) {
                 strncpy(info->m_LongText, txt, sizeof(info->m_LongText) - 1);
                 info->m_LongText[sizeof(info->m_LongText) - 1] = '\0';
@@ -143,13 +142,13 @@ void AchievementManager::LoadAchievementInfo() {
         }
 
         // value (threshold)
-        e->QueryIntAttribute("value", &info->m_Threshold);
+        e.QueryIntAttribute("value", &info->m_Threshold);
 
         // points
-        e->QueryIntAttribute("points", &info->m_Points);
+        e.QueryIntAttribute("points", &info->m_Points);
 
         // type index
-        const char* typeAttr = e->Attribute("type");
+        const char* typeAttr = e.Attribute("type");
         info->m_TypeIndex = -1;
         if (typeAttr) {
             if      (strcmp(typeAttr, "total")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_TOTAL;
@@ -166,7 +165,7 @@ void AchievementManager::LoadAchievementInfo() {
         }
 
         // mode bitmask (e.g. "classic,arcade,zen" — binary packs as bit flags)
-        const char* modeAttr = e->Attribute("mode");
+        const char* modeAttr = e.Attribute("mode");
         info->m_ModeBitmask = 0;
         if (modeAttr) {
             // Binary stores: bit0=classic, bit1=arcade, bit2=zen, bit3=attack
@@ -178,19 +177,19 @@ void AchievementManager::LoadAchievementInfo() {
         }
 
         // requires_unsullied flag
-        const char* unsullied = e->Attribute("requires_unsullied");
+        const char* unsullied = e.Attribute("requires_unsullied");
         info->m_RequiresUnsullied = (unsullied && strcmp(unsullied, "true") == 0);
 
         // texture
-        const char* texAttr = e->Attribute("texture");
+        const char* texAttr = e.Attribute("texture");
         if (texAttr) {
             info->m_Texture = TextureManager::LoadLocalisedTexture(texAttr);
         }
 
         // specific_order child
-        tinyxml2::XMLElement* soElem = e->FirstChildElement("specific_order");
+        TiXmlElement soElem = e.FirstChildElement("specific_order");
         if (soElem) {
-            const char* soStr = soElem->GetText();
+            const char* soStr = soElem.GetText();
             if (soStr) {
                 info->m_SpecificOrder = new SpecificOrder(soStr);
             }
@@ -215,7 +214,7 @@ void AchievementManager::LoadAchievementInfo() {
                 ti == ACHIEVEMENT_TYPE_COMBO_STAR  ||
                 ti == ACHIEVEMENT_TYPE_BONUS)
             {
-                const char* stAttr = e->Attribute("specific_type");
+                const char* stAttr = e.Attribute("specific_type");
                 secondaryKey = stAttr ? StringHash(stAttr) : 0;
             } else if (ti == ACHIEVEMENT_TYPE_SCORE ||
                        ti == ACHIEVEMENT_TYPE_SCORE_UNSULLIED)

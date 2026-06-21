@@ -7,8 +7,7 @@
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
 #include "debug/Logger.h"
-#include "xml/XmlLoad.h"
-#include <tinyxml2.h>
+#include "xml/TiXml.h"
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
@@ -675,13 +674,13 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 // ASM-spec v1.6.1 PSPParticleManager::LoadFile @0x0013d09c: 1024-slot particle buffer +
 // free-list (m_NextLink, 1-based) + MemoryPool::Create(120).
 bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, char** outNames) {
-    tinyxml2::XMLDocument doc;
-    if (FN::LoadXmlCI(doc, xmlPath) != tinyxml2::XML_SUCCESS) {
+    TiXmlDocument doc;
+    if (!doc.LoadFile(xmlPath)) {
         return false;
     }
-    tinyxml2::XMLElement* root = doc.FirstChildElement("particle_file");
+    TiXmlElement root = doc.FirstChildElement("particle_file");
     if (!root) return false;
-    tinyxml2::XMLElement* body = root->FirstChildElement("body");
+    TiXmlElement body = root.FirstChildElement("body");
     if (!body) return false;
 
     // (a) Allocate 1024-slot particle buffer on first call (guarded on null).
@@ -715,9 +714,9 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
     // --- First loop: <particleTemplate> --------------------------------------
     std::unordered_map<uint32_t, size_t> nameToIndex;
 
-    for (tinyxml2::XMLElement* pt = body->FirstChildElement("particleTemplate");
-         pt != nullptr;
-         pt = pt->NextSiblingElement("particleTemplate")) {
+    for (TiXmlElement pt = body.FirstChildElement("particleTemplate");
+         pt;
+         pt = pt.NextSiblingElement("particleTemplate")) {
 
         PSPParticleTemplate tmpl = {};
         // m_VelocityMin/Max on the TEMPLATE are a per-component per-frame velocity
@@ -726,148 +725,191 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         tmpl.m_VelocityMin[0] = 1.0f; tmpl.m_VelocityMin[1] = 1.0f; tmpl.m_VelocityMin[2] = 1.0f;
         tmpl.m_VelocityMax[0] = 1.0f; tmpl.m_VelocityMax[1] = 1.0f; tmpl.m_VelocityMax[2] = 1.0f;
 
-        const char* name = pt->Attribute("name");
+        const char* name = pt.Attribute("name");
         uint32_t hash = name ? StringHash(name) : 0;
         if (name) nameToIndex[hash] = m_ParticleTemplates.size();
 
-        { int _v = 0; pt->QueryIntAttribute("useDepth", &_v); tmpl.m_UseDepth = (int32_t)_v; }
+        { int _v = 0; pt.QueryIntAttribute("useDepth", &_v); tmpl.m_UseDepth = (int32_t)_v; }
 
         // <life> — stored as seconds after divide by 78.0
         // Binary @ 0x0013d558 uses divisor 78.0 (DAT 0x404e000000000000).
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("life")) {
-            const char* t = e->GetText();
-            tmpl.m_StartTime = t ? (float)(atof(t) / 78.0f) : 0.0f;
+        {
+            TiXmlElement e = pt.FirstChildElement("life");
+            if (e) {
+                const char* t = e.GetText();
+                tmpl.m_StartTime = t ? (float)(atof(t) / 78.0f) : 0.0f;
+            }
         }
 
         // <type> — 0=Point, 1=Vertex, 2=Direction, 3=Angular
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("type")) {
-            const char* t = e->GetText();
-            if (t) {
-                if      (!strcmp(t, "Point"))     tmpl.m_Shape = 0;
-                else if (!strcmp(t, "Vertex"))    tmpl.m_Shape = 1;
-                else if (!strcmp(t, "Direction")) tmpl.m_Shape = 2;
-                else if (!strcmp(t, "Angular"))   tmpl.m_Shape = 3;
+        {
+            TiXmlElement e = pt.FirstChildElement("type");
+            if (e) {
+                const char* t = e.GetText();
+                if (t) {
+                    if      (!strcmp(t, "Point"))     tmpl.m_Shape = 0;
+                    else if (!strcmp(t, "Vertex"))    tmpl.m_Shape = 1;
+                    else if (!strcmp(t, "Direction")) tmpl.m_Shape = 2;
+                    else if (!strcmp(t, "Angular"))   tmpl.m_Shape = 3;
+                }
             }
         }
         // <system> — 0=Local, 1=Global
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("system")) {
-            const char* t = e->GetText();
-            if (t && !strcmp(t, "Global")) tmpl.m_CoordSystem = 1;
+        {
+            TiXmlElement e = pt.FirstChildElement("system");
+            if (e) {
+                const char* t = e.GetText();
+                if (t && !strcmp(t, "Global")) tmpl.m_CoordSystem = 1;
+            }
         }
 
         // <gravity> — "x y z" (default min, max falls back to min)
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("gravity")) {
-            ParseVec3(e->GetText(), tmpl.m_GravityMin);
-            memcpy(tmpl.m_GravityMax, tmpl.m_GravityMin, sizeof(tmpl.m_GravityMin));
+        {
+            TiXmlElement e = pt.FirstChildElement("gravity");
+            if (e) {
+                ParseVec3(e.GetText(), tmpl.m_GravityMin);
+                memcpy(tmpl.m_GravityMax, tmpl.m_GravityMin, sizeof(tmpl.m_GravityMin));
+            }
         }
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("gravity_max")) {
-            ParseVec3(e->GetText(), tmpl.m_GravityMax);
+        {
+            TiXmlElement e = pt.FirstChildElement("gravity_max");
+            if (e) {
+                ParseVec3(e.GetText(), tmpl.m_GravityMax);
+            }
         }
 
         // <velocity min="..." max="..."/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("velocity")) {
-            ParseVec3(e->Attribute("min"), tmpl.m_VelocityMin);
-            ParseVec3(e->Attribute("max"), tmpl.m_VelocityMax);
+        {
+            TiXmlElement e = pt.FirstChildElement("velocity");
+            if (e) {
+                ParseVec3(e.Attribute("min"), tmpl.m_VelocityMin);
+                ParseVec3(e.Attribute("max"), tmpl.m_VelocityMax);
+            }
         }
 
         // <color startMin="R G B A" startMax=".." endMin=".." endMax=".."/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("color")) {
-            ParseColourBGRA(e->Attribute("startMin"), tmpl.m_ColourStartMin);
-            ParseColourBGRA(e->Attribute("startMax"), tmpl.m_ColourStartMax);
-            ParseColourBGRA(e->Attribute("endMin"),   tmpl.m_ColourEndMin);
-            ParseColourBGRA(e->Attribute("endMax"),   tmpl.m_ColourEndMax);
-            // mid = average of start/end (matches binary fallback)
-            for (int i = 0; i < 4; ++i) {
-                tmpl.m_ColourMidMin[i] = (uint8_t)(((int)tmpl.m_ColourStartMin[i] +
-                                                    (int)tmpl.m_ColourEndMin[i]) >> 1);
-                tmpl.m_ColourMidMax[i] = (uint8_t)(((int)tmpl.m_ColourStartMax[i] +
-                                                    (int)tmpl.m_ColourEndMax[i]) >> 1);
+        {
+            TiXmlElement e = pt.FirstChildElement("color");
+            if (e) {
+                ParseColourBGRA(e.Attribute("startMin"), tmpl.m_ColourStartMin);
+                ParseColourBGRA(e.Attribute("startMax"), tmpl.m_ColourStartMax);
+                ParseColourBGRA(e.Attribute("endMin"),   tmpl.m_ColourEndMin);
+                ParseColourBGRA(e.Attribute("endMax"),   tmpl.m_ColourEndMax);
+                // mid = average of start/end (matches binary fallback)
+                for (int i = 0; i < 4; ++i) {
+                    tmpl.m_ColourMidMin[i] = (uint8_t)(((int)tmpl.m_ColourStartMin[i] +
+                                                        (int)tmpl.m_ColourEndMin[i]) >> 1);
+                    tmpl.m_ColourMidMax[i] = (uint8_t)(((int)tmpl.m_ColourStartMax[i] +
+                                                        (int)tmpl.m_ColourEndMax[i]) >> 1);
+                }
             }
         }
 
         // <size startMin=".." startMax=".." endMin=".." endMax=".."/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("size")) {
-            int v = 0;
-            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeStartMin = (uint8_t)v;
-            if (e->QueryIntAttribute("startMax", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeStartMax = (uint8_t)v;
-            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeEndMin   = (uint8_t)v;
-            if (e->QueryIntAttribute("endMax",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SizeEndMax   = (uint8_t)v;
-            tmpl.m_SizeMidMin = (uint8_t)(((int)tmpl.m_SizeStartMin + (int)tmpl.m_SizeEndMin) >> 1);
-            tmpl.m_SizeMidMax = (uint8_t)(((int)tmpl.m_SizeStartMax + (int)tmpl.m_SizeEndMax) >> 1);
+        {
+            TiXmlElement e = pt.FirstChildElement("size");
+            if (e) {
+                int v = 0;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl.m_SizeStartMin = (uint8_t)v;
+                if (e.QueryIntAttribute("startMax", &v) == TIXML_SUCCESS) tmpl.m_SizeStartMax = (uint8_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl.m_SizeEndMin   = (uint8_t)v;
+                if (e.QueryIntAttribute("endMax",   &v) == TIXML_SUCCESS) tmpl.m_SizeEndMax   = (uint8_t)v;
+                tmpl.m_SizeMidMin = (uint8_t)(((int)tmpl.m_SizeStartMin + (int)tmpl.m_SizeEndMin) >> 1);
+                tmpl.m_SizeMidMax = (uint8_t)(((int)tmpl.m_SizeStartMax + (int)tmpl.m_SizeEndMax) >> 1);
+            }
         }
 
         // <spin startMin=".." startMax=".." endMin=".." endMax=".."/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("spin")) {
-            int v = 0;
-            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinStartMin = (int16_t)v;
-            if (e->QueryIntAttribute("startMax", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinStartMax = (int16_t)v;
-            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinEndMin   = (int16_t)v;
-            if (e->QueryIntAttribute("endMax",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinEndMax   = (int16_t)v;
+        {
+            TiXmlElement e = pt.FirstChildElement("spin");
+            if (e) {
+                int v = 0;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl.m_SpinStartMin = (int16_t)v;
+                if (e.QueryIntAttribute("startMax", &v) == TIXML_SUCCESS) tmpl.m_SpinStartMax = (int16_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl.m_SpinEndMin   = (int16_t)v;
+                if (e.QueryIntAttribute("endMax",   &v) == TIXML_SUCCESS) tmpl.m_SpinEndMax   = (int16_t)v;
+            }
         }
 
         // <cycleX startMin="a" startMax="b" endMin="c" endMax="d"/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("cycleX")) {
-            int v = 0;
-            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXStart = (int16_t)v;
-            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXEnd   = (int16_t)v;
+        {
+            TiXmlElement e = pt.FirstChildElement("cycleX");
+            if (e) {
+                int v = 0;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl.m_CycleXStart = (int16_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl.m_CycleXEnd   = (int16_t)v;
+            }
         }
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("cycleY")) {
-            int v = 0;
-            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYStart = (int16_t)v;
-            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYEnd   = (int16_t)v;
+        {
+            TiXmlElement e = pt.FirstChildElement("cycleY");
+            if (e) {
+                int v = 0;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl.m_CycleYStart = (int16_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl.m_CycleYEnd   = (int16_t)v;
+            }
         }
 
         // <gridLock x="16" y="16"/> -- snap-to-grid lock per axis.
         // ASM-verified: 2026-05-09 binary @ 0x00115f60 (re-analyst)
         {
-            tinyxml2::XMLElement* e = pt->FirstChildElement("gridLock");
+            TiXmlElement e = pt.FirstChildElement("gridLock");
             if (e) {
-                e->QueryFloatAttribute("x", &tmpl.m_GridLockStart);
-                e->QueryFloatAttribute("y", &tmpl.m_GridLockEnd);
+                e.QueryFloatAttribute("x", &tmpl.m_GridLockStart);
+                e.QueryFloatAttribute("y", &tmpl.m_GridLockEnd);
             }
         }
 
         // <friction start="x y z" end="x y z"/> -- velocity LERP damping factor.
         {
-            tinyxml2::XMLElement* e = pt->FirstChildElement("friction");
+            TiXmlElement e = pt.FirstChildElement("friction");
             if (e) {
-                ParseVec3(e->Attribute("start"), tmpl.m_VelocityMin);
-                ParseVec3(e->Attribute("end"),   tmpl.m_VelocityMax);
+                ParseVec3(e.Attribute("start"), tmpl.m_VelocityMin);
+                ParseVec3(e.Attribute("end"),   tmpl.m_VelocityMax);
             }
         }
 
         // <rotateCycle start="base" end="endBase" speedStart="rate1" speedEnd="rate2"/>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("rotateCycle")) {
-            float fv = 0.0f;
-            if (e->QueryFloatAttribute("speedStart", &fv) == tinyxml2::XML_SUCCESS)
-                tmpl.m_FrictionSpeedStart = fv;
-            if (e->QueryFloatAttribute("speedEnd",   &fv) == tinyxml2::XML_SUCCESS)
-                tmpl.m_FrictionSpeedEnd   = fv;
-            if (e->QueryFloatAttribute("start",      &fv) == tinyxml2::XML_SUCCESS)
-                tmpl.m_FrictionOffsetMin  = fv;
-            if (e->QueryFloatAttribute("end",        &fv) == tinyxml2::XML_SUCCESS)
-                tmpl.m_FrictionOffsetMax  = fv;
-            else
-                tmpl.m_FrictionOffsetMax  = tmpl.m_FrictionOffsetMin;
+        {
+            TiXmlElement e = pt.FirstChildElement("rotateCycle");
+            if (e) {
+                float fv = 0.0f;
+                if (e.QueryFloatAttribute("speedStart", &fv) == TIXML_SUCCESS)
+                    tmpl.m_FrictionSpeedStart = fv;
+                if (e.QueryFloatAttribute("speedEnd",   &fv) == TIXML_SUCCESS)
+                    tmpl.m_FrictionSpeedEnd   = fv;
+                if (e.QueryFloatAttribute("start",      &fv) == TIXML_SUCCESS)
+                    tmpl.m_FrictionOffsetMin  = fv;
+                if (e.QueryFloatAttribute("end",        &fv) == TIXML_SUCCESS)
+                    tmpl.m_FrictionOffsetMax  = fv;
+                else
+                    tmpl.m_FrictionOffsetMax  = tmpl.m_FrictionOffsetMin;
+            }
         }
 
         // <SourceBlend>, <DestinationBlend>
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("SourceBlend"))
-            tmpl.m_BlendMode = ParseBlendEnum(e->GetText());
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("DestinationBlend"))
-            tmpl.m_BlendMode = ParseBlendEnum(e->GetText());
+        {
+            TiXmlElement e = pt.FirstChildElement("SourceBlend");
+            if (e) tmpl.m_BlendMode = ParseBlendEnum(e.GetText());
+        }
+        {
+            TiXmlElement e = pt.FirstChildElement("DestinationBlend");
+            if (e) tmpl.m_BlendMode = ParseBlendEnum(e.GetText());
+        }
 
         // <texture name="..."/> — load via TextureManager
-        if (tinyxml2::XMLElement* e = pt->FirstChildElement("texture")) {
-            const char* texName = e->Attribute("name");
-            if (texName && *texName) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
-                tmpl.m_Texture = Mortar::TextureManager::GetInstance().Load(buf);
-                if (tmpl.m_Texture.IsValid()) {
-                    const float tw = (float)tmpl.m_Texture->m_Width;
-                    const float th = (float)tmpl.m_Texture->m_Height;
-                    if (th > 0.0f) tmpl.m_AspectRatio = tw / th;
+        {
+            TiXmlElement e = pt.FirstChildElement("texture");
+            if (e) {
+                const char* texName = e.Attribute("name");
+                if (texName && *texName) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
+                    tmpl.m_Texture = Mortar::TextureManager::GetInstance().Load(buf);
+                    if (tmpl.m_Texture.IsValid()) {
+                        const float tw = (float)tmpl.m_Texture->m_Width;
+                        const float th = (float)tmpl.m_Texture->m_Height;
+                        if (th > 0.0f) tmpl.m_AspectRatio = tw / th;
+                    }
                 }
             }
         }
@@ -879,55 +921,70 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
     }
 
     // --- Second loop: <emitter> ---------------------------------------------
-    for (tinyxml2::XMLElement* em = body->FirstChildElement("emitter");
-         em != nullptr;
-         em = em->NextSiblingElement("emitter")) {
+    for (TiXmlElement em = body.FirstChildElement("emitter");
+         em;
+         em = em.NextSiblingElement("emitter")) {
 
         PSPEmitterTemplate tmpl;
-        const char* name = em->Attribute("name");
+        const char* name = em.Attribute("name");
         if (name) {
             strncpy(tmpl.m_Name, name, sizeof(tmpl.m_Name) - 1);
             tmpl.m_Hash = StringHash(name);
         }
 
-        if (tinyxml2::XMLElement* life = em->FirstChildElement("life")) {
-            const char* t = life->GetText();
-            // Binary @ 0x0013d558 uses divisor 78.0 (DAT 0x404e000000000000).
-            tmpl.m_MaxLifetime = t ? (float)(atof(t) / 78.0f) : 0.0f;
+        {
+            TiXmlElement life = em.FirstChildElement("life");
+            if (life) {
+                const char* t = life.GetText();
+                // Binary @ 0x0013d558 uses divisor 78.0 (DAT 0x404e000000000000).
+                tmpl.m_MaxLifetime = t ? (float)(atof(t) / 78.0f) : 0.0f;
+            }
         }
 
-        for (tinyxml2::XMLElement* ps = em->FirstChildElement("particleSet");
-             ps != nullptr;
-             ps = ps->NextSiblingElement("particleSet")) {
+        for (TiXmlElement ps = em.FirstChildElement("particleSet");
+             ps;
+             ps = ps.NextSiblingElement("particleSet")) {
 
             PSPParticleSet set = {};
             set.m_pTemplate = nullptr;
 
             // Store template index encoded as a pointer -- patched below after
             // all emitter templates are built (mirrors binary post-load patch).
-            if (const char* psName = ps->Attribute("name")) {
-                std::unordered_map<uint32_t, size_t>::iterator it = nameToIndex.find(StringHash(psName));
-                if (it != nameToIndex.end()) {
-                    set.m_pTemplate = reinterpret_cast<PSPParticleTemplate*>(
-                        static_cast<uintptr_t>(it->second + 1)); // +1 so 0 == "none"
+            {
+                const char* psName = ps.Attribute("name");
+                if (psName) {
+                    std::unordered_map<uint32_t, size_t>::iterator it = nameToIndex.find(StringHash(psName));
+                    if (it != nameToIndex.end()) {
+                        set.m_pTemplate = reinterpret_cast<PSPParticleTemplate*>(
+                            static_cast<uintptr_t>(it->second + 1)); // +1 so 0 == "none"
+                    }
                 }
             }
 
-            if (tinyxml2::XMLElement* time = ps->FirstChildElement("time")) {
-                time->QueryFloatAttribute("start", &set.m_TimeStart);
-                time->QueryFloatAttribute("stop",  &set.m_TimeStop);
+            {
+                TiXmlElement time = ps.FirstChildElement("time");
+                if (time) {
+                    time.QueryFloatAttribute("start", &set.m_TimeStart);
+                    time.QueryFloatAttribute("stop",  &set.m_TimeStop);
+                }
             }
 
-            if (tinyxml2::XMLElement* num = ps->FirstChildElement("particleNumber")) {
-                int init = 0;
-                num->QueryIntAttribute("init", &init);
-                set.m_InitCount = (uint8_t)init;
-                num->QueryFloatAttribute("perSec", &set.m_PerSec);
+            {
+                TiXmlElement num = ps.FirstChildElement("particleNumber");
+                if (num) {
+                    int init = 0;
+                    num.QueryIntAttribute("init", &init);
+                    set.m_InitCount = (uint8_t)init;
+                    num.QueryFloatAttribute("perSec", &set.m_PerSec);
+                }
             }
 
-            if (tinyxml2::XMLElement* vel = ps->FirstChildElement("velocity")) {
-                ParseVec3(vel->Attribute("min"), set.m_VelocityMin);
-                ParseVec3(vel->Attribute("max"), set.m_VelocityMax);
+            {
+                TiXmlElement vel = ps.FirstChildElement("velocity");
+                if (vel) {
+                    ParseVec3(vel.Attribute("min"), set.m_VelocityMin);
+                    ParseVec3(vel.Attribute("max"), set.m_VelocityMax);
+                }
             }
 
             tmpl.m_Sets.push_back(set);
