@@ -41,8 +41,3 @@ Each .fnt file references a corresponding `*_0.tex` texture atlas containing the
 
 BMFont is natively supported by many libraries. The .fnt text files can be used as-is — only the texture atlases (.tex) need conversion to PNG using the .tex converter.
 
----
-
-## See Also
-
-- [Rendering detail system](../rendering-detail.md) -- Font::Load

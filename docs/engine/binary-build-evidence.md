@@ -136,7 +136,7 @@ Since the public installers / archive links are dead, the bali-sdk approach (bui
 3. Inside each, the toolchain source archive name is `bada-g++-X.Y-Z-src.tar.bz2`. Reading the filename alone confirms the toolchain version per SDK release without needing to extract.
 4. The bali-sdk Makefile is the reference for how to build a working `arm-bada-eabi-gcc` from these tarballs on Linux/macOS.
 
-For asm-differ / future fidelity verification, building the 4.4.1 toolchain explicitly (rather than relying on our installed 4.5.3) would tighten register-allocation and instruction-selection alignment with the binary by another 5-10%.
+For future operand-level verification refinement, building the 4.4.1 toolchain explicitly (rather than relying on our installed 4.5.3) would tighten register-allocation and instruction-selection alignment with the binary by another 5-10%.
 
 ## 10. References / verifications
 

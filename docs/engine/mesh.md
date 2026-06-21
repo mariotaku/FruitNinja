@@ -599,13 +599,3 @@ All 122 .mmd files have `skeletonBoneCount=1` and `meshBoneCount=1`. `SkipSkelet
 ### ResourceLoader
 The HBR0 "header" is NOT a separate magic — the entire file is parsed by `ResourceLoader::Initialize()` which treats the first 4 bytes as a skip value. The port reads the whole file and passes it to Initialize.
 
----
-
-## See Also
-
-- [texture-mesh-manager.md](texture-mesh-manager.md) — MeshManager (singleton, loading pipeline)
-- [rendering-detail.md](rendering-detail.md) — Model::Draw pipeline
-- [rendering-pipeline.md](rendering-pipeline.md) — Effect/Geometry/PassBinding 3D rendering path
-- [assets.md](assets.md) — LoadVertexStreamPSP, GPUafyTexture
-- [formats/models.md](formats/models.md) — HBR0 container format (.mad/.mmd), vertex declaration bitfield
-- [utility-types.md](utility-types.md) — ResourceLoader, SmartPtr, Delegate

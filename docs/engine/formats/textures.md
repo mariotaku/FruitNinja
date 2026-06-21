@@ -83,9 +83,3 @@ uint8_t b = ((pixel >> 0)  & 0x1F) * 255 / 31;
 uint8_t a = 255;
 ```
 
----
-
-## See Also
-
-- [Asset functions](../assets.md) -- GPUafyTexture decompilation
-- [Rendering detail system](../rendering-detail.md) -- texture pipeline
