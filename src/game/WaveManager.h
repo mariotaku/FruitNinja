@@ -262,10 +262,10 @@ public:
 
     // --- Per-frame update ---------------------------------------------
 
-    // 0x001259d8 (89 lines): fixed-timestep pump + multiplier resets.
+    // v1.6.1 WaveManager::Update @0x001267a0 (89 lines): fixed-timestep pump + multiplier resets.
     void Update(float dt);
 
-    // 0x00125390 (298 lines): one tick of wave spawning.
+    // v1.6.1 WaveManager::UpdateWave @0x00125d7c (298 lines): one tick of wave spawning.
     void UpdateWave(float dt, int playerIdx, int unk);
 
     // 0x00122f50: blitz-combo speed update.

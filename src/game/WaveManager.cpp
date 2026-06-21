@@ -998,7 +998,14 @@ void WaveManager::Update(float dt) {
     if (game_work.bM_bPaused == 0 || m_WaveCount[0] <= 0) {
         float accumDt = m_StepAccumulator + dt;
         while (accumDt > WAVE_STEP) {
-            UpdateWave(WAVE_STEP, 0, 0);
+            // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 WaveManager::Update @0x001267a0 (re-analyst):
+            //   call UpdateWave only when m_WaveInfo[gameMode] is non-empty; otherwise the
+            //   menu pump would deref a stale m_pCurrentWave[mode] (dangling from the prior
+            //   game) -> ACCESS_VIOLATION, and spawn fruit with that wave's garbage
+            //   SPAWNER_INFO.m_TimeScale (+0x14) -> over-fast spin (bombs ignore +0x14).
+            if (!m_WaveInfo[game_work.gameMode].empty()) {
+                UpdateWave(WAVE_STEP, 0, game_work.gameMode);
+            }
             accumDt -= WAVE_STEP;
         }
         m_StepAccumulator = accumDt;
@@ -1351,6 +1358,12 @@ void WaveManager::GetNextWave(int playerIdx) {
     int matchCount = 0;
     static const int MAX_CANDIDATES = 20;
     WAVE_INFO* candidates[MAX_CANDIDATES];
+
+    // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 WaveManager::GetNextWave @0x00125884 (re-analyst):
+    //   seed m_pCurrentWave[mode] = m_WaveInfo[mode].front() UNCONDITIONALLY before the
+    //   match loop, so a no-match (e.g. waveCount==0 right after Reset) never leaves it
+    //   stale. The per-match assignment below only refines this.
+    pCurrentWave = m_WaveInfo[gm].front();
 
     for (std::vector<WAVE_INFO*>::iterator wit = m_WaveInfo[gm].begin();
          wit != m_WaveInfo[gm].end(); ++wit) {
