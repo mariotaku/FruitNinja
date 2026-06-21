@@ -161,7 +161,7 @@ private:
     // v1.6.1: NewDraw -- BakedStringBox credit text pass
     // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,
     // m_HeadingBox (via DrawMarquee), m_VersionBox, m_CreditLine0..5 at
-    // positions derived from panelPos. Also gates DrawMarquee on alpha < 0.6.
+    // positions derived from panelPos. Also gates DrawMarquee on alpha > 0.6.
     void NewDraw(float yDrawn);
 
     // v1.6.1: CreateCreditsMarquee @0x0015ac0c
