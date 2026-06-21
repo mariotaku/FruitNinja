@@ -85,9 +85,7 @@ DojoScreen::DojoScreen(Game& g)
     , m_pAboutScreen(nullptr)     // field_0xa0
     , game(g)
 {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x00137b90");
-    #endif
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
     m_bNoDestructor = 0;
@@ -98,9 +96,7 @@ DojoScreen::DojoScreen(Game& g)
 // Binary: set vtable, call Release(), call ~BaseScreen()
 // ===================================================================
 DojoScreen::~DojoScreen() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "destroy", "DojoScreen::~DojoScreen @ 0x00137cf4");
-    #endif
     Release();
     // ~BaseScreen() called implicitly by ~HUDControl3d chain
 }
@@ -134,9 +130,7 @@ void DojoScreen::UnLoadContent() {
 // HUDControl::Init override
 // ===================================================================
 void DojoScreen::Init() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Init");
-    #endif
     m_State = 0;
     m_TransitionAlpha = 0.0f;
     m_Active = 1;
@@ -149,9 +143,7 @@ void DojoScreen::Init() {
 // at the AboutScreen-state-2 callsite the alpha is already <0.001 and
 // m_Active was never cleared, so Init's extras are no-ops there.
 void DojoScreen::Reset() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0013767c");
-    #endif
     m_State = 0;
 }
 
@@ -288,9 +280,7 @@ void DojoScreen::Update(float dt) {
         // Transition to state 1 when fully faded in
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
-            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 1, "Update/state-0 alpha settled");
-            #endif
             m_State = 1;
         }
         break;
@@ -350,9 +340,7 @@ void DojoScreen::Update(float dt) {
         if (prevState == 4) {
             // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada (no
             // button creates it). Binary state-4 body kept for vtable parity.
-            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(prevState), 0, "Update/state-4 defunct");
-            #endif
             m_State = 0;
             return;
         }
@@ -366,9 +354,7 @@ void DojoScreen::Update(float dt) {
 
         // Binary: if (alpha < 0.001) → mark for removal
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
-            #ifndef __bada__
             LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "pending-removal", "state-6 alpha faded");
-            #endif
             m_bPendingRemoval = 1;
             // Binary: *(game_work.mMainScreen + 0x10c) = 8
             // 0x10c into MainScreen is m_State = STATE_SLIDE_IN (8)
@@ -434,9 +420,7 @@ void DojoScreen::PlayCallback() {
     }
 
     // 2. State 6 (quit fade-out)
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 6, "PlayCallback @ 0x001389f4");
-    #endif
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
@@ -460,9 +444,7 @@ void DojoScreen::PlayCallback() {
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
-    #endif
     m_State = 2;
 
     // Binary @ 0x00137864: m_pPlayButton->m_pFruitPiece (+0x134), set
@@ -483,9 +465,7 @@ void DojoScreen::ShopCallback() {
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
-    #endif
     m_State = 3;
 
     // Binary @ 0x001378e0: m_pPlayButton->m_pFruitPiece (+0x134), set

@@ -753,9 +753,7 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
-            #ifndef __bada__
             LOG_DEBUG("Shop", "EquipCallback SaveItemInfo done");
-            #endif
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")

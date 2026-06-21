@@ -276,9 +276,7 @@ void MainScreen::Update(float dt) {
         CreatePlayDojo();
 
         if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt >= 0.0f) {
-            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
-            #endif
             m_State = STATE_CREATE_BUTTONS;
         }
         break;
@@ -396,9 +394,7 @@ void MainScreen::Update(float dt) {
     case STATE_MATCHMAKER:      // binary case 0x10
         // Defunct — OpenFeint / GameCenter / matchmaker states.
         // Binary resets m_StateTimer = 0 (bounce velocity cleared) and m_Timer2 = -0.85.
-        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
-        #endif
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
@@ -409,9 +405,7 @@ void MainScreen::Update(float dt) {
     case STATE_NEWS:            // binary case 0xb
         // Defunct — NetworkManager::UpdateNews.
         // Binary: m_StateTimer=0, m_State=1, m_Timer2=-0.85.
-        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
-        #endif
         m_State = STATE_CREATE_BUTTONS;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
@@ -444,9 +438,7 @@ void MainScreen::Update(float dt) {
             if (game_work.m_GameDt > -0.001f) {
                 game_work.m_GameDt = 0.0f;
                 game_work.bM_bPaused = 0;
-                #ifndef __bada__
                 LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to 0.0f, levelTransitionFlag cleared");
-                #endif
             }
         }
         break;
@@ -458,9 +450,7 @@ void MainScreen::Update(float dt) {
         if (m_Field114 >= 8.0f) {
             m_Field114 = 0.0f;
         }
-        #ifndef __bada__
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
-        #endif
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         game_work.m_GameDt = 0.0f;
@@ -479,15 +469,11 @@ void MainScreen::Update(float dt) {
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
             Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
-            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
-            #endif
             m_State = STATE_QUIT_BOMB;
             m_StateTimer = 0.0f;
         } else if (qs == 3) {
-            #ifndef __bada__
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/QUIT_WAIT qs==3 cancelled");
-            #endif
             m_State = STATE_CAMERA_ZOOM;
             m_StateTimer = 0.0f;
             m_Timer2 = 0.15f;       // DAT_0014c298
@@ -802,9 +788,7 @@ void MainScreen::DeleteMenuButtons() {
 
 // Matches 0x0014ad04 (7 lines)
 void MainScreen::Hide() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
-    #endif
     m_State = STATE_CAMERA_FADE;
     pos = Vec3(0.0f, 0.0f, 0.0f);
 }
@@ -1006,9 +990,7 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 
 // Matches 0x0014b068
 void MainScreen::GameModeCallback() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
-    #endif
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -1024,9 +1006,7 @@ void MainScreen::GameModeCallback() {
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
-    #endif
     m_State = STATE_GAME_START;
     // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst).
     if (game_work.mGameSound) {
@@ -1040,9 +1020,7 @@ void MainScreen::NewGameCallback() {
 // Matches 0x0014afc4
 void MainScreen::AboutCallback() {
     CancelNews();  // defunct stub
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
-    #endif
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -1064,18 +1042,14 @@ void MainScreen::MusicCallback() {
 // Matches 0x0014b010
 void MainScreen::LeaderboardsCallback() {
     CancelNews();  // defunct stub
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_LEADERBOARD), "LeaderboardsCallback");
-    #endif
     m_State = STATE_LEADERBOARD;
 }
 
 // Matches 0x0014b000
 void MainScreen::MoreGamesCallback() {
     CancelNews();  // defunct stub
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MORE_GAMES), "MoreGamesCallback");
-    #endif
     m_State = STATE_MORE_GAMES;
 }
 
@@ -1090,9 +1064,7 @@ void MainScreen::QuitGamesCallback() {
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);
     }
 
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
-    #endif
     m_State = STATE_QUIT_WAIT;
     m_StateTimer = 0.0f;
 }
@@ -1221,9 +1193,7 @@ void MainScreen::OnMenuItemsCleared() {
 
 // Binary @ 0x0014B0AC — multiplayer variant of GameModeCallback (state 0xF).
 void MainScreen::MultiplayerGameModeCallback() {
-    #ifndef __bada__
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT_2), "MultiplayerGameModeCallback");
-    #endif
     m_State = STATE_MODE_SELECT_2;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
