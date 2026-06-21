@@ -611,14 +611,17 @@ void MenuButton::Update(float dt) {
                 m_pEntity->CollisionResponse(nullptr, 0, 0, &blade);
             }
         }
-        // TODO: 0x0019a860 -- GetWorldPos() for rect origin; using pos directly for now
-
+        // ASM-verified: 2026-06-21T09:00:00Z v1.6.1 MenuButton::Update @0x0019a860 (re-analyst):
+        // hit rect centered on GetAdjustedPos() (HUDControl slot 15 @0x00136c2c) =
+        // pos + Vec3(480,320,0)*m_HudScale -- the SAME anchor the held bomb entity model
+        // is drawn at. Using raw pos offset the hit center from the model by that vector.
+        Vec3 hitC = GetAdjustedPos();
         float hw = m_RestScale.x * 0.5f;
         float hh = m_RestScale.y * 0.5f;
-        const float left   = pos.x - hw - m_HitInsetX;
-        const float right  = pos.x + hw + m_HitInsetX;
-        const float bottom = pos.y - hh - m_HitInsetY;
-        const float top    = pos.y + hh + m_HitInsetY;
+        const float left   = hitC.x - hw - m_HitInsetX;
+        const float right  = hitC.x + hw + m_HitInsetX;
+        const float bottom = hitC.y - hh - m_HitInsetY;
+        const float top    = hitC.y + hh + m_HitInsetY;
 
         Mortar::Touch& touch = Mortar::Touch::GetInstance();
 
