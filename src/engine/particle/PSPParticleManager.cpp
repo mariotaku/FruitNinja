@@ -115,7 +115,9 @@ bool PSPParticleManager::EmitterExists(uint32_t hash) {
     return FindTemplate(hash) != nullptr;
 }
 
-// Binary @ 0x0011490c — index lookup; returns &m_EmitterTemplates[idx] or nullptr.
+// Binary @ 0x0013c044 — index lookup; returns &m_EmitterTemplates[idx] or nullptr.
+// DIFFERS: binary uses flat blob with variable-stride emitter templates; port uses
+// std::vector for logical equivalence. v1.6.1 PSPParticleManager::GetEmitterTemplate @ 0x0013c044
 PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
     if (idx < 0 || (size_t)idx >= m_EmitterTemplates.size()) return nullptr;
     return &m_EmitterTemplates[(size_t)idx];
