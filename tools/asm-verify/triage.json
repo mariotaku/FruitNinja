@@ -1337,9 +1337,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11ItemManager12LoadItemDataEv": {
-    "decided_at": "2026-06-18T02:22Z",
+    "decided_at": "2026-06-21T00:00Z",
     "max_score": 29400,
-    "reason": "DIFFERS: uses tinyxml2 instead of Mortar TiXml (unported); documented with DIFFERS marker in LoadItemData. Score 64977/28800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 69844/28800 -> 63193/29400] [2026-06-17: score 63153/29400, DIFFERS marker added]",
+    "reason": "DIFFERS: now routes through the TiXml shim (#86) matching the binary's TinyXML-1 call shape; residual divergence is structural -- the shim wraps a void* handle backed by tinyxml2, vs the binary's 80-byte TiXmlElement node + TiXmlString fields, so the in-loop parsing call graph still differs. Score 64977/28800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 69844/28800 -> 63193/29400] [2026-06-17: score 63153/29400, DIFFERS marker added] [2026-06-21 #86: migrated tinyxml2 -> TiXml shim; reason updated, verdict unchanged]",
     "score": 62690,
     "verdict": "ACCEPT-deferred"
   },
