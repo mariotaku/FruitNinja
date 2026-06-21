@@ -14,8 +14,6 @@
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "debug/Logger.h"
-#include "xml/XmlLoad.h"
-#include <tinyxml2.h>
 #include <cstring>
 #include <string>
 #include "game/GameWork.h"
@@ -447,15 +445,15 @@ void PowerUpManager::Load() {
         path = "xml/powerUpList.xml";
     }
 
-    tinyxml2::XMLDocument doc;
-    if (FN::LoadXmlCI(doc, path) != tinyxml2::XML_SUCCESS) {
+    TiXmlDocument doc;
+    if (!doc.LoadFile(path.c_str())) {
         return;
     }
 
     // Real XML uses <powerInfoFile> root + <power> children -- not the
     // <powers>+<powerup> the port guessed. Same fix-pattern as
     // BonusManager's bonusawards.xml schema mismatch.
-    TiXmlElement root(doc.FirstChildElement("powerInfoFile"));
+    TiXmlElement root = doc.FirstChildElement("powerInfoFile");
     if (!root) {
         LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in '%s'", path.c_str());
         return;

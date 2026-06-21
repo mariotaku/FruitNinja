@@ -9,7 +9,6 @@
 #include "entities/Fruit.h"
 #include "util/StringHash.h"
 #include "math/Random.h"
-#include <tinyxml2.h>
 #include <cstdlib>
 
 // Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.

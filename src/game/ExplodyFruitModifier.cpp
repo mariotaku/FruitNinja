@@ -13,7 +13,6 @@
 #include "util/StringHash.h"
 #include "engine/util/Delegate.h"
 #include "asset/TextureManager.h"
-#include <tinyxml2.h>
 #include <cmath>
 #include <cstring>
 

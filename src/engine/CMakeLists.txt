@@ -102,8 +102,6 @@ target_sources(mortar_engine PRIVATE
     render/BakedStringBox.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
-    # XML loading helper (CI fallback for case-sensitive filesystems)
-    xml/XmlLoad.cpp
 )
 # TiXml.cpp is the sole tinyxml2 TU for the TiXml-1 shim.
 # Excluded from asm-verify cross-build: no binary counterpart in this form.

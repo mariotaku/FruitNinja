@@ -5,7 +5,6 @@
 #include "PowerUpManager.h"
 #include "ScoreDelegate.h"
 #include "ItemParseUtil.h"
-#include <tinyxml2.h>
 #include <cstdint>
 
 ScoreModifier::ScoreModifier()

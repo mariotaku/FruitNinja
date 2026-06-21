@@ -221,7 +221,7 @@ TiXmlDocument& TiXmlDocument::operator=(const TiXmlDocument& other) {
 }
 
 // ASM-spec v1.6.1 TiXmlDocument::LoadFile @0x001157a4
-// Folds in XmlLoad.cpp CI logic: try exact path, then ResolvePathCI fallback.
+// Folds in CI logic (formerly XmlLoad.cpp): try exact path, then ResolvePathCI fallback.
 bool TiXmlDocument::LoadFile(const char* path) {
     if (!m_node) return false;
     tinyxml2::XMLDocument* doc = AsDoc(m_node);

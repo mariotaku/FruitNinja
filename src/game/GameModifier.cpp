@@ -1,6 +1,5 @@
 #include "GameModifier.h"
 
-#include <tinyxml2.h>
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
 #include "game/PowerUpManager.h"
