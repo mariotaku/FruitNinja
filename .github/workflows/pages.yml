@@ -153,7 +153,7 @@ jobs:
             -v "$GITHUB_WORKSPACE":/src \
             -w /src \
             "$EMSDK_IMAGE" \
-            emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+            emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release
 
       - name: Build (cmake via Docker)
         run: |
@@ -161,13 +161,13 @@ jobs:
             -v "$GITHUB_WORKSPACE":/src \
             -w /src \
             "$EMSDK_IMAGE" \
-            cmake --build build-web -j
+            cmake --build build/web -j
 
       - name: Verify build outputs
         run: |
-          echo "=== build-web/ outputs ==="
-          ls -lh build-web/fruit-ninja.*
-          ls -lh build-web/splash-*.webp build-web/splash.webp 2>/dev/null || true
+          echo "=== build/web/ outputs ==="
+          ls -lh build/web/fruit-ninja.*
+          ls -lh build/web/splash-*.webp build/web/splash.webp 2>/dev/null || true
 
       # ---- Assemble pages/ ------------------------------------------------
       - name: Set up Python

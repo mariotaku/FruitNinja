@@ -127,7 +127,7 @@ exist, ask the user to configure it rather than doing so yourself.
 
 ### Optional: AddressSanitizer (clang64 on MSYS2)
 
-Optional ASAN build (clang64/MSYS2, separate `build-asan/` dir, `-DENABLE_ASAN=ON`) — full setup commands in the project docs or ask the user. LeakSanitizer is unsupported on Windows MinGW; ASAN catches UAF/OOB but not pure leaks.
+Optional ASAN build (clang64/MSYS2, separate `build/asan/` dir, `-DENABLE_ASAN=ON`) — full setup commands in the project docs or ask the user. LeakSanitizer is unsupported on Windows MinGW; ASAN catches UAF/OOB but not pure leaks.
 
 ## Key paths
 - Source: `src/engine/` (Mortar engine), `src/entities/` (game entities), `src/game/` (game-side managers + screens), `src/hud/` (HUD), `src/screens/` (screen classes).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Auto-rebuild the Emscripten web bundle (build-web/) when src/ changed since the
+# Auto-rebuild the Emscripten web bundle (build/web/) when src/ changed since the
 # last build. Invoked by the Claude Code Stop hook (.claude/settings.local.json),
 # so the web build the LAN dev server serves stays current without manual rebuilds.
 #
@@ -7,13 +7,13 @@
 #   worker DETACHED (nohup) so the agent turn never blocks on the ~30-60s build.
 # Worker (--worker): run the actual incremental Docker build (same image as CI).
 #
-# No-op when build-web/ is absent, no src file is newer than the wasm, or a build
+# No-op when build/web/ is absent, no src file is newer than the wasm, or a build
 # is already running (lockfile). Output/errors -> tmp/web-rebuild.log.
 # POSIX/bash; works in MSYS2 (Windows) and on Linux.
 set -u
 
 PROJ="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_WEB="$PROJ/build-web"
+BUILD_WEB="$PROJ/build/web"
 WASM="$BUILD_WEB/fruit-ninja.wasm"
 TMP="$PROJ/tmp"
 LOG="$TMP/web-rebuild.log"
@@ -29,7 +29,7 @@ if [ "${1:-}" = "--worker" ]; then
     if command -v cygpath >/dev/null 2>&1; then HOST="$(cygpath -m "$PROJ")"; else HOST="$PROJ"; fi
     {
         echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)"
-        docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" cmake --build build-web -j
+        docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" cmake --build build/web -j
         code=$?
         if [ "$code" -eq 0 ]; then echo "[$(date -Is 2>/dev/null || date)] rebuild OK"
         else echo "[$(date -Is 2>/dev/null || date)] rebuild FAILED (exit $code)"; fi

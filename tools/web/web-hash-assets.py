@@ -3,7 +3,7 @@
 tools/web/web-hash-assets.py -- Content-hash web output files to defeat browser caching.
 
 Usage:
-    python3 tools/web/web-hash-assets.py <build-web-dir>
+    python3 tools/web/web-hash-assets.py <build/web>
 
 Pipeline (order matters -- nested references):
   1. Hash wasm + data + splash.webp.  Rename to name-<sha8>.ext.
@@ -95,7 +95,7 @@ def prune_stale(out_dir, stem, ext, keep_digest):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: web-hash-assets.py <build-web-dir>", file=sys.stderr)
+        print("Usage: web-hash-assets.py <build/web>", file=sys.stderr)
         sys.exit(1)
 
     out_dir = sys.argv[1]

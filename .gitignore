@@ -1,7 +1,5 @@
 # Build
 build/
-build-web/
-build-*/
 cmake-build-*/
 out/
 
@@ -54,7 +52,6 @@ bada_SDK
 
 # asm-verify pipeline outputs
 bada-binary/symbols/
-build-bada-cross/
 tools/asm-verify/manifest.generated.toml
 
 # Ghidra MCP function-hash cache (moved to tmp/)

@@ -4,17 +4,17 @@ Emscripten web-build packaging + LAN dev serving, and the GitHub Pages deploy ru
 
 ## Scripts
 
-- **`build_pages.py`** — assemble the GitHub Pages output dir (`pages/`) from `web/` + `build-web/`. `python tools/web/build_pages.py [--out <dir>]`. Idempotent (removes+recreates `pages/`); errors if `build-web/fruit-ninja.html` is missing.
-- **`web-hash-assets.py`** — content-hash the wasm/data/js/splash to defeat browser caching, rewriting nested references. `python3 web-hash-assets.py <build-web-dir>`.
-- **`web-serve.py`** — LAN dev server with content-hash-aware caching (no-store HTML, immutable hashed assets, `application/wasm`). `web-serve.py [--dir build-web] [--port 8000]`.
+- **`build_pages.py`** — assemble the GitHub Pages output dir (`pages/`) from `web/` + `build/web/`. `python tools/web/build_pages.py [--out <dir>]`. Idempotent (removes+recreates `pages/`); errors if `build/web/fruit-ninja.html` is missing.
+- **`web-hash-assets.py`** — content-hash the wasm/data/js/splash to defeat browser caching, rewriting nested references. `python3 web-hash-assets.py <build/web>`.
+- **`web-serve.py`** — LAN dev server with content-hash-aware caching (no-store HTML, immutable hashed assets, `application/wasm`). `web-serve.py [--dir build/web] [--port 8000]`.
 - **`rebuild-web.sh`** — incremental Emscripten rebuild when `src/` changed; run detached by the Claude Code Stop hook so the dev server stays current.
 
 ## Build & preview locally (requires Emscripten)
 
 ```sh
 source /path/to/emsdk/emsdk_env.sh          # one-time: install emsdk
-emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
-cmake --build build-web -j$(nproc)          # assets must be at FruitNinjaBada/Data first
+emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release
+cmake --build build/web -j$(nproc)          # assets must be at FruitNinjaBada/Data first
 python tools/web/build_pages.py
 cd pages && python -m http.server 8000      # http://localhost:8000
 ```
