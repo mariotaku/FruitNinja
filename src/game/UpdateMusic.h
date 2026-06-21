@@ -4,7 +4,6 @@
 // UpdateMusic — music crossfade state machine
 // Binary: 0x0016a68c
 // Called every frame from GameUpdate when LoadingJob::IsLoaded().
-// See docs/systems/music-state.md for full spec.
 
 // Analysed: 2026-04-26T00:00
 

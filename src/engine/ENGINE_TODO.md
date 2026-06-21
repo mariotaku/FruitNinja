@@ -86,7 +86,6 @@ Ref: `docs/engine/input-manager.md`, `docs/engine/touch-system.md`
 
 ### Phase 6 — Audio ✅ DONE
 
-Ref: `docs/engine/sound-system.md`, `docs/engine/audio-internals.md`
 
 - [x] `audio/MortarSound.h/.cpp` — Sound instance (16B): m_Name, m_Handle, m_State, Play/Pause/Stop/SetVolume
 - [x] `audio/SoundManager.h/.cpp` — Abstract base singleton with static volume globals, virtual SFX/Music API

@@ -3,7 +3,7 @@
 
 //
 // MortarCamera (0x12C / 300 bytes)
-// See docs/engine/camera.md for full layout, vtable (15 entries), and decompilation.
+// Vtable: 15 entries (full layout RE'd).
 //
 
 #include "math/Matrix44.h"

@@ -3,9 +3,6 @@
 // Called every frame from GameUpdate once LoadingJob::IsLoaded() is true.
 //
 // Analysed: 2026-04-26T00:00
-//
-// See docs/systems/music-state.md for full pseudocode, DAT_ constants, and
-// state-machine prose description.
 
 #include "UpdateMusic.h"
 #include "GameMode.h"

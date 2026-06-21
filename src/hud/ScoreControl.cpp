@@ -414,7 +414,6 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
         // Section B: per-digit combo overlay.
         // ASM-verified gate at 0x00158FEC: gameMode == 1.
-        // (See docs/structs/hud.md ScoreControl PreDraw Section B detail.)
         if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
             // Executed once before the per-digit loop.

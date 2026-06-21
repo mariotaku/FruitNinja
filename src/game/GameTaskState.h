@@ -17,8 +17,7 @@
 // (the FN01 Ghidra script applies it as `/FruitNinja/GameTaskState`)
 // and is also used here for clarity. The binary's translation unit
 // that owns this state is `GameTask.cpp`. The full struct in the
-// binary is 0x118 (280) bytes / 19 fields per docs/structs/game.md
-// "GameTask State"; the port currently models only the 4 fields it
+// binary is 0x118 (280) bytes / 19 fields; the port currently models only the 4 fields it
 // actively uses -- expand as more callers are ported.
 //
 
@@ -36,8 +35,7 @@ class HUDControl;
 namespace Mortar { class MortarSound; }
 
 // Per-task state struct (matches original GameTaskState at ~0x120 bytes)
-// See docs/structs/game.md "GameTask State" section.
-// Binary fields added per docs/systems/gameinit-todos.md steps 8-10, 12.
+// Binary fields added (RE'd).
 struct GameTaskState {
     // +0x00: accumulated time
     float totalTime;

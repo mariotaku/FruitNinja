@@ -14,7 +14,7 @@
 //                 per-slot Vec3 zones  -> g_TaskState-adjacent InputZones array
 //                 callback table       -> InputManager singleton.
 //
-// TODO: full body -- see docs/systems/gameinit-todos.md step 18.
+// TODO: full body.
 // TODO: multi-touch / multi-player input zones (16-slot loop body).
 
 void GameTaskInitInput();

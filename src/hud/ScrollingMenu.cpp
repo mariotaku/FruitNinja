@@ -363,7 +363,7 @@ void ScrollingMenu::Update(float /*dt*/) {
     // Earlier port had `m_Velocity.y - pos.y` (sign flipped); the binary's
     // `_Vector3<float>::operator-(out, pos)` call carries m_Velocity in
     // r2 as a hidden third register and computes `out = pos - velocity`.
-    // See docs/systems/y-axis-convention.md Section 1.
+    // See docs/engine/coordinate-system.md.
     float curY = pos.y - m_Velocity.y;
 
     for (int i = 0; i < (int)m_Items.size(); i++) {

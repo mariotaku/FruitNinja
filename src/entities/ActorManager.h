@@ -121,7 +121,7 @@ public:
 
     // Stores the hash-converter function into m_HashDelegate.
     // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
-    // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
+    // TODO: implement.
     void RegisterHashConverter(HashFn fn);
 
     // +0x1048 (binary): hash converter is Mortar::Delegate2<long, ulong, bool&> object (36 bytes).

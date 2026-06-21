@@ -111,9 +111,9 @@ void SliceEffect_DestroyPool() {
 // Binary: GameInit step 9 @ 0x0016c9a8..0x0016ca90.
 // Allocates List<SliceEffect> + MemoryPool<Node>(capacity), stores in
 // g_TaskState +0x64 / +0xc8. Port no-op: C-array pool above already serves.
-// TODO: implement -- see docs/systems/gameinit-todos.md step 9.
+// TODO: implement.
 void SliceEffect_CreateList(int /*capacity*/) {
-    // TODO: implement SliceEffect_CreateList -- see docs/systems/gameinit-todos.md step 9.
+    // TODO: implement SliceEffect_CreateList.
 }
 
 // ---------------------------------------------------------------------

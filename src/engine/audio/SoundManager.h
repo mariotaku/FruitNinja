@@ -64,7 +64,7 @@ public:
     // Called from GameInit step 23 @ 0x0016cc6c.
     // basePath in binary = "Sound/Win32Project/Win/FruitNinja" (0x001BC978).
     // DIFFERS: Bada path is meaningless on SDL2; port receives translated path.
-    // TODO: implement cue-file scanning from basePath -- see docs/systems/gameinit-todos.md step 23.
+    // TODO: implement cue-file scanning from basePath.
     void Initialise(const char* basePath);
 
     // Allocates MortarSoundMAM (0x10 bytes) -- 0x0018cab8

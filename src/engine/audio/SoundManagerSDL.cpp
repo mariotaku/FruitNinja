@@ -552,9 +552,9 @@ void SoundManager::SetMusicVolume(float vol) {
 // Called from GameInit step 23 @ 0x0016cc6c.
 // basePath in binary = "Sound/Win32Project/Win/FruitNinja".
 // DIFFERS: Bada sound path is meaningless on SDL2; port receives translated path.
-// TODO: implement cue-file scanning -- see docs/systems/gameinit-todos.md step 23.
+// TODO: implement cue-file scanning.
 void SoundManager::Initialise(const char* /*basePath*/) {
-    // TODO: implement SoundManager::Initialise -- see docs/systems/gameinit-todos.md step 23.
+    // TODO: implement SoundManager::Initialise.
 }
 
 // 0x0018ca98

@@ -5,7 +5,6 @@
 // FRUIT_INFO — per-fruit-type data loaded from Data/xml/fruitlist.xml
 // Original: 0x330 bytes per entry, allocated as 8 + count * 0x330
 // Loaded by Fruit::LoadInfo (0x17987c, 527 lines)
-// See docs/structs/data.md for full layout
 //
 // Analysed: 2026-04-13T14:00
 // Layout correction 2026-05-03: field offsets for m_Singular/m_PluralEnglish
