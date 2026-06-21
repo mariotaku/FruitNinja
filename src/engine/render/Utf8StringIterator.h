@@ -4,24 +4,26 @@
 #include "render/Utf8StringProxy.h"
 #include <cstdint>
 
-// Mortar::Utf8StringIterator — derives from Mortar::Utf8StringProxy at offset 0.
-// sizeof == 0x1C (28) — entirely the base Utf8StringProxy sub-object; no own data members.
+// Mortar::Utf8StringIterator — NON-polymorphic flat iterator, sizeof 0x0C.
+// Binary: v1.6.1 Mortar::Utf8StringIterator @ 0x0021ebcc (flat, no vtable).
 //
-// Binary record (Ghidra struct Mortar::Utf8StringIterator == 28 bytes):
-//   Offset 0: base Utf8StringProxy (vptr @ +0x00 through field9_0x18 @ +0x18)
-//   No additional members beyond the base.
+// ASM-spec v1.6.1 Mortar::Utf8StringIterator::Advance @ 0x0021ebcc:
+// NON-polymorphic flat {+0x00 char* cursor, +0x04 char* src, +0x08 u32 codepoint};
+// if(cursor==0)return; loop: if(*cursor=='\0'){codepoint=0;return;}
+// src=cursor; codepoint=decode_next(&src); cursor=src.
 //
-// POLYMORPHIC: vtable installed by Utf8StringProxy base ctor (0x001840c0, GOT-indirect).
-//   Utf8StringIterator ctor (0x0012fe00) delegates to proxy base ctor (GOT thunk
-//   0x001018bc) then calls _Init (0x000f8514). Does NOT write its own vtable.
+// The binary iterator does NOT inherit Utf8StringProxy; they are SEPARATE types.
+// Utf8StringProxy (@ 0x0021eb98, 16 bytes, polymorphic) is a transient factory
+// used to extract the string start; the iterator then operates independently.
 //
-// The base fields serve as iterator cursor state (binary-verified @ Advance 0x0021ebcc / _Init 0x0021ec20):
-//   m_Begin            (+0x04) — IMMUTABLE original string start; set once in ctor, NEVER written by Advance
-//   m_NumChars         (+0x08) — total codepoint count (set by ctor walk)
-//   m_End              (+0x0C) — one-past-last byte of input string
-//   m_PrevBegin        (+0x10) — start of most-recently-decoded codepoint (written by Advance)
-//   m_NextScan         (+0x14) — live decode cursor (written by Advance via decode_next)
-//   m_CurrentCodepoint (+0x18) — decoded codepoint value; 0 = end-of-string
+// Binary ctors:
+//   Iterator ctor (str)  @ 0x00235a70 — stack-builds Proxy, calls _Init
+//   _Init                @ 0x0021ec20 — extracts begin from proxy, seeds cursor
+//
+// DIFFERS: binary flat iterator is 0x0C (no begin field); port adds a 4th
+// PORT-ONLY m_Begin for Reset() so it can rewind without re-creating a Proxy.
+// sizeof 0x10 not 0x0C.
+// v1.6.1 Utf8StringIterator @ 0x0021ebcc
 
 namespace Mortar {
 
@@ -31,29 +33,48 @@ namespace utf8 {
     uint32_t decode_next_unicode_character(const char** cursor);
 }
 
-class Utf8StringIterator : public Utf8StringProxy {
+class Utf8StringIterator {
 public:
-    // Binary @ 0x0012fe00 — builds temp Utf8StringProxy(str), calls base ctor, then _Init.
+    // Binary @ 0x00235a70 — stack-builds a Utf8StringProxy, then calls _Init
+    // (@ 0x0021ec20) which extracts begin from the proxy and seeds the cursor.
     explicit Utf8StringIterator(const char* str);
-    // Binary @ 0x00160cbc — base proxy copy-ctor + copies cursor fields.
+    // Copy-ctor: copies all four fields (m_Cursor, m_Src, m_CurrentCodepoint, m_Begin).
     Utf8StringIterator(const Utf8StringIterator& other);
 
     bool IsEmpty() const { return m_CurrentCodepoint == 0; }
+
+    // Binary @ 0x0021ebcc — Advance n steps through the UTF-8 string.
     void Advance(int n);
     void operator++(int) { Advance(1); }
     Utf8StringIterator operator+(int n) const;
 
-    // Binary @ 0x0021ec20 (_Init) / Reset(): rewind the iterator to the immutable string start
-    // (m_Begin, +0x04) so it can be walked a second time. Used by BakedString::Bake
-    // between pass 1 and pass 2. Resets m_NextScan to m_Begin and re-decodes the
-    // first codepoint via Advance(1).
+    // _Init / Reset — binary @ 0x0021ec20.
+    // Rewinds cursor to string start and re-primes the first codepoint.
+    // Used by BakedString::Bake between pass 1 and pass 2.
+    // DIFFERS: binary re-seeds from a fresh Utf8StringProxy via _Init;
+    // port uses port-only m_Begin to avoid re-creating the proxy.
+    // v1.6.1 Utf8StringIterator @ 0x0021ec20
     void Reset();
 
-    // No own data members — sizeof == sizeof(Utf8StringProxy) == 0x1C.
+    // +0x08 — decoded codepoint value; 0 = end-of-string.
+    // Public for direct access by Font.cpp / BakedString.cpp consumers.
+    uint32_t m_CurrentCodepoint;
+
+private:
+    const char* m_Cursor;  // +0x00 binary: cursor (live decode position)
+    const char* m_Src;     // +0x04 binary: src (decode scratch target)
+
+    // PORT-ONLY: not in the binary's flat 3-word iterator.
+    // Stores string start so Reset() can rewind without re-creating a Proxy.
+    // DIFFERS: original = flat 3-word iterator re-seeds begin from a fresh
+    // Utf8StringProxy via _Init; port keeps m_Begin for Reset() -- adds 4 bytes
+    // (sizeof 0x10 not 0x0C). v1.6.1 Utf8StringIterator @ 0x0021ebcc
+    const char* m_Begin;   // +0x0C PORT-ONLY
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-static_assert(sizeof(Utf8StringIterator) == 0x1C, "Utf8StringIterator sizeof mismatch");
+#ifdef __bada__
+// sizeof is 0x10 (not 0x0C) due to PORT-ONLY m_Begin field; see DIFFERS above.
+static_assert(sizeof(Utf8StringIterator) == 0x10, "Utf8StringIterator sizeof mismatch");
 #endif
 
 }  // namespace Mortar

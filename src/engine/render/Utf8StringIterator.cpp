@@ -1,4 +1,3 @@
-// Analysed: 2026-04-29T00:00
 #include "render/Utf8StringIterator.h"
 
 namespace Mortar {
@@ -86,52 +85,46 @@ uint32_t decode_next_unicode_character(const char** cursor) {
 
 } // namespace utf8
 
-// Binary @ 0x0012fe00 — delegates to proxy base ctor then calls _Init (0x000f8514).
-// Port: walk string once to set m_NumChars / m_End, then _Init: rewind and decode first codepoint.
+// Binary @ 0x00235a70 — stack-builds a Utf8StringProxy (binary @ 0x0021eb98),
+// then calls _Init (binary @ 0x0021ec20) which extracts begin from the proxy's
+// +0x04 field and seeds m_Cursor/m_Src from it, then calls Advance(1).
+// Port: construct proxy to obtain begin, seed flat fields, Advance(1).
 Utf8StringIterator::Utf8StringIterator(const char* str)
-    : Utf8StringProxy(str)
+    : m_CurrentCodepoint(0)
+    , m_Cursor(str)
+    , m_Src(str)
+    , m_Begin(str)
 {
-    // Walk once to count codepoints and locate end
-    const char* scan = str;
-    int count = 0;
-    while (*scan) {
-        uint32_t cp = utf8::decode_next_unicode_character(&scan);
-        if (cp != 0) {
-            count++;
-        }
+    // _Init (@ 0x0021ec20): if proxy's begin is null, codepoint=0 and return;
+    // otherwise cursor=src=begin, Advance(1).
+    if (str) {
+        Advance(1);
     }
-    m_NumChars = static_cast<uint32_t>(count);
-    m_End      = scan;
-    // _Init: rewind to immutable start, prime first codepoint.
-    // m_Begin is already set to str by the proxy ctor and never changes.
-    m_NextScan = m_Begin;
-    Advance(1);
 }
 
-// ASM-verified: 2026-06-12 binary @ 0x00160cbc (re-analyst) -- iterator copy-ctor
-// copies the cursor triple (proxy copy-ctor @0x001840c0 copies m_Begin/m_NumChars/m_End
-// and zeroes these three).
+// Copy-ctor: copies all four fields verbatim.
 Utf8StringIterator::Utf8StringIterator(const Utf8StringIterator& other)
-    : Utf8StringProxy(other)
+    : m_CurrentCodepoint(other.m_CurrentCodepoint)
+    , m_Cursor(other.m_Cursor)
+    , m_Src(other.m_Src)
+    , m_Begin(other.m_Begin)
 {
-    m_PrevBegin        = other.m_PrevBegin;
-    m_NextScan         = other.m_NextScan;
-    m_CurrentCodepoint = other.m_CurrentCodepoint;
 }
 
-// Binary @ 0x0021ebcc — Advance: outer guard if (m_PrevBegin != 0); per-step guard
-// if (*m_PrevBegin != '\0'); then m_PrevBegin = m_NextScan; m_CurrentCodepoint = decode(&m_NextScan).
-// +0x04 (m_Begin) is NEVER written here.
-// ASM-verified: 2026-06-12 binary @ 0x0021ebcc (asm-inspector)
+// Binary @ 0x0021ebcc — Advance n steps through the UTF-8 string.
+// if(cursor==0)return; loop: if(*cursor=='\0'){codepoint=0;return;}
+// src=cursor; codepoint=decode_next(&src); cursor=src.
+// ASM-spec v1.6.1 Mortar::Utf8StringIterator::Advance @ 0x0021ebcc
 void Utf8StringIterator::Advance(int n) {
-    if (m_PrevBegin == 0) return;
+    if (m_Cursor == 0) return;
     for (int i = 0; i < n; i++) {
-        if (*m_NextScan == '\0') {
+        if (*m_Cursor == '\0') {
             m_CurrentCodepoint = 0;
             return;
         }
-        m_PrevBegin = m_NextScan;                                               // +0x10 = old +0x14
-        m_CurrentCodepoint = utf8::decode_next_unicode_character(&m_NextScan);  // +0x18 = decode(&+0x14)
+        m_Src = m_Cursor;
+        m_CurrentCodepoint = utf8::decode_next_unicode_character(&m_Src);
+        m_Cursor = m_Src;
         if (m_CurrentCodepoint == 0) return;
     }
 }
@@ -142,12 +135,15 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
     return copy;
 }
 
-// Binary @ 0x0021ec20 (_Init / Reset) — rewinds to the IMMUTABLE string start (m_Begin = +0x04)
-// and re-primes the first codepoint, matching binary _Init exactly.
-// ASM-verified: 2026-06-12 binary @ 0x0021ebcc (asm-inspector)
+// Binary @ 0x0021ec20 (_Init / Reset) — rewinds cursor to string start and
+// re-primes the first codepoint. Used by BakedString::Bake between passes.
+// DIFFERS: binary re-seeds from a fresh Utf8StringProxy via _Init;
+// port uses port-only m_Begin to avoid re-creating the proxy.
+// v1.6.1 Utf8StringIterator @ 0x0021ec20
 void Utf8StringIterator::Reset() {
-    m_NextScan = m_Begin;   // rewind live cursor to immutable string start (+0x04)
-    Advance(1);             // prime first codepoint into m_PrevBegin/m_CurrentCodepoint
+    m_Cursor = m_Begin;
+    m_Src    = m_Begin;
+    Advance(1);
 }
 
 }  // namespace Mortar
