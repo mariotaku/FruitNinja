@@ -27,6 +27,7 @@
 #include <cstddef>
 
 class MenuButton;
+class BSButton;
 namespace Mortar { class BakedStringBox; }
 
 // PauseScreen state machine. m_State is `int` (binary +0xd8 layout); values
@@ -61,8 +62,8 @@ public:
     // +0x9c: P2 Resume button (MP only -- Tier-2; always nullptr in Tier-1)
     MenuButton* m_P2ResumeButton;
 
-    // +0xa0: P1 Quit button (quit_title.tex)
-    MenuButton* m_QuitButton;
+    // +0xa0: P1 Quit button -- BSButton in binary (v1.6.1 PauseScreen::Update @0x001a5ebc)
+    BSButton* m_QuitButton;
 
     // +0xa4: P2 Quit button (MP only -- Tier-2; always nullptr in Tier-1)
     MenuButton* m_P2QuitButton;
@@ -186,7 +187,7 @@ public:
 //   m_ButtonOriginPos+0x8c
 //   m_ResumeButton   +0x98
 //   m_P2ResumeButton +0x9c
-//   m_QuitButton     +0xa0
+//   m_QuitButton     +0xa0  (BSButton* in binary, v1.6.1 @0x001a5ebc)
 //   m_P2QuitButton   +0xa4
 //   m_Pad_0xA8       +0xa8  (5th MenuButton* slot, never assigned)
 //   m_RetryButton    +0xac

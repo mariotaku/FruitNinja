@@ -120,6 +120,17 @@ public:
     // TODO: v1.6.1 0x0015a1c4 (BakedStringBox::SetRotation) -- exact binary field offset not RE'd.
     void SetRotation(float degrees);
 
+    // ReshapeBounds  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
+    // Resizes the box (width, height) and marks dirty. flag1/flag2: binary args, exact
+    // field mapping not fully RE'd -- stored as align/maxLines-override or ignored.
+    // TODO: v1.6.1 BakedStringBox::ReshapeBounds -- confirm flag1/flag2 fields in binary.
+    void ReshapeBounds(float width, float height, int flag1, int flag2);
+
+    // SetFontSize  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
+    // Sets m_FontSize and m_BaseFontSize, marks dirty.
+    // TODO: v1.6.1 BakedStringBox::SetFontSize -- confirm exact binary field writes.
+    void SetFontSize(float size);
+
     // GetRotation -- port helper so DrawMarquee can retrieve the stored rotation.
     float GetRotation() const { return m_StoredRotation; }
 
