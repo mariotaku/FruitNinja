@@ -17,7 +17,6 @@ This `docs/` tree previously held large per-class / per-screen / per-function RE
 The remaining docs cover information that **isn't derivable from `src/`**:
 
 ### Project-level
-- **[`re-pipeline.md`](re-pipeline.md) — START HERE: end-to-end RE + port verification pipeline (11 stages, data flow, entry points).**
 - [`HANDOVER.md`](HANDOVER.md) — onboarding context.
 - RE backlog lives in Claude tasks (`TaskList`), not in any docs/ file.
 - Intentional-skip list lives in [`engine/online-services-audit.md`](engine/online-services-audit.md).

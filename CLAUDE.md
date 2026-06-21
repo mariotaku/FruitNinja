@@ -159,7 +159,6 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
 
 - `docs/README.md` — index for the below.
-- `docs/re-pipeline.md` — end-to-end RE + port pipeline stage map (start here).
 - `docs/HANDOVER.md` — onboarding context.
 - `docs/port-plan.md` — high-level port intent.
 - `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).

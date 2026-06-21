@@ -2,10 +2,52 @@
 
 Per-symbol ARM Thumb-2 verification of the desktop port against the original
 FruitNinja.exe binary. This is the **per-symbol track (stages 4-8)** of the
-pipeline — for the end-to-end map (how this feeds triage, the BinDiff parallel
-track, data-file locations, why operand-level is real signal), see
-**[`docs/re-pipeline.md`](../../docs/re-pipeline.md)**. This README is the
-operational/run detail only.
+end-to-end RE + port pipeline, mapped below.
+
+## Pipeline
+
+Binary + source → cross-compiled `.o` → operand-level ASM diff → ranked real-bug
+shortlist → triage. Stages 1-3 (RE → spec → implement) are agent-driven
+([`re-analyst`](../../.claude/agents/re-analyst.md) decompiles + writes
+source-side `// TODO`/`// ASM-spec` markers; [`implementer`](../../.claude/agents/implementer.md)
+codes against them). Stages 4-8 are **this dir** (cross-build, symbol discovery,
+diff, classify, triage). Stage 9 = whole-program BinDiff ([`bindiff/`](bindiff/README.md)),
+stage 10 = class-layout reference ([`layout/`](layout/README.md)), stage 11 =
+single-function claim checks ([`asm-inspector`](../../.claude/agents/asm-inspector.md)).
+Operand-level is real signal because the cross-build toolchain (Sourcery 2010q1,
+GCC 4.4.1) is the open upstream of the binary's Samsung Sourcery G++ — same
+operands = faithful, equivalent-but-different = cosmetic, missing-call / wrong-const = bug.
+
+```
+FruitNinja.exe (v1.6.1 ARM32)
+  | [1] re-analyst(GhidraMCP)
+  v
+source-side comments (spec) -- [2] --> [3] implementer -> src/
+                                              | [4] cross-compile (Docker, Sourcery 4.4.1)
+                                              v
+                                         fnverify.a
+                          [5] discover-symbols.py + export-binary-symbols.py
+                                              v
+                                  [6] asm-verify.py -> report.json
+                                              v
+                          [7] classify-divergences.py -> shortlist.md
+                                              v
+                          [8] asm-triager -> triage.json (sticky) --(fix loop back to [3])
+
+parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
+```
+
+### File locations
+
+| Item | Location | Commits? |
+|------|----------|----------|
+| Binary v1.6.1 (target) | `tmp/FruitNinja_v1_6_1.exe` | No (gitignored) |
+| Cross-build manifest | `manifest.generated.toml` | No (gitignored) |
+| Triage verdicts (sticky per `asm_hash`) | `triage.json` | **Yes** (fidelity record) |
+| asm-verify report | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |
+| Shortlist (triager input) | `tmp/asm-verify/shortlist.md` | No (gitignored) |
+| BinDiff CSV | `tmp/bindiff-out/` | No (gitignored) |
+| Class-size / typeinfo reference | `tmp/binary-class-sizes.json`, `tmp/typeinfo-tree.json` | No (gitignored) |
 
 ## Run
 
