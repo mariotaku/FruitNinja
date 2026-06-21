@@ -853,7 +853,9 @@ void MainScreen::CreatePlayDojo() {
         // ASM-verified: 2026-05-09 binary @ 0x0014b818..0x0014b82c (re-analyst).
         pPlayButton->m_HitInsetY  = -50.0f;
         pPlayButton->m_HitInsetX  = -50.0f;
+#if !defined(FN_ASM_VERIFY_CROSS)
         pPlayButton->m_AnimScale  = 0.5f;
+#endif
         pPlayButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(pPlayButton);
 

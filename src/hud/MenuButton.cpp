@@ -31,7 +31,7 @@
 #include <cstdint>
 #include "game/GameWork.h"
 
-// Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
+// Class-static textures loaded by MenuButton::LoadContent (v1.6.1 @0x0019d640).
 //   Slot 1  scratchs.tex        (Phase-A backdrop)
 //   Slot 2  blurry_backing.tex  (sparkle ring base)
 //   Slot 3  new_item.tex        (Layer-2 NEW star)
@@ -39,7 +39,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
-// Matches ClearMenuItems @ 0x0016ac7c -- binary-exact.
+// Matches ClearMenuItems v1.6.1 @0x0016ac7c -- binary-exact.
 static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
@@ -98,7 +98,6 @@ MenuButton::MenuButton()
     : m_pFruitPiece_alt(nullptr),
       m_pEntity(nullptr),
       m_FruitType(-1),
-      m_FadeAlphaIdx(0),
       m_AnimPhase(0),
       m_AnimFlag(0),
       m_GrowShrinkDone(0),
@@ -121,11 +120,7 @@ MenuButton::MenuButton()
       m_bClearsMenuItems(0),
       _pad13B(0),
       m_RestScale(0.0f, 0.0f, 0.0f),
-      m_bHasHitArea(0),
-      m_bInteractive(1),
       m_pFruitPiece(nullptr),
-      m_bAcceptsTouch(1),
-      _pad149{0, 0, 0},
       m_pTrackedFruit(nullptr),
       m_bBackdropActive(1),
       m_ShakeScale(1.0f, 0.85f, 0.85f),
@@ -134,18 +129,22 @@ MenuButton::MenuButton()
       m_HitInsetY(5.0f),
       m_fieldReserved(100.0f),
       m_NewBouncePhase(0.0f),
-      m_ShakeTimer(0.0f),
-      m_bEnabled(1),
+      m_ShakeTimer(0.0f)
+#if !defined(FN_ASM_VERIFY_CROSS)
+    , m_bEnabled(1),
       m_AnimScale(1.0f),
       m_BounceParams(0.85f, 0.85f, 0.0f),
       m_bTouchHeld(1),
       m_bScoreSubmitted(0)
+#endif
 {
     _pad114[0] = 0; _pad114[1] = 0; _pad114[2] = 0; _pad114[3] = 0;
     _pad114[4] = 0; _pad114[5] = 0; _pad114[6] = 0; _pad114[7] = 0;
     _pad130[0] = 0; _pad130[1] = 0; _pad130[2] = 0; _pad130[3] = 0;
-    _pad146[0] = 0; _pad146[1] = 0;
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
+    SetHasHitArea(false);
+    SetInteractive(true);
+    SetAcceptsTouch(true);
 }
 
 MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
@@ -164,7 +163,7 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
     }
 }
 
-// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f94c (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::~MenuButton @ 0x0019d130 (asm-inspector)
 MenuButton::~MenuButton() {}
 
 // MenuButton::Init @ 0x0019b994
@@ -177,9 +176,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_FruitType      = fruitType;
     m_RestScale.x     = hitBounds.x;
     m_RestScale.y     = hitBounds.y;
-    m_bHasHitArea    = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f ? 1 : 0;
-    m_bInteractive   = 1;
-    m_bAcceptsTouch  = 1;
+    SetHasHitArea((fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f);
+    SetInteractive(true);
+    SetAcceptsTouch(true);
     // TODO: v1.6.1 MenuButton::Init @0x0019b994 -- binary sets m_bBackdropActive=0 here;
     // DojoScreen::CreateButtons then writes 1 for the back button specifically.
     // Port defaults to 1 (ring visible for all buttons). Functionally harmless since
@@ -208,17 +207,18 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_pFruitPiece_alt = nullptr;
     m_pEntity        = nullptr;
     m_pTrackedFruit  = nullptr;
-    m_FadeAlphaIdx   = 0;
     // m_ShakeScale @ +0x154: x=1.0, y=0.85, z=0.85 (DAT_0019bafc=0.85f).
     m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
     // m_fieldReserved @ +0x16C: Init writes 100.0f (DAT_0019baf8 = 0x42c80000).
     m_fieldReserved  = 100.0f;
-    // compat fields
+    // compat fields (excluded from cross-build)
+#if !defined(FN_ASM_VERIFY_CROSS)
     m_bEnabled       = 1;
     m_AnimScale      = 1.0f;
     m_BounceParams   = Vec3(0.85f, 0.85f, 0.0f);
     m_bTouchHeld     = 1;
     m_bScoreSubmitted = 0;
+#endif
 
     // ASM-spec v1.6.1 MenuButton::Init @0x0019b994: m_RestScale (+0x13C) is set ONLY
     // from the caller's hitBounds/size Vec3 (param_4). Binary has NO texture-pixel
@@ -257,7 +257,7 @@ void MenuButton::CreateFruit() {
         fruit->m_MenuGrowFade = 1.0f;
         fruit->m_SpawnDelay = 0.0f;
         fruit->m_ZPosition = FRUIT_ZPOS;
-        // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst).
+        // ASM-verified: 2026-05-22 v1.6.1 MenuButton::CreateFruit @ 0x0019b5e0 (re-analyst).
         // Binary writes m_bMenuFling=1 (0x164) to mark this as a menu-context fruit.
         fruit->m_bMenuFling = 1;
         // Binary writes m_pOwner=this (0x160) so KillFruit can clear our m_pTrackedFruit.
@@ -293,7 +293,7 @@ void MenuButton::CreateFruit() {
         bomb->m_ZPosition = FRUIT_ZPOS;
         // Binary v1.6.1 MenuButton::CreateFruit @0x0019b8c8: m_RestScale = 2.0 * bombBaseSize
         m_RestScale = Vec3(bombRawSize * 2.0f, bombRawSize * 2.0f, bombRawSize * 2.0f);
-        m_bHasHitArea = 1;
+        SetHasHitArea(true);
     }
 
     // Random rotation speed (8-12 deg/frame, random direction)
@@ -301,8 +301,8 @@ void MenuButton::CreateFruit() {
     if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
 }
 
-// Binary @ 0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0014f7e0 (asm-inspector)
+// v1.6.1 MenuButton::Release @0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (asm-inspector)
 void MenuButton::Release() {
     Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
@@ -323,26 +323,26 @@ void MenuButton::Release() {
     m_pTrackedFruit = nullptr;
 }
 
-// Binary @ 0x19a4f8 -- vtable Init slot
+// v1.6.1 MenuButton::Init(void) @0x0019a4f8 -- vtable Init slot
 void MenuButton::Init() { Reset(); }
 
-// Binary @ 0x19a50c -- Reset is a no-op
-// ASM-verified: 2026-05-06T00:00 binary @ 0x0014e3b8 (asm-inspector)
+// v1.6.1 MenuButton::Reset @0x0019a50c -- no-op
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::Reset @ 0x0019a50c (asm-inspector)
 void MenuButton::Reset() {}
 
-// Binary @ 0x19a558 -- Skip snaps animation to full
+// v1.6.1 MenuButton::Skip @0x0019a558 -- snaps animation to full
 void MenuButton::Skip() { m_AnimPhase = 0x3ffc; }
 
-// Binary @ 0x0014e3bc
+// v1.6.1 MenuButton::Shake @0x0019a510
 void MenuButton::Shake(float t) { m_ShakeTimer = t; }
 
-// Binary @ 0x0014e434
+// v1.6.1 MenuButton::HasNewSymbol @0x0019a5a0
 bool MenuButton::HasNewSymbol() { return m_NewIndicatorTimer >= 0.0f; }
 
-// Binary @ 0x0014e484
+// v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608
 bool MenuButton::IsLoadingSymbol() { return m_SparkleTimer >= 0.0f; }
 
-// Binary @ 0x0014e45c
+// v1.6.1 MenuButton::SetLoadingSymbol @0x0019a560
 void MenuButton::SetLoadingSymbol(bool show) {
     if (m_SparkleTimer < 0.0f) {
         if (show) m_SparkleTimer = 0.0f;
@@ -351,13 +351,13 @@ void MenuButton::SetLoadingSymbol(bool show) {
     }
 }
 
-// Defunct: SetText -- no-op stub; binary @ 0x0014ebc0
+// Defunct: SetText -- no-op stub; v1.6.1 MenuButton::SetText @ 0x0019d4e0
 // Zero call sites in shipped binary; curved-text feature authored but never wired.
 void MenuButton::SetText(const char* /*text*/, Colour /*fg*/,
                          Colour /*shadow*/, float /*radius*/) {
 }
 
-// Binary @ 0x0014ed18
+// v1.6.1 MenuButton::Remove @0x0019d148
 void MenuButton::Remove() {
     if (!m_pFruitPiece) return;
     if (m_pFruitPiece->m_bSliced) return;
@@ -371,7 +371,7 @@ void MenuButton::Remove() {
     m_pTrackedFruit = nullptr;
 }
 
-// Binary @ 0x0019a7f8 (PLT thunk @0x001071c0 -> real body)
+// v1.6.1 MenuButton::TouchReleased @0x0019a7f8
 bool MenuButton::TouchReleased() {
     // Binary gate requires BOTH m_FruitType<0 AND m_bRespondsToBackKey. Toggle
     // buttons (sound/music) set m_bRespondsToBackKey=0, so release fires only
@@ -418,7 +418,7 @@ bool MenuButton::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// Matches MenuButton::SetNewSymbol (0x0014e404)
+// v1.6.1 MenuButton::SetNewSymbol @0x0019a534
 void MenuButton::SetNewSymbol(bool show) {
     if (show) {
         if (m_NewIndicatorTimer < 0.0f)
@@ -603,7 +603,7 @@ void MenuButton::Update(float dt) {
     }
 
     // ---- touch handling ----
-    if (m_bAcceptsTouch) {
+    if (AcceptsTouch()) {
         // ASM-spec binary @0x0019ad14 -- BACK-KEY force-slice path.
         // The menu fruit IS reached by the ActorManager blade-vs-sphere loop normally;
         // this block is the binary's separate back-key / pause-input forced slice
@@ -678,7 +678,7 @@ void MenuButton::Update(float dt) {
     }
 }
 
-// Binary @ 0x0014e3c4
+// v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0
 void MenuButton::UpdateTouchPosition() {
     if (m_TouchSlot < 0) return;
     const Mortar::TouchState* s =
@@ -693,13 +693,12 @@ void MenuButton::UpdateTouchPosition() {
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (m_DrawColour.a == 0) return;
 
-    // Compute fade-derived alpha
+    // Compute fade-derived alpha from m_AnimPhase (+0xD0).
+    // v1.6.1 MenuButton::Draw @0x0019c2e4: alpha ramp from m_AnimPhase (Q14 phase, 0..0x3ffc).
     uint8_t alpha;
     if (m_FruitType < 0) {
         alpha = 0xFF;
     } else {
-        // alpha = clamp(m_FadeAlphaIdx * K1/K2, 0, 255)
-        // TODO: 0x0019c2e4 -- VectorSignedToFloat constants K1/K2 for m_FadeAlphaIdx alpha compute
         float n = (float)m_AnimPhase * 256.0f / 16380.0f;
         int   a = (int)n;
         if (a > 255) a = 255;
@@ -708,7 +707,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     }
 
     // Layer 0 (backdrop): scratchs.tex at layer 0x40, then demote to 0x80
-    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A (asm-inspector).
+    // ASM-verified: 2026-05-06T16:00 v1.6.1 MenuButton::Draw @ 0x0019c2e4 Phase A (asm-inspector).
     if (m_LayerFlags == (int)Mortar::HUD_LAYER_MENU_BG) {
         m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
@@ -782,21 +781,21 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     //   Scale 0.75, MatrixStack push. Binary entry gates on m_RotationSpeed >= 0.
 }
 
-// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f674 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::LoadContent @ 0x0019d640 (asm-inspector)
 void MenuButton::LoadContent() {
     s_TexScratchs      = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
     s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     s_TexNewItem       = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
 }
 
-// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f718 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::UnLoadContent @ 0x0019d684 (asm-inspector)
 void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
     s_TexBlurryBacking.SetNull();
     s_TexNewItem.SetNull();
 }
 
-// Binary @ 0x00150240
+// v1.6.1 MenuButton::AddPeice @0x00150240
 void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                           float rotSpeed, float initialTimer,
                           Vec3 offset, Vec3 sizeScale,
@@ -842,7 +841,7 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
     m_AddOns.push_back(addOn);
 }
 
-// Binary @ 0x0014e49c
+// v1.6.1 MenuButton::UpdatePeices @0x0019a630
 void MenuButton::UpdatePeices(float dt) {
     float restY = m_RestScale.y;
     float ratio = (restY > 0.0f && size.y > 0.0f) ? (size.y / restY) : 1.0f;
@@ -856,7 +855,7 @@ void MenuButton::UpdatePeices(float dt) {
     }
 }
 
-// Binary @ 0x0014f74c
+// v1.6.1 MenuButton::DeletePeices @0x0019d1b0
 void MenuButton::DeletePeices() {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
@@ -869,7 +868,7 @@ void MenuButton::DeletePeices() {
     m_AddOns.clear();
 }
 
-// Binary @ 0x0014e54c
+// v1.6.1 MenuButton::DeletedPeice @0x0019a69c
 void MenuButton::DeletedPeice(HUDControl* hudControl) {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {

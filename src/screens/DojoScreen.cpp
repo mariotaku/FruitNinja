@@ -250,11 +250,13 @@ void DojoScreen::Update(float dt) {
                         (float)s_TexShop->m_Height + 1.0f,
                         1.0f);
                 }
+#if !defined(FN_ASM_VERIFY_CROSS)
                 m_pShopButton->m_AnimScale = 0.5f;
                 // TODO: m_BounceParams *= SHOP_SCALE. The port doesn't
                 // read m_BounceParams yet (MenuButton rework reverted),
                 // so this write is currently a no-op. Restore once the
                 // bounce/new-indicator draw path is ported.
+#endif
                 m_pShopButton->m_HitInsetY  = -15.0f;
                 m_pShopButton->m_HitInsetX = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;

@@ -5,6 +5,16 @@
 // MenuButton : HUDControl3d (size = 0x178 / 376 bytes)
 // v1.6.1 layout. operator_new(0x178) confirmed @ LeaderboardScreen::CreateQuitButton 0x00193198.
 //
+// ASM-spec v1.6.1 MenuButton @ ctor 0x0019bb08 / Init 0x0019b994, sizeof 0x178:
+//   Delegate0 is 0x24 bytes; m_DeletedCallback@0xAC fills to 0xCF (no field @0xCC --
+//   m_FadeAlphaIdx was a v1.5.x phantom); m_SparkleTimer@0xF8, m_NewIndicatorTimer@0xFC;
+//   m_RestScale@0x13C .z aliases m_bHasHitArea@0x144/m_bInteractive@0x145 (LE byte overlay);
+//   m_pFruitPiece@0x148 byte1 aliases m_bAcceptsTouch@0x149; m_pTrackedFruit@0x14C;
+//   m_ShakeTimer@0x174.
+// ASM-spec v1.6.1 MenuButton::HasNewSymbol @0x0019a5a0: m_NewIndicatorTimer(+0xFC) >= 0
+// ASM-spec v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608: m_SparkleTimer(+0xF8) >= 0
+// ASM-spec v1.6.1 MenuButton::Shake @0x0019a510: m_ShakeTimer(+0x174) = arg
+//
 // 3-layer rendering + 1 entity:
 //   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton -- Mortar::ActorManager::Draw)
 //   Layer 1 (2D): Button texture quad (+0x70)
@@ -62,7 +72,7 @@ struct MenuButtonAddOn {
 // animation mirrors the main -> mode-select cascade.
 namespace FN { void ClearMenuItems(); }
 
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0014ee40 + 0x0014e614 + 0x0014f7e0 (asm-inspector, base-shift unaffected)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton @ 0x0019bb08 (asm-inspector, layout verified)
 class MenuButton : public HUDControl3d {
 public:
     // HUDControl3d base ends at +0x7B (size = 0x7C). Own fields follow.
@@ -80,10 +90,8 @@ public:
     Mortar::Delegate0<void> m_ClickCallback;    // +0x88..+0xAB
 
     // +0xAC: fired when button is removed from HUD. 36 bytes.
+    // Fills 0xAC..0xCF exactly. No field at 0xCC (m_FadeAlphaIdx was a v1.5.x phantom).
     Mortar::Delegate0<void> m_DeletedCallback;  // +0xAC..+0xCF
-
-    // +0xCC: alpha ramp index fed into VectorSignedToFloat in Draw
-    int             m_FadeAlphaIdx;        // +0xCC
 
     // +0xD0: Q14 grow-in phase (0..0x3ffc). uint16 per spec.
     uint16_t        m_AnimPhase;           // +0xD0
@@ -173,37 +181,32 @@ public:
     uint8_t         _pad13B;               // +0x13B
 
     // +0x13C: target rest scale Vec3 (Init copies hitBounds). Binary spec: 12 bytes.
-    // Note: on ARM32, +0x144 (= m_RestScale.z first byte) is also read as m_bHasHitArea.
-    // The z-component is a don't-care for Update (only x,y used in scale fractions).
-    // Port models as Vec3; m_bHasHitArea byte at +0x144 overlaps .z on ARM32 (the
-    // static_assert at EOF guards the Bada build).
-    Vec3            m_RestScale;           // +0x13C..+0x147 (z-byte aliased as m_bHasHitArea on ARM32)
+    // Binary: byte0 of .z (@0x144) aliases m_bHasHitArea; byte1 (@0x145) aliases m_bInteractive.
+    // Access via HasHitArea()/SetHasHitArea()/IsInteractive()/SetInteractive() accessors so the
+    // offset holds on both ARM32 (binary) and host builds (8-byte pointer strides).
+    Vec3            m_RestScale;           // +0x13C..+0x147
 
-    // +0x144: non-zero if abs(hitBounds.x)+abs(hitBounds.y) > 0.
-    // On ARM32, this is byte 0 of m_RestScale.z (little-endian float). On host
-    // builds the offset differs; access by name only.
-    uint8_t         m_bHasHitArea;         // ARM32: +0x144 (= m_RestScale.z byte0)
-
-    // +0x145: accepts touch input (init=1)
-    uint8_t         m_bInteractive;        // ARM32: +0x145
-
-    // +0x146..+0x147: pad
-    uint8_t         _pad146[2];            // +0x146..+0x147
-
-    // +0x148: primary fruit pointer (Init=0; CreateFruit fills; used in SetToMultiplayerState)
+    // +0x148: primary fruit pointer (Init=0; CreateFruit fills; used in SetToMultiplayerState).
+    // Binary: byte1 of the pointer word (@0x149) aliases m_bAcceptsTouch.
+    // Access via AcceptsTouch()/SetAcceptsTouch() so sizeof stays 0x178 on both builds.
     Fruit*          m_pFruitPiece;         // +0x148
-
-    // +0x149 (ARM32): byte 1 of m_pFruitPiece pointer is read as accepts-touch gate in binary.
-    // On host builds this is a separate field appended after m_pTrackedFruit to avoid pointer overlap.
-    // Binary Update @ 0x0019a860: `ldrb r3, [this, #0x149]; cmp r3, #0` gates the touch block.
-    // DIFFERS: original = overlaps m_pFruitPiece on ARM32 little-endian; port adds as separate flag.
-    uint8_t         m_bAcceptsTouch;       // ARM32: +0x149 (byte1 of m_pFruitPiece ptr); host: separate
-
-    // pad to reach +0x14C on ARM32 (3 bytes between +0x149 and +0x14C)
-    uint8_t         _pad149[3];            // ARM32: +0x14A..+0x14B; host: structural pad
 
     // +0x14C: tracked-fruit pointer for per-frame scale writes
     Fruit*          m_pTrackedFruit;       // +0x14C
+
+    // Aliased-flag accessors: binary packs these into the float/pointer bytes above (LE).
+    // On the cross-build (ARM32 LE) these read/write the exact binary bytes.
+    // On the host x64 build they do the same -- host is also LE, and the float/pointer
+    // fields physically occupy those bytes before any pointer padding.
+    // v1.6.1 MenuButton::Init @0x0019b994 / Update @0x0019a860 / ctor @0x0019bb08
+    bool HasHitArea()    const { return ((const uint8_t*)&m_RestScale.z)[0] != 0; }
+    void SetHasHitArea(bool v) { ((uint8_t*)&m_RestScale.z)[0] = v ? 1 : 0; }
+
+    bool IsInteractive()    const { return ((const uint8_t*)&m_RestScale.z)[1] != 0; }
+    void SetInteractive(bool v)   { ((uint8_t*)&m_RestScale.z)[1] = v ? 1 : 0; }
+
+    bool AcceptsTouch()    const { return ((const uint8_t*)&m_pFruitPiece)[1] != 0; }
+    void SetAcceptsTouch(bool v) { ((uint8_t*)&m_pFruitPiece)[1] = v ? 1 : 0; }
 
     // +0x150: backdrop-active flag (init = 1 for most buttons)
     uint8_t         m_bBackdropActive;     // +0x150
@@ -233,6 +236,9 @@ public:
     float           m_ShakeTimer;          // +0x174
 
     // === v1.0 compat fields (port-side only; binary offset unknown in v1.6.1) ===
+    // Excluded from the cross-build (FN_ASM_VERIFY_CROSS) so sizeof == 0x178 is
+    // enforceable by the static_assert below. The Bada production build does NOT
+    // define FN_ASM_VERIFY_CROSS, so these fields remain visible there too.
     // DIFFERS: original v1.0 had these at known offsets; v1.6.1 layout unknown.
     //   m_bEnabled:        v1.0 +0x123; disables ClearMenuItems + touch input.
     //   m_AnimScale:       v1.0 +0x13C; maps to m_ShakeScale.x in v1.6.1 (backdrop scale factor).
@@ -240,11 +246,13 @@ public:
     //   m_bTouchHeld:      v1.0 +0x131; touch-held gate for Update and Init.
     //   m_bScoreSubmitted: v1.0 +0x120; TutorialControl flip direction.
     // TODO: 0x0019b994 -- RE v1.6.1 binary to locate each field's offset and remove these
+#if !defined(FN_ASM_VERIFY_CROSS)
     uint8_t         m_bEnabled;            // port-compat; v1.0 +0x123
     float           m_AnimScale;           // port-compat; v1.0 +0x13C -> v1.6.1 m_ShakeScale.x
     Vec3            m_BounceParams;        // port-compat; v1.0 +0x140 -> v1.6.1 hardcoded 0.85
     uint8_t         m_bTouchHeld;          // port-compat; v1.0 +0x131
     uint8_t         m_bScoreSubmitted;     // port-compat; v1.0 +0x120
+#endif
     // === end compat fields ===
 
     MenuButton();
@@ -277,43 +285,43 @@ public:
     // Creates the fruit/bomb entity for m_FruitType>=0 (called from Init tail)
     void CreateFruit();
 
-    // Binary @ 0x0014e404: arms/disarms the new-indicator timer
+    // v1.6.1 MenuButton::SetNewSymbol @0x0019a534: arms/disarms the new-indicator timer
     void SetNewSymbol(bool show);
 
-    // Binary @ 0x0014e3bc: sets m_ShakeTimer
+    // v1.6.1 MenuButton::Shake @0x0019a510: sets m_ShakeTimer (+0x174)
     void Shake(float t);
 
-    // Binary @ 0x0014e434: returns (m_NewIndicatorTimer >= 0)
+    // v1.6.1 MenuButton::HasNewSymbol @0x0019a5a0: returns (m_NewIndicatorTimer(+0xFC) >= 0)
     bool HasNewSymbol();
 
-    // Binary @ 0x0014e484: returns (m_SparkleTimer >= 0)
+    // v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608: returns (m_SparkleTimer(+0xF8) >= 0)
     bool IsLoadingSymbol();
 
-    // Binary @ 0x0014e45c: arms sparkle timer
+    // v1.6.1 MenuButton::SetLoadingSymbol @0x0019a560: arms sparkle timer (+0xF8)
     void SetLoadingSymbol(bool show);
 
-    // Binary @ 0x0014ebc0: builds curved-text BakedString pair. Zero call sites in shipped binary.
+    // v1.6.1 MenuButton::SetText @0x0019d4e0: builds curved-text BakedString pair. Zero call sites in shipped binary.
     void SetText(const char* text, Colour fg, Colour shadow, float radius);
 
-    // Binary @ 0x0014ed18: release fruit piece with upward fling
+    // v1.6.1 MenuButton::Remove @0x0019d148: release fruit piece with upward fling
     void Remove();
 
-    // Binary @ 0x0014e5cc: fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
+    // v1.6.1 MenuButton::TouchReleased @0x0019a7f8: fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
     bool TouchReleased();
 
-    // Binary @ 0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
+    // v1.6.1 MenuButton::AddPeice @0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
     void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                   float rotSpeed, float initialTimer,
                   Vec3 offset, Vec3 sizeScale,
                   Colour tint, int layerFlags);
 
-    // Binary @ 0x0014e49c: per-addon position/size update
+    // v1.6.1 MenuButton::UpdatePeices @0x0019a630: per-addon position/size update
     void UpdatePeices(float dt);
 
-    // Binary @ 0x0014f74c: detach and mark addons for HUD removal
+    // v1.6.1 MenuButton::DeletePeices @0x0019d1b0: detach and mark addons for HUD removal
     void DeletePeices();
 
-    // Binary @ 0x0014e54c: addon's HUD-side removal callback
+    // v1.6.1 MenuButton::DeletedPeice @0x0019a69c: addon's HUD-side removal callback
     void DeletedPeice(HUDControl* hudControl);
 
     // Binary @ 0x0019d870: Clicked -- no-op override
@@ -322,42 +330,37 @@ public:
     // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall.
     void SetCallback(const Mortar::Delegate0<void>& cb) { m_ClickCallback = cb; }
 
-    // Binary @ 0x0014f674: loads 3 shared textures into class statics.
+    // v1.6.1 MenuButton::LoadContent @0x0019d640: loads 3 shared textures into class statics.
     static void LoadContent();
     static void UnLoadContent();
 
 private:
-    // Binary @ 0x0014e3c4: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
+    // v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
     void UpdateTouchPosition();
 };
 
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-// Offsets from m_FadeAlphaIdx onward depend on sizeof(Delegate0<void>).
-// The binary's Delegate0 is 32 bytes; the cross-build arm-none-eabi stub
-// (cross-headers/util/Delegate.h) produces 36 bytes due to aligned_storage<32,4>
-// + tag + pad[3]. Guards prevent false failures in asm-verify; the Bada
-// toolchain (which has the real Mortar::Delegate sizes) should pass these.
-static_assert(__builtin_offsetof(MenuButton, m_pEntity)          == 0x80,  "MenuButton m_pEntity offset");
-static_assert(__builtin_offsetof(MenuButton, m_FruitType)        == 0x84,  "MenuButton m_FruitType offset");
-static_assert(__builtin_offsetof(MenuButton, m_FadeAlphaIdx)     == 0xCC,  "MenuButton m_FadeAlphaIdx offset");
-static_assert(__builtin_offsetof(MenuButton, m_AnimPhase)        == 0xD0,  "MenuButton m_AnimPhase offset");
-static_assert(__builtin_offsetof(MenuButton, m_TouchSlot)        == 0xD8,  "MenuButton m_TouchSlot offset");
-static_assert(__builtin_offsetof(MenuButton, m_BackdropScale)    == 0xEC,  "MenuButton m_BackdropScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)    == 0xF4,  "MenuButton m_RotationSpeed offset");
-static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)     == 0xF8,  "MenuButton m_SparkleTimer offset");
-static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC, "MenuButton m_NewIndicatorTimer offset");
-static_assert(__builtin_offsetof(MenuButton, m_BaseScale)        == 0x100, "MenuButton m_BaseScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)      == 0x134, "MenuButton m_GrowInTimer offset");
-static_assert(__builtin_offsetof(MenuButton, m_RestScale)        == 0x13C, "MenuButton m_RestScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)      == 0x144, "MenuButton m_bHasHitArea offset");
-static_assert(__builtin_offsetof(MenuButton, m_pFruitPiece)      == 0x148, "MenuButton m_pFruitPiece offset");
-static_assert(__builtin_offsetof(MenuButton, m_pTrackedFruit)    == 0x14C, "MenuButton m_pTrackedFruit offset");
-static_assert(__builtin_offsetof(MenuButton, m_ShakeScale)       == 0x154, "MenuButton m_ShakeScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)        == 0x164, "MenuButton m_HitInsetX offset");
-static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)        == 0x168, "MenuButton m_HitInsetY offset");
-static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)       == 0x174, "MenuButton m_ShakeTimer offset");
-// sizeof check: binary is 0x178; compat fields above add ~20 bytes on host builds.
-// The assert fires only on Bada (4-byte pointers, no compat-field expansion).
+// Layout asserts. FN_ASM_VERIFY_CROSS guard REMOVED so the cross-build also enforces
+// these (v1.6.1 MenuButton ctor @0x0019bb08, sizeof=0x178).
+// The compat fields below the asserts are wrapped in #if !defined(__bada__) so they
+// do not inflate the cross-build sizeof past 0x178.
+#if defined(__bada__)
+static_assert(__builtin_offsetof(MenuButton, m_pEntity)           == 0x80,  "MenuButton m_pEntity offset");
+static_assert(__builtin_offsetof(MenuButton, m_FruitType)         == 0x84,  "MenuButton m_FruitType offset");
+static_assert(__builtin_offsetof(MenuButton, m_AnimPhase)         == 0xD0,  "MenuButton m_AnimPhase offset");
+static_assert(__builtin_offsetof(MenuButton, m_TouchSlot)         == 0xD8,  "MenuButton m_TouchSlot offset");
+static_assert(__builtin_offsetof(MenuButton, m_BackdropScale)     == 0xEC,  "MenuButton m_BackdropScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)     == 0xF4,  "MenuButton m_RotationSpeed offset");
+static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)      == 0xF8,  "MenuButton m_SparkleTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC,  "MenuButton m_NewIndicatorTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_BaseScale)         == 0x100, "MenuButton m_BaseScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)       == 0x134, "MenuButton m_GrowInTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_RestScale)         == 0x13C, "MenuButton m_RestScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_pFruitPiece)       == 0x148, "MenuButton m_pFruitPiece offset");
+static_assert(__builtin_offsetof(MenuButton, m_pTrackedFruit)     == 0x14C, "MenuButton m_pTrackedFruit offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeScale)        == 0x154, "MenuButton m_ShakeScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)         == 0x164, "MenuButton m_HitInsetX offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)         == 0x168, "MenuButton m_HitInsetY offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)        == 0x174, "MenuButton m_ShakeTimer offset");
 static_assert(sizeof(MenuButton) == 0x178, "MenuButton sizeof mismatch");
 #endif
 

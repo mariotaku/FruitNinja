@@ -463,7 +463,9 @@ void ShopScreen::ShrinkBuyButton() {
     #endif
     fruit->m_bSliced           = true;  // *(fruit+0xb8) = 1
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
-    m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
+#if !defined(FN_ASM_VERIFY_CROSS)
+    m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0 (v1.0 compat field)
+#endif
     fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
     // Binary does NOT write m_bDrawWhole here (see docs/screens/shop-buttons.md §Gap4)
 }
@@ -824,7 +826,9 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+#if !defined(FN_ASM_VERIFY_CROSS)
                 m_pBuyButton->m_bEnabled = 1;
+#endif
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
@@ -901,7 +905,9 @@ void ShopScreen::Update(float dt) {
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                         // Binary (0x0015e5f6): m_bEnabled = 0
+#if !defined(FN_ASM_VERIFY_CROSS)
                         m_pEquipButton->m_bEnabled = 0;
+#endif
                         // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
                         SetSelected(m_pSelectedItem);
                         if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
@@ -1014,7 +1020,9 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+#if !defined(FN_ASM_VERIFY_CROSS)
             m_pBuyButton->m_bEnabled = 1;
+#endif
             if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
