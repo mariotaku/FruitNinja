@@ -423,7 +423,7 @@ void AboutScreen::Update(float dt)
 //   HeadingBox:   positioned by DrawMarquee (binary uses m_HeadingBox in DrawMarquee only)
 //   VersionBox:   SetTranslation(x0+5,     y0+0x15,    0), flag=0  (x0+5, y0+21)
 //   Each box is drawn with Draw(0, Vec2(1,1), 1).
-//   DrawMarquee gate: if (m_TransitionAlpha < 0.6f) DrawMarquee();
+//   DrawMarquee gate: if (m_TransitionAlpha > 0.6f) DrawMarquee();
 // -----------------------------------------------------------------------
 void AboutScreen::NewDraw(float yDrawn)
 {
@@ -468,8 +468,9 @@ void AboutScreen::NewDraw(float yDrawn)
         m_VersionBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
     }
 
-    // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: DrawMarquee only when alpha < 0.6.
-    if (m_TransitionAlpha < 0.6f) {
+    // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 AboutScreen::NewDraw @0x0015a264 (re-analyst):
+    //   vcmpe alpha,0.6f ; ble skip => DrawMarquee runs when alpha > 0.6 (idle/settled state).
+    if (m_TransitionAlpha > 0.6f) {
         DrawMarquee();
     }
 }
