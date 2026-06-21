@@ -316,13 +316,26 @@ void BSButton::SetCallback(const Mortar::Delegate0<void>& cb) {
     m_ClickCallback = cb;
 }
 
-// BSButton::SetTexture
-// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: stores SmartPtr into m_Texture2 (+0x7c).
-// bool flag: binary passes true; field mapping not yet confirmed. (void)flag for now.
-// TODO: v1.6.1 BSButton::SetTexture -- confirm bool flag field offset in binary.
-void BSButton::SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool flag) {
-    (void)flag;
+// BSButton::SetTexture  binary @ 0x0015ee34
+// ASM-spec v1.6.1 BSButton::SetTexture @0x0015ee34: m_Texture2=tex; if(param2) UpdateBoundsToTex();
+void BSButton::SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool updateBounds) {
     m_Texture2 = tex;
+    if (updateBounds) UpdateBoundsToTex();
+}
+
+// BSButton::UpdateBoundsToTex  binary @ 0x0015ede8
+// ASM-spec v1.6.1 BSButton::UpdateBoundsToTex @0x0015ede8:
+//   if (!m_Texture) return;
+//   m_ExtentX = texW(+0x24) * m_TextOffset.x;
+//   m_ExtentY = texH(+0x28) * m_TextOffset.y;
+// CROSS-BUILD: m_Width/m_Height are port-only fields (#if !defined(__bada__) per Texture.h:65).
+// On cross-build the extents stay 0 (cross-build is layout-only, not rendering).
+void BSButton::UpdateBoundsToTex() {
+    if (!m_Texture2.IsValid()) return;
+#if !defined(__bada__)
+    m_ExtentX = (float)m_Texture2->m_Width  * m_TextOffset.x;
+    m_ExtentY = (float)m_Texture2->m_Height * m_TextOffset.y;
+#endif
 }
 
 // BSButton::SetPosition

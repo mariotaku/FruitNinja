@@ -123,11 +123,9 @@ public:
     // Stores callback Delegate0 into m_ClickCallback (+0xc0).
     void SetCallback(const Mortar::Delegate0<void>& cb);
 
-    // Stores tex into m_Texture2 (+0x7c). flag arg: binary passes true;
-    // stored at m_bEnabled (+0xe4) on the BSButton -- but callers in PauseScreen
-    // always set active separately, so this is treated as (void)flag for now.
-    // TODO: v1.6.1 BSButton::SetTexture @unknown -- confirm bool flag field (may be m_bEnabled or a separate member).
-    void SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool flag);
+    // SetTexture  binary @ 0x0015ee34
+    // Stores tex into m_Texture2; if updateBounds is true, calls UpdateBoundsToTex().
+    void SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool updateBounds);
 
     // Writes base pos field (+0x08).
     void SetPosition(const Vec3& p);
@@ -137,6 +135,10 @@ public:
     void SetTextOffset(const Vec3& o);
 
 private:
+    // BSButton::UpdateBoundsToTex  binary @ 0x0015ede8
+    // If m_Texture2 is valid: m_ExtentX = texW * m_TextOffset.x; m_ExtentY = texH * m_TextOffset.y.
+    void UpdateBoundsToTex();
+
     // BSButton::UpdateTouchPosition -- copy latched slot's live touch pos into m_TouchX/m_TouchY.
     // Binary @ 0x15e428 (thunked via 0x10b32c). Member thiscall in binary.
     void UpdateTouchPosition();

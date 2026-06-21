@@ -640,17 +640,15 @@ void BakedStringBox::SetRotation(float degrees) {
     m_StoredRotation = degrees;
 }
 
-// ReshapeBounds  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
-// Resizes box dimensions (m_BoxWidth, m_BoxHeight); flag1/flag2 not RE'd, ignored.
-// TODO: v1.6.1 BakedStringBox::ReshapeBounds -- confirm flag1/flag2 field writes in binary.
-void BakedStringBox::ReshapeBounds(float width, float height, int flag1, int flag2) {
-    (void)flag1;
-    (void)flag2;
-    if (m_BoxWidth != width || m_BoxHeight != height) {
-        m_BoxWidth  = width;
-        m_BoxHeight = height;
-        m_Dirty     = true;
-    }
+// ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
+// Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_Param8=p4, m_Dirty=true unconditionally.
+// ASM-spec v1.6.1 BSButton::Init @0x0015ea40: ReshapeBounds(54,20,1,0) -> m_MaxLines=1.
+void BakedStringBox::ReshapeBounds(float width, float height, int maxLines, int param8) {
+    m_MaxLines  = maxLines;
+    m_BoxWidth  = width;
+    m_BoxHeight = height;
+    m_Param8    = param8;
+    m_Dirty     = true;
 }
 
 // SetFontSize  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
