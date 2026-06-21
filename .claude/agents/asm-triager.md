@@ -38,6 +38,10 @@ triage.) Also re-triage any rows marked `triage_stale: true` — these are
 symbols whose **normalized asm changed** since their previous triage (the
 entry's `asm_hash` no longer matches the current run).
 
+Each escalated symbol now also carries pre-classified `cause` +
+`likelihood` (HIGH/MED/LOW) fields written by classify-divergences.py — use
+them to prioritise: HIGH / likely-FIX-NEEDED rows first, LOW/benign last.
+
 ### 2. For each escalated symbol
 
 Read its diff block (in `report.md`, a `\`\`\`diff` body). It is the

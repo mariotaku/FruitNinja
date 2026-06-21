@@ -16,10 +16,21 @@
 # (e.g. `ldr GREG, [GREG, #116]`); calls render as `CALL <SYM>` / `bl <SYM>`.
 # The LCS% lives in `reason` (e.g. "42.9% LCS (7p vs 7b)"), not as a field.
 #
-# Outputs (all under the report's directory, never tools/asm-verify/triage.json):
-#   shortlist.md            HIGH/MED rows listed; LOW/benign collapsed to a count table
-#   suggested-triage.json   proposed ACCEPT entries for the benign rows (review only)
-# and prints a summary + a PASS/FAIL validation table against known ground truth.
+# JSON-first: this script ENRICHES report.json in place rather than emitting a
+# markdown product. report.json stays the single structured source of truth.
+#
+# Outputs:
+#   report.json  (re-saved)  each symbol gains two fields:
+#                              `cause`      -- the classifier tag (e.g. wrong-field)
+#                              `likelihood` -- HIGH / MED / LOW, or null when not
+#                                              classified (non-escalated rows).
+#                            Every pre-existing field is preserved unchanged.
+#   suggested-triage.json    proposed ACCEPT entries for the benign rows (review only).
+#
+# No markdown is written. The ranked shortlist (HIGH rows + top MED) is printed
+# to STDOUT instead, alongside a per-cause count summary and a PASS/FAIL
+# validation table against known ground truth. Consumers (asm-fix-loop,
+# asm-triager) read the `cause`/`likelihood` fields from report.json directly.
 #
 # Detector design notes (why each threshold is what it is) live inline below.
 
@@ -425,6 +436,15 @@ BENIGN_VERDICT = {
 LIKELIHOOD_RANK = {"HIGH": 0, "MED": 1, "LOW": 2}
 
 
+def _truncate(text, width):
+    """Trim a string to `width` chars with an ASCII '...' tail if it overflows."""
+    if len(text) <= width:
+        return text
+    if width <= 3:
+        return text[:width]
+    return text[: width - 3] + "..."
+
+
 def run(report_path):
     with open(report_path, "r", encoding="utf-8") as fh:
         report = json.load(fh)
@@ -434,55 +454,30 @@ def run(report_path):
     rows = []  # (sym, cause, likelihood, lcs)
     for sym in symbols:
         if sym.get("verdict") not in ESCALATED:
+            # Non-escalated rows (MATCH / COSMETIC / ...) aren't classified.
+            # Set the two fields to null consistently so every symbol carries
+            # them and downstream `.get('likelihood')` filters are well-defined.
+            sym["cause"] = None
+            sym["likelihood"] = None
             continue
         cause, likelihood = classify(sym)
+        # ---- enrich report.json in place: add cause + likelihood, preserve all
+        #      existing fields (mangled/addr/verdict/reason/score/max_score/
+        #      asm_hash/diff). report.json stays the structured source of truth.
+        sym["cause"] = cause
+        sym["likelihood"] = likelihood
         rows.append((sym, cause, likelihood, parse_lcs(sym.get("reason", ""))))
 
     high = [r for r in rows if r[2] == "HIGH"]
     med = [r for r in rows if r[2] == "MED"]
     low = [r for r in rows if r[2] == "LOW"]
 
-    # ---- shortlist.md ----
-    shortlist_path = os.path.join(out_dir, "shortlist.md")
-    listed = sorted(
-        high + med,
-        key=lambda r: (LIKELIHOOD_RANK[r[2]], r[3] if r[3] is not None else 999.0),
-    )
-    with open(shortlist_path, "w", encoding="utf-8") as fh:
-        fh.write("# asm-verify divergence shortlist (auto-classified)\n\n")
-        fh.write(
-            "Source: `{}`  --  {} escalated rows "
-            "({} HIGH, {} MED, {} LOW/benign).\n\n".format(
-                os.path.basename(report_path), len(rows), len(high), len(med), len(low)
-            )
-        )
-        fh.write("## Real-bug shortlist (HIGH then MED)\n\n")
-        fh.write("| mangled | cause | likelihood | LCS% | diff summary |\n")
-        fh.write("|---|---|---|---|---|\n")
-        for sym, cause, lk, lcs in listed:
-            fh.write(
-                "| `{}` | {} | {} | {} | {} |\n".format(
-                    sym["mangled"],
-                    cause,
-                    lk,
-                    "{:.1f}".format(lcs) if lcs is not None else "?",
-                    one_line_summary(sym).replace("|", "\\|"),
-                )
-            )
-        fh.write("\n## Benign / LOW rows (collapsed)\n\n")
-        fh.write("Auto-demoted; see `suggested-triage.json` for proposed entries.\n\n")
-        cause_counts = Counter(r[1] for r in low)
-        fh.write("| cause | count | proposed verdict |\n")
-        fh.write("|---|---|---|\n")
-        for cause, n in cause_counts.most_common():
-            fh.write(
-                "| {} | {} | {} |\n".format(
-                    cause, n, BENIGN_VERDICT.get(cause, "ACCEPT-cosmetic")
-                )
-            )
-        fh.write("| **total benign** | **{}** | |\n".format(len(low)))
+    # ---- re-save the enriched report.json ----
+    with open(report_path, "w", encoding="utf-8") as fh:
+        json.dump(report, fh, indent=2)
+        fh.write("\n")
 
-    # ---- suggested-triage.json ----
+    # ---- suggested-triage.json (already structured -- kept) ----
     triage_path = os.path.join(out_dir, "suggested-triage.json")
     suggested = {}
     for sym, cause, lk, lcs in low:
@@ -495,30 +490,206 @@ def run(report_path):
         json.dump(suggested, fh, indent=2, sort_keys=True)
         fh.write("\n")
 
-    # ---- summary ----
+    # ---- ranked shortlist -> STDOUT (replaces the old shortlist.md) ----
+    # HIGH rows first, then the top ~15 MED rows, as a compact aligned table.
+    MAX_MED = 15
+    listed = sorted(
+        high,
+        key=lambda r: (r[3] if r[3] is not None else 999.0),
+    )
+    med_sorted = sorted(
+        med,
+        key=lambda r: (r[3] if r[3] is not None else 999.0),
+    )
+    listed = listed + med_sorted[:MAX_MED]
+
+    print("=" * 100)
+    print("asm-verify divergence shortlist (auto-classified)  --  {}".format(
+        os.path.basename(report_path)))
+    print("source: {} escalated rows ({} HIGH, {} MED, {} LOW/benign)".format(
+        len(rows), len(high), len(med), len(low)))
+    print("=" * 100)
+    if listed:
+        hdr = "{:<46} {:<12} {:<5} {:>6}  {}".format(
+            "mangled", "cause", "lk", "LCS%", "diff summary")
+        print(hdr)
+        print("-" * 100)
+        for sym, cause, lk, lcs in listed:
+            print("{:<46} {:<12} {:<5} {:>6}  {}".format(
+                _truncate(sym["mangled"], 46),
+                cause,
+                lk,
+                "{:.1f}".format(lcs) if lcs is not None else "?",
+                _truncate(one_line_summary(sym), 60),
+            ))
+        if len(med) > MAX_MED:
+            print("... (+{} more MED rows -- see report.json likelihood/cause "
+                  "fields)".format(len(med) - MAX_MED))
+    else:
+        print("(no HIGH/MED rows)")
+
+    # ---- per-cause count summary ----
     cause_counts = Counter(r[1] for r in rows)
-    print("=" * 64)
-    print("asm-verify divergence classification  --  {}".format(os.path.basename(report_path)))
-    print("=" * 64)
-    print("escalated rows : {}".format(len(rows)))
-    print("  HIGH (real)  : {}".format(len(high)))
-    print("  MED  (review): {}".format(len(med)))
-    print("  LOW  (benign): {}".format(len(low)))
     print()
     print("per-cause breakdown:")
     for cause, n in cause_counts.most_common():
-        lk = {c: l for (_s, c, l, _x) in rows}.get(cause, "?")
         print("  {:<14} {:>5}".format(cause, n))
     print()
-    print("wrote: {}".format(shortlist_path))
-    print("wrote: {}".format(triage_path))
+    print("escalated rows : {}  (HIGH {} / MED {} / LOW {})".format(
+        len(rows), len(high), len(med), len(low)))
+    print("enriched: {}  (added cause + likelihood per symbol)".format(report_path))
+    print("wrote:    {}".format(triage_path))
     return rows
 
 
 # ---------------------------------------------------------------------------
 # Validation gate -- proves detectors match known ground truth from RE session.
 # Each entry: mangled -> a predicate over (cause, likelihood).
+#
+# The gate validates the DETECTOR LOGIC against fixed, canonical diff fixtures
+# (GATE_FIXTURES below), NOT against whatever the live report.json currently
+# holds. This is deliberate: report.json is regenerated every run and a symbol's
+# diff legitimately CHANGES as the port is fixed (e.g. once FruitSaveData::
+# ClearCombo's #528/#532 loop is ported, its diff stops being a disjoint
+# wrong-field cluster and the row drops off the shortlist -- correct behaviour,
+# but it would spuriously "fail" a gate that read the live diff). Pinning the
+# canonical ground-truth diffs keeps the gate a stable regression test on the
+# classifier itself. A fixture is preferred when present; otherwise the gate
+# falls back to the live symbol so newly-added ground truth still gets checked.
 # ---------------------------------------------------------------------------
+
+# Canonical ground-truth diffs (mangled -> {reason, diff}) captured from the RE
+# session that established each detector. Tag convention matches report.json:
+# "  " common, "- " binary-only, "+ " port-only.
+GATE_FIXTURES = {
+    # ClearCombo (the wrong-field HIGH case): binary clears the combo array with
+    # a counted loop over #528/#532; the (pre-fix) port wrote a DISJOINT trailing
+    # field cluster #32..#44 -- zero offset overlap, <40% LCS -> HIGH wrong-field.
+    "_ZN13FruitSaveData10ClearComboEv": {
+        "reason": "13.3% LCS (9p vs 9b)",
+        "diff": [
+            "- mov GREG, #0",
+            "- str GREG, [GREG, #528]",
+            "- add GREG, GREG, #1",
+            "- str GREG, [GREG, #532]",
+            "- cmp GREG, #11",
+            "- add GREG, GREG, #4",
+            "- bne <SYM>",
+            "+ str GREG, [GREG, #32]",
+            "+ str GREG, [GREG, #36]",
+            "+ str GREG, [GREG, #40]",
+            "+ str GREG, [GREG, #44]",
+            "  bx lr",
+        ],
+    },
+    # GetCriticalChance: single vldr displacement drift #116 vs #112 -> wrong-offset.
+    "_ZN11WaveManager17GetCriticalChanceEi": {
+        "reason": "87.5% LCS (8p vs 8b)",
+        "diff": [
+            "  add GREG, GREG, GREG, lsl #2",
+            "- vldr VREG, [GREG, #116]",
+            "+ vldr VREG, [GREG, #112]",
+            "  ldr GREG, [GREG, #564]",
+            "  cmp GREG, #0",
+            "  vldrne VREG, [GREG, #100]",
+            "  vmoveq VREG, #112",
+            "  vmul VREG, VREG, VREG",
+            "  bx lr",
+        ],
+    },
+    # BonusType ctor: binary CALLs the member ctor; port flattened it into a run
+    # of zero-init stores -> std-inline (benign).
+    "_ZN9BonusTypeC1Ev": {
+        "reason": "16.7% LCS (12p vs 9b)",
+        "diff": [
+            "- push {GREG, lr}",
+            "- mov GREG, GREG",
+            "- CALL <SYM>",
+            "- add GREG, GREG, #24",
+            "- CALL <SYM>",
+            "  mov GREG, #0",
+            "- mov GREG, GREG",
+            "+ add GREG, GREG, #4",
+            "  strb GREG, [GREG, #36]",
+            "- pop {GREG, pc}",
+            "+ str GREG, [GREG, #16]",
+            "+ str GREG, [GREG, #20]",
+            "+ strb GREG, [GREG, #4]",
+            "+ str GREG, [GREG, #8]",
+            "+ str GREG, [GREG, #12]",
+            "+ str GREG, [GREG, #24]",
+            "+ str GREG, [GREG, #28]",
+            "+ str GREG, [GREG, #32]",
+            "+ bx lr",
+        ],
+    },
+    # PROBABILITY_OVERIDE::GetType: port added a cmp #0 + conditional escape
+    # (mvnle #0 / pople) guard the binary lacks -> port-guard (benign-deferred).
+    "_ZN19PROBABILITY_OVERIDE7GetTypeEv": {
+        "reason": "61.5% LCS (13p vs 9b)",
+        "diff": [
+            "+ ldr GREG, [GREG, #104]",
+            "  push {GREG, lr}",
+            "+ cmp GREG, #0",
+            "  mov GREG, GREG",
+            "+ mvnle GREG, #0",
+            "+ pople {GREG, pc}",
+            "  CALL <SYM>",
+            "  ldr GREG, [GREG, #104]",
+            "- ldr GREG, [GREG, #32]",
+            "+ add GREG, GREG, #8",
+            "  CALL <SYM>",
+            "  add GREG, GREG, #6",
+            "  ldr GREG, [GREG, GREG, lsl #2]",
+            "  pop {GREG, pc}",
+        ],
+    },
+    # GetUncompressedSizeLZ8: same multi-byte little-endian value built via a
+    # different instruction selection -> addr-form (benign).
+    "_ZN4Math22GetUncompressedSizeLZ8EPKv": {
+        "reason": "42.9% LCS (7p vs 7b)",
+        "diff": [
+            "- add GREG, GREG, #1",
+            "+ ldrb GREG, [GREG, #3]",
+            "+ ldrb GREG, [GREG, #2]",
+            "  ldrb GREG, [GREG, #1]",
+            "- ldrb GREG, [GREG, #1]",
+            "- ldrb GREG, [GREG, #2]",
+            "+ lsl GREG, GREG, #16",
+            "  orr GREG, GREG, GREG, lsl #8",
+            "- orr GREG, GREG, GREG, lsl #16",
+            "+ orr GREG, GREG, GREG",
+            "  bx lr",
+        ],
+    },
+    # MenuButton::HasNewSymbol / IsLoadingSymbol: single vldr displacement drift,
+    # confirmed BENIGN (trailing-field pack difference) -> must NOT be HIGH.
+    "_ZN10MenuButton12HasNewSymbolEv": {
+        "reason": "83.3% LCS (6p vs 6b)",
+        "diff": [
+            "- vldr VREG, [GREG, #252]",
+            "+ vldr VREG, [GREG, #256]",
+            "  vcmpe VREG, #0.0",
+            "  vmrs APSR_nzcv, fpscr",
+            "  movlt GREG, #0",
+            "  movge GREG, #1",
+            "  bx lr",
+        ],
+    },
+    "_ZN10MenuButton15IsLoadingSymbolEv": {
+        "reason": "83.3% LCS (6p vs 6b)",
+        "diff": [
+            "- vldr VREG, [GREG, #248]",
+            "+ vldr VREG, [GREG, #252]",
+            "  vcmpe VREG, #0.0",
+            "  vmrs APSR_nzcv, fpscr",
+            "  movlt GREG, #0",
+            "  movge GREG, #1",
+            "  bx lr",
+        ],
+    },
+}
+
 
 def _gate_clearcombo(cause, lk):
     return lk == "HIGH" and cause == "wrong-field"
@@ -553,18 +724,26 @@ GATE = [
 
 
 def validate(report_path):
+    # Live symbols are used only as a fallback for GATE entries that have no
+    # canonical fixture (so freshly-added ground truth is still exercised).
     with open(report_path, "r", encoding="utf-8") as fh:
         report = json.load(fh)
-    syms = {s["mangled"]: s for s in report["symbols"]}
+    live = {s["mangled"]: s for s in report["symbols"]}
     print()
     print("=" * 72)
-    print("VALIDATION GATE  --  {}".format(os.path.basename(report_path)))
+    print("VALIDATION GATE  --  canonical fixtures (classifier regression)")
     print("=" * 72)
     print("{:<44} {:<22} {:<18} {}".format("symbol", "expected", "got", "result"))
     print("-" * 72)
     all_pass = True
     for mangled, expect_desc, pred in GATE:
-        sym = syms.get(mangled)
+        # Prefer the pinned ground-truth fixture; fall back to the live symbol.
+        fixture = GATE_FIXTURES.get(mangled)
+        if fixture is not None:
+            sym = {"mangled": mangled, "reason": fixture["reason"],
+                   "diff": fixture["diff"]}
+        else:
+            sym = live.get(mangled)
         if sym is None:
             print("{:<44} {:<22} {:<18} {}".format(
                 mangled[:42], expect_desc, "MISSING", "FAIL"))
@@ -582,9 +761,7 @@ def validate(report_path):
 
 
 def main(argv):
-    # Default report; allow override. Validation runs against whichever report
-    # contains the ground-truth symbols (defaults to report.after.json if the
-    # primary report lacks them).
+    # Default report; allow override.
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.abspath(os.path.join(here, "..", ".."))
     report_path = argv[1] if len(argv) > 1 else os.path.join(
@@ -596,19 +773,10 @@ def main(argv):
 
     run(report_path)
 
-    # Pick a report for the gate: prefer the run one if it has the targets,
-    # else fall back to report.after.json in the same dir.
-    gate_path = report_path
-    with open(report_path, "r", encoding="utf-8") as fh:
-        names = {s["mangled"] for s in json.load(fh)["symbols"]}
-    needed = {m for (m, _d, _p) in GATE}
-    if not needed.issubset(names):
-        alt = os.path.join(os.path.dirname(report_path), "report.after.json")
-        if os.path.exists(alt):
-            print("\n[gate] primary report lacks ground-truth symbols; "
-                  "validating against report.after.json")
-            gate_path = alt
-    ok = validate(gate_path)
+    # The gate validates the detectors against canonical GATE_FIXTURES (pinned
+    # ground truth), falling back to the live report only for entries lacking a
+    # fixture. It is therefore stable across report regenerations.
+    ok = validate(report_path)
     return 0 if ok else 1
 
 
