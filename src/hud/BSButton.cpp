@@ -309,3 +309,33 @@ void BSButton::SetVisible(bool v) {
 void BSButton::SetDrawOrder(int order) {
     m_LayerFlags = order;
 }
+
+// BSButton::SetCallback
+// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: stores Delegate0 into m_ClickCallback (+0xc0).
+void BSButton::SetCallback(const Mortar::Delegate0<void>& cb) {
+    m_ClickCallback = cb;
+}
+
+// BSButton::SetTexture
+// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: stores SmartPtr into m_Texture2 (+0x7c).
+// bool flag: binary passes true; field mapping not yet confirmed. (void)flag for now.
+// TODO: v1.6.1 BSButton::SetTexture -- confirm bool flag field offset in binary.
+void BSButton::SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool flag) {
+    (void)flag;
+    m_Texture2 = tex;
+}
+
+// BSButton::SetPosition
+// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: writes to base pos field (+0x08).
+void BSButton::SetPosition(const Vec3& p) {
+    pos = p;
+}
+
+// BSButton::SetTextOffset
+// ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: writes .y->.z of o into
+//   m_DrawRotation.y (+0xb4) and m_DrawRotation.z (+0xb8).
+// Draw reads m_DrawRotation.y/.z as the label translate offset.
+void BSButton::SetTextOffset(const Vec3& o) {
+    m_DrawRotation.y = o.y;
+    m_DrawRotation.z = o.z;
+}

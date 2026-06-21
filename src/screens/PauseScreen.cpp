@@ -17,6 +17,7 @@
 #include "screens/PauseScreen.h"
 #include "debug/Logger.h"
 #include "hud/MenuButton.h"
+#include "hud/BSButton.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "game/WaveManager.h"
@@ -45,6 +46,12 @@
 #include <cmath>
 #include <algorithm>
 #include "game/GameWork.h"
+#include "render/BakedStringBox.h"
+#include "render/Font.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
+#include "util/StringTable.h"
+#include "math/Vec2.h"
 
 // -------------------------------------------------------------------------
 // Constants from binary (see docs section 4 DAT table)
@@ -75,6 +82,20 @@ static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
+
+// Shared TTF face for m_PausedText BakedStringBox in PauseScreen.
+// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext;
+//   using a file-local SmartPtr<Font> + FontTTFRegistry::Lookup because
+//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+//   v1.6.1 PauseScreen::PauseScreen @0x001a7204.
+static Mortar::FontCacheObjectTTF* GetPauseTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_Font =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_Font.IsValid()) {
+        return 0;
+    }
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+}
 static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
                                                          int* outW = nullptr,
                                                          int* outH = nullptr) {
@@ -298,9 +319,31 @@ PauseScreen::PauseScreen()
     // size for HUDControl3d::Draw quad
     size = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
 #endif
+
+    // ASM-spec v1.6.1 PauseScreen::PauseScreen @0x001a7204: build m_PausedText.
+    // Binary: operator new(200=0xc8); BakedStringBox(box, *(g_GameData+0x614), 100, 0x1e);
+    //   SetHorizontalLineSpacing(-1); SetText(GETSTRING(0x3c8, 0));
+    //   SetColour(game_work[+0x6a0], true).
+    {
+        Mortar::FontCacheObjectTTF* font = GetPauseTTFFont();
+        if (font) {
+            m_PausedText = new Mortar::BakedStringBox(
+                font, 14.0f, 100.0f, 30.0f, 0xf, 1, 0.0f);
+            m_PausedText->SetHorizontalLineSpacing(-1);
+            m_PausedText->SetText(Mortar::GETSTRING(LSTR_PAUSED, 0));
+            m_PausedText->SetColour(game_work.m_TitleColour, true);
+        }
+    }
 }
 
-PauseScreen::~PauseScreen() {}
+PauseScreen::~PauseScreen() {
+    // ASM-spec v1.6.1 PauseScreen::~PauseScreen @0x001a7204 area: delete m_PausedText.
+    // Mirrors ScoreControl::~ScoreControl pattern for BakedStringBox* members.
+    if (m_PausedText) {
+        delete m_PausedText;
+        m_PausedText = nullptr;
+    }
+}
 
 // -------------------------------------------------------------------------
 // vtable[2]: Init -- forwards to Reset (HUDControl::Reset)
@@ -409,12 +452,25 @@ void PauseScreen::PreDraw(const Vec3& hudScale) {
 }
 
 // -------------------------------------------------------------------------
-// vtable[9]: DrawOrder -- gate on m_Alpha > 0 (Tier-1: skip online-MP branch)
-// Binary: 0x00153e98
+// vtable[9]: DrawOrder -- title quad + paused-text overlay
+// ASM-spec v1.6.1 PauseScreen::DrawOrder @0x001a572c:
+//   layerMask != 0x100: return immediately.
+//   m_Alpha > 0 && !IsOnlineMultiplayer(): HUDControl3d::Draw (title texture quad).
+//   m_Alpha > 0 && m_PausedText: SetTranslation(pos, 1); Draw(0.0f, (1,1), 1).
 // -------------------------------------------------------------------------
 void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
+    if (layerMask != 0x100) return;
+
     if (m_Alpha > 0.0f) {
+        // TODO: v1.6.1 PauseScreen::DrawOrder @0x001a572c -- !IsOnlineMultiplayer() guard;
+        //   binary skips HUDControl3d::Draw in online-MP mode. No online-MP in port;
+        //   guard omitted until MP is ported.
         HUDControl3d::Draw(hudScale, layerMask);
+    }
+
+    if (m_Alpha > 0.0f && m_PausedText) {
+        m_PausedText->SetTranslation(this->pos, 1);
+        m_PausedText->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
     }
 }
 
@@ -578,25 +634,29 @@ void PauseScreen::Update(float dt) {
         m_ButtonOriginPos            = m_ResumeButton->m_RestScale;
     }
 
+    // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: if (m_QuitButton==0) build BSButton.
     if (!m_QuitButton) {
-        m_QuitButton = new MenuButton();
-        // v1.6.1 PauseScreen::Update @0x001a5ebc: texture via ctor arg -> m_Texture.
-        m_QuitButton->m_Texture = m_QuitTitleTex;
-        m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
-        m_QuitButton->Init(
-            Vec3(0.0f, 320.0f, 0.0f),
-            Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback),
-            /*fruitType=*/-1,
-            Vec3(0.0f, 0.0f, 0.0f),
-            Mortar::Delegate0<void>()
+        m_QuitButton = new BSButton(
+            Vec3(215.0f, -135.0f, 0.0f),
+            Mortar::GETSTRING(LSTR_QUIT, 0),
+            Vec3(1.0f, 1.0f, 1.0f)
         );
-        // DIFFERS: binary Quit is a BSButton sized by ReshapeBounds(54,20); this MenuButton
-        // stand-in uses that text-box as m_RestScale (v1.6.1 PauseScreen::Update @0x001a5ebc).
-        // TODO: port m_QuitButton as a proper BSButton (see task: PauseScreen Quit BSButton).
-        m_QuitButton->m_RestScale = Vec3(54.0f, 20.0f, 0.0f);
-
+        m_QuitButton->Init();
+        m_QuitButton->SetCallback(
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback));
+        if (m_QuitButton->m_pLabelBox) {
+            m_QuitButton->m_pLabelBox->SetGradient(
+                Colour(0xff, 0xff, 0xff, 0xff),
+                Colour(0xff, 0xff, 0xff, 0x40),
+                false);
+            m_QuitButton->m_pLabelBox->ReshapeBounds(0x36, 0x14, 1, 0);
+            m_QuitButton->m_pLabelBox->SetStroke(1.0f, Colour::Black);
+            m_QuitButton->m_pLabelBox->SetFontSize(14.0f);
+            m_QuitButton->m_pLabelBox->FitIntoVerticalBounds();
+        }
+        m_QuitButton->SetTexture(m_QuitTitleTex, true);
+        m_QuitButton->SetDrawOrder(8);
         game_work.mHud->AddControl(m_QuitButton);
-        m_QuitButton->SetSingular();
     }
 
     if (!m_RetryButton) {
@@ -800,26 +860,18 @@ void PauseScreen::Update(float dt) {
         pos.y = TITLE_SLIDE_BASE + sizeY + TITLE_SLIDE_MUL * m_Alpha;
     }
 
-    // 5. Quit button position (only when m_Alpha > 0.01 and m_PressIndex < 2).
-    // ASM-verified: 2026-05-08 binary @ ~0x00154f7a..0x00154fae (re-analyst).
-    //   quit.pos.y = -((160 - sizeY*0.5 - 5) + (1-alpha)*(sizeY + 10))
-    //   quit.pos.x =  240 - sizeX*0.5
-    // Previous port had 240/0 instead of 160/240 -- positioned the quit
-    // button 80 units further off-screen and centered on x=0 instead of
-    // the right edge.
-    if (m_QuitButton && m_Alpha > FADE_CLAMP && m_PressIndex < 2) {
-#if !defined(__bada__)
-        const float qSizeY = m_QuitTitleTexH;
-        const float qSizeX = m_QuitTitleTexW;
-#else
-        const float qSizeY = 0.0f;
-        const float qSizeX = 0.0f;
-#endif
-        float quitY = -((TITLE_SLIDE_BASE - qSizeY * 0.5f - 5.0f)
-                        + (1.0f - m_Alpha) * (qSizeY + 10.0f));
-        float quitX = SCREEN_RIGHT_X - qSizeX * 0.5f;
-        m_QuitButton->pos.x = quitX;
-        m_QuitButton->pos.y = quitY;
+    // 5. Quit button (BSButton) per-frame position + active state.
+    // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: BSButton per-frame block.
+    if (m_QuitButton) {
+        if (m_Alpha <= 0.01f) {
+            m_QuitButton->SetActive(false);
+        } else {
+            int active = (m_PressIndex >= 2) ? 0 : (1 - m_PressIndex);
+            m_QuitButton->SetActive(active != 0);
+            m_QuitButton->m_DrawRotation.x = 0.0f;
+            m_QuitButton->SetPosition(Vec3(215.0f, (1.0f - m_Alpha) * -40.0f - 135.0f, 0.0f));
+        }
+        m_QuitButton->SetTextOffset(Vec3(-29.0f, 3.0f, 0.0f));
     }
 
     // 6. Resume + Retry button position recomputation.

@@ -640,4 +640,28 @@ void BakedStringBox::SetRotation(float degrees) {
     m_StoredRotation = degrees;
 }
 
+// ReshapeBounds  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
+// Resizes box dimensions (m_BoxWidth, m_BoxHeight); flag1/flag2 not RE'd, ignored.
+// TODO: v1.6.1 BakedStringBox::ReshapeBounds -- confirm flag1/flag2 field writes in binary.
+void BakedStringBox::ReshapeBounds(float width, float height, int flag1, int flag2) {
+    (void)flag1;
+    (void)flag2;
+    if (m_BoxWidth != width || m_BoxHeight != height) {
+        m_BoxWidth  = width;
+        m_BoxHeight = height;
+        m_Dirty     = true;
+    }
+}
+
+// SetFontSize  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
+// Updates m_FontSize and m_BaseFontSize, marks dirty.
+// TODO: v1.6.1 BakedStringBox::SetFontSize -- confirm exact binary field writes.
+void BakedStringBox::SetFontSize(float size) {
+    if (m_FontSize != size || m_BaseFontSize != size) {
+        m_FontSize     = size;
+        m_BaseFontSize = size;
+        m_Dirty        = true;
+    }
+}
+
 } // namespace Mortar

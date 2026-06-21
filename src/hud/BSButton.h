@@ -117,6 +117,25 @@ public:
     // Binary @ 0x15f3f4: str r1,[r0,#0x34]
     virtual void SetDrawOrder(int order);
 
+    // Non-virtual setters (binary call sites in PauseScreen::Update @0x001a5ebc)
+    // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: direct member writes.
+
+    // Stores callback Delegate0 into m_ClickCallback (+0xc0).
+    void SetCallback(const Mortar::Delegate0<void>& cb);
+
+    // Stores tex into m_Texture2 (+0x7c). flag arg: binary passes true;
+    // stored at m_bEnabled (+0xe4) on the BSButton -- but callers in PauseScreen
+    // always set active separately, so this is treated as (void)flag for now.
+    // TODO: v1.6.1 BSButton::SetTexture @unknown -- confirm bool flag field (may be m_bEnabled or a separate member).
+    void SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool flag);
+
+    // Writes base pos field (+0x08).
+    void SetPosition(const Vec3& p);
+
+    // Writes label offset: .y -> m_DrawRotation.y (+0xb4), .z -> m_DrawRotation.z (+0xb8).
+    // (Draw reads m_DrawRotation.y/.z as label translate offset.)
+    void SetTextOffset(const Vec3& o);
+
 private:
     // BSButton::UpdateTouchPosition -- copy latched slot's live touch pos into m_TouchX/m_TouchY.
     // Binary @ 0x15e428 (thunked via 0x10b32c). Member thiscall in binary.
