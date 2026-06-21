@@ -16,8 +16,7 @@ It is the "expensive once, cheap to draw repeatedly" counterpart of
 
 In the shipped Fruit Ninja Bada binary, BakedString is referenced from:
 * `MenuButton::SetText` (0x0014ebc0) -- but that function is itself
-  never called, so MenuButton labels never render. See
-  `docs/structs/gameplay-misc.md` "Label fields are dead code".
+  never called, so MenuButton labels never render (label fields are dead code).
 * (Possibly other widgets -- this doc is the spec, not an inventory.)
 
 This doc covers the **minimum spec** to port BakedString. Heap-allocated
@@ -39,8 +38,7 @@ destructor:
 | `+0x18` | `float` | `m_Height` | Maximum `glyph.yoffset + glyph.height` reached during baking, also in lineHeight-normalised units. Used by Draw for vertical alignment offsets. |
 
 Vertex format: each glyph contributes **6 vertices** in tristrip layout
-(4 corners + 2 degenerates), stride 0x24 bytes (= QUADCUSTOMVERTEX). See
-`docs/structs/gameplay-misc.md` "QUADCUSTOMVERTEX (vertex format)".
+(4 corners + 2 degenerates), stride 0x24 bytes (= QUADCUSTOMVERTEX).
 
 ## Construction (0x00197d64 / thunk @ 0x000fa314)
 
@@ -255,6 +253,5 @@ that consumer's context.
 ## See also
 
 * `docs/engine/font.md` -- Font class, glyph layout, normalised CharTemplate
-* `docs/structs/gameplay-misc.md` -- MenuButton struct + label dead-code note
 * `docs/engine/menubutton-backdrop.md` -- the menu button's Phase A backdrop
 * `docs/engine/rendering-pipeline.md` -- DrawTriStrip / MatrixStack lifecycle

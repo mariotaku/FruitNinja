@@ -7,12 +7,13 @@ All evidence below was extracted from the binary's own metadata (no external arc
 ## 1. Toolchain — confirmed direct from `.comment` section
 
 ```
-GCC: (Samsung Sourcery G++ 4.4-157) 4.4.1
+GCC: (Samsung Sourcery G++ 4.4-261) 4.4.1
+GCC: (Samsung Sourcery G++ 4.4-327) 4.4.1
 ```
 
-Repeated 24× across 24 compilation units in `.comment` (one entry per object file linked in). **`Samsung Sourcery G++ 4.4-157`** is Samsung's customized fork of Mentor Graphics' Sourcery G++ Lite distribution; the underlying GCC version is **4.4.1**.
+Repeated across 143 + 27 = 170 compilation units in `.comment` (one entry per object file linked in). The presence of two distinct build numbers (**`4.4-261`** dominant, **`4.4-327`** in 27 translation units) indicates the binary's object files were compiled across two Samsung SDK internal builds of GCC 4.4.1. Samsung's Sourcery fork used internal build-number versioning (`4.4-NNN`) rather than the public Mentor Graphics scheme (`YYYYqN`).
 
-Build number `4.4-157` is Samsung-internal and does not appear in the public Sourcery G++ Lite numbering scheme (`YYYYqN`). Mentor's stock 2009q3 (the public release that shipped GCC 4.4.1) corresponds roughly to this era.
+The open-source cross-build upstream equivalent is **Sourcery G++ Lite 2010q1** (GCC 4.4.1 public release). Operand-level ASM verification (asm-verify toolchain) has confirmed byte-identical code generation between the binary's 4.4-261/4.4-327 compiler and the open 2010q1 upstream for several functions.
 
 ## 2. Target architecture — `.ARM.attributes`
 
@@ -112,7 +113,7 @@ OpenFeint product/secret keys are present near the version string at `0x1a993e` 
 
 | Evidence | Constraint |
 |---|---|
-| `Samsung Sourcery G++ 4.4-157 / 4.4.1` | SDK before the 4.5.3 cutover |
+| `Samsung Sourcery G++ 4.4-261 / 4.4-327 / 4.4.1` | SDK before the 4.5.3 cutover |
 | `bada_SDK_2.0.0.zip` ships GCC 4.5.3 (per [`epi/bali-sdk`](https://github.com/epi/bali-sdk) Makefile) | Cutover happened ≤ bada 2.0.0 final |
 | `FGraphicsOpengl.so` + `FGraphicsEgl.so` NEEDED | Requires bada 1.2 or later |
 | Local install bada 2.0.5/2.0.6 → GCC 4.5.3 confirmed | (cross-check) |
@@ -136,7 +137,7 @@ Since the public installers / archive links are dead, the bali-sdk approach (bui
 3. Inside each, the toolchain source archive name is `bada-g++-X.Y-Z-src.tar.bz2`. Reading the filename alone confirms the toolchain version per SDK release without needing to extract.
 4. The bali-sdk Makefile is the reference for how to build a working `arm-bada-eabi-gcc` from these tarballs on Linux/macOS.
 
-For future operand-level verification refinement, building the 4.4.1 toolchain explicitly (rather than relying on our installed 4.5.3) would tighten register-allocation and instruction-selection alignment with the binary by another 5-10%.
+Operand-level verification against the binary's 4.4-261/4.4-327 compiler has been achieved using the open-source 2010q1 upstream (GCC 4.4.1 public release) — confirmed byte-identical code generation across tested function samples. This closes the alignment gap that existed when the exact compiler was unknown.
 
 ## 10. References / verifications
 

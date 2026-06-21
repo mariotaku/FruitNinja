@@ -43,7 +43,7 @@ path regardless of HD flag.
 
 | g_GameData offset | Decimal | SD filename | HD filename | Loader call site | Primary readers |
 |-------------------|---------|-------------|-------------|------------------|-----------------|
-| +0x50 | 80 | *(none — never loaded)* | — | n/a | *(none found)* |
+| +0x50 | 80 | *(never loaded)* | — | n/a | *(none found)* |
 | +0x54 | 84 | `fonts/font_fruit_ninja.fnt` | `fonts/font_fruit_ninja_HD.fnt` | `0x0010bf3a` | AboutScreen::Draw, ScoreControl, NotificationControl, FruitFactControl, ShopListItem, PowerUpShop, ScrollingMenuItem, LeaderboardItem, FriendLeaderboardItem, many others |
 | +0x58 | 88 | `fonts/fruit_ninja_numbers.fnt` | `fonts/fruit_ninja_numbers_HD.fnt` | `0x0010bf6e` (guarded: only if +0x58 == 0) | ScoreControl, TimeControl, GameOverScreen, ScoreMultiplyerBoard, ProgressionTimerControl |
 | +0x5C | 92 | *(none — never loaded)* | — | n/a | CoinCounter::Draw |
@@ -689,4 +689,3 @@ binary's centered-rectangle layout. This was fixed in a prior session.
 
 - `docs/engine/formats/fonts.md` — BMFont .fnt file format
 - `docs/engine/rendering-detail.md` — Font::Load, DrawString, QUADCUSTOMVERTEX
-- `docs/structs/game.md` — g_GameData full layout (+0x50..+0x80 region)
