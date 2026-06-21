@@ -153,7 +153,7 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
                        int fruitType, Vec3* restPos,
                        Mortar::Delegate1<void, HUDControl*>* onRemove)
 {
-    (void)tex;
+    if (tex) m_Texture = *tex;
     Init(*spawnPos,
          onTap ? *onTap : Mortar::Delegate0<void>(),
          fruitType,
