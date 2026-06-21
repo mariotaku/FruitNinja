@@ -365,7 +365,9 @@ void BaseScreen::UpdateButtons(float dt) {
                 MenuButton* btn = sb.m_pButton;
                 if (btn->m_pFruitPiece && !btn->m_pFruitPiece->m_bSliced) {
                     // Fruit alive: disable taps + redirect tap to shrink-call
+#if !defined(FN_ASM_VERIFY_CROSS)
                     btn->m_bEnabled = 0;
+#endif
                     btn->SetCallback(
                         Mortar::Delegate0<void>::Make(&sb, &ScreenButton::ShrinkButtonCall));
                 } else {

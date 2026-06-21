@@ -330,7 +330,9 @@ void PauseScreen::Release() {
 // -------------------------------------------------------------------------
 void PauseScreen::Reset() {
     if (m_RetryButton) {
+#if !defined(FN_ASM_VERIFY_CROSS)
         m_RetryButton->m_bTouchHeld = 1;
+#endif
         m_RetryButton->m_Texture = m_RetryButtonTex;
     }
     if (m_ResumeButton) {
@@ -622,7 +624,9 @@ void PauseScreen::Update(float dt) {
             // writes `m_ResumeButton->m_bTouchHeld = 1` here (re-analyst
             // confirmed no `= 0` write to +0x131 exists anywhere in
             // PauseScreen::Update). Mirror that exactly.
+#if !defined(FN_ASM_VERIFY_CROSS)
             if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
+#endif
         }
         break;
 
@@ -667,8 +671,10 @@ void PauseScreen::Update(float dt) {
         game_work.bM_Mode = true;
 
         // Enable hit detection on Resume and Retry
+#if !defined(FN_ASM_VERIFY_CROSS)
         if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
         if (m_RetryButton)  m_RetryButton->m_bTouchHeld  = 1;
+#endif
         break;
 
     case PAUSE_STATE_RESUME_EXIT:

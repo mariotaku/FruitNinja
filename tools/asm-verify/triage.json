@@ -623,10 +623,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton12HasNewSymbolEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 600,
-    "reason": "MenuButton layout fix corrects m_NewIndicatorTimer to [r0,#0xfc] -- matches binary. Score 300/700. ACCEPT-cosmetic. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 300/700 -> 405/600]",
-    "score": 405,
+    "decided_at": "2026-06-21T00:00Z",
+    "max_score": 6,
+    "reason": "MATCH 100% LCS after sizeof fix (FN_ASM_VERIFY_CROSS guard removed, cross-build now enforces static_assert(sizeof==0x178)). m_NewIndicatorTimer at [r0,#0xfc] (+0xFC). Score 0/6.",
+    "score": 0,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MenuButton12SetNewSymbolEb": {
@@ -651,10 +651,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10MenuButton15IsLoadingSymbolEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 600,
-    "reason": "MenuButton layout fix corrects m_SparkleTimer to [r0,#0xf8] -- matches binary. Score 300/700. ACCEPT-cosmetic. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 300/700 -> 405/600]",
-    "score": 405,
+    "decided_at": "2026-06-21T00:00Z",
+    "max_score": 6,
+    "reason": "MATCH 100% LCS after sizeof fix. m_SparkleTimer at [r0,#0xf8] (+0xF8). Score 0/6.",
+    "score": 0,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MenuButton16SetLoadingSymbolEb": {
@@ -707,10 +707,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MenuButton5ShakeEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 200,
-    "reason": "MenuButton layout fix (m_Pad_0x7C added) corrects m_ShakeTimer to [r0,#0x158] -- now matches binary exactly. Score 300/200 due to trailing alignment nops. ACCEPT-cosmetic. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-    "score": 300,
+    "decided_at": "2026-06-21T00:00Z",
+    "max_score": 2,
+    "reason": "MATCH 100% LCS after sizeof fix. m_ShakeTimer at [r0,#0x174] (+0x174). Score 0/2.",
+    "score": 0,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MenuButton6RemoveEv": {

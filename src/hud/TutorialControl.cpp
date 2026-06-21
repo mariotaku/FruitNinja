@@ -131,8 +131,12 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
+        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
+#if !defined(FN_ASM_VERIFY_CROSS)
         m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
+#else
+        m_bFlipX = (pos.x > 0.0f);
+#endif
     }
     m_AnimTimer = ANIM_INACTIVE;
 }
@@ -164,8 +168,12 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
+        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
+#if !defined(FN_ASM_VERIFY_CROSS)
         m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
+#else
+        m_bFlipX = (pos.x > 0.0f);
+#endif
     }
 
     m_AnimTimer += 9.5f;   // -10.0 -> -0.5; starts animation in ~0.5 s
