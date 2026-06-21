@@ -9,8 +9,6 @@ BUILD=/build
 # Stage source (same as verify.sh) — HOST is the bind-mount path
 HOST="${HOST:-/work}"
 rsync -aq --delete --exclude=build --exclude=tmp --exclude=.git --exclude=node_modules --exclude=_deps "$HOST/" "$SRC/"
-mkdir -p "$SRC/build/host/_deps/tinyxml2-src"
-cp "$HOST/build/host/_deps/tinyxml2-src/tinyxml2.h" "$SRC/build/host/_deps/tinyxml2-src/"
 mkdir -p "$SRC/FruitNinjaBada/Bin"
 cp "$HOST/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/" 2>/dev/null || true
 
