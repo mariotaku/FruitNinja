@@ -78,8 +78,8 @@ static const float SENSEI2_Y       =  56.0f;
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;    // binary: s_boardTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;  // binary: m_creditsTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;   // binary: m_senseiTexture
-// s_TexBackIcon: not ported (binary reads from game_work shared slot)
-// s_bContentLoaded: not ported (redundant — never read)
+static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
+// s_bContentLoaded: not ported (redundant -- never read)
 
 // -----------------------------------------------------------------------
 // GetVersionString
@@ -133,6 +133,7 @@ void AboutScreen::UnLoadContent()
     s_TexHaiku.SetNull();
     s_TexCredits.SetNull();
     s_TexSensei.SetNull();
+    s_TexBackIcon.SetNull();
 }
 
 // -----------------------------------------------------------------------
@@ -287,6 +288,12 @@ void AboutScreen::CreateBackButton()
     const int bombFruitType = FruitInfo_GetCount();
 
     m_pBackButton = new MenuButton();
+
+    // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: button m_Texture = back_icon
+    //   (game_work.pM_Textures[0x10]) set BEFORE Init; HUDControl3d::Draw early-returns on null m_Texture.
+    if (!s_TexBackIcon.IsValid())
+        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    m_pBackButton->m_Texture = s_TexBackIcon;
 
     m_pBackButton->Init(POS_BACK_BUTTON,
                         Mortar::Delegate0<void>::Make(this, &AboutScreen::BackCallback),
