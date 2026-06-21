@@ -65,3 +65,6 @@ pages/
 
 # Game screenshots
 /screenshots
+# Python bytecode cache
+__pycache__/
+*.pyc
