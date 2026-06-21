@@ -279,7 +279,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     loader.ReadSkeleton(model->m_skeleton);
 
     // meshCount: number of Mesh sub-resources that follow
-    if (loader.m_ReadPos + 4 > loader.DataSize()) {
+    if (loader.m_ReadCursor + 4 > loader.DataSize()) {
         LOG_ERROR("MeshManager", "'%s': truncated before meshCount", path);
         delete model;
         return Mortar::SmartPtr<Model>();
@@ -296,20 +296,20 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         Mesh* mesh = new Mesh();
 
         // ReadString -> mesh name
-        if (loader.m_ReadPos + 2 > loader.DataSize()) break;
+        if (loader.m_ReadCursor + 2 > loader.DataSize()) break;
         AsciiString meshName = loader.ReadString();
         mesh->m_Name = meshName.CStr();
 
         // Read<ulong> -> boneCount + per-bone BoneBinding data
-        if (loader.m_ReadPos + 4 > loader.DataSize()) break;
+        if (loader.m_ReadCursor + 4 > loader.DataSize()) break;
         uint32_t boneCount = loader.Read<uint32_t>();
         if (boneCount > 0 && boneCount < 256) {
             std::vector<BoneBinding> bones(boneCount);
             for (uint32_t i = 0; i < boneCount; i++) {
-                if (loader.m_ReadPos + 2 > loader.DataSize()) break;
+                if (loader.m_ReadCursor + 2 > loader.DataSize()) break;
                 AsciiString boneName = loader.ReadString();
                 bones[i].m_BoneName = boneName;
-                if (loader.m_ReadPos + 24 <= loader.DataSize()) {
+                if (loader.m_ReadCursor + 24 <= loader.DataSize()) {
                     loader.ReadBytes(&bones[i].m_Bounds.min, sizeof(Vec3));
                     loader.ReadBytes(&bones[i].m_Bounds.max, sizeof(Vec3));
                 }
@@ -318,7 +318,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         }
 
         // Read<ulong> -> materialCount + per-material sub-resource
-        if (loader.m_ReadPos + 4 > loader.DataSize()) break;
+        if (loader.m_ReadCursor + 4 > loader.DataSize()) break;
         uint32_t matCount = loader.Read<uint32_t>();
 
         // Local vector to hold textures indexed by material index.
@@ -358,7 +358,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
             // Read 4 color u32 + float specular (advancing read pos through file format)
             // Values are not stored since IsLit==false for all meshes.
-            if (matChild->m_ReadPos + 20 <= matChild->DataSize()) {
+            if (matChild->m_ReadCursor + 20 <= matChild->DataSize()) {
                 (void)matChild->Read<uint32_t>(); // color0
                 (void)matChild->Read<uint32_t>(); // color1
                 (void)matChild->Read<uint32_t>(); // color2
@@ -373,7 +373,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         }
 
         // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
-        if (loader.m_ReadPos + 4 > loader.DataSize()) {
+        if (loader.m_ReadCursor + 4 > loader.DataSize()) {
             model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
             continue;
         }
@@ -385,7 +385,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
             // Read<u16> matIndex -- from mesh loader (not geomChild), matches LoadMesh binary
             uint16_t matIndex = 0;
-            if (loader.m_ReadPos + 2 <= loader.DataSize()) {
+            if (loader.m_ReadCursor + 2 <= loader.DataSize()) {
                 matIndex = loader.Read<uint16_t>();
             }
 
