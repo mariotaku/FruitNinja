@@ -180,7 +180,7 @@ static void QuitToMenu() {
         // menu fruit/bomb entities survive gameplay (ResetGameEntities
         // re-chucks them, doesn't destroy them, per re-analyst
         // 2026-05-16). Port's gameplay teardown path destroys those
-        // entities (or nulls m_pFruitPiece via the OOB-kill back-ref
+        // entities (or nulls m_pTrackedFruit via the OOB-kill back-ref
         // clear in KillBomb), leaving the MenuButtons rendering an
         // empty ring after quit + Bomb::SetCallback rotation state
         // lost. Forcing a delete+re-create round-trip fixes both

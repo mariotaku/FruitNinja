@@ -8,9 +8,10 @@
 // ASM-spec v1.6.1 MenuButton @ ctor 0x0019bb08 / Init 0x0019b994, sizeof 0x178:
 //   Delegate0 is 0x24 bytes; m_DeletedCallback@0xAC fills to 0xCF (no field @0xCC --
 //   m_FadeAlphaIdx was a v1.5.x phantom); m_SparkleTimer@0xF8, m_NewIndicatorTimer@0xFC;
-//   m_RestScale@0x13C .z aliases m_bHasHitArea@0x144/m_bInteractive@0x145 (LE byte overlay);
-//   m_pFruitPiece@0x148 byte1 aliases m_bAcceptsTouch@0x149; m_pTrackedFruit@0x14C;
-//   m_ShakeTimer@0x174.
+//   m_RestScale@0x13C is a plain Vec3 (all 3 floats); m_bHasHitArea@0x148, m_bAcceptsTouch@0x149,
+//   2 pad bytes @0x14A; m_pTrackedFruit@0x14C; m_ShakeTimer@0x174.
+//   Init @0x0019b994 sets m_bAcceptsTouch(+0x149)=1 unconditionally.
+//   Update @0x0019a860 gates the entire touch block on byte @+0x149 != 0.
 // ASM-spec v1.6.1 MenuButton::HasNewSymbol @0x0019a5a0: m_NewIndicatorTimer(+0xFC) >= 0
 // ASM-spec v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608: m_SparkleTimer(+0xF8) >= 0
 // ASM-spec v1.6.1 MenuButton::Shake @0x0019a510: m_ShakeTimer(+0x174) = arg
@@ -180,33 +181,31 @@ public:
     // +0x13B: pad
     uint8_t         _pad13B;               // +0x13B
 
-    // +0x13C: target rest scale Vec3 (Init copies hitBounds). Binary spec: 12 bytes.
-    // Binary: byte0 of .z (@0x144) aliases m_bHasHitArea; byte1 (@0x145) aliases m_bInteractive.
-    // Access via HasHitArea()/SetHasHitArea()/IsInteractive()/SetInteractive() accessors so the
-    // offset holds on both ARM32 (binary) and host builds (8-byte pointer strides).
+    // +0x13C: target rest scale Vec3 (all 3 floats; Init writes all 3 via stmia).
+    // v1.6.1 MenuButton::Init @0x0019b994 / CreateFruit @0x0019b8c8 both write .z.
     Vec3            m_RestScale;           // +0x13C..+0x147
 
-    // +0x148: primary fruit pointer (Init=0; CreateFruit fills; used in SetToMultiplayerState).
-    // Binary: byte1 of the pointer word (@0x149) aliases m_bAcceptsTouch.
-    // Access via AcceptsTouch()/SetAcceptsTouch() so sizeof stays 0x178 on both builds.
-    Fruit*          m_pFruitPiece;         // +0x148
+    // +0x148: hit-area presence flag (Init sets from |hitBounds.x|+|hitBounds.y|>0)
+    uint8_t         m_bHasHitArea;        // +0x148
 
-    // +0x14C: tracked-fruit pointer for per-frame scale writes
+    // +0x149: accepts-touch flag (Init sets =1 unconditionally; Update gates touch block here)
+    // v1.6.1 MenuButton::Update @0x0019a860: gate at +0x149 != 0
+    uint8_t         m_bAcceptsTouch;      // +0x149
+
+    // +0x14A: padding
+    uint8_t         _pad14A[2];           // +0x14A..+0x14B
+
+    // +0x14C: tracked-fruit pointer for per-frame scale writes and KillFruit back-ref
+    // (Fruit::KillFruit nulls this via raw offset +0x14C on m_pOwner)
     Fruit*          m_pTrackedFruit;       // +0x14C
 
-    // Aliased-flag accessors: binary packs these into the float/pointer bytes above (LE).
-    // On the cross-build (ARM32 LE) these read/write the exact binary bytes.
-    // On the host x64 build they do the same -- host is also LE, and the float/pointer
-    // fields physically occupy those bytes before any pointer padding.
-    // v1.6.1 MenuButton::Init @0x0019b994 / Update @0x0019a860 / ctor @0x0019bb08
-    bool HasHitArea()    const { return ((const uint8_t*)&m_RestScale.z)[0] != 0; }
-    void SetHasHitArea(bool v) { ((uint8_t*)&m_RestScale.z)[0] = v ? 1 : 0; }
+    // Thin accessors backed by real flag members.
+    // v1.6.1 MenuButton::Init @0x0019b994 / Update @0x0019a860
+    bool HasHitArea()    const { return m_bHasHitArea != 0; }
+    void SetHasHitArea(bool v) { m_bHasHitArea = v ? 1 : 0; }
 
-    bool IsInteractive()    const { return ((const uint8_t*)&m_RestScale.z)[1] != 0; }
-    void SetInteractive(bool v)   { ((uint8_t*)&m_RestScale.z)[1] = v ? 1 : 0; }
-
-    bool AcceptsTouch()    const { return ((const uint8_t*)&m_pFruitPiece)[1] != 0; }
-    void SetAcceptsTouch(bool v) { ((uint8_t*)&m_pFruitPiece)[1] = v ? 1 : 0; }
+    bool AcceptsTouch()    const { return m_bAcceptsTouch != 0; }
+    void SetAcceptsTouch(bool v) { m_bAcceptsTouch = v ? 1 : 0; }
 
     // +0x150: backdrop-active flag (init = 1 for most buttons)
     uint8_t         m_bBackdropActive;     // +0x150
@@ -353,7 +352,8 @@ static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC,  "Men
 static_assert(__builtin_offsetof(MenuButton, m_BaseScale)         == 0x100, "MenuButton m_BaseScale offset");
 static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)       == 0x134, "MenuButton m_GrowInTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_RestScale)         == 0x13C, "MenuButton m_RestScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_pFruitPiece)       == 0x148, "MenuButton m_pFruitPiece offset");
+static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)       == 0x148, "MenuButton m_bHasHitArea offset");
+static_assert(__builtin_offsetof(MenuButton, m_bAcceptsTouch)     == 0x149, "MenuButton m_bAcceptsTouch offset");
 static_assert(__builtin_offsetof(MenuButton, m_pTrackedFruit)     == 0x14C, "MenuButton m_pTrackedFruit offset");
 static_assert(__builtin_offsetof(MenuButton, m_ShakeScale)        == 0x154, "MenuButton m_ShakeScale offset");
 static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)         == 0x164, "MenuButton m_HitInsetX offset");

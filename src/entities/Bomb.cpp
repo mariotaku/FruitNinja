@@ -433,8 +433,8 @@ void Bomb::Draw(Renderer& r) {
 // ASM-spec v1.6.1 Bomb::KillBomb @ 0x1d5660
 void Bomb::KillBomb() {
     flags |= ENT_KILLED;
-    if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pFruitPiece) == static_cast<void*>(this)) {
-        m_pOwnerButton->m_pFruitPiece = nullptr;
+    if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pTrackedFruit) == static_cast<void*>(this)) {
+        m_pOwnerButton->m_pTrackedFruit = nullptr;
     }
     if (m_pEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);

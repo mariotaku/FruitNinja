@@ -120,7 +120,8 @@ MenuButton::MenuButton()
       m_bClearsMenuItems(0),
       _pad13B(0),
       m_RestScale(0.0f, 0.0f, 0.0f),
-      m_pFruitPiece(nullptr),
+      m_bHasHitArea(0),
+      m_bAcceptsTouch(1),
       m_pTrackedFruit(nullptr),
       m_bBackdropActive(1),
       m_ShakeScale(1.0f, 0.85f, 0.85f),
@@ -141,10 +142,8 @@ MenuButton::MenuButton()
     _pad114[0] = 0; _pad114[1] = 0; _pad114[2] = 0; _pad114[3] = 0;
     _pad114[4] = 0; _pad114[5] = 0; _pad114[6] = 0; _pad114[7] = 0;
     _pad130[0] = 0; _pad130[1] = 0; _pad130[2] = 0; _pad130[3] = 0;
+    _pad14A[0] = 0; _pad14A[1] = 0;
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
-    SetHasHitArea(false);
-    SetInteractive(true);
-    SetAcceptsTouch(true);
 }
 
 MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
@@ -176,9 +175,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_FruitType      = fruitType;
     m_RestScale.x     = hitBounds.x;
     m_RestScale.y     = hitBounds.y;
+    m_RestScale.z     = hitBounds.z;
     SetHasHitArea((fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f);
-    SetInteractive(true);
-    SetAcceptsTouch(true);
+    m_bAcceptsTouch   = 1;
     // TODO: v1.6.1 MenuButton::Init @0x0019b994 -- binary sets m_bBackdropActive=0 here;
     // DojoScreen::CreateButtons then writes 1 for the back button specifically.
     // Port defaults to 1 (ring visible for all buttons). Functionally harmless since
@@ -203,7 +202,6 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_RotationSpeed  = -1.0f;
     m_RandomOffset   = 0.0f;
     m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
-    m_pFruitPiece    = nullptr;
     m_pFruitPiece_alt = nullptr;
     m_pEntity        = nullptr;
     m_pTrackedFruit  = nullptr;
@@ -231,7 +229,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     }
 }
 
-// Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pFruitPiece/m_pTrackedFruit.
+// Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pTrackedFruit.
 void MenuButton::CreateFruit() {
     Game* game = Game::GetInstance();
     if (!game || !game->actorManager) return;
@@ -267,7 +265,6 @@ void MenuButton::CreateFruit() {
         // Disables ballistic integration so the menu fruit stays pinned at the button
         // position; Fruit::Update gates pos/vel integration on this flag (binary 0x001df828).
         fruit->m_bBallisticEnable = 0;
-        m_pFruitPiece = fruit;
         // Binary @0x0019b608: m_RestScale = entity->scale * 200.0f (grow-in TARGET size).
         m_RestScale = m_pEntity->scale * 200.0f;
 
@@ -304,7 +301,7 @@ void MenuButton::CreateFruit() {
 // v1.6.1 MenuButton::Release @0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (asm-inspector)
 void MenuButton::Release() {
-    Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
+    Mortar::Entity* e = m_pTrackedFruit ? static_cast<Mortar::Entity*>(m_pTrackedFruit) : m_pEntity;
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
@@ -319,7 +316,6 @@ void MenuButton::Release() {
     DeletePeices();
     m_Texture.SetNull();
     m_pEntity = nullptr;
-    m_pFruitPiece = nullptr;
     m_pTrackedFruit = nullptr;
 }
 
@@ -359,15 +355,14 @@ void MenuButton::SetText(const char* /*text*/, Colour /*fg*/,
 
 // v1.6.1 MenuButton::Remove @0x0019d148
 void MenuButton::Remove() {
-    if (!m_pFruitPiece) return;
-    if (m_pFruitPiece->m_bSliced) return;
-    m_pFruitPiece->m_bDrawWhole = true;
+    if (!m_pTrackedFruit) return;
+    if (m_pTrackedFruit->m_bSliced) return;
+    m_pTrackedFruit->m_bDrawWhole = true;
     float vx = RandScaled(10.0f) - 5.0f;
     float vy = -(RandScaled(5.0f));
-    m_pFruitPiece->vel = Vec3(vx, vy, 0.0f);
-    m_pFruitPiece->m_SecondVel = m_pFruitPiece->vel;
+    m_pTrackedFruit->vel = Vec3(vx, vy, 0.0f);
+    m_pTrackedFruit->m_SecondVel = m_pTrackedFruit->vel;
     m_pEntity = nullptr;
-    m_pFruitPiece = nullptr;
     m_pTrackedFruit = nullptr;
 }
 
@@ -402,7 +397,7 @@ void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
 // Binary @ 0x19a794 -- kills owned fruit/bomb then defers to base SetToMultiplayerState
 bool MenuButton::SetToMultiplayerState() {
-    Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
+    Mortar::Entity* e = m_pTrackedFruit ? static_cast<Mortar::Entity*>(m_pTrackedFruit) : m_pEntity;
     if (!e) e = m_pFruitPiece_alt ? static_cast<Mortar::Entity*>(m_pFruitPiece_alt) : nullptr;
     if (e) {
         if (e->entityType == 0) {
@@ -412,7 +407,6 @@ bool MenuButton::SetToMultiplayerState() {
         }
     }
     m_pEntity = nullptr;
-    m_pFruitPiece = nullptr;
     m_pFruitPiece_alt = nullptr;
     m_pTrackedFruit = nullptr;
     return HUDControl::SetToMultiplayerState();

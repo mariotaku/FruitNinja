@@ -31,9 +31,9 @@ static const float FLING_VEL   = -10.0f;
 // = Vec3(0, 0, 0) — stops all motion.
 // ===================================================================
 void ScreenButton::ShrinkButtonCall() {
-    if (!m_pButton || !m_pButton->m_pFruitPiece) return;
+    if (!m_pButton || !m_pButton->m_pTrackedFruit) return;
 
-    Fruit* fruit = m_pButton->m_pFruitPiece;
+    Fruit* fruit = m_pButton->m_pTrackedFruit;
 
     // Save current pos → m_SecondPos (binary: +0xb8 = m_HalfB_pos)
     fruit->m_SecondPos = fruit->pos;
@@ -61,8 +61,8 @@ void ScreenButton::ShrinkButtonCall() {
 void ScreenButton::ControlDeleted(HUDControl* ctrl) {
     if (m_pButton != (MenuButton*)ctrl) return;
 
-    if (m_bShrunk && m_pButton->m_pFruitPiece) {
-        Fruit* fruit = m_pButton->m_pFruitPiece;
+    if (m_bShrunk && m_pButton->m_pTrackedFruit) {
+        Fruit* fruit = m_pButton->m_pTrackedFruit;
 
         // Teleport both halves off screen (DAT_00130fbc = -480.0)
         fruit->pos.y        = OFFSCREEN_Y;

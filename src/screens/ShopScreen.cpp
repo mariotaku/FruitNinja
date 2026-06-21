@@ -441,7 +441,7 @@ float ShopScreen::GetDescriptionTextXPos() {
 //
 // Binary disassembly (re-analysed 2026-04-28):
 //   if (m_pEquipButton == null) return
-//   fruit = m_pEquipButton->m_pFruitPiece
+//   fruit = m_pEquipButton->m_pTrackedFruit
 //   if (fruit == null) return
 //   if (Fruit::Sliced(fruit)) return            // already retracting
 //   fruit->m_bSliced = 1                         // +0xb4
@@ -457,7 +457,7 @@ float ShopScreen::GetDescriptionTextXPos() {
 // ---------------------------------------------------------------------------
 void ShopScreen::ShrinkBuyButton() {
     if (!m_pEquipButton) return;
-    Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+    Fruit* fruit = m_pEquipButton->m_pTrackedFruit;
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
@@ -487,7 +487,7 @@ void ShopScreen::ShrinkBuyButton() {
 // Binary pseudocode (re-RE'd 2026-05-09):
 //   if (param_1 == m_pEquipButton) {
 //       if (g_bShopButtonShrinking != 0) {
-//           fruit = param_1->m_pFruitPiece
+//           fruit = param_1->m_pTrackedFruit
 //           if (fruit) {
 //               fruit->m_SecondPos.y = -480.0   // DAT_0015d1e8 = 0xC3F00000
 //               fruit->pos.y         = -480.0   // DAT_0015d1e8
@@ -528,7 +528,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
             // m_Gravity=(0,-1,0) so the downward branch eventually returns true and
             // KillFruit reaps the fruit (Fruit::KillFruit sets flags|=0x10, which
             // ActorManager::Update polls per-tick).
-            Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+            Fruit* fruit = m_pEquipButton->m_pTrackedFruit;
             if (fruit) {
                 fruit->m_SecondPos.y = -480.0f;
                 fruit->pos.y         = -480.0f;
@@ -576,7 +576,7 @@ void ShopScreen::SetSelected(ShopListItem* item) {
     ItemInfo* info = item->m_pItemInfo;
     const int type_unlocked = Fruit::FruitType("watermelon", false);  // DAT_0015c970
     const int type_locked   = Fruit::FruitType("coconut",    false);  // DAT_0015c974
-    Fruit* equipFruit = m_pEquipButton->m_pFruitPiece;
+    Fruit* equipFruit = m_pEquipButton->m_pTrackedFruit;
     if (info->IsLocked() == 0) {
         // Item is unlocked: select_item.tex + watermelon fruit type
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x18
@@ -653,10 +653,10 @@ void ShopScreen::QuitShopCallback() {
     m_State = 2;
 
     // Fling the back/quit button. Binary @ 0x0015d55c indirects through
-    // m_pBuyButton->m_pFruitPiece (+0x134) and writes *(byte*)(piece+0x80)=1
+    // m_pBuyButton->m_pTrackedFruit (+0x14C) and writes *(byte*)(piece+0x80)=1
     // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
-    if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-        Fruit* piece = m_pBuyButton->m_pFruitPiece;
+    if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
+        Fruit* piece = m_pBuyButton->m_pTrackedFruit;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
@@ -695,7 +695,7 @@ void ShopScreen::EquipCallback() {
         // Programmatic-shrink path (EquipCallback @ 0x0015d649):
         // Copy current entity pos to m_HalfB_pos, then set all three
         // velocity fields from g_ShopFlingVec (SHOP_FLING_VEC = (0,1,0)).
-        Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+        Fruit* fruit = m_pEquipButton->m_pTrackedFruit;
         if (fruit) {
             // Binary EquipCallback shrink branch (0x0015d734..0x0015d76c).
             // The Vec3 source at GOT+0x73ec is the global zero vector
@@ -854,9 +854,9 @@ void ShopScreen::Update(float dt) {
                 if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
                 m_pBuyButton->m_RestScale = m_pBuyButton->m_RestScale * BUTTON_SCALE;
-                if (m_pBuyButton->m_pFruitPiece) {
-                    m_pBuyButton->m_pFruitPiece->scale =
-                        m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;
+                if (m_pBuyButton->m_pTrackedFruit) {
+                    m_pBuyButton->m_pTrackedFruit->scale =
+                        m_pBuyButton->m_pTrackedFruit->scale * BUTTON_SCALE;
                 }
             }
         }
@@ -939,10 +939,10 @@ void ShopScreen::Update(float dt) {
                         // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
                         m_pEquipButton->m_RestScale =
                             m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
-                        m_pEquipButton->m_pFruitPiece->scale =
-                            m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
+                        m_pEquipButton->m_pTrackedFruit->scale =
+                            m_pEquipButton->m_pTrackedFruit->scale * EQUIP_BUTTON_SCALE;
                         // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
-                        m_pEquipButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+                        m_pEquipButton->m_pTrackedFruit->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
                     }
                 }
             }
@@ -1001,10 +1001,10 @@ void ShopScreen::Update(float dt) {
         //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
         if (newAlpha >= ALPHA_STATE3_DONE) {
             // Still fading: fling old back-button if present.
-            // Binary: m_pBuyButton->m_pFruitPiece (+0x134); *(byte*)(piece+0x80)=1
+            // Binary: m_pBuyButton->m_pTrackedFruit (+0x14C); *(byte*)(piece+0x80)=1
             // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
-            if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-                Fruit* piece = m_pBuyButton->m_pFruitPiece;
+            if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
+                Fruit* piece = m_pBuyButton->m_pTrackedFruit;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
@@ -1048,9 +1048,9 @@ void ShopScreen::Update(float dt) {
         }
         // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
         m_pBuyButton->m_RestScale = m_pBuyButton->m_RestScale * BUTTON_SCALE;
-        if (m_pBuyButton->m_pFruitPiece) {
-            m_pBuyButton->m_pFruitPiece->scale =
-                m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;
+        if (m_pBuyButton->m_pTrackedFruit) {
+            m_pBuyButton->m_pTrackedFruit->scale =
+                m_pBuyButton->m_pTrackedFruit->scale * BUTTON_SCALE;
         }
         break;
     }
@@ -1063,11 +1063,11 @@ void ShopScreen::Update(float dt) {
     // ---- STATES 5 and 6: Wait for actors empty, then equip item ----
     case 5:
     case 6: {
-        // Fling buy button (same as state 3): use m_pFruitPiece per binary.
+        // Fling buy button (same as state 3): use m_pTrackedFruit per binary.
         // Binary writes *(byte*)(piece+0x80)=1 (Fruit+0x80 unconfirmed, no reader);
         // port omits the write.
-        if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-            Fruit* piece = m_pBuyButton->m_pFruitPiece;
+        if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
+            Fruit* piece = m_pBuyButton->m_pTrackedFruit;
             float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
