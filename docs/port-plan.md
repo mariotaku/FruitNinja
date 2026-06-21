@@ -83,7 +83,7 @@ All 3 states fully decompiled with Init/Update/Draw/Exit handlers:
 - State 1 (Frontend): Alternate entry, waits for DisplayManager ready
 - State 2 (Game): Full gameplay — GameInit (274 lines), GameUpdate (359 lines), GameDraw (211 lines), GameExit (98 lines)
 - Full entry point chain: OspMain → OspMain_AppBootstrap → FruitNinja lifecycle → OnTimerExpired → GameTick
-- See `docs/systems/state-machine.md`, `docs/functions/game-loop.md`, `docs/functions/game-update.md`
+- Full init/update/draw/exit game loop documented in `docs/engine/binary-static-init.md`
 
 ### Priority 2: T.NNN Helper Identification — DONE
 

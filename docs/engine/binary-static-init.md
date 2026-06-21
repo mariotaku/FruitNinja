@@ -321,8 +321,7 @@ These look like **default fruit-spawn rate / variance parameters** (1
 "base", a vec of (rate=8, variance=0.1) pair, etc.). The exact mapping
 to GameTask field names isn't established here — implementer should
 xref the `+0x68..+0xb0` field accesses inside `GameTask` member methods
-to identify which physics/spawn parameters they back. (`GameTask`
-struct layout in `docs/structs/`.) After
+to identify which physics/spawn parameters they back. After
 `+0xb0`, the body also copies `Vec3::Zero` into `+0xcc` and `+0xe4`,
 calls `ZeroInitPassthru_GT` on `+0x10c`, and then does
 `Colour::Colour(+0xf0, source)` — copy-ctor of a Colour from a static
@@ -657,11 +656,11 @@ verdict stands.
   - `DAT_0016d3e8/3ec/3f0/3f4 = 0.0/1.7/0.3/0.1` — GameTask spawn defaults.
 - Existing related docs:
   - `docs/engine/initialisation-asm-audit.md` — `OspMain` / `GamePreInitialise` bootstrap (BSS zero-fill, runs between `_GLOBAL__I_*` chain and `OnAppInitializing`).
-  - `docs/engine/system-manager.md` — `SystemManager` singleton.
-  - `docs/engine/rng.md` — random-number internals (verify seeding moment).
-  - `docs/structs/` — entity / GameTask struct layouts (resolve the GameTask `+0x68..+0xb0` field names).
-  - `docs/structs/game.md` — `g_GameData` 0x608-byte flat struct (Section 11 references).
-  - `docs/systems/string-hash.md` — runtime `StringTable` populator (Section 11.4).
+  - `SystemManager` singleton design and initialization.
+  - Random-number subsystem internals (verify seeding moment).
+  - Entity / GameTask struct layouts, especially `+0x68..+0xb0` field names and physics/spawn parameters.
+  - `g_GameData` 0x608-byte flat struct layout (Section 11 references).
+  - Runtime `StringTable` populator implementation (Section 11.4).
 
 ---
 
@@ -768,8 +767,7 @@ into the `g_GameData` flat struct at `0x001f43b8`.
   = 0x001ec130` (matches every other init).
 - `g_GameData` pointer: `*(int*)(0x001ec130 + DAT_0010ab48) =
   *(0x001f3ac0) = 0x001f43b8`.
-- Game struct in port docs: see `docs/structs/game.md` ("Game Data
-  Global g_GameData, 0x608 bytes").
+- `g_GameData` is a global flat struct of 0x608 bytes (details in Section 11 layout).
 
 ### 11.2 Three actions
 
@@ -777,7 +775,7 @@ into the `g_GameData` flat struct at `0x001f43b8`.
 | ----- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | 1     | **Black `Colour` write** at file-scope `Colour` slot                                                              | `iVar7 + DAT_0010ab44 + 0x38 = 0x001f43f8` (BGRA = `0,0,0,0xff`) | This is a standalone file-scope `Colour` global — registered with `__aeabi_atexit` for dtor at program exit. |
 | 2     | **`SmartPtr<Mortar::Texture>::SmartPtr(g_GameData + 0x17C)`**                                                     | `0x001f4534`                           | Default-constructs a null `SmartPtr<Texture>` field inside `g_GameData`. No texture loaded yet.             |
-| 3     | **`Mortar::StringTable::StringTable(g_GameData + 0x5B4)`**                                                        | `0x001f496c`                           | Default-constructs an empty `StringTable` (already noted in `docs/structs/game.md` line 270).               |
+| 3     | **`Mortar::StringTable::StringTable(g_GameData + 0x5B4)`**                                                        | `0x001f496c`                           | Default-constructs an empty `StringTable` (field at g_GameData+0x5B4).               |
 | 4     | **`Mortar::Delegate1<int,int>::Global` install at `g_GameData + 0xC` = `0x001f43c4`**                              | `0x001f43c4`                           | Sets the vtable to `_ZTVN6Mortar9Delegate1IiiE6GlobalE @ 0x001e8978` + 8 (skip past TypeInfo header).        |
 
 The Delegate1 sequence in pseudocode:
@@ -826,14 +824,12 @@ The Delegate1 vtables:
 `Mortar::StringTable::StringTable(g_GameData + 0x5B4)` is a **default
 ctor** — it constructs an EMPTY `StringTable`. **No string entries are
 inserted at static-init time.** The actual locale strings are loaded at
-runtime by `StringTableUtilInit() + StringTableUtilLoadStrings()` (per
-`docs/structs/game.md` line 279) which parses `.string_table_*.txt`
+runtime by `StringTableUtilInit() + StringTableUtilLoadStrings()` which parses `.string_table_*.txt`
 asset files.
 
 So Job B's "string table key/value table" is **empty at this point** —
 there are no statically-initialised entries to capture. The keys/values
-populate later from disk. See `docs/systems/string-hash.md` for the
-runtime population path.
+populate later from disk at runtime.
 
 ### 11.5 Port impact
 
