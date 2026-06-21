@@ -79,6 +79,7 @@ def split_sides(diff):
 # Mnemonic + operand extraction. Lines look like "ldr GREG, [GREG, #116]".
 MNEMONIC_RE = re.compile(r"^\s*([a-z][a-z0-9.]*)\b")
 OFFSET_RE = re.compile(r"\[GREG,\s*#(-?\d+)\]")           # [GREG, #116]
+ADD_IMM_RE = re.compile(r"\badd\w* GREG, GREG, #(-?\d+)\b")  # add GREG, GREG, #348 (&field)
 ANY_IMM_RE = re.compile(r"#(-?\d+(?:\.\d+)?)")             # any #imm (incl float)
 CALL_RE = re.compile(r"\b(?:CALL|bl|blx)\b")
 
@@ -288,6 +289,19 @@ def _offsets(lines):
     return s
 
 
+def _field_offsets(lines):
+    """Offsets a line references AS A STRUCT FIELD: memory-access displacements
+    `[GREG,#N]` PLUS address-computation `add GREG, GREG, #N` immediates. The
+    latter matters because taking &field (to pass a container base to an
+    out-of-line call) shows up as an `add`, not a load -- _offsets() misses it."""
+    s = set(_offsets(lines))
+    for l in lines:
+        m = ADD_IMM_RE.search(l)
+        if m:
+            s.add(int(m.group(1)))
+    return s
+
+
 def detect_addr_form(mangled, common, bin_only, port_only, lcs):
     """Benign instruction-selection / addressing-form difference: both sides
     assemble the SAME bytes into the SAME value via different opcodes -- e.g. a
@@ -327,6 +341,54 @@ def detect_addr_form(mangled, common, bin_only, port_only, lcs):
     )
     if window <= 4 and anchored:
         return ("addr-form", "LOW")
+    return None
+
+
+def detect_inline_stl(mangled, common, bin_only, port_only, lcs):
+    """Port INLINED a std::map / std::set / std::list method (find / count /
+    lower_bound / iterate) that the binary CALLED out-of-line. The binary passes
+    the container BASE to a `bl <method>`; the port's inlined tree/list walk
+    instead dereferences the container's _Rb_tree _M_header (or list sentinel) at
+    BASE+4, plus the cached _M_node_count at a small struct offset. To
+    detect_wrong_field this looks like a +4 field-offset shift -- but the struct
+    layout is IDENTICAL; it is pure libstdc++ inline-vs-out-of-line codegen.
+
+    FruitSaveData::IsAchievementUnlocked (#89, the canonical false positive):
+    binary `add GREG,#348; bl find` / `add GREG,#372; bl end`; port inlines to
+    `ldr [GREG,#352]` / `ldr [GREG,#376]` (= 348+4 / 372+4, the _M_header) plus a
+    node-count load -- offsetof and sizeof proven byte-exact via a real-header
+    compile. Must NOT be HIGH wrong-field. -> LOW std-inline.
+
+    Tell (all required, to avoid masking a genuine missing-call / wrong-field bug):
+      - the binary side has >=1 CALL that the port side dropped (port has strictly
+        fewer calls -- the library method got inlined away),
+      - >=1 port memory-offset equals a binary memory-offset + 4 (container base
+        vs its inlined _M_header deref),
+      - corroboration: either a SECOND such base+4 pairing, or a small-offset
+        node-count/header load (#8/#12/#16/#20/#24) on the port side.
+    Gated this tightly because a real wrong-field bug (ClearCombo) has NO calls and
+    a real missing-call bug won't also exhibit the base+4 _M_header fingerprint."""
+    bin_calls = len(_call_targets(bin_only))
+    port_calls = len(_call_targets(port_only))
+    # The binary calls a library container method that the port inlined away.
+    if bin_calls < 1 or port_calls >= bin_calls:
+        return None
+    # Use _field_offsets: the binary base is taken via `add GREG,#N` (to pass to
+    # the out-of-line call), while the port's inlined deref is a `[GREG,#N+4]` load.
+    bin_off = _field_offsets(bin_only)
+    port_off = _field_offsets(port_only)
+    if not bin_off or not port_off:
+        return None
+    # Inlined first-deref lands on (container base)+4 = the _Rb_tree _M_header
+    # / list sentinel that the binary reaches via the out-of-line call.
+    base_plus4 = sum(1 for b in bin_off if (b + 4) in port_off)
+    if base_plus4 < 1:
+        return None
+    # libstdc++ caches _M_node_count and touches the header node near the base;
+    # an inlined find/iterate loads it at a small struct offset.
+    has_count_load = any(o in port_off for o in (8, 12, 16, 20, 24))
+    if base_plus4 >= 2 or has_count_load:
+        return ("std-inline", "LOW")
     return None
 
 
@@ -385,6 +447,8 @@ DETECTORS = [
     detect_port_guard,    # benign(deferred), extra defensive guard
     detect_got_idiom,     # benign, PIC relocation noise
     detect_addr_form,     # benign, same-value different instruction selection
+    detect_inline_stl,    # benign, inlined std container method (base+4 _M_header)
+                          # -- MUST precede wrong_field so the +4 deref isn't a HIGH
     detect_wrong_field,   # HIGH real bug -- run before offset/const so a wholesale
                           # structural mismatch isn't downgraded to a 1-line offset
     detect_wrong_offset,  # MED real-ish, localized displacement
@@ -688,6 +752,29 @@ GATE_FIXTURES = {
             "  bx lr",
         ],
     },
+    # IsAchievementUnlocked (#89, the inline-STL false positive): binary takes the
+    # two std::map bases via `add #348` / `add #372` and CALLs find/end out-of-line;
+    # the port INLINES find, dereferencing each map's _M_header at base+4 (#352/#376)
+    # plus the _M_node_count (#16). offsetof + sizeof proven byte-exact via a real-
+    # header compile -> NOT a wrong-field bug. Must classify LOW std-inline, NOT HIGH.
+    "_ZN13FruitSaveData21IsAchievementUnlockedEm": {
+        "reason": "27.3% LCS (11p vs 6b)",
+        "diff": [
+            "  push {GREG, lr}",
+            "- add GREG, GREG, #348",
+            "- CALL <SYM>",
+            "- add GREG, GREG, #372",
+            "- CALL <SYM>",
+            "+ ldr GREG, [GREG, #352]",
+            "+ ldr GREG, [GREG, #16]",
+            "+ cmp GREG, #0",
+            "+ movls GREG, #1",
+            "+ ldr GREG, [GREG, #376]",
+            "+ ldr GREG, [GREG, #16]",
+            "+ cmp GREG, #0",
+            "  pop {GREG, pc}",
+        ],
+    },
 }
 
 
@@ -720,6 +807,10 @@ GATE = [
     ("_ZN4Math22GetUncompressedSizeLZ8EPKv", "LOW (benign)", _gate_low_any),
     ("_ZN10MenuButton12HasNewSymbolEv", "NOT HIGH", _gate_not_high),
     ("_ZN10MenuButton15IsLoadingSymbolEv", "NOT HIGH", _gate_not_high),
+    # Inlined std::map::find -> port derefs _M_header at base+4; must be demoted,
+    # NOT surfaced as a HIGH wrong-field (the #89 false positive).
+    ("_ZN13FruitSaveData21IsAchievementUnlockedEm", "LOW std-inline",
+     _gate_low_cause("std-inline")),
 ]
 
 
