@@ -1071,11 +1071,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11CoinCounter5ResetEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1300,
-    "reason": "CoinCounter method stub/divergence. Score 2295/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2295/1500 -> 2360/1300]",
-    "score": 2360,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "CoinCounter::Reset writes VFP field at wrong offset. Binary uses [this,#140]=0x8C and [this,#144]=0x90 for field_0x8C/field_0x90; port generates [this,#142] and [this,#20]. Offset 0x20=32 is wrong (should be 0x8C=140). HUDControl3d base size discrepancy. src/hud/CoinCounter.h:41 documents Reset touches field_0x8C and field_0x90. Score 9904/13 (762x).",
+    "asm_hash": "fdb428d5c90cbbe4",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11CoinCounter6UpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1827,18 +1826,16 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity10TouchMoveXEP10InputEvent": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 4100,
-    "reason": "TouchMoveX/Y: binary has full touch-delta stack compute block; port is Tier-2 stub. Also offset 0x11c vs 0x10 from Entity refactor. See src/entities/SlashEntity.h:155-161 // TODO: wire when Entity vtable input dispatch is ported. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5755/4400 -> 5965/4100]",
-    "score": 5965,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::TouchMoveX -- port lacks full touch-delta compute block; port stores to [this,#396]=0x18c vs binary [this,#16]. Tier-2 stub: input subsystem not wired. src/entities/SlashEntity.h (TouchMoveX comment). Task #83.",
+    "asm_hash": "0a9486164c9b9f2c",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11SlashEntity10TouchMoveYEP10InputEvent": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 4200,
-    "reason": "TouchMoveX/Y: binary has full touch-delta stack compute block; port is Tier-2 stub. Also offset 0x11c vs 0x10 from Entity refactor. See src/entities/SlashEntity.h:155-161 // TODO: wire when Entity vtable input dispatch is ported. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5855/4500 -> 5870/4200]",
-    "score": 5870,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::TouchMoveY -- same as TouchMoveX: port lacks coordinate-transform block, stores to [this,#400]=0x190 vs binary [this,#16]/[this,#20]. Tier-2 stub. Task #83.",
+    "asm_hash": "948be89a02ede6ac",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11SlashEntity11CreateGhostEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1897,11 +1894,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11SlashEntity15UpdateTouchDownEP10InputEvent": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 32600,
-    "reason": "Score drift 27055->27550/28000. Port routes touch-trail building through OnTouchActive(x,y); binary has equivalent logic inline. Semantically equivalent. See src/entities/SlashEntity.cpp:1539. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 27045/28000 -> 32985/32600]",
-    "score": 32985,
-    "verdict": "ACCEPT-cosmetic"
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::UpdateTouchDown -- Tier-2 stub with most touch-trail build logic missing. Binary 326 normalised lines; port contributes only a handful. Massive diff from input subsystem not wired. Task #83. Score 313000/326 (960x).",
+    "asm_hash": "3708c432eba39097",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11SlashEntity17CollideWithEntityEPN6Mortar6EntityE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1934,7 +1930,7 @@
   "_ZN11SlashEntity4InitEPvlP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 9300,
-    "reason": "SlashEntity::Init(void*,long,Vec3*) \u2014 binary does full 3-arg init (alloc, set state flags, copy vectors); port delegates to Init(0) as documented stub at src/entities/SlashEntity.cpp:1125. Binary path not yet ported. Score 9510/9200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12255/9200 -> 14785/9300]",
+    "reason": "SlashEntity::Init(void*,long,Vec3*) — binary does full 3-arg init (alloc, set state flags, copy vectors); port delegates to Init(0) as documented stub at src/entities/SlashEntity.cpp:1125. Binary path not yet ported. Score 9510/9200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12255/9200 -> 14785/9300]",
     "score": 14785,
     "verdict": "ACCEPT-deferred"
   },
@@ -2072,11 +2068,10 @@
     "decided_at": "2026-06-18T05:57Z"
   },
   "_ZN11SplatEntity18UpdateActiveSplatsEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 17100,
-    "reason": "SplatEntity method stub/divergence. Score 41515/17200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 40945/17200 -> 44325/17100]",
-    "score": 44325,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "SplatEntity::UpdateActiveSplats -- port uses simple iteration vs binary 3-array pool with inline colour-pick. Binary accesses [this,#28] vs port [this,#4]. Tier-2: splat pool iteration not ported to Mortar::MemoryPool. Score 141882/171.",
+    "asm_hash": "7f65ba0740d4e417",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11SplatEntity4DrawEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2179,7 +2174,7 @@
   "_ZN11TimeControl6UpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 35600,
-    "reason": "TimeControl::Update \u2014 IsTimedGame() gate removed and single slow-clock join point added per binary spec (0x001524a4). Remaining score divergence (47450/34700) driven by struct field offset mismatches: mMainScreen->m_TimeRemainingDisplay at port +0x134 vs binary +0x10c, and other pre-existing GameWork/MainScreen layout differences. Logic structure now matches binary. ACCEPT-deferred pending struct layout fixes. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 47920/34700 -> 51050/35600]",
+    "reason": "TimeControl::Update — IsTimedGame() gate removed and single slow-clock join point added per binary spec (0x001524a4). Remaining score divergence (47450/34700) driven by struct field offset mismatches: mMainScreen->m_TimeRemainingDisplay at port +0x134 vs binary +0x10c, and other pre-existing GameWork/MainScreen layout differences. Logic structure now matches binary. ACCEPT-deferred pending struct layout fixes. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 47920/34700 -> 51050/35600]",
     "score": 51050,
     "verdict": "ACCEPT-deferred"
   },
@@ -2413,11 +2408,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager7DestroyEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 8700,
-    "reason": "WaveManager::Destroy -- port has std::string cleanup + vector teardown vs binary shorter version; score 36330/5400 [refreshed 2026-05-24 post R8/R9/R10]. See src/game/WaveManager.cpp:582 TODO. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 36330/5400 -> 35478/8700]",
-    "score": 35478,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "WaveManager::Destroy -- binary uses intrusive MemoryPool teardown (offsets 0x180/0x184/0x752/0x756 + per-object refcount [reg,#-4] decrement); port has std::vector teardown. Tier-2. Task #81. Score 78300/87.",
+    "asm_hash": "efd73490e9881a5f",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11WaveManager7NewGameEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2483,11 +2477,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveQueItem14PerformCatchupEii": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 5500,
-    "reason": "Fresh-sweep: new untriaged symbol, raw verdict=DIVERGE, score 19255/5500. ACCEPT-deferred pending narrower investigation. [fresh-sweep 2026-06-14T05:19Z]",
-    "score": 19255,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "WaveQueItem::PerformCatchup -- binary allocates 200-byte stack array (sub sp,sp,#200) for per-wave-slot catchup arrays; port has no such allocation and completely different logic. Missing per-slot array iteration. Binary ldr [GREG,#32] vs port direct branch. Score 45704/55 (831x). RE PerformCatchup to port the 200-byte slot structure.",
+    "asm_hash": "5f171fcadffa20c3",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN11WaveQueItem9PopPlayerEPi": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2744,7 +2737,7 @@
   "_ZN12ScoreControl6UpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 56000,
-    "reason": "ScoreControl::Update \u2014 very large function (169%); port adds P2 score path stub and PowerUpManager integration. Documented gap at src/hud/ScoreControl.cpp:55 // TODO: P2 score when MP is ported. Additional structural divergence from PowerUpManager lerp changes on this branch. Score 99605/58800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 100120/58800 -> 100660/56000]",
+    "reason": "ScoreControl::Update — very large function (169%); port adds P2 score path stub and PowerUpManager integration. Documented gap at src/hud/ScoreControl.cpp:55 // TODO: P2 score when MP is ported. Additional structural divergence from PowerUpManager lerp changes on this branch. Score 99605/58800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 100120/58800 -> 100660/56000]",
     "score": 100660,
     "verdict": "ACCEPT-deferred"
   },
@@ -2777,18 +2770,16 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12ScoreControlD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6000,
-    "reason": "ScoreControl method stub/divergence. Score 7185/4500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7185/4500 -> 8005/6000]",
-    "score": 8005,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "ScoreControl dtor D1 -- binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port only destructs [this,#248]=0xF8 (m_FruitDigitTex). Two SmartPtr fields missing from ScoreControl at +0x100/+0x104. src/hud/ScoreControl.h declares sizeof=0x100 but binary requires >=0x108. Score 37000/60.",
+    "asm_hash": "5d1304c73edb90b2",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN12ScoreControlD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6000,
-    "reason": "ScoreControl method stub/divergence. Score 7185/4500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7185/4500 -> 8005/6000]",
-    "score": 8005,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "ScoreControl dtor D2 -- same as D1: binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port misses these. Two SmartPtr fields at +0x100/+0x104 missing. src/hud/ScoreControl.h size 0x100 too small. Score 37000/60.",
+    "asm_hash": "5d1304c73edb90b2",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN12ScreenButton14ControlDeletedEP10HUDControl": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2903,25 +2894,22 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12ShopListItemD0Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 8500,
-    "reason": "ShopListItem method stub/divergence. Score 4025/4000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4025/4000 -> 7685/8500]",
-    "score": 7685,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "ShopListItem dtor D0 -- binary destructs SmartPtrs at offsets 0x54/0x288/0x28C/0x294/0x298/0x29C not all present in port. Gap +0xDC..+0x25C not yet RE (src/hud/ShopListItem.h:36). Tier-2 deferred. Score 63999/85.",
+    "asm_hash": "e1d7298edb924da1",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN12ShopListItemD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 8300,
-    "reason": "ShopListItem method stub/divergence. Score 4065/3900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4065/3900 -> 7480/8300]",
-    "score": 7480,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "ShopListItem dtor D1 -- same as D0: binary destructs SmartPtrs at unmapped offsets. Gap +0xDC..+0x25C not RE (src/hud/ShopListItem.h:36). Tier-2 deferred. Score 66000/83.",
+    "asm_hash": "97c20273480ade37",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN12ShopListItemD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 8300,
-    "reason": "ShopListItem method stub/divergence. Score 4065/3900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4065/3900 -> 7480/8300]",
-    "score": 7480,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "ShopListItem dtor D2 -- same as D0/D1. Tier-2 deferred. Score 66000/83.",
+    "asm_hash": "97c20273480ade37",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN12SlashModInfo11SetEquippedEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2947,7 +2935,7 @@
   "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
     "decided_at": "2026-06-18T02:35Z",
     "max_score": 7000,
-    "reason": "SpeedControl::SoundNeedsLooping \u2014 binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7724/7100 -> 9239/7000]",
+    "reason": "SpeedControl::SoundNeedsLooping — binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7724/7100 -> 9239/7000]",
     "score": 8763,
     "verdict": "ACCEPT-deferred"
   },
@@ -3183,11 +3171,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveData21IsAchievementUnlockedEm": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 3300,
-    "reason": "Uses std::set::find vs binary tree-walk; same lookup. See src/game/FruitSaveData.cpp:187-191. [score refreshed 2026-05-17T00:00Z] [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8395/3300 -> 8590/3300]",
-    "score": 8590,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "FruitSaveData::IsAchievementUnlocked -- binary add #348 (0x15C) for m_PendingUnlocks and #372 (0x174) for m_UnlockedAchievements; port generates #352 (0x160) and #380 (0x17C). Both fields shifted +4 bytes vs binary. A 4-byte extra field before m_PendingUnlocks in src/game/FruitSaveData.h -- check around m_WaveScalar_v161 (+0x150)/m_WaveStates (+0x154). Score 29413/33 (891x).",
+    "asm_hash": "d28864066fd5b0cf",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN13FruitSaveData27PublishUnlockedAchievementsEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3211,11 +3198,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13FruitSaveData8GetTotalEm": {
-    "decided_at": "2026-06-18T02:55Z",
-    "max_score": 3400,
-    "reason": "FruitSaveData method stub/divergence. Score 5725/3200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5725/3200 -> 5355/3400]",
-    "score": 8095,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "FruitSaveData::GetTotal -- difference driven by x64 std::map node layout vs ARM32 binary 24-byte std::map. Functional lookup identical. Score 29041/34.",
+    "asm_hash": "09932f8dac7ca054",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN13FruitSaveData8SetTotalEPKcibb": {
     "decided_at": "2026-06-18T02:55Z",
@@ -3297,7 +3283,7 @@
   "_ZN13ScoreModifier11DeferPointsEi": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 1000,
-    "reason": "ScoreModifier::DeferPoints \u2014 documented stub; binary accumulates directly into m_DeferredPoints via field at +0x38 while port dispatches through m_pOwner->AddDeferedPoints(). Semantics equivalent. See src/game/ScoreModifier.cpp:94 // ScoreModifier::DeferPoints is not yet RE'd. Score 1860/1000. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 500/1000 -> 700/1000]",
+    "reason": "ScoreModifier::DeferPoints — documented stub; binary accumulates directly into m_DeferredPoints via field at +0x38 while port dispatches through m_pOwner->AddDeferedPoints(). Semantics equivalent. See src/game/ScoreModifier.cpp:94 // ScoreModifier::DeferPoints is not yet RE'd. Score 1860/1000. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 500/1000 -> 700/1000]",
     "score": 700,
     "verdict": "ACCEPT-deferred"
   },
@@ -3883,11 +3869,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14GameOverScreen12PostCallbackEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 600,
-    "reason": "Binary: stores 0 to [r0,#0xcd], then conditionally sets [r0,#0xcc]=1 (if param==0) or [r0,#0xcc]=0 (if param!=0). Port: clamps param via rsbs/it/movcc then stores result to [r0,#0xcc] and 0 to [r0,#0xcd]. Same observable field values for param in {0,1} but different instruction ordering. Acceptable cosmetic/scheduling difference. Score 1070/600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1070/600 -> 1400/600]",
-    "score": 1400,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "GameOverScreen::PostCallback -- binary strb to [this,#236]=0xEC (m_PostInProgress) and [this,#237]=0xED (m_PostOk); port strb to [this,#204]=0xCC and [this,#205]=0xCD. Port 0x20=32 bytes too low. src/screens/GameOverScreen.h places m_PostOk at +0xCC but binary puts it at +0xEC. Missing 32 bytes in GameOverScreen layout between +0x7C and +0xCC. Score 4000/6 (667x).",
+    "asm_hash": "2c636ad7e57a3429",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN14GameOverScreen12QuitCallbackEv": {
     "decided_at": "2026-06-14T07:00Z",
@@ -4102,7 +4087,7 @@
   "_ZN14PowerUpManager11SetDefaultsEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 3200,
-    "reason": "PowerUpManager::SetDefaults \u2014 binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
+    "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
     "score": 2860,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -4116,7 +4101,7 @@
   "_ZN14PowerUpManager14UnloadTexturesEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 4100,
-    "reason": "PowerUpManager::UnloadTextures \u2014 binary uses single std::map iterator loop pattern with binary STL; port iterates m_AllPowerUps then m_ScreenEffectPool with port std::map iterators. Semantically identical two-loop UnloadTextures walk. GOT/iterator codegen differences only. Score 4295/4100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4295/4100 -> 4100/4100]",
+    "reason": "PowerUpManager::UnloadTextures — binary uses single std::map iterator loop pattern with binary STL; port iterates m_AllPowerUps then m_ScreenEffectPool with port std::map iterators. Semantically identical two-loop UnloadTextures walk. GOT/iterator codegen differences only. Score 4295/4100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4295/4100 -> 4100/4100]",
     "score": 4100,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -4863,11 +4848,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager18GetEmitterTemplateEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1700,
-    "reason": "PSPParticleManager method stub/divergence. Score 3325/1600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3325/1600 -> 3430/1700]",
-    "score": 3430,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "PSPParticleManager::GetEmitterTemplate -- binary reads m_EmitterTemplates at [this,#44/48] (=0x2C/0x30); port reads [this,#32/36] (=0x20/0x24). Port is 12 bytes low. Singleton base or undeclared field before m_EmitterTemplates in src/engine/particle/PSPParticleManager.h adds 12 bytes in binary that port lacks. Score 15000/17 (882x).",
+    "asm_hash": "d8526bfa8ee72f34",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN18PSPParticleManager4DrawEfbi": {
     "decided_at": "2026-06-18T05:57Z",
@@ -5213,11 +5197,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Bomb11LoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 12800,
-    "reason": "Score 20217/12700. LoadContent uses named MeshManager/ActorManager singletons. Large function. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 20217/12700 -> 21450/12800]",
-    "score": 21450,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Bomb::LoadContent -- large function; [GREG,#48] vs [GREG,#24] for static load-guard byte is in a global/static struct. Port lacks SmartPtr content-load blocks. Tier-2 deferred. Score 96438/128.",
+    "asm_hash": "e2b29359255b2e22",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN4Bomb11SetCallbackEN6Mortar9Delegate0IvEEP10MenuButton": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5605,11 +5588,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit14RotateFacingUpEb8_Vector3IfE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 9400,
-    "reason": "Score improved 24316->23075/9900. Port calls cosf/sinf for quaternion construction; binary uses pre-computed angle16 constants. ASM-verified 2026-05-20. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 23075/9900 -> 21495/9400]",
-    "score": 21495,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Fruit::RotateFacingUp -- port uses cosf/sinf for quaternion; binary uses precomputed angle-16 lookup. Both access same quaternion fields (+0xE0-+0x10C). ASM-verified 2026-05-20. Score 78020/94.",
+    "asm_hash": "183eaafcdecfcd63",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN5Fruit15EnableCollisionEb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5668,11 +5650,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit18DestroyFruitModelsEv": {
-    "decided_at": "2026-06-18T05:57Z",
-    "max_score": 7600,
-    "reason": "Fruit::DestroyFruitModels -- port iterates extended model array; Tier-2 pending FruitModelInfo struct expansion. Score 21025/6800. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 21025/6800 -> 22780/7600]",
-    "score": 28210,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Fruit::DestroyFruitModels -- binary accesses [GREG,#212]=0xD4/[GREG,#216]=0xD8 for per-fruit model flags; port iterates SmartPtr array differently. Pending FruitModelInfo expansion (src/entities/Fruit.h). Tier-2 deferred. Score 66420/76.",
+    "asm_hash": "79b4fffd359f036e",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN5Fruit19UpdateBombAvoidanceEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6874,7 +6855,7 @@
   "_ZN6Mortar14AnimationStateD2Ev": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 3400,
-    "reason": "Same as D1Ev \u2014 compiler synthesis vs explicit order. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "Same as D1Ev — compiler synthesis vs explicit order. [re-triaged 2026-06-17T16:29Z]",
     "score": 15190,
     "verdict": "ACCEPT-deferred"
   },
@@ -7130,11 +7111,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar18Utf8StringIterator7AdvanceEi": {
-    "decided_at": "2026-06-18T01:15Z",
-    "max_score": 2100,
-    "reason": "STL vs raw pointer. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
-    "score": 9995,
-    "verdict": "ACCEPT-cosmetic"
+    "verdict": "FIX-NEEDED",
+    "reason": "Utf8StringIterator::Advance -- binary reads cursor from [this,+0x00]/[this,+0x04], stores to [this,+0x00]/[this,+0x08]; port reads [this,#16]=+0x10 (m_PrevBegin) and stores to [this,#16]/[this,#24]=+0x18. Port offsets +0x10 higher than binary. src/engine/render/Utf8StringProxy.h has vptr at +0x00 but binary Advance reads +0x00 as cursor -- suggests no vptr in binary proxy or layout shift. Hash changed from prior ACCEPT-cosmetic. Score 19400/21 (924x).",
+    "asm_hash": "16f1301a94b3ae32",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN6Mortar19IsParentFolderTokenERKNS_11AsciiStringE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7466,11 +7446,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar5Model14SetEffectGroupENS_8SmartPtrINS_11EffectGroupEEE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 3900,
-    "reason": "Mortar::EffectGroup: Defunct DrawEffectContainer/SharedEffectProperties system. See src/engine/asset/Mesh.cpp:444+ Defunct markers. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 6580/6100 -> 4595/3900]",
-    "score": 4595,
-    "verdict": "ACCEPT-defunct"
+    "verdict": "ACCEPT-defunct",
+    "reason": "Mortar::Model::SetEffectGroup -- EffectGroup subsystem defunct. Port is no-op stub. Binary effect-binding logic elided by policy. See Defunct markers in src/engine/asset/Mesh.cpp. Score 31999/39.",
+    "asm_hash": "8b17cea539a3c8f3",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN6Mortar5Model15UpdateBoneLinksEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7503,7 +7482,7 @@
   "_ZN6Mortar5Touch11GetAnyTouchEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 1500,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 7195,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -7524,14 +7503,14 @@
   "_ZN6Mortar5Touch28SendIndividualTouchCallbacksEPNS_11InputDeviceE": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 8400,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 56420,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar5Touch5ClearEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 1500,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 7500,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -7545,7 +7524,7 @@
   "_ZN6Mortar5Touch7_UpdateEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 2000,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 8565,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -7856,11 +7835,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7PowerUp11AddModifierEP12GameModifier": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 800,
-    "reason": "PowerUp method stub/divergence. Score 2035/800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2045/800 -> 1710/800]",
-    "score": 1710,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "PowerUp::AddModifier -- binary stores stack addr to [this,#28]=+0x1C (not a documented PowerUp field; m_ModList at +0x04, m_NameHash at +0x0C); port calls operator new(12) and chains STL list node. Binary uses non-STL list structure at +0x1C not present in src/game/PowerUp.h. Score 6153/8 (769x).",
+    "asm_hash": "8a263344804c25bc",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN7PowerUp12LoadTexturesEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -7900,7 +7878,7 @@
   "_ZN7PowerUp16SetDeferedPointsEi": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 2900,
-    "reason": "PowerUp::SetDeferedPoints \u2014 binary and port both walk m_ModList and call DeferPoints on type-2 (ScoreModifier) entries. Diff is entirely std::list iterator codegen: binary uses Sourcery-GCC 4.4.1 linked-list node traversal directly; port uses C++11-style iterator. Logic confirmed ASM-verified. Score 3210/2900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3800/2900 -> 3600/2900]",
+    "reason": "PowerUp::SetDeferedPoints — binary and port both walk m_ModList and call DeferPoints on type-2 (ScoreModifier) entries. Diff is entirely std::list iterator codegen: binary uses Sourcery-GCC 4.4.1 linked-list node traversal directly; port uses C++11-style iterator. Logic confirmed ASM-verified. Score 3210/2900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3800/2900 -> 3600/2900]",
     "score": 3600,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -8095,10 +8073,9 @@
   },
   "_ZN9BombBlast16DrawActiveBlastsEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "BombBlast::DrawActiveBlasts -- score 31610/6800 (grew from 31055 after R8/R9/R10 MeshDraw consolidation). Large entity Draw method with multiple SmartPtr/GOT/MatrixManager interactions and full sprite-batch state setup. Tier-2 entity-draw divergence. ACCEPT-deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-    "score": 12545,
-    "max_score": 8100,
-    "decided_at": "2026-06-18T05:57Z"
+    "reason": "BombBlast::DrawActiveBlasts -- port misses entity-list traversal, blast vtable dispatch, texture-state setup. Binary accesses [GREG,#44] and pool fields not in port. Tier-2 entity-draw deferred. Score 53129/81.",
+    "asm_hash": "cf9d6ed7e40f3406",
+    "decided_at": "2026-06-21T00:00Z"
   },
   "_ZN9BombBlast4InitEPvlP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8995,5 +8972,11 @@
     "score": 9898,
     "max_score": 2000,
     "decided_at": "2026-06-18T03:11Z"
+  },
+  "_ZN6Mortar14BakedStringBox11SetGradientE6ColourS1_b": {
+    "verdict": "FIX-NEEDED",
+    "reason": "BakedStringBox::SetGradient -- binary loads gradient fields as 4-byte words at [this,#124/128/140/144] (=0x7C/0x80/0x8C/0x90, matching m_GradTop/Bottom/Mode/GradFlag) with change-detect; port stores individual colour bytes at [this,#77..84] in a completely different layout. Port reimplementation of SetGradient in src/engine/render/BakedStringBox.h does not match binary access pattern at 0x0024566c. Score 61000/69 (884x).",
+    "asm_hash": "57dade4603a2e833",
+    "decided_at": "2026-06-21T00:00Z"
   }
 }
