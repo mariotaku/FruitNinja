@@ -104,21 +104,17 @@ public:
     void SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag);
 
     // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site)
-    // Sets a world-space clip rect for Draw. (x0, y0) = min corner, (x1, y1) = max.
+    // Sets a world-space clip rect for Draw. (x0, y0) = top-left corner; w, h = width/height in worldspace units.
     // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args are (-240, -46, 400, 108).
-    // TODO: v1.6.1 0x0015ab58 (BakedStringBox::SetWorldspaceClipping) -- full clip impl not RE'd; stored only.
-    void SetWorldspaceClipping(float x0, float y0, float x1, float y1);
+    // DIFFERS: original = CPU ClipAgainstPlanes geometry clip (v1.6.1 BakedStringBox::ClipToRectangle @0x00246358
+    //   / RebuildClipping @0x002464d0), using glScissor because GLES2 has no fixed-function user clip planes
+    //   and per-glyph CPU mesh clipping isn't ported.
+    void SetWorldspaceClipping(float x0, float y0, float w, float h);
 
     // Update  binary @ 0x0015ab80 (AddLine call site)
     // Forces an immediate layout rebuild (flushes dirty state).
     // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: called after SetText/SetColour/SetWorldspaceClipping.
     void Update();
-
-    // SetRotation  binary @ 0x0015a1c4 (DrawMarquee call site)
-    // Stores a persistent rotation (degrees) applied by subsequent Draw calls with rot=stored.
-    // ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138: m_HeadingBox->SetRotation(90.0f).
-    // TODO: v1.6.1 0x0015a1c4 (BakedStringBox::SetRotation) -- exact binary field offset not RE'd.
-    void SetRotation(float degrees);
 
     // ReshapeBounds  binary @ 0x00245ab8
     // Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_Param8=p4, m_Dirty=true unconditionally.
@@ -128,9 +124,6 @@ public:
     // Sets m_FontSize and m_BaseFontSize, marks dirty.
     // TODO: v1.6.1 BakedStringBox::SetFontSize -- confirm exact binary field writes.
     void SetFontSize(float size);
-
-    // GetRotation -- port helper so DrawMarquee can retrieve the stored rotation.
-    float GetRotation() const { return m_StoredRotation; }
 
     // SetShadow  binary @ 0x002462c0
     // Sets the shadow parameters (scale, colour, offset, enable flag).
@@ -188,12 +181,10 @@ private:
     Colour  m_StrokeCol1;         // binary 0x60
     Colour  m_StrokeCol2;         // binary 0x64
 
-    // Worldspace clip rect (from SetWorldspaceClipping); stored but not yet applied in Draw.
-    float   m_ClipX0, m_ClipY0, m_ClipX1, m_ClipY1;
+    // Worldspace clip rect (from SetWorldspaceClipping).
+    // (m_ClipX0, m_ClipY0) = top-left corner; m_ClipW/m_ClipH = extent in worldspace units.
+    float   m_ClipX0, m_ClipY0, m_ClipW, m_ClipH;
     bool    m_HasClip;
-
-    // Persistent rotation in degrees (from SetRotation).
-    float   m_StoredRotation;
 
     // Laid-out lines (rebuilt by Layout()).
     std::vector<BakedStringBoxLine> m_Lines;
