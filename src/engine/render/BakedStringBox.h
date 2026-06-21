@@ -103,6 +103,26 @@ public:
     // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
     void SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag);
 
+    // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site)
+    // Sets a world-space clip rect for Draw. (x0, y0) = min corner, (x1, y1) = max.
+    // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args are (-240, -46, 400, 108).
+    // TODO: v1.6.1 0x0015ab58 (BakedStringBox::SetWorldspaceClipping) -- full clip impl not RE'd; stored only.
+    void SetWorldspaceClipping(float x0, float y0, float x1, float y1);
+
+    // Update  binary @ 0x0015ab80 (AddLine call site)
+    // Forces an immediate layout rebuild (flushes dirty state).
+    // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: called after SetText/SetColour/SetWorldspaceClipping.
+    void Update();
+
+    // SetRotation  binary @ 0x0015a1c4 (DrawMarquee call site)
+    // Stores a persistent rotation (degrees) applied by subsequent Draw calls with rot=stored.
+    // ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138: m_HeadingBox->SetRotation(90.0f).
+    // TODO: v1.6.1 0x0015a1c4 (BakedStringBox::SetRotation) -- exact binary field offset not RE'd.
+    void SetRotation(float degrees);
+
+    // GetRotation -- port helper so DrawMarquee can retrieve the stored rotation.
+    float GetRotation() const { return m_StoredRotation; }
+
     // SetShadow  binary @ 0x002462c0
     // Sets the shadow parameters (scale, colour, offset, enable flag).
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
@@ -158,6 +178,13 @@ private:
     Colour  m_StrokeCol0;         // binary 0x5c
     Colour  m_StrokeCol1;         // binary 0x60
     Colour  m_StrokeCol2;         // binary 0x64
+
+    // Worldspace clip rect (from SetWorldspaceClipping); stored but not yet applied in Draw.
+    float   m_ClipX0, m_ClipY0, m_ClipX1, m_ClipY1;
+    bool    m_HasClip;
+
+    // Persistent rotation in degrees (from SetRotation).
+    float   m_StoredRotation;
 
     // Laid-out lines (rebuilt by Layout()).
     std::vector<BakedStringBoxLine> m_Lines;

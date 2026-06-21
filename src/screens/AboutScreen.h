@@ -5,18 +5,22 @@
 // AboutScreen : HUDControl3d  (no BaseScreen, direct subclass)
 //
 // v1.6.1 binary refs:
-//   Constructor      0x0015b764  (AboutScreen(DojoScreen*))
-//   LoadContent      0x0012ec14  (static, loads textures)
-//   UnLoadContent    0x0012efd8  (static, releases texture SmartPtrs)
-//   Draw             0x0012f394  (board panel + credits + sensei quads)
-//   NewDraw          0x0015a264  (BakedStringBox credit text pass)
+//   Constructor           0x0015b764  (AboutScreen(DojoScreen*))
+//   LoadContent           0x0015b6d4  (static, loads textures)
+//   UnLoadContent         (static, releases texture SmartPtrs)
+//   Draw                  0x0015a654  (board panel + credits quad + sensei quads)
+//   NewDraw               0x0015a264  (BakedStringBox credit text pass)
+//   CreateCreditsMarquee  0x0015ac0c  (builds m_Marquees scrolling credits list)
+//   AddLine               0x0015aaf0  (allocates one MarqueeText + BakedStringBox)
+//   DrawMarquee           0x0015a138  (draws m_Marquees + heading box, called from NewDraw)
+//   Update                0x0015c350  (state machine + marquee scroll)
 //
 // Credits / about page shown as a child of DojoScreen.
 // Pops up when DojoScreen::AboutCallback fires (state 3).
 //
 // Textures (static, loaded by LoadContent):
 //   haikus.tex     -> s_TexHaiku   (background panel, assigned to base m_Texture in ctor)
-//   credits.tex    -> s_TexCredits (sliding credits quad, v1.6.1 still loaded)
+//   credits.tex    -> s_TexCredits (lower sliding credits plate)
 //   sensei.tex     -> s_TexSensei  (slides in from right in Draw block D)
 //
 // Binary layout (HUDControl3d base = 0x7C bytes):
@@ -29,7 +33,7 @@
 //   +0x9C  int32_t            m_State             0=in, 1=idle, 2=out (init 0)
 //   // v1.6.1 additions: BakedStringBox* members (AboutScreen ctor @0x0015b764)
 //   +0xA0  BakedStringBox*    m_TitleBox          LSTR 0x3c3
-//   +0xA4  BakedStringBox*    m_HeadingBox        LSTR 0x349
+//   +0xA4  BakedStringBox*    m_HeadingBox        LSTR 0x349 (positioned by DrawMarquee)
 //   +0xA8  BakedStringBox*    m_VersionBox        "V 1.6.1"
 //   +0xAC  BakedStringBox*    m_CreditLine0       LSTR 0x34b
 //   +0xB0  BakedStringBox*    m_CreditLine1       LSTR 0x34c
@@ -37,8 +41,9 @@
 //   +0xB8  BakedStringBox*    m_CreditLine3       LSTR 0x34e
 //   +0xBC  BakedStringBox*    m_CreditLine4       LSTR 0x34f
 //   +0xC0  BakedStringBox*    m_CreditLine5       LSTR 0x350
-//   TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- m_Marquees vector
-//         layout offset + size not yet RE'd; reserve TBD.
+//   // v1.6.1 marquee members (CreateCreditsMarquee @0x0015ac0c):
+//   +0xC4  std::vector<MarqueeText*>  m_Marquees  (12 bytes on ARM32)
+//   +0xD0  float              m_EntryDelay         scroll delay countdown (ctor=3.0f)
 //
 // State machine:
 //   0: alpha lerp (+= (1-alpha)*0.125).
@@ -51,11 +56,22 @@
 #include "hud/HUDControl3d.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+#include <vector>
 
 namespace Mortar { class BakedStringBox; }
 
 class MenuButton;
 class DojoScreen;
+
+// MarqueeText -- scrolling credit list entry (0x10 bytes).
+// ASM-spec v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c / AddLine @0x0015aaf0:
+//   +0x00  Vec3                pos         (x=layout, y=scroll accumulator, z=0)
+//   +0x0C  Mortar::BakedStringBox*  m_pBox
+struct MarqueeText {
+    Vec3                       pos;    // +0x00
+    Mortar::BakedStringBox*    m_pBox; // +0x0C
+    MarqueeText() : pos(0.0f, 0.0f, 0.0f), m_pBox(0) {}
+};
 
 class AboutScreen : public HUDControl3d {
 public:
@@ -65,7 +81,7 @@ public:
 
     ~AboutScreen() override;
 
-    // v1.6.1 AboutScreen::LoadContent @ 0x0012ec14
+    // v1.6.1 AboutScreen::LoadContent @ 0x0015b6d4
     // Loads haikus.tex, credits.tex, sensei.tex into static storage.
     // Called from ctor; binary has no early-return guard.
     static void LoadContent();
@@ -117,7 +133,7 @@ private:
     // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: nine BakedStringBox
     // ptrs allocated in ctor; drawn by NewDraw @0x0015a264.
     Mortar::BakedStringBox* m_TitleBox;     // +0xA0: LSTR 0x3c3 (LSTR_ABOUT_TITLE)
-    Mortar::BakedStringBox* m_HeadingBox;   // +0xA4: LSTR 0x349 (LSTR_ABOUT_HEADING)
+    Mortar::BakedStringBox* m_HeadingBox;   // +0xA4: LSTR 0x349 (LSTR_ABOUT_HEADING), positioned by DrawMarquee
     Mortar::BakedStringBox* m_VersionBox;   // +0xA8: "V 1.6.1" (sprintf'd)
     Mortar::BakedStringBox* m_CreditLine0;  // +0xAC: LSTR 0x34b (LSTR_ABOUT_CREDIT0)
     Mortar::BakedStringBox* m_CreditLine1;  // +0xB0: LSTR 0x34c (LSTR_ABOUT_CREDIT1)
@@ -125,8 +141,9 @@ private:
     Mortar::BakedStringBox* m_CreditLine3;  // +0xB8: LSTR 0x34e (LSTR_ABOUT_CREDIT3)
     Mortar::BakedStringBox* m_CreditLine4;  // +0xBC: LSTR 0x34f (LSTR_ABOUT_CREDIT4)
     Mortar::BakedStringBox* m_CreditLine5;  // +0xC0: LSTR 0x350 (LSTR_ABOUT_CREDIT5)
-    // TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- m_Marquees vector
-    //       layout offset + size not yet RE'd; vector declared but unpopulated.
+    // ASM-spec v1.6.1 AboutScreen ctor @0x0015b764 / CreateCreditsMarquee @0x0015ac0c:
+    std::vector<MarqueeText*> m_Marquees;   // +0xC4: scrolling credits list (12B on ARM32)
+    float m_EntryDelay;                     // +0xD0: scroll start delay countdown (ctor=3.0f)
 
 private:
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
@@ -143,9 +160,22 @@ private:
 
     // v1.6.1: NewDraw -- BakedStringBox credit text pass
     // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,
-    // m_HeadingBox, m_VersionBox, m_CreditLine0..5 at positions derived from
-    // panelPos (the haiku board panel's animated position). Called from Draw.
+    // m_HeadingBox (via DrawMarquee), m_VersionBox, m_CreditLine0..5 at
+    // positions derived from panelPos. Also gates DrawMarquee on alpha < 0.6.
     void NewDraw(float yDrawn);
+
+    // v1.6.1: CreateCreditsMarquee @0x0015ac0c
+    // Builds m_Marquees by calling AddLine per credit entry, then lays out positions.
+    void CreateCreditsMarquee();
+
+    // v1.6.1: AddLine @0x0015aaf0
+    // Allocates a BakedStringBox, sets text/colour/clip/updates, wraps in a MarqueeText.
+    void AddLine(const char* text, const Colour& colour, float fontSize);
+
+    // v1.6.1: DrawMarquee @0x0015a138
+    // Draws each m_Marquees item translated by the transition offset, plus the
+    // heading box rotated 90 degrees.
+    void DrawMarquee();
 
 public:
     // Binary @ 0x0012eb30 (re-analyst 2026-06-07). AboutScreen quit/back-out
@@ -167,7 +197,9 @@ struct AboutScreenLayoutAssert {
     static_assert(offsetof(AboutScreen, m_VersionBox)      == 0xA8, "m_VersionBox offset");
     static_assert(offsetof(AboutScreen, m_CreditLine0)     == 0xAC, "m_CreditLine0 offset");
     static_assert(offsetof(AboutScreen, m_CreditLine5)     == 0xC0, "m_CreditLine5 offset");
-    // TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- sizeof(AboutScreen) not yet RE'd for v1.6.1; assert removed
+    static_assert(offsetof(AboutScreen, m_Marquees)        == 0xC4, "m_Marquees offset");
+    static_assert(offsetof(AboutScreen, m_EntryDelay)      == 0xD0, "m_EntryDelay offset");
+    // sizeof(AboutScreen): v1.6.1 not yet RE'd; assert omitted.
 };
 #endif
 

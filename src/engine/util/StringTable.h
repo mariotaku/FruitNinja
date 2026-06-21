@@ -71,7 +71,10 @@ enum LocalizedString {
     LSTR_LEADERBOARD_FRIENDS              = 0x363, // FruitFactLeaderboard title (friends scores);  binary GETSTRING(0x363,0) @ 0x00176980
 
     // AboutScreen v1.6.1 string IDs (AboutScreen ctor @0x0015b764)
-    LSTR_ABOUT_HEADING   = 0x349, // id 841  -- AboutScreen heading text
+    LSTR_ABOUT_HEADING   = 0x349, // id 841  -- AboutScreen heading text (also MarqueeText heading label)
+    LSTR_ABOUT_MARQUEE_LEAD0 = 0x347, // id 839  -- marquee colour-leader line 0 (CreateCreditsMarquee @0x0015ac0c)
+    LSTR_ABOUT_MARQUEE_LEAD1 = 0x348, // id 840  -- marquee colour-leader line 1 (CreateCreditsMarquee @0x0015ac0c)
+    LSTR_ABOUT_MARQUEE_LEAD2 = 0x34a, // id 842  -- marquee colour-leader line 2 (CreateCreditsMarquee @0x0015ac0c)
     LSTR_ABOUT_CREDIT0   = 0x34b, // id 843  -- credit line 0
     LSTR_ABOUT_CREDIT1   = 0x34c, // id 844  -- credit line 1
     LSTR_ABOUT_CREDIT2   = 0x34d, // id 845  -- credit line 2

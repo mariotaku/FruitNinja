@@ -62,6 +62,12 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_StrokeCol0(0, 0, 0, 255)
     , m_StrokeCol1(0, 0, 0, 255)
     , m_StrokeCol2(0, 0, 0, 255)
+    , m_ClipX0(0.0f)
+    , m_ClipY0(0.0f)
+    , m_ClipX1(0.0f)
+    , m_ClipY1(0.0f)
+    , m_HasClip(false)
+    , m_StoredRotation(0.0f)
     , m_Dirty(true)
     , m_BaseFontSize(fontSize)
 {
@@ -608,6 +614,30 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     }
 
     world.Pop();
+}
+
+// SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site @0x0015aaf0)
+// ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args (-240, -46, 400, 108).
+// TODO: v1.6.1 0x0015ab58 (BakedStringBox::SetWorldspaceClipping) -- clip impl not RE'd; stored only.
+void BakedStringBox::SetWorldspaceClipping(float x0, float y0, float x1, float y1) {
+    m_ClipX0 = x0;
+    m_ClipY0 = y0;
+    m_ClipX1 = x1;
+    m_ClipY1 = y1;
+    m_HasClip = true;
+}
+
+// Update  binary @ 0x0015ab80 (AddLine call site @0x0015aaf0)
+// ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: called after SetWorldspaceClipping.
+void BakedStringBox::Update() {
+    if (m_Dirty) Layout();
+}
+
+// SetRotation  binary @ 0x0015a1c4 (DrawMarquee call site @0x0015a138)
+// ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138: m_HeadingBox->SetRotation(90.0f).
+// TODO: v1.6.1 0x0015a1c4 (BakedStringBox::SetRotation) -- exact binary field offset not RE'd.
+void BakedStringBox::SetRotation(float degrees) {
+    m_StoredRotation = degrees;
 }
 
 } // namespace Mortar
