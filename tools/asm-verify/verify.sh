@@ -25,9 +25,6 @@ rsync -aq --delete \
     --exclude=node_modules --exclude=_deps \
     "$PROJECT/" "$SRC/"
 
-mkdir -p "$SRC/build/host/_deps/tinyxml2-src"
-rsync -aq "$PROJECT/build/host/_deps/tinyxml2-src/" "$SRC/build/host/_deps/tinyxml2-src/"
-
 mkdir -p "$SRC/FruitNinjaBada/Bin"
 # v1.6.1 verification target (port + RE both target v1.6.1). tmp/ is excluded
 # from the staging rsync, but /work (the read-only project bind-mount) has it;

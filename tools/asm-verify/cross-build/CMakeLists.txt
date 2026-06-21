@@ -1,9 +1,9 @@
 # Object-only cross build for ARM Thumb-2 verification.
 #
-# Thin wrapper that delegates to the root CMakeLists.txt (for dependency
-# stubs, tinyxml2 headers, and cross-headers). The actual source list
-# lives in ../verify-sources.cmake — a single, curated list of files
-# known to cross-compile under Sourcery 2010q1.
+# Thin wrapper that delegates to the root CMakeLists.txt (for SDL2/Freetype
+# stub targets and cross-headers). The actual source list lives in
+# ../verify-sources.cmake — a single, curated list of files known to
+# cross-compile under Sourcery 2010q1.
 #
 # Driven by ../run.sh; not intended for direct invocation. If you
 # need to, from the project root:
@@ -25,7 +25,6 @@ get_filename_component(_ASM_VERIFY   "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(FN_ASM_VERIFY ON CACHE BOOL "" FORCE)
 
 # Delegate to the main build for infrastructure:
-#   - tinyxml2 headers (FetchContent_Populate)
 #   - SDL2/Freetype INTERFACE stub targets
 #   - cross-headers include path on fruit-ninja-game
 add_subdirectory("${_PROJECT_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/FruitNinja")
@@ -39,9 +38,6 @@ target_include_directories(fnverify PRIVATE
     "${_ASM_VERIFY}/cross-headers"
     "${_PROJECT_ROOT}/src"
     "${_PROJECT_ROOT}/src/engine"
-    # verify.sh copies host build/host/_deps/tinyxml2-src into the Docker
-    # staging area, so this path exists even without FetchContent.
-    "${_PROJECT_ROOT}/build/host/_deps/tinyxml2-src"
 )
 
 set_target_properties(fnverify PROPERTIES LINKER_LANGUAGE CXX)
