@@ -609,16 +609,29 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexModeSensei->UnSet();
     }
 
-    // --- 2. Borders (BaseScreen::DrawBorders with mode_select.tex) ---
-    DrawBorders(s_TexModeSelect, m_TransitionAlpha, POS_BORDER);
+    // --- 2. Borders (BaseScreen::DrawBorders BakedStringBox* overload, NULL box) ---
+    // Binary GameModeScreen::Draw @0x00183c34 calls DrawBorders(nullptr, alpha, (-115,-130,0)).
+    // This overload draws shade triangles + sml_title deco only (no secondary texture).
+    // DIFFERS: port previously called DrawBorders(s_TexModeSelect,...) which drew mode_select.tex
+    // as secondary texture. The binary does NOT draw mode_select.tex in this call path; removing
+    // it is binary-faithful. The DrawBorders anchor is used to position m_pDescBox below.
+    Vec3 anchor = DrawBorders(nullptr, m_TransitionAlpha, POS_BORDER);
 
-    // --- 3. Connect texture animation ---
+    // --- 3. DescBox positioned from DrawBorders anchor ---
+    // Binary @0x00183c34: anchor += (-24, 11, 0); m_pDescBox->SetTranslation(anchor, 1); rot=-7
+    if (m_pDescBox) {
+        anchor += Vec3(-24.0f, 11.0f, 0.0f);
+        m_pDescBox->SetTranslation(anchor, 1);
+        m_pDescBox->Draw(-7.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // --- 4. Connect texture animation ---
     DrawConnectTexture(POS_CONNECT);
 
-    // --- 4. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
-    // Binary DAT_0013fbc0 = 0x76f8 → BSS slot for zen_sign.tex.
+    // --- 5. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
+    // Binary DAT_0013fbc0 = 0x76f8 -> BSS slot for zen_sign.tex.
     // Standard slide-in lerp: at alpha=0 the sign sits off-right at
-    // SRC=(314,14,10) (past +240 X edge), as alpha→1 it slides in to
+    // SRC=(314,14,10) (past +240 X edge), as alpha->1 it slides in to
     // rest at DST=(194,29,10) on-screen.
     if (s_TexZenSign.IsValid()) {
         mm.GetWorldStack().Reset();
@@ -636,19 +649,13 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexZenSign->UnSet();
 
         // Draw the feature-bullet text over the zen board quad.
-        // Binary @0x0013f8c8 (GameModeScreen::Draw): m_pTitleBox drawn at
-        // logoPos + (8, 3, 0), rotation 0 degrees, scale (1,1), centered.
+        // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
+        // logoPos + (8, 3, 0), rotation -9 degrees, scale (1,1), centered.
         if (m_pTitleBox) {
             m_pTitleBox->SetTranslation(logoPos + Vec3(8.0f, 3.0f, 0.0f), 1);
             m_pTitleBox->Draw(-9.0f, Vec2(1.0f, 1.0f), 1);
         }
     }
-
-    // TODO: v1.6.1 GameModeScreen::Draw @0x00183ac8 -- m_pDescBox needs BaseScreen::DrawBorders
-    //   anchor return (port DrawBorders is void; binary returns the border anchor Vec3 used here).
-    //   Binary draws m_pDescBox at DrawBorders_anchor + (-24, 11, 0), rotation -7.
-    //   Cannot wire without re-RE'ing / changing DrawBorders signature (touches other screens).
-    //   m_pDescBox is constructed and ready but left undrawn until anchor is available.
 
     // TODO: confirm m_pInfoBox draw site (MP/challenge path?)
     //   m_pInfoBox is constructed but its Draw site is unconfirmed -- left undrawn.

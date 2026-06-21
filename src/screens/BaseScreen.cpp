@@ -18,6 +18,7 @@
 #include "render/gl_funcs.h"
 #include "render/BakedStringBox.h"
 #include "math/Matrix44.h"
+#include "math/Vec2.h"
 #include "math/Colour.h"
 #include <cmath>
 #include "game/GameWork.h"
@@ -218,14 +219,92 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
 }
 
 // ===================================================================
-// BakedStringBox* overload of DrawBorders. Binary @ 0x0014f878 (v1.6.1).
-// DIFFERS: no-op stub because BakedStringBox does not expose a renderable
-// Texture in the port. The SmartPtr<Texture> overload handles rendering.
-void BaseScreen::DrawBorders(Mortar::BakedStringBox* /*box*/,
-                             float /*alpha*/, Vec3 /*secondaryTexPos*/) {
-    // Binary: creates a textured quad from the BakedStringBox's baked mesh
-    // data (same geometry as the secondary texture path). Port does not
-    // have a BakedStringBox→Texture conversion path, so this is a no-op.
+// BaseScreen::DrawBorders(BakedStringBox*, float, Vec3)
+// v1.6.1 @0x0015f878
+//
+// Draws the same shade-triangle + sml_title geometry as the SmartPtr
+// overload (v1.6.1 @0x0015fcec) but does NOT draw a secondary texture.
+// If box != nullptr, positions and draws the text box at the computed
+// anchor. Returns the anchor Vec3.
+// ASM-verified lhs-rhs at v1.6.1 @0x15fc80: anchor = arg3 - SLIDE_VEC*55*(1-alpha).
+// ===================================================================
+Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
+                             float alpha, Vec3 arg3) {
+    MatrixManager& mm = MatrixManager::GetInstance();
+
+    // --- 1. Shade triangles (blurry_backing.tex) --- identical to SmartPtr overload
+    if (s_TexBlurryBacking.IsValid()) {
+        static bool s_trisInitialized2 = false;
+        static QUADCUSTOMVERTEX s_tri1b[3];
+        static QUADCUSTOMVERTEX s_tri2b[3];
+
+        if (!s_trisInitialized2) {
+            s_trisInitialized2 = true;
+            const uint32_t kCol = Colour(0, 0, 0, 128).PlatformColour();
+
+            s_tri1b[0] = {       0.0f,       0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri1b[1] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  UV_FAR,  1.0f    };
+            s_tri1b[2] = { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
+
+            s_tri2b[0] = {      0.0f,        0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri2b[1] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  UV_FAR,  1.0f    };
+            s_tri2b[2] = { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
+        }
+
+        s_TexBlurryBacking->Set();
+
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            mat.GlobalTranslate44(Vec3(TRI1_X,
+                TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawTriList(s_tri1b, 3, false, NULL);
+        }
+
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            mat.GlobalTranslate44(Vec3(TRI2_X,
+                alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawTriList(s_tri2b, 3, false, NULL);
+        }
+
+        s_TexBlurryBacking->UnSet();
+    }
+
+    // --- 2. Decoration quad (sml_title.tex) --- identical to SmartPtr overload
+    if (s_TexSmlTitle.IsValid()) {
+        s_TexSmlTitle->Set();
+
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)s_TexSmlTitle->m_Width + 1.0f,
+            (float)s_TexSmlTitle->m_Height + 1.0f,
+            1.0f);
+        Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
+                       SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
+        mat.GlobalTranslate44(decoPos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
+        s_TexSmlTitle->UnSet();
+    }
+
+    // --- 3. Anchor and optional BakedStringBox draw ---
+    // anchor = arg3 - SLIDE_VEC * SEC_SLIDE_Y * (1 - alpha)
+    Vec3 anchor = arg3 - SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
+
+    if (box != nullptr) {
+        box->SetTranslation(anchor, 1);
+        box->Draw(-7.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    return anchor;
 }
 
 // ===================================================================
