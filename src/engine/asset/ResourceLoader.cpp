@@ -33,24 +33,18 @@ static AsciiString PathGetParent(const AsciiString& path)
 
 // Default ctor (no binary equivalent; port convenience for m_Children push_back).
 ResourceLoader::ResourceLoader()
-    : m_flag(0)
-#if !defined(__bada__)
-    , m_ReadPos(0)
-#endif
+    : m_ReadCursor(0)
 {
 }
 
 // Binary ctor @ 0x00255730:
-//   m_flag=0; AsciiString(m_BasePath,nullptr); m_Data={}; m_Children={};
+//   m_ReadCursor=0; AsciiString(m_BasePath,nullptr); m_Data={}; m_Children={};
 //   m_BasePath.Set(PathGetParent(path));
 //   FileDataReader fr(path);
 //   Initialize(fr);
 //   fr.~FileDataReader();
 ResourceLoader::ResourceLoader(const AsciiString& filePath)
-    : m_flag(0)
-#if !defined(__bada__)
-    , m_ReadPos(0)
-#endif
+    : m_ReadCursor(0)
 {
     m_BasePath.Set(PathGetParent(filePath));
     FileDataReader fr(filePath);
@@ -59,10 +53,7 @@ ResourceLoader::ResourceLoader(const AsciiString& filePath)
 
 // Port convenience wrapper: const char* path ctor delegates to the AsciiString ctor.
 ResourceLoader::ResourceLoader(const char* filePath)
-    : m_flag(0)
-#if !defined(__bada__)
-    , m_ReadPos(0)
-#endif
+    : m_ReadCursor(0)
 {
     if (filePath) {
         AsciiString path(filePath);
@@ -73,14 +64,11 @@ ResourceLoader::ResourceLoader(const char* filePath)
 }
 
 // Binary ctor @ 0x002556B4:
-//   m_flag=0; AsciiString(m_BasePath,nullptr); m_Data={}; m_Children={};
+//   m_ReadCursor=0 first; AsciiString(m_BasePath,nullptr); m_Data={}; m_Children={};
 //   m_BasePath.Set(basePath);
 //   Initialize(r);
 ResourceLoader::ResourceLoader(DataReader& reader, const AsciiString& basePath)
-    : m_flag(0)
-#if !defined(__bada__)
-    , m_ReadPos(0)
-#endif
+    : m_ReadCursor(0)
 {
     m_BasePath.Set(basePath);
     Initialize(reader);
@@ -129,27 +117,28 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize)
 }
 
 #if !defined(__bada__)
-// Binary @ 0x001b45bc -- if (count != 0) { memcpy(dest, &m_Data[cursor], count); cursor += count; }
-// The binary's read cursor lives at this+0x00 (m_flag); the port uses m_ReadPos.
+// Binary @ 0x00255398 -- if (count != 0) { memcpy(dest, &m_Data[cursor], count); cursor += count; }
+// ASM-spec v1.6.1 ResourceLoader::ReadBytes @ 0x00255398:
+//   if(count==0)return; memcpy(dest, m_Data.begin()+m_ReadCursor, count); m_ReadCursor += count.
+//   Cursor IS the +0x00 member (m_ReadCursor).
 // DIFFERS: original = no upper-bound check (only count != 0), using extra
-//   m_ReadPos + count <= m_Data.size() guard because the port lacks the binary's
+//   m_ReadCursor + count <= m_Data.size() guard because the port lacks the binary's
 //   DataReader stream-end invariants and would otherwise read out of bounds on
 //   malformed assets.
 void ResourceLoader::ReadBytes(void* dest, unsigned long count)
 {
-    if (count > 0 && m_ReadPos + count <= m_Data.size()) {
-        memcpy(dest, &m_Data[m_ReadPos], count);
-        m_ReadPos += count;
+    if (count > 0 && (size_t)m_ReadCursor + count <= m_Data.size()) {
+        memcpy(dest, &m_Data[m_ReadCursor], count);
+        m_ReadCursor += (int32_t)count;
     }
 }
 
-// Binary @ 0x001b45e0 -- len = Read<u16>(); AsciiString s; s.Resize(len);
-//   ReadBytes(s.GetPtr(), len); return s;
+// ReadString funnels through ReadBytes (Read<AsciiString> equivalent).
+// Binary: len = Read<u16>(); AsciiString s; s.Resize(len); ReadBytes(s.GetPtr(), len); return s;
 // Port-specific: the binary writes ReadBytes() straight into the AsciiString's
 //   buffer via a mutable GetPtr(); the port's AsciiString exposes only a const
-//   _GetPtr(), so we stage the bytes in a std::string of the same length and
-//   build the AsciiString from it. Same observable result (Resize(len) ==
-//   std::string(len,'\0'), then len bytes copied in via the same ReadBytes cursor).
+//   CStr(), so we stage the bytes in a std::string of the same length and
+//   build the AsciiString from it. Same observable result.
 AsciiString ResourceLoader::ReadString()
 {
     uint16_t len = Read<uint16_t>();
@@ -159,24 +148,21 @@ AsciiString ResourceLoader::ReadString()
     return AsciiString(str);
 }
 
-// Binary @ 0x001b46d0 -- index = Endian::ConvertFromLittle(Read<u32>());
+// Binary @ 0x002553cc -- index = Endian::ConvertFromLittle(Read<u32>());
 //   if (index != 0 && index-1 < m_Children.size()) {
 //       ResourceLoader* c = &m_Children[index-1];
-//       *(u32*)c = 0;   // reset child's read cursor (m_flag@+0x00) to 0
+//       *(u32*)c = 0;   // reset child's m_ReadCursor (+0x00) to 0
 //       return c;
 //   }
 //   return nullptr;
 // Port-specific: Read<u32> already reads native little-endian on LE hosts, so the
 //   binary's explicit Endian::ConvertFromLittle is a no-op on the SDL targets.
-//   The binary's "*(u32*)c = 0" zeroes the child's m_flag, which is the binary's
-//   read cursor; in the port the cursor is m_ReadPos, so we reset that instead.
 ResourceLoader* ResourceLoader::ReadSubResourceLookup()
 {
     uint32_t index = Read<uint32_t>();
     if (index > 0 && index - 1 < (uint32_t)m_Children.size()) {
         ResourceLoader* child = &m_Children[index - 1];
-        child->m_flag = 0;
-        child->m_ReadPos = 0;   // binary cursor is m_flag; port cursor is m_ReadPos
+        child->m_ReadCursor = 0;
         return child;
     }
     return nullptr;
