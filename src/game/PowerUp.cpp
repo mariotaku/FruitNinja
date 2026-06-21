@@ -369,8 +369,11 @@ void PowerUp::Release() {
     m_ModList.clear();
 }
 
-// AddModifier (binary @ 0x001193d0 callee — de-inlined)
+// ASM-spec v1.6.1 PowerUp::AddModifier @ 0x0014219c: mod->m_pDeferInfo=this
+// (GameModifier+0x1C); m_ModList.push_back(mod) (list head +0x04,
+// push_back @0x001100bc).
 void PowerUp::AddModifier(GameModifier* mod) {
+    mod->m_pDeferInfo = this;   // GameModifier+0x1C — sets owner back-ptr at attach
     m_ModList.push_back(mod);
 }
 
