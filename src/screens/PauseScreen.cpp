@@ -645,9 +645,14 @@ void PauseScreen::Update(float dt) {
         m_QuitButton->SetCallback(
             Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback));
         if (m_QuitButton->m_pLabelBox) {
+            // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 PauseScreen::Update @0x001a5ebc (re-analyst)
+            // Colour ctor T_1056 @0x001a5710 writes m_R=arg, m_A=0xff, m_G=m_B=0 -- the
+            // 0xff/0x40 vary RED, not alpha; alpha is always 0xff. Colour(r,g,b,a) is R,G,B,A order.
+            //   top    = opaque red          (R=0xff,G=0,B=0,A=0xff)
+            //   bottom = dark red, 1/4 red   (R=0x40,G=0,B=0,A=0xff)  -- still fully opaque
             m_QuitButton->m_pLabelBox->SetGradient(
-                Colour(0xff, 0xff, 0xff, 0xff),
-                Colour(0xff, 0xff, 0xff, 0x40),
+                Colour(0xff, 0x00, 0x00, 0xff),
+                Colour(0x40, 0x00, 0x00, 0xff),
                 false);
             m_QuitButton->m_pLabelBox->ReshapeBounds(0x36, 0x14, 1, 0);
             m_QuitButton->m_pLabelBox->SetStroke(1.0f, Colour::Black);
