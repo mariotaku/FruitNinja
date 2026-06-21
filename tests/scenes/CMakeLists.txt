@@ -60,3 +60,12 @@ add_scene_test(scene_fruit_scene scene_fruit.cpp)
 
 # ---- scene_slash: blade trail driven by mouse/touch drag ----
 add_scene_test(scene_slash_scene scene_slash.cpp)
+
+# ---- scene_bomb_scale: pixel-level bomb-scale regression test ----
+# Renders HOME and DOJO bombs side-by-side, reads back the framebuffer, and
+# asserts that the DOJO bomb's rendered bounding-box is ~0.825x the HOME bomb's.
+# Registers as a CTest so it can be run headless in CI.
+# Port specific: standalone entity scale regression test
+add_scene_test(scene_bomb_scale scene_bomb_scale.cpp)
+add_test(NAME bomb_scale COMMAND scene_bomb_scale)
+set_tests_properties(bomb_scale PROPERTIES TIMEOUT 60)

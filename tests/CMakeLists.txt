@@ -160,6 +160,65 @@ endif()
 add_test(NAME bomb_spawn COMMAND test_bomb_spawn all)
 set_tests_properties(bomb_spawn PROPERTIES TIMEOUT 60)
 
+# Menu-bomb scale regression test. Proves that a Dojo menu bomb ends up
+# 0.825x the size of a Home menu bomb after the DojoScreen shrink is applied.
+# Expected to FAIL until the root bug is fixed (Dojo restScale shrink not
+# reflected in m_BaseScale capture because the capture fires in Update, after
+# the DojoScreen shrink is applied -- or vice versa).
+add_executable(test_menubutton_scale test_menubutton_scale.cpp)
+target_link_libraries(test_menubutton_scale PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_menubutton_scale PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_menubutton_scale PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_menubutton_scale POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_menubutton_scale>)
+    endif()
+endif()
+add_test(NAME menubutton_scale COMMAND test_menubutton_scale)
+set_tests_properties(menubutton_scale PROPERTIES TIMEOUT 60)
+
+# DojoScreen bomb-scale regression test. Drives the REAL DojoScreen::Update
+# flow (state-0 fade-in + button creation) and asserts the back-bomb ends up
+# 0.825x the Home bomb size. Catches regressions where m_pTrackedFruit is null
+# at shrink time (so entity scale never gets the 0.825 factor).
+add_executable(test_dojoscreen_bomb_scale test_dojoscreen_bomb_scale.cpp)
+target_link_libraries(test_dojoscreen_bomb_scale PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_dojoscreen_bomb_scale PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_dojoscreen_bomb_scale PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_dojoscreen_bomb_scale POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_dojoscreen_bomb_scale>)
+    endif()
+endif()
+add_test(NAME dojoscreen_bomb_scale COMMAND test_dojoscreen_bomb_scale)
+set_tests_properties(dojoscreen_bomb_scale PROPERTIES TIMEOUT 60)
+
 # BONUS_PHASE stall regression test. Boots Arcade-mode GameOverScreen in
 # STATE_BONUS_PHASE and ticks 600 frames (10s). Asserts state advances
 # to STATE_MAIN_DISPLAY within the timeout. Currently FAILS (stall bug).
