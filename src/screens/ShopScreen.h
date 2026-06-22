@@ -175,14 +175,6 @@ public:
     // Port-specific trailing fields (not in the 188-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xbc.
 #if !defined(__bada__)
-    // Mirrors the static BSS bool at .got + 0x451b4 set by
-    // ShrinkBuyButton @ 0x0015c4cc and read by EquipCallback /
-    // DeletedMenuItem / Move. Tracks "the equip-button fruit piece
-    // is currently flying off-screen". Binary uses a process-wide
-    // static; port models it as a per-screen member since the screen
-    // is a singleton and the lifetime matches.
-    bool m_bShrinking;
-
     // Mirrors g_ShopStaticBlock->m_SelCounter at GOT_base + 0x451b4 + 0x88.
     // Rate-limiter for SetSelected calls in Update preamble: counter increments
     // every frame (mod 10), SetSelected fires only when counter == 0.
