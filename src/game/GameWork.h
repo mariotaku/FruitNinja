@@ -45,7 +45,7 @@ struct GameWork {
     float   retryTimer;            // +0x08
     float   m_GameDt;              // +0x0C: per-frame dt accumulator (Ghidra: m_GameDt; was m_TransitionTimer in port)
     float   m_BombHitTimer;        // +0x10
-    uint8_t missCount;             // +0x14: combo counter
+    uint8_t missCount;             // +0x14: miss count (3-strikes; binary bM_MissCount). NOT combo -- combo is the separate g_ComboCount global.
     uint8_t _pad_0x15[3];          // +0x15..+0x17
     int     currentScore;          // +0x18
     uint8_t m_bUnsullied;          // +0x1C: 0=no misses yet
