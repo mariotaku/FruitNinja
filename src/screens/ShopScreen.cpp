@@ -437,23 +437,19 @@ float ShopScreen::GetDescriptionTextXPos() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::ShrinkBuyButton @ 0x0015c4cc
+// ShopScreen::ShrinkBuyButton @ 0x001b17b4 (v1.6.1)
 //
-// Binary disassembly (re-analysed 2026-04-28):
-//   if (m_pEquipButton == null) return
-//   fruit = m_pEquipButton->m_pTrackedFruit
-//   if (fruit == null) return
-//   if (Fruit::Sliced(fruit)) return            // already retracting
-//   fruit->m_bSliced = 1                         // +0xb4
-//   g_bShopButtonShrinking = 1                   // BSS bool
-//   m_pEquipButton->m_bEnabled = 0               // +0x123
-//   fruit->m_HalfB_vel = SHOP_SHRINK_VEC         // +0xc4..+0xcc = (1,1,1)
+// ASM-verified binary writes (after null/Sliced early-outs):
+//   fruit->m_bSliced = 1;               // +0xb8
+//   g_bShopButtonShrinking = 1;         // BSS bool (port: m_bShrinking)
+//   m_pEquipButton->m_bClearsMenuItems = 0;  // +0x13a  (prevents ClearMenuItems on retract)
+//   fruit->m_SecondVel = SHOP_SHRINK_VEC;    // +0xd4 = (1,1,1)
 //
-// The binary does NOT destroy the equip button. Instead, marking the
-// fruit sliced + giving its second-half velocity a non-zero kick lets
-// MenuButton::Update fade the alpha each frame and self-remove via
-// m_bPendingRemoval once alpha hits zero. DeletedMenuItem then clears
-// m_pEquipButton when HUD destroys the control.
+// The m_bClearsMenuItems=0 write is the bomb-drop fix: MenuButton::Update's
+// slice gate fires m_ClickCallback AND calls ClearMenuItems when
+// m_bClearsMenuItems!=0.  Zeroing it here suppresses the bomb-clearing
+// cascade while still letting the click callback fire on retract.
+// Binary does NOT write vel, m_Gravity, scale, or m_bEnabled here.
 // ---------------------------------------------------------------------------
 void ShopScreen::ShrinkBuyButton() {
     if (!m_pEquipButton) return;
@@ -465,15 +461,14 @@ void ShopScreen::ShrinkBuyButton() {
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
     #endif
-    fruit->m_bSliced           = true;  // *(fruit+0xb8) = 1
+    fruit->m_bSliced                      = true;  // *(fruit+0xb8) = 1
 #if !defined(__bada__)
-    m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
+    // Host-only model of the binary's BSS global g_bShopButtonShrinking
+    // (.got+0x451b4). Excluded on __bada__ so ShopScreen sizeof stays 0xbc.
+    m_bShrinking                          = true;
 #endif
-#if !defined(__bada__)
-    m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0 (v1.0 compat field)
-#endif
-    fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
-    // Binary does NOT write m_bDrawWhole here (see docs/screens/shop-buttons.md §Gap4)
+    m_pEquipButton->m_bClearsMenuItems    = 0;     // *(button+0x13a) = 0 (suppresses ClearMenuItems)
+    fruit->m_SecondVel                    = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
 }
 
 // ---------------------------------------------------------------------------
