@@ -100,17 +100,16 @@ SpawnPlacement WaveManager::ParsePlacement(const char* side) {
 // ----------------------------------------------------------------------------
 
 WaveManager::WaveManager()
-    : spawnLevel(0.0f)
+    : m_SpawnLevel(1.0f)
     , m_CritChanceMult(1.0f)
     , field_0x35(1)   // TODO: v1.6.1 WaveManager::WaveManager @ 0x00125d7c -- verify ctor writes field_0x35=1; expected BSS-zero if binary ctor omits it (Reset() sets it to 1 unconditionally)
     , field_0x36(0)
     , field_0x37(0)
     , field_0x38(-1)
     , field_0x40(0.0f), field_0x44(0.0f)
-    , field_0x48(0)
-    , field_0x64(1.0f)
-    , field_0x6c(1.0f)
-    , field_0x74(1.0f)
+    , m_NetTimerB(0.0f)
+    , m_BombChance(1.0f)
+    , m_FruitChance(1.0f)
     , m_SpeedAccum(1.0f)
     , m_SpeedScale(1.0f), m_ComboSpeedDivisor(1.0f)
     , m_NextWaveDelay_P0(0.0f), m_NextWaveDelay_P1(0.0f)
@@ -123,10 +122,10 @@ WaveManager::WaveManager()
     , field_0x2e0(0)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
 {
-    m_ComboTimer[0] = 0.0f; m_ComboTimer[1] = 0.0f;
-    m_BlitzBonus[0] = 0;   m_BlitzBonus[1] = 0;
-    m_ColdTimer[0] = 0.0f;
-    m_Speed[0] = m_Speed[1] = 0.0f;
+    m_ComboTimer = 0.0f;
+    m_ComboSpeed = 0.0f; m_TargetComboSpeed = 0.0f;
+    m_BlitzLevel = 0;
+    m_ColdTimer  = 0.0f;
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
     // m_DtIncPerMode (+0x84): parsed from <defaults> "dtInc" attr per mode.
@@ -479,11 +478,11 @@ void WaveManager::Reset(bool fullReset) {
     m_RecentFruitCount[1] = 0;
     m_StepAccumulator = 0.0f;
     field_0x40 = 0.0f; field_0x44 = 0.0f;
-    field_0x48 = 0;
+    m_NetTimerB = 0.0f;
     m_NextWaveDelay_P0 = 0.0f;
     m_NextWaveDelay_P1 = 0.0f;
-    m_ComboTimer[0] = 0.0f;
-    m_Speed[0] = 0.0f; m_Speed[1] = 0.0f;
+    m_ComboTimer = 0.0f;
+    m_ComboSpeed = 0.0f; m_TargetComboSpeed = 0.0f;
 
     // 3. Game-side flags / score.
     game_work.m_bUnsullied = 0;
@@ -524,8 +523,8 @@ void WaveManager::Reset(bool fullReset) {
 
     // 6. Reset per-wave chance counters + PROBABILITY_OVERIDE state.
     ResetWaveChances();
-    m_BlitzBonus[0] = 0; m_BlitzBonus[1] = 0;
-    m_ColdTimer[0] = 0.0f;  // m_BlitzBonus[1] aliases this; P1 cold timer cleared via m_BlitzBonus[1]=0 above
+    m_BlitzLevel = 0;
+    m_ColdTimer  = 0.0f;
     for (std::vector<PROBABILITY_OVERIDE>::iterator pit = m_ProbabilityOverride[game_work.gameMode].begin();
          pit != m_ProbabilityOverride[game_work.gameMode].end(); ++pit)
         pit->SelectType();
@@ -613,10 +612,10 @@ void WaveManager::Resume() {
     FN::SetMissCount((int)sd->m_CurrentMissCount, -1);
 
     // 2. Restore per-player base speed from save.
-    // m_ComboTimer[0] <- sd+0x100 (combo timer snapshot).
-    // m_ColdTimer[0] <- sd+0x108 (cold-timer snapshot; binary vldr/vstr raw word move).
-    m_ComboTimer[0]  = sd->m_Speed_P0;
-    m_ColdTimer[0]   = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+    // m_ComboTimer <- sd+0x100 (combo timer snapshot).
+    // m_ColdTimer  <- sd+0x108 (cold-timer snapshot; binary vldr/vstr raw word move).
+    m_ComboTimer = sd->m_Speed_P0;
+    m_ColdTimer  = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
 
     // 3. Restore was-game-over flag.
     game_work.m_bUnsullied = sd->m_bWasGameOver;
@@ -746,14 +745,14 @@ void WaveManager::Resume() {
         // (uint), used to look up via the WaveState restore loop. The field name
         // inherited from earlier RE was misleading.
         field_0x38           = sd->m_pCurrentWave_P1;   // saved wave index
-        m_ComboTimer[0]      = sd->m_Speed_P0;
-        m_ColdTimer[0]       = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+        m_ComboTimer         = sd->m_Speed_P0;
+        m_ColdTimer          = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
         field_0x244 = 1; field_0x35 = 1;
         field_0x36 = 0; field_0x37 = 0;
-        m_Speed[0]           = sd->m_Speed_P0_alias;
-        m_Speed[1]           = sd->m_Speed_P0_alias;
+        m_ComboSpeed         = sd->m_Speed_P0_alias;
+        m_TargetComboSpeed   = sd->m_Speed_P0_alias;
         // Binary: hash of "blitz_bonus" — same key AddSpeed increments.
-        m_BlitzBonus[0] = sd->GetTotal("blitz_bonus");
+        m_BlitzLevel = sd->GetTotal("blitz_bonus");
 
         ResetWaveChances();
 
@@ -863,9 +862,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         sd->m_FruitQueueCount = m_MaxWaveIdP0;
         sd->m_WaveDelay       = m_NextWaveDelay_P0;
         sd->m_WaveWait        = m_NextWaveDelay_P1;
-        sd->m_Speed_P0        = m_Speed[0];
-        sd->m_Speed_P1        = m_ColdTimer[0];  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
-        sd->m_Speed_P0_alias  = m_Speed[1];
+        sd->m_Speed_P0        = m_ComboSpeed;
+        sd->m_Speed_P1        = m_ColdTimer;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+        sd->m_Speed_P0_alias  = m_TargetComboSpeed;
         memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0], 0x80);
         // ASM-verified: binary @ 0x00124930 reads +0x2d0 (m_RecentFruitCount[0]) into save+0x7c.
         sd->m_FruitQueueCount = m_RecentFruitCount[0];
@@ -948,11 +947,12 @@ void WaveManager::Update(float dt) {
     if (!game) return;
 
     // Reset per-frame multipliers.
+    // v1.6.1 WaveManager::Update @0x001267a0
+    m_SpawnLevel     = 1.0f;
+    m_BombChance     = 1.0f;
+    m_FruitChance    = 1.0f;
     m_CritChanceMult = 1.0f;
-    m_SpeedScale = 1.0f;
-    field_0x64 = 1.0f;
-    spawnLevel = 1.0f;
-    field_0x6c = 1.0f;
+    m_SpeedScale     = 1.0f;
 
     // Skip PowerUpManager::Update — not ported. m_SpeedScale stays 1.0.
 
@@ -1010,7 +1010,8 @@ void WaveManager::Update(float dt) {
         }
         m_StepAccumulator = accumDt;
     } else {
-        UpdateComboSpeed(dt);
+        // v1.6.1 WaveManager::Update @0x001267a0: passes dt * m_ComboSpeedDivisor to UpdateComboSpeed.
+        UpdateComboSpeed(dt * m_ComboSpeedDivisor);
     }
     // Removed per-frame Update spam; spawn events themselves print via [Spawn].
 
@@ -1262,7 +1263,8 @@ epilogue:
     ;  // matching binary's branch-to-epilogue pattern
 }
 
-void WaveManager::UpdateComboSpeed(float dt) {
+void WaveManager::UpdateComboSpeed(float dtIn) {
+    // v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc
     // ASM-verified: 2026-05-20 binary @ 0x00122f5e (re-analyst). DUAL gate:
     //   (game_work.m_GameDt == 0.0f) AND (gameMode == ARCADE)
     // game_work.m_GameDt (+0x0C) is the pause/fade indicator: 0.0f during
@@ -1277,18 +1279,22 @@ void WaveManager::UpdateComboSpeed(float dt) {
     if (game_work.m_GameDt != 0.0f) return;
     if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) return;
 
-    float curSpeed  = m_Speed[0];
-    float targetP1  = m_Speed[1];
-    if (targetP1 < 2.9f) targetP1 = 0.0f;   // DAT_001230dc/e0
+    // Ease m_ComboSpeed (+0x58) toward target (or 0 if target < 2.9).
+    // Binary: divide both ease delta and decay by m_ComboSpeedDivisor (+0x80).
+    // v1.6.1 UpdateComboSpeed @0x001238dc
+    float curSpeed  = m_ComboSpeed;        // +0x58
+    float target    = m_TargetComboSpeed;  // +0x5c
+    if (target < 2.9f) target = 0.0f;     // DAT_001230dc/e0
 
+    float easeRate = (dtIn * -5.0f) / m_ComboSpeedDivisor;
     float delta;
-    if (curSpeed == targetP1)        delta = 0.0f;
-    else if (targetP1 < curSpeed)    delta = std::max(targetP1 - curSpeed, dt * -5.0f);
-    else                              delta = std::min(targetP1 - curSpeed, dt *  5.0f);
-    m_Speed[0] = curSpeed + delta;
+    if (curSpeed == target)         delta = 0.0f;
+    else if (target < curSpeed)     delta = std::max(target - curSpeed, easeRate);
+    else                            delta = std::min(target - curSpeed, -easeRate);
+    m_ComboSpeed = curSpeed + delta;
 
     // Binary @ 0x00122f50: lazy SpeedControl alloc + push to HUD.
-    float cur = m_Speed[0];
+    float cur = m_ComboSpeed;
     HUDControl3d* sc = m_SpeedControl[0];
     if (!sc) {
         sc = new SpeedControl();
@@ -1303,16 +1309,17 @@ void WaveManager::UpdateComboSpeed(float dt) {
     }
     SpeedControl* spc = static_cast<SpeedControl*>(sc);
     spc->m_DisplayedSpeed = cur;
-    spc->m_Speed          = m_ComboTimer[0];
+    spc->m_Speed          = m_ComboTimer;  // +0x50
 
-    // Decay the combo timer (m_ComboTimer[0]) via GetWavedt/m_NextWaveSpeedLoss.
-    if (m_ComboTimer[0] > 0.0f && m_pCurrentWave[0] != nullptr
+    // Decay m_ComboTimer (+0x50) via GetWavedt/m_ComboSpeedDivisor/m_NextWaveSpeedLoss.
+    // v1.6.1 UpdateComboSpeed @0x001238dc: wd = clamp(GetWavedt(0)/m_ComboSpeedDivisor, ...1.0)
+    if (m_ComboTimer > 0.0f && m_pCurrentWave[0] != nullptr
         && m_pCurrentWave[0]->m_NextWaveSpeedLoss > 0.0f)
     {
-        float wd = GetWavedt(0);
+        float wd = GetWavedt(0) / m_ComboSpeedDivisor;
         if (wd > 1.0f) wd = 1.0f;
-        m_ComboTimer[0] -= (wd * dt) / m_pCurrentWave[0]->m_NextWaveSpeedLoss;
-        if (m_ComboTimer[0] <= 0.0f)
+        m_ComboTimer -= (wd * dtIn) / m_pCurrentWave[0]->m_NextWaveSpeedLoss;
+        if (m_ComboTimer <= 0.0f)
             ResetSpeed(0);
     }
 }
@@ -1444,7 +1451,7 @@ void WaveManager::GetNextWave(int playerIdx) {
         float w  = wave->m_NextWaveWait;
         float spinc = wave->m_NextWaveWaitSpInc;
         if (spinc != 0.0f) {
-            float w2 = w + spinc * m_Speed[playerIdx];
+            float w2 = w + spinc * m_ComboSpeed;  // +0x58: displayed speed (P0); v1.6.1 @0x00123050
             if (w2 < 0.05f) w2 = 0.05f;
             w = w2;
         }
@@ -1825,18 +1832,21 @@ void WaveManager::DeleteSpeedControl(HUDControl* c) {
 // Queries
 // ----------------------------------------------------------------------------
 
-float WaveManager::GetSpeed(int playerIdx) {
-    return (&m_Speed[0])[playerIdx];   // +0x54 + playerIdx*4
+float WaveManager::GetSpeed(int /*playerIdx*/) {
+    // v1.6.1 @0x00122fa0: reads m_ComboSpeed (+0x58) for P0.
+    // TODO: v1.6.1 @0x00122fa0 -- P1 path reads +0x5c (m_TargetComboSpeed); single-player port returns P0 only.
+    return m_ComboSpeed;  // +0x58
 }
 
 float WaveManager::GetWavedt(int playerIdx) {
-    // ASM-verified-spec: v1.6.1 WaveManager::GetWavedt @0x00123050
+    // v1.6.1 WaveManager::GetWavedt @0x00123050
+    // SpInc term uses m_ComboSpeed (+0x58) for P0.
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
     float waveDt = (w == nullptr)
         ? 1.0f
         : w->m_WaveDt
           + w->m_WaveDtInc * w->field_0x34
-          + w->m_WaveDtSpInc * m_Speed[playerIdx];
+          + w->m_WaveDtSpInc * m_ComboSpeed;  // +0x58 (P0 displayed speed)
 
     float dtMod = (playerIdx == 0) ? (m_SpeedAccum * m_SpeedScale) : 1.0f;
     float result = waveDt * dtMod * m_ComboSpeedDivisor;
@@ -1846,9 +1856,10 @@ float WaveManager::GetWavedt(int playerIdx) {
 }
 
 float WaveManager::GetCriticalChance(int playerIdx) {
+    // v1.6.1 @0x00123174: waveCritChance * m_CritChanceMult (+0x74)
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
     float cc = w ? w->m_CriticalChance : 1.0f;
-    return cc * m_CritChanceMult;
+    return cc * m_CritChanceMult;  // m_CritChanceMult now at +0x74
 }
 
 bool WaveManager::CriticalMode(int playerIdx) {
@@ -1864,14 +1875,14 @@ bool WaveManager::CriticalMode(int playerIdx) {
     return false;
 }
 
-float WaveManager::GetComboBonusProgression(int playerIdx) {
-    // ASM-verified-spec: v1.6.1 WaveManager::GetComboBonusProgression @0x00122fb0 — blitz(int)+cold(float) are distinct fields
-    // DIFFERS: binary indexes cold timer by playerIdx but port only has m_ColdTimer[1] (P0 cold only);
-    // using m_ColdTimer[0] unconditionally. Port shape mismatch — layout task will add [2] array if needed.
-    float progress = m_ColdTimer[0] / -2.5f + 1.0f;
+float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
+    // v1.6.1 WaveManager::GetComboBonusProgression @0x00122fb0
+    // Reads m_BlitzLevel (+0x60) + clamp(m_ColdTimer/-2.5+1, 0, 1), /6 clamp<=1.
+    // TODO: v1.6.1 @0x00122fb0 -- binary indexes cold timer by playerIdx; single-field port uses P0 only.
+    float progress = m_ColdTimer / -2.5f + 1.0f;  // m_ColdTimer at +0x64
     if (!(progress >= 0.0f)) progress = 0.0f;  // NaN-safe lower clamp
     if (progress > 1.0f) progress = 1.0f;
-    float result = ((float)m_BlitzBonus[playerIdx] + progress) / 6.0f;
+    float result = ((float)m_BlitzLevel + progress) / 6.0f;  // m_BlitzLevel at +0x60
     if (result > 1.0f) result = 1.0f;
     return result;
 }
@@ -1892,10 +1903,12 @@ PROBABILITY_OVERIDE* WaveManager::GetCurrentOverideList(int playerIdx) {
 
 void WaveManager::AddToSpeedLossTime(float amount, int playerIdx) {
     // Binary @ 0x001218ac. Clamps DOWN to 1.0 -- speed-loss accumulator cannot exceed 1.0.
-    if (m_ComboTimer[playerIdx] > 0.0f) {
-        float v = m_ComboTimer[playerIdx] + amount;
+    // TODO: v1.6.1 @0x001218ac -- binary indexes combo timer by playerIdx; single-field port uses P0 only.
+    (void)playerIdx;
+    if (m_ComboTimer > 0.0f) {
+        float v = m_ComboTimer + amount;
         if (v > 1.0f) v = 1.0f;  // caps at maximum 1.0f (binary: vcmpe s0,s15; it pl; vmovpl s0,s15)
-        m_ComboTimer[playerIdx] = v;
+        m_ComboTimer = v;
     }
 }
 
@@ -1904,9 +1917,11 @@ void WaveManager::ResetSpeed(int playerIdx) {
     // both the int blitz-level AND the float cold-timer (binary writes
     // separate stores: `mov r1,#0; str.w r1, [r2,#0x4]` for the int and
     // `vmov r1,s15; str.w r1, [r6,r5,lsl#0x2]` with s15=0.0f for the float).
-    m_Speed[1 + playerIdx] = 0.0f;      // +0x58 + p*4 (combo-speed overlap slot)
-    m_Speed[playerIdx]     = 0.0f;      // +0x54 + p*4
-    m_ComboTimer[playerIdx] = 0.0f;
+    // TODO: v1.6.1 @0x00122e94 -- binary indexes speed/blitz/cold by playerIdx; single-field port uses P0 only.
+    (void)playerIdx;
+    m_TargetComboSpeed = 0.0f;  // +0x5c
+    m_ComboSpeed       = 0.0f;  // +0x58
+    m_ComboTimer       = 0.0f;  // +0x50
 
     // Lazy-init "blitz_bonus" hash and clear total.
     static uint32_t s_blitzBonusHash = 0;
@@ -1916,8 +1931,8 @@ void WaveManager::ResetSpeed(int playerIdx) {
     if (game && game_work.m_SaveData)
         game_work.m_SaveData->ClearTotal(s_blitzBonusHash);
 
-    m_BlitzBonus[playerIdx] = 0;
-    m_ColdTimer[playerIdx]  = 0.0f;
+    m_BlitzLevel = 0;   // +0x60
+    m_ColdTimer  = 0.0f;  // +0x64
 
     // ASM-verified: 2026-05-03 binary @ 0x00122e94 (re-analyst)
     // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
@@ -1936,52 +1951,48 @@ static const char* const k_BlitzSfx[6] = {
 };
 
 void WaveManager::AddSpeed(float amount, int playerIdx) {
-    // Binary @ 0x00123510.
+    // v1.6.1 WaveManager::AddSpeed @0x00124f48
     // Re-verified 2026-05-22 (asm-inspector): the cold-start gate / timer-
-    // countdown logic operates on the FLOAT m_ColdTimer[] field at +0x60
+    // countdown logic operates on the FLOAT m_ColdTimer field at +0x64
     // (vldr.32 / vcmpe / vsub / vmov.f32 #3.0 / vstr.32). The int
-    // m_BlitzBonus[] field at +0x5c only holds the AddToTotal()-returned
+    // m_BlitzLevel field at +0x60 only holds the AddToTotal()-returned
     // level counter (1..6+) used to drive score and SFX selection.
-    // Previous port collapsed both into a single int, breaking the
-    // cold-start trigger -- combos couldn't accumulate to 2.9 speed and
-    // fire the first blitz tier because the float timer was treated as
-    // an int and round-tripped through `(int)amount` truncation.
-    const float oldSpeed = m_Speed[1 + playerIdx];
+    // TODO: v1.6.1 @0x00124f48 -- binary indexes speed/cold/blitz by playerIdx; single-field port uses P0 only.
+    (void)playerIdx;
+
+    // Accumulate m_TargetComboSpeed (+0x5c), clamp [0, 14].
+    const float oldSpeed = m_TargetComboSpeed;
     float v = oldSpeed + amount;
     if (v <= 0.0f)       v = 0.0f;
     else if (v >= 14.0f) v = 14.0f;
-    m_Speed[1 + playerIdx] = v;
+    m_TargetComboSpeed = v;
 
     if (amount <= 0.0f) return;
 
-    // Diagnostic: log every AddSpeed call so the user can see combos feeding
-    // the speed bar and the cold-timer state in real time.
     LOG_INFO("BLITZ", "AddSpeed p=%d amount=%.3f speed=%.3f->%.3f coldTimer=%.3f level=%d",
-             playerIdx, amount, oldSpeed, m_Speed[1 + playerIdx],
-             m_ColdTimer[playerIdx], m_BlitzBonus[playerIdx]);
+             playerIdx, amount, oldSpeed, m_TargetComboSpeed,
+             m_ColdTimer, m_BlitzLevel);
 
     static uint32_t s_blitzBonusHash = 0;
     if (!s_blitzBonusHash) s_blitzBonusHash = StringHash("blitz_bonus");
 
-    m_ComboTimer[playerIdx] = 1.0f;
+    // On amount>0 set m_ComboTimer (+0x50) to 1.
+    m_ComboTimer = 1.0f;
 
     Game* game = Game::GetInstance();
     FruitSaveData* sd = game ? game_work.m_SaveData : nullptr;
 
-    if (m_ColdTimer[playerIdx] <= 0.0f) {
+    if (m_ColdTimer <= 0.0f) {
         // Cold-start path (binary @ 0x001236da onwards).
-        if (m_Speed[1 + playerIdx] > 2.9f) {    // DAT_00123828
+        if (m_TargetComboSpeed > 2.9f) {    // DAT_00123828
             if (sd) {
-                m_ColdTimer[playerIdx] = 3.0f;  // binary vmov.f32 #0x40200000
+                m_ColdTimer = 3.0f;  // binary vmov.f32 #0x40200000
                 sd->ClearTotal(s_blitzBonusHash);
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
-                m_BlitzBonus[playerIdx] = newCount;
+                m_BlitzLevel = newCount;
                 FN::AddToCurrentScore(5, playerIdx, false, false);
                 // ASM-verified: 2026-05-23 binary @ 0x00123760..0x00123798 (re-analyst).
-                // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773),
-                // NOT "blitz_count". Earlier port-side guess didn't match any
-                // m_ScreenEffectPool entry so the activation silently failed and the
-                // blitz_1 popup never appeared on the first tier crossing.
+                // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
                 static uint32_t s_blitz1Hash = 0;
                 if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
                 PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitz1Hash);
@@ -1993,28 +2004,22 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
             }
         } else {
             LOG_INFO("BLITZ", "  cold-start: speed=%.3f <= 2.9, no fire yet (need %.3f more)",
-                     m_Speed[1 + playerIdx], 2.9f - m_Speed[1 + playerIdx]);
+                     m_TargetComboSpeed, 2.9f - m_TargetComboSpeed);
         }
     } else {
         // Combo continuation path (binary @ 0x001235d2 onwards).
-        // Binary subtracts the FLOAT amount from the cold-timer (vsub.f32),
-        // not an int truncation. With amount=combo/3.0 typically in [0.3,2.0],
-        // levelling up takes ~2-3 combos worth of timer drain (timer counts
-        // down 3.0 -> 0.0).
-        const float oldTimer = m_ColdTimer[playerIdx];
-        m_ColdTimer[playerIdx] -= amount;
-        if (m_ColdTimer[playerIdx] <= 0.0f) {
+        // Binary subtracts the FLOAT amount from the cold-timer (vsub.f32).
+        const float oldTimer = m_ColdTimer;
+        m_ColdTimer -= amount;
+        if (m_ColdTimer <= 0.0f) {
             if (sd) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 int level = (newCount < 6) ? newCount : 6;
-                m_BlitzBonus[playerIdx] = newCount;
+                m_BlitzLevel = newCount;
 
                 {
                     // ASM-verified: 2026-05-23 binary @ 0x00123614..0x00123642 (re-analyst).
-                    // Continuation tier uses format "blitz_%i" (rodata @ 0x001ba76a),
-                    // composing "blitz_1".."blitz_6" -- matching the XML <effect name="blitz_N">
-                    // entries. Earlier port-side guess "blitz_%d_count" produced a hash
-                    // that never matched the pool, so blitz_2..blitz_6 popups never appeared.
+                    // Continuation tier uses format "blitz_%i" (rodata @ 0x001ba76a).
                     char buf[16];
                     std::snprintf(buf, sizeof(buf), "blitz_%i", level);
                     PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
@@ -2026,26 +2031,27 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                     if (game_work.mGameSound) game_work.mGameSound->SFXPlay(k_BlitzSfx[sfxLevel - 1], 1.0f, 1.0f);
                 }
 
-                int clamped = (m_BlitzBonus[playerIdx] > 5) ? 6 : m_BlitzBonus[playerIdx];
+                int clamped = (m_BlitzLevel > 5) ? 6 : m_BlitzLevel;
                 FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
-                m_ColdTimer[playerIdx] = 3.0f;  // reset timer for next level-up
-                LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d_count effect",
+                m_ColdTimer = 3.0f;  // reset timer for next level-up
+                LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d effect",
                          playerIdx, newCount, clamped, clamped * 5, level, level);
             }
         } else {
             LOG_INFO("BLITZ", "  continuation: timer %.3f->%.3f (need %.3f more drain to fire next tier)",
-                     oldTimer, m_ColdTimer[playerIdx], m_ColdTimer[playerIdx]);
+                     oldTimer, m_ColdTimer, m_ColdTimer);
         }
     }
 
-    // Update "blitz_max" stat.
-    static uint32_t s_blitzMaxHash = 0;
-    if (!s_blitzMaxHash) s_blitzMaxHash = StringHash("blitz_max");
+    // v1.6.1 AddSpeed @0x00124f48: trailing best_blitz update (unconditional when amount>0).
+    // Binary: AddToTotal("best_blitz", max(m_BlitzLevel - GetTotal("best_blitz"), 0))
+    static uint32_t s_bestBlitzHash = 0;
+    if (!s_bestBlitzHash) s_bestBlitzHash = StringHash("best_blitz");
     if (sd) {
-        int existing = sd->GetTotal(s_blitzMaxHash);
-        int delta    = m_BlitzBonus[playerIdx] - existing;
+        int existing = sd->GetTotal(s_bestBlitzHash);
+        int delta    = m_BlitzLevel - existing;
         if (delta > 0)
-            sd->AddToTotal("blitz_max", s_blitzMaxHash, delta, false, false);
+            sd->AddToTotal("best_blitz", s_bestBlitzHash, delta, false, false);
     }
 }
 
@@ -2059,10 +2065,10 @@ void WaveManager::RecievedSync(int /*waveIdx*/, float /*score*/) {
 // Power-up modifiers
 // ----------------------------------------------------------------------------
 
-void WaveManager::BombScale(float mult)          { field_0x64 *= mult; }
-void WaveManager::BombMultiplyer(float mult)     { spawnLevel *= mult; }
-void WaveManager::FruitMultiplyer(float mult)    { field_0x6c *= mult; }
-void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }
+void WaveManager::BombScale(float mult)          { m_BombChance    *= mult; }   // +0x6c
+void WaveManager::BombMultiplyer(float mult)     { m_SpawnLevel    *= mult; }   // +0x68
+void WaveManager::FruitMultiplyer(float mult)    { m_FruitChance   *= mult; }   // +0x70
+void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  // +0x74
 
 // ----------------------------------------------------------------------------
 // Networking stubs

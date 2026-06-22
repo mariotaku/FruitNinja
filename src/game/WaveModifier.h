@@ -26,7 +26,7 @@ public:
     // +0x24: per-modifier blitz/power-up spawn override entries (std::vector<PROBABILITY_OVERIDE>, 0xc bytes)
     std::vector<PROBABILITY_OVERIDE> m_OverideEntries;
 
-    // +0x30: XML bombMultiplyer="..." (default 1.0) — multiplied into WaveManager spawnLevel
+    // +0x30: XML bombMultiplyer="..." (default 1.0) -- multiplied into WaveManager::m_SpawnLevel (+0x68)
     float m_BombMult;
 
     // +0x34: XML bombScale="..." (default 1.0)
