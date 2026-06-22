@@ -233,6 +233,21 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
     // Defunct: no-op stub; binary @ 0x0017ee2c
 }
 
+// MakeSplat random-kill denominators (binary @ 0x0017f456-f482).
+// FN_SPLAT_RAND_DENOM=4: main unconditional 25% suppression (RandInt(4)==0).
+// FN_SPLAT_SPRINKLE_RAND_DENOM=3: secondary kill for special/on-side fruit (RandInt(3)==0).
+#ifndef FN_SPLAT_RAND_DENOM
+#  define FN_SPLAT_RAND_DENOM 4
+#endif
+#ifndef FN_SPLAT_SPRINKLE_RAND_DENOM
+#  define FN_SPLAT_SPRINKLE_RAND_DENOM 3
+#endif
+
+// Test seam: s_RandKillEnabled defaults true (binary-faithful RandInt suppression).
+// Tests set false to force deterministic splat spawn. Production never modifies it;
+// default behaviour is byte-identical.
+bool SplatEntity::s_RandKillEnabled = true;
+
 // Binary @ 0x0017f2f0 -- MakeSplat
 // Initialises a free pool slot. Called from Fruit::Slice (0x00177028) and
 // Fruit::Update juice-trail (0x0017e342).
@@ -252,7 +267,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool lan
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
-    if (RandInt(4) == 0) return;
+    if (s_RandKillEnabled && RandInt(FN_SPLAT_RAND_DENOM) == 0) return;
 
     m_bParam3 = param3 ? 1 : 0;
 
@@ -290,7 +305,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool lan
         m_bAlive = 0;
         return;
     }
-    if (info && info->m_bSpecial && RandInt(3) == 0) {
+    if (info && info->m_bSpecial && s_RandKillEnabled && RandInt(FN_SPLAT_SPRINKLE_RAND_DENOM) == 0) {
         m_bAlive = 0;
         return;
     }

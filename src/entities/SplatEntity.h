@@ -128,6 +128,11 @@ public:
     // Default ctor (binary @ 0x0017ed58). Called by MemoryPool<SplatEntity>::Create
     // via new[] -- pool manages lifetime, direct construction is not part of normal flow.
     SplatEntity();
+
+    // Test seam: s_RandKillEnabled defaults true (binary-faithful RandInt suppression).
+    // Tests set false to force deterministic splat spawn. Production never modifies it;
+    // default behaviour is byte-identical.
+    static bool s_RandKillEnabled;
 };
 
 // Layout asserts -- only valid on 32-bit ARM cross-compile where pointers are 4 bytes.

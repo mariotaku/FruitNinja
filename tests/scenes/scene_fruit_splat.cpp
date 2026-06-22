@@ -1,19 +1,15 @@
 // scene_fruit_splat.cpp -- splat spawn + draw regression test.
 //
-// Reproduces the "fruit splat (background juice decal) not drawing" bug in
-// isolation.  Spawns MULTIPLE watermelons (12), triggers CollisionResponse to
-// start the slice countdown on each, ticks Fruit::Update until Fruit::Slice
-// fires and the splat-spawn loop runs, then renders SplatEntity::DrawActiveSplats
-// and reads back the framebuffer.
+// Slices a single watermelon with SplatEntity::s_RandKillEnabled=false so all
+// random kills in MakeSplat are disabled, giving deterministic splat spawn on
+// every run.  Ticks UpdateActiveSplats until splats land, then renders
+// SplatEntity::DrawActiveSplats and reads back the framebuffer.
 //
 // Two independent assertions:
-//   SPAWN: after slicing 12 fruits, alive splat count >= 1.  MakeSplat has a
-//          25% random suppression (RandInt(4)==0).  With 12 independent trials,
-//          P(all suppressed) = 0.25^12 ~ 6e-8, so the test is deterministic in
-//          practice.  Failure here still diagnoses alpha=0 (colour-parsing bug).
+//   SPAWN: after slicing 1 fruit with random kills off, alive splat count >= 1.
+//          Failure here means a real suppression bug (alpha=0, FruitInfo parse, etc.).
 //   DRAW:  after rendering, non-background pixels in the frame > a minimum.
-//          Failure here with SPAWN passing means a draw-state regression
-//          (depth test rejecting, blend off, texture missing, etc.).
+//          Failure with SPAWN passing means a draw-state regression.
 //
 // Background: bright green (0,255,0) -- splat juice is coloured, so any pixel
 // with |R-0|+|G-255|+|B-0| > 30 is considered non-background.
@@ -176,142 +172,86 @@ int main(int argc, char* argv[]) {
            (unsigned)info->m_FruitColour[2],
            fruitAlpha);
 
-    // --- Spawn and slice 12 fruits (faithful path, probabilistically deterministic) ---
-    // With 12 independent 75%-survive trials, P(all suppressed) = 0.25^12 ~ 6e-8.
-    static const int SPAWN_COUNT = 12;
+    // --- Disable random kills for deterministic spawn ---
+    // Test seam: SplatEntity::s_RandKillEnabled=false removes the 25% main kill
+    // and the special-fruit secondary kill from MakeSplat. The alpha==0 suppression
+    // (the real bug-guard) is NOT gated and still fires. Restored to true at exit.
+    SplatEntity::s_RandKillEnabled = false;
 
+    // --- Spawn and slice 1 fruit (deterministic with random kills off) ---
     Mortar::ActorManager* am = h.game.actorManager;
     if (!am) {
         fprintf(stderr, "[scene_fruit_splat] FAIL: actorManager null\n");
         return 1;
     }
 
-    // Track the last fruit for KillFruit cleanup (others deactivate naturally via slice).
     Fruit* lastFruit = NULL;
-    int slicedCount = 0;
 
-    for (int fi = 0; fi < SPAWN_COUNT; ++fi) {
-        Mortar::Entity* e = am->Add(0, true);
-        if (!e) {
-            fprintf(stderr, "[scene_fruit_splat] FAIL: actorManager->Add(0) returned null on spawn %d\n", fi);
-            return 1;
-        }
-        Fruit* fruit = static_cast<Fruit*>(e);
-        fruit->Init(NULL, (long)fruitType, NULL);
-
-        // Spread positions slightly so splats don't pile exactly on top of each other.
-        float fx = (float)(fi - SPAWN_COUNT / 2) * 5.0f;
-        fruit->pos               = Vec3(fx, 0.0f, 0.0f);
-        fruit->vel               = Vec3(0.0f, 0.0f, 0.0f);
-        fruit->m_Gravity         = Vec3(0.0f, 0.0f, 0.0f);
-        fruit->m_bBallisticEnable = 0;
-        fruit->m_TimeScale       = 1.0f;
-        fruit->flags            &= ~(uint32_t)(0x01 | 0x10);
-
-        // Trigger slice: blade moving right at speed=60; SLICE_BLADE_SCALE=0.1 -> bladeSpeed=6.
-        Vec3 bladeVel(60.0f, 10.0f, 0.0f);
-        fruit->CollisionResponse(NULL, 0, 0, &bladeVel);
-
-        // Tick Update until Slice() fires (timer 0.03 s at 1/60 dt = 2 frames).
-        for (int i = 0; i < SLICE_TICKS; ++i) {
-            fruit->Update(TICK_DT);
-            fruit->PostUpdate(TICK_DT);
-            if (fruit->m_bSliced) break;
-        }
-        if (fruit->m_bSliced) ++slicedCount;
-        lastFruit = fruit;
+    Mortar::Entity* e = am->Add(0, true);
+    if (!e) {
+        fprintf(stderr, "[scene_fruit_splat] FAIL: actorManager->Add(0) returned null\n");
+        return 1;
     }
+    Fruit* fruit = static_cast<Fruit*>(e);
+    fruit->Init(NULL, (long)fruitType, NULL);
+
+    fruit->pos               = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->vel               = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->m_Gravity         = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->m_bBallisticEnable = 0;
+    fruit->m_TimeScale       = 1.0f;
+    fruit->flags            &= ~(uint32_t)(0x01 | 0x10);
+
+    // Trigger slice: blade moving right at speed=60; SLICE_BLADE_SCALE=0.1 -> bladeSpeed=6.
+    Vec3 bladeVel(60.0f, 10.0f, 0.0f);
+    fruit->CollisionResponse(NULL, 0, 0, &bladeVel);
+
+    // Tick Update until Slice() fires (timer 0.03 s at 1/60 dt = 2 frames).
+    bool sliced = false;
+    for (int i = 0; i < SLICE_TICKS; ++i) {
+        fruit->Update(TICK_DT);
+        fruit->PostUpdate(TICK_DT);
+        if (fruit->m_bSliced) { sliced = true; break; }
+    }
+    lastFruit = fruit;
 
     int aliveAfterSlice = CountAliveSplats();
-    printf("[scene_fruit_splat] SPAWN: sliced %d/%d fruits  alive splats = %d\n",
-           slicedCount, SPAWN_COUNT, aliveAfterSlice);
+    printf("[scene_fruit_splat] SPAWN: sliced=%s  alive splats = %d\n",
+           sliced ? "yes" : "no", aliveAfterSlice);
 
     bool spawnPass = (aliveAfterSlice >= 1);
     if (!spawnPass) {
-        // Diagnose suppression cause.
-        fprintf(stderr, "[scene_fruit_splat] FAIL (SPAWN): 0 alive splats after slicing %d fruits.\n",
-                slicedCount);
-        if (fruitAlpha == 0) {
+        fprintf(stderr, "[scene_fruit_splat] FAIL (SPAWN): 0 alive splats after slicing 1 fruit.\n");
+        if (!sliced) {
+            fprintf(stderr, "  CAUSE: Fruit::Slice did not fire (m_SliceTimer not expiring).\n");
+        } else if (fruitAlpha == 0) {
             fprintf(stderr, "  CAUSE: m_FruitColour[3] (alpha) = 0 for fruitType=%d (%s).\n",
                     fruitType, info->m_Name);
-            fprintf(stderr, "  MakeSplat suppresses splats when info->m_FruitColour[3] == 0.\n");
-            fprintf(stderr, "  Root cause: FruitInfo::LoadInfo reads 'colour' attr from <FruitInfo>\n");
-            fprintf(stderr, "  element directly, but in fruitlist.xml 'colour' lives on the <colours>\n");
-            fprintf(stderr, "  child element -- so m_FruitColour[3] is always 0 for every fruit.\n");
-        } else if (slicedCount == 0) {
-            fprintf(stderr, "  CAUSE: Fruit::Slice did not run for any fruit (m_SliceTimer not expiring).\n");
+            fprintf(stderr, "  MakeSplat suppresses splats when m_ColA==0 (not gated by s_RandKillEnabled).\n");
         } else {
-            // This branch is practically unreachable: P(all suppressed across 12 sliced fruits) ~ 6e-8.
-            fprintf(stderr, "  CAUSE: Slice ran on %d fruit(s) but MakeSplat suppressed all splats.\n",
-                    slicedCount);
-            fprintf(stderr, "  This is astronomically unlikely (P~6e-8) -- suspect a real alpha=0 bug.\n");
-            fprintf(stderr, "  fruitAlpha=%u for fruitType=%d (%s)\n",
-                    fruitAlpha, fruitType, info->m_Name);
+            fprintf(stderr, "  CAUSE: Slice ran but 0 splats spawned. "
+                    "alpha=%u, s_RandKillEnabled=false -> random kills off. "
+                    "Suspect pool empty or another suppression path.\n", fruitAlpha);
         }
     } else {
-        printf("[scene_fruit_splat] SPAWN PASS: %d alive splat(s) from %d sliced fruits\n",
-               aliveAfterSlice, slicedCount);
-    }
-
-    // --- If no natural splats (e.g. alpha=0 colour bug): inject one for the DRAW path ---
-    // This isolates the DRAW regression from the SPAWN regression so both can be
-    // diagnosed independently.  With 12 fruits this path is only reached when
-    // m_FruitColour[3]==0 (the colour-parsing bug), not from random 25% suppression.
-    bool injected = false;
-    if (aliveAfterSlice == 0) {
-        SplatEntity* s = SplatEntity::GetFree();
-        if (s) {
-            // Set up a splat manually: force colour (red, non-zero alpha),
-            // landed position, small scale, valid m_SplatType.
-            s->m_bAlive      = 1;
-            s->m_SplatType   = 0;   // type 0: small round splat
-            s->m_Pos         = Vec3(0.0f, 0.0f, -50.0f);   // landed z
-            s->m_Vel         = Vec3(0.0f, 0.0f, 0.0f);
-            // Scale triple: (sc, -sc, sc).  sc=15 puts the splat at ~15 game units.
-            s->m_Scale       = Vec3(15.0f, -15.0f, 15.0f);
-            s->m_ScaleSpawn  = s->m_Scale;
-            // Angle=0: m_AxisA=(0.5,0,0), m_AxisB=(0,0.5,0).
-            s->m_Angle       = 0.0f;
-            s->m_AxisA       = Vec3(0.5f, 0.0f, 0.0f);
-            s->m_AxisB       = Vec3(0.0f, 0.5f, 0.0f);
-            // Red, fully opaque.
-            s->m_ColR        = 200;
-            s->m_ColG        = 30;
-            s->m_ColB        = 30;
-            s->m_ColA        = 255;
-            s->m_AlphaBase   = 255.0f;
-            s->m_Life        = 5.0f;   // well above UP_LIFE_SLIDE_THR (1.25) -- no decay
-            s->m_DecayRate   = 0.1f;
-            s->m_ColourPhase = 0.0f;
-            s->m_FruitType   = fruitType;
-            s->m_bSpecial    = 0;
-            s->m_bParam3     = 0;
-            s->m_bFlipV      = 0;
-            s->m_bSSMPHorizGravity = 0;
-
-            injected = true;
-            printf("[scene_fruit_splat] injected one splat (type=0, red, landed) for DRAW test\n");
-        } else {
-            fprintf(stderr, "[scene_fruit_splat] WARN: SplatEntity::GetFree() returned null; "
-                    "pool empty? Cannot inject for DRAW test.\n");
-        }
+        printf("[scene_fruit_splat] SPAWN PASS: %d alive splat(s)\n", aliveAfterSlice);
     }
 
     // --- Tick UpdateActiveSplats until splats land ---
-    // If we injected a pre-landed splat skip the landing wait.
-    if (!injected) {
-        for (int i = 0; i < LAND_TICKS; ++i) {
-            SplatEntity::UpdateActiveSplats(TICK_DT);
-            if (CountLandedSplats() > 0) {
-                printf("[scene_fruit_splat] natural splats landed after %d tick(s)\n", i + 1);
-                break;
-            }
+    for (int i = 0; i < LAND_TICKS; ++i) {
+        SplatEntity::UpdateActiveSplats(TICK_DT);
+        if (CountLandedSplats() > 0) {
+            printf("[scene_fruit_splat] splats landed after %d tick(s)\n", i + 1);
+            break;
         }
     }
 
     int landedCount = CountLandedSplats();
     printf("[scene_fruit_splat] landed splats = %d  (alive total = %d)\n",
            landedCount, CountAliveSplats());
+
+    // Restore production default.
+    SplatEntity::s_RandKillEnabled = true;
 
     // --- Interactive path ---
     if (h.IsInteractive()) {
@@ -324,7 +264,7 @@ int main(int argc, char* argv[]) {
                 if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE)
                     running = false;
             }
-            if (!injected) SplatEntity::UpdateActiveSplats(TICK_DT);
+            SplatEntity::UpdateActiveSplats(TICK_DT);
             RenderSplatFrame(static_cast<SDL_Window*>(h.window));
             SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
         }
@@ -382,8 +322,7 @@ int main(int argc, char* argv[]) {
     if (!drawPass) {
         fprintf(stderr, "[scene_fruit_splat] FAIL (DRAW): only %d non-background pixels "
                 "(< %d minimum).\n", drawnPixels, MIN_DRAWN_PIXELS);
-        fprintf(stderr, "  splat source: %s  landed=%d\n",
-                injected ? "INJECTED" : "NATURAL", landedCount);
+        fprintf(stderr, "  landed=%d\n", landedCount);
         fprintf(stderr, "  Possible causes:\n");
         if (landedCount == 0) {
             fprintf(stderr, "    - No landed splats at render time (m_SplatType still -1; "
@@ -395,21 +334,17 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "    - Splat texture not loaded (white_splash.tex missing)\n");
         fprintf(stderr, "    - DrawActiveSplats bailed early (s_SplatTex.IsValid() == false)\n");
     } else {
-        printf("[scene_fruit_splat] DRAW PASS: %d non-background pixels  "
-               "(source: %s)\n",
-               drawnPixels, injected ? "injected splat" : "natural splat");
+        printf("[scene_fruit_splat] DRAW PASS: %d non-background pixels\n", drawnPixels);
     }
 
     if (lastFruit) lastFruit->KillFruit(false);
     SplatEntity::RemoveAllSplats();
 
     // Final verdict.
-    printf("[scene_fruit_splat] SPAWN=%s DRAW=%s  (injected=%s)\n",
+    printf("[scene_fruit_splat] SPAWN=%s DRAW=%s\n",
            spawnPass ? "PASS" : "FAIL",
-           drawPass  ? "PASS" : "FAIL",
-           injected  ? "yes" : "no");
+           drawPass  ? "PASS" : "FAIL");
 
-    // Test fails if either assertion fails.
     h.Shutdown();
     return (spawnPass && drawPass) ? 0 : 1;
 }
