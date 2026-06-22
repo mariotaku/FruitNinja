@@ -42,6 +42,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "asset/MeshManager.h"
+#include "asset/AnimationManager.h"
 #include "core/SystemManager.h"
 #include "particle/PSPParticleManager.h"
 #include "asset/File.h"
@@ -121,6 +122,9 @@ void GameInitialise() {
         // DIFFERS: port cache is std::map; size advisory only (binary literal = 0x26C00 = 158720 bytes)
         meshMgr.Initialise(0x26C00);
     }
+
+    // Binary @0x0011d41c (GameInitialise): AnimationManager::Initialise(0x7d000=512000), no-op body (v1.6.1 @0x00236314).
+    Mortar::AnimationManager::GetInstance().Initialise(0x7d000);
 
     // Step 10: InputManager
     game->inputManager = new Mortar::InputManager();
@@ -442,7 +446,8 @@ void GameDestroy() {
     // --- 12. Engine singletons ---
     // Note: Mortar::InputManager::Destroy -- SDL2 replacement cleaned up above.
     // Note: Mortar::TextureManager::Destroy -- port uses SDL/GL teardown at process exit.
-    // Note: Mortar::AnimationManager::Destroy -- not yet ported; no-op acceptable at shutdown.
+    // Binary @0x0011d1b4 (GameDestroy): AnimationManager::Destroy() (-> ReleaseAll, no-op body).
+    Mortar::AnimationManager::GetInstance().Destroy();
     // Note: Mortar::MeshManager::Destroy -- not yet ported; no-op acceptable at shutdown.
     // Note: Mortar::TextureManager::Destroy (binary calls twice) -- same as above.
     // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
