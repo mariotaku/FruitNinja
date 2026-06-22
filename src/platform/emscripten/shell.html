@@ -404,16 +404,18 @@
   function _startDirectly() {
     if (_runtimeReady) return;
     _runtimeReady = true;
-    /* Hide the loading bar + cover (download complete) but KEEP the splash up.
-       The splash stays fully opaque over the still-blank canvas through game init
-       until the game has actually rendered its first frames, at which point the
-       C++ first-frame hook (mainEmscripten.cpp) calls window._fnFadeSplash().
-       Fading on load-complete (the previous behaviour) uncovered the canvas while
-       it was still blank for a few frames -> visible flash; deferring the fade to
-       the first rendered frame (the game draws its own identical in-game HB_logo
-       splash) makes the hand-off seamless. */
-    if (_progressWrap) _progressWrap.style.display = 'none';
-    if (_loadingCover) _loadingCover.style.display = 'none';
+    /* HOLD the loading bar + shadow cover AND the splash up after the download
+       completes. Download-complete only means the wasm runtime started -- the
+       game still has to init and render its first frames, during which the canvas
+       is blank. Keeping the progress bar + shadow over the splash through that gap
+       gives continuous loading indication (instead of a static splash with the
+       baked "Loading..." text re-exposed) until the game has actually rendered, at
+       which point the C++ first-frame hook (mainEmscripten.cpp) calls
+       window._fnFadeSplash() and the bar + shadow + splash fade out together
+       (seamless hand-off to the game's own identical in-game HB_logo splash).
+       (Fading on load-complete -- the older behaviour -- uncovered the still-blank
+       canvas for a few frames -> visible flash; deferring to the first rendered
+       frame avoids it.) */
     /* Reveal the fullscreen toggle now that the game is starting. */
     if (_fullscreenBtn) _fullscreenBtn.style.display = 'flex';
     /* Signal BootWait to proceed -- no tap required. */
@@ -449,8 +451,10 @@
 
   function _removeOverlayNow() {
     /* Immediate DOM removal -- called after fade-out transition completes.
-       The loading cover is removed alongside the splash so the baked
-       "Loading..." text it hid never reappears as the splash is torn down. */
+       The held progress bar + loading cover are removed alongside the splash so
+       neither the bar nor the baked "Loading..." text it hid reappears as the
+       splash is torn down. */
+    if (_progressWrap && _progressWrap.parentNode) _progressWrap.parentNode.removeChild(_progressWrap);
     if (_loadingCover && _loadingCover.parentNode) _loadingCover.parentNode.removeChild(_loadingCover);
     if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
   }
@@ -465,6 +469,16 @@
        suppress transitionend when the element is already gone or hidden. */
     if (_splashFadeStarted) return;
     _splashFadeStarted = true;
+    /* Fade the held progress bar + shadow cover out together with the splash so
+       the loading UI and the splash hand off to the game as one unit. */
+    if (_progressWrap) {
+      _progressWrap.style.transition = 'opacity 0.3s ease';
+      _progressWrap.style.opacity = '0';
+    }
+    if (_loadingCover) {
+      _loadingCover.style.transition = 'opacity 0.3s ease';
+      _loadingCover.style.opacity = '0';
+    }
     if (!_splashImg) { _removeOverlayNow(); return; }
     _splashImg.style.pointerEvents = 'none';
     _splashImg.style.transition = 'opacity 0.3s ease';
