@@ -56,7 +56,6 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_GradCol3(255, 255, 255, 255)
     , m_GradMode(0)
     , m_MetallicFlag(false)
-    , m_GradFlag(false)
     , m_StrokeWidth(0.0f)
     , m_StrokeCount(0)
     , m_StrokeCol0(0, 0, 0, 255)
@@ -392,11 +391,11 @@ void BakedStringBox::Layout() {
 void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
     if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
-        m_GradMode != 2 || m_GradFlag != false) {
+        m_GradMode != 2 || m_MetallicFlag != false) {
         m_GradMode = 2;
         m_GradTop = top;
         m_GradBottom = bottom;
-        m_GradFlag = false;
+        m_MetallicFlag = false;
         if (!perGlyph) {
             m_Dirty = true;
         }
@@ -419,7 +418,6 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
         m_GradBottom    = bottom;
         m_GradCol2      = c2;
         m_GradCol3      = c3;
-        m_GradFlag      = false;
         m_Dirty         = true;
     }
     (void)flag;
