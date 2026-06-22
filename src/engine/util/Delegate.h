@@ -162,6 +162,23 @@ public:
     bool operator==(decltype(nullptr)) const noexcept { return m_bEmpty != 0; }
     bool operator!=(decltype(nullptr)) const noexcept { return m_bEmpty == 0; }
 
+    // Delegate equality — used by EventN::operator-= / UnRegister via DelegateEqual().
+    // ASM-spec v1.6.1 BaseDelegate::operator== @0x0015d298 area:
+    //   a = this->Ptr(); b = other.Ptr();
+    //   if (a == b) return true;   // both empty, or same storage (shouldn't happen)
+    //   if (!a || !b) return false;
+    //   if (a->GetTypeID() != b->GetTypeID()) return false;
+    //   return a->Compare(*b);
+    bool operator==(const Delegate& other) const {
+        const Concept* a = Ptr();
+        const Concept* b = other.Ptr();
+        if (a == b) return true;
+        if (!a || !b) return false;
+        if (a->GetTypeID() != b->GetTypeID()) return false;
+        return a->Compare(*b);
+    }
+    bool operator!=(const Delegate& other) const { return !(*this == other); }
+
     // --- Static factories ---
 
     // Bind a member function. Mirrors binary's Callee<T> subtype.
@@ -192,6 +209,11 @@ private:
         virtual ~Concept() {}
         virtual R    Invoke(Args... args) const = 0;
         virtual void CloneTo(void* dst) const = 0;
+        // Appended after clone-helper to match binary vtable +0x10/+0x14.
+        // v1.6.1 BaseDelegate vtable: +0x10 GetTypeID, +0x14 Compare.
+        // Binary @0x0015d4ec (Callee<T>::Compare), @0x0015d574 (Global::Compare).
+        virtual int  GetTypeID() const = 0;
+        virtual bool Compare(const Concept& o) const = 0;
     };
 
     struct FreeFn : Concept {
@@ -201,6 +223,14 @@ private:
             return m_pFn ? m_pFn(std::forward<Args>(args)...) : R();
         }
         void CloneTo(void* dst) const override { new (dst) FreeFn(*this); }
+        // v1.6.1 Global::GetTypeID / Global::Compare @0x0015d574
+        int  GetTypeID() const override {
+            static const char s_id = 0;
+            return (int)(intptr_t)&s_id;
+        }
+        bool Compare(const Concept& o) const override {
+            return m_pFn == static_cast<const FreeFn&>(o).m_pFn;
+        }
     };
 
     template<typename T>
@@ -215,6 +245,17 @@ private:
                 : R();
         }
         void CloneTo(void* dst) const override { new (dst) MemFn(*this); }
+        // v1.6.1 Callee<T>::GetTypeID / Callee<T>::Compare @0x0015d4ec
+        // One static-address per MemFn<T> instantiation -> unique id per bound type.
+        int  GetTypeID() const override {
+            static const char s_id = 0;
+            return (int)(intptr_t)&s_id;
+        }
+        bool Compare(const Concept& o) const override {
+            const MemFn<T>& other = static_cast<const MemFn<T>&>(o);
+            // Compare bound object pointer AND full pmf (ptr word + adj word).
+            return m_pObj == other.m_pObj && m_pMethod == other.m_pMethod;
+        }
     };
 
     template<typename F>
@@ -229,6 +270,12 @@ private:
             return m_fn(args...);
         }
         void CloneTo(void* dst) const override { new (dst) Functor(*this); }
+        int  GetTypeID() const override {
+            static const char s_id = 0;
+            return (int)(intptr_t)&s_id;
+        }
+        // DIFFERS: no binary Functor in any UnRegister path (v1.6.1); identity compare only.
+        bool Compare(const Concept& o) const override { return this == &o; }
     };
 
     Concept*       Ptr()       noexcept { return m_bEmpty ? nullptr : reinterpret_cast<Concept*>(&m_Storage); }
@@ -302,6 +349,8 @@ public:
     }
     Ret operator()() const { return m_d(); }
     operator bool() const { return static_cast<bool>(m_d); }
+    bool operator==(const Delegate0& other) const { return m_d == other.m_d; }
+    bool operator!=(const Delegate0& other) const { return m_d != other.m_d; }
 };
 
 template<typename Ret, typename A1>
@@ -332,6 +381,8 @@ public:
     }
     Ret operator()(A1 a1) const { return m_d(a1); }
     operator bool() const { return static_cast<bool>(m_d); }
+    bool operator==(const Delegate1& other) const { return m_d == other.m_d; }
+    bool operator!=(const Delegate1& other) const { return m_d != other.m_d; }
 };
 
 template<typename Ret, typename A1, typename A2>
@@ -362,6 +413,8 @@ public:
     }
     Ret operator()(A1 a1, A2 a2) const { return m_d(a1, a2); }
     operator bool() const { return static_cast<bool>(m_d); }
+    bool operator==(const Delegate2& other) const { return m_d == other.m_d; }
+    bool operator!=(const Delegate2& other) const { return m_d != other.m_d; }
 };
 
 template<typename Ret, typename A1, typename A2, typename A3>
@@ -392,6 +445,8 @@ public:
     }
     Ret operator()(A1 a1, A2 a2, A3 a3) const { return m_d(a1, a2, a3); }
     operator bool() const { return static_cast<bool>(m_d); }
+    bool operator==(const Delegate3& other) const { return m_d == other.m_d; }
+    bool operator!=(const Delegate3& other) const { return m_d != other.m_d; }
 };
 
 template<typename Ret, typename A1, typename A2, typename A3, typename A4>
@@ -422,6 +477,8 @@ public:
     }
     Ret operator()(A1 a1, A2 a2, A3 a3, A4 a4) const { return m_d(a1, a2, a3, a4); }
     operator bool() const { return static_cast<bool>(m_d); }
+    bool operator==(const Delegate4& other) const { return m_d == other.m_d; }
+    bool operator!=(const Delegate4& other) const { return m_d != other.m_d; }
 };
 
 }  // namespace Mortar
