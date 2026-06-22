@@ -256,6 +256,12 @@ struct TestHarness {
 
     // -------- shutdown --------
     int Shutdown() {
+        // Port specific: game teardown must precede SDL_Quit so that
+        // SoundManager::SFXStop (called from GameSound::KillAll inside
+        // GameDestroy) does not call SDL_LockAudioDevice on a dead audio
+        // device. Game::shutdown() is idempotent (static flag guard) so the
+        // subsequent ~Game() call from ~TestHarness is a safe no-op.
+        game.shutdown();
         if (gl)     { SDL_GL_DeleteContext(gl); gl = NULL; }
         if (window) { SDL_DestroyWindow(window); window = NULL; }
         SDL_Quit();
