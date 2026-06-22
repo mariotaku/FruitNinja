@@ -621,10 +621,23 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #endif
 
     if (distSq < thresh && !isSeed) {
-        // Binary LAB_001ea3d0: nothing to add this frame when close to tail
-        // and not a seed frame. (Binary also early-outs when m_PointCount>0.)
+        // Binary UpdateTouchDown @0x1e9f08: when below the move threshold but the
+        // stroke already has points, the binary does `else if (0 < m_PointCount)
+        // goto LAB_001ea3d0` -- it skips AddPoint but STILL re-arms m_BladeActive.
+        // Re-arming here is load-bearing: DrawSlice shifts the latch each frame, so
+        // two consecutive slow frames without a re-arm decay it 1->2->0; the next
+        // per-frame TouchDown then sees m_BladeActive==0, calls Reset() (wiping the
+        // trail -> a visibly disconnected segment) AND re-advances the disco mod
+        // colour -- splitting one swipe into multiple differently-coloured pieces.
+        // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
+        if (m_PointCount > 0) {
+#if !defined(__bada__)
+            m_State = 1;
+#endif
+            m_BladeActive |= 1;
+        }
 #ifdef FN_DEBUG_TOUCH
-        LOG_DEBUG("SLASH", "OnTouchActive[%d]: skipped (below thresh, not seed) pointCount=%d",
+        LOG_DEBUG("SLASH", "OnTouchActive[%d]: skipped-add, re-armed (below thresh) pointCount=%d",
                  m_FingerId, m_PointCount);
 #endif
         return;
