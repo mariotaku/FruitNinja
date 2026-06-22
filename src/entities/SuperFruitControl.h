@@ -221,6 +221,9 @@ static_assert(offsetof(SuperFruitControl, m_Scale)           == 0xd8, "SuperFrui
 static_assert(offsetof(SuperFruitControl, m_SliceCooldown)   == 0xdc, "SuperFruitControl::m_SliceCooldown offset");
 static_assert(offsetof(SuperFruitControl, m_WorkVec5)        == 0xf0, "SuperFruitControl::m_WorkVec5 offset");
 static_assert(offsetof(SuperFruitControl, m_WorkVec6)        == 0xfc, "SuperFruitControl::m_WorkVec6 offset");
+// TODO: sizeof(SuperFruitControl) == 0x108 per binary (v1.6.1 @0x12c168), but port is 0x10c due to
+// port-only m_pGlow field at +0x108 inflating the struct by 4 bytes. Fix: move m_pGlow out-of-struct
+// (e.g. into a side-map), then re-add this assert. Filed as layout bug.
 #endif
 
 #endif // FN_SUPER_FRUIT_CONTROL_H

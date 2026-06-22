@@ -64,4 +64,9 @@ public:
 
 } // namespace Mortar
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(Mortar::MortarSound) == 0x10, "Mortar::MortarSound size mismatch"); // v1.6.1 MortarSound @0x2304a4
+#endif
+
 #endif

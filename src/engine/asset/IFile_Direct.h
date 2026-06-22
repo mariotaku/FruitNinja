@@ -33,4 +33,9 @@ private:
 
 } // namespace Mortar
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(Mortar::IFile_Direct) == 0x14, "Mortar::IFile_Direct size mismatch"); // v1.6.1 IFile_Direct @0x2511ac
+#endif
+
 #endif // FN_ENGINE_ASSET_IFILE_DIRECT_H

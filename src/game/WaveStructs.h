@@ -437,6 +437,8 @@ struct WaveQue {
 
 #ifdef __bada__
 static_assert(sizeof(WaveQue) == 0x0c, "WaveQue size mismatch");
+static_assert(sizeof(SPAWNER_INFO) == 0x64, "SPAWNER_INFO size mismatch"); // v1.6.1 SPAWNER_INFO @0x14be2c
+static_assert(sizeof(WaveInfo) == 0x7c, "WaveInfo size mismatch"); // v1.6.1 WaveInfo @0x122800 (MEDIUM confidence)
 #endif
 
 #endif // FN_WAVE_STRUCTS_H

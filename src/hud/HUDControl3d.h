@@ -54,4 +54,9 @@ public:
     void Update(float dt) override;                // binary @ 0x00143fcc: tail-calls base
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(HUDControl3d) == 0x7c, "HUDControl3d size mismatch"); // v1.6.1 HUDControl3d @0x149084
+#endif
+
 #endif

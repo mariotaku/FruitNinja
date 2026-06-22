@@ -62,4 +62,9 @@ public:
     GameModifier* Clone() override;
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(TimeModifier) == 0x3c, "TimeModifier size mismatch"); // v1.6.1 TimeModifier @0x14d2d4
+#endif
+
 #endif // FN_GAME_TIME_MODIFIER_H

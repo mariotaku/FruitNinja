@@ -98,4 +98,9 @@ private:
     bool m_bFlipX;                            // +0x9C
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(TutorialControl) == 0xa0, "TutorialControl size mismatch"); // v1.6.1 TutorialControl @0x1ce7d0
+#endif
+
 #endif

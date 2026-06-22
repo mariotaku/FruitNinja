@@ -53,4 +53,9 @@ private:
     bool IsTimedGame() const;
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(TimeControl) == 0x108, "TimeControl size mismatch"); // v1.6.1 TimeControl @0x1ce558
+#endif
+
 #endif
