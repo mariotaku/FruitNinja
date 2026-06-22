@@ -180,12 +180,12 @@ public:
     int      m_FruitQueue[32];     // +0x80 (all -1 by default)
 
     // +0x100..+0x108: per-player base speed snapshot.
-    // Resume: m_Speed_P0 -> WaveManager::m_ComboTimer[0]; m_Speed_P0_alias -> m_Speed[0]/[1];
-    // m_Speed_P1 (stored as float) -> WaveManager::m_BlitzBonus[1] (int).
-    // SaveWaveInfo (inverse): m_Speed[0] -> m_Speed_P0, m_BlitzBonus[1] -> m_Speed_P1.
-    float    m_Speed_P0;           // +0x100  (WaveManager::m_ComboTimer[0])
-    float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_Speed[0]/[1])
-    float    m_Speed_P1;           // +0x108  (WaveManager::m_BlitzBonus[1], stored as float)
+    // Resume: m_Speed_P0 -> WaveManager::m_ComboTimer (+0x50); m_Speed_P0_alias -> m_ComboSpeed/m_TargetComboSpeed;
+    // m_Speed_P1 (stored as float) -> WaveManager::m_ColdTimer (+0x64, raw float word move).
+    // SaveWaveInfo (inverse): m_ComboSpeed -> m_Speed_P0, m_ColdTimer -> m_Speed_P1.
+    float    m_Speed_P0;           // +0x100  (WaveManager::m_ComboTimer +0x50)
+    float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_ComboSpeed/m_TargetComboSpeed)
+    float    m_Speed_P1;           // +0x108  (WaveManager::m_ColdTimer +0x64, stored as float)
 
     // +0x10C: persists TimeControl::m_TimeRemaining for resume.
     //         -1.0f sentinel = "non-timed mode, no saved time".
@@ -220,10 +220,10 @@ public:
     float    m_WaveDelay;          // +0x144
     float    m_WaveWait;           // +0x148
     // CORRECTED: +0x14c was m_field14c ("globalWaveDt"). Verified by Resume
-    // (this->field_0x74 = sd->+0x14c) and SaveWaveInfo (inverse). The XML
+    // (WaveManager::m_SpeedAccum = sd->+0x14c) and SaveWaveInfo (inverse). The XML
     // attr name is "globalWaveDt" but in-code semantic is PROBABILITY_OVERIDE
-    // flag word (WaveManager::field_0x74). Resume and SaveWaveInfo both confirm.
-    float    m_ProbabilityOverideFlag; // +0x14c  WaveManager::field_0x74
+    // flag word (WaveManager::m_SpeedAccum +0x78). Resume and SaveWaveInfo both confirm.
+    float    m_ProbabilityOverideFlag; // +0x14c  WaveManager::m_SpeedAccum (+0x78)
 
     // +0x150: wave speed scalar (v1.6.1 NEW). Default 1.0f.
     // Persisted in the <que> block (XML attr TBD -- GOT 0xfffb06e6 unresolved).

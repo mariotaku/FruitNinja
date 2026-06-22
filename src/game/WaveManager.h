@@ -56,38 +56,41 @@ public:
     uint8_t _pad_0x3c[4];    // +0x3c
     // +0x40: play-time accumulators
     float field_0x40;         // +0x40
+    // +0x44: defunct net timer A (binary: multiplayer retry timer A; dead code in SP)
     float field_0x44;         // +0x44
-    // +0x48
-    int field_0x48;           // +0x48
-    // +0x4c: per-player combo "blitz" timer (decays via GetWavedt; AddSpeed
-    // pumps to 1.0f on every successful blitz multi-slice).
-    // ASM-verified: 2026-05-22 binary @ 0x00123510 / 0x00122f50 (re-analyst).
-    float m_ComboTimer[2];    // +0x4c (P0), +0x50 (P1)
-    // +0x54: wave speed per player [2]
-    float m_Speed[2];         // +0x54 (P0), +0x58 (P1)
-    // +0x5c: per-player blitz score-level (int, 1..6+) / cold-timer (float, resets 3.0f).
-    //   Binary aliases m_BlitzBonus[1] (int) with m_ColdTimer[0] (float) at +0x60:
-    //   same 4-byte slot, int interpretation = blitz level, float = cold-down timer.
-    //   Single-player uses P0 slot for blitz level (int) and the P1/ColdTimer slot
-    //   for the cold-timer float. Union preserves binary layout exactly.
-    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (asm-inspector).
-    union {
-        int   m_BlitzBonus[2];       // +0x5c: [0]=P0 blitz level (int), [1]=P1 (int; aliases m_ColdTimer[0])
-        struct {
-            int   _m_BlitzP0;        // +0x5c (use m_BlitzBonus[0] instead)
-            float m_ColdTimer[1];    // +0x60: P0 cold-down timer (float; aliases m_BlitzBonus[1])
-        };
-    };
-    // +0x64: bomb scale multiplier (BombScale power-up)
-    float field_0x64;         // +0x64
-    // +0x68: bomb chain spawn level (BombMultiplyer power-up)
-    float spawnLevel;         // +0x68
-    // +0x6c: fruit spawn multiplier (FruitMultiplyer power-up)
-    float field_0x6c;         // +0x6c
-    // +0x70: critical chance multiplier
-    float m_CritChanceMult;   // +0x70
-    // +0x74: globalDt base (set in ResetGlobalDt to dt; Reset to m_SpeedClampStart[gameMode]).
-    float field_0x74;             // +0x74
+    // +0x48: defunct net timer B (binary: multiplayer retry timer B; dead code in SP)
+    float m_NetTimerB;        // +0x48
+    // +0x4c: unnamed binary padding (4 bytes between net timers and combo timer)
+    uint8_t _pad4c[4];        // +0x4c
+    // +0x50: blitz combo timer (decays via GetWavedt; AddSpeed sets to 1.0 on slice).
+    // v1.6.1 AddSpeed @0x00124f48, UpdateComboSpeed @0x001238dc
+    float m_ComboTimer;       // +0x50
+    // +0x54: binary padding (4 bytes between combo timer and combo speed)
+    uint8_t _pad54[4];        // +0x54
+    // +0x58: displayed/eased combo speed (P0). Eased toward m_TargetComboSpeed.
+    // v1.6.1 UpdateComboSpeed @0x001238dc
+    float m_ComboSpeed;       // +0x58
+    // +0x5c: AddSpeed accumulator (target speed), clamped [0, 14].
+    // v1.6.1 AddSpeed @0x00124f48
+    float m_TargetComboSpeed; // +0x5c
+    // +0x60: blitz tier level (int, 1..6+). Written by AddToTotal("blitz_bonus").
+    // v1.6.1 AddSpeed @0x00124f48
+    int   m_BlitzLevel;       // +0x60
+    // +0x64: cold-down timer (float, set to 3.0 on each tier; counts down to 0).
+    // v1.6.1 AddSpeed @0x00124f48, GetComboBonusProgression @0x00122fb0
+    float m_ColdTimer;        // +0x64
+    // +0x68: bomb chain spawn level multiplier (BombMultiplyer power-up; reset 1.0 each frame)
+    // v1.6.1 WaveManager::Update @0x001267a0
+    float m_SpawnLevel;       // +0x68
+    // +0x6c: bomb spawn chance multiplier (BombScale power-up; reset 1.0 each frame)
+    // v1.6.1 WaveManager::Update @0x001267a0
+    float m_BombChance;       // +0x6c
+    // +0x70: fruit spawn multiplier (FruitMultiplyer power-up; reset 1.0 each frame)
+    // v1.6.1 WaveManager::Update @0x001267a0
+    float m_FruitChance;      // +0x70
+    // +0x74: critical chance multiplier (CriticalChanceMod power-up; reset 1.0 each frame)
+    // v1.6.1 WaveManager::Update @0x001267a0, GetCriticalChance @0x00123174
+    float m_CritChanceMult;   // +0x74
 
     // +0x78: speed accumulator (increment base for dtInc). Binary @ 0x001267a0
     // accumulates into +0x78; NOT a dtMod from PowerUpManager (that's at +0x7c).
@@ -306,7 +309,7 @@ public:
 
     Math::Random& GetRandom() { return m_Random; }
 
-    // 0x00121834: m_Speed[playerIdx].
+    // v1.6.1 @0x00122fa0: m_ComboSpeed (P0 displayed speed).
     float GetSpeed(int playerIdx);
 
     // 0x001218dc: effective wave dt (clamped).
@@ -343,13 +346,13 @@ public:
 
     // --- Power-up modifiers (PowerUpManager::Update calls these) ------
 
-    // 0x001286fc: field_0x64 *= mult
+    // 0x001286fc: m_BombChance *= mult
     void BombScale(float mult);
 
-    // 0x0012870c: spawnLevel *= mult
+    // 0x0012870c: m_SpawnLevel *= mult
     void BombMultiplyer(float mult);
 
-    // 0x0012871c: field_0x6c *= mult
+    // 0x0012871c: m_FruitChance *= mult
     void FruitMultiplyer(float mult);
 
     // 0x0012872c: m_CritChanceMult *= mult
@@ -378,11 +381,29 @@ private:
     static SpawnPlacement ParsePlacement(const char* side);
 };
 
-// Binary WaveManager is 752 bytes (0x2f0). Port adds m_pWaveQue/m_pWaveQueItem
-// beyond that. The assert below checks that m_pWaveQue sits exactly at offset
-// 752 (= binary boundary), verifying all binary-named members landed at the
-// right offsets. v1.6.1 binary struct @ 0x00123ef8 ctor + GetNextWave/SetCurrentWave
+// Layout asserts for the re-laid-out +0x4c..+0x77 block and the tail.
+// The -4 byte shift absorbed entirely within +0x4c..+0x77; +0x78 onward unchanged.
+// v1.6.1 binary struct @ 0x00123ef8 ctor + AddSpeed @0x00124f48 + Update @0x001267a0
 #ifdef __bada__
+static_assert(offsetof(WaveManager, m_ComboTimer)        == 0x50,
+              "WaveManager m_ComboTimer offset mismatch");
+static_assert(offsetof(WaveManager, m_ComboSpeed)        == 0x58,
+              "WaveManager m_ComboSpeed offset mismatch");
+static_assert(offsetof(WaveManager, m_TargetComboSpeed)  == 0x5c,
+              "WaveManager m_TargetComboSpeed offset mismatch");
+static_assert(offsetof(WaveManager, m_BlitzLevel)        == 0x60,
+              "WaveManager m_BlitzLevel offset mismatch");
+static_assert(offsetof(WaveManager, m_ColdTimer)         == 0x64,
+              "WaveManager m_ColdTimer offset mismatch");
+static_assert(offsetof(WaveManager, m_BombChance)        == 0x6c,
+              "WaveManager m_BombChance offset mismatch");
+static_assert(offsetof(WaveManager, m_FruitChance)       == 0x70,
+              "WaveManager m_FruitChance offset mismatch");
+static_assert(offsetof(WaveManager, m_CritChanceMult)    == 0x74,
+              "WaveManager m_CritChanceMult offset mismatch");
+static_assert(offsetof(WaveManager, m_SpeedAccum)        == 0x78,
+              "WaveManager m_SpeedAccum offset mismatch");
+// Tail assert: binary region boundary at 752 bytes (port extensions follow).
 static_assert(offsetof(WaveManager, m_pWaveQue) == 752,
               "WaveManager binary-region layout mismatch (expect 752 bytes before port extensions)");
 #endif

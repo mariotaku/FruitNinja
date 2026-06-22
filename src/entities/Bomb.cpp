@@ -283,7 +283,7 @@ void Bomb::Update(float /*dt*/) {
             // Countdown expired: chain-bomb spawning
             {
                 WaveManager* wm = WaveManager::GetInstance();
-                const float sl = wm->spawnLevel;
+                const float sl = wm->m_SpawnLevel;  // +0x68: bomb chain spawn level
                 int iVar7 = (int)sl;
                 const float frac = sl - (float)iVar7;
                 if (frac > 0.01f) {

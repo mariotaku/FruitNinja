@@ -195,9 +195,9 @@ bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     if (m_pSound != finished) return false;   // not our loop -- ignore
 
     // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
-    // After 6+ waves (WaveManager+0x5C), swap to the heavier stream variant.
+    // After 6+ blitz tiers (WaveManager m_BlitzLevel +0x60), swap to the heavier stream variant.
     WaveManager* wm = WaveManager::GetInstance();
-    if (wm && wm->m_BlitzBonus[0] > 5) {
+    if (wm && wm->m_BlitzLevel > 5) {
         m_SoundIdx = 1;
     }
 

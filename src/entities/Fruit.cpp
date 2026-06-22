@@ -514,13 +514,13 @@ void Fruit::Update(float dt) {
             // binary @0x001dfd80 -- cascade fruit-spawn fires ONCE on the transition
             // frame when m_SpawnDelay crosses from positive to non-positive. Binary
             // nests this inside the if (m_SpawnDelay > 0.0f) block, after trail re-arm.
-            // WaveManager::field_0x6c is the per-frame fruit multiplier set by
+            // WaveManager::m_FruitChance (+0x70) is the per-frame fruit multiplier set by
             // PowerUp::FruitMultiplyer. For value N: spawn (N-1) extras from a
             // random side-template. For value < 1: warp this fruit off-screen so
             // CheckHasGoneOffscreen kills it next frame.
             {
                 WaveManager* wm = WaveManager::GetInstance();
-                float countF = wm->field_0x6c;
+                float countF = wm->m_FruitChance;
                 int   cnt    = (int)countF;
                 // Stochastic round-up. Epsilon=0.01 (DAT_00177cec), scale=100 (DAT_00177cf0).
                 if ((float)cnt + 0.01f < countF) {
