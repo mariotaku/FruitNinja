@@ -172,7 +172,6 @@ private:
     Colour  m_GradCol3;           // binary field 0x88 (m_FillCol3, metallic c3)
     int     m_GradMode;           // binary field 0x8C (m_ColourMode: 2=gradient, 4=metallic)
     bool    m_MetallicFlag;       // binary field 0x90 (int m_MetallicFlag; SetMetallicGradient sets 1, SetGradient clears to 0)
-    bool    m_GradFlag;           // PORT-ONLY (no binary field); models clearing m_MetallicFlag@0x90
 
     // Stroke/outline fields (binary v1.6.1 @ 0x54..0x64):
     float   m_StrokeWidth;        // binary 0x54
