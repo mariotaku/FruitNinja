@@ -473,12 +473,11 @@ void BakedStringBox::BakeGradient() {
                 a = (unsigned char)(int)(fa * 255.0f);
 
                 // Metallic: step 2 — ApplyGradientSplit(0.51, c1=m_GradBottom).
-                // planeY = -(0.51 * (gradYTop + gradYBot))
-                // Transform_GradientSplit @0x0024954c: verts with Y < planeY get flat c1.
-                // TODO: v1.6.1 Transform_GradientSplit @0x0024954c — split plane sign and
-                // which-side-gets-colour not byte-verified; using vy < planeY = flat-band below.
-                float plane1 = -(0.51f * (gradYTop + gradYBot));
-                if (layoutY < plane1) {
+                // ASM-verified v1.6.1 Transform_GradientSplit @0x0024954c: plane d = -(sum*frac)
+                // with sum=(rectTop+rectBottom); per-vertex test paints the side vy + d > eps,
+                // i.e. vy > -d = frac*(gradYTop+gradYBot) (greater-Y / upper side).
+                float plane1 = 0.51f * (gradYTop + gradYBot);
+                if (layoutY > plane1) {
                     r = colBot2.r;
                     g = colBot2.g;
                     b = colBot2.b;
@@ -486,8 +485,10 @@ void BakedStringBox::BakeGradient() {
                 }
 
                 // Metallic: step 3 — ApplyGradientSplit(0.49, c2=m_GradCol2).
-                float plane2 = -(0.49f * (gradYTop + gradYBot));
-                if (layoutY < plane2) {
+                // 0.49 plane sits below the 0.51 plane, so c2 overpaints c1 above it,
+                // leaving a thin c1 strip between the two planes.
+                float plane2 = 0.49f * (gradYTop + gradYBot);
+                if (layoutY > plane2) {
                     r = colBand2.r;
                     g = colBand2.g;
                     b = colBand2.b;
