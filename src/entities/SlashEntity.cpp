@@ -1791,7 +1791,12 @@ void SlashEntity::Update(float dt) {
                         {
                             FruitSaveData* sd = game_work.m_SaveData;
                             if (sd && m_ComboCount > sd->m_BestComboLength) {
+                                // ASM-spec v1.6.1 SlashEntity::Update @0x1e9504 / @0x1e95a8: writer copies 11 ints via a
+                                // stepping ptr from +0x150; the 11th read is +0x178 (m_ComboCount), one past the 10-elem
+                                // m_ComboFruitTypes. Reproduce the 11th-slot write explicitly (NOT i<11 -- that would read
+                                // m_ComboFruitTypes[10] out of bounds on the port's 10-element array).
                                 for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                                sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
                                 sd->m_BestComboLength = m_ComboCount;
                                 s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
                             } else if (sd && m_ComboCount == sd->m_BestComboLength) {
@@ -1799,7 +1804,10 @@ void SlashEntity::Update(float dt) {
                                     s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCount, nullptr);
                                 int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
                                 if (s_CheckComboFlag < newScore) {
+                                    // ASM-spec v1.6.1 SlashEntity::Update @0x1e95a8: same 11-int stepping-ptr copy as
+                                    // the new-high path -- 11th slot is m_ComboCount (+0x178 spill).
                                     for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                                    sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
                                     sd->m_BestComboLength = m_ComboCount;
                                 }
                             }
