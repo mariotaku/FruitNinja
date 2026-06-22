@@ -73,6 +73,7 @@ namespace { struct _TextureLoaderLayoutCheck {
     static_assert(offsetof(Mortar::TextureLoader, m_Path)       == 0x1c,
                   "TextureLoader::m_Path offset");
     // m_LoadedData, m_LockCount, m_PathHash offsets depend on AsciiString being 44B on bada.
+    static_assert(sizeof(Mortar::TextureLoader) == 0x54, "Mortar::TextureLoader size mismatch"); // v1.6.1 TextureLoader @0x227124
 }; }
 #endif
 

@@ -41,4 +41,9 @@ private:
     int  m_SlotCount;          // +0x1BC: total number of slots parsed from spec
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(SpecificOrder) == 0x1c0, "SpecificOrder size mismatch"); // v1.6.1 SpecificOrder @0x118728
+#endif
+
 #endif // FN_GAME_SPECIFIC_ORDER_H

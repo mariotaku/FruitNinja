@@ -128,6 +128,9 @@ struct DojoScreenLayoutAssert {
     static_assert(offsetof(DojoScreen, m_pShopButton)  == 0x98, "m_pShopButton offset");
     static_assert(offsetof(DojoScreen, m_pAboutButton) == 0x9c, "m_pAboutButton offset");
     static_assert(offsetof(DojoScreen, m_pAboutScreen) == 0xa0, "m_pAboutScreen offset");
+    // TODO: sizeof(DojoScreen) == 0xb8 per binary (v1.6.1 @0x1974f4), but port gives 0xa8
+    // (BaseScreen(0x94) + 4 pointers(16) + Game& ref(4) = 0xa8 vs binary 0xb8 = 16 bytes short).
+    // Missing binary fields from +0xa4 to +0xb7 need to be RE'd. Filed as layout bug.
 };
 #endif
 

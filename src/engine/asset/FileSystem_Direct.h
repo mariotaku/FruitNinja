@@ -39,4 +39,9 @@ private:
 
 } // namespace Mortar
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(Mortar::FileSystem_Direct) == 0x14, "Mortar::FileSystem_Direct size mismatch"); // v1.6.1 FileSystem_Direct @0x11d25c
+#endif
+
 #endif // FN_ENGINE_ASSET_FILESYSTEM_DIRECT_H

@@ -71,4 +71,9 @@ public:
     int DeferPoints(int points);
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(ScoreModifier) == 0x3c, "ScoreModifier size mismatch"); // v1.6.1 ScoreModifier @0x147a64
+#endif
+
 #endif // FN_GAME_SCORE_MODIFIER_H

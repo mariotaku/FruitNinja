@@ -105,4 +105,9 @@ public:
     GameModifier* Clone() override;
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(SlashModifier) == 0x40, "SlashModifier size mismatch"); // v1.6.1 SlashModifier @0x14b024
+#endif
+
 #endif

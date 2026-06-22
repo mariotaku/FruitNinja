@@ -171,4 +171,9 @@ private:
     void _Update(float dt);
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(Coin) == 0x94, "Coin size mismatch"); // v1.6.1 Coin @0x1d90b8
+#endif
+
 #endif  // FN_COIN_H
