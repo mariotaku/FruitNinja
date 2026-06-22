@@ -69,3 +69,11 @@ add_scene_test(scene_slash_scene scene_slash.cpp)
 add_scene_test(scene_bomb_scale scene_bomb_scale.cpp)
 add_test(NAME bomb_scale COMMAND scene_bomb_scale)
 set_tests_properties(bomb_scale PROPERTIES TIMEOUT 60)
+
+# ---- scene_fruit_splat: splat spawn + draw regression test ----
+# Slices a watermelon, asserts a SplatEntity spawns (alive in pool) and
+# renders non-background pixels via DrawActiveSplats.
+# Port specific: standalone splat spawn+draw regression test
+add_scene_test(scene_fruit_splat scene_fruit_splat.cpp)
+add_test(NAME fruit_splat COMMAND scene_fruit_splat)
+set_tests_properties(fruit_splat PROPERTIES TIMEOUT 60)

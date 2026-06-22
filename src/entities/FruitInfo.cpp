@@ -181,13 +181,40 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_ZenTexture = Mortar::TextureManager::LoadLocalisedTexture(texName);
         }
 
+        // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084: colour/factColour read from a <colours> CHILD of <FruitInfo>; plural/singular/pluralEnglish/singularEnglish from a <titles> CHILD (NOT the parent). alpha==0 (4th CSV) clears m_bScorable + suppresses the SplatEntity::MakeSplat @0x001eb910 background juice splat.
+
         // --- String attrs with fallbacks ---
-        // "plural" -> +0x100 (fallback: "%ss")
-        const char* plural = elem.Attribute("plural");
-        if (plural && *plural)
-            strncpy(fi.m_Plural, plural, 63);
-        else
-            snprintf(fi.m_Plural, 64, "%ss", fi.m_Name);
+        // "plural", "singular", "pluralEnglish", "singularEnglish" from <titles> CHILD.
+        {
+            TiXmlElement titlesEl = elem.FirstChildElement("titles");
+            if (titlesEl)
+            {
+                const char* plural = titlesEl.Attribute("plural");
+                if (plural && *plural)
+                    strncpy(fi.m_Plural, plural, 63);
+                else
+                    snprintf(fi.m_Plural, 64, "%ss", fi.m_Name);
+
+                const char* singular = titlesEl.Attribute("singular");
+                strncpy(fi.m_Singular, (singular && *singular) ? singular : fi.m_Name, 63);
+
+                const char* pluralEng = titlesEl.Attribute("pluralEnglish");
+                if (pluralEng && *pluralEng)
+                    strncpy(fi.m_PluralEnglish, pluralEng, 63);
+                else
+                    snprintf(fi.m_PluralEnglish, 64, "%ss", fi.m_Name);
+
+                const char* singularEng = titlesEl.Attribute("singularEnglish");
+                strncpy(fi.m_SingularEnglish, (singularEng && *singularEng) ? singularEng : fi.m_Name, 63);
+            }
+            else
+            {
+                snprintf(fi.m_Plural, 64, "%ss", fi.m_Name);
+                strncpy(fi.m_Singular, fi.m_Name, 63);
+                snprintf(fi.m_PluralEnglish, 64, "%ss", fi.m_Name);
+                strncpy(fi.m_SingularEnglish, fi.m_Name, 63);
+            }
+        }
 
         // "factTexture" -> +0x278 (optional; empty if missing)
         const char* factTex = elem.Attribute("factTexture");
@@ -198,43 +225,34 @@ void FruitInfo_Load(const char* xmlPath)
         const char* modelName = elem.Attribute("modelName");
         strncpy(fi.m_ModelName, (modelName && *modelName) ? modelName : fi.m_Name, 63);
 
-        // "singular" -> +0x0C0 (fallback: m_Name)
-        const char* singular = elem.Attribute("singular");
-        strncpy(fi.m_Singular, (singular && *singular) ? singular : fi.m_Name, 63);
-
-        // "pluralEnglish" -> +0x080 (fallback: sprintf("%ss", m_Name))
-        const char* pluralEng = elem.Attribute("pluralEnglish");
-        if (pluralEng && *pluralEng)
-            strncpy(fi.m_PluralEnglish, pluralEng, 63);
-        else
-            snprintf(fi.m_PluralEnglish, 64, "%ss", fi.m_Name);
-
-        // "singularEnglish" -> +0x040 (fallback: m_Name)
-        const char* singularEng = elem.Attribute("singularEnglish");
-        strncpy(fi.m_SingularEnglish, (singularEng && *singularEng) ? singularEng : fi.m_Name, 63);
-
-        // --- Colour: "colour" -> +0x240 (R,G,B,A -> BGRA bytes) ---
-        const char* colourStr = elem.Attribute("colour");
-        if (colourStr && *colourStr)
+        // --- Colour: "colour" -> +0x240 (R,G,B,A -> BGRA bytes); from <colours> CHILD ---
+        // --- factColour: "factColour" -> +0x2F8 (R,G,B -> BGRA with A=0xFF); from <colours> CHILD ---
         {
-            int rgba[4] = {0, 0, 0, 0};
-            ParseCSV(colourStr, rgba, 4);
-            fi.m_FruitColour[0] = (uint8_t)rgba[2]; // B
-            fi.m_FruitColour[1] = (uint8_t)rgba[1]; // G
-            fi.m_FruitColour[2] = (uint8_t)rgba[0]; // R
-            fi.m_FruitColour[3] = (uint8_t)rgba[3]; // A
-        }
+            TiXmlElement coloursEl = elem.FirstChildElement("colours");
+            if (coloursEl)
+            {
+                const char* colourStr = coloursEl.Attribute("colour");
+                if (colourStr && *colourStr)
+                {
+                    int rgba[4] = {0, 0, 0, 0};
+                    ParseCSV(colourStr, rgba, 4);
+                    fi.m_FruitColour[0] = (uint8_t)rgba[2]; // B
+                    fi.m_FruitColour[1] = (uint8_t)rgba[1]; // G
+                    fi.m_FruitColour[2] = (uint8_t)rgba[0]; // R
+                    fi.m_FruitColour[3] = (uint8_t)rgba[3]; // A
+                }
 
-        // --- factColour: "factColour" -> +0x2F8 (R,G,B -> BGRA with A=0xFF) ---
-        const char* factColStr = elem.Attribute("factColour");
-        if (factColStr && *factColStr)
-        {
-            int rgb[3] = {0, 0, 0};
-            ParseCSV(factColStr, rgb, 3);
-            fi.m_FactColour[0] = (uint8_t)rgb[2]; // B
-            fi.m_FactColour[1] = (uint8_t)rgb[1]; // G
-            fi.m_FactColour[2] = (uint8_t)rgb[0]; // R
-            fi.m_FactColour[3] = 0xFF; // A = 0xFF always
+                const char* factColStr = coloursEl.Attribute("factColour");
+                if (factColStr && *factColStr)
+                {
+                    int rgb[3] = {0, 0, 0};
+                    ParseCSV(factColStr, rgb, 3);
+                    fi.m_FactColour[0] = (uint8_t)rgb[2]; // B
+                    fi.m_FactColour[1] = (uint8_t)rgb[1]; // G
+                    fi.m_FactColour[2] = (uint8_t)rgb[0]; // R
+                    fi.m_FactColour[3] = 0xFF; // A = 0xFF always
+                }
+            }
         }
 
         // ASM-verified: 2026-05-03 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
