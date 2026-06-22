@@ -182,7 +182,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
 // Binary @ 0x0017c99c
 // Creates a GenericHUDControl with a BakedStringBox displaying the fact body text.
 // pos=Vec3(-141,-24,0), scale=Vec3(1,1,1)*0.85.
-// Body text from controller+0x7c (m_pCurFactString). Colour (116,93,59,255).
+// Body text from controller+0x7c (m_FactText). Colour (116,93,59,255).
 // ASM-verified: 2026-06-13T03:40Z binary @ 0x0017c99c (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     Mortar::SmartPtr<Mortar::Texture> tex;
@@ -196,7 +196,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
             font, 10.0f, 270.0f, 36.0f, 0xf, 3, 3.0f);
-        box->SetText(m_pController->m_pCurFactString);
+        box->SetText(m_pController->m_FactText);
         box->SetColour(Colour(0x74, 0x5d, 0x3b, 255), 0);
         box->SetHorizontalLineSpacing(-1.0f);
         c->SetText(box);

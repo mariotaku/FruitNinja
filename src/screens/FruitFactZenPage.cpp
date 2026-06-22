@@ -45,13 +45,13 @@ static Mortar::FontCacheObjectTTF* GetZenTTFFont() {
 // Binary @ 0x0017fcd4
 FruitFactZenPage::FruitFactZenPage(FruitFactPageControl* pCtrl)
     : FruitFactPage(pCtrl)
-    , m_HasCombo(0)
-    , m_ComboCount(0)
-    , m_AnimCC(-0.5f)
-    , m_StarResult(0xff)
+    , m_HasUnlockedFacts(0)
+    , m_NumFacts(0)
+    , m_StarBias(-0.5f)
+    , m_ComboLevel(0xff)
 {
     _pad99[0] = 0; _pad99[1] = 0; _pad99[2] = 0;
-    memset(m_ComboFruitInfo, 0, sizeof(m_ComboFruitInfo));
+    memset(m_Facts, 0, sizeof(m_Facts));
 }
 
 FruitFactZenPage::~FruitFactZenPage() {
@@ -89,9 +89,9 @@ void FruitFactZenPage::UnloadContent() {
 // Session state @ binary Game+0x50 = FruitSaveData (port: game_work.m_SaveData).
 // +0x210 = m_BestComboLength, +0x214 = m_BestComboFruits[].
 void FruitFactZenPage::Init() {
-    m_ComboCount = 0;
-    m_AnimCC = -0.5f;
-    m_StarResult = 0xff;
+    m_NumFacts = 0;
+    m_StarBias = -0.5f;
+    m_ComboLevel = 0xff;
 
     CreateSenseisHead(68.0f);
     CreateHorizontalDivider();
@@ -108,7 +108,7 @@ void FruitFactZenPage::Init() {
         comboArr   = game_work.m_SaveData->m_BestComboFruits;
     }
     bool hasCombo = (comboCount > 2);
-    m_HasCombo = hasCombo ? 1 : 0;
+    m_HasUnlockedFacts = hasCombo ? 1 : 0;
 
     Mortar::FontCacheObjectTTF* font = GetZenTTFFont();
 
@@ -120,7 +120,7 @@ void FruitFactZenPage::Init() {
     if (hasCombo) {
         // --- combo-achievement branch ---
         snprintf(banner, sizeof(banner), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
-        m_ComboCount = comboCount;
+        m_NumFacts = comboCount;
 
         // Lay out comboCount fruit icons.
         // spacing=40.0 (DAT_1806d4), maxW=220.0 (DAT_1806d8).
@@ -134,13 +134,13 @@ void FruitFactZenPage::Init() {
 
         float fade = 0.25f;
         for (int i = 0; i < comboCount; ++i) {
-            // Fill m_ComboFruitInfo from the session combo array (Game+0x50+0x214+i*4).
+            // Fill m_Facts from the session combo array (Game+0x50+0x214+i*4).
             if (comboArr != NULL) {
-                m_ComboFruitInfo[i] = comboArr[i];
+                m_Facts[i] = comboArr[i];
             } else {
-                m_ComboFruitInfo[i] = 0;
+                m_Facts[i] = 0;
             }
-            Fruit::FruitInfo(m_ComboFruitInfo[i]);  // resolve (return value ignored here per binary)
+            Fruit::FruitInfo(m_Facts[i]);  // resolve (return value ignored here per binary)
 
             float x = (span * -0.5f - 8.0f) + (float)i * spacing;
             Vec3 ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
@@ -156,10 +156,10 @@ void FruitFactZenPage::Init() {
             fade += 0.25f;
         }
 
-        // Combo star classification from the just-filled m_ComboFruitInfo array.
+        // Combo star classification from the just-filled m_Facts array.
         int outDominant = 0;
-        m_StarResult = FruitFact::CheckCombo(m_ComboFruitInfo, comboCount, &outDominant);
-        Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(m_StarResult);
+        m_ComboLevel = FruitFact::CheckCombo(m_Facts, comboCount, &outDominant);
+        Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(m_ComboLevel);
 
         // Star position: if span < 140.0 (DAT_1806dc), use compressed X; else stagger=42.0 (DAT_1806e8).
         float starX;
@@ -185,9 +185,9 @@ void FruitFactZenPage::Init() {
         if (font) {
             Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
                 font, 10.0f, 128.0f, 10.0f, 0xf, 3, 5.0f);
-            // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_StarResult))
+            // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_ComboLevel))
             // GetComboStarText returns a LSTR id; GETSTRING converts to a C string.
-            unsigned int starStrId = FruitFact::GetComboStarText(m_StarResult);
+            unsigned int starStrId = FruitFact::GetComboStarText(m_ComboLevel);
             const char* starText = (starStrId > 0) ? Mortar::GETSTRING((LocalizedString)starStrId, 0) : "";
             char starBuf[512];
             snprintf(starBuf, sizeof(starBuf), "* %s", starText ? starText : "");  // DAT_001806f8 @ 0x0028260E
@@ -345,10 +345,10 @@ void FruitFactZenPage::DrawOrder(const Vec3& /*hudScale*/, int /*layerMask*/) {
 
 // Binary @ 0x0017fb44
 // add r0,r0,#0xd0 ; b 0x0017faf8  ->  mov r1,#0 ; b SmartPtr<Texture>::SetPtr (0x00104fb0)
-// i.e. the whole body is: m_TexZen.SetPtr(NULL) on the SmartPtr<Texture> at +0xd0.
+// i.e. the whole body is: m_pComboStarTexture.SetPtr(NULL) on the SmartPtr<Texture> at +0xd0.
 // DIFFERS: the prior stub called FruitFactPage::Release() first; the binary does NOT
 // chain to any base Release (FruitFactPage/BaseScreen declare no Release vtable slot).
-// The single observable action is releasing the zen-page texture reference.
+// The single observable action is releasing the zen-page combo-star texture reference.
 void FruitFactZenPage::Release() {
-    m_TexZen.SetPtr(nullptr);
+    m_pComboStarTexture.SetPtr(nullptr);
 }

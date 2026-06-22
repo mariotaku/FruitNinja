@@ -36,18 +36,20 @@
 //
 // Binary layout (ARM32, 4-byte ptrs, v1.6.1):
 //   +0x00..+0x7B : HUDControl3d base (0x7C bytes)
-//   +0x7C        : const char* m_pCurFactString (p_pad+0x00; ctor inits 0)
-//   +0x80        : int m_FruitIdx               (p_pad+0x04; ctor inits -1)
-//   +0x84        : int m_FactIdx                (p_pad+0x08; ctor inits -1)
-//   +0x88        : SmartPtr<Texture> m_Tex88    (p_pad+0x0C; fact page texture)
-//   +0x8C..+0x97 : unnamed SmartPtr<Texture> slots (p_pad+0x10..0x1B)
-//   +0x98        : Colour m_FactColour          (p_pad+0x1C)
-//   +0x9C        : int m_curPage  (init -1)
-//   +0xA0        : MenuButton* m_pLeftArrow  (lazily new'd in Update)
-//   +0xA4        : MenuButton* m_pRightArrow (lazily new'd in Update)
-//   +0xA8        : flags byte = 1
-//   +0xAC        : byte field (p_pad+0x2C, from FruitInfo+4)
-//   +0xB0        : std::vector<FruitFactPage*> m_pages  (p_pad+0x30)
+//   +0x7C        : const char* m_FactText       (ctor inits 0)
+//   +0x80        : uint m_ComboA                (ctor inits 0xFFFFFFFF)
+//   +0x84        : uint m_ComboB                (ctor inits 0xFFFFFFFF)
+//   +0x88        : SmartPtr<Texture> m_FactTexture
+//   +0x8C        : Vec3 m_FactOffset            (Init sets (-69,53,0))
+//   +0x98        : Colour m_FactColour          (ctor inits (0x74,0x5D,0x3B))
+//   +0x9C        : int m_PageFlag               (init -1)
+//   +0xA0        : MenuButton* m_NextButton     (lazily new'd in Update)
+//   +0xA4        : MenuButton* m_PrevButton     (lazily new'd in Update)
+//   +0xA8        : uint8_t m_GameStateSnapshot  (= game_work.gameMode byte)
+//   +0xAC        : std::vector<FruitFactPage*> m_Pages
+//   total 0xB8
+//
+// ASM-verified: layout v1.6.1 FruitFactControl @ 0x00170c78
 //
 // Singleton: static instance @ DATA 0x002d7520 (v1.6.1); constructed at
 // static-init time (entry-point xref). Not reached via a menu button.
@@ -57,6 +59,7 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/math/Colour.h"
+#include "engine/math/Vec3.h"
 #include <vector>
 #include <cstdint>
 
@@ -64,10 +67,8 @@ struct InputEvent;
 class MenuButton;
 class FruitFactPage;
 
-class FruitFactPage;
-
 class FruitFactPageControl : public HUDControl3d {
-    // FruitFactPage builder helpers access m_pCurFactString and m_FactColour
+    // FruitFactPage builder helpers access m_FactText and m_FactColour
     // directly (binary offset reads: ctrl+0x7c, ctrl+0x98).
     friend class FruitFactPage;
 public:
@@ -98,7 +99,7 @@ public:
     // Calls cur->HidePage(), new->ShowPage(); optionally plays sfx.
     void SetPage(int idx, bool playSound);
 
-    // Binary @ 0x00171ab4 -- push_back page into m_pages vector,
+    // Binary @ 0x00171ab4 -- push_back page into m_Pages vector,
     // hide if not current, copy control pos into page->pos.
     void RegisterPage(FruitFactPage* page);
 
@@ -121,33 +122,47 @@ public:
 
 private:
     // +0x7C: current fact string (result of Fruit::GetFact; ctor inits NULL)
-    const char* m_pCurFactString;                        // @+0x7C
-    // +0x80: current fruit-type index (ctor inits -1)
-    int         m_FruitIdx;                              // @+0x80
-    // +0x84: current fact-within-fruit index (ctor inits -1)
-    int         m_FactIdx;                               // @+0x84
-    // +0x88: fact page texture (ctor builds SmartPtr at p_pad+0xc)
-    Mortar::SmartPtr<Mortar::Texture> m_Tex88;          // @+0x88
-    // +0x8C..+0x97: unnamed SmartPtr slots (binary p_pad+0x10..+0x1b)
-    Mortar::SmartPtr<Mortar::Texture> m_Tex8C;          // @+0x8C
-    Mortar::SmartPtr<Mortar::Texture> m_Tex90;          // @+0x90
-    Mortar::SmartPtr<Mortar::Texture> m_Tex94;          // @+0x94
-    // +0x98: fact colour (ctor builds Colour at p_pad+0x1c)
-    Colour m_FactColour;                                 // @+0x98
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    const char* m_FactText;                                // @+0x7C
+    // +0x80: combo index A (ctor inits 0xFFFFFFFF)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    unsigned int m_ComboA;                                 // @+0x80
+    // +0x84: combo index B (ctor inits 0xFFFFFFFF)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    unsigned int m_ComboB;                                 // @+0x84
+    // +0x88: fact page texture
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    Mortar::SmartPtr<Mortar::Texture> m_FactTexture;       // @+0x88
+    // +0x8C: fact offset Vec3 (Init sets (-69,53,0)); replaces old 3x SmartPtr slots
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    Vec3 m_FactOffset;                                     // @+0x8C..+0x97
+    // +0x98: fact colour (ctor inits (0x74,0x5D,0x3B))
+    Colour m_FactColour;                                   // @+0x98
     // +0x9C: current page index (init -1)
-    int m_curPage;                                       // @+0x9C (p_pad+0x20)
-    // +0xA0: left arrow MenuButton (lazily new'd in Update when pages>1)
-    MenuButton* m_pLeftArrow;                            // @+0xA0
-    // +0xA4: right arrow MenuButton (lazily new'd in Update when pages>1)
-    MenuButton* m_pRightArrow;                           // @+0xA4
-    // +0xA8: opaque byte (flags, init 1 in binary ctor)
-    uint8_t m_flags;                                     // @+0xA8
-    uint8_t _pad_A9[3];                                  // padding
-    // +0xAC: additional byte field from binary ctor (p_pad[0x2c])
-    uint8_t m_flagsB;                                    // @+0xAC
-    uint8_t _pad_AD[3];                                  // padding to align pages vector
-    // +0xB0: pages vector (binary p_pad+0x30, i.e. class +0xB0)
-    std::vector<FruitFactPage*> m_pages;                 // @+0xB0
+    int m_PageFlag;                                        // @+0x9C
+    // +0xA0: next arrow MenuButton (lazily new'd in Update when pages>1)
+    MenuButton* m_NextButton;                              // @+0xA0
+    // +0xA4: prev arrow MenuButton (lazily new'd in Update when pages>1)
+    MenuButton* m_PrevButton;                              // @+0xA4
+    // +0xA8: game-mode snapshot byte (= game_work.gameMode at Init time)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    uint8_t m_GameStateSnapshot;                           // @+0xA8
+    uint8_t _pad_A9[3];                                    // padding to align m_Pages
+    // +0xAC: pages vector
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    std::vector<FruitFactPage*> m_Pages;                   // @+0xAC
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(FruitFactPageControl) == 0xB8,
+    "FruitFactPageControl sizeof must be 0xB8");
+static_assert(offsetof(FruitFactPageControl, m_FactOffset) == 0x8C,
+    "FruitFactPageControl::m_FactOffset must be at +0x8C");
+static_assert(offsetof(FruitFactPageControl, m_GameStateSnapshot) == 0xA8,
+    "FruitFactPageControl::m_GameStateSnapshot must be at +0xA8");
+static_assert(offsetof(FruitFactPageControl, m_Pages) == 0xAC,
+    "FruitFactPageControl::m_Pages must be at +0xAC");
+#endif
 
 #endif // FN_HUD_FRUIT_FACT_PAGE_CONTROL_H

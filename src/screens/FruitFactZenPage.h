@@ -15,12 +15,15 @@
 //
 // Layout (FruitFactPage base = 0x98 bytes; derived own-fields start at +0x98):
 //   +0x94 : FruitFactPageControl* m_pController  (BASE field, read-only in Init)
-//   +0x98 : uint8 m_HasCombo      (strb [r5,#0x98] = (fruitCount>2)?1:0)
-//   +0x9c : int   m_ComboFruitInfo[11]  (array +0x9c..+0xc7; CheckCombo(this+0x9c,...))
-//   +0xc8 : int   m_ComboCount    (str [r5,#0xc8])
-//   +0xcc : float m_AnimCC        (vstr s15(=-0.5f),[r5,#0xcc])
-//   +0xd0 : SmartPtr<Texture> m_TexZen  (4-byte raw-ptr SmartPtr; ctor+Release use +0xd0)
-//   +0xd4 : uint8 m_StarResult    (strb [r5,#0xd4] = 0xff; ldrsb [r5,#0xd4])
+//   +0x98 : uint8 m_HasUnlockedFacts  (strb [r5,#0x98] = (fruitCount>2)?1:0)
+//   +0x9c : int   m_Facts[11]         (array +0x9c..+0xc7; CheckCombo(this+0x9c,...))
+//   +0xc8 : int   m_NumFacts          (str [r5,#0xc8])
+//   +0xcc : float m_StarBias          (vstr s15(=-0.5f),[r5,#0xcc])
+//   +0xd0 : SmartPtr<Texture> m_pComboStarTexture  (4-byte raw-ptr SmartPtr; ctor+Release use +0xd0)
+//   +0xd4 : uint8 m_ComboLevel        (strb [r5,#0xd4] = 0xff; ldrsb [r5,#0xd4])
+//   total: 0xF0 (sizeof with trailing padding after m_ComboLevel)
+//
+// ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
 //
 
 #include "FruitFactPage.h"
@@ -44,33 +47,41 @@ public:
 
 protected:
     // +0x98: whether this session had a combo (fruitCount > 2)
-    uint8_t m_HasCombo;          // @+0x98
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    uint8_t m_HasUnlockedFacts;   // @+0x98
     uint8_t _pad99[3];
 
     // +0x9c: per-combo fruit-info id array (int[11], spans +0x9c..+0xc7)
-    // CheckCombo(this+0x9c, m_ComboCount, &outDominant) reads this array.
+    // CheckCombo(this+0x9c, m_NumFacts, &outDominant) reads this array.
     // Elements written by Init loop: *(int*)(this+0x9c+i*4) = fruitInfoId[i].
-    int m_ComboFruitInfo[11];    // @+0x9c..+0xc7
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    int m_Facts[11];              // @+0x9c..+0xc7
 
     // +0xc8: how many fruits in the best combo this session
-    int   m_ComboCount;          // @+0xc8
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    int   m_NumFacts;             // @+0xc8
 
-    // +0xcc: animation accumulator (init -0.5f)
-    float m_AnimCC;              // @+0xcc
+    // +0xcc: animation accumulator / star bias (init -0.5f)
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    float m_StarBias;             // @+0xcc
 
-    // +0xd0: zen-page texture SmartPtr (4-byte raw-ptr form; ctor/Release operate on [r0,#0xd0])
-    Mortar::SmartPtr<Mortar::Texture> m_TexZen;   // @+0xd0
+    // +0xd0: zen-page combo-star texture SmartPtr (4-byte raw-ptr form; ctor/Release operate on [r0,#0xd0])
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    Mortar::SmartPtr<Mortar::Texture> m_pComboStarTexture;  // @+0xd0
 
-    // +0xd4: star result byte (0xff = no combo; set by CheckCombo; read as signed byte)
-    uint8_t m_StarResult;        // @+0xd4
+    // +0xd4: combo level byte (0xff = no combo; set by CheckCombo; read as signed byte)
+    // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
+    uint8_t m_ComboLevel;         // @+0xd4
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(FruitFactZenPage, m_TexZen) == 0xd0,
-    "FruitFactZenPage::m_TexZen must be at +0xd0");
-static_assert(offsetof(FruitFactZenPage, m_StarResult) == 0xd4,
-    "FruitFactZenPage::m_StarResult must be at +0xd4");
+static_assert(sizeof(FruitFactZenPage) == 0xF0,
+    "FruitFactZenPage sizeof must be 0xF0");
+static_assert(offsetof(FruitFactZenPage, m_pComboStarTexture) == 0xd0,
+    "FruitFactZenPage::m_pComboStarTexture must be at +0xd0");
+static_assert(offsetof(FruitFactZenPage, m_ComboLevel) == 0xd4,
+    "FruitFactZenPage::m_ComboLevel must be at +0xd4");
 #endif
 
 #endif // FN_SCREENS_FRUIT_FACT_ZEN_PAGE_H
