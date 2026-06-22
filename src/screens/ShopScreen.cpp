@@ -141,6 +141,12 @@ Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
 Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
 
+// Binary BSS global g_bShopButtonShrinking @.got+0x451b4: "the equip-button fruit piece is
+// currently flying off-screen". Set by ShrinkBuyButton, read by Move/EquipCallback/DeletedMenuItem,
+// cleared on completion. The binary uses a process-wide static (NOT a ShopScreen member), so model
+// it as a TU-local static -- present in BOTH host and cross builds, no sizeof impact.
+static bool g_bShopButtonShrinking = false;
+
 // Port-only helpers (mirror DojoScreen pattern).
 #if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
@@ -226,7 +232,6 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_AnimFrame(0)
     , m_State(0)
 #if !defined(__bada__)
-    , m_bShrinking(false)
     , m_SelCounter(0)
 #endif
 {
@@ -441,7 +446,7 @@ float ShopScreen::GetDescriptionTextXPos() {
 //
 // ASM-verified binary writes (after null/Sliced early-outs):
 //   fruit->m_bSliced = 1;               // +0xb8
-//   g_bShopButtonShrinking = 1;         // BSS bool (port: m_bShrinking)
+//   g_bShopButtonShrinking = 1;         // BSS bool (file-static g_bShopButtonShrinking)
 //   m_pEquipButton->m_bClearsMenuItems = 0;  // +0x13a  (prevents ClearMenuItems on retract)
 //   fruit->m_SecondVel = SHOP_SHRINK_VEC;    // +0xd4 = (1,1,1)
 //
@@ -462,11 +467,7 @@ void ShopScreen::ShrinkBuyButton() {
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
     #endif
     fruit->m_bSliced                      = true;  // *(fruit+0xb8) = 1
-#if !defined(__bada__)
-    // Host-only model of the binary's BSS global g_bShopButtonShrinking
-    // (.got+0x451b4). Excluded on __bada__ so ShopScreen sizeof stays 0xbc.
-    m_bShrinking                          = true;
-#endif
+    g_bShopButtonShrinking                = true;
     m_pEquipButton->m_bClearsMenuItems    = 0;     // *(button+0x13a) = 0 (suppresses ClearMenuItems)
     fruit->m_SecondVel                    = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
 }
@@ -500,11 +501,7 @@ void ShopScreen::ShrinkBuyButton() {
 // ---------------------------------------------------------------------------
 void ShopScreen::DeletedMenuItem(HUDControl* removed) {
     if (removed == m_pEquipButton) {
-#if !defined(__bada__)
-        if (m_bShrinking) {
-#else
-        if (false) {
-#endif
+        if (g_bShopButtonShrinking) {
             // Kick the fruit off-screen when the button was shrunk programmatically.
             // Binary @ 0x0015d14c writes (re-RE'd 2026-05-09 by re-analyst):
             //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
@@ -682,11 +679,7 @@ void ShopScreen::EquipCallback() {
     if (!m_pEquipButton) return;
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
-#if !defined(__bada__)
-    if (m_bShrinking) {
-#else
-    if (false) {
-#endif
+    if (g_bShopButtonShrinking) {
         // Programmatic-shrink path (EquipCallback @ 0x0015d649):
         // Copy current entity pos to m_HalfB_pos, then set all three
         // velocity fields from g_ShopFlingVec (SHOP_FLING_VEC = (0,1,0)).
@@ -928,9 +921,7 @@ void ShopScreen::Update(float dt) {
                         if (game_work.m_TutorialControl)
                             game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
                         // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
-#if !defined(__bada__)
-                        m_bShrinking = false;
-#endif
+                        g_bShopButtonShrinking = false;
                         // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
                         m_pEquipButton->m_RestScale =
                             m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
