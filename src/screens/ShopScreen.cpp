@@ -147,6 +147,11 @@ bool ShopScreen::s_bContentLoaded = false;
 // it as a TU-local static -- present in BOTH host and cross builds, no sizeof impact.
 static bool g_bShopButtonShrinking = false;
 
+// Binary g_ShopStaticBlock->m_SelCounter @.got+0x451b4+0x88: SetSelected rate-limiter --
+// increments (mod 10) every frame; SetSelected fires only when ==0. Binary uses a
+// process-wide static block field (NOT a ShopScreen member); model as a TU-local static.
+static int g_ShopSelCounter = 0;
+
 // Port-only helpers (mirror DojoScreen pattern).
 #if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
@@ -231,9 +236,6 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
-#if !defined(__bada__)
-    , m_SelCounter(0)
-#endif
 {
     // Binary: call LoadContent if guard not set
     LoadContent();
@@ -773,23 +775,17 @@ void ShopScreen::Update(float dt) {
 
     // Binary pre-amble (0x0015e212..0x0015e244):
     // 1. If m_pShopList && GetItemClosestToZero() != m_pSelectedItem (pointer compare)
-    //    && m_SelCounter == 0: call SetSelected (rate-limited every 10 frames).
-    // 2. Increment m_SelCounter unconditionally: (m_SelCounter+1) % 10.
+    //    && g_ShopSelCounter == 0: call SetSelected (rate-limited every 10 frames).
+    // 2. Increment g_ShopSelCounter unconditionally: (g_ShopSelCounter+1) % 10.
     // Binary: __aeabi_idivmod(counter+1, 10) unconditionally, gate on counter==0.
     if (m_pShopList) {
         ShopListItem* closest = static_cast<ShopListItem*>(m_pShopList->GetItemClosestToZero());
-#if !defined(__bada__)
-        if (closest != m_pSelectedItem && m_SelCounter == 0) {
-#else
-        if (closest != m_pSelectedItem) {
-#endif
+        if (closest != m_pSelectedItem && g_ShopSelCounter == 0) {
             SetSelected(closest);
         }
     }
-#if !defined(__bada__)
-    // Increment unconditionally (binary: (m_SelCounter+1) % 10 every frame)
-    m_SelCounter = (m_SelCounter + 1) % 10;
-#endif
+    // Increment unconditionally (binary: (g_ShopSelCounter+1) % 10 every frame)
+    g_ShopSelCounter = (g_ShopSelCounter + 1) % 10;
 
     // Sync layer flags from alt (binary copies field_0x80 to field_0x34 each frame)
     m_LayerFlags = (uint32_t)m_LayerFlagsAlt;

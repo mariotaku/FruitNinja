@@ -172,16 +172,6 @@ public:
     // +0xB8: state machine index
     int m_State;
 
-    // Port-specific trailing fields (not in the 188-byte binary struct).
-    // Excluded on the __bada__ production build so sizeof stays at 0xbc.
-#if !defined(__bada__)
-    // Mirrors g_ShopStaticBlock->m_SelCounter at GOT_base + 0x451b4 + 0x88.
-    // Rate-limiter for SetSelected calls in Update preamble: counter increments
-    // every frame (mod 10), SetSelected fires only when counter == 0.
-    // Binary: __aeabi_idivmod(counter + 1, 10) every frame unconditionally.
-    int m_SelCounter;
-#endif // !defined(__bada__)
-
     // --- Static textures (GOT-relative globals in binary) ---
     // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
     // See docs/screens/shop.md "Corrected Static Block Slot Table" for authoritative mapping.
