@@ -99,8 +99,7 @@ public:
     // SetMetallicGradient  binary @ 0x002458e0
     // 4-stop metallic fill: m_ColourMode=4, m_MetallicFlag=1.
     // Fields: m_FillTop/Bottom at 0x7c/0x80, m_FillCol2/Col3 at 0x84/0x88.
-    // Port renders 2-stop (top/bottom) pending full 4-stop metallic path.
-    // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+    // Binary colour order: c0=top, c1=bottom(port), c2, c3=bottom (full); port arg order matches.
     void SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag);
 
     // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site)
@@ -163,9 +162,8 @@ private:
     // ASM-spec v1.6.1 BakedStringBox::SetGradient @ 0x0024566c: change-detect on
     // {m_FillTop[0x7C], m_FillBottom[0x80], m_ColourMode[0x8C]!=2, m_MetallicFlag[0x90]!=0};
     // on change set mode=2, store top/bottom, metallic=0; bool perGlyph==0 -> m_DirtyMesh=1
-    // (lazy), perGlyph!=0 -> per-line FancyBakedString::ApplyGradient.
-    // DIFFERS: port omits the perGlyph!=0 immediate per-line ApplyGradient branch
-    // (no FancyBakedString in port; gradient re-applied in Draw). v1.6.1 SetGradient @ 0x0024566c
+    // (lazy), perGlyph!=0 -> per-line FancyBakedString::ApplyGradient (BakeGradient in port).
+    // v1.6.1 SetGradient @ 0x0024566c
     Colour  m_GradTop;            // binary field 0x7C (m_FillTop)
     Colour  m_GradBottom;         // binary field 0x80 (m_FillBottom)
     Colour  m_GradCol2;           // binary field 0x84 (m_FillCol2, metallic c2)
@@ -192,6 +190,13 @@ private:
 
     // Rebuild the laid-out lines from m_Text at m_FontSize.
     void Layout();
+
+    // Bake the active gradient (m_GradMode>=2) into vertex colours across all m_Lines.
+    // ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
+    // FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4: c0->c3 base +
+    // 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
+    void BakeGradient();
 
     // Measure total height of currently laid-out lines (includes spacing).
     float TotalHeight() const;

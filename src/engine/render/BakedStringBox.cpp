@@ -384,10 +384,141 @@ void BakedStringBox::Layout() {
         m_Lines.push_back(line);
         wi = lineEnd;
     }
+
+    // Re-bake gradient on every mesh rebuild (mirrors binary ApplyEffects inside FullInternalRebuild).
+    if (m_GradMode >= 2 && !m_Lines.empty()) {
+        BakeGradient();
+    }
+}
+
+// BakeGradient — bake-time gradient: mirrors binary ApplyEffects path inside FullInternalRebuild.
+// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
+// FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
+// ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4: c0->c3 base +
+// 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
+void BakedStringBox::BakeGradient() {
+    if (m_Lines.empty()) return;
+
+    // Replicate the bbox computation the binary does in Transform_LinearGradient_TopBottom:
+    // yTop/yBot span the whole rendered block (same Y extents Draw used to use at render-time).
+    // The binary's "rectTop" / "rectBottom" are the block-level Y bounds before per-line offset.
+    float minDescent = 0.0f;
+    for (size_t li = 0; li < m_Lines.size(); ++li) {
+        if (m_Lines[li].minBottom < minDescent)
+            minDescent = m_Lines[li].minBottom;
+    }
+    const float step   = m_Lines[0].height;
+    const int   nLines = (int)m_Lines.size();
+
+    // Vertical anchor formula: mirrors Draw's baselineY computation (centre-V path for bake,
+    // but we need the same Y as Draw will use for actual rendering so colours match geometry).
+    // We replicate the full baselineY logic from Draw so per-line localBaseY is consistent.
+    float baselineY = 0.0f;
+    const int vertAlign = m_Align & 0xc;
+    if (vertAlign == 0xc) {
+        baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
+                     + (step * (float)nLines) * 0.5f) - minDescent;
+    } else if ((m_Align & 0x8) == 0) {
+        const BakedStringBoxLine& l0 = m_Lines[0];
+        float ascentSpan = l0.maxBearingY - l0.minBottom;
+        float descent    = -l0.minBottom;
+        baselineY = -(ascentSpan * 0.5f) - step * 0.5f - descent;
+    } else {
+        baselineY = m_BoxHeight;
+    }
+
+    // Block Y range: top of first-line ascent to bottom of last-line descent.
+    float gradYTop = baselineY + m_Lines[0].maxBearingY;
+    float lastBaseline = baselineY - (float)(nLines - 1) * step;
+    float gradYBot = lastBaseline + minDescent;
+    float gradYRange = gradYTop - gradYBot;
+    // Binary clamp: if (range < 1.0) range = 1.0  (Transform_LinearGradient_TopBottom @0x00247a48)
+    if (gradYRange < 1.0f) gradYRange = 1.0f;
+
+    // c0=m_GradTop, c3=m_GradCol3 for metallic base lerp; c0=m_GradTop, c1=m_GradBottom for 2-stop.
+    // Binary metallic param order: c0=top, c1=m_GradBottom, c2=m_GradCol2, c3=m_GradCol3.
+    const Colour& colTop    = m_GradTop;
+    const Colour& colBot2   = m_GradBottom;   // metallic c1 / 2-stop bottom
+    const Colour& colBand2  = m_GradCol2;     // metallic c2
+    const Colour& colBot4   = m_GradCol3;     // metallic c3 (full bottom)
+
+    for (size_t li = 0; li < m_Lines.size(); ++li) {
+        BakedStringBoxLine& line = m_Lines[li];
+        const int nVerts = (int)line.verts.size();
+        float localBaseY = baselineY - (float)li * step;
+
+        for (int vi = 0; vi < nVerts; ++vi) {
+            // Layout Y: same expression Draw uses to compute the pre-transform Y.
+            float layoutY = line.verts[vi].y + localBaseY;
+
+            unsigned char r, g, b, a;
+
+            if (m_GradMode == 4) {
+                // Metallic: step 1 — full c0->c3 base lerp (Transform_LinearGradient_TopBottom).
+                // vy >= yTop or vy < yBot -> solid top colour (edge clamp, binary behaviour).
+                float t;
+                if (layoutY >= gradYTop || layoutY < gradYBot) {
+                    t = 0.0f;
+                } else {
+                    t = (gradYTop - layoutY) / gradYRange;
+                }
+                // Per-channel: top*t + bot*(1-t), normalised /255 then *(int)255, truncated.
+                float fr = (colTop.r / 255.0f) * t + (colBot4.r / 255.0f) * (1.0f - t);
+                float fg = (colTop.g / 255.0f) * t + (colBot4.g / 255.0f) * (1.0f - t);
+                float fb = (colTop.b / 255.0f) * t + (colBot4.b / 255.0f) * (1.0f - t);
+                float fa = (colTop.a / 255.0f) * t + (colBot4.a / 255.0f) * (1.0f - t);
+                r = (unsigned char)(int)(fr * 255.0f);
+                g = (unsigned char)(int)(fg * 255.0f);
+                b = (unsigned char)(int)(fb * 255.0f);
+                a = (unsigned char)(int)(fa * 255.0f);
+
+                // Metallic: step 2 — ApplyGradientSplit(0.51, c1=m_GradBottom).
+                // planeY = -(0.51 * (gradYTop + gradYBot))
+                // Transform_GradientSplit @0x0024954c: verts with Y < planeY get flat c1.
+                // TODO: v1.6.1 Transform_GradientSplit @0x0024954c — split plane sign and
+                // which-side-gets-colour not byte-verified; using vy < planeY = flat-band below.
+                float plane1 = -(0.51f * (gradYTop + gradYBot));
+                if (layoutY < plane1) {
+                    r = colBot2.r;
+                    g = colBot2.g;
+                    b = colBot2.b;
+                    a = colBot2.a;
+                }
+
+                // Metallic: step 3 — ApplyGradientSplit(0.49, c2=m_GradCol2).
+                float plane2 = -(0.49f * (gradYTop + gradYBot));
+                if (layoutY < plane2) {
+                    r = colBand2.r;
+                    g = colBand2.g;
+                    b = colBand2.b;
+                    a = colBand2.a;
+                }
+            } else {
+                // 2-stop gradient (m_GradMode == 2): Transform_LinearGradient_TopBottom.
+                float t;
+                if (layoutY >= gradYTop || layoutY < gradYBot) {
+                    t = 0.0f;
+                } else {
+                    t = (gradYTop - layoutY) / gradYRange;
+                }
+                float fr = (colTop.r / 255.0f) * t + (colBot2.r / 255.0f) * (1.0f - t);
+                float fg = (colTop.g / 255.0f) * t + (colBot2.g / 255.0f) * (1.0f - t);
+                float fb = (colTop.b / 255.0f) * t + (colBot2.b / 255.0f) * (1.0f - t);
+                float fa = (colTop.a / 255.0f) * t + (colBot2.a / 255.0f) * (1.0f - t);
+                r = (unsigned char)(int)(fr * 255.0f);
+                g = (unsigned char)(int)(fg * 255.0f);
+                b = (unsigned char)(int)(fb * 255.0f);
+                a = (unsigned char)(int)(fa * 255.0f);
+            }
+
+            line.verts[vi].colour = Colour(r, g, b, a).PlatformColour();
+        }
+    }
 }
 
 // SetGradient  binary @ 0x0024566c
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x0024566c (asm-inspector)
+// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
+// FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
 void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
     if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
@@ -398,14 +529,16 @@ void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
         m_MetallicFlag = false;
         if (!perGlyph) {
             m_Dirty = true;
+        } else if (!m_Lines.empty()) {
+            BakeGradient();
         }
     }
 }
 
 // SetMetallicGradient  binary @ 0x002458e0
-// Stores 4 fill colours + sets m_GradMode=4 + m_MetallicFlag=1 + dirty.
-// Port renders 2-stop (top/bottom) in Draw; full 4-stop metallic path pending.
-// TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
+// ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4: c0->c3 base +
+// 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
+// Colour mapping: port top=c0, bottom=c1, c2=c2, c3=c3 (binary order: c0=top, c1, c2, c3=bottom).
 void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, Colour c3, bool flag) {
     if (m_GradTop.r    != top.r    || m_GradTop.g    != top.g    || m_GradTop.b    != top.b    || m_GradTop.a    != top.a    ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
@@ -418,7 +551,11 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
         m_GradBottom    = bottom;
         m_GradCol2      = c2;
         m_GradCol3      = c3;
-        m_Dirty         = true;
+        if (!m_Lines.empty()) {
+            BakeGradient();
+        } else {
+            m_Dirty = true;
+        }
     }
     (void)flag;
 }
@@ -556,21 +693,6 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
 
     Renderer* renderer = Renderer::GetInstance();
 
-    // Gradient: compute total text block Y range (local, pre-rotation) for lerp.
-    // Top of block = baselineY + line0.maxBearingY; bottom = last-line baseline + minDescent.
-    // m_GradMode >= 2: apply 2-stop top/bottom gradient (m_GradTop / m_GradBottom).
-    const bool doGrad = (m_GradMode >= 2);
-    float gradYTop    = 0.0f;
-    float gradYBot    = 0.0f;
-    float gradYRange  = 0.0f;
-    if (doGrad) {
-        gradYTop = baselineY + m_Lines[0].maxBearingY;
-        float lastBaseline = baselineY - (float)(nLines - 1) * step;
-        gradYBot = lastBaseline + minDescent; // minDescent <= 0 so this is below baseline
-        gradYRange = gradYTop - gradYBot;
-        if (gradYRange < 0.001f) gradYRange = 0.001f;
-    }
-
     // Apply worldspace scissor clip if set.
     // DIFFERS: original = CPU ClipAgainstPlanes geometry clip (v1.6.1 BakedStringBox::ClipToRectangle
     //   @0x00246358 / RebuildClipping @0x002464d0), using glScissor because GLES2 has no
@@ -626,20 +748,6 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
             float ly = (wv[i].y + localBaseY) * scale.y;
             wv[i].x = cosT * lx - sinT * ly + anchor.x;
             wv[i].y = sinT * lx + cosT * ly + anchor.y;
-
-            if (doGrad) {
-                // Lerp t=0 at top (gradYTop), t=1 at bottom (gradYBot).
-                // Use pre-transform layout Y: line.verts[i].y + localBaseY.
-                float layoutY = line.verts[i].y + localBaseY;
-                float t = (gradYTop - layoutY) / gradYRange;
-                if (t < 0.0f) t = 0.0f;
-                if (t > 1.0f) t = 1.0f;
-                uint8_t r = (uint8_t)(m_GradTop.r + (int)((m_GradBottom.r - m_GradTop.r) * t));
-                uint8_t g = (uint8_t)(m_GradTop.g + (int)((m_GradBottom.g - m_GradTop.g) * t));
-                uint8_t b = (uint8_t)(m_GradTop.b + (int)((m_GradBottom.b - m_GradTop.b) * t));
-                uint8_t a = (uint8_t)(m_GradTop.a + (int)((m_GradBottom.a - m_GradTop.a) * t));
-                wv[i].colour = Colour(r, g, b, a).PlatformColour();
-            }
         }
 
         // Wire degenerate connector between glyphs in the tri-strip.
