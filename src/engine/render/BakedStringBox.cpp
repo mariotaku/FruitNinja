@@ -462,11 +462,12 @@ void BakedStringBox::BakeGradient() {
                 } else {
                     t = (gradYTop - layoutY) / gradYRange;
                 }
-                // Per-channel: top*t + bot*(1-t), normalised /255 then *(int)255, truncated.
-                float fr = (colTop.r / 255.0f) * t + (colBot4.r / 255.0f) * (1.0f - t);
-                float fg = (colTop.g / 255.0f) * t + (colBot4.g / 255.0f) * (1.0f - t);
-                float fb = (colTop.b / 255.0f) * t + (colBot4.b / 255.0f) * (1.0f - t);
-                float fa = (colTop.a / 255.0f) * t + (colBot4.a / 255.0f) * (1.0f - t);
+                // Per-channel: top*(1-t) + bot*t, normalised /255 then *(int)255, truncated.
+                // t=0 at top (layoutY>=gradYTop) -> top colour; t=1 at bottom -> bottom colour.
+                float fr = (colTop.r / 255.0f) * (1.0f - t) + (colBot4.r / 255.0f) * t;
+                float fg = (colTop.g / 255.0f) * (1.0f - t) + (colBot4.g / 255.0f) * t;
+                float fb = (colTop.b / 255.0f) * (1.0f - t) + (colBot4.b / 255.0f) * t;
+                float fa = (colTop.a / 255.0f) * (1.0f - t) + (colBot4.a / 255.0f) * t;
                 r = (unsigned char)(int)(fr * 255.0f);
                 g = (unsigned char)(int)(fg * 255.0f);
                 b = (unsigned char)(int)(fb * 255.0f);
@@ -502,10 +503,11 @@ void BakedStringBox::BakeGradient() {
                 } else {
                     t = (gradYTop - layoutY) / gradYRange;
                 }
-                float fr = (colTop.r / 255.0f) * t + (colBot2.r / 255.0f) * (1.0f - t);
-                float fg = (colTop.g / 255.0f) * t + (colBot2.g / 255.0f) * (1.0f - t);
-                float fb = (colTop.b / 255.0f) * t + (colBot2.b / 255.0f) * (1.0f - t);
-                float fa = (colTop.a / 255.0f) * t + (colBot2.a / 255.0f) * (1.0f - t);
+                // top*(1-t) + bot*t: t=0 at top -> top colour, t=1 at bottom -> bottom colour.
+                float fr = (colTop.r / 255.0f) * (1.0f - t) + (colBot2.r / 255.0f) * t;
+                float fg = (colTop.g / 255.0f) * (1.0f - t) + (colBot2.g / 255.0f) * t;
+                float fb = (colTop.b / 255.0f) * (1.0f - t) + (colBot2.b / 255.0f) * t;
+                float fa = (colTop.a / 255.0f) * (1.0f - t) + (colBot2.a / 255.0f) * t;
                 r = (unsigned char)(int)(fr * 255.0f);
                 g = (unsigned char)(int)(fg * 255.0f);
                 b = (unsigned char)(int)(fb * 255.0f);
