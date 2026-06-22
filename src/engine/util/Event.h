@@ -24,24 +24,20 @@
 
 #include "Delegate.h"
 #include <list>
-#include <cstring>
 
 namespace Mortar {
 
 // ---------------------------------------------------------------------------
 // Helper: delegate equality for operator-=.
-// The binary compares the inline storage to find a matching subscriber.
-// We compare the canonical 36 bytes (32B storage + 1B flag + 3B pad) rather
-// than sizeof(TDelegate) to avoid comparing compiler-inserted tail padding
-// on 64-bit hosts where sizeof may be 40.
+// Replaced memcmp band-aid with faithful Delegate::operator== which calls
+// GetTypeID/Compare per-subclass, matching binary EventN UnRegister path.
+// ASM-spec v1.6.1 BaseDelegate::operator== / Callee::Compare @0x0015d4ec /
+//   Global::Compare @0x0015d574.
 // ---------------------------------------------------------------------------
 
 template<typename TDelegate>
 static inline bool DelegateEqual(const TDelegate& a, const TDelegate& b) {
-    // 36 = kInlineSize(32) + m_bEmpty(1) + m_pad(3).
-    // Both delegates have zeroed storage + pad in their constructors,
-    // so the 36-byte comparison is deterministic.
-    return ::memcmp(&a, &b, 36) == 0;
+    return a == b;
 }
 
 // ---------------------------------------------------------------------------
