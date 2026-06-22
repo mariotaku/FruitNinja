@@ -1690,9 +1690,12 @@ void SlashEntity::Update(float dt) {
     // 11. BASE COLOUR BLEND (binary @ 0x1e98b0: after scale update)
     //     UpdateModColour if g_ColourType < 2.
     //     Then blend m_BaseColour toward CRITICAL_COLOUR based on m_Scale.
+    // ASM-spec v1.6.1 SlashEntity::Update @0x001e8fd4: UpdateModColour(&m_HighlightColour, 0.0)
+    //   -- dt=0 causes UpdateModColour to early-return; per-frame does NOT advance mod colour.
+    //   Type-2 (disco) advance happens only in TouchDown @0x001ea46c (dt=1.0, new-stroke edge).
     // =====================================================================
     if (g_ColourType < 2) {
-        UpdateModColour(&m_HighlightColour, localDt);
+        UpdateModColour(&m_HighlightColour, 0.0f);
     }
     {
         float sc = m_Scale;
