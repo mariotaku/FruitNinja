@@ -66,14 +66,13 @@ void FruitFactPageControl::UnLoadContent() {
 
 FruitFactPageControl::FruitFactPageControl()
     : HUDControl3d()
-    , m_pCurFactString(NULL)
-    , m_FruitIdx(-1)
-    , m_FactIdx(-1)
-    , m_curPage(-1)
-    , m_pLeftArrow(NULL)
-    , m_pRightArrow(NULL)
-    , m_flags(1)
-    , m_flagsB(0)
+    , m_FactText(NULL)
+    , m_ComboA(0xFFFFFFFF)
+    , m_ComboB(0xFFFFFFFF)
+    , m_PageFlag(-1)
+    , m_NextButton(NULL)
+    , m_PrevButton(NULL)
+    , m_GameStateSnapshot(0)
 {
     _pad_A9[0] = 0; _pad_A9[1] = 0; _pad_A9[2] = 0;
 }
@@ -111,7 +110,11 @@ void FruitFactPageControl::Init() {
     // 4. Set pos from DAT constants.
     // TODO: 0x001717e8 / 0x001717ec -- header offset pos (X, Y unresolved; re-analyst needed).
 
-    // 5. Combo-mode seed: if game session state+4 == 3 (Zen combo mode).
+    // 5. Set the fact offset Vec3.
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x0017160c -- Init sets m_FactOffset = Vec3(-69,53,0)
+    m_FactOffset = Vec3(-69.0f, 53.0f, 0.0f);
+
+    // 6. Combo-mode seed: if game session state+4 == 3 (Zen combo mode).
     if (game_work.m_SaveData) {
         // Binary reads *(state+4) from Game+0x50 (session object, FruitSaveData mode byte).
         // FruitSaveData has no +4 mode byte in the port. The binary's "state+4" == gameMode
@@ -119,28 +122,32 @@ void FruitFactPageControl::Init() {
         if (game_work.gameMode == 3) {
             int* comboArr = game_work.m_SaveData->m_BestComboFruits;
             int  comboCount = game_work.m_SaveData->m_BestComboLength;
-            FruitFact::CheckCombo(comboArr, comboCount, &m_FruitIdx);
+            FruitFact::CheckCombo(comboArr, comboCount, (int*)&m_ComboA);
         }
     }
 
-    // 6. Seed current fact string.
-    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, m_FactIdx);
+    // 7. Snapshot game mode.
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x0017160c -- strb gameMode -> [this+0xA8]
+    m_GameStateSnapshot = (uint8_t)game_work.gameMode;
 
-    // 7. Fact colour.
-    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+    // 8. Seed current fact string.
+    m_FactText = Fruit::GetFact(NULL, (int*)&m_ComboB, (int)m_ComboA, (int)m_ComboB);
 
-    // 8. Build the per-fruit fact texture name and load it.
-    // Binary: OS_SPrintf(buf, 0x80, "%s.tex", Fruit::FruitFactTexture(m_FruitIdx)) @ 0x0028103A.
+    // 9. Fact colour.
+    m_FactColour = Fruit::FruitFactColour((int)m_ComboA);
+
+    // 10. Build the per-fruit fact texture name and load it.
+    // Binary: OS_SPrintf(buf, 0x80, "%s.tex", Fruit::FruitFactTexture(m_ComboA)) @ 0x0028103A.
     {
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
-        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture((int)m_ComboA));
+        m_FactTexture = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
 
-    // 9. Layer flags.
+    // 11. Layer flags.
     m_LayerFlags = 0x80;
 
-    // 10. Base Init.
+    // 12. Base Init.
     // TODO: 0x0017160c -- restore this+0x20 flag saved in step 0, then call HUDControl::Init.
     HUDControl::Init();
 }
@@ -153,27 +160,27 @@ void FruitFactPageControl::Release() {
     // Binary @ 0x00171808. Order from disassembly:
     //   1) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x74 (HUDControl3d base
     //      texture slot, not a named member in this port -- unmodeled here).
-    //   2) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x88 (m_Tex88).
-    //   3) if (m_pLeftArrow)  HUD::RemoveControl(hud, m_pLeftArrow);  delete it (vtable+4 deleting dtor); null it.
-    //   4) if (m_pRightArrow) HUD::RemoveControl(hud, m_pRightArrow); delete it; null it.
-    // The binary does NOT touch the m_pages vector in Release -- m_pages is
+    //   2) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x88 (m_FactTexture).
+    //   3) if (m_NextButton)  HUD::RemoveControl(hud, m_NextButton);  delete it (vtable+4 deleting dtor); null it.
+    //   4) if (m_PrevButton) HUD::RemoveControl(hud, m_PrevButton); delete it; null it.
+    // The binary does NOT touch the m_Pages vector in Release -- m_Pages is
     // destroyed by ~vector in the destructor (0x001718ac), not here.
-    m_Tex88.SetNull();
+    m_FactTexture.SetNull();
 
     // HUD owner: binary reads [singleton+0x40]; the port models this as game_work.mHud.
     HUD* hud = game_work.mHud;
 
-    if (m_pLeftArrow) {
-        if (hud) hud->RemoveControl(m_pLeftArrow);
-        m_pLeftArrow->Release();
-        delete m_pLeftArrow;
-        m_pLeftArrow = NULL;
+    if (m_NextButton) {
+        if (hud) hud->RemoveControl(m_NextButton);
+        m_NextButton->Release();
+        delete m_NextButton;
+        m_NextButton = NULL;
     }
-    if (m_pRightArrow) {
-        if (hud) hud->RemoveControl(m_pRightArrow);
-        m_pRightArrow->Release();
-        delete m_pRightArrow;
-        m_pRightArrow = NULL;
+    if (m_PrevButton) {
+        if (hud) hud->RemoveControl(m_PrevButton);
+        m_PrevButton->Release();
+        delete m_PrevButton;
+        m_PrevButton = NULL;
     }
 }
 
@@ -192,8 +199,8 @@ void FruitFactPageControl::Reset() {
 void FruitFactPageControl::SetPos(const Vec3& p) {
     pos = p;
     // Binary copies pos into each registered page as well
-    for (std::vector<FruitFactPage*>::iterator it = m_pages.begin();
-         it != m_pages.end(); ++it) {
+    for (std::vector<FruitFactPage*>::iterator it = m_Pages.begin();
+         it != m_Pages.end(); ++it) {
         if (*it) (*it)->pos = p;
     }
 }
@@ -224,7 +231,7 @@ void FruitFactPageControl::Update(float /*dt*/) {
     m_LayerFlags = 0x80;                                  // this+0x34
 
     // Arrows only exist for multi-page books.
-    if (m_pages.size() <= 1) return;                      // bls 0x1712c0
+    if (m_Pages.size() <= 1) return;                      // bls 0x1712c0
 
     // Size vector handed to the arrow buttons as their hit-bounds / rest
     // scale. Binary reads the native back-buffer dimensions via
@@ -236,43 +243,43 @@ void FruitFactPageControl::Update(float /*dt*/) {
     // scale in the binary is a no-op and is dropped.
     Vec3 arrowSize((float)FN_SCREEN_W, (float)FN_SCREEN_H, 0.0f);
 
-    // ---- Left arrow (this+0xA0) ----
-    if (m_pLeftArrow == NULL) {                           // ldr r6,[r4,#0xa0]; cmp #0
+    // ---- Next arrow (this+0xA0) ----
+    if (m_NextButton == NULL) {                            // ldr r6,[r4,#0xa0]; cmp #0
         Mortar::SmartPtr<Mortar::Texture> tex(s_TexArrow);
         Vec3 spawnPos = pos;
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactPageControl::LeftButton);
-        Vec3 size = arrowSize;
+        Vec3 sz = arrowSize;
         Mortar::Delegate1<void, HUDControl*> onRemove;   // T_1070: empty/Global no-op
-        m_pLeftArrow = new MenuButton(&tex, &spawnPos, &onTap, -1, &size, &onRemove);
-        m_pLeftArrow->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
-        m_pLeftArrow->Init();                            // vtable slot 2 (0-arg Init)
-        // Left arrow re-uses the right-arrow texture mirrored: UVLeft=1, UVRight=0.
-        m_pLeftArrow->m_UVLeft  = 1.0f;                  // [btn+0x64]
-        m_pLeftArrow->m_UVRight = 0.0f;                  // [btn+0x6c]
-        if (game_work.mHud) game_work.mHud->AddControl(m_pLeftArrow);
+        m_NextButton = new MenuButton(&tex, &spawnPos, &onTap, -1, &sz, &onRemove);
+        m_NextButton->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
+        m_NextButton->Init();                            // vtable slot 2 (0-arg Init)
+        // Next arrow re-uses the right-arrow texture mirrored: UVLeft=1, UVRight=0.
+        m_NextButton->m_UVLeft  = 1.0f;                  // [btn+0x64]
+        m_NextButton->m_UVRight = 0.0f;                  // [btn+0x6c]
+        if (game_work.mHud) game_work.mHud->AddControl(m_NextButton);
     }
 
-    // ---- Right arrow (this+0xA4) ----
-    if (m_pRightArrow == NULL) {                          // ldr r6,[r4,#0xa4]; cmp #0
+    // ---- Prev arrow (this+0xA4) ----
+    if (m_PrevButton == NULL) {                           // ldr r6,[r4,#0xa4]; cmp #0
         Mortar::SmartPtr<Mortar::Texture> tex(s_TexArrow);
         Vec3 spawnPos = pos;
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactPageControl::RightButton);
-        Vec3 size = arrowSize;
+        Vec3 sz = arrowSize;
         Mortar::Delegate1<void, HUDControl*> onRemove;
-        m_pRightArrow = new MenuButton(&tex, &spawnPos, &onTap, -1, &size, &onRemove);
-        m_pRightArrow->Init();                           // vtable slot 2
-        m_pRightArrow->m_AnimFlag = 1;                   // strb #1,[btn+0xd2]
-        if (game_work.mHud) game_work.mHud->AddControl(m_pRightArrow);
+        m_PrevButton = new MenuButton(&tex, &spawnPos, &onTap, -1, &sz, &onRemove);
+        m_PrevButton->Init();                            // vtable slot 2
+        m_PrevButton->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
+        if (game_work.mHud) game_work.mHud->AddControl(m_PrevButton);
     }
 
     // ---- Per-frame repositioning (still inside the pages>1 guard) ----
-    m_pLeftArrow->m_Active = 1;                           // strb #1,[leftArrow+0x30]
+    m_NextButton->m_Active = 1;                           // strb #1,[nextBtn+0x30]
     // DAT_001712cc=-158.0, vmov 0x41000000=8.0, DAT_001712c8=0.0
-    m_pLeftArrow->pos  = pos + Vec3(-158.0f, 8.0f, 0.0f);
+    m_NextButton->pos  = pos + Vec3(-158.0f, 8.0f, 0.0f);
     // DAT_001712d0=142.0
-    m_pRightArrow->pos = pos + Vec3(142.0f, 8.0f, 0.0f);
+    m_PrevButton->pos = pos + Vec3(142.0f, 8.0f, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +288,7 @@ void FruitFactPageControl::Update(float /*dt*/) {
 
 void FruitFactPageControl::SetPage(int idx, bool playSound) {
     // Binary @ 0x0017132c. Order is fixed by the disassembly and does NOT
-    // bounds-check idx / m_curPage -- it uses raw std::vector::operator[].
+    // bounds-check idx / m_PageFlag -- it uses raw std::vector::operator[].
     //
     // Resolved constants (v1.6.1):
     //   - SFX name literal @ 0x0028211d = "Next-screen-button"
@@ -298,19 +305,19 @@ void FruitFactPageControl::SetPage(int idx, bool playSound) {
     }
 
     // 2) Hide the currently-shown page (vtable +0x40 = HidePage). Binary indexes
-    //    m_pages[m_curPage] with no bounds check.
-    m_pages[m_curPage]->HidePage();
+    //    m_Pages[m_PageFlag] with no bounds check.
+    m_Pages[m_PageFlag]->HidePage();
 
     // 3) Switch.
-    m_curPage = idx;
+    m_PageFlag = idx;
 
-    // 4) Show the new page (vtable +0x44 = ShowPage). Binary indexes m_pages[idx].
-    m_pages[idx]->ShowPage();
+    // 4) Show the new page (vtable +0x44 = ShowPage). Binary indexes m_Pages[idx].
+    m_Pages[idx]->ShowPage();
 
     // 5) playSound actually gates a save-data write: record that this fact page
     //    has been viewed (1-based page index) under the "factMode" total.
     if (playSound && game_work.m_SaveData) {
-        game_work.m_SaveData->SetTotal("factMode", m_curPage + 1, true, true);
+        game_work.m_SaveData->SetTotal("factMode", m_PageFlag + 1, true, true);
     }
 }
 
@@ -320,9 +327,9 @@ void FruitFactPageControl::SetPage(int idx, bool playSound) {
 
 void FruitFactPageControl::RegisterPage(FruitFactPage* page) {
     if (!page) return;
-    m_pages.push_back(page);
+    m_Pages.push_back(page);
     // Hide if not the current page; copy control pos into page
-    if ((int)m_pages.size() - 1 != m_curPage) {
+    if ((int)m_Pages.size() - 1 != m_PageFlag) {
         page->HidePage();
     }
     page->pos = pos;
@@ -335,17 +342,17 @@ void FruitFactPageControl::RegisterPage(FruitFactPage* page) {
 void FruitFactPageControl::LeftButton() {
     // Binary @ 0x00171534. Plays the page-flip click SFX, then moves to the
     // previous page with wrap-around.
-    // Disasm: ldr r1,[r6,#0x9c] (m_curPage); cmp #0; subne r1,r1,#1
-    //         (curPage-1); if ==0 -> r1 = m_pages.size()-1; SetPage(r1, 1).
+    // Disasm: ldr r1,[r6,#0x9c] (m_PageFlag); cmp #0; subne r1,r1,#1
+    //         (curPage-1); if ==0 -> r1 = m_Pages.size()-1; SetPage(r1, 1).
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     int idx;
-    if (m_curPage != 0) {
-        idx = m_curPage - 1;
+    if (m_PageFlag != 0) {
+        idx = m_PageFlag - 1;
     } else {
-        idx = (int)m_pages.size() - 1;
+        idx = (int)m_Pages.size() - 1;
     }
     SetPage(idx, true);
 }
@@ -358,10 +365,10 @@ void FruitFactPageControl::RightButton() {
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     int next;
-    if (m_curPage == (int)m_pages.size() - 1) {
+    if (m_PageFlag == (int)m_Pages.size() - 1) {
         next = 0;
     } else {
-        next = m_curPage + 1;
+        next = m_PageFlag + 1;
     }
     SetPage(next, true);
 }
@@ -372,27 +379,30 @@ void FruitFactPageControl::RightButton() {
 
 bool FruitFactPageControl::LeftPressed(InputEvent* /*ev*/) {
     // Binary @ 0x001708b8 -- decrement fact index, wrap, refetch fact string.
-    // Field offsets from disassembly: [+0x84]=m_FactIdx, [+0x80]=m_FruitIdx,
-    // [+0x7C]=m_pCurFactString. FruitInfo->[+0x270]=m_FactCount.
-    --m_FactIdx;
-    if (m_FactIdx < 0)
-        m_FactIdx = Fruit::FruitInfo(m_FruitIdx)->m_FactCount - 1;
-    m_pCurFactString = Fruit::GetFact(NULL, NULL, m_FruitIdx, m_FactIdx);
+    // Field offsets from disassembly: [+0x84]=m_ComboB, [+0x80]=m_ComboA,
+    // [+0x7C]=m_FactText. FruitInfo->[+0x270]=m_FactCount.
+    int cb = (int)m_ComboB;
+    --cb;
+    if (cb < 0)
+        cb = Fruit::FruitInfo((int)m_ComboA)->m_FactCount - 1;
+    m_ComboB = (unsigned int)cb;
+    m_FactText = Fruit::GetFact(NULL, NULL, (int)m_ComboA, (int)m_ComboB);
     return true;
 }
 
 bool FruitFactPageControl::RightPressed(InputEvent* /*ev*/) {
     // Binary @ 0x0017086c (FruitFactControl::RightPressed):
-    //   ++m_FactIdx; info = Fruit::FruitInfo(m_FruitIdx);
-    //   if (info->m_FactCount <= m_FactIdx) m_FactIdx = 0;
-    //   m_pCurFactString = Fruit::GetFact(NULL, NULL, m_FruitIdx, m_FactIdx);
+    //   ++m_ComboB; info = Fruit::FruitInfo(m_ComboA);
+    //   if (info->m_FactCount <= m_ComboB) m_ComboB = 0;
+    //   m_FactText = Fruit::GetFact(NULL, NULL, m_ComboA, m_ComboB);
     //   return true;
-    ++m_FactIdx;
-    const ::FruitInfo* info = Fruit::FruitInfo(m_FruitIdx);
-    if (info && info->m_FactCount <= m_FactIdx) {
-        m_FactIdx = 0;
+    int cb = (int)m_ComboB + 1;
+    const ::FruitInfo* info = Fruit::FruitInfo((int)m_ComboA);
+    if (info && info->m_FactCount <= cb) {
+        cb = 0;
     }
-    m_pCurFactString = Fruit::GetFact(NULL, NULL, m_FruitIdx, m_FactIdx);
+    m_ComboB = (unsigned int)cb;
+    m_FactText = Fruit::GetFact(NULL, NULL, (int)m_ComboA, (int)m_ComboB);
     return true;
 }
 
@@ -401,18 +411,22 @@ bool FruitFactPageControl::UpPressed(InputEvent* /*ev*/) {
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
     int fruitCount = FruitInfo_GetCount();
+    int ca = (int)m_ComboA;
     do {
-        ++m_FruitIdx;
-        if (m_FruitIdx >= fruitCount) {
-            m_FruitIdx = 0;
+        ++ca;
+        if (ca >= fruitCount) {
+            ca = 0;
         }
-        info = Fruit::FruitInfo(m_FruitIdx);
+        info = Fruit::FruitInfo(ca);
     } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
-    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, -1);
-    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+    m_ComboA = (unsigned int)ca;
+    int cb = -1;
+    m_FactText = Fruit::GetFact(NULL, &cb, ca, -1);
+    m_ComboB = (unsigned int)cb;
+    m_FactColour = Fruit::FruitFactColour(ca);
     {
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(ca));
         m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
     return true;
@@ -423,18 +437,22 @@ bool FruitFactPageControl::DownPressed(InputEvent* /*ev*/) {
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
     int fruitCount = FruitInfo_GetCount();
+    int ca = (int)m_ComboA;
     do {
-        --m_FruitIdx;
-        if (m_FruitIdx < 0) {
-            m_FruitIdx = fruitCount - 1;
+        --ca;
+        if (ca < 0) {
+            ca = fruitCount - 1;
         }
-        info = Fruit::FruitInfo(m_FruitIdx);
+        info = Fruit::FruitInfo(ca);
     } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
-    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, -1);
-    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+    m_ComboA = (unsigned int)ca;
+    int cb = -1;
+    m_FactText = Fruit::GetFact(NULL, &cb, ca, -1);
+    m_ComboB = (unsigned int)cb;
+    m_FactColour = Fruit::FruitFactColour(ca);
     {
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(ca));
         m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
     return true;
