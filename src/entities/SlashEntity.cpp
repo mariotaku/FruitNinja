@@ -630,10 +630,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // trail -> a visibly disconnected segment) AND re-advances the disco mod
         // colour -- splitting one swipe into multiple differently-coloured pieces.
         // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
+        // (m_State is already 1 here -- the stroke is mid-flight, so no m_State
+        //  write is needed; only the binary's m_BladeActive re-arm matters.)
         if (m_PointCount > 0) {
-#if !defined(__bada__)
-            m_State = 1;
-#endif
             m_BladeActive |= 1;
         }
 #ifdef FN_DEBUG_TOUCH
