@@ -252,6 +252,9 @@ void MainScreen::Update(float dt) {
         // settled (m_GameDt < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
+        // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); port aliases a
+        // port-only float (DIFFERS, x64 8-byte SmartPtr) so the hold branch is bada-excluded
+        // -- the settle branch is binary-faithful.
 #ifndef __bada__
         float f0 = TexMoreGamesF0();
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
@@ -301,13 +304,21 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_GAME_START: {
+        // Binary case 2 @0x00197468: WaveManager::Reset(true) + bM_bPaused=1 fire
+        // UNCONDITIONALLY inside the m_GameDt guard (no latch in binary).
+        // Port adds m_bGameStartReset latch (one-shot, port-only) to prevent repeated
+        // resets on re-entry; guard only the latch reads/writes, not the binary calls.
+        if (-game_work.m_GameDt > 0.999f
 #ifndef __bada__
-        if (-game_work.m_GameDt > 0.999f && !m_bGameStartReset) {
+            && !m_bGameStartReset
+#endif // !defined(__bada__)
+        ) {
             WaveManager::GetInstance()->Reset(true);
+#ifndef __bada__
             m_bGameStartReset = true;
+#endif // !defined(__bada__)
             game_work.bM_bPaused = 1;
         }
-#endif // !defined(__bada__)
         game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(game_work.m_GameDt) < 0.001f) {
             game_work.m_GameDt = 0.0f;
@@ -566,9 +577,13 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
     mm.UploadModelViewOnly();
 }
 
-// Matches Draw at 0x0014d4ec (171 lines)
-// DIFFERS: binary signature is Draw(float*) at vtable slot 7 @ 0x0014D4EC;
+// Matches Draw at v1.6.1 MainScreen::Draw @0x001993ac (171 lines)
+// DIFFERS: binary signature is Draw(float*) at vtable slot 7 @0x001993ac;
 //   port uses Draw(Vec3&, int) for ergonomic param-passing.
+// Cross: whole-wrapped — Draw uses the port-only SDL renderer + convenience textures
+// that mirror binary file-scope globals s_blurTex/m_fruitTex/m_ninjaTex. Restoring
+// asm-verify coverage needs those textures moved to file-scope globals + a cross render
+// shim (TODO, larger refactor).
 void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 #ifndef __bada__
@@ -1075,7 +1090,9 @@ void MainScreen::DrawPostEffects() {
     // TODO: implement -- post-effect overlays (score flash, bonus anim, etc.)
 }
 
-// Binary @ 0x0014D1F8 — 8-segment radial loading spinner.
+// TODO: confirm v1.6.1 addr for MainScreen::DrawLoadingSymbol (stale ref was 0x0014D1F8, v1.5.x)
+// Cross: whole-wrapped — DrawLoadingSymbol uses the port-only SDL renderer + s_blurTex alias.
+// Restoring coverage needs the same file-scope global + cross render shim as Draw (TODO, larger refactor).
 void MainScreen::DrawLoadingSymbol(const float* hudScale) {
 #ifndef __bada__
     if (!m_blurryBackingTex.IsValid()) return;
