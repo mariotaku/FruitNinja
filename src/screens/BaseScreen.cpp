@@ -85,7 +85,8 @@ void BaseScreen::UnloadContent() {
 }
 
 // ===================================================================
-// Matches BaseScreen::DrawBorders @ 0x00130230
+// BaseScreen::DrawBorders(SmartPtr<Texture>, float, Vec3) v1.6.1 @0x0015fcec
+// BaseScreen::DrawBorders(BakedStringBox*, float, Vec3)   v1.6.1 @0x0015f878
 //
 // Draws (in order):
 //   1. Two shade triangles (blurry_backing.tex, Colour(0,0,0,128))
@@ -320,7 +321,7 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
 }
 
 // ===================================================================
-// Matches BaseScreen::UpdateButtons @ 0x00130ab4
+// BaseScreen::UpdateButtons v1.6.1 @0x001602cc
 // Binary iterates std::list<ScreenButton>: if m_pMenuButton is nullptr,
 // calls the visibility delegate then lazily creates MenuButton; else
 // calls the update delegate. ScreenButton struct (~0xCC bytes) with
@@ -376,10 +377,10 @@ void BaseScreen::UpdateButtons(float dt) {
             if (remove) {
                 MenuButton* btn = sb.m_pButton;
                 if (btn->m_pTrackedFruit && !btn->m_pTrackedFruit->m_bSliced) {
-                    // Fruit alive: disable taps + redirect tap to shrink-call
-#if !defined(__bada__)
-                    btn->m_bEnabled = 0;
-#endif
+                    // Fruit alive: redirect tap to shrink-call
+                    // TODO: v1.6.1 BaseScreen::UpdateButtons @0x001605f0 -- binary sets MenuButton+0xb8 = 1 on shrink-out (a flag not yet modelled; port previously approximated with m_bEnabled=0, which the binary does NOT touch).
+                    btn->m_bClearsMenuItems = 0;  // ASM v1.6.1 UpdateButtons @0x001605fc
+                    // TODO: v1.6.1 BaseScreen::UpdateButtons @0x0016060c -- binary blind-copies Vec3::One into MenuButton+0xd4 (m_fieldD4 region) on shrink-out; port +0xd4 layout unverified, deferred.
                     btn->SetCallback(
                         Mortar::Delegate0<void>::Make(&sb, &ScreenButton::ShrinkButtonCall));
                 } else {
@@ -400,6 +401,7 @@ void BaseScreen::AddGenericControl(HUDControl* ctrl) {
 
 // ===================================================================
 // Matches BaseScreen::Release @ 0x00130dd8
+// TODO: re-verify v1.6.1 BaseScreen::Release address (cited addr 0x00130dd8 may be stale v1.5.x; header cites 0x00160d90)
 // Binary: iterates m_HUDControls → set m_bPendingRemoval, clear list.
 // Then if game loaded: iterates m_ScreenButtons → set *(mbtn+0x32)=0,
 // clear draw delegates on MenuButton+0x38 and ScreenButton+0x80.
@@ -430,7 +432,7 @@ void BaseScreen::Release() {
 }
 
 // ===================================================================
-// Matches BaseScreen::RemoveButtons @ 0x00130eb8
+// BaseScreen::RemoveButtons v1.6.1 @0x00160ee8
 // Unconditional — marks each ScreenButton's MenuButton pending-removal
 // and clears delegates. No game-active guard (unlike Release).
 // ===================================================================

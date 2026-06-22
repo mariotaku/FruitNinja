@@ -10,10 +10,10 @@
 //   Destructor D1    0x00161b20 (non-deleting)
 //   LoadContent      0x001305cc (loads sml_title.tex + blurry_backing.tex)
 //   DrawBorders(SmartPtr)       0x0015fcec / DrawBorders(BakedStringBox*) 0x0015f878
-//   UpdateButtons    0x00130ab4 (lazy ScreenButton creation + update loop)
+//   UpdateButtons    0x001602cc (lazy ScreenButton creation + update loop)
 //   Release          0x00160d90 (marks HUD controls pending-removal)
 //   Reset            0x00161860
-//   RemoveButtons    0x00130eb8 (unconditional button teardown)
+//   RemoveButtons    0x00160ee8 (unconditional button teardown)
 //
 // BaseScreen is ABSTRACT: vtable slot 10 (Update) = __cxa_pure_virtual (0x360434).
 // Concrete subclasses: DojoScreen, GameModeScreen, FruitFactPage (and its children).
@@ -61,7 +61,7 @@ public:
     Vec3 DrawBorders(Mortar::BakedStringBox* box,
                      float alpha, Vec3 arg3);
 
-    // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.
+    // UpdateButtons v1.6.1 @0x001602cc — lazy ScreenButton creation + update.
     void UpdateButtons(float dt);
 
     // AddGenericControl — registers a HUDControl in m_HUDControls
@@ -72,7 +72,7 @@ public:
     // clears list, disables ScreenButton MenuButtons.
     void Release() override;
 
-    // RemoveButtons @ 0x00130eb8 — unconditional: marks all
+    // RemoveButtons v1.6.1 @0x00160ee8 — unconditional: marks all
     // ScreenButton MenuButtons pending-removal.
     void RemoveButtons();
 
