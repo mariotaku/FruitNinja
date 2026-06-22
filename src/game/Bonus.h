@@ -1,9 +1,8 @@
 #ifndef FN_GAME_BONUS_H
 #define FN_GAME_BONUS_H
 
-// Analysed: 2026-05-03T00:00
 // Bonus / BonusType -- per-round award structs.
-// Bonus  sizeof 0xD8 binary ctor @ 0x0010005c, dtor @ 0x0010fa40.
+// Bonus  sizeof 0xD4 binary ctor @ 0x0010005c, dtor @ 0x0010fa40.
 // BonusType sizeof 0x28 binary ctor @ 0x0010df00.
 
 #include <vector>
@@ -16,7 +15,7 @@
 
 // ---------------------------------------------------------------------------
 // Bonus
-// sizeof 0xD8 = 216 bytes
+// sizeof 0xD4 = 212 bytes
 // ---------------------------------------------------------------------------
 class Bonus {
 public:
@@ -25,7 +24,7 @@ public:
     std::map<uint64_t, int>         m_MinFruit;         // +0x08  sizeof 24
     std::map<uint64_t, int>         m_MaxFruit;         // +0x20  sizeof 24
     int                             m_DivisibleBy;      // +0x38
-    int                             m_Tier;             // +0x3C  (-1 = invalid)
+    int                             m_Tier;             // +0x3C  (binary ctor default 5; -1 used as invalid sentinel)
     char                            m_NameTemplate[64]; // +0x40
     char                            m_DisplayName[64];  // +0x80
     std::vector<uint64_t>           m_PatternHashes;    // +0xC0  sizeof 12
@@ -44,19 +43,12 @@ public:
 };
 
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
+// sizeof(Bonus) = 0xD4 (212). ASM: new_allocator<Bonus>::allocate @0x00130360 element stride
+// #0xd4 (overflow guard 0x013521CF = 2^32/0xD4). No std::map tail-padding -- map members hold
+// 4-aligned _Rb_tree pointers (uint64_t keys in heap nodes), so max alignment is 4 and the
+// struct ends at m_StarTexture(0xD0)+4 = 0xD4.
 #ifdef __bada__
-// sizeof(Bonus) = 0xD8 on the Bada Sourcery 4.4-157 toolchain: the two std::map<uint64_t,...>
-// members require 8-byte struct alignment (uint64_t key), adding 4 bytes of tail padding to
-// reach 0xD8. The cross-build Sourcery 2010q1 measures 212 (0xD4) -- no tail padding applied
-// -- so the assert cannot enforce on cross-build. Assert disabled on cross-build;
-// correct binary target value is 0xD8.
-#if 0
-// TODO: cross sizeof(Bonus)=212 (0xD4) != binary 216 (0xD8); std::map tail-alignment ABI
-// differs between Sourcery 2010q1 cross-build and Bada Sourcery 4.4-157; assert is correct
-// for Bada but cannot enforce on cross-build. Re-enable when a cross-build discriminator
-// for tail-alignment ABI is found.
-static_assert(sizeof(Bonus) == 0xD8, "Bonus size mismatch");
-#endif
+static_assert(sizeof(Bonus) == 0xD4, "Bonus size mismatch");
 static_assert(__builtin_offsetof(Bonus, m_MinSliced)      == 0x00, "Bonus::m_MinSliced offset");
 static_assert(__builtin_offsetof(Bonus, m_MaxSliced)      == 0x04, "Bonus::m_MaxSliced offset");
 static_assert(__builtin_offsetof(Bonus, m_MinFruit)       == 0x08, "Bonus::m_MinFruit offset");
