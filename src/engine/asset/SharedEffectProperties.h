@@ -106,6 +106,15 @@ struct EffectProperty {
     EffectPropertyValues*     m_Owner;  // +0x0c, 4 bytes
     unsigned long             m_Offset; // +0x10, 4 bytes
 
+    // Generic SetValue<T> — writes value at bucket slot m_Offset.
+    // T must match the declared type (m_Def.m_Type) or TrySetValue returns false.
+    template<typename T>
+    bool SetValue(const T& value) {
+        if (!m_Owner) return false;
+        return m_Owner->TrySetValue<T>(
+            static_cast<EffectDataTypes::Type>(m_Def.m_Type), m_Offset, value);
+    }
+
     // Binary @ 0x0023fc9c: SetValue<SmartPtr<Texture2D>> specialization.
     // Original stores a SmartPtr<Texture2D> (4-byte pointer) via
     // TrySetValue<SmartPtr<Texture2D>>. Port stores EffectTexture2D (uint32_t GL ID)
@@ -206,6 +215,20 @@ public:
     void InitPropertyList(Iter begin, Iter end,
                           SmartPtr<SharedEffectProperties> parent);
 
+    // SetValue<T>(key, value) — looks up property by name and writes value.
+    // Returns false if property not found or type mismatch.
+    template<typename T>
+    bool SetValue(const char* key, const T& value) {
+        EffectProperty* prop = GetProperty(key);
+        if (!prop) return false;
+        return prop->SetValue<T>(value);
+    }
+
+    template<typename T>
+    bool SetValue(const std::string& key, const T& value) {
+        return SetValue<T>(key.c_str(), value);
+    }
+
 private:
     // Comparator for lower_bound / sort: compares EffectProperty* by name vs char*.
     struct NameLessThan {
@@ -225,6 +248,19 @@ private:
     std::vector<EffectProperty*>     m_Props;     // +0x08, 12 bytes
     // total: 4 + 4 + 12 = 20 = 0x14
 };
+
+// GetColourRGB @ 0x00237f44 — unpacks a packed ABGR uint32 colour into a Vec3 RGB.
+// x = (c & 0xff) / 255.0f   (R, low byte)
+// y = ((c >> 8) & 0xff) / 255.0f  (G)
+// z = ((c >> 16) & 0xff) / 255.0f (B)
+// Alpha (high byte) is ignored.
+inline Vec3 GetColourRGB(uint32_t c) {
+    return Vec3(
+        static_cast<float>(c & 0xffu) / 255.0f,
+        static_cast<float>((c >> 8) & 0xffu) / 255.0f,
+        static_cast<float>((c >> 16) & 0xffu) / 255.0f
+    );
+}
 
 // TextureProps — value type in SharedPropsInfo::m_TexMaps.
 // Binary @ 0x001b15d8 ctor zeroes the handle; 0x001b1394 AddTextureMap writes

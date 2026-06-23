@@ -9,6 +9,17 @@ target_include_directories(test_asciistring PRIVATE
 )
 add_test(NAME asciistring COMMAND test_asciistring)
 
+# EffectPropertyValues / EffectPropertyList / GetColourRGB unit test.
+# Exercises the 9-def mesh-material property set, SetValue/TryGetValue for
+# float/bool/Vec3/Texture2D types, and parent-chain lookup.
+# Pure in-process: no GPU, no audio, no file I/O.
+add_executable(test_effectproperties test_effectproperties.cpp)
+target_link_libraries(test_effectproperties PRIVATE mortar_engine)
+target_include_directories(test_effectproperties PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME effectproperties COMMAND test_effectproperties)
+
 add_executable(test_localisation test_localisation.cpp)
 target_link_libraries(test_localisation PRIVATE mortar_engine)
 target_include_directories(test_localisation PRIVATE
