@@ -27,7 +27,7 @@
 #include "entities/Entity.h"
 #include "hud/ScoreControl.h"
 #include "hud/MissControl.h"
-#include "hud/FruitFactControl.h"
+#include "hud/FruitFactPageControl.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
 
@@ -332,10 +332,11 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "FAIL: m_pFruitFact should be created in state 6\n");
             failures++;
         } else {
-            // 4a. GetFact returned a valid string (Fruit::GetFact clamp fix).
-            if (!s->m_pFruitFact->m_pCurFactString) {
+            // 4a. m_FactText set after Init.
+            // (FruitFactPageControl uses m_FactText @+0x7C instead of old m_pCurFactString)
+            if (!s->m_pFruitFact->m_FactText) {
                 fprintf(stderr,
-                    "FAIL: FruitFactControl::m_pCurFactString should be non-null\n");
+                    "FAIL: FruitFactPageControl::m_FactText should be non-null after Init\n");
                 failures++;
             }
 
@@ -371,9 +372,9 @@ int main(int argc, char* argv[]) {
             failures++;
         }
 
-        // 7. Retry/Quit buttons should spawn after m_ProgressCounter == 10.
-        if (!s->m_pSlotB0) {
-            fprintf(stderr, "FAIL: retry button (m_pSlotB0) should be spawned in state 6\n");
+        // 7. Retry/Quit buttons should spawn after m_StarCount == 10.
+        if (!s->m_pRetryBtn) {
+            fprintf(stderr, "FAIL: retry button (m_pRetryBtn) should be spawned in state 6\n");
             failures++;
         }
         if (!s->m_pQuitBtn) {
@@ -409,8 +410,8 @@ int main(int argc, char* argv[]) {
         fprintf(stdout, "PASS: gameover-transition all assertions ok "
                         "(state=%d, alpha=%f, fact=%s, retry=%s, quit=%s)\n",
                 s->m_State, game_work.m_GameDt,
-                (s->m_pFruitFact && s->m_pFruitFact->m_pCurFactString) ? "ok" : "MISSING",
-                s->m_pSlotB0 ? "ok" : "MISSING",
+                (s->m_pFruitFact && s->m_pFruitFact->m_FactText) ? "ok" : "MISSING",
+                s->m_pRetryBtn ? "ok" : "MISSING",
                 s->m_pQuitBtn ? "ok" : "MISSING");
         return h.Shutdown();
     } else {

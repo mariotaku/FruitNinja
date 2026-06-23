@@ -793,6 +793,12 @@ void MenuButton::UnLoadContent() {
     s_TexNewItem.SetNull();
 }
 
+// Accessor for GameOverScreen::DrawOrder state-0xe spinner halo.
+// v1.6.1 GameOverScreen::DrawOrder @0x00186484 uses this static.
+Mortar::SmartPtr<Mortar::Texture>& MenuButton::GetSparkleRingTex() {
+    return s_TexBlurryBacking;
+}
+
 // v1.6.1 MenuButton::AddPeice @0x00150240
 void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                           float rotSpeed, float initialTimer,

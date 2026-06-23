@@ -320,6 +320,13 @@ public:
     static void LoadContent();
     static void UnLoadContent();
 
+    // Accessor for the blurry_backing.tex static (slot 2 in LoadContent).
+    // Used by GameOverScreen::DrawOrder for the state-0xe loading-spinner halo.
+    // The static lives in MenuButton.cpp (TU-private); this accessor exposes it
+    // without making the raw static header-visible.
+    // v1.6.1 GameOverScreen::DrawOrder @0x00186484 reads this static.
+    static Mortar::SmartPtr<Mortar::Texture>& GetSparkleRingTex();
+
 private:
     // v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
     void UpdateTouchPosition();
