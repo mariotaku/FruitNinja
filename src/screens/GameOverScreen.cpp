@@ -1017,13 +1017,10 @@ void GameOverScreen::Update(float dt) {
         if (m_pFruitFact == 0) {
             m_pFruitFact = new FruitFactPageControl();
             m_pFruitFact->pos = Vec3(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f);
-            // Binary: ff[1].pos.y = m_TabIndex; ff[1].pos.z = m_StarCountArg
-            // This writes into the FruitFactPageControl sub-object region
-            // ASM-spec v1.6.1 GameOverScreen::Update LAB_00187220
-            // ff[1] means the object at ff+sizeof(FruitFactPageControl) = ff+0xB8
-            // pos.y at +0x10, pos.z at +0x14 within FruitFactPage's Vec3
-            // Port: use m_GameStateSnapshot as the closest field (confirmed in header)
-            // TODO: v1.6.1 0x00186c80 LAB_00187220 -- ff[1].pos.y=m_TabIndex / ff[1].pos.z=m_StarCountArg exact offset
+            // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80 (0x00187280):
+            //   tab/star args -> FruitFactControl +0x80/+0x84 (m_ComboA/m_ComboB).
+            m_pFruitFact->m_ComboA = m_TabIndex;      // +0x80
+            m_pFruitFact->m_ComboB = m_StarCountArg;  // +0x84
             if (game_work.mHud) game_work.mHud->AddControl(m_pFruitFact, false);
             m_pFruitFact->Init();
 
@@ -1146,10 +1143,9 @@ void GameOverScreen::Update(float dt) {
             CreateQuitButton();
         }
 
-        // 7) LoadLocalisedTexture for m_TitleTex (localised title texture)
-        // ASM-spec v1.6.1 GameOverScreen::Update LAB_00187220
-        // TODO: v1.6.1 0x00186c80 LAB_00187220 -- exact .tex string for LoadLocalisedTexture
-        //   not byte-verified; using existing m_TitleTex source (already set in Initialise)
+        // 7) ASM-spec v1.6.1 GameOverScreen::Update @0x0018781c: reload localised title texture
+        //    (literal @0x002829E9 "comming_soon_highscore.tex" -- original's "comming" typo)
+        m_TitleTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
 
         // 8) Settle (always): if(pos.y < 212.8)
         if (pos.y < 212.8f) {
