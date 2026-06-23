@@ -952,9 +952,21 @@ void WaveManager::Update(float dt) {
     m_BombChance     = 1.0f;
     m_FruitChance    = 1.0f;
     m_CritChanceMult = 1.0f;
-    m_SpeedScale     = 1.0f;
-
-    // Skip PowerUpManager::Update — not ported. m_SpeedScale stays 1.0.
+    // v1.6.1 WaveManager::Update @0x001267a0: drive m_SpeedScale from PowerUpManager's
+    // m_DtMod (modifier dt mult: freeze<1 slows, frenzy>1 speeds spawn cadence). PUM::Update
+    // IS ported (the old "not ported" note was stale) -- this was why arcade freeze/frenzy
+    // never affected spawn cadence.
+    {
+        float comboDt = dt * m_ComboSpeedDivisor;   // +0x80, always 1.0
+        PowerUpManager* pum = PowerUpManager::GetInstance();
+        if (game_work.m_GameDt >= 1.0f || !PowersEnabled()) {   // flM_PauseAmount @+0x0C
+            pum->SetDefaults();
+            m_SpeedScale = 1.0f;
+        } else {
+            pum->Update(comboDt);
+            m_SpeedScale = pum->m_DtMod;            // +0x64
+        }
+    }
 
     // Wave speed accumulator — binary @ 0x125ba2-0x125aa6.
     // Binary uses TWO per-mode arrays: field_0x8c[4] (lower bound) and field_0x9c[4] (upper bound).
