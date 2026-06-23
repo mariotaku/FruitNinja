@@ -1278,18 +1278,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         FN::CriticalFlash(pos, Colour(255, 255, 255, 128));
     }
 
-    // Overlay label on critical / rare slices. Pool is stubbed (GetFree
-    // returns nullptr until the 9-slot MissControl pool lands in
-    // GameInitialise), so this is currently a no-op — the call is wired
-    // so it'll light up for free once the pool exists. See
-    // docs/entities/miss-control.md and src/hud/MissControl.h.
-    if (isCritical) {
-        if (MissControl* mc = MissControl::GetFree())
-            mc->MakeCritical(pos, 0 /* playerIdx */);
-    } else if (isSpecial) {
-        if (MissControl* mc = MissControl::GetFree())
-            mc->MakeRare(pos);
-    }
+    // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: CRITICAL_SCORE=5 (@0x002d8d48),
+    // CRITICAL_CHANCE=5 (@0x002d8d4c); single-player crit = CriticalFlash only, no
+    // MakeCritical popup (that is online-MP only). No MakeCritical/MakeRare here.
 
     // White slice-line visual — matches AddSlice call in binary
     // v1.6.1 Fruit::CollisionResponse @0x001dd500. Binary builds sliceInfo as:
@@ -1327,15 +1318,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // ASM-verified: 2026-05-10 binary @ 0x001dd500 (re-analyst).
         // Formula:
         //   score = info->m_Score                               // FRUIT_INFO+0x314
-        //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
+        //   if (critical) score += 5                            // CRITICAL_SCORE @ 0x002d8d48
         //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
         //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
-        //   if (critical) score *= 2                            // g_CritScoreMul / 2 = 2 (int div)
-        // Earlier port had `score * 2` for critical, missing the +5 bonus.
-        // For a normal scorable fruit (m_Score=1, no random override), this gives
-        // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
         // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
         // when used in this score path; same fields, dual-purpose semantics.
+        // The only x2 in the binary is on COINS, not score -- no score *= 2.
         {
             int score = info->m_Score;
             if (m_bCritical) score += 5;
@@ -1344,7 +1332,6 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                 score = info->m_CoinsMin
                       + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
             }
-            if (m_bCritical) score *= 2;  // g_CritScoreMul / 2 = 2
             g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
             FN::AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
@@ -1507,13 +1494,11 @@ void Fruit::Slice() {
         FN::SliceEffect_Add(pos, critBase - 60.0f, critLen, true);
         // Binary @ 0x00176f1e — splatCount = *(int*)(*(GOT+DAT_00177060)),
         // the configured juice-burst count global (read_memory @ 0x001F3E20 = 10),
-        // NOT splatCount += 2. impulse *= 1.5 then a MissControl::MakeCritical.
+        // NOT splatCount += 2. impulse *= 1.5.
+        // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: no MakeCritical popup
+        // in the normal single-player path (MakeCritical is online-MP only).
         impulse *= 1.5f;
         splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
-        // Binary @ 0x00176f2c..0x00176f46 — MissControl::MakeCritical(GetFree(), pos).
-        if (MissControl* mc = MissControl::GetFree()) {
-            mc->MakeCritical(pos, (int)m_PlayerIdx);
-        }
     }
 
     // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse and the
