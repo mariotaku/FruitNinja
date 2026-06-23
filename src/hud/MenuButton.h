@@ -8,10 +8,14 @@
 // ASM-spec v1.6.1 MenuButton @ ctor 0x0019bb08 / Init 0x0019b994, sizeof 0x178:
 //   Delegate0 is 0x24 bytes; m_DeletedCallback@0xAC fills to 0xCF (no field @0xCC --
 //   m_FadeAlphaIdx was a v1.5.x phantom); m_SparkleTimer@0xF8, m_NewIndicatorTimer@0xFC;
+//   m_field130@0x130 (byte, Init writes 0; TutorialControl reads for flip direction);
 //   m_RestScale@0x13C is a plain Vec3 (all 3 floats); m_bHasHitArea@0x148, m_bAcceptsTouch@0x149,
-//   2 pad bytes @0x14A; m_pTrackedFruit@0x14C; m_ShakeTimer@0x174.
+//   2 pad bytes @0x14A; m_pTrackedFruit@0x14C; m_ShakeScale@0x154 (Init=(1,0.85,0.85));
+//   m_ShakeTimer@0x174.
 //   Init @0x0019b994 sets m_bAcceptsTouch(+0x149)=1 unconditionally.
 //   Update @0x0019a860 gates the entire touch block on byte @+0x149 != 0.
+//   CreateButtons (DojoScreen @0x0016ad9c, MainScreen): sets m_ShakeScale.x=0.5 for shop/play btns;
+//   bounce writes m_ShakeScale.y*=0.575; m_ShakeScale.z*=0.575; m_ShakeScale.y=-m_ShakeScale.y.
 // ASM-spec v1.6.1 MenuButton::HasNewSymbol @0x0019a5a0: m_NewIndicatorTimer(+0xFC) >= 0
 // ASM-spec v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608: m_SparkleTimer(+0xF8) >= 0
 // ASM-spec v1.6.1 MenuButton::Shake @0x0019a510: m_ShakeTimer(+0x174) = arg
@@ -163,8 +167,10 @@ public:
     // +0x12C: player index tint (Colour = 4 bytes; ends at +0x12F)
     Colour          m_PlayerIndexTint;     // +0x12C
 
-    // +0x130..+0x133: pad to reach +0x134
-    uint8_t         _pad130[4];            // +0x130..+0x133
+    // +0x130: binary byte written by Init @0x0019b994 (*(uchar*)&m_field130 = 0);
+    // read by TutorialControl::ResetTutePos/@ButtonPressedAtPos for flip direction.
+    uint8_t         m_field130;            // +0x130
+    uint8_t         _pad131[3];            // +0x131..+0x133
 
     // +0x134: grow-in delay countdown; Init=1.0; Update gates on >0; decrements by dt.
     float           m_GrowInTimer;         // +0x134
@@ -234,24 +240,6 @@ public:
     // +0x174: shake timer countdown (Update)
     float           m_ShakeTimer;          // +0x174
 
-    // === v1.0 compat fields (port-side only; binary offset unknown in v1.6.1) ===
-    // Excluded from the cross-build (__bada__) so sizeof == 0x178 is
-    // enforceable by the static_assert below.
-    // DIFFERS: original v1.0 had these at known offsets; v1.6.1 layout unknown.
-    //   m_bEnabled:        v1.0 +0x123; disables ClearMenuItems + touch input.
-    //   m_AnimScale:       v1.0 +0x13C; maps to m_ShakeScale.x in v1.6.1 (backdrop scale factor).
-    //   m_BounceParams:    v1.0 +0x140; new-item star anchor ratios.
-    //   m_bTouchHeld:      v1.0 +0x131; touch-held gate for Update and Init.
-    //   m_bScoreSubmitted: v1.0 +0x120; TutorialControl flip direction.
-    // TODO: 0x0019b994 -- RE v1.6.1 binary to locate each field's offset and remove these
-#if !defined(__bada__)
-    uint8_t         m_bEnabled;            // port-compat; v1.0 +0x123
-    float           m_AnimScale;           // port-compat; v1.0 +0x13C -> v1.6.1 m_ShakeScale.x
-    Vec3            m_BounceParams;        // port-compat; v1.0 +0x140 -> v1.6.1 hardcoded 0.85
-    uint8_t         m_bTouchHeld;          // port-compat; v1.0 +0x131
-    uint8_t         m_bScoreSubmitted;     // port-compat; v1.0 +0x120
-#endif
-    // === end compat fields ===
 
     MenuButton();
 
@@ -338,8 +326,6 @@ private:
 };
 
 // Layout asserts under __bada__ (v1.6.1 MenuButton ctor @0x0019bb08, sizeof=0x178).
-// The compat fields above are wrapped in #if !defined(__bada__) so they
-// do not inflate the cross-build sizeof past 0x178.
 #if defined(__bada__)
 static_assert(__builtin_offsetof(MenuButton, m_pEntity)           == 0x80,  "MenuButton m_pEntity offset");
 static_assert(__builtin_offsetof(MenuButton, m_FruitType)         == 0x84,  "MenuButton m_FruitType offset");
@@ -350,6 +336,7 @@ static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)     == 0xF4,  "Men
 static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)      == 0xF8,  "MenuButton m_SparkleTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC,  "MenuButton m_NewIndicatorTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_BaseScale)         == 0x100, "MenuButton m_BaseScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_field130)          == 0x130, "MenuButton m_field130 offset");
 static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)       == 0x134, "MenuButton m_GrowInTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_RestScale)         == 0x13C, "MenuButton m_RestScale offset");
 static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)       == 0x148, "MenuButton m_bHasHitArea offset");
