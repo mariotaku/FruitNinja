@@ -21,7 +21,7 @@
 // Mesh::Draw (Phase 5 ported Geometry as a real class). The classes
 // are ported for ABI/call-graph parity (so EffectGroup::AddEffect can
 // do its real lower_bound + merge dance) but no live render-time call
-// site reaches them — see Geometry::EffectGroupSet @ 0x001a00f8
+// site reaches them -- see Geometry::EffectGroupSet (v1.5.1 @ 0x001a00f8; TODO: re-verify v1.6.1 addr)
 // (binary stub).
 
 #include "util/ReferenceCounter.h"
@@ -138,10 +138,10 @@ struct EffectLessThanCompare {
 // `this->MergeProperties(effect->Properties())` which folds the new
 // effect's property defs into m_MergedDefs.
 //
-// Live render path is fully bypassed in the port (Renderer uses GLES2
-// shaders directly, not Effect/EffectGroup multi-pass dispatch). Both
-// AddEffect and MergeProperties are reachable in code shape but never
-// fire at runtime — every binary caller chains through stubs.
+// Live render path is fully bypassed in the port (Geometry::Render draws from load-cached
+// m_Vbo/m_Ibo/m_Layout rather than walking Effect/EffectGroup multi-pass dispatch;
+// both paths are fixed-function GLES1.x). Both AddEffect and MergeProperties are reachable
+// in code shape but never fire at runtime -- every binary caller chains through stubs.
 class EffectGroup : public ReferenceCounter {
 public:
     std::vector<EffectPropertyDefinition>  m_MergedDefs;   // +0x0C

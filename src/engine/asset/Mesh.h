@@ -69,8 +69,8 @@ struct SharedPropsInfo {
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
 // Inherits: Mortar::ReferenceCounter → IModelNode → Mesh
 // Binary sizeof(Mesh) = 0x7C.
-// Port specific: skips Effect/Geometry/SharedEffectProperties system,
-// uses direct GLES2 calls via Renderer::setup_3d_shader()
+// Port specific: Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout rather than
+// walking the PassBinding::Apply chain (structural divergence; same fixed-function GLES1.x calls).
 // Per-geometry diffuse texture is stored on Geometry::m_DiffuseTex.
 class Mesh : public IModelNode {
 public:
@@ -167,25 +167,28 @@ public:
     // and Fruit::LoadFruitModels.
 
     // Subsystem status (post Phase 5):
-    //   Geometry         -- PORTED as real class (src/engine/asset/Geometry.{h,cpp});
-    //                       Render body uses the port's GLES2 path instead of binary's
-    //                       fixed-pipeline GL ES 1.x.
-    //                       Binary @ 0x001a3c50 ctor, 0x001a3e98 Render (non-virtual).
-    //   Geometry_Bada    -- collapsed into Geometry's base; binary @ 0x001a4ba8.
-    //   GeometryBinding  -- defunct stub (declaration in Geometry.h); binary @ 0x001a3990..0x001a40c0.
-    //                       SmartPtr<GeometryBinding> is stored on Geometry but never dereferenced
-    //                       because the port's GLES2 Render doesn't use the per-pass binding records.
+    //   Geometry         -- PORTED as real class (src/engine/asset/Geometry.{h,cpp}).
+    //                       Render body is fixed-function GLES1.x (same as binary) but draws
+    //                       from load-cached m_Vbo/m_Ibo/m_Layout rather than walking
+    //                       PassBinding::Apply (structural divergence; byte-equivalent GL output).
+    //                       v1.6.1 Geometry::Render @0x00264468.
+    //                       TODO: re-verify v1.6.1 addrs: ctor (v1.5.1 @ 0x001a3c50 C1/0x001a3cc4 C2).
+    //   Geometry_Bada    -- collapsed into Geometry's base; TODO: re-verify v1.6.1 addr (v1.5.1 @ 0x001a4ba8).
+    //   GeometryBinding  -- constructed and wired faithfully in LoadMesh; m_Binding stored on Geometry
+    //                       but PassBinding::Apply is not called at draw (structural bypass -- same GL result).
+    //                       TODO: re-verify v1.6.1 addrs (v1.5.1 range @ 0x001a3990..0x001a40c0).
     //   EffectGroup      -- PORTED (src/engine/asset/Effect.h, moved from here in commit 5bcdf2b);
     //                       AddEffect/MergeProperties have real bodies, but the live render path
     //                       never reaches them because EffectBinding/PassBinding aren't constructed.
     //   EffectBinding / PassBinding / GLFuncParams / MapBinding -- defunct, never constructed.
     //
-    // Geometry::Render in the binary is hard-Bada: glMatrixMode / glPushMatrix /
-    // glLoadMatrixf / glDrawArrays via fixed-pipeline GL ES 1.x. Port uses ES 2.0
-    // shaders + Renderer::setup_3d_shader directly inside the ported Geometry::Render,
-    // bypassing the EffectGroup -> EffectBinding[] -> PassBinding[] multi-pass
-    // machinery. Mesh::Draw iterates m_Geometries[] and calls Geometry::Render per
-    // submesh.
+    // Geometry::Render (binary v1.6.1 @0x00264468): walks m_Binding->GetBindings()[idx].m_PassBindings,
+    // calls GeometryBinding_GLES1::PassBinding::Apply (v1.6.1 @0x00263b7c, thunk @0x00111e24) for
+    // glVertexPointer/glNormalPointer/glTexCoordPointer etc., then issues glDrawElements via
+    // the IIndexStream vtable -- fixed-function GL ES 1.x throughout.
+    // Port mirrors all the same fixed-function calls but drives them from load-cached fields
+    // rather than re-deriving from the PassBinding records. Mesh::Draw iterates m_Geometries[]
+    // and calls Geometry::Render per submesh.
     //
     // Defunct: SharedEffectProperties machinery -- port stores per-geometry
     // diffuse texture on Geometry::m_DiffuseTex; field shape (m_OwnGroup,

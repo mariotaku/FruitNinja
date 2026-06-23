@@ -146,8 +146,10 @@ Bounds3D Mesh::GetBounds() const {
 }
 
 // Binary @ 0x00272e98
-// DIFFERS: binary @ 0x00272e98 Geometry::Render uses fixed-pipeline GL ES 1.x
-// (glLoadMatrixf / glDrawArrays); port uses GLES2 setup_3d_shader + Renderer::DrawGeometry.
+// Geometry::Render (v1.6.1 @0x00264468) uses fixed-function GL ES 1.x throughout (both binary and port).
+// DIFFERS: structural -- binary Render walks m_Binding->GetBindings()[idx].m_PassBindings and re-derives
+//   glVertexPointer/glDrawElements args per draw; port draws from load-cached m_Vbo/m_Ibo/m_Layout
+//   (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
 // EffectProperty SetValue calls (m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp) are
 // defunct-stubbed (no-op) but call shape preserved. Bone branch + 4-matrix composition
 // + geometry loop order all match binary.
@@ -172,8 +174,8 @@ void Mesh::Draw(const Matrix44& worldTransform) {
 
     // Binary-faithful 4-matrix property upload (binary @ 0x001b0c3c).
     // Side-effect feed for any consumer reading EffectPropertyValues;
-    // the port's GLES2 DrawGeometry doesn't read these but the call shape
-    // matches the binary so asm-verify sees the same write pattern.
+    // the defunct-stubbed SetValue calls don't affect the GL state but the
+    // call shape matches the binary so asm-verify sees the same write pattern.
     const Matrix44& camView = mm.GetViewStack().m_Current;
     const Matrix44& camProj = mm.GetProjectionStack().m_Current;
     TrySetMatrix_EffectProp(m_WorldProp, &finalWorld);
