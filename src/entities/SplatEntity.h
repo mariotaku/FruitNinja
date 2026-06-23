@@ -10,7 +10,8 @@
 //   SplatEntity ctor            0x0017ed58
 //   SplatEntity::MakeSplat      0x0017f2f0
 //   SplatEntity::Update         0x0017f774
-//   SplatEntity::DrawActiveSplats 0x00180344
+//   SplatEntity::DrawSplat      0x001eb5d8
+//   SplatEntity::DrawActiveSplats 0x001ece34
 //   UV atlas table              0x001bd014 (6 entries x 4 floats)
 //   Vtable                      0x001ea5e8
 //
@@ -73,11 +74,11 @@ public:
     // bx lr (no-op)
     virtual void Release();
 
-    // --- Vtable slot 4: DrawSplat (binary @ 0x0017f008) ---
+    // --- Vtable slot 4: DrawSplat (binary @ 0x001eb5d8) ---
     // Pure thiscall -- pulls vertex cursor from s_NumActiveSplats and writes
     // into s_pSplatVertexBuffer. Tint read from s_CurrentTintRGB (set by
     // DrawActiveSplats before dispatch).
-    // ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst)
+    // ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
     virtual void DrawSplat();
 
     // --- Vtable slot 5: Update (binary @ 0x0017f774) ---
@@ -113,7 +114,7 @@ public:
     static int NumActiveSplats();
     // Binary: SplatEntity::UpdateActiveSplats @ 0x0017fd68
     static void UpdateActiveSplats(float dt);
-    // Binary: SplatEntity::DrawActiveSplats @ 0x00180344
+    // Binary: SplatEntity::DrawActiveSplats @ 0x001ece34
     static void DrawActiveSplats();
     // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
     static void RemoveAllSplats();

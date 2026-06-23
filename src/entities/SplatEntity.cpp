@@ -1,6 +1,6 @@
 //
 // SplatEntity -- juice-splat pool, 1:1 binary port.
-// Binary @ 0x0017ed58..0x00180344. sizeof = 0x78 (120 bytes), no base class.
+// Binary @ 0x0017ed58..0x001ece34. sizeof = 0x78 (120 bytes), no base class.
 //
 // Analysed: 2026-05-04T00:00
 //
@@ -51,13 +51,6 @@ static const float MS_SCALE_RAND      = 10.0f;
 // Update @ 0x0017f774
 static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing threshold)
 
-// ASM-verified: binary @ 0x001803c0 DrawActiveSplats draws the splat batch
-// through a world matrix translated to z = DAT_00180404 = -5500, far behind
-// all fruits (fruit mesh z = -500..-2499). The landed m_Pos.z (-50) is the
-// entity's logical land plane; the DRAW plane is -5500. Without this, splats
-// at -50 are nearer than fruits and win GL_LESS, painting over them.
-static const float SPLAT_DRAW_Z       = -5500.0f; // DAT_00180404
-
 // Verified 2026-04-15 from instruction at 0x0017fa90:
 //   vmov.f32 s13, 0xc1200000   ; -10.0f
 //   vmla.f32 s15, s13, s14     ; vel.y += -10.0 * dt
@@ -105,7 +98,7 @@ static float s_PulpDripGate = 0.0f;
 // -1 until first resolved; set once via Fruit::FruitType("Moose", false).
 static int s_MooseFruitType = -2;  // -2 = uncached; use -2 so -1 (not found) can cache
 
-// DrawActiveSplats @ 0x00180344 -- UV atlas table @ 0x001bd014 (6 x 4 floats)
+// DrawActiveSplats @ 0x001ece34 -- UV atlas table @ 0x001bd014 (6 x 4 floats)
 // Each entry is {u0, u1, v0, v1} -- verified from raw little-endian dump.
 struct SplatAtlasEntry { float u0, u1, v0, v1; };
 static const SplatAtlasEntry SPLAT_ATLAS[6] = {
@@ -716,17 +709,19 @@ void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
 }
 
 // ---------------------------------------------------------------------
-// SplatEntity::DrawSplat (0x0017f008) -- virtual per-instance render
+// SplatEntity::DrawSplat (0x001eb5d8) -- virtual per-instance render
 // Vtable slot 4.
-// ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst)
+// ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
 // ---------------------------------------------------------------------
 // Writes 6 QUADCUSTOMVERTEX entries into s_SplatVerts at the cursor
 // position given by s_NumActiveSplats. Tint read from s_CurrentTintRGB.
 // Called indirectly via vtable from DrawActiveSplats (pure thiscall).
+// Binary writes vertex z = 0; the z=-5500 depth placement comes from the
+// modelview Translate in DrawActiveSplats (v1.6.1 DrawActiveSplats @0x001ece34).
 void SplatEntity::DrawSplat() {
     QUADCUSTOMVERTEX* outVerts = &s_SplatVerts[s_NumActiveSplats * 6];
     const float* tintRGB = s_CurrentTintRGB;
-    // Quad corner construction -- matches binary DrawSplat (0x0017f008).
+    // Quad corner construction -- matches binary DrawSplat (0x001eb5d8).
     // The four corners are built from the sum/diff of the two axis
     // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
     // that m_Scale.y is the negative `-sc` from the spawn triple,
@@ -753,7 +748,7 @@ void SplatEntity::DrawSplat() {
         ((uint32_t)tinted.g <<  8) |
         ((uint32_t)tinted.r);
 
-    // Atlas UV -- verified via SplatEntity::DrawSplat @ 0x0017f008.
+    // Atlas UV -- verified via SplatEntity::DrawSplat @ 0x001eb5d8.
     // The binary halves the table-stored U coords (* 0.5) before
     // applying them, then optionally shifts both by +0.5 when
     // m_bSpecial (binary field_0x19) is set -- selecting the right
@@ -772,7 +767,7 @@ void SplatEntity::DrawSplat() {
     if (m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
 
     QUADCUSTOMVERTEX* v = outVerts;
-    const float px = m_Pos.x, py = m_Pos.y, pz = SPLAT_DRAW_Z;
+    const float px = m_Pos.x, py = m_Pos.y, pz = 0.0f;
 
     // Vertex layout matches binary DrawSplat (vertices 0..5 written in
     // order, then v3=v2 and v4=v1 via memcpy):
@@ -814,20 +809,27 @@ void SplatEntity::DrawSplat() {
 }
 
 // ---------------------------------------------------------------------
-// Batched draw -- matches DrawActiveSplats (0x00180344)
+// Batched draw -- matches DrawActiveSplats (0x001ece34)
 // ---------------------------------------------------------------------
 //
-// Zeros s_NumActiveSplats at entry (binary @ 0x00180356), sets
-// s_CurrentTintRGB from HUD::scales[3..5], then for each alive landed
-// splat calls DrawSplat() (pure thiscall, vtable slot 4) and increments
-// s_NumActiveSplats (binary @ 0x0018039c). Submits the completed batch.
-// ASM-verified: 2026-05-18 binary @ 0x00180344 (re-analyst)
+// Zeros s_NumActiveSplats at entry, sets s_CurrentTintRGB from
+// HUD::scales[3..5], then for each alive landed splat calls DrawSplat()
+// (pure thiscall, vtable slot 4) and increments s_NumActiveSplats.
+// Submits the completed batch.
+// ASM-verified: 2026-05-18 binary @ 0x00180344 (re-analyst) [addr updated: 0x001ece34]
 // Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
 // glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
+//
+// Binary call order (v1.6.1 DrawActiveSplats @0x001ece34, tail block):
+//   1. splatTexture->Set()                        -- vtable +0xc, BEFORE matrix ops
+//   2. world.Reset()
+//   3. world.Translate(Vec3(0,0,-5500))            -- DAT 0xc5abe000 = -5500.0f
+//   4. UploadModelViewOnly()
+//   5. Mesh::DrawTriList(m_points, count*6, ...)
+//   6. splatTexture->UnSet(true)                  -- vtable +0x10, flag=1
 void SplatEntity::DrawActiveSplats() {
     if (!s_SplatTex.IsValid()) return;
 
-    // Binary @ 0x00180356: *s_NumActiveSplats = 0 before the loop.
     s_NumActiveSplats = 0;
 
     s_CurrentTintRGB = Colour::IdentityTint();
@@ -844,24 +846,23 @@ void SplatEntity::DrawActiveSplats() {
 
         s->DrawSplat();
 
-        // Binary @ 0x0018039c: cursor++ after each DrawSplat call.
         ++s_NumActiveSplats;
     }
 
     if (s_NumActiveSplats == 0) return;
 
+    // Binary call order: Set() first, then matrix block, then draw, then UnSet(true).
+    s_SplatTex->Set();
+
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
+    mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, -5500.0f)); // binary: UnitZ * DAT(0xc5abe000); splats live at modelview z=-5500
     mm.UploadModelViewOnly();
-
-    s_SplatTex->Set();
 
     // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888):
     // SetDepthBuffer(1) + SetDepthBufferWrite(0) is set BEFORE the splat pass and
-    // stays in effect. SplatEntity::Draw must NOT mutate it -- doing so leaves
-    // depth-test OFF for subsequent same-bucket draws and breaks the fruit
-    // -occludes-backdrop sort order on the menu screen.
+    // stays in effect. SplatEntity::Draw must NOT mutate it.
     Mortar::Mesh::DrawTriList(s_SplatVerts, s_NumActiveSplats * 6, false, NULL);
 
-    s_SplatTex->UnSet();
+    s_SplatTex->UnSet(true);
 }
