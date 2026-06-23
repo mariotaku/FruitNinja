@@ -23,6 +23,7 @@ set(VERIFY_SOURCES
     #         math / network / particle / render / util
     "${_PROJECT_ROOT}/src/engine/MenuBackground.cpp"
     "${_PROJECT_ROOT}/src/engine/Renderer.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/AlternativeTextureLoader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AnimationState.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/File.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/FileManager.cpp"
@@ -34,8 +35,10 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/asset/Model.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Effect.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/ResourceLoader.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/SharedEffectProperties.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Skeleton.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Texture.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/TextureFileFormat.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/TextureManager.cpp"
     "${_PROJECT_ROOT}/src/engine/audio/GameSound.cpp"
     "${_PROJECT_ROOT}/src/engine/audio/MortarSound.cpp"
@@ -58,6 +61,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/render/BakedStringBox.cpp"
     "${_PROJECT_ROOT}/src/engine/render/DisplayManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Font.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/FontInterface.cpp"
     "${_PROJECT_ROOT}/src/engine/render/MatrixManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/MortarCamera.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
@@ -78,6 +82,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/entities/FruitInfo.cpp"
     "${_PROJECT_ROOT}/src/entities/SlashEntity.cpp"
     "${_PROJECT_ROOT}/src/entities/SplatEntity.cpp"
+    "${_PROJECT_ROOT}/src/entities/SuperFruitControl.cpp"
 
     # Game
     "${_PROJECT_ROOT}/src/game/AchievementManager.cpp"
@@ -113,10 +118,12 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/WaveSyncPacket.cpp"
 
     # HUD
+    "${_PROJECT_ROOT}/src/hud/BSButton.cpp"
     "${_PROJECT_ROOT}/src/hud/CheckBox.cpp"
     "${_PROJECT_ROOT}/src/hud/CoinCounter.cpp"
     "${_PROJECT_ROOT}/src/hud/ComboControl.cpp"
     "${_PROJECT_ROOT}/src/hud/FruitFactControl.cpp"
+    "${_PROJECT_ROOT}/src/hud/FruitFactPageControl.cpp"
     "${_PROJECT_ROOT}/src/hud/HUD.cpp"
     "${_PROJECT_ROOT}/src/hud/HUDControl3d.cpp"
     "${_PROJECT_ROOT}/src/hud/MenuButton.cpp"
