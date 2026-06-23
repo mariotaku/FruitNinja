@@ -509,8 +509,9 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
         g->m_MaterialIndex = (int)matIndex;
 
         // Assign diffuse texture from material index (port render path).
-        // DIFFERS: binary renders via EffectProperty "DiffuseMap" in the PassBinding chain;
-        // port reads m_DiffuseTex directly in Geometry::Render (GLES2 path).
+        // DIFFERS: structural -- binary renders via EffectProperty "DiffuseMap" in the PassBinding chain
+        // (v1.6.1 Geometry::Render @0x00264468); port reads m_DiffuseTex directly (same GL result,
+        // both are fixed-function GLES1.x -- NOT a GLES2 shader path).
         if (matIndex < (uint16_t)matTextures.size()) {
             g->m_DiffuseTex = matTextures[matIndex];
         }

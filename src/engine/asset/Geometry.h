@@ -45,8 +45,9 @@ class EffectGroup;
 // Fields used by LoadMesh (VertexStreamAdd/IndexStreamSet/EffectGroupSet) are exposed
 // as real typed fields. m_NamedIndexStreams and m_EffectBindings are padded because
 // their element types (EffectBinding/PassBinding) are unported subsystems.
-// Geometry::Render bypasses PassBinding::Apply entirely (GLES2 path).
-// Binary @ 0x001a57bc
+// Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout rather than walking PassBinding::Apply
+// (structural divergence; both paths are fixed-function GLES1.x -- NOT a GLES2 shader path).
+// TODO: re-verify v1.6.1 addr for GeometryBinding_Bada ctor (v1.5.1 @ 0x001a57bc)
 class GeometryBinding_Bada : public ReferenceCounter {
 public:
     GeometryBinding_Bada();
@@ -71,9 +72,11 @@ struct Event1_GeometryBinding {
 
 // GeometryBinding -- constructed by LoadMesh to hold stream references and
 // the EffectGroup pointer. Render-time use (PassBinding::Apply chain) is defunct
-// in the port -- Geometry::Render uses a direct GLES2 path instead.
-// Binary @ 0x001a3990 (ctor zeros all), 0x002640c8 (VertexStreamAdd),
-//          0x001a4f90 (IndexStreamSet), 0x001a00f8 (EffectGroupSet).
+// in the port -- Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout
+// (structural divergence; same fixed-function GLES1.x calls, NOT a GLES2 shader path).
+// v1.6.1 VertexStreamAdd @0x002640c8.
+// TODO: re-verify v1.6.1 addrs: GeometryBinding ctor (v1.5.1 @ 0x001a3990),
+//   IndexStreamSet (v1.5.1 @ 0x001a4f90), EffectGroupSet (v1.5.1 @ 0x001a00f8).
 class GeometryBinding : public GeometryBinding_Bada {
 public:
     // Binary @ 0x001a3990
@@ -90,7 +93,7 @@ public:
     // v1.6.1 LoadMesh @0x0023890c calls this before VertexStreamAdd.
     void IndexStreamSet(SmartPtr<IIndexStream> stream, const AsciiString& name);
 
-    // Binary @ 0x001a00f8 -- stores EffectGroup ptr into m_EffectGroup.
+    // TODO: re-verify v1.6.1 addr for EffectGroupSet (v1.5.1 @ 0x001a00f8) -- stores EffectGroup ptr into m_EffectGroup.
     // v1.6.1 LoadMesh @0x0023890c calls this after creating the binding.
     // Binary body is minimal (1-2 instructions in the stub); shape preserved.
     void EffectGroupSet(SmartPtr<EffectGroup> group);
@@ -108,11 +111,12 @@ struct VertexLayout {
     int totalStride;
 };
 
-// Shape-preserved port of Mortar::Geometry (binary @ 0x001a3c50 ctor; sizeof 0x18).
+// Shape-preserved port of Mortar::Geometry.
+// TODO: re-verify v1.6.1 addrs for ctor (v1.5.1 @ 0x001a3c50 C1 / 0x001a3cc4 C2); sizeof 0x18.
 // Binary fields preserved at canonical offsets +0x0C..+0x14 relative to base.
-// Port appends VBO/IBO/material data after the binary fields; the binary's
-// binding-stack pipeline (PassBinding::Apply etc.) is defunct because GLES2
-// shaders replace the fixed-pipeline client-state calls.
+// Port appends VBO/IBO/material data after the binary fields; the binary's binding-stack
+// pipeline (PassBinding::Apply etc.) is structurally bypassed -- Geometry::Render draws
+// from load-cached m_Vbo/m_Ibo/m_Layout (same fixed-function GLES1.x calls, NOT GLES2 shaders).
 class Geometry : public ReferenceCounter {
 public:
     // Binary @ 0x001a3c50 (C1) / 0x001a3cc4 (C2)
@@ -120,18 +124,17 @@ public:
              SmartPtr<SharedEffectProperties> props);
     virtual ~Geometry();
 
-    // Binary @ 0x001a3e98 -- non-virtual member; called directly by Mesh::Draw.
-    // DIFFERS: binary walks m_Binding->GetBindings()[m_ActiveBindingIdx].m_PassBindings,
-    //   calling PassBinding::Apply (glVertexPointer/etc.) then glDrawArrays/Elements
-    //   via the IIndexStream vtable. Port renders directly from the loader-cached
-    //   m_Vbo/m_Ibo/m_Layout because GLES2 has no fixed-pipeline client state.
+    // v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
+    // DIFFERS: structural -- binary walks m_Binding->GetBindings()[idx].m_PassBindings and re-derives
+    //   the glVertexPointer/glDrawElements args per draw; port draws from the load-cached
+    //   m_Vbo/m_Ibo/m_Layout (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
     //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
     void Render(Matrix44 const& mvp);
 
-    // Binary @ 0x001a3e7c
+    // TODO: re-verify v1.6.1 addr for HasActiveEffect (v1.5.1 @ 0x001a3e7c)
     bool HasActiveEffect() const;
 
-    // Binary @ 0x001a3e5c
+    // TODO: re-verify v1.6.1 addr for SetActiveEffect (v1.5.1 @ 0x001a3e5c)
     bool SetActiveEffect(uint32_t idx);
 
     // Accessor for m_PropList (used by Fruit::LoadFruitModels for DiffuseMap property extraction).

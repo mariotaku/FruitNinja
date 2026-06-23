@@ -19,7 +19,7 @@ GeometryBinding_Bada::GeometryBinding_Bada() {
 GeometryBinding_Bada::~GeometryBinding_Bada() {
 }
 
-// Binary @ 0x001a3990 -- constructs base then zeros Event1.
+// TODO: re-verify v1.6.1 addr for GeometryBinding ctor (v1.5.1 @ 0x001a3990) -- constructs base then zeros Event1.
 GeometryBinding::GeometryBinding() {
 }
 
@@ -38,20 +38,20 @@ void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
     m_VertexStreams.push_back(stream);
 }
 
-// Binary @ 0x001a4f90 -- stores stream into m_IndexStream; name is unused
-// by LoadMesh (always passed as ""). No lookup into m_NamedIndexStreams in
-// this path.
+// TODO: re-verify v1.6.1 addr for IndexStreamSet (v1.5.1 @ 0x001a4f90) -- stores stream into m_IndexStream;
+// name is unused by LoadMesh (always passed as ""). No lookup into m_NamedIndexStreams in this path.
 void GeometryBinding::IndexStreamSet(SmartPtr<IIndexStream> stream,
                                      const AsciiString& /*name*/) {
     m_IndexStream = stream;
 }
 
 // Binary @ 0x001a00f8 -- stores EffectGroup into m_EffectGroup.
+// TODO: re-verify v1.6.1 addr (v1.5.1 @ 0x001a00f8)
 void GeometryBinding::EffectGroupSet(SmartPtr<EffectGroup> group) {
     m_EffectGroup = group;
 }
 
-// Binary @ 0x001a3c50 (C1) / 0x001a3cc4 (C2)
+// TODO: re-verify v1.6.1 addrs for Geometry ctor (v1.5.1 @ 0x001a3c50 C1 / 0x001a3cc4 C2)
 Geometry::Geometry(SmartPtr<GeometryBinding> binding,
                    SmartPtr<SharedEffectProperties> props)
     : m_ActiveBindingIdx(0)
@@ -68,18 +68,22 @@ Geometry::Geometry(SmartPtr<GeometryBinding> binding,
     BuildPropList(props);
 }
 
-// Binary @ 0x001a4de0 (D0) / 0x001a4e38 (D2/D1)
+// TODO: re-verify v1.6.1 addrs for Geometry dtor (v1.5.1 @ 0x001a4de0 D0 / 0x001a4e38 D2/D1)
 Geometry::~Geometry() {
     if (m_Vbo) { glDeleteBuffers(1, &m_Vbo); }
     if (m_Ibo) { glDeleteBuffers(1, &m_Ibo); }
 }
 
-// Binary @ 0x001a3e98 -- non-virtual member; called directly by Mesh::Draw.
-// DIFFERS: binary walks m_Binding->GetBindings()[m_ActiveBindingIdx].m_PassBindings,
-//   calling PassBinding::Apply (glVertexPointer/etc.) then glDrawArrays/Elements
-//   via the IIndexStream vtable. Port renders directly from the loader-cached
-//   m_Vbo/m_Ibo/m_Layout because GLES2 has no fixed-pipeline client state.
+// v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
+// DIFFERS: structural -- binary Geometry::Render @0x00264468 walks m_Binding->GetBindings()[idx].m_PassBindings
+//   and re-derives the glVertexPointer/glDrawElements args per draw; port draws from the load-cached
+//   m_Vbo/m_Ibo/m_Layout (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
 //   Port uses m_DiffuseTex instead of MeshMaterial for texture binding.
+//   GeometryBinding_GLES1::PassBinding::Apply v1.6.1 @0x00263b7c (thunk 0x00111e24).
+// TODO: v1.6.1 -- binary gates Render on HasActiveEffect; port draws unconditionally (bindings are constructed so the gate would pass)
+// Note: the binary's Geometry::Render @0x00264468 consumes only the 3 matrices + DiffuseMap; IsLit/Ambience/Diffuse/Specular
+//   are NOT applied to GL at draw (no glMaterialfv/glLightfv import) -- one bare glEnable(GL_LIGHTING) -> GL-default white.
+//   The material props are structurally carried but render-dead.
 void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
@@ -171,14 +175,14 @@ void Geometry::Render(Matrix44 const& mvp) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-// Binary @ 0x001a3e7c
+// TODO: re-verify v1.6.1 addr for HasActiveEffect (v1.5.1 @ 0x001a3e7c)
 bool Geometry::HasActiveEffect() const {
     // Defunct: GeometryBinding stack not constructed -- port's binding is always null.
     // Binary: return m_ActiveBindingIdx < m_Binding->GetBindings().size();
     return false;
 }
 
-// Binary @ 0x001a3e5c
+// TODO: re-verify v1.6.1 addr for SetActiveEffect (v1.5.1 @ 0x001a3e5c)
 bool Geometry::SetActiveEffect(uint32_t idx) {
     // Defunct: GeometryBinding stack not constructed -- always false in port.
     // Binary: if (idx < size) { m_ActiveBindingIdx = idx; return true; } return false;
@@ -186,7 +190,7 @@ bool Geometry::SetActiveEffect(uint32_t idx) {
     return false;
 }
 
-// Binary @ 0x001a3c00
+// TODO: re-verify v1.6.1 addr for BuildPropList (v1.5.1 @ 0x001a3c00)
 void Geometry::BuildPropList(SmartPtr<SharedEffectProperties> /*props*/) {
     // Defunct: EffectPropertyList not load-bearing in port; m_PropList stays null.
     m_PropList = NULL;

@@ -7,8 +7,9 @@
 // Binary: IVertexStream and IIndexStream are ReferenceCounter subclasses held in
 // GeometryBinding_Bada::m_VertexStreams / m_IndexStream. Their vtables contain the
 // stream-source interface (bind / stride / count / etc.) that PassBinding::Apply
-// dispatches through. The PassBinding subsystem is defunct in the port (Geometry::Render
-// uses a direct GLES2 path), so only the layout-shape and ownership wiring matter here.
+// dispatches through. The PassBinding subsystem is structurally bypassed in the port
+// (Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout, same fixed-function GLES1.x
+// calls as PassBinding::Apply -- NOT a GLES2 shader path); layout-shape and ownership wiring matter here.
 //
 // Port: IVertexStream and IIndexStream are minimal ReferenceCounter subclasses that
 // carry the GL buffer handles and layout metadata produced by the PSP stream parsers.
