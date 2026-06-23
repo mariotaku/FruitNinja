@@ -511,8 +511,15 @@ void SlashEntity::CreateGhost() {
 // at 0x0010c488) to copy colourOut to *outColour.
 // ---------------------------------------------------------------------------
 void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
-    if (dt == 0.0f) return;
-
+    // ASM-verified v1.6.1 SlashEntity::UpdateModColour @0x001e5de4: when dt==0 the
+    // binary skips the palette COMPUTATION (vcmp s0,#0; beq epilogue @0x1e6058) but
+    // STILL runs the epilogue copy g_ModColourOut -> *outColour. Returning early on
+    // dt==0 (as the port used to) means the per-frame Update(dt=0) call never
+    // re-seeds m_HighlightColour from the palette, so mod-colour skins (e.g. flame)
+    // drift to black while the default (white palette) is unaffected. Skip only the
+    // computation; the epilogue below always runs (preserves the disco no-advance
+    // because the held g_ModColourOut is copied, not re-advanced).
+    if (dt != 0.0f) {
     const int count = g_ColourCount;
 
     if (count == 1) {
@@ -577,7 +584,10 @@ void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
         }
     }
 
-    // Epilogue: copy colourOut to output pointer if non-null.
+    }  // end if (dt != 0.0f) -- computation only
+
+    // Epilogue: always copy colourOut to output pointer if non-null (binary
+    // @0x1e6058 -- runs for both the dt==0 and dt!=0 paths).
     // Binary uses custom operator= at 0x0010c488 (r1=dest, r2=src convention).
     if (outColour) {
         *outColour = g_ModColourOut;
