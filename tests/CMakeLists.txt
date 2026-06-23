@@ -87,6 +87,17 @@ target_include_directories(test_event PRIVATE
 )
 add_test(NAME event COMMAND test_event)
 
+# BakedStringTTF unit test -- struct layout, arc math, gradient math.
+# Does NOT call any BakedStringTTF methods (avoids the GL-using TU).
+# Pure in-process: no GPU, no audio, no FreeType.
+# Cross-build safe: no lambdas, no auto, no range-for, no enum class.
+add_executable(test_bakedstringttf test_bakedstringttf.cpp)
+target_link_libraries(test_bakedstringttf PRIVATE mortar_engine)
+target_include_directories(test_bakedstringttf PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME bakedstringttf COMMAND test_bakedstringttf)
+
 # Per-screen smoke test. Each entry boots a hidden SDL+GL context,
 # inits the full game, pushes the named screen, and ticks 30 frames.
 # Catches font / vertex / matrix / divide-by-zero regressions that
