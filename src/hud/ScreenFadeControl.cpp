@@ -25,7 +25,7 @@ ScreenFadeControl::ScreenFadeControl()
       _pad8F(0)
 {
     m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;
-    // ASM-verified: 2026-05-18 binary @ 0x0015AA1C (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0015AA1C (re-analyst)
     // Binary loads literal "loading.tex" (same GOT offset as SpeedControl).
     // Runtime TextureManager::LoadLocalisedTexture may remap to the actual fade asset.
     m_FadeTexture = Mortar::TextureManager::LoadLocalisedTexture("loading.tex");

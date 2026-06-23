@@ -85,7 +85,7 @@ void PurchaseInfo::LoadTextures() {
 
 void PurchaseInfo::UnloadTextures() {
     // Binary @ 0x00118334: three ReloadableTexture::Unload() calls in sequence.
-    // ASM-verified: 2026-05-18 binary @ 0x00118334 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118334 (re-analyst)
     m_Texture.Unload();
     m_InUseTexture.Unload();
     m_GreyTexture.Unload();

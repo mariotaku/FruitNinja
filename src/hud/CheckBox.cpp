@@ -125,7 +125,7 @@ void CheckBox::Update(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-06T16:00 binary @ 0x00134E70 (asm-inspector)
+// ASM-verified: 2026-05-06T16:00 v1.6.1 binary @ 0x00134E70 (asm-inspector)
 // CheckBox in the binary does NOT override the inherited HUDControl3d::Draw;
 // the port's body is the engine-level draw with no per-control GL state
 // mutation. Depth state owned by GameDraw at the pass level.

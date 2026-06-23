@@ -564,7 +564,7 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
 }
 
 // SetShadow  binary @ 0x002462c0
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x002462c0 (asm-inspector)
+// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x002462c0 (asm-inspector)
 void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) {
     if (m_ShadowScale != scale ||
         m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
@@ -578,7 +578,7 @@ void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) 
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z binary @ 0x00245314 (asm-inspector)
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x00245314 (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0) {
     if (m_StrokeCount != 1 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -590,7 +590,7 @@ void BakedStringBox::SetStroke(float width, const Colour& c0) {
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z binary @ 0x0024536c (asm-inspector)
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x0024536c (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) {
     if (m_StrokeCount != 2 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -605,7 +605,7 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) 
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z binary @ 0x002453f0 (asm-inspector)
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x002453f0 (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2) {
     if (m_StrokeCount != 3 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||

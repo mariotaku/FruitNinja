@@ -43,7 +43,7 @@ ProgressionTimerControl::~ProgressionTimerControl() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 2 -- Binary @ 0x0015793c (empty bx lr)
-// Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x0015793c
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x0015793c
 void ProgressionTimerControl::Init() {
     // Binary @ 0x0015793c
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
@@ -52,7 +52,7 @@ void ProgressionTimerControl::Init() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 3 -- Binary @ 0x00157940 (empty bx lr)
-// Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157940
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157940
 void ProgressionTimerControl::Release() {
     // Binary @ 0x00157940
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
@@ -73,7 +73,7 @@ void ProgressionTimerControl::Reset() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged, no writes)
-// Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157964
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157964
 void ProgressionTimerControl::PreDraw(float* hudScaleRaw) {
     // Binary @ 0x00157964
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
@@ -84,7 +84,7 @@ void ProgressionTimerControl::PreDraw(float* hudScaleRaw) {
 // ---------------------------------------------------------------------------
 // vtable slot 7 -- Binary @ 0x001579f4
 // Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
-// Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x001579f4
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x001579f4
 void ProgressionTimerControl::Draw(float* hudScaleRaw) {
     // Binary @ 0x001579f4
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
@@ -127,7 +127,7 @@ void ProgressionTimerControl::Update(float dt) {
 // ---------------------------------------------------------------------------
 // vtable slot 11 -- Binary @ 0x00157968
 // Identical to StopCountdown: Reset() then m_bCountUp = false.
-// Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157968
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157968
 bool ProgressionTimerControl::SetToMultiplayerState() {
     // Binary @ 0x00157968
     // Defunct: ProgressionTimerControl -- never instantiated in shipping

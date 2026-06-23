@@ -62,7 +62,7 @@ FruitFactRewardsPage::~FruitFactRewardsPage() {
 // DAT_0017e6c0 = 0.0f (zero constant for most field inits).
 // DAT_0017e6c4 = 68.0f (head scale).
 // LSTR 0x15D (349) = "Rewards" title string.
-// ASM-verified: 2026-06-13T04:40Z binary @ 0x0017e4d8 (asm-inspector)
+// ASM-verified: 2026-06-13T04:40Z v1.6.1 binary @ 0x0017e4d8 (asm-inspector)
 void FruitFactRewardsPage::Init() {
     // State field inits (offsets confirmed from disasm, [r4,#off]):
     m_timerB0  = 0.0f;    // [r4,#0xb0]

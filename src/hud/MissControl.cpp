@@ -64,7 +64,7 @@ static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 static constexpr float MISS_DISAPPEAR_SIZE = 62.0f;
 
 // Pulse banding thresholds. DAT_001522a4..DAT_001522b4.
-// ASM-verified: 2026-05-24 binary @ 0x001522a4 (re-analyst) — byte-exact IEEE-754.
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001522a4 (re-analyst) — byte-exact IEEE-754.
 static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // DAT_001522b4 = 0x3f266666
 static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f;  // DAT_001522a4 = 0x467ff000
 static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8 = 0x48b7f480
@@ -109,7 +109,7 @@ void MissControl::Release() {
     m_Texture.SetNull();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00150fa4 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150fa4 (re-analyst)
 // vtable[4] @ 0x00150fa4
 void MissControl::Init() {
     m_bComboActive = 0;
@@ -119,7 +119,7 @@ void MissControl::Init() {
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_AnimState    = 0;
-    // ASM-verified: 2026-05-24 binary @ 0x00150fc0 (re-analyst v3)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150fc0 (re-analyst v3)
     // Init defaults m_Texture to s_TexCross (hud_cross.tex), NOT s_TexCritical.
     // This is the red X used by path 2 of MakeDisappear (fruit-miss penalty).
     // MakeCritical/MakeRare/MakeCombo override with their respective textures.
@@ -145,7 +145,7 @@ void MissControl::Init() {
     HUDControl3d::Init();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00150f14 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150f14 (re-analyst)
 // vtable[6] @ 0x00150f14
 void MissControl::Reset() {
     m_DrawColour   = Colour(255, 255, 255, 255);  // restore RGBA tint from DAT_00150f7c
@@ -165,7 +165,7 @@ void MissControl::Reset() {
 void MissControl::PreDraw(float* /*hudScale*/) {}
 
 // Binary @ 0x00150dfc -- vtable[16]. Defunct: same-screen MP player-index hook.
-// Defunct: same-screen MP player-index hook -- no-op stub; binary @ 0x00150dfc
+// Defunct: same-screen MP player-index hook -- no-op stub; v1.6.1 binary @ 0x00150dfc
 int MissControl::SetPlayer(int player) {
     return player;
 }
@@ -192,7 +192,7 @@ Vec3 MissControl::GetDrawPos() const {
                 p.z);
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00150e3c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150e3c (re-analyst)
 // vtable[15] @ 0x00150e3c
 void MissControl::Skip() {
     // Binary reads GameWork.missCount (+0x14) as the cap, not hardcoded 1.
@@ -221,7 +221,7 @@ void MissControl::LoadContent() {
     s_TexCritical = Mortar::TextureManager::LoadLocalisedTexture("critical.tex");
     s_TexRare     = Mortar::TextureManager::LoadLocalisedTexture("ultra_rare_plus_50.tex");
     s_TexCross    = Mortar::TextureManager::LoadLocalisedTexture("hud_cross.tex");
-    // ASM-verified: 2026-05-18 binary @ 0x001515a4 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001515a4 (re-analyst)
     // Binary loop: iVar3=1..10; loads combo_%d.tex only for iVar3>=3.
     // Slots [0] and [1] are intentionally NULL (combo=1,2 have no texture).
     // Names: combo_3.tex .. combo_10.tex -> array indices [2..9].
@@ -336,7 +336,7 @@ MissControl* MissControl::GetFree() {
 
 // --- Make* -----------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 binary @ 0x00151764 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151764 (re-analyst)
 // binary @ 0x00151764: Init() first, then tex + flags, then half/clamp/restore size.
 void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     #ifndef __bada__
@@ -380,7 +380,7 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     SetPlayer(playerIdx);
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x001518d8 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001518d8 (re-analyst)
 // binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_DragScale=0.5,
 // and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
@@ -425,7 +425,7 @@ void MissControl::MakeRare(Vec3 pos) {
     // MakeRare does NOT call SetPlayer (unlike MakeCritical)
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x001515a4 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001515a4 (re-analyst)
 // binary @ 0x001515a4
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
 // Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.811, anim=3, visible=1.
@@ -486,10 +486,10 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
         size.y += size.y;
     }
     SetPlayer(entityType);
-    // ASM-verified: 2026-05-18 binary @ 0x001515a4 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001515a4 (re-analyst)
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151d94 (re-analyst)
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
 // Common prefix: Init fields inline (binary does not call virtual Init()), then m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
@@ -524,7 +524,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         uint32_t w = (uint32_t)tex->GetWidth();
         uint32_t h = (uint32_t)tex->GetHeight();
         size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
-        // ASM-verified: 2026-05-24 binary @ 0x00151e40 (re-analyst v2)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151e40 (re-analyst v2)
         // Binary: `mov r0,r4; mov r1,r7; blx 0x000f6c30` -- r7 was saved from
         // r2 = param_3 = sizeMult at function entry @ 0x00151db6.
         SetPlayer(sizeMult);
@@ -549,7 +549,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
             const Vec3& pHudScale = Vec3::One();  // GOT+0x77CC == _Vector3<float>::One
             size = pHudScale * MISS_DISAPPEAR_SIZE;
         }
-        // ASM-verified: 2026-05-24 binary @ 0x00151e94 (re-analyst v2)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151e94 (re-analyst v2)
         // Same pattern as path 1: r1 = r7 = sizeMult.
         SetPlayer(sizeMult);
         // Path 2 size is set again after SetPlayer (binary @ 0x00151e9a sets size
@@ -572,7 +572,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
 
 // --- Update ----------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 binary @ 0x00151a60 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151a60 (re-analyst)
 // binary @ 0x00151a60
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
@@ -631,7 +631,7 @@ void MissControl::Update(float dt) {
             }
             dx /= dist;
             dy /= dist;
-            // ASM-verified: 2026-05-24 binary @ 0x00151b80..0x00151bbc (re-analyst v2)
+            // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151b80..0x00151bbc (re-analyst v2)
             // Binary chains three Vec2 *= scalar calls then a -= :
             //   a_Stack_60 = dir * (70 - dist)
             //   a_Stack_68 = a_Stack_60 * dt
@@ -675,7 +675,7 @@ void MissControl::Update(float dt) {
     m_LifeTimer -= dt;
 
     // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
-    // ASM-verified: 2026-05-18 binary @ 0x00151a60 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00151a60 (re-analyst)
     if (wasAboveThresh && m_LifeTimer < SOUND_THRESH && m_bComboActive && m_bPlaySound) {
         char buf[0x40];
         bool altPlayed = false;
@@ -707,7 +707,7 @@ void MissControl::Update(float dt) {
     if (m_LifeTimer <= 0.0f) {
         // Binary fires m_RemoveCallback BEFORE writing m_Active = 0.
         // Binary does NOT clear m_LifeTimer or m_bComboActive here.
-        // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
+        // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00151d0a (re-analyst)
         m_RemoveCallback(this);
         m_Active = 0;
     }
@@ -715,8 +715,8 @@ void MissControl::Update(float dt) {
 
 // --- Draw ------------------------------------------------------------------
 
-// ASM-verified: 2026-05-20T00:00Z binary @ 0x00151f60 (re-analyst)
-// ASM-verified: 2026-05-24 binary @ 0x00151f60 (re-analyst)
+// ASM-verified: 2026-05-20T00:00Z v1.6.1 binary @ 0x00151f60 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151f60 (re-analyst)
 // Quad-origin formula (binary @ 0x00151f60..0x00152186):
 //
 //   origin = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3)
@@ -734,7 +734,7 @@ void MissControl::Update(float dt) {
 // binary @ 0x00151f60
 void MissControl::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
-    // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
+    // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bFlashing -- those are UV-pickers later in the function, not gates.
     // The disappear mechanism for finished combo popups is the m_Active=0
@@ -744,7 +744,7 @@ void MissControl::Draw(float* hudScaleRaw) {
 
     // _Vector3<float>::Zero global (binary @ 0x001f4328, GOT slot 0x73ec).
     // Binary loads Zero.{x,y,z} into stack-local drawPos -- semantically Vec3(0,0,0).
-    // ASM-verified: 2026-05-24 binary @ 0x001522c4 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001522c4 (re-analyst)
     Vec3 drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
@@ -778,7 +778,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         //   if phase_f > 16380 && phase_f < 376740:
         //     if phase_f >= 32760 && phase_f <= 360360: pulseScale = 0.65 (forced)
         //     else                                    : pulseScale = max(pulseScale, 0.65)
-        // ASM-verified: 2026-05-24 binary @ 0x00152034 (re-analyst)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00152034 (re-analyst)
         // Outer band: strict > / < (bhi/blo). Inner band: inclusive >= / <= (bmi/ble).
         if (phase_f > MISS_PULSE_PHASE_LO && phase_f < MISS_PULSE_PHASE_HI) {
             if (phase_f >= MISS_PULSE_NARROW_LO && phase_f <= MISS_PULSE_NARROW_HI) {
@@ -790,7 +790,7 @@ void MissControl::Draw(float* hudScaleRaw) {
     } else {
         // m_LifeTimer <= 0 -- passive miss-marker path: y-shift
         // Binary has NO Game::GetInstance gate here -- reads game_work directly.
-        // ASM-verified: 2026-05-24 binary @ 0x00151fe4 (re-analyst)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151fe4 (re-analyst)
         const bool failureEnabled =
             Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
         if (failureEnabled) {
@@ -817,7 +817,7 @@ void MissControl::Draw(float* hudScaleRaw) {
     }
     // Anchor offset (binary @ 0x00152140..0x00152186):
     //   final = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3 componentwise)
-    // ASM-verified: 2026-05-24 binary @ 0x00152140 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00152140 (re-analyst)
     (void)hudScale;  // per-frame hudScale arg is unused for MissControl
     Vec3 t1 = drawPos + pos;
     Vec3 anchor(480.0f, 320.0f, 0.0f);
@@ -833,7 +833,7 @@ void MissControl::Draw(float* hudScaleRaw) {
     // Binary @ 0x001521ac: scale alpha by game_work.mHud->m_globalTimeScale (HUD + 0x24).
     // Binary has NO Game::GetInstance gate here -- reads game_work.mHud directly.
     // Skips multiplier when ts >= 1.0 (bpl branch @ 0x001521aa -> 0x001521d8).
-    // ASM-verified: 2026-05-24 binary @ 0x001520ec (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001520ec (re-analyst)
     Colour tint = m_DrawColour;
     {
         float ts = game_work.mHud->m_globalTimeScale;  // HUD + 0x24
@@ -845,7 +845,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         }
     }
     // UV crop based on m_bComboActive / m_bFlashing.
-    // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
+    // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00151f60..0x00152258 (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
     //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
     //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)

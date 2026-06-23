@@ -15,15 +15,15 @@ struct _Vector2 {
     T x, y;
 
     _Vector2() : x(0), y(0) {}
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00117830 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00117830 (asm-inspector)
     _Vector2(T x_, T y_) : x(x_), y(y_) {}
 
     _Vector2 operator+(const _Vector2& o) const { return _Vector2(x + o.x, y + o.y); }
     _Vector2 operator-(const _Vector2& o) const { return _Vector2(x - o.x, y - o.y); }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x001178c4 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001178c4 (asm-inspector)
     // Scalar by const-ref (vldr from [r2]), not by value.
     _Vector2 operator*(const T& s) const { return _Vector2(x * s, y * s); }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00152664 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00152664 (asm-inspector)
     // 2 separate vdiv.f32 ops, not reciprocal-multiply (different rounding).
     _Vector2 operator/(const T& s) const { return _Vector2(x / s, y / s); }
     _Vector2 operator-() const { return _Vector2(-x, -y); }
@@ -31,19 +31,19 @@ struct _Vector2 {
     _Vector2& operator+=(const _Vector2& o) { x += o.x; y += o.y; return *this; }
     _Vector2& operator-=(const _Vector2& o) { x -= o.x; y -= o.y; return *this; }
     _Vector2& operator*=(T s) { x *= s; y *= s; return *this; }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00173064 (asm-inspector) -- scalar by value
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173064 (asm-inspector) -- scalar by value
     _Vector2& operator/=(T s) { x /= s; y /= s; return *this; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x001526a8 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001526a8 (asm-inspector)
     T Dot(const _Vector2& o) const { return x * o.x + y * o.y; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x001526c4 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001526c4 (asm-inspector)
     T MagnitudeSqr() const { return Dot(*this); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00173080 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173080 (asm-inspector)
     T Magnitude() const { return T(std::sqrt((double)MagnitudeSqr())); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00173098 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173098 (asm-inspector)
     // Recursive 1M-scale retry mirrors binary's near-zero handling.
     T Normalise() {
         if (x == T(0) && y == T(0)) return T(0);

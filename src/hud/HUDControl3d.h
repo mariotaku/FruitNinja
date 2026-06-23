@@ -13,7 +13,7 @@
 //                                                  Dtor @ 0x00144474 calls SmartPtr<Model>::~SmartPtr
 //                                                  on this+0x78 confirming the type.
 //
-// ASM-verified: 2026-05-24 binary @ 0x001443f4 / 0x00144434 (ctors), 0x00144474 /
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001443f4 / 0x00144434 (ctors), 0x00144474 /
 //   0x001444e0 / 0x00144548 (dtors), 0x00143fc4 (Release), 0x00143fc8 (PreDraw),
 //   0x00143fcc (Update), 0x0014428c (Draw) (re-analyst)
 //

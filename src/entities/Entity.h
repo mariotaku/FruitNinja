@@ -53,8 +53,8 @@ enum EntityFlagBits : uint8_t {
 
 namespace Mortar {
 
-// ASM-verified: 2026-04-28T15:55Z binary @ 0x0019d88c (asm-inspector)
-// ASM-verified: 2026-04-28T15:55Z binary @ 0x001ea478 (asm-inspector)
+// ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x0019d88c (asm-inspector)
+// ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x001ea478 (asm-inspector)
 class Entity {
 public:
     // +0x04: RuntimeID / loader field. Set by LoadEntity; unread at runtime.

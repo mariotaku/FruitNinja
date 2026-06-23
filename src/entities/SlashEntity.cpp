@@ -327,7 +327,7 @@ void SlashEntity::RegisterInputCallbacks() {
 #endif
 }
 
-// ASM-verified: 2026-06-13T00:00 binary @ 0x001e79b0 (asm-inspector)
+// ASM-verified: 2026-06-13T00:00 v1.6.1 binary @ 0x001e79b0 (asm-inspector)
 void SlashEntity::Release() {
     if (m_pLeftBuffer) {
         delete[] m_pLeftBuffer;
@@ -342,7 +342,7 @@ void SlashEntity::Release() {
         m_TrailEmitter = nullptr;
     }
     m_PointCount = 0;
-    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; binary @ 0x0017C60C.
+    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; v1.6.1 binary @ 0x0017C60C.
     // Binary Release writes a 1-byte 0 to a static slot with no other accessors
     // (likely a once-flag whose set/check sites were inlined out / DCE'd). Port
     // omits the write; semantically equivalent. (re-analyst 2026-05-20)
@@ -437,7 +437,7 @@ void SlashEntity::PreUpdate(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-08 binary @ 0x17CCDC (re-analyst).
+// ASM-verified: 2026-05-08 v1.6.1 binary @ 0x17CCDC (re-analyst).
 // Binary path:
 //   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {
 //       int idx = Math::Random::Rand32(g_GlobalRng, 6) + 1;  // [1,6]
@@ -481,7 +481,7 @@ float SlashEntity::GetHeadThicknessScale() const {
 
 // Binary @ 0x17B82C -- snapshot blade vertex strips into global ghost ring.
 // Port specific: SlashEntityGhost ring not yet ported. No-op stub.
-// ASM-verified: 2026-05-18 binary @ 0x0017B82C (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B82C (re-analyst)
 void SlashEntity::CreateGhost() {
 }
 
@@ -632,7 +632,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // per-frame TouchDown then sees m_BladeActive==0, calls Reset() (wiping the
         // trail -> a visibly disconnected segment) AND re-advances the disco mod
         // colour -- splitting one swipe into multiple differently-coloured pieces.
-        // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
+        // ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1ea3d0 (asm-inspector)
         if (m_PointCount > 0) {
             m_BladeActive |= 1;
         }
@@ -712,7 +712,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
 
     // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
-    // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
+    // ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1ea3d0 (asm-inspector)
     m_BladeActive |= 1;
 }
 
@@ -1939,7 +1939,7 @@ bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
 
 // ---------------------------------------------------------------------------
 // Draw -- Entity vtable slot 5. Binary @ 0x17B3B8 is a 1-instruction BX lr stub.
-// ASM-verified: 2026-05-18 binary @ 0x0017B3B8 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B3B8 (re-analyst)
 // ---------------------------------------------------------------------------
 void SlashEntity::Draw(Renderer& /*r*/) {
 }
@@ -2020,12 +2020,12 @@ void SlashEntity::DrawSlice() {
 
 // ---------------------------------------------------------------------------
 // Init (3-arg binary form) -- v1.6.1 @ 0x1e7a34
-// ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C65C (re-analyst)
 // ---------------------------------------------------------------------------
 void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     // 1. Allocate ColLine into m_Col (+0x38).
     m_Col = new ColLine();
-    // ASM-verified: 2026-05-27 binary @ 0x0017c68c (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x0017c68c (re-analyst)
     flags |= ENT_HAS_COLLISION;
 
     // 2. Reset scale-adjacent float at +0x94.
@@ -2213,7 +2213,7 @@ void SlashEntity::InitModColours()
     g_ModTexture.SetNull();
 }
 
-// ASM-verified: 2026-06-16 binary @ 0x1e60a8 (re-analyst)
+// ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1e60a8 (re-analyst)
 // Binary param order: (length, thickness, endThickness, pointScale, flipUD, loop, uvNormalLen)
 // ModSlashLength=p1->g_Scale3, ModSlashThickness=p2->g_Scale1, ModSlashEndThickness=p3->g_Scale2
 void SlashEntity::SetModScales(

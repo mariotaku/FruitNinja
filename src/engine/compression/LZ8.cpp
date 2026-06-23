@@ -44,7 +44,7 @@ void UncompressLZ8(const void* src, void* dst) {
 
 // Binary @ 0x0019500c — asset re-compression not needed at runtime
 unsigned int CompressLZ(const unsigned char* /*src*/, unsigned long /*size*/, unsigned char* /*dst*/) {
-    // Defunct: asset re-compression not needed at runtime; binary @ 0x0019500c
+    // Defunct: asset re-compression not needed at runtime; v1.6.1 binary @ 0x0019500c
     return 0;
 }
 

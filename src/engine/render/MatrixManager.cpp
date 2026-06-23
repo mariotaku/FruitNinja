@@ -26,7 +26,7 @@ MatrixManager::MatrixManager()
 // in practice but the vtable slots must exist.
 MatrixManager::~MatrixManager() {}
 
-// ASM-verified: 2026-05-09 binary @ 0x0019e280..0x0019e2a9 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0019e280..0x0019e2a9 (asm-inspector)
 void MatrixManager::ResetAllStacks() {
     m_Projection.Reset();
     m_View.Reset();
@@ -34,7 +34,7 @@ void MatrixManager::ResetAllStacks() {
     m_Texture.Reset();
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x0019e5a4..0x0019e5cb + OrthoW body
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0019e5a4..0x0019e5cb + OrthoW body
 // @ 0x0019e7a8..0x0019e829 (asm-inspector). Arg order (top, bottom, left,
 // right, near, far) is genuinely non-standard for glOrtho. Verified via
 // callee-body trace: s0->top, s1->bottom, s2->left, s3->right, s4->near,
@@ -47,7 +47,7 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
     UploadAll();
 }
 
-// DIFFERS: binary @ 0x0019e724 + LookAt43 @ 0x0019e82c (asm-inspector
+// DIFFERS: v1.6.1 binary @ 0x0019e724 + LookAt43 @ 0x0019e82c (asm-inspector
 // 2026-05-09) computes a NON-CANONICAL view matrix:
 //   forward = normalise(-p1)            // p3 (target/up) is IGNORED
 //   right   = normalise(cross(p2, forward))   // up x forward (NOT f x u)

@@ -47,7 +47,7 @@ static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match 
 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
 // Binary sizeof(Fruit) = 0x18c (396). v1.6.1 CreateEntity does operator_new(0x18c).
 // Tail fields 0x118..0x18c (events + padding) added per #31 spec.
 // 0x00..0x118 layout cross-verified by re-analyst 2026-05-17

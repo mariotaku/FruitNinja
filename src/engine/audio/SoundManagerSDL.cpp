@@ -146,7 +146,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
 
     // hdr[0] = type (1), hdr[1] = sampleRate (16000), hdr[2] = bitDepth (16),
     // hdr[3] = sampleCount, hdr[4] = loop-start sample offset (0 = no loop).
-    // ASM-verified: MAMAudioController::LoadSound binary @ 0x0018c468.
+    // ASM-verified: MAMAudioController::LoadSound v1.6.1 binary @ 0x0018c468.
     // Bomb-Fuse hdr[4] = 12736: skip the 0.8s ignition intro, loop the 5.4s
     // burn tail forever. Matches the binary's MAMAudioThread::FillBuffer
     // rewind-to-loopStart behaviour.
@@ -567,7 +567,7 @@ void SoundManager::SetSFXVolume(float vol) {
 // (DAT_0018ca48). Binary also OR's a master-mute byte at MortarSoundState+0x4
 // (DAT_0018ca54) but that byte has NO writer in FruitNinja (MuteSound has
 // no callers); omitted. If MuteSound() is ever ported, OR its result here.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0018c9d4 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c9d4 (asm-inspector)
 void SoundManager::SyncMutes() {
     s_SFXMuted   = ((double)s_SFXVolume   < 0.1);
     s_MusicMuted = ((double)s_MusicVolume < 0.1);

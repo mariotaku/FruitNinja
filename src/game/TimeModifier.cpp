@@ -51,7 +51,7 @@ int TimeModifier::UpdateSpecific(float dt) {
         m_CurrentDtMod = m_DtScale;
     } else {
         if (m_TransitionRate < m_BonusAccum || m_Duration <= 0.0f) {
-            // ASM-verified: 2026-05-02 binary @ 0x12003a -- STEADY-STATE: lots of time remaining
+            // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x12003a -- STEADY-STATE: lots of time remaining
             float target = m_DtScale;
             if (target >= m_CurrentDtMod) {
                 m_CurrentDtMod += dt / m_TransitionRate;
@@ -78,7 +78,7 @@ int TimeModifier::UpdateSpecific(float dt) {
     return 0;
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x001200fc..0x00120188 (asm-inspector)
+// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x001200fc..0x00120188 (asm-inspector)
 // @ 0x001200fc
 void TimeModifier::ParseSpecific(TiXmlElement* xml) {
     const char* stopAttr = xml->Attribute("stopClock");

@@ -6,7 +6,7 @@
 
 namespace Mortar {
 
-// ASM-verified: 2026-06-14T00:00Z binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
+// ASM-verified: 2026-06-14T00:00Z v1.6.1 binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
 FontInterface::FontInterface(int atlasSize)
     : m_CacheSize(100)
     , m_FontScale(1.0f)

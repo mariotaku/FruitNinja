@@ -134,7 +134,7 @@ void PowerUpShop::Init() {
     m_PulseScale        = 1.0f;
     m_FruitScale        = 1.0f;
 
-    // Defunct: binary @ 0x00156b08 — m_Texture(+0x74) SmartPtr static at .bss
+    // Defunct: v1.6.1 binary @ 0x00156b08 — m_Texture(+0x74) SmartPtr static at .bss
     // 0x00231288 never assigned. Buy-bg path is dead in shipped binary. Init's
     // GetWidth/GetHeight calls only fire when IsValid().
     // m_Texture is default-constructed (null); pivot assignment only executes when valid.
@@ -440,7 +440,7 @@ void PowerUpShop::Update(float dt) {
         float targetZ = (i == m_SelectedIndex) ? 1.25f : 1.0f;
         slot.z += (targetZ - slot.z) * 0.15f;
 
-        // ASM-verified: 2026-05-18 binary @ 0x00156398 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00156398 (re-analyst)
         // Reads GameContext aliased fields:
         //   +0x9e  uint8_t  m_bPointerActive -- set by PointerDownCallback @ 0x00168e24,
         //                                       cleared by PointerUpCallback @ 0x00168e48.
@@ -522,7 +522,7 @@ void PowerUpShop::Update(float dt) {
         if (m_BuyButton->m_pTrackedFruit != NULL) {
             m_BuyButton->m_pTrackedFruit->m_RotVel1.x *= 0.85f;
             m_BuyButton->m_pTrackedFruit->m_RotVel1.y *= 0.85f;
-            // ASM-verified: 2026-05-20 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
+            // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
             m_BuyButton->m_pTrackedFruit->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
         }
     } else if (m_BuyButton != NULL) {

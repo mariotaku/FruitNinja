@@ -127,12 +127,12 @@ public:
 
     void SetSingular() {
         m_Singular = 1;
-        // ASM-verified: 2026-05-24 binary @ 0x0014dda8 (re-analyst)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0014dda8 (re-analyst)
     }
 
     void SetActive(bool b) {
         m_Active = b ? 1 : 0;
-        // ASM-verified: 2026-05-24 binary @ 0x0013cdd0 (re-analyst)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cdd0 (re-analyst)
     }
 };
 

@@ -100,7 +100,7 @@ public:
 
     // Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
     // Binary @ 0x17B3B8 is a 1-instruction BX lr stub -- no-op.
-    // ASM-verified: 2026-05-18 binary @ 0x0017B3B8 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B3B8 (re-analyst)
     void Draw(Renderer& r) override;
 
     // Binary @ 0x17CCDC -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
@@ -158,13 +158,13 @@ private:
     // +0x4c  uint8_t  m_BombHitEdge   bomb-hit one-shot. Set in Update when
     // bomb[0x68]!=0 && bomb[0x88]==0. NOT the swipe fuse (see m_BladeActive @+0x140).
     // Ghidra-authoritative name: m_BombHitEdge.
-    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017E424 (re-analyst)
     uint8_t m_BombHitEdge;
     uint8_t _pad4d[3];
 
     // +0x50  int32_t  m_SplitPoint  InitPoints capacity (160 from Init).
     // v1.6.1 @ 0x1e75d0 InitPoints sets m_SplitPoint = splitPoint.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C340 (re-analyst)
     int m_SplitPoint;
 
     // +0x54  int32_t  m_ComboBaseIdx  combo base index
@@ -176,7 +176,7 @@ private:
     // +0x5c  QUADCUSTOMVERTEX*  m_pLeftBuffer   heap array of (m_SplitPoint+2) = 162 verts
     // +0x60  QUADCUSTOMVERTEX*  m_pRightBuffer  heap array of 162 verts
     // Each buffer: 162 * 36 = 5832 bytes.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C340 (re-analyst)
     QUADCUSTOMVERTEX* m_pLeftBuffer;
     QUADCUSTOMVERTEX* m_pRightBuffer;
 
@@ -271,7 +271,7 @@ private:
     // +0x150  int32_t[10]  m_ComboFruitTypes  10-entry combo fruit type history.
     //         v1.6.1 binary-faithful: fruit type indices. Init fills all 10 with -1.
     //         Written at m_ComboCounter before increment.
-    //         ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    //         ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C65C (re-analyst)
     int m_ComboFruitTypes[10];
 
     // +0x178  int32_t  m_ComboCount  number of fruits sliced in current combo swing
@@ -413,7 +413,7 @@ public:
     bool CollideWithEntity(Mortar::Entity* entity);
 
     // Binary @ 0x17B3BC -- 2-instruction stub `movs r0,#0; bx lr`.
-    // ASM-verified: 2026-06-07 binary @ 0x0017B3BC (re-analyst)
+    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x0017B3BC (re-analyst)
     int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
 
     // DrawSlice -- binary @ 0x1e83b0. Main blade render (two mirrored tri-strips).
@@ -423,7 +423,7 @@ public:
     // Init (3-arg binary form) -- v1.6.1 @ 0x1e7a34. Vtable slot 2.
     // Allocates ColLine (new(0x20)), calls InitPoints(160),
     // inits ghost ring + combo array.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C65C (re-analyst)
     void Init(void* param1, long param2, Vec3* param3) override;
 
     // InitPoints -- v1.6.1 @ 0x1e75d0. Heap-allocates m_pLeftBuffer /

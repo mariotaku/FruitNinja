@@ -199,7 +199,7 @@ bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
 // ----------------------------------------------------------------------
 
 // 0x00129c50 -- returns 2 if pending, 1 if unlocked, 0 otherwise.
-// ASM-verified: 2026-05-18 binary @ 0x00129c50 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00129c50 (re-analyst)
 int FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
     if (m_PendingUnlocks.find(hash) != m_PendingUnlocks.end()) return 2;
     return (m_UnlockedAchievements.find(hash) != m_UnlockedAchievements.end()) ? 1 : 0;
@@ -213,7 +213,7 @@ void FruitSaveData::UnlockTotals() {
 // Binary @ 0x0012b38c. Queue an achievement unlock. Skip if already pending or unlocked.
 // Stagger semantics: if any popup is still in the queue, delay the new one by 3.0s
 // so popups don't stomp each other; otherwise fire on the next Update tick (0.0f).
-// ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b38c (re-analyst)
 //   ldr.w r3,[this,#0x170]  -> m_PendingUnlocks._M_node_count (std::map
 //   stores its cached size at base+0x14; map base = +0x15c).
 int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
@@ -253,7 +253,7 @@ void FruitSaveData::DownloadTweaks() {
 // Binary @ 0x0012b3dc. Achievement timer tick: find the pending entry with the
 // smallest timer, decrement it, fire when it reaches zero, then move to unlocked map.
 // Name prefix '0'..'9' -> UnlockAchievementInNetwork (defunct online ID); else -> ItemManager::UnlockItem.
-// ASM-verified: 2026-05-18 binary @ 0x0012b3dc (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b3dc (re-analyst)
 void FruitSaveData::Update(float dt, HUD* hud) {
     if (m_PendingUnlocks.empty()) return;
 
@@ -718,11 +718,11 @@ void FruitNinja_SaveOnExit() {
     FruitNinja_SaveCurrentData(true);
 }
 
-// Defunct: online tweaks -- no-op stub; binary @ 0x0012a080
+// Defunct: online tweaks -- no-op stub; v1.6.1 binary @ 0x0012a080
 // Binary finds m_SessionTotals entry by hash(name) and writes count = value.
 void FruitSaveData::DownloadedTweakValue(char const*, int) {}
 
-// Defunct: online achievements -- no-op stub; binary @ 0x0012a194
+// Defunct: online achievements -- no-op stub; v1.6.1 binary @ 0x0012a194
 // Binary gates on NetworkManager::IsOnline()||IsP2POnline(), then pushes each
 // numeric-prefixed unlocked achievement via UnlockAchievementInNetwork.
 void FruitSaveData::PublishUnlockedAchievements() {}

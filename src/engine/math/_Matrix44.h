@@ -22,7 +22,7 @@ struct _Matrix44 {
         m[0] = m[5] = m[10] = m[15] = T(1);
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0019e7a8 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0019e7a8 (asm-inspector)
     // Parameter order (top, bottom, left, right, near, far, w) matches binary.
     // The `w` argument is DEAD in the binary -- it re-materialises 1.0 into
     // m[15] regardless of the passed value. Port keeps the param for API
@@ -48,7 +48,7 @@ struct _Matrix44 {
         out.m[5]  = T(2) * invTB;
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0012f954 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0012f954 (asm-inspector)
     // col[3] += (tx, ty, tz) -- world-space translate.
     void GlobalTranslate44(T tx, T ty, T tz) {
         m[12] += tx;
@@ -60,7 +60,7 @@ struct _Matrix44 {
         GlobalTranslate44(t.x, t.y, t.z);
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0019a3d4 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0019a3d4 (asm-inspector)
     // col[3] += col[0]*tx + col[1]*ty + col[2]*tz -- local-space translate.
     void LocalTranslate44(T tx, T ty, T tz) {
         m[12] += m[0] * tx + m[4] * ty + m[8]  * tz;
@@ -68,7 +68,7 @@ struct _Matrix44 {
         m[14] += m[2] * tx + m[6] * ty + m[10] * tz;
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0012f9a0 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0012f9a0 (asm-inspector)
     // In-place column-scale; not the same as the static factory below.
     void ApplyScale(T sx, T sy, T sz) {
         m[0]  *= sx; m[1]  *= sx; m[2]  *= sx; m[3]  *= sx;
@@ -97,7 +97,7 @@ struct _Matrix44 {
         return r;
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00172f58 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00172f58 (asm-inspector)
     // PRE-multiply by Rot_std_X(+alpha). Per col c, mix m[c*4+1] (row 1)
     // with m[c*4+2] (row 2):
     //   new_row1 = cos*row1 - sin*row2
@@ -111,7 +111,7 @@ struct _Matrix44 {
         }
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00172fdc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00172fdc (asm-inspector)
     //   new_row0 = cos*row0 + sin*row2
     //   new_row2 = -sin*row0 + cos*row2
     void RotY44(T sinA, T cosA) {
@@ -123,7 +123,7 @@ struct _Matrix44 {
         }
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00144958 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00144958 (asm-inspector)
     //   new_row0 = cos*row0 - sin*row1
     //   new_row1 = sin*row0 + cos*row1
     void RotZ44(T sinA, T cosA) {

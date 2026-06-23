@@ -142,7 +142,7 @@ GLenum DisplayManager::GetPlatformWrapT() {
 // Binary @ 0x0019da38 -- DisplayManager::Destroy is a single `bx lr` (empty
 // no-op). The Bada build had no GL/platform display state to release here, so
 // the faithful port body is empty.
-// ASM-verified: 2026-06-07T00:00Z binary @ 0x0019da38 (asm-inspector)
+// ASM-verified: 2026-06-07T00:00Z v1.6.1 binary @ 0x0019da38 (asm-inspector)
 void DisplayManager::Destroy() {}
 
 } // namespace Mortar

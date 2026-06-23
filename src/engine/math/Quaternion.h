@@ -37,7 +37,7 @@ struct Quaternion {
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0017aa64..0x0017ab9d (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017aa64..0x0017ab9d (asm-inspector)
     // (Matrix33Unit + Copy33To44 pipeline collapsed into a single column-major write;
     //  bit-identical 16-float output -- verified against the binary's row-major M[]
     //  followed by the Copy33To44 padding/fill-with-0/1 pattern.)
@@ -77,7 +77,7 @@ struct Quaternion {
 
     static Quaternion Identity() { return Quaternion(0, 0, 0, 1); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0017ac68 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017ac68 (asm-inspector)
     // 16-bit angle encoding (0x10000 = 2pi). The axis is NOT normalized by
     // this function -- binary does not normalize, caller is responsible for
     // unit-length axes. Calls SinIdx 3x (one per component) + CosIdx 1x;

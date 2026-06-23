@@ -8,7 +8,7 @@ namespace Mortar {
 
 // Matches original MortarSound (0x10 = 16 bytes)
 // +0x00 vtable, +0x04 m_Name, +0x08 m_Handle, +0x0c m_State
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0018c6ac (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c6ac (asm-inspector)
 class MortarSound {
 public:
     char*    m_Name;    // +0x04: heap-allocated sound name; NULL when idle

@@ -208,7 +208,7 @@ public:
 
     // ---- STUBS (binary) ----
 
-    // Defunct: Mesh(SmartPtr<SharedEffectProperties>, AsciiString const&) -- binary @ 0x002730ac
+    // Defunct: Mesh(SmartPtr<SharedEffectProperties>, AsciiString const&) -- v1.6.1 binary @ 0x002730ac
     // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
     Mesh(SmartPtr<SharedEffectProperties> props, AsciiString const& name);
 
@@ -219,31 +219,31 @@ public:
     // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
     void AddGeometry(SmartPtr<Geometry> geom);
 
-    // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x00272c98
+    // Defunct: GetPropertiesGroup(AsciiString const&) const -- v1.6.1 binary @ 0x00272c98
     // Shape-preserved: returns ptr-to-SmartPtr in m_GroupsByName (matching binary return type).
     SmartPtr<SharedEffectProperties>* GetPropertiesGroup(AsciiString const& name) const;
 
-    // Defunct: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, ...) -- binary @ 0x001b1430
+    // Defunct: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, ...) -- v1.6.1 binary @ 0x001b1430
     // Shape-preserved: range-based variant; may insert new group if defs not already present.
     SmartPtr<SharedEffectProperties>* GetPropertiesGroup(AsciiString const& name,
                                                          EffectPropertyDefinition const* begin,
                                                          EffectPropertyDefinition const* end);
 
-    // Defunct: SharedEffectProperties subsystem -- no-op stub; binary @ 0x001b08e8
+    // Defunct: SharedEffectProperties subsystem -- no-op stub; v1.6.1 binary @ 0x001b08e8
     // Port computes MVP via MatrixManager directly.
     void RebuildEffectBindings();
 
-    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ed8
+    // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ed8
     // Binary itself is a stub (BX LR, returns colour unchanged); port is likewise a no-op.
     void DrawCube(float x, float y, float z, Colour colour, DrawEffectContainer* fx);
 
-    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193edc
+    // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193edc
     // Binary itself is a stub (BX LR, returns first vec unchanged); port is likewise a no-op.
     void DrawLine(Vec3 const& from, Vec3 const& to, float const& width,
                   Colour const& colour, Vec3 const& normal,
                   DrawEffectContainer* fx);
 
-    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ee0
+    // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ee0
     // Binary itself is a stub (BX LR, returns colour unchanged); port is likewise a no-op.
     void DrawSphere(float radius, Colour colour, DrawEffectContainer* fx);
 
@@ -277,7 +277,7 @@ public:
     // statics (lazily interned via __cxa_guard from DAT_002736c8/d8). If the matched EffectProperty*
     // Vec3 target is non-null, builds a Binding and push_backs into out. With EffectProperty subsystem
     // defunct-stubbed in the port, produces zero bindings (correct observable result).
-    // Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+    // Defunct: EffectProperty channel binding -- v1.6.1 binary @ 0x0027350c
     void GenerateBindings(AsciiString const& channelName,
                           AsciiString const& targetName,
                           std::vector<AnimBindings::Vector::Binding>& out) override;

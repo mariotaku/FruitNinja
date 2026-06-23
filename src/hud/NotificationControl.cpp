@@ -167,7 +167,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Icon quad
-        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
@@ -184,7 +184,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Name text
-        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
         if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y, pos.z);
@@ -193,7 +193,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Points text (right-aligned)
-        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
         if (m_PointsText[0] != '\0' && game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 ptPos(pos.x + 186.0f, pos.y, pos.z);
@@ -224,7 +224,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Larger icon quad
-        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
@@ -242,7 +242,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Name text only (no points text for named type)
-        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
         if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y + 16.0f, pos.z);

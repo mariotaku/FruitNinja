@@ -49,7 +49,7 @@ public:
     //   broadcast Update(dt) via device vtable slot +0x0c, m_inUpdate=false.
     void Update(float dt);
 
-    // Binary @ 0x001969d8 — Defunct: input config file — Bada-only; binary @ 0x001969d8
+    // Binary @ 0x001969d8 — Defunct: input config file — Bada-only; v1.6.1 binary @ 0x001969d8
     int LoadConfigFile(const char* path);
 
     // Binary @ 0x001960f8 — AddActionMapper: broadcast to devices.

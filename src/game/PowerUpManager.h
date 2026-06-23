@@ -202,19 +202,19 @@ private:
 
 public:
     // @ 0x00117c50 — iterator-style walk: returns first purchasable, sets outIt
-    // ASM-verified: 2026-05-18 binary @ 0x00117c50 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117c50 (re-analyst)
     PowerUp* GetFirstPurchasable(std::list<PowerUp*>::iterator& outIt);
 
     // @ 0x00117bf4 — iterator-style walk: advances it, returns next purchasable
-    // ASM-verified: 2026-05-18 binary @ 0x00117bf4 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117bf4 (re-analyst)
     PowerUp* GetNextPurchasable(std::list<PowerUp*>::iterator& it);
 
     // @ 0x00118c14 — bind active ScoreModifier's OnScore delegate or reset to default
-    // ASM-verified: 2026-05-18 binary @ 0x00118c14 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118c14 (re-analyst)
     void SetAppropriateScoreCallback();
 
     // @ 0x0011836c — walk m_AllPowerUps and m_ScreenEffectPool, call UnloadTextures on each
-    // ASM-verified: 2026-05-18 binary @ 0x0011836c (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0011836c (re-analyst)
     void UnloadTextures();
 };
 

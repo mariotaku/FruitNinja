@@ -470,7 +470,7 @@ void DojoScreen::AboutCallback() {
 // ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----
 // See file-header "Defunct: 4 binary symbols compiled into FruitNinja.exe but
 // with ZERO callsite xrefs" comment. iPhone/iPad-variant leftover .o code.
-// Defunct: iOS "More Games" button -- no-op stub; binary @ 0x0013769c
+// Defunct: iOS "More Games" button -- no-op stub; v1.6.1 binary @ 0x0013769c
 void DojoScreen::MoreGamesCallback() {}
 // Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary @ 0x????
 void DojoScreen::QuitCallback() {}

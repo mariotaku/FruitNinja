@@ -5,7 +5,7 @@
 // Binary layout confirmed from Mortar::ActorManager::SendMessage @ 0x0016ffd8 and
 // Mortar::Entity::ReceiveMessage @ 0x0019d61c.
 //
-// Defunct: Mortar messaging — no-op stub; binary @ 0x0016ffd8 (Send),
+// Defunct: Mortar messaging — no-op stub; v1.6.1 binary @ 0x0016ffd8 (Send),
 //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
 //   never instantiated in shipped retail.
 //

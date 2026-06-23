@@ -118,7 +118,7 @@ static void DoSetTerminate(GameOverScreen* self) {
     self->m_bPendingRemoval = 1;
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00169e50 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00169e50 (re-analyst)
 static void DoQuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
     Game* game = Game::GetInstance();
@@ -137,7 +137,7 @@ static void DoQuitToMenu() {
 
     FN::SetScore(0, -1);
 
-    // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
+    // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 binary @ 0x00169e9e
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
 
     game_work.m_QuitTransitionTimer = 0.0f;
@@ -475,7 +475,7 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::Release() {
-    // Defunct: CancelHUDProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140600
+    // Defunct: CancelHUDProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::CancelHUDProgressionTimer @ 0x00184d4c
     CancelHUDProgressionTimer();
 
     Game* game = Game::GetInstance();
@@ -613,13 +613,13 @@ void GameOverScreen::SetStateWait() {
 // ProgressionTimer no-op stubs
 // ---------------------------------------------------------------------------
 
-// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x001405fc
+// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::StartProgressionTimer @ 0x00184d48
 void GameOverScreen::StartProgressionTimer() {}
-// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140600
+// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::CancelHUDProgressionTimer @ 0x00184d4c
 void GameOverScreen::CancelHUDProgressionTimer() {}
-// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140614
+// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::OnProgressionTimerUp @ 0x00184d5c
 void GameOverScreen::OnProgressionTimerUp() {}
-// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140618
+// Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::HandleProgressionTimerExpiration @ 0x00184d60
 void GameOverScreen::HandleProgressionTimerExpiration() {}
 
 // ---------------------------------------------------------------------------

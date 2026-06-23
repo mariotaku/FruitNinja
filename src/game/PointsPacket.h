@@ -20,7 +20,7 @@ public:
     int  m_field1c;   // +0x1c
     int  m_field20;   // +0x20
 
-    // Defunct: P2P MP points-broadcast packet -- no-op stub; binary @ 0x157b20 (id=100)
+    // Defunct: P2P MP points-broadcast packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=100)
     PointsPacket();
 
     // Defunct: P2P MP points-broadcast packet -- no-op stub

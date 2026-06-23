@@ -82,7 +82,7 @@ void BombBlast::LoadContent()    {}
 void BombBlast::ReleaseContent() {}
 
 // Binary @ 0x001718ac — vtable slot 2.
-// ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+// ASM-verified: 2026-05-04T08:23Z v1.6.1 binary @ 0x001718ac (asm-inspector)
 // Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
 // writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
 // Body operates exclusively on `this` and ignores all three explicit params.

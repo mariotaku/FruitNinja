@@ -12,16 +12,16 @@ namespace Mortar {
 
 class OpenFeintNewsRenderer {
 public:
-    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00191a94
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x00191a94
     OpenFeintNewsRenderer() {}
 
     // Polymorphic root: vptr @ +0x00; binary vtable resolved GOT-indirectly.
     virtual ~OpenFeintNewsRenderer() {}
 
-    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00190a4c
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x00190a4c
     virtual void StartNewsRender(void* /*texture*/, void* /*font*/) {}
 
-    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x001900d0
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x001900d0
     virtual void CancelNewsRender() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub
@@ -30,10 +30,10 @@ public:
     // Defunct: OpenFeintNewsRenderer -- no-op stub
     virtual void Update(float /*dt*/) {}
 
-    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00190a30
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x00190a30
     void GetNewsString() {}
 
-    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00190840
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x00190840
     void ProcessNewsString() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub

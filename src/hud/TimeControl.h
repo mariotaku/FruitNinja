@@ -19,7 +19,7 @@ public:
     float m_CountdownStart;
     // +0xC4: slow-clock shimmer accumulator: ((elapsed_seconds % 6) + 0.5f).
     // Written every frame in Update (both Zen and Arcade paths).
-    // ASM-verified: 2026-05-18 binary @ 0x001627e2 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001627e2 (re-analyst)
     // No port-side reader exists yet -- the binary's Draw reads it for a
     // shimmer animation that the port's simplified Draw omits. Kept as a
     // write-only field so the layout matches binary; can be wired into

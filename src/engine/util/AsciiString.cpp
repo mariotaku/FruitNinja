@@ -126,7 +126,7 @@ int AsciiString::CompareI(const AsciiString& other) const
     if (m_size != other.m_size) {
         return (m_size < other.m_size) ? -1 : 1;
     }
-    // DIFFERS: CompareI body inferred (tolower loop); not byte-verified vs binary @ 0x00183a40.
+    // DIFFERS: CompareI body inferred (tolower loop); not byte-verified vs v1.6.1 binary @ 0x00183a40.
     //   asm-verify has not flagged divergence as of R4 W4.
     const char* a = c_str();
     const char* b = other.c_str();

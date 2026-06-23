@@ -275,7 +275,7 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
 
 // GetDefaultEffectGroup -- returns a shared empty EffectGroup used when a geometry
 // has no matching material entry.
-// DIFFERS: binary @0x00237fc4 loads a real default EffectGroup from an embedded
+// DIFFERS: v1.6.1 binary @ 0x00237fc4 loads a real default EffectGroup from an embedded
 // Effect blob (&DefaultMeshEffect, 0x1873); port returns an empty EffectGroup stub
 // because Effect::LoadEffects is not yet ported.
 // v1.6.1 GetDefaultEffect @0x00237fc4

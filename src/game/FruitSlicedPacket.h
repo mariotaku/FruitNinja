@@ -22,10 +22,10 @@ public:
     long     m_field1c;   // +0x1c -- player ID / field
     long     m_field20;   // +0x20
 
-    // Defunct: P2P MP slice-broadcast packet -- no-op stub; binary @ 0x0012ce48
+    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012ce48
     FruitSlicedPacket();
 
-    // Defunct: P2P MP slice-broadcast packet -- no-op stub; binary @ 0x0012cda8
+    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012cda8
     FruitSlicedPacket(long fruitId, uint16_t f14, uint16_t f16, float f18, long f1c, long f20);
 
     virtual ~FruitSlicedPacket() {}

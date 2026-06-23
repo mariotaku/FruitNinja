@@ -227,7 +227,7 @@ struct WAVE_INFO {
 };
 
 // DEFAULT_WAVE_INFO — size 0x40 (64 bytes), stored at WaveManager+0xdc per mode.
-// ASM-verified: 2026-05-27 binary @ 0x0012630c (re-analyst) -- Reset writes all defaults.
+// ASM-verified: 2026-05-27 v1.6.1 binary @ 0x0012630c (re-analyst) -- Reset writes all defaults.
 // WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) @ 0x001267c8 copies these into per-wave WAVE_INFOs.
 struct DEFAULT_WAVE_INFO {
     int     m_WaveChance;            // +0x00 XML "waveChance"           default 10

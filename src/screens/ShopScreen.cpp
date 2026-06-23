@@ -342,7 +342,7 @@ void ShopScreen::CreateShopList() {
     //   @ 0x0015f828: vtable[+0x54](80.0f)  -- SetItemHeight(80) writes +0x9c (m_Width)
     // Port field names (m_Width/m_Height/m_ItemHeight) are name-swapped vs binary semantics
     // -- preserved to avoid mangled-symbol drift.
-    // ASM-verified: 2026-06-06 binary @ 0x0015f7fc (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
+    // ASM-verified: 2026-06-06 v1.6.1 binary @ 0x0015f7fc (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
     m_pShopList->SetWidth(290.0f);
     m_pShopList->SetHeight(80.0f);
     m_pShopList->SetItemHeight(80.0f);
@@ -844,7 +844,7 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 1: Active / idle ----
     case 1: {
-        // ASM-verified: 2026-05-09 binary @ 0x0015e208 (re-analyst).
+        // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015e208 (re-analyst).
         // Selection-ring counter (m_AnimFrame at +0xb4) defaults to DECAY
         // each frame: ringSignedDt = -dt. Only ONE control path keeps it
         // at +dt: when the selected item IS EQUIPPED. The ring marks the

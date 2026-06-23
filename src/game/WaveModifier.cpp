@@ -65,7 +65,7 @@ void PROBABILITY_OVERIDE::Parse(TiXmlElement* xml) {
 // PROBABILITY_OVERIDE::GetType — binary @ 0x001217e4
 // Picks a random entry from m_TypeQueue[0..m_field68).
 // SelectType() is called once at Reset/NewGame; GetType() is called per-spawn.
-// ASM-verified: 2026-05-18 binary @ 0x001217e4 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001217e4 (re-analyst)
 int PROBABILITY_OVERIDE::GetType() {
     if (m_field68 <= 0) return -1;
     uint32_t idx = WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)m_field68);

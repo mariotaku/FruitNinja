@@ -48,7 +48,7 @@ public:
     // Virtual dtor emits the vptr, matching binary isPolymorphic=true.
     virtual ~MatrixManager();
 
-    // ASM-verified: 2026-05-09 binary @ 0x0019e2ac (asm-inspector)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0019e2ac (asm-inspector)
     // Binary is a 2-instruction tail-call to ResetAllStacks. Inlining
     // the call here is the same effect.
     void Init() { ResetAllStacks(); }

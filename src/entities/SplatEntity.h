@@ -78,7 +78,7 @@ public:
     // Pure thiscall -- pulls vertex cursor from s_NumActiveSplats and writes
     // into s_pSplatVertexBuffer. Tint read from s_CurrentTintRGB (set by
     // DrawActiveSplats before dispatch).
-    // ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
     virtual void DrawSplat();
 
     // --- Vtable slot 5: Update (binary @ 0x0017f774) ---

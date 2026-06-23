@@ -57,7 +57,7 @@ FruitCamera::~FruitCamera() {
 //   5. LookAt = Lerp(globalLook, m_ZoomTarget, SinTransition(ZoomT, k))
 //   6. m_RollOut = (short)(Lerp(0, m_RollScale, InverseSquareTransition(ZoomT)) * k)
 //   7. add shake offset: Vec3(m_Target.x, m_Target.y, 0) += into LookAt
-// ASM-verified: 2026-05-17 binary @ 0x00180c8c..0x00180d0e (re-analyst) [v1.5.1].
+// ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180c8c..0x00180d0e (re-analyst) [v1.5.1].
 // v1.6.1 UpdateCamera at 0x1edf24 extends this with the zoom state machine.
 void FruitCamera::UpdateCamera(float dt) {
     // RE-ported: 0x1edf24 — v1.6.1 UpdateCamera does NOT write m_field14c (+0x14c) at all.
@@ -182,8 +182,8 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
 
 // Non-virtual (0x001810ac) — 4-type ortho dispatch.
 //
-// ASM-verified: 2026-05-06T00:00 binary @ 0x001810ac..0x001813d1 (asm-inspector)
-// ASM-verified: 2026-05-06T00:00 binary @ 0x0019e7a8..0x0019e828 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001810ac..0x001813d1 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0019e7a8..0x0019e828 (asm-inspector)
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -209,7 +209,7 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    // ASM-verified: 2026-05-16 binary @ 0x001810ac..0x001813f4 (re-analyst).
+    // ASM-verified: 2026-05-16 v1.6.1 binary @ 0x001810ac..0x001813f4 (re-analyst).
     mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
     m_projection = mm.GetProjectionStack().m_Current;
@@ -220,7 +220,7 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
 }
 
 // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
-// ASM-verified: 2026-05-17 binary @ 0x00180d10..0x00180d68 (re-analyst).
+// ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180d10..0x00180d68 (re-analyst).
 // DIFFERS: original = Math::Atan2Idx 16-bit-angle-index trig; port uses
 //          atan2f/sinf/cosf with the (radians to 16-bit-index) conversion
 //          factor 65536/2pi.

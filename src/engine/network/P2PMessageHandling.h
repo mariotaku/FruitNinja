@@ -16,34 +16,34 @@ enum P2PMessage {
 };
 } // namespace Mortar
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void P2PConnect(bool host);
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void DisconnectP2P(bool sendDisconnect);
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640 (returns false)
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)
 bool IsP2POnline();
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640 (returns false)
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)
 bool IsP2PSupported();
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640 (returns false)
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)
 bool IsP2PConnecting();
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157630 EMPTY {}
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157630 EMPTY {}
 void SendP2PPacket(Mortar::NetworkPacket& packet, bool reliable);
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void LaunchP2PMatchMaker();
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x15761c EMPTY {}
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x15761c EMPTY {}
 void GlobalP2PMessageHandler(Mortar::P2PMessage msg, Mortar::NetworkPacket* packet);
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void SetupP2PMessageHandling();
 
-// Defunct: P2P multiplayer -- no-op stub; binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void P2PInitializationCompleteHandler(bool success, bool isHost);
 
 #endif // FN_ENGINE_NETWORK_P2P_MESSAGE_HANDLING_H

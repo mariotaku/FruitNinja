@@ -11,7 +11,7 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
-// ASM-verified: 2026-05-03 binary @ 0x00169670 (re-analyst)
+// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00169670 (re-analyst)
 
 // 16-slot touch zone position table.
 // Binary: g_TaskState+0xa0..0xa8 region, 12-byte stride (Vec3).
@@ -158,7 +158,7 @@ static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
 // PauseGameCallback @ 0x00168fd8
 // Binary: if (ev != NULL) { if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame(); }
 // g_GameData[+2] = pausedFlag in port (false=running, true=paused).
-// ASM-verified: 2026-05-18 binary @ 0x00168fd8 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168fd8 (re-analyst)
 static bool PauseGameCallback(InputEvent* ev) {
     if (!ev) return true;
     Game* game = Game::GetInstance();
@@ -176,7 +176,7 @@ static bool PauseGameCallback(InputEvent* ev) {
 // +0x604 is m_bFrameDirty in port (same slot ShowPauseMenuCallback writes
 // when its gate passes -- both actions flip the same "menu input pending"
 // latch consumed downstream).
-// ASM-verified: 2026-05-18 binary @ 0x00168e9c (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e9c (re-analyst)
 static bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
@@ -189,7 +189,7 @@ static bool RegressMenuCallback(InputEvent* ev) {
 // Binary: if (m_TransitionTimer == 0.0f && pausedFlag == 0)
 //             g_GameData[+0x604] = 1;
 // +0x604 is m_bFrameDirty -- same field as RegressMenuCallback.
-// ASM-verified: 2026-05-18 binary @ 0x00168e6c (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e6c (re-analyst)
 static bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();

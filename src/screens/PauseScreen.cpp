@@ -125,7 +125,7 @@ void PauseScreen::PauseGame() {
     ts->pauseTransitionTimer = 0.25f;
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00168fb0 UnpauseGame (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00168fb0 UnpauseGame (re-analyst)
 // Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game_work.bM_Mode.
 // pausedFlag stays set through QUIT_EXIT/RETRY_EXIT/BOMB_FLASH so the dispatcher's
 // `active = !pausedFlag && pmState == 0` evaluates to false during those transitions,
@@ -142,7 +142,7 @@ void PauseScreen::UnpauseGame() {
 // IsEnabled (binary @ 0x00153e4c)
 // -------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-09 binary @ 0x00153e4c (re-analyst)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00153e4c (re-analyst)
 // Returns TRUE when pause overlay is available -- transition timer at rest
 // (|t| < 0.001), no bomb-hit pause, and levelTransitionFlag == 0. Earlier port had
 // the comparison inverted -- the binary uses `bpl` after vcmpe which means
@@ -192,7 +192,7 @@ static void QuitToMenu() {
 
     FN::SetScore(0, -1);                               // 0x169e90
 
-    // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
+    // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 binary @ 0x00169e9e
     // (binary: NetworkManager::GetInstance()->vtable[3](0))
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
 
@@ -332,7 +332,7 @@ PauseScreen::PauseScreen()
 }
 
 PauseScreen::~PauseScreen() {
-    // ASM-spec v1.6.1 PauseScreen::~PauseScreen @0x001a7204 area: delete m_PausedText.
+    // ASM-spec v1.6.1 PauseScreen::~PauseScreen @0x001a5ce4 area: delete m_PausedText.
     // Mirrors ScoreControl::~ScoreControl pattern for BakedStringBox* members.
     if (m_PausedText) {
         delete m_PausedText;
@@ -350,7 +350,7 @@ void PauseScreen::Init() {
 
 // -------------------------------------------------------------------------
 // vtable[3]: Release -- nulls 5 SmartPtr<Texture> slots.
-// ASM-verified: 2026-05-08T00:00 binary @ 0x0015408C (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x0015408C (re-analyst)
 //
 // Slots nulled (5x SmartPtrNull_Tex calls at 0x00154054):
 //   +0x74 m_Texture (HUDControl3d primary)
@@ -369,7 +369,7 @@ void PauseScreen::Release() {
 
 // -------------------------------------------------------------------------
 // vtable[4]: Reset -- restores SP-mode tex assignments on resume/retry buttons
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00154024 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00154024 (re-analyst)
 //
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
@@ -507,7 +507,7 @@ void PauseScreen::PauseGameCallback() {
     }
 }
 
-// ASM-verified: 2026-05-02 binary @ 0x00154400 (asm-inspector)
+// ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00154400 (asm-inspector)
 void PauseScreen::PauseGameCallback2() {
     bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == PAUSE_STATE_HIDDEN);
     PauseGameCallback();   // drives state 0->2 or 3->4
@@ -517,7 +517,7 @@ void PauseScreen::PauseGameCallback2() {
     // state 5 is unreachable from this callback in single-player
 }
 
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00153ebc (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153ebc (re-analyst)
 // Binary @ 0x00153ebc QuitGameCallback():
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
@@ -537,7 +537,7 @@ void PauseScreen::QuitGameCallback() {
 // Binary @ 0x00153ef8 QuitGameCallback2():
 //   QuitGameCallback(); m_LastHitButton = 1; g->field_0x85 = 0;
 // Used by P2-Quit button in MP path.
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00153ef8 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153ef8 (re-analyst)
 // Defunct: multiplayer Quit2 path -- single-player port still wires the
 // tutorial-clear write so the cb retains its post-call observable state.
 void PauseScreen::QuitGameCallback2() {
@@ -546,7 +546,7 @@ void PauseScreen::QuitGameCallback2() {
     game_work.m_bTutorialShown = 0;
 }
 
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00153f68 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153f68 (re-analyst)
 // Binary @ 0x00153f68 RetryGameCallback():
 //   if (m_State != 3) return;
 //   if (game_work.m_ElapsedGameTime < 10.5f)
@@ -581,14 +581,14 @@ void PauseScreen::RetryGameCallback() {
 // -------------------------------------------------------------------------
 void PauseScreen::Update(float dt) {
     // --- Lazy button creation (SP path only) ---
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00154468..0x001545fc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00154468..0x001545fc (asm-inspector)
     // Each of the three create blocks is gated only on null-on-self
     // (`+0x98 m_ResumeButton`, `+0xa0 m_QuitButton`, `+0xac m_RetryButton`).
     // No `IsEnabled()` / `levelTransitionFlag` / `m_State` / `m_TransitionTimer` test
     // wraps the allocations — binary creates eagerly on first Update().
     // Visibility on non-gameplay screens is an alpha/draw-time concern,
     // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
-    // ASM-spec for binary @ 0x001544e8..0x001545fc (re-analyst):
+    // ASM-spec for v1.6.1 binary @ 0x001544e8..0x001545fc (re-analyst):
     //   MenuButton(this, texSP&, &pos, &clickDelegate, fruitType=-1,
     //              &globalCenterVec, &deletedDelegate)
     //   then SetSingular() and AddControl().
@@ -692,7 +692,7 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_BOMB_FLASH:
-        // ASM-verified: 2026-05-10 binary @ 0x00154d2a..0x00154d72 (re-analyst).
+        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00154d2a..0x00154d72 (re-analyst).
         // Hold m_Alpha = 1.0 / m_ButtonFadeAlpha = 0.0 each frame while
         // BombFlashFull() returns false (i.e. game_work.m_BombHitTimer >= 1.0).
         // When the bomb-hit timer crosses below 1.0 (half the 2.0s window),
@@ -770,7 +770,7 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_QUIT_EXIT:
-        // ASM-verified: 2026-05-10 binary @ 0x00154dc4..0x00154e1e (re-analyst).
+        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00154dc4..0x00154e1e (re-analyst).
         // Binary applies 0.5x extra fast-fade in case 6 then falls through to
         // the common 0.75 decay; both happen each frame.
         m_Alpha *= 0.5f;
@@ -867,7 +867,7 @@ void PauseScreen::Update(float dt) {
     }
 
     // 6. Resume + Retry button position recomputation.
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00154f8a..0x001550d6 (re-analyst+asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00154f8a..0x001550d6 (re-analyst+asm-inspector)
     //
     // PauseScreen post-switch tail. Three RE passes converged on this:
     //   - m_ButtonOriginPos.x is a per-session constant set ONCE at
@@ -882,7 +882,7 @@ void PauseScreen::Update(float dt) {
     //   - Resume formula writes pos.x AND pos.y; pos.z untouched.
     //   - Retry formula writes pos.x, pos.y, pos.z.
     //
-    // ASM-verified: 2026-05-08 binary @ 0x00154fea..0x001551d2 (re-analyst).
+    // ASM-verified: 2026-05-08 v1.6.1 binary @ 0x00154fea..0x001551d2 (re-analyst).
     //
     // Two-phase Resume + Retry layout:
     //   Phase 1 (lines below): write the off-screen base positions.
@@ -891,7 +891,7 @@ void PauseScreen::Update(float dt) {
     //     base positions (off-screen left/right) for the entire pause
     //     overlay -- which is what the user observed visually.
     //
-    // ASM-verified: 2026-05-18 binary @ 0x00154468 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 (re-analyst)
     // Per-frame Resume m_TargetSize: m_ButtonOriginPos (captured (64,64,64)
     // at lazy-create) scaled by resumeScale = m_Alpha * 1.25 + 0.75.
     // MenuButton::Update writes `size = m_TargetSize` each frame, so only
@@ -921,7 +921,7 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->pos = Vec3(240.0f + 0.5f * OX, -20.0f, 0.0f);
     }
 
-    // ASM-verified: 2026-05-18 binary @ 0x00154468 tail (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 tail (re-analyst)
     // Retry m_TargetSize := Resume m_TargetSize when m_Alpha > 0.
     // Without this, Retry stays at MenuButton::Init texture-auto-size
     // (129,129,0) -- 2x oversize hitbox and .z=0 degenerate render matrix.
@@ -962,7 +962,7 @@ void PauseScreen::Update(float dt) {
     m_ButtonFadeAlpha = savedButtonFadeAlpha;
 }
 
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00153e34 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153e34 (re-analyst)
 // Binary @ 0x00153e34: external entry — force overlay fully visible and
 // jump to state 3. Used by the Bada-app-side "skip intro" handler.
 void PauseScreen::SkipTo() {
@@ -970,7 +970,7 @@ void PauseScreen::SkipTo() {
     m_Alpha = 1.0f;
 }
 
-// ASM-verified: 2026-05-08T00:00 binary @ 0x00153fe8 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153fe8 (re-analyst)
 // Binary @ 0x00153fe8: external entry (no in-screen button binds it).
 // Likely call site: shop/tutorial popup-dismiss handler. Advances state
 // 3 -> 4 and clears the tutorial-shown flag.

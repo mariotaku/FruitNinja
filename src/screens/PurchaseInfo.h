@@ -55,7 +55,7 @@ public:
     void LoadTextures();
 
     // @ 0x00118334 — call Unload() on all three ReloadableTexture slots.
-    // ASM-verified: 2026-05-18 binary @ 0x00118334 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118334 (re-analyst)
     void UnloadTextures();
 };
 

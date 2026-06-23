@@ -5,12 +5,31 @@ Scans src/ for source-side RE markers (ASM-verified, ASM-spec, TODO, DIFFERS,
 Defunct) and checks each against the binary symbol table.
 
 Verdicts per marker:
-  OK          -- addr resolves to a symbol whose demangled name contains the
-                 cited symbol string, AND 'v1.6.1' is present.
-  STALE       -- addr resolves to a symbol whose name does NOT match the cited
-                 symbol (address has been re-used or was always wrong).
-  NO-VERSION  -- marker lacks 'v1.6.1' version tag.
-  UNRESOLVED  -- addr not found as a known symbol start in the binary.
+  OK              -- addr resolves to a symbol whose demangled name contains the
+                     cited symbol string, AND 'v1.6.1' is present.
+  STALE-MISMATCH  -- cited symbol is found in the binary at exactly ONE other
+                     address addr2 != cited_addr; the marker address is wrong.
+                     report.json['correct_addr'] gives the correct Ghidra address.
+  STALE-AMBIGUOUS -- cited symbol matches MULTIPLE binary addresses; cannot
+                     auto-fix. Manual review required.
+  STALE           -- addr resolves to a symbol whose name does NOT match the cited
+                     symbol AND the cited symbol is not uniquely findable.
+  NO-VERSION      -- marker lacks 'v1.6.1' version tag; addr resolves OK.
+  MID-SYMBOL      -- addr is not a symbol start, but falls within the [start,
+                     start+size) range of a known function/object; the address
+                     is valid (deliberate mid-function reference). report.json
+                     contains 'containing_sym' and 'containing_addr'.
+  UNRESOLVED      -- addr not found as a known symbol start, and NOT within any
+                     symbol's size range. Truly unknown.
+  OK-NO-SYM       -- has v1.6.1 but no symbol name in the marker (old 'binary @')
+
+All NO-VERSION variants carry a sub-verdict:
+  NO-VERSION       -- addr resolves to a matching symbol (OK except missing tag)
+  NO-VERSION+STALE -- addr resolves but symbol name doesn't match
+  NO-VERSION+MID-SYMBOL -- addr is inside a function body (valid mid-func ref)
+  NO-VERSION+UNRESOLVED -- addr not found at all
+
+Addresses use GHIDRA convention throughout: Ghidra_addr = LIEF_value + 0x10000.
 
 Usage:
     python tools/asm-verify/stale-marker-lint.py [--src <dir>] [--binary <path>]
@@ -210,6 +229,8 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     4. The mangled binary_sym contains a fragment derived from cited_sym.
 
     We strip ctor/dtor noise: '{ctor}', '{deleting dtor}', etc.
+    Dtor variants: '~Foo' is treated as matching '{dtor}', '{deleting dtor}',
+    '{base dtor}' for the same class.
     """
     # Normalise both sides
     cited_clean = cited_sym.strip()
@@ -219,7 +240,6 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     cited_base = re.sub(r'\(.*', '', cited_clean).strip()
     dem_base   = re.sub(r'\(.*', '', dem_clean).strip()
 
-    # Remove trailing whitespace and ::operator noise
     def _last_segment(s: str) -> str:
         """Extract the last :: segment, stripping template params."""
         s = re.sub(r'<[^>]*>', '', s)  # strip template args
@@ -247,36 +267,85 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     if len(cited_last) >= 4 and cited_last in dem_clean:
         return True
 
+    # 5. Dtor match: '~Foo' in cited should match '{dtor}', '{deleting dtor}',
+    #    '{base dtor}' in the same class. Extract 'Foo' from '~Foo' and check
+    #    that the demangled name starts with 'Foo::' and contains 'dtor'.
+    if cited_last.startswith('~'):
+        class_name = cited_last[1:]
+        if class_name and 'dtor' in dem_last:
+            # Extract class portion from demangled (before the last ::)
+            dem_parts = re.sub(r'\(.*', '', dem_clean).rsplit('::', 2)
+            if len(dem_parts) >= 2:
+                dem_class = dem_parts[-2].strip()
+                # Strip template params from class name
+                dem_class = re.sub(r'<[^>]*>', '', dem_class).strip()
+                if dem_class == class_name or dem_class.endswith('::' + class_name):
+                    return True
+
+    # 6. Compiler-generated names: 'T_NNNN' matches 'T.NNNN' (GCC emits '.'
+    #    which cannot appear in source identifiers so ports use '_' instead).
+    if re.match(r'^T_\d+$', cited_last):
+        dot_form = cited_last.replace('_', '.', 1)
+        if dot_form == binary_sym or dot_form == demangled:
+            return True
+
     return False
 
 
-def load_binary_symbols(binary_path: pathlib.Path) -> tuple[dict, dict]:
-    """Return (addr_to_mangled, addr_to_demangled) dicts from the ELF.
+def _forward_lookup(cited_sym: str,
+                    addr_to_mangled: dict,
+                    addr_to_demangled: dict) -> list:
+    """FORWARD check: find all binary addresses where cited_sym matches.
 
-    addr_to_mangled: {int_addr: mangled_name}
-    addr_to_demangled: {int_addr: demangled_name}
+    Returns list of (addr, demangled) pairs sorted by addr.
+    An empty list means the symbol wasn't found anywhere in the binary.
+    """
+    if not cited_sym:
+        return []
+    results = []
+    seen = set()
+    for addr, mangled in addr_to_mangled.items():
+        dem = addr_to_demangled.get(addr, mangled)
+        if _symbol_matches(cited_sym, mangled, dem):
+            if addr not in seen:
+                seen.add(addr)
+                results.append((addr, dem))
+    results.sort(key=lambda x: x[0])
+    return results
 
-    Prefers FUNC-typed symbols over NOTYPE when both exist at the same address.
-    Skips ARM mapping symbols ($a, $d, $t), FILE, and SECTION entries.
+
+def load_binary_symbols(binary_path: pathlib.Path):
+    """Return (addr_to_mangled, addr_to_demangled, sym_ranges) from the ELF.
+
+    addr_to_mangled:  {int_addr: mangled_name}
+    addr_to_demangled:{int_addr: demangled_name}
+    sym_ranges:       sorted list of (start_addr, end_addr, mangled_name) for
+                      all symbols with size > 0. Used for CONTAINMENT check.
+
+    All addresses use GHIDRA convention: LIEF_value + 0x10000.
     """
     b = lief.parse(str(binary_path))
     if b is None:
         sys.exit(f"ERROR: lief could not parse {binary_path}")
 
-    addr_to_mangled: dict[int, str] = {}
-    addr_to_demangled: dict[int, str] = {}
-
-    # The port's source-side markers use GHIDRA addresses, and Ghidra loads this
-    # ELF at image_base 0x10000 (verified via GhidraMCP get_current_program_info:
-    # GameOverScreen::Update is 0x176c80 in the raw ELF / LIEF but 0x00186c80 in
-    # Ghidra and in every marker + asm-verify disasm). So Ghidra_addr = LIEF_value
-    # + 0x10000. Without this offset the linter mis-reports every marker as stale.
+    # Ghidra loads this ELF at image_base 0x10000. Every source-side marker and
+    # every asm-verify disasm uses Ghidra addresses. LIEF reports raw ELF .st_value
+    # fields, so we must add 0x10000 to convert.
+    # Validated anchors (Ghidra convention, confirmed via GhidraMCP):
+    #   GameOverScreen::Update  @ 0x00186c80  (LIEF 0x176c80 + 0x10000)
+    #   Fruit::RandomFruit      @ 0x001dc5d8  (LIEF 0x1cc5d8 + 0x10000)
+    #   Fruit::CollisionResponse@ 0x001dd500  (LIEF 0x1cd500 + 0x10000)
     GHIDRA_IMAGE_BASE = 0x10000
 
+    addr_to_mangled = {}
+    addr_to_demangled = {}
+    sym_ranges = []
+
     for sym in b.symbols:
-        addr = sym.value + GHIDRA_IMAGE_BASE
-        if addr == 0:
+        raw_val = sym.value
+        if raw_val == 0:
             continue
+        addr = raw_val + GHIDRA_IMAGE_BASE
         name = sym.name
         if not name:
             continue
@@ -288,19 +357,45 @@ def load_binary_symbols(binary_path: pathlib.Path) -> tuple[dict, dict]:
         if sym_type_str in ('TYPE.FILE', 'TYPE.SECTION'):
             continue
 
+        dem = _demangle(name)
+
         if addr not in addr_to_mangled:
             addr_to_mangled[addr] = name
-            addr_to_demangled[addr] = _demangle(name)
+            addr_to_demangled[addr] = dem
         else:
             # Prefer FUNC over NOTYPE
-            if sym_type_str == 'TYPE.FUNC' and str(b.symbols) != 'TYPE.FUNC':
+            if sym_type_str == 'TYPE.FUNC':
                 addr_to_mangled[addr] = name
-                addr_to_demangled[addr] = _demangle(name)
+                addr_to_demangled[addr] = dem
 
-    return addr_to_mangled, addr_to_demangled
+        # Collect size-bearing symbols for containment check
+        size = sym.size
+        if size > 0:
+            sym_ranges.append((addr, addr + size, name))
+
+    # Sort ranges by start address for binary-search efficiency
+    sym_ranges.sort(key=lambda t: t[0])
+
+    return addr_to_mangled, addr_to_demangled, sym_ranges
 
 
-def scan_sources(src_dir: pathlib.Path) -> list[dict]:
+def _containment_check(addr: int, sym_ranges: list):
+    """CONTAINMENT check: is addr strictly inside any symbol's [start, start+size)?
+
+    Returns (containing_start, containing_end, containing_mangled) or None.
+    Uses a simple linear scan; sym_ranges is sorted by start.
+    """
+    for (start, end, mangled) in sym_ranges:
+        if start < addr < end:
+            return (start, end, mangled)
+        if start > addr:
+            # Since sorted, no later symbol can contain addr unless we missed overlap
+            # But symbols can overlap (thunks), so we can't break early
+            pass
+    return None
+
+
+def scan_sources(src_dir: pathlib.Path) -> list:
     """Scan all .cpp/.h files under src_dir for RE markers.
 
     Returns list of dicts:
@@ -328,7 +423,10 @@ def scan_sources(src_dir: pathlib.Path) -> list[dict]:
 
                 cited_sym = None
                 try:
-                    cited_sym = m.group('sym').strip()
+                    raw_sym = m.group('sym').strip()
+                    # 'binary' is a legacy placeholder, not an actual symbol name
+                    if raw_sym and raw_sym != 'binary':
+                        cited_sym = raw_sym
                 except IndexError:
                     pass
 
@@ -358,52 +456,98 @@ def scan_sources(src_dir: pathlib.Path) -> list[dict]:
     return results
 
 
-def classify(markers: list[dict],
+def classify(markers: list,
              addr_to_mangled: dict,
-             addr_to_demangled: dict) -> list[dict]:
-    """Add 'verdict', 'binary_sym', 'binary_demangled' to each marker dict."""
+             addr_to_demangled: dict,
+             sym_ranges: list) -> list:
+    """Add 'verdict' and auxiliary fields to each marker dict.
+
+    Fields added:
+      verdict          -- see module docstring
+      binary_sym       -- mangled name at cited_addr (or None)
+      binary_demangled -- demangled name at cited_addr (or None)
+      correct_addr     -- (STALE-MISMATCH only) the correct Ghidra address
+      correct_demangled-- (STALE-MISMATCH only) demangled name at correct_addr
+      containing_sym   -- (MID-SYMBOL only) mangled name of the containing func
+      containing_addr  -- (MID-SYMBOL only) start address of containing func
+      forward_matches  -- (STALE-AMBIGUOUS only) list of (addr, dem) candidates
+    """
     for m in markers:
-        addr = m['cited_addr']
-        if addr not in addr_to_mangled:
-            m['verdict']           = 'UNRESOLVED'
-            m['binary_sym']        = None
-            m['binary_demangled']  = None
-            # Still flag NO-VERSION if applicable
-            if not m['has_version']:
-                m['verdict'] = 'NO-VERSION+UNRESOLVED'
-        else:
+        addr       = m['cited_addr']
+        cited_sym  = m.get('cited_sym')
+        has_ver    = m['has_version']
+
+        # ----------------------------------------------------------------
+        # Step 1: look up addr in symbol-start table
+        # ----------------------------------------------------------------
+        if addr in addr_to_mangled:
             mangled   = addr_to_mangled[addr]
             demangled = addr_to_demangled[addr]
             m['binary_sym']       = mangled
             m['binary_demangled'] = demangled
 
-            cited_sym = m.get('cited_sym')
-
-            if not m['has_version']:
-                # Could still be STALE too, but NO-VERSION is the top flag
+            if not has_ver:
                 if cited_sym and not _symbol_matches(cited_sym, mangled, demangled):
                     m['verdict'] = 'NO-VERSION+STALE'
                 else:
                     m['verdict'] = 'NO-VERSION'
             elif not cited_sym:
-                # Has version but no symbol in the marker (e.g. 'binary @ 0x...' with v1.6.1)
                 m['verdict'] = 'OK-NO-SYM'
             elif _symbol_matches(cited_sym, mangled, demangled):
                 m['verdict'] = 'OK'
             else:
-                m['verdict'] = 'STALE'
+                # Addr resolves to wrong symbol -- run FORWARD check
+                fwd = _forward_lookup(cited_sym, addr_to_mangled, addr_to_demangled)
+                # Filter out the current (wrong) address
+                fwd = [(a, d) for (a, d) in fwd if a != addr]
+                if len(fwd) == 1:
+                    m['verdict']           = 'STALE-MISMATCH'
+                    m['correct_addr']      = fwd[0][0]
+                    m['correct_demangled'] = fwd[0][1]
+                elif len(fwd) > 1:
+                    m['verdict']         = 'STALE-AMBIGUOUS'
+                    m['forward_matches'] = [(hex(a), d) for (a, d) in fwd[:10]]
+                else:
+                    m['verdict'] = 'STALE'
+
+        # ----------------------------------------------------------------
+        # Step 2: addr not a symbol start -- containment check
+        # ----------------------------------------------------------------
+        else:
+            m['binary_sym']       = None
+            m['binary_demangled'] = None
+
+            container = _containment_check(addr, sym_ranges)
+            if container:
+                (c_start, c_end, c_mangled) = container
+                m['containing_sym']  = c_mangled
+                m['containing_addr'] = c_start
+                m['containing_dem']  = _demangle(c_mangled)
+                if not has_ver:
+                    m['verdict'] = 'NO-VERSION+MID-SYMBOL'
+                else:
+                    m['verdict'] = 'MID-SYMBOL'
+            else:
+                if not has_ver:
+                    m['verdict'] = 'NO-VERSION+UNRESOLVED'
+                else:
+                    m['verdict'] = 'UNRESOLVED'
 
     return markers
 
 
 _VERDICT_ORDER = {
-    'STALE':               0,
-    'NO-VERSION+STALE':    1,
-    'NO-VERSION':          2,
-    'NO-VERSION+UNRESOLVED': 3,
-    'UNRESOLVED':          4,
-    'OK-NO-SYM':           5,
-    'OK':                  6,
+    'STALE-MISMATCH':          0,
+    'STALE-AMBIGUOUS':         1,
+    'STALE':                   2,
+    'NO-VERSION+STALE':        3,
+    'NO-VERSION':              4,
+    'NO-VERSION+MID-SYMBOL':   5,
+    'NO-VERSION+UNRESOLVED':   6,
+    'UNRESOLVED':              7,
+    'MID-SYMBOL':              8,
+    'OK-NO-SYM':               9,
+    'OK':                      10,
 }
 
 
@@ -428,18 +572,18 @@ def main():
         sys.exit(f"ERROR: src dir not found: {src_dir}")
 
     print(f"Loading binary symbols from {binary_path.name} ...", flush=True)
-    addr_to_mangled, addr_to_demangled = load_binary_symbols(binary_path)
+    addr_to_mangled, addr_to_demangled, sym_ranges = load_binary_symbols(binary_path)
     print(f"  {len(addr_to_mangled)} unique symbol addresses loaded.")
+    print(f"  {len(sym_ranges)} symbols with size (for containment check).")
 
     print(f"Scanning {src_dir} for RE markers ...", flush=True)
     markers = scan_sources(src_dir)
     print(f"  {len(markers)} markers found.")
 
-    print("Classifying ...", flush=True)
-    markers = classify(markers, addr_to_mangled, addr_to_demangled)
+    print("Classifying (forward + containment checks) ...", flush=True)
+    markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
 
-    # Deduplicate: same (file, line) => keep first match (already done by break above)
-    # but also deduplicate across multiple pattern matches for the same physical line
+    # Deduplicate: same (file, line) => keep first match
     seen_file_line = set()
     deduped = []
     for m in markers:
@@ -471,17 +615,44 @@ def main():
     for v in sorted(_VERDICT_ORDER, key=lambda x: _VERDICT_ORDER[x]):
         c = verdict_counts.get(v, 0)
         if c:
-            print(f"  {v:<28}: {c}")
+            print(f"  {v:<32}: {c}")
     print()
 
-    # Show STALE and NO-VERSION+STALE rows first
-    stale_rows = [m for m in markers if 'STALE' in m['verdict']]
+    # Show STALE-MISMATCH rows (actionable: have correct addr)
+    mismatch_rows = [m for m in markers if m['verdict'] == 'STALE-MISMATCH']
+    if mismatch_rows:
+        print(f"--- STALE-MISMATCH ({len(mismatch_rows)}) -- correct addr known, safe to fix ---")
+        for m in mismatch_rows:
+            sym_cited = m['cited_sym'] or '(none)'
+            correct   = hex(m.get('correct_addr', 0))
+            correct_d = m.get('correct_demangled', '?')
+            if len(correct_d) > 55:
+                correct_d = correct_d[:52] + '...'
+            print(f"  {m['file']}:{m['line']}")
+            print(f"    cited:   {sym_cited} @ {m['addr_str']}")
+            print(f"    correct: {sym_cited} @ {correct}  ({correct_d})")
+        print()
+
+    # Show STALE-AMBIGUOUS rows (need manual resolution)
+    ambig_rows = [m for m in markers if m['verdict'] == 'STALE-AMBIGUOUS']
+    if ambig_rows:
+        print(f"--- STALE-AMBIGUOUS ({len(ambig_rows)}) -- multiple candidates, manual review ---")
+        for m in ambig_rows:
+            sym_cited = m['cited_sym'] or '(none)'
+            matches   = m.get('forward_matches', [])
+            print(f"  {m['file']}:{m['line']}  cited: {sym_cited} @ {m['addr_str']}")
+            for (ha, hd) in matches[:4]:
+                hd_s = hd[:55] if len(hd) > 55 else hd
+                print(f"    candidate: {ha}  {hd_s}")
+        print()
+
+    # Show remaining STALE rows
+    stale_rows = [m for m in markers if m['verdict'] == 'STALE']
     if stale_rows:
-        print(f"--- STALE ({len(stale_rows)}) ---")
-        for m in stale_rows[:40]:
+        print(f"--- STALE ({len(stale_rows)}) -- symbol not found at cited addr or anywhere ---")
+        for m in stale_rows:
             sym_cited = m['cited_sym'] or '(none)'
             sym_bin   = m['binary_demangled'] or m['binary_sym'] or '?'
-            # Trim long symbols
             if len(sym_cited) > 50:
                 sym_cited = sym_cited[:47] + '...'
             if len(sym_bin) > 60:
@@ -489,21 +660,56 @@ def main():
             print(f"  [{m['verdict']}] {m['file']}:{m['line']}")
             print(f"    cited:  {sym_cited} @ {m['addr_str']}")
             print(f"    binary: {sym_bin}")
-        if len(stale_rows) > 40:
-            print(f"  ... and {len(stale_rows) - 40} more (see report.json)")
+        print()
+
+    # Show NO-VERSION+STALE rows
+    nvstale_rows = [m for m in markers if m['verdict'] == 'NO-VERSION+STALE']
+    if nvstale_rows:
+        print(f"--- NO-VERSION+STALE ({len(nvstale_rows)}) ---")
+        for m in nvstale_rows:
+            sym_cited = m['cited_sym'] or '(none)'
+            sym_bin   = m['binary_demangled'] or '?'
+            if len(sym_bin) > 55:
+                sym_bin = sym_bin[:52] + '...'
+            print(f"  {m['file']}:{m['line']}  cited={sym_cited}  binary={sym_bin}")
         print()
 
     # Show NO-VERSION rows (up to 20)
-    noversion_rows = [m for m in markers if m['verdict'].startswith('NO-VERSION')]
+    noversion_rows = [m for m in markers if m['verdict'] == 'NO-VERSION']
     if noversion_rows:
-        print(f"--- NO-VERSION ({len(noversion_rows)}) (first 20) ---")
+        print(f"--- NO-VERSION ({len(noversion_rows)}) -- addr OK but tag missing (first 20) ---")
         for m in noversion_rows[:20]:
             sym_cited = m['cited_sym'] or '(none)'
             if len(sym_cited) > 55:
                 sym_cited = sym_cited[:52] + '...'
-            print(f"  {m['file']}:{m['line']}  [{m['verdict']}]  {sym_cited} @ {m['addr_str']}")
+            print(f"  {m['file']}:{m['line']}  {sym_cited} @ {m['addr_str']}")
         if len(noversion_rows) > 20:
             print(f"  ... and {len(noversion_rows) - 20} more")
+        print()
+
+    # Show NO-VERSION+MID-SYMBOL (up to 20)
+    nvmid_rows = [m for m in markers if m['verdict'] == 'NO-VERSION+MID-SYMBOL']
+    if nvmid_rows:
+        print(f"--- NO-VERSION+MID-SYMBOL ({len(nvmid_rows)}) -- valid mid-func refs, tag missing (first 20) ---")
+        for m in nvmid_rows[:20]:
+            sym_cited    = m['cited_sym'] or '(none)'
+            container_d  = _demangle(m.get('containing_sym', '?'))
+            if len(container_d) > 50:
+                container_d = container_d[:47] + '...'
+            print(f"  {m['file']}:{m['line']}  {sym_cited} @ {m['addr_str']}  (in {container_d})")
+        if len(nvmid_rows) > 20:
+            print(f"  ... and {len(nvmid_rows) - 20} more")
+        print()
+
+    # Show UNRESOLVED rows (up to 20)
+    unresolved_rows = [m for m in markers if m['verdict'] in ('UNRESOLVED', 'NO-VERSION+UNRESOLVED')]
+    if unresolved_rows:
+        print(f"--- UNRESOLVED ({len(unresolved_rows)}) -- addr not in any symbol range (first 20) ---")
+        for m in unresolved_rows[:20]:
+            sym_cited = m['cited_sym'] or '(none)'
+            print(f"  [{m['verdict']}] {m['file']}:{m['line']}  {sym_cited} @ {m['addr_str']}")
+        if len(unresolved_rows) > 20:
+            print(f"  ... and {len(unresolved_rows) - 20} more")
         print()
 
     print(f"Full detail in: {out_path}")

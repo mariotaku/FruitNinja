@@ -13,12 +13,12 @@ int GetSocialNetworkProvider() {
     return 0;
 }
 
-// Defunct: online leaderboard -- no-op stub; binary @ 0x0011f534.
+// Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
 bool IsProviderOnline() {
     return false;
 }
 
-// Defunct: online leaderboard -- no-op stub; binary @ 0x0011f4a0.
+// Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f4a0.
 bool AreFriendsLoaded() {
     return false;
 }

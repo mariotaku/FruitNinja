@@ -209,7 +209,7 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
     if (!pItemInfo) return;
 
     // --- Icon texture ---
-    // ASM-verified: 2026-05-09 binary @ 0x0015c9ea (re-analyst).
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015c9ea (re-analyst).
     // Binary picks one of two format strings keyed on m_Type:
     //   BACKGROUND (type == 1): "item_%s.tex"   (DAT_0015caf8 -> "item_%s.tex")
     //   else                  : "%s.tex"        (DAT_0015cafc -> "%s.tex")
@@ -406,7 +406,7 @@ void ShopListItem::Draw() {
 
         // -----------------------------------------------------------------------
         // Part 2: Cost hint text (shadow + fill)
-        // ASM-verified: 2026-05-14 binary @ 0x0015eb00 (re-analyst).
+        // ASM-verified: 2026-05-14 v1.6.1 binary @ 0x0015eb00 (re-analyst).
         // costStr from static_block[+0x1C + m_Type*4]:
         //   m_Type==0: GETSTRING(0xB7) = CODE_SHOP_BLADE         "BLADE"
         //   m_Type==1: GETSTRING(0xB6) = CODE_SHOP_BACKGROUND    "BACKGROUND"
@@ -663,7 +663,7 @@ void ShopListItem::Draw() {
 
                 float descFontSize = 18.0f;
 
-                // ASM-verified: 2026-05-18 binary @ 0x0015eb00 (re-analyst)
+                // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0015eb00 (re-analyst)
                 // Shrink font until wrapped height fits within 82.5f (DAT_0015f524).
                 // maxWidth = 160.0f (DAT_0015f540).
                 if (font) {

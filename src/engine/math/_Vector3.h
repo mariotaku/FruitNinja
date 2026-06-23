@@ -24,46 +24,46 @@ struct _Vector3 {
     _Vector3() : x(0), y(0), z(0) {}
     _Vector3(T x_, T y_, T z_) : x(x_), y(y_), z(z_) {}
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00117674 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00117674 (asm-inspector)
     _Vector3 operator+(const _Vector3& o) const { return _Vector3(x + o.x, y + o.y, z + o.z); }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x001176cc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001176cc (asm-inspector)
     _Vector3 operator-(const _Vector3& o) const { return _Vector3(x - o.x, y - o.y, z - o.z); }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x001176a4 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001176a4 (asm-inspector)
     // Scalar passed by const-ref in the binary (vldr from [r2]), not by value.
     _Vector3 operator*(const T& s) const { return _Vector3(x * s, y * s, z * s); }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0013ce38 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0013ce38 (asm-inspector)
     // 3 separate vdiv.f32 ops, not reciprocal-multiply (different rounding).
     _Vector3 operator/(const T& s) const { return _Vector3(x / s, y / s, z / s); }
     _Vector3 operator-() const { return _Vector3(-x, -y, -z); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00126518 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00126518 (asm-inspector)
     _Vector3& operator+=(const _Vector3& o) { x += o.x; y += o.y; z += o.z; return *this; }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00117878 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00117878 (asm-inspector)
     _Vector3& operator-=(const _Vector3& o) { x -= o.x; y -= o.y; z -= o.z; return *this; }
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0011783c (asm-inspector) -- scalar by value
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0011783c (asm-inspector) -- scalar by value
     _Vector3& operator*=(T s) { x *= s; y *= s; z *= s; return *this; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00138b40 (asm-inspector) -- scalar by value
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00138b40 (asm-inspector) -- scalar by value
     _Vector3& operator/=(T s) { x /= s; y /= s; z /= s; return *this; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0011e6b0 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0011e6b0 (asm-inspector)
     // Component-wise multiply (used in HUDControl3d::Draw).
     _Vector3 operator*(const _Vector3& o) const { return _Vector3(x * o.x, y * o.y, z * o.z); }
 
     bool operator!=(const _Vector3& o) const { return x != o.x || y != o.y || z != o.z; }
     bool operator==(const _Vector3& o) const { return x == o.x && y == o.y && z == o.z; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00133c4c (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00133c4c (asm-inspector)
     T Dot(const _Vector3& o) const { return x * o.x + y * o.y + z * o.z; }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00133c74 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00133c74 (asm-inspector)
     T MagnitudeSqr() const { return Dot(*this); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00138cdc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00138cdc (asm-inspector)
     // Widens to f64, vsqrt.f64, narrows back -- matches binary.
     T Magnitude() const { return T(std::sqrt((double)MagnitudeSqr())); }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00138ce8 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00138ce8 (asm-inspector)
     // In-place, returns original magnitude. Recursive 1M-scale retry for
     // near-zero input mirrors DAT_00138d5c = 0x49742400 (1000000.0f).
     T Normalise() {
@@ -78,7 +78,7 @@ struct _Vector3 {
         return mag;
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0017ea04 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017ea04 (asm-inspector)
     // Static, ARM struct-return convention; binary uses vnmls.f32 for the
     // (Sn*Sm - Sd) FMA pattern -- the operand pairing below matches.
     static _Vector3 Cross(const _Vector3& a, const _Vector3& b) {

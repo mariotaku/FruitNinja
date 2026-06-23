@@ -73,13 +73,13 @@ VerticalScroller::~VerticalScroller() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 2 -- Binary @ 0x00167E6C (empty bx lr)
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00167E6C
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00167E6C
 void VerticalScroller::Init() {
 }
 
 // ---------------------------------------------------------------------------
 // vtable slot 3 -- Binary @ 0x00168170 (calls HUDControl3d::Release then returns)
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00168170
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00168170
 void VerticalScroller::Release() {
     HUDControl3d::Release();
     m_State = 0;
@@ -87,7 +87,7 @@ void VerticalScroller::Release() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 6 -- Binary @ 0x00167FD0 (empty bx lr; returns void)
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00167FD0
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00167FD0
 void VerticalScroller::PreDraw(float* hudScale) {
     (void)hudScale;
 }
@@ -95,7 +95,7 @@ void VerticalScroller::PreDraw(float* hudScale) {
 // ---------------------------------------------------------------------------
 // vtable slot 7 -- Binary @ 0x00168454 (~224 instructions)
 // Renders scrollbar as 4 textured quads: vbar background, up-arrow, down-arrow, thumb.
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00168454
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00168454
 void VerticalScroller::Draw(float* hudScaleRaw) {
     (void)hudScaleRaw;
     // Stub: binary draws vbar.tex background, arrow.tex at top+bottom, vslider.tex
@@ -108,7 +108,7 @@ void VerticalScroller::Draw(float* hudScaleRaw) {
 // vtable slot 10 -- Binary @ 0x00167FD8 (~120 instructions)
 // Touch state machine: hit-test bbox -> classify top-arrow/bottom-arrow/drag ->
 // on release apply one-shot step to m_CurrentValue clamped to [min,max].
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00167FD8
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00167FD8
 void VerticalScroller::Update(float dt) {
     (void)dt;
     // Stub: binary polls TouchInRegion / IsTouchDown and updates m_CurrentValue.
@@ -126,14 +126,14 @@ int VerticalScroller::GetType() {
 // Non-virtual. Binary @ 0x0014A908 (also via thunk @ 0x00107754 -> GOT 0x001F2C6C)
 // Effect: pos.x += m_VisibleHeightPx * 0.5f
 // Places scrollbar left edge at original pos.x (right side of parent listbox).
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x0014A908
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x0014A908
 void VerticalScroller::AdjustByWidth() {
     pos.x += m_VisibleHeightPx * 0.5f;
 }
 
 // ---------------------------------------------------------------------------
 // Non-virtual setter. Binary @ 0x0014A920 (in ListBox.cpp CU)
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x0014A920
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x0014A920
 void VerticalScroller::SetPosition(float x, float y) {
     pos.x = x;
     pos.y = y;
@@ -144,7 +144,7 @@ void VerticalScroller::SetPosition(float x, float y) {
 // Private non-virtual helper called by Update while touch is held.
 // Binary @ 0x00167E70 (~80 instructions)
 // Drag-mode: reads live touch position -> maps touch.y into [m_MinValue, m_MaxValue].
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x00167E70
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00167E70
 void VerticalScroller::UpdateTouchPosition() {
     // Stub: binary reads touch slot via GOT[+0x7990] (touch table, 12-byte stride),
     // stores into m_LastTouchPos, then (if m_State==3) maps touch.y into m_CurrentValue.
@@ -154,7 +154,7 @@ void VerticalScroller::UpdateTouchPosition() {
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x0016872C
 // Loads vbar.tex, vslider.tex, arrow.tex via TextureManager::LoadLocalisedTexture.
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x0016872C
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x0016872C
 void VerticalScroller::LoadContent() {
     // Stub: binary calls Mortar::TextureManager::LoadLocalisedTexture for each of:
     //   GOT[+0x7148] = "vbar.tex"    (@ 0x001BC570)
@@ -165,7 +165,7 @@ void VerticalScroller::LoadContent() {
 
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x001687D0
-// Defunct: VerticalScroller -- no-op stub; binary @ 0x001687D0
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x001687D0
 void VerticalScroller::UnloadContent() {
     // Stub: binary calls Mortar::SmartPtr<Texture>::SetNull on s_vbar, s_vslider, s_arrow.
     s_vbar    = 0;

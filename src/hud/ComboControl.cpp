@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cstring>
 
-// ASM-verified: 2026-05-20 binary @ 0x00136cc4 (re-analyst) -- format is "%i", not "x%d"
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136cc4 (re-analyst) -- format is "%i", not "x%d"
 ComboControl::ComboControl(int comboCount)
     : m_Lifetime(1.0f), m_ComboCount(comboCount) {
     std::memset(m_Label, 0, sizeof(m_Label));
@@ -34,19 +34,19 @@ void ComboControl::Update(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00136bd0 (re-analyst) -- tail-calls Reset
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136bd0 (re-analyst) -- tail-calls Reset
 void ComboControl::Init() { Reset(); }
 
-// ASM-verified: 2026-05-20 binary @ 0x00136be0 (re-analyst) -- no-op
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136be0 (re-analyst) -- no-op
 void ComboControl::Release() {}
 
-// ASM-verified: 2026-05-20 binary @ 0x00136c08 (re-analyst) -- no-op
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136c08 (re-analyst) -- no-op
 void ComboControl::Skip() {}
 
-// ASM-verified: 2026-05-20 binary @ 0x00136c04 (re-analyst) -- extra vtable slot, no-op
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136c04 (re-analyst) -- extra vtable slot, no-op
 void ComboControl::PreDraw() {}
 
-// ASM-verified: 2026-05-20 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,
 // center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the extra-vtable slot +0x40
 // no-args form; port wires the body inside the base Draw(hudScale,layerMask) override
 // since no port-side caller hits the +0x40 slot.

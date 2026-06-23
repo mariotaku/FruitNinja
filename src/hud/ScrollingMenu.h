@@ -110,7 +110,7 @@ public:
     //   SetItemHeight vtable+0x54 -> +0x9c (m_Width)   -- item row height
     // Port field names (m_Width/m_Height/m_ItemHeight) are name-swapped vs binary semantics;
     // preserved to avoid mangled-symbol drift on the getter/setter method names.
-    // ASM-verified: 2026-06-06 binary @ 0x001479a0 (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
+    // ASM-verified: 2026-06-06 v1.6.1 binary @ 0x001479a0 (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
     void SetWidth(float w);
     void SetHeight(float h)     { m_Height = h; }
     // SetItemHeight @ 0x001479d4: vtable+0x54, writes +0x9c (port: m_Width -- field-name swap).

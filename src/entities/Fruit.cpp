@@ -106,7 +106,7 @@ static float s_FruitZCounter = -500.0f;
 static Colour g_FruitTint1(128, 128, 255, 128);  // DAT_0017a678
 // DAT_0017a670: copy-ctor from BLUE singleton (DAT_0017a674 -> GOT off 0x7a5c
 // == BLUE created in _GLOBAL__I_Colour_cpp @ 0x00184068).
-// ASM-verified: 2026-05-20 binary @ 0x0017a512..0x0017a51c (re-analyst).
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0017a512..0x0017a51c (re-analyst).
 static Colour g_FruitTint2(0, 0, 255, 255);      // DAT_0017a670: blue
 
 // Binary constants for fruit slicing.
@@ -149,7 +149,7 @@ static const float kSplatScaleBoost  = 1.5f;     // *(GOT+DAT_001774b4) @ 0x001F
 // The old port used FromAxisAngle(Vec3(1,0,0), RandRange(pi)) which locked
 // every fruit's initial spin to the X axis — visible as all fruits starting
 // level/upright instead of at varied tilts.
-// RNG source: binary uses the WaveManager-owned PRNG (ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)).
+// RNG source: binary uses the WaveManager-owned PRNG (ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00176708 (re-analyst)).
 static Quaternion RandomStartAngle() {
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     float ax = rng.RandF(2.0f) - 1.0f;   // [-1, 1]
@@ -215,9 +215,9 @@ Fruit::~Fruit() {
     // Model released by SmartPtr destructor
 }
 
-// ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
-// ASM-verified: 2026-05-20 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
-// ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst) -- RNG source, field writes, flags bit-op.
+// ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x00176708 (asm-inspector)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
+// ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00176708 (re-analyst) -- RNG source, field writes, flags bit-op.
 // ASM-verified-partial: 2026-05-27 binary @ 0x00176708 (asm-inspector) --
 //   power-fruit counter increment + non-arcade path verified;
 //   arcade pineapple-blitz dedup + power-fruit gate left as TODO.
@@ -245,8 +245,8 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_TimeScale = 1.0f;
     m_CollisionSize = 75;         // binary @ 0x00176708: str r3, [r0, #0x4b] = 0x4B
     m_VestigialInitFour = 4;      // binary @ 0x00176708: write-only dead field
-    // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)
-    // ASM-verified: 2026-05-27 binary @ 0x0017690a (re-analyst)
+    // ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00176708 (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x0017690a (re-analyst)
     // orr r1,r1,#0x2 ; bfc r1,#0x4,#0x1
     flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
 
@@ -272,7 +272,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     // Random rotation velocity (matches binary Fruit::Init @ 0x00176708):
     // one triple of random values, stored IDENTICALLY into both m_RotVel1
     // and m_RotVel2 — the two halves tumble in sync.
-    // RNG source: binary uses WaveManager-owned PRNG (ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)).
+    // RNG source: binary uses WaveManager-owned PRNG (ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00176708 (re-analyst)).
     {
         Math::Random& rng = WaveManager::GetInstance()->GetRandom();
         m_RotVel1 = Vec3(rng.RandF(11.0f) - 5.5f,
@@ -306,7 +306,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         const FruitInfoData* info = FruitInfo_Get(fruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
-        m_VisualScale = scale;  // ASM-verified: 2026-05-18 binary @ 0x00176290 (re-analyst); SetFruitType writes 0xAC/B0/B4
+        m_VisualScale = scale;  // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00176290 (re-analyst); SetFruitType writes 0xAC/B0/B4
 
         // Collision sphere (SetFruitType @ 0x0017621c, verified
         // 2026-04-15 from disassembly).
@@ -325,7 +325,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         cs->radius = radius;
     }
 
-    // ASM-verified: 2026-05-27 binary @ 0x00176754..0x0017683e (re-analyst).
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00176754..0x0017683e (re-analyst).
     // Arcade-only (gameMode==2, m_GameDt<1.0) duplicate-pineapple + power-fruit
     // spam gate. Runs BEFORE the g_PowerFruitCount increment so the kill branch
     // doesn't need an undo-decrement.
@@ -363,7 +363,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         }
     }
 
-    // ASM-verified: 2026-05-27 binary @ 0x001768a8..0x001768b8 (asm-inspector).
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001768a8..0x001768b8 (asm-inspector).
     // Increment global active-power-fruit counter for power-fruits. Pairs with
     // KillFruit's natural-expiry decrement.
     const FruitInfoData* spawnInfo = FruitInfo_Get(m_FruitType);
@@ -371,13 +371,13 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         ++g_PowerFruitCount;
     }
 
-    // Defunct: online-MP -- no-op stub; binary @ 0x00176708 +0x1b8
+    // Defunct: online-MP -- no-op stub; v1.6.1 binary @ 0x00176708 +0x1b8
     // Binary: BOMB_PINEAPPLE count decrement for online multiplayer sync packet.
     // Dead on this platform -- P2P online MP was removed.
 
 }
 
-// ASM-verified: 2026-05-27 binary @ 0x00175a64 (re-analyst)
+// ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00175a64 (re-analyst)
 // Binary semantics: cache pos into m_SecondPos, clamp negative delay to
 // 0.125, set m_SpawnDelay. NO flags write, NO m_ScaleAnim write,
 // NO s_FruitThrowSfxFired reset -- those belong in Init.
@@ -385,7 +385,7 @@ void Fruit::Chuck(float delay) {
     m_SecondPos = pos;
     if (delay < 0.0f) delay = 0.125f;
     m_SpawnDelay = delay;
-    // ASM-verified: 2026-05-27 binary @ 0x00175ab2..0x00175af2 (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00175ab2..0x00175af2 (re-analyst)
     // Power-fruit cancel-if-thrown-too-late: when this fruit carries a non-freeze
     // power-up and the wave will end within 8s of when its delay elapses, abort
     // (mark dead, decrement g_PowerFruitCount).
@@ -409,7 +409,7 @@ void Fruit::Chuck(float delay) {
     SuperFruitControl::SuperFruitThrown(this);
 }
 
-// ASM-verified: 2026-06-15T00:00Z binary @ 0x001df828 (asm-inspector)
+// ASM-verified: 2026-06-15T00:00Z v1.6.1 binary @ 0x001df828 (asm-inspector)
 // binary @0x001df828 -- m_TimeScale(0x98) applied to integration dt; dtNorm = dtScaled*60 (DAT_1dfb90=1/60)
 void Fruit::Update(float dt) {
     // binary @0x001df828: dtScaled = dt * m_TimeScale(0x98); all integration uses dtScaled.
@@ -739,7 +739,7 @@ void Fruit::Update(float dt) {
 // fruits hard-bounce off ±192 X bounds instead of being soft-nudged.
 // Historically mislabelled "Zen" in port comments -- binary @ 0x00175066
 // checks gameMode == 2 = ARCADE.
-// ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175066 (re-analyst)
 static bool IsArcadeStrictBounceActive() {
     return (SlashEntity::s_ModPowerMask & 0x20u) != 0;
 }
@@ -765,7 +765,7 @@ static bool IsArcadeStrictBounceActive() {
 // accelTerm -- accumulates per-frame, equilibrium ~200 against the
 // 0.9 damping factor).
 //
-// ASM-verified: 2026-05-09 binary @ 0x0017501c..0x00175198 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0017501c..0x00175198 (asm-inspector)
 void Fruit::PostUpdate(float dt) {
     static const float ROT_AXIS_DAMPING = 0.9f;    // DAT_0017519c
     static const float BOUND_X_LO = -192.0f;       // DAT_001751a0
@@ -785,7 +785,7 @@ void Fruit::PostUpdate(float dt) {
 
     if (m_Gravity.x == 0.0f) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
-        // ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst) — gate is
+        // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175066 (re-analyst) — gate is
         // gameMode == ARCADE (literal cmp #0x2) plus s_ModPowerMask bit 0x20.
         const bool arcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
         const bool strictBounce = arcade && IsArcadeStrictBounceActive();
@@ -842,7 +842,7 @@ static void DrawOneModel(Mortar::Model* model,
 }
 
 void Fruit::Draw(Renderer& r) {
-    // ASM-verified: 2026-05-27 binary @ 0x00179216 (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00179216 (re-analyst)
     // Binary resets the throw-fruit SFX per-frame flag at Draw entry,
     // not per-launch in Chuck. This means only one fruit per frame can
     // play the SFX, but the flag re-arms on the next frame.
@@ -853,7 +853,7 @@ void Fruit::Draw(Renderer& r) {
     const FruitModelInfo* fmi = GetFruitModelInfo(m_FruitType);
     if (!fmi || !fmi->m_Whole.IsValid()) return;
 
-    // ASM-verified: 2026-05-27 binary @ 0x001791f4 (re-analyst).
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001791f4 (re-analyst).
     // Binary Fruit::Draw uses m_VisualScale (+0x28) only for the model scale;
     // m_MenuGrowFade is NOT a model-scale multiplier. It is consumed exclusively
     // by Fruit::AddShadow for the whole<->halves shadow crossfade during slicing.
@@ -917,7 +917,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
                 if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Arcade: tracking only, no life loss, no MissControl spawn.
-                    // ASM-verified: 2026-05-20 binary @ 0x00176bbe..0x00176c00 (re-analyst)
+                    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00176bbe..0x00176c00 (re-analyst)
                     // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
                     // m_DropsKey is the same per-fruit key used by the score path (line ~904), but
                     // here trackSession=false. Per-fruit AddToTotal is gated on info != null.
@@ -941,7 +941,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                         if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
                         game_work.missCount++;
                         if (game_work.missCount > 2) {
-                            // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
+                            // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00176c84 -- combo reset only inside game-over branch
                             g_ComboCount  = 0;
                             g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
                             FN::GameOver(-1, -1.0f, -1);
@@ -956,7 +956,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
     // 1. Clear owner's back-pointer (owner+0x14C = m_pTrackedFruit) if it still points at us.
     //    Binary: "puVar7=*(this+0x160); if(puVar7 && puVar7[0x53]==this){ puVar7[0x53]=0; }"
     //    owner+0x14C == MenuButton::m_pTrackedFruit (MenuButton.p_pad+0x110 = 0x14C in MenuButton).
-    // ASM-verified: 2026-05-03 binary @ 0x00176c8e..0x00176cea (asm-inspector)
+    // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00176c8e..0x00176cea (asm-inspector)
     if (m_pOwner) {
         // owner+0x14C stores the tracked-fruit pointer. On ARM32 puVar7[0x53] = *(puVar7 + 0x14C).
         Fruit** ownerSlot = reinterpret_cast<Fruit**>(
@@ -1013,7 +1013,7 @@ static const float SCALE_MARGIN_MULT   =   50.0f; // DAT_00175564
 static const float WARP_THRESH_RIGHT   =  360.0f; // DAT_00175568
 static const float WARP_THRESH_LEFT    = -360.0f; // DAT_0017556c
 
-// ASM-verified: 2026-04-28T00:00 binary @ 0x00175218 (asm-inspector)
+// ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x00175218 (asm-inspector)
 bool Fruit::CheckHasGoneOffscreen() {
     const float margin = SCALE_MARGIN_MULT * scale.y;
 
@@ -1141,12 +1141,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     const bool isSpecial  = (info->m_Score == 0x32);
 
-    // ASM-verified: 2026-04-29T00:00Z binary @ 0x001780f0 (asm-inspector)
+    // ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001780f0 (asm-inspector)
     // Critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8).
     // All gates must pass; on success roll Rand32(reroll) -- 0 == hit.
     m_bCritical = 0;
 
-    // ASM-verified: 2026-05-20 binary @ 0x00178154/0x001781d4 (re-analyst).
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00178154/0x001781d4 (re-analyst).
     // kCritScoreBound and kCritResetBase are GOT-indirect int32 globals.
     // DAT_001784fc -> GOT[0x7674] -> *0x001f3e34 = 5
     // DAT_00178504 -> GOT[0x77c8] -> *0x001f3e38 = 30
@@ -1157,7 +1157,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
     const bool canCritFruit = info->m_bScorable;
 
-    // ASM-verified: 2026-05-20 binary @ 0x001780f0 (re-analyst).
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001780f0 (re-analyst).
     // Critical-hit ladder gates on game_work fields at +0x05 (bM_bPaused)
     // and +0x10 (m_BombHitTimer) -- the same "non-interactive cinematic" pair used
     // by GameOver, bomb-hit, level-transition. Previously mislabelled as "frenzy"
@@ -1208,7 +1208,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceArcAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
-    // ASM-verified: 2026-05-18 binary @ 0x00178454..0x00178466 (re-analyst).
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00178454..0x00178466 (re-analyst).
     // Clear any prior trail/juice emitters before allocating the slice-
     // burst + persistent juice emitters below. Mirrors the pattern used
     // by Release/KillFruit so special-fruit trails (from
@@ -1252,7 +1252,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
     }
 
-    // ASM-verified: 2026-05-23 binary @ 0x001781e8..0x00178218 (re-analyst)
+    // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x001781e8..0x00178218 (re-analyst)
     {
         bool altPlayed = ItemManager::GetInstance()->PlayAlternateImpactSound(1.0f, 0.5f);
         if (!altPlayed && info->m_pSounds && info->m_SoundCount > 0) {
@@ -1315,7 +1315,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             && !m_bNoPowerUp
             && (game_work.bM_bPaused == 0 || bombHitWindowGate)) {
         // Matches CollisionResponse score+save dispatch (binary @ 0x001de40c, inside 0x001dd500).
-        // ASM-verified: 2026-05-10 binary @ 0x001dd500 (re-analyst).
+        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x001dd500 (re-analyst).
         // Formula:
         //   score = info->m_Score                               // FRUIT_INFO+0x314
         //   if (critical) score += 5                            // CRITICAL_SCORE @ 0x002d8d48
@@ -1355,7 +1355,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                 }
             }
         }
-        // ASM-verified: 2026-05-20 binary @ 0x00178b40..0x00178c34 (re-analyst)
+        // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00178b40..0x00178c34 (re-analyst)
         // Arcade-mode-only (NOT Zen as a prior TODO claimed):
         //   AddToSpeedLossTime(0.05f, 0)             -- SpeedControl HUD tick refresh.
         //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
@@ -1375,10 +1375,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             }
         }
 
-        // ASM-verified: 2026-05-22 binary @ 0x001dd500 ~+0x360 (re-analyst).
+        // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x001dd500 ~+0x360 (re-analyst).
         // Powerup-fruit slice activates the modifier polymorphism chain. Without
         // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
-        // ASM-verified: 2026-05-22 binary @ 0x001dd500 (re-analyst).
+        // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x001dd500 (re-analyst).
         // Powerup-fruit slice fires either during normal gameplay (bM_bPaused==0) OR
         // inside the bomb-hit cinematic window (gameMode in {2,3} = timed-game modes
         // AND m_GameDt in (-0.1f, 0.95f)). Binary field: gameMode (+0x04) for window,
@@ -1557,7 +1557,7 @@ void Fruit::Slice() {
         }
     }
 
-    // ASM-verified: 2026-05-23 binary @ 0x001770e0 (re-analyst)
+    // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x001770e0 (re-analyst)
     if (splatCount > 0 && game_work.mGameSound) {
         char cleanSliceBuf[16];
         uint32_t r = Math::g_Random.Rand32(3);
@@ -1780,7 +1780,7 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, int sliceDirFlag) {
 //   WaveManager's Random instance; port substitutes rand() since this
 //   only affects display orientation, not gameplay.
 void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
-    // ASM-verified: 2026-05-20 binary @ 0x001757f4 — RotateFacingUp uses Math::g_Random
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001757f4 — RotateFacingUp uses Math::g_Random
     float r    = Math::g_Random.RandF(2.0f);
     float sign = (Math::g_Random.Rand32(2) == 0) ? 1.0f : -1.0f;
     float magnitude = sign * (2.0f + r);
@@ -2144,7 +2144,7 @@ int Fruit::RandomFruit(bool includeOnSide) {
     return (int)rng->Rand32((uint32_t)(cnt - 1));
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00175928 (re-analyst).
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175928 (re-analyst).
 // Second param is a MODE-SELECTOR, NOT "checkBombs" as the name suggested.
 //   byPlayerMode==false: counts INACTIVE fruits (ignores playerIdx).
 //   byPlayerMode==true : counts fruits where m_PlayerIdx == playerIdx
@@ -2164,7 +2164,7 @@ int Fruit::GetNumActiveForPlayer(int playerIdx, bool byPlayerMode) {
     return count;
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x00176d14 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00176d14 (re-analyst)
 void Fruit::ClearUnspawned(bool clearAll) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -2180,7 +2180,7 @@ void Fruit::ClearUnspawned(bool clearAll) {
 }
 
 // Matches Fruit::Disable (binary @ 0x00126374): one-byte store of 1 to +0x3D.
-// ASM-verified: 2026-05-03 binary @ 0x00126374 (asm-inspector)
+// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00126374 (asm-inspector)
 void Fruit::Disable(Fruit* f) {
     f->m_bNoPowerUp = 1;
 }
@@ -2316,7 +2316,7 @@ const ::FruitInfo* Fruit::FruitInfo(long type) {
 // Counter starts at -500, decrements by 100 per call, resets to -500 when
 // it falls below -2499. DATs: step=100 (0x00169108), lower=-2499 (0x0016910c),
 // reset=-500 (0x00169110).
-// ASM-verified: 2026-05-23 binary @ 0x001690cc (re-analyst)
+// ASM-verified: 2026-05-23 v1.6.1 binary @ 0x001690cc (re-analyst)
 float Fruit::GetFruitZPosition() {
     s_FruitZCounter -= 100.0f;
     if (s_FruitZCounter < -2499.0f) {
@@ -2328,7 +2328,7 @@ float Fruit::GetFruitZPosition() {
 // Binary @ 0x0016911c — move sliced fruit to back of z-order.
 // Formula from disassembly (VNMLS): *m_ZPosition = (500 + *m_ZPosition)*0.5 - 2600
 // DATs: addend=500 (0x0016913c), subtrahend=2600 (0x00169140), half=0.5 (vmov literal).
-// ASM-verified: 2026-05-23 binary @ 0x0016911c (re-analyst)
+// ASM-verified: 2026-05-23 v1.6.1 binary @ 0x0016911c (re-analyst)
 void Fruit::MoveFruitZPositionToBack(Fruit* f) {
     f->m_ZPosition = (500.0f + f->m_ZPosition) * 0.5f - 2600.0f;
 }
@@ -2390,7 +2390,7 @@ void Fruit::EnableCollision(bool enable) {
 // Binary @ 0x00175b78
 void Fruit::SetForPlayer(int playerIdx) {
     m_PlayerIdx = (uint32_t)playerIdx;
-    // Defunct: online-mp — P2 collision radius *= 0.66; binary @ 0x00175b78
+    // Defunct: online-mp — P2 collision radius *= 0.66; v1.6.1 binary @ 0x00175b78
     // Mortar::NetworkManager::GetInstance().IsOnlineMultiplayer() is always false in port.
     if (Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer()) {
         if (playerIdx == 1 && m_Col) {
@@ -2448,7 +2448,7 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const FruitInfoData* chosen = FruitInfo_Get(ft);
     if (!chosen || chosen->m_FactCount <= 0) return nullptr;
 
-    // ASM-verified: 2026-05-20 binary @ 0x00175c8c..0x00175cd4 (re-analyst)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175c8c..0x00175cd4 (re-analyst)
     // Fact-tracking AddToTotal pair drives deterministic fact rotation (NOT Rand32):
     // per-fruit `<Name>_facts` count modulo m_FactCount picks the index.
     // Both calls use trackSession=true, unlockAchievement=true.
@@ -2559,7 +2559,7 @@ static bool Fruit_IsSameScreenMultiplayer() {
     return false;
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00175ea0 (re-analyst).
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175ea0 (re-analyst).
 // SSM Player 2 swaps shadow-offset axes; offset rotates 90 deg and the
 // sign follows the fruit's screen-half (pos.x < 0 -> negative).
 void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {

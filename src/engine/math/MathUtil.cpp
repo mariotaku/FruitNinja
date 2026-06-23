@@ -26,20 +26,20 @@ float CosIdx(unsigned short idx) {
 }
 #endif
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d98 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194d98 (asm-inspector)
 // SinIdx/CosIdx with 100000.0f (=0x47C35000) fallback when cos==0.
 float TanIdx(unsigned short idx) {
     float c = CosIdx(idx);
     return (c == 0.0f) ? 100000.0f : SinIdx(idx) / c;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194dcc (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194dcc (asm-inspector)
 // Binary body is a no-op stub (4-byte body: movs r0,#0; bx lr); no callers. Ported faithfully.
 unsigned short AsinIdx(float /*x*/) {
     return 0; // matches binary stub @ 0x00194dcc
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194dd0 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194dd0 (asm-inspector)
 // Binary body is a no-op stub (4-byte body: movs r0,#0; bx lr); no callers. Ported faithfully.
 unsigned short AcosIdx(float /*x*/) {
     return 0; // matches binary stub @ 0x00194dd0
@@ -60,7 +60,7 @@ short Atan2Idx(float y, float x) {
 }
 #endif
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00195254 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00195254 (asm-inspector)
 // Binary widens to f64 then vsqrt.f64 + narrow back; port stays in f32 with
 // fsqrts. Output identical for all valid inputs (hardware sqrt correctly
 // rounded in both precisions). NaN fallback to libc in both.
@@ -68,22 +68,22 @@ float Sqrt(float x) {
     return sqrtf(x);
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x0019521c (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x0019521c (asm-inspector)
 void SqrtAsyncSet(float x) {
     g_sqrtAsyncResult = sqrtf(x);
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194cf8 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194cf8 (asm-inspector)
 float SqrtAsyncGet() {
     return g_sqrtAsyncResult;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d14 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194d14 (asm-inspector)
 void DivAsyncSet(float a, float b) {
     g_divAsyncResult = a / b;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d34 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x00194d34 (asm-inspector)
 float DivAsyncGet() {
     return g_divAsyncResult;
 }

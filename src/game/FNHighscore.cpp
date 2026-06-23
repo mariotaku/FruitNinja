@@ -36,7 +36,7 @@ bool FNHighscore::IsCurrentUser() const
     Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
     int provider = nm->GetPreferredNetworkProvider();
     if (provider == 1) {
-        // Defunct: online leaderboard -- no-op stub; binary @ 0x00137034
+        // Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x00137034
         // LastLoggedInUser() returns nullptr in the defunct stub -> return false.
         return false;
     }

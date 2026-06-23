@@ -23,10 +23,10 @@ public:
     int  m_field18;    // +0x18 -- init 0
     // TODO: v1.6.1 0x00158dc0 (StartGamePacket::StartGamePacket) -- confirm +0x18 role
 
-    // Defunct: P2P MP game-start packet -- no-op stub; binary @ 0x157b20 (id=103 / case 0x67)
+    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=103 / case 0x67)
     StartGamePacket();
 
-    // Defunct: P2P MP game-start packet -- no-op stub; binary @ 0x157b20 (id=103 / case 0x67)
+    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=103 / case 0x67)
     explicit StartGamePacket(int flags);
 
     virtual ~StartGamePacket() {}
