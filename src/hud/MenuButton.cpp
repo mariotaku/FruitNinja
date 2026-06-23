@@ -219,6 +219,18 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
 
 // Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pTrackedFruit.
 void MenuButton::CreateFruit() {
+    // v1.6.1 MenuButton::CreateFruit @0x0019b608 -- guard branch @0x0019b910:
+    //   if (m_FruitType < 0 || m_pTrackedFruit != nullptr): recompute m_RestScale only, set tracked, return.
+    if (m_FruitType < 0 || m_pTrackedFruit != nullptr) {
+        if (!m_bHasHitArea) {                                      // ldrb [this,#0x148]
+            m_RestScale.x = (float)(m_Texture->GetWidth()  + 1);  // m_Texture=+0x74; w/h from vtable
+            m_RestScale.y = (float)(m_Texture->GetHeight() + 1);
+            // m_RestScale.z unchanged
+        }
+        m_pTrackedFruit = static_cast<Fruit*>(m_pEntity);         // tail @0x0019b95c
+        return;
+    }
+
     Game* game = Game::GetInstance();
     if (!game || !game->actorManager) return;
 

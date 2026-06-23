@@ -860,24 +860,6 @@ void MainScreen::CreatePlayDojo() {
         if (game_work.m_TutorialControl)
             game_work.m_TutorialControl->ResetTutePos(pPlayButton);
 
-    } else if (pPlayButton->m_pEntity == nullptr) {
-        // Binary CreateButtons @0x001961f8: when button exists but fruit entity is gone,
-        // re-spawn the fruit so the button is interactive again after menu re-entry.
-        pPlayButton->CreateFruit();
-        pPlayButton->m_GrowInTimer = 0.25f;
-        // CreateFruit resets m_RestScale to entity->scale*200 (fresh base). Re-apply the
-        // same texture-dimension override as first-creation so the respawned button is the
-        // same size. The TODO 0x0014b782 (whether texture-dim is binary-correct) stays
-        // deferred; this fix only makes respawn == first-creation size.
-        {
-            Mortar::SmartPtr<Mortar::Texture> texNewGame =
-                Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
-            if (texNewGame.IsValid()) {
-                pPlayButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
-                pPlayButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
-                pPlayButton->m_RestScale.z = 1.0f;
-            }
-        }
     }
 
     if (pDojoButton == nullptr) {
@@ -901,25 +883,6 @@ void MainScreen::CreatePlayDojo() {
         pDojoButton->m_GrowInTimer  = 0.25f;
         game_work.mHud->AddControl(pDojoButton);
 
-    } else if (pDojoButton->m_pEntity == nullptr) {
-        // Port specific: binary's CreateButtons has no respawn branch (guards only on pX==nullptr);
-        // the port re-spawns the fruit on the surviving button here because the port's menu-fruit
-        // lifecycle clears m_pEntity on slice. Binary's exact re-spawn-on-return mechanism is
-        // unconfirmed (follow-up); this keeps the menu functional without compounding.
-        //
-        // CreateFruit resets m_RestScale to entity->scale*200 (fresh base). Apply the dojo
-        // 0.9x/1.05x tweak exactly ONCE to that fresh base -- identical to first-creation --
-        // so result is always base*1.05, never compounding across returns.
-        // Guard on m_pEntity so the tweak is skipped if CreateFruit fails (pool full); it will
-        // re-run next frame on the fresh base rather than accumulating on a stale value.
-        pDojoButton->CreateFruit();
-        pDojoButton->m_GrowInTimer = 0.25f;
-        if (pDojoButton->m_pEntity != nullptr) {
-            if (pDojoButton->m_pTrackedFruit) {
-                pDojoButton->m_pTrackedFruit->scale = pDojoButton->m_pTrackedFruit->scale * 0.9f;
-            }
-            pDojoButton->m_RestScale = pDojoButton->m_RestScale * 1.05f;
-        }
     }
 
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: quit-bomb recreated every frame
@@ -927,18 +890,6 @@ void MainScreen::CreatePlayDojo() {
     // into CreatePlayDojo per-frame path).
     if (pLeaderboardBtn == nullptr) {
         CreateQuitButton();
-    } else if (pLeaderboardBtn->m_pEntity == nullptr) {
-        pLeaderboardBtn->CreateFruit();
-        pLeaderboardBtn->m_GrowInTimer = 0.25f;
-        {
-            Mortar::SmartPtr<Mortar::Texture> texQuit =
-                Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
-            if (texQuit.IsValid()) {
-                pLeaderboardBtn->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
-                pLeaderboardBtn->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
-                pLeaderboardBtn->m_RestScale.z = 1.0f;
-            }
-        }
     }
 }
 
