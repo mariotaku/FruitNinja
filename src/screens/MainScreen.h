@@ -220,12 +220,6 @@ private:
     // float field instead. Functional behaviour of the f0 hold/settle/exit logic is identical.
     float m_MoreGamesF0;
 
-    // Global textures (not on struct; loaded in ctor and assigned to file-scope globals)
-    // s_blurTex/m_fruitTex/m_ninjaTex read directly in Draw.
-    Mortar::SmartPtr<Mortar::Texture> m_blurryBackingTex;   // blurry_backing.tex -> s_blurTex
-    Mortar::SmartPtr<Mortar::Texture> m_fruitTextTex;        // fruit_text.tex -> m_fruitTex
-    Mortar::SmartPtr<Mortar::Texture> m_ninjaTextTex;        // ninja_text.tex -> m_ninjaTex
-
     // Font SmartPtr for the BakedStringBox (binary manages this differently; port convenience).
     Mortar::SmartPtr<Mortar::Font> m_BakedStrSmart;
 

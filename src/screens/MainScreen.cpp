@@ -62,6 +62,12 @@ static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->GetTexId() : 0;
 }
 
+// File-scope globals mirroring the binary's GOT globals (s_blurTex/m_fruitTex/m_ninjaTex).
+// Loaded once in MainScreen ctor (unconditionally, cross-visible).
+static Mortar::SmartPtr<Mortar::Texture> s_blurTex;
+static Mortar::SmartPtr<Mortar::Texture> m_fruitTex;
+static Mortar::SmartPtr<Mortar::Texture> m_ninjaTex;
+
 // Button positions (verified from read_memory, docs/screens/main.md)
 static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, 0.0f);
 static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
@@ -112,15 +118,13 @@ MainScreen::MainScreen(Game& g)
     (void)g;
 #endif
 
-    // Load global textures (assigned to globals via GOT in original)
-#ifndef __bada__
-    m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
-    m_fruitTextTex     = Mortar::TextureManager::LoadLocalisedTexture("fruit_text.tex");
-    m_ninjaTextTex     = Mortar::TextureManager::LoadLocalisedTexture("ninja_text.tex");
+    // Load global textures (assigned to file-scope globals mirroring binary GOT globals).
+    s_blurTex  = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    m_fruitTex = Mortar::TextureManager::LoadLocalisedTexture("fruit_text.tex");
+    m_ninjaTex = Mortar::TextureManager::LoadLocalisedTexture("ninja_text.tex");
 
-    // m_TexFruitText mirrors m_fruitTextTex (fruit_text.tex at binary +0xE4)
-    m_TexFruitText = m_fruitTextTex;
-#endif // !defined(__bada__)
+    // m_TexFruitText mirrors m_fruitTex (fruit_text.tex at binary +0xE4)
+    m_TexFruitText = m_fruitTex;
 
     // Load slice_fruit parchment frame
     m_TexSliceFruit = Mortar::TextureManager::LoadLocalisedTexture("slice_fruit.tex");
@@ -193,14 +197,9 @@ MainScreen::MainScreen(Game& g)
     // Binary ctor @ 0x0014c430: calls ninja_text_tex->GetHeight() (vtable +0x18)
     // -> shifts right by 1 -> adds 160.0.
     // m_BounceY is the bounce POSITION; starts at top of screen and falls into place.
-    // m_ninjaTextTex is a host-only convenience member (#ifndef __bada__).
-#ifndef __bada__
-    const float ninjaH = m_ninjaTextTex.IsValid()
-                       ? (float)(m_ninjaTextTex->GetHeight() / 2)
+    const float ninjaH = m_ninjaTex.IsValid()
+                       ? (float)(m_ninjaTex->GetHeight() / 2)
                        : 0.0f;
-#else
-    const float ninjaH = 0.0f;
-#endif
     m_BounceY = ninjaH + 160.0f;
 }
 
@@ -578,29 +577,29 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
     mm.UploadModelViewOnly();
 }
 
-// Matches Draw at v1.6.1 MainScreen::Draw @0x001993ac (171 lines)
+// ASM-spec v1.6.1 MainScreen::Draw @0x001993ac: per-quad = tex->Set / WorldStack::Reset /
+//  MakeScale+matrix / GlobalTranslate44 / UploadModelViewOnly / DrawQuad(White) (shade tri =
+//  Mesh::DrawTriList,3) / tex->UnSet. Renderer is the cross-visible Mortar::Renderer
+//  (game->renderer, same path as ScoreControl::Draw). Textures s_blurTex/m_fruitTex/m_ninjaTex
+//  are file-scope statics (binary GOT globals), not struct members.
 // DIFFERS: binary signature is Draw(float*) at vtable slot 7 @0x001993ac;
 //   port uses Draw(Vec3&, int) for ergonomic param-passing.
-// Cross: whole-wrapped — Draw uses the port-only SDL renderer + convenience textures
-// that mirror binary file-scope globals s_blurTex/m_fruitTex/m_ninjaTex. Restoring
-// asm-verify coverage needs those textures moved to file-scope globals + a cross render
-// shim (TODO, larger refactor).
 void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
-#ifndef __bada__
 
     if (m_State == STATE_CAMERA_FADE) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
          m_State == STATE_DOJO_WAIT_C || m_State == STATE_DOJO_WAIT_D) &&
         m_Timer2 == 0.0f) return;
 
+    Game* game = Game::GetInstance();
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // 1+2. fruit_text guard (GOT+0x6FCC, binary: gate on m_TexFruitText/global s_fruitTex)
     if (m_TexFruitText.IsValid()) {
         // 1a. Background shade (blurry_backing.tex) — angled triangle
-        if (m_blurryBackingTex.IsValid()) {
-            m_blurryBackingTex->Set();
+        if (s_blurTex.IsValid()) {
+            s_blurTex->Set();
             SetupQuadMatrix(mm, hudScale, size.x, size.y, pos);
 
             static const uint32_t kShadeCol = 0x80000000u;
@@ -609,9 +608,9 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
                 {  3.5f,  1.0f,    0.0f,  0,0,1,  kShadeCol,  1.0f,      0.0078125f },
                 { -1.0f,  1.0f,    0.0f,  0,0,1,  kShadeCol,  0.065694f, 1.0f       },
             };
-            game.renderer.DrawTriList(shadeVerts, 3);
+            if (game) game->renderer.DrawTriList(shadeVerts, 3);
 
-            m_blurryBackingTex->UnSet();
+            s_blurTex->UnSet();
         }
 
         // 1b. fruit_text logo (m_TexFruitText) drawn at {m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ}
@@ -624,21 +623,21 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
             (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
             fruitTextDrawPos);
-        game.renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(m_DrawColour);
         m_TexFruitText->UnSet();
     }
 
     // 3. ninja_text drawn at {m_BounceVel, m_BounceY, m_field10C} (+0x104..+0x10C binary)
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
-    if (m_ninjaTextTex.IsValid()) {
+    if (m_ninjaTex.IsValid()) {
         Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_field10C);
-        m_ninjaTextTex->Set();
+        m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
-            (float)m_ninjaTextTex->GetWidth(), (float)m_ninjaTextTex->GetHeight(),
+            (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
             ninjaDrawPos);
-        game.renderer.DrawQuad(m_DrawColour);
-        m_ninjaTextTex->UnSet();
+        if (game) game->renderer.DrawQuad(m_DrawColour);
+        m_ninjaTex->UnSet();
     }
 
     // 4. Parchment frame (slice_fruit.tex) at m_LogoPos, then BakedStringBox on top.
@@ -647,7 +646,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexSliceFruit->GetWidth(), (float)m_TexSliceFruit->GetHeight(),
             m_LogoPos);
-        game.renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
     }
     if (m_pSliceInstrBox) {
@@ -670,10 +669,9 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         Vec3 csPos(0.0f, 7.0f, 0.0f);
         m_TexBc->Set();
         SetupQuadMatrix(mm, hudScale, scaleX, scaleY, csPos);
-        game.renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(m_DrawColour);
         m_TexBc->UnSet();
     }
-#endif // !defined(__bada__)
 }
 
 // ASM-verified: v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
@@ -1067,11 +1065,8 @@ void MainScreen::DrawPostEffects() {
 }
 
 // TODO: confirm v1.6.1 addr for MainScreen::DrawLoadingSymbol (stale ref was 0x0014D1F8, v1.5.x)
-// Cross: whole-wrapped — DrawLoadingSymbol uses the port-only SDL renderer + s_blurTex alias.
-// Restoring coverage needs the same file-scope global + cross render shim as Draw (TODO, larger refactor).
 void MainScreen::DrawLoadingSymbol(const float* hudScale) {
-#ifndef __bada__
-    if (!m_blurryBackingTex.IsValid()) return;
+    if (!s_blurTex.IsValid()) return;
 
     int idx   = (int)m_Field114 & 7;  // DAT_0014D4B8
     int phase = (7 - idx) & 7;
@@ -1129,7 +1124,7 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
     }
 
     MatrixManager& mm = MatrixManager::GetInstance();
-    m_blurryBackingTex->Set();
+    s_blurTex->Set();
 
     float scale = (*hudScale) * 0.0625f;  // DAT_0014D4C8
 
@@ -1150,12 +1145,10 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    game.renderer.DrawTriList(s_verts, 48);
+    Game* game = Game::GetInstance();
+    if (game) game->renderer.DrawTriList(s_verts, 48);
 
-    m_blurryBackingTex->UnSet();
-#else
-    (void)hudScale;
-#endif // !defined(__bada__)
+    s_blurTex->UnSet();
 }
 
 // Defunct: vtable PreDraw — no-op stub; binary @ 0x0014AC94
