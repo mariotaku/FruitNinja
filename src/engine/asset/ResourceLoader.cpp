@@ -116,7 +116,6 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize)
     Initialize(vr);
 }
 
-#if !defined(__bada__)
 // Binary @ 0x00255398 -- if (count != 0) { memcpy(dest, &m_Data[cursor], count); cursor += count; }
 // ASM-spec v1.6.1 ResourceLoader::ReadBytes @ 0x00255398:
 //   if(count==0)return; memcpy(dest, m_Data.begin()+m_ReadCursor, count); m_ReadCursor += count.
@@ -167,6 +166,5 @@ ResourceLoader* ResourceLoader::ReadSubResourceLookup()
     }
     return nullptr;
 }
-#endif // !defined(__bada__)
 
 } // namespace Mortar
