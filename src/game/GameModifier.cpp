@@ -55,13 +55,17 @@ void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
     }
 
     // 3) two cached StringHash powerup-name ids (guarded statics)
+    // ASM-spec v1.6.1 GameModifier::OnDeferComplete @0x00140890: the powers are
+    // "overtime" (+5s) and "freeze" (+50s) -- NOT "doubleTime"/"frenzy". The wrong
+    // literals queried non-existent powers, so a deferred mod (x2 uses deferPoints)
+    // got the wrong remaining-time clamp when a freeze banana overlapped.
     static uint32_t s_hashA = 0;
     static bool     s_initA = false;
-    if (!s_initA) { s_hashA = StringHash("doubleTime"); s_initA = true; }
+    if (!s_initA) { s_hashA = StringHash("overtime"); s_initA = true; }
 
     static uint32_t s_hashB = 0;
     static bool     s_initB = false;
-    if (!s_initB) { s_hashB = StringHash("frenzy");     s_initB = true; }
+    if (!s_initB) { s_hashB = StringHash("freeze");   s_initB = true; }
 
     float baseTime = game_work.m_SaveData ? game_work.m_SaveData->m_TimeRemainingSave : 0.0f;
     float bonusA = 0.0f;
