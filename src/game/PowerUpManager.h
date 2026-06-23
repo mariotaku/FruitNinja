@@ -17,7 +17,7 @@
 //   SetDefaults             0x00117a80
 //   ClearScoreMultipliers   0x0011a218
 //   Update                  0x001189b4  (wrapper: 0x000f3ccc)
-//   Reset                   0x00119b08
+//   Reset                   0x00119b08  (stale -- TODO: re-verify v1.6.1)
 //   ClearTimedPowers        0x00118904
 //   ActivatePower           0x001197c4
 //   ActivateScreenEffect    0x00119760
@@ -67,7 +67,7 @@ public:
     // @ 0x0011a218
     void ClearScoreMultipliers();
 
-    // @ 0x00119b08
+    // TODO: re-verify v1.6.1 Reset addr (0x00119b08 is stale -- that addr is _Rb_tree::_M_insert_unique)
     void Reset(bool fullReset);
 
     // @ 0x00118904

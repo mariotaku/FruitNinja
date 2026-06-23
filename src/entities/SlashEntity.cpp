@@ -2226,15 +2226,19 @@ void SlashEntity::SetModScales(
     g_ScaleFlag2 = loop   ? 1 : 0;
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x00117a80 / 0x00119b08 (re-analyst)
+// Port convenience folding ItemManager::SetEquippedItem(NULL) -> SetModScales(NULL,1,1,0,1,false,0,0)
+// from ItemManager::SetEquippedItem @0x00139ba0 v1.6.1.
+// There is NO binary SlashEntity::ResetModScales symbol; the false
+// ASM-verified marker at @0x00117a80/@0x00119b08 was a mis-RE
+// (those addrs are AchievementManager fns, not SlashEntity).
 void SlashEntity::ResetModScales() {
-    g_Scale1     = 1.0f;
-    g_Scale2     = 1.0f;
-    g_Scale3     = 1.0f;
-    g_Scale4     = 1.0f;
-    g_Scale5     = 1.0f;
-    g_ScaleFlag1 = 1;
-    g_ScaleFlag2 = 1;
+    g_Scale3     = 1.0f;  // length     (SetModScales param 1)
+    g_Scale1     = 1.0f;  // thickness  (SetModScales param 2)
+    g_Scale2     = 0.0f;  // endThickness (SetModScales param 3 = 0 unequip default)
+    g_Scale4     = 1.0f;  // pointScale (SetModScales param 4)
+    g_Scale5     = 0.0f;  // uvNormalLen (SetModScales param 7 = 0 unequip default)
+    g_ScaleFlag1 = 0;     // flipUD     (SetModScales param 5 = false)
+    g_ScaleFlag2 = 0;     // loop       (SetModScales param 6 = false)
 }
 
 // ColoursChanged v1.6.1 @ 0x1e76fc.

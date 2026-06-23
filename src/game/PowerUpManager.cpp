@@ -171,7 +171,7 @@ void PowerUpManager::Update(float dt) {
     m_WaveDtModPrev = m_WaveDtModCur;
 }
 
-// @ 0x00119b08
+// TODO: re-verify v1.6.1 Reset addr (0x00119b08 is stale -- that addr is _Rb_tree::_M_insert_unique)
 void PowerUpManager::Reset(bool fullReset) {
     m_HighestActiveProgress = 0.0f;
     m_StopClockAccum        = 0.0f;

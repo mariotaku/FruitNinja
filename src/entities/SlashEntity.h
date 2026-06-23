@@ -374,8 +374,9 @@ public:
 
     static void InitModColours();
 
-    // ResetModScales -- reset all 6 blade-mod scale fields to 1.0f.
-    // ASM-verified: 2026-05-18 binary @ 0x00117a80 / 0x00119b08 (re-analyst)
+    // ResetModScales -- port convenience: folds SetModScales(NULL,1,1,0,1,false,0,0)
+    // from ItemManager::SetEquippedItem @0x00139ba0 v1.6.1.
+    // No binary SlashEntity::ResetModScales symbol (prior marker was a mis-RE).
     static void ResetModScales();
 
     // Binary param order @0x1e60a8: (length, thickness, endThickness, pointScale, flipUD, loop, uvNormalLen)
