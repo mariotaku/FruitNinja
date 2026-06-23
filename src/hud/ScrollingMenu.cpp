@@ -568,7 +568,7 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 // item's first draw call. Fix the leak in ShopListItem to match binary.
 // ASM-verified: 2026-05-24 binary @ 0x0015af98 (re-analyst)
 // ---------------------------------------------------------------------------
-void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void ScrollingMenu::Draw(float* /*hudScaleRaw*/) {
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         world.Reset();

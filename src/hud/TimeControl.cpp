@@ -264,9 +264,9 @@ void TimeControl::Update(float dt) {
     pos.y = size.y * -2.0f * tiltMix + (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
-void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
+void TimeControl::Draw(float* hudScaleRaw) {
     // 0x001628d8
-    (void)layerMask;
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     Game* game = Game::GetInstance();
     if (!game) return;

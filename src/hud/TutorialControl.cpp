@@ -266,8 +266,8 @@ void TutorialControl::Update(float dt) {
 // m_bHidden is NOT a visibility gate; it selects the UV frame for the
 // arrow: 0 -> u=[0.0,0.5], 1 -> u=[0.5,1.0].
 // ===================================================================
-void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
-    if ((layerMask & m_LayerFlags) == 0) return;
+void TutorialControl::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     if (m_AnimTimer <= 0.0f) return;
     // NOTE: no early-out on m_bHidden -- it is a UV frame selector, not a guard.
 

@@ -217,7 +217,7 @@ void FruitFactPageControl::BeginDraw(float /*dt*/) {
 // DrawOrder  (Binary @ 0x00170810 -- no-op)
 // ---------------------------------------------------------------------------
 
-void FruitFactPageControl::DrawOrder(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void FruitFactPageControl::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/) {
     // Binary @ 0x00170810: bare BX LR (no-op).
 }
 

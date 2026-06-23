@@ -1137,7 +1137,7 @@ void ShopScreen::Update(float dt) {
 // early-return. The `layers` parameter is loaded but discarded. The port
 // replicates the actual guard exactly.
 // ---------------------------------------------------------------------------
-void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void ShopScreen::Draw(float* /*hudScaleRaw*/) {
     // Static dial_alpha lives at static_block+0x84 in the binary (BSS).
     // Port uses a function-local static — same lifetime (process lifetime).
     static float s_DialAlpha = 0.0f;  // static_block+0x84

@@ -221,7 +221,7 @@ void PowerUpShop::Reset() {
 // ============================================================
 // PreDraw @ 0x00155b58 (vtable slot 6) — identity pass-through
 // ============================================================
-void PowerUpShop::PreDraw(const Vec3& hudScale) {
+void PowerUpShop::PreDraw(float* hudScale) {
     // Binary @ 0x00155b58: returns param_1 unchanged (no-op).
     (void)hudScale;
 }
@@ -229,8 +229,8 @@ void PowerUpShop::PreDraw(const Vec3& hudScale) {
 // ============================================================
 // Draw @ 0x00155e08 (vtable slot 7)
 // ============================================================
-void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
+void PowerUpShop::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     // Binary @ 0x00155e08:
     // Step 1: scale + translate world matrix, upload.

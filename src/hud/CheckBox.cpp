@@ -66,8 +66,8 @@ void CheckBox::Release() {
 }
 
 // Binary @ 0x00134B20 -- vtable PreDraw slot; empty in binary (single `bx lr`), no-op is faithful.
-void CheckBox::PreDraw(const Vec3& hudScale) {
-    (void)hudScale;
+void CheckBox::PreDraw(float* hudScaleRaw) {
+    (void)hudScaleRaw;
 }
 
 // Binary @ 0x00134B24 — empty in binary
@@ -129,8 +129,8 @@ void CheckBox::Update(float dt) {
 // CheckBox in the binary does NOT override the inherited HUDControl3d::Draw;
 // the port's body is the engine-level draw with no per-control GL state
 // mutation. Depth state owned by GameDraw at the pass level.
-void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
+void CheckBox::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     Game* game = Game::GetInstance();
     if (!game) return;

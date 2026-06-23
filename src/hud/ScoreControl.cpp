@@ -403,7 +403,7 @@ void ScoreControl::Update(float dt) {
 }
 
 // Draw @ 0x001581d4 — alpha gate, delegates to HUDControl3d::Draw for +0x74 quad
-void ScoreControl::Draw(const Vec3& hudScale, int layerMask) {
+void ScoreControl::Draw(float* hudScaleRaw) {
     // Skip P1 in multiplayer
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
@@ -418,11 +418,11 @@ void ScoreControl::Draw(const Vec3& hudScale, int layerMask) {
     uint8_t alpha = (alphaF > 255.0f) ? 255 : (alphaF < 0.0f ? 0 : (uint8_t)alphaF);
     m_DrawColour.a = alpha;
 
-    HUDControl3d::Draw(hudScale, layerMask);
+    HUDControl3d::Draw(hudScaleRaw);
 }
 
 // PreDraw @ 0x00158e1c — main rendering (text, multiplier, highscore banner)
-void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
+void ScoreControl::PreDraw(float* /*hudScale*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 

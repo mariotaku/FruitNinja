@@ -74,7 +74,7 @@ public:
     void Release() override;
 
     // slot9: DrawOrder @ 0x1bfb18. Double-draw spin mirror for two-blade glow.
-    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // slot10: Update @ 0x1c0024. Fade in/out, pos tracking, SFX volume.
     void Update(float dt) override;

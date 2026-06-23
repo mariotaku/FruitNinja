@@ -90,7 +90,7 @@ public:
     void BeginDraw(float dt) override;
 
     // Binary @ 0x00170810 -- DrawOrder (no-op in binary)
-    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // Binary @ 0x001720dc -- returns 0xc (12)
     int GetType() override { return 0xc; }

@@ -107,10 +107,8 @@ public:
     // Matches ShopScreen::Update(float) @ 0x0015e1f4 (387 lines)
     void Update(float dt) override;
 
-    // Matches ShopScreen::Draw(float*) @ 0x0015dd50
-    // Binary param is actually a layerMask passed as float* (ARM calling convention),
-    // but the port prototype matches HUDControl3d::Draw.
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    // ShopScreen::Draw @ 0x0015dd50 (v1.6.1)
+    void Draw(float* hudScaleRaw) override;
 
     int GetType() override { return 1; }
 

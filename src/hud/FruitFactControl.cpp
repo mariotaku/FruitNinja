@@ -643,8 +643,7 @@ void FruitFactControl::UpdateLeaderboard(float dt) {
 // DrawOrder  (Binary @ 0x0013b95c, vtable slot 9)
 // ---------------------------------------------------------------------------
 
-void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
+void FruitFactControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask) {
 
     Game* game = Game::GetInstance();
     if (!game || !game_work.pFontMain.IsValid()) return;

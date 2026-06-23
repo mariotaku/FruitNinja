@@ -63,7 +63,7 @@ public:
     // ScrollingMenu::Draw @ 0x0015af98
     // Pure iterator: calls vtable+0x2C (Draw) on each item in m_Items.
     // No scissor/clip, no per-frame positioning (that is done by Update).
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // ScrollingMenu::AddItem @ 0x0015be54
     // Appends item to m_Items, updates width/height accumulators,

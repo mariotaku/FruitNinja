@@ -45,7 +45,7 @@ public:
     void Release() override;
     void Reset() override;
     void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
     int  GetType() override { return 1; }
 
     // Binary stores textures at GOT-relative static storage.

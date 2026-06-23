@@ -30,9 +30,9 @@ public:
     // Vtable overrides — match HUDControl vtable slot order.
     virtual void   Init()    override;                              // Binary @ 0x00134AE4 (no-op)
     virtual void   Release() override;                              // Binary @ 0x00134AE8 (no-op)
-    virtual void   PreDraw(const Vec3& hudScale) override;          // Binary @ 0x00134B20
+    virtual void   PreDraw(float* hudScaleRaw) override;            // Binary @ 0x00134B20
     virtual void   Update(float dt) override;                       // Binary @ 0x00134B28
-    virtual void   Draw(const Vec3& hudScale, int layerMask) override;  // Binary @ 0x00134E70
+    virtual void   Draw(float* hudScaleRaw) override;               // Binary @ 0x00134E70
     virtual int    GetType() override { return 5; }                  // Binary @ 0x001354D8
 
     // Non-virtual helpers

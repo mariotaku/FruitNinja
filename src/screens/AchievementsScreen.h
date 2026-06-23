@@ -40,7 +40,7 @@ public:
 
     // Defunct: AchievementsScreen -- no surviving class methods in binary
     // (only _GLOBAL__I_ static-init @ 0x0015d9e4) -- placeholder, no-op stub
-    void Draw(const Vec3& /*hudScale*/, int /*layerMask*/) override {}
+    void Draw(float* /*hudScaleRaw*/) override {}
 
     // Defunct: AchievementsScreen -- no surviving class methods in binary
     // (only _GLOBAL__I_ static-init @ 0x0015d9e4) -- placeholder, no-op stub

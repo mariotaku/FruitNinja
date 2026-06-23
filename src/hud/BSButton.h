@@ -95,11 +95,11 @@ public:
 
     // slot 6: PreDraw -- empty no-op override
     // Binary @ 0x15e468: bx lr
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
 
     // slot 7: Draw -- textured quad + label
     // Binary @ 0x15e60c
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // slot 10: Update -- touch hit-test + click fire
     // Binary @ 0x15e470

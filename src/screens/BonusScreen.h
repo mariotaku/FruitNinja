@@ -76,7 +76,7 @@ public:
     void Update(float dt) override;
 
     // vtable slot: Draw (binary @ 0x0013325C)
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // GetType -- returns 8 (TODO: confirm from binary)
     int GetType() override { return 8; }
@@ -85,9 +85,6 @@ public:
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
-    // Binary form of Draw — float* arg (port uses const Vec3&, int; both overloads present)
-    // STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
-    void Draw(float* mtx);
 
     // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
     float GetTimeFirstAward();

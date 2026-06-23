@@ -37,7 +37,7 @@ public:
     void  Release() override;
     void  Reset() override;
     void  Update(float dt) override;
-    void  Draw(const Vec3& hudScale, int layerMask) override;
+    void  Draw(float* hudScaleRaw) override;
     bool  SetToMultiplayerState() override;
     int   GetType() override { return 4; }
     void  Skip() override;

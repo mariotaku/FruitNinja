@@ -184,10 +184,10 @@ public:
     void Update(float dt) override;
 
     // vtable slot 8: PreDrawOrder (0x0014171c)
-    void PreDrawOrder(const Vec3& hudScale, int layerMask) override;
+    void PreDrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // vtable slot 9: DrawOrder (0x00141448)
-    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // vtable slot 3: Release -- cleanup (0x00185970)
     void Release() override;

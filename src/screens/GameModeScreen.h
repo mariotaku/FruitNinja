@@ -75,7 +75,7 @@ public:
     void Update(float dt) override;
     void UpdateSpecific(float dt);                   // Binary @ 0x00140498 — no-op (Update does all work); vtable slot not in ported base yet
     bool IsTransitionInFinished();                   // Binary @ 0x0013df94 — bare BX LR, returns false; vtable slot not in ported base yet
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
     int  GetType() override { return 1; }
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }

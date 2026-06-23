@@ -412,8 +412,7 @@ void PauseScreen::BeginDraw(float dt) {
 // alpha = clamp(m_Alpha * 1000.0, 0, 128); tint = (0,0,0,alpha)
 // scale = m_Alpha * 10000.0
 // -------------------------------------------------------------------------
-void PauseScreen::PreDraw(const Vec3& hudScale) {
-    (void)hudScale;
+void PauseScreen::PreDraw(float* /*hudScale*/) {
 
     if (m_Alpha <= 0.0f) return;
 
@@ -453,14 +452,14 @@ void PauseScreen::PreDraw(const Vec3& hudScale) {
 //   m_Alpha > 0 && !IsOnlineMultiplayer(): HUDControl3d::Draw (title texture quad).
 //   m_Alpha > 0 && m_PausedText: SetTranslation(pos, 1); Draw(0.0f, (1,1), 1).
 // -------------------------------------------------------------------------
-void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
+void PauseScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
     if (layerMask != 0x100) return;
 
     if (m_Alpha > 0.0f) {
         // TODO: v1.6.1 PauseScreen::DrawOrder @0x001a572c -- !IsOnlineMultiplayer() guard;
         //   binary skips HUDControl3d::Draw in online-MP mode. No online-MP in port;
         //   guard omitted until MP is ported.
-        HUDControl3d::Draw(hudScale, layerMask);
+        HUDControl3d::Draw(hudScaleRaw);
     }
 
     if (m_Alpha > 0.0f && m_PausedText) {

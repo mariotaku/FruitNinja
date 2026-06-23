@@ -582,10 +582,9 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
 //  Mesh::DrawTriList,3) / tex->UnSet. Renderer is the cross-visible Mortar::Renderer
 //  (game->renderer, same path as ScoreControl::Draw). Textures s_blurTex/m_fruitTex/m_ninjaTex
 //  are file-scope statics (binary GOT globals), not struct members.
-// DIFFERS: binary signature is Draw(float*) at vtable slot 7 @0x001993ac;
-//   port uses Draw(Vec3&, int) for ergonomic param-passing.
-void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
+// Binary signature: Draw(float*) at vtable slot 7 @0x001993ac (v1.6.1 MainScreen::Draw)
+void MainScreen::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     if (m_State == STATE_CAMERA_FADE) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
@@ -1151,9 +1150,8 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
     s_blurTex->UnSet();
 }
 
-// Defunct: vtable PreDraw — no-op stub; binary @ 0x0014AC94
-void* MainScreen::PreDraw(float* /*hudScale*/) {
-    return this;
+// Defunct: vtable PreDraw — no-op stub; v1.6.1 MainScreen @ 0x0014AC94
+void MainScreen::PreDraw(float* /*hudScale*/) {
 }
 
 // Defunct: NetworkManager::CancelNewsDisplay — no-op stub; binary @ 0x0014AFB8

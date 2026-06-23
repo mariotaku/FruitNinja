@@ -40,7 +40,7 @@ public:
     HUDControl3d();
 
     // vtable +0x1c: Draw — binary @ 0x0014428c
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // vtable +0x30: returns 1.
     int GetType() override { return 1; }
@@ -50,7 +50,7 @@ public:
 
     // Vtable overrides (all verified — see .cpp markers).
     void Release() override;                       // binary @ 0x00143fc4: bx lr
-    void PreDraw(const Vec3& hudScale) override;   // binary @ 0x00143fc8: bx lr
+    void PreDraw(float* hudScale) override;         // binary @ 0x00143fc8: bx lr
     void Update(float dt) override;                // binary @ 0x00143fcc: tail-calls base
 };
 

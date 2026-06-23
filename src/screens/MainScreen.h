@@ -56,13 +56,12 @@ public:
     void Init() override;                               // vtable slot 2 @ 0x0014AC80
     void Release() override;                            // vtable slot 3 @ 0x0014CD20
     void Reset() override;                              // vtable slot 4 @ 0x0014AC8C (no-op)
-    // Binary @ 0x0014AC94 — vtable slot 6, no-op stub; returns this.
-    // Defunct: vtable PreDraw — no-op stub matching binary's empty body; binary @ 0x0014AC94
-    void* PreDraw(float* hudScale);
+    // Binary @ 0x0014AC94 — vtable slot 6, no-op stub; binary @ 0x0014AC94
+    // Defunct: vtable PreDraw — no-op stub; v1.6.1 MainScreen @ 0x0014AC94
+    void PreDraw(float* hudScale) override;
     void Update(float dt) override;                     // vtable slot 10 @ 0x00196e1c
-    // Port-specific: binary signature is Draw(float*) at vtable slot 7 @0x001993ac (v1.6.1);
-    //   port uses Draw(Vec3&, int) for ergonomic param-passing.
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    // Binary signature: Draw(float*) at vtable slot 7 @0x001993ac (v1.6.1)
+    void Draw(float* hudScaleRaw) override;
     int GetType() override { return 1; }                // vtable slot 12 (base default)
 
     // UpdateScreenElements — vtable slot 15; v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
@@ -247,7 +246,7 @@ private:
     void CreateQuitButton();
     void RemoveButton(MenuButton*& btn);
 
-    // TODO: confirm v1.6.1 addr for DrawLoadingSymbol (stale ref was 0x0014D1F8, v1.5.x)
+    // v1.6.1 MainScreen::DrawLoadingSymbol @ 0x001154d4
     // 8-segment radial loading spinner.
     void DrawLoadingSymbol(const float* hudScale);
 

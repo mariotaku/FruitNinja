@@ -99,10 +99,10 @@ public:
     virtual void Release();
     virtual void Reset();
     virtual void BeginDraw(float dt) { (void)dt; }
-    virtual void PreDraw(const Vec3& hudScale) { (void)hudScale; }
-    virtual void Draw(const Vec3& hudScale, int layerMask) { (void)hudScale; (void)layerMask; }
-    virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
-    virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }
+    virtual void PreDraw(float* hudScale) { (void)hudScale; }
+    virtual void Draw(float* hudScale) { (void)hudScale; }
+    virtual void PreDrawOrder(float* hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
+    virtual void DrawOrder(float* hudScale, int layerMask) { Draw(hudScale); (void)layerMask; }
     virtual void Update(float dt);
     // Binary @ 0x00143fac — returns true if this control should be removed (m_Singular == 0).
     virtual bool SetToMultiplayerState();

@@ -189,10 +189,10 @@ public:
 
     // vtable overrides
     // PreDraw  binary @ 0x00189ae4  (slot +0x18)
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScaleRaw) override;
 
     // DrawOrder  binary @ 0x00189a58  (slot +0x24)
-    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // Update  binary @ 0x00189ed0  (slot +0x28)
     void Update(float dt) override;

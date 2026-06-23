@@ -81,10 +81,10 @@ public:
     void Release() override;
 
     // vtable slot 6 -- Binary @ 0x0015ffa8 (bx lr; no-op)
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
 
     // vtable slot 7 -- Binary @ 0x0016069c (~224 instructions; draws track+thumb quads + label)
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // vtable slot 10 -- Binary @ 0x00160090 (touch state machine)
     void Update(float dt) override;

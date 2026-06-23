@@ -88,7 +88,7 @@ void VerticalScroller::Release() {
 // ---------------------------------------------------------------------------
 // vtable slot 6 -- Binary @ 0x00167FD0 (empty bx lr; returns void)
 // Defunct: VerticalScroller -- no-op stub; binary @ 0x00167FD0
-void VerticalScroller::PreDraw(const Vec3& hudScale) {
+void VerticalScroller::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
@@ -96,9 +96,8 @@ void VerticalScroller::PreDraw(const Vec3& hudScale) {
 // vtable slot 7 -- Binary @ 0x00168454 (~224 instructions)
 // Renders scrollbar as 4 textured quads: vbar background, up-arrow, down-arrow, thumb.
 // Defunct: VerticalScroller -- no-op stub; binary @ 0x00168454
-void VerticalScroller::Draw(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
-    (void)layerMask;
+void VerticalScroller::Draw(float* hudScaleRaw) {
+    (void)hudScaleRaw;
     // Stub: binary draws vbar.tex background, arrow.tex at top+bottom, vslider.tex
     // thumb (if m_TotalRows >= m_TypeId). Port renders nothing -- widget is never
     // instantiated in-game. Binary draw math preserved in RE report for future

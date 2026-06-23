@@ -39,7 +39,7 @@ public:
 
     void Init() override;                                        // Binary @ 0x00180320
     void Update(float dt) override;                             // Binary @ 0x0017fa04
-    void DrawOrder(const Vec3& hudScale, int layerMask) override; // Binary @ 0x00180ef0
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;   // Binary @ 0x00180ef0
     void Release() override;                                    // Binary @ 0x0017fb44
 
     static void LoadContent();    // Binary @ 0x0017fa34

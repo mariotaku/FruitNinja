@@ -162,7 +162,7 @@ void MissControl::Reset() {
 // Binary's MissControl::PreDraw is a no-op (single bx lr in the original).
 // m_HudScale (+0x14) is initialised once in GameInit and not refreshed
 // per-frame; the Draw call uses the stored value directly.
-void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
+void MissControl::PreDraw(float* /*hudScale*/) {}
 
 // Binary @ 0x00150dfc -- vtable[16]. Defunct: same-screen MP player-index hook.
 // Defunct: same-screen MP player-index hook -- no-op stub; binary @ 0x00150dfc
@@ -732,7 +732,8 @@ void MissControl::Update(float dt) {
 //             drawPos.y -= 3.0f * pos.y    // Zen / MP: park off-screen
 //
 // binary @ 0x00151f60
-void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
+void MissControl::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bFlashing -- those are UV-pickers later in the function, not gates.

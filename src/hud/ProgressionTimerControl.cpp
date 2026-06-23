@@ -74,23 +74,22 @@ void ProgressionTimerControl::Reset() {
 // ---------------------------------------------------------------------------
 // vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged, no writes)
 // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157964
-void ProgressionTimerControl::PreDraw(const Vec3& hudScale) {
+void ProgressionTimerControl::PreDraw(float* hudScaleRaw) {
     // Binary @ 0x00157964
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
     //          binary; class fully compiled but no construction site exists.
-    (void)hudScale;
+    (void)hudScaleRaw;
 }
 
 // ---------------------------------------------------------------------------
 // vtable slot 7 -- Binary @ 0x001579f4
 // Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
 // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x001579f4
-void ProgressionTimerControl::Draw(const Vec3& hudScale, int layerMask) {
+void ProgressionTimerControl::Draw(float* hudScaleRaw) {
     // Binary @ 0x001579f4
     // Defunct: ProgressionTimerControl -- never instantiated in shipping
     //          binary; class fully compiled but no construction site exists.
-    (void)hudScale;
-    (void)layerMask;
+    (void)hudScaleRaw;
 }
 
 // ---------------------------------------------------------------------------

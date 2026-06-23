@@ -268,8 +268,8 @@ public:
     void Release() override;
     void Reset() override;
     void BeginDraw(float dt) override;
-    void PreDraw(const Vec3& hudScale) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void PreDraw(float* hudScale) override;
+    void Draw(float* hudScaleRaw) override;
     void Update(float dt) override;
     bool SetToMultiplayerState() override;
     int  GetType() override { return 5; }

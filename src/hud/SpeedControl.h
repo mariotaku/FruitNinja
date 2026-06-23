@@ -59,7 +59,7 @@ public:
     void Init() override;
     // Binary @ 0x00160CE4 -- PreDraw vtable slot. Binary body is `bx lr`
     // (empty no-op). All gauge transform work happens in Update/Draw.
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
     // Binary @ 0x00160CD8 -- Reset vtable slot. Binary body is `bx lr`
     // (empty no-op). Gauge state is reset by WaveManager recreating the
     // control, not by a per-frame Reset.
