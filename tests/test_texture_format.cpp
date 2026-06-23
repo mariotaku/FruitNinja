@@ -59,9 +59,10 @@ static void test_tex1_rgba8888_2x2()
         Mortar::TextureFileFormat::ReadTex1Format(kBuf, sizeof(kBuf));
 
     CHECK(d != 0);
-    CHECK(d->info.width  == 2);
-    CHECK(d->info.height == 2);
-    CHECK(d->info.dataSize == 16);
+    CHECK(d->info.rawWidth  == 2);
+    CHECK(d->info.rawHeight == 2);
+    CHECK(d->info.apparentWidth  == 2);
+    CHECK(d->info.apparentHeight == 2);
 
     // Verify the raw pixel pointer points into the buffer (not a copy).
     CHECK(d->pixels == (const void*)(kBuf + 12));
@@ -238,8 +239,8 @@ static void test_tex1_rgb888_1x1()
     Mortar::TextureSourceData* d =
         Mortar::TextureFileFormat::ReadTex1Format(kBuf, sizeof(kBuf));
     CHECK(d != 0);
-    CHECK(d->info.width  == 1);
-    CHECK(d->info.height == 1);
+    CHECK(d->info.rawWidth  == 1);
+    CHECK(d->info.rawHeight == 1);
 
     Mortar::TextureFileFormat::Tex1Data* t1 =
         static_cast<Mortar::TextureFileFormat::Tex1Data*>(d);

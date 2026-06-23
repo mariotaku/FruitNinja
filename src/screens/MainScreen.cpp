@@ -58,11 +58,9 @@ static const float PAUSE_VISIBILITY    = 0.01f;
 static const float SOUND_VOLUME_ON     = 0.5f;
 
 // Helper: get GLuint from Mortar::SmartPtr<Texture>
-#if !defined(__bada__)
 static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
-    return tex.IsValid() ? tex->m_TexId : 0;
+    return tex.IsValid() ? tex->GetTexId() : 0;
 }
-#endif
 
 // Button positions (verified from read_memory, docs/screens/main.md)
 static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, 0.0f);
@@ -195,12 +193,15 @@ MainScreen::MainScreen(Game& g)
     // Binary ctor @ 0x0014c430: calls ninja_text_tex->GetHeight() (vtable +0x18)
     // -> shifts right by 1 -> adds 160.0.
     // m_BounceY is the bounce POSITION; starts at top of screen and falls into place.
+    // m_ninjaTextTex is a host-only convenience member (#ifndef __bada__).
 #ifndef __bada__
     const float ninjaH = m_ninjaTextTex.IsValid()
-                       ? (float)(m_ninjaTextTex->m_Height / 2)
+                       ? (float)(m_ninjaTextTex->GetHeight() / 2)
                        : 0.0f;
+#else
+    const float ninjaH = 0.0f;
+#endif
     m_BounceY = ninjaH + 160.0f;
-#endif // !defined(__bada__)
 }
 
 MainScreen::~MainScreen() {
@@ -620,12 +621,8 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         m_TexFruitText->Set();
         Vec3 fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
-#if !defined(__bada__)
-            (float)m_TexFruitText->m_Width * FRUIT_TEXT_SCALE,
-            (float)m_TexFruitText->m_Height * FRUIT_TEXT_SCALE,
-#else
-            0.0f, 0.0f,
-#endif
+            (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
+            (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
             fruitTextDrawPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_TexFruitText->UnSet();
@@ -638,11 +635,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_field10C);
         m_ninjaTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
-#if !defined(__bada__)
-            (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
-#else
-            0.0f, 0.0f,
-#endif
+            (float)m_ninjaTextTex->GetWidth(), (float)m_ninjaTextTex->GetHeight(),
             ninjaDrawPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_ninjaTextTex->UnSet();
@@ -652,11 +645,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     if (m_TexSliceFruit.IsValid()) {
         m_TexSliceFruit->Set();
         SetupQuadMatrix(mm, hudScale,
-#if !defined(__bada__)
-            (float)m_TexSliceFruit->m_Width, (float)m_TexSliceFruit->m_Height,
-#else
-            0.0f, 0.0f,
-#endif
+            (float)m_TexSliceFruit->GetWidth(), (float)m_TexSliceFruit->GetHeight(),
             m_LogoPos);
         game.renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
@@ -674,13 +663,8 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // 6. m_TexBc (comming_soon overlay) — drawn when valid AND pPlayButton exists.
     if (m_TexBc.IsValid() && pPlayButton != NULL) {
-#if !defined(__bada__)
-        float csW = (float)m_TexBc->m_Width;
-        float csH = (float)m_TexBc->m_Height;
-#else
-        float csW = 0.0f;
-        float csH = 0.0f;
-#endif
+        float csW = (float)m_TexBc->GetWidth();
+        float csH = (float)m_TexBc->GetHeight();
         float scaleX = csW * 0.5f;
         float scaleY = csH * 0.5f * (csW > 0.0f ? (csH / csW) : 1.0f);
         Vec3 csPos(0.0f, 7.0f, 0.0f);
@@ -861,11 +845,9 @@ void MainScreen::CreatePlayDojo() {
         // TODO: 0x0014b782 -- RE whether play block truly overrides m_RestScale to texWidth+1
         //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
-#if !defined(__bada__)
-            pPlayButton->m_RestScale.x = (float)(texNewGame->m_Width  + 1);
-            pPlayButton->m_RestScale.y = (float)(texNewGame->m_Height + 1);
+            pPlayButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
+            pPlayButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
             pPlayButton->m_RestScale.z = 1.0f;
-#endif
         }
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
@@ -874,7 +856,7 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_HitInsetY  = -50.0f;
         pPlayButton->m_HitInsetX  = -50.0f;
 #if !defined(__bada__)
-        pPlayButton->m_AnimScale  = 0.5f;
+        pPlayButton->m_AnimScale  = 0.5f;   // port-compat only; v1.6.1 field not yet located
 #endif
         pPlayButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(pPlayButton);
@@ -895,11 +877,9 @@ void MainScreen::CreatePlayDojo() {
             Mortar::SmartPtr<Mortar::Texture> texNewGame =
                 Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
             if (texNewGame.IsValid()) {
-#if !defined(__bada__)
-                pPlayButton->m_RestScale.x = (float)(texNewGame->m_Width  + 1);
-                pPlayButton->m_RestScale.y = (float)(texNewGame->m_Height + 1);
+                pPlayButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
+                pPlayButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
                 pPlayButton->m_RestScale.z = 1.0f;
-#endif
             }
         }
     }
@@ -958,11 +938,9 @@ void MainScreen::CreatePlayDojo() {
             Mortar::SmartPtr<Mortar::Texture> texQuit =
                 Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
             if (texQuit.IsValid()) {
-#if !defined(__bada__)
-                pLeaderboardBtn->m_RestScale.x = (float)(texQuit->m_Width  + 1);
-                pLeaderboardBtn->m_RestScale.y = (float)(texQuit->m_Height + 1);
+                pLeaderboardBtn->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
+                pLeaderboardBtn->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
                 pLeaderboardBtn->m_RestScale.z = 1.0f;
-#endif
             }
         }
     }
@@ -984,11 +962,9 @@ void MainScreen::CreateQuitButton() {
     pLeaderboardBtn->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     if (texQuit.IsValid()) {
-#if !defined(__bada__)
-        pLeaderboardBtn->m_RestScale.x = (float)(texQuit->m_Width  + 1);
-        pLeaderboardBtn->m_RestScale.y = (float)(texQuit->m_Height + 1);
+        pLeaderboardBtn->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
+        pLeaderboardBtn->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
         pLeaderboardBtn->m_RestScale.z = 1.0f;
-#endif
     }
     game_work.mHud->AddControl(pLeaderboardBtn);
 }

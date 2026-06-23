@@ -452,9 +452,7 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
                                                  : GL_ONE_MINUS_SRC_ALPHA;
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, dstFactor);
-#if !defined(__bada__)
-            glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
-#endif
+            glBindTexture(GL_TEXTURE_2D, tex->GetTexId());
             if (Renderer* r = Renderer::GetInstance()) {
                 r->DrawTriList(verts.data(), (int)verts.size());
             }
@@ -1046,8 +1044,8 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
                     for (int ti2 = 0; ti2 < m_NumParticleTemplates; ++ti2) {
                         PSPParticleTemplate* tmpl2 = GetParticleTemplate(ti2);
                         if (tmpl2 && tmpl2->m_TextureIdx == (uint32_t)texSlot) {
-                            const float tw = (float)tex->m_Width;
-                            const float th = (float)tex->m_Height;
+                            const float tw = (float)tex->GetWidth();
+                            const float th = (float)tex->GetHeight();
                             if (th > 0.0f) tmpl2->m_AspectRatio = tw / th;
                             break;
                         }

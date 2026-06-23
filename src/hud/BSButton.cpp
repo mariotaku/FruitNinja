@@ -328,14 +328,10 @@ void BSButton::SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool updateBoun
 //   if (!m_Texture) return;
 //   m_ExtentX = texW(+0x24) * m_TextOffset.x;
 //   m_ExtentY = texH(+0x28) * m_TextOffset.y;
-// CROSS-BUILD: m_Width/m_Height are port-only fields (#if !defined(__bada__) per Texture.h:65).
-// On cross-build the extents stay 0 (cross-build is layout-only, not rendering).
 void BSButton::UpdateBoundsToTex() {
     if (!m_Texture2.IsValid()) return;
-#if !defined(__bada__)
-    m_ExtentX = (float)m_Texture2->m_Width  * m_TextOffset.x;
-    m_ExtentY = (float)m_Texture2->m_Height * m_TextOffset.y;
-#endif
+    m_ExtentX = (float)m_Texture2->GetWidth()  * m_TextOffset.x;
+    m_ExtentY = (float)m_Texture2->GetHeight() * m_TextOffset.y;
 }
 
 // BSButton::SetPosition

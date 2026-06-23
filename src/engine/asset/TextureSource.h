@@ -65,47 +65,47 @@ namespace TextureInfo {
 //   +0x00  PixelFormat (12B, channel-mapping opaque block)
 //   +0x0c  u8  numberFormat/type enum (NumberFormat_e)
 //   +0x0d  1B  pad
-//   +0x0e  u16 width     (ctor default=1)
-//   +0x10  u16 height    (ctor default=1)
-//   +0x12  u16 depth     (ctor default=1)
-//   +0x14  u16 arraySize (ctor default=1)
+//   +0x0e  u16 rawWidth     (ctor default=1)
+//   +0x10  u16 rawHeight    (ctor default=1)
+//   +0x12  u16 depth        (ctor default=1)
+//   +0x14  u16 levels/arraySize (ctor default=1)
 //   +0x16  2B  pad
-//   +0x18  u32 rowPitch/dataSize   (ctor default=1)
-//   +0x1c  u32 slicePitch/offset   (ctor default=1)
+//   +0x18  u32 apparentWidth   -- apparent pixel width; MissControl reads Texture+0x24 = this field
+//   +0x1c  u32 apparentHeight  -- apparent pixel height; Texture+0x28 = this field
 struct DataInfo {
     Mortar::PixelFormat pixelFormat; // +0x00
     uint8_t  numberFormat;           // +0x0c
     uint8_t  _pad0d;                 // +0x0d
-    uint16_t width;                  // +0x0e
-    uint16_t height;                 // +0x10
+    uint16_t rawWidth;               // +0x0e  (was: width)
+    uint16_t rawHeight;              // +0x10  (was: height)
     uint16_t depth;                  // +0x12
-    uint16_t arraySize;              // +0x14
+    uint16_t levels;                 // +0x14  (was: arraySize)
     uint16_t _pad16;                 // +0x16
-    uint32_t dataSize;               // +0x18
-    uint32_t slicePitch;             // +0x1c
+    uint32_t apparentWidth;          // +0x18  consumers read Texture+0x24 here
+    uint32_t apparentHeight;         // +0x1c  consumers read Texture+0x28 here
 
     // Binary ctor @0x0022630c
     DataInfo()
         : numberFormat(0)
         , _pad0d(0)
-        , width(1)
-        , height(1)
+        , rawWidth(1)
+        , rawHeight(1)
         , depth(1)
-        , arraySize(1)
+        , levels(1)
         , _pad16(0)
-        , dataSize(1)
-        , slicePitch(1)
+        , apparentWidth(1)
+        , apparentHeight(1)
     {}
 };
 
 #if defined(__bada__)
 namespace { struct _DataInfoSizeCheck {
     static_assert(sizeof(DataInfo) == 0x20, "TextureInfo::DataInfo size mismatch");
-    static_assert(offsetof(DataInfo, numberFormat) == 0x0c, "DataInfo::numberFormat offset");
-    static_assert(offsetof(DataInfo, width)        == 0x0e, "DataInfo::width offset");
-    static_assert(offsetof(DataInfo, height)       == 0x10, "DataInfo::height offset");
-    static_assert(offsetof(DataInfo, dataSize)     == 0x18, "DataInfo::dataSize offset");
-    static_assert(offsetof(DataInfo, slicePitch)   == 0x1c, "DataInfo::slicePitch offset");
+    static_assert(offsetof(DataInfo, numberFormat)   == 0x0c, "DataInfo::numberFormat offset");
+    static_assert(offsetof(DataInfo, rawWidth)       == 0x0e, "DataInfo::rawWidth offset");
+    static_assert(offsetof(DataInfo, rawHeight)      == 0x10, "DataInfo::rawHeight offset");
+    static_assert(offsetof(DataInfo, apparentWidth)  == 0x18, "DataInfo::apparentWidth offset");
+    static_assert(offsetof(DataInfo, apparentHeight) == 0x1c, "DataInfo::apparentHeight offset");
 }; }
 #endif
 

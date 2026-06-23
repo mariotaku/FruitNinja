@@ -10,7 +10,7 @@
 void Mortar::ReloadableTexture::Load(const char* filename) {
     Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture(filename);
     if (tex.IsValid()) {
-        m_Handle = tex->m_TexId;
+        m_Handle = tex->GetTexId();
     } else {
         m_Handle = 0;
     }

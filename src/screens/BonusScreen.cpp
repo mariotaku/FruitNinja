@@ -61,9 +61,7 @@ BonusScreen::BonusScreen()
         TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
     m_SecondaryTex = bgTex;
     if (bgTex.IsValid()) {
-#if !defined(__bada__)
-        size = Vec3((float)bgTex->m_Width, (float)bgTex->m_Height, 0.0f);
-#endif
+        size = Vec3((float)bgTex->GetWidth(), (float)bgTex->GetHeight(), 0.0f);
     }
 
     // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162ea4: preloads

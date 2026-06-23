@@ -318,8 +318,8 @@ void FruitFactZenPage::DrawOrder(const Vec3& /*hudScale*/, int /*layerMask*/) {
 
     // Scale to (width+1, height+1, 0). Binary reads m_Width (+0x24) / m_Height (+0x28),
     // adds 1, converts unsigned->float, builds Vec3(w, h, 0.0f), then multiplies by 1.0f.
-    Vec3 sz((float)(m_Texture->m_Width + 1),
-            (float)(m_Texture->m_Height + 1),
+    Vec3 sz((float)(m_Texture->GetWidth() + 1),
+            (float)(m_Texture->GetHeight() + 1),
             0.0f);                         // DAT_00181050 = 0.0f
     Vec3 scaled = sz * 1.0f;               // binary local_24 = 1.0f scalar multiply
     mm.GetWorldStack().Scale(scaled);

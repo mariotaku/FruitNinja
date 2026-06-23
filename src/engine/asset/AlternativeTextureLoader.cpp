@@ -41,13 +41,10 @@ SubstituteApparentSizeTextureSourceData::SubstituteApparentSizeTextureSourceData
         pixels     = innerData->pixels;
         pixelsSize = innerData->pixelsSize;
     }
-    // Override width/height with apparent values.
-    // Binary: *(this+0x1c) = apparentW; *(this+0x20) = apparentH;
-    // (DataInfo.width is at +0x0e of DataInfo, which is at +0x04 of *this in binary;
-    //  so width = *(this+0x0e+0x04) = *(this+0x12) in binary layout.
-    //  In the port, DataInfo is the first field (info), so info.width / info.height.)
-    info.width  = m_apparentW;
-    info.height = m_apparentH;
+    // Override apparent dims with the scale-substitute values.
+    // Binary: *(this+0x1c) = apparentW; *(this+0x20) = apparentH (DataInfo +0x18/+0x1c).
+    info.apparentWidth  = m_apparentW;
+    info.apparentHeight = m_apparentH;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,8 +139,8 @@ TextureSourceData* SubstituteApparentSizeTextureSource::LockLayers() {
     if (m_ApparentSizeSource) {
         TextureSourceAutoLock sizeLock(m_ApparentSizeSource);
         if (sizeLock.m_data) {
-            aw = sizeLock.m_data->info.width;
-            ah = sizeLock.m_data->info.height;
+            aw = sizeLock.m_data->info.apparentWidth;
+            ah = sizeLock.m_data->info.apparentHeight;
         }
     }
 

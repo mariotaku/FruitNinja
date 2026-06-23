@@ -101,13 +101,8 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
                                                          int* outH = nullptr) {
     Mortar::SmartPtr<Mortar::Texture> t = Mortar::TextureManager::LoadLocalisedTexture(name);
     if (t.IsValid()) {
-#if !defined(__bada__)
-        if (outW) *outW = t->m_Width;
-        if (outH) *outH = t->m_Height;
-#else
-        if (outW) *outW = 0;
-        if (outH) *outH = 0;
-#endif
+        if (outW) *outW = t->GetWidth();
+        if (outH) *outH = t->GetHeight();
     } else {
         if (outW) *outW = 0;
         if (outH) *outH = 0;

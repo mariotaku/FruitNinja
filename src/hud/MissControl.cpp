@@ -135,13 +135,9 @@ void MissControl::Init() {
     // DIFFERS: original = (GetWidth()>>1)+1, (GetWidth()>>1)+1 from Init @ 0x00150fa4;
     //          port uses (W+1, H+1) -- see spec note 1 for Init.
     if (s_TexCritical.IsValid()) {
-#if !defined(__bada__)
-        size = Vec3((float)(s_TexCritical->m_Width >> 1) + 1,
-                    (float)(s_TexCritical->m_Width >> 1) + 1,
+        size = Vec3((float)(s_TexCritical->GetWidth() >> 1) + 1,
+                    (float)(s_TexCritical->GetWidth() >> 1) + 1,
                     0.0f);
-#else
-        size = Vec3(0.0f, 0.0f, 0.0f);
-#endif
     } else {
         size = Vec3(0.0f, 0.0f, 0.0f);
     }
@@ -364,13 +360,8 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     m_bComboActive = 1;
     m_FlashTimer  = 0;
     if (s_TexCritical.IsValid()) {
-#if !defined(__bada__)
-        uint32_t w = s_TexCritical->m_Width;
-        uint32_t h = s_TexCritical->m_Height;
-#else
-        uint32_t w = 0;
-        uint32_t h = 0;
-#endif
+        uint32_t w = (uint32_t)s_TexCritical->GetWidth();
+        uint32_t h = (uint32_t)s_TexCritical->GetHeight();
         // size = (w+1, h+1, 0), halved for clamp, then restored
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
@@ -414,13 +405,8 @@ void MissControl::MakeRare(Vec3 pos) {
     m_bComboActive = 1;
     m_FlashTimer  = 0;
     if (s_TexRare.IsValid()) {
-#if !defined(__bada__)
-        uint32_t w = s_TexRare->m_Width;
-        uint32_t h = s_TexRare->m_Height;
-#else
-        uint32_t w = 0;
-        uint32_t h = 0;
-#endif
+        uint32_t w = (uint32_t)s_TexRare->GetWidth();
+        uint32_t h = (uint32_t)s_TexRare->GetHeight();
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
         size.z = 0.0f;  // DAT_00151a30 = 0.0
@@ -483,13 +469,8 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     m_FlashTimer  = 0;
     // Size: (w+1, h+1, 0), halved for clamp, then restored
     if (s_ComboTextures[idx].IsValid()) {
-#if !defined(__bada__)
-        uint32_t w = s_ComboTextures[idx]->m_Width;
-        uint32_t h = s_ComboTextures[idx]->m_Height;
-#else
-        uint32_t w = 0;
-        uint32_t h = 0;
-#endif
+        uint32_t w = (uint32_t)s_ComboTextures[idx]->GetWidth();
+        uint32_t h = (uint32_t)s_ComboTextures[idx]->GetHeight();
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
         size.z = 0.0f;  // DAT_00151744 = 0.0
@@ -540,13 +521,8 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         m_LifeTimer    = MISS_FADE_INIT;  // DAT_00151f40 = 1.81f
         m_FlashTimer  = 0;
         m_bComboActive = 1;
-#if !defined(__bada__)
-        uint32_t w = tex->m_Width;
-        uint32_t h = tex->m_Height;
-#else
-        uint32_t w = 0;
-        uint32_t h = 0;
-#endif
+        uint32_t w = (uint32_t)tex->GetWidth();
+        uint32_t h = (uint32_t)tex->GetHeight();
         size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
         // ASM-verified: 2026-05-24 binary @ 0x00151e40 (re-analyst v2)
         // Binary: `mov r0,r4; mov r1,r7; blx 0x000f6c30` -- r7 was saved from

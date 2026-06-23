@@ -53,7 +53,7 @@ namespace TextureFileFormat {
 struct Tex1Data : public TextureSourceData {
     // format byte from the header (used by the GL upload layer to select glTexImage2D params)
     uint8_t  texFmt;
-    // raw width/height from header (already stored in info.width/info.height too)
+    // raw width/height from header (also stored in info.rawWidth/rawHeight; apparentWidth/Height = pixel dims)
     uint8_t  wLog2;
     uint8_t  hLog2;
 

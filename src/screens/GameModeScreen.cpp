@@ -601,13 +601,12 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     // Mode_sensei panel — same pattern as DojoScreen's dojo_sensei:
     // bottom-left position (-188, -32) with horizontal slide from left.
     if (s_TexModeSensei.IsValid()) {
-#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexModeSensei->m_Width + 1.0f,
-            (float)s_TexModeSensei->m_Height + 1.0f,
+            (float)s_TexModeSensei->GetWidth() + 1.0f,
+            (float)s_TexModeSensei->GetHeight() + 1.0f,
             1.0f);
-        const float slideX = -(float)s_TexModeSensei->m_Width * (1.0f - m_SecondaryAlpha);
+        const float slideX = -(float)s_TexModeSensei->GetWidth() * (1.0f - m_SecondaryAlpha);
         mat.GlobalTranslate44(Vec3(POS_BG.x + slideX, POS_BG.y, POS_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -615,7 +614,6 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexModeSensei->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexModeSensei->UnSet();
-#endif
     }
 
     // --- 2. Borders (BaseScreen::DrawBorders BakedStringBox* overload, NULL box) ---
@@ -644,11 +642,10 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     // rest at DST=(194,29,10) on-screen.
     if (s_TexZenSign.IsValid()) {
         Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
-#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexZenSign->m_Width + 1.0f,
-            (float)s_TexZenSign->m_Height + 1.0f,
+            (float)s_TexZenSign->GetWidth() + 1.0f,
+            (float)s_TexZenSign->GetHeight() + 1.0f,
             1.0f);
         mat.GlobalTranslate44(logoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -657,7 +654,6 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexZenSign->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
-#endif
 
         // Draw the feature-bullet text over the zen board quad.
         // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
