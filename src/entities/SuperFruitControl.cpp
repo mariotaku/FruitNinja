@@ -8,6 +8,7 @@
 
 #include "SuperFruitControl.h"
 #include "SuperFruitGlow.h"
+#include "engine/render/BakedStringBox.h"
 #include "hud/MissControl.h"
 #include "SuperFruitState.h"
 #include "Fruit.h"
@@ -43,10 +44,6 @@ std::map<Fruit*, SuperFruitControl*> SuperFruitControl::SuperFruitControls;
 // Binary: BSS global; accessed via IsInSuperFruitState / NumPomegranatesSpawnedThisGame.
 static int s_PomegranatesSpawnedThisGame = 0;
 
-// Static active-state flag. IsInSuperFruitState() reads game singleton +0x14.
-// Port: shadow the flag here since game+0x14 is not yet mapped in the port.
-static int s_SuperFruitActive = 0;
-
 // Binary @ 0x001be1c8: fresh controller ctor.
 SuperFruitControl::SuperFruitControl(Fruit* fruit)
     : m_pHostFruit(fruit)
@@ -55,6 +52,8 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     , m_PrevTimer(0.0f)
     , m_SliceCount(0)
     , m_pLinkedSlasher(nullptr)
+    , m_pComboText(nullptr)
+    , m_pScoreText(nullptr)
     , m_Lifetime(5.0f)   // default baseline; TODO: 0x001be1c8 -- resolve from binary DAT
     , m_FadeIn(0.0f)
     , m_Scale(0.0f)
@@ -64,7 +63,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     entityType = 6;  // super-fruit type in binary
     memset(_pad_own, 0, sizeof(_pad_own));
     memset(_pad_80, 0, sizeof(_pad_80));
-    memset(_pad_98, 0, sizeof(_pad_98));
     memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
     memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
     memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
@@ -73,7 +71,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
-    s_SuperFruitActive = 1;
     ++s_PomegranatesSpawnedThisGame;
     AttachGlow();
 }
@@ -86,6 +83,8 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     , m_PrevTimer(state.m_Timer)
     , m_SliceCount(state.m_SliceCount)
     , m_pLinkedSlasher(nullptr)
+    , m_pComboText(nullptr)
+    , m_pScoreText(nullptr)
     , m_Lifetime(state.m_Lifetime)
     , m_FadeIn(1.0f)   // already visible when restored
     , m_Scale(1.0f)
@@ -95,7 +94,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     entityType = 6;
     memset(_pad_own, 0, sizeof(_pad_own));
     memset(_pad_80, 0, sizeof(_pad_80));
-    memset(_pad_98, 0, sizeof(_pad_98));
     memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
     memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
     memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
@@ -104,7 +102,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
-    s_SuperFruitActive = 1;
     AttachGlow();
 }
 
@@ -115,16 +112,44 @@ SuperFruitControl::~SuperFruitControl()
 }
 
 // Binary @ 0x001bb664.
+// Order matches binary exactly:
+//   1. UnRegister ComboCancel delegate from SlashEntity::ComboCanceledEvent
+//   2. SuperFruitControls.find(key) -> erase if found
+//   3. StopRays()
+//   4. if (m_pHostFruit) { KillFruit(false); m_pHostFruit = NULL; }
+//   5. if (m_pComboText)  { delete m_pComboText;  m_pComboText  = NULL; }
+//   6. if (m_pScoreText)  { delete m_pScoreText;  m_pScoreText  = NULL; }
+// NOTE: binary Release has NO glow handling; m_pGlow is port-only (#106).
+// DIFFERS: m_pGlow is a port-only field (#106); binary Release has no glow ptr.
 void SuperFruitControl::Release()
 {
-    // Notify glow: trigger fade-out (marks m_bPendingRemoval for removal)
-    if (m_pGlow) {
-        m_pGlow->Release();
-        m_pGlow = nullptr;
+    // TODO: v1.6.1 SuperFruitControl::Release @0x001bb664 -- UnRegister ComboCancel
+    //   from SlashEntity::ComboCanceledEvent (GOT 0x6f04): Event1<SlashEntity*> not
+    //   yet a field on SlashEntity in the port. When ported, emit:
+    //     Mortar::Delegate1<void,SlashEntity*> d =
+    //         Mortar::Delegate1<void,SlashEntity*>::Make(this, &SuperFruitControl::ComboCancel);
+    //     SlashEntity::ComboCanceledEvent -= d;
+
+    std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.find(m_pHostFruit);
+    if (it != SuperFruitControls.end()) {
+        SuperFruitControls.erase(it);
     }
-    m_pHostFruit = nullptr;
-    s_SuperFruitActive = 0;
-    Mortar::Entity::Release();
+
+    StopRays();
+
+    if (m_pHostFruit) {
+        m_pHostFruit->KillFruit(false);
+        m_pHostFruit = nullptr;
+    }
+
+    if (m_pComboText) {
+        delete m_pComboText;
+        m_pComboText = nullptr;
+    }
+    if (m_pScoreText) {
+        delete m_pScoreText;
+        m_pScoreText = nullptr;
+    }
 }
 
 // Binary @ 0x001bca10. Per-frame phase-ladder state machine.
@@ -336,7 +361,6 @@ void SuperFruitControl::ExplodeSuperFruit()
 {
     Fruit* host = m_pHostFruit;
     if (!host) {
-        s_SuperFruitActive = 0;
         return;
     }
 
@@ -456,8 +480,6 @@ void SuperFruitControl::ExplodeSuperFruit()
 
     // ---- (E) restore host scale ----
     // TODO: 0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
-
-    s_SuperFruitActive = 0;
 }
 
 // Binary @ 0x001b9850. Clears m_pLinkedSlasher if it matches se.
@@ -565,10 +587,10 @@ void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Enti
 }
 
 // Binary @ 0x001b9828. Returns true while a super fruit is active.
-// Binary reads game+0x14; port uses shadow flag.
+// Binary reads SuperFruitControls+0x14 (_M_node_count, std::map size field != 0).
 bool SuperFruitControl::IsInSuperFruitState()
 {
-    return s_SuperFruitActive != 0;
+    return !SuperFruitControls.empty();
 }
 
 // Binary @ 0x001b98c0.
@@ -679,7 +701,6 @@ void SuperFruitControl::Reset()
 
     // TODO: 0x001bb52c -- this->+0x33 = 1 (game-level done-flag write; target unresolved in port)
 
-    s_SuperFruitActive = 0;
     s_PomegranatesSpawnedThisGame = 0;
 }
 

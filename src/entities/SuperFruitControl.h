@@ -42,6 +42,8 @@ struct SuperFruitState;
 struct Renderer;
 #include "engine/xml/TiXmlElement.h"
 
+namespace Mortar { class BakedStringBox; }
+
 class SuperFruitControl : public Mortar::Entity {
 public:
     // +0x3c..+0x7b: Entity base + gap (binary fields unresolved past Entity's 0x3c)
@@ -67,7 +69,10 @@ public:
     // +0x94: linked SlashEntity (nullable; nulled when slice is consumed)
     SlashEntity* m_pLinkedSlasher;// +0x94
 
-    uint8_t _pad_98[8];           // +0x98..+0x9f
+    // +0x98: combo popup text (FancyBakedString* in binary; BakedStringBox in port)
+    Mortar::BakedStringBox* m_pComboText;  // +0x98
+    // +0x9c: score popup text (FancyBakedString* in binary; BakedStringBox in port)
+    Mortar::BakedStringBox* m_pScoreText;  // +0x9c
 
     // +0xa0: explosion-phase time baseline (set at construction)
     float m_Lifetime;             // +0xa0
@@ -136,7 +141,7 @@ public:
     static void SuperFruitSliced(Fruit* fruit, int idx, Mortar::Entity* slashEntity);
 
     // Binary @ 0x001b9828. Returns true while a super fruit is active.
-    // Implementation: game singleton +0x14 field != 0.
+    // Implementation: SuperFruitControls._M_node_count (+0x14) != 0, i.e. !empty().
     static bool IsInSuperFruitState();
 
     // Binary @ 0x001b98c0. Returns how many super (pomegranate) fruits have been
@@ -211,6 +216,8 @@ static_assert(offsetof(SuperFruitControl, m_Timer)           == 0x88, "SuperFrui
 static_assert(offsetof(SuperFruitControl, m_PrevTimer)       == 0x8c, "SuperFruitControl::m_PrevTimer offset");
 static_assert(offsetof(SuperFruitControl, m_SliceCount)      == 0x90, "SuperFruitControl::m_SliceCount offset");
 static_assert(offsetof(SuperFruitControl, m_pLinkedSlasher)  == 0x94, "SuperFruitControl::m_pLinkedSlasher offset");
+static_assert(offsetof(SuperFruitControl, m_pComboText)      == 0x98, "SuperFruitControl::m_pComboText offset");
+static_assert(offsetof(SuperFruitControl, m_pScoreText)      == 0x9c, "SuperFruitControl::m_pScoreText offset");
 static_assert(offsetof(SuperFruitControl, m_Lifetime)        == 0xa0, "SuperFruitControl::m_Lifetime offset");
 static_assert(offsetof(SuperFruitControl, m_FadeIn)          == 0xa4, "SuperFruitControl::m_FadeIn offset");
 static_assert(offsetof(SuperFruitControl, m_WorkVec1)        == 0xa8, "SuperFruitControl::m_WorkVec1 offset");
