@@ -72,18 +72,22 @@ public:
     // +0xd4: combo level byte (0xff = no combo; set by CheckCombo; read as signed byte)
     // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
     uint8_t m_ComboLevel;         // @+0xd4
+
+    // +0xd5..+0xef: reserved trailing storage that restores the binary's sizeof 0xF0.
+    // DIFFERS: original sizeof = 0xF0 (operator new(0xf0) @ v1.6.1 GameOverScreen::Update
+    //   0x001872c8 -- ground truth). No code anywhere in the binary constructs, destructs,
+    //   reads, or writes this region -- verified across ctor 0x0017fcd4, Init 0x00180320,
+    //   dtor 0x0017fbc8, Update 0x0017fa04, DrawOrder 0x00180ef0, Load/UnloadContent. GCC
+    //   4.4.1 laid out header members the shipped build never references; their field
+    //   types/names are unrecoverable (zero access sites), so a reserved array is the
+    //   faithful resolution -- it restores the exact size without inventing semantics.
+    uint8_t _reserved_d5[0x1b];   // @+0xd5..+0xef -> object end 0xF0
 };
 
-// TODO: v1.6.1 0x0017fcd4 (FruitFactZenPage ctor) -- binary sizeof = 0xF0 but port
-//   computes 0xD8 under the cross-build (GCC 4.4.1 ARM32). Gap = 0x18 bytes (6 words)
-//   of unidentified own-fields between m_ComboLevel (+0xD4) and the object end.
-//   RE-analyst must decompile 0x0017fcd4 to identify the 0x18 bytes of missing fields.
-// DIFFERS: original sizeof = 0xF0 (v1.6.1 FruitFactZenPage @0x0017fcd4),
-//   cross-build gives 0xD8 because port is missing 0x18 bytes of fields.
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(FruitFactZenPage) == 0xD8,
-    "FruitFactZenPage sizeof is 0xD8 in port (binary is 0xF0; 0x18 bytes missing -- see TODO above)");
+static_assert(sizeof(FruitFactZenPage) == 0xF0,
+    "FruitFactZenPage sizeof must be 0xF0 (v1.6.1 operator new(0xf0) @0x001872c8)");
 static_assert(offsetof(FruitFactZenPage, m_pComboStarTexture) == 0xd0,
     "FruitFactZenPage::m_pComboStarTexture must be at +0xd0");
 static_assert(offsetof(FruitFactZenPage, m_ComboLevel) == 0xd4,
