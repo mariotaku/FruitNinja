@@ -906,6 +906,14 @@ void ShopScreen::Update(float dt) {
 #if !defined(__bada__)
                         m_pEquipButton->m_bEnabled = 0;
 #endif
+                        // Binary @0x001b321c (ShopScreen::Update state-1 equip build): the equip
+                        // button is born with m_bClearsMenuItems=0 (MenuButton +0x13a) so slicing
+                        // it to EQUIP does NOT cascade ClearMenuItems() and destroy the bomb/back
+                        // button. MenuButton::Init sets it to 1 for every button; the binary clears
+                        // it here at creation, right after Init and before SetSelected. The port
+                        // previously relied only on ShrinkBuyButton's later write, which is skipped
+                        // if the user slices the equip button before the list settles.
+                        m_pEquipButton->m_bClearsMenuItems = 0;
                         // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
                         SetSelected(m_pSelectedItem);
                         if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
