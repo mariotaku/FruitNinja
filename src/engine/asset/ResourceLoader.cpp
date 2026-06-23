@@ -3,6 +3,9 @@
 #include "asset/FileDataReader.h"
 #include "asset/VectorDataReader.h"
 #include "asset/File.h"
+#include "asset/IStreamTypes.h"
+#include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "debug/Logger.h"
 #include <cstring>
 
@@ -166,5 +169,73 @@ ResourceLoader* ResourceLoader::ReadSubResourceLookup()
     }
     return nullptr;
 }
+
+// ============================================================
+// ResourceLoader loader-dispatch machinery
+// v1.6.1 GetLoaders @0x0023c89c / RegisterLoader @0x0023de70 / Load<Model> @0x0023e80c
+// ============================================================
+
+// v1.6.1 GetLoaders @0x0023c89c: function-local static s_loaders map.
+// DIFFERS: binary guards with m_loadersCriticalSection (port single-threaded).
+std::map<uint32_t, LoaderHelperBase*>& ResourceLoader::GetLoaders()
+{
+    // Function-local static: initialized on first call, persists for process lifetime.
+    // Binary mirrors this with a global static guarded by a critical section.
+    static std::map<uint32_t, LoaderHelperBase*> s_loaders;
+    return s_loaders;
+}
+
+// v1.6.1 RegisterLoader @0x0023de70 (template body; explicit instantiations below).
+// Installs a delegate for type T. Deletes any previous helper at the same key.
+template<typename T>
+void ResourceLoader::RegisterLoader(Delegate1<SmartPtr<T>, ResourceLoader&> d)
+{
+    std::map<uint32_t, LoaderHelperBase*>& loaders = GetLoaders();
+    uint32_t key = LoaderTypeId<T>::value;
+    std::map<uint32_t, LoaderHelperBase*>::iterator it = loaders.find(key);
+    if (it != loaders.end()) {
+        delete it->second;
+        it->second = new LoaderHelper<T>(d);
+    } else {
+        loaders[key] = new LoaderHelper<T>(d);
+    }
+}
+
+// v1.6.1 Load<T> (template body; explicit instantiations below).
+// Looks up the registered helper by type ID and invokes LoadResource(*this).
+// Returns empty SmartPtr<T> if no loader registered for T.
+template<typename T>
+SmartPtr<T> ResourceLoader::Load()
+{
+    std::map<uint32_t, LoaderHelperBase*>& loaders = GetLoaders();
+    uint32_t key = LoaderTypeId<T>::value;
+    std::map<uint32_t, LoaderHelperBase*>::iterator it = loaders.find(key);
+    if (it == loaders.end() || it->second == 0) {
+        return SmartPtr<T>();
+    }
+    SmartPtr<ReferenceCounter> base = it->second->LoadResource(*this);
+    return SmartPtrCast<T>(base);
+}
+
+// v1.6.1 Load<Model>(path) @0x0023e80c: opens the file, constructs a child ResourceLoader
+// with PathGetParent(path) as the base path, then dispatches Load<Model>().
+SmartPtr<Model> ResourceLoader::LoadModel(const AsciiString& path)
+{
+    ResourceLoader child(path);
+    return child.Load<Model>();
+}
+
+// Explicit instantiations for the four registered types.
+// These emit T-symbols in this TU so RegisterLoader / Load are linkable from
+// MeshManager.cpp and the cross-build can match them.
+template void       ResourceLoader::RegisterLoader<IVertexStream>(Delegate1<SmartPtr<IVertexStream>, ResourceLoader&>);
+template void       ResourceLoader::RegisterLoader<IIndexStream> (Delegate1<SmartPtr<IIndexStream>,  ResourceLoader&>);
+template void       ResourceLoader::RegisterLoader<Model>        (Delegate1<SmartPtr<Model>,         ResourceLoader&>);
+template void       ResourceLoader::RegisterLoader<Mesh>         (Delegate1<SmartPtr<Mesh>,          ResourceLoader&>);
+
+template SmartPtr<IVertexStream> ResourceLoader::Load<IVertexStream>();
+template SmartPtr<IIndexStream>  ResourceLoader::Load<IIndexStream>();
+template SmartPtr<Model>         ResourceLoader::Load<Model>();
+template SmartPtr<Mesh>          ResourceLoader::Load<Mesh>();
 
 } // namespace Mortar

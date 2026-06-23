@@ -1,6 +1,7 @@
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
 #include "asset/Geometry.h"
+#include "asset/IStreamTypes.h"
 #include "asset/TextureManager.h"
 #include "debug/Logger.h"
 #include <cstring>
@@ -42,7 +43,7 @@ void MeshManager::ReleaseAll() {
 
 // v1.6.1 MeshManager::Load @0x00236874
 // DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
-//   v1.6.1 LoadMeshInternal @0x00228644 does NOT touch m_Models (registers loaders +
+//   v1.6.1 LoadMeshInternal @0x00238644 does NOT touch m_Models (registers loaders +
 //   calls ResourceLoader::Load<Model>). The port's Find+Add here is a port invention.
 Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     AsciiString apath(path);
@@ -61,6 +62,17 @@ Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     return model;
 }
 
+// ============================================================
+// PSP stream and mesh loader free functions (anonymous namespace).
+// v1.6.1 addresses:
+//   LoadVertexStreamPSP @0x001a7b0c
+//   LoadIndexStreamPSP  @0x001a799c
+//   LoadModel           @0x00238790
+//   LoadMesh            @0x0023890c
+// ============================================================
+
+namespace {
+
 static int FmtSize(int fmt) {
     switch (fmt) {
         case 0: return 0;
@@ -70,22 +82,27 @@ static int FmtSize(int fmt) {
     }
 }
 
-// Matches LoadVertexStreamPSP (0x001a7b0c, 112 lines)
-// Parses PSP vertex declaration bitfield + vertex data into a Geometry VBO.
-// Returns true on success.
-static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geometry& geom) {
-    if (dataSize < 9) return false;
+// LoadVertexStreamPSP @0x001a7b0c
+// Parses PSP vertex declaration bitfield + vertex data from rl into an IVertexStream.
+// The caller (LoadMesh) has positioned rl's read cursor past the index data so this
+// function reads the vertex stream from the current cursor position using DataPtr+ReadCursor.
+SmartPtr<IVertexStream> LoadVertexStreamPSP(ResourceLoader& rl)
+{
+    const uint8_t* data = rl.DataPtr() + rl.m_ReadCursor;
+    size_t dataSize = rl.DataSize() - (size_t)rl.m_ReadCursor;
+
+    if (dataSize < 9) return SmartPtr<IVertexStream>();
     size_t pos = 0;
     uint8_t skipCount = data[pos++];
-    if (skipCount > 16) return false;
+    if (skipCount > 16) return SmartPtr<IVertexStream>();
     pos += skipCount * 4;
-    if (pos + 8 > dataSize) return false;
+    if (pos + 8 > dataSize) return SmartPtr<IVertexStream>();
 
     uint32_t vertDecl = 0;
     memcpy(&vertDecl, data + pos, 4); pos += 4;
     uint32_t vertCount = 0;
     memcpy(&vertCount, data + pos, 4); pos += 4;
-    if (vertCount == 0 || vertCount > 100000) return false;
+    if (vertCount == 0 || vertCount > 100000) return SmartPtr<IVertexStream>();
 
     // PSP vertex declaration layout. Stride is computed per binary
     // LegacyPSPVertexDecl::Stride @ 0x001a741c:
@@ -172,28 +189,34 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geom
     }
 
     layout.totalStride = offset;
-    if (layout.totalStride == 0) return false;
+    if (layout.totalStride == 0) return SmartPtr<IVertexStream>();
 
     size_t vertDataSize = (size_t)vertCount * layout.totalStride;
-    if (pos + vertDataSize > dataSize) return false;
+    if (pos + vertDataSize > dataSize) return SmartPtr<IVertexStream>();
 
-    glGenBuffers(1, &geom.m_Vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, geom.m_Vbo);
+    IVertexStream* vs = new IVertexStream();
+    glGenBuffers(1, &vs->m_Vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vs->m_Vbo);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    vs->m_VertCount = (int)vertCount;
+    vs->m_Layout = layout;
 
-    geom.m_VertCount = (int)vertCount;
-    geom.m_Layout = layout;
-    return true;
+    // Advance the loader cursor past the vertex data.
+    rl.m_ReadCursor += (int32_t)(pos + vertDataSize);
+
+    return SmartPtr<IVertexStream>(vs);
 }
 
-// Matches LoadIndexStreamPSP (0x001a799c, ~40 lines)
-// Parses index stream header + index data into a Geometry IBO.
-// Returns true on success; sets consumed to bytes read from data.
-static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
-                             Mortar::Geometry& geom, size_t& consumed) {
-    consumed = 0;
-    if (dataSize < 7) return false;
+// LoadIndexStreamPSP @0x001a799c
+// Parses index stream header + index data from rl's current cursor position.
+// Returns an IIndexStream; rl cursor is advanced past the consumed bytes.
+SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
+{
+    const uint8_t* data = rl.DataPtr() + rl.m_ReadCursor;
+    size_t dataSize = rl.DataSize() - (size_t)rl.m_ReadCursor;
+
+    if (dataSize < 7) return SmartPtr<IIndexStream>();
     size_t pos = 2; // skip 2-byte padding
     uint8_t idxFlags = data[pos++];
     // Hi nibble -> Mortar::PrimType -> GL enum (via Geometry::
@@ -211,10 +234,11 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     // port mapped 0x20 -> GL_TRIANGLE_STRIP which explained all of the
     // "mirror through fuse hole" / "triangle holes on fruit" artefacts
     // we chased -- strip rendering of a triangle-list index buffer.
+    GLenum primType;
     switch (idxFlags & 0xF0) {
-        case 0x20: geom.m_PrimType = GL_TRIANGLES;      break;
-        case 0x40: geom.m_PrimType = GL_TRIANGLE_STRIP; break;
-        default:   geom.m_PrimType = GL_TRIANGLES;      break;
+        case 0x20: primType = GL_TRIANGLES;      break;
+        case 0x40: primType = GL_TRIANGLE_STRIP; break;
+        default:   primType = GL_TRIANGLES;      break;
     }
     // Low nibble = PSP GE_INDEX_TYPE: 0 none / 1 uint16 / 2 uint32.
     // Binary LoadIndexStreamPSP (0x001a799c) branches on `(nibble - 1)`;
@@ -224,211 +248,239 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     // Geometry::Render @ 0x001a3ec8 also hardcodes GL_UNSIGNED_SHORT --
     // the uint32 path is never exercised. TODO: wire nibble==2 if a
     // future asset dump needs it.
-    if (pos + 4 > dataSize) return false;
+    if (pos + 4 > dataSize) return SmartPtr<IIndexStream>();
     uint32_t idxCount = 0;
     memcpy(&idxCount, data + pos, 4); pos += 4;
-    if (idxCount == 0 || idxCount > 100000) return false;
+    if (idxCount == 0 || idxCount > 100000) return SmartPtr<IIndexStream>();
     size_t idxDataSize = (size_t)idxCount * 2;
-    if (pos + idxDataSize > dataSize) return false;
+    if (pos + idxDataSize > dataSize) return SmartPtr<IIndexStream>();
 
-    glGenBuffers(1, &geom.m_Ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.m_Ibo);
+    IIndexStream* is = new IIndexStream();
+    is->m_PrimType = primType;
+    glGenBuffers(1, &is->m_Ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, is->m_Ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    is->m_IndexCount = (int)idxCount;
 
-    geom.m_IndexCount = (int)idxCount;
-    consumed = pos + idxDataSize;
-    return true;
+    // Advance the loader cursor past the index data.
+    rl.m_ReadCursor += (int32_t)(pos + idxDataSize);
+
+    return SmartPtr<IIndexStream>(is);
 }
 
-// v1.6.1 MeshManager::LoadMeshInternal @0x00228644
-// Thin wrapper that registers IVertexStream/IIndexStream/Model/Mesh loaders +
-// calls ResourceLoader::Load<Model>. Does NOT touch m_Models directly.
-// DIFFERS: port caches in m_Models manually (in Load above); binary caches in ResourceLoader.
-//   Port inlines the full parse body; binary delegates to ResourceLoader dispatch chain.
-//
-// The root ResourceLoader maps to both the Model and Mesh scope:
-//   LoadModel reads: model name, Read<Skeleton> (skipped), meshCount
-//   LoadMesh reads (sequentially from same loader): mesh name, boneCount + bones,
-//     materialCount + per-material ReadSubResourceLookup, geometryCount + per-geometry
-//     ReadSubResourceLookup + Read<u16> matIndex
-//   children[0..N]: material and geometry sub-resources referenced by 1-based index
-//
-// Material child rawData: matName(ReadString), texIdx(ReadSubResourceLookup),
-//   4xU32 colors, float specular, unused ReadSubResourceLookup
-// Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
-// Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
-Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
-    ResourceLoader loader(path);
-    if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
-        LOG_ERROR("MeshManager", "failed to load '%s'", path.CStr());
-        return Mortar::SmartPtr<Model>();
+// LoadMesh @0x0023890c
+// Reads one Mesh sequentially from rl (the top-level model loader). Called via
+// ResourceLoader::Load<Mesh>() dispatch from LoadModel.
+// The mesh loader reads: mesh name, boneCount + BoneBindings,
+//   materialCount + per-material ReadSubResourceLookup,
+//   geometryCount + per-geometry ReadSubResourceLookup + matIndex.
+// For each geometry child it dispatches Load<IIndexStream>() and Load<IVertexStream>()
+// on the child loader to build the Geometry's GPU data.
+SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
+{
+    Mesh* mesh = new Mesh();
+
+    // ReadString -> mesh name
+    if (rl.m_ReadCursor + 2 > (int32_t)rl.DataSize()) {
+        return SmartPtr<Mesh>(mesh);
+    }
+    AsciiString meshName = rl.ReadString();
+    mesh->m_Name = meshName.CStr();
+
+    // Read<ulong> -> boneCount + per-bone BoneBinding data
+    if (rl.m_ReadCursor + 4 > (int32_t)rl.DataSize()) {
+        return SmartPtr<Mesh>(mesh);
+    }
+    uint32_t boneCount = rl.Read<uint32_t>();
+    if (boneCount > 0 && boneCount < 256) {
+        std::vector<BoneBinding> bones(boneCount);
+        for (uint32_t i = 0; i < boneCount; i++) {
+            if (rl.m_ReadCursor + 2 > (int32_t)rl.DataSize()) break;
+            AsciiString boneName = rl.ReadString();
+            bones[i].m_BoneName = boneName;
+            if (rl.m_ReadCursor + 24 <= (int32_t)rl.DataSize()) {
+                rl.ReadBytes(&bones[i].m_Bounds.min, sizeof(Vec3));
+                rl.ReadBytes(&bones[i].m_Bounds.max, sizeof(Vec3));
+            }
+        }
+        mesh->SetBones(bones.data(), (unsigned long)boneCount);
+    }
+
+    // Read<ulong> -> materialCount + per-material sub-resource
+    if (rl.m_ReadCursor + 4 > (int32_t)rl.DataSize()) {
+        return SmartPtr<Mesh>(mesh);
+    }
+    uint32_t matCount = rl.Read<uint32_t>();
+
+    // Local vector to hold textures indexed by material index.
+    // Each geometry references a material index; the texture is
+    // assigned directly to Geometry::m_DiffuseTex below.
+    std::vector<Mortar::SmartPtr<Mortar::Texture> > matTextures;
+    matTextures.reserve(matCount);
+
+    for (uint32_t i = 0; i < matCount; i++) {
+        // ReadSubResourceLookup -> material child (1-based index into rl.m_Children)
+        ResourceLoader* matChild = rl.ReadSubResourceLookup();
+        if (!matChild) {
+            matTextures.push_back(Mortar::SmartPtr<Mortar::Texture>());
+            continue;
+        }
+
+        matChild->ResetReadPos();
+
+        // Read material name (Material_Old = just AsciiString in rawData)
+        matChild->ReadString(); // material name, unused
+
+        // ReadSubResourceLookup -> texture grandchild
+        Mortar::SmartPtr<Mortar::Texture> loadedTexture;
+        ResourceLoader* texChild = matChild->ReadSubResourceLookup();
+        if (texChild) {
+            texChild->ResetReadPos();
+            /* AsciiString texName = */ texChild->ReadString();   // e.g. "Map #1" (unused)
+            AsciiString texRelPath = texChild->ReadString();  // e.g. "textures\fruit_atlas.tex"
+
+            std::string texPath = texRelPath.CStr();
+            for (size_t j = 0; j < texPath.size(); j++)
+                if (texPath[j] == '\\') texPath[j] = '/';
+
+            std::string fullPath = std::string(rl.BasePathGet().CStr()) + texPath;
+            loadedTexture = TextureManager::GetInstance().Load(fullPath.c_str());
+        }
+
+        // Read 4 color u32 + float specular (advancing read pos through file format)
+        // Values are not stored since IsLit==false for all meshes.
+        if (matChild->m_ReadCursor + 20 <= (int32_t)matChild->DataSize()) {
+            (void)matChild->Read<uint32_t>(); // color0
+            (void)matChild->Read<uint32_t>(); // color1
+            (void)matChild->Read<uint32_t>(); // color2
+            (void)matChild->Read<uint32_t>(); // color3
+            (void)matChild->Read<float>();    // specular
+        }
+
+        // ReadSubResourceLookup -> additional sub-resource (unused in port)
+        matChild->ReadSubResourceLookup();
+
+        matTextures.push_back(loadedTexture);
+    }
+
+    // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
+    if (rl.m_ReadCursor + 4 > (int32_t)rl.DataSize()) {
+        return SmartPtr<Mesh>(mesh);
+    }
+    uint32_t geomCount = rl.Read<uint32_t>();
+
+    for (uint32_t i = 0; i < geomCount; i++) {
+        // ReadSubResourceLookup -> geometry child (rawData = index+vertex streams)
+        ResourceLoader* geomChild = rl.ReadSubResourceLookup();
+
+        // Read<u16> matIndex -- from mesh loader (not geomChild), matches LoadMesh binary
+        uint16_t matIndex = 0;
+        if (rl.m_ReadCursor + 2 <= (int32_t)rl.DataSize()) {
+            matIndex = rl.Read<uint16_t>();
+        }
+
+        // Defunct: GeometryBinding stack not constructed -- port loads vbo/ibo directly.
+        // Binary @ 0x001a8388 would new GeometryBinding here.
+        Mortar::SmartPtr<Mortar::Geometry> g(
+            new Mortar::Geometry(Mortar::SmartPtr<Mortar::GeometryBinding>(),
+                                 Mortar::SmartPtr<Mortar::SharedEffectProperties>()));
+        g->m_MaterialIndex = (int)matIndex;
+
+        // Assign diffuse texture from material index to geometry.
+        if (matIndex < (uint16_t)matTextures.size()) {
+            g->m_DiffuseTex = matTextures[matIndex];
+        }
+
+        if (geomChild) {
+            // Dispatch Load<IIndexStream> and Load<IVertexStream> on the geometry child.
+            // The two calls read sequentially from the child: index stream first, then vertex stream.
+            // v1.6.1 LoadMesh @0x0023890c: calls Load<IIndexStream>() then Load<IVertexStream>().
+            SmartPtr<IIndexStream> ib = geomChild->Load<IIndexStream>();
+            SmartPtr<IVertexStream> vb = geomChild->Load<IVertexStream>();
+
+            if (ib.IsValid()) {
+                g->m_Ibo        = ib->m_Ibo;
+                g->m_IndexCount = ib->m_IndexCount;
+                g->m_PrimType   = ib->m_PrimType;
+                // Transfer ownership of the IBO from stream object to Geometry.
+                // Zero out the stream's handle so its dtor doesn't double-free.
+                ib->m_Ibo = 0;
+            }
+            if (vb.IsValid()) {
+                g->m_Vbo      = vb->m_Vbo;
+                g->m_VertCount = vb->m_VertCount;
+                g->m_Layout   = vb->m_Layout;
+                // Transfer ownership of the VBO from stream object to Geometry.
+                vb->m_Vbo = 0;
+            }
+        }
+
+        if (g->m_Vbo || g->m_Ibo) {
+            mesh->AddGeometry(g);
+        } else {
+            LOG_WARN("MeshManager", "mesh '%s' geom[%u]: no GPU data", mesh->m_Name.c_str(), i);
+        }
+    }
+
+    if (mesh->m_Geometries.empty()) {
+        LOG_WARN("MeshManager", "mesh '%s': no geometries loaded", mesh->m_Name.c_str());
+    }
+
+    return SmartPtr<Mesh>(mesh);
+}
+
+// LoadModel @0x00238790
+// Reads a Model from rl. Reads model name, skeleton, meshCount, then dispatches
+// Load<Mesh>() for each mesh (sequential reads on the same rl).
+SmartPtr<Model> LoadModel(ResourceLoader& rl)
+{
+    if (rl.DataSize() == 0 && rl.ChildCount() == 0) {
+        return SmartPtr<Model>();
     }
 
     Model* model = new Model();
-    model->m_name = path;
 
-    loader.ResetReadPos();
+    rl.ResetReadPos();
 
-    // --- LoadModel portion ---
-    // ReadString -> model name (stored in Model, mesh name read again below)
-    AsciiString modelName = loader.ReadString();
+    // ReadString -> model name (from stream; not used as m_name in port convention)
+    AsciiString modelName = rl.ReadString();
+    // m_name set by MeshManager::Load callers (the path string); modelName is the
+    // binary-embedded name which callers don't use. Set from the loader's base path
+    // as a fallback; MeshManager::LoadMeshInternal callers set it to the full path.
+    // port convention: m_name = full load path (set in MeshManager::Load via m_name = apath).
+    // Here we store the model name from the stream for reference; Load() overwrites it.
+    model->m_name = modelName;
 
-    // Read<Skeleton> (0x001a8468): parse skeleton and bind to all meshes via UpdateBoneLinks
-    loader.ReadSkeleton(model->m_skeleton);
+    // Read<Skeleton>: parse skeleton and bind to all meshes via UpdateBoneLinks
+    rl.ReadSkeleton(model->m_skeleton);
 
     // meshCount: number of Mesh sub-resources that follow
-    if (loader.m_ReadCursor + 4 > loader.DataSize()) {
-        LOG_ERROR("MeshManager", "'%s': truncated before meshCount", path.CStr());
+    if (rl.m_ReadCursor + 4 > (int32_t)rl.DataSize()) {
+        LOG_ERROR("MeshManager", "LoadModel: truncated before meshCount");
         delete model;
-        return Mortar::SmartPtr<Model>();
+        return SmartPtr<Model>();
     }
-    uint32_t meshCount = loader.Read<uint32_t>();
+    uint32_t meshCount = rl.Read<uint32_t>();
     if (meshCount == 0 || meshCount > 64) {
-        LOG_ERROR("MeshManager", "'%s': bad meshCount=%u", path.CStr(), meshCount);
+        LOG_ERROR("MeshManager", "LoadModel: bad meshCount=%u", meshCount);
         delete model;
-        return Mortar::SmartPtr<Model>();
+        return SmartPtr<Model>();
     }
 
-    // --- LoadMesh portion (one per mesh, sequential on same loader) ---
+    // Dispatch Load<Mesh>() for each mesh -- reads sequentially from the same rl.
+    // v1.6.1 LoadModel @0x00238790: loop calls Load<Mesh>().
     for (uint32_t mi = 0; mi < meshCount; mi++) {
-        Mesh* mesh = new Mesh();
-
-        // ReadString -> mesh name
-        if (loader.m_ReadCursor + 2 > loader.DataSize()) break;
-        AsciiString meshName = loader.ReadString();
-        mesh->m_Name = meshName.CStr();
-
-        // Read<ulong> -> boneCount + per-bone BoneBinding data
-        if (loader.m_ReadCursor + 4 > loader.DataSize()) break;
-        uint32_t boneCount = loader.Read<uint32_t>();
-        if (boneCount > 0 && boneCount < 256) {
-            std::vector<BoneBinding> bones(boneCount);
-            for (uint32_t i = 0; i < boneCount; i++) {
-                if (loader.m_ReadCursor + 2 > loader.DataSize()) break;
-                AsciiString boneName = loader.ReadString();
-                bones[i].m_BoneName = boneName;
-                if (loader.m_ReadCursor + 24 <= loader.DataSize()) {
-                    loader.ReadBytes(&bones[i].m_Bounds.min, sizeof(Vec3));
-                    loader.ReadBytes(&bones[i].m_Bounds.max, sizeof(Vec3));
-                }
-            }
-            mesh->SetBones(bones.data(), (unsigned long)boneCount);
+        SmartPtr<Mesh> mesh = rl.Load<Mesh>();
+        if (mesh.IsValid()) {
+            model->AddNode(mesh);
         }
-
-        // Read<ulong> -> materialCount + per-material sub-resource
-        if (loader.m_ReadCursor + 4 > loader.DataSize()) break;
-        uint32_t matCount = loader.Read<uint32_t>();
-
-        // Local vector to hold textures indexed by material index.
-        // Each geometry references a material index; the texture is
-        // assigned directly to Geometry::m_DiffuseTex below.
-        std::vector<Mortar::SmartPtr<Mortar::Texture> > matTextures;
-        matTextures.reserve(matCount);
-
-        for (uint32_t i = 0; i < matCount; i++) {
-            // ReadSubResourceLookup -> material child (1-based index into loader.m_Children)
-            ResourceLoader* matChild = loader.ReadSubResourceLookup();
-            if (!matChild) {
-                matTextures.push_back(Mortar::SmartPtr<Mortar::Texture>());
-                continue;
-            }
-
-            matChild->ResetReadPos();
-
-            // Read material name (Material_Old = just AsciiString in rawData)
-            matChild->ReadString(); // material name, unused
-
-            // ReadSubResourceLookup -> texture grandchild
-            Mortar::SmartPtr<Mortar::Texture> loadedTexture;
-            ResourceLoader* texChild = matChild->ReadSubResourceLookup();
-            if (texChild) {
-                texChild->ResetReadPos();
-                /* AsciiString texName = */ texChild->ReadString();   // e.g. "Map #1" (unused)
-                AsciiString texRelPath = texChild->ReadString();  // e.g. "textures\fruit_atlas.tex"
-
-                std::string texPath = texRelPath.CStr();
-                for (size_t j = 0; j < texPath.size(); j++)
-                    if (texPath[j] == '\\') texPath[j] = '/';
-
-                std::string fullPath = std::string(loader.BasePathGet().CStr()) + texPath;
-                loadedTexture = TextureManager::GetInstance().Load(fullPath.c_str());
-            }
-
-            // Read 4 color u32 + float specular (advancing read pos through file format)
-            // Values are not stored since IsLit==false for all meshes.
-            if (matChild->m_ReadCursor + 20 <= matChild->DataSize()) {
-                (void)matChild->Read<uint32_t>(); // color0
-                (void)matChild->Read<uint32_t>(); // color1
-                (void)matChild->Read<uint32_t>(); // color2
-                (void)matChild->Read<uint32_t>(); // color3
-                (void)matChild->Read<float>();    // specular
-            }
-
-            // ReadSubResourceLookup -> additional sub-resource (unused in port)
-            matChild->ReadSubResourceLookup();
-
-            matTextures.push_back(loadedTexture);
-        }
-
-        // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
-        if (loader.m_ReadCursor + 4 > loader.DataSize()) {
-            model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
-            continue;
-        }
-        uint32_t geomCount = loader.Read<uint32_t>();
-
-        for (uint32_t i = 0; i < geomCount; i++) {
-            // ReadSubResourceLookup -> geometry child (rawData = index+vertex streams)
-            ResourceLoader* geomChild = loader.ReadSubResourceLookup();
-
-            // Read<u16> matIndex -- from mesh loader (not geomChild), matches LoadMesh binary
-            uint16_t matIndex = 0;
-            if (loader.m_ReadCursor + 2 <= loader.DataSize()) {
-                matIndex = loader.Read<uint16_t>();
-            }
-
-            // Defunct: GeometryBinding stack not constructed -- port loads vbo/ibo directly.
-            // Binary @ 0x001a8388 would new GeometryBinding here.
-            Mortar::SmartPtr<Mortar::Geometry> g(
-                new Mortar::Geometry(Mortar::SmartPtr<Mortar::GeometryBinding>(),
-                                     Mortar::SmartPtr<Mortar::SharedEffectProperties>()));
-            g->m_MaterialIndex = (int)matIndex;
-
-            // Assign diffuse texture from material index to geometry.
-            if (matIndex < (uint16_t)matTextures.size()) {
-                g->m_DiffuseTex = matTextures[matIndex];
-            }
-
-            if (geomChild) {
-                const uint8_t* d = geomChild->DataPtr();
-                size_t ds = geomChild->DataSize();
-                size_t consumed = 0;
-                if (ParseIndexStream(d, ds, *g, consumed)) {
-                    if (consumed < ds) {
-                        ParseVertexStream(d + consumed, ds - consumed, *g);
-                    }
-                }
-            }
-
-            if (g->m_Vbo || g->m_Ibo) {
-                mesh->AddGeometry(g);
-            } else {
-                LOG_WARN("MeshManager", "'%s' mesh[%u] geom[%u]: no GPU data", path.CStr(), mi, i);
-            }
-        }
-
-        if (mesh->m_Geometries.empty()) {
-            LOG_WARN("MeshManager", "'%s' mesh[%u]: no geometries loaded", path.CStr(), mi);
-        }
-
-        model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
     }
 
     if (model->m_nodes.empty()) {
-        LOG_ERROR("MeshManager", "'%s': no meshes loaded", path.CStr());
+        LOG_ERROR("MeshManager", "LoadModel: no meshes loaded");
         delete model;
-        return Mortar::SmartPtr<Model>();
+        return SmartPtr<Model>();
     }
 
     // Matches Model::SwapSkeleton -> UpdateBoneLinks (0x001aaba8, 0x00193010):
@@ -437,7 +489,46 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
         model->UpdateBoneLinks();
     }
 
-    return Mortar::SmartPtr<Model>(model);
+    return SmartPtr<Model>(model);
+}
+
+}  // anonymous namespace
+
+// v1.6.1 MeshManager::LoadMeshInternal @0x00238644
+// Thin dispatcher: registers the four loaders, then calls ResourceLoader::Load<Model>(path).
+// DIFFERS: port caches in m_Models manually (in Load above); binary caches in ResourceLoader.
+// DIFFERS: model->m_name set to path in LoadModel (port) vs model name from stream (binary).
+Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
+    // Register the four stream/mesh/model loaders.
+    // v1.6.1 @0x00238644: RegisterLoader<IVertexStream>(Delegate1(&LoadVertexStreamPSP))
+    ResourceLoader::RegisterLoader<IVertexStream>(
+        Delegate1<SmartPtr<IVertexStream>, ResourceLoader&>::MakeFree(&LoadVertexStreamPSP));
+    // v1.6.1 @0x00238644: RegisterLoader<IIndexStream>(Delegate1(&LoadIndexStreamPSP))
+    ResourceLoader::RegisterLoader<IIndexStream>(
+        Delegate1<SmartPtr<IIndexStream>, ResourceLoader&>::MakeFree(&LoadIndexStreamPSP));
+    // v1.6.1 @0x00238644: RegisterLoader<Model>(Delegate1(&LoadModel)) @0x00238790
+    ResourceLoader::RegisterLoader<Model>(
+        Delegate1<SmartPtr<Model>, ResourceLoader&>::MakeFree(&LoadModel));
+    // v1.6.1 @0x00238644: RegisterLoader<Mesh>(Delegate1(&LoadMesh)) @0x0023890c
+    ResourceLoader::RegisterLoader<Mesh>(
+        Delegate1<SmartPtr<Mesh>, ResourceLoader&>::MakeFree(&LoadMesh));
+
+    // Open the file and dispatch Load<Model> via the loader machinery.
+    // v1.6.1 @0x00238644: return ResourceLoader::Load<Model>(path) @0x0023e80c
+    ResourceLoader loader(path);
+
+    // v1.6.1 @0x00238644: return ResourceLoader::Load<Model>(path) @0x0023e80c
+    SmartPtr<Model> model = loader.Load<Model>();
+    if (model.IsValid()) {
+        // Port convention: m_name = full load path (used by MeshManager::Find/Load cache).
+        // Binary sets m_name from stream name; port convention overrides it to the path
+        // so the cache lookup in MeshManager::Load works correctly.
+        // DIFFERS: binary m_name = stream-embedded model name; port m_name = load path.
+        model->m_name = path;
+    } else {
+        LOG_ERROR("MeshManager", "failed to load '%s'", path.CStr());
+    }
+    return model;
 }
 
 } // namespace Mortar
