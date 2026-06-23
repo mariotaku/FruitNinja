@@ -42,11 +42,20 @@ struct Bounds3D {
 class DrawEffectContainer;
 
 // SharedPropsInfo -- value-type stored in Mesh::m_GroupsByName.
-// sizeof = 0x1c (28 bytes). Binary layout confirmed by AddTextureMap RE.
+// sizeof = 0x1c (28 bytes). Binary: ctor @0x002742c8, AddTextureMap @0x001b1394.
+// v1.6.1 LoadMesh @0x0023890c -- GetPropertiesGroup inserts entries; AddTextureMap
+// is called per material when mat.m_TextureName is non-empty.
 struct SharedPropsInfo {
-    SmartPtr<SharedEffectProperties>           m_Group;    // +0x00, 4 bytes
-    std::map<AsciiString, TextureProps>        m_TexMaps; // +0x04, 24 bytes
+    SmartPtr<SharedEffectProperties>           m_Props;      // +0x00, 4 bytes
+    std::map<AsciiString, TextureProps>        m_TextureMaps; // +0x04, 24 bytes
     // total: 4 + 24 = 28 = 0x1c
+
+    // Binary @ 0x001b1394 -- inserts a TextureProps into m_TextureMaps.
+    // Called when material texture-name is non-empty; TextureProps{} default-inserts.
+    // The propName ("DiffuseMap") is unused in the current port stub (TextureProps
+    // only carries an EffectProperty* handle looked up by GetProperty(propName), which
+    // returns nullptr when the subsystem is defunct).
+    void AddTextureMap(const AsciiString& name, const AsciiString& propName);
 };
 
 // VertexLayout is declared in Geometry.h (included above) so it can be
@@ -290,6 +299,9 @@ static_assert(sizeof(Mortar::Mesh::BoneBinding)                   == 0x44, "Mort
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_BoneName)    == 0x00, "BoneBinding::m_BoneName offset");
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_Bounds)      == 0x28, "BoneBinding::m_Bounds offset");
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_SkeletonIndex)== 0x40, "BoneBinding::m_SkeletonIndex offset");
+static_assert(sizeof(Mortar::SharedPropsInfo)                     == 0x1c, "SharedPropsInfo size (0x1c = 28 bytes)");
+static_assert(offsetof(Mortar::SharedPropsInfo, m_Props)          == 0x00, "SharedPropsInfo::m_Props offset");
+static_assert(offsetof(Mortar::SharedPropsInfo, m_TextureMaps)    == 0x04, "SharedPropsInfo::m_TextureMaps offset");
 #endif
 
 // Model is declared in Model.h.

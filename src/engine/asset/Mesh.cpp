@@ -249,16 +249,31 @@ void Mesh::AddGeometry(SmartPtr<Geometry> geom) {
     m_Geometries.push_back(geom);
 }
 
+// SharedPropsInfo::AddTextureMap -- binary @ 0x001b1394.
+// Inserts a TextureProps{} into m_TextureMaps keyed by `name`.
+// propName is the effect property name (e.g. "DiffuseMap"); the binary
+// calls GetProperty(propName) on the SharedEffectProperties list and stores
+// the result in TextureProps::m_Handle. With the subsystem defunct-stubbed
+// GetProperty returns nullptr; m_Handle stays null. Shape preserved per spec.
+void SharedPropsInfo::AddTextureMap(const AsciiString& name, const AsciiString& propName) {
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b1394
+    TextureProps& entry = m_TextureMaps[name];
+    // Binary: entry.m_Handle = m_Props->GetList().GetProperty(propName.CStr())
+    if (m_Props.IsValid()) {
+        entry.m_Handle = m_Props->GetList().GetProperty(propName.CStr());
+    }
+}
+
 // Binary @ 0x00272c98
 // DIFFERS: binary @ 0x00272c98 walks _Rb_tree node layout (&node[2].field_0x8) to
-// return &m_Group from the found node; port uses std::map::find and &it->second.m_Group.
-// Semantically identical find/return-&m_Group; std::map vs _Rb_tree container-layer
+// return &m_Props from the found node; port uses std::map::find and &it->second.m_Props.
+// Semantically identical find/return-&m_Props; std::map vs _Rb_tree container-layer
 // substitution cannot byte-match.
 SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& name) const {
     // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x00272c98
     std::map<AsciiString, SharedPropsInfo>::const_iterator it = m_GroupsByName.find(name);
     if (it == m_GroupsByName.end()) return NULL;
-    return const_cast<SmartPtr<SharedEffectProperties>*>(&it->second.m_Group);
+    return const_cast<SmartPtr<SharedEffectProperties>*>(&it->second.m_Props);
 }
 
 // Binary @ 0x001b1430 (address unchanged between builds for this overload)
@@ -275,7 +290,7 @@ SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& na
         while (p < end && (*existing)->GetList().Contains(p)) ++p;
         if (p == end) return existing;
     }
-    SmartPtr<SharedEffectProperties>& slot = m_GroupsByName[name].m_Group;
+    SmartPtr<SharedEffectProperties>& slot = m_GroupsByName[name].m_Props;
     SmartPtr<SharedEffectProperties> parent = existing ? *existing : m_OwnGroup;
     slot = new SharedEffectProperties(begin, end, parent);
     return &slot;
