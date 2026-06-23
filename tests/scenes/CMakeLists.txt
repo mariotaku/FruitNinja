@@ -77,3 +77,12 @@ set_tests_properties(bomb_scale PROPERTIES TIMEOUT 60)
 add_scene_test(scene_fruit_splat scene_fruit_splat.cpp)
 add_test(NAME fruit_splat COMMAND scene_fruit_splat)
 set_tests_properties(fruit_splat PROPERTIES TIMEOUT 60)
+
+# ---- scene_slash_blade: blade-skin colour regression test ----
+# Injects a synthetic swipe for each of: default, flame, shiny_red skins.
+# Reads back the rendered framebuffer and asserts the trail is non-black.
+# Headless assertion reproduces "flame blade renders black on web" on native.
+# Port specific: standalone blade-skin diagnostic / regression scene
+add_scene_test(scene_slash_blade_scene scene_slash_blade.cpp)
+add_test(NAME slash_blade COMMAND scene_slash_blade_scene)
+set_tests_properties(slash_blade PROPERTIES TIMEOUT 120)

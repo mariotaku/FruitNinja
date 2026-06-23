@@ -305,6 +305,26 @@ private:
 public:
     // Back-pointer to the fruit this slasher is aimed at.
     Fruit* m_pCurrentTarget;
+
+    // Port specific: test-seam accessor for blade colour diagnostics.
+    const Colour& GetBaseColour() const { return m_BaseColour; }
+
+    // Port specific: test-seam accessor for first vertex buffer colour (what DrawSlice uploads).
+    // Returns 0 if buffer is not allocated.
+    uint32_t GetFirstVertexColour() const {
+        if (m_pLeftBuffer && m_PointCount > 0) return m_pLeftBuffer[0].colour;
+        return 0;
+    }
+
+    // Port specific: test-seam accessor for the U coordinate of vertex[i] in the left buffer.
+    // Returns -99.0f if buffer is not allocated or index is out of range.
+    float GetVertexU(int i) const {
+        if (m_pLeftBuffer && i >= 0 && i < m_PointCount) return m_pLeftBuffer[i].u;
+        return -99.0f;
+    }
+
+    // Port specific: number of live trail points.
+    int GetPointCount() const { return m_PointCount; }
 #endif // !defined(__bada__)
 
 public:

@@ -1265,9 +1265,15 @@ void SlashEntity::UpdatePoints(float dt) {
         //   U = 0.98 - (1 - (arcLen[arcIdx]*0.98/arcLen[iVar14])) * normFactor
         // Apply to BOTH left and right buffers (binary outer do/while iterates twice).
         // -----------------------------------------------------------------------
+        // ASM-spec v1.6.1 SlashEntity::UpdatePoints @0x001e72d8: the remap divisor is
+        // ModSlashUVNormalLength (port g_Scale5, default 0.0 from SlashModInfo ctor), NOT
+        // ModSlashPointScale (g_Scale4). g_Scale5<=0 -> normFactor=1.0 (the default path for
+        // items with no <scales>), giving U in ~-0.02..0.96. Using g_Scale4 (default 1.0)
+        // took the >0 branch -> normFactor=arcTotal (~384) -> U~-383, wrapping the texture
+        // (GL_REPEAT) so the flame blade sampled its dark edge and rendered black.
         float normFactor;
-        if (g_Scale4 > 0.0f) {
-            normFactor = (iVar14 > 0) ? (arcLen[iVar14] / g_Scale4) : 1.0f;
+        if (g_Scale5 > 0.0f) {
+            normFactor = (iVar14 > 0) ? (arcLen[iVar14] / g_Scale5) : 1.0f;
         } else {
             normFactor = 1.0f;
         }
