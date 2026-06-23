@@ -1,5 +1,4 @@
-// Analysed: 2026-04-30T12:00, REVISED 2026-05-02T00:00
-// GameOver — 0x00169ed4
+// GameOver — v1.6.1 FN::GameOver @ 0x0012b838
 
 #include "GameOver.h"
 #include "Game.h"
@@ -16,7 +15,7 @@
 
 namespace FN {
 
-// 0x00169ed4
+// v1.6.1 FN::GameOver @ 0x0012b838
 void GameOver(int endReason, float endScore, int endParam) {
     Game* game = Game::GetInstance();
     if (!game) return;

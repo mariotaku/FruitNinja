@@ -128,16 +128,18 @@ WaveManager::WaveManager()
     m_ColdTimer  = 0.0f;
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
-    // m_DtIncPerMode (+0x84): parsed from <defaults> "dtInc" attr per mode.
-    // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). v1.6.1 binary @ 0x00125ac4
+    // m_DtIncPerMode, m_SpeedClampStart, m_SpeedClampMax:
+    // v1.6.1 WaveManager ctor @ 0x00123ef8 leaves these BSS-zero; Init() fills
+    // them from <defaults> globalDtInc/globalDtStart/globalDtMax. All 4 shipped
+    // modes have globalDtInc=0 (no ramp), so inc=0 is binary-faithful.
+    // globalDtStart/globalDtMax default to 1.0 when absent; with inc=0 the
+    // clamp range is unreachable anyway, so 1.0 is the correct sentinel.
     m_DtIncPerMode[0] = m_DtIncPerMode[1] = 0.0f;
     m_DtIncPerMode[2] = m_DtIncPerMode[3] = 0.0f;
-    // DIFFERS: actual per-mode globalDtStart unknown from RE; using 1.0 as placeholder.
     m_SpeedClampStart[0] = m_SpeedClampStart[1] = 1.0f;
     m_SpeedClampStart[2] = m_SpeedClampStart[3] = 1.0f;
-    // DIFFERS: per-mode speed upper bounds -- need RE; using 100.0f.
-    m_SpeedClampMax[0] = m_SpeedClampMax[1] = 100.0f;
-    m_SpeedClampMax[2] = m_SpeedClampMax[3] = 100.0f;
+    m_SpeedClampMax[0] = m_SpeedClampMax[1] = 1.0f;
+    m_SpeedClampMax[2] = m_SpeedClampMax[3] = 1.0f;
     for (int j = 0; j < 32; ++j)
         m_FruitQueue[j] = -1;
     m_MaxWaveIdP0 = 0;
@@ -968,9 +970,8 @@ void WaveManager::Update(float dt) {
         }
     }
 
-    // Wave speed accumulator — binary @ 0x125ba2-0x125aa6.
-    // Binary uses TWO per-mode arrays: field_0x8c[4] (lower bound) and field_0x9c[4] (upper bound).
-    // TODO: per-mode bounds need RE — initialised to {1.0,1.0,1.0,1.0} / {100.0,...} as placeholders.
+    // Wave speed accumulator: per-mode inc=0 in all shipped modes (globalDtInc absent),
+    // so m_SpeedAccum stays at m_SpeedClampStart (1.0) and the clamp is a no-op.
     {
         int mode = game_work.gameMode;
         // Binary @ 0x001267a0: accumulator is at +0x78 (m_SpeedAccum), NOT +0x74.

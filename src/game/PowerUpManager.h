@@ -17,7 +17,7 @@
 //   SetDefaults             0x00117a80
 //   ClearScoreMultipliers   0x0011a218
 //   Update                  0x001189b4  (wrapper: 0x000f3ccc)
-//   Reset                   0x00119b08  (stale -- TODO: re-verify v1.6.1)
+//   Reset                   0x00142e08  (v1.6.1 verified)
 //   ClearTimedPowers        0x00118904
 //   ActivatePower           0x001197c4
 //   ActivateScreenEffect    0x00119760
@@ -25,10 +25,10 @@
 //   Load                    0x00119cb0
 //   LoadTextures            0x0011840c
 //   Draw                    0x00119384
-//   ApplyDtMod              0x001204dc
-//   SlowClock               0x001204cc
+//   ApplyDtMod              0x0014d9c0  (v1.6.1 verified)
+//   SlowClock               0x0014d9b0  (v1.6.1 verified)
 //   StopClock               0x00117a70
-//   PowerupDtModMultiply    0x001286ec
+//   PowerupDtModMultiply    0x00150cf0  (v1.6.1 verified)
 //   AddToScoreGainAdd       0x0011d10c
 //   AddToScoreLossAdd       0x0011d114
 //   AddToScoreGainMultiply  0x0011d120
@@ -67,7 +67,7 @@ public:
     // @ 0x0011a218
     void ClearScoreMultipliers();
 
-    // TODO: re-verify v1.6.1 Reset addr (0x00119b08 is stale -- that addr is _Rb_tree::_M_insert_unique)
+    // v1.6.1 PowerUpManager::Reset @ 0x00142e08
     void Reset(bool fullReset);
 
     // @ 0x00118904
@@ -100,16 +100,16 @@ public:
     // @ 0x001199d4 — restore active power-up state from XML
     void LoadActivePowerUps(TiXmlElement* parent, int gameMode);
 
-    // @ 0x001204dc — m_DtMod *= scale
+    // @ 0x0014d9c0 (v1.6.1) — m_DtMod *= scale
     void ApplyDtMod(float scale) { m_DtMod *= scale; }
 
-    // @ 0x001204cc — m_SlowClockMult *= scale
+    // @ 0x0014d9b0 (v1.6.1) — m_SlowClockMult *= scale
     void SlowClock(float scale) { m_SlowClockMult *= scale; }
 
     // @ 0x00117a70 — m_StopClockAccum += duration
     void StopClock(float duration);
 
-    // @ 0x001286ec — m_WaveDtModCur *= scale
+    // @ 0x00150cf0 (v1.6.1) — m_WaveDtModCur *= scale
     void PowerupDtModMultiply(float scale) { m_WaveDtModCur *= scale; }
 
     // @ 0x0011d10c
