@@ -558,8 +558,12 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 
             float aspect = tmpl->m_AspectRatio;
             if (aspect <= 0.0f) aspect = 1.0f;
-            float hx = size * 0.5f * aspect;
-            float hy = size * 0.5f;
+            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: the quad half-extent
+            // IS the interpolated size (X *= m_AspectRatio) -- NO 0.5 factor. Corners are
+            // center +/- basis*size, so the quad spans 2*size. The port's *0.5f made every
+            // particle 2x too small (most visible on the tiny pixel_blade particle).
+            float hx = size * aspect;
+            float hy = size;
 
             if (p.m_CycleXRate != 0.0f) hx *= cosf(p.m_CycleXPhase);
             if (p.m_CycleYRate != 0.0f) hy *= cosf(p.m_CycleYPhase);
