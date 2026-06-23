@@ -120,7 +120,8 @@ public:
     // Shared paging-arrow texture (loaded by LoadContent @ 0x00170b1c).
     static Mortar::SmartPtr<Mortar::Texture> s_TexArrow;
 
-private:
+    // Binary struct fields — public to allow offsetof() in layout static_asserts
+    // (GCC 4.4 __bada__ cross-build: offsetof on private members is an error).
     // +0x7C: current fact string (result of Fruit::GetFact; ctor inits NULL)
     // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
     const char* m_FactText;                                // @+0x7C

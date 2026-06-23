@@ -121,6 +121,7 @@
         void glBindTexture(GLenum, GLuint);
         void glTexParameteri(GLenum, GLenum, GLint);
         void glTexImage2D(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*);
+        void glTexSubImage2D(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
         void glCompressedTexImage2D(GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*);
         void glActiveTexture(GLenum);
         void glDrawArrays(GLenum, GLint, GLsizei);
