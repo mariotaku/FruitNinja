@@ -100,14 +100,7 @@ public:
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
-    // Under __bada__ (incl. the asm-verify cross-build) the layout members are
-    // public so the offsetof() static_asserts below can reach them — GCC 4.4.1
-    // rejects offsetof on private members. On the host they stay private.
-#if defined(__bada__)
-public:
-#else
 private:
-#endif
     // +0x7C in binary: transition scalar, ctor=0.0f
     float m_TransitionAlpha;
 
@@ -181,6 +174,10 @@ public:
     // Binary @ 0x0012eb30 (re-analyst 2026-06-07). AboutScreen quit/back-out
     // handler.
     void QuitGameCallback();
+
+#ifdef __bada__
+    friend struct AboutScreenLayoutAssert;
+#endif
 };
 
 #if defined(__bada__)

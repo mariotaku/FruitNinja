@@ -464,27 +464,59 @@ public:
     static Mortar::Event1<SlashEntity*>& OnComboCancelEvent();
 
     // ---- end STUBS ----
+
+#ifdef __bada__
+    friend struct SlashEntityLayoutAssert;
+#endif
 };
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(SlashEntity)                              == 0x188, "SlashEntity size");
-// TODO(#93-followup): offsetof on private members rejected by GCC 4.4; need
-// public fields or friend access to enforce field offsets on the cross-build.
-// Expected offsets: m_TrailEmitter@0x3c, m_Scale@0x40, m_BaseColour@0x44,
-//   m_HighlightColour@0x48, m_BombHitEdge@0x4c, m_SplitPoint@0x50,
-//   m_PointCount@0x58, m_pLeftBuffer@0x5c, m_pRightBuffer@0x60, m_BladeDir@0x64,
-//   m_TailPos@0x70, m_HeadPos@0x7c, m_PrevHeadPos@0x88, m_SegLenSq@0x94,
-//   m_HeadThickScale@0x98, m_SliceBladeDir@0x9c, m_SliceFruitPos@0xa8,
-//   m_SliceFruitType@0xb4, m_SwipeSoundTimer@0xb8, m_GhostDirRing@0xbc,
-//   m_GhostIndex@0x104, m_GhostCount@0x108, m_GhostDir@0x10c,
-//   m_ComboTimer@0x118, m_pComboMissControl@0x11c, m_GhostSpawnTimer@0x120,
-//   m_GhostSpawnPending@0x124, m_pLastComboFruit@0x128, m_PendingSplats@0x12c,
-//   m_SplatTimer@0x130, m_SplatInterval@0x134, m_TrailShiftA@0x138,
-//   m_TrailShiftB@0x13c, m_BladeActive@0x140, m_ComboScoreScale@0x144,
-//   m_field_0x148@0x148, m_field_0x14c@0x14c, m_ComboFruitTypes@0x150,
-//   m_ComboCount@0x178, m_ComboCounter@0x17c, m_ComboOnlineMode@0x180,
-//   m_AngleIndex@0x184.
+struct SlashEntityLayoutAssert {
+    static_assert(sizeof(SlashEntity)                                        == 0x188, "SlashEntity size");
+    static_assert(offsetof(SlashEntity, m_TrailEmitter)                      == 0x3c,  "m_TrailEmitter offset");
+    static_assert(offsetof(SlashEntity, m_Scale)                             == 0x40,  "m_Scale offset");
+    static_assert(offsetof(SlashEntity, m_BaseColour)                        == 0x44,  "m_BaseColour offset");
+    static_assert(offsetof(SlashEntity, m_HighlightColour)                   == 0x48,  "m_HighlightColour offset");
+    static_assert(offsetof(SlashEntity, m_BombHitEdge)                       == 0x4c,  "m_BombHitEdge offset");
+    static_assert(offsetof(SlashEntity, m_SplitPoint)                        == 0x50,  "m_SplitPoint offset");
+    static_assert(offsetof(SlashEntity, m_PointCount)                        == 0x58,  "m_PointCount offset");
+    static_assert(offsetof(SlashEntity, m_pLeftBuffer)                       == 0x5c,  "m_pLeftBuffer offset");
+    static_assert(offsetof(SlashEntity, m_pRightBuffer)                      == 0x60,  "m_pRightBuffer offset");
+    static_assert(offsetof(SlashEntity, m_BladeDir)                          == 0x64,  "m_BladeDir offset");
+    static_assert(offsetof(SlashEntity, m_TailPos)                           == 0x70,  "m_TailPos offset");
+    static_assert(offsetof(SlashEntity, m_HeadPos)                           == 0x7c,  "m_HeadPos offset");
+    static_assert(offsetof(SlashEntity, m_PrevHeadPos)                       == 0x88,  "m_PrevHeadPos offset");
+    static_assert(offsetof(SlashEntity, m_SegLenSq)                          == 0x94,  "m_SegLenSq offset");
+    static_assert(offsetof(SlashEntity, m_HeadThickScale)                    == 0x98,  "m_HeadThickScale offset");
+    static_assert(offsetof(SlashEntity, m_SliceBladeDir)                     == 0x9c,  "m_SliceBladeDir offset");
+    static_assert(offsetof(SlashEntity, m_SliceFruitPos)                     == 0xa8,  "m_SliceFruitPos offset");
+    static_assert(offsetof(SlashEntity, m_SliceFruitType)                    == 0xb4,  "m_SliceFruitType offset");
+    static_assert(offsetof(SlashEntity, m_SwipeSoundTimer)                   == 0xb8,  "m_SwipeSoundTimer offset");
+    static_assert(offsetof(SlashEntity, m_GhostDirRing)                      == 0xbc,  "m_GhostDirRing offset");
+    static_assert(offsetof(SlashEntity, m_GhostIndex)                        == 0x104, "m_GhostIndex offset");
+    static_assert(offsetof(SlashEntity, m_GhostCount)                        == 0x108, "m_GhostCount offset");
+    static_assert(offsetof(SlashEntity, m_GhostDir)                          == 0x10c, "m_GhostDir offset");
+    static_assert(offsetof(SlashEntity, m_ComboTimer)                        == 0x118, "m_ComboTimer offset");
+    static_assert(offsetof(SlashEntity, m_pComboMissControl)                 == 0x11c, "m_pComboMissControl offset");
+    static_assert(offsetof(SlashEntity, m_GhostSpawnTimer)                   == 0x120, "m_GhostSpawnTimer offset");
+    static_assert(offsetof(SlashEntity, m_GhostSpawnPending)                 == 0x124, "m_GhostSpawnPending offset");
+    static_assert(offsetof(SlashEntity, m_pLastComboFruit)                   == 0x128, "m_pLastComboFruit offset");
+    static_assert(offsetof(SlashEntity, m_PendingSplats)                     == 0x12c, "m_PendingSplats offset");
+    static_assert(offsetof(SlashEntity, m_SplatTimer)                        == 0x130, "m_SplatTimer offset");
+    static_assert(offsetof(SlashEntity, m_SplatInterval)                     == 0x134, "m_SplatInterval offset");
+    static_assert(offsetof(SlashEntity, m_TrailShiftA)                       == 0x138, "m_TrailShiftA offset");
+    static_assert(offsetof(SlashEntity, m_TrailShiftB)                       == 0x13c, "m_TrailShiftB offset");
+    static_assert(offsetof(SlashEntity, m_BladeActive)                       == 0x140, "m_BladeActive offset");
+    static_assert(offsetof(SlashEntity, m_ComboScoreScale)                   == 0x144, "m_ComboScoreScale offset");
+    static_assert(offsetof(SlashEntity, m_field_0x148)                       == 0x148, "m_field_0x148 offset");
+    static_assert(offsetof(SlashEntity, m_field_0x14c)                       == 0x14c, "m_field_0x14c offset");
+    static_assert(offsetof(SlashEntity, m_ComboFruitTypes)                   == 0x150, "m_ComboFruitTypes offset");
+    static_assert(offsetof(SlashEntity, m_ComboCount)                        == 0x178, "m_ComboCount offset");
+    static_assert(offsetof(SlashEntity, m_ComboCounter)                      == 0x17c, "m_ComboCounter offset");
+    static_assert(offsetof(SlashEntity, m_ComboOnlineMode)                   == 0x180, "m_ComboOnlineMode offset");
+    static_assert(offsetof(SlashEntity, m_AngleIndex)                        == 0x184, "m_AngleIndex offset");
+};
 #endif
 
 // Per-finger SlashEntity instances (binary has SlashEntity[16] @ BSS).

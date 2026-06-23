@@ -265,15 +265,17 @@ public:
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
-static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");
-static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
-static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
-static_assert(offsetof(ShopScreen, m_ScrollOffset)    == 0xac, "m_ScrollOffset offset");
-static_assert(offsetof(ShopScreen, field_0xb0)        == 0xb0, "field_0xb0 offset");
-static_assert(offsetof(ShopScreen, m_AnimFrame)       == 0xb4, "m_AnimFrame offset");
-static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
-static_assert(sizeof(ShopScreen) == 0xbc, "ShopScreen size must match binary");
+struct ShopScreenLayoutAssert {
+    static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
+    static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");
+    static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
+    static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
+    static_assert(offsetof(ShopScreen, m_ScrollOffset)    == 0xac, "m_ScrollOffset offset");
+    static_assert(offsetof(ShopScreen, field_0xb0)        == 0xb0, "field_0xb0 offset");
+    static_assert(offsetof(ShopScreen, m_AnimFrame)       == 0xb4, "m_AnimFrame offset");
+    static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
+    static_assert(sizeof(ShopScreen) == 0xbc, "ShopScreen size must match binary");
+};
 #endif
 
 #endif // FN_SHOP_SCREEN_H
