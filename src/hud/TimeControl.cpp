@@ -64,7 +64,7 @@ void TimeControl::Release() {
 }
 
 void TimeControl::Reset() {
-    // 0x00162168
+    // v1.6.1 TimeControl::Reset @ 0x001c0930
     m_PowerupOverlay[0] = '\0';
     float startSecs = m_CountdownStart;
     if (startSecs < 0.0f) startSecs = 0.0f;
@@ -97,12 +97,12 @@ void TimeControl::Skip() {
 }
 
 void TimeControl::CountDown(float startSeconds) {
-    // 0x001620f0
+    // v1.6.1 TimeControl::CountDown @ 0x001c0890
     m_CountdownStart = startSeconds;
 }
 
 float TimeControl::GetCountDown() const {
-    // 0x00162134
+    // v1.6.1 TimeControl::GetCountDown @ 0x001c08e8
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
     if (game_work.gameMode != Mortar::GAME_MODE_ARCADE && !IsMultiplayer())
@@ -121,9 +121,9 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001624a4 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001c0a48 (re-analyst)
 void TimeControl::Update(float dt) {
-    // 0x001624a4
+    // 0x001c0a48
     float entrySizeX = size.x;   // cached before GetInstance call (binary s16)
     Game* game = Game::GetInstance();
     if (!game) {
@@ -133,7 +133,6 @@ void TimeControl::Update(float dt) {
 #endif // !defined(__bada__)
         return;
     }
-    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001624ec (re-analyst)
     // Non-timed-mode early return: hide HUD, stamp sentinel into save slot,
     // and skip the LAB_00162818 timed-mode block entirely. Other subsystems
     // (Fruit::Chuck power-fruit abort gate) read -1.0f to detect "no time
@@ -150,9 +149,8 @@ void TimeControl::Update(float dt) {
     // Binary re-anchors pos.x every frame (no IsTimedGame() gate at this level).
     pos.x = (480.0f - entrySizeX) * 0.5f - 5.0f;
 
-    // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
-    // Three conditions suppress the timer tick (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001624e6 (re-analyst)
+    // Pause / suppress gate — three conditions suppress the timer tick
+    // (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
     bool suppress = game_work.bM_Mode
                  || game_work.bM_bPaused
                  || (game_work.m_bMPRetryPending && !game_work.m_bP2PReady);
@@ -161,15 +159,12 @@ void TimeControl::Update(float dt) {
         int q;
         if (m_CountdownStart <= 0.0f) {
             // ZEN count-up branch: tick time only; slow-clock join below.
-            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001627ea (re-analyst)
             m_TimeRemaining += dt;
             q = (int)m_TimeRemaining;
         } else {
             // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
 
-            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00162528 (re-analyst)
-            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016257c (re-analyst)
             if (WaveManager::PowersEnabled()) {
                 PowerUpManager* pum = PowerUpManager::GetInstance();
                 if (pum && pum->m_StopClockAccum > 0.0f) {
@@ -185,11 +180,11 @@ void TimeControl::Update(float dt) {
                 m_TimeRemaining -= dt;
             }
 
-            // GameOver trigger (binary @ 0x001625be).
+            // GameOver trigger.
             if (m_TimeRemaining < 0.5f) {
                 FN::GameOver(-1, -1.0f, -1);
-                m_TimeRemaining = 0.0f;    // DAT_001627a0
-                // Reset combo on Arcade timeout (binary @ 0x001625dc).
+                m_TimeRemaining = 0.0f;
+                // Reset combo on Arcade timeout.
                 g_ComboCount  = 0;
                 g_LastSlasher = -1;
                 m_DrawColour = Colour(255, 100, 100, 255);
@@ -211,8 +206,7 @@ void TimeControl::Update(float dt) {
                 m_DrawColour = tint;
             }
 
-            // Tick-tock SFX when colour band toggled this frame (binary @ 0x00162716).
-            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016273a (re-analyst)
+            // Tick-tock SFX when colour band toggled this frame.
             // s_TickTockToggle ? "Time-tick" : "Time-tock" is correct post-XOR order;
             // first fire after Reset is "Time-tick".
             if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
@@ -226,7 +220,6 @@ void TimeControl::Update(float dt) {
             }
 
             // Arcade q value for slow-clock join below.
-            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001627d2 (re-analyst)
             q = (int)(m_CountdownStart - m_TimeRemaining);
         }
         // Single slow-clock join point for both Zen and Arcade paths.
@@ -235,15 +228,13 @@ void TimeControl::Update(float dt) {
     }
 
     // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
-    // Write HUD-side timer mirror every frame (binary @ 0x00162830).
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00162830 (re-analyst)
+    // Write HUD-side timer mirror every frame.
     LAB_00162818:
 #ifndef __bada__
     if (game_work.mMainScreen) {
         game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
 #endif // !defined(__bada__)
-    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00162830 (re-analyst)
     // Mirror live time to game_work.m_SaveData->m_TimeRemainingSave so other
     // subsystems (e.g. Fruit::Chuck power-fruit abort gate) can read the
     // remaining wave time without a TimeControl pointer.
@@ -251,8 +242,7 @@ void TimeControl::Update(float dt) {
         game_work.m_SaveData->m_TimeRemainingSave = m_TimeRemaining;
     }
 
-    // Binary @ LAB_00162818 -- pos.y re-anchor every timed frame based on
-    // camera transition. Non-MP branch:
+    // pos.y re-anchor every timed frame based on camera transition. Non-MP branch:
     //   tiltMix = 1.0 - |cameraTransition|
     //   pos.y   = size.y * -2 * tiltMix + (2*size.y + 320) * 0.5
     // For size.y=18 and stable in-game camera (transition=0), pos.y = 142.

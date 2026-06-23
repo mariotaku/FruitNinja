@@ -376,9 +376,11 @@ public:
     // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_field68.
     static int SplitWords(const char* str, std::vector<std::string>& out);
 
-private:
     // Parse placement string to SpawnPlacement enum.
+    // Called from SpawnModifier::ParseSpecific as well as WaveManager::Init.
     static SpawnPlacement ParsePlacement(const char* side);
+
+private:
 };
 
 // Layout asserts for the re-laid-out +0x4c..+0x77 block and the tail.

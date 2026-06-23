@@ -80,7 +80,7 @@ void DrawStartFade() {
     game->pSplashTex->UnSet();
 }
 
-// @ 0x00169a9c
+// v1.6.1 FN::PrepareForLevelStart @ 0x001cb3e8
 void PrepareForLevelStart() {
     LOG_DEBUG("FN", "PrepareForLevelStart: firing -> WaveManager::Reset(false)");
     WaveManager::GetInstance()->Reset(false);

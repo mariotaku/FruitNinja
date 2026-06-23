@@ -9,7 +9,7 @@
 #include "Game.h"
 #include "GameOver.h"
 #include "entities/SlashEntity.h"
-#include "network/NetworkManager.h"
+#include "hud/TimeControl.h"
 #include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
@@ -18,6 +18,7 @@
 #include <string>
 #include "game/GameWork.h"
 #include "hud/HUD.h"
+#include "game/WaveManager.h"
 
 // Binary file-static globals at 0x001f3d84..0x001f3da8.
 // Port-side: hoisted out of PowerUpManager so the binary-faithful 0x90
@@ -156,9 +157,12 @@ void PowerUpManager::Update(float dt) {
     }
 
     // (4) Tick all active screen-effects.
+    // Binary PowerUpManager::Update @ 0x001189b4: passes dt / WaveManager::GetInstance()->m_ComboSpeedDivisor.
+    // m_ComboSpeedDivisor is always 1.0 in shipped content (no XML sets it), so numerically identical.
     std::list<ScreenEffect>::iterator eit = m_ActiveScreenEffects.begin();
     while (eit != m_ActiveScreenEffects.end()) {
-        eit->Update(dt, 0.0f, 0.0f);   // DAT_00118b9c = 0.0f
+        float effectDt = dt / WaveManager::GetInstance()->m_ComboSpeedDivisor;
+        eit->Update(effectDt, 0.0f, 0.0f);   // DAT_00118b9c = 0.0f
         if (eit->m_RemainingTime <= 0.0f) {
             eit->Deactivate();
             eit = m_ActiveScreenEffects.erase(eit);
@@ -171,21 +175,36 @@ void PowerUpManager::Update(float dt) {
     m_WaveDtModPrev = m_WaveDtModCur;
 }
 
-// TODO: re-verify v1.6.1 Reset addr (0x00119b08 is stale -- that addr is _Rb_tree::_M_insert_unique)
+// v1.6.1 PowerUpManager::Reset @ 0x00142e08
 void PowerUpManager::Reset(bool fullReset) {
-    m_HighestActiveProgress = 0.0f;
     m_StopClockAccum        = 0.0f;
+    m_HighestActiveProgress = 0.0f;
     m_pActiveSpecial        = 0;
+    SlashEntity::s_ModPowerMask = 0;
     m_WaveDtModCur          = 1.0f;
     m_WaveDtModPrev         = 1.0f;     // also reset here, unlike SetDefaults
     m_DtMod                 = 1.0f;
     m_SlowClockMult         = 1.0f;
     ClearScoreMultipliers();
-    SlashEntity::s_ModPowerMask = 0;
-    SlashEntity::ResetModScales();
+
+    // Binary @ 0x00142e08: if HUD != NULL, writes 1.0f to all 6 scale slots.
+    // Port: SetDefaults() already does this; HUD gate kept faithful to binary.
+    HUD* pHud = game_work.mHud;
+    if (pHud) {
+        pHud->scales[0] = 1.0f;
+        pHud->scales[1] = 1.0f;
+        pHud->scales[2] = 1.0f;
+        pHud->scales[3] = 1.0f;
+        pHud->scales[4] = 1.0f;
+        pHud->scales[5] = 1.0f;
+    }
 
     if (fullReset) {
-        Mortar::NetworkManager::GetInstance()->SyncClear();  // Defunct: online MP
+        // Binary @ 0x00142e08: (**(code **)(*(int *)game_work.pM_pTimeControl + 0x10))()
+        // = TimeControl::Reset() via vtable slot +0x10, called BEFORE the active-list drain.
+        if (game_work.mCountDown) {
+            game_work.mCountDown->Reset();
+        }
     }
 
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();

@@ -501,13 +501,12 @@ void GameModeScreen::Update(float dt) {
                 // was wrong (r5 was the GOT base, not MainScreen*).
                 //
                 // The binary's arcade-start path does NOT trigger
-                // PowerUpManager's m_bIsSpecial activation here. The real
-                // trigger for ready_set_go is elsewhere -- likely
-                // PowerUpManager::Update scanning specials with an
-                // in-game gate, or some other entry point not yet RE'd.
-                // TODO: find the real m_bIsSpecial activation site so
-                // ready_set_go / arcade_60seconds / arcade_go fire on
-                // arcade start. See Claude task #10.
+                // PowerUpManager's m_bIsSpecial activation here.
+                // Arcade-via-mode-select uses Reset(false) (non-fullReset),
+                // so m_bIsSpecial specials (ready_set_go, arcade_60seconds)
+                // seed only via the MainScreen STATE_GAME_START NewGame path
+                // which calls WaveManager::NewGame() -> PowerUpManager::Reset(true).
+                // Intentional: GameModeScreen only transitions state; NewGame fires later.
                 game_work.mMainScreen->SetCameraTransition(0.0f);
                 game_work.bM_bPaused = 0;
                 m_bPendingRemoval = 1;
