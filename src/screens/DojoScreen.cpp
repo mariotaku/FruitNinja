@@ -231,8 +231,8 @@ void DojoScreen::Update(float dt) {
                 //   m_RestScale = (texW+1, texH+1, 1.0)   (absolute)
                 //   m_ShakeScale.x = 0.5  (backdrop scale factor for shop button)
                 //   m_ShakeScale.y *= 0.575; m_ShakeScale.z *= 0.575; m_ShakeScale.y = -m_ShakeScale.y
-                //   m_HitInsetY  = -15.0
-                //   m_HitInsetX  = -15.0
+                //   m_HitInsetX    = -15.0
+                //   m_HitInsetY    = -15.0
                 if (s_TexShop.IsValid()) {
                     m_pShopButton->m_RestScale = Vec3(
                         (float)s_TexShop->GetWidth() + 1.0f,
@@ -245,8 +245,9 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->m_ShakeScale.y *= 0.575f;
                 m_pShopButton->m_ShakeScale.z *= 0.575f;
                 m_pShopButton->m_ShakeScale.y = -m_pShopButton->m_ShakeScale.y;
-                m_pShopButton->m_HitInsetY  = -15.0f;
-                m_pShopButton->m_HitInsetX = -15.0f;
+                // TODO: v1.6.1 DojoScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value
+                m_pShopButton->m_HitInsetX   = -15.0f;
+                m_pShopButton->m_HitInsetY   = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
                 game_work.mHud->AddControl(m_pShopButton);

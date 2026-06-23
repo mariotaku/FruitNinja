@@ -22,6 +22,10 @@
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
+#include "render/BakedStringTTF.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
+#include "render/Font.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
@@ -30,6 +34,19 @@
 #include <cmath>
 #include <cstdint>
 #include "game/GameWork.h"
+
+namespace {
+// Shared TTF face (gangofchinese.ttf) for MenuButton BakedStringTTF labels.
+// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext,
+//   using a file-local shared SmartPtr<Font> + FontTTFRegistry::Lookup because
+//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_TTFFont =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_TTFFont.IsValid()) return 0;
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_TTFFont.Get());
+}
+} // namespace
 
 // Class-static textures loaded by MenuButton::LoadContent (v1.6.1 @0x0019d640).
 //   Slot 1  scratchs.tex        (Phase-A backdrop)
@@ -111,9 +128,9 @@ MenuButton::MenuButton()
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
       m_BaseScale(0.0f, 0.0f, 0.0f),
-      m_pLabelFg(nullptr), m_pLabelExtra(nullptr), m_pLabelShadow(nullptr),
-      m_PlayerColour(255, 255, 255, 255),
-      m_PlayerIndexTint(255, 255, 255, 255),
+      m_DrawOffset(0.0f, 0.0f, 0.0f),
+      m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr),
+      _field12C(0),
       m_GrowInTimer(0.0f),
       m_bRespondsToBackKey(0),
       m_bDragCancel(0),
@@ -126,14 +143,12 @@ MenuButton::MenuButton()
       m_bBackdropActive(1),
       m_ShakeScale(1.0f, 0.85f, 0.85f),
       m_LabelExtraAlpha(0.0f),
+      m_LabelRadius(0.0f),
       m_HitInsetX(5.0f),
       m_HitInsetY(5.0f),
-      m_fieldReserved(100.0f),
-      m_NewBouncePhase(0.0f),
+      m_NewBouncePhase(100.0f),
       m_ShakeTimer(0.0f)
 {
-    _pad114[0] = 0; _pad114[1] = 0; _pad114[2] = 0; _pad114[3] = 0;
-    _pad114[4] = 0; _pad114[5] = 0; _pad114[6] = 0; _pad114[7] = 0;
     m_field130 = 0;
     _pad131[0] = 0; _pad131[1] = 0; _pad131[2] = 0;
     _pad14A[0] = 0; _pad14A[1] = 0;
@@ -179,10 +194,11 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bBackdropActive = 1;
     m_GrowInTimer    = 0.0f;
     m_AnimPhase      = 0;
+    m_LabelRadius    = 0.0f;
     m_HitInsetX      = 5.0f;
     m_HitInsetY      = 5.0f;
     m_ShakeTimer     = 0.0f;
-    m_NewBouncePhase = 0.0f;
+    m_NewBouncePhase = 100.0f;
     m_LabelExtraAlpha = 0.0f;
     m_bClearsMenuItems = 1;  // binary Init @0x19b9f8 sets 1 for EVERY button: slicing any
                              // menu button clears all menu fruits (ClearMenuItems) so the
@@ -201,8 +217,6 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_pTrackedFruit  = nullptr;
     // m_ShakeScale @ +0x154: x=1.0, y=0.85, z=0.85 (DAT_0019bafc=0.85f).
     m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
-    // m_fieldReserved @ +0x16C: Init writes 100.0f (DAT_0019baf8 = 0x42c80000).
-    m_fieldReserved  = 100.0f;
     // m_field130 @ +0x130: Init writes 0 (*(uchar*)&m_field130 = 0).
     m_field130       = 0;
 
@@ -310,9 +324,9 @@ void MenuButton::Release() {
             static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
     }
-    m_pLabelFg = nullptr;
-    m_pLabelExtra = nullptr;
-    m_pLabelShadow = nullptr;
+    delete m_pLabelFg;     m_pLabelFg     = nullptr;
+    delete m_pLabelShadow; m_pLabelShadow = nullptr;
+    delete m_pLabelGlow;   m_pLabelGlow   = nullptr;
     DeletePeices();
     m_Texture.SetNull();
     m_pEntity = nullptr;
@@ -347,10 +361,66 @@ void MenuButton::SetLoadingSymbol(bool show) {
     }
 }
 
-// Defunct: SetText -- no-op stub; v1.6.1 MenuButton::SetText @ 0x0019d4e0
-// Zero call sites in shipped binary; curved-text feature authored but never wired.
-void MenuButton::SetText(const char* /*text*/, Colour /*fg*/,
-                         Colour /*shadow*/, float /*radius*/) {
+// v1.6.1 MenuButton::SetText @0x0019b0ac
+void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
+                         float radius, float fontScale,
+                         bool wantGlow, bool wantInnerGlow) {
+    Mortar::FontCacheObjectTTF* font = GetSharedTTFFont();
+
+    delete m_pLabelFg;     m_pLabelFg     = nullptr;
+    delete m_pLabelShadow; m_pLabelShadow = nullptr;
+    delete m_pLabelGlow;   m_pLabelGlow   = nullptr;
+
+    if (!font || !text) return;
+
+    // FitStringToWidth shrink: if the arc width < text width, scale font down.
+    // v1.6.1 MenuButton::SetText @0x0019b0ac: arcW = radius * PI * 0.75
+    float actualFontScale = fontScale;
+    if (radius > 0.0f) {
+        float arcW = radius * 3.14159265f * 0.75f;
+        float outWidth = 0.0f;
+        Mortar::BakedStringTTF::FitStringToWidth(font, text, fontScale, 500.0f, &outWidth);
+        if (outWidth > arcW) {
+            float newScale = fontScale / (outWidth / arcW);
+            m_LabelRadius = radius + fabsf(fontScale - newScale);
+            actualFontScale = newScale;
+        } else {
+            m_LabelRadius = radius;
+        }
+    } else {
+        m_LabelRadius = 0.0f;
+    }
+
+    // FG label: weight=0, white base colour, then gradient applied.
+    m_pLabelFg = new Mortar::BakedStringTTF(font, text, actualFontScale,
+        Colour(255, 255, 255, 255), 0L, 0.0f, Mortar::FONT_EFFECT_NONE);
+    if (wantGlow) {
+        // Outer glow: weight=5, black.
+        m_pLabelGlow = new Mortar::BakedStringTTF(font, text, actualFontScale,
+            Colour(0, 0, 0, 255), 5L, 0.0f, Mortar::FONT_EFFECT_NONE);
+        if (m_LabelRadius > 0.0f)
+            m_pLabelGlow->ApplyFormatting_Circle(m_LabelRadius);
+    }
+    if (wantInnerGlow) {
+        SetInnerGlow(text, Colour(255, 255, 128, 255), m_LabelRadius, actualFontScale, 2.0f);
+    }
+    if (m_LabelRadius > 0.0f)
+        m_pLabelFg->ApplyFormatting_Circle(m_LabelRadius);
+    m_pLabelFg->ApplyGradient_TopBottom(gradTop, gradBottom);
+}
+
+// v1.6.1 MenuButton::SetInnerGlow @0x0019afbc
+void MenuButton::SetInnerGlow(const char* text, Colour colour, float radius,
+                               float fontScale, float /*weight*/) {
+    delete m_pLabelShadow;
+    m_pLabelShadow = nullptr;
+    Mortar::FontCacheObjectTTF* font = GetSharedTTFFont();
+    if (!font || !text) return;
+    // weight=2 for inner glow (shadow).
+    m_pLabelShadow = new Mortar::BakedStringTTF(font, text, fontScale,
+        colour, 2L, 0.0f, Mortar::FONT_EFFECT_NONE);
+    if (radius > 0.0f)
+        m_pLabelShadow->ApplyFormatting_Circle(radius);
 }
 
 // v1.6.1 MenuButton::Remove @0x0019d148
@@ -737,10 +807,34 @@ void MenuButton::Draw(float* hudScaleRaw) {
         HUDControl3d::Draw(hudScaleRaw);
     }
 
-    // Label block (v1.6.1 LIVE): if m_pLabelFg(+0x11c)!=0 -> render BakedString curve-draw
+    // Label block v1.6.1 MenuButton::Draw @0x0019c764:
+    // anchor = GetAdjustedPos() + m_DrawOffset; draw order glow->fg->shadow;
+    // when m_LabelRadius>0 each label also drawn a 2nd time at rotZ+180.
     if (m_pLabelFg != nullptr) {
-        // TODO: 0x0019c2e4 -- BakedString curve-draw for m_pLabelFg / m_pLabelExtra / m_pLabelShadow
-        // TODO: 0x0019c2e4 -- second pass when m_LabelExtraAlpha(+0x160) > 0
+        Vec3 anchor = GetAdjustedPos();
+        anchor.x += m_DrawOffset.x;
+        anchor.y += m_DrawOffset.y;
+        anchor.z += m_DrawOffset.z;
+
+        // scale = size.y / m_RestScale.y (+0x140); rotZ = m_Timer (+0x2c)
+        float restY = m_RestScale.y;
+        float scaleF = (restY != 0.0f) ? (size.y / restY) : 1.0f;
+        float rotZ = m_Timer;
+        Vec2 scaleV(scaleF, scaleF);
+
+        if (m_pLabelGlow) {
+            m_pLabelGlow->Draw(anchor, scaleV, rotZ, 0xf);
+            if (m_LabelRadius > 0.0f)
+                m_pLabelGlow->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+        }
+        m_pLabelFg->Draw(anchor, scaleV, rotZ, 0xf);
+        if (m_LabelRadius > 0.0f)
+            m_pLabelFg->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+        if (m_pLabelShadow) {
+            m_pLabelShadow->Draw(anchor, scaleV, rotZ, 0xf);
+            if (m_LabelRadius > 0.0f)
+                m_pLabelShadow->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+        }
     }
 
     // New-indicator star indicator
