@@ -1,8 +1,6 @@
 #ifndef FN_ENGINE_UTIL_ASCII_STRING_H
 #define FN_ENGINE_UTIL_ASCII_STRING_H
 
-// Analysed: 2026-05-04T00:00
-
 #include "util/StringHash.h"
 #include <cstdint>
 #include <cstddef>
@@ -11,10 +9,13 @@
 
 namespace Mortar {
 
-// Mortar::AsciiString -- binary @ 0x00183c54 ctors / @ 0x00183b18 Resize.
-// 40-byte SSO body (inline_buf for strings <= 32 chars; heap-allocated for longer).
-// Inherits Mortar::MicroBuffer<char, 32> -- for port simplicity we inline the
-// body here.
+// Mortar::AsciiString -- v1.6.1 AsciiString @0x0021e684 ctor / @0x0021e454 Resize.
+// 40-byte SSO body. m_size stores strlen+1 (byte count INCLUDING null terminator),
+// matching the binary. Inline when m_size <= 32 (i.e. strlen <= 31); heap when
+// m_size > 32 (i.e. strlen >= 32). Default ctor leaves m_size=0 (transient;
+// Empty() treats m_size<=1 as empty). Empty string: m_size==1, buf[0]=='\0'.
+// MicroBuffer<char,32> threshold: v1.6.1 MicroBuffer::operator[] @0x00252578 cmp r3,#0x20;
+// MicroBuffer::Resize @0x0021e6ec.
 // Port-specific: port doesn't model MicroBuffer as a separate template; equivalent inlined.
 class AsciiString {
 public:
@@ -29,8 +30,9 @@ public:
     AsciiString& operator=(const char* s);
 
     const char*   c_str() const;
-    unsigned long Length() const { return m_size; }
-    bool          Empty() const  { return m_size == 0; }
+    // Returns strlen (m_size-1); 0 when m_size==0 (default-ctor transient).
+    unsigned long Length() const { return m_size ? m_size - 1 : 0; }
+    bool          Empty() const  { return m_size <= 1; }
 
     // Port bridge: binary uses c_str(); call sites in port use CStr() from old wrapper.
     const char* CStr() const { return c_str(); }
@@ -46,7 +48,7 @@ public:
     // Binary @ 0x00183a40 -- case-insensitive variant.
     int  CompareI(const AsciiString& other) const;
 
-    // Binary @ TBD -- aliases for operator=; match binary entry points for callers using Set() by name.
+    // Binary @ v1.6.1 AsciiString::Set @0x0021e5e4 (from char*) / @0x0021e594 (from char*,len).
     void Set(const AsciiString& other);
     void Set(const char* s);
     void Set(const char* s, unsigned long len);
@@ -61,6 +63,7 @@ public:
 
     void Append(const AsciiString& other);
     void Append(char c);
+    // Resize to newLen characters (strlen). m_size becomes newLen+1.
     void Resize(unsigned long newLen);
 
     // For std::map<AsciiString, T> binary-faithful ordering.
@@ -70,16 +73,18 @@ public:
 
 private:
     void        SetFromCStr(const char* s, unsigned long len);
+    // m_size == strlen+1; heap when strlen >= 32 means m_size > 32.
+    // v1.6.1 MicroBuffer::Resize @0x0021e6ec.
     bool        IsHeap() const { return m_size > 32; }
     char*       Buffer();
     const char* Buffer() const;
 
-    uint32_t m_size;                // +0x00
+    uint32_t m_size;                // +0x00  (strlen+1; 0=default-ctor transient; 1=empty)
     union {
-        char     m_inline_buf[32];  // +0x04..+0x23 (inline mode; strings <= 32 chars)
+        char     m_inline_buf[32];  // +0x04..+0x23 (inline: strlen<=31, m_size<=32)
         struct {
             char*    m_heap;        // +0x04 (heap mode)
-            uint32_t m_capacity;    // +0x08 (heap mode)
+            uint32_t m_capacity;    // +0x08 (heap mode; capacity = strlen+1)
         } m_h;
     };
     mutable uint32_t m_hashCache;   // +0x24 (lazy; 0 = unset; cleared by every mutator)

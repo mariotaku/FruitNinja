@@ -1,5 +1,14 @@
 # tests/CMakeLists.txt — minimal ctest registration.
 
+# AsciiString SSO correctness -- regression guard for the strlen+1/strlen mis-RE.
+# Pure in-process: no GPU, no audio, no file I/O.
+add_executable(test_asciistring test_asciistring.cpp)
+target_link_libraries(test_asciistring PRIVATE mortar_engine)
+target_include_directories(test_asciistring PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME asciistring COMMAND test_asciistring)
+
 add_executable(test_localisation test_localisation.cpp)
 target_link_libraries(test_localisation PRIVATE mortar_engine)
 target_include_directories(test_localisation PRIVATE
