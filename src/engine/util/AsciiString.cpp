@@ -1,4 +1,8 @@
-// Analysed: 2026-05-04T00:00
+// v1.6.1 AsciiString @0x0021e684 ctor / @0x0021e454 Resize / @0x0021e594 Set(s,len)
+// m_size = strlen+1 (byte count including null terminator), matching the binary.
+// Inline when m_size <= 32 (strlen <= 31); heap when m_size > 32 (strlen >= 32).
+// MicroBuffer threshold: v1.6.1 MicroBuffer::operator[] @0x00252578 `cmp r3,#0x20`;
+// MicroBuffer::Resize @0x0021e6ec.
 
 #include "util/AsciiString.h"
 #include <cctype>
@@ -7,13 +11,10 @@
 
 namespace Mortar {
 
-// Binary @ 0x00183b18 Resize (body documented in RE audit).
-// SSO threshold: heap-allocate when m_size > 32.
-
 AsciiString::AsciiString()
     : m_size(0), m_hashCache(0)
 {
-    // inline_buf left uninitialised; c_str() returns "" when m_size==0.
+    // m_size==0: default-ctor transient. Empty() and c_str() treat this as empty.
 }
 
 AsciiString::AsciiString(const char* s)
@@ -25,6 +26,7 @@ AsciiString::AsciiString(const char* s)
     }
 }
 
+// v1.6.1 AsciiString::Set @0x0021e594 (s, len variant).
 AsciiString::AsciiString(const char* s, unsigned long len)
     : m_size(0), m_hashCache(0)
 {
@@ -34,7 +36,8 @@ AsciiString::AsciiString(const char* s, unsigned long len)
 AsciiString::AsciiString(const AsciiString& other)
     : m_size(0), m_hashCache(0)
 {
-    SetFromCStr(other.c_str(), other.m_size);
+    // Pass strlen = other.Length() (= other.m_size - 1 when non-empty, 0 when empty).
+    SetFromCStr(other.c_str(), other.Length());
 }
 
 // Port-specific bridge: ResourceLoader.cpp constructs AsciiString from std::string.
@@ -55,7 +58,8 @@ AsciiString& AsciiString::operator=(const AsciiString& other)
 {
     if (this != &other) {
         m_hashCache = 0;
-        SetFromCStr(other.c_str(), other.m_size);
+        // Pass strlen, not m_size.
+        SetFromCStr(other.c_str(), other.Length());
     }
     return *this;
 }
@@ -84,14 +88,16 @@ const char* AsciiString::Buffer() const
 
 const char* AsciiString::c_str() const
 {
-    if (m_size == 0) return "";
+    // m_size==0 (default ctor) or m_size==1 (empty string "\0") both return "".
+    if (m_size <= 1) return "";
     return Buffer();
 }
 
 // Binary @ 0x0018397c -- lazy hash; cleared by every mutator.
 unsigned int AsciiString::Hash() const
 {
-    if (m_hashCache == 0 && m_size != 0) {
+    // m_size > 1 means the string has at least one character.
+    if (m_hashCache == 0 && m_size > 1) {
         m_hashCache = StringHash(c_str());
     }
     return m_hashCache;
@@ -109,7 +115,9 @@ int AsciiString::Compare(const AsciiString& other) const
     if (ha != hb) {
         return (ha < hb) ? -1 : 1;
     }
-    return memcmp(c_str(), other.c_str(), m_size);
+    // Compare strlen bytes (m_size-1 when m_size>0; safe since lengths are equal).
+    unsigned long slen = Length();
+    return memcmp(c_str(), other.c_str(), slen);
 }
 
 // Binary @ 0x00183a40 -- case-insensitive variant; same shape as Compare.
@@ -122,7 +130,8 @@ int AsciiString::CompareI(const AsciiString& other) const
     //   asm-verify has not flagged divergence as of R4 W4.
     const char* a = c_str();
     const char* b = other.c_str();
-    for (unsigned long i = 0; i < m_size; i++) {
+    unsigned long slen = Length();
+    for (unsigned long i = 0; i < slen; i++) {
         int ca = tolower((unsigned char)a[i]);
         int cb = tolower((unsigned char)b[i]);
         if (ca != cb) {
@@ -132,17 +141,19 @@ int AsciiString::CompareI(const AsciiString& other) const
     return 0;
 }
 
-// Binary @ TBD -- Set overloads; aliases for operator=.
+// v1.6.1 AsciiString::Set @0x0021e5e4 (from AsciiString).
 void AsciiString::Set(const AsciiString& other)
 {
     *this = other;
 }
 
+// v1.6.1 AsciiString::Set @0x0021e5e4 (from char*).
 void AsciiString::Set(const char* s)
 {
     *this = s;
 }
 
+// v1.6.1 AsciiString::Set @0x0021e594 (from char*, len).
 void AsciiString::Set(const char* s, unsigned long len)
 {
     m_hashCache = 0;
@@ -152,7 +163,8 @@ void AsciiString::Set(const char* s, unsigned long len)
 // Binary @ TBD -- equality with caller-precomputed hash: length, then hash, then memcmp.
 bool AsciiString::Equals(const char* s, unsigned int hash, unsigned long len) const
 {
-    if (m_size != len) return false;
+    // len is the caller's strlen; compare against our strlen = Length().
+    if (Length() != len) return false;
     if (Hash() != hash) return false;
     return memcmp(c_str(), s, len) == 0;
 }
@@ -160,7 +172,7 @@ bool AsciiString::Equals(const char* s, unsigned int hash, unsigned long len) co
 // Binary @ TBD -- case-insensitive variant of Equals.
 bool AsciiString::EqualsI(const char* s, unsigned int hash, unsigned long len) const
 {
-    if (m_size != len) return false;
+    if (Length() != len) return false;
     if (Hash() != hash) return false;
     const char* a = c_str();
     for (unsigned long i = 0; i < len; i++) {
@@ -179,90 +191,106 @@ bool AsciiString::operator==(const AsciiString& other) const
 {
     if (m_size != other.m_size) return false;
     if (Hash() != other.Hash()) return false;
-    return memcmp(c_str(), other.c_str(), m_size) == 0;
+    unsigned long slen = Length();
+    return memcmp(c_str(), other.c_str(), slen) == 0;
 }
 
-// Binary @ 0x00183b18 Resize.
-// Handles inline<->heap transitions; clears hash cache.
+// v1.6.1 AsciiString::Resize @0x0021e454 / MicroBuffer::Resize @0x0021e6ec.
+// newLen is the desired strlen. After Resize, m_size == newLen+1.
 void AsciiString::Resize(unsigned long newLen)
 {
     m_hashCache = 0;
 
-    if (newLen == m_size) return;
+    // Compare desired strlen with current strlen.
+    if (newLen == Length()) return;
 
     bool wasHeap = IsHeap();
-    bool willHeap = (newLen > 32);
+    // Heap when strlen >= 32, i.e. byteCount = strlen+1 > 32.
+    bool willHeap = (newLen >= 32);
 
     if (willHeap && !wasHeap) {
         // inline -> heap
-        char* buf = new char[newLen + 1];
-        unsigned long copyLen = (newLen < m_size) ? newLen : m_size;
+        unsigned long byteCount = newLen + 1;
+        char* buf = new char[byteCount];
+        unsigned long copyLen = (newLen < Length()) ? newLen : Length();
         memcpy(buf, m_inline_buf, copyLen);
         buf[newLen] = '\0';
         m_h.m_heap = buf;
-        m_h.m_capacity = newLen;
-        m_size = newLen;
+        m_h.m_capacity = byteCount;
+        m_size = byteCount;
     } else if (!willHeap && wasHeap) {
         // heap -> inline
         char* old = m_h.m_heap;
-        unsigned long copyLen = (newLen < m_size) ? newLen : m_size;
+        unsigned long oldLen = Length();
+        unsigned long copyLen = (newLen < oldLen) ? newLen : oldLen;
         memcpy(m_inline_buf, old, copyLen);
         m_inline_buf[newLen] = '\0';
         delete[] old;
-        m_size = newLen;
+        m_size = newLen + 1;
     } else if (willHeap && wasHeap) {
-        if (newLen > m_h.m_capacity) {
-            char* buf = new char[newLen + 1];
-            unsigned long copyLen = (newLen < m_size) ? newLen : m_size;
+        unsigned long byteCount = newLen + 1;
+        if (byteCount > m_h.m_capacity) {
+            char* buf = new char[byteCount];
+            unsigned long oldLen = Length();
+            unsigned long copyLen = (newLen < oldLen) ? newLen : oldLen;
             memcpy(buf, m_h.m_heap, copyLen);
             buf[newLen] = '\0';
             delete[] m_h.m_heap;
             m_h.m_heap = buf;
-            m_h.m_capacity = newLen;
+            m_h.m_capacity = byteCount;
+        } else {
+            m_h.m_heap[newLen] = '\0';
         }
-        m_size = newLen;
+        m_size = byteCount;
     } else {
         // inline -> inline
-        m_size = newLen;
+        m_inline_buf[newLen] = '\0';
+        m_size = newLen + 1;
     }
 }
 
 void AsciiString::Append(const AsciiString& other)
 {
-    if (other.m_size == 0) return;
-    unsigned long oldSize = m_size;
-    Resize(m_size + other.m_size);
-    memcpy(Buffer() + oldSize, other.c_str(), other.m_size);
-    Buffer()[m_size] = '\0';
+    if (other.Empty()) return;
+    unsigned long oldLen = Length();
+    unsigned long addLen = other.Length();
+    Resize(oldLen + addLen);
+    memcpy(Buffer() + oldLen, other.c_str(), addLen);
+    Buffer()[oldLen + addLen] = '\0';
     m_hashCache = 0;
 }
 
 void AsciiString::Append(char c)
 {
-    unsigned long oldSize = m_size;
-    Resize(m_size + 1);
-    Buffer()[oldSize] = c;
-    Buffer()[m_size] = '\0';
+    unsigned long oldLen = Length();
+    Resize(oldLen + 1);
+    Buffer()[oldLen] = c;
+    Buffer()[oldLen + 1] = '\0';
     m_hashCache = 0;
 }
 
+// v1.6.1 AsciiString ctor @0x0021e684 / Set(s,len) @0x0021e594.
+// len is strlen (NOT including null). Stores m_size = len+1.
+// Inline when len <= 31 (m_size <= 32); heap when len >= 32 (m_size > 32).
 void AsciiString::SetFromCStr(const char* s, unsigned long len)
 {
     m_hashCache = 0;
 
     bool wasHeap = IsHeap();
-    bool willHeap = (len > 32);
+    // v1.6.1 MicroBuffer::Resize @0x0021e6ec: heap when byteCount (=len+1) > 32.
+    bool willHeap = (len >= 32);
 
     if (willHeap) {
+        unsigned long byteCount = len + 1;
         if (wasHeap) {
-            if (len > m_h.m_capacity) {
+            if (byteCount > m_h.m_capacity) {
                 delete[] m_h.m_heap;
-                m_h.m_heap = new char[len + 1];
-                m_h.m_capacity = len;
+                m_h.m_heap = new char[byteCount];
+                m_h.m_capacity = byteCount;
             }
         } else {
-            m_h.m_heap = new char[len + 1];
-            m_h.m_capacity = len;
+            m_h.m_heap = new char[byteCount];
+            m_h.m_capacity = byteCount;
         }
         if (s && len > 0) {
             memcpy(m_h.m_heap, s, len);
@@ -275,9 +303,11 @@ void AsciiString::SetFromCStr(const char* s, unsigned long len)
         if (s && len > 0) {
             memcpy(m_inline_buf, s, len);
         }
+        // len <= 31 always lands inside the 32-byte inline buffer.
         m_inline_buf[len] = '\0';
     }
-    m_size = len;
+    // Store strlen+1 as the binary does.
+    m_size = len + 1;
 }
 
 // Binary @ TBD -- returns true iff name == "..".
