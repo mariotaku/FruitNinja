@@ -824,9 +824,6 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-#if !defined(__bada__)
-                m_pBuyButton->m_bEnabled = 1;
-#endif
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
@@ -902,10 +899,8 @@ void ShopScreen::Update(float dt) {
                         m_pEquipButton->Init(POS_EQUIP_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-                        // Binary (0x0015e5f6): m_bEnabled = 0
-#if !defined(__bada__)
-                        m_pEquipButton->m_bEnabled = 0;
-#endif
+                        // Binary (0x0015e5f6): disables touch on equip button at creation
+                        m_pEquipButton->m_bAcceptsTouch = 0;
                         // Binary @0x001b321c (ShopScreen::Update state-1 equip build): the equip
                         // button is born with m_bClearsMenuItems=0 (MenuButton +0x13a) so slicing
                         // it to EQUIP does NOT cascade ClearMenuItems() and destroy the bomb/back
@@ -1026,9 +1021,6 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
-#if !defined(__bada__)
-            m_pBuyButton->m_bEnabled = 1;
-#endif
             if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =

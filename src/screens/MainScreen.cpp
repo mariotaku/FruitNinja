@@ -852,9 +852,8 @@ void MainScreen::CreatePlayDojo() {
         // ASM-verified: 2026-05-09 binary @ 0x0014b818..0x0014b82c (re-analyst).
         pPlayButton->m_HitInsetY  = -50.0f;
         pPlayButton->m_HitInsetX  = -50.0f;
-#if !defined(__bada__)
-        pPlayButton->m_AnimScale  = 0.5f;   // port-compat only; v1.6.1 field not yet located
-#endif
+        // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
+        pPlayButton->m_ShakeScale.x = 0.5f;
         pPlayButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(pPlayButton);
 

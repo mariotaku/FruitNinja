@@ -498,7 +498,7 @@ void PowerUpShop::Update(float dt) {
         //                                &origin, &deletedCb)
         //   m_BuyButton->Init()          — vtable no-arg Init (calls Reset, no-op)
         //   m_BuyButton->vel.x = 0
-        //   m_BuyButton->m_bEnabled = 0  (field_0x123)
+        //   m_BuyButton->m_bAcceptsTouch = 0  (v1.0 field_0x123 -> v1.6.1 m_bAcceptsTouch +0x149)
         //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
@@ -509,9 +509,8 @@ void PowerUpShop::Update(float dt) {
                                      fruitType, &restPos, &removeCb);
         m_BuyButton->Init();
         // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
-#if !defined(__bada__)
-        m_BuyButton->m_bEnabled = 0;
-#endif
+        // Binary: m_BuyButton->m_bEnabled = 0 (field_0x123 in v1.0 comment; v1.6.1 = m_bAcceptsTouch=0)
+        m_BuyButton->m_bAcceptsTouch = 0;
 
         if (game_work.mHud) {
             game_work.mHud->AddControl(m_BuyButton, false);
@@ -544,9 +543,7 @@ void PowerUpShop::Update(float dt) {
 
             // Binary: set Fruit vel = pushVec (origin), field_0x123 = 0, m_BuyTriggered = 1.
             m_BuyButton->m_pTrackedFruit->vel = g_Origin;
-#if !defined(__bada__)
-            m_BuyButton->m_bEnabled = 0;    // field_0x123 -> m_bEnabled port analogue
-#endif
+            m_BuyButton->m_bAcceptsTouch = 0;
             m_BuyTriggered = 1;
         }
     }

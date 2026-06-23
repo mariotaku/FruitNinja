@@ -226,29 +226,24 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->Init(POS_SHOP_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
                                     shopFruitType, Vec3(0, 0, 0), nullptr);
-                // Binary post-Init writes (order per 0x00138414, RE'd at
-                // asm level not decompile to resolve operator*= target):
-                //   [+0x124] m_TargetSize = (texW+1, texH+1, 1.0)   (absolute)
-                //   [+0x13C] m_AnimScale  = 0.5
-                //   [+0x140] m_BounceParams *= 0.575 (SHOP_SCALE)   (NOT m_TargetSize)
-                //   [+0x150] m_HitInsetY  = -15.0  (was m_AnimSpeed)
-                //   [+0x14C] m_HitInsetX  = -15.0  (was m_AnimSpeed2)
-                // Earlier port had `m_TargetSize *= SHOP_SCALE` which
-                // shrank the ring to ~57.5% of tex size -- wrong. 0.575
-                // is the bounce multiplier, not a size multiplier.
+                // Binary post-Init writes (order per CreateButtons @0x0016ad9c):
+                //   m_RestScale = (texW+1, texH+1, 1.0)   (absolute)
+                //   m_ShakeScale.x = 0.5  (backdrop scale factor for shop button)
+                //   m_ShakeScale.y *= 0.575; m_ShakeScale.z *= 0.575; m_ShakeScale.y = -m_ShakeScale.y
+                //   m_HitInsetY  = -15.0
+                //   m_HitInsetX  = -15.0
                 if (s_TexShop.IsValid()) {
                     m_pShopButton->m_RestScale = Vec3(
                         (float)s_TexShop->GetWidth() + 1.0f,
                         (float)s_TexShop->GetHeight() + 1.0f,
                         1.0f);
                 }
-#if !defined(__bada__)
-                m_pShopButton->m_AnimScale = 0.5f;  // port-compat only; v1.6.1 field not yet located
-#endif
-                // TODO: m_BounceParams *= SHOP_SCALE. The port doesn't
-                // read m_BounceParams yet (MenuButton rework reverted),
-                // so this write is currently a no-op. Restore once the
-                // bounce/new-indicator draw path is ported.
+                // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
+                m_pShopButton->m_ShakeScale.x = 0.5f;
+                // Binary CreateButtons @0x0016ad9c: bounce params *= 0.575, then y = -y
+                m_pShopButton->m_ShakeScale.y *= 0.575f;
+                m_pShopButton->m_ShakeScale.z *= 0.575f;
+                m_pShopButton->m_ShakeScale.y = -m_pShopButton->m_ShakeScale.y;
                 m_pShopButton->m_HitInsetY  = -15.0f;
                 m_pShopButton->m_HitInsetX = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;

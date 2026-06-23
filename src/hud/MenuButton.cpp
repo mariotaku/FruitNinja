@@ -131,17 +131,11 @@ MenuButton::MenuButton()
       m_fieldReserved(100.0f),
       m_NewBouncePhase(0.0f),
       m_ShakeTimer(0.0f)
-#if !defined(__bada__)
-    , m_bEnabled(1),
-      m_AnimScale(1.0f),
-      m_BounceParams(0.85f, 0.85f, 0.0f),
-      m_bTouchHeld(1),
-      m_bScoreSubmitted(0)
-#endif
 {
     _pad114[0] = 0; _pad114[1] = 0; _pad114[2] = 0; _pad114[3] = 0;
     _pad114[4] = 0; _pad114[5] = 0; _pad114[6] = 0; _pad114[7] = 0;
-    _pad130[0] = 0; _pad130[1] = 0; _pad130[2] = 0; _pad130[3] = 0;
+    m_field130 = 0;
+    _pad131[0] = 0; _pad131[1] = 0; _pad131[2] = 0;
     _pad14A[0] = 0; _pad14A[1] = 0;
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
 }
@@ -209,14 +203,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
     // m_fieldReserved @ +0x16C: Init writes 100.0f (DAT_0019baf8 = 0x42c80000).
     m_fieldReserved  = 100.0f;
-    // compat fields (excluded from cross-build)
-#if !defined(__bada__)
-    m_bEnabled       = 1;
-    m_AnimScale      = 1.0f;
-    m_BounceParams   = Vec3(0.85f, 0.85f, 0.0f);
-    m_bTouchHeld     = 1;
-    m_bScoreSubmitted = 0;
-#endif
+    // m_field130 @ +0x130: Init writes 0 (*(uchar*)&m_field130 = 0).
+    m_field130       = 0;
 
     // ASM-spec v1.6.1 MenuButton::Init @0x0019b994: m_RestScale (+0x13C) is set ONLY
     // from the caller's hitBounds/size Vec3 (param_4). Binary has NO texture-pixel

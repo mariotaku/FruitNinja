@@ -373,7 +373,7 @@ void PauseScreen::Release() {
 //
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
-//       retry->m_bTouchHeld = 1;            // +0x131
+//       retry->m_bAcceptsTouch = 1;          // +0x149
 //       retry->m_Texture = m_RetryButtonTex;   // src is +0xc4 (binary)
 //   }
 //   if (m_ResumeButton) resume->m_Texture = m_PlayButtonTex;
@@ -383,9 +383,7 @@ void PauseScreen::Release() {
 // -------------------------------------------------------------------------
 void PauseScreen::Reset() {
     if (m_RetryButton) {
-#if !defined(__bada__)
-        m_RetryButton->m_bTouchHeld = 1;
-#endif
+        m_RetryButton->m_bAcceptsTouch = 1;
         m_RetryButton->m_Texture = m_RetryButtonTex;
     }
     if (m_ResumeButton) {
@@ -476,7 +474,7 @@ bool PauseScreen::SetToMultiplayerState() {
     // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
     //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
-    //   2. m_RetryButton->m_bTouchHeld = 0;               // retry+0x131 -- disable interactability
+    //   2. m_RetryButton->m_bAcceptsTouch = 0;             // retry+0x149 -- disable interactability
     //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon (+0xc4) on resume btn
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
     return HUDControl::SetToMultiplayerState();
@@ -687,12 +685,9 @@ void PauseScreen::Update(float dt) {
         if (m_RevealTimer <= 0.0f) {
             m_RevealTimer = 0.0f;
             // Re-arm the Resume button. Binary @ 0x00154d24 unconditionally
-            // writes `m_ResumeButton->m_bTouchHeld = 1` here (re-analyst
-            // confirmed no `= 0` write to +0x131 exists anywhere in
-            // PauseScreen::Update). Mirror that exactly.
-#if !defined(__bada__)
-            if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
-#endif
+            // writes m_bAcceptsTouch(+0x149) = 1 here (re-analyst confirmed
+            // no = 0 write to +0x149 exists anywhere in PauseScreen::Update).
+            if (m_ResumeButton) m_ResumeButton->m_bAcceptsTouch = 1;
         }
         break;
 
@@ -733,10 +728,8 @@ void PauseScreen::Update(float dt) {
         game_work.bM_Mode = true;
 
         // Enable hit detection on Resume and Retry
-#if !defined(__bada__)
-        if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
-        if (m_RetryButton)  m_RetryButton->m_bTouchHeld  = 1;
-#endif
+        if (m_ResumeButton) m_ResumeButton->m_bAcceptsTouch = 1;
+        if (m_RetryButton)  m_RetryButton->m_bAcceptsTouch  = 1;
         break;
 
     case PAUSE_STATE_RESUME_EXIT:

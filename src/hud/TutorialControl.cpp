@@ -124,19 +124,14 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         pos = btn->pos;
 
         // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
-        // Binary fields: field_0x124 = m_TargetSize (Vec3 at +0x124, .x),
-        //                field_0x14c = m_HitInsetX (float at +0x14C; was m_AnimSpeed2)
         float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162f44: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
-#if !defined(__bada__)
-        m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
-#else
-        m_bFlipX = (pos.x > 0.0f);
-#endif
+        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_field130 != 0)
+        // Binary v1.6.1 TutorialControl::ResetTutePos @0x00162f2c: exact form
+        m_bFlipX = (pos.x > 0.0f) != (btn->m_field130 != 0);
     }
     m_AnimTimer = ANIM_INACTIVE;
 }
@@ -162,18 +157,14 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
         pos = btn->pos;
 
         // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
-        // Binary fields: field_0x124 = m_TargetSize.x, field_0x14c = m_HitInsetX (was m_AnimSpeed2)
         float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162ea6: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120, v1.0 compat field)
-#if !defined(__bada__)
-        m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
-#else
-        m_bFlipX = (pos.x > 0.0f);
-#endif
+        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_field130 != 0)
+        // Binary v1.6.1 TutorialControl::ButtonPressedAtPos @0x00162e58: exact form
+        m_bFlipX = (pos.x > 0.0f) != (btn->m_field130 != 0);
     }
 
     m_AnimTimer += 9.5f;   // -10.0 -> -0.5; starts animation in ~0.5 s
