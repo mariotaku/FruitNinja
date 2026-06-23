@@ -42,7 +42,7 @@ void MeshManager::ReleaseAll() {
 
 // v1.6.1 MeshManager::Load @0x00236874
 // DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
-//   v1.6.1 LoadMeshInternal @0x00238644 does NOT touch m_Models (registers loaders +
+//   v1.6.1 LoadMeshInternal @0x00228644 does NOT touch m_Models (registers loaders +
 //   calls ResourceLoader::Load<Model>). The port's Find+Add here is a port invention.
 Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     AsciiString apath(path);
@@ -54,7 +54,7 @@ Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
         node = node->next;
     }
 
-    Mortar::SmartPtr<Model> model = LoadMeshInternal(path);
+    Mortar::SmartPtr<Model> model = LoadMeshInternal(apath);
     if (model.IsValid()) {
         m_Models.Add(model);
     }
@@ -241,11 +241,11 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     return true;
 }
 
-// v1.6.1 LoadMeshInternal @0x00238644
-// Registers IVertexStream/IIndexStream/Model/Mesh loaders + calls ResourceLoader::Load<Model>.
-// Does NOT touch m_Models directly -- the binary caches via ResourceLoader.
+// v1.6.1 MeshManager::LoadMeshInternal @0x00228644
+// Thin wrapper that registers IVertexStream/IIndexStream/Model/Mesh loaders +
+// calls ResourceLoader::Load<Model>. Does NOT touch m_Models directly.
 // DIFFERS: port caches in m_Models manually (in Load above); binary caches in ResourceLoader.
-//   v1.6.1 LoadMeshInternal @0x00238644.
+//   Port inlines the full parse body; binary delegates to ResourceLoader dispatch chain.
 //
 // The root ResourceLoader maps to both the Model and Mesh scope:
 //   LoadModel reads: model name, Read<Skeleton> (skipped), meshCount
@@ -258,16 +258,15 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
 //   4xU32 colors, float specular, unused ReadSubResourceLookup
 // Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
 // Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
-Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
-#if !defined(__bada__)
+Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
     ResourceLoader loader(path);
     if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
-        LOG_ERROR("MeshManager", "failed to load '%s'", path);
+        LOG_ERROR("MeshManager", "failed to load '%s'", path.CStr());
         return Mortar::SmartPtr<Model>();
     }
 
     Model* model = new Model();
-    model->m_name = AsciiString(path);
+    model->m_name = path;
 
     loader.ResetReadPos();
 
@@ -280,13 +279,13 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
     // meshCount: number of Mesh sub-resources that follow
     if (loader.m_ReadCursor + 4 > loader.DataSize()) {
-        LOG_ERROR("MeshManager", "'%s': truncated before meshCount", path);
+        LOG_ERROR("MeshManager", "'%s': truncated before meshCount", path.CStr());
         delete model;
         return Mortar::SmartPtr<Model>();
     }
     uint32_t meshCount = loader.Read<uint32_t>();
     if (meshCount == 0 || meshCount > 64) {
-        LOG_ERROR("MeshManager", "'%s': bad meshCount=%u", path, meshCount);
+        LOG_ERROR("MeshManager", "'%s': bad meshCount=%u", path.CStr(), meshCount);
         delete model;
         return Mortar::SmartPtr<Model>();
     }
@@ -415,19 +414,19 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             if (g->m_Vbo || g->m_Ibo) {
                 mesh->AddGeometry(g);
             } else {
-                LOG_WARN("MeshManager", "'%s' mesh[%u] geom[%u]: no GPU data", path, mi, i);
+                LOG_WARN("MeshManager", "'%s' mesh[%u] geom[%u]: no GPU data", path.CStr(), mi, i);
             }
         }
 
         if (mesh->m_Geometries.empty()) {
-            LOG_WARN("MeshManager", "'%s' mesh[%u]: no geometries loaded", path, mi);
+            LOG_WARN("MeshManager", "'%s' mesh[%u]: no geometries loaded", path.CStr(), mi);
         }
 
         model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
     }
 
     if (model->m_nodes.empty()) {
-        LOG_ERROR("MeshManager", "'%s': no meshes loaded", path);
+        LOG_ERROR("MeshManager", "'%s': no meshes loaded", path.CStr());
         delete model;
         return Mortar::SmartPtr<Model>();
     }
@@ -439,10 +438,6 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     }
 
     return Mortar::SmartPtr<Model>(model);
-#else
-    (void)path;
-    return Mortar::SmartPtr<Model>();
-#endif
 }
 
 } // namespace Mortar
