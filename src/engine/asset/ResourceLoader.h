@@ -50,7 +50,6 @@ public:
     const uint8_t* DataPtr() const { return m_Data.data(); }
     size_t ChildCount() const { return m_Children.size(); }
 
-#if !defined(__bada__)
     template<typename T>
     T Read() {
         T val;
@@ -116,7 +115,6 @@ public:
             m_ReadCursor += 132;
         }
     }
-#endif // !defined(__bada__)
 
     // ---- binary symbol map ----
     // Binary @ 0x002554A0 -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
