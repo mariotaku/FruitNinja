@@ -266,8 +266,15 @@ def load_binary_symbols(binary_path: pathlib.Path) -> tuple[dict, dict]:
     addr_to_mangled: dict[int, str] = {}
     addr_to_demangled: dict[int, str] = {}
 
+    # The port's source-side markers use GHIDRA addresses, and Ghidra loads this
+    # ELF at image_base 0x10000 (verified via GhidraMCP get_current_program_info:
+    # GameOverScreen::Update is 0x176c80 in the raw ELF / LIEF but 0x00186c80 in
+    # Ghidra and in every marker + asm-verify disasm). So Ghidra_addr = LIEF_value
+    # + 0x10000. Without this offset the linter mis-reports every marker as stale.
+    GHIDRA_IMAGE_BASE = 0x10000
+
     for sym in b.symbols:
-        addr = sym.value
+        addr = sym.value + GHIDRA_IMAGE_BASE
         if addr == 0:
             continue
         name = sym.name
