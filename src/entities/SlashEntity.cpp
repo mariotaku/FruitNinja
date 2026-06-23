@@ -683,6 +683,14 @@ void SlashEntity::OnTouchActive(float x, float y) {
         LOG_DEBUG("SLASH", "OnTouchActive[%d]: ADD branch dist=%.2f dir=(%.2f,%.2f) pointCount=%d",
                  m_FingerId, dist, dir.x, dir.y, m_PointCount);
 #endif
+        // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1ea2fc
+        // Orient trail emitter along swipe direction for particles_directional blades.
+        if (m_TrailEmitter != NULL && g_DirectionalFlag == 2) {
+            short ang  = Math::Atan2Idx(unitDir.x, unitDir.y);
+            uint16_t nAng = (uint16_t)(-(short)ang);
+            m_TrailEmitter->m_DirSin = -Math::SinIdx(nAng);
+            m_TrailEmitter->m_DirCos =  Math::CosIdx(nAng);
+        }
     }
 
     // Always lay the head point at the live touch position (full pressure, binary: 1.0).
