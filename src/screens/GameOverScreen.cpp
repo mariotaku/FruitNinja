@@ -686,7 +686,7 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
 }
 
 // ---------------------------------------------------------------------------
-// FindMostOfFruit (0x00141a18)
+// FindMostOfFruit (v1.6.1 @0x00186ac8)
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::FindMostOfFruit() {
@@ -731,7 +731,8 @@ void GameOverScreen::FindMostOfFruit() {
     }
 
     if (bestCount > 0) {
-        // TODO: v1.6.1 0x00141a18 (FindMostOfFruit) -- re-verify which field stores most-fruit type index
+        // v1.6.1 FindMostOfFruit @0x00186ac8. (Binary also stores bestIdx at this[1]+0x144,
+        // but that offset collides with m_bScoreSubmitted and the read site is unconfirmed -- deferred.)
         m_MostFruitCount = bestCount;
     }
 }
