@@ -70,6 +70,12 @@ EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
 static void EmscriptenFrame(void* arg) {
     Game* game = static_cast<Game*>(arg);
     if (!game->running) {
+        // Port specific: show the restart overlay so the user can tap to
+        // reload the page and play again.  Must be called BEFORE cancelling
+        // the main loop -- the overlay is rendered in the DOM, not the canvas.
+        EM_ASM({
+            if (typeof window._fnShowRestart === 'function') { window._fnShowRestart(); }
+        });
         emscripten_cancel_main_loop();
         return;
     }

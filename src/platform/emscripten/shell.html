@@ -175,6 +175,48 @@
       outline: none;
     }
 
+    /* --- RESTART overlay: shown when the game quits (EmscriptenFrame detects
+       !game->running).  Same style as error overlay but hidden by default;
+       _showRestart() sets display:flex.  z-index 20 sits above the game canvas
+       but below the error overlay (30). --- */
+    #restart-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.82);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      gap: 0.9em;
+      padding: 2em;
+      text-align: center;
+      animation: restartFadeIn 0.4s ease;
+    }
+
+    @keyframes restartFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    #restart-btn {
+      margin-top: 0.5em;
+      padding: 0.55em 1.6em;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.45);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease;
+    }
+
+    #restart-btn:hover, #restart-btn:focus {
+      background: rgba(255,255,255,0.22);
+      outline: none;
+    }
+
     /* Port specific: full-screen toggle button.  A corner overlay in the
        top-right of the window, sitting ABOVE the canvas (z-index 25).  Fixed
        positioning keeps it pinned regardless of letterbox bars; pointer-events
@@ -258,6 +300,13 @@
       <div id="error-msg">Couldn't load the game.</div>
       <div id="error-detail"></div>
       <button id="error-reload" tabindex="0">Reload</button>
+    </div>
+
+    <!-- Restart overlay: shown by C++ (EmscriptenFrame) when game->running == false.
+         Fixed full-viewport so it covers the canvas but stays below error overlay.
+         The restart button reloads the page. -->
+    <div id="restart-overlay" role="alertdialog" aria-modal="true" aria-label="Game over">
+      <button id="restart-btn" tabindex="0">Tap to Restart</button>
     </div>
 
     <!-- Port specific: full-screen toggle button.  Fixed to the top-right
@@ -383,8 +432,9 @@
   var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
   var _errorDetail  = document.getElementById('error-detail');
-  var _runtimeReady = false;
-  var _loadFailed   = false;
+  var _runtimeReady  = false;
+  var _loadFailed    = false;
+  var _restartShown  = false;
   /* Guard so the splash fade runs once even if both the C++ first-frame hook and
      the _startDirectly safety-timeout call it. */
   var _splashFadeStarted = false;
@@ -438,6 +488,23 @@
     if (reloadBtn) reloadBtn.focus();
   }
 
+  /* Show the restart overlay: called from C++ (EmscriptenFrame) when the game
+     loop exits.  Idempotent: guarded by _restartShown so only the first quit
+     event triggers it. */
+  function _showRestart() {
+    if (_restartShown) return;
+    _restartShown = true;
+    var overlay = document.getElementById('restart-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    var btn = document.getElementById('restart-btn');
+    if (btn) btn.focus();
+  }
+
+  /* Expose for C++ (EM_ASM) in mainEmscripten.cpp. */
+  window._fnShowRestart = _showRestart;
+
+  /* Error-reload button handler. */
   (function () {
     var reloadBtn = document.getElementById('error-reload');
     if (!reloadBtn) return;
@@ -446,6 +513,33 @@
     reloadBtn.addEventListener('touchstart', _doReload, {passive: false});
     reloadBtn.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') _doReload(e);
+    });
+  })();
+
+  /* Restart button handler: sync save data to IndexedDB before reloading so
+     the user does not lose progress.  Falls back to plain reload if FS is
+     not available (should not happen at this point -- the game was running). */
+  (function () {
+    var btn = document.getElementById('restart-btn');
+    if (!btn) return;
+    function _doRestart(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      function _reload() { location.reload(); }
+      try {
+        if (typeof FS !== 'undefined' && typeof FS.syncfs === 'function') {
+          FS.syncfs(false, _reload);
+        } else {
+          _reload();
+        }
+      } catch(ex) {
+        _reload();
+      }
+    }
+    btn.addEventListener('click',      _doRestart);
+    btn.addEventListener('touchstart', _doRestart, {passive: false});
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _doRestart(e);
     });
   })();
 
