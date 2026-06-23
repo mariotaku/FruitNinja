@@ -108,16 +108,101 @@ void InputTranslatorSDL::PollHeldFingers() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
-    // TEMP #71: track per-channel previous held state to detect state changes.
-    static bool s_pollWasHeld[16] = {false};
+    // Port specific: web/emscripten drops SDL_FINGERUP for real touches;
+    // reconcile held fingers vs SDL touch state so the blade latch can decay
+    // (binary relies on OS-guaranteed lift events).
+    //
+    // On web with a real touchscreen (MOUSE_TOUCH_EVENTS=0), physical touch
+    // fingers carry a real Touch.identifier (not SDL_TOUCH_MOUSEID). If the
+    // browser drops a touchend/touchcancel (finger leaves canvas, mobile
+    // browser cancels, etc.) the matching SDL_FINGERUP is never received and
+    // fingerActive[ch] stays true forever -> blade re-arms every frame.
+    //
+    // Fix: query SDL's real-time finger state (SDL_GetNumTouchFingers /
+    // SDL_GetTouchFinger) and release any held channel whose fingerId is no
+    // longer present in SDL's live set. SDL_GetTouchFinger reflects the true
+    // hardware state and is updated synchronously by the event pump -- a finger
+    // that has lifted is immediately absent from this list even if the FINGERUP
+    // event was dropped. SDL_TOUCH_MOUSEID channels are exempt: they are managed
+    // by the mouse-button-down state and released via SDL_MOUSEBUTTONUP; they
+    // never appear in the touch-device finger list.
+    //
+    // Desktop behaviour is unchanged: on desktop SDL_FINGERUP fires reliably for
+    // both real touch hardware and the MOUSE_TOUCH_EVENTS=1 synthetic path
+    // (SDL_TOUCH_MOUSEID), so the reconcile loop finds no stale channels.
+    {
+        // Build live fingerId set from all touch devices.
+        // We use a small flat array (max 16 channels) to avoid allocation.
+        SDL_FingerID liveIds[64];
+        int liveCount = 0;
+
+        int numDevices = SDL_GetNumTouchDevices();
+        for (int di = 0; di < numDevices && liveCount < 64; ++di) {
+            SDL_TouchID tid = SDL_GetTouchDevice(di);
+            int nf = SDL_GetNumTouchFingers(tid);
+            for (int fi = 0; fi < nf && liveCount < 64; ++fi) {
+                SDL_Finger* f = SDL_GetTouchFinger(tid, fi);
+                if (f) {
+                    liveIds[liveCount++] = f->id;
+                }
+            }
+        }
+
+        // Check for the mouse button being held (covers SDL_TOUCH_MOUSEID channel).
+        Uint32 mouseButtons = SDL_GetMouseState(NULL, NULL);
+        bool mouseDown = (mouseButtons & SDL_BUTTON_LMASK) != 0;
+
+        for (int ch = 0; ch < 16; ++ch) {
+            if (!fingerActive[ch]) continue;
+
+            SDL_FingerID fid = fingerMap[ch];
+
+            // SDL_TOUCH_MOUSEID channel: managed by mouse button state.
+            if (fid == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+                if (!mouseDown) {
+                    // Mouse released without SDL_MOUSEBUTTONUP reaching us;
+                    // synthesize the release now.
+                    if (ch < Mortar::Touch::MAX_SLOTS) {
+                        Mortar::Touch::GetInstance().OnReleased(ch + 1);
+                    }
+                    InputEvent ie;
+                    memset(&ie, 0, sizeof(ie));
+                    ie.actionHash  = hashTouchUp[ch];
+                    ie.actionFlags = INPUT_ACTION_UP;
+                    ie.fingerId    = ch;
+                    ie.x = fingerX[ch];
+                    ie.y = fingerY[ch];
+                    mgr->DispatchEvent(&ie);
+                    ReleaseFingerId(fid);
+                }
+                continue;
+            }
+
+            // Real touch finger: check against SDL live set.
+            bool found = false;
+            for (int li = 0; li < liveCount; ++li) {
+                if (liveIds[li] == fid) { found = true; break; }
+            }
+            if (!found) {
+                // SDL no longer reports this finger as down -- FINGERUP was dropped.
+                // Synthesize the release so the blade latch can decay.
+                if (ch < Mortar::Touch::MAX_SLOTS) {
+                    Mortar::Touch::GetInstance().OnReleased(ch + 1);
+                }
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.actionHash  = hashTouchUp[ch];
+                ie.actionFlags = INPUT_ACTION_UP;
+                ie.fingerId    = ch;
+                ie.x = fingerX[ch];
+                ie.y = fingerY[ch];
+                mgr->DispatchEvent(&ie);
+                ReleaseFingerId(fid);
+            }
+        }
+    }
 
     for (int ch = 0; ch < 16; ch++) {
-        // TEMP #71: log when a channel starts being polled (was not held last frame).
-        if (fingerActive[ch] && !s_pollWasHeld[ch]) {
-            printf("[71] poll holding ch=%d pos=(%.1f,%.1f)\n", ch, fingerX[ch], fingerY[ch]);
-        }
-        s_pollWasHeld[ch] = fingerActive[ch];
-
         if (!fingerActive[ch]) continue;
 
         // Keep Touch ring-buffer current for this frame (move = held, not new press).
@@ -270,18 +355,15 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         ie.x = gx; ie.y = gy;
         mgr->DispatchEvent(&ie);
 
-        // TEMP #71
-        printf("[71] lift FINGERUP ch=%d fingerActive->0\n", ch);
         ReleaseFingerId(ev.tfinger.fingerId);
         break;
     }
 
-    // Port specific: safety-net for web -- on some browsers / SDL-Emscripten builds,
-    // SDL_HINT_MOUSE_TOUCH_EVENTS=1 synthesizes SDL_FINGERDOWN/MOTION but the UP
-    // arrives as SDL_MOUSEBUTTONUP only, leaving fingerActive set.  Explicitly release
-    // the channel mapped to SDL_TOUCH_MOUSEID here so PollHeldFingers doesn't keep
-    // re-dispatching TouchDown_N at the frozen lift position.
-    // TEMP #71
+    // Port specific: safety-net for desktop/web -- SDL_HINT_MOUSE_TOUCH_EVENTS=1
+    // synthesizes SDL_FINGERDOWN/MOTION but the UP sometimes arrives as
+    // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
+    // Belt-and-suspenders: handle it here too; PollHeldFingers also checks mouse
+    // button state as a fallback in case this event is missed.
     case SDL_MOUSEBUTTONUP: {
         // Find any active finger mapped to SDL_TOUCH_MOUSEID (the synthetic ID
         // SDL uses when converting mouse events to touch events).
@@ -305,7 +387,6 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         ie.y = fingerY[ch];
         mgr->DispatchEvent(&ie);
 
-        printf("[71] lift MOUSEBUTTONUP ch=%d fingerActive->0\n", ch);
         ReleaseFingerId(mouseId);
         break;
     }
