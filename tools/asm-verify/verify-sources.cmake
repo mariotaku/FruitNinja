@@ -61,6 +61,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/particle/PSPParticleManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/BakedString.cpp"
     "${_PROJECT_ROOT}/src/engine/render/BakedStringBox.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/BakedStringTTF.cpp"
     "${_PROJECT_ROOT}/src/engine/render/DisplayManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Font.cpp"
     "${_PROJECT_ROOT}/src/engine/render/FontInterface.cpp"

@@ -101,6 +101,7 @@ target_sources(mortar_engine PRIVATE
     render/FontCacheObjectTTF.cpp
     render/FontTTFRegistry.cpp
     render/BakedStringBox.cpp
+    render/BakedStringTTF.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
 )
