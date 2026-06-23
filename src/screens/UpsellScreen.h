@@ -83,10 +83,10 @@ public:
     UpsellScreen(Mortar::Delegate0<void> onDone, int mode);
     ~UpsellScreen() override {}
 
-    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00166d20
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166d20
     static UpsellScreen* MakeMainUpsellScreen(Mortar::Delegate0<void> onDone);
 
-    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00166708
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166708
     static UpsellScreen* MakeModeUpsellScreen(Mortar::Delegate0<void> onDone, int mode);
 };
 
@@ -176,7 +176,7 @@ public:
         }
     };
 
-    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00165c74
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00165c74
     UpsellScreenElement() {}
 
     // Binary @ 0x001679b8 -- copies every field including the m_Sounds list
@@ -190,7 +190,7 @@ public:
         memcpy(m_pad_after,  o.m_pad_after,  sizeof(m_pad_after));
     }
 
-    // Defunct: UpsellScreen monetization -- dtor; binary @ 0x00166324
+    // Defunct: UpsellScreen monetization -- dtor; v1.6.1 binary @ 0x00166324
     ~UpsellScreenElement() {}
 
     // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00104c58

@@ -50,7 +50,7 @@ public:
     ~BombBlast();
 
     // Vtable slot 2: Binary @ 0x001718ac.
-    // ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+    // ASM-verified: 2026-05-04T08:23Z v1.6.1 binary @ 0x001718ac (asm-inspector)
     // All three params are unused at runtime — caller passes (this, 0, 0, 0).
     // The first arg is r0 / `this` (Ghidra's void* p1 is a free-function-rendering
     // artifact); body operates exclusively on `this`.

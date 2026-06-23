@@ -4,7 +4,7 @@
 
 namespace Math {
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x001b3248 (re-analyst)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b3248 (re-analyst)
 // Foot-of-perpendicular on the INFINITE line through A,B (not the segment --
 // despite the name there is no t-clamp). Special cases write only x,y; out.z
 // is left untouched (general path writes z=0). Branch order: A.y==B.y first.
@@ -28,7 +28,7 @@ void ClosestPointOnLine(Vec3 A, Vec3 B, Vec3 P, Vec3& out) {
     out.z = 0.0f;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x001b30f8 (re-analyst)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b30f8 (re-analyst)
 // 2D segment-segment intersection via determinant + AABB containment.
 // Returns false if denom==0 OR the intersection point falls outside either
 // segment's XY bounding box. On success writes only out.x and out.y -- out.z
@@ -70,7 +70,7 @@ bool LineIntersect(Vec3 A1, Vec3 A2, Vec3 B1, Vec3 B2, Vec3& out) {
     return true;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x001b32d8 (re-analyst)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b32d8 (re-analyst)
 // Signed distance from P to the infinite plane through B with normal N.
 // Param 3 is unused. N is NOT mutated. outSigned must be non-null --
 // binary stores unconditionally (no null guard).
@@ -81,7 +81,7 @@ bool PointOnLineSide(const Vec3* P, const Vec3* B, const Vec3* /*unused*/, const
     return signedDist > 0.0f;
 }
 
-// ASM-verified: 2026-05-06T15:30 binary @ 0x001b3324 (asm-inspector)
+// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b3324 (asm-inspector)
 // DEAD CODE in shipping binary. Standard Catmull-Rom spline:
 // 0.5 * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t^2 + (-p0+3*p1-3*p2+p3)*t^3)
 // Same constants {2,3,4,5,0.5}, port inlines the Vec3 helper calls; cosmetic.

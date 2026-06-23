@@ -237,11 +237,11 @@ public:
     std::list<WaveState> m_WaveStates;
 
     // +0x15c: queued pending unlocks; populated by AddToQue, ticked by Update.
-    // ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b38c (re-analyst)
     std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
     // +0x174: fully unlocked achievements; persisted in <achievements> XML block.
-    // ASM-verified: 2026-05-18 binary @ 0x0012b3dc (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b3dc (re-analyst)
     std::map<uint32_t, AchievementItem> m_UnlockedAchievements;
 
     // +0x18c..+0x194: blitz mode state.
@@ -370,9 +370,9 @@ public:
     // 0x0012b3dc. Achievement in-progress timer ticks.
     void Update(float dt, HUD* hud);
 
-    // Defunct: online tweaks -- no-op stub; binary @ 0x0012a080
+    // Defunct: online tweaks -- no-op stub; v1.6.1 binary @ 0x0012a080
     void DownloadedTweakValue(char const*, int);
-    // Defunct: online achievements -- no-op stub; binary @ 0x0012a194
+    // Defunct: online achievements -- no-op stub; v1.6.1 binary @ 0x0012a194
     void PublishUnlockedAchievements();
     // Binary @ 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal,
     // AddToTotal(delta); returns the OLD total (uint) prior to the set.

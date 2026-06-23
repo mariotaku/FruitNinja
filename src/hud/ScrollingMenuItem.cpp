@@ -18,7 +18,7 @@
 // DAT_0015b668 = 0.0f (m_Width default). m_Height default = 25.0f (ctor literal).
 // m_Size is loaded from a global Vec3 ptr (zeroed at load time = all 0.0f).
 
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0015b5dc (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0015b5dc (asm-inspector)
 ScrollingMenuItem::ScrollingMenuItem()
     : m_pParent(nullptr)
     , m_Colour(0xFFFFFFFF)

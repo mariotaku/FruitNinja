@@ -547,7 +547,7 @@ void PowerUpManager::StopClock(float duration) {
 }
 
 // @ 0x00117c50 — return first active purchasable; set outIt to its position
-// ASM-verified: 2026-05-18 binary @ 0x00117c50 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117c50 (re-analyst)
 PowerUp* PowerUpManager::GetFirstPurchasable(std::list<PowerUp*>::iterator& outIt) {
     outIt = m_ActivePowerUps.begin();
     if (outIt == m_ActivePowerUps.end()) return NULL;
@@ -558,7 +558,7 @@ PowerUp* PowerUpManager::GetFirstPurchasable(std::list<PowerUp*>::iterator& outI
 }
 
 // @ 0x00117bf4 — advance it, return next active purchasable
-// ASM-verified: 2026-05-18 binary @ 0x00117bf4 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117bf4 (re-analyst)
 PowerUp* PowerUpManager::GetNextPurchasable(std::list<PowerUp*>::iterator& it) {
     ++it;
     if (it == m_ActivePowerUps.end()) return NULL;
@@ -568,7 +568,7 @@ PowerUp* PowerUpManager::GetNextPurchasable(std::list<PowerUp*>::iterator& it) {
     return byHash->second;
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x00118c14 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118c14 (re-analyst)
 void PowerUpManager::SetAppropriateScoreCallback() {
     for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {
@@ -589,7 +589,7 @@ void PowerUpManager::SetAppropriateScoreCallback() {
 }
 
 // @ 0x0011836c — walk m_AllPowerUps and m_ScreenEffectPool, call UnloadTextures
-// ASM-verified: 2026-05-18 binary @ 0x0011836c (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0011836c (re-analyst)
 void PowerUpManager::UnloadTextures() {
     for (std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.begin();
          it != m_AllPowerUps.end(); ++it) {

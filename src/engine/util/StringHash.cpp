@@ -3,7 +3,7 @@
 
 // Case-insensitive Jenkins lookup3 hash.
 // Binary: 0x00252a10 (v1.6.1) / 0x0019c5d4 (v1.0)
-// ASM-verified: 2026-06-12 binary @ 0x00252a10 / 0x0019c5d4 (re-analyst)
+// ASM-verified: 2026-06-12 v1.6.1 binary @ 0x00252a10 / 0x0019c5d4 (re-analyst)
 // Verified test vectors (case-insensitive):
 //   "watermelon"  -> 0x158bc245
 //   "apple_red"   -> 0xdac1f38f

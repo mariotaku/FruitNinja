@@ -1,4 +1,4 @@
-// Defunct: P2P packet hierarchy -- stub; binary @ 0x157b20 (PacketFactory).
+// Defunct: P2P packet hierarchy -- stub; v1.6.1 binary @ 0x157b20 (PacketFactory).
 // Binary switches on typeId to allocate: id=100->PointsPacket, id=101->FruitSlicedPacket,
 // id=102->StartGamePacket, id=103->WaveSyncPacket, id=104->PlayerDisconnectGamePacket.
 
@@ -10,7 +10,7 @@
 #include "game/WaveSyncPacket.h"
 #include "game/PlayerDisconnectGamePacket.h"
 
-// Defunct: P2P packet hierarchy -- no-op stub; binary @ 0x157b20
+// Defunct: P2P packet hierarchy -- no-op stub; v1.6.1 binary @ 0x157b20
 Mortar::NetworkPacket* PacketFactory::Create(Mortar::NetworkPacket* src) {
     if (!src) return 0;
     switch (src->m_PacketType) {

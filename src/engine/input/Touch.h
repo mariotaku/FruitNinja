@@ -67,7 +67,7 @@ struct TEvnt {
 //   +0x04: int    capacity (= 10)
 //   +0x08: int    field_8  (binary = 1 after init; semantic TBD)
 //   +0x0c: int    field_c  (binary = 0 after init; semantic TBD)
-// DIFFERS: binary @ 0x001958fc sets field_8=1, field_c=0 (internal ring state).
+// DIFFERS: v1.6.1 binary @ 0x001958fc sets field_8=1, field_c=0 (internal ring state).
 //   Port reuses field_8/field_c as m_eventHead/m_eventTail (0-based head/tail
 //   indices) because the binary's RingBufferT ring-management code (Clear/push/pop)
 //   is not yet ported. Struct fields are layout-identical to binary; init values

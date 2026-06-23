@@ -100,11 +100,11 @@ public:
     void SetCallback(Mortar::Delegate0<void> cb, MenuButton* button = nullptr);
 
     // v1.6.1 @ 0x19d87c — returns !m_bCollisionGuard
-    // ASM-verified: 2026-04-28T00:00 binary @ 0x001507e0 (asm-inspector)
+    // ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x001507e0 (asm-inspector)
     bool Enabled() const { return m_bCollisionGuard == 0; }
 
     // v1.6.1 @ 0x12c9d8 — sets m_bCollisionGuard=1
-    // ASM-verified: 2026-04-28T00:00 binary @ 0x0012637c (asm-inspector)
+    // ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x0012637c (asm-inspector)
     void Disable() { m_bCollisionGuard = 1; }
 
     // v1.6.1 @ 0x1d6fd4 — scale up + reduce speed (bomb-multiplier powerup)

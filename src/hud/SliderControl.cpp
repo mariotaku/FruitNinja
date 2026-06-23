@@ -116,7 +116,7 @@ SliderControl::~SliderControl() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 2 -- Binary @ 0x0015ffa0 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffa0
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa0
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::Init() {
@@ -124,7 +124,7 @@ void SliderControl::Init() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 3 -- Binary @ 0x0015ffa4 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffa4
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa4
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::Release() {
@@ -132,7 +132,7 @@ void SliderControl::Release() {
 
 // ---------------------------------------------------------------------------
 // vtable slot 6 -- Binary @ 0x0015ffa8 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffa8
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa8
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::PreDraw(float* hudScale) {
@@ -143,7 +143,7 @@ void SliderControl::PreDraw(float* hudScale) {
 // vtable slot 7 -- Binary @ 0x0016069c (~224 instructions)
 // Draws: label text (Font::DrawString), track quad (box.tex, black tint),
 //        thumb quad (slider_will.tex, black tint, x-offset per current value).
-// Defunct: SliderControl -- no-op stub; binary @ 0x0016069c
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016069c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::Draw(float* hudScaleRaw) {
@@ -160,7 +160,7 @@ void SliderControl::Draw(float* hudScaleRaw) {
 // Acquires a touch slot via TouchInRegion centered on pos with half-extents
 // m_TrackWidth*0.5 (X) and m_TrackHeight*0.5 (Y). Releases on touch-up.
 // On each held frame calls UpdateTouchPosition() to update m_CurrentValue.
-// Defunct: SliderControl -- no-op stub; binary @ 0x00160090
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x00160090
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::Update(float dt) {
@@ -180,7 +180,7 @@ int SliderControl::GetType() {
 // ---------------------------------------------------------------------------
 // Non-virtual. Binary @ 0x0016010c
 // Updates m_Label: constructs Mortar::Utf8StringIterator from str, assigns to m_Label.
-// Defunct: SliderControl -- no-op stub; binary @ 0x0016010c
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016010c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::SetText(const char* str) {
@@ -197,7 +197,7 @@ void SliderControl::SetText(const char* str) {
 // m_CurrentValue in [m_MinValue, m_MaxValue]. Fires m_OnValueChanged
 // when m_CurrentValue changes. Quirk: value mapping is ratio*(min+max)/2
 // which is only correct when min==0.
-// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffb0
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffb0
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::UpdateTouchPosition() {
@@ -210,7 +210,7 @@ void SliderControl::UpdateTouchPosition() {
 // Static -- Binary @ 0x00160890
 // Loads "box.tex" (track background) and "slider_will.tex" (thumb) via
 // TextureManager::LoadLocalisedTexture into static Mortar::SmartPtr<Texture> slots.
-// Defunct: SliderControl -- no-op stub; binary @ 0x00160890
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x00160890
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::LoadContent() {
@@ -222,7 +222,7 @@ void SliderControl::LoadContent() {
 
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x0016090c
-// Defunct: SliderControl -- no-op stub; binary @ 0x0016090c
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016090c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::UnloadContent() {
@@ -233,7 +233,7 @@ void SliderControl::UnloadContent() {
 
 // ---------------------------------------------------------------------------
 // HUDControl override -- Binary @ 0x0015ffac (single bx lr; no-op)
-// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffac
+// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffac
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::UpdateFromGameWork() {}

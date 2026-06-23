@@ -285,7 +285,7 @@ FruitFactControl::FruitFactControl()
     memset(_pad_201, 0, sizeof(_pad_201));
 
     // Binary @ 0x0013cb60: snapshots game_work.gameMode (gw+4) into m_StarType at construction.
-    // ASM-verified: 2026-05-24 binary @ 0x0013cb60 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cb60 (re-analyst)
     // Defunct stub: gameMode is 0 at pre-game construction time, so m_StarType stays 0 -- identical effect.
 
     // Binary: IsProviderOnline() -> m_LBState (1 = always offline branch)
@@ -337,7 +337,7 @@ void FruitFactControl::Init() {
         size.z *= 1.37f;
     }
 
-    // ASM-verified: 2026-05-18 binary @ 0x0013a34e..0x0013a3ac (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0013a34e..0x0013a3ac (re-analyst)
     // TWO distinct gates in the binary:
     //   1. comboFlag (m_ComboActiveFlag / field_0xa0): Zen ONLY (mode==3 && cnt>=3).
     //      Stored in m_ComboActiveFlag; consumed by Update/Draw layout paths.
@@ -346,7 +346,7 @@ void FruitFactControl::Init() {
     int comboFlag = 0;
     int comboPath = 0;
     if (game && game_work.m_SaveData) {
-        // ASM-verified: 2026-05-18 binary @ 0x0013a398 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0013a398 (re-analyst)
         int count = game_work.m_SaveData->m_BestComboLength;
         if (gameMode == 3 && count >= 3) {
             comboFlag = 1;
@@ -402,10 +402,10 @@ void FruitFactControl::Init() {
     m_pCurFactString = Fruit::GetFact(&m_FruitIdx, &m_FactIdx, m_FruitIdx, m_FactIdx);
 
     // Always: colour from fruit (binary always assigns; Fruit::FruitFactColour clamps internally)
-    // ASM-verified: 2026-05-24 binary @ 0x0013a278 (re-analyst) -- unconditional, no m_FruitIdx guard
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013a278 (re-analyst) -- unconditional, no m_FruitIdx guard
     m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
 
-    // ASM-verified: 2026-05-14 binary @ 0x0013a278..0x0013a4f6 (asm-inspector)
+    // ASM-verified: 2026-05-14 v1.6.1 binary @ 0x0013a278..0x0013a4f6 (asm-inspector)
     //   GOT base = 0x001ec130 (ldr r5,[pc,#0x000b1eb0]; adds r5,r5,r3)
     //   GOT off  = 0xfffcdf83 (ldr r2,[pc,...])  -> r2 = 0x001ba0b3
     //   bytes @ 0x001ba0b3 = 25 73 2E 74 65 78 00 = "%s.tex"
@@ -510,7 +510,7 @@ void FruitFactControl::Update(float dt) {
         // SecondaryTex = combo-star tex
         m_Texture = m_ComboStarTex;
 
-        // ASM-verified: 2026-05-24 binary @ 0x0013b604 (re-analyst)
+        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013b604 (re-analyst)
         // Path A: post-combo single-shot "achievement" SFX, dt*2 step.
         // Path B: during-combo per-beat "popup-%i" SFX, dt*4 step.
         // Gate: (gw.m_GameDt > 0.75f && m_StarTimer < ComboLength) -> Path B; else Path A.
@@ -672,7 +672,7 @@ void FruitFactControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask) {
         }
 
         // Draw the combo-star texture quad with sin-pulse scale
-        // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0013a06c (re-analyst)
         const float tw = (float)m_ComboStarTex->GetWidth();
         const float th = (float)m_ComboStarTex->GetHeight();
         m_ComboStarTex->Set();
@@ -799,7 +799,7 @@ void FruitFactControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask) {
                         Vec3(rowPos.x + 193.0f, rowPos.y, 0.0f),
                         col, 0x0F);
                     if (bonus->m_StarTexture.IsValid()) {
-                        // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
+                        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0013a06c (re-analyst)
                         bonus->m_StarTexture->Set();
                         mm.GetWorldStack().Reset();
                         Matrix44 starMat = Matrix44::MakeScale(
@@ -911,7 +911,7 @@ void FruitFactControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask) {
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::DrawLeaderboard() {
-    // Defunct: online-services -- no-op stub; binary @ 0x0013aac0
+    // Defunct: online-services -- no-op stub; v1.6.1 binary @ 0x0013aac0
 }
 
 // ---------------------------------------------------------------------------
@@ -919,7 +919,7 @@ void FruitFactControl::DrawLeaderboard() {
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::DrawDownloadIcon() {
-    // Defunct: online-services -- no-op stub; binary @ 0x001395d0
+    // Defunct: online-services -- no-op stub; v1.6.1 binary @ 0x001395d0
     // Binary @ 0x001395d0 builds an 8-segment ring with per-segment alpha
     // animation (48 verts, Mesh::DrawTriList). The only caller is
     // UpdateLeaderboard state 2 which is itself defunct.
@@ -984,7 +984,7 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
 void FruitFactControl::LeftButton() {
     Game* g = Game::GetInstance();
     if (g && game_work.mGameSound) {
-        // ASM-verified: 2026-05-23 binary @ 0x0013a160 (re-analyst)
+        // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x0013a160 (re-analyst)
         game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
@@ -999,7 +999,7 @@ void FruitFactControl::LeftButton() {
 void FruitFactControl::RightButton() {
     Game* g = Game::GetInstance();
     if (g && game_work.mGameSound) {
-        // ASM-verified: 2026-05-23 binary @ 0x0013a204 (re-analyst)
+        // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x0013a204 (re-analyst)
         game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
@@ -1012,7 +1012,7 @@ void FruitFactControl::RightButton() {
 
 // Binary @ 0x00139440
 void FruitFactControl::ConnectPressed() {
-    // Defunct: online-services -- no-op stub; binary @ 0x00139440
+    // Defunct: online-services -- no-op stub; v1.6.1 binary @ 0x00139440
     // NetworkManager::ConnectGameCenter() / NetworkManager::LaunchDashboard() are no-op stubs.
     (void)Mortar::NetworkManager::GetInstance();
 }

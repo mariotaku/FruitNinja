@@ -487,7 +487,7 @@ void GameModeScreen::Update(float dt) {
                 if (game_work.mGameSound) {
                     game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
-                // ASM-verified: 2026-05-22 binary @ 0x0013f366..0x0013f386
+                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0013f366..0x0013f386
                 // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
                 //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
                 //   g_GameData->byte_0x5 = 0;                 // bM_bPaused
@@ -526,7 +526,7 @@ void GameModeScreen::Update(float dt) {
         break;
 
     case 0xe: {
-        // Defunct: Challenges (SocialLib ChallengeMenuScreen) -- no-op stub; binary @ 0x1827d0 case 0xe.
+        // Defunct: Challenges (SocialLib ChallengeMenuScreen) -- no-op stub; v1.6.1 binary @ 0x1827d0 case 0xe.
         // ChallengesCallback (@0x181154) sets m_State=0xE but the binary's case 0xE is empty -- no
         // ChallengeMenuScreen ctor/push is reachable (it exists only as a SocialLib static-init symbol,
         // _GLOBAL__I_ChallengeMenuScreen.cpp @0x166010, with no instantiation xref). The earlier
@@ -768,38 +768,38 @@ void GameModeScreen::DeletedMenuButton(MenuButton* btn) {
 #if !defined(__bada__)
     if (btn == m_pOnlineMpButton) {
         m_pOnlineMpButton = nullptr;
-        // Defunct: online-MP detached fruit fling (binary @ 0x0013f6ac)
+        // Defunct: online-MP detached fruit fling (v1.6.1 binary @ 0x0013f6ac)
     }
 #endif
 }
 
-// Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets gameMode=1, m_State=4 + NetworkManager flag
+// Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x0013dfdc sets gameMode=1, m_State=4 + NetworkManager flag
 void GameModeScreen::CasinoModeCallback() {
     game_work.gameMode = 1;
     m_State = 4;
     // Defunct: NetworkManager online-MP flag omitted
 }
 
-// Defunct: online MP (Versus) -- no-op stub; binary @ 0x0013e01c sets m_State=7 + alpha=1.0 to enter matchmaker
+// Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x0013e01c sets m_State=7 + alpha=1.0 to enter matchmaker
 void GameModeScreen::VersusModeCallback() {
     m_State = 7;
     m_TransitionAlpha = 1.0f;
     // Defunct: matchmaker entry omitted
 }
 
-// Defunct: P2P connect -- no-op stub; binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
+// Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
 void GameModeScreen::P2PConnectCallback() {
     m_State = 8;
     // Defunct: GameCenter/P2P connect omitted
 }
 
-// Defunct: upsell store handoff -- no-op stub; binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
+// Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
 void GameModeScreen::BuyNow() {
     // Defunct: GotoFruitNinjaPage(1,-1) omitted (online upsell)
     // Defunct: m_State=0xd transition omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: upsell glue -- UpsellScreen never instantiated; binary @ 0x0013e084 sets m_State=10 + bumps modeS_p* counters
+// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x0013e084 sets m_State=10 + bumps modeS_p* counters
 void GameModeScreen::SwitchToUpsell(int idx) {
     // Binary @ 0x0013e084: FruitSaveData::AddToTotal for the matching
     // modeS_p* counter. Per-idx key is "modeS_p<n>" where <n> is the
@@ -814,17 +814,17 @@ void GameModeScreen::SwitchToUpsell(int idx) {
     (void)idx;
 }
 
-// Defunct: upsell return path -- no-op stub; binary @ 0x0013e07c sets m_State=1 (transition-in resume)
+// Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x0013e07c sets m_State=1 (transition-in resume)
 void GameModeScreen::UpsellFinished() {
     // Defunct: upsell return path omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: online-MP shrink hook -- no-op stub; binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
+// Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
 void GameModeScreen::ShrinkedMultiplayerButton() {
     // Defunct: online-MP fruit snapshot omitted
 }
 
-// Defunct: online-MP button lifecycle -- no-op stub; binary @ 0x0013ecdc grows/shrinks the 4th MenuButton based on connectivity
+// Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0013ecdc grows/shrinks the 4th MenuButton based on connectivity
 void GameModeScreen::UpdateOnlineMultiplayerButton(float /*dt*/) {
     // Defunct: online-MP button grow/shrink based on connectivity omitted
 }

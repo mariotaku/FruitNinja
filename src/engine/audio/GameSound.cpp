@@ -39,7 +39,7 @@ int GameSound::FindFree() {
     return -1;
 }
 
-// ASM-verified: 2026-05-04T11:00 binary @ 0x00129270 (asm-inspector)
+// ASM-verified: 2026-05-04T11:00 v1.6.1 binary @ 0x00129270 (asm-inspector)
 // DIFFERS: binary @ 0x... calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
@@ -156,7 +156,7 @@ void GameSound::Unpause() {
     }
 }
 
-// ASM-verified: 2026-05-04T11:00 binary @ 0x0012930c (asm-inspector)
+// ASM-verified: 2026-05-04T11:00 v1.6.1 binary @ 0x0012930c (asm-inspector)
 void GameSound::Update(float /*dt*/) {
     if (m_PausedForInterrupt) {
         SoundManager& mgr = SoundManager::GetInstance();

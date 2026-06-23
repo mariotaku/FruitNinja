@@ -73,7 +73,7 @@ public:
     // Vtable slot 5, binary @ 0x00257758 — LookAt + ortho from viewport
     virtual void SetupOrtho();
 
-    // DIFFERS: binary @ 0x001ee9b4 does m_fovX / m_fovY unprotected (no zero guard).
+    // DIFFERS: v1.6.1 binary @ 0x001ee9b4 does m_fovX / m_fovY unprotected (no zero guard).
     // Port adds defensive zero-check.
     // Vtable slot 6
     float GetAspectRatio() const { return (m_fovY != 0.0f) ? m_fovX / m_fovY : 1.0f; }

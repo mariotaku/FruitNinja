@@ -122,7 +122,7 @@ void MortarCamera::SetupPerspective() {
         mm.SetupLookAt(m_pos, m_up, m_lookAt);
         m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-        // DIFFERS: binary @ 0x00257aac computes half=m_fovY*182.0 (DAT_00257d60,
+        // DIFFERS: v1.6.1 binary @ 0x00257aac computes half=m_fovY*182.0 (DAT_00257d60,
         // deg->16bit-angle units), then calls MatrixManager::SetupPerspective(
         //   s=Math::SinIdx(half&0xffff), c=Math::CosIdx(half&0xffff),
         //   aspect=m_fovX/m_fovY, near=m_fovOrNear(+0x124), far=m_farPlane(+0x128)).

@@ -181,7 +181,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
 
     m_BombVariant = 0;
     m_bCollisionGuard = 0;
-    // ASM-verified: 2026-05-27 binary @ 0x001725ce (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001725ce (re-analyst)
     // orr r2,r2,#0x2 ; bfi r2,r3,#0x4,#0x1 (r3 = 0)
     flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
     m_bHit = 0;
@@ -221,7 +221,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     flags &= ~ENT_SKIP_MASK;
 }
 
-// ASM-verified: 2026-04-28T00:00 binary @ 0x0017121c (asm-inspector)
+// ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x0017121c (asm-inspector)
 // Matches Bomb::SetCallback (0x0017121c)
 void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
     m_bMenuBombHit   = 1;
@@ -360,7 +360,7 @@ void Bomb::Update(float /*dt*/) {
     }
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x001714e4 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001714e4 (asm-inspector)
 // ASM-spec v1.6.1 Bomb::DrawUpdate (PostUpdate) @ 0x1d53a0
 // Pure 2D circle in XY using m_RotY only; emitter tip + direction cosines.
 void Bomb::PostUpdate(float /*dt*/) {
@@ -564,7 +564,7 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     return count;
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x0017171c (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017171c (re-analyst)
 // ASM-spec v1.6.1 Bomb::ClearUnspawned @ 0x1d56b4
 void Bomb::ClearUnspawned() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -588,7 +588,7 @@ void Bomb::SetHit(Bomb* b, float speed) {
     b->m_bHit       = 1;
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x00126390 (asm-inspector)
+// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00126390 (asm-inspector)
 // ASM-spec v1.6.1 Bomb::SetForPlayer @ 0x00126390
 void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
     b->m_BombVariant = playerIdx;

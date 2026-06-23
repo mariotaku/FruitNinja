@@ -137,7 +137,7 @@ public:
     // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
     // Binary signature: MakeDisappear(_Vector3<float>, int, SmartPtr<Texture>).
     // Vec3 + SmartPtr are passed BY VALUE (no reference prefix in mangling).
-    // ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151d94 (re-analyst)
     void MakeDisappear(Vec3 pos, int sizeMult,
                        Mortar::SmartPtr<Mortar::Texture> tex);
 
@@ -157,7 +157,7 @@ public:
     void PreDraw(float* hudScale) override;
 
     // Binary @ 0x00150dfc — vtable[16]. New virtual not in HUDControl base; extends vtable to 17 slots.
-    // Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
+    // Defunct: same-screen MP player-index hook — no-op stub; v1.6.1 binary @ 0x00150dfc
     virtual int SetPlayer(int player);
 
     // Port specific: F1 overlay support. MissControl::Draw renders at

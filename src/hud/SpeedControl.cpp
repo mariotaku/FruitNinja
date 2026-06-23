@@ -30,7 +30,7 @@ SpeedControl::SpeedControl()
     m_bUseHUDScales = 0;
 
     // Load speed-gauge texture.
-    // ASM-verified: 2026-05-22 binary @ 0x0016133c (re-analyst).
+    // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0016133c (re-analyst).
     // SpeedControl loads "loading.tex" verbatim -- string literal at binary
     // 0x001bb184, PC-relative load at 0x00161352..0x0016135a. The filename
     // is misleading: "loading.tex" IS the 8-frame vertical speed-gauge atlas,
@@ -62,7 +62,7 @@ SpeedControl::SpeedControl()
 // dtor @ 0x00161558 / 0x001615d4 / 0x00161650
 SpeedControl::~SpeedControl() {}
 
-// ASM-verified: 2026-05-17 binary @ 0x00160dc4 (re-analyst)
+// ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00160dc4 (re-analyst)
 // Binary computes ducking + per-frame lerps for the Combo-Blitz speed
 // effect: master-volume duck (via GameSound::m_MasterVolume), looping
 // stream SFX gated on combo progression, fuse-style trail emitter
@@ -75,7 +75,7 @@ void SpeedControl::Update(float dt) {
     if (!g || !game_work.mGameSound) return;
     GameSound* gs = game_work.mGameSound;
 
-    // ASM-verified: 2026-05-20 binary @ 0x00160de4 ldrb r3,[r3,#0x2] (re-analyst)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00160de4 ldrb r3,[r3,#0x2] (re-analyst)
     // Gate reads game_work+0x02 = bM_Mode, NOT +0x05 = bM_bPaused.
     // Wrong gate caused Arcade-entry white-line flash: bM_bPaused=1
     // at Arcade start, port returned early, default opaque-white m_DrawColour
@@ -153,7 +153,7 @@ void SpeedControl::Update(float dt) {
             Mortar::Delegate1<bool, Mortar::MortarSound*> loopCb =
                 Mortar::Delegate1<bool, Mortar::MortarSound*>::Make(
                     this, &SpeedControl::SoundNeedsLooping);
-            // ASM-verified: 2026-05-18 binary @ 0x00160dc4 (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00160dc4 (re-analyst)
             m_pSound = gs->SFXPlay(kStreamSfx, m_SoundVolume, 0.0f, loopCb);
         }
         if (m_pSound) {
@@ -192,7 +192,7 @@ void SpeedControl::Skip() {}
 bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     if (m_pSound != finished) return false;   // not our loop -- ignore
 
-    // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00160ce8 (re-analyst)
     // After 6+ blitz tiers (WaveManager m_BlitzLevel +0x60), swap to the heavier stream variant.
     WaveManager* wm = WaveManager::GetInstance();
     if (wm && wm->m_BlitzLevel > 5) {
@@ -200,7 +200,7 @@ bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     }
 
     // Second SFX name confirmed from .rodata GOT[0x00160dac][1].
-    // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00160ce8 (re-analyst)
     static const char* const kSfxNames[2] = {
         "Combo-Blitz-Backing-Light",
         "Combo-Blitz-Backing"

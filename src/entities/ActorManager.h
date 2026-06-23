@@ -139,7 +139,7 @@ public:
     // 0x00170654. Push a pre-constructed entity into a type list without
     // going through the factory. Used by LoadEntity; exposed here for
     // parity but currently only stubbed callers use it.
-    // Defunct: zero live in-binary callers (only LoadEntity, itself dead); binary @ 0x00170654.
+    // Defunct: zero live in-binary callers (only LoadEntity, itself dead); v1.6.1 binary @ 0x00170654.
     Entity* Add(Entity* entity, long typeIdx);
 
     // 0x00170184. Erase from its type list, set ENT_INACTIVE, append to
@@ -150,12 +150,12 @@ public:
 
     // 0x001702d8. Erase + (unless ENT_NO_DESTRUCT) delete.
     // Dtor calls Release() for per-type cleanup.
-    // Defunct: zero in-binary callers; binary @ 0x001702d8.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x001702d8.
     void Remove(Entity* entity);
 
     // 0x0016fb44. Set ENT_KILLED on every entity of the given type so
     // the next Update sweep drains them into the free pool.
-    // Defunct: zero in-binary callers; binary @ 0x0016fb44.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fb44.
     void DeactivateAllEntities(int typeIdx);
 
     // --- Per-frame update / draw ---------------------------------------
@@ -173,7 +173,7 @@ public:
 
     // 0x0016fe1c. Per-entity collision-sphere debug draw. Gated on
     // m_DebugDraw.
-    // Defunct: zero in-binary callers; binary @ 0x0016fe1c.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fe1c.
     void DrawDebug();
 
     // Binary @ 0x0016fdc8 -- iterates m_pTypeLists and calls entity->vtable[+0x1c]
@@ -225,7 +225,7 @@ public:
     Entity* GetEntity(int typeIdx, size_t slot) const;
 
     // 0x0016fc64. Ordinal index of `entity` in its type list, or -1.
-    // Defunct: zero in-binary callers; binary @ 0x0016fc64.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fc64.
     int GetEntityIdx(Entity* entity);
 
     // 0x0016fd10. Linear scan of the type list `type`; returns the first
@@ -238,14 +238,14 @@ public:
 
     // 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
     // test passes against `aabb`. Port stub returns 0.
-    // Defunct: zero in-binary callers; binary @ 0x0016fbec.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fbec.
     int GetNumInAABB(ColAABB* aabb);
 
     // --- Level deserialiser (stubbed — .lvl loading not used by FN) -----
 
     // 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
     // Port stub returns false -- not used by FruitNinja runtime.
-    // Defunct: zero in-binary callers; binary @ 0x00170728.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170728.
     bool LoadEntity(EntityChunk* chunk, void* hdr, long hdrLen, long lod);
 
     // --- Heap diagnostics -----------------------------------------------
@@ -256,15 +256,15 @@ public:
 
     // 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port
     // returns m_HeapSize (no allocation tracking).
-    // Defunct: zero in-binary callers; binary @ 0x00170370.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170370.
     int  GetHeapFree() const;
 
     // 0x00170364. Binary forwards to LinkedHeap::DisplayUsage(verbose).
-    // Defunct: zero in-binary callers; binary @ 0x00170364.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170364.
     void HeapDisplay(bool verbose);
 
     // 0x00170354. Binary forwards to LinkedHeap::DisplayUsage(true) gated.
-    // Defunct: zero in-binary callers; binary @ 0x00170354.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170354.
     void DisplayUsage(bool dumpAll);
 
     // 0x0016fb3c. Setter for m_DebugDraw.
@@ -276,19 +276,19 @@ public:
 
     // 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot
     // clear, then dispatch target->ReceiveMessage(sender, msg).
-    // Defunct: zero in-binary callers; binary @ 0x0016ffd8.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016ffd8.
     bool SendMessage(unsigned long typeHash, Entity* sender, Mortar::Message* msg);
 
     // 0x0017085c. m_Listeners.push_back(L).
-    // Defunct: zero in-binary callers; binary @ 0x0017085c.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017085c.
     void AddMessageListener(Mortar::MessageListener* listener);
 
     // 0x00170124. m_Listeners.remove(L).
-    // Defunct: zero in-binary callers; binary @ 0x00170124.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170124.
     void RemoveMessageListener(Mortar::MessageListener* listener);
 
     // 0x0017013c. Delete each listener, then clear list.
-    // Defunct: zero in-binary callers; binary @ 0x0017013c.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017013c.
     void ClearAllListeners();
 
     // ---- Integer-width convenience overloads ----

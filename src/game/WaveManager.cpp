@@ -82,7 +82,7 @@ int WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
             out.push_back(std::string(start, end));
     }
     return (int)out.size();
-    // ASM-verified: 2026-05-18 binary @ 0x001231d8 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001231d8 (re-analyst)
 }
 
 SpawnPlacement WaveManager::ParsePlacement(const char* side) {
@@ -129,7 +129,7 @@ WaveManager::WaveManager()
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
     // m_DtIncPerMode (+0x84): parsed from <defaults> "dtInc" attr per mode.
-    // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). binary @ 0x00125ac4
+    // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). v1.6.1 binary @ 0x00125ac4
     m_DtIncPerMode[0] = m_DtIncPerMode[1] = 0.0f;
     m_DtIncPerMode[2] = m_DtIncPerMode[3] = 0.0f;
     // DIFFERS: actual per-mode globalDtStart unknown from RE; using 1.0 as placeholder.
@@ -240,7 +240,7 @@ void WaveManager::Init() {
             } else if (strcmp(elName, "WaveInfo") == 0) {
                 WAVE_INFO* wi = new WAVE_INFO();
                 wi->m_WaveIndex = waveIndex++;
-                // ASM-verified: 2026-05-22 binary @ 0x001267c8 (re-analyst).
+                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x001267c8 (re-analyst).
                 // WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) copies m_bWaitForEntities (+0x2c)
                 // and m_bWaitForProcessing (+0x2d) from the per-mode DEFAULT_WAVE_INFO.
                 wi->m_bWaitForEntities   = m_DefaultWaveInfo[mode].m_bWaitForEntities;
@@ -440,7 +440,7 @@ void WaveManager::Reset(bool fullReset) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // ASM-verified: 2026-05-23 binary @ 0x00125bfe..0x00125c0a (re-analyst).
+    // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00125bfe..0x00125c0a (re-analyst).
     // Reset prologue: load arcade powerup textures unconditionally on every
     // Reset when gameMode == ARCADE, independent of fullReset. This is the
     // ONLY path that loads ScreenEffect / EffectImage textures during normal
@@ -878,7 +878,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::GameOver() {
-    // ASM-verified: 2026-05-02 binary @ 0x00121f74 -- ResetGlobalDt first, then PowerUpManager::Reset.
+    // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00121f74 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
@@ -887,7 +887,7 @@ void WaveManager::GameOver() {
 }
 
 void WaveManager::NewGame() {
-    // ASM-verified: 2026-05-02 binary @ 0x00121f90 -- ResetGlobalDt first, then PowerUpManager::Reset.
+    // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00121f90 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
@@ -994,7 +994,7 @@ void WaveManager::Update(float dt) {
     //   - PrepareForLevelStart -> Reset sets m_WaveCount[0]=-1 then GetNextWave
     //     bumps to 0; bM_bPaused cleared to 0 -> gate always FALSE -> spawn pump runs
     //     for real gameplay.
-    // ASM-verified: 2026-05-20 binary @ 0x00125a62 (re-analyst).
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00125a62 (re-analyst).
     if (game_work.bM_bPaused == 0 || m_WaveCount[0] <= 0) {
         float accumDt = m_StepAccumulator + dt;
         while (accumDt > WAVE_STEP) {
@@ -1028,7 +1028,7 @@ void WaveManager::Update(float dt) {
 // top of UpdateWave; set to 1 in the pre-spawn-timer-ticking branch (when
 // m_NextWaveDelay_P0 > 0); read by the wave-end block to suppress GetNextWave
 // while the pre-spawn delay is still counting down.
-// ASM-verified: 2026-05-10 binary @ 0x001253b0 / 0x00125928 / 0x0012593e
+// ASM-verified: 2026-05-10 v1.6.1 binary @ 0x001253b0 / 0x00125928 / 0x0012593e
 // (asm-inspector). Without this gate the wave-end block fires GetNextWave
 // every frame the pre-spawn delay is active (no entities yet but timer is
 // ticking), which resets m_NextWaveDelay_P0 -> infinite loop -> first wave never
@@ -1186,7 +1186,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                 {
                                     PROBABILITY_OVERIDE& po = *oit;
                                     if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
-                                    // ASM-verified: 2026-05-27 binary @ 0x00125606..0x00125622 (re-analyst).
+                                    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00125606..0x00125622 (re-analyst).
                                     // Uses m_WaveCount[playerIdx] at binary offset this+0x238+p*4.
                                     if (waveCount >= 0
                                             && po.m_PerWaveCount > 0
@@ -1265,7 +1265,7 @@ epilogue:
 
 void WaveManager::UpdateComboSpeed(float dtIn) {
     // v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc
-    // ASM-verified: 2026-05-20 binary @ 0x00122f5e (re-analyst). DUAL gate:
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00122f5e (re-analyst). DUAL gate:
     //   (game_work.m_GameDt == 0.0f) AND (gameMode == ARCADE)
     // game_work.m_GameDt (+0x0C) is the pause/fade indicator: 0.0f during
     // active gameplay, non-zero during pause/gameover/quit transitions
@@ -1514,7 +1514,7 @@ void WaveManager::ClearUnspawned() {
 // IsWaveProcessing — per wave-system-impl.md §4
 // ----------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-22 binary @ 0x00122a40..0x00122ad6 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x00122a40..0x00122ad6 (re-analyst).
 // Updated 2026-05-22: restored the entry-flag gate (was incorrectly removed
 // as "invented" -- the binary genuinely has `ldrb r3,[r4,#0x244+p]; cbz r3, ...`
 // at 0x00122a48). Flag is set by Reset (field_0x244 = 1 for player 0) and
@@ -1585,7 +1585,7 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         // spread = 20 for BOTTOM/BOTTOM_SLOW (spawner==0 or type<2), 12 for LEFT/RIGHT.
         float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
         float r      = m_Random.RandF(1.0f);
-        // ASM-verified: 2026-05-26 binary @ 0x00122644 (re-analyst)
+        // ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00122644 (re-analyst)
         // vsub.f32 s0,s0,s15 (s0=r-0.5); vadd.mi.f32 s15,s0,s15 (s15=r) if r<0.5,
         // else vsub.pl.f32 s15,s15,s0 (s15=1-r). halfR in [0,0.5]; sign flips neg when r<0.5.
         float halfR  = (r < 0.5f) ? r : (1.0f - r);
@@ -1601,7 +1601,7 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
 
         float velMultX = info ? info->m_VelXScale : 1.0f;
         float velMultY = info ? info->m_VelYScale : 1.0f;
-        // ASM-verified: 2026-05-27 binary @ 0x00122744 (fruit) (re-analyst).
+        // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00122744 (fruit) (re-analyst).
         // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
         // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
         // over-scattered horizontal arrival.
@@ -1634,7 +1634,7 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         }   /* fall through */
         case PLACEMENT_LEFT:
         case PLACEMENT_RIGHT: {
-            // ASM-verified: 2026-05-27 binary @ 0x001227fe..0x0012828e + 0x001228d2 (asm-inspector).
+            // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001227fe..0x0012828e + 0x001228d2 (asm-inspector).
             // Binary swaps velocity sources between axes (vel.x basis = velY_orig*-0.75,
             // vel.y basis = velX_orig + gravity term), then applies the LEFT/RIGHT sign
             // vector via a unified Vec3 multiply at the join: vel.x and pos.x both get
@@ -1671,13 +1671,13 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
         f->vel  = Vec3(velX, velY, 0.0f);
         f->Init(nullptr, (long)fruitType, nullptr);
-        // DIFFERS: binary @ 0x00122a00 only writes m_PlayerIdx in the online-MP branch
+        // DIFFERS: v1.6.1 binary @ 0x00122a00 only writes m_PlayerIdx in the online-MP branch
         // via SetForPlayer(newFruit, 0). For SSM (same-screen split-touch), per-fruit
         // attribution is required by AddShadow / KillFruit -> MissControl::MakeDisappear,
         // so we wire it from the spawn parameter. The binary's omission appears to be a
         // Halfbrick bug; the port honors SSM design intent inferred from the downstream
         // consumers.
-        // ASM-verified: 2026-05-20 binary @ 0x00122a00 (re-analyst).
+        // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00122a00 (re-analyst).
         f->m_PlayerIdx = playerIdx;
         // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
         LOG_VERBOSE("Spawn", "fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d",
@@ -1733,7 +1733,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float velMultY = (type == 0) ? 1.0f : spawner->m_VelYScale;
         float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
 
-        // ASM-verified: 2026-05-27 binary @ 0x001220e2 (bomb) (re-analyst).
+        // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001220e2 (bomb) (re-analyst).
         // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
         // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
         // over-scattered horizontal arrival.
@@ -1767,7 +1767,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
                 break;
             case PLACEMENT_RIGHT:
             case PLACEMENT_LEFT: {
-                // ASM-verified: 2026-05-22 binary @ 0x00121fa8 (side-spawn block
+                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x00121fa8 (side-spawn block
                 // mirrors SpawnFruit @ 0x001225a0) (asm-inspector). Formula:
                 //   pos.x = (int)(240.0f * sign)                  // DAT_00122228 = int 240
                 //   pos.y = (int)(baseDeg * 320 / 480)            // DAT_0012221c/20
@@ -1822,7 +1822,7 @@ void WaveManager::Draw(int playerIdx) {
     }
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x001217d4 (re-analyst)
+// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x001217d4 (re-analyst)
 void WaveManager::DeleteSpeedControl(HUDControl* c) {
     // Binary @ 0x001217d4: only checks slot 0 (slot 1 never populated).
     if (m_SpeedControl[0] == c) m_SpeedControl[0] = nullptr;
@@ -1934,7 +1934,7 @@ void WaveManager::ResetSpeed(int playerIdx) {
     m_BlitzLevel = 0;   // +0x60
     m_ColdTimer  = 0.0f;  // +0x64
 
-    // ASM-verified: 2026-05-03 binary @ 0x00122e94 (re-analyst)
+    // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00122e94 (re-analyst)
     // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
     HUDControl3d* sc = m_SpeedControl[playerIdx];
     if (sc) {
@@ -1991,7 +1991,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 m_BlitzLevel = newCount;
                 FN::AddToCurrentScore(5, playerIdx, false, false);
-                // ASM-verified: 2026-05-23 binary @ 0x00123760..0x00123798 (re-analyst).
+                // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00123760..0x00123798 (re-analyst).
                 // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
                 static uint32_t s_blitz1Hash = 0;
                 if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
@@ -2018,7 +2018,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 m_BlitzLevel = newCount;
 
                 {
-                    // ASM-verified: 2026-05-23 binary @ 0x00123614..0x00123642 (re-analyst).
+                    // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00123614..0x00123642 (re-analyst).
                     // Continuation tier uses format "blitz_%i" (rodata @ 0x001ba76a).
                     char buf[16];
                     std::snprintf(buf, sizeof(buf), "blitz_%i", level);
@@ -2075,7 +2075,7 @@ void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  
 // ----------------------------------------------------------------------------
 
 int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; }
-// Defunct: P2P MP wave-sync packet -- empty in binary @ 0x0012197c too
+// Defunct: P2P MP wave-sync packet -- empty in v1.6.1 binary @ 0x0012197c too
 // (literal `return;`); only the GOT trampoline at 0x00102390 had a body,
 // and that calls a NetworkManager fn pointer that's null on Bada.
 void WaveManager::SendWaveSyncPacket()                               {}
@@ -2108,7 +2108,7 @@ void WaveManager::RequestCoins() {
             return;
     }
     // Fallback: RNG-advance only — return value discarded (binary behaviour).
-    // ASM-verified: 2026-05-20 binary @ 0x00121a1c — coinChance index = game_work.gameMode
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00121a1c — coinChance index = game_work.gameMode
     // (uint8 @ +0x04). Per-mode table at WaveManager+0x1dc, stride 8.
     int idx = game_work.gameMode;
     if (idx >= 0 && idx < 4)

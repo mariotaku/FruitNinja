@@ -124,7 +124,7 @@ struct GameTaskState {
     // before arming bombHitTimer=3.2. Gates the GameUpdate cross-1.5 GameOver
     // trigger so that Quit-from-GameOverScreen / PauseScreen quit / Zen-mode bomb
     // penalty animations don't re-fire GameOver.
-    // ASM-verified: 2026-05-20 binary @ 0x0016b270 / 0x0016b154 / 0x0016c2bc (re-analyst)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b270 / 0x0016b154 / 0x0016c2bc (re-analyst)
     uint8_t m_bMenuBombFlashFlag;          // +0xf8
     uint8_t _gap_f9[0x03];                 // +0xf9..+0xfb pad
 
@@ -142,7 +142,7 @@ struct GameTaskState {
     // +0x10C: per-attempt timed-mode accumulator. Reset to 0 alongside TimeControl
     // (+0x180)+0x7c at EndRetryLevel (binary @ 0x0016a226) and SkipToGameOver
     // (binary @ 0x0016adba, guarded by IsTimedGame). Reader not yet RE'd -- treat
-    // as write-only. ASM-verified: 2026-05-20 binary @ 0x0016a226 (re-analyst).
+    // as write-only. ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016a226 (re-analyst).
     int32_t m_TimedModeAccumulator;
 
     // +0x110..+0x113: written by EndRetryLevel (binary @ 0x0016a220) as float 0.5f,

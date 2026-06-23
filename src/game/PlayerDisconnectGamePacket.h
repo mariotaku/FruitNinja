@@ -17,7 +17,7 @@ public:
     // Own fields from +0x10 to +0x57 (72 bytes of payload)
     uint8_t m_payload[72]; // +0x10..+0x57
 
-    // Defunct: P2P MP disconnect packet -- no-op stub; binary @ 0x157b20 (id=104)
+    // Defunct: P2P MP disconnect packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=104)
     PlayerDisconnectGamePacket();
 
     virtual ~PlayerDisconnectGamePacket() {}

@@ -42,7 +42,7 @@ HUDControl::HUDControl()
     s_ActiveControls.push_back(this);
     LOG_DEBUG("HUDCONTROL", "ctor this=%p", static_cast<void*>(this));
 #endif
-    // ASM-verified: 2026-05-24 binary @ 0x00144104 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144104 (re-analyst)
 }
 
 HUDControl::~HUDControl()
@@ -53,7 +53,7 @@ HUDControl::~HUDControl()
 #endif
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00143f98..0x00143fa8 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143f98..0x00143fa8 (re-analyst)
 void HUDControl::Init()
 {}
 
@@ -76,7 +76,7 @@ bool HUDControl::SetToMultiplayerState()
         return true;
     }
     return false;
-    // ASM-verified: 2026-05-24 binary @ 0x00143fac (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fac (re-analyst)
 }
 
 // Binary @ 0x136c2c — DAT_00136c88={480.0f, 320.0f, 0.0f}

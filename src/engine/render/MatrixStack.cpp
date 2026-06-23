@@ -1,6 +1,6 @@
 #include "render/MatrixStack.h"
 
-// ASM-verified: 2026-05-09 binary @ 0x001175d4 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001175d4 (asm-inspector)
 void MatrixStack::Reset() {
     m_Current.Identity();
     StackAt(0).Identity();
@@ -26,19 +26,19 @@ void MatrixStack::Pop() {
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x0012fa34 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012fa34 (asm-inspector)
 void MatrixStack::Scale(const Vec3& s) {
     m_Current.ApplyScale(s.x, s.y, s.z);
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x0012f97c (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012f97c (asm-inspector)
 void MatrixStack::Translate(const Vec3& t) {
     m_Current.GlobalTranslate44(t);
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x0011a130 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0011a130 (asm-inspector)
 void MatrixStack::SetCurrentMatrix(const Matrix44& mat) {
     m_Current = mat;
     m_Version++;

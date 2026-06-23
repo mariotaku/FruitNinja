@@ -10,12 +10,12 @@
 
 class FriendLeaderboardItem : public LeaderboardItem {
 public:
-    // Defunct: FriendLeaderboardItem -- no-op stub; binary @ 0x0013d210
+    // Defunct: FriendLeaderboardItem -- no-op stub; v1.6.1 binary @ 0x0013d210
     FriendLeaderboardItem(const char* /*name*/, int /*rank*/, int /*score*/,
                           void* /*userdata*/, const char* /*url*/) {}
     ~FriendLeaderboardItem() {}
 
-    // Defunct: FriendLeaderboardItem -- geometry stub; binary @ 0x0013d304
+    // Defunct: FriendLeaderboardItem -- geometry stub; v1.6.1 binary @ 0x0013d304
     bool CollideWithButton(long /*touchIdx*/) { return false; }
 
 private:

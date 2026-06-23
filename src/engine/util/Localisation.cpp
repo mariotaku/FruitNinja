@@ -14,7 +14,7 @@
 // Localisation::Load -- mirrors StringTableUtilLoadStrings @ 0x0011fb20.
 // Delegates to Mortar::StringTable::Load which implements the full
 // language-switch, header+body load, and english_us fallback.
-// ASM-verified: 2026-05-18 binary @ 0x0011fb20 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0011fb20 (re-analyst)
 void Localisation::Load(const char* dataDir, int languageFlag) {
     Mortar::StringTable::Load(dataDir, languageFlag);
 }

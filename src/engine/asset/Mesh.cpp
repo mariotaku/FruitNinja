@@ -30,7 +30,7 @@ Mesh::Mesh()
 {}
 
 // Binary D1 @ 0x00272dc8 (complete), D0 @ 0x00272e7c (deleting)
-// DIFFERS: binary @ 0x00272dc8 hand-codes member teardown in declaration order
+// DIFFERS: v1.6.1 binary @ 0x00272dc8 hand-codes member teardown in declaration order
 // (_Rb_tree::_M_erase(m_GroupsByName), m_OwnGroup.Clear(), ~vector(m_Geometries),
 // ~vector(m_BoneBindings), ~AsciiString(m_Name)) -- port relies on implicit member
 // dtors in reverse-declaration order (same members, same logical order; std::map vs
@@ -100,7 +100,7 @@ Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
 // retval ptr to a 24-byte Bounds3D). Computes AABB by transforming each
 // bone's local bounds through its world matrix, then min/max-reducing
 // across all bones. Initial values: +/-1e30 (DAT_00272c8c / DAT_00272c90).
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x001b07f0 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001b07f0 (asm-inspector)
 Bounds3D Mesh::GetBounds() const {
     Bounds3D out(Vec3( 1e30f,  1e30f,  1e30f),
                  Vec3(-1e30f, -1e30f, -1e30f));
@@ -211,7 +211,7 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> parent, AsciiString const& name)
     : m_Skeleton(NULL)
     , m_WorldProp(NULL), m_ViewProp(NULL), m_ProjProp(NULL), m_WVPProp(NULL)
 {
-    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x002730ac
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x002730ac
     m_Name = name.c_str();
     EffectPropertyDefinition defs[4];
     defs[0].m_Name  = kMeshName_World;
@@ -258,7 +258,7 @@ void Mesh::AddGeometry(SmartPtr<Geometry> geom) {
 // the result in TextureProps::m_Handle. With the subsystem defunct-stubbed
 // GetProperty returns nullptr; m_Handle stays null. Shape preserved per spec.
 void SharedPropsInfo::AddTextureMap(const AsciiString& name, const AsciiString& propName) {
-    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b1394
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x001b1394
     TextureProps& entry = m_TextureMaps[name];
     // Binary: entry.m_Handle = m_Props->GetList().GetProperty(propName.CStr())
     if (m_Props.IsValid()) {
@@ -267,25 +267,25 @@ void SharedPropsInfo::AddTextureMap(const AsciiString& name, const AsciiString& 
 }
 
 // Binary @ 0x00272c98
-// DIFFERS: binary @ 0x00272c98 walks _Rb_tree node layout (&node[2].field_0x8) to
+// DIFFERS: v1.6.1 binary @ 0x00272c98 walks _Rb_tree node layout (&node[2].field_0x8) to
 // return &m_Props from the found node; port uses std::map::find and &it->second.m_Props.
 // Semantically identical find/return-&m_Props; std::map vs _Rb_tree container-layer
 // substitution cannot byte-match.
 SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& name) const {
-    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x00272c98
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x00272c98
     std::map<AsciiString, SharedPropsInfo>::const_iterator it = m_GroupsByName.find(name);
     if (it == m_GroupsByName.end()) return NULL;
     return const_cast<SmartPtr<SharedEffectProperties>*>(&it->second.m_Props);
 }
 
 // Binary @ 0x001b1430 (address unchanged between builds for this overload)
-// DIFFERS: binary @ 0x001b1430 insert-or-reuse path uses _Rb_tree + live
+// DIFFERS: v1.6.1 binary @ 0x001b1430 insert-or-reuse path uses _Rb_tree + live
 // EffectPropertyList::Contains(); port uses std::map + defunct stub Contains()->true
 // (fast-path reuse whenever a group is already present). Container-layer substitution.
 SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& name,
                                                             EffectPropertyDefinition const* begin,
                                                             EffectPropertyDefinition const* end) {
-    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b1430
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x001b1430
     SmartPtr<SharedEffectProperties>* existing = GetPropertiesGroup(name);
     if (existing) {
         const EffectPropertyDefinition* p = begin;
@@ -298,11 +298,11 @@ SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& na
     return &slot;
 }
 
-// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b08e8
+// Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x001b08e8
 // Binary: re-fetches the 4 cached prop handles (World/View/Proj/WVP) from m_OwnGroup.
 // Port: GetProperty() stub returns nullptr; handles stay nullptr.
 void Mesh::RebuildEffectBindings() {
-    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b08e8
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x001b08e8
     if (!m_OwnGroup.IsValid()) return;
     m_WorldProp = m_OwnGroup->GetList().GetProperty("World");
     m_ViewProp  = m_OwnGroup->GetList().GetProperty("SceneCamera.View");
@@ -311,18 +311,18 @@ void Mesh::RebuildEffectBindings() {
 }
 
 // vtable slot 6 (+0x18): GenerateBindings(Vector) binary @ 0x0027350c
-// DIFFERS: binary @ 0x0027350c walks m_GroupsByName _Rb_tree, lazily inits 2 static
+// DIFFERS: v1.6.1 binary @ 0x0027350c walks m_GroupsByName _Rb_tree, lazily inits 2 static
 // AsciiString keys (uvwChannel/opacityChannel from DAT_002736c8/d8 via __cxa_guard),
 // finds channelName in each node's TextureProps map (node+0x3c region), and if an
 // EffectProperty* Vec3 target is non-null builds Binding{normalized=0, target, count}
 // and push_backs into out. Port produces zero bindings because EffectProperty/
 // SharedEffectProperties subsystem is defunct-stubbed (GetProperty->nullptr, TextureProps
 // never populated) -- empty body is the correct observable result.
-// Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+// Defunct: EffectProperty channel binding -- v1.6.1 binary @ 0x0027350c
 void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
                             AsciiString const& /*targetName*/,
                             std::vector<AnimBindings::Vector::Binding>& /*out*/) {
-    // Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+    // Defunct: EffectProperty channel binding -- v1.6.1 binary @ 0x0027350c
     // EffectProperty path is defunct-stubbed; produces zero bindings (correct).
 }
 
@@ -335,22 +335,22 @@ void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
     // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
 }
 
-// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ed8
+// Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ed8
 void Mesh::DrawCube(float /*x*/, float /*y*/, float /*z*/,
                     Colour /*colour*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawCube is a binary stub (BX LR); no-op stub; binary @ 0x00193ed8
+    // Defunct: DrawCube is a binary stub (BX LR); no-op stub; v1.6.1 binary @ 0x00193ed8
 }
 
-// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193edc
+// Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193edc
 void Mesh::DrawLine(Vec3 const& /*from*/, Vec3 const& /*to*/, float const& /*width*/,
                     Colour const& /*colour*/, Vec3 const& /*normal*/,
                     DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawLine is a binary stub (BX LR); no-op stub; binary @ 0x00193edc
+    // Defunct: DrawLine is a binary stub (BX LR); no-op stub; v1.6.1 binary @ 0x00193edc
 }
 
-// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ee0
+// Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ee0
 void Mesh::DrawSphere(float /*radius*/, Colour /*colour*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawSphere is a binary stub (BX LR); no-op stub; binary @ 0x00193ee0
+    // Defunct: DrawSphere is a binary stub (BX LR); no-op stub; v1.6.1 binary @ 0x00193ee0
 }
 
 // Binary @ 0x00272a3c (v1.6.1 Bada); port ASM-verified at iOS address 0x001b09b0 (re-analyst 2026-05-24)
@@ -386,7 +386,7 @@ void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
 }
 
 // Binary @ 0x00194060
-// ASM-verified: 2026-05-24 binary @ 0x00194060 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00194060 (re-analyst)
 void Mesh::DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
                              DrawEffectContainer* /*fx*/) {
     // Port specific: binary @ 0x00194060 gates GL_BLEND via fixed-function glState<3042>:
@@ -401,21 +401,21 @@ void Mesh::DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v
 }
 
 // Binary @ 0x0019404c
-// ASM-verified: 2026-05-24 binary @ 0x0019404c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0019404c (re-analyst)
 void Mesh::DrawTriList(QUADCUSTOMVERTEX const* verts, long count,
                        bool /*blend*/, DrawEffectContainer* fx) {
     DrawTris(verts, count, 4 /*GL_TRIANGLES*/, fx != 0, 0);
 }
 
 // Binary @ 0x00194038
-// ASM-verified: 2026-05-24 binary @ 0x00194038 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00194038 (re-analyst)
 void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
                         bool /*blend*/, DrawEffectContainer* fx) {
     DrawTris(verts, count, 5 /*GL_TRIANGLE_STRIP*/, fx != 0, 0);
 }
 
 // Binary @ 0x00193f5c
-// ASM-verified: 2026-05-24 binary @ 0x00193f5c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00193f5c (re-analyst)
 void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
                     bool /*blend*/, DrawEffectContainer* /*fx*/) {
     // Port specific: binary @ 0x00193f5c gates GL_BLEND via fixed-function glState<3042>:

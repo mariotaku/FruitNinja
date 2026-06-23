@@ -85,7 +85,7 @@ public:
     // --- Public API ------------------------------------------------------
 
     // 0x00173454 — set up all coin fields for a launch.
-    // ASM-verified: 2026-06-07 binary @ 0x00173454 (disassembly inspected).
+    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x00173454 (disassembly inspected).
     //
     // Binary signature (HFA): InitCoin(_Vector3<float> gravity /*s0-s2*/,
     //   _Vector3<float>* pos /*r1*/, _Vector3<float>* target /*r2*/,
@@ -123,7 +123,7 @@ public:
     void Arrived();
 
     // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
-    // ASM-verified: 2026-06-07 binary @ 0x00173568 (disassembly inspected).
+    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x00173568 (disassembly inspected).
     //
     // Binary signature (HFA): MakeCoins(int totalCoins /*r0*/,
     //   int coinsPerCoin /*r1*/, _Vector3<float> delay /*s0-s2*/,

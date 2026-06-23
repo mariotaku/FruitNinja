@@ -469,7 +469,7 @@ void MainScreen::Update(float dt) {
         break;
 
     case STATE_QUIT_WAIT: {
-        // ASM-verified: 2026-04-30 binary @ 0x0014c078..0x0014c0ea (asm-inspector)
+        // ASM-verified: 2026-04-30 v1.6.1 binary @ 0x0014c078..0x0014c0ea (asm-inspector)
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -849,7 +849,7 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-        // ASM-verified: 2026-05-09 binary @ 0x0014b818..0x0014b82c (re-analyst).
+        // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0014b818..0x0014b82c (re-analyst).
         pPlayButton->m_HitInsetY  = -50.0f;
         pPlayButton->m_HitInsetX  = -50.0f;
         // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
@@ -938,7 +938,7 @@ void MainScreen::GameModeCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
-// Defunct: orphaned callback in shipping binary -- binary @ 0x0014c384
+// Defunct: orphaned callback in shipping binary -- v1.6.1 binary @ 0x0014c384
 // ZERO inbound xrefs. STATE_GAME_START is genuinely unreachable in shipping FruitNinja.exe.
 // Body retained for vtable / layout fidelity.
 // Matches 0x0014c384
@@ -946,7 +946,7 @@ void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
     m_State = STATE_GAME_START;
-    // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst).
+    // ASM-verified: 2026-05-08 v1.6.1 binary @ 0x0014c3ce (re-analyst).
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay(
             "Game-start", 1.0f, 1.0f,
@@ -991,7 +991,7 @@ void MainScreen::MoreGamesCallback() {
     m_State = STATE_MORE_GAMES;
 }
 
-// ASM-verified: 2026-04-30 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
+// ASM-verified: 2026-04-30 v1.6.1 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
 void MainScreen::QuitGamesCallback() {
     SystemManager::GetInstance().RequestQuit();
 
@@ -1104,19 +1104,19 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
 void MainScreen::PreDraw(float* /*hudScale*/) {
 }
 
-// Defunct: NetworkManager::CancelNewsDisplay — no-op stub; binary @ 0x0014AFB8
+// Defunct: NetworkManager::CancelNewsDisplay — no-op stub; v1.6.1 binary @ 0x0014AFB8
 void MainScreen::CancelNews() {
-    // Defunct: NetworkManager — no-op stub; binary @ 0x0014AFB8
+    // Defunct: NetworkManager — no-op stub; v1.6.1 binary @ 0x0014AFB8
 }
 
-// Defunct: network UI button — empty in binary (single bx lr); binary @ 0x0014ACFC
+// Defunct: network UI button — empty in binary (single bx lr); v1.6.1 binary @ 0x0014ACFC
 void MainScreen::ClearNetworkButton() {
-    // Defunct: network UI button — no-op stub; binary @ 0x0014ACFC
+    // Defunct: network UI button — no-op stub; v1.6.1 binary @ 0x0014ACFC
 }
 
-// Defunct: leaderboard UI — returns this in binary; binary @ 0x0014AD00
+// Defunct: leaderboard UI — returns this in binary; v1.6.1 binary @ 0x0014AD00
 MainScreen* MainScreen::CreateNormalLeaderboardButton() {
-    // Defunct: leaderboard UI — no-op stub; binary @ 0x0014AD00
+    // Defunct: leaderboard UI — no-op stub; v1.6.1 binary @ 0x0014AD00
     return this;
 }
 

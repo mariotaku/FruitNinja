@@ -81,7 +81,7 @@ ScrollingMenu::ScrollingMenu()
 {
     // Binary ctor helper @ 0x0015b2bc writes { -120, +320, +120, -320 } for both
     // outer and inner: [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM.
-    // ASM-verified: 2026-05-24 binary @ 0x0015b3b0 ctor (asm-inspector)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015b3b0 ctor (asm-inspector)
     m_OuterRegion[0] = -120.0f;  // LEFT
     m_OuterRegion[1] =  320.0f;  // TOP
     m_OuterRegion[2] =  120.0f;  // RIGHT
@@ -105,7 +105,7 @@ ScrollingMenu::~ScrollingMenu() {
 // Binary @ 0x001479a0: vstr.32 s0,[r0,#0xa4] then derives 4 fields:
 //   +0xe0 = w*-0.5, +0xe8 = w*0.5, +0xf0 = w*-0.5*1.25, +0xf8 = w*0.5*1.25
 // [0] must be negative (xMin) so Phase-2 TouchInRegion(xMin<=x<=xMax) accepts.
-// ASM-verified: 2026-06-06 binary @ 0x001479a0 (re-analyst) -- SetWidth: +0xe0=w*-0.5(xMin) +0xe8=w*0.5(xMax) +0xf0=w*-0.5*1.25 +0xf8=w*0.5*1.25; [1]/[3] keep ctor +-320. Region[0]=xMin must be negative so Phase-2 TouchInRegion(xMin<=x<=xMax) accepts.
+// ASM-verified: 2026-06-06 v1.6.1 binary @ 0x001479a0 (re-analyst) -- SetWidth: +0xe0=w*-0.5(xMin) +0xe8=w*0.5(xMax) +0xf0=w*-0.5*1.25 +0xf8=w*0.5*1.25; [1]/[3] keep ctor +-320. Region[0]=xMin must be negative so Phase-2 TouchInRegion(xMin<=x<=xMax) accepts.
 // Note: port "outer"/"inner" names are functionally swapped vs binary semantics
 // (+0xe0 group is the tighter ACQUIRE region; +0xf0 group is the 1.25x-wider HOLD region).
 // ---------------------------------------------------------------------------
@@ -459,7 +459,7 @@ void ScrollingMenu::Update(float /*dt*/) {
     // Binary @ 0x0015bd7c reads +0xa0 at 0x0015bd9e (vldr.32 s13,[r4,#0xa0]):
     //   bottom = field_0xa0 - m_TotalHeight  (SetHeight field minus accumulated item heights)
     //   [bottom, 0] is the valid scroll range; bottom is NEGATIVE when content overflows.
-    // ASM-verified: 2026-06-06 binary @ 0x0015bd7c (asm-inspector) -- scroll clamp bottom = SetHeight-field(+0xa0) - m_TotalHeight(+0xa8); SetHeight=vtable+0x4c->+0xa0, SetWidth=vtable+0x50->+0xa4, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
+    // ASM-verified: 2026-06-06 v1.6.1 binary @ 0x0015bd7c (asm-inspector) -- scroll clamp bottom = SetHeight-field(+0xa0) - m_TotalHeight(+0xa8); SetHeight=vtable+0x4c->+0xa0, SetWidth=vtable+0x50->+0xa4, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
     float offset = m_Velocity.y;
     // m_Height = port name for binary +0xa0 (the SetHeight target).
     float totalScrollH = m_Height - m_TotalHeight;
@@ -482,7 +482,7 @@ void ScrollingMenu::Update(float /*dt*/) {
     m_Velocity.y = offset;
 
     // Apply friction to pending velocity again (end-of-phase)
-    // ASM-verified: 2026-05-24 binary @ 0x0015b744 Phase 7 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015b744 Phase 7 (re-analyst)
     Vec3Scale_ScrollMenu(&m_PendingVelocity);
 }
 
@@ -496,7 +496,7 @@ ScrollingMenuItem* ScrollingMenu::AddItem(ScrollingMenuItem* item) {
     item->SetParent(this);
     m_Items.push_back(item);
     return item;
-    // ASM-verified: 2026-05-24 binary @ 0x0015be54 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015be54 (re-analyst)
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +566,7 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 // DIFFERS: original does not Reset world stack between items; port adds
 // world.Reset() because ShopListItem's Draw leaks Scale44 into the next
 // item's first draw call. Fix the leak in ShopListItem to match binary.
-// ASM-verified: 2026-05-24 binary @ 0x0015af98 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015af98 (re-analyst)
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Draw(float* /*hudScaleRaw*/) {
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
@@ -586,7 +586,7 @@ void ScrollingMenu::DestroyList() {
     }
     m_Items.clear();
     // Binary does NOT zero m_TotalWidth/m_TotalHeight here.
-    // ASM-verified: 2026-05-24 binary @ 0x0015afd0 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015afd0 (re-analyst)
 }
 
 // ---- Lifecycle methods ported from binary (re-analyst 2026-05-18) ----
@@ -634,7 +634,7 @@ void ScrollingMenu::Reset() {
     m_SnapDist          = 1.0f;
     m_PendingVelocity   = Vec3(0.0f, 0.0f, 0.0f);
     // Note: binary does NOT clear m_bDragging (+0xc8) in Reset.
-    // ASM-verified: 2026-05-24 binary @ 0x0015aeb8 (re-analyst)
+    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015aeb8 (re-analyst)
 }
 
 // Binary @ 0x0015af38 -- no-op stub (single bx lr).

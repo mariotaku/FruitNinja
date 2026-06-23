@@ -40,7 +40,7 @@ int GameModifier::Update(float dt) {
 // power-up name-hash lookups via PowerUpManager::GetActiveSingle; scales by
 // PowerUpManager::m_WaveDtModPrev (field_0x74). DAT consts: 0.01f, 0.0f,
 // 50.0f (aa0), 0.333f (aa4), 0.1f (aa8).
-// ASM-verified: 2026-06-13T18:00Z binary @ 0x00140890 (asm-inspector)
+// ASM-verified: 2026-06-13T18:00Z v1.6.1 binary @ 0x00140890 (asm-inspector)
 void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
     // 1) fold m_Duration (+0x04) into m_BonusAccum -- binary vldr.32 s15,[r0,#4]
     float acc = m_Duration;

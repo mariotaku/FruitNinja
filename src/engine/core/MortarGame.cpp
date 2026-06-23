@@ -51,19 +51,19 @@ void MortarGame::RenderAtHalfFrames(const char* hwName, const char* model) {
 float MortarGame::GetHighResolutionScale() { return 1.0f; }
 
 // slot 4 @ 0x0018ac88
-// Defunct: OpenFeint — no-op stub; binary @ 0x0018ac88
+// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac88
 const char* MortarGame::GetOpenFeintProductKey() { return ""; }
 
 // slot 5 @ 0x0018ac8c
-// Defunct: OpenFeint — no-op stub; binary @ 0x0018ac8c
+// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac8c
 const char* MortarGame::GetOpenFeintSecret() { return ""; }
 
 // slot 6 @ 0x0018ac90
-// Defunct: OpenFeint — no-op stub; binary @ 0x0018ac90
+// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac90
 const char* MortarGame::GetOpenDisplayName() { return ""; }
 
 // slot 7 @ 0x0018ac94
-// Defunct: Playhaven — no-op stub; binary @ 0x0018ac94
+// Defunct: Playhaven — no-op stub; v1.6.1 binary @ 0x0018ac94
 const char* MortarGame::GetPlayhavenToken() { return ""; }
 
 // slot 8 @ 0x0010d9dc

@@ -76,7 +76,7 @@ void Touch::StateUpdate(TouchState& s) {
 // per-slot state machine via StateUpdate (frees released slots by zeroing
 // extId/touchId on phase==1; promotes phase -1 -> 0; rolls prev <- curr).
 // IMPORTANT: StateUpdate runs on states2 (the LIVE mailbox), not states1.
-// ASM-verified: 2026-05-06T17:00 binary @ 0x001953ec (re-analyst) -- the
+// ASM-verified: 2026-05-06T17:00 v1.6.1 binary @ 0x001953ec (re-analyst) -- the
 // disassembly at 0x00195414 computes r0 = (this + i*0x1c) + 0xe0 = &states2[i],
 // not the copy in states1. Running StateUpdate on states1 (the dead snapshot)
 // leaves states2's extId stuck after release, so the next press from the

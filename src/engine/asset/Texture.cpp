@@ -31,7 +31,7 @@ Texture::~Texture() {
     // Notify the TextureManager so its cache drops the entry pointing at us BEFORE
     // the GL handle is freed. Mirrors the binary's WeakPtr cleanup path.
     TextureManager::GetInstance().OnTextureDestroyed(this);
-    // Defunct: DeviceResource unregister -- no-op stub; v1.6.1 Texture::~Texture @0x00268ea4
+    // Defunct: DeviceResource unregister -- no-op stub; v1.6.1 Texture::~Texture @0x00268e1c
 }
 
 // Vtable slot 3 -- base default: no GL state (subclass Texture2D_Bada overrides).

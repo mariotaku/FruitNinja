@@ -141,13 +141,13 @@ private:
     void SetStateWait();        // v1.6.1 @ 0x00140688
     void SetTerminate();        // v1.6.1 @ 0x00140604
 
-    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x001405fc
+    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::StartProgressionTimer @ 0x00184d48
     void StartProgressionTimer();
-    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140600
+    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::CancelHUDProgressionTimer @ 0x00184d4c
     void CancelHUDProgressionTimer();
-    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140614
+    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::OnProgressionTimerUp @ 0x00184d5c
     void OnProgressionTimerUp();
-    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen @ 0x00140618
+    // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::HandleProgressionTimerExpiration @ 0x00184d60
     void HandleProgressionTimerExpiration();
 
     // Defunct: Facebook share -- no-op stub; v1.6.1 GameOverScreen @ 0x0014083c

@@ -23,7 +23,7 @@ struct _Matrix43 {
         data[0][0] = data[1][1] = data[2][2] = T(1);
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00181cdc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00181cdc (asm-inspector)
     // Copy43To44 -- writes data[r][c] into m[col=c, row=r] for r<3, fills
     // column 3 of M with (0,0,0,1); the translation row data[3][0..2] lands
     // in m[12..14].
@@ -34,7 +34,7 @@ struct _Matrix43 {
         out.m[12] = data[3][0]; out.m[13] = data[3][1]; out.m[14] = data[3][2]; out.m[15] = T(1);
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x00181c68 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00181c68 (asm-inspector)
     // Copy44To43 -- drops row 3 (column 3 of M is (0,0,0,1) and discarded);
     // data[r][c] = m[col=c, row=r] for r in 0..3.
     static _Matrix43 FromMatrix44(const _Matrix44<T>& in) {
@@ -46,7 +46,7 @@ struct _Matrix43 {
         return out;
     }
 
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0019e82c (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0019e82c (asm-inspector)
     // Standard view matrix: forward = normalize(target - eye);
     // right = normalize(up x forward); realUp = forward x right.
     // Per-component layout matches binary stack trace -- basis vectors are

@@ -44,7 +44,7 @@ struct MatrixStack {
         m_Version = 1;
     }
 
-    // ASM-verified: 2026-05-09 binary @ 0x001175d4 (asm-inspector)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001175d4 (asm-inspector)
     void Reset();
 
     // Port specific: no binary equivalent (GL push/pop happens inside
@@ -53,13 +53,13 @@ struct MatrixStack {
     void Push();
     void Pop();
 
-    // ASM-verified: 2026-05-09 binary @ 0x0012fa34 (asm-inspector)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012fa34 (asm-inspector)
     void Scale(const Vec3& s);
 
-    // ASM-verified: 2026-05-09 binary @ 0x0012f97c (asm-inspector)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012f97c (asm-inspector)
     void Translate(const Vec3& t);
 
-    // ASM-verified: 2026-05-09 binary @ 0x0011a130 (asm-inspector)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0011a130 (asm-inspector)
     void SetCurrentMatrix(const Matrix44& mat);
 };
 

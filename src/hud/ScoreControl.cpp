@@ -69,7 +69,7 @@ static bool IsMultiplayer() { return false; }
 
 // GetCurrentScore: returns score for the given player index.
 // Player 1 (idx=0) uses game_work.currentScore. Player 2 is not yet ported.
-// ASM-verified: 2026-05-18 binary @ 0x00148e00 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00148e00 (re-analyst)
 // Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
 // Same-screen MP does not split saved stats; no "Score_P2" key exists.
 static int GetCurrentScore(int playerIdx) {
@@ -189,7 +189,7 @@ void ScoreControl::Release() {
 }
 
 // Reset @ 0x001582e4
-// ASM-verified: 2026-05-09 binary @ 0x001582e4 (re-analyst)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001582e4 (re-analyst)
 void ScoreControl::Reset() {
     // Binary copies m_FruitDigitTex (+0xF8 = hud_fruit.tex) into m_Texture
     // (+0x74) unconditionally so HUDControl3d::Draw renders the watermelon
@@ -215,7 +215,7 @@ void ScoreControl::Reset() {
     m_LayerFlags = 1 << m_PlayerIdx;
 }
 
-// ASM-verified: 2026-05-14T00:00 binary @ 0x001581a0 (re-analyst)
+// ASM-verified: 2026-05-14T00:00 v1.6.1 binary @ 0x001581a0 (re-analyst)
 // +0x4C (game_work.m_SaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
 // Prior port incorrectly tested game_work.bM_bPaused (engine pause flag) instead.
 void ScoreControl::Skip() {
@@ -226,7 +226,7 @@ void ScoreControl::Skip() {
     }
 }
 
-// ASM-verified: 2026-05-03T00:00 binary @ 0x0015853c (asm-inspector)
+// ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x0015853c (asm-inspector)
 // Update @ 0x0015853c
 void ScoreControl::Update(float dt) {
     int currentScore = GetCurrentScore(m_PlayerIdx);
@@ -336,7 +336,7 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 6: position + layer flags
-    // ASM-verified: 2026-05-09 binary @ 0x0015853c (re-analyst)
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015853c (re-analyst)
     // pos = base - stride * abs(m_TransitionTimer)
     // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
     // distance, NOT a per-player MP offset. Steady-state gameplay
@@ -353,7 +353,7 @@ void ScoreControl::Update(float dt) {
         m_DrawPosY = pos.y;
         m_DrawPosZ = pos.z;
         // wave-mode: recentre score banner via lerp toward anchor. binary @ 0x001589f0..0x00158ac6
-        // ASM-verified: 2026-05-18 binary @ 0x00158a64 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00158a64 (re-analyst)
         // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
         if (game_work.pFontNumbers.IsValid()) {
             char scoreBuf[32];
@@ -531,7 +531,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
-        // ASM-verified: 2026-05-10 binary @ 0x00159240..0x0015925e (re-analyst).
+        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00159240..0x0015925e (re-analyst).
         // Anchor uses raw pos (m_Pos.x/y), NOT m_DrawPosX/Y:
         //   X = pos.x - 18.0   (literal 0x41900000)
         //   Y = pos.y - 52.0   (DAT_001593d4 = 0x42500000)
@@ -554,7 +554,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
         if (m_HighscoreToShow > 0 && transTimer > -1.0f && transTimer < 1.0f) {
             // Binary @ 0x001591BC: green-pulse lerp on highscore-reached banner.
-            // ASM-verified: 2026-05-03T00:00 binary @ 0x00159334..0x001594e0 (asm-inspector)
+            // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159334..0x001594e0 (asm-inspector)
             Colour col(0xB4, 0x80, 0x05, 200);  // base orange
             if (m_HighscoreToShow == m_DisplayedScore) {
                 s_BannerSinIdx += (!game_work.bM_Mode) ? 6 : 0;
@@ -572,7 +572,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             // CENTER) do the actual positioning so the label sits left of the
             // anchor and the digit centers on it.
             //
-            // ASM-verified: 2026-05-09 binary @ 0x00159500..0x001596a4 (re-analyst).
+            // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00159500..0x001596a4 (re-analyst).
             // Constants:
             //   - both calls scale = 20.0f, anchor = pos + (cursorX + 28, -28.8, 0)
             //   - cursorX = MeasureString(label)*20 - 48 (DAT_00159798 = 48.0)
@@ -584,14 +584,14 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             if (game_work.pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
-                // ASM-verified: 2026-05-10 binary @ 0x001592c4..0x001592c8
+                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x001592c4..0x001592c8
                 // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
                 // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
                 // resolves to "BEST:" (with trailing colon) in english_us.
                 const char* label = Mortar::GETSTRING_CAST_0(LSTR_BEST);
                 float labelW  = game_work.pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
-                // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
+                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00159588..0x001596a6 (re-analyst).
                 // Anchor uses raw pos (m_Pos.x/y at +0x8/+0xc), NOT m_DrawPosX/Y
                 // at +0x94/+0x98. Earlier port pulled m_DrawPosX (= pos.x + 24)
                 // which shifted the BEST label/digit +24 px right of correct.
@@ -615,7 +615,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 // Digit call: binary @ 0x0015969c routes through PLT
                 // 0x000fd80c which resolves to Font::DrawString @ 0x00199aa0
                 // -- the wrapper, NOT a separate full overload.
-                // ASM-verified: 2026-05-10 binary @ 0x00199aa0 (asm-inspector).
+                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00199aa0 (asm-inspector).
                 // Caller emits s2=0.0 (DAT 0x001597c0) which the wrapper
                 // stores as anchor.z, NOT as yLineFactor. Internally, the
                 // wrapper hardcodes yLineFactor=1.0 (vmov.f32 s1,#0x3f800000
@@ -635,7 +635,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
 
     // draw_quads:
     // Section D: Score-icon texture quad (+0xA0 = score.tex) — guarded by transTimer > 0
-    // ASM-verified: 2026-05-03T00:00 binary @ 0x00159726..0x00159770 (asm-inspector)
+    // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159726..0x00159770 (asm-inspector)
     if (m_ScoreIconTex.IsValid() && transTimer > 0.0f) {
         Mortar::Texture* tex = m_ScoreIconTex.Get();
         float texW = (tex && tex->GetWidth()  > 0) ? (float)tex->GetWidth()  : 64.0f;
@@ -661,7 +661,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
 
     // Section E: Highscore banner texture (+0xA4 = new_best_score.tex)
     // guarded by m_BannerScaleTime > 0
-    // ASM-verified: 2026-05-03T00:00 binary @ 0x00159842..0x0015990c (asm-inspector)
+    // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159842..0x0015990c (asm-inspector)
     if (m_HighscoreBannerTex.IsValid() && m_BannerScaleTime > 0.0f) {
         Mortar::Texture* tex = m_HighscoreBannerTex.Get();
         float texW = (tex && tex->GetWidth()  > 0) ? (float)tex->GetWidth()  + 1.0f : 65.0f;
@@ -692,7 +692,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     }
 }
 
-// ASM-verified: 2026-05-13 binary @ 0x0015819c (re-analyst).
+// ASM-verified: 2026-05-13 v1.6.1 binary @ 0x0015819c (re-analyst).
 // Body is a single `bx lr` -- returns r0 (= the int arg) unchanged. No
 // internal callers in the shipping binary; the multiplier path is owned
 // by ScoreMultiplyerBoard. Kept here only so the port's symbol table

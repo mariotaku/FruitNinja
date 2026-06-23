@@ -55,7 +55,7 @@ bool MortarSound::IsPaused() {
 // Before the call, binary writes this+8 (=&m_Handle) into a MAMAudioController
 // listener-pair table slot, then passes NULL as the sound* arg.
 // Port specific: passes 'this' as listener instead of inline listener-table write.
-// DIFFERS: binary @ 0x0018c850 calls SFXPlay(m_Name, 0, NULL, 0x40, -1);
+// DIFFERS: v1.6.1 binary @ 0x0018c850 calls SFXPlay(m_Name, 0, NULL, 0x40, -1);
 //   port simplifies to 2-arg form, losing default volume 64 and listener-table semantics.
 void MortarSound::Play() {
     MortarSound_HandleGuard(this);
@@ -139,7 +139,7 @@ void MortarSound::Load(const char* name) {
     InternalLoad(name);
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x0018c8d0 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0018c8d0 (re-analyst)
 // Calling InternalLoad on an actively-playing sound silently stops it
 // because InternalDestroy calls Stop(0) and zeros m_Handle before m_Name is replaced.
 void MortarSound::InternalLoad(const char* name) {
@@ -149,14 +149,14 @@ void MortarSound::InternalLoad(const char* name) {
     memcpy(m_Name, name, n);
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x0018c7a8 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0018c7a8 (re-analyst)
 // Note: binary is a no-op stub; loads complete synchronously.
 bool MortarSound::IsReady() {
     if (m_Handle == 0) m_State = 0;
     return true;
 }
 
-// DIFFERS: binary @ 0x0018c778 discards pitch arg; not implementing real pitch shift to match
+// DIFFERS: v1.6.1 binary @ 0x0018c778 discards pitch arg; not implementing real pitch shift to match
 void MortarSound::SetPitch(unsigned int /*pitch*/) {
     if (m_Handle == 0) m_State = 0;
     // binary discards the pitch argument; not implementing real pitch shift to match

@@ -57,7 +57,7 @@ ActorManager* ActorManager::GetInstance() {
 // 0x0017046c. Allocates the per-type list array from the LinkedHeap.
 // Port drops LinkedHeap and uses new[]; sets m_pHeap to a sentinel so the
 // null-guard in Update/Draw stays false.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0017046c (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017046c (asm-inspector)
 void ActorManager::Initialise(int numTypes, int heapSize) {
     if (m_pHeap != nullptr) return;  // already initialised
     m_HeapSize    = heapSize;
@@ -67,7 +67,7 @@ void ActorManager::Initialise(int numTypes, int heapSize) {
 }
 
 // 0x0017037c.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0017037c (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017037c (asm-inspector)
 void ActorManager::Destroy() {
     m_DebugDraw = false;
     Clear();
@@ -81,7 +81,7 @@ void ActorManager::Destroy() {
 }
 
 // 0x00170064. Delete all entities in type lists + free pool.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x00170064 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x00170064 (asm-inspector)
 void ActorManager::Clear() {
     if (m_pTypeLists) {
         for (int t = 0; t < m_NumTypes; t++) {
@@ -110,7 +110,7 @@ void ActorManager::Clear() {
 // --- Entity API -----------------------------------------------------------
 
 // 0x0017068c. Binary-faithful recycle-first Add.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0017068c (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017068c (asm-inspector)
 Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary*/) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return nullptr;
     if (entityType < 0 || entityType >= m_NumTypes) return nullptr;
@@ -129,7 +129,7 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
             m_FreePool[m_FreeCount] = nullptr;
             // Entity::Activate at 0x00170b18: flags &= 0xFE (clear bit 0 only).
             // Binary @ 0x00170b18: only ENT_INACTIVE (bit 0) is cleared; ENT_KILLED
-            // is NOT touched. ASM-verified: 2026-04-28T15:55Z binary @ 0x00170b18 (asm-inspector)
+            // is NOT touched. ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x00170b18 (asm-inspector)
             candidate->flags &= ~ENT_INACTIVE;
             return candidate;
         }
@@ -151,8 +151,8 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
 }
 
 // 0x00170654. Push an already-built entity into its type list.
-// Defunct: zero live in-binary callers (only LoadEntity, itself dead); binary @ 0x00170654.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x00170654 (asm-inspector)
+// Defunct: zero live in-binary callers (only LoadEntity, itself dead); v1.6.1 binary @ 0x00170654.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x00170654 (asm-inspector)
 Entity* ActorManager::Add(Entity* entity, long typeIdx) {
     if (!entity) return nullptr;
     if (typeIdx < 0 || typeIdx >= (long)m_NumTypes || m_pTypeLists == nullptr) return nullptr;
@@ -179,8 +179,8 @@ void ActorManager::Deactivate(Entity* entity) {
 }
 
 // 0x001702d8. Binary calls vtable+0xc (Release) then operator delete.
-// Defunct: zero in-binary callers; binary @ 0x001702d8.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x001702d8 (asm-inspector)
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x001702d8.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001702d8 (asm-inspector)
 void ActorManager::Remove(Entity* entity) {
     if (!entity || m_pTypeLists == nullptr) return;
     const int type = entity->entityType;
@@ -199,8 +199,8 @@ void ActorManager::Remove(Entity* entity) {
 }
 
 // 0x0016fb44.
-// Defunct: zero in-binary callers; binary @ 0x0016fb44.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fb44 (asm-inspector)
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fb44.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fb44 (asm-inspector)
 void ActorManager::DeactivateAllEntities(int typeIdx) {
     if (m_pTypeLists == nullptr) return;
     if (typeIdx < 0 || typeIdx >= m_NumTypes) return;
@@ -247,7 +247,7 @@ void ActorManager::Update(float dt) {
 }
 
 // 0x0016fe7c.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fe7c (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fe7c (asm-inspector)
 void ActorManager::Draw(Renderer& r) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
     for (int t = 0; t < m_NumTypes; t++) {
@@ -263,27 +263,27 @@ void ActorManager::Draw(Renderer& r) {
 }
 
 // 0x0016fe1c. ColSphere debug drawing.
-// Defunct: zero in-binary callers; binary @ 0x0016fe1c.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fe1c.
 void ActorManager::DrawDebug() {}
 
 // Binary @ 0x0016fdc8 -- iterates m_pTypeLists and calls entity->vtable[+0x1c]
 // (slot 7, PostLoad). Defunct: zero in-binary callers; LoadEntity is itself dead.
 // Port keeps stub body as no-op for safety.
 void ActorManager::PostLoad() {
-    // Defunct: zero in-binary callers; binary @ 0x0016fdc8.
+    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fdc8.
 }
 
 // --- Query API ------------------------------------------------------------
 
 // 0x0016ff98. Binary returns list size with NO active filtering.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff98 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff98 (asm-inspector)
 int ActorManager::GetNumEntities(int typeIdx) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return 0;
     return (int)m_pTypeLists[typeIdx].size();
 }
 
 // 0x0016ffac.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ffac (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ffac (asm-inspector)
 int ActorManager::GetNumEntities() {
     if (!m_pTypeLists) return 0;
     int total = 0;
@@ -293,7 +293,7 @@ int ActorManager::GetNumEntities() {
 
 // 0x0016ff30. Sentinel is -1L, not 0 (type 0 == Bomb would be skipped wrongly).
 // Binary @ 0x0016ff30.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff30 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff30 (asm-inspector)
 int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
     if (!m_pTypeLists || !typeIdxNullTerminated) return 0;
     int total = 0;
@@ -305,7 +305,7 @@ int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
 }
 
 // 0x0016ff5c.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff5c (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff5c (asm-inspector)
 int ActorManager::GetNumEntities(long typeA, long typeB) {
     if (!m_pTypeLists) return 0;
     long lo = typeA < typeB ? typeA : typeB;
@@ -318,7 +318,7 @@ int ActorManager::GetNumEntities(long typeA, long typeB) {
 }
 
 // 0x0016ff00.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff00 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff00 (asm-inspector)
 int ActorManager::GetNumTypes() {
     if (!m_pTypeLists) return 0;
     int n = 0;
@@ -330,7 +330,7 @@ int ActorManager::GetNumTypes() {
 // type list's begin() iterator and returns the Entity* it points at, or
 // nullptr if the list is empty. Binary also returns the ActorManager*
 // via an outer CONCAT that callers ignore.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fbb8 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fbb8 (asm-inspector)
 Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& it) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) {
         it = std::list<Entity*>::iterator();
@@ -344,7 +344,7 @@ Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& 
 
 // Matches ActorManager::GetEntityNext (0x0016fb88). Advances `it` and
 // returns the next Entity*, or nullptr when past end.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fb88 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fb88 (asm-inspector)
 Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& it) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
@@ -354,7 +354,7 @@ Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& i
 }
 
 // 0x0016fcc4.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fcc4 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fcc4 (asm-inspector)
 Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
@@ -365,8 +365,8 @@ Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
 }
 
 // 0x0016fc64.
-// Defunct: zero in-binary callers; binary @ 0x0016fc64.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fc64 (asm-inspector)
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fc64.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fc64 (asm-inspector)
 int ActorManager::GetEntityIdx(Entity* entity) {
     if (!entity || !m_pTypeLists) return -1;
     const int type = entity->entityType;
@@ -417,7 +417,7 @@ Entity* ActorManager::Find(unsigned long trackerKey) {
 
 // 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
 // test passes against aabb.
-// Defunct: zero in-binary callers; binary @ 0x0016fbec.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fbec.
 int ActorManager::GetNumInAABB(ColAABB* aabb) {
     (void)aabb;
     return 0;
@@ -426,7 +426,7 @@ int ActorManager::GetNumInAABB(ColAABB* aabb) {
 // --- Level deserialiser ---------------------------------------------------
 
 // 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
-// Defunct: zero in-binary callers; binary @ 0x00170728.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170728.
 bool ActorManager::LoadEntity(EntityChunk* /*chunk*/, void* /*hdr*/,
                               long /*hdrLen*/, long /*lod*/) {
     return false;
@@ -442,31 +442,31 @@ int ActorManager::GetHeapFree() const {
 
 // 0x00170364.
 void ActorManager::HeapDisplay(bool /*verbose*/) {
-    // Defunct: LinkedHeap diagnostics -- no-op stub; binary @ 0x00170364
+    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 binary @ 0x00170364
 }
 
 // 0x00170354.
 void ActorManager::DisplayUsage(bool /*dumpAll*/) {
-    // Defunct: LinkedHeap diagnostics -- no-op stub; binary @ 0x00170354
+    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 binary @ 0x00170354
 }
 
 // --- Messaging ------------------------------------------------------------
 
 // 0x0017085c. m_Listeners.push_back(L).
-// Defunct: zero in-binary callers; binary @ 0x0017085c.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017085c.
 void ActorManager::AddMessageListener(Mortar::MessageListener* listener) {
     if (!listener) return;
     m_Listeners.push_back(listener);
 }
 
 // 0x00170124. m_Listeners.remove(L).
-// Defunct: zero in-binary callers; binary @ 0x00170124.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170124.
 void ActorManager::RemoveMessageListener(Mortar::MessageListener* listener) {
     m_Listeners.remove(listener);
 }
 
 // 0x0017013c. Delete each listener (operator delete), then clear list.
-// Defunct: zero in-binary callers; binary @ 0x0017013c.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017013c.
 void ActorManager::ClearAllListeners() {
     for (std::list<Mortar::MessageListener*>::iterator it = m_Listeners.begin();
          it != m_Listeners.end(); ++it) {
@@ -477,7 +477,7 @@ void ActorManager::ClearAllListeners() {
 
 // 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot clear,
 // then dispatch target->ReceiveMessage(sender, msg).
-// Defunct: zero in-binary callers; binary @ 0x0016ffd8.
+// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016ffd8.
 //
 // Filter semantics (binary @ 0x0016ffd8):
 //   L->type == msg->type         (exact match; no wildcard on type)
@@ -506,7 +506,7 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
             !(sender != nullptr && (unsigned int)L->senderId == sender->field_0x04))
             continue;
         if (L->callback) {
-            // ASM-verified: 2026-05-20 binary @ 0x0016ffd8 (asm-inspector)
+            // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016ffd8 (asm-inspector)
             // Binary: cb->vtable[+0x30](cb, sender, target, msg) — Delegate3 invoke.
             Mortar::Delegate3<void, Entity*, Entity*, Message*>* cb =
                 static_cast<Mortar::Delegate3<void, Entity*, Entity*, Message*>*>(L->callback);

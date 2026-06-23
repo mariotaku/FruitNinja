@@ -161,7 +161,7 @@ void Model::SetEffectGroup(Mortar::SmartPtr<EffectGroup> /*effectGroup*/) {
         // (port's Geometry class IS ported as of Phase 5; Geometry::Render draws from
         // load-cached m_Vbo/m_Ibo/m_Layout rather than walking PassBinding::Apply --
         // structural bypass, same fixed-function GLES1.x calls, NOT GLES2 shaders).
-        // Defunct: RebuildEffectBindings -- no-op stub; binary @ 0x001b08e8
+        // Defunct: RebuildEffectBindings -- no-op stub; v1.6.1 binary @ 0x001b08e8
         mesh->RebuildEffectBindings();
     }
 }

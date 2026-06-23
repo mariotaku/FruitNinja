@@ -24,7 +24,7 @@ static const float HUD_SCREEN_W = 480.0f;
 static const float HUD_SCREEN_H = 320.0f;
 static const float HUD_SCREEN_Z = 0.0f;
 
-// ASM-verified: 2026-05-24 binary @ 0x0014428c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0014428c (re-analyst)
 //   - texture validity gate, m_DrawColour.a gate
 //   - Scale44(size) -> optional RotZ44(SinIdx, CosIdx) -> GlobalTranslate44
 //   - translate = pos + Vec3(480, 320, 0) * m_HudScale  (screen-anchor offset)
@@ -72,7 +72,7 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     m_Texture->UnSet();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144434 (HUDControl3d::HUDControl3d)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144434 (HUDControl3d::HUDControl3d)
 // Structure: base ctor (implicit) → vtable (implicit) → SetNull(m_Texture) → SetNull(m_Model) → m_Timer = 0.
 HUDControl3d::HUDControl3d() {
     m_Texture.SetNull();
@@ -80,7 +80,7 @@ HUDControl3d::HUDControl3d() {
     m_Timer = 0.0f;
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144474 / 0x001444e0 / 0x00144548 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144474 / 0x001444e0 / 0x00144548 (re-analyst)
 // Binary body: vtable<- HUDControl3d::vtable; Release(); ~SmartPtr(m_Model);
 // ~SmartPtr(m_Texture); ~HUDControl(); [operator delete for D0 variant].
 // C++ auto-emits SmartPtr dtors in reverse declaration order, which matches
@@ -89,17 +89,17 @@ HUDControl3d::HUDControl3d() {
 HUDControl3d::~HUDControl3d() {
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00143fc4 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fc4 (re-analyst)
 // Single bx lr; does NOT chain to HUDControl::Release.
 void HUDControl3d::Release() {}
 
-// ASM-verified: 2026-05-24 binary @ 0x00143fc8 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fc8 (re-analyst)
 // Single bx lr; no-op.
 void HUDControl3d::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00143fcc (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fcc (re-analyst)
 // Tail-calls HUDControl::Update(this, dt).
 void HUDControl3d::Update(float dt) {
     HUDControl::Update(dt);

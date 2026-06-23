@@ -29,11 +29,11 @@
 // Binary constants (resolved from Ghidra; all addresses in ARM32 .text/.rodata)
 // ---------------------------------------------------------------------
 
-// ASM-verified: 2026-04-29T03:09Z binary @ 0x001bd08c (asm-inspector)
+// ASM-verified: 2026-04-29T03:09Z v1.6.1 binary @ 0x001bd08c (asm-inspector)
 // Per-splat-type slide-rate table. Indexed by m_SplatType (0..5).
 static const float kSlideRate[6] = { 2.5f, 2.5f, 2.5f, 2.9f, 0.0f, 0.0f };
 
-// ASM-verified: 2026-04-29T03:09Z binary @ 0x001bd074 (asm-inspector)
+// ASM-verified: 2026-04-29T03:09Z v1.6.1 binary @ 0x001bd074 (asm-inspector)
 // Per-type post-landing scale multiplier. Applied as: m_Scale *= kLandScale[type] * 2.5f.
 static const float kLandScale[6] = { 1.6f, 1.6f, 1.6f, 1.6f, 2.9f, 2.9f };
 
@@ -211,19 +211,19 @@ void SplatEntity::Init() {
 // --- Vtable slot 3: Release (binary @ 0x0017edd0) ---
 // Binary body: `bx lr` (no-op)
 void SplatEntity::Release() {
-    // Defunct: no-op stub; binary @ 0x0017edd0
+    // Defunct: no-op stub; v1.6.1 binary @ 0x0017edd0
 }
 
 // --- Vtable slot 6: Draw (binary @ 0x0017ee30) ---
 // Binary body: `bx lr` (no-op -- splats are batched, never per-instance Draw())
 void SplatEntity::Draw() {
-    // Defunct: no-op stub; binary @ 0x0017ee30
+    // Defunct: no-op stub; v1.6.1 binary @ 0x0017ee30
 }
 
 // --- Vtable slot 7: DrawUpdate (binary @ 0x0017ee2c) ---
 // Binary body: `bx lr` (no-op)
 void SplatEntity::DrawUpdate(float /*dt*/) {
-    // Defunct: no-op stub; binary @ 0x0017ee2c
+    // Defunct: no-op stub; v1.6.1 binary @ 0x0017ee2c
 }
 
 // MakeSplat random-kill denominators (binary @ 0x0017f456-f482).
@@ -272,7 +272,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool lan
         m_ColB = info->m_FruitColour[0];
         m_ColG = info->m_FruitColour[1];
         m_ColR = info->m_FruitColour[2];
-        // ASM-verified: 2026-05-16 binary @ 0x0016f342 — FruitTypeColour
+        // ASM-verified: 2026-05-16 v1.6.1 binary @ 0x0016f342 — FruitTypeColour
         // helper fills all 4 bytes (B, G, R, A) from FruitInfo, including
         // the alpha. The next suppression block (binary @ 0x0016f45e:
         // `ldrb r3,[r4,#11]; cbz r3, exit`) then exits if m_ColA == 0 so
@@ -339,13 +339,13 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool lan
 
     // Axis vectors. Binary @ 0x0017f1cc: axisA = (cos, sin) * 0.5 and
     // axisB = perp * 0.5 (local_44 = 0x3f000000 = 0.5f).
-    // ASM-verified: 2026-04-29T03:09Z binary @ 0x0017f1cc (asm-inspector)
+    // ASM-verified: 2026-04-29T03:09Z v1.6.1 binary @ 0x0017f1cc (asm-inspector)
     const float angleRad  = m_Angle * (3.1415926f / 180.0f);
     const float axPerpRad = angleRad + 1.5707963f;  // +90 deg
     m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
     m_AxisB = Vec3(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.5f;
 
-    // Defunct: SSMP horizontal-gravity flag -- stubbed to 0; binary @ 0x0017f438.
+    // Defunct: SSMP horizontal-gravity flag -- stubbed to 0; v1.6.1 binary @ 0x0017f438.
     // Binary: m_bSSMPHorizGravity = IsSameScreenMultiplayer() && game->field_0xc == 0
     m_bSSMPHorizGravity = 0;
 
@@ -486,7 +486,7 @@ void SplatEntity::UpdateSplat(float dt) {
             // gate has soaked past -0.5 (i.e. the post-fire cooldown is over
             // and we're free to rearm). Binary uses `vcmpe gate, -0.5; it mi`
             // -> N flag set when gate + 0.5 < 0, i.e., gate < -0.5.
-            // ASM-verified: 2026-05-06T17:00 binary @ 0x0017fa56 (asm-inspector)
+            // ASM-verified: 2026-05-06T17:00 v1.6.1 binary @ 0x0017fa56 (asm-inspector)
             // (Earlier port had `>= -0.5f` -- inverted comparator; rearmed
             //  while still in cooldown soak instead of after it.)
             if (RandInt(10) == 0 && s_PulpDripGate < -0.5f) {
@@ -557,7 +557,7 @@ void SplatEntity::UpdateSplat(float dt) {
 // Note pair order: RandInt(2)==0 selects suffix -2, ==1 selects -1.
 // Per-size cooldown: gate ticks down by dt/frame in Update; when
 // <= 0 here, fires + resets to 0.5. Three independent gates by size.
-// ASM-verified: 2026-04-29 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
+// ASM-verified: 2026-04-29 v1.6.1 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
 // ---------------------------------------------------------------------
 void SplatEntity::PlaySplat(int splatSize) {
     int sz = splatSize;
@@ -616,14 +616,14 @@ static int s_NumActiveSplats = 0;
 // Points into HUD::scales[3..5] (world tint) for the duration of the batch pass.
 static const float* s_CurrentTintRGB = 0;
 
-// ASM-verified: 2026-05-06T17:00 binary @ 0x0017ee34 (asm-inspector)
+// ASM-verified: 2026-05-06T17:00 v1.6.1 binary @ 0x0017ee34 (asm-inspector)
 // Returns the cached counter; binary does NOT iterate the pool here.
 // The cache is refreshed at the end of UpdateActiveSplats's pool loop.
 int SplatEntity::NumActiveSplats() {
     return s_NumActiveSplats;
 }
 
-// ASM-verified: 2026-05-06T18:00 binary @ 0x0017fd68 (asm-inspector)
+// ASM-verified: 2026-05-06T18:00 v1.6.1 binary @ 0x0017fd68 (asm-inspector)
 // Body order matches binary 0x0017fd7c..0x0017ff38:
 //   (a) Per-impact splat-SFX gate ticks (3-iter loop).
 //   (b) Pulp-drip-gate timer + positive->non-positive fire edge.
@@ -711,7 +711,7 @@ void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
 // ---------------------------------------------------------------------
 // SplatEntity::DrawSplat (0x001eb5d8) -- virtual per-instance render
 // Vtable slot 4.
-// ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
 // ---------------------------------------------------------------------
 // Writes 6 QUADCUSTOMVERTEX entries into s_SplatVerts at the cursor
 // position given by s_NumActiveSplats. Tint read from s_CurrentTintRGB.
@@ -739,7 +739,7 @@ void SplatEntity::DrawSplat() {
 
     // Colour pre-computed in UpdateSplat each frame.
     // Apply per-channel tint from &pHUD->scales[3] -- world tint window.
-    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
+    // ASM-verified: 2026-04-29T03:29Z v1.6.1 binary @ 0x0017f1ec (asm-inspector)
     Colour splatColour(m_ColR, m_ColG, m_ColB, m_ColA);
     Colour tinted = Colour::TintColour(splatColour, tintRGB);
     const uint32_t col =
@@ -816,7 +816,7 @@ void SplatEntity::DrawSplat() {
 // HUD::scales[3..5], then for each alive landed splat calls DrawSplat()
 // (pure thiscall, vtable slot 4) and increments s_NumActiveSplats.
 // Submits the completed batch.
-// ASM-verified: 2026-05-18 binary @ 0x00180344 (re-analyst) [addr updated: 0x001ece34]
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00180344 (re-analyst) [addr updated: 0x001ece34]
 // Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
 // glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
 //

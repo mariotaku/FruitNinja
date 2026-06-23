@@ -255,7 +255,7 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
 
-        // ASM-verified: 2026-05-03 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
+        // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
         // --- Float attrs with defaults ---
         // Floats (defaults already applied at top of loop via ctor mirror).
         elem.QueryFloatAttribute("collision", &fi.m_CollisionScale);
@@ -421,7 +421,7 @@ Mortar::Texture* FruitInfo_GetShadowTex()
 
 // FRUIT_POWERS::AnyActivePowers -- binary @ 0x00175714
 // Returns true if any power in m_pArray is currently active via PowerUpManager.
-// ASM-verified: 2026-05-18 binary @ 0x00175714 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00175714 (re-analyst)
 bool FRUIT_POWERS::AnyActivePowers() const {
     PowerUpManager* mgr = PowerUpManager::GetInstance();
     if (!mgr) return false;
@@ -431,7 +431,7 @@ bool FRUIT_POWERS::AnyActivePowers() const {
     return false;
 }
 
-// ASM-verified: 2026-05-22 binary @ 0x0017a7d8 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0017a7d8 (re-analyst).
 // Weighted random pick. m_CumulativeWeight is a running total set at XML load;
 // total weight == m_pArray[m_Count-1].m_CumulativeWeight. Roll in [0, total),
 // return first entry whose cumulative > roll. Falls back to last entry (cannot

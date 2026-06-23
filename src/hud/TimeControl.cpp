@@ -121,7 +121,7 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x001624a4 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001624a4 (re-analyst)
 void TimeControl::Update(float dt) {
     // 0x001624a4
     float entrySizeX = size.x;   // cached before GetInstance call (binary s16)
@@ -133,7 +133,7 @@ void TimeControl::Update(float dt) {
 #endif // !defined(__bada__)
         return;
     }
-    // ASM-verified: 2026-05-27 binary @ 0x001624ec (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001624ec (re-analyst)
     // Non-timed-mode early return: hide HUD, stamp sentinel into save slot,
     // and skip the LAB_00162818 timed-mode block entirely. Other subsystems
     // (Fruit::Chuck power-fruit abort gate) read -1.0f to detect "no time
@@ -152,7 +152,7 @@ void TimeControl::Update(float dt) {
 
     // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
     // Three conditions suppress the timer tick (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
-    // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001624e6 (re-analyst)
     bool suppress = game_work.bM_Mode
                  || game_work.bM_bPaused
                  || (game_work.m_bMPRetryPending && !game_work.m_bP2PReady);
@@ -161,15 +161,15 @@ void TimeControl::Update(float dt) {
         int q;
         if (m_CountdownStart <= 0.0f) {
             // ZEN count-up branch: tick time only; slow-clock join below.
-            // ASM-verified: 2026-05-18 binary @ 0x001627ea (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001627ea (re-analyst)
             m_TimeRemaining += dt;
             q = (int)m_TimeRemaining;
         } else {
             // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
 
-            // ASM-verified: 2026-05-18 binary @ 0x00162528 (re-analyst)
-            // ASM-verified: 2026-05-18 binary @ 0x0016257c (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00162528 (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016257c (re-analyst)
             if (WaveManager::PowersEnabled()) {
                 PowerUpManager* pum = PowerUpManager::GetInstance();
                 if (pum && pum->m_StopClockAccum > 0.0f) {
@@ -212,7 +212,7 @@ void TimeControl::Update(float dt) {
             }
 
             // Tick-tock SFX when colour band toggled this frame (binary @ 0x00162716).
-            // ASM-verified: 2026-05-18 binary @ 0x0016273a (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016273a (re-analyst)
             // s_TickTockToggle ? "Time-tick" : "Time-tock" is correct post-XOR order;
             // first fire after Reset is "Time-tick".
             if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
@@ -226,7 +226,7 @@ void TimeControl::Update(float dt) {
             }
 
             // Arcade q value for slow-clock join below.
-            // ASM-verified: 2026-05-18 binary @ 0x001627d2 (re-analyst)
+            // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001627d2 (re-analyst)
             q = (int)(m_CountdownStart - m_TimeRemaining);
         }
         // Single slow-clock join point for both Zen and Arcade paths.
@@ -236,14 +236,14 @@ void TimeControl::Update(float dt) {
 
     // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
     // Write HUD-side timer mirror every frame (binary @ 0x00162830).
-    // ASM-verified: 2026-05-18 binary @ 0x00162830 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00162830 (re-analyst)
     LAB_00162818:
 #ifndef __bada__
     if (game_work.mMainScreen) {
         game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
 #endif // !defined(__bada__)
-    // ASM-verified: 2026-05-27 binary @ 0x00162830 (re-analyst)
+    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00162830 (re-analyst)
     // Mirror live time to game_work.m_SaveData->m_TimeRemainingSave so other
     // subsystems (e.g. Fruit::Chuck power-fruit abort gate) can read the
     // remaining wave time without a TimeControl pointer.

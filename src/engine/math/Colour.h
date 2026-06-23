@@ -35,7 +35,7 @@ struct Colour {
 
     // Mortar::TintColour @ 0x0013540c -- per-channel tint with [0..255] clamp.
     // tintRGB[0..2] multiplies R/G/B independently; alpha is preserved.
-    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
+    // ASM-verified: 2026-04-29T03:29Z v1.6.1 binary @ 0x0013540c (asm-inspector)
     static Colour TintColour(Colour src, const float tintRGB[3]) {
         return Colour(Clamp255(src.r * tintRGB[0]),
                       Clamp255(src.g * tintRGB[1]),

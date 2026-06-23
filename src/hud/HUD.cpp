@@ -7,7 +7,7 @@
 #include "render/MatrixStack.h"
 #include <list>
 
-// ASM-verified: 2026-05-24 binary @ 0x00144bb0 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144bb0 (re-analyst)
 // DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
 //          (m_globalTimeScale); m_field20 (+0x20) is left uninitialized by ctor.
 //          Port zero-inits m_field20 and pre-inits m_globalTimeScale here to
@@ -16,17 +16,17 @@ HUD::HUD() : m_field20(0.0f), m_globalTimeScale(1.0f) {
     for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144cd0 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144cd0 (re-analyst)
 HUD::~HUD() {
     Release();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144d18 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144d18 (re-analyst)
 void HUD::Init() {
     controls.clear();
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144c5c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c5c (re-analyst)
 void HUD::Release() {
     // Binary @ 0x00144c5e: game_work.field_0x34 = 1 (HUD-destructing guard).
     // PIC-resolved global (GOT @ 0x001ec130+0x7990 -> &game_work @ 0x001f43b8), field_0x34.
@@ -48,7 +48,7 @@ void HUD::Release() {
     game_work.field_0x34 = 0;
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144db0 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144db0 (re-analyst)
 void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
     if (pushFront)
         controls.push_front(ctrl);
@@ -56,14 +56,14 @@ void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
         controls.push_back(ctrl);
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144c40 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c40 (re-analyst)
 void HUD::RemoveControl(HUDControl* ctrl) {
     if (!ctrl) return;
     ctrl->m_RemoveCallback(ctrl);    // Delegate1::operator() -- internal null-check
     controls.remove(ctrl);
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144b28 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144b28 (re-analyst)
 void HUD::BeginDraw(float dt) {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->m_Active)
@@ -71,7 +71,7 @@ void HUD::BeginDraw(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144a90 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a90 (re-analyst)
 // DIFFERS: binary leaves matrix discipline to each control. Port resets the
 //          world matrix between PreDrawOrder and DrawOrder of each control to
 //          guard against leftover transforms (e.g. ShopScreen 481x scale).
@@ -93,7 +93,7 @@ void HUD::Draw(int layerMask) {
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144d20 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144d20 (re-analyst)
 void HUD::Update(float dt) {
     MissControl::PreUpdate(dt);              // global combo-decay pre-tick
     m_globalTimeScale = 1.0f;               // binary stores 1.0 to +0x24 each tick
@@ -115,14 +115,14 @@ void HUD::Update(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144b78 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144b78 (re-analyst)
 void HUD::ResetControls() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         (*it)->Reset();
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144c00 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c00 (re-analyst)
 void HUD::OnPause() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->GetType() == 8 /* TYPE_SCROLLING_MENU */) {
@@ -131,7 +131,7 @@ void HUD::OnPause() {
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144a20 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a20 (re-analyst)
 void HUD::Save() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* c = *it;
@@ -139,14 +139,14 @@ void HUD::Save() {
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144a58 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a58 (re-analyst)
 void HUD::Skip() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         (*it)->Skip();
     }
 }
 
-// ASM-verified: 2026-05-24 binary @ 0x00144dcc (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144dcc (re-analyst)
 // DIFFERS-trivial: binary's literal shape has a defensive inner-loop that re-scans
 //                  controls before each RemoveControl. Omitted here because list::remove
 //                  is a no-op on missing elements, making the inner loop observable no-op.

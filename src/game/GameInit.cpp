@@ -704,7 +704,7 @@ void GameDraw(float dt, bool active) {
     // ActorManager::Draw above already walked type-3 SlashEntity slots but
     // their Draw(Renderer&) vtable slot is a BX lr stub -- no output.
     // All blade rendering comes from here.
-    // ASM-verified: 2026-05-18 binary @ 0x0016b888 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016b888 (re-analyst)
     dm.SetDepthBuffer(false);
     for (int i = 0; i < 16; ++i) {
         if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();

@@ -48,11 +48,11 @@ public:
     virtual ~ProgressionTimerControl();
 
     // vtable slot 2 -- Binary @ 0x0015793c (empty bx lr)
-    // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x0015793c
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x0015793c
     void Init() override;
 
     // vtable slot 3 -- Binary @ 0x00157940 (empty bx lr)
-    // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157940
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157940
     void Release() override;
 
     // vtable slot 4 -- Binary @ 0x00157944
@@ -61,12 +61,12 @@ public:
     void Reset() override;
 
     // vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged)
-    // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157964
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157964
     void PreDraw(float* hudScaleRaw) override;
 
     // vtable slot 7 -- Binary @ 0x001579f4
     // Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
-    // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x001579f4
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x001579f4
     void Draw(float* hudScaleRaw) override;
 
     // vtable slot 10 -- Binary @ 0x00157bb0
@@ -76,7 +76,7 @@ public:
     void Update(float dt) override;
 
     // vtable slot 11 -- Binary @ 0x00157968
-    // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157968
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157968
     // Identical to StopCountdown: Reset() then m_bCountUp = false.
     bool SetToMultiplayerState() override;
 

@@ -281,7 +281,7 @@ public:
     void OnMenuItemsCleared();
 
     // Port-specific: HUD-side timer mirror written by TimeControl::Update every frame.
-    // ASM-verified: 2026-05-18 binary @ 0x001624f6 / 0x00162830 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001624f6 / 0x00162830 (re-analyst)
     // Note: binary writes to mainScreen+0x118 (binary m_State field at that offset).
     // Port uses a dedicated member to avoid aliasing the state machine int.
 #ifndef __bada__

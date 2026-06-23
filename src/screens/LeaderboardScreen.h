@@ -18,16 +18,16 @@ public:
     LeaderboardScreen() {}
     ~LeaderboardScreen() override {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00148030
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00148030
     static void LoadContent() {}
 
     // Defunct: LeaderboardScreen -- no-op stub
     static void UnLoadContent() {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00147cd0
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00147cd0
     void OnLeaderboardListPopulated(void* /*list*/) {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00147d1c
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00147d1c
     void LoadLeaderboards(int /*gameMode*/, int /*boardId*/) {}
 
     // Defunct: LeaderboardScreen -- no-op stub

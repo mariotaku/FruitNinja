@@ -54,7 +54,7 @@ Font::~Font() {
     FontTTFRegistry::GetInstance().Unregister(this);
 #endif
 
-    // DIFFERS: binary @ 0x0024d818 free order is (1) delete[] m_Kernings@+0x410,
+    // DIFFERS: v1.6.1 binary @ 0x0024d818 free order is (1) delete[] m_Kernings@+0x410,
     // (2) delete[] m_Glyphs@+0x000, (3) ~Page each + operator delete[] on Page
     // array@+0x408, (4) ~vector m_PageVerts@+0x42c. Port order differs but all
     // four frees are independent non-aliasing heap blocks; semantically identical.
@@ -558,7 +558,7 @@ float Font::MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const {
 // Returns total advance in lineHeight-normalized units.
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-09 binary @ 0x001988a8 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001988a8 (asm-inspector)
 // Binary's MeasureString is a thunk that calls GetLineLength(iter, 0.0f, NULL).
 // Forward through to match exactly.
 float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
@@ -748,7 +748,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
 // DrawString (matches Font_DrawString 0x00198e44)
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-09 binary @ 0x00198e44 (asm-inspector)
+// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00198e44 (asm-inspector)
 void Font::DrawString(float scale, float yLineFactor, float rotZ,
                       Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                       Vec2 maxWH, int alignment, float z,
@@ -815,7 +815,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     uint32_t origColour = curColour;
 
     // Horizontal alignment: compute offset for first line.
-    // ASM-verified: 2026-05-10T00:00Z binary @ 0x00198e44 (re-analyst hand-
+    // ASM-verified: 2026-05-10T00:00Z v1.6.1 binary @ 0x00198e44 (re-analyst hand-
     // disassembly @ 0x00198ef0..0x00198f80). Definitive alignment decode:
     //   alignment & 3 == 0 (LEFT):       lineOffset = 0
     //   alignment & 3 == 1 (CENTER):     lineOffset = 0  -- INERT for X
@@ -838,7 +838,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // moved score digits leftward over the watermelon icon. The binary's
     // CENTER mode is intentionally inert; ScoreControl's 0x0d achieves
     // LEFT-anchor layout via this inert path, not via a real centring op.
-    // ASM-verified: 2026-05-11 binary @ 0x00198eee..0x00198f7c (asm-inspector)
+    // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00198eee..0x00198f7c (asm-inspector)
     const int horizAlign = alignment & 0x3;
     float lineOffset = 0.0f;
     if (horizAlign >= 2) {
@@ -1009,7 +1009,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             const float u1 = u0 + g->w * lhDivW;
             const float v1 = v0 + g->h * lhDivH;
 
-            // ASM-verified: 2026-05-09 binary @ 0x00199576..0x00199836
+            // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00199576..0x00199836
             // (asm-inspector). Per-glyph emit is 6 verts in GL_TRIANGLE_STRIP
             // order: LB, LT, RB, RT + 2 degenerate copies of RT.
             //   strip(LB,LT,RB,RT) = tris (LB,LT,RB) + (LT,RB,RT) = one quad
@@ -1103,7 +1103,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         textM.RotZ44(sinf(rotZ), cosf(rotZ));
     }
 
-    // ASM-verified: 2026-05-11 binary @ 0x00199920..0x00199964 (asm-inspector)
+    // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00199920..0x00199964 (asm-inspector)
     // Vertical alignment: LocalTranslate(0, alignY, 0). The Y-shift depends
     // on the final cursorY (== -(numLines - 1)) so it's known only after
     // the glyph loop above.
@@ -1292,7 +1292,7 @@ float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth
         return lineH * (float)(newlines + 1);
     }
 
-    // DIFFERS: binary @ 0x0024c45c wrap path calls FindAdvanceOfNextWord per word
+    // DIFFERS: v1.6.1 binary @ 0x0024c45c wrap path calls FindAdvanceOfNextWord per word
     // (Mortar::WordWrap-aware); space-tokenised approximation used until WordWrap lands.
     int lines = 1;
     float curWidth = 0.0f;

@@ -191,7 +191,7 @@ public:
 
     CharTemplate* GetCharTemplate(uint32_t cp) const;
 
-    // ASM-verified: 2026-05-09 binary @ 0x00198528 (re-analyst) -- the
+    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00198528 (re-analyst) -- the
     // shipped Bada build's GetKerning is a 2-instruction stub:
     //     vldr.32 s0, [pc, #0x4]   ; literal 0.0f
     //     bx      lr

@@ -181,7 +181,7 @@ void PowerUp::Parse(TiXmlElement* elem) {
 }
 
 // Step 4: Activate (binary @ 0x00119134)
-// ASM-verified: 2026-05-18 binary @ 0x00119134 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
 void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float* extraParam) {
     if (showPopup) {
         if (m_Texture2.IsValid()) {
@@ -383,7 +383,7 @@ void PowerUp::SetTotalTime(float t) {
 }
 
 // PowerUp::PowerUp(PowerUp*) copy ctor — binary @ 0x00118ed4 (C1) / 0x00119004 (C2)
-// ASM-verified: 2026-05-18 binary @ 0x00118ed4 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118ed4 (re-analyst)
 PowerUp::PowerUp(PowerUp* src)
     : m_bIsPurchasable(false)
     , m_bIsSpecial(false)
@@ -423,13 +423,13 @@ PowerUp::PowerUp(PowerUp* src)
 }
 
 // @ 0x00117a44 — returns coin cost if purchaseable, else 0
-// ASM-verified: 2026-05-18 binary @ 0x00117a44 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117a44 (re-analyst)
 int PowerUp::Purchaseable() const {
     return m_pPurchaseInfo ? m_pPurchaseInfo->m_Cost : 0;
 }
 
 // @ 0x00117cdc — walk m_ModList; on type==2 mods, call DeferPoints
-// ASM-verified: 2026-05-18 binary @ 0x00117cdc (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117cdc (re-analyst)
 void PowerUp::SetDeferedPoints(int points) {
     for (std::list<GameModifier*>::iterator it = m_ModList.begin();
          it != m_ModList.end(); ++it) {
@@ -440,7 +440,7 @@ void PowerUp::SetDeferedPoints(int points) {
 }
 
 // @ 0x00118350 — null-guarded UnloadTextures calls
-// ASM-verified: 2026-05-18 binary @ 0x00118350 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118350 (re-analyst)
 void PowerUp::UnloadTextures() {
     if (m_pScreenEffect)  m_pScreenEffect->UnloadTextures();
     if (m_pPurchaseInfo)  m_pPurchaseInfo->UnloadTextures();

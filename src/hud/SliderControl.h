@@ -107,7 +107,7 @@ private:
 
 public:
     // HUDControl override -- Binary @ 0x0015ffac (single bx lr; no-op)
-    // Defunct: SliderControl -- no-op stub; binary @ 0x0015ffac
+    // Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffac
     void UpdateFromGameWork();
 };
 

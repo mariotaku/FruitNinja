@@ -8,7 +8,7 @@
 //   vtable @ 0x2CE3E8 (typeinfo 0x2CE428).
 //   sizeof(SuperFruitGlow): 0x8C (confirmed via SuperFruitControl `new 0x8c` allocation)
 //
-// ASM-verified: 2026-06-13T05:00Z binary @ 0x001c06bc (asm-inspector)
+// ASM-verified: 2026-06-13T05:00Z v1.6.1 binary @ 0x001c06bc (asm-inspector)
 //
 // Layout: HUDControl3d base is 0x7C bytes. SuperFruitGlow own fields @ +0x7C..+0x8B.
 // Fields from spec at offsets +0x08..+0x78 are absolute offsets into the inherited

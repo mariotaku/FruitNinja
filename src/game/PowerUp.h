@@ -123,7 +123,7 @@ public:
     void Parse(TiXmlElement* elem);
 
     // @ 0x00119134 — activate this power-up clone
-    // ASM-verified: 2026-05-18 binary @ 0x00119134 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
     // param1: showPopup — display miss control + deduct coins
     // param2: isPurchased — forwarded to ApplyModifier
     // param3: position — by-value in binary; port uses const& for ergonomics
@@ -191,19 +191,19 @@ public:
     void AddModifier(GameModifier* mod);
 
     // @ 0x00118ed4 — copy constructor (C1/C2 ctor variants)
-    // ASM-verified: 2026-05-18 binary @ 0x00118ed4 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118ed4 (re-analyst)
     PowerUp(PowerUp* src);
 
     // @ 0x00117a44 — returns coin cost if purchaseable, else 0
-    // ASM-verified: 2026-05-18 binary @ 0x00117a44 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117a44 (re-analyst)
     int Purchaseable() const;
 
     // @ 0x00117cdc — walk m_ModList, forward to ScoreModifier::DeferPoints on type==2
-    // ASM-verified: 2026-05-18 binary @ 0x00117cdc (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117cdc (re-analyst)
     void SetDeferedPoints(int points);
 
     // @ 0x00118350 — null-guarded calls to m_pScreenEffect and m_pPurchaseInfo
-    // ASM-verified: 2026-05-18 binary @ 0x00118350 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118350 (re-analyst)
     void UnloadTextures();
 };
 

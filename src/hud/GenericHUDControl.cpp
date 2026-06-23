@@ -18,7 +18,7 @@
 //      scale/col/flags spill to stack.
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x00189f60 (asm-inspector)
+// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x00189f60 (asm-inspector)
 GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
                                      Mortar::SmartPtr<Mortar::Texture> tex,
                                      Vec2* parentRect,
@@ -98,7 +98,7 @@ GenericHUDControl::~GenericHUDControl() {
 // Owns/deletes the BakedStringBox at +0x1d4.
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x00189858 (asm-inspector)
+// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x00189858 (asm-inspector)
 void GenericHUDControl::SetText(Mortar::BakedStringBox* box) {
     if (m_pLabel == box) return;
     if (m_pLabel) {
@@ -115,7 +115,7 @@ void GenericHUDControl::SetText(Mortar::BakedStringBox* box) {
 // Demangled: AddSound(const char* name, float startT, float endT)
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x0018a4c4 (asm-inspector)
+// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x0018a4c4 (asm-inspector)
 void GenericHUDControl::AddSound(const char* name, float startT, float endT) {
     GenericHUDControlSound s(m_FadeIn, -1.0f, startT, endT, name);
     m_Sounds.push_back(s);
@@ -130,7 +130,7 @@ void GenericHUDControl::AddSound(const char* name, float startT, float endT) {
 // Binary constant DAT_189a50 = 182.04445f = 65536/360 (deg-to-uint16 scaler)
 static const float kDegToIdx = 182.04445f;
 
-// ASM-verified: 2026-06-13T03:20Z binary @ 0x001899a0 (asm-inspector)
+// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x001899a0 (asm-inspector)
 void GenericHUDControl::SetAngle(float angleDeg, float radius) {
     m_Timer   = angleDeg;   // HUDControl base +0x2c (computed angle slot)
     m_BaseAngle = angleDeg;

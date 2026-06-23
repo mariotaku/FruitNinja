@@ -72,7 +72,7 @@ void InputManager::Update(float dt) {
 // Binary @ 0x001969d8
 int InputManager::LoadConfigFile(const char* path) {
     (void)path;
-    // Defunct: input config file -- Bada-only; binary @ 0x001969d8
+    // Defunct: input config file -- Bada-only; v1.6.1 binary @ 0x001969d8
     return 1;
 }
 

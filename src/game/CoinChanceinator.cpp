@@ -1,6 +1,6 @@
 #include "game/CoinChanceinator.h"
 
-// Defunct: coin chance system -- no-op stub; binary @ 0x001230f0
+// Defunct: coin chance system -- no-op stub; v1.6.1 binary @ 0x001230f0
 void ParseCoinChanceinator(COIN_CHANCEINATOR* /*pDst*/, TiXmlElement* /*pElem*/) {
 }
 

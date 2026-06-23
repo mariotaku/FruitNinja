@@ -2,7 +2,7 @@
 #define FN_GAME_FRUIT_NINJA_NEWS_CONTROL_H
 
 // FruitNinjaNewsControl -- live news overlay UI control.
-// Defunct: online News -- no-op stub; binary @ 0x1a13d0 (FruitNinjaNewsControl ctor).
+// Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a13d0 (FruitNinjaNewsControl ctor).
 // Engine base: Mortar::OpenFeintNewsRenderer @ 0x233xxx.
 //
 // Since HasUnreadNews() always returns false, StartNewsRender/Update/Draw are dead paths.
@@ -16,31 +16,31 @@
 
 class FruitNinjaNewsControl : public Mortar::OpenFeintNewsRenderer {
 public:
-    // Defunct: online News -- no-op stub; binary @ 0x1a13d0
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a13d0
     FruitNinjaNewsControl();
 
     // Defunct: online News -- no-op stub
     virtual ~FruitNinjaNewsControl();
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a2074
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2074
     void StartNewsRender(const Mortar::SmartPtr<Mortar::Texture>& tex, Mortar::Font* font);
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a1000
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a1000
     void CancelNewsRender();
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a0bc4
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a0bc4
     void Update(float dt);
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a27fc
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a27fc
     void Draw(float* hudScale);
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a0fb4
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a0fb4
     void Destroy();
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a2014
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2014
     void SetNewsString(const char* str);
 
-    // Defunct: online News -- no-op stub; binary @ 0x1a2030 (returns empty)
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2030 (returns empty)
     const char* GetNewsString() const;
 
     // Defunct: online News -- no-op stub (input sinks)
@@ -60,7 +60,7 @@ public:
     void TransitionOut();
 
 private:
-    // Defunct: online News -- no-op stub; binary @ 0x1a2074 helper
+    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2074 helper
     void ParseUrl(const char* url);
 
     // Defunct: online News -- no-op stub

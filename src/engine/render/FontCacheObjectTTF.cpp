@@ -45,7 +45,7 @@ FontCacheObjectTTF::~FontCacheObjectTTF() {
 //   scaledHeight = requestedSize * m_GlobalSizeScale
 //   char_height_26.6 = trunc(max(0, scaledHeight * m_FontScale * 64.0))
 //   FT_Set_Char_Size(face, 0, char_height_26.6, 0, m_CacheSize)
-// ASM-verified: 2026-06-14T00:00Z binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
+// ASM-verified: 2026-06-14T00:00Z v1.6.1 binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
 static long ComputeCharHeight26_6(float requestedSize,
                                   float globalSizeScale,
                                   float fontScale) {

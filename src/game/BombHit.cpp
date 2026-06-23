@@ -200,7 +200,7 @@ static const float DIST_SQ_THRESH =  400.0f;  // DAT_0016a198
 static const float IMPULSE_LEN    =   20.0f;
 
 void ResetGameEntities(bool killAll) {
-    // ASM-verified: 2026-05-20 binary @ 0x0016a058 (asm-inspector)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016a058 (asm-inspector)
     // Binary entry loop: iVar4 = 0; do { iVar4 += 4;
     // g_pSlashEntities[iVar4>>2 - 1]->Reset(); } while (iVar4 != 0x40);
     // 16 iterations. Drops every live blade trail (m_NumPoints = 0) so
@@ -223,7 +223,7 @@ void ResetGameEntities(bool killAll) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    // ASM-verified: 2026-05-20 binary @ 0x0016a0e4 reads game+0x6 (retryFlag).
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016a0e4 reads game+0x6 (retryFlag).
     // DIFFERS: prior port code read gameMode as 'zen'; actual binary reads retryFlag.
     const bool forceSliceAll = (game_work.retryFlag != 0) || killAll;
 
@@ -313,7 +313,7 @@ void ResetGameEntities(bool killAll) {
     // multiplayer so we skip — splats fade naturally.
 }
 
-// ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
+// ASM-verified: 2026-05-20T00:00:00Z v1.6.1 binary @ 0x0016a208 (asm-inspector)
 // (previously implemented as a file-static in PauseScreen.cpp; moved here
 //  so GameUpdate can call it from the retry dispatch tail)
 void EndRetryLevel() {
@@ -370,10 +370,10 @@ void EndRetryLevel() {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
     }
 
-    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
+    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; v1.6.1 binary @ 0x0016a27e
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x0016b008 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b008 (re-analyst)
 void RetryLevel() {
     // game+0x08 = retryTimer: 0.1f initial countdown window.
     game_work.retryTimer = 0.1f;
@@ -383,7 +383,7 @@ void RetryLevel() {
     // game+0x05 = bM_bPaused: suppresses GameOver cross-check + fuse SFX.
     game_work.bM_bPaused = 1;
 
-    // ASM-verified: 2026-05-20 binary @ 0x0016b040 (re-analyst follow-up)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b040 (re-analyst follow-up)
     // Iterates WaveManager's wave-list (std::vector<WAVE_INFO*>, stride 0x78),
     // NOT ActorManager fruits as a prior RE incorrectly claimed.
     // Sets each wave's +0x6c = 0.25f, clamps +0x68 <= 0.15f.
@@ -403,7 +403,7 @@ void RetryLevel() {
         }
     }
 
-    // ASM-verified: 2026-05-20 binary @ 0x0016b0c4 (re-analyst)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b0c4 (re-analyst)
     // Mute the persistent looping Bomb-Fuse handle for the 0.1s retry-shrink window.
     // Binary path: *(GameTaskState*)(GOT+0x452d4) +0xD8 = m_pBombFuseSound; SetVolume(0).
     // NOT ambient music -- the prior TODO label was wrong.
@@ -413,7 +413,7 @@ void RetryLevel() {
         }
     }
 
-    // ASM-verified: 2026-05-20 binary @ 0x0016b0f8 (re-analyst)
+    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b0f8 (re-analyst)
     // Play the retry whoosh -- string at rodata 0x001B96AF resolves to "Game-start"
     // (same SFX as level-start; already used by GameOverScreen / GameModeScreen).
     // Binary calls MakeSFXDelegate_GT to build a stock complete-handler delegate;
@@ -426,7 +426,7 @@ void RetryLevel() {
     }
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00169cd4 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00169cd4 (re-analyst)
 void RetryUpdate(float dt) {
     static const float TARGET_TIME = 0.1f;  // matches retryTimer initial value
     const float t_raw = (TARGET_TIME - game_work.retryTimer) / TARGET_TIME;
