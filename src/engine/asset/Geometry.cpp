@@ -1,11 +1,55 @@
 #include "asset/Geometry.h"
 #include "asset/SharedEffectProperties.h"
+#include "asset/IStreamTypes.h"
+#include "asset/Effect.h"
 #include "asset/Texture.h"
 #include "render/Renderer.h"
 #include <cstring>
 
 
 namespace Mortar {
+
+// Binary @ 0x001a57bc -- zero-initialises pads (via memset of _pad regions)
+// and default-constructs m_EffectGroup / m_VertexStreams / m_IndexStream.
+GeometryBinding_Bada::GeometryBinding_Bada() {
+    memset(_pad_namedstreams, 0, sizeof(_pad_namedstreams));
+    memset(_pad_effectbindings, 0, sizeof(_pad_effectbindings));
+}
+
+GeometryBinding_Bada::~GeometryBinding_Bada() {
+}
+
+// Binary @ 0x001a3990 -- constructs base then zeros Event1.
+GeometryBinding::GeometryBinding() {
+}
+
+GeometryBinding::~GeometryBinding() {
+}
+
+// Binary @ 0x002640c8 -- find-or-push_back SmartPtr<IVertexStream> into m_VertexStreams.
+// The binary's body: searches m_VertexStreams for a matching ptr (by address comparison);
+// if not found, push_back. In LoadMesh, each stream is unique so the push_back path always fires.
+void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
+    // Search for duplicate (matching binary -- linear scan before push_back).
+    for (std::vector<SmartPtr<IVertexStream> >::iterator it = m_VertexStreams.begin();
+         it != m_VertexStreams.end(); ++it) {
+        if (it->Get() == stream.Get()) return;
+    }
+    m_VertexStreams.push_back(stream);
+}
+
+// Binary @ 0x001a4f90 -- stores stream into m_IndexStream; name is unused
+// by LoadMesh (always passed as ""). No lookup into m_NamedIndexStreams in
+// this path.
+void GeometryBinding::IndexStreamSet(SmartPtr<IIndexStream> stream,
+                                     const AsciiString& /*name*/) {
+    m_IndexStream = stream;
+}
+
+// Binary @ 0x001a00f8 -- stores EffectGroup into m_EffectGroup.
+void GeometryBinding::EffectGroupSet(SmartPtr<EffectGroup> group) {
+    m_EffectGroup = group;
+}
 
 // Binary @ 0x001a3c50 (C1) / 0x001a3cc4 (C2)
 Geometry::Geometry(SmartPtr<GeometryBinding> binding,

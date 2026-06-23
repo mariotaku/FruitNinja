@@ -3,9 +3,13 @@
 #include "asset/Geometry.h"
 #include "asset/IStreamTypes.h"
 #include "asset/TextureManager.h"
+#include "asset/SharedEffectProperties.h"
+#include "asset/Effect.h"
+#include "util/Immutable.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <string>
+#include <map>
 
 namespace Mortar {
 
@@ -216,8 +220,8 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
     const uint8_t* data = rl.DataPtr() + rl.m_ReadCursor;
     size_t dataSize = rl.DataSize() - (size_t)rl.m_ReadCursor;
 
-    if (dataSize < 7) return SmartPtr<IIndexStream>();
-    size_t pos = 2; // skip 2-byte padding
+    if (dataSize < 5) return SmartPtr<IIndexStream>();
+    size_t pos = 0;
     uint8_t idxFlags = data[pos++];
     // Hi nibble -> Mortar::PrimType -> GL enum (via Geometry::
     // _NativePrimitiveType at 0x001a3ec8). Confirmed empirically against
@@ -269,6 +273,20 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
     return SmartPtr<IIndexStream>(is);
 }
 
+// GetDefaultEffectGroup -- returns a shared empty EffectGroup used when a geometry
+// has no matching material entry.
+// DIFFERS: binary @0x00237fc4 loads a real default EffectGroup from an embedded
+// Effect blob (&DefaultMeshEffect, 0x1873); port returns an empty EffectGroup stub
+// because Effect::LoadEffects is not yet ported.
+// v1.6.1 GetDefaultEffect @0x00237fc4
+static SmartPtr<EffectGroup> GetDefaultEffectGroup() {
+    static SmartPtr<EffectGroup> s_Default;
+    if (!s_Default.IsValid()) {
+        s_Default = new EffectGroup();
+    }
+    return s_Default;
+}
+
 // LoadMesh @0x0023890c
 // Reads one Mesh sequentially from rl (the top-level model loader). Called via
 // ResourceLoader::Load<Mesh>() dispatch from LoadModel.
@@ -313,10 +331,28 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
     }
     uint32_t matCount = rl.Read<uint32_t>();
 
-    // Local vector to hold textures indexed by material index.
-    // Each geometry references a material index; the texture is
-    // assigned directly to Geometry::m_DiffuseTex below.
+    // Standard 9-def material property set for all LoadMesh materials.
+    // v1.6.1 LoadMesh @0x0023890c: these 9 defs are built per-material and passed
+    // to GetPropertiesGroup<9> to create or reuse a SharedEffectProperties entry.
+    // Type values: Float=1, Bool=2, Vec3=5, Texture2D=7.
+    // UVWOffset count=3 (float-component count per binary InitPropertyList spec).
+    // Vec3 props (Ambience/Diffuse/SelfIllum/Specular) count=1 each.
+    static const EffectPropertyDefinition s_MatDefs[9] = {
+        { Immutable("DiffuseMap"),       7u, 1u },  // Type_Texture2D
+        { Immutable("UVWOffset"),        5u, 3u },  // Type_Vec3, count=3 (float-component count)
+        { Immutable("Alpha"),            1u, 1u },  // Type_Float
+        { Immutable("Ambience"),         5u, 1u },  // Type_Vec3
+        { Immutable("Diffuse"),          5u, 1u },  // Type_Vec3
+        { Immutable("SelfIllum"),        5u, 1u },  // Type_Vec3
+        { Immutable("Specular"),         5u, 1u },  // Type_Vec3
+        { Immutable("SpecularStrength"), 1u, 1u },  // Type_Float
+        { Immutable("IsLit"),            2u, 1u },  // Type_Bool
+    };
+
+    // Per-material data collected during the material loop.
+    std::vector<SmartPtr<SharedEffectProperties> > matSharedProps;
     std::vector<Mortar::SmartPtr<Mortar::Texture> > matTextures;
+    matSharedProps.reserve(matCount);
     matTextures.reserve(matCount);
 
     for (uint32_t i = 0; i < matCount; i++) {
@@ -324,20 +360,22 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
         ResourceLoader* matChild = rl.ReadSubResourceLookup();
         if (!matChild) {
             matTextures.push_back(Mortar::SmartPtr<Mortar::Texture>());
+            matSharedProps.push_back(SmartPtr<SharedEffectProperties>());
             continue;
         }
 
         matChild->ResetReadPos();
 
-        // Read material name (Material_Old = just AsciiString in rawData)
-        matChild->ReadString(); // material name, unused
+        // Read material name (Material_Old @0x0023c750: AsciiString m_Name@0)
+        AsciiString matName = matChild->ReadString();
 
         // ReadSubResourceLookup -> texture grandchild
         Mortar::SmartPtr<Mortar::Texture> loadedTexture;
+        AsciiString texName;
         ResourceLoader* texChild = matChild->ReadSubResourceLookup();
         if (texChild) {
             texChild->ResetReadPos();
-            /* AsciiString texName = */ texChild->ReadString();   // e.g. "Map #1" (unused)
+            texName = texChild->ReadString();        // e.g. "Map #1" (slot name)
             AsciiString texRelPath = texChild->ReadString();  // e.g. "textures\fruit_atlas.tex"
 
             std::string texPath = texRelPath.CStr();
@@ -348,20 +386,65 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
             loadedTexture = TextureManager::GetInstance().Load(fullPath.c_str());
         }
 
-        // Read 4 color u32 + float specular (advancing read pos through file format)
-        // Values are not stored since IsLit==false for all meshes.
+        // Read 4 color u32 + float specular from Material_Old stream.
+        // Material_Old layout @0x0023c750: colors[4] (u32 each), specular (float).
+        // Binary forces alpha on col0: col0 |= 0xff000000.
+        uint32_t col0 = 0, col1 = 0, col2 = 0, col3 = 0;
+        float specular = 0.0f;
         if (matChild->m_ReadCursor + 20 <= (int32_t)matChild->DataSize()) {
-            (void)matChild->Read<uint32_t>(); // color0
-            (void)matChild->Read<uint32_t>(); // color1
-            (void)matChild->Read<uint32_t>(); // color2
-            (void)matChild->Read<uint32_t>(); // color3
-            (void)matChild->Read<float>();    // specular
+            col0     = matChild->Read<uint32_t>();
+            col1     = matChild->Read<uint32_t>();
+            col2     = matChild->Read<uint32_t>();
+            col3     = matChild->Read<uint32_t>();
+            specular = matChild->Read<float>();
         }
+        (void)col3; // col3 not used in binary's LoadMesh path
 
-        // ReadSubResourceLookup -> additional sub-resource (unused in port)
+        // ReadSubResourceLookup -> additional sub-resource (texture anim or similar;
+        // ignored by the port as it was in the previous implementation).
         matChild->ReadSubResourceLookup();
 
+        // Build SharedEffectProperties for this material via GetPropertiesGroup<9>.
+        // v1.6.1 LoadMesh @0x0023890c: calls Mesh::GetPropertiesGroup(matName, defs, defs+9).
+        SmartPtr<SharedEffectProperties>* propPtr =
+            mesh->GetPropertiesGroup(matName, s_MatDefs, s_MatDefs + 9);
+        SmartPtr<SharedEffectProperties> props;
+        if (propPtr) props = *propPtr;
+
+        if (props.IsValid()) {
+            EffectPropertyList& list = props->GetList();
+            // SetValue<bool> IsLit = false (v1.6.1 LoadMesh: all meshes IsLit=false)
+            list.SetValue<bool>("IsLit", false);
+            // Binary forces alpha on col0 before GetColourRGB: col0 |= 0xff000000.
+            col0 |= 0xff000000u;
+            list.SetValue<Vec3>("Ambience",  GetColourRGB(col0));
+            list.SetValue<Vec3>("Diffuse",   GetColourRGB(col1));
+            list.SetValue<Vec3>("Specular",  GetColourRGB(col2));
+            list.SetValue<float>("SpecularStrength", specular);
+            // DiffuseMap: set texture handle if available.
+            if (loadedTexture.IsValid()) {
+                EffectProperty* dmProp = list.GetProperty("DiffuseMap");
+                if (dmProp) {
+                    EffectTexture2D tex2d;
+                    tex2d.id = loadedTexture->GetTexId();
+                    dmProp->SetValue(tex2d, 0);
+                }
+            }
+            // AddTextureMap if texture name is non-empty (v1.6.1 LoadMesh @0x0023890c).
+            // Binary: if (texName.CStr()[0] != 0) info->AddTextureMap(texName, "DiffuseMap")
+            // The binary calls AddTextureMap on the SharedPropsInfo node (not the SmartPtr).
+            // Access via mesh->m_GroupsByName (public field).
+            if (texName.CStr()[0] != '\0') {
+                std::map<AsciiString, SharedPropsInfo>::iterator it =
+                    mesh->m_GroupsByName.find(matName);
+                if (it != mesh->m_GroupsByName.end()) {
+                    it->second.AddTextureMap(texName, AsciiString("DiffuseMap"));
+                }
+            }
+        }
+
         matTextures.push_back(loadedTexture);
+        matSharedProps.push_back(props);
     }
 
     // Read<ulong> -> geometryCount + per-geometry sub-resource + matIndex
@@ -374,46 +457,79 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
         // ReadSubResourceLookup -> geometry child (rawData = index+vertex streams)
         ResourceLoader* geomChild = rl.ReadSubResourceLookup();
 
-        // Read<u16> matIndex -- from mesh loader (not geomChild), matches LoadMesh binary
+        // Read<u16> matIndex -- from geomChild (the geometry sub-resource loader).
+        // Binary @0x2390bc: Read<u16> operand = geomChild, advancing geomChild's cursor.
+        // v1.6.1 LoadMesh @0x0023890c confirmed: matIndex comes from geomChild, NOT parent rl.
         uint16_t matIndex = 0;
-        if (rl.m_ReadCursor + 2 <= (int32_t)rl.DataSize()) {
-            matIndex = rl.Read<uint16_t>();
+        if (geomChild && geomChild->m_ReadCursor + 2 <= (int32_t)geomChild->DataSize()) {
+            matIndex = geomChild->Read<uint16_t>();
         }
 
-        // Defunct: GeometryBinding stack not constructed -- port loads vbo/ibo directly.
-        // Binary @ 0x001a8388 would new GeometryBinding here.
-        Mortar::SmartPtr<Mortar::Geometry> g(
-            new Mortar::Geometry(Mortar::SmartPtr<Mortar::GeometryBinding>(),
-                                 Mortar::SmartPtr<Mortar::SharedEffectProperties>()));
+        // Get EffectGroup for this geometry's material.
+        // v1.6.1 LoadMesh @0x0023890c: effectGroup = (matIdx < groups.size() && groups[matIdx])
+        //   ? groups[matIdx] : GetDefaultEffect().
+        // Port: groups are stored via GetPropertiesGroup; EffectGroup not yet built per-material
+        // (requires Effect::LoadEffects which is not yet ported). Use default for all.
+        // DIFFERS: binary builds per-material EffectGroup via Effect::LoadEffects; port uses a
+        // shared empty EffectGroup stub. v1.6.1 LoadMesh @0x0023890c
+        SmartPtr<EffectGroup> effectGroup = GetDefaultEffectGroup();
+
+        // Get SharedEffectProperties for this geometry's material.
+        SmartPtr<SharedEffectProperties> sharedProps;
+        if (matIndex < (uint16_t)matSharedProps.size() && matSharedProps[matIndex].IsValid()) {
+            sharedProps = matSharedProps[matIndex];
+        } else {
+            sharedProps = mesh->m_OwnGroup;
+        }
+
+        // Load IIndexStream then IVertexStream from the geometry child.
+        // v1.6.1 LoadMesh @0x0023890c: calls Load<IIndexStream>() then Load<IVertexStream>().
+        SmartPtr<IIndexStream> ib;
+        SmartPtr<IVertexStream> vb;
+        if (geomChild) {
+            ib = geomChild->Load<IIndexStream>();
+            vb = geomChild->Load<IVertexStream>();
+        }
+
+        // Construct GeometryBinding and wire it with the streams and effect group.
+        // v1.6.1 LoadMesh @0x0023890c: new GeometryBinding; EffectGroupSet; IndexStreamSet; VertexStreamAdd.
+        SmartPtr<GeometryBinding> binding(new GeometryBinding());
+        binding->EffectGroupSet(effectGroup);
+        if (ib.IsValid()) {
+            binding->IndexStreamSet(ib, AsciiString(""));
+        }
+        if (vb.IsValid()) {
+            binding->VertexStreamAdd(vb);
+        }
+
+        // Construct Geometry with binding + sharedProps.
+        // v1.6.1 LoadMesh @0x0023890c: new Geometry(binding, sharedProps); SetActiveEffect(0).
+        Mortar::SmartPtr<Mortar::Geometry> g(new Mortar::Geometry(binding, sharedProps));
+        g->SetActiveEffect(0);
         g->m_MaterialIndex = (int)matIndex;
 
-        // Assign diffuse texture from material index to geometry.
+        // Assign diffuse texture from material index (port render path).
+        // DIFFERS: binary renders via EffectProperty "DiffuseMap" in the PassBinding chain;
+        // port reads m_DiffuseTex directly in Geometry::Render (GLES2 path).
         if (matIndex < (uint16_t)matTextures.size()) {
             g->m_DiffuseTex = matTextures[matIndex];
         }
 
-        if (geomChild) {
-            // Dispatch Load<IIndexStream> and Load<IVertexStream> on the geometry child.
-            // The two calls read sequentially from the child: index stream first, then vertex stream.
-            // v1.6.1 LoadMesh @0x0023890c: calls Load<IIndexStream>() then Load<IVertexStream>().
-            SmartPtr<IIndexStream> ib = geomChild->Load<IIndexStream>();
-            SmartPtr<IVertexStream> vb = geomChild->Load<IVertexStream>();
-
-            if (ib.IsValid()) {
-                g->m_Ibo        = ib->m_Ibo;
-                g->m_IndexCount = ib->m_IndexCount;
-                g->m_PrimType   = ib->m_PrimType;
-                // Transfer ownership of the IBO from stream object to Geometry.
-                // Zero out the stream's handle so its dtor doesn't double-free.
-                ib->m_Ibo = 0;
-            }
-            if (vb.IsValid()) {
-                g->m_Vbo      = vb->m_Vbo;
-                g->m_VertCount = vb->m_VertCount;
-                g->m_Layout   = vb->m_Layout;
-                // Transfer ownership of the VBO from stream object to Geometry.
-                vb->m_Vbo = 0;
-            }
+        // Copy GL handles from streams into Geometry's port-specific fields.
+        // This preserves the existing draw path (Geometry::Render reads m_Vbo/m_Ibo/m_Layout).
+        // The GeometryBinding above holds SmartPtrs to the stream objects; their dtors will
+        // call glDeleteBuffers when released unless we zero their handles after copying.
+        if (ib.IsValid()) {
+            g->m_Ibo        = ib->m_Ibo;
+            g->m_IndexCount = ib->m_IndexCount;
+            g->m_PrimType   = ib->m_PrimType;
+            ib->m_Ibo = 0;  // transfer ownership: prevent double-free on stream dtor
+        }
+        if (vb.IsValid()) {
+            g->m_Vbo       = vb->m_Vbo;
+            g->m_VertCount  = vb->m_VertCount;
+            g->m_Layout    = vb->m_Layout;
+            vb->m_Vbo = 0;  // transfer ownership: prevent double-free on stream dtor
         }
 
         if (g->m_Vbo || g->m_Ibo) {

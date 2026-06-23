@@ -3,10 +3,12 @@
 
 #include "util/SmartPtr.h"
 #include "util/ReferenceCounter.h"
+#include "util/AsciiString.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include <cstring>
 #include <cstdint>
+#include <vector>
 
 namespace Mortar {
 
@@ -14,6 +16,9 @@ class SharedEffectProperties;
 class EffectPropertyList;
 struct EffectProperty;
 class Texture;
+class IVertexStream;
+class IIndexStream;
+class EffectGroup;
 
 // GeometryBinding -- shape-preserved defunct stub.
 // Binary @ 0x001a3990..0x001a40c0 (ctor/PassBinding::Apply chain).
@@ -37,20 +42,23 @@ class Texture;
 //   map<string,SmartPtr<IIndexStream>>::map(this+0x20)  // +0x20  m_NamedIndexStreams (std::map, 24 bytes)
 //   vector<EffectBinding>::vector(this+0x38)            // +0x38  m_EffectBindings  (std::vector, 12 bytes)
 //   end                                                 // +0x44 = 68 bytes (0x44) ✓
-// The member types IVertexStream / IIndexStream / GeometryBinding_Bada::EffectBinding
-// (and the nested PassBinding the binding pipeline walks) are unported subsystems;
-// GeometryBinding is constructed by the mesh loader but never dispatched through
-// (Geometry::Render bypasses PassBinding::Apply for the GLES2 path), so the base
-// body is kept as a correctly-sized opaque pad rather than pulling those types in.
-// The exact field offsets above are the spec if/when the binding pipeline is ported.
+// Fields used by LoadMesh (VertexStreamAdd/IndexStreamSet/EffectGroupSet) are exposed
+// as real typed fields. m_NamedIndexStreams and m_EffectBindings are padded because
+// their element types (EffectBinding/PassBinding) are unported subsystems.
+// Geometry::Render bypasses PassBinding::Apply entirely (GLES2 path).
 // Binary @ 0x001a57bc
 class GeometryBinding_Bada : public ReferenceCounter {
 public:
-    GeometryBinding_Bada() {}
-    virtual ~GeometryBinding_Bada() {}
-    // Base body, RE'd from the ctor (see layout table above). ReferenceCounter base
-    // occupies +0x00..+0x0B (12 bytes); own fields fill +0x0C..+0x43 (56 bytes).
-    char _base_pad[56];  // +0x0C..+0x43: m_EffectGroup/m_VertexStreams/m_IndexStream/m_NamedIndexStreams/m_EffectBindings
+    GeometryBinding_Bada();
+    virtual ~GeometryBinding_Bada();
+
+    SmartPtr<EffectGroup>                  m_EffectGroup;   // +0x0C, 4 bytes
+    std::vector<SmartPtr<IVertexStream> >  m_VertexStreams; // +0x10, 12 bytes
+    SmartPtr<IIndexStream>                 m_IndexStream;   // +0x1C, 4 bytes
+    // TODO: v1.6.1 0x001a57bc (GeometryBinding_Bada) -- m_NamedIndexStreams: map<AsciiString,SmartPtr<IIndexStream>> (24B)
+    char _pad_namedstreams[24];  // +0x20..+0x37: m_NamedIndexStreams placeholder
+    // TODO: v1.6.1 0x001a57bc (GeometryBinding_Bada) -- m_EffectBindings: vector<EffectBinding> (12B, EffectBinding unported)
+    char _pad_effectbindings[12]; // +0x38..+0x43: m_EffectBindings placeholder
 };
 
 // Event1<GeometryBinding&> placeholder (8 bytes per binary record).
@@ -61,17 +69,31 @@ struct Event1_GeometryBinding {
     Event1_GeometryBinding() : _ptr0(0), _ptr1(0) {}
 };
 
-// Defunct: GeometryBinding -- no-op stub preserving binary layout; binary @ 0x001a3990
-// Live class used by the mesh loader (VertexStreamAdd/IndexStreamSet/EffectGroupSet).
-// Port's Geometry::Render bypasses the PassBinding::Apply chain entirely (GLES2 path),
-// so GeometryBinding is constructed by the loader but never dispatched through.
+// GeometryBinding -- constructed by LoadMesh to hold stream references and
+// the EffectGroup pointer. Render-time use (PassBinding::Apply chain) is defunct
+// in the port -- Geometry::Render uses a direct GLES2 path instead.
+// Binary @ 0x001a3990 (ctor zeros all), 0x002640c8 (VertexStreamAdd),
+//          0x001a4f90 (IndexStreamSet), 0x001a00f8 (EffectGroupSet).
 class GeometryBinding : public GeometryBinding_Bada {
 public:
-    // Defunct: GeometryBinding -- no-op stub; binary @ 0x001a3990
-    GeometryBinding() {}
-    virtual ~GeometryBinding() {}
+    // Binary @ 0x001a3990
+    GeometryBinding();
+    virtual ~GeometryBinding();
 
     Event1_GeometryBinding m_OnDestroyed;  // +0x44 (8 bytes)
+
+    // Binary @ 0x002640c8 -- find-or-push_back into m_VertexStreams.
+    // v1.6.1 LoadMesh @0x0023890c calls this after EffectGroupSet.
+    void VertexStreamAdd(SmartPtr<IVertexStream> stream);
+
+    // Binary @ 0x001a4f90 -- sets m_IndexStream; name ignored by LoadMesh (empty string).
+    // v1.6.1 LoadMesh @0x0023890c calls this before VertexStreamAdd.
+    void IndexStreamSet(SmartPtr<IIndexStream> stream, const AsciiString& name);
+
+    // Binary @ 0x001a00f8 -- stores EffectGroup ptr into m_EffectGroup.
+    // v1.6.1 LoadMesh @0x0023890c calls this after creating the binding.
+    // Binary body is minimal (1-2 instructions in the stub); shape preserved.
+    void EffectGroupSet(SmartPtr<EffectGroup> group);
 };
 
 // Vertex attribute layout (from PSP vertex declaration).
@@ -149,7 +171,12 @@ private:
 #include <cstddef>
 static_assert(sizeof(Mortar::GeometryBinding_Bada) == 68, "GeometryBinding_Bada size mismatch");
 static_assert(sizeof(Mortar::GeometryBinding)      == 76, "GeometryBinding size mismatch (0x4C)");
-static_assert(offsetof(Mortar::GeometryBinding, m_OnDestroyed) == 68, "GeometryBinding::m_OnDestroyed offset");
+static_assert(offsetof(Mortar::GeometryBinding, m_OnDestroyed)  == 68, "GeometryBinding::m_OnDestroyed offset");
+static_assert(offsetof(Mortar::GeometryBinding_Bada, m_EffectGroup)    == 0x0c, "GeometryBinding_Bada::m_EffectGroup offset");
+static_assert(offsetof(Mortar::GeometryBinding_Bada, m_VertexStreams)   == 0x10, "GeometryBinding_Bada::m_VertexStreams offset");
+static_assert(offsetof(Mortar::GeometryBinding_Bada, m_IndexStream)     == 0x1c, "GeometryBinding_Bada::m_IndexStream offset");
+static_assert(offsetof(Mortar::GeometryBinding_Bada, _pad_namedstreams) == 0x20, "GeometryBinding_Bada::_pad_namedstreams offset");
+static_assert(offsetof(Mortar::GeometryBinding_Bada, _pad_effectbindings) == 0x38, "GeometryBinding_Bada::_pad_effectbindings offset");
 #endif
 
 #endif  // FN_ENGINE_ASSET_GEOMETRY_H
