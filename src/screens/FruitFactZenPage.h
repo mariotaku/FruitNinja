@@ -45,7 +45,7 @@ public:
     static void LoadContent();    // Binary @ 0x0017fa34
     static void UnloadContent();  // Binary @ 0x0017fb00
 
-protected:
+public:
     // +0x98: whether this session had a combo (fruitCount > 2)
     // ASM-verified: v1.6.1 FruitFactZenPage @ 0x0017fcd4
     uint8_t m_HasUnlockedFacts;   // @+0x98
