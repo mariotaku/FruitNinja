@@ -327,13 +327,8 @@ void FruitFactControl::Init() {
     // ASM-verified: 2026-05-11 binary @ 0x0017160c (v1.6.1 FruitFactControl::Init)
     // Binary always assigns s_boardTexture (fact_board.tex) to m_Texture, no per-mode branching.
     m_Texture = s_PanelTexClassic;
-#if !defined(__bada__)
-    size.x = (float)(m_Texture->m_Width + 1);
-    size.y = (float)(m_Texture->m_Height + 1);
-#else
-    size.x = 0.0f;
-    size.y = 0.0f;
-#endif
+    size.x = (float)(m_Texture->GetWidth() + 1);
+    size.y = (float)(m_Texture->GetHeight() + 1);
     size.z = 0.0f;
     // 1.37f scale applies when gameMode == 0 (Classic) — binary @ 0x0017160c
     if (gameMode == 0) {
@@ -679,13 +674,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // Draw the combo-star texture quad with sin-pulse scale
         // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
-#if !defined(__bada__)
-        const float tw = (float)m_ComboStarTex->m_Width;
-        const float th = (float)m_ComboStarTex->m_Height;
-#else
-        const float tw = 0.0f;
-        const float th = 0.0f;
-#endif
+        const float tw = (float)m_ComboStarTex->GetWidth();
+        const float th = (float)m_ComboStarTex->GetHeight();
         m_ComboStarTex->Set();
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale((tw + 1.0f) * pulse, (th + 1.0f) * pulse, 0.0f);
@@ -750,13 +740,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // Fact icon: does NOT use m_FactPosOffset
         if (m_FactTexture.IsValid()) {
-#if !defined(__bada__)
-            const float w = (float)m_FactTexture->m_Width;
-            const float h = (float)m_FactTexture->m_Height;
-#else
-            const float w = 0.0f;
-            const float h = 0.0f;
-#endif
+            const float w = (float)m_FactTexture->GetWidth();
+            const float h = (float)m_FactTexture->GetHeight();
             m_FactTexture->Set();
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);
@@ -816,19 +801,17 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                         col, 0x0F);
                     if (bonus->m_StarTexture.IsValid()) {
                         // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
-#if !defined(__bada__)
                         bonus->m_StarTexture->Set();
                         mm.GetWorldStack().Reset();
                         Matrix44 starMat = Matrix44::MakeScale(
-                            (float)bonus->m_StarTexture->m_Width * 0.5f,
-                            (float)bonus->m_StarTexture->m_Height * 0.5f,
+                            (float)bonus->m_StarTexture->GetWidth() * 0.5f,
+                            (float)bonus->m_StarTexture->GetHeight() * 0.5f,
                             0.0f);
                         starMat.GlobalTranslate44(rowPos);
                         mm.GetWorldStack().SetCurrentMatrix(starMat);
                         mm.UploadModelViewOnly();
                         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
                         bonus->m_StarTexture->UnSet();
-#endif
                     }
                     rowPos.y -= 20.0f;
                     bonus = bm->GetNextBestBonus(it);
@@ -907,13 +890,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // 4. Per-fruit fact icon with m_FactPosOffset
         if (m_FactTexture.IsValid()) {
-#if !defined(__bada__)
-            const float w = (float)m_FactTexture->m_Width;
-            const float h = (float)m_FactTexture->m_Height;
-#else
-            const float w = 0.0f;
-            const float h = 0.0f;
-#endif
+            const float w = (float)m_FactTexture->GetWidth();
+            const float h = (float)m_FactTexture->GetHeight();
             m_FactTexture->Set();
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);

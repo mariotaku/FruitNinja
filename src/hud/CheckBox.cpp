@@ -148,10 +148,8 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     Mortar::SmartPtr<Mortar::Texture>& texPtr = m_bChecked ? s_checked : s_unchecked;
     if (!texPtr.IsValid()) return;
 
-#if !defined(__bada__)
-    GLuint texId = texPtr->m_TexId;
+    GLuint texId = texPtr->GetTexId();
     if (!texId) return;
-#endif
 
     // Matrix-stack reset / scale / translate / upload — matches HUDControl3d::Draw pattern.
     MatrixManager& mm = MatrixManager::GetInstance();

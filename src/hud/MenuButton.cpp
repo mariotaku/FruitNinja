@@ -812,13 +812,8 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
         if (sizeScale.z == 0.0f) sizeScale.z = 1.0f;
         const float uSpan = c->m_UVRight  - c->m_UVLeft;
         const float vSpan = c->m_UVBottom - c->m_UVTop;
-#if !defined(__bada__)
-        const float texW  = tex.IsValid() ? (float)tex->m_Width  : 0.0f;
-        const float texH  = tex.IsValid() ? (float)tex->m_Height : 0.0f;
-#else
-        const float texW  = 0.0f;
-        const float texH  = 0.0f;
-#endif
+        const float texW  = tex.IsValid() ? (float)tex->GetWidth()  : 0.0f;
+        const float texH  = tex.IsValid() ? (float)tex->GetHeight() : 0.0f;
         sizeScale = Vec3(texW * uSpan * sizeScale.z,
                          texH * vSpan * sizeScale.z,
                          0.0f);

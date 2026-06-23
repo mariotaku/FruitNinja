@@ -62,11 +62,9 @@ static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 
 // Helpers
-#if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
-    return tex.IsValid() ? tex->m_TexId : 0;
+    return tex.IsValid() ? tex->GetTexId() : 0;
 }
-#endif
 
 // --- Static texture storage (binary: GOT-relative globals) ---
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
@@ -239,20 +237,18 @@ void DojoScreen::Update(float dt) {
                 // shrank the ring to ~57.5% of tex size -- wrong. 0.575
                 // is the bounce multiplier, not a size multiplier.
                 if (s_TexShop.IsValid()) {
-#if !defined(__bada__)
                     m_pShopButton->m_RestScale = Vec3(
-                        (float)s_TexShop->m_Width + 1.0f,
-                        (float)s_TexShop->m_Height + 1.0f,
+                        (float)s_TexShop->GetWidth() + 1.0f,
+                        (float)s_TexShop->GetHeight() + 1.0f,
                         1.0f);
-#endif
                 }
 #if !defined(__bada__)
-                m_pShopButton->m_AnimScale = 0.5f;
+                m_pShopButton->m_AnimScale = 0.5f;  // port-compat only; v1.6.1 field not yet located
+#endif
                 // TODO: m_BounceParams *= SHOP_SCALE. The port doesn't
                 // read m_BounceParams yet (MenuButton rework reverted),
                 // so this write is currently a no-op. Restore once the
                 // bounce/new-indicator draw path is ported.
-#endif
                 m_pShopButton->m_HitInsetY  = -15.0f;
                 m_pShopButton->m_HitInsetX = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
@@ -381,19 +377,13 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     // Slides in from left (horizontal slide): X -= texW * (1 - alpha).
     if (s_TexSensei.IsValid()) {
         MatrixManager& mm = MatrixManager::GetInstance();
-#if !defined(__bada__)
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexSensei->m_Width + 1.0f,
-            (float)s_TexSensei->m_Height + 1.0f,
+            (float)s_TexSensei->GetWidth() + 1.0f,
+            (float)s_TexSensei->GetHeight() + 1.0f,
             1.0f);
-        const float slideX = -(float)s_TexSensei->m_Width * (1.0f - m_TransitionAlpha);
+        const float slideX = -(float)s_TexSensei->GetWidth() * (1.0f - m_TransitionAlpha);
         mat.GlobalTranslate44(Vec3(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
-#else
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(0.0f, 0.0f, 1.0f);
-        mat.GlobalTranslate44(POS_DOJO_BG);
-#endif
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 

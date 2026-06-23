@@ -18,22 +18,121 @@ GLuint Texture::s_LastBoundTexId = 0;
 // Binary: bool global @ data segment; default false (Prefix/Postfix are empty in shipped data).
 bool Texture::UseAlternativeTextureLoader = false;
 
+// Binary base ctor @0x00268ea4.
 Texture::Texture()
-#if !defined(__bada__)
-    : m_TexId(0)
-    , m_Width(0)
-    , m_Height(0)
-#endif
+    : m_HasAlpha(true)
+    , m_DeviceResVptr(0)
+    , m_RegistryNext(0)
 {
+    // Defunct: DeviceResource registry -- no-op stub; v1.6.1 Texture::Texture @0x00268ea4
 }
 
 Texture::~Texture() {
-    // Notify the TextureManager so its cache drops the entry pointing
-    // at us BEFORE the GL handle is freed. Mirrors the binary's
-    // WeakPtr cleanup path -- without this the next Find() for our
-    // hash would return a dangling pointer.
+    // Notify the TextureManager so its cache drops the entry pointing at us BEFORE
+    // the GL handle is freed. Mirrors the binary's WeakPtr cleanup path.
     TextureManager::GetInstance().OnTextureDestroyed(this);
+    // Defunct: DeviceResource unregister -- no-op stub; v1.6.1 Texture::~Texture @0x00268ea4
+}
 
+// Vtable slot 3 -- base default: no GL state (subclass Texture2D_Bada overrides).
+void Texture::Set() {
+}
+
+// Vtable slot 4 -- base default: no GL state (subclass Texture2D_Bada overrides).
+void Texture::UnSet(bool /*flag*/) {
+}
+
+// Binary @0x00188da4 -- cache-gated bind: forwards to Set().
+void Texture::SetUnCached() {
+    Set();
+}
+
+// Binary @0x00188d9c -- uncached unbind: forwards to UnSet().
+void Texture::UnSetUnCached() {
+    UnSet();
+}
+
+// Binary ctor @0x00268d44.
+Texture2D::Texture2D()
+    : m_MeshVptr(0)
+{
+    // DIFFERS: original sets m_MeshVptr to UVMesh secondary vtable pointer;
+    //   port = null placeholder (UVMesh interface unused in live render path).
+}
+
+Texture2D::~Texture2D() {
+}
+
+} // namespace Mortar
+
+// ---------------------------------------------------------------------------
+// Mortar::Bada::Texture2D_Bada
+// ---------------------------------------------------------------------------
+namespace Mortar {
+namespace Bada {
+
+// Binary ctor @0x0022a7d8.
+Texture2D_Bada::Texture2D_Bada()
+    : m_PrimType(0)
+    , m_TexId(0)
+    , m_Pad5c(0)
+    , m_Source()
+{
+}
+
+// Binary dtor @0x00229b8c (in-place).
+Texture2D_Bada::~Texture2D_Bada() {
+    ReleaseCache();
+}
+
+// Vtable slot 3 @0x00229710 -- bind this GL texture.
+void Texture2D_Bada::Set() {
+#if !defined(__bada__)
+    if (m_TexId == 0) {
+        static bool s_warned = false;
+        if (!s_warned) {
+            LOG_WARN("TEXTURE/Set", "m_TexId==0 (load failed or not yet uploaded); skipping bind");
+            s_warned = true;
+        }
+        Texture::s_LastBoundTexId = 0;
+        return;
+    }
+    glActiveTexture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, m_TexId);
+    Texture::s_LastBoundTexId = m_TexId;
+#endif
+}
+
+// Vtable slot 4 @0x002296ac -- unbind.
+void Texture2D_Bada::UnSet(bool /*flag*/) {
+#if !defined(__bada__)
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    Texture::s_LastBoundTexId = 0;
+#endif
+}
+
+// Vtable slot 5 @0x0022964c -- return hash from source.
+unsigned int Texture2D_Bada::GetHash() const {
+    if (m_Source.IsValid()) {
+        return m_Source->GetHash();
+    }
+    return 0;
+}
+
+// Vtable slot 6 @0x0022a8d0 -- debug string.
+const char* Texture2D_Bada::Debug_ToString() const {
+    return "Texture2D_Bada";
+}
+
+// Vtable slot 7 @0x0022a8b4 -- UVMesh ID (stub: 0).
+unsigned int Texture2D_Bada::GetUVMeshID() const {
+    return 0;
+}
+
+// ReleaseCache: delete GL texture and reset m_TexId.
+void Texture2D_Bada::ReleaseCache() {
 #if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
@@ -42,114 +141,156 @@ Texture::~Texture() {
 #endif
 }
 
-// Matches Bada::Texture2DFromFile_Bada::Set (0x001897c0).
-void Texture::Set() {
-#if !defined(__bada__)
-    if (m_TexId == 0) {
-        static bool s_warned = false;
-        if (!s_warned) {
-            LOG_WARN("TEXTURE/Set", "m_TexId==0 for path='%s' (load failed mid-stream); skipping bind",
-                m_Path.c_str());
-            s_warned = true;
-        }
-        s_LastBoundTexId = 0;
+// Cache @0x0022a4f4: fill DataInfo dims, glGenTextures, upload pixels.
+// Port specific: implements the binary Cache() body which calls FindBestFormat,
+// fills DataInfo, then glGenTextures + glTexImage2D. The binary calls LockLayers
+// on m_Source to get the parsed data; port does the same.
+void Texture2D_Bada::Cache() {
+    if (!m_Source.IsValid()) {
         return;
     }
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, m_TexId);
-    s_LastBoundTexId = m_TexId;
-#endif
-}
 
-// Matches Bada::Texture2DFromFile_Bada::UnSet (0x00189790).
-void Texture::UnSet() {
-#if !defined(__bada__)
-    glDisable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    s_LastBoundTexId = 0;
-#endif
-}
-
-void Texture::UploadRGBA(int width, int height, const void* pixels) {
-#if !defined(__bada__)
-    if (m_TexId != 0) {
-        glDeleteTextures(1, &m_TexId);
+    TextureSourceData* raw = m_Source->LockLayers();
+    if (!raw) {
+        return;
     }
 
-    m_Width = width;
-    m_Height = height;
+    TextureFileFormat::Tex1Data* tex1 =
+        static_cast<TextureFileFormat::Tex1Data*>(raw);
 
-    DisplayManager& dm = DisplayManager::GetInstance();
+    if (tex1) {
+        int width  = (int)tex1->info.apparentWidth;
+        int height = (int)tex1->info.apparentHeight;
+        const uint8_t* pixels = static_cast<const uint8_t*>(tex1->pixels);
 
-    glGenTextures(1, &m_TexId);
-    glBindTexture(GL_TEXTURE_2D, m_TexId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-#else
-    (void)width; (void)height; (void)pixels;
-#endif
-}
+        // Fill DataInfo in the base Texture with apparent dimensions.
+        m_DataInfo.apparentWidth  = (uint32_t)width;
+        m_DataInfo.apparentHeight = (uint32_t)height;
+        m_DataInfo.rawWidth       = tex1->info.rawWidth;
+        m_DataInfo.rawHeight      = tex1->info.rawHeight;
 
-void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType,
-                           const void* pixels) {
 #if !defined(__bada__)
-    if (m_TexId != 0) {
-        glDeleteTextures(1, &m_TexId);
+        DisplayManager& dm = DisplayManager::GetInstance();
+
+        if (m_TexId == 0) {
+            glGenTextures(1, &m_TexId);
+        }
+        glBindTexture(GL_TEXTURE_2D, m_TexId);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
+
+        switch (tex1->texFmt) {
+            case 0x00: // RGB888
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                             GL_RGB, GL_UNSIGNED_BYTE, pixels);
+                break;
+            case 0x01: // RGBA8888
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+                break;
+            case 0x0f: // RGBA5551
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                             GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, pixels);
+                break;
+            case 0x10: { // RGBA4444 -> CPU-unpack to RGBA8888
+                const size_t pixCount = (size_t)width * (size_t)height;
+                std::vector<unsigned char> rgba(pixCount * 4);
+                const unsigned short* src16 = reinterpret_cast<const unsigned short*>(pixels);
+                size_t i;
+                for (i = 0; i < pixCount; ++i) {
+                    unsigned short p = src16[i];
+                    unsigned char r = (unsigned char)((p >> 12) & 0xF);
+                    unsigned char g = (unsigned char)((p >>  8) & 0xF);
+                    unsigned char b = (unsigned char)((p >>  4) & 0xF);
+                    unsigned char a = (unsigned char)((p >>  0) & 0xF);
+                    rgba[i*4 + 0] = (r << 4) | r;
+                    rgba[i*4 + 1] = (g << 4) | g;
+                    rgba[i*4 + 2] = (b << 4) | b;
+                    rgba[i*4 + 3] = (a << 4) | a;
+                }
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+                break;
+            }
+            case 0x11: // RGB565
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                             GL_RGB, GL_UNSIGNED_SHORT_5_6_5, pixels);
+                break;
+            default:
+                LOG_ERROR("TEXTURE/Cache", "unsupported format 0x%02x", (unsigned)tex1->texFmt);
+                break;
+        }
+#endif
     }
 
-    m_Width = width;
-    m_Height = height;
-
-    DisplayManager& dm = DisplayManager::GetInstance();
-
-    glGenTextures(1, &m_TexId);
-    glBindTexture(GL_TEXTURE_2D, m_TexId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
-    glTexImage2D(GL_TEXTURE_2D, 0, glFormat, width, height, 0,
-                 glFormat, glType, pixels);
-#else
-    (void)width; (void)height; (void)glFormat; (void)glType; (void)pixels;
-#endif
+    m_Source->UnlockLayers(raw);
 }
 
-// Upload a parsed Tex1Data to GL. Called by Load() and LoadFromMemory().
-// This is the "// Port specific: GL boundary" sink fed by the reader's parsed DataInfo + blob.
-// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78).
+// SetSource @0x0022a7a8.
+void Texture2D_Bada::SetSource(Mortar::SmartPtr<TextureSource> src, unsigned int primType) {
+    ReleaseCache();
+    m_Source   = src;
+    m_PrimType = primType;
+    Cache();
+}
+
+} // namespace Bada
+} // namespace Mortar
+
+// ---------------------------------------------------------------------------
+// Texture::Load factory + helpers (binary @0x0022a854 Texture2D::Load)
+// ---------------------------------------------------------------------------
+namespace Mortar {
+
+// Upload a parsed Tex1Data to GL using a Texture2D_Bada. Called by Load() and LoadFromMemory().
+// Port specific: GL boundary. Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78).
 static Mortar::SmartPtr<Texture> UploadTex1ToGL(
-        Texture* tex,
+        Bada::Texture2D_Bada* tex,
         const TextureFileFormat::Tex1Data* d,
         const char* pathForLog)
 {
-    int width  = d->info.width;
-    int height = d->info.height;
+    int width  = (int)d->info.apparentWidth;
+    int height = (int)d->info.apparentHeight;
     const uint8_t* raw = static_cast<const uint8_t*>(d->pixels);
+
+    tex->m_DataInfo.apparentWidth  = (uint32_t)width;
+    tex->m_DataInfo.apparentHeight = (uint32_t)height;
+    tex->m_DataInfo.rawWidth       = d->info.rawWidth;
+    tex->m_DataInfo.rawHeight      = d->info.rawHeight;
+
+#if !defined(__bada__)
+    DisplayManager& dm = DisplayManager::GetInstance();
+
+    if (tex->m_TexId == 0) {
+        glGenTextures(1, &tex->m_TexId);
+    }
+    glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, dm.GetPlatformWrapT());
 
     switch (d->texFmt) {
         case 0x00: // RGB888
-            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                         GL_RGB, GL_UNSIGNED_BYTE, raw);
             break;
         case 0x01: // RGBA8888
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, raw);
             break;
         case 0x0f: // RGBA5551
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw);
             break;
         case 0x10: { // RGBA4444 -> CPU-unpack to RGBA8888
-            // GL_UNSIGNED_SHORT_4_4_4_4 nibble order differs across desktop GL drivers.
-            // Binary stores LE uint16: bits 15..12=R, 11..8=G, 7..4=B, 3..0=A.
-            // Unpack on CPU and upload as GL_UNSIGNED_BYTE to avoid driver variance.
             const size_t pixCount = (size_t)width * (size_t)height;
             std::vector<unsigned char> rgba(pixCount * 4);
             const unsigned short* src16 = reinterpret_cast<const unsigned short*>(raw);
-            for (size_t i = 0; i < pixCount; ++i) {
+            size_t i;
+            for (i = 0; i < pixCount; ++i) {
                 unsigned short p = src16[i];
                 unsigned char r = (unsigned char)((p >> 12) & 0xF);
                 unsigned char g = (unsigned char)((p >>  8) & 0xF);
@@ -160,38 +301,44 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
                 rgba[i*4 + 2] = (b << 4) | b;
                 rgba[i*4 + 3] = (a << 4) | a;
             }
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             break;
         }
         case 0x11: // RGB565
-            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                         GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw);
             break;
-        // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
         default:
             LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", (unsigned)d->texFmt,
                       pathForLog ? pathForLog : "<memory>");
             return Mortar::SmartPtr<Texture>();
     }
+#else
+    (void)raw; (void)pathForLog;
+#endif
+
     return Mortar::SmartPtr<Texture>(tex);
 }
 
-// Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4).
-// Reconciled to use TextureFileFormat::g_readers[] dispatch via TextureLoader/LockLayers.
-// Binary flow: AlternativeTextureLoader::CreateLoader -> TextureLoader -> LockLayers ->
-//   g_readers[i](data, size) -> Tex1Data* -> GL upload.
+// Texture2D::Load @0x0022a854.
+// Binary flow: src null -> null SmartPtr; else operator new(100) -> Texture2D_Bada ctor
+//   -> SetSource(src,primType).
+// Port: we don't have a TextureSource at Load(path) time, so we create the Texture2D_Bada
+// and call Cache() directly after parsing the Tex1 data.
+// DIFFERS: binary calls SetSource which calls Cache(); port calls UploadTex1ToGL inline
+//   (same GL result; SetSource/Cache is the correct binary path but TextureSource
+//   setup for file-path-based loading is TODO: 0x0022a854).
 Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
     // v1.6.1: AlternativeTextureLoader::CreateLoader handles both the fast path
     // (Prefix/Postfix empty -> returns TextureLoader over original path) and the
     // slow path (Prefix/Postfix set -> SubstituteApparentSizeTextureSource).
-    // CreateLoader gates on File::Exists internally (via TextureLoader::CreateLoader).
     AsciiString pathStr(path);
     SmartPtr<TextureSource> src = AlternativeTextureLoader::CreateLoader(pathStr);
 
     if (!src.IsValid()) {
-        // File not found (TextureLoader::CreateLoader returned null).
         // Port-specific fallback: try TextureOverloadPrefix path.
-        // DIFFERS: binary has no TextureOverloadPrefix; this is a port-specific feature
-        //   for the SDL asset-root override. Mirrors the old Texture::Load behaviour.
+        // DIFFERS: binary has no TextureOverloadPrefix; SDL asset-root override.
         DisplayManager& dm = DisplayManager::GetInstance();
         if (dm.m_TextureOverloadPrefix[0] != '\0') {
             std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
@@ -208,20 +355,13 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         return Mortar::SmartPtr<Texture>();
     }
 
-    // Identify and upload. Currently the only live format is Tex1.
-    // The binary was built -fno-rtti so dynamic_cast is unavailable; static_cast
-    // is safe here because LockLayers() iterates g_readers[] and returns the first
-    // non-null result -- in the shipped 1.5.1/1.6.1 packs the only reader that
-    // accepts actual data is ReadTex1Format. Tex2/DDS/Tex3 return null for all
-    // shipped assets (their full decode is TODO), so raw is always Tex1Data* in
-    // practice. When those decoders land, replace this with a type-tag field.
     // TODO: 0x00189dd4 -- binary type-dispatch mechanism for multi-format raw*.
     TextureFileFormat::Tex1Data* tex1 =
         static_cast<TextureFileFormat::Tex1Data*>(raw);
 
     Mortar::SmartPtr<Texture> result;
     if (tex1) {
-        Texture* t = new Texture();
+        Bada::Texture2D_Bada* t = new Bada::Texture2D_Bada();
         result = UploadTex1ToGL(t, tex1, path);
         if (!result.IsValid()) {
             delete t;
@@ -242,18 +382,15 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
     return result;
 }
 
-// Binary @ 0x00189d80 Mortar::Texture::LoadFromMemory(void const*, int).
-// Port: routes the in-memory blob directly through the Tex1 reader (no file I/O).
+// Binary @0x00189d80 Mortar::Texture::LoadFromMemory(void const*, int).
 // DIFFERS: binary constructs Texture2DFromFile_Bada and parses via GPUafyTexture;
 //   port calls ReadTex1Format directly (same logic, no TextureLoader wrapping needed
 //   for memory blobs -- LoadFromMemory is never called with Tex3/Tex2/DDS data).
 Mortar::SmartPtr<Texture> Texture::LoadFromMemory(void const* buf, int len) {
-    return ParseTexBuffer(buf, (long)len, nullptr);
+    return ParseTexBuffer(buf, (long)len, 0);
 }
 
-// ParseTexBuffer -- kept as the shared helper for LoadFromMemory and the test path.
-// Calls the Tex1 reader directly (bypasses the registry for in-memory blobs).
-// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78).
+// ParseTexBuffer -- shared helper for LoadFromMemory and the test path.
 Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
                                                   const char* pathForLog) {
     TextureSourceData* raw = TextureFileFormat::ReadTex1Format(data, (unsigned long)size);
@@ -261,7 +398,7 @@ Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
         return Mortar::SmartPtr<Texture>();
     }
     TextureFileFormat::Tex1Data* d = static_cast<TextureFileFormat::Tex1Data*>(raw);
-    Texture* tex = new Texture();
+    Bada::Texture2D_Bada* tex = new Bada::Texture2D_Bada();
     Mortar::SmartPtr<Texture> result = UploadTex1ToGL(tex, d, pathForLog);
     if (!result.IsValid()) {
         delete tex;
@@ -271,10 +408,7 @@ Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
 }
 
 // ParseTex3Buffer -- magic-check only; full decode is TODO.
-// Kept for call-site compatibility (previously called by Load()).
-// Now Load() routes through AlternativeTextureLoader -> TextureLoader -> g_readers,
-// so this function is effectively dead but preserved as a named binary landmark.
-// Binary: Mortar::TextureFileFormat::Tex3Format::Read @ 0x0022bd7c.
+// Binary: Mortar::TextureFileFormat::Tex3Format::Read @0x0022bd7c.
 Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
                                                     const char* pathForLog)
 {
@@ -289,17 +423,3 @@ Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
 }
 
 } // namespace Mortar
-
-namespace Mortar {
-
-// Binary @ 0x00188da4 Mortar::Texture::SetUnCached().
-void Texture::SetUnCached() {
-    Set();
-}
-
-// Binary @ 0x00188d9c Mortar::Texture::UnSetUnCached() -- forwards to UnSet().
-void Texture::UnSetUnCached() {
-    UnSet();
-}
-
-}  // namespace Mortar

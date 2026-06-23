@@ -153,11 +153,9 @@ static bool g_bShopButtonShrinking = false;
 static int g_ShopSelCounter = 0;
 
 // Port-only helpers (mirror DojoScreen pattern).
-#if !defined(__bada__)
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
-    return tex.IsValid() ? tex->m_TexId : 0;
+    return tex.IsValid() ? tex->GetTexId() : 0;
 }
-#endif
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x0015cb08
@@ -1271,13 +1269,8 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         if (s_TexDialogBox.IsValid()) {
             // Get dialog box dimensions via vtable GetWidth/GetHeight.
             // Binary: *(int**)(static_block+0x34)->vtable[5]/[6]
-#if !defined(__bada__)
-            float texW = (float)(s_TexDialogBox->m_Width);
-            float texH = (float)(s_TexDialogBox->m_Height);
-#else
-            float texW = 0.0f;
-            float texH = 0.0f;
-#endif
+            float texW = (float)(s_TexDialogBox->GetWidth());
+            float texH = (float)(s_TexDialogBox->GetHeight());
 
             // Scale Vec3 = (texW+1, texH+1, 0) * 1.0f (identity multiply)
             // The decompile multiplies by local_44=1.0f via _Vector3::operator* — no-op.
@@ -1348,13 +1341,8 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     // Binary: __cxa_guard_acquire(static_block+0x74), then init Vec3 at +0x78.
     // Port: plain bool guard (equivalent lifetime).
     if (!s_RingVecInited && s_TexSelected.IsValid()) {
-#if !defined(__bada__)
-        float w = (float)(s_TexSelected->m_Width);
-        float h = (float)(s_TexSelected->m_Height);
-#else
-        float w = 0.0f;
-        float h = 0.0f;
-#endif
+        float w = (float)(s_TexSelected->GetWidth());
+        float h = (float)(s_TexSelected->GetHeight());
         // z = 1.0f  (local_44 = 0x3f800000 from binary stack)
         s_RingVec = Vec3(w + 1.0f, h + 1.0f, 1.0f);
         s_RingVecInited = true;

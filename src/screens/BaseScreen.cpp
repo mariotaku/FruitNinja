@@ -167,14 +167,10 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         s_TexSmlTitle->Set();
 
         mm.GetWorldStack().Reset();
-#if !defined(__bada__)
         Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexSmlTitle->m_Width + 1.0f,
-            (float)s_TexSmlTitle->m_Height + 1.0f,
+            (float)s_TexSmlTitle->GetWidth() + 1.0f,
+            (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-#else
-        Matrix44 mat = Matrix44::MakeScale(0.0f, 0.0f, 1.0f);
-#endif
         Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
                        SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);
@@ -204,14 +200,10 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         secondaryTex->Set();
 
         mm.GetWorldStack().Reset();
-#if !defined(__bada__)
         Matrix44 mat = Matrix44::MakeScale(
-            (float)secondaryTex->m_Width + 1.0f,
-            (float)secondaryTex->m_Height + 1.0f,
+            (float)secondaryTex->GetWidth() + 1.0f,
+            (float)secondaryTex->GetHeight() + 1.0f,
             1.0f);
-#else
-        Matrix44 mat = Matrix44::MakeScale(0.0f, 0.0f, 1.0f);
-#endif
         // At alpha=1 (on-screen rest): secPos = secondaryTexPos.
         // At alpha=0 (slide-out): secPos moves DOWN by SEC_SLIDE_Y
         // (subtracting a +Y slide vector), matching the visual where
@@ -290,14 +282,10 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
         s_TexSmlTitle->Set();
 
         mm.GetWorldStack().Reset();
-#if !defined(__bada__)
         Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexSmlTitle->m_Width + 1.0f,
-            (float)s_TexSmlTitle->m_Height + 1.0f,
+            (float)s_TexSmlTitle->GetWidth() + 1.0f,
+            (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-#else
-        Matrix44 mat = Matrix44::MakeScale(0.0f, 0.0f, 1.0f);
-#endif
         Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
                        SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);

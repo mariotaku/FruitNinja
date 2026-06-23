@@ -44,7 +44,7 @@ public:
     void*    m_pCtrl80;               // +0x80
     void*    m_LinkedScreen;          // +0x84
 
-    // +0x88: title-tex display width (set from tex->m_Width in Initialise)
+    // +0x88: title-tex display width (set from tex->GetWidth() in Initialise)
     float    m_TitleSizeX;            // +0x88
 
     // +0x8C: state machine index (one of STATE_* above)

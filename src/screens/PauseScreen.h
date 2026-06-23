@@ -114,7 +114,7 @@ public:
 
     // Port-specific trailing fields (not in the 220-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xdc.
-    // Binary reads texture dimensions from SmartPtr<Texture>->m_Width/m_Height
+    // Binary reads texture dimensions from SmartPtr<Texture>->GetWidth()/GetHeight()
     // each time they are needed. Port caches them after load to avoid holding
     // SmartPtrs in Update.
 #if !defined(__bada__)

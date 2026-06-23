@@ -106,12 +106,12 @@ TextureSourceData* TextureFileFormat::ReadTex1Format(const void* data, unsigned 
     d->wLog2  = wLog2;
     d->hLog2  = hLog2;
 
-    d->info.width      = (uint16_t)(1u << wLog2);
-    d->info.height     = (uint16_t)(1u << hLog2);
-    d->info.depth      = 1;
-    d->info.arraySize  = 1;
-    d->info.dataSize   = (uint32_t)(size - 12u);
-    d->info.slicePitch = 0;
+    d->info.rawWidth       = (uint16_t)(1u << wLog2);
+    d->info.rawHeight      = (uint16_t)(1u << hLog2);
+    d->info.depth          = 1;
+    d->info.levels         = 1;
+    d->info.apparentWidth  = (uint32_t)(1u << wLog2);
+    d->info.apparentHeight = (uint32_t)(1u << hLog2);
 
     d->pixels     = bytes + 12;
     d->pixelsSize = size - 12u;
@@ -123,7 +123,7 @@ TextureSourceData* TextureFileFormat::ReadTex1Format(const void* data, unsigned 
 // Binary @0x0022baf8 (outer) / @0x0022b404 (inner ReadFormatInternal).
 // Accept gate: size >= 0x11 && u16@+2 == 4.
 // Header: bytes[8]=wLog2, bytes[9]=hLog2, bytes[0xb]=mipCount; u32@+4 = format
-//   descriptor; u16@+0xc = dataSize; u16@+0xe = slicePitch.
+//   descriptor; u16@+0xc = apparentWidth; u16@+0xe = apparentHeight.
 // Validation: max(wLog2,hLog2)+1 >= mipCount, and per-mip byte accumulation
 //   (sum of (bpp*w*h)>>3 over the mip chain) + 0x10 == size.
 // PixelFormat (12-byte channel-mapping block) is built byte-for-byte from the
@@ -197,14 +197,14 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
 
     // ---- Scalar DataInfo fields ----
     d->info.numberFormat = 0;
-    d->info.width     = (uint16_t)(1u << wLog2);
-    d->info.height    = (uint16_t)(1u << hLog2);
-    d->info.depth     = 1;
-    d->info.arraySize = 1;
+    d->info.rawWidth     = (uint16_t)(1u << wLog2);
+    d->info.rawHeight    = (uint16_t)(1u << hLog2);
+    d->info.depth        = 1;
+    d->info.levels       = 1;
     {
         uint16_t v;
-        memcpy(&v, bytes + 0xc, 2); d->info.dataSize   = v;
-        memcpy(&v, bytes + 0xe, 2); d->info.slicePitch = v;
+        memcpy(&v, bytes + 0xc, 2); d->info.apparentWidth  = v;
+        memcpy(&v, bytes + 0xe, 2); d->info.apparentHeight = v;
     }
 
     // ---- PixelFormat (12-byte channel-mapping block) ----
