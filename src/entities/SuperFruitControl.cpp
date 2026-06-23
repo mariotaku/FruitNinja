@@ -8,6 +8,7 @@
 
 #include "SuperFruitControl.h"
 #include "SuperFruitGlow.h"
+#include "hud/HUD.h"
 #include "engine/render/BakedStringBox.h"
 #include "hud/MissControl.h"
 #include "SuperFruitState.h"
@@ -40,9 +41,10 @@
 // Static map definition (24-byte std::map per CLAUDE.md).
 std::map<Fruit*, SuperFruitControl*> SuperFruitControl::SuperFruitControls;
 
-// Static session counter: number of pomegranates spawned this game.
-// Binary: BSS global; accessed via IsInSuperFruitState / NumPomegranatesSpawnedThisGame.
-static int s_PomegranatesSpawnedThisGame = 0;
+// Port specific: side-map for glow entities excluded from the binary struct
+// to preserve sizeof(SuperFruitControl)==0x108. Binary spawns glow in
+// SuperFruitThrown @0x001bbf48 as a free entity, never stored on the controller.
+static std::map<SuperFruitControl*, SuperFruitGlow*> s_GlowMap;
 
 // Binary @ 0x001be1c8: fresh controller ctor.
 SuperFruitControl::SuperFruitControl(Fruit* fruit)
@@ -58,7 +60,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     , m_FadeIn(0.0f)
     , m_Scale(0.0f)
     , m_SliceCooldown(0)
-    , m_pGlow(nullptr)
 {
     entityType = 6;  // super-fruit type in binary
     memset(_pad_own, 0, sizeof(_pad_own));
@@ -71,7 +72,11 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
-    ++s_PomegranatesSpawnedThisGame;
+    // Binary ctor @0x001be1c8: registers ComboCancel delegate on ComboCanceledEvent
+    // after setting m_pHostFruit2/m_PrevTimer, before glow/transition work.
+    SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
+        this, &SuperFruitControl::ComboCancel);
+
     AttachGlow();
 }
 
@@ -89,7 +94,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     , m_FadeIn(1.0f)   // already visible when restored
     , m_Scale(1.0f)
     , m_SliceCooldown(0)
-    , m_pGlow(nullptr)
 {
     entityType = 6;
     memset(_pad_own, 0, sizeof(_pad_own));
@@ -102,13 +106,16 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
+    // (restore ctor: register by symmetry with Release unregister; not byte-confirmed)
+    SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
+        this, &SuperFruitControl::ComboCancel);
+
     AttachGlow();
 }
 
 SuperFruitControl::~SuperFruitControl()
 {
     m_pHostFruit = nullptr;
-    m_pGlow = nullptr;
 }
 
 // Binary @ 0x001bb664.
@@ -119,16 +126,11 @@ SuperFruitControl::~SuperFruitControl()
 //   4. if (m_pHostFruit) { KillFruit(false); m_pHostFruit = NULL; }
 //   5. if (m_pComboText)  { delete m_pComboText;  m_pComboText  = NULL; }
 //   6. if (m_pScoreText)  { delete m_pScoreText;  m_pScoreText  = NULL; }
-// NOTE: binary Release has NO glow handling; m_pGlow is port-only (#106).
-// DIFFERS: m_pGlow is a port-only field (#106); binary Release has no glow ptr.
 void SuperFruitControl::Release()
 {
-    // TODO: v1.6.1 SuperFruitControl::Release @0x001bb664 -- UnRegister ComboCancel
-    //   from SlashEntity::ComboCanceledEvent (GOT 0x6f04): Event1<SlashEntity*> not
-    //   yet a field on SlashEntity in the port. When ported, emit:
-    //     Mortar::Delegate1<void,SlashEntity*> d =
-    //         Mortar::Delegate1<void,SlashEntity*>::Make(this, &SuperFruitControl::ComboCancel);
-    //     SlashEntity::ComboCanceledEvent -= d;
+    // Binary @ 0x001bb664: step 1 -- UnRegister ComboCancel from ComboCanceledEvent.
+    SlashEntity::OnComboCancelEvent() -= Mortar::Delegate1<void, SlashEntity*>::Make(
+        this, &SuperFruitControl::ComboCancel);
 
     std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.find(m_pHostFruit);
     if (it != SuperFruitControls.end()) {
@@ -150,6 +152,9 @@ void SuperFruitControl::Release()
         delete m_pScoreText;
         m_pScoreText = nullptr;
     }
+
+    // Port specific: clean side-map entry (binary has no equivalent; glow is self-managed).
+    s_GlowMap.erase(this);
 }
 
 // Binary @ 0x001bca10. Per-frame phase-ladder state machine.
@@ -482,11 +487,13 @@ void SuperFruitControl::ExplodeSuperFruit()
     // TODO: 0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
 }
 
-// Binary @ 0x001b9850. Clears m_pLinkedSlasher if it matches se.
+// Binary @ 0x001b9850. Forces host fruit's slice timer negative when combo is cancelled
+// while the super fruit is still in its anticipation phase (Timer < Lifetime).
 void SuperFruitControl::ComboCancel(SlashEntity* se)
 {
-    if (m_pLinkedSlasher == se) {
-        m_pLinkedSlasher = nullptr;
+    (void)se;
+    if (m_pHostFruit && m_Timer < m_Lifetime) {
+        m_pHostFruit->m_SliceTimer = -1.0f;
     }
 }
 
@@ -506,13 +513,17 @@ void SuperFruitControl::PushBombsAway(float dt)
     }
 }
 
-// Attach a SuperFruitGlow entity to the host fruit via ActorManager.
+// Port specific: spawn glow and add it to the HUD. The binary spawns glow
+// in SuperFruitThrown @0x001bbf48 as a free HUDControl entity added to the HUD;
+// it is never stored on the controller. The side-map s_GlowMap holds the ptr
+// so Release can clean up and sizeof(SuperFruitControl)==0x108 is preserved.
 void SuperFruitControl::AttachGlow()
 {
-    // TODO: 0x001c06bc -- wire SuperFruitGlow through ActorManager pool when
-    //   Entity pool allocation for type-6 entities is supported.
-    // For now: create on heap and track via m_pGlow pointer.
-    m_pGlow = new SuperFruitGlow(m_pHostFruit);
+    SuperFruitGlow* glow = new SuperFruitGlow(m_pHostFruit);
+    s_GlowMap[this] = glow;
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(glow, false);
+    }
 }
 
 // -----------------------------------------------------------------------
@@ -593,10 +604,12 @@ bool SuperFruitControl::IsInSuperFruitState()
     return !SuperFruitControls.empty();
 }
 
-// Binary @ 0x001b98c0.
+// Binary @ 0x001b98c0. Reads FruitSaveData::GetTotal(game_work.m_SaveData, "super_pomegranates_spawned").
+// There is no BSS counter; the value comes directly from the persistent save-data total.
 int SuperFruitControl::NumPomegranatesSpawnedThisGame()
 {
-    return s_PomegranatesSpawnedThisGame;
+    if (!game_work.m_SaveData) return 0;
+    return game_work.m_SaveData->GetTotal("super_pomegranates_spawned");
 }
 
 // Binary @ 0x001b99d4. Game-mode gating for final pomegranate spawn.
@@ -700,8 +713,6 @@ void SuperFruitControl::Reset()
     SuperFruitControls.clear();
 
     // TODO: 0x001bb52c -- this->+0x33 = 1 (game-level done-flag write; target unresolved in port)
-
-    s_PomegranatesSpawnedThisGame = 0;
 }
 
 // Binary @ 0x001ba460. Stops all in-flight fruit and bombs during the

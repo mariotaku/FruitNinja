@@ -95,9 +95,6 @@ public:
     Vec3 m_WorkVec5;              // +0xf0  (work vector -- purpose unresolved)
     Vec3 m_WorkVec6;              // +0xfc  (work vector -- purpose unresolved; spans to 0x107)
 
-    // Associated glow entity (not in binary struct; lifetime tied to this controller)
-    SuperFruitGlow* m_pGlow;
-
     // -----------------------------------------------------------------------
     // Static map: indexes all active super-fruit controllers by host fruit.
     // Binary: static std::map<Fruit*, SuperFruitControl*> SuperFruitControls.
@@ -198,8 +195,9 @@ public:
     // away from the host fruit. Called while Timer < Lifetime (throw/anticipation phase).
     void PushBombsAway(float dt);
 
-    // Binary @ 0x001b9850. Combo cancel: clears linked slash entity when that
-    // entity's combo is cancelled (e.g. swipe released mid-combo).
+    // Binary @ 0x001b9850. Combo cancel: forces host fruit's m_SliceTimer to -1
+    // when the combo is cancelled while the super fruit is still in anticipation phase
+    // (Timer < Lifetime). Subscribed to SlashEntity::OnComboCancelEvent().
     void ComboCancel(SlashEntity* se);
 
 private:
@@ -228,9 +226,7 @@ static_assert(offsetof(SuperFruitControl, m_Scale)           == 0xd8, "SuperFrui
 static_assert(offsetof(SuperFruitControl, m_SliceCooldown)   == 0xdc, "SuperFruitControl::m_SliceCooldown offset");
 static_assert(offsetof(SuperFruitControl, m_WorkVec5)        == 0xf0, "SuperFruitControl::m_WorkVec5 offset");
 static_assert(offsetof(SuperFruitControl, m_WorkVec6)        == 0xfc, "SuperFruitControl::m_WorkVec6 offset");
-// TODO: sizeof(SuperFruitControl) == 0x108 per binary (v1.6.1 @0x12c168), but port is 0x10c due to
-// port-only m_pGlow field at +0x108 inflating the struct by 4 bytes. Fix: move m_pGlow out-of-struct
-// (e.g. into a side-map), then re-add this assert. Filed as layout bug.
+static_assert(sizeof(SuperFruitControl)                      == 0x108, "SuperFruitControl sizeof wrong (binary 0x108, v1.6.1 @0x12c168)");
 #endif
 
 #endif // FN_SUPER_FRUIT_CONTROL_H
