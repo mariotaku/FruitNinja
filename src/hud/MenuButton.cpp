@@ -393,7 +393,7 @@ void MenuButton::BeginDraw(float dt) {
 }
 
 // Binary @ 0x19a5b8 -- PreDraw no-op
-void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
+void MenuButton::PreDraw(float* hudScale) { (void)hudScale; }
 
 // Binary @ 0x19a794 -- kills owned fruit/bomb then defers to base SetToMultiplayerState
 bool MenuButton::SetToMultiplayerState() {
@@ -687,7 +687,8 @@ void MenuButton::UpdateTouchPosition() {
 }
 
 // MenuButton::Draw @ 0x0019c2e4
-void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
+void MenuButton::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     if (m_DrawColour.a == 0) return;
 
     // Compute fade-derived alpha from m_AnimPhase (+0xD0).
@@ -730,10 +731,10 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         Vec3 savedPos = pos;
         pos.x += ((float)(rand() % 600) / 100.0f) - 3.0f;
         pos.y += ((float)(rand() % 600) / 100.0f) - 3.0f;
-        HUDControl3d::Draw(hudScale, layerMask);
+        HUDControl3d::Draw(hudScaleRaw);
         pos = savedPos;
     } else {
-        HUDControl3d::Draw(hudScale, layerMask);
+        HUDControl3d::Draw(hudScaleRaw);
     }
 
     // Label block (v1.6.1 LIVE): if m_pLabelFg(+0x11c)!=0 -> render BakedString curve-draw

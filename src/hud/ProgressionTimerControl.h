@@ -62,12 +62,12 @@ public:
 
     // vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged)
     // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x00157964
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScaleRaw) override;
 
     // vtable slot 7 -- Binary @ 0x001579f4
     // Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
     // Defunct: ProgressionTimerControl -- no-op stub; binary @ 0x001579f4
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // vtable slot 10 -- Binary @ 0x00157bb0
     // Drives m_ShowAnim toward 0/1 at +/-3/s based on m_bCountUp; if active

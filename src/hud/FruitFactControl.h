@@ -124,7 +124,7 @@ public:
     virtual void Reset() override {}        // Binary @ 0x00139298 (empty)
     virtual void BeginDraw(float dt) override; // Binary @ 0x0013a0bc
     virtual void Update(float dt) override; // Binary @ 0x0013b604
-    virtual void DrawOrder(const Vec3& hudScale, int layerMask) override; // Binary @ 0x0013b95c
+    virtual void DrawOrder(float* hudScaleRaw, int layerMask) override; // Binary @ 0x0013b95c
 
     virtual int GetType() override { return 6; }
 

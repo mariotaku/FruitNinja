@@ -79,7 +79,7 @@ public:
 
         void Update(float dt) override;
         // RE-ported: 0x00134E00 — thunks to HUDControl3d::DrawOrder (no custom body).
-        void DrawOrder(const Vec3& hudScale, int layerMask) override;
+        void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
         // Delegate target: called when tracked fruit is killed (nulls m_pEntity).
         // RE-ported: 0x00134DEC

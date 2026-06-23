@@ -369,8 +369,8 @@ void DojoScreen::Update(float dt) {
 // ===================================================================
 // Matches DojoScreen::Draw @ 0x0013822c
 // ===================================================================
-void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
-    if ((layerMask & m_LayerFlags) == 0) return;
+void DojoScreen::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     if (m_TransitionAlpha <= 0.0f) return;
 
     // --- Block A: dojo_sensei.tex (slot +0x10) — main panel (128x256) ---

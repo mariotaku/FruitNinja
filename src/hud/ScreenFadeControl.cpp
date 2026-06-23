@@ -66,10 +66,9 @@ void ScreenFadeControl::Update(float dt)
 }
 
 // Binary @ 0x0015A868
-void ScreenFadeControl::Draw(const Vec3& hudScale, int layerMask)
+void ScreenFadeControl::Draw(float* hudScaleRaw)
 {
-    (void)hudScale;
-    (void)layerMask;
+    (void)hudScaleRaw;
 
     if (!m_bVisible) return;
 

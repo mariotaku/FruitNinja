@@ -88,20 +88,21 @@ void SuperFruitGlow::Release() {
 // slot9: DrawOrder @ 0x1bfb18
 // Double-draw: scales inherited size Vec3 (+0x20) by m_Fade, draws twice with
 // m_Timer (+0x2c) negated between passes, then restores both.
-void SuperFruitGlow::DrawOrder(const Vec3& hudScale, int layerMask) {
+void SuperFruitGlow::DrawOrder(float* hudScaleRaw, int layerMask) {
+    (void)layerMask;
     // ASM @ 0x1bfb18: two-pass mirror using m_Fade (+0x88) as scale multiplier:
     //   1. save size (+0x20 Vec3)
     //   2. size *= m_Fade (+0x88)           -> _Vector3<float>::operator*=
-    //   3. Draw(hudScale, layerMask)        -> HUDControl3d::Draw (1st blade)
+    //   3. Draw(hudScaleRaw)               -> HUDControl3d::Draw (1st blade)
     //   4. m_Timer = -m_Timer (+0x2c)       -> mirror rotation for 2nd blade
-    //   5. Draw(hudScale, layerMask)        -> HUDControl3d::Draw (2nd blade)
+    //   5. Draw(hudScaleRaw)               -> HUDControl3d::Draw (2nd blade)
     //   6. m_Timer = -m_Timer               -> restore +0x2c
     //   7. size = saved                     -> restore +0x20 Vec3
     Vec3 savedSize = size;
     size *= m_Fade;
-    HUDControl3d::Draw(hudScale, layerMask);
+    HUDControl3d::Draw(hudScaleRaw);
     m_Timer = -m_Timer;
-    HUDControl3d::Draw(hudScale, layerMask);
+    HUDControl3d::Draw(hudScaleRaw);
     m_Timer = -m_Timer;
     size = savedSize;
 }

@@ -148,13 +148,13 @@ public:
     void Update(float dt) override;
 
     // vtable[9] @ 0x00151f60 -- render textured quad with UV crop + rotation
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // Binary @ 0x001513cc — vtable[5]. Drops m_Texture ref (single-line helper).
     void Release() override;
 
     // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
 
     // Binary @ 0x00150dfc — vtable[16]. New virtual not in HUDControl base; extends vtable to 17 slots.
     // Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc

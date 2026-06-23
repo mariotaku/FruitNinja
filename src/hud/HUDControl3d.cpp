@@ -30,8 +30,8 @@ static const float HUD_SCREEN_Z = 0.0f;
 //   - translate = pos + Vec3(480, 320, 0) * m_HudScale  (screen-anchor offset)
 //   - TintColour(m_DrawColour, hudScale) -> DrawQuad(UVs)
 //   - Texture::UnSet
-void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
+void HUDControl3d::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     if (!m_Texture.IsValid()) {
         return;
@@ -95,7 +95,7 @@ void HUDControl3d::Release() {}
 
 // ASM-verified: 2026-05-24 binary @ 0x00143fc8 (re-analyst)
 // Single bx lr; no-op.
-void HUDControl3d::PreDraw(const Vec3& hudScale) {
+void HUDControl3d::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 

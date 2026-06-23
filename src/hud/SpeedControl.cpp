@@ -176,7 +176,7 @@ void SpeedControl::Update(float dt) {
 void SpeedControl::Init() {}
 
 // Binary @ 0x00160ce4 -- empty pass-through.
-void SpeedControl::PreDraw(const Vec3& /*hudScale*/) {}
+void SpeedControl::PreDraw(float* /*hudScale*/) {}
 
 // Binary @ 0x00160cd8 -- no-op (single bx lr). State is driven entirely
 // by m_DisplayedSpeed in Update; no per-Reset wipe.

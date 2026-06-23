@@ -39,7 +39,7 @@ public:
 
     // Defunct: ChallengeMenuScreen -- no surviving class methods in binary
     // (only _GLOBAL__I_ static-init @ 0x00166010) -- placeholder, no-op stub
-    void Draw(const Vec3& /*hudScale*/, int /*layerMask*/) override {}
+    void Draw(float* /*hudScaleRaw*/) override {}
 
     // Defunct: ChallengeMenuScreen -- no surviving class methods in binary
     // (only _GLOBAL__I_ static-init @ 0x00166010) -- placeholder, no-op stub

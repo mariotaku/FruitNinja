@@ -85,9 +85,9 @@ void HUD::Draw(int layerMask) {
             // m_bUseHUDScales == 0: receives identity (1,1,1) — opted out of tint.
             const Vec3& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
             world.Reset();
-            ctrl->PreDrawOrder(scaleVec, layerMask);
+            ctrl->PreDrawOrder(const_cast<float*>(&scaleVec.x), layerMask);
             world.Reset();
-            ctrl->DrawOrder(scaleVec, layerMask);
+            ctrl->DrawOrder(const_cast<float*>(&scaleVec.x), layerMask);
         }
     }
 }

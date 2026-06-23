@@ -581,9 +581,7 @@ void GameModeScreen::DrawConnectTexture(Vec3 pos) {
 // 3. Connect animation (zen_sign.tex pulsating)
 // 4. Logo panel (mode_sensei.tex repeated at top-right)
 // ===================================================================
-void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
-    if ((layerMask & m_LayerFlags) == 0) return;
+void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     if (m_TransitionAlpha <= 0.0f) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();

@@ -38,16 +38,15 @@ void CoinCounter::Reset() {
 // Draw @ v1.6.1 0x00167730
 // TODO: v1.6.1 0x00167730 (CoinCounter::Draw) — full draw body not yet RE'd;
 //   uses m_CoinCount (+0x84) and m_CountText (+0x94) for Font::DrawString render.
-void CoinCounter::Draw(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
-    (void)layerMask;
+void CoinCounter::Draw(float* hudScaleRaw) {
+    (void)hudScaleRaw;
 }
 
 // Release @ v1.6.1 0x0016756c — binary body is an empty no-op (immediate return)
 void CoinCounter::Release() {}
 
 // PreDraw @ v1.6.1 0x001675e4 — binary body is an empty no-op (immediate return)
-void CoinCounter::PreDraw(const Vec3& hudScale) { (void)hudScale; }
+void CoinCounter::PreDraw(float* hudScale) { (void)hudScale; }
 
 // Skip @ v1.6.1 0x001675e8 — binary body is an empty no-op (immediate return)
 void CoinCounter::Skip() {}

@@ -140,10 +140,10 @@ public:
     void BeginDraw(float dt) override;
 
     // vtable[6]: PreDraw -- flash.tex black-tinted dim overlay
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
 
     // vtable[9]: DrawOrder -- conditional HUDControl3d::Draw gate
-    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
     // vtable[10]: Update -- state machine + lazy button creation
     void Update(float dt) override;

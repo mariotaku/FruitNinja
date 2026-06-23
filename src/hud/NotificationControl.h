@@ -30,7 +30,7 @@ public:
     void Update(float dt) override;
 
     // Binary @ 0x001531f8
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // Binary ctor stores the icon SmartPtr into the base HUDControl3d::m_Texture slot (+0x74).
     // No subclass texture member; use m_Texture (inherited) for the icon.

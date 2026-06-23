@@ -135,7 +135,7 @@ void SliderControl::Release() {
 // Defunct: SliderControl -- no-op stub; binary @ 0x0015ffa8
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
-void SliderControl::PreDraw(const Vec3& hudScale) {
+void SliderControl::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
@@ -146,9 +146,8 @@ void SliderControl::PreDraw(const Vec3& hudScale) {
 // Defunct: SliderControl -- no-op stub; binary @ 0x0016069c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
-void SliderControl::Draw(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
-    (void)layerMask;
+void SliderControl::Draw(float* hudScaleRaw) {
+    (void)hudScaleRaw;
     // Stub: binary draws label via Font::DrawString at
     //   (pos.x + 15 + m_TrackWidth*0.5, pos.y + 14),
     // then renders track background (box.tex) and thumb (slider_will.tex)

@@ -50,7 +50,7 @@ void ComboControl::PreDraw() {}
 // center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the extra-vtable slot +0x40
 // no-args form; port wires the body inside the base Draw(hudScale,layerMask) override
 // since no port-side caller hits the +0x40 slot.
-void ComboControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void ComboControl::Draw(float* /*hudScaleRaw*/) {
     if (!game_work.pFontNumbers.IsValid()) return;
     Mortar::Utf8StringIterator iter(m_Label);
     Colour col(0xFF, 0xFF, 0xFF, 0xFF);

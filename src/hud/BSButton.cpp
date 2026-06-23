@@ -156,15 +156,14 @@ void BSButton::Release() {
 
 // BSButton::PreDraw  (slot 6)
 // Binary @ 0x15e468: bx lr  (empty no-op)
-void BSButton::PreDraw(const Vec3& hudScale) {
+void BSButton::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
 // BSButton::Draw  (slot 7)
 // Binary @ 0x15e60c
-void BSButton::Draw(const Vec3& hudScale, int layerMask) {
-    (void)hudScale;
-    (void)layerMask;
+void BSButton::Draw(float* hudScaleRaw) {
+    (void)hudScaleRaw;
 
     // Gated on m_bEnabled (+0xe4); disabled buttons draw nothing.
     if (m_bEnabled == 0) {

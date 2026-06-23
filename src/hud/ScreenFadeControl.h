@@ -41,11 +41,11 @@ public:
     // vtable +0x10: Binary @ 0x0015A734
     virtual void Reset() override;
     // vtable +0x18: Binary @ 0x0015A750 -- pass-through
-    virtual void PreDraw(const Vec3& hudScale) override { (void)hudScale; }
+    virtual void PreDraw(float* hudScale) override { (void)hudScale; }
     // vtable +0x28: Binary @ 0x0015A798
     virtual void Update(float dt) override;
     // vtable +0x1C: Binary @ 0x0015A868
-    virtual void Draw(const Vec3& hudScale, int layerMask) override;
+    virtual void Draw(float* hudScaleRaw) override;
     // vtable +0x2C: Binary @ 0x0015A754 -- Reset(); return false
     virtual bool SetToMultiplayerState() override;
     // vtable +0x30: Binary @ 0x0015AEA0

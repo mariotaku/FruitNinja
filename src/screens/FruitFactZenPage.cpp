@@ -303,7 +303,7 @@ void FruitFactZenPage::Update(float /*dt*/) {
 }
 
 // Binary @ 0x00180ef0
-void FruitFactZenPage::DrawOrder(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void FruitFactZenPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/) {
     // Binary @ 0x00180ef0: if the page's cached render-texture (HUDControl3d::m_Texture,
     // binary +0x74) is non-null, draw it as a full-screen-quad backing for the page.
     if (!m_Texture) {

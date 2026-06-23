@@ -489,7 +489,7 @@ void AboutScreen::NewDraw(float yDrawn)
 // ASM-spec v1.6.1 AboutScreen::Draw @0x0015a654: blocks A, B (null skip), C,
 // D unchanged; NewDraw call added; block C pos = Vec3(-50, -96 + (1-alpha)*(-320), 0).
 // -----------------------------------------------------------------------
-void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
+void AboutScreen::Draw(float* /*hudScaleRaw*/)
 {
     if (m_TransitionAlpha <= 0.0f) return;
 

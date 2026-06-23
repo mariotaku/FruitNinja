@@ -80,10 +80,10 @@ public:
     void Reset() override;
 
     // vtable slot 6 @ 0x00155b58 — identity (returns hudScale)
-    void PreDraw(const Vec3& hudScale) override;
+    void PreDraw(float* hudScale) override;
 
     // vtable slot 7 @ 0x00155e08
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // vtable slot 10 @ 0x00156398
     void Update(float dt) override;

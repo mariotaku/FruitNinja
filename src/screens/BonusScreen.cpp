@@ -108,8 +108,6 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
     m_Awards.push_back(entry);
 }
 
-// STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
-void BonusScreen::Draw(float* /*mtx*/) {}
 
 // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
 float BonusScreen::GetTimeFirstAward() { return 0.0f; }
@@ -248,7 +246,7 @@ void BonusScreen::Update(float dt) {
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x0013325C
-void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
+void BonusScreen::Draw(float* hudScaleRaw) {
     // Apply m_PosOffset to position before base draw.
     Vec3 savedPos = pos;
     pos.x += m_PosOffset.x;
@@ -256,7 +254,7 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
     pos.z += m_PosOffset.z;
 
     // Base box draw (HUDControl3d::Draw handles the dialog background via m_SecondaryTex).
-    HUDControl3d::Draw(hudScale, layerMask);
+    HUDControl3d::Draw(hudScaleRaw);
 
     // Restore position.
     pos = savedPos;
@@ -276,7 +274,5 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
         // TODO: DrawString tier*multiplier score text
 
         (void)entry;
-        (void)hudScale;
-        (void)layerMask;
     }
 }

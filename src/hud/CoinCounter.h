@@ -49,13 +49,13 @@ public:
     void Init() override;       // v1.6.1 @0x00167568: binary body is empty no-op (immediate return)
     void Reset() override;      // v1.6.1 @0x00167574
     void Update(float dt) override;  // v1.6.1 @0x001675e8: no-op
-    void Draw(const Vec3& hudScale, int layerMask) override; // v1.6.1 @0x00167730
+    void Draw(float* hudScaleRaw) override; // v1.6.1 @0x00167730
 
     int GetType() override { return 3; }  // v1.6.1 @0x00167b5c
 
     // Faithful empty no-op overrides (binary bodies are immediate returns):
     void Release() override;      // v1.6.1 @0x0016756c
-    void PreDraw(const Vec3& hudScale) override;  // v1.6.1 @0x001675e4
+    void PreDraw(float* hudScale) override;  // v1.6.1 @0x001675e4
     void Skip() override;         // v1.6.1 @0x001675e8 (shares address range with Update nop)
 };
 

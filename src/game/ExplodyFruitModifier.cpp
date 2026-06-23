@@ -164,9 +164,9 @@ void ExplodyFruitModifier::FruitSplosion::Update(float dt)
 // RE-ported: 0x00134E00 — single-instruction tail-call thunk to HUDControl3d::DrawOrder.
 // No custom body; binary b 0x0010ddcc = HUDControl3d::DrawOrder (base).
 void ExplodyFruitModifier::FruitSplosion::DrawOrder(
-    const Vec3& hudScale, int layerMask)
+    float* hudScaleRaw, int layerMask)
 {
-    HUDControl3d::DrawOrder(hudScale, layerMask);
+    HUDControl3d::DrawOrder(hudScaleRaw, layerMask);
 }
 
 // RE-ported: 0x00134DEC — null the back-reference when the tracked fruit dies.

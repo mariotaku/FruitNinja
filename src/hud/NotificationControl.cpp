@@ -135,8 +135,8 @@ void NotificationControl::Update(float dt) {
 // Per-type render path:
 //   Type 1 (numeric): banner quad + icon + name text + points text right-aligned.
 //   Type 2 (named):   unlock-banner + larger icon + name text only.
-void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
+void NotificationControl::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     Game* g = Game::GetInstance();
     if (!g) return;

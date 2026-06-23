@@ -1407,7 +1407,8 @@ void GameOverScreen::Update(float dt) {
 // ---------------------------------------------------------------------------
 
 // ASM-verified: 2026-05-10 binary @ 0x0014171c (re-analyst)
-void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
+void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     // -----------------------------------------------------------------
     // Layer 0x80 path -- highscore label + game-over overlay quad.
@@ -1546,7 +1547,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
         }
 
         // Layer 1 -- always call HUDControl3d base draw last.
-        HUDControl3d::Draw(hudScale, layerMask);
+        HUDControl3d::Draw(hudScaleRaw);
     }
 }
 
@@ -1555,7 +1556,8 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 // ---------------------------------------------------------------------------
 
 // ASM-verified: 2026-05-10 binary @ 0x00141448 (re-analyst)
-void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
+void GameOverScreen::DrawOrder(float* hudScaleRaw, int /*layerMask*/) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     if (m_State != STATE_QUICK_RESTART) return;
     if (!g_StarburstTex.IsValid()) return;
 

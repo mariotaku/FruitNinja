@@ -39,7 +39,7 @@ public:
 
     void Reset() override;     // 0x00136bdc — no-op in binary
     void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
 
     // ASM-verified: 2026-05-20 binary @ 0x00137124 (re-analyst) -- returns 6
     int GetType() override { return 6; }

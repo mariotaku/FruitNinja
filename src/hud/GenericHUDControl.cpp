@@ -151,7 +151,7 @@ void GenericHUDControl::SetAngle(float angleDeg, float radius) {
 // Writes HUDControl base: pos(+0x08), size(+0x20), m_Timer(+0x2c), m_DrawColour.a(+0x5f).
 // ---------------------------------------------------------------------------
 
-void GenericHUDControl::PreDraw(const Vec3& /*hudScale*/) {
+void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
     float t = m_GHCTimer;
     float fadeIn  = m_FadeIn;
     float fadeOut = m_FadeOut;
@@ -189,8 +189,9 @@ void GenericHUDControl::PreDraw(const Vec3& /*hudScale*/) {
 // Delegates to Draw via the inherited base chain (HUDControl3d::Draw).
 // ---------------------------------------------------------------------------
 
-void GenericHUDControl::DrawOrder(const Vec3& hudScale, int layerMask) {
-    Draw(hudScale, layerMask);
+void GenericHUDControl::DrawOrder(float* hudScaleRaw, int layerMask) {
+    (void)layerMask;
+    Draw(hudScaleRaw);
     if (m_pLabel) {
         // TODO: 0x00189a58 -- label draw call (BakedStringBox::Draw at world pos)
     }

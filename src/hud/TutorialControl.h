@@ -42,7 +42,7 @@ public:
     void Init() override;
     void Release() override;
     void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Draw(float* hudScaleRaw) override;
     int  GetType() override { return 1; }
 
     // Reset animation timer to -10 (inactive sentinel).
