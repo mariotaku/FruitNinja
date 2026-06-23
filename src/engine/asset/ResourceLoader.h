@@ -3,14 +3,114 @@
 
 #include "util/AsciiString.h"
 #include "util/SmartPtr.h"
+#include "util/ReferenceCounter.h"
+#include "util/Delegate.h"
 #include "asset/DataReader.h"
 #include "asset/Skeleton.h"
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <cstring>
 
 namespace Mortar {
 
+// ============================================================
+// ResourceLoader loader-dispatch machinery
+// v1.6.1 MeshManager::LoadMeshInternal @0x00238644:
+//   Calls RegisterLoader<IVertexStream>, RegisterLoader<IIndexStream>,
+//   RegisterLoader<Model>, RegisterLoader<Mesh>, then Load<Model>(path).
+//
+// GetLoaders @0x0023c89c / RegisterLoader @0x0023de70 / Load<Model> @0x0023e80c
+// ============================================================
+
+// LoaderHelperBase: polymorphic loader dispatch node.
+// Binary LoaderHelper +0x00 = vptr, +0x04 = Delegate1<SmartPtr<T>,ResourceLoader&> (0x20 bytes),
+// +0x24 = bool owns-flag. Virtual slot 0 = LoadResource (pure).
+// v1.6.1 binary @ 0x0023c89c area (GetLoaders).
+class ResourceLoader;
+
+class LoaderHelperBase {
+public:
+    virtual ~LoaderHelperBase() {}
+    // v1.6.1 LoaderHelper::LoadResource: invokes delegate(rl), returns SmartPtr<ReferenceCounter>.
+    virtual SmartPtr<ReferenceCounter> LoadResource(ResourceLoader& rl) = 0;
+};
+
+// LoaderHelper<T>: concrete LoaderHelperBase that holds a free-function delegate
+// returning SmartPtr<T>. T must derive from ReferenceCounter.
+// Binary: struct LoaderHelper<T> { vptr, Delegate1<SmartPtr<T>,ResourceLoader&>, bool }.
+template<typename T>
+class LoaderHelper : public LoaderHelperBase {
+public:
+    // The delegate holds a free function: SmartPtr<T>(*)(ResourceLoader&)
+    Delegate1<SmartPtr<T>, ResourceLoader&> m_Delegate;
+
+    explicit LoaderHelper(Delegate1<SmartPtr<T>, ResourceLoader&> d)
+        : m_Delegate(d) {}
+
+    virtual SmartPtr<ReferenceCounter> LoadResource(ResourceLoader& rl) {
+        SmartPtr<T> result = m_Delegate(rl);
+        // Upcast: T derives from ReferenceCounter.
+        return SmartPtr<ReferenceCounter>(result.Get());
+    }
+};
+
+// ConstFreeAutoPtr<T>: owning pointer that deletes on Reset/dtor/re-assign.
+// Binary equivalent: used as the map value type in GetLoaders' s_loaders.
+// Non-copyable; default-constructible (null); assignable from raw T*.
+// std::map::operator[] default-constructs the value, then we assign via operator=(T*).
+template<typename T>
+class ConstFreeAutoPtr {
+public:
+    ConstFreeAutoPtr() : m_ptr(0) {}
+    ~ConstFreeAutoPtr() { delete m_ptr; }
+
+    void Reset() { delete m_ptr; m_ptr = 0; }
+
+    ConstFreeAutoPtr& operator=(T* p) {
+        if (m_ptr != p) {
+            delete m_ptr;
+            m_ptr = p;
+        }
+        return *this;
+    }
+
+    T*       Get()       { return m_ptr; }
+    const T* Get() const { return m_ptr; }
+    operator bool() const { return m_ptr != 0; }
+
+private:
+    // Non-copyable.
+    ConstFreeAutoPtr(const ConstFreeAutoPtr&);
+    ConstFreeAutoPtr& operator=(const ConstFreeAutoPtr&);
+
+    T* m_ptr;
+};
+
+// LoaderTypeId<T>: maps each registered type to a stable uint32_t ID.
+// DIFFERS: binary TypeInfo<T>::ID are runtime-counter-assigned (non-deterministic);
+//   port hand-assigns stable IDs via enum to avoid non-determinism.
+// v1.6.1 TypeInfo<T>::ID: monotonic counter assigned at static-init time.
+enum LoaderTypeEnum {
+    TYPEID_IVertexStream = 1,
+    TYPEID_IIndexStream  = 2,
+    TYPEID_Model         = 3,
+    TYPEID_Mesh          = 4
+};
+
+// Forward declarations for the four registered types.
+class IVertexStream;
+class IIndexStream;
+class Model;
+class Mesh;
+
+template<typename T> struct LoaderTypeId;
+template<> struct LoaderTypeId<IVertexStream> { static const uint32_t value = TYPEID_IVertexStream; };
+template<> struct LoaderTypeId<IIndexStream>  { static const uint32_t value = TYPEID_IIndexStream; };
+template<> struct LoaderTypeId<Model>         { static const uint32_t value = TYPEID_Model; };
+template<> struct LoaderTypeId<Mesh>          { static const uint32_t value = TYPEID_Mesh; };
+
+// ============================================================
 // ResourceLoader (68 bytes = 0x44)
 // Binary layout confirmed via ctor @ 0x002556B4 / path ctor @ 0x00255730:
 //   +0x00  int32_t               m_ReadCursor (sequential read cursor; zero-inited by ctor)
@@ -119,7 +219,37 @@ public:
     // ---- binary symbol map ----
     // Binary @ 0x002554A0 -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
     // ---- end binary symbol map ----
+
+    // ---- loader dispatch machinery ----
+    // v1.6.1 GetLoaders @0x0023c89c: returns the static s_loaders map.
+    // DIFFERS: binary guards GetLoaders with m_loadersCriticalSection (port single-threaded).
+    // DIFFERS: map value is LoaderHelperBase* (raw) rather than ConstFreeAutoPtr<LoaderHelperBase>
+    //   because std::map requires CopyConstructible values; ownership is managed manually
+    //   in RegisterLoader (delete old before inserting new).
+    static std::map<uint32_t, LoaderHelperBase*>& GetLoaders();
+
+    // v1.6.1 RegisterLoader @0x0023de70: installs a typed loader delegate.
+    // Explicitly instantiated in ResourceLoader.cpp for IVertexStream, IIndexStream, Model, Mesh.
+    template<typename T>
+    static void RegisterLoader(Delegate1<SmartPtr<T>, ResourceLoader&> d);
+
+    // v1.6.1 Load<T>(ResourceLoader&): dispatches through the registered helper.
+    // Explicitly instantiated in ResourceLoader.cpp for IVertexStream, IIndexStream, Model, Mesh.
+    template<typename T>
+    SmartPtr<T> Load();
+
+    // v1.6.1 Load<Model>(path) @0x0023e80c: opens a FileDataReader, builds a child
+    // ResourceLoader over PathGetParent(path), then dispatches Load<Model>().
+    SmartPtr<Model> LoadModel(const AsciiString& path);
 };
+
+// SmartPtrCast<U>: downcast SmartPtr<ReferenceCounter> to SmartPtr<U> via static_cast.
+// Used by ResourceLoader::Load<T>() to recover the typed pointer from the base result.
+// Binary equivalent: SmartPtr<T>::SetPtrCast pattern in the dispatch path.
+template<typename U>
+inline SmartPtr<U> SmartPtrCast(const SmartPtr<ReferenceCounter>& sp) {
+    return SmartPtr<U>(static_cast<U*>(sp.Get()));
+}
 
 } // namespace Mortar
 

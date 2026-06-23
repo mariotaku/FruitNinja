@@ -29,11 +29,10 @@ public:
 private:
     List<Mortar::SmartPtr<Model>> m_Models;
 
-    // v1.6.1 MeshManager::LoadMeshInternal @0x00228644 -- thin wrapper that registers
-    // IVertexStream/IIndexStream/Model/Mesh loaders + calls ResourceLoader::Load<Model>.
+    // v1.6.1 MeshManager::LoadMeshInternal @0x00238644 -- thin dispatcher that registers
+    // IVertexStream/IIndexStream/Model/Mesh loaders + calls ResourceLoader::Load<Model>(path).
     // Does NOT touch m_Models directly.
     // DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
-    //   Port inlines the full parse body here; binary delegates to ResourceLoader dispatch.
     Mortar::SmartPtr<Model> LoadMeshInternal(const AsciiString& path);
 
 public:
