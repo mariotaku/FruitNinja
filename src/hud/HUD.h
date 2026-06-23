@@ -1,15 +1,18 @@
 #ifndef FN_HUD_H
 #define FN_HUD_H
 
-// Analysed: 2026-04-30T00:00
-
 #include "HUDControl.h"
 #include "MissControl.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
 #include <list>
 
-// Matches original HUD class (0x24 bytes)
+// Binary sizeof(HUD) == 0x28 (operator new(0x28) @0x001ce208 v1.6.1 HUD::HUD).
+// Layout:
+//   +0x00: std::list<HUDControl*> controls  (8 bytes)
+//   +0x08: float scales[6]                  (24 bytes, all 1.0f at ctor)
+//   +0x20: float m_field20                  (ctor-UNINITIALIZED; TODO: v1.6.1 semantic unresolved)
+//   +0x24: float m_globalTimeScale          (1.0f sentinel written by HUD::Update each tick)
 class HUD {
 public:
     // +0x00: control list (8 bytes on this libstdc++ build)
@@ -20,10 +23,14 @@ public:
     //   scales[3..5] are preserved for size-fidelity; no HUD read site in scope.
     float scales[6];
 
-    // +0x20: slow-motion multiplier. 1.0 = normal speed, <1.0 = slow-mo.
-    // Read by TutorialControl::CanShowTute (binary @ 0x00162fb8).
-    // HUD::Update resets it to 1.0f at the start of each tick; the wave
-    // system writes values < 1.0 during last-fruit slow-motion.
+    // +0x20: ctor-uninitialized field; semantic not yet resolved.
+    // TODO: v1.6.1 HUD::HUD @0x001ce208 -- identity of this field unresolved.
+    float m_field20;
+
+    // +0x24: slow-motion multiplier. 1.0 = normal speed, <1.0 = slow-mo.
+    // Written 1.0f by HUD::Update each tick; SuperFruitControl/MainScreen write <1.0.
+    // Read by SuperFruitControl::Update, MainScreen::Update, MissControl, ScoreControl,
+    // TutorialControl (all via *(float*)(hud+0x24) in binary).
     float m_globalTimeScale;
 
     HUD();
@@ -41,5 +48,13 @@ public:
     void Skip();
     void SetToMultiplayerState();
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(HUD) == 0x28, "HUD size mismatch (v1.6.1 @0x001ce208)");
+static_assert(__builtin_offsetof(HUD, scales)           == 0x08, "HUD::scales offset");
+static_assert(__builtin_offsetof(HUD, m_field20)        == 0x20, "HUD::m_field20 offset");
+static_assert(__builtin_offsetof(HUD, m_globalTimeScale) == 0x24, "HUD::m_globalTimeScale offset");
+#endif
 
 #endif

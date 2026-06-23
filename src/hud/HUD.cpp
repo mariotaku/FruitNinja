@@ -8,10 +8,11 @@
 #include <list>
 
 // ASM-verified: 2026-05-24 binary @ 0x00144bb0 (re-analyst)
-// DIFFERS: binary doesn't init m_globalTimeScale in ctor (Update sets it each frame);
-//          port initialises to 1.0 here which is harmless and avoids reading
-//          an uninit float if any code peeks before the first Update tick.
-HUD::HUD() : m_globalTimeScale(1.0f) {
+// DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
+//          (m_globalTimeScale); m_field20 (+0x20) is left uninitialized by ctor.
+//          Port zero-inits m_field20 and pre-inits m_globalTimeScale here to
+//          avoid reading uninit floats before the first Update tick.
+HUD::HUD() : m_field20(0.0f), m_globalTimeScale(1.0f) {
     for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
 }
 
@@ -95,7 +96,7 @@ void HUD::Draw(int layerMask) {
 // ASM-verified: 2026-05-24 binary @ 0x00144d20 (re-analyst)
 void HUD::Update(float dt) {
     MissControl::PreUpdate(dt);              // global combo-decay pre-tick
-    m_globalTimeScale = 1.0f;               // binary stores 1.0 to +0x20 each tick
+    m_globalTimeScale = 1.0f;               // binary stores 1.0 to +0x24 each tick
 
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ) {
         HUDControl* ctrl = *it;

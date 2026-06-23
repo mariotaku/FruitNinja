@@ -56,27 +56,53 @@ enum AchievementType {
     ACHIEVEMENT_TYPE_BONUS            = 10, // UnlockBonusAchievement
 };
 
-// AchievementInfo — sizeof 0x1A0 (416 bytes)
-// Binary layout confirmed via RE §7.
+// AchievementInfo — sizeof 0xa8 (168 bytes) on ARM32.
+// Binary: operator new(0xa8) @0x00118198 v1.6.1 AchievementInfo ctor.
+// Layout (ARM32, 4-byte ptrs, short-enums ABI):
+//   0x00  char m_Description[64]         XML "description" attribute (GETSTRING key)
+//   0x40  char m_Name[64]                XML "name" attribute (also save-key string)
+//   0x80  uint32_t m_NameHash            StringHash(m_Name)
+//   0x84  SmartPtr<Texture> m_Texture    4 bytes (single T*)
+//   0x88  uint32_t m_NumberedStringHash  StringHash of XML <longText> child text (0 if absent)
+//   0x8c  int m_Total                    XML "value" attribute threshold
+//   0x90  int m_Score                    XML "points" attribute
+//   0x94  uint32_t m_TypeIndex           0xb (11) sentinel in ctor; 0..10 on valid entry
+//   0x98  uint32_t m_ModeBitmask         bit0=classic bit1=arcade bit2=zen bit3=attack
+//   0x9c  bool m_IsGameOver              requires_unsullied flag
+//   0x9d  char _pad[7]
+//   0xa4  SpecificOrder* m_SpecificOrder
 struct AchievementInfo {
-    char      m_Description[64];                       // 0x000 (XML "description", GETSTRING-localised)
-    char      m_Name[64];                              // 0x040 (XML "name" — also save-key string)
-    uint32_t  m_NameHash;                              // 0x080
-    Mortar::SmartPtr<Mortar::Texture> m_Texture;               // 0x084 (8 bytes)
-    char      m_LongText[256];                         // 0x088 (optional element child text)
-    int       m_Threshold;                             // 0x188 (XML "value" attr)
-    int       m_Points;                                // 0x18C (XML "points" attr)
-    int       m_TypeIndex;                             // 0x190 (-1 sentinel; 0..10)
-    uint32_t  m_ModeBitmask;                           // 0x194
-    bool      m_RequiresUnsullied;                     // 0x198
-    char      _pad[3];                                 // 0x199
-    SpecificOrder* m_SpecificOrder;                    // 0x19C
+    char      m_Description[64];         // 0x00
+    char      m_Name[64];                // 0x40
+    uint32_t  m_NameHash;                // 0x80
+    Mortar::SmartPtr<Mortar::Texture> m_Texture; // 0x84 (4 bytes on ARM32)
+    uint32_t  m_NumberedStringHash;      // 0x88 (StringHash of <longText> text; 0 if absent)
+    int       m_Total;                   // 0x8c (XML "value" attr)
+    int       m_Score;                   // 0x90 (XML "points" attr)
+    uint32_t  m_TypeIndex;               // 0x94 (0xb sentinel; 0..10)
+    uint32_t  m_ModeBitmask;             // 0x98
+    bool      m_IsGameOver;              // 0x9c (requires_unsullied flag)
+    char      _pad[7];                   // 0x9d
+    SpecificOrder* m_SpecificOrder;      // 0xa4
 
     AchievementInfo();
     ~AchievementInfo();
 };
-// Note: sizeof(AchievementInfo) == 0x1A0 on ARM32 binary.
-// x64 port differs due to pointer/string sizes; assert omitted.
+
+#if defined(__bada__)
+#include <cstddef>
+static_assert(sizeof(AchievementInfo) == 0xa8, "AchievementInfo size mismatch (v1.6.1 @0x00118198)");
+static_assert(__builtin_offsetof(AchievementInfo, m_Name)               == 0x40, "AchievementInfo::m_Name");
+static_assert(__builtin_offsetof(AchievementInfo, m_NameHash)           == 0x80, "AchievementInfo::m_NameHash");
+static_assert(__builtin_offsetof(AchievementInfo, m_Texture)            == 0x84, "AchievementInfo::m_Texture");
+static_assert(__builtin_offsetof(AchievementInfo, m_NumberedStringHash) == 0x88, "AchievementInfo::m_NumberedStringHash");
+static_assert(__builtin_offsetof(AchievementInfo, m_Total)              == 0x8c, "AchievementInfo::m_Total");
+static_assert(__builtin_offsetof(AchievementInfo, m_Score)              == 0x90, "AchievementInfo::m_Score");
+static_assert(__builtin_offsetof(AchievementInfo, m_TypeIndex)          == 0x94, "AchievementInfo::m_TypeIndex");
+static_assert(__builtin_offsetof(AchievementInfo, m_ModeBitmask)        == 0x98, "AchievementInfo::m_ModeBitmask");
+static_assert(__builtin_offsetof(AchievementInfo, m_IsGameOver)         == 0x9c, "AchievementInfo::m_IsGameOver");
+static_assert(__builtin_offsetof(AchievementInfo, m_SpecificOrder)      == 0xa4, "AchievementInfo::m_SpecificOrder");
+#endif
 
 class AchievementManager {
 public:

@@ -830,13 +830,13 @@ void MissControl::Draw(float* hudScaleRaw) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // Binary @ 0x001521ac: scale alpha by game_work.mHud->m_globalTimeScale (HUD + 0x20).
+    // Binary @ 0x001521ac: scale alpha by game_work.mHud->m_globalTimeScale (HUD + 0x24).
     // Binary has NO Game::GetInstance gate here -- reads game_work.mHud directly.
     // Skips multiplier when ts >= 1.0 (bpl branch @ 0x001521aa -> 0x001521d8).
     // ASM-verified: 2026-05-24 binary @ 0x001520ec (re-analyst)
     Colour tint = m_DrawColour;
     {
-        float ts = game_work.mHud->m_globalTimeScale;  // HUD + 0x20
+        float ts = game_work.mHud->m_globalTimeScale;  // HUD + 0x24
         if (ts < 1.0f) {
             int aScaled = (int)((float)tint.a * ts);
             if (aScaled < 1)          tint.a = 0;
