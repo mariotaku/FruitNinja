@@ -36,16 +36,22 @@ private:
     // +0x9C: lazy-initialized body BakedStringBox pointer (init NULL)
     // ASM-verified: v1.6.1 FruitFactClassicFactPage @ 0x00174e30
     Mortar::BakedStringBox* m_pBodyBox;    // @+0x9C
+
+#ifdef __bada__
+    friend struct FruitFactClassicFactPageLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(FruitFactClassicFactPage) == 0xA0,
-    "FruitFactClassicFactPage sizeof must be 0xA0");
-static_assert(offsetof(FruitFactClassicFactPage, m_pTitleBox) == 0x98,
-    "FruitFactClassicFactPage::m_pTitleBox must be at +0x98");
-static_assert(offsetof(FruitFactClassicFactPage, m_pBodyBox) == 0x9C,
-    "FruitFactClassicFactPage::m_pBodyBox must be at +0x9C");
+struct FruitFactClassicFactPageLayoutAssert {
+    static_assert(sizeof(FruitFactClassicFactPage) == 0xA0,
+        "FruitFactClassicFactPage sizeof must be 0xA0");
+    static_assert(offsetof(FruitFactClassicFactPage, m_pTitleBox) == 0x98,
+        "FruitFactClassicFactPage::m_pTitleBox must be at +0x98");
+    static_assert(offsetof(FruitFactClassicFactPage, m_pBodyBox) == 0x9C,
+        "FruitFactClassicFactPage::m_pBodyBox must be at +0x9C");
+};
 #endif
 
 #endif // FN_SCREENS_FRUIT_FACT_CLASSIC_FACT_PAGE_H

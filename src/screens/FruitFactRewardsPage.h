@@ -108,14 +108,20 @@ private:
 
     // +0xe8: float (=1.0f)
     float m_floatE8;   // @+0xe8
+
+#ifdef __bada__
+    friend struct FruitFactRewardsPageLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(FruitFactRewardsPage, m_pTitleBox) == 0xa0,
-    "FruitFactRewardsPage::m_pTitleBox must be at +0xa0");
-static_assert(sizeof(FruitFactRewardsPage) == 0xec,
-    "FruitFactRewardsPage size must be 0xec (236)");
+struct FruitFactRewardsPageLayoutAssert {
+    static_assert(offsetof(FruitFactRewardsPage, m_pTitleBox) == 0xa0,
+        "FruitFactRewardsPage::m_pTitleBox must be at +0xa0");
+    static_assert(sizeof(FruitFactRewardsPage) == 0xec,
+        "FruitFactRewardsPage size must be 0xec (236)");
+};
 #endif
 
 #endif // FN_SCREENS_FRUIT_FACT_REWARDS_PAGE_H
