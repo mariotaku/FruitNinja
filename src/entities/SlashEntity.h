@@ -9,7 +9,7 @@
 //   m_pLeftBuffer/m_pRightBuffer each hold (m_SplitPoint+2) = 162 QUADCUSTOMVERTEX records.
 //   Trail state is stored directly in the vertex buffers; no separate TrailPoint ring.
 //
-// Port-only SDL fields (m_FingerId, m_RawTouchPos, m_State) are appended
+// Port-only SDL fields (m_FingerId, m_RawTouchPos) are appended
 // AFTER offset 0x188 so they do not perturb the binary field offsets.
 //
 // Binary addresses (v1.6.1 ARM32):
@@ -299,20 +299,20 @@ private:
     int m_FingerId;
 
     // Raw touch position from most recent OnTouchActive.
+    // Port specific: caches SDL event coordinates; the binary reads from the Bada InputEvent pipeline.
     Vec3 m_RawTouchPos;
-
-    // Port-internal state machine: 0=off, 1=active, 2=fading.
-    uint8_t m_State;
 
 public:
     // Back-pointer to the fruit this slasher is aimed at.
     Fruit* m_pCurrentTarget;
+#endif // !defined(__bada__)
 
+public:
     // True while the blade has at least 2 trail points and is not idle.
-    bool IsBladeActive() const { return m_State != 0 && m_PointCount >= 2; }
+    // Driven by m_BladeActive (+0x140), the binary's uchar shift-register latch.
+    bool IsBladeActive() const { return m_BladeActive != 0 && m_PointCount >= 2; }
 
 private:
-#endif // !defined(__bada__)
 
     // -----------------------------------------------------------------------
     // Private methods

@@ -275,7 +275,6 @@ SlashEntity::SlashEntity()
 #if !defined(__bada__)
     , m_FingerId(0)
     , m_RawTouchPos(0, 0, 0)
-    , m_State(0)
     , m_pCurrentTarget(nullptr)
 #endif
 {
@@ -356,9 +355,6 @@ void SlashEntity::Release() {
 // ---------------------------------------------------------------------------
 void SlashEntity::Reset() {
     m_PointCount = 0;
-#if !defined(__bada__)
-    m_State      = 0;
-#endif
 
     // Binary @ 0x1e6688: re-arm the anchor sentinel on every touch-down
     // (do/while i!=3 writes (-65535,-65535,-65535) to +0x70/+0x7c/+0x88).
@@ -594,6 +590,7 @@ void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
 void SlashEntity::OnTouchActive(float x, float y) {
     Vec3 newPos(x, y, 0.0f);
 #if !defined(__bada__)
+    // Port specific: cache SDL touch coordinates for splat emission (lacks Bada InputEvent pipeline).
     m_RawTouchPos = newPos;
 #endif
 
@@ -607,17 +604,13 @@ void SlashEntity::OnTouchActive(float x, float y) {
 
     // Distance threshold: active blade uses MOVE_THRESH_ACTIVE^2, inactive uses MOVE_THRESH_INACTIVE^2.
     // Binary: (this[0x140] & bit0) ? 25.0 : 2500.0.
-#if !defined(__bada__)
-    const float thresh = (m_State != 0)
+    const float thresh = (m_BladeActive != 0)
         ? (MOVE_THRESH_ACTIVE   * MOVE_THRESH_ACTIVE)
         : (MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE);
-#else
-    const float thresh = MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE;
-#endif
 
 #ifdef FN_DEBUG_TOUCH
-    LOG_DEBUG("SLASH", "OnTouchActive[%d]: pos=(%.2f,%.2f) isSeed=%d distSq=%.2f thresh=%.2f state=%d",
-              m_FingerId, x, y, (int)isSeed, distSq, thresh, m_State);
+    LOG_DEBUG("SLASH", "OnTouchActive[%d]: pos=(%.2f,%.2f) isSeed=%d distSq=%.2f thresh=%.2f bladeActive=%d",
+              m_FingerId, x, y, (int)isSeed, distSq, thresh, (int)m_BladeActive);
 #endif
 
     if (distSq < thresh && !isSeed) {
@@ -630,8 +623,6 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // trail -> a visibly disconnected segment) AND re-advances the disco mod
         // colour -- splitting one swipe into multiple differently-coloured pieces.
         // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
-        // (m_State is already 1 here -- the stroke is mid-flight, so no m_State
-        //  write is needed; only the binary's m_BladeActive re-arm matters.)
         if (m_PointCount > 0) {
             m_BladeActive |= 1;
         }
@@ -649,9 +640,6 @@ void SlashEntity::OnTouchActive(float x, float y) {
         m_HeadPos     = newPos;
         m_PrevHeadPos = newPos;
         m_PointCount  = 0;
-#if !defined(__bada__)
-        m_State       = 1;
-#endif
         m_BladeDir    = Vec3(1.0f, 0.0f, 0.0f); // non-zero seed so AddPoint guard passes
         // Binary computes seed direction from DAT_001ea41c (global ref vec) - tail.
         // Using (1,0,0) matches binary's "non-degenerate first direction" intent.
@@ -704,9 +692,6 @@ void SlashEntity::OnTouchActive(float x, float y) {
              m_PointCount);
 #endif
 
-#if !defined(__bada__)
-    m_State = 1;
-#endif
     // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
     // ASM-verified: 2026-06-16 binary @ 0x1ea3d0 (asm-inspector)
@@ -714,12 +699,13 @@ void SlashEntity::OnTouchActive(float x, float y) {
 }
 
 void SlashEntity::OnTouchReleased() {
-#if !defined(__bada__)
-    if (m_State == 1) m_State = 2;
-#endif
+    // Port specific: binary has no OnTouchReleased -- the blade latch (m_BladeActive)
+    // decays naturally via DrawSlice (1->2->0) when dispatch stops delivering touches.
+    // This body only clears the trail emitter on the SDL FINGERUP edge to prevent the
+    // emitter streaming at a frozen lift position (PollHeldFingers edge case).
 #ifdef FN_DEBUG_TOUCH
-    LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended state=%d pointCount=%d",
-             m_FingerId, (int)m_State, m_PointCount);
+    LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended bladeActive=%d pointCount=%d",
+             m_FingerId, (int)m_BladeActive, m_PointCount);
 #endif
     // DIFFERS: original defers trail-emitter teardown to the next TouchDown
     // via the !bladeActive branch in Update; port clears on the release edge
@@ -971,11 +957,7 @@ void SlashEntity::UpdatePoints(float dt) {
     // else -> FruitCamera::TranslatePos(m_HeadPos) + TranslatePos(m_TailPos),
     //   midPt = (headT + tailT) * 0.5, write ColLine endpoints, compute SegLenSq.
     // -----------------------------------------------------------------------
-#if !defined(__bada__)
-    const bool bladeActive = (m_State != 0);
-#else
     const bool bladeActive = (m_BladeActive != 0);
-#endif
     if (m_PointCount < 4 || !bladeActive || m_TrailShiftA == -1 || m_TrailShiftB == -1) {
         m_TrailShiftA = -1;
         m_TrailShiftB = -1;
@@ -1390,7 +1372,7 @@ void SlashEntity::Update(float dt) {
 
     // =====================================================================
     // 2. TRAIL EMITTER MANAGEMENT
-    //    Binary gate: m_BladeActive != 0 (not m_State).
+    //    Binary gate: m_BladeActive != 0.
     // =====================================================================
     {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
@@ -1405,6 +1387,7 @@ void SlashEntity::Update(float dt) {
             }
             if (m_TrailEmitter) {
 #if !defined(__bada__)
+                // Port specific: binary reads live touch from InputEvent; port caches in m_RawTouchPos.
                 m_TrailEmitter->m_Pos = m_RawTouchPos;
 #endif
             }
@@ -1418,15 +1401,6 @@ void SlashEntity::Update(float dt) {
     // 3. UPDATEPOINTS (uses localDt, not dt)
     // =====================================================================
     UpdatePoints(localDt);
-
-    // =====================================================================
-    // 4. STATE MACHINE COLLAPSE
-    // =====================================================================
-#if !defined(__bada__)
-    if (m_State == 2 && m_PointCount == 0) {
-        m_State = 0;
-    }
-#endif
 
     // =====================================================================
     // 5. BLADE VELOCITY -> ITEMMANAGER SWISH LOOP VOLUME
@@ -1896,6 +1870,8 @@ void SlashEntity::Update(float dt) {
                    0.0f);
             // DIFFERS: binary param3 passes incidental register-reuse bits, not a designed flag. Pass false.
 #if !defined(__bada__)
+            // Port specific: binary uses FruitCamera::TranslatePos for splat position;
+            // port caches last SDL touch in m_RawTouchPos as an approximation.
             s->MakeSplat(m_RawTouchPos, v, false, m_SliceFruitType);
 #else
             s->MakeSplat(Vec3(0,0,0), v, false, m_SliceFruitType);
@@ -1911,11 +1887,7 @@ void SlashEntity::Update(float dt) {
 // ---------------------------------------------------------------------------
 bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
                                      Vec3& outBladeVel) const {
-#if !defined(__bada__)
-    const bool bladeInactive = (m_State == 0);
-#else
     const bool bladeInactive = (m_BladeActive == 0);
-#endif
     if (bladeInactive || m_PointCount < 2) {
         outBladeVel = Vec3(0, 0, 0);
         return false;
@@ -2253,21 +2225,14 @@ void SlashEntity::ResetModScales() {
 // Binary order: (1) ClearEmitter if non-null; (2) if m_BladeActive==0 return;
 // (3) m_PointCount=0; (4) if ColourType==2 UpdateModColour(&m_HighlightColour,1.0f);
 // (5) AddEmitter(g_TrailHash) if g_DirectionalFlag+g_TrailHash.
-// Port uses m_State instead of m_BladeActive -- semantically equivalent.
 void SlashEntity::ColoursChanged() {
     if (m_TrailEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
-#if !defined(__bada__)
-    if (m_State == 0) {
-        return;
-    }
-#else
     if (m_BladeActive == 0) {
         return;
     }
-#endif
     m_PointCount = 0;
 
     if (g_ColourType == 2) {
