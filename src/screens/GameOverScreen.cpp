@@ -763,8 +763,14 @@ void GameOverScreen::CreateRetryButton() {
         globalCenter,
         Mortar::Delegate0<void>()
     );
-    // TODO: v1.6.1 0x00185f98 (CreateRetryButton) -- SetText(GetString(0x3b5), colA, colB, 42.0, 12.0, true, true)
-    //   port MenuButton::SetText only has 4 args; pM_Colours[4],[5] not mapped in port
+    // v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98:
+    // SetText(GETSTRING(0x3b5), pM_Colours[4], pM_Colours[5], 42.0, 12.0, true, true)
+    // pM_Colours[4]=(147,238,255) pM_Colours[5]=(45,144,245) -- cyan/blue gradient
+    m_pRetryBtn->SetText(
+        Mortar::GETSTRING_CAST_0((LocalizedString)0x3b5),
+        Colour(147, 238, 255, 255),
+        Colour(45,  144, 245, 255),
+        42.0f, 12.0f, true, true);
 
     game_work.mHud->AddControl(m_pRetryBtn, false);
     m_pRetryBtn->m_RemoveCallback =
@@ -816,8 +822,14 @@ void GameOverScreen::CreateQuitButton() {
         globalCenter,
         Mortar::Delegate0<void>()
     );
-    // TODO: v1.6.1 0x00186220 (CreateQuitButton) -- SetText(GetString(0x35f), colC, colD, 42.0, 12.0, true, true)
-    //   port MenuButton::SetText only has 4 args; pM_Colours[0],[1] not mapped in port
+    // v1.6.1 GameOverScreen::CreateQuitButton @0x00186220:
+    // SetText(GETSTRING(0x35f), pM_Colours[0], pM_Colours[1], 42.0, 12.0, true, true)
+    // pM_Colours[0]=(249,62,19) pM_Colours[1]=(195,15,0) -- orange/red gradient
+    m_pQuitBtn->SetText(
+        Mortar::GETSTRING_CAST_0(LSTR_QUIT),
+        Colour(249, 62,  19, 255),
+        Colour(195, 15,  0,  255),
+        42.0f, 12.0f, true, true);
 
     // Copy retry btn m_RestScale region if retry exists
     if (m_pRetryBtn) {

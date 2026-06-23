@@ -849,9 +849,9 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-        // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0014b818..0x0014b82c (re-analyst).
-        pPlayButton->m_HitInsetY  = -50.0f;
-        pPlayButton->m_HitInsetX  = -50.0f;
+        // TODO: v1.6.1 MainScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value (marker @0x0014b818 is stale)
+        pPlayButton->m_HitInsetX   = -50.0f;
+        pPlayButton->m_HitInsetY   = -50.0f;
         // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
         pPlayButton->m_ShakeScale.x = 0.5f;
         pPlayButton->m_GrowInTimer = 0.25f;
@@ -878,6 +878,7 @@ void MainScreen::CreatePlayDojo() {
         }
         pDojoButton->m_RestScale   = pDojoButton->m_RestScale * 1.05f;
         pDojoButton->m_ShakeScale.x = 0.5f;
+        // TODO: v1.6.1 MainScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value (marker @0x0014b818 is stale)
         pDojoButton->m_HitInsetX    = -50.0f;
         pDojoButton->m_HitInsetY    = -50.0f;
         pDojoButton->m_GrowInTimer  = 0.25f;

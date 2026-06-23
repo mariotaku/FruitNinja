@@ -54,7 +54,7 @@
 #include <cstdint>
 #include <list>
 
-namespace Mortar { class Entity; }
+namespace Mortar { class Entity; class BakedStringTTF; }
 class Fruit;
 
 // MenuButtonAddOn -- child sprite metadata for AddPeice/UpdatePeices.
@@ -145,27 +145,24 @@ public:
     // std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11 sentinel-only).
     std::list<MenuButtonAddOn> m_AddOns;   // +0x10C..+0x113 (ARM32)
 
-    // +0x114..+0x11B: gap between end of m_AddOns and m_pLabelFg.
-    // Spec says +0x110 is Vec3 m_DrawOffset (Draw adds to pos for label placement);
-    // the Vec3 overlaps the list on ARM32 (list = 8B, Vec3 would start inside it).
-    // Port lays this out as raw pad; Draw will reference +0x110/+0x114/+0x118 as needed.
-    // TODO: 0x0019c2e4 -- confirm m_DrawOffset exact offset vs std::list size
-    uint8_t         _pad114[8];            // +0x114..+0x11B
+    // +0x114: label anchor offset added to GetAdjustedPos() in Draw.
+    // v1.6.1 MenuButton::Draw @0x0019c764: anchor = GetWorldPos() + m_DrawOffset.
+    Vec3            m_DrawOffset;          // +0x114..+0x11F
 
-    // +0x11C: BakedString* label foreground. LIVE in v1.6.1 Draw when !=0.
-    void*           m_pLabelFg;            // +0x11C
+    // +0x120: white FG label (gradient-tinted). BakedStringTTF weight=0.
+    // v1.6.1 MenuButton::SetText @0x0019b0ac.
+    Mortar::BakedStringTTF* m_pLabelFg;   // +0x120
 
-    // +0x120: BakedString* extra label
-    void*           m_pLabelExtra;         // +0x120
+    // +0x124: inner glow/shadow label. BakedStringTTF weight=2.
+    // v1.6.1 MenuButton::SetInnerGlow @0x0019afbc.
+    Mortar::BakedStringTTF* m_pLabelShadow; // +0x124
 
-    // +0x124: label shadow/curve data
-    void*           m_pLabelShadow;        // +0x124
+    // +0x128: outer glow label. BakedStringTTF weight=5, black.
+    // v1.6.1 MenuButton::SetText @0x0019b0ac (wantGlow path).
+    Mortar::BakedStringTTF* m_pLabelGlow;  // +0x128
 
-    // +0x128: player colour tint (Colour = 4 bytes)
-    Colour          m_PlayerColour;        // +0x128
-
-    // +0x12C: player index tint (Colour = 4 bytes; ends at +0x12F)
-    Colour          m_PlayerIndexTint;     // +0x12C
+    // +0x12C: un-RE'd 4-byte field (binary offset confirmed by m_field130@+0x130).
+    uint32_t        _field12C;             // +0x12C
 
     // +0x130: binary byte written by Init @0x0019b994 (*(uchar*)&m_field130 = 0);
     // read by TutorialControl::ResetTutePos/@ButtonPressedAtPos for flip direction.
@@ -225,16 +222,24 @@ public:
     // +0x160: label extra alpha (Draw second-pass gate >0). Init=0.
     float           m_LabelExtraAlpha;     // +0x160
 
-    // +0x164: hit-area X inset (default 5.0)
-    float           m_HitInsetX;           // +0x164
+    // +0x164: arc radius for label layout (SetText stores here; TutorialControl::ResetTutePos
+    // and ButtonPressedAtPos read it as the arc radius for tute-arrow half-width).
+    // v1.6.1 MenuButton::SetText @0x0019b0ac stores radius here.
+    float           m_LabelRadius;         // +0x164
 
-    // +0x168: hit-area Y inset (default 5.0)
-    float           m_HitInsetY;           // +0x168
+    // +0x168: hit-area X inset (default 5.0; Init @0x0019b994).
+    // hit-test: left  = cx - 0.5*restX - HitInsetX
+    //           right = cx + 0.5*restX + HitInsetX
+    // v1.6.1 MenuButton::Update hit-test block @0x0019ad94 reads +0x168.
+    float           m_HitInsetX;           // +0x168
 
-    // +0x16C: reserved float (Init=DAT)
-    float           m_fieldReserved;       // +0x16C
+    // +0x16C: hit-area Y inset (default 5.0; Init @0x0019b994).
+    // hit-test: bottom = cy - 0.5*restY - HitInsetY
+    //           top    = cy + 0.5*restY + HitInsetY
+    // v1.6.1 MenuButton::Update hit-test block @0x0019ad94 reads +0x16C.
+    float           m_HitInsetY;           // +0x16C
 
-    // +0x170: new-bounce phase (Draw gate). Init=0.
+    // +0x170: new-bounce phase (Draw gate). Init=100.0 (DAT@0x19baf8=0x42c80000).
     float           m_NewBouncePhase;      // +0x170
 
     // +0x174: shake timer countdown (Update)
@@ -286,8 +291,15 @@ public:
     // v1.6.1 MenuButton::SetLoadingSymbol @0x0019a560: arms sparkle timer (+0xF8)
     void SetLoadingSymbol(bool show);
 
-    // v1.6.1 MenuButton::SetText @0x0019d4e0: builds curved-text BakedString pair. Zero call sites in shipped binary.
-    void SetText(const char* text, Colour fg, Colour shadow, float radius);
+    // v1.6.1 MenuButton::SetText @0x0019b0ac: builds curved BakedStringTTF label triple.
+    // text=string, gradTop/gradBottom=FG gradient, radius=arc (0=flat), fontScale=size,
+    // wantGlow=outer glow, wantInnerGlow=inner glow/shadow.
+    void SetText(const char* text, Colour gradTop, Colour gradBottom,
+                 float radius = 42.0f, float fontScale = 12.0f,
+                 bool wantGlow = true, bool wantInnerGlow = true);
+
+    // v1.6.1 MenuButton::SetInnerGlow @0x0019afbc: (re)builds m_pLabelShadow.
+    void SetInnerGlow(const char* text, Colour colour, float radius, float fontScale, float weight);
 
     // v1.6.1 MenuButton::Remove @0x0019d148: release fruit piece with upward fling
     void Remove();
@@ -343,6 +355,10 @@ static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)     == 0xF4,  "Men
 static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)      == 0xF8,  "MenuButton m_SparkleTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC,  "MenuButton m_NewIndicatorTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_BaseScale)         == 0x100, "MenuButton m_BaseScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_DrawOffset)         == 0x114, "MenuButton m_DrawOffset offset");
+static_assert(__builtin_offsetof(MenuButton, m_pLabelFg)           == 0x120, "MenuButton m_pLabelFg offset");
+static_assert(__builtin_offsetof(MenuButton, m_pLabelShadow)       == 0x124, "MenuButton m_pLabelShadow offset");
+static_assert(__builtin_offsetof(MenuButton, m_pLabelGlow)         == 0x128, "MenuButton m_pLabelGlow offset");
 static_assert(__builtin_offsetof(MenuButton, m_field130)          == 0x130, "MenuButton m_field130 offset");
 static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)       == 0x134, "MenuButton m_GrowInTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_RestScale)         == 0x13C, "MenuButton m_RestScale offset");
@@ -350,8 +366,10 @@ static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)       == 0x148, "Men
 static_assert(__builtin_offsetof(MenuButton, m_bAcceptsTouch)     == 0x149, "MenuButton m_bAcceptsTouch offset");
 static_assert(__builtin_offsetof(MenuButton, m_pTrackedFruit)     == 0x14C, "MenuButton m_pTrackedFruit offset");
 static_assert(__builtin_offsetof(MenuButton, m_ShakeScale)        == 0x154, "MenuButton m_ShakeScale offset");
-static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)         == 0x164, "MenuButton m_HitInsetX offset");
-static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)         == 0x168, "MenuButton m_HitInsetY offset");
+static_assert(__builtin_offsetof(MenuButton, m_LabelRadius)        == 0x164, "MenuButton m_LabelRadius offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)         == 0x168, "MenuButton m_HitInsetX offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)         == 0x16C, "MenuButton m_HitInsetY offset");
+static_assert(__builtin_offsetof(MenuButton, m_NewBouncePhase)    == 0x170, "MenuButton m_NewBouncePhase offset");
 static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)        == 0x174, "MenuButton m_ShakeTimer offset");
 static_assert(sizeof(MenuButton) == 0x178, "MenuButton sizeof mismatch");
 #endif

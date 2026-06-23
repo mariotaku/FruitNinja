@@ -123,8 +123,9 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         // Copy button position
         pos = btn->pos;
 
-        // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
-        float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
+        // halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0 - 10.0
+        // v1.6.1 TutorialControl::ResetTutePos @0x00162f2c reads MenuButton+0x164 (m_LabelRadius).
+        float halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0f - 10.0f;
         // Binary @ 0x00162f44: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
@@ -156,8 +157,9 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
     if (btn != nullptr) {
         pos = btn->pos;
 
-        // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
-        float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
+        // halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0 - 10.0
+        // v1.6.1 TutorialControl::ButtonPressedAtPos @0x00162e58 reads MenuButton+0x164 (m_LabelRadius).
+        float halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0f - 10.0f;
         // Binary @ 0x00162ea6: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
