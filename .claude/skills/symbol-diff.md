@@ -14,7 +14,7 @@ Produce a binary-vs-port symbol coverage report by cross-compiling every `src/**
 - To validate that a Bada-platform/defunct/phantom class is correctly excluded.
 
 ## Pre-requisites
-- `fnverify` Docker image built: `bash tools/asm-verify/setup.sh` (one-time).
+- `fnverify-bada` Docker image built: `bash tools/asm-verify/setup.sh` (one-time).
 - The port's MSVC `build/` exists with `tinyxml2.h` available at `build/host/_deps/tinyxml2-src/tinyxml2.h`.
 
 ## Steps
@@ -23,25 +23,25 @@ Produce a binary-vs-port symbol coverage report by cross-compiling every `src/**
 
 ```bash
 mkdir -p tmp/symbol-diff
-docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c '
-arm-none-eabi-nm /work/FruitNinjaBada/Bin/FruitNinja.exe \
+docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify-bada -c '
+arm-samsung-nucleuseabi-nm /work/FruitNinjaBada/Bin/FruitNinja.exe \
   | awk "\$2 ~ /^[Tt]\$/ {print \$3}" \
   | sort -u > /work/tmp/symbol-diff/binary_symbols_mangled.txt
 
-arm-none-eabi-nm --demangle /work/FruitNinjaBada/Bin/FruitNinja.exe \
+arm-samsung-nucleuseabi-nm --demangle /work/FruitNinjaBada/Bin/FruitNinja.exe \
   | awk "\$2 ~ /^[Tt]\$/ { \$1=\"\"; \$2=\"\"; sub(/^  */,\"\"); print }" \
   | sort -u > /work/tmp/symbol-diff/binary_symbols_demangled.txt
 '
 ```
 
-Expected: ~3305 mangled / ~2916 demangled.
+Expected: ~5000-5500 mangled / ~4500-5000 demangled (Samsung Sourcery 4.4-157 resolves more symbols than the old toolchain).
 
 ### 2. Cross-compile every src/.cpp and aggregate port symbols
 
 This is the load-bearing step. It stages source onto an ext4 path inside the container (drvfs's i386 inode-overflow blocks the toolchain from stating /work directly), applies known C++11→C++03 sed transforms, compiles with the same flags as the asm-verifier (`-fshort-enums -fshort-wchar` for ABI parity), and harvests text symbols.
 
 ```bash
-docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c '
+docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify-bada -c '
 mkdir -p /tmp/portsrc/src /tmp/portsrc/cross-headers /tmp/portsrc/tinyxml2
 rsync -aq /work/src/ /tmp/portsrc/src/
 rsync -aq /work/tools/asm-verify/cross-headers/ /tmp/portsrc/cross-headers/
@@ -55,7 +55,7 @@ find /tmp/portsrc/src -name "*.h" -o -name "*.cpp" | xargs sed -i \
     -e "s|using \([A-Za-z_][A-Za-z_0-9]*\) = \(.*\);|typedef \2 \1;|g"
 
 mkdir -p /tmp/portsyms
-CXX=arm-none-eabi-g++
+CXX=arm-samsung-nucleuseabi-g++
 CXXFLAGS="-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar"
 CXXFLAGS="$CXXFLAGS -std=gnu++0x -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables"
 CXXFLAGS="$CXXFLAGS -fpermissive -include /tmp/portsrc/cross-headers/fn-cxx11-shims.h"
@@ -91,15 +91,15 @@ for cpp in $(find src -name "*.cpp" \
 done
 echo "compiled OK: $ok, failed: $fail"
 
-ls /tmp/portsyms/*.o | xargs arm-none-eabi-nm 2>/dev/null \
+ls /tmp/portsyms/*.o | xargs arm-samsung-nucleuseabi-nm 2>/dev/null \
   | awk "\$2 ~ /^[Tt]\$/ {print \$3}" | grep -v "^\." | sort -u \
   > /work/tmp/symbol-diff/port_full_mangled.txt
-arm-none-eabi-c++filt < /work/tmp/symbol-diff/port_full_mangled.txt | sort -u \
+arm-samsung-nucleuseabi-c++filt < /work/tmp/symbol-diff/port_full_mangled.txt | sort -u \
   > /work/tmp/symbol-diff/port_full_demangled.txt
 
 comm -23 /work/tmp/symbol-diff/binary_symbols_mangled.txt /work/tmp/symbol-diff/port_full_mangled.txt \
   > /work/tmp/symbol-diff/missing_full_mangled.txt
-arm-none-eabi-c++filt < /work/tmp/symbol-diff/missing_full_mangled.txt | sort -u \
+arm-samsung-nucleuseabi-c++filt < /work/tmp/symbol-diff/missing_full_mangled.txt | sort -u \
   > /work/tmp/symbol-diff/missing_full_demangled.txt
 cp /tmp/compile_failures.txt /work/tmp/symbol-diff/compile_failures.txt
 '

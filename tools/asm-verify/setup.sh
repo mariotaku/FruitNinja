@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMAGE="${ASM_VERIFY_IMAGE:-fnverify}"
+IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
 
 if ! command -v docker > /dev/null; then
     echo "ERROR: docker not on PATH. Install Docker Desktop (or rancher-desktop)." >&2
@@ -23,7 +23,7 @@ docker build -t "$IMAGE" "$SCRIPT_DIR"
 
 echo
 echo "Image ready. Test with:"
-echo "  docker run --rm $IMAGE -c 'arm-none-eabi-g++ --version | head -1'"
+echo "  docker run --rm $IMAGE -c 'arm-samsung-nucleuseabi-g++ --version | head -1'"
 echo
 echo "Then drive verification via:"
 echo "  bash tools/asm-verify/run.sh"
