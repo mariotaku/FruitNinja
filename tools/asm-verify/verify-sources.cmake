@@ -67,6 +67,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Utf8StringIterator.cpp"
     "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/LinkedHeap.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringTable.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringHash.cpp"
 
@@ -80,6 +81,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/entities/EntityFactory.cpp"
     "${_PROJECT_ROOT}/src/entities/Fruit.cpp"
     "${_PROJECT_ROOT}/src/entities/FruitInfo.cpp"
+    "${_PROJECT_ROOT}/src/entities/Jiblet.cpp"
     "${_PROJECT_ROOT}/src/entities/SlashEntity.cpp"
     "${_PROJECT_ROOT}/src/entities/SplatEntity.cpp"
     "${_PROJECT_ROOT}/src/entities/SuperFruitControl.cpp"
@@ -89,6 +91,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/BombHit.cpp"
     "${_PROJECT_ROOT}/src/game/Bonus.cpp"
     "${_PROJECT_ROOT}/src/game/BonusManager.cpp"
+    "${_PROJECT_ROOT}/src/game/ExplodyFruitModifier.cpp"
     "${_PROJECT_ROOT}/src/game/FrontendTask.cpp"
     "${_PROJECT_ROOT}/src/game/FruitCamera.cpp"
     "${_PROJECT_ROOT}/src/game/FruitSaveData.cpp"
