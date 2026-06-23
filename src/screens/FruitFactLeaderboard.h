@@ -54,16 +54,22 @@ private:
     FNHighscore m_Row0;         // +0xC8
     FNHighscore m_Row1;         // +0x11C
     FNHighscore m_Row2;         // +0x170
+
+#ifdef __bada__
+    friend struct FruitFactLeaderboardLayoutAssert;
+#endif
 };
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(offsetof(FruitFactLeaderboard, m_field98)    == 0x98,  "FruitFactLeaderboard::m_field98");
-static_assert(offsetof(FruitFactLeaderboard, m_ModeSelector) == 0xB8, "FruitFactLeaderboard::m_ModeSelector");
-static_assert(offsetof(FruitFactLeaderboard, m_DisplayMode)  == 0xBC, "FruitFactLeaderboard::m_DisplayMode");
-static_assert(offsetof(FruitFactLeaderboard, m_Row0)         == 0xC8, "FruitFactLeaderboard::m_Row0");
-static_assert(offsetof(FruitFactLeaderboard, m_Row1)         == 0x11C,"FruitFactLeaderboard::m_Row1");
-static_assert(offsetof(FruitFactLeaderboard, m_Row2)         == 0x170,"FruitFactLeaderboard::m_Row2");
+struct FruitFactLeaderboardLayoutAssert {
+    static_assert(offsetof(FruitFactLeaderboard, m_field98)    == 0x98,  "FruitFactLeaderboard::m_field98");
+    static_assert(offsetof(FruitFactLeaderboard, m_ModeSelector) == 0xB8, "FruitFactLeaderboard::m_ModeSelector");
+    static_assert(offsetof(FruitFactLeaderboard, m_DisplayMode)  == 0xBC, "FruitFactLeaderboard::m_DisplayMode");
+    static_assert(offsetof(FruitFactLeaderboard, m_Row0)         == 0xC8, "FruitFactLeaderboard::m_Row0");
+    static_assert(offsetof(FruitFactLeaderboard, m_Row1)         == 0x11C,"FruitFactLeaderboard::m_Row1");
+    static_assert(offsetof(FruitFactLeaderboard, m_Row2)         == 0x170,"FruitFactLeaderboard::m_Row2");
+};
 #endif
 
 #endif // FN_SCREENS_FRUIT_FACT_LEADERBOARD_H

@@ -7,7 +7,9 @@
 #
 # Excluded by convention:
 #   *SDL.cpp, *Posix.cpp, *Win32.cpp — platform glue (no binary counterpart)
-#   FreeType/TTF files — port-only additions
+#   FreeType/TTF files — port-only additions (FontCacheObjectTTF.cpp, FontTTFRegistry.cpp)
+#   PathCI.cpp — POSIX dirent utility, port-only (no binary counterpart)
+#   mainEmscripten.cpp — Emscripten platform entry point
 #   DebugFlags.cpp — guarded by #ifndef __bada__
 #
 # This file is the single source of truth; the old duplicated list in
@@ -150,6 +152,10 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/screens/BaseScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/BonusScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/DojoScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/FruitFactClassicFactPage.cpp"
+    "${_PROJECT_ROOT}/src/screens/FruitFactLeaderboard.cpp"
+    "${_PROJECT_ROOT}/src/screens/FruitFactRewardsPage.cpp"
+    "${_PROJECT_ROOT}/src/screens/FruitFactZenPage.cpp"
     "${_PROJECT_ROOT}/src/screens/GameModeScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/GameOverScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/MainScreen.cpp"
