@@ -1,17 +1,14 @@
 //
-// DojoScreen — secondary menu shown after tapping Dojo button.
-// See DojoScreen.h for binary refs and docs/screens/dojo.md.
+// DojoScreen -- secondary menu shown after tapping Dojo button.
+// See DojoScreen.h for binary refs.
 //
-// Analysed: 2026-04-17T01:00
-//
-// Defunct: 4 binary symbols compiled into FruitNinja.exe but with ZERO
-// callsite xrefs -- leftover .o code from other Halfbrick build variants
-// (iPhone/iPad with Twitter/Facebook + More-Games buttons on the Dojo menu).
-// Not ported.
-//   SwitchCallback         @ 0x00137694
-//   MoreGamesCallback      @ 0x0013769c
-//   TwitterFacbookButtons  @ 0x00137738
-//   SwitchNetworkButton    @ 0x001379b0
+// Defunct: 4 binary symbols with ZERO callsite xrefs -- leftover .o code from
+// other Halfbrick build variants (iPhone/iPad Twitter/Facebook + More-Games).
+// Not ported. v1.5.x addresses below; TODO: re-verify v1.6.1 addresses.
+//   SwitchCallback         @ 0x00137694  (stale v1.5.x)
+//   MoreGamesCallback      @ 0x0013769c  (stale v1.5.x)
+//   TwitterFacbookButtons  @ 0x00137738  (stale v1.5.x)
+//   SwitchNetworkButton    @ 0x001379b0  (stale v1.5.x)
 
 #include "DojoScreen.h"
 #include "debug/Logger.h"
@@ -74,27 +71,33 @@ Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 
 // ===================================================================
-// Matches DojoScreen::DojoScreen @ 0x00137b90
+// Matches DojoScreen::DojoScreen @ 0x0016bad8
 // ===================================================================
 DojoScreen::DojoScreen(Game& g)
-    : m_pPlayButton(nullptr)      // field_0x94
-    , m_pShopButton(nullptr)      // field_0x98
-    , m_pAboutButton(nullptr)     // field_0x9c
-    , m_pAboutScreen(nullptr)     // field_0xa0
+    : m_pBackButton(nullptr)    // +0x94
+    , m_pShopButton(nullptr)    // +0x98
+    , m_pAboutButton(nullptr)   // +0x9c
+    , m_pBSButton0(nullptr)     // +0xa0 Defunct: Facebook social share
+    , m_pBSButton1(nullptr)     // +0xa4 Defunct: Twitter social share
+    , m_pButton4(nullptr)       // +0xa8
+    , m_ResetValue(0)           // +0xac
+    , m_TransitionDelay(0.0f)   // +0xb0
+    , m_pVersionText(nullptr)   // +0xb4
+    , m_pAboutScreen(nullptr)   // port-only tail
     , game(g)
 {
-    LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x00137b90");
+    LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x0016bad8");
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
     m_bNoDestructor = 0;
 }
 
 // ===================================================================
-// Matches DojoScreen::~DojoScreen @ 0x00137cf4
+// Matches DojoScreen::~DojoScreen (v1.6.1 dtor -- addr TODO: re-verify from 0x0016c7f8 region)
 // Binary: set vtable, call Release(), call ~BaseScreen()
 // ===================================================================
 DojoScreen::~DojoScreen() {
-    LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "destroy", "DojoScreen::~DojoScreen @ 0x00137cf4");
+    LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "destroy", "DojoScreen::~DojoScreen");
     Release();
     // ~BaseScreen() called implicitly by ~HUDControl3d chain
 }
@@ -134,30 +137,28 @@ void DojoScreen::Init() {
     m_Active = 1;
 }
 
-// Matches DojoScreen::Reset @ 0x0013767c (vtable slot +0x10).
+// Matches DojoScreen::Reset @ 0x0016b568 (vtable slot +0x10).
 // Binary writes only the BaseScreen::m_State (+0x90) field to 0 — used
 // when AboutScreen completes its fade-out and wants DojoScreen to
 // re-fade-in. Init() is more eager (also zeros alpha + sets active);
 // at the AboutScreen-state-2 callsite the alpha is already <0.001 and
 // m_Active was never cleared, so Init's extras are no-ops there.
 void DojoScreen::Reset() {
-    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0013767c");
+    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0016b568");
     m_State = 0;
 }
 
 // ===================================================================
 // HUDControl::Release override
-// Matches the Release() called from ~DojoScreen @ 0x00137cf4
-// Binary Release @ 0x0016c7f8: calls BaseScreen::RemoveButtons() then cleans up 4
-// pointer fields at offsets +0xa0..+0xac (m_pAboutScreen + 3 unknown pointers).
-// The port's three button fields at +0x94..+0x9c are NOT touched in the binary's
-// Release — they are handled through other mechanisms (base destructor, HUD).
+// Matches DojoScreen::Release @ 0x0016c7f8
+// Binary: calls BaseScreen::RemoveButtons() then cleans up fields at +0xa0..+0xb4
+// (BSButton0/1, Button4, ResetValue, TransitionDelay, VersionText).
+// The +0x94..+0x9c button fields are NOT touched here -- handled by HUD/base dtor.
 // ===================================================================
 void DojoScreen::Release() {
     BaseScreen::RemoveButtons();
 
-    // Binary: cleans fields at +0xa0..+0xac (each: set flag byte +0x33, null ptr).
-    // Port only has m_pAboutScreen at +0xa0; the +0xa4..+0xac fields are unported.
+    // Binary cleans up fields +0xa0..+0xb4; port-only m_pAboutScreen also cleaned.
     if (m_pAboutScreen) {
         m_pAboutScreen->SetPendingRemoval();
         m_pAboutScreen = nullptr;
@@ -175,7 +176,7 @@ void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
 }
 
 // ===================================================================
-// Matches DojoScreen::Update @ 0x00138414 (247 lines)
+// Matches DojoScreen::Update @ 0x0016b6a4
 // ===================================================================
 void DojoScreen::Update(float dt) {
     (void)dt;
@@ -194,26 +195,26 @@ void DojoScreen::Update(float dt) {
         if (m_TransitionAlpha > ALPHA_BUTTON_CREATE) {
 
             // --- field_0x94: Back/Play button (back_icon.tex) ---
-            if (m_pPlayButton == nullptr) {
+            if (m_pBackButton == nullptr) {
                 // Binary: fruit type from **(int**)(GOT + 0x7060) — this
                 // is the bomb threshold global, equal to FruitInfo_GetCount().
                 // MenuButton treats fruitType >= count as a BOMB spawn.
                 const int bombFruitType = FruitInfo_GetCount();
-                m_pPlayButton = new MenuButton();
-                m_pPlayButton->m_Texture = (s_TexBackIcon);
-                m_pPlayButton->Init(POS_BACK_BUTTON,
+                m_pBackButton = new MenuButton();
+                m_pBackButton->m_Texture = (s_TexBackIcon);
+                m_pBackButton->Init(POS_BACK_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
                 // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
-                m_pPlayButton->m_bRespondsToBackKey = 1;
-                m_pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                game_work.mHud->AddControl(m_pPlayButton);
-                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pPlayButton);
+                m_pBackButton->m_bRespondsToBackKey = 1;
+                m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+                game_work.mHud->AddControl(m_pBackButton);
+                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
                 // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
-                m_pPlayButton->m_RestScale = m_pPlayButton->m_RestScale * BACK_SCALE;
-                if (m_pPlayButton->m_pTrackedFruit) {
-                    m_pPlayButton->m_pTrackedFruit->scale =
-                        m_pPlayButton->m_pTrackedFruit->scale * BACK_SCALE;
+                m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
+                if (m_pBackButton->m_pTrackedFruit) {
+                    m_pBackButton->m_pTrackedFruit->scale =
+                        m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
                 }
             }
 
@@ -297,7 +298,7 @@ void DojoScreen::Update(float dt) {
 
         // Fade complete — null all button pointers and reset alpha
         int prevState = m_State;
-        m_pPlayButton  = nullptr;  // field_0x94
+        m_pBackButton  = nullptr;  // field_0x94
         m_TransitionAlpha = 0.0f;
         m_pShopButton  = nullptr;  // button (field_0x98)
         m_pAboutButton = nullptr;  // field_0x9c (stored as int 0 in binary)
@@ -362,7 +363,7 @@ void DojoScreen::Update(float dt) {
 }
 
 // ===================================================================
-// Matches DojoScreen::Draw @ 0x0013822c
+// Matches DojoScreen::Draw @ 0x0016a004
 // ===================================================================
 void DojoScreen::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
@@ -409,13 +410,13 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
-    //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pTrackedFruit
+    //    Binary @ 0x001389f4: indirects through m_pBackButton->m_pTrackedFruit
     //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (aliases
     //    Bomb::m_bMovement / Fruit+0x80 unknown field), then writes
     //    Vec3(r1+5, -r2, 0) to piece->vel. Port omits the byte write since
     //    Fruit+0x80 has no reader and the Bomb write is to a different class.
-    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
-        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
+    if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
+        Fruit* piece = m_pBackButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
@@ -432,11 +433,11 @@ void DojoScreen::ShopCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
-    // Binary @ 0x00137864: m_pPlayButton->m_pTrackedFruit (+0x134), set
+    // Binary @ 0x00137864: m_pBackButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
-    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
-        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
+    if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
+        Fruit* piece = m_pBackButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
@@ -453,11 +454,11 @@ void DojoScreen::AboutCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 
-    // Binary @ 0x001378e0: m_pPlayButton->m_pTrackedFruit (+0x134), set
+    // Binary @ 0x001378e0: m_pBackButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
-    if (m_pPlayButton && m_pPlayButton->m_pTrackedFruit) {
-        Fruit* piece = m_pPlayButton->m_pTrackedFruit;
+    if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
+        Fruit* piece = m_pBackButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
@@ -473,9 +474,9 @@ void DojoScreen::AboutCallback() {
 void DojoScreen::MoreGamesCallback() {}
 // Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary @ 0x????
 void DojoScreen::QuitCallback() {}
-// Defunct: network-switch button -- no-op stub; binary @ 0x00137694
+// Defunct: network-switch button -- no-op stub; v1.5.x @ 0x00137694 (TODO: re-verify v1.6.1)
 void DojoScreen::SwitchCallback() {}
-// Defunct: network-switch ScreenButton frame helper -- no-op stub; binary @ 0x001379b0
+// Defunct: network-switch ScreenButton frame helper -- no-op stub; v1.5.x @ 0x001379b0 (TODO: re-verify v1.6.1)
 void DojoScreen::SwitchNetworkButton(MenuButton*, float, ScreenButton&) {}
-// Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; binary @ 0x00137738
+// Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; v1.5.x @ 0x00137738 (TODO: re-verify v1.6.1)
 void DojoScreen::TwitterFacbookButtons(MenuButton*, float, ScreenButton&) {}

@@ -39,16 +39,16 @@ static Mortar::SmartPtr<Mortar::Texture> s_BannerExtra2;
 
 AchievementInfo::AchievementInfo()
     : m_NameHash(0)
-    , m_Threshold(0)
-    , m_Points(0)
-    , m_TypeIndex(-1)
+    , m_NumberedStringHash(0)
+    , m_Total(0)
+    , m_Score(0)
+    , m_TypeIndex(0xb)  // binary ctor sentinel = 11 (v1.6.1 AchievementInfo @0x00118198)
     , m_ModeBitmask(0)
-    , m_RequiresUnsullied(false)
+    , m_IsGameOver(false)
     , m_SpecificOrder(nullptr)
 {
     m_Description[0] = '\0';
     m_Name[0]        = '\0';
-    m_LongText[0]    = '\0';
 }
 
 AchievementInfo::~AchievementInfo() {
@@ -131,25 +131,24 @@ void AchievementManager::LoadAchievementInfo() {
             info->m_Description[sizeof(info->m_Description) - 1] = '\0';
         }
 
-        // long text (optional element child text)
+        // numbered string hash (optional <longText> child element — binary stores StringHash)
         TiXmlElement longElem = e.FirstChildElement("longText");
         if (longElem) {
             const char* txt = longElem.GetText();
             if (txt) {
-                strncpy(info->m_LongText, txt, sizeof(info->m_LongText) - 1);
-                info->m_LongText[sizeof(info->m_LongText) - 1] = '\0';
+                info->m_NumberedStringHash = StringHash(txt);
             }
         }
 
         // value (threshold)
-        e.QueryIntAttribute("value", &info->m_Threshold);
+        e.QueryIntAttribute("value", &info->m_Total);
 
         // points
-        e.QueryIntAttribute("points", &info->m_Points);
+        e.QueryIntAttribute("points", &info->m_Score);
 
         // type index
         const char* typeAttr = e.Attribute("type");
-        info->m_TypeIndex = -1;
+        info->m_TypeIndex = 0xb;  // sentinel (binary ctor default)
         if (typeAttr) {
             if      (strcmp(typeAttr, "total")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_TOTAL;
             else if (strcmp(typeAttr, "score")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SCORE;
@@ -176,9 +175,9 @@ void AchievementManager::LoadAchievementInfo() {
             if (strstr(modeAttr, "attack"))   info->m_ModeBitmask |= (1u << 3);
         }
 
-        // requires_unsullied flag
+        // game-over / unsullied flag
         const char* unsullied = e.Attribute("requires_unsullied");
-        info->m_RequiresUnsullied = (unsullied && strcmp(unsullied, "true") == 0);
+        info->m_IsGameOver = (unsullied && strcmp(unsullied, "true") == 0);
 
         // texture
         const char* texAttr = e.Attribute("texture");
@@ -206,9 +205,9 @@ void AchievementManager::LoadAchievementInfo() {
         //     secondary key = autoincrement counter
         //   all others (0,3,6,7,9):
         //     secondary key = threshold value
-        if (info->m_TypeIndex >= 0 && info->m_TypeIndex <= 10) {
+        if (info->m_TypeIndex <= 10) {  // uint32_t; 0xb = sentinel (no type), 0..10 = valid
             uint32_t secondaryKey = 0;
-            int ti = info->m_TypeIndex;
+            int ti = (int)info->m_TypeIndex;
             if (ti == ACHIEVEMENT_TYPE_SPECIFIC ||
                 ti == ACHIEVEMENT_TYPE_CONSECUTIVE ||
                 ti == ACHIEVEMENT_TYPE_COMBO_STAR  ||
@@ -221,7 +220,7 @@ void AchievementManager::LoadAchievementInfo() {
             {
                 secondaryKey = (uint32_t)autoKey++;
             } else {
-                secondaryKey = (uint32_t)info->m_Threshold;
+                secondaryKey = (uint32_t)info->m_Total;
             }
             m_ByType[ti][secondaryKey] = info;
         }
@@ -308,7 +307,7 @@ int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
         ? NotificationControl::Type_Numeric
         : NotificationControl::Type_Named;
     NotificationControl* ctrl = new NotificationControl(
-        a->m_Name, a->m_Points, a->m_Texture, notifType);
+        a->m_Name, a->m_Score, a->m_Texture, notifType);
     ctrl->Init();
     if (hud) hud->AddControl(ctrl, false);
     return 1;
@@ -348,7 +347,7 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Threshold <= total && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= total && ModeBitmaskAllows(info->m_ModeBitmask)) {
             if (QueAchievement(info, it)) ++unlocked;
             // it was pre-advanced by QueAchievement; don't ++it
         } else {
@@ -369,7 +368,7 @@ int AchievementManager::UnlockScoreAchievement(int score) {
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Threshold <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
             if (QueAchievement(info, it)) ++unlocked;
         } else {
             ++it;
@@ -383,13 +382,13 @@ int AchievementManager::UnlockScoreAchievement(int score) {
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
-    // Binary: same as UnlockScoreAchievement but also checks m_RequiresUnsullied
+    // Binary: same as UnlockScoreAchievement but also checks m_IsGameOver (requires_unsullied)
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE_UNSULLIED];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Threshold <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
             if (QueAchievement(info, it)) ++unlocked;
         } else {
             ++it;
@@ -410,7 +409,7 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Threshold <= score &&
+        if (info->m_Total <= score &&
             score > hiScore / 2 &&
             ModeBitmaskAllows(info->m_ModeBitmask))
         {
@@ -449,7 +448,7 @@ int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsign
     if (it == bucket.end()) return 0;
     AchievementInfo* info = it->second;
     if (!info) return 0;
-    if ((uint32_t)info->m_Threshold > count) return 0;
+    if ((uint32_t)info->m_Total > count) return 0;
     if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
     return QueAchievement(info, it);
 }
@@ -461,7 +460,7 @@ int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsign
 int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash) {
     // Binary @ 0x00108c40: two bucket lookups.
     // Bucket CONSECUTIVE (5): keyed by fruitTypeHash; threshold <= count + mode gate.
-    // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Threshold == count).
+    // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Total == count).
     int awarded = 0;
     {
         std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_CONSECUTIVE];
@@ -469,7 +468,7 @@ int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fru
         if (it != bucket.end()) {
             AchievementInfo* info = it->second;
             if (info &&
-                info->m_Threshold <= count &&
+                info->m_Total <= count &&
                 ModeBitmaskAllows(info->m_ModeBitmask))
             {
                 if (QueAchievement(info, it)) awarded = 1;
@@ -502,7 +501,7 @@ int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeH
     if (it == bucket.end()) return 0;
     AchievementInfo* info = it->second;
     if (!info) return 0;
-    if (info->m_Threshold > combo) return 0;
+    if (info->m_Total > combo) return 0;
     if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
     return QueAchievement(info, it);
 }
@@ -551,7 +550,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
 
-        if (info->m_Threshold > comboLen || !ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total > comboLen || !ModeBitmaskAllows(info->m_ModeBitmask)) {
             ++it;
             continue;
         }
@@ -563,7 +562,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
             for (int fi = 0; fi < comboLen; ++fi) {
                 if ((uint32_t)fruitArr[fi] == firstHash) ++matches;
             }
-            if (matches < info->m_Threshold) {
+            if (matches < info->m_Total) {
                 ++it;
                 continue;
             }
@@ -577,7 +576,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         //   running, reject. Only when the Arcade/Zen-timed countdown has hit 0.0f
         //   does the achievement become eligible.
         // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
-        if (info->m_RequiresUnsullied) {
+        if (info->m_IsGameOver) {
             Game* g = Game::GetInstance();
             if (game_work.mCountDown == NULL) { ++it; continue; }
             if (comboLen <= 2)        { ++it; continue; }

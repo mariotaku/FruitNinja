@@ -2,28 +2,31 @@
 #define FN_DOJO_SCREEN_H
 
 //
-// DojoScreen : HUDControl3d (BaseScreen subclass, size ~0xa4)
+// DojoScreen : HUDControl3d (BaseScreen subclass, binary sizeof 0xb8)
 //
-// Binary refs (docs/screens/dojo.md + docs/screens/common-patterns.md):
-//   Constructor 0x00137b90
-//   Update      0x00138414 (247 lines)
-//   Draw        0x0013822c
+// Binary refs (v1.6.1):
+//   Constructor 0x0016bad8
+//   Update      0x0016b6a4
+//   Draw        0x0016a004
+//   Init        0x00169e80
+//   Release     0x0016c7f8
+//   Reset       0x0016b568
 //
 // Secondary menu shown after tapping the Dojo button on MainScreen.
-// Has three sub-buttons: Play (return to game), Shop (blade/power-up
-// shop — stubbed for port), About (credits).
+// Has sub-buttons: Back (return to game), Shop (blade/power-up shop),
+// About (credits), plus defunct social-share buttons (BSButton).
 //
 // State machine:
-//   0 = transition-in: lerp m_TransitionAlpha → 1.0 (step 0.25),
-//       create 3 buttons, → state 1
+//   0 = transition-in: lerp m_TransitionAlpha -> 1.0 (step 0.25),
+//       create buttons, -> state 1
 //   1 = idle
-//   2 = fade out, → ShopScreen  (port: stub, falls through to 6)
-//   3 = fade out, → AboutScreen
-//   6 = fade out, pending removal → MainScreen STATE_SLIDE_IN
+//   2 = fade out, -> ShopScreen  (port: stub, falls through to 6)
+//   3 = fade out, -> AboutScreen
+//   6 = fade out, pending removal -> MainScreen STATE_SLIDE_IN
 //
 // Port specific:
 //   - No sensei 3D animation (binary has an animated 3D model).
-//   - Shop button stub — returns to MainScreen instead of opening ShopScreen.
+//   - Shop button stub -- returns to MainScreen instead of opening ShopScreen.
 //   - No "new item" badge (needs ItemManager).
 //
 
@@ -57,7 +60,7 @@ public:
     // back to STATE_SLIDE_IN.
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
-    // Matches DojoScreen::ButtonDeleted @ 0x00137684.
+    // Matches DojoScreen::ButtonDeleted @ 0x0016bad8 region.
     // Remove callback for the shop button (field_0x98). Binary only
     // installs this on the shop button, not play or about.
     void ButtonDeleted(HUDControl* ctrl);
@@ -66,18 +69,24 @@ public:
     void AboutScreenRemoved(HUDControl*) { m_pAboutScreen = nullptr; }
 
 private:
-    // +0x94..+0x9c: sub-button pointers (lazy-created in Update state 0)
-    MenuButton* m_pPlayButton;
-    MenuButton* m_pShopButton;
-    MenuButton* m_pAboutButton;
+    // Binary own fields (BaseScreen base = 0x94; own fields 0x94..0xb4):
+    MenuButton* m_pBackButton;   // +0x94 (binary name; port used m_pPlayButton)
+    MenuButton* m_pShopButton;   // +0x98
+    MenuButton* m_pAboutButton;  // +0x9c
+    // Defunct: Twitter/Facebook social share -- stub; v1.6.1 DojoScreen ctor @0x0016bad8
+    void*       m_pBSButton0;    // +0xa0 (BSButton* Facebook social share)
+    // Defunct: Twitter/Facebook social share -- stub; v1.6.1 DojoScreen ctor @0x0016bad8
+    void*       m_pBSButton1;    // +0xa4 (BSButton* Twitter social share)
+    void*       m_pButton4;      // +0xa8 (HUDControl*)
+    int         m_ResetValue;    // +0xac
+    float       m_TransitionDelay; // +0xb0
+    void*       m_pVersionText;  // +0xb4 (BakedStringBox*)
 
-    // Child AboutScreen when state==3 triggers. nullptr when no about
-    // is shown. Port keeps a weak ptr so the parent can poll
-    // m_bPendingRemoval and react.
+    // Port-only tail (beyond binary 0xb8 boundary, does not shift binary fields):
+    // Child AboutScreen when state==3 triggers. nullptr when not shown.
     AboutScreen* m_pAboutScreen;
 
-    // Port specific: binary accesses Game via GOT; port stores a reference here,
-    // declared after all binary-faithful fields so it does not displace them.
+    // Port specific: binary accesses Game via GOT; port stores a reference here.
     Game& game;
 
     // Binary stores textures at GOT-relative globals, not per-instance.
@@ -95,42 +104,43 @@ private:
     void ShopCallback();
     void AboutCallback();
 
-#ifdef __bada__
-    friend struct DojoScreenLayoutAssert;
-#endif
-
 public:
-    // Defunct: more-games/online dashboard upsell (NetworkManager::LaunchDashboard) -- no-op stub; binary @ 0x0013769c
+    // Defunct: more-games/online dashboard upsell -- no-op stub; v1.5.x @ 0x0013769c (TODO: re-verify v1.6.1)
     void MoreGamesCallback();
     // Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary symbol exists
     // with ZERO Bada call-site xrefs (iPhone/iPad-variant leftover .o).
     //
-    // NOTE on 0x001389f4: that address is NOT a distinct QuitCallback. It is the
-    // click delegate the binary installs on the Play button (field +0x94) in
-    // DojoScreen::Update @ 0x001384a8 (delegate fn-ptr = 0x001389f4). Its logic
-    // -- SFXPlay("menu-bomb",1,1); m_State=6; set m_pPlayButton->m_pTrackedFruit
-    // visible (+0x80=1) and fling it Vec3(rand[0,5)+5, -rand[0,5), 0); then
-    // TutorialControl::ResetTutePos(0) -- is already ported faithfully as
-    // DojoScreen::PlayCallback() (DojoScreen.cpp). z velocity = DAT_00138acc = 0.0f.
+    // NOTE: the Back button click delegate (Play -> state 6) is implemented as
+    // DojoScreen::PlayCallback() in DojoScreen.cpp (not a separate QuitCallback).
     void QuitCallback();
-    // Defunct: online network-provider selection (AskUserToChoosePreferredNetwork) -- no-op stub; binary @ 0x00137694
+    // Defunct: online network-provider selection -- no-op stub; v1.5.x @ 0x00137694 (TODO: re-verify v1.6.1)
     void SwitchCallback();
-    // Defunct: online network-provider button (NetworkManager::GetPreferredNetworkProvider texture swap) -- no-op stub; binary @ 0x001379b0
+    // Defunct: online network-provider button -- no-op stub; v1.5.x @ 0x001379b0 (TODO: re-verify v1.6.1)
     void SwitchNetworkButton(MenuButton*, float, ScreenButton&);
-    // Defunct: Twitter/Facebook social-share button layout/animation -- no-op stub; binary @ 0x00137738
+    // Defunct: Twitter/Facebook social-share button layout/animation -- no-op stub; v1.5.x @ 0x00137738 (TODO: re-verify v1.6.1)
     void TwitterFacbookButtons(MenuButton*, float, ScreenButton&);
+
+#ifdef __bada__
+    friend struct DojoScreenLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
 #include <cstddef>
+// Binary sizeof(DojoScreen) == 0xb8 (v1.6.1 DojoScreen ctor @0x0016bad8).
+// Port-only tail (m_pAboutScreen, game) pushes sizeof past 0xb8, so we assert
+// offsetof on the binary-faithful prefix only (same pattern as MainScreen).
+// Friend struct: GCC 4.4 rejects offsetof on private members from namespace scope.
 struct DojoScreenLayoutAssert {
-    static_assert(offsetof(DojoScreen, m_pPlayButton)  == 0x94, "m_pPlayButton offset");
-    static_assert(offsetof(DojoScreen, m_pShopButton)  == 0x98, "m_pShopButton offset");
-    static_assert(offsetof(DojoScreen, m_pAboutButton) == 0x9c, "m_pAboutButton offset");
-    static_assert(offsetof(DojoScreen, m_pAboutScreen) == 0xa0, "m_pAboutScreen offset");
-    // TODO: sizeof(DojoScreen) == 0xb8 per binary (v1.6.1 @0x1974f4), but port gives 0xa8
-    // (BaseScreen(0x94) + 4 pointers(16) + Game& ref(4) = 0xa8 vs binary 0xb8 = 16 bytes short).
-    // Missing binary fields from +0xa4 to +0xb7 need to be RE'd. Filed as layout bug.
+static_assert(__builtin_offsetof(DojoScreen, m_pBackButton)      == 0x94, "m_pBackButton offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pShopButton)      == 0x98, "m_pShopButton offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pAboutButton)     == 0x9c, "m_pAboutButton offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pBSButton0)       == 0xa0, "m_pBSButton0 offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pBSButton1)       == 0xa4, "m_pBSButton1 offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pButton4)         == 0xa8, "m_pButton4 offset");
+static_assert(__builtin_offsetof(DojoScreen, m_ResetValue)       == 0xac, "m_ResetValue offset");
+static_assert(__builtin_offsetof(DojoScreen, m_TransitionDelay)  == 0xb0, "m_TransitionDelay offset");
+static_assert(__builtin_offsetof(DojoScreen, m_pVersionText)     == 0xb4, "m_pVersionText offset");
 };
 #endif
 
