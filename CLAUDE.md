@@ -3,7 +3,7 @@
 ## Port Goal
 - **Fidelity first** — match the original game as closely as possible
 - Preserve all gameplay mechanics, physics, scoring, timing, and visual behavior
-- Preserve same-screen multiplayer (local split-touch)
+- Preserve simultaneous multi-finger slicing (per-finger blades, up to 8 fingers) — this *is* the binary's "multiplayer". NOTE: v1.6.1 has **no** same-screen split-screen mode to port; its networked MP was **online P2P (defunct, stubbed)**, and `m_PlayerIdx`∈{0,1,2} is the P2P/EntityTracker partition, NOT a screen-half split (confirmed by the input-path audit, #158).
 - All UI screens and widgets should be ported, not just core gameplay
 
 ## Defunct features — stub, never skip
