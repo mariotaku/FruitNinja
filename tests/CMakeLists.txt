@@ -239,6 +239,37 @@ endif()
 add_test(NAME dojoscreen_bomb_scale COMMAND test_dojoscreen_bomb_scale)
 set_tests_properties(dojoscreen_bomb_scale PROPERTIES TIMEOUT 60)
 
+# Menu-fruit round-trip regression test (#130). Drives the REAL game path:
+# MainScreen idle -> Play-button slice -> GameModeScreen -> entity pool
+# exercise -> GameOverScreen STATE_QUIT_WAIT -> DoQuitToMenu -> fresh
+# MainScreen. Asserts both Play and Dojo fruits are healthy (non-frozen,
+# spinning) after the round-trip. Proves the #130 symptom is NOT in the
+# state-machine or entity-pool recycling on the faithful port path.
+add_executable(test_menu_fruit_roundtrip test_menu_fruit_roundtrip.cpp)
+target_link_libraries(test_menu_fruit_roundtrip PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_menu_fruit_roundtrip PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_menu_fruit_roundtrip PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_menu_fruit_roundtrip POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_menu_fruit_roundtrip>)
+    endif()
+endif()
+add_test(NAME menu_fruit_roundtrip COMMAND test_menu_fruit_roundtrip)
+set_tests_properties(menu_fruit_roundtrip PROPERTIES TIMEOUT 120)
+
 # BONUS_PHASE stall regression test. Boots Arcade-mode GameOverScreen in
 # STATE_BONUS_PHASE and ticks 600 frames (10s). Asserts state advances
 # to STATE_MAIN_DISPLAY within the timeout. Currently FAILS (stall bug).
