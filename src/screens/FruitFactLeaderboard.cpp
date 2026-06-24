@@ -1,5 +1,5 @@
 // FruitFactLeaderboard -- v1.6.1 leaderboard fact page.
-// Binary refs: ctor 0x00176980.
+// Binary refs: ctor 0x00176980, dtor 0x001764b8, Update 0x00177abc.
 
 #include "FruitFactLeaderboard.h"
 #include "hud/FruitFactPageControl.h"
@@ -21,27 +21,28 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
     , m_pExtraLabel(0)
     , m_pScoreListHud(0)
     , m_pActionButton(0)
-    , m_RefreshCount(0.0f)
-    , m_FlashFlag(0)
-    , m_ConnectTimer(0.0f)
-    , m_Mode(param2 ? 3u : 0u)
+    , m_RefreshCount(0)
+    , m_RefreshTimer(0.0f)
+    , m_ConnectFlag(0)
+    , m_FlashTimer(0.0f)
+    , m_Mode(param2 ? 3 : 0)
     , m_State(1)
     , m_Row0()
     , m_Row1()
     , m_Row2()
 {
-    _padB1[0] = 0; _padB1[1] = 0; _padB1[2] = 0;
-    _padC0[0] = 0; _padC0[1] = 0; _padC0[2] = 0; _padC0[3] = 0;
-    _padC0[4] = 0; _padC0[5] = 0; _padC0[6] = 0; _padC0[7] = 0;
+    _padB5[0] = 0; _padB5[1] = 0; _padB5[2] = 0;
+    _gapC4[0] = 0; _gapC4[1] = 0; _gapC4[2] = 0; _gapC4[3] = 0;
+    _gapC4[4] = 0; _gapC4[5] = 0; _gapC4[6] = 0; _gapC4[7] = 0;
 
     LoadContent();
 
     // Post-LoadContent zero-fills for own state fields (binary @ 0x00176980)
-    m_pScoreListHud = 0;    // binary: str 0 @0xA4 (after FNHighscore ctors via LoadContent)
-    m_ConnectTimer = 0.0f;  // binary: strb 0 @0xB4
-    m_FlashFlag = 0;        // binary: vstr 0.0 @0xB0
-    m_RefreshCount = 0.0f;  // binary: str 0 @0xAC
-    m_pActionButton = 0;    // binary: str 0 @0xA8
+    m_pScoreListHud  = 0;     // binary: str 0 @0xA4 (after FNHighscore ctors via LoadContent)
+    m_ConnectFlag    = 0;     // binary: strb 0 @0xB4
+    m_RefreshTimer   = 0.0f;  // binary: vstr 0.0 @0xB0
+    m_RefreshCount   = 0;     // binary: str 0 @0xAC
+    m_pActionButton  = 0;     // binary: str 0 @0xA8
 
     // Title: LSTR 0x7b if global (param2), else LSTR 0x363 (friends)
     const char* title = Mortar::GETSTRING(
@@ -52,7 +53,7 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
 
     // Divider 0: pos.x=-7.5, size=Vec3(276,53,0), field[+0xE8]=0.48
     {
-        // TODO: 0x00176d30 -- resolve divider0 texture name from GOT string pool
+        // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider0 texture name from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
         Vec3 pos(-7.5f, 0.0f, 0.0f);
@@ -65,7 +66,7 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
 
     // Divider 1: pos.x=15.0, field[+0xE8]=0.5
     {
-        // TODO: 0x00176d30 -- resolve divider1 texture name + size vec from GOT string pool
+        // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider1 texture name + size vec from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
         Vec3 pos(15.0f, 0.0f, 0.0f);
@@ -78,7 +79,7 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
 
     // Divider 2: pos.x=80.0, field[+0xE8]=0.5
     {
-        // TODO: 0x00176d30 -- resolve divider2 texture name + size vec from GOT string pool
+        // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider2 texture name + size vec from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
         Vec3 pos(80.0f, 0.0f, 0.0f);
@@ -90,12 +91,12 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
     }
 
     // Clear stale scores for (diff, mode). Difficulty byte from settings global +4.
-    // TODO: 0x00176980 -- read difficulty byte from settings global offset +4; resolve global addr
+    // TODO: v1.6.1 0x00176980 (FruitFactLeaderboard::FruitFactLeaderboard) -- read difficulty byte from settings global offset +4; resolve global addr
     {
         uint8_t diff = 0;
         if (diff != 2) {
             LeaderboardManager::GetInstance()->ClearScores(
-                static_cast<int>(diff), static_cast<int>(m_Mode));
+                static_cast<int>(diff), m_Mode);
         }
     }
 
@@ -114,8 +115,13 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
 FruitFactLeaderboard::~FruitFactLeaderboard() {
 }
 
-// TODO: 0x00176980 -- row-population Update: populate m_Row0/1/2 via FNHighscore param-ctor
-//   @ 0x00137e48, called via PTR_FNHighscore_002d6560; part of the display-refresh method.
+// TODO: v1.6.1 0x00177abc (FruitFactLeaderboard::Update) -- full Update body:
+//   m_FlashTimer accumulates dt (vldr/vmla/clamp/vstr @0x177ac0)
+//   m_State jump-table switch @0x17801c writes 2/3/4
+//   m_ConnectFlag ldrb check @0x1782bc
+//   m_Mode ldr @0x1782f8 feeds ClearScores
+//   m_RefreshTimer accumulates dt, clamp vs 30.0 @0x178394
+//   m_RefreshCount ldr/add#1/str @0x178524
 void FruitFactLeaderboard::Update(float dt) {
     FruitFactPage::Update(dt);
 }
