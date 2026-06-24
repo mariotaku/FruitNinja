@@ -7,7 +7,7 @@ if(NOT FN_ASM_VERIFY)
     )
 endif()
 
-# Port specific: RenderInterp.cpp is platform-side (excluded from asm-verify
+# RenderInterp.cpp is platform-side (excluded from asm-verify
 # automatically because the entire fruit-ninja-game target is excluded when
 # FN_ASM_VERIFY is ON).  We additionally gate on FN_RENDER_INTERP so the
 # source list reflects the compile-time choice (avoids compiling a file that

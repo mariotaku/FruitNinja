@@ -1,4 +1,4 @@
-// Port specific: render interpolation implementation.
+// render interpolation implementation.
 // Entire file is compiled only when FN_RENDER_INTERP is on (non-asm-verify builds).
 
 #include "platform/RenderInterp.h"

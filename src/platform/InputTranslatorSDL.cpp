@@ -2,7 +2,7 @@
 // InputTranslatorSDL -- converts SDL events to Mortar InputEvents AND feeds
 // Mortar::Touch directly (poll-based binary path).
 //
-// Port specific: binary is a strict 1:1 input->update->draw tick.
+// binary is a strict 1:1 input->update->draw tick.
 // This file splits touch dispatch into three phases:
 //   DrainSDLEvent()      -- accumulate per-frame (no dispatch); called from pollInput()
 //   ReconcileTouch()     -- after drain, query SDL live-finger set for #154;
@@ -115,13 +115,13 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
-// Port specific: legacy wrapper -- no-op. Dispatch is now via DispatchForSimTick().
+// legacy wrapper -- no-op. Dispatch is now via DispatchForSimTick().
 // Retained so any callers that invoke BeginFrame() are not broken.
 void InputTranslatorSDL::BeginFrame() {
     // No-op: the drain/flush split moves all dispatch to DispatchForSimTick().
 }
 
-// Port specific: legacy wrapper -- calls DrainSDLEvent internally.
+// legacy wrapper -- calls DrainSDLEvent internally.
 // Retained for scene_slash / scene_slash_blade and any other direct callers
 // that forward SDL events without going through Game::pollInput.
 // Scene code that calls this should also call DispatchForSimTick() once per tick.
@@ -129,7 +129,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     DrainSDLEvent(ev, window);
 }
 
-// Port specific: synthesize TouchUp for every held finger and clear all channels.
+// synthesize TouchUp for every held finger and clear all channels.
 // Called when the SDL window loses focus or is minimized so no blade stays armed
 // across a background/restore cycle (#162).
 void InputTranslatorSDL::ReleaseAllFingers() {
@@ -162,7 +162,7 @@ void InputTranslatorSDL::ReleaseAllFingers() {
     memset(pendingEdge, 0, sizeof(pendingEdge));
 }
 
-// Port specific: drain one SDL event into per-channel pending state.
+// drain one SDL event into per-channel pending state.
 // TOUCH events (FINGERDOWN/MOTION/UP, MOUSEBUTTONUP) are accumulated in
 // pendingDown/pendingUp + fingerX/Y; they are NOT dispatched to InputManager.
 // Non-touch events (WINDOW/FOCUS/keyboard) are handled inline as before.
@@ -243,7 +243,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         break;
     }
 
-    // Port specific: safety-net for desktop/web -- SDL_HINT_MOUSE_TOUCH_EVENTS=1
+    // safety-net for desktop/web -- SDL_HINT_MOUSE_TOUCH_EVENTS=1
     // synthesizes SDL_FINGERDOWN/MOTION but the UP sometimes arrives as
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
     // Belt-and-suspenders: handle it here too; ReconcileTouch also checks mouse
@@ -275,7 +275,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     (void)window;
 }
 
-// Port specific: reconcile only the MOUSE channel after the drain pass (pollInput).
+// reconcile only the MOUSE channel after the drain pass (pollInput).
 // Real touch channels are event-driven (FINGERDOWN active / FINGERUP -> pendingUp);
 // their state lives in the per-channel array and is polled per sim tick. We do NOT
 // query the SDL touch live-set (GetNumTouchFingers etc.): on emscripten it reads
@@ -322,7 +322,7 @@ void InputTranslatorSDL::ReconcileTouch() {
     }
 }
 
-// Port specific: dispatch accumulated touch state to InputManager for one sim tick.
+// dispatch accumulated touch state to InputManager for one sim tick.
 // Binary cadence: input->update->draw happens exactly once per tick.
 // This function provides the "input" phase that runs at the start of each sim tick
 // (before GameTaskUpdate), matching the binary's strict 1:1 tick ordering.

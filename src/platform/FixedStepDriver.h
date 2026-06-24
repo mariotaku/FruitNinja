@@ -1,7 +1,7 @@
 #ifndef FN_PLATFORM_FIXEDSTEPDRIVER_H
 #define FN_PLATFORM_FIXEDSTEPDRIVER_H
 
-// Port specific: fixed-step accumulator shared between the SDL desktop build
+// fixed-step accumulator shared between the SDL desktop build
 // and the Emscripten web build.  No SDL / GL / emscripten dependencies -- pure
 // arithmetic so it compiles in any translation unit that includes it.
 //
