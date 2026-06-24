@@ -353,6 +353,11 @@ void SlashEntity::Release() {
 // Wipe touch/trail state; sentinel-fill both vertex strips up to m_SplitPoint;
 // clear 11-entry combo-slice array.
 // ---------------------------------------------------------------------------
+#if defined(__GNUC__) && !defined(__clang__)
+// Binary's vertex-wipe + combo loops are rolled; the cross-build -O2 unrolls them
+// (181 instr vs binary's 86). Pin this fn to non-unrolled codegen so it matches.
+__attribute__((optimize("no-unroll-loops")))
+#endif
 void SlashEntity::Reset() {
     m_PointCount = 0;
 
@@ -384,15 +389,16 @@ void SlashEntity::Reset() {
         for (int side = 0; side < 2; ++side) {
             QUADCUSTOMVERTEX* buf = (side == 0) ? m_pLeftBuffer : m_pRightBuffer;
             for (int i = 0; i < m_SplitPoint; ++i) {
-                buf[i].x      = 0.0f;
+                // Store order mirrors the binary @0x1e6754 (y,z,nx,ny,colour,u,v,nz,x).
                 buf[i].y      = 0.0f;
                 buf[i].z      = 0.0f;
                 buf[i].nx     = 0.0f;
                 buf[i].ny     = 0.0f;
-                buf[i].nz     = 1.0f;
+                buf[i].colour = whitePacked;
                 buf[i].u      = 0.0f;
                 buf[i].v      = 0.0f;
-                buf[i].colour = whitePacked;
+                buf[i].nz     = 1.0f;
+                buf[i].x      = 0.0f;
             }
         }
     }
