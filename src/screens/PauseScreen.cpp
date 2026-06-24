@@ -157,10 +157,10 @@ bool PauseScreen::IsEnabled() {
 }
 
 // -------------------------------------------------------------------------
-// QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
+// QuitToMenu / EndRetryLevel -- binary @ 0x001cb6e4 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
-    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
+    LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     game_work.bM_bPaused = 1;                               // 0x169e6e: strb 1, [+0x05]
 
@@ -208,6 +208,10 @@ static void QuitToMenu() {
     game_work.m_bMPRetryPending = 0;
     game_work.m_bP2PHostMatched = 0;
     game_work.m_bP2PClientJoined = 0;
+
+    // ASM-spec: GameExit @0x001cfed4 tears down WaveManager on game->menu (task 2->1);
+    // the SDL port collapses that task swap, so mirror the teardown here. (#177/#178)
+    WaveManager::GetInstance()->Destroy();
 
     // DIFFERS: binary relies on the OS task scheduler swapping from Game task
     // to Frontend task, which triggers GameExit_Handler via GameTaskExit.

@@ -118,7 +118,7 @@ static void DoSetTerminate(GameOverScreen* self) {
     self->m_bPendingRemoval = 1;
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00169e50 (re-analyst)
+// Stale marker removed: 0x00169e50 was v1.5.x; real v1.6.1 QuitToMenu @0x001cb6e4.
 static void DoQuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
     Game* game = Game::GetInstance();
@@ -144,6 +144,10 @@ static void DoQuitToMenu() {
     game_work.m_bMPRetryPending   = 0;
     game_work.m_bP2PHostMatched   = 0;
     game_work.m_bP2PClientJoined  = 0;
+
+    // ASM-spec: GameExit @0x001cfed4 tears down WaveManager on game->menu (task 2->1);
+    // the SDL port collapses that task swap, so mirror the teardown here. (#177/#178)
+    WaveManager::GetInstance()->Destroy();
 
     // DIFFERS: binary relies on OS task scheduler; port drives transition explicitly.
     game_work.taskStateIndex = 1;
