@@ -1,7 +1,7 @@
 // Analysed: 2026-05-02T00:00
 //
 // PauseScreen — Tier-1 implementation.
-// Binary: PauseScreen::PauseScreen @ 0x00155460 (ctor), Update @ 0x00154468.
+// Binary: PauseScreen::PauseScreen @ 0x001a7204 (ctor), Update @ 0x001a5ebc.
 // See docs/engine/pausescreen-deep-re.md for full spec.
 //
 // Tier-1 scope: SP-only path, states 0/2/3/4/5/6, three P1 buttons.
@@ -259,8 +259,7 @@ PauseScreen::PauseScreen()
     {
         int w = 0, h = 0;
         Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
-        m_Texture      = tex;     // +0x74 slot (PauseScreen::DrawOrder uses its own path)
-        m_Texture = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
+        m_Texture = tex;   // +0x74: binary @0x001a7204 field_0x74 (read +0x24/+0x28 for title W/H)
 #if !defined(__bada__)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
@@ -342,7 +341,7 @@ PauseScreen::~PauseScreen() {
 
 // -------------------------------------------------------------------------
 // vtable[2]: Init -- forwards to Reset (HUDControl::Reset)
-// Binary: 0x00153e28 -- 5-instr thunk: (*vtable[4])(this)
+// Binary: 0x001a5554 -- 5-instr thunk: (*vtable[4])(this)
 // -------------------------------------------------------------------------
 void PauseScreen::Init() {
     Reset();
@@ -576,7 +575,7 @@ void PauseScreen::RetryGameCallback() {
 
 // -------------------------------------------------------------------------
 // vtable[10]: Update -- state machine + lazy button creation
-// Binary: 0x00154468 (569 lines)
+// Binary: 0x001a5ebc (569 lines)
 // Tier-1: SP path only (IsSameScreenMultiplayer() branch skipped)
 // -------------------------------------------------------------------------
 void PauseScreen::Update(float dt) {

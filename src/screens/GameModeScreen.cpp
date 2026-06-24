@@ -166,8 +166,8 @@ void GameModeScreen::UnLoadContent() {
 }
 
 // ===================================================================
-// Matches GameModeScreen::GameModeScreen(bool) @ 0x0013e524
-// Binary @ 0x0013e524 — initialise BaseScreen, default m_State=0,
+// Matches GameModeScreen::GameModeScreen(bool) @ 0x00182da0
+// Binary @ 0x00182da0 — initialise BaseScreen, default m_State=0,
 // m_SecondaryAlpha=-2.5, online-MP slot=null, m_FrameTimer=0.
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
@@ -274,7 +274,7 @@ GameModeScreen::~GameModeScreen() {
 // MainScreen does NOT call Init() on GameModeScreen (matching binary behaviour).
 void GameModeScreen::Init() {}
 
-// Binary @ 0x0013df80 — vtable slot 2 Reset(): no-op override stub
+// Binary @ 0x00181074 — vtable slot 2 Reset(): no-op override stub
 void GameModeScreen::Reset() {}
 
 // Binary @ 0x00140498 — vtable slot 11 UpdateSpecific(): no-op (Update does all work)
@@ -288,7 +288,7 @@ void GameModeScreen::Release() {
 }
 
 // ===================================================================
-// Matches GameModeScreen::CreateControls @ 0x0013e764
+// Matches GameModeScreen::CreateControls @ 0x001819bc
 // Binary creates 4 buttons in this order:
 //   Back(1)    : construct -> Init -> m_bRemovalPending=1 -> AddControl
 //                -> m_TargetSize *= 0.75 -> fruitPiece->scale *= 0.75
@@ -540,7 +540,7 @@ void GameModeScreen::Update(float dt) {
     // Only ticks when state > 2.
     if ((int)m_State > 2) {
         m_FrameTimer += dt / FRAMETIMER_RATE;
-        if (m_FrameTimer < 0.0f) m_FrameTimer = 0.0f;
+        if (m_FrameTimer >= 0.0f) m_FrameTimer = 0.0f;   // binary @0x00182d70 vmovpl: clamp to <= 0
     }
 }
 
@@ -557,7 +557,7 @@ void GameModeScreen::DrawConnectTexture(Vec3 pos) {
 }
 
 // ===================================================================
-// Matches GameModeScreen::Draw @ 0x0013f8c8
+// Matches GameModeScreen::Draw @ 0x00183ac8
 // 1. Background panel (mode_sensei.tex) with slide-in from secondaryAlpha
 // 2. Borders via BaseScreen::DrawBorders (mode_select.tex)
 // 3. Connect animation (zen_sign.tex pulsating)
@@ -686,7 +686,7 @@ void GameModeScreen::QuitCallback() {
     // and oscillating menu<->mode-select (task #16). Removed for fidelity.
 }
 
-// vtable[18] @ 0x0013e21c
+// vtable[18] @ 0x00181428
 void GameModeScreen::SetupLevel() {
     FN::PrepareForLevelStart();
 }
