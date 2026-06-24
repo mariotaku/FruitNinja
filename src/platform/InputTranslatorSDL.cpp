@@ -331,15 +331,17 @@ void InputTranslatorSDL::ReconcileTouch() {
         }
 
         // Real touch finger: check against SDL live set.
-        // Port specific: only reconcile when SDL reports at least one real
-        // touch device. When numDevices==0 there is no hardware touch state to
-        // query -- synthetic SDL_PushEvent injections (test harnesses, etc.) do
-        // not register fingers with SDL's touch tracking, so an absent-finger
-        // check against an empty live set would incorrectly release every active
-        // channel. With real touch hardware (numDevices>0) the reconcile is
-        // meaningful: a FINGERUP dropped by the OS leaves the channel stuck, and
-        // ReconcileTouch marks it pendingUp (#154).
-        if (numDevices == 0) {
+        // Port specific: only reconcile against a NON-EMPTY live set.
+        //   - numDevices==0: no touch hardware (headless / synthetic SDL_PushEvent
+        //     injections don't register with SDL touch tracking).
+        //   - liveCount==0: on emscripten/web SDL_GetNumTouchFingers reports 0 live
+        //     fingers even MID-DRAG (the touch device exists but the live-finger
+        //     array isn't maintained), so reconciling against an empty set would
+        //     release the active finger every frame -> "tap instead of drag".
+        // In both cases the query is unreliable, so skip and rely on the real
+        // FINGERUP. The reconcile only fires when liveCount>0 -- a populated set
+        // where THIS finger's absence is a genuine dropped-FINGERUP (#154).
+        if (numDevices == 0 || liveCount == 0) {
             continue;
         }
         bool found = false;
