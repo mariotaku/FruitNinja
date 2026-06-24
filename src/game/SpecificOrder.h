@@ -24,7 +24,7 @@ public:
     // On mismatch, retries slot 0; resets to 0 if still no match.
     int Check(uint32_t newFruitHash);
 
-    // Binary @ 0x00108468
+    // v1.6.1 SpecificOrder::GetFirstFruitTypeHash @0x00116d18: ldr r0,[r0,#8]; bx lr -- unconditional return of m_Slots[0].hashes[0].
     uint32_t GetFirstFruitTypeHash() const;
 
 private:

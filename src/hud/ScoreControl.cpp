@@ -692,7 +692,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     }
 }
 
-// ASM-verified: 2026-05-13 v1.6.1 binary @ 0x0015819c (re-analyst).
+// ASM-verified: 2026-05-13 v1.6.1 ScoreControl::AddMultipliyer @ 0x001abc68 (re-analyst).
 // Body is a single `bx lr` -- returns r0 (= the int arg) unchanged. No
 // internal callers in the shipping binary; the multiplier path is owned
 // by ScoreMultiplyerBoard. Kept here only so the port's symbol table

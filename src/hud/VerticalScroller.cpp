@@ -78,11 +78,10 @@ void VerticalScroller::Init() {
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 3 -- Binary @ 0x00168170 (calls HUDControl3d::Release then returns)
-// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00168170
+// vtable slot 3 -- v1.6.1 VerticalScroller::Release @0x001c917c: tail-calls HUDControl3d::Release @0x0018b134 (no-op bx lr); binary does NOT write m_State.
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 VerticalScroller::Release @0x001c917c
 void VerticalScroller::Release() {
     HUDControl3d::Release();
-    m_State = 0;
 }
 
 // ---------------------------------------------------------------------------
