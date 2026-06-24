@@ -16,16 +16,16 @@
 // Binary @ 0x00176980
 FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool param2)
     : FruitFactPage(pCtrl)
-    , m_field98(0)
-    , m_field9C(0)
-    , m_fieldA0(0)
-    , m_fieldA4(0)
-    , m_fieldA8(0)
-    , m_fieldAC(0.0f)
-    , m_fieldB0(0)
-    , m_fieldB4(0.0f)
-    , m_ModeSelector(param2 ? 3u : 0u)
-    , m_DisplayMode(1)
+    , m_pDownloadingLabel(0)
+    , m_pProviderLabel(0)
+    , m_pExtraLabel(0)
+    , m_pScoreListHud(0)
+    , m_pActionButton(0)
+    , m_RefreshCount(0.0f)
+    , m_FlashFlag(0)
+    , m_ConnectTimer(0.0f)
+    , m_Mode(param2 ? 3u : 0u)
+    , m_State(1)
     , m_Row0()
     , m_Row1()
     , m_Row2()
@@ -37,11 +37,11 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
     LoadContent();
 
     // Post-LoadContent zero-fills for own state fields (binary @ 0x00176980)
-    m_fieldA4 = 0;
-    m_fieldB4 = 0.0f;
-    m_fieldB0 = 0;
-    m_fieldAC = 0.0f;
-    m_fieldA8 = 0;
+    m_pScoreListHud = 0;    // binary: str 0 @0xA4 (after FNHighscore ctors via LoadContent)
+    m_ConnectTimer = 0.0f;  // binary: strb 0 @0xB4
+    m_FlashFlag = 0;        // binary: vstr 0.0 @0xB0
+    m_RefreshCount = 0.0f;  // binary: str 0 @0xAC
+    m_pActionButton = 0;    // binary: str 0 @0xA8
 
     // Title: LSTR 0x7b if global (param2), else LSTR 0x363 (friends)
     const char* title = Mortar::GETSTRING(
@@ -95,20 +95,20 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
         uint8_t diff = 0;
         if (diff != 2) {
             LeaderboardManager::GetInstance()->ClearScores(
-                static_cast<int>(diff), static_cast<int>(m_ModeSelector));
+                static_cast<int>(diff), static_cast<int>(m_Mode));
         }
     }
 
-    // Online gate: provider offline or friends not loaded -> local-only (m_DisplayMode=1).
+    // Online gate: provider offline or friends not loaded -> local-only (m_State=1).
     if (!Mortar::IsProviderOnline() || !Mortar::AreFriendsLoaded()) {
-        m_DisplayMode = 1;
+        m_State = 1;
     } else {
-        m_DisplayMode = 2;
+        m_State = 2;
     }
 
-    m_field98 = 0;
-    m_field9C = 0;
-    m_fieldA0 = 0;
+    m_pDownloadingLabel = 0;  // binary: str 0 @0x98
+    m_pProviderLabel = 0;     // binary: str 0 @0x9C
+    m_pExtraLabel = 0;        // binary: str 0 @0xA0
 }
 
 FruitFactLeaderboard::~FruitFactLeaderboard() {
