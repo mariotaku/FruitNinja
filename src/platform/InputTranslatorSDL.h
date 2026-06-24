@@ -46,6 +46,11 @@ public:
     // SlashEntity::OnTouchActive emits a blade point every frame (binary cadence).
     void BeginFrame();
 
+    // Port specific: synthesize TouchUp for every held finger and release all
+    // channels. Called on SDL focus-loss / minimize to clear blade state before
+    // the frame that runs while the app is backgrounded.
+    void ReleaseAllFingers();
+
 private:
     // Port specific: SDL is event-driven; Bada polled touch every frame.
     // Re-dispatch TouchDown_N each frame for held fingers so

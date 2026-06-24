@@ -108,6 +108,35 @@ void InputTranslatorSDL::BeginFrame() {
     PollHeldFingers();
 }
 
+// Port specific: synthesize TouchUp for every held finger and clear all channels.
+// Called when the SDL window loses focus or is minimized so no blade stays armed
+// across a background/restore cycle. Mirrors the per-finger release in PollHeldFingers
+// and SDL_FINGERUP handling, applied to all active channels at once.
+void InputTranslatorSDL::ReleaseAllFingers() {
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+
+    for (int ch = 0; ch < 16; ++ch) {
+        if (!fingerActive[ch]) continue;
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+        }
+
+        if (mgr) {
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.actionHash  = hashTouchUp[ch];
+            ie.actionFlags = INPUT_ACTION_UP;
+            ie.fingerId    = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+            mgr->DispatchEvent(&ie);
+        }
+
+        fingerActive[ch] = false;
+    }
+}
+
 // Port specific: SDL is event-driven; Bada polled touch every frame.
 // Re-dispatch TouchDown_N each frame for held fingers so
 // SlashEntity::OnTouchActive emits a blade point per frame (binary cadence)
