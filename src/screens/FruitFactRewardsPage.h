@@ -47,8 +47,12 @@ public:
     void Init() override;  // Binary @ 0x0017e4d8 -- state init + CreateSenseisHead + title box
 
 private:
-    // +0x98: first own field (zero-init)
-    int   m_field98;      // @+0x98
+    // +0x98: lazily-created "Progress" reward button (Ghidra BSButton* pM_pButton).
+    // ctor @0x0017e4d8 inits 0 (str r3=0,[r4,#0x98]); Update @0x0017d44c creates it
+    // (operator_new(0xe8), Progress_Button.tex) when 0; Release @0x0017d0a4 reads it
+    // (ldr r1,[r0,#0x98]), HUD::RemoveControl + dtor, then nulls. Held as int to preserve
+    // 4-byte layout; real type is BSButton*.
+    int   m_pRewardButton;   // @+0x98
 
     // +0x9c: pad (not written by ctor)
     uint8_t _pad9C[4];

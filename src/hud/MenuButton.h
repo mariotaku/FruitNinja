@@ -107,8 +107,11 @@ public:
     // +0xD3: grow/shrink-done flag; Update sets when phase hits 0
     uint8_t         m_GrowShrinkDone;      // +0xD3
 
-    // +0xD4: Init = 0xffffffff (touch-slot init / reserved)
-    int             m_fieldD4;             // +0xD4
+    // +0xD4: purpose unknown -- write-only, no reader found.
+    // Init @0x0019b994 zeroes all 4 bytes; BaseScreen::UpdateButtons @0x0016060c shrink-out
+    // path blind-copies Vec3::One into +0xD4..+0xDF (the contiguous str of Vec3::One.x lands
+    // here, .y/.z spill into m_TouchSlot/m_TouchX). No Draw/Update read site.
+    int             m_reservedD4;          // +0xD4
 
     // +0xD8: touch slot currently tracked (-1 = none)
     int             m_TouchSlot;           // +0xD8

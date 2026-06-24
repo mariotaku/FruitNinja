@@ -118,7 +118,7 @@ MenuButton::MenuButton()
       m_AnimPhase(0),
       m_AnimFlag(0),
       m_GrowShrinkDone(0),
-      m_fieldD4(static_cast<int>(0xffffffff)),
+      m_reservedD4(static_cast<int>(0xffffffff)),
       m_TouchSlot(-1),
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
       m_BackdropOffsetX(0.0f),
@@ -205,7 +205,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                              // type-0 entity count reaches 0 and the target screen can open.
     m_bDragCancel    = 0;
     m_bRespondsToBackKey = 0;
-    m_fieldD4        = static_cast<int>(0xffffffff);
+    m_reservedD4     = static_cast<int>(0xffffffff);
     m_TouchSlot      = -1;
     m_SparkleTimer   = -1.0f;
     m_NewIndicatorTimer = -1.0f;
