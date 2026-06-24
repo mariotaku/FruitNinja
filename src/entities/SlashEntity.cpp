@@ -2319,10 +2319,19 @@ void SlashEntity::SetModColours(
 
 // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
 bool SlashEntity::TouchDown(InputEvent* event) {
-    // Binary @ 0x1ea420: gate is (m_BladeActive == 0), i.e. m_BladeActive == 0.
-    // DrawSlice drives m_BladeActive to 0 within <=2 frames of lift via the
-    // bit0 latch, independently of trail length / m_PointCount.
-    if (m_BombHitEdge == 0 && m_BladeActive == 0) {
+    // DIFFERS: binary SlashEntity::TouchDown @0x1ea420 gates Reset() only on
+    //   m_BladeActive==0 -- it relies on the once-per-10ms-tick poll guaranteeing
+    //   >=2 DrawSlice frames (latch decay) between a physical lift and the next
+    //   press. The SDL/web port drains lift+repress in one pollInput() with no
+    //   DrawSlice between, so the latch is still armed and Reset() is skipped ->
+    //   the new slice bridges from the prior slice's tail. Force the break on a
+    //   genuine press-edge (INPUT_ACTION_DOWN_EDGE, set only in SDL_FINGERDOWN,
+    //   never in PollHeldFingers) to replicate the binary's behaviour.
+    //   Multi-touch: g_pSlashEntities[ch] gives each finger its own SlashEntity,
+    //   so a press-edge on channel N resets only channel N's blade; channels M!=N
+    //   are separate instances and are unaffected.
+    bool pressEdge = (event && (event->actionFlags & INPUT_ACTION_DOWN_EDGE));
+    if (m_BombHitEdge == 0 && (m_BladeActive == 0 || pressEdge)) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);
