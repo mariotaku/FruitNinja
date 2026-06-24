@@ -64,6 +64,13 @@ void InputTranslatorSDL::Init() {
     }
 
     hashTouchScreen = StringHash("TouchScreen");
+
+#ifdef FN_DEBUG_TOUCH
+    // SDL suppresses DEBUG-priority logs by default; lower the cutoff so the
+    // TLOG drain/dispatch trace reaches stdout / the browser console.
+    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_DEBUG);
+    TLOG("FN_DEBUG_TOUCH active -- touch drain/dispatch trace enabled\n");
+#endif
 }
 
 // Transform normalized SDL touch coords -> binary-centred ortho coords.
