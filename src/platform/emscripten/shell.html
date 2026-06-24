@@ -222,6 +222,20 @@
        positioning keeps it pinned regardless of letterbox bars; pointer-events
        are its own so taps here never reach the canvas/game.  Semi-transparent
        dark pill with an inline-SVG glyph that JS swaps between enter/exit. */
+    /* build identifier (wasm hash) pinned bottom-left; revealed by JS only when
+       the ?fps query param is present, so it doubles as a cache/freshness check. */
+    #fn-build {
+      position: fixed;
+      left: 6px;
+      bottom: 4px;
+      z-index: 30;
+      font: 11px/1.2 monospace;
+      color: rgba(255,255,255,0.85);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+      pointer-events: none;
+      display: none;
+      user-select: none;
+    }
     #fullscreen-btn {
       position: fixed;
       top: 10px;
@@ -325,7 +339,27 @@
         <path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"></path>
       </svg>
     </div>
+
+    <!-- build identifier; __FN_BUILD__ is replaced with the wasm sha8 by
+         tools/web/web-hash-assets.py. Shown bottom-left only when ?fps is set. -->
+    <div id="fn-build">build __FN_BUILD__</div>
   </div>
+
+  <script>
+  /* Reveal the build identifier when the ?fps query param is present (same
+     gate as the in-engine FPS overlay), so it's easy to confirm which wasm
+     the browser actually loaded (defeats stale-cache confusion). */
+  (function () {
+    try {
+      var qs = new URLSearchParams(window.location.search);
+      var v = qs.get('fps');
+      if (v !== null && v !== '0') {
+        var el = document.getElementById('fn-build');
+        if (el) el.style.display = 'block';
+      }
+    } catch (e) {}
+  })();
+  </script>
 
   <script>
   /* all overlay elements are inside the viewport div as absolute

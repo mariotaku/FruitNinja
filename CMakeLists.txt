@@ -22,6 +22,12 @@ endif()
 # breaks touch. Default OFF (RAF). No effect on native builds.
 option(FN_WEB_FORCE_60FPS "Force emscripten main loop to a fixed 60fps (web debug)" OFF)
 
+# Touch-path debug logging: when ON, scopes FN_DEBUG_TOUCH to InputTranslatorSDL.cpp
+# so its drain/dispatch TLOG trace compiles, and that file raises the SDL log
+# priority to DEBUG at startup so the trace reaches stdout / the browser console.
+# Default OFF. Used to capture device touch logs (filter console by "[TOUCH]").
+option(FN_DEBUG_TOUCH "Enable touch drain/dispatch debug logging (InputTranslatorSDL)" OFF)
+
 project(FruitNinja LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -436,6 +442,13 @@ endif()
 if (FN_WEB_FORCE_60FPS)
     target_compile_definitions(fruit-ninja-game PUBLIC FN_WEB_FORCE_60FPS=1)
     message(STATUS "FN_WEB_FORCE_60FPS = ON")
+endif()
+
+# touch drain/dispatch debug logging (target-wide so InputTranslatorSDL.cpp +
+# Touch.cpp + SlashEntity.cpp + GameSDL.cpp all emit their [TOUCH]/[SLASH] trace).
+if (FN_DEBUG_TOUCH)
+    target_compile_definitions(fruit-ninja-game PUBLIC FN_DEBUG_TOUCH=1)
+    message(STATUS "FN_DEBUG_TOUCH = ON")
 endif()
 
 if (NOT EMSCRIPTEN)

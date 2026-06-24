@@ -221,6 +221,14 @@ def main():
             html_content = html_content.replace(_HTML_SPLASH_LITERAL, new_splash)
             print("[web-hash] html: replaced {} occurrence(s) of splash src".format(count))
 
+        # Replace the build-identifier placeholder with the wasm sha8 so the
+        # bottom-left "build <hash>" overlay (shown when ?fps is set) matches
+        # the actual loaded wasm -- a quick cache/freshness check on device.
+        if wasm_digest is not None:
+            count = html_content.count("__FN_BUILD__")
+            html_content = html_content.replace("__FN_BUILD__", wasm_digest)
+            print("[web-hash] html: replaced {} occurrence(s) of __FN_BUILD__ -> {}".format(count, wasm_digest))
+
         write_text(html_path, html_content)
         print("[web-hash] html: rewrites applied -> fruit-ninja.html (unchanged filename)")
 
