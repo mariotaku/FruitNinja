@@ -190,14 +190,19 @@ static void RenderBladeFrame(SDL_Window* window) {
 
 // ---------------------------------------------------------------------------
 // Tick the slash entity: process SDL events through InputTranslator + Update.
+// Port specific: drain events (no dispatch), then FlushForSimTick (dispatch
+// once per tick) to match the #168 drain/flush split invariant.
 // ---------------------------------------------------------------------------
 static void TickSlash(Game& game, SDL_Window* window) {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (game.inputTranslator) {
-            game.inputTranslator->ProcessSDLEvent(ev,
+            game.inputTranslator->DrainSDLEvent(ev,
                 static_cast<SDL_Window*>(window));
         }
+    }
+    if (game.inputTranslator) {
+        game.inputTranslator->FlushForSimTick();
     }
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);
@@ -471,10 +476,13 @@ static bool InteractiveTick(fn::TestHarness& h, InteractiveData* d) {
             if (ev.key.keysym.sym == SDLK_3) { d->activeSkin = 2; d->skinDirty = true; }
         } else {
             if (h.game.inputTranslator) {
-                h.game.inputTranslator->ProcessSDLEvent(
+                h.game.inputTranslator->DrainSDLEvent(
                     ev, static_cast<SDL_Window*>(h.window));
             }
         }
+    }
+    if (h.game.inputTranslator) {
+        h.game.inputTranslator->FlushForSimTick();
     }
 
     float dt = 0.0f;

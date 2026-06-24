@@ -1,8 +1,14 @@
 //
-// InputTranslatorSDL — converts SDL events to Mortar InputEvents AND feeds
-// Mortar::Touch directly (poll-based binary path). The InputManager dispatch
-// is kept for keyboard/gamepad actions only — step 7 of the touch rewrite
-// will drop the TouchDown_N / TouchMove_XN / TouchUp_N bindings.
+// InputTranslatorSDL -- converts SDL events to Mortar InputEvents AND feeds
+// Mortar::Touch directly (poll-based binary path).
+//
+// Port specific: binary is a strict 1:1 input->update->draw tick.
+// This file splits touch dispatch into two phases:
+//   DrainSDLEvent()  -- accumulate per-frame (no dispatch); called from pollInput()
+//   FlushForSimTick() -- dispatch once per sim tick; called from stepUpdate()
+// This ensures m_PointCount only advances inside a tick that also runs
+// UpdatePoints (which reconciles the head-cap vertex), so DrawSlice never draws
+// a stale head-cap to origin (#168 bridge-to-origin fix).
 //
 
 #include "platform/InputTranslatorSDL.h"
@@ -20,14 +26,16 @@
 // StringHash is provided by src/engine/util/StringHash.h (the binary-faithful
 // Jenkins lookup3 with case-folding). Earlier this file had a local DJB2-like
 // definition that produced different hashes for the same string -- causing
-// SlashEntity event-driven dispatch to silently fail. Single source of truth
-// now.
+// SlashEntity event-driven dispatch to silently fail. Single source of truth now.
 
 InputTranslatorSDL::InputTranslatorSDL() : hashTouchScreen(0) {
     memset(fingerX, 0, sizeof(fingerX));
     memset(fingerY, 0, sizeof(fingerY));
     memset(fingerActive, 0, sizeof(fingerActive));
     memset(fingerMap, 0xFF, sizeof(fingerMap));
+    memset(pendingDown, 0, sizeof(pendingDown));
+    memset(pendingUp, 0, sizeof(pendingUp));
+    memset(pendingEdge, 0, sizeof(pendingEdge));
 }
 
 void InputTranslatorSDL::Init() {
@@ -104,14 +112,17 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
+// Port specific: legacy wrapper -- retained so any callers that invoke
+// BeginFrame() are not broken. Now delegates to FlushForSimTick() which
+// contains all the logic that was previously in PollHeldFingers().
 void InputTranslatorSDL::BeginFrame() {
-    PollHeldFingers();
+    FlushForSimTick();
 }
 
 // Port specific: synthesize TouchUp for every held finger and clear all channels.
 // Called when the SDL window loses focus or is minimized so no blade stays armed
 // across a background/restore cycle. Mirrors the per-finger release in PollHeldFingers
-// and SDL_FINGERUP handling, applied to all active channels at once.
+// and SDL_FINGERUP handling, applied to all active channels at once (#162).
 void InputTranslatorSDL::ReleaseAllFingers() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
@@ -135,97 +146,170 @@ void InputTranslatorSDL::ReleaseAllFingers() {
 
         fingerActive[ch] = false;
     }
+
+    // Also clear any pending drain state so the next flush doesn't re-fire.
+    memset(pendingDown, 0, sizeof(pendingDown));
+    memset(pendingUp, 0, sizeof(pendingUp));
+    memset(pendingEdge, 0, sizeof(pendingEdge));
 }
 
-// Port specific: SDL is event-driven; Bada polled touch every frame.
-// Re-dispatch TouchDown_N each frame for held fingers so
-// SlashEntity::OnTouchActive emits a blade point per frame (binary cadence)
-// -- fixes slow-slice blade dashing. Press-edge (IsTouchDown==2) stays
-// first-frame-only: the Touch ring-buffer promotes phase -1->0 via StateUpdate
-// after the first frame, so subsequent OnMoved calls keep phase==0 (held,
-// IsTouchDown==1), never re-triggering the press-edge.
+// Port specific: flush accumulated touch state to InputManager for one sim tick.
+// Binary cadence: input->update->draw happens exactly once per tick.
+// This function provides the "input" phase that runs at the start of each sim tick
+// (before GameTaskUpdate), matching the binary's strict 1:1 tick ordering.
+//
+// Per tick:
+//   1. PollHeldFingers reconcile (#154): synthesize TouchUp for any SDL-dropped fingers.
+//   2. For each channel with a pending TouchDown edge: dispatch TouchScreen +
+//      TouchMove + TouchDown (with INPUT_ACTION_DOWN_EDGE on press-edge).
+//      Consumes and clears the pending edge so subsequent catch-up steps do not
+//      re-fire the edge.
+//   3. For each channel with a pending TouchUp: dispatch TouchUp, mark inactive.
+//   4. For each still-active channel (no pending up): dispatch one TouchMove at
+//      current position (held, phase 0) -- mirrors the binary's per-tick held poll.
+//
+// Catch-up (steps>=2 in one display frame): pending edges were set once in the drain
+// (per display frame). The first FlushForSimTick consumes the edges. The second+ flush
+// in the same display frame sees pendingDown=false but fingerActive=true, so it
+// dispatches a held TouchMove at the same position -- one trail point per tick,
+// matching the binary's once-per-tick poll cadence.
+void InputTranslatorSDL::FlushForSimTick() {
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+    if (!mgr) return;
+
+    // Step 1: stuck-blade reconcile -- release any SDL-dropped fingers (#154).
+    PollHeldFingers();
+
+    // Step 2+3+4: dispatch pending edges and held moves.
+    for (int ch = 0; ch < 16; ++ch) {
+        if (pendingDown[ch]) {
+            // A FINGERDOWN (or first touch) was drained this display frame.
+            // Consume the edge.
+            bool isEdge = pendingEdge[ch];
+            pendingDown[ch] = false;
+            pendingEdge[ch] = false;
+
+            // Update Touch ring-buffer with the new press.
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnPressed(ch + 1, fingerX[ch], fingerY[ch]);
+            }
+
+            TLOG("FlushForSimTick FINGERDOWN ch=%d edge=%d game=(%g,%g)\n",
+                 ch, (int)isEdge, fingerX[ch], fingerY[ch]);
+
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.fingerId = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+
+            ie.actionHash  = hashTouchScreen;
+            ie.actionFlags = INPUT_ACTION_DOWN;
+            mgr->DispatchEvent(&ie);
+
+            // Synthesize TouchMove_X/Y before TouchDown_n so SlashEntity sees
+            // fresh pos at press-edge (binary Bada platform fires moves first).
+            ie.actionHash  = hashTouchMoveX[ch];
+            ie.actionFlags = INPUT_ACTION_MOVE;
+            mgr->DispatchEvent(&ie);
+            ie.actionHash  = hashTouchMoveY[ch];
+            mgr->DispatchEvent(&ie);
+
+            ie.actionHash  = hashTouchDown[ch];
+            ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+            mgr->DispatchEvent(&ie);
+
+        } else if (pendingUp[ch]) {
+            // A FINGERUP was drained this display frame.
+            pendingUp[ch] = false;
+
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnReleased(ch + 1);
+            }
+
+            TLOG("FlushForSimTick FINGERUP ch=%d game=(%g,%g)\n", ch, fingerX[ch], fingerY[ch]);
+
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.actionHash  = hashTouchUp[ch];
+            ie.actionFlags = INPUT_ACTION_UP;
+            ie.fingerId    = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+            mgr->DispatchEvent(&ie);
+
+            ReleaseFingerId(fingerMap[ch]);
+
+        } else if (fingerActive[ch]) {
+            // Held finger, no new edge this tick: emit one TouchMove at current pos.
+            // This is the per-tick equivalent of the binary's OS touch poll.
+            // isActive=true + existing slot -> OnMoved only updates currX/Y, phase stays 0.
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnMoved(ch + 1, fingerX[ch], fingerY[ch]);
+            }
+
+            TLOG("FlushForSimTick HELD ch=%d game=(%g,%g)\n", ch, fingerX[ch], fingerY[ch]);
+
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.fingerId = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+
+            ie.actionHash  = hashTouchMoveX[ch];
+            ie.actionFlags = INPUT_ACTION_MOVE;
+            mgr->DispatchEvent(&ie);
+
+            ie.actionHash  = hashTouchMoveY[ch];
+            mgr->DispatchEvent(&ie);
+
+            ie.actionHash  = hashTouchDown[ch];
+            ie.actionFlags = INPUT_ACTION_DOWN;
+            mgr->DispatchEvent(&ie);
+        }
+    }
+}
+
+// Port specific: stuck-blade reconcile (#154).
+// Check SDL's live finger state and synthesize TouchUp for any held channel whose
+// fingerId is no longer present. Runs inside FlushForSimTick (once per sim tick).
+// SDL_TOUCH_MOUSEID channels are checked against mouse button state.
+// On desktop, SDL_FINGERUP fires reliably so this is a no-op in the common case.
+// On web with real touchscreens, a dropped touchend/touchcancel leaves the channel
+// stuck; this reconcile releases it (SDL_GetTouchFinger reflects hardware state
+// synchronously after the event pump runs in pollInput).
 void InputTranslatorSDL::PollHeldFingers() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
-    // Port specific: web/emscripten drops SDL_FINGERUP for real touches;
-    // reconcile held fingers vs SDL touch state so the blade latch can decay
-    // (binary relies on OS-guaranteed lift events).
-    //
-    // On web with a real touchscreen (MOUSE_TOUCH_EVENTS=0), physical touch
-    // fingers carry a real Touch.identifier (not SDL_TOUCH_MOUSEID). If the
-    // browser drops a touchend/touchcancel (finger leaves canvas, mobile
-    // browser cancels, etc.) the matching SDL_FINGERUP is never received and
-    // fingerActive[ch] stays true forever -> blade re-arms every frame.
-    //
-    // Fix: query SDL's real-time finger state (SDL_GetNumTouchFingers /
-    // SDL_GetTouchFinger) and release any held channel whose fingerId is no
-    // longer present in SDL's live set. SDL_GetTouchFinger reflects the true
-    // hardware state and is updated synchronously by the event pump -- a finger
-    // that has lifted is immediately absent from this list even if the FINGERUP
-    // event was dropped. SDL_TOUCH_MOUSEID channels are exempt: they are managed
-    // by the mouse-button-down state and released via SDL_MOUSEBUTTONUP; they
-    // never appear in the touch-device finger list.
-    //
-    // Desktop behaviour is unchanged: on desktop SDL_FINGERUP fires reliably for
-    // both real touch hardware and the MOUSE_TOUCH_EVENTS=1 synthetic path
-    // (SDL_TOUCH_MOUSEID), so the reconcile loop finds no stale channels.
-    {
-        // Build live fingerId set from all touch devices.
-        // We use a small flat array (max 16 channels) to avoid allocation.
-        SDL_FingerID liveIds[64];
-        int liveCount = 0;
+    // Build live fingerId set from all touch devices.
+    SDL_FingerID liveIds[64];
+    int liveCount = 0;
 
-        int numDevices = SDL_GetNumTouchDevices();
-        for (int di = 0; di < numDevices && liveCount < 64; ++di) {
-            SDL_TouchID tid = SDL_GetTouchDevice(di);
-            int nf = SDL_GetNumTouchFingers(tid);
-            for (int fi = 0; fi < nf && liveCount < 64; ++fi) {
-                SDL_Finger* f = SDL_GetTouchFinger(tid, fi);
-                if (f) {
-                    liveIds[liveCount++] = f->id;
-                }
+    int numDevices = SDL_GetNumTouchDevices();
+    for (int di = 0; di < numDevices && liveCount < 64; ++di) {
+        SDL_TouchID tid = SDL_GetTouchDevice(di);
+        int nf = SDL_GetNumTouchFingers(tid);
+        for (int fi = 0; fi < nf && liveCount < 64; ++fi) {
+            SDL_Finger* f = SDL_GetTouchFinger(tid, fi);
+            if (f) {
+                liveIds[liveCount++] = f->id;
             }
         }
+    }
 
-        // Check for the mouse button being held (covers SDL_TOUCH_MOUSEID channel).
-        Uint32 mouseButtons = SDL_GetMouseState(NULL, NULL);
-        bool mouseDown = (mouseButtons & SDL_BUTTON_LMASK) != 0;
+    // Check for the mouse button being held (covers SDL_TOUCH_MOUSEID channel).
+    Uint32 mouseButtons = SDL_GetMouseState(NULL, NULL);
+    bool mouseDown = (mouseButtons & SDL_BUTTON_LMASK) != 0;
 
-        for (int ch = 0; ch < 16; ++ch) {
-            if (!fingerActive[ch]) continue;
+    for (int ch = 0; ch < 16; ++ch) {
+        if (!fingerActive[ch]) continue;
 
-            SDL_FingerID fid = fingerMap[ch];
+        SDL_FingerID fid = fingerMap[ch];
 
-            // SDL_TOUCH_MOUSEID channel: managed by mouse button state.
-            if (fid == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
-                if (!mouseDown) {
-                    // Mouse released without SDL_MOUSEBUTTONUP reaching us;
-                    // synthesize the release now.
-                    if (ch < Mortar::Touch::MAX_SLOTS) {
-                        Mortar::Touch::GetInstance().OnReleased(ch + 1);
-                    }
-                    InputEvent ie;
-                    memset(&ie, 0, sizeof(ie));
-                    ie.actionHash  = hashTouchUp[ch];
-                    ie.actionFlags = INPUT_ACTION_UP;
-                    ie.fingerId    = ch;
-                    ie.x = fingerX[ch];
-                    ie.y = fingerY[ch];
-                    mgr->DispatchEvent(&ie);
-                    ReleaseFingerId(fid);
-                }
-                continue;
-            }
-
-            // Real touch finger: check against SDL live set.
-            bool found = false;
-            for (int li = 0; li < liveCount; ++li) {
-                if (liveIds[li] == fid) { found = true; break; }
-            }
-            if (!found) {
-                // SDL no longer reports this finger as down -- FINGERUP was dropped.
-                // Synthesize the release so the blade latch can decay.
+        // SDL_TOUCH_MOUSEID channel: managed by mouse button state.
+        if (fid == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+            if (!mouseDown) {
                 if (ch < Mortar::Touch::MAX_SLOTS) {
                     Mortar::Touch::GetInstance().OnReleased(ch + 1);
                 }
@@ -238,48 +322,59 @@ void InputTranslatorSDL::PollHeldFingers() {
                 ie.y = fingerY[ch];
                 mgr->DispatchEvent(&ie);
                 ReleaseFingerId(fid);
+                // Clear any stale pending state for this channel.
+                pendingDown[ch] = false;
+                pendingUp[ch]   = false;
+                pendingEdge[ch] = false;
             }
-        }
-    }
-
-    for (int ch = 0; ch < 16; ch++) {
-        if (!fingerActive[ch]) continue;
-
-        // Keep Touch ring-buffer current for this frame (move = held, not new press).
-        // isActive=true + existing slot -> only updates currX/Y, phase stays 0 (held).
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnMoved(ch + 1, fingerX[ch], fingerY[ch]);
+            continue;
         }
 
-        // Re-dispatch position then TouchDown_N for this held finger.
-        // SlashEntity::OnTouchActive checks TouchDown_N every frame; without this
-        // poll, frames with no SDL_FINGERMOTION emit no TouchDown_N -> gaps -> dashing.
-        InputEvent ie;
-        memset(&ie, 0, sizeof(ie));
-        ie.fingerId = ch;
-        ie.x = fingerX[ch];
-        ie.y = fingerY[ch];
-
-        ie.actionHash  = hashTouchMoveX[ch];
-        ie.actionFlags = INPUT_ACTION_MOVE;
-        mgr->DispatchEvent(&ie);
-
-        ie.actionHash  = hashTouchMoveY[ch];
-        mgr->DispatchEvent(&ie);
-
-        ie.actionHash  = hashTouchDown[ch];
-        ie.actionFlags = INPUT_ACTION_DOWN;
-        mgr->DispatchEvent(&ie);
+        // Real touch finger: check against SDL live set.
+        // Port specific: only reconcile when SDL reports at least one real
+        // touch device. When numDevices==0 there is no hardware touch state to
+        // query -- synthetic SDL_PushEvent injections (test harnesses, etc.) do
+        // not register fingers with SDL's touch tracking, so an absent-finger
+        // check against an empty live set would incorrectly release every active
+        // channel. With real touch hardware (numDevices>0) the reconcile is
+        // meaningful: a FINGERUP dropped by the OS leaves the channel stuck, and
+        // PollHeldFingers synthesizes the release (#154).
+        if (numDevices == 0) {
+            // No touch hardware: skip live-set reconcile for this channel.
+            continue;
+        }
+        bool found = false;
+        for (int li = 0; li < liveCount; ++li) {
+            if (liveIds[li] == fid) { found = true; break; }
+        }
+        if (!found) {
+            // SDL no longer reports this finger as down -- FINGERUP was dropped.
+            // Synthesize the release so the blade latch can decay.
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnReleased(ch + 1);
+            }
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.actionHash  = hashTouchUp[ch];
+            ie.actionFlags = INPUT_ACTION_UP;
+            ie.fingerId    = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+            mgr->DispatchEvent(&ie);
+            ReleaseFingerId(fid);
+            pendingDown[ch] = false;
+            pendingUp[ch]   = false;
+            pendingEdge[ch] = false;
+        }
     }
 }
 
-void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window) {
-    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-    if (!mgr) return;
-
-    InputEvent ie;
-    memset(&ie, 0, sizeof(ie));
-
+// Port specific: drain one SDL event into per-channel pending state.
+// TOUCH events (FINGERDOWN/MOTION/UP, MOUSEBUTTONUP) are accumulated in
+// pendingDown/pendingUp + fingerX/Y; they are NOT dispatched to InputManager.
+// Non-touch events (WINDOW/FOCUS/keyboard) are handled inline as before.
+// Called from pollInput() for every SDL_PollEvent result.
+void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) {
     switch (ev.type) {
 
     // === Touch (multitouch, up to 16 fingers) ===
@@ -294,37 +389,17 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         int ch = MapFingerId(ev.tfinger.fingerId);
         if (ch < 0) { TLOG("  -> MapFingerId returned -1 (all 16 channels busy)\n"); break; }
 
-        float nx = ev.tfinger.x, ny = ev.tfinger.y;
         float gx, gy;
-        TransformTouchNormalized(nx, ny, gx, gy);
-        fingerX[ch] = gx; fingerY[ch] = gy;
-        TLOG("FINGERDOWN ch=%d raw=(%g,%g) game=(%g,%g)\n", ch, nx, ny, gx, gy);
+        TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
+        fingerX[ch] = gx;
+        fingerY[ch] = gy;
+        TLOG("FINGERDOWN (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
+             ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
-        // Poll-based path. Mortar::Touch has 8 slots; clamp or drop extras.
-        // extId is ch+1 so 0 stays reserved as Touch's "free slot" sentinel
-        // (binary @ 0x00195314 ___UpdateInternal).
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
-        }
-
-        TLOG("dispatch TouchDown slot=%d game=(%g,%g)\n", ch, gx, gy);
-        ie.actionHash = hashTouchScreen;
-        ie.actionFlags = INPUT_ACTION_DOWN;
-        ie.fingerId = ch;
-        ie.x = gx; ie.y = gy;
-        mgr->DispatchEvent(&ie);
-
-        // Synthesize TouchMove_X/Y before TouchDown_n so SlashEntity sees
-        // fresh pos at press-edge (binary Bada platform fires moves first).
-        ie.actionHash = hashTouchMoveX[ch];
-        ie.actionFlags = INPUT_ACTION_MOVE;
-        mgr->DispatchEvent(&ie);
-        ie.actionHash = hashTouchMoveY[ch];
-        mgr->DispatchEvent(&ie);
-
-        ie.actionHash  = hashTouchDown[ch];
-        ie.actionFlags = INPUT_ACTION_DOWN | INPUT_ACTION_DOWN_EDGE;
-        mgr->DispatchEvent(&ie);
+        // Set pending down edge for this channel; will be dispatched on FlushForSimTick.
+        pendingDown[ch] = true;
+        pendingEdge[ch] = true;  // first-press edge
+        pendingUp[ch]   = false; // cancel any stale up for the same channel
         break;
     }
 
@@ -342,31 +417,11 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
-        float dx = gx - fingerX[ch];
-        float dy = gy - fingerY[ch];
-        fingerX[ch] = gx; fingerY[ch] = gy;
-        TLOG("MOVE ch=%d raw=(%g,%g) game=(%g,%g) delta=(%g,%g)\n",
-             ch, ev.tfinger.x, ev.tfinger.y, gx, gy, dx, dy);
-
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);  // extId +1
-        }
-
-        ie.actionHash = hashTouchMoveX[ch];
-        ie.actionFlags = INPUT_ACTION_MOVE;
-        ie.fingerId = ch;
-        ie.x = gx; ie.y = gy;
-        ie.deltaX = dx; ie.deltaY = dy;
-        mgr->DispatchEvent(&ie);
-
-        ie.actionHash = hashTouchMoveY[ch];
-        mgr->DispatchEvent(&ie);
-
-        // Binary @ 0x00169670: Bada delivers TouchDown_n events for both
-        // press AND every move; re-fire here on SDL_FINGERMOTION to match.
-        ie.actionHash = hashTouchDown[ch];
-        ie.actionFlags = INPUT_ACTION_DOWN;
-        mgr->DispatchEvent(&ie);
+        // Update current position; FlushForSimTick will dispatch one move per tick.
+        fingerX[ch] = gx;
+        fingerY[ch] = gy;
+        TLOG("MOVE (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
+             ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
         break;
     }
 
@@ -383,19 +438,14 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
-        TLOG("FINGERUP ch=%d game=(%g,%g)\n", ch, gx, gy);
+        fingerX[ch] = gx;
+        fingerY[ch] = gy;
+        TLOG("FINGERUP (drain) ch=%d game=(%g,%g)\n", ch, gx, gy);
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnReleased(ch + 1);  // extId +1
-        }
-
-        ie.actionHash = hashTouchUp[ch];
-        ie.actionFlags = INPUT_ACTION_UP;
-        ie.fingerId = ch;
-        ie.x = gx; ie.y = gy;
-        mgr->DispatchEvent(&ie);
-
-        ReleaseFingerId(ev.tfinger.fingerId);
+        // Set pending up; will be dispatched on FlushForSimTick.
+        pendingUp[ch]   = true;
+        pendingDown[ch] = false; // cancel any pending down for same channel
+        pendingEdge[ch] = false;
         break;
     }
 
@@ -416,22 +466,17 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         }
         if (ch < 0) break;  // not our mouse-as-touch finger, ignore
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnReleased(ch + 1);
-        }
+        TLOG("MOUSEBUTTONUP (drain) ch=%d game=(%g,%g)\n", ch, fingerX[ch], fingerY[ch]);
 
-        ie.actionHash = hashTouchUp[ch];
-        ie.actionFlags = INPUT_ACTION_UP;
-        ie.fingerId = ch;
-        ie.x = fingerX[ch];
-        ie.y = fingerY[ch];
-        mgr->DispatchEvent(&ie);
-
-        ReleaseFingerId(mouseId);
+        // Treat the same as FINGERUP: pend the release for FlushForSimTick.
+        pendingUp[ch]   = true;
+        pendingDown[ch] = false;
+        pendingEdge[ch] = false;
         break;
     }
 
     default:
         break;
     }
+    (void)window;
 }
