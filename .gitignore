@@ -40,6 +40,9 @@ tmp/
 .claude/worktrees
 .mcp.json
 
+# opencode (local editor config)
+.opencode/
+
 # OS
 .DS_Store
 Thumbs.db
