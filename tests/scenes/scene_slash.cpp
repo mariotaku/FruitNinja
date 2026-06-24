@@ -83,7 +83,9 @@ static void InjectFingerUp(SDL_TouchID tid, float nx, float ny) {
 // (so finger events reach SlashEntity), updates slash entities, draws them.
 // Returns false to quit.
 static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
-    // Poll SDL events and dispatch to InputTranslator for FINGER* handling.
+    // Poll SDL events: drain into pending state (no dispatch per-frame).
+    // Port specific: matches the #173 drain/dispatch split -- DrainSDLEvent
+    // accumulates touch input, DispatchForSimTick dispatches once per sim tick.
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) return false;
@@ -92,13 +94,18 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
             if (ev.key.keysym.sym == SDLK_r) d->resetRequested = true;
         } else {
             // Forward all other events (FINGER*, MOUSE*) to InputTranslator
-            // so SlashEntity touch callbacks fire.
+            // so SlashEntity touch callbacks fire on the next DispatchForSimTick.
             if (game.inputTranslator) {
-                game.inputTranslator->ProcessSDLEvent(ev,
+                game.inputTranslator->DrainSDLEvent(ev,
                     static_cast<SDL_Window*>(window));
             }
         }
     }
+    // Reconcile SDL live-finger state after all events are drained (#154, web-safe).
+    if (game.inputTranslator) game.inputTranslator->ReconcileTouch();
+
+    // Dispatch accumulated touch state to InputManager for this sim tick (#173).
+    if (game.inputTranslator) game.inputTranslator->DispatchForSimTick();
 
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);
