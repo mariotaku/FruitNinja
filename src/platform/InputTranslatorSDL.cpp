@@ -322,8 +322,8 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         ie.actionHash = hashTouchMoveY[ch];
         mgr->DispatchEvent(&ie);
 
-        ie.actionHash = hashTouchDown[ch];
-        ie.actionFlags = INPUT_ACTION_DOWN;
+        ie.actionHash  = hashTouchDown[ch];
+        ie.actionFlags = INPUT_ACTION_DOWN | INPUT_ACTION_DOWN_EDGE;
         mgr->DispatchEvent(&ie);
         break;
     }

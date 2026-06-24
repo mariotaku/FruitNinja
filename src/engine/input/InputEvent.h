@@ -4,9 +4,16 @@
 #include <cstdint>
 
 // Action type flags (from InputActionMapper::ProcessEvent at 0x1b3508)
-static const uint32_t INPUT_ACTION_DOWN = 0x10000;
-static const uint32_t INPUT_ACTION_MOVE = 0x20000;
-static const uint32_t INPUT_ACTION_UP   = 0x80000;
+static const uint32_t INPUT_ACTION_DOWN      = 0x10000;
+static const uint32_t INPUT_ACTION_MOVE      = 0x20000;
+static const uint32_t INPUT_ACTION_UP        = 0x80000;
+// Port specific: genuine press-edge flag, not present in binary.
+// Set ONLY on real SDL_FINGERDOWN (first frame of a new touch), never on
+// PollHeldFingers re-dispatches. Used by SlashEntity::TouchDown to force
+// Reset() even when m_BladeActive is still armed from a prior slice -- mirrors
+// the binary's behaviour where the 10ms poll guarantees >=2 DrawSlice frames
+// between lift and repress so the latch always decays before the next TouchDown.
+static const uint32_t INPUT_ACTION_DOWN_EDGE = 0x100000;
 
 struct InputEvent {
     uint32_t actionHash;   // StringHash of action name
