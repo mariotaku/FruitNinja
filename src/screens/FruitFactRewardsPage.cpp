@@ -26,7 +26,7 @@ static Mortar::FontCacheObjectTTF* GetRewardsTTFFont() {
 // Binary @ 0x0017e4d8
 FruitFactRewardsPage::FruitFactRewardsPage(FruitFactPageControl* pCtrl)
     : FruitFactPage(pCtrl)
-    , m_field98(0)
+    , m_pRewardButton(0)
     , m_pTitleBox(0)
     , m_animA(0.0f)
     , m_animB(0.0f)

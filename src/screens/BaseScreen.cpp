@@ -368,7 +368,7 @@ void BaseScreen::UpdateButtons(float dt) {
                     // Fruit alive: redirect tap to shrink-call
                     // TODO: v1.6.1 BaseScreen::UpdateButtons @0x001605f0 -- binary sets MenuButton+0xb8 = 1 on shrink-out (a flag not yet modelled; port previously approximated with m_bEnabled=0, which the binary does NOT touch).
                     btn->m_bClearsMenuItems = 0;  // ASM v1.6.1 UpdateButtons @0x001605fc
-                    // TODO: v1.6.1 BaseScreen::UpdateButtons @0x0016060c -- binary blind-copies Vec3::One into MenuButton+0xd4 (m_fieldD4 region) on shrink-out; port +0xd4 layout unverified, deferred.
+                    // TODO: v1.6.1 BaseScreen::UpdateButtons @0x0016060c -- binary blind-copies Vec3::One into MenuButton+0xd4 (m_reservedD4 region) on shrink-out; port +0xd4 layout unverified, deferred.
                     btn->SetCallback(
                         Mortar::Delegate0<void>::Make(&sb, &ScreenButton::ShrinkButtonCall));
                 } else {
