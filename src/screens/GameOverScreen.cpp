@@ -234,7 +234,7 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_State(0),
       m_Timer(0.0f),
       m_TitleSize(0.0f, 0.0f, 0.0f),
-      field_0xa0(0),
+      m_reservedA0(0),
       m_pRetryBtn(0),
       m_pSlotA8(0),
       m_AnimCounter(0),
@@ -246,11 +246,11 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_pZenPage(0),
       m_pBonusFactPage(0),
       m_pClassicFactPage(0),
-      field_0xd8(0),
-      field_0xdc(0),
+      m_pChildCtrlD8(0),
+      m_pChildCtrlDC(0),
       m_pNoticeCtrl(0),
       m_pBonusScreen(0),
-      field_0xe8(0),
+      m_reservedE8(0),
       m_PostOk(0),
       m_PostInProgress(0),
       m_StarCount(0),
@@ -258,7 +258,7 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_SubObjectVptr(0),
       m_MostFruitCount(-1),
       m_bScoreSubmitted(0),
-      field_0x145(0),
+      m_reserved145(0),
       m_ExpressionIdx(expressionIdx),
       m_BgPatternIdx(bgPatternIdx),
       m_TabIndex(tabIndex),
@@ -289,7 +289,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     // 2. Init sub-object and misc fields
     m_SubObjectVptr  = 0;
-    field_0xe8       = 0;
+    m_reservedE8       = 0;
     m_MostFruitCount = -1;
     m_TitleSizeX     = 0.0f;   // +0x88
     m_TabIndex       = tabIndex;
@@ -371,7 +371,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_AnimTimeMs      = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx    = bgPatternIdx;
-    field_0xa0        = 0;
+    m_reservedA0        = 0;
     m_pBonusScreen    = 0;
     m_AnimCounter     = 0;
     m_FruitFactAlpha  = game ? game_work.m_GameDt : 0.0f;
@@ -409,8 +409,8 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_pCtrl80          = 0;
     m_pBonusFactPage   = 0;
     m_pClassicFactPage = 0;
-    field_0xd8         = 0;
-    field_0xdc         = 0;
+    m_pChildCtrlD8         = 0;
+    m_pChildCtrlDC         = 0;
     m_LinkedScreen     = 0;
     m_pNoticeCtrl      = 0;
     m_PostOk           = 0;
@@ -423,7 +423,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel),
                  "YOU JUST EARNT %d COINS", coinsEarned);
     }
-    field_0x145 = 1;
+    m_reserved145 = 1;
 
     // 17. Arcade off-screen seed
     if (gameMode == Mortar::GAME_MODE_ARCADE) {
@@ -512,8 +512,8 @@ void GameOverScreen::Release() {
         if (m_pCtrl80)          hud->RemoveControl((HUDControl*)m_pCtrl80);
         if (m_pBonusFactPage)   hud->RemoveControl(m_pBonusFactPage);
         if (m_pClassicFactPage) hud->RemoveControl(m_pClassicFactPage);
-        if (field_0xd8)         hud->RemoveControl((HUDControl*)field_0xd8);
-        if (field_0xdc)         hud->RemoveControl((HUDControl*)field_0xdc);
+        if (m_pChildCtrlD8)         hud->RemoveControl((HUDControl*)m_pChildCtrlD8);
+        if (m_pChildCtrlDC)         hud->RemoveControl((HUDControl*)m_pChildCtrlDC);
         if (m_LinkedScreen)     hud->RemoveControl((HUDControl*)m_LinkedScreen);
         if (m_pNoticeCtrl)      hud->RemoveControl(m_pNoticeCtrl);
         if (m_pSlotA8)          hud->RemoveControl(m_pSlotA8);
@@ -558,15 +558,15 @@ void GameOverScreen::Release() {
             delete m_pClassicFactPage;
             m_pClassicFactPage = 0;
         }
-        if (field_0xd8) {
-            ((HUDControl*)field_0xd8)->m_bNoDestructor = 0;
-            delete (HUDControl*)field_0xd8;
-            field_0xd8 = 0;
+        if (m_pChildCtrlD8) {
+            ((HUDControl*)m_pChildCtrlD8)->m_bNoDestructor = 0;
+            delete (HUDControl*)m_pChildCtrlD8;
+            m_pChildCtrlD8 = 0;
         }
-        if (field_0xdc) {
-            ((HUDControl*)field_0xdc)->m_bNoDestructor = 0;
-            delete (HUDControl*)field_0xdc;
-            field_0xdc = 0;
+        if (m_pChildCtrlDC) {
+            ((HUDControl*)m_pChildCtrlDC)->m_bNoDestructor = 0;
+            delete (HUDControl*)m_pChildCtrlDC;
+            m_pChildCtrlDC = 0;
         }
         if (m_LinkedScreen) {
             ((HUDControl*)m_LinkedScreen)->m_bNoDestructor = 0;
@@ -678,8 +678,8 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
     if (ctrl == (HUDControl*)m_pCtrl80)           { m_pCtrl80          = 0; }
     if (ctrl == (HUDControl*)m_pBonusFactPage)    { m_pBonusFactPage   = 0; }
     if (ctrl == (HUDControl*)m_pClassicFactPage)  { m_pClassicFactPage = 0; }
-    if (ctrl == (HUDControl*)field_0xd8)          { field_0xd8         = 0; }
-    if (ctrl == (HUDControl*)field_0xdc)          { field_0xdc         = 0; }
+    if (ctrl == (HUDControl*)m_pChildCtrlD8)          { m_pChildCtrlD8         = 0; }
+    if (ctrl == (HUDControl*)m_pChildCtrlDC)          { m_pChildCtrlDC         = 0; }
     if (ctrl == (HUDControl*)m_LinkedScreen)      { m_LinkedScreen     = 0; }
     if (ctrl == (HUDControl*)m_pSlotA8)           { m_pSlotA8          = 0; }
     if (ctrl == (HUDControl*)m_pSlotB4)           { m_pSlotB4          = 0; }
