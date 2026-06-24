@@ -1,6 +1,6 @@
 // ShopScreen — Sensei's Swag blade/background shop, launched from DojoScreen.
-// Binary: ShopScreen(DojoScreen*) @ 0x0015cdac, Update @ 0x0015e1f4 (387 lines),
-//         Draw @ 0x0015dd50, LoadContent @ 0x0015cb08.
+// Binary: ShopScreen(DojoScreen*) @ 0x001b3f94, Update @ 0x001b321c (387 lines),
+//         DrawOrder @ 0x001b4e48, LoadContent @ 0x001b61c8.
 //
 // Analysed: 2026-04-28T14:00
 
@@ -158,7 +158,7 @@ static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::LoadContent @ 0x0015cb08
+// ShopScreen::LoadContent @ 0x001b61c8
 // Loads 10 textures into static slots (binary-faithful: no guard, no s_TexBackIcon).
 // Binary pattern: LoadLocalisedTexture(name) -> store in static slot.
 // Conditional at end: if LowResBackgrounds() load BG_store_sml.tex else BG_store.tex.
@@ -213,7 +213,7 @@ void ShopScreen::UnLoadContent() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::ShopScreen(DojoScreen*) @ 0x0015cdac
+// ShopScreen::ShopScreen(DojoScreen*) @ 0x001b3f94
 // ---------------------------------------------------------------------------
 ShopScreen::ShopScreen(DojoScreen* parent)
     : HUDControl3d()
@@ -250,14 +250,10 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     m_pSlotItems[0] = nullptr;
     m_pSlotItems[1] = nullptr;
     m_pSlotItems[2] = nullptr;
-    m_pSlotItems[3] = nullptr;  // +0xa8 -- REMOVEADS slot (defunct IAP); binary Init @ 0x0015f820 explicitly zeroes field_0xa8
+    m_pSlotItems[3] = nullptr;  // +0xa8 -- REMOVEADS slot (defunct IAP); binary Init @ 0x001b42ac explicitly zeroes field_0xa8
 
-    // Binary: m_ScrollOffset = (float)(ItemManager->GetNumItems()) + 0.5
-    // Binary reads via vtable+0x20 on the GameTask's ItemManager ref.
-    // Port: compute from stub (returns 0).
-    ItemManager* im = ItemManager::GetInstance();
-    int numItems = im ? im->GetNumItems() : 0;
-    m_ScrollOffset = (float)numItems + 0.5f;
+    // Binary @0x001b3f94: m_ScrollOffset = (float)game_work.m_CoinsBalance + 0.5 (VectorSignedToFloat = vcvt.f32.s32)
+    m_ScrollOffset = (float)game_work.m_CoinsBalance + 0.5f;
 
     // Binary: m_BuyDelay = DAT_0015cd98 (same constant used for m_TransitionAlpha
     // initial value — both set to 0 in port since alpha starts at 0).
@@ -756,7 +752,7 @@ void ShopScreen::EquipCallback() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::Update(float) @ 0x0015e1f4 (387 lines)
+// ShopScreen::Update(float) @ 0x001b321c (387 lines)
 // ---------------------------------------------------------------------------
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
@@ -1118,7 +1114,7 @@ void ShopScreen::Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::Draw(float*) @ 0x0015dd50
+// ShopScreen::Draw(float*) @ 0x001b4e48
 //
 // Top-level control flow (binary-faithful):
 //   if (m_LayerFlags == m_LayerFlagsAlt)  -> Block A (one-shot BG + dialog)
