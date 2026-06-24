@@ -52,9 +52,9 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     , m_Text(0)
     , m_GlyphsBuilt(false)
     , m_SurfacesBuilt(false)
-    , m_field5e(0)
-    , m_field5f(255)
-    , m_field60(0.0f)
+    , m_CircleFlag(0)
+    , m_reserved5f(255)
+    , m_TotalAdvance(0.0f)
 {
     // Zero the base struct.
     memset(&m_Base, 0, sizeof(m_Base));
@@ -231,7 +231,7 @@ void BakedStringTTF::ApplyFormatting_LeftJustify()
         // Advance: advanceX + 1.0 inter-glyph gap.
         penX += entry->advanceX + 1.0f;
     }
-    m_field60 = penX;
+    m_TotalAdvance = penX;
 }
 
 // BuildSurfaces @0x00248c14:
@@ -419,10 +419,10 @@ void BakedStringTTF::ApplyFormatting_Circle_Internal(float radius)
 
     DeleteSurfaces();
     ApplyFormatting_LeftJustify();
-    m_field5e = 1;
+    m_CircleFlag = 1;
 
     float degPerUnit = 360.0f / (radius * 2.0f * k_PI);
-    float half       = degPerUnit * m_field60 * 0.5f;
+    float half       = degPerUnit * m_TotalAdvance * 0.5f;
 
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
@@ -555,7 +555,7 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t a
     float alignOffX = 0.0f;
     float alignOffY = 0.0f;
 
-    if (m_field5e == 0) {
+    if (m_CircleFlag == 0) {
         // Compute bounding box from surface verts.
         float xMin =  1e30f, xMax = -1e30f;
         float yMin =  1e30f, yMax = -1e30f;
@@ -664,7 +664,7 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t a
 
 float BakedStringTTF::GetTotalAdvance() const
 {
-    return m_field60;
+    return m_TotalAdvance;
 }
 
 int BakedStringTTF::GetGlyphCount() const

@@ -130,7 +130,7 @@ MenuButton::MenuButton()
       m_BaseScale(0.0f, 0.0f, 0.0f),
       m_DrawOffset(0.0f, 0.0f, 0.0f),
       m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr),
-      _field12C(0),
+      m_PlayerColour(),
       m_GrowInTimer(0.0f),
       m_bRespondsToBackKey(0),
       m_bDragCancel(0),
@@ -149,7 +149,7 @@ MenuButton::MenuButton()
       m_NewBouncePhase(100.0f),
       m_ShakeTimer(0.0f)
 {
-    m_field130 = 0;
+    m_FlipDirection = 0;
     _pad131[0] = 0; _pad131[1] = 0; _pad131[2] = 0;
     _pad14A[0] = 0; _pad14A[1] = 0;
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
@@ -217,8 +217,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_pTrackedFruit  = nullptr;
     // m_ShakeScale @ +0x154: x=1.0, y=0.85, z=0.85 (DAT_0019bafc=0.85f).
     m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
-    // m_field130 @ +0x130: Init writes 0 (*(uchar*)&m_field130 = 0).
-    m_field130       = 0;
+    // m_FlipDirection @ +0x130: Init writes 0 (*(uchar*)&m_FlipDirection = 0).
+    m_FlipDirection  = 0;
 
     // ASM-spec v1.6.1 MenuButton::Init @0x0019b994: m_RestScale (+0x13C) is set ONLY
     // from the caller's hitBounds/size Vec3 (param_4). Binary has NO texture-pixel
