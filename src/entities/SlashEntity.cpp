@@ -372,12 +372,28 @@ void SlashEntity::Reset() {
              m_PointCount);
 #endif
 
+    // ASM-spec v1.6.1 SlashEntity::Reset @0x1e6688: fully wipe both ribbon buffers
+    //   (pos=0, normal=(0,0,1), uv=0, colour=white) for all m_SplitPoint verts.
+    //   Clearing only .colour (prior port) left stale positions; DrawSlice submits
+    //   m_PointCount+1 verts and the head-cap slot [m_PointCount] is undrawn until
+    //   m_PointCount>2, so the first frames of a new slice read the previous slice's
+    //   vertex -> bridging triangle.
     if (m_pLeftBuffer && m_pRightBuffer) {
         Colour white(255, 255, 255, 255);
         uint32_t whitePacked = white.PlatformColour();
-        for (int i = 0; i < m_SplitPoint; ++i) {
-            m_pLeftBuffer[i].colour  = whitePacked;
-            m_pRightBuffer[i].colour = whitePacked;
+        for (int side = 0; side < 2; ++side) {
+            QUADCUSTOMVERTEX* buf = (side == 0) ? m_pLeftBuffer : m_pRightBuffer;
+            for (int i = 0; i < m_SplitPoint; ++i) {
+                buf[i].x      = 0.0f;
+                buf[i].y      = 0.0f;
+                buf[i].z      = 0.0f;
+                buf[i].nx     = 0.0f;
+                buf[i].ny     = 0.0f;
+                buf[i].nz     = 1.0f;
+                buf[i].u      = 0.0f;
+                buf[i].v      = 0.0f;
+                buf[i].colour = whitePacked;
+            }
         }
     }
 

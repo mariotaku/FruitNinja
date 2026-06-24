@@ -323,6 +323,14 @@ public:
         return -99.0f;
     }
 
+    // Port specific: test-seam accessor for the Y position of vertex[i] in the left buffer.
+    // Upper bound is m_SplitPoint (not m_PointCount) so the head-cap slot is reachable.
+    // Returns -99999.0f if buffer is not allocated or index is out of range.
+    float GetVertexY(int i) const {
+        if (m_pLeftBuffer && i >= 0 && i < m_SplitPoint) return m_pLeftBuffer[i].y;
+        return -99999.0f;
+    }
+
     // Port specific: number of live trail points.
     int GetPointCount() const { return m_PointCount; }
 
