@@ -130,9 +130,9 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_field130 != 0)
+        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_FlipDirection != 0)
         // Binary v1.6.1 TutorialControl::ResetTutePos @0x00162f2c: exact form
-        m_bFlipX = (pos.x > 0.0f) != (btn->m_field130 != 0);
+        m_bFlipX = (pos.x > 0.0f) != (btn->m_FlipDirection != 0);
     }
     m_AnimTimer = ANIM_INACTIVE;
 }
@@ -164,9 +164,9 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
-        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_field130 != 0)
+        // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_FlipDirection != 0)
         // Binary v1.6.1 TutorialControl::ButtonPressedAtPos @0x00162e58: exact form
-        m_bFlipX = (pos.x > 0.0f) != (btn->m_field130 != 0);
+        m_bFlipX = (pos.x > 0.0f) != (btn->m_FlipDirection != 0);
     }
 
     m_AnimTimer += 9.5f;   // -10.0 -> -0.5; starts animation in ~0.5 s

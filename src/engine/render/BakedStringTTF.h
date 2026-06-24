@@ -104,17 +104,25 @@ struct BakedStringEffect {
 // BakedStringEffectBase -- base object at +0x00 of BakedStringTTF. sizeof 0x38 (=56).
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
 struct BakedStringEffectBase {
-    // +0x00..+0x0f: unknown fields (colour, bounds, or flags -- not decompiled)
-    uint32_t    _field00;       // +0x00
-    uint32_t    _field04;       // +0x04
-    uint32_t    _field08;       // +0x08
-    uint32_t    _field0c;       // +0x0c
+    // +0x00..+0x0f: glyph-space bounding box, written by UpdateBounds @0x00247ed0
+    // and read by Draw @0x002497a8 for alignment offset.
+    //   UpdateBounds inits {minX=999999, maxY=-big, maxX=-big, minY=999999} then
+    //   folds each surface's [+0x28..+0x34] extents in; Draw computes
+    //   width = maxX - minX, height = (minY - maxY)/2 - minY.
+    float       m_BoundsMinX;   // +0x00 (Draw: -X for right/centre align)
+    float       m_BoundsMaxY;   // +0x04
+    float       m_BoundsMaxX;   // +0x08 (Draw: width = MaxX - MinX)
+    float       m_BoundsMinY;   // +0x0c (Draw: height basis)
 
     // +0x10: gradient stop container (AddColour targets).
     // Spans +0x10..+0x1f (global BakedStringTTF offsets).
     BakedStringEffect m_Effect; // +0x10 (16 bytes, ends at +0x20)
 
-    uint32_t    _field20;       // +0x20
+    // +0x20: gradient-stop list "cap"/end-of-capacity pointer in the binary
+    // (Mortar::GradientPoint*; binary BakedStringEffect at m_Base+0x10 keeps the
+    // gradient stops as a 3-pointer vector at +0x18/+0x1c/+0x20). The port models
+    // the stops inline in m_Effect instead, so this slot is layout-only here.
+    uint32_t    m_GradientCap;  // +0x20 (GradientPoint* in binary; unused in port path)
     float       m_Radius;       // +0x24 -- stored by ApplyFormatting_Circle
 
     float       m_Weight;       // +0x28 signedWeight * fc[+0x10c][+0x10]
@@ -123,7 +131,9 @@ struct BakedStringEffectBase {
     uint8_t     _pad31;         // +0x31
     uint8_t     _pad32;         // +0x32
     uint8_t     _pad33;         // +0x33
-    uint32_t    _field34;       // +0x34
+    // +0x34: BakedStringEffect::m_Field24 in the binary -- written 0 by the effect
+    // ctor @0x00248448, never read on any path RE'd. Pure layout filler.
+    uint32_t    m_reserved34;   // +0x34 // purpose unknown (binary m_Field24, write-only)
 };
 
 #ifdef __bada__
@@ -206,14 +216,20 @@ private:
     // +0x5d: m_SurfacesBuilt
     bool    m_SurfacesBuilt;    // +0x5d
 
-    // +0x5e: field_5e (=1 after circle layout; Draw skips align when set)
-    uint8_t m_field5e;          // +0x5e
+    // +0x5e: circle-layout flag. ApplyFormatting_LeftJustify @0x00247874 sets 0,
+    // ApplyFormatting_Circle_Internal @0x00248cc8 sets 1; Draw @0x002497a8 skips
+    // the alignment block when set.
+    uint8_t m_CircleFlag;       // +0x5e
 
-    // +0x5f: field_5f (per-string alpha)
-    uint8_t m_field5f;          // +0x5f
+    // +0x5f: never written or read on any RE'd ctor/rebuild/draw path (ctor
+    // @0x00249a5c leaves it; Init @0x002475e0 leaves it). Pure layout byte.
+    // NOTE: the port's ctor inits this to 255; the binary does not -- harmless
+    // since nothing reads it, but it is a port-side liberty (out of scope here).
+    uint8_t m_reserved5f;       // +0x5f // purpose unknown (uninitialised in binary)
 
-    // +0x60: field_60 (total advance, arc-centering basis)
-    float   m_field60;          // +0x60
+    // +0x60: total pen advance, set by ApplyFormatting_LeftJustify; used by
+    // ApplyFormatting_Circle_Internal as the arc-centering half-width basis.
+    float   m_TotalAdvance;     // +0x60
 
     // BuildGlyphs @0x00248b28: DeleteGlyphs; Utf8StringIterator(m_Text);
     //   per cp: g=fc->GetGlyph(cp, m_ScaledHeight); GlyphTTF alloc; m_Glyphs.push_back.
@@ -260,7 +276,7 @@ static_assert(__builtin_offsetof(BakedStringTTF, m_Glyphs) == 0x40, "m_Glyphs of
 static_assert(__builtin_offsetof(BakedStringTTF, m_Text) == 0x58, "m_Text offset mismatch");
 static_assert(__builtin_offsetof(BakedStringTTF, m_GlyphsBuilt) == 0x5c, "m_GlyphsBuilt offset mismatch");
 static_assert(__builtin_offsetof(BakedStringTTF, m_SurfacesBuilt) == 0x5d, "m_SurfacesBuilt offset mismatch");
-static_assert(__builtin_offsetof(BakedStringTTF, m_field60) == 0x60, "field_60 offset mismatch");
+static_assert(__builtin_offsetof(BakedStringTTF, m_TotalAdvance) == 0x60, "m_TotalAdvance offset mismatch");
 };
 #endif
 

@@ -8,7 +8,7 @@
 // ASM-spec v1.6.1 MenuButton @ ctor 0x0019bb08 / Init 0x0019b994, sizeof 0x178:
 //   Delegate0 is 0x24 bytes; m_DeletedCallback@0xAC fills to 0xCF (no field @0xCC --
 //   m_FadeAlphaIdx was a v1.5.x phantom); m_SparkleTimer@0xF8, m_NewIndicatorTimer@0xFC;
-//   m_field130@0x130 (byte, Init writes 0; TutorialControl reads for flip direction);
+//   m_FlipDirection@0x130 (byte, Init writes 0; TutorialControl reads for flip direction);
 //   m_RestScale@0x13C is a plain Vec3 (all 3 floats); m_bHasHitArea@0x148, m_bAcceptsTouch@0x149,
 //   2 pad bytes @0x14A; m_pTrackedFruit@0x14C; m_ShakeScale@0x154 (Init=(1,0.85,0.85));
 //   m_ShakeTimer@0x174.
@@ -161,12 +161,17 @@ public:
     // v1.6.1 MenuButton::SetText @0x0019b0ac (wantGlow path).
     Mortar::BakedStringTTF* m_pLabelGlow;  // +0x128
 
-    // +0x12C: un-RE'd 4-byte field (binary offset confirmed by m_field130@+0x130).
-    uint32_t        _field12C;             // +0x12C
+    // +0x12C: per-player tint colour (P2P multiplayer). ctor @0x0019bb08
+    // default-constructs it (Colour::Colour) then copies it into a scratch; Draw
+    // @0x0019c2e4 gates a tint branch on (m_PlayerColour != Colour::White).
+    // Defunct: P2P multiplayer tint -- effectively always White in single-player;
+    //          v1.6.1 MenuButton @0x0019bb08 / Draw @0x0019c2e4.
+    Colour          m_PlayerColour;        // +0x12C
 
-    // +0x130: binary byte written by Init @0x0019b994 (*(uchar*)&m_field130 = 0);
-    // read by TutorialControl::ResetTutePos/@ButtonPressedAtPos for flip direction.
-    uint8_t         m_field130;            // +0x130
+    // +0x130: flip-direction flag. Init @0x0019b994 writes 0; TutorialControl
+    // (ResetTutePos / ButtonPressedAtPos) XORs it with (pos.x > 0) to pick the
+    // tute-arrow flip side.
+    uint8_t         m_FlipDirection;       // +0x130
     uint8_t         _pad131[3];            // +0x131..+0x133
 
     // +0x134: grow-in delay countdown; Init=1.0; Update gates on >0; decrements by dt.
@@ -359,7 +364,7 @@ static_assert(__builtin_offsetof(MenuButton, m_DrawOffset)         == 0x114, "Me
 static_assert(__builtin_offsetof(MenuButton, m_pLabelFg)           == 0x120, "MenuButton m_pLabelFg offset");
 static_assert(__builtin_offsetof(MenuButton, m_pLabelShadow)       == 0x124, "MenuButton m_pLabelShadow offset");
 static_assert(__builtin_offsetof(MenuButton, m_pLabelGlow)         == 0x128, "MenuButton m_pLabelGlow offset");
-static_assert(__builtin_offsetof(MenuButton, m_field130)          == 0x130, "MenuButton m_field130 offset");
+static_assert(__builtin_offsetof(MenuButton, m_FlipDirection)     == 0x130, "MenuButton m_FlipDirection offset");
 static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)       == 0x134, "MenuButton m_GrowInTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_RestScale)         == 0x13C, "MenuButton m_RestScale offset");
 static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)       == 0x148, "MenuButton m_bHasHitArea offset");
