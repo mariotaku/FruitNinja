@@ -202,34 +202,34 @@ struct PSPParticle {
     float    m_SpinStart;       // +0x3C
     uint16_t m_NextLink;        // +0x40  1-based index: free-next (free) / live-next (live); 0=end
     uint16_t _pad42;            // +0x42
-    uint16_t m_field0x44;       // +0x44
+    uint16_t m_RotAngleIdx;     // +0x44  rotation angle as 16-bit index (AddParticle: angle*182; Draw: += spin*360*182*dt)
     uint16_t m_pad46;           // +0x46
     float    m_RotCycleRate;    // +0x48
     float    m_RotCyclePhase;   // +0x4C
-    uint16_t m_field0x50;       // +0x50
+    uint16_t m_ScaleXAngleIdx;  // +0x50  X-scale cycle angle (16-bit idx); Draw: CosIdx -> width scale (local_44)
     uint16_t m_pad52;           // +0x52
     float    m_RotCycleAmp;     // +0x54
     float    m_SpinEnd;         // +0x58  port: spin-end rate (rad/sec)
-    uint16_t m_field0x5c;       // +0x5C
+    uint16_t m_ScaleYAngleIdx;  // +0x5C  Y-scale cycle angle (16-bit idx); Draw: CosIdx -> height scale (local_48)
     uint16_t m_pad5e;           // +0x5E
     float    m_CycleXRate;      // +0x60
     float    m_CycleXPhase;     // +0x64
     float    m_CycleYRate;      // +0x68
     float    m_CycleYPhase;     // +0x6C
-    float    m_field0x70;       // +0x70
-    float    m_field0x74;       // +0x74
-    float    m_field0x78;       // +0x78
-    uint16_t m_field0x7c;       // +0x7C
-    uint16_t m_field0x7e;       // +0x7E
-    uint16_t m_field0x80;       // +0x80
+    float    m_RotCycleC0;      // +0x70  rotation-cycle modulation constant term (AddParticle: lerp tmpl+0x8C/0x90)
+    float    m_RotCycleC1;      // +0x74  rotation-cycle modulation linear term (AddParticle: lerp tmpl+0x7C/0x80)
+    float    m_RotCycleC2;      // +0x78  rotation-cycle modulation quadratic term (per-life rate; AddParticle: (lerp tmpl+0x84/0x88)/m_Life)
+    uint16_t m_AlphaBase;       // +0x7C  packed colour/alpha base (Draw: VectorUnsignedToFloat -> alpha local_f4)
+    int16_t  m_AlphaMidDelta;   // +0x7E  colour interp delta, first half (Draw local_f2)
+    int16_t  m_AlphaEndDelta;   // +0x80  colour interp delta, second half (Draw local_f0)
     uint16_t m_pad82;           // +0x82
-    Vec2     m_field0x84;       // +0x84
-    Vec2     m_field0x8c;       // +0x8C
-    float    m_field0x94;       // +0x94
-    float    m_field0x98;       // +0x98
-    uint8_t  m_field0x9c;       // +0x9C
+    Vec2     m_BasisX;          // +0x84  rotated quad basis X (Draw: m_BasisX from RotCycle SinIdx/CosIdx)
+    Vec2     m_BasisY;          // +0x8C  rotated quad basis Y
+    float    m_Basis2Cos;       // +0x94  secondary basis cos*1.41 (Draw flM_Basis2Cos)
+    float    m_Basis2Sin;       // +0x98  secondary basis sin*1.41 (Draw flM_Basis2Sin)
+    uint8_t  m_NoAttract;       // +0x9C  per-particle flag: when set, skip global-origin attractor pull (Draw local_d3 gate)
     uint8_t  m_pad9d[3];        // +0x9D
-    int32_t  m_SetIdx;          // +0xA0  port: set index within emitter template (not in binary; repurposes m_field44)
+    int32_t  m_SetIdx;          // +0xA0  port: set index within emitter template (binary nM_field0xA0; written by AddParticle as (float)this)
 
     PSPParticle()
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
@@ -237,18 +237,18 @@ struct PSPParticle {
         , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
         , m_Rotation(0), m_SpinStart(0)
         , m_NextLink(0), _pad42(0)
-        , m_field0x44(0), m_pad46(0)
+        , m_RotAngleIdx(0), m_pad46(0)
         , m_RotCycleRate(0), m_RotCyclePhase(0)
-        , m_field0x50(0), m_pad52(0)
+        , m_ScaleXAngleIdx(0), m_pad52(0)
         , m_RotCycleAmp(0), m_SpinEnd(0)
-        , m_field0x5c(0), m_pad5e(0)
+        , m_ScaleYAngleIdx(0), m_pad5e(0)
         , m_CycleXRate(0), m_CycleXPhase(0)
         , m_CycleYRate(0), m_CycleYPhase(0)
-        , m_field0x70(0), m_field0x74(0), m_field0x78(0)
-        , m_field0x7c(0), m_field0x7e(0), m_field0x80(0), m_pad82(0)
-        , m_field0x84(0,0), m_field0x8c(0,0)
-        , m_field0x94(0), m_field0x98(0)
-        , m_field0x9c(0), m_SetIdx(0)
+        , m_RotCycleC0(0), m_RotCycleC1(0), m_RotCycleC2(0)
+        , m_AlphaBase(0), m_AlphaMidDelta(0), m_AlphaEndDelta(0), m_pad82(0)
+        , m_BasisX(0,0), m_BasisY(0,0)
+        , m_Basis2Cos(0), m_Basis2Sin(0)
+        , m_NoAttract(0), m_SetIdx(0)
     {
         m_pad9d[0] = m_pad9d[1] = m_pad9d[2] = 0;
     }
@@ -263,18 +263,18 @@ static_assert(__builtin_offsetof(PSPParticle, m_Life)         == 0x28, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Rotation)     == 0x38, "");
 static_assert(__builtin_offsetof(PSPParticle, m_SpinStart)    == 0x3C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_NextLink)     == 0x40, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x44)    == 0x44, "");
+static_assert(__builtin_offsetof(PSPParticle, m_RotAngleIdx)   == 0x44, "");
 static_assert(__builtin_offsetof(PSPParticle, m_RotCycleRate) == 0x48, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x50)    == 0x50, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ScaleXAngleIdx) == 0x50, "");
 static_assert(__builtin_offsetof(PSPParticle, m_RotCycleAmp)  == 0x54, "");
 static_assert(__builtin_offsetof(PSPParticle, m_SpinEnd)      == 0x58, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x5c)    == 0x5C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ScaleYAngleIdx) == 0x5C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_CycleXRate)   == 0x60, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x7c)    == 0x7C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x84)    == 0x84, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x8c)    == 0x8C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x94)    == 0x94, "");
-static_assert(__builtin_offsetof(PSPParticle, m_field0x9c)    == 0x9C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_AlphaBase)    == 0x7C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_BasisX)       == 0x84, "");
+static_assert(__builtin_offsetof(PSPParticle, m_BasisY)       == 0x8C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Basis2Cos)    == 0x94, "");
+static_assert(__builtin_offsetof(PSPParticle, m_NoAttract)    == 0x9C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_SetIdx)       == 0xA0, "");
 #endif
 
