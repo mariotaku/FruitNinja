@@ -59,6 +59,15 @@ endmacro()
 # Pure-logic tests (no SDL, no GL, no audio)
 # ---------------------------------------------------------------------------
 
+# FixedStepDriver unit test -- no SDL, no GL, no audio.
+# Covers steady 60/144/30 Hz streams, 500ms spike clamping, alpha bounds.
+# Header-only target: only needs the src/ include path.
+add_executable(test_fixedstep test_fixedstep.cpp)
+target_include_directories(test_fixedstep PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME fixedstep COMMAND test_fixedstep)
+
 # AsciiString SSO correctness -- regression guard for the strlen+1/strlen mis-RE.
 # Pure in-process: no GPU, no audio, no file I/O.
 add_executable(test_asciistring test_asciistring.cpp)

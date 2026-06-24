@@ -17,21 +17,15 @@
 // can reach it.  Must outlive the emscripten main loop.
 static Game g_game;
 
-// Port specific: fixed-timestep accumulator state for the Emscripten path.
-// The simulation is frame-rate-coupled: SystemManager::Update writes a fixed
-// dt = 1/60 s per tick (binary 0x0018ade0, DAT_0018ae84) and physics+spin both
-// scale by it, so the real-time game speed equals the TICK RATE. The design
-// intent is ~60 ticks/s (hardcoded FPS=59, dt=1/60 -> real-time); the native
-// run()'s FRAME_MS=10 is only an upper FPS *floor*, while vsync gates the real
-// native rate to the display refresh (~60 on a 60 Hz panel).
-// Without accumulation, RAF fires at the display refresh (120 Hz on the test
-// phone) -> sim runs 2x too fast. The accumulator must therefore target the
-// DESIGN rate of 60 ticks/s (NOT 100 = FRAME_MS/10, which ran ~1.67x fast and
-// left fruit trajectories visibly off while spin still "looked" right).
-static const double EM_FRAME_MS    = 1000.0 / 60.0;  // target ms per sim tick (60 ticks/s)
-static const int    EM_MAX_STEPS   = 5;      // spiral-of-death guard
-static double       g_accumulator  = 0.0;    // unprocessed ms carried between RAFs
-static double       g_lastTime     = -1.0;   // last RAF timestamp (emscripten_get_now)
+// Port specific: fixed-timestep accumulator for the Emscripten path.
+// Uses the shared FixedStepDriver so the desktop and web builds have a single
+// source of truth for frameMs=1000/60 and maxSteps=5.
+// Without accumulation, RAF fires at display refresh (120 Hz on a test phone)
+// -> sim runs 2x too fast. The accumulator targets 60 ticks/s (the design rate
+// hardcoded in SystemManager::Update, binary 0x0018ade0 / DAT_0018ae84).
+#include "platform/FixedStepDriver.h"
+static fn::FixedStepDriver g_driver;
+static double g_lastTime = -1.0;   // last RAF timestamp from emscripten_get_now()
 
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
@@ -80,17 +74,12 @@ static void EmscriptenFrame(void* arg) {
         return;
     }
 
-    // Port specific: fixed-timestep accumulator.
-    // Accumulate real elapsed time, then drain in FRAME_MS-sized steps so
-    // the simulation always advances at the same wall-clock rate regardless
-    // of display refresh (60 Hz, 120 Hz, etc.).
-    // Target is 60 ticks/s (EM_FRAME_MS ~= 16.667 ms), the design rate.
-    // On 60 Hz: ~16.7 ms elapsed -> 1 step per RAF.
-    // On 120 Hz: ~8.3 ms elapsed -> 0 steps every other RAF, 1 step the next
-    //   -> 60 ticks/s, decoupled from the 120 Hz refresh.
-    // Note: frameTick() bundles poll+update+render, so a multi-step callback
-    // redraws N times per RAF.  This is acceptable for correctness; a future
-    // optimisation could separate update from render for the catch-up steps.
+    // Port specific: fixed-timestep accumulator (shared FixedStepDriver).
+    // Poll input ONCE per RAF (not per sim step) so held-finger TouchDown_N is
+    // not re-dispatched during catch-up ticks, which would change slice behaviour
+    // on high-refresh displays.  N sim steps run, then ONE render pass.
+    // On 60 Hz:  ~16.7 ms -> 1 step, 1 render.
+    // On 120 Hz: ~8.3 ms  -> 0 or 1 step per RAF, 60 ticks/s total, 1 render/RAF.
     double now = emscripten_get_now();
     if (g_lastTime < 0.0) {
         g_lastTime = now;
@@ -98,18 +87,20 @@ static void EmscriptenFrame(void* arg) {
     double elapsed = now - g_lastTime;
     g_lastTime = now;
 
-    // Clamp elapsed to guard against tab-suspend / huge gaps.
-    if (elapsed > EM_FRAME_MS * EM_MAX_STEPS) {
-        elapsed = EM_FRAME_MS * EM_MAX_STEPS;
+    game->pollInput();
+    if (!game->running) {
+        EM_ASM({
+            if (typeof window._fnShowRestart === 'function') { window._fnShowRestart(); }
+        });
+        emscripten_cancel_main_loop();
+        return;
     }
-    g_accumulator += elapsed;
 
-    int steps = 0;
-    while (g_accumulator >= EM_FRAME_MS && steps < EM_MAX_STEPS) {
-        game->frameTick();
-        g_accumulator -= EM_FRAME_MS;
-        ++steps;
+    int steps = g_driver.advance(elapsed);
+    for (int i = 0; i < steps && game->running; ++i) {
+        game->stepUpdate();
     }
+    game->renderFrame();
 
     // Port specific: web (#73) -- fade the DOM loading splash out once the game has
     // actually rendered a few frames.  The shell keeps the splash fully opaque over

@@ -121,7 +121,10 @@ struct Game : public Mortar::MortarGame {
     bool init(void* win, void* gl);   // win = SDL_Window*, gl = SDL_GLContext (opaque to header)
     void shutdown();
     void run();
-    void frameTick();               // Port specific: one game tick; used by Emscripten main loop
+    void frameTick();               // Port specific: one game tick; thin wrapper for the three below
+    void pollInput();               // Port specific: SDL event loop + BeginFrame (once per display frame)
+    void stepUpdate();              // Port specific: dt=0 + SystemManager::Update + GameTaskUpdate
+    void renderFrame();             // Port specific: glViewport + BeginFrame + GameTaskDraw + SwapWindow
     void runFrames(int frameCount);
 };
 
