@@ -73,8 +73,9 @@ struct SPAWNER_INFO {
     int                      m_RemainingCount;   // +0x50
     // +0x54: fractional spawn count accumulator
     float                    m_SpawnCountF;      // +0x54
-    // +0x58: unknown
-    int                      m_field58;          // +0x58
+    // +0x58: reserved -- no meaningful read site in the binary. Reset/Resume/SaveWaveInfo
+    // only ever write 0 here (Resume restore @0x0012c4a0 sets it 0). Purpose unknown.
+    int                      m_reserved58;       // +0x58
     // +0x5c: countdown timer (decremented by dt*dtMod each tick)
     float                    m_SpawnTimer;       // +0x5c
     // +0x60: "mirror" attr (1 if attr present and != "false"; 0 if absent)
@@ -93,7 +94,7 @@ struct SPAWNER_INFO {
         , m_SpawnMin(0.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(0.0f)
         , m_GrowthInc(0.0f)
         , m_Delay(0.0f), m_DelayInc(0.0f)
-        , m_RemainingCount(0), m_SpawnCountF(0.0f), m_field58(0)
+        , m_RemainingCount(0), m_SpawnCountF(0.0f), m_reserved58(0)
         , m_SpawnTimer(0.0f)
         , m_bMirror(0)
     {
@@ -111,7 +112,7 @@ struct SPAWNER_INFO {
     // BOMB / BOMB_PINEAPPLE -> -2; RANDOM -> Fruit::RandomFruit(false); else Fruit::FruitType.
     void SelectTypes();
 
-    // Reset spawner for a new wave. waveRevisitCounter = wave->field_0x34.
+    // Reset spawner for a new wave. waveRevisitCounter = wave->m_RevisitCounter.
     void Reset(float waveRevisitCounter) {
         float spawnCount = m_SpawnMin + m_GrowthInc * waveRevisitCounter;
         float spawnMax   = m_SpawnMax + m_GrowthInc * waveRevisitCounter;
@@ -149,12 +150,14 @@ struct WAVE_INFO {
     float                    m_NextWaveDelayInc; // +0x24
     // +0x28: NextWaveDelay "wait" attr
     float                    m_NextWaveWait;     // +0x28
-    // +0x2c: (gap/padding — binary layout has a gap here)
-    float                    m_field2c;          // +0x2c
+    // +0x2c: reserved -- binary layout has a gap here; no read site. Purpose unknown.
+    float                    m_reserved2c;       // +0x2c
     // +0x30: NextWaveDelay "waitSpinc" attr
     float                    m_NextWaveWaitSpInc; // +0x30
-    // +0x34: wave revisit counter (incremented each GetNextWave selection)
-    float                    field_0x34;         // +0x34
+    // +0x34: wave revisit counter (incremented each GetNextWave selection; starts at 1.0).
+    // GetNextWave bumps it on re-selection; drives WaveDt/delay growth & spawner Reset.
+    // v1.6.1 GetNextWave @0x00125be4 / ResetWaveChances @0x0012b8c0
+    float                    m_RevisitCounter;   // +0x34
     // +0x38: seeded from DEFAULT_WAVE_INFO::m_bWaitForEntities (XML "waitForEntities" on <defaults>);
     // also written by <NextWaveDelay waitForEntities> attr per-wave.
     uint8_t                  m_bWaitForEntities; // +0x38
@@ -179,8 +182,8 @@ struct WAVE_INFO {
     int                      m_GamesMax;         // +0x50
     // +0x54: ChooseFrom types vector
     std::vector<std::string> m_SpecialFruits;   // +0x54
-    // +0x60: always cleared to 0 during Init
-    int                      m_field60;          // +0x60
+    // +0x60: reserved -- only ever cleared to 0 during Init; no other access. Purpose unknown.
+    int                      m_reserved60;       // +0x60
     // +0x64: "criticalChance" attr
     float                    m_CriticalChance;   // +0x64
     // +0x68: sequential wave index in mode list
@@ -202,17 +205,17 @@ struct WAVE_INFO {
         , m_WaveDt(1.0f), m_WaveDtInc(0.0f), m_WaveDtSpInc(0.0f)
         , m_NextWaveSpeedLoss(0.0f)
         , m_NextWaveDelay(2.0f), m_NextWaveDelayInc(0.0f)
-        , m_NextWaveWait(0.0f), m_field2c(0.0f)
+        , m_NextWaveWait(0.0f), m_reserved2c(0.0f)
         , m_NextWaveWaitSpInc(0.0f)
         // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; revisit counter starts at 1.
-        , field_0x34(1.0f)
+        , m_RevisitCounter(1.0f)
         // ASM-verified: binary WAVE_INFO ctor @ 0x00126748 sets BOTH to 1.
         , m_bWaitForEntities(1), m_bWaitForProcessing(1)
         // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; m_Chance=10, m_ChanceRegrowth=0.25
         , m_Chance(10), m_CurrentChance(10)
         , m_ChanceRegrowth(0.25f), m_CurrentRegrowth(0.25f)
         , m_GamesMin(-1), m_GamesMax(-1)
-        , m_field60(0), m_CriticalChance(1.0f)
+        , m_reserved60(0), m_CriticalChance(1.0f)
         , m_WaveIndex(0), m_pCoinChance(nullptr)
         , m_OverideProbabilityPool(100), m_TotalWeight(0)
         , m_WaveNumber(0)
@@ -331,8 +334,9 @@ struct PROBABILITY_OVERIDE {
     // +0x18..+0x67: per-type spawn-tracking queue (20 ints, init -1).
     // Used by UpdateWave blitz-spawn loop to track which types were already spawned.
     int                      m_TypeQueue[20];    // +0x18
-    // +0x68: reserved int (init 0).
-    int                      m_field68;          // +0x68
+    // +0x68: valid type-queue count. SplitWords("types") return value (Parse @0x001231d8);
+    // used as the Rand32 upper bound in GetType @0x001217e4 (m_TypeQueue[Rand32(m_TypeCount)]).
+    int                      m_TypeCount;        // +0x68
     // +0x6c: power-up disable threshold (XML "disableWhenPowered"). Binary default 0.0.
     float                    m_DisableWhenPowered; // +0x6c
     // +0x70: minimum game count gate (XML "waveCount"). Binary default 0.
@@ -342,7 +346,7 @@ struct PROBABILITY_OVERIDE {
 
     PROBABILITY_OVERIDE()
         : m_PercentChance(0), m_PerWave(0), m_Counter(0)
-        , m_field68(0), m_DisableWhenPowered(0.0f)
+        , m_TypeCount(0), m_DisableWhenPowered(0.0f)
         // DIFFERS: binary ctor @ 0x00126884 writes literal pool word 0xfff0bdc0 to +0x70
         // (m_PerWaveCount). This is likely a pointer slot or pre-relocation GOT offset baked
         // into the literal pool; treating as int default 0 is safe because
@@ -361,7 +365,7 @@ struct PROBABILITY_OVERIDE {
     // BOMB/BOMB_PINEAPPLE -> m_TypeQueue[i]=-2; RANDOM -> RandomFruit(false); else FruitType(name,false).
     void SelectType();
 
-    // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_field68)].
+    // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_TypeCount)].
     // Does NOT call SelectType (SelectType is called once at Reset/NewGame).
     // TODO: latent — Data/xml/fruitlist.xml has no <FruitInfo name="starfruit">; FruitType("starfruit",false)==-1.
     // GetType() returns -1 for the starfruit override, which falls through to RandomFruit in callers.

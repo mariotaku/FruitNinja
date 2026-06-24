@@ -102,24 +102,24 @@ SpawnPlacement WaveManager::ParsePlacement(const char* side) {
 WaveManager::WaveManager()
     : m_SpawnLevel(1.0f)
     , m_CritChanceMult(1.0f)
-    , field_0x35(1)   // TODO: v1.6.1 WaveManager::WaveManager @ 0x00125d7c -- verify ctor writes field_0x35=1; expected BSS-zero if binary ctor omits it (Reset() sets it to 1 unconditionally)
-    , field_0x36(0)
-    , field_0x37(0)
-    , field_0x38(-1)
-    , field_0x40(0.0f), field_0x44(0.0f)
+    , m_SyncLocalReady(1)   // TODO: v1.6.1 WaveManager::WaveManager @ 0x00123ef8 -- binary ctor omits this (BSS-zero); Reset() sets it to 1 unconditionally
+    , m_SyncRemotePending(0)
+    , m_SyncReceived(0)
+    , m_SyncWaveIdx(-1)
+    , m_SyncScore(0.0f), m_NetTimerA(0.0f)
     , m_NetTimerB(0.0f)
     , m_BombChance(1.0f)
     , m_FruitChance(1.0f)
     , m_SpeedAccum(1.0f)
     , m_SpeedScale(1.0f), m_ComboSpeedDivisor(1.0f)
     , m_NextWaveDelay_P0(0.0f), m_NextWaveDelay_P1(0.0f)
-    , field_0x244(0), m_BlitzSpawnCount(0), m_BlitzState(0), _pad247(0)
+    , m_WaveActive(0), m_BlitzSpawnCount(0), m_BlitzState(0), _pad247(0)
     , m_NextBlitzTime(0.0f)
     , m_MaxWaveIdP0(0)
     , m_RecentFruitCount{0, 0}
-    , field_0x2d8(0)
+    , m_SyncScoreSnapshot(0)
     , m_StepAccumulator(0.0f)
-    , field_0x2e0(0)
+    , m_SavedWaveDelay(0)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
 {
     m_ComboTimer = 0.0f;
@@ -233,7 +233,7 @@ void WaveManager::Init() {
             } else if (strcmp(elName, "OverideProbability") == 0) {
                 PROBABILITY_OVERIDE po;
                 const char* types = el.Attribute("types");
-                if (types) po.m_field68 = SplitWords(types, po.m_Types);
+                if (types) po.m_TypeCount = SplitWords(types, po.m_Types);
                 el.QueryIntAttribute("percentageChance", &po.m_PercentChance);
                 el.QueryIntAttribute("perWave", &po.m_PerWave);
                 el.QueryIntAttribute("waveCount", &po.m_PerWaveCount);
@@ -291,12 +291,12 @@ void WaveManager::Init() {
                 if (wi->m_GamesMin < 0) wi->m_GamesMin = wi->m_GamesMax;
                 if (wi->m_GamesMax < 0) wi->m_GamesMax = wi->m_GamesMin;
 
-                // <ChooseFrom> child -> m_SpecialFruits (+0x54); m_field60 always cleared to 0.
+                // <ChooseFrom> child -> m_SpecialFruits (+0x54); m_reserved60 always cleared to 0.
                 {
                     TiXmlElement cfEl = el.FirstChildElement("ChooseFrom");
                     if (cfEl) {
                         wi->m_SpecialFruits.clear();
-                        wi->m_field60 = 0;
+                        wi->m_reserved60 = 0;
                         const char* types = cfEl.Attribute("types");
                         if (types) SplitWords(types, wi->m_SpecialFruits);
                     }
@@ -472,14 +472,14 @@ void WaveManager::Reset(bool fullReset) {
     delete m_pWaveQueItem; m_pWaveQueItem = nullptr;
 
     // 2. Per-frame state flags.
-    field_0x36 = 0;
-    field_0x35 = 1;
-    field_0x37 = 0;
-    field_0x38 = -1;
-    field_0x2d8 = 0;
+    m_SyncRemotePending = 0;
+    m_SyncLocalReady = 1;
+    m_SyncReceived = 0;
+    m_SyncWaveIdx = -1;
+    m_SyncScoreSnapshot = 0;
     m_RecentFruitCount[1] = 0;
     m_StepAccumulator = 0.0f;
-    field_0x40 = 0.0f; field_0x44 = 0.0f;
+    m_SyncScore = 0.0f; m_NetTimerA = 0.0f;
     m_NetTimerB = 0.0f;
     m_NextWaveDelay_P0 = 0.0f;
     m_NextWaveDelay_P1 = 0.0f;
@@ -496,7 +496,7 @@ void WaveManager::Reset(bool fullReset) {
     // ET_ClearKnownEntities(-1) -- TODO: not ported
 
     // 4. Per-player wave state.
-    field_0x244 = 1;          // wave-was-spawned flag (player 0)
+    m_WaveActive = 1;          // wave-active flag (player 0)
     m_WaveCount[0] = -1;      // pre-incremented by GetNextWave
     m_WaveCount[1] = -1;
     // Camera reset not ported (FruitCamera stubs).
@@ -746,11 +746,11 @@ void WaveManager::Resume() {
         // sd->m_pCurrentWave_P1 (FruitSaveData+0x140) stores the SAVED WAVE INDEX
         // (uint), used to look up via the WaveState restore loop. The field name
         // inherited from earlier RE was misleading.
-        field_0x38           = sd->m_pCurrentWave_P1;   // saved wave index
+        m_SyncWaveIdx        = sd->m_pCurrentWave_P1;   // saved wave index
         m_ComboTimer         = sd->m_Speed_P0;
         m_ColdTimer          = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
-        field_0x244 = 1; field_0x35 = 1;
-        field_0x36 = 0; field_0x37 = 0;
+        m_WaveActive = 1; m_SyncLocalReady = 1;
+        m_SyncRemotePending = 0; m_SyncReceived = 0;
         m_ComboSpeed         = sd->m_Speed_P0_alias;
         m_TargetComboSpeed   = sd->m_Speed_P0_alias;
         // Binary: hash of "blitz_bonus" — same key AddSpeed increments.
@@ -765,10 +765,10 @@ void WaveManager::Resume() {
         {
             WaveState& ws = *wit;
             // ws.index = sequential index into m_WaveInfo[mode] (SaveWaveInfo stores candidateIdx).
-            // ws.waveIdx = revisit counter (field_0x34).
+            // ws.waveIdx = revisit counter (m_RevisitCounter).
             if (ws.index < 0 || ws.index >= (int)m_WaveInfo[mode].size()) continue;
             WAVE_INFO* w = m_WaveInfo[mode][ws.index];
-            w->field_0x34 = (float)ws.waveIdx;
+            w->m_RevisitCounter = (float)ws.waveIdx;
             if (!ws.spawners.empty()) {
                 m_pCurrentWave[0] = w;
                 int s = 0;
@@ -779,7 +779,7 @@ void WaveManager::Resume() {
                     SPAWNER_INFO& sp = w->m_pSpawners[s];
                     sp.m_SpawnTimer     = sit->timer;
                     sp.m_RemainingCount = (int)sit->count;
-                    sp.m_field58        = 0;
+                    sp.m_reserved58     = 0;
                     sp.m_SpawnCountF    = sit->count;
                     sp.SelectTypes();
                 }
@@ -846,7 +846,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         for (int i = 0; i < numCandidates; ++i) {
             WaveState state;
             state.index   = candidateIdx[i];
-            state.waveIdx = (int)candidates[i]->field_0x34;  // revisit counter
+            state.waveIdx = (int)candidates[i]->m_RevisitCounter;  // revisit counter
             state.spawners.clear();
             if (candidates[i] == m_pCurrentWave[0]) {
                 for (int s = 0; s < candidates[i]->m_SpawnerCount; ++s) {
@@ -928,7 +928,7 @@ void WaveManager::ResetGlobalDt(float dt) {
 void WaveManager::ResetWaveChances() {
     // Reset m_CurrentChance (+0x40) back to m_Chance (+0x3c) for each wave in current mode.
     // Binary @ 0x001249d0: also resets m_CurrentRegrowth (+0x48) = m_ChanceRegrowth (+0x44)
-    // and field_0x34 (revisit counter) = 1.0.
+    // and m_RevisitCounter (revisit counter) = 1.0.
     Game* game = Game::GetInstance();
     if (!game) return;
     for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[game_work.gameMode].begin();
@@ -936,7 +936,7 @@ void WaveManager::ResetWaveChances() {
         WAVE_INFO* wi = *it;
         wi->m_CurrentChance   = wi->m_Chance;
         wi->m_CurrentRegrowth = wi->m_ChanceRegrowth;
-        wi->field_0x34        = 1.0f;
+        wi->m_RevisitCounter        = 1.0f;
     }
 }
 
@@ -1239,10 +1239,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         SpawnFruit(1, fruitType, &spawner, playerIdx);
                     }
 
-                    field_0x244 = 1;
+                    m_WaveActive = 1;
                     spawner.m_RemainingCount--;
 
-                    float spawnDt = spawner.m_Delay - spawner.m_DelayInc * pCurrentWave->field_0x34;
+                    float spawnDt = spawner.m_Delay - spawner.m_DelayInc * pCurrentWave->m_RevisitCounter;
                     if (spawnDt < 0.0f) spawnDt = 0.0f;
                     spawner.m_SpawnTimer += spawnDt;
                 }
@@ -1365,7 +1365,7 @@ void WaveManager::GetNextWave(int playerIdx) {
 
     // Speed ramp: increment revisit counter on previously-visited wave.
     if (waveCount > 1 && pCurrentWave)
-        pCurrentWave->field_0x34 += 1.0f;
+        pCurrentWave->m_RevisitCounter += 1.0f;
 
     // Wave queue path (survival/combo — null in normal play).
     if (m_pWaveQue) {
@@ -1449,13 +1449,13 @@ void WaveManager::GetNextWave(int playerIdx) {
     }
 
     // Set wave timing (m_WaveDt at +0x10, m_WaveDtInc at +0x14, m_WaveDtSpInc at +0x18).
-    (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->field_0x34);  // consumed by GetWavedt
+    (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->m_RevisitCounter);  // consumed by GetWavedt
 
     // v1.6.1 binary @ 0x001251cc / 0x00125210 (re-analyst):
     //   WAVE_INFO+0x20 (m_NextWaveDelay, XML "delay") -> delay slot (pre-spawn timer)
     //   WAVE_INFO+0x28 (m_NextWaveWait,  XML "wait")  -> wait slot (wave-end gate)
     if (wave->m_NextWaveDelay > 0.0f) {
-        float d = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
+        float d = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->m_RevisitCounter;
         if (d < 0.05f) d = 0.05f;
         delay = d;
     } else {
@@ -1474,7 +1474,7 @@ void WaveManager::GetNextWave(int playerIdx) {
 
     // Reset all spawners in this wave.
     for (int i = 0; i < wave->m_SpawnerCount; ++i)
-        wave->m_pSpawners[i].Reset(wave->field_0x34);
+        wave->m_pSpawners[i].Reset(wave->m_RevisitCounter);
 
     // Decrement PROBABILITY_OVERIDE counters.
     // No separate per-tick iteration — override selection is in UpdateWave
@@ -1531,8 +1531,8 @@ void WaveManager::ClearUnspawned() {
 // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x00122a40..0x00122ad6 (re-analyst).
 // Updated 2026-05-22: restored the entry-flag gate (was incorrectly removed
 // as "invented" -- the binary genuinely has `ldrb r3,[r4,#0x244+p]; cbz r3, ...`
-// at 0x00122a48). Flag is set by Reset (field_0x244 = 1 for player 0) and
-// by UpdateWave's per-spawn loop (line 1249 `field_0x244 = 1` after each
+// at 0x00122a48). Flag is set by Reset (m_WaveActive = 1 for player 0) and
+// by UpdateWave's per-spawn loop (`m_WaveActive = 1` after each
 // SpawnFruit/SpawnBomb). Flag is cleared by IsWaveProcessing tail when
 // "nothing left to wait for". This stateful counter lets IsWaveProcessing
 // return false immediately on the frame AFTER the last entity drained,
@@ -1541,7 +1541,7 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
     // Entry-flag gate (binary @ 0x00122a48). If the per-player wave-active
     // flag is 0, no wave activity is in progress for this player -- return
     // false without checking entities or clearing the flag.
-    if ((&field_0x244)[playerIdx] == 0) return false;
+    if ((&m_WaveActive)[playerIdx] == 0) return false;
 
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
 
@@ -1562,12 +1562,12 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
             if (am && am->GetNumEntities(0) != 0) return true;
             if (am && am->GetNumEntities(1) != 0) return true;
         }
-        (&field_0x244)[0] = 0;
+        (&m_WaveActive)[0] = 0;
         return false;
     } else {
         if (Fruit::GetNumActiveForPlayer(playerIdx, true) >= 1) return true;
         if (Bomb::GetNumActiveForPlayer(playerIdx, true) >= 1) return true;
-        (&field_0x244)[playerIdx] = 0;
+        (&m_WaveActive)[playerIdx] = 0;
         return false;
     }
 }
@@ -1860,7 +1860,7 @@ float WaveManager::GetWavedt(int playerIdx) {
     float waveDt = (w == nullptr)
         ? 1.0f
         : w->m_WaveDt
-          + w->m_WaveDtInc * w->field_0x34
+          + w->m_WaveDtInc * w->m_RevisitCounter
           + w->m_WaveDtSpInc * m_ComboSpeed;  // +0x58 (P0 displayed speed)
 
     float dtMod = (playerIdx == 0) ? (m_SpeedAccum * m_SpeedScale) : 1.0f;
