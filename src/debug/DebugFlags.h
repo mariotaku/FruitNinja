@@ -37,6 +37,12 @@ void DebugHUDBounds_Draw();
 // No-op when g_ShowFps is false or fps <= 0.
 void DebugFps_Draw(float fps);
 
+// Draw a thick line from m_TailPos to m_HeadPos for every active blade
+// (IsBladeActive() == true). Yellow line + small end-cap markers.
+// Call from GameDraw after DebugHitbox_Draw / DebugHUDBounds_Draw.
+// No-op when g_DebugHitboxes is false.
+void DebugBladeTrails_Draw();
+
 } // namespace FN
 
 #else // __bada__
@@ -52,6 +58,7 @@ static const bool  g_ShowFps        = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}
+inline void DebugBladeTrails_Draw() {}
 } // namespace FN
 
 #endif // !__bada__

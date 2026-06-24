@@ -761,10 +761,11 @@ void GameDraw(float dt, bool active) {
         FN::DrawNews();
         FN::DrawStartFade();
 
-        // Debug overlay -- fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
+        // Debug overlay -- fruit/bomb hitboxes + MenuButton AABBs + blade trails (F1 toggle)
 #ifndef __bada__
         FN::DebugHitbox_Draw();
         FN::DebugHUDBounds_Draw();
+        FN::DebugBladeTrails_Draw();
 #endif
 
         // HUD::Draw(0x400) -- top layer @ 0x0016bd7c, ALWAYS fires
