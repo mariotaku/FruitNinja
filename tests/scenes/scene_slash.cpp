@@ -83,9 +83,7 @@ static void InjectFingerUp(SDL_TouchID tid, float nx, float ny) {
 // (so finger events reach SlashEntity), updates slash entities, draws them.
 // Returns false to quit.
 static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
-    // Poll SDL events: drain into pending state (no dispatch per-frame).
-    // Port specific: matches the #168 drain/flush split -- DrainSDLEvent
-    // accumulates touch input, FlushForSimTick dispatches once per sim tick.
+    // Poll SDL events and dispatch to InputTranslator for FINGER* handling.
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) return false;
@@ -94,15 +92,12 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
             if (ev.key.keysym.sym == SDLK_r) d->resetRequested = true;
         } else {
             // Forward all other events (FINGER*, MOUSE*) to InputTranslator
-            // so SlashEntity touch callbacks fire on the next FlushForSimTick.
+            // so SlashEntity touch callbacks fire.
             if (game.inputTranslator) {
-                game.inputTranslator->DrainSDLEvent(ev,
+                game.inputTranslator->ProcessSDLEvent(ev,
                     static_cast<SDL_Window*>(window));
             }
         }
-    }
-    if (game.inputTranslator) {
-        game.inputTranslator->FlushForSimTick();
     }
 
     float dt = 0.0f;
