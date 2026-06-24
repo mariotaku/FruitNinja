@@ -124,7 +124,9 @@ struct Game : public Mortar::MortarGame {
     void frameTick();               // Port specific: one game tick; thin wrapper for the three below
     void pollInput();               // Port specific: SDL event loop + BeginFrame (once per display frame)
     void stepUpdate();              // Port specific: dt=0 + SystemManager::Update + GameTaskUpdate
-    void renderFrame();             // Port specific: glViewport + BeginFrame + GameTaskDraw + SwapWindow
+    // Port specific: alpha = fractional sim residual in [0,1) for render interpolation.
+    // Callers inside run() and mainEmscripten.cpp pass driver.alpha(); frameTick() passes 0.
+    void renderFrame(float alpha = 0.0f);
     void runFrames(int frameCount);
 };
 

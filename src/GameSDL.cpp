@@ -7,6 +7,9 @@
 #include <SDL.h>
 #include "platform/InputTranslatorSDL.h"
 #include "platform/FixedStepDriver.h"
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+#include "platform/RenderInterp.h"
+#endif
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -226,22 +229,34 @@ void Game::stepUpdate() {
 // Port specific: one render pass (no simulation).
 // Per-frame GL setup mirrors DisplayManagerBada::BeginFrame (0x0019dfec).
 // glViewport is re-applied each call so window resizes are picked up immediately.
-void Game::renderFrame() {
+// alpha is the fractional sim residual [0,1) for render interpolation; 0 = no interp.
+void Game::renderFrame(float alpha) {
     int ww, wh;
     SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
     glViewport(0, 0, ww, wh);
     Mortar::DisplayManager::GetInstance().BeginFrame();
-    GameTaskDraw(game_work.dt);
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+    fn::RenderInterp::Get().ApplyForDraw(alpha);
+#endif
+    GameTaskDraw(game_work.dt);   // UNMODIFIED: binary-faithful, asm-verified
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+    fn::RenderInterp::Get().RestoreAfterDraw();
+#endif
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
 }
 
 // Port specific: one complete game tick — poll, step, render.
 // Kept as a thin wrapper so existing callers (legacy / external) are unaffected.
+// Passes alpha=0 to renderFrame (no interpolation; frameTick is used by runFrames
+// which is the deterministic headless path -- Apply/Restore must not fire there).
 void Game::frameTick() {
     pollInput();
     stepUpdate();
-    renderFrame();
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+    fn::RenderInterp::Get().SnapshotAfterStep();
+#endif
+    renderFrame(0.0f);
 }
 
 // Port specific: main game loop with fixed-step accumulator.
@@ -266,8 +281,11 @@ void Game::run() {
         int steps = driver.advance(ms);
         for (int i = 0; i < steps && running; ++i) {
             stepUpdate();
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+            fn::RenderInterp::Get().SnapshotAfterStep();
+#endif
         }
-        renderFrame();
+        renderFrame(static_cast<float>(driver.alpha()));
 
         if (steps == 0) {
             SDL_Delay(1);

@@ -240,6 +240,14 @@ fn_add_game_test(test_bonus_screen test_bonus_screen.cpp)
 add_test(NAME bonus_screen COMMAND test_bonus_screen)
 set_tests_properties(bonus_screen PROPERTIES TIMEOUT 60)
 
+# Render interpolation determinism + recycle tests.
+# Covers: byte-identity after Apply(0.5)+Restore(), and recycle-guard
+# (new pool occupant has hadPrev==false, no teleport-lerp from dead entity).
+# When FN_RENDER_INTERP is OFF the test body compiles to a trivial pass.
+fn_add_game_test(test_render_interp test_render_interp.cpp)
+add_test(NAME render_interp COMMAND test_render_interp)
+set_tests_properties(render_interp PROPERTIES TIMEOUT 60)
+
 # ---- Standalone scene test harnesses (visual dev tools, NOT CTest tests) ----
 # scene_fruit_scene.exe  -- single watermelon in a ballistic arc
 # scene_slash_scene.exe  -- blade trail driven by mouse/touch drag

@@ -24,6 +24,9 @@ static Game g_game;
 // -> sim runs 2x too fast. The accumulator targets 60 ticks/s (the design rate
 // hardcoded in SystemManager::Update, binary 0x0018ade0 / DAT_0018ae84).
 #include "platform/FixedStepDriver.h"
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+#include "platform/RenderInterp.h"
+#endif
 static fn::FixedStepDriver g_driver;
 static double g_lastTime = -1.0;   // last RAF timestamp from emscripten_get_now()
 
@@ -99,8 +102,11 @@ static void EmscriptenFrame(void* arg) {
     int steps = g_driver.advance(elapsed);
     for (int i = 0; i < steps && game->running; ++i) {
         game->stepUpdate();
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+        fn::RenderInterp::Get().SnapshotAfterStep();
+#endif
     }
-    game->renderFrame();
+    game->renderFrame(static_cast<float>(g_driver.alpha()));
 
     // Port specific: web (#73) -- fade the DOM loading splash out once the game has
     // actually rendered a few frames.  The shell keeps the splash fully opaque over
