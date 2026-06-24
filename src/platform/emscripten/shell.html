@@ -222,8 +222,10 @@
        positioning keeps it pinned regardless of letterbox bars; pointer-events
        are its own so taps here never reach the canvas/game.  Semi-transparent
        dark pill with an inline-SVG glyph that JS swaps between enter/exit. */
-    /* build identifier (wasm hash) pinned bottom-left; revealed by JS only when
-       the ?fps query param is present, so it doubles as a cache/freshness check. */
+    /* build identifier (wasm hash) pinned bottom-left of the loading screen.
+       Always shown over the splash so the loaded build is visible every load
+       (a cache/freshness check); removed together with the splash once the game
+       has rendered its first frame. */
     #fn-build {
       position: fixed;
       left: 6px;
@@ -233,7 +235,7 @@
       color: rgba(255,255,255,0.85);
       text-shadow: 0 1px 2px rgba(0,0,0,0.9);
       pointer-events: none;
-      display: none;
+      display: block;
       user-select: none;
     }
     #fullscreen-btn {
@@ -341,25 +343,10 @@
     </div>
 
     <!-- build identifier; __FN_BUILD__ is replaced with the wasm sha8 by
-         tools/web/web-hash-assets.py. Shown bottom-left only when ?fps is set. -->
+         tools/web/web-hash-assets.py. Shown over the splash during loading and
+         removed together with the splash once the game has loaded. -->
     <div id="fn-build">build __FN_BUILD__</div>
   </div>
-
-  <script>
-  /* Reveal the build identifier when the ?fps query param is present (same
-     gate as the in-engine FPS overlay), so it's easy to confirm which wasm
-     the browser actually loaded (defeats stale-cache confusion). */
-  (function () {
-    try {
-      var qs = new URLSearchParams(window.location.search);
-      var v = qs.get('fps');
-      if (v !== null && v !== '0') {
-        var el = document.getElementById('fn-build');
-        if (el) el.style.display = 'block';
-      }
-    } catch (e) {}
-  })();
-  </script>
 
   <script>
   /* all overlay elements are inside the viewport div as absolute
@@ -462,6 +449,7 @@
   var _progressWrap = document.getElementById('progress-bar-wrap');
   var _loadingCover = document.getElementById('loading-cover');
   var _splashImg    = document.getElementById('splash-img');
+  var _buildOverlay = document.getElementById('fn-build');
   var _fullscreenBtn = document.getElementById('fullscreen-btn');
   var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
@@ -585,6 +573,8 @@
     if (_progressWrap && _progressWrap.parentNode) _progressWrap.parentNode.removeChild(_progressWrap);
     if (_loadingCover && _loadingCover.parentNode) _loadingCover.parentNode.removeChild(_loadingCover);
     if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
+    /* The build-id overlay lives only on the loading screen -- remove it with the splash. */
+    if (_buildOverlay && _buildOverlay.parentNode) _buildOverlay.parentNode.removeChild(_buildOverlay);
   }
 
   function _removeOverlayFade() {
@@ -606,6 +596,10 @@
     if (_loadingCover) {
       _loadingCover.style.transition = 'opacity 0.3s ease';
       _loadingCover.style.opacity = '0';
+    }
+    if (_buildOverlay) {
+      _buildOverlay.style.transition = 'opacity 0.3s ease';
+      _buildOverlay.style.opacity = '0';
     }
     if (!_splashImg) { _removeOverlayNow(); return; }
     _splashImg.style.pointerEvents = 'none';
