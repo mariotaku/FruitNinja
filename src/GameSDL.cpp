@@ -144,10 +144,14 @@ bool Game::init(void* win, void* gl) {
     return true;
 }
 
-// Port specific: poll SDL events and pump the input translator for one display
-// frame.  Called ONCE per display frame (before accumulator drain) so held-
-// finger TouchDown_N is not re-dispatched per catch-up step, which would
-// change slice behaviour on high-refresh displays.
+// Port specific: drain SDL events into per-channel pending state (no touch dispatch).
+// Called ONCE per display frame (before accumulator drain).
+// Touch events (FINGERDOWN/MOTION/UP, MOUSEBUTTONUP) are accumulated into the
+// translator's pending state; actual dispatch to InputManager happens in
+// stepUpdate() via FlushForSimTick() so m_PointCount only advances inside a tick
+// that also runs UpdatePoints (head-cap reconcile). This is the #168 fix.
+// Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately (#162).
+// Non-touch keyboard/debug events are handled inline as before (#163 fidelity).
 void Game::pollInput() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -197,17 +201,13 @@ void Game::pollInput() {
                     ev.window.event == SDL_WINDOWEVENT_HIDDEN)) {
             // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
             // pause; clears touch so no blade stays held (pairs with #154).
-            // Bada OnBackground/OnDeactivated triggered a pause when the OS
-            // backgrounded the app mid-slice. SDL has no equivalent lifecycle
-            // event, so we synthesize it from FOCUS_LOST / MINIMIZED / HIDDEN.
-            // Only pause during active gameplay (bM_Mode == false means game is
-            // running; true means already paused/transitioning).
+            // ReleaseAllFingers fires immediately in pollInput (not deferred to
+            // FlushForSimTick) so the release takes effect on this display frame
+            // regardless of whether steps==0 (#162 semantics preserved).
             if (!game_work.bM_Mode) {
                 PauseScreen::PauseGame();
                 LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
             }
-            // Always clear held touch channels regardless of pause state so no
-            // blade stays armed across a background/restore cycle.
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else if (ev.type == SDL_APP_WILLENTERBACKGROUND) {
             // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
@@ -220,20 +220,30 @@ void Game::pollInput() {
             }
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else {
-            if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
+            // Port specific: accumulate touch events into pending state; dispatch
+            // happens in stepUpdate()->FlushForSimTick() (#168 fix).
+            if (inputTranslator) inputTranslator->DrainSDLEvent(ev, static_cast<SDL_Window*>(window));
         }
     }
-
-    // Per-frame shim pump: re-dispatches TouchDown_N for held fingers.
-    // Logic lives inside InputTranslatorSDL::BeginFrame (poll stays in the shim).
-    if (inputTranslator) inputTranslator->BeginFrame();
+    // No BeginFrame()/FlushForSimTick() here -- touch dispatch is deferred to stepUpdate().
 }
 
 // Port specific: one simulation step.
 // Matches FruitNinja::Draw (0x1824e0): dt=0 -> SystemManager::Update(&dt)
 // writes fixed 1/60 -> GameTaskUpdate(dt).  g_DebugTimeScale scales dt for
 // the slow-motion debug path only; game logic always sees 1/60 at 1.0x scale.
+//
+// Port specific: FlushForSimTick() is called BEFORE GameTaskUpdate so that
+// touch dispatch (AddPoint -> m_PointCount advance) and geometry reconcile
+// (UpdatePoints inside GameTaskUpdate) happen in the same tick, matching the
+// binary's strict 1:1 input->update ordering (#168 bridge-to-origin fix).
+// On steps==0 (pure interpolated frame), stepUpdate() does not run, so neither
+// FlushForSimTick nor AddPoint runs -> m_PointCount unchanged -> DrawSlice
+// draws the already-reconciled buffer, no stale head-cap.
 void Game::stepUpdate() {
+    // Flush deferred touch dispatch for this sim tick (before update).
+    if (inputTranslator) inputTranslator->FlushForSimTick();
+
     game_work.dt = 0.0f;
     SystemManager::GetInstance().Update(&game_work.dt);
     game_work.dt *= FN::g_DebugTimeScale;
