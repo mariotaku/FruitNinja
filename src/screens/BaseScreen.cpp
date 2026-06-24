@@ -404,8 +404,9 @@ void BaseScreen::Release() {
     m_HUDControls.clear();
 
     // 2. Disable ScreenButton MenuButtons + clear delegates
-    // Binary: guarded by game_work.field_0x34 != 0 (direct check, no Game::GetInstance)
-    if (game_work.field_0x34 != 0) {
+    // Binary: guarded by game_work.m_bHudDestructing != 0 (direct check, no Game::GetInstance;
+    // BaseScreen::Release@0x160e08 reads game_work+0x34, the HUD-teardown guard set by HUD::Release)
+    if (game_work.m_bHudDestructing != 0) {
         for (std::list<ScreenButton>::iterator it = m_ScreenButtons.begin(); it != m_ScreenButtons.end(); ++it) {
             ScreenButton& sb = *it;
             if (sb.m_pButton) {

@@ -28,9 +28,8 @@ void HUD::Init() {
 
 // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c5c (re-analyst)
 void HUD::Release() {
-    // Binary @ 0x00144c5e: game_work.field_0x34 = 1 (HUD-destructing guard).
-    // PIC-resolved global (GOT @ 0x001ec130+0x7990 -> &game_work @ 0x001f43b8), field_0x34.
-    game_work.field_0x34 = 1;
+    // Binary v1.6.1 HUD::Release@0x18c2b8: game_work.m_bHudDestructing = 1 (HUD-teardown guard).
+    game_work.m_bHudDestructing = 1;
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
         if (!ctrl->m_bNoDestructor) {
@@ -44,8 +43,8 @@ void HUD::Release() {
         }
     }
     controls.clear();
-    // Binary @ 0x00144cc2: game_work.field_0x34 = 0 (clear HUD-destructing guard).
-    game_work.field_0x34 = 0;
+    // Binary v1.6.1 HUD::Release@0x18c344: game_work.m_bHudDestructing = 0 (clear HUD-teardown guard).
+    game_work.m_bHudDestructing = 0;
 }
 
 // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144db0 (re-analyst)

@@ -35,13 +35,13 @@ namespace Mortar {
 struct GameWork {
     // +0x00..+0x38: UNCHANGED from v1.5.1 baseline.
     uint8_t taskStateIndex;        // +0x00: 0=Splash, 1=Frontend, 2=Game
-    uint8_t field_0x01;            // +0x01
+    uint8_t m_reserved01;          // +0x01: purpose unknown -- written-never-read (zero-init only; no real binary access -- the lone Ghidra xref @ SetAppLicensed 0x11fc98 is a GOT-load false positive, real access is +0x190)
     bool    bM_Mode;               // +0x02: gameplay-mode-active gate (binary: bM_Mode); 0=active, non-zero=paused/inactive
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
     uint8_t gameMode;              // +0x04: GAME_MODE enum stored as uint8_t
     uint8_t bM_bPaused;           // +0x05: pause/inactive gate (binary: bM_bPaused); 1=paused/suppressed
     uint8_t retryFlag;             // +0x06
-    uint8_t field_0x07;            // +0x07
+    uint8_t m_reserved07;          // +0x07: purpose unknown -- written-never-read (zero-init only; no binary xref to game_work+0x07)
     float   retryTimer;            // +0x08
     float   m_GameDt;              // +0x0C: per-frame dt accumulator (Ghidra: m_GameDt; was m_TransitionTimer in port)
     float   m_BombHitTimer;        // +0x10
@@ -55,7 +55,10 @@ struct GameWork {
     int32_t m_CoinsAtGameStart;    // +0x28
     float   m_CritTimer;           // +0x2C
     int     m_ScoreThreshold;      // +0x30
-    uint8_t field_0x34;            // +0x34: state byte: 1=HUDDestructing (HUD::Release), 3=BonusFinalePhase (BonusScreen). Re-verify other values.
+    // +0x34 v1.6.1 GameContext.bField_0x34: HUD-teardown guard. HUD::Release@0x18c29c sets 1 around
+    // the HUDControl list teardown then clears to 0; BaseScreen::Release@0x160e08 reads it to skip
+    // re-entrant teardown. (Distinct from the HUDControl::m_LayerFlags +0x34 seen in ShopScreen/FruitFactPage.)
+    uint8_t m_bHudDestructing;     // +0x34
     uint8_t m_bSlowMotion;         // +0x35
     uint8_t _pad_0x36[2];          // +0x36..+0x37
     float   dt;                    // +0x38
@@ -121,8 +124,8 @@ struct GameWork {
     int     m_gameDataLicensedState; // +0x190
 
     // +0x194..+0x197: four byte fields (Ghidra: dwField_0x194 undefined4).
-    uint8_t field_0x194;           // +0x194: SetupGameWork inits to 1. TODO: 0x002d931c+0x194 -- semantic unknown.
-    uint8_t m_bUpdatesSuspended;   // +0x195: suspend-updates/paused-by-system guard (Ghidra: bField_0x195)
+    uint8_t m_reserved194;         // +0x194: purpose unknown -- written-never-read in this build. SetupGameWork@0x11c0fc sets =1 (dwField_0x194._0_1_); no reader found (paired byte +0x195 is the live suspend guard).
+    uint8_t m_bUpdatesSuspended;   // +0x195: suspend-updates/system-notification guard (Ghidra: dwField_0x194._1_1_). SetupGameWork sets 1; CustomNotificationCallback@0x1cf0cc sets 1 on notification-shown; MainScreen/GameOverScreen::Update toggle it.
     uint8_t _pad_0x196[2];         // +0x196..+0x197
 
     // +0x198..+0x19B: four P2P/connection byte fields (Ghidra: dwField_0x198 undefined4).
@@ -133,23 +136,35 @@ struct GameWork {
 
     int     m_FrameTimer;          // +0x19C: frame accumulator (Ghidra: nM_FrameAccumulator)
 
-    // +0x1A0..+0x1A7: byte fields (Ghidra bField_0x1a0..bField_0x1a6 + pad).
-    uint8_t field_0x1a0;           // +0x1A0
-    uint8_t field_0x1a1;           // +0x1A1
-    uint8_t field_0x1a2;           // +0x1A2: zeroed by SetupGameWork
-    uint8_t field_0x1a3;           // +0x1A3: zeroed by SetupGameWork
-    uint8_t field_0x1a4;           // +0x1A4: zeroed by SetupGameWork
-    uint8_t field_0x1a5;           // +0x1A5: zeroed by SetupGameWork
-    uint8_t field_0x1a6;           // +0x1A6
+    // +0x1A0..+0x1A7: P2P/GameCenter session-state byte cluster (Defunct: online P2P MP).
+    // +0x1A0 IsP2PConnecting@0x11a1f0 returns it; P2PConnect@0x11c388 + GameModeScreen::Update set 1
+    //        immediately before ConnectGameCenter -> GameCenter/P2P connection-in-progress flag.
+    uint8_t m_bP2PConnecting;      // +0x1A0  (Defunct: online P2P -- live read by IsP2PConnecting)
+    // +0x1A1 WaveManager::Update@0x126908 gates the online-MP wave tick: when IsOnlineMultiplayer()
+    //        && this byte == 0, dt is forced to 0 (opponent not yet ready). Set by GameModeScreen::Update.
+    uint8_t m_bP2POpponentReady;   // +0x1A1  (Defunct: online P2P -- live read by WaveManager::Update)
+    // +0x1A2..+0x1A6: P2P session flags written-never-read in this build (readers were in dead-stripped
+    //        networking code). QuitToMenu@0x1cb764 zeroes 1a2..1a5 alongside DisconnectP2P/MPRetryPending;
+    //        SetupGameWork zeroes 1a2..1a6. No reader found via xref -> reserved, descriptive offset names.
+    uint8_t m_reserved1a2;         // +0x1A2: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
+    uint8_t m_reserved1a3;         // +0x1A3: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
+    uint8_t m_reserved1a4;         // +0x1A4: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
+    uint8_t m_reserved1a5;         // +0x1A5: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
+    uint8_t m_reserved1a6;         // +0x1A6: P2P session flag -- written-never-read (SetupGameWork zeroes it)
     uint8_t _pad_0x1a7;            // +0x1A7
 
     float   m_QuitTransitionTimer; // +0x1A8: quit/cleanup transition timer (Ghidra: flM_QuitTransitionTimer)
     Mortar::InputSink* m_pActiveTouchSink; // +0x1AC: currently active touch-input sink
-    float   field_0x1b0;           // +0x1B0: TODO: 0x002d931c+0x1b0 -- semantic unknown (Ghidra: flM_UpsideDownTimer)
-    uint8_t field_0x1b4;           // +0x1B4: gate byte; zeroed by SetupGameWork (Ghidra: bField_0x1b4)
+    // +0x1B0 v1.6.1 GameContext.flM_UpsideDownTimer: device-orientation timer. UpdateUpsideDown@0x11a184
+    //        sets 0.75 while the device is held upside-down and decays it by dt once upright;
+    //        IsDeviceUpsideDown@0x11a164 returns (timer > 0).
+    float   m_UpsideDownTimer;     // +0x1B0
+    // +0x1B4 upside-down scoring-active flag. AddToCurrentScore@0x11a6a8 reads it to also bump the
+    //        "upside_down_points" save total; WaveManager::Update@0x126908 clears it after >5s upright.
+    uint8_t m_bUpsideDownActive;   // +0x1B4
     uint8_t _pad_0x1b5[3];         // +0x1B5..+0x1B7
     float   m_ElapsedGameTime;     // +0x1B8: elapsed game-time accumulator in seconds (Ghidra: dwField_0x1b8 undefined4)
-    uint8_t field_0x1bc;           // +0x1BC: gate byte; zeroed by SetupGameWork (Ghidra: bField_0x1bc)
+    uint8_t m_reserved1bc;         // +0x1BC: purpose unknown -- written-never-read (SetupGameWork@0x11c0f0 zeroes it; no reader found via xref)
 
     // +0x1BD..+0x5BC: four contiguous 256-byte state blocks (1024 bytes total).
     // Binary @ 0x0010b66c (InitialiseData): four back-to-back memset(base+offset, 0, 0x100)
