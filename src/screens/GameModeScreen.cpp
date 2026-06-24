@@ -29,6 +29,7 @@
 #include "util/StringHash.h"
 #include "util/StringTable.h"
 #include "game/FruitSaveData.h"
+#include "game/WaveManager.h"
 #include <cmath>
 #include <cstdio>
 #include "game/GameWork.h"
@@ -400,7 +401,7 @@ void GameModeScreen::RemoveButtons() {
 }
 
 // ===================================================================
-// Matches GameModeScreen::Update @ 0x0013f10c (212 lines)
+// Matches GameModeScreen::Update @ 0x1827d0
 // ===================================================================
 void GameModeScreen::Update(float dt) {
     switch (m_State) {
@@ -487,30 +488,12 @@ void GameModeScreen::Update(float dt) {
                 if (game_work.mGameSound) {
                     game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
-                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0013f366..0x0013f386
-                // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
-                //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
-                //   g_GameData->byte_0x5 = 0;                 // bM_bPaused
-                //   this->m_bPendingRemoval = 1;
-                //   g_GameData->pMainScreen->m_State = 0x11;  // STATE_CAMERA_FADE
-                //   if (IsSameScreenMultiplayer()) for-each-Slash: ColoursChanged
-                // State 0x11 is a PASSIVE camera-fade wait state -- it does
-                // NOT call WaveManager::Reset(true)/NewGame() nor
-                // PowerUpManager::Reset(true) anywhere. The earlier
-                // misreading of [r5+0x160] as a child-object state machine
-                // was wrong (r5 was the GOT base, not MainScreen*).
-                //
-                // The binary's arcade-start path does NOT trigger
-                // PowerUpManager's m_bIsSpecial activation here.
-                // Arcade-via-mode-select uses Reset(false) (non-fullReset),
-                // so m_bIsSpecial specials (ready_set_go, arcade_60seconds)
-                // seed only via the MainScreen STATE_GAME_START NewGame path
-                // which calls WaveManager::NewGame() -> PowerUpManager::Reset(true).
-                // Intentional: GameModeScreen only transitions state; NewGame fires later.
+                // ASM-spec v1.6.1 GameModeScreen::Update @0x1829e4 cases 3-6: GameModeScreen is the sole NewGame owner on the mode-select start path.
                 game_work.mMainScreen->SetCameraTransition(0.0f);
                 game_work.bM_bPaused = 0;
                 m_bPendingRemoval = 1;
                 game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+                WaveManager::GetInstance()->NewGame();
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
             }
         }
