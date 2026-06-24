@@ -382,3 +382,34 @@ endforeach()
 set_tests_properties(classic_spawn PROPERTIES TIMEOUT 50)
 set_tests_properties(arcade_spawn  PROPERTIES TIMEOUT 90)
 set_tests_properties(zen_spawn     PROPERTIES TIMEOUT 120)
+
+# Arcade spawn-stall regression guard (WaveManager slot-collapse bug fix).
+# Reproduces the "1 fruit then nothing" arcade stall: drives Reset(true) +
+# m_GameDt=0.0f (the STATE_GAME_START conditions that triggered UpdateComboSpeed
+# to fill m_SpeedControl[0], permanently closing the UpdateWave spawn-pump gate).
+# Must FAIL on the old [0]-collapse code and PASS after the [0]/[1] split fix.
+# Asserts >= 3 wave transitions in 600 frames (10s of simulated gameplay).
+add_executable(test_arcade_spawn test_arcade_spawn.cpp)
+target_link_libraries(test_arcade_spawn PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_arcade_spawn PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_arcade_spawn PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_arcade_spawn POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_arcade_spawn>)
+    endif()
+endif()
+add_test(NAME arcade_spawn_real COMMAND test_arcade_spawn)
+set_tests_properties(arcade_spawn_real PROPERTIES TIMEOUT 120)

@@ -29,11 +29,17 @@ namespace Mortar { class Entity; }
 
 class WaveManager {
 public:
-    // +0x00: cached SpeedControl HUD widget pointers, one per player.
-    // Binary @ 0x001217d4 (DeleteSpeedControl): ldr from [r0, #0x00].
-    // Binary @ 0x00122f50 (UpdateComboSpeed): slot 0 allocated lazily.
-    // Slot 1 is never populated (binary @ 0x001217d4 checks only slot 0).
-    HUDControl3d* m_SpeedControl[2];   // +0x00, +0x04
+    // +0x00: two distinct binary slots.
+    // [0] +0x00: MP/networking spawn-suppression gate. UpdateWave reads this as a
+    //            byte gate: if (*this+0x00 != 0) skip spawn loop. Reset() writes 0.
+    //            In single-player this never gets written non-zero -> gate always open.
+    //            Binary: ldrb r3,[r0,#0x0]; cmp r3,r2; bne epilogue (UpdateWave @0x00125dac).
+    // [1] +0x04: lazy arcade SpeedControl HUD widget pointer. UpdateComboSpeed allocates it;
+    //            DeleteSpeedControl nulls it. Binary @ 0x00122f50 (UpdateComboSpeed): stores
+    //            into [r0,#0x4]. Binary @ 0x001217d4 (DeleteSpeedControl): ldr from [r0,#0x4].
+    // BUG HISTORY: port incorrectly used slot [0] for BOTH, so UpdateComboSpeed
+    //              filling [0] permanently closed the gate -> 1-fruit-then-stall in Arcade.
+    HUDControl3d* m_SpeedControl[2];   // +0x00 (gate), +0x04 (SpeedControl widget)
 
     // +0x08: RNG instance.
     // DIFFERS: binary fetches Random via a GOT-relative global pointer; port embeds
