@@ -131,6 +131,9 @@ struct Game : public Mortar::MortarGame {
     // (#171).  Callers pass the loop's step count; frameTick() and runFrames() pass 1.
     void renderFrame(float alpha = 0.0f, int steps = 1);
     void runFrames(int frameCount);
+    // Port specific: update the FPS value shown by DebugFps_Draw.
+    // Called by platform main loops that compute FPS independently (e.g. mainEmscripten).
+    void setCurrentFps(float fps);
 };
 
 // Field-offset assertions for Game (binary @ g_MortarGame, ARM32).
