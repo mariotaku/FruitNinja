@@ -849,7 +849,7 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-        // TODO: v1.6.1 MainScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value (marker @0x0014b818 is stale)
+        // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: Play(GameMode) button sets m_HitInsetX=m_HitInsetY=-50.0 (both axes; Update @0x0019a860 expands rect by +inset/side so negative shrinks). Dojo(About) button does NOT set inset (keeps default 5.0).
         pPlayButton->m_HitInsetX   = -50.0f;
         pPlayButton->m_HitInsetY   = -50.0f;
         // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
@@ -878,9 +878,6 @@ void MainScreen::CreatePlayDojo() {
         }
         pDojoButton->m_RestScale   = pDojoButton->m_RestScale * 1.05f;
         pDojoButton->m_ShakeScale.x = 0.5f;
-        // TODO: v1.6.1 MainScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value (marker @0x0014b818 is stale)
-        pDojoButton->m_HitInsetX    = -50.0f;
-        pDojoButton->m_HitInsetY    = -50.0f;
         pDojoButton->m_GrowInTimer  = 0.25f;
         game_work.mHud->AddControl(pDojoButton);
 
