@@ -67,6 +67,7 @@ struct TestHarness {
           interactive(false), screenshot(false),
           window(NULL), gl(NULL),
           initFrames(5),
+          frames(-1),
           m_interactiveDefault(false),
           m_glReadPixels(NULL)
     {
@@ -91,7 +92,7 @@ struct TestHarness {
     void SetInitFrames(int n) { initFrames = n; }
 
     // -------- arg parsing --------
-    // Parses --interactive / --screenshot / --headless.
+    // Parses --interactive / --screenshot / --headless / --frames N / --duration S.
     // Ignores unknown flags so the caller's main can do its own parsing pass.
     // Call once before Init().
     //
@@ -100,18 +101,38 @@ struct TestHarness {
     //   --interactive          -- force visible window (overrides --headless)
     //   --screenshot           -- headless one-shot: run hidden, dump PPM, exit
     //   --headless             -- force hidden window, no screenshot dump
+    //   --frames N             -- override headless run frame count (stored in frames)
+    //   --duration S           -- override headless run in seconds at 60fps (frames = S*60)
+    //
+    // Both --frames and --duration populate the public `frames` field. The test
+    // reads frames to know how many RunHeadless iterations to drive. If neither
+    // flag is given, frames remains -1 (no override; test uses its own default).
     bool ParseFlags() {
         interactive = m_interactiveDefault;
         for (int i = 1; i < argc; ++i) {
             if      (std::strcmp(argv[i], "--interactive") == 0) { interactive = true;  screenshot = false; }
             else if (std::strcmp(argv[i], "--screenshot")  == 0) { screenshot  = true;  interactive = false; }
             else if (std::strcmp(argv[i], "--headless")    == 0) { interactive = false; }
+            else if (std::strncmp(argv[i], "--frames=", 9) == 0) {
+                frames = std::atoi(argv[i] + 9);
+            } else if (i + 1 < argc && std::strcmp(argv[i], "--frames") == 0) {
+                frames = std::atoi(argv[++i]);
+            } else if (std::strncmp(argv[i], "--duration=", 11) == 0) {
+                float secs = (float)std::atof(argv[i] + 11);
+                frames = (int)(secs * 60.0f + 0.5f);
+            } else if (i + 1 < argc && std::strcmp(argv[i], "--duration") == 0) {
+                float secs = (float)std::atof(argv[++i]);
+                frames = (int)(secs * 60.0f + 0.5f);
+            }
         }
         return true;
     }
 
     bool IsInteractive() const { return interactive;  }
     bool IsScreenshot()  const { return screenshot;   }
+    // Returns true if --frames or --duration was parsed; test should use frames
+    // instead of its own default frame count.
+    bool HasFramesOverride() const { return frames >= 0; }
 
     // -------- init --------
     bool Init() {
@@ -278,6 +299,10 @@ struct TestHarness {
     SDL_GLContext gl;
     Game         game;
     int          initFrames;
+    // Set by --frames N or --duration S in ParseFlags(). -1 = no override.
+    // Tests should check HasFramesOverride() and use frames instead of their
+    // own default when it is >= 0.
+    int          frames;
 
 private:
     bool m_interactiveDefault;

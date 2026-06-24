@@ -1,4 +1,63 @@
-# tests/CMakeLists.txt — minimal ctest registration.
+# tests/CMakeLists.txt -- minimal ctest registration.
+
+# ---------------------------------------------------------------------------
+# Helper macro: fn_add_game_test
+#
+# Registers an executable that links against fruit-ninja-game, SDL2::SDL2main,
+# and the platform GL library. Also copies SDL2.dll next to the exe on Windows.
+# This replaces the ~20 lines of boilerplate each test used to carry verbatim.
+#
+# Usage:
+#   fn_add_game_test(<target> <source>)
+#
+# The caller then adds include dirs, ctest entries, and test properties as
+# needed after the macro call -- the macro only wires the shared link/copy
+# boilerplate.
+#
+# opengl32 is linked on WIN32 only; on non-WIN32 OpenGL::GL is found and linked
+# (except for test_screen which resolves glReadPixels at runtime -- that target
+# is still registered via fn_add_game_test but callers can omit its GL assertion
+# since the linker doesn't need it on non-WIN32 there either; the macro always
+# links OpenGL::GL on non-WIN32 for consistency).
+# ---------------------------------------------------------------------------
+macro(fn_add_game_test _target _source)
+    add_executable(${_target} ${_source})
+
+    target_include_directories(${_target} PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/src/engine
+        ${CMAKE_SOURCE_DIR}/tests
+    )
+
+    target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
+
+    if (WIN32)
+        target_link_libraries(${_target} PRIVATE opengl32)
+    else()
+        find_package(OpenGL REQUIRED)
+        target_link_libraries(${_target} PRIVATE OpenGL::GL)
+    endif()
+
+    # Copy SDL2.dll next to the exe on Windows so the test can run in-place.
+    if (WIN32 AND TARGET SDL2::SDL2)
+        set(_fn_sdl2_real SDL2::SDL2)
+        get_target_property(_fn_alias ${_fn_sdl2_real} ALIASED_TARGET)
+        if (_fn_alias)
+            set(_fn_sdl2_real ${_fn_alias})
+        endif()
+        get_target_property(_fn_sdl2_type ${_fn_sdl2_real} TYPE)
+        if (_fn_sdl2_type STREQUAL "SHARED_LIBRARY")
+            add_custom_command(TARGET ${_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SDL2::SDL2>
+                    $<TARGET_FILE_DIR:${_target}>)
+        endif()
+    endif()
+endmacro()
+
+# ---------------------------------------------------------------------------
+# Pure-logic tests (no SDL, no GL, no audio)
+# ---------------------------------------------------------------------------
 
 # AsciiString SSO correctness -- regression guard for the strlen+1/strlen mis-RE.
 # Pure in-process: no GPU, no audio, no file I/O.
@@ -68,7 +127,7 @@ target_include_directories(test_linkedheap PRIVATE
 target_compile_definitions(test_linkedheap PRIVATE FN_TEST)
 add_test(NAME linkedheap COMMAND test_linkedheap)
 
-# Mortar::Delegate template — size + bind + invoke correctness.
+# Mortar::Delegate template -- size + bind + invoke correctness.
 add_executable(test_delegate test_delegate.cpp)
 target_include_directories(test_delegate PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -76,7 +135,7 @@ target_include_directories(test_delegate PRIVATE
 )
 add_test(NAME delegate COMMAND test_delegate)
 
-# Mortar::Event multicast — subscribe/fire/unsubscribe correctness.
+# Mortar::Event multicast -- subscribe/fire/unsubscribe correctness.
 # High-fan-in infra: ComboModifier, ExplodyFruitModifier, TimeSinkModifier,
 # SuperFruitGlow, and FruitCamera all depend on this type.
 # No GPU / audio dependency; pure in-process template test.
@@ -98,35 +157,16 @@ target_include_directories(test_bakedstringttf PRIVATE
 )
 add_test(NAME bakedstringttf COMMAND test_bakedstringttf)
 
+# ---------------------------------------------------------------------------
+# Visual / component tests (SDL + GL + TestHarness)
+# All use fn_add_game_test for shared link/copy boilerplate.
+# ---------------------------------------------------------------------------
+
 # Per-screen smoke test. Each entry boots a hidden SDL+GL context,
 # inits the full game, pushes the named screen, and ticks 30 frames.
 # Catches font / vertex / matrix / divide-by-zero regressions that
 # the home screen alone doesn't exercise.
-add_executable(test_screen test_screen.cpp)
-target_link_libraries(test_screen PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_screen PRIVATE opengl32)
-endif()
-# Linux/macOS: glReadPixels resolved at runtime via SDL_GL_GetProcAddress
-# inside test_screen.cpp -- no static GL link needed.
-
-# SDL2.dll must sit next to test_screen.exe on Windows (same as the
-# fruit-ninja exe). copy_if_different keeps the rule cheap on rebuilds.
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_screen POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_screen>)
-    endif()
-endif()
-
+fn_add_game_test(test_screen test_screen.cpp)
 foreach(screen main dojo about shop gamemode gameover gameover-transition classic)
     add_test(NAME screen_${screen} COMMAND test_screen ${screen})
     set_tests_properties(screen_${screen} PROPERTIES TIMEOUT 60)
@@ -134,28 +174,7 @@ endforeach()
 
 # Per-mode gameplay smoke test. Boots GameInit, fires SetupLevel for the
 # named mode, ticks ~3s, asserts wave count + at least one spawn.
-add_executable(test_gameplay test_gameplay.cpp)
-target_link_libraries(test_gameplay PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_gameplay PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_gameplay PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_gameplay POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_gameplay>)
-    endif()
-endif()
+fn_add_game_test(test_gameplay test_gameplay.cpp)
 foreach(mode classic combo arcade zen)
     add_test(NAME gameplay_${mode} COMMAND test_gameplay ${mode})
     set_tests_properties(gameplay_${mode} PROPERTIES TIMEOUT 60)
@@ -166,28 +185,7 @@ endforeach()
 # To see per-frame trace output, configure with -DFRUITNINJA_BOMB_TRACE=ON
 # (that define propagates to fruit-ninja-game; the test exe itself carries
 # no trace define since Bomb.cpp lives in the library).
-add_executable(test_bomb_spawn test_bomb_spawn.cpp)
-target_link_libraries(test_bomb_spawn PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_bomb_spawn PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_bomb_spawn PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_bomb_spawn POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_bomb_spawn>)
-    endif()
-endif()
+fn_add_game_test(test_bomb_spawn test_bomb_spawn.cpp)
 add_test(NAME bomb_spawn COMMAND test_bomb_spawn all)
 set_tests_properties(bomb_spawn PROPERTIES TIMEOUT 60)
 
@@ -196,28 +194,7 @@ set_tests_properties(bomb_spawn PROPERTIES TIMEOUT 60)
 # Expected to FAIL until the root bug is fixed (Dojo restScale shrink not
 # reflected in m_BaseScale capture because the capture fires in Update, after
 # the DojoScreen shrink is applied -- or vice versa).
-add_executable(test_menubutton_scale test_menubutton_scale.cpp)
-target_link_libraries(test_menubutton_scale PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_menubutton_scale PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_menubutton_scale PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_menubutton_scale POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_menubutton_scale>)
-    endif()
-endif()
+fn_add_game_test(test_menubutton_scale test_menubutton_scale.cpp)
 add_test(NAME menubutton_scale COMMAND test_menubutton_scale)
 set_tests_properties(menubutton_scale PROPERTIES TIMEOUT 60)
 
@@ -225,28 +202,7 @@ set_tests_properties(menubutton_scale PROPERTIES TIMEOUT 60)
 # flow (state-0 fade-in + button creation) and asserts the back-bomb ends up
 # 0.825x the Home bomb size. Catches regressions where m_pTrackedFruit is null
 # at shrink time (so entity scale never gets the 0.825 factor).
-add_executable(test_dojoscreen_bomb_scale test_dojoscreen_bomb_scale.cpp)
-target_link_libraries(test_dojoscreen_bomb_scale PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_dojoscreen_bomb_scale PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_dojoscreen_bomb_scale PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_dojoscreen_bomb_scale POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_dojoscreen_bomb_scale>)
-    endif()
-endif()
+fn_add_game_test(test_dojoscreen_bomb_scale test_dojoscreen_bomb_scale.cpp)
 add_test(NAME dojoscreen_bomb_scale COMMAND test_dojoscreen_bomb_scale)
 set_tests_properties(dojoscreen_bomb_scale PROPERTIES TIMEOUT 60)
 
@@ -256,56 +212,14 @@ set_tests_properties(dojoscreen_bomb_scale PROPERTIES TIMEOUT 60)
 # MainScreen. Asserts both Play and Dojo fruits are healthy (non-frozen,
 # spinning) after the round-trip. Proves the #130 symptom is NOT in the
 # state-machine or entity-pool recycling on the faithful port path.
-add_executable(test_menu_fruit_roundtrip test_menu_fruit_roundtrip.cpp)
-target_link_libraries(test_menu_fruit_roundtrip PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_menu_fruit_roundtrip PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_menu_fruit_roundtrip PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_menu_fruit_roundtrip POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_menu_fruit_roundtrip>)
-    endif()
-endif()
+fn_add_game_test(test_menu_fruit_roundtrip test_menu_fruit_roundtrip.cpp)
 add_test(NAME menu_fruit_roundtrip COMMAND test_menu_fruit_roundtrip)
 set_tests_properties(menu_fruit_roundtrip PROPERTIES TIMEOUT 120)
 
 # BONUS_PHASE stall regression test. Boots Arcade-mode GameOverScreen in
 # STATE_BONUS_PHASE and ticks 600 frames (10s). Asserts state advances
 # to STATE_MAIN_DISPLAY within the timeout. Currently FAILS (stall bug).
-add_executable(test_bonus_phase test_bonus_phase.cpp)
-target_link_libraries(test_bonus_phase PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_bonus_phase PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_bonus_phase PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_bonus_phase POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_bonus_phase>)
-    endif()
-endif()
+fn_add_game_test(test_bonus_phase test_bonus_phase.cpp)
 add_test(NAME bonus_phase COMMAND test_bonus_phase)
 set_tests_properties(bonus_phase PROPERTIES TIMEOUT 120)
 
@@ -313,28 +227,7 @@ set_tests_properties(bonus_phase PROPERTIES TIMEOUT 120)
 # awards (no BonusManager), ticks frames, asserts size populated, score
 # advances, dismiss timer fires. Catches ctor / Update / phase-timer
 # regressions without needing to play a full Arcade run.
-add_executable(test_bonus_screen test_bonus_screen.cpp)
-target_link_libraries(test_bonus_screen PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_bonus_screen PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_bonus_screen PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_bonus_screen POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_bonus_screen>)
-    endif()
-endif()
+fn_add_game_test(test_bonus_screen test_bonus_screen.cpp)
 add_test(NAME bonus_screen COMMAND test_bonus_screen)
 set_tests_properties(bonus_screen PROPERTIES TIMEOUT 60)
 
@@ -350,28 +243,7 @@ endif()
 # full pos/vel/gravity parameters plus per-wave spawner config so
 # divergences vs. binary expectations are readable line-by-line. Always
 # returns success unless setup fails -- it's a log dump, not pass/fail.
-add_executable(test_spawn_lifecycle test_spawn_lifecycle.cpp)
-target_link_libraries(test_spawn_lifecycle PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_spawn_lifecycle PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_spawn_lifecycle PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_spawn_lifecycle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_spawn_lifecycle>)
-    endif()
-endif()
+fn_add_game_test(test_spawn_lifecycle test_spawn_lifecycle.cpp)
 foreach(spawn_mode classic arcade zen)
     add_test(NAME ${spawn_mode}_spawn COMMAND test_spawn_lifecycle --mode=${spawn_mode})
 endforeach()
@@ -389,27 +261,6 @@ set_tests_properties(zen_spawn     PROPERTIES TIMEOUT 120)
 # to fill m_SpeedControl[0], permanently closing the UpdateWave spawn-pump gate).
 # Must FAIL on the old [0]-collapse code and PASS after the [0]/[1] split fix.
 # Asserts >= 3 wave transitions in 600 frames (10s of simulated gameplay).
-add_executable(test_arcade_spawn test_arcade_spawn.cpp)
-target_link_libraries(test_arcade_spawn PRIVATE fruit-ninja-game SDL2::SDL2main)
-if (WIN32)
-    target_link_libraries(test_arcade_spawn PRIVATE opengl32)
-else()
-    find_package(OpenGL REQUIRED)
-    target_link_libraries(test_arcade_spawn PRIVATE OpenGL::GL)
-endif()
-if (WIN32 AND TARGET SDL2::SDL2)
-    set(_sdl2_real SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_arcade_spawn POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_arcade_spawn>)
-    endif()
-endif()
+fn_add_game_test(test_arcade_spawn test_arcade_spawn.cpp)
 add_test(NAME arcade_spawn_real COMMAND test_arcade_spawn)
 set_tests_properties(arcade_spawn_real PROPERTIES TIMEOUT 120)
