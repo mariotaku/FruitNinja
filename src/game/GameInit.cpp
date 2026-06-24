@@ -304,7 +304,17 @@ void GameUpdate(float dt, bool active) {
             game->pSplashTex.SetNull();
         }
     } else {
-        Mortar::Touch::GetInstance().Update(dt);
+        // Port specific: the port's single per-tick Mortar::Touch ring drain now
+        // happens in InputTranslatorSDL::DispatchForSimTick (stepUpdate, before
+        // GameTaskUpdate). Draining again here would re-snapshot states1 and demote
+        // the press-edge (phase -1 -> 0) before the HUD poll consumers
+        // (MenuButton/ScrollingMenu/BSButton, IsTouchDown==2) read it, making shop
+        // buttons and scroll unresponsive (#176).
+        // NB: the binary's GameUpdate @0x001cf534 has NO Touch::Update of its own -- it
+        // only ages pM_FingerSpawnPos.z (2->0->-1) and calls InputManager::Update; the
+        // binary's single ring drain lives in FruitNinja::Draw. So dropping the drain
+        // here makes GameUpdate MATCH the binary (no asm-verify divergence), not diverge
+        // from it -- hence no __bada__ guard is warranted.
     }
 
     // --- Common update block: sound + music (0x001cf6b8..0x001cf7d0) ---
