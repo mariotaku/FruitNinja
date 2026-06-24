@@ -10,6 +10,7 @@
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
+#include "screens/PauseScreen.h"
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "config.h"
@@ -173,6 +174,34 @@ void Game::frameTick() {
                    ev.key.keysym.scancode == SDL_SCANCODE_F12) {
             // Port specific: screenshot on F12.
             g_takeScreenshot = true;
+        } else if (ev.type == SDL_WINDOWEVENT &&
+                   (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
+                    ev.window.event == SDL_WINDOWEVENT_MINIMIZED  ||
+                    ev.window.event == SDL_WINDOWEVENT_HIDDEN)) {
+            // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
+            // pause; clears touch so no blade stays held (pairs with #154).
+            // Bada OnBackground/OnDeactivated triggered a pause when the OS
+            // backgrounded the app mid-slice. SDL has no equivalent lifecycle
+            // event, so we synthesize it from FOCUS_LOST / MINIMIZED / HIDDEN.
+            // Only pause during active gameplay (bM_Mode == false means game is
+            // running; true means already paused/transitioning).
+            if (!game_work.bM_Mode) {
+                PauseScreen::PauseGame();
+                LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
+            }
+            // Always clear held touch channels regardless of pause state so no
+            // blade stays armed across a background/restore cycle.
+            if (inputTranslator) inputTranslator->ReleaseAllFingers();
+        } else if (ev.type == SDL_APP_WILLENTERBACKGROUND) {
+            // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
+            // pause; clears touch so no blade stays held (pairs with #154).
+            // SDL_APP_WILLENTERBACKGROUND fires on mobile (iOS/Android) before the
+            // app is backgrounded -- equivalent to Bada OnBackground.
+            if (!game_work.bM_Mode) {
+                PauseScreen::PauseGame();
+                LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
+            }
+            if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else {
             if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
         }
