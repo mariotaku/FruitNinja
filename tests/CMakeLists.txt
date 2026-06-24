@@ -248,6 +248,15 @@ fn_add_game_test(test_render_interp test_render_interp.cpp)
 add_test(NAME render_interp COMMAND test_render_interp)
 set_tests_properties(render_interp PROPERTIES TIMEOUT 60)
 
+# SlashEntity::Reset() bridging-triangle regression guard.
+# Proves that Reset fully wipes both ribbon buffers (pos=0, not just colour=white)
+# so the head-cap slot at index m_PointCount does not carry stale positions from
+# a prior slice. Pure buffer-content check: no SDL init, no GL, no audio --
+# SlashEntity init only allocates heap memory (ColLine, vertex buffers).
+fn_add_game_test(test_slash_reset test_slash_reset.cpp)
+add_test(NAME slash_reset COMMAND test_slash_reset)
+set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
+
 # ---- Standalone scene test harnesses (visual dev tools, NOT CTest tests) ----
 # scene_fruit_scene.exe  -- single watermelon in a ballistic arc
 # scene_slash_scene.exe  -- blade trail driven by mouse/touch drag
