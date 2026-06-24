@@ -434,10 +434,19 @@ void GameUpdate(float dt, bool active) {
             if (game_work.m_BombHitTimer <= 0.0f) {
                 // No bomb hit -- normal gameplay with WaveManager active
                 game_work.m_SaveData->m_bHasActiveGame = 1;
-                WaveManager::GetInstance()->Update(fVar9);
-
-                float wavedt = WaveManager::GetInstance()->GetWavedt(0);
-                fVar11 = fVar9 * wavedt;
+                // Port specific (task collapse): the binary's Frontend task (FrontendUpdate
+                // @0x001d1830) does not tick WaveManager; GameExit @0x001cfed4 tears it down.
+                // The SDL port collapses Frontend into the Game task (FrontendTask.cpp stub
+                // bounces taskStateIndex=2), so gate the wave tick/scale off on the menu
+                // (bM_bPaused) to match. See #177/#178.
+                if (game_work.bM_bPaused) {
+                    WaveManager::GetInstance()->Update(0.0f);
+                    fVar11 = fVar9;
+                } else {
+                    WaveManager::GetInstance()->Update(fVar9);
+                    float wavedt = WaveManager::GetInstance()->GetWavedt(0);
+                    fVar11 = fVar9 * wavedt;
+                }
                 fVar10 = fVar9;
             } else {
                 // Bomb hit active
@@ -564,7 +573,7 @@ void GameUpdate(float dt, bool active) {
     if (game_work.m_QuitTransitionTimer > 0.0f) {
         game_work.m_QuitTransitionTimer -= dt;
         if (game_work.m_QuitTransitionTimer <= 0.0f) {
-            // Binary: blx CleanupAndReturnToMainMenu (0x0016b2dc).
+            // Binary: blx CleanupAndReturnToMainMenu v1.6.1 @0x00157620 (empty body in v1.6.1).
         }
     }
 
