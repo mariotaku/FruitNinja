@@ -163,13 +163,12 @@ public:
     bool operator!=(decltype(nullptr)) const noexcept { return m_bEmpty == 0; }
 
     // Delegate equality — used by EventN::operator-= / UnRegister via DelegateEqual().
-    // TODO: v1.6.1 template-per-instantiation, no single addr; see Delegate0<void> @0x001674e0
-    // ASM-spec v1.6.1 BaseDelegate::operator== @0x0015d298 area:
-    //   a = this->Ptr(); b = other.Ptr();
-    //   if (a == b) return true;   // both empty, or same storage (shouldn't happen)
-    //   if (!a || !b) return false;
-    //   if (a->GetTypeID() != b->GetTypeID()) return false;
-    //   return a->Compare(*b);
+    // ASM-spec v1.6.1 Mortar::Delegate0<void>::BaseDelegate::operator== @0x001674e0
+    // (template — per-instantiation, no single canonical address; this is a verified representative body):
+    //   if (a->GetTypeID() != b->GetTypeID()) return false;  // vtable+0x10
+    //   return a->Compare(*b);                               // vtable+0x14
+    //   (port's Ptr() == binary StackAllocatedPointer::Resolve @0x0015d298; the a==b/null guards
+    //    below are a port-side safety add, not in the binary representative body)
     bool operator==(const Delegate& other) const {
         const Concept* a = Ptr();
         const Concept* b = other.Ptr();

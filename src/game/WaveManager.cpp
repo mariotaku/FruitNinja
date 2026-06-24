@@ -897,11 +897,10 @@ void WaveManager::NewGame() {
     }
 }
 
-// ASM-verified: 2026-05-18 binary @ 0x0010a42c (re-analyst)
-// TODO: v1.6.1 PowersEnabled inlined/renamed; cited 0x0010a42c stale, locate real body
+// ASM-verified: 2026-06-24 v1.6.1 WaveManager::PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (re-analyst)
 bool WaveManager::PowersEnabled() {
-    Game* game = Game::GetInstance();
-    return game && game_work.gameMode == Mortar::GAME_MODE_ARCADE;
+    // Binary: ldrb game_work+0x4 (1-byte gameMode) == 2 (GAME_MODE_ARCADE); no Game::GetInstance guard.
+    return game_work.gameMode == Mortar::GAME_MODE_ARCADE;
 }
 
 void WaveManager::ResetGlobalDt(float dt) {
