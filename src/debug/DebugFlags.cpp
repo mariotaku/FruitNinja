@@ -9,6 +9,7 @@
 #include "debug/Logger.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
+#include "entities/SlashEntity.h"
 #include "hud/HUDControl.h"
 #include "hud/ScrollingMenu.h"
 #include "render/Renderer.h"
@@ -514,6 +515,95 @@ void DebugFps_Draw(float fps) {
     const Vec2 scale(1.0f, 1.0f);
     // align 0x4: bits 0-1 = 0 (left), bits 2-3 = 4 (vAlign=4, no y offset).
     s_FpsBaked->Draw(anchor, scale, 0.0f, 0x4);
+}
+
+// Build a thick line segment (two triangles = one quad) from (x0,y0) to (x1,y1)
+// into `out` (6 verts). `thickness` is total width in world units.
+static void BuildSegment(QUADCUSTOMVERTEX* out,
+                         float x0, float y0,
+                         float x1, float y1,
+                         float z, float thickness,
+                         uint32_t col) {
+    const float dx  = x1 - x0;
+    const float dy  = y1 - y0;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 0.001f) len = 0.001f;
+    const float h   = thickness * 0.5f;
+    const float px  = (-dy / len) * h;
+    const float py  = ( dx / len) * h;
+
+    out[0].x = x0 + px; out[0].y = y0 + py; out[0].z = z;
+    out[1].x = x0 - px; out[1].y = y0 - py; out[1].z = z;
+    out[2].x = x1 + px; out[2].y = y1 + py; out[2].z = z;
+    out[3].x = x1 + px; out[3].y = y1 + py; out[3].z = z;
+    out[4].x = x0 - px; out[4].y = y0 - py; out[4].z = z;
+    out[5].x = x1 - px; out[5].y = y1 - py; out[5].z = z;
+
+    for (int k = 0; k < 6; ++k) {
+        out[k].nx = 0.0f; out[k].ny = 0.0f; out[k].nz = 1.0f;
+        out[k].u  = 0.5f; out[k].v  = 0.5f;
+        out[k].colour = col;
+    }
+}
+
+void DebugBladeTrails_Draw() {
+    if (!g_DebugHitboxes) return;
+
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    EnsureWhiteTex();
+
+    // Restore scene ortho + identity world matrix -- same state as DebugHitbox_Draw.
+    // SlashEntity positions (m_TailPos, m_HeadPos) are in the same scene world space
+    // as entity ColSphere centers.
+    r->SetupGameOrtho();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+
+    // Yellow, fully opaque (BGRA: B=0x00 G=0xFF R=0xFF A=0xFF).
+    static const uint32_t kBladeLineCol = 0xFF00FFFF;
+    // Bright cyan end-cap markers (BGRA: B=0xFF G=0xFF R=0x00 A=0xFF) -- tail.
+    static const uint32_t kTailCapCol   = 0xFFFFFF00;
+    // Orange end-cap for head (BGRA: B=0x00 G=0x80 R=0xFF A=0xFF).
+    static const uint32_t kHeadCapCol   = 0xFF0080FF;
+
+    // Scratch buffer: 6 verts for the line segment + 24 for a crosshair cap = 30 max per call.
+    static QUADCUSTOMVERTEX s_SegVerts[6];
+    static QUADCUSTOMVERTEX s_CapVerts[24]; // BuildCrosshair uses 24 verts (4*6)
+
+    static const float kLineThickness = 2.5f;
+    static const float kCapRadius     = 4.0f;
+    static const float kZ             = -0.8f; // slightly behind fruit spheres (-1.0f)
+
+    for (int i = 0; i < 16; ++i) {
+        SlashEntity* se = g_pSlashEntities[i];
+        if (!se) continue;
+        if (!se->IsBladeActive()) continue;
+
+        const Vec3& tail = se->GetTailPos();
+        const Vec3& head = se->GetHeadPos();
+
+        // Draw the main trail line: tail -> head.
+        BuildSegment(s_SegVerts,
+                     tail.x, tail.y,
+                     head.x, head.y,
+                     kZ, kLineThickness, kBladeLineCol);
+        r->DrawTriList(s_SegVerts, 6);
+
+        // Tail end-cap (cyan crosshair).
+        BuildCrosshair(s_CapVerts, tail.x, tail.y, kZ - 0.1f, kCapRadius, kTailCapCol);
+        r->DrawTriList(s_CapVerts, 24);
+
+        // Head end-cap (orange crosshair).
+        BuildCrosshair(s_CapVerts, head.x, head.y, kZ - 0.1f, kCapRadius, kHeadCapCol);
+        r->DrawTriList(s_CapVerts, 24);
+    }
 }
 
 } // namespace FN

@@ -325,6 +325,10 @@ public:
 
     // Port specific: number of live trail points.
     int GetPointCount() const { return m_PointCount; }
+
+    // Port specific: debug accessor for blade trail endpoints (used by DebugBladeTrails_Draw).
+    const Vec3& GetTailPos() const { return m_TailPos; }
+    const Vec3& GetHeadPos() const { return m_HeadPos; }
 #endif // !defined(__bada__)
 
 public:
