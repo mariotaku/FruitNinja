@@ -140,8 +140,7 @@ int SpecificOrder::Check(uint32_t newFruitHash) {
     return 0;
 }
 
-// Binary @ 0x00108468
+// v1.6.1 SpecificOrder::GetFirstFruitTypeHash @0x00116d18: ldr r0,[r0,#8]; bx lr -- unconditional return of m_Slots[0].hashes[0].
 uint32_t SpecificOrder::GetFirstFruitTypeHash() const {
-    if (m_SlotCount <= 0) return 0;
     return m_Slots[0].hashes[0];
 }
