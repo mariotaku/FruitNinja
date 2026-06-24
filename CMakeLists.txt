@@ -15,6 +15,13 @@ if(FN_ASM_VERIFY)
     set(FN_RENDER_INTERP OFF)
 endif()
 
+# Web-only debug isolation switch: drive the emscripten main loop at a fixed
+# 60Hz setTimeout cadence instead of requestAnimationFrame (display rate), so
+# pollInput()+render run at 60Hz regardless of a 120/144Hz panel (1:1
+# drain:dispatch). Used to confirm whether the high-refresh decoupling is what
+# breaks touch. Default OFF (RAF). No effect on native builds.
+option(FN_WEB_FORCE_60FPS "Force emscripten main loop to a fixed 60fps (web debug)" OFF)
+
 project(FruitNinja LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -423,6 +430,12 @@ if (FN_RENDER_INTERP)
     message(STATUS "FN_RENDER_INTERP = ON")
 else()
     message(STATUS "FN_RENDER_INTERP = OFF")
+endif()
+
+# propagate the web 60fps debug switch (gates the emscripten main-loop fps arg).
+if (FN_WEB_FORCE_60FPS)
+    target_compile_definitions(fruit-ninja-game PUBLIC FN_WEB_FORCE_60FPS=1)
+    message(STATUS "FN_WEB_FORCE_60FPS = ON")
 endif()
 
 if (NOT EMSCRIPTEN)

@@ -264,11 +264,20 @@ static void BootWait(void* arg) {
     });
 
     // Port specific: hand control to the browser event loop.
-    // fps=0 lets the browser decide (requestAnimationFrame).
+    // fps=0 lets the browser decide (requestAnimationFrame) = display refresh rate.
     // simulate_infinite_loop=0: we return from main() after the boot loop
     // returned from emscripten_set_main_loop_arg below; the game loop is
     // installed for future RAFs.
+    //
+    // FN_WEB_FORCE_60FPS (debug isolation switch): drive the loop at a fixed
+    // 60Hz setTimeout cadence instead of RAF, so pollInput()+render run at 60Hz
+    // regardless of a 120/144Hz panel (1:1 drain:dispatch). Confirms whether the
+    // high-refresh decoupling is what breaks touch. Default OFF (RAF).
+#if defined(FN_WEB_FORCE_60FPS) && FN_WEB_FORCE_60FPS
+    emscripten_set_main_loop_arg(EmscriptenFrame, &g_game, 60, 0);
+#else
     emscripten_set_main_loop_arg(EmscriptenFrame, &g_game, 0, 0);
+#endif
 }
 
 int main(int argc, char* argv[]) {
