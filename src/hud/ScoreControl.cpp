@@ -84,8 +84,8 @@ static int GetScoreMultiplyer(int /*playerIdx*/) {
     return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
 }
 
-// ASM-verified: 2026-05-03T00:00 binary @ 0x0010a35c (asm-inspector)
-// Binary: GetCurrentModeHighscore @ 0x0010a35c.
+// ASM-verified: 2026-05-03T00:00 v1.6.1 GetCurrentModeHighscore @ 0x00115444 (asm-inspector)
+// Binary: GetCurrentModeHighscore @ 0x00115444.
 // pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
 static int GetCurrentModeHighscore() {
     Game* gd = Game::GetInstance();

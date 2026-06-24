@@ -163,6 +163,7 @@ public:
     bool operator!=(decltype(nullptr)) const noexcept { return m_bEmpty == 0; }
 
     // Delegate equality — used by EventN::operator-= / UnRegister via DelegateEqual().
+    // TODO: v1.6.1 template-per-instantiation, no single addr; see Delegate0<void> @0x001674e0
     // ASM-spec v1.6.1 BaseDelegate::operator== @0x0015d298 area:
     //   a = this->Ptr(); b = other.Ptr();
     //   if (a == b) return true;   // both empty, or same storage (shouldn't happen)

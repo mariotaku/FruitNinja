@@ -424,10 +424,10 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 // ---- Additional ItemManager public API (binary missing-symbol set) ----
 
 // -----------------------------------------------------------------------
-// EquipItem @ 0x00103198 (address not re-verified for v1.6.1)
+// EquipItem @ 0x00139ccc
 // Equip item by hash. Returns 1 on success, 0 if not found or not purchased.
 // Binary: lookup m_ByHash; gate on m_Cost < 0; UnEquip current slot; SetEquippedItem.
-// ASM-verified: 2026-05-23 binary @ 0x00103198 (re-analyst)
+// ASM-verified: 2026-05-23 v1.6.1 ItemManager::EquipItem @ 0x00139ccc (re-analyst)
 // -----------------------------------------------------------------------
 int ItemManager::EquipItem(unsigned int hash) {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
@@ -445,10 +445,10 @@ int ItemManager::EquipItem(unsigned int hash) {
 }
 
 // -----------------------------------------------------------------------
-// UnequipItem @ 0x0010314c (address not re-verified for v1.6.1)
+// UnequipItem @ 0x00139c4c
 // Unequip item by hash. Returns true if item was found.
 // Binary: lookup m_ByHash; if found, UnEquip() + SetEquippedItem(type, nullptr).
-// ASM-verified: 2026-05-23 binary @ 0x0010314c (re-analyst)
+// ASM-verified: 2026-05-23 v1.6.1 ItemManager::UnequipItem @ 0x00139c4c (re-analyst)
 // -----------------------------------------------------------------------
 bool ItemManager::UnequipItem(unsigned long hash) {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
@@ -466,10 +466,10 @@ bool ItemManager::PlayAlternateComboSound(int comboIdx) {
     return m->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f);
 }
 // -----------------------------------------------------------------------
-// PlayAlternateImpactSound @ v1.6.1 0x00139ac4
+// PlayAlternateImpactSound @ v1.6.1 0x00139aec
 // Binary: *(int*)this == m_DefaultItems[0] (first field = blade slot pointer).
 // Dereferences to SlashModInfo, calls m_ImpactSounds.PlaySound(-1, vol, pitch).
-// ASM-verified: 2026-05-23 binary @ 0x00113054 / 0x00113068 (re-analyst)
+// ASM-verified: 2026-05-23 v1.6.1 ItemManager::PlayAlternateImpactSound @ 0x00139aec (re-analyst)
 // -----------------------------------------------------------------------
 bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);

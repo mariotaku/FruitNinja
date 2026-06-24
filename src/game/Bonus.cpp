@@ -157,7 +157,7 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
         }
     }
 
-    // ASM-verified: 2026-05-22 binary @ 0x0010e61c (re-analyst). Binary's
+    // ASM-verified: 2026-05-22 v1.6.1 Bonus::Parse @ 0x001036e8 (re-analyst). Binary's
     // Bonus::Parse calls GETSTRING_CAST_0_STR on the inner text BEFORE
     // strcpy -- the <bonus>GAME_TEXTURE_13</bonus> text is a localisation
     // key, not the display text. Without this lookup the raw key renders
@@ -169,8 +169,8 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
 }
 
 // ---------------------------------------------------------------------------
-// Bonus::IsAchieved -- Binary @ 0x0010df38
-// ASM-verified: 2026-06-07 binary @ 0x0010df38 (disassemble_function diff)
+// Bonus::IsAchieved -- Binary @ 0x001064c4
+// ASM-verified: 2026-06-07 v1.6.1 Bonus::IsAchieved @ 0x001064c4 (disassemble_function diff)
 //
 // Faithful port of the binary control flow:
 //   1. Gate (0010df3e-0010df62, all unconditional -- NO `>0` guards):
@@ -317,7 +317,7 @@ void BonusType::Parse(TiXmlElement* e) {
 
 static int GetBonusTotal(uint64_t hash);
 
-// ASM-verified: 2026-05-22 binary @ 0x0010e094 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0010ecc8 (re-analyst).
 Bonus* BonusType::GetBest() {
     int totalAcrossFruits = 0;
     for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
@@ -358,8 +358,8 @@ static int GetBonusTotal(uint64_t hash) {
 }
 
 // ---------------------------------------------------------------------------
-// BonusType::UnlockAchievements -- Binary @ 0x0010e12c
-// ASM-verified: 2026-05-18 binary @ 0x0010e12c (re-analyst Claude #49)
+// BonusType::UnlockAchievements -- Binary @ 0x00108eb0
+// ASM-verified: 2026-05-18 v1.6.1 BonusType::UnlockAchievements @ 0x00108eb0 (re-analyst Claude #49)
 //
 // Pre-pass: refresh per-fruit totals into m_RequiredHashes values (the map
 // keys were populated by Parse from the "requires" CSV; values get overwritten

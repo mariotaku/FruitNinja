@@ -89,13 +89,13 @@ struct Game : public Mortar::MortarGame {
     //   GetCacheDataArchive(8), SetLanguage(21), AllowOrientationChange(22), OrientationDidChange(23).
     void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 2 @ 0x0010dcf4
     float GetHighResolutionScale() override;                // slot 3 @ 0x0010d9e4 returns 2.0f
-    // Defunct: OpenFeint -- no-op stub; binary @ 0x0010da04
+    // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetHighResolutionScale @ 0x0011fbd0
     const char* GetOpenFeintProductKey() override;          // slot 4
-    // Defunct: OpenFeint -- no-op stub; binary @ 0x0010da14
+    // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintProductKey @ 0x0011fbf4
     const char* GetOpenFeintSecret() override;              // slot 5
-    // Defunct: OpenFeint -- no-op stub; binary @ 0x0010da24
+    // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintSecret @ 0x0011fc10
     const char* GetOpenDisplayName() override;              // slot 6
-    // Defunct: Playhaven -- no-op stub; binary @ 0x0010da34
+    // Defunct: Playhaven -- no-op stub; v1.6.1 Game::GetOpenDisplayName @ 0x0011fc2c
     const char* GetPlayhavenToken() override;               // slot 7
     void CreateFileSystems(const char* a, const char* b) override;  // slot 9 @ 0x0010dca8
     void TellGameToStart(int multiplayer) override;         // slot 10 @ 0x0010dc80

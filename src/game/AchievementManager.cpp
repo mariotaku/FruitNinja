@@ -79,11 +79,11 @@ AchievementManager* AchievementManager::GetInstance() {
 }
 
 // ---------------------------------------------------------------------------
-// LoadAchievementInfo  (Binary @ 0x00109200)
+// LoadAchievementInfo  (Binary @ 0x00113c50)
 // ---------------------------------------------------------------------------
 
 void AchievementManager::LoadAchievementInfo() {
-    // ASM-verified: 2026-05-23 binary @ 0x00109188 (re-analyst)
+    // ASM-verified: 2026-05-23 v1.6.1 AchievementManager::LoadAchievementInfo @ 0x00113c50 (re-analyst)
     // Binary loads "achievment_banner.tex" (sic) into DAT_001096a8 BEFORE opening the XML doc.
     s_AchievementBannerTex = TextureManager::LoadLocalisedTexture("achievment_banner.tex");
     // TODO: DAT_001096ac -- load second preamble texture (identity not yet RE'd).
@@ -253,8 +253,8 @@ int AchievementManager::AchievementExists(uint32_t hash) {
 }
 
 // ---------------------------------------------------------------------------
-// QueAchievement  (Binary @ 0x00108978)
-// ASM-verified: 2026-05-18 binary @ 0x00108978 (re-analyst)
+// QueAchievement  (Binary @ 0x001106a4)
+// ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x001106a4 (re-analyst)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::QueAchievement(AchievementInfo* info,
@@ -314,11 +314,11 @@ int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockAchievementInNetwork  (Binary @ 0x001085a0)
+// UnlockAchievementInNetwork  (Binary @ 0x0010bd34)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x001085a0
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 AchievementManager::UnlockAchievementInNetwork @ 0x0010bd34
     return 0;
 }
 
@@ -422,8 +422,8 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockBonusAchievement  (Binary @ 0x00108af0)
-// ASM-verified: 2026-05-18T00:00 binary @ 0x00108af0..0x00108b4f (asm-inspector)
+// UnlockBonusAchievement  (Binary @ 0x0010f7c4)
+// ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0010f7c4 (asm-inspector)
 // ---------------------------------------------------------------------------
 
 unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
@@ -575,7 +575,8 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         //   no timer HUD), reject. If comboLen <= 2, reject. If countdown still
         //   running, reject. Only when the Arcade/Zen-timed countdown has hit 0.0f
         //   does the achievement become eligible.
-        // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x001106a4 (re-analyst)
+        // (IsGameOver gate is a mid-function range within QueAchievement; exact offset unverified -- asm-inspector to pin)
         if (info->m_IsGameOver) {
             Game* g = Game::GetInstance();
             if (game_work.mCountDown == NULL) { ++it; continue; }

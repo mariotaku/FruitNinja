@@ -30,7 +30,7 @@ void Localisation::Unload() {
 // Mortar::StringTable::GetString returns "STRING NOT FOUND" on miss.
 // GETSTRING_CAST_0_STR is used as the public call site -- its binary
 // implementation delegates through GETSTRING_STR which returns key on miss.
-// ASM-verified: 2026-05-18 binary @ 0x00109ec0 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 Localisation::Get @ 0x00114b50 (re-analyst)
 const char* Localisation::Get(const char* key) {
     return Mortar::GETSTRING_CAST_0_STR(key);
 }
