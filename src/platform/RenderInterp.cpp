@@ -265,6 +265,15 @@ void RenderInterp::ApplyForDraw(float alpha) {
 // ---------------------------------------------------------------------------
 
 void RenderInterp::RestoreAfterDraw() {
+    // Port specific: #172 -- gate to active gameplay, matching SnapshotAfterStep /
+    // ApplyForDraw. In the frontend m_cur holds STALE gameplay entities (Snapshot is
+    // gated, so it's never rebuilt/cleared there); the shop recycles those Entity*
+    // slots as button props, so writing the stale snapshot back would corrupt their
+    // positions every frame -> flicker + jump. With all three gated, interpolation is
+    // a complete no-op outside gameplay; the maps self-heal on gameplay re-entry
+    // (first SnapshotAfterStep rebuilds m_cur; hadPrev=false for recycled slots).
+    if (game_work.taskStateIndex != 2) return;
+
     for (std::unordered_map<Mortar::Entity*, EntitySnap>::iterator it = m_cur.begin();
          it != m_cur.end(); ++it) {
         if (!it->second.hadPrev) continue;
