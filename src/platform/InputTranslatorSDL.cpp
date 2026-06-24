@@ -1,14 +1,19 @@
 //
-// InputTranslatorSDL -- converts SDL events to Mortar InputEvents AND feeds
-// Mortar::Touch directly (poll-based binary path).
+// InputTranslatorSDL -- converts SDL events to Mortar::Touch ring buffer
+// entries AND InputManager hash events.
 //
-// binary is a strict 1:1 input->update->draw tick.
-// This file splits touch dispatch into two phases:
-//   DrainSDLEvent()      -- accumulate per-frame (no dispatch); called from pollInput()
-//   DispatchForSimTick() -- dispatch once per sim tick; called from stepUpdate()
-// This ensures m_PointCount only advances inside a tick that also runs
-// UpdatePoints (which reconciles the head-cap vertex), so DrawSlice never draws
-// a stale head-cap to origin (#168 / #173 bridge fix).
+// Refresh-rate-independent fix for #175 (120Hz slashing bug):
+// DrainSDLEvent pushes each touch event IMMEDIATELY into Mortar::Touch's
+// ring buffer (OnPressed/OnMoved/OnReleased) for channels 0-7. This means
+// a FINGERDOWN followed by a FINGERUP arriving in two consecutive drains
+// before the next sim tick both land in the ring -- neither edge is lost.
+// DispatchForSimTick calls Touch::Update(0.0f) (Mortar::Touch::Update
+// @0x00242d14: dt==0 skips the timestamp guard, drains the ENTIRE ring),
+// then reads the drained states1 to drive InputManager hash events.
+//
+// At 120Hz: two drains per tick -> two events in ring -> both applied in
+// one DispatchForSimTick call. At 60Hz: one drain per tick -> same as
+// before. Refresh-rate-independent by construction.
 //
 
 #include "platform/InputTranslatorSDL.h"
@@ -32,6 +37,7 @@ InputTranslatorSDL::InputTranslatorSDL() : hashTouchScreen(0) {
     memset(fingerX, 0, sizeof(fingerX));
     memset(fingerY, 0, sizeof(fingerY));
     memset(fingerActive, 0, sizeof(fingerActive));
+    memset(prevActive, 0, sizeof(prevActive));
     memset(fingerMap, 0xFF, sizeof(fingerMap));
     memset(pendingDown, 0, sizeof(pendingDown));
     memset(pendingUp, 0, sizeof(pendingUp));
@@ -127,8 +133,9 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
 }
 
 // synthesize TouchUp for every held finger and clear all channels.
-// Called when the SDL window loses focus or is minimized so no blade stays armed
-// across a background/restore cycle (#162).
+// Flushes the Mortar::Touch ring buffer (Touch::Update(0.0f) drains it)
+// then releases all states. Called when the SDL window loses focus or is
+// minimized so no blade stays armed across a background/restore cycle (#162).
 void InputTranslatorSDL::ReleaseAllFingers() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
@@ -151,17 +158,36 @@ void InputTranslatorSDL::ReleaseAllFingers() {
         }
 
         fingerActive[ch] = false;
+        prevActive[ch]   = false;
     }
 
-    // Also clear any pending drain state so the next flush doesn't re-fire.
+    // Drain any ring-buffered events that accumulated before the release,
+    // so the next DispatchForSimTick starts with a clean Touch state.
+    if (mgr) {
+        Mortar::Touch::GetInstance().Update(0.0f);
+    }
+
+    // Clear pending bools for ch >= 8 (the non-Touch fallback channels).
     memset(pendingDown, 0, sizeof(pendingDown));
     memset(pendingUp, 0, sizeof(pendingUp));
     memset(pendingEdge, 0, sizeof(pendingEdge));
 }
 
-// drain one SDL event into per-channel pending state.
-// TOUCH events (FINGERDOWN/MOTION/UP, MOUSEBUTTONUP) are accumulated in
-// pendingDown/pendingUp + fingerX/Y; they are NOT dispatched to InputManager.
+// drain one SDL event into Mortar::Touch ring buffer (channels 0-7) and
+// into per-channel position state (all 16 channels).
+//
+// For channels 0-7: each FINGERDOWN/MOTION/UP is IMMEDIATELY pushed into
+// the Mortar::Touch ring buffer (OnPressed/OnMoved/OnReleased). This is the
+// core fix for the 120Hz slashing bug (#175): both the DOWN and UP from a
+// fast flick within one tick interval enter the ring and are applied in
+// order by DispatchForSimTick's Touch::Update(0.0f) drain -- no edge lost.
+//
+// For channels 8-15: falls back to the old pending-bool model since these
+// channels have no Mortar::Touch slot.
+//
+// fingerX/Y always tracks the latest position for InputManager hash events.
+// fingerActive tracks whether the SDL layer considers the finger down.
+//
 // Non-touch events (WINDOW/FOCUS/keyboard) are handled inline as before.
 // Called from pollInput() for every SDL_PollEvent result.
 void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) {
@@ -186,10 +212,18 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TLOG("FINGERDOWN (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
-        // Set pending down edge for this channel; will be dispatched on DispatchForSimTick.
-        pendingDown[ch] = true;
-        pendingEdge[ch] = true;  // first-press edge (#173)
-        pendingUp[ch]   = false; // cancel any stale up for the same channel
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            // Push into Touch ring buffer immediately -- preserves the DOWN
+            // edge even if a UP arrives before the next DispatchForSimTick.
+            Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
+            // Mark first-press edge for the InputManager DOWN_EDGE flag.
+            pendingEdge[ch] = true;
+        } else {
+            // ch >= 8: no Touch slot; use pending-bool model.
+            pendingDown[ch] = true;
+            pendingEdge[ch] = true;
+            pendingUp[ch]   = false;
+        }
         break;
     }
 
@@ -207,12 +241,17 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
-        // Update current position; DispatchForSimTick will dispatch one move per tick.
         fingerX[ch] = gx;
         fingerY[ch] = gy;
         TLOG("MOVE (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
-        // Do NOT touch pendingDown/pendingUp -- motion only updates position.
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            // Push move into Touch ring buffer immediately.
+            Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);
+        }
+        // Do NOT touch pendingDown/pendingUp for ch < 8.
+        // Do NOT modify pending state for ch >= 8 (motion only updates position).
         break;
     }
 
@@ -233,10 +272,22 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         fingerY[ch] = gy;
         TLOG("FINGERUP (drain) ch=%d game=(%g,%g)\n", ch, gx, gy);
 
-        // Set pending up; will be dispatched on DispatchForSimTick.
-        pendingUp[ch]   = true;
-        pendingDown[ch] = false; // cancel any pending down for same channel
-        pendingEdge[ch] = false;
+        // Mark SDL-layer inactive immediately so MapFingerId can reuse this slot.
+        fingerActive[ch] = false;
+        ReleaseFingerId(ev.tfinger.fingerId);
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            // Push release into Touch ring buffer immediately.
+            // The DOWN (if any) is already in the ring ahead of this UP,
+            // so Touch::Update(0.0f) will apply them in order. No edge lost.
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+            pendingEdge[ch] = false;
+        } else {
+            // ch >= 8: pending-bool model.
+            pendingUp[ch]   = true;
+            pendingDown[ch] = false;
+            pendingEdge[ch] = false;
+        }
         break;
     }
 
@@ -245,8 +296,6 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
     // Handle it here as the event-driven fallback for the mouse channel.
     case SDL_MOUSEBUTTONUP: {
-        // Find any active finger mapped to SDL_TOUCH_MOUSEID (the synthetic ID
-        // SDL uses when converting mouse events to touch events).
         SDL_FingerID mouseId = (SDL_FingerID)SDL_TOUCH_MOUSEID;
         int ch = -1;
         for (int i = 0; i < 16; i++) {
@@ -254,14 +303,21 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
                 ch = i; break;
             }
         }
-        if (ch < 0) break;  // not our mouse-as-touch finger, ignore
+        if (ch < 0) break;
 
         TLOG("MOUSEBUTTONUP (drain) ch=%d game=(%g,%g)\n", ch, fingerX[ch], fingerY[ch]);
 
-        // Treat the same as FINGERUP: pend the release for DispatchForSimTick.
-        pendingUp[ch]   = true;
-        pendingDown[ch] = false;
-        pendingEdge[ch] = false;
+        fingerActive[ch] = false;
+        ReleaseFingerId(mouseId);
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+            pendingEdge[ch] = false;
+        } else {
+            pendingUp[ch]   = true;
+            pendingDown[ch] = false;
+            pendingEdge[ch] = false;
+        }
         break;
     }
 
@@ -271,51 +327,145 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     (void)window;
 }
 
-// dispatch accumulated touch state to InputManager for one sim tick.
-// Binary cadence: input->update->draw happens exactly once per tick.
-// This function provides the "input" phase that runs at the start of each sim tick
-// (before GameTaskUpdate), matching the binary's strict 1:1 tick ordering.
+// Drain the Mortar::Touch ring buffer and dispatch InputManager hash events
+// for one sim tick.
 //
-// Per tick:
-//   1. For each channel with a pending TouchDown edge: dispatch TouchScreen +
-//      TouchMove + TouchDown (with INPUT_ACTION_DOWN_EDGE on press-edge, #173).
-//      Consumes and clears the pending edge so subsequent catch-up steps do not
-//      re-fire the edge.
-//   2. For each channel with a pending TouchUp: dispatch TouchUp, mark inactive.
-//   3. For each still-active channel (no pending up): dispatch one TouchMove at
-//      current position (held, phase 0) -- mirrors the binary's per-tick held poll.
+// Binary cadence (Mortar::Touch::Update @0x00242d14): each game tick calls
+// Touch::Update(0.0) which, because dt==0, skips the timestamp guard and
+// pops the ENTIRE ring buffer in order via ___UpdateInternal into states2,
+// then _Update() snapshots states2->states1 and advances phase state
+// (-1 just-pressed -> 0 held; phase==1 -> free slot).
 //
-// No SDL touch/mouse live-set queries here -- only edge-driven dispatch from the
-// pending state set by DrainSDLEvent in pollInput.
+// This function mirrors that cadence:
+//   1. Touch::Update(0.0f) -- drain all queued events, advance state machine.
+//   2. For each channel 0-7: read drained states1[slot] (extId == ch+1) to
+//      determine phase, then emit InputManager hash events accordingly.
+//   3. For channels 8-15: read pending-bool model (unchanged from before).
 //
-// Catch-up (steps>=2 in one display frame): pending edges were set once in the drain
-// (per display frame). The first DispatchForSimTick consumes the edges. The second+
-// dispatch in the same display frame sees pendingDown=false but fingerActive=true,
-// so it dispatches a held TouchMove at the same position -- one trail point per tick,
-// matching the binary's once-per-tick poll cadence.
+// Phase -> InputManager hash mapping:
+//   phase == -1 (just-pressed, one tick): emit TouchScreen + TouchMove + TouchDown
+//      with INPUT_ACTION_DOWN | INPUT_ACTION_DOWN_EDGE.
+//   phase == 0 (held): emit TouchMove + TouchDown (held, no DOWN_EDGE).
+//   phase == 1 (released/free) and prevActive[ch]: emit TouchUp.
+//
+// prevActive[ch] tracks whether the channel was active (phase < 1) on the
+// previous DispatchForSimTick so that a release can be detected exactly once.
 void InputTranslatorSDL::DispatchForSimTick() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-    // Note: do NOT early-return on null mgr. Pending state must be consumed
-    // even in headless mode so catch-up ticks don't re-fire stale edges.
-    // When mgr is null, Touch ring-buffer updates and InputManager dispatches
-    // are skipped; only the pending state bookkeeping runs.
 
-    for (int ch = 0; ch < 16; ++ch) {
+    // Drain the entire Touch ring buffer for this tick. Binary-faithful:
+    // Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the
+    // timestamp guard and pops every queued TEvnt in order.
+    // This is safe to call even when mgr is null (headless): Touch state
+    // still advances correctly; InputManager dispatch below is gated on mgr.
+    Mortar::Touch& touch = Mortar::Touch::GetInstance();
+    touch.Update(0.0f);
+
+    // --- Channels 0-7: derive state from drained states1 ---
+    for (int ch = 0; ch < Mortar::Touch::MAX_SLOTS; ++ch) {
+        // Find the states1 slot whose extId matches this channel.
+        // extId = ch+1 (1-based) was assigned by ___UpdateInternal on press.
+        int slot = -1;
+        for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+            if (touch.states1[s].extId == (uint32_t)(ch + 1)) {
+                slot = s;
+                break;
+            }
+        }
+
+        bool nowActive = (slot >= 0 && touch.states1[slot].phase < 1);
+        bool wasActive = prevActive[ch];
+        int  phase     = (slot >= 0) ? touch.states1[slot].phase : 1;
+
+        if (phase == -1) {
+            // Just-pressed this tick.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
+            bool  isEdge = pendingEdge[ch];
+            pendingEdge[ch] = false;
+
+            TLOG("DispatchForSimTick FINGERDOWN ch=%d slot=%d edge=%d game=(%g,%g)\n",
+                 ch, slot, (int)isEdge, gx, gy);
+
+            if (mgr) {
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.fingerId = ch;
+                ie.x = gx;
+                ie.y = gy;
+
+                ie.actionHash  = hashTouchScreen;
+                ie.actionFlags = INPUT_ACTION_DOWN;
+                mgr->DispatchEvent(&ie);
+
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+
+                ie.actionHash  = hashTouchDown[ch];
+                ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+                mgr->DispatchEvent(&ie);
+            }
+        } else if (phase == 0) {
+            // Held finger: emit move + held-down.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
+
+            TLOG("DispatchForSimTick HELD ch=%d slot=%d game=(%g,%g)\n",
+                 ch, slot, gx, gy);
+
+            if (mgr) {
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.fingerId = ch;
+                ie.x = gx;
+                ie.y = gy;
+
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
+
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+
+                ie.actionHash  = hashTouchDown[ch];
+                ie.actionFlags = INPUT_ACTION_DOWN;
+                mgr->DispatchEvent(&ie);
+            }
+        } else if (wasActive && !nowActive) {
+            // Released this tick: emit TouchUp once.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
+
+            TLOG("DispatchForSimTick FINGERUP ch=%d game=(%g,%g)\n", ch, gx, gy);
+
+            if (mgr) {
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.actionHash  = hashTouchUp[ch];
+                ie.actionFlags = INPUT_ACTION_UP;
+                ie.fingerId    = ch;
+                ie.x = gx;
+                ie.y = gy;
+                mgr->DispatchEvent(&ie);
+            }
+        }
+
+        prevActive[ch] = nowActive;
+    }
+
+    // --- Channels 8-15: pending-bool model (no Mortar::Touch slot) ---
+    for (int ch = Mortar::Touch::MAX_SLOTS; ch < 16; ++ch) {
         if (pendingDown[ch]) {
-            // A FINGERDOWN (or first touch) was drained this display frame.
-            // Consume the edge unconditionally (even when mgr is null).
             bool isEdge = pendingEdge[ch];
             pendingDown[ch] = false;
             pendingEdge[ch] = false;
 
             if (!mgr) continue;
 
-            // Update Touch ring-buffer with the new press.
-            if (ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnPressed(ch + 1, fingerX[ch], fingerY[ch]);
-            }
-
-            TLOG("DispatchForSimTick FINGERDOWN ch=%d edge=%d game=(%g,%g)\n",
+            TLOG("DispatchForSimTick FINGERDOWN ch=%d (overflow) edge=%d game=(%g,%g)\n",
                  ch, (int)isEdge, fingerX[ch], fingerY[ch]);
 
             InputEvent ie;
@@ -328,8 +478,6 @@ void InputTranslatorSDL::DispatchForSimTick() {
             ie.actionFlags = INPUT_ACTION_DOWN;
             mgr->DispatchEvent(&ie);
 
-            // Synthesize TouchMove_X/Y before TouchDown_n so SlashEntity sees
-            // fresh pos at press-edge (binary Bada platform fires moves first).
             ie.actionHash  = hashTouchMoveX[ch];
             ie.actionFlags = INPUT_ACTION_MOVE;
             mgr->DispatchEvent(&ie);
@@ -341,15 +489,10 @@ void InputTranslatorSDL::DispatchForSimTick() {
             mgr->DispatchEvent(&ie);
 
         } else if (pendingUp[ch]) {
-            // A FINGERUP was drained this display frame.
-            // Consume unconditionally; only dispatch if mgr is available.
             pendingUp[ch] = false;
+            fingerActive[ch] = false;
 
-            if (mgr && ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnReleased(ch + 1);
-            }
-
-            TLOG("DispatchForSimTick FINGERUP ch=%d game=(%g,%g)\n",
+            TLOG("DispatchForSimTick FINGERUP ch=%d (overflow) game=(%g,%g)\n",
                  ch, fingerX[ch], fingerY[ch]);
 
             if (mgr) {
@@ -363,19 +506,11 @@ void InputTranslatorSDL::DispatchForSimTick() {
                 mgr->DispatchEvent(&ie);
             }
 
-            ReleaseFingerId(fingerMap[ch]);
-
         } else if (fingerActive[ch]) {
-            // Held finger, no new edge this tick: emit one TouchMove at current pos.
-            // This is the per-tick equivalent of the binary's OS touch poll.
-            // isActive=true + existing slot -> OnMoved only updates currX/Y, phase stays 0.
+            // Held overflow finger: emit one TouchMove at current pos.
             if (!mgr) continue;
 
-            if (ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnMoved(ch + 1, fingerX[ch], fingerY[ch]);
-            }
-
-            TLOG("DispatchForSimTick HELD ch=%d game=(%g,%g)\n",
+            TLOG("DispatchForSimTick HELD ch=%d (overflow) game=(%g,%g)\n",
                  ch, fingerX[ch], fingerY[ch]);
 
             InputEvent ie;

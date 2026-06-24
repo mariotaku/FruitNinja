@@ -13,24 +13,27 @@
 // SDL_FINGER* events from SDL_MOUSE* with finger id = SDL_TOUCH_MOUSEID.
 // This file therefore only handles SDL_FINGERDOWN/MOTION/UP.
 //
-// binary is a strict 1:1 input->update->draw tick (the Bada
-// OS polls touch once per frame). The SDL port separates this into two phases:
+// Refresh-rate-independent dispatch (Mortar::Touch::Update @0x00242d14):
 //
 //   DrainSDLEvent() -- called once per display frame from pollInput().
-//     Accumulates FINGERDOWN/MOTION/UP (and MOUSEBUTTONUP for SDL_TOUCH_MOUSEID)
-//     into per-channel pending state (down/up edges + latest position). Does NOT
-//     dispatch to InputManager so m_PointCount does not advance outside a sim tick.
-//     Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately
-//     from pollInput() (#162).
+//     For channels 0-7 (Mortar::Touch slots): IMMEDIATELY pushes each event
+//     into the Mortar::Touch ring buffer via OnPressed/OnMoved/OnReleased.
+//     This means a DOWN followed by an UP within the same drain window both
+//     enter the ring and are applied in order -- neither edge is lost.
+//     For channels 8-15 (beyond Touch capacity): accumulates pendingDown/Up
+//     bools as before (these channels have no binary Touch equivalent).
+//     Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately.
 //
 //   DispatchForSimTick() -- called once per sim tick from stepUpdate(), BEFORE
-//     GameTaskUpdate. Dispatches the accumulated pending state to InputManager:
-//     TouchDown/Up edges + one held TouchMove per active channel. No SDL
-//     touch/mouse live queries here at all -- only edge-driven dispatch from
-//     the pending state set by DrainSDLEvent. On the first flush after pending
-//     edges arrive, edges are consumed (cleared). On subsequent flushes in the
-//     same display frame (catch-up steps >= 2), only a held-position TouchMove
-//     is dispatched.
+//     GameTaskUpdate. Calls Touch::Update(0.0f) to drain the ENTIRE ring buffer
+//     accumulated since last tick (binary-faithful: Mortar::Touch::Update with
+//     dt=0 drains all queued events in order). Then reads drained states1 to
+//     drive InputManager hash events per channel.
+//
+// At 120Hz: two drains (RAF ~8.3ms each) feed one dispatch tick (~16.7ms).
+// Both drains' events sit in the ring; DispatchForSimTick drains the whole ring
+// in one pass -- no edge is lost regardless of arrival rate.
+// At 60Hz: one drain feeds one dispatch (1:1, same behaviour as before).
 //
 // Invariant: m_PointCount (SlashEntity::AddPoint) only advances inside a
 // tick that also runs UpdatePoints (which reconciles the head-cap vertex),
@@ -60,29 +63,31 @@ public:
     // Initialize action hashes (call once after StringHash is available)
     void Init();
 
-    // drain one SDL event into per-channel pending state.
-    // TOUCH events (FINGERDOWN/MOTION/UP + mouse-as-touch) accumulate into
-    // pendingDown/pendingUp/pendingPos; they are NOT dispatched to InputManager
-    // here. Non-touch events (WINDOW/FOCUS/keyboard/mouse-button) are handled
-    // inline as before. Called from pollInput() for every SDL_PollEvent result.
+    // drain one SDL event into Mortar::Touch ring buffer (channels 0-7)
+    // and into per-channel state (all 16). For channels 0-7, FINGERDOWN /
+    // MOTION / UP are pushed immediately into Mortar::Touch via
+    // OnPressed/OnMoved/OnReleased -- preserving all edges in order.
+    // For channels 8-15, falls back to the pending-bool model (no Touch slot).
+    // Non-touch events (WINDOW/FOCUS/keyboard) are handled inline.
+    // Called from pollInput() for every SDL_PollEvent result.
     void DrainSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
-    // dispatch accumulated touch state to InputManager for one sim tick.
-    // Dispatches pending TouchDown/Up edges for each channel, then one TouchMove at
-    // the channel's current position for held fingers. No SDL live-set queries here.
+    // drain the Mortar::Touch ring buffer and dispatch InputManager hash
+    // events for one sim tick.  Calls Touch::Update(0.0f) which drains ALL
+    // queued events (binary-faithful: dt==0 skips the timestamp guard and
+    // pops the entire ring). Then reads the drained states1 to emit
+    // hashTouchDown/Move/Up events to InputManager.
     // Called from stepUpdate() BEFORE GameTaskUpdate.
-    // On the first flush after pending edges arrive, edges are consumed (cleared).
-    // On subsequent flushes in the same display frame (catch-up steps >= 2),
-    // only a held-position TouchMove is dispatched (edges already consumed).
     void DispatchForSimTick();
 
     // legacy wrapper -- retained so existing callers that invoke
     // BeginFrame() are not broken. No-op now; dispatch is via DispatchForSimTick.
     void BeginFrame();
 
-    // synthesize TouchUp for every held finger and release all
-    // channels. Called on SDL focus-loss / minimize to clear blade state before
-    // the frame that runs while the app is backgrounded (#162).
+    // synthesize TouchUp for every held finger and release all channels.
+    // Flushes + clears the Mortar::Touch ring buffer. Called on SDL focus-loss
+    // / minimize to clear blade state before the frame that runs while the
+    // app is backgrounded (#162).
     void ReleaseAllFingers();
 
     // legacy wrapper for ProcessSDLEvent -- retained for callers
@@ -91,12 +96,18 @@ public:
     void ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
 private:
-    // Per-channel pending state, set by DrainSDLEvent, consumed by DispatchForSimTick.
-    // these fields have no binary equivalent; they exist solely to
-    // stage the once-per-tick dispatch that mirrors the binary's per-frame poll.
-    bool pendingDown[16];   // a FINGERDOWN arrived for this channel since last flush
-    bool pendingUp[16];     // a FINGERUP arrived for this channel since last flush
-    bool pendingEdge[16];   // was this a first-press edge (INPUT_ACTION_DOWN_EDGE)?
+    // Per-channel "was active at last DispatchForSimTick" snapshot.
+    // Used to detect release edges for the InputManager hash path:
+    //   prevActive[ch]==true and now inactive -> emit hashTouchUp.
+    // For channels 0-7 this is derived from states1 after Touch::Update(0.0f).
+    // For channels 8-15 it mirrors fingerActive directly.
+    bool prevActive[16];
+
+    // Pending bools for channels 8-15 ONLY (no Mortar::Touch slot).
+    // For channels 0-7 these are unused; ring buffer preserves all edges.
+    bool pendingDown[16];
+    bool pendingUp[16];
+    bool pendingEdge[16];
 
     // Convert normalized SDL touch coords to game coords (centred ortho).
     void TransformTouchNormalized(float nx, float ny, float& gx, float& gy);
@@ -109,14 +120,17 @@ private:
 
 #ifdef FN_TEST
 public:
-    // Test-seam: expose pending state for unit-test assertions.
+    // Test-seam: expose state for unit-test assertions.
     // Only compiled in when FN_TEST is defined (test targets only).
+    // pendingDown/Up/Edge are only meaningful for ch >= 8 in the new model;
+    // for ch 0-7 use TestGetTouchPhase() to read the ring-drained state.
     bool TestGetPendingDown(int ch) const { return ch >= 0 && ch < 16 ? pendingDown[ch] : false; }
     bool TestGetPendingUp(int ch)   const { return ch >= 0 && ch < 16 ? pendingUp[ch]   : false; }
     bool TestGetPendingEdge(int ch) const { return ch >= 0 && ch < 16 ? pendingEdge[ch] : false; }
     bool TestGetFingerActive(int ch) const { return ch >= 0 && ch < 16 ? fingerActive[ch] : false; }
     float TestGetFingerX(int ch) const { return ch >= 0 && ch < 16 ? fingerX[ch] : 0.0f; }
     float TestGetFingerY(int ch) const { return ch >= 0 && ch < 16 ? fingerY[ch] : 0.0f; }
+    bool TestGetPrevActive(int ch) const { return ch >= 0 && ch < 16 ? prevActive[ch] : false; }
 #endif
 };
 
