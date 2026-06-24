@@ -157,8 +157,35 @@
       word-break: break-word;
     }
 
-    #error-reload {
-      margin-top: 0.5em;
+    /* Crash stack trace box: scrollable + selectable so the trace can be read
+       and copied on-device without DevTools (shown by _showCrash()). */
+    #error-stack {
+      display: none;
+      margin-top: 0.4em;
+      max-width: min(92vw, 60em);
+      max-height: 40vh;
+      overflow: auto;
+      padding: 0.6em 0.8em;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.92);
+      font: 11px/1.4 monospace;
+      text-align: left;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+      -webkit-user-select: text;
+      pointer-events: auto;
+    }
+
+    #error-actions {
+      display: flex;
+      gap: 0.6em;
+      margin-top: 0.6em;
+    }
+
+    #error-reload, #error-copy {
       padding: 0.55em 1.6em;
       background: rgba(255,255,255,0.12);
       border: 1px solid rgba(255,255,255,0.45);
@@ -170,7 +197,8 @@
       transition: background 0.15s ease;
     }
 
-    #error-reload:hover, #error-reload:focus {
+    #error-reload:hover, #error-reload:focus,
+    #error-copy:hover, #error-copy:focus {
       background: rgba(255,255,255,0.22);
       outline: none;
     }
@@ -315,7 +343,11 @@
     <div id="error-overlay" role="alertdialog" aria-modal="true" aria-label="Load error">
       <div id="error-msg">Couldn't load the game.</div>
       <div id="error-detail"></div>
-      <button id="error-reload" tabindex="0">Reload</button>
+      <pre id="error-stack"></pre>
+      <div id="error-actions">
+        <button id="error-copy" tabindex="0" style="display:none;">Copy trace</button>
+        <button id="error-reload" tabindex="0">Reload</button>
+      </div>
     </div>
 
     <!-- Restart overlay: shown by C++ (EmscriptenFrame) when game->running == false.
@@ -463,6 +495,9 @@
   var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
   var _errorDetail  = document.getElementById('error-detail');
+  var _errorStack   = document.getElementById('error-stack');
+  var _errorCopy    = document.getElementById('error-copy');
+  var _crashShown    = false;
   var _runtimeReady  = false;
   var _loadFailed    = false;
   var _restartShown  = false;
@@ -517,6 +552,43 @@
     if (_errorOverlay) _errorOverlay.style.display  = 'flex';
     var reloadBtn = document.getElementById('error-reload');
     if (reloadBtn) reloadBtn.focus();
+  }
+
+  /* Show the crash overlay for a RUNTIME crash (after the game started), with
+     the full message + stack trace in a scrollable, selectable box plus a Copy
+     button -- so a crash can be read and grabbed on-device without DevTools.
+     (--profiling-funcs keeps C++ function names in the trace.) Shown once. */
+  function _showCrash(msg, stack) {
+    if (_crashShown) return;
+    _crashShown = true;
+    var msgEl = document.getElementById('error-msg');
+    if (msgEl) msgEl.textContent = 'The game crashed.';
+    if (_errorDetail) _errorDetail.textContent = msg || '';
+    if (_errorStack) {
+      _errorStack.textContent = stack || '(no stack trace available)';
+      _errorStack.style.display = 'block';
+    }
+    if (_errorCopy) {
+      _errorCopy.style.display = 'inline-block';
+      _errorCopy.onclick = function () {
+        var text = (msg ? msg + '\n\n' : '') + (stack || '');
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+          } else if (_errorStack) {
+            /* Fallback: select the trace so the user can long-press -> Copy. */
+            var r = document.createRange();
+            r.selectNodeContents(_errorStack);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+          _errorCopy.textContent = 'Copied';
+          setTimeout(function () { _errorCopy.textContent = 'Copy trace'; }, 1500);
+        } catch (e) {}
+      };
+    }
+    if (_errorOverlay) _errorOverlay.style.display = 'flex';
   }
 
   /* Show the restart overlay: called from C++ (EmscriptenFrame) when the game
@@ -773,12 +845,28 @@
 
   window.onerror = function (msg, src, line, col, err) {
     console.error('[onerror]', msg, src, line, col, err);
-    /* A JS error during load = fatal; show the error UI instead of leaving
-       the user staring at a frozen progress bar or, worse, the play button. */
     if (!_runtimeReady) {
+      /* A JS error during load = fatal; show the load error UI instead of
+         leaving the user staring at a frozen progress bar or play button. */
       _showError(msg ? String(msg) : 'A script error occurred while loading.');
+    } else {
+      /* Runtime crash after the game started (e.g. a wasm trap like
+         "index out of bounds") -- surface the stack trace overlay so it can be
+         read/copied on-device without DevTools. */
+      _showCrash(msg ? String(msg) : 'A runtime error occurred.',
+                 (err && err.stack) ? String(err.stack) : null);
     }
   };
+
+  /* Promise rejections (and some wasm aborts) arrive here rather than onerror. */
+  window.addEventListener('unhandledrejection', function (ev) {
+    var r = ev && ev.reason;
+    console.error('[unhandledrejection]', r);
+    if (_runtimeReady) {
+      _showCrash((r && r.message) ? String(r.message) : String(r),
+                 (r && r.stack) ? String(r.stack) : null);
+    }
+  });
   </script>
 
   <!-- Module must be defined in its own <script> block,
