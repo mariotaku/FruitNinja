@@ -15,16 +15,13 @@
 //
 // CORRECTED DESIGN (this implementation):
 //   DrainSDLEvent()      -- pollInput(), per display frame. Accumulates FINGERDOWN/
-//                          MOTION/UP into per-channel pending state. No dispatch.
-//   ReconcileTouch()     -- pollInput(), after drain. Queries SDL live-finger set to
-//                          detect dropped FINGERUP (#154). Sets pendingUp for stale
-//                          channels. NO SDL live queries in DispatchForSimTick.
+//                          MOTION/UP (and MOUSEBUTTONUP for SDL_TOUCH_MOUSEID) into
+//                          per-channel pending state. No dispatch.
 //   DispatchForSimTick() -- stepUpdate(), per sim tick. Dispatches pending edges +
 //                          one held TouchMove per active channel. No SDL queries.
 //
 // FIX: DispatchForSimTick contains NO SDL_GetNumTouchDevices/GetTouchDevice/
-// GetNumTouchFingers/GetTouchFinger calls -- all SDL live-set queries are
-// in ReconcileTouch which runs in pollInput only.
+// GetNumTouchFingers/GetTouchFinger calls -- fully event-driven.
 //
 // INVARIANTS PINNED HERE:
 //
@@ -49,17 +46,9 @@
 //      (Tested by asserting fingerX/Y holds the LATEST position after N motions,
 //      and pendingDown stays false -- so DispatchForSimTick emits one held move.)
 //
-//  (H) ReconcileTouch (#154): when SDL_GetNumTouchDevices()==0 (headless), does NOT
-//      spuriously set pendingUp for active channels. With real touch hardware
-//      (numDevices>0), a finger absent from the live set gets pendingUp set.
-//      (Tested in headless: after DrainSDLEvent(FINGERDOWN), ReconcileTouch must
-//      NOT set pendingUp when numDevices==0.)
-//
 // NOTE: DispatchForSimTick() returns early (no-op) when Mortar::InputManager::GetInstance()
 // returns null (headless mode). The "pending state consumed on dispatch" behaviour is
 // exercised end-to-end in the full game loop (test_gameplay) and visually in scene_slash_blade.
-// The structural guarantee -- NO SDL live-set queries in DispatchForSimTick -- is verified
-// by grep at the end of this file's comments and in the build report.
 //
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
@@ -434,42 +423,9 @@ static void test_held_finger_single_dispatch_per_tick() {
     printf("  PASS\n");
 }
 
-// Invariant (H): ReconcileTouch (#154) does NOT spuriously set pendingUp when
-// SDL_GetNumTouchDevices()==0 (headless/test context). With real hardware
-// (numDevices>0) the reconcile is meaningful but that path can't be tested
-// headlessly without real touch hardware. This test pins the guard: headless
-// ReconcileTouch must leave fingerActive and pendingUp unchanged.
-static void test_reconciletouch_no_spurious_release_without_hardware() {
-    printf("  test_reconciletouch_no_spurious_release_without_hardware...\n");
-
-    InputTranslatorSDL tr;
-    tr.Init();
-
-    // Register a finger via DrainSDLEvent (synthetic path).
-    SDL_Event down = MakeFingerDown((SDL_FingerID)42, 0.5f, 0.5f);
-    tr.DrainSDLEvent(down, NULL);
-    CHECK(tr.TestGetFingerActive(0));
-    CHECK(tr.TestGetPendingDown(0));
-    CHECK(!tr.TestGetPendingUp(0));
-
-    // ReconcileTouch: in headless mode (SDL_GetNumTouchDevices()==0), the guard
-    // skips the live-set check for non-MOUSEID fingers. pendingUp must NOT be set.
-    tr.ReconcileTouch();
-
-    CHECK(tr.TestGetFingerActive(0));
-    CHECK(!tr.TestGetPendingUp(0));
-    printf("    fingerActive after ReconcileTouch (no touch device): %s (expect: still active)\n",
-           tr.TestGetFingerActive(0) ? "yes" : "no");
-    printf("    pendingUp after ReconcileTouch: %s (expect: false)\n",
-           tr.TestGetPendingUp(0) ? "true" : "false");
-
-    printf("  PASS\n");
-}
-
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
-    // SDL_Init is required for SDL_FINGERDOWN/UP/MOTION event types to be
-    // valid, and for SDL_GetNumTouchDevices (called from ReconcileTouch).
+    // SDL_Init is required for SDL_FINGERDOWN/UP/MOTION event types to be valid.
     // We use SDL_INIT_EVENTS only -- no video, no audio, no GL context needed.
     if (SDL_Init(SDL_INIT_EVENTS) < 0) {
         fprintf(stderr, "SDL_Init(EVENTS) failed: %s\n", SDL_GetError());
@@ -486,7 +442,6 @@ int main(int argc, char* argv[]) {
     test_release_all_fingers_clears_all_state();
     test_two_fingers_independent_channels();
     test_held_finger_single_dispatch_per_tick();
-    test_reconciletouch_no_spurious_release_without_hardware();
 
     printf("test_input_tick_invariant: PASS\n");
 

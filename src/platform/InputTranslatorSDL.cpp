@@ -3,11 +3,8 @@
 // Mortar::Touch directly (poll-based binary path).
 //
 // binary is a strict 1:1 input->update->draw tick.
-// This file splits touch dispatch into three phases:
+// This file splits touch dispatch into two phases:
 //   DrainSDLEvent()      -- accumulate per-frame (no dispatch); called from pollInput()
-//   ReconcileTouch()     -- after drain, query SDL live-finger set for #154;
-//                          called from pollInput() ONLY (web-safe: live set is valid
-//                          right after the event pump, NOT from stepUpdate)
 //   DispatchForSimTick() -- dispatch once per sim tick; called from stepUpdate()
 // This ensures m_PointCount only advances inside a tick that also runs
 // UpdatePoints (which reconciles the head-cap vertex), so DrawSlice never draws
@@ -246,8 +243,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // safety-net for desktop/web -- SDL_HINT_MOUSE_TOUCH_EVENTS=1
     // synthesizes SDL_FINGERDOWN/MOTION but the UP sometimes arrives as
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
-    // Belt-and-suspenders: handle it here too; ReconcileTouch also checks mouse
-    // button state as a fallback in case this event is missed.
+    // Handle it here as the event-driven fallback for the mouse channel.
     case SDL_MOUSEBUTTONUP: {
         // Find any active finger mapped to SDL_TOUCH_MOUSEID (the synthetic ID
         // SDL uses when converting mouse events to touch events).
@@ -275,53 +271,6 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     (void)window;
 }
 
-// reconcile only the MOUSE channel after the drain pass (pollInput).
-// Real touch channels are event-driven (FINGERDOWN active / FINGERUP -> pendingUp);
-// their state lives in the per-channel array and is polled per sim tick. We do NOT
-// query the SDL touch live-set (GetNumTouchFingers etc.): on emscripten it reads
-// empty / mismatched even mid-drag, which spuriously released the active finger
-// (tap instead of drag). Only SDL_GetMouseState (reliable) reconciles the mouse
-// channel, catching a missed desktop MOUSEBUTTONUP. If a real touch FINGERUP is ever
-// dropped on web, that channel sticks until the next FINGERDOWN -- acceptable vs.
-// breaking every drag.
-void InputTranslatorSDL::ReconcileTouch() {
-    // Touch finger down/up is maintained PURELY by SDL events (FINGERDOWN -> channel
-    // active, FINGERUP -> pendingUp) -- the event-driven state array is the source of
-    // truth, polled per sim tick. We deliberately do NOT reconcile real-touch channels
-    // against SDL_GetNumTouchFingers: on emscripten that live set reads empty (or with
-    // mismatched ids) even MID-DRAG, so the query spuriously releases the active finger
-    // (tap instead of drag). Only the SDL_TOUCH_MOUSEID channel is reconciled, via the
-    // reliable SDL_GetMouseState, to catch a missed desktop MOUSEBUTTONUP.
-
-    // Check for the mouse button being held (covers SDL_TOUCH_MOUSEID channel).
-    Uint32 mouseButtons = SDL_GetMouseState(NULL, NULL);
-    bool mouseDown = (mouseButtons & SDL_BUTTON_LMASK) != 0;
-
-    for (int ch = 0; ch < 16; ++ch) {
-        if (!fingerActive[ch]) continue;
-
-        SDL_FingerID fid = fingerMap[ch];
-
-        // SDL_TOUCH_MOUSEID channel: managed by mouse button state.
-        if (fid == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
-            if (!mouseDown && !pendingUp[ch]) {
-                // Mouse released without SDL_MOUSEBUTTONUP reaching us;
-                // mark pendingUp so DispatchForSimTick will release it.
-                pendingUp[ch]   = true;
-                pendingDown[ch] = false;
-                pendingEdge[ch] = false;
-                TLOG("ReconcileTouch: mouse not held, ch=%d -> pendingUp\n", ch);
-            }
-            continue;
-        }
-
-        // Real touch channel: event-driven only. Active until a real FINGERUP
-        // arrives (DrainSDLEvent sets pendingUp). No SDL live-set reconcile --
-        // unreliable on emscripten and the cause of tap-instead-of-drag.
-        (void)fid;
-    }
-}
-
 // dispatch accumulated touch state to InputManager for one sim tick.
 // Binary cadence: input->update->draw happens exactly once per tick.
 // This function provides the "input" phase that runs at the start of each sim tick
@@ -337,7 +286,7 @@ void InputTranslatorSDL::ReconcileTouch() {
 //      current position (held, phase 0) -- mirrors the binary's per-tick held poll.
 //
 // No SDL touch/mouse live-set queries here -- only edge-driven dispatch from the
-// pending state set by DrainSDLEvent + ReconcileTouch in pollInput.
+// pending state set by DrainSDLEvent in pollInput.
 //
 // Catch-up (steps>=2 in one display frame): pending edges were set once in the drain
 // (per display frame). The first DispatchForSimTick consumes the edges. The second+
@@ -392,7 +341,7 @@ void InputTranslatorSDL::DispatchForSimTick() {
             mgr->DispatchEvent(&ie);
 
         } else if (pendingUp[ch]) {
-            // A FINGERUP was drained this display frame (or set by ReconcileTouch).
+            // A FINGERUP was drained this display frame.
             // Consume unconditionally; only dispatch if mgr is available.
             pendingUp[ch] = false;
 

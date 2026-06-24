@@ -258,14 +258,12 @@ add_test(NAME slash_reset COMMAND test_slash_reset)
 set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
 
 # InputTranslatorSDL drain/dispatch split invariant (#173 bridge-to-origin fix).
-# Verifies that DrainSDLEvent() accumulates pending state WITHOUT dispatching,
-# ReconcileTouch() marks stale fingers without SDL live queries in DispatchForSimTick,
+# Verifies that DrainSDLEvent() accumulates pending state WITHOUT dispatching
 # and DispatchForSimTick() consumes pending state. Pins the invariant that
 # m_PointCount (AddPoint) only advances inside a tick that also runs UpdatePoints.
 # Covers: FINGERDOWN drain-then-flush, FINGERMOTION position-only update (#163),
 # multiple motions -> single flush-move (catch-up invariant G), FINGERUP deferred
-# release, held-finger single-dispatch-per-tick, ReleaseAllFingers atomicity (#162),
-# ReconcileTouch headless path (#154).
+# release, held-finger single-dispatch-per-tick, ReleaseAllFingers atomicity (#162).
 # Uses FN_TEST to expose pending-state accessors; SDL_INIT_EVENTS only (no GL/audio).
 fn_add_game_test(test_input_tick_invariant test_input_tick_invariant.cpp)
 target_compile_definitions(test_input_tick_invariant PRIVATE FN_TEST)
