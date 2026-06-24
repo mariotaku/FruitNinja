@@ -32,7 +32,7 @@
 //  field77_0xc0       | +0xc0         | m_DragTargetIdx  (ephemeral; NOT persistent selection)
 //  field_0xc8         | +0xc8         | m_bDragging
 //  field_0xc9         | +0xc9         | m_bTouchProcessed
-//  field_0xca         | +0xca         | m_fieldCA
+//  field_0xca         | +0xca         | m_bCollideEnabled
 //  field83_0xcc       | +0xcc         | m_pCollidedItem
 //  field_0xd0         | +0xd0         | m_bConstrainedView
 //  field_0xd4..0xdc   | +0xd4         | m_Velocity (Vec3; m_Velocity.y = TRUE scroll offset)
@@ -95,7 +95,7 @@ public:
     // ScrollingMenu::Collide(slot) @ 0x0015af4c
     // Walks m_Items calling vtable+0x38 (Slot13/hit-test, v1.6.1 slot 14) on each.
     // Returns the first item that returns non-null, or nullptr.
-    // Only active when m_fieldCA != 0.
+    // Only active when m_bCollideEnabled != 0.
     ScrollingMenuItem* Collide(int touchSlot);
 
     // Inline accessors — binary @ 0x0014797c..0x001479dc
@@ -167,10 +167,12 @@ public:
     uint8_t m_bDragging;
     // +0xc9: touch-processed flag (cleared each Update; set when tap fires)
     uint8_t m_bTouchProcessed;
-    // +0xca: enables Collide() walk (init 1)
-    uint8_t m_fieldCA;
-    // +0xcb: padding
-    uint8_t m_fieldCB;
+    // +0xca: collision-enabled flag; gates the Collide() walk (ctor inits 1).
+    //   Binary @ 0x001afed8 sets this->m_bCollideEnabled = 1; Collide @ 0x0015af4c
+    //   early-returns nullptr when 0. Ghidra struct: m_bCollideEnabled.
+    uint8_t m_bCollideEnabled;
+    // +0xcb: padding (written 0 in ctor list, never read). Ghidra struct: _pad_cb.
+    uint8_t m_padCB;
 
     // +0xcc: pointer to item collided at touch-acquire time (field83_0xcc)
     ScrollingMenuItem* m_pCollidedItem;
@@ -202,7 +204,7 @@ public:
     void ClearTouch();
 
     // Binary @ 0x0015af4c -- Collide(long): walk m_Items, call vtable+0x34 (hit-test)
-    // on each; return first non-null item, else nullptr. Gated by m_fieldCA != 0.
+    // on each; return first non-null item, else nullptr. Gated by m_bCollideEnabled != 0.
     // Binary exports both int and long overloads (long is the type-resolver
     // delegate signature); port body forwards long -> int.
     ScrollingMenuItem* Collide(long touchSlot);
@@ -231,7 +233,7 @@ static_assert(offsetof(ScrollingMenu, m_DragTargetIdx)  == 0xc0, "ScrollingMenu:
 static_assert(offsetof(ScrollingMenu, m_SnapDist)       == 0xc4, "ScrollingMenu::m_SnapDist offset");
 static_assert(offsetof(ScrollingMenu, m_bDragging)      == 0xc8, "ScrollingMenu::m_bDragging offset");
 static_assert(offsetof(ScrollingMenu, m_bTouchProcessed) == 0xc9, "ScrollingMenu::m_bTouchProcessed offset");
-static_assert(offsetof(ScrollingMenu, m_fieldCA)        == 0xca, "ScrollingMenu::m_fieldCA offset");
+static_assert(offsetof(ScrollingMenu, m_bCollideEnabled) == 0xca, "ScrollingMenu::m_bCollideEnabled offset");
 static_assert(offsetof(ScrollingMenu, m_pCollidedItem)  == 0xcc, "ScrollingMenu::m_pCollidedItem offset");
 #endif
 

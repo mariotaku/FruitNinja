@@ -72,8 +72,8 @@ ScrollingMenu::ScrollingMenu()
     , m_SnapDist(1.0f)
     , m_bDragging(0)
     , m_bTouchProcessed(0)
-    , m_fieldCA(1)
-    , m_fieldCB(0)
+    , m_bCollideEnabled(1)
+    , m_padCB(0)
     , m_pCollidedItem(nullptr)
     , m_bConstrainedView(0)
     , m_pad_d1{0, 0, 0}
@@ -124,10 +124,10 @@ void ScrollingMenu::SetWidth(float w) {
 // ScrollingMenu::Collide @ 0x0015af4c
 // Walks m_Items calling vtable[+0x38] (Slot13/hit-test, v1.6.1 slot 14) on each.
 // Returns the first item that returns non-null, or nullptr.
-// Only walks when m_fieldCA != 0.
+// Only walks when m_bCollideEnabled != 0.
 // ---------------------------------------------------------------------------
 ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
-    if (!m_fieldCA) return nullptr;
+    if (!m_bCollideEnabled) return nullptr;
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         ScrollingMenuItem* item = *it;
         ScrollingMenuItem* hit = item->Slot13(touchSlot);
