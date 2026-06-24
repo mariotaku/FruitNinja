@@ -1307,11 +1307,12 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
     m_ComboSpeed = curSpeed + delta;
 
     // Binary @ 0x00122f50: lazy SpeedControl alloc + push to HUD.
+    // Widget lives in slot [1] (+0x04); slot [0] (+0x00) is the spawn-gate (always 0 in SP).
     float cur = m_ComboSpeed;
-    HUDControl3d* sc = m_SpeedControl[0];
+    HUDControl3d* sc = m_SpeedControl[1];
     if (!sc) {
         sc = new SpeedControl();
-        m_SpeedControl[0] = sc;
+        m_SpeedControl[1] = sc;
         // ASM-verified: binary @ 0x00122f50 (re-analyst) constructs a
         // Delegate1<void, HUDControl*>::QCallee<WaveManager>(this, &DeleteSpeedControl)
         // and stores it into sc->m_RemoveCallback so HUD::Release nulls
@@ -1837,8 +1838,9 @@ void WaveManager::Draw(int playerIdx) {
 
 // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x001217d4 (re-analyst)
 void WaveManager::DeleteSpeedControl(HUDControl* c) {
-    // Binary @ 0x001217d4: only checks slot 0 (slot 1 never populated).
-    if (m_SpeedControl[0] == c) m_SpeedControl[0] = nullptr;
+    // Binary @ 0x001217d4: ldr from [r0, #0x4] — slot [1] (+0x04), the SpeedControl widget.
+    // (Old port comment "slot 0" was the collapse bug; binary checks +0x04, not +0x00.)
+    if (m_SpeedControl[1] == c) m_SpeedControl[1] = nullptr;
 }
 
 // ----------------------------------------------------------------------------
@@ -1948,8 +1950,8 @@ void WaveManager::ResetSpeed(int playerIdx) {
     m_ColdTimer  = 0.0f;  // +0x64
 
     // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00122e94 (re-analyst)
-    // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
-    HUDControl3d* sc = m_SpeedControl[playerIdx];
+    // Binary @ 0x00122e94: ldr from [r0, #0x4] -> slot [1] (+0x04), the SpeedControl widget.
+    HUDControl3d* sc = m_SpeedControl[1];
     if (sc) {
         SpeedControl* spc = static_cast<SpeedControl*>(sc);
         spc->m_Speed          = 0.0f;
