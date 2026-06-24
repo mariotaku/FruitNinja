@@ -57,48 +57,55 @@ struct EffectImage : public Mortar::ReloadableTexture {
     //   port base = char[4]+GLuint (same 8-byte size, different field types).
     //   Binary @ 0x001213f0 base ctor.
 
-    // +0x08  uint32_t  field_0x08   ctor sets 0; copy copies u32 (HUDControl* in port)
+    // Field semantics verified v1.6.1 EffectImage copy-ctor @ 0x00145bd4 and
+    // ScreenEffect::Update @ 0x00148844 (re-analyst #164). Names match how Update
+    // reads each slot; Ghidra's alt guesses (m_FadeIn/m_Hold/m_AlphaStart/...) are
+    // the wrong interpretation and were corrected in the Ghidra DB to these names.
+
+    // +0x08  HUDControl*  runtime control ptr; copy-ctor copies, ScreenEffect copy
+    //                     resets to null. Not parsed from XML.
     HUDControl*  m_pHudCtrl;         // +0x08
-    // +0x0c  bool      m_Enabled    ctor sets 1 in binary (port: m_bAddedToHUD init false)
-    // DIFFERS: binary default ctor sets m_Enabled=1; port initialises false.
+    // +0x0c  bool  added-to-HUD guard. DIFFERS: binary default ctor sets 1; port
+    //               initialises false (HUD attach happens in Activate either way).
     bool         m_bAddedToHUD;      // +0x0c
-    // +0x0d  bool      field_0x0d   ctor sets 0
+    // +0x0d  bool  multiplyer-board kind flag (XML "multiplyer"; Activate kind byte
+    //               selects ScoreMultiplyerBoard vs HUDControl3d).
     bool         m_bIsMultiplyerBoard; // +0x0d
     // +0x0e..+0x0f  implicit padding for Vec3 alignment
-    // +0x10  Vec3      m_Vec_0x10   position
+    // +0x10  Vec3  base position (XML "pos"); Update writes ctrl->pos.
     Vec3         m_Pos;              // +0x10
-    // +0x1c  Vec3      m_Vec_0x1c   entry velocity
+    // +0x1c  Vec3  entry velocity (XML "transitionMoveIn").
     Vec3         m_Vel;              // +0x1c
-    // +0x28  uint32_t  field_0x28   group mask
+    // +0x28  uint32_t  HUD layer/group mask (XML "group"); Activate -> ctrl+0x34.
     uint32_t     m_GroupMask;        // +0x28
-    // +0x2c  uint16_t  field_0x2c   sine wave index
+    // +0x2c  uint16_t  sine oscillator index; Update += dt*32760*m_Freq @0x00148844.
     uint16_t     m_SinIdx;           // +0x2c
     // +0x2e..+0x2f  implicit padding for float alignment
-    // +0x30  float     field_0x30
+    // +0x30  float  sine frequency (XML "freq"); drives m_SinIdx increment.
     float        m_Freq;             // +0x30
-    // +0x34  float     field_0x34
+    // +0x34  float  size oscillation amp1 (XML "amp1"); selected when sin>=0.
     float        m_Amp1;             // +0x34
-    // +0x38  float     field_0x38
+    // +0x38  float  size oscillation amp2 (XML "amp2"); selected when sin<0.
     float        m_Amp2;             // +0x38
-    // +0x3c  float     field_0x3c   current visibility [0..1]
+    // +0x3c  float  current visibility accumulator [0..1]; Update writes each frame.
     float        m_CurrentVis;       // +0x3c
-    // +0x40  float     field_0x40   fade rate
+    // +0x40  float  fade rate (XML "fade"/"transitionTime"); Update uses dt/m_FadeRate.
     float        m_FadeRate;         // +0x40
-    // +0x44  Vec3      m_Vec_0x44   size-in
+    // +0x44  Vec3  in-window scale (XML "sizeIn"); selected when t in window.
     Vec3         m_SizeIn;           // +0x44
-    // +0x50  Vec3      m_Vec_0x50   size-out
+    // +0x50  Vec3  out-of-window scale (XML "sizeOut").
     Vec3         m_SizeOut;          // +0x50
-    // +0x5c  float     m_Scale_0x5c ctor = 1.0f
+    // +0x5c  float  window start time (XML "timeStart"); Update gate = param_3*m_StartT.
     float        m_StartT;           // +0x5c
-    // +0x60  float     field_0x60   ctor = 0.0f
+    // +0x60  float  window end time (XML "timeEnd"); Update gate = param_3*m_EndT.
     float        m_EndT;             // +0x60
-    // +0x64  Vec3      m_Vec_0x64   colour scale; ctor from global Vec3 const
+    // +0x64  Vec3  colour scale (XML "colourScale"); applied when m_FlagBits&1==0.
     Vec3         m_ColourScale;      // +0x64
-    // +0x70  Colour    m_Colour     4-byte packed RGBA
+    // +0x70  Colour  packed RGBA tint (XML "tint").
     Colour       m_Tint;             // +0x70
-    // +0x74  uint32_t  field_0x74   flags
+    // +0x74  uint32_t  flag bits (XML "flags"); &1 = use colourScale, &2 = alpha clamp.
     uint32_t     m_FlagBits;         // +0x74
-    // +0x78  bool      field_0x78   ctor sets 0; padding +0x79..+0x7b to 0x7c
+    // +0x78  bool  low-end-only gate (XML "lowEndOnly"); padding +0x79..+0x7b to 0x7c.
     bool         m_bLowEndOnly;      // +0x78
 
     // ---- Port specific: fields below are NOT in the 124-byte binary struct ----
