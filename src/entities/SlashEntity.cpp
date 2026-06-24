@@ -361,6 +361,11 @@ __attribute__((optimize("no-unroll-loops")))
 void SlashEntity::Reset() {
     m_PointCount = 0;
 
+    // Binary @0x1e66c8: re-arm blade direction to the zero vector on every
+    // touch-down (ldmia/stmia copies _Vector3::Zero @0x2d9288;
+    // DAT_002d928c/002d9290 = 0.0f). Set before the anchor sentinels.
+    m_BladeDir = Vec3(0.0f, 0.0f, 0.0f);
+
     // Binary @ 0x1e6688: re-arm the anchor sentinel on every touch-down
     // (do/while i!=3 writes (-65535,-65535,-65535) to +0x70/+0x7c/+0x88).
     // DAT_001e67e0 = 0xc77fff00 = -65535.0f.
@@ -368,6 +373,13 @@ void SlashEntity::Reset() {
     m_TailPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
     m_HeadPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
     m_PrevHeadPos = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+
+    // Binary @0x1e671c..0x1e6744: clear the ghost-ring write cursor/count, then
+    // fill all 6 m_GhostDirRing entries (stride 0xc) with _Vector3::Zero.
+    // Re-arms the #128 directional trail emitter on every new slice.
+    m_GhostIndex = 0;
+    m_GhostCount = 0;
+    for (int i = 0; i < 6; ++i) m_GhostDirRing[i] = Vec3(0.0f, 0.0f, 0.0f);
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "Reset[%d]: seed anchors tail=(%.1f,%.1f,%.1f) head=(%.1f,%.1f,%.1f) prev=(%.1f,%.1f,%.1f) pointCount=%d",
              m_FingerId,
