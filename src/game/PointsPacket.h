@@ -14,11 +14,13 @@
 
 class PointsPacket : public Mortar::NetworkPacket {
 public:
-    int  m_Points;    // +0x10 -- score points
-    int  m_field14;   // +0x14
-    int  m_field18;   // +0x18
-    int  m_field1c;   // +0x1c
-    int  m_field20;   // +0x20
+    // Wire fields in binary serialize order (PointsPacket::Serialize @ 0x001585f8,
+    // 4-arg ctor @ 0x00158710). m_field20 has no ctor/serialize site.
+    int  m_Points;        // +0x10 -- score points (WriteInt32; ctor param 1)
+    int  m_reserved14;    // +0x14 -- WriteInt32; ctor param 2; purpose unknown
+    int  m_reserved18;    // +0x18 -- WriteInt32; ctor param 3; purpose unknown
+    int  m_reserved1c;    // +0x1c -- WriteInt32; ctor param 4; purpose unknown
+    int  m_reserved20;    // +0x20 -- no ctor/serialize site; purpose unknown
 
     // Defunct: P2P MP points-broadcast packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=100)
     PointsPacket();

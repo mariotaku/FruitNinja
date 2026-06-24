@@ -15,18 +15,22 @@
 
 class FruitSlicedPacket : public Mortar::NetworkPacket {
 public:
-    long     m_fruitId;   // +0x10 -- ID of sliced fruit
-    uint16_t m_field14;   // +0x14 -- packet payload field (slice coords / angle)
-    uint16_t m_field16;   // +0x16
-    float    m_field18;   // +0x18
-    long     m_field1c;   // +0x1c -- player ID / field
-    long     m_field20;   // +0x20
+    // Wire fields in binary serialize order (FruitSlicedPacket::Serialize @ 0x00156f80,
+    // ctor @ 0x001570b0). NOTE port offsets are 4 less than the binary's actual byte
+    // offsets (see header banner) -- binary writes fruitId@+0x14, x@+0x18, y@+0x1a,
+    // angle@+0x1c, player@+0x20; the +0x20 reserved word here has no ctor/serialize site.
+    long     m_FruitId;     // +0x10 -- ID of sliced fruit (WriteInt32; ctor param 1)
+    uint16_t m_SliceX;      // +0x14 -- slice point X, 16-bit (WriteInt16; ctor param 2)
+    uint16_t m_SliceY;      // +0x16 -- slice point Y, 16-bit (WriteInt16; ctor param 3)
+    float    m_SliceAngle;  // +0x18 -- slice direction/angle (WriteDec32 float; ctor param 4)
+    long     m_PlayerIdx;   // +0x1c -- player/blade slot (WriteInt32; ctor param 5)
+    long     m_reserved20;  // +0x20 -- purpose unknown; no ctor/serialize site in binary
 
     // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012ce48
     FruitSlicedPacket();
 
     // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012cda8
-    FruitSlicedPacket(long fruitId, uint16_t f14, uint16_t f16, float f18, long f1c, long f20);
+    FruitSlicedPacket(long fruitId, uint16_t sliceX, uint16_t sliceY, float sliceAngle, long playerIdx, long reserved20);
 
     virtual ~FruitSlicedPacket() {}
 };

@@ -18,10 +18,9 @@
 
 class StartGamePacket : public Mortar::NetworkPacket {
 public:
-    int  m_Flags;      // +0x10 -- game-mode flags bitmask; init 0x18bb8
-    int  m_GameSeed;   // +0x14 -- random seed for game sync; init 0
-    int  m_field18;    // +0x18 -- init 0
-    // TODO: v1.6.1 0x00158dc0 (StartGamePacket::StartGamePacket) -- confirm +0x18 role
+    int  m_Flags;        // +0x10 -- game-mode flags bitmask; init 0x18bb8
+    int  m_GameSeed;     // +0x14 -- random seed for game sync; init 0
+    int  m_reserved18;   // +0x18 -- no ctor-set / serialize site in binary; purpose unknown
 
     // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=103 / case 0x67)
     StartGamePacket();
