@@ -352,6 +352,14 @@ if (EMSCRIPTEN)
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
         "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started']"
     )
+    # Debug build (FN_DEBUG_TOUCH): keep C++ function names in the wasm name
+    # section so browser crash stack traces name the actual C++ frames.
+    # --profiling-funcs is pure metadata (no codegen/timing change), so it does
+    # not perturb timing-sensitive intermittent crashes. (Deliberately NOT adding
+    # -sASSERTIONS, which would change memory init/timing and could mask the repro.)
+    if (FN_DEBUG_TOUCH)
+        target_link_options(fruit-ninja PRIVATE "SHELL:--profiling-funcs")
+    endif()
     # Port specific: copy the shell's splash image next to fruit-ninja.html
     # so the loading screen can reference it by relative URL before MEMFS is
     # populated.  splash.webp is the loading-screen backdrop (HB_logo.tex region).
