@@ -54,8 +54,8 @@ void SetupGameWork() {
     //          field name m_ScoreThreshold is provisional -- rename when RE confirms.
     game_work.m_ScoreThreshold = save->m_CriticalChance;
 
-    // +0x034: field_0x34 = 0.
-    game_work.field_0x34 = 0;
+    // +0x034: m_bHudDestructing = 0 (HUD-teardown guard).
+    game_work.m_bHudDestructing = 0;
 
     // +0x08C: flM_BombSize = 50.0f.
     // DAT_0010b578 confirmed = 0x42480000 = 50.0f.
@@ -83,24 +83,24 @@ void SetupGameWork() {
     // m_FrameTimer (int @ +0x19C); the explicit zero is dropped (m_FrameTimer
     // is not set here; zero-init from .bss suffices).
 
-    // +0x194: field_0x194 = 1 (v1.6.1; binary init confirmed by SetupGameWork).
-    game_work.field_0x194 = 1;
+    // +0x194: m_reserved194 = 1 (v1.6.1; binary init confirmed by SetupGameWork; written-never-read).
+    game_work.m_reserved194 = 1;
 
-    // +0x1A2..+0x1A5: zero four byte fields (v1.6.1 SetupGameWork).
-    game_work.field_0x1a2 = 0;
-    game_work.field_0x1a3 = 0;
-    game_work.field_0x1a4 = 0;
-    game_work.field_0x1a5 = 0;
+    // +0x1A2..+0x1A5: zero four P2P session flags (v1.6.1 SetupGameWork; written-never-read).
+    game_work.m_reserved1a2 = 0;
+    game_work.m_reserved1a3 = 0;
+    game_work.m_reserved1a4 = 0;
+    game_work.m_reserved1a5 = 0;
 
     // +0x1A8: m_QuitTransitionTimer = 0.0f.
     game_work.m_QuitTransitionTimer = 0.0f;
 
-    // +0x1B0: field_0x1b0 = 0.0f (binary @ 0x0010b56e).
-    game_work.field_0x1b0 = 0.0f;
+    // +0x1B0: m_UpsideDownTimer = 0.0f (binary @ 0x0010b56e).
+    game_work.m_UpsideDownTimer = 0.0f;
 
-    // +0x1B4: field_0x1b4 = 0 (v1.6.1; gate byte zeroed by SetupGameWork).
-    game_work.field_0x1b4 = 0;
+    // +0x1B4: m_bUpsideDownActive = 0 (v1.6.1; upside-down scoring flag zeroed by SetupGameWork).
+    game_work.m_bUpsideDownActive = 0;
 
-    // +0x1BC: field_0x1bc = 0 (v1.6.1; gate byte zeroed by SetupGameWork).
-    game_work.field_0x1bc = 0;
+    // +0x1BC: m_reserved1bc = 0 (v1.6.1; written-never-read, zeroed by SetupGameWork).
+    game_work.m_reserved1bc = 0;
 }
