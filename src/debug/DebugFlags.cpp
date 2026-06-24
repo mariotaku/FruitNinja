@@ -14,6 +14,9 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
+#include "render/BakedStringTTF.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
 #include "render/gl_funcs.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
@@ -417,22 +420,60 @@ void DebugHUDBounds_Draw() {
     }
 }
 
-// Lazy debug font for the FPS overlay (reuses verdana.fnt like DebugHUDBounds_Draw).
-static Mortar::SmartPtr<Mortar::Font> s_FpsFont;
+// Lazy TTF font (gangofchinese.ttf) for the FPS overlay — same face as MenuButton.
+static Mortar::SmartPtr<Mortar::Font> s_FpsTTFFont;
+// Cached FontCacheObjectTTF* (owned by FontTTFRegistry, valid as long as s_FpsTTFFont is valid).
+static Mortar::FontCacheObjectTTF* s_FpsFontCache = 0;
+// Baked string for the FPS counter. Rebuilt only when the displayed integer changes.
+static Mortar::BakedStringTTF* s_FpsBaked = 0;
+// Last integer value that s_FpsBaked was built for (sentinel -1 = not yet built).
+static int s_FpsLastInt = -1;
 
-static void EnsureFpsFont() {
-    if (s_FpsFont.IsValid()) return;
-    s_FpsFont = Mortar::Font::Create("fonts/verdana.fnt");
+static Mortar::FontCacheObjectTTF* EnsureFpsFontCache() {
+    if (!s_FpsTTFFont.IsValid()) {
+        s_FpsTTFFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+        s_FpsFontCache = 0;
+    }
+    if (!s_FpsTTFFont.IsValid()) return 0;
+    if (!s_FpsFontCache)
+        s_FpsFontCache = Mortar::FontTTFRegistry::GetInstance().Lookup(s_FpsTTFFont.Get());
+    return s_FpsFontCache;
 }
 
 void DebugFps_Draw(float fps) {
     if (!g_ShowFps || fps <= 0.0f) return;
 
-    EnsureFpsFont();
-    if (!s_FpsFont.IsValid()) return;
+    Mortar::FontCacheObjectTTF* fc = EnsureFpsFontCache();
+    if (!fc) return;
 
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
+
+    const int fpsInt = (int)(fps + 0.5f);
+
+    if (fpsInt != s_FpsLastInt) {
+        delete s_FpsBaked;
+        s_FpsBaked = 0;
+        s_FpsLastInt = -1;
+
+        char buf[16];
+        snprintf(buf, sizeof(buf), "FPS %d", fpsInt);
+
+        // Plain white, size 12, no circle, no gradient, no glow.
+        // weight=0 (left-aligned), FONT_EFFECT_NONE.
+        s_FpsBaked = new Mortar::BakedStringTTF(
+            fc, buf, 12.0f,
+            Colour(255, 255, 255, 255),
+            0L, 0.0f,
+            Mortar::FONT_EFFECT_NONE);
+        // Solid white: set both gradient stops to white so no colour shift occurs.
+        s_FpsBaked->ApplyGradient_TopBottom(
+            Colour(255, 255, 255, 255),
+            Colour(255, 255, 255, 255));
+        s_FpsLastInt = fpsInt;
+    }
+
+    if (!s_FpsBaked) return;
 
     // Restore game ortho so the coordinates match game space (centered 480x320).
     r->SetupGameOrtho();
@@ -444,19 +485,15 @@ void DebugFps_Draw(float fps) {
     // Top-left corner in centered game space:
     // X axis: +160 = top,  -160 = bottom  (landscape)
     // Y axis: -240 = left, +240 = right   (landscape)
-    // Place text just inside the top-left corner so it's visible but not clipped.
-    // Scale 10 pt, white, left-aligned.
-    static const float kScale    = 10.0f;
-    static const float kMarginX  =  5.0f;  // inset from top  edge (+160 side)
-    static const float kMarginY  =  8.0f;  // inset from left edge (-240 side)
-    static const Colour kWhite(255, 255, 255, 220);
-    static const float kZ = -0.1f;  // slightly in front of everything
+    // Small margin from the edges so text is not clipped.
+    static const float kMarginX = 5.0f;   // inset from top  edge (+160 side)
+    static const float kMarginY = 8.0f;   // inset from left edge (-240 side)
+    static const float kZ       = -0.1f;  // slightly in front of everything
+    static const float kSize    = 12.0f;
 
-    char buf[16];
-    snprintf(buf, sizeof(buf), "FPS %d", (int)(fps + 0.5f));
-
-    const Vec3 pos(160.0f - kMarginX - kScale, -240.0f + kMarginY, kZ);
-    s_FpsFont->DrawString(kScale, 1.0f, 0.0f, buf, pos, kWhite, Mortar::FONT_ALIGN_LEFT);
+    const Vec3 anchor(160.0f - kMarginX - kSize, -240.0f + kMarginY, kZ);
+    const Vec2 scale(1.0f, 1.0f);
+    s_FpsBaked->Draw(anchor, scale, 0.0f, 0xf);
 }
 
 } // namespace FN
