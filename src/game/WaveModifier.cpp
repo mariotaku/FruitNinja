@@ -55,7 +55,7 @@ void PROBABILITY_OVERIDE::Parse(TiXmlElement* xml) {
     xml->QueryIntAttribute("waveCount",            &m_PerWaveCount);
     const char* typesAttr = xml->Attribute("types");
     if (typesAttr) {
-        m_field68 = WaveManager::SplitWords(typesAttr, m_Types);
+        m_TypeCount = WaveManager::SplitWords(typesAttr, m_Types);
     }
     xml->QueryIntAttribute("perWave",              &m_PerWave);
     xml->QueryFloatAttribute("disableWhenPowered", &m_DisableWhenPowered);
@@ -63,12 +63,12 @@ void PROBABILITY_OVERIDE::Parse(TiXmlElement* xml) {
 }
 
 // PROBABILITY_OVERIDE::GetType — binary @ 0x001217e4
-// Picks a random entry from m_TypeQueue[0..m_field68).
+// Picks a random entry from m_TypeQueue[0..m_TypeCount).
 // SelectType() is called once at Reset/NewGame; GetType() is called per-spawn.
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001217e4 (re-analyst)
 int PROBABILITY_OVERIDE::GetType() {
-    if (m_field68 <= 0) return -1;
-    uint32_t idx = WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)m_field68);
+    if (m_TypeCount <= 0) return -1;
+    uint32_t idx = WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)m_TypeCount);
     return m_TypeQueue[idx];
 }
 

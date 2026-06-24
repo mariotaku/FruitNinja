@@ -50,20 +50,32 @@ public:
     // +0x20..+0x34: remaining unnamed binary region (21 bytes of padding).
     uint8_t _pad_0x20[0x15];  // +0x20
 
-    // +0x35: wave-active flag
-    uint8_t field_0x35;       // +0x35
-    // +0x36: reset flag
-    uint8_t field_0x36;       // +0x36
-    // +0x37: misc flag
-    uint8_t field_0x37;       // +0x37
-    // +0x38: last selected wave index (int, -1 = none)
-    int field_0x38;           // +0x38
+    // +0x35: DEFUNCT MP wave-sync "local ready" flag (binary offset 0x39).
+    // Reset writes 1; ShouldDisplayNetworkWaitIndicator @0x00123130 returns true only
+    // when this == 0 (i.e. local wave not yet ready). SP never displays the indicator.
+    // v1.6.1 WaveManager::Reset @0x0012ba78 / ShouldDisplayNetworkWaitIndicator @0x00123130
+    uint8_t m_SyncLocalReady;  // +0x35
+    // +0x36: DEFUNCT MP wave-sync "remote pending" flag (binary offset 0x3a).
+    // Reset writes 0; ShouldDisplayNetworkWaitIndicator requires this != 0 to show wait UI.
+    // v1.6.1 ShouldDisplayNetworkWaitIndicator @0x00123130
+    uint8_t m_SyncRemotePending; // +0x36
+    // +0x37: DEFUNCT MP "sync received" flag (binary offset 0x3b).
+    // RecievedSync @0x00123444 sets this = 1 on an inbound wave-sync packet; Reset clears it.
+    // v1.6.1 WaveManager::RecievedSync @0x00123444
+    uint8_t m_SyncReceived;    // +0x37
+    // +0x38: DEFUNCT MP received wave index (int, binary offset 0x3c, -1 = none).
+    // RecievedSync stores the inbound waveIdx param here; Reset writes -1.
+    // v1.6.1 WaveManager::RecievedSync @0x00123444
+    int m_SyncWaveIdx;         // +0x38
     // +0x3c: gap to reach +0x40
     uint8_t _pad_0x3c[4];    // +0x3c
-    // +0x40: play-time accumulators
-    float field_0x40;         // +0x40
-    // +0x44: defunct net timer A (binary: multiplayer retry timer A; dead code in SP)
-    float field_0x44;         // +0x44
+    // +0x40: DEFUNCT MP received score (float). RecievedSync stores the inbound score param
+    // here when score < 999.0. No SP reader. v1.6.1 WaveManager::RecievedSync @0x00123444
+    float m_SyncScore;         // +0x40
+    // +0x44: DEFUNCT net timer A (binary m_NetTimerA @0x44; MP retry timer; dead code in SP).
+    // RecievedSync zeroes it; UpdateWave bumps it when game_work.fM_bMPRetryPending.
+    // v1.6.1 WaveManager::RecievedSync @0x00123444 / UpdateWave @0x00125d7c
+    float m_NetTimerA;         // +0x44
     // +0x48: defunct net timer B (binary: multiplayer retry timer B; dead code in SP)
     float m_NetTimerB;        // +0x48
     // +0x4c: unnamed binary padding (4 bytes between net timers and combo timer)
@@ -174,9 +186,11 @@ public:
     // Binary uses this as P1's m_NextWaveDelay[1] in multiplayer aliasing.
     float m_NextWaveDelay_P1;           // +0x240 (was field_0x238)
 
-    // +0x244: wave-was-spawned flag (IsWaveProcessing reads this).
-    // WAS field_0x23c (wrong offset in comment). Actual __bada__ offset: +0x244.
-    uint8_t field_0x244;                // +0x244 (was field_0x23c)
+    // +0x244: per-player wave-active flag (IsWaveProcessing @0x001232c4 reads m_NextWaveDelay[p+8],
+    // i.e. byte at 0x23c+p+8 = 0x244 for p0). Set to 1 by Reset and after each spawn in UpdateWave;
+    // cleared to 0 by IsWaveProcessing when no entities/timers remain.
+    // v1.6.1 IsWaveProcessing @0x001232c4 / UpdateWave @0x00125d7c (was field_0x23c)
+    uint8_t m_WaveActive;               // +0x244 (was field_0x244 / field_0x23c)
     // +0x245: blitz spawned-this-game counter (byte).
     // v1.6.1 @ 0x00125be4 / 0x00124cf4
     uint8_t m_BlitzSpawnCount;          // +0x245 (was field_0x23d)
@@ -206,15 +220,20 @@ public:
     // v1.6.1 WaveManager Reset @ 0x00125be4
     int m_RecentFruitCount[2];          // +0x2d0 ([0] was m_FruitQueueSize[1], [1] was field_0x2cc)
 
-    // +0x2d8: misc counter (binary unnamed; reset to 0 in Reset).
-    int field_0x2d8;                    // +0x2d8 (was field_0x2d0)
+    // +0x2d8: DEFUNCT MP synced-at score snapshot (int). RecievedSync @0x00123444 stores
+    // GetCurrentScore(2) here when an inbound wave-sync packet arrives; Reset clears to 0.
+    // v1.6.1 WaveManager::RecievedSync @0x00123444 / Reset @0x0012ba78
+    int m_SyncScoreSnapshot;            // +0x2d8 (was field_0x2d8 / field_0x2d0)
 
     // +0x2dc: fixed-timestep accumulator (init 0.0f).
     float m_StepAccumulator;            // +0x2dc (was field_0x2d4)
 
-    // +0x2e0: misc counter (int, NOT a pointer — port had m_pWaveQue here!).
-    // Binary unnamed field; reset to 0 in binary @ 0x00125be4.
-    int field_0x2e0;                    // +0x2e0 (NEW)
+    // +0x2e0: saved-wave-delay shuttle (binary treats as float; NOT a pointer — port had
+    // m_pWaveQue here!). SaveWaveInfo @0x001254b0 copies this into FruitSaveData::m_WaveDelay;
+    // Resume @0x0012bf58 copies m_WaveDelay back into it. Holds the P0 pre-spawn delay across
+    // save/restore. Reset clears to 0. Kept as int (4 bytes, same layout); the port doesn't
+    // read it arithmetically. v1.6.1 SaveWaveInfo @0x001254b0 / Resume @0x0012bf58
+    int m_SavedWaveDelay;               // +0x2e0 (was field_0x2e0)
 
     // +0x2e4: global probability override list (12 bytes on __bada__).
     // Binary field at +0x2e4 (12 bytes = std::vector<void*> on 32-bit).
@@ -379,7 +398,7 @@ public:
     static void RequestCoins();
 
     // Split whitespace-separated string into tokens. Returns the count written.
-    // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_field68.
+    // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_TypeCount.
     static int SplitWords(const char* str, std::vector<std::string>& out);
 
     // Parse placement string to SpawnPlacement enum.
