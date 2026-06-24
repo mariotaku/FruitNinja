@@ -47,7 +47,10 @@ public:
     float    m_Timer;                            // +0x90
     Vec3     m_TitleSize;                        // +0x94  final = (256,64,0)
 
-    int      field_0xa0;                         // +0xA0
+    // +0xA0: written 0 in Initialise, never read across any GameOverScreen
+    // function (ctor/Initialise/Update/Release/DrawOrder/PreDrawOrder/dtor).
+    // Binary declares it as a 1-byte field; purpose unknown.
+    int      m_reservedA0;                       // +0xA0  purpose unknown (write-only)
 
     // +0xA4: RETRY button (binary name misleadingly m_pQuitBtn at +0xA4)
     // ASM-verified: v1.6.1 GameOverScreen @ 0x001882a0 — +0xA4 = RETRY, +0xB0 = QUIT
@@ -73,13 +76,20 @@ public:
     FruitFactBonusFactPage* m_pBonusFactPage;    // +0xD0
     FruitFactClassicFactPage* m_pClassicFactPage;// +0xD4
 
-    void*        field_0xd8;                     // +0xD8  Release frees as HUDControl*
-    void*        field_0xdc;                     // +0xDC  Release frees as HUDControl*
+    // +0xD8/+0xDC: extra HUD child-control slots. Both are RemoveControl'd in
+    // Release, deleted via the deleting-dtor vtable slot, and nulled by
+    // DeletedControl when the HUD fires their removal callback -- identical
+    // lifecycle to m_pNoticeCtrl / m_pSlotA8 / m_pSlotB4. Always 0 in this
+    // build (no code path assigns them); kept for layout + teardown fidelity.
+    HUDControl*  m_pChildCtrlD8;                  // +0xD8  HUD child-control slot
+    HUDControl*  m_pChildCtrlDC;                  // +0xDC  HUD child-control slot
 
     HUDControl*  m_pNoticeCtrl;                  // +0xE0
     BonusScreen* m_pBonusScreen;                 // +0xE4
 
-    int          field_0xe8;                     // +0xE8
+    // +0xE8: zeroed in ctor and Initialise, never read in any GameOverScreen
+    // function; purpose unknown.
+    int          m_reservedE8;                    // +0xE8  purpose unknown (write-only)
 
     uint8_t      m_PostOk;                       // +0xEC
     uint8_t      m_PostInProgress;               // +0xED
@@ -100,7 +110,10 @@ public:
     // +0x144: score-submitted guard (0 until state-6 commit, then 1)
     uint8_t      m_bScoreSubmitted;              // +0x144
 
-    uint8_t      field_0x145;                    // +0x145  =1 in Initialise
+    // +0x145: set to 1 once near the end of Initialise (binary this[1].field_0x9),
+    // never read in any GameOverScreen function; purpose unknown (likely an
+    // init-complete/active flag). Kept write-only for layout fidelity.
+    uint8_t      m_reserved145;                   // +0x145  purpose unknown (write-only, =1)
 
     int          m_ExpressionIdx;                // +0x148
     int          m_BgPatternIdx;                 // +0x14C
