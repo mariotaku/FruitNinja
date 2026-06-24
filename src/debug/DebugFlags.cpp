@@ -30,6 +30,7 @@ namespace FN {
 bool  g_DebugHitboxes  = false;
 bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
+bool  g_ShowFps        = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
 
 // Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
@@ -414,6 +415,48 @@ void DebugHUDBounds_Draw() {
                                     Mortar::FONT_ALIGN_LEFT);
         }
     }
+}
+
+// Lazy debug font for the FPS overlay (reuses verdana.fnt like DebugHUDBounds_Draw).
+static Mortar::SmartPtr<Mortar::Font> s_FpsFont;
+
+static void EnsureFpsFont() {
+    if (s_FpsFont.IsValid()) return;
+    s_FpsFont = Mortar::Font::Create("fonts/verdana.fnt");
+}
+
+void DebugFps_Draw(float fps) {
+    if (!g_ShowFps || fps <= 0.0f) return;
+
+    EnsureFpsFont();
+    if (!s_FpsFont.IsValid()) return;
+
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // Restore game ortho so the coordinates match game space (centered 480x320).
+    r->SetupGameOrtho();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    // Top-left corner in centered game space:
+    // X axis: +160 = top,  -160 = bottom  (landscape)
+    // Y axis: -240 = left, +240 = right   (landscape)
+    // Place text just inside the top-left corner so it's visible but not clipped.
+    // Scale 10 pt, white, left-aligned.
+    static const float kScale    = 10.0f;
+    static const float kMarginX  =  5.0f;  // inset from top  edge (+160 side)
+    static const float kMarginY  =  8.0f;  // inset from left edge (-240 side)
+    static const Colour kWhite(255, 255, 255, 220);
+    static const float kZ = -0.1f;  // slightly in front of everything
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "FPS %d", (int)(fps + 0.5f));
+
+    const Vec3 pos(160.0f - kMarginX - kScale, -240.0f + kMarginY, kZ);
+    s_FpsFont->DrawString(kScale, 1.0f, 0.0f, buf, pos, kWhite, Mortar::FONT_ALIGN_LEFT);
 }
 
 } // namespace FN

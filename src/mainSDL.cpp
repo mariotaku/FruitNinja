@@ -4,9 +4,17 @@
 #include "render/Renderer.h"
 #include "debug/CrashHandler.h"
 #include "debug/Logger.h"
+#include "debug/DebugFlags.h"
+#include <cstring>
 
 int main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
+    // Port specific: parse launch parameters for debug flags.
+    //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--fps") == 0 || strcmp(argv[i], "--show-fps") == 0) {
+            FN::g_ShowFps = true;
+        }
+    }
 
     // Disable stdout buffering so log lines flush immediately. Without
     // this, line-buffered stdout silently drops the last few logs when

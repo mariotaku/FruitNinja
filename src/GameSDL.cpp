@@ -33,6 +33,16 @@
 // read+cleared in frameTick before SDL_GL_SwapWindow (same thread, no signal).
 static bool g_takeScreenshot = false;
 
+// Port specific: FPS measurement for the g_ShowFps overlay.
+// Updated every render frame in run(); read in renderFrame() for the draw call.
+// Uses a ~0.5s sliding window: accumulate frame count + elapsed seconds, recompute
+// once the window fills, then reset.  Decoupled from the sim rate (60Hz fixed); this
+// measures the actual display-frame interval including any vsync stall.
+static float  s_currentFps      = 0.0f;
+static double s_fpsWindowSecs   = 0.0;
+static int    s_fpsWindowFrames = 0;
+static const double kFpsWindowTarget = 0.5;  // recompute every ~0.5 seconds
+
 // Port specific: perform glReadPixels + SDL_SaveBMP when g_takeScreenshot is set.
 // Called just before SDL_GL_SwapWindow so GL_BACK holds the finished frame.
 static void do_screenshot_if_requested(SDL_Window* window) {
@@ -169,6 +179,10 @@ void Game::pollInput() {
             // entity draw pass. Desktop GL only -- no-op under GLES.
             FN::g_DebugWireframe = !FN::g_DebugWireframe;
             LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F3) {
+            // Port specific: toggle FPS counter overlay.
+            FN::g_ShowFps = !FN::g_ShowFps;
+            LOG_DEBUG("Debug", "FPS overlay %s", FN::g_ShowFps ? "ON" : "OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
@@ -242,6 +256,8 @@ void Game::renderFrame(float alpha) {
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().RestoreAfterDraw();
 #endif
+    // Port specific: FPS counter overlay -- additive, after all game draw calls.
+    FN::DebugFps_Draw(s_currentFps);
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
 }
@@ -288,6 +304,18 @@ void Game::run() {
         Uint64 now = SDL_GetPerformanceCounter();
         double ms = static_cast<double>(now - last) * 1000.0 / freq;
         last = now;
+
+        // Port specific: accumulate render-frame intervals for the FPS overlay.
+        // Only active when the overlay is on to avoid redundant work.
+        if (FN::g_ShowFps) {
+            s_fpsWindowSecs   += ms * 0.001;
+            s_fpsWindowFrames += 1;
+            if (s_fpsWindowSecs >= kFpsWindowTarget) {
+                s_currentFps      = static_cast<float>(s_fpsWindowFrames / s_fpsWindowSecs);
+                s_fpsWindowSecs   = 0.0;
+                s_fpsWindowFrames = 0;
+            }
+        }
 
         // frameStart reuses `now` (already read at loop top) so the cap
         // accounts for the full iteration including any vsync-blocked SwapWindow.

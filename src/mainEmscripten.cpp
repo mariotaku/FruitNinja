@@ -30,6 +30,12 @@ static Game g_game;
 static fn::FixedStepDriver g_driver;
 static double g_lastTime = -1.0;   // last RAF timestamp from emscripten_get_now()
 
+// Port specific: FPS measurement for the g_ShowFps overlay.
+// Mirrors the logic in GameSDL.cpp run(): ~0.5s sliding window.
+static float  s_emFps             = 0.0f;
+static double s_emFpsWindowMs     = 0.0;
+static int    s_emFpsWindowFrames = 0;
+
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
 // Written from JS via Module._fn_idbfs_ready() (EMSCRIPTEN_KEEPALIVE below).
@@ -90,6 +96,17 @@ static void EmscriptenFrame(void* arg) {
     double elapsed = now - g_lastTime;
     g_lastTime = now;
 
+    // Port specific: accumulate render-frame intervals for the FPS overlay.
+    if (FN::g_ShowFps) {
+        s_emFpsWindowMs     += elapsed;
+        s_emFpsWindowFrames += 1;
+        if (s_emFpsWindowMs >= 500.0) {
+            s_emFps             = static_cast<float>(s_emFpsWindowFrames / (s_emFpsWindowMs * 0.001));
+            s_emFpsWindowMs     = 0.0;
+            s_emFpsWindowFrames = 0;
+        }
+    }
+
     game->pollInput();
     if (!game->running) {
         EM_ASM({
@@ -107,6 +124,8 @@ static void EmscriptenFrame(void* arg) {
 #endif
     }
     game->renderFrame(static_cast<float>(g_driver.alpha()));
+    // Port specific: FPS counter overlay -- additive, after all game draw calls.
+    FN::DebugFps_Draw(s_emFps);
 
     // Port specific: web (#73) -- fade the DOM loading splash out once the game has
     // actually rendered a few frames.  The shell keeps the splash fully opaque over
@@ -190,6 +209,22 @@ static void BootWait(void* arg) {
         if (tsParam > 0.0) {
             FN::g_DebugTimeScale = (float)tsParam;
             LOG_INFO("Debug", "URL param: timescale = %.3f", FN::g_DebugTimeScale);
+        }
+
+        // fps=1 or fps (bare) -- enables the FPS counter overlay.
+        int fpsParam = EM_ASM_INT({
+            try {
+                var qs = window.location.search;
+                if (!qs) return 0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('fps');
+                if (v !== null && v !== '0') return 1;
+            } catch(e) {}
+            return 0;
+        });
+        if (fpsParam) {
+            FN::g_ShowFps = true;
+            LOG_INFO("Debug", "URL param: FPS overlay ON");
         }
     }
 
