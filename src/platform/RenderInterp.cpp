@@ -94,9 +94,9 @@ void RenderInterp::CaptureJiblet(Mortar::Entity* e, EntitySnap& d) {
 // ---------------------------------------------------------------------------
 
 void RenderInterp::SnapshotAfterStep() {
-    // Port specific: #172 -- UI screens (ShopScreen, frontend) place real Fruit
-    // entities in ActorManager type-0 for button decorations; interpolating them
-    // causes flicker.  Gating Snapshot here also prevents stale frontend snapshots
+    // #172: UI screens (ShopScreen, frontend) place real Fruit entities in
+    // ActorManager type-0 for button decorations; interpolating them causes
+    // flicker.  Gating Snapshot here also prevents stale frontend snapshots
     // leaking into gameplay on re-entry (first step's hadPrev will be false -> no
     // teleport-lerp).
     if (game_work.taskStateIndex != 2) return;
@@ -232,7 +232,7 @@ void RenderInterp::RestoreJiblet(Mortar::Entity* e, const EntitySnap& cur) {
 
 void RenderInterp::ApplyForDraw(float alpha) {
     if (alpha <= 0.0f) return;
-    // Port specific: #172 -- gate interpolation to active gameplay only.
+    // #172: gate interpolation to active gameplay only.
     if (game_work.taskStateIndex != 2) return;
 
     for (std::unordered_map<Mortar::Entity*, EntitySnap>::iterator it = m_cur.begin();
@@ -265,8 +265,8 @@ void RenderInterp::ApplyForDraw(float alpha) {
 // ---------------------------------------------------------------------------
 
 void RenderInterp::RestoreAfterDraw() {
-    // Port specific: #172 -- gate to active gameplay, matching SnapshotAfterStep /
-    // ApplyForDraw. In the frontend m_cur holds STALE gameplay entities (Snapshot is
+    // #172: gate to active gameplay, matching SnapshotAfterStep / ApplyForDraw.
+    // In the frontend m_cur holds STALE gameplay entities (Snapshot is
     // gated, so it's never rebuilt/cleared there); the shop recycles those Entity*
     // slots as button props, so writing the stale snapshot back would corrupt their
     // positions every frame -> flicker + jump. With all three gated, interpolation is

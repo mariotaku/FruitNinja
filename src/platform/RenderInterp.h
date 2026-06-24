@@ -79,7 +79,7 @@ public:
     void RestoreAfterDraw();
 
 private:
-    // Port specific: two snapshot maps keyed by entity pointer.
+    // Two snapshot maps keyed by entity pointer.
     // m_prev = snapshot from the step before the current one.
     // m_cur  = snapshot from the most-recently committed step.
     std::unordered_map<Mortar::Entity*, EntitySnap> m_prev;
