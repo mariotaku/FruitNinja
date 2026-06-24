@@ -17,32 +17,20 @@
 // OS polls touch once per frame). The SDL port separates this into two phases:
 //
 //   DrainSDLEvent() -- called once per display frame from pollInput().
-//     Accumulates FINGERDOWN/MOTION/UP into per-channel pending state
-//     (down/up edges + latest position). Does NOT dispatch to InputManager
-//     so m_PointCount does not advance outside a sim tick.
+//     Accumulates FINGERDOWN/MOTION/UP (and MOUSEBUTTONUP for SDL_TOUCH_MOUSEID)
+//     into per-channel pending state (down/up edges + latest position). Does NOT
+//     dispatch to InputManager so m_PointCount does not advance outside a sim tick.
 //     Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately
 //     from pollInput() (#162).
-//
-//   ReconcileTouch() -- called once per display frame from pollInput(), AFTER
-//     DrainSDLEvent() has drained all SDL events. Runs the #154 stuck-blade
-//     reconcile: queries the SDL live-finger set (SDL_GetNumTouchDevices /
-//     GetTouchDevice / GetNumTouchFingers / GetTouchFinger) and marks any held
-//     channel whose fingerId is no longer in the live set as pendingUp. Also
-//     checks mouse button state for SDL_TOUCH_MOUSEID channels. This is the
-//     ONLY place SDL touch/mouse live state is queried -- running it in pollInput
-//     ensures the live set is valid (it reflects hardware state synchronously
-//     after the event pump runs). On emscripten, these queries are only valid
-//     right after the event pump; calling them from stepUpdate would read empty
-//     and spuriously release just-pressed fingers.
 //
 //   DispatchForSimTick() -- called once per sim tick from stepUpdate(), BEFORE
 //     GameTaskUpdate. Dispatches the accumulated pending state to InputManager:
 //     TouchDown/Up edges + one held TouchMove per active channel. No SDL
 //     touch/mouse live queries here at all -- only edge-driven dispatch from
-//     the pending state set by DrainSDLEvent + ReconcileTouch. On the first
-//     flush after pending edges arrive, edges are consumed (cleared). On
-//     subsequent flushes in the same display frame (catch-up steps >= 2),
-//     only a held-position TouchMove is dispatched.
+//     the pending state set by DrainSDLEvent. On the first flush after pending
+//     edges arrive, edges are consumed (cleared). On subsequent flushes in the
+//     same display frame (catch-up steps >= 2), only a held-position TouchMove
+//     is dispatched.
 //
 // Invariant: m_PointCount (SlashEntity::AddPoint) only advances inside a
 // tick that also runs UpdatePoints (which reconciles the head-cap vertex),
@@ -78,15 +66,6 @@ public:
     // here. Non-touch events (WINDOW/FOCUS/keyboard/mouse-button) are handled
     // inline as before. Called from pollInput() for every SDL_PollEvent result.
     void DrainSDLEvent(const SDL_Event& ev, SDL_Window* window);
-
-    // reconcile SDL live-finger state after all events are drained.
-    // Queries SDL_GetNumTouchDevices/GetTouchDevice/GetNumTouchFingers/GetTouchFinger
-    // to detect fingers that SDL dropped a FINGERUP for, and marks them pendingUp.
-    // Also checks SDL_GetMouseState for SDL_TOUCH_MOUSEID channels.
-    // MUST be called from pollInput() ONLY -- on emscripten, these live-set queries
-    // are only valid right after the SDL event pump. Calling from stepUpdate would
-    // read empty and spuriously release just-pressed fingers (#154 fix, web-safe).
-    void ReconcileTouch();
 
     // dispatch accumulated touch state to InputManager for one sim tick.
     // Dispatches pending TouchDown/Up edges for each channel, then one TouchMove at

@@ -189,8 +189,8 @@ static void RenderBladeFrame(SDL_Window* window) {
 }
 
 // ---------------------------------------------------------------------------
-// Tick the slash entity: drain SDL events, reconcile, dispatch, then Update.
-// Port specific: drain events (no dispatch), then ReconcileTouch + DispatchForSimTick
+// Tick the slash entity: drain SDL events, dispatch, then Update.
+// Port specific: drain events (no dispatch), then DispatchForSimTick
 // to match the #173 drain/dispatch split invariant.
 // ---------------------------------------------------------------------------
 static void TickSlash(Game& game, SDL_Window* window) {
@@ -201,7 +201,6 @@ static void TickSlash(Game& game, SDL_Window* window) {
                 static_cast<SDL_Window*>(window));
         }
     }
-    if (game.inputTranslator) game.inputTranslator->ReconcileTouch();
     if (game.inputTranslator) game.inputTranslator->DispatchForSimTick();
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);
@@ -480,7 +479,6 @@ static bool InteractiveTick(fn::TestHarness& h, InteractiveData* d) {
             }
         }
     }
-    if (h.game.inputTranslator) h.game.inputTranslator->ReconcileTouch();
     if (h.game.inputTranslator) h.game.inputTranslator->DispatchForSimTick();
 
     float dt = 0.0f;

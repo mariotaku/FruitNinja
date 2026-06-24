@@ -150,9 +150,6 @@ bool Game::init(void* win, void* gl) {
 // translator's pending state; actual dispatch to InputManager happens in
 // stepUpdate() via DispatchForSimTick() so m_PointCount only advances inside a
 // tick that also runs UpdatePoints (head-cap reconcile). This is the #173 fix.
-// After draining all events, ReconcileTouch() queries the SDL live-finger set (#154)
-// -- this MUST stay in pollInput, not in stepUpdate; on emscripten the live set is
-// only valid right after the event pump, not from the stepUpdate phase.
 // Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately (#162).
 // Non-touch keyboard/debug events are handled inline as before (#163 fidelity).
 void Game::pollInput() {
@@ -229,13 +226,6 @@ void Game::pollInput() {
         }
     }
 
-    // Port specific: reconcile SDL live-finger state AFTER all events are drained.
-    // This is the #154 stuck-blade fix -- queries SDL touch/mouse live state to
-    // detect dropped FINGERUP events. MUST run here in pollInput (after the event
-    // pump), NOT in stepUpdate: on emscripten, SDL live-finger queries are only
-    // valid right after SDL_PollEvent drains. Moving this to stepUpdate was the
-    // bug in commit 7cb4de73 that broke web slashing.
-    if (inputTranslator) inputTranslator->ReconcileTouch();
 }
 
 // Port specific: one simulation step.
@@ -250,8 +240,8 @@ void Game::pollInput() {
 // On steps==0 (pure interpolated frame), stepUpdate() does not run, so neither
 // DispatchForSimTick nor AddPoint runs -> m_PointCount unchanged -> DrawSlice
 // draws the already-reconciled buffer, no stale head-cap.
-// DispatchForSimTick contains NO SDL live-finger queries (those are in ReconcileTouch,
-// called from pollInput only); this makes it safe to call from stepUpdate on web.
+// DispatchForSimTick contains NO SDL live-finger queries; this makes it safe to
+// call from stepUpdate on web.
 void Game::stepUpdate() {
     // Flush deferred touch dispatch for this sim tick (before update).
     if (inputTranslator) inputTranslator->DispatchForSimTick();

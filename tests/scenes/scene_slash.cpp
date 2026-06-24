@@ -101,9 +101,6 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
             }
         }
     }
-    // Reconcile SDL live-finger state after all events are drained (#154, web-safe).
-    if (game.inputTranslator) game.inputTranslator->ReconcileTouch();
-
     // Dispatch accumulated touch state to InputManager for this sim tick (#173).
     if (game.inputTranslator) game.inputTranslator->DispatchForSimTick();
 
