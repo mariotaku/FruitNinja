@@ -1,5 +1,5 @@
 // InputDeviceBada — concrete Bada/touch InputDevice.
-// Binary @ 0x001958a4.
+// ASM-spec v1.6.1 InputDeviceBada @ 0x002427e0.
 
 #include "input/InputDeviceBada.h"
 // Acceleration: small accelerometer singleton polled by InputDeviceBada::Update
@@ -11,7 +11,7 @@
 
 namespace Mortar {
 
-// Binary @ 0x001958a4 — ctor: call InputDevice ctor at base, write
+// ASM-spec v1.6.1 InputDeviceBada::InputDeviceBada @ 0x002427e0 — ctor: call InputDevice ctor at base, write
 // InputDeviceBada vtable (fns*) at +0x00, zero four uint32_t fields.
 InputDeviceBada::InputDeviceBada()
     : m_ActiveTouchId(0)
@@ -42,7 +42,7 @@ void InputDeviceBada::Destroy() {
 #endif
 }
 
-// Binary @ 0x00195a2c — InputDeviceBada::Update(float).
+// ASM-spec v1.6.1 InputDeviceBada::Update @ 0x00242f40 — InputDeviceBada::Update(float).
 // Binary vtable slot +0x0c — broadcast target from InputManager::Update.
 // Per-device touch poll: track the active touch in m_ActiveTouchId, emit
 // position AxisEvents (action 0x74/0x75) and lifecycle ButtonPressed (action
@@ -118,6 +118,10 @@ void InputDeviceBada::Update(float /*dt*/) {
 callbacks:
     Touch::GetInstance().SendIndividualTouchCallbacks(this);
 
+    // TODO: v1.6.1 -- InputDeviceBada::Update @0x00242f40 has NO accelerometer tail;
+    // the binary likely polls Acceleration in a separate input device. Confirm where
+    // (Acceleration::GetAccel* @stale 0x001955e0/0x001955fc need re-RE) before removing
+    // this block, so upside-down scoring isn't lost. Stale addrs unverified.
     float ax = 0.0f, ay = 0.0f, az = 0.0f;
     float dx = 0.0f, dy = 0.0f, dz = 0.0f;
     Acceleration::GetInstance()->GetAccelAbs(&ax, &ay, &az);
@@ -165,7 +169,7 @@ void InputDeviceBada::RegisterInputCallback(unsigned long actionHash,
 #endif
 }
 
-// Binary @ 0x00195c00 — InputDeviceBada::Reset().
+// ASM-spec v1.6.1 InputDeviceBada::Reset @ 0x00243174 — InputDeviceBada::Reset().
 // Clear tracked-touch state (m_ActiveTouchId, m_LastTouchX/m_LastTouchY) and wipe
 // the Touch singleton's pending state. (The InputManager-level broadcast that
 // fans Reset() out to every device is InputManager::ResetDevices @ 0x00196194,
@@ -193,7 +197,7 @@ void InputDeviceBada::SetSendDownCallbacksEachUpdate(bool v) {
 #endif
 }
 
-// Binary @ 0x00195eb8 — InputDeviceBada::OnAxisExtentsChanged().
+// ASM-spec v1.6.1 InputDeviceBada::OnAxisExtentsChanged @ 0x00243550 — InputDeviceBada::OnAxisExtentsChanged().
 // Empty body in the binary (inherits the InputDevice base no-op; the touch
 // device has no axis extents to recompute). The InputManager-level broadcast
 // that fans this out across devices is InputManager::OnAxisExtentsChanged

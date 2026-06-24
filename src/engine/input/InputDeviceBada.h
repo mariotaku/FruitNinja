@@ -6,7 +6,7 @@
 #include <list>
 #include <cstdint>
 
-// Binary @ 0x001958a4 — InputDeviceBada: concrete InputDevice for Bada/touch.
+// ASM-spec v1.6.1 InputDeviceBada @ 0x002427e0 — concrete InputDevice for Bada/touch.
 // sizeof = 28 (0x1c), from operator new(0x1c) @ InputManager::Init 0x00196cd4.
 // Layout:
 //   +0x00: vptr (port) / InputDevice base (binary fns*)
@@ -29,7 +29,7 @@ struct InputDeviceBinding {
 
 class InputDeviceBada : public InputDevice {
 public:
-    // Binary @ 0x001958a4 — ctor (C1/C2 pair, byte-identical).
+    // ASM-spec v1.6.1 InputDeviceBada::InputDeviceBada @ 0x002427e0 — ctor (C1/C2 pair, byte-identical).
     InputDeviceBada();
     virtual ~InputDeviceBada();
 
