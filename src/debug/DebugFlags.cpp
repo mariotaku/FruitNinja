@@ -475,10 +475,15 @@ void DebugFps_Draw(float fps) {
             Colour(255, 255, 255, 255),
             0L, 0.0f,
             Mortar::FONT_EFFECT_NONE);
-        // Solid white: set both gradient stops to white so no colour shift occurs.
-        s_FpsBaked->ApplyGradient_TopBottom(
-            Colour(255, 255, 255, 255),
-            Colour(255, 255, 255, 255));
+        // Do NOT call ApplyGradient_TopBottom here.
+        // BuildSurfaces (called by the ctor) bakes all vertices to the ctor
+        // base colour (255,255,255,255) -- flat white.  ApplyGradient_TopBottom
+        // has a bug in its AddColour slot-selection logic: the second
+        // AddColour(bottom, 1.0f) call incorrectly overwrites slot-0 (because
+        // m_T0==0.0f after the first call satisfies the slot-0 condition), leaving
+        // m_Col1=={0,0,0,0} (black). The gradient then lerps white->black,
+        // producing the dark bottom ramp. Leaving the ctor-baked white vertices
+        // untouched gives flat 255,255,255,255 on every pixel (>= 80% brightness).
         s_FpsLastInt = fpsInt;
     }
 
