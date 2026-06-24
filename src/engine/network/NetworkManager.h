@@ -320,7 +320,7 @@ public:
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e8b8
     void SetP2PVoiceChatOpponentSpeakingCallback(void* /*cb*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0010c688
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 NetworkManager::SetGameCenterInitializationCallback @ 0x001044fc
     void SetGameCenterInitializationCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub (symbol in list_methods)

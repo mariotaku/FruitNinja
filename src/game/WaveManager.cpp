@@ -183,7 +183,7 @@ void WaveManager::Init() {
         TiXmlElement root = doc.RootElement();
         if (!root) continue;
 
-        // ASM-verified: 2026-05-27 binary @ 0x00113a4c..0x0011428e (asm-inspector)
+        // ASM-verified: 2026-05-27 v1.6.1 WaveManager::Init @ 0x001144e8 (asm-inspector)
         // -- pre-loop Reset + single-pass dispatch + per-defaults re-Reset +
         //    coin_chances/WaveInfo/defaults/OverideProbability strings all match.
         // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing
@@ -898,6 +898,7 @@ void WaveManager::NewGame() {
 }
 
 // ASM-verified: 2026-05-18 binary @ 0x0010a42c (re-analyst)
+// TODO: v1.6.1 PowersEnabled inlined/renamed; cited 0x0010a42c stale, locate real body
 bool WaveManager::PowersEnabled() {
     Game* game = Game::GetInstance();
     return game && game_work.gameMode == Mortar::GAME_MODE_ARCADE;

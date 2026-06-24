@@ -4,7 +4,7 @@
 void ParseCoinChanceinator(COIN_CHANCEINATOR* /*pDst*/, TiXmlElement* /*pElem*/) {
 }
 
-// Defunct: coin chance system -- always returns 0; binary @ 0x0010a428
+// Defunct: coin chance system -- always returns 0; v1.6.1 ParseCoinChanceinator @ 0x00113650
 int CoinsEnabled() {
     return 0;
 }

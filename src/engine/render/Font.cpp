@@ -1080,6 +1080,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // 0x00199216..0x00199254 architecture) ---
     //
     // ASM-verified: 2026-05-11 binary @ 0x00101c58, 0x00101964 (asm-inspector
+    // TODO: v1.6.1 re-pin exact instruction range (asm-inspector); owning fn likely Mortar::Font::DrawString @0x0010671c
     // verdict (c) -- "Helper bypasses the matrix stack entirely. World coords
     // are computed from scalars"). The binary's Font_DrawString writes
     // screen-space scalar math directly into the vertex buffer; it never

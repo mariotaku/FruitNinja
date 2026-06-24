@@ -119,9 +119,11 @@ public:
     int  AchievementExists(uint32_t hash);
 
     // Unlock paths — Binary addresses above
-    // ASM-verified: 2026-05-18T00:00 binary @ 0x00108af0..0x00108b4f (asm-inspector)
+    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00105230 (asm-inspector)
+    // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockBonusAchievement not AchievementExists)
     unsigned int UnlockBonusAchievement(unsigned long bonusId);
-    // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::AchievementExists @ 0x00105230 (re-analyst)
+    // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockComboAchievement not AchievementExists)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
     int  UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash);

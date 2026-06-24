@@ -69,7 +69,7 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     // there is no matching sub-struct at that offset — this is FontCacheObjectTTF's
     // binary layout detail. The port approximates: weight affects outline count only.
     // Using alignSigned directly as the weight multiplier (= alignSigned * 1.0).
-    // TODO: v1.6.1 0x00249a5c (BakedStringTTF ctor) -- fc[+0x10c] weight/count fields
+    // TODO: v1.6.1 0x00249a5c (Mortar::BakedStringTTF::BakedStringTTF) -- fc[+0x10c] weight/count fields
     //   need the full FontCacheObjectTTF binary layout to compute exactly.
     float weightF = (float)alignSigned;
     float rawN = ceilf(weightF);
@@ -348,9 +348,9 @@ void BakedStringTTF::BuildSurfaces()
     m_SurfacesBuilt = true;
 }
 
-// ApplyEffects @0x001049b0: tail-branch dispatch.
+// ApplyEffects @0x00249684: tail-branch dispatch.
 // Not decompiled this pass; safe no-op (circle/gradient called explicitly by caller).
-// Defunct: ApplyEffects dispatch -- no-op stub; v1.6.1 BakedStringTTF @0x001049b0
+// Defunct: ApplyEffects dispatch -- no-op stub; v1.6.1 Mortar::BakedStringTTF::ApplyEffects @ 0x00249684
 void BakedStringTTF::ApplyEffects()
 {
 }

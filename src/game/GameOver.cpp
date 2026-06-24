@@ -93,9 +93,9 @@ void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param
     game_work.currentScore += points;
 }
 
-// Binary free functions @ 0x0010a4b8 / 0x0010a4e8.
-// Defunct sig: playerIdx ignored (online MP scrubbed) — binary @ 0x0010a4b8 / 0x0010a4e8.
-// ASM-verified: 2026-05-10 binary @ 0x0010a4b8 (asm-inspector). Writes
+// Binary free functions @ 0x001138f0 / 0x001151ec.
+// Defunct sig: playerIdx ignored (online MP scrubbed) — binary @ 0x001138f0 / 0x001151ec.
+// ASM-verified: 2026-05-10 v1.6.1 SetScore @ 0x001138f0 (asm-inspector). Writes
 // score to Game+0x18 (the live `currentScore` that ScoreControl reads),
 // NOT to pSaveData->m_CurrentScore (which earlier port had wrong --
 // game-start SetScore(0,-1) failed to reset the live score, so the
@@ -105,7 +105,7 @@ void SetScore(int score, int /*playerIdx*/) {
     if (game) game_work.currentScore = score;
 }
 
-// ASM-verified: 2026-05-22 binary @ 0x0010a4e8 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 SetMissCount @ 0x001151ec (re-analyst).
 // Binary writes `strb r0, [game_work + 0x14]` -- the LIVE missCount that
 // MissControl::Update reads. Prior port wrote to m_SaveData->m_CurrentMissCount
 // (FruitSaveData+0x68, the persisted snapshot) which is a DIFFERENT field.

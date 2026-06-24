@@ -32,7 +32,7 @@ public:
         , m_flagC(false)
     {}
 
-    // Defunct: FNHighscoreList -- no-op stub; binary @ 0x00111874
+    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::AddPlayerScore @ 0x00113fa8
     static void AddPlayerScore(long long /*score*/) {}
 
     void* GetFirst() { return nullptr; }

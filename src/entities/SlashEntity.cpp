@@ -56,7 +56,7 @@ Mortar::Event1<SlashEntity*>& SlashEntity::OnComboCancelEvent() {
     return g_OnComboCancel;
 }
 
-// ASM-verified: 2026-05-20 binary @ 0x00110cb0 CheckCombo (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 SlashEntity::CheckCombo @ 0x00113d64 (re-analyst)
 // Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
 // Score table:
 //   0x18: 2 unique types in strict ABAB... (any length)

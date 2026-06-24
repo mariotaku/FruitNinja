@@ -55,20 +55,20 @@ void Game::RenderAtHalfFrames(const char* hwName, const char* model) {
 // slot 3 @ 0x0010d9e4
 float Game::GetHighResolutionScale() { return 2.0f; }
 
-// slot 4 @ 0x0010da04
-// Defunct: OpenFeint — no-op stub; binary @ 0x0010da04
+// slot 4 @ 0x0011fbd0
+// Defunct: OpenFeint — no-op stub; v1.6.1 Game::GetHighResolutionScale @ 0x0011fbd0
 const char* Game::GetOpenFeintProductKey() { return "7rJ4RGXLEkwDnRr9QuNIQ"; }
 
-// slot 5 @ 0x0010da14
-// Defunct: OpenFeint — no-op stub; binary @ 0x0010da14
+// slot 5 @ 0x0011fbf4
+// Defunct: OpenFeint — no-op stub; v1.6.1 Game::GetOpenFeintProductKey @ 0x0011fbf4
 const char* Game::GetOpenFeintSecret() { return "B8DmWmQ4pX3aHCtYIpu6g8rWBEkY29mlQkDjUcprKE"; }
 
-// slot 6 @ 0x0010da24
-// Defunct: OpenFeint — no-op stub; binary @ 0x0010da24
+// slot 6 @ 0x0011fc10
+// Defunct: OpenFeint — no-op stub; v1.6.1 Game::GetOpenFeintSecret @ 0x0011fc10
 const char* Game::GetOpenDisplayName() { return "Fruit Ninja"; }
 
-// slot 7 @ 0x0010da34
-// Defunct: Playhaven — no-op stub; binary @ 0x0010da34
+// slot 7 @ 0x0011fc2c
+// Defunct: Playhaven — no-op stub; v1.6.1 Game::GetOpenDisplayName @ 0x0011fc2c
 const char* Game::GetPlayhavenToken() { return "FIX!"; }
 
 // slot 9 @ 0x0010dca8 — sets up FileSystem_Direct; args unused (root path from rodata)

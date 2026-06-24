@@ -29,8 +29,8 @@ static const float POWERUP_Y_OFFSET = 32.0f;
 // DAT_001628c4 = 60.0 (seconds-per-minute)
 static const float SECS_PER_MIN = 60.0f;
 
-// ASM-verified: 2026-05-18 binary @ 0x000f6e04 (re-analyst)
-// Binary IsMultiplayer() thunk -> impl @ 0x0010a470: unconditionally returns false.
+// ASM-verified: 2026-05-18 v1.6.1 IsMultiplayer @ 0x00105ea0 (re-analyst)
+// Binary IsMultiplayer() thunk -> impl @ 0x00105ea0: unconditionally returns false.
 // Same-screen MP exists as code structure but is gated off in the shipping build.
 static inline bool IsMultiplayer() { return false; }
 
@@ -86,9 +86,9 @@ void TimeControl::Reset() {
     m_DrawColour = Colour(255, 255, 255, 255);
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x001629xx (re-analyst)
+// ASM-verified: 2026-05-03 v1.6.1 TimeControl::Skip @ 0x001c089c (re-analyst)
 void TimeControl::Skip() {
-    // Binary @ 0x001629xx: restore from save.
+    // Binary @ 0x001c089c: restore from save.
     Game* game = Game::GetInstance();
     if (game && game_work.m_SaveData) {
         m_TimeRemaining = game_work.m_SaveData->m_TimeRemainingSave;

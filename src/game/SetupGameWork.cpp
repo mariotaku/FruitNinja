@@ -1,5 +1,4 @@
-// Analysed: 2026-05-03T00:00
-// SetupGameWork -- binary @ 0x0010b4e8.
+// SetupGameWork -- binary @ 0x0010ed34.
 
 #include "game/SetupGameWork.h"
 #include "Game.h"
@@ -7,9 +6,9 @@
 #include "util/StringHash.h"
 #include "game/GameWork.h"
 
-// ASM-verified: 2026-05-03 binary @ 0x0010b4e8 (re-analyst)
+// ASM-verified: 2026-05-03 v1.6.1 SetupGameWork @ 0x0010ed34 (re-analyst)
 
-// Binary @ 0x0010b4e8: 23 field stores + plays_total bump.
+// Binary @ 0x0010ed34: 23 field stores + plays_total bump.
 void SetupGameWork() {
     Game* app = Game::GetInstance();
     FruitSaveData* save = game_work.m_SaveData;
@@ -17,7 +16,7 @@ void SetupGameWork() {
     // Bump cumulative play count.
     save->AddToTotal("plays_total", StringHash("plays_total"), 1, true, true);
 
-    // 23 field stores (binary @ 0x0010b4e8 disasm-confirmed):
+    // 23 field stores (binary @ 0x0010ed34 disasm-confirmed):
 
     // +0x000: set task state to 2 (Game state; binary field is "m_GameMode" in spec,
     //         maps to taskStateIndex in port which is 0=Splash/1=Frontend/2=Game).
