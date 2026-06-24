@@ -96,7 +96,7 @@ public:
     //   +0x94..+0x9F  12-byte gap (BaseScreen tail / alignment; Ghidra-confirmed)
     //   +0xa0  m_BtnBack          (back_icon.tex + bomb fruit, QuitCallback)
     //   +0xa4  m_ButtonDelay      (-1 = inactive, else decrements by dt)
-    //   +0xa8  field_0xa8         (set to -1 in state 0 transition)
+    //   +0xa8  m_TransitionTimer  (set to -1 in state 0 transition)
     //   +0xac  m_pClassicButton   (classic.tex, watermelon)
     //   +0xb0  m_pZenButton       (mode_2.tex, apple_red)
     //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 1)
@@ -117,7 +117,7 @@ public:
 
     MenuButton* m_pBackButton;       // +0xa0: m_BtnBack (back_icon.tex, bomb, QuitCallback)
     float m_ButtonDelay;             // +0xa4: -1 = inactive, else decrements by dt
-    float field_0xa8;                // +0xa8: set to -1 in state 0 transition
+    float m_TransitionTimer;         // +0xa8: set to -1 in state 0 transition
     MenuButton* m_pClassicButton;    // +0xac: classic.tex, watermelon, ClassicModeCallback
     MenuButton* m_pZenButton;        // +0xb0: mode_2.tex, apple_red, ZenModeCallback
     float m_SecondaryAlpha;          // +0xb4: starts -2.5, lerped toward 1
@@ -194,7 +194,7 @@ public:
 static_assert(offsetof(GameModeScreen, _pad_0x94)            == 0x94, "_pad_0x94 offset");
 static_assert(offsetof(GameModeScreen, m_pBackButton)        == 0xa0, "m_pBackButton offset");
 static_assert(offsetof(GameModeScreen, m_ButtonDelay)        == 0xa4, "m_ButtonDelay offset");
-static_assert(offsetof(GameModeScreen, field_0xa8)           == 0xa8, "field_0xa8 offset");
+static_assert(offsetof(GameModeScreen, m_TransitionTimer)    == 0xa8, "m_TransitionTimer offset");
 static_assert(offsetof(GameModeScreen, m_pClassicButton)     == 0xac, "m_pClassicButton offset");
 static_assert(offsetof(GameModeScreen, m_pZenButton)         == 0xb0, "m_pZenButton offset");
 static_assert(offsetof(GameModeScreen, m_SecondaryAlpha)     == 0xb4, "m_SecondaryAlpha offset");

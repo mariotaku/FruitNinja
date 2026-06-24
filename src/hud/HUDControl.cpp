@@ -23,7 +23,7 @@ HUDControl::HUDControl()
     : m_Singular(0),                              // +0x04
       m_Timer(0.0f),                              // DIFFERS: binary leaves uninitialised; port zero-inits for determinism
       m_Active(1),                                // +0x30
-      field_0x31(0),
+      m_reserved31(0),
       m_bNoDestructor(0),
       m_bPendingRemoval(0),
       m_LayerFlags(1),

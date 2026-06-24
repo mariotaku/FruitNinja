@@ -99,7 +99,7 @@ MainScreen::MainScreen(Game& g)
       _pad_c4(0), _pad_c8(0),
       m_Lean(1.0f),
       m_NinjaTextX(0.0f), m_NinjaTextY(0.0f), m_NinjaTextZ(0.0f),
-      m_BounceVel(0.0f), m_BounceY(0.0f), m_field10C(0.0f),
+      m_BounceVel(0.0f), m_BounceY(0.0f), m_BounceZ(0.0f),
       m_StateTimer(0.0f),
       m_Field114(0.0f),
       m_State(STATE_CAMERA_ZOOM),
@@ -626,11 +626,11 @@ void MainScreen::Draw(float* hudScaleRaw) {
         m_TexFruitText->UnSet();
     }
 
-    // 3. ninja_text drawn at {m_BounceVel, m_BounceY, m_field10C} (+0x104..+0x10C binary)
+    // 3. ninja_text drawn at {m_BounceVel, m_BounceY, m_BounceZ} (+0x104..+0x10C binary)
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
     if (m_ninjaTex.IsValid()) {
-        Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_field10C);
+        Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_BounceZ);
         m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
@@ -692,7 +692,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
 //   m_NinjaTextX (+0xE0 port / +0xF8 binary)  = fruit_text X (-120/frame)
 //   m_NinjaTextY (+0xE4 port / +0xFC binary)  = fruit_text Y (pos.y+18)
 //   m_NinjaTextZ (+0xE8 port / +0x100 binary) = 0
-//   m_field10C   (+0xF4 port / +0x10C binary) = 0; ninja_text Z
+//   m_BounceZ    (+0xF4 port / +0x10C binary) = 0; ninja_text Z
 //   m_Lean       (+0xDC port / +0xF4 binary)  = logo lean lerp (init 1.0)
 //   m_LogoPos    (+0xD0 port / +0xE8 binary)  = fruit_text + sliceInstrBox draw pos
 //
@@ -710,9 +710,9 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
         dt = MAX_DT;
     }
 
-    // m_NinjaTextZ and m_field10C = 0.0
+    // m_NinjaTextZ and m_BounceZ = 0.0
     m_NinjaTextZ = 0.0f;
-    m_field10C   = 0.0f;
+    m_BounceZ    = 0.0f;
 
     // fruit_text X = -120.0 (constant per binary @ 0x00195a58)
     m_NinjaTextX = -120.0f;

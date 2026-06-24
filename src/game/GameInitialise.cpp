@@ -91,7 +91,7 @@ void GameInitialise() {
     // (WaveManager, Fruit::Init, MenuButton random angles etc.).
     srand((unsigned int)time(nullptr));
 
-    // Step 1: Mortar::SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
+    // Step 1: Mortar::SystemManager::Init() — 0x0018b024: m_reserved50=0, m_bRunning=1, clock base (skipped)
     SystemManager::GetInstance().Init();
 
     // Step 2: MatrixManager::Init() — 0x0019e2ac: just calls ResetAllStacks

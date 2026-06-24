@@ -171,7 +171,7 @@ public:
     // +0x104..+0x10c  ninja_text sprite draw position triple
     float m_BounceVel;    // +0x104  (ninja_text X; 60.0 decorative per frame)
     float m_BounceY;      // +0x108  (bounce POSITION, ninja sprite Y)
-    float m_field10C;     // +0x10c  (= 0; ninja sprite Z)
+    float m_BounceZ;      // +0x10c  (= 0; ninja sprite Z)
 
     // +0x110  float m_StateTimer — BOUNCE VELOCITY accumulator.
     // UpdateScreenElements: m_StateTimer += dt*-55; m_BounceY += m_StateTimer*dt*15.

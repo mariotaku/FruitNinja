@@ -41,8 +41,8 @@ public:
     // +0x30: non-zero = visible + receives updates
     uint8_t m_Active;
 
-    // +0x31
-    uint8_t field_0x31;
+    // +0x31: written 0 by ctor; no read site identified. Reserved.
+    uint8_t m_reserved31;  // purpose unknown
 
     // +0x32: if true, HUD won't call destructor on removal
     uint8_t m_bNoDestructor;

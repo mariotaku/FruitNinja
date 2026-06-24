@@ -392,12 +392,12 @@ void ActorManager::RegisterHashConverter(HashFn fn) {
 // --- Find variants --------------------------------------------------------
 
 // 0x0016fd10. Linear scan of type list `type`; returns first entity whose
-// field_0x04 (Entity+0x04) equals `trackerKey`. Binary @ 0x0016fd10.
+// m_RuntimeID (Entity+0x04) equals `trackerKey`. Binary @ 0x0016fd10.
 Entity* ActorManager::Find(long type, unsigned long trackerKey) {
     if (!m_pTypeLists || type < 0 || type >= (long)m_NumTypes) return nullptr;
     std::list<Entity*>& lst = m_pTypeLists[type];
     for (std::list<Entity*>::iterator it = lst.begin(); it != lst.end(); ++it) {
-        if ((*it)->field_0x04 == (uint32_t)trackerKey) return *it;
+        if ((*it)->m_RuntimeID == (uint32_t)trackerKey) return *it;
     }
     return nullptr;
 }
@@ -409,7 +409,7 @@ Entity* ActorManager::Find(unsigned long trackerKey) {
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& lst = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = lst.begin(); it != lst.end(); ++it) {
-            if ((*it)->field_0x04 == (uint32_t)trackerKey) return *it;
+            if ((*it)->m_RuntimeID == (uint32_t)trackerKey) return *it;
         }
     }
     return nullptr;
@@ -500,10 +500,10 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         if (L->type != (unsigned int)msg->type) continue;
         if (L->msgKind != 0 && L->msgKind != (unsigned int)typeHash) continue;
         // Binary @ 0x0016ffd8: senderId filter is
-        //   piVar3[1] == 0 || (param_2 != 0 && piVar3[1] == param_2->field_0x04)
+        //   piVar3[1] == 0 || (param_2 != 0 && piVar3[1] == param_2->m_RuntimeID)
         // i.e. 0 = wildcard, else the sender's RuntimeID (Entity+0x04) must match.
         if (L->senderId != 0 &&
-            !(sender != nullptr && (unsigned int)L->senderId == sender->field_0x04))
+            !(sender != nullptr && (unsigned int)L->senderId == sender->m_RuntimeID))
             continue;
         if (L->callback) {
             // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016ffd8 (asm-inspector)

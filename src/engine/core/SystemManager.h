@@ -22,8 +22,9 @@ class SystemManager : public Mortar::Singleton<SystemManager> {
     int16_t m_FrameTimeRing[30]; // +0x10
     uint8_t m_QuitState;         // +0x4C
     // +0x4D..+0x4F padding
-    // +0x50: float (ctor uses vldr.32/vstr.32 s15; DAT_0018af98/0x0018afe4 = 0.0f)
-    float   m_field50;           // +0x50
+    // +0x50: float written 0.0f by Init (vldr.32/vstr.32 s15; DAT = 0.0f); no read
+    // site identified. Reserved.
+    float   m_reserved50;        // +0x50  purpose unknown
     // +0x54: UniqueDeviceID sub-object (128 bytes), ctor'd via thunk 0x000f5094
     UniqueDeviceID m_DeviceID;   // +0x54
 
@@ -31,7 +32,7 @@ class SystemManager : public Mortar::Singleton<SystemManager> {
     virtual ~SystemManager() {}
 
 public:
-    // Matches 0x0018b024: sets m_field50=0, m_bRunning=1, records clock base (Bada),
+    // Matches 0x0018b024: sets m_reserved50=0, m_bRunning=1, records clock base (Bada),
     // calls _RetrieveDeviceID (Bada). Port: only the two field writes are meaningful.
     void Init();
 
@@ -62,7 +63,7 @@ public:
 static_assert(sizeof(SystemManager) == 212, "SystemManager size mismatch");
 // TODO(#93-followup): offsetof on private members rejected by GCC 4.4; need friend
 // access or public fields to enforce field offsets on the cross-build.
-// Expected: m_bRunning@0x04, m_QuitState@0x4C, m_field50@0x50, m_DeviceID@0x54.
+// Expected: m_bRunning@0x04, m_QuitState@0x4C, m_reserved50@0x50, m_DeviceID@0x54.
 #endif
 
 #endif
