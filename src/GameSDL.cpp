@@ -263,17 +263,35 @@ void Game::frameTick() {
 // The accumulator decouples simulation rate (60 ticks/s) from display refresh
 // so the game runs at correct wall-clock speed on 60/120/144 Hz panels.
 // vsync (SDL_GL_SetSwapInterval(1) in mainSDL.cpp) paces the render; the
-// accumulator owns the sim rate.  SDL_Delay(1) only fires when steps==0
-// (minimised / vsync off) to avoid a busy-spin.
+// accumulator owns the sim rate.
+// Port specific: vsync (SDL_GL_SetSwapInterval) isn't guaranteed; when inactive,
+// pace render to the display refresh so we don't render unbounded.
 void Game::run() {
     fn::FixedStepDriver driver;
     Uint64 last = SDL_GetPerformanceCounter();
     double freq = static_cast<double>(SDL_GetPerformanceFrequency());
 
+    // Detect actual vsync state and display refresh target once at loop entry.
+    // SDL_GL_SetSwapInterval(1) is a request that drivers may ignore; check
+    // the actual interval rather than assuming the request was honoured.
+    bool vsyncOn = (SDL_GL_GetSwapInterval() != 0);
+    double targetMs = 1000.0 / 60.0;
+    {
+        SDL_DisplayMode dm;
+        int win = SDL_GetWindowDisplayIndex(static_cast<SDL_Window*>(window));
+        if (SDL_GetCurrentDisplayMode(win < 0 ? 0 : win, &dm) == 0 && dm.refresh_rate > 0) {
+            targetMs = 1000.0 / dm.refresh_rate;
+        }
+    }
+
     while (running) {
         Uint64 now = SDL_GetPerformanceCounter();
         double ms = static_cast<double>(now - last) * 1000.0 / freq;
         last = now;
+
+        // frameStart reuses `now` (already read at loop top) so the cap
+        // accounts for the full iteration including any vsync-blocked SwapWindow.
+        Uint64 frameStart = now;
 
         pollInput();
         if (!running) break;
@@ -287,8 +305,13 @@ void Game::run() {
         }
         renderFrame(static_cast<float>(driver.alpha()));
 
-        if (steps == 0) {
-            SDL_Delay(1);
+        if (!vsyncOn) {
+            double frameMs = static_cast<double>(SDL_GetPerformanceCounter() - frameStart) * 1000.0 / freq;
+            if (frameMs < targetMs) {
+                SDL_Delay(static_cast<Uint32>(targetMs - frameMs));
+            }
+        } else if (steps == 0) {
+            SDL_Delay(1);   // vsync on but not blocking (e.g. minimized) -- don't peg a core
         }
     }
 }
