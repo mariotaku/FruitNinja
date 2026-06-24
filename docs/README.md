@@ -23,6 +23,7 @@ The remaining docs cover information that **isn't derivable from `src/`**:
 - [`port-plan.md`](port-plan.md) — high-level port intent.
 - [`resources.md`](resources.md) — asset directory layout, XML schemas, loading flow (data, not derivable from code).
 - [`source-files.md`](source-files.md) — port-file → binary-symbol cross-reference index.
+- [`ghidra-re-techniques.md`](ghidra-re-techniques.md) — reusable Ghidra-scripting techniques (RTTI walk, bulk proto application, GOT-DAT resolution, offset scanners). Scripts are user-local, not in-repo.
 - `tools/` — build / verification / asset tooling (see [`../tools/README.md`](../tools/README.md)).
 
 ### Cross-cutting reference
