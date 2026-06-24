@@ -15,19 +15,21 @@
 
 class WaveSyncPacket : public Mortar::NetworkPacket {
 public:
-    long     m_WaveIdx;   // +0x10
-    long     m_field14;   // +0x14
-    float    m_Score;     // +0x18
-    int      m_field1c;   // +0x1c -- initialised to 0
-    uint8_t  m_field20;   // +0x20 -- initialised to 0
+    // Wire fields in binary serialize order (WaveSyncPacket::Serialize @ 0x00159230,
+    // 3-arg ctor @ 0x00159360). m_field24 has no ctor/serialize site.
+    long     m_WaveIdx;     // +0x10 -- wave index (WriteInt32; ctor param 1)
+    long     m_WaveData14;  // +0x14 -- wave payload (WriteInt32; ctor param 2; purpose unknown)
+    float    m_Score;       // +0x18 -- score (WriteDec32 float; ctor param 3)
+    int      m_reserved1c;  // +0x1c -- init 0 (WriteInt32; purpose unknown)
+    uint8_t  m_Flag20;      // +0x20 -- init 0 (WriteBool; boolean flag, purpose unknown)
     uint8_t  _pad21[3];
-    int      m_field24;   // +0x24 -- initialised to 0
+    int      m_reserved24;  // +0x24 -- init 0; no serialize site, purpose unknown
 
     // Defunct: online multiplayer -- no-op stub; binary nm confirms:
     //   WaveSyncPacket()                   @ 0x00149430
     //   WaveSyncPacket(long, long, float)  @ 0x00149360
     WaveSyncPacket();
-    WaveSyncPacket(long waveIdx, long field14, float score);
+    WaveSyncPacket(long waveIdx, long waveData14, float score);
 
     virtual ~WaveSyncPacket() {}
 };
