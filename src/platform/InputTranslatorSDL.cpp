@@ -60,6 +60,13 @@ void InputTranslatorSDL::Init() {
 // (its drag formula negates currY before applying the binary-faithful
 // math). Other touch consumers (MenuButton hit-tests, SlashEntity blade
 // tracking) work in port's Y-up convention directly.
+//
+// DIFFERS: original = GlesForm::TransformTouchPos @0x001f1038 (v1.6.1):
+//   out.x=(int)(rawDeviceX*480.0/800.0); out.y=(int)(rawDeviceY*320.0/480.0)
+//   -- pure anisotropic down-scale of raw portrait device pixels (480x800),
+//   NO rotation, NO centring, top-left Y-down. Port takes normalized SDL [0,1]
+//   coords -> centred Y-up ortho because the SDL pipeline works in centred
+//   Y-up throughout.
 void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
                                                    float& gx, float& gy) {
     gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);
@@ -67,6 +74,10 @@ void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
     TLOG("TransformTouchNormalized raw=(%g,%g) -> game=(%g,%g)\n", nx, ny, gx, gy);
 }
 
+// DIFFERS: binary caps touch at 8 channels at the source (Mortar::Touch 8 slots,
+// Touch::FindTouch @0x002429a8 loops i<8; GlesForm::OnTouch* gate GetPointId()<8
+// @0x001f1128/0x001f11c4/0x001f10a0). Port uses 16 SDL channels then clamps to
+// MAX_SLOTS=8 before Mortar::Touch -- benign superset.
 int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
     // Check if already mapped
     for (int i = 0; i < 16; i++) {
