@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Port specific: Custom Emscripten shell for Fruit Ninja web build.
+<!-- Custom Emscripten shell for Fruit Ninja web build.
      Boot-direct: game starts immediately on load-complete (no tap-to-play cushion).
      Audio starts muted; SFX is enabled on the first in-game gesture (see
      mainEmscripten.cpp one-shot hook); music remains opt-in via in-game toggle.
@@ -20,7 +20,7 @@
       font-family: Arial, Helvetica, sans-serif;
     }
 
-    /* Port specific: #viewport is a full-window flex centering container.
+    /* #viewport is a full-window flex centering container.
        The canvas is positioned inside it and sized by JS letterbox scaling.
        We do NOT give #viewport a fixed pixel size -- that was causing the
        flexbox to collapse the width to ~62px on the 946x938 test window.
@@ -51,7 +51,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* Port specific: splash image sits inside #viewport as an absolute sibling
+    /* splash image sits inside #viewport as an absolute sibling
        of the canvas.  resize() sets its CSS width/height to the same letterboxed
        dimensions as the canvas (scale*960 x scale*640), so the splash always
        covers exactly the game viewport rectangle.
@@ -217,7 +217,7 @@
       outline: none;
     }
 
-    /* Port specific: full-screen toggle button.  A corner overlay in the
+    /* full-screen toggle button.  A corner overlay in the
        top-right of the window, sitting ABOVE the canvas (z-index 25).  Fixed
        positioning keeps it pinned regardless of letterbox bars; pointer-events
        are its own so taps here never reach the canvas/game.  Semi-transparent
@@ -262,7 +262,7 @@
   </style>
 </head>
 <body>
-  <!-- Port specific: splash, progress bar, and canvas all live INSIDE
+  <!-- splash, progress bar, and canvas all live INSIDE
        the viewport div so they are naturally clipped to the game-viewport
        rectangle (scale*960 x scale*640, flex-centered with black letterbox bars
        outside). resize() sets explicit CSS dimensions so they all coincide. -->
@@ -309,7 +309,7 @@
       <button id="restart-btn" tabindex="0">Tap to Restart</button>
     </div>
 
-    <!-- Port specific: full-screen toggle button.  Fixed to the top-right
+    <!-- full-screen toggle button.  Fixed to the top-right
          window corner, above the canvas (z-index 25).  Its own click/touch
          handler toggles fullscreen on #viewport (so the letterboxed canvas +
          black bars fill the screen) and requests landscape orientation.
@@ -328,7 +328,7 @@
   </div>
 
   <script>
-  /* Port specific: all overlay elements are inside the viewport div as absolute
+  /* all overlay elements are inside the viewport div as absolute
      siblings of the canvas.  resize() sizes the canvas, splash, loading cover,
      and progress bar to the letterboxed CSS rect.
      Black letterbox bars outside the 3:2 area are the viewport div's background. */
@@ -418,7 +418,7 @@
 
     resize();
     window.addEventListener('resize', resize);
-    /* Port specific: expose resize() so the fullscreen/orientation handler
+    /* expose resize() so the fullscreen/orientation handler
        (a separate script block / IIFE) can re-letterbox the canvas after the
        viewport changes on enter/exit fullscreen and on orientation change. */
     window._fnResize = resize;
@@ -445,7 +445,7 @@
      decide whether the download completed before giving up. */
   var _lastProgressPct  = 0;
 
-  /* Port specific: web autoplay -- boot-direct start.
+  /* web autoplay -- boot-direct start.
      Called when Module.calledRun is true (runtime loaded, BEFORE game init).
      Hides the loading UI (progress bar + cover + splash), then immediately
      signals fn_user_started() so BootWait proceeds without any tap overlay.
@@ -588,7 +588,7 @@
     setTimeout(_onFadeDone, 350);
   }
 
-  /* Port specific: web (#73) -- exposed so the C++ first-frame hook
+  /* web (#73) -- exposed so the C++ first-frame hook
      (mainEmscripten.cpp EmscriptenFrame) can trigger the splash fade once the
      canvas has actually rendered content, masking the few-frame blank flash. */
   window._fnFadeSplash = _removeOverlayFade;
@@ -601,7 +601,7 @@
     }
   }
 
-  /* Port specific: full-screen toggle + landscape-orientation request.
+  /* full-screen toggle + landscape-orientation request.
      -----------------------------------------------------------------------
      - The element we fullscreen is #viewport (the container wrapping the
        canvas + black letterbox bars), so the whole game rectangle fills the
@@ -744,7 +744,7 @@
   };
   </script>
 
-  <!-- Port specific: Module must be defined in its own <script> block,
+  <!-- Module must be defined in its own <script> block,
        separate from the helpers above.  Emscripten's HTML minifier
        processes each <script> block independently; mixing the helper
        functions and the Module definition in one block caused the
@@ -787,7 +787,7 @@
   };
 
   (function () {
-    /* Port specific: web autoplay -- boot-direct poll.
+    /* web autoplay -- boot-direct poll.
        Poll every 100ms: success path -- calledRun means the runtime started.
        _startDirectly() hides the loading UI and immediately calls fn_user_started()
        so BootWait proceeds without waiting for a tap. */
@@ -837,7 +837,7 @@
   })();
   </script>
 
-  <!-- Port specific: Emscripten injects the generated <script> tag here.
+  <!-- Emscripten injects the generated <script> tag here.
        This MUST be after the Module definition above. -->
   {{{ SCRIPT }}}
 </body>

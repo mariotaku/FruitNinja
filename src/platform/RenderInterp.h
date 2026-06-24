@@ -1,7 +1,7 @@
 #ifndef FN_PLATFORM_RENDERINTERP_H
 #define FN_PLATFORM_RENDERINTERP_H
 
-// Port specific: render interpolation -- lerp entity transforms between
+// render interpolation -- lerp entity transforms between
 // the previous and current simulation steps so motion is smooth at any
 // refresh rate.  ALL code in this file is gated behind FN_RENDER_INTERP
 // and is never compiled under __bada__ (cross-build / asm-verify).

@@ -13,7 +13,7 @@
 // SDL_FINGER* events from SDL_MOUSE* with finger id = SDL_TOUCH_MOUSEID.
 // This file therefore only handles SDL_FINGERDOWN/MOTION/UP.
 //
-// Port specific: binary is a strict 1:1 input->update->draw tick (the Bada
+// binary is a strict 1:1 input->update->draw tick (the Bada
 // OS polls touch once per frame). The SDL port separates this into two phases:
 //
 //   DrainSDLEvent() -- called once per display frame from pollInput().
@@ -72,14 +72,14 @@ public:
     // Initialize action hashes (call once after StringHash is available)
     void Init();
 
-    // Port specific: drain one SDL event into per-channel pending state.
+    // drain one SDL event into per-channel pending state.
     // TOUCH events (FINGERDOWN/MOTION/UP + mouse-as-touch) accumulate into
     // pendingDown/pendingUp/pendingPos; they are NOT dispatched to InputManager
     // here. Non-touch events (WINDOW/FOCUS/keyboard/mouse-button) are handled
     // inline as before. Called from pollInput() for every SDL_PollEvent result.
     void DrainSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
-    // Port specific: reconcile SDL live-finger state after all events are drained.
+    // reconcile SDL live-finger state after all events are drained.
     // Queries SDL_GetNumTouchDevices/GetTouchDevice/GetNumTouchFingers/GetTouchFinger
     // to detect fingers that SDL dropped a FINGERUP for, and marks them pendingUp.
     // Also checks SDL_GetMouseState for SDL_TOUCH_MOUSEID channels.
@@ -88,7 +88,7 @@ public:
     // read empty and spuriously release just-pressed fingers (#154 fix, web-safe).
     void ReconcileTouch();
 
-    // Port specific: dispatch accumulated touch state to InputManager for one sim tick.
+    // dispatch accumulated touch state to InputManager for one sim tick.
     // Dispatches pending TouchDown/Up edges for each channel, then one TouchMove at
     // the channel's current position for held fingers. No SDL live-set queries here.
     // Called from stepUpdate() BEFORE GameTaskUpdate.
@@ -97,23 +97,23 @@ public:
     // only a held-position TouchMove is dispatched (edges already consumed).
     void DispatchForSimTick();
 
-    // Port specific: legacy wrapper -- retained so existing callers that invoke
+    // legacy wrapper -- retained so existing callers that invoke
     // BeginFrame() are not broken. No-op now; dispatch is via DispatchForSimTick.
     void BeginFrame();
 
-    // Port specific: synthesize TouchUp for every held finger and release all
+    // synthesize TouchUp for every held finger and release all
     // channels. Called on SDL focus-loss / minimize to clear blade state before
     // the frame that runs while the app is backgrounded (#162).
     void ReleaseAllFingers();
 
-    // Port specific: legacy wrapper for ProcessSDLEvent -- retained for callers
+    // legacy wrapper for ProcessSDLEvent -- retained for callers
     // (scene_slash, scene_slash_blade) that forward events directly. Calls
     // DrainSDLEvent internally.
     void ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
 private:
     // Per-channel pending state, set by DrainSDLEvent, consumed by DispatchForSimTick.
-    // Port specific: these fields have no binary equivalent; they exist solely to
+    // these fields have no binary equivalent; they exist solely to
     // stage the once-per-tick dispatch that mirrors the binary's per-frame poll.
     bool pendingDown[16];   // a FINGERDOWN arrived for this channel since last flush
     bool pendingUp[16];     // a FINGERUP arrived for this channel since last flush
