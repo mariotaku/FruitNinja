@@ -1079,10 +1079,13 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // --- Bake text transform into vertex coords (binary-faithful, matches
     // 0x00199216..0x00199254 architecture) ---
     //
-    // ASM-verified: 2026-05-11 binary @ 0x00101c58, 0x00101964 (asm-inspector
-    // TODO: v1.6.1 re-pin exact instruction range (asm-inspector); owning fn likely Mortar::Font::DrawString @0x0010671c
-    // verdict (c) -- "Helper bypasses the matrix stack entirely. World coords
-    // are computed from scalars"). The binary's Font_DrawString writes
+    // ASM-verified: 2026-06-24 v1.6.1 Mortar::Font::DrawString @ 0x0024c7f0 (re-analyst)
+    //   (10-param Vector3-pos overload; per-glyph scalar-bake vertex stores
+    //    @ 0x0024d01c..0x0024d27c; matrix-stack flush transform @ 0x0024d36c..0x0024d384.
+    //    v1.5.x 0x00101c58/0x00101964 were the stale equivalents; 0x0010671c is a thunk
+    //    for the wrong 12-param overload.)
+    // "Helper bypasses the matrix stack entirely. World coords
+    // are computed from scalars". The binary's Font_DrawString writes
     // screen-space scalar math directly into the vertex buffer; it never
     // reads or writes m_Current during per-glyph submission. Per-glyph corner
     // emit is `Vec2 ctor` + `Vec2 operator+` + direct vstr.32 into the batch
