@@ -54,10 +54,11 @@ public:
     // +0x144: camera target position (shake lerps toward m_ShakeDir)
     Vec2 m_Target;
 
-    // +0x14C: float copy of ushort angle field (cast each UpdateCamera)
-    // v1.6.1 @ +0x14c. Note: v1.5.1 had m_field14c + m_field150 as a pair;
-    // v1.6.1 only lists one field here at +0x14C.
-    float m_field14c;
+    // +0x14C: written 0.0f by ctor; v1.6.1 UpdateCamera @ 0x1edf24 does NOT write
+    // or read it (the v1.5.1 (float)m_TiltPitch/(float)m_TiltYaw casts were dropped).
+    // Semantic unresolved in v1.6.1. Note: v1.5.1 had m_field14c + m_field150 as a
+    // pair; v1.6.1 only lists one field here at +0x14C. Reserved.
+    float m_reserved14c;  // purpose unknown
 
     // +0x150: lookAt saved each UpdateCamera frame.
     // v1.6.1 @ +0x150 (3 floats = Vec3, 12B).
@@ -157,7 +158,7 @@ static_assert(__builtin_offsetof(FruitCamera, m_TiltPitch)      == 0x136, "m_Til
 static_assert(__builtin_offsetof(FruitCamera, m_ShakeDir)       == 0x138, "m_ShakeDir wrong");
 static_assert(__builtin_offsetof(FruitCamera, m_ShakeAngle)     == 0x140, "m_ShakeAngle wrong");
 static_assert(__builtin_offsetof(FruitCamera, m_Target)         == 0x144, "m_Target wrong");
-static_assert(__builtin_offsetof(FruitCamera, m_field14c)       == 0x14C, "m_field14c wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_reserved14c)    == 0x14C, "m_reserved14c wrong");
 static_assert(__builtin_offsetof(FruitCamera, m_LookAt)         == 0x150, "m_LookAt wrong");
 static_assert(__builtin_offsetof(FruitCamera, m_Zoom)           == 0x15C, "m_Zoom wrong");
 static_assert(__builtin_offsetof(FruitCamera, m_RollOut)        == 0x160, "m_RollOut wrong");

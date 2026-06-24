@@ -152,7 +152,7 @@ struct GameTaskState {
         float m_ScoreStateField_0x110;  // +0x110: float write path (EndRetryLevel, 0.5f)
         struct {
             uint8_t _unused_0x110;      // byte 0 of float
-            bool field_0x111;           // +0x111: unknown flag cleared in step 10
+            bool m_reserved111;         // +0x111: flag cleared in step 10; purpose unknown
             bool initComplete;          // +0x112: GameInit-complete / re-entry guard
             uint8_t _pad_113;           // +0x113: padding
         };
@@ -221,7 +221,7 @@ static_assert(offsetof(GameTaskState, pBackgroundTexture)    == 0xFC,  "GameTask
 static_assert(offsetof(GameTaskState, pDeferredControl)      == 0x100, "GameTaskState::pDeferredControl must be at +0x100");
 static_assert(offsetof(GameTaskState, m_TimedModeAccumulator) == 0x10C, "GameTaskState::m_TimedModeAccumulator must be at +0x10C");
 static_assert(offsetof(GameTaskState, m_ScoreStateField_0x110) == 0x110, "GameTaskState::m_ScoreStateField_0x110 must be at +0x110");
-static_assert(offsetof(GameTaskState, field_0x111)           == 0x111, "GameTaskState::field_0x111 must be at +0x111");
+static_assert(offsetof(GameTaskState, m_reserved111)         == 0x111, "GameTaskState::m_reserved111 must be at +0x111");
 static_assert(offsetof(GameTaskState, initComplete)          == 0x112, "GameTaskState::initComplete must be at +0x112");
 static_assert(offsetof(GameTaskState, pAppState_x54)         == 0x114, "GameTaskState::pAppState_x54 must be at +0x114");
 static_assert(sizeof(GameTaskState)                          == 0x118, "sizeof(GameTaskState) must be 0x118");

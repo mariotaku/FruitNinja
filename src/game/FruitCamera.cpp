@@ -22,7 +22,7 @@ FruitCamera::FruitCamera()
       m_ShakeDir(Vec2::Zero()),           // +0x138 <- ldmia of `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
       m_ShakeAngle(0), _pad142(0),        // +0x140 NOT written by ctor; zeroed for port determinism
       m_Target(Vec2::Zero()),             // +0x144 <- same `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
-      m_field14c(0.0f),                   // +0x14c vstr s15 ; s15 = DAT_001edbf0 = 0.0f
+      m_reserved14c(0.0f),                // +0x14c vstr s15 ; s15 = DAT_001edbf0 = 0.0f
       m_LookAt(0.0f, 0.0f, 0.0f),         // +0x150 NOT written by ctor; zeroed for port determinism
       m_Zoom(1.0f),                       // +0x15c vstr s14 = 1.0f (0x3f800000)
       m_RollOut(0), _pad162(0),           // +0x160 strh r3(=0)
@@ -37,7 +37,7 @@ FruitCamera::FruitCamera()
     // ctor @ 0x1edb48 (v1.6.1) fully resolved from disassembly:
     //   m_ShakeDir/m_Target  <- `Zero` Vec2 global (GOT @ 0x002d882c -> 0x002d92a0), both (0,0)
     //   m_ZoomTarget         <- `Zero` Vec3 global (GOT @ 0x002d8248 -> 0x002d9288), (0,0,0)
-    //   m_field14c, m_ZoomT, m_ShakeIntensity  <- s15 = DAT_001edbf0 = 0.0f
+    //   m_reserved14c, m_ZoomT, m_ShakeIntensity  <- s15 = DAT_001edbf0 = 0.0f
     //   m_Zoom, m_ZoomScale  <- s14 = 1.0f
     //   m_TiltYaw/Pitch, m_CameraMode, m_pFollowEntity, m_RollOut  <- 0
     // Fields the binary ctor leaves UNwritten (heap garbage in the binary, but the
@@ -60,8 +60,8 @@ FruitCamera::~FruitCamera() {
 // ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180c8c..0x00180d0e (re-analyst) [v1.5.1].
 // v1.6.1 UpdateCamera at 0x1edf24 extends this with the zoom state machine.
 void FruitCamera::UpdateCamera(float dt) {
-    // RE-ported: 0x1edf24 — v1.6.1 UpdateCamera does NOT write m_field14c (+0x14c) at all.
-    // The v1.5.1 (float)m_TiltPitch / (float)m_TiltYaw casts were dropped; m_field14c retains ctor value.
+    // RE-ported: 0x1edf24 — v1.6.1 UpdateCamera does NOT write m_reserved14c (+0x14c) at all.
+    // The v1.5.1 (float)m_TiltPitch / (float)m_TiltYaw casts were dropped; m_reserved14c retains ctor value.
 
     UpdateShake(dt);
 

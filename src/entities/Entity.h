@@ -22,7 +22,8 @@ struct Renderer;
 //
 // Layout verified from ctor at 0x0019d88c (memset 0x3C bytes):
 //   +0x00: vtable (4B)
-//   +0x04: field_0x04 / uint32_t (4B) — RuntimeID or LoadEntity ID
+//   +0x04: m_RuntimeID / uint32_t (4B) — RuntimeID / LoadEntity ID; matched by
+//          ActorManager::FindByID against a trackerKey, and as the message senderId
 //   +0x08: m_TrackerID / uint16_t (2B) — EntityTracker spatial-tree key
 //   +0x0a: (2B gap)
 //   +0x0c: flags / uint8_t (1B)
@@ -57,8 +58,9 @@ namespace Mortar {
 // ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x001ea478 (asm-inspector)
 class Entity {
 public:
-    // +0x04: RuntimeID / loader field. Set by LoadEntity; unread at runtime.
-    uint32_t field_0x04;
+    // +0x04: RuntimeID / loader field. Set by LoadEntity; matched by
+    // ActorManager::FindByID (trackerKey) and used as the message senderId.
+    uint32_t m_RuntimeID;
 
     // +0x08: EntityTracker spatial-tree key. Assigned on spawn registration.
     // Binary @ Fruit::Init sets this->m_TrackerID = 0.
@@ -215,7 +217,7 @@ public:
 #ifdef __bada__
 // Binary-faithful layout asserts (cross-build only). Under __bada__, entityType
 // reverts to uint8_t matching the binary, so all post-m_RecycleFlag offsets hold.
-static_assert(offsetof(Entity, field_0x04)   == 0x04, "field_0x04 offset wrong");
+static_assert(offsetof(Entity, m_RuntimeID)  == 0x04, "m_RuntimeID offset wrong");
 static_assert(offsetof(Entity, m_TrackerID)  == 0x08, "m_TrackerID offset wrong");
 static_assert(offsetof(Entity, flags)        == 0x0C, "flags offset wrong");
 static_assert(offsetof(Entity, pos)          == 0x10, "pos offset wrong");
@@ -231,7 +233,7 @@ static_assert(sizeof(Entity)                 == 0x3C, "sizeof(Entity) wrong");
 // 8-byte vtable ptr on 64-bit, int-widened entityType, Col* at 8-byte pointer size.
 // Port specific: Emscripten (wasm32) has 4-byte pointers like Bada ARM32 so
 // these x64-specific offsets don't apply there; skip to avoid false failures.
-static_assert(offsetof(Entity, field_0x04)   == 0x08, "field_0x04 port offset drift");
+static_assert(offsetof(Entity, m_RuntimeID)  == 0x08, "m_RuntimeID port offset drift");
 static_assert(offsetof(Entity, m_TrackerID)  == 0x0C, "m_TrackerID port offset drift");
 static_assert(offsetof(Entity, flags)        == 0x10, "flags port offset drift");
 static_assert(offsetof(Entity, pos)          == 0x14, "pos port offset drift");

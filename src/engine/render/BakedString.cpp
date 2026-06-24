@@ -15,7 +15,7 @@ namespace Mortar {
 
 // Binary @ 0x0019789c (default ctor — zero-init)
 BakedString::BakedString()
-    : m_unknown0(0)
+    : m_reserved00(0)
     , m_pPageTextures(0)
     , m_PageCount(0)
     , m_pPageVertices(0)
@@ -27,7 +27,7 @@ BakedString::BakedString()
 
 // Binary @ 0x0019789c — explicit-construct entry; same body as Bake().
 BakedString::BakedString(Font* font, Utf8StringIterator iter, const Colour& colour)
-    : m_unknown0(0)
+    : m_reserved00(0)
     , m_pPageTextures(0)
     , m_PageCount(0)
     , m_pPageVertices(0)

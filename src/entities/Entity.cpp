@@ -16,7 +16,7 @@ static unsigned int  s_EntityHeapSize = 0;
 // memset(this, 0, 0x3C) then explicit assignments. Scale stays 0 from memset
 // (subclasses must set scale if they need 1.0). flags bit5 (NO_DESTRUCT) cleared.
 Entity::Entity()
-    : field_0x04(0)
+    : m_RuntimeID(0)
     , m_TrackerID(0)
     , flags(0)
     , m_RecycleFlag(0)

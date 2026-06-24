@@ -9,7 +9,7 @@
 #include <cstdint>
 
 // Binary layout (sizeof == 0x1C = 28):
-//   +0x00  uint32_t        m_unknown0       (struct-only; never touched by ctor/dtor/Draw)
+//   +0x00  uint32_t        m_reserved00     (struct-only; never touched by ctor/dtor/Draw)
 //   +0x04  SmartPtr<Texture>* m_pPageTextures (heap block [tag, count, SmartPtrs x N])
 //   +0x08  uint32_t        m_PageCount      (loop bound in dtor + Draw)
 //   +0x0C  QUADCUSTOMVERTEX** m_pPageVertices (per-page vertex-buffer array)
@@ -64,7 +64,7 @@ public:
     void LayoutToCircle(float);
 
 private:
-    uint32_t            m_unknown0;        // +0x00 struct-only (never written by known methods)
+    uint32_t            m_reserved00;      // +0x00 struct-only (never written by known methods); purpose unknown
     // +0x04 heap block: [tag@-2, count@-1, SmartPtr<Texture> x N]. Pointer stored is &block[2].
     // Port specific: binary types this SmartPtr<Texture2D>; the port merged Texture2D
     // into Texture (see Texture.h), so the page-texture refs are SmartPtr<Texture>.

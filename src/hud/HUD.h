@@ -11,7 +11,7 @@
 // Layout:
 //   +0x00: std::list<HUDControl*> controls  (8 bytes)
 //   +0x08: float scales[6]                  (24 bytes, all 1.0f at ctor)
-//   +0x20: float m_field20                  (ctor-UNINITIALIZED; TODO: v1.6.1 semantic unresolved)
+//   +0x20: float m_reserved20                  (ctor-UNINITIALIZED; TODO: v1.6.1 semantic unresolved)
 //   +0x24: float m_globalTimeScale          (1.0f sentinel written by HUD::Update each tick)
 class HUD {
 public:
@@ -25,7 +25,7 @@ public:
 
     // +0x20: ctor-uninitialized field; semantic not yet resolved.
     // TODO: v1.6.1 HUD::HUD @0x001ce208 -- identity of this field unresolved.
-    float m_field20;
+    float m_reserved20;
 
     // +0x24: slow-motion multiplier. 1.0 = normal speed, <1.0 = slow-mo.
     // Written 1.0f by HUD::Update each tick; SuperFruitControl/MainScreen write <1.0.
@@ -53,7 +53,7 @@ public:
 #include <cstddef>
 static_assert(sizeof(HUD) == 0x28, "HUD size mismatch (v1.6.1 @0x001ce208)");
 static_assert(__builtin_offsetof(HUD, scales)           == 0x08, "HUD::scales offset");
-static_assert(__builtin_offsetof(HUD, m_field20)        == 0x20, "HUD::m_field20 offset");
+static_assert(__builtin_offsetof(HUD, m_reserved20)        == 0x20, "HUD::m_reserved20 offset");
 static_assert(__builtin_offsetof(HUD, m_globalTimeScale) == 0x24, "HUD::m_globalTimeScale offset");
 #endif
 

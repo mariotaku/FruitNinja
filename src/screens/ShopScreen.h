@@ -159,10 +159,9 @@ public:
     // +0xAC: scroll position / animation offset (from item count + 0.5)
     float m_ScrollOffset;
 
-    // +0xB0: binary field at this offset (4 bytes, zero-init in ctor).
-    // Not named in Ghidra struct; present as a 4-byte gap between m_ScrollOffset
-    // and field_0xb4 in the binary record. Exact semantic not yet RE'd.
-    uint32_t field_0xb0;
+    // +0xB0: 4-byte field, zero-init in ctor; no read site identified.
+    // Sits as a 4-byte gap between m_ScrollOffset and m_AnimFrame. Reserved.
+    uint32_t m_reservedB0;  // purpose unknown
 
     // +0xB4: sin-wave animation frame counter (0..0x3FFC range)
     int m_AnimFrame;
@@ -271,7 +270,7 @@ struct ShopScreenLayoutAssert {
     static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
     static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
     static_assert(offsetof(ShopScreen, m_ScrollOffset)    == 0xac, "m_ScrollOffset offset");
-    static_assert(offsetof(ShopScreen, field_0xb0)        == 0xb0, "field_0xb0 offset");
+    static_assert(offsetof(ShopScreen, m_reservedB0)      == 0xb0, "m_reservedB0 offset");
     static_assert(offsetof(ShopScreen, m_AnimFrame)       == 0xb4, "m_AnimFrame offset");
     static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
     static_assert(sizeof(ShopScreen) == 0xbc, "ShopScreen size must match binary");

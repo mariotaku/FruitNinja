@@ -127,8 +127,8 @@ public:
     // +0x18: per-session totals (cleared at session start).
     std::map<uint32_t, SliceTotal> m_SessionTotals;
 
-    // +0x30: undocumented byte (reserved).
-    uint8_t  field_0x30;
+    // +0x30: written 0 by ctor; no read site found in binary or port. Reserved.
+    uint8_t  m_reserved30;  // purpose unknown
 
     // +0x31: non-zero when a game-in-progress save exists. Gates the
     // <que> ActiveGame block in SaveGame.
@@ -140,8 +140,8 @@ public:
     // +0x34: list of saved entity states for resume.
     std::list<EntityState> m_EntityStates;
 
-    // +0x3c: second dojo unlock flag (XML attr "p2pCancelled").
-    uint8_t  field_0x3c;
+    // +0x3c: P2P-cancelled flag, serialised as XML attr "p2pCancelled".
+    uint8_t  m_bP2PCancelled;
 
     // +0x40: global all-time high score (XML attr "highscore").
     int      m_highscore;
@@ -208,7 +208,7 @@ public:
 
     // +0x130..+0x13c: in-progress timers + camera shake.
     float    m_BombHitTimer;       // +0x130
-    float    m_field134;           // +0x134 (default -1.0; XML "nextComboBonus")
+    float    m_NextComboBonus;     // +0x134 (default -1.0; XML "nextComboBonus")
     float    m_ShakeIntensity;     // +0x138
     float    m_ShakeDecay;         // +0x13c (default 1.0)
 
@@ -255,9 +255,8 @@ public:
     // +0x1f8: save format version (must match GetVersionTotal()).
     int      m_VersionInfo;
 
-    // +0x1fc: unknown byte (v1.6.1 NEW). Default 0. NOT serialised.
-    // TODO: semantics of field_0x1fc_v161 unknown; name preserved from binary struct offset.
-    uint8_t  field_0x1fc_v161;             // +0x1fc
+    // +0x1fc: written 0 by ctor (v1.6.1 NEW); NOT serialised; no read site found. Reserved.
+    uint8_t  m_reserved1fc;                // +0x1fc  purpose unknown
     // +0x1fd..+0x1ff: 3 bytes implicit padding.
 
     // +0x200: date stamp of most-recent GameOver per mode (XML attr "%s_dolg").

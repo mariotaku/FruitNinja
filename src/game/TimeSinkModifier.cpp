@@ -90,7 +90,7 @@ void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score, Mortar::E
 GameModifier* TimeSinkModifier::Clone() {
     TimeSinkModifier* c = new TimeSinkModifier();
     c->m_Duration    = m_Duration;
-    c->field_0x08    = field_0x08;
+    c->m_reserved08  = m_reserved08;
     c->m_BonusAccum  = m_BonusAccum;
     c->m_bDeferred   = m_bDeferred;
     c->m_DeferTime   = m_DeferTime;

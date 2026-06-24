@@ -29,10 +29,10 @@
 
 // Matches binary ctor @ 0x00129e74. Defaults from doc + RE.
 FruitSaveData::FruitSaveData()
-    : field_0x30(0)
+    : m_reserved30(0)
     , m_bHasActiveGame(0)
     , m_bDojoBGUnlocked(0)
-    , field_0x3c(0)
+    , m_bP2PCancelled(0)
     , m_highscore(0)
     , m_CurrentScore(0)
     , m_CurrentMissCount(0)
@@ -55,7 +55,7 @@ FruitSaveData::FruitSaveData()
     , newBestThisGame(0)
     , secondaryFlag(0)
     , m_BombHitTimer(0.0f)
-    , m_field134(-1.0f)
+    , m_NextComboBonus(-1.0f)
     , m_ShakeIntensity(0.0f)
     , m_ShakeDecay(1.0f)                // 0x3F800000
     , m_pCurrentWave_P1(0)
@@ -67,7 +67,7 @@ FruitSaveData::FruitSaveData()
     , m_blitzForceSpawnedCounter(0)
     , m_blitzSpawnTime(0.0f)
     , m_VersionInfo(0)
-    , field_0x1fc_v161(0)
+    , m_reserved1fc(0)
     , m_BestComboLength(0)
 {
     for (int i = 0; i < 4; i++) {
@@ -389,7 +389,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
 
     root.SetAttribute("critical_chance", save->m_CriticalChance);
     root.SetAttribute("rated",         save->m_bDojoBGUnlocked ? "true" : "false");
-    root.SetAttribute("p2pCancelled",  save->field_0x3c        ? "true" : "false");
+    root.SetAttribute("p2pCancelled",  save->m_bP2PCancelled   ? "true" : "false");
 
     // SliceTotal elements: cumulative totals first, then session-only.
     // Range-for replaced with iterator form for GCC 4.4 (asm-verify cross
@@ -474,7 +474,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que.SetAttribute("go_fact",         save->m_GameOverField4);
         que.SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
         que.SetAttribute("go_setScore",     save->secondaryFlag ? "true" : "false");
-        que.SetAttribute("nextComboBonus",  save->m_field134);
+        que.SetAttribute("nextComboBonus",  save->m_NextComboBonus);
         que.SetAttribute("shake_time",      save->m_ShakeIntensity);
         que.SetAttribute("shake_max_time",  save->m_ShakeDecay);
 
@@ -542,7 +542,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
     if (ratedAttr) save->m_bDojoBGUnlocked = (strcmp(ratedAttr, "true") == 0) ? 1 : 0;
 
     const char* p2pAttr = root.Attribute("p2pCancelled");
-    if (p2pAttr) save->field_0x3c = (strcmp(p2pAttr, "true") == 0) ? 1 : 0;
+    if (p2pAttr) save->m_bP2PCancelled = (strcmp(p2pAttr, "true") == 0) ? 1 : 0;
 
     // SliceTotal elements (cumulative + session).
     for (TiXmlElement e = root.FirstChildElement("SliceTotal"); e;
@@ -643,7 +643,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
             if (showHs) save->newBestThisGame = (strcmp(showHs, "true") == 0) ? 1 : 0;
             const char* setScore = que.Attribute("go_setScore");
             if (setScore) save->secondaryFlag = (strcmp(setScore, "true") == 0) ? 1 : 0;
-            que.QueryFloatAttribute("nextComboBonus", &save->m_field134);
+            que.QueryFloatAttribute("nextComboBonus", &save->m_NextComboBonus);
             que.QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
             que.QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
             // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).

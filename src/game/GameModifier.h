@@ -40,8 +40,11 @@ public:
     // +0x04: XML duration (initial timer)
     float m_Duration;
 
-    // +0x08: scratch field (ctor writes 0.0f; OnDeferComplete folds it into m_BonusAccum)
-    float field_0x08;
+    // +0x08: scratch float, copied verbatim by every subclass Clone(). No write
+    // site in the base ctor (disasm @ 0x00133378 only touches +0x4/+0xc/+0x10/
+    // +0x14/+0x18/+0x19/+0x1c) and no read site in OnDeferComplete @ 0x00140890.
+    // Semantic unresolved; preserved for Clone fidelity. Reserved.
+    float m_reserved08;  // purpose unknown
 
     // +0x0c: bonus/duration accumulator; decremented each frame; expiry when <= 0
     float m_BonusAccum;
@@ -69,7 +72,7 @@ public:
 
     GameModifier()
         : m_Duration(0.0f)
-        , field_0x08(0.0f)
+        , m_reserved08(0.0f)
         , m_BonusAccum(0.0f)
         , m_bConfigured(0)
         , _pad11{0, 0, 0}
@@ -92,7 +95,7 @@ public:
     virtual int UpdateSpecific(float dt) = 0;
 
     // [5] OnDeferComplete @ 0x140890 — called by Update when defer fires;
-    // folds field_0x08 into m_BonusAccum; clamps via PowerUpManager multipliers
+    // clamps m_BonusAccum via PowerUpManager multipliers
     // and two cached StringHash powerup-name ids.
     virtual void OnDeferComplete(bool unused, float* pExtra);
 

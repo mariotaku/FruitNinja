@@ -172,7 +172,7 @@ void GameModeScreen::UnLoadContent() {
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : m_pBackButton(nullptr)        // +0xa0
     , m_ButtonDelay(-1.0f)          // +0xa4 (binary init)
-    , field_0xa8(-1.0f)             // +0xa8 (binary: set to -1 in state-0 transition)
+    , m_TransitionTimer(-1.0f)      // +0xa8 (binary: set to -1 in state-0 transition)
     , m_pClassicButton(nullptr)     // +0xac
     , m_pZenButton(nullptr)         // +0xb0
     , m_SecondaryAlpha(-2.5f)       // +0xb4 DAT_0013e5a0

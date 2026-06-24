@@ -726,7 +726,7 @@ void WaveManager::Resume() {
     if (gameOver) {
         SkipToGameOver(sd->m_GameOverScreenState,
                        sd->m_GameOverTimer,
-                       sd->m_field134,
+                       sd->m_NextComboBonus,
                        sd->m_BombHitTimer,
                        /*field5=*/-1);
     } else if ((respawned || !sd->m_WaveStates.empty())

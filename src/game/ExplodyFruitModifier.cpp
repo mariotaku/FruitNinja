@@ -286,7 +286,7 @@ void ExplodyFruitModifier::FruitWasSliced(
 GameModifier* ExplodyFruitModifier::Clone() {
     ExplodyFruitModifier* c = new ExplodyFruitModifier();
     c->m_Duration       = m_Duration;
-    c->field_0x08       = field_0x08;
+    c->m_reserved08     = m_reserved08;
     c->m_BonusAccum     = m_BonusAccum;
     c->m_bDeferred      = m_bDeferred;
     c->m_DeferTime      = m_DeferTime;
