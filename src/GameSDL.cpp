@@ -6,6 +6,7 @@
 #include "game/GameWork.h"
 #include <SDL.h>
 #include "platform/InputTranslatorSDL.h"
+#include "platform/FixedStepDriver.h"
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -130,12 +131,11 @@ bool Game::init(void* win, void* gl) {
     return true;
 }
 
-// Port specific: one complete game tick — poll events, update, render, present.
-// Extracted from run() so the Emscripten main loop can call it as a callback
-// (emscripten_set_main_loop_arg) without the surrounding while-loop or SDL_Delay.
-// Native Game::run() below calls this each iteration; behaviour is identical.
-void Game::frameTick() {
-    // === SDL events -> InputManager ===
+// Port specific: poll SDL events and pump the input translator for one display
+// frame.  Called ONCE per display frame (before accumulator drain) so held-
+// finger TouchDown_N is not re-dispatched per catch-up step, which would
+// change slice behaviour on high-refresh displays.
+void Game::pollInput() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
 #ifdef FN_DEBUG_TOUCH
@@ -210,85 +210,84 @@ void Game::frameTick() {
     // Per-frame shim pump: re-dispatches TouchDown_N for held fingers.
     // Logic lives inside InputTranslatorSDL::BeginFrame (poll stays in the shim).
     if (inputTranslator) inputTranslator->BeginFrame();
+}
 
-    // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
-
-    // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
-    // then passes dt to update + draw functions
+// Port specific: one simulation step.
+// Matches FruitNinja::Draw (0x1824e0): dt=0 -> SystemManager::Update(&dt)
+// writes fixed 1/60 -> GameTaskUpdate(dt).  g_DebugTimeScale scales dt for
+// the slow-motion debug path only; game logic always sees 1/60 at 1.0x scale.
+void Game::stepUpdate() {
     game_work.dt = 0.0f;
     SystemManager::GetInstance().Update(&game_work.dt);
-
-    // Port specific: debug time-scale. We scale dt so every
-    // dt-integrating update (physics, velocity, acceleration)
-    // slows smoothly. Per-tick lerps (alpha fades, state timer
-    // decays) don't read dt, so they read FN::g_DebugTimeScale
-    // directly at the lerp site -- at 1.0x this is a no-op, at
-    // 0.1x the lerp advances 10x less per frame. Result: both
-    // categories slow uniformly AND render every real frame, so
-    // animations stay smooth at slow speed.
     game_work.dt *= FN::g_DebugTimeScale;
-
-    // Update: 3-state dispatcher
     GameTaskUpdate(game_work.dt);
+}
 
-    // Per-frame GL setup. Binary calls DisplayManagerBada::BeginFrame
-    // (0x0019dfec) which handles clears, depth/blend state reset, and
-    // matrix stack reset. glViewport isn't touched by BeginFrame -- our
-    // port re-applies it each frame so window resizes are picked up.
+// Port specific: one render pass (no simulation).
+// Per-frame GL setup mirrors DisplayManagerBada::BeginFrame (0x0019dfec).
+// glViewport is re-applied each call so window resizes are picked up immediately.
+void Game::renderFrame() {
     int ww, wh;
     SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
     glViewport(0, 0, ww, wh);
     Mortar::DisplayManager::GetInstance().BeginFrame();
-
-    // Draw: state-specific rendering
     GameTaskDraw(game_work.dt);
-
-    // Port specific: capture screenshot before swap so GL_BACK has the finished frame.
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
-
-    // Present
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
 }
 
-// Matches: FruitNinja::Draw (the real game tick) called in a loop
-// Original: OnTimerExpired fires every 10ms (100fps), dt fixed at 1/60
+// Port specific: one complete game tick — poll, step, render.
+// Kept as a thin wrapper so existing callers (legacy / external) are unaffected.
+void Game::frameTick() {
+    pollInput();
+    stepUpdate();
+    renderFrame();
+}
+
+// Port specific: main game loop with fixed-step accumulator.
+// The accumulator decouples simulation rate (60 ticks/s) from display refresh
+// so the game runs at correct wall-clock speed on 60/120/144 Hz panels.
+// vsync (SDL_GL_SetSwapInterval(1) in mainSDL.cpp) paces the render; the
+// accumulator owns the sim rate.  SDL_Delay(1) only fires when steps==0
+// (minimised / vsync off) to avoid a busy-spin.
 void Game::run() {
-    static const Uint32 FRAME_MS = 10;  // original Bada timer interval = 10ms
+    fn::FixedStepDriver driver;
+    Uint64 last = SDL_GetPerformanceCounter();
+    double freq = static_cast<double>(SDL_GetPerformanceFrequency());
 
     while (running) {
-        Uint32 frameStart = SDL_GetTicks();
+        Uint64 now = SDL_GetPerformanceCounter();
+        double ms = static_cast<double>(now - last) * 1000.0 / freq;
+        last = now;
 
-        frameTick();
+        pollInput();
+        if (!running) break;
 
-        // Frame pacing: original Bada timer fires every 10ms (100fps)
-        // All game logic uses fixed dt=1/60, tuned for this tick rate
-        Uint32 frameTime = SDL_GetTicks() - frameStart;
-        if (frameTime < FRAME_MS) {
-            SDL_Delay(FRAME_MS - frameTime);
+        int steps = driver.advance(ms);
+        for (int i = 0; i < steps && running; ++i) {
+            stepUpdate();
+        }
+        renderFrame();
+
+        if (steps == 0) {
+            SDL_Delay(1);
         }
     }
 }
 
-// Test-only: run a fixed number of game ticks (no SDL_Delay, no input).
-// Used by tests/test_screen.cpp to drive a few frames after pushing a
-// screen so its Update + Draw run against a real GL context.
+// Test-only: run a fixed number of game ticks (no SDL_Delay, no accumulator).
+// Wall-clock-free and deterministic: each iteration drains only SDL_QUIT then
+// calls stepUpdate() + renderFrame() exactly once.  No full pollInput() so
+// held-finger shim and focus-loss logic don't fire during headless tests.
+// Behaviour is identical to the pre-Phase-1 implementation; headless tests
+// (test_screen, test_gameplay, etc.) are unaffected by the run() rewrite.
 void Game::runFrames(int frameCount) {
-    for (int i = 0; i < frameCount && running; i++) {
+    for (int i = 0; i < frameCount && running; ++i) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) running = false;
         }
-
-        game_work.dt = 0.0f;
-        SystemManager::GetInstance().Update(&game_work.dt);
-        game_work.dt *= FN::g_DebugTimeScale;
-        GameTaskUpdate(game_work.dt);
-
-        int ww, wh;
-        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
-        glViewport(0, 0, ww, wh);
-        Mortar::DisplayManager::GetInstance().BeginFrame();
-        GameTaskDraw(game_work.dt);
-        SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+        stepUpdate();
+        renderFrame();
     }
 }
