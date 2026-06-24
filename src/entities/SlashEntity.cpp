@@ -661,9 +661,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // Binary UpdateTouchDown @0x1e9f08: when below the move threshold but the
         // stroke already has points, the binary does `else if (0 < m_PointCount)
         // goto LAB_001ea3d0` -- it skips AddPoint but STILL re-arms m_BladeActive.
-        // Re-arming here is load-bearing: DrawSlice shifts the latch each frame, so
-        // two consecutive slow frames without a re-arm decay it 1->2->0; the next
-        // per-frame TouchDown then sees m_BladeActive==0, calls Reset() (wiping the
+        // Re-arming here is load-bearing: Update (sim rate) shifts the latch each
+        // tick, so two consecutive ticks without a re-arm decay it 1->2->0; the next
+        // per-tick TouchDown then sees m_BladeActive==0, calls Reset() (wiping the
         // trail -> a visibly disconnected segment) AND re-advances the disco mod
         // colour -- splitting one swipe into multiple differently-coloured pieces.
         // ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1ea3d0 (asm-inspector)
@@ -752,9 +752,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
 
 void SlashEntity::OnTouchReleased() {
     // Port specific: binary has no OnTouchReleased -- the blade latch (m_BladeActive)
-    // decays naturally via DrawSlice (1->2->0) when dispatch stops delivering touches.
-    // This body only clears the trail emitter on the SDL FINGERUP edge to prevent the
-    // emitter streaming at a frozen lift position (PollHeldFingers edge case).
+    // decays naturally via Update (1->2->0, sim rate) when dispatch stops delivering
+    // touches. This body only clears the trail emitter on the SDL FINGERUP edge to
+    // prevent the emitter streaming at a frozen lift position (PollHeldFingers edge case).
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended bladeActive=%d pointCount=%d",
              m_FingerId, (int)m_BladeActive, m_PointCount);
@@ -1429,6 +1429,44 @@ void SlashEntity::Update(float dt) {
     }
 
     // =====================================================================
+    // DIFFERS: original = m_BladeActive latch shift in DrawSlice @0x1e83b0
+    // (v1.6.1); moved to Update @0x1e867c because the SDL/web port decouples
+    // render (display rate) from the fixed 60Hz sim tick, whereas the binary's
+    // DrawSlice IS the once-per-tick poll -- shifting at render rate decays the
+    // latch faster than OnTouchActive re-arms it at sim rate (>60Hz), causing a
+    // spurious mid-stroke Reset.
+    // Sequence (sim rate): re-arm via OnTouchActive |=1 runs before Update within
+    // the same tick (DispatchForSimTick before GameTaskUpdate), so by the time
+    // this shift runs the re-arm for this tick has already been applied.
+    //   held: old=1, nv=(1<<1)&2=2; next tick: re-arm sets bit0 -> old=3,
+    //         nv=(3<<1)&2=2; stays 2 while held. released (no re-arm):
+    //         old=2, nv=0 -> burst fires once.
+    // Isolated to the runtime port via #ifndef __bada__: asm-verify (__bada__)
+    // keeps the binary-faithful shift in DrawSlice @0x1e83b0, so the cross-build
+    // stays byte-exact; only the render/sim-decoupled runtime shifts here.
+    // =====================================================================
+#ifndef __bada__
+    {
+        unsigned char old = (unsigned char)m_BladeActive;
+        if (old != 0) {
+            int nv = (old << 1) & 2;
+            m_BladeActive = nv;
+            if (nv == 0) {
+                // old==2 -> release edge: fire burst ONCE.
+                if (g_ScaleFlag1) CreateGhost();
+                // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
+                if (g_SecondHash != 0) {
+                    PSPParticleEmitter* eBurst =
+                        PSPParticleManager::GetInstance().AddEmitter(
+                            g_SecondHash, nullptr, /*persistent=*/false);
+                    if (eBurst) eBurst->m_Pos = pos;
+                }
+            }
+        }
+    }
+#endif // !__bada__
+
+    // =====================================================================
     // 2. TRAIL EMITTER MANAGEMENT
     //    Binary gate: m_BladeActive != 0.
     // =====================================================================
@@ -1982,17 +2020,23 @@ void SlashEntity::Draw(Renderer& /*r*/) {
 // DrawSlice -- v1.6.1 @ 0x1e83b0
 // Called from GameDraw's 16-slot loop, NOT from ActorManager::Draw.
 //
-// m_BladeActive latch (binary @ 0x1e83b0):
+// Binary m_BladeActive latch (binary @ 0x1e83b0):
 //   old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) burst; }
 //   s_slashes=0; // unconditional after the latch block
-// OnTouchActive re-arms m_BladeActive |= 1 every active frame.
-// Sequence: held -> old=1, nv=2, no burst; released -> old=2, nv=0, burst fires ONCE.
-// Burst emitter is ModParticlesReleaseHash (g_SecondHash), NOT the contact hash.
+// PORT DIFFERS: latch shift + release burst moved to Update (sim rate) to stay
+// lockstep with OnTouchActive re-arm at 60Hz. DrawSlice now reads m_BladeActive
+// read-only. See DIFFERS comment in Update for the full rationale.
 // Draw if m_PointCount > 3: reset+upload modelview, bind blade.tex, DrawTriStrip
 // both buffers with count = m_PointCount + 1 (includes head-cap vertex).
 // ---------------------------------------------------------------------------
 void SlashEntity::DrawSlice() {
-    // m_BladeActive latch (v1.6.1 DrawSlice @0x1e83b0).
+    // DIFFERS (runtime only): the m_BladeActive latch shift + release burst is
+    // moved to Update @0x1e867c for the SDL/web runtime, because that build
+    // decouples render (display rate) from the fixed 60Hz sim tick; shifting at
+    // render rate decays the latch faster than OnTouchActive re-arms it at sim
+    // rate (>60Hz), causing a spurious mid-stroke Reset. asm-verify (__bada__)
+    // keeps the binary-faithful shift HERE so DrawSlice @0x1e83b0 stays byte-exact.
+#ifdef __bada__
     {
         unsigned char old = (unsigned char)m_BladeActive;
         if (old != 0) {
@@ -2002,7 +2046,6 @@ void SlashEntity::DrawSlice() {
                 // old==2 -> release edge: fire burst ONCE.
                 if (g_ScaleFlag1) CreateGhost();
                 // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
-                // ASM-spec v1.6.1 DrawSlice @0x1e8400: burst uses ModParticlesReleaseHash.
                 if (g_SecondHash != 0) {
                     PSPParticleEmitter* eBurst =
                         PSPParticleManager::GetInstance().AddEmitter(
@@ -2012,7 +2055,10 @@ void SlashEntity::DrawSlice() {
             }
         }
     }
+#endif // __bada__
+
     // Unconditional clamp: binary @ 0x1e8444 runs after the latch block every DrawSlice.
+    // s_slashes is incremented per sim tick (UpdatePoints) and cleared per render frame here.
     if (s_slashes > 0) {
         s_slashes = 0;
     }
@@ -2020,8 +2066,11 @@ void SlashEntity::DrawSlice() {
     // Gate: m_PointCount > 3 (binary @ 0x1e83b0).
     if (m_PointCount <= 3) {
 #ifdef FN_DEBUG_TOUCH
-        LOG_DEBUG("SLASH", "DrawSlice[%d]: early-return pointCount=%d (<=3)",
-                 m_FingerId, m_PointCount);
+        // Only log when points are actually accumulating; idle channels at
+        // pointCount==0 would spam this every frame for all 16 fingers.
+        if (m_PointCount > 0)
+            LOG_DEBUG("SLASH", "DrawSlice[%d]: early-return pointCount=%d (<=3)",
+                     m_FingerId, m_PointCount);
 #endif
         return;
     }
@@ -2355,12 +2404,12 @@ void SlashEntity::SetModColours(
 bool SlashEntity::TouchDown(InputEvent* event) {
     // DIFFERS: binary SlashEntity::TouchDown @0x1ea420 gates Reset() only on
     //   m_BladeActive==0 -- it relies on the once-per-10ms-tick poll guaranteeing
-    //   >=2 DrawSlice frames (latch decay) between a physical lift and the next
-    //   press. The SDL/web port drains lift+repress in one pollInput() with no
-    //   DrawSlice between, so the latch is still armed and Reset() is skipped ->
-    //   the new slice bridges from the prior slice's tail. Force the break on a
-    //   genuine press-edge (INPUT_ACTION_DOWN_EDGE, set only in SDL_FINGERDOWN,
-    //   never in PollHeldFingers) to replicate the binary's behaviour.
+    //   >=2 Update ticks (latch decay, now in Update not DrawSlice) between a
+    //   physical lift and the next press. The SDL/web port drains lift+repress in
+    //   one pollInput() with no Update between, so the latch is still armed and
+    //   Reset() is skipped -> the new slice bridges from the prior slice's tail.
+    //   Force the break on a genuine press-edge (INPUT_ACTION_DOWN_EDGE, set only
+    //   in SDL_FINGERDOWN, never in PollHeldFingers) to replicate the behaviour.
     //   Multi-touch: g_pSlashEntities[ch] gives each finger its own SlashEntity,
     //   so a press-edge on channel N resets only channel N's blade; channels M!=N
     //   are separate instances and are unaffected.
