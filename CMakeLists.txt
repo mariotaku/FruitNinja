@@ -7,6 +7,13 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 option(FN_ASM_VERIFY "Cross-compile for asm-verify (ARM Thumb-2, object files only)" OFF)
+# Port specific: compile-time render interpolation toggle.
+# Default ON for host/web builds; always forced OFF under FN_ASM_VERIFY
+# (cross-build must never see RenderInterp.* or unordered_map churn).
+option(FN_RENDER_INTERP "Enable render interpolation for smooth high-refresh motion" ON)
+if(FN_ASM_VERIFY)
+    set(FN_RENDER_INTERP OFF)
+endif()
 
 project(FruitNinja LANGUAGES CXX)
 
@@ -407,6 +414,15 @@ endif()
 option(FRUITNINJA_BOMB_TRACE "Enable per-frame Bomb::Update trace logging" OFF)
 if (FRUITNINJA_BOMB_TRACE)
     target_compile_definitions(fruit-ninja-game PRIVATE MORTAR_BOMB_TRACE=1)
+endif()
+
+# Port specific: propagate FN_RENDER_INTERP as a compile definition so
+# RenderInterp.h / GameSDL.cpp / mainEmscripten.cpp can gate on it.
+if (FN_RENDER_INTERP)
+    target_compile_definitions(fruit-ninja-game PUBLIC FN_RENDER_INTERP=1)
+    message(STATUS "FN_RENDER_INTERP = ON")
+else()
+    message(STATUS "FN_RENDER_INTERP = OFF")
 endif()
 
 if (NOT EMSCRIPTEN)

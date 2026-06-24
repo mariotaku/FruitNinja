@@ -6,3 +6,14 @@ if(NOT FN_ASM_VERIFY)
         ${CMAKE_CURRENT_SOURCE_DIR}/InputTranslatorSDL.cpp
     )
 endif()
+
+# Port specific: RenderInterp.cpp is platform-side (excluded from asm-verify
+# automatically because the entire fruit-ninja-game target is excluded when
+# FN_ASM_VERIFY is ON).  We additionally gate on FN_RENDER_INTERP so the
+# source list reflects the compile-time choice (avoids compiling a file that
+# evaluates to an empty TU when FN_RENDER_INTERP is OFF).
+if(NOT FN_ASM_VERIFY AND FN_RENDER_INTERP)
+    target_sources(fruit-ninja-game PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/RenderInterp.cpp
+    )
+endif()
