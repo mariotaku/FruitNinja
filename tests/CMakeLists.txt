@@ -257,6 +257,21 @@ fn_add_game_test(test_slash_reset test_slash_reset.cpp)
 add_test(NAME slash_reset COMMAND test_slash_reset)
 set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
 
+# InputTranslatorSDL drain/dispatch split invariant (#173 bridge-to-origin fix).
+# Verifies that DrainSDLEvent() accumulates pending state WITHOUT dispatching,
+# ReconcileTouch() marks stale fingers without SDL live queries in DispatchForSimTick,
+# and DispatchForSimTick() consumes pending state. Pins the invariant that
+# m_PointCount (AddPoint) only advances inside a tick that also runs UpdatePoints.
+# Covers: FINGERDOWN drain-then-flush, FINGERMOTION position-only update (#163),
+# multiple motions -> single flush-move (catch-up invariant G), FINGERUP deferred
+# release, held-finger single-dispatch-per-tick, ReleaseAllFingers atomicity (#162),
+# ReconcileTouch headless path (#154).
+# Uses FN_TEST to expose pending-state accessors; SDL_INIT_EVENTS only (no GL/audio).
+fn_add_game_test(test_input_tick_invariant test_input_tick_invariant.cpp)
+target_compile_definitions(test_input_tick_invariant PRIVATE FN_TEST)
+add_test(NAME input_tick_invariant COMMAND test_input_tick_invariant)
+set_tests_properties(input_tick_invariant PROPERTIES TIMEOUT 30)
+
 # ---- Standalone scene test harnesses (visual dev tools, NOT CTest tests) ----
 # scene_fruit_scene.exe  -- single watermelon in a ballistic arc
 # scene_slash_scene.exe  -- blade trail driven by mouse/touch drag
