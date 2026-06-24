@@ -11,10 +11,10 @@
 // Layout:
 //   +0x00: vptr (port) / InputDevice base (binary fns*)
 //   +0x04: std::list<InputActionMapper*> actionMappers (8B, from InputDevice base)
-//   +0x0c: uint32_t field_0xc   (ctor-zero)
-//   +0x10: uint32_t field_0x10  (ctor-zero)
-//   +0x14: uint32_t field_0x14  (ctor-zero)
-//   +0x18: uint32_t field_0x18  (ctor-zero)
+//   +0x0c: uint32_t m_ActiveTouchId (ctor-zero)
+//   +0x10: uint32_t m_LastTouchX    (ctor-zero)
+//   +0x14: uint32_t m_LastTouchY    (ctor-zero)
+//   +0x18: uint32_t m_EventStamp    (ctor-zero)
 // Total: 12 (base) + 16 (derived) = 28.
 
 namespace Mortar {
@@ -50,20 +50,23 @@ public:
     // Port-side dispatch (not a binary vtable slot).
     virtual void              DispatchEvent(InputEvent* event);
 
-    // Binary-faithful derived fields (ctor-zero). Semantics resolved by RE'ing
-    // InputDeviceBada::Update @ 0x00195a2c / Reset @ 0x00195c00:
-    //   field_0xc  = active/tracked touch id (0 = none). Set from
+    // Binary-faithful derived fields (ctor-zero). Names match the Ghidra
+    // v1.6.1 InputDeviceBada struct (m_ActiveTouchId/m_LastTouchX/m_LastTouchY/
+    // m_EventStamp); semantics confirmed by RE'ing InputDeviceBada::Update /
+    // Reset:
+    //   m_ActiveTouchId = active/tracked touch id (0 = none). Set from
     //               Touch::GetMostRecentTouch/GetAnyTouch; cleared on release.
-    //   field_0x10 = last touch X (signed; kept as uint32_t to match binary
-    //               4-byte slot, cast to int for delta math).
-    //   field_0x14 = last touch Y (signed; same storage note as X).
-    //   field_0x18 = monotonically-incrementing event stamp; bumped once per
+    //   m_LastTouchX = last touch X (Ghidra types it as int/signed; kept as
+    //               uint32_t to match the binary 4-byte slot, cast to int for
+    //               delta math).
+    //   m_LastTouchY = last touch Y (same signed/storage note as X).
+    //   m_EventStamp = monotonically-incrementing event stamp; bumped once per
     //               Update() and passed as the timestamp arg to every emitted
     //               AxisEvent/ButtonPressed.
-    uint32_t field_0xc;    // +0x0c  active touch id
-    uint32_t field_0x10;   // +0x10  last touch X
-    uint32_t field_0x14;   // +0x14  last touch Y
-    uint32_t field_0x18;   // +0x18  event stamp counter
+    uint32_t m_ActiveTouchId;  // +0x0c  active touch id (0 = none)
+    uint32_t m_LastTouchX;     // +0x10  last touch X (signed in binary)
+    uint32_t m_LastTouchY;     // +0x14  last touch Y (signed in binary)
+    uint32_t m_EventStamp;     // +0x18  event stamp counter
 
     // Port-only fields (tail; not counted in binary sizeof).
     // These implement the port-side callback dispatch path which in the
