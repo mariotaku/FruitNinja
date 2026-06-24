@@ -5,14 +5,14 @@
 
 // Defunct: online multiplayer -- no-op stub; binary nm: @ 0x00149430
 WaveSyncPacket::WaveSyncPacket()
-    : m_WaveIdx(0), m_WaveData14(0), m_Score(0.0f), m_reserved1c(0), m_Flag20(0), m_reserved24(0)
+    : m_WaveIdx(0), m_WaveData18(0), m_Score(0.0f), m_reserved20(0), m_Flag24(0)
 {
-    _pad21[0] = _pad21[1] = _pad21[2] = 0;
+    _pad25[0] = _pad25[1] = _pad25[2] = 0;
 }
 
 // Defunct: online multiplayer -- no-op stub; binary nm: @ 0x00149360
-WaveSyncPacket::WaveSyncPacket(long waveIdx, long waveData14, float score)
-    : m_WaveIdx(waveIdx), m_WaveData14(waveData14), m_Score(score), m_reserved1c(0), m_Flag20(0), m_reserved24(0)
+WaveSyncPacket::WaveSyncPacket(long waveIdx, long waveData18, float score)
+    : m_WaveIdx(waveIdx), m_WaveData18(waveData18), m_Score(score), m_reserved20(0), m_Flag24(0)
 {
-    _pad21[0] = _pad21[1] = _pad21[2] = 0;
+    _pad25[0] = _pad25[1] = _pad25[2] = 0;
 }

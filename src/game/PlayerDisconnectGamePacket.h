@@ -5,8 +5,8 @@
 // Defunct: P2P MP -- stub per stub-don't-skip policy.
 //
 // Packet type ID = 104, total size = 0x58 (88 bytes).
-// Mortar::NetworkPacket base occupies +0x00..+0x0f (16 bytes).
-// PlayerDisconnectGamePacket own fields start at +0x10 (72 bytes of payload).
+// Mortar::NetworkPacket base occupies +0x00..+0x13 (20 bytes).
+// PlayerDisconnectGamePacket own fields start at +0x14 (68 bytes of payload).
 // Binary: PacketFactory::Create @ 0x157b20 allocates this for id=104.
 
 #include "engine/network/NetworkPacket.h"
@@ -14,8 +14,8 @@
 
 class PlayerDisconnectGamePacket : public Mortar::NetworkPacket {
 public:
-    // Own fields from +0x10 to +0x57 (72 bytes of payload)
-    uint8_t m_payload[72]; // +0x10..+0x57
+    // Own fields from +0x14 to +0x57 (68 bytes of payload)
+    uint8_t m_payload[68]; // +0x14..+0x57
 
     // Defunct: P2P MP disconnect packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=104)
     PlayerDisconnectGamePacket();

@@ -5,12 +5,11 @@
 // Defunct: P2P MP -- stub per stub-don't-skip policy.
 //
 // Packet type ID = 103 (case 0x67), total size = 0x1c (28 bytes).
-// Mortar::NetworkPacket base occupies +0x00..+0x0f (16 bytes).
-// StartGamePacket own fields start at +0x10 (12 bytes of own fields).
+// Mortar::NetworkPacket base occupies +0x00..+0x13 (20 bytes).
+// StartGamePacket own fields start at +0x14 (8 bytes of own fields).
 // Binary ctor @ v1.6.1 StartGamePacket::StartGamePacket @ 0x00158dc0:
-//   +0x10  int32  m_Flags     (init 0x18bb8 = game-mode flags bitmask)
-//   +0x14  int32  m_GameSeed  (init 0)
-//   +0x18  int32  m_field18   (init 0)
+//   +0x14  int32  m_Flags     (always init 0x18bb8 = game-mode flags bitmask)
+//   +0x18  int32  m_GameSeed  (init from ctor param, or 0 for default ctor)
 // Binary: PacketFactory::Create @ 0x157b20 allocates this for id=103 (case 0x67).
 
 #include "engine/network/NetworkPacket.h"
@@ -18,15 +17,14 @@
 
 class StartGamePacket : public Mortar::NetworkPacket {
 public:
-    int  m_Flags;        // +0x10 -- game-mode flags bitmask; init 0x18bb8
-    int  m_GameSeed;     // +0x14 -- random seed for game sync; init 0
-    int  m_reserved18;   // +0x18 -- no ctor-set / serialize site in binary; purpose unknown
+    int  m_Flags;      // +0x14 -- game-mode flags bitmask; always init 0x18bb8
+    int  m_GameSeed;   // +0x18 -- random seed for game sync; init from ctor param
 
-    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=103 / case 0x67)
+    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x00158dc0
     StartGamePacket();
 
-    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x157b20 (id=103 / case 0x67)
-    explicit StartGamePacket(int flags);
+    // Defunct: P2P MP game-start packet -- no-op stub; v1.6.1 binary @ 0x00158dc0
+    explicit StartGamePacket(int gameSeed);
 
     virtual ~StartGamePacket() {}
 };
