@@ -124,9 +124,12 @@ struct Game : public Mortar::MortarGame {
     void frameTick();               // Port specific: one game tick; thin wrapper for the three below
     void pollInput();               // Port specific: SDL event loop + BeginFrame (once per display frame)
     void stepUpdate();              // Port specific: dt=0 + SystemManager::Update + GameTaskUpdate
-    // Port specific: alpha = fractional sim residual in [0,1) for render interpolation.
-    // Callers inside run() and mainEmscripten.cpp pass driver.alpha(); frameTick() passes 0.
-    void renderFrame(float alpha = 0.0f);
+    // Port specific: alpha = fractional sim residual [0,1) for render interpolation.
+    // steps = number of sim steps advanced this display frame (0 = pure interp frame,
+    // >=1 = at least one sim step ran).  On steps==0 the Draw-path dt is zeroed so
+    // particle/HUD/SliceEffect integrators don't over-advance on high-refresh displays
+    // (#171).  Callers pass the loop's step count; frameTick() and runFrames() pass 1.
+    void renderFrame(float alpha = 0.0f, int steps = 1);
     void runFrames(int frameCount);
 };
 

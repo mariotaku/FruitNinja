@@ -123,7 +123,7 @@ static void EmscriptenFrame(void* arg) {
         fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
     }
-    game->renderFrame(static_cast<float>(g_driver.alpha()));
+    game->renderFrame(static_cast<float>(g_driver.alpha()), steps);
     // Port specific: FPS counter overlay -- additive, after all game draw calls.
     FN::DebugFps_Draw(s_emFps);
 

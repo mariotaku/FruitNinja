@@ -243,8 +243,10 @@ void Game::stepUpdate() {
 // Port specific: one render pass (no simulation).
 // Per-frame GL setup mirrors DisplayManagerBada::BeginFrame (0x0019dfec).
 // glViewport is re-applied each call so window resizes are picked up immediately.
-// alpha is the fractional sim residual [0,1) for render interpolation; 0 = no interp.
-void Game::renderFrame(float alpha) {
+// alpha = fractional sim residual [0,1) for render interpolation; 0 = no interp.
+// steps = sim steps advanced this display frame; 0 on pure-interp frames (120 Hz
+// second render with no new sim tick).
+void Game::renderFrame(float alpha, int steps) {
     int ww, wh;
     SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
     glViewport(0, 0, ww, wh);
@@ -252,11 +254,20 @@ void Game::renderFrame(float alpha) {
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().ApplyForDraw(alpha);
 #endif
+    // Port specific: #168 -- Draw-path effects integrate by dt; on interpolated
+    // frames (no sim step) zero the Draw dt so they don't outrun the 60Hz sim.
+    // Affects: particleDt in GameDraw, HUD anim timers, SliceEffect timer,
+    // ShopScreen dial-alpha.  On steps>=1 leave dt unchanged (particles already
+    // advanced in the sim step(s); scaling by steps would over-advance).
+    float savedDt = game_work.dt;
+    if (steps == 0) game_work.dt = 0.0f;
     GameTaskDraw(game_work.dt);   // UNMODIFIED: binary-faithful, asm-verified
+    game_work.dt = savedDt;
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().RestoreAfterDraw();
 #endif
     // Port specific: FPS counter overlay -- additive, after all game draw calls.
+    // Intentionally outside the dt-zero block: DebugFps_Draw does not use game_work.dt.
     FN::DebugFps_Draw(s_currentFps);
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
@@ -272,7 +283,7 @@ void Game::frameTick() {
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
-    renderFrame(0.0f);
+    renderFrame(0.0f, 1);
 }
 
 // Port specific: main game loop with fixed-step accumulator.
@@ -331,7 +342,7 @@ void Game::run() {
             fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
         }
-        renderFrame(static_cast<float>(driver.alpha()));
+        renderFrame(static_cast<float>(driver.alpha()), steps);
 
         if (!vsyncOn) {
             double frameMs = static_cast<double>(SDL_GetPerformanceCounter() - frameStart) * 1000.0 / freq;
@@ -357,6 +368,6 @@ void Game::runFrames(int frameCount) {
             if (ev.type == SDL_QUIT) running = false;
         }
         stepUpdate();
-        renderFrame();
+        renderFrame(0.0f, 1);
     }
 }

@@ -135,6 +135,10 @@ int main(int argc, char* argv[]) {
     game_work.gameMode = 0;  // classic
     FN::PrepareForLevelStart();
     game_work.bM_bPaused = 0;
+    // Set taskStateIndex=2 (Game state) so SnapshotAfterStep / ApplyForDraw pass
+    // the gameplay gate added by #172.  Without this the interp singleton no-ops
+    // and the test trivially passes without exercising any interpolation logic.
+    game_work.taskStateIndex = 2;
 
     // Run enough frames that at least a couple of fruits and bombs spawn.
     h.RunHeadless(180);
