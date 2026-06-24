@@ -897,7 +897,8 @@ void WaveManager::NewGame() {
     }
 }
 
-// ASM-verified: 2026-06-24 v1.6.1 WaveManager::PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (re-analyst)
+// ASM-verified: 2026-06-24 v1.6.1 WaveManager::PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (asm-inspector)
+//   Cross-compile matches binary instruction-for-instruction: ldrb game_work+0x4 == 2, movne/moveq.
 bool WaveManager::PowersEnabled() {
     // Binary: ldrb game_work+0x4 (1-byte gameMode) == 2 (GAME_MODE_ARCADE); no Game::GetInstance guard.
     return game_work.gameMode == Mortar::GAME_MODE_ARCADE;

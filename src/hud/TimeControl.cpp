@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cmath>
 #include "game/GameWork.h"
+#include "entities/SuperFruitControl.h"
 
 // DAT_001621ec / DAT_0016215c = 60.9 (Arcade/MP starting time)
 static const float ARCADE_START_TIME = 60.9f;
@@ -121,7 +122,11 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x001c0a48 (re-analyst)
+// ASM-verified: 2026-06-24 v1.6.1 TimeControl::Update @ 0x001c0a48 (asm-inspector)
+//   Count-down branch: two independent PowersEnabled gates @0x001c0afc/@0x001c0b80 with
+//   IsInSuperFruitState between them overriding dt to 0.0 (DAT_001c0e54) @0x001c0b70 (true
+//   freeze); m_StopClockAccum +0x68, m_SlowClockMult +0x6c. Gate structure + field offsets
+//   instruction-faithful.
 void TimeControl::Update(float dt) {
     // 0x001c0a48
     float entrySizeX = size.x;   // cached before GetInstance call (binary s16)
@@ -174,10 +179,21 @@ void TimeControl::Update(float dt) {
                     goto LAB_00162818;
                 }
                 m_PowerupOverlay[0] = '\0';
-                m_TimeRemaining -= dt * (pum ? pum->m_SlowClockMult : 1.0f);
+            }
+            // v1.6.1 @0x001c0b70 -- super-fruit freezes the clock: override dt to 0.0
+            // (asm @0x001c0b74 vldr s15 <- DAT_001c0e54 = 0.0f; vmovne s17). The decrement
+            // below then subtracts 0 -> the timer is paused (true freeze) while a super fruit
+            // is on screen. IsInSuperFruitState @0x001b9828 reads a global singleton.
+            float effDt = dt;
+            if (SuperFruitControl::IsInSuperFruitState()) {
+                effDt = 0.0f;
+            }
+            // v1.6.1 @0x001c0b80 -- second, INDEPENDENT PowersEnabled() gate (separate call).
+            if (WaveManager::PowersEnabled()) {
+                PowerUpManager* pum2 = PowerUpManager::GetInstance();
+                m_TimeRemaining -= effDt * (pum2 ? pum2->m_SlowClockMult : 1.0f);
             } else {
-                m_PowerupOverlay[0] = '\0';
-                m_TimeRemaining -= dt;
+                m_TimeRemaining -= effDt;
             }
 
             // GameOver trigger.
