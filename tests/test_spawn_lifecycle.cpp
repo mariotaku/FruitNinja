@@ -96,7 +96,7 @@ static void DumpWave(int frame, WAVE_INFO* w) {
            w->m_WaveDt, w->m_SpawnerCount,
            w->m_OverideProbabilityPool,
            w->m_SpecialFruits.size(),
-           w->m_Chance, w->m_CurrentChance, w->field_0x34);
+           w->m_Chance, w->m_CurrentChance, w->m_RevisitCounter);
     for (int i = 0; i < w->m_SpawnerCount; ++i) {
         DumpSpawner(i, w->m_pSpawners[i]);
     }
