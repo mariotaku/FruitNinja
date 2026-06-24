@@ -439,9 +439,10 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         }
 
         // Sine-wave oscillation on size
-        // RE-ported: binary @ 0x00148adc (v1.6.1, re-analyst spec) — m_SinIdx += dt*32764.0f*m_Freq
-        //   DAT_00148ca4=32764.0f; SinIdx period == port's, so 65536.0f was 2x too fast.
-        img.m_SinIdx += (uint16_t)(img.m_Freq * 32764.0f * dt);
+        // ASM-verified: 2026-06-24T00:00Z v1.6.1 ScreenEffect::Update @ 0x00148adc (asm-inspector)
+        //   m_SinIdx += dt*32760.0f*m_Freq; multiplier loaded at 0x00148ad8 from
+        //   DAT_00148ca4 = 0x46fff000 = 32760.0f (32764 would be 0x46fff800). 65536.0f was 2x too fast.
+        img.m_SinIdx += (uint16_t)(img.m_Freq * 32760.0f * dt);
         float sinVal = SinIdx(img.m_SinIdx);
 
         // Lerp size between SizeIn and SizeOut using sinVal
