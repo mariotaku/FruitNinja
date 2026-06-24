@@ -359,6 +359,7 @@
     var splashImg    = document.getElementById('splash-img');
     var loadingCover = document.getElementById('loading-cover');
     var progressWrap = document.getElementById('progress-bar-wrap');
+    var buildOverlay = document.getElementById('fn-build');
 
     function resize() {
       var ww = window.innerWidth, wh = window.innerHeight;
@@ -377,6 +378,14 @@
         splashImg.style.height = ch + 'px';
         splashImg.style.left   = Math.floor((ww - cw) / 2) + 'px';
         splashImg.style.top    = Math.floor((wh - ch) / 2) + 'px';
+      }
+
+      /* Build-id overlay: pin to the SPLASH's bottom-left corner (not the
+         window's) so it sits on the splash image even when letterboxed.
+         (wh-ch)/2 is the gap from the window bottom up to the splash bottom. */
+      if (buildOverlay) {
+        buildOverlay.style.left   = (Math.floor((ww - cw) / 2) + 6) + 'px';
+        buildOverlay.style.bottom = (Math.floor((wh - ch) / 2) + 4) + 'px';
       }
 
       /* Loading cover + progress bar: both centre on the splash's baked
