@@ -275,38 +275,23 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     (void)window;
 }
 
-// Port specific: reconcile SDL live-finger state after all drain events are processed.
-// MUST be called from pollInput() ONLY -- the SDL live-set queries
-// (SDL_GetNumTouchDevices / GetTouchDevice / GetNumTouchFingers / GetTouchFinger)
-// are only valid right after the SDL event pump. On emscripten, calling these from
-// stepUpdate would read empty and spuriously release just-pressed fingers.
-//
-// #154 fix: detects fingers for which SDL dropped a FINGERUP (finger left the
-// canvas, browser cancelled the touch, etc.) and marks them pendingUp so
-// DispatchForSimTick will release them on the next sim tick.
-//
-// Guard: when SDL_GetNumTouchDevices()==0 (no real touch hardware, headless tests),
-// skip the live-set check for non-MOUSEID channels -- synthetic SDL_PushEvent
-// injections do not register fingers with SDL's touch tracking.
-// Also guard: when liveCount==0 and numDevices>0, the hardware is present but
-// currently reports no fingers. In this case we DO reconcile (any held channel
-// with numDevices>0 but not in the live set was dropped by the OS).
+// Port specific: reconcile only the MOUSE channel after the drain pass (pollInput).
+// Real touch channels are event-driven (FINGERDOWN active / FINGERUP -> pendingUp);
+// their state lives in the per-channel array and is polled per sim tick. We do NOT
+// query the SDL touch live-set (GetNumTouchFingers etc.): on emscripten it reads
+// empty / mismatched even mid-drag, which spuriously released the active finger
+// (tap instead of drag). Only SDL_GetMouseState (reliable) reconciles the mouse
+// channel, catching a missed desktop MOUSEBUTTONUP. If a real touch FINGERUP is ever
+// dropped on web, that channel sticks until the next FINGERDOWN -- acceptable vs.
+// breaking every drag.
 void InputTranslatorSDL::ReconcileTouch() {
-    // Build live fingerId set from all touch devices.
-    SDL_FingerID liveIds[64];
-    int liveCount = 0;
-
-    int numDevices = SDL_GetNumTouchDevices();
-    for (int di = 0; di < numDevices && liveCount < 64; ++di) {
-        SDL_TouchID tid = SDL_GetTouchDevice(di);
-        int nf = SDL_GetNumTouchFingers(tid);
-        for (int fi = 0; fi < nf && liveCount < 64; ++fi) {
-            SDL_Finger* f = SDL_GetTouchFinger(tid, fi);
-            if (f) {
-                liveIds[liveCount++] = f->id;
-            }
-        }
-    }
+    // Touch finger down/up is maintained PURELY by SDL events (FINGERDOWN -> channel
+    // active, FINGERUP -> pendingUp) -- the event-driven state array is the source of
+    // truth, polled per sim tick. We deliberately do NOT reconcile real-touch channels
+    // against SDL_GetNumTouchFingers: on emscripten that live set reads empty (or with
+    // mismatched ids) even MID-DRAG, so the query spuriously releases the active finger
+    // (tap instead of drag). Only the SDL_TOUCH_MOUSEID channel is reconciled, via the
+    // reliable SDL_GetMouseState, to catch a missed desktop MOUSEBUTTONUP.
 
     // Check for the mouse button being held (covers SDL_TOUCH_MOUSEID channel).
     Uint32 mouseButtons = SDL_GetMouseState(NULL, NULL);
@@ -330,33 +315,10 @@ void InputTranslatorSDL::ReconcileTouch() {
             continue;
         }
 
-        // Real touch finger: check against SDL live set.
-        // Port specific: only reconcile against a NON-EMPTY live set.
-        //   - numDevices==0: no touch hardware (headless / synthetic SDL_PushEvent
-        //     injections don't register with SDL touch tracking).
-        //   - liveCount==0: on emscripten/web SDL_GetNumTouchFingers reports 0 live
-        //     fingers even MID-DRAG (the touch device exists but the live-finger
-        //     array isn't maintained), so reconciling against an empty set would
-        //     release the active finger every frame -> "tap instead of drag".
-        // In both cases the query is unreliable, so skip and rely on the real
-        // FINGERUP. The reconcile only fires when liveCount>0 -- a populated set
-        // where THIS finger's absence is a genuine dropped-FINGERUP (#154).
-        if (numDevices == 0 || liveCount == 0) {
-            continue;
-        }
-        bool found = false;
-        for (int li = 0; li < liveCount; ++li) {
-            if (liveIds[li] == fid) { found = true; break; }
-        }
-        if (!found && !pendingUp[ch]) {
-            // SDL no longer reports this finger as down -- FINGERUP was dropped.
-            // Mark pendingUp so DispatchForSimTick will release it.
-            pendingUp[ch]   = true;
-            pendingDown[ch] = false;
-            pendingEdge[ch] = false;
-            TLOG("ReconcileTouch: finger %lld not in live set, ch=%d -> pendingUp\n",
-                 (long long)fid, ch);
-        }
+        // Real touch channel: event-driven only. Active until a real FINGERUP
+        // arrives (DrainSDLEvent sets pendingUp). No SDL live-set reconcile --
+        // unreliable on emscripten and the cause of tap-instead-of-drag.
+        (void)fid;
     }
 }
 
