@@ -123,9 +123,12 @@ static void EmscriptenFrame(void* arg) {
         fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
     }
+    // Port specific: feed the current FPS to renderFrame so DebugFps_Draw
+    // (called inside renderFrame, before SDL_GL_SwapWindow) shows the right value.
+    // The desktop run() loop does this via s_currentFps in GameSDL.cpp; here we
+    // use the web-specific s_emFps accumulator and push it in via setCurrentFps.
+    game->setCurrentFps(s_emFps);
     game->renderFrame(static_cast<float>(g_driver.alpha()), steps);
-    // Port specific: FPS counter overlay -- additive, after all game draw calls.
-    FN::DebugFps_Draw(s_emFps);
 
     // Port specific: web (#73) -- fade the DOM loading splash out once the game has
     // actually rendered a few frames.  The shell keeps the splash fully opaque over

@@ -240,6 +240,12 @@ void Game::stepUpdate() {
     GameTaskUpdate(game_work.dt);
 }
 
+// Port specific: allow platform main loops (mainEmscripten) to feed the FPS value
+// that DebugFps_Draw reads inside renderFrame.
+void Game::setCurrentFps(float fps) {
+    s_currentFps = fps;
+}
+
 // Port specific: one render pass (no simulation).
 // Per-frame GL setup mirrors DisplayManagerBada::BeginFrame (0x0019dfec).
 // glViewport is re-applied each call so window resizes are picked up immediately.

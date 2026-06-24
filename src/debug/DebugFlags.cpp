@@ -6,6 +6,7 @@
 #ifndef __bada__
 
 #include "DebugFlags.h"
+#include "debug/Logger.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
 #include "hud/HUDControl.h"
@@ -433,10 +434,18 @@ static Mortar::FontCacheObjectTTF* EnsureFpsFontCache() {
     if (!s_FpsTTFFont.IsValid()) {
         s_FpsTTFFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
         s_FpsFontCache = 0;
+        if (!s_FpsTTFFont.IsValid()) {
+            LOG_WARN("DebugFps", "Font::Create(fontstruetype/gangofchinese.ttf) returned null -- FPS overlay will not render");
+            return 0;
+        }
     }
-    if (!s_FpsTTFFont.IsValid()) return 0;
-    if (!s_FpsFontCache)
+    if (!s_FpsFontCache) {
         s_FpsFontCache = Mortar::FontTTFRegistry::GetInstance().Lookup(s_FpsTTFFont.Get());
+        if (!s_FpsFontCache) {
+            LOG_WARN("DebugFps", "FontTTFRegistry::Lookup returned null -- FPS overlay will not render");
+            return 0;
+        }
+    }
     return s_FpsFontCache;
 }
 
@@ -475,25 +484,31 @@ void DebugFps_Draw(float fps) {
 
     if (!s_FpsBaked) return;
 
-    // Restore game ortho so the coordinates match game space (centered 480x320).
+    // Restore game ortho so the coordinates match game space.
+    // Coordinate convention (from docs/engine/coordinate-system.md):
+    //   X axis: -240 (left edge) to +240 (right edge)  -- horizontal
+    //   Y axis: -160 (bottom edge) to +160 (top edge)  -- vertical
     r->SetupGameOrtho();
 
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    mm.UploadModelViewOnly();
+    // BakedStringTTF::Draw sets its own GL state (blend, texture, no cull).
+    // SetupGameOrtho updates m_CachedProjView which GetMVP() reads inside Draw.
+    // No additional GL state setup needed here.
 
-    // Top-left corner in centered game space:
-    // X axis: +160 = top,  -160 = bottom  (landscape)
-    // Y axis: -240 = left, +240 = right   (landscape)
-    // Small margin from the edges so text is not clipped.
-    static const float kMarginX = 5.0f;   // inset from top  edge (+160 side)
-    static const float kMarginY = 8.0f;   // inset from left edge (-240 side)
-    static const float kZ       = -0.1f;  // slightly in front of everything
-    static const float kSize    = 12.0f;
+    // Top-left corner anchor.
+    // align=0x4: hAlign=0 (left -- text extends rightward from anchor X),
+    //            vAlign=4 (no alignOffY -- baseline at anchor Y, glyphs extend
+    //                      upward by their bearingY).
+    // At size 12, bearingY ~= 10 units; set anchor Y to +148 so the glyph top
+    // lands near +158, a few units below the top edge (+160).
+    // Anchor X = -240 + 5 = -235, just inside the left edge.
+    static const float kAnchorX = -235.0f;  // left edge -240 + 5 margin
+    static const float kAnchorY =  148.0f;  // top edge +160 - ~12 margin
+    static const float kZ       =   -0.1f;  // in front of game content
 
-    const Vec3 anchor(160.0f - kMarginX - kSize, -240.0f + kMarginY, kZ);
+    const Vec3 anchor(kAnchorX, kAnchorY, kZ);
     const Vec2 scale(1.0f, 1.0f);
-    s_FpsBaked->Draw(anchor, scale, 0.0f, 0xf);
+    // align 0x4: bits 0-1 = 0 (left), bits 2-3 = 4 (vAlign=4, no y offset).
+    s_FpsBaked->Draw(anchor, scale, 0.0f, 0x4);
 }
 
 } // namespace FN
