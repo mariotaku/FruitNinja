@@ -16,6 +16,7 @@
 #include "particle/PSPParticleManager.h"
 #include "hud/MenuButton.h"
 #include "hud/SliceEffect.h"
+#include "util/MemoryPool.h"
 #include "hud/MissControl.h"
 #include "game/BombHit.h"
 #include "game/ScoreState.h"
@@ -1289,9 +1290,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // v1.6.1 Fruit::CollisionResponse @0x001dd500. Binary builds sliceInfo as:
     //   x = m_SliceArcAngle / -182.0 + 90.0   (degrees-offset)
     //   y = bladeSpeed * 0.4                   (impulse length)
+    // v1.6.1 Fruit::CollisionResponse @0x001de53c: AddSlice with 6 args.
+    //   modelIdx = 0 (normal) or 1 (crit), fruit = this, rateMul = 1.0
     const float sliceAngleDeg = (float)(int16_t)m_SliceArcAngle / -182.0f + 90.0f;
     const float sliceLength   = bladeSpeed * 0.4f;
-    FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
+    AddSlice(Vec3(sliceAngleDeg, sliceLength, 1.0f), pos.x, pos.y,
+             isCritical ? 1 : 0, this, pos.z);
 
     // Score, save totals, powerup, combo and achievements are gated exactly as
     // the binary does (v1.6.1 Fruit::CollisionResponse @0x001dd500):
@@ -1493,10 +1497,14 @@ void Fruit::Slice() {
         //   infoA.x = m_SliceArcAngle / -182.0 + 60.0
         //   infoB.x = m_SliceArcAngle / -182.0 - 60.0
         //   infoA/B.y = impulse * 0.4 * 0.7
+        // v1.6.1 Fruit::Slice @0x001dcba0: two crit slice lines at +/-60 deg.
+        //   rateMul=1.0, modelIdx=0, fruit=(Fruit*)1 (sentinel, not real ptr)
         const float critBase = (float)(int16_t)m_SliceArcAngle / -182.0f;
         const float critLen  = impulse * 0.4f * 0.7f;
-        FN::SliceEffect_Add(pos, critBase + 60.0f, critLen, true);
-        FN::SliceEffect_Add(pos, critBase - 60.0f, critLen, true);
+        AddSlice(Vec3(critBase + 60.0f, critLen, 1.0f), pos.x, pos.y,
+                 0, (Fruit*)1, pos.z);
+        AddSlice(Vec3(critBase - 60.0f, critLen, 1.0f), pos.x, pos.y,
+                 0, (Fruit*)1, pos.z);
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00176f1e -- stale v1.5.x) -- splatCount = *(int*)(*(GOT+DAT_00177060)),
         // the configured juice-burst count global (read_memory @ 0x001F3E20 = 10),
@@ -1864,7 +1872,9 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
 }
 
 
-// Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
+// Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24.
+// Also creates s_pool (capacity=100) and loads s_sliceModel[0/1/3] when fruitInfo==0
+// (first call), matching the lazy-init guard @0x001e10c4.
 void Fruit::LoadInfo() {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -1893,8 +1903,168 @@ static uint8_t* s_FruitModelsRaw = nullptr;          // raw allocation base (hea
 static FruitModelInfo* s_FruitModels = nullptr;      // -> raw + 8 (first element)
 static int s_FruitModelCount = 0;                    // number of elements
 
-static Mortar::SmartPtr<Mortar::Model> s_SliceFxModel;
-static Mortar::SmartPtr<Mortar::Model> s_SliceFxCritModel;
+// s_sliceModel[4]: slice-effect model array.
+// [0] = slice_fx.mmd, [1] = slice_fx_crit.mmd, [2] = unused, [3] = slice_fx.mmd
+// Loaded by Fruit::LoadFruitModels @0x001e09b4, indexed by SliceEffect::Node::m_ModelIdx.
+static Mortar::SmartPtr<Mortar::Model> s_sliceModel[4];
+
+// Intrusive doubly-linked list for SliceEffect::Node (20 bytes, matches Mortar::List layout).
+// v1.6.1 AddSlice @0x001dc990 calls AddHead; DrawSlices @0x001dae7c iterates via Remove.
+struct SliceNodeList {
+    void*         m_pFreeList;    // +0x00: unused (no FreeList in pool path)
+    SliceEffect::Node* m_pHead;  // +0x04
+    SliceEffect::Node* m_pTail;  // +0x08
+    unsigned int  m_Count;       // +0x0c
+    short         m_OwnsFreeList;// +0x10
+    short         m_Active;      // +0x12
+
+    SliceNodeList()
+        : m_pFreeList(0), m_pHead(0), m_pTail(0),
+          m_Count(0), m_OwnsFreeList(0), m_Active(0) {}
+
+    void AddHead(SliceEffect::Node* n) {
+        n->m_pPrev = 0;
+        n->m_pNext = m_pHead;
+        if (m_pHead) m_pHead->m_pPrev = n;
+        m_pHead = n;
+        if (!m_pTail) m_pTail = n;
+        ++m_Count;
+        m_Active = 1;
+    }
+
+    void Remove(SliceEffect::Node* n) {
+        if (n->m_pPrev) n->m_pPrev->m_pNext = n->m_pNext;
+        else            m_pHead = n->m_pNext;
+        if (n->m_pNext) n->m_pNext->m_pPrev = n->m_pPrev;
+        else            m_pTail = n->m_pPrev;
+        n->m_pNext = 0;
+        n->m_pPrev = 0;
+        if (m_Count > 0) --m_Count;
+    }
+
+    SliceEffect::Node* begin() { return m_pHead; }
+};
+
+static SliceNodeList s_slices;
+static Mortar::MemoryPool<SliceEffect::Node> s_pool;
+
+// AddSlice -- v1.6.1 @0x001dc990
+// Mangles: _Z8AddSlice8_Vector3IfEffiP5Fruitf
+//   v.x = angleDeg, v.y = impulse, v.z = rateMul
+//   posX/posY/posZ: world position components (split across arg slots)
+//   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
+//   fruit: dedup/clamp sentinel (real Fruit* or 0/1/3)
+void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
+{
+    SliceEffect::Node local;
+    memset(&local, 0, sizeof(local));
+    local.m_Impulse  = v.y;
+    local.m_AngleDeg = v.x;
+    local.m_Pos      = Vec3(posX, posY, posZ);
+    local.m_pFruit   = fruit;
+    local.m_ModelIdx = modelIdx;
+    local.m_RateMul  = v.z;
+
+    // Crit SFX: if impulse > 2.5 and 1-in-3 chance, play Air-Whoosh variant.
+    // v1.6.1 @0x001dc990 (GOT-relative SFX name resolution).
+    // TODO: confirm Air-Whoosh sfx names @0x001dc990
+    if (v.y > 2.5f && Math::g_Random.Rand32(3) == 0) {
+        const char* sfxName = nullptr;
+        uint32_t pick = Math::g_Random.Rand32(3);
+        if (pick == 0)      sfxName = "Air-Whoosh-Hard";
+        else if (pick == 1) sfxName = "Air-Whoosh-Med";
+        else                sfxName = "Air-Whoosh-Soft";
+        if (sfxName && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
+        }
+    }
+
+    // Dedup: walk s_slices; expire (set m_Timer=6.0) any earlier node
+    // whose m_pFruit key matches this fruit/ident (all but the first hit).
+    // v1.6.1 @0x001dc990: +0x1c (m_pFruit) is the dedup key; action = expire.
+    {
+        SliceEffect::Node* n = s_slices.begin();
+        while (n) {
+            SliceEffect::Node* next = n->m_pNext;
+            if (n->m_pFruit == fruit) {
+                n->m_Timer = 6.0f;
+            }
+            n = next;
+        }
+    }
+
+    SliceEffect::Node* n = s_pool.Pop();
+    if (!n) return;
+    *n = local;
+    s_slices.AddHead(n);
+}
+
+// DrawSlices -- v1.6.1 @0x001dae7c
+// Combined update+draw pass. pass==false draws modelIdx!=3; pass==true draws modelIdx==3.
+void DrawSlices(float dt, bool pass)
+{
+    SliceEffect::Node* n = s_slices.begin();
+    while (n) {
+        SliceEffect::Node* next = n->m_pNext;
+
+        float rate = (n->m_ModelIdx != 0) ? 0.75f : 1.0f;
+        n->m_Timer += dt * n->m_RateMul * 40.0f * rate;
+
+        // Fruit-link clamp: if the linked fruit has been sliced, clear the link;
+        // clamp timer to minimum 3.0 while the link was active.
+        if (n->m_pFruit) {
+            // Sentinel check: only real Fruit* instances have m_bSliced.
+            // Sentinels 0/1/3 must not be dereferenced -- check size_t > 3.
+            uintptr_t fp = (uintptr_t)n->m_pFruit;
+            if (fp > 3) {
+                if (n->m_pFruit->m_bSliced) {
+                    n->m_pFruit = 0;
+                }
+            }
+            if (n->m_Timer < 3.0f) {
+                n->m_Timer = 3.0f;
+            }
+        }
+
+        if (n->m_Timer < 6.0f) {
+            if (n->m_Timer >= 0.0f) {
+                // pass gate: pass==false draws modelIdx!=3; pass==true draws modelIdx==3
+                if ((!pass) == (n->m_ModelIdx != 3)) {
+                    int f = (int)n->m_Timer;
+                    if (f < 0) f = 0;
+                    if (f > 5) f = 5;
+                    float frac = n->m_Timer - (float)f;
+                    const Vec3& kA = SLICE_KEYFRAMES[f];
+                    const Vec3& kB = SLICE_KEYFRAMES[f + 1];
+                    Vec3 scale(
+                        kA.x + (kB.x - kA.x) * frac,
+                        kA.y + (kB.y - kA.y) * frac,
+                        kA.z + (kB.z - kA.z) * frac
+                    );
+                    if (n->m_pFruit) {
+                        scale.y *= 0.9f;
+                    }
+
+                    int idx = n->m_ModelIdx;
+                    if (idx < 0 || idx > 3) idx = 0;
+                    Mortar::Model* model = s_sliceModel[idx].Get();
+                    if (model) {
+                        uint16_t a = (uint16_t)(int)(n->m_AngleDeg * 182.0f);
+                        Matrix44 m = Matrix44::Scale44(scale);
+                        m.RotZ44(SinIdx(a), CosIdx(a));
+                        m.GlobalTranslate44(n->m_Pos);
+                        model->Draw(m);
+                    }
+                }
+            }
+        } else {
+            s_slices.Remove(n);
+            s_pool.Push(n);
+        }
+
+        n = next;
+    }
+}
 
 // Matches Fruit::LoadFruitModels (v1.6.1 0x001e08ec). Replicates the binary's
 // raw-allocation + header pattern, followed by per-fruit model loading with
@@ -2055,10 +2225,21 @@ void Fruit::LoadFruitModels() {
         }
     }
 
-    // Step 4: Load slice-effect models into static globals
-    // Binary @ 0x001e0b50+: load slice_fx.mmd and slice_fx_crit.mmd
-    s_SliceFxModel = meshMgr->Load("models/Fruit/slice_fx.mmd");
-    s_SliceFxCritModel = meshMgr->Load("models/Fruit/slice_fx_crit.mmd");
+    // Step 4: Load slice-effect models into s_sliceModel[].
+    // v1.6.1 Fruit::LoadFruitModels @0x001e09b4:
+    //   [0] = models/fruit/slice_fx.mmd       (normal slice)
+    //   [1] = models/fruit/slice_fx_crit.mmd  (critical slice)
+    //   [2] = unused
+    //   [3] = models/fruit/slice_fx.mmd       (super-fruit second pass)
+    s_sliceModel[0] = meshMgr->Load("models/fruit/slice_fx.mmd");
+    s_sliceModel[1] = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
+    s_sliceModel[3] = meshMgr->Load("models/fruit/slice_fx.mmd");
+
+    // Create slice-effect pool (capacity=100) now that models are loaded.
+    // v1.6.1 Fruit::LoadInfo @0x001e10c4: guarded by if(fruitInfo==0).
+    if (s_pool.Capacity() == 0) {
+        s_pool.Create(100);
+    }
 
     // Step 5: Extract shared fruit atlas texture from first model's EffectProperty.
     // Binary @ 0x001e0b78: s_fruitModels[0].m_pWholeEffect->m_Owner
@@ -2554,9 +2735,11 @@ void Fruit::UpdateBombAvoidance(float dt) {
 
 // Binary @ 0x0017911c — releases the FruitModelInfo[] array.
 void Fruit::DestroyFruitModels() {
-    // Release slice-effect globals
-    s_SliceFxModel = Mortar::SmartPtr<Mortar::Model>();
-    s_SliceFxCritModel = Mortar::SmartPtr<Mortar::Model>();
+    // Release slice-effect model array and pool.
+    for (int i = 0; i < 4; ++i) {
+        s_sliceModel[i] = Mortar::SmartPtr<Mortar::Model>();
+    }
+    s_pool.Destroy();
 
     // Release raw allocation (header + elements) with proper destructor calls
     if (s_FruitModelsRaw) {

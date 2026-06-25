@@ -19,7 +19,6 @@
 #include "entities/SlashEntity.h"
 #include "FruitSaveData.h"
 #include "audio/GameSound.h"
-#include "hud/SliceEffect.h"
 #include "hud/MissControl.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
@@ -342,7 +341,7 @@ void GameInitialise(void* window, const char* config) {
     // Step 25: LoadContent calls (binary: 0x10c41a region)
     SplatEntity::LoadContent();
     SplatEntity::CreatePool(48);     // binary calls CreatePool(30-50)
-    FN::SliceEffect_CreatePool(32);  // binary uses MemoryPool<Node>(32)
+    // SliceEffect pool (capacity=100) is created in Fruit::LoadFruitModels (v1.6.1 @0x001e10c4)
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
     MenuButton::LoadContent();      // loads new_item.tex (star indicator)

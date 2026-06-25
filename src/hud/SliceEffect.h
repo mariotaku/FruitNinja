@@ -1,84 +1,77 @@
 #ifndef FN_SLICE_EFFECT_H
 #define FN_SLICE_EFFECT_H
 
+// SliceEffect subsystem — slash-line visual effects.
 //
-// SliceEffect — the brief "slash line" visual that appears at the slice
-// point when a fruit is cut. Spawned by AddSlice from
-// Fruit::CollisionResponse (and twice from Fruit::Slice for critical
-// hits), ticked + drawn each frame.
+// v1.6.1 binary refs:
+//   AddSlice     @0x001dc990  (_Z8AddSlice8_Vector3IfEffiP5Fruitf)
+//   DrawSlices   @0x001dae7c
+//   Pool create  in Fruit::LoadInfo @0x001e10c4
+//   Models load  in Fruit::LoadFruitModels @0x001e09b4
 //
-// Binary refs:
-//   AddSlice        0x0016b480 (62 lines) — pool pop + list append + SFX
-//   DrawSlices      0x00169ac8 (65 lines) — iterate + draw + remove
-//   KeyframeInit    0x0016d0dc (_GLOBAL__I_GameTask.cpp static ctor)
-//
-// Analysed: 2026-04-15T15:00
-//
+// Owner: Fruit TU statics (s_slices + s_pool).
+// AddSlice / DrawSlices are top-level free functions (no namespace).
 
 #include "math/Vec3.h"
 #include <cstdint>
 
-namespace FN {
+class Fruit;
 
-// Pool node layout (matches binary AddSlice stores @ 0x0016b480).
+// SliceEffect::Node — 0x30 (48) bytes.
+// Binary layout verified against AddSlice @0x001dc990.
 struct SliceEffect {
-    // Default-construct to the free sentinel (timer < 0). MemoryPool::Create
-    // uses `new T[N]` which only default-inits PODs — without this ctor the
-    // backing slots would contain garbage and the Draw sweep would treat
-    // them as live, OOB-indexing SLICE_KEYFRAMES.
-    SliceEffect()
-        : timer(-1.0f), impulse(0.0f), angleDeg(0.0f),
-          pos(0, 0, 0), critical(0) {}
+    // Intrusive doubly-linked list node for s_slices.
+    // Pool-managed: MemoryPool<Node> owns the backing storage.
+    struct Node {
+        float  m_Timer;      // +0x00: 0..6 lifetime clock; expire at >=6.0
+        float  m_Impulse;    // +0x04: v.y (length-scale hint)
+        float  m_AngleDeg;   // +0x08: v.x (degrees-offset angle)
+        Vec3   m_Pos;        // +0x0c: world position (+0x0c..+0x17)
+        int    m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
+        Fruit* m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
+        float  m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
+        Node*  m_pNext;      // +0x24: intrusive list next
+        Node*  m_pPrev;      // +0x28: intrusive list prev
+        uint32_t _pad;       // +0x2c: padding to 0x30
 
-    // +0x00: timer — advances by dt * 40.0 * (0.75 if critical else 1.0)
-    //        each frame. Entry removed when timer >= 6.0 (7 keyframes,
-    //        6 integer steps). Matches DAT_00169c38 = 40.0.
-    float  timer;
-
-    // +0x04: impulse (display-space length scale). Binary stores the
-    //        param_1.y at this offset — currently unused by the draw
-    //        path but kept for layout parity.
-    float  impulse;
-
-    // +0x08: rotation angle in degrees (degrees-offset representation
-    //        used throughout Mortar: Atan2Idx / 182.0 + base). Matches
-    //        binary node+0x08 from AddSlice param_1.x.
-    float  angleDeg;
-
-    // +0x0c: world position (centred ortho).
-    Vec3   pos;
-
-    // +0x18: critical-hit flag. Selects slice_fx_crit.mmd model and the
-    //        0.75× timer-rate multiplier.
-    int    critical;
+        Node() : m_Timer(0.0f), m_Impulse(0.0f), m_AngleDeg(0.0f),
+                 m_Pos(0.0f, 0.0f, 0.0f), m_ModelIdx(0),
+                 m_pFruit(0), m_RateMul(1.0f),
+                 m_pNext(0), m_pPrev(0), _pad(0) {}
+    };
 };
 
-// Call once from GameInitialise. Allocates the slice-effect pool and
-// loads the slice_fx[_crit].mmd models via MeshManager.
-// Matches MemoryPool<SliceEffect::Node>::Create(32).
-void SliceEffect_CreatePool(int capacity);
-void SliceEffect_DestroyPool();
-
-// Binary: GameInit step 9 (0x0016c9a8..0x0016ca90).
-// Allocates a List<SliceEffect> and MemoryPool<Node> with the given capacity,
-// wires them into g_TaskState +0x64 / +0xc8.
-// Port stub is a no-op; the C-array pool above serves the same purpose until
-// the entity-backed pool is fully ported.
-// TODO: implement.
-void SliceEffect_CreateList(int capacity);
-
-// Append a new slice line. Matches AddSlice (0x0016b480).
-//   pos       — world position of the slice
-//   angleDeg  — rotation angle in degrees (degrees-offset convention,
-//               converted internally via 16-bit angle scale = 182.0)
-//   impulse   — length-scale hint (unused by draw path, stored for parity)
-//   critical  — selects the critical visual variant + 0.75× rate
-void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critical);
-
-// Tick + render every active slice. Matches DrawSlices (0x00169ac8).
-// Called from GameDraw on the HUD 0x40 layer.
-void SliceEffect_Draw(float dt);
-
-} // namespace FN
-
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(SliceEffect::Node) == 0x30,
+              "SliceEffect::Node must be 0x30 bytes (v1.6.1 AddSlice @0x001dc990)");
+static_assert(offsetof(SliceEffect::Node, m_Timer)    == 0x00, "");
+static_assert(offsetof(SliceEffect::Node, m_Impulse)  == 0x04, "");
+static_assert(offsetof(SliceEffect::Node, m_AngleDeg) == 0x08, "");
+static_assert(offsetof(SliceEffect::Node, m_Pos)      == 0x0c, "");
+static_assert(offsetof(SliceEffect::Node, m_ModelIdx) == 0x18, "");
+static_assert(offsetof(SliceEffect::Node, m_pFruit)   == 0x1c, "");
+static_assert(offsetof(SliceEffect::Node, m_RateMul)  == 0x20, "");
+static_assert(offsetof(SliceEffect::Node, m_pNext)    == 0x24, "");
+static_assert(offsetof(SliceEffect::Node, m_pPrev)    == 0x28, "");
 #endif
+
+// 7-frame keyframe scale table (frame index = int(m_Timer), frac = m_Timer - int).
+// Binary: _GLOBAL__I_GameTask.cpp static ctor @0x0016d0dc.
+extern const Vec3 SLICE_KEYFRAMES[7];
+
+// AddSlice -- spawn a new slice-line effect.
+// Binary: _Z8AddSlice8_Vector3IfEffiP5Fruitf @0x001dc990
+//   v.x = angleDeg, v.y = impulse, v.z = rateMul
+//   posX/posY/posZ = world position of the slice effect
+//   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
+//   fruit: dedup/clamp link; sentinel values 0, 1, 3 accepted
+void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ);
+
+// DrawSlices -- update timer + draw all active slice nodes.
+// Binary: @0x001dae7c
+//   pass==false: draw modelIdx!=3 nodes (normal + crit lines)
+//   pass==true : draw modelIdx==3 nodes (super-fruit second pass)
+void DrawSlices(float dt, bool pass);
+
+#endif // FN_SLICE_EFFECT_H
