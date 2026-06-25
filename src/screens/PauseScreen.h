@@ -162,7 +162,7 @@ public:
     // Returns false while transition is in-flight or bomb hit timer running.
     bool IsEnabled();
 
-    // Engine pause helpers matching binary 0x00168f80 / 0x00168fb0
+    // Engine pause helpers -- v1.6.1 PauseScreen::PauseGame @0x001ca48c / UnpauseGame @0x001ca4b4
     static void PauseGame();
     static void UnpauseGame();
 

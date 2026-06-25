@@ -146,8 +146,8 @@ void GameInit(unsigned long) {
             // Functionally equivalent with the port's always-fast IsFastHardware.
             ChangeBackground(nullptr);
         }
-        // Binary also assigns: hud_font = pM_Fonts[1]; unpause_game = 0;
-        // clearInput = 0; game_work.bM_Mode = 0
+        // Binary also assigns: hud_font = pM_Fonts[1]; unpause_game = 0; clearInput = 0;
+        g_unpause_game = 0;
         game_work.bM_Mode = false;
         game_work.gameMode = 0;
     }
@@ -278,6 +278,17 @@ static float slowTimeSpeed = 1.0f;    // _ZL13slowTimeSpeed @ 0x002d8c88 (ST .da
 static float slowTimeTime  = 0.0f;    // _ZL12slowTimeTime @ 0x00316704 (.bss -- zero; SlowTime sets to 1.0)
 static float quickener     = 1.0f;    // _ZL9quickener @ 0x002d8cd8 (ST .data 0x3f800000)
 
+// Global pause flag block @ 0x00316700 (binary .bss, adjacent to slowTimeTime @ 0x316704).
+// These occupy 0x316708/0x31670c/0x316710; the 4-byte gap at 0x316700..0x316707 is the
+// unnamed block head (possibly alignment / reserved).
+// PauseGame sets unpauseDelay + clears unpause_game.
+// UnpauseGame sets repauseDelay + arms unpause_game.
+// GameDraw tail fires the actual bM_Mode clear + ClearActions when unpause_game is armed.
+// v1.6.1 PauseGame @0x001ca48c, UnpauseGame @0x001ca4b4, GameDraw tail @0x001cdd64.
+float g_unpauseDelay  = 0.0f;   // @ 0x00316708
+int   g_unpause_game  = 0;      // @ 0x0031670c  (byte in binary; int here for portability)
+float g_repauseDelay  = 0.0f;   // @ 0x00316710
+
 void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
 
@@ -348,15 +359,25 @@ void GameUpdate(float dt, bool active) {
         // INACTIVE BRANCH (0x001cfa9c)
         // ================================================================
 
-        // Clear slow-motion flag, then pause-threshold check
+        // Clear slow-motion flag, then camera-settle auto-clear.
+        // v1.6.1 GameUpdate @0x001cfaec (param_2==0 / menu path):
+        //   pa = game_work.m_GameDt (+0x0c flM_PauseAmount);
+        //   settled = (pa >= 0) ? (pa > 0.999f) : (pa < -0.999f);
+        //   if (settled && (ps == 0 || ps->m_State != 3)) bM_Mode = 0;
+        // This is THE auto-clear; QuitToMenu/UnpauseGame never write bM_Mode directly.
         game_work.m_bSlowMotion = false;
         {
             static const float THR = 0.99896961f;  // DAT_0x001cfe74
-            const float tt = game_work.m_GameDt;
-            const bool unpause = (tt < 0.0f)
-                ? (tt < -THR)
-                : (tt >  THR);
-            if (unpause) game_work.bM_Mode = false;
+            const float pa = game_work.m_GameDt;
+            const bool settled = (pa >= 0.0f)
+                ? (pa > THR)
+                : (pa < -THR);
+            if (settled) {
+                PauseScreen* ps = GetTaskState()->pPauseScreen;
+                if (ps == 0 || ps->m_State != PAUSE_STATE_ACTIVE) {
+                    game_work.bM_Mode = false;
+                }
+            }
         }
 
         // SaveData active-game flag: set when paused
@@ -789,6 +810,17 @@ void GameDraw(float dt, bool active) {
         // HUD::Draw(0x400) -- top layer (v1.6.1 GameDraw @0x001cd720), ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
         game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
+    }
+
+    // v1.6.1 GameDraw tail @0x001cdd64: unpause_game auto-clear.
+    // When UnpauseGame() arms unpause_game=1, GameDraw fires the actual bM_Mode clear
+    // + ClearActions on the NEXT rendered frame, after the fade overlay has settled.
+    // The binary clears bM_Mode here (not in UnpauseGame directly) so the gameplay
+    // tick cannot restart before the pause overlay has completely faded.
+    if (g_unpause_game != 0 && game_work.bM_Mode != 0) {
+        g_unpause_game = 0;
+        Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/PauseMenu.txt"));
+        game_work.bM_Mode = false;
     }
 }
 
