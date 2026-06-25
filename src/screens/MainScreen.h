@@ -72,16 +72,24 @@ public:
     void SetState(MainScreenState s);
 
     // SetStateTimer: sets m_StateTimer (+0x110) = bounce velocity accumulator.
-    // Binary @ 0x00169e80 (QuitToMenu @0x00169e50) writes 0.5f here to seed the logo
-    // bounce animation on gameplay->menu return. NOT a transition countdown.
+    // NOT written by QuitToMenu @0x001cb6e4 (v1.6.1). The real quit write is +0x11c
+    // via SetMoreGamesTimer. Used internally by UpdateScreenElements physics.
     void SetStateTimer(float t) { m_StateTimer = t; }
 
-    // SetMoreGamesTimer: seeds m_MoreGamesF0 (the intro-slide hold countdown).
-    // Binary QuitToMenu @0x001cb6e4 writes 0.5f to +0x11C to hold the slide off-screen
-    // for ~0.5s before the intro plays on gameplay->menu return.
-#ifndef __bada__
-    void SetMoreGamesTimer(float t) { m_MoreGamesF0 = t; }
-#endif // !defined(__bada__)
+    // SetMoreGamesTimer: seeds the intro-slide hold countdown at +0x11c.
+    // Binary QuitToMenu @0x001cb6e4 writes 0.5f to +0x11c (vstr s15,[r1,#0x11c])
+    // to hold the slide off-screen for ~0.5s before the intro plays on gameplay->menu return.
+    // Under __bada__: +0x11c is the raw-pointer slot of m_TexMoreGames (4 bytes, ARM32);
+    // the binary writes a float there directly (MoreGames texture is defunct/null).
+    // Under host: m_MoreGamesF0 is a dedicated float (SmartPtr at +0x11c is 8 bytes on x64).
+    void SetMoreGamesTimer(float t) {
+#ifdef __bada__
+        // Binary faithful: vstr s15,[r1,#0x11c] — write float into the raw-pointer slot.
+        *reinterpret_cast<float*>(&m_TexMoreGames) = t;
+#else
+        m_MoreGamesF0 = t;
+#endif
+    }
 
     // Used by EndRetryLevel to emulate GameInit step 11 (fresh MainScreen ctor).
     void ResetTimers() { m_StateTimer = 0.0f; m_Timer2 = 0.0f; }
