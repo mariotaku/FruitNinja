@@ -278,6 +278,14 @@ if (NOT EMSCRIPTEN)
     add_subdirectory(scenes)
 endif()
 
+# GameModeScreen destructor UAF regression guard.
+# Exercises the back-out (QuitCallback) and mode-pick (ClassicModeCallback)
+# paths that trigger GameModeScreen removal. Under ASAN (build/asan) the pre-fix
+# RemoveButtons()-in-dtor UAF is caught; after the fix the test runs clean.
+fn_add_game_test(test_gamemode_destructor test_gamemode_destructor.cpp)
+add_test(NAME gamemode_destructor COMMAND test_gamemode_destructor)
+set_tests_properties(gamemode_destructor PROPERTIES TIMEOUT 60)
+
 # Per-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn with
 # full pos/vel/gravity parameters plus per-wave spawner config so
 # divergences vs. binary expectations are readable line-by-line. Always
