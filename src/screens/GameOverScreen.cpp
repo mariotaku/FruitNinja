@@ -136,8 +136,8 @@ static void DoQuitToMenu() {
     game_work.bM_Mode = false;
 
     if (game_work.mMainScreen) {
-        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);
-        game_work.mMainScreen->SetStateTimer(0.5f);
+        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0
+        game_work.mMainScreen->SetMoreGamesTimer(0.5f);        // v1.6.1 QuitToMenu @0x001cb6e4: vstr s15,[r1,#0x11c]
     }
 
     if (game_work.m_pActiveHUDControl) {
