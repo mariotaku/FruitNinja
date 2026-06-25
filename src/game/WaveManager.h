@@ -4,10 +4,7 @@
 // WaveManager — wave spawning subsystem.
 //
 // Binary class at 0x0022ee80 (singleton), 752 bytes (0x2f0).
-// Port extends beyond binary region with m_pWaveQue/m_pWaveQueItem.
-//
-// Analysed: 2026-04-30T00:00 (updated 2026-06-18: corrected array offsets,
-// renamed fields to match binary, added missing tail fields).
+// v1.6.1 WaveManager ctor @ 0x00123ef8
 
 #include "math/Random.h"
 #include "game/WaveStructs.h"
@@ -47,8 +44,20 @@ public:
     // +0x08..+0x1f (24 bytes); bridges into the binary's +0x08..+0x34 unnamed region.
     Math::Random m_Random;   // Port specific: +0x08
 
-    // +0x20..+0x34: remaining unnamed binary region (21 bytes of padding).
-    uint8_t _pad_0x20[0x15];  // +0x20
+    // +0x20..+0x23: binary's m_pRandom GOT-relative pointer slot (not used in port;
+    // port embeds m_Random above instead of fetching via pointer).
+    uint8_t _pad_0x20[4];     // +0x20
+
+    // +0x24: wave queue item pointer. Binary: WaveQueItem* @ +0x24.
+    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00124564
+    WaveQueItem* m_pWaveQueItem;  // +0x24
+
+    // +0x28: wave queue pointer. Binary: WaveQue* @ +0x28.
+    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00124564
+    WaveQue* m_pWaveQue;          // +0x28
+
+    // +0x2c..+0x34: unnamed binary padding (9 bytes) to reach m_SyncLocalReady at +0x35.
+    uint8_t _pad_0x2c[9];     // +0x2c
 
     // +0x35: DEFUNCT MP wave-sync "local ready" flag (binary offset 0x39).
     // Reset writes 1; ShouldDisplayNetworkWaitIndicator @0x00123130 returns true only
@@ -243,12 +252,6 @@ public:
 
     // --- Binary region END: +0x2f0 (752 bytes) --------------------------
 
-    // Port extensions (beyond binary region):
-    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=752.
-    // Moved from +0x2e0 (which was a bug — that's binary field_0x2e0).
-    WaveQue*     m_pWaveQue;            // port-only
-    WaveQueItem* m_pWaveQueItem;        // port-only
-
     // --- Construction / singleton --------------------------------------
 
     WaveManager();
@@ -262,7 +265,7 @@ public:
     // builds WAVE_INFO/SPAWNER_INFO arrays.
     void Init();
 
-    // 0x00121bf0: frees WAVE_INFO list, WaveQue, WaveQueItem.
+    // v1.6.1 WaveManager::Destroy @0x00123b54: frees WAVE_INFO list, GlobalProbabilityOveride list, WaveQue, WaveQueItem.
     void Destroy();
 
     // 0x00125be4: full state reset between games.
@@ -430,9 +433,12 @@ static_assert(offsetof(WaveManager, m_CritChanceMult)    == 0x74,
               "WaveManager m_CritChanceMult offset mismatch");
 static_assert(offsetof(WaveManager, m_SpeedAccum)        == 0x78,
               "WaveManager m_SpeedAccum offset mismatch");
-// Tail assert: binary region boundary at 752 bytes (port extensions follow).
-static_assert(offsetof(WaveManager, m_pWaveQue) == 752,
-              "WaveManager binary-region layout mismatch (expect 752 bytes before port extensions)");
+// WaveQue pointer fields at binary offsets +0x24/+0x28.
+// v1.6.1 WaveManager::Destroy @0x00123b54
+static_assert(offsetof(WaveManager, m_pWaveQueItem) == 0x24,
+              "WaveManager m_pWaveQueItem must be at +0x24");
+static_assert(offsetof(WaveManager, m_pWaveQue) == 0x28,
+              "WaveManager m_pWaveQue must be at +0x28");
 #endif
 
 #endif  // FN_WAVE_MANAGER_H
