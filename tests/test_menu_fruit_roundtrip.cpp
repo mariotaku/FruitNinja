@@ -6,7 +6,7 @@
 //
 // REAL PATH DRIVEN:
 //   Phase 0: Boot -> MainScreen idle (STATE_CAMERA_ZOOM -> STATE_CREATE_BUTTONS).
-//            Run frames until BOTH pPlayButton and pDojoButton have live fruits.
+//            Run frames until BOTH m_pGameModeButton and m_pStoreButton have live fruits.
 //            Log "[RT before]" each button.
 //
 //   Phase 1 (game-start): Trigger a REAL Play-button slice the way MenuButton::Update
@@ -245,8 +245,8 @@ int main(int argc, char* argv[]) {
     // Pump extra frames until Play button + tracked fruit are both alive.
     int warmup = 0;
     while (warmup < 600) {
-        bool playReady = ms->pPlayButton && ms->pPlayButton->m_pTrackedFruit;
-        bool dojoReady = ms->pDojoButton && ms->pDojoButton->m_pTrackedFruit;
+        bool playReady = ms->m_pGameModeButton && ms->m_pGameModeButton->m_pTrackedFruit;
+        bool dojoReady = ms->m_pStoreButton && ms->m_pStoreButton->m_pTrackedFruit;
         if (playReady && dojoReady) break;
         h.RunHeadless(10);
         warmup += 10;
@@ -254,27 +254,27 @@ int main(int argc, char* argv[]) {
     if (warmup > 0) {
         printf("[ROUNDTRIP] both buttons ready after extra %d warmup frames\n", warmup);
     }
-    if (!ms->pPlayButton) {
-        fprintf(stderr, "FAIL: pPlayButton never created (MainScreen state=%d)\n", ms->m_State);
+    if (!ms->m_pGameModeButton) {
+        fprintf(stderr, "FAIL: m_pGameModeButton never created (MainScreen state=%d)\n", ms->m_State);
         return 1;
     }
-    if (!ms->pDojoButton) {
-        fprintf(stderr, "FAIL: pDojoButton never created (MainScreen state=%d)\n", ms->m_State);
+    if (!ms->m_pStoreButton) {
+        fprintf(stderr, "FAIL: m_pStoreButton never created (MainScreen state=%d)\n", ms->m_State);
         return 1;
     }
-    if (!ms->pPlayButton->m_pTrackedFruit) {
-        fprintf(stderr, "FAIL: pPlayButton->m_pTrackedFruit is null after warmup\n");
+    if (!ms->m_pGameModeButton->m_pTrackedFruit) {
+        fprintf(stderr, "FAIL: m_pGameModeButton->m_pTrackedFruit is null after warmup\n");
         return 1;
     }
-    if (!ms->pDojoButton->m_pTrackedFruit) {
-        fprintf(stderr, "FAIL: pDojoButton->m_pTrackedFruit is null after warmup\n");
+    if (!ms->m_pStoreButton->m_pTrackedFruit) {
+        fprintf(stderr, "FAIL: m_pStoreButton->m_pTrackedFruit is null after warmup\n");
         return 1;
     }
 
     // ---- Phase 0: BEFORE capture --------------------------------------------
     printf("\n[RT before]\n");
-    FruitSnap playBefore = SnapFruit(ms->pPlayButton, true, "Play/before");
-    FruitSnap dojoBefore = SnapFruit(ms->pDojoButton, true, "Dojo/before");
+    FruitSnap playBefore = SnapFruit(ms->m_pGameModeButton, true, "Play/before");
+    FruitSnap dojoBefore = SnapFruit(ms->m_pStoreButton, true, "Dojo/before");
     Fruit* playPtrBefore = playBefore.ptr;
     Fruit* dojoPtrBefore = dojoBefore.ptr;
 
@@ -282,12 +282,12 @@ int main(int argc, char* argv[]) {
     printf("\n[RT gamestart] triggering Play-button slice via MenuButton::Update path\n");
 
     // Set up slice on the Play fruit so MenuButton::Update fires GameModeCallback.
-    TriggerButtonSlice(ms->pPlayButton);
+    TriggerButtonSlice(ms->m_pGameModeButton);
 
     // Run frames to let MenuButton::Update detect the slice and fire m_ClickCallback.
     // One frame is enough for the Update to fire; give a few extra for reliability.
     // After m_ClickCallback fires:  MainScreen m_State = STATE_MODE_SELECT, m_Timer2=1.0
-    //   pLeaderboardBtn = nullptr (GameModeCallback clears it).
+    //   m_pQuitButton = nullptr (GameModeCallback clears it).
     // Also run enough for GameModeScreen to appear (STATE_MODE_SELECT -> m_Timer2
     // crosses 0.25 -> GameModeScreen added to HUD -> state 0 transition-in starts).
     h.RunHeadless(5);
@@ -295,11 +295,11 @@ int main(int argc, char* argv[]) {
     printf("[RT gamestart] MainScreen state after slice: %d (expect STATE_MODE_SELECT=%d)\n",
            ms->m_State, (int)STATE_MODE_SELECT);
 
-    printf("[RT gamestart] pPlayButton=%p pDojoButton=%p\n",
-           (void*)ms->pPlayButton, (void*)ms->pDojoButton);
-    if (ms->pPlayButton) {
-        Fruit* f = ms->pPlayButton->m_pTrackedFruit;
-        printf("[RT gamestart] pPlayButton->m_pTrackedFruit=%p (was %p)\n",
+    printf("[RT gamestart] m_pGameModeButton=%p m_pStoreButton=%p\n",
+           (void*)ms->m_pGameModeButton, (void*)ms->m_pStoreButton);
+    if (ms->m_pGameModeButton) {
+        Fruit* f = ms->m_pGameModeButton->m_pTrackedFruit;
+        printf("[RT gamestart] m_pGameModeButton->m_pTrackedFruit=%p (was %p)\n",
                (void*)f, (void*)playPtrBefore);
     }
 
@@ -361,17 +361,17 @@ int main(int argc, char* argv[]) {
     // Run three batches of 60 frames each, logging mid-game state.
     for (int batch = 0; batch < 3; batch++) {
         h.RunHeadless(60);
-        printf("[RT gameplay batch %d] MainScreen state=%d pPlayButton=%p pDojoButton=%p\n",
+        printf("[RT gameplay batch %d] MainScreen state=%d m_pGameModeButton=%p m_pStoreButton=%p\n",
                batch + 1, ms->m_State,
-               (void*)ms->pPlayButton, (void*)ms->pDojoButton);
-        if (ms->pPlayButton) {
-            Fruit* f = ms->pPlayButton->m_pTrackedFruit;
+               (void*)ms->m_pGameModeButton, (void*)ms->m_pStoreButton);
+        if (ms->m_pGameModeButton) {
+            Fruit* f = ms->m_pGameModeButton->m_pTrackedFruit;
             printf("[RT gameplay batch %d] Play trackedFruit=%p (was %p, %s)\n",
                    batch + 1, (void*)f, (void*)playPtrBefore,
                    (f == playPtrBefore) ? "SAME" : (f ? "CHANGED" : "NULL"));
         }
-        if (ms->pDojoButton) {
-            Fruit* f = ms->pDojoButton->m_pTrackedFruit;
+        if (ms->m_pStoreButton) {
+            Fruit* f = ms->m_pStoreButton->m_pTrackedFruit;
             printf("[RT gameplay batch %d] Dojo trackedFruit=%p (was %p, %s)\n",
                    batch + 1, (void*)f, (void*)dojoPtrBefore,
                    (f == dojoPtrBefore) ? "SAME" : (f ? "CHANGED" : "NULL"));
@@ -454,8 +454,8 @@ int main(int argc, char* argv[]) {
     // recreates them via per-pointer null guards). Allow up to 400 extra frames.
     int settleFrames = 0;
     while (settleFrames < 400) {
-        bool playReady = ms->pPlayButton && ms->pPlayButton->m_pTrackedFruit;
-        bool dojoReady = ms->pDojoButton && ms->pDojoButton->m_pTrackedFruit;
+        bool playReady = ms->m_pGameModeButton && ms->m_pGameModeButton->m_pTrackedFruit;
+        bool dojoReady = ms->m_pStoreButton && ms->m_pStoreButton->m_pTrackedFruit;
         if (playReady && dojoReady) break;
         h.RunHeadless(10);
         settleFrames += 10;
@@ -464,7 +464,7 @@ int main(int argc, char* argv[]) {
             printf("[RT settle f%d] msState=%d pPlay=%p pDojo=%p m_GameDt=%.4f"
                    " m_BombHitTimer=%.4f m_Timer2=%.4f bPaused=%d\n",
                    settleFrames, ms->m_State,
-                   (void*)ms->pPlayButton, (void*)ms->pDojoButton,
+                   (void*)ms->m_pGameModeButton, (void*)ms->m_pStoreButton,
                    game_work.m_GameDt, game_work.m_BombHitTimer,
                    ms->m_Timer2, (int)game_work.bM_bPaused);
         }
@@ -473,8 +473,8 @@ int main(int argc, char* argv[]) {
 
     // ---- Phase 5: AFTER capture + assert ------------------------------------
     printf("\n[RT after]\n");
-    FruitSnap playAfter = SnapFruit(ms->pPlayButton, true, "Play/after");
-    FruitSnap dojoAfter = SnapFruit(ms->pDojoButton, true, "Dojo/after");
+    FruitSnap playAfter = SnapFruit(ms->m_pGameModeButton, true, "Play/after");
+    FruitSnap dojoAfter = SnapFruit(ms->m_pStoreButton, true, "Dojo/after");
 
     // Entity aliasing notes.
     if (playAfter.valid && playAfter.ptr != playPtrBefore) {
@@ -522,11 +522,11 @@ int main(int argc, char* argv[]) {
 
     // Interactivity check: m_bAcceptsTouch must be 1 (MenuButton::Init always sets it;
     // if it's 0, slicing the button in-game won't fire anything).
-    if (ms->pPlayButton && !ms->pPlayButton->m_bAcceptsTouch) {
+    if (ms->m_pGameModeButton && !ms->m_pGameModeButton->m_bAcceptsTouch) {
         fprintf(stderr, "  FAIL [Play]: m_bAcceptsTouch=0 (button non-interactive)\n");
         failures++;
     }
-    if (ms->pDojoButton && !ms->pDojoButton->m_bAcceptsTouch) {
+    if (ms->m_pStoreButton && !ms->m_pStoreButton->m_bAcceptsTouch) {
         fprintf(stderr, "  FAIL [Dojo]: m_bAcceptsTouch=0 (button non-interactive)\n");
         failures++;
     }
