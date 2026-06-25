@@ -27,11 +27,12 @@
 #include "game/BombHit.h"
 #include "Game.h"
 #include "engine/particle/PSPParticleManager.h"
-#include "engine/math/MathUtil.h"
-#include "engine/math/Random.h"
+#include "math/MathUtil.h"
+#include "math/Random.h"
 #include "engine/asset/MeshManager.h"
 #include "util/StringHash.h"
 #include "debug/Logger.h"
+#include "hud/SliceEffect.h"
 #include <map>
 
 #include <cstring>
@@ -352,6 +353,21 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Null out linked slasher (binary @ 0x001bb994 nulls the stored SlashEntity).
     if (slashEntity) {
         m_pLinkedSlasher = nullptr;
+    }
+
+    // v1.6.1 SuperFruitControl::Sliced @0x001bb994: two AddSlice effects at the host fruit pos.
+    //   angle = Atan2Idx(vel.x, vel.y) / 182.0  (GOT-relative atan2 of host velocity)
+    //   impulse = Rand32 in [0.8, 1.1], rateMul = 0.65
+    //   call A: fruit=(Fruit*)0, call B: fruit=(Fruit*)3
+    if (m_pHostFruit) {
+        float angleDeg = (float)(int16_t)Math::Atan2Idx(
+            m_pHostFruit->vel.y, m_pHostFruit->vel.x) / 182.0f;
+        float impulse = 0.8f + Math::g_Random.RandF(0.3f);
+        Vec3 hostPos = m_pHostFruit->pos;
+        AddSlice(Vec3(angleDeg, impulse, 0.65f),
+                 hostPos.x, hostPos.y, 0, (Fruit*)0, hostPos.z);
+        AddSlice(Vec3(angleDeg, impulse, 0.65f),
+                 hostPos.x, hostPos.y, 0, (Fruit*)3, hostPos.z);
     }
 
     LOG_INFO("SUPERFRUIT", "Sliced() hit %d", m_SliceCount);

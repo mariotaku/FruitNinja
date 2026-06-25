@@ -247,8 +247,8 @@ void GameInit(unsigned long) {
         }
     }
 
-    // SliceEffect list + pool (binary: initialized elsewhere)
-    FN::SliceEffect_CreateList(100);
+    // SliceEffect list + pool are owned by Fruit TU (s_slices + s_pool).
+    // Created in Fruit::LoadFruitModels (v1.6.1 @0x001e10c4). No explicit init here.
 
     // Per-finger SlashEntity array (binary: allocated by GameTaskInitInput)
     for (int i = 0; i < 16; ++i) {
@@ -754,7 +754,7 @@ void GameDraw(float dt, bool active) {
     pm.Draw(particleDt, false, 0);
 
     // DrawSlices (v1.6.1 GameDraw @0x001cd720) -- slash-line pool
-    FN::SliceEffect_Draw(dt);
+    DrawSlices(dt, false);   // pass=false: draw modelIdx!=3 nodes
 
     // HUD::Draw(0x01) -- MainScreen logo / shade (v1.6.1 GameDraw @0x001cd720)
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
