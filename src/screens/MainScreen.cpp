@@ -281,7 +281,11 @@ void MainScreen::Update(float dt) {
         // v1.6.1 @0x00197430: CreateButtons called unconditionally every frame; internal gate on flM_BombHitTimer<1.45 + per-button null guards.
         CreateButtons();
 
-        if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt >= 0.0f) {
+        // v1.6.1 MainScreen::Update @0x00196e1c case 0 (binary @0x00197334..0x00197360):
+        //   advance iff (m_Timer2 > 0.15) AND (flM_PauseAmount < 0.0). Binary uses bmi
+        //   (branch-if-negative). The settle branch ramps m_GameDt toward -1.0, so the
+        //   gate tests < 0, not >= 0 (an earlier RE mis-read the bmi sign as >=).
+        if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt < 0.0f) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
         }
@@ -778,7 +782,8 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
     m_LogoPos = base + offset * m_Lean * 2.0f;
 }
 
-// v1.6.1 MainScreen::DeleteMenuButtons @0x0014aee8
+// Port-only helper -- no binary counterpart; binary keeps menu buttons alive across
+// gameplay (persisting MainScreen). Do not call on the game->menu path.
 void MainScreen::DeleteMenuButtons() {
     RemoveButton(pPlayButton);
     RemoveButton(pDojoButton);
@@ -822,11 +827,14 @@ void MainScreen::CreateToggles() {
 }
 
 // v1.6.1 MainScreen::CreateButtons @0x001961f8
-// Gated as a whole by flM_BombHitTimer < 1.45, then each button created independently
-// with a per-pointer null guard. Sets m_ButtonsCreatedFlag=1 after the first full run.
-// Called every frame from case 0 (cheap due to per-pointer guards) and gated on
-// m_ButtonsCreatedFlag==0 from case 1 for re-show after return.
+// strb #1,[r0,#0x7c] at 0x0019620c is the FIRST instruction after prologue --
+// flag is set unconditionally, even on the BombHitTimer early-out frames.
+// Button CREATION is gated (per-pointer null guards + BombHitTimer < 1.45);
+// the flag write is not. Called every frame from case 0 (cheap due to
+// per-pointer guards) and gated on m_ButtonsCreatedFlag==0 from case 1.
 void MainScreen::CreateButtons() {
+    m_ButtonsCreatedFlag = 1;
+
     if (!game_work.mHud) return;
 
     if (game_work.m_BombHitTimer >= 1.45f) return;
@@ -883,8 +891,6 @@ void MainScreen::CreateButtons() {
     if (pLeaderboardBtn == nullptr) {
         CreateQuitButton();
     }
-
-    m_ButtonsCreatedFlag = 1;
 }
 
 void MainScreen::CreateQuitButton() {
