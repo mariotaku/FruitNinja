@@ -899,9 +899,10 @@ void GameOverScreen::Update(float dt) {
     m_AnimTimeMs = (int)((float)m_AnimTimeMs + dt * 1000.0f);
     if (m_AnimTimeMs >= 1000) m_AnimTimeMs -= 1000;
 
-    // m_LinkedScreen[+0x98] callback (linked screen update)
-    // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80
+    // Defunct: linked-screen callback -- m_LinkedScreen is always NULL in v1.6.1
+    // (Initialise @0x00188158 stores 0, no setter); v1.6.1 GameOverScreen::Update @0x00186c80
     if (m_LinkedScreen) {
+#if defined(__bada__)
         void** linkedVtable = *reinterpret_cast<void***>(
             reinterpret_cast<uint8_t*>(m_LinkedScreen) + 0x98);
         if (linkedVtable) {
@@ -910,6 +911,7 @@ void GameOverScreen::Update(float dt) {
             typedef void (*VtFn)(void*, uint8_t);
             reinterpret_cast<VtFn>(linkedVtable[0x40])(m_LinkedScreen, flagByte);
         }
+#endif
     }
 
     // buttonCalled defunct stub -- NetworkManager::DeregisterAllPopupAlertButtons
