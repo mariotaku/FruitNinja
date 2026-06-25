@@ -455,6 +455,15 @@ void ScreenEffect::Activate() {
         // v1.6.1 ScreenEffect::Update @0x00148844 writes ctrl->size from m_ColourScale each frame.
         ctrl->size = img.m_ColourScale;
         ctrl->m_DrawColour = img.m_Tint;
+        // v1.6.1 ScreenEffect::Activate @0x00148f08: for alpha-driven images
+        // (m_FlagBits & 2) the binary zeroes the control's alpha byte
+        // (HUDControl+0x5f = m_DrawColour.a) BEFORE AddControl, so the control is
+        // invisible on the activation frame until the first Update computes alpha
+        // from m_CurrentVis. Without this both ready_set_go textures draw full for
+        // one frame (the activation flash).
+        if (img.m_FlagBits & 2u) {
+            ctrl->m_DrawColour.a = 0;
+        }
         // Texture assignment per binary @ 0x0011dd2e onwards: the loaded
         // ReloadableTexture's SmartPtr is copied into HUDControl3d.m_Texture
         // (at HUDControl3d+0x74). Without this the spawned HUD control has
