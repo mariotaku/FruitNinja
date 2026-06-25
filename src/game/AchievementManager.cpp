@@ -592,3 +592,9 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
     }
     return unlocked;
 }
+
+// Defunct: achievements parse -- no-op stub; v1.6.1 ParseAchievements @0x001094ec
+// Binary: walks TiXmlElement tree, populating FruitSaveData achievement records.
+// Stub does nothing; save data has no achievements to parse from server.
+void ParseAchievements(TiXmlElement* /*root*/, FruitSaveData* /*save*/, bool /*reset*/) {
+}

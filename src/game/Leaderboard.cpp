@@ -1,0 +1,23 @@
+// Defunct: online leaderboard ID helpers -- no-op stubs.
+// These free functions map game mode to leaderboard board IDs for the online
+// leaderboard service (GameSpy/GameCenter). All defunct in port.
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetCurrentModeLeaderboardID @0x0011f4b4
+int GetCurrentModeLeaderboardID(int /*playerIdx*/) {
+    return 0;
+}
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetLeaderboardID @0x0011f460
+int GetLeaderboardID(int /*mode*/, int /*variant*/) {
+    return 0;
+}
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetTotalFruitLeaderboardId @0x0011f480
+int GetTotalFruitLeaderboardId(int /*variant*/) {
+    return 0;
+}
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetTweakLeaderboardId @0x0011f498
+int GetTweakLeaderboardId(int /*variant*/) {
+    return 0;
+}

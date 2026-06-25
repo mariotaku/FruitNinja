@@ -113,6 +113,7 @@ endif()
 target_sources(mortar_engine PRIVATE
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
+    network/OpenFeint.cpp
     network/P2PMessageHandling.cpp
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp

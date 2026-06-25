@@ -50,4 +50,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaNewsControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameMode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemParseUtil.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Leaderboard.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Licensing.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Social.cpp
 )
