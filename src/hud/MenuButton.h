@@ -75,7 +75,7 @@ struct MenuButtonAddOn {
 // FadeCounter shrink. Called from MenuButton::Update on user slice of a
 // fruit button, and from GameModeScreen::QuitCallback so the back-out
 // animation mirrors the main -> mode-select cascade.
-namespace FN { void ClearMenuItems(); }
+void ClearMenuItems();
 
 // ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton @ 0x0019bb08 (asm-inspector, layout verified)
 class MenuButton : public HUDControl3d {

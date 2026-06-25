@@ -61,7 +61,7 @@ static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
 
-void FN::ClearMenuItems() {
+void ClearMenuItems() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
@@ -618,7 +618,7 @@ void MenuButton::Update(float dt) {
                         }
                         // m_bClearsMenuItems gate: cascades to clear menu fruits.
                         if (m_bClearsMenuItems) {
-                            FN::ClearMenuItems();
+                            ClearMenuItems();
                             if (game_work.mMainScreen) {
                                 game_work.mMainScreen->OnMenuItemsCleared();
                             }

@@ -33,8 +33,6 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
-namespace FN {
-
 // CriticalFlash state — matches binary CriticalFlash @ 0x0016a9a4 +
 // DrawCritHit @ 0x0016b5b4 (verified 2026-04-15).
 //
@@ -74,12 +72,14 @@ static void EnsureWhitePx() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+namespace FN {
 // Writes the bomb-hit world position used by Bomb::DrawBombHit.
 // Bomb::HitBomb and Bomb::HitMenuBomb now write g_BombHitPos directly;
 // this wrapper remains for call sites that use the FN:: form.
 void SetBombHitPos(const Vec3& pos) {
     g_BombHitPos = pos;
 }
+} // namespace FN
 
 // Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
 // Game::m_CritTimer to the full duration. The pos arg exists in the
@@ -93,6 +93,7 @@ void CriticalFlash(const Vec3& pos, const Colour& colour) {
     }
 }
 
+namespace FN {
 // Matches the Game::m_CritTimer decrement in the binary's main update
 // loop — runs every frame, clamps at 0.
 void UpdateCriticalFlash(float dt) {
@@ -169,6 +170,7 @@ void DrawCriticalFlash() {
     Mortar::Texture::s_LastBoundTexId = 0;
 #endif
 }
+} // namespace FN
 
 // Matches ResetGameEntities (binary 0x0016a058, 40 lines).
 // See docs/engine/reset-game-entities.md for the full pseudocode.
@@ -330,7 +332,7 @@ void EndRetryLevel() {
         ts->m_TimedModeAccumulator  = 0;               // 0x16a226 [GTS+0x10c]
     }
 
-    FN::SetScore(0, -1);                               // 0x16a22a
+    SetScore(0, -1);                               // 0x16a22a
 
     if (game_work.m_SaveData) {
         FruitSaveData* sd = game_work.m_SaveData;
@@ -345,7 +347,7 @@ void EndRetryLevel() {
     // (game+0x28) = (game+0x20).
     game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
 
-    FN::ResetGameEntities(false);                      // 0x16a24e
+    ResetGameEntities(false);                      // 0x16a24e
     BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
     WaveManager::GetInstance()->Reset(true);           // 0x16a25c
 
@@ -449,5 +451,3 @@ void RetryUpdate(float dt) {
     }
     (void)dt;
 }
-
-} // namespace FN

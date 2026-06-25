@@ -946,7 +946,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                             // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00176c84 -- combo reset only inside game-over branch
                             g_ComboCount  = 0;
                             g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
-                            FN::GameOver(-1, -1.0f, -1);
+                            GameOver(-1, -1.0f, -1);
                         }
                     }
                 }
@@ -1275,9 +1275,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // with no binary basis. DrawCritHit applies the time fade; alpha comes from
     // m_FruitColour[3]. Special (score==0x32): white half-alpha (binary @ 0x001783fa).
     if (isCritical) {
-        FN::CriticalFlash(pos, FruitTypeColour((long)m_FruitType));
+        CriticalFlash(pos, FruitTypeColour((long)m_FruitType));
     } else if (isSpecial) {
-        FN::CriticalFlash(pos, Colour(255, 255, 255, 128));
+        CriticalFlash(pos, Colour(255, 255, 255, 128));
     }
 
     // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: CRITICAL_SCORE=5 (@0x002d8d48),
@@ -1335,7 +1335,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                       + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
             }
             g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
-            FN::AddToCurrentScore(score, (int)m_PlayerIdx,
+            AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
 
             // Per-fruit-name save totals.
@@ -2366,7 +2366,7 @@ void Fruit::CheckFruitDropped() {
     // is computed on-demand via GetNumActiveForPlayer(idx, true). Single-player path:
     // count INACTIVE fruits == 0 means the wave is clear, which maps to byPlayerMode=false.
     if (GetNumActiveForPlayer(0, false) == 0) {
-        FN::GameOver(-1, -1.0f, -1);
+        GameOver(-1, -1.0f, -1);
     }
 }
 

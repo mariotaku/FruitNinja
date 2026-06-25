@@ -527,8 +527,8 @@ void WaveManager::Reset(bool fullReset) {
     m_BlitzSpawnCount = 0;
     m_BlitzState = 0;
     m_NextBlitzTime = m_Random.RandF(10.0f) + 10.0f;
-    FN::SetScore(0, -1);       // Binary @ 0x0010a4b8; playerIdx -1 = all (defunct MP sig)
-    FN::SetMissCount(0, -1);   // Binary @ 0x0010a4e8
+    SetScore(0, -1);       // Binary @ 0x0010a4b8; playerIdx -1 = all (defunct MP sig)
+    SetMissCount(0, -1);   // Binary @ 0x0010a4e8
     // ET_ClearKnownEntities(-1) -- TODO: not ported
 
     // 4. Per-player wave state.
@@ -646,8 +646,8 @@ void WaveManager::Resume() {
     // 1. Restore score + miss count.
     // Binary @ 0x00124b7c-0x00124b8c: calls SetScore(sd->m_CurrentScore, -1) +
     // SetMissCount(sd->m_CurrentMissCount, -1).
-    FN::SetScore(sd->m_CurrentScore, -1);
-    FN::SetMissCount((int)sd->m_CurrentMissCount, -1);
+    SetScore(sd->m_CurrentScore, -1);
+    SetMissCount((int)sd->m_CurrentMissCount, -1);
 
     // 2. Restore per-player base speed from save.
     // m_ComboTimer <- sd+0x100 (combo timer snapshot).
@@ -2042,7 +2042,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 sd->ClearTotal(s_blitzBonusHash);
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 m_BlitzLevel = newCount;
-                FN::AddToCurrentScore(5, playerIdx, false, false);
+                AddToCurrentScore(5, playerIdx, false, false);
                 // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00123760..0x00123798 (re-analyst).
                 // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
                 static uint32_t s_blitz1Hash = 0;
@@ -2084,7 +2084,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 }
 
                 int clamped = (m_BlitzLevel > 5) ? 6 : m_BlitzLevel;
-                FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
+                AddToCurrentScore(clamped * 5, playerIdx, false, false);
                 m_ColdTimer = 3.0f;  // reset timer for next level-up
                 LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d effect",
                          playerIdx, newCount, clamped, clamped * 5, level, level);

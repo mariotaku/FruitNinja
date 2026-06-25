@@ -701,7 +701,7 @@ void GameModeScreen::QuitCallback() {
 
 // vtable[18] @ 0x00181428
 void GameModeScreen::SetupLevel() {
-    FN::PrepareForLevelStart();
+    PrepareForLevelStart();
 }
 
 // Matches ClassicModeCallback @ 0x0013dfb4

@@ -494,7 +494,7 @@ void GameUpdate(float dt, bool active) {
                 if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f &&
                     game_work.bM_bPaused == 0 &&
                     (!ts || ts->m_bMenuBombFlashFlag == 0)) {
-                    FN::GameOver(-1, -1.0f, -1);
+                    GameOver(-1, -1.0f, -1);
                 }
 
                 if (game_work.m_BombHitTimer < 0.0f) {
@@ -582,10 +582,10 @@ void GameUpdate(float dt, bool active) {
     // --- Retry dispatch (0x001cfe2c..0x001cfe70) ---
     if (game_work.retryFlag != 0) {
         if (game_work.retryTimer > 0.0f) {
-            FN::RetryUpdate(fVar9);
+            RetryUpdate(fVar9);
             game_work.retryTimer -= fVar9;
         } else {
-            FN::EndRetryLevel();
+            EndRetryLevel();
         }
     }
 
@@ -798,7 +798,7 @@ void GameDraw(float dt, bool active) {
 
         // DrawNews / DrawStartFade (v1.6.1 GameDraw @0x001cd720)
         FN::DrawNews();
-        FN::DrawStartFade();
+        DrawStartFade();
 
         // Debug overlay -- fruit/bomb hitboxes + MenuButton AABBs + blade trails (F1 toggle)
 #ifndef __bada__

@@ -16,11 +16,11 @@
 #include "game/GameWork.h"
 
 namespace FN {
-
 // @ 0x0016bbf0
 void DrawNews() {
     // TODO: implement -- news ticker / MOTD overlay draw
 }
+} // namespace FN
 
 // DrawStartFade @ 0x0016AB10
 // 3-phase splash overlay: white fill -> logo on white -> fade out.
@@ -87,5 +87,3 @@ void PrepareForLevelStart() {
     Game* game = Game::GetInstance();
     if (game) game_work.bM_bPaused = 1;
 }
-
-} // namespace FN

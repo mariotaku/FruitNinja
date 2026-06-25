@@ -1,4 +1,4 @@
-// GameOver — v1.6.1 FN::GameOver @ 0x0012b838
+// GameOver — v1.6.1 GameOver @ 0x0012b838
 
 #include "GameOver.h"
 #include "Game.h"
@@ -13,9 +13,7 @@
 #include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
 #include "game/GameWork.h"
 
-namespace FN {
-
-// v1.6.1 FN::GameOver @ 0x0012b838
+// v1.6.1 GameOver @ 0x0012b838
 void GameOver(int endReason, float endScore, int endParam) {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -119,4 +117,3 @@ void SetMissCount(int n, int /*playerIdx*/) {
     if (game) game_work.missCount = (uint8_t)n;
 }
 
-} // namespace FN

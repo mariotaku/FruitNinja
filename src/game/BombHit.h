@@ -14,8 +14,6 @@
 #include "math/Colour.h"
 #include "game/GameWork.h"
 
-namespace FN {
-
 // CriticalFlash (binary 0x0016a9a4) — kicks a full-screen colour tint
 // overlay that fades out over ~0.3s. Binary stamps two Colour fields on
 // the FruitGame singleton (+0xe4, +0xf0) and resets a ScreenTint time
@@ -23,19 +21,6 @@ namespace FN {
 // rendered by DrawCriticalFlash during GameDraw. Used by Fruit slice
 // for critical-hit and rare (special fruit) feedback.
 void CriticalFlash(const Vec3& pos, const Colour& colour);
-
-// Per-frame advance of the CriticalFlash fade timer. Called from
-// GameUpdate after Mortar::ActorManager::Update.
-void UpdateCriticalFlash(float dt);
-
-// Draws the current CriticalFlash tint as a full-screen quad. Called
-// from GameDraw after the slice-line pass and before the HUD overlays,
-// so the flash sits under the logo/buttons. No-op when the timer is 0.
-void DrawCriticalFlash();
-
-// Writes g_BombHitPos (world position of last bomb hit). Called by
-// Bomb::HitBomb / Bomb::HitMenuBomb and legacy FN:: call sites.
-void SetBombHitPos(const Vec3& pos);
 
 // Matches ResetGameEntities (binary address pending RE). Walks every
 // live entity in Mortar::ActorManager and deactivates fruit + bombs. Called
@@ -62,6 +47,19 @@ void RetryLevel();
 // negative (visually shrinks them to zero) over the retryTimer window.
 void RetryUpdate(float dt);
 
+namespace FN {
+// Per-frame advance of the CriticalFlash fade timer. Called from
+// GameUpdate after Mortar::ActorManager::Update.
+void UpdateCriticalFlash(float dt);
+
+// Draws the current CriticalFlash tint as a full-screen quad. Called
+// from GameDraw after the slice-line pass and before the HUD overlays,
+// so the flash sits under the logo/buttons. No-op when the timer is 0.
+void DrawCriticalFlash();
+
+// Writes g_BombHitPos (world position of last bomb hit). Called by
+// Bomb::HitBomb / Bomb::HitMenuBomb and legacy FN:: call sites.
+void SetBombHitPos(const Vec3& pos);
 } // namespace FN
 
 #endif

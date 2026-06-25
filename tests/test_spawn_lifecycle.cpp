@@ -47,7 +47,7 @@
 #include "entities/Bomb.h"
 #include "entities/Entity.h"
 #include "hud/HUD.h"
-#include "hud/MenuButton.h"  // FN::ClearMenuItems
+#include "hud/MenuButton.h"  // ClearMenuItems
 #include "screens/MainScreen.h"
 
 #include <cstring>
@@ -231,12 +231,12 @@ int main(int argc, char* argv[]) {
     //       branch keeps respawning the bomb, locking IsWaveProcessing
     //       at true forever and surfacing a fake "wave stall" that
     //       doesn't exist in real arcade gameplay.
-    FN::ClearMenuItems();
+    ClearMenuItems();
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
     }
     game_work.gameMode = (uint8_t)gameMode;
-    FN::PrepareForLevelStart();
+    PrepareForLevelStart();
     game_work.bM_bPaused = 0;  // bypass MainScreen camera-fade gate
     // Let the flung menu items physics-die before we start counting spawns.
     h.RunHeadless(120);

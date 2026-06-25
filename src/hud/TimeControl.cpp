@@ -198,7 +198,7 @@ void TimeControl::Update(float dt) {
 
             // GameOver trigger.
             if (m_TimeRemaining < 0.5f) {
-                FN::GameOver(-1, -1.0f, -1);
+                GameOver(-1, -1.0f, -1);
                 m_TimeRemaining = 0.0f;
                 // Reset combo on Arcade timeout.
                 g_ComboCount  = 0;
