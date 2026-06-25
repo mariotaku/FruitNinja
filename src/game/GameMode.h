@@ -48,15 +48,6 @@ inline bool IsTimedGame(uint8_t gameMode) {
     return ((uint8_t)(gameMode - 2u)) < 2u;
 }
 
-// Binary @ 0x0010b15c -- GetModeName(GAME_MODE). Returns the ASCII mode-name
-// string used to construct per-mode stat keys ("combo_CLASSIC", "combo_ARCADE", etc.).
-// Names taken from rodata / FruitSaveData key evidence; see also FruitSaveData.cpp:k_ModeNames.
-inline const char* GetModeName(uint8_t gameMode) {
-    static const char* s_Names[] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
-    if (gameMode < 4) return s_Names[gameMode];
-    return "UNKNOWN";
-}
-
 // Binary @ 0x00111f54. Probes accelerometer via Game+0x1a4; that field is
 // never set in the shipped binary (dead initialisation path), so the function
 // unconditionally returns 0. Gating the ShopListItem locked-state-1 red prompt.
@@ -66,5 +57,14 @@ inline bool IsDeviceUpsideDown() {
 }
 
 } // namespace Mortar
+
+// GAME_MODE -- type alias matching the binary's mangled enum name.
+// Used by free functions whose binary symbol encodes this exact name
+// (e.g. _Z11GetModeName9GAME_MODE, _Z14GetModeBitMask9GAME_MODE).
+typedef Mortar::GameMode GAME_MODE;
+
+// GetModeName -- binary: _Z11GetModeName9GAME_MODE v1.6.1 @0x0010b15c
+// Returns the ASCII mode-name string for the given game mode.
+const char* GetModeName(GAME_MODE gameMode);
 
 #endif // FN_GAME_MODE_H

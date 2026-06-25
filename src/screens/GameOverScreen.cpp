@@ -23,6 +23,7 @@
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "engine/audio/GameSound.h"
 #include "engine/audio/MortarSound.h"
 #include "asset/TextureManager.h"
@@ -892,7 +893,8 @@ static const char* const g_ComboNameTable[25] = {
     "2_PAIR", "3_OF_A_KIND", "4_OF_A_KIND", "5_OF_A_KIND",
 };
 
-static const char* GetComboName(int starType) {
+// GetComboName -- binary: _Z12GetComboName10COMBO_TYPE v1.6.1 @0x00110c94
+const char* GetComboName(COMBO_TYPE starType) {
     return g_ComboNameTable[starType];
 }
 
@@ -1126,7 +1128,7 @@ void GameOverScreen::Update(float dt) {
                         if (comboLevel >= 0 && comboLevel < 25) {
                             AchievementManager::GetInstance()->UnlockComboStarAchievement(
                                 m_pZenPage->m_NumFacts,
-                                StringHash(GetComboName(comboLevel)));
+                                StringHash(GetComboName((COMBO_TYPE)comboLevel)));
                         }
                     }
 

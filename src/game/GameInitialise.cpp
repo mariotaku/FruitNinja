@@ -155,7 +155,7 @@ void GameInitialise(void* window, const char* config) {
     // InitialiseData @ 0x0010b66c follows the ctor with a LoadGame call
     // so persistent state is restored before the rest of init runs.
     game_work.m_SaveData = new FruitSaveData();
-    FruitNinja_LoadGame(game_work.m_SaveData);
+    LoadGame(game_work.m_SaveData);
 
     // InitialiseData step 7: restore last-used game mode from save
     game_work.gameMode = (uint8_t)game_work.m_SaveData->m_GameMode;

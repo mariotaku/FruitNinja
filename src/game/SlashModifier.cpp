@@ -141,7 +141,7 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
         int idx = 0;
         for (TiXmlElement c = xml->FirstChildElement("colour"); c;
              c = c.NextSiblingElement("colour"), ++idx) {
-            ParseColour(&m_pColours[idx], c.GetText());
+            ParseColour(m_pColours[idx], c.GetText());
         }
     } else if (m_pTexture1 || m_pTexture2) {
         // DIFFERS: binary = 12B raw alloc + 8B header [4,1] + 1 Colour; port uses

@@ -1,7 +1,7 @@
 // FruitSaveData -- save/load to FruitySave.xml + slice-total maps.
 //
-// Implements binary FruitNinja_SaveGame @ 0x0012a2fc and
-// FruitNinja_LoadGame @ 0x0012be74. Coin balance is owned by ItemSave.xml
+// Implements binary SaveGame @ 0x0012a2fc and
+// LoadGame @ 0x0012be74. Coin balance is owned by ItemSave.xml
 // via ItemManager and is only mirrored here for in-memory access.
 //
 // Analysed: 2026-04-23T02:00, REVISED 2026-05-02T00:00
@@ -357,9 +357,9 @@ bool FruitSaveData::PlayedModeToday(int gameMode) {
 }
 
 // ----------------------------------------------------------------------
-// FruitNinja_SaveGame @ 0x0012a2fc
+// SaveGame @ 0x0012a2fc
 // ----------------------------------------------------------------------
-void FruitNinja_SaveGame(FruitSaveData* save) {
+void SaveGame(FruitSaveData* save) {
     if (!save) return;
 
     TiXmlDocument doc;
@@ -504,9 +504,9 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
 }
 
 // ----------------------------------------------------------------------
-// FruitNinja_LoadGame @ 0x0012be74
+// LoadGame @ 0x0012be74
 // ----------------------------------------------------------------------
-bool FruitNinja_LoadGame(FruitSaveData* save) {
+bool LoadGame(FruitSaveData* save) {
     if (!save) return false;
 
     TiXmlDocument doc;
@@ -708,7 +708,7 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     // simplicity.
     snapshot.m_BombHitTimer = game_work.m_BombHitTimer;
 
-    FruitNinja_SaveGame(&snapshot);
+    SaveGame(&snapshot);
 }
 
 // ----------------------------------------------------------------------

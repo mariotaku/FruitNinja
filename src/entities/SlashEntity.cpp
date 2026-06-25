@@ -1840,7 +1840,7 @@ void SlashEntity::Update(float dt) {
                         BonusManager::GetInstance()->AddCombo(m_ComboCount);
                         if (game && game_work.m_SaveData) {
                             char buf[64];
-                            snprintf(buf, sizeof(buf), "%s_combos", Mortar::GetModeName(game_work.gameMode));
+                            snprintf(buf, sizeof(buf), "%s_combos", GetModeName((GAME_MODE)game_work.gameMode));
                             game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
                             static int s_StrawberryType = -2;
                             if (s_StrawberryType == -2)

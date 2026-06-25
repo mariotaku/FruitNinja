@@ -10,12 +10,24 @@
 #include "ItemParseUtil.h"
 #include "GameWork.h"
 #include "engine/util/StringHash.h"
+#include "engine/util/StringTable.h"
 #include "engine/audio/GameSound.h"
 #include "engine/math/Random.h"
 #include "entities/SlashEntity.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+// ParseItemType -- maps XML "type" attribute string to ItemType int.
+// Binary: _Z13ParseItemTypePKc v1.6.1
+int ParseItemType(const char* str) {
+    if (str == nullptr) return 0;
+    if (strcmp(str, "SLASH_MODIFIER") == 0) return 0;
+    if (strcmp(str, "BACKGROUND")     == 0) return 1;
+    if (strcmp(str, "UPSELL")         == 0) return 2;
+    if (strcmp(str, "REMOVEADS")      == 0) return 3;
+    return 0;
+}
 
 // -----------------------------------------------------------------------
 // ItemInfo
@@ -134,10 +146,10 @@ void ItemInfo::Parse(TiXmlElement* e) {
     CloneString(&m_pTextureName, texAttr);
 
     const char* colourAttr = e->Attribute("colour");  // 0x1b9f98
-    ParseColour(&m_Colour1, colourAttr);
+    ParseColour(m_Colour1, colourAttr);
 
-    // m_Colour2: vestigial attr "titleolour" (0x1ba021 — typo/mangled in binary string table)
-    ParseColour(&m_Colour2, e->Attribute("titleolour"));  // 0x1ba021
+    // m_Colour2: vestigial attr "titleolour" (0x1ba021 -- typo/mangled in binary string table)
+    ParseColour(m_Colour2, e->Attribute("titleolour"));  // 0x1ba021
 }
 
 // -----------------------------------------------------------------------
@@ -496,7 +508,7 @@ void SlashModInfo::Parse(TiXmlElement* e) {
         c = smi.FirstChildElement("colour");
         while (c) {
             const char* cval = c.GetText();
-            if (cval) ParseColour(colourPtr, cval);
+            if (cval) ParseColour(*colourPtr, cval);
             colourPtr++;
             c = c.NextSiblingElement("colour");
         }

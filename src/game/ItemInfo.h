@@ -26,16 +26,9 @@ enum ItemType {
     ITEM_TYPE_REMOVEADS  = 3,
 };
 
-// ParseItemType — maps XML "type" attribute string to ItemType int.
-// Binary: strcmp chain used in LoadItemData.
-inline int ParseItemType(const char* str) {
-    if (str == nullptr) return 0;
-    if (strcmp(str, "SLASH_MODIFIER") == 0) return 0;
-    if (strcmp(str, "BACKGROUND")     == 0) return 1;
-    if (strcmp(str, "UPSELL")         == 0) return 2;
-    if (strcmp(str, "REMOVEADS")      == 0) return 3;
-    return 0;
-}
+// ParseItemType -- maps XML "type" attribute string to ItemType int.
+// Binary: _Z13ParseItemTypePKc
+int ParseItemType(const char* str);
 
 // -----------------------------------------------------------------------
 // ItemInfo (0x48 bytes)
