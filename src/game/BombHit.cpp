@@ -373,6 +373,11 @@ void EndRetryLevel() {
     // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; v1.6.1 binary @ 0x0016a27e
 }
 
+static void RetryShrinkSplat(SplatEntity* s, void* /*ctx*/) {
+    if (s->m_Life > 0.15f) s->m_Life = 0.15f;
+    s->m_DecayRate = 0.25f;
+}
+
 // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b008 (re-analyst)
 void RetryLevel() {
     // game+0x08 = retryTimer: 0.1f initial countdown window.
@@ -383,25 +388,8 @@ void RetryLevel() {
     // game+0x05 = bM_bPaused: suppresses GameOver cross-check + fuse SFX.
     game_work.bM_bPaused = 1;
 
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b040 (re-analyst follow-up)
-    // Iterates WaveManager's wave-list (std::vector<WAVE_INFO*>, stride 0x78),
-    // NOT ActorManager fruits as a prior RE incorrectly claimed.
-    // Sets each wave's +0x6c = 0.25f, clamps +0x68 <= 0.15f.
-    // Port-side WAVE_INFO has +0x68 = m_WaveIndex (int) and +0x6c = m_pCoinChance (void*),
-    // but the binary writes floats to these slots; access via reinterpret cast.
-    {
-        WaveManager* wm = WaveManager::GetInstance();
-        if (wm) {
-            std::vector<WAVE_INFO*>& waves = wm->m_WaveInfo[game_work.gameMode];
-            for (std::vector<WAVE_INFO*>::iterator it = waves.begin(); it != waves.end(); ++it) {
-                WAVE_INFO* wave = *it;
-                if (!wave) continue;
-                *reinterpret_cast<float*>(&wave->m_pCoinChance) = 0.25f;  // +0x6c
-                float& fade68 = *reinterpret_cast<float*>(&wave->m_WaveIndex);  // +0x68
-                if (fade68 > 0.15f) fade68 = 0.15f;
-            }
-        }
-    }
+    // v1.6.1 RetryLevel @0x001cf124: clamp m_Life<=0.15 + m_DecayRate=0.25 on all pooled splats
+    SplatEntity::ForEachInPool(&RetryShrinkSplat, NULL);
 
     // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b0c4 (re-analyst)
     // Mute the persistent looping Bomb-Fuse handle for the 0.1s retry-shrink window.

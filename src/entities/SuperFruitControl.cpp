@@ -470,12 +470,10 @@ void SuperFruitControl::ExplodeSuperFruit()
         // angular velocity: dirN * 700.0  (DAT_001bae64=700.0f)
         Vec3 angVel = dirN * 700.0f;
 
-        // Jiblet::Init(gravScale=1.0, fadeRate=0.0, fruitType, pos=host+0x74, vel, mdl, emitterHash=0, gravBase=angVel)
-        // DIFFERS: binary passes host+0x74 as Vec3* (raw offset into Fruit; port field at +0x74 is
-        //   m_SpawnDelay (float), not a Vec3). Binary reuses the 12 bytes starting at +0x74 as a
-        //   Vec3 spawn-position cache written by Slice/CollisionResponse. Port casts raw.
-        Vec3* hostJibPos = reinterpret_cast<Vec3*>(reinterpret_cast<uint8_t*>(host) + 0x74);
-        jiblet->Init(1.0f, 0.0f, (int)hostFruitType, hostJibPos, &vel, mdl, 0, &angVel);
+        // Jiblet::Init(gravScale=1.0, fadeRate=0.0, fruitType, pos=&m_WorkVec5, vel, mdl, emitterHash=0, angVel)
+        // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: pos arg is &this->m_WorkVec5
+        // (SuperFruitControl+0xf0, the explosion origin). The prior host+0x74 cast was wrong.
+        jiblet->Init(1.0f, 0.0f, (int)hostFruitType, &m_WorkVec5, &vel, mdl, 0, &angVel);
 
         // post-init writes: copy host transform onto the jib actor
         jiblet->m_Age = 0.0f;                // jib+0xac = 0 (reset age set by Init to -0.04)
@@ -836,13 +834,13 @@ void SuperFruitControl::StopRays()
     std::list<Mortar::Entity*>::iterator it;
     Mortar::Entity* e = am->GetEntityFirst(6, it);
     while (e != NULL) {
-        // entity+0xe0 = 1: stop flag for ray entities.
-        // DIFFERS: accessing via raw byte pointer because the ray-entity class
-        // is not yet ported and its +0xe0 field is not named; the binary writes
-        // exactly one byte at entity+0xe0. Once the ray entity is ported, replace
-        // with the proper field access.
+        // TODO: v1.6.1 0x001b9b4c (SuperFruitControl::StopRays) -- x64 byte-offset landmine (#189);
+        // ray (type-6) class unported, loop body dormant (no producer). +0xE0 = Entity[3].m_LaunchVelocity.y
+        // on the ray subclass; use named field once ported.
+#if defined(__bada__)
         uint8_t* rawBase = reinterpret_cast<uint8_t*>(e);
         rawBase[0xe0] = 1;
+#endif
         e = am->GetEntityNext(6, it);
     }
 }
