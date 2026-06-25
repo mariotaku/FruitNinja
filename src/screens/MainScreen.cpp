@@ -93,8 +93,8 @@ void MainScreen::SetState(MainScreenState s) {
 // ASM-spec v1.6.1 MainScreen ctor @0x0019811c
 MainScreen::MainScreen(Game& g)
     : m_ButtonsCreatedFlag(false),
-      pPlayButton(nullptr), pDojoButton(nullptr),
-      pLeaderboardBtn(nullptr), pMoreGamesBtn(nullptr),
+      m_pGameModeButton(nullptr), m_pStoreButton(nullptr),
+      m_pQuitButton(nullptr), m_pMoreGamesBtn(nullptr),
       pToggleA(nullptr), pToggleB(nullptr),
       pMusicToggle(nullptr), pSoundToggle(nullptr),
       _pad_c4(0), _pad_c8(0),
@@ -219,10 +219,10 @@ void MainScreen::Reset() {
 
 // v1.6.1 MainScreen::Release @0x0014cd20
 void MainScreen::Release() {
-    pPlayButton    = nullptr;
-    pDojoButton    = nullptr;
-    pLeaderboardBtn = nullptr;
-    pMoreGamesBtn  = nullptr;
+    m_pGameModeButton    = nullptr;
+    m_pStoreButton    = nullptr;
+    m_pQuitButton = nullptr;
+    m_pMoreGamesBtn  = nullptr;
     pToggleA       = nullptr;
     pToggleB       = nullptr;
     pMusicToggle   = nullptr;
@@ -293,12 +293,9 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CREATE_BUTTONS: {
-        // v1.6.1 MainScreen::Update @0x001974e0
-        // Binary badges the +0xa8 member (Dojo/Store button). Port's pLeaderboardBtn is the Quit button
-        // due to member-name shuffle vs binary; pDojoButton is the correct physical target here.
-        // TODO: v1.6.1 0x001961f8 -- port button members are shuffled vs binary (+0xa0..+0xac); the binary badges the +0xa8 member which is the Dojo/Store button. Port badges its pDojoButton (same physical button). Full member-offset realignment tracked in task #187.
-        if (pDojoButton) {
-            pDojoButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
+        // v1.6.1 MainScreen::Update @0x001974e0: badge the Store/Dojo button (+0xa4) from AreNewItems().
+        if (m_pStoreButton) {
+            m_pStoreButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
         }
 
         if (m_ButtonsCreatedFlag == 0) {
@@ -494,7 +491,7 @@ void MainScreen::Update(float dt) {
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
-        pMoreGamesBtn = nullptr;
+        m_pMoreGamesBtn = nullptr;
 
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
@@ -669,8 +666,8 @@ void MainScreen::Draw(float* hudScaleRaw) {
         DrawLoadingSymbol(&hudScale.x);
     }
 
-    // 6. m_TexBc (comming_soon overlay) — drawn when valid AND pPlayButton exists.
-    if (m_TexBc.IsValid() && pPlayButton != NULL) {
+    // 6. m_TexBc (comming_soon overlay) — drawn when valid AND m_pGameModeButton exists.
+    if (m_TexBc.IsValid() && m_pGameModeButton != NULL) {
         float csW = (float)m_TexBc->GetWidth();
         float csH = (float)m_TexBc->GetHeight();
         float scaleX = csW * 0.5f;
@@ -787,10 +784,10 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
 // Port-only helper -- no binary counterpart; binary keeps menu buttons alive across
 // gameplay (persisting MainScreen). Do not call on the game->menu path.
 void MainScreen::DeleteMenuButtons() {
-    RemoveButton(pPlayButton);
-    RemoveButton(pDojoButton);
-    RemoveButton(pMoreGamesBtn);
-    RemoveButton(pLeaderboardBtn);
+    RemoveButton(m_pGameModeButton);
+    RemoveButton(m_pStoreButton);
+    RemoveButton(m_pMoreGamesBtn);
+    RemoveButton(m_pQuitButton);
 }
 
 // v1.6.1 MainScreen::Hide @0x0014ad04
@@ -841,58 +838,58 @@ void MainScreen::CreateButtons() {
 
     if (game_work.m_BombHitTimer >= 1.45f) return;
 
-    if (pPlayButton == nullptr) {
+    if (m_pGameModeButton == nullptr) {
         Mortar::SmartPtr<Mortar::Texture> texNewGame =
             Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
-        pPlayButton = new MenuButton();
-        pPlayButton->m_Texture = texNewGame;
-        pPlayButton->Init(POS_PLAY_BUTTON,
+        m_pGameModeButton = new MenuButton();
+        m_pGameModeButton->m_Texture = texNewGame;
+        m_pGameModeButton->Init(POS_PLAY_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
         // TODO: 0x001961f8 -- RE whether play block truly overrides m_RestScale to texWidth+1
         //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
-            pPlayButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
-            pPlayButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
-            pPlayButton->m_RestScale.z = 1.0f;
+            m_pGameModeButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
+            m_pGameModeButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
+            m_pGameModeButton->m_RestScale.z = 1.0f;
         }
-        pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-        pPlayButton->m_RemoveCallback =
+        m_pGameModeButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        m_pGameModeButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
         // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: Play(GameMode) button sets m_HitInsetX=m_HitInsetY=-50.0.
-        pPlayButton->m_HitInsetX   = -50.0f;
-        pPlayButton->m_HitInsetY   = -50.0f;
-        pPlayButton->m_ShakeScale.x = 0.5f;
-        pPlayButton->m_GrowInTimer = 0.25f;
-        game_work.mHud->AddControl(pPlayButton);
+        m_pGameModeButton->m_HitInsetX   = -50.0f;
+        m_pGameModeButton->m_HitInsetY   = -50.0f;
+        m_pGameModeButton->m_ShakeScale.x = 0.5f;
+        m_pGameModeButton->m_GrowInTimer = 0.25f;
+        game_work.mHud->AddControl(m_pGameModeButton);
 
         if (game_work.m_TutorialControl)
-            game_work.m_TutorialControl->ResetTutePos(pPlayButton);
+            game_work.m_TutorialControl->ResetTutePos(m_pGameModeButton);
     }
 
-    if (pDojoButton == nullptr) {
+    if (m_pStoreButton == nullptr) {
         Mortar::SmartPtr<Mortar::Texture> texDojoIcon =
             Mortar::TextureManager::LoadLocalisedTexture("dojo_icon.tex");
-        pDojoButton = new MenuButton();
-        pDojoButton->m_Texture = texDojoIcon;
-        pDojoButton->Init(POS_DOJO_BUTTON,
+        m_pStoreButton = new MenuButton();
+        m_pStoreButton->m_Texture = texDojoIcon;
+        m_pStoreButton->Init(POS_DOJO_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
             Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
-        pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-        pDojoButton->m_RemoveCallback =
+        m_pStoreButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        m_pStoreButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-        if (pDojoButton->m_pTrackedFruit) {
-            pDojoButton->m_pTrackedFruit->scale = pDojoButton->m_pTrackedFruit->scale * 0.9f;
+        if (m_pStoreButton->m_pTrackedFruit) {
+            m_pStoreButton->m_pTrackedFruit->scale = m_pStoreButton->m_pTrackedFruit->scale * 0.9f;
         }
-        pDojoButton->m_RestScale   = pDojoButton->m_RestScale * 1.05f;
-        pDojoButton->m_ShakeScale.x = 0.5f;
-        pDojoButton->m_GrowInTimer  = 0.25f;
-        game_work.mHud->AddControl(pDojoButton);
+        m_pStoreButton->m_RestScale   = m_pStoreButton->m_RestScale * 1.05f;
+        m_pStoreButton->m_ShakeScale.x = 0.5f;
+        m_pStoreButton->m_GrowInTimer  = 0.25f;
+        game_work.mHud->AddControl(m_pStoreButton);
         // v1.6.1 MainScreen::CreateButtons @0x001961f8: badge set at creation (and refreshed in Update case 1).
-        pDojoButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
+        m_pStoreButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
     }
 
     // v1.6.1 @0x001961f8: quit button recreated per-frame via if(pX==nullptr) guard.
-    if (pLeaderboardBtn == nullptr) {
+    if (m_pQuitButton == nullptr) {
         CreateQuitButton();
     }
 }
@@ -903,29 +900,29 @@ void MainScreen::CreateQuitButton() {
     Mortar::SmartPtr<Mortar::Texture> texQuit =
         Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
 
-    pLeaderboardBtn = new MenuButton();
-    pLeaderboardBtn->m_Texture = texQuit;
-    pLeaderboardBtn->m_bRespondsToBackKey = 1;
+    m_pQuitButton = new MenuButton();
+    m_pQuitButton->m_Texture = texQuit;
+    m_pQuitButton->m_bRespondsToBackKey = 1;
     int fruitCount = FruitInfo_GetCount();
-    pLeaderboardBtn->Init(POS_QUIT,
+    m_pQuitButton->Init(POS_QUIT,
         Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
-    pLeaderboardBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-    pLeaderboardBtn->m_RemoveCallback =
+    m_pQuitButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+    m_pQuitButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     if (texQuit.IsValid()) {
-        pLeaderboardBtn->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
-        pLeaderboardBtn->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
-        pLeaderboardBtn->m_RestScale.z = 1.0f;
+        m_pQuitButton->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
+        m_pQuitButton->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
+        m_pQuitButton->m_RestScale.z = 1.0f;
     }
-    game_work.mHud->AddControl(pLeaderboardBtn);
+    game_work.mHud->AddControl(m_pQuitButton);
 }
 
 // v1.6.1 MainScreen::ButtonDeleted @0x0014acc0
 void MainScreen::ButtonDeleted(HUDControl* ctrl) {
-    if (ctrl == pDojoButton)    pDojoButton    = nullptr;
-    if (ctrl == pPlayButton)    pPlayButton    = nullptr;
-    if (ctrl == pLeaderboardBtn) pLeaderboardBtn = nullptr;
-    if (ctrl == pMoreGamesBtn)  pMoreGamesBtn  = nullptr;
+    if (ctrl == m_pStoreButton)    m_pStoreButton    = nullptr;
+    if (ctrl == m_pGameModeButton)    m_pGameModeButton    = nullptr;
+    if (ctrl == m_pQuitButton) m_pQuitButton = nullptr;
+    if (ctrl == m_pMoreGamesBtn)  m_pMoreGamesBtn  = nullptr;
 }
 
 // --- Callbacks ---
@@ -937,7 +934,7 @@ void MainScreen::GameModeCallback() {
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
     FruitSaveData::DownloadTweaks();  // defunct stub
-    pLeaderboardBtn = nullptr;
+    m_pQuitButton = nullptr;
     // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
@@ -965,10 +962,9 @@ void MainScreen::AboutCallback() {
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
-    // Binary clears pMoreGamesBtn (Quit button) + pToggleB. Due to port name-shuffle, port's
-    // pLeaderboardBtn IS the Quit button (same physical button as binary's pMoreGamesBtn) -- equivalent.
-    // pToggleB clear is missing here; tracked with full member-offset realignment in task #187.
-    pLeaderboardBtn = nullptr;
+    // v1.6.1 AboutCallback @0x195d88: clears m_pQuitButton (+0xa8) and pToggleA (+0xb0).
+    m_pQuitButton = nullptr;
+    pToggleA = nullptr;
 }
 
 // v1.6.1 MainScreen::SoundCallback @0x0014af64
@@ -1001,9 +997,9 @@ void MainScreen::MoreGamesCallback() {
 void MainScreen::QuitGamesCallback() {
     SystemManager::GetInstance().RequestQuit();
 
-    if (pLeaderboardBtn && pLeaderboardBtn->m_pTrackedFruit) {
+    if (m_pQuitButton && m_pQuitButton->m_pTrackedFruit) {
         Bomb* bomb = static_cast<Bomb*>(
-            static_cast<Mortar::Entity*>(pLeaderboardBtn->m_pTrackedFruit));
+            static_cast<Mortar::Entity*>(m_pQuitButton->m_pTrackedFruit));
         bomb->m_bMovement = 1;
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);
     }
@@ -1136,6 +1132,6 @@ void MainScreen::MultiplayerGameModeCallback() {
     m_State = STATE_MODE_SELECT_2;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
-    pLeaderboardBtn = nullptr;
+    m_pQuitButton = nullptr;
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }

@@ -129,11 +129,11 @@ public:
     Mortar::SmartPtr<Mortar::Texture> m_Tex4;         // +0x98
     Mortar::SmartPtr<Mortar::Texture> m_Tex9c;        // +0x9c
 
-    // +0xa0..+0xb8: 7x MenuButton* (pPlayButton..pMusicToggle)
-    MenuButton* pPlayButton;                           // +0xa0
-    MenuButton* pDojoButton;                           // +0xa4
-    MenuButton* pLeaderboardBtn;                       // +0xa8 (port: used as Quit button)
-    MenuButton* pMoreGamesBtn;                         // +0xac
+    // +0xa0..+0xb8: 7x MenuButton* (m_pGameModeButton..pMusicToggle)
+    MenuButton* m_pGameModeButton;                     // +0xa0 (GameModeCallback)
+    MenuButton* m_pStoreButton;                        // +0xa4 (AboutCallback->DojoScreen, AreNewItems badge)
+    MenuButton* m_pQuitButton;                         // +0xa8 (QuitGamesCallback)
+    MenuButton* m_pMoreGamesBtn;                       // +0xac
     MenuButton* pToggleA;                              // +0xb0  (NEW in v1.6.1)
     MenuButton* pToggleB;                              // +0xb4  (NEW in v1.6.1)
     MenuButton* pMusicToggle;                          // +0xb8
@@ -310,10 +310,10 @@ static_assert(__builtin_offsetof(MainScreen, m_TexSoundOff)    == 0x90,  "m_TexS
 static_assert(__builtin_offsetof(MainScreen, m_Tex3)           == 0x94,  "m_Tex3 offset");
 static_assert(__builtin_offsetof(MainScreen, m_Tex4)           == 0x98,  "m_Tex4 offset");
 static_assert(__builtin_offsetof(MainScreen, m_Tex9c)          == 0x9c,  "m_Tex9c offset");
-static_assert(__builtin_offsetof(MainScreen, pPlayButton)      == 0xa0,  "pPlayButton offset");
-static_assert(__builtin_offsetof(MainScreen, pDojoButton)      == 0xa4,  "pDojoButton offset");
-static_assert(__builtin_offsetof(MainScreen, pLeaderboardBtn)  == 0xa8,  "pLeaderboardBtn offset");
-static_assert(__builtin_offsetof(MainScreen, pMoreGamesBtn)    == 0xac,  "pMoreGamesBtn offset");
+static_assert(__builtin_offsetof(MainScreen, m_pGameModeButton) == 0xa0, "m_pGameModeButton offset");
+static_assert(__builtin_offsetof(MainScreen, m_pStoreButton)    == 0xa4, "m_pStoreButton offset");
+static_assert(__builtin_offsetof(MainScreen, m_pQuitButton)     == 0xa8, "m_pQuitButton offset");
+static_assert(__builtin_offsetof(MainScreen, m_pMoreGamesBtn)   == 0xac, "m_pMoreGamesBtn offset");
 static_assert(__builtin_offsetof(MainScreen, pToggleA)         == 0xb0,  "pToggleA offset");
 static_assert(__builtin_offsetof(MainScreen, pToggleB)         == 0xb4,  "pToggleB offset");
 static_assert(__builtin_offsetof(MainScreen, pMusicToggle)     == 0xb8,  "pMusicToggle offset");
