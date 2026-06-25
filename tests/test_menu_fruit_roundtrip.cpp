@@ -30,10 +30,11 @@
 //            then create a GameOverScreen in STATE_QUIT_WAIT. On the next frame, entity
 //            count drops to 0, STATE_QUIT_WAIT fires DoQuitToMenu(), which sets:
 //              WaveManager::ResetGlobalDt(1.0), bM_bPaused=1,
-//              MainScreen->STATE_CAMERA_ZOOM, MainScreen->SetStateTimer(0.5f),
-//              game_work.taskStateIndex=1 (DIFFERS port path -> triggers GameInit re-run).
-//            GameInit creates a fresh MainScreen and HUD. Re-read game_work.mMainScreen.
-//            Log "[RT after]" from the fresh MainScreen.
+//              MainScreen->STATE_CAMERA_ZOOM, MainScreen->SetMoreGamesTimer(0.5f).
+//            Binary persisting model: DoQuitToMenu does NOT set taskStateIndex or
+//            rebuild the HUD/MainScreen. Same MainScreen pointer, buttons stay alive.
+//            A pointer-change check is still done below (prints diagnostic if pointer
+//            somehow changed), but the expected path is same pointer.
 //
 //   Phase 5 (assert): Both buttons healthy: non-null fruit, tscale!=0, |rotspd|>=1,
 //            frozen==0, |rv1.x|>=0.75, |rv1.y|>=0.5, no absurd spin rate.
@@ -432,23 +433,25 @@ int main(int argc, char* argv[]) {
     printf("[RT return-to-menu] MainScreen reached STATE_CAMERA_ZOOM after %d frames "
            "(was state %d)\n", returnFrames, stateBeforeReturn);
 
-    // Re-fetch MainScreen pointer -- DoQuitToMenu sets taskStateIndex=1 which triggers
-    // a GameInit re-run (FrontendInit -> taskStateIndex=2 -> GameInit), creating a fresh
-    // MainScreen at a new address. The old 'ms' pointer is stale after this.
+    // Verify persisting model: DoQuitToMenu does NOT rebuild MainScreen; same pointer expected.
+    // (Pointer-change check kept for diagnostic purposes -- if it fires, something is wrong.)
     {
         MainScreen* newMs = game_work.mMainScreen;
         if (newMs != ms) {
-            printf("[RT return-to-menu] NOTE: MainScreen CHANGED %p -> %p (re-initialized by GameInit)\n",
+            printf("[RT return-to-menu] UNEXPECTED: MainScreen pointer CHANGED %p -> %p"
+                   " (binary uses persisting model -- rebuild is a port divergence)\n",
                    (void*)ms, (void*)newMs);
             ms = newMs;
         } else {
-            printf("[RT return-to-menu] NOTE: MainScreen same pointer %p\n", (void*)ms);
+            printf("[RT return-to-menu] NOTE: MainScreen same pointer %p (persisting model, expected)\n",
+                   (void*)ms);
         }
     }
 
-    // Run more frames for STATE_CAMERA_ZOOM -> CreatePlayDojo -> buttons + fruits.
-    // STATE_CAMERA_ZOOM: CreatePlayDojo() called unconditionally every frame;
-    // buttons recreated when pointer is null. Allow up to 400 extra frames.
+    // Run more frames for STATE_CAMERA_ZOOM -> CreateButtons -> buttons + fruits.
+    // Persisting model: buttons were alive before gameplay; they stay alive through
+    // the roundtrip (ButtonDeleted fires when fruits are sliced, CreateButtons
+    // recreates them via per-pointer null guards). Allow up to 400 extra frames.
     int settleFrames = 0;
     while (settleFrames < 400) {
         bool playReady = ms->pPlayButton && ms->pPlayButton->m_pTrackedFruit;

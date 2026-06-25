@@ -292,11 +292,10 @@ int main(int argc, char* argv[]) {
     game_work.bM_bPaused = 0;
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
-        // test_screen.cpp's "classic" path leaves the menu buttons in
-        // place because its smoke test only checks HUD widget presence.
-        // For a visual test we explicitly drop the menu buttons -- the
-        // binary's normal Play-flow eventually calls DeleteMenuButtons
-        // (via STATE_LOADING_A path) once the camera has settled.
+        // Port-specific: explicitly remove menu buttons so they don't
+        // appear in this visual test. DeleteMenuButtons has no binary
+        // counterpart -- the binary keeps buttons alive across gameplay
+        // (persisting MainScreen model).
         game_work.mMainScreen->DeleteMenuButtons();
     }
     game_work.m_GameDt = 0.0f;
