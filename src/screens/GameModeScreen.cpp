@@ -212,9 +212,9 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         Mortar::BakedStringBox* tbox = new Mortar::BakedStringBox(
             font, 12.0f, 73.0f, 53.0f, 0xf, 3, 0.0f);
         {
-            const char* s0 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3be); // "NO BOMBS!"
-            const char* s1 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3bf); // "NO LIVES!"
-            const char* s2 = Mortar::GETSTRING_CAST_0((LocalizedString)0x3c0); // "90 SECS!"
+            const char* s0 = GETSTRING_CAST_0((LocalizedString)0x3be); // "NO BOMBS!"
+            const char* s1 = GETSTRING_CAST_0((LocalizedString)0x3bf); // "NO LIVES!"
+            const char* s2 = GETSTRING_CAST_0((LocalizedString)0x3c0); // "90 SECS!"
             char buf[256];
             snprintf(buf, sizeof(buf), "%s\n%s\n%s",
                      s0 ? s0 : "", s1 ? s1 : "", s2 ? s2 : "");
@@ -230,7 +230,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
         Mortar::BakedStringBox* dbox = new Mortar::BakedStringBox(
             font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
-        dbox->SetText(Mortar::GETSTRING_CAST_0((LocalizedString)0x3ba)); // "MODE SELECT"
+        dbox->SetText(GETSTRING_CAST_0((LocalizedString)0x3ba)); // "MODE SELECT"
         // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
         // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
         // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)
@@ -247,7 +247,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
         Mortar::BakedStringBox* ibox = new Mortar::BakedStringBox(
             font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
-        ibox->SetText(Mortar::GETSTRING_CAST_0((LocalizedString)0x39f)); // "MULTIPLAYER"
+        ibox->SetText(GETSTRING_CAST_0((LocalizedString)0x39f)); // "MULTIPLAYER"
         // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
         // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
         // TODO: 4-stop metallic render path (binary SetMetallicGradient @0x002458e0)

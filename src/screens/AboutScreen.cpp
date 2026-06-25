@@ -179,7 +179,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // fontSize 20, width 0xa0(160), align 0xf, height 30, maxLines 1
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
         m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160.0f, 30.0f, 0xf, 1, 0.0f);
-        m_TitleBox->SetText(Mortar::GETSTRING(LSTR_ABOUT_TITLE, 0));
+        m_TitleBox->SetText(GETSTRING(LSTR_ABOUT_TITLE, 0));
         m_TitleBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
         // Heading box -- LSTR 0x349
@@ -187,7 +187,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
         // Constructed for layout parity; NOT drawn in NewDraw (binary never positions/draws it).
         m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100.0f, 30.0f, 0xf, 1, 0.0f);
-        m_HeadingBox->SetText(Mortar::GETSTRING(LSTR_ABOUT_HEADING, 0));
+        m_HeadingBox->SetText(GETSTRING(LSTR_ABOUT_HEADING, 0));
         m_HeadingBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
         // Version box -- "V <ver>"
@@ -209,32 +209,32 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         const Colour& creditColour = game_work.m_TitleColour;
 
         m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine0->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT0, 0));
+        m_CreditLine0->SetText(GETSTRING(LSTR_ABOUT_CREDIT0, 0));
         m_CreditLine0->SetColour(creditColour, 0);
         m_CreditLine0->SetHorizontalLineSpacing(-1.0f);
 
         m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine1->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT1, 0));
+        m_CreditLine1->SetText(GETSTRING(LSTR_ABOUT_CREDIT1, 0));
         m_CreditLine1->SetColour(creditColour, 0);
         m_CreditLine1->SetHorizontalLineSpacing(-1.0f);
 
         m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine2->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT2, 0));
+        m_CreditLine2->SetText(GETSTRING(LSTR_ABOUT_CREDIT2, 0));
         m_CreditLine2->SetColour(creditColour, 0);
         m_CreditLine2->SetHorizontalLineSpacing(-1.0f);
 
         m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine3->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT3, 0));
+        m_CreditLine3->SetText(GETSTRING(LSTR_ABOUT_CREDIT3, 0));
         m_CreditLine3->SetColour(creditColour, 0);
         m_CreditLine3->SetHorizontalLineSpacing(-1.0f);
 
         m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine4->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT4, 0));
+        m_CreditLine4->SetText(GETSTRING(LSTR_ABOUT_CREDIT4, 0));
         m_CreditLine4->SetColour(creditColour, 0);
         m_CreditLine4->SetHorizontalLineSpacing(-1.0f);
 
         m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0.0f);
-        m_CreditLine5->SetText(Mortar::GETSTRING(LSTR_ABOUT_CREDIT5, 0));
+        m_CreditLine5->SetText(GETSTRING(LSTR_ABOUT_CREDIT5, 0));
         m_CreditLine5->SetColour(creditColour, 0);
         m_CreditLine5->SetHorizontalLineSpacing(-1.0f);
 
@@ -627,7 +627,7 @@ void AboutScreen::CreateCreditsMarquee()
     const Colour& titleColour = game_work.m_TitleColour;
 
     // LSTR 0x349 -- heading line (Colour(0xB9,0x4F,0x37), fontSize 12)
-    AddLine(Mortar::GETSTRING(LSTR_ABOUT_HEADING, 0), Colour(0xB9, 0x4F, 0x37, 255), 12.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_HEADING, 0), Colour(0xB9, 0x4F, 0x37, 255), 12.0f);
 
     // Lang gate: if languageFlag in {0x0D=13, 0x0E=14, 0x14=20}, add blank padding.
     // ASM-spec v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c: langId gate.
@@ -639,7 +639,7 @@ void AboutScreen::CreateCreditsMarquee()
     }
 
     // LSTR 0x347 -- colour-leader line 0 (Colour(0x68,0x9A,0x27), fontSize 10)
-    AddLine(Mortar::GETSTRING(LSTR_ABOUT_MARQUEE_LEAD0, 0), Colour(0x68, 0x9A, 0x27, 255), 10.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD0, 0), Colour(0x68, 0x9A, 0x27, 255), 10.0f);
 
     // 6 dev-name lines -- Colour = m_TitleColour, fontSize 8
     AddLine("Luke Muscat, Shath, Steven Last,",                           titleColour, 8.0f);
@@ -650,11 +650,11 @@ void AboutScreen::CreateCreditsMarquee()
     AddLine("Peter McNeill, Michael Szewczyk, Paul McNab",                 titleColour, 8.0f);
 
     // LSTR 0x348 -- colour-leader line 1 (Colour(0x8D,0x4A,0xB9), fontSize 10)
-    AddLine(Mortar::GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
     AddLine("Shainiel Deo, Phil Larsen, Tony Takoushi,",                  Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
 
     // LSTR 0x34A -- colour-leader line 2 (Colour(0x8D,0x4A,0xB9), fontSize 10)
-    AddLine(Mortar::GETSTRING(LSTR_ABOUT_MARQUEE_LEAD2, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD2, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
     AddLine("Natalie Clarke, Chloe Pearson,",                             Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
     AddLine("Char + Emma Wood, Nell + Calyb Rehua",                       Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
 

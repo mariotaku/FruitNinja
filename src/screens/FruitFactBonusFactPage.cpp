@@ -54,7 +54,7 @@ void FruitFactBonusFactPage::Init() {
     m_Texture = bgTex;
 
     // Title + layout helpers (all base helpers, binary-faithful call order).
-    CreateTitleTextControl(Mortar::GETSTRING(LSTR_BONUS_PAGE_TITLE, 0));
+    CreateTitleTextControl(GETSTRING(LSTR_BONUS_PAGE_TITLE, 0));
     CreateHorizontalDivider();
     CreateSenseisFruitFactTitle();
     CreateSenseisFruitFactText();

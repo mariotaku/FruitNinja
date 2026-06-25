@@ -208,6 +208,8 @@ public:
 static_assert(sizeof(StringTable) == 0x50, "StringTable sizeof mismatch");
 #endif
 
+} // namespace Mortar
+
 // Free wrapper: binary @ 0x0011f958.
 // Looks up string ID in table index tableIdx (0 = default table).
 const char* GETSTRING(LocalizedString id, int tableIdx);
@@ -221,7 +223,5 @@ const char* GETSTRING_CAST_0(LocalizedString id);
 
 // Thunk to GETSTRING_STR(key, 0): binary @ 0x00109ec0.
 const char* GETSTRING_CAST_0_STR(const char* key);
-
-} // namespace Mortar
 
 #endif // FN_ENGINE_UTIL_STRINGTABLE_H

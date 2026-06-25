@@ -162,7 +162,7 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
     // strcpy -- the <bonus>GAME_TEXTURE_13</bonus> text is a localisation
     // key, not the display text. Without this lookup the raw key renders
     // verbatim on BonusScreen.
-    const char* localised = Mortar::GETSTRING_CAST_0_STR(m_NameTemplate);
+    const char* localised = GETSTRING_CAST_0_STR(m_NameTemplate);
     strncpy(m_DisplayName, localised ? localised : m_NameTemplate,
             sizeof(m_DisplayName) - 1);
     m_DisplayName[sizeof(m_DisplayName) - 1] = '\0';

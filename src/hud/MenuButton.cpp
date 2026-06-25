@@ -707,7 +707,7 @@ void MenuButton::Update(float dt) {
             int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
             m_TouchSlot = slot;
             if (slot >= 0) {
-                if (Mortar::IsTouchDown(slot) == 2) {
+                if (IsTouchDown(slot) == 2) {
                     if (!m_bRespondsToBackKey && m_FruitType < 0) {
                         m_ClickCallback();
                     }
@@ -716,7 +716,7 @@ void MenuButton::Update(float dt) {
                 }
             }
         } else {
-            int down = Mortar::IsTouchDown(m_TouchSlot);
+            int down = IsTouchDown(m_TouchSlot);
             if (down == 0) {
                 UpdateTouchPosition();
                 const bool insideOnRelease =

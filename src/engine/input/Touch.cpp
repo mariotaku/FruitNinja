@@ -360,22 +360,24 @@ bool Touch::IsSlotDown(int slot) const {
 // ---------------------------------------------------------------------------
 // Free functions.
 
+} // namespace Mortar
+
 // TouchInRegion @ 0x001691cc -- Tier A slot-returning helper. Used by every
 // UI widget Update() in the binary (MenuButton, CheckBox, ScrollingMenu,
 // SliderControl, VerticalScroller, ComboBox). Port uses (left, right,
 // bottom, top) instead of binary's (x, y, w, h) -- numerically equivalent
 // since all call sites compute edges from pos +/- halfSize.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
-    Touch& t = Touch::GetInstance();
-    if (hint_slot >= 0 && hint_slot < Touch::MAX_SLOTS) {
-        const TouchState& s = t.states1[hint_slot];
+    Mortar::Touch& t = Mortar::Touch::GetInstance();
+    if (hint_slot >= 0 && hint_slot < Mortar::Touch::MAX_SLOTS) {
+        const Mortar::TouchState& s = t.states1[hint_slot];
         if (s.phase < 1) {
             float cx = (float)s.currX, cy = (float)s.currY;
             if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return hint_slot;
         }
     }
-    for (int i = 0; i < Touch::MAX_SLOTS; i++) {
-        const TouchState& s = t.states1[i];
+    for (int i = 0; i < Mortar::Touch::MAX_SLOTS; i++) {
+        const Mortar::TouchState& s = t.states1[i];
         if (s.phase >= 1) continue;
         float cx = (float)s.currX, cy = (float)s.currY;
         if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return i;
@@ -396,12 +398,10 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
 // press-edge only and reject slice-drags through the button. Signature
 // matches binary verbatim (takes slot index, returns int 0/1/2).
 int IsTouchDown(int slot) {
-    const Touch& t = Touch::GetInstance();
-    if (slot < 0 || slot >= Touch::MAX_SLOTS) return 0;
+    const Mortar::Touch& t = Mortar::Touch::GetInstance();
+    if (slot < 0 || slot >= Mortar::Touch::MAX_SLOTS) return 0;
     int ph = t.states1[slot].phase;
     if (ph >= 1)  return 0;
     if (ph == -1) return 2;
     return 1;
 }
-
-} // namespace Mortar

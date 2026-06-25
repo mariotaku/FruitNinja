@@ -355,10 +355,10 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             // 8. SetText by mode: Classic→0x2db, Arcade&Zen→0x2f9
             if (gameMode == Mortar::GAME_MODE_CLASSIC) {
                 m_pTitleString->SetText(
-                    Mortar::GETSTRING((LocalizedString)0x2db, 0));
+                    GETSTRING((LocalizedString)0x2db, 0));
             } else {
                 m_pTitleString->SetText(
-                    Mortar::GETSTRING((LocalizedString)0x2f9, 0));
+                    GETSTRING((LocalizedString)0x2f9, 0));
             }
         }
     }
@@ -772,7 +772,7 @@ void GameOverScreen::CreateRetryButton() {
     // SetText(GETSTRING(0x3b5), pM_Colours[4], pM_Colours[5], 42.0, 12.0, true, true)
     // pM_Colours[4]=(147,238,255) pM_Colours[5]=(45,144,245) -- cyan/blue gradient
     m_pRetryBtn->SetText(
-        Mortar::GETSTRING_CAST_0((LocalizedString)0x3b5),
+        GETSTRING_CAST_0((LocalizedString)0x3b5),
         Colour(147, 238, 255, 255),
         Colour(45,  144, 245, 255),
         42.0f, 12.0f, true, true);
@@ -831,7 +831,7 @@ void GameOverScreen::CreateQuitButton() {
     // SetText(GETSTRING(0x35f), pM_Colours[0], pM_Colours[1], 42.0, 12.0, true, true)
     // pM_Colours[0]=(249,62,19) pM_Colours[1]=(195,15,0) -- orange/red gradient
     m_pQuitBtn->SetText(
-        Mortar::GETSTRING_CAST_0(LSTR_QUIT),
+        GETSTRING_CAST_0(LSTR_QUIT),
         Colour(249, 62,  19, 255),
         Colour(195, 15,  0,  255),
         42.0f, 12.0f, true, true);

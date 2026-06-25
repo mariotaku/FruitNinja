@@ -119,7 +119,7 @@ void FruitFactZenPage::Init() {
 
     if (hasCombo) {
         // --- combo-achievement branch ---
-        snprintf(banner, sizeof(banner), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
+        snprintf(banner, sizeof(banner), GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
         m_NumFacts = comboCount;
 
         // Lay out comboCount fruit icons.
@@ -188,7 +188,7 @@ void FruitFactZenPage::Init() {
             // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_ComboLevel))
             // GetComboStarText returns a LSTR id; GETSTRING converts to a C string.
             unsigned int starStrId = FruitFact::GetComboStarText(m_ComboLevel);
-            const char* starText = (starStrId > 0) ? Mortar::GETSTRING((LocalizedString)starStrId, 0) : "";
+            const char* starText = (starStrId > 0) ? GETSTRING((LocalizedString)starStrId, 0) : "";
             char starBuf[512];
             snprintf(starBuf, sizeof(starBuf), "* %s", starText ? starText : "");  // DAT_001806f8 @ 0x0028260E
             box->SetText(starBuf);
@@ -206,7 +206,7 @@ void FruitFactZenPage::Init() {
     } else {
         // --- no-combo branch: "play more" style message ---
         // Binary: strcpy(*(GOT+0x71E0), GETSTRING(LSTR_ZEN_NO_COMBO_LINE1)) sets shared banner.
-        const char* noComboStr = Mortar::GETSTRING(LSTR_ZEN_NO_COMBO_LINE1, 0);
+        const char* noComboStr = GETSTRING(LSTR_ZEN_NO_COMBO_LINE1, 0);
         strncpy(banner, noComboStr ? noComboStr : "", sizeof(banner) - 1);
         banner[sizeof(banner) - 1] = '\0';
 
@@ -229,7 +229,7 @@ void FruitFactZenPage::Init() {
                     Colour(0xff, 0xfc, 0x14, 255),
                     Colour(0xc8, 0x82, 0x00, 255));
                 box1->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
-                box1->SetText(Mortar::GETSTRING(LSTR_ZEN_NO_COMBO_BODY, 0));
+                box1->SetText(GETSTRING(LSTR_ZEN_NO_COMBO_BODY, 0));
                 box1->SetHorizontalLineSpacing(-1.0f);
                 c1->SetText(box1);
                 // Binary reads actual baked dims box->+0x24 / +0x28 to recenter.

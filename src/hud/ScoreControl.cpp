@@ -150,7 +150,7 @@ ScoreControl::ScoreControl()
             Colour(0xFF, 0xFC, 0x5A, 255),
             Colour(0xE7, 0x83, 0x08, 255),
             false);
-        m_pScoreBox->SetText(Mortar::GETSTRING_CAST_0(LSTR_SCORE));
+        m_pScoreBox->SetText(GETSTRING_CAST_0(LSTR_SCORE));
         m_pScoreBox->SetHorizontalLineSpacing(-1.0f);
     }
 
@@ -588,7 +588,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
                 // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
                 // resolves to "BEST:" (with trailing colon) in english_us.
-                const char* label = Mortar::GETSTRING_CAST_0(LSTR_BEST);
+                const char* label = GETSTRING_CAST_0(LSTR_BEST);
                 float labelW  = game_work.pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
                 // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00159588..0x001596a6 (re-analyst).

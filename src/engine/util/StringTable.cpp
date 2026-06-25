@@ -325,20 +325,20 @@ const HeaderLookup* Mortar::StringTable::GetInfoS(const char* key) {
 
 // --- Free wrapper implementations ---
 
-const char* Mortar::GETSTRING(LocalizedString id, int tableIdx) {
+const char* GETSTRING(LocalizedString id, int tableIdx) {
     (void)tableIdx;
     return Mortar::StringTable::GetStringS(id);
 }
 
-const char* Mortar::GETSTRING_STR(const char* key, int tableIdx) {
+const char* GETSTRING_STR(const char* key, int tableIdx) {
     (void)tableIdx;
     return Mortar::StringTable::GetStringS(key);
 }
 
-const char* Mortar::GETSTRING_CAST_0(LocalizedString id) {
-    return Mortar::GETSTRING(id, 0);
+const char* GETSTRING_CAST_0(LocalizedString id) {
+    return GETSTRING(id, 0);
 }
 
-const char* Mortar::GETSTRING_CAST_0_STR(const char* key) {
-    return Mortar::GETSTRING_STR(key, 0);
+const char* GETSTRING_CAST_0_STR(const char* key) {
+    return GETSTRING_STR(key, 0);
 }

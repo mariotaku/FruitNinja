@@ -32,7 +32,7 @@ void Localisation::Unload() {
 // implementation delegates through GETSTRING_STR which returns key on miss.
 // ASM-verified: 2026-05-18 v1.6.1 Localisation::Get @ 0x00114b50 (re-analyst)
 const char* Localisation::Get(const char* key) {
-    return Mortar::GETSTRING_CAST_0_STR(key);
+    return GETSTRING_CAST_0_STR(key);
 }
 
 // Localisation::IsLoaded -- mirrors StringTableUtilLoaded @ 0x0011f940.

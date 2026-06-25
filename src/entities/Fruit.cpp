@@ -2495,7 +2495,7 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     // translated paragraph, not the raw key.
     const char* key = chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
     if (!key) return nullptr;
-    return Mortar::GETSTRING_CAST_0_STR(key);
+    return GETSTRING_CAST_0_STR(key);
 }
 
 // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter.

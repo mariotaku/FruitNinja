@@ -178,7 +178,7 @@ MainScreen::MainScreen(Game& g)
                 3,      // maxLines
                 3.0f    // lineSpacing
             );
-            const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
+            const char* sliceText = GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
             m_pSliceInstrBox->SetText(sliceText ? sliceText : "SLICE FRUIT TO BEGIN");
             // Colour: binary reads game_work.m_TitleColour (+0x6a0) = RGB(0x6F,0x46,0x1E).
             m_pSliceInstrBox->SetColour(game_work.m_TitleColour, /*setBase*/0);

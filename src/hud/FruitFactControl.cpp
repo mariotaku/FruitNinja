@@ -373,7 +373,7 @@ void FruitFactControl::Init() {
         // Binary: OS_SPrintf(bakedBuf, 0x80, GETSTRING(LSTR_BEST_COMBO), count)
         // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!".
         snprintf(s_BakedFactTitle, sizeof(s_BakedFactTitle),
-                 Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO),
+                 GETSTRING_CAST_0(LSTR_BEST_COMBO),
                  game_work.m_SaveData->m_BestComboLength);
         m_ComboLength = game_work.m_SaveData->m_BestComboLength;
         for (int i = 0; i < m_ComboLength && i < 11; i++) {
@@ -389,7 +389,7 @@ void FruitFactControl::Init() {
         // baked title buffer. The binary calls GETSTRING_CAST_0(0xb1); the port's
         // StringTable already exposes id 0xb1 as LSTR_FACT_MODE (the Zen fruit-
         // fact intro headline string). Binary @ 0x0013a3ae
-        const char* intro = Mortar::GETSTRING_CAST_0(LSTR_FACT_MODE); // id 0xb1
+        const char* intro = GETSTRING_CAST_0(LSTR_FACT_MODE); // id 0xb1
         if (intro) {
             strncpy(s_BakedFactTitle, intro, sizeof(s_BakedFactTitle) - 1);
             s_BakedFactTitle[sizeof(s_BakedFactTitle) - 1] = '\0';
@@ -852,7 +852,7 @@ void FruitFactControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask) {
 
         // 2. Title: dispatch on game_work.languageFlag (field_0x3)
         {
-            const char* title = Mortar::GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
+            const char* title = GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
             if (!title) title = "FRUIT FACT";
 
             if (!game_work.languageFlag) {
