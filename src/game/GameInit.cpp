@@ -1,7 +1,7 @@
 //
 // State 2 handlers: GameInit, GameUpdate, GameDraw, GameExit
-// Binary: GameInit v1.6.1 @ 0x001ce1c0 (18 steps), GameUpdate @ 0x001CF534,
-//         GameDraw @ 0x16b888 (211 lines), GameExit @ 0x16cf74 (98 lines)
+// Binary v1.6.1: GameInit @0x001ce1c0 (18 steps), GameUpdate @0x001cf534,
+//                GameDraw @0x001cd720 (211 lines), GameExit @0x001cfed4 (98 lines)
 //
 // GameInit rewritten 2026-06-17 to match v1.6.1 binary step order.
 //
@@ -581,7 +581,7 @@ void GameUpdate(float dt, bool active) {
     game_work.m_bFrameDirty = false;
 }
 
-// Matches GameDraw (0x16b888, 211 lines) -- full render frame.
+// Matches GameDraw (v1.6.1 @0x001cd720, 211 lines) -- full render frame.
 //
 // Binary draw order (verified from decompile, see comments inline):
 //   1.  Camera + background quad
@@ -642,7 +642,7 @@ void GameDraw(float dt, bool active) {
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
     // === 1. Mortar::ActorManager::Draw -- 3D fruit/bomb/slash entities ===
-    // Binary @ 0x0016ba10: SetDepthBufferWrite(1) + SetDepthBuffer(1)
+    // v1.6.1 GameDraw @0x001cd720: SetDepthBufferWrite(1) + SetDepthBuffer(1)
     // just before Mortar::ActorManager::Draw. Depth func stays at GL_LESS set
     // by BeginFrame -- binary never overrides it.
     dm.SetDepthBufferWrite(true);
@@ -660,7 +660,7 @@ void GameDraw(float dt, bool active) {
 #endif
 
     // === 2. HUD::BeginDraw + post-actor block ===
-    // Binary @ 0x0016ba10 right after Mortar::ActorManager::Draw:
+    // v1.6.1 GameDraw @0x001cd720 right after Mortar::ActorManager::Draw:
     //   SetDepthBuffer(1)       -- depth test still ON
     //   SetDepthBufferWrite(0)  -- writes OFF for HUD/splats/bomb blasts
     dm.SetDepthBuffer(true);
@@ -668,35 +668,35 @@ void GameDraw(float dt, bool active) {
     {
         game_work.mHud->BeginDraw(dt);
 
-        // 2a. HUD::Draw(0x40) -- menu button sprites @ 0x0016ba5a
+        // 2a. HUD::Draw(0x40) -- menu button sprites (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);
 
-        // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
+        // 2b. SplatEntity::DrawActiveSplats (v1.6.1 GameDraw @0x001cd720)
         SplatEntity::DrawActiveSplats();
 
-        // 2c. Fruit::DrawShadows @ 0x0016ba6e
+        // 2c. Fruit::DrawShadows (v1.6.1 GameDraw @0x001cd720)
         Fruit::DrawShadows();
 
-        // 2d. SlashEntity::PreDraw @ 0x0016ba84 -- blade pre-pass for each
-        //     of 16 finger slots (binary loops over SlashEntity[16]).
+        // 2d. SlashEntity::PreDraw -- blade pre-pass for each of 16 finger slots
+        //     (v1.6.1 GameDraw @0x001cd720; binary loops over SlashEntity[16]).
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) g_pSlashEntities[i]->PreDraw();
         }
 
-        // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 -- drawn HERE in
-        //     the binary, NOT inside the 0x200 layer. Shockwave rings
-        //     belong to this post-actor block.
+        // 2e. BombBlast::DrawActiveBlasts (v1.6.1 GameDraw @0x001cd720) -- drawn HERE
+        //     in the binary, NOT inside the 0x200 layer. Shockwave rings belong to
+        //     this post-actor block.
         BombBlast::DrawActiveBlasts();
 
-        // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0
+        // 2f. BombFlash::DrawActiveFlashes (v1.6.1 GameDraw @0x001cd720)
         BombFlash::DrawActiveFlashes();
 
-        // 2g. HUD::Draw(0x80) -- DojoScreen / AboutScreen @ 0x0016baf8
+        // 2g. HUD::Draw(0x80) -- DojoScreen / AboutScreen (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
     }
 
     // Particle dt: binary GameDraw recomputes s0=frameDt/wavedt before each
-    // pm.Draw call (0x1cda20/0x1cdafc/0x1cdbc4). Mirror the same derivation
+    // pm.Draw call (v1.6.1 @0x001cda20/0x001cdafc/0x001cdbc4). Mirror the same derivation
     // used by the Update path (GameInit.cpp lines 484-493).
     float particleDt;
     {
@@ -713,55 +713,54 @@ void GameDraw(float dt, bool active) {
     }
 
     // === 3. Background particles ===
-    // Binary pm.Draw(-1) @ 0x1cda34 -- drawn BEHIND the logo/shade.
+    // Binary pm.Draw(-1) @ v1.6.1 0x001cda34 -- drawn BEHIND the logo/shade.
     pm.Draw(particleDt, false, -1);
 
-    // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
+    // v1.6.1 GameDraw @0x001cd720 after pm.Draw(-1): SetDepthBuffer(0) turns
     // depth test off before the SlashEntity DrawSlice loop x16 and all
-    // later 2D passes.
-    // Binary @ 0x0016b888: explicit per-finger DrawSlice dispatch loop.
+    // later 2D passes. Explicit per-finger DrawSlice dispatch loop.
     // ActorManager::Draw above already walked type-3 SlashEntity slots but
     // their Draw(Renderer&) vtable slot is a BX lr stub -- no output.
     // All blade rendering comes from here.
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0016b888 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 GameDraw @ 0x001cd720 (re-analyst)
     dm.SetDepthBuffer(false);
     for (int i = 0; i < 16; ++i) {
         if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
     }
 
     // === 4. Mid particles + slice lines + main-screen logo ===
-    // Binary pm.Draw(0) @ 0x1cdb10
+    // Binary pm.Draw(0) @ v1.6.1 0x001cdb10
     pm.Draw(particleDt, false, 0);
 
-    // DrawSlices @ 0x0016bb52 -- slash-line pool
+    // DrawSlices (v1.6.1 GameDraw @0x001cd720) -- slash-line pool
     FN::SliceEffect_Draw(dt);
 
-    // HUD::Draw(0x01) -- MainScreen logo / shade @ 0x0016bb5a
+    // HUD::Draw(0x01) -- MainScreen logo / shade (v1.6.1 GameDraw @0x001cd720)
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
-    // pm.Draw(1) -- foreground particles @ 0x1cdbd8
+    // pm.Draw(1) -- foreground particles @ v1.6.1 0x001cdbd8
     pm.Draw(particleDt, false, 1);
 
-    // WaveManager::Draw(0) @ 0x0016bb98 -- stubbed (wave-banner overlay).
+    // WaveManager::Draw(0) (v1.6.1 GameDraw @0x001cd720) -- stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
 
     // === 5. HUD overlay layers + flash effects ===
     {
-        // HUD::Draw(0x08) -- buttons @ 0x0016bba8
+        // HUD::Draw(0x08) -- buttons (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
-        // MainScreen::DrawPostEffects @ 0x0016bbb0
+        // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720)
         game_work.mMainScreen->DrawPostEffects();
 
-        // DrawCritHit (CriticalFlash) @ 0x0016bbd2 -- gated on
+        // DrawCritHit (CriticalFlash) (v1.6.1 GameDraw @0x001cd720) -- gated on
         // critFlash > 0 && IsFastHardware. Port has CriticalFlash
         // implemented as FN::DrawCriticalFlash.
         FN::DrawCriticalFlash();
 
-        // HUD::Draw(0x100) -- overlays @ 0x0016bbde
+        // HUD::Draw(0x100) -- overlays (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);
 
-        // DrawBombHit @ 0x0016bbe6 -- bomb-hit white flash, gated on
+        // DrawBombHit (v1.6.1 GameDraw @0x001cd720) -- bomb-hit white flash, gated on
         // bombFlash > 0. Binary gates on LoadingJob::CanBoot() -- when splash
         // is exclusive (CanBoot false), DrawBombHit is never reached. Port
         // always draws game content, so suppress bomb flash while the splash
@@ -773,10 +772,10 @@ void GameDraw(float dt, bool active) {
             }
         }
 
-        // HUD::Draw(0x200) -- bomb-hit overlay layer @ 0x0016bbec
+        // HUD::Draw(0x200) -- bomb-hit overlay layer (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);
 
-        // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12
+        // DrawNews / DrawStartFade (v1.6.1 GameDraw @0x001cd720)
         FN::DrawNews();
         FN::DrawStartFade();
 
@@ -787,13 +786,13 @@ void GameDraw(float dt, bool active) {
         FN::DebugBladeTrails_Draw();
 #endif
 
-        // HUD::Draw(0x400) -- top layer @ 0x0016bd7c, ALWAYS fires
+        // HUD::Draw(0x400) -- top layer (v1.6.1 GameDraw @0x001cd720), ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
         game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
     }
 }
 
-// Matches GameExit (0x16cf74). Order matters:
+// v1.6.1 GameExit @0x001cfed4. Order matters:
 //   1. UnloadBackground / pBackgroundTexture.SetNull
 //   2. mHud->Release()   -- destroys HUDControls (MenuButtons etc.); does NOT
 //                          delete their m_pEntity (ActorManager-owned).
@@ -804,7 +803,7 @@ void GameDraw(float dt, bool active) {
 //   5. Null g_pSlashEntities[*] (already deleted by Clear; just drop refs).
 //   6. InputManager Destroy/Init reset.
 //   7. Entity::HeapDestroy (free the entity pool itself).
-void GameExit_Handler() {
+void GameExit() {
     LOG_INFO("GAMEINIT", "GameExit: cleaning up");
 
     // Release background texture (shared MenuBackground slot)
@@ -822,7 +821,7 @@ void GameExit_Handler() {
         game_work.mHud = nullptr;
     }
 
-    // Binary @ 0x0016d086 -- release the 12-slot MissControl pool. Pool slots
+    // v1.6.1 GameExit @0x001cfed4 -- release the 12-slot MissControl pool. Pool slots
     // are created with m_bNoDestructor=1 so HUD::Release skips them; CleanPool
     // is the only path that actually frees them. Heap leak otherwise.
     MissControl::CleanPool();
@@ -843,8 +842,8 @@ void GameExit_Handler() {
     // we null the SlashEntity pointers so the entity destruction order is
     // ActorManager-driven (Release + delete per slot via the type-list walk).
     Coin::ClearCoins(false);
-    FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; matches binary @ 0x0016ccc8
-    WaveManager::GetInstance()->Destroy();  // frees per-session wave state; matches binary @ 0x00121bf0
+    FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; v1.6.1 GameExit @0x001cfed4
+    WaveManager::GetInstance()->Destroy();  // frees per-session wave state; v1.6.1 WaveManager::Destroy @0x001c1be8
     PSPParticleManager::GetInstance().ClearEmitters();
     {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -871,7 +870,7 @@ void GameExit_Handler() {
     // Clear the initComplete guard so the next GameInit (via FrontendInit ->
     // taskStateIndex=2 handoff) can rebuild HUD + MainScreen. Without this,
     // GameInit's early-return at the initComplete check leaves the screen
-    // blank after quit-to-main. Binary @ 0x0016cf74 head clears the
+    // blank after quit-to-main. v1.6.1 GameExit @0x001cfed4 head clears the
     // equivalent flag at GameTaskState +0x113.
     ts->initComplete = false;
 }

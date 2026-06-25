@@ -157,45 +157,45 @@ bool PauseScreen::IsEnabled() {
 }
 
 // -------------------------------------------------------------------------
-// QuitToMenu / EndRetryLevel -- binary @ 0x001cb6e4 / 0x0016a208
+// QuitToMenu / EndRetryLevel -- binary @ 0x001cb6e4
+// TODO: re-verify v1.6.1 EndRetryLevel addr
 // -------------------------------------------------------------------------
 // v1.6.1 Model A: quit-to-menu pauses in place (bM_bPaused=1), stays in task state 2 --
 // the binary (QuitToMenu @0x001cb6e4) never hops task state or tears down HUD/WaveManager;
 // GameExit @0x001cfed4 runs only on real app exit. #179
 static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
-    game_work.bM_bPaused = 1;                               // 0x169e6e: strb 1, [+0x05]
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // v1.6.1 QuitToMenu @0x001cb6e4
+    game_work.bM_bPaused = 1;                          // v1.6.1 QuitToMenu @0x001cb6e4: strb 1, [+0x05]
 
     if (game_work.mMainScreen) {
-        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
-        game_work.mMainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
+        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // v1.6.1 QuitToMenu @0x001cb6e4 [+0x10c] = 0
+        game_work.mMainScreen->SetStateTimer(0.5f);         // v1.6.1 QuitToMenu @0x001cb6e4 [+0x110]
         // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- seed m_TexMoreGames.f0=0.5f on gameplay->menu return.
-        // That binary function (distinct from 0x00169e50) also writes 0.5f to +0x11c so the
+        // That binary function (distinct from v1.5.x 0x00169e50) also writes 0.5f to +0x11c so the
         // case-0 hold branch runs for ~0.5s before sliding in. Not yet confirmed whether
         // 0x001cb6e4 is a second QuitToMenu variant or a wrapper; needs re-analyst pass.
         // Binary keeps menu buttons and fruit alive on quit; ResetGameEntities flings in-game
-        // fruit/bombs during the bomb-flash phase (Bomb::HitMenuBomb -> UpdateBombHit @
-        // 0x0016a1a8 crosses 1.5s -> ResetGameEntities(false)). No DeleteMenuButtons here.
+        // fruit/bombs during the bomb-flash phase (Bomb::HitMenuBomb -> UpdateBombHit
+        // crosses 1.5s -> ResetGameEntities(false)). No DeleteMenuButtons here.
     }
 
-    // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
+    // v1.6.1 QuitToMenu @0x001cb6e4: binary writes PauseScreen->m_bPendingRemoval = 1
     // (re-analyst 2026-05-10), destructing the overlay. Port relies on
     // PauseScreen's own state machine (BOMB_FLASH -> HIDDEN with m_Alpha
     // decay) to fade the overlay out gradually -- if we deactivated here
     // (m_Active=0), Update would stop running and the BOMB_FLASH state
     // would never advance.
 
-    FN::SetScore(0, -1);                               // 0x169e90
+    FN::SetScore(0, -1);                               // v1.6.1 QuitToMenu @0x001cb6e4
 
-    // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 binary @ 0x00169e9e
+    // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 QuitToMenu @ 0x001cb6e4
     // (binary: NetworkManager::GetInstance()->vtable[3](0))
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
 
-    // 0x169eaa: vstr 0.0f, [+0x1a0] (DAT_00169ec4 = 0x00000000 verified
-    // via read_memory). Earlier port asm-inspector misread the literal as
-    // -2.0f; binary actually CLEARS the timer on quit (resets the
-    // vestigial ramp at 0x0016c5fe back to disarmed).
+    // v1.6.1 QuitToMenu @0x001cb6e4: vstr 0.0f, [+0x1a0] (verified via read_memory).
+    // Earlier port asm-inspector misread the literal as -2.0f; binary actually CLEARS
+    // the timer on quit (resets the vestigial ramp back to disarmed).
     game_work.m_QuitTransitionTimer = 0.0f;
 
     // Binary @ 0x00169eae..0x00169ebe: clear-on-quit flags.
@@ -761,7 +761,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
-            LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x00169e50", "QUIT_EXIT faded");
+            LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x001cb6e4", "QUIT_EXIT faded");
             QuitToMenu();
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
