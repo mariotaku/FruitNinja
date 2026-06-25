@@ -1,5 +1,3 @@
-// Analysed: 2026-05-03T00:00
-
 #include "ScreenEffect.h"
 #include "PowerUp.h"
 #include "util/StringHash.h"
@@ -50,70 +48,150 @@ void Emmiter::Parse(TiXmlElement* xml) {
     }
 }
 
-// ---- EffectImage::Parse -------------------------------------------------------
+// ---- ParseVector: read "x,y,z" (comma-separated) into Vec3 -------------------
+// v1.6.1 EffectImage::Parse @0x001491e4 uses comma-separated vector parsing.
+
+static Vec3 ParseVector(const char* s) {
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    if (s) sscanf(s, "%f,%f,%f", &x, &y, &z);
+    return Vec3(x, y, z);
+}
+
+// ---- ParseColour: read "r g b a" (space-separated) into Colour ---------------
+
+static Colour ParseColour(const char* s) {
+    int r = 255, g = 255, b = 255, a = 255;
+    if (s) sscanf(s, "%d %d %d %d", &r, &g, &b, &a);
+    return Colour((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a);
+}
+
+// ---- ParseMaskWords: comma-split token match -> OR (1<<idx) -------------------
+// v1.6.1 ParseMaskWords @0x0014f404: splits str on commas, matches each token
+// against the provided word hashes; sets bit (1<<matchIndex) in the result.
+// Tokens: index 0 = "scale" (bit 0 = 1), index 1 = "fade" (bit 1 = 2).
+
+static uint32_t ParseMaskWords(const char* str) {
+    if (!str || !*str) return 0u;
+    static const uint32_t kHashScale = StringHash("scale");
+    static const uint32_t kHashFade  = StringHash("fade");
+    uint32_t bits = 0u;
+    char buf[64];
+    strncpy(buf, str, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char* tok = buf;
+    while (tok && *tok) {
+        char* comma = strchr(tok, ',');
+        if (comma) *comma = '\0';
+        // trim leading spaces
+        while (*tok == ' ') ++tok;
+        uint32_t h = StringHash(tok);
+        if (h == kHashScale) bits |= 1u;
+        if (h == kHashFade)  bits |= 2u;
+        tok = comma ? (comma + 1) : NULL;
+    }
+    return bits;
+}
+
+// ---- EffectImage::Parse @0x001491e4 ------------------------------------------
 
 void EffectImage::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
+    // "pos" -> m_Pos (comma-separated Vec3)
+    const char* pos = xml->Attribute("pos");
+    if (pos) m_Pos = ParseVector(pos);
+
+    // "anchor" -> m_Vel (comma-separated Vec3)
+    const char* anchor = xml->Attribute("anchor");
+    if (anchor) m_Vel = ParseVector(anchor);
+
+    // "transitionMove" -> both m_SizeIn and m_SizeOut
+    const char* transMove = xml->Attribute("transitionMove");
+    if (transMove) {
+        Vec3 v = ParseVector(transMove);
+        m_SizeIn  = v;
+        m_SizeOut = v;
+    }
+    // "transitionMoveIn" overrides m_SizeIn; "transitionMoveOut" overrides m_SizeOut
+    const char* moveIn = xml->Attribute("transitionMoveIn");
+    if (moveIn) m_SizeIn = ParseVector(moveIn);
+    const char* moveOut = xml->Attribute("transitionMoveOut");
+    if (moveOut) {
+        m_SizeOut = ParseVector(moveOut);
+#if !defined(__bada__)
+        m_VelOut = m_SizeOut;
+#endif
+    }
+
+    // "texture" -> load texture; set m_ColourScale = (texWidth, texHeight, 0)
+    // v1.6.1 EffectImage::Parse @0x001491e4: VectorUnsignedToFloat from tex+0x24/+0x28
     const char* tex = xml->Attribute("texture");
     if (tex) {
 #if !defined(__bada__)
         strncpy(m_TexName, tex, sizeof(m_TexName) - 1);
         m_TexName[sizeof(m_TexName) - 1] = '\0';
-#else
-        (void)tex;
+        char texPath[80];
+        snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
+        Mortar::SmartPtr<Mortar::Texture> loaded =
+            Mortar::TextureManager::LoadLocalisedTexture(texPath);
+        if (loaded.IsValid()) {
+            m_Texture    = loaded;
+            m_ColourScale = Vec3((float)loaded->GetWidth(),
+                                 (float)loaded->GetHeight(),
+                                 0.0f);
+        }
 #endif
     }
 
-    const char* multi = xml->Attribute("multiplyer");
-    if (multi) m_bIsMultiplyerBoard = (strcmp(multi, "true") == 0 || strcmp(multi, "1") == 0);
+    // "scale" -> m_ColourScale (explicit override; binary *=1.0 no-op after)
+    const char* scale = xml->Attribute("scale");
+    if (scale) m_ColourScale = ParseVector(scale);
 
-    const char* pos = xml->Attribute("pos");
-    if (pos) {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        sscanf(pos, "%f %f %f", &x, &y, &z);
-        m_Pos = Vec3(x, y, z);
+    // "slowHardwareScale" -> float; if !IsFastHardware() multiply into m_ColourScale
+    const char* slowScale = xml->Attribute("slowHardwareScale");
+    if (slowScale) {
+        float ss = (float)atof(slowScale);
+        if (!IsFastHardware()) {
+            m_ColourScale.x *= ss;
+            m_ColourScale.y *= ss;
+            m_ColourScale.z *= ss;
+        }
     }
 
-    // XML uses transitionMoveIn / transitionMoveOut for entry and exit velocity.
-    // m_Vel stores the entry vector; exit vector is not yet separately tracked.
-    // TODO: add m_VelOut field when exit-slide animation is ported.
-    const char* moveIn = xml->Attribute("transitionMoveIn");
-    if (moveIn) {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        sscanf(moveIn, "%f,%f,%f", &x, &y, &z);
-        m_Vel = Vec3(x, y, z);
-    }
-    // transitionMoveOut="X,Y" -- exit velocity (Vec3).
-    const char* moveOut = xml->Attribute("transitionMoveOut");
-    if (moveOut) {
-#if !defined(__bada__)
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        sscanf(moveOut, "%f,%f,%f", &x, &y, &z);
-        m_VelOut = Vec3(x, y, z);
-#else
-        (void)moveOut;
-#endif
-    }
+    // "pulseSpeed" -> m_Freq
+    const char* pulseSpeed = xml->Attribute("pulseSpeed");
+    if (pulseSpeed) m_Freq = (float)atof(pulseSpeed);
 
-    // transitionTime drives m_FadeRate (seconds for fade-in/out).
-    // TODO: "fade" attribute not present in current powerUpList.xml; kept for
-    // any older XML that may use the direct rate form.
+    // "pulseScale" -> m_Amp1, copy to m_Amp2
+    const char* pulseScale = xml->Attribute("pulseScale");
+    if (pulseScale) { m_Amp1 = (float)atof(pulseScale); m_Amp2 = m_Amp1; }
+
+    // "pulseScalePositive" -> m_Amp1 ; "pulseScaleNegative" -> m_Amp2
+    const char* pulsePos = xml->Attribute("pulseScalePositive");
+    if (pulsePos) m_Amp1 = (float)atof(pulsePos);
+    const char* pulseNeg = xml->Attribute("pulseScaleNegative");
+    if (pulseNeg) m_Amp2 = (float)atof(pulseNeg);
+
+    // "transitionTime" -> m_FadeRate
     const char* transitionTime = xml->Attribute("transitionTime");
     if (transitionTime) m_FadeRate = (float)atof(transitionTime);
-    const char* fade = xml->Attribute("fade");
-    if (fade) m_FadeRate = (float)atof(fade);
 
-    // transition="fade"|"slide" -- animation mode (port-side trailing field).
-    const char* mode = xml->Attribute("transition");
-#if !defined(__bada__)
-    m_TransitionHash = (mode && *mode) ? StringHash(mode) : 0u;
-#else
-    (void)mode;
-#endif
+    // "timeStart" -> m_StartT ; "timeEnd" -> m_EndT
+    const char* timeStart = xml->Attribute("timeStart");
+    if (timeStart) m_StartT = (float)atof(timeStart);
+    const char* timeEnd = xml->Attribute("timeEnd");
+    if (timeEnd) m_EndT = (float)atof(timeEnd);
 
-    // v1.6.1 EffectImage::Parse @0x001491e4: m_GroupMask from "drawOrder" (absent -> HUD_LAYER_DEFAULT=1). Table @0x2d8bf0.
-    // TODO: v1.6.1 EffectImage::Parse @0x001491e4 -- port the transition/anchor/pulse attribute names faithfully (currently divergent)
+    // "colour" -> m_Tint (RGBA space-separated)
+    const char* colour = xml->Attribute("colour");
+    if (colour) m_Tint = ParseColour(colour);
+
+    // "transition" -> m_FlagBits via ParseMaskWords (bit0="scale", bit1="fade")
+    // v1.6.1 ParseMaskWords @0x0014f404
+    const char* transition = xml->Attribute("transition");
+    if (transition) m_FlagBits = ParseMaskWords(transition);
+
+    // "drawOrder" -> m_GroupMask (kept from commit 1af02f65)
     {
         const char* drawOrder = xml->Attribute("drawOrder");
         if (!drawOrder) {
@@ -139,54 +217,16 @@ void EffectImage::Parse(TiXmlElement* xml) {
         }
     }
 
-    const char* freq = xml->Attribute("freq");
-    if (freq) m_Freq = (float)atof(freq);
+    // "deferPoints" / "defer" -> m_bIsMultiplyerBoard
+    // v1.6.1 EffectImage::Parse @0x001491e4
+    const char* defer = xml->Attribute("deferPoints");
+    if (!defer) defer = xml->Attribute("defer");
+    if (defer) m_bIsMultiplyerBoard = (strcmp(defer, "true") == 0 || strcmp(defer, "1") == 0);
 
-    const char* amp1 = xml->Attribute("amp1");
-    if (amp1) m_Amp1 = (float)atof(amp1);
-
-    const char* amp2 = xml->Attribute("amp2");
-    if (amp2) m_Amp2 = (float)atof(amp2);
-
-    const char* sizeIn = xml->Attribute("sizeIn");
-    if (sizeIn) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(sizeIn, "%f %f %f", &x, &y, &z);
-        m_SizeIn = Vec3(x, y, z);
-    }
-
-    const char* sizeOut = xml->Attribute("sizeOut");
-    if (sizeOut) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(sizeOut, "%f %f %f", &x, &y, &z);
-        m_SizeOut = Vec3(x, y, z);
-    }
-
-    const char* timeStart = xml->Attribute("timeStart");
-    if (timeStart) m_StartT = (float)atof(timeStart);
-
-    const char* timeEnd = xml->Attribute("timeEnd");
-    if (timeEnd) m_EndT = (float)atof(timeEnd);
-
-    const char* cs = xml->Attribute("colourScale");
-    if (cs) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(cs, "%f %f %f", &x, &y, &z);
-        m_ColourScale = Vec3(x, y, z);
-    }
-
-    const char* tint = xml->Attribute("tint");
-    if (tint) {
-        int r = 255, g = 255, b = 255, a = 255;
-        sscanf(tint, "%d %d %d %d", &r, &g, &b, &a);
-        m_Tint = Colour((uint8_t)r, (uint8_t)g, (uint8_t)b, (uint8_t)a);
-    }
-
-    const char* lowEnd = xml->Attribute("lowEndOnly");
-    if (lowEnd) m_bLowEndOnly = (strcmp(lowEnd, "true") == 0 || strcmp(lowEnd, "1") == 0);
-
-    const char* flags = xml->Attribute("flags");
-    if (flags) m_FlagBits = (uint32_t)atoi(flags);
+    // "scaleToScreen" -> m_bLowEndOnly
+    // v1.6.1 EffectImage::Parse @0x001491e4
+    const char* scaleToScreen = xml->Attribute("scaleToScreen");
+    if (scaleToScreen) m_bLowEndOnly = (strcmp(scaleToScreen, "true") == 0);
 }
 
 void EffectImage::LoadTextures() {
@@ -194,12 +234,24 @@ void EffectImage::LoadTextures() {
     // which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex"). XML
     // attribute values omit the .tex suffix (e.g. `texture="arcade_60seconds"`
     // -> file `arcade_60seconds.tex`). Mirror the binary's name+".tex" append.
+    // Parse already loads and sets m_ColourScale from texture dims; this is a
+    // reload path used when the texture cache is flushed and restored.
 #if !defined(__bada__)
     if (m_TexName[0] == '\0') return;
-    if (m_Texture.IsValid()) return;  // already loaded
+    if (m_Texture.IsValid()) return;  // already loaded (Parse loads on first call)
     char texPath[80];
     snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
-    m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
+    Mortar::SmartPtr<Mortar::Texture> loaded =
+        Mortar::TextureManager::LoadLocalisedTexture(texPath);
+    if (loaded.IsValid()) {
+        m_Texture     = loaded;
+        // Restore m_ColourScale dims if they were zeroed after an unload
+        if (m_ColourScale.x == 0.0f && m_ColourScale.y == 0.0f) {
+            m_ColourScale = Vec3((float)loaded->GetWidth(),
+                                 (float)loaded->GetHeight(),
+                                 0.0f);
+        }
+    }
 #endif
 }
 
@@ -398,7 +450,10 @@ void ScreenEffect::Activate() {
         HUDControl3d* ctrl = new HUDControl3d();
         // pos offset (480, 320, 0) added internally by HUDControl3d::Draw
         ctrl->pos = img.m_Pos;
-        ctrl->size = img.m_SizeIn;
+        // Size comes from m_ColourScale (= texture dims written by Parse);
+        // NOT from m_SizeIn (which is the slide-move offset).
+        // v1.6.1 ScreenEffect::Update @0x00148844 writes ctrl->size from m_ColourScale each frame.
+        ctrl->size = img.m_ColourScale;
         ctrl->m_DrawColour = img.m_Tint;
         // Texture assignment per binary @ 0x0011dd2e onwards: the loaded
         // ReloadableTexture's SmartPtr is copied into HUDControl3d.m_Texture
@@ -434,65 +489,97 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     // its own timeline rather than inheriting the PowerUp's.
     if (m_RemainingTime > 0.0f) {
         m_RemainingTime -= dt;
-        // Override caller args with our own normalised time
         currentLongest = m_RemainingTime;
         maxTotal       = m_TotalDuration;
     }
 
-    float tNorm = (maxTotal > 0.0f) ? (currentLongest / maxTotal) : 0.0f;
-
-    // Per-image fade logic
+    // Per-image fade + slide + size logic
+    // v1.6.1 ScreenEffect::Update @0x00148844
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
         if (!img.m_pHudCtrl) continue;
 
-        // Compute target visibility from startT/endT window
-        bool inWindow = true;
-        if (img.m_EndT > 0.0f && tNorm > img.m_EndT) inWindow = false;
-        if (tNorm < img.m_StartT)                      inWindow = false;
+        float wStart = maxTotal * img.m_StartT;
+        float wEnd   = maxTotal * img.m_EndT;
 
-        if (img.m_FadeRate > 0.0f) {
-            // Fade-in / fade-out
-            if (inWindow) {
-                img.m_CurrentVis += img.m_FadeRate * dt;
-                if (img.m_CurrentVis > 1.0f) img.m_CurrentVis = 1.0f;
-            } else {
-                img.m_CurrentVis -= img.m_FadeRate * dt;
-                if (img.m_CurrentVis < 0.0f) img.m_CurrentVis = 0.0f;
-            }
-        } else {
+        bool useMoveIn = false;
+
+        if (img.m_FadeRate <= 0.0f) {
+            // Hard on/off: visible only when tNorm in [wStart, wEnd]
+            bool inWindow = (currentLongest >= wStart &&
+                             (img.m_EndT <= 0.0f || currentLongest <= wEnd));
             img.m_CurrentVis = inWindow ? 1.0f : 0.0f;
+            useMoveIn = inWindow;
+        } else {
+            // Entering: currentLongest in [wStart, wStart+m_FadeRate]
+            if (currentLongest >= wStart && currentLongest <= wStart + img.m_FadeRate) {
+                img.m_CurrentVis += dt / img.m_FadeRate;
+                if (img.m_CurrentVis > 1.0f) img.m_CurrentVis = 1.0f;
+                useMoveIn = true;
+            }
+            // Leaving: past wEnd window
+            else if (img.m_EndT > 0.0f && currentLongest < wEnd) {
+                useMoveIn = false;
+                float ratio = (wEnd - currentLongest) / img.m_FadeRate;
+                if (ratio < 0.0f) ratio = 0.0f;
+                if (ratio > 1.0f) ratio = 1.0f;
+                img.m_CurrentVis = ratio;
+            }
+            // Fully visible in-window
+            else if (currentLongest >= wStart && (img.m_EndT <= 0.0f || currentLongest >= wEnd)) {
+                img.m_CurrentVis = 1.0f;
+                useMoveIn = true;
+            }
         }
 
-        // Sine-wave oscillation on size
+        // Ease: e = (1 - vis)^2
+        float e = 1.0f - img.m_CurrentVis;
+        e = e * e;
+
+        // ctrl.pos = m_Pos * (480,320,0) + move_offset * e
+        // m_Pos is in normalised [0..1] space; multiply by screen dims
+        // v1.6.1 @0x00148844: pos = m_Pos*(480,320,0) + (useMoveIn?m_SizeIn:m_SizeOut)*e
+        const Vec3& moveOffset = useMoveIn ? img.m_SizeIn : img.m_SizeOut;
+        img.m_pHudCtrl->pos.x = img.m_Pos.x * 480.0f + moveOffset.x * e;
+        img.m_pHudCtrl->pos.y = img.m_Pos.y * 320.0f + moveOffset.y * e;
+        img.m_pHudCtrl->pos.z = img.m_Pos.z * 0.0f   + moveOffset.z * e;
+
+        // Size = m_ColourScale * ((m_FlagBits & 1) ? (1 - e) : 1.0f)
+        // m_ColourScale holds texture dims (written by Parse)
+        float scaleFactor = (img.m_FlagBits & 1u) ? (1.0f - e) : 1.0f;
+        Vec3 sz;
+        sz.x = img.m_ColourScale.x * scaleFactor;
+        sz.y = img.m_ColourScale.y * scaleFactor;
+        sz.z = img.m_ColourScale.z * scaleFactor;
+
+        // Pulse oscillation on size
         // ASM-verified: 2026-06-24T00:00Z v1.6.1 ScreenEffect::Update @ 0x00148adc (asm-inspector)
-        //   m_SinIdx += dt*32760.0f*m_Freq; multiplier loaded at 0x00148ad8 from
-        //   DAT_00148ca4 = 0x46fff000 = 32760.0f (32764 would be 0x46fff800). 65536.0f was 2x too fast.
+        //   m_SinIdx += dt*32760.0f*m_Freq; DAT_00148ca4 = 0x46fff000 = 32760.0f
         img.m_SinIdx += (uint16_t)(img.m_Freq * 32760.0f * dt);
         float sinVal = SinIdx(img.m_SinIdx);
-
-        // Lerp size between SizeIn and SizeOut using sinVal
-        Vec3 sz;
-        sz.x = img.m_SizeIn.x + (img.m_SizeOut.x - img.m_SizeIn.x) * (sinVal * img.m_Amp1 + img.m_Amp2);
-        sz.y = img.m_SizeIn.y + (img.m_SizeOut.y - img.m_SizeIn.y) * (sinVal * img.m_Amp1 + img.m_Amp2);
-        sz.z = img.m_SizeIn.z;
+        float amp = (sinVal < 0.0f) ? img.m_Amp2 : img.m_Amp1;
+        float pulse = sinVal * amp + 1.0f;
+        sz.x *= pulse;
+        sz.y *= pulse;
+        sz.z *= pulse;
 
         img.m_pHudCtrl->size = sz;
 
-        // Apply colour scale * tint alpha from visibility
-        uint8_t alpha = (uint8_t)(img.m_CurrentVis * 255.0f);
+        // Alpha: fade bit (bit1=2) -> alpha * m_CurrentVis, else full tint alpha
+        // v1.6.1 @0x00148844
+        float alpha = (img.m_FlagBits & 2u)
+            ? ((float)img.m_Tint.a * img.m_CurrentVis)
+            : (float)img.m_Tint.a;
+        if (alpha < 0.0f) alpha = 0.0f;
+        // TODO: v1.6.1 @0x00148844 -- binary reads hud->alpha (HUD+0x24) and multiplies
+        //   into alpha here. Port's HUD+0x24 = m_globalTimeScale (slow-motion; not a
+        //   global alpha). Semantic mismatch -- skip multiplication until field is RE'd.
         img.m_pHudCtrl->m_DrawColour = Colour(
-            (uint8_t)(img.m_Tint.r * img.m_ColourScale.x),
-            (uint8_t)(img.m_Tint.g * img.m_ColourScale.y),
-            (uint8_t)(img.m_Tint.b * img.m_ColourScale.z),
-            alpha
+            img.m_Tint.r,
+            img.m_Tint.g,
+            img.m_Tint.b,
+            (uint8_t)alpha
         );
-
-        // Update position with velocity
-        img.m_Pos.x += img.m_Vel.x * dt;
-        img.m_Pos.y += img.m_Vel.y * dt;
-        img.m_Pos.z += img.m_Vel.z * dt;
-        img.m_pHudCtrl->pos = img.m_Pos;
     }
 
     // Per-tint colour multiply on HUD scales
@@ -505,7 +592,6 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         if (t.m_Length > 0.0f)
             tval = Clamp(t.m_CurrentT / t.m_Length, 0.0f, 1.0f);
 
-        // Fade-in ramp over m_FadeIn seconds
         float fade = 1.0f;
         if (t.m_FadeIn > 0.0f)
             fade = Clamp(t.m_CurrentT / t.m_FadeIn, 0.0f, 1.0f);
@@ -515,14 +601,12 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         col.y = Lerp(t.m_ColourFrom.y, t.m_ColourTo.y, tval) * fade;
         col.z = Lerp(t.m_ColourFrom.z, t.m_ColourTo.z, tval) * fade;
 
-        // Multiply into HUD scales[0..2]
         hud->scales[0] *= col.x;
         hud->scales[1] *= col.y;
         hud->scales[2] *= col.z;
     }
 
-    // RE-ported: binary @ 0x00148d24 (v1.6.1, re-analyst spec) — when remaining time < 0.8f,
-    // halt emitter spawning (m_RateScale=0); do NOT destroy the emitter.
+    // v1.6.1 @0x00148d24: when remaining time < 0.8f, halt emitter spawning.
     for (size_t i = 0; i < m_Emmiters.size(); ++i) {
         Emmiter& em = m_Emmiters[i];
         if (em.m_pHandle && currentLongest < 0.8f) {
@@ -530,10 +614,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         }
     }
 
-    // RE-ported: binary @ 0x00148d84 (v1.6.1, re-analyst spec) — forward iteration;
-    // gate: fires when currentLongest (remaining) <= maxTotal*m_StartT; writes 100.0f to
-    // m_StartT as fired-marker; stores SFXPlay return in m_VoiceHandle; vol=0.6599f, pitch=1.0f,
-    // empty Delegate1 callback (DAT_00148cc0=0.0f is the 4th float arg to SFXPlay).
+    // v1.6.1 @0x00148d84: fire SFX when remaining time crosses m_StartT threshold.
     {
         GameSound* gs = game_work.mGameSound;
 
