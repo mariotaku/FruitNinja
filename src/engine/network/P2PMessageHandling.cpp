@@ -54,3 +54,22 @@ void P2PInitializationCompleteHandler(bool success, bool isHost) {
     (void)success;
     (void)isHost;
 }
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsMultiplayer @0x00105ea0
+bool IsMultiplayer() {
+    return false;
+}
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsOnlineMultiplayer @0x00105ea4
+bool IsOnlineMultiplayer() {
+    return false;
+}
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsSameScreenMultiplayer @0x00105ea8
+bool IsSameScreenMultiplayer() {
+    return false;
+}
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
+void RetryOnlineMultiplayerGame() {
+}

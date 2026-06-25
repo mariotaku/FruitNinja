@@ -19,6 +19,7 @@
 #include "hud/TimeControl.h"
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/network/P2PMessageHandling.h"
 #include "debug/Logger.h"
 
 // Port-only debug logging: the binary has no equivalent. Suppressed in non-debug
@@ -60,13 +61,6 @@ static const char* const s_WaveXML[4] = {
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
-
-// Port specific: binary reads a game-mode byte at g_Game+0x4 to determine if
-// same-screen multiplayer is active. Port re-derives from gameMode field.
-// TODO: implement full IsSameScreenMultiplayer when gameMode bitmask is further RE'd.
-static bool IsSameScreenMultiplayer() {
-    return false;
-}
 
 int WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
     out.clear();
@@ -854,8 +848,6 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 
     // Sentinel: only save if single-player (m_bSplitPlayerWaves == 0 or waveCount < 0)
     // and waves are loaded for this mode.
-    // Port specific: binary uses game-mode byte at g_Game+0x4 — port re-derives via IsSameScreenMultiplayer().
-    // TODO: implement IsSameScreenMultiplayer (binary needs further RE for full gameMode bitmask).
     bool splitPlayer = IsSameScreenMultiplayer();
     if ((!splitPlayer || m_WaveCount[1] < 0)
         && !m_WaveInfo[game_work.gameMode].empty())

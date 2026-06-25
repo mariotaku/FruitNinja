@@ -58,6 +58,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/math/MathUtil.cpp"
     "${_PROJECT_ROOT}/src/engine/math/Random.cpp"
     "${_PROJECT_ROOT}/src/engine/network/NetworkManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/network/P2PMessageHandling.cpp"
     "${_PROJECT_ROOT}/src/engine/particle/PSPParticleManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/BakedString.cpp"
     "${_PROJECT_ROOT}/src/engine/render/BakedStringBox.cpp"

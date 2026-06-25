@@ -24,6 +24,7 @@
 #include "game/ItemManager.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/network/P2PMessageHandling.h"
 #include "engine/util/StringTable.h"
 #include "engine/util/Event.h"
 #include "game/FruitSaveData.h"
@@ -2570,12 +2571,6 @@ void Fruit::DestroyFruitModels() {
     }
 }
 
-// ============================================================
-// Port specific: binary reads g_Game+0x4 for SSM flag; port re-derives.
-// TODO: implement full IsSameScreenMultiplayer when gameMode bitmask is further RE'd.
-static bool Fruit_IsSameScreenMultiplayer() {
-    return false;
-}
 
 // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00175ea0 (re-analyst).
 // SSM Player 2 swaps shadow-offset axes; offset rotates 90 deg and the
@@ -2583,7 +2578,7 @@ static bool Fruit_IsSameScreenMultiplayer() {
 void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
     float mirrorX = 1.0f;
     float mirrorY = 0.0f;   // DAT_00176160
-    if (m_PlayerIdx >= 1 && Fruit_IsSameScreenMultiplayer()) {
+    if (m_PlayerIdx >= 1 && IsSameScreenMultiplayer()) {
         mirrorX = 0.0f;
         mirrorY = (pos.x < 0.0f) ? 1.0f : -1.0f;
     }
