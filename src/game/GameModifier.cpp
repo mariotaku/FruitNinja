@@ -2,6 +2,7 @@
 
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
+#include "game/PowerUp.h"
 #include "game/PowerUpManager.h"
 #include "util/StringHash.h"
 
@@ -73,7 +74,7 @@ void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
 
     float bonusB = 0.0f;
     if (m_pDeferInfo == nullptr ||
-        *(reinterpret_cast<const int*>(reinterpret_cast<const uint8_t*>(m_pDeferInfo) + 0xc)) != (int)s_hashB) {
+        static_cast<const PowerUp*>(m_pDeferInfo)->m_NameHash != s_hashB) {
         if (PowerUpManager::GetInstance()->GetActiveSingle(s_hashB)) bonusB = 50.0f;
     } else {
         bonusB = 50.0f;

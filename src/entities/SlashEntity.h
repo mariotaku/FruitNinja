@@ -480,6 +480,7 @@ public:
 #ifdef __bada__
     friend struct SlashEntityLayoutAssert;
 #endif
+    friend class ComboModifier;
 };
 
 #if defined(__bada__)
