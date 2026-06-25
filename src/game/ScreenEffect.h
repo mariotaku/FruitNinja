@@ -74,7 +74,8 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // +0x0e..+0x0f  implicit padding for Vec3 alignment
     // +0x10  Vec3  base position (XML "pos"); Update writes ctrl->pos.
     Vec3         m_Pos;              // +0x10
-    // +0x1c  Vec3  entry velocity (XML "transitionMoveIn").
+    // +0x1c  Vec3  anchor offset (XML "anchor"); also used as entry slide-move base.
+    //         Binary: Parse @0x001491e4 writes "anchor" here.
     Vec3         m_Vel;              // +0x1c
     // +0x28  uint32_t  HUD layer/group mask (XML "group"); Activate -> ctrl+0x34.
     uint32_t     m_GroupMask;        // +0x28
@@ -91,19 +92,27 @@ struct EffectImage : public Mortar::ReloadableTexture {
     float        m_CurrentVis;       // +0x3c
     // +0x40  float  fade rate (XML "fade"/"transitionTime"); Update uses dt/m_FadeRate.
     float        m_FadeRate;         // +0x40
-    // +0x44  Vec3  in-window scale (XML "sizeIn"); selected when t in window.
+    // +0x44  Vec3  entry slide move offset (XML "transitionMoveIn" / "transitionMove").
+    //         Applied to ctrl->pos during entrance transition. Default (0,0,0).
+    //         v1.6.1 EffectImage::Parse @0x001491e4.
     Vec3         m_SizeIn;           // +0x44
-    // +0x50  Vec3  out-of-window scale (XML "sizeOut").
+    // +0x50  Vec3  exit slide move offset (XML "transitionMoveOut" / "transitionMove").
+    //         Applied to ctrl->pos during exit transition. Default (0,0,0).
     Vec3         m_SizeOut;          // +0x50
     // +0x5c  float  window start time (XML "timeStart"); Update gate = param_3*m_StartT.
     float        m_StartT;           // +0x5c
     // +0x60  float  window end time (XML "timeEnd"); Update gate = param_3*m_EndT.
     float        m_EndT;             // +0x60
-    // +0x64  Vec3  colour scale (XML "colourScale"); applied when m_FlagBits&1==0.
+    // +0x64  Vec3  on-screen size source. Primary write: Parse @0x001491e4 loads the
+    //         texture and writes (texWidth, texHeight, 0) here. Secondary write: "scale"
+    //         attr overrides with explicit (x,y,z). "slowHardwareScale" multiplies into it.
+    //         Update @0x00148844 reads m_ColourScale as the base quad size each frame.
     Vec3         m_ColourScale;      // +0x64
     // +0x70  Colour  packed RGBA tint (XML "tint").
     Colour       m_Tint;             // +0x70
-    // +0x74  uint32_t  flag bits (XML "flags"); &1 = use colourScale, &2 = alpha clamp.
+    // +0x74  uint32_t  transition flag bits. Bit0(1)="scale" (size fades with visibility),
+    //         bit1(2)="fade" (alpha scales with visibility). XML "transition" attr parsed
+    //         via ParseMaskWords; v1.6.1 ParseMaskWords @0x0014f404.
     uint32_t     m_FlagBits;         // +0x74
     // +0x78  bool  low-end-only gate (XML "lowEndOnly"); padding +0x79..+0x7b to 0x7c.
     bool         m_bLowEndOnly;      // +0x78
@@ -121,35 +130,32 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // in base ReloadableTexture::m_pName char*; port base has char m_Name[4]
     // which is too short, so we store the full name here).
     char         m_TexName[64];
-    // Port specific: exit velocity from "transitionMoveOut" XML attr.
-    // Binary parses this into the same region as m_Vel (entry velocity field at +0x1c)
-    // via a separate code path; port needs a distinct field since we can't alias.
+    // Port specific: exit slide offset from "transitionMoveOut" XML attr.
+    // Binary stores m_SizeIn/m_SizeOut as separate Vec3 fields at +0x44/+0x50.
+    // Port maps transitionMoveIn->m_SizeIn, transitionMoveOut->m_VelOut (port alias).
     Vec3         m_VelOut;
-    // Port specific: hash of "transition" XML attr (e.g. "fade", "slide").
-    // Binary passes the raw string pointer; port hashes at parse time.
-    uint32_t     m_TransitionHash;
 #endif
 
+    // EffectImage ctor defaults -- v1.6.1 EffectImage::EffectImage @0x0014a508
     EffectImage()
         : Mortar::ReloadableTexture()
         , m_pHudCtrl(nullptr)
-        , m_bAddedToHUD(false)
+        , m_bAddedToHUD(true)    // binary default = 1 (v1.6.1 @0x0014a508)
         , m_bIsMultiplyerBoard(false)
         , m_Pos(0,0,0), m_Vel(0,0,0)
         , m_GroupMask(0)
         , m_SinIdx(0)
         , m_Freq(0.0f), m_Amp1(0.0f), m_Amp2(0.0f)
         , m_CurrentVis(0.0f), m_FadeRate(0.0f)
-        , m_SizeIn(1,1,1), m_SizeOut(1,1,1)
-        , m_StartT(0.0f), m_EndT(0.0f)
-        , m_ColourScale(1,1,1)
+        , m_SizeIn(0,0,0), m_SizeOut(0,0,0) // binary default = (0,0,0) (v1.6.1 @0x0014a508)
+        , m_StartT(1.0f), m_EndT(0.0f)      // binary default m_StartT=1.0f (v1.6.1 @0x0014a508)
+        , m_ColourScale(0,0,0)              // binary default = (0,0,0); texture dims written by Parse (v1.6.1 @0x0014a508)
         , m_Tint(255,255,255,255)
         , m_FlagBits(0), m_bLowEndOnly(false)
     {
 #if !defined(__bada__)
         m_TexName[0] = '\0';
         m_VelOut = Vec3(0,0,0);
-        m_TransitionHash = 0;
 #endif
     }
 
