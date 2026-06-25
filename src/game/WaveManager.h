@@ -19,6 +19,7 @@ struct COIN_CHANCEINATOR;
 struct WaveQue;
 struct WaveQueItem;
 class  FruitSaveData;
+class  GlobalProbabilityOveride;
 class HUDControl;
 class HUDControl3d;
 class SpeedControl;
@@ -245,10 +246,8 @@ public:
     int m_SavedWaveDelay;               // +0x2e0 (was field_0x2e0)
 
     // +0x2e4: global probability override list (12 bytes on __bada__).
-    // Binary field at +0x2e4 (12 bytes = std::vector<void*> on 32-bit).
-    // DIFFERS: port uses void* because element type is not yet RE'd.
     // v1.6.1 WaveManager field @ 0x00125be4
-    std::vector<void*> m_GlobalProbabilityOverride;  // +0x2e4 (NEW)
+    std::vector<GlobalProbabilityOveride*> m_GlobalProbabilityOverride;  // +0x2e4
 
     // --- Binary region END: +0x2f0 (752 bytes) --------------------------
 

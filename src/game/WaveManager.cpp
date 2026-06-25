@@ -1,4 +1,5 @@
 #include "WaveManager.h"
+#include "game/GlobalProbabilityOveride.h"
 #include "GameMode.h"
 #include "ScoreState.h"
 #include "WaveStructs.h"
@@ -444,10 +445,11 @@ void WaveManager::Destroy() {
     m_pCurrentWave[0] = 0;
 
     // GlobalProbabilityOveride teardown — indexed loop matching binary.
-    // TODO: v1.6.1 0x00123b54 (WaveManager::Destroy) — GlobalProbabilityOveride::~ not yet ported, delete-only
-    std::vector<void*>& gpo = m_GlobalProbabilityOverride;
-    for (std::vector<void*>::size_type i = 0; i < gpo.size(); ++i) {
+    // v1.6.1 WaveManager::Destroy @0x00123b54
+    std::vector<GlobalProbabilityOveride*>& gpo = m_GlobalProbabilityOverride;
+    for (std::vector<GlobalProbabilityOveride*>::size_type i = 0; i < gpo.size(); ++i) {
         if (gpo[i]) {
+            gpo[i]->~GlobalProbabilityOveride();
             operator delete(gpo[i]);
             gpo[i] = 0;
         }
