@@ -111,31 +111,25 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
 }
 
 // -------------------------------------------------------------------------
-// PauseGame / UnpauseGame (binary @ 0x00168f80 / 0x00168fb0)
+// PauseGame / UnpauseGame (binary @ 0x001ca48c / 0x001ca4b4)
 // -------------------------------------------------------------------------
 
-// Binary @ 0x00168f80 PauseGame():
-//   gameObj+0x02 (byte) = 1   -- timer-running flag on gameObj
-//   TaskState+0x0C (byte) = 0 -- isPaused = 0 (transition entering pause)
-//   TaskState+0x08 (float) = 0.25f -- pause transition timer
+// v1.6.1 PauseScreen::PauseGame @0x001ca48c:
+//   game_work.bM_Mode = 1;   unpause_game = 0;   unpauseDelay = 0.25f;
+// Note: the old stale address 0x00168f80 was a different function (ComboBox ctor area).
 void PauseScreen::PauseGame() {
-    GameTaskState* ts = GetTaskState();
     game_work.bM_Mode = true;
-    ts->isPaused = 0;
-    ts->pauseTransitionTimer = 0.25f;
+    g_unpause_game  = 0;
+    g_unpauseDelay  = 0.25f;
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00168fb0 UnpauseGame (re-analyst)
-// Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game_work.bM_Mode.
-// pausedFlag stays set through QUIT_EXIT/RETRY_EXIT/BOMB_FLASH so the dispatcher's
-// `active = !pausedFlag && pmState == 0` evaluates to false during those transitions,
-// which makes UpdateBombHit and GameOver-cross-1.5 skip. The port's RESUME_EXIT case
-// in PauseScreen::Update has its own port-specific pausedFlag clear (DIFFERS) because
-// the port's PowerManager stub always returns 0.
+// v1.6.1 PauseScreen::UnpauseGame @0x001ca4b4:
+//   repauseDelay = 0.4f;   unpause_game = 1;
+// Does NOT write bM_Mode directly. GameDraw tail @0x001cdd64 fires the actual
+// bM_Mode clear + ClearActions on the next rendered frame after unpause_game is armed.
 void PauseScreen::UnpauseGame() {
-    GameTaskState* ts = GetTaskState();
-    ts->isPaused = 1;
-    ts->pauseBombHitTimer = 0.4f;        // DAT_00168fcc, GameTaskState+0x10
+    g_repauseDelay = 0.4f;
+    g_unpause_game = 1;
 }
 
 // -------------------------------------------------------------------------
@@ -165,14 +159,14 @@ bool PauseScreen::IsEnabled() {
 // GameExit @0x001cfed4 runs only on real app exit. #179
 static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
+    // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- SuperFruitControl::StopAllPomegranates(...)
+    //   is the FIRST call in the binary before ResetGlobalDt. Not yet in
+    //   SuperFruitControl public API; add when ported.
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // v1.6.1 QuitToMenu @0x001cb6e4
     game_work.bM_bPaused = 1;                          // v1.6.1 QuitToMenu @0x001cb6e4: strb 1, [+0x05]
-    // Clear the pause-overlay gate so the menu runs ACTIVE (bM_Mode=0, like the
-    // menu boot in GameInit @0x001ce1c0). Pause sets bM_Mode=1, and the active
-    // gate is canUpdate=(!bM_Mode && pmState==0); the old port cleared it via the
-    // GameExit/GameInit hop, which the pause-in-place change (#179) removed -- so
-    // without this, quit-from-pause leaves bM_Mode=1 and the menu freezes.
-    game_work.bM_Mode = false;
+    // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
+    // The camera-settle auto-clear in GameUpdate @0x001cfaec clears bM_Mode once
+    // m_GameDt settles and PauseScreen leaves state ACTIVE (m_State != 3).
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0
@@ -188,6 +182,10 @@ static void QuitToMenu() {
     // decay) to fade the overlay out gradually -- if we deactivated here
     // (m_Active=0), Update would stop running and the BOMB_FLASH state
     // would never advance.
+
+    // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- if (game_work.pM_pTransientScreen)
+    //   *(reinterpret_cast<uint8_t*>(game_work.pM_pTransientScreen)+0x33) = 1;
+    //   pM_pTransientScreen not yet in GameWork layout; add when that field is RE'd.
 
     FN::SetScore(0, -1);                               // v1.6.1 QuitToMenu @0x001cb6e4
 
@@ -727,14 +725,8 @@ void PauseScreen::Update(float dt) {
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
-            // DIFFERS: binary relies on PowerManager::GetState() going non-zero on
-            // background to make the dispatcher's active=(!pausedFlag&&pmState==0)
-            // evaluate true again after resume. Port's PowerManager stub always
-            // returns 0, so pausedFlag is the sole gate. Clear it here (resume path
-            // only) so GameUpdate resumes ticking. QUIT_EXIT and RETRY_EXIT leave
-            // pausedFlag set -- binary-faithful -- so active=false holds through
-            // BOMB_FLASH and the 1.5f GameOver-cross check skips.
-            game_work.bM_Mode = false;
+            // bM_Mode cleared by GameDraw tail @0x001cdd64 when g_unpause_game fires,
+            // NOT here. Removing the old port-specific clear restores binary behaviour.
         }
         break;
 

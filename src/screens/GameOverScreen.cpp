@@ -130,10 +130,9 @@ static void DoQuitToMenu() {
     if (!game) return;
 
     game_work.bM_bPaused = 1;
-    // Clear the pause-overlay gate so the menu runs active (bM_Mode=0); the
-    // pause-in-place change (#179) removed the GameExit/GameInit hop that used
-    // to clear it. Harmless if game-over already left bM_Mode=0.
-    game_work.bM_Mode = false;
+    // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
+    // The camera-settle auto-clear in GameUpdate @0x001cfaec handles it once
+    // m_GameDt settles and PauseScreen leaves state ACTIVE.
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0

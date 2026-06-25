@@ -204,6 +204,15 @@ struct GameWork {
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised
 
+// Pause flag block @ 0x00316700 (binary .bss).
+// Defined in GameInit.cpp (same TU as slowTimeTime @ 0x316704).
+// PauseGame @0x001ca48c writes g_unpauseDelay / clears g_unpause_game.
+// UnpauseGame @0x001ca4b4 writes g_repauseDelay / arms g_unpause_game.
+// GameDraw tail @0x001cdd64 reads g_unpause_game and fires the bM_Mode clear + ClearActions.
+extern float g_unpauseDelay;   // @ 0x00316708
+extern int   g_unpause_game;   // @ 0x0031670c  (byte in binary)
+extern float g_repauseDelay;   // @ 0x00316710
+
 // Shared per-frame gameplay/render flag bitfield -- binary standalone .bss
 // uint32_t @ 0x00332bc8 (GOT-loaded, NOT a game_work field). Subsystems OR/BIC
 // individual bits each frame: 0x80 = combo-modifier active (ComboModifier::
