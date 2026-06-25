@@ -162,10 +162,6 @@ public:
     // Returns false while transition is in-flight or bomb hit timer running.
     bool IsEnabled();
 
-    // Engine pause helpers -- v1.6.1 PauseScreen::PauseGame @0x001ca48c / UnpauseGame @0x001ca4b4
-    static void PauseGame();
-    static void UnpauseGame();
-
     // Binary @ 0x00153fe8 -- ContinueGameCallback: if m_State==3, set m_State=4
     //   (RESUME_EXIT); if Game-state +0x85 tutorial-shown flag was set, re-seed the
     //   global RNG from Game-state +0x194, then clear the flag. (impl in .cpp)
@@ -174,6 +170,10 @@ public:
     //   (m_State=3, m_Alpha=1.0). (impl in .cpp)
     void SkipTo();
 };
+
+// v1.6.1 PauseGame @0x001ca48c / UnpauseGame @0x001ca4b4 — engine pause helpers.
+void PauseGame();
+void UnpauseGame();
 
 // Offset assertions (ARM32 binary layout).
 // The binary offsets are for the ARM32 target where pointers are 4 bytes.

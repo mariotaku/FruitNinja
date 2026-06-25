@@ -205,7 +205,7 @@ void Game::pollInput() {
             // DispatchForSimTick) so the release takes effect on this display frame
             // regardless of whether steps==0 (#162 semantics preserved).
             if (!game_work.bM_Mode) {
-                PauseScreen::PauseGame();
+                PauseGame();
                 LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
             }
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
@@ -215,7 +215,7 @@ void Game::pollInput() {
             // SDL_APP_WILLENTERBACKGROUND fires on mobile (iOS/Android) before the
             // app is backgrounded -- equivalent to Bada OnBackground.
             if (!game_work.bM_Mode) {
-                PauseScreen::PauseGame();
+                PauseGame();
                 LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
             }
             if (inputTranslator) inputTranslator->ReleaseAllFingers();

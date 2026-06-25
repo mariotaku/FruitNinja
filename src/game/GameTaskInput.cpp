@@ -164,9 +164,9 @@ static bool PauseGameCallback(InputEvent* ev) {
     Game* game = Game::GetInstance();
     if (!game) return true;
     if (!game_work.bM_Mode) {
-        PauseScreen::PauseGame();
+        PauseGame();
     } else {
-        PauseScreen::UnpauseGame();
+        UnpauseGame();
     }
     return true;
 }
