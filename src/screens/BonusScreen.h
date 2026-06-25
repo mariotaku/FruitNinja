@@ -1,16 +1,17 @@
 #ifndef FN_SCREENS_BONUS_SCREEN_H
 #define FN_SCREENS_BONUS_SCREEN_H
 
-// BonusScreen : HUDControl3d (size ~0xC8+)
-// Binary: ctor 0x00132048, dtor 0x00131F9C, Update 0x00132930,
-//         Draw 0x0013325C, AddAward 0x00133664, AwardScores 0x0013260C
-// Analysed: 2026-05-03T00:00
+// BonusScreen : HUDControl3d (sizeof == 0xEC)
+// v1.6.1: ctor @0x00162d1c, dtor D2 @0x00162724 / D1 @0x0016283c / D0 @0x00162954,
+//         Update @0x00163dd0, Draw @0x0016492c
+// AddAward / Reset -- TODO: re-verify v1.6.1 addr (prior 0x00133664 / 0x00131D90 are stale v1.5.x)
 
 #include "hud/HUDControl3d.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/math/Colour.h"
 #include "engine/math/Vec3.h"
+#include "engine/render/BakedStringBox.h"
 #include <vector>
 #include <cstdint>
 
@@ -39,52 +40,50 @@ struct BonusAwardHud {
 class BonusScreen : public HUDControl3d {
 public:
     // Binary layout from +0x7C (immediately after HUDControl3d's +0x78 SmartPtr pair):
-    int                              m_DisplayedScore;        // +0x7C (port offset)
-    int                              m_TotalScore;            // +0x80
-    std::vector<BonusAwardHud>       m_Awards;                // +0x84 (cap 3 in binary)
-    float                            m_PulseField15;          // +0x90
-    float                            m_PulseTimer;            // +0x94
-    float                            m_PulseField17;          // +0x98 (init 1.0)
-    int16_t                          m_PulseAngle;            // +0x9C
-    int16_t                          _padPulse;               // +0x9E
-    Colour                           m_PulseColour;           // +0xA0 (4 bytes)
-    int                              _padA4;                  // +0xA4
-    int                              _padA8;                  // +0xA8
-    float                            m_NameScale;             // +0xAC (init 1.0)
-    uint8_t                          m_LeaderboardSubmitted;  // +0xB0
-    uint8_t                          _pad1;                   // +0xB1
-    uint8_t                          _pad2;                   // +0xB2
-    uint8_t                          _pad3;                   // +0xB3
-    Mortar::MortarSound*             m_RushSFX;               // +0xB4
-    float                            m_PhaseTimer;            // +0xB8
-    Vec3                             m_PosOffset;             // +0xBC
-    int                              _padfield23;             // +0xC8
-    int                              _padfield24;             // +0xCC
+    int                               m_TotalScore;           // +0x7C  (accumulator; AddAward sums tier into this)
+    int                               m_DisplayedScore;       // +0x80  (animated toward total)
+    std::vector<BonusAwardHud>        m_Awards;               // +0x84  (cap 3 in binary)
+    float                             m_ShakeAmplitude;       // +0x90
+    float                             m_ShakeTimer;           // +0x94
+    float                             m_ShakeDuration;        // +0x98  (init 1.0)
+    uint16_t                          m_ShakeAngle;           // +0x9C
+    uint16_t                          _padShake;              // +0x9E
+    Vec3                              m_ShakeOffset;          // +0xA0  (3 floats, 12 bytes)
+    float                             m_NamePulseScale;       // +0xAC  (init 1.0)
+    bool                              m_FinaleFired;          // +0xB0
+    bool                              field_0xB1;             // +0xB1  // TODO: re-verify (ctor writes 0 only)
+    bool                              field_0xB2;             // +0xB2  // TODO: re-verify (ctor writes 0 only)
+    uint8_t                           _padB3;                 // +0xB3
+    Mortar::MortarSound*              m_RushLoopSFX;          // +0xB4
+    Mortar::BakedStringBox*           m_ScoreBox;             // +0xB8
+    Mortar::BakedStringBox*           m_TotalBox;             // +0xBC
+    Mortar::BakedStringBox*           m_RankLabelBoxes[3];    // +0xC0..+0xCB
+    Mortar::BakedStringBox*           m_RankValueBoxes[3];    // +0xCC..+0xD7
+    bool                              m_bSkipIntro;           // +0xD8
+    uint8_t                           _padD9[3];              // +0xD9
+    float                             m_Timer;                // +0xDC  (ctor = -TRANSITION_IN_TIME)
+    Vec3                              m_AnimPos;              // +0xE0  (3 floats, 12 bytes -> ends 0xEC)
 
-    // Port-specific: background texture handle (beyond binary struct size)
-    Mortar::SmartPtr<Mortar::Texture> m_SecondaryTex;         // port-specific
-
-    // Binary ctor @ 0x00132048
+    // v1.6.1: ctor @0x00162d1c
     BonusScreen();
-    // Binary dtor @ 0x00131F9C
+    // v1.6.1: dtor D2 @0x00162724
     ~BonusScreen() override;
 
-    // vtable slot: Reset — empty body (binary @ 0x00131D90, single bx lr)
+    // vtable slot: Reset — TODO: re-verify v1.6.1 addr (prior 0x00131D90 stale v1.5.x)
     void Reset() override {}
 
-    // vtable slot: Update (binary @ 0x00132930)
+    // vtable slot: Update — v1.6.1 @0x00163dd0
     void Update(float dt) override;
 
-    // vtable slot: Draw (binary @ 0x0013325C)
+    // vtable slot: Draw — v1.6.1 @0x0016492c
     void Draw(float* hudScaleRaw) override;
 
     // GetType -- returns 8 (TODO: confirm from binary)
     int GetType() override { return 8; }
 
-    // Binary @ 0x00133664 — real binary AddAward signature (Colour).
+    // TODO: re-verify v1.6.1 addr (prior 0x00133664 stale v1.5.x)
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
-
 
     // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
     float GetTimeFirstAward();
@@ -103,8 +102,24 @@ public:
     // ---- end STUBS ----
 
 private:
-    // Binary @ 0x0013260C — one-shot finale: coin spawn, camera shake, finish SFX
+    // TODO: re-verify v1.6.1 addr (prior 0x0013260C stale v1.5.x)
     void AwardScores();
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(BonusScreen, m_TotalScore)        == 0x7C,  "BonusScreen::m_TotalScore offset");
+static_assert(offsetof(BonusScreen, m_Awards)            == 0x84,  "BonusScreen::m_Awards offset");
+static_assert(offsetof(BonusScreen, m_ShakeAmplitude)    == 0x90,  "BonusScreen::m_ShakeAmplitude offset");
+static_assert(offsetof(BonusScreen, m_RushLoopSFX)       == 0xB4,  "BonusScreen::m_RushLoopSFX offset");
+static_assert(offsetof(BonusScreen, m_ScoreBox)          == 0xB8,  "BonusScreen::m_ScoreBox offset");
+static_assert(offsetof(BonusScreen, m_TotalBox)          == 0xBC,  "BonusScreen::m_TotalBox offset");
+static_assert(offsetof(BonusScreen, m_RankLabelBoxes)    == 0xC0,  "BonusScreen::m_RankLabelBoxes offset");
+static_assert(offsetof(BonusScreen, m_RankValueBoxes)    == 0xCC,  "BonusScreen::m_RankValueBoxes offset");
+static_assert(offsetof(BonusScreen, m_bSkipIntro)        == 0xD8,  "BonusScreen::m_bSkipIntro offset");
+static_assert(offsetof(BonusScreen, m_Timer)             == 0xDC,  "BonusScreen::m_Timer offset");
+static_assert(offsetof(BonusScreen, m_AnimPos)           == 0xE0,  "BonusScreen::m_AnimPos offset");
+static_assert(sizeof(BonusScreen)                        == 0xEC,  "BonusScreen size mismatch");
+#endif
 
 #endif // FN_SCREENS_BONUS_SCREEN_H

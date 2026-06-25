@@ -1,7 +1,7 @@
-// Analysed: 2026-05-03T00:00
 // BonusScreen -- post-game bonus award display (HUDControl3d subclass).
-// Binary: ctor 0x00132048, dtor 0x00131F9C, Update 0x00132930,
-//         Draw 0x0013325C, AddAward 0x00133664, AwardScores 0x0013260C
+// v1.6.1: ctor @0x00162d1c, dtor D2 @0x00162724 / D1 @0x0016283c / D0 @0x00162954,
+//         Update @0x00163dd0, Draw @0x0016492c
+// AddAward / AwardScores -- TODO: re-verify v1.6.1 addr (prior 0x00133664/0x0013260C stale v1.5.x)
 
 #include "BonusScreen.h"
 #include "hud/HUD.h"
@@ -17,41 +17,51 @@
 
 using Mortar::TextureManager;
 
-// Phase-timer rodata constants — binary @ GOT_DAT_00132cdc area.
-// TODO: resolve phase-timer rodata @ DAT_00132cdc
+// Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
+// TODO: resolve phase-timer rodata @ DAT_00162cdc (v1.6.1 BonusScreen::Update @0x00163dd0)
 static const float PRE_OFFSET     = 1.0f;
 static const float AWARD_SPACING  = 0.5f;
 static const float REVEAL_END     = 1.0f;
 static const float FINALE_HOLD    = 0.5f;
 static const float DISMISS_BUFFER = 0.5f;
 
+// Transition-in slide duration (init value for m_Timer; binary loads from rodata).
+// TODO: resolve exact init constant from ctor @0x00162d1c
+static const float TRANSITION_IN_TIME = 1.0f;
+
 // ---------------------------------------------------------------------------
-// BonusScreen ctor (binary @ 0x00132048)
+// BonusScreen ctor (binary @ 0x00162d1c)
 // ---------------------------------------------------------------------------
 
 BonusScreen::BonusScreen()
     : HUDControl3d(),
-      m_DisplayedScore(0),
       m_TotalScore(0),
-      m_PulseField15(0.0f),
-      m_PulseTimer(0.0f),
-      m_PulseField17(1.0f),
-      m_PulseAngle(0),
-      _padPulse(0),
-      m_PulseColour(255, 255, 255, 255),
-      _padA4(0),
-      _padA8(0),
-      m_NameScale(1.0f),
-      m_LeaderboardSubmitted(0),
-      _pad1(0),
-      _pad2(0),
-      _pad3(0),
-      m_RushSFX(nullptr),
-      m_PhaseTimer(0.0f),
-      m_PosOffset(0.0f, 0.0f, 0.0f),
-      _padfield23(0),
-      _padfield24(0)
+      m_DisplayedScore(0),
+      m_ShakeAmplitude(0.0f),
+      m_ShakeTimer(0.0f),
+      m_ShakeDuration(1.0f),
+      m_ShakeAngle(0),
+      _padShake(0),
+      m_ShakeOffset(0.0f, 0.0f, 0.0f),
+      m_NamePulseScale(1.0f),
+      m_FinaleFired(false),
+      field_0xB1(false),
+      field_0xB2(false),
+      _padB3(0),
+      m_RushLoopSFX(nullptr),
+      m_ScoreBox(nullptr),
+      m_TotalBox(nullptr),
+      m_bSkipIntro(false),
+      m_Timer(-TRANSITION_IN_TIME),
+      m_AnimPos(0.0f, 0.0f, 0.0f)
 {
+    m_RankLabelBoxes[0] = nullptr;
+    m_RankLabelBoxes[1] = nullptr;
+    m_RankLabelBoxes[2] = nullptr;
+    m_RankValueBoxes[0] = nullptr;
+    m_RankValueBoxes[1] = nullptr;
+    m_RankValueBoxes[2] = nullptr;
+
     m_Awards.reserve(3);
 
     // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162d1c: loads "arcade_diolog_box.tex"
@@ -59,7 +69,7 @@ BonusScreen::BonusScreen()
     // TODO: v1.6.1 0x00162d5c (BonusScreen::BonusScreen) — binary caches backing tex in a load-once static
     Mortar::SmartPtr<Mortar::Texture> bgTex =
         TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
-    m_SecondaryTex = bgTex;
+    m_Texture = bgTex;
     if (bgTex.IsValid()) {
         size = Vec3((float)bgTex->GetWidth(), (float)bgTex->GetHeight(), 0.0f);
     }
@@ -76,22 +86,36 @@ BonusScreen::BonusScreen()
     sm.PreLoadSound("Bonus-Explosion-1");        // rodata 0x00281e72
     sm.PreLoadSound("Bonus-Explosion-3");        // rodata 0x00281e84
     sm.PreLoadSound("Bonus-Explosion-5");        // rodata 0x00281e96
+
+    // TODO: v1.6.1 BonusScreen::SetUpBonusScreen @0x0012ede8 -- create the BakedStringBox score/rank boxes
 }
 
 // ---------------------------------------------------------------------------
-// BonusScreen dtor (binary @ 0x00131F9C)
+// BonusScreen dtor (binary D2 @ 0x00162724)
+// Binary order: loop i=0..2 delete m_RankLabelBoxes[i] + m_RankValueBoxes[i],
+//               then delete m_ScoreBox, then delete m_TotalBox.
+//               m_Awards vector and base HUDControl3d dtors follow (implicit).
 // ---------------------------------------------------------------------------
 
 BonusScreen::~BonusScreen() {
-    // m_RushSFX: not owned (pointer to a manager-owned sound), no delete.
+    for (int i = 0; i < 3; ++i) {
+        delete m_RankLabelBoxes[i];
+        m_RankLabelBoxes[i] = 0;
+        delete m_RankValueBoxes[i];
+        m_RankValueBoxes[i] = 0;
+    }
+    delete m_ScoreBox;
+    m_ScoreBox = 0;
+    delete m_TotalBox;
+    m_TotalBox = 0;
+    // m_RushLoopSFX: not owned (pointer to a manager-owned sound), no delete.
     // m_Awards vector destructs its BonusAwardHud entries (SmartPtr released).
 }
 
 // ---------------------------------------------------------------------------
-// AddAward (binary @ 0x00133664)
+// AddAward -- TODO: re-verify v1.6.1 addr (prior 0x00133664 stale v1.5.x)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00133664
 void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                            const char* name, int tier) {
     BonusAwardHud entry;
@@ -125,38 +149,37 @@ void BonusScreen::Shake(float /*amplitude*/, float /*duration*/) {}
 void BonusScreen::UnLoadContent() {}
 
 // ---------------------------------------------------------------------------
-// AwardScores (binary @ 0x0013260C)
+// AwardScores -- TODO: re-verify v1.6.1 addr (prior 0x0013260C stale v1.5.x)
 // One-shot finale: coin spawn, camera shake, big particle, finish SFX.
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0013260C
 void BonusScreen::AwardScores() {
     // TODO: Coin::MakeCoins(m_TotalScore / 6)
     // TODO: FruitCamera::CreateCameraShake(...)
     // TODO: PSPParticleManager::AddEmitter(...) big finale particle
-    // TODO: play "BonusFinale" SFX via m_RushSFX or SoundManager
+    // TODO: play "BonusFinale" SFX via m_RushLoopSFX or SoundManager
     (void)m_TotalScore;
 }
 
 // ---------------------------------------------------------------------------
-// Update (binary @ 0x00132930) — three-phase state machine driven by m_PhaseTimer
+// Update (binary @ 0x00163dd0) — three-phase state machine driven by m_Timer
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00132930
+// v1.6.1 @0x00163dd0
 void BonusScreen::Update(float dt) {
     // Advance phase timer unconditionally each frame.
-    m_PhaseTimer += dt;
+    m_Timer += dt;
 
     // -----------------------------------------------------------------------
     // Phase A: pre-show slide-in (timer < 0)
     // -----------------------------------------------------------------------
-    if (m_PhaseTimer < 0.0f) {
-        // Slide-in from off-screen. m_PosOffset.y interpolates toward 0.
-        // TODO: resolve exact slide-in math from binary @ 0x00132930
-        m_PosOffset.y = m_PhaseTimer * PRE_OFFSET;
+    if (m_Timer < 0.0f) {
+        // Slide-in from off-screen. m_AnimPos.y interpolates toward 0.
+        // TODO: resolve exact slide-in math from binary @ 0x00163dd0
+        m_AnimPos.y = m_Timer * PRE_OFFSET;
 
         // Start rush SFX once.
-        // TODO: SoundManager::PreLoadSound / play "BonusRush" into m_RushSFX
+        // TODO: SoundManager::PreLoadSound / play "BonusRush" into m_RushLoopSFX
         return;
     }
 
@@ -164,11 +187,11 @@ void BonusScreen::Update(float dt) {
     // Phase B: per-award reveal (0 <= timer < REVEAL_END + awards * AWARD_SPACING)
     // -----------------------------------------------------------------------
     float revealEnd = REVEAL_END + (float)(m_Awards.size() > 0 ? (int)m_Awards.size() - 1 : 0) * AWARD_SPACING;
-    if (m_PhaseTimer < revealEnd) {
+    if (m_Timer < revealEnd) {
         int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
-            float localT = m_PhaseTimer - (float)i * AWARD_SPACING;
+            float localT = m_Timer - (float)i * AWARD_SPACING;
 
             if (localT < 0.0f) {
                 // Not yet revealed.
@@ -186,12 +209,12 @@ void BonusScreen::Update(float dt) {
             }
 
             // Scale pulse: sin-based scale wobble on reveal.
-            // TODO: resolve exact sin formula from binary @ 0x00132a50
+            // TODO: resolve exact sin formula from binary @ 0x00163dd0
             entry.m_Scale = 1.0f + 0.3f * sinf(localT * 6.28f);
             if (entry.m_Scale < 0.0f) entry.m_Scale = 0.0f;
 
             // Score counter ramp-up.
-            // TODO: resolve exact multiplier ramp math from binary @ 0x00132b00
+            // TODO: resolve exact multiplier ramp math from binary @ 0x00163dd0
             float scoreT = localT * 0.5f + 0.5f;
             if (scoreT > 1.0f) scoreT = 1.0f;
             entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * scoreT);
@@ -206,8 +229,8 @@ void BonusScreen::Update(float dt) {
     // Phase C: finale one-shot (timer >= REVEAL_END + ..., only once)
     // -----------------------------------------------------------------------
     float finaleStart = revealEnd;
-    if (m_PhaseTimer >= finaleStart && m_LeaderboardSubmitted == 0) {
-        m_LeaderboardSubmitted = 1;
+    if (m_Timer >= finaleStart && !m_FinaleFired) {
+        m_FinaleFired = true;
         AwardScores();
         // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
 
@@ -224,36 +247,36 @@ void BonusScreen::Update(float dt) {
     // Phase D: dismiss (timer past finale + hold + buffer)
     // -----------------------------------------------------------------------
     float dismissAt = finaleStart + FINALE_HOLD + DISMISS_BUFFER;
-    if (m_PhaseTimer >= dismissAt) {
+    if (m_Timer >= dismissAt) {
         m_bPendingRemoval = 1;
     }
 
     // -----------------------------------------------------------------------
-    // Pulse colour update (independent of phase)
+    // Shake update (independent of phase)
     // -----------------------------------------------------------------------
-    if (m_PulseTimer > 0.0f) {
-        m_PulseTimer -= dt;
-        // Damped wobble around m_PulseColour.
-        // TODO: resolve exact wobble math from binary @ 0x00132c80
-        float wobble = m_PulseTimer * m_PulseField17;
-        m_PulseAngle = (int16_t)((int)m_PulseAngle + (int)(wobble * 100.0f));
+    if (m_ShakeTimer > 0.0f) {
+        m_ShakeTimer -= dt;
+        // Damped wobble around m_ShakeOffset.
+        // TODO: resolve exact wobble math from binary @ 0x00163dd0
+        float wobble = m_ShakeTimer * m_ShakeDuration;
+        m_ShakeAngle = (uint16_t)((int)m_ShakeAngle + (int)(wobble * 100.0f));
         (void)wobble;
     }
 }
 
 // ---------------------------------------------------------------------------
-// Draw (binary @ 0x0013325C)
+// Draw (binary @ 0x0016492c)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0013325C
+// v1.6.1 @0x0016492c
 void BonusScreen::Draw(float* hudScaleRaw) {
-    // Apply m_PosOffset to position before base draw.
+    // Apply m_AnimPos to position before base draw.
     Vec3 savedPos = pos;
-    pos.x += m_PosOffset.x;
-    pos.y += m_PosOffset.y;
-    pos.z += m_PosOffset.z;
+    pos.x += m_AnimPos.x;
+    pos.y += m_AnimPos.y;
+    pos.z += m_AnimPos.z;
 
-    // Base box draw (HUDControl3d::Draw handles the dialog background via m_SecondaryTex).
+    // Base box draw (HUDControl3d::Draw handles the dialog background via m_Texture@0x74).
     HUDControl3d::Draw(hudScaleRaw);
 
     // Restore position.
@@ -265,13 +288,15 @@ void BonusScreen::Draw(float* hudScaleRaw) {
         if (entry.m_Scale <= 0.0f) continue;
 
         // TODO: set matrix scale + translate per award position
-        // Award Y positions stacked vertically (TODO: resolve spacing constant)
-        // float awardY = pos.y + m_PosOffset.y + (float)i * 20.0f;
-        // float awardX = pos.x + m_PosOffset.x;
+        // Award Y positions stacked vertically (TODO: resolve spacing constant from v1.6.1 @0x0016492c)
+        // float awardY = pos.y + m_AnimPos.y + (float)i * 20.0f;
+        // float awardX = pos.x + m_AnimPos.x;
 
         // TODO: DrawQuadUnCached(entry.m_StarTex, awardX, awardY, entry.m_Scale * 16.0f, entry.m_Scale * 16.0f)
-        // TODO: Font::DrawString(entry.m_Name, awardX + 20.0f, awardY, m_NameScale)
+        // TODO: Font::DrawString(entry.m_Name, awardX + 20.0f, awardY, m_NamePulseScale)
         // TODO: DrawString tier*multiplier score text
+        // TODO: m_ScoreBox->Draw / m_TotalBox->Draw / m_RankLabelBoxes[i]->Draw / m_RankValueBoxes[i]->Draw
+        //       (v1.6.1 BonusScreen::Draw @0x0016492c -- BakedStringBox draws; null-check before draw)
 
         (void)entry;
     }

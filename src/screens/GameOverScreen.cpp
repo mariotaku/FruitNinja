@@ -985,9 +985,8 @@ void GameOverScreen::Update(float dt) {
                 BonusManager::GetInstance()->SetUpBonusScreen(m_pBonusScreen);
             } else {
                 // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80
-                // ny = bonus[+0xC] + bonus[+0xE4] + 135.0  (BonusScreen::m_PosOffset.y = +0xC0 in old port but spec says +0xE4)
-                // Using port's BonusScreen field: b[+0xE4] per spec (not +0xC0)
-                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PosOffset.y + 135.0f;
+                // ny = bonus[+0xC] + bonus[+0xE0] + 135.0  (BonusScreen::m_AnimPos.y @0xE0)
+                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_AnimPos.y + 135.0f;
                 m_OffsetPos.y = std::max(m_OffsetPos.y, ny);
 
                 float newPosY = m_pBonusScreen->size.y + m_pBonusScreen->pos.y + 135.0f;
@@ -997,7 +996,7 @@ void GameOverScreen::Update(float dt) {
                 size = m_TitleSize * sf;
             }
             m_Timer += dt;
-            if (m_pBonusScreen) m_pBonusScreen->m_PhaseTimer = m_Timer;
+            if (m_pBonusScreen) m_pBonusScreen->m_Timer = m_Timer;
             game_work.m_bSlowMotion = 1;
         }
         break;
