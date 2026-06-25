@@ -14,7 +14,7 @@
 
 namespace Mortar { class Entity; }
 
-// 0x0017421c.
-Mortar::Entity* CreateEntity(int entityType);
+// Binary: _Z12CreateEntityl @0x001d8fec (v1.6.1)
+Mortar::Entity* CreateEntity(long entityType);
 
 #endif

@@ -106,7 +106,7 @@ void Game::Init(int argc, char** argv) {
     GamePreInitialise();
     game_work.languageFlag = 0;         // g_GameData[3] = 0
     SetHardware("BADA", false);
-    GameInitialise();
+    GameInitialise(nullptr, nullptr);
     m_bLanguageSet = 1;
 }
 

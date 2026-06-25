@@ -1,29 +1,20 @@
 #include "StringHash.h"
-#include <cstring>
 
 // Case-insensitive Jenkins lookup3 hash.
-// Binary: 0x00252a10 (v1.6.1) / 0x0019c5d4 (v1.0)
+// v1.6.1 StringHash(const char*, int) @ 0x00252a10 — real impl; len is the byte length
+// v1.6.1 StringHash(const char*)      @ 0x00119328 — 1-arg helper (inline in header)
 // ASM-verified: 2026-06-12 v1.6.1 binary @ 0x00252a10 / 0x0019c5d4 (re-analyst)
 // Verified test vectors (case-insensitive):
 //   "watermelon"  -> 0x158bc245
 //   "apple_red"   -> 0xdac1f38f
 //   "banana"      -> 0x5ff2eb92
 //
-// Two bugs in the previous port (now corrected):
-//   (1) Init was `c = 0x805 + len` AND then `c += len` after the loop
-//       (double-counted len). Binary has `c = 0x805` at init; `c += len`
-//       only once, after the main loop.
-//   (2) Each main-loop mix step split the two subtractions across two
-//       statements, computing ((a-c)^(c>>13))-b. Binary does both
-//       subtractions first, then the XOR: ((a-c)-b)^(c>>13).
-//
-uint32_t StringHash(const char* str) {
-    size_t len = strlen(str);
+uint32_t StringHash(const char* str, int len) {
     uint32_t a, b, c;
     a = b = 0x9e3779b9;
     c = 0x805;                          // NO + len here
 
-    size_t remaining = len;
+    int remaining = len;
     const char* p = str;
     uint8_t buf[12];
 

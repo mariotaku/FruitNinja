@@ -11,7 +11,7 @@
 
 #include <cstdio>
 
-// CreateEntity — binary-faithful port of 0x001d90f4 (v1.6.1).
+// CreateEntity — binary-faithful port of _Z12CreateEntityl @0x001d8fec (v1.6.1).
 //
 // Binary pseudocode:
 //   Mortar::Entity* CreateEntity(long entityType) {
@@ -22,13 +22,12 @@
 //       case 3:  return new SlashEntity();  // 0x188 bytes
 //       case 4:  return new BombBlast();    // 0x70  bytes
 //       case 5:  return new Jiblet();       // 0xB0  bytes (memset 0xB0 first)
+//       case 6:  return new FruitRay();     // (unported)
 //       default: return nullptr;
 //       }
 //   }
-//
-// Analysed: 2026-04-23T01:30
 
-Mortar::Entity* CreateEntity(int entityType) {
+Mortar::Entity* CreateEntity(long entityType) {
     switch (entityType) {
     case 0:  return new Fruit();
     case 1:  return new Bomb();
@@ -36,8 +35,9 @@ Mortar::Entity* CreateEntity(int entityType) {
     case 3:  return new SlashEntity();
     case 4:  return new BombBlast();
     case 5:  return new Jiblet();
+    // TODO: v1.6.1 CreateEntity @0x001d8fec case 6 FruitRay (unported)
     default:
-        LOG_WARN("ENTITYFACTORY", "unknown entity type %d", entityType);
+        LOG_WARN("ENTITYFACTORY", "unknown entity type %ld", entityType);
         return nullptr;
     }
 }

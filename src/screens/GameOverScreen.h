@@ -177,6 +177,11 @@ private:
     void DeletedControl(HUDControl* ctrl);// v1.6.1 @ 0x00140558
 };
 
+// Binary: _Z23SetCurrentModeHighscorei @0x00119f24 (v1.6.1)
+// Free wrapper: reads current mode index from game_work, guards idx<4 + saveData,
+// updates m_ModeHighScores[idx] if score strictly beats stored, returns bool.
+bool SetCurrentModeHighscore(int score);
+
 #ifdef __bada__
 static_assert(sizeof(GameOverScreen) == 0x160,
               "GameOverScreen size mismatch -- expected 0x160");

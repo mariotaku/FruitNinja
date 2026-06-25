@@ -149,7 +149,7 @@ uint8_t FruitFact::CheckCombo(int* hashes, int count, int* outFruitIdx) {
 }
 
 // ---------------------------------------------------------------------------
-// GetComboStarTexture (binary @ 0x001112e0)
+// GetComboStarTexture -- binary: _Z19GetComboStarTexture10COMBO_TYPE @0x00132a94 (v1.6.1)
 // Returns the star-burst texture for the given combo type. Some combos have
 // multiple tier-textures; binary picks one uniformly at random per call
 // using Math::g_Random. Port mirrors via Math::g_Random.Rand32(count).
@@ -183,20 +183,20 @@ static const ComboStarEntry kComboStars[25] = {
     { 1, { "star_checkers.tex",       nullptr,                   nullptr } },             // 24 5_OF_A_KIND (CHECKERS)
 };
 
-Mortar::SmartPtr<Mortar::Texture> FruitFact::GetComboStarTexture(uint8_t comboType) {
-    if (comboType >= 25) return Mortar::SmartPtr<Mortar::Texture>();
-    const ComboStarEntry& e = kComboStars[comboType];
+// GetComboStarTexture  binary: _Z19GetComboStarTexture10COMBO_TYPE @0x00132a94 (v1.6.1)
+Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType) {
+    uint8_t ct = (uint8_t)comboType;
+    if (ct >= 25) return Mortar::SmartPtr<Mortar::Texture>();
+    const ComboStarEntry& e = kComboStars[ct];
     uint32_t tier = (e.count > 1) ? Math::g_Random.Rand32(e.count) : 0;
     return Mortar::TextureManager::LoadLocalisedTexture(e.tex[tier]);
 }
 
-// GetComboStarText  binary @ 0x001325f8
-// Returns the localised string id for the given combo type.
-// TODO: 0x001325f8 -- binary DAT_132558 string-id table (0..24 entries) not yet dumped;
-// port returns 0 as a safe fallback until the table is RE'd.
-unsigned int FruitFact::GetComboStarText(uint8_t comboType) {
-    if (comboType > 0x18) return 0;
-    // TODO: 0x001325f8 -- static LUT contents (DAT_132558) not yet dumped; return 0
+// GetComboStarText  binary: _Z16GetComboStarText10COMBO_TYPE @0x001325f8 (v1.6.1)
+// TODO: v1.6.1 GetComboStarText @0x001325f8 -- static LUT (DAT_132558, 0..24 entries) not yet dumped; returns 0
+unsigned int GetComboStarText(COMBO_TYPE comboType) {
+    if ((uint8_t)comboType > 0x18) return 0;
+    // TODO: v1.6.1 GetComboStarText @0x001325f8 -- static LUT contents (DAT_132558) not yet dumped; return 0
     return 0;
 }
 
@@ -381,7 +381,7 @@ void FruitFactControl::Init() {
         }
         int localFruitIdx = 0;
         m_ComboType = FruitFact::CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
-        m_ComboStarTex = FruitFact::GetComboStarTexture(m_ComboType);
+        m_ComboStarTex = GetComboStarTexture((COMBO_TYPE)m_ComboType);
         if (m_FruitIdx != localFruitIdx) m_FruitIdx = localFruitIdx;
         m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f);
     } else {

@@ -14,10 +14,11 @@
 // Binary: Mortar::SmartPtr<Texture> at _ZL17backgroundTexture.
 static Mortar::SmartPtr<Mortar::Texture> g_BackgroundTexture;
 
-// IsFastHardware — binary: reads a hardware-capability flag set during
-// platform init. Port: stub returning true (no slow-hardware path needed).
+// IsFastHardware — binary: _Z14IsFastHardwarev @0x0011f394 (v1.6.1)
+// Reads a hardware-capability flag set during platform init.
+// Port: always true (no slow-hardware path needed on SDL2 target).
 // Binary: the slow branch appends "_sml" suffix (rodata 0x001bc7a5).
-static bool IsFastHardware() {
+bool IsFastHardware() {
     return true;
 }
 
