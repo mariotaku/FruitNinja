@@ -7,6 +7,7 @@
 
 #include "BombHit.h"
 #include "debug/Logger.h"
+#include "engine/network/P2PMessageHandling.h"
 #include "game/GameMode.h"
 #include "Game.h"
 #include "entities/ActorManager.h"
@@ -372,7 +373,7 @@ void EndRetryLevel() {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
     }
 
-    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; v1.6.1 binary @ 0x0016a27e
+    RetryOnlineMultiplayerGame();  // Defunct: P2P multiplayer -- no-op stub; v1.6.1 @0x0016a27e
 }
 
 static void RetryShrinkSplat(SplatEntity* s, void* /*ctx*/) {

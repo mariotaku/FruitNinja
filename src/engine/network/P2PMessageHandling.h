@@ -46,4 +46,16 @@ void SetupP2PMessageHandling();
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
 void P2PInitializationCompleteHandler(bool success, bool isHost);
 
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsMultiplayer @0x00105ea0 (always false)
+bool IsMultiplayer();
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsOnlineMultiplayer @0x00105ea4 (always false)
+bool IsOnlineMultiplayer();
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsSameScreenMultiplayer @0x00105ea8 (always false)
+bool IsSameScreenMultiplayer();
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
+void RetryOnlineMultiplayerGame();
+
 #endif // FN_ENGINE_NETWORK_P2P_MESSAGE_HANDLING_H

@@ -2,6 +2,7 @@
 
 #include "ScoreControl.h"
 #include "game/GameMode.h"
+#include "network/P2PMessageHandling.h"
 #include "Game.h"
 #include "game/ScoreState.h"
 #include "game/PowerUpManager.h"
@@ -63,9 +64,6 @@ constexpr float SCORE_LABEL_BASELINE    = 48.0f;       // DAT_00159798
 static float s_SfxCooldown     = 0.0f;  // bonus SFX rate-limiter
 static float s_StaticTimer      = 0.0f;  // non-Classic digit gate (0.25s)
 static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pulse
-
-// IsMultiplayer: not yet ported (same-screen MP). Always returns false.
-static bool IsMultiplayer() { return false; }
 
 // GetCurrentScore: returns score for the given player index.
 // Player 1 (idx=0) uses game_work.currentScore. Player 2 is not yet ported.

@@ -1,5 +1,6 @@
 #include "Bomb.h"
 #include "game/GameMode.h"
+#include "network/P2PMessageHandling.h"
 #include "ActorManager.h"
 #include "BombBlast.h"
 #include "FruitInfo.h"
@@ -448,9 +449,6 @@ void Bomb::Chuck(float delay) {
         delay = DEFAULT_CHUCK_DELAY;
     m_Countdown = delay;
 }
-
-// Binary @ 0x00105ea0: IsMultiplayer thunk; always returns false (v1.6.1).
-static bool IsMultiplayer() { return false; }
 
 // ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
 float Bomb::GetHeighestBomb() {

@@ -2,6 +2,7 @@
 
 #include "TimeControl.h"
 #include "game/GameMode.h"
+#include "network/P2PMessageHandling.h"
 #include "Game.h"
 #include "hud/HUDLayer.h"
 #include "game/GameOver.h"
@@ -29,11 +30,6 @@ static const float TEXT_X_MULT = -0.6f;
 static const float POWERUP_Y_OFFSET = 32.0f;
 // DAT_001628c4 = 60.0 (seconds-per-minute)
 static const float SECS_PER_MIN = 60.0f;
-
-// ASM-verified: 2026-05-18 v1.6.1 IsMultiplayer @ 0x00105ea0 (re-analyst)
-// Binary IsMultiplayer() thunk -> impl @ 0x00105ea0: unconditionally returns false.
-// Same-screen MP exists as code structure but is gated off in the shipping build.
-static inline bool IsMultiplayer() { return false; }
 
 TimeControl::TimeControl() {
     // ctor 0x001622e8
