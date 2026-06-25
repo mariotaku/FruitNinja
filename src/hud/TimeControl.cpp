@@ -170,7 +170,7 @@ void TimeControl::Update(float dt) {
             // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
 
-            if (WaveManager::PowersEnabled()) {
+            if (PowersEnabled()) {
                 PowerUpManager* pum = PowerUpManager::GetInstance();
                 if (pum && pum->m_StopClockAccum > 0.0f) {
                     m_DrawColour = Colour(255, 100, 100, 255);
@@ -189,7 +189,7 @@ void TimeControl::Update(float dt) {
                 effDt = 0.0f;
             }
             // v1.6.1 @0x001c0b80 -- second, INDEPENDENT PowersEnabled() gate (separate call).
-            if (WaveManager::PowersEnabled()) {
+            if (PowersEnabled()) {
                 PowerUpManager* pum2 = PowerUpManager::GetInstance();
                 m_TimeRemaining -= effDt * (pum2 ? pum2->m_SlowClockMult : 1.0f);
             } else {

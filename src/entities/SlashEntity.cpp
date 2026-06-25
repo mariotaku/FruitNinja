@@ -67,7 +67,7 @@ Mortar::Event1<SlashEntity*>& SlashEntity::OnComboCancelEvent() {
 //   0x04: all unique, count >= 5
 //   Rare single-fruit table: 14 named fruit -> 0x06..0x12 (uniq==1 path)
 //   Fallback: {-1,-1,-1,0,1,2,3} for count<7 else 5
-static int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
+int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
     struct Slot { int type; int n; };
     static const struct RareEntry { const char* name; signed char score; } rareTable[16] = {
         {"apple",        0x06}, {"apple_red",   0x06},

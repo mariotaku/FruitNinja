@@ -324,35 +324,8 @@ void LoopingSound::SetLoopDesiredVol(float vol) {
     (void)vol;
 }
 
-// -----------------------------------------------------------------------
-// ParseSlashModColourType @ v1.6.1 0x0017b4a8
-// Maps XML `type` attr string to ColourType enum. Static-local StringHash
-// cache compared against: NONE(0), LERP(1), PER_SLASH(2), CONTINUOUS(3).
-// Default return 0 (NONE) for null/empty/unmatched.
-// -----------------------------------------------------------------------
-static int ParseSlashModColourType(const char* str) {
-    // Static local hashes (one-time init)
-    static uint32_t hashNone = 0;
-    static uint32_t hashLerp = 0;
-    static uint32_t hashPerSlash = 0;
-    static uint32_t hashContinuous = 0;
-    static bool hashesInitialised = false;
-    if (!hashesInitialised) {
-        hashNone       = StringHash("NONE");
-        hashLerp       = StringHash("LERP");
-        hashPerSlash   = StringHash("PER_SLASH");
-        hashContinuous = StringHash("CONTINUOUS");
-        hashesInitialised = true;
-    }
-
-    if (str == NULL || str[0] == '\0') return 0;
-    uint32_t h = StringHash(str);
-    if (h == hashNone)       return 0;
-    if (h == hashLerp)       return 1;
-    if (h == hashPerSlash)   return 2;
-    if (h == hashContinuous) return 3;
-    return 0;
-}
+// External fn defined in SlashModifier.cpp; v1.6.1 @ 0x0017b4a8.
+extern int ParseSlashModColourType(const char* str);
 
 // -----------------------------------------------------------------------
 // SlashModInfo

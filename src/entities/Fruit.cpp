@@ -2256,7 +2256,7 @@ void Fruit::DrawShadows() {
 //   DAT_00176178 = -0.45f  (sliced-half offset mult)
 //   DAT_00176180 = Vec3(0,0,1)  (slice-plane axis BSS singleton, never reassigned)
 //   DAT_00175e9c = -5000.0f    (shadow Z, written by AddQuad)
-static void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h, Colour col) {
+void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h, Colour col) {
     // Strip-compatible vertex order: TL, BL, BR, TR, TR, BR
     //   v0: (cx-w, cy-h)    v3: (cx+w, cy-h)  -- TR (also degenerate padding v4)
     //   v1: (cx-w, cy+h)    v5: (cx+w, cy+h)  -- BR (also degenerate padding v5)

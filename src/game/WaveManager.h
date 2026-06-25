@@ -280,9 +280,6 @@ public:
     static void GameOver();
     static void NewGame();
 
-    // Gate for PowerUpManager calls in GameOver/NewGame.
-    // TODO: RE exact binary address and condition; stubbed true (binary default).
-    static bool PowersEnabled();
 
     // 0x00121ed8: clears per-entity speed-control list.
     void ResetGlobalDt(float dt);
@@ -403,12 +400,12 @@ public:
     // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_TypeCount.
     static int SplitWords(const char* str, std::vector<std::string>& out);
 
-    // Parse placement string to SpawnPlacement enum.
-    // Called from SpawnModifier::ParseSpecific as well as WaveManager::Init.
-    static SpawnPlacement ParsePlacement(const char* side);
-
 private:
 };
+
+// Free functions (binary: _Z13PowersEnabledv @ 0x0011a034, _Z14ParsePlacementPKc).
+bool PowersEnabled();
+SpawnPlacement ParsePlacement(const char* side);
 
 // Layout asserts for the re-laid-out +0x4c..+0x77 block and the tail.
 // The -4 byte shift absorbed entirely within +0x4c..+0x77; +0x78 onward unchanged.

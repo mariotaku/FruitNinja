@@ -86,7 +86,7 @@ int WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001231d8 (re-analyst)
 }
 
-SpawnPlacement WaveManager::ParsePlacement(const char* side) {
+SpawnPlacement ParsePlacement(const char* side) {
     if (!side) return PLACEMENT_BOTTOM;
     if (strcmp(side, "BOTTOM") == 0 || strcmp(side, "bottom") == 0) return PLACEMENT_BOTTOM;
     if (strcmp(side, "BOTTOM_SLOW") == 0) return PLACEMENT_BOTTOM_SLOW;
@@ -937,9 +937,9 @@ void WaveManager::NewGame() {
     }
 }
 
-// ASM-verified: 2026-06-24 v1.6.1 WaveManager::PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (asm-inspector)
+// ASM-verified: 2026-06-24 v1.6.1 PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (asm-inspector)
 //   Cross-compile matches binary instruction-for-instruction: ldrb game_work+0x4 == 2, movne/moveq.
-bool WaveManager::PowersEnabled() {
+bool PowersEnabled() {
     // Binary: ldrb game_work+0x4 (1-byte gameMode) == 2 (GAME_MODE_ARCADE); no Game::GetInstance guard.
     return game_work.gameMode == Mortar::GAME_MODE_ARCADE;
 }
