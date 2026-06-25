@@ -23,19 +23,19 @@ static Vec3 g_TouchZoneTable[16];
 static Mortar::Entity* g_TouchEntities[16];
 
 // Forward declarations for input callbacks (bodies below).
-static bool PointerMoveCallback(InputEvent* ev);
-static bool PointerDownCallback(InputEvent* ev);
-static bool PointerUpCallback(InputEvent* ev);
-static bool PointerDownXboxCallback(InputEvent* ev);
+bool PointerMoveCallback(InputEvent* ev);
+bool PointerDownCallback(InputEvent* ev);
+bool PointerUpCallback(InputEvent* ev);
+bool PointerDownXboxCallback(InputEvent* ev);
 static bool PauseGameCallback(InputEvent* ev);
-static bool RegressMenuCallback(InputEvent* ev);
-static bool ShowPauseMenuCallback(InputEvent* ev);
+bool RegressMenuCallback(InputEvent* ev);
+bool ShowPauseMenuCallback(InputEvent* ev);
 
 // TouchDownCallback -- used in per-zone loop for "TouchReleased_<i>" action.
 // Binary name from the zone-loop registration (distinct from PointerDownCallback
 // at 0x00168e24 which handles global "PointerPressed").
 // TODO: implement full body (binary addr TBD from zone-loop decompile).
-static bool TouchDownCallback(InputEvent* ev);
+bool TouchDownCallback(InputEvent* ev);
 
 
 // GameTaskInitInput() @ 0x00169670
@@ -115,7 +115,7 @@ void GameTaskInitInput() {
 // The per-finger path already covers TouchMoveX/Y dispatch, so this
 // global hook stays a no-op pass-through. The worldPos.x/y writes are
 // also handled by InputTranslatorSDL on the SDL backend.
-static bool PointerMoveCallback(InputEvent* /*ev*/) {
+bool PointerMoveCallback(InputEvent* /*ev*/) {
     return false;  // pass-through; per-finger handlers do the real work
 }
 
@@ -123,7 +123,7 @@ static bool PointerMoveCallback(InputEvent* /*ev*/) {
 // Both fields are per-frame "pointer-down-this-frame" flags consumed
 // elsewhere (binary readers not RE'd; cleared per frame somewhere in
 // GameUpdate). Wiring them keeps the call-graph binary-faithful.
-static bool PointerDownCallback(InputEvent* /*ev*/) {
+bool PointerDownCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     game_work.m_bTouchDownThisFrame = 1;
@@ -132,7 +132,7 @@ static bool PointerDownCallback(InputEvent* /*ev*/) {
 }
 
 // PointerUpCallback @ 0x00168e48 -- Game[+0x9d]=1, Game[+0x9e]=0.
-static bool PointerUpCallback(InputEvent* /*ev*/) {
+bool PointerUpCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     game_work.m_bTouchUpThisFrame = 1;
@@ -147,7 +147,7 @@ static bool PointerUpCallback(InputEvent* /*ev*/) {
 // TouchDown on the matching per-finger entity. Port covers the
 // TouchDown dispatch via per-finger SlashEntity callbacks bound in
 // SlashEntity::Init -- so just the Game-field writes here.
-static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
+bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     game_work.m_bTouchDownThisFrame = 1;
@@ -177,7 +177,7 @@ static bool PauseGameCallback(InputEvent* ev) {
 // when its gate passes -- both actions flip the same "menu input pending"
 // latch consumed downstream).
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e9c (re-analyst)
-static bool RegressMenuCallback(InputEvent* ev) {
+bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
@@ -190,7 +190,7 @@ static bool RegressMenuCallback(InputEvent* ev) {
 //             g_GameData[+0x604] = 1;
 // +0x604 is m_bFrameDirty -- same field as RegressMenuCallback.
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e6c (re-analyst)
-static bool ShowPauseMenuCallback(InputEvent* ev) {
+bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
@@ -205,6 +205,6 @@ static bool ShowPauseMenuCallback(InputEvent* ev) {
 // the binary dispatches SlashEntity::TouchUp on the matching per-zone entity.
 // Port covers this via per-finger TouchUp_n callbacks bound in SlashEntity::
 // Init directly -- so this global hook is a no-op pass-through.
-static bool TouchDownCallback(InputEvent* /*ev*/) {
+bool TouchDownCallback(InputEvent* /*ev*/) {
     return false;  // pass-through; per-finger TouchUp_n handlers do the work
 }
