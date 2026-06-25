@@ -486,7 +486,7 @@ void GameUpdate(float dt, bool active) {
                 if (prevBombTimer > 1.55f) {
                     fVar10 = -fVar9;              // reverse camera
                 } else {
-                    Bomb::UpdateBombHit(prevBombTimer);
+                    UpdateBombHit(prevBombTimer);
                     fVar10 = fVar9 + fVar9;       // double-speed camera
                 }
 
@@ -789,7 +789,7 @@ void GameDraw(float dt, bool active) {
         {
             GameTaskState* splashTs = GetTaskState();
             if (splashTs->splashFadeTimer <= 0.0f) {
-                Bomb::DrawBombHit();
+                DrawBombHit();
             }
         }
 
