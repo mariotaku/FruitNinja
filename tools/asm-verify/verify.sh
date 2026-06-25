@@ -33,7 +33,8 @@ cp -u "$PROJECT/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/"
 
 # Pipeline env (Python tools read these).
 export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja_v1_6_1.exe"
-# Use Samsung Sourcery 4.4-157 (binary's actual compiler) from the
+# Use the Samsung Sourcery GCC 4.4.1 toolchain (matching the binary's compiler
+# family -- the binary's .comment is Samsung build 4.4-261/4.4-327) from the
 # ghcr.io/mariotaku/bada-sdk:1.1.0 base baked into the fnverify-bada image.
 export FN_TOOLCHAIN_DIR=/opt/codesourcery
 export ASM_VERIFY_NM="${FN_TOOLCHAIN_DIR}/bin/arm-samsung-nucleuseabi-nm"
@@ -47,9 +48,14 @@ echo "=== [1/4] cmake configure ==="
 if [[ ! -f "$BUILD/Makefile" ]]; then
     # /build is a docker named volume; can't `rm -rf` the mount point itself.
     rm -rf "$BUILD"/* "$BUILD"/.* 2>/dev/null || true
+    # NO -DCMAKE_BUILD_TYPE=Release: Release appends -O3, which overrides the
+    # toolchain's -O2 and bloats large functions (SlashEntity::DrawSlice,
+    # TimeControl) past the ARM VFP load/store +-1020-byte offset limit ->
+    # "co-processor offset out of range" assembler error that killed the whole
+    # sweep. The binary is -O2 and compile-one.sh diffs at -O2, so the toolchain's
+    # -O2 (CMAKE_CXX_FLAGS_INIT) is both the fix AND the faithful, consistent flag.
     cmake -S "$SRC/tools/asm-verify/cross-build" -B "$BUILD" -G "Unix Makefiles" \
-          -DCMAKE_TOOLCHAIN_FILE="$SRC/tools/asm-verify/toolchain.cmake" \
-          -DCMAKE_BUILD_TYPE=Release > /dev/null
+          -DCMAKE_TOOLCHAIN_FILE="$SRC/tools/asm-verify/toolchain.cmake" > /dev/null
 fi
 
 echo "=== [2/4] cmake build ==="
