@@ -113,8 +113,8 @@ void Bomb::LoadContent() {
     g_bombData.loaded = true;
 }
 
-// ASM-spec v1.6.1 Bomb::CleanupBomb @ 0x1d6758
-void Bomb::CleanupBomb() {
+// ASM-spec v1.6.1 CleanupBomb @ 0x1d6758
+void CleanupBomb() {
     for (int i = 0; i < 3; i++)
         g_bombData.model[i] = Mortar::SmartPtr<Mortar::Model>();
     g_bombData.texMinus10 = Mortar::SmartPtr<Mortar::Texture>();
@@ -216,7 +216,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     scale = computedScale;
     m_OrigScale = computedScale;
     m_AccelForce = Vec3(0.0f, GRAVITY_Y, 0.0f);
-    m_ZPosition = Bomb::GetBombZPosition();
+    m_ZPosition = GetBombZPosition();
 
     flags &= ~ENT_SKIP_MASK;
 }
@@ -506,7 +506,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
                 game_work.m_SaveData->AddToTotal("bombs_hit", 1);
             WaveManager::GetInstance()->ResetSpeed(0);
             m_bMenuBombHit = 1;
-            Bomb::HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
+            HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
             if (game_work.m_FruitCamera)
                 game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             AddToCurrentScore(-10, 0, false, false);
@@ -518,7 +518,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         } else {
             // Classic/Zen path: HitBomb handles shake internally (v1.6.1 @ 0x1cf27c)
             if (game_work.bM_bPaused) return 0;
-            Bomb::HitBomb(pos);
+            HitBomb(pos);
         }
     } else if (m_bMenuBombHit != 0) {
         // Menu-bomb re-hit: gate ClearMenuItems on m_bClearsMenuItems
@@ -611,10 +611,10 @@ void Bomb::MakeFat(bool skipSpawnFx) {
 
 // --- Static helper methods ---
 
-// ASM-spec v1.6.1 Bomb::GetBombZPosition @ 0x1ca5c8
+// ASM-spec v1.6.1 GetBombZPosition @ 0x1ca5c8
 // Static counter init 0.0f; first call decrements -> -50; wraps at -400 -> -10.
 static float s_BombZCounter = 0.0f;
-float Bomb::GetBombZPosition() {
+float GetBombZPosition() {
     static const float STEP  =  50.0f;
     static const float FLOOR = -400.0f;
     static const float RESET = -10.0f;
@@ -625,14 +625,14 @@ float Bomb::GetBombZPosition() {
     return s_BombZCounter;
 }
 
-// ASM-spec v1.6.1 Bomb::BombFlashFull @ 0x00168f24
-bool Bomb::BombFlashFull() {
+// ASM-spec v1.6.1 BombFlashFull @ 0x00168f24
+bool BombFlashFull() {
     return game_work.m_BombHitTimer < 1.0f;
 }
 
-// ASM-spec v1.6.1 Bomb::HitBomb @ 0x1cf27c
+// ASM-spec v1.6.1 HitBomb @ 0x1cf27c
 // Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
-void Bomb::HitBomb(const Vec3& pos) {
+void HitBomb(const Vec3& pos) {
     if (game_work.bM_bPaused) return;
     if (game_work.m_SaveData)
         game_work.m_SaveData->AddToTotal("bomb", 1);
@@ -647,10 +647,10 @@ void Bomb::HitBomb(const Vec3& pos) {
         game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
 }
 
-// ASM-spec v1.6.1 Bomb::HitMenuBomb @ 0x1cf42c
+// ASM-spec v1.6.1 HitMenuBomb @ 0x1cf42c
 // Arcade/menu bomb hit: timer=2.0, flash-flag=1, SFX, store hit pos.
-// TODO: v1.6.1 0x1cf42c (Bomb::HitMenuBomb) -- body not fully decompiled; keeping port semantics
-void Bomb::HitMenuBomb(const Vec3& pos) {
+// TODO: v1.6.1 0x1cf42c (HitMenuBomb) -- body not fully decompiled; keeping port semantics
+void HitMenuBomb(const Vec3& pos) {
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {
         ts->m_bMenuBombFlashFlag = 1;
@@ -672,8 +672,8 @@ static const float BOMB_FLASH_THRESHOLD = 2.0f;
 
 static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
 
-// ASM-spec v1.6.1 Bomb::DrawBombHit @ 0x0016b73c
-void Bomb::DrawBombHit() {
+// ASM-spec v1.6.1 DrawBombHit @ 0x0016b73c
+void DrawBombHit() {
     const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;
 
@@ -710,8 +710,8 @@ void Bomb::DrawBombHit() {
 static const float BOMB_BLAST_PURGE_THR = 1.55f;  // DAT_0016a1fc
 static const float BOMB_BLAST_RESET_THR = 1.5f;
 
-// ASM-spec v1.6.1 Bomb::UpdateBombHit @ 0x0016a1a8
-void Bomb::UpdateBombHit(float prevTimer) {
+// ASM-spec v1.6.1 UpdateBombHit @ 0x0016a1a8
+void UpdateBombHit(float prevTimer) {
     const float currentTimer = game_work.m_BombHitTimer;
 
     if (prevTimer > BOMB_BLAST_RESET_THR && currentTimer <= BOMB_BLAST_RESET_THR) {

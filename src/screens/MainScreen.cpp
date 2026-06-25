@@ -495,7 +495,7 @@ void MainScreen::Update(float dt) {
 
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
-            Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+            HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             m_State = STATE_QUIT_BOMB;
         } else if (qs == 3) {
@@ -512,7 +512,7 @@ void MainScreen::Update(float dt) {
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
-        if (Bomb::BombFlashFull()) {
+        if (BombFlashFull()) {
             SystemManager::GetInstance().QuitGame();
 #ifndef __bada__
             game.running = false;

@@ -860,7 +860,7 @@ void GameOverScreen::QuitCallback() {
     CancelHUDProgressionTimer();
     m_State = STATE_QUIT_WAIT;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+    HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
 }
 
 void GameOverScreen::OnQuitClicked() {

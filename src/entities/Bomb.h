@@ -116,12 +116,6 @@ public:
     // v1.6.1 @ 0x1d6dd4 — called once from GameInitialise
     static void LoadContent();
 
-    // v1.6.1 @ 0x1d6758 — unload bomb data
-    static void CleanupBomb();
-
-    // v1.6.1 @ 0x1ca5c8 — decrement z-layer counter by 50; wrap at -400 -> -10; first return -50
-    static float GetBombZPosition();
-
     // v1.6.1 @ 0x1d5074
     static int GetNumActiveForPlayer(int playerIdx, bool countPrespawn);
 
@@ -137,20 +131,6 @@ public:
     // ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
     static float GetHeighestBomb();
 
-    // v1.6.1 @ 0x00168f24
-    static bool BombFlashFull();
-
-    // v1.6.1 @ 0x1cf27c — classic/zen bomb hit: timer=3.2, shake(1.6,2.0), SFX
-    static void HitBomb(const Vec3& pos);
-
-    // v1.6.1 @ 0x1cf42c — arcade/menu bomb hit: timer=2.0, SFX, flash-flag=1
-    static void HitMenuBomb(const Vec3& pos);
-
-    // v1.6.1 @ 0x0016b73c — render bomb-flash overlay quad
-    static void DrawBombHit();
-
-    // v1.6.1 @ 0x0016a1a8 — per-frame bomb-hit timer tick / BombBlast purge
-    static void UpdateBombHit(float prevTimer);
 };
 
 #ifdef __bada__
@@ -176,8 +156,24 @@ static_assert(__builtin_offsetof(Bomb, m_Field_0xAC)      == 0xAC, "m_Field_0xAC
 static_assert(sizeof(Bomb)                                == 0xB0, "sizeof(Bomb) wrong (binary 0xB0 / 176)");
 #endif
 
-// World position of the last bomb hit; written by Bomb::HitBomb / Bomb::HitMenuBomb.
-// Read by Bomb::DrawBombHit.
+// Free functions — binary symbols _Z<name> (NOT Bomb class members).
+// v1.6.1 @ 0x1d6758
+void CleanupBomb();
+// v1.6.1 @ 0x1ca5c8
+float GetBombZPosition();
+// v1.6.1 @ 0x00168f24
+bool BombFlashFull();
+// v1.6.1 @ 0x1cf27c
+void HitBomb(const Vec3& pos);
+// v1.6.1 @ 0x1cf42c
+void HitMenuBomb(const Vec3& pos);
+// v1.6.1 @ 0x0016b73c
+void DrawBombHit();
+// v1.6.1 @ 0x0016a1a8
+void UpdateBombHit(float prevTimer);
+
+// World position of the last bomb hit; written by HitBomb / HitMenuBomb.
+// Read by DrawBombHit.
 extern Vec3 g_BombHitPos;
 
 #endif
