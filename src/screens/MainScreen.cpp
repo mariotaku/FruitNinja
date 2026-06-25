@@ -1,10 +1,10 @@
 //
-// MainScreen — reimplemented from docs/screens/main.md
+// MainScreen — v1.6.1 faithful port
 // v1.6.1 addresses:
-//   ctor 0x0019811c, Update 0x00196e1c, Draw 0x001993ac,
-//   UpdateScreenElements 0x00195a58
-// v1.6.1 struct re-layout applied: m_StateTimer=bounce velocity, m_Timer2=transition timer,
-//   m_BounceY=bounce position, m_LogoPos=fruit_text draw pos, etc.
+//   ctor @0x0019811c, Update @0x00196e1c, Draw @0x001993ac,
+//   UpdateScreenElements @0x00195a58, CreateButtons @0x001961f8
+// v1.6.1 struct layout: m_StateTimer=bounce velocity (+0x110), m_Timer2=transition timer (+0x124),
+//   m_ButtonsCreatedFlag(+0x7c), f0-countdown via SetMoreGamesTimer (+0x11c).
 //
 
 #include "MainScreen.h"
@@ -39,6 +39,7 @@
 #include "engine/util/StringTable.h"
 #include <cmath>
 #include "game/GameWork.h"
+#include "game/ItemManager.h"
 
 // Timing constants (verified from binary, see docs/screens/main.md)
 static const float CAMERA_LERP_RATE    = 0.125f;
@@ -89,9 +90,9 @@ void MainScreen::SetState(MainScreenState s) {
 #endif // !defined(__bada__)
 }
 
-// Matches ctor at 0x0019811c
+// ASM-spec v1.6.1 MainScreen ctor @0x0019811c
 MainScreen::MainScreen(Game& g)
-    : m_bFlag7c(false),
+    : m_ButtonsCreatedFlag(false),
       pPlayButton(nullptr), pDojoButton(nullptr),
       pLeaderboardBtn(nullptr), pMoreGamesBtn(nullptr),
       pToggleA(nullptr), pToggleB(nullptr),
@@ -207,16 +208,16 @@ MainScreen::~MainScreen() {
     Release();
 }
 
-// Matches 0x0014ac80 (13 lines): calls Reset via vtable
+// v1.6.1 MainScreen::Init @0x0014ac80
 void MainScreen::Init() {
     Reset();
 }
 
-// Matches 0x0014ac8c: no-op
+// v1.6.1 MainScreen::Reset @0x0014ac8c: no-op
 void MainScreen::Reset() {
 }
 
-// Matches 0x0014cd20 (~40 lines): cleanup all resources
+// v1.6.1 MainScreen::Release @0x0014cd20
 void MainScreen::Release() {
     pPlayButton    = nullptr;
     pDojoButton    = nullptr;
@@ -231,7 +232,7 @@ void MainScreen::Release() {
     m_pSliceInstrBox = nullptr;
 }
 
-// Matches Update at 0x0014b278 (677 lines) — state machine
+// v1.6.1 MainScreen::Update @0x00196e1c — state machine
 void MainScreen::Update(float dt) {
 #ifndef __bada__
     m_Time += dt;
@@ -259,6 +260,8 @@ void MainScreen::Update(float dt) {
         float f0 = TexMoreGamesF0();
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
+            // v1.6.1 @0x00197430: gameMode=0 fires in both branches when single-player.
+            game_work.gameMode = 0;
             TexMoreGamesF0() = f0 - dt;
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
             if (game_work.m_GameDt < 0.0f) {
@@ -267,7 +270,7 @@ void MainScreen::Update(float dt) {
         } else {
 #endif // !defined(__bada__)
             // Settle branch: clear gameMode, advance timer, ramp camera toward -1.
-            // Binary @ 0x0014b60e: writes 0 to g_GameData+0x04 (gameMode).
+            // v1.6.1 @0x00197430: gameMode=0 in both branches (single-player path).
             game_work.gameMode = 0;
             m_Timer2 += dt;
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
@@ -275,8 +278,8 @@ void MainScreen::Update(float dt) {
         }
 #endif // !defined(__bada__)
 
-        // Binary: CreateButtons called unconditionally every frame; gate inside CreatePlayDojo.
-        CreatePlayDojo();
+        // v1.6.1 @0x00197430: CreateButtons called unconditionally every frame; internal gate on flM_BombHitTimer<1.45 + per-button null guards.
+        CreateButtons();
 
         if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt >= 0.0f) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
@@ -286,13 +289,14 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CREATE_BUTTONS: {
-        // Binary @ 0x0014bbe2..0x0014bdf2.
-        if (pDojoButton) {
-            pDojoButton->SetNewSymbol(false);
+        // v1.6.1 MainScreen::Update @0x001974e0
+        // Binary: pLeaderboardBtn badge from ItemManager::AreNewItems(); then if(m_ButtonsCreatedFlag==0) CreateButtons(this).
+        if (pLeaderboardBtn) {
+            pLeaderboardBtn->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
         }
 
-        if (!pLeaderboardBtn) {
-            CreateQuitButton();
+        if (m_ButtonsCreatedFlag == 0) {
+            CreateButtons();
         }
 
         game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
@@ -304,7 +308,7 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_GAME_START: {
-        // Binary case 2 @0x00197468: WaveManager::Reset(true) + bM_bPaused=1 fire
+        // v1.6.1 MainScreen::Update @0x00197468: WaveManager::Reset(true) + bM_bPaused=1 fire
         // UNCONDITIONALLY inside the m_GameDt guard (no latch in binary).
         // Port adds m_bGameStartReset latch (one-shot, port-only) to prevent repeated
         // resets on re-entry; guard only the latch reads/writes, not the binary calls.
@@ -318,6 +322,8 @@ void MainScreen::Update(float dt) {
             m_bGameStartReset = true;
 #endif // !defined(__bada__)
             game_work.bM_bPaused = 1;
+            // v1.6.1 @0x00197468: snapshot coins at game-start (cold path; no inbound xrefs in binary)
+            game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
         }
         game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(game_work.m_GameDt) < 0.001f) {
@@ -338,10 +344,8 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_DOJO_WAIT_A:
-    case STATE_DOJO_WAIT_B:
-    case STATE_DOJO_WAIT_C:
-    case STATE_DOJO_WAIT_D: {
-        // Binary @ 0x0014be80: cases 3/4/0x15/0x16 share one block.
+    case STATE_DOJO_WAIT_B: {
+        // v1.6.1 MainScreen::Update @0x00197494: cases 3/4 share one block.
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
@@ -371,7 +375,7 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_SLIDE_IN: {
-        // Binary @ ~0x0014beec, two-phase lerp + pos.y animation.
+        // v1.6.1 MainScreen::Update @0x00196e1c case 8: two-phase lerp + pos.y animation.
         float posAlpha;
         if (m_Timer2 <= STATE_8_LERP_THRESHOLD) {
             m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE * FN::g_DebugTimeScale;
@@ -400,31 +404,37 @@ void MainScreen::Update(float dt) {
         break;
     }
 
-    case STATE_LEADERBOARD:     // binary case 9
-    case STATE_MORE_GAMES:      // binary case 10
-    case STATE_MATCHMAKER:      // binary case 0x10
-        // Defunct — OpenFeint / GameCenter / matchmaker states.
-        // Binary resets m_StateTimer = 0 (bounce velocity cleared) and m_Timer2 = -0.85.
+    case STATE_LEADERBOARD:     // v1.6.1 case 9 @0x0019765c
+    case STATE_MORE_GAMES:      // v1.6.1 case 10 @0x0019765c
+        // Defunct — OpenFeint / GameCenter states (lumped exit block @0x0019765c).
+        // Binary: m_State=0; f0(+0x11c)=0; m_Timer2=-0.85. No DeleteMenuButtons (persisting instance).
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
         m_State = STATE_CAMERA_ZOOM;
-        m_StateTimer = 0.0f;
+        SetMoreGamesTimer(0.0f);
         m_Timer2 = -0.85f;
-        game_work.m_GameDt = 0.0f;
-        DeleteMenuButtons();
         break;
 
-    case STATE_NEWS:            // binary case 0xb
+    case STATE_MATCHMAKER:      // v1.6.1 case 0x10 @0x001975f4
+        // Defunct: NetworkManager matchmaker — no-op stub; v1.6.1 @0x001975f4
+        // Binary falls through to CAMERA_ZOOM same as 9/10 but via a distinct block.
+        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-matchmaker state");
+        m_State = STATE_CAMERA_ZOOM;
+        SetMoreGamesTimer(0.0f);
+        m_Timer2 = -0.85f;
+        break;
+
+    case STATE_NEWS:            // v1.6.1 case 0xb @0x001975c0
         // Defunct — NetworkManager::UpdateNews.
-        // Binary: m_StateTimer=0, m_State=1, m_Timer2=-0.85.
+        // Binary: m_State=1; f0(+0x11c)=0; m_Timer2=-0.85.
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
         m_State = STATE_CREATE_BUTTONS;
-        m_StateTimer = 0.0f;
+        SetMoreGamesTimer(0.0f);
         m_Timer2 = -0.85f;
         break;
 
     case STATE_MODE_SELECT:
     case STATE_MODE_SELECT_2: {
-        // Binary @ 0x0014bf40 cases 0xe/0xf: decay m_Timer2 and slide pos.y upward.
+        // v1.6.1 MainScreen::Update @0x00197560 cases 0xe/0xf: decay m_Timer2 and slide pos.y upward.
         const float oldTimer2 = m_Timer2;
         const float decay = 1.0f - (1.0f - STATE_0E_DECAY) * FN::g_DebugTimeScale;
         m_Timer2 *= decay;
@@ -443,7 +453,7 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // Binary @ 0x0014c19a-0x0014c1d2
+        // v1.6.1 MainScreen::Update @0x00197828
         if (game_work.m_GameDt < 0.0f) {
             game_work.m_GameDt *= 0.75f;
             if (game_work.m_GameDt > -0.001f) {
@@ -456,20 +466,21 @@ void MainScreen::Update(float dt) {
 
     case STATE_LOADING_A:
     case STATE_LOADING_B:
-        // Binary @ 0x0014c010: state always resets to 0 + clears menu buttons.
+        // v1.6.1 @0x001976b8: m_bUpdatesSuspended=0; m_Field114+=dt*8 (wrap@8); m_State=0; f0=0; m_Timer2=-0.85.
+        // No DeleteMenuButtons (persisting instance keeps buttons).
+        game_work.m_bUpdatesSuspended = 0;
         m_Field114 += dt * 8.0f;
         if (m_Field114 >= 8.0f) {
             m_Field114 = 0.0f;
         }
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
         m_State = STATE_CAMERA_ZOOM;
-        m_StateTimer = 0.0f;
-        game_work.m_GameDt = 0.0f;
-        DeleteMenuButtons();
+        SetMoreGamesTimer(0.0f);
+        m_Timer2 = -0.85f;
         break;
 
     case STATE_QUIT_WAIT: {
-        // ASM-verified: 2026-04-30 v1.6.1 binary @ 0x0014c078..0x0014c0ea (asm-inspector)
+        // v1.6.1 MainScreen::Update @0x00197700
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -477,23 +488,24 @@ void MainScreen::Update(float dt) {
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
+        pMoreGamesBtn = nullptr;
+
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
             Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             m_State = STATE_QUIT_BOMB;
-            m_StateTimer = 0.0f;
         } else if (qs == 3) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/QUIT_WAIT qs==3 cancelled");
             m_State = STATE_CAMERA_ZOOM;
-            m_StateTimer = 0.0f;
-            m_Timer2 = 0.15f;       // DAT_0014c298
+            SetMoreGamesTimer(0.0f);
+            m_Timer2 = 0.15f;
         }
         break;
     }
 
     case STATE_QUIT_BOMB: {
-        // Binary @ 0x0014c0f2 case 0x18
+        // v1.6.1 MainScreen::Update @0x00196e1c case 0x16
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -520,8 +532,6 @@ void MainScreen::Update(float dt) {
     switch (m_State) {
     case STATE_DOJO_WAIT_A:
     case STATE_DOJO_WAIT_B:
-    case STATE_DOJO_WAIT_C:
-    case STATE_DOJO_WAIT_D:
     case STATE_MODE_SELECT:
     case STATE_MODE_SELECT_2:
     case STATE_SLIDE_IN:
@@ -562,7 +572,7 @@ void MainScreen::Update(float dt) {
     UpdateScreenElements(dt, elapsedTime);
 }
 
-// Binary @ 0x0014b278: Game+0x0c is the camera-transition timer.
+// v1.6.1 MainScreen: Game+0x0c is the camera-transition timer (game_work.m_GameDt).
 float MainScreen::GetCameraTransition() const { return game_work.m_GameDt; }
 void  MainScreen::SetCameraTransition(float v) { game_work.m_GameDt = v; }
 
@@ -577,18 +587,12 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
     mm.UploadModelViewOnly();
 }
 
-// ASM-spec v1.6.1 MainScreen::Draw @0x001993ac: per-quad = tex->Set / WorldStack::Reset /
-//  MakeScale+matrix / GlobalTranslate44 / UploadModelViewOnly / DrawQuad(White) (shade tri =
-//  Mesh::DrawTriList,3) / tex->UnSet. Renderer is the cross-visible Mortar::Renderer
-//  (game->renderer, same path as ScoreControl::Draw). Textures s_blurTex/m_fruitTex/m_ninjaTex
-//  are file-scope statics (binary GOT globals), not struct members.
-// Binary signature: Draw(float*) at vtable slot 7 @0x001993ac (v1.6.1 MainScreen::Draw)
+// ASM-spec v1.6.1 MainScreen::Draw @0x001993ac
 void MainScreen::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     if (m_State == STATE_CAMERA_FADE) return;
-    if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
-         m_State == STATE_DOJO_WAIT_C || m_State == STATE_DOJO_WAIT_D) &&
+    if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B) &&
         m_Timer2 == 0.0f) return;
 
     Game* game = Game::GetInstance();
@@ -654,7 +658,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         m_pSliceInstrBox->Draw(8.0f, Vec2(1.0f, 1.0f), 1);
     }
 
-    // 5. Loading symbol (states 0x13, 0x14 only)
+    // 5. Loading symbol (v1.6.1 Draw @0x001993ac: states 0x13/0x14 only)
     if (m_State == STATE_LOADING_A || m_State == STATE_LOADING_B) {
         DrawLoadingSymbol(&hudScale.x);
     }
@@ -673,7 +677,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
     }
 }
 
-// ASM-verified: v1.6.1 MainScreen::UpdateScreenElements @ 0x00195a58
+// ASM-verified: v1.6.1 MainScreen::UpdateScreenElements @0x00195a58
 //
 // Binary signature: (float dt, float stateVar)
 //   dt       = frame delta (used for bounce physics integration and tute gate).
@@ -774,7 +778,7 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
     m_LogoPos = base + offset * m_Lean * 2.0f;
 }
 
-// Matches 0x0014aee8 (~35 lines).
+// v1.6.1 MainScreen::DeleteMenuButtons @0x0014aee8
 void MainScreen::DeleteMenuButtons() {
     RemoveButton(pPlayButton);
     RemoveButton(pDojoButton);
@@ -782,7 +786,7 @@ void MainScreen::DeleteMenuButtons() {
     RemoveButton(pLeaderboardBtn);
 }
 
-// Matches 0x0014ad04 (7 lines)
+// v1.6.1 MainScreen::Hide @0x0014ad04
 void MainScreen::Hide() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
@@ -817,20 +821,15 @@ void MainScreen::CreateToggles() {
     game_work.mHud->AddControl(pMusicToggle);
 }
 
-void MainScreen::CreatePlayDojo() {
+// v1.6.1 MainScreen::CreateButtons @0x001961f8
+// Gated as a whole by flM_BombHitTimer < 1.45, then each button created independently
+// with a per-pointer null guard. Sets m_ButtonsCreatedFlag=1 after the first full run.
+// Called every frame from case 0 (cheap due to per-pointer guards) and gated on
+// m_ButtonsCreatedFlag==0 from case 1 for re-show after return.
+void MainScreen::CreateButtons() {
     if (!game_work.mHud) return;
 
-    // Binary CreateButtons @ 0x001961f8: gated as a whole by (flM_BombHitTimer < 1.45),
-    // then guards EACH button independently with if (pX == nullptr). The single
-    // `if (pPlayButton || ...) return;` early-return was wrong: it prevented dojo from
-    // being re-created when only pPlayButton was non-null (and vice versa), breaking
-    // the return-from-DojoScreen re-creation path.
     if (game_work.m_BombHitTimer >= 1.45f) return;
-
-    // v1.6.1: button textures come from game_work.pM_Textures[n] in the binary's CreateButtons.
-    // Port falls back to loading them here (same texture files).
-    // Textures are loaded here unconditionally (cheap once cached) so each per-button
-    // null-check below can create whichever buttons are missing.
 
     if (pPlayButton == nullptr) {
         Mortar::SmartPtr<Mortar::Texture> texNewGame =
@@ -839,7 +838,7 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_Texture = texNewGame;
         pPlayButton->Init(POS_PLAY_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
-        // TODO: 0x0014b782 -- RE whether play block truly overrides m_RestScale to texWidth+1
+        // TODO: 0x001961f8 -- RE whether play block truly overrides m_RestScale to texWidth+1
         //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
             pPlayButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
@@ -849,17 +848,15 @@ void MainScreen::CreatePlayDojo() {
         pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         pPlayButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-        // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: Play(GameMode) button sets m_HitInsetX=m_HitInsetY=-50.0 (both axes; Update @0x0019a860 expands rect by +inset/side so negative shrinks). Dojo(About) button does NOT set inset (keeps default 5.0).
+        // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: Play(GameMode) button sets m_HitInsetX=m_HitInsetY=-50.0.
         pPlayButton->m_HitInsetX   = -50.0f;
         pPlayButton->m_HitInsetY   = -50.0f;
-        // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
         pPlayButton->m_ShakeScale.x = 0.5f;
         pPlayButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(pPlayButton);
 
         if (game_work.m_TutorialControl)
             game_work.m_TutorialControl->ResetTutePos(pPlayButton);
-
     }
 
     if (pDojoButton == nullptr) {
@@ -880,15 +877,14 @@ void MainScreen::CreatePlayDojo() {
         pDojoButton->m_ShakeScale.x = 0.5f;
         pDojoButton->m_GrowInTimer  = 0.25f;
         game_work.mHud->AddControl(pDojoButton);
-
     }
 
-    // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: quit-bomb recreated every frame
-    // via if(pX==nullptr) guard (binary runs CreateButtons per-frame; port folds quit-bomb
-    // into CreatePlayDojo per-frame path).
+    // v1.6.1 @0x001961f8: quit button recreated per-frame via if(pX==nullptr) guard.
     if (pLeaderboardBtn == nullptr) {
         CreateQuitButton();
     }
+
+    m_ButtonsCreatedFlag = 1;
 }
 
 void MainScreen::CreateQuitButton() {
@@ -914,7 +910,7 @@ void MainScreen::CreateQuitButton() {
     game_work.mHud->AddControl(pLeaderboardBtn);
 }
 
-// Matches MainScreen::ButtonDeleted @ 0x0014acc0.
+// v1.6.1 MainScreen::ButtonDeleted @0x0014acc0
 void MainScreen::ButtonDeleted(HUDControl* ctrl) {
     if (ctrl == pDojoButton)    pDojoButton    = nullptr;
     if (ctrl == pPlayButton)    pPlayButton    = nullptr;
@@ -924,7 +920,7 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 
 // --- Callbacks ---
 
-// Matches 0x0014b068
+// v1.6.1 MainScreen::GameModeCallback @0x0014b068
 void MainScreen::GameModeCallback() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
     m_State = STATE_MODE_SELECT;
@@ -936,10 +932,9 @@ void MainScreen::GameModeCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
-// Defunct: orphaned callback in shipping binary -- v1.6.1 binary @ 0x0014c384
+// Defunct: orphaned callback in shipping binary -- v1.6.1 @0x0014c384
 // ZERO inbound xrefs. STATE_GAME_START is genuinely unreachable in shipping FruitNinja.exe.
 // Body retained for vtable / layout fidelity.
-// Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
@@ -953,7 +948,7 @@ void MainScreen::NewGameCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
-// Matches 0x0014afc4
+// v1.6.1 MainScreen::AboutCallback @0x0014afc4
 void MainScreen::AboutCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
@@ -963,26 +958,26 @@ void MainScreen::AboutCallback() {
     pLeaderboardBtn = nullptr;
 }
 
-// Matches 0x0014af64
+// v1.6.1 MainScreen::SoundCallback @0x0014af64
 void MainScreen::SoundCallback() {
     game_work.m_bSoundOn = !game_work.m_bSoundOn;
     Mortar::SoundManager::GetInstance().SetSFXVolume(
         game_work.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
 }
 
-// Matches 0x0014ac9c
+// v1.6.1 MainScreen::MusicCallback @0x0014ac9c
 void MainScreen::MusicCallback() {
     game_work.m_bMusicOn = !game_work.m_bMusicOn;
 }
 
-// Matches 0x0014b010
+// v1.6.1 MainScreen::LeaderboardsCallback @0x0014b010
 void MainScreen::LeaderboardsCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_LEADERBOARD), "LeaderboardsCallback");
     m_State = STATE_LEADERBOARD;
 }
 
-// Matches 0x0014b000
+// v1.6.1 MainScreen::MoreGamesCallback @0x0014b000
 void MainScreen::MoreGamesCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MORE_GAMES), "MoreGamesCallback");
@@ -1002,7 +997,6 @@ void MainScreen::QuitGamesCallback() {
 
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
     m_State = STATE_QUIT_WAIT;
-    m_StateTimer = 0.0f;
 }
 
 
