@@ -241,7 +241,9 @@ void MenuButton::CreateFruit() {
             m_RestScale.y = (float)(m_Texture->GetHeight() + 1);
             // m_RestScale.z unchanged
         }
-        m_pTrackedFruit = static_cast<Fruit*>(m_pEntity);         // tail @0x0019b95c
+        // Binary @0x0019b95c: raw word store (str) of m_pEntity -> m_pTrackedFruit.
+        // No type check; entity may be Bomb. reinterpret_cast matches the ARM store.
+        m_pTrackedFruit = reinterpret_cast<Fruit*>(m_pEntity);    // tail @0x0019b95c
         return;
     }
 
@@ -257,7 +259,8 @@ void MenuButton::CreateFruit() {
     e->Init(nullptr, (long)m_FruitType, nullptr);
     e->flags &= ~0x10;
     m_pEntity = e;
-    m_pTrackedFruit = static_cast<Fruit*>(e);
+    // Binary: raw word store; entity may be Bomb. reinterpret_cast matches ARM str.
+    m_pTrackedFruit = reinterpret_cast<Fruit*>(e);
 #ifndef __bada__
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
