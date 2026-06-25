@@ -419,10 +419,10 @@ void ShopListItem::Draw() {
 
         const char* costStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
-            case 0: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break;
-            case 1: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND);   break;
-            case 2: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION); break;
-            case 3: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_SPECIAL);      break;
+            case 0: costStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break;
+            case 1: costStr = GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND);   break;
+            case 2: costStr = GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION); break;
+            case 3: costStr = GETSTRING_CAST_0(LSTR_SHOP_SPECIAL);      break;
             default: costStr = nullptr; break;
         }
 
@@ -433,10 +433,10 @@ void ShopListItem::Draw() {
         // label happened to be rendered first.
         if (s_costWidths[0] == 0.0f && font) {
             const char* k[4] = {
-                Mortar::GETSTRING_CAST_0(LSTR_SHOP_BLADE),
-                Mortar::GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND),
-                Mortar::GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION),
-                Mortar::GETSTRING_CAST_0(LSTR_SHOP_SPECIAL),
+                GETSTRING_CAST_0(LSTR_SHOP_BLADE),
+                GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND),
+                GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION),
+                GETSTRING_CAST_0(LSTR_SHOP_SPECIAL),
             };
             for (int i = 0; i < 4; i++) {
                 if (k[i] && k[i][0] != '\0') {
@@ -745,7 +745,7 @@ void ShopListItem::Draw() {
                                        ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY        // 0xCF
                                        : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;   // 0xCE
                     }
-                    const char* promptStr = Mortar::GETSTRING_CAST_0(promptId);
+                    const char* promptStr = GETSTRING_CAST_0(promptId);
                     if (promptStr) {
                         Vec3 promptPos(xPos, -20.0f, 0.0f);   // DAT_0015f4e6 = -20.0f
                         font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,

@@ -15,7 +15,6 @@
 
 #include "engine/math/Colour.h"
 #include "engine/util/StringTable.h"
-#include "engine/util/Localisation.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -38,13 +37,6 @@ inline void CloneString(char** dst, const char* src) {
 inline int CompareWords(const char* a, const char* b) {
     if (a == nullptr || b == nullptr) return 0;
     return (strcmp(a, b) == 0) ? 1 : 0;
-}
-
-// GETSTRING_CAST_0_STR -- localisation lookup for a key string.
-// Binary: thunk to GETSTRING_STR(key, 0) @ 0x00109ec0.
-// Miss fallback returns "STRING NOT FOUND" (NOT the key).
-inline const char* GETSTRING_CAST_0_STR(const char* key) {
-    return Localisation::Get(key);
 }
 
 // ParseColour — parse "R,G,B" or "R,G,B,A" string into a Colour struct.

@@ -363,6 +363,8 @@ static_assert(sizeof(NetworkManager) == 668,
 // no-op stub; binary addr unknown.
 int GetSocialNetworkProvider();
 
+} // namespace Mortar
+
 // Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
 // Returns true when the preferred network provider is online.
 // Stub returns false so callers take the local/offline path.
@@ -372,7 +374,5 @@ bool IsProviderOnline();
 // Returns true when the friends list has been loaded from the network provider.
 // Stub returns false so callers take the local/offline path.
 bool AreFriendsLoaded();
-
-} // namespace Mortar
 
 #endif // FN_ENGINE_NETWORK_NETWORK_MANAGER_H

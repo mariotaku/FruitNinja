@@ -265,18 +265,18 @@ void BSButton::Update(float dt) {
 
     if (m_TouchId == -1) {
         // Not currently tracking a touch.
-        int id = Mortar::TouchInRegion(left, right, bottom, top, -1);
+        int id = TouchInRegion(left, right, bottom, top, -1);
         m_TouchId = id;
         if (id == -1) {
             UpdateTouchPosition();
             return;
         }
         // Check for just-pressed (phase == 2).
-        if (Mortar::IsTouchDown(id) != 2) {
+        if (IsTouchDown(id) != 2) {
             m_TouchId = -1;
         }
     } else {
-        int state = Mortar::IsTouchDown(m_TouchId);
+        int state = IsTouchDown(m_TouchId);
         if (state == 0) {
             // Touch released.
             m_TouchId = -1;

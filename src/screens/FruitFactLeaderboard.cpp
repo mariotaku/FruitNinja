@@ -45,7 +45,7 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
     m_pActionButton  = 0;     // binary: str 0 @0xA8
 
     // Title: LSTR 0x7b if global (param2), else LSTR 0x363 (friends)
-    const char* title = Mortar::GETSTRING(
+    const char* title = GETSTRING(
         param2 ? LSTR_LEADERBOARD_GLOBAL : LSTR_LEADERBOARD_FRIENDS, 0);
     CreateTitleTextControl(title);
 
@@ -101,7 +101,7 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool par
     }
 
     // Online gate: provider offline or friends not loaded -> local-only (m_State=1).
-    if (!Mortar::IsProviderOnline() || !Mortar::AreFriendsLoaded()) {
+    if (!IsProviderOnline() || !AreFriendsLoaded()) {
         m_State = 1;
     } else {
         m_State = 2;

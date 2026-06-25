@@ -98,9 +98,9 @@ void CheckBox::Update(float dt) {
     if (m_TouchSlot < 0) {
         // No active tracking slot — scan for a new touch in our region.
         // Binary: TouchInRegion(left, right, bottom, top, -1)
-        int slot = Mortar::TouchInRegion(left, right, bottom, top, -1);
+        int slot = TouchInRegion(left, right, bottom, top, -1);
         if (slot >= 0) {
-            int state = Mortar::IsTouchDown(slot);
+            int state = IsTouchDown(slot);
             if (state != 0) {
                 m_TouchSlot = slot;
                 UpdateTouchPosition();
@@ -108,7 +108,7 @@ void CheckBox::Update(float dt) {
         }
     } else {
         UpdateTouchPosition();
-        int state = Mortar::IsTouchDown(m_TouchSlot);
+        int state = IsTouchDown(m_TouchSlot);
         if (state == 0) {
             // Touch released — check if it ended inside the rect and toggle.
             const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);

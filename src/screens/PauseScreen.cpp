@@ -310,7 +310,7 @@ PauseScreen::PauseScreen()
             m_PausedText = new Mortar::BakedStringBox(
                 font, 14.0f, 100.0f, 30.0f, 0xf, 1, 0.0f);
             m_PausedText->SetHorizontalLineSpacing(-1);
-            m_PausedText->SetText(Mortar::GETSTRING(LSTR_PAUSED, 0));
+            m_PausedText->SetText(GETSTRING(LSTR_PAUSED, 0));
             m_PausedText->SetColour(game_work.m_TitleColour, true);
         }
     }
@@ -615,7 +615,7 @@ void PauseScreen::Update(float dt) {
     if (!m_QuitButton) {
         m_QuitButton = new BSButton(
             Vec3(215.0f, -135.0f, 0.0f),
-            Mortar::GETSTRING(LSTR_QUIT, 0),
+            GETSTRING(LSTR_QUIT, 0),
             Vec3(1.0f, 1.0f, 1.0f)
         );
         m_QuitButton->Init();

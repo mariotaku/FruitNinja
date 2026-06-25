@@ -170,7 +170,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
             Colour(0x5d, 0x46, 0x20, 255),
             Vec3(2.0f, -2.0f, 0.0f),
             false);
-        box->SetText(Mortar::GETSTRING(LSTR_FRUIT_FACT_TITLE, 0));
+        box->SetText(GETSTRING(LSTR_FRUIT_FACT_TITLE, 0));
         box->SetHorizontalLineSpacing(-1.0f);
         c->SetText(box);
     }

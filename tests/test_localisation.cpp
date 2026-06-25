@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     };
     for (int i = 0; i < (int)(sizeof(kIntAnchors)/sizeof(kIntAnchors[0])); i++) {
         const IntIdAnchor& a = kIntAnchors[i];
-        const char* got = Mortar::GETSTRING_CAST_0(a.id);
+        const char* got = GETSTRING_CAST_0(a.id);
         printf("  %-36s -> '%s'\n", a.label, got ? got : "(null)");
         if (!got || std::strcmp(got, a.expected) != 0) {
             fprintf(stderr, "    FAIL: %s expected '%s', got '%s'\n",

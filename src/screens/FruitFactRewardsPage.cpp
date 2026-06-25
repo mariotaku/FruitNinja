@@ -100,7 +100,7 @@ void FruitFactRewardsPage::Init() {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
             font, 12.0f, 250.0f, 14.0f, 0xf, 1, 0.0f);
         m_pTitleBox = box;
-        box->SetText(Mortar::GETSTRING(LSTR_REWARDS_TITLE, 0));
+        box->SetText(GETSTRING(LSTR_REWARDS_TITLE, 0));
         box->SetHorizontalLineSpacing(-1.0f);
         box->SetGradient(
             Colour(255, 255, 255, 255),

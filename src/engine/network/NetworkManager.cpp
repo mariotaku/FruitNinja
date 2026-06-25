@@ -13,14 +13,14 @@ int GetSocialNetworkProvider() {
     return 0;
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
+} // namespace Mortar
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 IsProviderOnline @0x0011f534.
 bool IsProviderOnline() {
     return false;
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f4a0.
+// Defunct: online leaderboard -- no-op stub; v1.6.1 AreFriendsLoaded @0x0011f4a0.
 bool AreFriendsLoaded() {
     return false;
 }
-
-} // namespace Mortar

@@ -196,6 +196,8 @@ public:
     // file-static in Touch.cpp for identical behaviour (Touch is a singleton).
 };
 
+} // namespace Mortar
+
 // ---------------------------------------------------------------------------
 // Free functions matching binary helpers.
 
@@ -211,8 +213,6 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 // Returns 0=up, 1=held, 2=press-edge (just-pressed, one frame) for given slot.
 // Matches binary signature verbatim (int slot -> int 0/1/2).
 int IsTouchDown(int slot);
-
-} // namespace Mortar
 
 #if defined(__bada__)
 static_assert(sizeof(Mortar::Touch) == 468, "Touch size mismatch");
