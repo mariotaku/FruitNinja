@@ -559,7 +559,7 @@ void SplatEntity::UpdateSplat(float dt) {
 // <= 0 here, fires + resets to 0.5. Three independent gates by size.
 // ASM-verified: 2026-04-29 v1.6.1 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
 // ---------------------------------------------------------------------
-void SplatEntity::PlaySplat(int splatSize) {
+void PlaySplat(int splatSize) {
     int sz = splatSize;
     if (sz > 2) sz = 2;
     if (sz < 0) sz = 0;

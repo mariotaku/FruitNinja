@@ -130,7 +130,7 @@ void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
         if (const char* mir = sp.Attribute("mirror"))
             s->m_bMirror = (strcmp(mir, "false") != 0) ? 1 : 0;
         const char* placement = sp.Attribute("placement");
-        if (placement) s->m_SpawnType = WaveManager::ParsePlacement(placement);
+        if (placement) s->m_SpawnType = ParsePlacement(placement);
 
         m_Spawners.push_back(s);
     }

@@ -64,7 +64,7 @@ static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 // if delta > 0 also adds to m_CoinsTotalEarned. Coin balance lives in
 // game_work (+0x20/+0x24), not FruitSaveData.
 // ---------------------------------------------------------------------------
-static void CoinArrived(Coin* coin) {
+void CoinArrived(Coin* coin) {
     int delta = coin->m_CoinValue;
     game_work.m_CoinsBalance += delta;
     if (delta > 0) game_work.m_CoinsTotalEarned += delta;

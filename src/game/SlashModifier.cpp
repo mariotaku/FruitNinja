@@ -12,7 +12,7 @@
 // Maps XML "type" string to colour-type enum (NONE/LERP/PER_SLASH/CONTINUOUS).
 // Binary uses StringHash + cached table hashes (__cxa_guard); port computes
 // StringHash on every call -- semantically identical since StringHash is pure.
-static int ParseSlashModColourType(const char* s) {
+int ParseSlashModColourType(const char* s) {
     if (!s || !*s) return 0;
     uint32_t h = StringHash(s);
     if (h == StringHash("LERP"))       return 1;
@@ -26,7 +26,7 @@ static int ParseSlashModColourType(const char* s) {
 // OR into SlashEntity::s_ModPowerMask which gates attract/repel/bomb-suppress/
 // fruit-bounce blade behaviours. Prior port stub returned 0 -- those bits
 // never lit.
-static uint32_t ParseSlashPowerMask(const char* s) {
+uint32_t ParseSlashPowerMask(const char* s) {
     if (!s || !*s) return 0;
     uint32_t h = StringHash(s);
     static const char* const kNames[6] = {

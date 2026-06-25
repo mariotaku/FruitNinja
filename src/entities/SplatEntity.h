@@ -103,9 +103,6 @@ public:
     // Existing 4-arg callers leave landImmediately at its default (0 = airborne).
     void MakeSplat(Vec3 pos, Vec3 vel, bool param3, int fruitType, bool landImmediately = false);
 
-    // Binary: PlaySplat @ 0x0017f5ec -- plays one of 6 splat impact SFX.
-    static void PlaySplat(int splatSize);
-
     // --- Pool API ---
     static void CreatePool(int capacity);
     static void DestroyPool();
@@ -135,6 +132,9 @@ public:
     // default behaviour is byte-identical.
     static bool s_RandKillEnabled;
 };
+
+// Free fn (binary: _Z9PlaySplati @ 0x0017f5ec) -- plays one of 6 splat impact SFX.
+void PlaySplat(int splatSize);
 
 // Layout asserts -- only valid on 32-bit ARM cross-compile where pointers are 4 bytes.
 // Run under #ifdef __bada__ so the 64-bit port build skips vtable-affected offsets.
