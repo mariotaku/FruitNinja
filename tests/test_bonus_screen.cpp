@@ -1,7 +1,7 @@
 // test_bonus_screen -- unit test for BonusScreen rendering with faked awards.
 //
 // Spawns a BonusScreen directly with 3 mock awards (no BonusManager), adds it
-// to the HUD, manually advances m_PhaseTimer (production drives this from
+// to the HUD, manually advances m_Timer (production drives this from
 // GameOverScreen), ticks 600 frames, asserts size populated, score advances,
 // dismiss flag fires, and bright + dark pixels show in the readback.
 //
@@ -20,13 +20,13 @@
 static const int TIMEOUT_FRAMES = 600;
 static const float kDtFixed = 1.0f / 60.0f;
 
-// Per-tick callback for the interactive loop -- advance m_PhaseTimer so the
+// Per-tick callback for the interactive loop -- advance m_Timer so the
 // reveal animation runs. Returns false once the dismiss flag fires so the
 // window doesn't sit blank after BonusScreen disappears.
 static bool BonusTick(Game& /*game*/, int /*frame*/, void* userdata) {
     BonusScreen* bs = (BonusScreen*)userdata;
     if (!bs) return false;
-    bs->m_PhaseTimer += kDtFixed;
+    bs->m_Timer += kDtFixed;
     return bs->m_bPendingRemoval == 0;
 }
 
@@ -79,10 +79,10 @@ int main(int argc, char* argv[]) {
         return h.Shutdown();
     }
 
-    // Headless: advance m_PhaseTimer manually per frame and capture metrics.
+    // Headless: advance m_Timer manually per frame and capture metrics.
     int firstScoreFrame = -1, dismissFrame = -1, maxScore = 0;
     for (int frame = 0; frame < TIMEOUT_FRAMES; ++frame) {
-        bs->m_PhaseTimer += kDtFixed;
+        bs->m_Timer += kDtFixed;
         h.RunHeadless(1);
         if (bs->m_DisplayedScore > maxScore) maxScore = bs->m_DisplayedScore;
         if (bs->m_DisplayedScore > 0 && firstScoreFrame < 0) firstScoreFrame = frame;
@@ -99,9 +99,9 @@ int main(int argc, char* argv[]) {
     }
     std::printf("OK: m_bPendingRemoval=1 at frame %d\n", dismissFrame);
 
-    // Pin m_PhaseTimer past all 3 award reveals for the screenshot.
+    // Pin m_Timer past all 3 award reveals for the screenshot.
     bs->m_bPendingRemoval = 0;
-    bs->m_PhaseTimer = 2.5f;
+    bs->m_Timer = 2.5f;
     h.RunHeadless(5);
 
     std::printf("DEBUG: pFontBlue2 valid=%d pFontMain valid=%d\n",

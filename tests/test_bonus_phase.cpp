@@ -181,8 +181,8 @@ int main(int argc, char* argv[])
             printf("[bonus_phase] frame=%d STATE_BONUS_PHASE timer=%.3f entities=(%d,%d)",
                    frame, gos->m_Timer, nf, nb);
             if (gos->m_pBonusScreen) {
-                printf(" bonus.phaseTimer=%.3f bonus.m_bPendingRemoval=%d",
-                       gos->m_pBonusScreen->m_PhaseTimer,
+                printf(" bonus.m_Timer=%.3f bonus.m_bPendingRemoval=%d",
+                       gos->m_pBonusScreen->m_Timer,
                        (int)gos->m_pBonusScreen->m_bPendingRemoval);
             } else {
                 printf(" bonus=null");
@@ -217,8 +217,8 @@ int main(int argc, char* argv[])
             printf("  m_Active=%d  m_bPendingRemoval=%d\n",
                    (int)gos->m_pBonusScreen->m_Active,
                    (int)gos->m_pBonusScreen->m_bPendingRemoval);
-            printf("  m_PhaseTimer=%.3f  m_PhaseTimerActual=%.3f\n",
-                   gos->m_pBonusScreen->m_PhaseTimer, gos->m_Timer);
+            printf("  bonus.m_Timer=%.3f  gos.m_Timer=%.3f\n",
+                   gos->m_pBonusScreen->m_Timer, gos->m_Timer);
         } else {
             printf("[bonus_phase] m_pBonusScreen is null at end of run.\n");
         }
