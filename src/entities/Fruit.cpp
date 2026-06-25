@@ -2336,7 +2336,7 @@ const ::FruitInfo* Fruit::FruitInfo(long type) {
 // it falls below -2499. DATs: step=100 (0x00169108), lower=-2499 (0x0016910c),
 // reset=-500 (0x00169110).
 // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x001690cc (re-analyst)
-float Fruit::GetFruitZPosition() {
+float GetFruitZPosition() {
     s_FruitZCounter -= 100.0f;
     if (s_FruitZCounter < -2499.0f) {
         s_FruitZCounter = -500.0f;

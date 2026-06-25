@@ -146,10 +146,10 @@ void Game::UnPaused() {
         game_work.mGameSound->Unpause();
     }
     // Binary @ 0x0010dae8: gate UnpauseGame on m_GameDt != 0.0f
-    // (the camera transition isn't mid-fade). PauseScreen::UnpauseGame
+    // (the camera transition isn't mid-fade). UnpauseGame
     // sets gs->m_GameDt=0.4f, gs->bM_Mode=1.
     if (game_work.m_GameDt != 0.0f) {
-        PauseScreen::UnpauseGame();
+        UnpauseGame();
     }
 }
 

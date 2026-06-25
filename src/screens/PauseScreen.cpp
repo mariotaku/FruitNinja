@@ -114,20 +114,20 @@ static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
 // PauseGame / UnpauseGame (binary @ 0x001ca48c / 0x001ca4b4)
 // -------------------------------------------------------------------------
 
-// v1.6.1 PauseScreen::PauseGame @0x001ca48c:
+// v1.6.1 PauseGame @0x001ca48c:
 //   game_work.bM_Mode = 1;   unpause_game = 0;   unpauseDelay = 0.25f;
 // Note: the old stale address 0x00168f80 was a different function (ComboBox ctor area).
-void PauseScreen::PauseGame() {
+void PauseGame() {
     game_work.bM_Mode = true;
     g_unpause_game  = 0;
     g_unpauseDelay  = 0.25f;
 }
 
-// v1.6.1 PauseScreen::UnpauseGame @0x001ca4b4:
+// v1.6.1 UnpauseGame @0x001ca4b4:
 //   repauseDelay = 0.4f;   unpause_game = 1;
 // Does NOT write bM_Mode directly. GameDraw tail @0x001cdd64 fires the actual
 // bM_Mode clear + ClearActions on the next rendered frame after unpause_game is armed.
-void PauseScreen::UnpauseGame() {
+void UnpauseGame() {
     g_repauseDelay = 0.4f;
     g_unpause_game = 1;
 }
