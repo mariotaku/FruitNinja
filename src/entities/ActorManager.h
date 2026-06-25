@@ -44,7 +44,7 @@ public:
     static const int FREE_POOL_CAP = 512;
 
     // Factory delegate signature — matches Mortar::Delegate1<Entity*, long>.
-    typedef Entity* (*FactoryFn)(int entityType);
+    typedef Entity* (*FactoryFn)(long entityType);
 
     // --- Fields mirrored from binary layout (sizes/offsets in comments) -
 

@@ -113,6 +113,16 @@ static int GetCurrentModeHighscore() {
     return game_work.m_SaveData->m_ModeHighScores[mode];
 }
 
+// Binary: _Z23SetCurrentModeHighscorei @0x00119f24 (v1.6.1)
+// Free wrapper: reads current mode idx, guards idx<4 + saveData + score beats stored, writes + returns bool.
+bool SetCurrentModeHighscore(int score) {
+    Game* g = Game::GetInstance();
+    if (!g || !game_work.m_SaveData) return false;
+    int idx = (int)game_work.gameMode;
+    if (idx < 0 || idx >= 4) return false;
+    return game_work.m_SaveData->SetCurrentModeHighscore(score);
+}
+
 // Binary @ 0x00140604
 static void DoSetTerminate(GameOverScreen* self) {
     self->m_bPendingRemoval = 1;
@@ -1124,7 +1134,7 @@ void GameOverScreen::Update(float dt) {
                     int hi = GetCurrentModeHighscore();
                     if (hi / 2 < score) {
                         save->newBestThisGame =
-                            (uint8_t)save->SetCurrentModeHighscore(score);
+                            (uint8_t)SetCurrentModeHighscore(score);
                     }
 
                     // Per-mode leaderboard ID + ModeBestCombos save

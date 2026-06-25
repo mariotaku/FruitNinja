@@ -1645,7 +1645,7 @@ void Fruit::Slice() {
         // (was: 0x00177444..0x0017744e -- stale v1.5.x) -- only on the plain slice path and
         // only when this fruit was NOT spawned by a critical splash / menu-fling.
         // m_bMenuFling==1 marks menu-context fruits (was m_bSpawnedByCriticalSplash).
-        MoveFruitZPositionToBack(this);
+        MoveFruitZPositionToBack(this->m_ZPosition);
     }
 
     m_SecondVel = halfVelA;
@@ -2345,12 +2345,12 @@ float GetFruitZPosition() {
     return s_FruitZCounter;
 }
 
-// Binary @ 0x0016911c — move sliced fruit to back of z-order.
-// Formula from disassembly (VNMLS): *m_ZPosition = (500 + *m_ZPosition)*0.5 - 2600
+// Binary: _Z24MoveFruitZPositionToBackRf @0x001ca674 (v1.6.1)
+// Formula from disassembly (VNMLS): z = (500 + z)*0.5 - 2600
 // DATs: addend=500 (0x0016913c), subtrahend=2600 (0x00169140), half=0.5 (vmov literal).
 // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x0016911c (re-analyst)
-void Fruit::MoveFruitZPositionToBack(Fruit* f) {
-    f->m_ZPosition = (500.0f + f->m_ZPosition) * 0.5f - 2600.0f;
+void MoveFruitZPositionToBack(float& z) {
+    z = (500.0f + z) * 0.5f - 2600.0f;
 }
 
 // ============================================================

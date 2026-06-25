@@ -315,14 +315,15 @@ void BonusType::Parse(TiXmlElement* e) {
     }
 }
 
-static int GetBonusTotal(uint64_t hash);
+// Forward declaration (defined below). Binary: _Z13GetBonusTotalm @0x0012e4c4
+int GetBonusTotal(unsigned long hash);
 
 // ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0010ecc8 (re-analyst).
 Bonus* BonusType::GetBest() {
     int totalAcrossFruits = 0;
     for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
-        int total = GetBonusTotal(it->first);
+        int total = GetBonusTotal((unsigned long)it->first);
         it->second = total;
         totalAcrossFruits += total;
     }
@@ -340,13 +341,13 @@ Bonus* BonusType::GetBest() {
 }
 
 // ---------------------------------------------------------------------------
-// GetBonusTotal -- Binary @ 0x0010ddb4 (file-scope helper)
+// GetBonusTotal -- Binary: _Z13GetBonusTotalm @0x0012e4c4 (v1.6.1)
 //
 // If hash == StringHash("score"), return the current game score for player 0.
 // Otherwise return FruitSaveData::GetTotal(sd, hash).
 // The "score" string hash is cached on first call (function-local static).
 // ---------------------------------------------------------------------------
-static int GetBonusTotal(uint64_t hash) {
+int GetBonusTotal(unsigned long hash) {
     static const uint32_t kScoreHash = StringHash("score");
     if ((uint32_t)hash == kScoreHash) {
         Game* g = Game::GetInstance();
@@ -374,7 +375,7 @@ bool BonusType::UnlockAchievements() {
     int totalAcrossFruits = 0;
     for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
-        int total = GetBonusTotal(it->first);
+        int total = GetBonusTotal((unsigned long)it->first);
         it->second = total;
         totalAcrossFruits += total;
     }

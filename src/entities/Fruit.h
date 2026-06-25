@@ -300,15 +300,16 @@ public:
     // Binary @ 0x0017911c — releases the FruitModelInfo[] array + per-MP-player SmartPtr slots; called on shutdown
     static void DestroyFruitModels();
 
-    // Binary @ 0x0016911c — push sliced-half z behind all unsliced fruits.
-    // Formula: f->m_ZPosition = (500 + f->m_ZPosition) * 0.5 - 2600.0.
-    // Called on first slice so halves draw behind unsliced fruit.
-    static void MoveFruitZPositionToBack(Fruit* f);
+    // (MoveFruitZPositionToBack de-method'd to free fn — see below)
 };
 
 // Binary @ 0x001690cc — return next z-slot for a newly spawned fruit.
 // Decrements a static counter (step=100, range [-2499..-500], wraps to -500).
 float GetFruitZPosition();
+
+// Binary: _Z24MoveFruitZPositionToBackRf @0x001ca674 (v1.6.1)
+// Push sliced-half z behind all unsliced fruits: z = (z+500)*0.5f - 2600.
+void MoveFruitZPositionToBack(float& z);
 
 #ifdef __bada__
 static_assert(sizeof(Fruit) == 0x18c, "Fruit sizeof must match binary 0x18c");

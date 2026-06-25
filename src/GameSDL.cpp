@@ -136,7 +136,7 @@ bool Game::init(void* win, void* gl) {
 
     // Matches original lifecycle:
     GamePreInitialise();   // zero game fields
-    GameInitialise();      // boot all engine singletons + load shared data
+    GameInitialise(nullptr, nullptr);  // boot all engine singletons + load shared data
 
     // Start in Splash state (will auto-transition to Game)
     game_work.taskStateIndex = 0;

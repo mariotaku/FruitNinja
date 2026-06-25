@@ -159,7 +159,7 @@ void FruitFactZenPage::Init() {
         // Combo star classification from the just-filled m_Facts array.
         int outDominant = 0;
         m_ComboLevel = FruitFact::CheckCombo(m_Facts, comboCount, &outDominant);
-        Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(m_ComboLevel);
+        Mortar::SmartPtr<Mortar::Texture> starTex = GetComboStarTexture((COMBO_TYPE)m_ComboLevel);
 
         // Star position: if span < 140.0 (DAT_1806dc), use compressed X; else stagger=42.0 (DAT_1806e8).
         float starX;
@@ -187,7 +187,7 @@ void FruitFactZenPage::Init() {
                 font, 10.0f, 128.0f, 10.0f, 0xf, 3, 5.0f);
             // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_ComboLevel))
             // GetComboStarText returns a LSTR id; GETSTRING converts to a C string.
-            unsigned int starStrId = FruitFact::GetComboStarText(m_ComboLevel);
+            unsigned int starStrId = GetComboStarText((COMBO_TYPE)m_ComboLevel);
             const char* starText = (starStrId > 0) ? GETSTRING((LocalizedString)starStrId, 0) : "";
             char starBuf[512];
             snprintf(starBuf, sizeof(starBuf), "* %s", starText ? starText : "");  // DAT_001806f8 @ 0x0028260E

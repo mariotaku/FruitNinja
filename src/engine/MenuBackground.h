@@ -21,6 +21,10 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 
+// IsFastHardware — binary: _Z14IsFastHardwarev @0x0011f394 (v1.6.1)
+// Returns true if the hardware is fast (always true in port; no slow-hardware path on SDL2).
+bool IsFastHardware();
+
 // ChangeBackground @ 0x0016ae8c
 // Loads the named background texture (e.g. "gb_game") into the global slot.
 // If texName == NULL, uses the default "gb_game" (rodata 0x001bc79d).

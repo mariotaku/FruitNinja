@@ -80,7 +80,10 @@ void GamePreInitialise() {
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons
 // See docs/functions/game-loop.md for full 25-step init order.
-void GameInitialise() {
+// DIFFERS: original passes the Bada window/config @0x0011d22c; SDL port owns its window, args unused.
+void GameInitialise(void* window, const char* config) {
+    (void)window;
+    (void)config;
     Game* game = Game::GetInstance();
 
     LOG_INFO("GAMEINIT", "GameInitialise: booting engine");

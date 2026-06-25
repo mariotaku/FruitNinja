@@ -147,7 +147,8 @@ static_assert(offsetof(Game, m_appState)      == 0x100, "Game::m_appState must b
 
 // Forward declarations for lifecycle functions (src/game/)
 void GamePreInitialise();
-void GameInitialise();
+// DIFFERS: original passes the Bada window/config @0x0011d22c; SDL port owns its window, args unused.
+void GameInitialise(void* window, const char* config);
 void GameDestroy();
 
 #endif
