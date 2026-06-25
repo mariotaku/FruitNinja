@@ -167,6 +167,12 @@ static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // v1.6.1 QuitToMenu @0x001cb6e4
     game_work.bM_bPaused = 1;                          // v1.6.1 QuitToMenu @0x001cb6e4: strb 1, [+0x05]
+    // Clear the pause-overlay gate so the menu runs ACTIVE (bM_Mode=0, like the
+    // menu boot in GameInit @0x001ce1c0). Pause sets bM_Mode=1, and the active
+    // gate is canUpdate=(!bM_Mode && pmState==0); the old port cleared it via the
+    // GameExit/GameInit hop, which the pause-in-place change (#179) removed -- so
+    // without this, quit-from-pause leaves bM_Mode=1 and the menu freezes.
+    game_work.bM_Mode = false;
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // v1.6.1 QuitToMenu @0x001cb6e4 [+0x10c] = 0
