@@ -257,6 +257,6 @@ void FrontendExit();
 void GameInit(unsigned long);
 void GameUpdate(float dt, bool active);
 void GameDraw(float dt, bool active);
-void GameExit_Handler();
+void GameExit(); // v1.6.1 GameExit @0x001cfed4
 
 #endif

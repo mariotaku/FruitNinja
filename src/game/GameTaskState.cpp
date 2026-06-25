@@ -23,7 +23,7 @@ static GameTaskState s_taskState;
 static StateInitFn   s_initFuncs[3]   = { SplashInit,   FrontendInit,   GameInit };
 static StateUpdateFn s_updateFuncs[3] = { SplashUpdate,  FrontendUpdate, GameUpdate };
 static StateDrawFn   s_drawFuncs[3]   = { SplashDraw,    FrontendDraw,   GameDraw };
-static StateExitFn   s_exitFuncs[3]   = { SplashExit,    FrontendExit,   GameExit_Handler };
+static StateExitFn   s_exitFuncs[3]   = { SplashExit,    FrontendExit,   GameExit };
 
 // Flag: state change was requested during init
 static bool s_stateChangeRequested = false;
@@ -80,7 +80,7 @@ void GameTaskUpdate(float rawDt) {
     }
 }
 
-// Matches GameTaskDraw (0x10a2c4, 23 lines)
+// Matches GameTaskDraw (v1.6.1 @ 0x00119dfc, 23 lines)
 void GameTaskDraw(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -91,7 +91,7 @@ void GameTaskDraw(float dt) {
     }
 }
 
-// Matches GameTaskExit (0x10a320, 22 lines)
+// Matches GameTaskExit (v1.6.1 @ 0x0011a320, 22 lines)
 void GameTaskExit() {
     if (s_taskState.initialized) {
         s_exitFuncs[s_taskState.prevState]();
