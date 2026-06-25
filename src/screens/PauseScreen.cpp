@@ -159,6 +159,9 @@ bool PauseScreen::IsEnabled() {
 // -------------------------------------------------------------------------
 // QuitToMenu / EndRetryLevel -- binary @ 0x001cb6e4 / 0x0016a208
 // -------------------------------------------------------------------------
+// v1.6.1 Model A: quit-to-menu pauses in place (bM_bPaused=1), stays in task state 2 --
+// the binary (QuitToMenu @0x001cb6e4) never hops task state or tears down HUD/WaveManager;
+// GameExit @0x001cfed4 runs only on real app exit. #179
 static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
@@ -171,16 +174,9 @@ static void QuitToMenu() {
         // That binary function (distinct from 0x00169e50) also writes 0.5f to +0x11c so the
         // case-0 hold branch runs for ~0.5s before sliding in. Not yet confirmed whether
         // 0x001cb6e4 is a second QuitToMenu variant or a wrapper; needs re-analyst pass.
-        // DIFFERS: binary does NOT call DeleteMenuButtons here. Binary's
-        // menu fruit/bomb entities survive gameplay (ResetGameEntities
-        // re-chucks them, doesn't destroy them, per re-analyst
-        // 2026-05-16). Port's gameplay teardown path destroys those
-        // entities (or nulls m_pTrackedFruit via the OOB-kill back-ref
-        // clear in KillBomb), leaving the MenuButtons rendering an
-        // empty ring after quit + Bomb::SetCallback rotation state
-        // lost. Forcing a delete+re-create round-trip fixes both
-        // symptoms until the entity-survival path is ported.
-        game_work.mMainScreen->DeleteMenuButtons();
+        // Binary keeps menu buttons and fruit alive on quit; ResetGameEntities flings in-game
+        // fruit/bombs during the bomb-flash phase (Bomb::HitMenuBomb -> UpdateBombHit @
+        // 0x0016a1a8 crosses 1.5s -> ResetGameEntities(false)). No DeleteMenuButtons here.
     }
 
     // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
@@ -208,20 +204,6 @@ static void QuitToMenu() {
     game_work.m_bMPRetryPending = 0;
     game_work.m_bP2PHostMatched = 0;
     game_work.m_bP2PClientJoined = 0;
-
-    // ASM-spec: GameExit @0x001cfed4 tears down WaveManager on game->menu (task 2->1);
-    // the SDL port collapses that task swap, so mirror the teardown here. (#177/#178)
-    WaveManager::GetInstance()->Destroy();
-
-    // DIFFERS: binary relies on the OS task scheduler swapping from Game task
-    // to Frontend task, which triggers GameExit_Handler via GameTaskExit.
-    // Port collapses both tasks into one; we drive the transition explicitly
-    // by flipping taskStateIndex to 1 (Frontend). FrontendInit immediately
-    // writes taskStateIndex=2, so the net effect on the next two GameTaskUpdate
-    // ticks is: GameExit_Handler (teardown HUD + WaveManager) then GameInit
-    // (fresh game). Without this flip GameExit_Handler never runs and
-    // SpeedControl / other HUD controls are never released.
-    game_work.taskStateIndex = 1;
 }
 
 // EndRetryLevel moved to BombHit.cpp (FN::EndRetryLevel) so GameUpdate can call it

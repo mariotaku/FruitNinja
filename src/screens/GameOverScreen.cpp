@@ -118,7 +118,12 @@ static void DoSetTerminate(GameOverScreen* self) {
     self->m_bPendingRemoval = 1;
 }
 
-// Stale marker removed: 0x00169e50 was v1.5.x; real v1.6.1 QuitToMenu @0x001cb6e4.
+// v1.6.1 Model A: quit-to-menu pauses in place (bM_bPaused=1), stays in task state 2 --
+// the binary (QuitToMenu @0x001cb6e4) never hops task state or tears down HUD/WaveManager;
+// GameExit @0x001cfed4 runs only on real app exit. #179
+// STATE_QUIT_WAIT gates on GetNumEntities(0)==0, so in-game fruit are already flung by
+// ResetGameEntities (via Bomb::HitMenuBomb -> UpdateBombHit @0x0016a1a8 1.5s threshold)
+// before this fires. No taskStateIndex hop or WaveManager::Destroy needed here.
 static void DoQuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
     Game* game = Game::GetInstance();
@@ -144,13 +149,6 @@ static void DoQuitToMenu() {
     game_work.m_bMPRetryPending   = 0;
     game_work.m_bP2PHostMatched   = 0;
     game_work.m_bP2PClientJoined  = 0;
-
-    // ASM-spec: GameExit @0x001cfed4 tears down WaveManager on game->menu (task 2->1);
-    // the SDL port collapses that task swap, so mirror the teardown here. (#177/#178)
-    WaveManager::GetInstance()->Destroy();
-
-    // DIFFERS: binary relies on OS task scheduler; port drives transition explicitly.
-    game_work.taskStateIndex = 1;
 }
 
 // ---------------------------------------------------------------------------
