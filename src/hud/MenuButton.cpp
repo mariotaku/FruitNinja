@@ -212,6 +212,11 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_RotationSpeed  = -1.0f;
     m_RandomOffset   = 0.0f;
     m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
+    // v1.6.1 MenuButton::Init @0x0019ba50: size (+0x20) <- Vector3::Zero (0,0,0).
+    // Without this, a freshly-new'd button's size is garbage; the new-items badge
+    // (Draw @0x0019c2e4 uses size.x/m_RestScale.x) flashes full on frame 1 before the
+    // AnimPhase grow-in resets size to 0. Fruit-type buttons grow icon+badge from 0.
+    size             = Vec3(0.0f, 0.0f, 0.0f);
     m_pFruitPiece_alt = nullptr;
     m_pEntity        = nullptr;
     m_pTrackedFruit  = nullptr;
