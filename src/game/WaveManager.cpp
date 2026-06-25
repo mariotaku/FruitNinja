@@ -248,6 +248,10 @@ void WaveManager::Init() {
                 // and m_bWaitForProcessing (+0x2d) from the per-mode DEFAULT_WAVE_INFO.
                 wi->m_bWaitForEntities   = m_DefaultWaveInfo[mode].m_bWaitForEntities;
                 wi->m_bWaitForProcessing = m_DefaultWaveInfo[mode].m_bWaitForProcessing;
+                // v1.6.1 WaveManager::GetNextWave @0x001267c8: WAVE_INFO ctor copies
+                // m_OverideProbabilityPool (+0x34) from DEFAULT_WAVE_INFO -> WAVE_INFO+0x70.
+                // Without this, SpeedWaves inherit ctor default 100 instead of XML default 150.
+                wi->m_OverideProbabilityPool = m_DefaultWaveInfo[mode].m_OverideProbabilityPool;
 
                 // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
                 // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
@@ -1513,9 +1517,23 @@ void WaveManager::GetNextWave(int playerIdx) {
     for (int i = 0; i < wave->m_SpawnerCount; ++i)
         wave->m_pSpawners[i].Reset(wave->m_RevisitCounter);
 
-    // Decrement PROBABILITY_OVERIDE counters.
-    // No separate per-tick iteration — override selection is in UpdateWave
-    // (PROBABILITY_OVERIDE block) and per-game reset in ResetGlobalDt.
+    // v1.6.1 WaveManager::GetNextWave @0x0012573c (tail): per-wave reset of each
+    // probability-override's budget counter + age-out of timed overrides.
+    // Without this, freeze/frenzy/scorex2 OverideProbability (perWave=1) is consumed
+    // after one banana spawn and m_Counter (1) >= m_PerWave (1) gates it off forever.
+    // Static arcade overrides have m_SelectedType=-1 (< 1), so only the m_Counter=0
+    // branch runs for them; the erase branch handles timed (countdown) overrides only.
+    {
+        std::vector<PROBABILITY_OVERIDE>& ov = m_ProbabilityOverride[gm];
+        for (std::vector<PROBABILITY_OVERIDE>::iterator it = ov.begin(); it != ov.end(); ) {
+            if (it->m_SelectedType < 1 || wave == nullptr || (--it->m_SelectedType != 0)) {
+                it->m_Counter = 0;
+                ++it;
+            } else {
+                it = ov.erase(it);
+            }
+        }
+    }
 
     // Multiplayer sync (not ported).
     // if (IsMultiplayer()) SendWaveSyncPacket();
