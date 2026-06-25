@@ -14,6 +14,7 @@
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
+#include "hud/MenuButton.h"
 #include "hud/SliceEffect.h"
 #include "hud/MissControl.h"
 #include "game/BombHit.h"
@@ -959,11 +960,11 @@ void Fruit::KillFruit(bool doMissPenalty) {
     //    owner+0x14C == MenuButton::m_pTrackedFruit (MenuButton.p_pad+0x110 = 0x14C in MenuButton).
     // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00176c8e..0x00176cea (asm-inspector)
     if (m_pOwner) {
-        // owner+0x14C stores the tracked-fruit pointer. On ARM32 puVar7[0x53] = *(puVar7 + 0x14C).
-        Fruit** ownerSlot = reinterpret_cast<Fruit**>(
-            reinterpret_cast<char*>(m_pOwner) + 0x14C);
-        if (*ownerSlot == this) {
-            *ownerSlot = nullptr;
+        // owner is always MenuButton (set by MenuButton::CreateFruit via m_pOwner=this).
+        // Use named member so x64 host uses the correct pointer-width offset.
+        MenuButton* owner = reinterpret_cast<MenuButton*>(m_pOwner);
+        if (owner->m_pTrackedFruit == this) {
+            owner->m_pTrackedFruit = nullptr;
         }
         m_pOwner = nullptr;
     }
@@ -2429,10 +2430,9 @@ void Fruit::Release() {
         m_pEmitter2 = nullptr;
     }
     if (m_pOwner) {
-        Fruit** ownerSlot = reinterpret_cast<Fruit**>(
-            reinterpret_cast<char*>(m_pOwner) + 0x14C);
-        if (*ownerSlot == this) {
-            *ownerSlot = nullptr;
+        MenuButton* owner = reinterpret_cast<MenuButton*>(m_pOwner);
+        if (owner->m_pTrackedFruit == this) {
+            owner->m_pTrackedFruit = nullptr;
         }
         m_pOwner = nullptr;
     }

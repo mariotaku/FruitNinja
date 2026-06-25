@@ -385,6 +385,14 @@ void GameDestroy() {
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
     ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
+    // --- 3.5. Entity pool teardown (Port specific: before HUD so Fruit::Release() /
+    //   Bomb::Release() can still reach live MenuButton objects to clear m_pOwner /
+    //   m_pOwnerButton back-refs. In the binary, CleanupFruit/Bomb/Splat/Slash (step 10
+    //   TODO) performed this cleanup explicitly; the port substitutes actorManager
+    //   deletion, which calls vtable Release() on every live entity. Must precede HUD
+    //   teardown or Fruit::Release() at line 2433 dereferences a freed MenuButton.) ---
+    { delete game->actorManager; game->actorManager = nullptr; }
+
     // --- 4. HUD ---
     {
         delete game_work.mHud;
@@ -441,7 +449,8 @@ void GameDestroy() {
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
     { delete game->inputManager; game->inputManager = nullptr; }
-    { delete game->actorManager; game->actorManager = nullptr; }
+    // actorManager deleted at step 3.5 (before HUD) to prevent use-after-free
+    // in Fruit::Release() / Bomb::Release() against freed MenuButton objects.
 
     // --- 12. Engine singletons ---
     // Note: Mortar::InputManager::Destroy -- SDL2 replacement cleaned up above.
