@@ -850,7 +850,12 @@ void MenuButton::Draw(float* hudScaleRaw) {
         && m_RestScale.x != 0.0f)
     {
         MatrixManager& mm = MatrixManager::GetInstance();
-        float ratio = (m_RestScale.x != 0.0f && size.x != 0.0f) ? (size.x / m_RestScale.x) : 1.0f;
+        // v1.6.1 MenuButton::Draw @0x0019c2e4: badge scale = size.x / m_RestScale.x (UNCONDITIONAL
+        // divide; binary has NO size.x!=0 fallback). On frame 1 size.x==0 -> 0.0 -> badge hidden
+        // until the grow-in ramp lifts size. The old `size.x != 0 ? ... : 1.0` band-aid forced the
+        // badge to full size on every grow-in frame (the frame-1 flash). Denominator is safe: the
+        // outer gate (above) already requires m_RestScale.x != 0.
+        float ratio = (m_RestScale.x != 0.0f) ? (size.x / m_RestScale.x) : 0.0f;
         const uint16_t phase =
             (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
         const float sv = SinIdx(phase);
