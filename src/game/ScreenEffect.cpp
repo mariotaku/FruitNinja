@@ -504,32 +504,28 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 
         bool useMoveIn = false;
 
+        // v1.6.1 ScreenEffect::Update @0x00148844: currentLongest counts DOWN;
+        // window (wEnd,wStart], m_StartT>m_EndT.
         if (img.m_FadeRate <= 0.0f) {
-            // Hard on/off: visible only when tNorm in [wStart, wEnd]
-            bool inWindow = (currentLongest >= wStart &&
-                             (img.m_EndT <= 0.0f || currentLongest <= wEnd));
-            img.m_CurrentVis = inWindow ? 1.0f : 0.0f;
-            useMoveIn = inWindow;
+            // @0x00148960: hard on/off: ON iff wEnd <= currentLongest <= wStart
+            bool on = (currentLongest >= wEnd && currentLongest <= wStart);
+            img.m_CurrentVis = on ? 1.0f : 0.0f;
+            useMoveIn = on;
+        } else if (currentLongest > wStart) {
+            // @0x001488f4: not started yet
+            img.m_CurrentVis = 0.0f;
+            useMoveIn = true;
+        } else if (currentLongest <= wEnd + img.m_FadeRate) {
+            // @0x0014892c: fade-OUT (uses m_SizeOut)
+            float r = (currentLongest - wEnd) / img.m_FadeRate;
+            if (r < 0.0f) r = 0.0f; else if (r > 1.0f) r = 1.0f;
+            img.m_CurrentVis = r;
+            useMoveIn = false;
         } else {
-            // Entering: currentLongest in [wStart, wStart+m_FadeRate]
-            if (currentLongest >= wStart && currentLongest <= wStart + img.m_FadeRate) {
-                img.m_CurrentVis += dt / img.m_FadeRate;
-                if (img.m_CurrentVis > 1.0f) img.m_CurrentVis = 1.0f;
-                useMoveIn = true;
-            }
-            // Leaving: past wEnd window
-            else if (img.m_EndT > 0.0f && currentLongest < wEnd) {
-                useMoveIn = false;
-                float ratio = (wEnd - currentLongest) / img.m_FadeRate;
-                if (ratio < 0.0f) ratio = 0.0f;
-                if (ratio > 1.0f) ratio = 1.0f;
-                img.m_CurrentVis = ratio;
-            }
-            // Fully visible in-window
-            else if (currentLongest >= wStart && (img.m_EndT <= 0.0f || currentLongest >= wEnd)) {
-                img.m_CurrentVis = 1.0f;
-                useMoveIn = true;
-            }
+            // @0x0014890c: fade-IN (wEnd+fade < currentLongest <= wStart; uses m_SizeIn)
+            img.m_CurrentVis += dt / img.m_FadeRate;
+            if (img.m_CurrentVis > 1.0f) img.m_CurrentVis = 1.0f;
+            useMoveIn = true;
         }
 
         // Ease: e = (1 - vis)^2
