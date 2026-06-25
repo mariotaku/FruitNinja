@@ -395,11 +395,11 @@ static_assert(sizeof(FruitSaveData) == 576, "FruitSaveData size mismatch (binary
 void FruitNinja_SaveCurrentData(bool fullSave = true);
 
 // 0x0012a2fc. Serialise a FruitSaveData to FruitySave.xml.
-void FruitNinja_SaveGame(FruitSaveData* save);
+void SaveGame(FruitSaveData* save);
 
 // 0x0012be74. Load FruitySave.xml into the given FruitSaveData.
 // Returns true on success.
-bool FruitNinja_LoadGame(FruitSaveData* save);
+bool LoadGame(FruitSaveData* save);
 
 // 0x0016cf40. Called on app termination.
 void FruitNinja_SaveOnExit();

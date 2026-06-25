@@ -31,6 +31,10 @@ namespace Mortar {
 }
 class PSPParticleEmitter;
 
+// ParseVector -- parse "x,y,z" comma-separated string into Vec3.
+// Binary: _Z11ParseVectorPKc v1.6.1
+Vec3 ParseVector(const char* s);
+
 class PowerUp;
 class HUDControl3d;
 

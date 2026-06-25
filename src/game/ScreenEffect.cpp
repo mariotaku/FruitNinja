@@ -50,8 +50,9 @@ void Emmiter::Parse(TiXmlElement* xml) {
 
 // ---- ParseVector: read "x,y,z" (comma-separated) into Vec3 -------------------
 // v1.6.1 EffectImage::Parse @0x001491e4 uses comma-separated vector parsing.
+// Binary: _Z11ParseVectorPKc
 
-static Vec3 ParseVector(const char* s) {
+Vec3 ParseVector(const char* s) {
     float x = 0.0f, y = 0.0f, z = 0.0f;
     if (s) sscanf(s, "%f,%f,%f", &x, &y, &z);
     return Vec3(x, y, z);

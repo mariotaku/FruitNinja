@@ -210,4 +210,8 @@ Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType);
 // Returns 0 if comboType > 0x18.
 unsigned int GetComboStarText(COMBO_TYPE comboType);
 
+// GetComboName -- binary: _Z12GetComboName10COMBO_TYPE v1.6.1 @0x00110c94
+// Returns the ASCII combo-name key string for the given combo type.
+const char* GetComboName(COMBO_TYPE starType);
+
 #endif // FN_HUD_FRUIT_FACT_CONTROL_H

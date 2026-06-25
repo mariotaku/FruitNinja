@@ -48,4 +48,6 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/PlayerDisconnectGamePacket.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PacketFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaNewsControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameMode.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ItemParseUtil.cpp
 )
