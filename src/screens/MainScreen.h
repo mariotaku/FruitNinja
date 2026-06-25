@@ -22,7 +22,7 @@ class MenuButton;
 class DojoScreen;
 class GameModeScreen;
 
-// State enum (verified from binary)
+// State enum (verified from v1.6.1 binary; Update @0x00196e1c)
 enum MainScreenState {
     STATE_CAMERA_ZOOM      = 0,    // Camera zoom-in, create toggles + play/dojo
     STATE_CREATE_BUTTONS   = 1,    // Create leaderboard/moregames, active menu
@@ -39,10 +39,8 @@ enum MainScreenState {
     STATE_CAMERA_FADE      = 0x11, // Camera fade after game return
     STATE_LOADING_A        = 0x13, // Timer accumulate + loading symbol
     STATE_LOADING_B        = 0x14, // Timer accumulate + loading symbol
-    STATE_DOJO_WAIT_C      = 0x15, // Wait for entities (variant)
-    STATE_DOJO_WAIT_D      = 0x16, // Wait for entities (variant)
-    STATE_QUIT_WAIT        = 0x17, // Tutorial reset -> bomb transition
-    STATE_QUIT_BOMB        = 0x18, // BombFlash -> Mortar::SystemManager::QuitGame
+    STATE_QUIT_WAIT        = 0x15, // Tutorial reset -> bomb transition; v1.6.1 @0x00197700
+    STATE_QUIT_BOMB        = 0x16, // BombFlash -> Mortar::SystemManager::QuitGame; v1.6.1 @0x00196e1c
 };
 
 class MainScreen : public HUDControl3d {
@@ -111,8 +109,9 @@ public:
     // Fields are public so __builtin_offsetof static_asserts can access them.
     // -----------------------------------------------------------------------
 
-    // +0x7c  bool m_bFlag7c (ctor =0; screen flag)
-    bool m_bFlag7c;                                    // +0x7c
+    // +0x7c  bool m_ButtonsCreatedFlag (ctor=0; set=1 by CreateButtons; gates case-1 re-create)
+    // v1.6.1 MainScreen ctor @0x0019811c; CreateButtons @0x001961f8
+    bool m_ButtonsCreatedFlag;                         // +0x7c
     uint8_t  _pad_7d[3];                               // alignment pad to +0x80
 
     // +0x80  float[3] m_Field80 (12 bytes; ctor writes here; role unclear)
@@ -250,7 +249,9 @@ private:
     // --- Internal helpers ---
     void Hide();
     void CreateToggles();
-    void CreatePlayDojo();
+    // v1.6.1 MainScreen::CreateButtons @0x001961f8: gated by flM_BombHitTimer<1.45, then per-button
+    // null checks; sets m_ButtonsCreatedFlag=1 on first run. Called per-frame from case 0.
+    void CreateButtons();
     void CreateQuitButton();
     void RemoveButton(MenuButton*& btn);
 
@@ -302,7 +303,7 @@ private:
 #ifdef __bada__
 #include <cstddef>
 // Binary offsets (ARM32, SmartPtr=4 bytes, sizeof(MainScreen)==0x12c)
-static_assert(__builtin_offsetof(MainScreen, m_bFlag7c)        == 0x7c,  "m_bFlag7c offset");
+static_assert(__builtin_offsetof(MainScreen, m_ButtonsCreatedFlag) == 0x7c,  "m_ButtonsCreatedFlag offset");
 static_assert(__builtin_offsetof(MainScreen, m_Field80)        == 0x80,  "m_Field80 offset");
 static_assert(__builtin_offsetof(MainScreen, m_TexSoundOn)     == 0x8c,  "m_TexSoundOn offset");
 static_assert(__builtin_offsetof(MainScreen, m_TexSoundOff)    == 0x90,  "m_TexSoundOff offset");
