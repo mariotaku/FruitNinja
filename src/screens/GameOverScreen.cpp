@@ -130,6 +130,10 @@ static void DoQuitToMenu() {
     if (!game) return;
 
     game_work.bM_bPaused = 1;
+    // Clear the pause-overlay gate so the menu runs active (bM_Mode=0); the
+    // pause-in-place change (#179) removed the GameExit/GameInit hop that used
+    // to clear it. Harmless if game-over already left bM_Mode=0.
+    game_work.bM_Mode = false;
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);
