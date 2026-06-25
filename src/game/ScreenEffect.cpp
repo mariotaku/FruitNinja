@@ -7,6 +7,7 @@
 #include "particle/PSPParticleManager.h"
 #include "hud/HUDControl3d.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "audio/GameSound.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Texture.h"
@@ -111,7 +112,32 @@ void EffectImage::Parse(TiXmlElement* xml) {
     (void)mode;
 #endif
 
-    xml->QueryUnsignedAttribute("group", &m_GroupMask);
+    // v1.6.1 EffectImage::Parse @0x001491e4: m_GroupMask from "drawOrder" (absent -> HUD_LAYER_DEFAULT=1). Table @0x2d8bf0.
+    // TODO: v1.6.1 EffectImage::Parse @0x001491e4 -- port the transition/anchor/pulse attribute names faithfully (currently divergent)
+    {
+        const char* drawOrder = xml->Attribute("drawOrder");
+        if (!drawOrder) {
+            m_GroupMask = HUD_LAYER_DEFAULT;
+        } else if (strcmp(drawOrder, "none") == 0) {
+            m_GroupMask = HUD_LAYER_NONE;
+        } else if (strcmp(drawOrder, "normal") == 0) {
+            m_GroupMask = HUD_LAYER_DEFAULT;
+        } else if (strcmp(drawOrder, "post") == 0) {
+            m_GroupMask = HUD_LAYER_BUTTONS;
+        } else if (strcmp(drawOrder, "before_splats") == 0) {
+            m_GroupMask = HUD_LAYER_MENU_BG;
+        } else if (strcmp(drawOrder, "after_splats") == 0) {
+            m_GroupMask = HUD_LAYER_POST_ACTOR;
+        } else if (strcmp(drawOrder, "before_bomb") == 0) {
+            m_GroupMask = HUD_LAYER_P2_SCORE;
+        } else if (strcmp(drawOrder, "after_bomb") == 0) {
+            m_GroupMask = HUD_LAYER_SLIDER;
+        } else if (strcmp(drawOrder, "top_most") == 0) {
+            m_GroupMask = HUD_LAYER_TOP_MOST;
+        } else {
+            m_GroupMask = HUD_LAYER_DEFAULT;
+        }
+    }
 
     const char* freq = xml->Attribute("freq");
     if (freq) m_Freq = (float)atof(freq);
