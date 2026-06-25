@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
 
     // Force into gameMode + fire SetupLevel as if the user clicked.
     game_work.gameMode = (uint8_t)gameMode;
-    FN::PrepareForLevelStart();
+    PrepareForLevelStart();
 
     if (!wm->m_pCurrentWave[0]) {
         fprintf(stderr, "FAIL: m_pCurrentWave[0] still null after PrepareForLevelStart\n");

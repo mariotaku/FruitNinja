@@ -128,12 +128,12 @@ int main(int argc, char* argv[]) {
 #else
 
     // ---- Setup: get into gameplay so entities are live ----
-    FN::ClearMenuItems();
+    ClearMenuItems();
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
     }
     game_work.gameMode = 0;  // classic
-    FN::PrepareForLevelStart();
+    PrepareForLevelStart();
     game_work.bM_bPaused = 0;
     // Set taskStateIndex=2 (Game state) so SnapshotAfterStep / ApplyForDraw pass
     // the gameplay gate added by #172.  Without this the interp singleton no-ops

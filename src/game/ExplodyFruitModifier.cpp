@@ -83,7 +83,7 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
         int n = ++head->m_ChainCount;
         if (n > 2 && m_typeIndex == 1) {
             MissControl::GetFree()->MakeCombo(pos, head->m_ChainCount, 0);
-            FN::AddToCurrentScore(head->m_ChainCount, 0, false, false);
+            AddToCurrentScore(head->m_ChainCount, 0, false, false);
         }
         // Binary: this->m_RemoveCallback = Make(head, &ADingoAteMyBaby)
         // (str r7=r4+0x38 with object=head, not this)
@@ -182,7 +182,7 @@ void ExplodyFruitModifier::FruitSplosion::ADingoAteMyBaby(HUDControl* ctrl)
     if (static_cast<HUDControl*>(m_pChainNext) == ctrl) {
         if (m_ChainCount > 2 && m_typeIndex == 1) {
             MissControl::GetFree()->MakeCombo(pos, m_ChainCount, 0);
-            FN::AddToCurrentScore(m_ChainCount, 0, false, false);
+            AddToCurrentScore(m_ChainCount, 0, false, false);
         }
         m_bPendingRemoval = 1;
     }

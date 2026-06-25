@@ -509,7 +509,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             Bomb::HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
             if (game_work.m_FruitCamera)
                 game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
-            FN::AddToCurrentScore(-10, 0, false, false);
+            AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
             if (MissControl* mc = MissControl::GetFree()) {
                 Mortar::SmartPtr<Mortar::Texture> noTex;
@@ -526,7 +526,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         // field at binary +0x13A matches m_bClearsMenuItems (spec says m_bClearsMenuItems;
         // port previously used m_bEnabled which is a v1.0 compat field)
         if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bClearsMenuItems != 0) {
-            FN::ClearMenuItems();
+            ClearMenuItems();
         }
         if (m_HitCallback) {
             m_HitCallback();
@@ -715,7 +715,7 @@ void Bomb::UpdateBombHit(float prevTimer) {
     const float currentTimer = game_work.m_BombHitTimer;
 
     if (prevTimer > BOMB_BLAST_RESET_THR && currentTimer <= BOMB_BLAST_RESET_THR) {
-        FN::ResetGameEntities(false);
+        ResetGameEntities(false);
     }
 
     if (currentTimer > 0.0f && currentTimer < BOMB_BLAST_PURGE_THR) {

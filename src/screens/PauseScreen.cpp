@@ -187,7 +187,7 @@ static void QuitToMenu() {
     //   *(reinterpret_cast<uint8_t*>(game_work.pM_pTransientScreen)+0x33) = 1;
     //   pM_pTransientScreen not yet in GameWork layout; add when that field is RE'd.
 
-    FN::SetScore(0, -1);                               // v1.6.1 QuitToMenu @0x001cb6e4
+    SetScore(0, -1);                               // v1.6.1 QuitToMenu @0x001cb6e4
 
     // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 QuitToMenu @ 0x001cb6e4
     // (binary: NetworkManager::GetInstance()->vtable[3](0))
@@ -206,8 +206,8 @@ static void QuitToMenu() {
     game_work.m_bP2PClientJoined = 0;
 }
 
-// EndRetryLevel moved to BombHit.cpp (FN::EndRetryLevel) so GameUpdate can call it
-// directly from the retry dispatch tail. PauseScreen calls FN::EndRetryLevel() below.
+// EndRetryLevel moved to BombHit.cpp so GameUpdate can call it
+// directly from the retry dispatch tail.
 
 // -------------------------------------------------------------------------
 // ctor
@@ -743,7 +743,7 @@ void PauseScreen::Update(float dt) {
             // Binary calls RetryLevel (0x0016b008), NOT EndRetryLevel (0x0016a208).
             // RetryLevel sets retryFlag=1 + retryTimer=0.1f; GameUpdate's retry
             // dispatch tail then calls RetryUpdate per frame and EndRetryLevel at 0.
-            FN::RetryLevel();
+            RetryLevel();
             UnpauseGame();
         }
         break;

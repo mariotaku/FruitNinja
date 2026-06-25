@@ -1833,9 +1833,9 @@ void SlashEntity::Update(float dt) {
                                        m_ComboCount, (float)m_ComboCount / 3.0f);
                             WaveManager::GetInstance()->AddSpeed(
                                 (float)m_ComboCount / 3.0f, 0);
-                            FN::AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, true);
+                            AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, true);
                         } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboOnlineMode != 2) {
-                            FN::AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, false);
+                            AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, false);
                         }
                         BonusManager::GetInstance()->AddCombo(m_ComboCount);
                         if (game && game_work.m_SaveData) {

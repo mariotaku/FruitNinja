@@ -447,7 +447,7 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         int deferedPoints = -1;
         el.QueryIntAttribute("deferedPoints", &deferedPoints);
         if (deferedPoints >= 0) {
-            FN::AddToCurrentScore(deferedPoints, 0, false, false);
+            AddToCurrentScore(deferedPoints, 0, false, false);
         }
     }
 }

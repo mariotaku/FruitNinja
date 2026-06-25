@@ -8,7 +8,6 @@
 // Adds points to currentScore, fires scoreDelegate, plays tier SFX.
 // Port stub: applies score delta only; delegate + tier SFX not yet ported.
 
-namespace FN {
 void GameOver(int endReason, float endScore, int endParam);
 void AddToCurrentScore(int points, int param1, bool param2, bool param3);
 
@@ -16,6 +15,5 @@ void AddToCurrentScore(int points, int param1, bool param2, bool param3);
 // playerIdx kept for binary signature but ignored — online MP scrubbed.
 void SetScore(int score, int playerIdx);
 void SetMissCount(int n, int playerIdx);
-}
 
 #endif

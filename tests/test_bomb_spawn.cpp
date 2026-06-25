@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
         }
     }
     game_work.gameMode = 0;
-    FN::PrepareForLevelStart();
+    PrepareForLevelStart();
     game_work.bM_bPaused = 0;
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE);

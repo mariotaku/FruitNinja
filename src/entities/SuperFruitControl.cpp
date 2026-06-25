@@ -263,7 +263,7 @@ void SuperFruitControl::Update(float dt)
                     game_work.m_SaveData->AddToTotal("super_slices", statHash, m_SliceCount, false, false);
                 }
             }
-            FN::AddToCurrentScore(m_SliceCount, 0, false, true);  // flag4=true; raw m_SliceCount
+            AddToCurrentScore(m_SliceCount, 0, false, true);  // flag4=true; raw m_SliceCount
         }
 
         // (e) kill host fruit window: Lifetime+0.5+0.35+0.55+0.65+0.25+0.55
@@ -409,7 +409,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     }
 
     // ---- (B) white critical screen-flash ----
-    FN::CriticalFlash(hostPos, Colour(255, 255, 255, 255));
+    CriticalFlash(hostPos, Colour(255, 255, 255, 255));
 
     // ---- (C) explosion SFX ----
     // TODO: 0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78 SFX key, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX key/cb unresolved)

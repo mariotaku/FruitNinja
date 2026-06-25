@@ -143,7 +143,7 @@ static void DoQuitToMenu() {
         game_work.m_pActiveHUDControl->m_bPendingRemoval = 1;
     }
 
-    FN::SetScore(0, -1);
+    SetScore(0, -1);
 
     // Defunct: P2P / online disconnect -- no-op stub; v1.6.1 binary @ 0x00169e9e
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
