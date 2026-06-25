@@ -73,3 +73,13 @@ bool IsSameScreenMultiplayer() {
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
 void RetryOnlineMultiplayerGame() {
 }
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 AcceptCallback @0x001053ec
+// Binary: handles incoming P2P game invite acceptance.
+void AcceptCallback(int /*sessionId*/) {
+}
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RejectCallback @0x001053f4
+// Binary: handles incoming P2P game invite rejection.
+void RejectCallback(int /*sessionId*/) {
+}

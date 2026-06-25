@@ -162,4 +162,10 @@ private:
 static_assert(sizeof(AchievementManager) == 0x120, "AchievementManager size mismatch");
 #endif
 
+class TiXmlElement;
+class FruitSaveData;
+
+// Defunct: achievements parse -- no-op stub; v1.6.1 ParseAchievements @0x001094ec
+void ParseAchievements(TiXmlElement* root, FruitSaveData* save, bool reset);
+
 #endif // FN_ACHIEVEMENT_MANAGER_H

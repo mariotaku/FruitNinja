@@ -58,4 +58,10 @@ bool IsSameScreenMultiplayer();
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
 void RetryOnlineMultiplayerGame();
 
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 AcceptCallback @0x001053ec
+void AcceptCallback(int sessionId);
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RejectCallback @0x001053f4
+void RejectCallback(int sessionId);
+
 #endif // FN_ENGINE_NETWORK_P2P_MESSAGE_HANDLING_H

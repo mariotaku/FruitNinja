@@ -375,4 +375,13 @@ bool IsProviderOnline();
 // Stub returns false so callers take the local/offline path.
 bool AreFriendsLoaded();
 
+// Defunct: network provider selection -- no-op stubs; v1.6.1 @0x00169354 area
+void AskUserToChoosePreferredNetwork();
+void ChangePreferredNetworkProvider(long v);
+long GetPrefNetwork();
+void SetPrefNetwork(long v);
+
+// Defunct: online-services notification -- no-op stub; v1.6.1 CustomNotificationCallback @0x001cf0cc
+void CustomNotificationCallback(const char* name, int i1, int i2);
+
 #endif // FN_ENGINE_NETWORK_NETWORK_MANAGER_H

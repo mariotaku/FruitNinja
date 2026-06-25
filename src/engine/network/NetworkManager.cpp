@@ -24,3 +24,26 @@ bool IsProviderOnline() {
 bool AreFriendsLoaded() {
     return false;
 }
+
+// Defunct: network provider selection -- no-op stub; v1.6.1 AskUserToChoosePreferredNetwork @0x00169354
+void AskUserToChoosePreferredNetwork() {
+}
+
+// Defunct: network provider selection -- no-op stub; v1.6.1 ChangePreferredNetworkProvider @0x00169354
+void ChangePreferredNetworkProvider(long /*v*/) {
+}
+
+// Defunct: network provider selection -- no-op stub; v1.6.1 GetPrefNetwork @0x0016916c
+long GetPrefNetwork() {
+    return 0;
+}
+
+// Defunct: network provider selection -- no-op stub; v1.6.1 SetPrefNetwork @0x0016917c
+void SetPrefNetwork(long /*v*/) {
+}
+
+// Defunct: online-services notification -- no-op stub; v1.6.1 CustomNotificationCallback @0x001cf0cc
+// Sets m_bUpdatesSuspended=1 on notification-shown (see GameWork.h +0x195).
+// Stub does nothing; online notifications are never shown.
+void CustomNotificationCallback(const char* /*name*/, int /*i1*/, int /*i2*/) {
+}

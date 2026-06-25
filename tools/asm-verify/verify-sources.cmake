@@ -65,6 +65,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/math/MathUtil.cpp"
     "${_PROJECT_ROOT}/src/engine/math/Random.cpp"
     "${_PROJECT_ROOT}/src/engine/network/NetworkManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/network/OpenFeint.cpp"
     "${_PROJECT_ROOT}/src/engine/network/P2PMessageHandling.cpp"
     "${_PROJECT_ROOT}/src/engine/particle/PSPParticleManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/BakedString.cpp"
@@ -105,6 +106,10 @@ set(VERIFY_SOURCES
 
     # Game
     "${_PROJECT_ROOT}/src/game/AchievementManager.cpp"
+    "${_PROJECT_ROOT}/src/game/DRMManager.cpp"
+    "${_PROJECT_ROOT}/src/game/Leaderboard.cpp"
+    "${_PROJECT_ROOT}/src/game/Licensing.cpp"
+    "${_PROJECT_ROOT}/src/game/Social.cpp"
     "${_PROJECT_ROOT}/src/game/BombHit.cpp"
     "${_PROJECT_ROOT}/src/game/Bonus.cpp"
     "${_PROJECT_ROOT}/src/game/BonusManager.cpp"
