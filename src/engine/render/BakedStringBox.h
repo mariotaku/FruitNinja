@@ -81,8 +81,9 @@ public:
     // fit within m_BoxHeight. Rebuilds layout at each candidate size.
     void FitIntoVerticalBounds();
 
-    // Set the translation used by Draw. flag==1 triggers an immediate layout
-    // rebuild (matches binary call site where flag=1).
+    // Set the translation used by Draw. flag==1 pre-shifts by -(boxW/2) in X
+    // and +(boxH/2) in Y (integer truncation, v1.6.1 BakedStringBox::SetTranslation @0x00246238).
+    // Does NOT dirty the layout — position is a draw-time anchor only.
     void SetTranslation(const Vec3& pos, int flag);
 
     // Draw the laid-out glyph quads.
@@ -185,7 +186,7 @@ private:
 
     // Laid-out lines (rebuilt by Layout()).
     std::vector<BakedStringBoxLine> m_Lines;
-    bool    m_Dirty;              // true when text/size/pos changed
+    bool    m_Dirty;              // true when text/colour/size changed (NOT position)
     char    m_Text[256];          // cached text copy
 
     // Rebuild the laid-out lines from m_Text at m_FontSize.

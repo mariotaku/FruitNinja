@@ -101,7 +101,13 @@ void BakedStringBox::SetTranslation(const Vec3& pos, int flag) {
         p.x -= (float)((int)m_BoxWidth  / 2);
         p.y += (float)((int)m_BoxHeight / 2);
     }
-    if (p != m_Pos) { m_Pos = p; m_Dirty = true; }
+    // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: writes position
+    // fields only; does NOT set m_Dirty. m_Pos is a draw-time translate anchor
+    // consumed in Draw() as Vec3 anchor = m_Pos; it is never read by Layout().
+    // The previous port code set m_Dirty=true on position change, causing a full
+    // re-layout + GL atlas upload every frame when a caller (e.g. MainScreen::Draw)
+    // updates position each frame via SetTranslation (performance fix).
+    m_Pos = p;
 }
 
 void BakedStringBox::FitIntoVerticalBounds() {
