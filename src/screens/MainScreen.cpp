@@ -294,9 +294,11 @@ void MainScreen::Update(float dt) {
 
     case STATE_CREATE_BUTTONS: {
         // v1.6.1 MainScreen::Update @0x001974e0
-        // Binary: pLeaderboardBtn badge from ItemManager::AreNewItems(); then if(m_ButtonsCreatedFlag==0) CreateButtons(this).
-        if (pLeaderboardBtn) {
-            pLeaderboardBtn->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
+        // Binary badges the +0xa8 member (Dojo/Store button). Port's pLeaderboardBtn is the Quit button
+        // due to member-name shuffle vs binary; pDojoButton is the correct physical target here.
+        // TODO: v1.6.1 0x001961f8 -- port button members are shuffled vs binary (+0xa0..+0xac); the binary badges the +0xa8 member which is the Dojo/Store button. Port badges its pDojoButton (same physical button). Full member-offset realignment tracked in task #187.
+        if (pDojoButton) {
+            pDojoButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
         }
 
         if (m_ButtonsCreatedFlag == 0) {
@@ -885,6 +887,8 @@ void MainScreen::CreateButtons() {
         pDojoButton->m_ShakeScale.x = 0.5f;
         pDojoButton->m_GrowInTimer  = 0.25f;
         game_work.mHud->AddControl(pDojoButton);
+        // v1.6.1 MainScreen::CreateButtons @0x001961f8: badge set at creation (and refreshed in Update case 1).
+        pDojoButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
     }
 
     // v1.6.1 @0x001961f8: quit button recreated per-frame via if(pX==nullptr) guard.
@@ -961,6 +965,9 @@ void MainScreen::AboutCallback() {
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
+    // Binary clears pMoreGamesBtn (Quit button) + pToggleB. Due to port name-shuffle, port's
+    // pLeaderboardBtn IS the Quit button (same physical button as binary's pMoreGamesBtn) -- equivalent.
+    // pToggleB clear is missing here; tracked with full member-offset realignment in task #187.
     pLeaderboardBtn = nullptr;
 }
 
