@@ -263,7 +263,12 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
 }
 
 GameModeScreen::~GameModeScreen() {
-    RemoveButtons();
+    // Binary ~GameModeScreen D1 @0x00183694: call Release(), then delete the 3 boxes.
+    // Release() does NOT touch the 4 MenuButtons; they self-remove via their own
+    // shrink-out lifecycle. Calling RemoveButtons() here was a port divergence
+    // that caused a heap-use-after-free when a button had already been self-reaped
+    // by HUD::Update() before GameModeScreen's own reap ran.
+    GameModeScreen::Release();
     delete m_pTitleBox; m_pTitleBox = nullptr;
     delete m_pDescBox;  m_pDescBox  = nullptr;
     delete m_pInfoBox;  m_pInfoBox  = nullptr;
@@ -283,8 +288,16 @@ void GameModeScreen::UpdateSpecific(float /*dt*/) {}
 // Binary @ 0x0013df94 — vtable slot 15 IsTransitionInFinished(): bare BX LR, returns false
 bool GameModeScreen::IsTransitionInFinished() { return false; }
 
+// Binary GameModeScreen::Release @0x001835a4:
+//   1. Nulls SmartPtr<Texture> at +0x74 (HUDControl3d::m_Texture / back-icon slot).
+//   2. Sets m_TransitionAlpha = 0.
+//   3. Calls BaseScreen::Release().
+// Does NOT call RemoveButtons() -- the 4 MenuButtons self-remove via their own
+// shrink-out lifecycle (fruit sliced -> m_pEntity null -> phase drain -> pending).
 void GameModeScreen::Release() {
-    RemoveButtons();
+    m_Texture.SetNull();       // +0x74: binary nulls this SmartPtr<Texture>
+    m_TransitionAlpha = 0.0f;  // +0x8c: binary writes 0
+    BaseScreen::Release();
 }
 
 // ===================================================================
