@@ -422,15 +422,49 @@ void WaveManager::Init() {
 // Destroy
 // ----------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 WaveManager::Destroy @0x00123b54:
+// 1. For each of 4 modes: dtor+delete+null each slot in m_WaveInfo[mode], then clear().
+// 2. m_pCurrentWave[0] = 0.
+// 3. Indexed teardown of m_GlobalProbabilityOverride: dtor+delete+null each element, clear().
+// 4. Free m_pWaveQue (+0x28) then m_pWaveQueItem (+0x24).
 void WaveManager::Destroy() {
     for (int mode = 0; mode < 4; ++mode) {
-        for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[mode].begin();
-             it != m_WaveInfo[mode].end(); ++it)
-            delete *it;
-        m_WaveInfo[mode].clear();
+        std::vector<WAVE_INFO*>& v = m_WaveInfo[mode];
+        for (std::vector<WAVE_INFO*>::iterator it = v.begin(); it != v.end(); ++it) {
+            WAVE_INFO* w = *it;
+            if (w) {
+                w->~WAVE_INFO();
+                operator delete(w);
+                *it = 0;
+            }
+        }
+        v.clear();
     }
-    delete m_pWaveQue;     m_pWaveQue = nullptr;
-    delete m_pWaveQueItem; m_pWaveQueItem = nullptr;
+
+    m_pCurrentWave[0] = 0;
+
+    // GlobalProbabilityOveride teardown — indexed loop matching binary.
+    // TODO: v1.6.1 0x00123b54 (WaveManager::Destroy) — GlobalProbabilityOveride::~ not yet ported, delete-only
+    std::vector<void*>& gpo = m_GlobalProbabilityOverride;
+    for (std::vector<void*>::size_type i = 0; i < gpo.size(); ++i) {
+        if (gpo[i]) {
+            operator delete(gpo[i]);
+            gpo[i] = 0;
+        }
+    }
+    gpo.clear();
+
+    // Free WaveQue (+0x28) before WaveQueItem (+0x24) — binary order.
+    if (m_pWaveQue) {
+        m_pWaveQue->~WaveQue();
+        operator delete(m_pWaveQue);
+        m_pWaveQue = 0;
+    }
+    if (m_pWaveQueItem) {
+        m_pWaveQueItem->~WaveQueItem();
+        operator delete(m_pWaveQueItem);
+        m_pWaveQueItem = 0;
+    }
 }
 
 // ----------------------------------------------------------------------------
