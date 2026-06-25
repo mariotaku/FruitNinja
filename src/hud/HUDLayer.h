@@ -87,6 +87,11 @@ enum HUDLayer : uint32_t {
     // 0x400 — screen fade + modal scrollers (drawn LAST, on top of all).
     // Writers: ScreenFadeControl, ListBox, VerticalScroller.
     HUD_LAYER_FADE_MODAL  = 0x0400,
+
+    // 0x800 — top-most overlay; maps to drawOrder="top_most" in effect XML
+    // (EffectImage::Parse table @0x2d8bf0, v1.6.1). No HUD::Draw caller for
+    // this bit observed in gameplay yet; reserved for effect images only.
+    HUD_LAYER_TOP_MOST    = 0x0800,
 };
 
 } // namespace Mortar
