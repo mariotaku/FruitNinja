@@ -58,10 +58,10 @@ class PowerUpManager {
 public:
     static PowerUpManager* GetInstance();
 
-    // @ 0x001189b4
+    // v1.6.1 PowerUpManager::Update @0x00141484
     void Update(float dt);
 
-    // @ 0x00117a80
+    // v1.6.1 PowerUpManager::SetDefaults @0x0013feb8
     void SetDefaults();
 
     // @ 0x0011a218
@@ -73,7 +73,8 @@ public:
     // @ 0x00118904
     void ClearTimedPowers();
 
-    // @ 0x001197c4 — 3-arg form; returns active clone (or nullptr)
+    // v1.6.1 ActivatePower @0x00142934 — 3-arg form; returns active clone (or nullptr)
+    // TODO: v1.6.1 ActivatePower @0x00142934 -- isPurchased (&extra vs NULL) and m_BarXPos *55 vs *110 need RE (cosmetic for freeze fix)
     PowerUp* ActivatePower(uint32_t hash, Vec3 position, float* purchaseExtra);
 
     // @ 0x001193d0 — re-arm a purchased PowerUp from its template

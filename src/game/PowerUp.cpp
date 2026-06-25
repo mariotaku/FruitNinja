@@ -60,7 +60,7 @@ PowerUp::PowerUp()
     memset(_padb8, 0, sizeof(_padb8));
 }
 
-// Steps 2: dtor (binary @ 0x001186bc)
+// Step 2: dtor (binary @ 0x001186bc)
 PowerUp::~PowerUp() {
     Deactivate(true);
     delete m_pPurchaseInfo;  m_pPurchaseInfo  = nullptr;
@@ -230,48 +230,57 @@ int PowerUp::Deactivate(bool removeAll) {
     return 0;
 }
 
-// Step 6: Update (binary @ 0x00117f90)
+// Step 6: Update (v1.6.1 PowerUp::Update @0x00140600)
 int PowerUp::Update(float dt) {
+    m_LongestRemaining = 0.0f;
     int activeCount = 0;
 
-    for (std::list<GameModifier*>::iterator it = m_ModList.begin();
-         it != m_ModList.end(); ++it) {
+    std::list<GameModifier*>::iterator it = m_ModList.begin();
+    while (it != m_ModList.end()) {
         GameModifier* mod = *it;
-        int expired = mod->Update(dt);
-        if (expired == 0) ++activeCount;
+        if (mod->Update(dt) == 0) {                  // GameModifier vtbl +0xc (slot 3) @0x0013fdc4
+            float rem = mod->m_BonusAccum;            // mod+0xc
+            if (m_LongestRemaining < rem) {
+                m_LongestRemaining = rem;
+                if (m_TotalTime < rem) m_TotalTime = rem;
+            }
+            ++activeCount;
+            ++it;
+        } else {
+            mod->RemoveModifier();                   // vtbl +0x18 (slot 6)
+            delete mod;                              // vtbl +0x4 (slot 1 deleting dtor)
+            it = m_ModList.erase(it);
+        }
     }
 
-    // Compute m_LongestRemaining = max remaining duration across mods
-    float longest = GetLongestMod();
-    m_LongestRemaining = longest;
-
-    // Bar ramp: fade-in at 4/sec, fade-out at 12/sec
-    // Purchasable special-case: check remaining uses
-    bool keepAlive = (activeCount > 0);
-    if (m_bIsPurchasable && m_pPurchaseInfo && m_pPurchaseInfo->m_CurrentUses > 0) {
-        keepAlive = true;
-    }
-
-    if (keepAlive) {
-        // Ramp up at 4 units/sec
+    // Bar ramps up only when there are active mods with remaining time
+    if (m_LongestRemaining > 0.0f) {
         m_BarRamp += dt * 4.0f;
         if (m_BarRamp > 1.0f) m_BarRamp = 1.0f;
-    } else {
-        // Ramp down at 12 units/sec
-        m_BarRamp -= dt * 12.0f;
-        if (m_BarRamp < 0.0f) m_BarRamp = 0.0f;
     }
 
     if (m_pScreenEffect) {
-        m_pScreenEffect->Update(dt, longest, m_TotalTime);
+        m_pScreenEffect->Update(dt, m_LongestRemaining, m_TotalTime);
     }
 
-    // Return 1 when ready to remove (no active mods AND bar fully hidden)
-    if (!keepAlive && m_BarRamp <= 0.0f) return 1;
+    // Power finished (non-purchasable, no active mods): ramp down then remove
+    if (m_pPurchaseInfo == NULL && activeCount == 0) {
+        m_BarRamp -= dt * 12.0f;
+        if (m_BarRamp < 0.0f) m_BarRamp = 0.0f;
+        if (m_BarRamp <= 0.0f) return 1;
+        return 0;
+    }
+
+    // Purchasable branch
+    if (m_pPurchaseInfo != NULL) {
+        if (activeCount != 0) return 0;
+        return (m_pPurchaseInfo->m_CurrentUses < 0) ? 1 : 0;
+    }
+
     return 0;
 }
 
-// Step 7: Clone (binary @ 0x00119468)
+// Step 7: Clone (v1.6.1 PowerUp::Clone @0x001422b0)
 PowerUp* PowerUp::Clone() {
     // Binary passes `this` (pointer) to the PowerUp(PowerUp*) copy ctor.
     PowerUp* clone = new PowerUp(this);
@@ -382,8 +391,7 @@ void PowerUp::SetTotalTime(float t) {
     m_TotalTime = t;
 }
 
-// PowerUp::PowerUp(PowerUp*) copy ctor — binary @ 0x00118ed4 (C1) / 0x00119004 (C2)
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118ed4 (re-analyst)
+// PowerUp::PowerUp(PowerUp*) copy ctor — v1.6.1 @0x00141b58 (C1) / 0x00141c88 (C2)
 PowerUp::PowerUp(PowerUp* src)
     : m_bIsPurchasable(false)
     , m_bIsSpecial(false)
