@@ -98,6 +98,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/FrontendTask.cpp"
     "${_PROJECT_ROOT}/src/game/FruitCamera.cpp"
     "${_PROJECT_ROOT}/src/game/FruitSaveData.cpp"
+    "${_PROJECT_ROOT}/src/game/GlobalProbabilityOveride.cpp"
     "${_PROJECT_ROOT}/src/game/GameInit.cpp"
     "${_PROJECT_ROOT}/src/game/GameInitialise.cpp"
     "${_PROJECT_ROOT}/src/game/GameOver.cpp"
