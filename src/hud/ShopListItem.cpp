@@ -291,12 +291,17 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
 //   Guard 2: m_bVisible (+0x2D ScrollingMenuItem field) == 0 -> return
 //   Part 1: Title text (2 draws: shadow + fill); local_d0.y -= 26.0f after
 //   Part 2: Cost hint text (2 draws: shadow + fill); uses local_d0 (y decremented)
-//   Part 3: new_item_sml badge (when m_NewItemAlpha > 0)
-//   Part 4: selected_sml highlight ring (when m_SelectedAlpha > 0)
-//   Part 5: Item icon texture (when m_pIconTex valid); translate from _pad2 (+0x268)
-//   Part 6: scratch_deviders divider cell (always); width=257, translate = pos+half
-//   Part 7: Description text (when m_CostAlpha > 0); font shrink loop
-//   Part 8: loading.tex new-badge stripes (OUTSIDE the visibility guard; when m_bIsNew)
+//   Part 3: Item icon texture (when m_pIconTex valid); translate from _pad2 (+0x268)
+//   Part 4: scratch_deviders divider cell (always); width=257, translate = pos+half
+//   Part 5: Description text (when m_CostAlpha > 0); font shrink loop
+//   Part 6: loading.tex new-badge stripes (OUTSIDE the visibility guard; when m_bIsNew)
+//
+// Badges (NEW / SELECTED) are drawn ONCE via DrawFloatingText() -> IngamePopup::Draw
+// (gated on m_NewItemAlpha / m_SelectedAlpha alpha fields +0x25c / +0x260 in binary).
+// There is NO inline badge quad in Draw or NewDraw for v1.6.1 -- those were v1.5.1
+// residue (removed by ASM-verified: 2026-06-26 v1.6.1 ShopListItem::Draw @0x001a5da4,
+// NewDraw @0x001a58e8 (asm-inspector)).
+// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001a4bc8 (asm-inspector)
 // ---------------------------------------------------------------------------
 void ShopListItem::Draw() {
     // --- Static colour cache (static_block+0x8C in binary) ---
@@ -320,20 +325,20 @@ void ShopListItem::Draw() {
     // +0x2D is m_bOnscreen in the pre-Mortar::Delegate1 gap (ScrollingMenuItem::m_bOnscreen).
     // This is NOT the same as m_bOnscreenItem (+0x27C).
     if (!m_bOnscreen) {
-        // Part 8 is OUTSIDE this guard (see binary spec).
-        // Fall through to Part 8 after the guard block.
-        goto draw_part8;
+        // Part 6 is OUTSIDE this guard (see binary spec).
+        // Fall through to Part 6 after the guard block.
+        goto draw_part6;
     }
 
     {
         // --- Guard: no item info, nothing to render ---
-        if (!m_pItemInfo) goto draw_part8;
+        if (!m_pItemInfo) goto draw_part6;
 
         Game* g = Game::GetInstance();
-        if (!g) goto draw_part8;
+        if (!g) goto draw_part6;
 
         Mortar::Font* font = game_work.pFontMain.IsValid() ? game_work.pFontMain.Get() : nullptr;
-        if (!font) goto draw_part8;
+        if (!font) goto draw_part6;
 
         MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -369,7 +374,7 @@ void ShopListItem::Draw() {
         // -----------------------------------------------------------------------
         const char* titleStr = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
 
-        // fVar27: measured title width (pixels), used in Part 3 badge X.
+        // fVar27: measured title width (pixels), used in the HD shrink-to-fit check below.
         // Binary: MeasureString called once before the title draw loop, stored in fVar27.
         float fVar27 = font->MeasureWidth(1.0f, titleStr);
 
@@ -429,9 +434,7 @@ void ShopListItem::Draw() {
 
         // Width cache (lazy): binary loop @ 0x0015ed3a measures EACH of the
         // 4 per-type category labels into static_block[+0x90 + i*4]. Port
-        // mirrors that so the selected_sml badge in Part 4 is positioned
-        // relative to THIS row's category label width, not whichever
-        // label happened to be rendered first.
+        // mirrors that to match the binary's cached-measurement pattern.
         if (s_costWidths[0] == 0.0f && font) {
             const char* k[4] = {
                 GETSTRING_CAST_0(LSTR_SHOP_BLADE),
@@ -460,72 +463,7 @@ void ShopListItem::Draw() {
         }
 
         // -----------------------------------------------------------------------
-        // Part 3: new_item_sml badge -- when m_NewItemAlpha > 0
-        // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2   (DAT_0015eebc=65, DAT_0015eec0=33)
-        //         X = (local_d0.x - fVar27 * costScale) - 4.0f
-        //             (fVar27 = measured title width; pFVar30 reused as costScale float)
-        //         Y = DAT_0015eec8(34.0f) + local_d0.y + static_block[+0x6C]
-        //           = 34.0f + (pos.y - 26.0f) + 0.0f = pos.y + 8.0f  (cache is 0)
-        //         Z = 0.0f
-        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
-        // -----------------------------------------------------------------------
-        if (m_NewItemAlpha > 0.0f) {
-            float alphaS = m_NewItemAlpha * m_NewItemAlpha;
-            Matrix44 matBadge = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
-            // Badge X: local_d0.x - fVar27*titleScale - 4.0f
-            // fVar27 = MeasureString(titleStr), measured before title draw.
-            // Binary uses titleScale (s18) here, not costScale -- traced
-            // via vmul.f32 s17,s0,s18 at 0x0015ec04 + use at 0x0015ef26.
-            float badgeX = (local_d0.x - fVar27 * titleScale) - 4.0f;
-            // Badge Y: 34.0f + local_d0.y + static_block[+0x6C](=0.0f)
-            // local_d0.y is already pos.y - 26.0f, so 34.0 + (pos.y-26.0) = pos.y + 8.0
-            float badgeY = 34.0f + local_d0.y;   // DAT_0015eec8 = 34.0f; cache = 0.0f
-            // Binary integer-snaps the translate (vcvt.s32.f32) at 0x0015ef90 area.
-            matBadge.GlobalTranslate44((float)(int)badgeX, (float)(int)badgeY, 0.0f);
-            mm.GetWorldStack().Reset();
-            mm.GetWorldStack().SetCurrentMatrix(matBadge);
-            mm.UploadModelViewOnly();
-
-            if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
-                ShopScreen::s_TexNewItemSmlBadge->Set();
-                Mortar::Mesh::DrawQuadUnCached(colourWhite, NULL);  // always white
-                ShopScreen::s_TexNewItemSmlBadge->UnSet();
-            }
-        }
-
-        // -----------------------------------------------------------------------
-        // Part 4: selected_sml highlight ring -- when m_SelectedAlpha > 0
-        // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2   (DAT_0015f17c=65, DAT_0015f180=33)
-        //         X = (local_d0.x - static_block[+0x90 + m_Type*4]) - DAT_0015f184(32.0f)
-        //             (static_block[+0x90+i*4] = cached cost text pixel width for type i)
-        //         Y = local_d0.y   (= pos.y - 26.0f)
-        //         Z = 0.0f   (DAT_0015f19c)
-        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
-        // -----------------------------------------------------------------------
-        if (m_SelectedAlpha > 0.0f) {
-            float alphaS = m_SelectedAlpha * m_SelectedAlpha;
-            Matrix44 matSel = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
-            // X: pos.x - cached cost width for this item's m_Type - 32.0f
-            int typeIdx = (int)(uint8_t)m_pItemInfo->m_Type;
-            if (typeIdx < 0 || typeIdx > 3) typeIdx = 0;
-            float cachedCostW = s_costWidths[typeIdx];
-            float selX = (local_d0.x - cachedCostW) - 32.0f;  // DAT_0015f184 = 32.0f
-            float selY = local_d0.y;    // = pos.y - 26.0f (already decremented)
-            // Binary integer-snaps only X (vcvt at 0x0015f064); Y stays float.
-            matSel.GlobalTranslate44((float)(int)selX, selY, 0.0f);
-            mm.GetWorldStack().Reset();
-            mm.GetWorldStack().SetCurrentMatrix(matSel);
-            mm.UploadModelViewOnly();
-
-            if (ShopScreen::s_TexSelectedSml.IsValid()) {
-                ShopScreen::s_TexSelectedSml->Set();
-                Mortar::Mesh::DrawQuadUnCached(colourWhite, NULL);  // always white
-                ShopScreen::s_TexSelectedSml->UnSet();
-            }
-        }
-
-        // -----------------------------------------------------------------------
-        // Part 5: Item icon texture -- when m_pIconTex valid
+        // Part 3: Item icon texture -- when m_pIconTex valid
         // Binary: Scale = Vec3(64.0f, 64.0f, 0.0f)   DAT_0015f188 = 64.0f
         //         Translate: global_icon_vec3(BSS,0,0,0) + _pad2(this+0x268)
         //           = (0 + _pad2.x, 0 + _pad2.y, 0 + _pad2.z)
@@ -560,7 +498,7 @@ void ShopListItem::Draw() {
         }
 
         // -----------------------------------------------------------------------
-        // Part 6: scratch_deviders divider cell -- always drawn
+        // Part 4: scratch_deviders divider cell -- always drawn
         // Binary: Scale = Vec3(257.0f, 17.0f, 0.0f)   DAT_0015f198 = 257.0f
         //         divider_scale = *(float**)(GOT+0x7214) (runtime float, ~1.0f)
         //         scaled = Vec3(257,17,0) * divider_scale
@@ -628,7 +566,7 @@ void ShopListItem::Draw() {
         }
 
         // -----------------------------------------------------------------------
-        // Part 7: Description / cost text -- when m_CostAlpha > 0 and pointers valid
+        // Part 5: Description / cost text -- when m_CostAlpha > 0 and pointers valid
         // Binary: gate: *(this+0x58) != 0 && *(this+0x278) != 0
         //         alphaU = clamp((uint)(m_CostAlpha * 255.0f), 0, 255)
         //         if alphaU == 0: skip
@@ -644,7 +582,7 @@ void ShopListItem::Draw() {
         // DAT_0015f524 = 82.5f; DAT_0015f540 = 160.0f (wrap width)
         // -----------------------------------------------------------------------
         if (m_pShopScreen && m_pItemInfo) {
-            // Part 6 (divider) left a Scale+Translate in the world matrix
+            // Part 4 (divider) left a Scale+Translate in the world matrix
             // via SetCurrentMatrix; reset before the description text so
             // Font::DrawString's Push captures identity, not the divider's
             // matrix. Matches the binary's per-part discipline (the binary
@@ -769,13 +707,15 @@ void ShopListItem::Draw() {
         }
     }  // end of onscreen block
 
-    // DrawFloatingText: ingame popup badges (NEW / SELECTED)
-    // Binary ShopListItem::Draw @0x0015eb00 calls DrawFloatingText @0x001b4bc8
-    // between Part 7 and Part 8.
+    // DrawFloatingText: ingame popup badges (NEW / SELECTED).
+    // Binary ShopListItem::Draw @0x001a5da4 calls DrawFloatingText @0x001a4bc8
+    // between Part 5 and Part 6. This is the SOLE badge draw path in v1.6.1;
+    // the inline badge quads (Parts 3+4 in older port code) were v1.5.1 residue.
+    // ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001a4bc8 (asm-inspector)
     DrawFloatingText();
 
     // -----------------------------------------------------------------------
-    // Part 8: loading.tex new-badge stripes -- OUTSIDE the onscreen guard
+    // Part 6: loading.tex new-badge stripes -- OUTSIDE the onscreen guard
     // Binary: gate is *(this+0x27E) != 0 (m_bIsNew), runs regardless of m_bVisible.
     //   Texture::Set(static_block2[+0x2C])  -- loading.tex
     //   Stripe 1: Scale(290,120,0), Translate(parent->pos.x - 2.0, 105.0, 0)
@@ -783,7 +723,7 @@ void ShopListItem::Draw() {
     //   Colour = (0,0,0,128)
     // Parent pos.x = *(float*)(*(this+0x10) + 8)  -- m_pParent->pos.x
     // -----------------------------------------------------------------------
-    draw_part8:
+    draw_part6:
     if (m_bIsNew) {
         // m_pParent->pos.x (binary: *(*(this+0x10) + 8))
         float parentX = m_pParent ? m_pParent->pos.x : pos.x;
