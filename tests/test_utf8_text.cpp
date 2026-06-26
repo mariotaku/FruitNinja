@@ -146,9 +146,11 @@ Matrix44 MatrixManager::GetMVP() const { return Matrix44(); }
 void MatrixManager::SetupPerspective(float, float, float, float, float, Matrix44*) {}
 
 // ---------------------------------------------------------------------------
-// Renderer stub (s_instance pointer; no methods called in our test).
+// Renderer stub (s_instance pointer; Draw* methods no-op in this test).
 // ---------------------------------------------------------------------------
 Renderer* Renderer::s_instance = nullptr;
+void Renderer::DrawTriStrip(QUADCUSTOMVERTEX*, int) {}
+void Renderer::DrawColorQuad(const Colour&) {}
 
 // ---------------------------------------------------------------------------
 // FontInterface stub.
