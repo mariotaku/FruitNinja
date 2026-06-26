@@ -9,10 +9,12 @@
 // collide on enum values and function typedefs when mixed. This file
 // is the single point of truth.
 
-#if defined(__bada__)
-    // asm-verify cross-build: arm-none-eabi has no system GL headers and
-    // the verify .o files don't link against GL anyway. Provide a minimal
-    // stub of just the GL types + constants the port code touches.
+#if defined(__bada__) || defined(FN_GL_STUB)
+    // asm-verify cross-build (__bada__) or unit-test stub (FN_GL_STUB):
+    // no system GL headers available. Provide a minimal stub of just the
+    // GL types + constants the port code touches. sizeof static_asserts
+    // are guarded #ifdef __bada__ only (not FN_GL_STUB) so they don't
+    // fire on the x64 host where struct sizes legitimately differ.
     typedef unsigned int  GLenum;
     typedef unsigned int  GLbitfield;
     typedef unsigned int  GLuint;

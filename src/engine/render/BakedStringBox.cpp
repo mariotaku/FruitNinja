@@ -719,10 +719,10 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     //   NDC_y = wy * 2/320;  pixel_y_gl = (NDC_y+1)/2 * vpH + vpY = (wy+160)/320 * vpH + vpY
     //   glScissor uses GL bottom-left origin; clip rect: left=m_ClipX0, right=m_ClipX0+m_ClipW,
     //   top=m_ClipY0, bottom=m_ClipY0-m_ClipH (decreasing Y = downward in worldspace).
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FN_GL_STUB)
     // Host/SDL+GLES2 only: glGetIntegerv/GL_VIEWPORT are not in the asm-verify
-    // cross-build's GL shim, and this whole block is the DIFFERS substitute
-    // (the binary clips on the CPU via ClipAgainstPlanes, never glScissor).
+    // cross-build's GL shim (or the unit-test GL stub), and this whole block is
+    // the DIFFERS substitute (binary clips on the CPU via ClipAgainstPlanes, never glScissor).
     if (m_HasClip) {
         GLint vp[4];
         glGetIntegerv(GL_VIEWPORT, vp);
@@ -812,7 +812,7 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FN_GL_STUB)
     if (m_HasClip) {
         glDisable(GL_SCISSOR_TEST);
     }

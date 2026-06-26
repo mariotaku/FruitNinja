@@ -70,6 +70,39 @@ endmacro()
 # Pure-logic tests (no SDL, no GL, no audio)
 # ---------------------------------------------------------------------------
 
+# UTF-8 text regression guard (#216 mojibake fix).
+#
+# Two layers:
+#   1. Utf8StringIterator unit coverage (ASCII, 2/3/4-byte, mixed, malformed, Reset).
+#   2. BakedStringBox recording guard: a stub FontCacheObjectTTF records every
+#      codepoint GetGlyph() receives; asserts decoded codepoints not raw bytes.
+#
+# Built as a standalone target (no mortar_engine, no SDL, no GL, no FreeType):
+#   - Compiles BakedStringBox.cpp, Utf8StringIterator.cpp, Utf8StringProxy.cpp,
+#     Colour.cpp directly.
+#   - The test file itself provides the recording FontCacheObjectTTF stub plus
+#     no-op stubs for GL, MatrixManager, Renderer, FontInterface.
+#   - __bada__ is defined by the test file so gl_compat.h gives stub GL types
+#     (no system GL header needed).
+# Cross-build safe: no lambdas, no auto, no range-for, no enum class.
+add_executable(test_utf8_text
+    test_utf8_text.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/BakedStringBox.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringIterator.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringProxy.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/math/Colour.cpp
+)
+target_include_directories(test_utf8_text PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+# FN_GL_STUB activates the stub GL typedefs in gl_compat.h (same as __bada__
+# but without the sizeof static_asserts that fire on x64 host builds).
+target_compile_definitions(test_utf8_text PRIVATE FN_GL_STUB)
+# No link against mortar_engine or fruit-ninja-game: the recording stub
+# FontCacheObjectTTF and all GL/engine stubs are defined in the test file.
+add_test(NAME utf8_text COMMAND test_utf8_text)
+
 # FixedStepDriver unit test -- no SDL, no GL, no audio.
 # Covers steady 60/144/30 Hz streams, 500ms spike clamping, alpha bounds.
 # Header-only target: only needs the src/ include path.
