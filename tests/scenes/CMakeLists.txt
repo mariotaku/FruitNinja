@@ -31,6 +31,11 @@ macro(add_scene_test _target _source)
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
 
+    # SDL2_image: test_harness.h uses IMG_SavePNG / IMG_SaveJPG.
+    if (TARGET SDL2_image::SDL2_image)
+        target_link_libraries(${_target} PRIVATE SDL2_image::SDL2_image)
+    endif()
+
     if (WIN32)
         target_link_libraries(${_target} PRIVATE opengl32)
     else()
@@ -51,6 +56,31 @@ macro(add_scene_test _target _source)
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_FILE:SDL2::SDL2>
                     $<TARGET_FILE_DIR:${_target}>)
+        endif()
+    endif()
+
+    # Copy SDL2_image.dll (and any bundled format DLLs) next to the exe.
+    if (WIN32 AND TARGET SDL2_image::SDL2_image)
+        set(_sdl2img_real SDL2_image::SDL2_image)
+        get_target_property(_sdl2img_alias ${_sdl2img_real} ALIASED_TARGET)
+        if (_sdl2img_alias)
+            set(_sdl2img_real ${_sdl2img_alias})
+        endif()
+        get_target_property(_sdl2img_type ${_sdl2img_real} TYPE)
+        if (_sdl2img_type STREQUAL "SHARED_LIBRARY")
+            add_custom_command(TARGET ${_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SDL2_image::SDL2_image>
+                    $<TARGET_FILE_DIR:${_target}>)
+            get_target_property(_sdl2img_loc ${_sdl2img_real} IMPORTED_LOCATION)
+            get_filename_component(_sdl2img_dir "${_sdl2img_loc}" DIRECTORY)
+            file(GLOB _sdl2img_extra_dlls "${_sdl2img_dir}/*.dll")
+            foreach(_extra_dll IN LISTS _sdl2img_extra_dlls)
+                add_custom_command(TARGET ${_target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_extra_dll}"
+                        $<TARGET_FILE_DIR:${_target}>)
+            endforeach()
         endif()
     endif()
 endmacro()

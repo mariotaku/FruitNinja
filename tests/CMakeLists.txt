@@ -1,17 +1,6 @@
 # tests/CMakeLists.txt -- minimal ctest registration.
 
 # ---------------------------------------------------------------------------
-# fn_png_impl: single-TU that provides FN_PNG_WRITE_IMPLEMENTATION so that
-# the encoder in tests/third_party/fn_png_write.h is linked once into every
-# game-test executable via fn_add_game_test. Keeps the implementation define
-# out of test_harness.h (which is a header-only include in many TUs).
-# ---------------------------------------------------------------------------
-add_library(fn_png_impl OBJECT fn_png_impl.cpp)
-target_include_directories(fn_png_impl PRIVATE
-    ${CMAKE_SOURCE_DIR}/tests
-)
-
-# ---------------------------------------------------------------------------
 # Helper macro: fn_add_game_test
 #
 # Registers an executable that links against fruit-ninja-game, SDL2::SDL2main,
@@ -32,7 +21,7 @@ target_include_directories(fn_png_impl PRIVATE
 # links OpenGL::GL on non-WIN32 for consistency).
 # ---------------------------------------------------------------------------
 macro(fn_add_game_test _target _source)
-    add_executable(${_target} ${_source} $<TARGET_OBJECTS:fn_png_impl>)
+    add_executable(${_target} ${_source})
 
     target_include_directories(${_target} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
@@ -41,6 +30,12 @@ macro(fn_add_game_test _target _source)
     )
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
+
+    # SDL2_image: used by test_harness.h for IMG_SavePNG / IMG_SaveJPG.
+    # Only linked to test targets, never to game/engine targets.
+    if (TARGET SDL2_image::SDL2_image)
+        target_link_libraries(${_target} PRIVATE SDL2_image::SDL2_image)
+    endif()
 
     if (WIN32)
         target_link_libraries(${_target} PRIVATE opengl32)
@@ -62,6 +57,36 @@ macro(fn_add_game_test _target _source)
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_FILE:SDL2::SDL2>
                     $<TARGET_FILE_DIR:${_target}>)
+        endif()
+    endif()
+
+    # Copy SDL2_image.dll (and any bundled format DLLs in the same dir) next to
+    # the exe on Windows.  The MSVC prebuilt zip ships SDL2_image.dll in lib/x64;
+    # some releases also include optional codec DLLs there.  copy_if_different
+    # handles repeated POST_BUILD calls (no-op when already up-to-date).
+    if (WIN32 AND TARGET SDL2_image::SDL2_image)
+        set(_fn_sdl2img_real SDL2_image::SDL2_image)
+        get_target_property(_fn_sdl2img_alias ${_fn_sdl2img_real} ALIASED_TARGET)
+        if (_fn_sdl2img_alias)
+            set(_fn_sdl2img_real ${_fn_sdl2img_alias})
+        endif()
+        get_target_property(_fn_sdl2img_type ${_fn_sdl2img_real} TYPE)
+        if (_fn_sdl2img_type STREQUAL "SHARED_LIBRARY")
+            add_custom_command(TARGET ${_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SDL2_image::SDL2_image>
+                    $<TARGET_FILE_DIR:${_target}>)
+            # Also copy any sibling DLLs from the same directory (optional
+            # codec DLLs such as libpng16-16.dll, libjpeg-9.dll, etc.).
+            get_target_property(_fn_sdl2img_loc ${_fn_sdl2img_real} IMPORTED_LOCATION)
+            get_filename_component(_fn_sdl2img_dir "${_fn_sdl2img_loc}" DIRECTORY)
+            file(GLOB _fn_sdl2img_extra_dlls "${_fn_sdl2img_dir}/*.dll")
+            foreach(_fn_extra_dll IN LISTS _fn_sdl2img_extra_dlls)
+                add_custom_command(TARGET ${_target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_fn_extra_dll}"
+                        $<TARGET_FILE_DIR:${_target}>)
+            endforeach()
         endif()
     endif()
 endmacro()

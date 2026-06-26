@@ -216,6 +216,49 @@ else()
     endif()
 endif()
 
+# --- SDL2_image (test-only) ---
+# Used only by test executables (IMG_SavePNG / IMG_SaveJPG); NOT linked into
+# the game or engine targets.  The F12 in-game screenshot path uses SDL_SaveBMP
+# and must NOT depend on SDL2_image.
+#
+# Provider priority mirrors the SDL2 block above:
+#   1. System package (MSYS2: mingw-w64-SDL2_image, Linux: libsdl2-image-dev).
+#   2. MSVC: FetchContent prebuilt VC zip from libsdl-org/SDL_image releases.
+set(_SDL2_IMAGE_VER 2.8.2)
+
+if(NOT FN_ASM_VERIFY)
+
+find_package(SDL2_image QUIET)
+if (NOT SDL2_image_FOUND AND MSVC)
+    message(STATUS "System SDL2_image not found -- fetching prebuilt MSVC zip ${_SDL2_IMAGE_VER}")
+    FetchContent_Declare(
+        SDL2_image_prebuilt_msvc
+        URL https://github.com/libsdl-org/SDL_image/releases/download/release-${_SDL2_IMAGE_VER}/SDL2_image-devel-${_SDL2_IMAGE_VER}-VC.zip
+    )
+    FetchContent_MakeAvailable(SDL2_image_prebuilt_msvc)
+
+    set(_sdl2img_root "${sdl2_image_prebuilt_msvc_SOURCE_DIR}")
+    set(_sdl2img_arch "x64")
+    set(_sdl2img_lib_dir "${_sdl2img_root}/lib/${_sdl2img_arch}")
+
+    add_library(SDL2_image::SDL2_image SHARED IMPORTED)
+    set_target_properties(SDL2_image::SDL2_image PROPERTIES
+        IMPORTED_LOCATION             "${_sdl2img_lib_dir}/SDL2_image.dll"
+        IMPORTED_IMPLIB               "${_sdl2img_lib_dir}/SDL2_image.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${_sdl2img_root}/include")
+
+    set(SDL2_image_FOUND TRUE)
+endif()
+
+if (NOT SDL2_image_FOUND AND NOT MSVC)
+    # MSYS2/Linux should have it as a system package; warn rather than pulling
+    # source (SDL_image has many optional codec dependencies that complicate
+    # a source build significantly).
+    message(WARNING "SDL2_image not found; install mingw-w64-x86_64-SDL2_image (MSYS2) or libsdl2-image-dev (Debian). Test screenshots will not link.")
+endif()
+
+endif() # NOT FN_ASM_VERIFY (SDL2_image block)
+
 FetchContent_Declare(
     tinyxml2
     GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
