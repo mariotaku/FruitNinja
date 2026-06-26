@@ -311,3 +311,18 @@ set_tests_properties(zen_spawn     PROPERTIES TIMEOUT 120)
 fn_add_game_test(test_arcade_spawn test_arcade_spawn.cpp)
 add_test(NAME arcade_spawn_real COMMAND test_arcade_spawn)
 set_tests_properties(arcade_spawn_real PROPERTIES TIMEOUT 120)
+
+# Wave-timeline diagnostic. Drives the full spawn pipeline for N frames and
+# logs per-second spawn events (fruit type, bombs, super-fruit) with wave
+# transitions. Returns 0 if >0 fruit spawned; 1 if the pipeline is broken.
+# Seed is fixed (12345) for determinism. Modes: classic/arcade/zen/combo.
+# Timeouts: classic/arcade 90s, zen 120s (mode game-length + 30s slack).
+fn_add_game_test(test_wave_timeline test_wave_timeline.cpp)
+add_test(NAME wave_timeline_classic COMMAND test_wave_timeline --mode=classic --frames=3600)
+add_test(NAME wave_timeline_arcade  COMMAND test_wave_timeline --mode=arcade  --frames=3600)
+add_test(NAME wave_timeline_zen     COMMAND test_wave_timeline --mode=zen     --frames=3600)
+add_test(NAME wave_timeline_combo   COMMAND test_wave_timeline --mode=combo   --frames=3600)
+set_tests_properties(wave_timeline_classic PROPERTIES TIMEOUT 90)
+set_tests_properties(wave_timeline_arcade  PROPERTIES TIMEOUT 90)
+set_tests_properties(wave_timeline_zen     PROPERTIES TIMEOUT 120)
+set_tests_properties(wave_timeline_combo   PROPERTIES TIMEOUT 90)
