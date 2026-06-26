@@ -9,10 +9,10 @@
 
 // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144bb0 (re-analyst)
 // DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
-//          (m_globalTimeScale); m_reserved20 (+0x20) is left uninitialized by ctor.
-//          Port zero-inits m_reserved20 and pre-inits m_globalTimeScale here to
+//          (m_globalTimeScale); m_TitleTexAlpha (+0x20) is left uninitialized by ctor.
+//          Port zero-inits m_TitleTexAlpha and pre-inits m_globalTimeScale here to
 //          avoid reading uninit floats before the first Update tick.
-HUD::HUD() : m_reserved20(0.0f), m_globalTimeScale(1.0f) {
+HUD::HUD() : m_TitleTexAlpha(0.0f), m_globalTimeScale(1.0f) {
     for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
 }
 
