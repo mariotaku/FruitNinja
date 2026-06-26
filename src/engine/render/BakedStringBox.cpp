@@ -775,41 +775,12 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
         // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
         // lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas.
-        Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
-        glMatrixMode(GL_PROJECTION);
-        glLoadMatrixf(mvp.ptr());
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
         glEnable(GL_TEXTURE_2D);
-        TexEnvModulate();
-        glDisable(GL_LIGHTING);
-        glColor4ub(255, 255, 255, 255);
+        TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
 
-        glDisable(GL_CULL_FACE);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        const int stride = sizeof(QUADCUSTOMVERTEX);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, stride, &wv[0].x);
-        glClientActiveTexture(GL_TEXTURE0);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glTexCoordPointer(2, GL_FLOAT, stride, &wv[0].u);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glColorPointer(4, GL_UNSIGNED_BYTE, stride, &wv[0].colour);
-        glDisableClientState(GL_NORMAL_ARRAY);
-
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, nVerts);
-
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
-
-        glBindTexture(GL_TEXTURE_2D, 0);
+        renderer->DrawTriStrip(&wv[0], nVerts);
     }
 
 #if !defined(__bada__) && !defined(FN_GL_STUB)
