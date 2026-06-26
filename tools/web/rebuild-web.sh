@@ -32,9 +32,18 @@ if [ "${1:-}" = "--worker" ]; then
     # Windows/MSYS: keep /src and -w literal; hand Docker a native host path.
     export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
     if command -v cygpath >/dev/null 2>&1; then HOST="$(cygpath -m "$PROJ")"; else HOST="$PROJ"; fi
+    # Clear only the executable's link outputs (NOT the 49MB .data, which is
+    # incremental + reused by web-hash). This avoids a corrupted/truncated wasm
+    # intermediate surviving across builds (wasm-metadce "Section extends beyond
+    # end of input"). Keeps fruit-ninja-<hash>.data so web-hash reuses it.
+    rm -f "$BUILD_WEB"/fruit-ninja.wasm "$BUILD_WEB"/fruit-ninja.html "$BUILD_WEB"/fruit-ninja.js
     {
         echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)"
-        docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" cmake --build build/web -j
+        # Build the static lib FIRST, then the executable: the parallel -j build
+        # of fruit-ninja.html can otherwise race ahead of libfruit-ninja-game.a's
+        # rule ("No rule to make target ... libfruit-ninja-game.a" / 168-byte wasm).
+        docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" \
+            sh -c "cmake --build build/web --target fruit-ninja-game -j && cmake --build build/web -j"
         code=$?
         if [ "$code" -eq 0 ]; then echo "[$(date -Is 2>/dev/null || date)] rebuild OK"
         else echo "[$(date -Is 2>/dev/null || date)] rebuild FAILED (exit $code)"; fi

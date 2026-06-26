@@ -5,9 +5,9 @@ Emscripten web-build packaging + LAN dev serving, and the GitHub Pages deploy ru
 ## Scripts
 
 - **`build_pages.py`** — assemble the GitHub Pages output dir (`pages/`) from `web/` + `build/web/`. `python tools/web/build_pages.py [--out <dir>]`. Idempotent (removes+recreates `pages/`); errors if `build/web/fruit-ninja.html` is missing.
-- **`web-hash-assets.py`** — content-hash the wasm/data/js/splash to defeat browser caching, rewriting nested references. `python3 web-hash-assets.py <build/web>`.
+- **`web-hash-assets.py`** — content-hash wasm/data/js/splash to defeat browser caching, rewriting all nested references (js data/wasm refs, html script/splash/build-id). `python3 web-hash-assets.py <build/web>`. Robust to incremental builds: emcc re-emits `fruit-ninja.{js,wasm,html}` every build but only re-emits `fruit-ninja.data` when packaged assets change, so each asset's hash is resolved from the fresh canonical file *or* (when unchanged/absent) from the already-hashed `fruit-ninja-<sha8>.ext` — the js/html refs are always rewritten to a valid hashed name, and the 49MB `.data` is never re-copied when unchanged. Ends with a self-check that the served js references no un-hashed asset (exits non-zero otherwise).
 - **`web-serve.py`** — LAN dev server with content-hash-aware caching (no-store HTML, immutable hashed assets, `application/wasm`). `web-serve.py [--dir build/web] [--port 8000]`.
-- **`rebuild-web.sh`** — incremental Emscripten rebuild when `src/` changed; run detached by the Claude Code Stop hook so the dev server stays current.
+- **`rebuild-web.sh`** — incremental Emscripten rebuild when `src/` changed; run detached by the Claude Code Stop hook so the dev server stays current. The worker clears the executable's link outputs (`fruit-ninja.{wasm,js,html}`, NOT the `.data`) and builds the static lib target **before** the executable, to avoid two recurring failures: a parallel-`-j` race where `fruit-ninja.html` links before `libfruit-ninja-game.a`'s rule registers, and a corrupted/truncated wasm intermediate surviving across builds.
 
 ## Build & preview locally (requires Emscripten)
 
