@@ -8,7 +8,7 @@
 //   #include "test_harness.h"
 //
 //   int main(int argc, char* argv[]) {
-//       fn::TestHarness h(argc, argv, "bonus_screen");
+//       fn::TestHarness h(argc, argv, "bonus/default");
 //       if (!h.ParseFlags()) return 1;        // handles --interactive, --screenshot, --extra-flag if you AddFlag()'d
 //       if (!h.Init()) return 1;              // SDL + GL + game.init + 5 burn-in frames
 //
@@ -20,10 +20,15 @@
 //           h.RunHeadless(210);                     // 180 transition + 30 idle frames
 //           // ...assertions...
 //       }
-//       if (h.IsScreenshot()) h.Screenshot();       // writes tmp/test/screenshots/<label>.ppm
+//       if (h.IsScreenshot()) h.Screenshot();       // writes tmp/test/screenshots/<suite>/<case>.ppm
 //
 //       return h.Shutdown();                        // SDL/GL teardown + final PASS line
 //   }
+//
+// Screenshot paths use a <suite>/<case> scheme: the name (or nameOverride)
+// passed to Screenshot/ScreenshotPng/ScreenshotJpg may contain a single '/'
+// separating suite from case. The intermediate subdirectory is created
+// automatically (e.g. "gameover/classic" -> tmp/test/screenshots/gameover/classic.png).
 //
 // The harness is header-only / inline; no separate .cpp. Header-only keeps
 // link-line surgery off the test CMake list. Cross-build (asm-verify
@@ -421,7 +426,10 @@ struct TestHarness {
     }
 
     // -------- screenshot --------
-    // Writes tmp/test/screenshots/<label>.ppm. Returns true on success.
+    // Writes tmp/test/screenshots/<suite>/<case>.ppm. Returns true on success.
+    // The name (nameOverride or label) may contain a '/' to place the file in
+    // a suite subdirectory, e.g. "gameover/classic" ->
+    // tmp/test/screenshots/gameover/classic.ppm.
     bool Screenshot(const char* nameOverride = NULL) {
         int ww = 0, wh = 0;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
@@ -439,14 +447,10 @@ struct TestHarness {
         const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
         m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, pixels);
 
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
+        const char* name = nameOverride ? nameOverride : label;
+        MakeScreenshotDir_(name);
         char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.ppm",
-                      nameOverride ? nameOverride : label);
+        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.ppm", name);
         FILE* f = std::fopen(path, "wb");
         if (!f) { std::free(pixels); return false; }
         std::fprintf(f, "P6\n%d %d\n255\n", ww, wh);
@@ -460,7 +464,8 @@ struct TestHarness {
         return true;
     }
 
-    // Writes tmp/test/screenshots/<label>.png (compressed PNG, RGB, top-down).
+    // Writes tmp/test/screenshots/<suite>/<case>.png (compressed PNG, RGB, top-down).
+    // The name (nameOverride or label) may contain a '/' for suite/case nesting.
     // Uses SDL2_image IMG_SavePNG. Returns true on success.
     bool ScreenshotPng(const char* nameOverride = NULL) {
         unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
@@ -468,10 +473,10 @@ struct TestHarness {
         int ww = 0, wh = 0;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
 
-        MakeScreenshotDir_();
+        const char* name = nameOverride ? nameOverride : label;
+        MakeScreenshotDir_(name);
         char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.png",
-                      nameOverride ? nameOverride : label);
+        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.png", name);
 
         SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
             pixels, ww, wh,
@@ -498,7 +503,8 @@ struct TestHarness {
         return true;
     }
 
-    // Writes tmp/test/screenshots/<label>.jpg (JPEG, RGB, top-down).
+    // Writes tmp/test/screenshots/<suite>/<case>.jpg (JPEG, RGB, top-down).
+    // The name (nameOverride or label) may contain a '/' for suite/case nesting.
     // quality: 0-100 (default 90). Uses SDL2_image IMG_SaveJPG.
     bool ScreenshotJpg(const char* nameOverride = NULL, int quality = 90) {
         unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
@@ -506,10 +512,10 @@ struct TestHarness {
         int ww = 0, wh = 0;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
 
-        MakeScreenshotDir_();
+        const char* name = nameOverride ? nameOverride : label;
+        MakeScreenshotDir_(name);
         char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.jpg",
-                      nameOverride ? nameOverride : label);
+        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.jpg", name);
 
         SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
             pixels, ww, wh,
@@ -633,12 +639,27 @@ private:
         return flip;
     }
 
-    // Create the screenshot output directory hierarchy.
-    static void MakeScreenshotDir_() {
+    // Create tmp/test/screenshots/ and any subdirectory implied by 'name'.
+    // If 'name' contains a '/' (e.g. "gameover/classic"), the part before
+    // the slash is treated as a suite subdirectory and is created under
+    // tmp/test/screenshots/. Names without '/' only create the base dir.
+    static void MakeScreenshotDir_(const char* name = NULL) {
 #ifdef _WIN32
         _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
 #else
         mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
+#endif
+        if (!name) return;
+        const char* slash = std::strchr(name, '/');
+        if (!slash) return;
+        // Build "tmp/test/screenshots/<suite>" and mkdir it.
+        char suiteDir[256];
+        int suiteLen = (int)(slash - name);
+        std::snprintf(suiteDir, sizeof(suiteDir), "tmp/test/screenshots/%.*s", suiteLen, name);
+#ifdef _WIN32
+        _mkdir(suiteDir);
+#else
+        mkdir(suiteDir, 0755);
 #endif
     }
 };

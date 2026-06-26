@@ -3,14 +3,15 @@
 // Usage: test_screenshot <screen> [--interactive|--screenshot|--headless]
 //
 // Drives the named screen to a fully-drawn, stable state and captures the
-// framebuffer to tmp/test/screenshots/<screen>_screen.png.
+// framebuffer to tmp/test/screenshots/<suite>/<case>.png.
 //
-// Supported screens:
-//   bonus          -- BonusScreen with 3 mock awards, timer past all reveals.
-//   gameover       -- Classic-mode GameOverScreen in STATE_MAIN_DISPLAY, score 123.
-//   gameover_zen   -- Zen-mode GameOverScreen, best combo of 4 fruit seeded.
-//   gameover_arcade -- Arcade-mode GameOverScreen, 2 bonus rows seeded.
-//   mesh           -- 3D fruit mesh (apple_single.mmd) rendered in isolation.
+// Supported screens (suite/case mapping):
+//   bonus          -> bonus/default
+//   gameover       -> gameover/classic
+//   gameover_zen   -> gameover/zen
+//   gameover_arcade -> gameover/arcade
+//   drawquad       -> drawquad/default
+//   mesh           -> mesh/default
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
@@ -51,19 +52,20 @@ static int RunMesh(fn::TestHarness& h);
 // Dispatch table.
 // ---------------------------------------------------------------------------
 struct ScreenCase {
-    const char* name;
+    const char* name;       // command-line argument (e.g. "gameover")
+    const char* label;      // screenshot path suffix: "<suite>/<case>" (e.g. "gameover/classic")
     int (*run)(fn::TestHarness& h);
 };
 
 static const ScreenCase kScreens[] = {
-    { "bonus",           RunBonus          },
-    { "gameover",        RunGameOver       },
-    { "gameover_zen",    RunGameOverZen    },
-    { "gameover_arcade", RunGameOverArcade },
-    { "drawquad",        RunDrawQuad       },
-    { "mesh",            RunMesh           },
+    { "bonus",           "bonus/default",    RunBonus          },
+    { "gameover",        "gameover/classic", RunGameOver       },
+    { "gameover_zen",    "gameover/zen",     RunGameOverZen    },
+    { "gameover_arcade", "gameover/arcade",  RunGameOverArcade },
+    { "drawquad",        "drawquad/default", RunDrawQuad       },
+    { "mesh",            "mesh/default",     RunMesh           },
     // TODO: fixture for shop
-    { NULL, NULL }
+    { NULL, NULL, NULL }
 };
 
 // ---------------------------------------------------------------------------
@@ -93,11 +95,7 @@ int main(int argc, char* argv[]) {
         return FailUsage();
     }
 
-    // Build a label for output paths: "<screen>_screen".
-    char label[64];
-    std::snprintf(label, sizeof(label), "%s_screen", screen_name);
-
-    fn::TestHarness h(argc, argv, label);
+    fn::TestHarness h(argc, argv, sc->label);
     // 120 burn-in frames: lets GameInit run through the Splash->Game state
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
@@ -230,14 +228,14 @@ static int RunBonus(fn::TestHarness& h) {
         bs->m_bPendingRemoval = 0;
     }
 
-    std::printf("[bonus_screen] stable state reached (timer=%.2f, isolation mode)\n",
+    std::printf("[bonus/default] stable state reached (timer=%.2f, isolation mode)\n",
                 bs->m_Timer);
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: bonus_screen screenshot complete\n");
+    std::printf("PASS: bonus/default screenshot complete\n");
     return h.Shutdown();
 }
 
@@ -305,14 +303,14 @@ static int RunGameOver(fn::TestHarness& h) {
         h.RunComponentHeadlessMultiPass(1);
     }
 
-    std::printf("[gameover_screen] stable state reached (m_State=%d, score=%d)\n",
+    std::printf("[gameover/classic] stable state reached (m_State=%d, score=%d)\n",
                 gos->m_State, game_work.currentScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng("gameover_screen")) return 3;
+        if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: gameover_screen screenshot complete\n");
+    std::printf("PASS: gameover/classic screenshot complete\n");
     return h.Shutdown();
 }
 
@@ -380,14 +378,14 @@ static int RunGameOverZen(fn::TestHarness& h) {
 
     game_work.m_SaveData = prevSaveData;
 
-    std::printf("[gameover_zen] stable state reached (m_State=%d, combo=%d)\n",
+    std::printf("[gameover/zen] stable state reached (m_State=%d, combo=%d)\n",
                 gos->m_State, zenSave.m_BestComboLength);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng("gameover_zen_screen")) return 3;
+        if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: gameover_zen screenshot complete\n");
+    std::printf("PASS: gameover/zen screenshot complete\n");
     return h.Shutdown();
 }
 
@@ -467,14 +465,14 @@ static int RunGameOverArcade(fn::TestHarness& h) {
         h.RunComponentHeadlessMultiPass(1);
     }
 
-    std::printf("[gameover_arcade] stable state reached (m_State=%d, score=%d)\n",
+    std::printf("[gameover/arcade] stable state reached (m_State=%d, score=%d)\n",
                 gos->m_State, game_work.currentScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng("gameover_arcade_screen")) return 3;
+        if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: gameover_arcade screenshot complete\n");
+    std::printf("PASS: gameover/arcade screenshot complete\n");
     return h.Shutdown();
 }
 
@@ -527,10 +525,10 @@ static int RunDrawQuad(fn::TestHarness& h) {
 
 done:
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng("drawquad")) return 3;
+        if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: drawquad complete (texValid=%d)\n", (int)tex.IsValid());
+    std::printf("PASS: drawquad/default complete (texValid=%d)\n", (int)tex.IsValid());
     return 0;
 }
 
@@ -632,9 +630,9 @@ static int RunMesh(fn::TestHarness& h) {
 
 mesh_done:
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng("mesh")) return 3;
+        if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: mesh complete\n");
+    std::printf("PASS: mesh/default complete\n");
     return 0;
 }
