@@ -223,7 +223,8 @@ void BonusScreen::BuildBonusText() {
                 kLabelFontSizes[i],
                 60.0f,   // 0x3C
                 10.0f,
-                0x0F,    // CENTER-H + bottom-V
+                0x03,    // center-H + top-V (binary 0x0F adds bottom-V which the port's
+                         // BakedStringBox mishandles -> drops glyphs in the 10px box; TODO fix bottom-V)
                 0,
                 -1.0f,
                 0
@@ -490,29 +491,34 @@ void BonusScreen::Draw(float* hudScaleRaw) {
         }
 
         // m_RankLabelBoxes[i]: pos + (-2, 6, 0), colour = award.m_Colour, alpha 1.0.
+        // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c: SetTranslation flag=0 (0x164cec).
+        // flag!=0 would pre-shift x -= boxW/2 (=-110 for the 220px box) -> name jumps left
+        // onto the icon; the binary keeps it left-aligned at pos.x-2.
         if (i < 3 && m_RankLabelBoxes[i]) {
             m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
             m_RankLabelBoxes[i]->SetTranslation(
                 Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
-                1
+                0
             );
             m_RankLabelBoxes[i]->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
         }
 
-        // m_RankValueBoxes[i]: pos + (220, 5, 0), colour = award.m_Colour, alpha = award.m_Alpha.
-        // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c: m_RankValueBoxes[i] = pos+(220,5,0).
-        // Binary Vec3 @0x164d40, literal 220.0f @0x164dd4.
-        // TODO: SetTranslation param_2 binary=0 port=1 (v1.6.1 BonusScreen::Draw @0x0016492c)
+        // m_RankValueBoxes[i]: the tier number, centered on the right baked star.
+        // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c: translate Vec3 @0x164d40
+        // (220.0f @0x164dd4), Draw alpha=m_Alpha (0x164e00) via wrapper @0x1626e0 (the
+        // value pulses by uniform SCALE, not colour.a). Using flag=1 (center the 60px box
+        // on the translate point) since the value is center-aligned.
+        // TODO #218: the faithful +220 overshoots the baked star in the current render
+        // (empirically the star sits ~+185); rooted in the dialog being drawn at a smaller
+        // scale than the binary's row offsets assume -- fix the dialog draw scale, not this
+        // offset. Y also not yet aligned to the baked-star rows.
         if (i < 3 && m_RankValueBoxes[i]) {
-            Colour valueColour = entry.m_Colour;
-            valueColour.a = (unsigned char)(entry.m_Alpha * 255.0f > 255.0f ? 255 :
-                            (entry.m_Alpha * 255.0f < 0.0f ? 0 : entry.m_Alpha * 255.0f));
-            m_RankValueBoxes[i]->SetColour(valueColour, 0);
+            m_RankValueBoxes[i]->SetColour(entry.m_Colour, 0);
             m_RankValueBoxes[i]->SetTranslation(
                 Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
                 1
             );
-            m_RankValueBoxes[i]->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+            m_RankValueBoxes[i]->Draw(0.0f, Vec2(entry.m_Alpha, entry.m_Alpha), 1);
         }
 
         // Row step: pos.y -= 42 at loop tail.
