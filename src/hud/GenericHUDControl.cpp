@@ -38,7 +38,7 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
     , m_BasePos(pos)
     , m_AnglePosOffA(0.0f, 0.0f, 0.0f)
     , m_AnglePosOffB(0.0f, 0.0f, 0.0f)
-    , m_BaseScale(scale)
+    , m_BaseScale(0.0f, 0.0f, 0.0f)
     , m_BasePos2(1.0f, 1.0f, 1.0f)
     , m_BaseAngle(0.0f)
     , m_FadeIn(fadeIn)
@@ -56,9 +56,23 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
         m_UVBottom = parentRect[1].y;   // max.y
     }
 
-    // Binary: position auto-placement when pos==(0,0,0) branch omitted;
-    // callers always supply an explicit non-zero pos per call-site evidence.
-    // TODO: 0x00189f60 -- pos==(0,0,0) auto-placement branch (tex-scale multiply)
+    // ASM-spec v1.6.1 GenericHUDControl::GenericHUDControl @0x00189f60: zero scale ->
+    // auto-size from texture dims * UV span. When scale.x==0 && scale.y==0, compute
+    // sx = texW*(uvRight-uvLeft), sy = texH*(uvBottom-uvTop); guard texture valid, else
+    // (1,1,1). z defaults to 1 if 0. Store as m_BaseScale (ctor param scale).
+    Vec3 resolvedScale = scale;
+    if (scale.x == 0.0f && scale.y == 0.0f) {
+        if (tex.IsValid()) {
+            float sx = (float)tex->GetWidth()  * (m_UVRight - m_UVLeft);
+            float sy = (float)tex->GetHeight() * (m_UVBottom - m_UVTop);
+            float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
+            resolvedScale = Vec3(sx, sy, sz);
+        } else {
+            float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
+            resolvedScale = Vec3(1.0f, 1.0f, sz);
+        }
+    }
+    m_BaseScale = resolvedScale;
 
     // HUDControl base field: size (written via HUDControl3d's computed scale path)
     // Binary seeds +0x20 (size/scale) from default Vec3 in ctor.
@@ -190,14 +204,22 @@ void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
 
 // ---------------------------------------------------------------------------
 // DrawOrder  binary @ 0x00189a58  (vtable slot +0x24)
-// Delegates to Draw via the inherited base chain (HUDControl3d::Draw).
+// Draws the textured quad (HUDControl3d::Draw) AND, when a label is set, the
+// BakedStringBox label at the computed pos.
 // ---------------------------------------------------------------------------
 
 void GenericHUDControl::DrawOrder(float* hudScaleRaw, int layerMask) {
     (void)layerMask;
     Draw(hudScaleRaw);
+    // ASM-spec v1.6.1 GenericHUDControl::DrawOrder @0x00189a58: if m_pLabel,
+    //   m_pLabel->SetTranslation(pos, 0); m_pLabel->Draw(m_Timer, Vec2(size.z,size.z), 1).
+    // Translation = HUDControl::pos (+0x08), rotation = m_Timer (+0x2c, the PreDraw
+    // angle), scale = Vec2(size.z, size.z) (+0x28, both components), center = 1.
+    // Label alpha is plumbed via BakedStringBox::SetColour at the setup side, not here.
     if (m_pLabel) {
-        // TODO: 0x00189a58 -- label draw call (BakedStringBox::Draw at world pos)
+        m_pLabel->SetTranslation(this->pos, 0);
+        float s = this->size.z;
+        m_pLabel->Draw(this->m_Timer, Vec2(s, s), 1);
     }
 }
 
