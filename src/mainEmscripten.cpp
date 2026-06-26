@@ -12,6 +12,8 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "engine/util/LanguageArgs.h"
+#include "engine/util/Localisation.h"
 
 // Port specific: Game instance lives as a file-static so the C callback
 // can reach it.  Must outlive the emscripten main loop.
@@ -35,6 +37,10 @@ static double g_lastTime = -1.0;   // last RAF timestamp from emscripten_get_now
 static float  s_emFps             = 0.0f;
 static double s_emFpsWindowMs     = 0.0;
 static int    s_emFpsWindowFrames = 0;
+
+// Port specific: language override from ?lang= URL param. -1 = not set.
+// Set during BootWait URL-param parsing, applied once after g_game.init().
+static int g_langOverride = -1;
 
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
@@ -229,11 +235,53 @@ static void BootWait(void* arg) {
             FN::g_ShowFps = true;
             LOG_INFO("Debug", "URL param: FPS overlay ON");
         }
+
+        // lang=<code|num> -- language override for i18n testing.
+        // Reads the raw string from location.search, passes to C ParseLanguageArg.
+        // Buffer is 32 bytes; URL params longer than 31 chars are clamped (safe).
+        {
+            char langBuf[32];
+            langBuf[0] = '\0';
+            EM_ASM({
+                try {
+                    var qs = window.location.search;
+                    if (!qs) return;
+                    var params = new URLSearchParams(qs);
+                    var v = params.get('lang');
+                    if (v !== null) {
+                        var s = v.substring(0, 31);
+                        stringToUTF8(s, $0, 32);
+                    }
+                } catch(e) {}
+            }, langBuf);
+            if (langBuf[0] != '\0') {
+                g_langOverride = ParseLanguageArg(langBuf);
+                if (g_langOverride >= 0) {
+                    LOG_INFO("Debug", "URL param: lang=%s -> flag=%d", langBuf, g_langOverride);
+                } else {
+                    fprintf(stderr, "[lang] URL param lang='%s' not recognised, ignored\n", langBuf);
+                }
+            }
+        }
     }
 
     if (!g_game.init(ba->window, ba->gl)) {
         fprintf(stderr, "Failed to init game\n");
         return;
+    }
+
+    // Port specific: apply ?lang= override after init so the first frame sees
+    // the chosen language.  Localisation::Load handles the missing-file fallback.
+    if (g_langOverride >= 0) {
+        static const char* const kLangNames[] = {
+            "english_us", "german", "dutch", "french", "spanish", "italian",
+            "swedish", "danish", "norwegian", "finnish", "korean", "japanese",
+            "english_uk", "chinese", "english_us"
+        };
+        game_work.languageFlag = (uint8_t)g_langOverride;
+        Localisation::Load(g_game.data_dir.c_str(), g_langOverride);
+        printf("[lang] override applied: flag=%d (%s)\n",
+               g_langOverride, kLangNames[g_langOverride]);
     }
 
     // Port specific: web audio (#73) -- resume the suspended AudioContext on the
