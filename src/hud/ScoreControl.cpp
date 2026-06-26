@@ -24,6 +24,7 @@
 #include <cstring>
 #include <algorithm>
 #include "game/GameWork.h"
+#include "hud/IngamePopup.h"
 
 // Shared TTF face for BakedStringBox labels in ScoreControl.
 // DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext;
@@ -657,35 +658,21 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         }
     }
 
-    // Section E: Highscore banner texture (+0xA4 = new_best_score.tex)
-    // guarded by m_BannerScaleTime > 0
-    // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159842..0x0015990c (asm-inspector)
-    if (m_HighscoreBannerTex.IsValid() && m_BannerScaleTime > 0.0f) {
-        Mortar::Texture* tex = m_HighscoreBannerTex.Get();
-        float texW = (tex && tex->GetWidth()  > 0) ? (float)tex->GetWidth()  + 1.0f : 65.0f;
-        float texH = (tex && tex->GetHeight() > 0) ? (float)tex->GetHeight() + 1.0f : 17.0f;
-
-        // Binary @ 0x00159740..0x0015975c
+    // Section E: NEW BEST SCORE banner (type 0x0F IngamePopup)
+    // Binary ScoreControl::PreDraw @0x001ace80 -- replaced inline texture draw with
+    // pM_Popups[0xF]->Draw(animScale, &pos). The scale anim (bannerScale * wobbleScale)
+    // stays; the texture draw is now owned by IngamePopup.
+    if (m_BannerScaleTime > 0.0f) {
         float k = m_BannerScaleTime * SCORE_BANNER_SIN_RATE2;
         uint16_t idx = (k > 0.0f) ? (uint16_t)(int)k : 0;
         float bannerScale = SinIdx(idx);
-        float wobbleScale = SinIdx(m_BannerSinIdx) * SCORE_BANNER_WOBBLE + 1.0f;  // DAT_001597bc
+        float wobbleScale = SinIdx(m_BannerSinIdx) * SCORE_BANNER_WOBBLE + 1.0f;
+        float animScale = bannerScale * wobbleScale;
 
-        MatrixManager& mm = MatrixManager::GetInstance();
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(texW * bannerScale * wobbleScale,
-                                           texH * bannerScale * wobbleScale, 1.0f);
-        // RotZ44 ~5 degrees: SinIdx(0xE38)/CosIdx(0xE38)
-        mat.RotZ44(SinIdx(0x0E38), CosIdx(0x0E38));
-        mat.GlobalTranslate44(Vec3(texW * 0.5f - SCORE_BANNER_X_CENTRE, m_DrawPosY + SCORE_BANNER_Y_OFFSET, 0.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        if (tex) {
-            tex->Set();
-            Colour col(255, 255, 255, alpha);
-            if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-            tex->UnSet();
+        IngamePopup* popup = GetIngamePopup(0x0F);
+        if (popup) {
+            Vec3 bannerPos(-100.0f, 70.0f, 0.0f);
+            popup->Draw(animScale, &bannerPos);
         }
     }
 }

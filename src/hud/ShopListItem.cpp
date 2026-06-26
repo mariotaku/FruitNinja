@@ -30,6 +30,7 @@
 #include "game/FruitSaveData.h"
 #include "game/GameMode.h"
 #include "debug/Logger.h"
+#include "hud/IngamePopup.h"
 
 // Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5) using the
 // process-global GameTask::Random LCG. Port uses rand() since the
@@ -768,6 +769,11 @@ void ShopListItem::Draw() {
         }
     }  // end of onscreen block
 
+    // DrawFloatingText: ingame popup badges (NEW / SELECTED)
+    // Binary ShopListItem::Draw @0x0015eb00 calls DrawFloatingText @0x001b4bc8
+    // between Part 7 and Part 8.
+    DrawFloatingText();
+
     // -----------------------------------------------------------------------
     // Part 8: loading.tex new-badge stripes -- OUTSIDE the onscreen guard
     // Binary: gate is *(this+0x27E) != 0 (m_bIsNew), runs regardless of m_bVisible.
@@ -819,5 +825,30 @@ void ShopListItem::Draw() {
 void ShopListItem::ButtonClicked() {
     if (m_pShopScreen != nullptr) {
         m_pShopScreen->SetSelected(this);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::DrawFloatingText @ 0x001b4bc8
+// Draws ingame popups for new-item and selected-item badges.
+//   - pM_Popups[0x10] (scale 0.8) when m_NewItemAlpha > 0
+//   - pM_Popups[0x11] (scale 0.5) when m_SelectedAlpha > 0
+// Anchor pos for both: this->pos (base position of the row).
+// ---------------------------------------------------------------------------
+void ShopListItem::DrawFloatingText() {
+    if (m_NewItemAlpha > 0.0f) {
+        IngamePopup* popup = GetIngamePopup(0x10);
+        if (popup) {
+            Vec3 anchor(pos.x, pos.y, pos.z);
+            popup->Draw(0.8f, &anchor);
+        }
+    }
+
+    if (m_SelectedAlpha > 0.0f) {
+        IngamePopup* popup = GetIngamePopup(0x11);
+        if (popup) {
+            Vec3 anchor(pos.x, pos.y, pos.z);
+            popup->Draw(0.5f, &anchor);
+        }
     }
 }
