@@ -153,8 +153,8 @@ void Game::UnPaused() {
     }
 }
 
-// slot 17 @ 0x0010d9ec
-const char* Game::SelfVersion() { return "1.5.1"; }
+// slot 17 @ 0x0010d9ec — TODO: re-verify v1.6.1 Game::SelfVersion address
+const char* Game::SelfVersion() { return "1.6.1"; }
 
 // slot 18 @ 0x0010dae0 — tail call to GameTaskSaveOnExit
 void Game::SaveOnExit() {
