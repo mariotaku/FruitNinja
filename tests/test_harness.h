@@ -52,7 +52,7 @@
 #ifdef _WIN32
 #  include <direct.h>
 #endif
-#include "third_party/fn_png_write.h"
+#include <SDL_image.h>
 
 // glReadPixels isn't in the thin gl_funcs.h wrapper -- pull via
 // SDL_GL_GetProcAddress so we don't need to link opengl32 statically.
@@ -423,43 +423,79 @@ struct TestHarness {
         return true;
     }
 
-    // Writes tmp/test/screenshots/<label>.png (RGB, top-down flip applied).
-    // Returns true on success. Creates the output directory if missing.
+    // Writes tmp/test/screenshots/<label>.png (compressed PNG, RGB, top-down).
+    // Uses SDL2_image IMG_SavePNG. Returns true on success.
     bool ScreenshotPng(const char* nameOverride = NULL) {
+        unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
+        if (!pixels) return false;
         int ww = 0, wh = 0;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
-        unsigned char* pixels = (unsigned char*)std::malloc((size_t)ww * wh * 3);
-        if (!pixels) return false;
-        if (!m_glReadPixels) {
-            m_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
-        }
-        if (!m_glReadPixels) {
-            std::fprintf(stderr, "[%s] glReadPixels unavailable\n", label);
-            std::free(pixels);
-            return false;
-        }
-        const unsigned int GL_RGB_           = 0x1907;
-        const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
-        m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, pixels);
 
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
+        MakeScreenshotDir_();
         char path[256];
         std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.png",
                       nameOverride ? nameOverride : label);
-        // pixels from glReadPixels are bottom-up; pass top_down=0 so the
-        // encoder flips rows, producing a correct top-down PNG.
-        int rc = fn_png_write_rgb(path, pixels, ww, wh, /*top_down=*/0);
-        if (rc != 0) {
-            std::fprintf(stderr, "[%s] fn_png_write_rgb failed (rc=%d)\n", label, rc);
+
+        SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+            pixels, ww, wh,
+            24,            // bits per pixel
+            ww * 3,        // pitch (bytes per row)
+            0x000000FFu,   // Rmask
+            0x0000FF00u,   // Gmask
+            0x00FF0000u,   // Bmask
+            0u);           // Amask (none -- 24-bit RGB)
+        if (!surf) {
+            std::fprintf(stderr, "[%s] SDL_CreateRGBSurfaceFrom failed: %s\n",
+                         label, SDL_GetError());
             std::free(pixels);
             return false;
         }
-        std::printf("[%s] wrote %s (%dx%d)\n", label, path, ww, wh);
+        int rc = IMG_SavePNG(surf, path);
+        SDL_FreeSurface(surf);
         std::free(pixels);
+        if (rc != 0) {
+            std::fprintf(stderr, "[%s] IMG_SavePNG failed: %s\n", label, IMG_GetError());
+            return false;
+        }
+        std::printf("[%s] wrote %s (%dx%d)\n", label, path, ww, wh);
+        return true;
+    }
+
+    // Writes tmp/test/screenshots/<label>.jpg (JPEG, RGB, top-down).
+    // quality: 0-100 (default 90). Uses SDL2_image IMG_SaveJPG.
+    bool ScreenshotJpg(const char* nameOverride = NULL, int quality = 90) {
+        unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
+        if (!pixels) return false;
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(window, &ww, &wh);
+
+        MakeScreenshotDir_();
+        char path[256];
+        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.jpg",
+                      nameOverride ? nameOverride : label);
+
+        SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+            pixels, ww, wh,
+            24,
+            ww * 3,
+            0x000000FFu,
+            0x0000FF00u,
+            0x00FF0000u,
+            0u);
+        if (!surf) {
+            std::fprintf(stderr, "[%s] SDL_CreateRGBSurfaceFrom failed: %s\n",
+                         label, SDL_GetError());
+            std::free(pixels);
+            return false;
+        }
+        int rc = IMG_SaveJPG(surf, path, quality);
+        SDL_FreeSurface(surf);
+        std::free(pixels);
+        if (rc != 0) {
+            std::fprintf(stderr, "[%s] IMG_SaveJPG failed: %s\n", label, IMG_GetError());
+            return false;
+        }
+        std::printf("[%s] wrote %s (%dx%d, quality=%d)\n", label, path, ww, wh, quality);
         return true;
     }
 
@@ -522,6 +558,52 @@ private:
     // Per-instance glReadPixels pointer. Loaded lazily via
     // SDL_GL_GetProcAddress on first use; cached for subsequent calls.
     PFN_glReadPixels m_glReadPixels;
+
+    // Read the framebuffer and flip bottom-up -> top-down.
+    // Returns a malloc'd (ww*wh*3)-byte RGB buffer; caller free()s.
+    // Writes dimensions to *outW / *outH if non-null.
+    unsigned char* _ReadPixelsFlipped(int* outW, int* outH) {
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        if (outW) *outW = ww;
+        if (outH) *outH = wh;
+        if (!m_glReadPixels) {
+            m_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
+        }
+        if (!m_glReadPixels) {
+            std::fprintf(stderr, "[%s] glReadPixels unavailable\n", label);
+            return NULL;
+        }
+        const unsigned int GL_RGB_           = 0x1907;
+        const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
+        size_t rowBytes = (size_t)ww * 3;
+        size_t totalBytes = rowBytes * (size_t)wh;
+        // Read bottom-up into a temp buffer, then flip into the final buffer.
+        unsigned char* tmp  = (unsigned char*)std::malloc(totalBytes);
+        unsigned char* flip = (unsigned char*)std::malloc(totalBytes);
+        if (!tmp || !flip) {
+            std::free(tmp);
+            std::free(flip);
+            return NULL;
+        }
+        m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, tmp);
+        for (int y = 0; y < wh; ++y) {
+            std::memcpy(flip + (size_t)y * rowBytes,
+                        tmp  + (size_t)(wh - 1 - y) * rowBytes,
+                        rowBytes);
+        }
+        std::free(tmp);
+        return flip;
+    }
+
+    // Create the screenshot output directory hierarchy.
+    static void MakeScreenshotDir_() {
+#ifdef _WIN32
+        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
+#else
+        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
+#endif
+    }
 };
 
 } // namespace fn
