@@ -18,7 +18,12 @@
 #include "game/GameWork.h"
 #include "game/GameMode.h"
 #include "engine/math/Vec3.h"
+#include "engine/math/Colour.h"
 #include "engine/asset/TextureManager.h"
+#include "engine/asset/Texture.h"
+#include "engine/asset/Mesh.h"
+#include "engine/render/MatrixStack.h"
+#include "engine/util/SmartPtr.h"
 #include "engine/util/StringTable.h"
 
 // ---------------------------------------------------------------------------
@@ -26,6 +31,7 @@
 // ---------------------------------------------------------------------------
 static int RunBonus(fn::TestHarness& h);
 static int RunGameOver(fn::TestHarness& h);
+static int RunDrawQuad(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
 // Dispatch table.
@@ -38,6 +44,7 @@ struct ScreenCase {
 static const ScreenCase kScreens[] = {
     { "bonus",    RunBonus    },
     { "gameover", RunGameOver },
+    { "drawquad", RunDrawQuad },
     // TODO: fixture for shop
     { NULL, NULL }
 };
@@ -48,7 +55,7 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus gameover\n");
+        "  screens: bonus gameover drawquad\n");
     return 1;
 }
 
@@ -289,4 +296,60 @@ static int RunGameOver(fn::TestHarness& h) {
 
     std::printf("PASS: gameover_screen screenshot complete\n");
     return h.Shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// DrawQuad fixture -- isolates the Mesh::DrawQuadUnCached / textured-quad path.
+//
+// Draws one known-opaque texture (sensei_head_01.tex) as a 200x200 quad
+// centered at the screen origin, bypassing HUD/screen machinery entirely.
+// Purpose: determine whether the textured-quad path renders at all.
+// ---------------------------------------------------------------------------
+static int RunDrawQuad(fn::TestHarness& h) {
+    Mortar::SmartPtr<Mortar::Texture> tex =
+        Mortar::TextureManager::LoadLocalisedTexture("sensei_head_01.tex");
+    if (!tex.IsValid()) {
+        std::fprintf(stderr, "FAIL: drawquad -- could not load sensei_head_01.tex\n");
+        return 1;
+    }
+
+    for (int i = 0; i < 5; ++i) {
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) {
+            if (ev.type == SDL_QUIT) goto done;
+        }
+
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(h.window), &ww, &wh);
+        glViewport(0, 0, ww, wh);
+
+        Mortar::DisplayManager::GetInstance().BeginFrame();
+
+        MatrixManager::GetInstance().SetupOrtho(
+            160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+
+        {
+            MatrixManager& mm = MatrixManager::GetInstance();
+            tex->SetUnCached();
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().Scale(Vec3(200.0f, 200.0f, 1.0f));
+            mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, 0.0f));
+            mm.UploadModelViewOnly();
+            // Faithful board UV convention: DrawQuadUnCached(colour, uMin, uMax, vMin, vMax).
+            // (0,1,0,1) = full texture; mirrors FruitFactClassicFactPage::DrawOrder's board.
+            Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255),
+                                           0.0f, 1.0f, 0.0f, 1.0f, NULL);
+            tex->UnSetUnCached();
+        }
+
+        SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
+    }
+
+done:
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng("drawquad")) return 3;
+    }
+
+    std::printf("PASS: drawquad complete (texValid=%d)\n", (int)tex.IsValid());
+    return 0;
 }

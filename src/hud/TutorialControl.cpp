@@ -318,7 +318,7 @@ void TutorialControl::Draw(float* hudScaleRaw) {
 
             m_PressTex->Set();
             // UV: full (0.0, 0.0, 1.0, 1.0) per DAT_001635c4=0.0, 0x3f800000=1.0
-            Mortar::Mesh::DrawQuadUnCached(trailColour, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
+            Mortar::Mesh::DrawQuadUnCached(trailColour, 0.0f, 1.0f, 0.0f, 1.0f, NULL);
             m_PressTex->UnSet();
         }
     }
@@ -347,7 +347,7 @@ void TutorialControl::Draw(float* hudScaleRaw) {
         mm.UploadModelViewOnly();
 
         m_Texture->Set();
-        Mortar::Mesh::DrawQuadUnCached(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f, NULL);
+        Mortar::Mesh::DrawQuadUnCached(m_Colour, arrow_u0, arrow_u1, 0.0f, 1.0f, NULL);
         m_Texture->UnSet();
     }
 }

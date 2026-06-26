@@ -32,8 +32,9 @@ struct Renderer {
     void draw_fullscreen_quad(GLuint tex, float alpha = 1.0f);
 
     // Matches DrawQuadUnCached — draws unit quad transformed by current MVP.
-    void DrawQuad(const Colour& tint, float u0 = 0.0f, float v0 = 0.0f,
-                  float u1 = 1.0f, float v1 = 1.0f);
+    // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060: args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
+    void DrawQuad(const Colour& tint, float uMin = 0.0f, float uMax = 1.0f,
+                  float vMin = 0.0f, float vMax = 1.0f);
 
     // Draw a textured sprite at game coordinates.
     void draw_sprite(GLuint tex, float x, float y, float w, float h,

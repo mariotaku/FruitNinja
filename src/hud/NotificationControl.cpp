@@ -161,7 +161,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
                 bannerTex->UnSet();
             }
         }
@@ -178,7 +178,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
                 mm.UploadModelViewOnly();
                 iconTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
                 iconTex->UnSet();
             }
         }
@@ -218,7 +218,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
                 bannerTex->UnSet();
             }
         }
@@ -236,7 +236,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
                 mm.UploadModelViewOnly();
                 iconTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
                 iconTex->UnSet();
             }
         }

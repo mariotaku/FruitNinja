@@ -74,8 +74,8 @@ void DrawStartFade() {
     const uint8_t r = (uint8_t)r_f;
     const Colour col(r, r, r, a);
 
-    // UV crop: binary draws logo rect (u0=0.03125, u1=0.96875, v0=0.1875, v1=0.8125)
-    Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.1875f, 0.96875f, 0.8125f, NULL);
+    // UV crop: binary draws logo rect (uMin=0.03125, uMax=0.96875, vMin=0.1875, vMax=0.8125)
+    Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.96875f, 0.1875f, 0.8125f, NULL);
 
     game->pSplashTex->UnSet();
 }

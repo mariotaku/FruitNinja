@@ -168,7 +168,7 @@ void CheckBox::Draw(float* hudScaleRaw) {
     // subsequent same-bucket draws (MenuButton scratchs.tex backdrop).
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
-    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
+    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
 
     texPtr->UnSet();
 }

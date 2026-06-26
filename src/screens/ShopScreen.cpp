@@ -1199,8 +1199,8 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 // v0=0.1875f, v1=0.8125f hardcoded inside helper
                 // DAT_0015e06c = 0.03125f, DAT_0015e070 = 0.597656f
                 Mortar::Mesh::DrawQuadUnCached(c,
-                    0.03125f, 0.1875f,   // u0, v0
-                    0.597656f, 0.8125f,  // u1, v1
+                    0.03125f, 0.597656f,  // uMin, uMax
+                    0.1875f, 0.8125f,     // vMin, vMax
                     NULL);
             }
 
@@ -1222,8 +1222,8 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 // DrawQuadSized_GameTask(u0=0.597656f, u1=0.96875f, colour)
                 // v0=0.1875f, v1=0.8125f; u1=0.96875f = 31/32 (literal 0x3f780000)
                 Mortar::Mesh::DrawQuadUnCached(c,
-                    0.597656f, 0.1875f,  // u0, v0
-                    0.96875f, 0.8125f,   // u1, v1
+                    0.597656f, 0.96875f,  // uMin, uMax
+                    0.1875f, 0.8125f,     // vMin, vMax
                     NULL);
             }
 
@@ -1253,8 +1253,8 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.96875f, colour)
                 // DAT_0015e06c=0.03125f; u1=0.96875f literal (0x3f780000)
                 Mortar::Mesh::DrawQuadUnCached(c,
-                    0.03125f, 0.1875f,  // u0, v0
-                    0.96875f, 0.8125f,  // u1, v1
+                    0.03125f, 0.96875f,  // uMin, uMax
+                    0.1875f, 0.8125f,    // vMin, vMax
                     NULL);
             }
 

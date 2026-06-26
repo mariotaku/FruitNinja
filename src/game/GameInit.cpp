@@ -647,7 +647,7 @@ void GameDraw(float dt, bool active) {
         mm.UploadModelViewOnly();
 
         Colour white(255, 255, 255, 255);
-        game->renderer.DrawQuad(white, 0.03125f, 0.1875f, 0.96875f, 0.8125f);
+        game->renderer.DrawQuad(white, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
 
         bgTex->UnSet();
     }
