@@ -5,14 +5,21 @@
 #include "debug/CrashHandler.h"
 #include "debug/Logger.h"
 #include "debug/DebugFlags.h"
+#include "engine/util/LanguageArgs.h"
+#include "engine/util/Localisation.h"
+#include "game/GameWork.h"
 #include <cstring>
 
 int main(int argc, char* argv[]) {
     // Port specific: parse launch parameters for debug flags.
     //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
+    //   --lang=<code|num>   : override language (e.g. --lang=french or --lang=3)
+    int g_langOverride = -1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--fps") == 0 || strcmp(argv[i], "--show-fps") == 0) {
             FN::g_ShowFps = true;
+        } else if (strncmp(argv[i], "--lang=", 7) == 0) {
+            g_langOverride = ParseLanguageArg(argv[i] + 7);
         }
     }
 
@@ -122,6 +129,20 @@ int main(int argc, char* argv[]) {
     if (!game.init(window, gl)) {
         fprintf(stderr, "Failed to init game\n");
         return 1;
+    }
+
+    // Port specific: apply --lang= override after init so the first frame sees
+    // the chosen language.  Localisation::Load handles the missing-file fallback.
+    if (g_langOverride >= 0) {
+        static const char* const kLangNames[] = {
+            "english_us", "german", "dutch", "french", "spanish", "italian",
+            "swedish", "danish", "norwegian", "finnish", "korean", "japanese",
+            "english_uk", "chinese", "english_us"
+        };
+        game_work.languageFlag = (uint8_t)g_langOverride;
+        Localisation::Load(game.data_dir.c_str(), g_langOverride);
+        printf("[lang] override applied: flag=%d (%s)\n",
+               g_langOverride, kLangNames[g_langOverride]);
     }
 
     game.run();

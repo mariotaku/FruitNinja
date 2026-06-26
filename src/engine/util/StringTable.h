@@ -207,6 +207,10 @@ public:
     static bool IsLoaded();
     static const HeaderLookup* GetInfoS(const char* key);
 
+    // Returns the language flag (0..14) for a language name like "french",
+    // "korean", "english_uk", etc. Case-insensitive. Returns -1 on no match.
+    static int LanguageFlagFromName(const char* name);
+
 };
 
 #if defined(__bada__)

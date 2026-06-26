@@ -42,6 +42,8 @@
 #include "hud/HUDLayer.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "engine/util/LanguageArgs.h"
+#include "engine/util/Localisation.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -75,6 +77,7 @@ struct TestHarness {
           window(NULL), gl(NULL),
           initFrames(5),
           frames(-1),
+          m_langOverride(-1),
           m_interactiveDefault(false),
           m_componentMode(false),
           m_glReadPixels(NULL)
@@ -131,9 +134,31 @@ struct TestHarness {
             } else if (i + 1 < argc && std::strcmp(argv[i], "--duration") == 0) {
                 float secs = (float)std::atof(argv[++i]);
                 frames = (int)(secs * 60.0f + 0.5f);
+            } else if (std::strncmp(argv[i], "--lang=", 7) == 0) {
+                m_langOverride = ParseLanguageArg(argv[i] + 7);
             }
         }
         return true;
+    }
+
+    // Apply --lang= override: set languageFlag and reload translations.
+    // Call after game.init() succeeds, before burn-in frames consume strings.
+    // No-op if --lang= was not specified or the value was invalid.
+    void ApplyLanguageOverride() {
+        if (m_langOverride < 0) return;
+        game_work.languageFlag = (uint8_t)m_langOverride;
+        Localisation::Load(game.data_dir.c_str(), m_langOverride);
+        // Log the applied language name for verification.
+        // kLanguageSuffix is private to StringTable.cpp; use flag 0..13 directly.
+        static const char* const kNames[] = {
+            "english_us", "german", "dutch", "french", "spanish", "italian",
+            "swedish", "danish", "norwegian", "finnish", "korean", "japanese",
+            "english_uk", "chinese", "english_us"
+        };
+        const char* name = (m_langOverride >= 0 && m_langOverride <= 14)
+                           ? kNames[m_langOverride] : "?";
+        std::printf("[%s] lang override applied: flag=%d (%s)\n",
+                    label, m_langOverride, name);
     }
 
     bool IsInteractive() const { return interactive;  }
@@ -192,6 +217,10 @@ struct TestHarness {
             std::fprintf(stderr, "game.init failed\n");
             return false;
         }
+
+        // Apply --lang= override before burn-in frames so components baked
+        // during burn-in see the overridden language strings.
+        ApplyLanguageOverride();
 
         // Headless tests have no human listener; silence the SFX channel.
         // Interactive tests keep audio so the tester can hear what fires.
@@ -483,6 +512,8 @@ struct TestHarness {
     int          frames;
 
 private:
+    // Language flag resolved from --lang=<code|num>. -1 = no override.
+    int  m_langOverride;
     bool m_interactiveDefault;
     // Set by InitComponent(); signals that the HUD was cleared for isolation mode.
     // Informational only -- the actual isolation is enforced by not calling

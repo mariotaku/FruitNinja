@@ -323,6 +323,26 @@ const HeaderLookup* Mortar::StringTable::GetInfoS(const char* key) {
     return s_DefaultTable.GetInfo(key);
 }
 
+int Mortar::StringTable::LanguageFlagFromName(const char* name) {
+    if (!name) return -1;
+    // Convert name to lowercase for case-insensitive match.
+    char lower[32];
+    int i = 0;
+    while (name[i] && i < 31) {
+        char c = name[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+        lower[i] = c;
+        ++i;
+    }
+    lower[i] = '\0';
+    // Search only indices 0..13 (index 14 is a duplicate "english_us" alias).
+    for (int j = 0; j < 14; ++j) {
+        if (strcmp(lower, kLanguageSuffix[j]) == 0)
+            return j;
+    }
+    return -1;
+}
+
 // --- Free wrapper implementations ---
 
 const char* GETSTRING(LocalizedString id, int tableIdx) {
