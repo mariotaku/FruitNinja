@@ -1356,10 +1356,15 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
 
     // Layer 1 path: field_0x5f = clamp(hudScale.x * 255) + HUDControl3d::Draw
     // field_0x5f = m_DrawColour.a (+0x5c+3 = alpha byte of tint colour)
-    // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894
+    // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894:
+    //   title-texture alpha = clamp(game_work.mHud->m_TitleTexAlpha * 255, 0, 255)
+    //   -- NOT hudScale.x (always 1.0). m_TitleTexAlpha is ctor-uninitialized + never
+    //   written -> reads 0 -> HUDControl3d::Draw @0x0018b544 skips the texture title;
+    //   only the BakedStringBox TTF title (DrawOrder) shows. The old hudScale.x*255
+    //   forced full opacity -> the visible duplicate.
     // Real binary layer-1 = ONLY this -- NO sensei/expression/bg-pattern overlay
     if ((layerMask & Mortar::HUD_LAYER_DEFAULT) != 0) {
-        float v = hudScale.x * 255.0f;
+        float v = game_work.mHud ? game_work.mHud->m_TitleTexAlpha * 255.0f : 0.0f;
         if (v < 0.0f)   v = 0.0f;
         if (v > 255.0f) v = 255.0f;
         m_DrawColour.a = (uint8_t)(int)v;
