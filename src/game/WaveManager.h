@@ -400,6 +400,15 @@ public:
     // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_TypeCount.
     static int SplitWords(const char* str, std::vector<std::string>& out);
 
+    // v1.6.1 WaveManager::ParseGlobalProbabilityOverides @0x00129718
+    // Loads globalprobabilities.xml and populates m_GlobalProbabilityOverride.
+    void ParseGlobalProbabilityOverides(const char* path);
+
+    // v1.6.1 WaveManager::CheckForGlobalProbabilityOveride @0x00123228
+    // Iterates m_GlobalProbabilityOverride; returns the first GPO that fires
+    // (writes outType) or null if none fire.
+    GlobalProbabilityOveride* CheckForGlobalProbabilityOveride(int& outType);
+
 private:
 };
 

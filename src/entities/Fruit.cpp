@@ -2552,6 +2552,13 @@ void Fruit::CheckFruitDropped() {
     }
 }
 
+// Counts active fruits that have active power-ups.
+// TODO: v1.6.1 -- binary addr unresolved; port stub returns 0 (conservative: no powerup fruits).
+// Used by GlobalProbabilityOveride::CanSpawn; returning 0 means the progression gate is checked.
+int Fruit::NumberOfPowerupFruits() {
+    return 0;
+}
+
 // Binary @ 0x00175624 — gravity-axis projection offscreen check.
 // DAT_001756d4=160.0f (Y-bound base), DAT_001756d8=240.0f (X-bound base),
 // DAT_001756d0=50.0f (margin scale per scale.y).

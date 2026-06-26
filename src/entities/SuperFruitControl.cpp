@@ -589,6 +589,15 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
 
     // TODO: 0x001bbf48 -- SuperFruitThrown SFX not yet ported
 
+    // ASM-spec v1.6.1 SuperFruitControl::SuperFruitThrown @0x001bbf48:
+    // increment "super_pomegranates_spawned" stat when super-fruit is thrown.
+    {
+        const char* kSpawnedKey  = "super_pomegranates_spawned";
+        uint32_t    spawnedHash  = StringHash(kSpawnedKey);
+        if (game_work.m_SaveData)
+            game_work.m_SaveData->AddToTotal(kSpawnedKey, spawnedHash, 1, false, false);
+    }
+
     SuperFruitControl* ctrl = new SuperFruitControl(fruit);
     SuperFruitControls[fruit] = ctrl;
 }

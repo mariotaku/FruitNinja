@@ -415,6 +415,10 @@ void WaveManager::Init() {
         LOG_DEBUG("WaveManager", "Init: mode %d -> %d waves from %s",
                   mode, (int)m_WaveInfo[mode].size(), s_WaveXML[mode]);
     }
+
+    // v1.6.1 WaveManager::Init @0x00129934: call ParseGlobalProbabilityOverides at tail.
+    // ASM-spec v1.6.1 ParseGlobalProbabilityOverides @0x00129718
+    ParseGlobalProbabilityOverides((game->data_dir + "/xml/globalprobabilities.xml").c_str());
 }
 
 // ----------------------------------------------------------------------------
@@ -465,6 +469,73 @@ void WaveManager::Destroy() {
         operator delete(m_pWaveQueItem);
         m_pWaveQueItem = 0;
     }
+}
+
+// ----------------------------------------------------------------------------
+// ParseGlobalProbabilityOverides / CheckForGlobalProbabilityOveride
+// ----------------------------------------------------------------------------
+
+// v1.6.1 WaveManager::ParseGlobalProbabilityOverides @0x00129718
+// Loads globalprobabilities.xml, selects the file sub-element based on the
+// "super_fruit_probability_system" save value, then populates
+// m_GlobalProbabilityOverride with base/PointBased/Timed entries.
+void WaveManager::ParseGlobalProbabilityOverides(const char* path)
+{
+    TiXmlDocument doc;
+    if (!doc.LoadFile(path)) return;
+
+    int sys = 0;
+    if (game_work.m_SaveData)
+        sys = game_work.m_SaveData->GetTotal("super_fruit_probability_system");
+
+    char buf[64];
+    // OS_SPrintf equivalent: build "probabilityFileN"
+    snprintf(buf, sizeof(buf), "probabilityFile%i", sys);
+
+    TiXmlElement file = doc.FirstChildElement(buf);
+    if (!file) return;
+
+    // 1) <globalProbability> -> base class
+    for (TiXmlElement el = file.FirstChildElement("globalProbability");
+         el; el = el.NextSiblingElement("globalProbability"))
+    {
+        GlobalProbabilityOveride* g = new GlobalProbabilityOveride();
+        g->Parse(&el);
+        m_GlobalProbabilityOverride.push_back(g);
+    }
+
+    // 2) <globalProbabilityPointBased> -> PointBased (memset 0 before ctor matches binary)
+    for (TiXmlElement el = file.FirstChildElement("globalProbabilityPointBased");
+         el; el = el.NextSiblingElement("globalProbabilityPointBased"))
+    {
+        GlobalProbabilityOveridePointBased* g = new GlobalProbabilityOveridePointBased();
+        g->Parse(&el);
+        m_GlobalProbabilityOverride.push_back(g);
+    }
+
+    // 3) <globalProbabilityTimed> -> Timed
+    for (TiXmlElement el = file.FirstChildElement("globalProbabilityTimed");
+         el; el = el.NextSiblingElement("globalProbabilityTimed"))
+    {
+        GlobalProbabilityOverideTimed* g = new GlobalProbabilityOverideTimed();
+        g->Parse(&el);
+        m_GlobalProbabilityOverride.push_back(g);
+    }
+
+    LOG_DEBUG("WaveManager", "ParseGlobalProbabilityOverides: loaded %d entries from %s (sys=%d)",
+              (int)m_GlobalProbabilityOverride.size(), path, sys);
+}
+
+// v1.6.1 WaveManager::CheckForGlobalProbabilityOveride @0x00123228
+// Iterates m_GlobalProbabilityOverride; calls CheckForOverride on each.
+// Returns the first GPO that fires (writes outType) or null if none fires.
+GlobalProbabilityOveride* WaveManager::CheckForGlobalProbabilityOveride(int& outType)
+{
+    for (size_t i = 0; i < m_GlobalProbabilityOverride.size(); ++i) {
+        GlobalProbabilityOveride* g = m_GlobalProbabilityOverride[i];
+        if (g && g->CheckForOverride(outType)) return g;
+    }
+    return 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -589,6 +660,14 @@ void WaveManager::Reset(bool fullReset) {
     m_SpeedScale = 1.0f;
     // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
     m_SpeedAccum = m_SpeedClampStart[game_work.gameMode];
+
+    // v1.6.1 WaveManager::Reset @0x0012ba78: iterate m_GlobalProbabilityOverride,
+    // call slot4 NewGameStarted on each, then if (fullReset) NewGame().
+    // ASM-spec v1.6.1 NewGameStarted loop @0x00125be4 area (before fullReset tail).
+    for (size_t i = 0; i < m_GlobalProbabilityOverride.size(); ++i) {
+        GlobalProbabilityOveride* g = m_GlobalProbabilityOverride[i];
+        if (g) g->NewGameStarted();
+    }
 
     if (fullReset)
         NewGame();
@@ -1263,11 +1342,29 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             }
                         }
 
+                        // v1.6.1 WaveManager::UpdateWave @LAB_001263ec: GlobalProbabilityOveride check.
+                        // ASM-spec v1.6.1 CheckForGlobalProbabilityOveride @0x00123228.
+                        // Only fires when no per-wave override already picked a type (chosenType < 0).
+                        GlobalProbabilityOveride* gpo = 0;
+                        if (chosenType < 0)
+                            gpo = CheckForGlobalProbabilityOveride(chosenType);
                         if (chosenType < 0) {
                             chosenType = Fruit::RandomFruit(false);
                         }
-                        SpawnFruit(1, chosenType,
+                        Mortar::Entity* spawnedGPO = SpawnFruit(1, chosenType,
                             blitzSpawner ? blitzSpawner : &spawner, playerIdx);
+                        // Subscribe Entity events for GPO re-arm when the super-fruit is killed/expires.
+                        // ASM-spec v1.6.1 UpdateWave @0x001263ec: onKilled (+0x178) -> FruitWasKilled,
+                        //   onThrown (+0x180) -> FruitWasThrown.
+                        if (gpo && spawnedGPO) {
+                            Fruit* spawnedFruit = static_cast<Fruit*>(spawnedGPO);
+                            spawnedFruit->m_OnKilled +=
+                                Mortar::Delegate1<void, Fruit*>::Make(gpo,
+                                    &GlobalProbabilityOveride::FruitWasKilled);
+                            spawnedFruit->m_OnExpired +=
+                                Mortar::Delegate1<void, Fruit*>::Make(gpo,
+                                    &GlobalProbabilityOveride::FruitWasThrown);
+                        }
                     } else {
                         SpawnFruit(1, fruitType, &spawner, playerIdx);
                     }

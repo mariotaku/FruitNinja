@@ -67,4 +67,16 @@ typedef Mortar::GameMode GAME_MODE;
 // Returns the ASCII mode-name string for the given game mode.
 const char* GetModeName(GAME_MODE gameMode);
 
+// GetModeBitMask -- v1.6.1 @0x0010b15c area; returns (1 << gameMode).
+// Used by GlobalProbabilityOveride::CheckForOverride to gate mode.
+inline uint32_t GetModeBitMask(GAME_MODE gameMode) {
+    return (uint32_t)(1u << (unsigned)gameMode);
+}
+
+// ParseModeMask -- v1.6.1 @0x00116674.
+// Parses a comma-separated mode-name string ("CLASSIC", "ARCADE,CLASSIC", etc.)
+// into a bitmask of GAME_MODE bits (bit N = mode N).
+// Unknown tokens are ignored. Empty/null -> 0xFFFFFFFF (all modes).
+uint32_t ParseModeMask(const char* modeStr);
+
 #endif // FN_GAME_MODE_H
