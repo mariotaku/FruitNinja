@@ -13,12 +13,28 @@
 #include "engine/math/MathUtil.h"
 #include "engine/math/Matrix44.h"
 #include "engine/render/MatrixManager.h"
+#include "engine/render/BakedStringBox.h"
+#include "engine/render/FontCacheObjectTTF.h"
+#include "engine/render/FontTTFRegistry.h"
+#include "engine/render/Font.h"
+#include "engine/util/StringTable.h"
+#include "engine/math/Vec2.h"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
 
 using Mortar::TextureManager;
+
+// Shared TTF face for BonusScreen BakedStringBox labels.
+// DIFFERS: original = *(game_work+0x614) shared TTF face; using a file-local SmartPtr<Font>
+//   + FontTTFRegistry::Lookup. v1.6.1 BonusScreen::BuildBonusText @0x001621dc.
+static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_Font =
+        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_Font.IsValid()) return 0;
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+}
 
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
 // TODO: resolve phase-timer rodata @ DAT_00162cdc (v1.6.1 BonusScreen::Update @0x00163dd0)
@@ -165,6 +181,127 @@ void BonusScreen::AwardScores() {
 }
 
 // ---------------------------------------------------------------------------
+// BuildBonusText -- v1.6.1 @0x001621dc
+// Creates all BakedStringBox members. Called once from Update tail when
+// m_bSkipIntro is set (create-once guard: only allocates if boxes are null).
+// ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc
+// ---------------------------------------------------------------------------
+
+void BonusScreen::BuildBonusText() {
+    Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
+    if (!font) return;
+
+    // Per-award label/value boxes (loop i=0..count-1, up to 3).
+    // Binary: r6+=4 per iteration == [i].
+    // Font sizes per row: slot0=13px, slot1=16px, slot2=15px.
+    static const float kLabelFontSizes[3] = { 13.0f, 16.0f, 15.0f };
+    for (int i = 0; i < (int)m_Awards.size() && i < 3; ++i) {
+        if (!m_RankLabelBoxes[i]) {
+            // m_RankLabelBoxes[i] (+0xC0): name, w=220(0xDC), h=10, tier colour.
+            // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc: ctor align arg = 1 (LEFT).
+            m_RankLabelBoxes[i] = new Mortar::BakedStringBox(
+                font,
+                kLabelFontSizes[i],
+                220.0f,  // 0xDC
+                10.0f,
+                0x01,    // LEFT
+                0,       // maxLines
+                -1.0f,   // lineSpacing
+                0
+            );
+            m_RankLabelBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
+            m_RankLabelBoxes[i]->SetText(m_Awards[i].m_Name);
+            m_RankLabelBoxes[i]->Update();
+        }
+        if (!m_RankValueBoxes[i]) {
+            // m_RankValueBoxes[i] (+0xCC): value=tier as "%i", w=60(0x3C), h=10, tier colour.
+            // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc: ctor align arg = 0xF (CENTER-H + bottom-V).
+            char valBuf[16];
+            snprintf(valBuf, sizeof(valBuf), "%i", m_Awards[i].m_TierBase);
+            m_RankValueBoxes[i] = new Mortar::BakedStringBox(
+                font,
+                kLabelFontSizes[i],
+                60.0f,   // 0x3C
+                10.0f,
+                0x0F,    // CENTER-H + bottom-V
+                0,
+                -1.0f,
+                0
+            );
+            m_RankValueBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
+            m_RankValueBoxes[i]->SetText(valBuf);
+            m_RankValueBoxes[i]->Update();
+        }
+    }
+
+    // m_ScoreBox (+0xB8): animated total counter.
+    // fontSize=20px, w=90(0x5A), h=20(0x14), gradient yellow->orange, stroke 2px red.
+    if (!m_ScoreBox) {
+        m_ScoreBox = new Mortar::BakedStringBox(
+            font,
+            20.0f,
+            90.0f,   // 0x5A
+            20.0f,   // 0x14
+            0x0d,
+            0,
+            -1.0f,
+            0
+        );
+        // Colour ctor is (r,g,b,a). Spec gives RGB values.
+        m_ScoreBox->SetGradient(
+            Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)
+            Colour(0xEF, 0x77, 0x00, 0xFF),   // orange bottom: RGB(0xEF,0x77,0x00)
+            false
+        );
+        m_ScoreBox->SetStroke(2.0f, Colour(0xDC, 0x13, 0x00, 0xFF));  // RGB(0xDC,0x13,0x00)
+        // Text is set each frame in Draw.
+    }
+
+    // m_TotalBox (+0xBC): title band.
+    // fontSize=30px, w=220(0xDC), h=30(0x1E), red gradient, gold stroke, brown shadow.
+    if (!m_TotalBox) {
+        m_TotalBox = new Mortar::BakedStringBox(
+            font,
+            30.0f,
+            220.0f,  // 0xDC
+            30.0f,   // 0x1E
+            0x0d,
+            0,
+            -1.0f,
+            0
+        );
+        // Colour ctor is (r,g,b,a). Spec gives RGB values.
+        m_TotalBox->SetGradient(
+            Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
+            Colour(0xB4, 0x00, 0x00, 0xFF),   // red bottom: RGB(0xB4,0x00,0x00)
+            false
+        );
+        m_TotalBox->SetStroke(
+            1.0f,
+            Colour(0xFF, 0xDC, 0x50, 0xFF),   // gold: RGB(0xFF,0xDC,0x50)
+            Colour(0xFF, 0xC8, 0x87, 0xFF)    // gold2: RGB(0xFF,0xC8,0x87)
+        );
+        m_TotalBox->SetShadow(
+            1.0f,
+            Colour(0x5D, 0x28, 0x0C, 0xFF),  // brown: RGB(0x5D,0x28,0x0C)
+            Vec3(0.0f, -3.0f, 0.0f),
+            true
+        );
+        // Title text: "_ %s _" wrapping GETSTRING(0x31E).
+        // TODO: v1.6.1 BonusScreen::BuildBonusText @0x001621dc -- binary uses GETSTRING(0x31E) for title
+        const char* titleStr = GETSTRING((LocalizedString)0x31E, 0);
+        if (titleStr && titleStr[0]) {
+            char titleBuf[128];
+            snprintf(titleBuf, sizeof(titleBuf), "_ %s _", titleStr);
+            m_TotalBox->SetText(titleBuf);
+        } else {
+            m_TotalBox->SetText("_ BONUS _");
+        }
+        m_TotalBox->Update();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Update (binary @ 0x00163dd0) — three-phase state machine driven by m_Timer
 // ---------------------------------------------------------------------------
 
@@ -264,6 +401,12 @@ void BonusScreen::Update(float dt) {
         m_ShakeAngle = (uint16_t)((int)m_ShakeAngle + (int)(wobble * 100.0f));
         (void)wobble;
     }
+
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: Update tail calls BuildBonusText
+    // when m_bSkipIntro is set (create-once: boxes are null-checked inside BuildBonusText).
+    if (m_bSkipIntro) {
+        BuildBonusText();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -272,8 +415,11 @@ void BonusScreen::Update(float dt) {
 
 // v1.6.1 @0x0016492c
 void BonusScreen::Draw(float* hudScaleRaw) {
-    // Apply m_AnimPos to position before base draw.
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c: saves pos at entry @0x0016494c,
+    // restores at exit @0x00164e38. The per-award loop steps pos.y by -42 each row.
     Vec3 savedPos = pos;
+
+    // Apply m_AnimPos to position before base draw.
     pos.x += m_AnimPos.x;
     pos.y += m_AnimPos.y;
     pos.z += m_AnimPos.z;
@@ -281,11 +427,41 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // Base box draw (HUDControl3d::Draw handles the dialog background via m_Texture@0x74).
     HUDControl3d::Draw(hudScaleRaw);
 
-    // Restore position.
+    // Restore pos to original (no AnimPos) for all text/award draws below.
     pos = savedPos;
 
-    // Per-award rendering.
-    // TODO: v1.6.1 0x00164b64 -- per-award reveal spacing (gate on m_Timer); draw all for now.
+    // -----------------------------------------------------------------------
+    // Pre-loop draws: score counter + title band (un-stepped pos).
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c
+    // -----------------------------------------------------------------------
+
+    // m_ScoreBox: pos + (105, 51, 0). Text = m_TotalScore each frame.
+    if (m_ScoreBox) {
+        char scoreBuf[16];
+        snprintf(scoreBuf, sizeof(scoreBuf), "%i", m_TotalScore);
+        m_ScoreBox->SetText(scoreBuf);
+        m_ScoreBox->SetTranslation(
+            Vec3(pos.x + 105.0f, pos.y + 51.0f, pos.z),
+            1
+        );
+        m_ScoreBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // m_TotalBox: pos + (75, -128, 0).
+    if (m_TotalBox) {
+        m_TotalBox->SetTranslation(
+            Vec3(pos.x + 75.0f, pos.y - 128.0f, pos.z),
+            1
+        );
+        m_TotalBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // Per-award loop: star + label + value. pos.y steps -42 each row.
+    // TODO: v1.6.1 0x00164b64 -- reveal gate: `if (m_Timer - 0.666 < i*0.6) break`.
+    //   For stable screenshot, draw all rows (no gate).
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c
+    // -----------------------------------------------------------------------
     MatrixManager& mm = MatrixManager::GetInstance();
     for (int i = 0; i < (int)m_Awards.size(); ++i) {
         const BonusAwardHud& entry = m_Awards[i];
@@ -299,8 +475,12 @@ void BonusScreen::Draw(float* hudScaleRaw) {
 
             entry.m_StarTex->SetUnCached();
 
+            // ASM-verified: 2026-06-26 v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector)
+            // star corner = pos - 35*UnitX (literal 35.0 @0x164dd0), NOT pos. With the
+            // ~33px bonus_icon this places the icon as a leading bullet at [pos.x-35, pos.x-2],
+            // just left of the name (origin pos.x-2). Prior RE missed the -35 term.
             Matrix44 mat = Matrix44::Scale44(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
-            mat.GlobalTranslate44(pos);
+            mat.GlobalTranslate44(Vec3(pos.x - 35.0f, pos.y, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
 
@@ -309,8 +489,36 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             entry.m_StarTex->UnSetUnCached();
         }
 
-        // TODO: v1.6.1 0x0016492c (BonusScreen::Draw) -- label/value/score text boxes
-        //   (blocked on #212: BakedStringBox builds unimplemented)
-        (void)entry;
+        // m_RankLabelBoxes[i]: pos + (-2, 6, 0), colour = award.m_Colour, alpha 1.0.
+        if (i < 3 && m_RankLabelBoxes[i]) {
+            m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
+            m_RankLabelBoxes[i]->SetTranslation(
+                Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
+                1
+            );
+            m_RankLabelBoxes[i]->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        }
+
+        // m_RankValueBoxes[i]: pos + (220, 5, 0), colour = award.m_Colour, alpha = award.m_Alpha.
+        // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c: m_RankValueBoxes[i] = pos+(220,5,0).
+        // Binary Vec3 @0x164d40, literal 220.0f @0x164dd4.
+        // TODO: SetTranslation param_2 binary=0 port=1 (v1.6.1 BonusScreen::Draw @0x0016492c)
+        if (i < 3 && m_RankValueBoxes[i]) {
+            Colour valueColour = entry.m_Colour;
+            valueColour.a = (unsigned char)(entry.m_Alpha * 255.0f > 255.0f ? 255 :
+                            (entry.m_Alpha * 255.0f < 0.0f ? 0 : entry.m_Alpha * 255.0f));
+            m_RankValueBoxes[i]->SetColour(valueColour, 0);
+            m_RankValueBoxes[i]->SetTranslation(
+                Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
+                1
+            );
+            m_RankValueBoxes[i]->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        }
+
+        // Row step: pos.y -= 42 at loop tail.
+        pos.y += -42.0f;
     }
+
+    // Restore pos to saved value (binary restores @0x00164e38).
+    pos = savedPos;
 }
