@@ -10,6 +10,7 @@
 //   gameover       -- Classic-mode GameOverScreen in STATE_MAIN_DISPLAY, score 123.
 //   gameover_zen   -- Zen-mode GameOverScreen, best combo of 4 fruit seeded.
 //   gameover_arcade -- Arcade-mode GameOverScreen, 2 bonus rows seeded.
+//   mesh           -- 3D fruit mesh (apple_single.mmd) rendered in isolation.
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
@@ -27,9 +28,13 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Texture.h"
 #include "engine/asset/Mesh.h"
+#include "engine/asset/MeshManager.h"
+#include "engine/asset/Model.h"
 #include "engine/render/MatrixStack.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/util/StringTable.h"
+#include "engine/math/Quaternion.h"
+#include "engine/math/math3d.h"
 #include <cstring>
 
 // ---------------------------------------------------------------------------
@@ -40,6 +45,7 @@ static int RunGameOver(fn::TestHarness& h);
 static int RunGameOverZen(fn::TestHarness& h);
 static int RunGameOverArcade(fn::TestHarness& h);
 static int RunDrawQuad(fn::TestHarness& h);
+static int RunMesh(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
 // Dispatch table.
@@ -55,6 +61,7 @@ static const ScreenCase kScreens[] = {
     { "gameover_zen",    RunGameOverZen    },
     { "gameover_arcade", RunGameOverArcade },
     { "drawquad",        RunDrawQuad       },
+    { "mesh",            RunMesh           },
     // TODO: fixture for shop
     { NULL, NULL }
 };
@@ -65,7 +72,7 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus gameover gameover_zen gameover_arcade drawquad\n");
+        "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh\n");
     return 1;
 }
 
@@ -524,5 +531,110 @@ done:
     }
 
     std::printf("PASS: drawquad complete (texValid=%d)\n", (int)tex.IsValid());
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Mesh fixture -- renders a single 3D fruit mesh (apple_single.mmd) in
+// isolation, exercising the 3D Geometry::Render path (Model::Draw ->
+// Mesh::Draw -> Geometry::Render), separate from the 2D quad path.
+//
+// No live Fruit entity or physics state needed. MeshManager::Load is called
+// directly; if the model is already cached from the burn-in it returns the
+// cached SmartPtr.
+//
+// Camera replicates FruitCamera::SetupPerspective (v1.6.1 @0x001810ac):
+//   SetupLookAt(eye=(0,0,1), upHint=(0,1,0), target=(0,0,0))
+//   SetupOrtho(160, -160, -240, 240, 2000, -6000)
+//   (despite the name, FruitCamera::SetupPerspective uses ortho -- ASM-verified)
+//
+// World transform replicates DrawOneModel in Fruit.cpp (v1.6.1 @0x00179216):
+//   MakeScale(s,s,s) -> rotate by quaternion -> GlobalTranslate44(pos)
+//   Apple scale: fruitlist.xml scale="60" -> s = 60 * 0.01 = 0.60f
+//   Apple Z: GetFruitZPosition initial value = -500.0f (Fruit.cpp @0x00169108)
+//   Tilt: 45-degree Y-axis rotation so 3D form is visible (not a flat disc)
+//
+// Depth test: GameDraw enables SetDepthBuffer(1)+SetDepthBufferWrite(1) before
+//   ActorManager::Draw (@0x0016ba10). BeginFrame disables it. We replicate that
+//   sequence so GL_LESS depth test orders front/back faces correctly.
+// ---------------------------------------------------------------------------
+static int RunMesh(fn::TestHarness& h) {
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    if (!meshMgr) {
+        std::fprintf(stderr, "FAIL: mesh -- MeshManager singleton is null\n");
+        return 1;
+    }
+
+    Mortar::SmartPtr<Mortar::Model> model = meshMgr->Load("models/fruit/apple_single.mmd");
+    if (!model.IsValid()) {
+        std::fprintf(stderr, "FAIL: mesh -- apple_single.mmd load failed\n");
+        return 1;
+    }
+
+    std::printf("[mesh] apple_single.mmd loaded (nodes=%d)\n", model->NodeCount());
+
+    // Apple scale from fruitlist.xml (scale="60"): s = 60 * 0.01 = 0.60f.
+    // Matches Fruit::Init -> SetFruitType path: scale = Vec3::One() * (m_Scale * 0.01f).
+    // Apple collision radius = 5 + 0.52*60 = 36.2 ortho units -- reasonable for the
+    // 160-unit half-height of the game ortho.
+    const float kAppleScale = 0.60f;
+
+    // 45-degree Y-axis tilt so the 3D form is visible rather than a flat disc.
+    Quaternion rot = Quaternion::FromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), 0.7854f /* pi/4 */);
+
+    // Replicate DrawOneModel (Fruit.cpp @0x00179216):
+    //   mat = MakeScale(s,s,s)
+    //   mat = quat.ToMatrix44() * mat   (rotation applied after scale)
+    //   mat.GlobalTranslate44(pos)
+    Matrix44 world = Matrix44::MakeScale(kAppleScale, kAppleScale, kAppleScale);
+    {
+        Matrix44 qmat = rot.ToMatrix44();
+        float temp[16];
+        mat4_multiply(temp, qmat.ptr(), world.ptr());
+        for (int i = 0; i < 16; ++i) world.m[i] = temp[i];
+    }
+    // Z = -500 is the initial GetFruitZPosition value (Fruit.cpp s_FruitZCounter init).
+    // In ortho this doesn't affect apparent size but puts the fruit within
+    // the near/far range [2000, -6000] used by the game camera.
+    world.GlobalTranslate44(Vec3(0.0f, 0.0f, -500.0f));
+
+    for (int i = 0; i < 5; ++i) {
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) {
+            if (ev.type == SDL_QUIT) goto mesh_done;
+        }
+
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(h.window), &ww, &wh);
+        glViewport(0, 0, ww, wh);
+
+        // BeginFrame disables depth test. Re-enable it exactly as GameDraw does
+        // before ActorManager::Draw (binary @ 0x0016ba10).
+        Mortar::DisplayManager::GetInstance().BeginFrame();
+        Mortar::DisplayManager::GetInstance().SetDepthBuffer(true);
+        Mortar::DisplayManager::GetInstance().SetDepthBufferWrite(true);
+
+        {
+            MatrixManager& mm = MatrixManager::GetInstance();
+            // Replicate FruitCamera::SetupPerspective (v1.6.1 @0x001810ac):
+            //   eye=(0,0,1) target=(0,0,0) up=(0,1,0)
+            //   SetupOrtho(160, -160, -240, 240, 2000, -6000)
+            mm.SetupLookAt(Vec3(0.0f, 0.0f, 1.0f),
+                           Vec3(0.0f, 1.0f, 0.0f),
+                           Vec3(0.0f, 0.0f, 0.0f));
+            mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+            // Model::Draw(const Matrix44&) -- same call as DrawOneModel in Fruit.cpp.
+            model->Draw(world);
+        }
+
+        SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
+    }
+
+mesh_done:
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng("mesh")) return 3;
+    }
+
+    std::printf("PASS: mesh complete\n");
     return 0;
 }
