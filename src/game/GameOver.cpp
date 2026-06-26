@@ -7,6 +7,8 @@
 #include "screens/GameOverScreen.h"
 #include "hud/HUD.h"
 #include "engine/util/StringHash.h"
+#include "ScoreDelegate.h"
+#include "PowerUpManager.h"
 
 #include <algorithm>
 #include <ctime>
@@ -83,12 +85,20 @@ void GameOver(int endReason, float endScore, int endParam) {
     }
 }
 
-// 0x0010a7ac
-// TODO: implement scoreDelegate.Call + tier SFX when delegate is ported.
+// ASM-spec v1.6.1 AddToCurrentScore @0x0011a4c0
+// Binary order: GetScoreMultiplyer(0) @0x0011a4f0, g_ScoreDelegate call @0x0011a504,
+// add to currentScore @0x0011a510, clamp-to-zero @0x0011a518/0x0011a520/0x0011a524.
+// GetScoreMultiplyer returns PowerUpManager::GetScoreGainMultiplier() (default 1),
+// so normal fruit gains are unchanged. DefaultScoreDelegate multiplies negative
+// deltas by GetScoreLossMultiplier() so bomb penalty magnitude is delegate-controlled.
+// TODO: v1.6.1 @0x0011a4c0 tail -- NEW_LIFE_AT extra-life miss-restore + AddToTotal("all")/upside_down stat + P2P PointsPacket (out of scope, defunct P2P)
 void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param3*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    game_work.currentScore += points;
+    int mult  = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
+    int delta = g_ScoreDelegate(points * mult);
+    game_work.currentScore += delta;
+    if (game_work.currentScore < 0) game_work.currentScore = 0;
 }
 
 // Binary free functions @ 0x001138f0 / 0x001151ec.
