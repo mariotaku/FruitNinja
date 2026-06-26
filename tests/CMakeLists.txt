@@ -1,6 +1,17 @@
 # tests/CMakeLists.txt -- minimal ctest registration.
 
 # ---------------------------------------------------------------------------
+# fn_png_impl: single-TU that provides FN_PNG_WRITE_IMPLEMENTATION so that
+# the encoder in tests/third_party/fn_png_write.h is linked once into every
+# game-test executable via fn_add_game_test. Keeps the implementation define
+# out of test_harness.h (which is a header-only include in many TUs).
+# ---------------------------------------------------------------------------
+add_library(fn_png_impl OBJECT fn_png_impl.cpp)
+target_include_directories(fn_png_impl PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+# ---------------------------------------------------------------------------
 # Helper macro: fn_add_game_test
 #
 # Registers an executable that links against fruit-ninja-game, SDL2::SDL2main,
@@ -21,7 +32,7 @@
 # links OpenGL::GL on non-WIN32 for consistency).
 # ---------------------------------------------------------------------------
 macro(fn_add_game_test _target _source)
-    add_executable(${_target} ${_source})
+    add_executable(${_target} ${_source} $<TARGET_OBJECTS:fn_png_impl>)
 
     target_include_directories(${_target} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
@@ -340,3 +351,10 @@ set_tests_properties(wave_timeline_combo   PROPERTIES TIMEOUT 90)
 fn_add_game_test(test_global_probability test_global_probability.cpp)
 add_test(NAME global_probability COMMAND test_global_probability)
 set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
+
+# Golden-screenshot driver. Boots a named screen to its stable fully-drawn
+# state and captures the framebuffer to tmp/test/screenshots/<screen>_screen.png.
+# Each ctest entry runs with --screenshot so the PNG is written automatically.
+fn_add_game_test(test_screenshot test_screenshot.cpp)
+add_test(NAME screenshot_bonus COMMAND test_screenshot bonus --screenshot)
+set_tests_properties(screenshot_bonus PROPERTIES TIMEOUT 60)

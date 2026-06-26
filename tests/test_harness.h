@@ -37,13 +37,20 @@
 #include "Game.h"
 #include "engine/audio/SoundManager.h"
 #include "game/GameWork.h"
+#include "hud/HUD.h"
+#include "hud/HUDControl.h"
+#include "hud/HUDLayer.h"
+#include "render/MatrixManager.h"
+#include "render/DisplayManager.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <list>
 #include <sys/stat.h>
 #ifdef _WIN32
 #  include <direct.h>
 #endif
+#include "third_party/fn_png_write.h"
 
 // glReadPixels isn't in the thin gl_funcs.h wrapper -- pull via
 // SDL_GL_GetProcAddress so we don't need to link opengl32 statically.
@@ -69,6 +76,7 @@ struct TestHarness {
           initFrames(5),
           frames(-1),
           m_interactiveDefault(false),
+          m_componentMode(false),
           m_glReadPixels(NULL)
     {
         setvbuf(stdout, NULL, _IONBF, 0);
@@ -195,6 +203,136 @@ struct TestHarness {
         return true;
     }
 
+    // -------- Component-isolation mode --------
+    //
+    // InitComponent() boots SDL+GL+game.init() identically to Init(), then
+    // strips the HUD so NO game-state drawing happens by default. The caller
+    // adds only the component under test before calling RunComponentHeadless.
+    //
+    // This suppresses the full GameTaskDraw / GameDraw path (background tex,
+    // 3D actors, particles, slashes, MainScreen logo/shade, etc.) and renders
+    // ONLY what the caller explicitly puts into the isolated HUD, on a clean
+    // clear-colour background.
+    //
+    // How it works:
+    //   1. game.init() as normal (boots game, runs initFrames burn-in so HUD is live).
+    //   2. Clear game_work.mHud->controls -- removes MainScreen and all other
+    //      controls the game boot added, WITHOUT deleting them (m_bNoDestructor guard).
+    //   3. Set m_componentMode=true so RunComponentHeadless uses its own frame loop.
+    //
+    // The existing RunHeadless / RunInteractive paths are NOT affected; they call
+    // game.runFrames() which calls the full GameTaskDraw as before.
+    bool InitComponent() {
+        if (!Init()) return false;
+        m_componentMode = true;
+
+        // Strip the game-state controls from mHud. Mark each control with
+        // m_bNoDestructor=1 before clearing so HUD::Release doesn't free them
+        // (they're owned by the game subsystems, not by us). We just want the
+        // draw list empty so RunComponentHeadless sees a blank canvas.
+        int stripped = 0;
+        if (game_work.mHud) {
+            std::list<HUDControl*>& ctrls = game_work.mHud->controls;
+            for (std::list<HUDControl*>::iterator it = ctrls.begin();
+                 it != ctrls.end(); ++it) {
+                if (*it) { (*it)->m_bNoDestructor = 1; ++stripped; }
+            }
+            ctrls.clear();
+        }
+        std::printf("[%s] component mode: HUD cleared (%d controls stripped)\n",
+                    label, stripped);
+        return true;
+    }
+
+    // Run n frames in component-isolation mode. Each frame:
+    //   - DisplayManager::BeginFrame (GL clear)
+    //   - MatrixManager::SetupOrtho (same ortho as the HUD path in FruitCamera)
+    //   - mHud->BeginDraw(dt) + mHud->Draw(layerMask) -- draws only what the
+    //     caller added to mHud
+    //   - SDL_GL_SwapWindow
+    //
+    // dt is fixed at 1/60 per frame (matches binary fixed-step timing).
+    // layerMask defaults to all layers so any HUDControl layer is drawn.
+    //
+    // Does NOT call game.stepUpdate() so the game state machine does not run.
+    void RunComponentHeadless(int n, int layerMask = 0x7FFFFFFF) {
+        static const float kDt = 1.0f / 60.0f;
+        for (int i = 0; i < n; ++i) {
+            // Drain quit events so the window close button works in interactive use.
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_QUIT) return;
+            }
+
+            int ww = 0, wh = 0;
+            SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+            glViewport(0, 0, ww, wh);
+
+            // Clear to the game's default clear colour (black).
+            Mortar::DisplayManager::GetInstance().BeginFrame();
+
+            // Set up the same ortho projection the HUD path uses.
+            // Matches FruitCamera::SetupPerspective(PT_STANDARD) ortho branch
+            // and Renderer::SetupOrtho.
+            MatrixManager::GetInstance().SetupOrtho(
+                160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+
+            // Drive the component: Update propagates animation state (phase
+            // timers, per-award scales, score counters), then Draw renders it.
+            // HUD::Update may mark controls for removal (m_bPendingRemoval) and
+            // delete them -- callers that want to hold a screen past its dismiss
+            // point should suppress m_bPendingRemoval before each call.
+            if (game_work.mHud) {
+                game_work.mHud->Update(kDt);
+                game_work.mHud->BeginDraw(kDt);
+                game_work.mHud->Draw(layerMask);
+            }
+
+            SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+        }
+    }
+
+    // Interactive component-isolation loop. ESC / close exits. on_tick runs
+    // once per frame before the component draw. layerMask defaults to all layers.
+    void RunComponentInteractive(OnTickFn on_tick, void* userdata = NULL,
+                                 int maxFrames = -1,
+                                 int layerMask = 0x7FFFFFFF) {
+        static const float kDt = 1.0f / 60.0f;
+        int frame = 0;
+        bool running_ = true;
+        while (running_) {
+            if (maxFrames >= 0 && frame >= maxFrames) break;
+            if (on_tick && !on_tick(game, frame, userdata)) break;
+
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_QUIT) { running_ = false; break; }
+                if (ev.type == SDL_KEYDOWN &&
+                    ev.key.keysym.sym == SDLK_ESCAPE) { running_ = false; break; }
+            }
+            if (!running_) break;
+
+            int ww = 0, wh = 0;
+            SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+            glViewport(0, 0, ww, wh);
+
+            Mortar::DisplayManager::GetInstance().BeginFrame();
+            MatrixManager::GetInstance().SetupOrtho(
+                160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+
+            if (game_work.mHud) {
+                game_work.mHud->Update(kDt);
+                game_work.mHud->BeginDraw(kDt);
+                game_work.mHud->Draw(layerMask);
+            }
+
+            SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+            SDL_Delay(16); // ~60 Hz pace for interactive viewing
+            ++frame;
+        }
+        std::printf("[%s] component interactive exit after %d frames\n", label, frame);
+    }
+
     // -------- run --------
     void RunHeadless(int frames) {
         for (int i = 0; i < frames; ++i) game.runFrames(1);
@@ -256,6 +394,46 @@ struct TestHarness {
         return true;
     }
 
+    // Writes tmp/test/screenshots/<label>.png (RGB, top-down flip applied).
+    // Returns true on success. Creates the output directory if missing.
+    bool ScreenshotPng(const char* nameOverride = NULL) {
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        unsigned char* pixels = (unsigned char*)std::malloc((size_t)ww * wh * 3);
+        if (!pixels) return false;
+        if (!m_glReadPixels) {
+            m_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
+        }
+        if (!m_glReadPixels) {
+            std::fprintf(stderr, "[%s] glReadPixels unavailable\n", label);
+            std::free(pixels);
+            return false;
+        }
+        const unsigned int GL_RGB_           = 0x1907;
+        const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
+        m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, pixels);
+
+#ifdef _WIN32
+        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
+#else
+        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
+#endif
+        char path[256];
+        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.png",
+                      nameOverride ? nameOverride : label);
+        // pixels from glReadPixels are bottom-up; pass top_down=0 so the
+        // encoder flips rows, producing a correct top-down PNG.
+        int rc = fn_png_write_rgb(path, pixels, ww, wh, /*top_down=*/0);
+        if (rc != 0) {
+            std::fprintf(stderr, "[%s] fn_png_write_rgb failed (rc=%d)\n", label, rc);
+            std::free(pixels);
+            return false;
+        }
+        std::printf("[%s] wrote %s (%dx%d)\n", label, path, ww, wh);
+        std::free(pixels);
+        return true;
+    }
+
     // Pixel readback for assertion-style checks. Caller manages pixels buffer.
     // Returns (ww * wh * 3)-byte RGB buffer or NULL. Caller free()s.
     unsigned char* ReadPixels(int* outW, int* outH) {
@@ -306,6 +484,10 @@ struct TestHarness {
 
 private:
     bool m_interactiveDefault;
+    // Set by InitComponent(); signals that the HUD was cleared for isolation mode.
+    // Informational only -- the actual isolation is enforced by not calling
+    // game.runFrames() in RunComponentHeadless.
+    bool m_componentMode;
     // Per-instance glReadPixels pointer. Loaded lazily via
     // SDL_GL_GetProcAddress on first use; cached for subsequent calls.
     PFN_glReadPixels m_glReadPixels;
