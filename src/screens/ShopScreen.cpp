@@ -781,8 +781,13 @@ void ShopScreen::Update(float dt) {
     // Increment unconditionally (binary: (g_ShopSelCounter+1) % 10 every frame)
     g_ShopSelCounter = (g_ShopSelCounter + 1) % 10;
 
-    // Sync layer flags from alt (binary copies field_0x80 to field_0x34 each frame)
-    m_LayerFlags = (uint32_t)m_LayerFlagsAlt;
+    // Binary @ 0x001b321c ShopScreen::Update: *(this+0x34) = *(this+0x80) | 1
+    // The |1 ensures m_LayerFlags always has the DEFAULT pass bit set so the ring
+    // (Block B, which uses `layerMask != m_LayerFlagsAlt`) can also run in the
+    // default pass. Without |1 the ring is invisible when m_LayerFlagsAlt==0x80
+    // and the HUD dispatches a separate 0x01 call.
+    // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: +0x34 = m_LayerFlagsAlt | 1
+    m_LayerFlags = (uint32_t)m_LayerFlagsAlt | 1u;
 
     switch (m_State) {
 
@@ -1114,18 +1119,21 @@ void ShopScreen::Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::Draw(float*) @ 0x001b4e48
+// ShopScreen::DrawOrder(float*, int) @ 0x001b4e48
 //
 // Top-level control flow (binary-faithful):
-//   if (m_LayerFlags == m_LayerFlagsAlt)  -> Block A (one-shot BG + dialog)
-//   elif (m_AnimFrame > 0)                -> Block B (pulsing ring, every frame)
-//   else                                  -> return
+//   if (layerMask == m_LayerFlagsAlt)  -> Block A (BG + dialog; the alt-layer pass)
+//   else if (m_AnimFrame > 0)          -> Block B (pulsing ring; the default pass)
+//   else                               -> return
 //
-// NOTE: the binary does NOT use the standard (layerMask & m_LayerFlags) == 0
-// early-return. The `layers` parameter is loaded but discarded. The port
-// replicates the actual guard exactly.
+// The binary reads the layerMask parameter and compares it to m_LayerFlagsAlt;
+// it NEVER writes m_LayerFlags inside DrawOrder. The self-mutating latch
+// (`m_LayerFlags = HUD_LAYER_DEFAULT`) was a port-only fabrication that caused
+// a 1-frame BG skip on touch-down (splat toggles m_LayerFlagsAlt -> latch desyncs).
+// Fix: compare layerMask to m_LayerFlagsAlt (stateless, like the binary).
+// ASM-spec v1.6.1 ShopScreen::DrawOrder @0x001b4e48: param == m_LayerFlagsAlt gates Block A.
 // ---------------------------------------------------------------------------
-void ShopScreen::Draw(float* /*hudScaleRaw*/) {
+void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     // Static dial_alpha lives at static_block+0x84 in the binary (BSS).
     // Port uses a function-local static — same lifetime (process lifetime).
     static float s_DialAlpha = 0.0f;  // static_block+0x84
@@ -1142,15 +1150,16 @@ void ShopScreen::Draw(float* /*hudScaleRaw*/) {
     const Colour colourWhite(255, 255, 255, 255);  // DAT_0015e08c = 0x000073a4 GOT entry
 
     // -----------------------------------------------------------------------
-    // Guard: replicate the binary's structural flag check.
+    // Block A gate: binary compares the passed layerMask to m_LayerFlagsAlt.
+    // Runs when HUD dispatches the alt-layer pass (0x40 or 0x80).
+    // ASM-spec v1.6.1 ShopScreen::DrawOrder @0x001b4e48: param == m_LayerFlagsAlt
     // -----------------------------------------------------------------------
-    if (m_LayerFlags == (uint32_t)m_LayerFlagsAlt) {
+    if (layerMask == (int)m_LayerFlagsAlt) {
         // ===================================================================
-        // Block A — one-shot BG + dialog box (0x0015ded8 .. 0x0015e1cd)
-        // First action: mark Block A as done so next frame falls to Block B.
-        // Binary: this->m_LayerFlags = 1  at 0x0015dee6
+        // Block A — BG + dialog box (0x001b4f58 .. 0x001b52cd)
+        // Binary does NOT write m_LayerFlags here; the gate is purely
+        // based on the passed layerMask each call.
         // ===================================================================
-        m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
         const float alpha = m_TransitionAlpha;
 
@@ -1316,8 +1325,11 @@ void ShopScreen::Draw(float* /*hudScaleRaw*/) {
     }
 
     // -----------------------------------------------------------------------
-    // Block B — Animated selection ring  (0x0015dd78..0x0015ded4)
-    // Trigger: m_LayerFlags != m_LayerFlagsAlt  AND  m_AnimFrame > 0
+    // Block B — Animated selection ring  (0x001b4e78..0x001b4f54)
+    // else if (m_AnimFrame > 0): only runs on the non-alt pass (layerMask != m_LayerFlagsAlt).
+    // Binary: `else if (0 < m_AnimFrame)` -- mirrors the `else if` by falling through
+    // from Block A's return and gating on AnimFrame here.
+    // ASM-spec v1.6.1 ShopScreen::DrawOrder @0x001b4e48: else if (0 < m_AnimFrame)
     // -----------------------------------------------------------------------
     if (m_AnimFrame <= 0) return;
 
