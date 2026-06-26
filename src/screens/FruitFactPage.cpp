@@ -1,6 +1,6 @@
 // FruitFactPage -- base class for v1.6.1 fruit-fact "page book" pages.
 // Binary refs (v1.6.1): ctor 0x0017c214, dtor 0x0017d030, etc.
-// NOTE: v1.6.1 addresses; current port targets v1.5.1 binary.
+// NOTE: v1.6.1 addresses; port targets v1.6.1 binary.
 
 #include "FruitFactPage.h"
 #include "hud/FruitFactPageControl.h"

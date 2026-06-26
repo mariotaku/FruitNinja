@@ -27,8 +27,7 @@
 //   +0x94        : FruitFactPageControl* m_pController  (word 0x25)
 //   Total: at least 0x98
 //
-// NOTE: these are v1.6.1 addresses. The current port targets v1.5.1;
-// address spaces differ. This stub is added for compile-clean call-graph
+// NOTE: v1.6.1 addresses. This stub is added for compile-clean call-graph
 // completeness.
 //
 
