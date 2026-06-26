@@ -8978,5 +8978,311 @@
     "reason": "FALSE POSITIVE (re-analyst #90c, 2026-06-21): the SetGradient .cpp is already correct (rewritten + ASM-verified 2026-06-13): 4-byte Colour-word storage + change-detection at m_FillTop@0x7C/m_FillBottom@0x80/m_ColourMode@0x8C/m_MetallicFlag@0x90. The 'byte storage at ~0x4D' evidence does not match current source. Only divergence: the port omits the binary's perGlyph!=0 immediate FancyBakedString::ApplyGradient branch (port re-applies in Draw) -- intentional port-specific (no FancyBakedString). Header-comment offsets corrected + DIFFERS marker added in src.",
     "asm_hash": "57dade4603a2e833",
     "decided_at": "2026-06-21T00:00Z"
+  },
+  "_Z22RegisterSocialNetworksv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: social sharing -- no-op stub; src/game/Social.cpp:12. Port body is empty; binary tail-calls social registration logic.",
+    "asm_hash": "133484e3d366431f",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl16CancelNewsRenderEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: online News -- no-op stub; src/game/FruitNinjaNewsControl.cpp:24. Port body is empty; binary tail-calls news render cancel.",
+    "asm_hash": "133484e3d366431f",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z18UserChoseOpenFeinti": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: OpenFeint -- no-op stub; src/engine/network/OpenFeint.cpp:10. Binary sets mov r0=1 and tail-calls; port body is empty.",
+    "asm_hash": "01e35816958c6407",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z19UserChoseGameCenteri": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: GameCenter -- no-op stub; src/engine/network/OpenFeint.cpp:18. Binary sets mov r0=2 and tail-calls; port body is empty.",
+    "asm_hash": "7537d588a7ebb67b",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z14BuyMonsterDashv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: IAP -- no-op stub; src/game/Licensing.cpp:19. Binary loads float+int id=11 and tail-calls Bada IAP; port body is empty.",
+    "asm_hash": "f8ba111828c820d8",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z6BuyAOZv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: IAP -- no-op stub; src/game/Licensing.cpp:15. Binary loads float+int id=10 and tail-calls Bada IAP; port body is empty.",
+    "asm_hash": "6038da1fd3106ef7",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl11IsValidCharEc": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: online News -- no-op stub returning false; src/game/FruitNinjaNewsControl.cpp:101. Binary has full multi-branch char-set validation tree.",
+    "asm_hash": "232d255a1bf4528a",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z27GetCurrentModeLeaderboardIDi": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: online leaderboard -- no-op stub; src/game/Leaderboard.cpp:5. Port returns 0; binary does mode-indexed table lookup.",
+    "asm_hash": "d5862ffb4ae37b1d",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z11CoinArrivedP4Coin": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines AddCoins (game_work[+0x20]+=delta; if>0 game_work[+0x24]+=delta) matching Coin.cpp:63 spec. Binary tail-calls AddCoins. Same semantics.",
+    "asm_hash": "68c9e5f4a64927cc",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z16GetLeaderboardIDii": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: online leaderboard -- no-op stub; src/game/Leaderboard.cpp:10. Port returns 0; binary does 2D table lookup.",
+    "asm_hash": "8fddd916cf5a066f",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN8BSButton10SetTextureEN6Mortar8SmartPtrINS0_7TextureEEEb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port expands SmartPtr refcount inline (inc new ref, dec old, delete-if-zero); binary delegates via single CALL. Structurally different but semantically equivalent.",
+    "asm_hash": "6d81173f2c774117",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar11InputDeviceD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port expands InputDevice list-removal logic before parent dtor call; binary is more direct. Consistent with InputDevice registration system not fully ported.",
+    "asm_hash": "6832df64b408539c",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox11SetFontSizeEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "BakedStringBox layout need not match binary (src/engine/render/BakedStringBox.h:9). Port stores m_FontSize at +4 vs binary +76; port also updates m_BaseFontSize at +8. See TODO at BakedStringBox.cpp:846.",
+    "asm_hash": "46f5e7df21206e73",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN16FruitFactZenPage13UnloadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port expands two SmartPtr::Release calls inline (refcount decrement + conditional free + dtor dispatch) where binary uses CALL. Structurally different but semantically equivalent.",
+    "asm_hash": "eed855dc79e0a2dd",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Colour4LerpES_S_f": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port uses ubfx/bfi packed-int extraction; binary uses ldrb/strb byte-by-byte. Same 4-channel RGBA lerp result. Port vcmpe/#0 clamp before uxtb has no effect on valid 0-255 lerp output.",
+    "asm_hash": "3f5f4fb7b4ce6652",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar15GeometryBindingC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary ctor zeroes fields #4-#28, #56-#72; port only zeroes #0,#68,#72. TODO at src/engine/asset/Geometry.cpp:22: re-verify v1.6.1 addr for GeometryBinding ctor.",
+    "asm_hash": "49640a87ec962949",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar15GeometryBindingC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Same as C1Ev: binary zeroes many fields; port only zeroes #0,#68,#72. TODO at src/engine/asset/Geometry.cpp:22.",
+    "asm_hash": "49640a87ec962949",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z20PrepareForLevelStartv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Binary has ldr [game_work,#32]; str [game_work,#40] copy BEFORE WaveManager::Reset -- entirely missing from port (src/game/StartupEffects.cpp:84). Pre-level field snapshot (likely coins or score init). Needs RE to identify game_work fields at +0x20/+0x28.",
+    "asm_hash": "5070b5d19321fb02",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z11ParseColourR6ColourPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port uses incremental ldrb byte scan; binary uses bulk ldm/stm + index arithmetic. Different iteration strategy, same parse result. No missing operation identified.",
+    "asm_hash": "49909a9e38286382",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZNK6Colour8ToStringEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Different register assignment for r/g/b/a bytes before snprintf. Binary loads via str+ldm; port uses ldrb + separate regs. Minor stack size difference. Semantics appear equivalent.",
+    "asm_hash": "1ba5de4ab985e100",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z12CompareWordsPKcS0_": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Scheduling reorder of null checks. Binary checks first arg before second; port uses cmpne to combine. Same early-return semantics before strcasecmp call.",
+    "asm_hash": "b762cb848041d945",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z19RegressMenuCallbackP10InputEvent": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds null guard before strb [#1552]; binary writes unconditionally. Defensive addition; no semantic difference in non-null path.",
+    "asm_hash": "2d7e548c6cd49c40",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z23SetCurrentModeHighscorei": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port delegates high-score array indexing to FruitSaveData::SetCurrentModeHighscore; binary inlines the add+ldr+cmp+strgt logic. Adds null checks. Semantics should match if FruitSaveData::SetCurrentModeHighscore is correct.",
+    "asm_hash": "47c1455afb03a9ee",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar11InputDeviceD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port expands InputDevice list-removal before parent dtor; binary is direct. Same structural gap as D0Ev.",
+    "asm_hash": "f12b78d692731562",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar11InputDeviceD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port expands InputDevice list-removal before parent dtor; binary is direct. Same structural gap as D0Ev.",
+    "asm_hash": "f12b78d692731562",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN16TimeSinkModifier17ScoreNotificationEii": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds null guard for game_work.mCountDown before calling AddTime; binary calls unconditionally. Defensive guard; no semantic difference during gameplay.",
+    "asm_hash": "397b13504ecbdde3",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z15BadaPurchaseAppv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Defunct: Bada IAP -- no-op stub; src/game/Licensing.cpp:11. Binary sets r0=1 (returns true); port has empty body.",
+    "asm_hash": "8c048f98e3ca176c",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z17PointerUpCallbackP10InputEvent": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds null guard before strb [#162]/[#161] writes; binary writes unconditionally. Same writes in same order after guard.",
+    "asm_hash": "7bd235117c94777c",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN17SuperFruitControl21SpawnFinalPomegranateEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port adds null checks on SpawnFruit results and SaveData; binary is more direct. Extra conditional around stat AddToTotal. Consistent with incomplete SuperFruitControl port.",
+    "asm_hash": "728732c78cbab1cd",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z19PointerDownCallbackP10InputEvent": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds null guard before strb [#162]/[#160]; binary writes unconditionally. Defensive addition; no semantic change on non-null path.",
+    "asm_hash": "09d1c38c29050be1",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar9Texture2DC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary stores vtable/parent chain fields at #60-#80; port stores at #56-#80 with extra str [#56]. Likely Texture2D vtable offset shift by one slot. Needs verify against binary layout.",
+    "asm_hash": "eb00d0dbbf50b875",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar9Texture2DC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Same as C1Ev: binary stores at #60-#80; port at #56-#80 with extra str [#56]. Likely Texture2D vtable offset shift.",
+    "asm_hash": "eb00d0dbbf50b875",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZNK6Mortar4Bada14Texture2D_Bada7GetHashEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Load [GREG,#96] moved before push vs after. Scheduling reorder; same value and same cmp/branch targets. Semantics identical.",
+    "asm_hash": "901245a0fbee046c",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z12SetMissCountii": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds Game::GetInstance() null guard before strb game_work.missCount [+20]; binary writes unconditionally. Same offset +20. Defensive guard.",
+    "asm_hash": "de0936d2ffc28f46",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z8SetScoreii": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds Game::GetInstance() null guard before str game_work.currentScore [+24]; binary writes unconditionally. Same offset +24. Defensive guard.",
+    "asm_hash": "6a50cf01d63d89d5",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z13UpdateBombHitf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port reorders two float comparisons and uses vpush/vpop for DREG save. bhi/bls pair reordering of independent comparisons. mov #0; CALL sequence reordered. Same logical result.",
+    "asm_hash": "69b00e5a283d1c90",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringTTF14DeleteSurfacesEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port precomputes loop count via rsb/lsrs and adds null check [GREG,#4] before delete. Binary iterates with direct lsl-indexed load. blt vs bcc loop test: signed vs unsigned, safe for non-negative count. Same result.",
+    "asm_hash": "4cd525a525a1235b",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z11UnpauseGamev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary accesses g_repauseDelay/g_unpause_game as game_work-struct members at fixed offsets; port uses separate GOT-referenced globals. Different addressing, same values. Confirmed by src/screens/PauseScreen.cpp:130.",
+    "asm_hash": "85d0796c6acd341e",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z9PauseGamev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary accesses bM_Mode/g_unpause_game/g_unpauseDelay as game_work-struct members; port uses separate GOT globals. Different addressing, same values. Confirmed by src/screens/PauseScreen.cpp:120.",
+    "asm_hash": "d7e9458383753f5a",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z13BombFlashFullv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "False positive (task #200 asm-inspector confirmation). Binary uses a two-stage VFP guard: vcmpe vs 1.55f (0x3fc66666) then vs 1.0f. Because any value < 1.0 is also < 1.55, the two-stage reduce to exactly `return m_BombHitTimer < 1.0f`, which is what the port does. The prior triage misread the two vcmpe immediates as a < 0.0f threshold.",
+    "asm_hash": "6c6a81a583267f8f",
+    "decided_at": "2026-06-26T12:00Z"
+  },
+  "_Z16GetBombZPositionv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port accesses s_BombZCounter at GOT offset +0; binary at +8 in a multi-variable GOT block. Different GOT slot layout, same counter. Confirmed by src/entities/Bomb.cpp:614.",
+    "asm_hash": "731d5641f41d2b96",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z17GetFruitZPositionv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port accesses s_FruitZCounter at GOT offset +0; binary at +12 in a multi-variable GOT block. Different GOT slot layout, same counter. Confirmed by src/entities/Fruit.cpp:2521.",
+    "asm_hash": "f3ceb1c32510a0ec",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN24GlobalProbabilityOverideD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port adds null check on m_TypeChances [+8] before dtor; binary omits it. Different register setup order. See TODO stubs at src/game/GlobalProbabilityOveride.cpp:28.",
+    "asm_hash": "08cf9f48fea46358",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN24GlobalProbabilityOverideD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Same as D1Ev: port adds null check on m_TypeChances [+8] before dtor. See TODO stubs at src/game/GlobalProbabilityOveride.cpp:28.",
+    "asm_hash": "08cf9f48fea46358",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_Z21ShowPauseMenuCallbackP10InputEvent": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds null guard for game_work ptr; binary accesses directly. addeq r0,r0,#1 vs moveq r0,#1: functionally identical on beq path where byte is 0. Semantics preserved.",
+    "asm_hash": "7e28bb92afcc476a",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN15SuperFruitState5ParseEP12TiXmlElement": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port reorders null-check and has extra CALL before main parse; adds lr offset computation. Consistent with partial SuperFruitState port.",
+    "asm_hash": "1e1b283665a25524",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN30ScrollingMenuItemRemoveAnimate6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port re-fetches vtable ptr [GREG] before ldr [+8] call; binary goes direct. Different stack frame size. Semantics appear equivalent for the Update->vmul->CALL->vcmpe logic.",
+    "asm_hash": "a333d01a0c3a820c",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN12PurchaseInfo12LoadTexturesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "False positive (task #200 asm-inspector confirmation). Member offsets m_Texture@0xA8, m_InUseTexture@0xB0, m_GreyTexture@0xB8 are CORRECT (8-byte ReloadableTexture stride, pinned by static_asserts). The extra adds in the diff (+196/+260/+324) come from the port's m_TextureFilenames[] plumbing and the documented port-specific Load(filename) call shape, not wrong field offsets. The real gap is the un-RE'd ReloadableTexture filename-storage mechanism, which is part of the known-incomplete shop subsystem. Deferred pending shop RE completion.",
+    "asm_hash": "67dd5829434166ee",
+    "decided_at": "2026-06-26T12:00Z"
+  },
+  "_ZN10HUDControl21SetToMultiplayerStateEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port adds intermediate mov GREG,GREG and reorders moveq around strbeq. Final stores to [+50] and [+51] are identical. Scheduling difference only.",
+    "asm_hash": "bf2cd97687b1e807",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN17GenericHUDControl7SetTextEPN6Mortar14BakedStringBoxE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port reloads [#468] after CALL for second arg; binary passes via register before call. Different register-spill strategy, same value. Both store 0 to [#468] twice at end.",
+    "asm_hash": "949559c6272c9844",
+    "decided_at": "2026-06-26T00:00Z"
+  },
+  "_ZN12GameModifier6UpdateEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "False positive (task #200 asm-inspector confirmation). Binary `vcmpe.f32 s14(curTime), s15(m_DeferTime)` + `bhi` returns 0 when curTime > m_DeferTime, i.e. m_DeferTime < curTime -- identical to the port's `if (m_DeferTime < curTime) return 0;`. The prior triage conflated the vcmpe operand order; movhi/bhi with (curTime, m_DeferTime) is exactly equivalent to the port's movmi/bpl with the operands swapped -- same semantic, different encoding.",
+    "asm_hash": "f92aa1c993d665aa",
+    "decided_at": "2026-06-26T12:00Z"
   }
 }
