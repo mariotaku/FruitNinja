@@ -290,11 +290,9 @@ void FruitInfo_Load(const char* xmlPath)
         elem.QueryIntAttribute("onlySprinkle", &sprinkle);
         fi.m_bSpecial = (sprinkle == 1) ? 1 : 0;
 
-        // "superFruit" -> +0x330: v1.6.1 super-fruit (pomegranate) gate.
-        // Binary: SuperFruitControl::SuperFruitThrown @ 0x001bbf48 reads this byte.
-        int superFruitVal = 0;
-        elem.QueryIntAttribute("superFruit", &superFruitVal);
-        fi.m_bIsSuperFruit = (superFruitVal != 0) ? 1 : 0;
+        // m_bIsSuperFruit set iff m_Score==0 (super_pomegranate has no score attr).
+        // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084
+        fi.m_bIsSuperFruit = (fi.m_Score == 0) ? 1 : 0;
 
         // --- <fact> child elements -> +0x270/+0x274 ---
         fi.m_FactCount = 0;
