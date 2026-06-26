@@ -34,6 +34,7 @@
 #include <cmath>
 #include <cstdint>
 #include "game/GameWork.h"
+#include "hud/IngamePopup.h"
 
 namespace {
 // Shared TTF face (gangofchinese.ttf) for MenuButton BakedStringTTF labels.
@@ -845,39 +846,20 @@ void MenuButton::Draw(float* hudScaleRaw) {
         }
     }
 
-    // New-indicator star indicator
-    if (m_NewIndicatorTimer >= 0.0f && s_TexNewItem.IsValid()
-        && m_RestScale.x != 0.0f)
-    {
-        MatrixManager& mm = MatrixManager::GetInstance();
-        // v1.6.1 MenuButton::Draw @0x0019c2e4: badge scale = size.x / m_RestScale.x (UNCONDITIONAL
-        // divide; binary has NO size.x!=0 fallback). On frame 1 size.x==0 -> 0.0 -> badge hidden
-        // until the grow-in ramp lifts size. The old `size.x != 0 ? ... : 1.0` band-aid forced the
-        // badge to full size on every grow-in frame (the frame-1 flash). Denominator is safe: the
-        // outer gate (above) already requires m_RestScale.x != 0.
-        float ratio = (m_RestScale.x != 0.0f) ? (size.x / m_RestScale.x) : 0.0f;
-        const uint16_t phase =
-            (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
-        const float sv = SinIdx(phase);
-        const float by = (sv < 0.0f ? -sv : sv) * 6.0f;
-
-        Vec3 off(0.85f * m_RestScale.x * 0.5f,
-                 by + 0.85f * m_RestScale.y * 0.5f,
-                 0.0f);
-        off = off * ratio;
-        Vec3 drawAt = pos + off;
-
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f, ratio * 32.0f, 0.0f);
-        mat.GlobalTranslate44(drawAt);
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        const uint8_t a = m_DrawColour.a;
-        Colour tint(255, 255, 255, a);
-        s_TexNewItem->Set();
-        Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
-        s_TexNewItem->UnSet();
+    // New-indicator badge via IngamePopup::Draw (type 0x10).
+    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c2e4: badge drawn via pM_Popups[0x10]->Draw,
+    // not an inline new_item.tex quad.
+    if (m_NewIndicatorTimer >= 0.0f) {
+        IngamePopup* popup = GetIngamePopup(0x10);
+        if (popup) {
+            float scale = (m_RestScale.x != 0.0f) ? (size.x / m_RestScale.x) : 0.0f;
+            const float sinV = SinIdx((uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f));
+            const float bob  = (sinV < 0.0f ? -sinV : sinV) * 8.0f;
+            Vec3 anchor = GetAdjustedPos();
+            anchor.x += m_ShakeScale.y * m_RestScale.x * 0.5f;
+            anchor.y += m_ShakeScale.z * m_RestScale.y * 0.5f + bob;
+            popup->Draw(scale, &anchor);
+        }
     }
 
     // Sparkle ring: armed when m_RotationSpeed(+0xf4) >= 0.
