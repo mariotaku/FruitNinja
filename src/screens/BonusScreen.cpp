@@ -9,7 +9,10 @@
 #include "engine/audio/MortarSound.h"
 #include "engine/audio/SoundManager.h"
 #include "engine/asset/TextureManager.h"
+#include "engine/asset/Mesh.h"
 #include "engine/math/MathUtil.h"
+#include "engine/math/Matrix44.h"
+#include "engine/render/MatrixManager.h"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -127,7 +130,7 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
     entry.m_TierBase       = tier;
     entry.m_DisplayedScore = 0;
     entry.m_Colour         = colour;
-    entry.m_Scale          = 1.0f;
+    entry.m_Alpha          = 1.0f;
     m_TotalScore          += tier;
     m_Awards.push_back(entry);
 }
@@ -195,7 +198,7 @@ void BonusScreen::Update(float dt) {
 
             if (localT < 0.0f) {
                 // Not yet revealed.
-                entry.m_Scale          = 0.0f;
+                entry.m_Alpha          = 0.0f;
                 entry.m_DisplayedScore = 0;
                 continue;
             }
@@ -208,10 +211,9 @@ void BonusScreen::Update(float dt) {
                 // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
             }
 
-            // Scale pulse: sin-based scale wobble on reveal.
-            // TODO: resolve exact sin formula from binary @ 0x00163dd0
-            entry.m_Scale = 1.0f + 0.3f * sinf(localT * 6.28f);
-            if (entry.m_Scale < 0.0f) entry.m_Scale = 0.0f;
+            // Alpha pulse on reveal -- TODO: resolve exact formula from binary @ 0x00163dd0
+            entry.m_Alpha = 1.0f + 0.3f * sinf(localT * 6.28f);
+            if (entry.m_Alpha < 0.0f) entry.m_Alpha = 0.0f;
 
             // Score counter ramp-up.
             // TODO: resolve exact multiplier ramp math from binary @ 0x00163dd0
@@ -283,21 +285,32 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     pos = savedPos;
 
     // Per-award rendering.
+    // TODO: v1.6.1 0x00164b64 -- per-award reveal spacing (gate on m_Timer); draw all for now.
+    MatrixManager& mm = MatrixManager::GetInstance();
     for (int i = 0; i < (int)m_Awards.size(); ++i) {
         const BonusAwardHud& entry = m_Awards[i];
-        if (entry.m_Scale <= 0.0f) continue;
 
-        // TODO: set matrix scale + translate per award position
-        // Award Y positions stacked vertically (TODO: resolve spacing constant from v1.6.1 @0x0016492c)
-        // float awardY = pos.y + m_AnimPos.y + (float)i * 20.0f;
-        // float awardX = pos.x + m_AnimPos.x;
+        // Star icon draw (only if texture is valid).
+        // Mirrors BSButton::Draw API: SetUnCached -> Scale44 -> GlobalTranslate44 ->
+        // SetCurrentMatrix -> UploadModelViewOnly -> DrawQuadUnCached -> UnSetUnCached.
+        if (entry.m_StarTex.IsValid()) {
+            float texW = (float)entry.m_StarTex->GetWidth();
+            float texH = (float)entry.m_StarTex->GetHeight();
 
-        // TODO: DrawQuadUnCached(entry.m_StarTex, awardX, awardY, entry.m_Scale * 16.0f, entry.m_Scale * 16.0f)
-        // TODO: Font::DrawString(entry.m_Name, awardX + 20.0f, awardY, m_NamePulseScale)
-        // TODO: DrawString tier*multiplier score text
-        // TODO: m_ScoreBox->Draw / m_TotalBox->Draw / m_RankLabelBoxes[i]->Draw / m_RankValueBoxes[i]->Draw
-        //       (v1.6.1 BonusScreen::Draw @0x0016492c -- BakedStringBox draws; null-check before draw)
+            entry.m_StarTex->SetUnCached();
 
+            Matrix44 mat = Matrix44::Scale44(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
+            mat.GlobalTranslate44(pos);
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            Mortar::Mesh::DrawQuadUnCached(entry.m_Colour, NULL);
+
+            entry.m_StarTex->UnSetUnCached();
+        }
+
+        // TODO: v1.6.1 0x0016492c (BonusScreen::Draw) -- label/value/score text boxes
+        //   (blocked on #212: BakedStringBox builds unimplemented)
         (void)entry;
     }
 }
