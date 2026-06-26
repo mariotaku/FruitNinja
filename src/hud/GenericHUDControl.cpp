@@ -156,13 +156,17 @@ void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
     float fadeIn  = m_FadeIn;
     float fadeOut = m_FadeOut;
 
-    // Fade fraction: clamp01((t - fadeIn) / (fadeOut - fadeIn))
-    float frac = 0.0f;
-    if (fadeOut != fadeIn) {
+    // Fade fraction
+    // ASM-spec v1.6.1 GenericHUDControl::PreDraw @0x00189ae4: equal fade-in/out
+    //   -> opaque (1.0), except still 0.0 before the fade-in time.
+    float frac;
+    if (fadeIn == fadeOut) {
+        frac = (t < fadeIn) ? 0.0f : 1.0f;
+    } else {
         frac = (t - fadeIn) / (fadeOut - fadeIn);
+        if (frac < 0.0f) frac = 0.0f;
+        else if (frac > 1.0f) frac = 1.0f;
     }
-    if (frac < 0.0f) frac = 0.0f;
-    if (frac > 1.0f) frac = 1.0f;
 
     // Position: base + angle offsets + pos transition GetAmt + pos pulse GetPulseAmt
     // TODO: 0x00189ae4 -- TranisitionInfo::GetAmt and PulseInfo::GetPulseAmt not yet ported;
