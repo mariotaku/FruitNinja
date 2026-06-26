@@ -39,7 +39,7 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
     , m_AnglePosOffA(0.0f, 0.0f, 0.0f)
     , m_AnglePosOffB(0.0f, 0.0f, 0.0f)
     , m_BaseScale(0.0f, 0.0f, 0.0f)
-    , m_BasePos2(1.0f, 1.0f, 1.0f)
+    , m_BasePos2(0.0f, 0.0f, 0.0f)  // binary @0x00189f60: Vec3::Zero (was 1,1,1 -> +1 pos drift on every control)
     , m_BaseAngle(0.0f)
     , m_FadeIn(fadeIn)
     , m_FadeOut(fadeOut)
@@ -188,7 +188,7 @@ void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
     Vec3 worldPos = m_BasePos + m_AnglePosOffA + m_BasePos2;
     this->pos = worldPos;
 
-    // Scale: base scale (m_BasePos2 as scale seed from ctor default Vec3)
+    // Scale: base scale
     // TODO: 0x00189ae4 -- scale transition/pulse not applied (pending GetAmt/GetPulseAmt)
     this->size = m_BaseScale;
 

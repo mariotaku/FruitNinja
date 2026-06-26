@@ -140,14 +140,18 @@ void FruitFactZenPage::Init() {
             } else {
                 m_Facts[i] = 0;
             }
-            Fruit::FruitInfo(m_Facts[i]);  // resolve (return value ignored here per binary)
+            // ASM-spec v1.6.1 FruitFactZenPage::Init @0x00180320: icon tex = FruitInfo(m_Facts[i])->m_ZenTexture (+0x304); scale arg = Vec3::Zero (auto-size).
+            const FruitInfo* fi = Fruit::FruitInfo(m_Facts[i]);
+            Mortar::SmartPtr<Mortar::Texture> iconTex;
+            if (fi) {
+                iconTex = fi->m_ZenTexture;
+            }
 
             float x = (span * -0.5f - 8.0f) + (float)i * spacing;
             Vec3 ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
-            Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 sc(1.0f, 1.0f, 1.0f);
+            Vec3 sc(0.0f, 0.0f, 0.0f);             // Vec3::Zero -> auto-size from texture dims
             Colour col(1.0f, 1.0f, 1.0f, 1.0f);
-            GenericHUDControl* c = new GenericHUDControl(fade, fade + 0.25f, emptyTex, NULL, ipos, sc, col, 8);
+            GenericHUDControl* c = new GenericHUDControl(fade, fade + 0.25f, iconTex, NULL, ipos, sc, col, 8);
             // Binary: T_1022 default block (all zeros) memcpy'd to c+0xa4 (m_ScaleTrans, 5 words).
             // GenericHUDControl ctor already zero-initializes m_ScaleTrans; no-op here.
             int si = (i < 8) ? i : 8;
