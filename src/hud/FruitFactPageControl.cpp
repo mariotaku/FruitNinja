@@ -69,7 +69,7 @@ FruitFactPageControl::FruitFactPageControl()
     , m_FactText(NULL)
     , m_ComboA(0xFFFFFFFF)
     , m_ComboB(0xFFFFFFFF)
-    , m_PageFlag(-1)
+    , m_PageFlag(0) // v1.6.1 FruitFactControl ctor @0x00170c78: m_PageFlag = 0 (first registered page stays active)
     , m_NextButton(NULL)
     , m_PrevButton(NULL)
     , m_GameStateSnapshot(0)
@@ -96,19 +96,32 @@ void FruitFactPageControl::Init() {
 
     // 1. Set board texture into HUDControl3d m_Texture slot (+0x74).
     m_Texture = g_factTex0;
+    // LoadContent() may not have been called yet (e.g. in component tests).
+    // Load the board texture directly if the static slot is still empty.
+    if (!m_Texture.IsValid()) {
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture("fact_board.tex");
+    }
 
     // 2. Compute display-size quad.
-    // DIFFERS: original = VectorUnsignedToFloat(display[+0x24]+1, display[+0x28]+1) from
-    //   the Bada back-buffer object; port uses FN_SCREEN_W/FN_SCREEN_H (480x320).
-    size.x = (float)FN_SCREEN_W;
-    size.y = (float)FN_SCREEN_H;
+    // v1.6.1 FruitFactControl::Init @0x0017160c:
+    //   size = Vec3(boardTex.width+1, boardTex.height+1, 0); Classic mode (==0): size *= 1.37
+    // fact_board.tex is 128x128 -> (129,129,0); Classic: (176.73,176.73,0).
+    // DAT_001717e8/ec (-69.0, 53.0) are the m_FactOffset assigned below -- already correct.
+    float boardW = 129.0f, boardH = 129.0f;   // fact_board.tex 128x128 -> +1; binary-faithful fallback
+    if (m_Texture.IsValid()) {
+        boardW = (float)(m_Texture->GetWidth()  + 1);
+        boardH = (float)(m_Texture->GetHeight() + 1);
+    }
+    size.x = boardW;
+    size.y = boardH;
     size.z = 0.0f;
+    if (game_work.gameMode == 0) {
+        size.x *= 1.37f;   // DAT_001717e4 = 0x3faf5c29 = 1.37f
+        size.y *= 1.37f;
+        // size.z *= 1.37f -- dropped; z=0 so multiplication is a no-op
+    }
 
-    // 3. If mode==0 (classic), multiply size by DAT_001717e4 each axis.
-    // TODO: 0x001717e4 -- scale constant for mode-0 header quad (value unresolved; re-analyst needed).
-
-    // 4. Set pos from DAT constants.
-    // TODO: 0x001717e8 / 0x001717ec -- header offset pos (X, Y unresolved; re-analyst needed).
+    // 4. (m_FactOffset set below at step 5 -- DAT_001717e8/ec resolved as -69,53.)
 
     // 5. Set the fact offset Vec3.
     // ASM-verified: v1.6.1 FruitFactControl @ 0x0017160c -- Init sets m_FactOffset = Vec3(-69,53,0)
@@ -328,11 +341,11 @@ void FruitFactPageControl::SetPage(int idx, bool playSound) {
 void FruitFactPageControl::RegisterPage(FruitFactPage* page) {
     if (!page) return;
     m_Pages.push_back(page);
-    // Hide if not the current page; copy control pos into page
+    // Hide if not the current page; copy control size into page
     if ((int)m_Pages.size() - 1 != m_PageFlag) {
         page->HidePage();
     }
-    page->pos = pos;
+    page->size = size;   // v1.6.1 FruitFactControl::RegisterPage @0x00171ab4 copies size, not pos
 }
 
 // ---------------------------------------------------------------------------
