@@ -269,6 +269,13 @@ public:
     // Binary @ 0x00176184 — local-MP "did a player drop their last life" check; defers to FN::GameOver
     static void CheckFruitDropped();
 
+    // Binary @0x001b98f4 area (called from CanSpawnFinalPomegranate).
+    // Returns the count of active fruits that have active power-up info.
+    // Port stub returns 0 (no powerup fruits active); safe conservative default.
+    // TODO: v1.6.1 -- NumberOfPowerupFruits exact binary addr unresolved; impl pending RE
+    static int NumberOfPowerupFruits();
+
+
     // Accessor for the file-scope global g_FruitWasSliced event (binary GOT 0x332a34).
     // Binary subscribe sites load [GOT,0x6e04] to get the event address; port uses this
     // accessor for cross-TU subscribe/unsubscribe.

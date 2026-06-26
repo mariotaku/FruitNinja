@@ -326,3 +326,17 @@ set_tests_properties(wave_timeline_classic PROPERTIES TIMEOUT 90)
 set_tests_properties(wave_timeline_arcade  PROPERTIES TIMEOUT 90)
 set_tests_properties(wave_timeline_zen     PROPERTIES TIMEOUT 120)
 set_tests_properties(wave_timeline_combo   PROPERTIES TIMEOUT 90)
+
+# GlobalProbabilityOveride fire-path verification.
+# Proves parse -> arm -> gate -> fire -> correct-type for the super_pomegranate
+# GPO (PointBased, CLASSIC mode) deterministically, without accumulating real
+# game score. Boots the full game (needed for FruitInfo / FruitType lookup),
+# then bypasses the game loop entirely for gate testing.
+# Cases: (1) parse 1 PointBased entry with super_pomegranate type,
+#         (2) NewGameStarted seeds threshold in [40,70],
+#         (3) score=0 < threshold -> no fire,
+#         (4) score=110 >= threshold=55 -> fires and writes super_pomegranate type,
+#         (5) re-arm: threshold advances, second call at same score -> no fire.
+fn_add_game_test(test_global_probability test_global_probability.cpp)
+add_test(NAME global_probability COMMAND test_global_probability)
+set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
