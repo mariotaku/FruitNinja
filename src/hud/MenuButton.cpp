@@ -288,7 +288,10 @@ void MenuButton::CreateFruit() {
         // Disables ballistic integration so the menu fruit stays pinned at the button
         // position; Fruit::Update gates pos/vel integration on this flag (binary 0x001df828).
         fruit->m_bBallisticEnable = 0;
-        // Binary @0x0019b608: m_RestScale = entity->scale * 200.0f (grow-in TARGET size).
+        // ASM-verified: 2026-06-26T16:02Z v1.6.1 MenuButton::CreateFruit @0x0019b608 (asm-inspector)
+        //   m_RestScale(+0x13C) = entity->scale * 200.0f [0x43480000]; size(+0x20) settles to
+        //   m_RestScale post grow-in. For scale-60 fruits -> 0.6*200 = 120 (drives the visible
+        //   ring scale AND the gameover highscore text scale = size.x*0.5 = 60).
         m_RestScale = m_pEntity->scale * 200.0f;
 
         if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)

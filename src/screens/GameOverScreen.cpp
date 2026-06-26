@@ -1330,7 +1330,13 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
     // Layer 0x80 path -- highscore label + title-tex quad
-    // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894
+    // ASM-verified: 2026-06-26T16:02Z v1.6.1 GameOverScreen::PreDrawOrder @0x00186894..0x00186aac (asm-inspector)
+    //   scale = m_pRetryBtn(+0xA4).size.x(+0x20) * 0.5 [vmul s0,s14,s15 @0x186980; s15=0.5];
+    //   pos (-163,-96,0) [DAT @0x186aa0]; align 0xF; font pM_Fonts[2]; settled size.x=120 -> scale 60.
+    //   The "5000-over-Retry" overlap is binary-faithful: Bada's 2-button layout (no Leaderboards)
+    //   puts Retry at x=-80, next to the highscore at x=-163. iOS/Android center Retry (3 buttons) so
+    //   they don't collide -- a real Bada-vs-mobile UI difference, NOT a port bug. Keep as-is.
+    //   (+0xA4 holds the RETRY button; Ghidra's "m_pQuitBtn" label at +0xA4 is wrong.)
     if ((layerMask & Mortar::HUD_LAYER_POST_ACTOR) != 0) {
         Game* game = Game::GetInstance();
         // Gate: m_pRetryBtn(+0xA4) != 0 && save->m_highscore > 0
