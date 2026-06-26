@@ -89,6 +89,11 @@ enum LocalizedString {
     // PauseScreen v1.6.1 string IDs (PauseScreen ctor @0x001a7204 / Update @0x001a5ebc)
     LSTR_PAUSED          = 0x3c8, // "PAUSED" -- m_PausedText label (ctor @0x001a7204)
     LSTR_QUIT            = 0x35f, // quit label for BSButton (Update @0x001a5ebc GETSTRING(0x35f,0))
+
+    // IngamePopup v1.6.1 string IDs (IngamePopup ctor @0x0016dbac)
+    LSTR_GAME_TEXTURE_02 = 0x2dc, // "NEW BEST!" -- type 0x0F NEW BEST SCORE banner
+    LSTR_MENU_TEXTURE_09 = 0x399, // "NEW"       -- type 0x10 shop new-item badge
+    LSTR_MENU_TEXTURE_53 = 0x3c5, // "SELECTED"  -- type 0x11 shop selected-item badge
 };
 
 // --- StringEntry (12 bytes) ---

@@ -7,6 +7,7 @@
 #include "game/GameWork.h"
 #include "math/Colour.h"
 #include "asset/TextureManager.h"
+#include "hud/IngamePopup.h"
 
 void PreloadRings() {
     // Ring texture slot map (binary @ 0x11c644, LoadLocalisedTexture order).
@@ -46,4 +47,7 @@ void PreloadRings() {
     // binary PreloadRings @0x0011cd44: GameWork+0x6a0 = Colour(0x6f,0x46,0x1e) -- brown,
     // used by the "SLICE FRUIT TO BEGIN" text (MainScreen ctor @0x001982fc SetColour).
     game_work.m_TitleColour = Colour(0x6F, 0x46, 0x1E, 255);   // GameWork+0x6A0
+
+    // v1.6.1 PreloadRings @0x0011cd68: BuildAllPopups() -- builds ingame popup overlays.
+    BuildAllPopups();
 }

@@ -159,6 +159,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/WaveSyncPacket.cpp"
 
     # HUD
+    "${_PROJECT_ROOT}/src/hud/IngamePopup.cpp"
     "${_PROJECT_ROOT}/src/hud/BSButton.cpp"
     "${_PROJECT_ROOT}/src/hud/CheckBox.cpp"
     "${_PROJECT_ROOT}/src/hud/GenericHUDControl.cpp"

@@ -175,6 +175,11 @@ public:
 public:
     // Binary @ 0x0015c978: if (m_pShopScreen) m_pShopScreen->SetSelected(this).
     void ButtonClicked();
+
+    // ShopListItem::DrawFloatingText @0x001b4bc8
+    // Draws ingame popups for new-item and selected-item badges.
+    // Called from ShopListItem::Draw (after Part 7, before Part 8).
+    void DrawFloatingText();
 };
 
 // ---------------------------------------------------------------------------

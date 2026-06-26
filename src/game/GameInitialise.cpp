@@ -48,6 +48,7 @@
 #include "asset/FileManager.h"
 #include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
+#include "hud/IngamePopup.h"
 #include "util/StringTable.h"
 #include "util/Localisation.h"
 #include "util/StringHash.h"
@@ -382,6 +383,9 @@ void GameDestroy() {
     ShopScreen::UnLoadContent();
     PowerUpShop::UnLoadContent();
     LeaderboardScreen::UnLoadContent();
+
+    // --- 2.5. Ingame popups (v1.6.1 @0x0016db38 DeleteAllPopups) ---
+    DeleteAllPopups();
 
     // --- 3. Data managers ---
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
