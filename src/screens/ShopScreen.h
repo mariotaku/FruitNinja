@@ -107,8 +107,11 @@ public:
     // Matches ShopScreen::Update(float) @ 0x0015e1f4 (387 lines)
     void Update(float dt) override;
 
-    // ShopScreen::Draw @ 0x0015dd50 (v1.6.1)
-    void Draw(float* hudScaleRaw) override;
+    // ShopScreen::DrawOrder @ 0x001b4e48 (v1.6.1, vtable slot 9 +0x24)
+    // Binary gates BG block on `layerMask == m_LayerFlagsAlt`; ring block on
+    // `else if (m_AnimFrame > 0)`. Never writes m_LayerFlags.
+    // ASM-spec v1.6.1 ShopScreen::DrawOrder @0x001b4e48
+    void DrawOrder(float* hudScale, int layerMask) override;
 
     int GetType() override { return 1; }
 
