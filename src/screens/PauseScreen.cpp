@@ -41,6 +41,7 @@
 #include "game/PowerUpManager.h"
 #include "screens/MainScreen.h"
 #include "entities/BombBlast.h"
+#include "entities/SuperFruitControl.h"
 #include "Game.h"
 #include <cstdio>
 #include <cmath>
@@ -159,9 +160,14 @@ bool PauseScreen::IsEnabled() {
 // GameExit @0x001cfed4 runs only on real app exit. #179
 static void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
-    // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- SuperFruitControl::StopAllPomegranates(...)
-    //   is the FIRST call in the binary before ResetGlobalDt. Not yet in
-    //   SuperFruitControl public API; add when ported.
+    // Binary first call: SuperFruitControl::StopAllPomegranates(...) @0x001cb6e4.
+    // StopAllPomegranates is not yet ported; use Reset() @0x001bb52c which kills all
+    // ActorManager group-6 entities and clears SuperFruitControls, preventing a
+    // lingering SuperFruitControl from advancing m_Timer on the menu (bM_Mode==0)
+    // and calling GetNextWave(0) on a stale/empty m_WaveInfo list -> OOB (#178).
+    // TODO: v1.6.1 QuitToMenu @0x001cb6e4 -- replace with SuperFruitControl::StopAllPomegranates
+    //   once that function is RE'd and added to the public API.
+    SuperFruitControl::Reset();
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // v1.6.1 QuitToMenu @0x001cb6e4
     game_work.bM_bPaused = 1;                          // v1.6.1 QuitToMenu @0x001cb6e4: strb 1, [+0x05]
     // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
