@@ -134,7 +134,8 @@ struct FruitInfo {
     // Power-ups
     FRUIT_POWERS* m_pPowers;      // +0x32C
 
-    // Super-fruit flag: byte at +0x330, set by fruitlist.xml "superFruit" attr.
+    // Super-fruit flag: byte at +0x330, set iff m_Score==0 (no score attr).
+    // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084.
     // Binary: FRUIT_INFO+0x330 gate in SuperFruitControl::SuperFruitThrown
     // and SuperFruitControl::SuperFruitSliced (@ 0x001bbf48 / 0x001be630).
     uint8_t m_bIsSuperFruit;      // +0x330
