@@ -223,6 +223,22 @@ void GameOverScreen::UnLoadContent() {
     }
 }
 
+// Binary: GameOverScreen::m_senseiHeads[idx] (static SmartPtr<Texture>[3])
+// Port: g_ExpressionTexArr file-static, loaded by LoadContent.
+// v1.6.1 FruitFactClassicFactPage ctor @0x00174e30 reads GameOverScreen::m_senseiHeads.
+Mortar::SmartPtr<Mortar::Texture> GameOverScreen::GetSenseiHeadTex(int idx) {
+    if (idx < 0 || idx >= 3) return Mortar::SmartPtr<Mortar::Texture>();
+    return g_ExpressionTexArr[idx];
+}
+
+// Binary: GameOverScreen::m_senseiBody[idx] (static SmartPtr<Texture>[3])
+// Port: g_BgPatternTexArr file-static, loaded by LoadContent.
+// v1.6.1 FruitFactClassicFactPage ctor @0x00174e30 reads GameOverScreen::m_senseiBody.
+Mortar::SmartPtr<Mortar::Texture> GameOverScreen::GetSenseiBodyTex(int idx) {
+    if (idx < 0 || idx >= 3) return Mortar::SmartPtr<Mortar::Texture>();
+    return g_BgPatternTexArr[idx];
+}
+
 // ---------------------------------------------------------------------------
 // Reset — empty in binary (0x00140554, single bx lr)
 // ---------------------------------------------------------------------------

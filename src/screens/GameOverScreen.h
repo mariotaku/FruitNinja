@@ -130,6 +130,14 @@ public:
     static void LoadContent();
     static void UnLoadContent();
 
+    // Accessors for the sensei head/body texture arrays (indexed 0..2).
+    // Binary: GameOverScreen::m_senseiHeads[idx] / m_senseiBody[idx]
+    // (static SmartPtr<Texture>[3] arrays; v1.6.1 GameOverScreen ctor @0x001882a0).
+    // Port maps these to g_ExpressionTexArr / g_BgPatternTexArr file-statics.
+    // Returns an invalid SmartPtr if idx is out of range or content not loaded.
+    static Mortar::SmartPtr<Mortar::Texture> GetSenseiHeadTex(int idx); // @0x001882a0
+    static Mortar::SmartPtr<Mortar::Texture> GetSenseiBodyTex(int idx); // @0x001882a0
+
     GameOverScreen(const char* modeName, int param2, float param3,
                    int expressionIdx, int bgPatternIdx, int tabIndex, int starCount);
     ~GameOverScreen() override;

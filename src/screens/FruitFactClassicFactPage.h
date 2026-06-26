@@ -28,6 +28,7 @@ public:
     ~FruitFactClassicFactPage() override;
 
     void Init() override;  // Binary @ 0x00174e30 -- build icon GenericHUDControls
+    void DrawOrder(float* hudScaleRaw, int layerMask) override; // Binary @ 0x00175250
 
 private:
     // +0x98: lazy-initialized title BakedStringBox pointer (init NULL)
