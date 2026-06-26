@@ -15,6 +15,7 @@
 #include "screens/BonusScreen.h"
 #include "engine/math/Vec3.h"
 #include "engine/asset/TextureManager.h"
+#include "engine/util/StringTable.h"
 
 // ---------------------------------------------------------------------------
 // Forward declarations for per-screen fixture functions.
@@ -120,20 +121,51 @@ static int RunBonus(fn::TestHarness& h) {
     // the GameOver->BonusScreen transition.
     bs->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
-    // Load the canonical award-star icon so the star-draw path is exercised.
-    // star_awards.tex is the game's general award-star badge texture.
-    Mortar::SmartPtr<Mortar::Texture> starTex =
-        Mortar::TextureManager::LoadLocalisedTexture("star_awards.tex");
-    if (!starTex.IsValid()) {
-        std::fprintf(stderr, "WARN: star_awards.tex failed to load -- star quads will be skipped\n");
+    // Per-award icons (bonus_icon_*.tex). NOTE: the real award icon is the
+    // bonusType's m_StarTexture, a small per-award bonus_icon -- NOT star_awards.tex
+    // (that is a 128px star sprite STRIP which scales to a huge quad over the name).
+    Mortar::SmartPtr<Mortar::Texture> icon0 =
+        Mortar::TextureManager::LoadLocalisedTexture("bonus_icon_total_combo.tex");
+    Mortar::SmartPtr<Mortar::Texture> icon1 =
+        Mortar::TextureManager::LoadLocalisedTexture("bonus_icon_max_combo.tex");
+    Mortar::SmartPtr<Mortar::Texture> icon2 =
+        Mortar::TextureManager::LoadLocalisedTexture("bonus_icon_no_fruit_dropped.tex");
+
+    // Real award data per spec (#212). Colour ctor is (r,g,b,a); spec gives BGRA memory layout:
+    // slot0 gold: b=0x00,g=0x7E,r=0xAD -> Colour(0xAD,0x7E,0x00,0xFF)
+    // slot1 red:  b=0x05,g=0x05,r=0xA0 -> Colour(0xA0,0x05,0x05,0xFF)
+    // slot2 blue: b=0x95,g=0x5C,r=0x01 -> Colour(0x01,0x5C,0x95,0xFF)
+    //
+    // Award names are localization keys (Bonus::Parse uses GETSTRING_CAST_0_STR):
+    //   GAME_TEXTURE_17  = "COMBO GOD!!!!"
+    //   GAME_TEXTURE_118 = "%i FRUIT COMBO?!?!" (bake with value 55)
+    //   GAME_TEXTURE_23  = "NO FRUIT DROPPED!"
+    // Route through GETSTRING_STR so --lang= override changes displayed names.
+    // ApplyLanguageOverride() runs before InitComponent/burn-in so these
+    // GETSTRING_STR calls reflect the chosen language.
+    const char* name0 = GETSTRING_STR("GAME_TEXTURE_17",  0);
+    if (!name0 || !name0[0]) name0 = "COMBO GOD!!!!";
+
+    // GAME_TEXTURE_118 contains %i; bake with the tier value (55).
+    const char* tmpl1 = GETSTRING_STR("GAME_TEXTURE_118", 0);
+    char name1buf[64];
+    if (tmpl1 && tmpl1[0]) {
+        std::snprintf(name1buf, sizeof(name1buf), tmpl1, 55);
+    } else {
+        std::snprintf(name1buf, sizeof(name1buf), "55 FRUIT COMBO?!?!");
     }
 
-    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), starTex, "ALL_APPLES",   150);
-    bs->AddAward(Colour(0x00, 0xAD, 0x7E, 0xFF), starTex, "STRAIGHT_3",   300);
-    bs->AddAward(Colour(0x7E, 0xAD, 0x00, 0xFF), starTex, "FRUIT_FRENZY", 500);
-    bs->m_Awards[0].m_Multiplier = 2;
-    bs->m_Awards[1].m_Multiplier = 3;
-    bs->m_Awards[2].m_Multiplier = 4;
+    const char* name2 = GETSTRING_STR("GAME_TEXTURE_23",  0);
+    if (!name2 || !name2[0]) name2 = "NO FRUIT DROPPED!";
+
+    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), icon0, name0,      50);  // slot0 gold
+    bs->AddAward(Colour(0xA0, 0x05, 0x05, 0xFF), icon1, name1buf,   55);  // slot1 red
+    bs->AddAward(Colour(0x01, 0x5C, 0x95, 0xFF), icon2, name2,      50);  // slot2 blue
+    // Representative total score so m_ScoreBox shows a number.
+    // Note: AddAward already sums tier into m_TotalScore (50+55+50=155); override to 1234.
+    bs->m_TotalScore = 1234;
+    // m_bSkipIntro triggers BuildBonusText on first Update call.
+    bs->m_bSkipIntro = true;
 
     // Add BonusScreen as the ONLY control in the isolated HUD.
     // InitComponent() already cleared the game-state controls (MainScreen, etc.)

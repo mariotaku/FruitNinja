@@ -106,6 +106,11 @@ public:
     void UnLoadContent();
     // ---- end STUBS ----
 
+    // BuildBonusText -- v1.6.1 @0x001621dc
+    // Creates all BakedStringBox members (rank label/value, score counter, title band).
+    // Called once from Update tail when m_bSkipIntro becomes true.
+    void BuildBonusText();
+
 private:
     // TODO: re-verify v1.6.1 addr (prior 0x0013260C stale v1.5.x)
     void AwardScores();
