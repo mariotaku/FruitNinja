@@ -67,6 +67,8 @@ void FruitFactBonusFactPage::Init() {
     rowCol[2] = Colour(0x95, 0x5c, 0x01, 0xff); // blue
 
     // Shared constants for all row controls (DAT_17485c, DAT_174860).
+    // scZero triggers auto-size from texture dims for icon controls (binary: callers pass zero scale).
+    Vec3 scZero(0.0f, 0.0f, 0.0f);
     Vec3 scUnit(1.0f, 1.0f, 1.0f);
     Colour white(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -95,7 +97,7 @@ void FruitFactBonusFactPage::Init() {
         Mortar::SmartPtr<Mortar::Texture> iconTex =
             Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
         GenericHUDControl* cIcon = new GenericHUDControl(
-            0.0f, 0.0f, iconTex, NULL, iconPos, scUnit, white, 8);
+            0.0f, 0.0f, iconTex, NULL, iconPos, scZero, white, 8);
         AddGenericControl(cIcon);
 
         // (b) Format value string from bonus->m_Tier (+0x3c).

@@ -174,7 +174,7 @@ void FruitFactZenPage::Init() {
         Vec3 starPos(starX, 53.0f, 0.0f);             // starY=53.0 (DAT_1806e4)
         float starFadeIn  = fade;
         float starFadeOut = starFadeIn + 0.5f;
-        Vec3 scStar(1.0f, 1.0f, 1.0f);
+        Vec3 scStar(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
         Colour colStar(1.0f, 1.0f, 1.0f, 1.0f);
         // Star + label are the same GenericHUDControl in the binary (pGVar5).
         GenericHUDControl* cStar = new GenericHUDControl(starFadeIn, starFadeOut, starTex, NULL, starPos, scStar, colStar, 0x400);

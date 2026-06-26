@@ -86,7 +86,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
     }
     Mortar::SmartPtr<Mortar::Texture> tex(g_SenseisHeadTex);
     Vec3 pos(140.0f, scale, 0.0f);
-    Vec3 sc(1.0f, 1.0f, 1.0f);
+    Vec3 sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour col(1.0f, 1.0f, 1.0f, 1.0f);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 0x400);
     AddGenericControl(c);
@@ -100,7 +100,7 @@ void FruitFactPage::CreateHorizontalDivider() {
     Mortar::SmartPtr<Mortar::Texture> tex =
         Mortar::TextureManager::LoadLocalisedTexture("result_board_divider.tex");
     Vec3 pos(-7.5f, 0.0f, 0.0f);
-    Vec3 sc(1.0f, 1.0f, 1.0f);
+    Vec3 sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour col(1.0f, 1.0f, 1.0f, 1.0f);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 8);
     AddGenericControl(c);

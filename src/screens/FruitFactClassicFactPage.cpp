@@ -59,7 +59,7 @@ FruitFactClassicFactPage::~FruitFactClassicFactPage() {
 //   ctrl2 pos: ctrl1 + Vec3(9, 40, 0) = Vec3(-193, 16, 0)
 //   Both flags=1, scale unit, col white.
 void FruitFactClassicFactPage::Init() {
-    Vec3 scUnit(1.0f, 1.0f, 1.0f);
+    Vec3 scZero(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour white(255, 255, 255, 255);
 
     // ctrl 1: sensei body background slot (binary: m_senseiBody[bodyIdx=0])
@@ -70,7 +70,7 @@ void FruitFactClassicFactPage::Init() {
             GameOverScreen::GetSenseiBodyTex(0);
         Vec3 pos1(-202.0f, -24.0f, 0.0f);
         GenericHUDControl* c1 = new GenericHUDControl(
-            0.0f, 0.0f, bodyTex, NULL, pos1, scUnit, white, 1);
+            0.0f, 0.0f, bodyTex, NULL, pos1, scZero, white, 1);
         AddGenericControl(c1);
     }
 
@@ -83,7 +83,7 @@ void FruitFactClassicFactPage::Init() {
             GameOverScreen::GetSenseiHeadTex(0);
         Vec3 pos2(-202.0f + 9.0f, -24.0f + 40.0f, 0.0f);
         GenericHUDControl* c2 = new GenericHUDControl(
-            0.0f, 0.0f, headTex, NULL, pos2, scUnit, white, 1);
+            0.0f, 0.0f, headTex, NULL, pos2, scZero, white, 1);
         AddGenericControl(c2);
     }
 }
