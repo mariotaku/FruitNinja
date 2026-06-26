@@ -146,6 +146,41 @@ target_include_directories(test_asciistring PRIVATE
 )
 add_test(NAME asciistring COMMAND test_asciistring)
 
+# --- #228 engine low-level leaf coverage (pure-CPU, no GPU/audio/IO) ---
+# StringHash: Jenkins lookup3 + case-fold; assert known binary DAT hash constants.
+add_executable(test_stringhash test_stringhash.cpp)
+target_link_libraries(test_stringhash PRIVATE mortar_engine)
+target_include_directories(test_stringhash PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME stringhash COMMAND test_stringhash)
+
+# Vec3 / _Vector3<float> math (Dot/Magnitude/Normalise incl. zero/near-zero). Header-only.
+add_executable(test_vec3 test_vec3.cpp)
+target_include_directories(test_vec3 PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME vec3 COMMAND test_vec3)
+
+# Colour: BGRA channel order, PlatformColour packing, Tint, Lerp.
+add_executable(test_colour test_colour.cpp)
+target_link_libraries(test_colour PRIVATE mortar_engine)
+target_include_directories(test_colour PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME colour COMMAND test_colour)
+
+# SmartPtr<T> / ReferenceCounter intrusive ref-count lifecycle. Header-only.
+add_executable(test_smartptr test_smartptr.cpp)
+target_include_directories(test_smartptr PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME smartptr COMMAND test_smartptr)
+
+# MemoryPool<T> Create/Pop/Push/Reset/Destroy ctor-dtor contract.
+add_executable(test_memorypool test_memorypool.cpp)
+target_link_libraries(test_memorypool PRIVATE mortar_engine)
+target_include_directories(test_memorypool PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME memorypool COMMAND test_memorypool)
+
+# Matrix44: column-major identity/multiply/scale/translate/RotZ + transform-point.
+add_executable(test_matrix44 test_matrix44.cpp)
+target_link_libraries(test_matrix44 PRIVATE mortar_engine)
+target_include_directories(test_matrix44 PRIVATE ${CMAKE_SOURCE_DIR}/src/engine ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME matrix44 COMMAND test_matrix44)
+
 # EffectPropertyValues / EffectPropertyList / GetColourRGB unit test.
 # Exercises the 9-def mesh-material property set, SetValue/TryGetValue for
 # float/bool/Vec3/Texture2D types, and parent-chain lookup.
