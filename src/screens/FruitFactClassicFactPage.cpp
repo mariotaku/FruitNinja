@@ -110,15 +110,13 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
         Vec3 scaled = scaleBase * size;
         mm.GetWorldStack().Scale(scaled);
 
-        // Translate: board offset Vec3(-86, 0, 0), then add Vec3(1, 8, 0), subtract pos
-        // Binary: local_64 = Vec3(-86,0,0); _Stack_88 = Vec3(1,8,0)
-        //         _Stack_94 = local_64 - pos
-        //         _Stack_a0 = _Stack_88 + _Stack_94
-        //         = Vec3(1,8,0) + Vec3(-86,0,0) - pos = Vec3(-85,8,0) - pos
-        // v1.6.1 @0x00175314
-        Vec3 boardOffset(-86.0f, 0.0f, 0.0f);
-        Vec3 boardAdj(1.0f, 8.0f, 0.0f);
-        Vec3 t = boardAdj + (boardOffset - pos);
+        // Translate: t = (pos - Vec3(1,8,0)) + Vec3(-86,0,0) = pos + Vec3(-87,-8,0).
+        // Binary Vec3 operator- @0x00136144 is out = r1 - r2 with r1=pos (minuend),
+        // r2=(1,8,0) (subtrahend); operator+ @0x0013610c then adds local_64=(-86,0,0).
+        // (A prior decompile read this as "local_64 - pos", REVERSING the operands,
+        // which put the board on the opposite side of its own title/body text.)
+        // ASM-verified: v1.6.1 FruitFactClassicFactPage::DrawOrder @0x00175368 (operator-), @0x00175378 (operator+)
+        Vec3 t = pos + Vec3(-87.0f, -8.0f, 0.0f);
         mm.GetWorldStack().Translate(t);
 
         mm.UploadModelViewOnly();
