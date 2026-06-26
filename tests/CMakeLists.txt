@@ -426,3 +426,19 @@ set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
 fn_add_game_test(test_game_over test_game_over.cpp)
 add_test(NAME game_over COMMAND test_game_over)
 set_tests_properties(game_over PROPERTIES TIMEOUT 60)
+
+# Renderer 2D pixel-readback + golden-image suite (#225 regression guard).
+# Covers: solid tint, full-UV orientation, sub-rect UV (the #225 UV-convention
+# bug guard), alpha blend, draw_fullscreen_quad, DrawTriList.
+# Renders into a 64x64 offscreen FBO -- no game init, no asset loading.
+# If no GL context is available (headless CI), the test prints
+#   "SKIP: no GL context" and exits 77 (CTest SKIP, not FAIL).
+# Golden images live in tests/golden/renderer/<case>.png (source tree). The test
+# reads/writes them via the relative path "tests/golden/renderer/", so it must run
+# from the project root -> WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}.
+# Regenerate goldens: ./build/host/tests/Debug/test_renderer --update-golden  (from project root)
+fn_add_game_test(test_renderer test_renderer.cpp)
+add_test(NAME renderer COMMAND test_renderer)
+set_tests_properties(renderer PROPERTIES
+    TIMEOUT 60 SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
