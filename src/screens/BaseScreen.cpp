@@ -384,6 +384,15 @@ void BaseScreen::UpdateButtons(float dt) {
 // (called when creating child screens like AboutScreen).
 // ===================================================================
 void BaseScreen::AddGenericControl(HUDControl* ctrl) {
+    // ASM-spec v1.6.1 BaseScreen::AddGenericControl @0x001606e8:
+    //   HUD::AddControl(game_work.pM_pHud, ctrl, false) -- registers the child with the
+    //   global HUD so the HUD draw loop renders it; THEN records it in m_HUDControls for
+    //   Release() teardown. The port previously only did the push_back, so every generic
+    //   child (sensei head/body, fact-card divider, bonus rows, Zen combo icons) was
+    //   created but never drawn.
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(ctrl, false);
+    }
     m_HUDControls.push_back(ctrl);
 }
 
