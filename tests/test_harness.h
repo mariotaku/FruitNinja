@@ -321,6 +321,43 @@ struct TestHarness {
         }
     }
 
+    // Like RunComponentHeadless but issues the game's per-layer ordered passes each
+    // frame, matching GameDraw's separate HUD::Draw(layer) calls. This is required
+    // for multi-pass self-demoting controls like MenuButton: BeginDraw re-arms 0x40,
+    // the 0x40 pass draws the scratch backdrop and demotes m_LayerFlags to 0x80,
+    // then the 0x80 pass draws the button face and label. A single all-bits-mask
+    // pass misses the second visit -- the face/label never renders.
+    //
+    // Per-frame order: ONE Update + ONE BeginDraw, then one Draw() per layer bit.
+    void RunComponentHeadlessMultiPass(int n) {
+        static const float kDt = 1.0f / 60.0f;
+        static const int kLayers[] = { 0x40, 0x80, 0x01, 0x08, 0x100, 0x200, 0x400 };
+        for (int i = 0; i < n; ++i) {
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_QUIT) return;
+            }
+
+            int ww = 0, wh = 0;
+            SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+            glViewport(0, 0, ww, wh);
+
+            Mortar::DisplayManager::GetInstance().BeginFrame();
+            MatrixManager::GetInstance().SetupOrtho(
+                160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+
+            if (game_work.mHud) {
+                game_work.mHud->Update(kDt);
+                game_work.mHud->BeginDraw(kDt);
+                for (int L = 0; L < (int)(sizeof(kLayers) / sizeof(kLayers[0])); ++L) {
+                    game_work.mHud->Draw(kLayers[L]);
+                }
+            }
+
+            SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+        }
+    }
+
     // Interactive component-isolation loop. ESC / close exits. on_tick runs
     // once per frame before the component draw. layerMask defaults to all layers.
     void RunComponentInteractive(OnTickFn on_tick, void* userdata = NULL,

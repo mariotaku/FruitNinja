@@ -295,14 +295,14 @@ static int RunGameOver(fn::TestHarness& h) {
         return h.Shutdown();
     }
 
-    // Settle 60 frames: drives BeginDraw -> sets final m_LayerFlags, creates
-    // FruitFactPageControl (Classic page), creates Retry + Quit buttons.
-    // Keep m_GameDt=1.0f each frame so alpha ramp is already done.
-    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
-    // so the fixture must draw 0x7FFFFFFF to cover title/divider/fact-title/fact-text (0x400) and rows (0x08).
+    // Settle 60 frames with per-layer passes matching GameDraw's HUD::Draw order
+    // (0x40->0x80->0x01->0x08->0x100->0x200->0x400). This is required for
+    // MenuButton: BeginDraw re-arms 0x40; the 0x40 pass draws+demotes to 0x80;
+    // the 0x80 pass then draws the button face + Retry/Quit label. A single
+    // all-bits pass misses the 0x80 visit so only the scratch backdrop renders.
     for (int i = 0; i < 60; ++i) {
         game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        h.RunComponentHeadlessMultiPass(1);
     }
 
     std::printf("[gameover_screen] stable state reached (m_State=%d, score=%d)\n",
@@ -371,11 +371,11 @@ static int RunGameOverZen(fn::TestHarness& h) {
         return h.Shutdown();
     }
 
-    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
-    // so the fixture must draw 0x7FFFFFFF to cover combo icons (0x08) and star/title (0x400).
+    // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
+    // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
         game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        h.RunComponentHeadlessMultiPass(1);
     }
 
     game_work.m_SaveData = prevSaveData;
@@ -460,11 +460,11 @@ static int RunGameOverArcade(fn::TestHarness& h) {
         return h.Shutdown();
     }
 
-    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
-    // so the fixture must draw 0x7FFFFFFF to cover bonus rows (0x08) and title/fact-text (0x400).
+    // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
+    // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
         game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        h.RunComponentHeadlessMultiPass(1);
     }
 
     std::printf("[gameover_arcade] stable state reached (m_State=%d, score=%d)\n",
