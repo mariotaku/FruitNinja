@@ -623,7 +623,8 @@ float GetBombZPosition() {
     return s_BombZCounter;
 }
 
-// ASM-spec v1.6.1 BombFlashFull @ 0x00168f24
+// ASM-verified: 2026-06-26 v1.6.1 BombFlashFull @ 0x001ca40c (asm-inspector)
+// Two-stage vcmpe (vs 1.55f then 1.0f) reduces to (m_BombHitTimer < 1.0f) since <1.0 implies <1.55.
 bool BombFlashFull() {
     return game_work.m_BombHitTimer < 1.0f;
 }

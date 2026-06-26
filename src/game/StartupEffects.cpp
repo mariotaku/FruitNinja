@@ -83,6 +83,8 @@ void DrawStartFade() {
 // v1.6.1 FN::PrepareForLevelStart @ 0x001cb3e8
 void PrepareForLevelStart() {
     LOG_DEBUG("FN", "PrepareForLevelStart: firing -> WaveManager::Reset(false)");
+    // ASM-spec v1.6.1 PrepareForLevelStart @0x001cb3e8: snapshot coin balance before Reset
+    game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
     WaveManager::GetInstance()->Reset(false);
     Game* game = Game::GetInstance();
     if (game) game_work.bM_bPaused = 1;
