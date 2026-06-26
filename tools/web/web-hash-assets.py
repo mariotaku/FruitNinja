@@ -5,18 +5,27 @@ tools/web/web-hash-assets.py -- Content-hash web output files to defeat browser 
 Usage:
     python3 tools/web/web-hash-assets.py <build/web>
 
-Pipeline (order matters -- nested references):
-  1. Hash wasm + data + splash.webp.  Rename to name-<sha8>.ext.
-  2. Rewrite fruit-ninja.js: replace references to hashed wasm + data filenames.
-  3. Hash the now-rewritten fruit-ninja.js.  Rename to fruit-ninja-<sha8>.js.
-  4. Rewrite fruit-ninja.html: replace script src + splash src with hashed names.
-  5. Prune stale hashed files from prior builds (pattern name-<8hex>.ext).
+Every build, ALL of wasm + data + js (+ splash) end up as content-hashed
+fruit-ninja-<sha8>.ext files, and fruit-ninja.js / fruit-ninja.html are rewritten
+to reference those hashed names. fruit-ninja.html keeps its stable (unhashed) name
+as the entry point.
 
-fruit-ninja.html stays unhashed (stable entry point).
+Why this is careful about incremental builds
+--------------------------------------------
+emcc re-emits the canonical fruit-ninja.{js,wasm,html} on every build, but it does
+NOT re-emit fruit-ninja.DATA when the packaged assets are unchanged. The previous
+version of this script `rename`d the canonical files to hashed names; on the next
+incremental build fruit-ninja.data was therefore ABSENT (already renamed), the data
+hash was skipped, and the freshly-emitted fruit-ninja.js kept its un-hashed
+'fruit-ninja.data' reference -> 404 at runtime (only fruit-ninja-<datahash>.data
+exists on disk).
 
-Idempotent: emcc always re-emits the canonical fruit-ninja.{html,js,wasm,data}
-on each full build, so this script always operates on those fresh canonical names.
-If any canonical file is missing, it is skipped (partial build scenario).
+Fix: resolve each asset's digest from the fresh canonical file when present, OR
+from the already-existing fruit-ninja-<sha8>.ext when the canonical is absent
+(unchanged this build). The JS/HTML reference rewrite then ALWAYS runs against a
+valid digest, hashed or not. No 49MB data re-copy when the data is unchanged.
+
+Idempotent and safe to re-run on an already-hashed tree.
 """
 
 import hashlib
@@ -24,29 +33,21 @@ import os
 import re
 import sys
 
+STEM = "fruit-ninja"
 
-# ---------------------------------------------------------------------------
-# Reference literals emcc emits in fruit-ninja.js and fruit-ninja.html
-# (verified against emscripten/emsdk:latest / emcc 6.x output).
-# ---------------------------------------------------------------------------
-
-# JS: the .data package loader uses these two identical string literals.
-# Both must be replaced; order does not matter since they are independent.
+# Reference literals emcc emits in fruit-ninja.js / fruit-ninja.html
+# (emscripten/emsdk:latest, emcc 6.x).
 _DATA_LITERALS = [
     'PACKAGE_NAME="fruit-ninja.data"',
     'REMOTE_PACKAGE_BASE="fruit-ninja.data"',
 ]
-# JS: the wasm loader calls locateFile with this exact string literal.
+_DATA_DEP_LITERAL = '"datafile_fruit-ninja.data"'
 _WASM_LITERAL = 'locateFile("fruit-ninja.wasm")'
-
-# HTML: emcc minifies the <script> tag to this exact form (no quotes around src value).
 _HTML_SCRIPT_LITERAL = '<script async src=fruit-ninja.js>'
-# HTML: shell.html emits this for the splash img.
 _HTML_SPLASH_LITERAL = 'src=splash.webp'
 
 
 def sha8(path):
-    """Return first 8 hex digits of the SHA-256 of the file at path."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -55,215 +56,193 @@ def sha8(path):
 
 
 def hashed_name(stem, digest, ext):
-    """Return 'stem-digest.ext' (e.g. 'fruit-ninja-ab12cd34.wasm')."""
     return "{}-{}.{}".format(stem, digest, ext)
 
 
-def rename_with_hash(src_path, stem, digest, ext):
-    """Rename src_path to stem-digest.ext in the same directory. Returns new path."""
-    dst_name = hashed_name(stem, digest, ext)
-    dst_path = os.path.join(os.path.dirname(src_path), dst_name)
-    os.rename(src_path, dst_path)
-    return dst_path
-
-
 def read_text(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8", errors="surrogateescape") as f:
         return f.read()
 
 
 def write_text(path, content):
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", errors="surrogateescape") as f:
         f.write(content)
 
 
-def prune_stale(out_dir, stem, ext, keep_digest):
-    """
-    Delete any file matching stem-<8hex>.ext in out_dir that is NOT keep_digest.
-    Matches only exactly 8 lowercase hex characters.
-    """
-    pattern = re.compile(r"^{}-([0-9a-f]{{8}})\.{}$".format(re.escape(stem), re.escape(ext)))
-    removed = []
+def find_existing_hashed(out_dir, stem, ext):
+    """Return [(digest, name, mtime), ...] for files stem-<8hex>.ext in out_dir."""
+    pat = re.compile(r"^{}-([0-9a-f]{{8}})\.{}$".format(re.escape(stem), re.escape(ext)))
+    out = []
     for name in os.listdir(out_dir):
-        m = pattern.match(name)
+        m = pat.match(name)
+        if m:
+            full = os.path.join(out_dir, name)
+            out.append((m.group(1), name, os.path.getmtime(full)))
+    return out
+
+
+def resolve_asset(out_dir, stem, ext):
+    """
+    Ensure a content-hashed stem-<sha8>.ext exists in out_dir and return its 8-hex
+    digest (or None if the asset is entirely absent).
+
+    - If the freshly-emitted canonical stem.ext exists: hash it and turn it into the
+      hashed name (rename; or, if an identical-hash file already exists, just drop
+      the duplicate canonical). This is the "changed / full build" path.
+    - Else (canonical absent -> unchanged on this incremental build): reuse the
+      existing stem-<sha8>.ext. No copy. This is the fix for the .data 404.
+    """
+    canonical = os.path.join(out_dir, "{}.{}".format(stem, ext))
+    if os.path.isfile(canonical):
+        digest = sha8(canonical)
+        hashed = os.path.join(out_dir, hashed_name(stem, digest, ext))
+        if os.path.abspath(hashed) != os.path.abspath(canonical):
+            if os.path.isfile(hashed):
+                os.remove(canonical)          # identical content already hashed
+            else:
+                os.rename(canonical, hashed)
+        return digest, "fresh"
+
+    existing = find_existing_hashed(out_dir, stem, ext)
+    if not existing:
+        return None, "missing"
+    if len(existing) == 1:
+        return existing[0][0], "reused"
+    # ambiguous (multiple hashed copies left over) -> keep the newest; prune later
+    newest = max(existing, key=lambda t: t[2])
+    return newest[0], "reused-newest"
+
+
+def prune_stale(out_dir, stem, ext, keep_digest):
+    pat = re.compile(r"^{}-([0-9a-f]{{8}})\.{}$".format(re.escape(stem), re.escape(ext)))
+    removed = []
+    for name in sorted(os.listdir(out_dir)):
+        m = pat.match(name)
         if m and m.group(1) != keep_digest:
-            path = os.path.join(out_dir, name)
-            os.remove(path)
+            os.remove(os.path.join(out_dir, name))
             removed.append(name)
     return removed
+
+
+def replace_report(content, old, new, label):
+    count = content.count(old)
+    if count == 0:
+        print("[web-hash] WARNING: literal not found ({}): {!r}".format(label, old))
+        return content
+    print("[web-hash] {}: replaced {} occurrence(s) of {!r}".format(label, count, old))
+    return content.replace(old, new)
 
 
 def main():
     if len(sys.argv) < 2:
         print("Usage: web-hash-assets.py <build/web>", file=sys.stderr)
         sys.exit(1)
-
     out_dir = sys.argv[1]
     if not os.path.isdir(out_dir):
         print("ERROR: not a directory: {}".format(out_dir), file=sys.stderr)
         sys.exit(1)
 
-    def p(path):
-        return os.path.join(out_dir, path)
+    def p(name):
+        return os.path.join(out_dir, name)
 
     print("[web-hash] starting in: {}".format(os.path.abspath(out_dir)))
 
-    # -----------------------------------------------------------------------
-    # Step 1: Hash wasm + data + splash.webp; rename each to name-<sha8>.ext
-    # -----------------------------------------------------------------------
+    # --- Step 1: resolve content hashes for wasm + data + splash --------------
+    # (each becomes / stays fruit-ninja-<sha8>.ext; digest reused if unchanged)
+    wasm_digest, wasm_how = resolve_asset(out_dir, STEM, "wasm")
+    print("[web-hash] wasm   digest={} ({})".format(wasm_digest, wasm_how))
+    data_digest, data_how = resolve_asset(out_dir, STEM, "data")
+    print("[web-hash] data   digest={} ({})".format(data_digest, data_how))
+    splash_digest, splash_how = resolve_asset(out_dir, "splash", "webp")
+    print("[web-hash] splash digest={} ({})".format(splash_digest, splash_how))
 
-    wasm_digest = data_digest = splash_digest = None
+    if data_digest is None:
+        print("[web-hash] ERROR: no fruit-ninja.data (canonical or hashed) found -- "
+              "the runtime will 404. Run a clean web build.", file=sys.stderr)
 
-    # -- wasm --
-    wasm_src = p("fruit-ninja.wasm")
-    if os.path.isfile(wasm_src):
-        wasm_digest = sha8(wasm_src)
-        wasm_hashed = rename_with_hash(wasm_src, "fruit-ninja", wasm_digest, "wasm")
-        print("[web-hash] wasm  {} -> {}".format("fruit-ninja.wasm", os.path.basename(wasm_hashed)))
-    else:
-        print("[web-hash] WARNING: fruit-ninja.wasm not found -- skipping")
-
-    # -- data --
-    data_src = p("fruit-ninja.data")
-    if os.path.isfile(data_src):
-        data_digest = sha8(data_src)
-        data_hashed = rename_with_hash(data_src, "fruit-ninja", data_digest, "data")
-        print("[web-hash] data  {} -> {}".format("fruit-ninja.data", os.path.basename(data_hashed)))
-    else:
-        print("[web-hash] WARNING: fruit-ninja.data not found -- skipping")
-
-    # -- splash --
-    splash_src = p("splash.webp")
-    if os.path.isfile(splash_src):
-        splash_digest = sha8(splash_src)
-        splash_hashed = rename_with_hash(splash_src, "splash", splash_digest, "webp")
-        print("[web-hash] splash {} -> {}".format("splash.webp", os.path.basename(splash_hashed)))
-    else:
-        print("[web-hash] WARNING: splash.webp not found -- skipping")
-
-    # -----------------------------------------------------------------------
-    # Step 2: Rewrite fruit-ninja.js -- replace wasm + data references
-    # -----------------------------------------------------------------------
-
-    js_src = p("fruit-ninja.js")
-    if not os.path.isfile(js_src):
-        print("[web-hash] WARNING: fruit-ninja.js not found -- skipping js rewrite")
-        js_digest = None
-    else:
-        js_content = read_text(js_src)
-
-        # Replace data references (PACKAGE_NAME + REMOTE_PACKAGE_BASE)
+    # --- Step 2: rewrite fruit-ninja.js references, then hash it ---------------
+    # The JS is re-emitted (with un-hashed refs) every build, so rewrite always
+    # runs against the fresh canonical file using the digests resolved above.
+    js_digest = None
+    js_src = p("{}.js".format(STEM))
+    if os.path.isfile(js_src):
+        js = read_text(js_src)
         if data_digest is not None:
-            new_data_name = hashed_name("fruit-ninja", data_digest, "data")
-            for literal in _DATA_LITERALS:
-                new_literal = literal.replace("fruit-ninja.data", new_data_name)
-                count = js_content.count(literal)
-                if count == 0:
-                    print("[web-hash] WARNING: JS literal not found: {}".format(literal))
-                js_content = js_content.replace(literal, new_literal)
-                print("[web-hash] js: replaced {} occurrence(s) of {!r}".format(count, literal))
-
-            # Also replace the datafile_ dependency key (two occurrences expected)
-            old_dep = '"datafile_fruit-ninja.data"'
-            new_dep = '"datafile_{}"'.format(new_data_name)
-            count = js_content.count(old_dep)
-            if count > 0:
-                js_content = js_content.replace(old_dep, new_dep)
-                print("[web-hash] js: replaced {} occurrence(s) of {!r}".format(count, old_dep))
-
-        # Replace wasm reference
+            new_data = hashed_name(STEM, data_digest, "data")
+            for lit in _DATA_LITERALS:
+                js = replace_report(js, lit, lit.replace("fruit-ninja.data", new_data), "js")
+            js = replace_report(js, _DATA_DEP_LITERAL,
+                                _DATA_DEP_LITERAL.replace("fruit-ninja.data", new_data), "js")
         if wasm_digest is not None:
-            new_wasm_name = hashed_name("fruit-ninja", wasm_digest, "wasm")
-            new_wasm_literal = _WASM_LITERAL.replace("fruit-ninja.wasm", new_wasm_name)
-            count = js_content.count(_WASM_LITERAL)
-            if count == 0:
-                print("[web-hash] WARNING: wasm literal not found in JS: {}".format(_WASM_LITERAL))
-            js_content = js_content.replace(_WASM_LITERAL, new_wasm_literal)
-            print("[web-hash] js: replaced {} occurrence(s) of {!r}".format(count, _WASM_LITERAL))
-
-        write_text(js_src, js_content)
-        print("[web-hash] js: rewrites applied -> {}".format(os.path.basename(js_src)))
-
-        # -----------------------------------------------------------------------
-        # Step 3: Hash the now-rewritten js; rename to fruit-ninja-<sha8>.js
-        # -----------------------------------------------------------------------
+            new_wasm = hashed_name(STEM, wasm_digest, "wasm")
+            js = replace_report(js, _WASM_LITERAL,
+                                _WASM_LITERAL.replace("fruit-ninja.wasm", new_wasm), "js")
+        # Belt-and-suspenders: catch any remaining bare references emcc may emit
+        # in future versions (idempotent -- already-hashed names won't match).
+        if data_digest is not None:
+            stray = re.findall(r'"fruit-ninja\.data"', js)
+            if stray:
+                js = js.replace('"fruit-ninja.data"', '"{}"'.format(hashed_name(STEM, data_digest, "data")))
+                print("[web-hash] js: rewrote {} stray bare fruit-ninja.data ref(s)".format(len(stray)))
+        write_text(js_src, js)
         js_digest = sha8(js_src)
-        js_hashed = rename_with_hash(js_src, "fruit-ninja", js_digest, "js")
-        print("[web-hash] js   fruit-ninja.js -> {}".format(os.path.basename(js_hashed)))
-
-    # -----------------------------------------------------------------------
-    # Step 4: Rewrite fruit-ninja.html -- replace script src + splash src
-    # -----------------------------------------------------------------------
-
-    html_path = p("fruit-ninja.html")
-    if not os.path.isfile(html_path):
-        print("[web-hash] WARNING: fruit-ninja.html not found -- skipping html rewrite")
+        os.rename(js_src, p(hashed_name(STEM, js_digest, "js")))
+        print("[web-hash] js   fruit-ninja.js -> {}".format(hashed_name(STEM, js_digest, "js")))
     else:
-        html_content = read_text(html_path)
+        existing_js = find_existing_hashed(out_dir, STEM, "js")
+        if existing_js:
+            js_digest = max(existing_js, key=lambda t: t[2])[0]
+            print("[web-hash] js   canonical absent -> reusing {}".format(
+                hashed_name(STEM, js_digest, "js")))
+        else:
+            print("[web-hash] WARNING: no fruit-ninja.js (canonical or hashed) found")
 
-        # Replace <script async src=fruit-ninja.js>
+    # --- Step 3: rewrite fruit-ninja.html (stays unhashed) --------------------
+    html = p("{}.html".format(STEM))
+    if os.path.isfile(html):
+        h = read_text(html)
         if js_digest is not None:
-            new_js_name = hashed_name("fruit-ninja", js_digest, "js")
-            new_script = _HTML_SCRIPT_LITERAL.replace("fruit-ninja.js", new_js_name)
-            count = html_content.count(_HTML_SCRIPT_LITERAL)
-            if count == 0:
-                print("[web-hash] WARNING: script literal not found in HTML: {}".format(_HTML_SCRIPT_LITERAL))
-            html_content = html_content.replace(_HTML_SCRIPT_LITERAL, new_script)
-            print("[web-hash] html: replaced {} occurrence(s) of script src".format(count))
-
-        # Replace src=splash.webp
+            h = replace_report(h, _HTML_SCRIPT_LITERAL,
+                               _HTML_SCRIPT_LITERAL.replace("fruit-ninja.js",
+                                                            hashed_name(STEM, js_digest, "js")), "html")
         if splash_digest is not None:
-            new_splash_name = hashed_name("splash", splash_digest, "webp")
-            new_splash = _HTML_SPLASH_LITERAL.replace("splash.webp", new_splash_name)
-            count = html_content.count(_HTML_SPLASH_LITERAL)
-            if count == 0:
-                print("[web-hash] WARNING: splash literal not found in HTML: {}".format(_HTML_SPLASH_LITERAL))
-            html_content = html_content.replace(_HTML_SPLASH_LITERAL, new_splash)
-            print("[web-hash] html: replaced {} occurrence(s) of splash src".format(count))
+            h = replace_report(h, _HTML_SPLASH_LITERAL,
+                               _HTML_SPLASH_LITERAL.replace("splash.webp",
+                                                            hashed_name("splash", splash_digest, "webp")), "html")
+        if wasm_digest is not None and "__FN_BUILD__" in h:
+            h = h.replace("__FN_BUILD__", wasm_digest)
+            print("[web-hash] html: __FN_BUILD__ -> {}".format(wasm_digest))
+        write_text(html, h)
+        print("[web-hash] html: rewrites applied -> fruit-ninja.html")
+    else:
+        print("[web-hash] WARNING: fruit-ninja.html not found")
 
-        # Replace the build-identifier placeholder with the wasm sha8 so the
-        # bottom-left "build <hash>" overlay (shown when ?fps is set) matches
-        # the actual loaded wasm -- a quick cache/freshness check on device.
-        if wasm_digest is not None:
-            count = html_content.count("__FN_BUILD__")
-            html_content = html_content.replace("__FN_BUILD__", wasm_digest)
-            print("[web-hash] html: replaced {} occurrence(s) of __FN_BUILD__ -> {}".format(count, wasm_digest))
+    # --- Step 4: prune stale hashes (keep current) ----------------------------
+    for stem, ext, dig in [(STEM, "wasm", wasm_digest), (STEM, "data", data_digest),
+                           (STEM, "js", js_digest), ("splash", "webp", splash_digest)]:
+        if dig is not None:
+            for name in prune_stale(out_dir, stem, ext, dig):
+                print("[web-hash] pruned stale: {}".format(name))
 
-        write_text(html_path, html_content)
-        print("[web-hash] html: rewrites applied -> fruit-ninja.html (unchanged filename)")
-
-    # -----------------------------------------------------------------------
-    # Step 5: Prune stale hashed files from prior builds
-    # -----------------------------------------------------------------------
-
-    print("[web-hash] pruning stale hashes...")
-
-    if wasm_digest is not None:
-        removed = prune_stale(out_dir, "fruit-ninja", "wasm", wasm_digest)
-        for name in removed:
-            print("[web-hash] pruned stale: {}".format(name))
-
-    if data_digest is not None:
-        removed = prune_stale(out_dir, "fruit-ninja", "data", data_digest)
-        for name in removed:
-            print("[web-hash] pruned stale: {}".format(name))
-
+    # --- Verify: the served JS must not reference any un-hashed asset ----------
+    ok = True
     if js_digest is not None:
-        removed = prune_stale(out_dir, "fruit-ninja", "js", js_digest)
-        for name in removed:
-            print("[web-hash] pruned stale: {}".format(name))
-
-    if splash_digest is not None:
-        removed = prune_stale(out_dir, "splash", "webp", splash_digest)
-        for name in removed:
-            print("[web-hash] pruned stale: {}".format(name))
+        served_js = p(hashed_name(STEM, js_digest, "js"))
+        if os.path.isfile(served_js):
+            content = read_text(served_js)
+            for bad in ('"fruit-ninja.data"', "locateFile(\"fruit-ninja.wasm\")"):
+                if bad in content:
+                    print("[web-hash] ERROR: served JS still references un-hashed asset: {}".format(bad),
+                          file=sys.stderr)
+                    ok = False
 
     print("[web-hash] done.")
     print("[web-hash] current set:")
     for name in sorted(os.listdir(out_dir)):
-        if re.search(r"-[0-9a-f]{8}\.(js|wasm|data)$", name) or re.search(r"-[0-9a-f]{8}\.webp$", name) or name == "fruit-ninja.html":
-            size = os.path.getsize(os.path.join(out_dir, name))
-            print("[web-hash]   {} ({} bytes)".format(name, size))
+        if re.search(r"-[0-9a-f]{8}\.(js|wasm|data|webp)$", name) or name == "fruit-ninja.html":
+            print("[web-hash]   {} ({} bytes)".format(name, os.path.getsize(p(name))))
+
+    sys.exit(0 if ok else 2)
 
 
 if __name__ == "__main__":
