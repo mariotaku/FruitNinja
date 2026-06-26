@@ -106,9 +106,10 @@ public:
     void UnLoadContent();
     // ---- end STUBS ----
 
-    // BuildBonusText -- v1.6.1 @0x001621dc
-    // Creates all BakedStringBox members (rank label/value, score counter, title band).
+    // BuildBonusText -- v1.6.1 @0x001621dc..0x0016267b
+    // Creates all BakedStringBox members (rank label/value, BONUS title, TOTAL label).
     // Called once from Update tail when m_bSkipIntro becomes true.
+    // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
     void BuildBonusText();
 
 private:
