@@ -7,12 +7,16 @@
 //
 // Supported screens:
 //   bonus    -- BonusScreen with 3 mock awards, timer past all reveals.
+//   gameover -- Classic-mode GameOverScreen in STATE_MAIN_DISPLAY, score 123.
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
 
 #include "test_harness.h"
 #include "screens/BonusScreen.h"
+#include "screens/GameOverScreen.h"
+#include "game/GameWork.h"
+#include "game/GameMode.h"
 #include "engine/math/Vec3.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringTable.h"
@@ -21,6 +25,7 @@
 // Forward declarations for per-screen fixture functions.
 // ---------------------------------------------------------------------------
 static int RunBonus(fn::TestHarness& h);
+static int RunGameOver(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
 // Dispatch table.
@@ -31,8 +36,8 @@ struct ScreenCase {
 };
 
 static const ScreenCase kScreens[] = {
-    { "bonus", RunBonus },
-    // TODO: fixture for gameover
+    { "bonus",    RunBonus    },
+    { "gameover", RunGameOver },
     // TODO: fixture for shop
     { NULL, NULL }
 };
@@ -43,7 +48,7 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus\n");
+        "  screens: bonus gameover\n");
     return 1;
 }
 
@@ -209,5 +214,79 @@ static int RunBonus(fn::TestHarness& h) {
     }
 
     std::printf("PASS: bonus_screen screenshot complete\n");
+    return h.Shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// GameOverScreen fixture (Classic mode, STATE_MAIN_DISPLAY, score 123).
+//
+// Component-isolation mode: only GameOverScreen renders on a clean background.
+// No BonusManager, no live entities required.
+//
+// Setup:
+//   gameMode = CLASSIC (0), currentScore = 123, m_GameDt = 1.0f (fully faded).
+//   Construct in fast-path (param2=STATE_MAIN_DISPLAY, param3=0.0f) which sets
+//   m_bScoreSubmitted=1 and immediately calls Update(0.0f) inside Initialise
+//   (fast-path gate: param2>5 && m_GameDt>0.999).
+//   Add to isolated HUD, run 60 frames to create Retry/Quit buttons + settle.
+//
+// Stubbed:
+//   FruitFactPageControl (Classic page) is created by Update state-6 on the first
+//   tick after entering STATE_MAIN_DISPLAY -- it renders fine as long as textures
+//   loaded during 120-frame burn-in. No manual BonusManager setup needed for
+//   Classic mode.
+// ---------------------------------------------------------------------------
+
+static int RunGameOver(fn::TestHarness& h) {
+    if (!game_work.mHud) {
+        std::fprintf(stderr, "FAIL: mHud null after boot\n");
+        return 1;
+    }
+
+    // Classic mode, score 123.
+    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
+    game_work.currentScore = 123;
+    game_work.m_GameDt     = 1.0f;  // fully faded; required by fast-path gate
+
+    // Fast-path ctor: param2=STATE_MAIN_DISPLAY(6)>5, param3=0.0f satisfies
+    // the gate (param2>=0 && param3>=0.0f && param2>5 && m_GameDt>0.999).
+    // Initialise calls Update(0.0f) and sets m_bScoreSubmitted=1 immediately.
+    GameOverScreen* gos = new GameOverScreen(
+        "Classic",
+        GameOverScreen::STATE_MAIN_DISPLAY,   // param2
+        0.0f,                                  // param3
+        1,                                     // expressionIdx
+        1,                                     // bgPatternIdx
+        0,                                     // tabIndex
+        0);                                    // starCount
+
+    gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
+    game_work.pGameOverScreen = gos;
+
+    // Add as the ONLY control -- component mode already cleared the HUD.
+    game_work.mHud->AddControl(gos);
+
+    if (h.IsInteractive()) {
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1,
+                                  Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT);
+        return h.Shutdown();
+    }
+
+    // Settle 60 frames: drives BeginDraw -> sets final m_LayerFlags, creates
+    // FruitFactPageControl (Classic page), creates Retry + Quit buttons.
+    // Keep m_GameDt=1.0f each frame so alpha ramp is already done.
+    for (int i = 0; i < 60; ++i) {
+        game_work.m_GameDt = 1.0f;
+        h.RunComponentHeadless(1, Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT);
+    }
+
+    std::printf("[gameover_screen] stable state reached (m_State=%d, score=%d)\n",
+                gos->m_State, game_work.currentScore);
+
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng("gameover_screen")) return 3;
+    }
+
+    std::printf("PASS: gameover_screen screenshot complete\n");
     return h.Shutdown();
 }

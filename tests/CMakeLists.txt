@@ -414,5 +414,15 @@ set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
 # state and captures the framebuffer to tmp/test/screenshots/<screen>_screen.png.
 # Each ctest entry runs with --screenshot so the PNG is written automatically.
 fn_add_game_test(test_screenshot test_screenshot.cpp)
-add_test(NAME screenshot_bonus COMMAND test_screenshot bonus --screenshot)
-set_tests_properties(screenshot_bonus PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_bonus    COMMAND test_screenshot bonus    --screenshot)
+add_test(NAME screenshot_gameover COMMAND test_screenshot gameover --screenshot)
+set_tests_properties(screenshot_bonus    PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
+
+# AddToCurrentScore clamp regression guard (#222 fix).
+# Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
+# + penalty=-5 -> 0; score 0 + gain=50 -> 50. Uses TestHarness so
+# Game::GetInstance() + PowerUpManager + g_ScoreDelegate are live.
+fn_add_game_test(test_game_over test_game_over.cpp)
+add_test(NAME game_over COMMAND test_game_over)
+set_tests_properties(game_over PROPERTIES TIMEOUT 60)
