@@ -181,6 +181,24 @@ target_link_libraries(test_matrix44 PRIVATE mortar_engine)
 target_include_directories(test_matrix44 PRIVATE ${CMAKE_SOURCE_DIR}/src/engine ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME matrix44 COMMAND test_matrix44)
 
+# Math::Random 64-bit LCG: determinism, range bound, RandF [0,range), distribution.
+add_executable(test_random test_random.cpp)
+target_link_libraries(test_random PRIVATE mortar_engine)
+target_include_directories(test_random PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME random COMMAND test_random)
+
+# Collision: ColSphere/ColLine intersect predicates + penetration normal/depth.
+add_executable(test_collision test_collision.cpp)
+target_link_libraries(test_collision PRIVATE mortar_engine)
+target_include_directories(test_collision PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME collision COMMAND test_collision)
+
+# DataReader / VectorDataReader byte-stream: Read clamp/EOF, ReadLE<T> byte order.
+add_executable(test_datareader test_datareader.cpp)
+target_link_libraries(test_datareader PRIVATE mortar_engine)
+target_include_directories(test_datareader PRIVATE ${CMAKE_SOURCE_DIR}/src/engine ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME datareader COMMAND test_datareader)
+
 # EffectPropertyValues / EffectPropertyList / GetColourRGB unit test.
 # Exercises the 9-def mesh-material property set, SetValue/TryGetValue for
 # float/bool/Vec3/Texture2D types, and parent-chain lookup.
