@@ -17,11 +17,8 @@
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
-#include "asset/Mesh.h"
-#include "asset/TextureManager.h"
-#include "asset/Texture.h"
 #include "render/MatrixManager.h"
-#include "render/gl_funcs.h"
+#include "render/Renderer.h"
 #include "util/SmartPtr.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
@@ -54,24 +51,6 @@ static const float CRITICAL_FLASH_START_FADE = 0.3f;   // Fruit::CRITICAL_FLASH_
 static const float CRITICAL_FLASH_SCALE_MUL  = 15002.0f; // DAT_0016b714
 static const float CRITICAL_FLASH_MAX_X      = 480.0f;   // DAT_0016b718
 static const float CRITICAL_FLASH_MAX_Y      = 320.0f;   // DAT_0016b71c
-
-// Lazy 1×1 white texture for the untextured quad path. The Renderer's
-// quad shader samples u_tex × u_tint; without a bound texture the
-// sample is undefined, so bind a solid-white pixel and let the tint
-// drive the colour.
-static GLuint s_WhitePx = 0;
-static void EnsureWhitePx() {
-    if (s_WhitePx) return;
-    glGenTextures(1, &s_WhitePx);
-    glBindTexture(GL_TEXTURE_2D, s_WhitePx);
-    static const uint8_t white[4] = { 255, 255, 255, 255 };
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, white);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-}
 
 namespace FN {
 // Writes the bomb-hit world position used by Bomb::DrawBombHit.
@@ -148,28 +127,13 @@ void DrawCriticalFlash() {
                       s_CritFlashColour.b,
                       (uint8_t)alpha);
 
-    EnsureWhitePx();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_WhitePx);
-    // Sync s_LastBoundTexId since the white-pixel is procedural (no
-    // Mortar::Texture wrapper), and Renderer::DrawQuad would otherwise
-    // skip the draw thinking nothing is bound.
-#if !defined(__bada__)
-    Mortar::Texture::s_LastBoundTexId = s_WhitePx;
-#endif
-
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(sx, sy, 1.0f);
     mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
 
-    Mortar::Mesh::DrawQuadUnCached(tint, NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
-#if !defined(__bada__)
-    Mortar::Texture::s_LastBoundTexId = 0;
-#endif
+    Renderer::GetInstance()->DrawColorQuad(tint);
 }
 } // namespace FN
 

@@ -40,6 +40,9 @@ struct Renderer {
     void draw_sprite(GLuint tex, float x, float y, float w, float h,
                      float angle = 0.0f, float alpha = 1.0f);
 
+    // Port specific: untextured tinted quad (binary inlines this in the crit-flash; no standalone symbol).
+    void DrawColorQuad(const Colour& tint);
+
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24).
     // Matches original DrawTriList (0x00193f5c) / DrawTriStrip.
     void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount);
