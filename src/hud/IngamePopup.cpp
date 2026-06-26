@@ -115,9 +115,11 @@ IngamePopup::IngamePopup(int type)
         float textY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
         m_TextPositions.push_back(Vec3(0.0f, textY, 0.0f));
 
-        // Localised texture
+        // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x10,
+        // GOT [0x16dfcc] -> "new_outline.tex" (the bordered badge; "new_sml.tex"
+        // does not exist -> invalid SmartPtr -> border never drawn).
         Mortar::SmartPtr<Mortar::Texture> tex =
-            Mortar::TextureManager::LoadLocalisedTexture("new_sml.tex");
+            Mortar::TextureManager::LoadLocalisedTexture("new_outline.tex");
         m_Textures.push_back(tex);
 
         // Texture position: matches the language shift
@@ -148,9 +150,11 @@ IngamePopup::IngamePopup(int type)
         m_TextBoxes.push_back(box);
         m_TextPositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
 
-        // Localised texture
+        // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x11,
+        // GOT [0x16e574] -> "selected_outline.tex" (bordered; "selected_sml.tex"
+        // is the wrong, borderless small variant).
         Mortar::SmartPtr<Mortar::Texture> tex =
-            Mortar::TextureManager::LoadLocalisedTexture("selected_sml.tex");
+            Mortar::TextureManager::LoadLocalisedTexture("selected_outline.tex");
         m_Textures.push_back(tex);
         m_TexturePositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
         m_TextureScales.push_back(Vec3(1.0f, 1.0f, 0.0f));
