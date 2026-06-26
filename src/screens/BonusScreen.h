@@ -17,25 +17,30 @@
 
 namespace Mortar { class MortarSound; }
 
+// BonusAwardHud -- per-award data block. Binary size 0x60.
+// v1.6.1 BonusScreen::Draw @0x0016492c reads these fields per-award.
 struct BonusAwardHud {
     char       m_Name[64];        // +0x00
-    int        m_TierBase;        // +0x40
+    int        m_TierBase;        // +0x40  (binary: m_Score)
     int        m_Multiplier;      // +0x44
     int        _pad48;            // +0x48
     int        m_DisplayedScore;  // +0x4C
-    Colour     m_Colour;          // +0x50 (4 bytes, BGRA)
-    float      m_Scale;           // +0x54
-    int        _pad58;            // +0x58
-    Mortar::SmartPtr<Mortar::Texture> m_StarTex; // +0x5C (4 bytes on port; 8 in binary ARM SmartPtr)
-    // pad to 0x88 in binary; ARM SmartPtr is 4-byte here so struct is shorter on port
-    // Port: no ARM padding needed for asserts — see static_assert below gated on ARM.
+    Colour     m_Colour;          // +0x50 (4 bytes, BGRA) -- star tint + text-box colour
+    float      m_Alpha;           // +0x54 -- per-award draw alpha (passed to BakedStringBox::Draw as s0)
+    Colour     m_Colour2;         // +0x58 -- second palette colour (populated by AddAward, unread by Draw)
+    Mortar::SmartPtr<Mortar::Texture> m_StarTex; // +0x5C (binary: m_Icon; 4 bytes on ARM SmartPtr)
 
     BonusAwardHud()
         : m_TierBase(0), m_Multiplier(1), _pad48(0), m_DisplayedScore(0),
-          m_Scale(1.0f), _pad58(0) {
+          m_Alpha(1.0f) {
         m_Name[0] = '\0';
     }
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(BonusAwardHud) == 0x60, "BonusAwardHud size mismatch");
+#endif
 
 class BonusScreen : public HUDControl3d {
 public:
