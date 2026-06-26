@@ -761,6 +761,40 @@ static bool caseF_DrawTriList(FBO& fbo, bool updateGolden) {
     return ok;
 }
 
+// Case G: DrawColorQuad -- untextured tinted quad (used by BombHit crit-flash).
+// No texture bound; expect the FBO filled with the tint colour.
+static bool caseG_ColorQuad(FBO& fbo, bool updateGolden) {
+    fbo.Bind();
+    clearFBO(0.0f, 0.0f, 0.0f);
+    setupPixelOrtho();
+    Mortar::Texture::s_LastBoundTexId = 0;   // DrawColorQuad binds no texture
+    glDisable(GL_BLEND);
+
+    // 64x64 quad centred (same world-matrix setup as drawPixelQuad).
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().Scale(Vec3(64.0f, 64.0f, 1.0f));
+    mm.GetWorldStack().Translate(Vec3(32.0f, 32.0f, 0.0f));
+    mm.UploadModelViewOnly();
+
+    Renderer::GetInstance()->DrawColorQuad(Colour(0, 128, 255, 255));
+
+    unsigned char buf[FBO_W * FBO_H * 4];
+    fbo.ReadPixels(buf);
+    fbo.Unbind();
+
+    bool ok = true;
+    if (!updateGolden) {
+        ok = ok && assertPixel(buf, 32, 32,   0, 128, 255, 255, "G_ColorQuad");
+        ok = ok && assertPixel(buf,  0,  0,   0, 128, 255, 255, "G_ColorQuad");
+        ok = ok && assertPixel(buf, 63, 63,   0, 128, 255, 255, "G_ColorQuad");
+        if (ok) ok = compareGolden("G_ColorQuad", buf);
+    } else {
+        ok = saveGolden("G_ColorQuad", buf);
+    }
+    return ok;
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -844,6 +878,7 @@ int main(int argc, char* argv[]) {
     if (!caseD_AlphaBlend        (fbo, updateGolden)) { ++failures; fprintf(stderr, "FAIL: case D\n"); }
     if (!caseE_FullscreenQuad    (fbo, updateGolden)) { ++failures; fprintf(stderr, "FAIL: case E\n"); }
     if (!caseF_DrawTriList       (fbo, updateGolden)) { ++failures; fprintf(stderr, "FAIL: case F\n"); }
+    if (!caseG_ColorQuad         (fbo, updateGolden)) { ++failures; fprintf(stderr, "FAIL: case G\n"); }
 
     fbo.Destroy();
     SDL_GL_DeleteContext(glctx);
