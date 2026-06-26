@@ -6,8 +6,10 @@
 // framebuffer to tmp/test/screenshots/<screen>_screen.png.
 //
 // Supported screens:
-//   bonus    -- BonusScreen with 3 mock awards, timer past all reveals.
-//   gameover -- Classic-mode GameOverScreen in STATE_MAIN_DISPLAY, score 123.
+//   bonus          -- BonusScreen with 3 mock awards, timer past all reveals.
+//   gameover       -- Classic-mode GameOverScreen in STATE_MAIN_DISPLAY, score 123.
+//   gameover_zen   -- Zen-mode GameOverScreen, best combo of 4 fruit seeded.
+//   gameover_arcade -- Arcade-mode GameOverScreen, 2 bonus rows seeded.
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
@@ -17,6 +19,9 @@
 #include "screens/GameOverScreen.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
+#include "game/BonusManager.h"
+#include "game/Bonus.h"
+#include "game/FruitSaveData.h"
 #include "engine/math/Vec3.h"
 #include "engine/math/Colour.h"
 #include "engine/asset/TextureManager.h"
@@ -25,12 +30,15 @@
 #include "engine/render/MatrixStack.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/util/StringTable.h"
+#include <cstring>
 
 // ---------------------------------------------------------------------------
 // Forward declarations for per-screen fixture functions.
 // ---------------------------------------------------------------------------
 static int RunBonus(fn::TestHarness& h);
 static int RunGameOver(fn::TestHarness& h);
+static int RunGameOverZen(fn::TestHarness& h);
+static int RunGameOverArcade(fn::TestHarness& h);
 static int RunDrawQuad(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
@@ -42,9 +50,11 @@ struct ScreenCase {
 };
 
 static const ScreenCase kScreens[] = {
-    { "bonus",    RunBonus    },
-    { "gameover", RunGameOver },
-    { "drawquad", RunDrawQuad },
+    { "bonus",           RunBonus          },
+    { "gameover",        RunGameOver       },
+    { "gameover_zen",    RunGameOverZen    },
+    { "gameover_arcade", RunGameOverArcade },
+    { "drawquad",        RunDrawQuad       },
     // TODO: fixture for shop
     { NULL, NULL }
 };
@@ -55,7 +65,7 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus gameover drawquad\n");
+        "  screens: bonus gameover gameover_zen gameover_arcade drawquad\n");
     return 1;
 }
 
@@ -274,17 +284,18 @@ static int RunGameOver(fn::TestHarness& h) {
     game_work.mHud->AddControl(gos);
 
     if (h.IsInteractive()) {
-        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1,
-                                  Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT);
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
         return h.Shutdown();
     }
 
     // Settle 60 frames: drives BeginDraw -> sets final m_LayerFlags, creates
     // FruitFactPageControl (Classic page), creates Retry + Quit buttons.
     // Keep m_GameDt=1.0f each frame so alpha ramp is already done.
+    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
+    // so the fixture must draw 0x7FFFFFFF to cover title/divider/fact-title/fact-text (0x400) and rows (0x08).
     for (int i = 0; i < 60; ++i) {
         game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadless(1, Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT);
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
     }
 
     std::printf("[gameover_screen] stable state reached (m_State=%d, score=%d)\n",
@@ -295,6 +306,168 @@ static int RunGameOver(fn::TestHarness& h) {
     }
 
     std::printf("PASS: gameover_screen screenshot complete\n");
+    return h.Shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// GameOverScreen fixture -- Zen mode, STATE_MAIN_DISPLAY.
+//
+// FruitFactZenPage::Init reads game_work.m_SaveData->m_BestComboLength
+// and m_BestComboFruits[]. A combo of 4 (> 2 threshold) forces the
+// hasCombo branch that displays fruit icons + combo star.
+// Fruit type indices 0,1,2,3 are the first four fruits in the fruit table
+// (watermelon/apple/pear/orange by default); Init calls Fruit::FruitInfo()
+// on each but ignores the return value, so any valid index works.
+//
+// The fixture creates a local FruitSaveData, seeds the combo fields, and
+// points game_work.m_SaveData at it for the duration of the settle frames.
+// ---------------------------------------------------------------------------
+static int RunGameOverZen(fn::TestHarness& h) {
+    if (!game_work.mHud) {
+        std::fprintf(stderr, "FAIL: mHud null after boot\n");
+        return 1;
+    }
+
+    // A local save-data object; seeded with a 4-fruit combo.
+    FruitSaveData zenSave;
+    zenSave.m_BestComboLength = 4;
+    zenSave.m_BestComboFruits[0] = 0;  // fruit type index 0
+    zenSave.m_BestComboFruits[1] = 1;  // fruit type index 1
+    zenSave.m_BestComboFruits[2] = 2;  // fruit type index 2
+    zenSave.m_BestComboFruits[3] = 0;  // fruit type index 0 again (mixed combo)
+
+    // Point game_work at our local save-data so FruitFactZenPage::Init reads it.
+    FruitSaveData* prevSaveData = game_work.m_SaveData;
+    game_work.m_SaveData = &zenSave;
+
+    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ZEN;
+    game_work.currentScore = 456;
+    game_work.m_GameDt     = 1.0f;
+
+    GameOverScreen* gos = new GameOverScreen(
+        "Zen",
+        GameOverScreen::STATE_MAIN_DISPLAY,   // param2
+        0.0f,                                  // param3
+        1,                                     // expressionIdx
+        1,                                     // bgPatternIdx
+        0,                                     // tabIndex
+        0);                                    // starCount
+
+    gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
+    game_work.pGameOverScreen = gos;
+
+    game_work.mHud->AddControl(gos);
+
+    if (h.IsInteractive()) {
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        game_work.m_SaveData = prevSaveData;
+        return h.Shutdown();
+    }
+
+    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
+    // so the fixture must draw 0x7FFFFFFF to cover combo icons (0x08) and star/title (0x400).
+    for (int i = 0; i < 60; ++i) {
+        game_work.m_GameDt = 1.0f;
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
+    }
+
+    game_work.m_SaveData = prevSaveData;
+
+    std::printf("[gameover_zen] stable state reached (m_State=%d, combo=%d)\n",
+                gos->m_State, zenSave.m_BestComboLength);
+
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng("gameover_zen_screen")) return 3;
+    }
+
+    std::printf("PASS: gameover_zen screenshot complete\n");
+    return h.Shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// GameOverScreen fixture -- Arcade mode, STATE_MAIN_DISPLAY.
+//
+// FruitFactBonusFactPage::Init iterates BonusManager::m_BestBonuses via
+// GetFirstBestBonus / GetNextBestBonus. We push 2 hand-crafted Bonus objects
+// directly into m_BestBonuses; each carries a DisplayName, Tier, and a
+// star-icon texture (result_board_star.tex, matching what Init loads).
+//
+// starCount=3 is passed to the GameOverScreen ctor to show 3 stars on the
+// arcade results header (a common post-round state).
+// ---------------------------------------------------------------------------
+static int RunGameOverArcade(fn::TestHarness& h) {
+    if (!game_work.mHud) {
+        std::fprintf(stderr, "FAIL: mHud null after boot\n");
+        return 1;
+    }
+
+    // Seed BonusManager::m_BestBonuses with 2 representative awards.
+    BonusManager* bm = BonusManager::GetInstance();
+    bm->ClearBestBonuses();
+
+    // Award 0: "COMBO GOD!!!!" tier 50 (gold).
+    {
+        Bonus b;
+        const char* name = GETSTRING_STR("GAME_TEXTURE_17", 0);
+        if (!name || !name[0]) name = "COMBO GOD!!!!";
+        std::strncpy(b.m_DisplayName, name, sizeof(b.m_DisplayName) - 1);
+        b.m_DisplayName[sizeof(b.m_DisplayName) - 1] = '\0';
+        b.m_Tier = 50;
+        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
+        bm->m_BestBonuses.push_back(b);
+    }
+
+    // Award 1: "NO FRUIT DROPPED!" tier 50 (blue).
+    {
+        Bonus b;
+        const char* name = GETSTRING_STR("GAME_TEXTURE_23", 0);
+        if (!name || !name[0]) name = "NO FRUIT DROPPED!";
+        std::strncpy(b.m_DisplayName, name, sizeof(b.m_DisplayName) - 1);
+        b.m_DisplayName[sizeof(b.m_DisplayName) - 1] = '\0';
+        b.m_Tier = 50;
+        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
+        bm->m_BestBonuses.push_back(b);
+    }
+
+    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
+    game_work.currentScore = 789;
+    game_work.m_GameDt     = 1.0f;
+
+    // starCount=3: shows 3 stars on the arcade results board header.
+    GameOverScreen* gos = new GameOverScreen(
+        "Arcade",
+        GameOverScreen::STATE_MAIN_DISPLAY,   // param2
+        0.0f,                                  // param3
+        1,                                     // expressionIdx
+        1,                                     // bgPatternIdx
+        0,                                     // tabIndex
+        3);                                    // starCount (3 stars)
+
+    gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
+    game_work.pGameOverScreen = gos;
+
+    game_work.mHud->AddControl(gos);
+
+    if (h.IsInteractive()) {
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        return h.Shutdown();
+    }
+
+    // Draw all layers: real game issues multi-pass HUD::Draw (0x40/0x80/0x01/0x08/0x100/0x200/0x400)
+    // so the fixture must draw 0x7FFFFFFF to cover bonus rows (0x08) and title/fact-text (0x400).
+    for (int i = 0; i < 60; ++i) {
+        game_work.m_GameDt = 1.0f;
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
+    }
+
+    std::printf("[gameover_arcade] stable state reached (m_State=%d, score=%d)\n",
+                gos->m_State, game_work.currentScore);
+
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng("gameover_arcade_screen")) return 3;
+    }
+
+    std::printf("PASS: gameover_arcade screenshot complete\n");
     return h.Shutdown();
 }
 
