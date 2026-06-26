@@ -267,7 +267,7 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
         mm.UploadModelViewOnly();
 
         Colour white(255, 255, 255, 255);
-        Mortar::Mesh::DrawQuadUnCached(white, 0.0f, 0.0f, 1.0f, 1.0f, nullptr);
+        Mortar::Mesh::DrawQuadUnCached(white, 0.0f, 1.0f, 0.0f, 1.0f, nullptr);
 
         tex->UnSet(1);
     }

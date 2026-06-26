@@ -89,7 +89,7 @@ void ScreenFadeControl::Draw(float* hudScaleRaw)
     mm.UploadModelViewOnly();
 
     // Binary: Mortar::Mesh::DrawQuadUnCached(m_Colour, ...)
-    game->renderer.DrawQuad(m_Colour, 0.0f, 0.0f, 1.0f, 1.0f);
+    game->renderer.DrawQuad(m_Colour, 0.0f, 1.0f, 0.0f, 1.0f);
 
     tex->UnSet();
 }

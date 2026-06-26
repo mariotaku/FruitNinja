@@ -799,7 +799,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
             mm.UploadModelViewOnly();
             Colour tint(255, 255, 255, alpha);
             s_TexScratchs->Set();
-            Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
+            Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 1.0f, 0.0f, 1.0f, NULL);
             s_TexScratchs->UnSet();
         }
         return;

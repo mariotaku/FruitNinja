@@ -653,7 +653,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         if (tex) {
             tex->Set();
             Colour col(255, 255, 255, alpha);
-            if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+            if (game) game->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
             tex->UnSet();
         }
     }

@@ -67,7 +67,7 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     // binary @ 0x00144380..0x001443c0: TintColour(m_DrawColour, hudScale) then DrawQuad.
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
-    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
+    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
 
     m_Texture->UnSet();
 }

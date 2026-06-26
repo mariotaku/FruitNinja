@@ -253,11 +253,12 @@ public:
                   float w, float h, float uOff, float vOff,
                   DrawEffectContainer* fx);
 
-    // Binary @ 0x00194180 — delegates to 6-arg with u0=0,v0=1,u1=0,v1=1 (full texture).
+    // Binary @ 0x00194180 — delegates to 6-arg with uMin=0,uMax=1,vMin=0,vMax=1 (full texture).
     static void DrawQuadUnCached(Colour colour, DrawEffectContainer* fx);
 
-    // Binary @ 0x00194060 — 4-vert TRIANGLE_STRIP unit quad with UV crop [u0,v0]..[u1,v1].
-    static void DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
+    // Binary @ 0x00194060 — 4-vert TRIANGLE_STRIP unit quad with UV crop (uMin,uMax,vMin,vMax).
+    // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060: U-pair first, then V-pair.
+    static void DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, float vMax,
                                  DrawEffectContainer* fx);
 
     // Binary @ 0x0019404c — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.

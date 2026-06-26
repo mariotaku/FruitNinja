@@ -130,14 +130,16 @@ void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
-void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float v1) {
+// ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060 (binary 0x00240a70): UV args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
+void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, float vMax) {
     // Unit quad (-0.5..0.5) transformed by current matrix stack MVP.
+    // Vertex UV table matches binary DrawQuadUnCached: BL=(uMin,vMax), BR=(uMax,vMax), TL=(uMin,vMin), TR=(uMax,vMin).
     float verts[] = {
         // pos(xyz)          uv
-        -0.5f, -0.5f, 0.0f,  u0, v1,
-         0.5f, -0.5f, 0.0f,  u1, v1,
-        -0.5f,  0.5f, 0.0f,  u0, v0,
-         0.5f,  0.5f, 0.0f,  u1, v0,
+        -0.5f, -0.5f, 0.0f,  uMin, vMax,  // BL
+         0.5f, -0.5f, 0.0f,  uMax, vMax,  // BR
+        -0.5f,  0.5f, 0.0f,  uMin, vMin,  // TL
+         0.5f,  0.5f, 0.0f,  uMax, vMin,  // TR
     };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
@@ -151,7 +153,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
         if (!s_warned) {
             LOG_WARN("RENDERER/DrawQuad",
                 "no texture bound; tint=(%u,%u,%u,%u) uv=(%g,%g..%g,%g) -- caller missing Texture::Set?",
-                tint.r, tint.g, tint.b, tint.a, u0, v0, u1, v1);
+                tint.r, tint.g, tint.b, tint.a, uMin, vMin, uMax, vMax);
             s_warned = true;
         }
         return;

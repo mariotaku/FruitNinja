@@ -335,7 +335,7 @@ void FruitFactZenPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/) {
     // Draw the full texture quad in white. Binary copies the engine global white
     // Colour (GOT entry @ 0x002d81f8 -> Colour @ 0x002d0398, runtime-init 255,255,255,255 --
     // same global used by BaseScreen/AboutScreen/DojoScreen page draws).
-    // DrawQuadUnCached(colour, u0=0.0, v0=1.0, u1=0.0, v1=1.0, fx=NULL) -> full texture.
+    // DrawQuadUnCached(colour, uMin=0.0, uMax=1.0, vMin=0.0, vMax=1.0, fx=NULL) -> full texture.
     Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255),
                                    0.0f, 1.0f, 0.0f, 1.0f, NULL);
 
