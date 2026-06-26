@@ -4,6 +4,7 @@
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
 #include "render/Renderer.h"
+#include "render/Utf8StringIterator.h"
 #include "math/Matrix44.h"
 #include "math/Vec2.h"
 #include "math/Vec3.h"
@@ -159,8 +160,11 @@ float BakedStringBox::TotalHeight() const {
 static float MeasureWord(FontCacheObjectTTF* font, const char* ptr, int len,
                          float requestedSize) {
     float adv = 0.0f;
-    for (int c = 0; c < len; c++) {
-        uint32_t cp = (uint32_t)(unsigned char)ptr[c];
+    const char* p   = ptr;
+    const char* end = ptr + len;
+    while (p < end) {
+        uint32_t cp = Mortar::utf8::decode_next_unicode_character(&p);
+        if (cp == 0) break;
         const GlyphAtlasEntry* g = font->GetGlyph(cp, requestedSize);
         if (g) adv += g->advanceX;
     }
@@ -197,11 +201,11 @@ void BakedStringBox::Layout() {
 
     // Pre-render every codepoint in the string so atlas UVs are populated.
     {
-        const char* p = m_Text;
-        while (*p) {
-            if (*p != '\n')
-                m_Font->GetGlyph((uint32_t)(unsigned char)*p, requestedSize);
-            p++;
+        Mortar::Utf8StringIterator it(m_Text);
+        while (!it.IsEmpty()) {
+            if (it.m_CurrentCodepoint != (uint32_t)'\n')
+                m_Font->GetGlyph(it.m_CurrentCodepoint, requestedSize);
+            it++;
         }
     }
     FontInterface* atlas = m_Font->GetAtlas();
@@ -293,9 +297,11 @@ void BakedStringBox::Layout() {
                 if (words[wj].hardBreak) continue;
                 if (!firstWordInk) penX += spAdv;
                 firstWordInk = false;
-                const char* wp = words[wj].start;
-                for (int c = 0; c < words[wj].len; c++) {
-                    uint32_t cp = (uint32_t)(unsigned char)wp[c];
+                const char* wp    = words[wj].start;
+                const char* wpEnd = wp + words[wj].len;
+                while (wp < wpEnd) {
+                    uint32_t cp = Mortar::utf8::decode_next_unicode_character(&wp);
+                    if (cp == 0) break;
                     const GlyphAtlasEntry* g = m_Font->GetGlyph(cp, requestedSize);
                     if (!g) continue;
                     if (g->width > 0.0f) {
@@ -341,9 +347,11 @@ void BakedStringBox::Layout() {
             if (words[wj].hardBreak) continue; // skip '\n' sentinels
             if (!firstWordOnLine) curX += spAdv;
             firstWordOnLine = false;
-            const char* wp = words[wj].start;
-            for (int c = 0; c < words[wj].len; c++) {
-                uint32_t cp = (uint32_t)(unsigned char)wp[c];
+            const char* wp    = words[wj].start;
+            const char* wpEnd = wp + words[wj].len;
+            while (wp < wpEnd) {
+                uint32_t cp = Mortar::utf8::decode_next_unicode_character(&wp);
+                if (cp == 0) break;
                 const GlyphAtlasEntry* g = m_Font->GetGlyph(cp, requestedSize);
                 if (!g) continue;
 
