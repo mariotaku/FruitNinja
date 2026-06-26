@@ -189,6 +189,28 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
+void Renderer::DrawColorQuad(const Colour& tint) {
+    float verts[] = { -0.5f,-0.5f,0.0f,  0.5f,-0.5f,0.0f,  -0.5f,0.5f,0.0f,  0.5f,0.5f,0.0f };
+    Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
+
+    SetupFF2D(mvp.ptr(), 0, tint);
+
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 12, verts);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    glDisableClientState(GL_VERTEX_ARRAY);
+}
+
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
                            float angle, float alpha) {
     MatrixStack& stack = MatrixManager::GetInstance().GetWorldStack();
