@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     }
     std::printf("OK: ctor size=(%.1f,%.1f)\n", bs->size.x, bs->size.y);
 
-    bs->pos = Vec3(0.0f, -20.0f, 0.0f);
+    bs->pos = Vec3(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
     Mortar::SmartPtr<Mortar::Texture> noTex;
     bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), noTex, "ALL_APPLES",   150);
     bs->AddAward(Colour(0x00, 0xAD, 0x7E, 0xFF), noTex, "STRAIGHT_3",   300);
