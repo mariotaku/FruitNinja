@@ -541,3 +541,17 @@ add_test(NAME font_align COMMAND test_font_align)
 set_tests_properties(font_align PROPERTIES
     TIMEOUT 60 SKIP_RETURN_CODE 77
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Sensei-board-lingers-after-quit repro diagnostic.
+# Drives a real Classic GameOverScreen to STATE_MAIN_DISPLAY (creating
+# FruitFactClassicFactPage + sensei GenericHUDControls), then fires the quit
+# callback and ticks 180 frames with per-frame logging.  Asserts that
+# pGameOverScreen goes null and no FruitFactControl/GenericHUDControl lingers.
+# FAILS if the sensei board does not tear down (reproduces the bug);
+# PASSES (with a note) if headless path reaps cleanly (real-app-only bug).
+# FN_TEST enables BaseScreen::GetHUDControlsForTest() for pointer-identity
+# tracking of sensei GenericHUDControls (GetType()==1 is too broad to use alone).
+fn_add_game_test(test_sensei_teardown test_sensei_teardown.cpp)
+target_compile_definitions(test_sensei_teardown PRIVATE FN_TEST)
+add_test(NAME sensei_teardown COMMAND test_sensei_teardown)
+set_tests_properties(sensei_teardown PROPERTIES TIMEOUT 120)
