@@ -7,12 +7,12 @@
 //
 // Supported screens (suite/case mapping):
 //   bonus               -> bonus/default
-//   gameover            -> gameover/classic
-//   gameover_zen        -> gameover/zen
-//   gameover_arcade     -> gameover/arcade
+//   gameover            -> gameover/classic    (score 266, highscore 200, NEW BEST, ScoreControl)
+//   gameover_zen        -> gameover/zen        (score 456, highscore 400, NEW BEST, ScoreControl)
+//   gameover_arcade     -> gameover/arcade     (score 789, highscore 700, NEW BEST, ScoreControl)
 //   drawquad            -> drawquad/default
 //   mesh                -> mesh/default
-//   gameover_withscore  -> temp/gameover_with_scorecontrol  (ScoreControl in full game-over flow)
+//   gameover_withscore  -> temp/gameover_with_scorecontrol  (classic 266, kept for reference)
 //
 // FruitFact per-mode screenshots have moved to test_fruitfact (classic/arcade/zen).
 //
@@ -248,17 +248,18 @@ static int RunBonus(fn::TestHarness& h) {
 }
 
 // ---------------------------------------------------------------------------
-// GameOverScreen fixture (Classic mode, STATE_MAIN_DISPLAY, score 123).
+// GameOverScreen fixture (Classic mode, STATE_MAIN_DISPLAY).
 //
-// Component-isolation mode: only GameOverScreen renders on a clean background.
-// No BonusManager, no live entities required.
+// ScoreControl is kept present alongside GameOverScreen (same pattern as
+// RunGameOverWithScore) so SCORE + number + NEW BEST render top-left.
 //
 // Setup:
-//   gameMode = CLASSIC (0), currentScore = 123, m_GameDt = 1.0f (fully faded).
+//   gameMode = CLASSIC (0), currentScore = 266, highscore = 200 -> NEW BEST.
+//   m_GameDt = 1.0f (fully faded; required by fast-path gate).
 //   Construct in fast-path (param2=STATE_MAIN_DISPLAY, param3=0.0f) which sets
 //   m_bScoreSubmitted=1 and immediately calls Update(0.0f) inside Initialise
 //   (fast-path gate: param2>5 && m_GameDt>0.999).
-//   Add to isolated HUD, run 60 frames to create Retry/Quit buttons + settle.
+//   Add GameOverScreen + ScoreControl to HUD, run 60 frames to settle.
 //
 // Stubbed:
 //   FruitFactPageControl (Classic page) is created by Update state-6 on the first
@@ -273,10 +274,17 @@ static int RunGameOver(fn::TestHarness& h) {
         return 1;
     }
 
-    // Classic mode, score 123.
+    // Classic mode, score 266.  Highscore 200 < 266 -> NEW BEST fires.
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
-    game_work.currentScore = 123;
+    game_work.currentScore = 266;
     game_work.m_GameDt     = 1.0f;  // fully faded; required by fast-path gate
+    game_work.bM_bPaused   = 0;
+
+    FruitSaveData saveData;
+    saveData.m_ModeHighScores[Mortar::GAME_MODE_CLASSIC] = 200;
+    saveData.newBestThisGame = 1;
+    FruitSaveData* prevSaveData = game_work.m_SaveData;
+    game_work.m_SaveData = &saveData;
 
     // Fast-path ctor: param2=STATE_MAIN_DISPLAY(6)>5, param3=0.0f satisfies
     // the gate (param2>=0 && param3>=0.0f && param2>5 && m_GameDt>0.999).
@@ -292,12 +300,17 @@ static int RunGameOver(fn::TestHarness& h) {
 
     gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
     game_work.pGameOverScreen = gos;
-
-    // Add as the ONLY control -- component mode already cleared the HUD.
     game_work.mHud->AddControl(gos);
+
+    // ScoreControl: kept present so SCORE + number + NEW BEST render top-left.
+    ScoreControl* sc = new ScoreControl();
+    sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+    sc->Skip();
+    game_work.mHud->AddControl(sc);
 
     if (h.IsInteractive()) {
         h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        game_work.m_SaveData = prevSaveData;
         return h.Shutdown();
     }
 
@@ -307,17 +320,22 @@ static int RunGameOver(fn::TestHarness& h) {
     // the 0x80 pass then draws the button face + Retry/Quit label. A single
     // all-bits pass misses the 0x80 visit so only the scratch backdrop renders.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt = 1.0f;
+        game_work.m_GameDt     = 1.0f;
+        game_work.currentScore = 266;
         h.RunComponentHeadlessMultiPass(1);
     }
 
-    std::printf("[gameover/classic] stable state reached (m_State=%d, score=%d)\n",
-                gos->m_State, game_work.currentScore);
+    std::printf("[gameover/classic] stable state reached (m_State=%d, score=%d, sc_displayed=%d)\n",
+                gos->m_State, game_work.currentScore, sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
+        if (!h.ScreenshotPng()) {
+            game_work.m_SaveData = prevSaveData;
+            return 3;
+        }
     }
 
+    game_work.m_SaveData = prevSaveData;
     std::printf("PASS: gameover/classic screenshot complete\n");
     return h.Shutdown();
 }
@@ -341,13 +359,16 @@ static int RunGameOverZen(fn::TestHarness& h) {
         return 1;
     }
 
-    // A local save-data object; seeded with a 4-fruit combo.
+    // A local save-data object; seeded with a 4-fruit combo + highscore.
+    // Highscore 400 < 456 -> NEW BEST fires.
     FruitSaveData zenSave;
     zenSave.m_BestComboLength = 4;
     zenSave.m_BestComboFruits[0] = 0;  // fruit type index 0
     zenSave.m_BestComboFruits[1] = 1;  // fruit type index 1
     zenSave.m_BestComboFruits[2] = 2;  // fruit type index 2
     zenSave.m_BestComboFruits[3] = 0;  // fruit type index 0 again (mixed combo)
+    zenSave.m_ModeHighScores[Mortar::GAME_MODE_ZEN] = 400;
+    zenSave.newBestThisGame = 1;
 
     // Point game_work at our local save-data so FruitFactZenPage::Init reads it.
     FruitSaveData* prevSaveData = game_work.m_SaveData;
@@ -356,6 +377,7 @@ static int RunGameOverZen(fn::TestHarness& h) {
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ZEN;
     game_work.currentScore = 456;
     game_work.m_GameDt     = 1.0f;
+    game_work.bM_bPaused   = 0;
 
     GameOverScreen* gos = new GameOverScreen(
         "Zen",
@@ -368,8 +390,13 @@ static int RunGameOverZen(fn::TestHarness& h) {
 
     gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
     game_work.pGameOverScreen = gos;
-
     game_work.mHud->AddControl(gos);
+
+    // ScoreControl: kept present so SCORE + number + NEW BEST render top-left.
+    ScoreControl* sc = new ScoreControl();
+    sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+    sc->Skip();
+    game_work.mHud->AddControl(sc);
 
     if (h.IsInteractive()) {
         h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
@@ -380,14 +407,15 @@ static int RunGameOverZen(fn::TestHarness& h) {
     // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
     // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt = 1.0f;
+        game_work.m_GameDt     = 1.0f;
+        game_work.currentScore = 456;
         h.RunComponentHeadlessMultiPass(1);
     }
 
     game_work.m_SaveData = prevSaveData;
 
-    std::printf("[gameover/zen] stable state reached (m_State=%d, combo=%d)\n",
-                gos->m_State, zenSave.m_BestComboLength);
+    std::printf("[gameover/zen] stable state reached (m_State=%d, combo=%d, sc_displayed=%d)\n",
+                gos->m_State, zenSave.m_BestComboLength, sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
@@ -442,9 +470,17 @@ static int RunGameOverArcade(fn::TestHarness& h) {
         bm->m_BestBonuses.push_back(b);
     }
 
+    // Highscore 700 < 789 -> NEW BEST fires.
+    FruitSaveData saveData;
+    saveData.m_ModeHighScores[Mortar::GAME_MODE_ARCADE] = 700;
+    saveData.newBestThisGame = 1;
+    FruitSaveData* prevSaveData = game_work.m_SaveData;
+    game_work.m_SaveData = &saveData;
+
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
     game_work.currentScore = 789;
     game_work.m_GameDt     = 1.0f;
+    game_work.bM_bPaused   = 0;
 
     // starCount=3: shows 3 stars on the arcade results board header.
     GameOverScreen* gos = new GameOverScreen(
@@ -458,28 +494,39 @@ static int RunGameOverArcade(fn::TestHarness& h) {
 
     gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
     game_work.pGameOverScreen = gos;
-
     game_work.mHud->AddControl(gos);
+
+    // ScoreControl: kept present so SCORE + number + NEW BEST render top-left.
+    ScoreControl* sc = new ScoreControl();
+    sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+    sc->Skip();
+    game_work.mHud->AddControl(sc);
 
     if (h.IsInteractive()) {
         h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        game_work.m_SaveData = prevSaveData;
         return h.Shutdown();
     }
 
     // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
     // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt = 1.0f;
+        game_work.m_GameDt     = 1.0f;
+        game_work.currentScore = 789;
         h.RunComponentHeadlessMultiPass(1);
     }
 
-    std::printf("[gameover/arcade] stable state reached (m_State=%d, score=%d)\n",
-                gos->m_State, game_work.currentScore);
+    std::printf("[gameover/arcade] stable state reached (m_State=%d, score=%d, sc_displayed=%d)\n",
+                gos->m_State, game_work.currentScore, sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
+        if (!h.ScreenshotPng()) {
+            game_work.m_SaveData = prevSaveData;
+            return 3;
+        }
     }
 
+    game_work.m_SaveData = prevSaveData;
     std::printf("PASS: gameover/arcade screenshot complete\n");
     return h.Shutdown();
 }
