@@ -18,8 +18,8 @@ from pathlib import Path
 
 
 HERE      = Path(__file__).resolve().parent
-PROJ_ROOT = HERE.parent.parent                        # docs/model_gallery -> project root
-MMD_ROOT  = PROJ_ROOT / "FruitNinjaBada" / "Data" / "models" / "Fruit"
+PROJ_ROOT = HERE.parent.parent.parent                 # docs/gallery/models -> project root
+MMD_ROOT  = PROJ_ROOT / "FruitNinjaBada" / "Data" / "models" / "fruit"
 OUT_DIR   = HERE                                      # write JSON sibling to this script
 
 
