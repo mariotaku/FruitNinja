@@ -14,7 +14,7 @@
 #include "engine/math/Colour.h"
 #include "engine/util/StringTable.h"
 #include "hud/GenericHUDControl.h"
-#include "hud/FruitFactControl.h"
+#include "hud/FruitFactCombo.h"
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
 #include "entities/Fruit.h"
@@ -43,7 +43,7 @@ static Mortar::FontCacheObjectTTF* GetZenTTFFont() {
 }
 
 // Binary @ 0x0017fcd4
-FruitFactZenPage::FruitFactZenPage(FruitFactPageControl* pCtrl)
+FruitFactZenPage::FruitFactZenPage(FruitFactControl* pCtrl)
     : FruitFactPage(pCtrl)
     , m_HasUnlockedFacts(0)
     , m_NumFacts(0)

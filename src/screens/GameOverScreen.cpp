@@ -22,8 +22,8 @@
 #include "hud/TutorialControl.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
-#include "hud/FruitFactPageControl.h"
 #include "hud/FruitFactControl.h"
+#include "hud/FruitFactCombo.h"
 #include "engine/audio/GameSound.h"
 #include "engine/audio/MortarSound.h"
 #include "asset/TextureManager.h"
@@ -1061,9 +1061,9 @@ void GameOverScreen::Update(float dt) {
     {
         const int prevState = m_State;
 
-        // 2) Create FruitFactPageControl on first entry (LAB_00187220)
+        // 2) Create FruitFactControl on first entry (LAB_00187220)
         if (m_pFruitFact == 0) {
-            m_pFruitFact = new FruitFactPageControl();
+            m_pFruitFact = new FruitFactControl();
             m_pFruitFact->pos = Vec3(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f);
             // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80 (0x00187280):
             //   tab/star args -> FruitFactControl +0x80/+0x84 (m_ComboA/m_ComboB).

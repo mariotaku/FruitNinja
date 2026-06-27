@@ -28,7 +28,7 @@
 #include "screens/ShopScreen.h"
 #include "ItemManager.h"
 #include "screens/LeaderboardScreen.h"
-#include "hud/FruitFactControl.h"
+#include "hud/FruitFactControl.h"   // FruitFactControl::UnLoadContent
 #include "hud/TutorialControl.h"
 #include "entities/Coin.h"
 #include "entities/SlashEntity.h"

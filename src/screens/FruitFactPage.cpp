@@ -3,7 +3,7 @@
 // NOTE: v1.6.1 addresses; port targets v1.6.1 binary.
 
 #include "FruitFactPage.h"
-#include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "hud/GenericHUDControl.h"
 #include "engine/render/BakedStringBox.h"
 #include "engine/render/FontCacheObjectTTF.h"
@@ -35,11 +35,11 @@ static Mortar::FontCacheObjectTTF* GetPageTTFFont() {
 
 // Cached sensei head texture (GOT-relative global in binary; one per process).
 // Binary @ 0x0017c3b4 reads from GOT+DAT_0017c4b0 -> the global SmartPtr<Texture>.
-// LoadContent for FruitFactPageControl populates it; here we load on demand.
+// LoadContent for FruitFactControl populates it; here we load on demand.
 static Mortar::SmartPtr<Mortar::Texture> g_SenseisHeadTex;
 
 // Binary @ 0x0017c214 / 0x0017c250
-FruitFactPage::FruitFactPage(FruitFactPageControl* pCtrl)
+FruitFactPage::FruitFactPage(FruitFactControl* pCtrl)
     : BaseScreen()
     , m_pController(pCtrl)
 {

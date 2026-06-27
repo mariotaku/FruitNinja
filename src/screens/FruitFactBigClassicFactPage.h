@@ -13,7 +13,7 @@
 class FruitFactBigClassicFactPage : public FruitFactPage {
 public:
     // Binary @ 0x00172884 -- ctor(FruitFactControl*, int factIndex, int pageIndex)
-    FruitFactBigClassicFactPage(FruitFactPageControl* pCtrl, int factIndex, int pageIndex);
+    FruitFactBigClassicFactPage(FruitFactControl* pCtrl, int factIndex, int pageIndex);
     ~FruitFactBigClassicFactPage() override;
 
     void Init() override;  // Binary @ 0x00172884 -- build icon GenericHUDControls

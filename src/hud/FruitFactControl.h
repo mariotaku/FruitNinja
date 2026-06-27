@@ -1,217 +1,166 @@
 #ifndef FN_HUD_FRUIT_FACT_CONTROL_H
 #define FN_HUD_FRUIT_FACT_CONTROL_H
 
-// FruitFactControl : HUDControl3d (binary sizeof = 0x204)
-// "Best fruit you sliced" callout panel shown on GameOverScreen.
-// Shown in gameMode 0 (classic), 2 (arcade), and 3 (dojo/zen).
 //
-// Binary addresses:
-//   ctor       0x0013cb60
-//   dtor D1    0x00139e6c
-//   Init       0x0013a278
-//   Release    0x00139d24
-//   Reset      0x00139298
-//   BeginDraw  0x0013a0bc
-//   Update     0x0013b604
-//   DrawOrder  0x0013b95c  (vtable slot 9)
-//   LoadContent   0x00170b1c  (v1.6.1)
-//   UnLoadContent 0x00171a4c  (v1.6.1)
-//   UpdateLeaderboard 0x0013afbc
-//   DrawLeaderboard   0x0013aac0
-//   DrawDownloadIcon  0x001395d0
-//   LeftPressed  0x001394ec
-//   RightPressed 0x001394b0
-//   UpPressed    0x0013993c
-//   DownPressed  0x0013987c
-//   LeftButton   0x0013a130
-//   RightButton  0x0013a1d4
-//   ConnectPressed 0x00139440
+// FruitFactControl : HUDControl3d  (v1.6.1 binary page-book controller)
 //
-// Binary field layout (ARM32, 4-byte pointers):
-//   +0x00: HUDControl3d super (0x7C bytes)
-//   +0x7C: float m_AnimTimer
-//   +0x80: const char* m_pCurFactString
-//   +0x84: int m_FruitIdx
-//   +0x88: int m_FactIdx
-//   +0x8C: Mortar::SmartPtr<Texture> m_FactTexture  (4B)
-//   +0x90: Vec3 m_FactPosOffset (12B) -- ASM-verified: 2026-05-11 v1.6.1 binary @ 0x0013a278 (re-analyst)
-//   +0x9C: Colour m_FactColour  (4B + 4B pad to reach +0xA4)
-//   +0xA4: int[11] m_ComboHashArray  (44B; 0xA4+44=0xD0) -- ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cb60 (re-analyst)
-//   +0xD0: int m_ComboLength
-//   +0xD4: float m_StarTimer
-//   +0xD8: uint8 m_bConnectPressed
-//   +0xD9..+0xDB: padding 3B
-//   +0xDC: Mortar::SmartPtr<Texture> m_ComboStarTex  (4B)
-//   +0xE0: uint8_t m_ComboType (0xFF = no combo) -- ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cb60 (re-analyst)
-//   +0xE4: uint8 m_TabIndex
-//   +0xE5..+0xE7: padding 3B
-//   +0xE8: LeaderboardList* m_pLeaderboardMenu
-//   +0xEC: MenuButton* m_pConnectButton
-//   +0xF0: int m_LBVisitedCount
-//   +0xF4: float m_LBProgressTimer
-//   +0xF8: int m_LBState (0..4)
-//   +0xFC: MenuButton* m_pLeftButton
-//   +0x100: MenuButton* m_pRightButton
-//   +0x104: FNHighscore m_LocalScore  (81B -> padded to 84B, ends at +0x157)
-//   +0x158: FNHighscore m_FriendScore1 (81B -> padded to 84B, ends at +0x1AB)
-//   +0x1AC: FNHighscore m_FriendScore2 (81B -> padded to 84B, ends at +0x1FF)
-//   +0x200: uint8 m_StarType
-//   +0x201..+0x203: padding 3B
-//   Total: 0x204
+// Binary class name: FruitFactControl (v1.6.1 binary @ 0x00170c78)
 //
-// Analysed: 2026-05-04T00:00
+// Binary refs (v1.6.1 FruitFactControl):
+//   ctor       0x00170c78
+//   dtor D0    0x001718ac
+//   dtor D1    0x0017193c
+//   dtor D2    0x001719c4
+//   Init       0x0017160c
+//   LoadContent  0x00170b1c
+//   UnLoadContent 0x00171a4c
+//   Update     0x00170eb4
+//   Reset      0x00170800  (no-op)
+//   Release    0x00171808
+//   SetPos     0x00170814
+//   BeginDrawing 0x00170804  (no-op)
+//   DrawOrder  0x00170810  (no-op)
+//   GetType    0x001720dc  -> returns 0xc (12)
+//   SetPage(int,bool)        0x0017132c
+//   RegisterPage(FruitFactPage*) 0x00171ab4
+//   LeftButton               0x00171534
+//   RightButton              0x00171458
+//   LeftPressed(InputEvent*) 0x001708b8
+//   RightPressed(InputEvent*) 0x0017086c
+//   UpPressed(InputEvent*)   0x00170a20
+//   DownPressed(InputEvent*) 0x00170924
+//
+// Binary layout (ARM32, 4-byte ptrs, v1.6.1):
+//   +0x00..+0x7B : HUDControl3d base (0x7C bytes)
+//   +0x7C        : const char* m_FactText       (ctor inits 0)
+//   +0x80        : uint m_ComboA                (ctor inits 0xFFFFFFFF)
+//   +0x84        : uint m_ComboB                (ctor inits 0xFFFFFFFF)
+//   +0x88        : SmartPtr<Texture> m_FactTexture
+//   +0x8C        : Vec3 m_FactOffset            (Init sets (-69,53,0))
+//   +0x98        : Colour m_FactColour          (ctor inits (0x74,0x5D,0x3B))
+//   +0x9C        : int m_PageFlag               (ctor inits 0)
+//   +0xA0        : MenuButton* m_NextButton     (lazily new'd in Update)
+//   +0xA4        : MenuButton* m_PrevButton     (lazily new'd in Update)
+//   +0xA8        : uint8_t m_GameStateSnapshot  (= game_work.gameMode byte)
+//   +0xAC        : std::vector<FruitFactPage*> m_Pages
+//   total 0xB8
+//
+// ASM-verified: layout v1.6.1 FruitFactControl @ 0x00170c78
+//
+// Singleton: static instance @ DATA 0x002d7520 (v1.6.1); constructed at
+// static-init time (entry-point xref). Not reached via a menu button.
+//
 
 #include "hud/HUDControl3d.h"
-#include "game/FNHighscore.h"
-#include "game/LeaderboardList.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/math/Colour.h"
+#include "engine/math/Vec3.h"
+#include <vector>
 #include <cstdint>
-#include <cstddef>
 
 struct InputEvent;
 class MenuButton;
+class FruitFactPage;
 
 class FruitFactControl : public HUDControl3d {
+    // FruitFactPage builder helpers access m_FactText and m_FactColour
+    // directly (binary offset reads: ctrl+0x7c, ctrl+0x98).
+    friend class FruitFactPage;
 public:
-    float          m_AnimTimer;          // +0x7C
-    const char*    m_pCurFactString;     // +0x80
-    int            m_FruitIdx;           // +0x84 (default -1)
-    int            m_FactIdx;            // +0x88 (default -1)
-    Mortar::SmartPtr<Mortar::Texture> m_FactTexture; // +0x8C
-    // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x0013a278 (re-analyst)
-    Vec3           m_FactPosOffset;      // +0x90 (12B: x,y,z floats)
-    Colour         m_FactColour;         // +0x9C  (4B)
-    uint8_t        m_ComboActiveFlag;    // +0xA0: field_0xa0; Zen-only comboFlag (set by Init, read by Update/Draw)
-    uint8_t        _pad_factColour[3];   // +0xA1: 3B pad to reach +0xA4
-    // +0xA4: int[11] (44B) -- see TODO above re: spec says int[12]
-    int            m_ComboHashArray[11]; // +0xA4
-    int            m_ComboLength;        // +0xD0
-    float          m_StarTimer;          // +0xD4
-    uint8_t        m_bConnectPressed;    // +0xD8
-    uint8_t        _pad_D9[3];           // +0xD9
-    Mortar::SmartPtr<Mortar::Texture> m_ComboStarTex; // +0xDC
-    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cb60 (re-analyst) -- uint8_t, NOT int; 0xFF = "no combo"
-    uint8_t        m_ComboType;          // +0xE0
-    uint8_t        _pad_E1[3];           // +0xE1
-    uint8_t        m_TabIndex;           // +0xE4
-    uint8_t        _pad_E5[3];           // +0xE5
-    LeaderboardList* m_pLeaderboardMenu; // +0xE8
-    MenuButton*    m_pConnectButton;     // +0xEC
-    int            m_LBVisitedCount;     // +0xF0
-    float          m_LBProgressTimer;   // +0xF4
-    int            m_LBState;           // +0xF8
-    MenuButton*    m_pLeftButton;        // +0xFC
-    MenuButton*    m_pRightButton;       // +0x100
-    FNHighscore    m_LocalScore;         // +0x104 (81B padded to 84)
-    uint8_t        _pad_LocalScore[3];
-    FNHighscore    m_FriendScore1;       // +0x158 (binary: 0x104+0x54=0x158)
-    uint8_t        _pad_FriendScore1[3];
-    FNHighscore    m_FriendScore2;       // +0x1AC (binary: 0x158+0x54=0x1AC)
-    uint8_t        _pad_FriendScore2[3];
-    uint8_t        m_StarType;           // +0x200
-    uint8_t        _pad_201[3];
-
-    // Binary @ 0x0013cb60
+    // Binary @ 0x00170c78
     FruitFactControl();
-    // Binary @ 0x00139e6c
-    virtual ~FruitFactControl() override;
+    // Binary @ 0x001718ac (D0) / 0x0017193c (D1) / 0x001719c4 (D2)
+    virtual ~FruitFactControl();
 
-    // HUDControl vtable overrides
-    virtual void Init() override;           // Binary @ 0x0013a278
-    virtual void Release() override;        // Binary @ 0x00139d24
-    virtual void Reset() override {}        // Binary @ 0x00139298 (empty)
-    virtual void BeginDraw(float dt) override; // Binary @ 0x0013a0bc
-    virtual void Update(float dt) override; // Binary @ 0x0013b604
-    virtual void DrawOrder(float* hudScaleRaw, int layerMask) override; // Binary @ 0x0013b95c
+    // HUDControl3d vtable overrides
+    void Init() override;            // Binary @ 0x0017160c
+    void Release() override;         // Binary @ 0x00171808
+    void Reset() override;           // Binary @ 0x00170800 (no-op)
+    void Update(float dt) override;  // Binary @ 0x00170eb4
 
-    virtual int GetType() override { return 6; }
+    // Binary @ 0x00170814 -- SetPos(_Vector3)
+    void SetPos(const Vec3& p);
 
-    // Input handlers
-    bool LeftPressed(InputEvent* ev);   // Binary @ 0x001394ec
-    bool RightPressed(InputEvent* ev);  // Binary @ 0x001394b0
-    bool UpPressed(InputEvent* ev);     // Binary @ 0x0013993c
-    bool DownPressed(InputEvent* ev);   // Binary @ 0x0013987c
+    // Binary @ 0x00170804 -- BeginDrawing (no-op in binary)
+    void BeginDraw(float dt) override;
 
-    // Button callbacks
-    void LeftButton();    // Binary @ 0x0013a130
-    void RightButton();   // Binary @ 0x0013a1d4
+    // Binary @ 0x00170810 -- DrawOrder (no-op in binary)
+    void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
-    // Binary @ 0x00139440 -- Defunct: online-services -- no-op stub; v1.6.1 binary @ 0x00139440
-    void ConnectPressed();
+    // Binary @ 0x001720dc -- returns 0xc (12)
+    int GetType() override { return 0xc; }
 
-    static void LoadContent();    // Binary @ 0x00170b1c (v1.6.1)
-    static void UnLoadContent();  // Binary @ 0x00171a4c (v1.6.1)
+    // Binary @ 0x0017132c -- SetPage(index, playSound)
+    // Calls cur->HidePage(), new->ShowPage(); optionally plays sfx.
+    void SetPage(int idx, bool playSound);
 
-private:
-    void UpdateLeaderboard(float dt);  // Binary @ 0x0013afbc
-    void DrawLeaderboard();            // Binary @ 0x0013aac0
-    void DrawDownloadIcon();           // Binary @ 0x001395d0
+    // Binary @ 0x00171ab4 -- push_back page into m_Pages vector,
+    // hide if not current, copy control pos into page->pos.
+    void RegisterPage(FruitFactPage* page);
+
+    // Binary @ 0x00171534 / 0x00171458 -- arrow button callbacks
+    void LeftButton();
+    void RightButton();
+
+    // Binary @ 0x001708b8 / 0x0017086c / 0x00170a20 / 0x00170924 -- input
+    bool LeftPressed(InputEvent* ev);
+    bool RightPressed(InputEvent* ev);
+    bool UpPressed(InputEvent* ev);
+    bool DownPressed(InputEvent* ev);
+
+    // Binary @ 0x00170b1c / 0x00171a4c
+    static void LoadContent();
+    static void UnLoadContent();
+
+    // Shared paging-arrow texture (loaded by LoadContent @ 0x00170b1c).
+    static Mortar::SmartPtr<Mortar::Texture> s_TexArrow;
+
+    // Binary struct fields -- public to allow offsetof() in layout static_asserts
+    // (GCC 4.4 __bada__ cross-build: offsetof on private members is an error).
+    // +0x7C: current fact string (result of Fruit::GetFact; ctor inits NULL)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    const char* m_FactText;                                // @+0x7C
+    // +0x80: combo index A (ctor inits 0xFFFFFFFF)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    unsigned int m_ComboA;                                 // @+0x80
+    // +0x84: combo index B (ctor inits 0xFFFFFFFF)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    unsigned int m_ComboB;                                 // @+0x84
+    // +0x88: fact page texture
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    Mortar::SmartPtr<Mortar::Texture> m_FactTexture;       // @+0x88
+    // +0x8C: fact offset Vec3 (Init sets (-69,53,0)); replaces old 3x SmartPtr slots
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    Vec3 m_FactOffset;                                     // @+0x8C..+0x97
+    // +0x98: fact colour (ctor inits (0x74,0x5D,0x3B))
+    Colour m_FactColour;                                   // @+0x98
+    // +0x9C: current page index (ctor inits 0)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    int m_PageFlag;                                        // @+0x9C
+    // +0xA0: next arrow MenuButton (lazily new'd in Update when pages>1)
+    MenuButton* m_NextButton;                              // @+0xA0
+    // +0xA4: prev arrow MenuButton (lazily new'd in Update when pages>1)
+    MenuButton* m_PrevButton;                              // @+0xA4
+    // +0xA8: game-mode snapshot byte (= game_work.gameMode at Init time)
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    uint8_t m_GameStateSnapshot;                           // @+0xA8
+    uint8_t _pad_A9[3];                                    // padding to align m_Pages
+    // +0xAC: pages vector
+    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    std::vector<FruitFactPage*> m_Pages;                   // @+0xAC
 };
 
-#if 0
-// TODO(#74): FruitFactControl layout unported; 0x204 is stale v1.5.x binary size,
-// real v1.6.1 binary size is 0xb8 (task #74). offsetof(m_LocalScore)==0x104 is also
-// stale v1.5.x. Re-enable with correct layout values when task #74 lands.
-static_assert(offsetof(FruitFactControl, m_LocalScore) == 0x104,
-              "FruitFactControl::m_LocalScore offset mismatch");
-static_assert(sizeof(FruitFactControl) == 0x204,
-              "FruitFactControl size mismatch");
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(FruitFactControl) == 0xB8,
+    "FruitFactControl sizeof must be 0xB8");
+static_assert(offsetof(FruitFactControl, m_FactOffset) == 0x8C,
+    "FruitFactControl::m_FactOffset must be at +0x8C");
+static_assert(offsetof(FruitFactControl, m_GameStateSnapshot) == 0xA8,
+    "FruitFactControl::m_GameStateSnapshot must be at +0xA8");
+static_assert(offsetof(FruitFactControl, m_Pages) == 0xAC,
+    "FruitFactControl::m_Pages must be at +0xAC");
 #endif
-
-// COMBO_TYPE — binary enum at mangled name 10COMBO_TYPE (used by GetComboStarText + GetComboStarTexture).
-// 25 values (0..24); 0xFF = no combo (stored as uint8_t m_ComboType, 0xFF sentinel).
-// Values derived from FruitFactControl.cpp kComboStars table and CheckCombo logic.
-enum COMBO_TYPE {
-    COMBO_3_FRUIT        = 0,
-    COMBO_4_FRUIT        = 1,
-    COMBO_5_FRUIT        = 2,
-    COMBO_6_FRUIT        = 3,
-    COMBO_ALL_DIFFERENT  = 4,
-    COMBO_7_FRUIT_PLUS   = 5,
-    COMBO_ALL_APPLES     = 6,
-    COMBO_ALL_ORANGES    = 7,
-    COMBO_ALL_PINEAPPLES = 8,
-    COMBO_ALL_WATERMELONS= 9,
-    COMBO_ALL_KIWIS      = 10,
-    COMBO_ALL_MANGOES    = 11,
-    COMBO_ALL_STRAWBERRIES=12,
-    COMBO_ALL_PEARS      = 13,
-    COMBO_ALL_BANANAS    = 14,
-    COMBO_ALL_LIMES      = 15,
-    COMBO_ALL_LEMONS     = 16,
-    COMBO_ALL_COCONUTS   = 17,
-    COMBO_ALL_PASSIONFRUITS=18,
-    COMBO_ALPHABETICAL   = 19,
-    COMBO_FULLHOUSE      = 20,
-    COMBO_2_PAIR         = 21,
-    COMBO_3_OF_A_KIND    = 22,
-    COMBO_4_OF_A_KIND    = 23,
-    COMBO_5_OF_A_KIND    = 24
-};
-
-// FruitFact helper functions exposed for FruitFactZenPage reuse.
-// Implemented in FruitFactControl.cpp as the canonical copy.
-namespace FruitFact {
-    // CheckCombo  binary @ 0x001320b4
-    // Classifies a run of sliced fruit type indices into a combo category.
-    // Returns a COMBO_TYPE byte (0..0x18 = 0..24); 0xFF = no combo.
-    // *outDominantType receives the most-frequent fruit type index.
-    uint8_t CheckCombo(int* fruitTypeArray, int count, int* outDominantType);
-} // namespace FruitFact
-
-// GetComboStarTexture  binary: _Z19GetComboStarTexture10COMBO_TYPE @0x00132a94 (v1.6.1)
-// Returns the star-burst texture SmartPtr for the given combo type.
-Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType);
-
-// GetComboStarText  binary: _Z16GetComboStarText10COMBO_TYPE @0x001325f8 (v1.6.1)
-// Returns the localised string id (for GETSTRING) for the given combo type.
-// Returns 0 if comboType > 0x18.
-unsigned int GetComboStarText(COMBO_TYPE comboType);
-
-// GetComboName -- binary: _Z12GetComboName10COMBO_TYPE v1.6.1 @0x00110c94
-// Returns the ASCII combo-name key string for the given combo type.
-const char* GetComboName(COMBO_TYPE starType);
 
 #endif // FN_HUD_FRUIT_FACT_CONTROL_H

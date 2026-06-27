@@ -15,7 +15,7 @@
 class MenuButton;
 class HUDControl;
 class BonusScreen;
-class FruitFactPageControl;
+class FruitFactControl;
 class FruitFactZenPage;
 class FruitFactBonusFactPage;
 class FruitFactClassicFactPage;
@@ -71,7 +71,7 @@ public:
 
     Vec3         m_OffsetPos;                    // +0xBC
 
-    FruitFactPageControl* m_pFruitFact;          // +0xC8
+    FruitFactControl* m_pFruitFact;              // +0xC8
     FruitFactZenPage*     m_pZenPage;            // +0xCC
     FruitFactBonusFactPage* m_pBonusFactPage;    // +0xD0
     FruitFactClassicFactPage* m_pClassicFactPage;// +0xD4

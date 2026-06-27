@@ -4,7 +4,7 @@
 #include "FruitFactLitePage.h"
 
 // Binary @ 0x0017ad5c
-FruitFactLitePage::FruitFactLitePage(FruitFactPageControl* pCtrl)
+FruitFactLitePage::FruitFactLitePage(FruitFactControl* pCtrl)
     : FruitFactPage(pCtrl)
     , m_LiteState(0)
     , m_RandomSeed(0.0f)

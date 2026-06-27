@@ -6,7 +6,7 @@
 #include "FruitFactClassicFactPage.h"
 #include "GameOverScreen.h"
 #include "hud/GenericHUDControl.h"
-#include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "engine/math/Vec3.h"
 #include "engine/math/Vec2.h"
 #include "engine/math/Colour.h"
@@ -41,7 +41,7 @@ static Mortar::FontCacheObjectTTF* GetClassicFactTTFFont() {
 // Port: accesses via GameOverScreen::GetSenseiHeadTex / GetSenseiBodyTex.
 // ASM-verified: v1.6.1 FruitFactClassicFactPage @ 0x00174e30
 FruitFactClassicFactPage::FruitFactClassicFactPage(
-    FruitFactPageControl* pCtrl, int headIdx, int bodyIdx)
+    FruitFactControl* pCtrl, int headIdx, int bodyIdx)
     : FruitFactPage(pCtrl)
     , m_pTitleBox(NULL)
     , m_pBodyBox(NULL)

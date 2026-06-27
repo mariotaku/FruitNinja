@@ -5,7 +5,7 @@
 // FruitFactClassicFactPage : FruitFactPage  (v1.6.1 binary)
 //
 // Binary refs (v1.6.1):
-//   ctor  0x00174e30  (FruitFactPageControl*, int headIdx, int bodyIdx)
+//   ctor  0x00174e30  (FruitFactControl*, int headIdx, int bodyIdx)
 //
 // Layout (FruitFactPage base = 0x98 bytes; derived own-fields start at +0x98):
 //   +0x98 : BakedStringBox* m_pTitleBox  (lazy, init NULL)
@@ -23,8 +23,8 @@ namespace Mortar { class BakedStringBox; }
 
 class FruitFactClassicFactPage : public FruitFactPage {
 public:
-    // Binary @ 0x00174e30 -- ctor(FruitFactPageControl*, int headIdx, int bodyIdx)
-    FruitFactClassicFactPage(FruitFactPageControl* pCtrl, int headIdx, int bodyIdx);
+    // Binary @ 0x00174e30 -- ctor(FruitFactControl*, int headIdx, int bodyIdx)
+    FruitFactClassicFactPage(FruitFactControl* pCtrl, int headIdx, int bodyIdx);
     ~FruitFactClassicFactPage() override;
 
     void Init() override;  // Binary @ 0x00174e30 -- build icon GenericHUDControls
