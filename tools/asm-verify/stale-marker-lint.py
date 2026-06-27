@@ -14,11 +14,26 @@ Verdicts per marker:
                      auto-fix. Manual review required.
   STALE           -- addr resolves to a symbol whose name does NOT match the cited
                      symbol AND the cited symbol is not uniquely findable.
+  MID-SYMBOL-MISMATCH -- addr falls inside some function's [start,start+size)
+                     range, the marker cites a symbol NAME, and that cited name
+                     does NOT match the containing function. This is the
+                     high-value mis-stamp class (e.g. cited 'Fruit::Init
+                     @0x00176708' whose addr actually lands inside
+                     'FruitFactLeaderboard'). The cited symbol is resolved
+                     against the binary with STRICT exact-identifier matching;
+                     report.json['correct_addr'] (+ 'correct_candidates' when
+                     >1) gives the real location of the cited symbol.
+  CONVENTION-SLIP -- sub-flag on MID-SYMBOL-MISMATCH / STALE-MISMATCH: the cited
+                     symbol's real address is exactly cited_addr +/- 0x10000
+                     (a LIEF<->Ghidra image-base convention mix-up). The fix is
+                     just the +/- 0x10000 correction. report.json carries
+                     'convention_slip': true and 'correct_addr'.
   NO-VERSION      -- marker lacks 'v1.6.1' version tag; addr resolves OK.
   MID-SYMBOL      -- addr is not a symbol start, but falls within the [start,
-                     start+size) range of a known function/object; the address
-                     is valid (deliberate mid-function reference). report.json
-                     contains 'containing_sym' and 'containing_addr'.
+                     start+size) range of a known function/object, AND the cited
+                     name (if any) matches the containing function -- a genuine
+                     deliberate mid-function reference. report.json contains
+                     'containing_sym' and 'containing_addr'.
   UNRESOLVED      -- addr not found as a known symbol start, and NOT within any
                      symbol's size range. Truly unknown.
   OK-NO-SYM       -- has v1.6.1 but no symbol name in the marker (old 'binary @')
@@ -29,14 +44,34 @@ All NO-VERSION variants carry a sub-verdict:
   NO-VERSION+MID-SYMBOL -- addr is inside a function body (valid mid-func ref)
   NO-VERSION+UNRESOLVED -- addr not found at all
 
+report.json per-marker fields of note (added by this revision):
+  correct_addr        -- int Ghidra addr where the cited symbol really lives
+                         (STALE-MISMATCH and unambiguous MID-SYMBOL-MISMATCH).
+  correct_demangled   -- demangled name at correct_addr.
+  correct_candidates  -- [[hex_addr, demangled], ...] when the cited symbol
+                         resolves to >1 strict address (ambiguous mismatch).
+  convention_slip     -- true when correct_addr == cited_addr +/- 0x10000.
+  containing_sym/_addr/_dem -- containing function for MID-SYMBOL[-MISMATCH].
+
 Addresses use GHIDRA convention throughout: Ghidra_addr = LIEF_value + 0x10000.
 
 Usage:
     python tools/asm-verify/stale-marker-lint.py [--src <dir>] [--binary <path>]
+    python tools/asm-verify/stale-marker-lint.py --fix      # auto-correct safe cases
+    python tools/asm-verify/stale-marker-lint.py --check     # CI: exit 1 on bugs
+    python tools/asm-verify/stale-marker-lint.py --check --strict  # also fail NO-VERSION
+
+  --fix    in-place, comment-only address rewrites for STALE-MISMATCH and
+           MID-SYMBOL-MISMATCH / CONVENTION-SLIP where the cited symbol resolves
+           to EXACTLY ONE address (preserves CRLF, only touches the addr text).
+           Ambiguous (>1) and zero-match cases are left untouched and reported.
+  --check  exit non-zero if any STALE-MISMATCH / STALE / MID-SYMBOL-MISMATCH
+           exists (actionable bugs); exit 0 otherwise. --strict also fails on
+           NO-VERSION. Prints a one-line PASS/FAIL.
 
 Output:
     tmp/stale-markers/report.json  (machine-readable, full detail)
-    stdout                         (ranked summary: STALE first)
+    stdout                         (ranked summary: mismatches first)
 """
 import argparse
 import json
@@ -292,6 +327,78 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     return False
 
 
+def _symbol_matches_strict(cited_sym: str, binary_sym: str, demangled: str) -> bool:
+    """STRICT exact-identifier matcher (from fix_misstamps.py).
+
+    Used by the auto-fixer's forward lookup and by MID-SYMBOL-MISMATCH resolution.
+    DIFFERS from the loose _symbol_matches: it requires an EXACT identifier match
+    (not a substring/prefix/suffix), so that "exactly 1 candidate" is real and
+    lexical neighbours (e.g. 'Foo::Draw' vs 'Game::Draw') do not vote.
+
+    Rules (all exact):
+      - full namespace-qualified base equal, or dem ends with '::<cited_base>'
+      - last-segment EXACT equality (only when cited is unqualified)
+      - dtor:  '~Foo' vs '{dtor}/{base dtor}/...' of class Foo
+      - compiler temp:  'T_NNNN' vs 'T.NNNN'
+    """
+    cited_clean = cited_sym.strip()
+    dem_clean   = demangled
+    cited_base = re.sub(r'\(.*', '', cited_clean).strip()
+    dem_base   = re.sub(r'\(.*', '', dem_clean).strip()
+
+    def _last_segment(s):
+        s = re.sub(r'<[^>]*>', '', s)
+        return s.rsplit('::', 1)[-1].strip()
+
+    cited_last = _last_segment(cited_base)
+    dem_last   = _last_segment(dem_base)
+
+    # 1. Full qualified-name match (cited may omit a leading namespace).
+    if cited_base and '::' in cited_base:
+        if dem_base == cited_base or dem_base.endswith('::' + cited_base):
+            return True
+    # 2. Last-segment EXACT equality, only for unqualified cited names.
+    if cited_last and dem_last and cited_last == dem_last:
+        if '::' not in cited_base:
+            return True
+    # 3. Dtor.
+    if cited_last.startswith('~'):
+        class_name = cited_last[1:]
+        if class_name and 'dtor' in dem_last:
+            dem_parts = re.sub(r'\(.*', '', dem_clean).rsplit('::', 2)
+            if len(dem_parts) >= 2:
+                dem_class = re.sub(r'<[^>]*>', '', dem_parts[-2].strip()).strip()
+                if dem_class == class_name or dem_class.endswith('::' + class_name):
+                    return True
+    # 4. Compiler temp.
+    if re.match(r'^T_\d+$', cited_last):
+        dot_form = cited_last.replace('_', '.', 1)
+        if dot_form == binary_sym or dot_form == demangled:
+            return True
+    return False
+
+
+def _forward_lookup_strict(cited_sym: str,
+                           addr_to_mangled: dict,
+                           addr_to_demangled: dict) -> list:
+    """STRICT forward check: addresses where cited_sym EXACTLY matches.
+
+    Returns sorted list of (addr, demangled). Empty == symbol absent.
+    """
+    if not cited_sym:
+        return []
+    results = []
+    seen = set()
+    for addr, mangled in addr_to_mangled.items():
+        dem = addr_to_demangled.get(addr, mangled)
+        if _symbol_matches_strict(cited_sym, mangled, dem):
+            if addr not in seen:
+                seen.add(addr)
+                results.append((addr, dem))
+    results.sort(key=lambda x: x[0])
+    return results
+
+
 def _forward_lookup(cited_sym: str,
                     addr_to_mangled: dict,
                     addr_to_demangled: dict) -> list:
@@ -456,6 +563,27 @@ def scan_sources(src_dir: pathlib.Path) -> list:
     return results
 
 
+def _resolve_cited(cited_sym, cited_addr, addr_to_mangled, addr_to_demangled):
+    """STRICT-resolve cited_sym against the binary, excluding cited_addr itself.
+
+    Returns dict with keys:
+      candidates       -- list of (addr, demangled), strict matches, sorted.
+      correct_addr     -- int (only when exactly 1 candidate), else None.
+      correct_demangled-- demangled at correct_addr, else None.
+      convention_slip  -- True when the sole correct_addr == cited_addr +/-0x10000.
+    """
+    fwd = _forward_lookup_strict(cited_sym, addr_to_mangled, addr_to_demangled)
+    fwd = [(a, d) for (a, d) in fwd if a != cited_addr]
+    info = {'candidates': fwd, 'correct_addr': None,
+            'correct_demangled': None, 'convention_slip': False}
+    if len(fwd) == 1:
+        info['correct_addr']      = fwd[0][0]
+        info['correct_demangled'] = fwd[0][1]
+        if abs(fwd[0][0] - cited_addr) == 0x10000:
+            info['convention_slip'] = True
+    return info
+
+
 def classify(markers: list,
              addr_to_mangled: dict,
              addr_to_demangled: dict,
@@ -496,17 +624,19 @@ def classify(markers: list,
             elif _symbol_matches(cited_sym, mangled, demangled):
                 m['verdict'] = 'OK'
             else:
-                # Addr resolves to wrong symbol -- run FORWARD check
-                fwd = _forward_lookup(cited_sym, addr_to_mangled, addr_to_demangled)
-                # Filter out the current (wrong) address
-                fwd = [(a, d) for (a, d) in fwd if a != addr]
-                if len(fwd) == 1:
+                # Addr resolves to wrong symbol -- STRICT-resolve the cited name.
+                res = _resolve_cited(cited_sym, addr, addr_to_mangled, addr_to_demangled)
+                cand = res['candidates']
+                if len(cand) == 1:
                     m['verdict']           = 'STALE-MISMATCH'
-                    m['correct_addr']      = fwd[0][0]
-                    m['correct_demangled'] = fwd[0][1]
-                elif len(fwd) > 1:
-                    m['verdict']         = 'STALE-AMBIGUOUS'
-                    m['forward_matches'] = [(hex(a), d) for (a, d) in fwd[:10]]
+                    m['correct_addr']      = res['correct_addr']
+                    m['correct_demangled'] = res['correct_demangled']
+                    if res['convention_slip']:
+                        m['convention_slip'] = True
+                elif len(cand) > 1:
+                    m['verdict']            = 'STALE-AMBIGUOUS'
+                    m['forward_matches']    = [(hex(a), d) for (a, d) in cand[:10]]
+                    m['correct_candidates'] = [[hex(a), d] for (a, d) in cand[:10]]
                 else:
                     m['verdict'] = 'STALE'
 
@@ -520,10 +650,36 @@ def classify(markers: list,
             container = _containment_check(addr, sym_ranges)
             if container:
                 (c_start, c_end, c_mangled) = container
+                c_dem = _demangle(c_mangled)
                 m['containing_sym']  = c_mangled
                 m['containing_addr'] = c_start
-                m['containing_dem']  = _demangle(c_mangled)
-                if not has_ver:
+                m['containing_dem']  = c_dem
+
+                # Does the cited name match the CONTAINING function? If a symbol
+                # is cited and it does NOT match the container, this is the
+                # high-value mis-stamp class (cited 'Fruit::Init' but addr lands
+                # inside 'FruitFactLeaderboard'). Resolve the cited symbol
+                # strictly to find where it really lives.
+                cited_matches_container = (
+                    cited_sym is not None
+                    and (_symbol_matches(cited_sym, c_mangled, c_dem)
+                         or _symbol_matches_strict(cited_sym, c_mangled, c_dem))
+                )
+
+                if cited_sym is not None and not cited_matches_container:
+                    res = _resolve_cited(cited_sym, addr,
+                                         addr_to_mangled, addr_to_demangled)
+                    cand = res['candidates']
+                    m['verdict'] = 'MID-SYMBOL-MISMATCH'
+                    if len(cand) == 1:
+                        m['correct_addr']      = res['correct_addr']
+                        m['correct_demangled'] = res['correct_demangled']
+                        if res['convention_slip']:
+                            m['convention_slip'] = True
+                    elif len(cand) > 1:
+                        m['correct_candidates'] = [[hex(a), d] for (a, d) in cand[:10]]
+                    # len 0 -> cited symbol absent; no correct_addr.
+                elif not has_ver:
                     m['verdict'] = 'NO-VERSION+MID-SYMBOL'
                 else:
                     m['verdict'] = 'MID-SYMBOL'
@@ -537,18 +693,92 @@ def classify(markers: list,
 
 
 _VERDICT_ORDER = {
-    'STALE-MISMATCH':          0,
-    'STALE-AMBIGUOUS':         1,
-    'STALE':                   2,
-    'NO-VERSION+STALE':        3,
-    'NO-VERSION':              4,
-    'NO-VERSION+MID-SYMBOL':   5,
-    'NO-VERSION+UNRESOLVED':   6,
-    'UNRESOLVED':              7,
-    'MID-SYMBOL':              8,
-    'OK-NO-SYM':               9,
-    'OK':                      10,
+    'MID-SYMBOL-MISMATCH':     0,
+    'STALE-MISMATCH':          1,
+    'STALE-AMBIGUOUS':         2,
+    'STALE':                   3,
+    'NO-VERSION+STALE':        4,
+    'NO-VERSION':              5,
+    'NO-VERSION+MID-SYMBOL':   6,
+    'NO-VERSION+UNRESOLVED':   7,
+    'UNRESOLVED':              8,
+    'MID-SYMBOL':              9,
+    'OK-NO-SYM':               10,
+    'OK':                      11,
 }
+
+# Verdicts that --check treats as actionable bugs (exit non-zero).
+_CHECK_FAIL_VERDICTS = {'MID-SYMBOL-MISMATCH', 'STALE-MISMATCH', 'STALE'}
+# Additionally failed under --strict.
+_CHECK_STRICT_EXTRA = {'NO-VERSION', 'NO-VERSION+STALE'}
+
+
+def _dedupe_sort(markers: list) -> list:
+    """Dedupe by (file, line) keeping first, then sort by verdict priority."""
+    seen = set()
+    out = []
+    for m in markers:
+        key = (m['file'], m['line'])
+        if key not in seen:
+            seen.add(key)
+            out.append(m)
+    out.sort(key=lambda m: (_VERDICT_ORDER.get(m['verdict'], 99), m['file'], m['line']))
+    return out
+
+
+def apply_fixes(markers: list, project_root: pathlib.Path) -> dict:
+    """Comment-only, in-place auto-fix of safely-resolvable mis-stamps.
+
+    Fixes STALE-MISMATCH and MID-SYMBOL-MISMATCH (incl. CONVENTION-SLIP) markers
+    that have a single 'correct_addr'. Only the cited address text is rewritten;
+    CRLF / line endings are preserved (we splitlines(keepends=True) and replace
+    inside the matched line). Ambiguous (>1 candidate) and zero-match markers are
+    left untouched and reported.
+
+    Returns counts dict: fixed / ambiguous / zero_match / skipped.
+    """
+    counts = {'fixed': 0, 'ambiguous': 0, 'zero_match': 0, 'skipped': 0}
+    # Group fixable markers by file so we read/write each file once.
+    by_file = {}
+    fixable_verdicts = ('STALE-MISMATCH', 'MID-SYMBOL-MISMATCH')
+    for m in markers:
+        if m['verdict'] not in fixable_verdicts:
+            continue
+        if m.get('correct_addr') is None:
+            if m.get('correct_candidates'):
+                counts['ambiguous'] += 1
+            else:
+                counts['zero_match'] += 1
+            continue
+        by_file.setdefault(m['file'], []).append(m)
+
+    for f_rel, recs in by_file.items():
+        f_abs = project_root / f_rel
+        if not f_abs.exists():
+            counts['skipped'] += len(recs)
+            continue
+        # keepends=True preserves CRLF / LF exactly per line.
+        with f_abs.open('r', encoding='utf-8', errors='replace', newline='') as fh:
+            lines = fh.read().splitlines(keepends=True)
+        changed = False
+        for m in recs:
+            idx = m['line'] - 1
+            if idx < 0 or idx >= len(lines):
+                counts['skipped'] += 1
+                continue
+            cur = lines[idx]
+            old_addr = m['addr_str']
+            if old_addr not in cur:
+                counts['skipped'] += 1   # line shifted since scan
+                continue
+            new_addr = "0x%08x" % m['correct_addr']
+            lines[idx] = cur.replace(old_addr, new_addr)
+            counts['fixed'] += 1
+            changed = True
+        if changed:
+            with f_abs.open('w', encoding='utf-8', newline='') as fh:
+                fh.write(''.join(lines))
+    return counts
 
 
 def main():
@@ -560,6 +790,14 @@ def main():
                     help='Path to FruitNinja ELF binary')
     ap.add_argument('--out',    default=str(OUT_DIR / 'report.json'),
                     help='Output JSON path')
+    ap.add_argument('--fix',    action='store_true',
+                    help='auto-correct safely-resolvable mis-stamps in place '
+                         '(comment-only address rewrites)')
+    ap.add_argument('--check',  action='store_true',
+                    help='CI mode: exit non-zero if actionable bugs exist '
+                         '(MID-SYMBOL-MISMATCH / STALE-MISMATCH / STALE)')
+    ap.add_argument('--strict', action='store_true',
+                    help='with --check, also fail on NO-VERSION markers')
     args = ap.parse_args()
 
     binary_path = pathlib.Path(args.binary)
@@ -582,19 +820,22 @@ def main():
 
     print("Classifying (forward + containment checks) ...", flush=True)
     markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
+    markers = _dedupe_sort(markers)
 
-    # Deduplicate: same (file, line) => keep first match
-    seen_file_line = set()
-    deduped = []
-    for m in markers:
-        key = (m['file'], m['line'])
-        if key not in seen_file_line:
-            seen_file_line.add(key)
-            deduped.append(m)
-    markers = deduped
-
-    # Sort by verdict priority then file+line
-    markers.sort(key=lambda m: (_VERDICT_ORDER.get(m['verdict'], 99), m['file'], m['line']))
+    # -----------------------------------------------------------------------
+    # --fix: auto-correct safely-resolvable mis-stamps, then re-scan so the
+    # report/summary reflect the post-fix state.
+    # -----------------------------------------------------------------------
+    fix_counts = None
+    if args.fix:
+        print("\nApplying fixes (comment-only address rewrites) ...", flush=True)
+        fix_counts = apply_fixes(markers, src_dir.parent)
+        print(f"  fixed={fix_counts['fixed']}  ambiguous={fix_counts['ambiguous']}"
+              f"  zero_match={fix_counts['zero_match']}  skipped={fix_counts['skipped']}")
+        # Re-scan & re-classify against the rewritten sources.
+        markers = scan_sources(src_dir)
+        markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
+        markers = _dedupe_sort(markers)
 
     # Write JSON report
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -618,6 +859,36 @@ def main():
             print(f"  {v:<32}: {c}")
     print()
 
+    # Show MID-SYMBOL-MISMATCH rows FIRST (the real bugs: cited name lands
+    # inside a DIFFERENT function than the one it names).
+    midmis_rows = [m for m in markers if m['verdict'] == 'MID-SYMBOL-MISMATCH']
+    if midmis_rows:
+        print(f"--- MID-SYMBOL-MISMATCH ({len(midmis_rows)}) -- cited symbol's addr "
+              f"is inside a DIFFERENT function ---")
+        for m in midmis_rows:
+            sym_cited   = m['cited_sym'] or '(none)'
+            container_d = m.get('containing_dem') or _demangle(m.get('containing_sym', '?'))
+            if len(container_d) > 55:
+                container_d = container_d[:52] + '...'
+            print(f"  {m['file']}:{m['line']}")
+            print(f"    cited:     {sym_cited} @ {m['addr_str']}")
+            print(f"    addr is in: {container_d}")
+            if m.get('correct_addr') is not None:
+                correct_d = m.get('correct_demangled', '?')
+                if len(correct_d) > 55:
+                    correct_d = correct_d[:52] + '...'
+                slip = '  [CONVENTION-SLIP +/-0x10000]' if m.get('convention_slip') else ''
+                print(f"    correct:   {sym_cited} @ {hex(m['correct_addr'])}"
+                      f"  ({correct_d}){slip}")
+            elif m.get('correct_candidates'):
+                print(f"    AMBIGUOUS: {len(m['correct_candidates'])} candidates "
+                      f"(manual review)")
+                for ha, hd in m['correct_candidates'][:4]:
+                    print(f"      candidate: {ha}  {hd[:55]}")
+            else:
+                print(f"    cited symbol ABSENT in binary (defunct/inlined)")
+        print()
+
     # Show STALE-MISMATCH rows (actionable: have correct addr)
     mismatch_rows = [m for m in markers if m['verdict'] == 'STALE-MISMATCH']
     if mismatch_rows:
@@ -628,9 +899,10 @@ def main():
             correct_d = m.get('correct_demangled', '?')
             if len(correct_d) > 55:
                 correct_d = correct_d[:52] + '...'
+            slip = '  [CONVENTION-SLIP +/-0x10000]' if m.get('convention_slip') else ''
             print(f"  {m['file']}:{m['line']}")
             print(f"    cited:   {sym_cited} @ {m['addr_str']}")
-            print(f"    correct: {sym_cited} @ {correct}  ({correct_d})")
+            print(f"    correct: {sym_cited} @ {correct}  ({correct_d}){slip}")
         print()
 
     # Show STALE-AMBIGUOUS rows (need manual resolution)
@@ -714,6 +986,40 @@ def main():
 
     print(f"Full detail in: {out_path}")
 
+    # -----------------------------------------------------------------------
+    # --fix summary
+    # -----------------------------------------------------------------------
+    if fix_counts is not None:
+        print("\n" + "=" * 70)
+        print("FIX SUMMARY")
+        print("=" * 70)
+        print(f"  fixed       : {fix_counts['fixed']}")
+        print(f"  ambiguous   : {fix_counts['ambiguous']}  (>1 candidate, left untouched)")
+        print(f"  zero_match  : {fix_counts['zero_match']}  (cited symbol absent, left untouched)")
+        print(f"  skipped     : {fix_counts['skipped']}  (line shifted / missing)")
+
+    # -----------------------------------------------------------------------
+    # --check: CI exit code
+    # -----------------------------------------------------------------------
+    if args.check:
+        fail_verdicts = set(_CHECK_FAIL_VERDICTS)
+        if args.strict:
+            fail_verdicts |= _CHECK_STRICT_EXTRA
+        failing = [m for m in markers if m['verdict'] in fail_verdicts]
+        fail_counts = Counter(m['verdict'] for m in failing)
+        print("\n" + "=" * 70)
+        if failing:
+            detail = ', '.join(f"{v}={fail_counts[v]}"
+                               for v in sorted(fail_counts))
+            print(f"CHECK: FAIL -- {len(failing)} actionable marker(s): {detail}")
+            print("=" * 70)
+            return 1
+        scope = "actionable + NO-VERSION" if args.strict else "actionable"
+        print(f"CHECK: PASS -- no {scope} marker bugs")
+        print("=" * 70)
+        return 0
+    return 0
+
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)
