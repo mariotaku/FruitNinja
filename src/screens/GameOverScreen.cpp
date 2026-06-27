@@ -670,7 +670,8 @@ void GameOverScreen::PostCallback(int result) {
 }
 
 // ---------------------------------------------------------------------------
-// LeaderboardsCallback (0x001405a0)
+// LeaderboardsCallback -- TODO: re-verify v1.6.1 address (cited 0x001405a0 is stale: that
+//   address is PowerUp::Deactivate in v1.6.1). Leaderboards is a defunct online stub.
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::LeaderboardsCallback() {
