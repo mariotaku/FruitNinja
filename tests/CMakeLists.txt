@@ -474,6 +474,14 @@ set_tests_properties(screenshot_bonus     PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_gameover  PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_fruitfact PROPERTIES TIMEOUT 60)
 
+# ScoreControl component screenshot test. Renders the in-game HUD score widget
+# (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
+# in isolation on a clean background. Seeded state: score=266, highscore=200 (new best),
+# m_GameDt=1.0f (fully faded in). Output: tmp/test/screenshots/scorecontrol/default.png.
+fn_add_game_test(test_scorecontrol test_scorecontrol.cpp)
+add_test(NAME screenshot_scorecontrol COMMAND test_scorecontrol --screenshot)
+set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60)
+
 # AddToCurrentScore clamp regression guard (#222 fix).
 # Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
 # + penalty=-5 -> 0; score 0 + gain=50 -> 50. Uses TestHarness so
