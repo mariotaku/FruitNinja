@@ -101,10 +101,14 @@ void GameInit(unsigned long) {
     // Step 3: ScoreControl (sizeof 0x108 = 264 bytes)
     {
         ScoreControl* sc = new ScoreControl();
-        // Binary loads three textures into specific slots.
-        sc->m_Texture          = Mortar::TextureManager::LoadLocalisedTexture("score_fruit.tex");
-        sc->m_ScoreIconTex     = Mortar::TextureManager::LoadLocalisedTexture("score_icon.tex");
-        sc->m_HighscoreBannerTex = Mortar::TextureManager::LoadLocalisedTexture("high_score_banner.tex");
+        // ASM-spec v1.6.1 GameInit @0x001ce378 (ScoreControl block): 3x LoadLocalisedTexture:
+        //   +0x74 m_Texture            <- "hud_fruit.tex"       (@0x0028332E, call @0x1ce3a0)
+        //   +0xA0 m_ScoreIconTex       <- "score.tex"           (@0x00283E7D, call @0x1ce3dc)
+        //   +0xA4 m_HighscoreBannerTex <- "new_best_score.tex"  (@0x00283E74, call @0x1ce418)
+        // (earlier port fabricated score_fruit/score_icon/high_score_banner -- none in binary strtab)
+        sc->m_Texture            = Mortar::TextureManager::LoadLocalisedTexture("hud_fruit.tex");
+        sc->m_ScoreIconTex       = Mortar::TextureManager::LoadLocalisedTexture("score.tex");
+        sc->m_HighscoreBannerTex = Mortar::TextureManager::LoadLocalisedTexture("new_best_score.tex");
         // size = Vec3::One * 64.0
         sc->size               = Vec3(64.0f, 64.0f, 64.0f);
         // pos: binary uses GetScreenWidth/GetScreenHeight
