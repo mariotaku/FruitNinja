@@ -6,7 +6,7 @@
 // Game::SetAppLicensed / GetAppLicensedState back a state int in game_work
 // (binary @ 0x11fc7c / 0x11fcbc via g_GameData+0x18C).
 
-// Defunct: upsell store handoff -- UPSELL_PLACES enum; v1.6.1 GotoFruitNinjaPage @0x001ce2b0
+// Defunct: upsell store handoff -- UPSELL_PLACES enum; v1.6.1 GotoFruitNinjaPage @0x001cbd5c
 // Binary calls GotoFruitNinjaPage(1, -1) from GameModeScreen::BuyNow @ 0x0013e10c.
 enum UPSELL_PLACES {
     UPSELL_PLACE_0 = 0,

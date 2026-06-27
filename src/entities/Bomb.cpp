@@ -587,7 +587,7 @@ void Bomb::SetHit(Bomb* b, float speed) {
 }
 
 // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00126390 (asm-inspector)
-// ASM-spec v1.6.1 Bomb::SetForPlayer @ 0x00126390
+// ASM-spec v1.6.1 Bomb::SetForPlayer @ 0x0012702c
 void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
     b->m_BombVariant = playerIdx;
 }
@@ -671,7 +671,7 @@ static const float BOMB_FLASH_THRESHOLD = 2.0f;
 
 static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
 
-// ASM-spec v1.6.1 DrawBombHit @ 0x0016b73c
+// ASM-spec v1.6.1 DrawBombHit @ 0x001cd1a0
 void DrawBombHit() {
     const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;
@@ -709,7 +709,7 @@ void DrawBombHit() {
 static const float BOMB_BLAST_PURGE_THR = 1.55f;  // DAT_0016a1fc
 static const float BOMB_BLAST_RESET_THR = 1.5f;
 
-// ASM-spec v1.6.1 UpdateBombHit @ 0x0016a1a8
+// ASM-spec v1.6.1 UpdateBombHit @ 0x001cbbac
 void UpdateBombHit(float prevTimer) {
     const float currentTimer = game_work.m_BombHitTimer;
 

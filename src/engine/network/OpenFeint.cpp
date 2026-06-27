@@ -3,11 +3,11 @@
 // ConnectGameCenter / UserChoseGameCenter: v1.6.1 NetworkManager area.
 // All four are free functions (not NetworkManager members) in the binary.
 
-// Defunct: OpenFeint -- no-op stub; v1.6.1 OpenFeintOnline @0x0011f0c0
+// Defunct: OpenFeint -- no-op stub; v1.6.1 OpenFeintOnline @0x001543f4
 void OpenFeintOnline() {
 }
 
-// Defunct: OpenFeint -- no-op stub; v1.6.1 UserChoseOpenFeint @0x0011f0d4
+// Defunct: OpenFeint -- no-op stub; v1.6.1 UserChoseOpenFeint @0x001cab9c
 void UserChoseOpenFeint(int /*choice*/) {
 }
 
@@ -15,6 +15,6 @@ void UserChoseOpenFeint(int /*choice*/) {
 void ConnectGameCenter() {
 }
 
-// Defunct: GameCenter -- no-op stub; v1.6.1 UserChoseGameCenter @0x0011f164
+// Defunct: GameCenter -- no-op stub; v1.6.1 UserChoseGameCenter @0x001cab94
 void UserChoseGameCenter(int /*choice*/) {
 }

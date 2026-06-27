@@ -25,20 +25,20 @@ bool AreFriendsLoaded() {
     return false;
 }
 
-// Defunct: network provider selection -- no-op stub; v1.6.1 AskUserToChoosePreferredNetwork @0x00169354
+// Defunct: network provider selection -- no-op stub; v1.6.1 AskUserToChoosePreferredNetwork @0x001ca8f0
 void AskUserToChoosePreferredNetwork() {
 }
 
-// Defunct: network provider selection -- no-op stub; v1.6.1 ChangePreferredNetworkProvider @0x00169354
+// Defunct: network provider selection -- no-op stub; v1.6.1 ChangePreferredNetworkProvider @0x001ca9f8
 void ChangePreferredNetworkProvider(long /*v*/) {
 }
 
-// Defunct: network provider selection -- no-op stub; v1.6.1 GetPrefNetwork @0x0016916c
+// Defunct: network provider selection -- no-op stub; v1.6.1 GetPrefNetwork @0x001ca884
 long GetPrefNetwork() {
     return 0;
 }
 
-// Defunct: network provider selection -- no-op stub; v1.6.1 SetPrefNetwork @0x0016917c
+// Defunct: network provider selection -- no-op stub; v1.6.1 SetPrefNetwork @0x001ca9e0
 void SetPrefNetwork(long /*v*/) {
 }
 

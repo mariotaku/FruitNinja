@@ -55,7 +55,7 @@ public:
     void Release() override;                            // vtable slot 3 @ 0x0014CD20
     void Reset() override;                              // vtable slot 4 @ 0x0014AC8C (no-op)
     // Binary @ 0x0014AC94 — vtable slot 6, no-op stub; binary @ 0x0014AC94
-    // Defunct: vtable PreDraw — no-op stub; v1.6.1 MainScreen @ 0x0014AC94
+    // Defunct: vtable PreDraw — no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
     void PreDraw(float* hudScale) override;
     void Update(float dt) override;                     // vtable slot 10 @ 0x00196e1c
     // Binary signature: Draw(float*) at vtable slot 7 @0x001993ac (v1.6.1)

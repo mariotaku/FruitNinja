@@ -299,9 +299,9 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
 // Badges (NEW / SELECTED) are drawn ONCE via DrawFloatingText() -> IngamePopup::Draw
 // (gated on m_NewItemAlpha / m_SelectedAlpha alpha fields +0x25c / +0x260 in binary).
 // There is NO inline badge quad in Draw or NewDraw for v1.6.1 -- those were v1.5.1
-// residue (removed by ASM-verified: 2026-06-26 v1.6.1 ShopListItem::Draw @0x001a5da4,
+// residue (removed by ASM-verified: 2026-06-26 v1.6.1 ShopListItem::Draw @0x001b5da4,
 // NewDraw @0x001a58e8 (asm-inspector)).
-// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001a4bc8 (asm-inspector)
+// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
 // ---------------------------------------------------------------------------
 void ShopListItem::Draw() {
     // --- Static colour cache (static_block+0x8C in binary) ---
@@ -711,7 +711,7 @@ void ShopListItem::Draw() {
     // Binary ShopListItem::Draw @0x001a5da4 calls DrawFloatingText @0x001a4bc8
     // between Part 5 and Part 6. This is the SOLE badge draw path in v1.6.1;
     // the inline badge quads (Parts 3+4 in older port code) were v1.5.1 residue.
-    // ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001a4bc8 (asm-inspector)
+    // ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
     DrawFloatingText();
 
     // -----------------------------------------------------------------------

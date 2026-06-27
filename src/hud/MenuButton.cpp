@@ -278,7 +278,7 @@ void MenuButton::CreateFruit() {
         fruit->m_MenuGrowFade = 1.0f;
         fruit->m_SpawnDelay = 0.0f;
         fruit->m_ZPosition = FRUIT_ZPOS;
-        // ASM-verified: 2026-05-22 v1.6.1 MenuButton::CreateFruit @ 0x0019b5e0 (re-analyst).
+        // ASM-verified: 2026-05-22 v1.6.1 MenuButton::CreateFruit @ 0x0019b608 (re-analyst).
         // Binary writes m_bMenuFling=1 (0x164) to mark this as a menu-context fruit.
         fruit->m_bMenuFling = 1;
         // Binary writes m_pOwner=this (0x160) so KillFruit can clear our m_pTrackedFruit.
@@ -871,14 +871,14 @@ void MenuButton::Draw(float* hudScaleRaw) {
     //   Scale 0.75, MatrixStack push. Binary entry gates on m_RotationSpeed >= 0.
 }
 
-// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::LoadContent @ 0x0019d640 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::LoadContent @ 0x0019c1a0 (asm-inspector)
 void MenuButton::LoadContent() {
     s_TexScratchs      = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
     s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     s_TexNewItem       = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
 }
 
-// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::UnLoadContent @ 0x0019d684 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::UnLoadContent @ 0x0019c2a0 (asm-inspector)
 void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
     s_TexBlurryBacking.SetNull();

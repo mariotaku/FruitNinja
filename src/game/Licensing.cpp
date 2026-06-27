@@ -8,31 +8,31 @@ bool IsLicensed() {
     return true;
 }
 
-// Defunct: IAP -- no-op stub; v1.6.1 BadaPurchaseApp @0x001ca7f0
+// Defunct: IAP -- no-op stub; v1.6.1 BadaPurchaseApp @0x001eebe4
 void BadaPurchaseApp() {
 }
 
-// Defunct: IAP -- no-op stub; v1.6.1 BuyAOZ @0x001ca854
+// Defunct: IAP -- no-op stub; v1.6.1 BuyAOZ @0x0017a288
 void BuyAOZ() {
 }
 
-// Defunct: IAP -- no-op stub; v1.6.1 BuyMonsterDash @0x001ca870
+// Defunct: IAP -- no-op stub; v1.6.1 BuyMonsterDash @0x0017a27c
 void BuyMonsterDash() {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 GotoFruitNinjaPage @0x001ce2b0
+// Defunct: upsell -- no-op stub; v1.6.1 GotoFruitNinjaPage @0x001cbd5c
 // Binary: calls GotoFruitNinjaPage(1,-1) from GameModeScreen::BuyNow @ 0x0013e10c
 void GotoFruitNinjaPage(UPSELL_PLACES /*place*/, float /*param*/) {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 OpenBrowser @0x001ca890
+// Defunct: upsell -- no-op stub; v1.6.1 OpenBrowser @0x001eee64
 void OpenBrowser(const char* /*url*/) {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 DownloadUDC @0x001ca8a8
+// Defunct: upsell -- no-op stub; v1.6.1 DownloadUDC @0x00195d60
 void DownloadUDC(const char* /*url*/, void* /*buf*/, int /*size*/) {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 RemindLaterCallback @0x001ca8c8
+// Defunct: upsell -- no-op stub; v1.6.1 RemindLaterCallback @0x00184fb4
 void RemindLaterCallback() {
 }

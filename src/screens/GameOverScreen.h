@@ -171,9 +171,9 @@ private:
     // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::HandleProgressionTimerExpiration @ 0x00184d60
     void HandleProgressionTimerExpiration();
 
-    // Defunct: Facebook share -- no-op stub; v1.6.1 GameOverScreen @ 0x0014083c
+    // Defunct: Facebook share -- no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
     void FacebookCallback();
-    // Defunct: Twitter share -- no-op stub; v1.6.1 GameOverScreen @ 0x001405f8
+    // Defunct: Twitter share -- no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
     void TwitterCallback();
 
     void PostCallback(int result);        // v1.6.1 @ 0x00184d2c
