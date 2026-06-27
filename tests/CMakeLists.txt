@@ -467,12 +467,24 @@ set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
 # state and captures the framebuffer to tmp/test/screenshots/<screen>_screen.png.
 # Each ctest entry runs with --screenshot so the PNG is written automatically.
 fn_add_game_test(test_screenshot test_screenshot.cpp)
-add_test(NAME screenshot_bonus     COMMAND test_screenshot bonus     --screenshot)
-add_test(NAME screenshot_gameover  COMMAND test_screenshot gameover  --screenshot)
-add_test(NAME screenshot_fruitfact COMMAND test_screenshot fruitfact --screenshot)
-set_tests_properties(screenshot_bonus     PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_gameover  PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_fruitfact PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_bonus    COMMAND test_screenshot bonus    --screenshot)
+add_test(NAME screenshot_gameover COMMAND test_screenshot gameover --screenshot)
+set_tests_properties(screenshot_bonus    PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
+
+# Per-mode FruitFact board screenshot driver.
+# Drives a per-mode GameOverScreen to STATE_MAIN_DISPLAY so the corresponding
+# FruitFactPage is created and rendered. Outputs:
+#   tmp/test/screenshots/fruitfact/classic.png
+#   tmp/test/screenshots/fruitfact/arcade.png
+#   tmp/test/screenshots/fruitfact/zen.png
+fn_add_game_test(test_fruitfact test_fruitfact.cpp)
+add_test(NAME screenshot_fruitfact_classic COMMAND test_fruitfact classic --screenshot)
+add_test(NAME screenshot_fruitfact_arcade  COMMAND test_fruitfact arcade  --screenshot)
+add_test(NAME screenshot_fruitfact_zen     COMMAND test_fruitfact zen     --screenshot)
+set_tests_properties(screenshot_fruitfact_classic PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_fruitfact_arcade  PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_fruitfact_zen     PROPERTIES TIMEOUT 60)
 
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
