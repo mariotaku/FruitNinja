@@ -6,13 +6,14 @@
 // framebuffer to tmp/test/screenshots/<suite>/<case>.png.
 //
 // Supported screens (suite/case mapping):
-//   bonus          -> bonus/default
-//   gameover       -> gameover/classic
-//   gameover_zen   -> gameover/zen
-//   gameover_arcade -> gameover/arcade
-//   drawquad       -> drawquad/default
-//   mesh           -> mesh/default
-//   fruitfact      -> fruitfact/default
+//   bonus               -> bonus/default
+//   gameover            -> gameover/classic
+//   gameover_zen        -> gameover/zen
+//   gameover_arcade     -> gameover/arcade
+//   drawquad            -> drawquad/default
+//   mesh                -> mesh/default
+//   fruitfact           -> fruitfact/default
+//   gameover_withscore  -> temp/gameover_with_scorecontrol  (ScoreControl in full game-over flow)
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
@@ -22,6 +23,7 @@
 #include "screens/GameOverScreen.h"
 #include "screens/FruitFactClassicFactPage.h"
 #include "hud/FruitFactPageControl.h"
+#include "hud/ScoreControl.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
 #include "game/BonusManager.h"
@@ -51,6 +53,7 @@ static int RunGameOverArcade(fn::TestHarness& h);
 static int RunDrawQuad(fn::TestHarness& h);
 static int RunMesh(fn::TestHarness& h);
 static int RunFruitFact(fn::TestHarness& h);
+static int RunGameOverWithScore(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
 // Dispatch table.
@@ -62,13 +65,14 @@ struct ScreenCase {
 };
 
 static const ScreenCase kScreens[] = {
-    { "bonus",           "bonus/default",    RunBonus          },
-    { "gameover",        "gameover/classic", RunGameOver       },
-    { "gameover_zen",    "gameover/zen",     RunGameOverZen    },
-    { "gameover_arcade", "gameover/arcade",  RunGameOverArcade },
-    { "drawquad",        "drawquad/default", RunDrawQuad       },
-    { "mesh",            "mesh/default",     RunMesh           },
-    { "fruitfact",       "fruitfact/default", RunFruitFact     },
+    { "bonus",              "bonus/default",               RunBonus             },
+    { "gameover",           "gameover/classic",            RunGameOver          },
+    { "gameover_zen",       "gameover/zen",                RunGameOverZen       },
+    { "gameover_arcade",    "gameover/arcade",             RunGameOverArcade    },
+    { "drawquad",           "drawquad/default",            RunDrawQuad          },
+    { "mesh",               "mesh/default",                RunMesh              },
+    { "fruitfact",          "fruitfact/default",           RunFruitFact         },
+    { "gameover_withscore", "temp/gameover_with_scorecontrol",    RunGameOverWithScore },
     // TODO: fixture for shop
     { NULL, NULL, NULL }
 };
@@ -79,7 +83,8 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh fruitfact\n");
+        "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh fruitfact\n"
+        "           gameover_withscore\n");
     return 1;
 }
 
@@ -730,5 +735,85 @@ static int RunFruitFact(fn::TestHarness& h) {
     }
 
     std::printf("PASS: fruitfact/default screenshot complete\n");
+    return h.Shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// GameOverWithScore fixture -- Classic game-over WITH ScoreControl present.
+//
+// Purpose: verify ScoreControl renders at the correct position in the full
+// game-over flow (same top-left position as the isolated test_scorecontrol).
+// Settled state confirmed matching: m_GameDt=1.0, pos=(-418,138),
+// m_DrawPosX=-160.71 (lerped to anchor), m_DrawPosY=80.
+//
+// Output screenshot: tmp/test/screenshots/temp/gameover_with_scorecontrol.png
+// ---------------------------------------------------------------------------
+static int RunGameOverWithScore(fn::TestHarness& h) {
+    if (!game_work.mHud) {
+        std::fprintf(stderr, "FAIL: mHud null after boot\n");
+        return 1;
+    }
+
+    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
+    game_work.currentScore = 266;
+    game_work.m_GameDt     = 1.0f;
+    game_work.bM_bPaused   = 0;
+
+    // FruitSaveData with highscore 200 < 266 -> triggers NEW BEST path.
+    FruitSaveData saveData;
+    saveData.m_ModeHighScores[Mortar::GAME_MODE_CLASSIC] = 200;
+    saveData.newBestThisGame = 1;
+    FruitSaveData* prevSaveData = game_work.m_SaveData;
+    game_work.m_SaveData = &saveData;
+
+    // Create GameOverScreen (fast-path to STATE_MAIN_DISPLAY).
+    // Its Update() in STATE_MAIN_DISPLAY always writes game_work.m_GameDt=1.0f
+    // at step 5 (line: "game_work.m_GameDt = 1.0f; m_State = STATE_MAIN_DISPLAY").
+    GameOverScreen* gos = new GameOverScreen(
+        "Classic",
+        GameOverScreen::STATE_MAIN_DISPLAY,
+        0.0f,
+        1,   // expressionIdx
+        1,   // bgPatternIdx
+        0,   // tabIndex
+        0);  // starCount
+    gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
+    game_work.pGameOverScreen = gos;
+    game_work.mHud->AddControl(gos);
+
+    // Create ScoreControl with the same seeding as the isolated test.
+    ScoreControl* sc = new ScoreControl();
+    sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+    sc->Skip();
+    game_work.mHud->AddControl(sc);
+
+    if (h.IsInteractive()) {
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        game_work.m_SaveData = prevSaveData;
+        return h.Shutdown();
+    }
+
+    // Settle 60 frames using the multi-pass layer order (same as RunGameOver).
+    // GameOverScreen::Update writes game_work.m_GameDt=1.0f each frame in
+    // STATE_MAIN_DISPLAY, so ScoreControl::Update sees m_GameDt=1.0 each tick.
+    for (int i = 0; i < 60; ++i) {
+        game_work.m_GameDt     = 1.0f;
+        game_work.currentScore = 266;
+        h.RunComponentHeadlessMultiPass(1);
+    }
+
+    std::printf("[gameover_with_scorecontrol] stable state reached"
+                " (gos_state=%d, sc_displayedScore=%d)\n",
+                gos->m_State, sc->m_DisplayedScore);
+
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng()) {
+            game_work.m_SaveData = prevSaveData;
+            return 3;
+        }
+    }
+
+    game_work.m_SaveData = prevSaveData;
+    std::printf("PASS: temp/gameover_with_scorecontrol screenshot complete\n");
     return h.Shutdown();
 }
