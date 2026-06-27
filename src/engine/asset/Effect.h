@@ -21,7 +21,7 @@
 // Mesh::Draw (Phase 5 ported Geometry as a real class). The classes
 // are ported for ABI/call-graph parity (so EffectGroup::AddEffect can
 // do its real lower_bound + merge dance) but no live render-time call
-// site reaches them -- see Geometry::EffectGroupSet (v1.5.1 @ 0x001a00f8; TODO: re-verify v1.6.1 addr)
+// site reaches them -- see Geometry::EffectGroupSet (v1.6.1 Geometry::EffectGroupSet @0x0025eee0)
 // (binary stub).
 
 #include "util/ReferenceCounter.h"

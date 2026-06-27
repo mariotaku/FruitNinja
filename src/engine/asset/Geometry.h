@@ -21,8 +21,8 @@ class IIndexStream;
 class EffectGroup;
 
 // GeometryBinding -- shape-preserved defunct stub.
-// Binary @ 0x001a3990..0x001a40c0 (ctor/PassBinding::Apply chain).
-// sizeof = 76 (0x4C), vtable @ 0x001eb720.
+// v1.6.1 Mortar::GeometryBinding::GeometryBinding @0x00263e90 (ctor; PassBinding::Apply chain in the GLES1 binding).
+// sizeof = 76 (0x4C). TODO: re-verify v1.6.1 vtable address (was: 0x001eb720 stale v1.5.x).
 // Binary layout:
 //   +0x00  Mortar::GeometryBinding_Bada base sub-object (68 bytes, 0x00..0x43)
 //   +0x44  Event1<GeometryBinding&> m_OnDestroyed (8 bytes)
@@ -33,7 +33,7 @@ class EffectGroup;
 // Confirmed size: Event1 sub-object at +0x44, object ends at +0x4C.
 
 // GeometryBinding_Bada base layout fully RE'd from the ctor body.
-// Binary @ 0x001a57bc (GeometryBinding_Bada::GeometryBinding_Bada):
+// TODO: re-verify v1.6.1 GeometryBinding_Bada ctor (symbol absent in Bada v1.6.1; binding is GeometryBinding_GLES1, base folded into GeometryBinding @0x00263e90; was: 0x001a57bc stale v1.5.x):
 //   ReferenceCounter::ReferenceCounter(this)            // +0x00..0x0B (vptr + refcount)
 //   *(int*)this = vtable + 8                            // vptr fixup
 //   SmartPtr<EffectGroup>::SmartPtr(this+0x0c)          // +0x0C  m_EffectGroup     (SmartPtr, 4 bytes)
@@ -47,7 +47,7 @@ class EffectGroup;
 // their element types (EffectBinding/PassBinding) are unported subsystems.
 // Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout rather than walking PassBinding::Apply
 // (structural divergence; both paths are fixed-function GLES1.x -- NOT a GLES2 shader path).
-// TODO: re-verify v1.6.1 addr for GeometryBinding_Bada ctor (v1.5.1 @ 0x001a57bc)
+// TODO: re-verify v1.6.1 GeometryBinding_Bada ctor address (symbol absent in Bada v1.6.1 binary; was: 0x001a57bc stale v1.5.x)
 class GeometryBinding_Bada : public ReferenceCounter {
 public:
     GeometryBinding_Bada();
@@ -56,9 +56,9 @@ public:
     SmartPtr<EffectGroup>                  m_EffectGroup;   // +0x0C, 4 bytes
     std::vector<SmartPtr<IVertexStream> >  m_VertexStreams; // +0x10, 12 bytes
     SmartPtr<IIndexStream>                 m_IndexStream;   // +0x1C, 4 bytes
-    // TODO: v1.6.1 0x001a57bc (GeometryBinding_Bada) -- m_NamedIndexStreams: map<AsciiString,SmartPtr<IIndexStream>> (24B)
+    // TODO: re-verify v1.6.1 GeometryBinding_Bada address (was: 0x001a57bc stale v1.5.x) -- m_NamedIndexStreams: map<AsciiString,SmartPtr<IIndexStream>> (24B)
     char _pad_namedstreams[24];  // +0x20..+0x37: m_NamedIndexStreams placeholder
-    // TODO: v1.6.1 0x001a57bc (GeometryBinding_Bada) -- m_EffectBindings: vector<EffectBinding> (12B, EffectBinding unported)
+    // TODO: re-verify v1.6.1 GeometryBinding_Bada address (was: 0x001a57bc stale v1.5.x) -- m_EffectBindings: vector<EffectBinding> (12B, EffectBinding unported)
     char _pad_effectbindings[12]; // +0x38..+0x43: m_EffectBindings placeholder
 };
 
@@ -74,26 +74,25 @@ struct Event1_GeometryBinding {
 // the EffectGroup pointer. Render-time use (PassBinding::Apply chain) is defunct
 // in the port -- Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout
 // (structural divergence; same fixed-function GLES1.x calls, NOT a GLES2 shader path).
-// v1.6.1 VertexStreamAdd @0x002640c8.
-// TODO: re-verify v1.6.1 addrs: GeometryBinding ctor (v1.5.1 @ 0x001a3990),
-//   IndexStreamSet (v1.5.1 @ 0x001a4f90), EffectGroupSet (v1.5.1 @ 0x001a00f8).
+// v1.6.1 VertexStreamAdd @0x002640c8, GeometryBinding ctor @0x00263e90,
+//   IndexStreamSet @0x00264108, EffectGroupSet @0x0026406c.
 class GeometryBinding : public GeometryBinding_Bada {
 public:
-    // Binary @ 0x001a3990
+    // v1.6.1 Mortar::GeometryBinding::GeometryBinding @0x00263e90
     GeometryBinding();
     virtual ~GeometryBinding();
 
     Event1_GeometryBinding m_OnDestroyed;  // +0x44 (8 bytes)
 
-    // Binary @ 0x002640c8 -- find-or-push_back into m_VertexStreams.
+    // v1.6.1 Mortar::GeometryBinding::VertexStreamAdd @0x002640c8 -- find-or-push_back into m_VertexStreams.
     // v1.6.1 LoadMesh @0x0023890c calls this after EffectGroupSet.
     void VertexStreamAdd(SmartPtr<IVertexStream> stream);
 
-    // Binary @ 0x001a4f90 -- sets m_IndexStream; name ignored by LoadMesh (empty string).
+    // v1.6.1 Mortar::GeometryBinding::IndexStreamSet @0x00264108 -- sets m_IndexStream; name ignored by LoadMesh (empty string).
     // v1.6.1 LoadMesh @0x0023890c calls this before VertexStreamAdd.
     void IndexStreamSet(SmartPtr<IIndexStream> stream, const AsciiString& name);
 
-    // TODO: re-verify v1.6.1 addr for EffectGroupSet (v1.5.1 @ 0x001a00f8) -- stores EffectGroup ptr into m_EffectGroup.
+    // v1.6.1 Mortar::GeometryBinding::EffectGroupSet @0x0026406c -- stores EffectGroup ptr into m_EffectGroup.
     // v1.6.1 LoadMesh @0x0023890c calls this after creating the binding.
     // Binary body is minimal (1-2 instructions in the stub); shape preserved.
     void EffectGroupSet(SmartPtr<EffectGroup> group);
@@ -112,14 +111,14 @@ struct VertexLayout {
 };
 
 // Shape-preserved port of Mortar::Geometry.
-// TODO: re-verify v1.6.1 addrs for ctor (v1.5.1 @ 0x001a3c50 C1 / 0x001a3cc4 C2); sizeof 0x18.
+// TODO: re-verify v1.6.1 Geometry ctor (C1/C2) address (was: 0x001a3c50/0x001a3cc4 stale v1.5.x); sizeof 0x18. (dtor confirmed v1.6.1 @0x00264f40)
 // Binary fields preserved at canonical offsets +0x0C..+0x14 relative to base.
 // Port appends VBO/IBO/material data after the binary fields; the binary's binding-stack
 // pipeline (PassBinding::Apply etc.) is structurally bypassed -- Geometry::Render draws
 // from load-cached m_Vbo/m_Ibo/m_Layout (same fixed-function GLES1.x calls, NOT GLES2 shaders).
 class Geometry : public ReferenceCounter {
 public:
-    // Binary @ 0x001a3c50 (C1) / 0x001a3cc4 (C2)
+    // TODO: re-verify v1.6.1 Geometry ctor (C1/C2) address (was: 0x001a3c50/0x001a3cc4 stale v1.5.x)
     Geometry(SmartPtr<GeometryBinding> binding,
              SmartPtr<SharedEffectProperties> props);
     virtual ~Geometry();
@@ -131,16 +130,16 @@ public:
     //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
     void Render(Matrix44 const& mvp);
 
-    // TODO: re-verify v1.6.1 addr for HasActiveEffect (v1.5.1 @ 0x001a3e7c)
+    // v1.6.1 Mortar::Geometry::HasActiveEffect @0x00264440
     bool HasActiveEffect() const;
 
-    // TODO: re-verify v1.6.1 addr for SetActiveEffect (v1.5.1 @ 0x001a3e5c)
+    // v1.6.1 Mortar::Geometry::SetActiveEffect @0x00264410
     bool SetActiveEffect(uint32_t idx);
 
     // Accessor for m_PropList (used by Fruit::LoadFruitModels for DiffuseMap property extraction).
     EffectPropertyList* GetPropList() const { return m_PropList; }
 
-    // Binary @ 0x0025ee7c — 3-instruction wrapper; nameHash is cast to const char*
+    // v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c — 3-instruction wrapper; nameHash is cast to const char*
     // for the binary's interned-string lookup (port's m_PropList is null while
     // BuildPropList is defunct, so this always returns null in the current port).
     EffectProperty* GetProperty(uint32_t nameHash);
@@ -158,7 +157,7 @@ public:
     SmartPtr<Texture> m_DiffuseTex;  // Port: diffuse texture (formerly in MeshMaterial)
 
 private:
-    // Binary @ 0x001a3c00
+    // v1.6.1 Mortar::Geometry::BuildPropList @0x00264170
     void BuildPropList(SmartPtr<SharedEffectProperties> props);
 
     // === binary fields (offsets +0x0C..+0x14 from ReferenceCounter base) ===

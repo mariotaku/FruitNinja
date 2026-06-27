@@ -84,33 +84,33 @@ struct Game : public Mortar::MortarGame {
     // === Singleton ===
     static Game* GetInstance() { return static_cast<Game*>(s_instance); }
 
-    // === MortarGame vtable overrides (Game vtable @ 0x001e8bc0) ===
+    // === MortarGame vtable overrides (TODO: re-verify v1.6.1 Game vtable address) ===
     // Inherited (not overridden): GetHardwareString(0), IsFastHardware(1),
     //   GetCacheDataArchive(8), SetLanguage(21), AllowOrientationChange(22), OrientationDidChange(23).
-    void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 2 @ 0x0010dcf4
-    float GetHighResolutionScale() override;                // slot 3 @ 0x0010d9e4 returns 2.0f
+    void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 2; v1.6.1 Game::RenderAtHalfFrames @0x001207f0
+    float GetHighResolutionScale() override;                // slot 3; v1.6.1 Game::GetHighResolutionScale @0x0011fbd0 returns 2.0f
     // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetHighResolutionScale @ 0x0011fbd0
-    const char* GetOpenFeintProductKey() override;          // slot 4
+    const char* GetOpenFeintProductKey() override;          // slot 4; v1.6.1 Game::GetOpenFeintProductKey @0x0011fbf4
     // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintProductKey @ 0x0011fbf4
-    const char* GetOpenFeintSecret() override;              // slot 5
+    const char* GetOpenFeintSecret() override;              // slot 5; v1.6.1 Game::GetOpenFeintSecret @0x0011fc10
     // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintSecret @ 0x0011fc10
-    const char* GetOpenDisplayName() override;              // slot 6
+    const char* GetOpenDisplayName() override;              // slot 6; v1.6.1 Game::GetOpenDisplayName @0x0011fc2c
     // Defunct: Playhaven -- no-op stub; v1.6.1 Game::GetOpenDisplayName @ 0x0011fc2c
-    const char* GetPlayhavenToken() override;               // slot 7
-    void CreateFileSystems(const char* a, const char* b) override;  // slot 9 @ 0x0010dca8
-    void TellGameToStart(int multiplayer) override;         // slot 10 @ 0x0010dc80
-    void Update(float dt) override;                         // slot 11 @ 0x0010dc78
-    void Draw(float dt) override;                           // slot 12 @ 0x0010dc70
-    void Init(int argc, char** argv) override;              // slot 13 @ 0x0010dbe4
-    MortarGame* End() override;                             // slot 14 @ 0x0010db84
-    void Paused() override;                                 // slot 15 @ 0x0010db34
-    void UnPaused() override;                               // slot 16 @ 0x0010dae8
-    const char* SelfVersion() override;                     // slot 17 @ 0x0010d9ec returns "1.5.1"
-    void SaveOnExit() override;                             // slot 18 @ 0x0010dae0
-    void SetAppLicensed(bool licensed) override;            // slot 19 @ 0x0010da68
-    int GetAppLicensedState() override;                     // slot 20 @ 0x0010da94
+    const char* GetPlayhavenToken() override;               // slot 7; v1.6.1 Game::GetPlayhavenToken @0x0011fc48
+    void CreateFileSystems(const char* a, const char* b) override;  // slot 9; v1.6.1 Game::CreateFileSystems @0x00120704
+    void TellGameToStart(int multiplayer) override;         // slot 10; v1.6.1 Game::TellGameToStart @0x001206c8
+    void Update(float dt) override;                         // slot 11; TODO: re-verify v1.6.1 Game::Update address (no named symbol)
+    void Draw(float dt) override;                           // slot 12; TODO: re-verify v1.6.1 Game::Draw address (no named symbol)
+    void Init(int argc, char** argv) override;              // slot 13; v1.6.1 Game::Init @0x00120374
+    MortarGame* End() override;                             // slot 14; TODO: re-verify v1.6.1 Game::End address (no named symbol)
+    void Paused() override;                                 // slot 15; v1.6.1 Game::Paused @0x001202ec
+    void UnPaused() override;                               // slot 16; v1.6.1 Game::UnPaused @0x00120270
+    const char* SelfVersion() override;                     // slot 17; v1.6.1 Game::SelfVersion @0x0011fbd8 returns "1.6.1"
+    void SaveOnExit() override;                             // slot 18; v1.6.1 Game::SaveOnExit @0x0012026c
+    void SetAppLicensed(bool licensed) override;            // slot 19; v1.6.1 Game::SetAppLicensed @0x0011fc7c
+    int GetAppLicensedState() override;                     // slot 20; v1.6.1 Game::GetAppLicensedState @0x0011fcbc
 
-    // Non-virtual -- mirrors Game_SetLanguage @ 0x0010b140 (not a vtable override;
+    // Non-virtual -- mirrors Game::SetLanguage (TODO: re-verify v1.6.1 Game::SetLanguage address; not a vtable override;
     // binary's slot 21 still points to MortarGame::SetLanguage base impl).
     void SetLanguage(const char* lang);
 
@@ -147,7 +147,7 @@ static_assert(offsetof(Game, m_appState)      == 0x100, "Game::m_appState must b
 
 // Forward declarations for lifecycle functions (src/game/)
 void GamePreInitialise();
-// DIFFERS: original passes the Bada window/config @0x0011d22c; SDL port owns its window, args unused.
+// DIFFERS: original passes the Bada window/config (v1.6.1 GameInitialise @0x0011d22c); SDL port owns its window, args unused.
 void GameInitialise(void* window, const char* config);
 void GameDestroy();
 

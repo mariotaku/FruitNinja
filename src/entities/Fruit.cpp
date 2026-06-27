@@ -44,12 +44,12 @@
 #include "game/GameWork.h"
 
 // Binary static: critical/charged fruit blend-target colour for blade flash.
-// Used by SlashEntity::UpdatePoints colour-blend path (binary @ 0x1e6914).
-// TODO: 0x1e6914 -- verify exact RGB from Ghidra (binary blends toward this when m_Scale>0).
+// Used by SlashEntity::UpdatePoints colour-blend path (v1.6.1 SlashEntity::UpdatePoints @0x001e6914).
+// TODO: re-verify exact RGB from Ghidra (v1.6.1 SlashEntity::UpdatePoints @0x001e6914 blends toward this when m_Scale>0).
 const Colour Fruit::CRITICAL_COLOUR(255, 128, 0, 255);
 
 // File-scope global: multicast event fired on every fruit slice.
-// Binary: file-static in Fruit.cpp, ctor'd in global.ctors @ 0x1e2404.
+// Binary: file-static in Fruit.cpp, ctor'd in global.ctors (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c).
 // GOT-resolved address: 0x00332a34.
 // Subscribers: ComboModifier, ExplodyFruitModifier, TimeSinkModifier.
 // DIFFERS: binary accesses via GOT load on every subscribe site; port exposes via
@@ -78,7 +78,7 @@ typedef ::FruitInfo FruitInfoData;
 
 // Count of active power-fruits (FruitInfo::m_pPowers != nullptr) on screen.
 // Decremented by KillFruit on natural-expiry path (flag 0x10 not yet set).
-// Binary @ 0x00176cc8..0x00176cd4: unconditional store, clamped to >= 0 (not >= 1).
+// TODO: re-verify v1.6.1 Fruit::KillFruit @0x001deba8 inner offset (was: 0x00176cc8..0x00176cd4 stale v1.5.x): unconditional store, clamped to >= 0 (not >= 1).
 static int g_PowerFruitCount = 0;
 
 // Per-frame gate for "Throw-fruit" SFX. Binary stores at *(g_fruitGlobal + 0x48)
@@ -87,7 +87,7 @@ static int g_PowerFruitCount = 0;
 static bool s_FruitThrowSfxFiredThisFrame = false;
 
 // Base slice-rotation axes — written by global.constructors.keyed.to.Fruit.cpp
-// (binary @ 0x1E206C). Values: world unit basis X/Y/Z.
+// (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c). Values: world unit basis X/Y/Z.
 //   0x2D9EE4 -> kSliceBaseAxis[0] = (1,0,0)   slice axis[0]
 //   0x2D9ED8 -> kSliceBaseAxis[1] = (0,1,0)   slice axis[1]
 //   0x3328AC -> kSliceBaseAxis[2] = (0,0,1)   slice axis[2]
@@ -97,19 +97,20 @@ static const Vec3 kSliceBaseAxis[3] = {
     Vec3(0.0f, 0.0f, 1.0f),
 };
 
-// GetFruitZPosition counter (binary @ 0x001690cc).
+// GetFruitZPosition counter (v1.6.1 GetFruitZPosition @0x001ca61c).
 // Decrements by 100 per call, wraps back to -500 when it falls below -2499.
 // Constants from binary DATs: step=100 (DAT_00169108), lower=-2499 (DAT_0016910c),
 // reset=-500 (DAT_00169110).
 static float s_FruitZCounter = -500.0f;
 
-// Static Colour constants from _GLOBAL__I_Fruit.cpp @ 0x0017a354.
+// Static Colour constants from global.constructors.keyed.to.Fruit.cpp
+// (TODO: re-verify v1.6.1 Fruit.cpp static-init offset; was: _GLOBAL__I_Fruit.cpp @ 0x0017a354 stale v1.5.x).
 // *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
 // Likely g_FruitOutlineTint or g_FruitGlowTint. Exact consumer not yet RE'd -- TODO.
-static Colour g_FruitTint1(128, 128, 255, 128);  // DAT_0017a678
-// DAT_0017a670: copy-ctor from BLUE singleton (DAT_0017a674 -> GOT off 0x7a5c
-// == BLUE created in _GLOBAL__I_Colour_cpp @ 0x00184068).
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0017a512..0x0017a51c (re-analyst).
+static Colour g_FruitTint1(128, 128, 255, 128);  // DAT_0017a678 (TODO: re-verify v1.6.1 DAT)
+// DAT_0017a670: copy-ctor from BLUE singleton
+// == BLUE created in global.constructors.keyed.to.Colour.cpp (v1.6.1 @0x0021e9b8).
+// TODO: re-verify v1.6.1 Fruit.cpp static-init offset (was: ASM-verified 0x0017a512..0x0017a51c stale v1.5.x).
 static Colour g_FruitTint2(0, 0, 255, 255);      // DAT_0017a670: blue
 
 // Binary constants for fruit slicing.
@@ -119,13 +120,13 @@ static const float SLICE_BLADE_SCALE   = 0.1f;    // DAT_001784e0 -- TODO: re-RE
 
 // Bomb-hit cinematic window: LTF in {2,3} and timer in (-0.1f, 0.95f).
 // Shared by both the power-up-activation gate and the score+save gate
-// in CollisionResponse. Binary @ 0x001788f4 (same game_work GOT entry).
+// in CollisionResponse. TODO: re-verify v1.6.1 Fruit::CollisionResponse @0x001dd500 inner offset (same game_work GOT entry; was: 0x001788f4 stale v1.5.x).
 static const float kBombHitMax = 0.95f;
 static const float kBombHitMin = -0.1f;
 static const float SLICE_CLAMP_MIN_NRM = 4.0f;    // normal fruit clamp
 static const float SLICE_CLAMP_MAX     = 8.0f;
-// Fruit::SetFruitType (0x0017621c) collision radius formula — verified
-// 2026-04-15 from binary disassembly at 0x0017630e..0x0017631e:
+// Fruit::SetFruitType (v1.6.1 @0x001dc054) collision radius formula.
+// ASM-spec v1.6.1 Fruit::SetFruitType @0x001dc054 (TODO: re-verify inner offset; was: 0x0017630e..0x0017631e stale v1.5.x):
 //   vldr s14, [r3, #0x244]   ; s14 = m_Scale            (XML "scale")
 //   vldr s15, [r3, #0x248]   ; s15 = m_CollisionScale   (XML "collision")
 //   vmla s15, s13, s14       ; s15 += 0.52 * s14
