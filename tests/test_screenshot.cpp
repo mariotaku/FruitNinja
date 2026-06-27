@@ -149,7 +149,7 @@ static int RunBonus(fn::TestHarness& h) {
         return 2;
     }
 
-    bs->pos = Vec3(0.0f, -20.0f, 0.0f);
+    bs->pos = Vec3(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
     // Binary layer for BonusScreen is HUD_LAYER_POST_ACTOR (0x80), drawn at
     // GameDraw step 8. HUDControl ctor defaults m_LayerFlags=0x01 (DEFAULT),
     // so set the correct layer here -- mirrors what the binary sets during
