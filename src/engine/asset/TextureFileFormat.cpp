@@ -6,10 +6,10 @@
 // all shipped assets.
 //
 // Binary reader registry @ 0x2cf8e8 (array of 4 ReadFn pointers):
-//   [0] = ReadTex3Format @0x0022bd7c
-//   [1] = ReadDDSFormat  @0x0022cc04
-//   [2] = ReadTex2Format @0x0022baf8
-//   [3] = ReadTex1Format @0x0022b324
+//   [0] = ReadTex3Format v1.6.1 Tex3Format::Read @0x0022bd7c
+//   [1] = ReadDDSFormat  v1.6.1 DDSFormat::Read @0x0022cc04
+//   [2] = ReadTex2Format v1.6.1 Tex2Format::Read @0x0022baf8
+//   [3] = ReadTex1Format v1.6.1 Tex1Format::Read @0x0022b324
 
 #include "asset/TextureFileFormat.h"
 #include <cstdint>
@@ -19,14 +19,14 @@
 namespace Mortar {
 
 // ---- Tex3 FourCC ----------------------------------------------------------
-// Static-init in binary: _GLOBAL__I_Tex3Format.cpp @ 0x0022be94 copies
+// Static-init in binary: v1.6.1 global.constructors.keyed.to.Tex3Format.cpp @0x0022be94 copies
 // .rodata @0x0029ac00 (bytes 54 45 58 01) into .bss @0x0034e3f4.
 // Port: compile-time constant; value identical.
 // DIFFERS: original = DAT_0034e3f4 (static-init copy); port = const literal.
 const uint32_t TextureFileFormat::kTex3FourCC = 0x01584554u; // "TEX\x01" LE
 
 // ---- Reader [3]: Tex1 -----------------------------------------------------
-// Binary @0x0022b324 (outer dispatch) / @0x0022ad04 (inner ReadFormatInternal).
+// Binary v1.6.1 Tex1Format::Read @0x0022b324 (outer dispatch) / Tex1Format::ReadFormatInternal @0x0022ad04 (inner).
 // The outer checks size >= 0xd and byte[2] in range 0..0x11;
 // the inner allocates Tex1Data (0x48 bytes in binary), fills DataInfo, stores pixel ptr.
 //
@@ -120,7 +120,7 @@ TextureSourceData* TextureFileFormat::ReadTex1Format(const void* data, unsigned 
 }
 
 // ---- Reader [2]: Tex2 -----------------------------------------------------
-// Binary @0x0022baf8 (outer) / @0x0022b404 (inner ReadFormatInternal).
+// Binary v1.6.1 Tex2Format::Read @0x0022baf8 (outer) / Tex2Format::ReadFormatInternal @0x0022b404 (inner).
 // Accept gate: size >= 0x11 && u16@+2 == 4.
 // Header: bytes[8]=wLog2, bytes[9]=hLog2, bytes[0xb]=mipCount; u32@+4 = format
 //   descriptor; u16@+0xc = apparentWidth; u16@+0xe = apparentHeight.
@@ -129,7 +129,7 @@ TextureSourceData* TextureFileFormat::ReadTex1Format(const void* data, unsigned 
 // PixelFormat (12-byte channel-mapping block) is built byte-for-byte from the
 // two switches over (u32@+4 & 0xf00) (type byte pair, pf[0]/pf[1]) and
 // (u32@+4 & 0xf) (channel layout, pf[4..0xb] + NumberType -> MakeIntFormat).
-// MakeIntFormat @0x0022b3dc: ret = (((n-1)*0x10)&0xff)<<8  -> pf[2]/pf[3].
+// v1.6.1 MakeIntFormat @0x0022b3dc: ret = (((n-1)*0x10)&0xff)<<8  -> pf[2]/pf[3].
 // Binary zeroes the pixel-ptr fields (piVar3[9..0x11]); pixels/pixelsSize stay 0.
 // No Tex2 assets ship in 1.5.1/1.6.1 packs, but the decode is faithful per policy.
 TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned long size) {
@@ -244,7 +244,7 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
     }
 
     if (numType != 0) {
-        // MakeIntFormat @0x0022b3dc: (((n-1)*0x10)&0xff)<<8
+        // v1.6.1 MakeIntFormat @0x0022b3dc: (((n-1)*0x10)&0xff)<<8
         unsigned int makeInt = ((((unsigned int)(numType - 1)) * 0x10u) & 0xffu) << 8;
         pf[2] = (uint8_t)(makeInt & 0xffu);         // always 0
         pf[3] = (uint8_t)((makeInt >> 8) & 0xffu);  // ((n-1)*0x10)&0xff
@@ -254,9 +254,9 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
 }
 
 // ---- Reader [1]: DDS ------------------------------------------------------
-// Binary @0x0022cc04 (outer) / @0x0022c7d4 (inner).
+// Binary v1.6.1 DDSFormat::Read @0x0022cc04 (outer) / DDSFormat::ReadFormatInternal @0x0022c7d4 (inner).
 // Accept gate: size >= 0x80 && u32@0 LE == 0x20534444 ("DDS ").
-// TODO: 0x0022c7d4 -- full DDS decode (no DDS assets in shipped packs).
+// TODO: v1.6.1 0x0022c7d4 (DDSFormat::ReadFormatInternal) -- full DDS decode (no DDS assets in shipped packs).
 TextureSourceData* TextureFileFormat::ReadDDSFormat(const void* data, unsigned long size) {
     if (size < 0x80) {
         return 0;
@@ -267,7 +267,7 @@ TextureSourceData* TextureFileFormat::ReadDDSFormat(const void* data, unsigned l
     if (magic != 0x20534444u) { // "DDS " LE
         return 0;
     }
-    // TODO: 0x0022c7d4 -- full DDS decode: 0x7c-byte DDS_HEADER, LE-convert ~19 dwords,
+    // TODO: v1.6.1 0x0022c7d4 (DDSFormat::ReadFormatInternal) -- full DDS decode: 0x7c-byte DDS_HEADER, LE-convert ~19 dwords,
     //   pixelflags&4 -> compressed (FourCC DXT*); else channel-mapping from RGBA masks
     //   (VerifyBitRun + sort<ChannelMapping>); dims from header w@+0xc, h@+8, mips@+0x14;
     //   allocate DDSTextureData (0x44 bytes).
@@ -276,11 +276,11 @@ TextureSourceData* TextureFileFormat::ReadDDSFormat(const void* data, unsigned l
 }
 
 // ---- Reader [0]: Tex3 -----------------------------------------------------
-// Binary @0x0022bd7c (outer) / @0x0022bc6c (internal ReadFormatInternal).
+// Binary v1.6.1 Tex3Format::Read @0x0022bd7c (outer) / Tex3Format::ReadFormatInternal @0x0022bc6c (inner).
 // Accept gate: u32@0 == kTex3FourCC (0x01584554 = "TEX\x01").
-// FourCC static-init: _GLOBAL__I_Tex3Format.cpp @0x0022be94 copies
+// FourCC static-init: v1.6.1 global.constructors.keyed.to.Tex3Format.cpp @0x0022be94 copies
 //   .rodata @0x0029ac00 -> .bss @0x0034e3f4.
-// TODO: 0x0022bc6c -- ReadFormatInternal: allocate Tex3Data (0x4c bytes), read
+// TODO: v1.6.1 0x0022bc6c (Tex3Format::ReadFormatInternal) -- allocate Tex3Data (0x4c bytes), read
 //   TextureInfo fields via MakeIntFormat helpers, read per-layer size table,
 //   accumulate layer-data offsets.
 //   No Tex3 assets in shipped 1.5.1/1.6.1 packs.
@@ -294,7 +294,7 @@ TextureSourceData* TextureFileFormat::ReadTex3Format(const void* data, unsigned 
     if (magic != kTex3FourCC) {
         return 0;
     }
-    // TODO: 0x0022bc6c -- full Tex3 decode (no Tex3 assets in shipped packs).
+    // TODO: v1.6.1 0x0022bc6c (Tex3Format::ReadFormatInternal) -- full Tex3 decode (no Tex3 assets in shipped packs).
     return 0;
 }
 
@@ -302,10 +302,10 @@ TextureSourceData* TextureFileFormat::ReadTex3Format(const void* data, unsigned 
 // Binary: 4-entry array @ 0x2cf8e8.
 // Order: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
 TextureReadFn g_readers[4] = {
-    TextureFileFormat::ReadTex3Format,  // [0] @0x0022bd7c
-    TextureFileFormat::ReadDDSFormat,   // [1] @0x0022cc04
-    TextureFileFormat::ReadTex2Format,  // [2] @0x0022baf8
-    TextureFileFormat::ReadTex1Format   // [3] @0x0022b324
+    TextureFileFormat::ReadTex3Format,  // [0] v1.6.1 Tex3Format::Read @0x0022bd7c
+    TextureFileFormat::ReadDDSFormat,   // [1] v1.6.1 DDSFormat::Read @0x0022cc04
+    TextureFileFormat::ReadTex2Format,  // [2] v1.6.1 Tex2Format::Read @0x0022baf8
+    TextureFileFormat::ReadTex1Format   // [3] v1.6.1 Tex1Format::Read @0x0022b324
 };
 
 } // namespace Mortar

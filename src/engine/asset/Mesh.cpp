@@ -326,13 +326,13 @@ void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
     // EffectProperty path is defunct-stubbed; produces zero bindings (correct).
 }
 
-// vtable slot 7 (+0x1c): GenerateBindings(Bone) binary @ 0x0027385c
+// vtable slot 7 (+0x1c): GenerateBindings(Bone) v1.6.1 Mesh::GenerateBindings @0x0027385c
 // Binary body is a single BX LR (genuinely empty). Port empty body is exact match.
-// Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+// Defunct-ish: Mesh emits no bone bindings; v1.6.1 Mesh::GenerateBindings @0x0027385c (empty BX LR)
 void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
                             AsciiString const& /*targetName*/,
                             std::vector<AnimBindings::Bone::Binding>& /*out*/) {
-    // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+    // Defunct-ish: Mesh emits no bone bindings; v1.6.1 Mesh::GenerateBindings @0x0027385c (empty BX LR)
 }
 
 // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ed8

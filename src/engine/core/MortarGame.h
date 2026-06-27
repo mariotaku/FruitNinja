@@ -8,7 +8,8 @@ namespace Mortar {
 
 // Matches original MortarGame base class (0xFC / 252 bytes)
 // Game subclass adds 3 fields to reach 0x104 bytes total.
-// Binary base vtable @ 0x001eae58 (= 0x001eae50 + 8), 24 slots.
+// Binary base vtable: v1.6.1 Mortar::MortarGame vtable, 24 slots.
+// TODO: re-verify v1.6.1 Mortar::MortarGame vtable address (v1.5.x 0x001eae58 was stale code, not a vtable).
 // NOTE: Binary has NO virtual destructor — slot 0 is GetHardwareString.
 //       Port keeps a non-virtual dtor for C++ correctness.
 //       // DIFFERS: binary has no virtual dtor on MortarGame; port keeps one for safe
@@ -42,47 +43,47 @@ public:
     MortarGame();
     ~MortarGame();
 
-    // --- Vtable (24 slots) — binary @ 0x001eae58 ---
+    // --- Vtable (24 slots) — v1.6.1 Mortar::MortarGame vtable ---
     // DIFFERS: port emits a non-virtual dtor before slot 0 for C++ safety;
     //          binary's slot 0 is GetHardwareString (no virtual dtor exists there).
 
-    virtual const char* GetHardwareString();               // slot 0  @ 0x0010d9d0 (returns this+0x04 ptr)
-    virtual bool IsFastHardware();                          // slot 1  @ 0x0010d9d4
-    virtual void RenderAtHalfFrames(const char* hwName, const char* model);  // slot 2  @ 0x0018aa14 base no-op
-    virtual float GetHighResolutionScale();                 // slot 3  @ 0x0018ac80 returns 1.0f
-    virtual const char* GetOpenFeintProductKey();           // slot 4  @ 0x0018ac88 Defunct
-    virtual const char* GetOpenFeintSecret();               // slot 5  @ 0x0018ac8c Defunct
-    virtual const char* GetOpenDisplayName();               // slot 6  @ 0x0018ac90 Defunct
-    virtual const char* GetPlayhavenToken();                // slot 7  @ 0x0018ac94 Defunct
-    virtual void* GetCacheDataArchive();                    // slot 8  @ 0x0010d9dc returns nullptr
-    virtual void CreateFileSystems(const char* a, const char* b);  // slot 9  @ 0x0018ac98 no-op
-    virtual void TellGameToStart(int multiplayer);          // slot 10 @ 0x0018aa28 no-op
-    virtual void Update(float dt);                          // slot 11 @ 0x0018aa1c no-op
-    virtual void Draw(float dt);                            // slot 12 @ 0x0018aa18 no-op
-    virtual void Init(int argc, char** argv);               // slot 13 @ 0x0018aa20 no-op
-    virtual MortarGame* End();                              // slot 14 @ 0x0018aa24 returns this
-    virtual void Paused();                                  // slot 15 @ 0x0018aa2c no-op
-    virtual void UnPaused();                                // slot 16 @ 0x0018aa30 no-op
-    virtual const char* SelfVersion();                      // slot 17 @ 0x0018aa38 returns "1.0.0"
-    virtual void SaveOnExit();                              // slot 18 @ 0x0018aa34 no-op
-    virtual void SetAppLicensed(bool licensed);             // slot 19 @ 0x0018aa50
-    virtual int GetAppLicensedState();                      // slot 20 @ 0x0018aa68 (NOT const — binary doesn't tag const)
-    virtual void SetLanguage(const char* lang);             // slot 21 @ 0x0018aa70 Game does NOT override
-    virtual bool AllowOrientationChange(int orientation);   // slot 22 @ 0x0018ac9c returns false
-    virtual void OrientationDidChange(int orientation);     // slot 23 @ 0x0010d9e0 no-op
+    virtual const char* GetHardwareString();               // slot 0  v1.6.1 Mortar::MortarGame::GetHardwareString @0x0011fb80 (returns this+0x04 ptr)
+    virtual bool IsFastHardware();                          // slot 1  v1.6.1 Mortar::MortarGame::IsFastHardware @0x0011fb88
+    virtual void RenderAtHalfFrames(const char* hwName, const char* model);  // slot 2  v1.6.1 Mortar::MortarGame::RenderAtHalfFrames @0x0022de74 base no-op
+    virtual float GetHighResolutionScale();                 // slot 3  v1.6.1 Mortar::MortarGame::GetHighResolutionScale @0x0022e194 returns 1.0f
+    virtual const char* GetOpenFeintProductKey();           // slot 4  v1.6.1 Mortar::MortarGame::GetOpenFeintProductKey @0x0022e19c Defunct
+    virtual const char* GetOpenFeintSecret();               // slot 5  v1.6.1 Mortar::MortarGame::GetOpenFeintSecret @0x0022e1a4 Defunct
+    virtual const char* GetOpenDisplayName();               // slot 6  v1.6.1 Mortar::MortarGame::GetOpenDisplayName @0x0022e1ac Defunct
+    virtual const char* GetPlayhavenToken();                // slot 7  v1.6.1 Mortar::MortarGame::GetPlayhavenToken @0x0022e1b4 Defunct
+    virtual void* GetCacheDataArchive();                    // slot 8  v1.6.1 Mortar::MortarGame::GetCacheDataArchive @0x0011fba0 returns nullptr
+    virtual void CreateFileSystems(const char* a, const char* b);  // slot 9  v1.6.1 Mortar::MortarGame::CreateFileSystems @0x0022e1bc no-op
+    virtual void TellGameToStart(int multiplayer);          // slot 10 v1.6.1 Mortar::MortarGame::TellGameToStart @0x0022de8c no-op
+    virtual void Update(float dt);                          // slot 11 v1.6.1 Mortar::MortarGame::Update @0x0022de80 no-op
+    virtual void Draw(float dt);                            // slot 12 v1.6.1 Mortar::MortarGame::Draw @0x0022de7c no-op
+    virtual void Init(int argc, char** argv);               // slot 13 v1.6.1 Mortar::MortarGame::Init @0x0022de84 no-op
+    virtual MortarGame* End();                              // slot 14 v1.6.1 Mortar::MortarGame::End @0x0022de88 returns this
+    virtual void Paused();                                  // slot 15 v1.6.1 Mortar::MortarGame::Paused @0x0022de90 no-op
+    virtual void UnPaused();                                // slot 16 v1.6.1 Mortar::MortarGame::UnPaused @0x0022de94 no-op
+    virtual const char* SelfVersion();                      // slot 17 v1.6.1 Mortar::MortarGame::SelfVersion @0x0022de9c returns "1.0.0"
+    virtual void SaveOnExit();                              // slot 18 v1.6.1 Mortar::MortarGame::SaveOnExit @0x0022de98 no-op
+    virtual void SetAppLicensed(bool licensed);             // slot 19 v1.6.1 Mortar::MortarGame::SetAppLicensed @0x0022deb8
+    virtual int GetAppLicensedState();                      // slot 20 v1.6.1 Mortar::MortarGame::GetAppLicensedState @0x0022dee4 (NOT const — binary doesn't tag const)
+    virtual void SetLanguage(const char* lang);             // slot 21 v1.6.1 Mortar::MortarGame::SetLanguage @0x0022dedc Game does NOT override
+    virtual bool AllowOrientationChange(int orientation);   // slot 22 v1.6.1 Mortar::MortarGame::AllowOrientationChange @0x0011fbb0 returns false
+    virtual void OrientationDidChange(int orientation);     // slot 23 v1.6.1 Mortar::MortarGame::OrientationDidChange @0x0011fbb8 no-op
 
     // --- Non-virtual methods ---
 
-    // Matches 0x0018ac64
+    // Matches v1.6.1 TellGameToQuit @0x0022e054
     void TellGameToQuit();
 
-    // Matches 0x0018aa90 — parses "M.m.p" string, fills version fields
+    // Matches v1.6.1 MortarGame::SetVersion @0x0022deec — parses "M.m.p" string, fills version fields
     // DIFFERS: binary single-digit minor/patch sections multiplied by 10
     //          (e.g. "1.5.1" -> minor=50, patch=10, combined=15010).
     //          Port keeps direct semver (combined=10501). No callers read m_versionCombined.
     void SetVersion(const char* version);
 
-    // Matches 0x0018aa7c
+    // Matches v1.6.1 MortarGame::SetHardware @0x0022e038
     void SetHardware(const char* hw, bool fast);
 
     // Singleton access

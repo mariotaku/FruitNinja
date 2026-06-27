@@ -33,9 +33,9 @@ struct Colour {
         return (uint8_t)v;
     }
 
-    // Mortar::TintColour @ 0x0013540c -- per-channel tint with [0..255] clamp.
+    // Mortar::TintColour @0x0015f2fc -- per-channel tint with [0..255] clamp.
     // tintRGB[0..2] multiplies R/G/B independently; alpha is preserved.
-    // ASM-verified: 2026-04-29T03:29Z v1.6.1 binary @ 0x0013540c (asm-inspector)
+    // ASM-spec v1.6.1 Mortar::TintColour @0x0015f2fc: per-channel signed->float, *tintRGB, clamp [0,255], alpha preserved.
     static Colour TintColour(Colour src, const float tintRGB[3]) {
         return Colour(Clamp255(src.r * tintRGB[0]),
                       Clamp255(src.g * tintRGB[1]),
@@ -70,7 +70,7 @@ public:
     char* ToString() const;
 
     // Binary static colour constants (BSS, zero-init then set by static ctors).
-    // TODO: 0x001eb618 -- verify exact binary addresses for Red/White/Black via Ghidra xref.
+    // TODO: re-verify v1.6.1 Colour::Red/White/Black BSS addresses via Ghidra xref.
     static const Colour Red;    // Colour::Red   = Colour(255,0,0,255)
     static const Colour White;  // Colour::White = Colour(255,255,255,255)
     static const Colour Black;  // Colour::Black = Colour(0,0,0,255)

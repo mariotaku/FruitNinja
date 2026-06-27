@@ -86,7 +86,7 @@ void MatrixManager::UploadModelViewOnly() {
     _UploadCurrentMatrices(true);
 }
 
-// DIFFERS from binary @ 0x0019e2b4 (asm-inspector 2026-05-24): the binary
+// DIFFERS from binary v1.6.1 _UploadCurrentMatrices @0x00257018 (asm-inspector 2026-05-24): the binary
 // emits a fixed-pipeline GL stream here -- glMatrixMode(GL_PROJECTION) +
 // glLoadMatrixf(DisplayManager.m_OrientationMatrix * proj); optionally
 // glMatrixMode(GL_TEXTURE) + glLoadMatrixf(tex); and a pop/load/push/mult

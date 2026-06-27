@@ -92,7 +92,7 @@ class Effect : public Effect_Bada {
 public:
     // Effect::DebugInfo (size 0x1C). Only m_Name @ +0x00 has a known
     // role; +0x04 / +0x10 are vectors of unknown element type that
-    // hold shader / attribute debug data. TODO: 0x001a30dc — RE
+    // hold shader / attribute debug data. TODO: v1.6.1 Effect::DebugInfo @0x00260560 — RE
     // DebugInfo's two inner vectors' element types.
     struct DebugInfo {
         std::string         m_Name;     // +0x00

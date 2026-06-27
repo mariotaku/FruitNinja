@@ -151,11 +151,11 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
 }
 
 // ---------------------------------------------------------------------------
-// AddCombo -- Binary @ 0x0010de24
+// AddCombo -- v1.6.1 BonusManager::AddCombo @0x0012e570
 //
 // Records a combo event (comboLen >= 3) into per-mode save totals.
-// Key strings (TODO: verify from binary @ 0x0010def4 / 0x0010defc):
-//   "CombosTotal-%s" / "BestCombo-%s" where %s = GetModeName(currentMode).
+// Key strings are inline StringHash literals in the binary:
+//   "combo_bonus" (per-level combo total) and "best_combo" (best combo).
 // ---------------------------------------------------------------------------
 void BonusManager::AddCombo(int comboLen) {
     if (comboLen < 3) return;

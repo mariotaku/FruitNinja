@@ -60,7 +60,9 @@ public:
     // Binary @ 0x001971c8 — genuine no-op in the shipped Bada build (single `bx lr`).
     void AddDropShadow();
 
-    // TODO: 0x0019762c -- LayoutToCircle: arrange baked glyph quads onto a circular arc.
+    // TODO: re-verify v1.6.1 BakedString::LayoutToCircle address (cited 0x0019762c
+    // was stale v1.5.x -- resolves to MainScreen::Update in v1.6.1; no confirmed
+    // bitmap-font symbol). LayoutToCircle: arrange baked glyph quads onto a circular arc.
     void LayoutToCircle(float);
 
 private:

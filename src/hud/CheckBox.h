@@ -22,7 +22,7 @@ public:
     CheckBox(Vec3 pos, Vec3 size, const char* label);
 
     // Binary @ 0x00134D98
-    // ASM-verified pending: 0x00134d98 -- m_pLabel offset/type. asm-verify clean as of R4 W4.
+    // ASM-spec v1.6.1 CheckBox::CheckBox(Vec3,Vec3,LocalizedString) @0x00166ab8 -- m_pLabel offset/type. asm-verify clean as of R4 W4.
     CheckBox(Vec3 pos, Vec3 size, LocalizedString loc);
 
     virtual ~CheckBox();

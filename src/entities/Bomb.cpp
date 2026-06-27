@@ -578,8 +578,8 @@ void Bomb::ClearUnspawned() {
     }
 }
 
-// ASM-verified-via-RE: 2026-05-03 binary @ 0x00126384
-// ASM-spec v1.6.1 Bomb::SetHit @ 0x00126384
+// ASM-verified: 2026-05-03 v1.6.1 Bomb::SetHit @0x0012c9e4 (re-analyst)
+// ASM-spec v1.6.1 Bomb::SetHit @0x0012c9e4
 void Bomb::SetHit(Bomb* b, float speed) {
     if (!b) return;
     b->m_SpawnTimer = speed;

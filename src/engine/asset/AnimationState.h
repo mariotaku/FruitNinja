@@ -20,7 +20,7 @@ struct AnimBindings {
     // Bone::Binding -- empty shell; Mesh::GenerateBindings(Bone) @ 0x0027385c is BX LR.
     // Declare for type completeness and vtable slot 7 signature.
     struct Bone {
-        // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR).
+        // Defunct-ish: Mesh emits no bone bindings; v1.6.1 Mortar::Mesh::GenerateBindings @0x0027385c (empty BX LR).
         struct Binding {};
         std::vector<Binding> m_bindings;  // +0x00 (12B)
     };

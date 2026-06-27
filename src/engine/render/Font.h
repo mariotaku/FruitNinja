@@ -222,7 +222,7 @@ public:
     void DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
                     Colour colour, float scale, float maxWHx, float maxWHy,
                     int alignment, MortarRectangleDec* clip, float rotZ);
-    // TODO: 0x0024c2a0 -- word-advance helper for word-wrap. BLOCKED on the
+    // TODO: v1.6.1 Font::FindAdvanceOfNextWord @0x0024c2a0 -- word-advance helper for word-wrap. BLOCKED on the
     // Mortar::WordWrap subsystem (CanBreakLineAt + East-Asian line-break tables).
     // Binary return type is Utf8StringIterator/char* (start iter if word fits,
     // NULL if line must break) -- port's float return is a Ghidra mis-decode;

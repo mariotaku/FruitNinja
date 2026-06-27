@@ -237,7 +237,7 @@ void FruitFactZenPage::Init() {
                 box1->SetHorizontalLineSpacing(-1.0f);
                 c1->SetText(box1);
                 // Binary reads actual baked dims box->+0x24 / +0x28 to recenter.
-                // TODO: 0x00180320 -- c1pos.x -= box1->m_BakedWidth/2; c1pos.y -= box1->m_BakedHeight/2
+                // TODO: v1.6.1 FruitFactZenPage::Init @0x00180320 -- c1pos.x -= box1->m_BakedWidth/2; c1pos.y -= box1->m_BakedHeight/2
                 //   (field_0x24 / field_0x28 in BakedStringBox); using declared ctor dims (160, 40) as
                 //   approximation until BakedStringBox layout is confirmed.
                 c1pos.x -= 80.0f;
@@ -303,7 +303,7 @@ void FruitFactZenPage::Init() {
 
 // Binary @ 0x0017fa04
 void FruitFactZenPage::Update(float /*dt*/) {
-    // TODO: 0x0017fa04 -- per-frame update for zen page
+    // TODO: v1.6.1 FruitFactZenPage::Update @0x0017fa04 -- per-frame update for zen page
 }
 
 // Binary @ 0x00180ef0

@@ -327,7 +327,7 @@ void SlashEntity::RegisterInputCallbacks() {
 #endif
 }
 
-// ASM-verified: 2026-06-13T00:00 v1.6.1 binary @ 0x001e79b0 (asm-inspector)
+// ASM-verified: 2026-06-13T00:00 v1.6.1 SlashEntity::Release @ 0x001e79b0 (asm-inspector)
 void SlashEntity::Release() {
     if (m_pLeftBuffer) {
         delete[] m_pLeftBuffer;
@@ -342,7 +342,7 @@ void SlashEntity::Release() {
         m_TrailEmitter = nullptr;
     }
     m_PointCount = 0;
-    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; v1.6.1 binary @ 0x0017C60C.
+    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; v1.6.1 SlashEntity::Release @ 0x001e79b0 (strb 0 @0x001e7a20).
     // Binary Release writes a 1-byte 0 to a static slot with no other accessors
     // (likely a once-flag whose set/check sites were inlined out / DCE'd). Port
     // omits the write; semantically equivalent. (re-analyst 2026-05-20)

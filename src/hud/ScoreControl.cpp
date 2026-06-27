@@ -237,7 +237,7 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 1: per-digit alpha cascade
-    // ASM-verified gate at 0x001585A8: gameMode == 1.
+    // ASM-verified gate v1.6.1 ScoreControl::Update @0x001ac5c0: gameMode == 1.
     // Non-gameMode-1: static-timer driven (0.25s gate) same rates.
     // Binary @ 0x00158580: digitsActive = comboCount - 1, then clamp [0, 15].
     // g_ComboCount is from GOT[0x78f8] -> BSS @ 0x0024d764.
@@ -463,13 +463,13 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             // produces lineOffset = 0, identical to LEFT (0x00). So this call
             // effectively LEFT-anchors the digit string at (drawX, drawY),
             // which keeps multi-digit scores to the right of the watermelon
-            // icon. See ASM-verified Font::DrawString @ 0x00198e44.
+            // icon. See ASM-verified v1.6.1 Mortar::Font::DrawString @0x0010671c.
             game_work.pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                 buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
         }
 
         // Section B: per-digit combo overlay.
-        // ASM-verified gate at 0x00158FEC: gameMode == 1.
+        // ASM-verified gate v1.6.1 ScoreControl::PreDraw @0x001ace80: gameMode == 1.
         if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
             // Executed once before the per-digit loop.

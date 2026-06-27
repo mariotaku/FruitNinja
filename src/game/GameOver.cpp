@@ -102,7 +102,7 @@ void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param
 }
 
 // Binary free functions @ 0x001138f0 / 0x001151ec.
-// Defunct sig: playerIdx ignored (online MP scrubbed) — binary @ 0x001138f0 / 0x001151ec.
+// Defunct sig: playerIdx ignored (online MP scrubbed) — binary v1.6.1 SetScore @0x001138f0 / v1.6.1 SetMissCount @0x001151ec.
 // ASM-verified: 2026-05-10 v1.6.1 SetScore @ 0x001138f0 (asm-inspector). Writes
 // score to Game+0x18 (the live `currentScore` that ScoreControl reads),
 // NOT to pSaveData->m_CurrentScore (which earlier port had wrong --

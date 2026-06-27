@@ -81,7 +81,7 @@ void FruitFactPage::HideSubObjects() {
 // ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c3b4 (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
     if (!g_SenseisHeadTex.IsValid()) {
-        // TODO: 0x0017c3b4 -- resolve sensei head tex name from DAT_0017c4b0 string pool
+        // TODO: v1.6.1 FruitFactPage::CreateSenseisHead @0x0017c3b4 -- resolve sensei head tex name from DAT_0017c4b0 string pool
         g_SenseisHeadTex = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
     }
     Mortar::SmartPtr<Mortar::Texture> tex(g_SenseisHeadTex);

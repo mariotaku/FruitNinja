@@ -23,7 +23,7 @@
 
 class FNHighscoreList {
 public:
-    // Defunct: FNHighscoreList -- no-op stub; binary ctor @ 0x00111408
+    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::FNHighscoreList @0x00106500
     FNHighscoreList()
         : m_flag8(false)
         , m_flag9(false)

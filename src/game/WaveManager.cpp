@@ -730,7 +730,7 @@ void WaveManager::Resume() {
     // m_ComboTimer <- sd+0x100 (combo timer snapshot).
     // m_ColdTimer  <- sd+0x108 (cold-timer snapshot; binary vldr/vstr raw word move).
     m_ComboTimer = sd->m_Speed_P0;
-    m_ColdTimer  = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+    m_ColdTimer  = sd->m_Speed_P1;  // ASM-verified: v1.6.1 WaveManager::Resume @0x0012bf58 vldr/vstr -- raw word move
 
     // 3. Restore was-game-over flag.
     game_work.m_bUnsullied = sd->m_bWasGameOver;
@@ -817,7 +817,7 @@ void WaveManager::Resume() {
             // has Update(float) at +0x10, NOT this (float,Entity*) activate slot,
             // so the kind-4 PowerUp-entity class is entirely unported and has no
             // vtable to dispatch through.
-            // TODO: 0x00124b1c -- PowerUp-entity (ActorManager type 4) vtable+0x10
+            // TODO: v1.6.1 WaveManager::Resume @0x0012bf58 -- PowerUp-entity (ActorManager type 4) vtable+0x10
             //   activate(m_ChuckMag, e); blocked on unported PowerUp-entity subsystem.
         }
         respawned = true;
@@ -861,7 +861,7 @@ void WaveManager::Resume() {
         // inherited from earlier RE was misleading.
         m_SyncWaveIdx        = sd->m_pCurrentWave_P1;   // saved wave index
         m_ComboTimer         = sd->m_Speed_P0;
-        m_ColdTimer          = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+        m_ColdTimer          = sd->m_Speed_P1;  // ASM-verified: v1.6.1 WaveManager::Resume @0x0012bf58 vldr/vstr -- raw word move
         m_WaveActive = 1; m_SyncLocalReady = 1;
         m_SyncRemotePending = 0; m_SyncReceived = 0;
         m_ComboSpeed         = sd->m_Speed_P0_alias;
@@ -976,10 +976,10 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         sd->m_WaveDelay       = m_NextWaveDelay_P0;
         sd->m_WaveWait        = m_NextWaveDelay_P1;
         sd->m_Speed_P0        = m_ComboSpeed;
-        sd->m_Speed_P1        = m_ColdTimer;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
+        sd->m_Speed_P1        = m_ColdTimer;  // ASM-verified: v1.6.1 WaveManager::SaveWaveInfo @0x001254b0 vldr/vstr -- raw word move
         sd->m_Speed_P0_alias  = m_TargetComboSpeed;
         memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0], 0x80);
-        // ASM-verified: binary @ 0x00124930 reads +0x2d0 (m_RecentFruitCount[0]) into save+0x7c.
+        // ASM-verified: v1.6.1 WaveManager::SaveWaveInfo @0x001254b0 reads +0x2d0 (m_RecentFruitCount[0]) into save+0x7c.
         sd->m_FruitQueueCount = m_RecentFruitCount[0];
         return 1;
     }
@@ -1443,7 +1443,7 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
     if (!sc) {
         sc = new SpeedControl();
         m_SpeedControl[1] = sc;
-        // ASM-verified: binary @ 0x00122f50 (re-analyst) constructs a
+        // ASM-verified: v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc (re-analyst) constructs a
         // Delegate1<void, HUDControl*>::QCallee<WaveManager>(this, &DeleteSpeedControl)
         // and stores it into sc->m_RemoveCallback so HUD::Release nulls
         // m_SpeedControl when the control is torn down on GameExit.

@@ -1,6 +1,6 @@
 #include "screens/UpsellScreen.h"
 
-// Defunct: UpsellScreen monetization -- stub; binary ctor @ 0x00164814.
+// Defunct: UpsellScreen monetization -- stub; v1.6.1 UpsellScreen::UpsellScreen @0x001c443c.
 UpsellScreen::UpsellScreen(Mortar::Delegate0<void> onDone, int mode)
     : field1_0x7c(0)
     , field2_0x80(0)

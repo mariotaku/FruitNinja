@@ -81,7 +81,7 @@ int EffectGroup::MergeProperties(
 
         if (lo < m_MergedDefs.size() &&
             std::strcmp(m_MergedDefs[lo].m_Name.c_str(), incoming.m_Name.c_str()) == 0) {
-            // Same-name entry already present. TODO: 0x001a2030 — RE
+            // Same-name entry already present. TODO: re-verify v1.6.1 — RE
             // EffectPropertyDefinition::operator!= to detect structural
             // mismatch and return 0 on conflict. Port treats same-name
             // as equal (no conflict).

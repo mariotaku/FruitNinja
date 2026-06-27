@@ -65,7 +65,7 @@ static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 byt
 // m_Overlay interpretation by actor kind (derived from m_KindIndex):
 //   Fruit  (kind == 0): m_Overlay = gravity Vec3 -> actor->m_Gravity
 //   Bomb   (kind == 1): x = rotAxis_z, y = playerIdx (raw int in float slot),
-//                       z = timeScale -- TODO: 0x00124b1c bomb-overlay fields
+//                       z = timeScale -- TODO: v1.6.1 SpawnBomb @0x00124b1c bomb-overlay fields
 //   PowerUp(kind == 4): overlay not consumed
 //
 // Kind selection from m_KindIndex (g_FruitCount = **DAT_00124f04):

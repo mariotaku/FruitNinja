@@ -251,7 +251,7 @@ static_assert(sizeof(Entity)                 == 0x50, "sizeof(Entity) port drift
 // Free function: remove an entity from EntityTracker tree `treeIdx` by its
 // 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying
 // fruit from the spatial acceleration structure.
-// TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
+// TODO: implement v1.6.1 ET_RemoveEntity @0x001d976c when EntityTracker tree storage is ported
 void ET_RemoveEntity(int treeIdx, uint16_t trackerID);
 
 #endif
