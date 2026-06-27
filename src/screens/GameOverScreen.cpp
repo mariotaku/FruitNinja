@@ -1077,15 +1077,23 @@ void GameOverScreen::Update(float dt) {
             if (game_work.mHud) game_work.mHud->AddControl(m_pFruitFact, false);
             m_pFruitFact->Init();
 
-            // Set removal callback so HUD-driven teardown nulls our pointer
-            // (prevents double-free when HUD::Release processes children before parent).
+            // m_pFruitFact owns itself: m_bNoDestructor=1 (set in ctor) prevents
+            // HUD::Release from deleting it; GameOverScreen::Release is the sole
+            // deleter (clears m_bNoDestructor=0 before delete).
             m_pFruitFact->m_RemoveCallback =
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
 
             // Per-mode page creation (once)
+            // m_bNoDestructor=1: GameOverScreen::Release is the sole deleter (it
+            // clears to 0 before delete); prevents HUD::Release from double-freeing
+            // the page when it iterates the HUD list before reaching gos.
+            // Binary evidence: GameOverScreen::Release @0x00185970 explicitly clears
+            // m_bNoDestructor=0 on every page before deleting, which implies they
+            // were created with m_bNoDestructor=1 (same pattern as m_pFruitFact).
             uint8_t gm = game_work.gameMode;
             if (gm == Mortar::GAME_MODE_ZEN) {
                 m_pZenPage = new FruitFactZenPage(m_pFruitFact);
+                m_pZenPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pZenPage, false);
                 m_pZenPage->Init();
                 m_pFruitFact->RegisterPage(m_pZenPage);
@@ -1093,6 +1101,7 @@ void GameOverScreen::Update(float dt) {
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
             } else if (gm == Mortar::GAME_MODE_ARCADE) {
                 m_pBonusFactPage = new FruitFactBonusFactPage(m_pFruitFact);
+                m_pBonusFactPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBonusFactPage, false);
                 m_pBonusFactPage->Init();
                 m_pFruitFact->RegisterPage(m_pBonusFactPage);
@@ -1100,6 +1109,7 @@ void GameOverScreen::Update(float dt) {
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
             } else {
                 m_pClassicFactPage = new FruitFactClassicFactPage(m_pFruitFact, 0, 0);
+                m_pClassicFactPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pClassicFactPage, false);
                 m_pClassicFactPage->Init();
                 m_pFruitFact->RegisterPage(m_pClassicFactPage);
