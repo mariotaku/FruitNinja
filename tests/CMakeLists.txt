@@ -21,7 +21,7 @@
 # links OpenGL::GL on non-WIN32 for consistency).
 # ---------------------------------------------------------------------------
 macro(fn_add_game_test _target _source)
-    add_executable(${_target} ${_source})
+    add_executable(${_target} ${_source} ${CMAKE_SOURCE_DIR}/tests/test_silence.cpp)
 
     target_include_directories(${_target} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
