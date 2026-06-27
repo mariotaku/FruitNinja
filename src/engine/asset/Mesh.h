@@ -172,11 +172,11 @@ public:
     //                       from load-cached m_Vbo/m_Ibo/m_Layout rather than walking
     //                       PassBinding::Apply (structural divergence; byte-equivalent GL output).
     //                       v1.6.1 Geometry::Render @0x00264468.
-    //                       TODO: re-verify v1.6.1 addrs: ctor (v1.5.1 @ 0x001a3c50 C1/0x001a3cc4 C2).
-    //   Geometry_Bada    -- collapsed into Geometry's base; TODO: re-verify v1.6.1 addr (v1.5.1 @ 0x001a4ba8).
+    //                       v1.6.1 Mortar::Geometry::Geometry ctor @0x002641c4.
+    //   Geometry_Bada    -- collapsed into Geometry's base; TODO: re-verify v1.6.1 Geometry_Bada address (no separate symbol -- collapsed).
     //   GeometryBinding  -- constructed and wired faithfully in LoadMesh; m_Binding stored on Geometry
     //                       but PassBinding::Apply is not called at draw (structural bypass -- same GL result).
-    //                       TODO: re-verify v1.6.1 addrs (v1.5.1 range @ 0x001a3990..0x001a40c0).
+    //                       v1.6.1 Mortar::GeometryBinding::GeometryBinding ctor @0x00263e90.
     //   EffectGroup      -- PORTED (src/engine/asset/Effect.h, moved from here in commit 5bcdf2b);
     //                       AddEffect/MergeProperties have real bodies, but the live render path
     //                       never reaches them because EffectBinding/PassBinding aren't constructed.

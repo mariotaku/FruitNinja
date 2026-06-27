@@ -105,7 +105,7 @@ private:
     void AboutCallback();
 
 public:
-    // Defunct: more-games/online dashboard upsell -- no-op stub; v1.5.x @ 0x0013769c (TODO: re-verify v1.6.1)
+    // Defunct: more-games/online dashboard upsell -- no-op stub; v1.6.1 DojoScreen::MoreGamesCallback @0x00169eec
     void MoreGamesCallback();
     // Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary symbol exists
     // with ZERO Bada call-site xrefs (iPhone/iPad-variant leftover .o).
@@ -113,11 +113,11 @@ public:
     // NOTE: the Back button click delegate (Play -> state 6) is implemented as
     // DojoScreen::PlayCallback() in DojoScreen.cpp (not a separate QuitCallback).
     void QuitCallback();
-    // Defunct: online network-provider selection -- no-op stub; v1.5.x @ 0x00137694 (TODO: re-verify v1.6.1)
+    // Defunct: online network-provider selection -- no-op stub; v1.6.1 DojoScreen::SwitchCallback @0x00169ea8
     void SwitchCallback();
-    // Defunct: online network-provider button -- no-op stub; v1.5.x @ 0x001379b0 (TODO: re-verify v1.6.1)
+    // Defunct: online network-provider button -- no-op stub; TODO: re-verify v1.6.1 DojoScreen::SwitchNetworkButton address (no named symbol)
     void SwitchNetworkButton(MenuButton*, float, ScreenButton&);
-    // Defunct: Twitter/Facebook social-share button layout/animation -- no-op stub; v1.5.x @ 0x00137738 (TODO: re-verify v1.6.1)
+    // Defunct: Twitter/Facebook social-share button layout/animation -- no-op stub; TODO: re-verify v1.6.1 DojoScreen::TwitterFacbookButtons address (no named symbol)
     void TwitterFacbookButtons(MenuButton*, float, ScreenButton&);
 
 #ifdef __bada__

@@ -5,7 +5,7 @@
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
 
-// Binary MatrixManager: 8500 bytes, polymorphic (vtable @ 0x001eb528, 3 vfn slots).
+// Binary MatrixManager: 8500 bytes, polymorphic (v1.6.1 MatrixManager__vtable @0x002d0738, 4 vfn slots).
 // Layout: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
 // Port adds m_CachedProjView + m_ProjVersionUploaded for the GLES2 shader path
 // (DIFFERS, marked below). Binary size applies only under __bada__.
@@ -18,13 +18,13 @@ class MatrixManager {
 public:
     // Binary @ ram:0x0035ced4 — direct global access, no guard.
     static MatrixManager& GetInstance() { return s_instance; }
-    // vptr at +0x00 (emitted by the virtual dtor below; matches binary vtable @ 0x001eb528)
+    // vptr at +0x00 (emitted by the virtual dtor below; matches v1.6.1 MatrixManager__vtable @0x002d0738)
     MatrixStack m_Projection;  // +0x004, 0x848 bytes
     MatrixStack m_View;        // +0x84C, 0x848 bytes
     MatrixStack m_World;       // +0x1094, 0x848 bytes
     MatrixStack m_Texture;     // +0x18DC, 0x848 bytes
 
-    // Binary trailing ints (binary @ ctor 0x0019e478):
+    // Binary trailing ints (v1.6.1 MatrixManager::MatrixManager @0x00256f3c):
     //   m_ViewVersion         @ +0x2124 (8484)  — init 0
     //   m_ViewVersionUploaded @ +0x2128 (8488)  — init 0
     //   m_WorldVersionUploaded@ +0x212C (8492)  — init 0
@@ -39,29 +39,30 @@ public:
 
     // DIFFERS from binary: binary has no m_CachedProjView / m_ProjVersionUploaded.
     // Required by the GLES2 shader-uniform path (fixed-pipeline unavailable on GLES2).
-    // Binary's _UploadCurrentMatrices @ 0x0019e2b4 emits glLoad/Push/Pop/Mult instead.
+    // Binary's _UploadCurrentMatrices @0x00257018 emits glLoad/Push/Pop/Mult instead.
     Matrix44 m_CachedProjView;    // Port specific
     int m_ProjVersionUploaded;    // Port specific
 
-    // Binary vtable @ 0x001eb528: slot 0+1 = dtor pair (0x0019e3b4, 0x0019e434),
-    // slot 2 = vfn @ 0x00277264 (identity unknown; non-pure, 1-instruction stub).
+    // v1.6.1 MatrixManager__vtable @0x002d0738 (4 slots): slot 0+1 = dtor pair
+    // (~MatrixManager @0x00256ec8, deleting-dtor @0x00256f20),
+    // slot 2+3 = vfn (identity unknown). TODO: re-verify v1.6.1 vfn slot addresses.
     // Virtual dtor emits the vptr, matching binary isPolymorphic=true.
     virtual ~MatrixManager();
 
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0019e2ac (asm-inspector)
-    // Binary is a 2-instruction tail-call to ResetAllStacks. Inlining
-    // the call here is the same effect.
+    // ASM-spec v1.6.1 MatrixManager::ResetAllStacks @0x00256fe8: Init is a
+    // 2-instruction tail-call to ResetAllStacks. Inlining the call here is
+    // the same effect.
     void Init() { ResetAllStacks(); }
 
-    // Matches 0x0019e5a4
+    // Matches v1.6.1 MatrixManager::SetupOrtho @0x002571d0
     // NOTE: parameter order is (top, bottom, left, right, near, far) — NOT standard GL
     void SetupOrtho(float top, float bottom, float left, float right,
                     float nearVal, float farVal);
 
-    // DIFFERS from binary @ 0x0019e724 (asm-inspector). Binary's LookAt43
+    // DIFFERS from v1.6.1 MatrixManager::SetupLookAt @0x00257534. Binary's LookAt43
     // produces a non-canonical X-flipped view matrix that is compensated
     // by an orientation-matrix multiply in _UploadCurrentMatrices @
-    // 0x0019e2b4 (Bada portrait->landscape rotation). Port skips that
+    // 0x00257018 (Bada portrait->landscape rotation). Port skips that
     // compensator, so this entrypoint uses canonical glLookAt math; arg
     // names are (eye, upHint, target) to keep positional parity with the
     // binary call sites (3rd slot is "unused" in binary, "target" here).
@@ -91,7 +92,7 @@ public:
     const MatrixStack& GetViewStack() const { return m_View; }
     const MatrixStack& GetTextureStack() const { return m_Texture; }
 
-    // Binary @ 0x0019e668. Builds a column-major GL perspective projection and
+    // Binary @ v1.6.1 MatrixManager::SetupPerspective @0x00257164. Builds a column-major GL perspective projection and
     // applies it via m_Projection.SetCurrentMatrix + UploadAll(). Args are
     // (top, bottom, aspect, near, far, out); out==null uses a local matrix.
     //   m[0]=(bottom/top)/aspect, m[5]=bottom/top, m[10]=(far+near)/(near-far),
@@ -100,7 +101,7 @@ public:
                           float nearVal, float farVal, Matrix44* out);
 
 private:
-    // Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions
+    // Matches v1.6.1 MatrixManager::_UploadCurrentMatrices @0x00257018 — recomputes cached matrices based on dirty versions
     void _UploadCurrentMatrices(bool skipProjection);
 
     MatrixManager();

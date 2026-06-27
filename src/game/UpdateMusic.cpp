@@ -1,5 +1,9 @@
 // UpdateMusic — music crossfade state machine
-// Binary: 0x0016a68c (entry), 0x0016a860 (shared branch tail)
+// Binary: v1.6.1 UpdateMusic @0x001cc18c (entry; body 0x001cc18c-0x001cc593).
+// NOTE: the inline per-instruction 0x0016a6xx / string-data 0x001bcxxx
+// addresses below are STALE v1.5.1 residue (the function moved to 0x001cxxxx
+// in v1.6.1); they are kept only as relative-order bookkeeping, not as
+// authoritative v1.6.1 addresses. TODO: re-verify v1.6.1 inline addresses.
 // Called every frame from GameUpdate once LoadingJob::IsLoaded() is true.
 //
 // Analysed: 2026-04-26T00:00
@@ -49,7 +53,7 @@ static bool  g_preloadedIngame  = false;  // g_MusicState+0x21
 static bool  g_preloadedArcade  = false;  // g_MusicState+0x20
 
 // ---------------------------------------------------------------------------
-// PreloadInGameSounds (0x001695e8)
+// PreloadInGameSounds (v1.6.1 @0x001cad28)
 // Guards with g_MusicState+0x21; returns immediately if already called.
 // Sets flag, then calls SoundManager::PreLoadSound on four SFX assets.
 // ---------------------------------------------------------------------------
@@ -62,7 +66,7 @@ static void PreloadInGameSounds() {
 
     Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
 
-    // Binary: four PreLoadSound calls in order at 0x001695e8.
+    // Binary: four PreLoadSound calls in order (v1.6.1 PreloadInGameSounds @0x001cad28).
     // PreLoadSound is intentionally a no-op stub in the port (virtual nop in
     // SoundManagerFns); call sites are kept to preserve binary shape so they
     // light up when actual preload is wired. Do NOT skip or remove them.
@@ -86,7 +90,7 @@ static void PreloadInGameSounds() {
 }
 
 // ---------------------------------------------------------------------------
-// PreloadArcadeModeSounds (0x00169504)
+// PreloadArcadeModeSounds (v1.6.1 @0x001caba4)
 // Guards with g_MusicState+0x20; returns immediately if already called.
 // Sets flag, then calls SoundManager::PreLoadSound on twelve assets in fixed
 // order. The two identical consecutive calls on "Combo-Blitz-Backing" are
@@ -101,7 +105,7 @@ static void PreloadArcadeModeSounds() {
 
     Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
 
-    // Binary: 12 PreLoadSound calls at 0x00169504.
+    // Binary: 12 PreLoadSound calls (v1.6.1 PreloadArcadeModeSounds @0x001caba4).
     // PreLoadSound is intentionally a no-op stub; calls kept for binary shape.
 
     // 1. "Combo-Blitz-Backing-Light" (0x001bc258)
@@ -118,13 +122,13 @@ static void PreloadArcadeModeSounds() {
     sm.PreLoadSound("Bonus-Banana-Frenzy");
     sm.PreLoadSound("Bonus-Banana-X2");
     // Remaining four arcade SFX (addresses in the spec; exact names from binary strings)
-    // TODO: re-analyst to confirm remaining 4 names at 0x001ba775..nearby if needed.
+    // TODO: re-verify v1.6.1 string addresses; re-analyst to confirm remaining 4 names if needed.
     LOG_DEBUG("UPDATEMUSIC", "UpdateMusic: PreloadArcadeModeSounds fired");
 }
 
 // ---------------------------------------------------------------------------
 // UpdateMusic(float dt)
-// Binary entry: 0x0016a68c
+// Binary entry: v1.6.1 UpdateMusic @0x001cc18c
 // Called every frame from GameUpdate when LoadingJob::IsLoaded().
 // ---------------------------------------------------------------------------
 void UpdateMusic(float dt) {

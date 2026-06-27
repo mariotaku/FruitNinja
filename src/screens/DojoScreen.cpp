@@ -4,11 +4,11 @@
 //
 // Defunct: 4 binary symbols with ZERO callsite xrefs -- leftover .o code from
 // other Halfbrick build variants (iPhone/iPad Twitter/Facebook + More-Games).
-// Not ported. v1.5.x addresses below; TODO: re-verify v1.6.1 addresses.
-//   SwitchCallback         @ 0x00137694  (stale v1.5.x)
-//   MoreGamesCallback      @ 0x0013769c  (stale v1.5.x)
-//   TwitterFacbookButtons  @ 0x00137738  (stale v1.5.x)
-//   SwitchNetworkButton    @ 0x001379b0  (stale v1.5.x)
+// Not ported.
+//   SwitchCallback         @ v1.6.1 DojoScreen::SwitchCallback @0x00169ea8
+//   MoreGamesCallback      @ v1.6.1 DojoScreen::MoreGamesCallback @0x00169eec
+//   TwitterFacbookButtons  -- TODO: re-verify v1.6.1 address (not present in Bada v1.6.1 binary)
+//   SwitchNetworkButton    -- TODO: re-verify v1.6.1 address (not present in Bada v1.6.1 binary)
 
 #include "DojoScreen.h"
 #include "debug/Logger.h"
@@ -93,7 +93,7 @@ DojoScreen::DojoScreen(Game& g)
 }
 
 // ===================================================================
-// Matches DojoScreen::~DojoScreen (v1.6.1 dtor -- addr TODO: re-verify from 0x0016c7f8 region)
+// Matches DojoScreen::~DojoScreen @ 0x0016c904 (v1.6.1)
 // Binary: set vtable, call Release(), call ~BaseScreen()
 // ===================================================================
 DojoScreen::~DojoScreen() {
@@ -103,7 +103,7 @@ DojoScreen::~DojoScreen() {
 }
 
 // ===================================================================
-// Matches DojoScreen::LoadContent @ 0x00137a20
+// Matches DojoScreen::LoadContent @ 0x0016a554 (v1.6.1)
 // ===================================================================
 void DojoScreen::LoadContent() {
     // +0x08: loading.tex — skipped (not used in Draw)
@@ -116,7 +116,7 @@ void DojoScreen::LoadContent() {
 }
 
 // ===================================================================
-// Matches DojoScreen::UnLoadContent @ 0x00137c04
+// Matches DojoScreen::UnLoadContent @ 0x0016c788 (v1.6.1)
 // ===================================================================
 void DojoScreen::UnLoadContent() {
     BaseScreen::UnloadContent();  // releases sml_title + blurry_backing
@@ -166,7 +166,7 @@ void DojoScreen::Release() {
 }
 
 // ===================================================================
-// Matches DojoScreen::ButtonDeleted @ 0x00137684
+// Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1)
 // Remove callback for the shop button only (field_0x98 / this->button).
 // ===================================================================
 void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
@@ -205,7 +205,7 @@ void DojoScreen::Update(float dt) {
                 m_pBackButton->Init(POS_BACK_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
-                // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
+                // TODO: re-verify v1.6.1 DojoScreen::Update @0x0016b6a4 inner offset (was: 0x0013856c stale v1.5.x): strb 1 at button+0x138 = m_bRespondsToBackKey.
                 m_pBackButton->m_bRespondsToBackKey = 1;
                 m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 game_work.mHud->AddControl(m_pBackButton);
@@ -220,7 +220,7 @@ void DojoScreen::Update(float dt) {
 
             // --- field_0x98: Shop button (senseis_swag.tex) ---
             if (m_pShopButton == nullptr) {
-                // Binary: Fruit::FruitType((char*)DAT_001386b0, false)
+                // Binary: Fruit::FruitType((char*)<pineapple string ptr>, false) (TODO: re-verify v1.6.1 DAT; was: DAT_001386b0 stale v1.5.x)
                 const int shopFruitType = Fruit::FruitType("pineapple", false);
                 m_pShopButton = new MenuButton();
                 m_pShopButton->m_Texture = (s_TexShop);
@@ -397,7 +397,7 @@ void DojoScreen::Draw(float* hudScaleRaw) {
 }
 
 // ===================================================================
-// Matches DojoScreen::QuitCallback @ 0x001389f4
+// Matches DojoScreen::QuitCallback @ 0x0016b980 (v1.6.1; bound to the back/play button)
 // Binary: SFXPlay("menu-bomb"), state=6, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::PlayCallback() {
@@ -411,7 +411,7 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
-    //    Binary @ 0x001389f4: indirects through m_pBackButton->m_pTrackedFruit
+    //    v1.6.1 DojoScreen::QuitCallback @0x0016b980: indirects through m_pBackButton->m_pTrackedFruit
     //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (aliases
     //    Bomb::m_bMovement / Fruit+0x80 unknown field), then writes
     //    Vec3(r1+5, -r2, 0) to piece->vel. Port omits the byte write since
@@ -427,14 +427,14 @@ void DojoScreen::PlayCallback() {
 }
 
 // ===================================================================
-// Matches DojoScreen::ShopCallback @ 0x00137864
+// Matches DojoScreen::ShopCallback @ 0x0016a3f8 (v1.6.1)
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
-    // Binary @ 0x00137864: m_pBackButton->m_pTrackedFruit (+0x134), set
+    // v1.6.1 DojoScreen::ShopCallback @0x0016a3f8: m_pBackButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
@@ -448,14 +448,14 @@ void DojoScreen::ShopCallback() {
 }
 
 // ===================================================================
-// Matches DojoScreen::AboutCallback @ 0x001378e0
+// Matches DojoScreen::AboutCallback @ 0x0016a48c (v1.6.1)
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 
-    // Binary @ 0x001378e0: m_pBackButton->m_pTrackedFruit (+0x134), set
+    // v1.6.1 DojoScreen::AboutCallback @0x0016a48c: m_pBackButton->m_pTrackedFruit (+0x134), set
     // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
     // Port omits the byte write; Fruit+0x80 has no reader.
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
@@ -471,13 +471,13 @@ void DojoScreen::AboutCallback() {
 // ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----
 // See file-header "Defunct: 4 binary symbols compiled into FruitNinja.exe but
 // with ZERO callsite xrefs" comment. iPhone/iPad-variant leftover .o code.
-// Defunct: iOS "More Games" button -- no-op stub; v1.6.1 binary @ 0x0013769c
+// Defunct: iOS "More Games" button -- no-op stub; v1.6.1 DojoScreen::MoreGamesCallback @0x00169eec
 void DojoScreen::MoreGamesCallback() {}
-// Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary @ 0x????
+// Defunct: iOS Quit-from-Dojo callback -- no-op stub; v1.6.1 DojoScreen::QuitCallback @0x0016b980
 void DojoScreen::QuitCallback() {}
-// Defunct: network-switch button -- no-op stub; v1.5.x @ 0x00137694 (TODO: re-verify v1.6.1)
+// Defunct: network-switch button -- no-op stub; v1.6.1 DojoScreen::SwitchCallback @0x00169ea8
 void DojoScreen::SwitchCallback() {}
-// Defunct: network-switch ScreenButton frame helper -- no-op stub; v1.5.x @ 0x001379b0 (TODO: re-verify v1.6.1)
+// Defunct: network-switch ScreenButton frame helper -- no-op stub; TODO: re-verify v1.6.1 address (not present in Bada v1.6.1 binary)
 void DojoScreen::SwitchNetworkButton(MenuButton*, float, ScreenButton&) {}
-// Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; v1.5.x @ 0x00137738 (TODO: re-verify v1.6.1)
+// Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; TODO: re-verify v1.6.1 address (not present in Bada v1.6.1 binary)
 void DojoScreen::TwitterFacbookButtons(MenuButton*, float, ScreenButton&) {}

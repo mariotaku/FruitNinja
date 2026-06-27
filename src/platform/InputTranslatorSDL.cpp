@@ -7,7 +7,7 @@
 // ring buffer (OnPressed/OnMoved/OnReleased) for channels 0-7. This means
 // a FINGERDOWN followed by a FINGERUP arriving in two consecutive drains
 // before the next sim tick both land in the ring -- neither edge is lost.
-// DispatchForSimTick calls Touch::Update(0.0f) (Mortar::Touch::Update
+// DispatchForSimTick calls Touch::Update(0.0f) (v1.6.1 Mortar::Touch::Update
 // @0x00242d14: dt==0 skips the timestamp guard, drains the ENTIRE ring),
 // then reads the drained states1 to drive InputManager hash events.
 //
@@ -96,7 +96,7 @@ void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
 }
 
 // DIFFERS: binary caps touch at 8 channels at the source (Mortar::Touch 8 slots,
-// Touch::FindTouch @0x002429a8 loops i<8; GlesForm::OnTouch* gate GetPointId()<8
+// v1.6.1 Touch::FindTouch @0x002429a8 loops i<8; GlesForm::OnTouch* gate GetPointId()<8
 // @0x001f1128/0x001f11c4/0x001f10a0). Port uses 16 SDL channels then clamps to
 // MAX_SLOTS=8 before Mortar::Touch -- benign superset.
 int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
@@ -337,7 +337,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
 // Drain the Mortar::Touch ring buffer and dispatch InputManager hash events
 // for one sim tick.
 //
-// Binary cadence (Mortar::Touch::Update @0x00242d14): each game tick calls
+// Binary cadence (v1.6.1 Mortar::Touch::Update @0x00242d14): each game tick calls
 // Touch::Update(0.0) which, because dt==0, skips the timestamp guard and
 // pops the ENTIRE ring buffer in order via ___UpdateInternal into states2,
 // then _Update() snapshots states2->states1 and advances phase state
@@ -361,7 +361,7 @@ void InputTranslatorSDL::DispatchForSimTick() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
     // Drain the entire Touch ring buffer for this tick. Binary-faithful:
-    // Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the
+    // v1.6.1 Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the
     // timestamp guard and pops every queued TEvnt in order.
     // This is safe to call even when mgr is null (headless): Touch state
     // still advances correctly; InputManager dispatch below is gated on mgr.

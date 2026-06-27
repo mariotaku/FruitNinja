@@ -9,7 +9,7 @@
 
 namespace Mortar {
 
-// Binary @ 0x001a57bc -- zero-initialises pads (via memset of _pad regions)
+// TODO: re-verify v1.6.1 GeometryBinding_Bada address (symbol absent in Bada v1.6.1 binary; the binding is GeometryBinding_GLES1, ctor folded into GeometryBinding @0x00263e90) -- zero-initialises pads (via memset of _pad regions)
 // and default-constructs m_EffectGroup / m_VertexStreams / m_IndexStream.
 GeometryBinding_Bada::GeometryBinding_Bada() {
     memset(_pad_namedstreams, 0, sizeof(_pad_namedstreams));
@@ -19,14 +19,14 @@ GeometryBinding_Bada::GeometryBinding_Bada() {
 GeometryBinding_Bada::~GeometryBinding_Bada() {
 }
 
-// TODO: re-verify v1.6.1 addr for GeometryBinding ctor (v1.5.1 @ 0x001a3990) -- constructs base then zeros Event1.
+// v1.6.1 Mortar::GeometryBinding::GeometryBinding @0x00263e90 -- constructs base then zeros Event1.
 GeometryBinding::GeometryBinding() {
 }
 
 GeometryBinding::~GeometryBinding() {
 }
 
-// Binary @ 0x002640c8 -- find-or-push_back SmartPtr<IVertexStream> into m_VertexStreams.
+// v1.6.1 Mortar::GeometryBinding::VertexStreamAdd @0x002640c8 -- find-or-push_back SmartPtr<IVertexStream> into m_VertexStreams.
 // The binary's body: searches m_VertexStreams for a matching ptr (by address comparison);
 // if not found, push_back. In LoadMesh, each stream is unique so the push_back path always fires.
 void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
@@ -38,20 +38,19 @@ void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
     m_VertexStreams.push_back(stream);
 }
 
-// TODO: re-verify v1.6.1 addr for IndexStreamSet (v1.5.1 @ 0x001a4f90) -- stores stream into m_IndexStream;
+// v1.6.1 Mortar::GeometryBinding::IndexStreamSet @0x00264108 -- stores stream into m_IndexStream;
 // name is unused by LoadMesh (always passed as ""). No lookup into m_NamedIndexStreams in this path.
 void GeometryBinding::IndexStreamSet(SmartPtr<IIndexStream> stream,
                                      const AsciiString& /*name*/) {
     m_IndexStream = stream;
 }
 
-// Binary @ 0x001a00f8 -- stores EffectGroup into m_EffectGroup.
-// TODO: re-verify v1.6.1 addr (v1.5.1 @ 0x001a00f8)
+// v1.6.1 Mortar::GeometryBinding::EffectGroupSet @0x0026406c -- stores EffectGroup into m_EffectGroup.
 void GeometryBinding::EffectGroupSet(SmartPtr<EffectGroup> group) {
     m_EffectGroup = group;
 }
 
-// TODO: re-verify v1.6.1 addrs for Geometry ctor (v1.5.1 @ 0x001a3c50 C1 / 0x001a3cc4 C2)
+// TODO: re-verify v1.6.1 Geometry ctor (C1/C2) address (v1.5.1 @ 0x001a3c50/0x001a3cc4 stale; dtor confirmed @0x00264f40)
 Geometry::Geometry(SmartPtr<GeometryBinding> binding,
                    SmartPtr<SharedEffectProperties> props)
     : m_ActiveBindingIdx(0)
@@ -68,7 +67,7 @@ Geometry::Geometry(SmartPtr<GeometryBinding> binding,
     BuildPropList(props);
 }
 
-// TODO: re-verify v1.6.1 addrs for Geometry dtor (v1.5.1 @ 0x001a4de0 D0 / 0x001a4e38 D2/D1)
+// v1.6.1 Mortar::Geometry::~Geometry @0x00264f40 (D0/D2)
 Geometry::~Geometry() {
     if (m_Vbo) { glDeleteBuffers(1, &m_Vbo); }
     if (m_Ibo) { glDeleteBuffers(1, &m_Ibo); }
@@ -87,11 +86,11 @@ Geometry::~Geometry() {
 void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
-    // CULL_FACE: do NOT enable. The binary's Geometry::Render @ 0x001a3ec8
-    // guards its `glEnable(GL_CULL_FACE)` behind a one-shot static byte at
-    // DAT_001a4050 -- after frame 0, that byte is set, the enable never
+    // CULL_FACE: do NOT enable. The binary's Geometry::Render @0x00264468
+    // guards its `glEnable(GL_CULL_FACE)` behind a one-shot static byte
+    // (TODO: re-verify v1.6.1 DAT; was DAT_001a4050 stale v1.5.x) -- after frame 0, that byte is set, the enable never
     // executes again, and DisplayManagerBada::BeginFrame's two glDisable
-    // calls (0x0019e012 and 0x0019e066) leave CULL_FACE off for the rest
+    // calls (TODO: re-verify v1.6.1 BeginFrame offsets; were 0x0019e012/0x0019e066 stale v1.5.x) leave CULL_FACE off for the rest
     // of the program's life. Net effect: the binary renders 3D meshes
     // with cull disabled. Asm-inspector confirmed via Geometry::Render
     // disassembly + BeginFrame trace.
@@ -175,14 +174,14 @@ void Geometry::Render(Matrix44 const& mvp) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-// TODO: re-verify v1.6.1 addr for HasActiveEffect (v1.5.1 @ 0x001a3e7c)
+// v1.6.1 Mortar::Geometry::HasActiveEffect @0x00264440
 bool Geometry::HasActiveEffect() const {
     // Defunct: GeometryBinding stack not constructed -- port's binding is always null.
     // Binary: return m_ActiveBindingIdx < m_Binding->GetBindings().size();
     return false;
 }
 
-// TODO: re-verify v1.6.1 addr for SetActiveEffect (v1.5.1 @ 0x001a3e5c)
+// v1.6.1 Mortar::Geometry::SetActiveEffect @0x00264410
 bool Geometry::SetActiveEffect(uint32_t idx) {
     // Defunct: GeometryBinding stack not constructed -- always false in port.
     // Binary: if (idx < size) { m_ActiveBindingIdx = idx; return true; } return false;
@@ -190,13 +189,13 @@ bool Geometry::SetActiveEffect(uint32_t idx) {
     return false;
 }
 
-// TODO: re-verify v1.6.1 addr for BuildPropList (v1.5.1 @ 0x001a3c00)
+// v1.6.1 Mortar::Geometry::BuildPropList @0x00264170
 void Geometry::BuildPropList(SmartPtr<SharedEffectProperties> /*props*/) {
     // Defunct: EffectPropertyList not load-bearing in port; m_PropList stays null.
     m_PropList = NULL;
 }
 
-// Binary @ 0x0025ee7c — 3-instruction wrapper matching binary body.
+// v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c — 3-instruction wrapper matching binary body.
 EffectProperty* Geometry::GetProperty(uint32_t nameHash) {
     if (!m_PropList) return nullptr;
     return m_PropList->GetProperty((const char*)nameHash);
