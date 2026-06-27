@@ -160,6 +160,10 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
                        Mortar::Delegate0<void>* onTap,
                        int fruitType, Vec3* restPos,
                        Mortar::Delegate1<void, HUDControl*>* onRemove)
+    // Port specific: ARM32 heap may be zero-initialized by Bada's operator new;
+    // x64 heap is not. Initialize label pointers to null so MenuButton::Draw's
+    // m_pLabelFg != nullptr guard doesn't read garbage.
+    : m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
 {
     if (tex) m_Texture = *tex;
     Init(*spawnPos,
