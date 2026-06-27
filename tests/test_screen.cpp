@@ -27,7 +27,7 @@
 #include "entities/Entity.h"
 #include "hud/ScoreControl.h"
 #include "hud/MissControl.h"
-#include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
 
@@ -333,10 +333,10 @@ int main(int argc, char* argv[]) {
             failures++;
         } else {
             // 4a. m_FactText set after Init.
-            // (FruitFactPageControl uses m_FactText @+0x7C instead of old m_pCurFactString)
+            // (FruitFactControl uses m_FactText @+0x7C instead of old m_pCurFactString)
             if (!s->m_pFruitFact->m_FactText) {
                 fprintf(stderr,
-                    "FAIL: FruitFactPageControl::m_FactText should be non-null after Init\n");
+                    "FAIL: FruitFactControl::m_FactText should be non-null after Init\n");
                 failures++;
             }
 

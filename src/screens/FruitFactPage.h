@@ -24,7 +24,7 @@
 //
 // Binary layout (ARM32, 4-byte ptrs):
 //   +0x00..+0x93 : BaseScreen base (0x94 bytes)
-//   +0x94        : FruitFactPageControl* m_pController  (word 0x25)
+//   +0x94        : FruitFactControl* m_pController  (word 0x25)
 //   Total: at least 0x98
 //
 // NOTE: v1.6.1 addresses. This stub is added for compile-clean call-graph
@@ -33,16 +33,13 @@
 
 #include "BaseScreen.h"
 
-// Forward-declare the page-book controller (v1.6.1 page-book; named
-// FruitFactPageControl in the port to avoid collision with the v1.5.1
-// FruitFactControl game-over panel class already in src/hud/).
-class FruitFactPageControl;
+class FruitFactControl;
 class GenericHUDControl;
 
 class FruitFactPage : public BaseScreen {
 public:
     // Binary @ 0x0017c214 / 0x0017c250
-    explicit FruitFactPage(FruitFactPageControl* pCtrl);
+    explicit FruitFactPage(FruitFactControl* pCtrl);
     virtual ~FruitFactPage();
 
     // HUDControl overrides
@@ -58,7 +55,7 @@ public:
 
 protected:
     // +0x94: back-pointer to the owning page-book controller
-    FruitFactPageControl* m_pController;  // word 0x25 in binary struct
+    FruitFactControl* m_pController;  // word 0x25 in binary struct
 
     // Helper builders for subclass Init() -- binary @ addresses in comment
     GenericHUDControl* CreateSenseisHead(float scale);      // 0x0017c3b4

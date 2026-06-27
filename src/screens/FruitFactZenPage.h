@@ -14,7 +14,7 @@
 //   Release    0x0017fb44
 //
 // Layout (FruitFactPage base = 0x98 bytes; derived own-fields start at +0x98):
-//   +0x94 : FruitFactPageControl* m_pController  (BASE field, read-only in Init)
+//   +0x94 : FruitFactControl* m_pController  (BASE field, read-only in Init)
 //   +0x98 : uint8 m_HasUnlockedFacts  (strb [r5,#0x98] = (fruitCount>2)?1:0)
 //   +0x9c : int   m_Facts[11]         (array +0x9c..+0xc7; CheckCombo(this+0x9c,...))
 //   +0xc8 : int   m_NumFacts          (str [r5,#0xc8])
@@ -34,7 +34,7 @@
 class FruitFactZenPage : public FruitFactPage {
 public:
     // Binary @ 0x0017fcd4
-    explicit FruitFactZenPage(FruitFactPageControl* pCtrl);
+    explicit FruitFactZenPage(FruitFactControl* pCtrl);
     ~FruitFactZenPage() override;
 
     void Init() override;                                        // Binary @ 0x00180320

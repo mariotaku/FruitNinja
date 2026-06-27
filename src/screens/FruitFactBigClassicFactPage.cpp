@@ -10,7 +10,7 @@
 
 // Binary @ 0x00172884
 FruitFactBigClassicFactPage::FruitFactBigClassicFactPage(
-    FruitFactPageControl* pCtrl, int factIndex, int pageIndex)
+    FruitFactControl* pCtrl, int factIndex, int pageIndex)
     : FruitFactPage(pCtrl)
     , m_factIndex(factIndex)
     , m_pageIndex(pageIndex)

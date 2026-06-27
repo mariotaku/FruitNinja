@@ -32,7 +32,7 @@ static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
 }
 
 // Binary @ 0x001743b8
-FruitFactBonusFactPage::FruitFactBonusFactPage(FruitFactPageControl* pCtrl)
+FruitFactBonusFactPage::FruitFactBonusFactPage(FruitFactControl* pCtrl)
     : FruitFactPage(pCtrl)
 {
 }

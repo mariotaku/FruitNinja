@@ -13,7 +13,7 @@
 #include "test_harness.h"
 #include "screens/GameOverScreen.h"
 #include "screens/FruitFactClassicFactPage.h"
-#include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "hud/ScoreControl.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
 // ---------------------------------------------------------------------------
 // Classic mode: FruitFactClassicFactPage
 //
-// GameOverScreen (Classic, STATE_MAIN_DISPLAY) creates FruitFactPageControl +
+// GameOverScreen (Classic, STATE_MAIN_DISPLAY) creates FruitFactControl +
 // FruitFactClassicFactPage via Update state-6 on the first post-Initialise tick.
 // A second FruitFactClassicFactPage is injected directly to m_Pages so the
 // left/right arrow MenuButtons appear (pages.size() > 1 gate in Update).
@@ -144,7 +144,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
         h.RunComponentHeadlessMultiPass(1);
     }
 
-    FruitFactPageControl* ctrl = gos->m_pFruitFact;
+    FruitFactControl* ctrl = gos->m_pFruitFact;
     if (!ctrl) {
         game_work.m_SaveData = prevSaveData;
         std::fprintf(stderr, "FAIL: m_pFruitFact not created\n");
@@ -267,7 +267,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
 
     game_work.m_SaveData = prevSaveData;
 
-    FruitFactPageControl* ctrl = gos->m_pFruitFact;
+    FruitFactControl* ctrl = gos->m_pFruitFact;
     std::printf("[fruitfact/arcade] stable state (pages=%d, gos_state=%d, bonuses=%d, sc_displayed=%d)\n",
                 ctrl ? (int)ctrl->m_Pages.size() : -1,
                 gos->m_State,
@@ -347,7 +347,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
 
     game_work.m_SaveData = prevSaveData;
 
-    FruitFactPageControl* ctrl = gos->m_pFruitFact;
+    FruitFactControl* ctrl = gos->m_pFruitFact;
     std::printf("[fruitfact/zen] stable state (pages=%d, combo=%d, gos_state=%d, sc_displayed=%d)\n",
                 ctrl ? (int)ctrl->m_Pages.size() : -1,
                 zenSave.m_BestComboLength,

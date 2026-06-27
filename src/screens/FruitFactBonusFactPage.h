@@ -20,7 +20,7 @@
 class FruitFactBonusFactPage : public FruitFactPage {
 public:
     // Binary @ 0x001743b8
-    explicit FruitFactBonusFactPage(FruitFactPageControl* pCtrl);
+    explicit FruitFactBonusFactPage(FruitFactControl* pCtrl);
     ~FruitFactBonusFactPage() override;
 
     void Init() override;

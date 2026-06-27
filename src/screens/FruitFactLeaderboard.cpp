@@ -2,7 +2,7 @@
 // Binary refs: ctor 0x00176980, dtor 0x001764b8, Update 0x00177abc.
 
 #include "FruitFactLeaderboard.h"
-#include "hud/FruitFactPageControl.h"
+#include "hud/FruitFactControl.h"
 #include "hud/GenericHUDControl.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/math/Vec3.h"
@@ -14,7 +14,7 @@
 #include "game/LeaderboardManager.h"
 
 // Binary @ 0x00176980
-FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool param2)
+FruitFactLeaderboard::FruitFactLeaderboard(FruitFactControl* pCtrl, bool param2)
     : FruitFactPage(pCtrl)
     , m_pDownloadingLabel(0)
     , m_pProviderLabel(0)

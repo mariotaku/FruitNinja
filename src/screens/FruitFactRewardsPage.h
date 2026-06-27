@@ -41,7 +41,7 @@ namespace Mortar { class BakedStringBox; }
 class FruitFactRewardsPage : public FruitFactPage {
 public:
     // Binary @ 0x0017e4d8
-    explicit FruitFactRewardsPage(FruitFactPageControl* pCtrl);
+    explicit FruitFactRewardsPage(FruitFactControl* pCtrl);
     ~FruitFactRewardsPage() override;
 
     void Init() override;  // Binary @ 0x0017e4d8 -- state init + CreateSenseisHead + title box

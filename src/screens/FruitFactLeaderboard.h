@@ -36,7 +36,7 @@
 class FruitFactLeaderboard : public FruitFactPage {
 public:
     // Binary @ 0x00176980 -- ctor(FruitFactControl*, bool isGlobal)
-    FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool param2);
+    FruitFactLeaderboard(FruitFactControl* pCtrl, bool param2);
     ~FruitFactLeaderboard() override;
 
     // vtable Update override (binary @ 0x00177abc)
