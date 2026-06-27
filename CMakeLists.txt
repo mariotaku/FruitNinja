@@ -259,12 +259,19 @@ endif()
 
 endif() # NOT FN_ASM_VERIFY (SDL2_image block)
 
-FetchContent_Declare(
-    tinyxml2
-    GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
-    GIT_TAG        10.0.0
-)
-FetchContent_MakeAvailable(tinyxml2)
+# Prefer a system/vcpkg tinyxml2 (provides tinyxml2::tinyxml2); fall back to a
+# FetchContent source build when not installed. Both providers export the same
+# tinyxml2::tinyxml2 target, so the link line is identical either way.
+find_package(tinyxml2 CONFIG QUIET)
+if (NOT tinyxml2_FOUND)
+    message(STATUS "System/vcpkg tinyxml2 not found -- fetching tinyxml2 10.0.0 source")
+    FetchContent_Declare(
+        tinyxml2
+        GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
+        GIT_TAG        10.0.0
+    )
+    FetchContent_MakeAvailable(tinyxml2)
+endif()
 
 # --- FreeType ---
 # Used for dynamic glyph rendering of the game's CJK/Arabic TTF fonts
