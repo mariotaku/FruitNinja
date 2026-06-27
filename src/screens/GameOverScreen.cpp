@@ -658,9 +658,9 @@ void GameOverScreen::HandleProgressionTimerExpiration() {}
 // Social share callbacks
 // ---------------------------------------------------------------------------
 
-// Defunct: Facebook share -- no-op stub; v1.6.1 GameOverScreen @ 0x0014083c
+// Defunct: Facebook share -- no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
 void GameOverScreen::FacebookCallback() {}
-// Defunct: Twitter share -- no-op stub; v1.6.1 GameOverScreen @ 0x001405f8
+// Defunct: Twitter share -- no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
 void GameOverScreen::TwitterCallback() {}
 
 // Binary @ 0x00184d2c
@@ -703,7 +703,7 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
     // Null the 12-slot RemoveControl fields when HUD fires their removal
     // callback. This prevents double-free if HUD::Release deletes a child
     // control before it reaches the parent GameOverScreen in the iteration.
-    // ASM-spec v1.6.1 GameOverScreen::DeletedControl @0x00140558
+    // ASM-spec v1.6.1 GameOverScreen::DeletedControl @0x00184c40
     if (ctrl == (HUDControl*)m_pFruitFact)       { m_pFruitFact       = 0; }
     if (ctrl == (HUDControl*)m_pZenPage)          { m_pZenPage         = 0; }
     if (ctrl == (HUDControl*)m_pCtrl7C)           { m_pCtrl7C          = 0; }

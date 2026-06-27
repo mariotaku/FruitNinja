@@ -2181,7 +2181,7 @@ void Fruit::LoadFruitModels() {
                 models[i].m_Whole = wholeModel;
                 models[i].m_pWholeEffect = prop;
 
-                // ASM-spec v1.6.1 T_2044 @ 0x001e0b3c:
+                // ASM-spec v1.6.1 T_2044 @ 0x001e050c:
                 // EffectProperty::SetValue<Texture2D>(prop, modelSmartPtr).
                 // Called when info->m_bIsSuperFruit is set (binary +0x330).
                 // Binary path: stores the model's diffuse-map texture as a

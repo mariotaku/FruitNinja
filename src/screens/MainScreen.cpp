@@ -1101,7 +1101,7 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
     s_blurTex->UnSet();
 }
 
-// Defunct: vtable PreDraw — no-op stub; v1.6.1 MainScreen @ 0x0014AC94
+// Defunct: vtable PreDraw — no-op stub; (v1.6.1: symbol absent -- defunct/inlined)
 void MainScreen::PreDraw(float* /*hudScale*/) {
 }
 

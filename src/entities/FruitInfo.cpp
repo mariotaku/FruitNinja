@@ -70,7 +70,7 @@ void FruitInfo_Load(const char* xmlPath)
     if (!doc.LoadFile(xmlPath)) {
         return;
     }
-    // ASM-spec v1.6.1 Fruit::LoadInfo @0x0017987c:
+    // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084:
     // doc.FirstChildElement("fruitInfoFile") is how binary walks to root.
     TiXmlElement root = doc.FirstChildElement("fruitInfoFile");
     if (!root)

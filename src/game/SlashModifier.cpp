@@ -90,7 +90,7 @@ void SlashModifier::RemoveModifier() {
     }
 }
 
-// ASM-spec v1.6.1 SlashModifier::ParseSpecific @ 0x0011f464:
+// ASM-spec v1.6.1 SlashModifier::ParseSpecific @ 0x0014b310:
 //   - Binary wraps whole body in if (xml != null) { ... }; port early-returns.
 //   - speed -> m_ColourSpeed (default 1.0) via QueryDoubleAttribute
 //   - type -> ParseSlashModColourType (unconditional, null-safe)

@@ -113,7 +113,7 @@ void Skeleton::BuildLocalMatrices() {
     }
 }
 
-// ASM-spec v1.6.1 Skeleton::BuildFinalMatrices @ 0x00192e0c:
+// ASM-spec v1.6.1 Skeleton::BuildFinalMatrices @ 0x00236f68:
 //   accumulated = localMatrices[i]
 //   walk parent chain: accumulated = localMatrices[j] * accumulated  (parent * child)
 //   worldMatrices[i] = accumulated
