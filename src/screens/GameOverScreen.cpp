@@ -687,35 +687,40 @@ void GameOverScreen::LeaderboardsCallback() {
 // ---------------------------------------------------------------------------
 // DeletedControl (0x00140558)
 // ---------------------------------------------------------------------------
+//
+// ASM-spec v1.6.1 GameOverScreen::DeletedControl @0x00184c40:
+//   Handles EXACTLY 3 pointer slots:
+//     if (ctrl == m_pBonusScreen)  { m_pBonusScreen = 0; m_State = 6; }
+//     if (ctrl == m_pQuitBtn)      { m_pQuitBtn = 0; }
+//     if (ctrl == nM_reservedE8)   { nM_reservedE8 = 0; m_State = 6; }
+//   m_pBonusScreen is at +0xE4, m_pQuitBtn at +0xB0, nM_reservedE8 at +0xE8.
+//   The binary does NOT null m_pClassicFactPage (+0xD4), m_pFruitFact (+0xC8),
+//   m_pZenPage (+0xCC), m_pBonusFactPage (+0xD0), m_pRetryBtn (+0xA4),
+//   m_pNoticeCtrl (+0xE0), or any other slot.
+//
+//   Over-broad nulling of m_pClassicFactPage caused the sensei-board-lingers bug:
+//   Release calls hud->RemoveControl(m_pClassicFactPage), which fires DeletedControl,
+//   which (wrongly) zeroed m_pClassicFactPage, so the subsequent
+//   `if (m_pClassicFactPage) delete m_pClassicFactPage` guard was always skipped.
+//   ~FruitFactClassicFactPage (BaseScreen::Release) never ran, so m_bPendingRemoval
+//   was never set on the 2 sensei GenericHUDControl children, and HUD::Update
+//   never reaped them -- they lingered in the HUD after game-over teardown.
 
 void GameOverScreen::DeletedControl(HUDControl* ctrl) {
+    // +0xE4 = m_pBonusScreen
     if (ctrl == (HUDControl*)m_pBonusScreen) {
         m_pBonusScreen = 0;
         m_State = STATE_MAIN_DISPLAY;
     }
-    // +0xA4 = m_pRetryBtn
-    if (ctrl == (HUDControl*)m_pRetryBtn)  { m_pRetryBtn = 0; }
     // +0xB0 = m_pQuitBtn
-    if (ctrl == (HUDControl*)m_pQuitBtn)   { m_pQuitBtn  = 0; }
-    if (ctrl == m_pNoticeCtrl) {
-        m_pNoticeCtrl = 0;
+    if (ctrl == (HUDControl*)m_pQuitBtn) {
+        m_pQuitBtn = 0;
+    }
+    // +0xE8 = nM_reservedE8 (always 0 in this build; check is always-false but binary-faithful)
+    if (ctrl == (HUDControl*)(intptr_t)m_reservedE8) {
+        m_reservedE8 = 0;
         m_State = STATE_MAIN_DISPLAY;
     }
-    // Null the 12-slot RemoveControl fields when HUD fires their removal
-    // callback. This prevents double-free if HUD::Release deletes a child
-    // control before it reaches the parent GameOverScreen in the iteration.
-    // ASM-spec v1.6.1 GameOverScreen::DeletedControl @0x00184c40
-    if (ctrl == (HUDControl*)m_pFruitFact)       { m_pFruitFact       = 0; }
-    if (ctrl == (HUDControl*)m_pZenPage)          { m_pZenPage         = 0; }
-    if (ctrl == (HUDControl*)m_pCtrl7C)           { m_pCtrl7C          = 0; }
-    if (ctrl == (HUDControl*)m_pCtrl80)           { m_pCtrl80          = 0; }
-    if (ctrl == (HUDControl*)m_pBonusFactPage)    { m_pBonusFactPage   = 0; }
-    if (ctrl == (HUDControl*)m_pClassicFactPage)  { m_pClassicFactPage = 0; }
-    if (ctrl == (HUDControl*)m_pChildCtrlD8)          { m_pChildCtrlD8         = 0; }
-    if (ctrl == (HUDControl*)m_pChildCtrlDC)          { m_pChildCtrlDC         = 0; }
-    if (ctrl == (HUDControl*)m_LinkedScreen)      { m_LinkedScreen     = 0; }
-    if (ctrl == (HUDControl*)m_pSlotA8)           { m_pSlotA8          = 0; }
-    if (ctrl == (HUDControl*)m_pSlotB4)           { m_pSlotB4          = 0; }
 }
 
 // ---------------------------------------------------------------------------

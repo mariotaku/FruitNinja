@@ -86,6 +86,16 @@ protected:
     // Binary: std::list<HUDControl*>. Port: matches.
     std::list<HUDControl*> m_HUDControls;
 
+#ifdef FN_TEST
+public:
+    // Port specific: test-only read accessor for m_HUDControls.
+    // Used by test_sensei_teardown to snapshot child control pointers for
+    // teardown verification (by pointer identity, not GetType(), since
+    // GenericHUDControl::GetType()==1 is shared with many other controls).
+    const std::list<HUDControl*>& GetHUDControlsForTest() const { return m_HUDControls; }
+protected:
+#endif
+
     // +0x8C: transition alpha (lerped 0->1 on entry, decayed on exit)
     float m_TransitionAlpha;
 
