@@ -442,8 +442,22 @@ void BonusScreen::Draw(float* hudScaleRaw) {
 
     // -----------------------------------------------------------------------
     // Pre-loop draws: "_ BONUS _" title (m_ScoreBox) + "TOTAL" label (m_TotalBox).
-    // ASM-verified: v1.6.1 BonusScreen::Draw @0x0016492c..0x00164e4c (asm-inspector)
+    // ASM-verified: 2026-06-27T00:00:00Z v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector)
     // Both boxes are static (text set once in BuildBonusText; no per-frame SetText here).
+    //
+    // OFFSET FIDELITY NOTE (verified by 3 independent RE passes -- do not "fix"):
+    //   m_ScoreBox ("_ BONUS _") draws at pos+(105, 51, 0) -- binary literal @0x164dc0/0x164dc4.
+    //   m_TotalBox ("TOTAL")     draws at pos+(75, -128, 0) -- binary literal @0x164dc8/0x164dcc.
+    //   Full transform: BakedStringBox::SetTranslation(flag=1) @0x00246238 subtracts boxW/2;
+    //   RebuildAlignments @0x00245c78 adds it back; net text-center = pos.x + offset.x.
+    //   The board (HUDControl3d::Draw @0x0018b544) is centered at pos (m_HudScale +0x14 = 0),
+    //   so BONUS lands RIGHT-of-center by design in v1.6.1 Bada.
+    //
+    // WARNING: do NOT center these to match Android/Froyo screenshots -- that is a different
+    //   SKU. Android has baked-centered text; v1.6.1 Bada arcade_diolog_box.tex has empty bands
+    //   + code-drawn text at +105. Centering DIVERGES from the Bada target.
+    //   The dead literal-pool slots @0x164db4/@0x164db8 (values 105.0/51.0) are NOT the offsets
+    //   and previously misled RE.
     // -----------------------------------------------------------------------
 
     // m_ScoreBox (+0xB8): "_ BONUS _" title at pos+(105,+51). SetTranslation flag=1.
