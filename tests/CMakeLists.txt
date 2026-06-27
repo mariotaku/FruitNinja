@@ -467,10 +467,12 @@ set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
 # state and captures the framebuffer to tmp/test/screenshots/<screen>_screen.png.
 # Each ctest entry runs with --screenshot so the PNG is written automatically.
 fn_add_game_test(test_screenshot test_screenshot.cpp)
-add_test(NAME screenshot_bonus    COMMAND test_screenshot bonus    --screenshot)
-add_test(NAME screenshot_gameover COMMAND test_screenshot gameover --screenshot)
-set_tests_properties(screenshot_bonus    PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_bonus     COMMAND test_screenshot bonus     --screenshot)
+add_test(NAME screenshot_gameover  COMMAND test_screenshot gameover  --screenshot)
+add_test(NAME screenshot_fruitfact COMMAND test_screenshot fruitfact --screenshot)
+set_tests_properties(screenshot_bonus     PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_gameover  PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_fruitfact PROPERTIES TIMEOUT 60)
 
 # AddToCurrentScore clamp regression guard (#222 fix).
 # Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
