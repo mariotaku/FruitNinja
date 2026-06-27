@@ -7,7 +7,7 @@
 
 // Matches original MatrixStack (0x848 = 2120 bytes)
 // 32-deep matrix stack with dirty-tracking version counter
-// DIFFERS from binary ctor @ 0x00171734: binary copies from a static identity
+// DIFFERS from binary ctor v1.6.1 MatrixStack::MatrixStack @0x00257658: binary copies from a static identity
 // constant via ldmia/vstm into m_Current and m_Stack[0]; the port uses
 // Matrix44::Identity() on those two instead. m_Stack[1..31] use char
 // storage to avoid redundant Identity() calls (124 per MatrixManager
@@ -33,7 +33,7 @@ struct MatrixStack {
         return *reinterpret_cast<const Matrix44*>(m_StackData + i * sizeof(Matrix44));
     }
 
-    // ASM-spec v1.6.1 MatrixStack ctor @ 0x00171734: binary loads from a global
+    // ASM-spec v1.6.1 MatrixStack::MatrixStack @0x00257658: binary loads from a global
     // identity constant (ldmia) into m_Current and m_Stack[0], then sets
     // Depth=0, Version=1. m_Stack[1..31] are left uninitialized.
     MatrixStack()
@@ -44,7 +44,9 @@ struct MatrixStack {
         m_Version = 1;
     }
 
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001175d4 (asm-inspector)
+    // TODO: re-verify v1.6.1 MatrixStack::Reset address (cited 0x001175d4 was stale
+    // v1.5.x -- resolves to QueAchievement in v1.6.1; method is inlined into
+    // MatrixManager, no standalone symbol confirmed)
     void Reset();
 
     // Port specific: no binary equivalent (GL push/pop happens inside
@@ -53,13 +55,19 @@ struct MatrixStack {
     void Push();
     void Pop();
 
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012fa34 (asm-inspector)
+    // TODO: re-verify v1.6.1 MatrixStack::Scale address (cited 0x0012fa34 was stale
+    // v1.5.x -- resolves to a BonusManager static-ctor blob in v1.6.1; method is
+    // inlined into MatrixManager, no standalone symbol confirmed)
     void Scale(const Vec3& s);
 
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012f97c (asm-inspector)
+    // TODO: re-verify v1.6.1 MatrixStack::Translate address (cited 0x0012f97c was
+    // stale v1.5.x -- resolves to a BonusManager static-ctor blob in v1.6.1; method
+    // is inlined into MatrixManager, no standalone symbol confirmed)
     void Translate(const Vec3& t);
 
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0011a130 (asm-inspector)
+    // TODO: re-verify v1.6.1 MatrixStack::SetCurrentMatrix address (cited 0x0011a130
+    // was stale v1.5.x -- resolves to SetMissCount in v1.6.1; method is inlined into
+    // MatrixManager, no standalone symbol confirmed)
     void SetCurrentMatrix(const Matrix44& mat);
 };
 

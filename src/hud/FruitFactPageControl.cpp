@@ -91,7 +91,7 @@ FruitFactPageControl::~FruitFactPageControl() {
 
 void FruitFactPageControl::Init() {
     // Binary @ 0x0017160c.
-    // TODO: 0x0017160c -- save/clear field this+0x20 (flag in HUDControl base); exact
+    // TODO: v1.6.1 FruitFactControl::Init @0x0017160c -- save/clear field this+0x20 (flag in HUDControl base); exact
     //   semantics require re-analyst to confirm whether it saves size.x or a derived field.
 
     // 1. Set board texture into HUDControl3d m_Texture slot (+0x74).
@@ -161,7 +161,7 @@ void FruitFactPageControl::Init() {
     m_LayerFlags = 0x80;
 
     // 12. Base Init.
-    // TODO: 0x0017160c -- restore this+0x20 flag saved in step 0, then call HUDControl::Init.
+    // TODO: v1.6.1 FruitFactControl::Init @0x0017160c -- restore this+0x20 flag saved in step 0, then call HUDControl::Init.
     HUDControl::Init();
 }
 

@@ -62,7 +62,7 @@ void ColSphere::DrawDebug() {
     Colour colour = m_CollideFlag
         ? Colour(0xff, 0x00, 0x00, 0x64)
         : Colour(0x00, 0x7d, 0x7d, 0x64);
-    // TODO: 0x0019fd70 -- Mesh instance not yet identified; binary loads Mesh* from GOT+offset
+    // TODO: v1.6.1 ColSphere::DrawDebug @0x0025d068 -- Mesh instance not yet identified; binary loads Mesh* from GOT+offset
     //   before calling DrawSphere. Mesh::DrawSphere is BX LR in binary so this is a no-op
     //   in the original; call site omitted until instance is RE'd.
     (void)colour;

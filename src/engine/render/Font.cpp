@@ -1239,7 +1239,7 @@ void Font::DrawString(Utf8StringIterator iter, float posX, float posY, float pos
     DrawString(iter, colour, alignment, posX, posY, posZ, scale, maxWHx, maxWHy, rotZ, clip);
 }
 
-// TODO: 0x0024c2a0 -- word-advance helper for word-wrap: walk chars until
+// TODO: v1.6.1 Font::FindAdvanceOfNextWord @0x0024c2a0 -- word-advance helper for word-wrap: walk chars until
 // WordWrap::CanBreakLineAt, tag-skip <font>/</font> via strncasecmp, accumulate
 // xadv per glyph; return startIter-if-fits else NULL (iterator/char*, NOT float).
 // BLOCKED: faithful port requires the Mortar::WordWrap subsystem
@@ -1281,10 +1281,10 @@ Font::CharTemplate* Font::GetCharTemplate(long codepoint, int /*unused*/) {
 //     Binary inits s18=lineH (vmovls s18,s0), adds lineH per '\n' (vaddeq).
 //     Port matches exactly; binary also calls GetCharTemplate+GetKerning per char
 //     (dead calls whose results are discarded); port omits those -- cosmetic only.
-//   maxWidth >  0: DIFFERS: binary calls FindAdvanceOfNextWord(@0x0024c2a0) per
+//   maxWidth >  0: DIFFERS: binary calls FindAdvanceOfNextWord(v1.6.1 @0x0024c2a0) per
 //     word (East-Asian/tag-aware WordWrap); port substitutes a space-tokenised
 //     accumulation. Blocked on Mortar::WordWrap::CanBreakLineAt (unported).
-//     TODO: 0x0024c45c wrap path -- port FindAdvanceOfNextWord(@0x0024c2a0) +
+//     TODO: v1.6.1 Font::GetStringHeight @0x0024c45c wrap path -- port FindAdvanceOfNextWord(v1.6.1 @0x0024c2a0) +
 //     WordWrap::CanBreakLineAt; do NOT empirically tune the space-split heuristic.
 float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth) {
     if (maxWidth <= 0.0f) {

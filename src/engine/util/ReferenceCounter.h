@@ -16,14 +16,14 @@
 //   asm-verify (R4 W4) did not flag the indirect form -- deliberate omission.
 //
 // DIFFERS: binary +0x08 = __WeakReferenceData* m_pWeakData (lazy-allocated weak-ref
-//   control block, 16 bytes, CAS-installed by __GetWeakRefData @ 0x2275d4).
+//   control block, 16 bytes, CAS-installed by v1.6.1 __GetWeakRefData @0x2275d4).
 //   Port models +0x08 as int m_WeakCount (inline count, strong-ref-only semantics).
 //   sizeof(int) == sizeof(ptr) on ARM32 so the 12-byte binary layout is preserved
 //   by coincidence. If/when WeakPtr support is needed, replace m_WeakCount with a
 //   __WeakReferenceData* and add the 16-byte control block class.
 //   __WeakReferenceData is currently UNPORTED (no port consumers).
 //
-// DIFFERS: binary AddRef/Release @ 0x1194f4 use InterlockedUNumber::Increment/Decrement
+// DIFFERS: binary v1.6.1 AddRef/Release @0x1194f4 use InterlockedUNumber::Increment/Decrement
 //   (Bada OSAL atomics). Port uses plain ++/-- (single-threaded; Job system unported).
 //   v1.6.1 AddRef @ 0x1194f4; __GetWeakRefData @ 0x2275d4.
 

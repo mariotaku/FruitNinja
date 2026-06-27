@@ -319,7 +319,12 @@ void BakedString::Clear() {
 // Binary @ 0x001971c8 — single `bx lr`; a genuine no-op in the shipped Bada build.
 void BakedString::AddDropShadow() {}
 
-// TODO: 0x0019762c -- LayoutToCircle: reposition baked glyph quads onto a circular
+// TODO: re-verify v1.6.1 BakedString::LayoutToCircle address (cited 0x0019762c was
+//   stale v1.5.x -- resolves to MainScreen::Update in v1.6.1; the v1.6.1 binary's
+//   circle layout lives in the TTF path BakedStringTTF::ApplyFormatting_Circle_Internal
+//   @0x00248cc8 / Transform_Circle @0x00247998, but the bitmap-font BakedString
+//   variant described below has no confirmed standalone symbol). LayoutToCircle:
+//   reposition baked glyph quads onto a circular
 //   arc of the given radius. BLOCKED on the matrix-vector transform subsystem:
 //   the binary builds a per-glyph translate+RotZ matrix and runs each of the 6
 //   glyph vertices through _Matrix44<float>::MultVec44 (0x000fc57c) using a Vec4

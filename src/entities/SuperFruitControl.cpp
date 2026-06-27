@@ -57,7 +57,7 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     , m_pLinkedSlasher(nullptr)
     , m_pComboText(nullptr)
     , m_pScoreText(nullptr)
-    , m_Lifetime(5.0f)   // default baseline; TODO: 0x001be1c8 -- resolve from binary DAT
+    , m_Lifetime(5.0f)   // default baseline; TODO: v1.6.1 0x001be1c8 (SuperFruitControl) -- resolve from binary DAT
     , m_FadeIn(0.0f)
     , m_Scale(0.0f)
     , m_SliceCooldown(0)
@@ -176,11 +176,11 @@ void SuperFruitControl::Update(float dt)
     }
 
     // keep host fruit's +0xbc clamped to 1.0 while >0
-    // TODO: 0x001bca10 -- clamp host-fruit field +0xbc to 1.0 (Fruit field not yet named in port)
+    // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- clamp host-fruit field +0xbc to 1.0 (Fruit field not yet named in port)
 
     // one-shot edge: PrevTimer<0 && Timer>=0 && SliceCount==1 -> first ChangeText
     if (m_PrevTimer < 0.0f && m_Timer >= 0.0f && m_SliceCount == 1) {
-        // TODO: 0x001bca10 -- ChangeText(this, DAT_001bcd78, 0, NULL) (needs FancyBakedString)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, DAT_001bcd78, 0, NULL) (needs FancyBakedString)
     }
 
     // pre-roll slowdown: while Timer < Lifetime+0.5
@@ -192,12 +192,12 @@ void SuperFruitControl::Update(float dt)
     // bomb suppression window; fVar = 1.5 if Arcade else 0.5
     float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
     if (m_Timer < m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias) {
-        // TODO: 0x001bca10 -- Bomb::DeactivateAll (needs Bomb::DeactivateAll static)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- Bomb::DeactivateAll (needs Bomb::DeactivateAll static)
     }
 
     // whoosh SFX: one-shot on crossing (Lifetime - 0.1)
     if (m_Timer >= m_Lifetime - 0.1f && m_PrevTimer < m_Lifetime - 0.1f) {
-        // TODO: 0x001bca10 -- GameSound::SFXPlay(game+0x18c, DAT_001bcd80, pitch=0.125, vol=1.0, cb@DAT_001bcd7c) (whoosh SFX)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- GameSound::SFXPlay(game+0x18c, DAT_001bcd80, pitch=0.125, vol=1.0, cb@DAT_001bcd7c) (whoosh SFX)
     }
 
     if (m_Timer >= m_Lifetime) {
@@ -208,11 +208,11 @@ void SuperFruitControl::Update(float dt)
             if (m_pHostFruit) {
                 m_WorkVec5 = m_pHostFruit->pos;     // explosion centre (+0xf0)
             }
-            // TODO: 0x001bca10 -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
             StopAllFruit();
-            // TODO: 0x001bca10 -- UnpauseSlices (function not yet ported)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- UnpauseSlices (function not yet ported)
             if (m_pLinkedSlasher) {
-                // TODO: 0x001bca10 -- clear *(int*)(m_pLinkedSlasher+0x7c) = 0 (SlashEntity field +0x7c)
+                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- clear *(int*)(m_pLinkedSlasher+0x7c) = 0 (SlashEntity field +0x7c)
             }
             // zoom target = host pos clamped x in [-204,204], y in [-128,128]
             if (m_pHostFruit) {
@@ -234,11 +234,11 @@ void SuperFruitControl::Update(float dt)
             }
             if (m_Timer >= m_Lifetime + 0.5f) {
                 // one-shot: the actual blast
-                // TODO: 0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
+                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
                 ExplodeSuperFruit();
                 SpawnJibs(0);
                 StopRays();
-                // TODO: 0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
+                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
             }
         }
 
@@ -248,10 +248,10 @@ void SuperFruitControl::Update(float dt)
             UpdateExplosion(dt);
             float tLateShake = m_Lifetime + 0.5f + 0.35f + 0.4f;  // DAT_001bcd9c=0.35, DAT_001bcd90=0.4
             if (m_PrevTimer < tLateShake && tLateShake <= m_Timer) {
-                // TODO: 0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.6, dur=2.0, pos) (DAT_001bcd94=1.6)
+                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.6, dur=2.0, pos) (DAT_001bcd94=1.6)
             }
             // ease global time-scale back toward 1.0: ts = (ts-1)*pow(0.75, dt*60) + 1
-            // TODO: 0x001bca10 -- *(game_work+0x40)->+0x24 time-scale ease (game_work._pad_0x40 unresolved)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 time-scale ease (game_work._pad_0x40 unresolved)
         }
 
         // (d) score payoff window: Lifetime+0.5+0.35+0.55+0.1
@@ -282,10 +282,10 @@ void SuperFruitControl::Update(float dt)
         float tEnd = m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias2 + 0.15f;  // DAT_001bcda8=0.15
         if (m_Timer > tEnd) {
             WaveManager::GetInstance()->m_SpeedScale = 1.0f;  // SetAbsoluteDtMod(1.0)
-            // TODO: 0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
             WaveManager::GetInstance()->GetNextWave(0);
             PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
-            // TODO: 0x001bca10 -- *(game_work+0x40)->+0x24 = 1.0 time-scale restore (game_work._pad_0x40 unresolved)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 = 1.0 time-scale restore (game_work._pad_0x40 unresolved)
             flags |= ENT_KILLED;                    // this->done(+0x33) = 1
         }
     } else {
@@ -293,24 +293,24 @@ void SuperFruitControl::Update(float dt)
 
         if (m_pHostFruit) {
             // host-fruit gravity-based spin angle write (Fruit+0x98), branchy
-            // TODO: 0x001bca10 -- host-fruit spin(+0x98) = T_1616(...) write (Fruit field +0x98 not named in port)
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- host-fruit spin(+0x98) = T_1616(...) write (Fruit field +0x98 not named in port)
             PushBombsAway(dt);
         }
 
         // global time-scale pre-roll: ts = 0.0 + ts*pow(0.75, dt*60)
-        // TODO: 0x001bca10 -- *(game_work+0x40)->+0x24 *= pow(0.75, dt*60) (DAT_001bd488=0.0 double; game_work._pad_0x40 unresolved)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 *= pow(0.75, dt*60) (DAT_001bd488=0.0 double; game_work._pad_0x40 unresolved)
 
         // build the spin-orbit camera transition for the thrown fruit
-        // TODO: 0x001bca10 -- FruitCamera::Transition(game+0x4c, dist, angle, target, doneCb@DAT_001bd4ac) (needs camera + Math::SinIdx/CosIdx)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::Transition(game+0x4c, dist, angle, target, doneCb@DAT_001bd4ac) (needs camera + Math::SinIdx/CosIdx)
 
         // recompute pos from host + scaled dir
-        // TODO: 0x001bca10 -- pos(+0x08) orbit recompute from host + dirXY*320*0.25*0.625 (DAT_001bd49c=320.0)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- pos(+0x08) orbit recompute from host + dirXY*320*0.25*0.625 (DAT_001bd49c=320.0)
     }
 
     // tail: LAB_001bd0ac -- runs every frame
     // ray-entity scaling: for i in 0..2
     if (m_Timer < m_Lifetime + 0.5f) {
-        // TODO: 0x001bca10 -- ray-entity scale update: *(float*)(rg+0x14+i*4) *= T_1629(0.3, prog) for i=0..2 (needs ray-entity subsystem; DAT_001bd4a0=0.3)
+        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ray-entity scale update: *(float*)(rg+0x14+i*4) *= T_1629(0.3, prog) for i=0..2 (needs ray-entity subsystem; DAT_001bd4a0=0.3)
     }
 
     // fade-in accumulator: += dt*3, clamp 1
@@ -330,7 +330,7 @@ void SuperFruitControl::Update(float dt)
     m_PrevTimer = m_Timer;  // commit edge tracker (+0x8c = +0x88)
 }
 
-// TODO: 0x001bd7c8 -- DrawOrder ray/explosion VFX (needs ray-entity + explosion subsystem)
+// TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- DrawOrder ray/explosion VFX (needs ray-entity + explosion subsystem)
 void SuperFruitControl::Draw(Renderer& /*r*/)
 {
 }
@@ -341,14 +341,14 @@ void SuperFruitControl::PostUpdate(float /*dt*/)
 
 // Binary @ 0x001bb994. Per-hit combo response.
 // Bumps m_SliceCount / m_HitCount, applies cooldown, accrues score.
-// TODO: 0x001bb994 -- slash particles, combo-pitch SFX, FancyBakedString popup not yet ported
+// TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- slash particles, combo-pitch SFX, FancyBakedString popup not yet ported
 void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 {
     if (m_SliceCooldown > 0) return;
 
     ++m_SliceCount;
     m_HitCount += 1.0f;
-    m_SliceCooldown = 6;  // TODO: 0x001bb994 -- resolve cooldown value from binary DAT
+    m_SliceCooldown = 6;  // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- resolve cooldown value from binary DAT
 
     // Null out linked slasher (binary @ 0x001bb994 nulls the stored SlashEntity).
     if (slashEntity) {
@@ -428,7 +428,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     CriticalFlash(hostPos, Colour(255, 255, 255, 255));
 
     // ---- (C) explosion SFX ----
-    // TODO: 0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78 SFX key, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX key/cb unresolved)
+    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78 SFX key, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX key/cb unresolved)
 
     // ---- (D) 8 lettered mesh fragments (cube-corner pattern) ----
     // fmt string @ 0x0028383a: "models/Fruit/%s_%c_piece_%d.mmd"
@@ -498,7 +498,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     }
 
     // ---- (E) restore host scale ----
-    // TODO: 0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
+    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
 }
 
 // Binary @ 0x001b9850. Forces host fruit's slice timer negative when combo is cancelled
@@ -587,7 +587,7 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
         fruit->vel.x       = -fruit->vel.x;              // [fruit+0x1c]
     }
 
-    // TODO: 0x001bbf48 -- SuperFruitThrown SFX not yet ported
+    // TODO: v1.6.1 SuperFruitControl::SuperFruitThrown @0x001bbf48 -- SuperFruitThrown SFX not yet ported
 
     // ASM-spec v1.6.1 SuperFruitControl::SuperFruitThrown @0x001bbf48:
     // increment "super_pomegranates_spawned" stat when super-fruit is thrown.
@@ -636,7 +636,7 @@ int SuperFruitControl::NumPomegranatesSpawnedThisGame()
 }
 
 // Binary @ 0x001b99d4. Game-mode gating for final pomegranate spawn.
-// TODO: 0x001b99d4 -- gate needs PowerUpManager::GetActiveProgression + Fruit::NumberOfPowerupFruits
+// TODO: v1.6.1 SuperFruitControl::CanSpawnFinalPomegranate @0x001b99d4 -- gate needs PowerUpManager::GetActiveProgression + Fruit::NumberOfPowerupFruits
 bool SuperFruitControl::CanSpawnFinalPomegranate()
 {
     return false;
@@ -715,12 +715,12 @@ void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
 void SuperFruitControl::Reset()
 {
     WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
-    // TODO: 0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
     PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
-    // TODO: 0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
-    // TODO: 0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
-    // TODO: 0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
-    // TODO: 0x001bb52c -- UnpauseSlices (function not yet ported)
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- UnpauseSlices (function not yet ported)
 
     // Walk ActorManager type 6, OR 0x10 (ENT_KILLED) into each entity's flags(+0x0c)
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -735,7 +735,7 @@ void SuperFruitControl::Reset()
 
     SuperFruitControls.clear();
 
-    // TODO: 0x001bb52c -- this->+0x33 = 1 (game-level done-flag write; target unresolved in port)
+    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- this->+0x33 = 1 (game-level done-flag write; target unresolved in port)
 }
 
 // Binary @ 0x001ba460. Stops all in-flight fruit and bombs during the

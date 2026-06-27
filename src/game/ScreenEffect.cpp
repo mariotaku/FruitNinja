@@ -633,7 +633,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
                 sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.6599f, 1.0f, emptyDelegate);
             }
         }
-        // TODO: 0x00148e3c — binary also: (a) while (maxTotal*m_EndT <= currentLongest) erases the
+        // TODO: v1.6.1 ScreenEffect::Update @0x00148e3c — binary also: (a) while (maxTotal*m_EndT <= currentLongest) erases the
         //   record, and (b) a separate m_EndT<0 one-shot path (0x148da4) plays at vol 1.0 without
         //   storing a handle. Port once the loop erase semantics are confirmed.
     }

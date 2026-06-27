@@ -31,7 +31,7 @@ namespace Mortar {
 // N=0 @ 0x0026ec5c -- nearest-knot sample (no basis blend)
 template<>
 void UpdateBinding<0>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x0026ec5c -- nearest-knot sample: FindKnot, single row read, write loop.
+    // TODO: v1.6.1 UpdateBinding<0> @0x0026ec5c -- nearest-knot sample: FindKnot, single row read, write loop.
     //   Per-N DAT scale pair @ DAT_0026ed4c / DAT_0026ed50 (exact float values TBD).
     //   N=0 skips basis weighting: sample = m_data + dim*4*FindKnot(time, knots).
     (void)time; (void)v;
@@ -40,7 +40,7 @@ void UpdateBinding<0>(float time, AnimBindings::Vector const& v) {
 // N=1 @ 0x00270010 -- B-spline BasisFunc<2> quadratic blend
 template<>
 void UpdateBinding<1>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x00270010 -- B-spline quadratic blend: FindKnot + ClampKnotIdx + BasisFunc<2>,
+    // TODO: v1.6.1 UpdateBinding<1> @0x00270010 -- B-spline quadratic blend: FindKnot + ClampKnotIdx + BasisFunc<2>,
     //   accumulate sample[] weighted sum, write loop.
     //   Per-N DAT scale pair @ DAT_0x002701a8 / DAT_0x002701ac (exact float values TBD).
     (void)time; (void)v;
@@ -49,7 +49,7 @@ void UpdateBinding<1>(float time, AnimBindings::Vector const& v) {
 // N=2 @ 0x002701b0 -- B-spline BasisFunc<2>
 template<>
 void UpdateBinding<2>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x002701b0 -- B-spline BasisFunc<2>.
+    // TODO: v1.6.1 UpdateBinding<2> @0x002701b0 -- B-spline BasisFunc<2>.
     //   Per-N DAT scale pair @ DAT_0x00270348 / DAT_0x0027034c (exact float values TBD).
     (void)time; (void)v;
 }
@@ -57,7 +57,7 @@ void UpdateBinding<2>(float time, AnimBindings::Vector const& v) {
 // N=3 @ 0x00270350 -- B-spline BasisFunc<2>
 template<>
 void UpdateBinding<3>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x00270350 -- B-spline BasisFunc<2>.
+    // TODO: v1.6.1 UpdateBinding<3> @0x00270350 -- B-spline BasisFunc<2>.
     //   Per-N DAT scale pair @ DAT_0x002704e8 / DAT_0x002704ec (exact float values TBD).
     (void)time; (void)v;
 }
@@ -65,7 +65,7 @@ void UpdateBinding<3>(float time, AnimBindings::Vector const& v) {
 // N=4 @ 0x002704f0 -- B-spline BasisFunc<2>
 template<>
 void UpdateBinding<4>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x002704f0 -- B-spline BasisFunc<2>.
+    // TODO: v1.6.1 UpdateBinding<4> @0x002704f0 -- B-spline BasisFunc<2>.
     //   Per-N DAT scale pair @ DAT_0x00270688 / DAT_0x0027068c (exact float values TBD).
     (void)time; (void)v;
 }
@@ -73,7 +73,7 @@ void UpdateBinding<4>(float time, AnimBindings::Vector const& v) {
 // N=5 @ 0x00270690 -- B-spline BasisFunc<2>
 template<>
 void UpdateBinding<5>(float time, AnimBindings::Vector const& v) {
-    // TODO: 0x00270690 -- B-spline BasisFunc<2>.
+    // TODO: v1.6.1 UpdateBinding<5> @0x00270690 -- B-spline BasisFunc<2>.
     //   Per-N DAT scale pair @ DAT_0x00270828 / DAT_0x0027082c (exact float values TBD).
     (void)time; (void)v;
 }
@@ -82,7 +82,7 @@ void UpdateBinding<5>(float time, AnimBindings::Vector const& v) {
 // AnimationState methods
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0026f0b4 ctor
+// v1.6.1 AnimationState::AnimationState @0x0026f0b4 ctor
 AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
     if (list.IsValid()) {
         m_AnimList = list;
@@ -94,23 +94,23 @@ AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
     m_Speed = 1.0f;
 }
 
-// Binary D1/D2 @ 0x0026f010, D0 @ 0x0026f098
+// v1.6.1 AnimationState::~AnimationState D1/D2 @0x0026f010, D0 @0x0026f098
 // Empty body; C++ auto-generates reverse-order member destruction (m_AnimList, m_Bindings, m_Mesh).
 // AnimBindings::Bone/Vector members are non-empty, so their vector dtors run as expected.
 // DIFFERS: binary inlines SmartPtr::Clear + explicit vptr writes; port relies on compiler synthesis.
 AnimationState::~AnimationState() {}
 
-// Binary @ 0x001ace8c
+// v1.6.1 AnimationState::GetAnimIter(AsciiString const&) @0x0026ed8c
 AnimationState::AnimIter AnimationState::GetAnimIter(const AsciiString& name) {
     return m_AnimList->m_Anims.find(name);
 }
 
-// Binary @ 0x001ace74
+// v1.6.1 AnimationState::GetAnimIter(AsciiString const&) const @0x0026ed54
 AnimationState::AnimConstIter AnimationState::GetAnimIter(const AsciiString& name) const {
     return m_AnimList->m_Anims.find(name);
 }
 
-// Binary @ 0x0026eb80 -- upfront size check, then iterate
+// v1.6.1 AnimationState::GetAnimIter(unsigned long) @0x0026eb80 -- upfront size check, then iterate
 AnimationState::AnimIter AnimationState::GetAnimIter(unsigned long idx) {
     if (idx >= m_AnimList->m_Anims.size()) return m_AnimList->m_Anims.end();
     AnimIter it = m_AnimList->m_Anims.begin();
@@ -120,7 +120,7 @@ AnimationState::AnimIter AnimationState::GetAnimIter(unsigned long idx) {
     return it;
 }
 
-// Binary @ 0x0026ec3c -- const overload
+// v1.6.1 AnimationState::GetAnimIter(unsigned long) const @0x0026ebd4 -- const overload
 AnimationState::AnimConstIter AnimationState::GetAnimIter(unsigned long idx) const {
     if (idx >= m_AnimList->m_Anims.size()) return m_AnimList->m_Anims.end();
     AnimConstIter it = m_AnimList->m_Anims.begin();
@@ -130,7 +130,7 @@ AnimationState::AnimConstIter AnimationState::GetAnimIter(unsigned long idx) con
     return it;
 }
 
-// Binary @ 0x001ace8c -- iter==end() ? null : &iter->second
+// v1.6.1 AnimationState::GetAnimation(AsciiString const&) const @0x0026ed68 -- iter==end() ? null : &iter->second
 Animation* AnimationState::GetAnimation(const AsciiString& name) const {
     AnimConstIter it = GetAnimIter(name);
     if (it == m_AnimList->m_Anims.end()) {
@@ -139,7 +139,7 @@ Animation* AnimationState::GetAnimation(const AsciiString& name) const {
     return const_cast<Animation*>(&it->second);
 }
 
-// Binary @ 0x001acdf8 -- by index
+// v1.6.1 AnimationState::GetAnimation(unsigned long) const @0x0026ec28 -- by index
 Animation* AnimationState::GetAnimation(unsigned long idx) const {
     AnimConstIter it = GetAnimIter(idx);
     if (it == m_AnimList->m_Anims.end()) {
@@ -148,7 +148,7 @@ Animation* AnimationState::GetAnimation(unsigned long idx) const {
     return const_cast<Animation*>(&it->second);
 }
 
-// Binary @ 0x001ad398
+// v1.6.1 AnimationState::LinkMesh @0x0026f3dc
 void AnimationState::LinkMesh(const Mortar::SmartPtr<Model>& m) {
     m_Mesh = m;
     RebindAnim();
@@ -163,7 +163,7 @@ void AnimationState::PlayAnim(const AsciiString& name, float time, bool loop) {
     RebindAnim();
 }
 
-// Binary @ 0x001ad348
+// v1.6.1 AnimationState::PlayAnimIdx @0x0026f374
 void AnimationState::PlayAnimIdx(unsigned long idx, float time, bool loop) {
     m_CurrentIter = GetAnimIter(idx);
     m_Loop  = loop;
@@ -171,7 +171,7 @@ void AnimationState::PlayAnimIdx(unsigned long idx, float time, bool loop) {
     RebindAnim();
 }
 
-// Binary @ 0x0026f1ac
+// v1.6.1 AnimationState::RebindAnim @0x0026f1ac
 // Rebuilds m_Bindings.m_Vectors from the current animation's track groups.
 // For each track group, resizes m_Vectors, fills v.m_track, calls GenerateBindings,
 // and collapses empty entries back.
@@ -208,7 +208,7 @@ void AnimationState::RebindAnim() {
     }
 }
 
-// Binary @ 0x0026ee84
+// v1.6.1 AnimationState::SetTime @0x0026ee84
 // Advances time, handles loop wrap / stop, then dispatches UpdateBinding<N>
 // for each element of m_Bindings.m_Vectors (at this+0x1c, stride 0x10).
 void AnimationState::SetTime(float t) {
@@ -246,17 +246,17 @@ void AnimationState::SetTime(float t) {
     }
 }
 
-// Binary @ 0x001accc0
+// v1.6.1 AnimationState::StopAnim @0x0026ec4c
 void AnimationState::StopAnim() {
     m_CurrentIter = m_AnimList->m_Anims.end();
 }
 
-// Binary @ 0x001ad974
+// TODO: re-verify v1.6.1 AnimationState::IsPlaying address (inlined; no standalone symbol found, old @0x001ad974 was stale ScoreControl::PreDraw)
 bool AnimationState::IsPlaying() const {
     return m_CurrentIter != m_AnimList->m_Anims.end();
 }
 
-// Binary @ 0x001acffc -- Meyers singleton; empty AnimationList shared across all default ctors
+// v1.6.1 AnimationState::GetDummyAnimList @0x0026eda0 -- Meyers singleton; empty AnimationList shared across all default ctors
 Mortar::SmartPtr<AnimationList> AnimationState::GetDummyAnimList() {
     static Mortar::SmartPtr<AnimationList> s_dummy(new AnimationList());
     return s_dummy;

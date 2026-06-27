@@ -291,7 +291,7 @@ void ShopScreen::Init() {
 // Re-entrancy: Release() is called from ~ShopScreen() inside HUD::Update's
 // deletion block; std::list::remove() on a different element does not
 // invalidate the iterator currently held by HUD::Update, so this is safe.
-// DIFFERS: binary ShopScreen::Release @0x001b498c removes only m_pShopList
+// DIFFERS: binary v1.6.1 ShopScreen::Release @0x001b498c removes only m_pShopList
 //          and relies on the equip button self-removing in shop state 1;
 //          port removes m_pBuyButton/m_pEquipButton synchronously here because
 //          the port state machine does not reliably reach state-1 self-removal
@@ -618,7 +618,7 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
 //         TutorialControl::ResetTutePos(tute, 0).
 // ---------------------------------------------------------------------------
 void ShopScreen::QuitShopCallback() {
-    // DIFFERS (intentional bug fix): the binary @ 0x0015d55c does NOT call
+    // DIFFERS (intentional bug fix): the binary v1.6.1 ShopScreen::QuitShopCallback @0x001b2ef0 does NOT call
     // ShrinkBuyButton on shop-quit, and `~MenuButton` / `MenuButton::Release`
     // neither KillFruit nor remove the entity from ActorManager. So if the
     // user taps Quit during the 0.25s post-equip m_BuyDelay window (set by

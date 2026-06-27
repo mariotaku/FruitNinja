@@ -47,7 +47,7 @@ static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match 
 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
+// ASM-spec v1.6.1 Fruit::Fruit @0x001dc4f0 (ctor), Fruit::Init @0x001e2898, Fruit::Update @0x001df828, Fruit::CheckHasGoneOffsceen @0x001df304
 // Binary sizeof(Fruit) = 0x18c (396). v1.6.1 CreateEntity does operator_new(0x18c).
 // Tail fields 0x118..0x18c (events + padding) added per #31 spec.
 // 0x00..0x118 layout cross-verified by re-analyst 2026-05-17
@@ -73,7 +73,7 @@ public:
     int32_t m_VestigialInitFour;            // +0x68 (init=4; write-only / dead)
     // +0x6C: binary role not yet RE'd; old port misused this slot as the slice-countdown timer
     // but the real countdown lives at 0xBC (m_SliceTimer). Kept as pad for layout fidelity.
-    // TODO: 0x0017621c -- determine true binary semantics of the +0x6C field.
+    // TODO: v1.6.1 Fruit::Init @0x001e2898 (writes field_0x6c=0) -- determine true binary semantics of the +0x6C field.
     uint8_t  _pad_6C[4];                   // +0x6C..+0x6F  (role unknown)
     uint8_t  m_bBallisticEnable;           // +0x70  u8 gate: Update runs gravity arc when !=0; CreateFruit menu-path sets =0
     uint8_t  _pad_71[3];                   // +0x71..+0x73
@@ -257,7 +257,7 @@ public:
     // Binary static: critical / charged fruit blend target colour for blade flash.
     // Used by SlashEntity::UpdatePoints to blend m_BaseColour toward CRITICAL_COLOUR
     // when m_Scale > 0 (hit-flash active). Exact binary address and value:
-    // TODO: 0x1e6914 -- verify CRITICAL_COLOUR RGB values from Ghidra (likely orange/yellow).
+    // TODO: v1.6.1 SlashEntity::UpdatePoints @0x001e6914 -- verify CRITICAL_COLOUR RGB values from Ghidra (likely orange/yellow).
     static const Colour CRITICAL_COLOUR;
     // Binary @ 0x00174fc8 — return FRUIT_INFO[type].m_FactColour
     static Colour FruitFactColour(long type);

@@ -19,7 +19,7 @@ class TextureManager : public Singleton<TextureManager> {
 public:
     // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
-    // DIFFERS: binary has second SmartPtr<TextureSource> param (0x00188ca4).
+    // DIFFERS: binary has second SmartPtr<TextureSource> param (v1.6.1 Mortar::TextureManager::Load @0x002274d0).
     Mortar::SmartPtr<Texture> Load(const char* path,
         Mortar::SmartPtr<Mortar::TextureSource> source = Mortar::SmartPtr<Mortar::TextureSource>());
 

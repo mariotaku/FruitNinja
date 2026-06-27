@@ -41,7 +41,7 @@ ItemManager::ItemManager() {
     m_DefaultItems[3] = nullptr;
 }
 
-// DIFFERS: original = no dtor (binary frees items via UnLoadItemData @ 0x001124fc).
+// DIFFERS: original = no dtor (binary frees items via v1.6.1 UnLoadItemData @0x00138a64).
 //          Port keeps the dtor as a defensive no-op so static-destructor order
 //          can't double-free.
 ItemManager::~ItemManager() {

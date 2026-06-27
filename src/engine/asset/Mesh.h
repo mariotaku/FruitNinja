@@ -283,9 +283,9 @@ public:
                           AsciiString const& targetName,
                           std::vector<AnimBindings::Vector::Binding>& out) override;
 
-    // vtable slot 7 (+0x1c): GenerateBindings(Bone) binary @ 0x0027385c
+    // vtable slot 7 (+0x1c): GenerateBindings(Bone) v1.6.1 Mortar::Mesh::GenerateBindings @0x0027385c
     // Binary body is a single BX LR (genuinely empty). Port empty body is exact match.
-    // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+    // Defunct-ish: Mesh emits no bone bindings; v1.6.1 Mortar::Mesh::GenerateBindings @0x0027385c (empty BX LR)
     void GenerateBindings(AsciiString const& channelName,
                           AsciiString const& targetName,
                           std::vector<AnimBindings::Bone::Binding>& out) override;

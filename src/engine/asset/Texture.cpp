@@ -355,7 +355,7 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         return Mortar::SmartPtr<Texture>();
     }
 
-    // TODO: 0x00189dd4 -- binary type-dispatch mechanism for multi-format raw*.
+    // TODO: re-verify v1.6.1 Mortar::TextureFileFormat format-dispatch address -- binary type-dispatch mechanism for multi-format raw*.
     TextureFileFormat::Tex1Data* tex1 =
         static_cast<TextureFileFormat::Tex1Data*>(raw);
 
@@ -371,9 +371,9 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
 #endif
         }
     } else {
-        // TODO: 0x0022bc6c -- Tex3 full decode + GL upload.
-        // TODO: 0x0022c7d4 -- DDS full decode + GL upload.
-        // TODO: 0x0022b404 -- Tex2 full decode + GL upload.
+        // TODO: v1.6.1 TextureFileFormat::Tex3Format::ReadFormatInternal @0x0022bc6c -- Tex3 full decode + GL upload.
+        // TODO: v1.6.1 TextureFileFormat::DDSFormat::ReadFormatInternal @0x0022c7d4 -- DDS full decode + GL upload.
+        // TODO: v1.6.1 TextureFileFormat::Tex2Format::ReadFormatInternal @0x0022b404 -- Tex2 full decode + GL upload.
         LOG_INFO("TEXTURE/Load", "tex3/dds/tex2 format not yet decoded for '%s'"
                  " (TODO: 0x0022bc6c / 0x0022c7d4 / 0x0022b404)", path);
     }
@@ -416,7 +416,7 @@ Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
     if (!raw) {
         return Mortar::SmartPtr<Texture>();
     }
-    // TODO: 0x0022bc6c -- Tex3Data GL upload path (no Tex3 assets in shipped packs).
+    // TODO: v1.6.1 TextureFileFormat::Tex3Format::ReadFormatInternal @0x0022bc6c -- Tex3Data GL upload path (no Tex3 assets in shipped packs).
     delete raw;
     (void)pathForLog;
     return Mortar::SmartPtr<Texture>();

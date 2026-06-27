@@ -183,21 +183,21 @@ void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
     }
 
     // Position: base + angle offsets + pos transition GetAmt + pos pulse GetPulseAmt
-    // TODO: 0x00189ae4 -- TranisitionInfo::GetAmt and PulseInfo::GetPulseAmt not yet ported;
+    // TODO: v1.6.1 GenericHUDControl::PreDraw @0x00189ae4 -- TranisitionInfo::GetAmt and PulseInfo::GetPulseAmt not yet ported;
     //   using base values only until those helpers are implemented.
     Vec3 worldPos = m_BasePos + m_AnglePosOffA + m_BasePos2;
     this->pos = worldPos;
 
     // Scale: base scale
-    // TODO: 0x00189ae4 -- scale transition/pulse not applied (pending GetAmt/GetPulseAmt)
+    // TODO: v1.6.1 GenericHUDControl::PreDraw @0x00189ae4 -- scale transition/pulse not applied (pending GetAmt/GetPulseAmt)
     this->size = m_BaseScale;
 
     // Angle: base + angle transition + angle pulse
-    // TODO: 0x00189ae4 -- angle transition/pulse not applied
+    // TODO: v1.6.1 GenericHUDControl::PreDraw @0x00189ae4 -- angle transition/pulse not applied
     this->m_Timer = m_BaseAngle;
 
     // Alpha: mapped from fade fraction through alpha transition
-    // TODO: 0x00189ae4 -- alpha transition/pulse not applied; use linear fade
+    // TODO: v1.6.1 GenericHUDControl::PreDraw @0x00189ae4 -- alpha transition/pulse not applied; use linear fade
     uint8_t alpha = (uint8_t)(int)(frac * 255.0f);
     this->m_DrawColour.a = alpha;
 }

@@ -75,7 +75,7 @@ Geometry::~Geometry() {
 }
 
 // v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
-// DIFFERS: structural -- binary Geometry::Render @0x00264468 walks m_Binding->GetBindings()[idx].m_PassBindings
+// DIFFERS: structural -- binary v1.6.1 Geometry::Render @0x00264468 walks m_Binding->GetBindings()[idx].m_PassBindings
 //   and re-derives the glVertexPointer/glDrawElements args per draw; port draws from the load-cached
 //   m_Vbo/m_Ibo/m_Layout (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
 //   Port uses m_DiffuseTex instead of MeshMaterial for texture binding.

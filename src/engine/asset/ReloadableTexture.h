@@ -3,11 +3,11 @@
 
 // Mortar::ReloadableTexture — 8-byte texture handle record.
 //
-// Binary layout (sizeof = 8, ctor @ 0x001213f0 / 0x00121400):
+// Binary layout (sizeof = 8, v1.6.1 ReloadableTexture::ReloadableTexture ctor @0x0014f8e8):
 //   +0x00  Mortar::SmartPtr<Mortar::Texture>  (4 bytes, base sub-object)
 //   +0x04  char*  m_pPath                     (4 bytes)
 //
-// DIFFERS: original = SmartPtr<Texture>(4B) base + char* m_pPath(4B) from ctor @ 0x001213f0;
+// DIFFERS: original = SmartPtr<Texture>(4B) base + char* m_pPath(4B) from v1.6.1 ReloadableTexture::ReloadableTexture ctor @0x0014f8e8;
 //   port = char m_Name[4] + GLuint m_Handle (same 8-byte total size, different field types).
 //   sizeof matches (8 == 8) so PurchaseInfo member offsets (+0xA8/+0xB0/+0xB8) are correct.
 //   Changing to the binary layout would require porting SmartPtr<Texture> as the base class
@@ -15,7 +15,7 @@
 //   fully RE'd.
 //
 // Ctor zero-inits both fields (inlined in PurchaseInfo ctor 0x0011bdd8).
-// Unload() zeroes m_Handle (binary @ 0x00118334, ASM-verified 2026-05-18).
+// Unload() zeroes m_Handle (ASM-verified v1.6.1 ReloadableTexture::Unload @0x0014f878).
 //
 // Used as embedded fields in PurchaseInfo (+0xA8, +0xB0, +0xB8, 8 bytes each).
 
@@ -37,7 +37,7 @@ public:
         m_Name[3] = '\0';
     }
 
-    // Zeroes the GL handle (matches binary Unload at 0x00118334).
+    // Zeroes the GL handle (matches v1.6.1 ReloadableTexture::Unload @0x0014f878).
     void Unload() {
         m_Handle = 0;
     }

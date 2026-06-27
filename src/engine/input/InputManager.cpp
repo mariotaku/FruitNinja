@@ -203,7 +203,7 @@ unsigned long InputManager::ParseKey(unsigned long hash) {
 }
 
 // Binary @ 0x0019683c — broadcast to devices (2-param; bindings live on device).
-// DIFFERS: original = per-device binding store, see Binary @ 0x0019683c
+// DIFFERS: original = per-device binding store, see v1.6.1 Mortar::InputManager::RegisterInputCallback @0x0024475c
 void InputManager::RegisterInputCallback(unsigned long actionHash, InputCallback cb) {
     for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {

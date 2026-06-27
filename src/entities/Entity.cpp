@@ -106,7 +106,7 @@ Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*ms
 
 }  // namespace Mortar
 
-// TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
+// TODO: implement ET_RemoveEntity (v1.6.1 ET_RemoveEntity @0x001d976c) when EntityTracker tree storage is ported
 void ET_RemoveEntity(int /*treeIdx*/, uint16_t /*trackerID*/) {}
 
 // Entity LinkedHeap arena accessors. The binary keeps two process-global slots,

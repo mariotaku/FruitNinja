@@ -118,7 +118,7 @@ public:
     // Entity vtable overrides
     // -----------------------------------------------------------------------
     void Update(float dt) override;     // 0x001bca10 -- state machine
-    void Draw(Renderer& r) override;    // TODO: 0x001bd7c8
+    void Draw(Renderer& r) override;    // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 (binary symbol at this addr)
     void PostUpdate(float dt) override; // TODO
     void Release() override;            // 0x001bb664
 
@@ -176,7 +176,7 @@ public:
 
     // Binary @ 0x001baa20. Finale VFX: spawns 10 or 25 radial jibs, 8 lettered
     // fragments, white flash, resets fruit colour.
-    // TODO: 0x001baa20 -- full ExplodeSuperFruit VFX not yet ported
+    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- full ExplodeSuperFruit VFX not yet ported
     void ExplodeSuperFruit();
 
     // Binary @ 0x1baeb8. Per-frame shockwave: writes PSPParticleManager globals

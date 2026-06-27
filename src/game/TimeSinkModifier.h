@@ -52,12 +52,12 @@ public:
 
     // Delegate target: called when score changes (int points, int extra)
     // @ 0x0014dac4 — accumulate or immediately call TimeControl::AddTime
-    // TODO: 0x0014dac4 — wire to score notification signal
+    // TODO: v1.6.1 TimeSinkModifier::ScoreNotification @0x0014dac4 — wire to score notification signal
     void ScoreNotification(int points, int extra);
 
     // Delegate target: called when fruit is sliced (Fruit*, int score, Entity* slasher).
     // Subscribed in ApplyModifier to g_FruitWasSliced (Fruit.cpp, GOT 0x332a34).
-    // TODO: 0x0014da7c — verify binary arg3 (Entity* slasher) is unused in sink body.
+    // TODO: v1.6.1 TimeSinkModifier::FruitWasSliced @0x0014da7c — verify binary arg3 (Entity* slasher) is unused in sink body.
     void FruitWasSlicedSink(Fruit* fruit, int score, Mortar::Entity* slasher);
 };
 

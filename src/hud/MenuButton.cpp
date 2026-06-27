@@ -514,7 +514,7 @@ void MenuButton::Update(float dt) {
         m_GrowInTimer -= dt;
         if (fruit) {
             // mark hidden while waiting
-            // TODO: 0x0019a860 -- confirm exact flag bit written to fruit->flags(+0xc) for hidden
+            // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- confirm exact flag bit written to fruit->flags(+0xc) for hidden
             fruit->flags |= 1;
         }
         return;
@@ -611,7 +611,7 @@ void MenuButton::Update(float dt) {
                     float magSqr = d.x*d.x + d.y*d.y + d.z*d.z;
                     if (magSqr > 0.001f) {   // SLICE_EPS @0x0019ac50 (binary ble-skip => strictly >)
                         m_ClickCallback();
-                        // TODO: 0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
+                        // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
                         entity->scale = m_BaseScale;
                         // Binary @ 0x19aa34..0x19ac20 (Site B): set respawn flag if halves are
                         // already at rest on the same frame as the slice (rare; normally Site A
@@ -634,7 +634,7 @@ void MenuButton::Update(float dt) {
                 // BOMB branch
                 pos.z = -5.0f;
                 entity->pos.z = 0.0f;  // +0x18 = 0
-                // TODO: 0x0019a860 -- Bomb::Enabled() check; use existing Enabled() method
+                // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- Bomb::Enabled() check; use existing Enabled() method
                 Bomb* b = static_cast<Bomb*>(m_pEntity);
                 if (b && !b->Enabled()) {
                     m_pEntity = nullptr;
@@ -680,7 +680,7 @@ void MenuButton::Update(float dt) {
 
     // ---- touch handling ----
     if (AcceptsTouch()) {
-        // ASM-spec binary @0x0019ad14 -- BACK-KEY force-slice path.
+        // ASM-spec v1.6.1 MenuButton::Update @0x0019ad14 -- BACK-KEY force-slice path.
         // The menu fruit IS reached by the ActorManager blade-vs-sphere loop normally;
         // this block is the binary's separate back-key / pause-input forced slice
         // (m_bFrameDirty = back/pause input latch, set by RegressMenuCallback/ShowPauseMenuCallback).
@@ -742,7 +742,7 @@ void MenuButton::Update(float dt) {
                         m_TouchSlot = -1;
                     }
                 }
-                // TODO: 0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
+                // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
             }
         }
     }
@@ -866,7 +866,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
     }
 
     // Sparkle ring: armed when m_RotationSpeed(+0xf4) >= 0.
-    // TODO: 0x0019c2e4 -- sparkle ring 48-vert mesh (binary @ Draw layer3): build ring once into
+    // TODO: v1.6.1 MenuButton::Draw @0x0019c2e4 -- sparkle ring 48-vert mesh (binary @ Draw layer3): build ring once into
     //   static buffer, animate per-vertex colour by rotating index, draw via Mesh::DrawTriList(0x30 tris).
     //   Scale 0.75, MatrixStack push. Binary entry gates on m_RotationSpeed >= 0.
 }

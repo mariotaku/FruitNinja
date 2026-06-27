@@ -76,7 +76,7 @@ TextureSourceData* ReadTex2Format(const void* data, unsigned long size);
 // ---------------------------------------------------------------------------
 // Reader [1]: DDS -- binary @0x0022cc04 / internal @0x0022c7d4.
 // Accept gate: size>=0x80 && u32@0 LE == 0x20534444 ("DDS ").
-// TODO: 0x0022c7d4 -- full decode: 0x7c-byte DDS_HEADER, LE-convert ~19 dwords,
+// TODO: v1.6.1 ReadFormatInternal @0x0022c7d4 -- full decode: 0x7c-byte DDS_HEADER, LE-convert ~19 dwords,
 //   pixelflags&4 -> compressed (FourCC DXT*); else channel-mapping from RGBA masks
 //   (VerifyBitRun + sort<ChannelMapping>); dims from header w@+0xc, h@+8, mips@+0x14;
 //   allocate DDSTextureData (0x44 bytes).
@@ -89,7 +89,7 @@ TextureSourceData* ReadDDSFormat(const void* data, unsigned long size);
 // Accept gate: u32@0 == 0x01584554 ("TEX\x01").
 // Static-init: FourCC copied from .rodata @0x0029ac00 into .bss @0x0034e3f4 by
 //   thunk @0x0022be94. Bytes: 'T','E','X',0x01 (LE uint32 = 0x01584554).
-// TODO: 0x0022bc6c -- ReadFormatInternal: allocate Tex3Data (0x4c bytes), read
+// TODO: v1.6.1 ReadFormatInternal @0x0022bc6c -- allocate Tex3Data (0x4c bytes), read
 //   TextureInfo fields (format/numLayersX/numLayersY via MakeIntFormat helpers),
 //   read per-layer size table, accumulate layer-data offsets.
 //   No Tex3 assets ship in 1.5.1/1.6.1 packs.

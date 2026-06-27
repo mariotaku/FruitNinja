@@ -28,7 +28,7 @@ int TimeSinkModifier::UpdateSpecific(float /*dt*/) { return 0; }
 // Binary: if not deferred and m_Accumulator >= 0, register ScoreNotification
 // as Delegate2<void,int,int> on the score signal; also register FruitWasSlicedSink
 // on g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
-// TODO: 0x0014dc88 — register ScoreNotification on score signal (score signal not yet ported).
+// TODO: v1.6.1 TimeSinkModifier::ApplyModifier @0x0014dc88 — register ScoreNotification on score signal (score signal not yet ported).
 void TimeSinkModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (!m_bDeferred && m_Accumulator >= 0.0f) {
@@ -36,7 +36,7 @@ void TimeSinkModifier::ApplyModifier(bool isPurchased, float* extra) {
             Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
                 this, &TimeSinkModifier::FruitWasSlicedSink);
     }
-    // TODO: 0x0014dc88 — register ScoreNotification as Delegate2<void,int,int> on score signal.
+    // TODO: v1.6.1 TimeSinkModifier::ApplyModifier @0x0014dc88 — register ScoreNotification as Delegate2<void,int,int> on score signal.
 }
 
 // @ 0x0014dbf4

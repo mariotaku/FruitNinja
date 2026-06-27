@@ -315,7 +315,7 @@ static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
     }
 
     // Push onto template live-list: head is at particle_template+0x04.
-    // ASM-verified: AddParticle @0x13c554 — r6=tmpl, *(r6+0x4)=newHead, slot->m_NextLink=oldHead.
+    // ASM-verified: v1.6.1 AddParticle @0x0013c554 — r6=tmpl, *(r6+0x4)=newHead, slot->m_NextLink=oldHead.
     p.m_NextLink = tmpl ? tmpl->m_LiveHead : 0;
     if (tmpl) {
         tmpl->m_LiveHead = idx;

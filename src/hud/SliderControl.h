@@ -1,7 +1,8 @@
 #ifndef FN_HUD_SLIDER_CONTROL_H
 #define FN_HUD_SLIDER_CONTROL_H
 
-// Defunct: SliderControl -- orphaned in binary; binary vtable @ 0x001ea090.
+// Defunct: SliderControl -- orphaned in binary.
+// TODO: re-verify v1.6.1 SliderControl vtable address (old 0x001ea090 was stale v1.5.x -- resolves mid-SlashEntity::UpdateTouchDown in v1.6.1, not a vtable).
 // Zero internal call sites; every public symbol has only [EXTERNAL] xrefs.
 // OptionsScreen was repurposed to PauseScreen, leaving the slider library
 // code unused. Class shape preserved per stub-don't-skip policy.

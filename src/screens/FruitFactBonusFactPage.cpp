@@ -47,7 +47,7 @@ FruitFactBonusFactPage::~FruitFactBonusFactPage() {
 // blue=(0x95,0x5c,0x01). GenericHUDControl sizeof=0x1d8, BakedStringBox sizeof=0xc8.
 void FruitFactBonusFactPage::Init() {
     // Page background texture.
-    // TODO: 0x001743b8 -- resolve bg tex name from DAT_17484c string pool;
+    // TODO: v1.6.1 FruitFactBonusFactPage @0x001743b8 -- resolve bg tex name from DAT_17484c string pool;
     //   sibling pages use "blank_dialog_box.tex" or similar -- reuse until confirmed.
     Mortar::SmartPtr<Mortar::Texture> bgTex =
         Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
@@ -92,7 +92,7 @@ void FruitFactBonusFactPage::Init() {
         Colour* tint = &rowCol[row];
 
         // (a) Star / icon control (DAT_174834=58 Y, DAT_174830=95 X).
-        // TODO: 0x001743b8 -- resolve icon tex name from DAT_174854 string pool;
+        // TODO: v1.6.1 FruitFactBonusFactPage @0x001743b8 -- resolve icon tex name from DAT_174854 string pool;
         //   sibling pages use a star/badge tex -- reuse result_board_star.tex until confirmed.
         Mortar::SmartPtr<Mortar::Texture> iconTex =
             Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");

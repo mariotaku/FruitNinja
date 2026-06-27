@@ -68,7 +68,7 @@
 //
 // Port status:
 //   - State machine ported with full logic.
-//   - GL rendering stubbed (TODO: port Draw @ 0x0015dd50).
+//   - GL rendering stubbed (TODO: re-verify v1.6.1 ShopScreen::Draw address -- old 0x0015dd50 was stale v1.5.x, resolves to no function in v1.6.1).
 //   - ScrollingMenu is a stub (items visible but not scrollable).
 //   - ItemManager stubs always return "unlocked/not-equipped".
 //   - FruitSaveData::CheckDatesHaveChanged called in DojoScreen before push.

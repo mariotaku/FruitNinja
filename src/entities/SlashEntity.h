@@ -450,13 +450,13 @@ public:
                               const char* textureName2, bool directional,
                               const char* contactParticle, const char* particle2);
 
-    // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
+    // ASM-spec v1.6.1 SlashEntity::TouchDown @0x001ea420
     bool TouchDown(InputEvent* event);
 
-    // ASM-spec: SlashEntity::TouchMoveX @ 0x17C50C -- writes pos.x.
+    // ASM-spec v1.6.1 SlashEntity::TouchMoveX @0x001e785c -- writes pos.x.
     bool TouchMoveX(InputEvent* event);
 
-    // ASM-spec: SlashEntity::TouchMoveY @ 0x17C490 -- writes pos.y.
+    // ASM-spec v1.6.1 SlashEntity::TouchMoveY @0x001e77b4 -- writes pos.y.
     bool TouchMoveY(InputEvent* event);
 
     // Binary @ 0x17D2E4 -- UpdateTouchDown: trail builder, forwards to OnTouchActive.

@@ -222,7 +222,7 @@ Fruit::~Fruit() {
 // ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x00176708 (asm-inspector)
 // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
 // ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00176708 (re-analyst) -- RNG source, field writes, flags bit-op.
-// ASM-verified-partial: 2026-05-27 binary @ 0x00176708 (asm-inspector) --
+// ASM-verified-partial: 2026-05-27 v1.6.1 Fruit::Init @ 0x00176708 (asm-inspector) --
 //   power-fruit counter increment + non-arcade path verified;
 //   arcade pineapple-blitz dedup + power-fruit gate left as TODO.
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
@@ -1402,8 +1402,8 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         }
 
         // Combo counter increment.
-        // TODO: re-verify combo addr -- v1.5.x @ 0x001787a8..0x001787b0 are stale;
-        // combo counter moved into SlashEntity::Update @0x001e867c in v1.6.1.
+        // TODO: re-verify combo addr -- combo counter moved into
+        // v1.6.1 SlashEntity::Update @0x001e867c (old v1.5.x @0x001787a8..0x001787b0 are stale).
         int slasher = (int)m_PlayerIdx;
         if (g_LastSlasher != slasher) {
             g_ComboCount  = 0;
@@ -1615,8 +1615,8 @@ void Fruit::Slice() {
         m_SliceArcAngle = (uint16_t)(m_SliceArcAngle + 0x7ff8);
     }
     uint16_t base = m_SliceArcAngle;
-    uint16_t angA = (uint16_t)(base + offA);  // TODO: re-RE inner offset (was: 0x0017725e stale v1.5.x)
-    uint16_t angB = (uint16_t)(base - offB);  // TODO: re-RE inner offset (was: 0x0017727e stale v1.5.x)
+    uint16_t angA = (uint16_t)(base + offA);  // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0 (was: 0x0017725e stale v1.5.x)
+    uint16_t angB = (uint16_t)(base - offB);  // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0 (was: 0x0017727e stale v1.5.x)
 
     const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
     const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
@@ -1967,7 +1967,7 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
 
     // Crit SFX: if impulse > 2.5 and 1-in-3 chance, play Air-Whoosh variant.
     // v1.6.1 @0x001dc990 (GOT-relative SFX name resolution).
-    // TODO: confirm Air-Whoosh sfx names @0x001dc990
+    // TODO: confirm Air-Whoosh sfx names -- v1.6.1 AddSlice @0x001dc990
     if (v.y > 2.5f && Math::g_Random.Rand32(3) == 0) {
         const char* sfxName = nullptr;
         uint32_t pick = Math::g_Random.Rand32(3);
@@ -2488,9 +2488,11 @@ const char* Fruit::FruitFactTexture(long type) {
 
 // Binary @ 0x00174f80
 Colour Fruit::FruitTypeColour(long type) {
-    // DIFFERS: binary checks g_SpecialFruitIdx == type (DAT_0x00174fbc) and
-    // returns g_SpecialFruitColour (DAT_0x00174fc0) when matched, set by
+    // DIFFERS: v1.6.1 Fruit::FruitTypeColour @0x001da524 checks the special-fruit
+    // index == type (MAX_FRUIT_TYPES sentinel) and returns the special/critical
+    // colour (CRITICAL_COLOUR) when matched, set by
     // StarFruit/Gem/Pomegranate spawners as per-frame colour overrides.
+    // (old v1.5.x DAT_0x00174fbc/DAT_0x00174fc0 are stale -- re-verify the v1.6.1 DAT slots.)
     // Port has neither global wired (none of those spawners are ported yet);
     // -1 default means "never match", so this branch always falls through
     // to FRUIT_INFO[type]. Re-enable when those spawners port.

@@ -90,7 +90,7 @@ struct SPAWNER_INFO {
         , m_VelXScale(1.0f), m_VelYScale(1.0f)
         , m_HorizMin(-1.0f), m_HorizMax(1.0f)
         , m_SpawnType(PLACEMENT_BOTTOM)
-        // ASM-verified: binary SPAWNER_INFO ctor @ 0x001270ac sets m_SpawnMin=0.0, m_SpawnMax=0.0
+        // ASM-verified: v1.6.1 SPAWNER_INFO::SPAWNER_INFO @0x00122ec4 sets m_SpawnMin=0.0, m_SpawnMax=0.0
         , m_SpawnMin(0.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(0.0f)
         , m_GrowthInc(0.0f)
         , m_Delay(0.0f), m_DelayInc(0.0f)
@@ -167,13 +167,14 @@ struct WAVE_INFO {
     // +0x3c: "chance" attr (selection weight)
     int                      m_Chance;           // +0x3c
     // +0x40: running copy of m_Chance; ResetWaveChances writes +0x40 = +0x3c
-    // ASM-verified: binary WAVE_INFO @ 0x00126748 (ctor) / 0x001249d0 (ResetWaveChances)
+    // ASM-verified: v1.6.1 WaveManager::ResetWaveChances @0x0012b87c writes +0x40 = +0x3c
+    // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined; no standalone symbol)
     // Replaces former port-tail field m_CurrentMax (which was off-struct).
     int                      m_CurrentChance;    // +0x40
     // +0x44: "chanceRegrowth" attr
     float                    m_ChanceRegrowth;   // +0x44
     // +0x48: running copy of m_ChanceRegrowth; ResetWaveChances writes +0x48 = +0x44
-    // ASM-verified: binary @ 0x001249d0 (ResetWaveChances); type is float (0x3e800000 = 0.25)
+    // ASM-verified: v1.6.1 WaveManager::ResetWaveChances @0x0012b87c; type is float (0x3e800000 = 0.25)
     // Replaces former port-tail field m_CurrentRegrowth (which was off-struct).
     float                    m_CurrentRegrowth;  // +0x48
     // +0x4c: "games"/"gamesMin" attr
@@ -207,11 +208,11 @@ struct WAVE_INFO {
         , m_NextWaveDelay(2.0f), m_NextWaveDelayInc(0.0f)
         , m_NextWaveWait(0.0f), m_reserved2c(0.0f)
         , m_NextWaveWaitSpInc(0.0f)
-        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; revisit counter starts at 1.
+        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); revisit counter starts at 1.
         , m_RevisitCounter(1.0f)
-        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748 sets BOTH to 1.
+        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); sets BOTH to 1.
         , m_bWaitForEntities(1), m_bWaitForProcessing(1)
-        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; m_Chance=10, m_ChanceRegrowth=0.25
+        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); m_Chance=10, m_ChanceRegrowth=0.25
         , m_Chance(10), m_CurrentChance(10)
         , m_ChanceRegrowth(0.25f), m_CurrentRegrowth(0.25f)
         , m_GamesMin(-1), m_GamesMax(-1)
@@ -347,7 +348,7 @@ struct PROBABILITY_OVERIDE {
     PROBABILITY_OVERIDE()
         : m_PercentChance(0), m_PerWave(0), m_Counter(0)
         , m_TypeCount(0), m_DisableWhenPowered(0.0f)
-        // DIFFERS: binary ctor @ 0x00126884 writes literal pool word 0xfff0bdc0 to +0x70
+        // DIFFERS: v1.6.1 PROBABILITY_OVERIDE::PROBABILITY_OVERIDE @0x0012abc0 writes literal pool word 0xfff0bdc0 to +0x70
         // (m_PerWaveCount). This is likely a pointer slot or pre-relocation GOT offset baked
         // into the literal pool; treating as int default 0 is safe because
         // WaveManager::Init always overwrites via QueryIntAttribute("waveCount") when the

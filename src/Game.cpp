@@ -158,7 +158,7 @@ const char* Game::SelfVersion() { return "1.6.1"; }
 
 // slot 18 @ 0x0010dae0 — tail call to GameTaskSaveOnExit
 void Game::SaveOnExit() {
-    // TODO: replace with GameTaskSaveOnExit() (binary @ 0x0016cf40) once
+    // TODO: replace with GameTaskSaveOnExit() (v1.6.1 GameTaskSaveOnExit @0x001ce170) once
     // ported. Binary body: gs->field_0x190 = 1 (save-pending flag); if
     // (!GetIsSavingBool() && hud) { HUD::Save(); SaveCurrentData(true); }
     // Using GameTaskExit as placeholder -- this tears down resources on a

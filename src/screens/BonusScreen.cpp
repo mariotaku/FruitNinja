@@ -45,11 +45,11 @@ static const float FINALE_HOLD    = 0.5f;
 static const float DISMISS_BUFFER = 0.5f;
 
 // Transition-in slide duration (init value for m_Timer; binary loads from rodata).
-// TODO: resolve exact init constant from ctor @0x00162d1c
+// TODO: resolve exact init constant from ctor v1.6.1 BonusScreen::BonusScreen @0x00162d1c
 static const float TRANSITION_IN_TIME = 1.0f;
 
 // ---------------------------------------------------------------------------
-// BonusScreen ctor (binary @ 0x00162d1c)
+// BonusScreen ctor (v1.6.1 BonusScreen::BonusScreen @0x00162d1c)
 // ---------------------------------------------------------------------------
 
 BonusScreen::BonusScreen()
@@ -316,7 +316,7 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     if (m_Timer < 0.0f) {
         // Slide-in from off-screen. m_AnimPos.y interpolates toward 0.
-        // TODO: resolve exact slide-in math from binary @ 0x00163dd0
+        // TODO: resolve exact slide-in math from binary v1.6.1 BonusScreen::Update @0x00163dd0
         m_AnimPos.y = m_Timer * PRE_OFFSET;
 
         // Start rush SFX once.
@@ -349,12 +349,12 @@ void BonusScreen::Update(float dt) {
                 // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
             }
 
-            // Alpha pulse on reveal -- TODO: resolve exact formula from binary @ 0x00163dd0
+            // Alpha pulse on reveal -- TODO: resolve exact formula from binary v1.6.1 BonusScreen::Update @0x00163dd0
             entry.m_Alpha = 1.0f + 0.3f * sinf(localT * 6.28f);
             if (entry.m_Alpha < 0.0f) entry.m_Alpha = 0.0f;
 
             // Score counter ramp-up.
-            // TODO: resolve exact multiplier ramp math from binary @ 0x00163dd0
+            // TODO: resolve exact multiplier ramp math from binary v1.6.1 BonusScreen::Update @0x00163dd0
             float scoreT = localT * 0.5f + 0.5f;
             if (scoreT > 1.0f) scoreT = 1.0f;
             entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * scoreT);
@@ -397,7 +397,7 @@ void BonusScreen::Update(float dt) {
     if (m_ShakeTimer > 0.0f) {
         m_ShakeTimer -= dt;
         // Damped wobble around m_ShakeOffset.
-        // TODO: resolve exact wobble math from binary @ 0x00163dd0
+        // TODO: resolve exact wobble math from binary v1.6.1 BonusScreen::Update @0x00163dd0
         float wobble = m_ShakeTimer * m_ShakeDuration;
         m_ShakeAngle = (uint16_t)((int)m_ShakeAngle + (int)(wobble * 100.0f));
         (void)wobble;

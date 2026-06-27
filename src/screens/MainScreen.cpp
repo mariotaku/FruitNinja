@@ -409,7 +409,7 @@ void MainScreen::Update(float dt) {
 
     case STATE_LEADERBOARD:     // v1.6.1 case 9 @0x0019765c
     case STATE_MORE_GAMES:      // v1.6.1 case 10 @0x0019765c
-        // Defunct — OpenFeint / GameCenter states (lumped exit block @0x0019765c).
+        // Defunct — OpenFeint / GameCenter states (lumped exit block; v1.6.1 MainScreen::Update @0x0019765c).
         // Binary: m_State=0; f0(+0x11c)=0; m_Timer2=-0.85. No DeleteMenuButtons (persisting instance).
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
         m_State = STATE_CAMERA_ZOOM;
@@ -845,7 +845,7 @@ void MainScreen::CreateButtons() {
         m_pGameModeButton->m_Texture = texNewGame;
         m_pGameModeButton->Init(POS_PLAY_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
-        // TODO: 0x001961f8 -- RE whether play block truly overrides m_RestScale to texWidth+1
+        // TODO: v1.6.1 MainScreen::CreateButtons @0x001961f8 -- RE whether play block truly overrides m_RestScale to texWidth+1
         //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
             m_pGameModeButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
