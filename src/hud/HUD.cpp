@@ -7,26 +7,26 @@
 #include "render/MatrixStack.h"
 #include <list>
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144bb0 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUD::HUD @ 0x0018c1a0 (re-analyst)
 // DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
-//          (m_globalTimeScale); m_TitleTexAlpha (+0x20) is left uninitialized by ctor.
-//          Port zero-inits m_TitleTexAlpha and pre-inits m_globalTimeScale here to
+//          (m_globalTimeScale); m_DrawAlpha (+0x20) is left uninitialized by ctor.
+//          Port zero-inits m_DrawAlpha and pre-inits m_globalTimeScale here to
 //          avoid reading uninit floats before the first Update tick.
-HUD::HUD() : m_TitleTexAlpha(0.0f), m_globalTimeScale(1.0f) {
+HUD::HUD() : m_DrawAlpha(0.0f), m_globalTimeScale(1.0f) {
     for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144cd0 (re-analyst)
+// TODO: HUD::~HUD -- v1.6.1 address unconfirmed (old marker 0x00144cd0 is stale v1.5.x; needs re-RE)
 HUD::~HUD() {
     Release();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144d18 (re-analyst)
+// TODO: HUD::Init -- v1.6.1 address unconfirmed (old marker 0x00144d18 is stale v1.5.x; needs re-RE)
 void HUD::Init() {
     controls.clear();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c5c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUD::Release @ 0x0018c2c0 (re-analyst)
 void HUD::Release() {
     // Binary v1.6.1 HUD::Release@0x18c2b8: game_work.m_bHudDestructing = 1 (HUD-teardown guard).
     game_work.m_bHudDestructing = 1;
@@ -47,7 +47,7 @@ void HUD::Release() {
     game_work.m_bHudDestructing = 0;
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144db0 (re-analyst)
+// TODO: HUD::AddControl -- v1.6.1 address unconfirmed (old marker 0x00144db0 is stale v1.5.x; needs re-RE)
 void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
     if (pushFront)
         controls.push_front(ctrl);
@@ -55,14 +55,14 @@ void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
         controls.push_back(ctrl);
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c40 (re-analyst)
+// TODO: HUD::RemoveControl -- v1.6.1 address unconfirmed (old marker 0x00144c40 is stale v1.5.x; needs re-RE)
 void HUD::RemoveControl(HUDControl* ctrl) {
     if (!ctrl) return;
     ctrl->m_RemoveCallback(ctrl);    // Delegate1::operator() -- internal null-check
     controls.remove(ctrl);
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144b28 (re-analyst)
+// TODO: HUD::BeginDraw -- v1.6.1 address unconfirmed (old marker 0x00144b28 is stale v1.5.x; needs re-RE)
 void HUD::BeginDraw(float dt) {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->m_Active)
@@ -70,7 +70,7 @@ void HUD::BeginDraw(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a90 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUD::Draw @ 0x0018bfc4 (re-analyst)
 // DIFFERS: binary leaves matrix discipline to each control. Port resets the
 //          world matrix between PreDrawOrder and DrawOrder of each control to
 //          guard against leftover transforms (e.g. ShopScreen 481x scale).
@@ -92,10 +92,10 @@ void HUD::Draw(int layerMask) {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144d20 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUD::Update @ 0x0018c44c (re-analyst)
 void HUD::Update(float dt) {
     MissControl::PreUpdate(dt);              // global combo-decay pre-tick
-    m_globalTimeScale = 1.0f;               // binary stores 1.0 to +0x24 each tick
+    m_DrawAlpha = 1.0f;                     // binary vstr.32 s15,[r4,#0x20] s15=1.0 (v1.6.1 @0x0018c3e0)
 
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ) {
         HUDControl* ctrl = *it;
@@ -114,14 +114,14 @@ void HUD::Update(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144b78 (re-analyst)
+// TODO: HUD::ResetControls -- v1.6.1 address unconfirmed (old marker 0x00144b78 is stale v1.5.x; needs re-RE)
 void HUD::ResetControls() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         (*it)->Reset();
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144c00 (re-analyst)
+// TODO: HUD::OnPause -- v1.6.1 address unconfirmed (old marker 0x00144c00 is stale v1.5.x; needs re-RE)
 void HUD::OnPause() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->GetType() == 8 /* TYPE_SCROLLING_MENU */) {
@@ -130,7 +130,7 @@ void HUD::OnPause() {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a20 (re-analyst)
+// TODO: HUD::Save -- v1.6.1 address unconfirmed (old marker 0x00144a20 is stale v1.5.x; needs re-RE)
 void HUD::Save() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* c = *it;
@@ -138,14 +138,14 @@ void HUD::Save() {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144a58 (re-analyst)
+// TODO: HUD::Skip -- v1.6.1 address unconfirmed (old marker 0x00144a58 is stale v1.5.x; needs re-RE)
 void HUD::Skip() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         (*it)->Skip();
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144dcc (re-analyst)
+// TODO: HUD::SetToMultiplayerState -- v1.6.1 address unconfirmed (old marker 0x00144dcc is stale v1.5.x; needs re-RE)
 // DIFFERS-trivial: binary's literal shape has a defensive inner-loop that re-scans
 //                  controls before each RemoveControl. Omitted here because list::remove
 //                  is a no-op on missing elements, making the inner loop observable no-op.

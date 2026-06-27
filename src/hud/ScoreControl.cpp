@@ -187,8 +187,8 @@ void ScoreControl::Release() {
     m_HighscoreBannerTex.SetNull();
 }
 
-// Reset @ 0x001582e4
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001582e4 (re-analyst)
+// v1.6.1 ScoreControl::Reset @ 0x001ac1c8
+// ASM-verified: 2026-05-09 v1.6.1 ScoreControl::Reset @ 0x001ac1c8 (re-analyst)
 void ScoreControl::Reset() {
     // Binary copies m_FruitDigitTex (+0xF8 = hud_fruit.tex) into m_Texture
     // (+0x74) unconditionally so HUDControl3d::Draw renders the watermelon
@@ -225,8 +225,7 @@ void ScoreControl::Skip() {
     }
 }
 
-// ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x0015853c (asm-inspector)
-// Update @ 0x0015853c
+// ASM-verified: 2026-05-03T00:00 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (asm-inspector)
 void ScoreControl::Update(float dt) {
     int currentScore = GetCurrentScore(m_PlayerIdx);
 
@@ -335,7 +334,7 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 6: position + layer flags
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015853c (re-analyst)
+    // ASM-verified: 2026-05-09 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (re-analyst)
     // pos = base - stride * abs(m_TransitionTimer)
     // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
     // distance, NOT a per-player MP offset. Steady-state gameplay
@@ -401,7 +400,7 @@ void ScoreControl::Update(float dt) {
     size.x = size.y = sizeVal;
 }
 
-// Draw @ 0x001581d4 — alpha gate, delegates to HUDControl3d::Draw for +0x74 quad
+// Draw @ 0x001abcb0 (v1.6.1 ScoreControl::Draw) — alpha gate, delegates to HUDControl3d::Draw for +0x74 quad
 void ScoreControl::Draw(float* hudScaleRaw) {
     // Skip P1 in multiplayer
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
@@ -412,7 +411,8 @@ void ScoreControl::Draw(float* hudScaleRaw) {
     // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
     if (game_work.m_GameDt < -1.0f) return;
 
-    float intensity = (game_work.mHud) ? game_work.mHud->m_globalTimeScale : 1.0f;
+    // Binary @0x1abce8: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
+    float intensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
     float alphaF = 255.0f * intensity;
     uint8_t alpha = (alphaF > 255.0f) ? 255 : (alphaF < 0.0f ? 0 : (uint8_t)alphaF);
     m_DrawColour.a = alpha;
@@ -420,14 +420,15 @@ void ScoreControl::Draw(float* hudScaleRaw) {
     HUDControl3d::Draw(hudScaleRaw);
 }
 
-// PreDraw @ 0x00158e1c — main rendering (text, multiplier, highscore banner)
+// PreDraw @ 0x001ace80 (v1.6.1 ScoreControl::PreDraw) — main rendering (text, multiplier, highscore banner)
 void ScoreControl::PreDraw(float* /*hudScale*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
-    float cameraIntensity = (game_work.mHud) ? game_work.mHud->m_globalTimeScale : 1.0f;
+    // Binary @0x1aceac: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
+    float cameraIntensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
     uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
     float transTimer = game_work.m_GameDt;  // g_GameData.someTimer
 
