@@ -11,8 +11,11 @@
 // Layout:
 //   +0x00: std::list<HUDControl*> controls  (8 bytes)
 //   +0x08: float scales[6]                  (24 bytes, all 1.0f at ctor)
-//   +0x20: float m_TitleTexAlpha               (ctor-UNINITIALIZED; always 0; suppresses tex-title)
-//   +0x24: float m_globalTimeScale          (1.0f sentinel written by HUD::Update each tick)
+//   +0x20: float m_DrawAlpha               (per-frame HUD draw-alpha; HUD::Update writes 1.0 each tick
+//                                           v1.6.1 HUD+0x20; read by ScoreControl::Draw/PreDraw,
+//                                           MissControl::Draw for score/miss alpha)
+//   +0x24: float m_globalTimeScale          (slow-mo multiplier; ctor writes 1.0;
+//                                           SuperFruitControl/MainScreen write <1.0)
 class HUD {
 public:
     // +0x00: control list (8 bytes on this libstdc++ build)
@@ -23,15 +26,18 @@ public:
     //   scales[3..5] are preserved for size-fidelity; no HUD read site in scope.
     float scales[6];
 
-    // +0x20: ctor-UNINITIALIZED in binary (reads 0); sourced by GameOverScreen::PreDrawOrder
-    // @0x00186894 as the texture-title alpha -- always 0 -> tex title suppressed, TTF title shows.
+    // +0x20: per-frame HUD draw-alpha. HUD::Update writes 1.0 each tick
+    // (v1.6.1 HUD::Update @0x0018c44c: vstr.32 s15,[r4,#0x20], s15=1.0).
+    // Read by ScoreControl::Draw (@0x1abce8) and ScoreControl::PreDraw (@0x1aceac)
+    // and MissControl::Draw (@0x001521ac) for score/miss alpha calculation.
+    // ctor-UNINITIALIZED in binary; also read by GameOverScreen::PreDrawOrder
+    // @0x00186894 as tex-title alpha (always 0 at ctor -> tex title suppressed).
     // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894: alpha = *(hud+0x20) * 255
-    float m_TitleTexAlpha;
+    float m_DrawAlpha;
 
     // +0x24: slow-motion multiplier. 1.0 = normal speed, <1.0 = slow-mo.
     // Written 1.0f by HUD::Update each tick; SuperFruitControl/MainScreen write <1.0.
-    // Read by SuperFruitControl::Update, MainScreen::Update, MissControl, ScoreControl,
-    // TutorialControl (all via *(float*)(hud+0x24) in binary).
+    // Read by SuperFruitControl::Update, MainScreen::Update, TutorialControl.
     float m_globalTimeScale;
 
     HUD();
@@ -54,7 +60,7 @@ public:
 #include <cstddef>
 static_assert(sizeof(HUD) == 0x28, "HUD size mismatch (v1.6.1 @0x001ce208)");
 static_assert(__builtin_offsetof(HUD, scales)           == 0x08, "HUD::scales offset");
-static_assert(__builtin_offsetof(HUD, m_TitleTexAlpha)     == 0x20, "HUD::m_TitleTexAlpha offset");
+static_assert(__builtin_offsetof(HUD, m_DrawAlpha)         == 0x20, "HUD::m_DrawAlpha offset");
 static_assert(__builtin_offsetof(HUD, m_globalTimeScale) == 0x24, "HUD::m_globalTimeScale offset");
 #endif
 

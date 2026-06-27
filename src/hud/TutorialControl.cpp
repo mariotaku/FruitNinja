@@ -112,6 +112,7 @@ bool TutorialControl::CanShowTute() {
     if (!game_work.pGameOverScreen) return false;
 
     if (!game_work.mHud) return false;
+    // TODO: v1.6.1 -- verify HUD alpha read +0x20 vs +0x24 (slow-mo) against the binary
     return game_work.mHud->m_globalTimeScale < 1.0f;
 }
 

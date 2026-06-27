@@ -502,6 +502,16 @@ fn_add_game_test(test_game_over test_game_over.cpp)
 add_test(NAME game_over COMMAND test_game_over)
 set_tests_properties(game_over PROPERTIES TIMEOUT 60)
 
+# HUD draw-alpha vs slow-mo field conflation regression guard.
+# Reproduces the bug where ScoreControl::Draw read HUD+0x24 (m_globalTimeScale,
+# slow-mo) instead of HUD+0x20 (per-frame draw-alpha) for score visibility.
+# Drives HUD::Update (writes draw-alpha) then simulates a slow-mo writer
+# (lowers +0x24 to 0.0) and asserts ScoreControl::m_DrawColour.a == 255.
+# FAILS before the fix (alpha ~0); PASSES after it.
+fn_add_game_test(test_hud_alpha test_hud_alpha.cpp)
+add_test(NAME hud_alpha COMMAND test_hud_alpha)
+set_tests_properties(hud_alpha PROPERTIES TIMEOUT 60)
+
 # Renderer 2D pixel-readback + golden-image suite (#225 regression guard).
 # Covers: solid tint, full-UV orientation, sub-rect UV (the #225 UV-convention
 # bug guard), alpha blend, draw_fullscreen_quad, DrawTriList.

@@ -3,8 +3,10 @@
 // Usage:
 //   test_scorecontrol [--screenshot|--interactive|--headless]
 //
-// Renders ScoreControl in component-isolation mode on a clean background.
-// Output (--screenshot): tmp/test/screenshots/scorecontrol/default.png
+// Renders ScoreControl in three cases and captures each to a PNG:
+//   scorecontrol/default    -- m_GameDt=1.0f (fully faded/game-over state)
+//   scorecontrol/active     -- m_GameDt=0.0f (active gameplay, score visible, no wordmark)
+//   scorecontrol/suppressed -- m_GameDt=-1.0f (camera pulled back, score fully suppressed)
 //
 // Isolation approach: InitComponent() (boot + 120 burn-in + HUD cleared),
 // then a ScoreControl is constructed and added as the sole HUD control.
@@ -13,13 +15,21 @@
 // State seeded:
 //   - currentScore  = 266
 //   - gameMode      = CLASSIC (0)
-//   - m_GameDt      = 1.0f   (fully faded / settled -- causes SCORE wordmark + live banner path)
 //   - m_SaveData    = local FruitSaveData with highscore 200 and newBestThisGame=1
 //     (currentScore 266 > highscore 200 -> NEW BEST path, S6 popup fires)
 //   - m_bDirty=1 (already set by ctor), so first Update snaps m_ScoreSmoothed to 266
 //
-// Renders S1 (score.tex wordmark), S2 (animated score number), S4 (BEST: banner),
-// and S6 (NEW BEST! IngamePopup popup via m_BannerScaleTime=1.0 seeded after Skip()).
+// "default" (m_GameDt=1.0f): renders S1 (score.tex wordmark), S2 (animated score number),
+//   S4 (BEST: banner), and S6 (NEW BEST! IngamePopup popup via m_BannerScaleTime=1.0 seeded
+//   after Skip()).
+//
+// "active" (m_GameDt=0.0f): renders S2 (score number) + watermelon icon only.
+//   The "SCORE" wordmark (Section D) is gated off (requires transTimer > 0.0).
+//   Binary draw gate: Draw() passes (m_GameDt >= -1.0), PreDraw Section A fires.
+//
+// "suppressed" (m_GameDt=-1.0f): Draw() passes (m_GameDt == -1.0, not < -1.0),
+//   PreDraw Section A fires (transTimer >= -1.0), but pos.x slides to -418 (fully
+//   off-screen). Section D and E are gated off. Effectively a blank frame.
 
 #include "test_harness.h"
 #include "hud/ScoreControl.h"
@@ -29,10 +39,22 @@
 #include "hud/HUDLayer.h"
 #include <cstdio>
 
+// Helper: print position fields for diagnostic logging.
+static void LogScoreControlPos(const char* caseName, ScoreControl* sc) {
+    std::printf("[scorecontrol/%s] pos=(%.2f, %.2f, %.2f)"
+                " m_DrawPosX=%.2f m_DrawPosY=%.2f m_DrawPosZ=%.2f"
+                " displayedScore=%d bannerScale=%.2f\n",
+                caseName,
+                sc->pos.x, sc->pos.y, sc->pos.z,
+                sc->m_DrawPosX, sc->m_DrawPosY, sc->m_DrawPosZ,
+                sc->m_DisplayedScore,
+                sc->m_BannerScaleTime);
+}
+
 int main(int argc, char* argv[]) {
+    // The harness label is used for the window title. Screenshots are written
+    // per-case with explicit nameOverride strings.
     fn::TestHarness h(argc, argv, "scorecontrol/default");
-    // 120 burn-in: lets fonts/textures load and IngamePopup build (BuildAllPopups is
-    // called from PreloadRings during GameInitialise, after the 120-frame burn-in start).
     h.SetInitFrames(120);
     if (!h.ParseFlags()) return 1;
     if (!h.InitComponent()) return 1;
@@ -42,73 +64,130 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Seed game_work state so ScoreControl renders all visible sub-elements.
-    // Classic mode with a score that beats the saved highscore.
-    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
-    game_work.currentScore = 266;
-    // m_GameDt=1.0f: fully faded in (transTimer > 0 path in Update/PreDraw).
-    // Section D score.tex wordmark is guarded by transTimer > 0.
-    game_work.m_GameDt     = 1.0f;
-    // bM_bPaused=0 so the highscore tracking branch fires each Update.
-    game_work.bM_bPaused   = 0;
-
-    // FruitSaveData with a highscore below currentScore so NEW BEST fires.
+    // Shared save data: highscore below currentScore so NEW BEST fires.
     FruitSaveData saveData;
     saveData.m_ModeHighScores[Mortar::GAME_MODE_CLASSIC] = 200; // 266 > 200 -> new best
-    saveData.newBestThisGame = 1;   // triggers S6 NEW BEST! IngamePopup in PreDraw
+    saveData.newBestThisGame = 1;
     FruitSaveData* prevSaveData = game_work.m_SaveData;
     game_work.m_SaveData = &saveData;
 
-    // Construct ScoreControl. Ctor loads score.tex, new_best_score.tex, hud_fruit.tex,
-    // and creates m_pScoreBox (SCORE wordmark baked string box).
-    ScoreControl* sc = new ScoreControl();
-
-    // Layer 0x01 (HUD_LAYER_DEFAULT) -- the steady-state layer for m_PlayerIdx=0
-    // (set by Reset() -> m_LayerFlags = 1 << m_PlayerIdx = 1).
-    // RunComponentHeadless uses layerMask=0x7FFFFFFF so all layers draw.
-    sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
-
-    // Call Skip() to force m_BannerScaleTime=1.0f (NEW BEST path from m_SaveData).
-    // Skip() is the binary's end-of-game fast-path that bypasses the gradual banner
-    // animation ramp and immediately sets the scale to 1.0f.
-    sc->Skip();
-
-    // Add as the only control in the isolated HUD.
-    game_work.mHud->AddControl(sc);
-
-    if (h.IsInteractive()) {
-        // Interactive: run indefinitely so the tester can watch the score animate.
-        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
-        game_work.m_SaveData = prevSaveData;
-        return h.Shutdown();
-    }
-
-    // Headless: drive 60 frames to let Update animate score-easing, pulse decay,
-    // banner animation, and digit-alpha cascade to their settled states.
-    // Per-frame: keep m_GameDt=1.0f (settles the SCORE wordmark / banner path)
-    //            and reset m_bPendingRemoval so the control isn't removed
-    //            (ScoreControl removes itself only for P2 in non-multiplayer; P1 is safe).
-    for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt = 1.0f;
-        // Keep currentScore constant so the smooth-lerp settles to 266.
+    // -------------------------------------------------------------------------
+    // Case 1: "default" -- m_GameDt=1.0f (fully faded, game-over state)
+    // Same setup as the original single-case test.
+    // -------------------------------------------------------------------------
+    {
+        game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
         game_work.currentScore = 266;
+        game_work.m_GameDt     = 1.0f;
+        game_work.bM_bPaused   = 0;
+
+        ScoreControl* sc = new ScoreControl();
+        sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+        // Skip() forces m_BannerScaleTime=1.0f (NEW BEST path from m_SaveData).
+        sc->Skip();
+        game_work.mHud->AddControl(sc);
+
+        for (int i = 0; i < 60; ++i) {
+            game_work.m_GameDt     = 1.0f;
+            game_work.currentScore = 266;
+            h.RunComponentHeadless(1, 0x7FFFFFFF);
+        }
+
+        LogScoreControlPos("default", sc);
+
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("scorecontrol/default")) {
+                game_work.m_SaveData = prevSaveData;
+                return 3;
+            }
+        }
+
+        // Remove sc from the HUD before the next case. Mark no-destructor so
+        // HUD::Release doesn't double-free -- we let the next Reset re-add.
+        sc->m_bPendingRemoval = 1;
+        // Drive one frame to let HUD process the pending removal.
         h.RunComponentHeadless(1, 0x7FFFFFFF);
+        std::printf("PASS: scorecontrol/default complete\n");
     }
 
-    std::printf("[scorecontrol/default] stable state reached"
-                " (displayedScore=%d, bannerScale=%.2f, highscore=%d)\n",
-                sc->m_DisplayedScore,
-                sc->m_BannerScaleTime,
-                saveData.m_ModeHighScores[Mortar::GAME_MODE_CLASSIC]);
+    // -------------------------------------------------------------------------
+    // Case 2: "active" -- m_GameDt=0.0f (active gameplay)
+    // Score number + watermelon icon render; SCORE wordmark (Section D) is OFF.
+    // Expected: m_DrawPosX = SCORE_BASE_POS_X + 24 = -218 + 24 = -194
+    // -------------------------------------------------------------------------
+    {
+        game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
+        game_work.currentScore = 266;
+        game_work.m_GameDt     = 0.0f;
+        game_work.bM_bPaused   = 0;
 
-    if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) {
-            game_work.m_SaveData = prevSaveData;
-            return 3;
+        ScoreControl* sc = new ScoreControl();
+        sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+        // Do NOT call Skip() -- at m_GameDt=0.0 the banner is already gated off
+        // (wantBanner requires waveTimer > SCORE_BANNER_TIMER_THRESH ~= 1.0).
+        // m_BannerScaleTime starts at -2.0 from ctor, decays further, stays hidden.
+        game_work.mHud->AddControl(sc);
+
+        for (int i = 0; i < 60; ++i) {
+            game_work.m_GameDt     = 0.0f;
+            game_work.currentScore = 266;
+            h.RunComponentHeadless(1, 0x7FFFFFFF);
         }
+
+        LogScoreControlPos("active", sc);
+
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("scorecontrol/active")) {
+                game_work.m_SaveData = prevSaveData;
+                return 3;
+            }
+        }
+
+        sc->m_bPendingRemoval = 1;
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        std::printf("PASS: scorecontrol/active complete\n");
+    }
+
+    // -------------------------------------------------------------------------
+    // Case 3: "suppressed" -- m_GameDt=-1.0f (camera pulled back / menu state)
+    // Draw() gate: m_GameDt < -1.0f returns early -- at exactly -1.0f it does
+    // NOT return early (strict less-than). However pos.x slides to
+    //   SCORE_BASE_POS_X - SCORE_MP_X_STRIDE * abs(-1.0) = -218 - 200 = -418
+    // which is fully off-screen (screen half-width = 240 in Y, 160 in X).
+    // Section D (score.tex) is gated off (transTimer > 0 fails at -1.0).
+    // Section E (banner) is also gated off (m_BannerScaleTime stays <= 0).
+    // Expected: a blank/empty frame.
+    // -------------------------------------------------------------------------
+    {
+        game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
+        game_work.currentScore = 266;
+        game_work.m_GameDt     = -1.0f;
+        game_work.bM_bPaused   = 0;
+
+        ScoreControl* sc = new ScoreControl();
+        sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+        game_work.mHud->AddControl(sc);
+
+        for (int i = 0; i < 60; ++i) {
+            game_work.m_GameDt     = -1.0f;
+            game_work.currentScore = 266;
+            h.RunComponentHeadless(1, 0x7FFFFFFF);
+        }
+
+        LogScoreControlPos("suppressed", sc);
+
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("scorecontrol/suppressed")) {
+                game_work.m_SaveData = prevSaveData;
+                return 3;
+            }
+        }
+
+        sc->m_bPendingRemoval = 1;
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        std::printf("PASS: scorecontrol/suppressed complete\n");
     }
 
     game_work.m_SaveData = prevSaveData;
-    std::printf("PASS: scorecontrol/default screenshot complete\n");
     return h.Shutdown();
 }

@@ -578,9 +578,11 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
             ? ((float)img.m_Tint.a * img.m_CurrentVis)
             : (float)img.m_Tint.a;
         if (alpha < 0.0f) alpha = 0.0f;
-        // TODO: v1.6.1 @0x00148844 -- binary reads hud->alpha (HUD+0x24) and multiplies
-        //   into alpha here. Port's HUD+0x24 = m_globalTimeScale (slow-motion; not a
-        //   global alpha). Semantic mismatch -- skip multiplication until field is RE'd.
+        // TODO: v1.6.1 @0x00148844 -- binary reads hud+0x24 and multiplies into alpha.
+        //   HUD+0x24 = m_globalTimeScale (slow-mo), HUD+0x20 = m_DrawAlpha (per-frame draw-alpha).
+        //   RE-confirmed: v1.6.1 HUD::Update @0x0018c44c writes 1.0 to +0x20; ScoreControl/
+        //   MissControl read +0x20. Need to verify whether ScreenEffect reads +0x20 or +0x24.
+        // TODO: v1.6.1 -- verify HUD alpha read +0x20 vs +0x24 (slow-mo) against the binary
         img.m_pHudCtrl->m_DrawColour = Colour(
             img.m_Tint.r,
             img.m_Tint.g,
