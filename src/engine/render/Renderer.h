@@ -32,7 +32,7 @@ struct Renderer {
     void draw_fullscreen_quad(GLuint tex, float alpha = 1.0f);
 
     // Matches DrawQuadUnCached — draws unit quad transformed by current MVP.
-    // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060: args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
+    // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
     void DrawQuad(const Colour& tint, float uMin = 0.0f, float uMax = 1.0f,
                   float vMin = 0.0f, float vMax = 1.0f);
 

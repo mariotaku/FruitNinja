@@ -23,9 +23,10 @@
 //   __WeakReferenceData* and add the 16-byte control block class.
 //   __WeakReferenceData is currently UNPORTED (no port consumers).
 //
-// DIFFERS: binary v1.6.1 AddRef/Release @0x1194f4 use InterlockedUNumber::Increment/Decrement
+// DIFFERS: binary v1.6.1 AddRef/Release use InterlockedUNumber::Increment/Decrement
 //   (Bada OSAL atomics). Port uses plain ++/-- (single-threaded; Job system unported).
-//   v1.6.1 AddRef @ 0x1194f4; __GetWeakRefData @ 0x2275d4.
+//   v1.6.1 Mortar::__ReferenceCounterData::AddRef @0x001194f4; __GetWeakRefData @0x002275d4.
+//   Release has no standalone symbol (decrement is inlined at call sites).
 
 namespace Mortar {
 

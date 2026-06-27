@@ -371,14 +371,14 @@ void Mesh::DrawQuad(Colour colour, SmartPtr<Texture> texture,
     texture->UnSet();
 }
 
-// Binary @ 0x00194180
+// Binary @ 0x00240be4 (v1.6.1 Mesh::DrawQuadUnCached(Colour,DrawEffectContainer*))
 void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
     DrawQuadUnCached(colour, 0.0f, 1.0f, 0.0f, 1.0f, fx);
 }
 
-// Binary @ 0x00194060
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00194060 (re-analyst)
-// ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060: args are (colour,uMin,uMax,vMin,vMax,fx).
+// Binary @ 0x00240a70
+// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawQuadUnCached @0x00240a70 (re-analyst)
+// ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: args are (colour,uMin,uMax,vMin,vMax,fx).
 void Mesh::DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, float vMax,
                              DrawEffectContainer* /*fx*/) {
     // Port specific: binary @ 0x00194060 gates GL_BLEND via fixed-function glState<3042>:

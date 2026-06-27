@@ -345,10 +345,11 @@ ScreenEffect::ScreenEffect(const ScreenEffect& rhs)
         m_Sounds[i].m_VoiceHandle = nullptr;
 }
 
-// Binary @ 0x0011d5a0 -- "compact push/pop" = just member destruction.
+// Binary @ 0x00148728 -- "compact push/pop" = just member destruction.
 // Deactivate() is called by external callers (PowerUpManager) before destruction;
 // the dtor trusts member destructors for std::vector and SmartPtr cleanup.
-// ASM-spec v1.6.1 ScreenEffect::~ScreenEffect @ 0x0011d5a0
+// Complete-object dtor (D1); base/deleting variant is the sibling at 0x00148794.
+// ASM-spec v1.6.1 ScreenEffect::~ScreenEffect @0x00148728
 ScreenEffect::~ScreenEffect() {
 }
 

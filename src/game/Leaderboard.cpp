@@ -7,12 +7,12 @@ int GetCurrentModeLeaderboardID(int /*playerIdx*/) {
     return 0;
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 GetLeaderboardID @0x0011f460
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetLeaderboardID @0x00116de4
 int GetLeaderboardID(int /*mode*/, int /*variant*/) {
     return 0;
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 GetTotalFruitLeaderboardId @0x0011f480
+// Defunct: online leaderboard -- no-op stub; v1.6.1 GetTotalFruitLeaderboardId @0x00116e80
 int GetTotalFruitLeaderboardId(int /*variant*/) {
     return 0;
 }
