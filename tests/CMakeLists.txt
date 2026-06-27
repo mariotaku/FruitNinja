@@ -527,3 +527,17 @@ add_test(NAME renderer COMMAND test_renderer)
 set_tests_properties(renderer PROPERTIES
     TIMEOUT 60 SKIP_RETURN_CODE 77
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Font alignment pixel-readback test (guards RE-confirmed binary semantics).
+# Renders "123" at a known anchor X with each alignment flag via Font::DrawString
+# (the same path ScoreControl's score digits use) into an offscreen FBO, then reads
+# pixels to find the glyph bounding box and asserts LEFT/RIGHT/CENTER placement.
+# Key assertion: align=0x0D (ScoreControl's score flag) must render LEFT-anchored.
+# Uses fn_add_game_test (full game boot) so pFontNumbers is loaded; the test itself
+# uses an FBO for isolation rather than the window framebuffer.
+# Exits 77 (CTest SKIP) if no GL context is available.
+fn_add_game_test(test_font_align test_font_align.cpp)
+add_test(NAME font_align COMMAND test_font_align)
+set_tests_properties(font_align PROPERTIES
+    TIMEOUT 60 SKIP_RETURN_CODE 77
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
