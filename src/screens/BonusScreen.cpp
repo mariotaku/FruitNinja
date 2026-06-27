@@ -244,7 +244,9 @@ void BonusScreen::BuildBonusText() {
     // m_ScoreBox (+0xB8): the "_ BONUS _" title drawn at top of board pos+(105,+51).
     // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b:
     //   fontSize=30, w=220, h=30, align=0x0F, text=sprintf("_ %s _", GETSTRING(0x31E)),
-    //   gradient yellow->orange, stroke(1-colour) 2.0, shadow 5.0 offset Vec3(0,-3,0). STATIC.
+    //   gradient red->dark-red (top 0xFF0000, bottom 0xB40000),
+    //   stroke(2-colour) 2.0 gold (0xFFDC50, 0xFFC887),
+    //   shadow 5.0 brown 0x5D280C offset Vec3(0,-3,0). STATIC.
     if (!m_ScoreBox) {
         m_ScoreBox = new Mortar::BakedStringBox(
             font,
@@ -257,11 +259,13 @@ void BonusScreen::BuildBonusText() {
             0
         );
         m_ScoreBox->SetGradient(
-            Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)
-            Colour(0xEF, 0x77, 0x00, 0xFF),   // orange bottom: RGB(0xEF,0x77,0x00)
+            Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
+            Colour(0xB4, 0x00, 0x00, 0xFF),   // dark-red bottom: RGB(0xB4,0x00,0x00)
             false
         );
-        m_ScoreBox->SetStroke(2.0f, Colour(0xDC, 0x13, 0x00, 0xFF));
+        m_ScoreBox->SetStroke(2.0f,
+            Colour(0xFF, 0xDC, 0x50, 0xFF),   // gold inner: RGB(0xFF,0xDC,0x50)
+            Colour(0xFF, 0xC8, 0x87, 0xFF));  // gold outer: RGB(0xFF,0xC8,0x87)
         m_ScoreBox->SetShadow(
             5.0f,
             Colour(0x5D, 0x28, 0x0C, 0xFF),
@@ -278,7 +282,8 @@ void BonusScreen::BuildBonusText() {
     // m_TotalBox (+0xBC): raw "TOTAL" label drawn at bottom of board pos+(75,-128).
     // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b:
     //   fontSize=20, w=90, h=20, align=0x0F, text=GETSTRING(0x31F) raw (NO wrapper),
-    //   gradient red->dark-red, stroke(single-colour) 2.0, NO shadow. STATIC.
+    //   gradient yellow->orange (top 0xFFEF00, bottom 0xEF7700),
+    //   stroke(single-colour) 2.0 red-orange 0xDC1300, NO shadow. STATIC.
     if (!m_TotalBox) {
         m_TotalBox = new Mortar::BakedStringBox(
             font,
@@ -291,8 +296,8 @@ void BonusScreen::BuildBonusText() {
             0
         );
         m_TotalBox->SetGradient(
-            Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
-            Colour(0xB4, 0x00, 0x00, 0xFF),   // red bottom: RGB(0xB4,0x00,0x00)
+            Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)
+            Colour(0xEF, 0x77, 0x00, 0xFF),   // orange bottom: RGB(0xEF,0x77,0x00)
             false
         );
         m_TotalBox->SetStroke(2.0f, Colour(0xDC, 0x13, 0x00, 0xFF));
