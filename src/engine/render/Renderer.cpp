@@ -130,7 +130,7 @@ void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
-// ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00194060 (binary 0x00240a70): UV args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
+// ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: UV args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
 void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, float vMax) {
     // Unit quad (-0.5..0.5) transformed by current matrix stack MVP.
     // Vertex UV table matches binary DrawQuadUnCached: BL=(uMin,vMax), BR=(uMax,vMax), TL=(uMin,vMin), TR=(uMax,vMin).

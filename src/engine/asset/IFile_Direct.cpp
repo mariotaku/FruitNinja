@@ -48,7 +48,7 @@ bool IFile_Direct::Read(void* dst, unsigned long n) {
 
 // Binary @ IFile vtbl+0x14 (IFile_Direct slot 5) — encryption path; defunct, delegate to Write
 bool IFile_Direct::WriteEncrypted(const void* src, unsigned long n) {
-    // Defunct: encryption — WriteEncrypted; v1.6.1 IFile_Direct @ 0x001eb3b8 +0x14
+    // Defunct: encryption — WriteEncrypted (v1.6.1: encryption defunct — IFile vtable slot +0x14, no standalone symbol)
     // DIFFERS: original may encrypt, using plain Write because encryption is defunct.
     return Write(src, n);
 }

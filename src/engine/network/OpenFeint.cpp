@@ -11,7 +11,8 @@ void OpenFeintOnline() {
 void UserChoseOpenFeint(int /*choice*/) {
 }
 
-// Defunct: GameCenter -- no-op stub; v1.6.1 ConnectGameCenter @0x0011f150
+// Defunct: GameCenter -- no-op stub; v1.6.1 ConnectGameCenter @0x0011a200
+// (free-fn shim that calls NetworkManager::GetInstance()->ConnectGameCenter())
 void ConnectGameCenter() {
 }
 
