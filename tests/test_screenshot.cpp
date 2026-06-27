@@ -12,8 +12,9 @@
 //   gameover_arcade     -> gameover/arcade
 //   drawquad            -> drawquad/default
 //   mesh                -> mesh/default
-//   fruitfact           -> fruitfact/default
 //   gameover_withscore  -> temp/gameover_with_scorecontrol  (ScoreControl in full game-over flow)
+//
+// FruitFact per-mode screenshots have moved to test_fruitfact (classic/arcade/zen).
 //
 // Adding more screens later: add a ScreenCase entry to the dispatch table
 // and implement its fixture function below.
@@ -21,8 +22,6 @@
 #include "test_harness.h"
 #include "screens/BonusScreen.h"
 #include "screens/GameOverScreen.h"
-#include "screens/FruitFactClassicFactPage.h"
-#include "hud/FruitFactPageControl.h"
 #include "hud/ScoreControl.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
@@ -52,7 +51,6 @@ static int RunGameOverZen(fn::TestHarness& h);
 static int RunGameOverArcade(fn::TestHarness& h);
 static int RunDrawQuad(fn::TestHarness& h);
 static int RunMesh(fn::TestHarness& h);
-static int RunFruitFact(fn::TestHarness& h);
 static int RunGameOverWithScore(fn::TestHarness& h);
 
 // ---------------------------------------------------------------------------
@@ -71,7 +69,6 @@ static const ScreenCase kScreens[] = {
     { "gameover_arcade",    "gameover/arcade",             RunGameOverArcade    },
     { "drawquad",           "drawquad/default",            RunDrawQuad          },
     { "mesh",               "mesh/default",                RunMesh              },
-    { "fruitfact",          "fruitfact/default",           RunFruitFact         },
     { "gameover_withscore", "temp/gameover_with_scorecontrol",    RunGameOverWithScore },
     // TODO: fixture for shop
     { NULL, NULL, NULL }
@@ -83,8 +80,9 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
-        "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh fruitfact\n"
-        "           gameover_withscore\n");
+        "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh\n"
+        "           gameover_withscore\n"
+        "  (fruitfact per-mode: see test_fruitfact classic|arcade|zen)\n");
     return 1;
 }
 
@@ -645,97 +643,6 @@ mesh_done:
 
     std::printf("PASS: mesh/default complete\n");
     return 0;
-}
-
-// ---------------------------------------------------------------------------
-// FruitFact fixture -- renders the FruitFactPageControl (parchment board +
-// sensei head + fact text) with two registered pages so the left/right nav
-// arrows appear.
-//
-// Approach: drive via GameOverScreen (Classic mode, STATE_MAIN_DISPLAY) to
-// let the game's normal path create FruitFactPageControl + FruitFactClassicFactPage
-// (page 0). After the first settle phase, a second FruitFactClassicFactPage is
-// injected directly into ctrl->m_Pages (without AddControl or Init) so that
-// m_Pages.size() > 1 causes FruitFactPageControl::Update to create the
-// left/right nav arrow MenuButtons on subsequent settle frames.
-//
-// Using GameOverScreen ensures GameOverScreen::LoadContent() is called internally
-// (populates sensei head/body textures) and that the full HUD layer wiring
-// is identical to the gameover/classic fixture.
-// ---------------------------------------------------------------------------
-static int RunFruitFact(fn::TestHarness& h) {
-    if (!game_work.mHud) {
-        std::fprintf(stderr, "FAIL: mHud null after boot\n");
-        return 1;
-    }
-
-    // Classic mode, score 321.
-    game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
-    game_work.currentScore = 321;
-    game_work.m_GameDt     = 1.0f;
-
-    GameOverScreen* gos = new GameOverScreen(
-        "Classic",
-        GameOverScreen::STATE_MAIN_DISPLAY,
-        0.0f,
-        1,  // expressionIdx (0 clamped to 1 by Initialise)
-        1,  // bgPatternIdx
-        0,  // tabIndex
-        0); // starCount
-
-    gos->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT;
-    game_work.pGameOverScreen = gos;
-    game_work.mHud->AddControl(gos);
-
-    if (h.IsInteractive()) {
-        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
-        return h.Shutdown();
-    }
-
-    // Settle 1 frame: the Initialise fast-path already called Update(0.0f)
-    // which creates m_pFruitFact + m_pClassicFactPage. One more frame fully
-    // wires up the HUD and starts the alpha ramp.
-    for (int i = 0; i < 1; ++i) {
-        game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadlessMultiPass(1);
-    }
-
-    // m_pFruitFact is created by the Initialise fast-path Update.
-    FruitFactPageControl* ctrl = gos->m_pFruitFact;
-    if (!ctrl) {
-        std::fprintf(stderr, "FAIL: m_pFruitFact not created\n");
-        return 2;
-    }
-
-    // Inject a second page directly into ctrl->m_Pages (not via AddControl/Init)
-    // so m_Pages.size() > 1 and FruitFactPageControl::Update creates the arrows.
-    // page2 is intentionally NOT added to the HUD to keep it invisible; only its
-    // presence in m_Pages matters for the arrow-creation gate.
-    FruitFactClassicFactPage* page2 = new FruitFactClassicFactPage(ctrl, 0, 0);
-    ctrl->m_Pages.push_back(page2);
-    page2->HidePage();       // m_Active = 0 (not the current page at index 0)
-    page2->size = ctrl->size;
-
-    // Settle 60 frames with per-layer passes so:
-    //   (a) FruitFactPageControl::Update (frame 1) creates m_NextButton / m_PrevButton,
-    //   (b) MenuButton BeginDraw/Draw/Update cycles fully render the scratch backdrop
-    //       and button face via the multi-pass layer order (0x40->0x80->...).
-    for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt = 1.0f;
-        h.RunComponentHeadlessMultiPass(1);
-    }
-
-    std::printf("[fruitfact/default] stable state reached (pages=%d, arrows=%s, gos_state=%d)\n",
-                ctrl ? (int)ctrl->m_Pages.size() : -1,
-                (ctrl && ctrl->m_NextButton != NULL) ? "yes" : "no",
-                gos->m_State);
-
-    if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
-    }
-
-    std::printf("PASS: fruitfact/default screenshot complete\n");
-    return h.Shutdown();
 }
 
 // ---------------------------------------------------------------------------
