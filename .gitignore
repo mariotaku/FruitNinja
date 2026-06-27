@@ -9,6 +9,8 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 *.cbp
+# Local CMake preset override (machine-specific VCPKG_ROOT path)
+CMakeUserPresets.json
 
 # IDE
 .idea/

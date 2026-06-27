@@ -1,0 +1,48 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "vcpkg-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "host",
+      "displayName": "Debug (vcpkg, MSVC/Ninja)",
+      "description": "Native host Debug build. Mirrors the CLion 'Debug-Visual Studio' profile: build/host, MSVC toolchain (run from a VS Developer prompt or CLion's Visual Studio toolchain), vcpkg via $env{VCPKG_ROOT}. Deps are classic-mode (vcpkg install sdl2 sdl2-image freetype tinyxml2); CMake falls back to FetchContent for any not installed.",
+      "inherits": "vcpkg-base",
+      "binaryDir": "${sourceDir}/build/host",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "host-release",
+      "displayName": "Release (vcpkg, MSVC/Ninja)",
+      "description": "Native host Release build (build/host-release).",
+      "inherits": "vcpkg-base",
+      "binaryDir": "${sourceDir}/build/host-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host", "configurePreset": "host" },
+    { "name": "host-release", "configurePreset": "host-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "host",
+      "configurePreset": "host",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    }
+  ]
+}
