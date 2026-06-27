@@ -21,6 +21,9 @@ What "stub" means concretely:
 
 What "skip" would have meant (NOT what we do): omitting the class entirely so call sites in surrounding code need to be deleted or guarded with `#ifdef`s. Don't do this.
 
+**Defunct UI is still DRAWN — when the target binary actually draws it.** Stubbing the *logic* never means dropping the *visuals*. If a defunct feature has in-game UI that **the v1.6.1 target's call graph actually instantiates and draws** — a button, a navigable page in a carousel, a badge, a banner, a menu entry — port that UI as a **visible stub**: it must appear on screen exactly as the original drew it (same texture, position, layer), even though tapping/activating it is a no-op. The handler is a no-op; the draw is faithful.
+  - **The test is "does v1.6.1 draw it," not "does the class exist."** A defunct class that is *linked-but-unreferenced* in v1.6.1 (zero call-site xrefs — present only as RTTI/vtable relics from other SKUs/older builds) is **dead code, not in-game UI**. Do NOT instantiate it to force visuals the v1.6.1 binary never shows — that's a band-aid that *adds* divergence. (Concrete case: the game-over fact-board nav arrows. They only appear when >1 page is registered; v1.6.1 registers exactly one page per mode and the multi-page classes — `FruitFactLeaderboard`/`FruitFactRewardsPage`/etc. — have no call sites, so v1.6.1 shows **no arrows**. The port correctly shows none. Restoring them would be a `// DIFFERS:` enhancement, not fidelity.)
+
 ## No band-aid fixes
 
 When a port-side bug is identified, the fix is to **RE the binary correctly and port it faithfully**, NOT to apply an empirical workaround that happens to make the visible symptom go away.
