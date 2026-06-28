@@ -48,6 +48,7 @@
 #include "asset/FileManager.h"
 #include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
+#include "PreloadFontsTTF.h"
 #include "hud/IngamePopup.h"
 #include "util/StringTable.h"
 #include "util/Localisation.h"
@@ -327,6 +328,11 @@ void GameInitialise(void* window, const char* config) {
         }
     }
 
+    // PreloadFontsTTF (binary @0x0011c1fc, called from InitialiseData @0x0011c3f0):
+    // populates game_work.m_pTTFFontMain with the localized TTF face.
+    // Must run before MenuButton::LoadContent so GetSharedTTFFont() finds it.
+    PreloadFontsTTF();
+
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas SmartPtr slot).
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();
@@ -413,7 +419,7 @@ void GameDestroy() {
     // TutorialControl is a HUDControl — destroyed by HUD teardown above.
     game_work.m_TutorialControl = nullptr;
 
-    // --- 6. Fonts (field_0x50..0x80, 11 Font* slots) ---
+    // --- 6. Fonts (field_0x50..0x80, 11 Font* slots + TTF slot at +0x614) ---
     // Matches GameDestroy @ 0x0010b7ec font teardown sequence.
     // Reserved slots (pFontReserved0, pFontReserved1, pFontReserved2) are already null.
     // Slots +0x70..+0x7C: binary iterates and skips deletion if ptr == pFontArcade (alias).
@@ -424,6 +430,11 @@ void GameDestroy() {
     //   else if slot_ptr != null: Font::~Font + operator_delete + null
     // SmartPtr assignment to null handles this correctly for non-aliases.
     // For aliases: SmartPtr operator= already handles ref-count safely.
+    //
+    // +0x614 m_pTTFFontMain: binary GameDestroy @0x0011d20c clears the raw ptr.
+    // Port: null the raw ptr. The owning s_TTFFontMain SmartPtr lives in
+    // PreloadFontsTTF.cpp and is released at process exit / next PreloadFontsTTF call.
+    game_work.m_pTTFFontMain = 0;
     game_work.pFontGold.SetNull();
     game_work.pFontSilver.SetNull();
     game_work.pFontBronze.SetNull();

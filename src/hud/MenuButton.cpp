@@ -37,11 +37,14 @@
 #include "hud/IngamePopup.h"
 
 namespace {
-// Shared TTF face (gangofchinese.ttf) for MenuButton BakedStringTTF labels.
-// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext,
-//   using a file-local shared SmartPtr<Font> + FontTTFRegistry::Lookup because
-//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+// Shared TTF face for MenuButton BakedStringTTF labels.
+// Binary: reads *(g_GameData+0x614) -- the shared localized TTF face loaded once
+//   by PreloadFontsTTF @0x0011c1fc (gangofchinese.ttf or arabic.ttf).
+// Port: returns game_work.m_pTTFFontMain (populated at GameInitialise time by
+//   PreloadFontsTTF, before MenuButton::LoadContent is called). Falls back to a
+//   lazy local load if somehow null (e.g. TTF file missing).
 static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
+    if (game_work.m_pTTFFontMain) return game_work.m_pTTFFontMain;
     static Mortar::SmartPtr<Mortar::Font> s_TTFFont =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_TTFFont.IsValid()) return 0;
