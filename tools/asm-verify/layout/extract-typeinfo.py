@@ -15,7 +15,7 @@ Per-class type_info kinds (vptr field's reloc names the abi vtable):
 Output JSON: { "Qualified::Class": {
     "mangled_zti", "kind", "bases": [ {name, mangled_zti, offset, virtual, public} ] } }
 
-Usage: extract-typeinfo.py --binary tmp/FruitNinja_v1_6_1.exe --out tmp/typeinfo-tree.json
+Usage: extract-typeinfo.py --binary FruitNinjaBada/Bin/FruitNinja.exe --out tmp/typeinfo-tree.json
 """
 import argparse, json, struct, sys
 
@@ -62,7 +62,7 @@ def demangle_type(sym):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--binary", default="tmp/FruitNinja_v1_6_1.exe")
+    ap.add_argument("--binary", default="FruitNinjaBada/Bin/FruitNinja.exe")
     ap.add_argument("--out", default="tmp/typeinfo-tree.json")
     a = ap.parse_args()
 

@@ -17,7 +17,7 @@ for readability via the toolchain c++filt in the fnverify-bada image. Noise
 (vtables/typeinfo/guards, std::, __gnu_cxx, __cxxabi, SDL, ARM mapping) filtered.
 
 Usage:
-  compare-globals.py --binary tmp/FruitNinja_v1_6_1.exe \
+  compare-globals.py --binary FruitNinjaBada/Bin/FruitNinja.exe \
       --port-so tmp/fnverify.arm.so --out tmp/asm-verify/globals-diff.csv
 """
 import argparse, os, subprocess, sys, csv
@@ -106,7 +106,7 @@ def is_behavioral_candidate(dm):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--binary", default="tmp/FruitNinja_v1_6_1.exe")
+    ap.add_argument("--binary", default="FruitNinjaBada/Bin/FruitNinja.exe")
     ap.add_argument("--port-so", default="tmp/fnverify.arm.so")
     ap.add_argument("--image", default="fnverify-bada", help="c++filt image, or 'none'")
     ap.add_argument("--out", default="tmp/asm-verify/globals-diff.csv")

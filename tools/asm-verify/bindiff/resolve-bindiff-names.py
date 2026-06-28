@@ -22,7 +22,7 @@ Output (sorted by similarity, deduped by binary link-time addr):
   similarity,confidence,instructions,binary_mode,binary_addr,binary_name,port_addr,port_name
 
 Usage:
-  resolve-bindiff-names.py --binary tmp/FruitNinja_v1_6_1.exe \
+  resolve-bindiff-names.py --binary FruitNinjaBada/Bin/FruitNinja.exe \
       --port-so tmp/fnverify.arm.so \
       --dbs 'tmp/bindiff-out/binary_vs_*.BinDiff' \
       --out tmp/bindiff-out/divergences-named.csv
@@ -114,7 +114,7 @@ def bulk_demangle(names, image):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--binary", default="tmp/FruitNinja_v1_6_1.exe")
+    ap.add_argument("--binary", default="FruitNinjaBada/Bin/FruitNinja.exe")
     ap.add_argument("--port-so", default="tmp/fnverify.arm.so")
     ap.add_argument("--dbs", default="tmp/bindiff-out/binary_vs_*.BinDiff",
                     help="glob of .BinDiff sqlite DBs")

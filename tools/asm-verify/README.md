@@ -41,7 +41,7 @@ parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
 
 | Item | Location | Commits? |
 |------|----------|----------|
-| Binary v1.6.1 (target) | `tmp/FruitNinja_v1_6_1.exe` | No (gitignored) |
+| Binary v1.6.1 (target) | `FruitNinjaBada/Bin/FruitNinja.exe` | No (gitignored) |
 | Cross-build manifest | `manifest.generated.toml` | No (gitignored) |
 | Triage verdicts (sticky per `asm_hash`) | `triage.json` | **Yes** (fidelity record) |
 | asm-verify report | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |

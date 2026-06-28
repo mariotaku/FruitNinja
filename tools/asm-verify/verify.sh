@@ -26,13 +26,11 @@ rsync -aq --delete \
     "$PROJECT/" "$SRC/"
 
 mkdir -p "$SRC/FruitNinjaBada/Bin"
-# v1.6.1 verification target (port + RE both target v1.6.1). tmp/ is excluded
-# from the staging rsync, but /work (the read-only project bind-mount) has it;
-# copy onto the ext4 staging volume so the i386 objdump can stat() it.
-cp -u "$PROJECT/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/"
+# FruitNinjaBada/Bin/FruitNinja.exe is the canonical v1.6.1 binary and is
+# included in the rsync above (only tmp/ is excluded), so no explicit copy needed.
 
 # Pipeline env (Python tools read these).
-export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja_v1_6_1.exe"
+export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja.exe"
 # Use the Samsung Sourcery GCC 4.4.1 toolchain (matching the binary's compiler
 # family -- the binary's .comment is Samsung build 4.4-261/4.4-327) from the
 # ghcr.io/mariotaku/bada-sdk:1.1.0 base baked into the fnverify-bada image.

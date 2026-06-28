@@ -26,7 +26,7 @@ TMP="$ROOT/tmp"
 OUTDIR="$TMP/bindiff-out"
 mkdir -p "$OUTDIR"
 
-BINARY_EXE="$TMP/FruitNinja_v1_6_1.exe"
+BINARY_EXE="$ROOT/FruitNinjaBada/Bin/FruitNinja.exe"
 BINARY_BX="$TMP/binary.cli.BinExport"          # cached binary export (reused)
 : "${BUILD_IMAGE:=fnverify-bada}"
 : "${EXPORT_IMAGE:=ghcr.io/mariotaku/binexport-cli:arm}"
@@ -104,8 +104,22 @@ echo "=== stage 2: export to BinExport ==="
 export_bx "fnverify.arm.so"   "fnverify.arm.BinExport"
 export_bx "fnverify.thumb.so" "fnverify.thumb.BinExport"
 if [ ! -f "$BINARY_BX" ]; then
-  echo "(binary BinExport missing -- exporting the .exe, this takes a few minutes)"
-  export_bx "$(basename "$BINARY_EXE")" "$(basename "$BINARY_BX")"
+  echo "(binary BinExport missing -- exporting FruitNinjaBada/Bin/FruitNinja.exe, takes a few minutes)"
+  # The binary lives in $ROOT (not $TMP), so we can't use export_bx() which only
+  # mounts $TMP. Mount the binary's parent dir as /bin_in and $TMP for output.
+  _bx_log="$TMP/export-binary.cli.BinExport.log"
+  if ! docker run --rm \
+        -v "$(win "$ROOT/FruitNinjaBada/Bin")":/bin_in:ro \
+        -v "$(win "$TMP")":/work \
+        "$EXPORT_IMAGE" \
+        "/bin_in/FruitNinja.exe" "/work/$(basename "$BINARY_BX")" prepend-namespace \
+        > "$_bx_log" 2>&1; then
+    echo "  EXPORT FAILED (docker exit) -- see tmp/$(basename "$_bx_log")" >&2
+    grep -iE "error|exception|traceback" "$_bx_log" | tail -5 >&2 || true
+    exit 1
+  fi
+  grep -iE "wrote|error:" "$_bx_log" | tail -1 || true
+  [ -f "$BINARY_BX" ] || { echo "  EXPORT FAILED -- binary.cli.BinExport not produced" >&2; exit 1; }
 fi
 
 if [ "$TWINS_ONLY" -eq 1 ]; then

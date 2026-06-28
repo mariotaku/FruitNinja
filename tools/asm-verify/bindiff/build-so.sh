@@ -10,7 +10,7 @@ BUILD=/build
 HOST="${HOST:-/work}"
 rsync -aq --delete --exclude=build --exclude=tmp --exclude=.git --exclude=node_modules --exclude=_deps "$HOST/" "$SRC/"
 mkdir -p "$SRC/FruitNinjaBada/Bin"
-cp "$HOST/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/" 2>/dev/null || true
+# FruitNinjaBada/Bin/FruitNinja.exe is the canonical binary; rsync staged it above.
 
 # Configure and build .o files (OBJECT library)
 mkdir -p "$BUILD"
