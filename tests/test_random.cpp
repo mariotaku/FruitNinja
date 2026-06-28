@@ -35,7 +35,11 @@
 // ---------------------------------------------------------------------------
 static void test_determinism()
 {
-    const uint64_t SEED = 0xCAFEBABEDEADBEEFULL;
+    // Seed is 32-bit (v1.6.1 Random::Seed @0x0012c998 takes unsigned long); the
+    // game only ever seeds from a 32-bit value (SeedGlobalRng). Use a 32-bit seed
+    // so the ctor and Seed() paths set the same state (a 64-bit literal would
+    // truncate in Seed() but not the ctor, which is faithful but not what we test).
+    const uint32_t SEED = 0xCAFEBABEU;
     const int N = 64;
     uint32_t first[N];
 

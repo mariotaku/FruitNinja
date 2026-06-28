@@ -22,8 +22,11 @@ Random::Random(uint64_t seed)
 {
 }
 
-void Random::Seed(uint64_t seed) {
-    m_State = seed;
+// ASM-spec v1.6.1 Random::Seed @0x0012c998: (uint32_t) seed; high=0; resets m_Mult/m_Inc.
+void Random::Seed(uint32_t seed) {
+    m_State = (uint64_t)seed;  // low=seed, high=0 (zero-extends)
+    m_Mult  = kMultiplier;
+    m_Inc   = kIncrement;
 }
 
 // ASM-verified: 2026-06-19T00:00Z v1.6.1 Math::Random::Rand32 @ 0x00121c2c..0x00121c74 (asm-inspector)

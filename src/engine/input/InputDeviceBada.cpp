@@ -60,8 +60,8 @@ void InputDeviceBada::Update(float /*dt*/) {
 
     ++m_EventStamp;
 
-    int posX = 0;
-    int posY = 0;
+    float posX = 0.0f;
+    float posY = 0.0f;
 
     if (m_ActiveTouchId == 0) {
         // No active touch yet: try to acquire one this frame.
@@ -77,10 +77,10 @@ void InputDeviceBada::Update(float /*dt*/) {
         }
         // Freshly acquired touch -> emit current position (press-edge).
         touch.GetTouchPos(m_ActiveTouchId, posX, posY);
-        AxisEvent(0x74, 0x20, (float)posX,
-                  (float)(posX - (int)m_LastTouchX), m_EventStamp, 0);
-        AxisEvent(0x75, 0x20, (float)posY,
-                  (float)(posY - (int)m_LastTouchY), m_EventStamp, 0);
+        AxisEvent(0x74, 0x20, posX,
+                  posX - (float)m_LastTouchX, m_EventStamp, 0);
+        AxisEvent(0x75, 0x20, posY,
+                  posY - (float)m_LastTouchY, m_EventStamp, 0);
         // mask 1 = press-edge.
         ButtonPressed(0x6c, 1, 1.0f, m_EventStamp, 0);
         m_LastTouchX = (uint32_t)posX;
@@ -93,8 +93,8 @@ void InputDeviceBada::Update(float /*dt*/) {
             recent = touch.GetAnyTouch();
         }
         uint32_t tracked = m_ActiveTouchId;
-        int dX = 0;
-        int dY = 0;
+        float dX = 0.0f;
+        float dY = 0.0f;
         bool active = touch.GetTouchDelta(m_ActiveTouchId, dX, dY) != 0;
         if (!active || recent != tracked) {
             // Lost/changed touch: emit release (mask 4) then up (mask 8),
@@ -105,10 +105,10 @@ void InputDeviceBada::Update(float /*dt*/) {
             goto callbacks;
         }
         touch.GetTouchPos(m_ActiveTouchId, posX, posY);
-        AxisEvent(0x74, 0x20, (float)posX,
-                  (float)(posX - (int)m_LastTouchX), m_EventStamp, 0);
-        AxisEvent(0x75, 0x20, (float)posY,
-                  (float)(posY - (int)m_LastTouchY), m_EventStamp, 0);
+        AxisEvent(0x74, 0x20, posX,
+                  posX - (float)m_LastTouchX, m_EventStamp, 0);
+        AxisEvent(0x75, 0x20, posY,
+                  posY - (float)m_LastTouchY, m_EventStamp, 0);
         // mask 2 = held/move.
         ButtonPressed(0x6c, 2, 1.0f, m_EventStamp, 0);
         m_LastTouchX = (uint32_t)posX;

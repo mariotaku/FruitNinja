@@ -15,7 +15,8 @@ public:
     Random();
     explicit Random(uint64_t seed);
 
-    void Seed(uint64_t seed);
+    // ASM-spec v1.6.1 Random::Seed @0x0012c998: (uint32_t) seed; high=0; resets m_Mult/m_Inc.
+    void Seed(uint32_t seed);
 
     // Integer random in [0, max)
     // Uses multiply-high range reduction (Lemire's method)
