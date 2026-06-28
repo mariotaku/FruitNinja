@@ -92,6 +92,8 @@ manifest.toml             -- hand-written overrides (precedence)
 manifest.generated.toml   -- auto-discovered (gitignored)
 cross-build/              -- object-only `fnverify` target; TU list + demos
 cross-headers/            -- C++11 shims + libstdc++ 4.5 workarounds (no SDL.h)
+rerender-report.py        -- re-apply triage.json to cached report.json (no Docker needed)
+run-with-powerup-shim.sh  -- asm-verify wrapper that patches PowerUp.h cross-build guard
 ```
 
 ## Subdirectories
@@ -99,6 +101,7 @@ cross-headers/            -- C++11 shims + libstdc++ 4.5 workarounds (no SDL.h)
 - **`bindiff/`** — whole-program BinDiff track (stage 9). See `bindiff/README.md`.
 - **`layout/`** — binary class-size / RTTI reference generators (stage 10). See `layout/README.md`.
 - **`checks/`** — standalone auxiliary checks (signatures, sources-drift, globals, capstone diff). See `checks/README.md`.
+- **`coverage/`** — binary FUNC coverage analysis (lief + asm-verify report). See `coverage/README.md`.
 
 ## Verdicts
 
