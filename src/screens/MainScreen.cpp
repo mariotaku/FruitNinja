@@ -839,14 +839,12 @@ void MainScreen::CreateButtons() {
     if (game_work.m_BombHitTimer >= 1.45f) return;
 
     if (m_pGameModeButton == nullptr) {
-        Mortar::SmartPtr<Mortar::Texture> texNewGame =
-            Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
+        // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: ring = m_RingTex[3] + SetText(GETSTRING(0x398))
+        Mortar::SmartPtr<Mortar::Texture> texNewGame = game_work.m_RingTex[3];
         m_pGameModeButton = new MenuButton();
         m_pGameModeButton->m_Texture = texNewGame;
         m_pGameModeButton->Init(POS_PLAY_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
-        // TODO: v1.6.1 MainScreen::CreateButtons @0x001961f8 -- RE whether play block truly overrides m_RestScale to texWidth+1
-        //   or is a no-op *1.0 relying on CreateFruit entityScale*200.
         if (texNewGame.IsValid()) {
             m_pGameModeButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
             m_pGameModeButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
@@ -860,6 +858,11 @@ void MainScreen::CreateButtons() {
         m_pGameModeButton->m_HitInsetY   = -50.0f;
         m_pGameModeButton->m_ShakeScale.x = 0.5f;
         m_pGameModeButton->m_GrowInTimer = 0.25f;
+        m_pGameModeButton->SetText(
+            GETSTRING_CAST_0(LSTR_NEW_GAME),
+            game_work.m_RingColours[4],
+            game_work.m_RingColours[5],
+            58.0f, 12.0f, true, true);
         game_work.mHud->AddControl(m_pGameModeButton);
 
         if (game_work.m_TutorialControl)
@@ -867,10 +870,9 @@ void MainScreen::CreateButtons() {
     }
 
     if (m_pStoreButton == nullptr) {
-        Mortar::SmartPtr<Mortar::Texture> texDojoIcon =
-            Mortar::TextureManager::LoadLocalisedTexture("dojo_icon.tex");
+        // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: ring = m_RingTex[8] + SetText(GETSTRING(0x397))
         m_pStoreButton = new MenuButton();
-        m_pStoreButton->m_Texture = texDojoIcon;
+        m_pStoreButton->m_Texture = game_work.m_RingTex[8];
         m_pStoreButton->Init(POS_DOJO_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
             Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
@@ -883,6 +885,11 @@ void MainScreen::CreateButtons() {
         m_pStoreButton->m_RestScale   = m_pStoreButton->m_RestScale * 1.05f;
         m_pStoreButton->m_ShakeScale.x = 0.5f;
         m_pStoreButton->m_GrowInTimer  = 0.25f;
+        m_pStoreButton->SetText(
+            GETSTRING_CAST_0(LSTR_DOJO_TITLE),
+            game_work.m_RingColours[6],
+            game_work.m_RingColours[7],
+            50.0f, 12.0f, true, true);
         game_work.mHud->AddControl(m_pStoreButton);
         // v1.6.1 MainScreen::CreateButtons @0x001961f8: badge set at creation (and refreshed in Update case 1).
         m_pStoreButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
@@ -897,8 +904,8 @@ void MainScreen::CreateButtons() {
 void MainScreen::CreateQuitButton() {
     if (!game_work.mHud) return;
 
-    Mortar::SmartPtr<Mortar::Texture> texQuit =
-        Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
+    // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: ring = m_RingTex[16] + SetText(GETSTRING(0x35f))
+    Mortar::SmartPtr<Mortar::Texture> texQuit = game_work.m_RingTex[16];
 
     m_pQuitButton = new MenuButton();
     m_pQuitButton->m_Texture = texQuit;
@@ -914,6 +921,11 @@ void MainScreen::CreateQuitButton() {
         m_pQuitButton->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
         m_pQuitButton->m_RestScale.z = 1.0f;
     }
+    m_pQuitButton->SetText(
+        GETSTRING_CAST_0(LSTR_QUIT),
+        game_work.m_RingColours[0],
+        game_work.m_RingColours[1],
+        35.0f, 10.0f, true, true);
     game_work.mHud->AddControl(m_pQuitButton);
 }
 
