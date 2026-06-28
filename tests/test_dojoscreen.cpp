@@ -1,17 +1,25 @@
-// test_dojoscreen -- headless layout/structure guard for DojoScreen.
+// test_dojoscreen -- headless layout guard + optional screenshot for DojoScreen.
 //
-// Verifies the faithful DojoScreen activation path (Init()->Reset()->CreateButtons())
-// creates all expected controls and places them correctly. Runs headless --
-// no screenshot or display required. Passes with `ctest -E screenshot`.
+// Usage: test_dojoscreen [--screenshot] [--interactive] [--lang=<name|flag>]
 //
-// Asserted:
-//   1. All THREE ring buttons in HUD: back-bomb, shop (pineapple), about (plum).
-//   2. BOTH BSButtons (FB + TW social stubs) in HUD with DISTINCT positions
-//      (guards the v1.6.1 overlap bug where both were at Vec3(152,100,0)).
-//   3. DojoScreen itself is active and added to HUD.
+// Default (no flags): headless assertions only (runs via ctest -E screenshot).
+//   Verifies the faithful Init()->Reset()->CreateButtons() activation creates:
+//     - 3 ring buttons in HUD: back-bomb, shop (pineapple), about (plum)
+//     - 2 BSButtons (FB+TW social stubs) with DISTINCT positions
 //
-// Run:
-//   ctest --test-dir build/host -R dojoscreen --output-on-failure
+// --screenshot: renders DojoScreen to stable state and writes:
+//   tmp/test/screenshots/dojo/<lang>.png  (e.g. dojo/en.png, dojo/zh.png)
+//
+// --lang=<name>  Language name or numeric flag (same set as test_fruitfact).
+//                Applied for both headless (string IDs) and screenshot (font).
+//
+// Example screenshot commands:
+//   test_dojoscreen --screenshot
+//   test_dojoscreen --screenshot --lang=english_us
+//   test_dojoscreen --screenshot --lang=chinese
+//
+// Run headless (ctest):
+//   ctest --test-dir build/host -R ^dojoscreen$ --output-on-failure
 
 #include "test_harness.h"
 #include "hud/HUD.h"
@@ -22,11 +30,33 @@
 #include "screens/DojoScreen.h"
 #include "game/GameWork.h"
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <list>
 #include <vector>
 
-// Collect controls added to the HUD AFTER the snapshot into MenuButtons and
-// BSButtons. Controls that existed before the snapshot are skipped.
+// Language flag parsed from --lang= for screenshot label composition.
+// -1 = not specified.
+static int g_LangFlag = -1;
+
+// Short language tag table (matches kLanguageSuffix order in StringTable.cpp).
+static const char* const kLangShort[] = {
+    "en", "de", "nl", "fr", "es", "it", "sv", "da", "nb", "fi",
+    "ko", "ja", "en_uk", "zh", "en"
+};
+static const int kLangShortCount = 15;
+
+// Build the PNG label: "dojo/<lang>" e.g. "dojo/zh", or "dojo/default" when
+// no --lang= was specified (avoids collision with --lang=english_us -> "dojo/en").
+static void BuildShotLabel(char* out, size_t outSize, int langFlag) {
+    if (langFlag >= 0 && langFlag < kLangShortCount) {
+        snprintf(out, outSize, "dojo/%s", kLangShort[langFlag]);
+    } else {
+        snprintf(out, outSize, "dojo/default");
+    }
+}
+
+// Collect controls added AFTER the snapshot (skip pre-existing).
 static void CollectNewControls(
     const std::list<HUDControl*>& existing,
     std::list<MenuButton*>& outMenuButtons,
@@ -54,10 +84,24 @@ static void CollectNewControls(
 }
 
 int main(int argc, char* argv[]) {
-    fn::TestHarness h(argc, argv, "dojoscreen");
+    // Parse --lang= here for label composition; harness also parses it for
+    // locale application (two passes on the same args, harmless).
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "--lang=", 7) == 0) {
+            g_LangFlag = ParseLanguageArg(argv[i] + 7);
+        }
+    }
+
+    char shotLabel[256];
+    BuildShotLabel(shotLabel, sizeof(shotLabel), g_LangFlag);
+
+    fn::TestHarness h(argc, argv, shotLabel);
+    // 60 burn-in frames: fonts/textures live before component renders.
     h.SetInitFrames(60);
     if (!h.ParseFlags()) return 1;
-    if (!h.Init()) return 1;
+    // Component-isolation mode: Init() + clears HUD so DojoScreen renders on
+    // a clean background (no MainScreen chrome). Mirrors test_fruitfact pattern.
+    if (!h.InitComponent()) return 1;
 
     if (!game_work.mHud) {
         fprintf(stderr, "FAIL: game_work.mHud is null after init\n");
@@ -66,17 +110,18 @@ int main(int argc, char* argv[]) {
 
     int fruitCount = FruitInfo_GetCount();
     if (fruitCount <= 0) {
-        fprintf(stderr, "FAIL: FruitInfo_GetCount()=%d -- fruitlist.xml not loaded\n", fruitCount);
+        fprintf(stderr, "FAIL: FruitInfo_GetCount()=%d -- fruitlist.xml not loaded\n",
+                fruitCount);
         return 1;
     }
 
     const int bombType      = fruitCount;
     const int pineappleType = Fruit::FruitType("pineapple", false);
     const int plumType      = Fruit::FruitType("plum", false);
-    printf("[SETUP] bombType=%d pineappleType=%d plumType=%d\n",
-           bombType, pineappleType, plumType);
+    printf("[SETUP] fruitCount=%d bombType=%d pineappleType=%d plumType=%d\n",
+           fruitCount, bombType, pineappleType, plumType);
 
-    // Snapshot HUD before adding DojoScreen.
+    // Snapshot HUD (will be empty after InitComponent).
     std::list<HUDControl*> existing;
     for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
          it != game_work.mHud->controls.end(); ++it) {
@@ -84,16 +129,28 @@ int main(int argc, char* argv[]) {
     }
     printf("[SETUP] pre-DojoScreen HUD count=%d\n", (int)existing.size());
 
-    // Create and activate DojoScreen via the faithful binary flow:
-    //   Init() -> Reset() -> CreateButtons()  (v1.6.1 DojoScreen::Init @0x00169e80)
+    // Activate DojoScreen via the faithful binary flow:
+    //   new DojoScreen (ctor adds BSButtons to HUD immediately)
+    //   Init() -> Reset() -> CreateButtons()  (v1.6.1 @0x00169e80)
+    //   AddControl (adds DojoScreen itself to HUD)
     DojoScreen* dojo = new DojoScreen(h.game);
     dojo->Init();
     game_work.mHud->AddControl(dojo);
 
-    // Run a few frames so entity allocations (if any) settle.
-    h.game.runFrames(30);
+    if (h.IsInteractive()) {
+        h.RunComponentInteractive(NULL, NULL, /*maxFrames=*/-1, 0x7FFFFFFF);
+        return h.Shutdown();
+    }
 
-    // Collect newly-added controls.
+    // Settle 60 frames with multi-pass rendering so all ring button passes fire:
+    //   0x40 pass: MenuButton scratch backdrop (MENU_BG)
+    //   0x80 pass: ring face + label, BSButton, DojoScreen panel (POST_ACTOR)
+    // Also advances m_TransitionAlpha from 0 to ~1 (0.25 lerp; ~17 frames to 0.99).
+    for (int i = 0; i < 60; ++i) {
+        h.RunComponentHeadlessMultiPass(1);
+    }
+
+    // Collect controls added by DojoScreen and its Init path.
     std::list<MenuButton*> menuButtons;
     std::vector<BSButton*> bsButtons;
     CollectNewControls(existing, menuButtons, bsButtons);
@@ -101,22 +158,24 @@ int main(int argc, char* argv[]) {
     printf("[RESULT] new MenuButtons=%d  new BSButtons=%d\n",
            (int)menuButtons.size(), (int)bsButtons.size());
 
-    // --- Assertion 1: all three ring buttons ---
-    MenuButton* backBtn   = NULL;
-    MenuButton* shopBtn   = NULL;
-    MenuButton* aboutBtn  = NULL;
-    for (std::list<MenuButton*>::iterator it = menuButtons.begin(); it != menuButtons.end(); ++it) {
+    // --- Assertion 1: all three ring buttons in HUD ---
+    MenuButton* backBtn  = NULL;
+    MenuButton* shopBtn  = NULL;
+    MenuButton* aboutBtn = NULL;
+    for (std::list<MenuButton*>::iterator it = menuButtons.begin();
+         it != menuButtons.end(); ++it) {
         MenuButton* mb = *it;
-        if (mb->m_FruitType == bombType)       backBtn  = mb;
+        if (mb->m_FruitType == bombType)           backBtn  = mb;
         else if (mb->m_FruitType == pineappleType) shopBtn  = mb;
-        else if (mb->m_FruitType == plumType)   aboutBtn = mb;
+        else if (mb->m_FruitType == plumType)      aboutBtn = mb;
     }
 
     int failures = 0;
 
     if (!backBtn) {
-        fprintf(stderr, "FAIL: back-bomb ring (m_pBackButton, fruitType=%d) not in HUD"
-                " -- CreateButtons() not called on activation\n", bombType);
+        fprintf(stderr,
+            "FAIL: back-bomb ring (m_pBackButton, fruitType=%d) not in HUD"
+            " -- Init()->Reset()->CreateButtons() path broken\n", bombType);
         ++failures;
     } else {
         printf("PASS: back-bomb ring in HUD (pos=%.1f,%.1f restScale=%.3f)\n",
@@ -124,8 +183,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (!shopBtn) {
-        fprintf(stderr, "FAIL: shop ring (m_pShopButton, fruitType=%d/pineapple) not in HUD\n",
-                pineappleType);
+        fprintf(stderr,
+            "FAIL: shop ring (m_pShopButton, fruitType=%d/pineapple) not in HUD\n",
+            pineappleType);
         ++failures;
     } else {
         printf("PASS: shop ring in HUD (pos=%.1f,%.1f)\n",
@@ -133,18 +193,20 @@ int main(int argc, char* argv[]) {
     }
 
     if (!aboutBtn) {
-        fprintf(stderr, "FAIL: about ring (m_pAboutButton, fruitType=%d/plum) not in HUD\n",
-                plumType);
+        fprintf(stderr,
+            "FAIL: about ring (m_pAboutButton, fruitType=%d/plum) not in HUD\n",
+            plumType);
         ++failures;
     } else {
         printf("PASS: about ring in HUD (pos=%.1f,%.1f)\n",
                aboutBtn->pos.x, aboutBtn->pos.y);
     }
 
-    // --- Assertion 2: both BSButtons exist with distinct positions ---
+    // --- Assertion 2: both BSButtons with distinct positions ---
     if ((int)bsButtons.size() < 2) {
-        fprintf(stderr, "FAIL: expected 2 BSButtons (FB+TW) in HUD, found %d\n",
-                (int)bsButtons.size());
+        fprintf(stderr,
+            "FAIL: expected 2 BSButtons (FB+TW) in HUD, found %d\n",
+            (int)bsButtons.size());
         ++failures;
     } else {
         Vec3 pos0 = bsButtons[0]->pos;
@@ -152,11 +214,22 @@ int main(int argc, char* argv[]) {
         printf("[BSBUTTON] btn0 pos=(%.1f,%.1f,%.1f)  btn1 pos=(%.1f,%.1f,%.1f)\n",
                pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z);
         if (pos0.x == pos1.x && pos0.y == pos1.y) {
-            fprintf(stderr, "FAIL: FB and TW BSButtons are at identical positions"
-                    " (%.1f,%.1f) -- they overlap\n", pos0.x, pos0.y);
+            fprintf(stderr,
+                "FAIL: FB and TW BSButtons are at identical positions"
+                " (%.1f,%.1f) -- they overlap\n", pos0.x, pos0.y);
             ++failures;
         } else {
-            printf("PASS: FB and TW BSButtons have distinct positions\n");
+            printf("PASS: FB and TW BSButtons at distinct positions\n");
+        }
+    }
+
+    // --- Screenshot (only when --screenshot flag is present) ---
+    if (h.IsScreenshot()) {
+        if (!h.ScreenshotPng(shotLabel)) {
+            fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", shotLabel);
+            ++failures;
+        } else {
+            printf("[%s] screenshot written\n", shotLabel);
         }
     }
 

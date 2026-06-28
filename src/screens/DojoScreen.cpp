@@ -71,7 +71,6 @@ Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexSensei;
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexShop;
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
-Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 
 // ===================================================================
 // Matches DojoScreen::DojoScreen @ 0x0016bad8
@@ -141,9 +140,10 @@ DojoScreen::DojoScreen(Game& g)
     // --- m_pBSButton1: Twitter defunct visible stub ---
     // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: same pattern as FB,
     //   GETSTRING(0x11f,0), "join_tw.tex", stroke (0x31,0xae,0xd6)/(0x52,0xba,0xde).
-    // TODO: v1.6.1 DojoScreen ctor @0x0016bad8 -- confirm exact TW button position;
-    //   HLE shows FB above TW (stacked vertically), RE had both at Vec3(152,100,0)
-    //   which is wrong. TW is placed below FB using approx 2x button-height gap.
+    // DIFFERS: binary ctor @0x0016bad8 builds BOTH BSButtons at (152,100,0) (overlap);
+    //   HLE shows them stacked (FB above TW) via an un-RE'd runtime layout pass.
+    //   TW offset below FB here is a temporary visible-both placeholder pending HLE
+    //   peek of m_pBSButton0/1 +0x8 -- see task #267. Not a faithful position.
     {
         BSButton* btn = new BSButton(
             Vec3(108.0f, 100.0f, 0.0f),
@@ -188,7 +188,6 @@ void DojoScreen::LoadContent() {
     BaseScreen::LoadContent();  // loads sml_title.tex + blurry_backing.tex (slots +0x00, +0x04)
     s_TexShop   = Mortar::TextureManager::LoadLocalisedTexture("senseis_swag.tex"); // +0x14
     s_TexAbout  = Mortar::TextureManager::LoadLocalisedTexture("about.tex");        // +0x18
-    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 }
 
 // ===================================================================
@@ -200,7 +199,6 @@ void DojoScreen::UnLoadContent() {
     s_TexDojo.SetNull();
     s_TexShop.SetNull();
     s_TexAbout.SetNull();
-    s_TexBackIcon.SetNull();
 }
 
 // ===================================================================
@@ -279,15 +277,18 @@ void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
 void DojoScreen::CreateButtons() {
     if (!game_work.mHud) return;
 
+    // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: button m_Texture = generic ring
+    //   game_work.m_RingTex[16/7/12]; baked swag/about tex loaded-but-not-drawn;
+    //   label via SetText; gradient m_RingColours back[0,1]/shop[6,7]/about[10,11].
+
     // --- field_0x94: Back/Play button ---
     // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: bomb type, pos=(0,0,0),
-    //   field_0x14(m_HudScale.x)=0.375, field_0x18(m_HudScale.y)=-0.3,
-    //   field_0x13c(m_RestScale.x)*=0.825, m_bRespondsToBackKey=1.
-    // Confirm: back ring is the bomb (red) ring.
+    //   m_Texture=m_RingTex[16] (red_ring), m_HudScale.x=0.375, m_HudScale.y=-0.3,
+    //   m_RestScale*=0.825, m_bRespondsToBackKey=1.
     if (m_pBackButton == nullptr) {
         const int bombFruitType = FruitInfo_GetCount();
         m_pBackButton = new MenuButton();
-        m_pBackButton->m_Texture = s_TexBackIcon;
+        m_pBackButton->m_Texture = game_work.m_RingTex[16];
         m_pBackButton->Init(POS_BACK_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                             bombFruitType, Vec3(0, 0, 0), nullptr);
@@ -302,8 +303,7 @@ void DojoScreen::CreateButtons() {
             m_pBackButton->m_pTrackedFruit->scale =
                 m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
         }
-        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
-        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices (using [0],[1] = bomb ring, matches MainScreen quit pattern)
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [0],[1]
         m_pBackButton->SetText(
             GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),
             game_work.m_RingColours[0],
@@ -313,19 +313,19 @@ void DojoScreen::CreateButtons() {
         if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
     }
 
-    // --- field_0x98: Shop button (senseis_swag.tex) ---
+    // --- field_0x98: Shop button (pineapple ring, m_RingTex[7]) ---
     if (m_pShopButton == nullptr) {
         const int shopFruitType = Fruit::FruitType("pineapple", false);
         m_pShopButton = new MenuButton();
-        m_pShopButton->m_Texture = s_TexShop;
+        m_pShopButton->m_Texture = game_work.m_RingTex[7];
         m_pShopButton->Init(POS_SHOP_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
                             shopFruitType, Vec3(0, 0, 0), nullptr);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_RestScale=(texW+1,texH+1,1)
-        if (s_TexShop.IsValid()) {
+        if (m_pShopButton->m_Texture.IsValid()) {
             m_pShopButton->m_RestScale = Vec3(
-                (float)s_TexShop->GetWidth() + 1.0f,
-                (float)s_TexShop->GetHeight() + 1.0f,
+                (float)m_pShopButton->m_Texture->GetWidth() + 1.0f,
+                (float)m_pShopButton->m_Texture->GetHeight() + 1.0f,
                 1.0f);
         }
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_ShakeScale.x=0.5, y*=0.575, z*=0.575, y=-y
@@ -338,33 +338,31 @@ void DojoScreen::CreateButtons() {
         m_pShopButton->m_HitInsetY   = -15.0f;
         m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
-        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
-        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices (using [4],[5] = pineapple ring, matches MainScreen play pattern)
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [6],[7]
         m_pShopButton->SetText(
             GETSTRING_CAST_0(LSTR_DJ_SHOP_BUTTON),
-            game_work.m_RingColours[4],
-            game_work.m_RingColours[5],
+            game_work.m_RingColours[6],
+            game_work.m_RingColours[7],
             54.5f, 14.0f, true, true);
         game_work.mHud->AddControl(m_pShopButton);
         if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
         m_pShopButton->SetNewSymbol(false);
     }
 
-    // --- field_0x9c: About button (about.tex) ---
+    // --- field_0x9c: About button (orange ring, m_RingTex[12]) ---
     if (m_pAboutButton == nullptr) {
         const int aboutFruitType = Fruit::FruitType("plum", false);
         m_pAboutButton = new MenuButton();
-        m_pAboutButton->m_Texture = s_TexAbout;
+        m_pAboutButton->m_Texture = game_work.m_RingTex[12];
         m_pAboutButton->Init(POS_ABOUT_BUTTON,
                              Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                              aboutFruitType, Vec3(0, 0, 0), nullptr);
         m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
-        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices for about/plum button
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [10],[11]
         m_pAboutButton->SetText(
             GETSTRING_CAST_0(LSTR_ABOUT_TITLE),
-            game_work.m_RingColours[6],
-            game_work.m_RingColours[7],
+            game_work.m_RingColours[10],
+            game_work.m_RingColours[11],
             39.5f, 10.0f, true, true);
         game_work.mHud->AddControl(m_pAboutButton);
     }
