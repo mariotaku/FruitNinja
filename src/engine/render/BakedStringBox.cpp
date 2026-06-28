@@ -127,27 +127,31 @@ void BakedStringBox::SetTranslation(const Vec3& pos, int flag) {
 
 void BakedStringBox::FitIntoVerticalBounds() {
     if (!m_Font) return;
-    // Binary RebuildMeshes @ 0x00246944: shrink fontSize in 1-pixel steps (floor 6.0px)
-    // until wrapped text fits within m_MaxLines lines AND no line exceeds m_BoxWidth.
-    // m_BaseFontSize stays at the original size; m_FontSize is the shrunk size.
-    while (m_FontSize > 6.0f) {
+    // ASM-spec v1.6.1 BakedStringBox::FitIntoVerticalBounds @ 0x00246fbc:
+    // Shrinks m_FontSize in 1.0-px steps until total ink height < m_BoxHeight (HEIGHT predicate,
+    // NOT line-count). Binary loop:
+    //   Layout(); N = numLines; if (N == 0) return;
+    //   step = per-line pitch (RebuildAlignments @ 0x00245c78, stored as line.height)
+    //   totalInkHeight = maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
+    //   if (totalInkHeight < m_BoxHeight) return;  // fits
+    //   nextSize = m_FontSize - 1.0f;
+    //   if (nextSize < 6.0f) return;               // floor: stop without applying the too-small size
+    //   SetFontSize(nextSize);  // writes BOTH m_FontSize AND m_BaseFontSize, marks dirty
+    for (;;) {
         Layout();
-        bool fits = ((int)m_Lines.size() <= m_MaxLines);
-        if (fits) {
-            for (size_t i = 0; i < m_Lines.size(); ++i) {
-                if (m_Lines[i].width > m_BoxWidth) {
-                    fits = false;
-                    break;
-                }
-            }
-        }
-        if (fits) {
-            return;
-        }
-        m_FontSize -= 1.0f;
-        m_Dirty = true;
+        int N = (int)m_Lines.size();
+        if (N == 0) return;
+
+        float step = m_Lines[0].height;
+        float totalInkHeight = m_Lines[0].maxBearingY
+                             + (float)(N - 1) * step
+                             + (-m_Lines[N - 1].minBottom);
+        if (totalInkHeight < m_BoxHeight) return;
+
+        float nextSize = m_FontSize - 1.0f;
+        if (nextSize < 6.0f) return;
+        SetFontSize(nextSize);
     }
-    Layout();
 }
 
 float BakedStringBox::TotalHeight() const {
