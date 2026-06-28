@@ -482,12 +482,43 @@ fn_add_game_test(test_fruitfact test_fruitfact.cpp)
 # FN_TEST exposes BaseScreen::GetHUDControlsForTest() for the --isolated render
 # (keep-set of FruitFact page child controls). Layout-neutral (method-only guard).
 target_compile_definitions(test_fruitfact PRIVATE FN_TEST)
+# Base per-mode tests (default English locale, default fact).
+# LABELS let you slice the suite, e.g.:
+#   ctest -L screen_fruitfact          # every fruitfact render test
+#   ctest -L lang_chinese              # every Chinese-locale render test
+#   ctest -L mode_zen -L lang_korean   # intersection (zen AND korean)
 add_test(NAME screenshot_fruitfact_classic COMMAND test_fruitfact classic --screenshot)
 add_test(NAME screenshot_fruitfact_arcade  COMMAND test_fruitfact arcade  --screenshot)
 add_test(NAME screenshot_fruitfact_zen     COMMAND test_fruitfact zen     --screenshot)
-set_tests_properties(screenshot_fruitfact_classic PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_fruitfact_arcade  PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_fruitfact_zen     PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_fruitfact_classic PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_fruitfact;mode_classic;fact_default;lang_english_us")
+set_tests_properties(screenshot_fruitfact_arcade  PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_fruitfact;mode_arcade;fact_default;lang_english_us")
+set_tests_properties(screenshot_fruitfact_zen     PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_fruitfact;mode_zen;fact_default;lang_english_us")
+
+# --- Mode x language x fact matrix (i18n + per-fruit fact-colour render checks) ---
+# Reproduce all of them with:   ctest -R fruitfact   (or slice via -L, see above)
+# Each writes tmp/test/screenshots/fruitfact/<mode>_<langsuffix>[_<fact>].png
+# (CLion runs from build/host/tests, so the PNGs land under build/host/tests/tmp/).
+# These render real GL, so they need a display/GPU (skipped naturally in pure-headless CI).
+foreach(_ff_mode classic arcade zen)
+    foreach(_ff_lang english_us chinese japanese korean)
+        add_test(NAME screenshot_fruitfact_${_ff_mode}_${_ff_lang}
+                 COMMAND test_fruitfact ${_ff_mode} --screenshot --lang=${_ff_lang})
+        set_tests_properties(screenshot_fruitfact_${_ff_mode}_${_ff_lang} PROPERTIES TIMEOUT 60
+            LABELS "category_rendering;screen_fruitfact;mode_${_ff_mode};fact_default;lang_${_ff_lang}")
+    endforeach()
+endforeach()
+# Per-fruit fact selection (fact colour varies by fruit): strawberry=red (--fact=4).
+add_test(NAME screenshot_fruitfact_classic_strawberry
+         COMMAND test_fruitfact classic --screenshot --fact=4)
+add_test(NAME screenshot_fruitfact_zen_chinese_strawberry
+         COMMAND test_fruitfact zen --screenshot --lang=chinese --fact=4)
+set_tests_properties(screenshot_fruitfact_classic_strawberry PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_fruitfact;mode_classic;fact_strawberry;lang_english_us")
+set_tests_properties(screenshot_fruitfact_zen_chinese_strawberry PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_fruitfact;mode_zen;fact_strawberry;lang_chinese")
 
 # IngamePopup badge alignment screenshot test.
 # Renders the NEW badge (type 0x10, gold) and SELECTED badge (type 0x11, green)
