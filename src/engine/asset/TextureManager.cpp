@@ -126,3 +126,12 @@ Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(int) {
 }
 
 }  // namespace Mortar
+
+// ASM-spec v1.6.1 LoadTexture @0x14f88c: appends ".tex" to name, delegates to
+// TextureManager::LoadLocalisedTexture. buf[64] matches the binary's 0x40-byte stack frame.
+Mortar::SmartPtr<Mortar::Texture> LoadTexture(const char* name) {
+    if (!name) return Mortar::SmartPtr<Mortar::Texture>();
+    char buf[64];
+    snprintf(buf, 64, "%s.tex", name);
+    return Mortar::TextureManager::LoadLocalisedTexture(buf);
+}

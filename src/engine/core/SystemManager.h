@@ -88,4 +88,21 @@ bool IsStartupTexturePortrait();
 // Defined in SystemManager.cpp; also written by the GetStartupTexture need-care function.
 extern bool isStartupTexturePortrait;
 
+// ASM-spec v1.6.1 CombosEnabled @0x119fd0: returns game_work.gameMode != 1 (combos off in Zen).
+bool CombosEnabled();
+
+// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns pointer to 8-byte s_scoreNotification global.
+// Field semantics not yet RE'd; callers mutate through the pointer.
+void* GetScoreNotification();
+
+// ASM-spec v1.6.1 GetVersionFromString @0x152e78: parses "M.m.p" -> major*10000 + minor*100 + patch.
+// DIFFERS: binary scales single-digit sections x10; port uses direct semver to match SetVersion.
+int GetVersionFromString(const char* s);
+
+// ASM-spec v1.6.1 GetApparentWindowWidth @0x11bb44: returns 480 when ar<=1.5, else ar*320.
+float GetApparentWindowWidth();
+
+// ASM-spec v1.6.1 GetApparentWindowHeight @0x11baf4: returns 320 when ar>1.5, else GetAspectHvW*480.
+float GetApparentWindowHeight();
+
 #endif

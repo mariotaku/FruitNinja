@@ -98,4 +98,9 @@ public:
 
 } // namespace Mortar
 
+// ASM-spec v1.6.1 LoadTexture @0x14f88c: free function (global namespace).
+// Appends ".tex" to name and forwards to TextureManager::LoadLocalisedTexture.
+// Binary uses struct-return ABI (SmartPtr returned via hidden out-param).
+Mortar::SmartPtr<Mortar::Texture> LoadTexture(const char* name);
+
 #endif
