@@ -28,9 +28,12 @@
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
+#include "render/BakedStringBox.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
+#include "math/Vec2.h"
 #include "math/Colour.h"
+#include "engine/util/StringTable.h"
 #include <cstdio>
 #include <cstdlib>
 #include "game/GameWork.h"
@@ -40,14 +43,14 @@
 // Transition alpha
 static const float ALPHA_LERP_IN       = 0.25f;   // exponential approach step
 static const float ALPHA_IN_DONE       = 0.999f;  // DAT_001389dc
-static const float ALPHA_BUTTON_CREATE = 0.95f;   // DAT_00138684
 static const float ALPHA_DECAY         = 0.75f;   // geometric decay per frame
 static const float ALPHA_OUT_DONE      = 0.001f;  // DAT_001389e0
 
-// Button positions (DAT_00138688/8c/90, vmov, DAT_001389d0/d4/d8)
-static const Vec3 POS_BACK_BUTTON  ( 185.0f, -106.0f, 0.0f);
-static const Vec3 POS_SHOP_BUTTON  ( -18.0f,  -15.0f, 0.0f);
-static const Vec3 POS_ABOUT_BUTTON ( 145.0f,   42.0f, 0.0f);
+// ASM-spec v1.6.1 CreateButtons @0x0016ad9c: back=(0,0,0) shop=(-55,65,0) about=(35,-74,0)
+// [prior values were stale v1.5.x: back=(185,-106,0) shop=(-18,-15,0) about=(145,42,0)]
+static const Vec3 POS_BACK_BUTTON  (   0.0f,    0.0f, 0.0f);
+static const Vec3 POS_SHOP_BUTTON  ( -55.0f,   65.0f, 0.0f);
+static const Vec3 POS_ABOUT_BUTTON (  35.0f,  -74.0f, 0.0f);
 
 // Button scale multipliers
 static const float BACK_SCALE  = 0.825f;  // DAT_00138694
@@ -77,8 +80,8 @@ DojoScreen::DojoScreen(Game& g)
     : m_pBackButton(nullptr)    // +0x94
     , m_pShopButton(nullptr)    // +0x98
     , m_pAboutButton(nullptr)   // +0x9c
-    , m_pBSButton0(nullptr)     // +0xa0 Defunct: Facebook social share
-    , m_pBSButton1(nullptr)     // +0xa4 Defunct: Twitter social share
+    , m_pBSButton0(nullptr)     // +0xa0
+    , m_pBSButton1(nullptr)     // +0xa4
     , m_pButton4(nullptr)       // +0xa8
     , m_ResetValue(0)           // +0xac
     , m_TransitionDelay(0.0f)   // +0xb0
@@ -90,6 +93,79 @@ DojoScreen::DojoScreen(Game& g)
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
     m_bNoDestructor = 0;
+
+    // --- m_pVersionText: BakedStringBox "DOJO" title ---
+    // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: operator_new(0xc8), ctor
+    //   (font=*(g_GameData+0x614), fontSize=30, w=110, h=30, align=0xf, maxLines=1, param8=0),
+    //   SetGradient(Colour(1,146,208), Colour(0,26,69), 0), SetText(GETSTRING(0x397,0)),
+    //   SetHorizontalLineSpacing(-1). Drawn in Draw() at DrawBorders anchor + Vec3(0,5,0).
+    m_pVersionText = new Mortar::BakedStringBox(
+        game_work.m_pTTFFontMain,
+        30.0f, 110.0f, 30.0f,
+        0xf, 1, 0);
+    m_pVersionText->SetGradient(Colour(1, 146, 208, 255), Colour(0, 26, 69, 255), false);
+    m_pVersionText->SetText(GETSTRING_CAST_0(LSTR_DOJO_TITLE));
+    m_pVersionText->SetHorizontalLineSpacing(-1.0f);
+
+    // --- m_pBSButton0: Facebook defunct visible stub ---
+    // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: operator_new(0xe8),
+    //   BSButton(Vec3(152,100,0), GETSTRING(0x11e,0), Vec3(1,1,1)), Init(),
+    //   SetCallback(FacebookPressed), SetTexture("join_fb.tex", true),
+    //   SetTextOffset(Vec3(-70,20,0)), m_pLabelBox->SetColour(0xef,0xf7,0xff),
+    //   SetStroke, SetFontSize(14), ReshapeBounds(0x78,0x16,1,0),
+    //   m_DrawRotation.x=-7.17, HUD::AddControl(hud, btn, false).
+    // HLE screenshot: FB ("become a fan") is the UPPER button; TW is below.
+    {
+        BSButton* btn = new BSButton(
+            Vec3(152.0f, 100.0f, 0.0f),
+            GETSTRING_CAST_0(LSTR_SOCIAL_FACEBOOK),
+            Vec3(1.0f, 1.0f, 1.0f));
+        btn->Init();
+        btn->SetCallback(Mortar::Delegate0<void>::Make(this, &DojoScreen::FacebookPressed));
+        btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_fb.tex"), true);
+        btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
+        if (btn->m_pLabelBox) {
+            btn->m_pLabelBox->SetColour(Colour(0xef, 0xf7, 0xff, 0xff), 0);
+            // TODO: v1.6.1 DojoScreen::DojoScreen @0x0016bad8 -- verify stroke width (1.0f assumed)
+            btn->m_pLabelBox->SetStroke(1.0f,
+                Colour(0x21, 0x3c, 0x84, 0xff),
+                Colour(0x4a, 0x6d, 0xb5, 0xff));
+            btn->m_pLabelBox->SetFontSize(14.0f);
+            btn->m_pLabelBox->ReshapeBounds(0x78, 0x16, 1, 0);
+        }
+        btn->m_DrawRotation.x = -7.17f;
+        m_pBSButton0 = btn;
+        if (game_work.mHud) game_work.mHud->AddControl(btn, false);
+    }
+
+    // --- m_pBSButton1: Twitter defunct visible stub ---
+    // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: same pattern as FB,
+    //   GETSTRING(0x11f,0), "join_tw.tex", stroke (0x31,0xae,0xd6)/(0x52,0xba,0xde).
+    // TODO: v1.6.1 DojoScreen ctor @0x0016bad8 -- confirm exact TW button position;
+    //   HLE shows FB above TW (stacked vertically), RE had both at Vec3(152,100,0)
+    //   which is wrong. TW is placed below FB using approx 2x button-height gap.
+    {
+        BSButton* btn = new BSButton(
+            Vec3(108.0f, 100.0f, 0.0f),
+            GETSTRING_CAST_0(LSTR_SOCIAL_TWITTER),
+            Vec3(1.0f, 1.0f, 1.0f));
+        btn->Init();
+        btn->SetCallback(Mortar::Delegate0<void>::Make(this, &DojoScreen::TwitterPressed));
+        btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_tw.tex"), true);
+        btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
+        if (btn->m_pLabelBox) {
+            btn->m_pLabelBox->SetColour(Colour(0xef, 0xf7, 0xff, 0xff), 0);
+            // TODO: v1.6.1 DojoScreen::DojoScreen @0x0016bad8 -- verify stroke width (1.0f assumed)
+            btn->m_pLabelBox->SetStroke(1.0f,
+                Colour(0x31, 0xae, 0xd6, 0xff),
+                Colour(0x52, 0xba, 0xde, 0xff));
+            btn->m_pLabelBox->SetFontSize(14.0f);
+            btn->m_pLabelBox->ReshapeBounds(0x78, 0x16, 1, 0);
+        }
+        btn->m_DrawRotation.x = -7.17f;
+        m_pBSButton1 = btn;
+        if (game_work.mHud) game_work.mHud->AddControl(btn, false);
+    }
 }
 
 // ===================================================================
@@ -128,24 +204,28 @@ void DojoScreen::UnLoadContent() {
 }
 
 // ===================================================================
-// HUDControl::Init override
+// Matches DojoScreen::Init @ 0x00169e80 (vtable slot +0x08)
+// ASM-spec v1.6.1 DojoScreen::Init @0x00169e80: sets state=0, alpha=0, active=1,
+// then calls Reset() which calls CreateButtons(). This is the initial activation
+// path (called by MainScreen before AddControl). Reset() handles re-activation
+// (called by AboutScreen when returning). Both paths converge on CreateButtons().
 // ===================================================================
 void DojoScreen::Init() {
-    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Init");
+    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Init @ 0x00169e80");
     m_State = 0;
     m_TransitionAlpha = 0.0f;
     m_Active = 1;
+    // ASM-spec v1.6.1 DojoScreen::Init @0x00169e80: calls Reset() -> CreateButtons()
+    Reset();
 }
 
 // Matches DojoScreen::Reset @ 0x0016b568 (vtable slot +0x10).
-// Binary writes only the BaseScreen::m_State (+0x90) field to 0 — used
-// when AboutScreen completes its fade-out and wants DojoScreen to
-// re-fade-in. Init() is more eager (also zeros alpha + sets active);
-// at the AboutScreen-state-2 callsite the alpha is already <0.001 and
-// m_Active was never cleared, so Init's extras are no-ops there.
+// Binary: writes m_State=0, then calls CreateButtons() (v1.6.1 confirmed;
+// CreateButtons has per-pointer null guards so re-entry is safe).
 void DojoScreen::Reset() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0016b568");
     m_State = 0;
+    CreateButtons();
 }
 
 // ===================================================================
@@ -158,7 +238,23 @@ void DojoScreen::Reset() {
 void DojoScreen::Release() {
     BaseScreen::RemoveButtons();
 
-    // Binary cleans up fields +0xa0..+0xb4; port-only m_pAboutScreen also cleaned.
+    // Binary cleans up BSButton0/1 (+0xa0, +0xa4): mark pending removal from HUD.
+    if (m_pBSButton0) {
+        m_pBSButton0->m_bPendingRemoval = 1;
+        m_pBSButton0 = nullptr;
+    }
+    if (m_pBSButton1) {
+        m_pBSButton1->m_bPendingRemoval = 1;
+        m_pBSButton1 = nullptr;
+    }
+
+    // Binary cleans up VersionText (+0xb4): delete the BakedStringBox.
+    if (m_pVersionText) {
+        delete m_pVersionText;
+        m_pVersionText = nullptr;
+    }
+
+    // Port-only: clean up AboutScreen child pointer.
     if (m_pAboutScreen) {
         m_pAboutScreen->SetPendingRemoval();
         m_pAboutScreen = nullptr;
@@ -176,6 +272,105 @@ void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
 }
 
 // ===================================================================
+// Matches DojoScreen::CreateButtons @ 0x0016ad9c
+// Creates m_pBackButton, m_pShopButton, m_pAboutButton with per-pointer
+// null guards. Called from Reset() (v1.6.1 binary pattern).
+// ===================================================================
+void DojoScreen::CreateButtons() {
+    if (!game_work.mHud) return;
+
+    // --- field_0x94: Back/Play button ---
+    // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: bomb type, pos=(0,0,0),
+    //   field_0x14(m_HudScale.x)=0.375, field_0x18(m_HudScale.y)=-0.3,
+    //   field_0x13c(m_RestScale.x)*=0.825, m_bRespondsToBackKey=1.
+    // Confirm: back ring is the bomb (red) ring.
+    if (m_pBackButton == nullptr) {
+        const int bombFruitType = FruitInfo_GetCount();
+        m_pBackButton = new MenuButton();
+        m_pBackButton->m_Texture = s_TexBackIcon;
+        m_pBackButton->Init(POS_BACK_BUTTON,
+                            Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
+                            bombFruitType, Vec3(0, 0, 0), nullptr);
+        m_pBackButton->m_bRespondsToBackKey = 1;
+        m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_HudScale.x=0.375, m_HudScale.y=-0.3
+        m_pBackButton->m_HudScale.x = 0.375f;
+        m_pBackButton->m_HudScale.y = -0.3f;
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: field_0x13c(m_RestScale)*=0.825
+        m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
+        if (m_pBackButton->m_pTrackedFruit) {
+            m_pBackButton->m_pTrackedFruit->scale =
+                m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
+        }
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
+        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices (using [0],[1] = bomb ring, matches MainScreen quit pattern)
+        m_pBackButton->SetText(
+            GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),
+            game_work.m_RingColours[0],
+            game_work.m_RingColours[1],
+            31.0f, 10.0f, true, true);
+        game_work.mHud->AddControl(m_pBackButton);
+        if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
+    }
+
+    // --- field_0x98: Shop button (senseis_swag.tex) ---
+    if (m_pShopButton == nullptr) {
+        const int shopFruitType = Fruit::FruitType("pineapple", false);
+        m_pShopButton = new MenuButton();
+        m_pShopButton->m_Texture = s_TexShop;
+        m_pShopButton->Init(POS_SHOP_BUTTON,
+                            Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
+                            shopFruitType, Vec3(0, 0, 0), nullptr);
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_RestScale=(texW+1,texH+1,1)
+        if (s_TexShop.IsValid()) {
+            m_pShopButton->m_RestScale = Vec3(
+                (float)s_TexShop->GetWidth() + 1.0f,
+                (float)s_TexShop->GetHeight() + 1.0f,
+                1.0f);
+        }
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_ShakeScale.x=0.5, y*=0.575, z*=0.575, y=-y
+        m_pShopButton->m_ShakeScale.x = 0.5f;
+        m_pShopButton->m_ShakeScale.y *= 0.575f;
+        m_pShopButton->m_ShakeScale.z *= 0.575f;
+        m_pShopButton->m_ShakeScale.y = -m_pShopButton->m_ShakeScale.y;
+        // TODO: v1.6.1 DojoScreen::CreateButtons @0x0016ad9c -- confirm X+Y inset exact value
+        m_pShopButton->m_HitInsetX   = -15.0f;
+        m_pShopButton->m_HitInsetY   = -15.0f;
+        m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
+        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices (using [4],[5] = pineapple ring, matches MainScreen play pattern)
+        m_pShopButton->SetText(
+            GETSTRING_CAST_0(LSTR_DJ_SHOP_BUTTON),
+            game_work.m_RingColours[4],
+            game_work.m_RingColours[5],
+            54.5f, 14.0f, true, true);
+        game_work.mHud->AddControl(m_pShopButton);
+        if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
+        m_pShopButton->SetNewSymbol(false);
+    }
+
+    // --- field_0x9c: About button (about.tex) ---
+    if (m_pAboutButton == nullptr) {
+        const int aboutFruitType = Fruit::FruitType("plum", false);
+        m_pAboutButton = new MenuButton();
+        m_pAboutButton->m_Texture = s_TexAbout;
+        m_pAboutButton->Init(POS_ABOUT_BUTTON,
+                             Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
+                             aboutFruitType, Vec3(0, 0, 0), nullptr);
+        m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label
+        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- verify ring colour pair indices for about/plum button
+        m_pAboutButton->SetText(
+            GETSTRING_CAST_0(LSTR_ABOUT_TITLE),
+            game_work.m_RingColours[6],
+            game_work.m_RingColours[7],
+            39.5f, 10.0f, true, true);
+        game_work.mHud->AddControl(m_pAboutButton);
+    }
+}
+
+// ===================================================================
 // Matches DojoScreen::Update @ 0x0016b6a4
 // ===================================================================
 void DojoScreen::Update(float dt) {
@@ -186,89 +381,12 @@ void DojoScreen::Update(float dt) {
 
     switch (m_State) {
 
-    // ---- STATE 0: Fade in, create buttons when alpha > 0.95 ----
+    // ---- STATE 0: Fade in ----
+    // Binary: alpha lerp only. CreateButtons() is called from Reset(), not here.
     case 0: {
         // Exponential approach: alpha += (1 - alpha) * 0.25
         m_TransitionAlpha = m_TransitionAlpha +
                             (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
-
-        if (m_TransitionAlpha > ALPHA_BUTTON_CREATE) {
-
-            // --- field_0x94: Back/Play button (back_icon.tex) ---
-            if (m_pBackButton == nullptr) {
-                // Binary: fruit type from **(int**)(GOT + 0x7060) — this
-                // is the bomb threshold global, equal to FruitInfo_GetCount().
-                // MenuButton treats fruitType >= count as a BOMB spawn.
-                const int bombFruitType = FruitInfo_GetCount();
-                m_pBackButton = new MenuButton();
-                m_pBackButton->m_Texture = (s_TexBackIcon);
-                m_pBackButton->Init(POS_BACK_BUTTON,
-                                    Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
-                                    bombFruitType, Vec3(0, 0, 0), nullptr);
-                // TODO: re-verify v1.6.1 DojoScreen::Update @0x0016b6a4 inner offset (was: 0x0013856c stale v1.5.x): strb 1 at button+0x138 = m_bRespondsToBackKey.
-                m_pBackButton->m_bRespondsToBackKey = 1;
-                m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                game_work.mHud->AddControl(m_pBackButton);
-                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
-                // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
-                m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
-                if (m_pBackButton->m_pTrackedFruit) {
-                    m_pBackButton->m_pTrackedFruit->scale =
-                        m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
-                }
-            }
-
-            // --- field_0x98: Shop button (senseis_swag.tex) ---
-            if (m_pShopButton == nullptr) {
-                // Binary: Fruit::FruitType((char*)<pineapple string ptr>, false) (TODO: re-verify v1.6.1 DAT; was: DAT_001386b0 stale v1.5.x)
-                const int shopFruitType = Fruit::FruitType("pineapple", false);
-                m_pShopButton = new MenuButton();
-                m_pShopButton->m_Texture = (s_TexShop);
-                m_pShopButton->Init(POS_SHOP_BUTTON,
-                                    Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
-                                    shopFruitType, Vec3(0, 0, 0), nullptr);
-                // Binary post-Init writes (order per CreateButtons @0x0016ad9c):
-                //   m_RestScale = (texW+1, texH+1, 1.0)   (absolute)
-                //   m_ShakeScale.x = 0.5  (backdrop scale factor for shop button)
-                //   m_ShakeScale.y *= 0.575; m_ShakeScale.z *= 0.575; m_ShakeScale.y = -m_ShakeScale.y
-                //   m_HitInsetX    = -15.0
-                //   m_HitInsetY    = -15.0
-                if (s_TexShop.IsValid()) {
-                    m_pShopButton->m_RestScale = Vec3(
-                        (float)s_TexShop->GetWidth() + 1.0f,
-                        (float)s_TexShop->GetHeight() + 1.0f,
-                        1.0f);
-                }
-                // Binary CreateButtons @0x0016ad9c: m_ShakeScale.x = 0.5 (backdrop scale factor)
-                m_pShopButton->m_ShakeScale.x = 0.5f;
-                // Binary CreateButtons @0x0016ad9c: bounce params *= 0.575, then y = -y
-                m_pShopButton->m_ShakeScale.y *= 0.575f;
-                m_pShopButton->m_ShakeScale.z *= 0.575f;
-                m_pShopButton->m_ShakeScale.y = -m_pShopButton->m_ShakeScale.y;
-                // TODO: v1.6.1 DojoScreen::CreateButtons -- confirm X-only vs X+Y inset + exact value
-                m_pShopButton->m_HitInsetX   = -15.0f;
-                m_pShopButton->m_HitInsetY   = -15.0f;
-                m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
-                game_work.mHud->AddControl(m_pShopButton);
-                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
-                // ItemManager not ported — always show no badge
-                m_pShopButton->SetNewSymbol(false);
-            }
-
-            // --- field_0x9c: About button (about.tex) ---
-            if (m_pAboutButton == nullptr) {
-                // Binary: Fruit::FruitType((char*)DAT_001389f0, false)
-                const int aboutFruitType = Fruit::FruitType("plum", false);
-                m_pAboutButton = new MenuButton();
-                m_pAboutButton->m_Texture = (s_TexAbout);
-                m_pAboutButton->Init(POS_ABOUT_BUTTON,
-                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
-                                     aboutFruitType, Vec3(0, 0, 0), nullptr);
-                m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                game_work.mHud->AddControl(m_pAboutButton);
-            }
-        }
 
         // Transition to state 1 when fully faded in
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
@@ -368,6 +486,7 @@ void DojoScreen::Update(float dt) {
 // ===================================================================
 void DojoScreen::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    (void)hudScale;
     if (m_TransitionAlpha <= 0.0f) return;
 
     // --- Block A: dojo_sensei.tex (slot +0x10) — main panel (128x256) ---
@@ -389,11 +508,26 @@ void DojoScreen::Draw(float* hudScaleRaw) {
         s_TexSensei->UnSet();
     }
 
-    // --- Block B: DrawBorders (shade triangles + sml_title + dojo.tex) ---
-    // Binary: copies dojo.tex SmartPtr, builds translate (-184, -136, 0),
-    //         calls BaseScreen::DrawBorders(this, &tex, alpha, &pos)
-    static const Vec3 BORDER_POS(-184.0f, -136.0f, 0.0f);
-    DrawBorders(s_TexDojo, m_TransitionAlpha, BORDER_POS);
+    // --- Block B: DrawBorders (shade triangles + sml_title) + version text ---
+    // Binary DojoScreen::Draw @0x0016a004: calls DrawBorders(BakedStringBox* overload)
+    //   with pos=(-184,-141,0) and uses the RETURNED Vec3 as title anchor.
+    //   dojo.tex is vestigial in v1.6.1 (size-read only, not drawn here).
+    // Port: use BakedStringBox* overload (no secondary texture). Pass nullptr
+    //   to get the anchor back; draw m_pVersionText separately at anchor+(0,5,0).
+    {
+        static const Vec3 BORDER_POS(-184.0f, -141.0f, 0.0f);
+        Vec3 titlePos = DrawBorders(
+            static_cast<Mortar::BakedStringBox*>(nullptr),
+            m_TransitionAlpha,
+            BORDER_POS);
+
+        // Draw "DOJO" version text at title anchor + Vec3(0,5,0).
+        if (m_pVersionText) {
+            titlePos += Vec3(0.0f, 5.0f, 0.0f);
+            m_pVersionText->SetTranslation(titlePos, 1);
+            m_pVersionText->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        }
+    }
 }
 
 // ===================================================================
@@ -467,6 +601,13 @@ void DojoScreen::AboutCallback() {
 
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 }
+
+// ---- Defunct callbacks ----
+
+// Defunct: Facebook social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
+void DojoScreen::FacebookPressed() {}
+// Defunct: Twitter social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
+void DojoScreen::TwitterPressed() {}
 
 // ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----
 // See file-header "Defunct: 4 binary symbols compiled into FruitNinja.exe but

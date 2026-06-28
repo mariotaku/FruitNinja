@@ -2,9 +2,9 @@
 //
 // The manual test (test_menubutton_scale) proved the math is correct when
 // m_pTrackedFruit is non-null at shrink time. This test drives the REAL
-// DojoScreen::Update() flow to confirm whether m_pTrackedFruit is actually
-// set when lines ~215-218 execute (the 0.825 shrink block inside the
-// `if (m_pPlayButton == nullptr)` guard in state 0).
+// DojoScreen activation flow (Init()->Reset()->CreateButtons()) to confirm
+// whether m_pTrackedFruit is actually set when the 0.825 shrink block inside
+// CreateButtons() executes (m_pBackButton null guard).
 //
 // Hypothesis: if m_pTrackedFruit is null at shrink time (e.g. because
 // CreateFruit defers entity allocation past the current frame), then only
@@ -163,14 +163,17 @@ int main(int argc, char* argv[]) {
            (int)existingControls.size());
 
     DojoScreen* dojo = new DojoScreen(h.game);
+    // Match the real game's activation flow (MainScreen @ 0x197494):
+    //   Init() is called BEFORE AddControl; Init() -> Reset() -> CreateButtons().
+    dojo->Init();
     game_work.mHud->AddControl(dojo);
 
-    // --- Step 3: Tick enough frames that state-0 creates the back button. ---
-    // alpha starts at 0, reaches 0.95 in ~11 frames (0.25 lerp).
-    // We drive SETTLE_FRAMES total so grow-in fully saturates.
+    // --- Step 3: Tick enough frames for the back-bomb grow-in to saturate. ---
+    // CreateButtons() fires during Init() (v1.6.1 faithful path: Init->Reset->CreateButtons).
+    // We drive SETTLE_FRAMES total so MenuButton grow-in fully saturates.
     //
-    // After each frame, check if m_pPlayButton has been created.
-    // When it first appears, snapshot the diagnostic state.
+    // After each frame, check if the back-bomb has been added to HUD.
+    // When it first appears in the HUD list, snapshot the diagnostic state.
     MenuButton* dojoBtn       = NULL;
     int         creationFrame = -1;
 
@@ -201,7 +204,7 @@ int main(int argc, char* argv[]) {
     if (dojoBtn == NULL) {
         fprintf(stderr,
             "FAIL: DojoScreen never created its back-bomb after %d frames.\n"
-            "  -> m_pPlayButton was never added to HUD (DojoScreen state-0 didn't fire?)\n",
+            "  -> m_pBackButton was never added to HUD (Init()->Reset()->CreateButtons() path broken?)\n",
             SETTLE_FRAMES);
         h.Shutdown();
         return 1;
