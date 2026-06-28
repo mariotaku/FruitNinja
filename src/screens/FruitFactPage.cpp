@@ -48,8 +48,10 @@ FruitFactPage::FruitFactPage(FruitFactControl* pCtrl)
 FruitFactPage::~FruitFactPage() {
 }
 
-// Binary @ 0x0017c19c -- base Update; concrete pages override
-void FruitFactPage::Update(float /*dt*/) {
+// Binary @ 0x0017c19c
+void FruitFactPage::Update(float dt) {
+    UpdateButtons(dt);              // BaseScreen::UpdateButtons @0x001602cc
+    SetExtraControlsDefaultPos();   // @0x0015f618 -- writes child m_BasePos2 = pos
 }
 
 // Binary @ 0x0017c1b4 -- vtable +0x44: show this page

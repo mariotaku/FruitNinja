@@ -64,6 +64,11 @@ public:
     // UpdateButtons v1.6.1 @0x001602cc — lazy ScreenButton creation + update.
     void UpdateButtons(float dt);
 
+    // SetExtraControlsDefaultPos v1.6.1 @0x0015f618 — propagates this screen's
+    // origin (pos) into every registered child control's m_BasePos2 (+0x1bc)
+    // so they follow the page when the page is translated.
+    void SetExtraControlsDefaultPos();
+
     // AddGenericControl — registers a HUDControl in m_HUDControls
     // so Release() marks it pending-removal on teardown.
     void AddGenericControl(HUDControl* ctrl);
