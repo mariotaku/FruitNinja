@@ -1,11 +1,12 @@
-// Analysed: 2026-04-26T00:00
-//
-// ShopListItem implementation.
-// Binary: ctor (0-param) 0x0015f9e8, ctor (5-param) 0x0015f734.
-// Draw @ 0x0015eb00 -- ~450 instructions, 5 Font::DrawString calls.
-// Move @ 0x0015d1fc -- sets pos + _pad2 (iconPos cache).
-//
-// See docs/screens/shop-list-item-draw.md for full spec.
+// ASM-spec v1.6.1 ShopListItem::Draw @0x001b5da4 (thin dispatcher -> NewDraw)
+// ASM-spec v1.6.1 ShopListItem::NewDraw @0x001b58e8
+// ASM-spec v1.6.1 ShopListItem::DrawDescription @0x001b1f20
+// ASM-spec v1.6.1 ShopListItem::DrawDividers @0x001b1a98
+// ASM-spec v1.6.1 ShopListItem::DrawIcon @0x001b578c
+// ASM-spec v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8
+// ASM-spec v1.6.1 ShopListItem::DrawInAppPurchaseTags @0x001b1798
+// ASM-spec v1.6.1 ShopListItem::Create @0x001b27f0
+// ASM-spec v1.6.1 ShopListItem::Move @0x001b43e0
 
 #include "ShopListItem.h"
 #include "ScrollingMenu.h"
@@ -16,12 +17,16 @@
 #include "engine/asset/Mesh.h"
 #include "engine/render/MatrixManager.h"
 #include "engine/render/Font.h"
+#include "engine/render/BakedStringBox.h"
+#include "engine/render/FontCacheObjectTTF.h"
 #include "engine/math/Matrix44.h"
+#include "engine/math/Vec2.h"
 #include "engine/math/Colour.h"
 #include "engine/math/Vec3.h"
 #include "engine/math/MathUtil.h"
 #include "asset/TextureManager.h"
 #include "engine/util/StringTable.h"
+#include "engine/util/Localisation.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -32,115 +37,109 @@
 #include "debug/Logger.h"
 #include "hud/IngamePopup.h"
 
-// Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5) using the
-// process-global GameTask::Random LCG. Port uses rand() since the
-// per-task RNG isn't exposed yet.
+// Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5).
 static float RandFloat5() {
     return ((float)rand() / (float)RAND_MAX) * 5.0f;
 }
-// GL symbols come via Renderer.h -> gl_funcs.h
+
+// File-static colour cache. Mirrors static_block+0x8C in the binary.
+// Stores the last drawn m_Type for the divider colour cache;
+// reset to 0xFFFFFFFF when m_bSelected is set (Draw resets, DrawDividers reads).
+static int32_t s_lastDrawnType = (int32_t)0xFFFFFFFF;
 
 // ---------------------------------------------------------------------------
-// ShopListItem::ShopListItem() @ 0x0015f9e8
-// Binary: ScrollingMenuItem base ctor, SmartPtr::SetNull(+0x274),
-//         *(+0x264) = DAT_0015fa54 (0.0f), *(+0x278) = 0,
-//         *(+0x260) = *(+0x25c) = *(+0x280) = DAT_0015fa54 (0.0f),
-//         *(+0x27e) = 0, *(+0x27c) = 1, *(+0x27d) = 0.
+// Process-wide statics (binary static_block +0x68 / +0x6c).
+// ---------------------------------------------------------------------------
+uint16_t ShopListItem::s_ShimmerPhase = 0;
+float    ShopListItem::s_ShimmerY    = 0.0f;
+
+// ---------------------------------------------------------------------------
+// ShopListItem::ShopListItem() @ v1.6.1 0x001b41f0
+// Binary: ScrollingMenuItem base ctor, all 5 box ptrs = 0, TintA=0xFF,
+//         TrailFlag=0, SmartPtr::SetNull(m_pIconTex), m_pItemInfo=0,
+//         m_bOnscreenItem=1, m_bSelected=0, m_bIsNew=0, m_CostAlpha=0.
 // ---------------------------------------------------------------------------
 ShopListItem::ShopListItem()
     : ScrollingMenuItem()
     , m_pShopScreen(nullptr)
-    // m_DescText: zeroed in body below
-    // _pad: zeroed in body below
     , m_NewItemAlpha(0.0f)
     , m_SelectedAlpha(0.0f)
     , m_LockFlashAlpha(0.0f)
-    // _pad2: zeroed in body below
+    , m_IconPos(0.0f, 0.0f, 0.0f)
     , m_pItemInfo(nullptr)
     , m_bOnscreenItem(1)
     , m_bSelected(0)
     , m_bIsNew(0)
     , _pad3(0)
     , m_CostAlpha(0.0f)
+    , m_pBox0(nullptr)
+    , m_pBox1(nullptr)
+    , m_TintA(0xFF)
+    , m_pBox2(nullptr)
+    , m_pBox3(nullptr)
+    , m_pBox4(nullptr)
+    , m_TrailFlag(0)
 {
     memset(m_DescText, 0, sizeof(m_DescText));
     memset(_pad, 0, sizeof(_pad));
-    memset(_pad2, 0, sizeof(_pad2));
+    memset(_pad4, 0, sizeof(_pad4));
+    memset(_pad5, 0, sizeof(_pad5));
+    memset(_pad6, 0, sizeof(_pad6));
     m_pIconTex.SetNull();
 }
 
-ShopListItem::~ShopListItem() {}
+// ---------------------------------------------------------------------------
+// ~ShopListItem() @ v1.6.1 0x001b4270
+// Binary: delete all 5 BakedStringBox pointers, then base dtor.
+// ---------------------------------------------------------------------------
+ShopListItem::~ShopListItem() {
+    delete m_pBox0; m_pBox0 = nullptr;
+    delete m_pBox1; m_pBox1 = nullptr;
+    delete m_pBox2; m_pBox2 = nullptr;
+    delete m_pBox3; m_pBox3 = nullptr;
+    delete m_pBox4; m_pBox4 = nullptr;
+}
 
 // ---------------------------------------------------------------------------
-// ShopListItem::Move @ 0x0015d1fc (vtable slot 6, +0x18)
-//
-// Binary sequence:
-//   1. pos.x = x; pos.y = y; pos.z = z
-//   2. *(Vec3*)(this+0x268) = pos     // copy pos into _pad2 (iconPos)
-//   3. if (Mortar::SmartPtr<Texture>::operator bool(this+0x274)):
-//        *(float*)(this+0x268) += DAT_0015d474(35.2f) + *(this+0x18)(m_Size.x=60.0f)
-//        => _pad2.x = pos.x + 95.2f
-//   4. Animate two alpha fields each frame using game_work.dt:
-//        - one ramps toward 1 when ScrollingMenu->field_0x3c == 0
-//          (port maps to m_LockFlashAlpha @ +0x264 -- best fit for the
-//           "ramp up while menu is active" semantic).
-//        - one ramps toward 1 when ItemManager::IsEquipped(m_pItemInfo)
-//          (port maps to m_CostAlpha @ +0x280 -- gates description text
-//           draw in Part 7 of Draw).
-//      Both ramp at +/-5.0 per dt and clamp to [0, 1].
+// ShopListItem::Move @ v1.6.1 0x001b43e0 (vtable slot 6, +0x18)
 // ---------------------------------------------------------------------------
-// Process-wide statics. Binary stores these in the GOT-relative shop class
-// static_block (`+0x68` phase counter, `+0x6c` shimmer Y output). They are
-// shared across all ShopListItems — single oscillator drives all rows.
-uint16_t ShopListItem::s_ShimmerPhase = 0;
-float    ShopListItem::s_ShimmerY    = 0.0f;
-
 void ShopListItem::Move(float x, float y, float z) {
     Game* g = Game::GetInstance();
     const float dt = g ? game_work.dt : 0.0f;
 
-    // (1) Sin-jitter — runs only when this item is the current selection.
-    // Binary @ 0x0015d214-0x0015d278: phase += dt * 65520, output =
-    // |SinIdx(phase)| * 6.0. SinIdx period 65536, magnitude only.
-    // Stored at process-wide statics; Draw reads s_ShimmerY into the
-    // description-text Y component (description text only).
+    // (1) Sin-jitter when selected.
     if (m_bSelected) {
-        const float step = dt * 65520.0f;             // DAT_0015d470 = 0x477FF000
+        const float step = dt * 65520.0f;
         float advanced = (float)s_ShimmerPhase + step;
-        if (advanced < 0.0f) advanced = 0.0f;          // clamp to non-negative
-        s_ShimmerPhase = (uint16_t)advanced;           // implicit mod 65536
+        if (advanced < 0.0f) advanced = 0.0f;
+        s_ShimmerPhase = (uint16_t)advanced;
         const float sinVal = SinIdx(s_ShimmerPhase);
         s_ShimmerY = (sinVal < 0.0f ? -sinVal : sinVal) * 6.0f;
     }
 
-    // (2) Always: copy pos into base.
+    // (2) Copy pos into base.
     pos.x = x;
     pos.y = y;
     pos.z = z;
 
-    // (3) Icon position copy + offset, plus optional lock-flash decay/scatter.
-    // Binary writes the icon Vec3 to _pad2 (this+0x268), NOT to pos.
+    // (3) Icon position copy + offset.
+    // Binary @0x001b43e0: *(Vec3*)(this+0x268) = pos, then offset x.
     if (m_pIconTex.IsValid()) {
-        float* iconPos = reinterpret_cast<float*>(_pad2);
-        iconPos[0] = pos.x;
-        iconPos[1] = pos.y;
-        iconPos[2] = pos.z;
-        iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474 + m_Size.x = 35.2 + 60 = 95.2
+        m_IconPos.x = pos.x;
+        m_IconPos.y = pos.y;
+        m_IconPos.z = pos.z;
+        m_IconPos.x += 35.2f + m_Size.x;  // DAT_0015d474 + m_Size.x = 95.2f
 
-        // Binary @ 0x0015d2a4-0x0015d2fa: when m_LockFlashAlpha > 0,
-        // subtract raw dt (NOT 5*dt) and scatter icon pos by ±2.5 in X/Y.
         if (m_LockFlashAlpha > 0.0f) {
-            m_LockFlashAlpha -= dt;     // raw, not scaled
-            iconPos[0] += RandFloat5() - 2.5f;
-            iconPos[1] += RandFloat5() - 2.5f;
-            // Z unchanged (DAT_0015d478 = 0.0)
+            m_LockFlashAlpha -= dt;
+            m_IconPos.x += RandFloat5() - 2.5f;
+            m_IconPos.y += RandFloat5() - 2.5f;
         }
     }
 
-    // (4) Per-frame alpha ramps. Binary @ 0x0015d2fe-0x0015d448.
+    // (4) Per-frame alpha ramps.
     const float kRate = 5.0f;
-    // 4a: m_NewItemAlpha — NOT centered-gated. +5*dt up if NOT seen,
-    // -5*dt if seen, clamp [0, 1]. ItemInfo::m_bSeen at +0x3C.
+
     if (m_pItemInfo) {
         bool isNew = (m_pItemInfo->m_bSeen == 0);
         float c = m_NewItemAlpha + dt * (isNew ? +kRate : -kRate);
@@ -148,8 +147,6 @@ void ShopListItem::Move(float x, float y, float z) {
         m_NewItemAlpha = c;
     }
 
-    // 4b: m_SelectedAlpha — NOT centered-gated. +5*dt up if equipped,
-    // -5*dt otherwise.
     {
         ItemManager* im = ItemManager::GetInstance();
         bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
@@ -158,8 +155,6 @@ void ShopListItem::Move(float x, float y, float z) {
         m_SelectedAlpha = c;
     }
 
-    // 4c: m_CostAlpha — IS centered-gated. Centered = m_pShopScreen
-    // && m_pShopScreen->GetSelectedItem() == this.
     {
         bool isCentered = m_pShopScreen
             && (m_pShopScreen->GetSelectedItem() == this);
@@ -170,54 +165,22 @@ void ShopListItem::Move(float x, float y, float z) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::Create @ 0x0015c988
-// Binary signature: void Create(ShopListItem* this, ItemInfo* param_1, ShopScreen* param_2)
-//
-// Binary writes (resolved constants from DAT addresses):
-//   *(this + 0x24) = DAT_0015cae8 = 0x42a00000 = 80.0f  --> m_RowHeight = GetHeight()
-//   *(this + 0x28) = DAT_0015caec = 0x43910000 = 290.0f --> m_RowWidth
-//   *(this + 0x18) = DAT_0015caf0 = 0x42700000 = 60.0f  --> m_BBoxWidth (Vec3.x)
-//   *(this + 0x1c) =               0x41500000 = 13.0f   --> m_BBoxHeight (Vec3.y, literal in decompile)
-//   *(this + 0x20) = DAT_0015cae4 = 0x00000000 = 0.0f   --> m_BBoxDepth (Vec3.z)
-//   *(this + 0x280) = DAT_0015cae4 = 0.0f               --> m_CostAlpha init
-//   *(this + 0x58)  = param_2                            --> ShopScreen* back-ptr at +0x58
-//   *(this + 0x278) = param_1                            --> m_pItemInfo
-//
-// Also: loads item icon texture into m_pIconTex from ItemInfo::m_pType string,
-//       builds cost/description text into m_DescText (+0x5c),
-//       checks ItemManager::IsEquipped -> sets m_SelectedAlpha(+0x260) to 1.0f,
-//       checks ItemInfo::IsNew (field +0x3c) -> sets m_NewItemAlpha(+0x25c) to 1.0f.
+// ShopListItem::Create @ v1.6.1 0x001b27f0
 // ---------------------------------------------------------------------------
 void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
-    // --- Row height (critical): 80.0f = DAT_0015cae8 = 0x42a00000 ---
-    // GetHeight() reads m_Height (+0x24); this is the only place it gets set for shop rows.
-    m_Height = 80.0f;   // DAT_0015cae8
-    m_Width  = 290.0f;  // DAT_0015caec
+    m_Height = 80.0f;
+    m_Width  = 290.0f;
+    m_Size.x = 60.0f;
+    m_Size.y = 13.0f;
+    m_Size.z = 0.0f;
 
-    // --- Display size Vec3 (m_Size at +0x18/+0x1C/+0x20) ---
-    // Binary: Vec3(60.0f, 13.0f, 0.0f) written to +0x18/+0x1C/+0x20
-    m_Size.x = 60.0f;   // DAT_0015caf0
-    m_Size.y = 13.0f;   // literal in decompile
-    m_Size.z = 0.0f;    // DAT_0015cae4
-
-    // --- Back-pointers ---
-    m_pShopScreen = pShopScreen;   // +0x58 in binary (port: m_pShopScreen)
-    m_pItemInfo   = pItemInfo;     // +0x278
-
-    // --- Cost alpha init ---
-    m_CostAlpha = 0.0f;  // DAT_0015cae4
+    m_pShopScreen = pShopScreen;
+    m_pItemInfo   = pItemInfo;
+    m_CostAlpha   = 0.0f;
 
     if (!pItemInfo) return;
 
-    // --- Icon texture ---
-    // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015c9ea (re-analyst).
-    // Binary picks one of two format strings keyed on m_Type:
-    //   BACKGROUND (type == 1): "item_%s.tex"   (DAT_0015caf8 -> "item_%s.tex")
-    //   else                  : "%s.tex"        (DAT_0015cafc -> "%s.tex")
-    // BACKGROUND items use the XML attribute texture="BG_<name>" without
-    // the item_ prefix (asset on disk is item_bg_<name>.tex). The
-    // "item_%s.tex" format prepends the prefix; case-insensitive file
-    // lookup downstream handles BG_/bg_.
+    // Icon texture load.
     if (pItemInfo->m_pTextureName && pItemInfo->m_pTextureName[0] != '\0') {
         char buf[64];
         const char* fmt = (pItemInfo->m_Type == ITEM_TYPE_BACKGROUND)
@@ -227,12 +190,7 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
         m_pIconTex = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
 
-    // --- Description text — 3-way branch (binary @ 0x0015ca6e/c7e/c82) ---
-    //   if (!IsLocked):                       use m_pDescText
-    //   else if (m_pTotalStatKey == NULL):    use m_pLockedText (literal)
-    //   else if (m_pProgressFmt && remaining == 1):
-    //                                          use m_pProgressFmt (singular form)
-    //   else:                                  sprintf(m_pLockedText, remaining)
+    // Description text.
     {
         const char* src = nullptr;
         char remainingBuf[256] = {0};
@@ -242,12 +200,6 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
         } else if (pItemInfo->m_pTotalStatKey == nullptr) {
             src = pItemInfo->m_pLockedText;
         } else {
-            // Achievement-progress branch. Binary computes:
-            //   remaining = m_CountDownFrom > 0
-            //       ? max(0, m_CountDownFrom - GetTotal(StringHash(key)))
-            //       : GetTotal(StringHash(key))
-            // Port: stat-tracking not fully wired; treat remaining = m_CountDownFrom
-            // as a placeholder so the branch still picks a sensible string.
             int remaining = pItemInfo->m_CountDownFrom;
             if (remaining < 0) remaining = 0;
             if (pItemInfo->m_pProgressFmt && remaining == 1) {
@@ -268,512 +220,188 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
         }
     }
 
-    // --- Selected alpha: 1.0f if item is currently equipped ---
-    // Binary: ItemManager::IsEquipped(pItemInfo) != 0 -> *(+0x260) = 0x3f800000
     ItemManager* im = ItemManager::GetInstance();
     if (im && im->IsEquipped(pItemInfo)) {
         m_SelectedAlpha = 1.0f;
     }
 
-    // --- New-item alpha: 1.0f if item has not been seen ---
-    // Binary @ 0x0015cad0: if (*(char*)(pItemInfo + 0x3c) == 0) m_NewItemAlpha = 1.0f.
-    // ItemInfo::m_bSeen at +0x3C — false (0) means "not yet seen" → show new badge.
     if (pItemInfo->m_bSeen == 0) {
         m_NewItemAlpha = 1.0f;
     }
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::Draw @ 0x0015eb00
-//
-// Render order (binary-faithful):
-//   Guard 1: m_bSelected -> reset colour cache (static_block+0x8C)
-//   Guard 2: m_bVisible (+0x2D ScrollingMenuItem field) == 0 -> return
-//   Part 1: Title text (2 draws: shadow + fill); local_d0.y -= 26.0f after
-//   Part 2: Cost hint text (2 draws: shadow + fill); uses local_d0 (y decremented)
-//   Part 3: Item icon texture (when m_pIconTex valid); translate from _pad2 (+0x268)
-//   Part 4: scratch_deviders divider cell (always); width=257, translate = pos+half
-//   Part 5: Description text (when m_CostAlpha > 0); font shrink loop
-//   Part 6: loading.tex new-badge stripes (OUTSIDE the visibility guard; when m_bIsNew)
-//
-// Badges (NEW / SELECTED) are drawn ONCE via DrawFloatingText() -> IngamePopup::Draw
-// (gated on m_NewItemAlpha / m_SelectedAlpha alpha fields +0x25c / +0x260 in binary).
-// There is NO inline badge quad in Draw or NewDraw for v1.6.1 -- those were v1.5.1
-// residue (removed by ASM-verified: 2026-06-26 v1.6.1 ShopListItem::Draw @0x001b5da4,
-// NewDraw @0x001a58e8 (asm-inspector)).
-// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
+// ShopListItem::Draw @ v1.6.1 0x001b5da4 -- thin dispatcher
 // ---------------------------------------------------------------------------
 void ShopListItem::Draw() {
-    // --- Static colour cache (static_block+0x8C in binary) ---
-    // Stores the last seen costType (ItemInfo->m_Type). Reset to 0xFFFFFFFF when
-    // m_bSelected is set so the cache is re-evaluated (binary: write 0xFFFFFFFF).
-    static int32_t s_costTypeCache = (int32_t)0xFFFFFFFF;
+    // Legacy bitmap font ref (binary: pM_Fonts[1] = pFontMain); used only in
+    // the offscreen branch which draws nothing visible when m_CostAlpha==0.
+    // Kept as a faithful variable reference matching the binary's register load.
+    Mortar::Font* f = game_work.pFontMain.IsValid()
+                      ? game_work.pFontMain.Get() : nullptr;
+    (void)f;
 
-    // Guard 1: m_bSelected resets the colour cache
-    // Binary: if (*(this+0x27D) != 0) static_block[+0x8C] = 0xFFFFFFFF
+    // Reset divider colour cache when this row is selected.
+    // Binary @0x001b5da4: *(static_block+0x8C) = 0xFFFFFFFF when *(this+0x27D) != 0.
     if (m_bSelected) {
-        s_costTypeCache = (int32_t)0xFFFFFFFF;
+        s_lastDrawnType = (int32_t)0xFFFFFFFF;
     }
 
-    // --- Static cost-width cache (static_block+0x90..+0x9C in binary) ---
-    // Filled lazily: if [+0x90] == 0.0f, all 4 widths are measured once.
-    // Port: mirrors the same lazy fill semantics using a static float[4].
-    static float s_costWidths[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-    // Guard 2: skip if not onscreen.
-    // Binary: if (*(this+0x2D) == 0) return;
-    // +0x2D is m_bOnscreen in the pre-Mortar::Delegate1 gap (ScrollingMenuItem::m_bOnscreen).
-    // This is NOT the same as m_bOnscreenItem (+0x27C).
+    // Dispatch: onscreen -> full TTF draw; offscreen -> loading-stripe only.
     if (!m_bOnscreen) {
-        // Part 6 is OUTSIDE this guard (see binary spec).
-        // Fall through to Part 6 after the guard block.
-        goto draw_part6;
+        DrawDarkness();
+    } else {
+        NewDraw();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::NewDraw @ v1.6.1 0x001b58e8 -- all visible rendering (TTF)
+// ---------------------------------------------------------------------------
+void ShopListItem::NewDraw() {
+    if (!m_pItemInfo) { DrawDarkness(); return; }
+    if (!game_work.m_pTTFFontMain) { DrawDarkness(); return; }
+
+    Mortar::FontCacheObjectTTF* ttfFont = game_work.m_pTTFFontMain;
+
+    bool isLocked = (m_pItemInfo->IsLocked() != 0);
+    Colour itemColour = isLocked ? Colour(200, 200, 200, 255) : Colour(255, 255, 255, 255);
+
+    // --- Box0: title (lazy-build once) ---
+    // v1.6.1 NewDraw @0x001b58e8: operator_new(0xc8), ctor(font,16,195,30,align,1,0),
+    // SetText(m_pItemInfo->m_pTitle), SetShadow(0,black,Vec3(4,-4,0),1), Update.
+    if (!m_pBox0) {
+        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195.0f, 30.0f, 0x0d, 1, 0);
+        const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
+        m_pBox0->SetText(title);
+        m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
+        m_pBox0->Update();
     }
 
-    {
-        // --- Guard: no item info, nothing to render ---
-        if (!m_pItemInfo) goto draw_part6;
-
-        Game* g = Game::GetInstance();
-        if (!g) goto draw_part6;
-
-        Mortar::Font* font = game_work.pFontMain.IsValid() ? game_work.pFontMain.Get() : nullptr;
-        if (!font) goto draw_part6;
-
-        MatrixManager& mm = MatrixManager::GetInstance();
-
-        // White colour singleton (*(Colour**)(GOT+0x73a4) in binary = {255,255,255,255})
-        const Colour colourWhite(255, 255, 255, 255);
-
-        // Item colour: white if unlocked, grey(200,200,200,255) if locked.
-        // Binary: if (ItemInfo::IsLocked) CStack_40 = Colour(200,200,200,255)
-        Colour itemColour = colourWhite;
-        bool isLocked = (m_pItemInfo->IsLocked() != 0);
-        if (isLocked) {
-            itemColour = Colour(200, 200, 200, 255);
-        }
-
-        // local_d0: binary actually computes pos + m_Size. The Ghidra
-        // decompile of `_Vector3::operator+(&local_d0, p_Var9)` drops the
-        // hidden r2 register arg = &m_Size (offset +0x18). See spec at
-        // docs/screens/shop-list-item-draw.md "Position re-verification".
-        // m_Size for ShopListItem = (60, 13, 0) per Create.
-        Vec3 local_d0(pos.x + m_Size.x, pos.y + m_Size.y, pos.z);
-
-        // HD mode: Game.field_0x03 == '\f' (0x0C).
-        // Binary: if HD -> scale=20, else scale=25
-        bool isHD = (game_work.languageFlag == 0x0C);
-        float titleScale = isHD ? 20.0f : 25.0f;
-
-        // fVar26: title fit ratio (1.0 if no shrink), used to derive costScale.
-        float fVar26 = 1.0f;
-
-        // -----------------------------------------------------------------------
-        // Part 1: Title text (shadow + fill)
-        // Binary: Font::DrawString(scale,1.0,0.0, font, titleStr, pos, colour, vec2, 0xE, 0)
-        // -----------------------------------------------------------------------
-        const char* titleStr = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
-
-        // fVar27: measured title width (pixels), used in the HD shrink-to-fit check below.
-        // Binary: MeasureString called once before the title draw loop, stored in fVar27.
-        float fVar27 = font->MeasureWidth(1.0f, titleStr);
-
-        // Scale-to-fit check (HD mode only)
-        // Binary: if HD { if (fVar27 * scale > 175.0f) shrink; else scale=20, fVar26=1.0 }
-        if (isHD) {
-            if (fVar27 * titleScale > 175.0f) {     // DAT_0015eea8 = 175.0f
-                float textScale = 175.0f / (fVar27 * titleScale);
-                float scaled = textScale * 20.0f;
-                titleScale = (scaled > 0.0f) ? scaled : 0.0f;
-                fVar26 = textScale;  // ratio < 1.0 when shrinking
-            } else {
-                titleScale = 20.0f;
-                fVar26 = 1.0f;  // sentinel: no shrink needed
-            }
-        }
-
-        {
-            // Shadow: +4, -4, 0 offset
-            Vec3 shadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
-            font->DrawStringSized(titleScale, 1.0f, 0.0f,
-                             titleStr, shadowPos,
-                             Colour(0, 0, 0, 64),
-                             0xE);
-            // Fill at local_d0
-            font->DrawStringSized(titleScale, 1.0f, 0.0f,
-                             titleStr, local_d0,
-                             itemColour,
-                             0xE);
-        }
-
-        // Decrement local_d0.y by 26.0f (hardcoded literal in binary).
-        // All subsequent parts use the decremented Y.
-        local_d0.y -= 26.0f;
-
-        // -----------------------------------------------------------------------
-        // Part 2: Cost hint text (shadow + fill)
-        // ASM-verified: 2026-05-14 v1.6.1 binary @ 0x0015eb00 (re-analyst).
-        // costStr from static_block[+0x1C + m_Type*4]:
-        //   m_Type==0: GETSTRING(0xB7) = CODE_SHOP_BLADE         "BLADE"
-        //   m_Type==1: GETSTRING(0xB6) = CODE_SHOP_BACKGROUND    "BACKGROUND"
-        //   m_Type==2: GETSTRING(0xB8) = CODE_SHOP_FULL_VERSION  "FULL VERSION"
-        //   m_Type==3: GETSTRING(0x113) = CODE_SHOP_SPECIAL      "SPECIAL" (REMOVEADS)
-        // Width cache: if static_block[+0x90] == 0.0f, measure all 4 and cache.
-        // costScale: HD -> fVar26*16.0f; non-HD -> 20.0f (0x41A00000)
-        // -----------------------------------------------------------------------
-        float costScale = isHD ? (fVar26 * 16.0f) : 20.0f;
-
-        const char* costStr = nullptr;
+    // --- Box1: category (rebuild when m_TintA != m_Type) ---
+    // v1.6.1 NewDraw @0x001b58e8: same ctor pattern with fontSize=14, 175x30.
+    // typeNames (filled by Create @0x001b27f0): BLADE=0xCA, BG=0xC9, FULL=0xCB, SPECIAL=0x12F.
+    if (!m_pBox1 || m_TintA != (uint8_t)m_pItemInfo->m_Type) {
+        delete m_pBox1;
+        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175.0f, 30.0f, 0x0d, 1, 0);
+        const char* catStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
-            case 0: costStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break;
-            case 1: costStr = GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND);   break;
-            case 2: costStr = GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION); break;
-            case 3: costStr = GETSTRING_CAST_0(LSTR_SHOP_SPECIAL);      break;
-            default: costStr = nullptr; break;
+            case 0: catStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break; // 0xCA
+            case 1: catStr = GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND);   break; // 0xC9
+            case 2: catStr = GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION); break; // 0xCB
+            case 3: catStr = GETSTRING_CAST_0(LSTR_SHOP_SPECIAL);      break; // 0x12F
+            default: catStr = nullptr; break;
         }
+        if (catStr) m_pBox1->SetText(catStr);
+        m_pBox1->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
+        m_pBox1->Update();
+        m_TintA = (uint8_t)m_pItemInfo->m_Type;
+    }
 
-        // Width cache (lazy): binary loop @ 0x0015ed3a measures EACH of the
-        // 4 per-type category labels into static_block[+0x90 + i*4]. Port
-        // mirrors that to match the binary's cached-measurement pattern.
-        if (s_costWidths[0] == 0.0f && font) {
-            const char* k[4] = {
-                GETSTRING_CAST_0(LSTR_SHOP_BLADE),
-                GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND),
-                GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION),
-                GETSTRING_CAST_0(LSTR_SHOP_SPECIAL),
-            };
-            for (int i = 0; i < 4; i++) {
-                if (k[i] && k[i][0] != '\0') {
-                    float w = font->MeasureWidth(1.0f, k[i]);
-                    s_costWidths[i] = w * costScale;
-                }
-            }
-        }
+    // --- Set colour and draw both boxes ---
+    // box0 translate = pos + (-175,16,0) + (-20,0,0) = pos + (-195,16,0)
+    // box1 translate = pos + (-175,-10,0)
+    m_pBox0->SetColour(itemColour, 0);
+    m_pBox0->SetTranslation(Vec3(pos.x - 195.0f, pos.y + 16.0f, 0.0f), 0);
+    m_pBox0->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
 
-        if (costStr) {
-            Vec3 cShadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
-            font->DrawStringSized(costScale, 1.0f, 0.0f,
-                             costStr, cShadowPos,
-                             Colour(0, 0, 0, 64),
-                             0xE);
-            font->DrawStringSized(costScale, 1.0f, 0.0f,
-                             costStr, local_d0,
-                             itemColour,
-                             0xE);
-        }
+    m_pBox1->SetColour(itemColour, 0);
+    m_pBox1->SetTranslation(Vec3(pos.x - 175.0f, pos.y - 10.0f, 0.0f), 0);
+    m_pBox1->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
 
-        // -----------------------------------------------------------------------
-        // Part 3: Item icon texture -- when m_pIconTex valid
-        // Binary: Scale = Vec3(64.0f, 64.0f, 0.0f)   DAT_0015f188 = 64.0f
-        //         Translate: global_icon_vec3(BSS,0,0,0) + _pad2(this+0x268)
-        //           = (0 + _pad2.x, 0 + _pad2.y, 0 + _pad2.z)
-        //           = (_pad2.x, _pad2.y, _pad2.z)
-        //         _pad2.x set by Move = pos.x + 95.2f (when icon valid)
-        //         If not locked: draw m_pIconTex.
-        //         If locked: draw static_block[+0x40] = locked_stroke.tex.
-        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
-        // -----------------------------------------------------------------------
-        if (m_pIconTex.IsValid()) {
-            Matrix44 matIcon = Matrix44::Scale44(64.0f, 64.0f, 0.0f);  // DAT_0015f188 = 64.0f
-            // Translate from _pad2 (iconPos cache, set by Move each frame).
-            // global_icon_vec3 (BSS) is zeroed, so translate = _pad2 directly.
-            const float* iconPos = reinterpret_cast<const float*>(_pad2);
-            matIcon.GlobalTranslate44(iconPos[0], iconPos[1], iconPos[2]);
-            mm.GetWorldStack().Reset();
-            mm.GetWorldStack().SetCurrentMatrix(matIcon);
-            mm.UploadModelViewOnly();
-
-            if (!isLocked) {
-                m_pIconTex->Set();
-                Mortar::Mesh::DrawQuadUnCached(colourWhite, NULL);  // always white
-                m_pIconTex->UnSet();
-            } else {
-                // locked: draw locked_stroke.tex (static_block[+0x40])
-                if (ShopScreen::s_TexLockedStroke.IsValid()) {
-                    ShopScreen::s_TexLockedStroke->Set();
-                    Mortar::Mesh::DrawQuadUnCached(colourWhite, NULL);  // always white
-                    ShopScreen::s_TexLockedStroke->UnSet();
-                }
-            }
-        }
-
-        // -----------------------------------------------------------------------
-        // Part 4: scratch_deviders divider cell -- always drawn
-        // Binary: Scale = Vec3(257.0f, 17.0f, 0.0f)   DAT_0015f198 = 257.0f
-        //         divider_scale = *(float**)(GOT+0x7214) (runtime float, ~1.0f)
-        //         scaled = Vec3(257,17,0) * divider_scale
-        //         translate = scaled/2.0f + this->pos   (ORIGINAL pos, not local_d0)
-        //         => (pos.x + 128.5f, pos.y + 8.5f, 0.0f)  when divider_scale=1.0
-        //
-        // Colour cache logic (static_block[+0x8C]):
-        //   costType = (int)(int8_t)(*(ItemInfo+0x10)) = m_Type (sign-extended)
-        //   if (s_costTypeCache == costType): Colour(255,255,255,200)
-        //   else: s_costTypeCache = costType; Colour(128,128,128,255)
-        //
-        // DIFFERS: divider_scale (GOT+0x7214) not wired; using 1.0f (port approximation).
-        // -----------------------------------------------------------------------
-        {
-            int32_t costType = (int32_t)(int8_t)m_pItemInfo->m_Type;
-            Colour dividerColour;
-            if (s_costTypeCache == costType) {
-                dividerColour = Colour(255, 255, 255, 200);
-            } else {
-                s_costTypeCache = costType;   // update cache (static_block[+0x8C])
-                dividerColour = Colour(128, 128, 128, 255);
-            }
-
-            // Scale: 257 wide x 17 tall (the divider quad's pixel size).
-            float dividerW = 257.0f;           // DAT_0015f198
-            float dividerH = 17.0f;
-            Matrix44 matDiv = Matrix44::Scale44(dividerW, dividerH, 0.0f);
-            // Translate: pos + (yAxisUnit * m_Height / 2). Binary computes
-            //   tmp = (*GOT[0x52c]) * m_Height        (= (0,1,0) * 80 = (0,80,0))
-            //   tmp = tmp / 2.0                        (= (0,40,0))
-            //   final = pos + tmp                      (= (pos.x, pos.y + 40, pos.z))
-            // i.e. divider 1 sits at the row's TOP edge (Y-up: pos.y + halfRowH).
-            float halfRowH = m_Height * 0.5f;
-            matDiv.GlobalTranslate44(pos.x, pos.y + halfRowH, 0.0f);
-            mm.GetWorldStack().Reset();
-            mm.GetWorldStack().SetCurrentMatrix(matDiv);
-            mm.UploadModelViewOnly();
-
-            if (ShopScreen::s_TexScratch.IsValid()) {
-                ShopScreen::s_TexScratch->Set();
-                Mortar::Mesh::DrawQuadUnCached(dividerColour, NULL);
-                ShopScreen::s_TexScratch->UnSet();
-            }
-
-            // Second divider (gate: m_bIsNew != 0)
-            // Same scale as divider 1 but translate uses the SUBTRACT path:
-            // final = pos - (yAxisUnit * m_Height / 2)
-            //       = (pos.x, pos.y - halfRowH, pos.z)
-            // i.e. divider 2 sits at the row's BOTTOM edge (Y-up).
-            if (m_bIsNew) {
-                float dividerW2 = 257.0f;      // DAT_0015f51c = 257.0f
-                float dividerH2 = 17.0f;
-                Matrix44 matDiv2 = Matrix44::Scale44(dividerW2, dividerH2, 0.0f);
-                matDiv2.GlobalTranslate44(pos.x, pos.y - halfRowH, 0.0f);
-                mm.GetWorldStack().Reset();
-                mm.GetWorldStack().SetCurrentMatrix(matDiv2);
-                mm.UploadModelViewOnly();
-
-                if (ShopScreen::s_TexScratch.IsValid()) {
-                    ShopScreen::s_TexScratch->Set();
-                    Mortar::Mesh::DrawQuadUnCached(Colour(128, 128, 128, 255), NULL);  // always grey
-                    ShopScreen::s_TexScratch->UnSet();
-                }
-            }
-        }
-
-        // -----------------------------------------------------------------------
-        // Part 5: Description / cost text -- when m_CostAlpha > 0 and pointers valid
-        // Binary: gate: *(this+0x58) != 0 && *(this+0x278) != 0
-        //         alphaU = clamp((uint)(m_CostAlpha * 255.0f), 0, 255)
-        //         if alphaU == 0: skip
-        //         descBuf = (char*)(this+0x5c) = m_DescText
-        //         Font shrink loop:
-        //           descFontSize = 18.0f
-        //           while (GetStringHeight(font, descBuf, descFontSize, 160.0f) > 82.5f)
-        //               descFontSize -= 0.25f
-        //         xPos = ShopScreen::GetDescriptionTextXPos()
-        //         purchaseState = m_pItemInfo->m_RequirementType (+0x24)
-        //
-        // Colour: locked -> (255,255,255,alpha), unlocked -> (0x74,0x5D,0x3B,alpha)
-        // DAT_0015f524 = 82.5f; DAT_0015f540 = 160.0f (wrap width)
-        // -----------------------------------------------------------------------
-        if (m_pShopScreen && m_pItemInfo) {
-            // Part 4 (divider) left a Scale+Translate in the world matrix
-            // via SetCurrentMatrix; reset before the description text so
-            // Font::DrawString's Push captures identity, not the divider's
-            // matrix. Matches the binary's per-part discipline (the binary
-            // does an explicit Reset between parts that run text vs parts
-            // that SetCurrentMatrix).
-            mm.GetWorldStack().Reset();
-
-            uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);  // DAT_0015f520=255.0f
-            if (alphaU > 0xFE) alphaU = 0xFF;
-            alphaU &= ~((int32_t)alphaU >> 31);  // clamp negative to 0
-            uint8_t descAlpha = (uint8_t)alphaU;
-
-            if (descAlpha != 0) {
-                const char* descStr = (m_DescText[0] != '\0')
-                    ? m_DescText
-                    : (m_pItemInfo->m_pDescText ? m_pItemInfo->m_pDescText : "");
-
-                float descFontSize = 18.0f;
-
-                // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0015eb00 (re-analyst)
-                // Shrink font until wrapped height fits within 82.5f (DAT_0015f524).
-                // maxWidth = 160.0f (DAT_0015f540).
-                if (font) {
-                    Mortar::Utf8StringIterator iterH(descStr);
-                    float h = font->GetStringHeight(iterH, descFontSize, 160.0f);
-                    while (h > 82.5f) {
-                        descFontSize -= 0.25f;
-                        iterH = Mortar::Utf8StringIterator(descStr);
-                        h = font->GetStringHeight(iterH, descFontSize, 160.0f);
-                    }
-                }
-
-                float xPos = 65.0f;  // fallback
-                if (m_pShopScreen) {
-                    xPos = m_pShopScreen->GetDescriptionTextXPos();
-                }
-
-                int8_t purchaseState = m_pItemInfo->m_RequirementType;
-
-                Colour descColour;
-                if (isLocked) {
-                    descColour = Colour(255, 255, 255, descAlpha);
-                } else {
-                    descColour = Colour(0x74, 0x5D, 0x3B, descAlpha);
-                }
-
-                // Description Y positions are ABSOLUTE world coords (the
-                // description panel is centered on the screen, not anchored
-                // to row pos.y). Binary loads y as a float literal at
-                // 0x0015f5b6 etc. -- not a derived value.
-                // Wrap width for the right-side description panel.
-                // Binary: DAT_0015f540 = 160.0f -- text wider than this
-                // gets broken onto multiple lines by Font::DrawString's
-                // word-wrap path.
-                static constexpr float DESC_WRAP_W = 160.0f;
-
-                // Binary @ 0x1b5da4 ShopListItem::Draw locked-split gate
-                // (v1.6.1 scheme, ItemInfo+0x24 = m_RequirementType):
-                //   if (!IsLocked() || RequirementType==0)
-                //       single-line desc at y=0 (unlocked / no-requirement path)
-                //   else  (locked AND type==1 or type==2)
-                //       two-line split: red prompt at y=-20, white desc at y=+10
-                //
-                // Prompt string ID is type-gated (WHICH string, never WHETHER to draw):
-                //   type==1 (DARK blade):   IsDeviceUpsideDown()==false -> 0xD7, else 0xD8
-                //   type==2 (BAMBOO blade): PlayedModeToday(ZEN==3)==false -> 0xCE, else 0xCF
-                // Red prompt colour is always (0xBD,0,0,descAlpha).
-                // type==3 (SPECIAL) branch: Defunct: removed in v1.6.1; cost label now
-                //   staticBlock[m_Type*4 + 0x24], only 3 categories (BACKGROUND/BLADE/FULL).
-                bool isLockedSplit = (m_pItemInfo->IsLocked() != 0)
-                                  && (purchaseState == 1 || purchaseState == 2);
-
-                if (!isLockedSplit) {
-                    // Unlocked / no-requirement path: single white description at y=0.
-                    Vec3 descPos(xPos, 0.0f, 0.0f);
-                    font->DrawStringWrapped(descFontSize, DESC_WRAP_W, 0.0f,
-                                            descStr, descPos,
-                                            descColour,
-                                            0xF);
-                } else {
-                    // Locked + type 1 or 2: two-line red+white split.
-                    // Line 1: y=-20, scale = descFontSize*0.8 (DAT_0015f528),
-                    //         colour red (0xBD,0,0,alpha), alignment 3.
-                    // Line 2: y=+10, scale = type1 ? descFontSize*0.9 :
-                    //         descFontSize*0.81 (0.9*0.9), colour white, alignment 0xF.
-
-                    // --- Line 1: red prompt ---
-                    LocalizedString promptId;
-                    if (purchaseState == 1) {
-                        // type==1 DARK blade: gate on IsDeviceUpsideDown().
-                        promptId = Mortar::IsDeviceUpsideDown()
-                                       ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN    // 0xD8
-                                       : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;   // 0xD7
-                    } else {
-                        // type==2 BAMBOO blade: gate on FruitSaveData::PlayedModeToday(ZEN=3).
-                        bool playedToday = (game_work.m_SaveData != nullptr)
-                            && game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
-                        promptId = playedToday
-                                       ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY        // 0xCF
-                                       : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;   // 0xCE
-                    }
-                    const char* promptStr = GETSTRING_CAST_0(promptId);
-                    if (promptStr) {
-                        Vec3 promptPos(xPos, -20.0f, 0.0f);   // DAT_0015f4e6 = -20.0f
-                        font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
-                                                promptStr, promptPos,
-                                                Colour(0xBD, 0, 0, descAlpha),
-                                                3);
-                    }
-
-                    // --- Line 2: white description ---
-                    const float scale2 = (purchaseState == 2)
-                                            ? (descFontSize * 0.81f)
-                                            : (descFontSize * 0.9f);
-                    Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringWrapped(scale2, DESC_WRAP_W, 0.0f,
-                                     descStr, descPos2,
-                                     Colour(255, 255, 255, descAlpha),
-                                     0xF);
-                }
-            }
-        }
-    }  // end of onscreen block
-
-    // DrawFloatingText: ingame popup badges (NEW / SELECTED).
-    // Binary ShopListItem::Draw @0x001a5da4 calls DrawFloatingText @0x001a4bc8
-    // between Part 5 and Part 6. This is the SOLE badge draw path in v1.6.1;
-    // the inline badge quads (Parts 3+4 in older port code) were v1.5.1 residue.
-    // ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
+    // --- Helper chain ---
+    DrawDividers();
     DrawFloatingText();
+    DrawIcon();
+    DrawInAppPurchaseTags();
+    DrawDescription();
+    DrawDarkness();
+}
 
-    // -----------------------------------------------------------------------
-    // Part 6: loading.tex new-badge stripes -- OUTSIDE the onscreen guard
-    // Binary: gate is *(this+0x27E) != 0 (m_bIsNew), runs regardless of m_bVisible.
-    //   Texture::Set(static_block2[+0x2C])  -- loading.tex
-    //   Stripe 1: Scale(290,120,0), Translate(parent->pos.x - 2.0, 105.0, 0)
-    //   Stripe 2: Scale(290,120,0), Translate(parent->pos.x - 2.0, -105.0, 0)
-    //   Colour = (0,0,0,128)
-    // Parent pos.x = *(float*)(*(this+0x10) + 8)  -- m_pParent->pos.x
-    // -----------------------------------------------------------------------
-    draw_part6:
+// ---------------------------------------------------------------------------
+// ShopListItem::DrawDividers @ v1.6.1 0x001b1a98
+// ---------------------------------------------------------------------------
+void ShopListItem::DrawDividers() {
+    if (!m_pItemInfo) return;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    const Colour colGrey(128, 128, 128, 255);
+    const Colour colWhite(255, 255, 255, 200);
+
+    // Colour cache: white if same type as last draw, else grey (and update cache).
+    int32_t costType = (int32_t)(int8_t)m_pItemInfo->m_Type;
+    Colour dividerColour;
+    if (s_lastDrawnType == costType) {
+        dividerColour = colWhite;
+    } else {
+        s_lastDrawnType = costType;
+        dividerColour = colGrey;
+    }
+
+    // Divider 1: pos + UnitY * GetHeight()/2 (row top edge).
+    float halfRowH = m_Height * 0.5f;
+    {
+        Matrix44 mat = Matrix44::Scale44(257.0f, 17.0f, 0.0f);
+        mat.GlobalTranslate44(pos.x, pos.y + halfRowH, 0.0f);
+        mm.GetWorldStack().Reset();
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        if (ShopScreen::s_TexScratch.IsValid()) {
+            ShopScreen::s_TexScratch->Set();
+            Mortar::Mesh::DrawQuadUnCached(dividerColour, NULL);
+            ShopScreen::s_TexScratch->UnSet();
+        }
+    }
+
+    // Divider 2: only when m_bIsNew; pos - UnitY * GetHeight()/2 (row bottom), grey.
     if (m_bIsNew) {
-        // m_pParent->pos.x (binary: *(*(this+0x10) + 8))
-        float parentX = m_pParent ? m_pParent->pos.x : pos.x;
-
-        if (ShopScreen::s_TexLoading.IsValid()) {
-            MatrixManager& mm2 = MatrixManager::GetInstance();
-            ShopScreen::s_TexLoading->Set();
-
-            // Stripe 1 (top): Translate(parentX - 2.0, 105.0, 0)
-            {
-                Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);    // DAT_0015f724=105.0f
-                mm2.GetWorldStack().Reset();
-                mm2.GetWorldStack().SetCurrentMatrix(matTop);
-                mm2.UploadModelViewOnly();
-                Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);  // (0,0,0,0x80)
-            }
-            // Stripe 2 (bottom): Translate(parentX - 2.0, -105.0, 0)
-            {
-                Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);   // DAT_0015f728=-105.0f
-                mm2.GetWorldStack().Reset();
-                mm2.GetWorldStack().SetCurrentMatrix(matBot);
-                mm2.UploadModelViewOnly();
-                Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);
-            }
-
-            ShopScreen::s_TexLoading->UnSet();
+        Matrix44 mat2 = Matrix44::Scale44(257.0f, 17.0f, 0.0f);
+        mat2.GlobalTranslate44(pos.x, pos.y - halfRowH, 0.0f);
+        mm.GetWorldStack().Reset();
+        mm.GetWorldStack().SetCurrentMatrix(mat2);
+        mm.UploadModelViewOnly();
+        if (ShopScreen::s_TexScratch.IsValid()) {
+            ShopScreen::s_TexScratch->Set();
+            Mortar::Mesh::DrawQuadUnCached(colGrey, NULL);
+            ShopScreen::s_TexScratch->UnSet();
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::ButtonClicked @ 0x0015c978
-// Binary: r0=this->field_0x58 (m_pShopScreen); if non-null,
-//         ShopScreen::SetSelected(m_pShopScreen, this).
-// Binary @ 0x0015c978: ldr r0,[r0,#0x58]; cbz -> skip; blx ShopScreen::SetSelected.
+// ShopListItem::DrawIcon @ v1.6.1 0x001b578c
 // ---------------------------------------------------------------------------
-void ShopListItem::ButtonClicked() {
-    if (m_pShopScreen != nullptr) {
-        m_pShopScreen->SetSelected(this);
+void ShopListItem::DrawIcon() {
+    if (!m_pIconTex.IsValid()) return;
+    if (!m_pItemInfo) return;
+
+    bool isLocked = (m_pItemInfo->IsLocked() != 0);
+    MatrixManager& mm = MatrixManager::GetInstance();
+    const Colour colWhite(255, 255, 255, 255);
+
+    // Binary: scale 64x64, translate = Vec3(0,0,0) + m_IconPos.
+    Matrix44 mat = Matrix44::Scale44(64.0f, 64.0f, 0.0f);
+    mat.GlobalTranslate44(m_IconPos.x, m_IconPos.y, m_IconPos.z);
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    if (!isLocked) {
+        m_pIconTex->Set();
+        Mortar::Mesh::DrawQuadUnCached(colWhite, NULL);
+        m_pIconTex->UnSet();
+    } else {
+        if (ShopScreen::s_TexLockedStroke.IsValid()) {
+            ShopScreen::s_TexLockedStroke->Set();
+            Mortar::Mesh::DrawQuadUnCached(colWhite, NULL);
+            ShopScreen::s_TexLockedStroke->UnSet();
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::DrawFloatingText @ 0x001b4bc8
-// Draws ingame popups for new-item and selected-item badges.
-//   - pM_Popups[0x10] (scale 0.8) when m_NewItemAlpha > 0
-//   - pM_Popups[0x11] (scale 0.5) when m_SelectedAlpha > 0
-// Anchor pos for both: this->pos (base position of the row).
+// ShopListItem::DrawFloatingText @ v1.6.1 0x001b4bc8
+// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawFloatingText() {
     if (m_NewItemAlpha > 0.0f) {
@@ -790,5 +418,167 @@ void ShopListItem::DrawFloatingText() {
             Vec3 anchor(pos.x, pos.y, pos.z);
             popup->Draw(0.5f, &anchor);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::DrawInAppPurchaseTags @ v1.6.1 0x001b1798
+// Defunct: in-app purchase tags -- no-op stub;
+// v1.6.1 ShopListItem::DrawInAppPurchaseTags @0x001b1798
+// ---------------------------------------------------------------------------
+void ShopListItem::DrawInAppPurchaseTags() {
+    // Defunct: in-app purchase tags -- no-op stub; v1.6.1 ShopListItem::DrawInAppPurchaseTags @0x001b1798
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::DrawDescription @ v1.6.1 0x001b1f20
+// ---------------------------------------------------------------------------
+void ShopListItem::DrawDescription() {
+    if (!m_pShopScreen) return;
+    if (!m_pItemInfo) return;
+    if (!game_work.m_pTTFFontMain) return;
+
+    uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);
+    if (alphaU > 0xFF) alphaU = 0xFF;
+    if ((int32_t)alphaU < 0) alphaU = 0;
+    uint8_t alpha = (uint8_t)alphaU;
+    if (alpha == 0) return;
+
+    Mortar::FontCacheObjectTTF* ttfFont = game_work.m_pTTFFontMain;
+    bool isLocked = (m_pItemInfo->IsLocked() != 0);
+    int8_t purchaseState = m_pItemInfo->m_RequirementType;
+
+    // bVar6: locked AND requirement type 1 or 2.
+    bool bVar6 = isLocked && (purchaseState == 1 || purchaseState == 2);
+
+    // Determine base height and fontSize for box3.
+    float descH = bVar6 ? 62.0f : 82.0f;
+    float fontSize = 14.0f;
+    bool isKorean = (game_work.languageFlag == 0x14);
+    bool isChinese = (game_work.languageFlag == 0x0C);
+
+    if (isKorean) {
+        descH -= 20.0f;
+        fontSize = 14.0f;
+    } else if (isChinese) {
+        fontSize = 12.0f;
+        // Side-effect-only GETSTRING call for Chinese locale.
+        // Binary @0x001b1f20: GETSTRING_CAST_0(0x111) result discarded.
+        (void)GETSTRING_CAST_0((LocalizedString)0x111);
+    }
+
+    // Rebuild box3 when nullptr or bVar6 cache changed.
+    if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
+        delete m_pBox3;
+        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160.0f, descH, 0x0d, 10, 0);
+        m_pBox3->SetText(m_DescText);
+        m_pBox3->Update();
+        m_pBox3->FitIntoVerticalBounds();
+    }
+
+    // Rebuild box4 (prompt) only when bVar6.
+    if (bVar6) {
+        if (!m_pBox4) {
+            delete m_pBox4;
+            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160.0f, 21.0f, 0x0d, 1, 0);
+
+            // Determine prompt string id and colour.
+            LocalizedString promptId;
+            bool conditionMet = false;
+            if (purchaseState == 1) {
+                bool upsideDown = Mortar::IsDeviceUpsideDown();
+                conditionMet = upsideDown;
+                promptId = upsideDown
+                    ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN   // 0xD8 (met)
+                    : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;  // 0xD7 (not met)
+            } else {
+                bool playedToday = (game_work.m_SaveData != nullptr)
+                    && game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
+                conditionMet = playedToday;
+                promptId = playedToday
+                    ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY       // 0xCF (met)
+                    : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;  // 0xCE (not met)
+            }
+            const char* promptStr = GETSTRING_CAST_0(promptId);
+            if (promptStr) m_pBox4->SetText(promptStr);
+            m_pBox4->Update();
+
+            // Colour: red if not met, green if met.
+            Colour promptColour = conditionMet
+                ? Colour(0xA0, 0xDC, 0, alpha)
+                : Colour(0xBD, 0, 0, alpha);
+            m_pBox4->SetColour(promptColour, 0);
+        }
+    }
+
+    // Update bVar6 cache for next frame.
+    m_TrailFlag = (uint8_t)(bVar6 ? 1 : 0);
+
+    // Draw box4 (prompt) first when bVar6.
+    float xPos = m_pShopScreen->GetDescriptionTextXPos();
+    if (bVar6 && m_pBox4) {
+        // Position: (xPos, Korean ? -5 : -20, 0).
+        float promptY = isKorean ? -5.0f : -20.0f;
+        m_pBox4->SetTranslation(Vec3(xPos, promptY, 0.0f), 0);
+        m_pBox4->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+    }
+
+    // Draw box3 (description body).
+    if (m_pBox3) {
+        // Colour: white (locked) or (0x74,0x5D,0x3B) (unlocked), with alpha.
+        Colour descColour;
+        if (isLocked) {
+            descColour = Colour(255, 255, 255, alpha);
+        } else {
+            descColour = Colour(0x74, 0x5D, 0x3B, alpha);
+        }
+        m_pBox3->SetColour(descColour, 0);
+        m_pBox3->SetTranslation(Vec3(xPos, 42.0f, 0.0f), 0);
+        m_pBox3->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::DrawDarkness -- loading.tex stripe overlay
+// Extracted from v1.6.1 ShopListItem::Draw @0x001b5da4:
+//   Two 290x120 black(0,0,0,128) quads at parent->pos.x-2, ±105.
+//   Gated on m_bIsNew.
+// ---------------------------------------------------------------------------
+void ShopListItem::DrawDarkness() {
+    if (!m_bIsNew) return;
+
+    float parentX = m_pParent ? m_pParent->pos.x : pos.x;
+
+    if (!ShopScreen::s_TexLoading.IsValid()) return;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    ShopScreen::s_TexLoading->Set();
+
+    {
+        Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);
+        matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);
+        mm.GetWorldStack().Reset();
+        mm.GetWorldStack().SetCurrentMatrix(matTop);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);
+    }
+    {
+        Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);
+        matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);
+        mm.GetWorldStack().Reset();
+        mm.GetWorldStack().SetCurrentMatrix(matBot);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);
+    }
+
+    ShopScreen::s_TexLoading->UnSet();
+}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::ButtonClicked @ v1.6.1 0x001b3e10
+// ---------------------------------------------------------------------------
+void ShopListItem::ButtonClicked() {
+    if (m_pShopScreen != nullptr) {
+        m_pShopScreen->SetSelected(this);
     }
 }

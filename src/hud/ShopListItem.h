@@ -3,16 +3,37 @@
 
 //
 // ShopListItem : ScrollingMenuItem
-// Binary refs:
-//   ctor (0-param) 0x0015f9e8
-//   ctor (5-param) 0x0015f734  (takes ItemInfo* + texture data)
-//   dtor           0x0015cf50 / 0x0015cfb4 / 0x0015d018
+//
+// One row in the Sensei's Swag shop list. Owns five BakedStringBox
+// labels (title, category, [unused], description, prompt) built lazily
+// in NewDraw() and DrawDescription() and drawn via the TTF font chain
+// (game_work.m_pTTFFontMain). The v1.6.1 Draw() is a thin dispatcher:
+//   - onscreen  -> NewDraw() (all rendering, calls DrawDarkness() at end)
+//   - offscreen -> DrawDarkness() only (loading.tex stripe when m_bIsNew)
+//
+// Box ownership: ctor zero-inits all five pointers; NewDraw() and
+// DrawDescription() build lazily; dtor deletes all non-null boxes.
+//
+// Binary refs (v1.6.1):
+//   ctor (0-param) 0x001b41f0
+//   ctor (5-param) 0x001b27f0  (takes ItemInfo* + texture data)
+//   dtor           0x001b4270 / 0x001b42b0 / 0x001b4308
+//   Create         0x001b27f0
+//   Move           0x001b43e0  (vtable slot 6 +0x18)
+//   Draw           0x001b5da4  (vtable slot 12 +0x30, thin dispatcher)
+//   NewDraw        0x001b58e8  (all visible rendering, TTF)
+//   DrawDividers   0x001b1a98
+//   DrawIcon       0x001b578c
+//   DrawFloatingText 0x001b4bc8
+//   DrawInAppPurchaseTags 0x001b1798  (defunct no-op stub)
+//   DrawDescription 0x001b1f20
+//   DrawDarkness   (loading.tex stripes; extracted from Draw)
 //
 // Vtable overrides (v1.6.1):
-//   slot  0 (+0x00)  ~ShopListItem dtor1  0x0015cfb4
-//   slot  1 (+0x04)  ~ShopListItem dtor2  0x0015d018
-//   slot  6 (+0x18)  ShopListItem::Move   0x0015d9fc
-//   slot 12 (+0x30)  ShopListItem::Draw   0x0015eb00  (was slot 11 in v1.5.1)
+//   slot  0 (+0x00)  ~ShopListItem dtor1  0x001b42b0
+//   slot  1 (+0x04)  ~ShopListItem dtor2  0x001b4308
+//   slot  6 (+0x18)  ShopListItem::Move   0x001b43e0
+//   slot 12 (+0x30)  ShopListItem::Draw   0x001b5da4  (v1.6.1 thin dispatcher)
 //
 // Binary ScrollingMenuItem ends at +0x58 (88 bytes; base ctor 0x0015b5dc).
 // ShopListItem own-fields begin immediately at +0x58 in the binary:
@@ -24,88 +45,139 @@
 //   +0x25C  float  m_NewItemAlpha   >0 -> draw new_item_sml badge; fades from init
 //   +0x260  float  m_SelectedAlpha  >0 -> draw selected_sml highlight ring
 //   +0x264  float  m_LockFlashAlpha (init 0.0; set to 0.25 on locked-item tap)
-//   +0x268  char[0x0C]  _pad2       (likely Vec3 for icon translate -- not yet RE'd)
-//   +0x274  Mortar::SmartPtr<Texture>  m_pIconTex  item icon texture; SetNull in ctor
-//   +0x278  ItemInfo*  m_pItemInfo          ptr to item info; 0 in ctor
-//   +0x27C  byte   m_bOnscreenItem  1 in ctor; 0 = off-screen, Draw early-exits
-//   +0x27D  byte   m_bSelected      0 in ctor; 1 = resets static colour cache
-//   +0x27E  byte   m_bIsNew         0 in ctor; non-zero = draw loading.tex badge
+//   +0x268  Vec3   m_IconPos        icon translate cache; Move writes each frame
+//   +0x274  Mortar::SmartPtr<Texture>  m_pIconTex
+//   +0x278  ItemInfo*  m_pItemInfo
+//   +0x27C  byte   m_bOnscreenItem  1 in ctor
+//   +0x27D  byte   m_bSelected      0 in ctor; resets box-colour cache when set
+//   +0x27E  byte   m_bIsNew         0 in ctor; non-zero = draw loading.tex stripe
 //   +0x27F  pad
-//   +0x280  float  m_CostAlpha      (m_CostAlpha * 255.0f) -> byte alpha for cost/desc text
+//   +0x280  float  m_CostAlpha      (m_CostAlpha * 255.0f) -> byte alpha for desc text
+//   +0x284  [4-byte gap]
+//   +0x288  BakedStringBox* m_pBox0   title label; built once in NewDraw
+//   +0x28C  BakedStringBox* m_pBox1   category label; rebuilt when m_TintA != m_Type
+//   +0x290  byte   m_TintA           caches last m_Type for m_pBox1 rebuild; ctor=0xFF
+//   +0x291  [3-byte pad]
+//   +0x294  BakedStringBox* m_pBox2   reserved/unused; ctor=null
+//   +0x298  BakedStringBox* m_pBox3   description body; built in DrawDescription
+//   +0x29C  BakedStringBox* m_pBox4   unlock-requirement prompt; built in DrawDescription
+//   +0x2A0  byte   m_TrailFlag        caches bVar6 (locked+req) for box3/4 rebuild; ctor=0
+//   +0x2A4  (end, sizeof=0x2A4)
 //
 // Gap from end of ScrollingMenuItem (+0xDC) to +0x25C = 0x180 bytes.
-// Intermediate layout not yet fully RE'd. Filled with zeros until a full RE pass.
-//
-// Analysed: 2026-04-25T14:30
+// Intermediate layout not yet fully RE'd. Filled with zeros.
 //
 
 #include "ScrollingMenuItem.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+#include "engine/math/Vec3.h"
 #include <cstddef>
+#include <cstdint>
 
 class ItemInfo;
 class ShopScreen;
 
+namespace Mortar { class BakedStringBox; }
+
 // v1.6.1: ShopListItem vtable @ 0x1ea030 (17 slots, inherits v1.6.1 ScrollingMenuItem).
-// Draw override now vtable slot 12 (+0x30) after Update inserted at slot 10 in base.
-// Previous ASM-verified marker removed: base vtable shape updated for v1.6.1.
+// Draw override at vtable slot 12 (+0x30).
 class ShopListItem : public ScrollingMenuItem {
 public:
-    // Matches ShopListItem::ShopListItem() @ 0x0015f9e8
+    // ctor @ v1.6.1 ShopListItem::ShopListItem() @ 0x001b41f0
+    // Zeros all box ptrs, sets m_TintA=0xFF, m_TrailFlag=0.
     ShopListItem();
     ~ShopListItem() override;
 
-    // ShopListItem::Create @ 0x0015c988
+    // ShopListItem::Create @ v1.6.1 0x001b27f0
     // Called by ShopScreen::Init after each ShopListItem() ctor.
-    // Sets m_RowHeight (GetHeight() field at +0x24) to 80.0f (DAT_0015cae8),
-    // m_BBoxWidth/m_BBoxHeight/m_BBoxDepth from Vec3(60.0f, 13.0f, 0.0f),
-    // stores ItemInfo* and ShopScreen* back-pointer, loads icon texture,
-    // and builds the item's description/cost text buffer at +0x5c.
+    // Sets row metrics, stores ItemInfo* and ShopScreen* back-pointer,
+    // loads icon texture, and fills m_DescText from ItemInfo strings.
     void Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen);
 
     // vtable slot 6 (+0x18): Move override
-    // Binary 0x0015d9fc (ShopListItem::Move):
-    //   1. Sets pos.x/y/z from incoming Vec3.
-    //   2. Always copies pos into _pad2 (this+0x268):
-    //        *(Vec3*)(this+0x268) = pos
-    //   3. If m_pIconTex.IsValid():
-    //        *(float*)(this+0x268) += DAT_0015d474(35.2f) + m_Size.x(60.0f)
-    //        => _pad2.x = pos.x + 95.2f
-    // See docs/screens/shop-list-item-draw.md section 8 for full spec.
+    // v1.6.1 ShopListItem::Move @0x001b43e0:
+    //   1. Sets pos.x/y/z.
+    //   2. Copies pos -> m_IconPos; if m_pIconTex: m_IconPos.x += 95.2f.
+    //   3. When m_LockFlashAlpha > 0: subtract dt, scatter m_IconPos x/y by ±2.5.
+    //   4. Per-frame alpha ramps (m_NewItemAlpha, m_SelectedAlpha, m_CostAlpha).
     void Move(float x, float y, float z) override;
 
-    // vtable slot 12 (+0x30): Draw override -- renders the row (v1.6.1)
-    // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
+    // vtable slot 12 (+0x30): Draw() thin dispatcher
+    // v1.6.1 ShopListItem::Draw @0x001b5da4:
+    //   if (m_bSelected) reset s_lastDrawnType colour cache.
+    //   if (!m_bOnscreen) DrawDarkness();
+    //   else              NewDraw();
     void Draw() override;
 
-    // Process-wide shimmer oscillator. Binary stores these as static_block
-    // +0x68 (uint16_t phase) and +0x6c (float shimmer Y) — single shared
-    // oscillator across all ShopListItems. Move advances when m_bSelected;
-    // Draw reads s_ShimmerY into the description-text Y component.
+    // NewDraw -- all visible rendering, v1.6.1 TTF path.
+    // v1.6.1 ShopListItem::NewDraw @0x001b58e8:
+    //   Lazily builds m_pBox0 (title, fontSize=16, 195x30) and
+    //   m_pBox1 (category, fontSize=14, 175x30) from game_work.m_pTTFFontMain.
+    //   m_pBox1 is rebuilt whenever m_TintA != m_Type (m_TintA caches last type).
+    //   Draws both boxes with shadow, then calls:
+    //   DrawDividers() -> DrawFloatingText() -> DrawIcon() ->
+    //   DrawInAppPurchaseTags() -> DrawDescription() -> DrawDarkness().
+    void NewDraw();
+
+    // DrawDividers -- 257x17 divider quads at top/bottom of row.
+    // v1.6.1 ShopListItem::DrawDividers @0x001b1a98:
+    //   Divider 1 at pos + UnitY*GetHeight()/2. Colour: white(200) if
+    //   s_lastDrawnType==m_Type, else grey(255); updates s_lastDrawnType.
+    //   Divider 2 only when m_bIsNew: at pos - UnitY*GetHeight()/2, grey.
+    void DrawDividers();
+
+    // DrawIcon -- 64x64 icon quad at m_IconPos.
+    // v1.6.1 ShopListItem::DrawIcon @0x001b578c:
+    //   When m_pIconTex valid: draws m_pIconTex (unlocked) or
+    //   ShopScreen::s_TexLockedStroke (locked) at Vec3(0,0,0) + m_IconPos.
+    void DrawIcon();
+
+    // DrawFloatingText -- ingame-popup badges NEW and SELECTED.
+    // v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8:
+    //   pM_Popups[0x10] at scale 0.8 when m_NewItemAlpha > 0.
+    //   pM_Popups[0x11] at scale 0.5 when m_SelectedAlpha > 0.
+    void DrawFloatingText();
+
+    // DrawInAppPurchaseTags -- defunct in v1.6.1.
+    // Defunct: in-app purchase tags -- no-op stub;
+    // v1.6.1 ShopListItem::DrawInAppPurchaseTags @0x001b1798
+    void DrawInAppPurchaseTags();
+
+    // DrawDescription -- TTF description + unlock-requirement prompt.
+    // v1.6.1 ShopListItem::DrawDescription @0x001b1f20:
+    //   Gate: m_pShopScreen!=0 && m_pItemInfo!=0 && alpha>0.
+    //   bVar6 = isLocked && m_RequirementType in {1,2}.
+    //   Lazily builds m_pBox3 (desc body, w=160, h=62|82 based on bVar6
+    //   and language; Korean h-=20; Chinese fontSize=12 else 14).
+    //   When bVar6: builds m_pBox4 (prompt, 160x21, fontSize=12).
+    //   Category strings: LSTR_SHOP_BLADE(0xCA)/BACKGROUND(0xC9)/
+    //                     FULL_VERSION(0xCB)/SPECIAL(0x12F) per m_Type.
+    //   Chinese side-effect: GETSTRING_CAST_0(0x111) called and discarded.
+    //   box4 colour: red(0xBD,0,0,alpha) or green(0xA0,0xDC,0,alpha) on met.
+    //   box3 colour: white (locked) or (0x74,0x5D,0x3B,alpha) (unlocked).
+    void DrawDescription();
+
+    // DrawDarkness -- loading.tex stripe overlay when m_bIsNew.
+    // Extracted from v1.6.1 ShopListItem::Draw @0x001b5da4:
+    //   Two 290x120 black(0,0,0,128) quads at parent->pos.x-2, ±105.
+    //   Gated internally on m_bIsNew.
+    void DrawDarkness();
+
+    // Process-wide shimmer oscillator (static_block +0x68 phase, +0x6c Y).
     static uint16_t s_ShimmerPhase;
     static float    s_ShimmerY;
 
-    // --- ShopListItem own fields mirroring binary +0x58..+0xDB ---
-    //
-    // +0x58 (ARM32): ShopScreen* back-pointer.
-    // Binary Create @ 0x0015c988: *(this+0x58) = param_2 (ShopScreen*).
-    // Binary Draw   @ 0x0015eb00: *(int*)(in_r0+0x58) != 0 check, then ->field_0xb8.
-    // field_0xb8 of ShopScreen = m_State (int). Typed void* in binary; port uses ShopScreen*.
+    // --- ShopListItem own fields ---
+
+    // +0x58: ShopScreen* back-pointer (port maps void* from binary).
     ShopScreen* m_pShopScreen;        // +0x58 ARM32
 
-    // +0x5C (ARM32): inline description text buffer (128 bytes).
-    // Binary Draw: pcVar23 = (char*)(in_r0+0x5c) passed to Font::DrawString.
-    // Binary Create: snprintf/strncpy fills this buffer from ItemInfo strings.
+    // +0x5C: inline description text buffer (128 bytes).
     char m_DescText[128];             // +0x5C..+0xDB ARM32
 
-    // --- Padding to bridge from end-of-base (x86_64) to ARM32 +0x25C for m_NewItemAlpha ---
-    // ARM32 ShopListItem layout after m_DescText (+0xDC): gap to +0x25C.
-    // On x86_64, sizeof(ScrollingMenuItem) + sizeof(ShopScreen*) + 128 > ARM32 equivalents,
-    // so the _pad below shrinks to compensate. Size tuned to satisfy the static_assert
-    // for m_NewItemAlpha == 0x25C on GCC/libstdc++ x86_64 (MinGW).
-    // Formula: 0x25C - sizeof(ScrollingMenuItem)_x86 - sizeof(ShopScreen*)_x86 - 128 - align
-    // DIFFERS: exact size determined empirically; update if base struct layout changes.
+    // Padding to bridge from end-of-base (x86_64) to ARM32 +0x25C for m_NewItemAlpha.
+    // DIFFERS: exact size determined by static_assert tuning for x86_64 MinGW layout.
     char _pad[0x163];                 // bridge: end-of-m_DescText..+0x25B
 
     // +0x25C: new-item badge alpha (>0 => draw new_item_sml badge)
@@ -114,95 +186,71 @@ public:
     // +0x260: selected-ring alpha (>0 => draw selected_sml highlight)
     float m_SelectedAlpha;            // +0x260
 
-    // +0x264: flash alpha (set to 0.25 = 0x3e800000 on locked-item tap in binary)
-    // Binary offset confirmed from ShopScreen::ClickedOnShopItem.
+    // +0x264: flash alpha (set to 0.25 on locked-item tap)
     float m_LockFlashAlpha;           // +0x264
 
-    // +0x268..+0x273: Vec3 iconPos -- written by Move each frame.
-    // _pad2[0..3] = float x = pos.x + 95.2f (when m_pIconTex valid), else pos.x
-    // _pad2[4..7] = float y = pos.y
-    // _pad2[8..11] = float z = pos.z
-    // Binary: ShopListItem::Move @ 0x0015d1fc writes iconXOff = DAT_0015d474(35.2f) + m_Size.x(60.0f)
-    // Draw Part 5 reads *(float*)(this+0x268) as translate X.
-    char _pad2[0x0c];                 // +0x268..+0x273  (Vec3 iconPos, see Move)
+    // +0x268: icon translate cache, written by Move each frame.
+    // x = pos.x + 95.2f (when m_pIconTex valid), y = pos.y, z = pos.z.
+    // ASM-spec v1.6.1 ShopListItem::Move @0x001b43e0
+    Vec3 m_IconPos;                   // +0x268..+0x273 (ARM32)
 
-    // +0x274: item icon texture SmartPtr (4 bytes on ARM32)
-    // On x86_64: SmartPtr = 8 bytes + alignment gap. The ARM32 absolute offsets
-    // for fields after m_pIconTex and m_pItemInfo cannot be satisfied on x86_64
-    // without hiding the pointer inside a byte array. Fields below are accessed by
-    // name only; the static_asserts for them are ARM32-only (guarded by sizeof(void*)==4).
+    // +0x274: item icon texture SmartPtr (4 bytes on ARM32 / 8 bytes x86_64).
+    // Fields after m_pIconTex and m_pItemInfo (both pointer-sized) cannot
+    // satisfy ARM32 absolute offsets on x86_64; static_asserts for them are gated.
     Mortar::SmartPtr<Mortar::Texture> m_pIconTex;  // +0x274 (ARM32)
 
-    // +0x278: pointer to the ItemInfo for this list entry (null = no item)
+    // +0x278: pointer to ItemInfo for this row (null = no item).
     ItemInfo* m_pItemInfo;            // +0x278 (ARM32)
 
-    // +0x27C: onscreen flag (1 = on-screen; 0 = Draw early-exits)
+    // +0x27C: onscreen flag (1 = on-screen; 0 = offscreen path in Draw)
     uint8_t m_bOnscreenItem;          // +0x27C
-
-    // +0x27D: selected flag (1 = resets static colour cache)
+    // +0x27D: selected flag (resets colour cache when set)
     uint8_t m_bSelected;              // +0x27D
-
-    // +0x27E: new-item flag (non-zero = draw loading.tex badge stripes)
+    // +0x27E: new-item flag (non-zero = draw loading.tex badge stripe)
     uint8_t m_bIsNew;                 // +0x27E
-
     // +0x27F: alignment pad
     uint8_t _pad3;                    // +0x27F
-
     // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
     float m_CostAlpha;                // +0x280
 
-    // +0x284..+0x2A3: trailing fields initialised by the CTOR @ 0x001b41f0, NOT by Create.
-    // operator_new(0x2a4) confirmed @ ShopScreen::Init 0x001b42ac.
-    // Create (0x001b27f0) does not touch this region; its highest own-field write is
-    // m_CostAlpha (+0x280). The ctor zeroes all floats and sets m_TintA to 0xFF.
-
-    // +0x284: 4-byte gap -- NOT written by ctor or Create. Left uninitialized by
-    // operator_new(0x2a4); presumably set by Move/Draw or genuine alignment pad.
+    // +0x284: 4-byte gap (binary: not written by ctor or Create).
     uint8_t _pad4[0x04];              // +0x284..+0x287
 
-    // +0x288..+0x2A0: per-item tint/colour state. Ctor @ 0x001b41f0 zeroes all
-    // floats and sets the alpha byte at +0x290 to 0xFF. Create does NOT touch these.
-    float   m_TintR;                 // +0x288  (ctor = 0.0f)
-    float   m_TintG;                 // +0x28C  (ctor = 0.0f)
-    uint8_t m_TintA;                 // +0x290  (ctor = 0xFF)
-    uint8_t _pad5[0x03];             // +0x291..+0x293  (alignment after byte)
-    float   m_TintB;                 // +0x294  (ctor = 0.0f)
-    float   _trailF0;                // +0x298  (ctor = 0.0f)
-    float   _trailF1;                // +0x29C  (ctor = 0.0f)
-    uint8_t m_TrailFlag;             // +0x2A0  (ctor = 0)
-    uint8_t _pad6[0x03];             // +0x2A1..+0x2A3  tail pad (sizeof == 0x2A4)
+    // +0x288: title BakedStringBox; built once in NewDraw.
+    // ARM32 pointer = 4 bytes (same stride as the former float placeholders).
+    Mortar::BakedStringBox* m_pBox0;  // +0x288 (ARM32)
+    // +0x28C: category BakedStringBox; rebuilt when m_TintA != m_Type.
+    Mortar::BakedStringBox* m_pBox1;  // +0x28C (ARM32)
+    // +0x290: caches last m_Type used to build m_pBox1; ctor=0xFF (sentinel).
+    uint8_t m_TintA;                  // +0x290
+    // +0x291..+0x293: alignment pad (keeps m_pBox2 at +0x294 on ARM32).
+    uint8_t _pad5[0x03];              // +0x291..+0x293
+    // +0x294: reserved/unused BakedStringBox; always null.
+    Mortar::BakedStringBox* m_pBox2;  // +0x294 (ARM32)
+    // +0x298: description body BakedStringBox; built in DrawDescription.
+    Mortar::BakedStringBox* m_pBox3;  // +0x298 (ARM32)
+    // +0x29C: unlock-requirement prompt BakedStringBox; built in DrawDescription.
+    Mortar::BakedStringBox* m_pBox4;  // +0x29C (ARM32)
+    // +0x2A0: caches bVar6 (locked&&req) used to build m_pBox3/4; ctor=0.
+    uint8_t m_TrailFlag;              // +0x2A0
+    // +0x2A1..+0x2A3: tail alignment pad (sizeof == 0x2A4 on ARM32).
+    uint8_t _pad6[0x03];              // +0x2A1..+0x2A3
 
 public:
-    // Binary @ 0x0015c978: if (m_pShopScreen) m_pShopScreen->SetSelected(this).
+    // Binary @ 0x001b3e10: if (m_pShopScreen) m_pShopScreen->SetSelected(this).
     void ButtonClicked();
-
-    // ShopListItem::DrawFloatingText @0x001b4bc8
-    // Draws ingame popups for new-item and selected-item badges.
-    // Called from ShopListItem::Draw (after Part 7, before Part 8).
-    void DrawFloatingText();
 };
 
 // ---------------------------------------------------------------------------
 // Compile-time offset verification (ARM32 binary absolute offsets).
 //
-// Fields at +0x25C..+0x264 (pure float, no intervening pointer fields) are
-// verifiable on any platform — the _pad before them is tuned to 0x163 bytes
-// so they land at the ARM32 absolute offsets on both ARM32 and x86_64.
+// Fields at +0x25C..+0x268 (pure float / Vec3, no intervening pointer) are
+// satisfiable on both ARM32 and x86_64 because _pad is tuned for x86_64.
 //
-// Fields at +0x27C..+0x280 follow m_pIconTex (SmartPtr, 4B ARM32 / 8B x86_64)
-// and m_pItemInfo (ptr, 4B ARM32 / 8B x86_64). These CANNOT land at the exact
-// ARM32 absolute offsets on x86_64 without faking the pointer types.
-// Those asserts are therefore guarded to fire only on 32-bit (ARM32 target) builds.
-// Port code always accesses these fields by name, so the actual x86_64 offset
-// mismatch has no runtime impact.
+// Fields after m_pIconTex / m_pItemInfo (pointer-sized, differ between
+// platforms) are gated to fire only on Bada ARM32 + Sourcery libstdc++.
 // ---------------------------------------------------------------------------
 
-// `offsetof` on a non-standard-layout class (ShopListItem inherits from
-// ScrollingMenuItem which has virtual methods) is "conditionally-supported"
-// per the C++ standard. GCC emits -Winvalid-offsetof but its result is
-// correct for our layout-checking purpose. Suppress the warning around
-// the static_asserts -- they're a build-time invariant check, not actual
-// pointer arithmetic.
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
@@ -211,21 +259,25 @@ public:
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #endif
 
-// Bada-only struct-layout asserts (binary's std::string SBO + 4-byte ptrs).
-// Cross-build's Sourcery 2010q1 libstdc++ (__GLIBCXX__ == 20090722) has a different
-// std::string ABI (the SBO threshold and the trailing capacity field both differ from
-// Bada's Sourcery 4.4-157, which has __GLIBCXX__ > 20090722), so member offsets shift
-// on the cross-build even when the port-side struct order is correct.
-// Gate skips cross-build (GLIBCXX == 20090722 -> NOT > 20090722) and fires on Bada
-// production (GLIBCXX > 20090722). See CLAUDE.md "Per-class string-SBO divergences".
+static_assert(offsetof(ShopListItem, m_NewItemAlpha)   == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
+static_assert(offsetof(ShopListItem, m_SelectedAlpha)  == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
+static_assert(offsetof(ShopListItem, m_LockFlashAlpha) == 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
+static_assert(offsetof(ShopListItem, m_IconPos)        == 0x268, "ShopListItem::m_IconPos must be at +0x268");
+
+// Bada + Sourcery libstdc++ only (pointer-sized fields after +0x274 vary per platform).
+// Cross-build uses Sourcery 2010q1 with __GLIBCXX__ == 20090722 -> guard skips it.
 #if defined(__bada__) && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
-static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
-static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
-static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
-static_assert(offsetof(ShopListItem, m_bOnscreenItem) == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
-static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
-static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
-static_assert(offsetof(ShopListItem, m_CostAlpha)     == 0x280, "ShopListItem::m_CostAlpha must be at +0x280");
+static_assert(offsetof(ShopListItem, m_bOnscreenItem)  == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
+static_assert(offsetof(ShopListItem, m_bSelected)      == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
+static_assert(offsetof(ShopListItem, m_bIsNew)         == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
+static_assert(offsetof(ShopListItem, m_CostAlpha)      == 0x280, "ShopListItem::m_CostAlpha must be at +0x280");
+static_assert(offsetof(ShopListItem, m_pBox0)          == 0x288, "ShopListItem::m_pBox0 must be at +0x288");
+static_assert(offsetof(ShopListItem, m_pBox1)          == 0x28C, "ShopListItem::m_pBox1 must be at +0x28C");
+static_assert(offsetof(ShopListItem, m_TintA)          == 0x290, "ShopListItem::m_TintA must be at +0x290");
+static_assert(offsetof(ShopListItem, m_pBox2)          == 0x294, "ShopListItem::m_pBox2 must be at +0x294");
+static_assert(offsetof(ShopListItem, m_pBox3)          == 0x298, "ShopListItem::m_pBox3 must be at +0x298");
+static_assert(offsetof(ShopListItem, m_pBox4)          == 0x29C, "ShopListItem::m_pBox4 must be at +0x29C");
+static_assert(offsetof(ShopListItem, m_TrailFlag)      == 0x2A0, "ShopListItem::m_TrailFlag must be at +0x2A0");
 static_assert(sizeof(ShopListItem) == 0x2a4, "ShopListItem sizeof must be 0x2a4 (676)");
 #endif
 

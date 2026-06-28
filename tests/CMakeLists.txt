@@ -333,9 +333,16 @@ set_tests_properties(menubutton_scale PROPERTIES TIMEOUT 60)
 # Init()->Reset()->CreateButtons() activation path creates all expected HUD
 # controls: 3 ring buttons (back-bomb/shop/about) and 2 distinct-position
 # BSButtons (FB+TW social stubs). Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/dojo/<lang>.png (need GPU).
 fn_add_game_test(test_dojoscreen test_dojoscreen.cpp)
 add_test(NAME dojoscreen COMMAND test_dojoscreen)
 set_tests_properties(dojoscreen PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_dojo_english COMMAND test_dojoscreen --screenshot --lang=english_us)
+add_test(NAME screenshot_dojo_chinese COMMAND test_dojoscreen --screenshot --lang=chinese)
+set_tests_properties(screenshot_dojo_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_dojo;lang_english_us")
+set_tests_properties(screenshot_dojo_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_dojo;lang_chinese")
 
 # DojoScreen bomb-scale regression test. Drives the REAL DojoScreen activation
 # flow (Init()->Reset()->CreateButtons()) and asserts the back-bomb ends up
@@ -617,3 +624,12 @@ set_tests_properties(sensei_teardown PROPERTIES TIMEOUT 120)
 fn_add_game_test(test_text_render test_text_render.cpp)
 add_test(NAME test_text_render_screenshot COMMAND test_text_render --screenshot)
 set_tests_properties(test_text_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77)
+
+# ShopListItem TTF box-creation guard (#264).
+# Verifies that after NewDraw() the title (m_pBox0) and category (m_pBox1)
+# BakedStringBox pointers are non-null and m_TintA is cached to m_Type.
+# Proves the structural v1.6.1 TTF port replaced the v1.5.x bitmap monolith.
+# Headless: passes in ctest -E screenshot; no display needed.
+fn_add_game_test(test_shoplistitem test_shoplistitem.cpp)
+add_test(NAME shoplistitem COMMAND test_shoplistitem)
+set_tests_properties(shoplistitem PROPERTIES TIMEOUT 60)
