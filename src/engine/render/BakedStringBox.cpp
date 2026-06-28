@@ -10,6 +10,9 @@
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "render/gl_funcs.h"
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+#  include "debug/DebugFlags.h"
+#endif
 #include <cstring>
 #include <cmath>
 #include <vector>
@@ -756,6 +759,89 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
 
     // Render lines. Line 0 baseline at baselineY (relative to box centre / anchor.y),
     // each subsequent line step lower (decreasing Y).
+
+    // --- Shadow pass (drawn first, behind all other passes) ---
+    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: shadow drawn first at drawPos + m_Translation (m_ShadowOffset).
+    // DIFFERS: original blurs the shadow glyphs (FetchGlyph blur_radius ~= ceil(shadowScale*invFontScale));
+    //   port draws a SOLID offset drop-shadow (no pixel blur) because the port FontCache has no glyph-blur path.
+    // TODO: v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28 -- port glyph-blur for soft shadow/glow edges.
+    {
+        const bool doShadow = (!m_ShadowFlag && m_ShadowScale > 0.0f) ||
+                              (m_ShadowFlag  && m_ShadowScale >= 0.0f);
+        if (doShadow) {
+            const uint32_t shadowPacked = m_ShadowCol.PlatformColour();
+            const float sdx = m_ShadowOffset.x;
+            const float sdy = m_ShadowOffset.y;
+            for (size_t li = 0; li < m_Lines.size(); li++) {
+                const BakedStringBoxLine& sline = m_Lines[li];
+                if (sline.verts.empty()) continue;
+                const float localBaseY = baselineY - (float)li * step;
+                const int nVerts = (int)sline.verts.size();
+                std::vector<QUADCUSTOMVERTEX> wv(sline.verts);
+                for (int i = 0; i < nVerts; i++) {
+                    const float lx = wv[i].x * scale.x;
+                    const float ly = (wv[i].y + localBaseY) * scale.y;
+                    wv[i].x = cosT * lx - sinT * ly + anchor.x + sdx;
+                    wv[i].y = sinT * lx + cosT * ly + anchor.y + sdy;
+                    wv[i].colour = shadowPacked;
+                }
+                for (int gi = 1; gi * 6 < nVerts; gi++) {
+                    wv[gi * 6 - 1] = wv[gi * 6];
+                }
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+                glEnable(GL_TEXTURE_2D);
+                TexEnvModulate();
+                renderer->DrawTriStrip(&wv[0], nVerts);
+            }
+        }
+    }
+
+    // --- Stroke (glow) pass (drawn after shadow, before foreground) ---
+    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: m_pGlow (stroke) drawn at drawPos.
+    // DIFFERS: original = single expanded-glyph (blur) pass; port = 8-direction outline copies.
+    // TODO: blur path (see above). Multi-colour stroke (m_StrokeCount>=2/3, ApplyStrokeGradient)
+    //   + the m_Field68 inner-stroke layer are not ported yet.
+    if (m_StrokeWidth > 0.0f && m_StrokeCount >= 1) {
+        const uint32_t strokePacked = m_StrokeCol0.PlatformColour();
+        const float sw = m_StrokeWidth;
+        const float sd = sw * 0.707f;
+        const float offX[8] = {  sw, -sw, 0.0f, 0.0f,  sd, -sd,  sd, -sd };
+        const float offY[8] = { 0.0f, 0.0f, sw,  -sw,   sd,  sd, -sd, -sd };
+        for (int dir = 0; dir < 8; dir++) {
+            const float ox = offX[dir];
+            const float oy = offY[dir];
+            for (size_t li = 0; li < m_Lines.size(); li++) {
+                const BakedStringBoxLine& sline = m_Lines[li];
+                if (sline.verts.empty()) continue;
+                const float localBaseY = baselineY - (float)li * step;
+                const int nVerts = (int)sline.verts.size();
+                std::vector<QUADCUSTOMVERTEX> wv(sline.verts);
+                for (int i = 0; i < nVerts; i++) {
+                    const float lx = wv[i].x * scale.x;
+                    const float ly = (wv[i].y + localBaseY) * scale.y;
+                    wv[i].x = cosT * lx - sinT * ly + anchor.x + ox;
+                    wv[i].y = sinT * lx + cosT * ly + anchor.y + oy;
+                    wv[i].colour = strokePacked;
+                }
+                for (int gi = 1; gi * 6 < nVerts; gi++) {
+                    wv[gi * 6 - 1] = wv[gi * 6];
+                }
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+                glEnable(GL_TEXTURE_2D);
+                TexEnvModulate();
+                renderer->DrawTriStrip(&wv[0], nVerts);
+            }
+        }
+    }
+
+    // Port specific: accumulate ink bounds across all lines for DebugText_Overlay.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    float dbgInkX0 = 0.0f, dbgInkY0 = 0.0f, dbgInkX1 = 0.0f, dbgInkY1 = 0.0f;
+    bool dbgHasInk = false;
+#endif
+
     for (size_t li = 0; li < m_Lines.size(); li++) {
         const BakedStringBoxLine& line = m_Lines[li];
         if (line.verts.empty()) {
@@ -789,7 +875,46 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
 
         renderer->DrawTriStrip(&wv[0], nVerts);
+
+        // Accumulate ink bounds from transformed verts for the debug overlay.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+        if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+            for (int i = 0; i < nVerts; i++) {
+                if (!dbgHasInk) {
+                    dbgInkX0 = dbgInkX1 = wv[i].x;
+                    dbgInkY0 = dbgInkY1 = wv[i].y;
+                    dbgHasInk = true;
+                } else {
+                    if (wv[i].x < dbgInkX0) dbgInkX0 = wv[i].x;
+                    if (wv[i].x > dbgInkX1) dbgInkX1 = wv[i].x;
+                    if (wv[i].y < dbgInkY0) dbgInkY0 = wv[i].y;
+                    if (wv[i].y > dbgInkY1) dbgInkY1 = wv[i].y;
+                }
+            }
+        }
+#endif
     }
+
+    // Port specific: draw anchor + box + ink-bounds debug overlay.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay && dbgHasInk) {
+        // Box bounds: m_BoxWidth/m_BoxHeight are declared box dimensions in world units.
+        // Approximate box as centred on anchor (exact origin depends on SetTranslation
+        // flag and align mode; centering is a reasonable approximation for the overlay).
+        const bool hasBox = (m_BoxWidth > 0.0f);
+        const float bx0 = anchor.x - m_BoxWidth  * 0.5f;
+        const float bx1 = anchor.x + m_BoxWidth  * 0.5f;
+        const float by0 = anchor.y - m_BoxHeight * 0.5f;
+        const float by1 = anchor.y + m_BoxHeight * 0.5f;
+        FN::DebugText_Overlay(anchor.x, anchor.y,
+                              hasBox,
+                              bx0, by0, bx1, by1,
+                              dbgInkX0, dbgInkY0, dbgInkX1, dbgInkY1);
+        // Restore atlas texture for any following render state (scissor disable etc).
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+    }
+#endif
 
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     if (m_HasClip) {

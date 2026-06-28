@@ -14,7 +14,7 @@
 // Test strategy:
 //   1. Boot the full game via TestHarness::InitComponent() so pFontNumbers (a
 //      real .fnt atlas) is available.
-//   2. Create an offscreen FBO (256x64 pixels).
+//   2. Create an offscreen FBO (512x128 pixels).
 //   3. Set up a pixel-space ortho so 1 world unit == 1 FBO pixel.
 //   4. For each alignment flag, render the string "123" (asymmetric, non-trivial
 //      width) with a white colour on a black background.
@@ -30,6 +30,11 @@
 //
 // Tolerance: 8 px. LEFT vs RIGHT vs CENTER cases differ by ~tens of pixels
 // so 8 px cannot produce a false pass.
+//
+// Screenshot output (always written after assertions):
+//   tmp/test/screenshots/font_align/all.png    -- composite: 5 rows, one per case
+//   tmp/test/screenshots/font_align/<hex>.png  -- individual row per alignment flag
+// Each row shows the rendered text plus a magenta vertical reference line at anchorX.
 //
 // If the game boot fails (no assets, no GL), the test exits 77 (CTest SKIP).
 //
@@ -50,6 +55,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <SDL_image.h>
+#ifdef _WIN32
+#  include <direct.h>
+#endif
 
 // ---------------------------------------------------------------------------
 // FBO helpers (matches test_renderer.cpp pattern)
@@ -212,10 +221,13 @@ static bool FA_ScanBBox(const unsigned char* buf, int* outXmin, int* outXmax) {
 //   - Call Font::DrawString at anchor (FA_W/2, FA_H/2) with given alignment.
 //   - Read pixels.
 //   - Scan for bounding box.
+// outPixels: if non-null, receives the raw RGBA FBO pixels (FA_W*FA_H*4 bytes,
+//   bottom-up GL order). Caller must supply a buffer of that size.
 // Returns false if rendering fails (no lit pixels).
 // ---------------------------------------------------------------------------
 static bool FA_RenderAndScan(AlignFBO& fbo, Mortar::Font* font, const char* text,
-                              int alignment, int* outXmin, int* outXmax) {
+                              int alignment, int* outXmin, int* outXmax,
+                              unsigned char* outPixels = NULL) {
     fbo.Bind();
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -241,6 +253,10 @@ static bool FA_RenderAndScan(AlignFBO& fbo, Mortar::Font* font, const char* text
     fbo.ReadPixels(buf);
     fbo.Unbind();
 
+    if (outPixels) {
+        std::memcpy(outPixels, buf, (size_t)FA_W * FA_H * 4);
+    }
+
     if (!FA_ScanBBox(buf, outXmin, outXmax)) {
         fprintf(stderr, "  [scan] no lit pixels (alignment=0x%02X) -- font not rendering?\n",
                 alignment);
@@ -250,8 +266,374 @@ static bool FA_RenderAndScan(AlignFBO& fbo, Mortar::Font* font, const char* text
 }
 
 // ---------------------------------------------------------------------------
+// PNG composite save helpers.
+// ---------------------------------------------------------------------------
+
+// Create tmp/test/screenshots/font_align/ directory.
+static void FA_MakeDir() {
+#ifdef _WIN32
+    _mkdir("tmp");
+    _mkdir("tmp/test");
+    _mkdir("tmp/test/screenshots");
+    _mkdir("tmp/test/screenshots/font_align");
+#else
+    mkdir("tmp",                              0755);
+    mkdir("tmp/test",                         0755);
+    mkdir("tmp/test/screenshots",             0755);
+    mkdir("tmp/test/screenshots/font_align",  0755);
+#endif
+}
+
+// Save one row's RGBA pixels (FA_W x FA_H, bottom-up GL) as a PNG after:
+//   - flipping vertically (GL bottom-up -> top-down for PNG viewers)
+//   - painting a 2-px wide magenta vertical line at anchorX
+// path: absolute or relative path to write.
+// Returns true on success.
+static bool FA_SaveRowPng(const unsigned char* glPixels, int anchorX, const char* path) {
+    // Flip bottom-up to top-down into a working buffer.
+    unsigned char* flipped = (unsigned char*)std::malloc((size_t)FA_W * FA_H * 4);
+    if (!flipped) return false;
+    for (int y = 0; y < FA_H; ++y) {
+        std::memcpy(flipped + (size_t)y * FA_W * 4,
+                    glPixels + (size_t)(FA_H - 1 - y) * FA_W * 4,
+                    (size_t)FA_W * 4);
+    }
+
+    // Paint magenta (255, 0, 255) reference line at anchorX (2 px wide).
+    for (int y = 0; y < FA_H; ++y) {
+        for (int dx = 0; dx < 2; ++dx) {
+            int col = anchorX + dx;
+            if (col < 0 || col >= FA_W) continue;
+            unsigned char* p = flipped + ((size_t)y * FA_W + (size_t)col) * 4;
+            p[0] = 255;  // R
+            p[1] = 0;    // G
+            p[2] = 255;  // B
+            p[3] = 255;  // A
+        }
+    }
+
+    SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+        flipped, FA_W, FA_H,
+        32,          // bits per pixel
+        FA_W * 4,    // pitch (bytes per row)
+        0x000000FFu, // Rmask
+        0x0000FF00u, // Gmask
+        0x00FF0000u, // Bmask
+        0xFF000000u);// Amask
+    if (!surf) {
+        fprintf(stderr, "[font_align] SDL_CreateRGBSurfaceFrom failed: %s\n", SDL_GetError());
+        std::free(flipped);
+        return false;
+    }
+    int rc = IMG_SavePNG(surf, path);
+    SDL_FreeSurface(surf);
+    std::free(flipped);
+    if (rc != 0) {
+        fprintf(stderr, "[font_align] IMG_SavePNG(%s) failed: %s\n", path, IMG_GetError());
+        return false;
+    }
+    printf("[font_align] wrote %s (%dx%d)\n", path, FA_W, FA_H);
+    return true;
+}
+
+// Save composite PNG: numRows rows stacked vertically, each FA_W x FA_H.
+// glPixelRows: array of numRows pointers, each pointing to FA_W*FA_H*4 bytes (GL bottom-up RGBA).
+// Returns true on success.
+static bool FA_SaveCompositePng(const unsigned char* const* glPixelRows,
+                                int numRows, int anchorX, const char* path) {
+    int totalH = FA_H * numRows;
+    unsigned char* canvas = (unsigned char*)std::malloc((size_t)FA_W * totalH * 4);
+    if (!canvas) return false;
+
+    // Fill dark background (very dark grey so the black font row background
+    // is distinguishable from the inter-row separator).
+    std::memset(canvas, 0x10, (size_t)FA_W * totalH * 4);
+    // Force alpha to 255 everywhere.
+    for (int i = 3; i < FA_W * totalH * 4; i += 4) {
+        canvas[i] = 255;
+    }
+
+    for (int row = 0; row < numRows; ++row) {
+        const unsigned char* src = glPixelRows[row];
+        if (!src) continue;
+        // Flip GL bottom-up row into top-down canvas slot: canvas row 'row' starts at
+        // canvas y = row * FA_H, and GL row 0 is the BOTTOM of the FBO.
+        int dstRowBase = row * FA_H;
+        for (int y = 0; y < FA_H; ++y) {
+            // canvas y = dstRowBase + y; GL y = FA_H - 1 - y (flip).
+            std::memcpy(canvas + ((size_t)(dstRowBase + y) * FA_W) * 4,
+                        src    + (size_t)(FA_H - 1 - y) * FA_W * 4,
+                        (size_t)FA_W * 4);
+        }
+    }
+
+    // Paint magenta vertical reference line at anchorX across the entire height.
+    for (int y = 0; y < totalH; ++y) {
+        for (int dx = 0; dx < 2; ++dx) {
+            int col = anchorX + dx;
+            if (col < 0 || col >= FA_W) continue;
+            unsigned char* p = canvas + ((size_t)y * FA_W + (size_t)col) * 4;
+            p[0] = 255;
+            p[1] = 0;
+            p[2] = 255;
+            p[3] = 255;
+        }
+    }
+
+    SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+        canvas, FA_W, totalH,
+        32,
+        FA_W * 4,
+        0x000000FFu,
+        0x0000FF00u,
+        0x00FF0000u,
+        0xFF000000u);
+    if (!surf) {
+        fprintf(stderr, "[font_align] composite SDL_CreateRGBSurfaceFrom failed: %s\n",
+                SDL_GetError());
+        std::free(canvas);
+        return false;
+    }
+    int rc = IMG_SavePNG(surf, path);
+    SDL_FreeSurface(surf);
+    std::free(canvas);
+    if (rc != 0) {
+        fprintf(stderr, "[font_align] composite IMG_SavePNG(%s) failed: %s\n",
+                path, IMG_GetError());
+        return false;
+    }
+    printf("[font_align] wrote composite %s (%dx%d, %d rows)\n",
+           path, FA_W, totalH, numRows);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Scale x Alignment matrix screenshot (SM_*)
+// 6 scale rows (16,24,32,48,64,96 px) x 5 alignment columns.
+// Column order: LEFT(0x00), CTR(0x03), RIGHT(0x02), 0x0D, 0x0F.
+// Row order (top->bottom): 16 24 32 48 64 96 px.
+// Each cell: "123" at that scale/align, magenta line at anchor X.
+// Canvas: SM_NUM_ALIGNS*SM_CELL_W x SM_NUM_SCALES*SM_CELL_H px.
+// Uses a separate FBO (SM_FBO_W x SM_FBO_H) so large scales don't clip.
+// ---------------------------------------------------------------------------
+
+static const int SM_FBO_W         = 600;   // FBO wider than cell; anchor at centre
+static const int SM_FBO_H         = 200;   // taller than FA_H to hold scale=96 glyphs
+static const int SM_CELL_W        = 250;   // extracted cell width per column
+static const int SM_CELL_H        = 200;   // extracted cell height (== SM_FBO_H)
+static const int SM_FBO_ANCHOR_X  = 300;   // SM_FBO_W / 2
+static const int SM_FBO_ANCHOR_Y  = 100;   // SM_FBO_H / 2
+static const int SM_CELL_ANCHOR_X = 125;   // SM_CELL_W / 2
+static const int SM_EXTRACT_LEFT  = 175;   // SM_FBO_ANCHOR_X - SM_CELL_ANCHOR_X
+static const int SM_NUM_SCALES    = 6;
+static const int SM_NUM_ALIGNS    = 5;
+
+static const float SM_SCALES[SM_NUM_SCALES] = { 16.0f, 24.0f, 32.0f, 48.0f, 64.0f, 96.0f };
+static const int   SM_ALIGNS[SM_NUM_ALIGNS] = { 0x0, 0x3, 0x2, 0x0D, 0x0F };
+
+struct SmMatrixFBO {
+    GLuint fbo;
+    GLuint colorTex;
+    GLuint depthRbo;
+
+    SmMatrixFBO() : fbo(0), colorTex(0), depthRbo(0) {}
+
+    bool Create() {
+        glGenTextures(1, &colorTex);
+        glBindTexture(GL_TEXTURE_2D, colorTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, (GLint)FA_RGBA8_, SM_FBO_W, SM_FBO_H,
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        fa_glGenRenderbuffers(1, &depthRbo);
+        fa_glBindRenderbuffer(FA_RB_, depthRbo);
+        fa_glRenderbufferStorage(FA_RB_, FA_DEPTH16_, SM_FBO_W, SM_FBO_H);
+        fa_glBindRenderbuffer(FA_RB_, 0);
+
+        fa_glGenFramebuffers(1, &fbo);
+        fa_glBindFramebuffer(FA_FB_, fbo);
+        fa_glFramebufferTexture2D(FA_FB_, FA_COLOR0_, GL_TEXTURE_2D, colorTex, 0);
+        fa_glFramebufferRenderbuffer(FA_FB_, FA_DEPTH_ATTACH_, FA_RB_, depthRbo);
+
+        GLenum status = fa_glCheckFramebufferStatus(FA_FB_);
+        if (status != FA_FB_COMPLETE_) {
+            fprintf(stderr, "[scale_matrix] SmMatrixFBO incomplete (0x%x)\n", (unsigned)status);
+            fa_glBindFramebuffer(FA_FB_, 0);
+            return false;
+        }
+        return true;
+    }
+
+    void Bind() {
+        fa_glBindFramebuffer(FA_FB_, fbo);
+        glViewport(0, 0, SM_FBO_W, SM_FBO_H);
+    }
+
+    void Unbind() { fa_glBindFramebuffer(FA_FB_, 0); }
+
+    void ReadPixels(unsigned char* buf) {
+        fa_glReadPixels(0, 0, SM_FBO_W, SM_FBO_H, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+    }
+
+    void Destroy() {
+        if (fbo)      { fa_glDeleteFramebuffers(1, &fbo); fbo = 0; }
+        if (colorTex) { glDeleteTextures(1, &colorTex); colorTex = 0; }
+        if (depthRbo) { fa_glDeleteRenderbuffers(1, &depthRbo); depthRbo = 0; }
+    }
+};
+
+static void SM_SetupPixelOrtho() {
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.SetupOrtho((float)SM_FBO_H, 0.0f, 0.0f, (float)SM_FBO_W, 1.0f, -1.0f);
+    mm.GetViewStack().Reset();
+    mm.GetWorldStack().Reset();
+    MatrixManager::GetInstance().UploadModelViewOnly();
+}
+
+// Render scale x alignment matrix and save scale_matrix.png.
+// Must be called while the GL context is live (before Shutdown).
+static void SM_RenderMatrix(Mortar::Font* font, const char* text) {
+    SmMatrixFBO smfbo;
+    if (!smfbo.Create()) {
+        fprintf(stderr, "[scale_matrix] SmMatrixFBO create failed -- skipping\n");
+        return;
+    }
+
+    int totalW = SM_NUM_ALIGNS * SM_CELL_W;   // 5 * 250 = 1250
+    int totalH = SM_NUM_SCALES * SM_CELL_H;   // 6 * 200 = 1200
+
+    unsigned char* canvas = (unsigned char*)std::malloc((size_t)totalW * (size_t)totalH * 4);
+    unsigned char* fboBuf = (unsigned char*)std::malloc((size_t)SM_FBO_W * (size_t)SM_FBO_H * 4);
+    if (!canvas || !fboBuf) {
+        fprintf(stderr, "[scale_matrix] out of memory\n");
+        std::free(canvas);
+        std::free(fboBuf);
+        smfbo.Destroy();
+        return;
+    }
+
+    // Dark background (very dark grey, alpha=255).
+    std::memset(canvas, 0x18, (size_t)totalW * (size_t)totalH * 4);
+    for (int i = 3; i < totalW * totalH * 4; i += 4)
+        canvas[i] = 255;
+
+    for (int row = 0; row < SM_NUM_SCALES; ++row) {
+        float scale = SM_SCALES[row];
+        for (int col = 0; col < SM_NUM_ALIGNS; ++col) {
+            int align = SM_ALIGNS[col];
+
+            smfbo.Bind();
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            SM_SetupPixelOrtho();
+
+            Vec3 pos((float)SM_FBO_ANCHOR_X, (float)SM_FBO_ANCHOR_Y, 0.0f);
+            Colour white(255, 255, 255, 255);
+            font->DrawString(scale, 1.0f, 0.0f, text, pos, white, align);
+
+            smfbo.ReadPixels(fboBuf);
+            smfbo.Unbind();
+
+            // Copy extracted window [SM_EXTRACT_LEFT, SM_EXTRACT_LEFT+SM_CELL_W) from FBO
+            // into the canvas cell at (col*SM_CELL_W, row*SM_CELL_H), flipping GL bottom-up
+            // to canvas top-down.
+            int dstCellX = col * SM_CELL_W;
+            int dstCellY = row * SM_CELL_H;
+
+            for (int cy = 0; cy < SM_CELL_H; ++cy) {
+                int fboY = SM_CELL_H - 1 - cy;
+                for (int cx = 0; cx < SM_CELL_W; ++cx) {
+                    int fboX = SM_EXTRACT_LEFT + cx;
+                    if (fboX < 0 || fboX >= SM_FBO_W) continue;
+                    const unsigned char* src =
+                        fboBuf + ((size_t)fboY * (size_t)SM_FBO_W + (size_t)fboX) * 4;
+                    unsigned char* dst =
+                        canvas + ((size_t)(dstCellY + cy) * (size_t)totalW +
+                                  (size_t)(dstCellX + cx)) * 4;
+                    dst[0] = src[0]; dst[1] = src[1];
+                    dst[2] = src[2]; dst[3] = src[3];
+                }
+            }
+        }
+    }
+
+    // Magenta 2-px vertical reference lines at each column's anchor X (across all rows).
+    for (int col = 0; col < SM_NUM_ALIGNS; ++col) {
+        int lineX = col * SM_CELL_W + SM_CELL_ANCHOR_X;
+        for (int y = 0; y < totalH; ++y) {
+            for (int dx = 0; dx < 2; ++dx) {
+                int x = lineX + dx;
+                if (x < 0 || x >= totalW) continue;
+                unsigned char* p = canvas + ((size_t)y * (size_t)totalW + (size_t)x) * 4;
+                p[0] = 255; p[1] = 0; p[2] = 255; p[3] = 255;
+            }
+        }
+    }
+
+    // 1-px dark separator lines between rows and columns.
+    for (int row = 1; row < SM_NUM_SCALES; ++row) {
+        int sepY = row * SM_CELL_H;
+        for (int x = 0; x < totalW; ++x) {
+            unsigned char* p = canvas + ((size_t)sepY * (size_t)totalW + (size_t)x) * 4;
+            p[0] = 0x50; p[1] = 0x50; p[2] = 0x50; p[3] = 255;
+        }
+    }
+    for (int col = 1; col < SM_NUM_ALIGNS; ++col) {
+        int sepX = col * SM_CELL_W;
+        for (int y = 0; y < totalH; ++y) {
+            unsigned char* p = canvas + ((size_t)y * (size_t)totalW + (size_t)sepX) * 4;
+            p[0] = 0x50; p[1] = 0x50; p[2] = 0x50; p[3] = 255;
+        }
+    }
+
+    const char* kPath = "tmp/test/screenshots/font_align/scale_matrix.png";
+    SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
+        canvas, totalW, totalH,
+        32, totalW * 4,
+        0x000000FFu, 0x0000FF00u, 0x00FF0000u, 0xFF000000u);
+    if (surf) {
+        int rc = IMG_SavePNG(surf, kPath);
+        SDL_FreeSurface(surf);
+        if (rc == 0) {
+            printf("[font_align] wrote scale_matrix.png (%dx%d)\n", totalW, totalH);
+            printf("[font_align] cols left->right: LEFT(0x00) CTR(0x03) RIGHT(0x02) 0x0D 0x0F\n");
+            printf("[font_align] rows top->bottom: 16 24 32 48 64 96 px\n");
+            printf("[font_align] magenta=anchor; LEFT:text right, CTR:straddles, RIGHT:text left\n");
+        } else {
+            fprintf(stderr, "[font_align] IMG_SavePNG(%s) failed: %s\n", kPath, IMG_GetError());
+        }
+    } else {
+        fprintf(stderr, "[font_align] SDL_CreateRGBSurfaceFrom failed for scale_matrix\n");
+    }
+
+    smfbo.Destroy();
+    std::free(canvas);
+    std::free(fboBuf);
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
+
+// Number of alignment cases (rows in composite PNG).
+static const int FA_NUM_CASES = 5;
+// Alignment flags for each row, top to bottom.
+static const int FA_ALIGN_FLAGS[FA_NUM_CASES] = { 0x0, 0x2, 0x3, 0x0D, 0x0F };
+// Labels for each row (used only in log messages).
+static const char* const FA_ALIGN_LABELS[FA_NUM_CASES] = {
+    "0x0 LEFT",
+    "0x2 RIGHT",
+    "0x3 CENTER",
+    "0x0D score-left",
+    "0x0F bonus-center"
+};
+
 int main(int argc, char* argv[]) {
     fn::TestHarness h(argc, argv, "font_align");
     h.SetInitFrames(5);
@@ -303,6 +685,16 @@ int main(int argc, char* argv[]) {
     int xmin = 0, xmax = 0;
     int failures = 0;
 
+    // Pixel capture buffers for PNG output -- one per case (RGBA, bottom-up GL order).
+    static const size_t kRowBytes = (size_t)FA_W * FA_H * 4;
+    unsigned char* pixBufs[FA_NUM_CASES];
+    for (int i = 0; i < FA_NUM_CASES; ++i) {
+        pixBufs[i] = (unsigned char*)std::malloc(kRowBytes);
+        if (!pixBufs[i]) {
+            fprintf(stderr, "WARN: out of memory for pixel capture buf %d\n", i);
+        }
+    }
+
     // Measure the string width at scale=32 so we know expected bbox width.
     float measW = font->MeasureWidth(32.0f, kText) * 32.0f;
     int   measWi = (int)(measW + 0.5f);
@@ -314,7 +706,7 @@ int main(int argc, char* argv[]) {
     // Expected: xmin ~= anchorX
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x0 (LEFT):\n");
-    if (!FA_RenderAndScan(fbo, font, kText, 0x0, &xmin, &xmax)) {
+    if (!FA_RenderAndScan(fbo, font, kText, 0x0, &xmin, &xmax, pixBufs[0])) {
         fprintf(stderr, "FAIL [0x0]: no pixels\n");
         ++failures;
     } else {
@@ -342,6 +734,8 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     // Case 0x1 -- CENTER bit (INERT per binary RE; should render same as LEFT)
     // Expected: xmin ~= anchorX (same as LEFT)
+    // NOTE: 0x1 is NOT in the composite rows (it's identical to 0x0 LEFT
+    // by RE; the composite shows the five *distinct* alignment semantics).
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x1 (CENTER/inert):\n");
     int xmin1 = 0, xmax1 = 0;
@@ -377,7 +771,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x2 (RIGHT):\n");
     int xmin2 = 0, xmax2 = 0;
-    if (!FA_RenderAndScan(fbo, font, kText, 0x2, &xmin2, &xmax2)) {
+    if (!FA_RenderAndScan(fbo, font, kText, 0x2, &xmin2, &xmax2, pixBufs[1])) {
         fprintf(stderr, "FAIL [0x2]: no pixels\n");
         ++failures;
     } else {
@@ -407,7 +801,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x3 (CENTER):\n");
     int xmin3 = 0, xmax3 = 0;
-    if (!FA_RenderAndScan(fbo, font, kText, 0x3, &xmin3, &xmax3)) {
+    if (!FA_RenderAndScan(fbo, font, kText, 0x3, &xmin3, &xmax3, pixBufs[2])) {
         fprintf(stderr, "FAIL [0x3]: no pixels\n");
         ++failures;
     } else {
@@ -444,7 +838,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x0D (score flag: horiz=0x01 inert = LEFT):\n");
     int xmin0d = 0, xmax0d = 0;
-    if (!FA_RenderAndScan(fbo, font, kText, 0x0D, &xmin0d, &xmax0d)) {
+    if (!FA_RenderAndScan(fbo, font, kText, 0x0D, &xmin0d, &xmax0d, pixBufs[3])) {
         fprintf(stderr, "FAIL [0x0D]: no pixels\n");
         ++failures;
     } else {
@@ -486,7 +880,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     printf("[font_align] case 0x0F (bonus flag: horiz=0x03 = true CENTER):\n");
     int xmin0f = 0, xmax0f = 0;
-    if (!FA_RenderAndScan(fbo, font, kText, 0x0F, &xmin0f, &xmax0f)) {
+    if (!FA_RenderAndScan(fbo, font, kText, 0x0F, &xmin0f, &xmax0f, pixBufs[4])) {
         fprintf(stderr, "FAIL [0x0F]: no pixels\n");
         ++failures;
     } else {
@@ -532,6 +926,48 @@ int main(int argc, char* argv[]) {
     }
 
     fbo.Destroy();
+
+    // -----------------------------------------------------------------------
+    // PNG output -- written unconditionally after assertions so the images
+    // are always available regardless of pass/fail.
+    // Rows (top to bottom): 0x0 LEFT, 0x2 RIGHT, 0x3 CENTER, 0x0D score, 0x0F bonus.
+    // A magenta 2-px vertical line at anchorX (pixel column FA_W/2=256) is
+    // painted into every row so the viewer can see exactly where the anchor is.
+    // -----------------------------------------------------------------------
+    printf("[font_align] writing PNG output to tmp/test/screenshots/font_align/\n");
+    FA_MakeDir();
+
+    // Scale x alignment matrix (6 scales x 5 align flags).
+    SM_RenderMatrix(font, kText);
+
+    // Per-flag individual PNGs.
+    {
+        // hex names match alignment flag values: 00.png, 02.png, 03.png, 0d.png, 0f.png
+        static const char* const kFlagNames[FA_NUM_CASES] = { "00", "02", "03", "0d", "0f" };
+        for (int i = 0; i < FA_NUM_CASES; ++i) {
+            if (!pixBufs[i]) continue;
+            char path[256];
+            std::snprintf(path, sizeof(path),
+                          "tmp/test/screenshots/font_align/%s.png", kFlagNames[i]);
+            FA_SaveRowPng(pixBufs[i], anchorX, path);
+        }
+    }
+
+    // Composite PNG: 5 rows stacked.
+    {
+        const unsigned char* rowPtrs[FA_NUM_CASES];
+        for (int i = 0; i < FA_NUM_CASES; ++i) {
+            rowPtrs[i] = pixBufs[i];
+        }
+        FA_SaveCompositePng(rowPtrs, FA_NUM_CASES, anchorX,
+                            "tmp/test/screenshots/font_align/all.png");
+    }
+
+    // Free pixel capture buffers.
+    for (int i = 0; i < FA_NUM_CASES; ++i) {
+        std::free(pixBufs[i]);
+        pixBufs[i] = NULL;
+    }
 
     if (failures == 0) {
         printf("PASS: all font alignment cases ok\n");

@@ -32,10 +32,11 @@
 
 namespace FN {
 
-bool  g_DebugHitboxes  = false;
-bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
-float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
-bool  g_ShowFps        = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
+bool  g_DebugHitboxes        = false;
+bool  g_DebugWireframe       = false; // Port specific: desktop GL only (F2)
+float g_DebugTimeScale       = 1.0f;  // Port specific: debug-only, no binary equivalent
+bool  g_ShowFps              = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
+bool  g_SuppressTextOverlay  = false; // Port specific: suppresses DebugText_Overlay for debug-drawn text
 
 // Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
@@ -380,8 +381,10 @@ void DebugHUDBounds_Draw() {
                 const Vec3 labelPos(ox0 + 2.0f, oy1 - 2.0f, -0.4f);
                 mm.GetWorldStack().Reset();
                 mm.UploadModelViewOnly();
+                g_SuppressTextOverlay = true;
                 s_DebugFont->DrawString(8.0f, 1.0f, 0.0f, ptrBuf, labelPos,
                                         kSmLabel, Mortar::FONT_ALIGN_LEFT);
+                g_SuppressTextOverlay = false;
             }
         }
 
@@ -412,12 +415,14 @@ void DebugHUDBounds_Draw() {
 
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
+            g_SuppressTextOverlay = true;
             s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
                                     className, classPos, kLabelColour,
                                     Mortar::FONT_ALIGN_LEFT);
             s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
                                     ptrBuf, ptrPos, kLabelColour,
                                     Mortar::FONT_ALIGN_LEFT);
+            g_SuppressTextOverlay = false;
         }
     }
 }
@@ -543,6 +548,96 @@ static void BuildSegment(QUADCUSTOMVERTEX* out,
         out[k].nx = 0.0f; out[k].ny = 0.0f; out[k].nz = 1.0f;
         out[k].u  = 0.5f; out[k].v  = 0.5f;
         out[k].colour = col;
+    }
+}
+
+// Port specific: crosshair arm length / thickness for DebugText_Overlay anchor marker.
+static const float kTextAnchorArm = 5.0f;
+static const float kTextAnchorThk = 0.8f;
+
+void DebugText_Overlay(float anchorX, float anchorY,
+                       bool hasBox,
+                       float boxX0, float boxY0, float boxX1, float boxY1,
+                       float inkX0, float inkY0, float inkX1, float inkY1)
+{
+    if (!g_DebugHitboxes) return;
+
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    EnsureWhiteTex();
+
+    // Re-establish the scene projection + identity world matrix. This function
+    // may be called mid-text-draw while the world matrix is in an arbitrary
+    // state; reset to ensure overlay geometry lands in centred-ortho world space.
+    r->SetupGameOrtho();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+
+    // Colour constants (BGRA packed):
+    //   MAGENTA anchor crosshair: B=0xFF G=0x00 R=0xFF A=0xFF
+    static const uint32_t kAnchorCol = 0xFFFF00FF;
+    //   GREEN box rect: B=0x00 G=0xFF R=0x00 A=0xFF
+    static const uint32_t kBoxCol    = 0xFF00FF00;
+    //   YELLOW ink rect: B=0x00 G=0xFF R=0xFF A=0xFF
+    static const uint32_t kInkCol    = 0xFF00FFFF;
+
+    static const float kZ   = -0.3f;
+    static const float kThk = 0.8f;
+
+    // Anchor crosshair: 4 arms * 6 verts = 24 verts.
+    {
+        static QUADCUSTOMVERTEX cv[24];
+        const float arm = kTextAnchorArm;
+        const float h   = kTextAnchorThk * 0.5f;
+        // +X arm
+        cv[ 0] = {anchorX,     anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 1] = {anchorX,     anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 2] = {anchorX+arm, anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 3] = {anchorX+arm, anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 4] = {anchorX,     anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 5] = {anchorX+arm, anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        // -X arm
+        cv[ 6] = {anchorX-arm, anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 7] = {anchorX-arm, anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 8] = {anchorX,     anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[ 9] = {anchorX,     anchorY + h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[10] = {anchorX-arm, anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[11] = {anchorX,     anchorY - h, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        // +Y arm
+        cv[12] = {anchorX - h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[13] = {anchorX + h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[14] = {anchorX - h, anchorY+arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[15] = {anchorX - h, anchorY+arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[16] = {anchorX + h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[17] = {anchorX + h, anchorY+arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        // -Y arm
+        cv[18] = {anchorX - h, anchorY-arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[19] = {anchorX + h, anchorY-arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[20] = {anchorX - h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[21] = {anchorX - h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[22] = {anchorX + h, anchorY-arm, kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        cv[23] = {anchorX + h, anchorY,     kZ, 0,0,1, kAnchorCol, 0.5f, 0.5f};
+        r->DrawTriList(cv, 24);
+    }
+
+    // Box rect (GREEN) -- 4 sides * 6 verts = 24 verts.
+    if (hasBox) {
+        static QUADCUSTOMVERTEX bv[24];
+        BuildAABBOutline(bv, boxX0, boxX1, boxY0, boxY1, kZ - 0.01f, kThk, kBoxCol);
+        r->DrawTriList(bv, 24);
+    }
+
+    // Ink bounds rect (YELLOW) -- 4 sides * 6 verts = 24 verts.
+    {
+        static QUADCUSTOMVERTEX iv[24];
+        BuildAABBOutline(iv, inkX0, inkX1, inkY0, inkY1, kZ - 0.02f, kThk, kInkCol);
+        r->DrawTriList(iv, 24);
     }
 }
 

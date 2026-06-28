@@ -12,6 +12,9 @@
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
 #include "debug/Logger.h"
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+#  include "debug/DebugFlags.h"
+#endif
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -742,6 +745,23 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
     glBindTexture(GL_TEXTURE_2D, 0);
 
     world.Pop();
+
+    // Port specific: text-bounds debug overlay (F1). Ink bounds from transformed verts.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+        float inkX0 = verts[0].x, inkX1 = verts[0].x;
+        float inkY0 = verts[0].y, inkY1 = verts[0].y;
+        for (int i = 1; i < totalVerts; i++) {
+            if (verts[i].x < inkX0) inkX0 = verts[i].x;
+            if (verts[i].x > inkX1) inkX1 = verts[i].x;
+            if (verts[i].y < inkY0) inkY0 = verts[i].y;
+            if (verts[i].y > inkY1) inkY1 = verts[i].y;
+        }
+        FN::DebugText_Overlay(pos.x, pos.y,
+                              false, 0.0f, 0.0f, 0.0f, 0.0f,
+                              inkX0, inkY0, inkX1, inkY1);
+    }
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1163,6 +1183,37 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     }
 
     world.Pop();
+
+    // Port specific: text-bounds debug overlay (F1). Ink bounds accumulated from
+    // all transformed page verts.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+        float inkX0 = 0.0f, inkX1 = 0.0f, inkY0 = 0.0f, inkY1 = 0.0f;
+        bool hasInk = false;
+        for (int pg = 0; pg < m_PageCount; pg++) {
+            if (perPageCount[pg] == 0 || pg >= (int)m_PageVerts.size()) continue;
+            const QUADCUSTOMVERTEX* pv = &m_PageVerts[pg][0];
+            const int n = perPageCount[pg] * 6;
+            for (int i = 0; i < n; i++) {
+                if (!hasInk) {
+                    inkX0 = inkX1 = pv[i].x;
+                    inkY0 = inkY1 = pv[i].y;
+                    hasInk = true;
+                } else {
+                    if (pv[i].x < inkX0) inkX0 = pv[i].x;
+                    if (pv[i].x > inkX1) inkX1 = pv[i].x;
+                    if (pv[i].y < inkY0) inkY0 = pv[i].y;
+                    if (pv[i].y > inkY1) inkY1 = pv[i].y;
+                }
+            }
+        }
+        if (hasInk) {
+            FN::DebugText_Overlay(pos.x, pos.y,
+                                  false, 0.0f, 0.0f, 0.0f, 0.0f,
+                                  inkX0, inkY0, inkX1, inkY1);
+        }
+    }
+#endif
 
     delete[] perPageCount;
 }
