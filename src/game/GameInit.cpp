@@ -753,11 +753,32 @@ void GameDraw(float dt, bool active) {
     // DrawSlices (v1.6.1 GameDraw @0x001cd720) -- slash-line pool
     DrawSlices(dt, false);   // pass=false: draw modelIdx!=3 nodes
 
+    // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
+    // PowerUpManager::SetDefaults resets scales to 1.0 each GameUpdate tick; ScreenEffect::Update
+    // multiplies them (fade=0 at effect start -> scales *= 0 -> overlays go black).
+    // Binary saves here, resets to 1.0 before overlay draws, then restores so ScreenEffect
+    // tinting applies to the 0x01/particle pass but NOT to 0x08/0x400/0x100/0x200 overlays.
+    float savedScales[3] = { 1.0f, 1.0f, 1.0f };
+    if (game_work.mHud) {
+        savedScales[0] = game_work.mHud->scales[0];
+        savedScales[1] = game_work.mHud->scales[1];
+        savedScales[2] = game_work.mHud->scales[2];
+    }
+
     // HUD::Draw(0x01) -- MainScreen logo / shade (v1.6.1 GameDraw @0x001cd720)
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
     // pm.Draw(1) -- foreground particles @ v1.6.1 0x001cdbd8
     pm.Draw(particleDt, false, 1);
+
+    // v1.6.1 GameDraw @0x001cd720: reset HUD tint scales to 1.0f after the 0x01 pass so the
+    // 0x08/0x400/0x100/0x200 overlay passes (combo icons, sensei head, pause, fades) are NOT
+    // affected by ScreenEffect gameplay tinting (which can drive scales to 0 -> black sprites).
+    if (game_work.mHud) {
+        game_work.mHud->scales[0] = 1.0f;
+        game_work.mHud->scales[1] = 1.0f;
+        game_work.mHud->scales[2] = 1.0f;
+    }
 
     // WaveManager::Draw(0) (v1.6.1 GameDraw @0x001cd720) -- stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
@@ -807,6 +828,15 @@ void GameDraw(float dt, bool active) {
         // HUD::Draw(0x400) -- top layer (v1.6.1 GameDraw @0x001cd720), ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
         game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
+
+        // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
+        // Restore ScreenEffect-modified values so the next SetDefaults reset starts from
+        // the correct per-frame base (binary restores before leaving the overlay block).
+        if (game_work.mHud) {
+            game_work.mHud->scales[0] = savedScales[0];
+            game_work.mHud->scales[1] = savedScales[1];
+            game_work.mHud->scales[2] = savedScales[2];
+        }
     }
 
     // v1.6.1 GameDraw tail @0x001cdd64: unpause_game auto-clear.
@@ -819,6 +849,9 @@ void GameDraw(float dt, bool active) {
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/PauseMenu.txt"));
         game_work.bM_Mode = false;
     }
+
+    // v1.6.1 GameDraw tail @0x001cdd80: HUD::Draw(0x800) fires unconditionally outside the active-guard.
+    if (game_work.mHud) game_work.mHud->Draw(Mortar::HUD_LAYER_TOP_MOST);
 }
 
 // v1.6.1 GameExit @0x001cfed4. Order matters:
