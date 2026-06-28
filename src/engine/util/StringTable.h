@@ -65,6 +65,9 @@ enum LocalizedString {
     LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY     = 0xcf,  // CODE_DJ_BAMBOO_BLADE_PLAYED_TODAY
     LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP  = 0xd7,  // CODE_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP
     LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN  = 0xd8,  // CODE_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN
+    LSTR_DOJO_TITLE                       = 0x397, // DOJO ring label -- MainScreen ring (CreateButtons @0x001961f8)
+    LSTR_NEW_GAME                         = 0x398, // "NEW GAME" ring label -- MainScreen ring (CreateButtons @0x001961f8)
+    LSTR_MORE_GAMES                       = 0x39c, // "MORE GAMES" ring label -- MainScreen ring (CreateButtons @0x001961f8)
     LSTR_MENU_TEXTURE_13                  = 0x39d, // CODE_MENU_TEXTURE_13 "SLICE FRUIT TO BEGIN"
     LSTR_BONUS_PAGE_TITLE                 = 0x412, // T_1035 @ 0x00173d84 -- page title for FruitFactBonusFactPage (GETSTRING(0x412,0))
     LSTR_LEADERBOARD_GLOBAL               = 0x7b,  // FruitFactLeaderboard title (global/top scores); binary GETSTRING(0x7b,0) @ 0x00176980
