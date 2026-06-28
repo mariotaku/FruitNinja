@@ -40,7 +40,13 @@
 #include "engine/util/StringTable.h"
 #include "engine/math/Quaternion.h"
 #include "engine/math/math3d.h"
+#include "debug/DebugFlags.h"
 #include <cstring>
+
+// Port specific: --debug-textbounds flag. When set, FN::g_DebugHitboxes is
+// forced on before the screenshot render so the text-bounds overlay fires.
+// Output goes to debug/bonus_textbounds.png instead of the normal label.
+static bool g_DebugTextBounds = false;
 
 // ---------------------------------------------------------------------------
 // Forward declarations for per-screen fixture functions.
@@ -103,7 +109,25 @@ int main(int argc, char* argv[]) {
         return FailUsage();
     }
 
-    fn::TestHarness h(argc, argv, sc->label);
+    // Detect --debug-textbounds before TestHarness parses flags.
+    for (int i = 2; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--debug-textbounds") == 0) {
+            g_DebugTextBounds = true;
+        }
+    }
+
+    // When --debug-textbounds is set, redirect the output label so the overlay
+    // screenshot goes to a separate path and doesn't overwrite the normal golden.
+    const char* label = sc->label;
+    if (g_DebugTextBounds) {
+        if (std::strcmp(sc->name, "bonus") == 0) {
+            label = "debug/bonus_textbounds";
+        } else if (std::strcmp(sc->name, "gameover") == 0) {
+            label = "debug/gameover_textbounds";
+        }
+    }
+
+    fn::TestHarness h(argc, argv, label);
     // 120 burn-in frames: lets GameInit run through the Splash->Game state
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
@@ -111,6 +135,11 @@ int main(int argc, char* argv[]) {
     // InitComponent() boots normally then clears the HUD so GameDraw has
     // no controls and we get a clean background for component-only rendering.
     if (!h.InitComponent()) return 1;
+
+    // Enable text-bounds overlay after init so burn-in frames don't trigger it.
+    if (g_DebugTextBounds) {
+        FN::g_DebugHitboxes = true;
+    }
 
     return sc->run(h);
 }
@@ -262,7 +291,7 @@ static int RunBonus(fn::TestHarness& h) {
 //   Add GameOverScreen + ScoreControl to HUD, run 60 frames to settle.
 //
 // Stubbed:
-//   FruitFactPageControl (Classic page) is created by Update state-6 on the first
+//   FruitFactControl (Classic page) is created by Update state-6 on the first
 //   tick after entering STATE_MAIN_DISPLAY -- it renders fine as long as textures
 //   loaded during 120-frame burn-in. No manual BonusManager setup needed for
 //   Classic mode.
