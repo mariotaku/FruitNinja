@@ -90,7 +90,7 @@ void Touch::_Update() {
 #ifdef FN_DEBUG_TOUCH
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (states1[i].extId != 0) {
-            LOG_DEBUG("TOUCH", "slot[%d] extId=%u touchId=%u phase=%d x=%d y=%d\n",
+            LOG_DEBUG("TOUCH", "slot[%d] extId=%u touchId=%u phase=%d x=%g y=%g\n",
                       i, states1[i].extId, states1[i].touchId,
                       states1[i].phase, states1[i].currX, states1[i].currY);
         }
@@ -147,8 +147,8 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
         uint32_t slotExtId = states2[idx].extId;
         if (slotExtId == extId) {
             if (isActive) {
-                states2[idx].currX = (int32_t)x;
-                states2[idx].currY = (int32_t)y;
+                states2[idx].currX = x;
+                states2[idx].currY = y;
             } else {
                 states2[idx].phase = 1;
             }
@@ -168,10 +168,10 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
         nextTouchId++;
         if (nextTouchId == 0) nextTouchId = 1;
         states2[firstFree].extId  = extId;
-        states2[firstFree].prevX  = (int32_t)x;
-        states2[firstFree].prevY  = (int32_t)y;
-        states2[firstFree].currX  = (int32_t)x;
-        states2[firstFree].currY  = (int32_t)y;
+        states2[firstFree].prevX  = x;
+        states2[firstFree].prevY  = y;
+        states2[firstFree].currX  = x;
+        states2[firstFree].currY  = y;
         states2[firstFree].phase  = -1;
 #ifdef FN_DEBUG_TOUCH
         LOG_DEBUG("TOUCH", "  claimed slot=%d touchId=%u extId=%u phase=-1 (new press)\n",
@@ -206,10 +206,10 @@ uint32_t Touch::GetMostRecentTouch() {
     return states1[slot].touchId;
 }
 
-// Binary @ 0x0019543c -- GetTouchPos.
+// ASM-spec v1.6.1 Touch::GetTouchPos @0x002429d4: (uint, float&, float&).
 // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
 // Binary leaves *x/*y UNTOUCHED on miss -- do not zero them.
-int Touch::GetTouchPos(uint32_t touchId, int& x, int& y) const {
+int Touch::GetTouchPos(uint32_t touchId, float& x, float& y) const {
     int slot = FindTouch(touchId);
     if (slot < 0) return 0;
     x = states1[slot].currX;
@@ -217,13 +217,13 @@ int Touch::GetTouchPos(uint32_t touchId, int& x, int& y) const {
     return (states1[slot].phase < 1) ? 1 : 0;
 }
 
-// Binary @ 0x0019546c -- GetTouchDelta.
-// Writes currX-prevX/dy if phase >= 0, else 0. Returns 1 if active.
-int Touch::GetTouchDelta(uint32_t touchId, int& dx, int& dy) const {
+// ASM-spec v1.6.1 Touch::GetTouchDelta @0x00242a20: (uint, float&, float&).
+// Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
+int Touch::GetTouchDelta(uint32_t touchId, float& dx, float& dy) const {
     int slot = FindTouch(touchId);
-    if (slot < 0 || states1[slot].phase >= 1) { dx = 0; dy = 0; return 0; }
+    if (slot < 0 || states1[slot].phase >= 1) { dx = 0.0f; dy = 0.0f; return 0; }
     if (states1[slot].phase < 0) {
-        dx = 0; dy = 0;
+        dx = 0.0f; dy = 0.0f;
     } else {
         dx = states1[slot].currX - states1[slot].prevX;
         dy = states1[slot].currY - states1[slot].prevY;
@@ -231,16 +231,16 @@ int Touch::GetTouchDelta(uint32_t touchId, int& dx, int& dy) const {
     return 1;
 }
 
-// Binary @ 0x001954b4 -- GetTouchInReigion (note binary typo).
+// Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
 // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
 // Binary uses inclusive <= on all bounds.
-uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) {
-    int x1 = x + w;
-    int y1 = y + h;
+uint32_t Touch::GetTouchInReigion(float x, float y, float w, float h) {
+    float x1 = x + w;
+    float y1 = y + h;
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (states1[i].phase >= 1) continue;
-        int cx = states1[i].currX;
-        int cy = states1[i].currY;
+        float cx = states1[i].currX;
+        float cy = states1[i].currY;
         if (cx >= x && cx <= x1 && cy >= y && cy <= y1) {
             return states1[i].touchId;
         }
@@ -266,9 +266,9 @@ void Touch::SendIndividualTouchCallbacks(InputDevice* dev) {
         unsigned long mask;
         if (s->phase < 1) {
             dev->AxisEvent((long)(code + 0x10), 0x20,
-                           (float)s->currX, (float)(s->currX - s->prevX), 0, 0);
+                           s->currX, s->currX - s->prevX, 0, 0);
             dev->AxisEvent((long)(code + 0x20), 0x20,
-                           (float)s->currY, (float)(s->currY - s->prevY), 0, 0);
+                           s->currY, s->currY - s->prevY, 0, 0);
             if (s->phase == -1) {
                 dev->ButtonPressed(code, 1, 1.0f, 0, 0);
             }
@@ -296,7 +296,7 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
     if (preferredSlot >= 0 && preferredSlot < MAX_SLOTS) {
         const TouchState& s = states1[preferredSlot];
         if (s.phase < 1) {
-            float cx = (float)s.currX, cy = (float)s.currY;
+            float cx = s.currX, cy = s.currY;
             if (cx >= left && cx <= right && cy >= bottom && cy <= top) return preferredSlot;
         }
     }
@@ -372,7 +372,7 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     if (hint_slot >= 0 && hint_slot < Mortar::Touch::MAX_SLOTS) {
         const Mortar::TouchState& s = t.states1[hint_slot];
         if (s.phase < 1) {
-            float cx = (float)s.currX, cy = (float)s.currY;
+            float cx = s.currX, cy = s.currY;
             if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return hint_slot;
         }
     }

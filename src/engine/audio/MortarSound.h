@@ -58,8 +58,8 @@ public:
     // Note: binary is a no-op stub; loads complete synchronously.
     bool IsReady();
 
-    // Handle-validity guard; pitch argument is discarded in binary (0x0018c778)
-    void SetPitch(unsigned int pitch);
+    // ASM-spec v1.6.1 MortarSound::SetPitch @0x00230218: (float) — pitch arg discarded in binary body.
+    void SetPitch(float pitch);
 };
 
 } // namespace Mortar

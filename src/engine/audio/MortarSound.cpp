@@ -156,10 +156,9 @@ bool MortarSound::IsReady() {
     return true;
 }
 
-// DIFFERS: v1.6.1 binary @ 0x0018c778 discards pitch arg; not implementing real pitch shift to match
-void MortarSound::SetPitch(unsigned int /*pitch*/) {
+// ASM-spec v1.6.1 MortarSound::SetPitch @0x00230218: (float) — body discards the pitch arg.
+void MortarSound::SetPitch(float /*pitch*/) {
     if (m_Handle == 0) m_State = 0;
-    // binary discards the pitch argument; not implementing real pitch shift to match
 }
 
 } // namespace Mortar

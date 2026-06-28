@@ -66,9 +66,10 @@ public:
     uint8_t  m_bAlive;           // +0x75: live/dead flag
     uint8_t  pad76[2];           // +0x76: tail padding to 0x78
 
-    // --- Vtable slot 2: Init (binary @ 0x0017edc0) ---
-    // Sets m_SplatType=-1; m_bAlive=1. Called via vtable in MakeSplat.
-    virtual void Init();
+    // --- Vtable slot 2: Init (binary @ 0x001eb264) ---
+    // Binary signature: (SplatEntity*, void*, long, _Vector3*). All args ignored.
+    // Body: m_SplatType=-1; m_bAlive=1.
+    virtual void Init(void* param1 = 0, long param2 = 0, const Vec3* param3 = 0);
 
     // --- Vtable slot 3: Release (binary @ 0x0017edd0) ---
     // bx lr (no-op)

@@ -137,8 +137,8 @@ MatrixManager::MatrixManager()
 {}
 MatrixManager MatrixManager::s_instance;
 MatrixManager::~MatrixManager() {}
-void MatrixManager::SetupOrtho(float, float, float, float, float, float) {}
-void MatrixManager::SetupLookAt(const Vec3&, const Vec3&, const Vec3&) {}
+void MatrixManager::SetupOrtho(float, float, float, float, float, float, Matrix44*) {}
+void MatrixManager::SetupLookAt(const Vec3&, const Vec3&, const Vec3&, Matrix43*) {}
 void MatrixManager::UploadAll() {}
 void MatrixManager::UploadModelViewOnly() {}
 void MatrixManager::ResetAllStacks() {}

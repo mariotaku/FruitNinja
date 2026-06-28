@@ -3,6 +3,7 @@
 
 #include "render/MatrixStack.h"
 #include "math/Matrix44.h"
+#include "math/Matrix43.h"
 #include "math/Vec3.h"
 
 // Binary MatrixManager: 8500 bytes, polymorphic (v1.6.1 MatrixManager__vtable @0x002d0738, 4 vfn slots).
@@ -54,10 +55,10 @@ public:
     // the same effect.
     void Init() { ResetAllStacks(); }
 
-    // Matches v1.6.1 MatrixManager::SetupOrtho @0x002571d0
+    // ASM-spec v1.6.1 MatrixManager::SetupOrtho @0x002571d0: optional out-matrix param (parity with binary).
     // NOTE: parameter order is (top, bottom, left, right, near, far) — NOT standard GL
     void SetupOrtho(float top, float bottom, float left, float right,
-                    float nearVal, float farVal);
+                    float nearVal, float farVal, Matrix44* out = 0);
 
     // DIFFERS from v1.6.1 MatrixManager::SetupLookAt @0x00257534. Binary's LookAt43
     // produces a non-canonical X-flipped view matrix that is compensated
@@ -66,7 +67,8 @@ public:
     // compensator, so this entrypoint uses canonical glLookAt math; arg
     // names are (eye, upHint, target) to keep positional parity with the
     // binary call sites (3rd slot is "unused" in binary, "target" here).
-    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target);
+    // ASM-spec v1.6.1 MatrixManager::SetupLookAt @0x002572ac: optional out-matrix param (parity with binary).
+    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target, Matrix43* out = 0);
 
     // "Upload all" — called by SetupOrtho, SetupLookAt (skipProjection=false)
     void UploadAll();

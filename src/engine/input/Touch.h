@@ -38,11 +38,12 @@ namespace Mortar {
 class InputDevice;
 
 // Binary Mortar::Touch::State (28 bytes).
+// ASM-spec v1.6.1 Touch::UpdateInternal @0x00242868: float touch coords stored directly (no truncation).
 struct TouchState {
-    int32_t  prevX;    // +0x00  previous frame x
-    int32_t  prevY;    // +0x04  previous frame y
-    int32_t  currX;    // +0x08
-    int32_t  currY;    // +0x0c
+    float    prevX;    // +0x00  previous frame x (float: binary stores raw float from event)
+    float    prevY;    // +0x04  previous frame y
+    float    currX;    // +0x08
+    float    currY;    // +0x0c
     uint32_t extId;    // +0x10  external pointer id (from SDL FingerID / slot index)
     uint32_t touchId;  // +0x14  internal monotonic id (from nextTouchId)
     int32_t  phase;    // +0x18  -1=just-pressed, 0=held, 1=released/free
@@ -127,20 +128,19 @@ public:
     // FindTouch(nextTouchId - 1); returns touchId or 0.
     uint32_t GetMostRecentTouch();
 
-    // Binary @ 0x0019543c -- GetTouchPos(uint touchId, int& x, int& y).
+    // ASM-spec v1.6.1 Touch::GetTouchPos @0x002429d4: (uint, float&, float&).
     // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
     // Binary leaves *x/*y UNTOUCHED on miss.
-    int GetTouchPos(uint32_t touchId, int& x, int& y) const;
+    int GetTouchPos(uint32_t touchId, float& x, float& y) const;
 
-    // Binary @ 0x0019546c -- GetTouchDelta(uint touchId, int& dx, int& dy).
-    // Writes currX-prevX/dy if phase >= 0, else 0. Returns 1 if active.
-    int GetTouchDelta(uint32_t touchId, int& dx, int& dy) const;
+    // ASM-spec v1.6.1 Touch::GetTouchDelta @0x00242a20: (uint, float&, float&).
+    // Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
+    int GetTouchDelta(uint32_t touchId, float& dx, float& dy) const;
 
-    // Binary @ 0x001954b4 -- GetTouchInReigion (note binary typo).
+    // Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
     // Binary uses inclusive <= on all bounds.
-    // Binary signature: (int x, int y, int w, int h).
-    uint32_t GetTouchInReigion(int x, int y, int w, int h);
+    uint32_t GetTouchInReigion(float x, float y, float w, float h);
 
     // Binary @ 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks(InputDevice* dev).
     // Pointer-walks states1, emits AxisEvent/ButtonPressed per slot.

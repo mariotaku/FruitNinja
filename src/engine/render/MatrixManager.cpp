@@ -40,10 +40,11 @@ void MatrixManager::ResetAllStacks() {
 // callee-body trace: s0->top, s1->bottom, s2->left, s3->right, s4->near,
 // s5->far, with m[1][1] = 2/(top-bottom) and m[0][0] = 2/(right-left).
 void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
-                               float nearVal, float farVal) {
+                               float nearVal, float farVal, Matrix44* out) {
     Matrix44 ortho;
     Matrix44::OrthoW(top, bottom, left, right, nearVal, farVal, 1.0f, ortho);
     m_Projection.SetCurrentMatrix(ortho);
+    if (out) *out = ortho;
     UploadAll();
 }
 
@@ -69,13 +70,14 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
 // To match the binary byte-for-byte we'd also need to port the
 // orientation-matrix step (TODO), at which point this can be swapped
 // for the LookAt43 form.
-void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target) {
+void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target, Matrix43* out) {
     Matrix44 view;
     mat4_look_at(view.ptr(),
                  eye.x,    eye.y,    eye.z,
                  target.x, target.y, target.z,
                  upHint.x, upHint.y, upHint.z);
     m_View.SetCurrentMatrix(view);
+    if (out) *out = Matrix43::FromMatrix44(view);
 }
 
 void MatrixManager::UploadAll() {
