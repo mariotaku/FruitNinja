@@ -10,11 +10,14 @@
 // Output (--screenshot mode):
 //   tmp/test/screenshots/text_render/grid.png
 //
-// API note: SetStroke stores width/colour in m_StrokeCount/m_StrokeColN
-// and marks dirty, but the Draw() rendering pass does not yet emit a stroke
-// draw-call -- the stroke/shadow rendering pass is a port TODO. Cells that
-// call SetStroke/SetShadow therefore look identical to the base gradient.
-// This is documented as an API gap in the test stdout, not a crash.
+// Cell labels (bottom strip) are rendered in Verdana (C:\Windows\Fonts\verdana.ttf)
+// via a FontCacheObjectTTF + BakedStringBox when available; falls back to pFontMain
+// (bitmap .fnt) when Verdana is absent.
+//
+// Shadow/stroke effects are fully rendered as of this version:
+//   shadow = solid-colour copy at (anchor + m_ShadowOffset), drawn before fg.
+//   stroke = 8-direction solid-colour outline copies, drawn after shadow, before fg.
+//   DIFFERS from binary which blurs the shadow/glow glyph atlas slice.
 //
 // No lambdas, no auto, no range-for, no enum class (cross-build GCC 4.4.1 safe).
 
@@ -251,8 +254,8 @@ static void TR_ApplyEffect(Mortar::BakedStringBox* box, int effIdx) {
         box->SetStroke(5.0f, Colour(0, 0, 0, 255));
         break;
     case 4:
-        // Metallic gold + shadow (SetShadow used for inner-glow sheen by the game).
-        // SetShadow(scale, col, offset, flag) -- stores but does not yet render (port TODO).
+        // Metallic gold + visible offset drop-shadow (dark blue, 2px right/down).
+        // Demonstrates the shadow pass -- shadow is drawn before fg in the same glyphs.
         box->SetMetallicGradient(
             Colour(255, 253, 88, 255),
             Colour(255, 255, 255, 255),
@@ -260,7 +263,7 @@ static void TR_ApplyEffect(Mortar::BakedStringBox* box, int effIdx) {
             Colour(255, 253, 88, 255),
             false
         );
-        box->SetShadow(2.0f, Colour(255, 255, 255, 128), Vec3(0.0f, 0.0f, 0.0f), true);
+        box->SetShadow(1.0f, Colour(0, 0, 80, 220), Vec3(2.0f, -2.0f, 0.0f), false);
         break;
     case 5:
         // Flat white + stroke (single colour, cyan outline).
@@ -294,11 +297,14 @@ static bool TR_HasGlyphs(const unsigned char* rgba) {
 // Render one cell into CellFBO, read back pixels.
 // Returns true if glyphs were rendered, false if the box was empty.
 // outPixels must point to CELL_W*CELL_H*4 bytes.
+// verdanaFont: optional FontCacheObjectTTF for Verdana; used for the cell
+//   label strip. Falls back to labelFont->DrawString when NULL.
 // ---------------------------------------------------------------------------
 static bool TR_RenderCell(
     CellFBO& cfbo,
     Mortar::FontCacheObjectTTF* ttfFont,
     Mortar::Font* labelFont,
+    Mortar::FontCacheObjectTTF* verdanaFont,
     const char* langCode,
     const char* sampleText,
     int effIdx,
@@ -366,16 +372,37 @@ static bool TR_RenderCell(
         cfbo.ReadRGBA(outPixels);
     }
 
-    if (labelFont) {
-        // Draw label at bottom: "<langCode>:<effName>".
+    if (verdanaFont) {
+        // Verdana label via BakedStringBox (legible at small sizes).
+        char label[40];
+        std::snprintf(label, sizeof(label), "%s %s", langCode, EFF_NAMES[effIdx]);
+
+        // Cell ortho: pixel-space, Y=0 bottom, Y=CELL_H top.
+        // Label strip: Y=[0, LABEL_H]. Centre at (CELL_W/2, LABEL_H/2).
+        const float boxW = (float)(CELL_W - 4);
+        const float boxH = (float)LABEL_H;
+        const float fontSize = 9.0f;
+
+        Mortar::BakedStringBox lblBox(verdanaFont, fontSize, boxW, boxH, 0x0f, 1, 0.0f);
+        lblBox.SetText(label);
+        lblBox.SetColour(Colour(210, 210, 210, 255), 0);
+
+        // SetTranslation flag=1 pre-shifts: m_Pos.x = x - boxW/2, m_Pos.y = y + boxH/2.
+        // With center-V and center=1, the ink centre lands on y = LABEL_H/2 = centre of strip.
+        Vec3 lblPos((float)(CELL_W / 2), (float)(LABEL_H / 2), 0.0f);
+        lblBox.SetTranslation(lblPos, 1);
+        Vec2 lblSc(1.0f, 1.0f);
+        lblBox.Draw(0.0f, lblSc, 1);
+
+        cfbo.ReadRGBA(outPixels);
+    } else if (labelFont) {
+        // Fallback: bitmap font label.
         char label[40];
         std::snprintf(label, sizeof(label), "%s:%s", langCode, EFF_NAMES[effIdx]);
 
         const float lblScale = 6.0f;
-        // Position: baseline at y=8 (bottom of cell, above y=0 GL edge).
         Vec3 lblPos(4.0f, 8.0f, 0.0f);
         Colour lblCol(200, 200, 200, 255);
-        // align=0x0: left-anchored.
         labelFont->DrawString(lblScale, 1.0f, 0.0f, label, lblPos, lblCol, 0x0);
 
         cfbo.ReadRGBA(outPixels);
@@ -520,14 +547,34 @@ int main(int argc, char* argv[]) {
     }
     printf("[text_render] TTF font: gangofchinese.ttf OK\n");
 
-    // Label font: use pFontMain (.fnt, ASCII, always available for captions).
+    // Label font: Verdana preferred (legible at small sizes); pFontMain as fallback.
     Mortar::Font* labelFont = NULL;
     if (game_work.pFontMain.IsValid()) {
         labelFont = game_work.pFontMain.Get();
-        printf("[text_render] Label font: pFontMain OK (glyphs=%d)\n",
+        printf("[text_render] Fallback label font: pFontMain OK (glyphs=%d)\n",
                labelFont ? labelFont->m_GlyphCount : 0);
     } else {
-        printf("[text_render] WARN: pFontMain not available -- no cell captions\n");
+        printf("[text_render] WARN: pFontMain not available -- no bitmap label fallback\n");
+    }
+
+    // Verdana via FontCacheObjectTTF (direct FT load, not via Font::Create path resolve).
+    Mortar::FontCacheObjectTTF* verdanaFont = NULL;
+    {
+        FT_Library ftLib = Mortar::FontTTFRegistry::GetInstance().GetFTLibrary();
+        if (ftLib) {
+            const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
+            verdanaFont = new Mortar::FontCacheObjectTTF(ftLib, verdanaPath, 12);
+            if (!verdanaFont->IsValid()) {
+                delete verdanaFont;
+                verdanaFont = NULL;
+                printf("[text_render] WARN: verdana.ttf not found at %s -- using bitmap fallback\n",
+                       verdanaPath);
+            } else {
+                printf("[text_render] Verdana label font: OK (%s)\n", verdanaPath);
+            }
+        } else {
+            printf("[text_render] WARN: FT_Library not ready -- using bitmap label fallback\n");
+        }
     }
 
     // Create shared cell FBO.
@@ -576,7 +623,7 @@ int main(int argc, char* argv[]) {
 
             unsigned char* buf = cellPixels[langIdx * NUM_EFFS + effIdx];
             bool hasGlyphs = TR_RenderCell(
-                cfbo, ttfFont, labelFont,
+                cfbo, ttfFont, labelFont, verdanaFont,
                 LANG_CODES[langIdx], LANG_SAMPLES[langIdx],
                 effIdx, buf);
 
@@ -593,9 +640,11 @@ int main(int argc, char* argv[]) {
 
     printf("[text_render] Cells with no glyphs: %d / %d enabled\n",
            noGlyphCount, NUM_LANGS * NUM_EFFS);
-    printf("[text_render] API note: SetStroke/SetShadow store params but have no\n");
-    printf("  rendering pass yet -- METAL+STROKE, METAL+SHADOW, FLAT+STROKE cells\n");
-    printf("  look identical to METALLIC/FLAT (documented port TODO).\n");
+    printf("[text_render] Shadow/stroke passes now active:\n");
+    printf("  METAL+STROKE: 8-direction solid outline in m_StrokeCol0\n");
+    printf("  METAL+SHADOW: solid copy at anchor + m_ShadowOffset (2px right/down demo)\n");
+    printf("  FLAT+STROKE:  cyan 8-dir outline around white text\n");
+    printf("  DIFFERS from binary (blurred glyph atlas) -- see BakedStringBox.h SetShadow/SetStroke\n");
 
     // Save output PNG.
     bool saved = false;
@@ -628,6 +677,10 @@ int main(int argc, char* argv[]) {
     std::free(cellPixels);
 
     cfbo.Destroy();
+
+    // Release Verdana TTF (not registered with FontTTFRegistry, so manual delete).
+    delete verdanaFont;
+    verdanaFont = NULL;
 
     if (h.IsScreenshot() && !saved) {
         h.Shutdown();

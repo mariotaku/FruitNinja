@@ -128,12 +128,31 @@ public:
     // SetShadow  binary @ 0x002462c0
     // Sets the shadow parameters (scale, colour, offset, enable flag).
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
+    //
+    // Draw() renders a shadow pass BEFORE the foreground: each glyph is redrawn
+    // in m_ShadowCol at anchor + m_ShadowOffset (world units). The pass fires when:
+    //   flag==false: m_ShadowScale > 0.0f
+    //   flag==true:  m_ShadowScale >= 0.0f  (inner-glow mode; game uses offset=(0,0))
+    //
+    // DIFFERS (v1.6.1 FancyBakedString::Draw @0x0024b8e4): binary blurs the shadow
+    // glyph atlas slice (FetchGlyph with blur_radius = ceil(scale*invFontScale)).
+    // The port draws a solid copy at the offset with no pixel blur, because
+    // FontCacheObjectTTF has no glyph-blur rasterisation path.
+    // TODO: v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28 -- port glyph-blur.
     void SetShadow(float scale, Colour col, Vec3 offset, bool flag);
 
     // SetStroke  binary @ 0x00245314 (1 colour) / 0x0024536c (2) / 0x002453f0 (3)
-    // Outline/stroke of `width` px drawn behind the glyph fill. count 1/2/3 selects
-    // how many concentric stroke colours are layered. Change-detection gate matches
-    // SetGradient/SetShadow: dirties the bake on any field change.
+    // Outline/stroke of `width` px drawn behind the glyph fill (after shadow, before fg).
+    // count 1/2/3 selects how many concentric stroke colours are layered.
+    // Change-detection gate matches SetGradient/SetShadow: dirties the bake on any field change.
+    //
+    // Draw() renders the stroke pass as 8 solid copies of the glyph quads offset in
+    // cardinal + diagonal directions by m_StrokeWidth (diagonal scaled by 0.707), all in
+    // m_StrokeCol0. This approximates a solid outline.
+    //
+    // DIFFERS (v1.6.1 FancyBakedString::Draw @0x0024b8e4): binary draws ONE blurred
+    // expanded-glyph (m_pGlow) pass. Multi-colour gradient stroke (m_StrokeCount>=2/3,
+    // ApplyStrokeGradient) and the inner-stroke layer (m_Field68) are not yet ported.
     void SetStroke(float width, const Colour& c0);
     void SetStroke(float width, const Colour& c0, const Colour& c1);
     void SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2);
