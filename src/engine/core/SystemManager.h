@@ -66,4 +66,26 @@ static_assert(sizeof(SystemManager) == 212, "SystemManager size mismatch");
 // Expected: m_bRunning@0x04, m_QuitState@0x4C, m_reserved50@0x50, m_DeviceID@0x54.
 #endif
 
+// Free functions implemented in SystemManager.cpp that read from the MortarGame singleton.
+// All are global-namespace free functions in the binary (not class members).
+
+// ASM-spec v1.6.1 GetVersionMajor @0x11f440: returns theGame->m_versionMajor
+int GetVersionMajor();
+
+// ASM-spec v1.6.1 GetVersionMinor @0x11f460: returns theGame->m_versionMinor
+int GetVersionMinor();
+
+// ASM-spec v1.6.1 GetVersionPatch @0x11f480: returns theGame->m_versionPatch
+int GetVersionPatch();
+
+// ASM-spec v1.6.1 GetFormattedVersionString @0x11f3e0: returns theGame->m_formattedVersion (char[64] at +0x44)
+const char* GetFormattedVersionString();
+
+// ASM-spec v1.6.1 IsStartupTexturePortrait @0x11f4a8: reads global isStartupTexturePortrait
+bool IsStartupTexturePortrait();
+
+// Global byte set/cleared by startup texture lifecycle (GetStartupTexture/ReleaseStartupTexture).
+// Defined in SystemManager.cpp; also written by the GetStartupTexture need-care function.
+extern bool isStartupTexturePortrait;
+
 #endif

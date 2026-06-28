@@ -1,4 +1,5 @@
 #include "core/SystemManager.h"
+#include "core/MortarGame.h"
 #include <algorithm>
 
 SystemManager::SystemManager()
@@ -73,4 +74,32 @@ void SystemManager::QuitGame() {
 
 void SystemManager::RequestQuit() {
     m_QuitState = 2;
+}
+
+// Global byte read by IsStartupTexturePortrait; also written by GetStartupTexture (need-care).
+bool isStartupTexturePortrait = false;
+
+// ASM-spec v1.6.1 GetVersionMajor @0x11f440: loads theGame->m_versionMajor (+0xA8)
+int GetVersionMajor() {
+    return Mortar::MortarGame::GetInstance()->m_versionMajor;
+}
+
+// ASM-spec v1.6.1 GetVersionMinor @0x11f460: loads theGame->m_versionMinor (+0xAC)
+int GetVersionMinor() {
+    return Mortar::MortarGame::GetInstance()->m_versionMinor;
+}
+
+// ASM-spec v1.6.1 GetVersionPatch @0x11f480: loads theGame->m_versionPatch (+0xB0)
+int GetVersionPatch() {
+    return Mortar::MortarGame::GetInstance()->m_versionPatch;
+}
+
+// ASM-spec v1.6.1 GetFormattedVersionString @0x11f3e0: returns ptr to theGame->m_formattedVersion (+0x44)
+const char* GetFormattedVersionString() {
+    return Mortar::MortarGame::GetInstance()->m_formattedVersion;
+}
+
+// ASM-spec v1.6.1 IsStartupTexturePortrait @0x11f4a8: reads global isStartupTexturePortrait byte
+bool IsStartupTexturePortrait() {
+    return isStartupTexturePortrait;
 }
