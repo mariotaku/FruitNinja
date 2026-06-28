@@ -789,7 +789,10 @@ void GameOverScreen::CreateRetryButton() {
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98
     Vec3 btnPos(-80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);
-    Mortar::SmartPtr<Mortar::Texture> tex = g_RetryTex;
+    // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98: ring background is
+    // game_work.m_RingTex[1] (blue_ring.tex -- plain ring, NO baked text). The label is the
+    // TTF drawn by SetText; using retry.tex (which has "RETRY" baked into the art) doubled it.
+    Mortar::SmartPtr<Mortar::Texture> tex = game_work.m_RingTex[1];
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->m_Texture    = tex;
@@ -847,7 +850,10 @@ void GameOverScreen::CreateQuitButton() {
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);
-    Mortar::SmartPtr<Mortar::Texture> tex = g_QuitTex;
+    // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220: ring background is
+    // game_work.m_RingTex[16] (red_ring.tex -- plain ring, NO baked text). The label is the
+    // TTF drawn by SetText; using quit.tex (which has "QUIT" baked into the art) doubled it.
+    Mortar::SmartPtr<Mortar::Texture> tex = game_work.m_RingTex[16];
 
     // fruitType = Fruit::MAX_FRUIT_TYPES (bomb sentinel)
     m_pQuitBtn = new MenuButton();
