@@ -108,9 +108,8 @@ private:
     // any DojoScreen instance.
     static Mortar::SmartPtr<Mortar::Texture> s_TexDojo;        // +0x0c: dojo.tex
     static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;      // +0x10: dojo_sensei.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
-    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;    // back_icon.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex (loaded but not drawn as button texture; button uses m_RingTex[7])
+    static Mortar::SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex (loaded but not drawn as button texture; button uses m_RingTex[12])
 
     // --- CreateButtons (v1.6.1 CreateButtons @0x0016ad9c) ---
     // Creates m_pBackButton, m_pShopButton, m_pAboutButton with null guards.
