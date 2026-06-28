@@ -334,9 +334,21 @@ struct TestHarness {
     // pass misses the second visit -- the face/label never renders.
     //
     // Per-frame order: ONE Update + ONE BeginDraw, then one Draw() per layer bit.
+    //
+    // Scale reset (mirrors GameDraw @0x001cd720 FIX 1): after the 0x01 tinted pass and
+    // before the 0x08/0x100/0x200/0x400 overlay passes, reset scales[0..2] = 1.0f.
+    // RunComponentHeadlessMultiPass does not call PowerUpManager::Update/SetDefaults,
+    // so scales from the burn-in frames persist. If a ScreenEffect was active during
+    // the last burn-in frame (fade=0 -> scales *= 0), overlay controls (combo icons,
+    // sensei head) would render black. The reset matches the state GameDraw establishes
+    // for overlay rendering.
     void RunComponentHeadlessMultiPass(int n) {
         static const float kDt = 1.0f / 60.0f;
-        static const int kLayers[] = { 0x40, 0x80, 0x01, 0x08, 0x100, 0x200, 0x400 };
+        // Pre-overlay layers: 0x40 (MenuButton scratch bg), 0x80 (PostActor / face+label),
+        // 0x01 (DEFAULT -- GameOverScreen body, MainScreen logo).
+        static const int kLayersPre[]  = { 0x40, 0x80, 0x01 };
+        // Overlay layers: 0x08 (combo icons / buttons), 0x100, 0x200, 0x400.
+        static const int kLayersPost[] = { 0x08, 0x100, 0x200, 0x400 };
         for (int i = 0; i < n; ++i) {
             SDL_Event ev;
             while (SDL_PollEvent(&ev)) {
@@ -354,8 +366,17 @@ struct TestHarness {
             if (game_work.mHud) {
                 game_work.mHud->Update(kDt);
                 game_work.mHud->BeginDraw(kDt);
-                for (int L = 0; L < (int)(sizeof(kLayers) / sizeof(kLayers[0])); ++L) {
-                    game_work.mHud->Draw(kLayers[L]);
+                // Pre-overlay passes (may be tinted by ScreenEffect scales).
+                for (int L = 0; L < (int)(sizeof(kLayersPre) / sizeof(kLayersPre[0])); ++L) {
+                    game_work.mHud->Draw(kLayersPre[L]);
+                }
+                // Mirror GameDraw @0x001cd720: reset scales to 1.0f before overlay passes.
+                game_work.mHud->scales[0] = 1.0f;
+                game_work.mHud->scales[1] = 1.0f;
+                game_work.mHud->scales[2] = 1.0f;
+                // Overlay passes (combo icons, sensei head, pause overlays, fade modal).
+                for (int L = 0; L < (int)(sizeof(kLayersPost) / sizeof(kLayersPost[0])); ++L) {
+                    game_work.mHud->Draw(kLayersPost[L]);
                 }
             }
 
