@@ -355,19 +355,21 @@ void ScoreControl::Update(float dt) {
         // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
         if (game_work.pFontNumbers.IsValid()) {
             char scoreBuf[32];
-            snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
-            float measW = game_work.pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
-            float anchorX = -160.0f - measW * 0.5f;
+            // ASM-spec v1.6.1 ScoreControl::Update @0x001ac5c0: measures GetCurrentScore
+            // (not m_DisplayedScore) so the centre stays stable while the count animates up.
+            snprintf(scoreBuf, sizeof(scoreBuf), "%d", GetCurrentScore(m_PlayerIdx));
+            // anchorX = -160 - (measured_width)/2 so the number CENTERS at -160, under the
+            // (centred) SCORE label. measured_width = normalized advance * scaled font size.
+            // FIX: the old MeasureWidth(scale,...) ignored its scale arg on the .fnt path, so
+            // measW stayed ~1.4 (normalized) -> -measW*0.5 ~= -0.71 -> the number left-anchored
+            // at ~-160 and spilled right. Multiply by m_ScalePulse*48 explicitly.
+            float measNorm = game_work.pFontNumbers->MeasureString(scoreBuf);
+            float anchorX = -160.0f - measNorm * m_ScalePulse * 48.0f * 0.5f;
             float anchorY = 80.0f;
             float drawStartX = pos.x + 24.0f;
             m_DrawPosX = drawStartX + (anchorX - drawStartX) * waveTimer;
             m_DrawPosY = pos.y + (anchorY - pos.y) * waveTimer;
             m_DrawPosZ = pos.z + (0.0f - pos.z) * waveTimer;
-            // Verified binary-faithful: hardware-render drift is asset-dependent.
-            // MeasureString returns advance-sum; if FontNumbers.fnt digits have non-zero
-            // left-bearing the visible glyphs shift right of the SCORE wordmark centre.
-            // The binary's math is identical — any drift on the original Bada device is
-            // intrinsic to the .fnt asset, not a port bug.
         }
     } else {
         m_LayerFlags = 1 << m_PlayerIdx;
