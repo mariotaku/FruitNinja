@@ -64,10 +64,17 @@ cmake --build build/host -j$(nproc)
 ./build/host/Debug/fruit-ninja.exe    # MSVC
 ```
 
-Initial host configure (one of):
+Initial host configure — **CMake presets (vcpkg, MSVC/Ninja)** are the primary path and mirror the CLion "Debug-Visual Studio" profile (`build/host`):
 
-- **MSYS2 / MinGW**: `cmake -G "MSYS Makefiles" -B build/host`
-- **MSVC** (from a Developer Cmd Prompt or after `vcvars64.bat`): `cmake -S . -B build/host -G "CodeBlocks - NMake Makefiles" -DCMAKE_BUILD_TYPE=Release`
+- One-time: install deps into vcpkg, then point `VCPKG_ROOT` at it. The committed `CMakePresets.json` (`host` / `host-release`) references `$env{VCPKG_ROOT}`; the gitignored `CMakeUserPresets.json` sets the concrete machine path (`host-local`).
+  ```
+  vcpkg install sdl2 "sdl2-image[libjpeg-turbo]" freetype tinyxml2 --triplet x64-windows
+  cmake --preset host          # configure (run from a VS Developer prompt or CLion; needs ninja + MSVC env)
+  cmake --build --preset host
+  ctest --preset host
+  ```
+  In CLion: reload using profiles from `CMakePresets.json` and pick `host-local`. vcpkg supplies SDL2 / SDL2_image / FreeType / tinyxml2 (no FetchContent on Windows once installed); CMake falls back to `find_package`→`FetchContent` for any dep not vcpkg-installed and on non-vcpkg platforms. NOTE: never reconfigure a `build/host` that was generated with a *different* generator — delete it first (a stale `_deps/*-subbuild` cached with the old generator fails with `Error: generator : Ninja`).
+- Fallback **MSYS2 / MinGW** (no vcpkg): `cmake -G "MSYS Makefiles" -B build/host`
 
 Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implementer.md`.
 
