@@ -149,7 +149,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
                 14.0f,       // boxH     (binary r3=0xe=14)
                 0xf,         // align    (binary sp+0=15)
                 1,           // maxLines (binary sp+4=1)
-                3.0f         // lineSpacing (binary sp+8=3)
+                3            // param8   (binary sp+8=3; step = (int)(12+3) = 15px)
             );
 
             // SetColour from m_pController->m_FactColour (+0x98)
@@ -200,7 +200,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
                 120.0f,      // boxH     (binary r3=0x78=120)
                 0xf,         // align    (binary sp+0=15)
                 9,           // maxLines (binary sp+4=9)
-                3.0f         // lineSpacing (binary sp+8=3)
+                3            // param8   (binary sp+8=3; step = (int)(10+3) = 13px)
             );
 
             // SetText(m_pController->m_FactText at +0x7c)

@@ -128,7 +128,7 @@ GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
     Mortar::FontCacheObjectTTF* font = GetPageTTFFont();
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-            font, 12.0f, 270.0f, 14.0f, 0xf, 1, 0.0f);
+            font, 12.0f, 270.0f, 14.0f, 0xf, 1, 0);
         box->SetGradient(
             Colour(255, 255, 255, 255),
             Colour(0xeb, 0xd7, 0x1e, 255),
@@ -165,7 +165,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
     Mortar::FontCacheObjectTTF* font = GetPageTTFFont();
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-            font, 12.0f, 270.0f, 14.0f, 0xf, 1, 0.0f);
+            font, 12.0f, 270.0f, 14.0f, 0xf, 1, 0);
         box->SetColour(m_pController->m_FactColour, 0);
         box->SetShadow(
             5.0f,
@@ -197,7 +197,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     Mortar::FontCacheObjectTTF* font = GetPageTTFFont();
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-            font, 10.0f, 270.0f, 36.0f, 0xf, 3, 3.0f);
+            font, 10.0f, 270.0f, 36.0f, 0xf, 3, 3);
         box->SetText(m_pController->m_FactText);
         box->SetColour(Colour(0x74, 0x5d, 0x3b, 255), 0);
         box->SetHorizontalLineSpacing(-1.0f);

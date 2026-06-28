@@ -42,13 +42,13 @@ struct WordToken {
 
 namespace Mortar {
 
+// ASM-spec v1.6.1 BakedStringBox ctor @ 0x002465fc: 7 args, 7th = m_Param8.
 BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                float fontSize,
                                float width,
                                float height,
                                int align,
                                int maxLines,
-                               float lineSpacing,
                                int param8)
     : m_Font(font)
     , m_FontSize(fontSize)
@@ -56,8 +56,6 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_BoxHeight(height)
     , m_Align(align)
     , m_MaxLines(maxLines)
-    , m_LineSpacing(lineSpacing)
-    , m_HorizLineSpacing(-1.0f)
     , m_Param8(param8)
     , m_Colour(255, 255, 255, 255)
     , m_Pos(0.0f, 0.0f, 0.0f)
@@ -103,7 +101,10 @@ void BakedStringBox::SetColour(const Colour& colour, int /*setBase*/) {
 }
 
 void BakedStringBox::SetHorizontalLineSpacing(float spacing) {
-    m_HorizLineSpacing = spacing;
+    // TODO: v1.6.1 SetHorizontalLineSpacing @0x0024565c -- binary writes m_AlignMode
+    // (vtable-adjacent alignment field), not a pitch field. Confirm field offset/role
+    // before mapping to port. Port marks dirty (binary also does) as the closest safe action.
+    (void)spacing;
     m_Dirty = true;
 }
 
@@ -155,15 +156,15 @@ void BakedStringBox::FitIntoVerticalBounds() {
 }
 
 float BakedStringBox::TotalHeight() const {
-    if (m_Lines.empty()) return 0.0f;
-    float total = 0.0f;
-    for (size_t i = 0; i < m_Lines.size(); ++i) {
-        total += m_Lines[i].height;
-        if (i + 1 < m_Lines.size()) {
-            total += m_LineSpacing;
-        }
-    }
-    return total;
+    // Binary FitIntoVerticalBounds @ 0x00246fbc: totalInkHeight = maxBearingY(line0)
+    // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
+    // (= (int)(fontSize + m_Param8)); no separate inter-line spacing term.
+    int N = (int)m_Lines.size();
+    if (N == 0) return 0.0f;
+    const float step = m_Lines[0].height;
+    return m_Lines[0].maxBearingY
+         + (float)(N - 1) * step
+         + (-m_Lines[N - 1].minBottom);
 }
 
 // Measure world-unit advance of a word (ASCII chars, length len) at requestedSize.
@@ -439,11 +440,13 @@ void BakedStringBox::Layout() {
             }
         }
 
-        // Fix (c): binary step = round(currentFontSize + (param8 - (baseFontSize - currentFontSize)*0.5))
-        // This is the line pitch used by RebuildAlignments @ 0x00245c78.
-        // m_BaseFontSize is the original size; m_FontSize is the (possibly shrunk) current size.
+        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @ 0x00245c78:
+        // step = (int)(m_CurrentFontSize + (m_Param8 - (m_BaseFontSize - m_CurrentFontSize)*0.5))
+        // Binary truncates (C-cast to int), not rounds. m_BaseFontSize tracks the initial
+        // or last-SetFontSize size; after FitIntoVerticalBounds+SetFontSize both are equal
+        // so the shrink term is 0 and step = (int)(fontSize + m_Param8).
         float diffShrink = m_BaseFontSize - requestedSize;
-        float step = floorf(requestedSize + (m_Param8 - diffShrink * 0.5f) + 0.5f);
+        float step = (float)(int)(requestedSize + ((float)m_Param8 - diffShrink * 0.5f));
 
         line.height       = step;
         line.width        = lineWidth;
