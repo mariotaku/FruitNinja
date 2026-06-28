@@ -30,6 +30,7 @@ namespace Mortar {
     class ActorManager;
     class Texture;
     class InputSink;
+    class FontCacheObjectTTF;
 }
 
 struct GameWork {
@@ -186,7 +187,15 @@ struct GameWork {
     uint8_t m_StringTable[0x50];      // +0x5C0: binary Mortar::StringTable slot (reserve; sizeof==0x50)
 
     bool    m_bFrameDirty;         // +0x610: per-frame dirty flag (was +0x604 in v1.5.1)
-    uint8_t _pad_0x611[7];         // +0x611..+0x617
+    uint8_t _pad_0x611[3];         // +0x611..+0x613
+
+    // +0x614: shared localized TTF face, loaded once by PreloadFontsTTF @0x0011c1fc.
+    // Points to "fontstruetype/gangofchinese.ttf" (default) or "fontstruetype/arabic.ttf"
+    // (when languageFlag==0x14). Raw owning ptr in the binary; port's FontTTFRegistry owns
+    // the FontCacheObjectTTF object — null this on teardown (GameDestroy @0x0011d20c).
+    // DojoScreen and ShopScreen read this field for their BakedStringBox font parameter.
+    // ASM-spec v1.6.1 PreloadFontsTTF @0x0011c1fc: arabic.ttf if bM_LangId==0x14 else gangofchinese.ttf -> game_work+0x614
+    Mortar::FontCacheObjectTTF* m_pTTFFontMain;  // +0x614
 
     // +0x618..+0x623: std::vector<IngamePopup*> (12 bytes on ARM32 / ptr,size,cap).
     // RESERVE ONLY -- not wired in port; popups managed separately.
@@ -250,6 +259,7 @@ static_assert(offsetof(GameWork, m_bUpdatesSuspended)   == 0x195, "GameWork::m_b
 static_assert(offsetof(GameWork, m_pActiveTouchSink)    == 0x1ac, "GameWork::m_pActiveTouchSink");
 static_assert(offsetof(GameWork, m_ElapsedGameTime)     == 0x1b8, "GameWork::m_ElapsedGameTime");
 static_assert(offsetof(GameWork, m_bFrameDirty)         == 0x610, "GameWork::m_bFrameDirty");
+static_assert(offsetof(GameWork, m_pTTFFontMain)        == 0x614, "GameWork::m_pTTFFontMain");
 static_assert(offsetof(GameWork, m_RingTex)             == 0x624, "GameWork::m_RingTex");
 static_assert(offsetof(GameWork, m_RingColours)         == 0x668, "GameWork::m_RingColours");
 static_assert(offsetof(GameWork, m_Colour69C)           == 0x69c, "GameWork::m_Colour69C");
