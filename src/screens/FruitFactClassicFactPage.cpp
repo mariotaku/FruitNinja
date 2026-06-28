@@ -256,3 +256,13 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
         (void)targetFontSize; // result never applied in binary (dead store)
     }
 }
+
+// Test support: delete and null both lazy BakedStringBox members so the next
+// DrawOrder call rebuilds them from the controller's current m_FactText/m_FactColour.
+// Used by test_fruitfact --fact= after-the-fact override; never called by the game.
+void FruitFactClassicFactPage::ResetBakedTextBoxes() {
+    delete m_pTitleBox;
+    m_pTitleBox = NULL;
+    delete m_pBodyBox;
+    m_pBodyBox = NULL;
+}
