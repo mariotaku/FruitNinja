@@ -2507,8 +2507,11 @@ Colour Fruit::FruitTypeColour(long type) {
 Colour Fruit::FruitFactColour(long type) {
     const FruitInfoData* info = FruitInfo_Get((int)type);
     if (!info) return Colour(255, 255, 255, 255);
-    return Colour(info->m_FactColour[0], info->m_FactColour[1],
-                  info->m_FactColour[2], info->m_FactColour[3]);
+    // FIX (v1.6.1 Fruit::FruitFactColour @0x001da584): m_FactColour bytes are [B,G,R,A]
+    // (FruitInfo.cpp:250-253). Passing them positionally into Colour(r,g,b,a) swapped R<->B
+    // (apple 189,238,58 came out cyan). Map r=[2], b=[0] to un-swap.
+    return Colour(info->m_FactColour[2], info->m_FactColour[1],
+                  info->m_FactColour[0], info->m_FactColour[3]);
 }
 
 // v1.6.1 Fruit::FruitInfo @0x001da5c0
