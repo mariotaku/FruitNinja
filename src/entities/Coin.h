@@ -176,4 +176,11 @@ private:
 static_assert(sizeof(Coin) == 0x94, "Coin size mismatch"); // v1.6.1 Coin @0x1d90b8
 #endif
 
+// v1.6.1 AddToScoreOnArrival @0x162ab8
+// Bonus-mode coin arrival handler. Cycles a firework counter (g_oneInThree) and at
+// counts 3, 6, and >8 fires camera shake + "Bonus-Firework-Explode" SFX + two
+// particle emitters ("bonus_mode_fx_red" and "arcade_confetti"), then credits
+// coin->m_CoinValue via AddToCurrentScore.
+void AddToScoreOnArrival(Coin* coin);
+
 #endif  // FN_COIN_H

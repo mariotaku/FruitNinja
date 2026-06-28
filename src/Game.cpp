@@ -200,3 +200,28 @@ void Game::shutdown() {
     // inputTranslator is deleted in GameSDL.cpp via the dedicated SDL teardown
     // path; we forward-declare InputTranslatorSDL here so we can't delete it.
 }
+
+// --- Pause state accessors (free functions, binary global s_pauseScreen maps to GetTaskState()->pPauseScreen) ---
+
+// ASM-spec v1.6.1 GetPauseScreen @0x1ca298
+PauseScreen* GetPauseScreen() {
+    return GetTaskState()->pPauseScreen;
+}
+
+// ASM-spec v1.6.1 ClearPause @0x1ca3bc
+// Deactivates the pause overlay: resets m_State then clears bM_Mode.
+// Does NOT restore m_GameDt (that happens in the unpause/settle path).
+void ClearPause() {
+    if (game_work.bM_Mode) {
+        PauseScreen* ps = GetPauseScreen();
+        if (ps) ps->m_State = 0;    // PAUSE_STATE_HIDDEN; binary str #0 [r2,#0xd8]
+        game_work.bM_Mode = 0;
+    }
+}
+
+// ASM-spec v1.6.1 GetPausedBy @0x1ca594
+// Returns true if a player finger triggered the pause (m_PressIndex > 0).
+bool GetPausedBy() {
+    PauseScreen* ps = GetPauseScreen();
+    return ps && ps->m_PressIndex > 0;  // +0xcc; binary ldr r0,[r0,#0xcc]
+}

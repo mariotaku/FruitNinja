@@ -113,4 +113,13 @@ static_assert(offsetof(Mortar::MortarGame, m_licensedState)    == 0xF8, "MortarG
 static_assert(sizeof(Mortar::MortarGame)                       == 0xFC, "sizeof(MortarGame) must be 0xFC");
 #endif
 
+// Free functions outside Mortar namespace (binary: file-scope in MortarGame TU).
+// v1.6.1 EmptyFunction @0x1c3670: shared no-op (single bx lr).
+void EmptyFunction();
+
+// v1.6.1 ReturnsAnInstanceOfThisMortarGame @0x11f6ac: lazy singleton getter.
+// Binary: if (!s_instance) { s_instance = new Game(0x308); } return s_instance;
+// Port: new Game() is gated by s_instance (already set in Game ctor).
+Mortar::MortarGame* ReturnsAnInstanceOfThisMortarGame();
+
 #endif

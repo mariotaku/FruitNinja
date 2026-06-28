@@ -416,6 +416,9 @@ private:
 bool PowersEnabled();
 SpawnPlacement ParsePlacement(const char* side);
 
+// v1.6.1 ReachedEnd @0x1253c0: saves "limitsReached" stat, plays "time-up" SFX, calls GameOver.
+void ReachedEnd();
+
 // Layout asserts for the re-laid-out +0x4c..+0x77 block and the tail.
 // The -4 byte shift absorbed entirely within +0x4c..+0x77; +0x78 onward unchanged.
 // v1.6.1 binary struct @ 0x00123ef8 ctor + AddSpeed @0x00124f48 + Update @0x001267a0

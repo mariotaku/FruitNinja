@@ -11,3 +11,9 @@ int g_ComboCount = 0;
 // save/restore via WaveManager::Resume and SaveCurrentData -- see
 // docs/engine/scorecontrol-combo-source.md.
 int g_LastSlasher = -1;
+
+// ASM-spec v1.6.1 AddScoreNomal @0x1478b4: identity pass-through (single bx lr in Thumb).
+int AddScoreNomal(int x) { return x; }
+
+// ASM-spec v1.6.1 AddScoreNomals @0x1adee0: identity pass-through.
+int AddScoreNomals(int x) { return x; }

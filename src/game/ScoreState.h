@@ -15,4 +15,9 @@ extern int g_ComboCount;
 // cold-boot sentinel.
 extern int g_LastSlasher;
 
+// Identity pass-throughs used as score-accumulation helpers.
+// v1.6.1 AddScoreNomal @0x1478b4, AddScoreNomals @0x1adee0
+int AddScoreNomal(int x);
+int AddScoreNomals(int x);
+
 #endif // FN_GAME_SCORESTATE_H

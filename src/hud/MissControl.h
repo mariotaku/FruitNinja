@@ -202,4 +202,8 @@ static_assert(__builtin_offsetof(MissControl, m_DragScale)    == 0x90, "MissCont
 static_assert(sizeof(MissControl) == 0x94, "MissControl sizeof mismatch");
 #endif
 
+// v1.6.1 GetCurrentMissCount @0x11a10c: returns global miss count (ignores player arg).
+// Binary: ldrb r0,[<game_work.missCount>]; bx lr.
+unsigned char GetCurrentMissCount(int player);
+
 #endif

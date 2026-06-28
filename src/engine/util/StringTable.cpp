@@ -41,6 +41,22 @@ Mortar::StringTable::~StringTable() {
     m_HeaderLookup.m_Count   = 0;
 }
 
+// ASM-spec v1.6.1 Mortar::StringTable::Clear (called by StringTableUtilUnloadTable @0x14c9f8).
+// Defunct: game_work.m_StringTable is a uint8_t[0x50] placeholder, not a real array.
+// In the binary, Clear frees the two FileData allocations and zeroes all fields.
+// Port: no-op stub because the placeholder slot never holds live allocations.
+void Mortar::StringTable::Clear(Mortar::StringTable* /*st*/) {}
+
+// ASM-spec v1.6.1 StringTableUtilInit @0x14c980: empty body.
+void StringTableUtilInit() {}
+
+// ASM-spec v1.6.1 StringTableUtilUnloadTable @0x14c9f8
+// Binary: Mortar::StringTable::Clear(&game_work.m_StringTable[idx]).
+// Port: no-op — game_work.m_StringTable is a placeholder uint8_t[0x50] with no live allocs.
+void StringTableUtilUnloadTable(int /*idx*/) {
+    Mortar::StringTable::Clear(nullptr);
+}
+
 // Default instance used by the port's static wrappers
 static Mortar::StringTable s_DefaultTable;
 

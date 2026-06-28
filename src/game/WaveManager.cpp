@@ -2261,3 +2261,17 @@ void WaveManager::RequestCoins() {
     if (idx >= 0 && idx < 4)
         self->m_CoinChanceinator[idx].GetCoins();
 }
+
+// ASM-spec v1.6.1 ReachedEnd @0x1253c0
+// Saves "limitsReached" stat, plays "time-up" SFX, then triggers game over.
+void ReachedEnd() {
+    FruitSaveData* sd = game_work.m_SaveData;
+    if (sd) {
+        uint32_t h = StringHash("limitsReached");
+        sd->AddToTotal("limitsReached", h, 1, true, true);
+    }
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
+    }
+    GameOver(-1, -1.0f, -1);
+}

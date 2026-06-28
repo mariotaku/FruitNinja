@@ -4,12 +4,15 @@
 #include "audio/GameSound.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include "asset/Mesh.h"
 #include "asset/Model.h"
 #include "asset/MeshManager.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
 #include "render/MatrixManager.h"
+#include "game/FruitCamera.h"
+#include "game/GameOver.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
@@ -47,6 +50,11 @@ static const float COIN_FIXED_DT = 1.0f / 60.0f;
 
 // 0x00173114 loaded flag.
 static bool s_loaded = false;
+
+// v1.6.1 AddToScoreOnArrival @0x162ab8: file-static bonus-mode firework counter.
+// Cycles 1..8 (reset to 0 when >8), triggering camera shake + particle bursts at
+// counts 3, 6, and >8 (0).
+static int g_oneInThree = 0;
 
 // R1.6 re-analyst 2026-05-23: prior comment ("load models/coin.mmd") was
 // wrong. Binary @ 0x00173114 Coin::LoadContent is a no-op stub that just
@@ -522,4 +530,39 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
 // ---------------------------------------------------------------------------
 Mortar::Delegate1<void, Coin*> Coin::DefaultArrivedDelegate() {
     return Mortar::Delegate1<void, Coin*>::MakeFree(&CoinArrived);
+}
+
+// ASM-spec v1.6.1 AddToScoreOnArrival @0x162ab8
+// Bonus-mode coin arrival handler: cycles g_oneInThree and at counts 3, 6, and >8
+// fires a camera shake, "Bonus-Firework-Explode" SFX, and two particle bursts
+// before crediting the coin's value to the score.
+void AddToScoreOnArrival(Coin* coin) {
+    g_oneInThree++;
+    if (g_oneInThree == 3 || g_oneInThree == 6 || g_oneInThree > 8) {
+        FruitCamera* cam = game_work.m_FruitCamera;
+        if (cam) {
+            cam->CreateCameraShake(Vec3(-230.0f, 150.0f, 0.0f), 0.15f, 0.75f);
+        }
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
+        }
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
+        PSPParticleEmitter* em = pm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
+        if (em) {
+            em->m_Pos = Vec3(-230.0f, 150.0f, 0.0f);
+        }
+        // x-offset varies by count: 3=0, 6=57.6, >8=-57.6
+        float xoff = (g_oneInThree == 3) ? 0.0f :
+                     (g_oneInThree == 6) ? 57.6f : -57.6f;
+        float x = (Math::g_Random.RandF(24.0f) - 12.0f) + xoff;
+        float y = Math::g_Random.RandF(10.0f) + 160.0f + 3.0f;
+        PSPParticleEmitter* em2 = pm.AddEmitter(StringHash("arcade_confetti"), 0, false);
+        if (em2) {
+            em2->m_Pos = Vec3(x, y, 0.0f);
+        }
+        if (g_oneInThree > 8) {
+            g_oneInThree = 0;
+        }
+    }
+    AddToCurrentScore(coin->m_CoinValue, 0, false, false);
 }

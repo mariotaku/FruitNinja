@@ -80,4 +80,8 @@ private:
     Mortar::SmartPtr<Mortar::Texture>  m_FadeTexture;  // +0xB4 (4 bytes)
 };
 
+// v1.6.1 DefaultScreenFadeCompleteCallback @0x1aec48: empty no-op used as the
+// default Mortar::Delegate0<void> onComplete handler for ScreenFadeControl::StartFade.
+void DefaultScreenFadeCompleteCallback();
+
 #endif // FN_HUD_SCREENFADECONTROL_H

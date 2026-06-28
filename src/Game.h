@@ -151,4 +151,17 @@ void GamePreInitialise();
 void GameInitialise(void* window, const char* config);
 void GameDestroy();
 
+// String table init helpers (src/game/GameInitialise.cpp).
+// v1.6.1 InitialiseStrings @0x11c1c8, UnloadRings @0x11cdc8, GetLanguage @0x1eebec
+void InitialiseStrings();
+void UnloadRings();
+const char* GetLanguage(int& outLang);
+
+// Pause state accessors (src/Game.cpp; binary globals map to GetTaskState()->pPauseScreen).
+// v1.6.1 GetPauseScreen @0x1ca298, ClearPause @0x1ca3bc, GetPausedBy @0x1ca594
+class PauseScreen;
+PauseScreen* GetPauseScreen();
+void ClearPause();
+bool GetPausedBy();
+
 #endif

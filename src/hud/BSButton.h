@@ -163,4 +163,10 @@ static_assert(__builtin_offsetof(BSButton, m_AlphaOverride) == 0xe6, "BSButton m
 static_assert(sizeof(BSButton) == 0xe8, "BSButton sizeof mismatch");
 #endif
 
+// v1.6.1 DefaultCreateButtonDelegate @0x15f52c
+// Default Mortar::Delegate1<bool,float> "create button" predicate. Always returns true.
+// Real TU owner is likely the upsell/download-icon draw cluster (DrawDownloadIcon @0x1761a4,
+// FruitFactLeaderboard::DrawOrder @0x1773d8); BSButton.cpp is the accepted landing.
+bool DefaultCreateButtonDelegate(float);
+
 #endif // FN_HUD_BSBUTTON_H

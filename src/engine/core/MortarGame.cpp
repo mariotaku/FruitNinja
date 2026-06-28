@@ -1,6 +1,7 @@
 // Analysed: 2026-05-04T00:00
 #include "core/MortarGame.h"
 #include "core/SystemManager.h"
+#include "Game.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -177,3 +178,16 @@ void MortarGame::SetHardware(const char* hw, bool fast) {
 }
 
 } // namespace Mortar
+
+// ASM-spec v1.6.1 EmptyFunction @0x1c3670: shared no-op used as default callback body.
+void EmptyFunction() {}
+
+// ASM-spec v1.6.1 ReturnsAnInstanceOfThisMortarGame @0x11f6ac
+// Binary: lazy singleton — if s_instance is null, allocates Game (0x308 bytes) and constructs it.
+// Port: Game ctor sets MortarGame::s_instance = this; new Game() here is safe when called early.
+Mortar::MortarGame* ReturnsAnInstanceOfThisMortarGame() {
+    if (!Mortar::MortarGame::GetInstance()) {
+        new Game();  // MortarGame ctor sets s_instance = this
+    }
+    return Mortar::MortarGame::GetInstance();
+}
