@@ -67,6 +67,9 @@ Don't add new `// Analysed: YYYY-MM-DDTHH:MM` file-level timestamps (legacy, no 
 - When you implement a component, write **usage/contract docs in its header (.h)** — what it does, how to call it, key params, invariants, gotchas — not just inline `.cpp` comments. The header is the API surface a future reader hits first.
 - When you **fix a bug** that changes a component's behavior/contract, **revise that header doc** in the same change. A stale usage note is worse than none.
 
+**Name fields semantically:**
+- When you wire a `m_FieldNN` / `field_0xNN` / `DAT_addr` placeholder whose purpose the spec gives, **rename it to a descriptive name** (e.g. `m_Field74` → `m_TitleTex`). Keep the offset greppable in a comment / the `static_assert` (`// +0x74`). Don't leave address-placeholder names when the meaning is known.
+
 **ARM idioms:**
 - Fixed timestep: dt = 1/60 (don't compute from elapsed time).
 - ARM comparison `if (-1 < (int)((uint)(A < B) << 0x1f))` means A >= B (NOT A < B). Common pitfall: a `if (ct < threshold) ct = threshold` decompile is a MAX clamp, not MIN.
