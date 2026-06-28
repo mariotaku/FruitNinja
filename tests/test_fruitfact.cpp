@@ -12,6 +12,8 @@
 
 #include "test_harness.h"
 #include "screens/GameOverScreen.h"
+#include "screens/BaseScreen.h"
+#include "screens/FruitFactPage.h"
 #include "screens/FruitFactClassicFactPage.h"
 #include "hud/FruitFactControl.h"
 #include "hud/ScoreControl.h"
@@ -24,6 +26,15 @@
 #include "engine/asset/TextureManager.h"
 #include <cstring>
 #include <cstdio>
+#include <set>
+#include <list>
+#include "hud/MenuButton.h"
+#include "entities/Fruit.h"
+
+// When true (--isolated flag), each mode generates an additional PNG that
+// suppresses the game-over chrome (GameOverScreen board, RETRY/QUIT buttons,
+// ScoreControl) and renders only the FruitFact board + its page children.
+static bool g_Isolated = false;
 
 // ---------------------------------------------------------------------------
 // Forward declarations for per-mode fixture functions.
@@ -80,10 +91,68 @@ int main(int argc, char* argv[]) {
     // 120 burn-in frames: lets GameInit run through the Splash->Game state
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
+    for (int _ai = 2; _ai < argc; ++_ai) {
+        if (std::strcmp(argv[_ai], "--isolated") == 0) g_Isolated = true;
+    }
     if (!h.ParseFlags()) return 1;
     if (!h.InitComponent()) return 1;
 
     return mc->run(h);
+}
+
+// ---------------------------------------------------------------------------
+// RenderIsolated -- one isolated render + screenshot with chrome suppressed.
+//
+// Temporarily replaces game_work.mHud->controls with a minimal list containing
+// only FruitFactControl and its registered FruitFactPage children, renders one
+// multi-pass cycle, takes the screenshot, then splices the original list back.
+//
+// This is the only approach that works: flag-toggling (m_LayerFlags or m_Active)
+// fails because GameOverScreen::BeginDraw and MenuButton::BeginDraw both
+// unconditionally reset those fields on every frame before the HUD draw gate.
+// MenuButton::AddPeice adds ring/backdrop HUDControl3d objects as independent
+// HUD list entries with no pointer tracked here -- list erasure (not per-pointer
+// zeroing) is the only way to exclude them cleanly.
+// ---------------------------------------------------------------------------
+static void RenderIsolated(fn::TestHarness& h, GameOverScreen* gos,
+                            ScoreControl* /*sc*/, const char* isoLabel) {
+    if (!game_work.mHud || !gos->m_pFruitFact) {
+        h.ScreenshotPng(isoLabel);
+        return;
+    }
+    FruitFactControl* ctrl = gos->m_pFruitFact;
+
+    // Build the keep-set: the FruitFactControl, its pages, and each page's
+    // registered child controls (sensei head, combo icons, title, fact text).
+    // Those children are top-level HUD entries added via AddGenericControl --
+    // NOT object children of the page -- so they must be kept explicitly or the
+    // board renders empty. Everything else (SCORE, NEW BEST, RETRY/QUIT buttons
+    // and their AddPeice ring children) is dropped.
+    std::set<HUDControl*> keep;
+    keep.insert(ctrl);
+    for (std::vector<FruitFactPage*>::iterator it = ctrl->m_Pages.begin();
+         it != ctrl->m_Pages.end(); ++it) {
+        keep.insert(*it);
+        const std::list<HUDControl*>& kids = (*it)->GetHUDControlsForTest();
+        for (std::list<HUDControl*>::const_iterator k = kids.begin(); k != kids.end(); ++k)
+            keep.insert(*k);
+    }
+
+    // Move the full list out, then re-add only the kept controls in original
+    // order (preserves draw layering).
+    std::list<HUDControl*> savedControls;
+    savedControls.splice(savedControls.begin(), game_work.mHud->controls);
+    for (std::list<HUDControl*>::iterator it = savedControls.begin();
+         it != savedControls.end(); ++it) {
+        if (keep.count(*it)) game_work.mHud->controls.push_back(*it);
+    }
+
+    h.RunComponentHeadlessMultiPass(2);
+    h.ScreenshotPng(isoLabel);
+
+    // Restore the original list (pointers only; no controls deleted).
+    game_work.mHud->controls.clear();
+    game_work.mHud->controls.splice(game_work.mHud->controls.begin(), savedControls);
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +244,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/classic_isolated");
     }
 
     std::printf("PASS: fruitfact/classic screenshot complete\n");
@@ -276,6 +346,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/arcade_isolated");
     }
 
     std::printf("PASS: fruitfact/arcade screenshot complete\n");
@@ -356,6 +427,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/zen_isolated");
     }
 
     std::printf("PASS: fruitfact/zen screenshot complete\n");

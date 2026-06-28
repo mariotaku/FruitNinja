@@ -479,6 +479,9 @@ set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
 #   tmp/test/screenshots/fruitfact/arcade.png
 #   tmp/test/screenshots/fruitfact/zen.png
 fn_add_game_test(test_fruitfact test_fruitfact.cpp)
+# FN_TEST exposes BaseScreen::GetHUDControlsForTest() for the --isolated render
+# (keep-set of FruitFact page child controls). Layout-neutral (method-only guard).
+target_compile_definitions(test_fruitfact PRIVATE FN_TEST)
 add_test(NAME screenshot_fruitfact_classic COMMAND test_fruitfact classic --screenshot)
 add_test(NAME screenshot_fruitfact_arcade  COMMAND test_fruitfact arcade  --screenshot)
 add_test(NAME screenshot_fruitfact_zen     COMMAND test_fruitfact zen     --screenshot)
