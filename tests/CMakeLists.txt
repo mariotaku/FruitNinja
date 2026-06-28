@@ -569,3 +569,12 @@ fn_add_game_test(test_sensei_teardown test_sensei_teardown.cpp)
 target_compile_definitions(test_sensei_teardown PRIVATE FN_TEST)
 add_test(NAME sensei_teardown COMMAND test_sensei_teardown)
 set_tests_properties(sensei_teardown PROPERTIES TIMEOUT 120)
+
+# Multi-language x gradient/effect BakedStringBox screenshot grid.
+# Renders a 6-language x 6-effect grid using the TTF BakedStringBox API.
+# Detects glyph presence per cell; falls back to "[no glyphs:XX]" caption.
+# API note: SetStroke/SetShadow store params but rendering pass is a port TODO.
+# Output: tmp/test/screenshots/text_render/grid.png
+fn_add_game_test(test_text_render test_text_render.cpp)
+add_test(NAME test_text_render_screenshot COMMAND test_text_render --screenshot)
+set_tests_properties(test_text_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77)
