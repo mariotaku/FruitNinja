@@ -52,6 +52,8 @@ FruitFactZenPage::FruitFactZenPage(FruitFactControl* pCtrl)
 {
     _pad99[0] = 0; _pad99[1] = 0; _pad99[2] = 0;
     memset(m_Facts, 0, sizeof(m_Facts));
+    // ASM-spec v1.6.1 FruitFactZenPage::FruitFactZenPage @0x0017fcd4: final call is LoadContent(this)
+    LoadContent();
 }
 
 FruitFactZenPage::~FruitFactZenPage() {
@@ -302,8 +304,13 @@ void FruitFactZenPage::Init() {
 }
 
 // Binary @ 0x0017fa04
-void FruitFactZenPage::Update(float /*dt*/) {
-    // TODO: v1.6.1 FruitFactZenPage::Update @0x0017fa04 -- per-frame update for zen page
+// ASM-spec v1.6.1 FruitFactZenPage::Update @ 0x0017fa04:
+//   FruitFactPage::Update(dt); then m_Texture = g_ZenTex720c (SmartPtr at GOT+0x720c =
+//   "blank_dialog_box.tex" loaded in LoadContent). Without this, m_Texture stays NULL and
+//   DrawOrder (@0x00180ef0) skips the board quad -> invisible Zen board.
+void FruitFactZenPage::Update(float dt) {
+    FruitFactPage::Update(dt);
+    m_Texture = g_ZenTex720c;
 }
 
 // Binary @ 0x00180ef0

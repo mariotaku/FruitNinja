@@ -1090,25 +1090,33 @@ void GameOverScreen::Update(float dt) {
             // Binary evidence: GameOverScreen::Release @0x00185970 explicitly clears
             // m_bNoDestructor=0 on every page before deleting, which implies they
             // were created with m_bNoDestructor=1 (same pattern as m_pFruitFact).
+            // Binary (v1.6.1 GameOverScreen::Update @0x00187220) uses three INDEPENDENT
+            // if-checks: gm==3, gm==2, gm==0. COMBO (gm==1) receives no fact page.
             uint8_t gm = game_work.gameMode;
             if (gm == Mortar::GAME_MODE_ZEN) {
                 m_pZenPage = new FruitFactZenPage(m_pFruitFact);
+                // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
+                // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
                 m_pZenPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pZenPage, false);
                 m_pZenPage->Init();
                 m_pFruitFact->RegisterPage(m_pZenPage);
                 m_pZenPage->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
-            } else if (gm == Mortar::GAME_MODE_ARCADE) {
+            } if (gm == Mortar::GAME_MODE_ARCADE) {
                 m_pBonusFactPage = new FruitFactBonusFactPage(m_pFruitFact);
+                // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
+                // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
                 m_pBonusFactPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBonusFactPage, false);
                 m_pBonusFactPage->Init();
                 m_pFruitFact->RegisterPage(m_pBonusFactPage);
                 m_pBonusFactPage->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
-            } else {
+            } if (gm == Mortar::GAME_MODE_CLASSIC) {
                 m_pClassicFactPage = new FruitFactClassicFactPage(m_pFruitFact, 0, 0);
+                // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
+                // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
                 m_pClassicFactPage->m_bNoDestructor = 1;
                 if (game_work.mHud) game_work.mHud->AddControl(m_pClassicFactPage, false);
                 m_pClassicFactPage->Init();

@@ -24,6 +24,9 @@ public:
     ~FruitFactBonusFactPage() override;
 
     void Init() override;
+    // ASM-spec v1.6.1 FruitFactBonusFactPage::DrawOrder @0x001749e0: same as ZenPage DrawOrder + pass==1 guard.
+    // Scale(w+1,h+1,0); Translate(pos-Vec3(8,-8,0)); DrawQuadUnCached(White,0,1,0,1); SetUnCached/UnSetUnCached bracket.
+    void DrawOrder(float* hudScaleRaw, int pass) override;
 
 private:
     // +0x98..+0xBB: 0x24 bytes padding (no named fields in binary beyond base)
