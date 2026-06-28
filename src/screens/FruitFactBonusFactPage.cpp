@@ -4,10 +4,12 @@
 #include "FruitFactBonusFactPage.h"
 #include "hud/GenericHUDControl.h"
 #include "engine/asset/TextureManager.h"
+#include "engine/asset/Mesh.h"
 #include "engine/render/BakedStringBox.h"
 #include "engine/render/FontCacheObjectTTF.h"
 #include "engine/render/FontTTFRegistry.h"
 #include "engine/render/Font.h"
+#include "engine/render/MatrixManager.h"
 #include "engine/math/Vec3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
@@ -92,10 +94,9 @@ void FruitFactBonusFactPage::Init() {
         Colour* tint = &rowCol[row];
 
         // (a) Star / icon control (DAT_174834=58 Y, DAT_174830=95 X).
-        // TODO: v1.6.1 FruitFactBonusFactPage @0x001743b8 -- resolve icon tex name from DAT_174854 string pool;
-        //   sibling pages use a star/badge tex -- reuse result_board_star.tex until confirmed.
-        Mortar::SmartPtr<Mortar::Texture> iconTex =
-            Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
+        // Binary ctor @0x001743b8: SmartPtr::SmartPtr(&dst, (SmartPtr*)(bonus + 0xD0))
+        // Bonus::m_StarTexture is at +0xD0 (confirmed from Bonus.h layout assert).
+        Mortar::SmartPtr<Mortar::Texture> iconTex = b->m_StarTexture;
         GenericHUDControl* cIcon = new GenericHUDControl(
             0.0f, 0.0f, iconTex, NULL, iconPos, scZero, white, 8);
         AddGenericControl(cIcon);
@@ -146,4 +147,36 @@ void FruitFactBonusFactPage::Init() {
 
     // BaseScreen page-state slot at this+0x30 = HUDControl::m_Active, set to 9.
     m_Active = 9;
+}
+
+// ASM-spec v1.6.1 FruitFactBonusFactPage::DrawOrder @0x001749e0: same as ZenPage DrawOrder + pass==1 guard.
+// Scale(w+1,h+1,0); Translate(pos-Vec3(8,-8,0)); DrawQuadUnCached(White,0,1,0,1); SetUnCached/UnSetUnCached bracket.
+void FruitFactBonusFactPage::DrawOrder(float* /*hudScaleRaw*/, int pass) {
+    if (pass != 1) return;
+
+    if (!m_Texture) {
+        return;
+    }
+
+    m_Texture->SetUnCached();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+
+    Vec3 sz((float)(m_Texture->GetWidth() + 1),
+            (float)(m_Texture->GetHeight() + 1),
+            0.0f);
+    Vec3 scaled = sz * 1.0f;
+    mm.GetWorldStack().Scale(scaled);
+
+    Vec3 anchor(8.0f, -8.0f, 0.0f);
+    Vec3 t = pos - anchor;
+    mm.GetWorldStack().Translate(t);
+
+    mm.UploadModelViewOnly();
+
+    Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255),
+                                   0.0f, 1.0f, 0.0f, 1.0f, NULL);
+
+    m_Texture->UnSetUnCached();
 }
