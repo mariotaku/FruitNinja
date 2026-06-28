@@ -1,9 +1,9 @@
-// Analysed: 2026-05-04T00:00
-// Entity base class and static method stubs.
+// Entity base class, static methods, and EntityTracker free functions.
 
 #include "entities/Entity.h"
 #include "util/LinkedHeap.h"
 #include <cstdio>
+#include <map>
 #include <new>
 
 // Binary @ 0x0019d708 / 0x0019d6d0: process-global LinkedHeap arena + size fields.
@@ -106,8 +106,40 @@ Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*ms
 
 }  // namespace Mortar
 
-// TODO: implement ET_RemoveEntity (v1.6.1 ET_RemoveEntity @0x001d976c) when EntityTracker tree storage is ported
-void ET_RemoveEntity(int /*treeIdx*/, uint16_t /*trackerID*/) {}
+// EntityTracker globals.
+// Binary: s_entityMap[0] @0x3328c8, [1] @0x3328e0, [2] @0x3328f8 (stride 0x18 = sizeof std::map).
+// s_currentIdent @0x2d8d34 (uint16_t, shared across all 3 trees, monotonic).
+// Trees 0/1/2 = P2P player-index partition; Fruit uses tree 0.
+// Array length 3 confirmed by global ctor @0x1d9a40 (constructs 3) and __tcf_0 @0x1d96d4 (destroys 3).
+static std::map<uint16_t, Mortar::Entity*> s_entityMap[3];
+static uint16_t s_currentIdent = 0;
+
+// ASM-spec v1.6.1 ET_GetFreeIdent @0x1d95bc: single-probe + single-bump (NOT a loop).
+uint16_t ET_GetFreeIdent(int treeIdx) {
+    if (s_currentIdent == 0) s_currentIdent = 1;
+    std::map<uint16_t, Mortar::Entity*>& m = s_entityMap[treeIdx];
+    if (m.find(s_currentIdent) != m.end()) {
+        s_currentIdent++;
+        if (s_currentIdent == 0) s_currentIdent = 1;
+        // DIFFERS: binary @0x1d95bc re-probes find() here and discards result; port drops the dead call.
+    }
+    return s_currentIdent;
+}
+
+// ASM-spec v1.6.1 ET_GetEntity @0x1d966c: map lookup by 16-bit id, returns Entity* or null.
+Mortar::Entity* ET_GetEntity(int treeIdx, uint16_t id) {
+    std::map<uint16_t, Mortar::Entity*>& m = s_entityMap[treeIdx];
+    std::map<uint16_t, Mortar::Entity*>::iterator it = m.find(id);
+    if (it != m.end()) return it->second;
+    return 0;
+}
+
+// ASM-spec v1.6.1 ET_RemoveEntity @0x1d976c: erase by id if present.
+void ET_RemoveEntity(int treeIdx, uint16_t id) {
+    std::map<uint16_t, Mortar::Entity*>& m = s_entityMap[treeIdx];
+    std::map<uint16_t, Mortar::Entity*>::iterator it = m.find(id);
+    if (it != m.end()) m.erase(it);
+}
 
 // Entity LinkedHeap arena accessors. The binary keeps two process-global slots,
 // written by HeapCreate @ 0x0019d708: a LinkedHeap* (s_pEntityHeap) and the arena

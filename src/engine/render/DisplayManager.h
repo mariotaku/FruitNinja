@@ -93,6 +93,16 @@ private:
 public:
     // Binary @ 0x0019da38 -- empty no-op (`bx lr`); see DisplayManager.cpp.
     void Destroy();
+
+    // Binary vtable slot 17: Mortar::DisplayManagerBada::GetAspectWvH @0x25695c
+    // Returns window width / height from m_WindowRect. On 480x320 target = 1.5.
+    // Binary dispatch is virtual; port uses non-virtual call (DisplayManager vtable
+    // extension to slot 17/18 deferred to DisplayManager vtable audit).
+    float GetAspectWvH() const;
+
+    // Binary vtable slot 18: Mortar::DisplayManagerBada::GetAspectHvW @0x25698c
+    // Returns window height / width from m_WindowRect. On 480x320 target = 0.667.
+    float GetAspectHvW() const;
 };
 
 } // namespace Mortar

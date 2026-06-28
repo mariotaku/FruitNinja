@@ -145,4 +145,18 @@ GLenum DisplayManager::GetPlatformWrapT() {
 // ASM-verified: 2026-06-07T00:00Z v1.6.1 binary @ 0x0019da38 (asm-inspector)
 void DisplayManager::Destroy() {}
 
+// ASM-spec v1.6.1 Mortar::DisplayManagerBada::GetAspectWvH @0x25695c (vtable slot 17)
+// Returns (right - left) / (bottom - top) from m_WindowRect. On 480x320 = 1.5.
+float DisplayManager::GetAspectWvH() const {
+    return static_cast<float>(m_WindowRect.right - m_WindowRect.left) /
+           static_cast<float>(m_WindowRect.bottom - m_WindowRect.top);
+}
+
+// ASM-spec v1.6.1 Mortar::DisplayManagerBada::GetAspectHvW @0x25698c (vtable slot 18)
+// Returns (bottom - top) / (right - left) from m_WindowRect. On 480x320 = 0.667.
+float DisplayManager::GetAspectHvW() const {
+    return static_cast<float>(m_WindowRect.bottom - m_WindowRect.top) /
+           static_cast<float>(m_WindowRect.right - m_WindowRect.left);
+}
+
 } // namespace Mortar

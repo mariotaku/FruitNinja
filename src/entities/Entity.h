@@ -248,10 +248,20 @@ static_assert(sizeof(Entity)                 == 0x50, "sizeof(Entity) port drift
 
 }  // namespace Mortar
 
-// Free function: remove an entity from EntityTracker tree `treeIdx` by its
-// 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying
-// fruit from the spatial acceleration structure.
-// TODO: implement v1.6.1 ET_RemoveEntity @0x001d976c when EntityTracker tree storage is ported
+// EntityTracker free functions (global namespace, matching binary symbols).
+// Backing state: s_entityMap[3] (std::map<uint16_t, Entity*>) + s_currentIdent (uint16_t)
+// in Entity.cpp. Trees 0/1/2 = P2P player-index partition; Fruit uses tree 0.
+
+// ASM-spec v1.6.1 ET_GetFreeIdent @0x1d95bc
+// Allocates a free 16-bit tracker ID in treeIdx. Single-probe, not a loop.
+uint16_t ET_GetFreeIdent(int treeIdx);
+
+// ASM-spec v1.6.1 ET_GetEntity @0x1d966c
+// Returns the Entity* registered under `id` in treeIdx, or null if absent.
+Mortar::Entity* ET_GetEntity(int treeIdx, uint16_t id);
+
+// ASM-spec v1.6.1 ET_RemoveEntity @0x1d976c
+// Removes the entry for `trackerID` from treeIdx (no-op if absent).
 void ET_RemoveEntity(int treeIdx, uint16_t trackerID);
 
 #endif

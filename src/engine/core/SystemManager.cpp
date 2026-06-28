@@ -1,6 +1,9 @@
 #include "core/SystemManager.h"
 #include "core/MortarGame.h"
+#include "render/DisplayManager.h"
+#include "game/GameWork.h"
 #include <algorithm>
+#include <cstdlib>
 
 SystemManager::SystemManager()
     : m_bRunning(1)
@@ -102,4 +105,56 @@ const char* GetFormattedVersionString() {
 // ASM-spec v1.6.1 IsStartupTexturePortrait @0x11f4a8: reads global isStartupTexturePortrait byte
 bool IsStartupTexturePortrait() {
     return isStartupTexturePortrait;
+}
+
+// ASM-spec v1.6.1 CombosEnabled @0x119fd0: returns game_work.gameMode != 1.
+// Combos are off when gameMode == 1 (Zen mode).
+bool CombosEnabled() {
+    return game_work.gameMode != 1;
+}
+
+// 8-byte global accumulating score-notification data.
+// Binary @ 0x2d92e4. Field semantics not yet RE'd; callers mutate via pointer.
+static struct { int a; int b; } s_scoreNotification;
+
+// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns &s_scoreNotification.
+void* GetScoreNotification() {
+    return &s_scoreNotification;
+}
+
+// ASM-spec v1.6.1 GetVersionFromString @0x152e78: parse "M.m.p" -> packed int.
+// DIFFERS: binary scales single-digit minor/patch sections x10;
+// port uses direct semver (no x10) to match MortarGame::SetVersion convention.
+int GetVersionFromString(const char* s) {
+    if (!s) return 10000;
+    int major = atoi(s);
+    const char* p = s;
+    while (*p && *p != '.') ++p;
+    if (!*p) return major * 10000;
+    int minor = atoi(p + 1);
+    const char* q = p + 1;
+    int k = 0;
+    while (q[k] && q[k] != '.') ++k;
+    int patch = 0;
+    if (q[k] == '.') {
+        patch = atoi(q + k + 1);
+    }
+    return major * 10000 + minor * 100 + patch;
+}
+
+// ASM-spec v1.6.1 GetApparentWindowWidth @0x11bb44:
+// reads DisplayManager aspect ratio; returns 480 when ar <= 1.5, else ar * 320.
+float GetApparentWindowWidth() {
+    float ar = Mortar::DisplayManager::GetInstance().GetAspectWvH();
+    if (ar <= 1.5f) return 480.0f;
+    return ar * 320.0f;
+}
+
+// ASM-spec v1.6.1 GetApparentWindowHeight @0x11baf4:
+// reads DisplayManager aspect ratio; returns 320 when ar > 1.5, else GetAspectHvW * 480.
+float GetApparentWindowHeight() {
+    Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
+    float ar = dm.GetAspectWvH();
+    if (1.5f < ar) return 320.0f;
+    return dm.GetAspectHvW() * 480.0f;
 }
