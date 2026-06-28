@@ -341,7 +341,12 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         else
             bgTex = g_GameOverTitleTex;
         m_TitleTex = bgTex;
-        m_Texture  = bgTex;
+        // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90: the title texture is assigned to
+        // m_TitleTex ONLY, never to base m_Texture. The big centered title is the localized TTF
+        // (m_pTitleString: SetText id 0x2db Classic / 0x2f9 Arcade&Zen, with a (-6,-6) drop-shadow);
+        // m_TitleTex's only live draw is the small "new highscore" stamp in PreDrawOrder pass 0x80.
+        // Setting base m_Texture here made HUDControl3d::Draw render the baked title OVER the TTF
+        // (doubled, English-baked) -- so it is intentionally NOT set. (TTF shadow pending #257.)
         if (bgTex.IsValid()) {
             m_TitleSizeX  = (float)bgTex->GetWidth();
             m_TitleSize.x = (float)bgTex->GetWidth();
@@ -1412,11 +1417,13 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
     // Layer 1 path: field_0x5f = clamp(hudScale.x * 255) + HUDControl3d::Draw
     // field_0x5f = m_DrawColour.a (+0x5c+3 = alpha byte of tint colour)
     // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894:
-    //   title-texture alpha = clamp(game_work.mHud->m_DrawAlpha * 255, 0, 255)
-    //   -- NOT hudScale.x (always 1.0). m_DrawAlpha (HUD+0x20) is ctor-uninitialized + never
-    //   written at game-over time -> reads 0 -> HUDControl3d::Draw @0x0018b544 skips the
-    //   texture title; only the BakedStringBox TTF title (DrawOrder) shows. The old
-    //   hudScale.x*255 forced full opacity -> the visible duplicate.
+    //   title-texture alpha = clamp(game_work.mHud->m_DrawAlpha * 255, 0, 255) -- NOT hudScale.x.
+    //   CORRECTION: m_DrawAlpha (HUD+0x20) is written 1.0f EVERY tick by HUD::Update @0x0018c3c0
+    //   (HUD.cpp:98), so alpha = 255 (full opacity) -- it does NOT read 0. The baked title is
+    //   suppressed because base m_Texture is left UNASSIGNED in Initialise (only m_TitleTex is set;
+    //   see @0x00187c90) -> HUDControl3d::Draw @0x0018b544 skips on the invalid-texture gate. Only
+    //   the BakedStringBox TTF title (DrawOrder) shows. (The old `m_Texture = bgTex` made it draw
+    //   the baked title over the TTF -> the visible duplicate; that line is removed in Initialise.)
     // Real binary layer-1 = ONLY this -- NO sensei/expression/bg-pattern overlay
     if ((layerMask & Mortar::HUD_LAYER_DEFAULT) != 0) {
         float v = game_work.mHud ? game_work.mHud->m_DrawAlpha * 255.0f : 0.0f;
