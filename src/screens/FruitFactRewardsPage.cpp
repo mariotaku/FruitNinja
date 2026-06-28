@@ -98,7 +98,7 @@ void FruitFactRewardsPage::Init() {
     Mortar::FontCacheObjectTTF* font = GetRewardsTTFFont();
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-            font, 12.0f, 250.0f, 14.0f, 0xf, 1, 0.0f);
+            font, 12.0f, 250.0f, 14.0f, 0xf, 1, 0);
         m_pTitleBox = box;
         box->SetText(GETSTRING(LSTR_REWARDS_TITLE, 0));
         box->SetHorizontalLineSpacing(-1.0f);

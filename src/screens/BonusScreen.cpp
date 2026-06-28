@@ -211,8 +211,7 @@ void BonusScreen::BuildBonusText() {
                 10.0f,
                 0x01,    // LEFT
                 0,       // maxLines
-                -1.0f,   // lineSpacing
-                0
+                0        // param8 (binary 7th arg = 0; step = (int)(13+0) = 13px)
             );
             m_RankLabelBoxes[i]->SetColour(kRowColours[i], 0);
             m_RankLabelBoxes[i]->SetText(m_Awards[i].m_Name);
@@ -232,8 +231,7 @@ void BonusScreen::BuildBonusText() {
                 10.0f,
                 0x0F,    // center-H + center-V (binary @0x162324)
                 0,
-                -1.0f,
-                0
+                0        // param8 (binary 7th arg = 0; step = (int)(16+0) = 16px)
             );
             m_RankValueBoxes[i]->SetColour(kRowColours[i], 0);
             m_RankValueBoxes[i]->SetText(valBuf);
@@ -255,8 +253,7 @@ void BonusScreen::BuildBonusText() {
             30.0f,   // 0x1E
             0x0F,
             0,
-            -1.0f,
-            0
+            0        // param8 (binary 7th arg = 0; step = (int)(30+0) = 30px)
         );
         m_ScoreBox->SetGradient(
             Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
@@ -292,8 +289,7 @@ void BonusScreen::BuildBonusText() {
             20.0f,   // 0x14
             0x0F,
             0,
-            -1.0f,
-            0
+            0        // param8 (binary 7th arg = 0; step = (int)(20+0) = 20px)
         );
         m_TotalBox->SetGradient(
             Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)

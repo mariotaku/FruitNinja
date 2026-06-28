@@ -340,7 +340,7 @@ static bool TR_RenderCell(
         // align=0x0f: true horizontal centre (bits 0-1=0x3) + vertical centre (bits 2-3=0xC).
         // flag=1 in SetTranslation mirrors IngamePopup usage: m_Pos = pos - (boxW/2, -boxH/2)
         // so the box is centred on pos.x / pos.y, not anchored at its top-left.
-        Mortar::BakedStringBox box(ttfFont, fontSize, boxW, boxH, 0x0f, 1, 0.0f);
+        Mortar::BakedStringBox box(ttfFont, fontSize, boxW, boxH, 0x0f, 1, 0);
         box.SetText(sampleText);
         TR_ApplyEffect(&box, effIdx);
         Vec3 pos(textCentreX, textCentreY, 0.0f);
@@ -383,7 +383,7 @@ static bool TR_RenderCell(
         const float boxH = (float)LABEL_H;
         const float fontSize = 9.0f;
 
-        Mortar::BakedStringBox lblBox(verdanaFont, fontSize, boxW, boxH, 0x0f, 1, 0.0f);
+        Mortar::BakedStringBox lblBox(verdanaFont, fontSize, boxW, boxH, 0x0f, 1, 0);
         lblBox.SetText(label);
         lblBox.SetColour(Colour(210, 210, 210, 255), 0);
 

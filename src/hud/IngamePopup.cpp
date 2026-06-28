@@ -63,8 +63,7 @@ IngamePopup::IngamePopup(int type)
             0x2c,         // boxH = 44
             0x0d,         // align = centred+fit
             0,            // maxLines (0 = binary default, no shrink)
-            -1.0f,        // lineSpacing = -1
-            0             // param8
+            0             // param8 (binary 7th arg = 0; step = (int)(20+0) = 20px)
         );
         // SetGradient((255,142,0),(149,19,13),(94,11,0)) -- binary DAT values
         box->SetGradient(Colour(255, 142, 0), Colour(149, 19, 13), false);
@@ -91,8 +90,7 @@ IngamePopup::IngamePopup(int type)
             0x0e,         // boxH = 14
             0x0d,         // align
             0,            // maxLines
-            -1.0f,        // lineSpacing
-            0             // param8
+            0             // param8 (binary 7th arg = 0; step = (int)(16+0) = 16px)
         );
         // SetMetallicGradient((255,253,88),(255,255,255),(152,123,10),(255,253,88))
         box->SetMetallicGradient(
@@ -136,8 +134,7 @@ IngamePopup::IngamePopup(int type)
             0x12,         // boxH = 18
             0x0d,         // align
             0,            // maxLines
-            -1.0f,        // lineSpacing
-            0             // param8
+            0             // param8 (binary 7th arg = 0; step = (int)(17+0) = 17px)
         );
         // SetColour((43,176,5))
         box->SetColour(Colour(43, 176, 5), 0);

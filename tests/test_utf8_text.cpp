@@ -435,7 +435,7 @@ static void test_bakedstringbox_ascii_codepoints() {
     // Pure-ASCII "AB": GetGlyph must see only {0x41, 0x42}.
     // (Also verifies the test infrastructure works for the ASCII baseline.)
     Mortar::FontCacheObjectTTF* font = make_recording_font();
-    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3.0f);
+    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3);
 
     box.SetText("AB");
     g_recorded_codepoints.clear();
@@ -465,7 +465,7 @@ static void test_bakedstringbox_mixed_utf8_codepoints() {
     const char text[] = { 'A', (char)0xE5, (char)0xA5, (char)0x96, '\0' };
 
     Mortar::FontCacheObjectTTF* font = make_recording_font();
-    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3.0f);
+    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3);
 
     box.SetText(text);
     g_recorded_codepoints.clear();
@@ -517,7 +517,7 @@ static void test_bakedstringbox_two_cjk_codepoints() {
     };
 
     Mortar::FontCacheObjectTTF* font = make_recording_font();
-    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3.0f);
+    Mortar::BakedStringBox box(font, 9.0f, 200.0f, 30.0f, 0, 3, 3);
 
     box.SetText(text);
     g_recorded_codepoints.clear();

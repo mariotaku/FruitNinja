@@ -11,11 +11,14 @@
 // binary-side offsetof assertions (it is a v1.6.1 addition past the
 // previously-verified MainScreen+0x120 layout boundary).
 //
-// API modelled from re-analyst a7cd670 spec:
-//   BakedStringBox(font, fontSize, width, height, align, wrapMode, lineSpacing)
+// API (v1.6.1 BakedStringBox ctor @ 0x002465fc — 7 explicit args):
+//   BakedStringBox(font, fontSize, width, height, align, maxLines, param8)
+//     param8: integer added to the baseline-to-baseline pitch:
+//             step = (int)(fontSize + (param8 - (baseFontSize - fontSize)*0.5))
+//             Typical values: 0 (no extra gap), 3 (13px pitch at size 10), 7.
 //   SetText(const char*)
 //   SetColour(const Colour&, int setBase)
-//   SetHorizontalLineSpacing(float)
+//   SetHorizontalLineSpacing(float)   — binary writes m_AlignMode; see TODO in .cpp
 //   FitIntoVerticalBounds()
 //   SetTranslation(const Vec3&, int flag)
 //   Draw(float rotationDegrees, Vec2 scale, int center)
@@ -46,16 +49,15 @@ struct BakedStringBoxLine {
 
 class BakedStringBox {
 public:
-    // Binary ctor arg mapping (re-analyst a7cd670, reconciled against 0x002465fc):
+    // ASM-spec v1.6.1 BakedStringBox ctor @ 0x002465fc: 7 args, 7th = m_Param8.
     //   font        : FontCacheObjectTTF* (TTF face, 256x256 atlas)
-    //   fontSize    : 9.0f (initial render pixel size)
-    //   width       : 75 (wrap box width, int in binary at field 0x50)
-    //   height      : 30 (max box height, int in binary at field 0x24)
-    //   align       : 0x0d (centred + fit)
-    //   maxLines    : 3 (binary arg6; stored as m_MaxLines; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT not line count)
-    //   lineSpacing : 3 (pixels between lines)
-    //   param8      : int stored at field 0x48 (binary trailing arg; callers pass 0 or 1).
-    //                 Added as a trailing default param (default 0) so existing 7-arg callers are valid.
+    //   fontSize    : initial render pixel size (also stored as m_BaseFontSize)
+    //   width       : wrap box width  (int in binary at field 0x50)
+    //   height      : max box height  (int in binary at field 0x24)
+    //   align       : alignment flags (e.g. 0x0d = centred+fit, 0x0f = centre-H+centre-V+fit)
+    //   maxLines    : binary arg6; stored as m_MaxLines; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
+    //   param8      : line-pitch int stored at m_Param8; step = (int)(fontSize + param8)
+    //                 Typical values: 0 (no extra gap), 3 (+3px/line), 5, 7.
     // DIFFERS: original width/height are int (fields 0x50/0x24); port uses float for the renderer.
     BakedStringBox(FontCacheObjectTTF* font,
                    float fontSize,
@@ -63,8 +65,7 @@ public:
                    float height,
                    int align,
                    int maxLines,
-                   float lineSpacing,
-                   int param8 = 0);
+                   int param8);
     ~BakedStringBox();
 
     // Set the string to display. Triggers a layout rebuild on next Draw.
@@ -170,10 +171,8 @@ private:
     float   m_BoxWidth;           // wrap box width in world units
     float   m_BoxHeight;          // wrap box max height in world units
     int     m_Align;              // alignment flags (binary 0x0d)
-    int     m_MaxLines;           // binary arg6 (value 3 at call sites); FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
-    float   m_LineSpacing;        // additional spacing between lines
-    float   m_HorizLineSpacing;   // from SetHorizontalLineSpacing (-1 = auto)
-    int     m_Param8;             // binary field 0x48; trailing ctor arg (default 0)
+    int     m_MaxLines;           // binary arg6; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
+    int     m_Param8;             // binary field 0x48 (7th ctor arg); adds to line pitch: step = (int)(fontSize + m_Param8)
 
     Colour  m_Colour;
     Vec3    m_Pos;
@@ -229,7 +228,9 @@ private:
     // 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
     void BakeGradient();
 
-    // Measure total height of currently laid-out lines (includes spacing).
+    // Measure total ink height of currently laid-out lines:
+    //   maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
+    // where step == m_Lines[0].height (= (int)(fontSize + m_Param8)).
     float TotalHeight() const;
 };
 
