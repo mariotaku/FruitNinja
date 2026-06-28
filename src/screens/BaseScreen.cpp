@@ -10,6 +10,7 @@
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
+#include "hud/GenericHUDControl.h"
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
 #include "asset/Mesh.h"
@@ -394,6 +395,20 @@ void BaseScreen::AddGenericControl(HUDControl* ctrl) {
         game_work.mHud->AddControl(ctrl, false);
     }
     m_HUDControls.push_back(ctrl);
+}
+
+// ===================================================================
+// BaseScreen::SetExtraControlsDefaultPos v1.6.1 @0x0015f618
+// Propagates this screen's origin (pos) into every registered child
+// control's m_BasePos2 (+0x1bc) so they follow the page when translated.
+// Vec3& overload: v1.6.1 @0x0015f5b4 (port merges into the 0-arg version
+// using pos directly -- same net effect since callers always pass this->pos).
+// ===================================================================
+void BaseScreen::SetExtraControlsDefaultPos() {
+    for (std::list<HUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
+        HUDControl* c = *it;
+        if (c) static_cast<GenericHUDControl*>(c)->m_BasePos2 = pos;
+    }
 }
 
 // ===================================================================
