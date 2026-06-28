@@ -20,7 +20,7 @@ Output JSON: { "Qualified::Class": {size, size_hex, alloc_count, sizes_seen, sam
 
 Usage:
   infer-class-sizes.py --binexport tmp/binary.cli.BinExport \
-      --binary tmp/FruitNinja_v1_6_1.exe --out tmp/binary-class-sizes.json
+      --binary FruitNinjaBada/Bin/FruitNinja.exe --out tmp/binary-class-sizes.json
 """
 import argparse, bisect, json, re, sys
 from collections import defaultdict
@@ -54,7 +54,7 @@ def mangled_components(m):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--binexport", default="tmp/binary.cli.BinExport")
-    ap.add_argument("--binary", default="tmp/FruitNinja_v1_6_1.exe")
+    ap.add_argument("--binary", default="FruitNinjaBada/Bin/FruitNinja.exe")
     ap.add_argument("--out", default="tmp/binary-class-sizes.json")
     ap.add_argument("--back", type=int, default=8, help="instrs to scan back for the size")
     ap.add_argument("--fwd", type=int, default=24, help="instrs to scan forward for the ctor")
