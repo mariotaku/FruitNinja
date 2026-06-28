@@ -188,32 +188,18 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
         Mortar::BakedStringBox* box = m_TextBoxes[i];
         if (!box) continue;
 
-        // Binary reads box w=[+0x24]/h=[+0x28] -- those are the stored boxW/boxH
-        // We need w/h from the BakedStringBox. The spec says: read w and h from
-        // fields +0x24/+0x28 of BakedStringBox. In the port's layout, these are
-        // m_BoxWidth and m_BoxHeight (private). We replicate by using the ctor-passed values.
-        // For type 0xF: boxW=0x40=64, boxH=0x2c=44; for 0x10: 44,14; for 0x11: 118,18.
-        // The binary reads them at runtime from the object; we track the values implicitly
-        // via the offset formula which uses hw/hh = boxW/boxH * scale / 2.
-        // Since BakedStringBox private fields aren't exposed, we store boxW/boxH externally
-        // and use them here. For now, use a known workaround: pass 0,0 which makes the
-        // rotation term zero, matching "no pre-rotation" when m_VerticalOffset is small.
-        // The CORRECT approach is to expose GetBoxWidth()/GetBoxHeight() from BakedStringBox.
-        // TODO: expose BakedStringBox::GetBoxWidth/GetBoxHeight for correct Draw loop.
-        // For the text boxes, the binary:
-        //   hw = w * scale / 2
-        //   hh = h * scale / 2
-        //   rotated corner = (hw * cosA - (-hh) * sinA, hw * sinA + (-hh) * cosA, 0)
-        //   finalPos = pos + scale * textPos[i] + rotated
-        // With w=h=0 these terms vanish. The rotation term is cosmetic (small angle).
-        float w = 0.0f;  // TODO: expose from BakedStringBox
-        float h = 0.0f;
-        float hw = w * scale * 0.5f;
-        float hh = h * scale * 0.5f;
-
-        // rotate corner offset (hw, -hh, 0) by the angle
-        float rx = hw * cosA - (-hh) * sinA;
-        float ry = hw * sinA + (-hh) * cosA;
+        // ASM-spec v1.6.1 IngamePopup::Draw @0x0016d41c: text anchor uses BakedStringBox box dims
+        // (+0x24 boxW / +0x28 boxH, signed int) for a rotation-aware corner correction:
+        //   delta = (hw,-hh) - Rotate(hw,-hh,angle), so at angle=0 there is zero displacement.
+        int boxW = box->GetBoxWidth();
+        int boxH = box->GetBoxHeight();
+        // integer half-extents, sign-aware arithmetic shift (mirrors binary vcvt + (x+(x>>31))>>1)
+        int hwi = (int)(boxW * scale);  hwi = (hwi + (hwi >> 31)) >> 1;
+        int hhi = (int)(boxH * scale);  hhi = (hhi + (hhi >> 31)) >> 1;
+        float hw = (float)hwi;
+        float hh = (float)hhi;
+        float rx =  hw * (1.0f - cosA) - hh * sinA;
+        float ry = -hh * (1.0f - cosA) - hw * sinA;
 
         const Vec3& textPos = m_TextPositions[i];
         Vec3 finalPos(
@@ -250,18 +236,16 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
         tex->Set();
         mm.GetWorldStack().Reset();
 
-        Matrix44 mat;
         // scale matrix: m[0] = texW * texScale.x * scale; m[5] = texH * texScale.y * scale
         float sx = texW * texScale.x * scale;
         float sy = texH * texScale.y * scale;
-        mat = Matrix44::MakeScale(sx, sy, 1.0f);
 
-        // RotZ44(SinIdx(m_VerticalOffset * 182), CosIdx(...))
-        // Binary: m_VerticalOffset * 182 converts degrees to the SinIdx index space
-        // (182.044... = 65536/360, but binary uses 182 as integer multiplier)
+        // ASM-spec v1.6.1 IngamePopup::Draw @0x0016d6ec: border xform = (S * R) * T, z-scale 0.
         uint16_t rotIdx = (uint16_t)(int)(m_VerticalOffset * 182.0f);
-        mat.RotZ44(SinIdx(rotIdx), CosIdx(rotIdx));
-
+        Matrix44 matR;
+        matR.RotZ44(SinIdx(rotIdx), CosIdx(rotIdx));
+        Matrix44 matS = Matrix44::MakeScale(sx, sy, 0.0f);
+        Matrix44 mat = matS * matR;
         mat.GlobalTranslate44(pos2);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
