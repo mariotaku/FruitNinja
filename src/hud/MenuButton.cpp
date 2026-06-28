@@ -418,7 +418,11 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
             m_pLabelGlow->ApplyFormatting_Circle(m_LabelRadius);
     }
     if (wantInnerGlow) {
-        SetInnerGlow(text, Colour(255, 255, 128, 255), m_LabelRadius, actualFontScale, 2.0f);
+        // ASM-spec v1.6.1 MenuButton::SetText @0x0019b0ac (wantInnerGlow branch @0x0019b344):
+        // Colour ctor r1=0xff,r2=0xff,r3=0xff,[sp+0]=0x80 => Colour(255,255,255,128) -- white
+        // at 50% alpha (subtle inner sheen). Port had (255,255,255-vs-128, 255-vs-128) swapped,
+        // rendering an opaque light-yellow wash instead of a translucent white highlight.
+        SetInnerGlow(text, Colour(255, 255, 255, 128), m_LabelRadius, actualFontScale, 2.0f);
     }
     if (m_LabelRadius > 0.0f)
         m_pLabelFg->ApplyFormatting_Circle(m_LabelRadius);
@@ -528,11 +532,16 @@ void MenuButton::Update(float dt) {
     // --- sparkle + new-indicator timers ---
     if (m_SparkleTimer >= 0.0f) {
         m_SparkleTimer += dt * 8.0f;
-        if (m_SparkleTimer > 8.0f) m_SparkleTimer = 8.0f;
+        // ASM-spec v1.6.1 MenuButton::Update @0x0019a860: sparkle WRAPS to 0 at >=8.0
+        // (cyclic loading ring), not clamp-and-hold at 8.0.
+        if (m_SparkleTimer >= 8.0f) m_SparkleTimer = 0.0f;
     }
     if (m_NewIndicatorTimer >= 0.0f) {
         m_NewIndicatorTimer += 2.0f * dt;
-        if (m_SparkleTimer < 1.0f) m_NewIndicatorTimer = 0.0f;
+        // ASM-spec v1.6.1 MenuButton::Update @0x0019a860: reset the NEW-badge bob timer ONLY
+        // when sparkle is active (>=1.0). Port had `< 1.0f` (inverted), so with sparkle=-1.0
+        // (inactive, the menu's resting state) the timer reset every frame -> badge never bobbed.
+        if (m_SparkleTimer >= 1.0f) m_NewIndicatorTimer = 0.0f;
     }
 
     UpdatePeices(dt);
