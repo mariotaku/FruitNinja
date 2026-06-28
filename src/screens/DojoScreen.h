@@ -5,24 +5,34 @@
 // DojoScreen : HUDControl3d (BaseScreen subclass, binary sizeof 0xb8)
 //
 // Binary refs (v1.6.1):
-//   Constructor 0x0016bad8
-//   Update      0x0016b6a4
-//   Draw        0x0016a004
-//   Init        0x00169e80
-//   Release     0x0016c7f8
-//   Reset       0x0016b568
+//   Constructor    0x0016bad8
+//   Update         0x0016b6a4
+//   Draw           0x0016a004
+//   Init           0x00169e80
+//   Release        0x0016c7f8
+//   Reset          0x0016b568
+//   CreateButtons  0x0016ad9c
 //
 // Secondary menu shown after tapping the Dojo button on MainScreen.
 // Has sub-buttons: Back (return to game), Shop (blade/power-up shop),
 // About (credits), plus defunct social-share buttons (BSButton).
 //
 // State machine:
-//   0 = transition-in: lerp m_TransitionAlpha -> 1.0 (step 0.25),
-//       create buttons, -> state 1
+//   0 = transition-in: lerp m_TransitionAlpha -> 1.0 (step 0.25), -> state 1
 //   1 = idle
-//   2 = fade out, -> ShopScreen  (port: stub, falls through to 6)
+//   2 = fade out, -> ShopScreen
 //   3 = fade out, -> AboutScreen
 //   6 = fade out, pending removal -> MainScreen STATE_SLIDE_IN
+//
+// Button creation: CreateButtons() is called from Reset() (v1.6.1 binary pattern).
+// Buttons are re-created after state-2/3 fade-out nulls them and Reset() re-fires.
+//
+// BSButton creation: m_pBSButton0 (Facebook) and m_pBSButton1 (Twitter) are
+// created in the ctor (v1.6.1 DojoScreen::DojoScreen @0x0016bad8) and added to
+// the HUD immediately. They are defunct visible stubs -- drawn but do nothing.
+//
+// Version text: m_pVersionText (BakedStringBox) is created in the ctor and drawn
+// in Draw() at the DrawBorders-returned title anchor + Vec3(0,5,0).
 //
 // Port specific:
 //   - No sensei 3D animation (binary has an animated 3D model).
@@ -31,8 +41,11 @@
 //
 
 #include "BaseScreen.h"
+#include "hud/BSButton.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+
+namespace Mortar { class BakedStringBox; }
 
 class MenuButton;
 class AboutScreen;
@@ -73,14 +86,14 @@ private:
     MenuButton* m_pBackButton;   // +0x94 (binary name; port used m_pPlayButton)
     MenuButton* m_pShopButton;   // +0x98
     MenuButton* m_pAboutButton;  // +0x9c
-    // Defunct: Twitter/Facebook social share -- stub; v1.6.1 DojoScreen ctor @0x0016bad8
-    void*       m_pBSButton0;    // +0xa0 (BSButton* Facebook social share)
-    // Defunct: Twitter/Facebook social share -- stub; v1.6.1 DojoScreen ctor @0x0016bad8
-    void*       m_pBSButton1;    // +0xa4 (BSButton* Twitter social share)
-    void*       m_pButton4;      // +0xa8 (HUDControl*)
-    int         m_ResetValue;    // +0xac
-    float       m_TransitionDelay; // +0xb0
-    void*       m_pVersionText;  // +0xb4 (BakedStringBox*)
+    // Defunct: Facebook social share -- visible stub; v1.6.1 DojoScreen ctor @0x0016bad8
+    BSButton*              m_pBSButton0;    // +0xa0
+    // Defunct: Twitter social share -- visible stub; v1.6.1 DojoScreen ctor @0x0016bad8
+    BSButton*              m_pBSButton1;    // +0xa4
+    void*                  m_pButton4;      // +0xa8 (HUDControl*)
+    int                    m_ResetValue;    // +0xac
+    float                  m_TransitionDelay; // +0xb0
+    Mortar::BakedStringBox* m_pVersionText; // +0xb4
 
     // Port-only tail (beyond binary 0xb8 boundary, does not shift binary fields):
     // Child AboutScreen when state==3 triggers. nullptr when not shown.
@@ -99,10 +112,19 @@ private:
     static Mortar::SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
     static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;    // back_icon.tex
 
+    // --- CreateButtons (v1.6.1 CreateButtons @0x0016ad9c) ---
+    // Creates m_pBackButton, m_pShopButton, m_pAboutButton with null guards.
+    // Called from Reset() (binary pattern: Reset calls CreateButtons unconditionally).
+    void CreateButtons();
+
     // --- Callbacks ---
     void PlayCallback();
     void ShopCallback();
     void AboutCallback();
+    // Defunct: Facebook social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
+    void FacebookPressed();
+    // Defunct: Twitter social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
+    void TwitterPressed();
 
 public:
     // Defunct: more-games/online dashboard upsell -- no-op stub; v1.6.1 DojoScreen::MoreGamesCallback @0x00169eec

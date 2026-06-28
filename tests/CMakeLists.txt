@@ -329,8 +329,16 @@ fn_add_game_test(test_menubutton_scale test_menubutton_scale.cpp)
 add_test(NAME menubutton_scale COMMAND test_menubutton_scale)
 set_tests_properties(menubutton_scale PROPERTIES TIMEOUT 60)
 
-# DojoScreen bomb-scale regression test. Drives the REAL DojoScreen::Update
-# flow (state-0 fade-in + button creation) and asserts the back-bomb ends up
+# DojoScreen headless layout/structure guard. Verifies the faithful
+# Init()->Reset()->CreateButtons() activation path creates all expected HUD
+# controls: 3 ring buttons (back-bomb/shop/about) and 2 distinct-position
+# BSButtons (FB+TW social stubs). Headless -- passes with ctest -E screenshot.
+fn_add_game_test(test_dojoscreen test_dojoscreen.cpp)
+add_test(NAME dojoscreen COMMAND test_dojoscreen)
+set_tests_properties(dojoscreen PROPERTIES TIMEOUT 60)
+
+# DojoScreen bomb-scale regression test. Drives the REAL DojoScreen activation
+# flow (Init()->Reset()->CreateButtons()) and asserts the back-bomb ends up
 # 0.825x the Home bomb size. Catches regressions where m_pTrackedFruit is null
 # at shrink time (so entity scale never gets the 0.825 factor).
 fn_add_game_test(test_dojoscreen_bomb_scale test_dojoscreen_bomb_scale.cpp)

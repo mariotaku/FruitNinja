@@ -59,8 +59,7 @@ enum LocalizedString {
     LSTR_SHOP_BACKGROUND     = 0xc9,  // CODE_SHOP_BACKGROUND  "BACKGROUND"
     LSTR_SHOP_BLADE          = 0xca,  // CODE_SHOP_BLADE       "BLADE"
     LSTR_SHOP_FULL_VERSION   = 0xcb,  // CODE_SHOP_FULL_VERSION "FULL VERSION"
-    // Defunct: key removed in v1.6.1 (CODE_SHOP_SPECIAL call sites refactored away)
-    LSTR_SHOP_SPECIAL        = 0,
+    LSTR_SHOP_SPECIAL        = 0x12F, // CODE_SHOP_SPECIAL (DojoScreen/ShopScreen; v1.6.1 binary index 0x12F)
     LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY = 0xce,  // CODE_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY
     LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY     = 0xcf,  // CODE_DJ_BAMBOO_BLADE_PLAYED_TODAY
     LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP  = 0xd7,  // CODE_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP
@@ -88,6 +87,12 @@ enum LocalizedString {
 
     // ScoreControl v1.6.1 string IDs (ScoreControl ctor @0x001ad5fc)
     LSTR_SCORE           = 0x323, // "SCORE" -- ScoreControl m_pScoreBox label
+
+    // DojoScreen v1.6.1 string IDs (DojoScreen::CreateButtons @0x0016ad9c / ctor @0x0016bad8)
+    LSTR_DJ_BACK_BUTTON  = 0x352, // Back/Play ring label (CreateButtons @0x0016ad9c)
+    LSTR_DJ_SHOP_BUTTON  = 0x3c2, // Shop ring label (CreateButtons @0x0016ad9c)
+    LSTR_SOCIAL_FACEBOOK = 0x11e, // Facebook social share button label (DojoScreen ctor @0x0016bad8)
+    LSTR_SOCIAL_TWITTER  = 0x11f, // Twitter social share button label (DojoScreen ctor @0x0016bad8)
 
     // PauseScreen v1.6.1 string IDs (PauseScreen ctor @0x001a7204 / Update @0x001a5ebc)
     LSTR_PAUSED          = 0x3c8, // "PAUSED" -- m_PausedText label (ctor @0x001a7204)
