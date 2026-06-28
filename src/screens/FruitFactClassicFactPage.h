@@ -30,6 +30,12 @@ public:
     void Init() override;  // Binary @ 0x00174e30 -- build icon GenericHUDControls
     void DrawOrder(float* hudScaleRaw, int layerMask) override; // Binary @ 0x00175250
 
+    // Test support: delete and null both lazy BakedStringBox members so DrawOrder
+    // re-bakes them from the controller's current m_FactText/m_FactColour on the
+    // next frame. Used by test_fruitfact --fact= override after-the-fact patching.
+    // The game never calls this; it is a no-op stub from the binary's perspective.
+    void ResetBakedTextBoxes();
+
 private:
     // +0x98: lazy-initialized title BakedStringBox pointer (init NULL)
     // ASM-verified: v1.6.1 FruitFactClassicFactPage @ 0x00174e30

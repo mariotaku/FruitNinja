@@ -24,6 +24,7 @@
 #include "screens/FruitFactPage.h"
 #include "screens/FruitFactClassicFactPage.h"
 #include "hud/FruitFactControl.h"
+#include "hud/GenericHUDControl.h"
 #include "hud/ScoreControl.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
@@ -34,6 +35,7 @@
 #include "engine/asset/TextureManager.h"
 #include <cstring>
 #include <cstdio>
+#include <iterator>
 #include <set>
 #include <list>
 #include "hud/MenuButton.h"
@@ -88,9 +90,46 @@ static void BuildShotLabel(char* out, size_t outSize,
 }
 
 // ---------------------------------------------------------------------------
+// ResetPageFactBoxes -- re-arm baked text boxes on a page after a fact
+// override so the next DrawOrder rebuilds them from the patched controller.
+//
+// FruitFactClassicFactPage: the lazy m_pTitleBox and m_pBodyBox are deleted
+//   and nulled so DrawOrder's NULL-gate fires again on the next frame.
+// FruitFactZenPage / FruitFactBonusFactPage: the fact-title (index 2) and
+//   fact-text (index 3) GenericHUDControl objects in m_HUDControls own
+//   BakedStringBox labels that baked m_FactColour / m_FactText at Init() time.
+//   SetColour/SetText marks the box dirty so Draw() rebuilds it.
+//   Index 2 = CreateSenseisFruitFactTitle (colour needs update after override).
+//   Index 3 = CreateSenseisFruitFactText  (text needs update after override).
+//   This index is stable across both page types because both call the two
+//   helpers at positions 3 and 4 in their Init() AddGenericControl sequence
+//   (ZenPage: head, divider, title, text, ...; BonusPage: banner, divider, title, text, ...).
+// ---------------------------------------------------------------------------
+static void ResetPageFactBoxes(FruitFactPage* page, FruitFactControl* ctrl) {
+    FruitFactClassicFactPage* classic = dynamic_cast<FruitFactClassicFactPage*>(page);
+    if (classic) {
+        classic->ResetBakedTextBoxes();
+        return;
+    }
+    // Zen and Bonus pages: fact-title at index 2, fact-text at index 3.
+    const std::list<HUDControl*>& controls = page->GetHUDControlsForTest();
+    if (controls.size() < 4) return;
+    std::list<HUDControl*>::const_iterator it = controls.begin();
+    std::advance(it, 2);
+    GenericHUDControl* titleCtrl = dynamic_cast<GenericHUDControl*>(*it);
+    ++it;
+    GenericHUDControl* textCtrl = dynamic_cast<GenericHUDControl*>(*it);
+    if (titleCtrl && titleCtrl->m_pLabel)
+        titleCtrl->m_pLabel->SetColour(ctrl->m_FactColour, 0);
+    if (textCtrl && textCtrl->m_pLabel)
+        textCtrl->m_pLabel->SetText(ctrl->m_FactText);
+}
+
+// ---------------------------------------------------------------------------
 // ApplyFactOverride -- patch m_ComboA/B, m_FactText, m_FactColour,
 // m_FactTexture on an already-Inited FruitFactControl to force a specific
-// fruit fact.
+// fruit fact. Also resets any already-baked text boxes on the pages currently
+// in ctrl->m_Pages so the next settle frames rebuild from the overridden fields.
 //
 // Call AFTER FruitFactControl::Init() has run (i.e. after the first settle
 // frame). The caller must run additional settle frames after this call so
@@ -117,6 +156,13 @@ static void ApplyFactOverride(FruitFactControl* ctrl, int factIdx) {
                 (unsigned)ctrl->m_FactColour.r,
                 (unsigned)ctrl->m_FactColour.g,
                 (unsigned)ctrl->m_FactColour.b);
+    // Reset baked text boxes on all pages already registered at this point.
+    // Classic page2 (injected after ApplyFactOverride) is built fresh and
+    // needs no reset. Zen/Bonus have only one page, added during settle.
+    for (std::vector<FruitFactPage*>::iterator pit = ctrl->m_Pages.begin();
+         pit != ctrl->m_Pages.end(); ++pit) {
+        ResetPageFactBoxes(*pit, ctrl);
+    }
 }
 
 // ---------------------------------------------------------------------------
