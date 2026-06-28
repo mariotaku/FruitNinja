@@ -9,4 +9,8 @@
 
 void UpdateMusic(float dt);
 
+// v1.6.1 PreloadInGameSounds @0x001cad28 — one-shot preload of in-game SFX.
+// Idempotent (internal guard); safe to call from multiple paths (SkipToPause, UpdateMusic).
+void PreloadInGameSounds();
+
 #endif  // FN_UPDATE_MUSIC_H

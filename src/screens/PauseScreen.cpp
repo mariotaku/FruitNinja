@@ -48,6 +48,7 @@
 #include <algorithm>
 #include "game/GameWork.h"
 #include "render/BakedStringBox.h"
+#include "game/UpdateMusic.h"
 #include "render/Font.h"
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
@@ -131,6 +132,26 @@ void PauseGame() {
 void UnpauseGame() {
     g_repauseDelay = 0.4f;
     g_unpause_game = 1;
+}
+
+// -------------------------------------------------------------------------
+// SkipToPause (binary @ 0x001cb424)
+// -------------------------------------------------------------------------
+
+// ASM-spec v1.6.1 SkipToPause @ 0x001cb424
+// Binary body: if (force || (ps && ps->IsEnabled())) { m_GameDt=0; SkipTo;
+//   bM_bPaused=0; bM_Mode=true; MainScreen::Hide; HUD::Skip; PreloadInGameSounds. }
+void SkipToPause(bool force) {
+    PauseScreen* pauseScreen = GetTaskState()->pPauseScreen;
+    if (force || (pauseScreen && pauseScreen->IsEnabled())) {
+        game_work.m_GameDt = 0.0f;
+        if (pauseScreen) pauseScreen->SkipTo();
+        game_work.bM_bPaused = 0;
+        game_work.bM_Mode = true;
+        if (game_work.mMainScreen) game_work.mMainScreen->Hide();
+        if (game_work.mHud) game_work.mHud->Skip();
+        PreloadInGameSounds();
+    }
 }
 
 // -------------------------------------------------------------------------

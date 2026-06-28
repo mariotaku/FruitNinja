@@ -247,7 +247,6 @@ private:
 
 
     // --- Internal helpers ---
-    void Hide();
     void CreateToggles();
     // v1.6.1 MainScreen::CreateButtons @0x001961f8: gated by flM_BombHitTimer<1.45, then per-button
     // null checks; sets m_ButtonsCreatedFlag=1 on first run. Called per-frame from case 0.
@@ -288,6 +287,10 @@ private:
 public:
     // Binary @ 0x0014AC98 — no-op event hook.
     void OnMenuItemsCleared();
+
+    // Public: invoked by SkipToPause (PauseScreen.cpp) on the background-pause path,
+    // matching the binary where SkipToPause @0x001cb424 calls MainScreen::Hide directly.
+    void Hide();
 
     // Port-specific: HUD-side timer mirror written by TimeControl::Update every frame.
     // ASM-spec v1.6.1 TimeControl::Update @0x001c0a48 (re-stamp: old addrs 0x001624f6/
