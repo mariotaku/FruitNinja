@@ -255,8 +255,17 @@ private:
     // Internal of ApplyFormatting_Circle @0x00248cc8.
     void ApplyFormatting_Circle_Internal(float radius);
 
-    // Internal of ApplyGradient_TopBottom @0x00247c54.
-    void ApplyGradient_TopBottom_Internal();
+    // ApplyGradient_TopBottom (public, @0x0024863c) / _Internal (@0x00247c54):
+    //   Sets a 2-stop top-to-bottom vertical colour gradient on all built surfaces.
+    //   Contract: top and bottom colours are passed EXPLICITLY as parameters and are
+    //   used directly for the lerp; the method does NOT read m_Base.m_Effect.m_Col0/1.
+    //   _Internal scans the full Y-extent of all verts, then for each vertex:
+    //     t = (yTop - y) / yRange; colour = lerp(top, bottom, t).
+    //   Caller (ApplyGradient_TopBottom) additionally saves+restores gradient cache
+    //   in m_Base.m_Effect (m_Col1->m_Tc) before calling AddColour to populate stops.
+    // ASM-spec v1.6.1 BakedStringTTF::ApplyGradient_TopBottom_Internal @0x00247c54 /
+    //   ApplyGradient_TopBottom @0x0024863c: top/bottom passed as explicit params.
+    void ApplyGradient_TopBottom_Internal(Colour top, Colour bottom);
 
     // AddColour: store into m_Base.m_Effect colour stops.
     void AddColour(Colour col, float t);

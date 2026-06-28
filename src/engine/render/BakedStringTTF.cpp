@@ -119,8 +119,10 @@ BakedStringTTF::~BakedStringTTF()
 void BakedStringTTF::AddColour(Colour col, float t)
 {
     // Store into m_Base.m_Effect colour stop slots.
-    // First call (t==0.0) -> m_Col0/m_T0; second call -> m_Col1/m_Tc.
-    if (t == 0.0f || m_Base.m_Effect.m_T0 == 0.0f) {
+    // Slot 0 when t==0.0 exactly; slot 1 for any other t.
+    // The old guard "|| m_T0==0.0f" caused the 2nd AddColour call to overwrite slot 0
+    // when slot 0 held 0.0 from the reset, corrupting both stops.
+    if (t == 0.0f) {
         m_Base.m_Effect.m_Col0 = col;
         m_Base.m_Effect.m_T0   = t;
     } else {
@@ -462,7 +464,9 @@ void BakedStringTTF::ApplyFormatting_Circle(float radius)
 // ApplyGradient_TopBottom_Internal @0x00247c54:
 // if(m_SurfacesBuilt) for each surface: per-vertex vertical Y-lerp top->bottom.
 // Mirrors BakedStringBox::BakeGradient (Transform_LinearGradient_TopBottom @0x00247a48).
-void BakedStringTTF::ApplyGradient_TopBottom_Internal()
+// ASM-spec v1.6.1 BakedStringTTF::ApplyGradient_TopBottom_Internal @0x00247c54 /
+//   ApplyGradient_TopBottom @0x0024863c: top/bottom passed as explicit params.
+void BakedStringTTF::ApplyGradient_TopBottom_Internal(Colour top, Colour bottom)
 {
     if (!m_SurfacesBuilt) return;
     if (m_Surfaces.empty()) return;
@@ -481,9 +485,9 @@ void BakedStringTTF::ApplyGradient_TopBottom_Internal()
     float yRange = yTop - yBot;
     if (yRange < 1.0f) yRange = 1.0f;
 
-    // Gradient stops from m_Base.m_Effect.
-    Colour colTop = m_Base.m_Effect.m_Col0;
-    Colour colBot = m_Base.m_Effect.m_Col1;
+    // Gradient stops from explicit params (not m_Base.m_Effect which may be stale).
+    Colour colTop = top;
+    Colour colBot = bottom;
 
     // Per-vertex Y-lerp.
     // Transform_LinearGradient_TopBottom @0x00247a48: t = (yTop - y) / range; lerp top->bot.
@@ -530,7 +534,7 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
     AddColour(top,    0.0f);
     AddColour(bottom, 1.0f);
 
-    ApplyGradient_TopBottom_Internal();
+    ApplyGradient_TopBottom_Internal(top, bottom);
 }
 
 // Draw @0x002497a8:
