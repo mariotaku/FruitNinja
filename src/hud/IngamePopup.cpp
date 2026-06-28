@@ -240,12 +240,17 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
         float sx = texW * texScale.x * scale;
         float sy = texH * texScale.y * scale;
 
-        // ASM-spec v1.6.1 IngamePopup::Draw @0x0016d6ec: border xform = (S * R) * T, z-scale 0.
+        // ASM-spec v1.6.1 IngamePopup::Draw @0x0016d6ec: border xform equivalent to T*(R*S), z-scale 0.
+        // The binary's Mul44 @0x0016f5a0 is REVERSED (output = param_1 * this), so binary op*(this=S,
+        // rhs=R) stores R*S. The port's operator* is standard (this*b), so the port must use
+        // matR * matS (= R*S) to match -- matS * matR gave S*R, which shears the non-square SELECTED
+        // quad into a parallelogram (and made the border tilt differently from the text). Same root for
+        // both symptoms. SinIdx/CosIdx (border) and cosf/sinf (text) both use m_VerticalOffset, same sign.
         uint16_t rotIdx = (uint16_t)(int)(m_VerticalOffset * 182.0f);
         Matrix44 matR;
         matR.RotZ44(SinIdx(rotIdx), CosIdx(rotIdx));
         Matrix44 matS = Matrix44::MakeScale(sx, sy, 0.0f);
-        Matrix44 mat = matS * matR;
+        Matrix44 mat = matR * matS;
         mat.GlobalTranslate44(pos2);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
