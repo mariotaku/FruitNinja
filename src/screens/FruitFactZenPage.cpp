@@ -152,7 +152,7 @@ void FruitFactZenPage::Init() {
             float x = (span * -0.5f - 8.0f) + (float)i * spacing;
             Vec3 ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
             Vec3 sc(0.0f, 0.0f, 0.0f);             // Vec3::Zero -> auto-size from texture dims
-            Colour col(1.0f, 1.0f, 1.0f, 1.0f);
+            Colour col(255, 255, 255, 255);
             GenericHUDControl* c = new GenericHUDControl(fade, fade + 0.25f, iconTex, NULL, ipos, sc, col, 8);
             // Binary: T_1022 default block (all zeros) memcpy'd to c+0xa4 (m_ScaleTrans, 5 words).
             // GenericHUDControl ctor already zero-initializes m_ScaleTrans; no-op here.
@@ -181,7 +181,7 @@ void FruitFactZenPage::Init() {
         float starFadeIn  = fade;
         float starFadeOut = starFadeIn + 0.5f;
         Vec3 scStar(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
-        Colour colStar(1.0f, 1.0f, 1.0f, 1.0f);
+        Colour colStar(255, 255, 255, 255);
         // Star + label are the same GenericHUDControl in the binary (pGVar5).
         GenericHUDControl* cStar = new GenericHUDControl(starFadeIn, starFadeOut, starTex, NULL, starPos, scStar, colStar, 0x400);
         // Binary: T_1022 default block memcpy'd to cStar+0x28 (6 words = 0x18 bytes).
@@ -221,7 +221,7 @@ void FruitFactZenPage::Init() {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
             Vec3 c1pos(-8.0f, 37.0f, 0.0f);
             Vec3 sc(1.0f, 1.0f, 1.0f);
-            Colour col(1.0f, 1.0f, 1.0f, 1.0f);
+            Colour col(255, 255, 255, 255);
             GenericHUDControl* c1 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c1pos, sc, col, 8);
             // Binary: T_1022 all-zeros block; already zero-initialized by ctor; no-op.
             c1->AddSound("achievement", 1.0f, 0.0f);  // DAT_00180704 @ 0x0027F593
@@ -254,7 +254,7 @@ void FruitFactZenPage::Init() {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
             Vec3 c2pos(-8.0f, 37.0f, 0.0f);          // DAT_180ed0=-8.0, DAT_180ed4=37.0
             Vec3 sc(1.0f, 1.0f, 1.0f);
-            Colour col(1.0f, 1.0f, 1.0f, 1.0f);
+            Colour col(255, 255, 255, 255);
             GenericHUDControl* c2 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c2pos, sc, col, 8);
 
             if (font) {
@@ -278,7 +278,7 @@ void FruitFactZenPage::Init() {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
             Vec3 c3pos(-8.0f, 37.0f, 0.0f);          // same pos as ctrl 2 per binary
             Vec3 sc(1.0f, 1.0f, 1.0f);
-            Colour col(1.0f, 1.0f, 1.0f, 1.0f);
+            Colour col(255, 255, 255, 255);
             GenericHUDControl* c3 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c3pos, sc, col, 8);
 
             if (font) {

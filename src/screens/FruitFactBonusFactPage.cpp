@@ -72,7 +72,7 @@ void FruitFactBonusFactPage::Init() {
     // scZero triggers auto-size from texture dims for icon controls (binary: callers pass zero scale).
     Vec3 scZero(0.0f, 0.0f, 0.0f);
     Vec3 scUnit(1.0f, 1.0f, 1.0f);
-    Colour white(1.0f, 1.0f, 1.0f, 1.0f);
+    Colour white(255, 255, 255, 255);
 
     // Column anchor positions (DAT_174830..17483c, Z=0).
     Vec3 iconPos(95.0f, 58.0f, 0.0f);   // DAT_174830=95, DAT_174834=58
