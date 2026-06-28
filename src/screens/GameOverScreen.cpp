@@ -1214,9 +1214,12 @@ void GameOverScreen::Update(float dt) {
             CreateQuitButton();
         }
 
-        // 7) ASM-spec v1.6.1 GameOverScreen::Update @0x0018781c: reload localised title texture
-        //    (literal @0x002829E9 "comming_soon_highscore.tex" -- original's "comming" typo)
-        m_TitleTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
+        // (Removed: a per-frame LoadLocalisedTexture("comming_soon_highscore.tex"). That
+        //  string is absent from the v1.6.1 binary -- a cut asset, never loaded; the prior
+        //  @0x0018781c/@0x002829E9 spec was bogus (no function there). The load failed every
+        //  frame and clobbered the mode-title m_TitleTex set in Initialise()
+        //  (g_GameOverTitleTex / g_TimeUpTitleTex / g_ArcadeTimeUpTitleTex), killing the
+        //  title-overlay draw. m_TitleTex is already correct from Initialise.)
 
         // 8) Settle (always): if(pos.y < 212.8)
         if (pos.y < 212.8f) {
