@@ -215,6 +215,11 @@ private:
     char    m_Text[256];          // cached text copy
 
     // Rebuild the laid-out lines from m_Text at m_FontSize.
+    // Tokeniser: East-Asian codepoints (v1.6.1 WordWrap::IsEastAsianChar @0x002508ec)
+    // are emitted as individual single-codepoint tokens, so CJK text wraps between
+    // any two consecutive characters. Latin/symbol runs stop at spaces, newlines, or
+    // the first East-Asian codepoint. Space advances (spAdv) are suppressed between
+    // two adjacent CJK tokens everywhere (v1.6.1 WordWrap::CanBreakLineAt @0x002509cc).
     void Layout();
 
     // Bake the active gradient (m_GradMode>=2) into vertex colours across all m_Lines.

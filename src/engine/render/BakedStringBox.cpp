@@ -17,6 +17,16 @@
 #include <cmath>
 #include <vector>
 
+// v1.6.1 WordWrap::IsEastAsianChar @ 0x002508ec
+static bool IsEastAsianChar(uint32_t cp) {
+    if (cp >= 0x1100 && cp <= 0x11FF) return true;
+    if (cp >= 0x3000 && cp <= 0xD7AF) return true;
+    if (cp >= 0xF900 && cp <  0xFB00) return true;
+    if (cp >= 0xFF00 && cp <= 0xFFDC) return true;
+    return false;
+}
+// TODO: v1.6.1 0x00250868 (WordWrap::IsNonBeginningChar) -- line-start punctuation guard not ported
+
 // GCC 4.4.1 (C++03) forbids local types as template arguments (C++11 lifted
 // this restriction). WordToken must be at file scope so std::vector<WordToken>
 // compiles under the Sourcery 2010q1 cross-build.
@@ -26,6 +36,7 @@ struct WordToken {
     int         len;
     float       advance; // in world units
     bool        hardBreak; // true = this word is followed by a forced line break
+    bool        cjk;       // true = single East-Asian codepoint token (v1.6.1 WordWrap::IsEastAsianChar @ 0x002508ec)
 };
 } // anonymous namespace
 
@@ -231,18 +242,41 @@ void BakedStringBox::Layout() {
                 tok.len       = 0;
                 tok.advance   = 0.0f;
                 tok.hardBreak = true;
+                tok.cjk       = false;
                 words.push_back(tok);
                 p++;
                 continue;
             }
             const char* ws = p;
-            while (*p && *p != ' ' && *p != '\n') p++;
-            WordToken tok;
-            tok.start     = ws;
-            tok.len       = (int)(p - ws);
-            tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
-            tok.hardBreak = false;
-            words.push_back(tok);
+            const char* lookahead = p;
+            uint32_t firstCp = Mortar::utf8::decode_next_unicode_character(&lookahead);
+            if (IsEastAsianChar(firstCp)) {
+                // Each East-Asian codepoint becomes its own token so the greedy
+                // wrapper can break between any two consecutive CJK chars.
+                // v1.6.1 WordWrap::IsEastAsianChar @ 0x002508ec
+                WordToken tok;
+                tok.start     = ws;
+                tok.len       = (int)(lookahead - ws);
+                tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
+                tok.hardBreak = false;
+                tok.cjk       = true;
+                words.push_back(tok);
+                p = lookahead;
+            } else {
+                while (*p && *p != ' ' && *p != '\n') {
+                    const char* next = p;
+                    uint32_t cp = Mortar::utf8::decode_next_unicode_character(&next);
+                    if (IsEastAsianChar(cp)) break;
+                    p = next;
+                }
+                WordToken tok;
+                tok.start     = ws;
+                tok.len       = (int)(p - ws);
+                tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
+                tok.hardBreak = false;
+                tok.cjk       = false;
+                words.push_back(tok);
+            }
         }
     }
     if (words.empty()) return;
@@ -270,7 +304,10 @@ void BakedStringBox::Layout() {
                 break;
             }
             float needed = words[lineEnd].advance;
-            if (lineEnd > lineStart) needed += spAdv;
+            // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no inter-word space between adjacent CJK tokens
+            if (lineEnd > lineStart && !words[lineEnd].cjk && !words[lineEnd - 1].cjk) {
+                needed += spAdv;
+            }
             if (lineWidth + needed > wrapLimit && lineEnd > lineStart) {
                 break;
             }
@@ -296,9 +333,14 @@ void BakedStringBox::Layout() {
             float inkLeft  = 0.0f;
             float inkRight = 0.0f;
             bool firstWordInk = true;
+            size_t prevInkWj = lineStart; // last non-hardBreak word processed
             for (size_t wj = lineStart; wj < lineEnd; wj++) {
                 if (words[wj].hardBreak) continue;
-                if (!firstWordInk) penX += spAdv;
+                if (!firstWordInk) {
+                    // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no space between adjacent CJK tokens
+                    if (!words[wj].cjk && !words[prevInkWj].cjk) penX += spAdv;
+                }
+                prevInkWj = wj;
                 firstWordInk = false;
                 const char* wp    = words[wj].start;
                 const char* wpEnd = wp + words[wj].len;
@@ -346,9 +388,14 @@ void BakedStringBox::Layout() {
         float lineMinBottom   = 0.0f;   // min (bearingY - height) across glyphs (below baseline, negative)
 
         bool firstWordOnLine = true;
+        size_t prevLineWj = lineStart; // last non-hardBreak word drawn on this line
         for (size_t wj = lineStart; wj < lineEnd; wj++) {
             if (words[wj].hardBreak) continue; // skip '\n' sentinels
-            if (!firstWordOnLine) curX += spAdv;
+            if (!firstWordOnLine) {
+                // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no space between adjacent CJK tokens
+                if (!words[wj].cjk && !words[prevLineWj].cjk) curX += spAdv;
+            }
+            prevLineWj = wj;
             firstWordOnLine = false;
             const char* wp    = words[wj].start;
             const char* wpEnd = wp + words[wj].len;
