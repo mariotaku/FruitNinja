@@ -7,6 +7,7 @@
 #include "util/AsciiString.h"
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <new>
 
 namespace Mortar {
@@ -325,3 +326,296 @@ bool IsThisFolderToken(const AsciiString& name)
 }
 
 }  // namespace Mortar
+
+// ============================================================================
+// GROUP A -- string utility free functions at global scope.
+// Binary addresses are all v1.6.1. No namespace prefix in mangling.
+// ============================================================================
+
+// ASM-spec v1.6.1 MakeUpperCase @0x0014f18c
+// In-place ASCII a-z -> A-Z only (NOT libc). NULL-safe entry; re-checks ptr each iter.
+void MakeUpperCase(char* s) {
+    while (s) {
+        char c = *s;
+        if (c == '\0') return;
+        if ((unsigned char)(c - 'a') < 26u) *s = c - 0x20;
+        ++s;
+    }
+}
+
+// ASM-spec v1.6.1 MakeLowerCase @0x0014f1bc
+// In-place ASCII A-Z -> a-z only (NOT libc). NULL-safe entry.
+void MakeLowerCase(char* s) {
+    while (s) {
+        char c = *s;
+        if (c == '\0') return;
+        if ((unsigned char)(c - 'A') < 26u) *s = c + 0x20;
+        ++s;
+    }
+}
+
+// ASM-spec v1.6.1 StringToLower @0x00253508
+// In-place, libc tolower (locale-aware). NULL-check once up front.
+void StringToLower(char* s) {
+    if (!s) return;
+    for (; *s; ++s) *s = (char)tolower((unsigned char)*s);
+}
+
+// ASM-spec v1.6.1 StringToUpper @0x00253530
+// In-place, libc toupper (locale-aware). NULL-check once up front.
+void StringToUpper(char* s) {
+    if (!s) return;
+    for (; *s; ++s) *s = (char)toupper((unsigned char)*s);
+}
+
+// ASM-spec v1.6.1 FindSubstring @0x00253164
+// DEGENERATE -- binary is broken: only ever loads needle[0], never indexes deeper.
+// Net effect: always returns 0xFFFFFFFF in every case. Ported faithfully for asm-verify.
+// DIFFERS-NOTE: binary FindSubstring @0x00253164 is degenerate -- always returns
+// 0xFFFFFFFF (not a real substring search); ported as-is for asm-verify fidelity.
+uint32_t FindSubstring(const char* haystack, const char* needle) {
+    uint16_t nlen = (uint16_t)strlen(needle);
+    uint16_t i = 0;
+    while (haystack[i] != '\0') {
+        int flag = 0;
+        if (haystack[i] == needle[0]) {
+            if (nlen == 0) return i;
+            flag = 1;
+        }
+        if (haystack[i + flag] == '\0') return 0xFFFFFFFFu;
+        i = (uint16_t)(i + 1);
+    }
+    return 0xFFFFFFFFu;
+}
+
+// ASM-spec v1.6.1 StringFindLastIndex @0x00253558
+// Last index of ch in s; -1 if absent or s NULL. Null terminator matches if ch=='\0'.
+int StringFindLastIndex(const char* s, char ch) {
+    if (!s) return -1;
+    int last = -1;
+    for (int i = 0; ; ++i) {
+        if (s[i] == ch) last = i;
+        if (s[i] == '\0') break;
+    }
+    return last;
+}
+
+// ASM-spec v1.6.1 StartsWithWord @0x0014f1ec
+// Plain prefix test (no trailing word-boundary check despite the name). NULL-safe.
+bool StartsWithWord(const char* str, const char* word) {
+    if (!str || !word) return false;
+    size_t ls = strlen(str), lw = strlen(word);
+    if (lw > ls) return false;
+    for (int i = 0; ; ++i) {
+        if (word[i] == '\0') return true;
+        if (word[i] != str[i]) return false;
+    }
+}
+
+// ASM-spec v1.6.1 IsStringInDelimitedList @0x002535a8
+// True iff word appears as a complete delim-bounded token in list.
+bool IsStringInDelimitedList(const char* list, const char* word, char delim) {
+    size_t wlen = strlen(word);
+    while (*list != '\0') {
+        if (*word == *list) {
+            const char* p = list;
+            size_t k = 0;
+            for (; k != wlen; ++k, ++p) {
+                if (*p == '\0' || word[k] == '\0' || *p != word[k]) break;
+            }
+            if (k == wlen) {
+                char after = p[0];
+                if (after == '\0' || after == delim) return true;
+            }
+        }
+        while (*list != '\0' && *list != delim) ++list;
+        if (*list == delim) ++list;
+    }
+    return false;
+}
+
+// ASM-spec v1.6.1 ParseFloats @0x0014f6cc
+// Parse up to count comma-separated floats into out. Exhausted slots replicate previous.
+void ParseFloats(const char* s, float* out, int count) {
+    if (!s) return;
+    if (!out || *s == '\0') return;
+    for (int i = 0; i < count; ++i, ++out) {
+        if (*s == '\0') {
+            *out = out[-1];
+        } else {
+            *out = (float)atof(s);
+            while (*s != ',' && *s != '\0') ++s;
+            if (*s != '\0') ++s;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 CombineFilePaths @0x002536d0
+// Join a + b into out, normalising all separators to '/'. No leading slash.
+// 4th bool param unused in v1.6.1 (present for ABI fidelity).
+void CombineFilePaths(const char* a, const char* b, char* out, bool /*unused*/) {
+    bool secondPath = false;
+    int outLen = 0;
+    const char* p = a;
+    for (;;) {
+        while (*p == '\\' || *p == '/') ++p;
+        const char* seg = p;
+        const char* scan = p;
+        if (*p == '.' && p[1] == '.') scan = p + 2;
+        else if (*p == '.') scan = p + 1;
+        const char* end;
+        for (;;) {
+            end = scan;
+            char c = *end;
+            if (c == '\\' || c == '\0' || c == '/') break;
+            ++scan;
+        }
+        size_t n = (size_t)(end - seg);
+        if (n != 0) {
+            if (outLen != 0) out[outLen++] = '/';
+            memcpy(out + outLen, seg, n);
+            outLen += (int)n;
+        }
+        p = end;
+        if (*end == '\0') {
+            if (secondPath) { out[outLen] = '\0'; return; }
+            secondPath = true;
+            p = b;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 WildCardFit @0x002531dc
+// Case-insensitive glob matcher (Kirk Krauss algorithm + [set] extension).
+// Returns 1 = match, 0 = no match. Metacharacters: ? * [...] [!...] [a-z].
+// Note: [...] set comparisons are NOT tolower'd; only literal char matching is CI.
+// asterisk() is declared in AsciiString.h (already included); the mutual recursion
+// WildCardFit->asterisk->WildCardFit resolves without a local forward decl.
+int WildCardFit(char* wildcard, char* test) {
+    char* wc = wildcard;
+    char* ts = test;
+    unsigned m = 1;
+    for (;;) {
+        bool matchState = (m == 1);
+        unsigned cw = (unsigned char)*wc;
+        if (cw == 0 || !matchState) {
+            while ((unsigned char)*wc == '*' && matchState) {
+                ++wc;
+                cw = (unsigned char)*wc;
+                if (cw != '*') break;
+            }
+            int res = 0;
+            if (m == 1 && *ts == '\0') {
+                res = 1 - (int)cw;
+                if (cw > 1) res = 0;
+            }
+            return res;
+        }
+        if ((unsigned char)*ts == 0) {
+            m = 1; matchState = true;
+            while ((unsigned char)*wc == '*') ++wc;
+            cw = (unsigned char)*wc;
+            int res = 0;
+            if (m == 1 && *ts == '\0') {
+                res = 1 - (int)cw;
+                if (cw > 1) res = 0;
+            }
+            return res;
+        }
+        if (cw == '?') {
+            m = 1; ++ts;
+        } else if (cw == '[') {
+            char* setStart = wc + 1;
+            m = 0;
+            bool active = true;
+            char* s = wc + 1;
+            if ((unsigned char)*setStart == '!') s = wc + 2;
+            for (;;) {
+                wc = s;
+                unsigned cc = (unsigned char)*wc;
+                bool cont = active;
+                if (cc != ']') cont = true;
+                if (!cont) break;
+                if (m == 0) {
+                    if (cc == '-') {
+                        unsigned hi = (unsigned char)wc[1];
+                        if ((unsigned char)wc[-1] < hi) {
+                            active = !active;
+                            if (hi == ']') active = false;
+                            if (active) {
+                                if ((unsigned char)wc[-1] <= (unsigned char)*ts &&
+                                    (unsigned char)*ts <= hi) {
+                                    m = 1; ++wc;
+                                }
+                                goto setNext;
+                            }
+                        }
+                    }
+                    m = ((unsigned char)*ts == cc) ? 1u : 0u;
+                } else {
+                    m = 1;
+                }
+            setNext:
+                active = false; s = wc + 1;
+            }
+            if ((unsigned char)*setStart == '!') m = 1 - m;
+            if (m == 1) ++ts;
+        } else if (cw == '*') {
+            m = asterisk(&wc, &ts);
+            --wc;
+        } else {
+            int ca = tolower((unsigned char)cw);
+            int cb = tolower((unsigned char)*ts);
+            ++ts;
+            m = (ca == cb) ? 1u : 0u;
+        }
+        ++wc;
+    }
+}
+
+// ASM-spec v1.6.1 asterisk @0x002533e0
+// '*' backtracking helper; cursors advanced via pointer. Mutually recursive with WildCardFit.
+// Binary mangling: _Z8asteriskPPcS0_ (global scope, char**).
+unsigned asterisk(char** wcp, char** tsp) {
+    char* wc = *wcp;
+    char* ts = *tsp;
+    for (;;) {
+        ++wc;
+        if (*ts == '\0') { *wcp = wc; break; }
+        char c = *wc;
+        if (c != '?' && c != '*') break;
+        if (c == '?') ++ts;
+    }
+    *wcp = wc;
+    unsigned last;
+    for (;;) {
+        last = (unsigned char)*wc;
+        if (last != '*') break;
+        ++wc;
+    }
+    *wcp = wc;
+    if (*ts == '\0') {
+        unsigned r = 1 - last;
+        if (last > 1) r = 0;
+        *tsp = ts;
+        return r;
+    }
+    if (WildCardFit(wc, ts) == 0) {
+        do {
+            ++ts;
+            for (;;) {
+                unsigned cw2 = (unsigned char)*wc;
+                unsigned ct2 = (unsigned char)*ts;
+                if (cw2 == ct2 || cw2 == '[') break;
+                if (ct2 == 0) { *tsp = ts; return last; }
+                ++ts;
+            }
+            if (*ts == '\0') { *tsp = ts; return 1; }
+            last = (unsigned)WildCardFit(wc, ts);
+        } while (((last ^ 1) & 0xff) != 0);
+    }
+    last = 1;
+    if (*ts == '\0' && *wc == '\0') last = 1;
+    *tsp = ts;
+    return last;
+}

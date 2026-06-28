@@ -213,6 +213,198 @@ static void test_set_from_len()
     CHECK_STR(a.c_str(), p32);
 }
 
+// ============================================================================
+// GROUP A free-function tests
+// ============================================================================
+
+static void test_make_case()
+{
+    char buf[16];
+    // MakeLowerCase: ASCII A-Z only
+    memcpy(buf, "Hello, WORLD!", 14);
+    MakeLowerCase(buf);
+    CHECK_STR(buf, "hello, world!");
+    // MakeUpperCase: ASCII a-z only
+    memcpy(buf, "Hello, world!", 14);
+    MakeUpperCase(buf);
+    CHECK_STR(buf, "HELLO, WORLD!");
+    // NULL safety (must not crash)
+    MakeLowerCase(NULL);
+    MakeUpperCase(NULL);
+    // Non-ASCII characters are left unchanged by Make* (not libc)
+    buf[0] = (char)0xC0; buf[1] = '\0';
+    char save = buf[0];
+    MakeLowerCase(buf);
+    CHECK(buf[0] == save);
+}
+
+static void test_string_to_case()
+{
+    char buf[16];
+    // StringToLower: libc tolower
+    memcpy(buf, "Hello World", 12);
+    StringToLower(buf);
+    CHECK_STR(buf, "hello world");
+    // StringToUpper: libc toupper
+    memcpy(buf, "Hello World", 12);
+    StringToUpper(buf);
+    CHECK_STR(buf, "HELLO WORLD");
+    // NULL safety
+    StringToLower(NULL);
+    StringToUpper(NULL);
+}
+
+static void test_find_substring_degenerate()
+{
+    // Binary FindSubstring is always degenerate: always returns 0xFFFFFFFF.
+    // This test LOCKS that behavior -- do NOT change it to strstr.
+    CHECK(FindSubstring("hello world", "world") == 0xFFFFFFFFu);
+    CHECK(FindSubstring("hello world", "hello") == 0xFFFFFFFFu);
+    CHECK(FindSubstring("abc", "abc") == 0xFFFFFFFFu);
+    CHECK(FindSubstring("", "x") == 0xFFFFFFFFu);
+}
+
+static void test_string_find_last_index()
+{
+    CHECK(StringFindLastIndex("hello", 'l') == 3);
+    CHECK(StringFindLastIndex("hello", 'h') == 0);
+    CHECK(StringFindLastIndex("hello", 'o') == 4);
+    CHECK(StringFindLastIndex("hello", 'z') == -1);
+    CHECK(StringFindLastIndex(NULL, 'a') == -1);
+    // char == '\0' reports the terminator index
+    CHECK(StringFindLastIndex("abc", '\0') == 3);
+}
+
+static void test_starts_with_word()
+{
+    CHECK(StartsWithWord("hello world", "hello") == true);
+    CHECK(StartsWithWord("hello", "hello") == true);
+    CHECK(StartsWithWord("hello", "helo") == false);
+    CHECK(StartsWithWord("hi", "hello") == false);  // word longer than str
+    CHECK(StartsWithWord(NULL, "hi") == false);
+    CHECK(StartsWithWord("hi", NULL) == false);
+    CHECK(StartsWithWord("", "") == true);
+    // Case-sensitive
+    CHECK(StartsWithWord("Hello", "hello") == false);
+}
+
+static void test_is_string_in_delimited_list()
+{
+    // Basic delimited list
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "beta", ',') == true);
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "alpha", ',') == true);
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "gamma", ',') == true);
+    // Not in list
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "delta", ',') == false);
+    // Partial match is not a whole-token match
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "alph", ',') == false);
+    CHECK(IsStringInDelimitedList("alpha,beta,gamma", "bet", ',') == false);
+    // Empty list
+    CHECK(IsStringInDelimitedList("", "alpha", ',') == false);
+    // Single element list
+    CHECK(IsStringInDelimitedList("alpha", "alpha", ',') == true);
+    CHECK(IsStringInDelimitedList("alpha", "beta", ',') == false);
+}
+
+static void test_parse_floats()
+{
+    float out[4] = {0,0,0,0};
+    // Normal parse
+    ParseFloats("1.0,2.0,3.0,4.0", out, 4);
+    CHECK(out[0] == 1.0f);
+    CHECK(out[1] == 2.0f);
+    CHECK(out[2] == 3.0f);
+    CHECK(out[3] == 4.0f);
+    // Exhausted slots replicate last value
+    ParseFloats("5.0,6.0", out, 4);
+    CHECK(out[0] == 5.0f);
+    CHECK(out[1] == 6.0f);
+    CHECK(out[2] == 6.0f);  // replicated
+    CHECK(out[3] == 6.0f);  // replicated
+    // Single value -- all 4 slots get it
+    ParseFloats("7.0", out, 4);
+    CHECK(out[0] == 7.0f);
+    CHECK(out[1] == 7.0f);
+    CHECK(out[2] == 7.0f);
+    CHECK(out[3] == 7.0f);
+    // NULL / empty -- no crash, output unchanged
+    float save0 = out[0];
+    ParseFloats(NULL, out, 4);
+    CHECK(out[0] == save0);
+}
+
+static void test_combine_file_paths()
+{
+    char buf[256];
+    // Basic join
+    CombineFilePaths("models", "Fruit/apple.mmd", buf, false);
+    CHECK_STR(buf, "models/Fruit/apple.mmd");
+    // Normalise backslash
+    CombineFilePaths("models\\Fruit", "apple.mmd", buf, false);
+    CHECK_STR(buf, "models/Fruit/apple.mmd");
+    // Preserve .. segments
+    CombineFilePaths("..", "foo", buf, false);
+    CHECK_STR(buf, "../foo");
+    // Preserve . segments
+    CombineFilePaths(".", "foo", buf, false);
+    CHECK_STR(buf, "./foo");
+    // Empty first segment
+    CombineFilePaths("", "foo/bar", buf, false);
+    CHECK_STR(buf, "foo/bar");
+    // Both paths non-trivial
+    CombineFilePaths("data/textures", "ui/button.tex", buf, false);
+    CHECK_STR(buf, "data/textures/ui/button.tex");
+    // Leading separator stripped
+    CombineFilePaths("/models", "apple.mmd", buf, false);
+    CHECK_STR(buf, "models/apple.mmd");
+}
+
+static void test_wildcard_fit()
+{
+    // Plain exact match (case-insensitive)
+    char w1[] = "hello", t1[] = "hello";
+    CHECK(WildCardFit(w1, t1) == 1);
+    char w2[] = "Hello", t2[] = "hello";
+    CHECK(WildCardFit(w2, t2) == 1);
+    // Plain no match
+    char w3[] = "hello", t3[] = "world";
+    CHECK(WildCardFit(w3, t3) == 0);
+    // '*' matches anything
+    char w4[] = "h*o", t4[] = "hello";
+    CHECK(WildCardFit(w4, t4) == 1);
+    char w5[] = "*", t5[] = "anything";
+    CHECK(WildCardFit(w5, t5) == 1);
+    char w6[] = "*", t6[] = "";
+    CHECK(WildCardFit(w6, t6) == 1);
+    // '?' matches exactly one char
+    char w7[] = "h?llo", t7[] = "hello";
+    CHECK(WildCardFit(w7, t7) == 1);
+    char w8[] = "h?llo", t8[] = "hllo";
+    CHECK(WildCardFit(w8, t8) == 0);
+    // Trailing '*'
+    char w9[] = "hel*", t9[] = "hello";
+    CHECK(WildCardFit(w9, t9) == 1);
+    char w10[] = "hel*", t10[] = "hel";
+    CHECK(WildCardFit(w10, t10) == 1);
+    char w11[] = "hel*", t11[] = "world";
+    CHECK(WildCardFit(w11, t11) == 0);
+    // No match when test is longer
+    char w12[] = "hello", t12[] = "hellos";
+    CHECK(WildCardFit(w12, t12) == 0);
+    // [set] -- case-sensitive (binary behavior)
+    char w13[] = "[hH]ello", t13[] = "hello";
+    CHECK(WildCardFit(w13, t13) == 1);
+    char w14[] = "[hH]ello", t14[] = "Hello";
+    CHECK(WildCardFit(w14, t14) == 1);
+    char w15[] = "[abc]ello", t15[] = "hello";
+    CHECK(WildCardFit(w15, t15) == 0);
+    // [!set] negated
+    char w16[] = "[!abc]ello", t16[] = "hello";
+    CHECK(WildCardFit(w16, t16) == 1);
+    char w17[] = "[!hH]ello", t17[] = "hello";
+    CHECK(WildCardFit(w17, t17) == 0);
+}
+
 int main()
 {
     printf("test_asciistring: start\n");
@@ -252,6 +444,34 @@ int main()
 
     test_set_from_len();
     printf("  Set(s,len) strlen=32: OK\n");
+
+    // GROUP A free-function tests
+    test_make_case();
+    printf("  MakeLowerCase/MakeUpperCase: OK\n");
+
+    test_string_to_case();
+    printf("  StringToLower/StringToUpper: OK\n");
+
+    test_find_substring_degenerate();
+    printf("  FindSubstring (degenerate 0xFFFFFFFF lock): OK\n");
+
+    test_string_find_last_index();
+    printf("  StringFindLastIndex: OK\n");
+
+    test_starts_with_word();
+    printf("  StartsWithWord: OK\n");
+
+    test_is_string_in_delimited_list();
+    printf("  IsStringInDelimitedList: OK\n");
+
+    test_parse_floats();
+    printf("  ParseFloats: OK\n");
+
+    test_combine_file_paths();
+    printf("  CombineFilePaths: OK\n");
+
+    test_wildcard_fit();
+    printf("  WildCardFit: OK\n");
 
     printf("test_asciistring: PASS\n");
     return 0;
