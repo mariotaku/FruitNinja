@@ -382,4 +382,7 @@ static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)        == 0x174, "Men
 static_assert(sizeof(MenuButton) == 0x178, "MenuButton sizeof mismatch");
 #endif
 
+// v1.6.1 MenuCallbackClicked @0x19a620: empty no-op default menu-click callback.
+void MenuCallbackClicked();
+
 #endif

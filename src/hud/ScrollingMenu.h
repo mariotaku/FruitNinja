@@ -237,4 +237,9 @@ static_assert(offsetof(ScrollingMenu, m_bCollideEnabled) == 0xca, "ScrollingMenu
 static_assert(offsetof(ScrollingMenu, m_pCollidedItem)  == 0xcc, "ScrollingMenu::m_pCollidedItem offset");
 #endif
 
+// v1.6.1 DefaultClickedMenuItemCallback @0x1af5f4
+// Default Mortar::Delegate1<ScrollingMenuItem*,ScrollingMenuItem*> item-click callback.
+// Identity: returns the item unchanged (used as the default no-click handler).
+ScrollingMenuItem* DefaultClickedMenuItemCallback(ScrollingMenuItem* item);
+
 #endif // FN_SCROLLING_MENU_H

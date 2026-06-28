@@ -219,6 +219,11 @@ public:
     // "korean", "english_uk", etc. Case-insensitive. Returns -1 on no match.
     static int LanguageFlagFromName(const char* name);
 
+    // v1.6.1 StringTableUtilUnloadTable @0x14c9f8: clears one string table slot.
+    // Binary calls this via game_work.m_StringTable[idx]; port treats as no-op
+    // because m_StringTable is a placeholder uint8_t[0x50], not a real array.
+    static void Clear(StringTable* st);
+
 };
 
 #if defined(__bada__)
@@ -226,6 +231,12 @@ static_assert(sizeof(StringTable) == 0x50, "StringTable sizeof mismatch");
 #endif
 
 } // namespace Mortar
+
+// v1.6.1 StringTableUtilInit @0x14c980: empty no-op (binary returns immediately).
+void StringTableUtilInit();
+
+// v1.6.1 StringTableUtilUnloadTable @0x14c9f8: clears one string table slot by index.
+void StringTableUtilUnloadTable(int idx);
 
 // Free wrapper: binary @ 0x0011f958.
 // Looks up string ID in table index tableIdx (0 = default table).

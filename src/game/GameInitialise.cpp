@@ -461,7 +461,7 @@ void GameDestroy() {
     // --- 10. Engine subsystem teardown ---
     // TODO: FileManager::ClearSystems
     PSPParticleManager::GetInstance().Destroy();
-    // TODO: StringTableUtilUnload
+    StringTableUtilUnloadTable(0);  // closes StringTableUtilUnloadTable TODO (v1.6.1 @0x14c9f8)
     // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
@@ -479,4 +479,52 @@ void GameDestroy() {
     // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
     // Note: Mortar::SoundManager::Destroy -- SoundManager teardown on process exit.
     // Note: Mortar::SystemManager::Destroy -- no Mortar::SystemManager class in port; Bada OS only.
+}
+
+// ASM-spec v1.6.1 InitialiseStrings @0x11c1c8
+// Binary: calls StringTableUtilInit() then StringTableUtilLoadStrings() (@0x11fb20).
+// DIFFERS: StringTableUtilLoadStrings @0x11fb20 maps to Localisation::Load() which is
+//   already called in GameInitialise at step 1 of InitialiseData. Calling again here
+//   would double-load; init is deferred to the GameInitialise call path.
+void InitialiseStrings() {
+    StringTableUtilInit();
+}
+
+// ASM-spec v1.6.1 UnloadRings @0x11cdc8
+// Binary: inverse of PreloadRings — nulls the 17 ring textures in binary order.
+// The null order matches the binary's free sequence (NOT load order):
+//   {0,1,3,4,2,5,6,7,8,9,10,11,12,13,14,16,15}
+void UnloadRings() {
+    game_work.m_RingTex[ 0].SetNull();
+    game_work.m_RingTex[ 1].SetNull();
+    game_work.m_RingTex[ 3].SetNull();
+    game_work.m_RingTex[ 4].SetNull();
+    game_work.m_RingTex[ 2].SetNull();
+    game_work.m_RingTex[ 5].SetNull();
+    game_work.m_RingTex[ 6].SetNull();
+    game_work.m_RingTex[ 7].SetNull();
+    game_work.m_RingTex[ 8].SetNull();
+    game_work.m_RingTex[ 9].SetNull();
+    game_work.m_RingTex[10].SetNull();
+    game_work.m_RingTex[11].SetNull();
+    game_work.m_RingTex[12].SetNull();
+    game_work.m_RingTex[13].SetNull();
+    game_work.m_RingTex[14].SetNull();
+    game_work.m_RingTex[16].SetNull();
+    game_work.m_RingTex[15].SetNull();
+}
+
+// ASM-spec v1.6.1 GetLanguage @0x1eebec
+// Binary: reads Osp::Locales::LocaleManager to map system language to game lang id.
+// Port specific: Osp::Locales unavailable on SDL2 — default to English (id=0).
+// Language code -> game lang id table (from binary @0x1eebec):
+//   0xc9->5(italian), 0x60/0xcf->14(english_uk), 0x14->20, 0x4e->13(chinese),
+//   0x88->2(dutch), 0x95->4(spanish), 0x7a(country!=0xe1)->1(german),
+//   0xe6->11(japanese), 0xcc->12(english_uk alt), 0x159->16, 0x16a->19,
+//   0x190(country!=0xc6)->15 else 3(french), 0x15b(country==0x1e)->18 else 17,
+//   default->0(english_us).
+const char* GetLanguage(int& outLang) {
+    // Port specific: Osp::Locales unavailable; default to English.
+    outLang = 0;
+    return "en_US";
 }

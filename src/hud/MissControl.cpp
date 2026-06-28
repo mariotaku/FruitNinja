@@ -865,3 +865,9 @@ void MissControl::Draw(float* hudScaleRaw) {
 
     m_Texture->UnSet();
 }
+
+// ASM-spec v1.6.1 GetCurrentMissCount @0x11a10c
+// Returns the global miss count from game_work; player arg ignored (single global counter).
+unsigned char GetCurrentMissCount(int /*player*/) {
+    return game_work.missCount;
+}

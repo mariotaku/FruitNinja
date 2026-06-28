@@ -990,3 +990,6 @@ void MenuButton::DeletedPeice(HUDControl* hudControl) {
         }
     }
 }
+
+// ASM-spec v1.6.1 MenuCallbackClicked @0x19a620: empty no-op default menu-click callback.
+void MenuCallbackClicked() {}

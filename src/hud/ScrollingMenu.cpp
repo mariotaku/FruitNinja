@@ -639,3 +639,8 @@ void ScrollingMenu::Reset() {
 
 // Binary @ 0x0015af38 -- no-op stub (single bx lr).
 void ScrollingMenu::Skip() {}
+
+// ASM-spec v1.6.1 DefaultClickedMenuItemCallback @0x1af5f4: identity pass-through.
+ScrollingMenuItem* DefaultClickedMenuItemCallback(ScrollingMenuItem* item) {
+    return item;
+}

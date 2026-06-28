@@ -143,3 +143,6 @@ void ScreenFadeControl::OnFadeComplete()
     m_bAnimating = 0;
     m_OnComplete();
 }
+
+// ASM-spec v1.6.1 DefaultScreenFadeCompleteCallback @0x1aec48: empty no-op.
+void DefaultScreenFadeCompleteCallback() {}

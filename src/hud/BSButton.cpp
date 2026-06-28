@@ -344,3 +344,9 @@ void BSButton::SetTextOffset(const Vec3& o) {
     m_DrawRotation.y = o.x;
     m_DrawRotation.z = o.y;
 }
+
+// ASM-spec v1.6.1 DefaultCreateButtonDelegate @0x15f52c
+// Default "create button" predicate for Mortar::Delegate1<bool,float>; always true.
+bool DefaultCreateButtonDelegate(float /*arg*/) {
+    return true;
+}
