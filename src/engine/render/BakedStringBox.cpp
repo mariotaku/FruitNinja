@@ -675,9 +675,17 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     float baselineY = 0.0f;
     const int vertAlign = m_Align & 0xc;
     if (vertAlign == 0xc) {
-        // step == maxLineH per binary; minDescent == minBound (<=0).
-        baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
-                     + (step * (float)nLines) * 0.5f) - minDescent;
+        if (nLines == 1) {
+            // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (nLines==1, center-V):
+            // binary places the ink CENTRE at -boxH/2 using actual ink extents:
+            //   baselineY = -boxH/2 - inkCenter,  inkCenter = (maxBearingY + minBottom)/2.
+            float inkCenter = (m_Lines[0].maxBearingY + m_Lines[0].minBottom) * 0.5f;
+            baselineY = -m_BoxHeight * 0.5f - inkCenter;
+        } else {
+            // step == maxLineH per binary; minDescent == minBound (<=0).
+            baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
+                         + (step * (float)nLines) * 0.5f) - minDescent;
+        }
     } else if ((m_Align & 0x8) == 0) {
         // Top-anchored: binary RebuildAlignments @0x00245c78.
         // ascentSpan = maxBearingY - minBottom (total glyph cap-to-descent span, >0).

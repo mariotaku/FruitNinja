@@ -138,6 +138,12 @@ public:
     void SetStroke(float width, const Colour& c0, const Colour& c1);
     void SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2);
 
+    // Box dimension accessors -- v1.6.1 IngamePopup::Draw @0x0016d41c reads these to
+    // compute the rotation-aware text anchor delta. Binary fields: +0x24 (boxW), +0x28 (boxH).
+    // Port stores floats; cast to int mirrors binary signed-int field reads.
+    int GetBoxWidth()  const { return (int)m_BoxWidth; }
+    int GetBoxHeight() const { return (int)m_BoxHeight; }
+
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
     float   m_FontSize;           // current render pixel size (shrunk by FitInto)

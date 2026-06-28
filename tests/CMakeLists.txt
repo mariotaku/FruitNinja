@@ -489,6 +489,17 @@ set_tests_properties(screenshot_fruitfact_classic PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_fruitfact_arcade  PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_fruitfact_zen     PROPERTIES TIMEOUT 60)
 
+# IngamePopup badge alignment screenshot test.
+# Renders the NEW badge (type 0x10, gold) and SELECTED badge (type 0x11, green)
+# in isolation on a dark background at their real in-game draw scale (NEW 0.8,
+# SELECTED 0.5) so border-vs-text alignment matches what the game shows.
+# Output PNGs per run:
+#   tmp/test/screenshots/badges/new.png
+#   tmp/test/screenshots/badges/selected.png
+fn_add_game_test(test_badges test_badges.cpp)
+add_test(NAME screenshot_badges COMMAND test_badges --screenshot)
+set_tests_properties(screenshot_badges PROPERTIES TIMEOUT 60)
+
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
 # in isolation on a clean background. Seeded state: score=266, highscore=200 (new best),
