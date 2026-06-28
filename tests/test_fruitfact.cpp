@@ -1,6 +1,7 @@
 // test_fruitfact -- per-mode FruitFact board screenshot driver.
 //
 // Usage: test_fruitfact <mode> [--interactive|--screenshot|--headless]
+//                              [--lang=<name|flag>] [--fact=<fruitIdx>]
 //
 // Drives the named game-over mode to STATE_MAIN_DISPLAY so the
 // corresponding FruitFactPage is created and rendered, then captures a PNG.
@@ -9,6 +10,13 @@
 //   classic  -> FruitFactClassicFactPage  -> tmp/test/screenshots/fruitfact/classic.png
 //   arcade   -> FruitFactBonusFactPage    -> tmp/test/screenshots/fruitfact/arcade.png
 //   zen      -> FruitFactZenPage          -> tmp/test/screenshots/fruitfact/zen.png
+//
+// --lang=<name>  Language name (english_us, japanese, chinese, korean, etc.)
+//                or numeric flag (0=english_us, 11=japanese, 13=chinese).
+//                Suffix appended to output filename: e.g. classic_zh.png
+// --fact=<N>     Force a specific fruit fact (0=apple 1=banana 2=orange
+//                3=watermelon 4=strawberry 5=kiwifruit 7=plum).
+//                Suffix appended: e.g. classic_zh_strawberry.png
 
 #include "test_harness.h"
 #include "screens/GameOverScreen.h"
@@ -35,6 +43,81 @@
 // suppresses the game-over chrome (GameOverScreen board, RETRY/QUIT buttons,
 // ScoreControl) and renders only the FruitFact board + its page children.
 static bool g_Isolated = false;
+
+// Fruit index to force for the fact board (--fact=N). -1 = use the game's
+// default selection (Zen combo winner, or apple for Classic/Arcade).
+static int g_FactOverride = -1;
+
+// Language flag resolved from --lang= for label composition. -1 = not
+// specified (no lang suffix in output filename). TestHarness also parses
+// this arg independently; parsing twice is harmless.
+static int g_LangFlag = -1;
+
+// ---------------------------------------------------------------------------
+// BuildShotLabel -- compose screenshot label from mode + optional lang + fact.
+//
+// Produces "fruitfact/<mode>" when no lang/fact override is active, so
+// default runs keep the original output names intact.
+// ---------------------------------------------------------------------------
+static void BuildShotLabel(char* out, size_t outSize,
+                           const char* mode, int langFlag, int factIdx) {
+    // Short language tag table, indexed by languageFlag (matches kLanguageSuffix
+    // order in StringTable.cpp).
+    static const char* const kLangShort[] = {
+        "en", "de", "nl", "fr", "es", "it", "sv", "da", "nb", "fi",
+        "ko", "ja", "en_uk", "zh", "en"
+    };
+    // Sparse fruit name table (index matches fruitlist.xml order).
+    static const char* const kFruitShort[] = {
+        "apple", "banana", "orange", "watermelon", "strawberry", "kiwifruit",
+        NULL /*6=none*/, "plum"
+    };
+    snprintf(out, outSize, "fruitfact/%s", mode);
+    if (langFlag >= 0 && langFlag <= 14) {
+        size_t n = strlen(out);
+        snprintf(out + n, outSize - n, "_%s", kLangShort[langFlag]);
+    }
+    if (factIdx >= 0) {
+        size_t n = strlen(out);
+        const char* fname = (factIdx < 8) ? kFruitShort[factIdx] : NULL;
+        if (fname)
+            snprintf(out + n, outSize - n, "_%s", fname);
+        else
+            snprintf(out + n, outSize - n, "_fruit%d", factIdx);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ApplyFactOverride -- patch m_ComboA/B, m_FactText, m_FactColour,
+// m_FactTexture on an already-Inited FruitFactControl to force a specific
+// fruit fact.
+//
+// Call AFTER FruitFactControl::Init() has run (i.e. after the first settle
+// frame). The caller must run additional settle frames after this call so
+// the overridden fields propagate into the page's Draw.
+// ---------------------------------------------------------------------------
+static void ApplyFactOverride(FruitFactControl* ctrl, int factIdx) {
+    int comboB = -1;
+    ctrl->m_ComboA   = (unsigned int)factIdx;
+    ctrl->m_FactText = Fruit::GetFact(NULL, &comboB, factIdx, -1);
+    ctrl->m_ComboB   = (unsigned int)comboB;
+    ctrl->m_FactColour = Fruit::FruitFactColour(factIdx);
+    const char* texName = Fruit::FruitFactTexture(factIdx);
+    if (texName) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s.tex", texName);
+        ctrl->m_FactTexture =
+            Mortar::TextureManager::LoadLocalisedTexture(buf);
+    }
+    std::printf("[fact-override] fruit=%d text=%s comboB=%d"
+                " colour=(r=%u,g=%u,b=%u)\n",
+                factIdx,
+                ctrl->m_FactText ? ctrl->m_FactText : "(null)",
+                (int)ctrl->m_ComboB,
+                (unsigned)ctrl->m_FactColour.r,
+                (unsigned)ctrl->m_FactColour.g,
+                (unsigned)ctrl->m_FactColour.b);
+}
 
 // ---------------------------------------------------------------------------
 // Forward declarations for per-mode fixture functions.
@@ -65,7 +148,11 @@ static const ModeCase kModes[] = {
 static int FailUsage() {
     std::fprintf(stderr,
         "usage: test_fruitfact <mode> [--interactive|--screenshot|--headless]\n"
-        "  modes: classic arcade zen\n");
+        "                      [--lang=<name|flag>] [--fact=<fruitIdx>]\n"
+        "  modes: classic arcade zen\n"
+        "  lang examples: english_us japanese chinese korean (or numeric 0..13)\n"
+        "  fact: 0=apple 1=banana 2=orange 3=watermelon 4=strawberry"
+        " 5=kiwifruit 7=plum\n");
     return 1;
 }
 
@@ -92,7 +179,15 @@ int main(int argc, char* argv[]) {
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
     for (int _ai = 2; _ai < argc; ++_ai) {
-        if (std::strcmp(argv[_ai], "--isolated") == 0) g_Isolated = true;
+        if (std::strcmp(argv[_ai], "--isolated") == 0) {
+            g_Isolated = true;
+        } else if (std::strncmp(argv[_ai], "--fact=", 7) == 0) {
+            g_FactOverride = std::atoi(argv[_ai] + 7);
+        } else if (std::strncmp(argv[_ai], "--lang=", 7) == 0) {
+            // Parse here for label composition; TestHarness::ParseFlags()
+            // also parses this arg to apply the actual locale.
+            g_LangFlag = ParseLanguageArg(argv[_ai] + 7);
+        }
     }
     if (!h.ParseFlags()) return 1;
     if (!h.InitComponent()) return 1;
@@ -220,6 +315,10 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
         return 2;
     }
 
+    // Apply fact override (if requested) before the 60-frame settle so the
+    // overridden text + colour render in all subsequent frames.
+    if (g_FactOverride >= 0) ApplyFactOverride(ctrl, g_FactOverride);
+
     // Inject a second page so Update creates the nav arrow MenuButtons.
     FruitFactClassicFactPage* page2 = new FruitFactClassicFactPage(ctrl, 0, 0);
     ctrl->m_Pages.push_back(page2);
@@ -236,18 +335,26 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
 
     game_work.m_SaveData = prevSaveData;
 
-    std::printf("[fruitfact/classic] stable state (pages=%d, arrows=%s, gos_state=%d, sc_displayed=%d)\n",
+    char shotLabel[256];
+    char isoLabel[256];
+    BuildShotLabel(shotLabel, sizeof(shotLabel), "classic",
+                   g_LangFlag, g_FactOverride);
+    snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
+
+    std::printf("[%s] stable state (pages=%d, arrows=%s, gos_state=%d,"
+                " sc_displayed=%d)\n",
+                shotLabel,
                 ctrl ? (int)ctrl->m_Pages.size() : -1,
                 (ctrl && ctrl->m_NextButton != NULL) ? "yes" : "no",
                 gos->m_State,
                 sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
-        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/classic_isolated");
+        if (!h.ScreenshotPng(shotLabel)) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, isoLabel);
     }
 
-    std::printf("PASS: fruitfact/classic screenshot complete\n");
+    std::printf("PASS: %s screenshot complete\n", shotLabel);
     return h.Shutdown();
 }
 
@@ -338,18 +445,38 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
     game_work.m_SaveData = prevSaveData;
 
     FruitFactControl* ctrl = gos->m_pFruitFact;
-    std::printf("[fruitfact/arcade] stable state (pages=%d, gos_state=%d, bonuses=%d, sc_displayed=%d)\n",
+
+    // Apply fact override (if requested) and settle a few extra frames so the
+    // overridden fact text + colour propagate into the Draw cycle.
+    if (g_FactOverride >= 0 && ctrl) {
+        ApplyFactOverride(ctrl, g_FactOverride);
+        for (int i = 0; i < 5; ++i) {
+            game_work.m_GameDt     = 1.0f;
+            game_work.currentScore = 789;
+            h.RunComponentHeadlessMultiPass(1);
+        }
+    }
+
+    char shotLabel[256];
+    char isoLabel[256];
+    BuildShotLabel(shotLabel, sizeof(shotLabel), "arcade",
+                   g_LangFlag, g_FactOverride);
+    snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
+
+    std::printf("[%s] stable state (pages=%d, gos_state=%d, bonuses=%d,"
+                " sc_displayed=%d)\n",
+                shotLabel,
                 ctrl ? (int)ctrl->m_Pages.size() : -1,
                 gos->m_State,
                 (int)bm->m_BestBonuses.size(),
                 sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
-        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/arcade_isolated");
+        if (!h.ScreenshotPng(shotLabel)) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, isoLabel);
     }
 
-    std::printf("PASS: fruitfact/arcade screenshot complete\n");
+    std::printf("PASS: %s screenshot complete\n", shotLabel);
     return h.Shutdown();
 }
 
@@ -419,17 +546,37 @@ static int RunFruitFactZen(fn::TestHarness& h) {
     game_work.m_SaveData = prevSaveData;
 
     FruitFactControl* ctrl = gos->m_pFruitFact;
-    std::printf("[fruitfact/zen] stable state (pages=%d, combo=%d, gos_state=%d, sc_displayed=%d)\n",
+
+    // Apply fact override (if requested) and settle a few extra frames so the
+    // overridden fact text + colour propagate into the Draw cycle.
+    if (g_FactOverride >= 0 && ctrl) {
+        ApplyFactOverride(ctrl, g_FactOverride);
+        for (int i = 0; i < 5; ++i) {
+            game_work.m_GameDt     = 1.0f;
+            game_work.currentScore = 456;
+            h.RunComponentHeadlessMultiPass(1);
+        }
+    }
+
+    char shotLabel[256];
+    char isoLabel[256];
+    BuildShotLabel(shotLabel, sizeof(shotLabel), "zen",
+                   g_LangFlag, g_FactOverride);
+    snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
+
+    std::printf("[%s] stable state (pages=%d, combo=%d, gos_state=%d,"
+                " sc_displayed=%d)\n",
+                shotLabel,
                 ctrl ? (int)ctrl->m_Pages.size() : -1,
                 zenSave.m_BestComboLength,
                 gos->m_State,
                 sc->m_DisplayedScore);
 
     if (h.IsScreenshot()) {
-        if (!h.ScreenshotPng()) return 3;
-        if (g_Isolated) RenderIsolated(h, gos, sc, "fruitfact/zen_isolated");
+        if (!h.ScreenshotPng(shotLabel)) return 3;
+        if (g_Isolated) RenderIsolated(h, gos, sc, isoLabel);
     }
 
-    std::printf("PASS: fruitfact/zen screenshot complete\n");
+    std::printf("PASS: %s screenshot complete\n", shotLabel);
     return h.Shutdown();
 }
