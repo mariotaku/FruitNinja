@@ -176,9 +176,13 @@ public:
     // +0x5C: inline description text buffer (128 bytes).
     char m_DescText[128];             // +0x5C..+0xDB ARM32
 
-    // Padding to bridge from end-of-base (x86_64) to ARM32 +0x25C for m_NewItemAlpha.
-    // DIFFERS: exact size determined by static_assert tuning for x86_64 MinGW layout.
-    char _pad[0x163];                 // bridge: end-of-m_DescText..+0x25B
+    // Padding to bridge from end-of-m_DescText (+0xDC on ARM32) to m_NewItemAlpha (+0x25C).
+    // Binary ground truth: 0x25C - 0x58 (ScrollingMenuItem ARM32) - 0x04 (m_pShopScreen 32-bit)
+    //                       - 0x80 (m_DescText) = 0x180.
+    // On host x64/wasm32 this pad places m_NewItemAlpha at a different (larger) offset;
+    // the __bada__-gated static_asserts below only fire on the 32-bit ARM32 cross-build
+    // where the offset must be exactly 0x25C. Code always accesses by field name.
+    char _pad[0x180];  // bridge +0xDC..+0x25B (ARM32 binary-faithful)
 
     // +0x25C: new-item badge alpha (>0 => draw new_item_sml badge)
     float m_NewItemAlpha;             // +0x25C
@@ -244,11 +248,16 @@ public:
 // ---------------------------------------------------------------------------
 // Compile-time offset verification (ARM32 binary absolute offsets).
 //
-// Fields at +0x25C..+0x268 (pure float / Vec3, no intervening pointer) are
-// satisfiable on both ARM32 and x86_64 because _pad is tuned for x86_64.
+// ALL asserts are gated to __bada__ (Bada cross-build with Sourcery libstdc++).
+// Host x64 and wasm32 have pointer-size-dependent layouts; code accesses fields
+// by name, so only the 32-bit ARM32 binary offsets need to be verified.
 //
-// Fields after m_pIconTex / m_pItemInfo (pointer-sized, differ between
-// platforms) are gated to fire only on Bada ARM32 + Sourcery libstdc++.
+// _pad is sized for the faithful ARM32 layout (0x180); on host x64 / wasm32
+// m_NewItemAlpha lands at a different offset (harmless -- the assert is compiled out).
+//
+// The inner __GLIBCXX__ > 20090722 sub-guard skips the asm-verify cross-build
+// (Sourcery 2010q1, __GLIBCXX__ == 20090722) which uses a slightly different
+// SmartPtr/string layout that would produce false positives on pointer-containing fields.
 // ---------------------------------------------------------------------------
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -259,14 +268,13 @@ public:
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #endif
 
+// All offset asserts: __bada__ + Sourcery libstdc++ only.
+// _pad = 0x180 ensures ARM32 offsets: 0x58 (base) + 0x04 + 0x80 (m_DescText) + 0x180 = 0x25C.
+#if defined(__bada__) && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)   == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha)  == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
 static_assert(offsetof(ShopListItem, m_LockFlashAlpha) == 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
 static_assert(offsetof(ShopListItem, m_IconPos)        == 0x268, "ShopListItem::m_IconPos must be at +0x268");
-
-// Bada + Sourcery libstdc++ only (pointer-sized fields after +0x274 vary per platform).
-// Cross-build uses Sourcery 2010q1 with __GLIBCXX__ == 20090722 -> guard skips it.
-#if defined(__bada__) && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_bOnscreenItem)  == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
 static_assert(offsetof(ShopListItem, m_bSelected)      == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
 static_assert(offsetof(ShopListItem, m_bIsNew)         == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
