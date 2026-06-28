@@ -70,9 +70,9 @@ static Mortar::SmartPtr<Mortar::Texture> m_fruitTex;
 static Mortar::SmartPtr<Mortar::Texture> m_ninjaTex;
 
 // Button positions (verified from read_memory, docs/screens/main.md)
-static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, 0.0f);
+// ASM-spec v1.6.1 @0x00196264: NEW GAME pos.x = 24.0f
+static const Vec3 POS_PLAY_BUTTON(24.0f, -66.0f, 0.0f);
 static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
-static const Vec3 POS_QUIT(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
@@ -911,21 +911,24 @@ void MainScreen::CreateQuitButton() {
     m_pQuitButton->m_Texture = texQuit;
     m_pQuitButton->m_bRespondsToBackKey = 1;
     int fruitCount = FruitInfo_GetCount();
-    m_pQuitButton->Init(POS_QUIT,
+    // ASM-spec v1.6.1 MainScreen::CreateButtons @0x0019687c: quit button Init pos = (0,0,0)
+    m_pQuitButton->Init(Vec3(0.0f, 0.0f, 0.0f),
         Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
     m_pQuitButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     m_pQuitButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-    if (texQuit.IsValid()) {
-        m_pQuitButton->m_RestScale.x = (float)(texQuit->GetWidth()  + 1);
-        m_pQuitButton->m_RestScale.y = (float)(texQuit->GetHeight() + 1);
-        m_pQuitButton->m_RestScale.z = 1.0f;
-    }
     m_pQuitButton->SetText(
         GETSTRING_CAST_0(LSTR_QUIT),
         game_work.m_RingColours[0],
         game_work.m_RingColours[1],
         35.0f, 10.0f, true, true);
+    // ASM-spec v1.6.1 MainScreen::CreateButtons @0x00196a5c-0x00196b3c:
+    // Quit button is placed + scaled via m_HudScale (not pos). GetAdjustedPos =
+    // pos + Vec3(480,320,0)*m_HudScale = (180,-96,0).
+    m_pQuitButton->m_HudScale.x = 0.375f;    // 0.5 * 0.75f  @0x00196a74
+    m_pQuitButton->m_HudScale.y = -0.3f;     // -0.5 * 0.6f  @0x00196a9c
+    m_pQuitButton->m_bBackdropActive = 1;    // @0x00196a5c
+    m_pQuitButton->m_GrowInTimer = 0.25f;    // @0x00196b3c
     game_work.mHud->AddControl(m_pQuitButton);
 }
 
