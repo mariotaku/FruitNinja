@@ -1,8 +1,9 @@
-// StringHash unit test -- regression guard for the Jenkins lookup3 case-folding hash.
+// StringHash / MemHash unit test.
 //
-// Verified test vectors are taken verbatim from the comment block in
-// src/engine/util/StringHash.cpp (ASM-verified 2026-06-12 v1.6.1 binary
-// @ 0x00252a10 / 0x0019c5d4).
+// StringHash vectors: ASM-verified 2026-06-12 v1.6.1 binary @ 0x00252a10 / 0x0019c5d4.
+// MemHash vectors: derived from StringHash (identical algorithm, no case-fold) --
+//   for all-lowercase inputs MemHash == StringHash; for uppercase inputs they differ.
+//   v1.6.1 MemHash @ 0x00252c88.
 //
 // Pure in-process test: no GPU, no audio, no file I/O.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
@@ -125,6 +126,61 @@ static void test_boundary_11_12()
     CHECK(h_11 != h_12);
 }
 
+// ---- MemHash tests (v1.6.1 @ 0x00252c88) -----------------------------------
+// MemHash is the same Jenkins lookup3 algorithm as StringHash but does NOT
+// case-fold.  For inputs with no 'A'..'Z' bytes the two hash to the same value.
+
+// Known-good vectors for MemHash: all-lowercase inputs must equal the
+// ASM-verified StringHash values (no case-fold to differ on).
+static void test_memhash_known_vectors()
+{
+    CHECK_EQ(MemHash("watermelon", 10), 0x158bc245u);
+    CHECK_EQ(MemHash("apple_red",   9), 0xdac1f38fu);
+    CHECK_EQ(MemHash("banana",       6), 0x5ff2eb92u);
+}
+
+// MemHash is case-sensitive; StringHash is not.
+static void test_memhash_case_sensitive()
+{
+    // Same lowercase input: MemHash == StringHash (no 'A'..'Z' to fold).
+    CHECK_EQ(MemHash("apple", 5), StringHash("apple", 5));
+
+    // Uppercase input: MemHash keeps raw bytes, StringHash folds to lowercase.
+    uint32_t mh_upper = MemHash("APPLE", 5);
+    uint32_t sh_upper = StringHash("APPLE", 5);
+    CHECK(mh_upper != sh_upper);
+
+    // MemHash("APPLE") != MemHash("apple") because it does not fold.
+    CHECK(MemHash("APPLE", 5) != MemHash("apple", 5));
+
+    // StringHash("APPLE") == StringHash("apple") because it folds.
+    CHECK_EQ(StringHash("APPLE", 5), StringHash("apple", 5));
+}
+
+// MemHash can hash arbitrary byte sequences, not just C strings.
+static void test_memhash_raw_bytes()
+{
+    const uint8_t data1[] = {0x01, 0x02, 0x03, 0x04};
+    const uint8_t data2[] = {0x01, 0x02, 0x03, 0x05};  // differs at byte index 3
+    uint32_t h1 = MemHash(data1, 4);
+    uint32_t h2 = MemHash(data2, 4);
+    CHECK(h1 != 0u);
+    CHECK(h1 != h2);
+    // Deterministic: same call returns same value.
+    CHECK_EQ(MemHash(data1, 4), h1);
+}
+
+// Empty input: deterministic (same as StringHash("", 0)).
+static void test_memhash_empty()
+{
+    uint32_t h1 = MemHash("", 0);
+    uint32_t h2 = MemHash("", 0);
+    CHECK_EQ(h1, h2);
+    // Empty MemHash == empty StringHash (neither folds any bytes).
+    CHECK_EQ(h1, StringHash("", 0));
+    std::printf("  empty MemHash: 0x%08x\n", h1);
+}
+
 int main()
 {
     std::printf("test_stringhash: start\n");
@@ -146,6 +202,19 @@ int main()
 
     test_boundary_11_12();
     std::printf("  switch/loop boundary (len 11 vs 12): OK\n");
+
+    // ---- MemHash ----
+    test_memhash_known_vectors();
+    std::printf("  MemHash known vectors (watermelon/apple_red/banana): OK\n");
+
+    test_memhash_case_sensitive();
+    std::printf("  MemHash case-sensitive (APPLE != apple, != StringHash(APPLE)): OK\n");
+
+    test_memhash_raw_bytes();
+    std::printf("  MemHash raw bytes (non-ASCII, deterministic): OK\n");
+
+    test_memhash_empty();
+    std::printf("  MemHash empty (matches StringHash empty): OK\n");
 
     std::printf("test_stringhash: PASS\n");
     return 0;

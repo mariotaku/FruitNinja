@@ -13,4 +13,10 @@ uint32_t StringHash(const char* str, int len);
 
 inline uint32_t StringHash(const char* str) { return StringHash(str, (int)strlen(str)); }
 
+// Raw-byte Jenkins lookup3 hash — identical to StringHash but WITHOUT case-folding.
+// v1.6.1 MemHash(void const*, unsigned long) @ 0x00252c88
+// Mangled: _Z7MemHashPKvm — second param is unsigned long (ARM32 == 4 bytes).
+// High fan-in leaf; used wherever a binary blob (not a C-string) must be hashed.
+uint32_t MemHash(const void* p, unsigned long len);
+
 #endif // MORTAR_STRING_HASH_H

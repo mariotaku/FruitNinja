@@ -260,3 +260,14 @@ void InputManager::DispatchGlobal(InputEvent* event) {
 }
 
 } // namespace Mortar
+
+// ASM-spec v1.6.1 DefaultKeyCallback @0x18cd6c: identity; returns its argument unchanged.
+const char* DefaultKeyCallback(const char* key) {
+    return key;
+}
+
+// ASM-spec v1.6.1 TransformInput @0x1a03ac: identity no-op (binary body is `bx lr`).
+// Raw-touch to game-coord rotate/scale lives in InputDeviceBada, NOT here.
+InputEvent* TransformInput(InputEvent* ev, float& /*x*/, float& /*y*/) {
+    return ev;
+}

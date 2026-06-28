@@ -109,4 +109,14 @@ public:
 static_assert(sizeof(Mortar::InputManager) == 16, "InputManager size mismatch");
 #endif
 
+// Global-namespace free functions implemented in InputManager.cpp.
+// Both are identity no-ops in v1.6.1 — real coordinate transform lives in InputDeviceBada.
+
+// ASM-spec v1.6.1 DefaultKeyCallback @0x18cd6c: returns key unchanged (identity no-op).
+const char* DefaultKeyCallback(const char* key);
+
+// ASM-spec v1.6.1 TransformInput @0x1a03ac: binary body is bx lr — identity; returns ev unchanged.
+// Raw-touch to game-coord rotation is done in the platform InputDevice, NOT here.
+InputEvent* TransformInput(InputEvent* ev, float& x, float& y);
+
 #endif // FN_ENGINE_INPUT_INPUTMANAGER_H
