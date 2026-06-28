@@ -117,7 +117,7 @@ Mortar::MortarGame* Game::End() {
     return this;
 }
 
-// slot 15 @ 0x0010db34 — pause: reset input, pause sound, HUD::OnPause, save
+// slot 15 v1.6.1 Game::Paused @0x001202ec — pause: reset input, pause sound, HUD::OnPause, skip to pause overlay, save
 void Game::Paused() {
     // Port specific: LoadingJob::CanBoot() always-true on Bada (no
     // async loading screen). InputManager::ResetDevices() not yet ported.
@@ -128,16 +128,13 @@ void Game::Paused() {
     if (game_work.mHud) {
         game_work.mHud->OnPause();
     }
-    // Port specific: SkipToPause(false) free fn not yet ported (see
-    // WaveManager.cpp stub @ binary 0x00169c48). Save path uses the
-    // partial GameTaskExit until GameTaskSaveOnExit @ 0x0016cf40 lands
-    // -- TODO: replace with GameTaskSaveOnExit(); when that ports
-    // (binary body: gs->field_0x190=1; if (!GetIsSavingBool() && hud)
-    // { hud->Save(); SaveCurrentData(true); }).
+    SkipToPause(false);
+    // TODO: replace GameTaskExit() with GameTaskSaveOnExit() (v1.6.1 GameTaskSaveOnExit @0x001ce170) when ported;
+    // binary body: gs->field_0x190=1; if (!GetIsSavingBool() && hud) { hud->Save(); SaveCurrentData(true); }.
     GameTaskExit();
 }
 
-// slot 16 @ 0x0010dae8 — resume: end interruption, unpause sound, unpause game
+// slot 16 v1.6.1 Game::UnPaused @0x00120270 — resume: end interruption, unpause sound, unpause game
 void Game::UnPaused() {
     // Port specific: LoadingJob::CanBoot() always-true on Bada (no
     // async loading screen). Skipped -- no port equivalent needed.

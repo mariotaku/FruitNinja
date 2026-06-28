@@ -175,6 +175,12 @@ public:
 void PauseGame();
 void UnpauseGame();
 
+// v1.6.1 SkipToPause @0x001cb424 — snap PauseScreen to ACTIVE state instantly.
+// Freezes gameplay (m_GameDt=0, bM_Mode=true), hides MainScreen, skips all HUD controls,
+// and preloads in-game sounds. force=true bypasses the IsEnabled() gate (used during
+// session restore from save). Call from Game::Paused() and WaveManager::Resume().
+void SkipToPause(bool force);
+
 // Offset assertions (ARM32 binary layout).
 // The binary offsets are for the ARM32 target where pointers are 4 bytes.
 // On x64 host builds pointers are 8 bytes so these fail -- they are only

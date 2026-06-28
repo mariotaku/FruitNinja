@@ -57,7 +57,7 @@ static bool  g_preloadedArcade  = false;  // g_MusicState+0x20
 // Guards with g_MusicState+0x21; returns immediately if already called.
 // Sets flag, then calls SoundManager::PreLoadSound on four SFX assets.
 // ---------------------------------------------------------------------------
-static void PreloadInGameSounds() {
+void PreloadInGameSounds() {
     // Inner one-shot guard: g_MusicState+0x21
     if (g_preloadedIngame) {
         return;

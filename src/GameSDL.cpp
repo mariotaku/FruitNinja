@@ -199,26 +199,37 @@ void Game::pollInput() {
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
                     ev.window.event == SDL_WINDOWEVENT_MINIMIZED  ||
                     ev.window.event == SDL_WINDOWEVENT_HIDDEN)) {
-            // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
-            // pause; clears touch so no blade stays held (pairs with #154).
-            // ReleaseAllFingers fires immediately in pollInput (not deferred to
-            // DispatchForSimTick) so the release takes effect on this display frame
-            // regardless of whether steps==0 (#162 semantics preserved).
+            // Port specific: SDL focus-loss -> binary FruitNinja::OnBackground @0x001ef660
+            // -> Game::Paused (vtable +0x48). Clears touch so no blade stays held (#154, #162).
+            // Guard on bM_Mode prevents double-pause; SkipToPause's IsEnabled() gate is the
+            // second layer.
             if (!game_work.bM_Mode) {
-                PauseGame();
+                Paused();
                 LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
             }
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else if (ev.type == SDL_APP_WILLENTERBACKGROUND) {
-            // Port specific: SDL focus-loss maps to the binary's Bada app-deactivate
-            // pause; clears touch so no blade stays held (pairs with #154).
-            // SDL_APP_WILLENTERBACKGROUND fires on mobile (iOS/Android) before the
-            // app is backgrounded -- equivalent to Bada OnBackground.
+            // Port specific: mobile background event -> binary FruitNinja::OnBackground @0x001ef660
+            // -> Game::Paused (vtable +0x48). Equivalent to Bada OnBackground on iOS/Android.
             if (!game_work.bM_Mode) {
-                PauseGame();
+                Paused();
                 LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
             }
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
+        } else if (ev.type == SDL_WINDOWEVENT &&
+                   (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
+                    ev.window.event == SDL_WINDOWEVENT_RESTORED)) {
+            // Port specific: window focus restored -> binary FruitNinja::OnForeground @0x001ef6cc
+            // -> Game::UnPaused (vtable +0x4c). Ends audio interruption. Game stays paused
+            // (user must dismiss PauseScreen) because UnPaused gates UnpauseGame on m_GameDt!=0,
+            // and SkipToPause has set m_GameDt=0.
+            UnPaused();
+            LOG_INFO("GameSDL", "focus-gained unpause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
+        } else if (ev.type == SDL_APP_DIDENTERFOREGROUND) {
+            // Port specific: mobile foreground event -> binary FruitNinja::OnForeground @0x001ef6cc
+            // -> Game::UnPaused (vtable +0x4c). Restores audio; gameplay stays paused per above.
+            UnPaused();
+            LOG_INFO("GameSDL", "app-foreground unpause (SDL_APP_DIDENTERFOREGROUND)");
         } else {
             // Port specific: accumulate touch events into pending state; dispatch
             // happens in stepUpdate()->DispatchForSimTick() (#173 fix).

@@ -11,6 +11,7 @@
 #include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
 #include "hud/HUD.h"
+#include "screens/PauseScreen.h"
 #include "math/MathUtil.h"
 #include "util/StringHash.h"
 #include "xml/TiXml.h"
@@ -677,22 +678,9 @@ void WaveManager::Reset(bool fullReset) {
 // Resume / SaveWaveInfo
 // ----------------------------------------------------------------------------
 
-// ASM-spec corrected 2026-05-18 (re-analyst): SkipToPause is a FREE function
-// at binary @ 0x00169c48 -- NOT a WaveManager member, addr 0x001255b8 was
-// an internal call site inside WaveManager::UpdateWave. Binary body:
-//   if (force || (g_PauseScreen && g_PauseScreen->IsEnabled())) {
-//       gs->m_TransitionTimer = 0.0f;
-//       PauseScreen::SkipTo(g_PauseScreen);
-//       gs->pausedFlag = 1;
-//       gs->levelTransitionFlag = 0;
-//       MainScreen::Hide(g_MainScreen);
-//       HUD::Skip(gs->hud);
-//       PreloadInGameSounds();
-//   }
-// Port stub kept until PauseScreen::SkipTo + MainScreen::Hide are exposed.
-static void SkipToPause(bool /*flag*/) {
-    // TODO: implement once PauseScreen::SkipTo + MainScreen::Hide + HUD::Skip + PreloadInGameSounds are wired.
-}
+// v1.6.1 SkipToPause @ 0x001cb424 — free function defined in PauseScreen.cpp.
+// (Stale marker was 0x00169c48, a v1.5.1 address.)
+// Implemented in screens/PauseScreen.cpp alongside PauseGame/UnpauseGame.
 
 // ASM-spec corrected 2026-05-18: SkipToGameOver is also a free function at
 // binary @ 0x0016ada0 (not 0x00125450). Binary body conditionally zeroes
