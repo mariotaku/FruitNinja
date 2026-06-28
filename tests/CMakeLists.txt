@@ -137,7 +137,10 @@ target_include_directories(test_fixedstep PRIVATE
 )
 add_test(NAME fixedstep COMMAND test_fixedstep)
 
-# AsciiString SSO correctness -- regression guard for the strlen+1/strlen mis-RE.
+# AsciiString SSO correctness + GROUP A free-function coverage (strlen+1 bug regression
+# guard + MakeLowerCase/MakeUpperCase/StringToLower/StringToUpper/FindSubstring/
+# StartsWithWord/IsStringInDelimitedList/ParseFloats/CombineFilePaths/WildCardFit).
+# FindSubstring lock: pins the degenerate always-0xFFFFFFFF binary behavior.
 # Pure in-process: no GPU, no audio, no file I/O.
 add_executable(test_asciistring test_asciistring.cpp)
 target_link_libraries(test_asciistring PRIVATE mortar_engine)
@@ -145,6 +148,19 @@ target_include_directories(test_asciistring PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 add_test(NAME asciistring COMMAND test_asciistring)
+set_tests_properties(asciistring PROPERTIES TIMEOUT 60)
+
+# Transition / easing curves -- GROUP B v1.6.1 @0x0014e8c4..@0x0014eaa0.
+# Covers StraightTransition, SquareTransition, FullTransition, InAndOut,
+# SinPulse, JumpyPulse, JumpySinPulse, SinInAndOut, SinTransition(helper).
+# Pure CPU: no GPU, no audio, no file I/O.
+add_executable(test_transition test_transition.cpp)
+target_link_libraries(test_transition PRIVATE mortar_engine)
+target_include_directories(test_transition PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME transition COMMAND test_transition)
+set_tests_properties(transition PROPERTIES TIMEOUT 60)
 
 # --- #228 engine low-level leaf coverage (pure-CPU, no GPU/audio/IO) ---
 # StringHash: Jenkins lookup3 + case-fold; assert known binary DAT hash constants.

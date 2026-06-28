@@ -113,4 +113,27 @@ bool IsThisFolderToken(const AsciiString& name);
 
 }  // namespace Mortar
 
+// GROUP A -- string utility free functions (global scope; no namespace prefix in binary mangling).
+// v1.6.1 AsciiString TU (@0x0014f1bc..@0x0014f6cc) + util TU (@0x00253164..@0x002536d0).
+//
+// MakeLowerCase/MakeUpperCase: ASCII-only in-place case fold (NOT libc); NULL-safe entry.
+// StringToLower/StringToUpper: libc tolower/toupper in-place; NULL-safe entry.
+// FindSubstring: DEGENERATE in v1.6.1 -- always returns 0xFFFFFFFF (binary is broken, ported faithfully).
+// WildCardFit + asterisk: mutually recursive case-insensitive glob; '[...]'/'[!...]'/'[a-z]'/'?'/'*'.
+void     MakeLowerCase(char* s);
+void     MakeUpperCase(char* s);
+void     StringToLower(char* s);
+void     StringToUpper(char* s);
+uint32_t FindSubstring(const char* haystack, const char* needle);
+int      StringFindLastIndex(const char* s, char ch);
+bool     StartsWithWord(const char* str, const char* word);
+bool     IsStringInDelimitedList(const char* list, const char* word, char delim);
+void     ParseFloats(const char* s, float* out, int count);
+// 4th param present in signature for ABI fidelity; never referenced in the v1.6.1 body.
+void     CombineFilePaths(const char* a, const char* b, char* out, bool unused);
+// Returns 1 = match, 0 = no match. Params are non-const to match binary mangling (_Z11WildCardFitPcS_).
+int      WildCardFit(char* wildcard, char* test);
+// asterisk: '*' backtracking helper; cursors advanced by pointer (_Z8asteriskPPcS0_).
+unsigned asterisk(char** wcp, char** tsp);
+
 #endif  // FN_ENGINE_UTIL_ASCII_STRING_H
