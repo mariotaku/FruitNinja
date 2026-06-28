@@ -63,6 +63,10 @@ Don't add new `// Analysed: YYYY-MM-DDTHH:MM` file-level timestamps (legacy, no 
 - **Stub defunct features, never skip them** (see CLAUDE.md "Defunct features — stub, never skip"). Permanently-dead subsystems keep class/vtable/struct-field/public-API shape; bodies become no-ops marked `// Defunct: <subsystem> — no-op stub; v1.6.1 <Symbol> @ 0x<addr>`.
 - **No empirical / "looks-right" fixes.** If a port element is visually wrong (off-position, wrong size, wrong colour, mistimed), do NOT add a port-specific offset, multiplier, or hard-coded tweak to compensate. Empirical fixes hide the root cause and accumulate drift. Instead: RE the responsible binary function (font baseline math, matrix-stack convention, alignment-flag semantics, etc.) and port it correctly. If the RE is incomplete, file a TODO and revert to "wrong-but-binary-faithful" rather than commit a fudge. The only allowed deviations are GL ES 1->2 translation and clearly-marked `// Port specific:` workarounds for genuine platform-API differences (SDL audio backend, file I/O paths) — never for game-logic positioning, sizing, timing, or colours. If you can't determine the root cause from the existing source-side spec, return a gap list with the specific binary function to RE next; don't fudge.
 
+**Header usage docs:**
+- When you implement a component, write **usage/contract docs in its header (.h)** — what it does, how to call it, key params, invariants, gotchas — not just inline `.cpp` comments. The header is the API surface a future reader hits first.
+- When you **fix a bug** that changes a component's behavior/contract, **revise that header doc** in the same change. A stale usage note is worse than none.
+
 **ARM idioms:**
 - Fixed timestep: dt = 1/60 (don't compute from elapsed time).
 - ARM comparison `if (-1 < (int)((uint)(A < B) << 0x1f))` means A >= B (NOT A < B). Common pitfall: a `if (ct < threshold) ct = threshold` decompile is a MAX clamp, not MIN.
