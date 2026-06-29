@@ -145,6 +145,11 @@ public:
     // TODO: v1.6.1 BakedStringBox::SetFontSize -- confirm exact binary field writes.
     void SetFontSize(float size);
 
+    // GetFontSize  — returns m_FontSize, the current render pixel size.
+    // After FitIntoVerticalBounds() shrinks the box, this returns the post-shrink size.
+    // Used by AboutScreen ctor @0x0015b764 min-fontSize equalization pass.
+    float GetFontSize() const { return m_FontSize; }
+
     // SetShadow  binary @ 0x002462c0
     // Sets the shadow parameters (scale, colour, offset, enable flag).
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
