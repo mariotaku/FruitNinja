@@ -66,16 +66,18 @@ static void BuildShotLabel(char* out, size_t outSize,
     // Short language tag table, indexed by languageFlag (matches kLanguageSuffix
     // order in StringTable.cpp).
     static const char* const kLangShort[] = {
-        "en", "de", "nl", "fr", "es", "it", "sv", "da", "nb", "fi",
-        "ko", "ja", "en_uk", "zh", "en"
+        "en", "en_uk", "fr", "es", "de", "it", "nl", "sv", "da", "nb",
+        "fi", "ko", "ja", "zh", "zh_hant", "es_419", "pl", "pt", "pt_br", "ru",
+        "ar", "dbg"
     };
+    static const int kLangShortCount = 22;
     // Sparse fruit name table (index matches fruitlist.xml order).
     static const char* const kFruitShort[] = {
         "apple", "banana", "orange", "watermelon", "strawberry", "kiwifruit",
         NULL /*6=none*/, "plum"
     };
     snprintf(out, outSize, "fruitfact/%s", mode);
-    if (langFlag >= 0 && langFlag <= 14) {
+    if (langFlag >= 0 && langFlag < kLangShortCount) {
         size_t n = strlen(out);
         snprintf(out + n, outSize - n, "_%s", kLangShort[langFlag]);
     }

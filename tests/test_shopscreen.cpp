@@ -37,10 +37,11 @@ static int g_LangFlag = -1;
 
 // Short language tag table (matches kLanguageSuffix order in StringTable.cpp).
 static const char* const kLangShort[] = {
-    "en", "de", "nl", "fr", "es", "it", "sv", "da", "nb", "fi",
-    "ko", "ja", "en_uk", "zh", "en"
+    "en", "en_uk", "fr", "es", "de", "it", "nl", "sv", "da", "nb",
+    "fi", "ko", "ja", "zh", "zh_hant", "es_419", "pl", "pt", "pt_br", "ru",
+    "ar", "dbg"
 };
-static const int kLangShortCount = 15;
+static const int kLangShortCount = 22;
 
 // Build the PNG label: "shop/<lang>" or "shop/default".
 static void BuildShotLabel(char* out, size_t outSize, int langFlag) {
