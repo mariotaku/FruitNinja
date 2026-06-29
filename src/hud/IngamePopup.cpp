@@ -82,14 +82,18 @@ IngamePopup::IngamePopup(int type)
 
     } else if (type == 0x10) {
         // shop NEW badge -- v1.6.1 IngamePopup ctor @0x0016dbac
+        // ASM-spec v1.6.1 IngamePopup ctor @0x0016dbac type 0x10:
+        //   BakedStringBox(font, 16.0f, boxW=0x2c, boxH=0xe, align=0xf, maxLines=1, lineSpacing=0)
+        //   align=0xf: bits 0-1=11 (center-H), bits 2-3=11 (center-V).
+        //   text position: always (0,0,0); Arabic -4 shift is on TEXTURE position only.
         m_VerticalOffset = -7.0f;
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
             font,
             16.0f,        // pointSize
             0x2c,         // boxW = 44
             0x0e,         // boxH = 14
-            0x0d,         // align
-            0,            // maxLines
+            0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
+            1,            // maxLines = 1 (binary arg6)
             0             // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
         );
         // SetMetallicGradient((255,253,88),(255,255,255),(152,123,10),(255,253,88))
@@ -103,15 +107,14 @@ IngamePopup::IngamePopup(int type)
         // SetText(GetString(0x399)) = "NEW"
         const char* str = GETSTRING(LSTR_MENU_TEXTURE_09, 0);
         box->SetText(str ? str : "NEW");
-        // lineSpacing = -1 already set via ctor arg
+        // SetHorizontalLineSpacing(-1) already via ctor -> m_AlignMode=-1
         box->Update();
 
         m_TextBoxes.push_back(box);
 
-        // If langId == 0x14 (Arabic), shift text position by y-4
-        // Binary checks game_work languageFlag == 0x14
-        float textY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
-        m_TextPositions.push_back(Vec3(0.0f, textY, 0.0f));
+        // Binary _Stack_e4 = (0,0,0) always -- text position is NEVER shifted for Arabic.
+        // The -4 Arabic shift applies only to the TEXTURE position (_Stack_cc).
+        m_TextPositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
 
         // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x10,
         // GOT [0x16dfcc] -> "new_outline.tex" (the bordered badge; "new_sml.tex"
@@ -120,20 +123,25 @@ IngamePopup::IngamePopup(int type)
             Mortar::TextureManager::LoadLocalisedTexture("new_outline.tex");
         m_Textures.push_back(tex);
 
-        // Texture position: matches the language shift
-        m_TexturePositions.push_back(Vec3(0.0f, textY, 0.0f));
+        // Texture position: Arabic lang shifts texture y by -4; text is not shifted.
+        float texY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
+        m_TexturePositions.push_back(Vec3(0.0f, texY, 0.0f));
         m_TextureScales.push_back(Vec3(0.8f, 0.8f, 0.0f));
 
     } else if (type == 0x11) {
         // shop SELECTED badge -- v1.6.1 IngamePopup ctor @0x0016dbac
+        // ASM-spec v1.6.1 IngamePopup ctor @0x0016dbac type 0x11:
+        //   BakedStringBox(font, 17.0f, boxW=0x76, boxH=0x12, align=0xf, maxLines=1, lineSpacing=0)
+        //   align=0xf: bits 0-1=11 (center-H), bits 2-3=11 (center-V).
+        //   text position: always (0,0,0); Arabic -4 shift is on TEXTURE position only.
         m_VerticalOffset = 20.0f;
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
             font,
             17.0f,        // pointSize
             0x76,         // boxW = 118
             0x12,         // boxH = 18
-            0x0d,         // align
-            0,            // maxLines
+            0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
+            1,            // maxLines = 1 (binary arg6)
             0             // lineSpacing (binary 7th arg = 0; step = (int)(17+0) = 17px)
         );
         // SetColour((43,176,5))
@@ -141,10 +149,11 @@ IngamePopup::IngamePopup(int type)
         // SetText(GetString(0x3C5)) = "SELECTED"
         const char* str = GETSTRING(LSTR_MENU_TEXTURE_53, 0);
         box->SetText(str ? str : "SELECTED");
-        // lineSpacing = -1 already set via ctor arg
+        // SetHorizontalLineSpacing(-1) already via ctor -> m_AlignMode=-1
         box->Update();
 
         m_TextBoxes.push_back(box);
+        // Binary _Stack_114 = (0,0,0) always -- text position never shifted for Arabic.
         m_TextPositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
 
         // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x11,
@@ -153,7 +162,9 @@ IngamePopup::IngamePopup(int type)
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("selected_outline.tex");
         m_Textures.push_back(tex);
-        m_TexturePositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
+        // Texture position: Arabic lang shifts texture y by -4 (same pattern as type 0x10).
+        float texY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
+        m_TexturePositions.push_back(Vec3(0.0f, texY, 0.0f));
         m_TextureScales.push_back(Vec3(1.0f, 1.0f, 0.0f));
 
     }
