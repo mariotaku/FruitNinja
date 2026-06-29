@@ -266,7 +266,8 @@ public:
     // method name shadows the struct.
     static const ::FruitInfo* FruitInfo(long type);
 
-    // Binary @ 0x00176184 — local-MP "did a player drop their last life" check; defers to FN::GameOver
+    // Binary @ 0x001dbf70 (v1.6.1) — unconditional GameOver(-1,-1.0f,0) stub.
+    // v1.5.x @ 0x00176184 had per-player live-count gating (maps to FruitFactLeaderboard region); removed in v1.6.1.
     static void CheckFruitDropped();
 
     // Binary @0x001b98f4 area (called from CanSpawnFinalPomegranate).
@@ -289,7 +290,7 @@ public:
     // Binary @ 0x00176354 — toggle collision sphere; radius = m_CollisionScale + 0.52 * m_Scale
     void EnableCollision(bool enable);
 
-    // Binary @ 0x00175b78 — sets m_PlayerIdx; online-MP side-effect: P2 collision radius *= 0.66 (Defunct)
+    // Binary @ 0x001db778 (v1.6.1) — sets m_PlayerIdx; online-MP side-effect: partition 2 radius *= 0.66 (Defunct)
     void SetForPlayer(int playerIdx);
 
     // Binary @ 0x001761d8 — virtual Mortar::Entity::Release override
