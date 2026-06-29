@@ -649,3 +649,54 @@ set_tests_properties(test_text_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RET
 fn_add_game_test(test_shoplistitem test_shoplistitem.cpp)
 add_test(NAME shoplistitem COMMAND test_shoplistitem)
 set_tests_properties(shoplistitem PROPERTIES TIMEOUT 60)
+
+# AboutScreen headless layout/structure guard.
+# Verifies the faithful AboutScreen ctor+Init path creates:
+#   - 9 BakedStringBox credit-text controls (title+heading+version+6 credits)
+#   - >= 10 scrolling marquee lines (CreateCreditsMarquee)
+#   - Screen transitions state 0->1 (not pending-removal after settle)
+# Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/about/<lang>.png (need GPU).
+# FN_TEST exposes GetBuiltBoxCount()/GetMarqueeCount() test-only accessors.
+fn_add_game_test(test_aboutscreen test_aboutscreen.cpp)
+target_compile_definitions(test_aboutscreen PRIVATE FN_TEST)
+add_test(NAME aboutscreen COMMAND test_aboutscreen)
+set_tests_properties(aboutscreen PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_about_english COMMAND test_aboutscreen --screenshot --lang=english_us)
+add_test(NAME screenshot_about_chinese COMMAND test_aboutscreen --screenshot --lang=chinese)
+set_tests_properties(screenshot_about_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_about;lang_english_us")
+set_tests_properties(screenshot_about_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_about;lang_chinese")
+
+# GameModeScreen headless layout/structure guard.
+# Verifies the GameModeScreen activation flow:
+#   - 3 BakedStringBox title/desc/info boxes built in ctor (TTF path)
+#   - 4 mode buttons (back, classic, zen, arcade) in HUD after state 0->2 transition
+# Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/gamemode/<lang>.png (need GPU).
+fn_add_game_test(test_gamemodescreen test_gamemodescreen.cpp)
+add_test(NAME gamemodescreen COMMAND test_gamemodescreen)
+set_tests_properties(gamemodescreen PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_gamemode_english COMMAND test_gamemodescreen --screenshot --lang=english_us)
+add_test(NAME screenshot_gamemode_chinese COMMAND test_gamemodescreen --screenshot --lang=chinese)
+set_tests_properties(screenshot_gamemode_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_gamemode;lang_english_us")
+set_tests_properties(screenshot_gamemode_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_gamemode;lang_chinese")
+
+# ShopScreen headless layout/structure guard.
+# Verifies ShopScreen::Init creates m_pShopList (ScrollingMenu) and adds it to HUD.
+# Also verifies ShopListItem v1.6.1 TTF NewDraw path: m_pBox0 (title) and m_pBox1
+# (category) BakedStringBoxes non-null after NewDraw() -- same check as test_shoplistitem.
+# Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/shop/<lang>.png (need GPU).
+fn_add_game_test(test_shopscreen test_shopscreen.cpp)
+add_test(NAME shopscreen COMMAND test_shopscreen)
+set_tests_properties(shopscreen PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_shop_english COMMAND test_shopscreen --screenshot --lang=english_us)
+add_test(NAME screenshot_shop_chinese COMMAND test_shopscreen --screenshot --lang=chinese)
+set_tests_properties(screenshot_shop_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_shop;lang_english_us")
+set_tests_properties(screenshot_shop_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_shop;lang_chinese")
