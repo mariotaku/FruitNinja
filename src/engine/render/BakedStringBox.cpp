@@ -1221,4 +1221,20 @@ void BakedStringBox::SetFontSize(float size) {
     }
 }
 
+// GetTextWidth  binary v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width
+// ASM-spec v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width: binary returns
+// integer pixel width; port lays out 1:1 world=pixel so float max-line-width is equivalent.
+// Triggers a lazy Layout() if m_Dirty is set (same pattern as Draw()).
+// Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges.
+float BakedStringBox::GetTextWidth() const {
+    if (m_Dirty) {
+        const_cast<BakedStringBox*>(this)->Layout();
+    }
+    float maxW = 0.0f;
+    for (size_t i = 0; i < m_Lines.size(); ++i) {
+        if (m_Lines[i].width > maxW) maxW = m_Lines[i].width;
+    }
+    return maxW;
+}
+
 } // namespace Mortar

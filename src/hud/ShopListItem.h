@@ -19,7 +19,7 @@
 //   ctor (5-param) 0x001b27f0  (takes ItemInfo* + texture data)
 //   dtor           0x001b4270 / 0x001b42b0 / 0x001b4308
 //   Create         0x001b27f0
-//   Move           0x001b43e0  (vtable slot 6 +0x18)
+//   Move           0x001b54b0  (vtable slot 6 +0x18)
 //   Draw           0x001b5da4  (vtable slot 12 +0x30, thin dispatcher)
 //   NewDraw        0x001b58e8  (all visible rendering, TTF)
 //   DrawDividers   0x001b1a98
@@ -32,7 +32,7 @@
 // Vtable overrides (v1.6.1):
 //   slot  0 (+0x00)  ~ShopListItem dtor1  0x001b42b0
 //   slot  1 (+0x04)  ~ShopListItem dtor2  0x001b4308
-//   slot  6 (+0x18)  ShopListItem::Move   0x001b43e0
+//   slot  6 (+0x18)  ShopListItem::Move   0x001b54b0
 //   slot 12 (+0x30)  ShopListItem::Draw   0x001b5da4  (v1.6.1 thin dispatcher)
 //
 // Binary ScrollingMenuItem ends at +0x58 (88 bytes; base ctor 0x0015b5dc).
@@ -96,7 +96,7 @@ public:
     void Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen);
 
     // vtable slot 6 (+0x18): Move override
-    // v1.6.1 ShopListItem::Move @0x001b43e0:
+    // v1.6.1 ShopListItem::Move @0x001b54b0:
     //   1. Sets pos.x/y/z.
     //   2. Copies pos -> m_IconPos; if m_pIconTex: m_IconPos.x += 95.2f.
     //   3. When m_LockFlashAlpha > 0: subtract dt, scatter m_IconPos x/y by ±2.5.
@@ -195,7 +195,7 @@ public:
 
     // +0x268: icon translate cache, written by Move each frame.
     // x = pos.x + 95.2f (when m_pIconTex valid), y = pos.y, z = pos.z.
-    // ASM-spec v1.6.1 ShopListItem::Move @0x001b43e0
+    // ASM-spec v1.6.1 ShopListItem::Move @0x001b54b0
     Vec3 m_IconPos;                   // +0x268..+0x273 (ARM32)
 
     // +0x274: item icon texture SmartPtr (4 bytes on ARM32 / 8 bytes x86_64).
