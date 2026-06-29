@@ -13,6 +13,7 @@
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
+#include "engine/core/SystemManager.h"
 
 #include <cstdio>
 #include <cstring>
@@ -748,4 +749,34 @@ bool FruitSaveData::TotalExists(char const* name) {
 bool FruitSaveData::TotalExists(unsigned long hash) {
     if (m_Totals.find(hash) != m_Totals.end()) return true;
     return m_SessionTotals.find(hash) != m_SessionTotals.end();
+}
+
+// ASM-spec v1.6.1 ParseVersionInfo @0x00152f30 (_Z16ParseVersionInfoPKcP13FruitSaveData)
+// Parses the "version" string from the save file header and stores the packed int.
+void ParseVersionInfo(const char* s, FruitSaveData* sd) {
+    sd->m_VersionInfo = GetVersionFromString(s);
+}
+
+// File-scope accumulator for FruitCounter. Binary: BSS global at file scope.
+static int total_fruit = 0;
+
+// ASM-spec v1.6.1 FruitCounter @0x00159f10 (_Z12FruitCounterPKciiPv)
+// Iteration callback: accumulates count into total_fruit; arg3/arg4 unused.
+int FruitCounter(const char* /*name*/, int count, int /*extra*/, void* /*ctx*/) {
+    total_fruit += count;
+    return 1;
+}
+
+// ASM-spec v1.6.1 GetSaveFileFullPath @0x00152610 (_Z19GetSaveFileFullPathv)
+// DIFFERS: original returns "/Home/FruitySave.xml" (v1.6.1 @0x00152610),
+//   using GetSavePath() for port I/O because Bada /Home path is N/A on the host.
+const char* GetSaveFileFullPath() {
+    return "/Home/FruitySave.xml";
+}
+
+// ASM-spec v1.6.1 GetLoadFileFullPath @0x0015262c (_Z19GetLoadFileFullPathv)
+// DIFFERS: original returns "FruitySave.xml" (relative, v1.6.1 @0x0015262c),
+//   using GetSavePath() for port I/O because the asset tree layout differs on host.
+const char* GetLoadFileFullPath() {
+    return "FruitySave.xml";
 }

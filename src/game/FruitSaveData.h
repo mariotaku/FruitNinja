@@ -404,4 +404,23 @@ bool LoadGame(FruitSaveData* save);
 // 0x0016cf40. Called on app termination.
 void FruitNinja_SaveOnExit();
 
+// ParseVersionInfo -- v1.6.1 @0x00152f30 (_Z16ParseVersionInfoPKcP13FruitSaveData).
+// Parses the save-file version string and writes the packed int to sd->m_VersionInfo.
+void ParseVersionInfo(const char* s, FruitSaveData* sd);
+
+// FruitCounter -- v1.6.1 @0x00159f10 (_Z12FruitCounterPKciiPv).
+// Iteration callback with (name, count, extra, ctx) signature.
+// Accumulates count into the file-scope total_fruit global; returns 1.
+int FruitCounter(const char* name, int count, int extra, void* ctx);
+
+// GetLoadFileFullPath -- v1.6.1 @0x0015262c (_Z19GetLoadFileFullPathv).
+// Returns the relative save-file path used for loading on Bada ("FruitySave.xml").
+// DIFFERS: port I/O uses GetSavePath() returning <data_dir>/FruitySave.xml; binary hardcodes relative path.
+const char* GetLoadFileFullPath();
+
+// GetSaveFileFullPath -- v1.6.1 @0x00152610 (_Z19GetSaveFileFullPathv).
+// Returns the absolute Bada home path used for saving ("/Home/FruitySave.xml").
+// DIFFERS: port I/O uses GetSavePath() returning <data_dir>/FruitySave.xml; binary hardcodes Bada home.
+const char* GetSaveFileFullPath();
+
 #endif  // FN_FRUIT_SAVE_DATA_H

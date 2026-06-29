@@ -67,14 +67,12 @@ static Colour ParseColour(const char* s) {
 }
 
 // ---- ParseMaskWords: comma-split token match -> OR (1<<idx) -------------------
-// v1.6.1 ParseMaskWords @0x0014f404: splits str on commas, matches each token
-// against the provided word hashes; sets bit (1<<matchIndex) in the result.
-// Tokens: index 0 = "scale" (bit 0 = 1), index 1 = "fade" (bit 1 = 2).
+// ASM-spec v1.6.1 ParseMaskWords @0x0014f404 (_Z14ParseMaskWordsPKcPmi)
+// Generic helper: comma-split str; for each trimmed token hash it and scan
+// wordHashes[count]; on match OR (1<<idx) into the result bitmask.
 
-static uint32_t ParseMaskWords(const char* str) {
+uint32_t ParseMaskWords(const char* str, unsigned long* wordHashes, int count) {
     if (!str || !*str) return 0u;
-    static const uint32_t kHashScale = StringHash("scale");
-    static const uint32_t kHashFade  = StringHash("fade");
     uint32_t bits = 0u;
     char buf[64];
     strncpy(buf, str, sizeof(buf) - 1);
@@ -83,14 +81,27 @@ static uint32_t ParseMaskWords(const char* str) {
     while (tok && *tok) {
         char* comma = strchr(tok, ',');
         if (comma) *comma = '\0';
-        // trim leading spaces
         while (*tok == ' ') ++tok;
-        uint32_t h = StringHash(tok);
-        if (h == kHashScale) bits |= 1u;
-        if (h == kHashFade)  bits |= 2u;
+        unsigned long h = (unsigned long)StringHash(tok);
+        for (int i = 0; i < count; i++) {
+            if (wordHashes[i] == h) {
+                bits |= (1u << (unsigned)i);
+                break;
+            }
+        }
         tok = comma ? (comma + 1) : NULL;
     }
     return bits;
+}
+
+// Specialization for EffectImage::Parse: hard-coded "scale"(bit 0) / "fade"(bit 1).
+// Rewired to call the generic ParseMaskWords above (identical algorithm, same result).
+static uint32_t ParseMaskWords(const char* str) {
+    static unsigned long kWordHashes[2] = {
+        (unsigned long)StringHash("scale"),
+        (unsigned long)StringHash("fade")
+    };
+    return ParseMaskWords(str, kWordHashes, 2);
 }
 
 // ---- EffectImage::Parse @0x001491e4 ------------------------------------------

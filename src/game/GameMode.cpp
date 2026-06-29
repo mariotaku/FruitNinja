@@ -1,4 +1,5 @@
 #include "GameMode.h"
+#include "engine/util/StringHash.h"
 #include <cstring>
 
 // GetModeName -- binary: _Z11GetModeName9GAME_MODE v1.6.1 @0x0010b15c
@@ -7,6 +8,19 @@ const char* GetModeName(GAME_MODE gameMode) {
     static const char* s_Names[] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
     if ((unsigned)gameMode < 4) return s_Names[gameMode];
     return "UNKNOWN";
+}
+
+// ASM-spec v1.6.1 ParseGameMode @0x0011bf6c (_Z13ParseGameModem)
+// Hash -> mode index 0..3 (CLASSIC/CASINO/ARCADE/ZEN); unrecognized hash -> 4.
+unsigned int ParseGameMode(unsigned long nameHash) {
+    static unsigned long s_Names[4] = {
+        StringHash("CLASSIC"), StringHash("CASINO"),
+        StringHash("ARCADE"),  StringHash("ZEN")
+    };
+    for (int i = 0; i < 4; i++) {
+        if (s_Names[i] == nameHash) return (unsigned int)i;
+    }
+    return 4u;
 }
 
 // ParseModeMask -- v1.6.1 @0x00116674.

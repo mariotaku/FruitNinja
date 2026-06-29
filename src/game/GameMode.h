@@ -79,4 +79,9 @@ inline uint32_t GetModeBitMask(GAME_MODE gameMode) {
 // Unknown tokens are ignored. Empty/null -> 0xFFFFFFFF (all modes).
 uint32_t ParseModeMask(const char* modeStr);
 
+// ParseGameMode -- v1.6.1 @0x0011bf6c (_Z13ParseGameModem).
+// Maps a pre-computed StringHash of a mode name to its index: CLASSIC=0, CASINO=1,
+// ARCADE=2, ZEN=3. Returns 4 if the hash does not match any known mode.
+unsigned int ParseGameMode(unsigned long nameHash);
+
 #endif // FN_GAME_MODE_H
