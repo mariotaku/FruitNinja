@@ -357,7 +357,7 @@ void AboutScreen::CreateBackButton()
     m_pBackButton->m_Texture = s_TexBackIcon;
 
     m_pBackButton->Init(POS_BACK_BUTTON,
-                        Mortar::Delegate0<void>::Make(this, &AboutScreen::BackCallback),
+                        Mortar::Delegate0<void>::Make(this, &AboutScreen::QuitGameCallback),
                         bombFruitType,
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
@@ -741,25 +741,24 @@ void AboutScreen::DrawMarquee()
 }
 
 // -----------------------------------------------------------------------
-// BackCallback
-// -----------------------------------------------------------------------
-void AboutScreen::BackCallback()
-{
-    m_State = 2;
-}
-
-// -----------------------------------------------------------------------
-// QuitGameCallback
-// Binary @ 0x0012eb30 (re-analyst 2026-06-07).
+// QuitGameCallback  @ 0x0015c914
+// Bound to m_pBackButton (binary: m_pOkButton). Flits the back-bomb so the
+// ActorManager reaps it during the state-2 fade, freeing the single-slot
+// menu-bomb pool for DojoScreen::Reset->CreateButtons on re-entry.
+// ASM-spec v1.6.1 AboutScreen::QuitGameCallback @0x0015c914:
+//   SFXPlay("menu-bomb"); m_State=2; fling m_pBackButton->m_pTrackedFruit;
+//   ResetTutePos((MenuButton*)0).
 // -----------------------------------------------------------------------
 void AboutScreen::QuitGameCallback() {
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
     m_State = 2;
-    if (game_work.m_TutorialControl) {
-        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
-        float ry = -((float)(rand() % 500) / 100.0f);
-        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
+    if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
+        Fruit* piece = m_pBackButton->m_pTrackedFruit;
+        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 }
