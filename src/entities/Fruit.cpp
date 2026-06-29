@@ -2545,16 +2545,12 @@ void MoveFruitZPositionToBack(float& z) {
 // Chunk B: small helpers
 // ============================================================
 
-// v1.6.1 Fruit::CheckFruitDropped @0x001dbf70.
-// DIFFERS: the v1.6.1 binary body is trivial -- it unconditionally calls GameOver(-1,-1.0,0)
-// and returns 1 (the per-player live-count gating decompiled here is from the stale v1.5.x
-// 0x00176184 region, which actually maps to FruitFactLeaderboard code). Port keeps the
-// single-player count==0 gate as a conservative stand-in.
-// TODO: re-verify v1.6.1 Fruit::CheckFruitDropped @0x001dbf70 -- decompile shows just GameOver().
+// ASM-spec v1.6.1 Fruit::CheckFruitDropped @0x001dbf70: trivial body confirmed by decompile.
+// Binary: GameOver(-1,-1.0,0); return 1;
+// Ghidra warned "Removing unreachable block" for 0x001dbfa4/b4/bc/c4 -- the stale v1.5.x
+// per-player live-count gates at 0x00176184 are dead code in v1.6.1. Third arg is 0, not -1.
 void Fruit::CheckFruitDropped() {
-    if (GetNumActiveForPlayer(0, false) == 0) {
-        GameOver(-1, -1.0f, -1);
-    }
+    GameOver(-1, -1.0f, 0);
 }
 
 // Counts active fruits that have active power-ups.
@@ -2600,16 +2596,18 @@ void Fruit::EnableCollision(bool enable) {
     }
 }
 
-// v1.6.1 Fruit::SetForPlayer @0x001db778
+// ASM-spec v1.6.1 Fruit::SetForPlayer @0x001db778: gate is param==2 (P2P partition index), not param==1.
+// Binary: IsOnlineMultiplayer(); if (online && param==2) colSphere->radius*=0.66; m_PlayerIdx=param;
+// m_PlayerIdx in {0,1,2} is the P2P/EntityTracker partition; the radius shrink targeted partition 2.
 void Fruit::SetForPlayer(int playerIdx) {
-    m_PlayerIdx = (uint32_t)playerIdx;
-    // Defunct: online-mp — P2 collision radius *= 0.66; v1.6.1 Fruit::SetForPlayer @0x001db778
-    // Mortar::NetworkManager::GetInstance().IsOnlineMultiplayer() is always false in port.
+    // Defunct: online-mp — P2P partition 2 collision radius *= 0.66; v1.6.1 Fruit::SetForPlayer @0x001db778
+    // Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() is always false in port.
     if (Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer()) {
-        if (playerIdx == 1 && m_Col) {
+        if (playerIdx == 2 && m_Col) {
             static_cast<ColSphere*>(m_Col)->radius *= 0.66f;
         }
     }
+    m_PlayerIdx = (uint32_t)playerIdx;
 }
 
 // v1.6.1 Fruit::Release @0x001dbfe4 — virtual Mortar::Entity::Release override.
