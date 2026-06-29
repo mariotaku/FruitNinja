@@ -547,6 +547,22 @@ int main(int argc, char* argv[]) {
     }
     printf("[text_render] TTF font: gangofchinese.ttf OK\n");
 
+    // Load arabic.ttf for the AR row (langIdx 5); gangofchinese.ttf has no Arabic glyphs.
+    // arabicFont is registry-owned via s_ArabicFont SmartPtr -- no manual free needed.
+    // Falls back to ttfFont (gangofchinese) if arabic.ttf fails to load.
+    static Mortar::SmartPtr<Mortar::Font> s_ArabicFont =
+        Mortar::Font::Create("fontstruetype/arabic.ttf");
+    Mortar::FontCacheObjectTTF* arabicFont = NULL;
+    if (s_ArabicFont.IsValid()) {
+        arabicFont = Mortar::FontTTFRegistry::GetInstance().Lookup(s_ArabicFont.Get());
+    }
+    if (!arabicFont) {
+        printf("[text_render] WARN: arabic.ttf failed to load -- AR row falls back to gangofchinese.ttf\n");
+        arabicFont = ttfFont;
+    } else {
+        printf("[text_render] TTF font: arabic.ttf OK (AR row)\n");
+    }
+
     // Label font: Verdana preferred (legible at small sizes); pFontMain as fallback.
     Mortar::Font* labelFont = NULL;
     if (game_work.pFontMain.IsValid()) {
@@ -622,8 +638,9 @@ int main(int argc, char* argv[]) {
             }
 
             unsigned char* buf = cellPixels[langIdx * NUM_EFFS + effIdx];
+            Mortar::FontCacheObjectTTF* cellFont = (langIdx == 5) ? arabicFont : ttfFont;
             bool hasGlyphs = TR_RenderCell(
-                cfbo, ttfFont, labelFont, verdanaFont,
+                cfbo, cellFont, labelFont, verdanaFont,
                 LANG_CODES[langIdx], LANG_SAMPLES[langIdx],
                 effIdx, buf);
 
