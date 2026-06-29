@@ -188,10 +188,6 @@ public:
     static Mortar::SmartPtr<Mortar::Texture> s_TexLockedStroke;    // +0x40: locked_stroke.tex
     static Mortar::SmartPtr<Mortar::Texture> s_TexNewItemSmlBadge; // +0x44: new_item_sml.tex
     static Mortar::SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
-    // Port-only: button textures. Binary reads from per-task slots
-    // (*(GameTask + 0x17c) for back, *(GameTask + ...) for equip) which
-    // aren't yet ported. Loaded by LoadContent alongside the others.
-    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
     static bool s_bContentLoaded;                           // +0x4c: set =1 at end of LoadContent, =0 in UnLoadContent
 
     // ShopScreen::GetDescriptionTextXPos @ 0x0015c520
