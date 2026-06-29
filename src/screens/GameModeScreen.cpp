@@ -209,9 +209,9 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     if (font) {
         // m_pTitleBox: 3-line feature list "NO BOMBS!\nNO LIVES!\n90 SECS!"
         // ASM-spec v1.6.1 GameModeScreen ctor @0x00182da0: (font, 12.0, w=73, h=53,
-        // align=0xf, maxLines=4, param8=6). param8 is the line-pitch addend ->
-        // multi-line step = (int)(fontSize+param8) = (int)(12+6) = 18px. The port
-        // previously passed maxLines=3/param8=0 -> step 12px (6px too tight = crammed).
+        // align=0xf, maxLines=4, lineSpacing=6). lineSpacing is the line-pitch addend ->
+        // multi-line step = (int)(fontSize+lineSpacing) = (int)(12+6) = 18px. The port
+        // previously passed maxLines=3/lineSpacing=0 -> step 12px (6px too tight = crammed).
         Mortar::BakedStringBox* tbox = new Mortar::BakedStringBox(
             font, 12.0f, 73, 53, 0xf, 4, 6);
         {

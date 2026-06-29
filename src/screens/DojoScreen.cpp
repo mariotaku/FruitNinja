@@ -96,7 +96,7 @@ DojoScreen::DojoScreen(Game& g)
 
     // --- m_pVersionText: BakedStringBox "DOJO" title ---
     // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: operator_new(0xc8), ctor
-    //   (font=*(g_GameData+0x614), fontSize=30, w=110, h=30, align=0xf, maxLines=1, param8=0),
+    //   (font=*(g_GameData+0x614), fontSize=30, w=110, h=30, align=0xf, maxLines=1, lineSpacing=0),
     //   SetGradient(Colour(1,146,208), Colour(0,26,69), 0), SetText(GETSTRING(0x397,0)),
     //   SetHorizontalLineSpacing(-1). Drawn in Draw() at DrawBorders anchor + Vec3(0,5,0).
     m_pVersionText = new Mortar::BakedStringBox(
