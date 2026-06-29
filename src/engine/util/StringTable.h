@@ -102,6 +102,11 @@ enum LocalizedString {
     LSTR_SOCIAL_FACEBOOK = 0x11e, // Facebook social share button label (DojoScreen ctor @0x0016bad8)
     LSTR_SOCIAL_TWITTER  = 0x11f, // Twitter social share button label (DojoScreen ctor @0x0016bad8)
 
+    // GameModeScreen v1.6.1 string IDs (GameModeScreen::CreateControls @0x001819bc)
+    LSTR_GM_ARCADE        = 0x379, // Arcade mode ring label (街机模式)
+    LSTR_GM_CLASSIC       = 0x37a, // Classic mode ring label (经典模式)
+    LSTR_GM_ZEN           = 0x37b, // Zen mode ring label (禅模式)
+
     // PauseScreen v1.6.1 string IDs (PauseScreen ctor @0x001a7204 / Update @0x001a5ebc)
     LSTR_PAUSED          = 0x3c8, // "PAUSED" -- m_PausedText label (ctor @0x001a7204)
     LSTR_QUIT            = 0x35f, // quit label for BSButton (Update @0x001a5ebc GETSTRING(0x35f,0))

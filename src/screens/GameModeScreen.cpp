@@ -315,12 +315,12 @@ void GameModeScreen::Release() {
 //                -> AddControl
 // ===================================================================
 void GameModeScreen::CreateControls() {
-    // --- Button 1: BACK (back_icon.tex, bomb fruit, QuitCallback) ---
-    // Binary texture: Game+0x17c = back_icon.tex (same global slot used
-    // by DojoScreen's back/play button).
+    // --- Button 1: BACK (plain ring m_RingTex[0x10], bomb fruit, QuitCallback) ---
+    // ASM-spec v1.6.1 GameModeScreen::CreateControls @0x001819bc: ring label =
+    //   MenuButton::SetText(GETSTRING(...)) over plain m_RingTex[...].
     // Binary fruit type: FruitInfo_GetCount() (bomb threshold index).
     m_pBackButton = new MenuButton();
-    m_pBackButton->m_Texture = (s_TexBackIcon);
+    m_pBackButton->m_Texture = game_work.m_RingTex[0x10];
     {
         MenuButton* btn = m_pBackButton;
         m_pBackButton->Init(POS_BACK,
@@ -331,6 +331,11 @@ void GameModeScreen::CreateControls() {
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
     m_pBackButton->m_bRespondsToBackKey = 1;
+    m_pBackButton->SetText(
+        GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),
+        game_work.m_RingColours[0],
+        game_work.m_RingColours[1],
+        26.5f, 10.0f, true, true);
     game_work.mHud->AddControl(m_pBackButton);
     m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_TARGET_SCALE;
     if (m_pBackButton->m_pTrackedFruit) {
@@ -338,10 +343,10 @@ void GameModeScreen::CreateControls() {
             m_pBackButton->m_pTrackedFruit->scale * BACK_FRUIT_SCALE;
     }
 
-    // --- Button 2: CLASSIC (classic.tex, watermelon, ClassicModeCallback) ---
+    // --- Button 2: CLASSIC (plain ring m_RingTex[2], watermelon, ClassicModeCallback) ---
     // Binary: ResetTutePos is called on THIS button (not Zen).
     m_pClassicButton = new MenuButton();
-    m_pClassicButton->m_Texture = (s_TexClassic);
+    m_pClassicButton->m_Texture = game_work.m_RingTex[2];
     {
         MenuButton* btn = m_pClassicButton;
         m_pClassicButton->Init(POS_CLASSIC,
@@ -352,6 +357,11 @@ void GameModeScreen::CreateControls() {
     if (game_work.m_TutorialControl) {
         game_work.m_TutorialControl->ResetTutePos(m_pClassicButton);
     }
+    m_pClassicButton->SetText(
+        GETSTRING_CAST_0(LSTR_GM_CLASSIC),
+        game_work.m_RingColours[4],
+        game_work.m_RingColours[5],
+        48.5f, 14.0f, true, true);
     game_work.mHud->AddControl(m_pClassicButton);
     m_pClassicButton->m_RestScale = m_pClassicButton->m_RestScale * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pTrackedFruit) {
@@ -363,10 +373,10 @@ void GameModeScreen::CreateControls() {
     // a multiply of their own size).
     Vec3 sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
 
-    // --- Button 3: ZEN (mode_2.tex, apple_red, ZenModeCallback) ---
+    // --- Button 3: ZEN (plain ring m_RingTex[6], apple_red, ZenModeCallback) ---
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     m_pZenButton = new MenuButton();
-    m_pZenButton->m_Texture = (s_TexMode2);
+    m_pZenButton->m_Texture = game_work.m_RingTex[6];
     {
         MenuButton* btn = m_pZenButton;
         m_pZenButton->Init(POS_ZEN,
@@ -379,14 +389,19 @@ void GameModeScreen::CreateControls() {
         m_pZenButton->m_pTrackedFruit->scale =
             m_pZenButton->m_pTrackedFruit->scale * ZEN_FRUIT_SCALE;
     }
+    m_pZenButton->SetText(
+        GETSTRING_CAST_0(LSTR_GM_ZEN),
+        game_work.m_RingColours[6],
+        game_work.m_RingColours[7],
+        40.0f, 12.0f, true, true);
     game_work.mHud->AddControl(m_pZenButton);
 
-    // --- Button 4: ARCADE (arcade_mode.tex, banana, ArcadeModeCallback) ---
+    // --- Button 4: ARCADE (plain ring m_RingTex[0xd], banana, ArcadeModeCallback) ---
     // Binary: scale -> RotateFacingUp(false, Vec3(0,1,0)) -> AddControl.
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
     m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = (s_TexArcadeMode);
+    m_pArcadeButton->m_Texture = game_work.m_RingTex[0xd];
     {
         MenuButton* btn = m_pArcadeButton;
         m_pArcadeButton->Init(POS_ARCADE,
@@ -403,6 +418,11 @@ void GameModeScreen::CreateControls() {
             false,
             Vec3(0.0f, 1.0f, 0.0f));
     }
+    m_pArcadeButton->SetText(
+        GETSTRING_CAST_0(LSTR_GM_ARCADE),
+        game_work.m_RingColours[10],
+        game_work.m_RingColours[11],
+        41.0f, 12.0f, true, true);
     game_work.mHud->AddControl(m_pArcadeButton);
 }
 
