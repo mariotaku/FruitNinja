@@ -1903,6 +1903,9 @@ void Fruit::LoadInfo() {
 static uint8_t* s_FruitModelsRaw = nullptr;          // raw allocation base (header + elements)
 static FruitModelInfo* s_FruitModels = nullptr;      // -> raw + 8 (first element)
 static int s_FruitModelCount = 0;                    // number of elements
+// Binary: s_fruitModelsLoaded is a bool at the Fruit static-block +0xD4.
+// Port uses a separate static -- the resulting static-vs-GOT load is accept-cosmetic.
+static bool s_fruitModelsLoaded = false;
 
 // s_sliceModel[4]: slice-effect model array.
 // [0] = slice_fx.mmd, [1] = slice_fx_crit.mmd, [2] = unused, [3] = slice_fx.mmd
@@ -2263,6 +2266,8 @@ void Fruit::LoadFruitModels() {
     s_FruitModelsRaw = raw;
     s_FruitModels = models;
     s_FruitModelCount = count;
+    // Binary sets s_fruitModelsLoaded=1 as the last write in LoadFruitModels @0x1e08ec.
+    s_fruitModelsLoaded = true;
 }
 
 const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
@@ -2743,15 +2748,28 @@ void Fruit::UpdateBombAvoidance(float dt) {
     }
 }
 
-// v1.6.1 Fruit::DestroyFruitModels @0x001df1c0 — releases the FruitModelInfo[] array.
+// ASM-spec v1.6.1 Fruit::DestroyFruitModels @0x001df1c0 — releases the FruitModelInfo[] array.
+// Binary teardown order: (1) pre-null SmartPtr+EffectProperty* per element if loaded,
+// (2) element dtors + delete raw block, (3) pool destroy, (4) null slice models,
+// (5) clear loaded flag.
 void Fruit::DestroyFruitModels() {
-    // Release slice-effect model array and pool.
-    for (int i = 0; i < 4; ++i) {
-        s_sliceModel[i] = Mortar::SmartPtr<Mortar::Model>();
+    // Step 1: if loaded, null each element's SmartPtr<Model> and EffectProperty* fields
+    // before the dtor loop runs (binary T_2039 SmartPtr::SetPtr(null) per slot @+0x18..+0x4c,
+    // EffectProperty* zero writes interleaved).
+    if (s_fruitModelsLoaded) {
+        const int count = s_FruitModelCount;
+        for (int j = 0; j < count; ++j) {
+            s_FruitModels[j].m_HalfA        = Mortar::SmartPtr<Mortar::Model>();
+            s_FruitModels[j].m_pHalfEffectA = 0;
+            s_FruitModels[j].m_HalfB        = Mortar::SmartPtr<Mortar::Model>();
+            s_FruitModels[j].m_pHalfEffectB = 0;
+            s_FruitModels[j].m_Whole        = Mortar::SmartPtr<Mortar::Model>();
+            s_FruitModels[j].m_pWholeEffect = 0;
+            s_FruitModels[j].m_pMpModel     = Mortar::SmartPtr<Mortar::Model>();
+            s_FruitModels[j].m_pMpEffect    = 0;
+        }
     }
-    s_pool.Destroy();
-
-    // Release raw allocation (header + elements) with proper destructor calls
+    // Step 2: element dtors + delete the raw block.
     if (s_FruitModelsRaw) {
         const int count = s_FruitModelCount;
         for (int i = 0; i < count; ++i) {
@@ -2762,6 +2780,14 @@ void Fruit::DestroyFruitModels() {
         s_FruitModels = nullptr;
         s_FruitModelCount = 0;
     }
+    // Step 3: pool destroy (binary: two T_2024 pool-destroy calls @+0x8c/+0x90, matching
+    // MemoryPool::Destroy()'s delete[]+free() for m_Backing and m_FreeList -- accept-cosmetic).
+    s_pool.Destroy();
+    // Step 4: null the 4 slice models (binary T_2039 x4 @+0x58..+0x64).
+    for (int i = 0; i < 4; ++i)
+        s_sliceModel[i] = Mortar::SmartPtr<Mortar::Model>();
+    // Step 5: clear the loaded flag.
+    s_fruitModelsLoaded = false;
 }
 
 
