@@ -15,6 +15,7 @@
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
+#include "entities/Bomb.h"
 #include "entities/Fruit.h"
 #include "entities/FruitInfo.h"
 #include "asset/Mesh.h"
@@ -758,6 +759,12 @@ void AboutScreen::QuitGameCallback() {
         Fruit* piece = m_pBackButton->m_pTrackedFruit;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        // ASM-spec v1.6.1 *Callback (AboutScreen::QuitGameCallback @0x0015c914 strb [+0x80];
+        //   Dojo Shop/About/Play via T.1166 @0x0016a3ec): enable bomb physics so gravity +
+        //   AccelGrowth fling the back-bomb off-screen deterministically -> KillBomb ->
+        //   ActorManager reap before the next screen re-creates its single-slot menu bomb.
+        //   Omitting it => constant-velocity drift => race => pool stays full => soft-lock.
+        reinterpret_cast<Bomb*>(piece)->m_bMovement = 1;   // Bomb+0x80
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
