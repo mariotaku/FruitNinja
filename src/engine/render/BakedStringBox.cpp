@@ -491,6 +491,8 @@ void BakedStringBox::BakeGradient() {
     // Vertical anchor formula: mirrors Draw's baselineY computation (centre-V path for bake,
     // but we need the same Y as Draw will use for actual rendering so colours match geometry).
     // We replicate the full baselineY logic from Draw so per-line localBaseY is consistent.
+    // TODO: v1.6.1 0x00245c78 (RebuildAlignments) -- BakeGradient should use single-line else-branch
+    //   at nLines==1: -boxH*0.5 - (fontSize+4.0)*0.5 instead of the multi-line formula below.
     float baselineY = 0.0f;
     const int vertAlign = m_Align & 0xc;
     if (vertAlign == 0xc) {
@@ -702,19 +704,23 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, 
     }
 }
 
-// ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+// ASM-verified: 2026-06-29 v1.6.1 RebuildAlignments @0x00245c78 (asm-inspector + runtime HLE):
+// single-line center-V takes the *else* sub-branch @0x00245e74 (FontInterface::GetInstance()[0]=0x48!=0
+// at runtime; the metric-based if-branch @0x00245d74 is dead code). baselineY = -boxH*0.5 - (fontSize+4.0)*0.5
 // Pure stateless vertical baseline computation. See BakedStringBox.h ComputeBaselineY doc for formulas.
 // lineIdx==0 gives the line-0 anchor used by Draw(); the render loop subtracts li*step per line.
 float BakedStringBox::ComputeBaselineY(int align, int nLines, int lineIdx,
                                         float maxBearingY, float minBottom,
-                                        float boxH, float step, float maxSpan)
+                                        float boxH, float step, float maxSpan,
+                                        float fontSize)
 {
     const int vertAlign = align & 0xc;
     if (vertAlign == 0xc) {
         if (nLines == 1) {
-            // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
-            // single-line center-V: baselineY = maxBearingY - 1.5*minBottom - boxH*0.5 (yMin coeff exactly -1.5)
-            return maxBearingY - 1.5f * minBottom - boxH * 0.5f;
+            // ASM-verified: 2026-06-29 v1.6.1 RebuildAlignments @0x00245c78 (asm-inspector + runtime HLE):
+            // single-line center-V else-branch @0x00245e74 -- metric-independent.
+            // VFP const 4.0 = 0x40800000.
+            return -boxH * 0.5f - (fontSize + 4.0f) * 0.5f;
         } else {
             // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
             // multi-line center-V per line i: (lineH*nLines)*0.5 - lineH*0.5 - boxH*0.5 - maxSpan*0.5 - i*lineH
@@ -767,9 +773,10 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
 
     // Vertical alignment via ComputeBaselineY() (binary RebuildAlignments @ 0x00245c78).
     // lineIdx=0: the Draw loop below applies the per-line offset via baselineY - li*step.
+    // m_FontSize = m_CurrentFontSize @+0xc4 (possibly shrunk by FitIntoVerticalBounds).
     float baselineY = ComputeBaselineY(m_Align, nLines, 0,
                                        m_Lines[0].maxBearingY, m_Lines[0].minBottom,
-                                       m_BoxHeight, step, maxSpan);
+                                       m_BoxHeight, step, maxSpan, m_FontSize);
 
     // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20: center recenters only the scale-shrink
     // delta (0 at scale=1); per-line centering is in Layout/RebuildAlignments.

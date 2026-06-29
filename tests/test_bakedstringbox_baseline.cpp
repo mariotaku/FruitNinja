@@ -4,13 +4,12 @@
 // Binary: v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78
 //
 // Pins the exact binary formula for all three vertical-alignment cases:
-//   center-V single-line:  maxBearingY - 1.5*minBottom - boxH*0.5
+//   center-V single-line:  -boxH*0.5 - (fontSize+4.0)*0.5
+//     (else-branch @0x00245e74; metric-INDEPENDENT -- FontInterface::GetInstance()[0]=0x48!=0
+//      always takes this branch at runtime; the metric-based if-branch @0x00245d74 is dead code)
 //   center-V multi-line:   (step*nLines)*0.5 - step*0.5 - boxH*0.5 - maxSpan*0.5 - i*step
 //   top-anchored:          -(ascentSpan*0.5) - step*0.5 - descent
 //   bottom-anchored:       boxH
-//
-// The -1.5 coefficient in the single-line case is especially load-bearing:
-// -1.0 would move text ~descent-height too low; -2.0 too high.
 //
 // Pure in-process: no GPU, no audio, no FreeType, no SDL.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
@@ -232,34 +231,32 @@ static const int ALIGN_BOTTOM = 0x08;
 using Mortar::BakedStringBox;
 
 static void test_single_line_center_v() {
-    // v1.6.1 RebuildAlignments @0x00245c78: single-line center-V
-    // formula: maxBearingY - 1.5*minBottom - boxH*0.5
-    // step/maxSpan unused for single-line path (pass 0).
+    // v1.6.1 RebuildAlignments @0x00245c78: single-line center-V else-branch @0x00245e74.
+    // formula: -boxH*0.5 - (fontSize+4.0)*0.5   (metric-INDEPENDENT, VFP const 4.0 = 0x40800000)
+    // maxBearingY/minBottom are NOT used in this branch; step/maxSpan also unused.
 
-    // Case A: maxBearingY=12, minBottom=-3, boxH=30
-    // expected = 12 - 1.5*(-3) - 30*0.5 = 12 + 4.5 - 15 = 1.5
-    float r = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, -3.0f, 30.0f, 0.0f, 0.0f);
-    CHECK_NEAR(r, 1.5f, 1e-5f);
-    std::printf("  single-line center-V (boxH=30): %.6f == 1.5 OK\n", (double)r);
+    // Case A: boxH=30, fontSize=20 -> -30*0.5 - (20+4)*0.5 = -15 - 12 = -27.0
+    float rA = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, -3.0f, 30.0f, 0.0f, 0.0f, 20.0f);
+    CHECK_NEAR(rA, -27.0f, 1e-5f);
+    std::printf("  single-line center-V (boxH=30,fs=20): %.6f == -27.0 OK\n", (double)rA);
 
-    // Case B: same glyph metrics, different boxH=20
-    // expected = 12 + 4.5 - 10 = 6.5
-    float r2 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, -3.0f, 20.0f, 0.0f, 0.0f);
-    CHECK_NEAR(r2, 6.5f, 1e-5f);
-    std::printf("  single-line center-V (boxH=20): %.6f == 6.5 OK\n", (double)r2);
+    // Case B: boxH=20, fontSize=16 -> -20*0.5 - (16+4)*0.5 = -10 - 10 = -20.0
+    float rB = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, -3.0f, 20.0f, 0.0f, 0.0f, 16.0f);
+    CHECK_NEAR(rB, -20.0f, 1e-5f);
+    std::printf("  single-line center-V (boxH=20,fs=16): %.6f == -20.0 OK\n", (double)rB);
 
-    // Case C: zero descent (minBottom=0) -- baseline must be maxBearingY - boxH*0.5
-    // With minBottom=0: 12 - 0 - 15 = -3.0
-    float r3 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, 0.0f, 30.0f, 0.0f, 0.0f);
-    CHECK_NEAR(r3, -3.0f, 1e-5f);
-    std::printf("  single-line center-V (minBottom=0): %.6f == -3.0 OK\n", (double)r3);
+    // Case C: boxH=30, fontSize=12 -> -30*0.5 - (12+4)*0.5 = -15 - 8 = -23.0
+    float rC = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 12.0f, -3.0f, 30.0f, 0.0f, 0.0f, 12.0f);
+    CHECK_NEAR(rC, -23.0f, 1e-5f);
+    std::printf("  single-line center-V (boxH=30,fs=12): %.6f == -23.0 OK\n", (double)rC);
 
-    // Coefficient pin: verify the minBottom delta is exactly 1.5x between cases A and C.
-    // A vs C differ only in minBottom (-3 vs 0): delta should be 1.5*3 = 4.5.
-    // A coefficient of -1.0 would give delta 1*3 = 3.0 (not 4.5).
-    // A coefficient of -2.0 would give delta 2*3 = 6.0 (not 4.5).
-    CHECK_NEAR(r - r3, 4.5f, 1e-5f);
-    std::printf("  single-line coefficient pin (delta=4.5 -> coeff=-1.5): OK\n");
+    // Metric-independence assertion: varying maxBearingY and minBottom must NOT change the result.
+    // Same boxH=30, fontSize=20 but very different metric values -> identical baseline.
+    float rA2 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 99.0f, -50.0f, 30.0f, 0.0f, 0.0f, 20.0f);
+    CHECK_NEAR(rA2, rA, 1e-5f);
+    float rA3 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, 1, 0, 0.0f, 0.0f, 30.0f, 0.0f, 0.0f, 20.0f);
+    CHECK_NEAR(rA3, rA, 1e-5f);
+    std::printf("  single-line metric-independence (vary bearingY/bottom, same result): OK\n");
 
     std::printf("test_single_line_center_v: PASS\n");
 }
@@ -278,9 +275,9 @@ static void test_multi_line_center_v() {
     const float boxH    = 80.0f;
     const int   nLines  = 3;
 
-    float r0 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 0, 0.0f, 0.0f, boxH, step, maxSpan);
-    float r1 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 1, 0.0f, 0.0f, boxH, step, maxSpan);
-    float r2 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 2, 0.0f, 0.0f, boxH, step, maxSpan);
+    float r0 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 0, 0.0f, 0.0f, boxH, step, maxSpan, 0.0f);
+    float r1 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 1, 0.0f, 0.0f, boxH, step, maxSpan, 0.0f);
+    float r2 = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 2, 0.0f, 0.0f, boxH, step, maxSpan, 0.0f);
 
     CHECK_NEAR(r0, -29.5f, 1e-4f);
     CHECK_NEAR(r1, -47.5f, 1e-4f);
@@ -295,7 +292,7 @@ static void test_multi_line_center_v() {
     std::printf("  multi-line center-V line2: %.6f == -65.5 OK\n", (double)r2);
 
     // Verify that maxSpan contributes: doubling maxSpan shifts baseline down by maxSpan/2 = 7.5.
-    float r0_big = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 0, 0.0f, 0.0f, boxH, step, maxSpan * 2.0f);
+    float r0_big = BakedStringBox::ComputeBaselineY(ALIGN_CENTER_V, nLines, 0, 0.0f, 0.0f, boxH, step, maxSpan * 2.0f, 0.0f);
     CHECK_NEAR(r0 - r0_big, maxSpan * 0.5f, 1e-5f);
     std::printf("  multi-line maxSpan contribution (delta=7.5): OK\n");
 
@@ -308,12 +305,12 @@ static void test_top_anchored() {
     // maxBearingY=10, minBottom=-2, step=12
     // ascentSpan=12, descent=2
     // expected = -(12*0.5) - 12*0.5 - 2 = -6 - 6 - 2 = -14
-    float r = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 1, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f);
+    float r = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 1, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f, 0.0f);
     CHECK_NEAR(r, -14.0f, 1e-5f);
     std::printf("  top-anchored: %.6f == -14.0 OK\n", (double)r);
 
     // nLines > 1 should give same formula (top-anchored uses line0 metrics only, no per-line term at call site).
-    float r3 = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 3, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f);
+    float r3 = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 3, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f, 0.0f);
     CHECK_NEAR(r3, -14.0f, 1e-5f);
     std::printf("  top-anchored (nLines=3): %.6f == -14.0 OK\n", (double)r3);
 
@@ -322,11 +319,11 @@ static void test_top_anchored() {
 
 static void test_bottom_anchored() {
     // bottom-anchored: returns boxH (always).
-    float r = BakedStringBox::ComputeBaselineY(ALIGN_BOTTOM, 1, 0, 10.0f, -2.0f, 50.0f, 12.0f, 5.0f);
+    float r = BakedStringBox::ComputeBaselineY(ALIGN_BOTTOM, 1, 0, 10.0f, -2.0f, 50.0f, 12.0f, 5.0f, 0.0f);
     CHECK_NEAR(r, 50.0f, 1e-5f);
     std::printf("  bottom-anchored: %.6f == 50.0 OK\n", (double)r);
 
-    float r2 = BakedStringBox::ComputeBaselineY(ALIGN_BOTTOM, 3, 2, 10.0f, -2.0f, 100.0f, 12.0f, 5.0f);
+    float r2 = BakedStringBox::ComputeBaselineY(ALIGN_BOTTOM, 3, 2, 10.0f, -2.0f, 100.0f, 12.0f, 5.0f, 0.0f);
     CHECK_NEAR(r2, 100.0f, 1e-5f);
     std::printf("  bottom-anchored (boxH=100): %.6f == 100.0 OK\n", (double)r2);
 

@@ -190,8 +190,10 @@ public:
     // Extracted for unit testability; Draw() calls with lineIdx=0 and lets
     // the render loop apply the per-line step offset.
     //
-    // center-V single (nLines==1):
-    //   maxBearingY - 1.5*minBottom - boxH*0.5   (yMin coeff exactly -1.5)
+    // center-V single (nLines==1) -- else-branch @0x00245e74, metric-INDEPENDENT:
+    //   -boxH*0.5 - (fontSize+4.0)*0.5
+    //   Runtime-verified: FontInterface::GetInstance()[0] == 0x48 != 0 always takes this branch.
+    //   VFP const 4.0 = 0x40800000. maxBearingY/minBottom are NOT used.
     // center-V multi (nLines>1), per line i:
     //   (step*nLines)*0.5 - step*0.5 - boxH*0.5 - maxSpan*0.5 - i*step
     //   where maxSpan = max(maxBearingY-minBottom) across all lines
@@ -201,10 +203,11 @@ public:
     // bottom-anchored:
     //   boxH
     //
-    // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+    // ASM-verified: 2026-06-29 v1.6.1 RebuildAlignments @0x00245c78 (asm-inspector + runtime HLE)
     static float ComputeBaselineY(int align, int nLines, int lineIdx,
                                   float maxBearingY, float minBottom,
-                                  float boxH, float step, float maxSpan);
+                                  float boxH, float step, float maxSpan,
+                                  float fontSize);
 
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
