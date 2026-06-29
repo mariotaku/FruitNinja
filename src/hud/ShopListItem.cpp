@@ -6,7 +6,7 @@
 // ASM-spec v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8
 // ASM-spec v1.6.1 ShopListItem::DrawInAppPurchaseTags @0x001b1798
 // ASM-spec v1.6.1 ShopListItem::Create @0x001b27f0
-// ASM-spec v1.6.1 ShopListItem::Move @0x001b43e0
+// ASM-spec v1.6.1 ShopListItem::Move @0x001b54b0
 
 #include "ShopListItem.h"
 #include "ScrollingMenu.h"
@@ -101,7 +101,7 @@ ShopListItem::~ShopListItem() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::Move @ v1.6.1 0x001b43e0 (vtable slot 6, +0x18)
+// ShopListItem::Move @ v1.6.1 0x001b54b0 (vtable slot 6, +0x18)
 // ---------------------------------------------------------------------------
 void ShopListItem::Move(float x, float y, float z) {
     Game* g = Game::GetInstance();
@@ -123,7 +123,7 @@ void ShopListItem::Move(float x, float y, float z) {
     pos.z = z;
 
     // (3) Icon position copy + offset.
-    // Binary @0x001b43e0: *(Vec3*)(this+0x268) = pos, then offset x.
+    // Binary @0x001b54b0: *(Vec3*)(this+0x268) = pos, then offset x.
     if (m_pIconTex.IsValid()) {
         m_IconPos.x = pos.x;
         m_IconPos.y = pos.y;
@@ -405,23 +405,39 @@ void ShopListItem::DrawIcon() {
 
 // ---------------------------------------------------------------------------
 // ShopListItem::DrawFloatingText @ v1.6.1 0x001b4bc8
-// ASM-verified: 2026-06-26 v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 (asm-inspector)
+// ASM-spec v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawFloatingText() {
-    if (m_NewItemAlpha > 0.0f) {
-        IngamePopup* popup = GetIngamePopup(0x10);
-        if (popup) {
-            Vec3 anchor(pos.x, pos.y, pos.z);
-            popup->Draw(0.8f, &anchor);
+    // ASM-spec v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8:
+    // world base = pos + m_Size (m_Size = (60,13,0) from Create()).
+    const float baseX = pos.x + m_Size.x;
+    const float baseY = pos.y + m_Size.y;
+
+    // NEW badge (popup 0x10, scale 0.8): guard also requires m_pBox0 != null.
+    if (m_NewItemAlpha > 0.0f && m_pBox0 != 0) {
+        float boxW = m_pBox0->GetTextWidth();
+        Vec3 anchor(baseX - boxW - 4.0f, baseY + 8.0f + s_ShimmerY, 0.0f);
+        // ShopScreen state-1 clamp: pushes the badge off-screen during a shop transition.
+        if (m_pShopScreen != 0 && m_pShopScreen->m_State == 1) {
+            float clampX = 240.0f - 0.25f * (65.0f * m_NewItemAlpha * m_NewItemAlpha);
+            if (clampX > anchor.x) anchor.x = clampX;
         }
+        IngamePopup* popup = GetIngamePopup(0x10);
+        // TODO: v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 -- binary modulates
+        //   Draw scale by alpha^2 (65x33 matrix pre-built with alpha^2 factor). IngamePopup::Draw
+        //   has no internal alpha pulse; the modulation must be applied to the scale arg here.
+        if (popup) popup->Draw(0.8f, &anchor);
     }
 
+    // SELECTED badge (popup 0x11, scale 0.5).
     if (m_SelectedAlpha > 0.0f) {
+        float boxW = (m_pBox1 != 0) ? m_pBox1->GetTextWidth() : 0.0f;
+        // binary truncates to int before the float convert (explicit vcvt.s32/f32).
+        Vec3 anchor((float)(int)(baseX - boxW - 32.0f), baseY - 26.0f, 0.0f);
         IngamePopup* popup = GetIngamePopup(0x11);
-        if (popup) {
-            Vec3 anchor(pos.x, pos.y, pos.z);
-            popup->Draw(0.5f, &anchor);
-        }
+        // TODO: v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 -- same alpha^2 scale
+        //   modulation applies to SELECTED badge (scale 0.5 * alpha^2 factor).
+        if (popup) popup->Draw(0.5f, &anchor);
     }
 }
 
