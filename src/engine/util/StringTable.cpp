@@ -2,9 +2,8 @@
 // See docs/engine/localisation.md for full format documentation.
 //
 // Binary refs (v1.6.1):
-//   StringTableUtilLoadStrings         0x0011fb20
-//   StringTableUtilLoadStringsTable    0x0011f9dc
-//   LoadStringsTable                   0x14ca5c
+//   StringTableUtilLoadStrings         0x0014cccc
+//   StringTableUtilLoadStringsTable    0x0014ca5c
 //   Mortar::StringTable::LoadHeader    0x0022d800
 //   Mortar::StringTable::LoadLanguage  0x0022d74c
 //   Mortar::StringTable::GetInfo       0x14d1a4
@@ -60,27 +59,32 @@ void StringTableUtilUnloadTable(int /*idx*/) {
 // Default instance used by the port's static wrappers
 static Mortar::StringTable s_DefaultTable;
 
-// Language suffix table (indexed by languageFlag)
-// Binary: switch in StringTableUtilLoadStringsTable at 0x0011fa02
-// Default (0 or >=14) -> "english_us"
+// ASM-spec v1.6.1 StringTableUtilLoadStringsTable @0x0014ca5c: switch on bM_LangId (+0x03).
 static const char* const kLanguageSuffix[] = {
-    "english_us",  // 0 = default
-    "german",      // 1
-    "dutch",       // 2
-    "french",      // 3
-    "spanish",     // 4
-    "italian",     // 5
-    "swedish",     // 6
-    "danish",      // 7
-    "norwegian",   // 8
-    "finnish",     // 9
-    "korean",      // 10
-    "japanese",    // 11
-    "english_uk",  // 12
-    "chinese",     // 13
-    "english_us",  // 14 = same as default
+    "english_us",          // 0x00 = 0 (default)
+    "english_uk",          // 0x01 = 1
+    "french",              // 0x02 = 2
+    "spanish",             // 0x03 = 3
+    "german",              // 0x04 = 4
+    "italian",             // 0x05 = 5
+    "dutch",               // 0x06 = 6
+    "swedish",             // 0x07 = 7
+    "danish",              // 0x08 = 8
+    "norwegian",           // 0x09 = 9
+    "finnish",             // 0x0a = 10
+    "korean",              // 0x0b = 11
+    "japanese",            // 0x0c = 12
+    "chinese",             // 0x0d = 13
+    "traditional chinese", // 0x0e = 14
+    "latin spanish",       // 0x0f = 15
+    "polish",              // 0x10 = 16
+    "portuguese (pt)",     // 0x11 = 17
+    "portuguese (br)",     // 0x12 = 18
+    "russian",             // 0x13 = 19
+    "arabic",              // 0x14 = 20
+    "fake debug language", // 0x15 = 21
 };
-static const int kLanguageCount = (int)(sizeof(kLanguageSuffix) / sizeof(kLanguageSuffix[0]));
+static const int kLanguageCount = 22;
 
 // Miss fallback -- binary returns literal "STRING NOT FOUND" on all miss paths.
 static const char* const kStringNotFound = "STRING NOT FOUND";
@@ -351,8 +355,7 @@ int Mortar::StringTable::LanguageFlagFromName(const char* name) {
         ++i;
     }
     lower[i] = '\0';
-    // Search only indices 0..13 (index 14 is a duplicate "english_us" alias).
-    for (int j = 0; j < 14; ++j) {
+    for (int j = 0; j < kLanguageCount; ++j) {
         if (strcmp(lower, kLanguageSuffix[j]) == 0)
             return j;
     }

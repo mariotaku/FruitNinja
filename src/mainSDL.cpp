@@ -130,9 +130,11 @@ int main(int argc, char* argv[]) {
     // item titles (titles are baked at parse time, not draw time).
     if (g_langOverride >= 0) {
         static const char* const kLangNames[] = {
-            "english_us", "german", "dutch", "french", "spanish", "italian",
-            "swedish", "danish", "norwegian", "finnish", "korean", "japanese",
-            "english_uk", "chinese", "english_us"
+            "english_us", "english_uk", "french", "spanish", "german", "italian",
+            "dutch", "swedish", "danish", "norwegian", "finnish", "korean",
+            "japanese", "chinese", "traditional chinese", "latin spanish",
+            "polish", "portuguese (pt)", "portuguese (br)", "russian",
+            "arabic", "fake debug language"
         };
         game_work.languageFlag = (uint8_t)g_langOverride;
         printf("[lang] override: flag=%d (%s)\n",

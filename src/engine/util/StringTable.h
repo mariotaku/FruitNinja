@@ -7,8 +7,8 @@
 // stringtables directory.  Provides binary-search key lookup.
 //
 // Binary refs (v1.6.1):
-//   StringTableUtilLoadStrings         0x0011fb20
-//   StringTableUtilLoadStringsTable    0x0011f9dc
+//   StringTableUtilLoadStrings         0x0014cccc
+//   StringTableUtilLoadStringsTable    0x0014ca5c
 //   Mortar::StringTable::GetInfo       0x14d1a4
 //   Mortar::StringTable::GetString(int)        0x14d1dc
 //   Mortar::StringTable::GetString(HeaderLookup*)  0x14d1c0
@@ -27,21 +27,29 @@
 
 namespace Mortar { class File; }
 
-// languageFlag enum values (from g_GameData+0x03):
-//   0  = english_us (default / fallback)
-//   1  = german
-//   2  = dutch
-//   3  = french
-//   4  = spanish
-//   5  = italian
-//   6  = swedish
-//   7  = danish
-//   8  = norwegian
-//   9  = finnish
-//   10 = korean
-//   11 = japanese
-//   12 = english_uk
-//   13 = chinese
+// languageFlag enum values (bM_LangId / g_GameData+0x03):
+//   0x00 = english_us (default / fallback)
+//   0x01 = english_uk
+//   0x02 = french
+//   0x03 = spanish
+//   0x04 = german
+//   0x05 = italian
+//   0x06 = dutch
+//   0x07 = swedish
+//   0x08 = danish
+//   0x09 = norwegian
+//   0x0a = finnish
+//   0x0b = korean
+//   0x0c = japanese
+//   0x0d = chinese
+//   0x0e = traditional chinese
+//   0x0f = latin spanish
+//   0x10 = polish
+//   0x11 = portuguese (pt)
+//   0x12 = portuguese (br)
+//   0x13 = russian
+//   0x14 = arabic
+//   0x15 = fake debug language
 
 // Integer IDs: flat positional index into the sorted HeaderLookup[] array in
 // translations_header.str. Re-derived for v1.6.1 by key-name lookup in the
@@ -215,7 +223,7 @@ public:
     static bool IsLoaded();
     static const HeaderLookup* GetInfoS(const char* key);
 
-    // Returns the language flag (0..14) for a language name like "french",
+    // Returns the language flag (0..21) for a language name like "french",
     // "korean", "english_uk", etc. Case-insensitive. Returns -1 on no match.
     static int LanguageFlagFromName(const char* name);
 
