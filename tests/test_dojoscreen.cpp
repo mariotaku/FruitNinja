@@ -202,7 +202,11 @@ int main(int argc, char* argv[]) {
                aboutBtn->pos.x, aboutBtn->pos.y);
     }
 
-    // --- Assertion 2: both BSButtons with distinct positions ---
+    // --- Assertion 2: BSButton positions match UpdateBSButton anchor values ---
+    // After 60 settle frames m_TransitionAlpha == 1.0f exactly (state-0 sets it when
+    // > ALPHA_IN_DONE). At alpha=1 UpdateBSButton produces offset=0, so positions equal
+    // the per-index anchors: FB idx=0 -> (152,100,0), TW idx=1 -> (152,54,0).
+    // This assertion catches the regression where both were at (152,100,0) and overlapped.
     if ((int)bsButtons.size() < 2) {
         fprintf(stderr,
             "FAIL: expected 2 BSButtons (FB+TW) in HUD, found %d\n",
@@ -213,13 +217,45 @@ int main(int argc, char* argv[]) {
         Vec3 pos1 = bsButtons[1]->pos;
         printf("[BSBUTTON] btn0 pos=(%.1f,%.1f,%.1f)  btn1 pos=(%.1f,%.1f,%.1f)\n",
                pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z);
-        if (pos0.x == pos1.x && pos0.y == pos1.y) {
+
+        // Expected anchors at alpha=1 (UpdateBSButton: anchor = (152, 100 - 46*idx, 0)).
+        static const float kEps = 1.0f;
+        static const float kExpFBx = 152.0f, kExpFBy = 100.0f;  // idx=0
+        static const float kExpTWx = 152.0f, kExpTWy =  54.0f;  // idx=1 (100-46)
+
+        bool fbOk = (pos0.x >= kExpFBx - kEps && pos0.x <= kExpFBx + kEps &&
+                     pos0.y >= kExpFBy - kEps && pos0.y <= kExpFBy + kEps);
+        bool twOk = (pos1.x >= kExpTWx - kEps && pos1.x <= kExpTWx + kEps &&
+                     pos1.y >= kExpTWy - kEps && pos1.y <= kExpTWy + kEps);
+
+        if (!fbOk) {
             fprintf(stderr,
-                "FAIL: FB and TW BSButtons are at identical positions"
-                " (%.1f,%.1f) -- they overlap\n", pos0.x, pos0.y);
+                "FAIL: FB BSButton (idx=0) at (%.1f,%.1f), expected (%.1f,%.1f) "
+                "+/-%.1f -- UpdateBSButton not running or wrong anchor\n",
+                pos0.x, pos0.y, kExpFBx, kExpFBy, kEps);
             ++failures;
         } else {
-            printf("PASS: FB and TW BSButtons at distinct positions\n");
+            printf("PASS: FB BSButton at expected anchor (%.1f,%.1f)\n", pos0.x, pos0.y);
+        }
+
+        if (!twOk) {
+            fprintf(stderr,
+                "FAIL: TW BSButton (idx=1) at (%.1f,%.1f), expected (%.1f,%.1f) "
+                "+/-%.1f -- 46-unit vertical gap not achieved (overlap regression)\n",
+                pos1.x, pos1.y, kExpTWx, kExpTWy, kEps);
+            ++failures;
+        } else {
+            printf("PASS: TW BSButton at expected anchor (%.1f,%.1f)\n", pos1.x, pos1.y);
+        }
+
+        // Belt-and-suspenders: gap along y-axis >= 40 units.
+        float gap = pos0.y - pos1.y;
+        if (gap < 40.0f) {
+            fprintf(stderr,
+                "FAIL: FB/TW vertical gap=%.1f < 40 -- buttons visually overlap\n", gap);
+            ++failures;
+        } else {
+            printf("PASS: FB/TW vertical gap=%.1f >= 40\n", gap);
         }
     }
 

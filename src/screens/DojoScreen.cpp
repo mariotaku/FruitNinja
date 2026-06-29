@@ -24,6 +24,7 @@
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
+#include "entities/ActorManager.h"
 #include "audio/GameSound.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
@@ -140,13 +141,11 @@ DojoScreen::DojoScreen(Game& g)
     // --- m_pBSButton1: Twitter defunct visible stub ---
     // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: same pattern as FB,
     //   GETSTRING(0x11f,0), "join_tw.tex", stroke (0x31,0xae,0xd6)/(0x52,0xba,0xde).
-    // DIFFERS: binary ctor @0x0016bad8 builds BOTH BSButtons at (152,100,0) (overlap);
-    //   HLE shows them stacked (FB above TW) via an un-RE'd runtime layout pass.
-    //   TW offset below FB here is a temporary visible-both placeholder pending HLE
-    //   peek of m_pBSButton0/1 +0x8 -- see task #267. Not a faithful position.
+    // Ctor builds both at (152,100,0); UpdateBSButton slides each to its final
+    //   per-frame position (FB idx=0 -> y=100, TW idx=1 -> y=54) on every Update frame.
     {
         BSButton* btn = new BSButton(
-            Vec3(108.0f, 100.0f, 0.0f),
+            Vec3(152.0f, 100.0f, 0.0f),
             GETSTRING_CAST_0(LSTR_SOCIAL_TWITTER),
             Vec3(1.0f, 1.0f, 1.0f));
         btn->Init();
@@ -223,6 +222,8 @@ void DojoScreen::Init() {
 void DojoScreen::Reset() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0016b568");
     m_State = 0;
+    // ASM-spec v1.6.1 DojoScreen::Reset @0x0016b568: sets m_TransitionDelay=0.2f before CreateButtons.
+    m_TransitionDelay = 0.2f;
     CreateButtons();
 }
 
@@ -299,6 +300,8 @@ void DojoScreen::CreateButtons() {
         m_pBackButton->m_HudScale.y = -0.3f;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: field_0x13c(m_RestScale)*=0.825
         m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
+        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- binary does m_pTrackedFruit->m_LaunchVelocity *= 0.825
+        //   (a bomb member); m_LaunchVelocity not yet in entity layout; harmless to symptom.
         if (m_pBackButton->m_pTrackedFruit) {
             m_pBackButton->m_pTrackedFruit->scale =
                 m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
@@ -309,6 +312,8 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[0],
             game_work.m_RingColours[1],
             31.0f, 10.0f, true, true);
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
+        m_pBackButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pBackButton);
         if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
     }
@@ -344,6 +349,8 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[6],
             game_work.m_RingColours[7],
             54.5f, 14.0f, true, true);
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
+        m_pShopButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pShopButton);
         if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
         m_pShopButton->SetNewSymbol(false);
@@ -364,6 +371,8 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[10],
             game_work.m_RingColours[11],
             39.5f, 10.0f, true, true);
+        // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
+        m_pAboutButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pAboutButton);
     }
 }
@@ -372,10 +381,10 @@ void DojoScreen::CreateButtons() {
 // Matches DojoScreen::Update @ 0x0016b6a4
 // ===================================================================
 void DojoScreen::Update(float dt) {
-    (void)dt;
-
-    // Binary: BaseScreen::UpdateButtons(&this->super, dt);
+    // ASM-spec v1.6.1 DojoScreen::Update @0x0016b6a4
     BaseScreen::UpdateButtons(dt);
+    // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580: called every frame.
+    UpdateBSButtons(dt);
 
     switch (m_State) {
 
@@ -405,55 +414,58 @@ void DojoScreen::Update(float dt) {
         break;
 
     // ---- STATES 2, 3, 4: Fade out → sub-screen ----
+    // ASM-spec v1.6.1 DojoScreen::Update states 2/3/4 @0x0016b778: alpha decays each frame;
+    //   entity-count gate (bombs AND fruit gone) + m_TransitionDelay countdown before pushing
+    //   child screen. Prevents spawning the new back ring while the outgoing menu bomb
+    //   still occupies the pool (new ring Add(1)=null -> no entity -> shrinks out).
     case 2:
     case 3:
     case 4: {
         m_TransitionAlpha *= ALPHA_DECAY;
 
-        if (m_TransitionAlpha <= 0.0f) return;
-        if (m_TransitionAlpha > ALPHA_OUT_DONE) return;
+        {
+            Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+            bool cleared = (am && am->GetNumEntities(1) == 0 && am->GetNumEntities(0) == 0);
+            if (cleared) m_TransitionDelay -= dt;
+            if (cleared && m_pBackButton != nullptr && m_TransitionDelay <= 0.0f) {
+                int prevState = m_State;
+                m_pBackButton  = nullptr;  // field_0x94
+                m_TransitionAlpha = 0.0f;
+                m_pShopButton  = nullptr;  // field_0x98
+                m_pAboutButton = nullptr;  // field_0x9c
 
-        // Fade complete — null all button pointers and reset alpha
-        int prevState = m_State;
-        m_pBackButton  = nullptr;  // field_0x94
-        m_TransitionAlpha = 0.0f;
-        m_pShopButton  = nullptr;  // button (field_0x98)
-        m_pAboutButton = nullptr;  // field_0x9c (stored as int 0 in binary)
+                if (prevState == 3) {
+                    // State 3: push AboutScreen.
+                    // Binary: operator_new(0xa0), AboutScreen ctor, call vtable[2]=Init,
+                    //         HUD::AddControl. No RemoveCallback installed in binary.
+                    m_pAboutScreen = new AboutScreen(this);
+                    m_pAboutScreen->Init();
+                    // Port-specific: install RemoveCallback so DojoScreen clears its ptr.
+                    m_pAboutScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::AboutScreenRemoved);
+                    game_work.mHud->AddControl(m_pAboutScreen);
+                    return;
+                }
 
-        if (prevState == 3) {
-            // State 3: push AboutScreen.
-            // Binary: operator_new(0xa0), AboutScreen ctor, call vtable[2]=Init,
-            //         HUD::AddControl. No RemoveCallback installed in binary.
-            m_pAboutScreen = new AboutScreen(this);
-            m_pAboutScreen->Init();  // matches binary: (*(code*)about->vtable[2])(about)
-            // Port-specific: install RemoveCallback so DojoScreen clears its ptr.
-            // Binary relies on AboutScreen calling parent->Reset() which sets state=0.
-            // Port keeps both: Init() via RemoveCallback (redundant but harmless).
-            m_pAboutScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::AboutScreenRemoved);
-            game_work.mHud->AddControl(m_pAboutScreen);
-            return;
+                if (prevState == 2) {
+                    // State 2: push ShopScreen.
+                    // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
+                    //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
+                    //   HUD::AddControl(hud, shop, false); shop->Init();
+                    if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
+                    ShopScreen* shop = new ShopScreen(this);
+                    game_work.mHud->AddControl(shop, false);
+                    shop->Init();
+                    return;
+                }
+
+                if (prevState == 4) {
+                    // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada.
+                    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(prevState), 0, "Update/state-4 defunct");
+                    m_State = 0;
+                    return;
+                }
+            }
         }
-
-        if (prevState == 2) {
-            // State 2: push ShopScreen.
-            // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
-            //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
-            //   HUD::AddControl(hud, shop, false); shop->Init();
-            if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
-            ShopScreen* shop = new ShopScreen(this);
-            game_work.mHud->AddControl(shop, false);
-            shop->Init();
-            return;
-        }
-
-        if (prevState == 4) {
-            // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada (no
-            // button creates it). Binary state-4 body kept for vtable parity.
-            LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(prevState), 0, "Update/state-4 defunct");
-            m_State = 0;
-            return;
-        }
-
         break;
     }
 
@@ -598,6 +610,42 @@ void DojoScreen::AboutCallback() {
     }
 
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
+}
+
+// ===================================================================
+// Matches DojoScreen::UpdateBSButton @ 0x0016a2f4 + T_1162 @ 0x0016a274
+// Repositions a BSButton each frame along a slide-in direction proportional
+// to the screen's transition alpha.
+// ===================================================================
+void DojoScreen::UpdateBSButton(BSButton* btn, float /*dt*/, int idx) {
+    // ASM-spec v1.6.1 T_1162 @0x0016a274 + UpdateBSButton @0x0016a2f4:
+    //   anchor = (152, 100 - 46*idx, 0); slide = normalize(8,-1,0);
+    //   pos = anchor + slide * (1 - m_TransitionAlpha) * 248.
+    Vec3 anchor(152.0f, 100.0f - 46.0f * (float)idx, 0.0f);
+    Vec3 slide(8.0f, -1.0f, 0.0f);
+    slide.Normalise();
+    float offset = (1.0f - m_TransitionAlpha) * 248.0f;
+    Vec3 pos = anchor + slide * offset;
+    btn->SetPosition(pos);
+}
+
+// ===================================================================
+// Matches DojoScreen::UpdateBSButtons @ 0x0016b580
+// Loops over all 4 social/network button slots and repositions non-null ones.
+// ===================================================================
+void DojoScreen::UpdateBSButtons(float dt) {
+    // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580:
+    //   idx 0=m_pBSButton0, 1=m_pBSButton1, 2=m_pButton4 (defunct), 3=m_ResetValue (defunct).
+    if (m_pBSButton0) UpdateBSButton(m_pBSButton0, dt, 0);
+    if (m_pBSButton1) UpdateBSButton(m_pBSButton1, dt, 1);
+    // Defunct network-button slots -- always null; loop shape preserved.
+    BSButton* btn4 = static_cast<BSButton*>(m_pButton4);
+    if (btn4) UpdateBSButton(btn4, dt, 2);
+    // m_ResetValue (+0xac) doubles as defunct BSButton* slot in the binary loop; always 0.
+    if (m_ResetValue != 0) {
+        BSButton* btn5 = reinterpret_cast<BSButton*>((size_t)(unsigned int)m_ResetValue);
+        UpdateBSButton(btn5, dt, 3);
+    }
 }
 
 // ---- Defunct callbacks ----
