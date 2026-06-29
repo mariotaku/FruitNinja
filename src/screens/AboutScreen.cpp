@@ -208,6 +208,13 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: credit line colour + per-box SetHorizontalLineSpacing(-1)
         const Colour& creditColour = game_work.m_TitleColour;
 
+        // FAITHFUL: in some locales the About intro renders a mix of localized +
+        // English lines (e.g. Korean langId 0x0b: CREDIT0/2/4 return English, 1/3/5
+        // Korean). This is the original SKU's PARTIAL translation, not a bug --
+        // verified live: v1.6.1 GETSTRING(843)="ALL NINJAS HATE FRUIT!" under langId
+        // 0x0b. All 6 boxes use the one gangofchinese.ttf face (m_pTTFFontMain); the
+        // chunky English look is that CJK face's own Latin glyphs, NOT a bitmap font.
+        // Chinese (0x0d) has all 6 translated -> no mix.
         m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine0->SetText(GETSTRING(LSTR_ABOUT_CREDIT0, 0));
         m_CreditLine0->SetColour(creditColour, 0);
