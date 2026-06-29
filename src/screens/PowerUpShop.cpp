@@ -67,7 +67,7 @@ static Colour MakeColour(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 // ============================================================
-// PowerUpShop ctor — binary @ 0x00155cac (C1) / 0x00155ce4 (C2)
+// PowerUpShop ctor — v1.6.1 PowerUpShop ctor @0x001a81f0
 // ============================================================
 PowerUpShop::PowerUpShop()
     : m_SelectedIndex(0)
@@ -121,10 +121,10 @@ void PowerUpShop::UnLoadContent() {
 }
 
 // ============================================================
-// Init @ 0x00156b08 (vtable slot 2)
+// Init v1.6.1 PowerUpShop::Init @0x001a94b0 (vtable slot 2)
 // ============================================================
 void PowerUpShop::Init() {
-    // Binary @ 0x00156b08:
+    // Binary v1.6.1 PowerUpShop::Init @0x001a94b0:
     // Zero scalars.
     m_PurchasedCount = 0;
     m_SinIdx         = 0;
@@ -134,10 +134,12 @@ void PowerUpShop::Init() {
     m_PulseScale        = 1.0f;
     m_FruitScale        = 1.0f;
 
-    // Defunct: v1.6.1 binary @ 0x00156b08 — m_Texture(+0x74) SmartPtr static at .bss
-    // 0x00231288 never assigned. Buy-bg path is dead in shipped binary. Init's
-    // GetWidth/GetHeight calls only fire when IsValid().
-    // m_Texture is default-constructed (null); pivot assignment only executes when valid.
+    // ASM-spec v1.6.1 PowerUpShop::Init @0x001a94b0: size = boardTex(w,h,0)
+    // Binary reads g_BuyBg (board bg texture); GetWidth/GetHeight execute only when IsValid().
+    // In-game the caller loads g_BuyBg before Init; headless guard keeps it crash-safe.
+    if (g_BuyBg.IsValid()) {
+        size = Vec3((float)g_BuyBg->GetWidth(), (float)g_BuyBg->GetHeight(), 0.0f);
+    }
 
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
@@ -212,38 +214,38 @@ void PowerUpShop::Release() {
 }
 
 // ============================================================
-// Reset @ 0x00155b54 (vtable slot 4) — empty body
+// Reset v1.6.1 PowerUpShop::Reset @0x001a7fe0 (vtable slot 4) — empty body
 // ============================================================
 void PowerUpShop::Reset() {
-    // Binary @ 0x00155b54: returns immediately.
+    // Binary v1.6.1 PowerUpShop::Reset @0x001a7fe0: returns immediately.
 }
 
 // ============================================================
-// PreDraw @ 0x00155b58 (vtable slot 6) — identity pass-through
+// PreDraw v1.6.1 PowerUpShop::PreDraw @0x001a7fe4 (vtable slot 6) — identity pass-through
 // ============================================================
 void PowerUpShop::PreDraw(float* hudScale) {
-    // Binary @ 0x00155b58: returns param_1 unchanged (no-op).
+    // Binary v1.6.1 PowerUpShop::PreDraw @0x001a7fe4: returns param_1 unchanged (no-op).
     (void)hudScale;
 }
 
 // ============================================================
-// Draw @ 0x00155e08 (vtable slot 7)
+// Draw v1.6.1 PowerUpShop::Draw @0x001a8364 (vtable slot 7)
 // ============================================================
 void PowerUpShop::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
-    // Binary @ 0x00155e08:
+    // Binary v1.6.1 PowerUpShop::Draw @0x001a8364:
     // Step 1: scale + translate world matrix, upload.
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Push();
 
     Matrix44 scaleMat;
     scaleMat.Identity();
-    scaleMat.ApplyScale(hudScale.x, hudScale.y, hudScale.z);
+    scaleMat.ApplyScale(size.x, size.y, size.z);
 
     Matrix44 transMat;
     transMat.Identity();
-    transMat.GlobalTranslate44(Vec3(pos.x + 480.0f, pos.y + 320.0f, pos.z));
+    transMat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z));
 
     // Combine: translate * scale (transMat first, then scale columns)
     Matrix44 combined = transMat * scaleMat;
@@ -292,8 +294,8 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         mm.GetWorldStack().Push();
         Matrix44 slotTrans;
         slotTrans.Identity();
-        slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x + 480.0f,
-                                        pos.y + slot.y + 320.0f, pos.z + slot.z));
+        slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x,
+                                        pos.y + slot.y, pos.z + slot.z));
         Matrix44 slotScaleMat;
         slotScaleMat.Identity();
         slotScaleMat.ApplyScale(iconScale, iconScale, 1.0f);
@@ -392,15 +394,15 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         }
 
         // Selected-slot title + description.
+        // Binary v1.6.1 PowerUpShop::Draw @0x001a8364: title/desc drawn at pos DIRECTLY,
+        // not pos+slot (binary reads this->pos, not the per-slot offset).
         if (i == m_SelectedIndex && game_work.pFontMain.IsValid()) {
-            float sx = pos.x + slot.x;
-            float sy = pos.y + slot.y;
-            Vec3 titlePos(sx - 224.0f, sy - 30.0f, pos.z);
+            Vec3 titlePos(pos.x - 224.0f, pos.y - 30.0f, pos.z);
             Colour titleColour = MakeColour(0xD1, 0x25, 0x0B);
             game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                                             pi->m_DisplayName, titlePos, titleColour, 0xF);
 
-            Vec3 descPos(sx - 224.0f, sy - 54.0f, pos.z);
+            Vec3 descPos(pos.x - 224.0f, pos.y - 54.0f, pos.z);
             Colour descColour = MakeColour(0x74, 0x5D, 0x3B);
             game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                                             pi->m_Description, descPos, descColour, 0xF);
@@ -412,10 +414,10 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
 }
 
 // ============================================================
-// Update @ 0x00156398 (vtable slot 10)
+// Update v1.6.1 PowerUpShop::Update @0x001a8b04 (vtable slot 10)
 // ============================================================
 void PowerUpShop::Update(float dt) {
-    // Binary @ 0x00156398:
+    // Binary v1.6.1 PowerUpShop::Update @0x001a8b04:
 
     // Step 1: advance sin-phase and compute pulse scale.
     // m_SinIdx = max(0, m_SinIdx + dt * 32760 * 2.5)

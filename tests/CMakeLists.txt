@@ -722,3 +722,18 @@ set_tests_properties(screenshot_shop_english PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_shop;lang_english_us")
 set_tests_properties(screenshot_shop_chinese PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_shop;lang_chinese")
+
+# PowerUpShop draw-position isolation guard.
+# Verifies PowerUpShop::Init populates m_PurchasablePowerUps and m_SlotLayout,
+# and that the panel renders in-range after the +480/+320 offset removal.
+# Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/powerupshop/<lang>.png (need GPU).
+fn_add_game_test(test_powerupshop test_powerupshop.cpp)
+add_test(NAME powerupshop COMMAND test_powerupshop)
+set_tests_properties(powerupshop PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_powerupshop_english COMMAND test_powerupshop --screenshot --lang=english_us)
+add_test(NAME screenshot_powerupshop_chinese COMMAND test_powerupshop --screenshot --lang=chinese)
+set_tests_properties(screenshot_powerupshop_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_powerupshop")
+set_tests_properties(screenshot_powerupshop_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;screen_powerupshop")
