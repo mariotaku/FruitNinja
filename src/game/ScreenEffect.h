@@ -35,6 +35,12 @@ class PSPParticleEmitter;
 // Binary: _Z11ParseVectorPKc v1.6.1
 Vec3 ParseVector(const char* s);
 
+// ParseMaskWords -- v1.6.1 @0x0014f404 (_Z14ParseMaskWordsPKcPmi).
+// Generic helper: comma-splits str, hashes each trimmed token via StringHash,
+// scans wordHashes[count]; on match ORs (1<<matchIndex) into the result bitmask.
+// Used by EffectImage::Parse to decode the "transition" attribute ("scale","fade"->bits 0,1).
+uint32_t ParseMaskWords(const char* str, unsigned long* wordHashes, int count);
+
 class PowerUp;
 class HUDControl3d;
 
