@@ -650,6 +650,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
     // Max glyphs per draw call -- reuse a local stack buffer.
     const int MAX_GLYPHS = 512;
     QUADCUSTOMVERTEX verts[MAX_GLYPHS * 6];
+    GLuint pageTexIDs[MAX_GLYPHS]; // one per glyph (parallel to every 6-vert group)
     int vertCount = 0;
 
     const uint32_t packedColour = colour.PlatformColour();
@@ -699,6 +700,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
             if (vertCount > 0) {
                 v[-1] = v[0];
             }
+            pageTexIDs[vertCount] = g->pageTextureID;
             vertCount++;
         }
 
@@ -725,21 +727,27 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
         verts[i].y = a10 * lx + a11 * ly + ay;
     }
 
-    // Flush: identity world matrix + atlas texture.
+    // Flush: identity world matrix + per-page atlas textures.
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     world.Push();
     world.m_Current.Identity();
     world.m_Version++;
     MatrixManager::GetInstance().UploadModelViewOnly();
 
-    // Bind the atlas GL texture directly (it's not a Mortar::Texture wrapper).
-    glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
-    glEnable(GL_TEXTURE_2D);
-    TexEnvModulate();  // Set owns tex-env (binary model); raw bind skips Set(), so set it here.
-
+    // Draw per-page runs: bind each atlas page and draw its consecutive glyph run.
+    // In the common single-page case this is exactly one bind + one DrawTriStrip.
     Renderer* renderer = Renderer::GetInstance();
     if (renderer) {
-        renderer->DrawTriStrip(verts, totalVerts);
+        int gIdx = 0;
+        while (gIdx < vertCount) {
+            GLuint curTex = pageTexIDs[gIdx];
+            int runStart = gIdx;
+            while (gIdx < vertCount && pageTexIDs[gIdx] == curTex) gIdx++;
+            glBindTexture(GL_TEXTURE_2D, curTex);
+            glEnable(GL_TEXTURE_2D);
+            TexEnvModulate();  // Set owns tex-env; raw bind skips Set(), so set it here.
+            renderer->DrawTriStrip(verts + runStart * 6, (gIdx - runStart) * 6);
+        }
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);

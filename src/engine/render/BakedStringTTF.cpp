@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <vector>
+#include <map>
 
 // Binary constants
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
@@ -185,7 +186,7 @@ void BakedStringTTF::BuildGlyphs()
         g->m_CharCode  = cp;
         g->m_FontSize  = m_ScaledHeight;
         g->m_Font      = m_pFontCache;
-        g->m_SurfaceKey = 0;  // port: single atlas, no per-page key needed
+        g->m_SurfaceKey = 0;  // set below from entry->pageTextureID
         g->m_RotAngle  = 0.0f;
         g->m_RotBasis  = Vec2(0.0f, 0.0f);
         g->m_GlyphScale = Vec2(1.0f, 1.0f);
@@ -199,6 +200,9 @@ void BakedStringTTF::BuildGlyphs()
             g->m_UvU1 = entry->u1 - k_HalfTexel;
             g->m_UvV1 = entry->v1 - k_HalfTexel;
             g->m_QuadSize = Vec2(entry->width, entry->height);
+            // Store page texture ID as surface key so BuildSurfaces can group by page.
+            // DIFFERS: binary uses TextureAtlasPage* as key; port uses resolved GL texture ID.
+            g->m_SurfaceKey = (void*)(uintptr_t)entry->pageTextureID;
         } else {
             g->m_UvU0 = g->m_UvV0 = g->m_UvU1 = g->m_UvV1 = 0.0f;
             g->m_QuadSize = Vec2(0.0f, 0.0f);
@@ -238,7 +242,8 @@ void BakedStringTTF::ApplyFormatting_LeftJustify()
 
 // BuildSurfaces @0x00248c14:
 // Group glyphs by m_SurfaceKey -> one Surface per atlas page.
-// Port: single Surface (one FontInterface atlas).
+// DIFFERS: binary groups by TextureAtlasPage*; port groups by resolved GL texture ID
+//   stored in g->m_SurfaceKey (set in BuildGlyphs from entry->pageTextureID).
 // FinishMesh @0x002480a8 builds the 6-vert/glyph buffer per glyph.
 void BakedStringTTF::BuildSurfaces()
 {
@@ -246,31 +251,29 @@ void BakedStringTTF::BuildSurfaces()
     if (!m_GlyphsBuilt || m_Glyphs.empty()) return;
     if (!m_pFontCache) return;
 
-    // Count drawable glyphs (skip w<1 or h<1 = whitespace).
-    uint32_t drawableCount = 0;
+    // Collect drawable glyph indices grouped by page, preserving page insertion order.
+    // Using a std::vector<uint32_t> for page order and a std::map for index lookup.
+    std::vector<uint32_t> pageOrder;
+    std::map<uint32_t, std::vector<size_t> > pageGlyphs;
+
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        if (g->m_QuadSize.x >= 1.0f && g->m_QuadSize.y >= 1.0f) {
-            drawableCount++;
+        if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
+        uint32_t texID = (uint32_t)(uintptr_t)g->m_SurfaceKey;
+        if (pageGlyphs.find(texID) == pageGlyphs.end()) {
+            pageOrder.push_back(texID);
+            pageGlyphs[texID] = std::vector<size_t>();
         }
+        pageGlyphs[texID].push_back(i);
     }
-    if (drawableCount == 0) return;
 
-    // Allocate one surface.
-    BakedStringTTF_Surface* surf = new BakedStringTTF_Surface();
-    memset(surf, 0, sizeof(BakedStringTTF_Surface));
-
-    surf->m_DrawMode    = -1;  // single-buffer path
-    surf->m_VertCount   = drawableCount * 6;
-    surf->m_Verts       = new QUADCUSTOMVERTEX[surf->m_VertCount];
-    memset(surf->m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * surf->m_VertCount);
+    if (pageOrder.empty()) return;
 
     // Base colour from m_Base.m_Effect.m_Col0 (the colour passed to AddColour(col,0)).
     Colour baseCol = m_Base.m_Effect.m_Col0;
-    surf->m_PlatformColour = baseCol.PlatformColour();
-    uint32_t packed = surf->m_PlatformColour;
+    uint32_t packed = baseCol.PlatformColour();
 
-    // FinishMesh @0x002480a8: build 6-vert/glyph tri-list.
+    // FinishMesh @0x002480a8: build 6-vert/glyph tri-list per page.
     // Vertex layout (QUADCUSTOMVERTEX 0x24 bytes):
     //   +0x00 x, +0x04 y, +0x08 z=0
     //   +0x0c nx=0, +0x10 ny=0, +0x14 nz=1
@@ -282,72 +285,68 @@ void BakedStringTTF::BuildSurfaces()
     // Winding order: NON-flip branch (GLES port).
     // v1.6.1 FinishMesh @0x002480a8: two winding orders by FontInterface+0x14c==1 (RT Y-flip).
     // Port uses non-flip branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) = standard CCW.
-    //
-    // Spec vertex format (+0x00..+0x24):
-    //   tri0: BL, TL, BR
-    //   tri1: TR, BR, TL
-    // = 6 verts per quad (degenerate tri-list).
 
-    uint32_t vi = 0;
-    for (size_t i = 0; i < m_Glyphs.size(); ++i) {
-        GlyphTTF* g = m_Glyphs[i];
-        // Skip whitespace / invisible glyphs.
-        if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
+    for (size_t pi = 0; pi < pageOrder.size(); ++pi) {
+        uint32_t texID = pageOrder[pi];
+        const std::vector<size_t>& glyphIdxs = pageGlyphs[texID];
+        if (glyphIdxs.empty()) continue;
 
-        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(g->m_CharCode, m_ScaledHeight);
-        if (!entry) continue;
+        BakedStringTTF_Surface* surf = new BakedStringTTF_Surface();
+        memset(surf, 0, sizeof(BakedStringTTF_Surface));
 
-        // Quad corners in pen-local space (before rotation + translation).
-        // bearingX/Y define the glyph origin; QuadMin.x = penX + bearingX, QuadMin.y = bearingY.
-        // Corner offsets from m_QuadMin:
-        //   BL = (0,         -QuadSize.y)  (bottom of glyph, below baseline)
-        //   TL = (0,          0          )  (top of glyph, at bearingY)
-        //   BR = (QuadSize.x, -QuadSize.y)
-        //   TR = (QuadSize.x,  0         )
-        // Note: m_QuadMin.y = bearingY (top), so:
-        //   actual BL world y = m_QuadMin.y - g->m_QuadSize.y = bearingY - height = bottom
-        //   actual TL world y = m_QuadMin.y                   = bearingY          = top
-        float qx = g->m_QuadMin.x;
-        float qy = g->m_QuadMin.y;
-        float qw = g->m_QuadSize.x;
-        float qh = g->m_QuadSize.y;
+        surf->m_DrawMode       = -1;  // single-buffer path
+        surf->m_VertCount      = (uint32_t)glyphIdxs.size() * 6;
+        surf->m_Verts          = new QUADCUSTOMVERTEX[surf->m_VertCount];
+        memset(surf->m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * surf->m_VertCount);
+        surf->m_PageTextureID  = texID;
+        surf->m_PlatformColour = packed;
 
-        // Local corners relative to m_QuadMin (before rotation).
-        float cx[4] = { 0.0f,  0.0f,  qw,   qw   };
-        float cy[4] = { -qh,   0.0f,  -qh,  0.0f };  // BL, TL, BR, TR
+        uint32_t vi = 0;
+        for (size_t ii = 0; ii < glyphIdxs.size(); ++ii) {
+            size_t i = glyphIdxs[ii];
+            GlyphTTF* g = m_Glyphs[i];
 
-        // Apply rotation then add QuadMin.
-        float wx[4], wy[4];
-        for (int k = 0; k < 4; k++) {
-            float rx, ry;
-            Rotate2DVector(cx[k], cy[k], g->m_RotAngle, rx, ry);
-            wx[k] = qx + rx;
-            wy[k] = qy + ry;
+            // Quad corners in pen-local space (before rotation + translation).
+            float qx = g->m_QuadMin.x;
+            float qy = g->m_QuadMin.y;
+            float qw = g->m_QuadSize.x;
+            float qh = g->m_QuadSize.y;
+
+            float cx[4] = { 0.0f,  0.0f,  qw,   qw   };
+            float cy[4] = { -qh,   0.0f,  -qh,  0.0f };  // BL, TL, BR, TR
+
+            float wx[4], wy[4];
+            for (int k = 0; k < 4; k++) {
+                float rx, ry;
+                Rotate2DVector(cx[k], cy[k], g->m_RotAngle, rx, ry);
+                wx[k] = qx + rx;
+                wy[k] = qy + ry;
+            }
+
+            float u0 = g->m_UvU0, v0 = g->m_UvV0;
+            float u1 = g->m_UvU1, v1 = g->m_UvV1;
+
+            // Non-flip winding: BL(u0,v1), TL(u0,v0), BR(u1,v1), TR(u1,v0), BR, TL
+            // v1.6.1 FinishMesh @0x002480a8: 6-vert emit order matches BakedStringBox.
+            QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
+            v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1;
+            v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0;
+            v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1;
+            v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0;
+            v[4] = v[3];
+            v[5] = v[3];
+            vi += 6;
         }
+        surf->m_VertCount = vi;
 
-        float u0 = g->m_UvU0, v0 = g->m_UvV0;
-        float u1 = g->m_UvU1, v1 = g->m_UvV1;
+        // Store first and last glyph pointers for this surface.
+        surf->m_GlyphsBegin = m_Glyphs[glyphIdxs.front()];
+        surf->m_GlyphsEnd   = m_Glyphs[glyphIdxs.back()];
 
-        // Non-flip winding: BL(u0,v1), TL(u0,v0), BR(u1,v1), TR(u1,v0), BR, TL
-        // (tri0=BL,TL,BR; tri1=TR,BR,TL reordered for strip connectivity)
-        // v1.6.1 FinishMesh @0x002480a8: 6-vert emit order matches BakedStringBox.
-        QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
-        v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1;
-        v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0;
-        v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1;
-        v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0;
-        v[4] = v[3];
-        v[5] = v[3];
-        vi += 6;
+        m_Surfaces.push_back(surf);
     }
-    surf->m_VertCount = vi;
 
-    // Store glyph range in surface (spec: m_GlyphsBegin/End).
-    surf->m_GlyphsBegin = m_Glyphs.empty() ? 0 : m_Glyphs[0];
-    surf->m_GlyphsEnd   = m_Glyphs.empty() ? 0 : m_Glyphs[m_Glyphs.size() - 1];
-
-    m_Surfaces.push_back(surf);
-    m_SurfacesBuilt = true;
+    m_SurfacesBuilt = !m_Surfaces.empty();
 }
 
 // ApplyEffects @0x00249684: tail-branch dispatch.
@@ -627,7 +626,7 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t a
         }
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+        glBindTexture(GL_TEXTURE_2D, (GLuint)s->m_PageTextureID);
         glEnable(GL_TEXTURE_2D);
         TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
 

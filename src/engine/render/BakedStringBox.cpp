@@ -428,6 +428,8 @@ void BakedStringBox::Layout() {
                     v[4] = v[3];
                     v[5] = v[3];
                     for (int k = 0; k < 6; k++) line.verts.push_back(v[k]);
+                    // Record which atlas page this glyph belongs to for per-page batching in Draw.
+                    line.glyphPageTexIDs.push_back((uint32_t)g->pageTextureID);
 
                     if (g->bearingY > lineMaxBearingY)
                         lineMaxBearingY = g->bearingY;
@@ -842,11 +844,21 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
                 for (int gi = 1; gi * 6 < nVerts; gi++) {
                     wv[gi * 6 - 1] = wv[gi * 6];
                 }
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
-                glEnable(GL_TEXTURE_2D);
-                TexEnvModulate();
-                renderer->DrawTriStrip(&wv[0], nVerts);
+                // Per-page batch: draw consecutive same-page glyph runs.
+                {
+                    const int numGlyphs = (int)sline.glyphPageTexIDs.size();
+                    int gIdx = 0;
+                    while (gIdx < numGlyphs) {
+                        uint32_t curTex = sline.glyphPageTexIDs[gIdx];
+                        int runStart = gIdx;
+                        while (gIdx < numGlyphs && sline.glyphPageTexIDs[gIdx] == curTex) gIdx++;
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
+                        glEnable(GL_TEXTURE_2D);
+                        TexEnvModulate();
+                        renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
+                    }
+                }
             }
         }
     }
@@ -881,11 +893,21 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
                 for (int gi = 1; gi * 6 < nVerts; gi++) {
                     wv[gi * 6 - 1] = wv[gi * 6];
                 }
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
-                glEnable(GL_TEXTURE_2D);
-                TexEnvModulate();
-                renderer->DrawTriStrip(&wv[0], nVerts);
+                // Per-page batch for stroke pass.
+                {
+                    const int numGlyphs = (int)sline.glyphPageTexIDs.size();
+                    int gIdx = 0;
+                    while (gIdx < numGlyphs) {
+                        uint32_t curTex = sline.glyphPageTexIDs[gIdx];
+                        int runStart = gIdx;
+                        while (gIdx < numGlyphs && sline.glyphPageTexIDs[gIdx] == curTex) gIdx++;
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
+                        glEnable(GL_TEXTURE_2D);
+                        TexEnvModulate();
+                        renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
+                    }
+                }
             }
         }
     }
@@ -923,12 +945,21 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
         // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
         // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
         // lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas.
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
-        glEnable(GL_TEXTURE_2D);
-        TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
-
-        renderer->DrawTriStrip(&wv[0], nVerts);
+        // Per-page batch: bind each atlas page and draw its consecutive glyph run.
+        {
+            const int numGlyphs = (int)line.glyphPageTexIDs.size();
+            int gIdx = 0;
+            while (gIdx < numGlyphs) {
+                uint32_t curTex = line.glyphPageTexIDs[gIdx];
+                int runStart = gIdx;
+                while (gIdx < numGlyphs && line.glyphPageTexIDs[gIdx] == curTex) gIdx++;
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
+                glEnable(GL_TEXTURE_2D);
+                TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
+                renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
+            }
+        }
 
         // Accumulate ink bounds from transformed verts for the debug overlay.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
@@ -964,9 +995,9 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
                               hasBox,
                               bx0, by0, bx1, by1,
                               dbgInkX0, dbgInkY0, dbgInkX1, dbgInkY1);
-        // Restore atlas texture for any following render state (scissor disable etc).
+        // Unbind texture after debug overlay to restore clean GL state.
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 #endif
 

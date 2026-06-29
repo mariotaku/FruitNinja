@@ -28,6 +28,7 @@
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include <vector>
+#include <cstdint>
 #include <cstring>
 
 namespace Mortar {
@@ -39,6 +40,11 @@ struct GlyphAtlasEntry;
 // One laid-out line of glyphs ready to draw.
 struct BakedStringBoxLine {
     std::vector<QUADCUSTOMVERTEX> verts; // 6 verts per glyph (tri-strip)
+    // One GL texture ID per drawable glyph (parallel to every 6-vert group in verts).
+    // Stored as uint32_t (same bit width as GLuint) to avoid pulling GL headers here.
+    // Used by Draw to batch consecutive same-page glyphs. Port specific: the binary
+    // groups by TextureAtlasPage* implicitly; here we store the resolved GL texture ID.
+    std::vector<uint32_t> glyphPageTexIDs;
     float width;        // total world-unit advance (unscaled)
     float height;       // binary step = line pitch (world units)
     float maxBearingY;  // max bearingY across glyphs (above baseline, world units)

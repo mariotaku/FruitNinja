@@ -71,8 +71,8 @@ struct BakedStringTTF_Surface {
     uint32_t          _pad18;         // +0x18
     uint32_t          _pad1c;         // +0x1c
     uint32_t          _pad20;         // +0x20
-    int               m_DrawMode;     // +0x24 <0 = single-buffer path (the port's path)
-    uint32_t          _pad28;         // +0x28
+    int               m_DrawMode;      // +0x24 <0 = single-buffer path (the port's path)
+    uint32_t          m_PageTextureID; // +0x28 GL texture ID of the atlas page for this surface's glyphs
     uint32_t          _pad2c;         // +0x2c
     uint32_t          _pad30;         // +0x30
     uint32_t          _pad34;         // +0x34

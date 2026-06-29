@@ -153,12 +153,13 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX*, int) {}
 void Renderer::DrawColorQuad(const Colour&) {}
 
 // ---------------------------------------------------------------------------
-// FontInterface stub.
+// FontInterface stub — multi-page API (updated for #263 multi-page atlas).
 // GetAtlas() in FontCacheObjectTTF returns m_Atlas which is nullptr in our stub
 // ctor, so BakedStringBox::Layout()'s "if (atlas) atlas->BuildPendingTextures()"
 // guard skips all GL calls. We still need all the method bodies at link time.
-// GetTextureID() and GetSize() are inline in FontInterface.h; only provide the
-// out-of-line ones.
+// GetTextureID(), GetSize(), GetPageCount() are inline in FontInterface.h.
+// GetPageTextureID(int) is out-of-line and needs a stub body here.
+// Private helpers AllocatePage/EnsurePageTexture/MarkPageDirty also need bodies.
 // ---------------------------------------------------------------------------
 namespace Mortar {
 
@@ -168,16 +169,7 @@ FontInterface::FontInterface(int sz)
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
     , m_Size(sz)
-    , m_Pixels(nullptr)
-    , m_TextureID(0)
-    , m_CursorX(0)
-    , m_CursorY(0)
-    , m_RowHeight(0)
-    , m_Dirty(false)
-    , m_DirtyX0(0)
-    , m_DirtyY0(0)
-    , m_DirtyX1(0)
-    , m_DirtyY1(0)
+    // m_Pages (std::vector) default-constructs to empty — no explicit init needed.
 {}
 
 FontInterface::~FontInterface() {}
@@ -186,11 +178,16 @@ void FontInterface::InitialiseData(float fs, float gs) {
     m_InvFontScale = (fs > 0.0f ? 1.0f / fs : 1.0f);
     m_GlobalSizeScale = gs;
 }
-bool FontInterface::PackGlyph(int, int, const uint8_t*, GlyphAtlasEntry*) { return false; }
+bool FontInterface::PackGlyph(int, int, const uint8_t*, GlyphAtlasEntry* out) {
+    if (out) out->pageTextureID = 0;
+    return true;
+}
 void FontInterface::BuildPendingTextures() {}
 void FontInterface::Clear() {}
-void FontInterface::EnsureTexture() {}
-void FontInterface::MarkDirty(int, int, int, int) {}
+GLuint FontInterface::GetPageTextureID(int) const { return 0; }
+FontAtlasPage* FontInterface::AllocatePage() { return nullptr; }
+void FontInterface::EnsurePageTexture(FontAtlasPage*) {}
+void FontInterface::MarkPageDirty(FontAtlasPage*, int, int, int, int) {}
 
 // ---------------------------------------------------------------------------
 // RECORDING FontCacheObjectTTF stub

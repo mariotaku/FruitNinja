@@ -13,23 +13,12 @@ FontInterface::FontInterface(int atlasSize)
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
     , m_Size(atlasSize)
-    , m_Pixels(nullptr)
-    , m_TextureID(0)
-    , m_CursorX(0)
-    , m_CursorY(0)
-    , m_RowHeight(0)
-    , m_Dirty(false)
-    , m_DirtyX0(0), m_DirtyY0(0)
-    , m_DirtyX1(0), m_DirtyY1(0)
 {
-    // Port specific: RGBA atlas (4 bytes/texel) so GL_MODULATE yields vertex colour.
-    m_Pixels = (uint8_t*)calloc((size_t)(m_Size * m_Size * 4), 1);
-    EnsureTexture();
+    // Port specific: pages are allocated lazily on first PackGlyph (binary
+    // TextureAtlas @0x00269c9c starts empty; port follows the same model).
 }
 
 // Mirrors binary Initialize @ 0x00250470.
-// fontScale and invFontScale are always 1.0 in practice;
-// globalSizeScale is 0.9 only for Korean (language byte 0x13).
 void FontInterface::InitialiseData(float fontScale, float globalSizeScale) {
     m_FontScale      = fontScale;
     m_InvFontScale   = (fontScale != 0.0f) ? (1.0f / fontScale) : 1.0f;
@@ -41,61 +30,91 @@ FontInterface::~FontInterface() {
 }
 
 void FontInterface::Clear() {
-    if (m_TextureID) {
-        glDeleteTextures(1, &m_TextureID);
-        m_TextureID = 0;
+    for (size_t i = 0; i < m_Pages.size(); ++i) {
+        FontAtlasPage* page = m_Pages[i];
+        if (page->m_TextureID) {
+            glDeleteTextures(1, &page->m_TextureID);
+            page->m_TextureID = 0;
+        }
+        free(page->m_Pixels);
+        page->m_Pixels = nullptr;
+        delete page;
     }
-    free(m_Pixels);
-    m_Pixels    = nullptr;
-    m_CursorX   = 0;
-    m_CursorY   = 0;
-    m_RowHeight = 0;
-    m_Dirty     = false;
+    m_Pages.clear();
 }
 
-void FontInterface::EnsureTexture() {
-    if (m_TextureID) return;
-    glGenTextures(1, &m_TextureID);
-    glBindTexture(GL_TEXTURE_2D, m_TextureID);
+void FontInterface::EnsurePageTexture(FontAtlasPage* page) {
+    if (page->m_TextureID) return;
+    glGenTextures(1, &page->m_TextureID);
+    glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
-    // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
-    // lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas.
-    // RGBA rows are 4-byte aligned so the default GL_UNPACK_ALIGNMENT=4 is fine;
-    // setting 1 is harmless and kept for robustness.
+    // Port specific: RGBA atlas -- 4-byte aligned rows; GL_UNPACK_ALIGNMENT=1 is
+    // harmless and ensures correctness when widths are not multiples of 4.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_Size, m_Size, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, m_Pixels);
+                 GL_RGBA, GL_UNSIGNED_BYTE, page->m_Pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+FontAtlasPage* FontInterface::AllocatePage() {
+    FontAtlasPage* page = new FontAtlasPage();
+    page->m_Pixels   = (uint8_t*)calloc((size_t)(m_Size * m_Size * 4), 1);
+    page->m_TextureID = 0;
+    page->m_CursorX  = 0;
+    page->m_CursorY  = 0;
+    page->m_RowHeight = 0;
+    page->m_Dirty    = false;
+    page->m_DirtyX0  = 0;
+    page->m_DirtyY0  = 0;
+    page->m_DirtyX1  = 0;
+    page->m_DirtyY1  = 0;
+    EnsurePageTexture(page);
+    m_Pages.push_back(page);
+    LOG_INFO("FontInterface", "allocated atlas page %d (%dx%d)",
+             (int)m_Pages.size() - 1, m_Size, m_Size);
+    return page;
+}
+
+GLuint FontInterface::GetPageTextureID(int idx) const {
+    if (idx < 0 || idx >= (int)m_Pages.size()) return 0;
+    return m_Pages[idx]->m_TextureID;
+}
+
+// DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c never drops glyphs;
+//   on overflow it allocates a new TextureAtlasPage (256x256) and retries.
+//   Port mirrors this model with 512x512 pages (kFontSupersample=3).
 bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
-                              GlyphAtlasEntry* out) {
-    if (!m_Pixels) return false;
-    // 1-pixel padding between glyphs to avoid filtering bleed.
+                               GlyphAtlasEntry* out) {
+    // Ensure at least one page exists.
+    if (m_Pages.empty()) {
+        AllocatePage();
+    }
+
     const int padX = 1, padY = 1;
+    FontAtlasPage* page = m_Pages.back();
 
-    // Advance to next row if this glyph doesn't fit horizontally.
-    if (m_CursorX + width + padX > m_Size) {
-        m_CursorX  = 0;
-        m_CursorY += m_RowHeight + padY;
-        m_RowHeight = 0;
-    }
-    // Atlas full?
-    if (m_CursorY + height > m_Size) {
-        LOG_ERROR("FontInterface", "glyph atlas full (%dx%d)", m_Size, m_Size);
-        return false;
+    // Advance to next row if glyph doesn't fit horizontally on current page.
+    if (page->m_CursorX + width + padX > m_Size) {
+        page->m_CursorX  = 0;
+        page->m_CursorY += page->m_RowHeight + padY;
+        page->m_RowHeight = 0;
     }
 
-    // Copy glyph bitmap into the atlas CPU buffer.
+    // If the current page is vertically full, allocate a new page.
+    if (page->m_CursorY + height > m_Size) {
+        page = AllocatePage();
+    }
+
+    // Copy glyph bitmap into the page's CPU buffer.
     // Port specific: expand 1-byte FreeType coverage -> RGBA (R=G=B=255, A=coverage)
     // so GL_MODULATE passes the vertex colour through unchanged.
     if (bitmap && width > 0 && height > 0) {
         for (int row = 0; row < height; row++) {
-            uint8_t* dst = m_Pixels + ((m_CursorY + row) * m_Size + m_CursorX) * 4;
+            uint8_t* dst = page->m_Pixels
+                           + ((page->m_CursorY + row) * m_Size + page->m_CursorX) * 4;
             const uint8_t* src = bitmap + row * width;
             for (int col = 0; col < width; col++) {
                 dst[col * 4 + 0] = 255;
@@ -106,62 +125,64 @@ bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
         }
     }
 
-    MarkDirty(m_CursorX, m_CursorY, width, height);
+    MarkPageDirty(page, page->m_CursorX, page->m_CursorY, width, height);
 
     const float invS = 1.0f / (float)m_Size;
-    out->u0 = (float)m_CursorX         * invS;
-    out->v0 = (float)m_CursorY         * invS;
-    out->u1 = (float)(m_CursorX + width)  * invS;
-    out->v1 = (float)(m_CursorY + height) * invS;
+    out->u0 = (float)page->m_CursorX              * invS;
+    out->v0 = (float)page->m_CursorY              * invS;
+    out->u1 = (float)(page->m_CursorX + width)    * invS;
+    out->v1 = (float)(page->m_CursorY + height)   * invS;
+    out->pageTextureID = page->m_TextureID;
 
-    m_CursorX += width + padX;
-    if (height > m_RowHeight) m_RowHeight = height;
+    page->m_CursorX += width + padX;
+    if (height > page->m_RowHeight) page->m_RowHeight = height;
 
     return true;
 }
 
 void FontInterface::BuildPendingTextures() {
-    if (!m_Dirty || !m_Pixels || !m_TextureID) return;
+    for (size_t pi = 0; pi < m_Pages.size(); ++pi) {
+        FontAtlasPage* page = m_Pages[pi];
+        if (!page->m_Dirty || !page->m_Pixels || !page->m_TextureID) continue;
 
-    glBindTexture(GL_TEXTURE_2D, m_TextureID);
-    // Port specific: RGBA atlas — each texel is 4 bytes; rows are 4-byte aligned.
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    // Upload only the dirty rectangle.
-    const int dw = m_DirtyX1 - m_DirtyX0;
-    const int dh = m_DirtyY1 - m_DirtyY0;
-    if (dw > 0 && dh > 0) {
-        // Extract dirty rows (RGBA, 4 bytes/texel) into a contiguous temporary buffer.
-        uint8_t* tmp = (uint8_t*)malloc((size_t)(dw * dh * 4));
-        if (tmp) {
-            for (int row = 0; row < dh; row++) {
-                memcpy(tmp + row * dw * 4,
-                       m_Pixels + ((m_DirtyY0 + row) * m_Size + m_DirtyX0) * 4,
-                       (size_t)(dw * 4));
+        glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        const int dw = page->m_DirtyX1 - page->m_DirtyX0;
+        const int dh = page->m_DirtyY1 - page->m_DirtyY0;
+        if (dw > 0 && dh > 0) {
+            uint8_t* tmp = (uint8_t*)malloc((size_t)(dw * dh * 4));
+            if (tmp) {
+                for (int row = 0; row < dh; row++) {
+                    memcpy(tmp + row * dw * 4,
+                           page->m_Pixels
+                               + ((page->m_DirtyY0 + row) * m_Size + page->m_DirtyX0) * 4,
+                           (size_t)(dw * 4));
+                }
+                glTexSubImage2D(GL_TEXTURE_2D, 0,
+                                page->m_DirtyX0, page->m_DirtyY0, dw, dh,
+                                GL_RGBA, GL_UNSIGNED_BYTE, tmp);
+                free(tmp);
             }
-            glTexSubImage2D(GL_TEXTURE_2D, 0,
-                            m_DirtyX0, m_DirtyY0, dw, dh,
-                            GL_RGBA, GL_UNSIGNED_BYTE, tmp);
-            free(tmp);
         }
+        glBindTexture(GL_TEXTURE_2D, 0);
+        page->m_Dirty = false;
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_Dirty = false;
 }
 
-void FontInterface::MarkDirty(int x, int y, int w, int h) {
+void FontInterface::MarkPageDirty(FontAtlasPage* page, int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) return;
-    if (!m_Dirty) {
-        m_DirtyX0 = x;
-        m_DirtyY0 = y;
-        m_DirtyX1 = x + w;
-        m_DirtyY1 = y + h;
-        m_Dirty   = true;
+    if (!page->m_Dirty) {
+        page->m_DirtyX0 = x;
+        page->m_DirtyY0 = y;
+        page->m_DirtyX1 = x + w;
+        page->m_DirtyY1 = y + h;
+        page->m_Dirty   = true;
     } else {
-        if (x < m_DirtyX0)     m_DirtyX0 = x;
-        if (y < m_DirtyY0)     m_DirtyY0 = y;
-        if (x + w > m_DirtyX1) m_DirtyX1 = x + w;
-        if (y + h > m_DirtyY1) m_DirtyY1 = y + h;
+        if (x < page->m_DirtyX0)         page->m_DirtyX0 = x;
+        if (y < page->m_DirtyY0)         page->m_DirtyY0 = y;
+        if (x + w > page->m_DirtyX1)     page->m_DirtyX1 = x + w;
+        if (y + h > page->m_DirtyY1)     page->m_DirtyY1 = y + h;
     }
 }
 
