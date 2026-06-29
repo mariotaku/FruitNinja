@@ -458,15 +458,16 @@ void ShopListItem::DrawDescription() {
     // Determine base height and fontSize for box3.
     float descH = bVar6 ? 62.0f : 82.0f;
     float fontSize = 14.0f;
-    bool isKorean = (game_work.languageFlag == 0x14);
-    bool isChinese = (game_work.languageFlag == 0x0C);
+    // v1.6.1 DrawDescription @0x001b1f20: 0x14=Arabic, 0x0c=Japanese (NOT Korean/Chinese)
+    bool isArabic = (game_work.languageFlag == 0x14);
+    bool isJapanese = (game_work.languageFlag == 0x0C);
 
-    if (isKorean) {
+    if (isArabic) {
         descH -= 20.0f;
         fontSize = 14.0f;
-    } else if (isChinese) {
+    } else if (isJapanese) {
         fontSize = 12.0f;
-        // Side-effect-only GETSTRING call for Chinese locale.
+        // Side-effect-only GETSTRING call for Japanese locale.
         // Binary @0x001b1f20: GETSTRING_CAST_0(0x111) result discarded.
         (void)GETSTRING_CAST_0((LocalizedString)0x111);
     }
@@ -523,8 +524,8 @@ void ShopListItem::DrawDescription() {
     // Draw box4 (prompt) first when bVar6.
     float xPos = m_pShopScreen->GetDescriptionTextXPos();
     if (bVar6 && m_pBox4) {
-        // Position: (xPos, Korean ? -5 : -20, 0).
-        float promptY = isKorean ? -5.0f : -20.0f;
+        // Position: (xPos, Arabic(0x14) ? -5 : -20, 0).
+        float promptY = isArabic ? -5.0f : -20.0f;
         m_pBox4->SetTranslation(Vec3(xPos, promptY, 0.0f), 0);
         m_pBox4->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
     }
