@@ -105,7 +105,7 @@ DojoScreen::DojoScreen(Game& g)
         0xf, 1, 0);
     m_pVersionText->SetGradient(Colour(1, 146, 208, 255), Colour(0, 26, 69, 255), false);
     m_pVersionText->SetText(GETSTRING_CAST_0(LSTR_DOJO_TITLE));
-    m_pVersionText->SetHorizontalLineSpacing(-1.0f);
+    m_pVersionText->SetHorizontalLineSpacing(-1);
 
     // --- m_pBSButton0: Facebook defunct visible stub ---
     // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: operator_new(0xe8),
@@ -535,7 +535,7 @@ void DojoScreen::Draw(float* hudScaleRaw) {
         if (m_pVersionText) {
             titlePos += Vec3(0.0f, 5.0f, 0.0f);
             m_pVersionText->SetTranslation(titlePos, 1);
-            m_pVersionText->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+            m_pVersionText->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
         }
     }
 }

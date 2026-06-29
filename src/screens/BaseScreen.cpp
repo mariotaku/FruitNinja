@@ -303,7 +303,7 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
 
     if (box != nullptr) {
         box->SetTranslation(anchor, 1);
-        box->Draw(-7.0f, Vec2(1.0f, 1.0f), 1);
+        box->Draw(Vec2(1.0f, 1.0f), -7.0f, 1);
     }
 
     return anchor;

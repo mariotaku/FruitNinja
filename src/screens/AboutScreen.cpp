@@ -178,7 +178,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // Title box -- LSTR 0x3c3
         // fontSize 20, width 0xa0(160), align 0xf, height 30, maxLines 1
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
-        m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160.0f, 30.0f, 0xf, 1, 0);
+        m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160, 30, 0xf, 1, 0);
         m_TitleBox->SetText(GETSTRING(LSTR_ABOUT_TITLE, 0));
         m_TitleBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
@@ -186,7 +186,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // fontSize 20, width 0x64(100), align 0xf, height 30, maxLines 1
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
         // Constructed for layout parity; NOT drawn in NewDraw (binary never positions/draws it).
-        m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100.0f, 30.0f, 0xf, 1, 0);
+        m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100, 30, 0xf, 1, 0);
         m_HeadingBox->SetText(GETSTRING(LSTR_ABOUT_HEADING, 0));
         m_HeadingBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
@@ -197,10 +197,10 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         //   OS_SPrintf(buf, 0x200, "%s %s", "V", GetVersionString())
         char vbuf[32];
         snprintf(vbuf, sizeof(vbuf), "%s %s", "V", GetVersionString());
-        m_VersionBox = new Mortar::BakedStringBox(font, 10.0f, 80.0f, 30.0f, 1, 1, 0);
+        m_VersionBox = new Mortar::BakedStringBox(font, 10.0f, 80, 30, 1, 1, 0);
         m_VersionBox->SetText(vbuf);
         m_VersionBox->SetColour(Colour(0x74, 0x5D, 0x3C, 255), 1);
-        m_VersionBox->SetHorizontalLineSpacing(-1.0f);
+        m_VersionBox->SetHorizontalLineSpacing(-1);
 
         // Credit lines 0..5 -- LSTR 0x34b..0x350
         // fontSize 12, width 0x140(320), align 0xf, height 30, maxLines 1
@@ -208,35 +208,35 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: credit line colour + per-box SetHorizontalLineSpacing(-1)
         const Colour& creditColour = game_work.m_TitleColour;
 
-        m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine0->SetText(GETSTRING(LSTR_ABOUT_CREDIT0, 0));
         m_CreditLine0->SetColour(creditColour, 0);
-        m_CreditLine0->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine0->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine1->SetText(GETSTRING(LSTR_ABOUT_CREDIT1, 0));
         m_CreditLine1->SetColour(creditColour, 0);
-        m_CreditLine1->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine1->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine2->SetText(GETSTRING(LSTR_ABOUT_CREDIT2, 0));
         m_CreditLine2->SetColour(creditColour, 0);
-        m_CreditLine2->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine2->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine3->SetText(GETSTRING(LSTR_ABOUT_CREDIT3, 0));
         m_CreditLine3->SetColour(creditColour, 0);
-        m_CreditLine3->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine3->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine4->SetText(GETSTRING(LSTR_ABOUT_CREDIT4, 0));
         m_CreditLine4->SetColour(creditColour, 0);
-        m_CreditLine4->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine4->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320.0f, 30.0f, 0xf, 1, 0);
+        m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
         m_CreditLine5->SetText(GETSTRING(LSTR_ABOUT_CREDIT5, 0));
         m_CreditLine5->SetColour(creditColour, 0);
-        m_CreditLine5->SetHorizontalLineSpacing(-1.0f);
+        m_CreditLine5->SetHorizontalLineSpacing(-1);
 
         // TODO: v1.6.1 AboutScreen ctor @0x0015b764 -- min-fontSize equalization pass across credit boxes not ported (no BakedStringBox font-size getter)
     }
@@ -433,39 +433,39 @@ void AboutScreen::NewDraw(float yDrawn)
     // Credit lines
     if (m_CreditLine0) {
         m_CreditLine0->SetTranslation(Vec3((float)x0, (float)y0,            0.0f), 0);
-        m_CreditLine0->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine0->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine1) {
         m_CreditLine1->SetTranslation(Vec3((float)x0, (float)(y0 - 0x14),   0.0f), 0);
-        m_CreditLine1->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine1->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine2) {
         m_CreditLine2->SetTranslation(Vec3((float)x0, (float)(y0 - 0x28),   0.0f), 0);
-        m_CreditLine2->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine2->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine3) {
         m_CreditLine3->SetTranslation(Vec3((float)x0, (float)(y0 - 0x4b),   0.0f), 0);
-        m_CreditLine3->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine3->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine4) {
         m_CreditLine4->SetTranslation(Vec3((float)x0, (float)(y0 - 0x5f),   0.0f), 0);
-        m_CreditLine4->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine4->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine5) {
         m_CreditLine5->SetTranslation(Vec3((float)x0, (float)(y0 - 0x73),   0.0f), 0);
-        m_CreditLine5->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_CreditLine5->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Title box
     if (m_TitleBox) {
         m_TitleBox->SetTranslation(Vec3((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
-        m_TitleBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_TitleBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Version box
     if (m_VersionBox) {
         m_VersionBox->SetTranslation(Vec3((float)(x0 + 5), (float)(y0 + 0x15), 0.0f), 0);
-        m_VersionBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_VersionBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 AboutScreen::NewDraw @0x0015a264 (re-analyst):
@@ -604,10 +604,10 @@ void AboutScreen::AddLine(const char* text, const Colour& colour, float fontSize
     Mortar::FontCacheObjectTTF* font = GetAboutTTFFont();
     if (!font) return;
 
-    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, fontSize, 350.0f, 20.0f, 0xf, 1, 0);
+    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, fontSize, 350, 20, 0xf, 1, 0);
     box->SetText(text);
     box->SetColour(colour, 1);
-    box->SetWorldspaceClipping(-240.0f, -46.0f, 400.0f, 108.0f);
+    box->SetWorldspaceClipping(-240, -46, 400, 108);
     box->Update();
 
     MarqueeText* mt = new MarqueeText();
@@ -672,9 +672,9 @@ void AboutScreen::CreateCreditsMarquee()
 // plus the heading box rotated 90 degrees.
 // ASM-verified: 2026-06-21T00:00Z v1.6.1 AboutScreen::DrawMarquee @0x0015a138 (re-analyst):
 //   transOffset = Vec3(0, -416 + 320*alpha, 0)
-//   per item: m_pBox->SetTranslation(pos + transOffset, 0); m_pBox->Draw(0, Vec2(1,1), 1)
+//   per item: m_pBox->SetTranslation(pos + transOffset, 0); m_pBox->Draw(Vec2(1,1), 0, 1)
 //   heading: m_HeadingBox->SetTranslation(Vec3(-191, transOffset.y - 67, 0), 1)
-//            T_1164(90.0, m_HeadingBox) @0x0015a0e8 = Draw(box, 90.0f, Vec2(1,1), center=1).
+//            T_1164(90.0, m_HeadingBox) @0x0015a0e8 = Draw(box, Vec2(1,1), 90.0f, center=1).
 //            Binary has NO SetRotation; rotation is Draw's first arg (Draw @0x00246e20 applies theta=arg*pi/180).
 // -----------------------------------------------------------------------
 void AboutScreen::DrawMarquee()
@@ -686,12 +686,12 @@ void AboutScreen::DrawMarquee()
         if (!mt || !mt->m_pBox) continue;
         Vec3 drawPos = mt->pos + Vec3(0.0f, transY, 0.0f);
         mt->m_pBox->SetTranslation(drawPos, 0);
-        mt->m_pBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        mt->m_pBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     if (m_HeadingBox) {
         m_HeadingBox->SetTranslation(Vec3(-191.0f, transY - 67.0f, 0.0f), 1);
-        m_HeadingBox->Draw(90.0f, Vec2(1.0f, 1.0f), 1);
+        m_HeadingBox->Draw(Vec2(1.0f, 1.0f), 90.0f, 1);
     }
 }
 

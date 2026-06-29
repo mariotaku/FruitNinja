@@ -206,9 +206,9 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
         );
 
         box->SetTranslation(finalPos, 1);
-        // Draw(rotDeg, (scale,scale), center=1)
+        // Draw((scale,scale), rotDeg, center=1)
         Vec2 sc(scale, scale);
-        box->Draw(m_VerticalOffset, sc, 1);
+        box->Draw(sc, m_VerticalOffset, 1);
     }
 
     // (B) Textures

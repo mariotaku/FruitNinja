@@ -222,7 +222,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         }
         // ASM-spec v1.6.1: game_work+0x6a0 (PreloadRings @0x0011cd44) = #6F461E
         tbox->SetColour(Colour(111, 70, 30, 255), 0);
-        tbox->SetHorizontalLineSpacing(-1.0f);
+        tbox->SetHorizontalLineSpacing(-1);
         tbox->FitIntoVerticalBounds();
         m_pTitleBox = tbox;
 
@@ -240,7 +240,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
             Colour(121, 183, 20, 255),
             Colour(96,  116, 14, 255),
             false);
-        dbox->SetHorizontalLineSpacing(-1.0f);
+        dbox->SetHorizontalLineSpacing(-1);
         m_pDescBox = dbox;
 
         // m_pInfoBox: single-line "MULTIPLAYER"
@@ -257,7 +257,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
             Colour(170, 9,   19, 255),
             Colour(141, 1,   22, 255),
             false);
-        ibox->SetHorizontalLineSpacing(-1.0f);
+        ibox->SetHorizontalLineSpacing(-1);
         m_pInfoBox = ibox;
     }
 }
@@ -622,7 +622,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     if (m_pDescBox) {
         anchor += Vec3(-24.0f, 11.0f, 0.0f);
         m_pDescBox->SetTranslation(anchor, 1);
-        m_pDescBox->Draw(-7.0f, Vec2(1.0f, 1.0f), 1);
+        m_pDescBox->Draw(Vec2(1.0f, 1.0f), -7.0f, 1);
     }
 
     // --- 4. Connect texture animation ---
@@ -653,7 +653,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
         // logoPos + (8, 3, 0), rotation -9 degrees, scale (1,1), centered.
         if (m_pTitleBox) {
             m_pTitleBox->SetTranslation(logoPos + Vec3(8.0f, 3.0f, 0.0f), 1);
-            m_pTitleBox->Draw(-9.0f, Vec2(1.0f, 1.0f), 1);
+            m_pTitleBox->Draw(Vec2(1.0f, 1.0f), -9.0f, 1);
         }
     }
 

@@ -212,14 +212,14 @@ void GenericHUDControl::DrawOrder(float* hudScaleRaw, int layerMask) {
     (void)layerMask;
     Draw(hudScaleRaw);
     // ASM-spec v1.6.1 GenericHUDControl::DrawOrder @0x00189a58: if m_pLabel,
-    //   m_pLabel->SetTranslation(pos, 0); m_pLabel->Draw(m_Timer, Vec2(size.z,size.z), 1).
+    //   m_pLabel->SetTranslation(pos, 0); m_pLabel->Draw(Vec2(size.z,size.z), m_Timer, 1).
     // Translation = HUDControl::pos (+0x08), rotation = m_Timer (+0x2c, the PreDraw
     // angle), scale = Vec2(size.z, size.z) (+0x28, both components), center = 1.
     // Label alpha is plumbed via BakedStringBox::SetColour at the setup side, not here.
     if (m_pLabel) {
         m_pLabel->SetTranslation(this->pos, 0);
         float s = this->size.z;
-        m_pLabel->Draw(this->m_Timer, Vec2(s, s), 1);
+        m_pLabel->Draw(Vec2(s, s), this->m_Timer, 1);
     }
 }
 

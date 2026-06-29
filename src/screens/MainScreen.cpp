@@ -658,7 +658,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
     if (m_pSliceInstrBox) {
         Vec3 instrPos = m_LogoPos + Vec3(-4.0f, -4.0f, 0.0f);
         m_pSliceInstrBox->SetTranslation(instrPos, 1);
-        m_pSliceInstrBox->Draw(8.0f, Vec2(1.0f, 1.0f), 1);
+        m_pSliceInstrBox->Draw(Vec2(1.0f, 1.0f), 8.0f, 1);
     }
 
     // 5. Loading symbol (v1.6.1 Draw @0x001993ac: states 0x13/0x14 only)
