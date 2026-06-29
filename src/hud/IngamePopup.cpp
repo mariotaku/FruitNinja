@@ -108,7 +108,7 @@ IngamePopup::IngamePopup(int type)
 
         m_TextBoxes.push_back(box);
 
-        // If langId == 0x14 (Korean), shift text position by y-4
+        // If langId == 0x14 (Arabic), shift text position by y-4
         // Binary checks game_work languageFlag == 0x14
         float textY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
         m_TextPositions.push_back(Vec3(0.0f, textY, 0.0f));
