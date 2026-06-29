@@ -14,6 +14,7 @@
 #  include "debug/DebugFlags.h"
 #endif
 #include <cstring>
+#include <cstdlib>
 #include <cmath>
 #include <vector>
 
@@ -57,59 +58,90 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                int align,
                                int maxLines,
                                int lineSpacing)
-    : m_Font(font)
-    , m_FontSize(fontSize)
-    , m_BoxWidth((float)width)
-    , m_BoxHeight((float)height)
-    , m_Align(align)
-    , m_MaxLines(maxLines)
-    , m_LineSpacing(lineSpacing)
-    , m_AlignMode(-1)
-    , m_Colour(255, 255, 255, 255)
-    , m_Pos(0.0f, 0.0f, 0.0f)
-    , m_ShadowOffset(0.0f, 0.0f, 0.0f)
-    , m_ShadowScale(0.0f)
-    , m_ShadowCol(255, 255, 255, 255)
-    , m_ShadowFlag(false)
-    , m_GradTop(255, 255, 255, 255)
-    , m_GradBottom(255, 255, 255, 255)
-    , m_GradCol2(255, 255, 255, 255)
-    , m_GradCol3(255, 255, 255, 255)
-    , m_GradMode(0)
-    , m_MetallicFlag(false)
-    , m_StrokeWidth(0.0f)
-    , m_StrokeCount(0)
-    , m_StrokeCol0(0, 0, 0, 255)
-    , m_StrokeCol1(0, 0, 0, 255)
-    , m_StrokeCol2(0, 0, 0, 255)
-    , m_ClipX0(0.0f)
-    , m_ClipY0(0.0f)
-    , m_ClipW(0.0f)
-    , m_ClipH(0.0f)
-    , m_HasClip(false)
-    , m_Dirty(true)
-    , m_BaseFontSize(fontSize)
+    : m_Dirty(true)                           // +0x00
+    , m_Visible(false)                        // +0x01
+    // m_Lines default-constructed            // +0x04
+    , m_Field10(0)                            // +0x10
+    , m_Field14(0)                            // +0x14
+    , m_ShadowOffset(0.0f, 0.0f, 0.0f)       // +0x18
+    , m_BoxWidth(width)                       // +0x24
+    , m_BoxHeight(height)                     // +0x28
+    , m_MaxLines(maxLines)                    // +0x2c
+    , m_Align(align)                          // +0x30
+    , m_Text(0)                               // +0x34 (null; SetText allocates)
+    , m_Pos(0.0f, 0.0f, 0.0f)                // +0x38
+    , m_AlignMode(-1)                         // +0x44
+    , m_LineSpacing(lineSpacing)              // +0x48
+    , m_BaseFontSize(fontSize)                // +0x4c
+    , m_Font(font)                            // +0x50
+    , m_StrokeWidth(0.0f)                     // +0x54
+    , m_StrokeCount(0)                        // +0x58
+    , m_StrokeCol0(0, 0, 0, 255)             // +0x5c
+    , m_StrokeCol1(0, 0, 0, 255)             // +0x60
+    , m_StrokeCol2(0, 0, 0, 255)             // +0x64
+    , m_Field68(0.0f)                         // +0x68
+    , m_Colour(255, 255, 255, 255)            // +0x6c
+    , m_ShadowScale(0.0f)                     // +0x70
+    , m_ShadowCol(255, 255, 255, 255)         // +0x74
+    , m_ShadowFlag(0)                         // +0x78
+    , m_GradTop(255, 255, 255, 255)           // +0x7c
+    , m_GradBottom(255, 255, 255, 255)        // +0x80
+    , m_GradCol2(255, 255, 255, 255)          // +0x84
+    , m_GradCol3(255, 255, 255, 255)          // +0x88
+    , m_GradMode(0)                           // +0x8c
+    , m_MetallicFlag(0)                       // +0x90
+    , m_ClipX0(0)                             // +0x94
+    , m_ClipY0(0)                             // +0x98
+    , m_ClipW(0)                              // +0x9c
+    , m_ClipH(0)                              // +0xa0
+    , m_HasClip(false)                        // +0xa4
+    , m_FieldA5(false)                        // +0xa5
+    , m_FieldA8(0.0f)                         // +0xa8
+    , m_FieldAc(0)                            // +0xac
+    , m_ColourB0(0, 0, 0, 0)                  // +0xb0
+    , m_ColourB4(0, 0, 0, 0)                  // +0xb4
+    // m_WrappedLines default-constructed     // +0xb8
+    , m_FontSize(fontSize)                    // +0xc4
 {
-    m_Text[0] = '\0';
 }
 
 BakedStringBox::~BakedStringBox() {
+    if (m_Text) {
+        free(m_Text);
+        m_Text = 0;
+    }
 }
 
 void BakedStringBox::SetText(const char* text) {
     if (!text) text = "";
-    strncpy(m_Text, text, sizeof(m_Text) - 1);
-    m_Text[sizeof(m_Text) - 1] = '\0';
+    if (m_Text) {
+        free(m_Text);
+        m_Text = 0;
+    }
+    m_Text = (char*)malloc(strlen(text) + 1);
+    if (m_Text) strcpy(m_Text, text);
     m_Dirty = true;
 }
 
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetColour @0x002454e0: (Colour, bool eager).
-// TODO: v1.6.1 BakedStringBox::SetColour @0x002454e0 — binary writes m_FillTop + m_ColourMode=1
-//   + m_MetallicFlag=0 and on eager(bool!=0) calls FancyBakedString::ApplyGradient per line;
-//   port writes m_Colour only.
-void BakedStringBox::SetColour(Colour colour, bool /*eager*/) {
-    m_Colour = colour;
-    m_Dirty = true;
+// Binary change-detects on m_GradTop(+0x7c); on change writes m_GradTop=colour,
+// m_GradMode(+0x8c)=1, m_MetallicFlag(+0x90)=0; if eager!=0 iterates m_Lines calling
+// FancyBakedString::ApplyGradient per line, else m_Dirty=true.
+// Port: sets m_Dirty in both paths (ApplyGradient per-line is cosmetically divergent).
+void BakedStringBox::SetColour(Colour colour, bool eager) {
+    if (m_GradTop.r != colour.r || m_GradTop.g != colour.g ||
+        m_GradTop.b != colour.b || m_GradTop.a != colour.a) {
+        m_GradTop = colour;
+        m_GradMode = 1;
+        m_MetallicFlag = 0;
+        if (eager) {
+            // binary: iterate m_Lines calling FancyBakedString::ApplyGradient per line
+            // port: BakedStringBoxLine has no such method; cosmetically divergent
+            m_Dirty = true;
+        } else {
+            m_Dirty = true;
+        }
+    }
 }
 
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetHorizontalLineSpacing @0x0024565c:
@@ -125,9 +157,9 @@ void BakedStringBox::SetTranslation(const Vec3& pos, bool preShift) {
     if (preShift) {
         // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: preShift!=0 pre-shifts
         // -(boxW/2) in X, +(boxH/2) in Y, using SIGNED INT /2 (truncates: 75/2=37, not 37.5).
-        // m_BoxWidth/m_BoxHeight are float in the port; cast to int first to match truncation.
-        p.x -= (float)((int)m_BoxWidth  / 2);
-        p.y += (float)((int)m_BoxHeight / 2);
+        // m_BoxWidth/m_BoxHeight are int; integer division truncates correctly.
+        p.x -= (float)(m_BoxWidth  / 2);
+        p.y += (float)(m_BoxHeight / 2);
     }
     // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: writes position
     // fields only; does NOT set m_Dirty. m_Pos is a draw-time translate anchor
@@ -159,7 +191,7 @@ void BakedStringBox::FitIntoVerticalBounds() {
         float totalInkHeight = m_Lines[0].maxBearingY
                              + (float)(N - 1) * step
                              + (-m_Lines[N - 1].minBottom);
-        if (totalInkHeight < m_BoxHeight) return;
+        if (totalInkHeight < (float)m_BoxHeight) return;
 
         float nextSize = m_FontSize - 1.0f;
         if (nextSize < 6.0f) return;
@@ -305,7 +337,7 @@ void BakedStringBox::Layout() {
     m_Lines.clear();
     m_Dirty = false;
 
-    if (!m_Font || m_Text[0] == '\0') {
+    if (!m_Font || !m_Text || m_Text[0] == '\0') {
         return;
     }
 
@@ -318,7 +350,7 @@ void BakedStringBox::Layout() {
         const int cap = (m_MaxLines < 1) ? 999999 : m_MaxLines;
         m_FontSize = m_BaseFontSize;
         for (;;) {
-            MeasureResult mr = MeasureWrap(m_Font, m_Text, m_FontSize, m_BoxWidth);
+            MeasureResult mr = MeasureWrap(m_Font, m_Text, m_FontSize, (float)m_BoxWidth);
             if ((mr.lineCount <= cap && !mr.overflow) || m_FontSize <= 6.0f) break;
             m_FontSize -= 1.0f;
         }
@@ -329,8 +361,10 @@ void BakedStringBox::Layout() {
         return;
     }
 
-    const float wrapLimit  = m_BoxWidth;
-    const uint32_t packed  = m_Colour.PlatformColour();
+    const float wrapLimit  = (float)m_BoxWidth;
+    // m_GradTop is the primary fill colour (binary m_FillTop +0x7c). SetColour writes
+    // m_GradTop; Layout() uses it for vertex colours. BakeGradient() overwrites for mode>=2.
+    const uint32_t packed  = m_GradTop.PlatformColour();
 
     // Pre-render every codepoint in the string so atlas UVs are populated.
     {
@@ -714,11 +748,11 @@ void BakedStringBox::BakeGradient() {
 void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
     if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
-        m_GradMode != 2 || m_MetallicFlag != false) {
+        m_GradMode != 2 || m_MetallicFlag != 0) {
         m_GradMode = 2;
         m_GradTop = top;
         m_GradBottom = bottom;
-        m_MetallicFlag = false;
+        m_MetallicFlag = 0;
         if (!perGlyph) {
             m_Dirty = true;
         } else if (!m_Lines.empty()) {
@@ -736,9 +770,9 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
         m_GradCol2.r   != c2.r     || m_GradCol2.g   != c2.g     || m_GradCol2.b   != c2.b     || m_GradCol2.a   != c2.a     ||
         m_GradCol3.r   != c3.r     || m_GradCol3.g   != c3.g     || m_GradCol3.b   != c3.b     || m_GradCol3.a   != c3.a     ||
-        m_GradMode != 4 || m_MetallicFlag != true) {
+        m_GradMode != 4 || m_MetallicFlag != 1) {
         m_GradMode      = 4;
-        m_MetallicFlag  = true;
+        m_MetallicFlag  = 1;
         m_GradTop       = top;
         m_GradBottom    = bottom;
         m_GradCol2      = c2;
@@ -759,11 +793,11 @@ void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, int flag) {
     if (m_ShadowScale != scale ||
         m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
         m_ShadowOffset.x != offset.x || m_ShadowOffset.y != offset.y || m_ShadowOffset.z != offset.z ||
-        m_ShadowFlag != (bool)flag) {
+        m_ShadowFlag != flag) {
         m_Dirty = true;
         m_ShadowScale = scale;
         m_ShadowCol = col;
-        m_ShadowFlag = (bool)flag;
+        m_ShadowFlag = flag;
         m_ShadowOffset = offset;
     }
 }
@@ -1115,7 +1149,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         // Box bounds: m_BoxWidth/m_BoxHeight are declared box dimensions in world units.
         // Approximate box as centred on anchor (exact origin depends on SetTranslation
         // flag and align mode; centering is a reasonable approximation for the overlay).
-        const bool hasBox = (m_BoxWidth > 0.0f);
+        const bool hasBox = (m_BoxWidth > 0);
         const float bx0 = anchor.x - m_BoxWidth  * 0.5f;
         const float bx1 = anchor.x + m_BoxWidth  * 0.5f;
         const float by0 = anchor.y - m_BoxHeight * 0.5f;
@@ -1139,16 +1173,22 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     world.Pop();
 }
 
-// SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site @0x0015aaf0)
-// ASM-spec v1.6.1 Mortar::BakedStringBox::SetWorldspaceClipping @0x00114554: (int x0, int y0, int w, int h).
+// SetWorldspaceClipping  binary @ 0x00245c28 (real body)
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetWorldspaceClipping @0x00245c28: (int x0, int y0, int w, int h).
+// Stores clip values as int (+0x94..+0xa0), sets m_HasClip(+0xa4)=true, m_Visible(+0x01)=true.
+// Binary also checks FontInterface::GetInstance()[+0x150] (float y-scale): if == -1.0f,
+// negates m_ClipY0. Port: FontInterface is port-specific (no singleton/+0x150 field);
+// TODO: v1.6.1 BakedStringBox::SetWorldspaceClipping @0x00245c28 -- y-sign flip via
+//   FontInterface::GetInstance()[+0x150] == -1.0f; skipped (no binary FontInterface singleton in port).
 // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args (-240, -46, 400, 108).
 // Args: x0/y0 = top-left corner in worldspace; w/h = width/height (not far corner).
 void BakedStringBox::SetWorldspaceClipping(int x0, int y0, int w, int h) {
-    m_ClipX0 = (float)x0;
-    m_ClipY0 = (float)y0;
-    m_ClipW  = (float)w;
-    m_ClipH  = (float)h;
+    m_ClipX0 = x0;
+    m_ClipY0 = y0;
+    m_ClipW  = w;
+    m_ClipH  = h;
     m_HasClip = true;
+    m_Visible = true;
 }
 
 // Update  binary @ 0x0015ab80 (AddLine call site @0x0015aaf0)
@@ -1159,12 +1199,13 @@ void BakedStringBox::Update() {
 
 // ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
 // Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_LineSpacing=p4, m_Dirty=true unconditionally.
+// Binary emits str (integer store) not vcvt/vstr -- fields are int.
 // ASM-spec v1.6.1 Mortar::BakedStringBox::ReshapeBounds @0x00245ab8: (int, int, int, int).
 // ASM-spec v1.6.1 BSButton::Init @0x0015ea40: ReshapeBounds(54,20,1,0) -> m_MaxLines=1.
 void BakedStringBox::ReshapeBounds(int width, int height, int maxLines, int lineSpacing) {
     m_MaxLines    = maxLines;
-    m_BoxWidth    = (float)width;
-    m_BoxHeight   = (float)height;
+    m_BoxWidth    = width;
+    m_BoxHeight   = height;
     m_LineSpacing = lineSpacing;
     m_Dirty       = true;
 }
