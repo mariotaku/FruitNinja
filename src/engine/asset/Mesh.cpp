@@ -392,25 +392,25 @@ void Mesh::DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, f
     }
 }
 
-// Binary @ 0x0019404c
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0019404c (re-analyst)
+// Binary @ 0x00240e10
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240e10 (re-analyst)
 void Mesh::DrawTriList(QUADCUSTOMVERTEX const* verts, long count,
                        bool /*blend*/, DrawEffectContainer* fx) {
     DrawTris(verts, count, 4 /*GL_TRIANGLES*/, fx != 0, 0);
 }
 
-// Binary @ 0x00194038
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00194038 (re-analyst)
+// Binary @ 0x00240c30
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240c30 (re-analyst)
 void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
                         bool /*blend*/, DrawEffectContainer* fx) {
     DrawTris(verts, count, 5 /*GL_TRIANGLE_STRIP*/, fx != 0, 0);
 }
 
-// Binary @ 0x00193f5c
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00193f5c (re-analyst)
+// Binary @ 0x00240e34
+// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240e34 (re-analyst)
 void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
                     bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // Port specific: binary @ 0x00193f5c gates GL_BLEND via fixed-function glState<3042>:
+    // Port specific: binary @ 0x00240e34 gates GL_BLEND via fixed-function glState<3042>:
     //   blend OFF iff (blend == 0 && (renderModeSingleton == null ||
     //                  renderModeSingleton->vtable[0x10]() != 0x20)), else blend ON.
     // Also issues glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE) — both are

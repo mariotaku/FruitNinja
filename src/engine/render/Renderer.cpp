@@ -227,7 +227,7 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
     DrawQuad(Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 }
 
-// Matches DrawTriList (0x00193f5c) — QUADCUSTOMVERTEX stride 0x24 with
+// Matches DrawTriList (0x00240e34) — QUADCUSTOMVERTEX stride 0x24 with
 // per-vertex RGBA colour in `verts->colour` (packed BGRA uint32).
 void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();

@@ -43,7 +43,7 @@ public:
     bool GetFileData(const char* name, void** outBuf, unsigned long* outSize,
                      unsigned long idFilter, bool& outOwned);
 
-    // Binary @ 0x0019ae64 — Bada-specific save-root path resolution.
+    // Binary @ 0x00250ed4 — Bada-specific save-root path resolution.
     // Defunct: GetSaveRootDirectory — no-op stub; binary's body is also `return 0`.
     //          The only caller (GetUserFilePath @ 0x0012b09c) is itself unused.
     //          Port uses platform-specific paths via FileSystemPosix/Win32 directly.

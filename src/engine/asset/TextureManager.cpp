@@ -120,7 +120,7 @@ void TextureManager::Initialise(int) {
 void TextureManager::InitialiseInternal() {
 }
 
-// Binary @ 0x00188dd4 -- returns empty SmartPtr<Texture>.
+// Binary @ 0x00227230 -- returns empty SmartPtr<Texture>.
 Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(int) {
     return Mortar::SmartPtr<Texture>();
 }
