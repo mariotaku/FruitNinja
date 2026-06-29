@@ -218,14 +218,17 @@ struct TestHarness {
             return false;
         }
 
+        // Set languageFlag BEFORE game.init() so GameInitialise loads the
+        // correct string table before ItemManager::LoadItemData parses item
+        // titles (titles are baked at parse time, not draw time).
+        if (m_langOverride >= 0) {
+            game_work.languageFlag = (uint8_t)m_langOverride;
+        }
+
         if (!game.init(window, gl)) {
             std::fprintf(stderr, "game.init failed\n");
             return false;
         }
-
-        // Apply --lang= override before burn-in frames so components baked
-        // during burn-in see the overridden language strings.
-        ApplyLanguageOverride();
 
         // Headless tests have no human listener; silence the SFX channel.
         // Interactive tests keep audio so the tester can hear what fires.

@@ -92,7 +92,7 @@ public:
     // vtable[+0x0c] SetEquipped @ 0x00113978 — no-op
     virtual void SetEquipped();
 
-    // vtable[+0x10] Parse @ 0x0011293c — parse <item> TiXmlElement
+    // vtable[+0x10] Parse @ 0x0013907c (v1.6.1) — parse <item> TiXmlElement
     virtual void Parse(TiXmlElement* e);
 
     // IsLocked @ 0x0015fa60 — return m_Cost > 0
