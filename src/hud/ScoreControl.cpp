@@ -636,29 +636,15 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     }
 
     // draw_quads:
-    // Section D: Score-icon texture quad (+0xA0 = score.tex) — guarded by transTimer > 0
-    // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159726..0x00159770 (asm-inspector)
-    if (m_ScoreIconTex.IsValid() && transTimer > 0.0f) {
-        Mortar::Texture* tex = m_ScoreIconTex.Get();
-        float texW = (tex && tex->GetWidth()  > 0) ? (float)tex->GetWidth()  : 64.0f;
-        float texH = (tex && tex->GetHeight() > 0) ? (float)tex->GetHeight() : 16.0f;
-
-        MatrixManager& mm = MatrixManager::GetInstance();
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(texW, texH, 1.0f);
-        mat.GlobalTranslate44(Vec3(
-            IsMultiplayer() ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE) : SCORE_ICON_X_SP,
-            m_DrawPosY + 53.0f,
-            0.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        if (tex) {
-            tex->Set();
-            Colour col(255, 255, 255, alpha);
-            if (game) game->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
-            tex->UnSet();
-        }
+    // Section D: localized TTF score wordmark via m_pScoreBox — guarded by transTimer > 0.
+    // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: localized TTF score wordmark via
+    //   m_pScoreBox (not score.tex); SetTranslation 2nd arg=1 (preShift).
+    if (m_pScoreBox && transTimer > 0.0f) {
+        float xPos = IsMultiplayer()
+            ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE)
+            : SCORE_ICON_X_SP;
+        m_pScoreBox->SetTranslation(Vec3(xPos, m_DrawPosY + 53.0f, 0.0f), 1);
+        m_pScoreBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Section E: NEW BEST SCORE banner (type 0x0F IngamePopup)
