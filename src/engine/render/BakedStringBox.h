@@ -12,11 +12,11 @@
 // previously-verified MainScreen+0x120 layout boundary).
 //
 // API (v1.6.1 BakedStringBox ctor @ 0x002465fc — 7 explicit args):
-//   BakedStringBox(font, fontSize, width, height, align, maxLines, param8)
-//     width/height : int in binary (fields 0x50/0x24); stored as float internally.
-//     param8: integer added to the baseline-to-baseline pitch:
-//             step = (int)(fontSize + (param8 - (baseFontSize - fontSize)*0.5))
-//             Typical values: 0 (no extra gap), 3 (13px pitch at size 10), 7.
+//   BakedStringBox(font, fontSize, width, height, align, maxLines, lineSpacing)
+//     width/height  : int in binary (fields 0x50/0x24); stored as float internally.
+//     lineSpacing   : extra leading added to fontSize for the per-line baseline pitch:
+//                     step = (int)(fontSize + (lineSpacing - (baseFontSize - fontSize)*0.5))
+//                     Typical values: 0 (no extra gap), 3 (13px pitch at size 10), 7.
 //   SetText(const char*)
 //   SetColour(Colour, bool eager)     — binary writes m_FillTop + m_ColourMode; see TODO in .cpp
 //   SetHorizontalLineSpacing(int)     — binary writes m_AlignMode; pass -1 for auto
@@ -56,7 +56,7 @@ struct BakedStringBoxLine {
 
 class BakedStringBox {
 public:
-    // ASM-spec v1.6.1 BakedStringBox ctor @ 0x002465fc: 7 args, 7th = m_Param8.
+    // ASM-spec v1.6.1 BakedStringBox ctor @ 0x002465fc: 7 args, 7th = m_LineSpacing.
     //   font        : FontCacheObjectTTF* (TTF face, 256x256 atlas)
     //   fontSize    : initial render pixel size (also stored as m_BaseFontSize)
     //   width       : wrap box width  (int in binary, field 0x50; stored as float in port)
@@ -64,7 +64,7 @@ public:
     //   align       : alignment flags (e.g. 0x0d = centred+fit, 0x0f = centre-H+centre-V+fit)
     //                 binary type is ALIGNMENT_TYPE enum; port uses int (same underlying value).
     //   maxLines    : binary arg6; stored as m_MaxLines; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
-    //   param8      : line-pitch int stored at m_Param8; step = (int)(fontSize + param8)
+    //   lineSpacing : extra leading stored at m_LineSpacing; step = (int)(fontSize + lineSpacing)
     //                 Typical values: 0 (no extra gap), 3 (+3px/line), 5, 7.
     // ASM-spec v1.6.1 Mortar::BakedStringBox ctor @0x002465fc: 7 args; width/height int in binary.
     BakedStringBox(FontCacheObjectTTF* font,
@@ -73,7 +73,7 @@ public:
                    int height,
                    int align,
                    int maxLines,
-                   int param8);
+                   int lineSpacing);
     ~BakedStringBox();
 
     // Set the string to display. Triggers a layout rebuild on next Draw.
@@ -91,6 +91,8 @@ public:
     // Set horizontal line spacing / alignment mode. Pass -1 for auto.
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetHorizontalLineSpacing @0x0024565c:
     // body = m_AlignMode = param; m_DirtyMesh = true.
+    // BINARY MISNOMER: despite the name, this writes m_AlignMode (justification),
+    // NOT m_LineSpacing (the line-pitch addend). The two are unrelated fields.
     void SetHorizontalLineSpacing(int spacing);
 
     // Shrink fontSize in 1-pixel steps (floor 6.0px) until all wrapped lines
@@ -136,9 +138,9 @@ public:
     void Update();
 
     // ReshapeBounds  binary @ 0x00245ab8
-    // Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_Param8=p4, m_Dirty=true unconditionally.
-    // ASM-spec v1.6.1 Mortar::BakedStringBox::ReshapeBounds @0x00245ab8: (int width, int height, int maxLines, int param8).
-    void ReshapeBounds(int width, int height, int maxLines, int param8);
+    // Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_LineSpacing=p4, m_Dirty=true unconditionally.
+    // ASM-spec v1.6.1 Mortar::BakedStringBox::ReshapeBounds @0x00245ab8: (int width, int height, int maxLines, int lineSpacing).
+    void ReshapeBounds(int width, int height, int maxLines, int lineSpacing);
 
     // SetFontSize  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc
     // Sets m_FontSize and m_BaseFontSize, marks dirty.
@@ -222,7 +224,9 @@ private:
     float   m_BoxHeight;          // wrap box max height in world units
     int     m_Align;              // alignment flags (binary 0x0d)
     int     m_MaxLines;           // binary arg6; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
-    int     m_Param8;             // binary field 0x48 (7th ctor arg); adds to line pitch: step = (int)(fontSize + m_Param8)
+    // m_LineSpacing (binary ctor arg 7, "param8"): extra leading added to fontSize for the
+    // per-line baseline pitch. step = (int)(fontSize + m_LineSpacing - (m_BaseFontSize-m_CurrentFontSize)*0.5).
+    int     m_LineSpacing;        // binary field 0x48 (7th ctor arg); step = (int)(fontSize + m_LineSpacing)
 
     int     m_AlignMode;            // binary field written by SetHorizontalLineSpacing; -1 = auto
     Colour  m_Colour;
@@ -281,7 +285,7 @@ private:
 
     // Measure total ink height of currently laid-out lines:
     //   maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
-    // where step == m_Lines[0].height (= (int)(fontSize + m_Param8)).
+    // where step == m_Lines[0].height (= (int)(fontSize + m_LineSpacing)).
     float TotalHeight() const;
 };
 

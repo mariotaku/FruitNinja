@@ -118,7 +118,7 @@ void BSButton::Init() {
         0x28,     // height = 40
         0xf,      // align flags
         1,        // maxLines
-        3         // param8 (binary 7th arg = 3; step = (int)(10+3) = 13px)
+        3         // lineSpacing (binary 7th arg = 3; step = (int)(10+3) = 13px)
     );
     this->m_pLabelBox = box;
 

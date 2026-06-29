@@ -49,14 +49,14 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                int height,
                                int align,
                                int maxLines,
-                               int param8)
+                               int lineSpacing)
     : m_Font(font)
     , m_FontSize(fontSize)
     , m_BoxWidth((float)width)
     , m_BoxHeight((float)height)
     , m_Align(align)
     , m_MaxLines(maxLines)
-    , m_Param8(param8)
+    , m_LineSpacing(lineSpacing)
     , m_AlignMode(-1)
     , m_Colour(255, 255, 255, 255)
     , m_Pos(0.0f, 0.0f, 0.0f)
@@ -163,7 +163,7 @@ void BakedStringBox::FitIntoVerticalBounds() {
 float BakedStringBox::TotalHeight() const {
     // Binary FitIntoVerticalBounds @ 0x00246fbc: totalInkHeight = maxBearingY(line0)
     // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
-    // (= (int)(fontSize + m_Param8)); no separate inter-line spacing term.
+    // (= (int)(fontSize + m_LineSpacing)); no separate inter-line spacing term.
     int N = (int)m_Lines.size();
     if (N == 0) return 0.0f;
     const float step = m_Lines[0].height;
@@ -448,12 +448,12 @@ void BakedStringBox::Layout() {
         }
 
         // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @ 0x00245c78:
-        // step = (int)(m_CurrentFontSize + (m_Param8 - (m_BaseFontSize - m_CurrentFontSize)*0.5))
+        // step = (int)(m_CurrentFontSize + (m_LineSpacing - (m_BaseFontSize - m_CurrentFontSize)*0.5))
         // Binary truncates (C-cast to int), not rounds. m_BaseFontSize tracks the initial
         // or last-SetFontSize size; after FitIntoVerticalBounds+SetFontSize both are equal
-        // so the shrink term is 0 and step = (int)(fontSize + m_Param8).
+        // so the shrink term is 0 and step = (int)(fontSize + m_LineSpacing).
         float diffShrink = m_BaseFontSize - requestedSize;
-        float step = (float)(int)(requestedSize + ((float)m_Param8 - diffShrink * 0.5f));
+        float step = (float)(int)(requestedSize + ((float)m_LineSpacing - diffShrink * 0.5f));
 
         line.height       = step;
         line.width        = lineWidth;
@@ -1049,15 +1049,15 @@ void BakedStringBox::Update() {
 }
 
 // ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
-// Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_Param8=p4, m_Dirty=true unconditionally.
+// Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_LineSpacing=p4, m_Dirty=true unconditionally.
 // ASM-spec v1.6.1 Mortar::BakedStringBox::ReshapeBounds @0x00245ab8: (int, int, int, int).
 // ASM-spec v1.6.1 BSButton::Init @0x0015ea40: ReshapeBounds(54,20,1,0) -> m_MaxLines=1.
-void BakedStringBox::ReshapeBounds(int width, int height, int maxLines, int param8) {
-    m_MaxLines  = maxLines;
-    m_BoxWidth  = (float)width;
-    m_BoxHeight = (float)height;
-    m_Param8    = param8;
-    m_Dirty     = true;
+void BakedStringBox::ReshapeBounds(int width, int height, int maxLines, int lineSpacing) {
+    m_MaxLines    = maxLines;
+    m_BoxWidth    = (float)width;
+    m_BoxHeight   = (float)height;
+    m_LineSpacing = lineSpacing;
+    m_Dirty       = true;
 }
 
 // SetFontSize  binary call site v1.6.1 PauseScreen::Update @0x001a5ebc

@@ -475,7 +475,7 @@ void ShopListItem::DrawDescription() {
     // Rebuild box3 when nullptr or bVar6 cache changed.
     if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
         delete m_pBox3;
-        // ASM-verified v1.6.1 DrawDescription @0x001b1f20: desc align=0x0F (center), maxLines=7, param8=4.
+        // ASM-verified v1.6.1 DrawDescription @0x001b1f20: desc align=0x0F (center), maxLines=7, lineSpacing=4.
         m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, 0x0f, 7, 4);
         m_pBox3->SetText(m_DescText);
         m_pBox3->Update();
@@ -486,7 +486,7 @@ void ShopListItem::DrawDescription() {
     if (bVar6) {
         if (!m_pBox4) {
             delete m_pBox4;
-            // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, param8=4.
+            // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, lineSpacing=4.
             m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, 0x0f, 2, 4);
 
             // Determine prompt string id and colour.
