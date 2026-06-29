@@ -245,7 +245,45 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         m_CreditLine5->SetColour(creditColour, 0);
         m_CreditLine5->SetHorizontalLineSpacing(-1);
 
-        // TODO: v1.6.1 AboutScreen ctor @0x0015b764 -- min-fontSize equalization pass across credit boxes not ported (no BakedStringBox font-size getter)
+        // ASM-spec v1.6.1 AboutScreen ctor @0x0015b764: min-fontSize equalization across the 6 credit lines.
+        // Binary calls FitIntoVerticalBounds on each credit box (via its Update), scans GetFontSize()
+        // for the minimum, then SetFontSize(min) on all 6 so every line renders at one uniform size.
+        // Port calls FitIntoVerticalBounds explicitly here because the port's BakedStringBox::Update()
+        // only calls Layout() and does not call FitIntoVerticalBounds (the binary's Update does both).
+        m_CreditLine0->FitIntoVerticalBounds();
+        m_CreditLine1->FitIntoVerticalBounds();
+        m_CreditLine2->FitIntoVerticalBounds();
+        m_CreditLine3->FitIntoVerticalBounds();
+        m_CreditLine4->FitIntoVerticalBounds();
+        m_CreditLine5->FitIntoVerticalBounds();
+
+        {
+            float minSize = m_CreditLine0->GetFontSize();
+            if (m_CreditLine1->GetFontSize() < minSize) minSize = m_CreditLine1->GetFontSize();
+            if (m_CreditLine2->GetFontSize() < minSize) minSize = m_CreditLine2->GetFontSize();
+            if (m_CreditLine3->GetFontSize() < minSize) minSize = m_CreditLine3->GetFontSize();
+            if (m_CreditLine4->GetFontSize() < minSize) minSize = m_CreditLine4->GetFontSize();
+            if (m_CreditLine5->GetFontSize() < minSize) minSize = m_CreditLine5->GetFontSize();
+
+            m_CreditLine0->SetFontSize(minSize);
+            m_CreditLine1->SetFontSize(minSize);
+            m_CreditLine2->SetFontSize(minSize);
+            m_CreditLine3->SetFontSize(minSize);
+            m_CreditLine4->SetFontSize(minSize);
+            m_CreditLine5->SetFontSize(minSize);
+        }
+
+        // ASM-spec v1.6.1 AboutScreen ctor @0x0015b764: SetShadow(1.0f, white, Vec3(0,0,0), 0) on
+        // title/heading/credit boxes. offset (0,0,0) draws the shadow directly under the foreground
+        // (near-invisible at runtime) but faithfully matches the binary call.
+        m_TitleBox->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_HeadingBox->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine0->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine1->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine2->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine3->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine4->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine5->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
     }
 
     // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: calls CreateCreditsMarquee after text boxes.
