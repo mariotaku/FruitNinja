@@ -9,6 +9,8 @@
 #include <cmath>
 #include <cstdio>
 #include "game/GameWork.h"
+#include "game/FruitSaveData.h"
+#include "hud/HUD.h"  // GameTaskSaveOnExit: mHud->Save() needs the full HUD definition
 
 // Verified timing constants from binary (read_memory)
 static const float TASK_MAX_RAW_DT = 0.1f;     // DAT_0010a708
@@ -97,4 +99,14 @@ void GameTaskExit() {
         s_exitFuncs[s_taskState.prevState]();
         s_taskState.initialized = false;
     }
+}
+
+// ASM-spec v1.6.1 GameTaskSaveOnExit @0x001ce170: suspends updates and saves without teardown.
+// Used on app-suspend (Paused/SaveOnExit) instead of GameTaskExit so in-game state is preserved.
+void GameTaskSaveOnExit() {
+    game_work.m_bUpdatesSuspended = 1;
+    // TODO: v1.6.1 0x001ce178 (GetIsSavingBool) — not yet ported; skip the in-progress-save early return
+    if (!game_work.mHud) return;
+    game_work.mHud->Save();
+    FruitNinja_SaveCurrentData(true);
 }
