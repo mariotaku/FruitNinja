@@ -261,13 +261,18 @@ void DojoScreen::Release() {
 }
 
 // ===================================================================
-// Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1)
-// Remove callback for the shop button only (field_0x98 / this->button).
+// DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1) — extended
+// DIFFERS: v1.6.1 DojoScreen::ButtonDeleted @0x00169e94 nulls only m_pShopButton.
+//   Back/about extended to close the binary's latent use-after-free: HUD::Update
+//   @0x0018c44c frees a ring MenuButton (deleting-dtor) ~2-3 frames before
+//   DojoScreen::Update @0x0016b6a4 nulls the screen pointer; a ring slice in that
+//   window fires a callback that derefs the dangling pointer. (Bada's allocator hid
+//   this; MSVC's freed-memory poison makes it a deterministic crash.)
 // ===================================================================
 void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
-    if (ctrl == (HUDControl*)m_pShopButton) {
-        m_pShopButton = nullptr;
-    }
+    if (ctrl == (HUDControl*)m_pShopButton)  m_pShopButton  = nullptr;
+    if (ctrl == (HUDControl*)m_pBackButton)  m_pBackButton  = nullptr;
+    if (ctrl == (HUDControl*)m_pAboutButton) m_pAboutButton = nullptr;
 }
 
 // ===================================================================
@@ -295,6 +300,9 @@ void DojoScreen::CreateButtons() {
                             bombFruitType, Vec3(0, 0, 0), nullptr);
         m_pBackButton->m_bRespondsToBackKey = 1;
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        // DIFFERS: binary has no m_RemoveCallback on back button; installed here to close the
+        //   latent UAF (see ButtonDeleted comment above).
+        m_pBackButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_HudScale.x=0.375, m_HudScale.y=-0.3
         m_pBackButton->m_HudScale.x = 0.375f;
         m_pBackButton->m_HudScale.y = -0.3f;
@@ -365,6 +373,9 @@ void DojoScreen::CreateButtons() {
                              Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                              aboutFruitType, Vec3(0, 0, 0), nullptr);
         m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+        // DIFFERS: binary has no m_RemoveCallback on about button; installed here to close the
+        //   latent UAF (see ButtonDeleted comment above).
+        m_pAboutButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [10],[11]
         m_pAboutButton->SetText(
             GETSTRING_CAST_0(LSTR_ABOUT_TITLE),
