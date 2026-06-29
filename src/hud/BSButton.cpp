@@ -206,7 +206,7 @@ void BSButton::Draw(float* hudScaleRaw) {
     if (m_pLabelBox) {
         Vec3 labelOffset(m_DrawRotation.y, m_DrawRotation.z, 0.0f);
         m_pLabelBox->SetTranslation(pos + labelOffset, 0);
-        m_pLabelBox->Draw(m_DrawRotation.x, Vec2(1.0f, 1.0f), 1);
+        m_pLabelBox->Draw(Vec2(1.0f, 1.0f), m_DrawRotation.x, 1);
     }
 }
 

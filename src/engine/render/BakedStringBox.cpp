@@ -42,21 +42,22 @@ struct WordToken {
 
 namespace Mortar {
 
-// ASM-spec v1.6.1 BakedStringBox ctor @ 0x002465fc: 7 args, 7th = m_Param8.
+// ASM-spec v1.6.1 Mortar::BakedStringBox ctor @0x002465fc: 7 args; width/height int in binary.
 BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                float fontSize,
-                               float width,
-                               float height,
+                               int width,
+                               int height,
                                int align,
                                int maxLines,
                                int param8)
     : m_Font(font)
     , m_FontSize(fontSize)
-    , m_BoxWidth(width)
-    , m_BoxHeight(height)
+    , m_BoxWidth((float)width)
+    , m_BoxHeight((float)height)
     , m_Align(align)
     , m_MaxLines(maxLines)
     , m_Param8(param8)
+    , m_AlignMode(-1)
     , m_Colour(255, 255, 255, 255)
     , m_Pos(0.0f, 0.0f, 0.0f)
     , m_ShadowOffset(0.0f, 0.0f, 0.0f)
@@ -95,23 +96,27 @@ void BakedStringBox::SetText(const char* text) {
     m_Dirty = true;
 }
 
-void BakedStringBox::SetColour(const Colour& colour, int /*setBase*/) {
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetColour @0x002454e0: (Colour, bool eager).
+// TODO: v1.6.1 BakedStringBox::SetColour @0x002454e0 — binary writes m_FillTop + m_ColourMode=1
+//   + m_MetallicFlag=0 and on eager(bool!=0) calls FancyBakedString::ApplyGradient per line;
+//   port writes m_Colour only.
+void BakedStringBox::SetColour(Colour colour, bool /*eager*/) {
     m_Colour = colour;
     m_Dirty = true;
 }
 
-void BakedStringBox::SetHorizontalLineSpacing(float spacing) {
-    // TODO: v1.6.1 SetHorizontalLineSpacing @0x0024565c -- binary writes m_AlignMode
-    // (vtable-adjacent alignment field), not a pitch field. Confirm field offset/role
-    // before mapping to port. Port marks dirty (binary also does) as the closest safe action.
-    (void)spacing;
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetHorizontalLineSpacing @0x0024565c:
+// body = m_AlignMode = param; m_DirtyMesh = true.
+void BakedStringBox::SetHorizontalLineSpacing(int spacing) {
+    m_AlignMode = spacing;
     m_Dirty = true;
 }
 
-void BakedStringBox::SetTranslation(const Vec3& pos, int flag) {
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetTranslation @0x00246238: (_Vector3<float>, bool preShift).
+void BakedStringBox::SetTranslation(const Vec3& pos, bool preShift) {
     Vec3 p = pos;
-    if (flag) {
-        // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: flag!=0 pre-shifts
+    if (preShift) {
+        // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: preShift!=0 pre-shifts
         // -(boxW/2) in X, +(boxH/2) in Y, using SIGNED INT /2 (truncates: 75/2=37, not 37.5).
         // m_BoxWidth/m_BoxHeight are float in the port; cast to int first to match truncation.
         p.x -= (float)((int)m_BoxWidth  / 2);
@@ -637,16 +642,17 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
 }
 
 // SetShadow  binary @ 0x002462c0
-// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x002462c0 (asm-inspector)
-void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) {
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetShadow @0x002462c0: (float, Colour, _Vector3<float>, int).
+// Note: SetColour/SetTranslation use bool; SetShadow uses int.
+void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, int flag) {
     if (m_ShadowScale != scale ||
         m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
         m_ShadowOffset.x != offset.x || m_ShadowOffset.y != offset.y || m_ShadowOffset.z != offset.z ||
-        m_ShadowFlag != flag) {
+        m_ShadowFlag != (bool)flag) {
         m_Dirty = true;
         m_ShadowScale = scale;
         m_ShadowCol = col;
-        m_ShadowFlag = flag;
+        m_ShadowFlag = (bool)flag;
         m_ShadowOffset = offset;
     }
 }
@@ -696,7 +702,8 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, 
     }
 }
 
-void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
+// ASM-spec v1.6.1 Mortar::BakedStringBox::Draw @0x00246e20: (Vec2 scale, float rotation, bool center).
+void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     if (!m_Font) return;
     if (m_Dirty) Layout();
     if (m_Lines.empty()) return;
@@ -706,7 +713,7 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     atlas->BuildPendingTextures();
 
     // Build rotation coefficients.
-    const float theta = rotationDegrees * (3.14159265f / 180.0f);
+    const float theta = rotation * (3.14159265f / 180.0f);
     const float sinT  = sinf(theta);
     const float cosT  = cosf(theta);
 
@@ -1011,13 +1018,14 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
 }
 
 // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site @0x0015aaf0)
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetWorldspaceClipping @0x00114554: (int x0, int y0, int w, int h).
 // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args (-240, -46, 400, 108).
 // Args: x0/y0 = top-left corner in worldspace; w/h = width/height (not far corner).
-void BakedStringBox::SetWorldspaceClipping(float x0, float y0, float w, float h) {
-    m_ClipX0 = x0;
-    m_ClipY0 = y0;
-    m_ClipW  = w;
-    m_ClipH  = h;
+void BakedStringBox::SetWorldspaceClipping(int x0, int y0, int w, int h) {
+    m_ClipX0 = (float)x0;
+    m_ClipY0 = (float)y0;
+    m_ClipW  = (float)w;
+    m_ClipH  = (float)h;
     m_HasClip = true;
 }
 
@@ -1029,11 +1037,12 @@ void BakedStringBox::Update() {
 
 // ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
 // Writes m_MaxLines=p3, m_BoxWidth=w, m_BoxHeight=h, m_Param8=p4, m_Dirty=true unconditionally.
+// ASM-spec v1.6.1 Mortar::BakedStringBox::ReshapeBounds @0x00245ab8: (int, int, int, int).
 // ASM-spec v1.6.1 BSButton::Init @0x0015ea40: ReshapeBounds(54,20,1,0) -> m_MaxLines=1.
-void BakedStringBox::ReshapeBounds(float width, float height, int maxLines, int param8) {
+void BakedStringBox::ReshapeBounds(int width, int height, int maxLines, int param8) {
     m_MaxLines  = maxLines;
-    m_BoxWidth  = width;
-    m_BoxHeight = height;
+    m_BoxWidth  = (float)width;
+    m_BoxHeight = (float)height;
     m_Param8    = param8;
     m_Dirty     = true;
 }

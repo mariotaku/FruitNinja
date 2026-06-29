@@ -271,7 +271,7 @@ void ShopListItem::NewDraw() {
     // v1.6.1 NewDraw @0x001b58e8: operator_new(0xc8), ctor(font,16,195,30,align,1,0),
     // SetText(m_pItemInfo->m_pTitle), SetShadow(0,black,Vec3(4,-4,0),1), Update.
     if (!m_pBox0) {
-        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195.0f, 30.0f, 0x0d, 1, 0);
+        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0d, 1, 0);
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
         m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
@@ -283,7 +283,7 @@ void ShopListItem::NewDraw() {
     // typeNames (filled by Create @0x001b27f0): BLADE=0xCA, BG=0xC9, FULL=0xCB, SPECIAL=0x12F.
     if (!m_pBox1 || m_TintA != (uint8_t)m_pItemInfo->m_Type) {
         delete m_pBox1;
-        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175.0f, 30.0f, 0x0d, 1, 0);
+        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175, 30, 0x0d, 1, 0);
         const char* catStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
             case 0: catStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break; // 0xCA
@@ -303,11 +303,11 @@ void ShopListItem::NewDraw() {
     // box1 translate = pos + (-175,-10,0)
     m_pBox0->SetColour(itemColour, 0);
     m_pBox0->SetTranslation(Vec3(pos.x - 195.0f, pos.y + 16.0f, 0.0f), 0);
-    m_pBox0->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+    m_pBox0->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
 
     m_pBox1->SetColour(itemColour, 0);
     m_pBox1->SetTranslation(Vec3(pos.x - 175.0f, pos.y - 10.0f, 0.0f), 0);
-    m_pBox1->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+    m_pBox1->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
 
     // --- Helper chain ---
     DrawDividers();
@@ -470,7 +470,7 @@ void ShopListItem::DrawDescription() {
     // Rebuild box3 when nullptr or bVar6 cache changed.
     if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
         delete m_pBox3;
-        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160.0f, descH, 0x0d, 10, 0);
+        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, 0x0d, 10, 0);
         m_pBox3->SetText(m_DescText);
         m_pBox3->Update();
         m_pBox3->FitIntoVerticalBounds();
@@ -480,7 +480,7 @@ void ShopListItem::DrawDescription() {
     if (bVar6) {
         if (!m_pBox4) {
             delete m_pBox4;
-            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160.0f, 21.0f, 0x0d, 1, 0);
+            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, 0x0d, 1, 0);
 
             // Determine prompt string id and colour.
             LocalizedString promptId;
@@ -520,7 +520,7 @@ void ShopListItem::DrawDescription() {
         // Position: (xPos, Korean ? -5 : -20, 0).
         float promptY = isKorean ? -5.0f : -20.0f;
         m_pBox4->SetTranslation(Vec3(xPos, promptY, 0.0f), 0);
-        m_pBox4->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+        m_pBox4->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
     }
 
     // Draw box3 (description body).
@@ -534,7 +534,7 @@ void ShopListItem::DrawDescription() {
         }
         m_pBox3->SetColour(descColour, 0);
         m_pBox3->SetTranslation(Vec3(xPos, 42.0f, 0.0f), 0);
-        m_pBox3->Draw(0.0f, Vec2(1.0f, 1.0f), 0);
+        m_pBox3->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
     }
 }
 

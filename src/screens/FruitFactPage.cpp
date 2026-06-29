@@ -139,7 +139,7 @@ GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
             Vec3(1.0f, -1.0f, 0.0f),
             true);
         box->SetText(str);
-        box->SetHorizontalLineSpacing(-1.0f);
+        box->SetHorizontalLineSpacing(-1);
         c->SetText(box);
     }
 
@@ -173,7 +173,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
             Vec3(2.0f, -2.0f, 0.0f),
             false);
         box->SetText(GETSTRING(LSTR_FRUIT_FACT_TITLE, 0));
-        box->SetHorizontalLineSpacing(-1.0f);
+        box->SetHorizontalLineSpacing(-1);
         c->SetText(box);
     }
 
@@ -200,7 +200,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
             font, 10.0f, 270.0f, 36.0f, 0xf, 3, 3);
         box->SetText(m_pController->m_FactText);
         box->SetColour(Colour(0x74, 0x5d, 0x3b, 255), 0);
-        box->SetHorizontalLineSpacing(-1.0f);
+        box->SetHorizontalLineSpacing(-1);
         c->SetText(box);
     }
 

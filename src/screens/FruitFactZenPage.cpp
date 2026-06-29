@@ -203,7 +203,7 @@ void FruitFactZenPage::Init() {
                 Colour(0xf8, 0xf3, 0xdf, 255),
                 Colour(0xf5, 0xef, 0x64, 255),
                 false);
-            box->SetHorizontalLineSpacing(-1.0f);
+            box->SetHorizontalLineSpacing(-1);
             cStar->SetText(box);
             cStar->SetAngle(-20.0f, 0.0f);
         }
@@ -236,7 +236,7 @@ void FruitFactZenPage::Init() {
                     Colour(0xc8, 0x82, 0x00, 255));
                 box1->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
                 box1->SetText(GETSTRING(LSTR_ZEN_NO_COMBO_BODY, 0));
-                box1->SetHorizontalLineSpacing(-1.0f);
+                box1->SetHorizontalLineSpacing(-1);
                 c1->SetText(box1);
                 // Binary reads actual baked dims box->+0x24 / +0x28 to recenter.
                 // TODO: v1.6.1 FruitFactZenPage::Init @0x00180320 -- c1pos.x -= box1->m_BakedWidth/2; c1pos.y -= box1->m_BakedHeight/2
@@ -267,7 +267,7 @@ void FruitFactZenPage::Init() {
                     Colour(0xc8, 0x82, 0x00, 255));
                 box2->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
                 box2->SetText("_");                   // DAT_00180ee8 @ 0x00281E11 = "_"
-                box2->SetHorizontalLineSpacing(-1.0f);
+                box2->SetHorizontalLineSpacing(-1);
                 c2->SetText(box2);
             }
             AddGenericControl(c2);
@@ -291,7 +291,7 @@ void FruitFactZenPage::Init() {
                     Colour(0xc8, 0x82, 0x00, 255));
                 box3->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
                 box3->SetText("_");                   // DAT_00180ee8 @ 0x00281E11 = "_"
-                box3->SetHorizontalLineSpacing(-1.0f);
+                box3->SetHorizontalLineSpacing(-1);
                 c3->SetText(box3);
             }
             AddGenericControl(c3);

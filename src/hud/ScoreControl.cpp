@@ -150,7 +150,7 @@ ScoreControl::ScoreControl()
             Colour(0xE7, 0x83, 0x08, 255),
             false);
         m_pScoreBox->SetText(GETSTRING_CAST_0(LSTR_SCORE));
-        m_pScoreBox->SetHorizontalLineSpacing(-1.0f);
+        m_pScoreBox->SetHorizontalLineSpacing(-1);
     }
 
     Reset();

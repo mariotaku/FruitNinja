@@ -365,7 +365,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     {
         Mortar::FontCacheObjectTTF* font = GetGameOverTTFFont();
         if (font) {
-            m_pTitleString = new Mortar::BakedStringBox(font, 56.0f, 450.0f, 40.0f, 0xf, 1, 0.0f);
+            m_pTitleString = new Mortar::BakedStringBox(font, 56.0f, 450, 40, 0xf, 1, 0);
 
             // 6. SetShadow
             // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90
@@ -1507,7 +1507,7 @@ void GameOverScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
         if (m_pTitleString) {
             m_pTitleString->SetTranslation(pos, 1);
             float scale = size.x * (1.0f / 512.0f);  // 0.001953125 = 1/512
-            m_pTitleString->Draw(0.0f, Vec2(scale, scale), 1);
+            m_pTitleString->Draw(Vec2(scale, scale), 0.0f, 1);
         }
     }
 

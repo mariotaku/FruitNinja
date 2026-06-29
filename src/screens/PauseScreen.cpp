@@ -335,7 +335,7 @@ PauseScreen::PauseScreen()
         Mortar::FontCacheObjectTTF* font = GetPauseTTFFont();
         if (font) {
             m_PausedText = new Mortar::BakedStringBox(
-                font, 14.0f, 100.0f, 30.0f, 0xf, 1, 0);
+                font, 14.0f, 100, 30, 0xf, 1, 0);
             m_PausedText->SetHorizontalLineSpacing(-1);
             m_PausedText->SetText(GETSTRING(LSTR_PAUSED, 0));
             m_PausedText->SetColour(game_work.m_TitleColour, true);
@@ -474,7 +474,7 @@ void PauseScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
 
     if (m_Alpha > 0.0f && m_PausedText) {
         m_PausedText->SetTranslation(this->pos, 1);
-        m_PausedText->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_PausedText->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 }
 

@@ -145,8 +145,8 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
             m_pTitleBox = new Mortar::BakedStringBox(
                 font,
                 12.0f,       // fontSize (binary s0=0x41400000=12.0f)
-                148.0f,      // boxW     (binary r2=0x94=148)
-                14.0f,       // boxH     (binary r3=0xe=14)
+                148,         // boxW     (binary r2=0x94=148)
+                14,          // boxH     (binary r3=0xe=14)
                 0xf,         // align    (binary sp+0=15)
                 1,           // maxLines (binary sp+4=1)
                 3            // param8   (binary sp+8=3; step = (int)(12+3) = 15px)
@@ -172,7 +172,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
 
             // SetHorizontalLineSpacing(-1) -- auto spacing
             // v1.6.1 @0x00175544
-            m_pTitleBox->SetHorizontalLineSpacing(-1.0f);
+            m_pTitleBox->SetHorizontalLineSpacing(-1);
         }
     }
 
@@ -182,8 +182,8 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
     if (m_pTitleBox) {
         Vec3 titleTrans = pos + Vec3(-88.0f, 68.0f, 0.0f);
         m_pTitleBox->SetTranslation(titleTrans, 0);
-        // T_994 = BakedStringBox::Draw(0.0f, Vec2(1,1), 1)
-        m_pTitleBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        // T_994 = BakedStringBox::Draw(Vec2(1,1), 0.0f, 1)
+        m_pTitleBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // 3. BODY BOX: lazy-build m_pBodyBox once.
@@ -196,8 +196,8 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
             m_pBodyBox = new Mortar::BakedStringBox(
                 font,
                 10.0f,       // fontSize (binary s0=0x41200000=10.0f)
-                130.0f,      // boxW     (binary r2=0x82=130)
-                120.0f,      // boxH     (binary r3=0x78=120)
+                130,         // boxW     (binary r2=0x82=130)
+                120,         // boxH     (binary r3=0x78=120)
                 0xf,         // align    (binary sp+0=15)
                 9,           // maxLines (binary sp+4=9)
                 3            // param8   (binary sp+8=3; step = (int)(10+3) = 13px)
@@ -215,7 +215,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
 
             // SetHorizontalLineSpacing(-1) -- auto
             // v1.6.1 @0x00175688
-            m_pBodyBox->SetHorizontalLineSpacing(-1.0f);
+            m_pBodyBox->SetHorizontalLineSpacing(-1);
         }
     }
 
@@ -225,8 +225,8 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
     if (m_pBodyBox) {
         Vec3 bodyTrans = pos + Vec3(-81.0f, 41.0f, 0.0f);
         m_pBodyBox->SetTranslation(bodyTrans, 0);
-        // T_994 = BakedStringBox::Draw(0.0f, Vec2(1,1), 1)
-        m_pBodyBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        // T_994 = BakedStringBox::Draw(Vec2(1,1), 0.0f, 1)
+        m_pBodyBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // 4. AUTO-SHRINK measurement loop: measures body text height using the

@@ -462,7 +462,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             Vec3(pos.x + 105.0f, pos.y + 51.0f, pos.z),
             1
         );
-        m_ScoreBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_ScoreBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // m_TotalBox (+0xBC): "TOTAL" label at pos+(75,-128). SetTranslation flag=1.
@@ -471,7 +471,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             Vec3(pos.x + 75.0f, pos.y - 128.0f, pos.z),
             1
         );
-        m_TotalBox->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+        m_TotalBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
     // -----------------------------------------------------------------------
@@ -521,7 +521,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
                 Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
                 0
             );
-            m_RankLabelBoxes[i]->Draw(0.0f, Vec2(1.0f, 1.0f), 1);
+            m_RankLabelBoxes[i]->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
         }
 
         // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
@@ -532,7 +532,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
                 Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
                 0
             );
-            m_RankValueBoxes[i]->Draw(0.0f, Vec2(entry.m_Alpha, entry.m_Alpha), 1);
+            m_RankValueBoxes[i]->Draw(Vec2(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
         }
 
         // Row step: pos.y -= 42 at loop tail.

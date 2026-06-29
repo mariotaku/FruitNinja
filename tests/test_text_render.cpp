@@ -327,8 +327,8 @@ static bool TR_RenderCell(
     if (ttfFont) {
         // BakedStringBox: centred in the text area (above the label strip).
         // boxW/boxH give the wrap bounds.
-        const float boxW = (float)(CELL_W - 20);
-        const float boxH = (float)(CELL_H - LABEL_H - 8);
+        const int boxW = CELL_W - 20;
+        const int boxH = CELL_H - LABEL_H - 8;
         const float fontSize = 18.0f;
 
         // Text area vertical centre (in GL Y-up pixel space):
@@ -346,7 +346,7 @@ static bool TR_RenderCell(
         Vec3 pos(textCentreX, textCentreY, 0.0f);
         box.SetTranslation(pos, 1);
         Vec2 sc(1.0f, 1.0f);
-        box.Draw(0.0f, sc, 1);
+        box.Draw(sc, 0.0f, 1);
     }
 
     // Read pixels to detect glyph presence.
@@ -379,8 +379,8 @@ static bool TR_RenderCell(
 
         // Cell ortho: pixel-space, Y=0 bottom, Y=CELL_H top.
         // Label strip: Y=[0, LABEL_H]. Centre at (CELL_W/2, LABEL_H/2).
-        const float boxW = (float)(CELL_W - 4);
-        const float boxH = (float)LABEL_H;
+        const int boxW = CELL_W - 4;
+        const int boxH = LABEL_H;
         const float fontSize = 9.0f;
 
         Mortar::BakedStringBox lblBox(verdanaFont, fontSize, boxW, boxH, 0x0f, 1, 0);
@@ -392,7 +392,7 @@ static bool TR_RenderCell(
         Vec3 lblPos((float)(CELL_W / 2), (float)(LABEL_H / 2), 0.0f);
         lblBox.SetTranslation(lblPos, 1);
         Vec2 lblSc(1.0f, 1.0f);
-        lblBox.Draw(0.0f, lblSc, 1);
+        lblBox.Draw(lblSc, 0.0f, 1);
 
         cfbo.ReadRGBA(outPixels);
     } else if (labelFont) {
