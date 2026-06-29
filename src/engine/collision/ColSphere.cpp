@@ -9,18 +9,17 @@
 #include "asset/Mesh.h"
 #include "math/Colour.h"
 
-// Binary @ 0x0019fc20
+// ASM-spec v1.6.1 ColSphere::ColSphere() @ 0x0025cfd0
 ColSphere::ColSphere() : Col(), radius(0.0f) {}
 
-// Binary @ 0x0019fc50
+// ASM-spec v1.6.1 ColSphere::ColSphere(Vec3, float) @ 0x0025d024
 ColSphere::ColSphere(Vec3 c, float r) : Col(), radius(r) {
     m_PrimaryPoint = c;
 }
 
-// Binary @ 0x0019feac -- vtable slot 3 (Collide); double-dispatch by other->GetType().
+// ASM-spec v1.6.1 ColSphere::Collide @ 0x0025d328: vtable slot 3, double-dispatch by other->GetType().
 // Each branch calls the penetration-vector helper which writes outNormal = delta*push
 // (depth-scaled, NOT a unit normal). On hit, sets both collision flags.
-// RE-ported: 0x0025d328 -- replaced Intersects()+Normalise() with helper calls.
 int ColSphere::Collide(Col* other, Vec3* outNormal) {
     int t = other->GetType();
     int hit = 0;
@@ -43,9 +42,9 @@ int ColSphere::Collide(Col* other, Vec3* outNormal) {
     return hit;
 }
 
-// Binary @ 0x0019fd70 -- DrawDebug; reset matrix, scale by radius, translate by center, draw sphere
+// ASM-spec v1.6.1 ColSphere::DrawDebug @ 0x0025d068: reset matrix, scale by radius, translate by center, draw sphere
 void ColSphere::DrawDebug() {
-    // Binary @ 0x0019fd70: grab the MatrixManager singleton's world stack, reset it,
+    // v1.6.1 ColSphere::DrawDebug @ 0x0025d068: grab the MatrixManager singleton's world stack, reset it,
     // scale by radius, translate to the sphere centre, upload the modelview, then
     // draw a unit debug sphere. Mesh::DrawSphere itself is a binary BX-LR stub, so
     // the visible effect is a no-op in the original too -- the call shape is preserved.
@@ -76,7 +75,8 @@ bool ColSphere::Intersects(const ColSphere& other) const {
 }
 
 bool ColSphere::IntersectsLine(const ColLine& line) const {
-    Vec3 closest = ColLineClosestPoint(line, center());
+    Vec3 closest;
+    Math::ClosestPointOnLine(line.a(), line.b, center(), closest);
     Vec3 d(closest.x - center().x, closest.y - center().y, closest.z - center().z);
     float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
     return distSq <= radius * radius;
@@ -87,7 +87,8 @@ bool ColSphere::Contains(const Vec3& p) const {
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
-// Binary @ 0x0019fdec -- sphere (this) vs line (l) penetration.
+// ASM-verified: 2026-06-26 v1.6.1 ColSphere::ColSphereLine @ 0x0025d114 (asm-inspector)
+// sphere-vs-line penetration. Infinite-line (no t-clamp): calls Math::ClosestPointOnLine.
 //   closest = ClosestPointOnLine(l.a, l.b, this.center); delta = closest - center;
 //   if MagnitudeSqr(delta) < radius^2: mag = Magnitude(delta); normalise(delta);
 //   push = |radius - mag|; outVec = delta * push; return 1. Else return 0.
@@ -111,7 +112,7 @@ int ColSphere::ColSphereLine(ColSphere* self, ColLine* l, Vec3* outVec) {
     return 0;
 }
 
-// Binary @ 0x0019fc90 -- sphere (this) vs sphere (other) penetration.
+// ASM-spec v1.6.1 ColSphere::ColSphereSphere @ 0x0025d228 -- sphere-vs-sphere penetration.
 //   delta = this.center - other.center; outVec is pre-zeroed (Vec3::Zero).
 //   radSum = this.radius + other.radius;
 //   if MagnitudeSqr(delta) < radSum^2: d = Sqrt(distSq); push = d - radSum;

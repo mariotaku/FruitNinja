@@ -44,26 +44,5 @@ public:
 static_assert(sizeof(ColLine) == 32, "ColLine binary size mismatch");
 #endif
 
-// Closest point on line segment ab to point p, returns parameter t in [0,1]
-inline float ColLineClosestParam(const ColLine& line, const Vec3& p) {
-    Vec3 ab = line.b - line.a();
-    Vec3 ap = p - line.a();
-    float abLenSq = ab.x*ab.x + ab.y*ab.y + ab.z*ab.z;
-    if (abLenSq < 1e-8f) return 0.0f;
-    float t = (ap.x*ab.x + ap.y*ab.y + ap.z*ab.z) / abLenSq;
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-    return t;
-}
-
-// Closest point on line segment to point p
-inline Vec3 ColLineClosestPoint(const ColLine& line, const Vec3& p) {
-    float t = ColLineClosestParam(line, p);
-    return Vec3(
-        line.a().x + t * (line.b.x - line.a().x),
-        line.a().y + t * (line.b.y - line.a().y),
-        line.a().z + t * (line.b.z - line.a().z)
-    );
-}
 
 #endif

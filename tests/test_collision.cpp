@@ -5,7 +5,7 @@
 //
 // API conventions verified from source:
 //   ColSphere::Intersects        -- uses <= (touching at boundary -> true)
-//   ColSphere::IntersectsLine    -- uses <= (touching at boundary -> true; SEGMENT clamp via ColLineClosestPoint)
+//   ColSphere::IntersectsLine    -- uses <= (touching at boundary -> true; INFINITE-line via Math::ClosestPointOnLine @ 0x0027542c)
 //   ColSphereSphere(self,other,out):
 //       delta = self.center - other.center  (self-to-other direction REVERSED)
 //       push = d - radSum  (negative when overlapping)
@@ -151,7 +151,7 @@ static void test_colspheresphere_coincident_no_overlap()
 }
 
 // ---------------------------------------------------------------------------
-// ColSphere::IntersectsLine  (predicate with segment clamp, uses <=)
+// ColSphere::IntersectsLine  (predicate, infinite-line, uses <=)
 // ---------------------------------------------------------------------------
 
 static void test_sphere_line_through_centre()
@@ -163,12 +163,12 @@ static void test_sphere_line_through_centre()
     CHECK(s.IntersectsLine(line));
 }
 
-static void test_sphere_line_far_above()
+static void test_sphere_line_far()
 {
-    // Sphere (0,0,0) r=1; segment (0,2,0)->(0,3,0) -- closest endpoint (0,2,0).
-    // distSq = 4 > 1 -> false.
+    // Sphere (0,0,0) r=1; horizontal segment (-2,2,0)->(2,2,0): infinite line is y=2.
+    // Closest on infinite line to origin = (0,2,0); distSq=4 > r^2=1 -> false.
     ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 3.0f, 0.0f));
+    ColLine   line(Vec3(-2.0f, 2.0f, 0.0f), Vec3(2.0f, 2.0f, 0.0f));
     CHECK(!s.IntersectsLine(line));
 }
 
@@ -329,12 +329,12 @@ int main()
     test_colspheresphere_coincident_no_overlap();
     std::printf("  ColSphereSphere two zero-radius coincident: OK\n");
 
-    // ColSphere::IntersectsLine (predicate, segment-clamped, <= boundary)
+    // ColSphere::IntersectsLine (predicate, infinite-line, <= boundary)
     test_sphere_line_through_centre();
     std::printf("  sphere_line_through_centre (IntersectsLine): OK\n");
 
-    test_sphere_line_far_above();
-    std::printf("  sphere_line_far_above (IntersectsLine no-hit): OK\n");
+    test_sphere_line_far();
+    std::printf("  sphere_line_far (IntersectsLine infinite-line no-hit): OK\n");
 
     test_sphere_line_tangent();
     std::printf("  sphere_line_tangent (IntersectsLine boundary=true): OK\n");
