@@ -44,7 +44,7 @@ struct Renderer {
     void DrawColorQuad(const Colour& tint);
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24).
-    // Matches original DrawTriList (0x00193f5c) / DrawTriStrip.
+    // Matches original DrawTriList (0x00240e34) / DrawTriStrip.
     void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount);
     void DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount);
 };

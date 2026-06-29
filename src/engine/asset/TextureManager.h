@@ -89,7 +89,7 @@ public:
     // which resolves to the real body @ 0x001a73d0. That body is empty
     // (`return;`) -- no cache/state population happens here.
     void InitialiseInternal();
-    // Binary @ 0x00188dd4 -- constructs and returns an empty SmartPtr<Texture>
+    // Binary @ 0x00227230 -- constructs and returns an empty SmartPtr<Texture>
     // (the body is just `SmartPtr<Texture>(nullptr)` written to the RVO return
     // slot). The int arg is accepted but never used. Faithful behaviour is to
     // return a null texture handle.

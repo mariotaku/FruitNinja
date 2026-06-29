@@ -16,7 +16,7 @@ public:
     static const int MAX_SLOTS = 32;
 
     // Slot layout (stride 0x3c = 60 bytes, ARM32).
-    // Field order verified from SFXPlay @ 0x00129270:
+    // Field order verified from SFXPlay @ 0x00151d04:
     //   str r0,[r4,#0x8] -> sound at +0x00; str r3,[r4,#0xc] -> id at +0x04.
     // ARM ABI Tag_ABI_align_needed:8 forces Delegate1 (8-byte aligned) to +0x18;
     // a 4-byte pad sits at +0x14 between pitch and finishCallback.
@@ -56,10 +56,13 @@ public:
     // Binary @ 0x001290e8
     int FindFree();
 
-    // Binary @ 0x00129270 -- 4-arg form; 3-arg overload omits finishCallback.
-    Mortar::MortarSound* SFXPlay(const char* name, float vol, float pitch,
+    // Binary @ 0x00151d04 -- 4-arg form; 3-arg overload omits finishCallback.
+    // 3rd param is a gain multiplier (binary: SetVolume = (1-(1-master)*vol)*gain).
+    // The binary's 5th param (real pitch) feeds MortarSound::SetPitch @0x00230218, which
+    // is a no-op stub, so dropping it is faithful.
+    Mortar::MortarSound* SFXPlay(const char* name, float vol, float gain,
                                  Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback);
-    Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
+    Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float gain = 1.0f);
 
     // Binary @ 0x00151aa8
     bool IsPlaying(int hash);

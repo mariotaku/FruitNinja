@@ -261,15 +261,15 @@ public:
     static void DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, float vMax,
                                  DrawEffectContainer* fx);
 
-    // Binary @ 0x0019404c — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
+    // Binary @ 0x00240e10 — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
     static void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
                             DrawEffectContainer* fx);
 
-    // Binary @ 0x00194038 — forwards to DrawTris with primType=GL_TRIANGLE_STRIP; outer blend ignored.
+    // Binary @ 0x00240c30 — forwards to DrawTris with primType=GL_TRIANGLE_STRIP; outer blend ignored.
     static void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
                              DrawEffectContainer* fx);
 
-    // Binary @ 0x00193f5c — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
+    // Binary @ 0x00240e34 — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
     static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
                          DrawEffectContainer* fx);
 
