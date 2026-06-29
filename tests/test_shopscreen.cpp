@@ -115,8 +115,12 @@ int main(int argc, char* argv[]) {
     // then verify m_pBox0 (title) and m_pBox1 (category) are non-null.
     // Passes in the same headless context as the ShopScreen render (GL + TTF font live).
     // Scoped to destroy item+info before h.Shutdown() (while GL context still alive).
-    fprintf(stdout, "[test_shopscreen] ShopListItem TTF box-creation check (NewDraw path)\n");
-    {
+    // Skip in screenshot mode: this stub item's NewDraw() draws into the current
+    // framebuffer, which ScreenshotPng would then capture -- overlaying the real
+    // first shop item ("ORIGINAL" + "TEST BLADE" bleed). The assertion only needs
+    // to run in the headless ctest invocation (ctest -E screenshot).
+    if (!h.IsScreenshot()) {
+        fprintf(stdout, "[test_shopscreen] ShopListItem TTF box-creation check (NewDraw path)\n");
         // Prerequisite: game_work.m_pTTFFontMain must be live for NewDraw to build boxes.
         if (!game_work.m_pTTFFontMain) {
             fprintf(stderr, "WARN: game_work.m_pTTFFontMain null -- skipping box assertions\n");
