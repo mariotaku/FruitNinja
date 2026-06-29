@@ -208,9 +208,12 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     Mortar::FontCacheObjectTTF* font = GetGameModeTTFFont();
     if (font) {
         // m_pTitleBox: 3-line feature list "NO BOMBS!\nNO LIVES!\n90 SECS!"
-        // fontSize=12, w=73, h=53, align=0xf (centre+fit), maxLines=3, lineSpacing=0
+        // ASM-spec v1.6.1 GameModeScreen ctor @0x00182da0: (font, 12.0, w=73, h=53,
+        // align=0xf, maxLines=4, param8=6). param8 is the line-pitch addend ->
+        // multi-line step = (int)(fontSize+param8) = (int)(12+6) = 18px. The port
+        // previously passed maxLines=3/param8=0 -> step 12px (6px too tight = crammed).
         Mortar::BakedStringBox* tbox = new Mortar::BakedStringBox(
-            font, 12.0f, 73.0f, 53.0f, 0xf, 3, 0.0f);
+            font, 12.0f, 73, 53, 0xf, 4, 6);
         {
             const char* s0 = GETSTRING_CAST_0((LocalizedString)0x3be); // "NO BOMBS!"
             const char* s1 = GETSTRING_CAST_0((LocalizedString)0x3bf); // "NO LIVES!"
