@@ -141,14 +141,13 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
                 src = compact;
             }
         }
-        bool packed = m_Atlas->PackGlyph((int)bm.width, (int)bm.rows, src, &entry);
+        // PackGlyph always succeeds: allocates a new atlas page if the current one
+        // is full. DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
+        m_Atlas->PackGlyph((int)bm.width, (int)bm.rows, src, &entry);
         if (compact) free(compact);
-        if (!packed) {
-            LOG_ERROR("FontCacheObjectTTF", "atlas full, glyph cp=%u dropped", cp);
-            return nullptr;
-        }
     } else {
         entry.u0 = entry.v0 = entry.u1 = entry.v1 = 0.0f;
+        entry.pageTextureID = 0;
     }
 
     m_Cache[key] = entry;
