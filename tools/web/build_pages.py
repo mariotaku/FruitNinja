@@ -176,12 +176,19 @@ def main():
         die("docs/gallery/textures/ not found at: " + SRC_TEX_DIR)
 
     # ------------------------------------------------------------------
-    # Clean output
+    # Clean output -- non-destructive to top-level files.
+    # Only clean the regenerated SUBDIRS (game/models/textures) so the copytree
+    # targets get a clean dest; the top-level files (index.html, .nojekyll) are
+    # overwritten in place by the copy steps below and any extra files are kept.
+    # (Previously this rmtree'd the whole output dir, deleting index.html + any
+    # extra/deployed files and breaking a live server mid-publish.)
     # ------------------------------------------------------------------
-    if os.path.exists(out):
-        shutil.rmtree(out)
-        print("Removed old:", out)
     ensure_dir(out)
+    for _sub in ("game", "models", "textures"):
+        _subpath = os.path.join(out, _sub)
+        if os.path.isdir(_subpath):
+            shutil.rmtree(_subpath)
+            print("Cleaned subdir:", _subpath)
 
     summary = []
 
