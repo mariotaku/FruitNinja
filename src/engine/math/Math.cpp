@@ -4,7 +4,7 @@
 
 namespace Math {
 
-// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b3248 (re-analyst)
+// ASM-verified: 2026-06-26 v1.6.1 Math::ClosestPointOnLine @ 0x0027542c (asm-inspector)
 // Foot-of-perpendicular on the INFINITE line through A,B (not the segment --
 // despite the name there is no t-clamp). Special cases write only x,y; out.z
 // is left untouched (general path writes z=0). Branch order: A.y==B.y first.

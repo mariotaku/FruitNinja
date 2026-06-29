@@ -21,9 +21,9 @@ public:
     Vec3& center()             { return m_PrimaryPoint; }
     const Vec3& center() const { return m_PrimaryPoint; }
 
-    // Binary @ 0x0019fc20 -- default ctor
+    // ASM-spec v1.6.1 ColSphere::ColSphere() @ 0x0025cfd0
     ColSphere();
-    // Binary @ 0x0019fc50 -- parameterized ctor
+    // ASM-spec v1.6.1 ColSphere::ColSphere(Vec3, float) @ 0x0025d024
     ColSphere(Vec3 c, float r);
 
     virtual ~ColSphere() override {}
@@ -42,9 +42,9 @@ public:
     bool IntersectsLine(const ColLine& line) const;
     bool Contains(const Vec3& p) const;
 
-    // Binary @ 0x0019fdec -- sphere-vs-line penetration; returns 1 on hit.
+    // ASM-verified: 2026-06-26 v1.6.1 ColSphere::ColSphereLine @ 0x0025d114 (asm-inspector) -- sphere-vs-line penetration; returns 1 on hit.
     static int ColSphereLine(ColSphere*, ColLine*, Vec3*);
-    // Binary @ 0x0019fc90 -- sphere-vs-sphere penetration; returns 1 on hit.
+    // ASM-spec v1.6.1 ColSphere::ColSphereSphere @ 0x0025d228 -- sphere-vs-sphere penetration; returns 1 on hit.
     static int ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
 };
 
