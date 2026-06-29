@@ -690,6 +690,21 @@ fn_add_game_test(test_shoplistitem test_shoplistitem.cpp)
 add_test(NAME shoplistitem COMMAND test_shoplistitem)
 set_tests_properties(shoplistitem PROPERTIES TIMEOUT 60)
 
+# ShopListItem isolated row render test.
+# Renders a 5-row column (short CJK, long CJK, locked, new-badge, selected-badge)
+# on a clean dark background with Verdana captions.
+# Headless: passes in ctest -E screenshot; no display needed.
+# Screenshot variants write tmp/test/screenshots/shoplistitem/<lang>.png (need GPU).
+fn_add_game_test(test_shoplistitem_render test_shoplistitem_render.cpp)
+add_test(NAME shoplistitem_render COMMAND test_shoplistitem_render)
+set_tests_properties(shoplistitem_render PROPERTIES TIMEOUT 60)
+add_test(NAME screenshot_shoplistitem_english COMMAND test_shoplistitem_render --screenshot --lang=english_us)
+add_test(NAME screenshot_shoplistitem_chinese COMMAND test_shoplistitem_render --screenshot --lang=chinese)
+set_tests_properties(screenshot_shoplistitem_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_shoplistitem;lang_english_us")
+set_tests_properties(screenshot_shoplistitem_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_shoplistitem;lang_chinese")
+
 # AboutScreen headless layout/structure guard.
 # Verifies the faithful AboutScreen ctor+Init path creates:
 #   - 9 BakedStringBox credit-text controls (title+heading+version+6 credits)
