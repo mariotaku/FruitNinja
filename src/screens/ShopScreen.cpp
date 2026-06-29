@@ -29,6 +29,7 @@
 #include "math/Colour.h"
 #include "math/MathUtil.h"
 #include "debug/Logger.h"
+#include "engine/util/StringTable.h"
 #include <cstdlib>
 #include "game/GameWork.h"
 
@@ -138,7 +139,6 @@ Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectedSml;
 Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexLockedStroke;
 Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSmlBadge;
 Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
-Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
 
 // Binary BSS global g_bShopButtonShrinking @.got+0x451b4: "the equip-button fruit piece is
@@ -159,7 +159,7 @@ static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x001b61c8
-// Loads 10 textures into static slots (binary-faithful: no guard, no s_TexBackIcon).
+// Loads 10 textures into static slots (binary-faithful: no guard).
 // Binary pattern: LoadLocalisedTexture(name) -> store in static slot.
 // Conditional at end: if LowResBackgrounds() load BG_store_sml.tex else BG_store.tex.
 // ---------------------------------------------------------------------------
@@ -209,7 +209,6 @@ void ShopScreen::UnLoadContent() {
     s_TexLockedStroke.SetNull();
     s_TexNewItemSmlBadge.SetNull();
     s_TexBGStore.SetNull();
-    s_TexBackIcon.SetNull();
 }
 
 // ---------------------------------------------------------------------------
@@ -566,21 +565,24 @@ void ShopScreen::SetSelected(ShopListItem* item) {
     const int type_locked   = Fruit::FruitType("coconut",    false);  // DAT_0015c974
     Fruit* equipFruit = m_pEquipButton->m_pTrackedFruit;
     if (info->IsLocked() == 0) {
-        // Item is unlocked: select_item.tex + watermelon fruit type
-        // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x18
+        // ASM-spec v1.6.1 ShopScreen::SetSelected @0x001b24f0: unlocked branch
+        // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- m_RingTex[1] (blue_ring.tex)
         //         Fruit::SetFruitType(fruit, type_unlocked, 1.0f) @ 0x0017621c
-        m_pEquipButton->m_Texture = (s_TexSelectItem);
+        m_pEquipButton->m_Texture = game_work.m_RingTex[1];
+        m_pEquipButton->SetText(GETSTRING_CAST_0((LocalizedString)0xed),
+            game_work.m_RingColours[4], game_work.m_RingColours[5],
+            39.0f, 12.0f, true, true);
         if (equipFruit) {
-            // SetFruitType is not ported as a standalone method; set m_FruitType directly.
-            // Binary SetFruitType also updates visual scale and collision radius from FruitInfo;
-            // for the button-fruit display purpose m_FruitType drives model/texture selection.
             equipFruit->m_FruitType = type_unlocked;
         }
     } else {
-        // Item is locked: locked.tex + coconut fruit type
-        // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x14
+        // ASM-spec v1.6.1 ShopScreen::SetSelected @0x001b24f0: locked branch
+        // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- m_RingTex[10] (locked_ring.tex)
         //         Fruit::SetFruitType(fruit, type_locked, 1.0f) @ 0x0017621c
-        m_pEquipButton->m_Texture = (s_TexLocked);
+        m_pEquipButton->m_Texture = game_work.m_RingTex[10];
+        m_pEquipButton->SetText(GETSTRING_CAST_0((LocalizedString)0x3c7),
+            game_work.m_RingColours[12], game_work.m_Colour69C,
+            39.0f, 12.0f, true, true);
         if (equipFruit) {
             equipFruit->m_FruitType = type_locked;
         }
@@ -818,11 +820,12 @@ void ShopScreen::Update(float dt) {
             if (!m_pBuyButton) {
                 const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
-                // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
-                if (!s_TexBackIcon.IsValid())
-                    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-                m_pBuyButton->m_Texture = (s_TexBackIcon);
-                m_pBuyButton->Init(POS_BACK_BUTTON,
+                // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: BACK ring uses m_RingTex[16] (red_ring.tex).
+                m_pBuyButton->m_Texture = game_work.m_RingTex[16];
+                // Binary: spawn/rest pos = Vec3::Zero; m_HudScale (below) anchors the
+                // button to lower-right. Port previously passed POS_BACK_BUTTON here AND
+                // set m_HudScale -> double offset -> off-screen.
+                m_pBuyButton->Init(Vec3(0.0f, 0.0f, 0.0f),
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
@@ -838,6 +841,19 @@ void ShopScreen::Update(float dt) {
                     m_pBuyButton->m_pTrackedFruit->scale =
                         m_pBuyButton->m_pTrackedFruit->scale * BUTTON_SCALE;
                 }
+                // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: BACK ring SetText(GETSTRING 0x352)
+                m_pBuyButton->SetText(
+                    GETSTRING_CAST_0((LocalizedString)0x352),
+                    game_work.m_RingColours[0],
+                    game_work.m_RingColours[1],
+                    30.525f, 9.9f, true, true);
+                // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c (case 0, after SetText):
+                //   m_HudScale.x=0.5*0.75=0.375, m_HudScale.y=-0.5*0.7=-0.35 on m_pBuyButton.
+                //   m_HudScale is a POSITION anchor (not render scale): display pos =
+                //   pos + m_HudScale*(480,320,0). With pos=Zero -> (180,-112) lower-right.
+                //   HLE-confirmed: m_RestScale stays full-size while m_HudScale=(0.375,-0.35).
+                m_pBuyButton->m_HudScale.x = 0.5f * 0.75f;  // +0x14 = 0.375f
+                m_pBuyButton->m_HudScale.y = -0.5f * 0.7f;  // +0x18 = -0.35f
             }
         }
         break;
@@ -894,14 +910,21 @@ void ShopScreen::Update(float dt) {
                         const int equipFruitType =
                             Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
                         m_pEquipButton = new MenuButton();
-                        // DIFFERS: binary uses *(GameTask + slot+0x14); port
-                        // uses select_item.tex (same slot the binary assigns in SetSelected).
-                        m_pEquipButton->m_Texture = (s_TexSelectItem);
+                        // Creation default: locked_ring.tex (immediately overridden by SetSelected below).
+                        // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: binary writes m_RingTex[10] at creation.
+                        m_pEquipButton->m_Texture = game_work.m_RingTex[10];
                         m_pEquipButton->Init(POS_EQUIP_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                         // Binary (0x0015e5f6): disables touch on equip button at creation
                         m_pEquipButton->m_bAcceptsTouch = 0;
+                        // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: EQUIP ring SetText(GETSTRING 0x3c7)
+                        // Binary order: SetText -> m_bClearsMenuItems=0 -> SetSelected -> AddControl.
+                        m_pEquipButton->SetText(
+                            GETSTRING_CAST_0((LocalizedString)0x3c7),
+                            game_work.m_RingColours[12],
+                            game_work.m_Colour69C,  // +0x69c
+                            39.0f, 12.0f, true, true);
                         // Binary @0x001b321c (ShopScreen::Update state-1 equip build): the equip
                         // button is born with m_bClearsMenuItems=0 (MenuButton +0x13a) so slicing
                         // it to EQUIP does NOT cascade ClearMenuItems() and destroy the bomb/back
@@ -1015,10 +1038,8 @@ void ShopScreen::Update(float dt) {
         {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
-            // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
-            if (!s_TexBackIcon.IsValid())
-                s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-            m_pBuyButton->m_Texture = (s_TexBackIcon);
+            // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: BACK ring uses m_RingTex[16] (red_ring.tex).
+            m_pBuyButton->m_Texture = game_work.m_RingTex[16];
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
