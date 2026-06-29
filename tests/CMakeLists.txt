@@ -723,6 +723,36 @@ set_tests_properties(screenshot_shop_english PROPERTIES TIMEOUT 60
 set_tests_properties(screenshot_shop_chinese PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_shop;lang_chinese")
 
+# IngamePopup badge localisation regression guard.
+# Verifies that the NEW (0x10), SELECTED (0x11), and NEW BEST! (0x0F) badge labels
+# localise correctly across 5 locales: GETSTRING(0x399/0x3c5/0x2dc) returns
+# non-null non-empty strings, and each IngamePopup has at least one BakedStringBox.
+# Badges are built by BuildAllPopups() inside PreloadRings() during game.init();
+# the --lang= flag sets languageFlag before game.init() so glyphs are baked in
+# the requested locale (same path as the real game).
+# Arabic (0x14) uses arabic.ttf (loaded by PreloadFontsTTF) -- renders RTL glyphs.
+# Headless -- passes with ctest -E screenshot.
+# Screenshot variants write tmp/test/screenshots/badges/<lang>.png (need GPU).
+fn_add_game_test(test_ingamepopup_badges test_ingamepopup_badges.cpp)
+add_test(NAME ingamepopup_badges COMMAND test_ingamepopup_badges)
+set_tests_properties(ingamepopup_badges PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges")
+add_test(NAME screenshot_badges_english  COMMAND test_ingamepopup_badges --screenshot --lang=english_us)
+add_test(NAME screenshot_badges_chinese  COMMAND test_ingamepopup_badges --screenshot --lang=chinese)
+add_test(NAME screenshot_badges_japanese COMMAND test_ingamepopup_badges --screenshot --lang=japanese)
+add_test(NAME screenshot_badges_korean   COMMAND test_ingamepopup_badges --screenshot --lang=korean)
+add_test(NAME screenshot_badges_arabic   COMMAND test_ingamepopup_badges --screenshot --lang=arabic)
+set_tests_properties(screenshot_badges_english PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges;lang_english_us")
+set_tests_properties(screenshot_badges_chinese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges;lang_chinese")
+set_tests_properties(screenshot_badges_japanese PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges;lang_japanese")
+set_tests_properties(screenshot_badges_korean PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges;lang_korean")
+set_tests_properties(screenshot_badges_arabic PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ingamepopup;screen_badges;lang_arabic")
+
 # PowerUpShop draw-position isolation guard.
 # Verifies PowerUpShop::Init populates m_PurchasablePowerUps and m_SlotLayout,
 # and that the panel renders in-range after the +480/+320 offset removal.
