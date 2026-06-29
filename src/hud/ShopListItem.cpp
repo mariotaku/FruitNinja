@@ -271,7 +271,11 @@ void ShopListItem::NewDraw() {
     // v1.6.1 NewDraw @0x001b58e8: operator_new(0xc8), ctor(font,16,195,30,align,1,0),
     // SetText(m_pItemInfo->m_pTitle), SetShadow(0,black,Vec3(4,-4,0),1), Update.
     if (!m_pBox0) {
-        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0d, 1, 0);
+        // ASM-verified v1.6.1 ShopListItem::NewDraw @0x001b58e8: title/category align = 0x0E
+        // (RIGHT-horizontal | center-vertical), NOT 0x0d. RebuildAlignments @0x00245c78
+        // low-2-bits: 2=right. Right edge -> local x=195; translate x=pos.x-195 puts the
+        // shared right edge at pos.x (rest pos.x=-95). 0x0d (left) overflowed long titles left.
+        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0e, 1, 0);
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
         m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
@@ -283,7 +287,7 @@ void ShopListItem::NewDraw() {
     // typeNames (filled by Create @0x001b27f0): BLADE=0xCA, BG=0xC9, FULL=0xCB, SPECIAL=0x12F.
     if (!m_pBox1 || m_TintA != (uint8_t)m_pItemInfo->m_Type) {
         delete m_pBox1;
-        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175, 30, 0x0d, 1, 0);
+        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175, 30, 0x0e, 1, 0);
         const char* catStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
             case 0: catStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break; // 0xCA
@@ -470,7 +474,8 @@ void ShopListItem::DrawDescription() {
     // Rebuild box3 when nullptr or bVar6 cache changed.
     if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
         delete m_pBox3;
-        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, 0x0d, 10, 0);
+        // ASM-verified v1.6.1 DrawDescription @0x001b1f20: desc align=0x0F (center), maxLines=7, param8=4.
+        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, 0x0f, 7, 4);
         m_pBox3->SetText(m_DescText);
         m_pBox3->Update();
         m_pBox3->FitIntoVerticalBounds();
@@ -480,7 +485,8 @@ void ShopListItem::DrawDescription() {
     if (bVar6) {
         if (!m_pBox4) {
             delete m_pBox4;
-            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, 0x0d, 1, 0);
+            // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, param8=4.
+            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, 0x0f, 2, 4);
 
             // Determine prompt string id and colour.
             LocalizedString promptId;
