@@ -3,6 +3,7 @@
 #include "network/P2PMessageHandling.h"
 #include "ActorManager.h"
 #include "BombBlast.h"
+#include "BombFlash.h"
 #include "FruitInfo.h"
 #include "Game.h"
 #include "audio/GameSound.h"
@@ -52,33 +53,8 @@ static const int16_t DRAW_TILT_ANGLE  = (int16_t)0xBFF4;
 // 0xB6 = 182 ~ 1 degree in 16-bit (65536/360 ~ 182)
 static const int16_t ANGLE_SCALE      = 0xB6;
 
-// Global bomb data (BombGlobalData at GOT+0x464A0, loaded by LoadContent)
-struct BombGlobalData {
-    // +0x00: last qualifying bomb drawn this frame (highestBomb tracker).
-    // Bomb::Draw sets it when this != prev && !m_bMenuBombHit && pos.y > -1000.
-    // Release clears it when this == pTrackedBomb.
-    Bomb* pTrackedBomb;
-
-    // +0x08: per-frame gate for "Bomb-Fuse" SFX. Cleared at top of every
-    // Bomb::Draw; set by Bomb::Update when countdown crosses 0.2s downward.
-    uint8_t bFuseSfxFiredThisFrame;
-
-    Mortar::SmartPtr<Mortar::Model> model[3];
-    Mortar::SmartPtr<Mortar::Texture> texMinus10;
-    bool loaded;
-    uint32_t fuseHash[2];
-
-    BombGlobalData()
-        : pTrackedBomb(nullptr), bFuseSfxFiredThisFrame(0), loaded(false) {
-        fuseHash[0] = fuseHash[1] = 0;
-    }
-};
-static BombGlobalData g_bombData;
-
-// Binary stores at g_bombData->tex_02 (+0x04). Not the bomb mesh texture --
-// this is bomb_explode.tex used by BombBlast::DrawBlast for shockwave quads.
-// BombBlast.cpp references it via extern.
-Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
+// Global bomb data (v1.6.1 binary @ 0x31785C, size 0x48). Layout declared in Bomb.h.
+BombGlobalData g_bombData;
 
 // SetupLighting @ 0x00175018 -- single `bx lr`, genuine no-op stub in binary.
 // Both Bomb::LoadContent and Fruit::LoadFruitModels reach it via PLT trampoline.
@@ -116,13 +92,11 @@ void Bomb::LoadContent() {
 
 // ASM-spec v1.6.1 CleanupBomb @ 0x1d6758
 void CleanupBomb() {
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 2; i++)
         g_bombData.model[i] = Mortar::SmartPtr<Mortar::Model>();
     g_bombData.texMinus10 = Mortar::SmartPtr<Mortar::Texture>();
-    g_BombTexture = Mortar::SmartPtr<Mortar::Texture>();
-    g_bombData.loaded = false;
-    g_bombData.fuseHash[0] = 0;
-    g_bombData.fuseHash[1] = 0;
+    g_bombData.m_blastTexture = Mortar::SmartPtr<Mortar::Texture>();
+    BombFlash::CleanUp();
 }
 
 // --- Bomb implementation ---
@@ -176,8 +150,8 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     float scaleFactor = 1.0f;
     if (scaleOrNull) scaleFactor = scaleOrNull->x;
 
-    if (!g_BombTexture.IsValid()) {
-        g_BombTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
+    if (!g_bombData.m_blastTexture.IsValid()) {
+        g_bombData.m_blastTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
     }
 
     m_BombVariant = 0;

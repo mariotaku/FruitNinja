@@ -12,14 +12,15 @@
 //   - DrawActiveBlasts iterates every live type-4 entity, builds ONE
 //     shared vertex buffer, then issues a single DrawTriList for all
 //     blasts on that frame.
-//   - Texture is `bomb_explode.tex`, loaded by Bomb::Init into the
-//     extern'd g_BombTexture (same as g_bombData->tex_02 at +0x04 in
-//     the binary). There is NO separate "blast ring" texture.
+//   - Texture is `bomb_explode.tex`, loaded by Bomb::Init into
+//     g_bombData.m_blastTexture (+0x2C in the binary block @ 0x31785C).
+//     There is NO separate "blast ring" texture.
 //   - Init sets m_Scale = (5.0, 50.0, 1.0) as a Vec3 — unused in
 //     rendering but kept for struct fidelity.
 //
 
 #include "BombBlast.h"
+#include "Bomb.h"
 #include "ActorManager.h"
 #include "Game.h"
 #include "render/MatrixManager.h"
@@ -38,9 +39,7 @@ static const float RADIUS_GROWTH = 100.0f;   // DAT_0017120c
 static const float BLAST_LIFE    = 3.0f;
 static const float BLAST_Z       = 0.0f;     // field_0x6c initial
 
-// Shared texture — loaded by Bomb::Init, not re-loaded here.
-namespace { extern "C" {} }
-extern Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
+// Shared texture — loaded by Bomb::Init into g_bombData.m_blastTexture, not re-loaded here.
 
 // Static scratch buffer for the batched tri-list. Binary uses a global
 // at 0x00232618 sized for ~512 blasts per frame (0x1B000 / 36 / 6).
@@ -154,17 +153,17 @@ void BombBlast::PostUpdate(float /*dt*/) {}
 // Matches DrawActiveBlasts (0x171aa0).
 //
 // Binary control flow:
-//   if (g_BombTexture is valid) {
-//       g_BombTexture->Set();
+//   if (g_bombData.m_blastTexture is valid) {
+//       g_bombData.m_blastTexture->Set();
 //       *g_BlastCounter = 0;                  // reset shared blast index
 //       for each type-4 entity e (GetEntityFirst/Next):
 //           e->vtable[0x34]()  -> DrawBlast   // writes 6 verts at counter slot
 //           (*g_BlastCounter)++;              // bump after each blast
-//       g_BombTexture->UnSet();
-//       g_BombTexture->Set();                 // re-bind for the batched draw
+//       g_bombData.m_blastTexture->UnSet();
+//       g_bombData.m_blastTexture->Set();                 // re-bind for the batched draw
 //       worldStack.Reset(); UploadMatrices_Coin();
 //       DrawTriList(g_BlastVerts, *g_BlastCounter * 6, false, NULL);
-//       g_BombTexture->UnSet();
+//       g_bombData.m_blastTexture->UnSet();
 //   }
 //
 // Note the binary iterates EVERY type-4 entity unconditionally (no IsActive
@@ -175,11 +174,11 @@ void BombBlast::DrawActiveBlasts() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    // Share the texture Bomb::Init already loaded (g_bombData->tex_02
-    // in the binary). Skip the pass if no bomb has spawned yet.
-    if (!g_BombTexture.IsValid()) return;
+    // Share the texture Bomb::Init already loaded into g_bombData.m_blastTexture (+0x2C).
+    // Skip the pass if no bomb has spawned yet.
+    if (!g_bombData.m_blastTexture.IsValid()) return;
 
-    g_BombTexture->Set();
+    g_bombData.m_blastTexture->Set();
 
     // Reset the shared blast counter, then let each blast emit its own
     // 6-vertex slot via DrawBlast (vtable+0x34 in the binary).
@@ -193,12 +192,12 @@ void BombBlast::DrawActiveBlasts() {
         s_BlastCounter++;
     }
 
-    g_BombTexture->UnSet();
+    g_bombData.m_blastTexture->UnSet();
 
     if (s_BlastCounter == 0) return;
 
     // Re-bind and issue the single batched tri-list (binary Set/UnSet pair).
-    g_BombTexture->Set();
+    g_bombData.m_blastTexture->Set();
 
     // Identity world matrix — vertices are already in world space.
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -206,7 +205,7 @@ void BombBlast::DrawActiveBlasts() {
     mm.UploadModelViewOnly();
 
     Mortar::Mesh::DrawTriList(s_BlastVerts, s_BlastCounter * VERTS_PER_BLAST, false, NULL);
-    g_BombTexture->UnSet();
+    g_bombData.m_blastTexture->UnSet();
 }
 
 // Matches RemoveFlashEntities (0x169ca0) — called by UpdateBombHit when
