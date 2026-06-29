@@ -304,6 +304,28 @@ target_include_directories(test_bakedstringttf PRIVATE
 )
 add_test(NAME bakedstringttf COMMAND test_bakedstringttf)
 
+# BakedStringBox::ComputeBaselineY vertical baseline formula pin.
+# Pins the exact binary formula from v1.6.1 RebuildAlignments @0x00245c78
+# for all three vertical-alignment cases (center-V single/multi, top, bottom).
+# Critically pins the -1.5 coefficient in the single-line center-V case.
+# Pure in-process: no GPU, no audio, no FreeType, no SDL.
+# Cross-build safe: no lambdas, no auto, no range-for, no enum class.
+add_executable(test_bakedstringbox_baseline
+    test_bakedstringbox_baseline.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/BakedStringBox.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringIterator.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringProxy.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/math/Colour.cpp
+)
+target_include_directories(test_bakedstringbox_baseline PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_compile_definitions(test_bakedstringbox_baseline PRIVATE FN_GL_STUB)
+add_test(NAME bakedstringbox_baseline COMMAND test_bakedstringbox_baseline)
+set_tests_properties(bakedstringbox_baseline PROPERTIES TIMEOUT 30
+    LABELS "category_rendering;component_bakedstringbox")
+
 # ---------------------------------------------------------------------------
 # Visual / component tests (SDL + GL + TestHarness)
 # All use fn_add_game_test for shared link/copy boilerplate.

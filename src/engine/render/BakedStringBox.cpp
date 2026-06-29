@@ -702,6 +702,39 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, 
     }
 }
 
+// ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+// Pure stateless vertical baseline computation. See BakedStringBox.h ComputeBaselineY doc for formulas.
+// lineIdx==0 gives the line-0 anchor used by Draw(); the render loop subtracts li*step per line.
+float BakedStringBox::ComputeBaselineY(int align, int nLines, int lineIdx,
+                                        float maxBearingY, float minBottom,
+                                        float boxH, float step, float maxSpan)
+{
+    const int vertAlign = align & 0xc;
+    if (vertAlign == 0xc) {
+        if (nLines == 1) {
+            // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+            // single-line center-V: baselineY = maxBearingY - 1.5*minBottom - boxH*0.5 (yMin coeff exactly -1.5)
+            return maxBearingY - 1.5f * minBottom - boxH * 0.5f;
+        } else {
+            // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+            // multi-line center-V per line i: (lineH*nLines)*0.5 - lineH*0.5 - boxH*0.5 - maxSpan*0.5 - i*lineH
+            // binary descent term (pBVar11) evaluates to 0 -- no minDescent subtracted here.
+            return (step * (float)nLines) * 0.5f - step * 0.5f - boxH * 0.5f
+                   - maxSpan * 0.5f - (float)lineIdx * step;
+        }
+    } else if ((align & 0x8) == 0) {
+        // Top-anchored: binary RebuildAlignments @0x00245c78.
+        // ascentSpan = maxBearingY - minBottom (total glyph cap-to-descent span, >0).
+        // descent    = -minBottom (descent magnitude, >=0, since minBottom<=0).
+        float ascentSpan = maxBearingY - minBottom;
+        float descent    = -minBottom;
+        return -(ascentSpan * 0.5f) - step * 0.5f - descent;
+    } else {
+        // Bottom-anchored: binary RebuildAlignments @0x00245c78.
+        return boxH;
+    }
+}
+
 // ASM-spec v1.6.1 Mortar::BakedStringBox::Draw @0x00246e20: (Vec2 scale, float rotation, bool center).
 void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     if (!m_Font) return;
@@ -717,13 +750,13 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     const float sinT  = sinf(theta);
     const float cosT  = cosf(theta);
 
-    // Binary RebuildAlignments @ 0x00245c78: step stored per-line in line.height
-    // (all lines share the same step since requestedSize is fixed within one Layout() call).
-    // Collect minDescent (min bottom across all lines, <=0) for the centre formula.
-    float minDescent = 0.0f;
+    // Binary RebuildAlignments @ 0x00245c78: step stored per-line in line.height.
+    // Compute maxSpan = max(maxBearingY - minBottom) across all lines (binary iVar7,
+    // the max glyph ink-span used in the multi-line center-V baseline formula).
+    float maxSpan = 0.0f;
     for (size_t li = 0; li < m_Lines.size(); ++li) {
-        if (m_Lines[li].minBottom < minDescent)
-            minDescent = m_Lines[li].minBottom;
+        float span = m_Lines[li].maxBearingY - m_Lines[li].minBottom;
+        if (span > maxSpan) maxSpan = span;
     }
 
     const float step   = m_Lines[0].height;
@@ -732,38 +765,11 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     // World-space anchor.
     Vec3 anchor = m_Pos;
 
-    // Vertical alignment from binary RebuildAlignments @ 0x00245c78.
-    // Three branches on (m_Align & 0xc):
-    //   0xc (centre-V): existing formula -- unchanged.
-    //   0x0..0x3 (top-anchored, (m_Align&0x8)==0): line0 baseline = -(ascentSpan/2) - step/2 - descent.
-    //   0x8..0xb (bottom-anchored, (m_Align&0x8)!=0): baseline = boxH.
-    // NOTE: sign of descent term has not been ASM-pinned visually; flip if version box lands wrong side.
-    float baselineY = 0.0f;
-    const int vertAlign = m_Align & 0xc;
-    if (vertAlign == 0xc) {
-        if (nLines == 1) {
-            // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (nLines==1, center-V):
-            // binary places the ink CENTRE at -boxH/2 using actual ink extents:
-            //   baselineY = -boxH/2 - inkCenter,  inkCenter = (maxBearingY + minBottom)/2.
-            float inkCenter = (m_Lines[0].maxBearingY + m_Lines[0].minBottom) * 0.5f;
-            baselineY = -m_BoxHeight * 0.5f - inkCenter;
-        } else {
-            // step == maxLineH per binary; minDescent == minBound (<=0).
-            baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
-                         + (step * (float)nLines) * 0.5f) - minDescent;
-        }
-    } else if ((m_Align & 0x8) == 0) {
-        // Top-anchored: binary RebuildAlignments @0x00245c78.
-        // ascentSpan = maxBearingY - minBottom (total glyph cap-to-descent span, >0).
-        // descent    = -minBottom (descent magnitude, >=0, since minBottom<=0).
-        const BakedStringBoxLine& l0 = m_Lines[0];
-        float ascentSpan = l0.maxBearingY - l0.minBottom;
-        float descent    = -l0.minBottom;
-        baselineY = -(ascentSpan * 0.5f) - step * 0.5f - descent;
-    } else {
-        // Bottom-anchored: binary RebuildAlignments @0x00245c78.
-        baselineY = m_BoxHeight;
-    }
+    // Vertical alignment via ComputeBaselineY() (binary RebuildAlignments @ 0x00245c78).
+    // lineIdx=0: the Draw loop below applies the per-line offset via baselineY - li*step.
+    float baselineY = ComputeBaselineY(m_Align, nLines, 0,
+                                       m_Lines[0].maxBearingY, m_Lines[0].minBottom,
+                                       m_BoxHeight, step, maxSpan);
 
     // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20: center recenters only the scale-shrink
     // delta (0 at scale=1); per-line centering is in Layout/RebuildAlignments.

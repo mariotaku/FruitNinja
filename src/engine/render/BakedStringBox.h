@@ -185,6 +185,27 @@ public:
     int GetBoxWidth()  const { return (int)m_BoxWidth; }
     int GetBoxHeight() const { return (int)m_BoxHeight; }
 
+    // ComputeBaselineY  binary RebuildAlignments @ 0x00245c78
+    // Pure stateless vertical baseline for line `lineIdx` (0-based).
+    // Extracted for unit testability; Draw() calls with lineIdx=0 and lets
+    // the render loop apply the per-line step offset.
+    //
+    // center-V single (nLines==1):
+    //   maxBearingY - 1.5*minBottom - boxH*0.5   (yMin coeff exactly -1.5)
+    // center-V multi (nLines>1), per line i:
+    //   (step*nLines)*0.5 - step*0.5 - boxH*0.5 - maxSpan*0.5 - i*step
+    //   where maxSpan = max(maxBearingY-minBottom) across all lines
+    // top-anchored ((align&0x8)==0):
+    //   -(ascentSpan*0.5) - step*0.5 - descent
+    //   where ascentSpan = maxBearingY-minBottom, descent = -minBottom
+    // bottom-anchored:
+    //   boxH
+    //
+    // ASM-verified: 2026-06-29T00:00Z v1.6.1 Mortar::BakedStringBox::RebuildAlignments @0x00245c78 (asm-inspector)
+    static float ComputeBaselineY(int align, int nLines, int lineIdx,
+                                  float maxBearingY, float minBottom,
+                                  float boxH, float step, float maxSpan);
+
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
     float   m_FontSize;           // current render pixel size (shrunk by FitInto)
