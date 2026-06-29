@@ -663,6 +663,24 @@ fn_add_game_test(test_text_render test_text_render.cpp)
 add_test(NAME test_text_render_screenshot COMMAND test_text_render --screenshot)
 set_tests_properties(test_text_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77)
 
+# BakedStringBox effects-combination screenshot grid.
+# Renders a 4-column x 7-row grid covering every effect setter and combination:
+#   plain / 2-color gradient / metallic gold+silver (fill row)
+#   shadow small/medium/inner-glow/+gradient (shadow row)
+#   stroke thin/thick/2-color / metal+shadow+stroke (stroke row)
+#   font sizes 10/16/24/32px (size row)
+#   alignment left-H/center-H/right-H/center-H+top-V (align row)
+#   worldspace clipping no-clip/left-half/top-half/center-band (clip row)
+#   ZH/JA/KO/AR language samples with metallic/shadow/gradient/plain (lang row)
+# Validates the 200-byte BakedStringBox re-layout: shadow/gradient/metallic/
+# stroke/clipping fields at their verified v1.6.1 offsets.
+# Cell labels drawn in Verdana; falls back to pFontMain bitmap when absent.
+# Output: tmp/test/screenshots/text_effects/grid.png
+fn_add_game_test(test_text_effects test_text_effects.cpp)
+add_test(NAME test_text_effects_screenshot COMMAND test_text_effects --screenshot)
+set_tests_properties(test_text_effects_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77
+    LABELS "category_rendering;component_bakedstringbox")
+
 # ShopListItem TTF box-creation guard (#264).
 # Verifies that after NewDraw() the title (m_pBox0) and category (m_pBox1)
 # BakedStringBox pointers are non-null and m_TintA is cached to m_Type.
