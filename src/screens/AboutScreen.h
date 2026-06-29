@@ -178,6 +178,29 @@ public:
 #ifdef __bada__
     friend struct AboutScreenLayoutAssert;
 #endif
+
+#ifdef FN_TEST
+public:
+    // Test-only accessors (excluded from production/cross-build by FN_TEST guard).
+    // Returns number of non-null BakedStringBox credit-text controls.
+    // Expected 9 when TTF font initialises correctly (title+heading+version+6 credits).
+    int GetBuiltBoxCount() const {
+        int n = 0;
+        if (m_TitleBox)    ++n;
+        if (m_HeadingBox)  ++n;
+        if (m_VersionBox)  ++n;
+        if (m_CreditLine0) ++n;
+        if (m_CreditLine1) ++n;
+        if (m_CreditLine2) ++n;
+        if (m_CreditLine3) ++n;
+        if (m_CreditLine4) ++n;
+        if (m_CreditLine5) ++n;
+        return n;
+    }
+    // Returns number of scrolling marquee lines added by CreateCreditsMarquee.
+    // Expected >= 10 (heading + dev names + colour-leader lines).
+    int GetMarqueeCount() const { return (int)m_Marquees.size(); }
+#endif // FN_TEST
 };
 
 #if defined(__bada__)
