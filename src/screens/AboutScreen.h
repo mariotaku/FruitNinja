@@ -144,9 +144,6 @@ private:
     static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (binary: m_creditsTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex (binary: m_senseiTexture)
 
-    // Back button callback -> start fade-out (state 2)
-    void BackCallback();
-
     // Helpers
     void CreateBackButton();
     void RemoveBackButton();
@@ -171,8 +168,10 @@ private:
     void DrawMarquee();
 
 public:
-    // Binary @ 0x0012eb30 (re-analyst 2026-06-07). AboutScreen quit/back-out
-    // handler.
+    // v1.6.1 AboutScreen::QuitGameCallback @ 0x0015c914.
+    // Bound to m_pBackButton. Plays menu-bomb SFX, sets state 2, flits the
+    // back-bomb so the ActorManager reaps it during fade-out, freeing the
+    // menu-bomb pool for DojoScreen::Reset on re-entry.
     void QuitGameCallback();
 
 #ifdef __bada__
