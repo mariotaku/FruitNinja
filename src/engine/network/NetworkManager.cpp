@@ -20,9 +20,12 @@ bool IsProviderOnline() {
     return false;
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 AreFriendsLoaded @0x0011f4a0.
+// Defunct: online leaderboard -- no-op stub; v1.6.1 AreFriendsLoaded @0x0011f4a0
+// is `mov r0,#1; bx lr` (constant true). Match it byte-for-byte. Behaviourally
+// inert: the sole caller (FruitFactLeaderboard) gates on !IsProviderOnline()
+// first (also stubbed false), so the local/offline path is still forced.
 bool AreFriendsLoaded() {
-    return false;
+    return true;
 }
 
 // Defunct: network provider selection -- no-op stub; v1.6.1 AskUserToChoosePreferredNetwork @0x001ca8f0
