@@ -20,8 +20,10 @@
 #include <cstring>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 #include <vector>
 #include <map>
+#include "core/MortarTypes.h"
 
 // Binary constants
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
@@ -370,37 +372,58 @@ void BakedStringTTF::FullInternalRebuild()
 }
 
 // FitStringToWidth @0x00248734 (static):
-// pen += glyphAdvance + 1.0; track break (whitespace/0x200b/0xa); write outWidth; split at break.
-// Returns total advance; outWidth gets width up to the break point.
-float BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, const char* text,
-                                        float fontScale, float maxWidth, float* outWidth)
+// ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734
+// Word-wrap line-breaker: modifies ioText in-place to the head that fits within maxWidth,
+// sets outRemainder to the overflow tail, outWidth to the measured advance of the head,
+// and outTruncated when an unbreakable word overflows.
+// +1.0 inter-glyph gap; whitespace/0x200b/0x0a = break point.
+void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
+                                       std::string& outRemainder, float fontSize,
+                                       long maxWidth, int /*mode*/,
+                                       float* outWidth, bool* outTruncated)
 {
-    if (!fc || !text) {
+    outRemainder.clear();
+    if (outTruncated) *outTruncated = false;
+
+    if (!fc || ioText.empty()) {
         if (outWidth) *outWidth = 0.0f;
-        return 0.0f;
+        return;
     }
 
-    float total = 0.0f;
-    float breakAdv = 0.0f;
-    Utf8StringIterator it(text);
-    while (!it.IsEmpty()) {
-        uint32_t cp = it.m_CurrentCodepoint;
-        // Break characters: space, zero-width space (0x200b), newline (0x0a)
+    const char* text        = ioText.c_str();
+    const char* cursor      = text;
+    float       total       = 0.0f;
+    float       breakAdv    = 0.0f;
+    const char* breakCursor = 0;   // byte position immediately after last break char
+
+    while (*cursor != '\0') {
+        uint32_t cp = utf8::decode_next_unicode_character(&cursor);
+        // Break characters: space (0x20), zero-width space (0x200b), newline (0x0a)
         bool isBreak = (cp == ' ' || cp == 0x200b || cp == 0x0a);
         if (isBreak) {
-            breakAdv = total;
+            breakAdv    = total;
+            breakCursor = cursor;
         }
-        const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontScale);
+        const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontSize);
         float adv = g ? (g->advanceX + 1.0f) : 0.0f;
         total += adv;
-        if (total > maxWidth && breakAdv > 0.0f) {
-            if (outWidth) *outWidth = breakAdv;
-            return breakAdv;
+        if (total > (float)maxWidth) {
+            if (breakCursor) {
+                // Split at last break: head = [text, breakCursor), tail = rest.
+                if (outWidth) *outWidth = breakAdv;
+                outRemainder = std::string(breakCursor);   // construct tail first (text still valid)
+                ioText       = std::string(text, (size_t)(breakCursor - text));
+            } else {
+                // No break point: unbreakable overflow.
+                if (outTruncated) *outTruncated = true;
+                if (outWidth) *outWidth = total;
+                // ioText left as-is (no split possible).
+            }
+            return;
         }
-        it++;
     }
+    // Everything fits within maxWidth.
     if (outWidth) *outWidth = total;
-    return total;
 }
 
 // ApplyFormatting_Circle_Internal @0x00248cc8:
@@ -537,12 +560,16 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 }
 
 // Draw @0x002497a8:
+// ASM-spec v1.6.1 BakedStringTTF::Draw @0x002497a8:
+//   (Vec3 anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE, MortarRectangleT<long>* refRect=nullptr)
 // if(!m_SurfacesBuilt) FullInternalRebuild(); if 0 glyphs return.
 // FontInterface::BuildPendingTextures(). MatrixStack reset + identity.
 // if(field_5e==0) apply align (bits0-1 horiz, bits2-3 vert).
+// When refRect is non-null, bounds read from refRect; else computed from this object's glyph verts.
 // TranslateLocal(alignOffset); Scale; RotZ; Translate(anchor); Upload.
 // per surface (m_DrawMode<0): DrawTriList via vertex array.
-void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align)
+void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align,
+                           MortarRectangle* refRect)
 {
     if (!m_SurfacesBuilt) FullInternalRebuild();
     if (m_Surfaces.empty() || m_Glyphs.empty()) return;
@@ -559,18 +586,27 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t a
     float alignOffY = 0.0f;
 
     if (m_CircleFlag == 0) {
-        // Compute bounding box from surface verts.
-        float xMin =  1e30f, xMax = -1e30f;
-        float yMin =  1e30f, yMax = -1e30f;
-        for (size_t si = 0; si < m_Surfaces.size(); ++si) {
-            BakedStringTTF_Surface* s = m_Surfaces[si];
-            for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
-                float x = s->m_Verts[vi].x;
-                float y = s->m_Verts[vi].y;
-                if (x < xMin) xMin = x;
-                if (x > xMax) xMax = x;
-                if (y < yMin) yMin = y;
-                if (y > yMax) yMax = y;
+        float xMin, xMax, yMin, yMax;
+        if (refRect) {
+            // Binary: read alignment bounds from refRect (FG-label bbox for layer registration).
+            xMin = (float)refRect->left;
+            xMax = (float)refRect->right;
+            yMin = (float)refRect->top;
+            yMax = (float)refRect->bottom;
+        } else {
+            // Compute bounding box from this object's surface verts.
+            xMin =  1e30f; xMax = -1e30f;
+            yMin =  1e30f; yMax = -1e30f;
+            for (size_t si = 0; si < m_Surfaces.size(); ++si) {
+                BakedStringTTF_Surface* s = m_Surfaces[si];
+                for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
+                    float x = s->m_Verts[vi].x;
+                    float y = s->m_Verts[vi].y;
+                    if (x < xMin) xMin = x;
+                    if (x > xMax) xMax = x;
+                    if (y < yMin) yMin = y;
+                    if (y > yMax) yMax = y;
+                }
             }
         }
         float width  = (xMax > xMin) ? (xMax - xMin) : 0.0f;

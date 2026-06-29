@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include "game/GameWork.h"
 #include "hud/IngamePopup.h"
 
@@ -398,7 +399,13 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
     if (radius > 0.0f) {
         float arcW = radius * 3.14159265f * 0.75f;
         float outWidth = 0.0f;
-        Mortar::BakedStringTTF::FitStringToWidth(font, text, fontScale, 500.0f, &outWidth);
+        {
+            std::string ioText(text);
+            std::string remainder;
+            bool truncated = false;
+            // TODO: v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734 -- mode param semantics unconfirmed (passed as 0).
+            Mortar::BakedStringTTF::FitStringToWidth(font, ioText, remainder, fontScale, 500L, 0, &outWidth, &truncated);
+        }
         if (outWidth > arcW) {
             float newScale = fontScale / (outWidth / arcW);
             m_LabelRadius = radius + fabsf(fontScale - newScale);
@@ -850,6 +857,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
         float rotZ = m_Timer;
         Vec2 scaleV(scaleF, scaleF);
 
+        // TODO: v1.6.1 BakedStringTTF::Draw @0x002497a8 -- pass FG-label refRect for glow/shadow layer registration (needs UpdateBounds @0x00247ed0)
         if (m_pLabelGlow) {
             m_pLabelGlow->Draw(anchor, scaleV, rotZ, 0xf);
             if (m_LabelRadius > 0.0f)

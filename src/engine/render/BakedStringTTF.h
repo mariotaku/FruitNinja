@@ -23,12 +23,14 @@
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include <vector>
+#include <string>
 #include <cstdint>
 
 namespace Mortar {
 
 class FontCacheObjectTTF;
 struct GlyphAtlasEntry;
+struct MortarRectangle;  // forward declaration for Draw refRect param
 
 // FONT_EFFECT type -- values from binary (v1.6.1 BakedStringTTF ctor @0x00249a5c).
 // 0 = no effect, 1 = bold/outline driven by m_FmtCount.
@@ -164,11 +166,19 @@ public:
     //   BuildSurfaces + ApplyEffects (no-op stub).
     void FullInternalRebuild();
 
-    // FitStringToWidth @0x00248734 (static): pen-advance width measure.
-    // Returns the pen-advance total width of text at fontScale using fc.
+    // FitStringToWidth @0x00248734 (static): word-wrap line-breaker.
+    // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
+    //   (FontCacheObjectTTF*, std::string& ioText, std::string& outRemainder,
+    //    float fontSize, long maxWidth, int mode, float* outWidth, bool* outTruncated)
+    // ioText is modified in-place to the head that fits within maxWidth;
+    // outRemainder gets the overflow tail; outWidth gets the measured advance;
+    // outTruncated is set when an unbreakable word overflows maxWidth.
     // +1.0 inter-glyph gap; whitespace/0x200b/0xa = break point.
-    static float FitStringToWidth(FontCacheObjectTTF* fc, const char* text,
-                                  float fontScale, float maxWidth, float* outWidth);
+    // TODO: v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734 -- mode param semantics unconfirmed (passed as 0).
+    static void FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
+                                 std::string& outRemainder, float fontSize,
+                                 long maxWidth, int mode,
+                                 float* outWidth, bool* outTruncated);
 
     // ApplyFormatting_Circle @0x00248dd0: place glyphs on a circular arc.
     // public sets m_Radius=radius then calls Internal @0x00248cc8.
@@ -180,10 +190,16 @@ public:
     void ApplyGradient_TopBottom(Colour top, Colour bottom);
 
     // Draw @0x002497a8: render all surfaces via atlas + vertex colour.
-    // (Vec3& anchor, Vec2 scale, float rotZ, uint align, Rect* clip)
+    // ASM-spec v1.6.1 BakedStringTTF::Draw @0x002497a8:
+    //   (Vec3 anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE, MortarRectangleT<long>* refRect=nullptr)
     // if(!m_SurfacesBuilt) FullInternalRebuild(); if 0 glyphs return.
     // field_5e==1 (circle) skips align; else apply align bits 0-3.
-    void Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align);
+    // When refRect is non-null, alignment bounds are read from refRect instead of
+    // computed from this object's glyph verts (binary: FG-label bbox for glow/shadow layer
+    // registration). Zero visual change for all existing callers that pass no refRect.
+    // DIFFERS: binary uses MortarRectangleT<long>; port uses MortarRectangle (int-based).
+    void Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align,
+              MortarRectangle* refRect = 0);
 
     // Returns total advance (field_60) set by ApplyFormatting_LeftJustify.
     float GetTotalAdvance() const;
