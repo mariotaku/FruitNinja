@@ -205,8 +205,8 @@ static int RunBonus(fn::TestHarness& h) {
     //   GAME_TEXTURE_118 = "%i FRUIT COMBO?!?!" (bake with value 55)
     //   GAME_TEXTURE_23  = "NO FRUIT DROPPED!"
     // Route through GETSTRING_STR so --lang= override changes displayed names.
-    // ApplyLanguageOverride() runs before InitComponent/burn-in so these
-    // GETSTRING_STR calls reflect the chosen language.
+    // languageFlag is set before game.init() so string table and item parse
+    // both see the chosen language; these GETSTRING_STR calls follow suit.
     const char* name0 = GETSTRING_STR("GAME_TEXTURE_17",  0);
     if (!name0 || !name0[0]) name0 = "COMBO GOD!!!!";
 

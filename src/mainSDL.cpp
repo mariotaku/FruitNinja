@@ -125,14 +125,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    Game game;
-    if (!game.init(window, gl)) {
-        fprintf(stderr, "Failed to init game\n");
-        return 1;
-    }
-
-    // Port specific: apply --lang= override after init so the first frame sees
-    // the chosen language.  Localisation::Load handles the missing-file fallback.
+    // Port specific: set languageFlag BEFORE game.init() so GameInitialise
+    // loads the correct string table before ItemManager::LoadItemData parses
+    // item titles (titles are baked at parse time, not draw time).
     if (g_langOverride >= 0) {
         static const char* const kLangNames[] = {
             "english_us", "german", "dutch", "french", "spanish", "italian",
@@ -140,9 +135,14 @@ int main(int argc, char* argv[]) {
             "english_uk", "chinese", "english_us"
         };
         game_work.languageFlag = (uint8_t)g_langOverride;
-        Localisation::Load(game.data_dir.c_str(), g_langOverride);
-        printf("[lang] override applied: flag=%d (%s)\n",
+        printf("[lang] override: flag=%d (%s)\n",
                g_langOverride, kLangNames[g_langOverride]);
+    }
+
+    Game game;
+    if (!game.init(window, gl)) {
+        fprintf(stderr, "Failed to init game\n");
+        return 1;
     }
 
     game.run();

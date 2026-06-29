@@ -1,7 +1,7 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemInfo + SlashModInfo — method implementations.
-// Binary: ItemInfo::ctor 0x0013a714 (thunk 0x001145a0), ItemInfo::Parse 0x0011293c,
+// Binary: ItemInfo::ctor 0x0013a714 (thunk 0x001145a0), ItemInfo::Parse 0x0013907c,
 //         ItemInfo in-place dtor 0x0013adb8, deleting dtor 0x0013b098,
 //         SlashModInfo::ctor 0x0013ae78, ParseSlashModInfo 0x001126c0,
 //         SlashSoundMods::Parse 0x00112568, LoopingSound::Parse 0x0011253c.
@@ -82,7 +82,7 @@ bool ItemInfo::IsLocked() const {
     return m_Cost > 0;
 }
 
-// ItemInfo::Parse @ 0x0011293c
+// ItemInfo::Parse @ 0x0013907c (v1.6.1)
 void ItemInfo::Parse(TiXmlElement* e) {
     // --- Parse <requirements> child element (optional) ---
     TiXmlElement req = e->FirstChildElement("requirements");  // 0x1b9fc4
