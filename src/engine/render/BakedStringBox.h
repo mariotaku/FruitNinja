@@ -61,7 +61,7 @@ public:
     //   fontSize    : initial render pixel size (also stored as m_BaseFontSize)
     //   width       : wrap box width  (int in binary, field 0x50; stored as float in port)
     //   height      : max box height  (int in binary, field 0x24; stored as float in port)
-    //   align       : alignment flags (e.g. 0x0d = centred+fit, 0x0f = centre-H+centre-V+fit)
+    //   align       : alignment flags (e.g. 0x0f = centre-H+centre-V; bits 0-1: 3=centre-H, 2=right, 0/1=left; bits 2-3: 0xc=centre-V)
     //                 binary type is ALIGNMENT_TYPE enum; port uses int (same underlying value).
     //   maxLines    : binary arg6; stored as m_MaxLines; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
     //   lineSpacing : extra leading stored at m_LineSpacing; step = (int)(fontSize + lineSpacing)
