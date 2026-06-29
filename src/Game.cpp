@@ -129,9 +129,7 @@ void Game::Paused() {
         game_work.mHud->OnPause();
     }
     SkipToPause(false);
-    // TODO: replace GameTaskExit() with GameTaskSaveOnExit() (v1.6.1 GameTaskSaveOnExit @0x001ce170) when ported;
-    // binary body: gs->field_0x190=1; if (!GetIsSavingBool() && hud) { hud->Save(); SaveCurrentData(true); }.
-    GameTaskExit();
+    GameTaskSaveOnExit();
 }
 
 // slot 16 v1.6.1 Game::UnPaused @0x00120270 — resume: end interruption, unpause sound, unpause game
@@ -155,14 +153,7 @@ const char* Game::SelfVersion() { return "1.6.1"; }
 
 // slot 18 @ 0x0010dae0 — tail call to GameTaskSaveOnExit
 void Game::SaveOnExit() {
-    // TODO: replace with GameTaskSaveOnExit() (v1.6.1 GameTaskSaveOnExit @0x001ce170) once
-    // ported. Binary body: gs->field_0x190 = 1 (save-pending flag); if
-    // (!GetIsSavingBool() && hud) { HUD::Save(); SaveCurrentData(true); }
-    // Using GameTaskExit as placeholder -- this tears down resources on a
-    // save-exit transition where binary keeps them; mostly OK for the
-    // app's full-exit path but wrong if SaveOnExit is invoked from a
-    // resumeable suspend. Re-verify usage when GameTaskSaveOnExit lands.
-    GameTaskExit();
+    GameTaskSaveOnExit();
 }
 
 // slot 19 @ 0x0010da68 — reads/writes g_GameData+0x18C

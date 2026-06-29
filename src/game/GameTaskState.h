@@ -237,6 +237,7 @@ typedef void (*StateExitFn)(void);
 void GameTaskUpdate(float rawDt);
 void GameTaskDraw(float dt);
 void GameTaskExit();
+void GameTaskSaveOnExit(); // v1.6.1 GameTaskSaveOnExit @0x001ce170
 
 // Get the task state singleton
 GameTaskState* GetTaskState();
