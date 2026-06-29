@@ -195,9 +195,10 @@ MainScreen::MainScreen(Game& g)
     pos = Vec3(0.0f, (320.0f - size.y) * 0.5f, 0.0f);
 
     // m_BounceY = ninja_text.tex height / 2 + 160.0
-    // Binary ctor @ 0x0014c430: calls ninja_text_tex->GetHeight() (vtable +0x18)
+    // Binary ctor v1.6.1 MainScreen ctor @0x0019811c: calls ninja_text_tex->GetHeight() (vtable +0x18)
     // -> shifts right by 1 -> adds 160.0.
-    // m_BounceY is the bounce POSITION; starts at top of screen and falls into place.
+    // m_BounceY is the intentional off-screen START position; sprung down to pos.y+3 each frame
+    // by UpdateScreenElements bounce physics. NOT a stale 0-based formula.
     const float ninjaH = m_ninjaTex.IsValid()
                        ? (float)(m_ninjaTex->GetHeight() / 2)
                        : 0.0f;
