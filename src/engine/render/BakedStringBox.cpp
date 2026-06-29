@@ -38,6 +38,13 @@ struct WordToken {
     bool        hardBreak; // true = this word is followed by a forced line break
     bool        cjk;       // true = single East-Asian codepoint token (v1.6.1 WordWrap::IsEastAsianChar @ 0x002508ec)
 };
+
+// Return type for MeasureWrap() measure-only pass.
+// Binary: FitStrings @0x00246800 / FitStringToWidth @0x00248734 / GetFinalPointSize @0x002468fc.
+struct MeasureResult {
+    int  lineCount;
+    bool overflow;  // true when a line had to force an unbreakable token wider than wrapLimit
+};
 } // anonymous namespace
 
 namespace Mortar {
@@ -200,6 +207,93 @@ static float SpaceAdvance(FontCacheObjectTTF* font, float requestedSize) {
     return sp ? sp->advanceX : 0.0f;
 }
 
+// Measure-only word-wrap: tokenise `text` at `size` and greedy-wrap against `wrapLimit`.
+// Returns lineCount and overflow (set when any line forced an unbreakable token whose
+// advance > wrapLimit -- mirrors FitStringToWidth @0x00248734 / FitStrings @0x00246800 param_7=1).
+// No vertex data is produced. Side effect: GetGlyph may add atlas entries at `size`.
+// Binary: FitStrings @0x00246800, FitStringToWidth @0x00248734, GetFinalPointSize @0x002468fc.
+static MeasureResult MeasureWrap(FontCacheObjectTTF* font, const char* text,
+                                 float size, float wrapLimit)
+{
+    MeasureResult result = {0, false};
+
+    std::vector<WordToken> words;
+    {
+        const char* p = text;
+        while (*p) {
+            while (*p == ' ') p++;
+            if (!*p) break;
+            if (*p == '\n') {
+                WordToken tok;
+                tok.start     = p;
+                tok.len       = 0;
+                tok.advance   = 0.0f;
+                tok.hardBreak = true;
+                tok.cjk       = false;
+                words.push_back(tok);
+                p++;
+                continue;
+            }
+            const char* ws       = p;
+            const char* lookahead = p;
+            uint32_t firstCp = Mortar::utf8::decode_next_unicode_character(&lookahead);
+            if (IsEastAsianChar(firstCp)) {
+                WordToken tok;
+                tok.start     = ws;
+                tok.len       = (int)(lookahead - ws);
+                tok.advance   = MeasureWord(font, ws, tok.len, size);
+                tok.hardBreak = false;
+                tok.cjk       = true;
+                words.push_back(tok);
+                p = lookahead;
+            } else {
+                while (*p && *p != ' ' && *p != '\n') {
+                    const char* next = p;
+                    uint32_t cp = Mortar::utf8::decode_next_unicode_character(&next);
+                    if (IsEastAsianChar(cp)) break;
+                    p = next;
+                }
+                WordToken tok;
+                tok.start     = ws;
+                tok.len       = (int)(p - ws);
+                tok.advance   = MeasureWord(font, ws, tok.len, size);
+                tok.hardBreak = false;
+                tok.cjk       = false;
+                words.push_back(tok);
+            }
+        }
+    }
+    if (words.empty()) return result;
+
+    const float spAdv = SpaceAdvance(font, size);
+
+    size_t wi = 0;
+    while (wi < words.size()) {
+        if (words[wi].hardBreak) { wi++; continue; }
+        size_t lineStart = wi;
+        float  lineWidth = 0.0f;
+        size_t lineEnd   = lineStart;
+        while (lineEnd < words.size()) {
+            if (words[lineEnd].hardBreak) { lineEnd++; break; }
+            float needed = words[lineEnd].advance;
+            if (lineEnd > lineStart && !words[lineEnd].cjk && !words[lineEnd - 1].cjk) {
+                needed += spAdv;
+            }
+            if (lineWidth + needed > wrapLimit && lineEnd > lineStart) break;
+            lineWidth += needed;
+            lineEnd++;
+        }
+        if (lineEnd == lineStart) {
+            if (words[lineStart].advance > wrapLimit) result.overflow = true;
+            lineEnd = lineStart + 1;
+        }
+        result.lineCount++;
+        wi = lineEnd;
+    }
+
+    return result;
+}
+
 // Greedy word-wrap layout at m_FontSize into m_Lines.
 // All glyph coordinates and advances are in world units (FT metric / 64 * invFontScale).
 // Binary: ApplyFormatting_LeftJustify @ 0x00247874; RebuildAlignments @ 0x00245c78.
@@ -213,6 +307,21 @@ void BakedStringBox::Layout() {
 
     if (!m_Font || m_Text[0] == '\0') {
         return;
+    }
+
+    // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: shrink font (from
+    // m_BaseFontSize, step 1.0, floor 6.0) until lineCount<=m_MaxLines && no overflow,
+    // then build geometry.
+    // Helpers: FitStrings @0x00246800, FitStringToWidth @0x00248734,
+    //          GetFinalPointSize @0x002468fc (standalone copy of the same loop).
+    {
+        const int cap = (m_MaxLines < 1) ? 999999 : m_MaxLines;
+        m_FontSize = m_BaseFontSize;
+        for (;;) {
+            MeasureResult mr = MeasureWrap(m_Font, m_Text, m_FontSize, m_BoxWidth);
+            if ((mr.lineCount <= cap && !mr.overflow) || m_FontSize <= 6.0f) break;
+            m_FontSize -= 1.0f;
+        }
     }
 
     const float requestedSize = m_FontSize;
