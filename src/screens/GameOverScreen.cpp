@@ -1209,7 +1209,7 @@ void GameOverScreen::Update(float dt) {
 
                     save->FinishedGame();
                     save->ClearTotals();
-                    FruitNinja_SaveCurrentData(false);
+                    SaveCurrentData(false);
                 }
             }
         }
