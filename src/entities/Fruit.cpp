@@ -1884,43 +1884,34 @@ void Fruit::LoadInfo() {
     FruitInfo_Load(xmlPath.c_str());
 }
 
-// --- FruitModelInfo global array ---------------------------------------
+// --- FruitGlobalData (v1.6.1 binary static block @ 0x332910) ---------------
 //
-// Binary allocates a flat FruitModelInfo[fruitCount] array at
-// LoadFruitModels time using operator_new(count * 0x24 + 8). Layout:
-//   [0] uint32_t elemSize (0x24)
-//   [4] uint32_t count
-//   [8] FruitModelInfo[count]  -- 0x24 per entry
+// Single contiguous static block for all Fruit global state. Layout verified
+// against v1.6.1 Fruit::DestroyFruitModels @0x001df1c0:
+//   ldrb [base,#0xD4]  -> s_fruitModelsLoaded
+//   ldr  [base,#0xD8]  -> s_fruitModels
 //
-// The header stores [elemSize, count] so the "next element" stride is
-// runtime-configurable. Port mirrors this raw-allocation + placement-new
-// pattern to match v1.6.1 binary @ 0x001e08ec.
-// The element pointer is stored alongside the raw base for accessor use.
+// s_slices and s_pool: HEAP POINTERS (binary: operator new(0x14) each,
+// operator delete in CleanupFruit; v1.6.1 CleanupFruit TODO). Port lifecycle:
+// allocated in LoadFruitModels, deleted in DestroyFruitModels.
 //
-// Static slice-effect models (loaded after per-fruit loop).
-// v1.6.1 binary loads slice_fx.mmd / slice_fx_crit.mmd into file-scope globals.
+// s_fruitModels raw base and count are NOT stored as separate statics; derive:
+//   count = *(int*)((char*)s_fruitModels - 4)
+//   raw   = (char*)s_fruitModels - 8
+//
+// Binary allocates FruitModelInfo[] via operator_new(count * 0x24 + 8). Header:
+//   [0] uint32_t elemSize (0x24)  [4] uint32_t count  [8] FruitModelInfo[count]
+// Port mirrors the raw-allocation + placement-new pattern (v1.6.1 @0x001e08ec).
 
-static uint8_t* s_FruitModelsRaw = nullptr;          // raw allocation base (header + elements)
-static FruitModelInfo* s_FruitModels = nullptr;      // -> raw + 8 (first element)
-static int s_FruitModelCount = 0;                    // number of elements
-// Binary: s_fruitModelsLoaded is a bool at the Fruit static-block +0xD4.
-// Port uses a separate static -- the resulting static-vs-GOT load is accept-cosmetic.
-static bool s_fruitModelsLoaded = false;
-
-// s_sliceModel[4]: slice-effect model array.
-// [0] = slice_fx.mmd, [1] = slice_fx_crit.mmd, [2] = unused, [3] = slice_fx.mmd
-// Loaded by Fruit::LoadFruitModels @0x001e09b4, indexed by SliceEffect::Node::m_ModelIdx.
-static Mortar::SmartPtr<Mortar::Model> s_sliceModel[4];
-
-// Intrusive doubly-linked list for SliceEffect::Node (20 bytes, matches Mortar::List layout).
+// Port proxy for binary Mortar::List<SliceEffect> (20 bytes on ARM32).
 // v1.6.1 AddSlice @0x001dc990 calls AddHead; DrawSlices @0x001dae7c iterates via Remove.
 struct SliceNodeList {
-    void*         m_pFreeList;    // +0x00: unused (no FreeList in pool path)
-    SliceEffect::Node* m_pHead;  // +0x04
-    SliceEffect::Node* m_pTail;  // +0x08
-    unsigned int  m_Count;       // +0x0c
-    short         m_OwnsFreeList;// +0x10
-    short         m_Active;      // +0x12
+    void*              m_pFreeList;   // +0x00: unused (no FreeList in pool path)
+    SliceEffect::Node* m_pHead;      // +0x04
+    SliceEffect::Node* m_pTail;      // +0x08
+    unsigned int       m_Count;      // +0x0c
+    short              m_OwnsFreeList;// +0x10
+    short              m_Active;     // +0x12
 
     SliceNodeList()
         : m_pFreeList(0), m_pHead(0), m_pTail(0),
@@ -1949,8 +1940,42 @@ struct SliceNodeList {
     SliceEffect::Node* begin() { return m_pHead; }
 };
 
-static SliceNodeList s_slices;
-static Mortar::MemoryPool<SliceEffect::Node> s_pool;
+// Contiguous Fruit global-state block. Mirrors binary layout @ 0x332910.
+// [port] s_slices/s_pool are stored as heap pointers (binary embeds the 0x14-byte
+// objects inline; port uses new/delete to match the binary's allocation pattern).
+struct FruitGlobalData {
+    SliceNodeList*                          s_slices;              // +0x00 (heap ptr)
+    Vec3                                    s_sliceParams[7];      // +0x04..+0x57 (opaque runtime params)
+    Mortar::SmartPtr<Mortar::Model>         s_sliceModel[4];       // +0x58..+0x67
+    Mortar::MemoryPool<SliceEffect::Node>*  s_pool;                // +0x68 (heap ptr)
+    char                                    _pad6C[0x20];          // +0x6C..+0x8B (other statics)
+    Mortar::SmartPtr<Mortar::Texture2D>     s_globalFruitAtlas[2]; // +0x8C..+0x93
+    Mortar::SmartPtr<Mortar::Texture2D>     s_atlas2[2];           // +0x94..+0x9B (opaque)
+    Mortar::SmartPtr<Mortar::Texture>       s_texSlots[3];         // +0x9C..+0xA7 (opaque)
+    char                                    _padA8[0x20];          // +0xA8..+0xC7 (other statics)
+    Mortar::SmartPtr<Mortar::Texture>       s_objC8;               // +0xC8
+    char                                    _padCC[8];             // +0xCC..+0xD3
+    bool                                    s_fruitModelsLoaded;   // +0xD4
+    char                                    _padD5[3];             // +0xD5..+0xD7
+    FruitModelInfo*                         s_fruitModels;         // +0xD8
+};
+
+#ifdef __bada__
+static_assert(__builtin_offsetof(FruitGlobalData, s_sliceModel)        == 0x58,
+    "FruitGlobalData::s_sliceModel binary offset wrong");
+static_assert(__builtin_offsetof(FruitGlobalData, s_pool)              == 0x68,
+    "FruitGlobalData::s_pool binary offset wrong");
+static_assert(__builtin_offsetof(FruitGlobalData, s_globalFruitAtlas)  == 0x8C,
+    "FruitGlobalData::s_globalFruitAtlas binary offset wrong");
+static_assert(__builtin_offsetof(FruitGlobalData, s_fruitModelsLoaded) == 0xD4,
+    "FruitGlobalData::s_fruitModelsLoaded binary offset wrong");
+static_assert(__builtin_offsetof(FruitGlobalData, s_fruitModels)       == 0xD8,
+    "FruitGlobalData::s_fruitModels binary offset wrong");
+static_assert(sizeof(FruitGlobalData)                                  == 0xDC,
+    "sizeof(FruitGlobalData) wrong");
+#endif
+
+static FruitGlobalData g_fruitData;
 
 // AddSlice -- v1.6.1 @0x001dc990
 // Mangles: _Z8AddSlice8_Vector3IfEffiP5Fruitf
@@ -1983,11 +2008,13 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
         }
     }
 
+    if (!g_fruitData.s_slices || !g_fruitData.s_pool) return;
+
     // Dedup: walk s_slices; expire (set m_Timer=6.0) any earlier node
     // whose m_pFruit key matches this fruit/ident (all but the first hit).
     // v1.6.1 @0x001dc990: +0x1c (m_pFruit) is the dedup key; action = expire.
     {
-        SliceEffect::Node* n = s_slices.begin();
+        SliceEffect::Node* n = g_fruitData.s_slices->begin();
         while (n) {
             SliceEffect::Node* next = n->m_pNext;
             if (n->m_pFruit == fruit) {
@@ -1997,17 +2024,18 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
         }
     }
 
-    SliceEffect::Node* n = s_pool.Pop();
+    SliceEffect::Node* n = g_fruitData.s_pool->Pop();
     if (!n) return;
     *n = local;
-    s_slices.AddHead(n);
+    g_fruitData.s_slices->AddHead(n);
 }
 
 // DrawSlices -- v1.6.1 @0x001dae7c
 // Combined update+draw pass. pass==false draws modelIdx!=3; pass==true draws modelIdx==3.
 void DrawSlices(float dt, bool pass)
 {
-    SliceEffect::Node* n = s_slices.begin();
+    if (!g_fruitData.s_slices || !g_fruitData.s_pool) return;
+    SliceEffect::Node* n = g_fruitData.s_slices->begin();
     while (n) {
         SliceEffect::Node* next = n->m_pNext;
 
@@ -2051,7 +2079,7 @@ void DrawSlices(float dt, bool pass)
 
                     int idx = n->m_ModelIdx;
                     if (idx < 0 || idx > 3) idx = 0;
-                    Mortar::Model* model = s_sliceModel[idx].Get();
+                    Mortar::Model* model = g_fruitData.s_sliceModel[idx].Get();
                     if (model) {
                         uint16_t a = (uint16_t)(int)(n->m_AngleDeg * 182.0f);
                         Matrix44 m = Matrix44::Scale44(scale);
@@ -2062,8 +2090,8 @@ void DrawSlices(float dt, bool pass)
                 }
             }
         } else {
-            s_slices.Remove(n);
-            s_pool.Push(n);
+            g_fruitData.s_slices->Remove(n);
+            g_fruitData.s_pool->Push(n);
         }
 
         n = next;
@@ -2086,7 +2114,7 @@ void DrawSlices(float dt, bool pass)
 //   4. Load slice_fx.mmd / slice_fx_crit.mmd into static globals
 //   5. Extract fruit atlas texture from s_fruitModels[0].m_pWholeEffect
 void Fruit::LoadFruitModels() {
-    if (s_FruitModels) return;  // already loaded
+    if (g_fruitData.s_fruitModels) return;  // already loaded
 
     const int count = FruitInfo_GetCount();
     if (count <= 0) return;
@@ -2229,33 +2257,42 @@ void Fruit::LoadFruitModels() {
         }
     }
 
-    // Step 4: Load slice-effect models into s_sliceModel[].
+    // Step 4: Load slice-effect models into g_fruitData.s_sliceModel[].
     // v1.6.1 Fruit::LoadFruitModels @0x001e09b4:
     //   [0] = models/fruit/slice_fx.mmd       (normal slice)
     //   [1] = models/fruit/slice_fx_crit.mmd  (critical slice)
     //   [2] = unused
     //   [3] = models/fruit/slice_fx.mmd       (super-fruit second pass)
-    s_sliceModel[0] = meshMgr->Load("models/fruit/slice_fx.mmd");
-    s_sliceModel[1] = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
-    s_sliceModel[3] = meshMgr->Load("models/fruit/slice_fx.mmd");
+    g_fruitData.s_sliceModel[0] = meshMgr->Load("models/fruit/slice_fx.mmd");
+    g_fruitData.s_sliceModel[1] = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
+    g_fruitData.s_sliceModel[3] = meshMgr->Load("models/fruit/slice_fx.mmd");
 
-    // Create slice-effect pool (capacity=100) now that models are loaded.
-    // v1.6.1 Fruit::LoadInfo @0x001e10c4: guarded by if(fruitInfo==0).
-    if (s_pool.Capacity() == 0) {
-        s_pool.Create(100);
+    // Allocate slice list and pool (binary: new(0x14) each in LoadInfo @0x001e10c4).
+    // Port: allocate here as equivalent lazy-init. Pool created with capacity 100.
+    if (!g_fruitData.s_slices) {
+        g_fruitData.s_slices = new SliceNodeList();
+    }
+    if (!g_fruitData.s_pool) {
+        g_fruitData.s_pool = new Mortar::MemoryPool<SliceEffect::Node>();
+    }
+    if (g_fruitData.s_pool->Capacity() == 0) {
+        g_fruitData.s_pool->Create(100);
     }
 
     // Step 5: Extract shared fruit atlas texture from first model's EffectProperty.
-    // Binary @ 0x001e0b78: s_fruitModels[0].m_pWholeEffect->m_Owner
-    //   ->TryGetValue<EffectTexture2D>(Type_Texture2D, 0).
-    // EffectProperty path is defunct in the port (BuildPropList not wired), so this
-    // is a no-op here. Each geometry's m_DiffuseTex is already set by MeshManager
-    // during model loading from the .mmd material table (shared atlas fruit_atlas.tex
-    // -> FruitNinja.png).  No fallback or assignment loop needed.
+    // Binary @ 0x001e0b78: reads models[0].m_pWholeEffect->m_Owner
+    //   ->TryGetValue<EffectTexture2D>(Type_Texture2D, 0) and stores the result
+    //   into g_fruitData.s_globalFruitAtlas[0/1] (+0x8C/+0x90).
+    // EffectProperty path is defunct in the port (BuildPropList not wired); atlas
+    // texture is already available via per-geometry m_DiffuseTex from MeshManager.
     // DIFFERS: original reads atlas from EffectProperty after loading all models;
     // using per-geometry m_DiffuseTex from MeshManager because BuildPropList is
-    // defunct (port).  Fruit atlas is the same texture either way.
+    // defunct (port). Fruit atlas texture is the same either way.
+    // TODO: v1.6.1 Fruit::LoadFruitModels @0x001e08ec -- write g_fruitData.s_globalFruitAtlas[0/1]
+    //   when EffectProperty path is reactivated.
     {
+        // g_fruitData.s_globalFruitAtlas[0/1] written here when EffectProperty is live.
+        // Field exists at +0x8C/+0x90 for binary layout fidelity (#295).
         if (count > 0 && models[0].m_pWholeEffect && models[0].m_pWholeEffect->m_Owner) {
             Mortar::EffectTexture2D texId;
             models[0].m_pWholeEffect->m_Owner->TryGetValue<Mortar::EffectTexture2D>(
@@ -2263,17 +2300,19 @@ void Fruit::LoadFruitModels() {
         }
     }
 
-    s_FruitModelsRaw = raw;
-    s_FruitModels = models;
-    s_FruitModelCount = count;
+    // Binary stores element pointer at g_fruitData.s_fruitModels (+0xD8).
+    // Raw base and count derived from header when needed (s_fruitModels-8=raw, s_fruitModels-4=count).
+    g_fruitData.s_fruitModels = models;
     // Binary sets s_fruitModelsLoaded=1 as the last write in LoadFruitModels @0x1e08ec.
-    s_fruitModelsLoaded = true;
+    g_fruitData.s_fruitModelsLoaded = true;
 }
 
 const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
-    if (!s_FruitModels) return nullptr;
-    if (fruitType < 0 || fruitType >= s_FruitModelCount) return nullptr;
-    return &s_FruitModels[fruitType];
+    if (!g_fruitData.s_fruitModels) return nullptr;
+    // Count derived from allocation header: *(s_fruitModels - 4) (v1.6.1 binary pattern).
+    int modelCount = *reinterpret_cast<const int*>((const char*)g_fruitData.s_fruitModels - 4);
+    if (fruitType < 0 || fruitType >= modelCount) return nullptr;
+    return &g_fruitData.s_fruitModels[fruitType];
 }
 
 // v1.6.1 Fruit::RandomFruit @0x001dc5d8
@@ -2756,38 +2795,49 @@ void Fruit::DestroyFruitModels() {
     // Step 1: if loaded, null each element's SmartPtr<Model> and EffectProperty* fields
     // before the dtor loop runs (binary T_2039 SmartPtr::SetPtr(null) per slot @+0x18..+0x4c,
     // EffectProperty* zero writes interleaved).
-    if (s_fruitModelsLoaded) {
-        const int count = s_FruitModelCount;
+    if (g_fruitData.s_fruitModelsLoaded) {
+        // Count derived from allocation header (v1.6.1 Fruit::DestroyFruitModels @0x001df1c0).
+        int count = *reinterpret_cast<int*>((char*)g_fruitData.s_fruitModels - 4);
         for (int j = 0; j < count; ++j) {
-            s_FruitModels[j].m_HalfA        = Mortar::SmartPtr<Mortar::Model>();
-            s_FruitModels[j].m_pHalfEffectA = 0;
-            s_FruitModels[j].m_HalfB        = Mortar::SmartPtr<Mortar::Model>();
-            s_FruitModels[j].m_pHalfEffectB = 0;
-            s_FruitModels[j].m_Whole        = Mortar::SmartPtr<Mortar::Model>();
-            s_FruitModels[j].m_pWholeEffect = 0;
-            s_FruitModels[j].m_pMpModel     = Mortar::SmartPtr<Mortar::Model>();
-            s_FruitModels[j].m_pMpEffect    = 0;
+            g_fruitData.s_fruitModels[j].m_HalfA        = Mortar::SmartPtr<Mortar::Model>();
+            g_fruitData.s_fruitModels[j].m_pHalfEffectA = 0;
+            g_fruitData.s_fruitModels[j].m_HalfB        = Mortar::SmartPtr<Mortar::Model>();
+            g_fruitData.s_fruitModels[j].m_pHalfEffectB = 0;
+            g_fruitData.s_fruitModels[j].m_Whole        = Mortar::SmartPtr<Mortar::Model>();
+            g_fruitData.s_fruitModels[j].m_pWholeEffect = 0;
+            g_fruitData.s_fruitModels[j].m_pMpModel     = Mortar::SmartPtr<Mortar::Model>();
+            g_fruitData.s_fruitModels[j].m_pMpEffect    = 0;
         }
     }
     // Step 2: element dtors + delete the raw block.
-    if (s_FruitModelsRaw) {
-        const int count = s_FruitModelCount;
+    // Raw base and count derived from allocation header (*(s_fruitModels-4)=count, s_fruitModels-8=raw).
+    if (g_fruitData.s_fruitModels) {
+        int count = *reinterpret_cast<int*>((char*)g_fruitData.s_fruitModels - 4);
+        uint8_t* raw = (uint8_t*)g_fruitData.s_fruitModels - 8;
         for (int i = 0; i < count; ++i) {
-            s_FruitModels[i].~FruitModelInfo();
+            g_fruitData.s_fruitModels[i].~FruitModelInfo();
         }
-        ::operator delete(s_FruitModelsRaw);
-        s_FruitModelsRaw = nullptr;
-        s_FruitModels = nullptr;
-        s_FruitModelCount = 0;
+        ::operator delete(raw);
+        g_fruitData.s_fruitModels = nullptr;
     }
     // Step 3: pool destroy (binary: two T_2024 pool-destroy calls @+0x8c/+0x90, matching
     // MemoryPool::Destroy()'s delete[]+free() for m_Backing and m_FreeList -- accept-cosmetic).
-    s_pool.Destroy();
+    // Port: heap-allocated; also delete the object itself (binary stores inline at +0x68).
+    if (g_fruitData.s_pool) {
+        g_fruitData.s_pool->Destroy();
+        delete g_fruitData.s_pool;
+        g_fruitData.s_pool = nullptr;
+    }
+    // Port: heap-allocated slice list; delete (binary stores inline at +0x00).
+    if (g_fruitData.s_slices) {
+        delete g_fruitData.s_slices;
+        g_fruitData.s_slices = nullptr;
+    }
     // Step 4: null the 4 slice models (binary T_2039 x4 @+0x58..+0x64).
     for (int i = 0; i < 4; ++i)
-        s_sliceModel[i] = Mortar::SmartPtr<Mortar::Model>();
+        g_fruitData.s_sliceModel[i] = Mortar::SmartPtr<Mortar::Model>();
     // Step 5: clear the loaded flag.
-    s_fruitModelsLoaded = false;
+    g_fruitData.s_fruitModelsLoaded = false;
 }
 
 
