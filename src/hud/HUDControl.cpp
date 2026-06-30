@@ -14,7 +14,7 @@ const std::list<HUDControl*>& HUDControl::GetActiveControls() {
 // function. The ctor's MakeDelegate_PauseScreen_HUD (binary @ 0x001440d8)
 // builds a "Global" (free-function) delegate variant bound to this target
 // and assigns it into m_RemoveCallback (+0x38).
-static void DefaultDeleteCallback(HUDControl* control)
+void DefaultDeleteCallback(HUDControl* control)
 {
     (void)control;
 }

@@ -65,7 +65,7 @@ void SetBombHitPos(const Vec3& pos) {
 // Game::m_CritTimer to the full duration. The pos arg exists in the
 // binary signature but isn't used by DrawCritHit — the flash is
 // always full-screen at the origin.
-void CriticalFlash(const Vec3& pos, const Colour& colour) {
+void CriticalFlash(Vec3 pos, Colour colour) {
     (void)pos;
     s_CritFlashColour = colour;
     if (Game* game = Game::GetInstance()) {

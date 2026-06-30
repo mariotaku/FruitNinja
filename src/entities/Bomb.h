@@ -211,6 +211,8 @@ static_assert(sizeof(Bomb)                                == 0xB0, "sizeof(Bomb)
 #endif
 
 // Free functions — binary symbols _Z<name> (NOT Bomb class members).
+// v1.6.1 @ 0x001ca5e8 — single `bx lr` no-op in binary; serves both Bomb + Fruit TUs via PLT.
+void SetupLighting(const Mortar::SmartPtr<Mortar::Model>&);
 // v1.6.1 @ 0x1d6758
 void CleanupBomb();
 // v1.6.1 @ 0x1ca5c8
@@ -218,9 +220,9 @@ float GetBombZPosition();
 // v1.6.1 @ 0x00168f24
 bool BombFlashFull();
 // v1.6.1 @ 0x1cf27c
-void HitBomb(const Vec3& pos);
+void HitBomb(Vec3 pos);
 // v1.6.1 @ 0x1cf42c
-void HitMenuBomb(const Vec3& pos);
+void HitMenuBomb(Vec3 pos);
 // v1.6.1 @ 0x0016b73c
 void DrawBombHit();
 // v1.6.1 @ 0x0016a1a8

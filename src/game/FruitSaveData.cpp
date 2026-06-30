@@ -312,7 +312,7 @@ const char* k_ModeNames[4] = {
 // GetDaysSince1900 -- days elapsed since 1900-01-01.
 // Binary: used by GameOver @ 0x00169fec to write m_LastPlayedDay[mode].
 // 25569 = number of days from 1900-01-01 to 1970-01-01 (Unix epoch).
-static int GetDaysSince1900() {
+int GetDaysSince1900() {
     static const int DAYS_FROM_1900_TO_EPOCH = 25569;
     return (int)(time(nullptr) / 86400) + DAYS_FROM_1900_TO_EPOCH;
 }

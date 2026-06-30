@@ -179,7 +179,7 @@ bool PauseScreen::IsEnabled() {
 // v1.6.1 Model A: quit-to-menu pauses in place (bM_bPaused=1), stays in task state 2 --
 // the binary (QuitToMenu @0x001cb6e4) never hops task state or tears down HUD/WaveManager;
 // GameExit @0x001cfed4 runs only on real app exit. #179
-static void QuitToMenu() {
+void QuitToMenu() {
     LOG_INFO("SCREEN/PauseScreen", "QuitToMenu enter (v1.6.1 @0x001cb6e4)");
     // Binary first call: SuperFruitControl::StopAllPomegranates(...) @0x001cb6e4.
     // StopAllPomegranates is not yet ported; use Reset() @0x001bb52c which kills all

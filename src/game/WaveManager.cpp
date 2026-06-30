@@ -689,9 +689,9 @@ void WaveManager::Reset(bool fullReset) {
 // gs->bombHitTimer/m_TransitionTimer, conditionally fires GameOver,
 // clears MainScreen flag_0xf8, then HUD::Skip(hud). Port stub kept until
 // MainScreen::Hide + the camera/timecontrol field offsets are wired.
-static void SkipToGameOver(int /*goState*/, float /*goTimer*/,
-                           float /*nextComboBonus*/, float /*bombHitTimer*/,
-                           int /*field5*/) {
+void SkipToGameOver(int /*goState*/, float /*goTimer*/,
+                    float /*nextComboBonus*/, float /*bombHitTimer*/,
+                    int /*field5*/) {
     // TODO: implement once MainScreen::Hide is exposed; full spec above.
 }
 

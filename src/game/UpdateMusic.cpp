@@ -96,7 +96,7 @@ void PreloadInGameSounds() {
 // order. The two identical consecutive calls on "Combo-Blitz-Backing" are
 // INTENTIONAL binary behavior -- do not simplify.
 // ---------------------------------------------------------------------------
-static void PreloadArcadeModeSounds() {
+void PreloadArcadeModeSounds() {
     // Inner one-shot guard: g_MusicState+0x20
     if (g_preloadedArcade) {
         return;

@@ -256,8 +256,8 @@ bool AnimationState::IsPlaying() const {
     return m_CurrentIter != m_AnimList->m_Anims.end();
 }
 
-// v1.6.1 AnimationState::GetDummyAnimList @0x0026eda0 -- Meyers singleton; empty AnimationList shared across all default ctors
-Mortar::SmartPtr<AnimationList> AnimationState::GetDummyAnimList() {
+// v1.6.1 Mortar::GetDummyAnimList @0x0026eda0 -- Meyers singleton; empty AnimationList shared across all default ctors
+Mortar::SmartPtr<AnimationList> GetDummyAnimList() {
     static Mortar::SmartPtr<AnimationList> s_dummy(new AnimationList());
     return s_dummy;
 }
