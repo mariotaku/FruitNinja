@@ -129,11 +129,6 @@ public:
     // lerp between consecutive palette entries.
     void UpdateModColour(Colour* outColour, float dt);
 
-    // Deprecated: not in the binary blade path; superseded by CollideWithEntity (#306).
-    // Port-invented helper that tested an infinite multi-segment trail (no segment bound).
-    bool CollideWithSphere(const ColSphere& sphere,
-                           Vec3& outBladeVel) const;
-
 private:
     // -----------------------------------------------------------------------
     // Binary-faithful data members.

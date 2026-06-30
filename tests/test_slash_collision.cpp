@@ -1,27 +1,33 @@
 // test_slash_collision.cpp
 //
-// Regression guard for SlashEntity::CollideWithSphere blade-vs-sphere collision.
+// Regression guard for SlashEntity::CollideWithEntity -- the faithful single-segment
+// blade collision (ColLine mid->tail + m_SegLenSq bound, binary @0x001e6420).
 //
-// Gap covered: the previous test suite had no test exercising the collision
-// path itself, so a regression in the segment-clamped geometry (m_SegLenSq /
-// trail-shift) could pass all tests undetected.
+// The test builds a ribbon via the public Touch API.  m_TrailShiftA/B are now
+// set on every real touch-move add-path (UpdateTouchDown @0x1ea214 / @0x1ea3bc),
+// so after Update(0.0f) the ColLine and m_SegLenSq are valid.
 //
 // Three assertions:
-//   1. CROSSING HIT: a ribbon that spans the sphere center returns true.
-//   2. BLANK MISS:   a far-corner stroke returns false (guards the pre-#306
-//      infinite-line over-trigger: segment clamp must not extend the blade).
-//   3. NEAR-MISS / NEAR-HIT boundary (optional but load-bearing): a stroke
-//      whose closest point is just outside the radius misses; one whose
-//      closest point is inside the radius hits. Confirms the clamp geometry.
+//   1. CROSSING HIT: a ColLine anchor (mid-point) that falls INSIDE the sphere
+//      triggers the early-return true path.  Proves m_SegLenSq is now valid on
+//      the real Touch path.
+//   2. BLANK MISS:   a stroke at y=150 is well outside r=40; ColSphereLine
+//      returns 0 -> MISS.  Guards against over-trigger.
+//   3. NEAR-MISS / NEAR-HIT boundary using the ColLine model:
+//        near-miss: mid=(45,0) is 45 units from origin, > r=40  -> MISS.
+//        near-hit:  mid=(35,0) is 35 units from origin, < r=40  -> HIT (early-return).
 //
-// Approach: drive AddPoint directly via the public TouchMoveX/TouchMoveY/
-// TouchDown API so the test exercises the same code path the game uses.
-// No SDL_Init, no GL, no GameInit, no audio -- follows test_slash_reset.cpp
-// bootstrap pattern.
+// Geometry notes (binary ColLine):
+//   ColLine.a = mid = (m_HeadPos + m_TailPos) / 2
+//   ColLine.b = m_TailPos
+//   m_SegLenSq = |mid - tail|^2
+//   CollideWithEntity: early-returns true when |anchor - eCenter|^2 < r^2.
 //
+// No SDL_Init, no GL, no GameInit, no audio.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "entities/SlashEntity.h"
+#include "entities/Entity.h"
 #include "collision/ColSphere.h"
 #include "engine/input/InputEvent.h"
 #include <cstdio>
@@ -36,10 +42,26 @@
     } while(0)
 
 // ---------------------------------------------------------------------------
+// Minimal concrete Entity subclass for test-only use.
+// Provides empty bodies for the three pure virtuals; m_Col is set externally.
+// Entity() zeroes all fields (including m_Col) so ent.m_Col = &sphere is safe.
+// ~Entity() does NOT call Release(), so a stack-local ColSphere m_Col is safe.
+// ---------------------------------------------------------------------------
+struct Renderer;  // forward-declared in Entity.h; needed by Draw signature
+
+namespace {
+struct TestEntity : public Mortar::Entity {
+    void Update(float) {}
+    void Draw(Renderer&) {}
+    void PostUpdate(float) {}
+};
+} // namespace
+
+// ---------------------------------------------------------------------------
 // Touch helpers (identical pattern to test_slash_reset.cpp).
 // The binary Touch path is: TouchMoveX writes m_RawTouchPos.x, TouchMoveY
-// writes m_RawTouchPos.y, then TouchDown -> UpdateTouchDown calls
-// OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y) to build the ribbon.
+// writes m_RawTouchPos.y, then TouchDown -> UpdateTouchDown ->
+// OnTouchActive(x, y) to build the ribbon.
 // ---------------------------------------------------------------------------
 
 static InputEvent MakeMove(float x, float y) {
@@ -84,17 +106,13 @@ static void Touch(SlashEntity& se, float x, float y, bool pressEdge) {
 // ---------------------------------------------------------------------------
 // TEST 1 -- crossing_hit
 //
-// Blade: seed at (-60, 0), then (0, 0), then (60, 0).
-// Buffer layout after three Touch calls (60-unit steps, each < POINT_SPACING=64,
-// so no interpolation): spine positions at even indices:
-//   [0] = (-60, 0, 0)  -- seed AddPoint
-//   [2] = (  0, 0, 0)  -- second AddPoint (distance 60 > MOVE_THRESH=5, < 64)
-//   [4] = ( 60, 0, 0)  -- third AddPoint
-//
-// Sphere at (0, 0, 0), radius 40.
-// CollideWithSphere loop at i=0: a=(-60,0), b=(0,0), c=(0,0).
-//   t = dot(c-a, b-a) / |b-a|^2 = dot(60,0, 60,0) / 3600 = 1.0 (clamped).
-//   Closest = b = (0,0). dist^2 = 0 < 40^2 = 1600.  HIT.
+// Three touches, each 60 units apart along the x-axis.  After the anchor
+// shuffle in Touch 3: m_HeadPos=(0,0), m_TailPos=(60,0).
+// After Update(0.0f): ColLine.a = mid=(30,0,0), ColLine.b = (60,0,0),
+//   m_SegLenSq = 900.
+// Sphere at (0,0,0), r=40.
+// CollideWithEntity: ColSphereLine non-zero (line y=0 crosses sphere).
+//   anchor=(30,0), |anchor-eCenter|^2 = 900 < 1600 = r^2 -> early-return true.
 // ---------------------------------------------------------------------------
 static void test_crossing_hit() {
     std::printf("  test_crossing_hit...\n");
@@ -102,18 +120,23 @@ static void test_crossing_hit() {
     SlashEntity se;
     se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
 
-    Touch(se, -60.0f, 0.0f, true);   // seed; m_PointCount=2, spine[0]=(-60,0,0)
-    Touch(se, 0.0f,   0.0f, false);  // head reaches sphere centre; m_PointCount=4
-    Touch(se, 60.0f,  0.0f, false);  // extends past centre;        m_PointCount=6
+    Touch(se, -60.0f, 0.0f, true);   // seed; m_PointCount=2
+    Touch(se, 0.0f,   0.0f, false);  // extend; m_PointCount=4
+    Touch(se, 60.0f,  0.0f, false);  // extend; m_PointCount=6
 
     int pc = se.GetPointCount();
     std::printf("    m_PointCount=%d (expect >= 4)\n", pc);
     CHECK(pc >= 4);
     CHECK(se.IsBladeActive());
 
+    // Simulate one frame: triggers UpdatePoints, sets ColLine + m_SegLenSq.
+    se.Update(0.0f);
+
     ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
-    Vec3 bladeVel;
-    bool hit = se.CollideWithSphere(sphere, bladeVel);
+    TestEntity ent;
+    ent.m_Col = &sphere;
+
+    bool hit = se.CollideWithEntity(&ent);
     std::printf("    hit=%s (expect true)\n", hit ? "true" : "false");
     CHECK(hit);
 
@@ -123,21 +146,11 @@ static void test_crossing_hit() {
 // ---------------------------------------------------------------------------
 // TEST 2 -- blank_miss (#306 segment-clamp guard)
 //
-// Blade: seed at (-220, 150), then (-200, 150).
-// Stroke is a short 20-unit horizontal segment at y=150, far from (0,0).
-//   delta=20 > MOVE_THRESH=5 so the second point is accepted;
-//   dist=20 < POINT_SPACING=64 so no intermediate points.
-//   Spine [0]=(-220,150,0), [2]=(-200,150,0).
-//
-// Sphere at (0, 0, 0), radius 40.
-// CollideWithSphere i=0: a=(-220,150), b=(-200,150), c=(0,0).
-//   t = dot(220,-150, 20,0)/400 = 11.0 (clamped to 1.0).
-//   Closest = b = (-200,150). dist^2 = 200^2+150^2 = 62500 >> 1600.  MISS.
-//
-// A naive infinite-line test would compute the perpendicular distance from
-// (0,0) to the line y=150, giving 150 -- still a miss. This case primarily
-// guards against accidentally reversing the clamp direction (t>1 -> closest
-// must be b, not a point beyond b).
+// Stroke at y=150, far above sphere at (0,0,0) r=40.
+// After Touch(2): m_HeadPos=(-220,150), m_TailPos=(-200,150).
+// After Update(0.0f): ColLine.a=(-210,150,0), ColLine.b=(-200,150,0).
+// Line y=150 has perp distance 150 from origin > r=40.
+// ColSphereLine returns 0 -> CollideWithEntity returns false. MISS.
 // ---------------------------------------------------------------------------
 static void test_blank_miss() {
     std::printf("  test_blank_miss...\n");
@@ -153,9 +166,13 @@ static void test_blank_miss() {
     CHECK(pc >= 4);
     CHECK(se.IsBladeActive());
 
+    se.Update(0.0f);
+
     ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
-    Vec3 bladeVel;
-    bool hit = se.CollideWithSphere(sphere, bladeVel);
+    TestEntity ent;
+    ent.m_Col = &sphere;
+
+    bool hit = se.CollideWithEntity(&ent);
     std::printf("    hit=%s (expect false)\n", hit ? "true" : "false");
     CHECK(!hit);
 
@@ -163,61 +180,66 @@ static void test_blank_miss() {
 }
 
 // ---------------------------------------------------------------------------
-// TEST 3 -- near_boundary
+// TEST 3 -- near_boundary (ColLine model)
 //
-// Both strokes start to the right of the sphere and extend further right.
-// The clamp ensures only the actual closest point on the segment is tested.
+// Both strokes are short horizontal segments on y=0 pointing right.
+// The sphere is at (0,0,0) r=40.
 //
-// Near-miss: seed at (45,0), end at (100,0). dist=55 < 64 -> no interpolation.
-//   Spine [0]=(45,0,0), [2]=(100,0,0).
-//   i=0: a=(45,0), b=(100,0), c=(0,0).
-//   t = dot(-45,0, 55,0)/55^2 = -2475/3025 = -0.818 -> clamped to 0.
-//   Closest = a = (45,0). dist=45 > radius=40.  MISS.
+// Near-miss: seed at (30,0), extend to (60,0).
+//   Anchor shuffle -> m_HeadPos=(30,0), m_TailPos=(60,0), mid=(45,0).
+//   ColLine.a=(45,0,0), ColLine.b=(60,0,0), m_SegLenSq=225.
+//   anchor=(45,0): |anchor-center|^2 = 2025 > 1600 (not early-return).
+//   hitA=hitB=(0,0,0) via degenerate chord (line passes through center,
+//     Normalise of zero pen stays (0,0,0), 0*(r-half)=0).
+//   (anchor-hitA)^2=2025 > m_SegLenSq=225 -> false. MISS.
 //
-// Near-hit: seed at (35,0), end at (100,0). dist=65 > 64 -> one intermediate
-//   point at (35+64,0)=(99,0). Spine [0]=(35,0), [2]=(99,0), [4]=(100,0).
-//   i=0: a=(35,0), b=(99,0), c=(0,0).
-//   t = dot(-35,0, 64,0)/64^2 = -2240/4096 = -0.547 -> clamped to 0.
-//   Closest = a = (35,0). dist=35 < radius=40.  HIT.
+// Near-hit: seed at (10,0), extend to (60,0).
+//   Anchor shuffle -> m_HeadPos=(10,0), m_TailPos=(60,0), mid=(35,0).
+//   ColLine.a=(35,0,0), ColLine.b=(60,0,0), m_SegLenSq=625.
+//   anchor=(35,0): |anchor-center|^2 = 1225 < 1600 -> early-return true. HIT.
 // ---------------------------------------------------------------------------
 static void test_near_boundary() {
-    std::printf("  test_near_boundary (near-miss)...\n");
+    std::printf("  test_near_boundary (near-miss, anchor=45 > r=40)...\n");
     {
         SlashEntity se;
         se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
 
-        Touch(se, 45.0f,  0.0f, true);
-        Touch(se, 100.0f, 0.0f, false);
+        Touch(se, 30.0f, 0.0f, true);
+        Touch(se, 60.0f, 0.0f, false);
 
         CHECK(se.GetPointCount() >= 4);
         CHECK(se.IsBladeActive());
+        se.Update(0.0f);
 
         ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
-        Vec3 bladeVel;
-        bool hit = se.CollideWithSphere(sphere, bladeVel);
-        std::printf("    near-miss hit=%s (expect false, dist=45 > r=40)\n",
+        TestEntity ent;
+        ent.m_Col = &sphere;
+
+        bool hit = se.CollideWithEntity(&ent);
+        std::printf("    near-miss hit=%s (expect false, |mid|=45 > r=40)\n",
                     hit ? "true" : "false");
         CHECK(!hit);
     }
     std::printf("  PASS\n");
 
-    std::printf("  test_near_boundary (near-hit)...\n");
+    std::printf("  test_near_boundary (near-hit, anchor=35 < r=40)...\n");
     {
         SlashEntity se;
         se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
 
-        // dist=65 just exceeds POINT_SPACING=64 -> one interpolated point
-        // at (35+64,0)=(99,0) before the head point at (100,0).
-        Touch(se, 35.0f,  0.0f, true);
-        Touch(se, 100.0f, 0.0f, false);
+        Touch(se, 10.0f, 0.0f, true);
+        Touch(se, 60.0f, 0.0f, false);
 
         CHECK(se.GetPointCount() >= 4);
         CHECK(se.IsBladeActive());
+        se.Update(0.0f);
 
         ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
-        Vec3 bladeVel;
-        bool hit = se.CollideWithSphere(sphere, bladeVel);
-        std::printf("    near-hit  hit=%s (expect true,  dist=35 < r=40)\n",
+        TestEntity ent;
+        ent.m_Col = &sphere;
+
+        bool hit = se.CollideWithEntity(&ent);
+        std::printf("    near-hit  hit=%s (expect true,  |mid|=35 < r=40)\n",
                     hit ? "true" : "false");
         CHECK(hit);
     }
