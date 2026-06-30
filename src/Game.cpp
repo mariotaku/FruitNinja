@@ -16,6 +16,8 @@
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
 #include "screens/PauseScreen.h"
+#include "engine/core/SystemManager.h"
+#include "asset/TextureManager.h"
 #include <cstdio>
 #include <cstring>
 // SDL-bound bits (init / run / runFrames) live in GameSDL.cpp.
@@ -215,4 +217,35 @@ void ClearPause() {
 bool GetPausedBy() {
     PauseScreen* ps = GetPauseScreen();
     return ps && ps->m_PressIndex > 0;  // +0xcc; binary ldr r0,[r0,#0xcc]
+}
+
+// ASM-spec v1.6.1 GetPauseAmount @0x001ca528
+// Binary calls ps->GetTime() twice (compiler didn't cache); port calls once (same observable result).
+float GetPauseAmount() {
+    PauseScreen* ps = GetPauseScreen();
+    if (!ps) return 0.0f;
+    float t = ps->GetTime();
+    if (t <= 0.0f) return 0.0f;
+    if (t >= 1.0f) return 1.0f;
+    return t;
+}
+
+// ASM-spec v1.6.1 GetStartupTexture @0x0011f570
+// DIFFERS: binary dispatches via Game vtable +0x70/+0x74 (SetStartupTexture/GetStartupTexture
+// virtual slots); port accesses pSplashTex directly (vtable slots not yet declared).
+// TODO: extend Game vtable with slots 24-29 (separate task) and move pSplashTex to
+// MortarGame::m_StartupTexture at +0xFC after MortarGame sizeof fix.
+Mortar::SmartPtr<Mortar::Texture> GetStartupTexture() {
+    Game* g = Game::GetInstance();
+    if (!g->pSplashTex) {
+        isStartupTexturePortrait = false;
+        g->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
+    }
+    return g->pSplashTex;
+}
+
+// ASM-spec v1.6.1 ReleaseStartupTexture @0x0011f64c
+// DIFFERS: binary dispatches via Game vtable slot +0x70 (SetStartupTexture); port accesses directly.
+void ReleaseStartupTexture() {
+    Game::GetInstance()->pSplashTex = Mortar::SmartPtr<Mortar::Texture>();
 }

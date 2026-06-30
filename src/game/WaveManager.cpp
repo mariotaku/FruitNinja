@@ -2263,6 +2263,53 @@ void WaveManager::RequestCoins() {
         self->m_CoinChanceinator[idx].GetCoins();
 }
 
+// ASM-spec v1.6.1 GetRandomPowerSpawner @0x0012403c
+// Function-local static SPAWNER_INFO[3]: centre-bottom, right-side, left-side.
+// Lazy-initialised on first call (C++ static guard). Mirrors k_BlitzSpawners idiom above.
+// includeCenter=true: picks from all 3 entries (base=0, range=3).
+// includeCenter=false: skips entry 0 (centre), picks from entries 1/2 (base=1, range=2).
+SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
+    static bool s_inited = false;
+    static SPAWNER_INFO spinfos[3];
+    if (!s_inited) {
+        s_inited = true;
+
+        // Entry 0: centre-bottom slow (PLACEMENT_BOTTOM_SLOW)
+        spinfos[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+        spinfos[0].m_Gravity_x  = 0.0f;
+        spinfos[0].m_Gravity_y  = -1.1f;
+        spinfos[0].m_Gravity_z  = 0.0f;
+        spinfos[0].m_VelXScale  = 0.6667f;   // 0x3f2a7efa ~ 2/3
+        spinfos[0].m_VelYScale  = 0.0f;
+        spinfos[0].m_HorizMin   = -0.5f;
+        spinfos[0].m_HorizMax   =  0.5f;
+        spinfos[0].m_TimeScale  =  0.75f;
+        spinfos[0].m_SpawnTimer = -3.0f;     // immediately ready
+
+        // Entry 1: right-side (PLACEMENT_RIGHT)
+        spinfos[1].m_SpawnType  = PLACEMENT_RIGHT;
+        spinfos[1].m_VelYScale  = 0.75f;
+        spinfos[1].m_HorizMin   = -1.0f;
+        spinfos[1].m_HorizMax   = -0.5f;
+        spinfos[1].m_TimeScale  =  0.75f;
+        spinfos[1].m_SpawnTimer = -3.0f;
+
+        // Entry 2: left-side (PLACEMENT_LEFT)
+        spinfos[2].m_SpawnType  = PLACEMENT_LEFT;
+        spinfos[2].m_VelYScale  = 0.75f;
+        spinfos[2].m_HorizMin   = -1.0f;
+        spinfos[2].m_HorizMax   = -0.5f;
+        spinfos[2].m_TimeScale  =  0.75f;
+        spinfos[2].m_SpawnTimer = -3.0f;
+    }
+
+    WaveManager* wm = WaveManager::GetInstance();
+    uint32_t range = includeCenter ? 3u : 2u;
+    uint32_t idx   = wm->m_Random.Rand32(range);
+    int base       = includeCenter ? 0 : 1;
+    return &spinfos[base + (int)idx];
+}
+
 // ASM-spec v1.6.1 ReachedEnd @0x1253c0
 // Saves "limitsReached" stat, plays "time-up" SFX, then triggers game over.
 void ReachedEnd() {
