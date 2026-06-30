@@ -605,6 +605,39 @@ void GameUpdate(float dt, bool active) {
 void CleanupAndReturnToMainMenu() {
 }
 
+// ASM-spec v1.6.1 DrawBackground @ 0x001ccaf4
+// Draws the current background texture quad for the game screen.
+// Normal path (ViewIsNormal == true): full-screen background quad at Z=-5599.
+// Non-normal path (ViewIsNormal == false): 3x3 UV-seam grid for rotated camera.
+// TODO: v1.6.1 DrawBackground @0x001ccaf4 non-normal 3x3 UV-seam grid path
+//   (fires only with PT_ROTATED_CW / PT_ROTATED_CCW perspective; deferred until
+//   the 3x3 grid UV math is RE'd).
+void DrawBackground() {
+    Mortar::Texture* bgTex = GetCurrentBackground();
+    if (!bgTex) return;
+
+    if (game_work.m_FruitCamera && !game_work.m_FruitCamera->ViewIsNormal()) {
+        // TODO: v1.6.1 DrawBackground @0x001ccaf4 non-normal 3x3 UV-seam grid path.
+        // Falls through to normal path as a safe fallback.
+    }
+
+    // Normal path: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
+    // UV window: u0=0.03125, u1=0.96875, v0=0.1875, v1=0.8125
+    bgTex->Set();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
+    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -5599.0f));
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    Colour white(255, 255, 255, 255);
+    Renderer::GetInstance()->DrawQuad(white, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
+
+    bgTex->UnSet();
+}
+
 // Matches GameDraw (v1.6.1 @0x001cd720, 211 lines) -- full render frame.
 //
 // Binary draw order (verified from decompile, see comments inline):
@@ -639,28 +672,8 @@ void GameDraw(float dt, bool active) {
     // 1. Camera projection
     game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, false);
 
-    MatrixManager& mm = MatrixManager::GetInstance();
-
-    Mortar::Texture* bgTex = GetCurrentBackground();
-    // Background texture quad. Reads from the MenuBackground file-static
-    // (same slot ItemManager::SetEquippedItem(BACKGROUND, ...) updates
-    // via ChangeBackground), so a shop equip swaps the visible bg
-    // immediately on the next frame.
-    // Matches binary: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
-    if (bgTex) {
-        bgTex->Set();
-
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -5599.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        Colour white(255, 255, 255, 255);
-        game->renderer.DrawQuad(white, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
-
-        bgTex->UnSet();
-    }
+    // DrawBackground (v1.6.1 @ 0x001ccaf4) — factored from inline to free function.
+    DrawBackground();
 
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
@@ -797,10 +810,8 @@ void GameDraw(float dt, bool active) {
         // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720)
         game_work.mMainScreen->DrawPostEffects();
 
-        // DrawCritHit (CriticalFlash) (v1.6.1 GameDraw @0x001cd720) -- gated on
-        // critFlash > 0 && IsFastHardware. Port has CriticalFlash
-        // implemented as FN::DrawCriticalFlash.
-        FN::DrawCriticalFlash();
+        // DrawCritHit (v1.6.1 @ 0x001ccfa0) -- gated on critFlash > 0 && IsFastHardware.
+        DrawCritHit();
 
         // HUD::Draw(0x100) -- overlays (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);

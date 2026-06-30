@@ -1,8 +1,6 @@
 //
-// BombHit.cpp — DrawBombHit white flash overlay.
-// See BombHit.h for binary references.
-//
-// Analysed: 2026-04-13T22:00
+// BombHit.cpp — CriticalFlash + DrawCritHit + bomb-hit state helpers.
+// v1.6.1 symbols: CriticalFlash @ 0x001cca50, DrawCritHit @ 0x001ccfa0.
 //
 
 #include "BombHit.h"
@@ -20,6 +18,8 @@
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "util/SmartPtr.h"
+#include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
@@ -31,8 +31,8 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
-// CriticalFlash state — matches binary CriticalFlash @ 0x0016a9a4 +
-// DrawCritHit @ 0x0016b5b4 (verified 2026-04-15).
+// CriticalFlash state — matches binary CriticalFlash (v1.6.1) @ 0x001cca50 +
+// DrawCritHit (v1.6.1) @ 0x001ccfa0.
 //
 // Storage: the binary keeps the colour in a static block at GOT+0x452d4
 // (BSS @ 0x00231A04), with the active copy at +0xf0. The timer is on the
@@ -40,17 +40,22 @@
 //   m_CritTimer = 0.5         (CRITICAL_FLASH_TIME)
 //   stored_colour = passed colour
 // DrawCritHit reads both, computes a fade scale + alpha, and draws a
-// full-screen UNTEXTURED quad. The visible window is narrow:
-// m_CritTimer drops 0.5 → 0; only (0.3, 0.4) renders a non-zero quad
-// (≈0.1s flash). Outside that window the quad is degenerate (size 0).
+// full-screen TEXTURED quad ("flash.tex"). Rendering window: t in [0,0.5).
+// norm > 1 for t < 0.4 (clamped to 480/320 screen caps), 1.0 at t=0.4,
+// 0 at t=0.5 (not drawn). Effectively flash is full-screen for t in (0, 0.4)
+// and fades to zero in (0.4, 0.5).
 static Colour s_CritFlashColour(255, 255, 255, 255);
+
+// Lazy-loaded "flash.tex" — BSS global; NULL until first DrawCritHit call.
+// Binary: file-static SmartPtr<Texture> at BSS (v1.6.1 DrawCritHit @ 0x001ccfa0).
+static Mortar::SmartPtr<Mortar::Texture> s_flashTexture;
 
 static const float CRITICAL_FLASH_TIME       = 0.5f;   // Fruit::CRITICAL_FLASH_TIME @ 0x001f3e3c
 static const float CRITICAL_FLASH_FULL       = 0.4f;   // Fruit::CRITICAL_FLASH_FULL @ 0x001f3e40
 static const float CRITICAL_FLASH_START_FADE = 0.3f;   // Fruit::CRITICAL_FLASH_START_FADE @ 0x001f3e44
-static const float CRITICAL_FLASH_SCALE_MUL  = 15002.0f; // DAT_0016b714
-static const float CRITICAL_FLASH_MAX_X      = 480.0f;   // DAT_0016b718
-static const float CRITICAL_FLASH_MAX_Y      = 320.0f;   // DAT_0016b71c
+static const float CRITICAL_FLASH_SCALE_MUL  = 15000.0f; // v1.6.1 DrawCritHit @0x001ccfa0 (was 15002.0f: stale DAT_0016b714)
+static const float CRITICAL_FLASH_MAX_X      = 480.0f;   // v1.6.1 DrawCritHit @0x001ccfa0
+static const float CRITICAL_FLASH_MAX_Y      = 320.0f;   // v1.6.1 DrawCritHit @0x001ccfa0
 
 namespace FN {
 // Writes the bomb-hit world position used by Bomb::DrawBombHit.
@@ -61,7 +66,7 @@ void SetBombHitPos(const Vec3& pos) {
 }
 } // namespace FN
 
-// Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
+// ASM-spec v1.6.1 CriticalFlash @ 0x001cca50. Stores the colour and resets
 // Game::m_CritTimer to the full duration. The pos arg exists in the
 // binary signature but isn't used by DrawCritHit — the flash is
 // always full-screen at the origin.
@@ -84,34 +89,33 @@ void UpdateCriticalFlash(float dt) {
         if (game_work.m_CritTimer < 0.0f) game_work.m_CritTimer = 0.0f;
     }
 }
+} // namespace FN
 
-// Matches DrawCritHit @ 0x0016b5b4. Called from GameDraw between
-// HUD::Draw(0x08) and HUD::Draw(0x100). Draws an untextured full-
-// screen colour quad whose size + alpha track Game::m_CritTimer.
-void DrawCriticalFlash() {
+// ASM-spec v1.6.1 DrawCritHit @ 0x001ccfa0. Called from GameDraw between
+// HUD::Draw(0x08) and HUD::Draw(0x100). Draws a textured full-screen quad
+// whose size + alpha track Game::m_CritTimer. Lazy-loads "flash.tex" on
+// first call.
+//
+// Fix summary (vs. prior FN::DrawCriticalFlash port):
+//   Bug 1 — fade formula: binary uses denom=(FLASH_TIME-FLASH_FULL)=0.1,
+//            num=(t-FLASH_FULL); renders for t in [0,0.5) with norm>1 for
+//            t<0.4 (clamped to screen dims). Port was using START_FADE-based
+//            formula which only rendered the narrow (0.3,0.4) window.
+//   Bug 2 — texture: binary lazy-loads "flash.tex"; port used DrawColorQuad
+//            (untextured). Fixed: s_flashTexture BSS global, Set/UnSet around draw.
+//   Bug 3 — scale constant: 15002.0f -> 15000.0f (stale DAT_0016b714 comment).
+void DrawCritHit() {
     Game* game = Game::GetInstance();
     if (!game) return;
     const float t = game_work.m_CritTimer;
 
-    // Binary guard at the head of DrawCritHit: early-exit if the timer
-    // has already exceeded the full duration. The very first frame
-    // after CriticalFlash() this is exactly CRITICAL_FLASH_TIME, so
-    // nothing draws — drawing starts from the next frame as the timer
-    // decrements below the threshold.
     if (t <= 0.0f || t >= CRITICAL_FLASH_TIME) return;
 
-    // Quad size: a normalized fade `norm` is computed so it ramps up
-    // through the (0.3, 0.4) window then falls off. Outside that
-    // window the size is 0 (degenerate quad → not drawn).
-    //   norm = 1 - (t - START_FADE) / (FULL - START_FADE)
-    // The * 15002 multiplier saturates against the 480/320 caps for
-    // any nonzero norm, so the visible quad is always full-screen.
-    const float denom = CRITICAL_FLASH_FULL - CRITICAL_FLASH_START_FADE;
-    const float norm  = 1.0f - (t - CRITICAL_FLASH_START_FADE) / denom;
-    float scale = 0.0f;
-    if (norm > 0.0f && norm < 1.0f) {
-        scale = norm * CRITICAL_FLASH_SCALE_MUL;
-    }
+    // Bug 1 fix: binary formula — norm = 1 - (t - FULL) / (TIME - FULL).
+    // norm > 1 for t < FULL (clamped by 480/320 caps), 1.0 at t=FULL,
+    // 0 at t=TIME. Old port checked norm<1.0 which blocked the full-screen phase.
+    const float norm = 1.0f - (t - CRITICAL_FLASH_FULL) / (CRITICAL_FLASH_TIME - CRITICAL_FLASH_FULL);
+    float scale = norm * CRITICAL_FLASH_SCALE_MUL;
     if (scale <= 0.0f) return;
 
     float sx = scale; if (sx > CRITICAL_FLASH_MAX_X) sx = CRITICAL_FLASH_MAX_X;
@@ -119,23 +123,38 @@ void DrawCriticalFlash() {
 
     // Alpha = clamp(stored.a * t, 0, stored.a)
     int alpha = (int)((float)s_CritFlashColour.a * t);
-    if (alpha < 0)                       alpha = 0;
-    if (alpha > s_CritFlashColour.a)     alpha = s_CritFlashColour.a;
+    if (alpha < 0)                   alpha = 0;
+    if (alpha > s_CritFlashColour.a) alpha = s_CritFlashColour.a;
 
     const Colour tint(s_CritFlashColour.r,
                       s_CritFlashColour.g,
                       s_CritFlashColour.b,
                       (uint8_t)alpha);
 
+    // Bug 2 fix: lazy-load "flash.tex" and bind for textured draw.
+    // DIFFERS: binary calls Set(1) (GL_TEXTURE1 slot); port's Texture::Set()
+    //   has no slot param and binds to GL_TEXTURE0. Single-texture draw path
+    //   is functionally equivalent (no simultaneous multi-texture use here).
+    if (!s_flashTexture.Get()) {
+        s_flashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+    }
+    if (s_flashTexture.Get()) {
+        s_flashTexture.Get()->Set();
+    }
+
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(sx, sy, 1.0f);
     mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
 
-    Renderer::GetInstance()->DrawColorQuad(tint);
+    Renderer::GetInstance()->DrawQuad(tint, 0.0f, 1.0f, 0.0f, 1.0f);
+
+    if (s_flashTexture.Get()) {
+        s_flashTexture.Get()->UnSet();
+    }
 }
-} // namespace FN
 
 // Matches ResetGameEntities (binary 0x0016a058, 40 lines).
 // See docs/engine/reset-game-entities.md for the full pseudocode.

@@ -35,6 +35,7 @@ target_sources(mortar_engine PRIVATE
     # Phase 3 — Rendering
     render/Renderer.cpp
     render/MortarCamera.cpp
+    render/QuadUtil.cpp
     # Phase 4 — Asset Pipeline
     asset/IFile.cpp
     asset/IFileSystem.cpp

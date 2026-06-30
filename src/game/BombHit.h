@@ -3,22 +3,24 @@
 
 //
 // BombHit — white flash overlay drawn after a bomb is slashed.
-// Matches binary DrawBombHit (0x0016b73c), UpdateBombHit (0x0016a1a8),
-// and HitBomb (0x0016b0fc) helpers. Global state lives on the Game
-// singleton (Game::bombHitTimer), backing position stored here.
+// Matches binary DrawBombHit, UpdateBombHit, and HitBomb helpers.
+// Global state lives on the Game singleton (Game::bombHitTimer),
+// backing position stored here.
 //
-// Analysed: 2026-04-13T22:00
+// v1.6.1 binary symbols:
+//   CriticalFlash @ 0x001cca50
+//   DrawCritHit   @ 0x001ccfa0
 //
 
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "game/GameWork.h"
 
-// CriticalFlash (binary 0x0016a9a4) — kicks a full-screen colour tint
-// overlay that fades out over ~0.3s. Binary stamps two Colour fields on
+// CriticalFlash (v1.6.1) @ 0x001cca50 — kicks a full-screen colour tint
+// overlay that fades out over ~0.5s. Binary stamps two Colour fields on
 // the FruitGame singleton (+0xe4, +0xf0) and resets a ScreenTint time
 // scale. Port collapses this into a single static state + fade timer
-// rendered by DrawCriticalFlash during GameDraw. Used by Fruit slice
+// rendered by DrawCritHit during GameDraw. Used by Fruit slice
 // for critical-hit and rare (special fruit) feedback.
 void CriticalFlash(Vec3 pos, Colour colour);
 
@@ -47,15 +49,17 @@ void RetryLevel();
 // negative (visually shrinks them to zero) over the retryTimer window.
 void RetryUpdate(float dt);
 
+// DrawCritHit (v1.6.1) @ 0x001ccfa0 — draws the current CriticalFlash tint
+// as a full-screen textured quad. Called from GameDraw after the slice-line
+// pass and before the HUD overlays, so the flash sits under the logo/buttons.
+// No-op when the timer is 0 or >= CRITICAL_FLASH_TIME.
+// Lazy-loads "flash.tex" on first call.
+void DrawCritHit();
+
 namespace FN {
 // Per-frame advance of the CriticalFlash fade timer. Called from
 // GameUpdate after Mortar::ActorManager::Update.
 void UpdateCriticalFlash(float dt);
-
-// Draws the current CriticalFlash tint as a full-screen quad. Called
-// from GameDraw after the slice-line pass and before the HUD overlays,
-// so the flash sits under the logo/buttons. No-op when the timer is 0.
-void DrawCriticalFlash();
 
 // Writes g_BombHitPos (world position of last bomb hit). Called by
 // Bomb::HitBomb / Bomb::HitMenuBomb and legacy FN:: call sites.

@@ -77,6 +77,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/render/MatrixManager.cpp"
     "${_PROJECT_ROOT}/src/engine/render/MatrixStack.cpp"
     "${_PROJECT_ROOT}/src/engine/render/MortarCamera.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/QuadUtil.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Utf8StringIterator.cpp"
     "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
