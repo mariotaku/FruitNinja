@@ -308,4 +308,106 @@ TextureReadFn g_readers[4] = {
     TextureFileFormat::ReadTex1Format   // [3] v1.6.1 Tex1Format::Read @0x0022b324
 };
 
+// ---------------------------------------------------------------------------
+// TextureInfo Read<T> overloads
+// ---------------------------------------------------------------------------
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::ChannelDescription&) @0x0026bb0c
+// Reads 2 raw bytes: m_Bits then m_TypeFlag.
+void Read(DataStreamReader& reader, TextureInfo::ChannelDescription& cd) {
+    reader.ReadRaw<unsigned char>(cd.m_Bits);
+    reader.ReadRaw<unsigned char>(cd.m_TypeFlag);
+}
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::Compression&) @0x0026bb84
+// Reads 2 raw bytes into m_Field0, m_Field1.
+void Read(DataStreamReader& reader, TextureInfo::Compression& c) {
+    reader.ReadRaw<unsigned char>(c.m_Field0);
+    reader.ReadRaw<unsigned char>(c.m_Field1);
+}
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::NumberFormat&) @0x0026bb44
+// Reads 2 raw bytes; second byte is bit-shuffled from the on-disk packed format.
+// Bit shuffle (binary exact):
+//   stored = (raw >> 7) | (uint8_t)(((raw & 0x7f) >> 4) << 1) | (uint8_t)((raw & 0x0f) << 4)
+void Read(DataStreamReader& reader, TextureInfo::NumberFormat& nf) {
+    uint8_t b0 = 0;
+    uint8_t b1_raw = 0;
+    reader.ReadRaw<unsigned char>(b0);
+    reader.ReadRaw<unsigned char>(b1_raw);
+    nf.m_Field0 = b0;
+    nf.m_Field1 = (uint8_t)((b1_raw >> 7)
+                  | (uint8_t)(((b1_raw & 0x7fu) >> 4) << 1)
+                  | (uint8_t)((b1_raw & 0x0fu) << 4));
+}
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::TextureType&) @0x0026bba4
+// ReadBasicType<unsigned long>(v); truncate to byte.
+void Read(DataStreamReader& reader, TextureInfo::TextureType& tt) {
+    unsigned long v = 0UL;
+    reader.ReadBasicType<unsigned long>(v);
+    tt.m_Value = (uint8_t)((unsigned int)v & 0xFFu);
+}
+
+// Read<TextureInfo::ChannelDescription, 4u> -- explicit specialisation.
+// ASM-spec v1.6.1 @0x0026bc94: loop i=0..3 Read(arr[i]); on m_Error zero
+// remaining entries (m_Bits=0, clear bit7 of m_TypeFlag for entries i..3).
+template<>
+void Read<TextureInfo::ChannelDescription, 4u>(DataStreamReader& reader,
+                                               TextureInfo::ChannelDescription (&arr)[4]) {
+    unsigned int i = 0;
+    for (; i < 4u; ++i) {
+        Read(reader, arr[i]);
+        if (reader.m_Error) {
+            for (unsigned int j = i; j < 4u; ++j) {
+                arr[j].m_Bits    = 0;
+                arr[j].m_TypeFlag = arr[j].m_TypeFlag & static_cast<uint8_t>(~0x80u);
+            }
+            return;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::PixelFormat&) @0x0026bbc0
+// Composite: Compression(2B) + NumberFormat(2B) + ChannelDescription[4](8B) = 12B.
+// DIFFERS: binary takes TextureInfo::PixelFormat (named sub-fields);
+// port uses Mortar::PixelFormat (opaque data[12]) to avoid changing DataInfo consumers.
+// Access sub-fields by offset via reinterpret_cast.
+void Read(DataStreamReader& reader, PixelFormat& pf) {
+    Read(reader, *reinterpret_cast<TextureInfo::Compression*>(pf.data + 0));
+    Read(reader, *reinterpret_cast<TextureInfo::NumberFormat*>(pf.data + 2));
+    Read<TextureInfo::ChannelDescription, 4u>(reader,
+        *reinterpret_cast<TextureInfo::ChannelDescription (*)[4]>(pf.data + 4));
+}
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::DataInfo&) @0x0026bbec
+// Composite: PixelFormat(12B) + TextureType->numberFormat(4B read, 1B stored)
+//   + rawWidth/Height/depth/levels (u16 each, 8B total)
+//   + [_pad16 NOT read -- struct alignment gap only]
+//   + apparentWidth/Height (u32 each, 8B).
+// Total stream bytes consumed: 12+4+2+2+2+2+4+4 = 32 = 0x20.
+// Note: unsigned long and uint32_t are distinct types on MSVC (uint32_t=unsigned int);
+// intermediate unsigned long variables are used so ReadBasicType template T matches.
+void Read(DataStreamReader& reader, TextureInfo::DataInfo& di) {
+    Read(reader, di.pixelFormat);
+    TextureInfo::TextureType tt;
+    Read(reader, tt);
+    di.numberFormat = tt.m_Value;
+    unsigned short rw = 0, rh = 0, dep = 0, lev = 0;
+    reader.ReadBasicType<unsigned short>(rw);
+    reader.ReadBasicType<unsigned short>(rh);
+    reader.ReadBasicType<unsigned short>(dep);
+    reader.ReadBasicType<unsigned short>(lev);
+    di.rawWidth  = (uint16_t)rw;
+    di.rawHeight = (uint16_t)rh;
+    di.depth     = (uint16_t)dep;
+    di.levels    = (uint16_t)lev;
+    // _pad16 at +0x16 is NOT read -- alignment gap in struct, not present on disk.
+    unsigned long aw = 0UL, ah = 0UL;
+    reader.ReadBasicType<unsigned long>(aw);
+    reader.ReadBasicType<unsigned long>(ah);
+    di.apparentWidth  = (uint32_t)aw;
+    di.apparentHeight = (uint32_t)ah;
+}
+
 } // namespace Mortar
