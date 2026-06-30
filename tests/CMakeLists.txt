@@ -800,3 +800,35 @@ set_tests_properties(screenshot_powerupshop_english PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_powerupshop")
 set_tests_properties(screenshot_powerupshop_chinese PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_powerupshop")
+
+# DojoScreen -> AboutScreen / ShopScreen navigation regression test.
+# Exercises the REAL navigation path (DojoScreen state machine + entity-count gate)
+# rather than constructing child screens directly. The existing isolated tests
+# (test_aboutscreen, test_shopscreen) construct the child screens directly; THIS
+# test proves the full DojoScreen->child navigation works end-to-end.
+#
+# Key gate: DojoScreen states 2/3 require GetNumEntities(0)==0 && (1)==0 before
+# creating the child screen. TestFireAboutSlice()/TestFireShopSlice() replicate
+# the real ring-slice path: ClearMenuItems() flings all live menu entities, then
+# the callback fires. ActorManager::Update() reaps the flung entities so the gate
+# clears and the child screen is created.
+#
+# Headless pass: asserts transition fired (m_pBackButton nulled, child screen in HUD).
+# Screenshot pass: captures the child screen content (not blank = navigation works).
+#
+# FN_TEST enables TestFireAboutSlice/TestFireShopSlice/TestGetState/
+# TestTransitionFired/TestGetAboutScreen on DojoScreen.
+fn_add_game_test(test_dojo_navigation test_dojo_navigation.cpp)
+target_compile_definitions(test_dojo_navigation PRIVATE FN_TEST)
+add_test(NAME dojo_nav_about COMMAND test_dojo_navigation --mode=about)
+add_test(NAME dojo_nav_shop  COMMAND test_dojo_navigation --mode=shop)
+set_tests_properties(dojo_nav_about PROPERTIES TIMEOUT 120
+    LABELS "category_rendering;screen_about;nav_dojo_to_about")
+set_tests_properties(dojo_nav_shop PROPERTIES TIMEOUT 120
+    LABELS "category_rendering;screen_shop;nav_dojo_to_shop")
+add_test(NAME screenshot_dojo_nav_about COMMAND test_dojo_navigation --mode=about --screenshot)
+add_test(NAME screenshot_dojo_nav_shop  COMMAND test_dojo_navigation --mode=shop  --screenshot)
+set_tests_properties(screenshot_dojo_nav_about PROPERTIES TIMEOUT 120
+    LABELS "category_rendering;screen_about;nav_dojo_to_about")
+set_tests_properties(screenshot_dojo_nav_shop PROPERTIES TIMEOUT 120
+    LABELS "category_rendering;screen_shop;nav_dojo_to_shop")
