@@ -5,8 +5,16 @@
 
 // Binary @ 0x00188d84 -- SmartPtr<T> is a single embedded T* (intrusive refcount via
 // T's ReferenceCounter base). sizeof 4 on ARM32.
-// Lifecycle: ctor+raw-ptr always AddRef; assignment is AddRef-then-Release; SetPtrCast
-// is the assignment primitive in the binary (port uses operator= for the same effect).
+// Lifecycle: ctor+raw-ptr always AddRef; assignment is AddRef(new)->Release(old)->store
+// via the shared SetPtrCast primitive; no self-assign guard needed (AddRef-before-Release
+// is net-zero-safe on self). assign() is NOINLINE so each set site emits a `bl` to the
+// shared instantiation rather than inlining AddRef/Release/store (matches binary codegen).
+
+#if defined(__GNUC__)
+#define MORTAR_NOINLINE __attribute__((noinline))
+#else
+#define MORTAR_NOINLINE
+#endif
 
 namespace Mortar {
 
@@ -14,29 +22,32 @@ namespace Mortar {
 template<typename T>
 class SmartPtr {
     T* m_ptr;
+
+    // ASM-spec v1.6.1 SmartPtr<T>::SetPtrCast @0x0019a4ac: AddRef(new) -> store -> Release(old),
+    // no self-assign short-circuit. NOINLINE so each set site emits `bl SmartPtr<T>::assign`
+    // (the binary tail-calls a single shared SetPtrCast) instead of inlining AddRef/Release/store.
+    MORTAR_NOINLINE void assign(T* p) {
+        if (p) p->AddRef();
+        if (m_ptr) m_ptr->Release();
+        m_ptr = p;
+    }
+
+    MORTAR_NOINLINE void release() {
+        if (m_ptr) {
+            m_ptr->Release();
+            m_ptr = nullptr;
+        }
+    }
+
 public:
     SmartPtr() : m_ptr(nullptr) {}
-    SmartPtr(T* p) : m_ptr(p) { if (m_ptr) m_ptr->AddRef(); }
-    SmartPtr(const SmartPtr& o) : m_ptr(o.m_ptr) { if (m_ptr) m_ptr->AddRef(); }
-    ~SmartPtr() { if (m_ptr) m_ptr->Release(); }
+    // m_ptr must be nullptr before assign() so the Release-old inside assign is a no-op.
+    SmartPtr(T* p) : m_ptr(nullptr) { assign(p); }
+    SmartPtr(const SmartPtr& o) : m_ptr(nullptr) { assign(o.m_ptr); }
+    ~SmartPtr() { release(); }
 
-    SmartPtr& operator=(const SmartPtr& o) {
-        if (this != &o) {
-            if (o.m_ptr) o.m_ptr->AddRef();
-            if (m_ptr) m_ptr->Release();
-            m_ptr = o.m_ptr;
-        }
-        return *this;
-    }
-
-    SmartPtr& operator=(T* p) {
-        if (p != m_ptr) {
-            if (p) p->AddRef();
-            if (m_ptr) m_ptr->Release();
-            m_ptr = p;
-        }
-        return *this;
-    }
+    SmartPtr& operator=(const SmartPtr& o) { assign(o.m_ptr); return *this; }
+    SmartPtr& operator=(T* p)              { assign(p);       return *this; }
 
     T* operator->() const { return m_ptr; }
     T& operator*() const { return *m_ptr; }
@@ -47,12 +58,11 @@ public:
     bool operator==(const SmartPtr& o) const { return m_ptr == o.m_ptr; }
     bool operator!=(const SmartPtr& o) const { return m_ptr != o.m_ptr; }
 
-    // Binary @ 0x001020a8 (SetPtr<AnimationList>) -- thin wrapper over SetPtrCast<ReferenceCounter>;
-    // at the source level identical to operator=(raw).
-    void SetPtr(T* raw) { *this = raw; }
+    // Binary @ 0x001020a8 (SetPtr<AnimationList>) -- thin wrapper over SetPtrCast<ReferenceCounter>.
+    void SetPtr(T* raw) { assign(raw); }
 
     // Binary @ 0x0012ee80 (SetNull<Texture>) -- delegates to SetPtr(nullptr) -> Release-old.
-    void SetNull() { *this = nullptr; }
+    void SetNull() { assign(nullptr); }
 };
 
 // Binary @ 0x001ae748 (WrapPtr<AnimationList>), 0x001928e0 (WrapPtr<AnimationState>),
