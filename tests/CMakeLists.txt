@@ -267,6 +267,20 @@ target_include_directories(test_resourceloader PRIVATE
 )
 add_test(NAME resourceloader COMMAND test_resourceloader)
 
+# Binary chunk-stream reader + .fnt parse helper free functions (task #195).
+# Covers ReadFloat/ReadVec3/ReadString/ReadChunkHash (v1.6.1: 0x00238250,
+# 0x00238260, 0x002381e0, 0x0023819c) and Next_Word_Is/Get_Next_Value/
+# Parse_Char/Parse_Kerning (v1.6.1: 0x0024bdf4, 0x0024bb54, 0x0024be44, 0x0024c0b0).
+# Pure CPU: no GL, no SDL, no audio. Cross-build safe.
+add_executable(test_stream_read test_stream_read.cpp)
+target_link_libraries(test_stream_read PRIVATE mortar_engine)
+target_include_directories(test_stream_read PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME stream_read COMMAND test_stream_read)
+set_tests_properties(stream_read PROPERTIES TIMEOUT 30)
+
 add_executable(test_texture_format test_texture_format.cpp)
 target_link_libraries(test_texture_format PRIVATE mortar_engine)
 target_include_directories(test_texture_format PRIVATE
@@ -274,6 +288,17 @@ target_include_directories(test_texture_format PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 add_test(NAME texture_format COMMAND test_texture_format)
+
+# TextureConverter utility functions: COUNT_BITS, MultiplyColorComponent,
+# CorrectHalfTexel, GetConversionChannelRank.
+# Pure CPU: no GPU, no SDL, no audio.
+add_executable(test_texture_converter test_texture_converter.cpp)
+target_link_libraries(test_texture_converter PRIVATE mortar_engine)
+target_include_directories(test_texture_converter PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME texture_converter COMMAND test_texture_converter)
 
 # LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
 # Exercises tail-rewind (the shutdown crash path), forward-merge, and split-path

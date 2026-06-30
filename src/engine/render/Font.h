@@ -248,6 +248,47 @@ public:
     // ---- end unported overloads ----
 };
 
+// ---------------------------------------------------------------------------
+// Binary .fnt text format parser helpers — free functions in namespace Mortar.
+// These produce symbols for asm-verify coverage; Font::Load continues to use
+// the static ParseFntInt/ParseFntString helpers inline.
+//
+// ASM-spec v1.6.1:
+//   Mortar::Next_Word_Is    @0x0024bdf4
+//   Mortar::Get_Next_Value  @0x0024bb54
+//   Mortar::Parse_Char      @0x0024be44
+//   Mortar::Parse_Page      @0x0024d744
+//   Mortar::Parse_Kerning   @0x0024c0b0
+// ---------------------------------------------------------------------------
+
+// Compare key[0..strlen(word)) vs word; true if fully matched up to word length.
+// Stops on space within key. Used by Parse_Char/Parse_Page/Parse_Kerning to
+// identify which attribute was just scanned by Get_Next_Value.
+bool Next_Word_Is(char* key, const char* word);
+
+// Scan one key=value token from line.
+// keyBuf: 32-byte buffer filled with the key name (leading/trailing spaces stripped).
+// intOut: receives the parsed signed integer (sentinel -0xaabe = not set).
+// strHeapOut: receives heap-allocated char* for quoted-string values (else nullptr).
+// Returns: positive N = consumed N bytes (caller advances cursor by N);
+//          negative  = end-of-line or parse error (caller stops loop).
+int Get_Next_Value(char* line, char* keyBuf, int* intOut, char** strHeapOut);
+
+// Parse a "char " .fnt line into a CharTemplate, calling Get_Next_Value in a loop.
+// Stores raw int-as-float values; caller must normalize (divide by scaleW/H, lineHeight).
+// Returns bytes consumed from line.
+int Parse_Char(char* line, Font::CharTemplate* out, int lineLen);
+
+// Parse a "page " .fnt line into a Page (zero-inits filename and texture first).
+// Heap-allocates page->filename (truncated at '.' i.e. no extension) via Get_Next_Value.
+// Returns bytes consumed from line.
+int Parse_Page(char* line, Font::Page* out, int lineLen);
+
+// Parse a "kerning " .fnt line into a Kerning (zeroes all 12 bytes first).
+// first/second as int, amount as (float)intVal.
+// Returns bytes consumed from line.
+int Parse_Kerning(char* line, Font::Kerning* out, int lineLen);
+
 } // namespace Mortar
 
 #if defined(__bada__)

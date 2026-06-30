@@ -99,4 +99,21 @@ int EffectGroup::MergeProperties(
     return 1;
 }
 
+// ASM-spec v1.6.1 Mortar::operator<(SmartPtr<Effect> const&, SmartPtr<Effect> const&) @0x0025f3d8:
+// Binary: string::compare returns int; shift >> 31 extracts sign bit (= < 0).
+bool operator<(const SmartPtr<Effect>& a, const SmartPtr<Effect>& b) {
+    return a->m_Name.compare(b->m_Name) < 0;
+}
+
+// ASM-spec v1.6.1 Mortar::operator<(SmartPtr<Effect> const&, char const*) @0x0025f3f8:
+bool operator<(const SmartPtr<Effect>& a, const char* s) {
+    return a->m_Name.compare(s) < 0;
+}
+
+// ASM-spec v1.6.1 Mortar::operator<(char const*, SmartPtr<Effect> const&) @0x0025f410:
+// Binary: return (~compare_result) >> 31, i.e. compare_result > 0.
+bool operator<(const char* s, const SmartPtr<Effect>& b) {
+    return b->m_Name.compare(s) > 0;
+}
+
 }  // namespace Mortar

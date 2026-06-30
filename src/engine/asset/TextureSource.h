@@ -58,6 +58,16 @@ enum NumberFormat_e {
 
 namespace TextureInfo {
 
+// TextureInfo::ChannelDescription -- 2-byte channel descriptor.
+// Binary v1.6.1 Mortar::TextureInfo::ChannelDescription (2 bytes).
+// Used by PixelFormat[4] channel array and GetConversionChannelRank.
+// NOTE: binary namespace is Mortar::TextureInfo; port uses global TextureInfo
+// (pending DataStreamReader/TextureInfo namespace migration).
+struct ChannelDescription {
+    uint8_t m_Bits;     // +0x00 -- bit depth
+    uint8_t m_TypeFlag; // +0x01 -- channel type (low 7 bits); bit 7 = extra flag
+};
+
 // TextureInfo::DataInfo -- 0x20-byte header describing one texture layer.
 // Binary ctor @0x0022630c; Read @0x0026bbec.
 //

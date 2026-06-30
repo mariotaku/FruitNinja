@@ -123,6 +123,13 @@ struct EffectLessThanCompare {
     }
 };
 
+// Heterogeneous free comparators for sorted SmartPtr<Effect> containers.
+// Compare by Effect::m_Name (std::string at +0x30).
+// Binary v1.6.1 Mortar::operator< @0x0025f3d8, @0x0025f3f8, @0x0025f410.
+bool operator<(const SmartPtr<Effect>& a, const SmartPtr<Effect>& b);
+bool operator<(const SmartPtr<Effect>& a, const char* s);
+bool operator<(const char* s, const SmartPtr<Effect>& b);
+
 // EffectGroup — 0x38 bytes.
 // Binary ctor @ 0x001a2c10 (templated_ctor<Iter>), D2 @ 0x001a1a70.
 // Layout:

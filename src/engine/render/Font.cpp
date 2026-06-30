@@ -114,6 +114,188 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 }
 
 // ---------------------------------------------------------------------------
+// .fnt binary-stream parser free functions (for asm-verify coverage).
+// These are distinct from the static ParseFntInt/ParseFntString helpers above;
+// they match the binary's global-linkage symbols used internally by the engine.
+// Font::Load continues to use ParseFntInt/ParseFntString directly.
+// ---------------------------------------------------------------------------
+
+// ASM-spec v1.6.1 Mortar::Next_Word_Is @0x0024bdf4
+bool Next_Word_Is(char* key, const char* word) {
+    int n = (int)strlen(word);
+    int i = 0;
+    while ((unsigned char)key[i] == (unsigned char)word[i] && (unsigned char)key[i] != 0) {
+        if ((unsigned char)key[i] == 0x20) break;  // space in key: stop
+        if (i >= n) break;
+        i++;
+    }
+    return n <= i;
+}
+
+// ASM-spec v1.6.1 Mortar::Get_Next_Value @0x0024bb54
+// Sentinel value -0xaabe (-43710) used by callers (Parse_Char, Parse_Kerning) to
+// detect whether intOut was populated. Callers initialise *intOut = -0xaabe and
+// check != -0xaabe after the call before writing to the struct field.
+int Get_Next_Value(char* line, char* keyBuf, int* intOut, char** strHeapOut) {
+    // 1. Scan forward to find '=' (0x3d). Stop on CR/LF/NUL.
+    int i = 0;
+    while (line[i] != '=' && line[i] != '\r' && line[i] != '\n' && line[i] != '\0')
+        i++;
+    if (line[i] != '=') return -(i + 1);  // no '=' found: EOL
+
+    // 2. Copy key (strip leading+trailing spaces) into keyBuf[0..31].
+    //    Note: the spec shows trailing-space strip; leading-space strip is required
+    //    for subsequent calls where the cursor is positioned at whitespace between pairs.
+    int keyStart = 0;
+    while (keyStart < i && (unsigned char)line[keyStart] == 0x20) keyStart++;
+    int keyEnd = i;
+    while (keyEnd > keyStart && (unsigned char)line[keyEnd - 1] == 0x20) keyEnd--;
+    snprintf(keyBuf, 32, "%.*s", keyEnd - keyStart, line + keyStart);
+
+    // 3. Consume value after '='.
+    int j = i + 1;  // skip '='
+    if (line[j] == '\r' || line[j] == '\n' || line[j] == '\0') return -(j);
+
+    bool negative = false;
+    if (line[j] == '-') { negative = true; j++; }
+    if (line[j] == '\r' || line[j] == '\n' || line[j] == '\0') return -(j);
+
+    if (line[j] == '"') {
+        // Quoted string value (e.g. file="foo.tga").
+        // Binary stops at '"' or '.' so the extension is excluded from the result.
+        // ASM-spec: scan uses _OS_snprintf to copy into heap buffer (operator new[]).
+        j++;  // skip opening '"'
+        int valStart = j;
+        while (line[j] && line[j] != '"' && line[j] != '.') j++;
+        int strLen = j - valStart;
+        char* buf = new char[strLen + 1];
+        snprintf(buf, strLen + 1, "%.*s", strLen, line + valStart);
+        *strHeapOut = buf;
+        // j now points to '"' or '.' (not consumed; next call will scan past it)
+    } else {
+        // Integer value: scan digit run, build value via power-of-ten.
+        int valStart = j;
+        int valEnd = j;
+        while (line[valEnd] && line[valEnd] != '\r' && line[valEnd] != '\n'
+               && line[valEnd] != ' ' && line[valEnd] != '\0') valEnd++;
+        // Validate each char is a decimal digit; return negative on non-digit.
+        int acc = 0, mul = 1;
+        for (int k = valEnd - 1; k >= valStart; k--) {
+            unsigned char d = (unsigned char)line[k] - '0';
+            if (d > 9) return -(valEnd);  // non-digit: error
+            acc += (int)d * mul;
+            mul *= 10;
+        }
+        *intOut = negative ? -acc : acc;
+        j = valEnd;
+        // Skip trailing whitespace so the next call's cursor is at the next key.
+        while (line[j] == ' ') j++;
+    }
+
+    // 4. Return bytes consumed (to advance line cursor).
+    if (line[j] == '\r' || line[j] == '\n' || line[j] == '\0') return -(j + 1);
+    return j;  // positive: more pairs remain on this line
+}
+
+// ASM-spec v1.6.1 Mortar::Parse_Char @0x0024be44
+// Priority order for key matching (longer names before shorter prefixes):
+//   id -> xadvance -> xoffset -> x -> yoffset -> y -> width -> height -> page
+// Stores RAW pixel values as floats; caller normalises by scaleW/H and lineHeight.
+int Parse_Char(char* line, Font::CharTemplate* out, int lineLen) {
+    int pos = 0;
+    while (pos < lineLen) {
+        char keyBuf[32];
+        int intVal = -0xaabe;     // sentinel: "not set"
+        char* strHeapPtr = NULL;
+        int consumed = Get_Next_Value(line + pos, keyBuf, &intVal, &strHeapPtr);
+
+        if (Next_Word_Is(keyBuf, "id") && intVal != -0xaabe) {
+            *(short*)((char*)out + 0x00) = (short)intVal;
+        } else if (Next_Word_Is(keyBuf, "xadvance") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x1c) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "xoffset") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x14) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "x") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x04) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "yoffset") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x18) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "y") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x08) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "width") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x0c) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "height") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x10) = (float)intVal;
+        } else if (Next_Word_Is(keyBuf, "page") && intVal != -0xaabe) {
+            *(unsigned char*)((char*)out + 0x20) = (unsigned char)intVal;
+        }
+        delete[] strHeapPtr;   // quoted-string path not expected here; free if set
+
+        if (consumed < 0) break;
+        pos += consumed;
+    }
+    return pos;
+}
+
+// ASM-spec v1.6.1 Mortar::Parse_Page @0x0024d744
+// Zero-inits filename (nullptr) and texture (default SmartPtr) before parsing.
+// Only the "file" key is handled; its value is heap-allocated (caller owns).
+int Parse_Page(char* line, Font::Page* out, int lineLen) {
+    // Binary zero-inits: *(int*)out = 0 (filename=nullptr) and
+    // SmartPtr<Texture2D>::SetPtrCast(nullptr) (texture slot = 0).
+    out->filename = NULL;
+    out->texture = Mortar::SmartPtr<Mortar::Texture>();  // zero the SmartPtr slot
+
+    int pos = 0;
+    while (pos < lineLen) {
+        char keyBuf[32];
+        int intVal = 0;
+        char* strHeapPtr = NULL;
+        int consumed = Get_Next_Value(line + pos, keyBuf, &intVal, &strHeapPtr);
+
+        if (Next_Word_Is(keyBuf, "file") && strHeapPtr != NULL) {
+            // Assign heap-allocated filename (truncated at '.', no extension).
+            // Binary: *(char**)out = strHeapPtr. Port: out->filename = strHeapPtr.
+            // Page dtor calls delete[] filename, so the caller owns this allocation.
+            out->filename = strHeapPtr;
+            strHeapPtr = NULL;  // transfer ownership
+        }
+        delete[] strHeapPtr;   // free if not consumed (other keys)
+
+        if (consumed < 0) break;
+        pos += consumed;
+    }
+    return pos;
+}
+
+// ASM-spec v1.6.1 Mortar::Parse_Kerning @0x0024c0b0
+// Zeroes all 12 bytes of *out before parsing.
+// first/second: stored as int; amount: stored as (float)intVal.
+int Parse_Kerning(char* line, Font::Kerning* out, int lineLen) {
+    memset(out, 0, sizeof(Font::Kerning));  // binary: zeroes all 12 bytes
+
+    int pos = 0;
+    while (pos < lineLen) {
+        char keyBuf[32];
+        int intVal = -0xaabe;   // sentinel: "not set"
+        char* strHeapPtr = NULL;
+        int consumed = Get_Next_Value(line + pos, keyBuf, &intVal, &strHeapPtr);
+
+        if (Next_Word_Is(keyBuf, "first") && intVal != -0xaabe) {
+            *(int*)((char*)out + 0x00) = intVal;
+        } else if (Next_Word_Is(keyBuf, "second") && intVal != -0xaabe) {
+            *(int*)((char*)out + 0x04) = intVal;
+        } else if (Next_Word_Is(keyBuf, "amount") && intVal != -0xaabe) {
+            *(float*)((char*)out + 0x08) = (float)intVal;
+        }
+        delete[] strHeapPtr;   // not expected on kerning lines; free if set
+
+        if (consumed < 0) break;
+        pos += consumed;
+    }
+    return pos;
+}
+
+// ---------------------------------------------------------------------------
 // Font::Load -- binary @ 0x00199e9c (instance method, returns int 1/0)
 //
 // Slurps the entire .fnt file via Mortar::File (IFile-backed), walks

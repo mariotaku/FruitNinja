@@ -54,6 +54,7 @@ target_sources(mortar_engine PRIVATE
     asset/TextureManager.cpp
     asset/TextureSource.cpp
     asset/TextureFileFormat.cpp
+    asset/TextureConverter.cpp
     asset/TextureLoader.cpp
     asset/AlternativeTextureLoader.cpp
     asset/DataReader.cpp

@@ -1,6 +1,6 @@
 #include "util/PathCI.h"
 
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(__bada__)
 #  include <dirent.h>
 #  include <sys/stat.h>
 #  include <strings.h>   // strcasecmp
@@ -18,7 +18,16 @@ std::string ResolvePathCI(const char* /*absPath*/) {
     return std::string();
 }
 
-#else
+#elif defined(__bada__)
+
+// Bada device uses FAT FS which is case-insensitive; fopen matches regardless
+// of case, so path resolution is a no-op on device.
+// Port specific: cross-build defines __bada__ but lacks <dirent.h>/<strings.h>.
+std::string ResolvePathCI(const char* /*absPath*/) {
+    return std::string();
+}
+
+#else  // POSIX
 
 namespace {
 
@@ -105,6 +114,6 @@ std::string ResolvePathCI(const char* absPath) {
     return built;
 }
 
-#endif // !_WIN32
+#endif // _WIN32 / __bada__ / POSIX
 
 } // namespace Mortar
