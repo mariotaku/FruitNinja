@@ -57,6 +57,14 @@ public:
         return *this;
     }
 
+    // Binary: called by operator>>(DataStreamReader&, Immutable&) @0x0025fa40
+    // which does `imm = tmp` where tmp is std::string.
+    Immutable& operator=(const std::string& s) {
+        Immutable tmp(s);
+        *this = tmp;
+        return *this;
+    }
+
     bool operator==(const Immutable& other) const {
         return m_Node == other.m_Node;
     }
