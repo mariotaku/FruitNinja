@@ -36,7 +36,7 @@ public:
     ~Bonus();                                           // Binary @ 0x0010fa40
     Bonus& operator=(const Bonus& rhs);
 
-    void Parse(TiXmlElement* e, const char* parentTexName = NULL); // Binary @ 0x0010e61c
+    void Parse(TiXmlElement* e, const char* parentTexName = NULL); // Binary @ 0x0012f0f8
     int  IsAchieved(int score, std::map<uint32_t, int>& fruitCounts); // Binary @ 0x0010df38
 
     bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (binary @ 0x0010ed2c)
@@ -77,7 +77,7 @@ public:
     ~BonusType();
     BonusType& operator=(const BonusType& rhs);
 
-    void   Parse(TiXmlElement* e);       // Binary @ 0x0010e7ec
+    void   Parse(TiXmlElement* e);       // Binary @ 0x0012f3a4
     Bonus* GetBest();                            // Binary @ 0x0010e094
     bool   UnlockAchievements();                 // Binary @ 0x0010e12c
 };
