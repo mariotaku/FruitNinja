@@ -1903,51 +1903,18 @@ void Fruit::LoadInfo() {
 //   [0] uint32_t elemSize (0x24)  [4] uint32_t count  [8] FruitModelInfo[count]
 // Port mirrors the raw-allocation + placement-new pattern (v1.6.1 @0x001e08ec).
 
-// Port proxy for binary Mortar::List<SliceEffect> (20 bytes on ARM32).
-// v1.6.1 AddSlice @0x001dc990 calls AddHead; DrawSlices @0x001dae7c iterates via Remove.
-struct SliceNodeList {
-    void*              m_pFreeList;   // +0x00: unused (no FreeList in pool path)
-    SliceEffect::Node* m_pHead;      // +0x04
-    SliceEffect::Node* m_pTail;      // +0x08
-    unsigned int       m_Count;      // +0x0c
-    short              m_OwnsFreeList;// +0x10
-    short              m_Active;     // +0x12
-
-    SliceNodeList()
-        : m_pFreeList(0), m_pHead(0), m_pTail(0),
-          m_Count(0), m_OwnsFreeList(0), m_Active(0) {}
-
-    void AddHead(SliceEffect::Node* n) {
-        n->m_pPrev = 0;
-        n->m_pNext = m_pHead;
-        if (m_pHead) m_pHead->m_pPrev = n;
-        m_pHead = n;
-        if (!m_pTail) m_pTail = n;
-        ++m_Count;
-        m_Active = 1;
-    }
-
-    void Remove(SliceEffect::Node* n) {
-        if (n->m_pPrev) n->m_pPrev->m_pNext = n->m_pNext;
-        else            m_pHead = n->m_pNext;
-        if (n->m_pNext) n->m_pNext->m_pPrev = n->m_pPrev;
-        else            m_pTail = n->m_pPrev;
-        n->m_pNext = 0;
-        n->m_pPrev = 0;
-        if (m_Count > 0) --m_Count;
-    }
-
-    SliceEffect::Node* begin() { return m_pHead; }
-};
-
 // Contiguous Fruit global-state block. Mirrors binary layout @ 0x332910.
 // [port] s_slices/s_pool are stored as heap pointers (binary embeds the 0x14-byte
 // objects inline; port uses new/delete to match the binary's allocation pattern).
+// Convenience alias; List<SliceEffect>::Node is the 0x30-byte doubly-linked node
+// managed by AddNodeToHead/Remove (v1.6.1 @0x001e3158 / @0x001e36c8).
+typedef Mortar::List<SliceEffect>::Node SliceNode;
+
 struct FruitGlobalData {
-    SliceNodeList*                          s_slices;              // +0x00 (heap ptr)
+    Mortar::List<SliceEffect>*              s_slices;              // +0x00 (heap ptr)
     Vec3                                    s_sliceParams[7];      // +0x04..+0x57 (opaque runtime params)
     Mortar::SmartPtr<Mortar::Model>         s_sliceModel[4];       // +0x58..+0x67
-    Mortar::MemoryPool<SliceEffect::Node>*  s_pool;                // +0x68 (heap ptr)
+    Mortar::MemoryPool<SliceNode>*          s_pool;                // +0x68 (heap ptr)
     char                                    _pad6C[0x20];          // +0x6C..+0x8B (other statics)
     Mortar::SmartPtr<Mortar::Texture2D>     s_globalFruitAtlas[2]; // +0x8C..+0x93
     Mortar::SmartPtr<Mortar::Texture2D>     s_atlas2[2];           // +0x94..+0x9B (opaque)
@@ -1985,20 +1952,11 @@ static FruitGlobalData g_fruitData;
 //   fruit: dedup/clamp sentinel (real Fruit* or 0/1/3)
 void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
 {
-    SliceEffect::Node local;
-    memset(&local, 0, sizeof(local));
-    local.m_Impulse  = v.y;
-    local.m_AngleDeg = v.x;
-    local.m_Pos      = Vec3(posX, posY, posZ);
-    local.m_pFruit   = fruit;
-    local.m_ModelIdx = modelIdx;
-    local.m_RateMul  = v.z;
-
     // Crit SFX: if impulse > 2.5 and 1-in-3 chance, play Air-Whoosh variant.
     // v1.6.1 @0x001dc990 (GOT-relative SFX name resolution).
     // TODO: confirm Air-Whoosh sfx names -- v1.6.1 AddSlice @0x001dc990
     if (v.y > 2.5f && Math::g_Random.Rand32(3) == 0) {
-        const char* sfxName = nullptr;
+        const char* sfxName = 0;
         uint32_t pick = Math::g_Random.Rand32(3);
         if (pick == 0)      sfxName = "Air-Whoosh-Hard";
         else if (pick == 1) sfxName = "Air-Whoosh-Med";
@@ -2010,24 +1968,34 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
 
     if (!g_fruitData.s_slices || !g_fruitData.s_pool) return;
 
-    // Dedup: walk s_slices; expire (set m_Timer=6.0) any earlier node
-    // whose m_pFruit key matches this fruit/ident (all but the first hit).
+    // Dedup: walk s_slices via Iterator; expire (set m_Timer=6.0) any earlier node
+    // whose m_pFruit key matches this fruit/ident.
     // v1.6.1 @0x001dc990: +0x1c (m_pFruit) is the dedup key; action = expire.
     {
-        SliceEffect::Node* n = g_fruitData.s_slices->begin();
-        while (n) {
-            SliceEffect::Node* next = n->m_pNext;
-            if (n->m_pFruit == fruit) {
-                n->m_Timer = 6.0f;
+        Mortar::List<SliceEffect>::Iterator it = g_fruitData.s_slices->Begin();
+        while (it.Okay()) {
+            Mortar::List<SliceEffect>::Iterator nextIt = it.Next();
+            if (it.Get()->value.m_pFruit == fruit) {
+                it.Get()->value.m_Timer = 6.0f;
             }
-            n = next;
+            it = nextIt;
         }
     }
 
-    SliceEffect::Node* n = g_fruitData.s_pool->Pop();
+    SliceNode* n = g_fruitData.s_pool->Pop();
     if (!n) return;
-    *n = local;
-    g_fruitData.s_slices->AddHead(n);
+
+    // Initialise the payload fields of the new node.
+    n->value.m_Timer    = 0.f;
+    n->value.m_Impulse  = v.y;
+    n->value.m_AngleDeg = v.x;
+    n->value.m_Pos      = Vec3(posX, posY, posZ);
+    n->value.m_ModelIdx = modelIdx;
+    n->value.m_pFruit   = fruit;
+    n->value.m_RateMul  = v.z;
+    n->value.field_0x24 = 0;
+
+    g_fruitData.s_slices->AddNodeToHead(n);
 }
 
 // DrawSlices -- v1.6.1 @0x001dae7c
@@ -2035,37 +2003,40 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
 void DrawSlices(float dt, bool pass)
 {
     if (!g_fruitData.s_slices || !g_fruitData.s_pool) return;
-    SliceEffect::Node* n = g_fruitData.s_slices->begin();
-    while (n) {
-        SliceEffect::Node* next = n->m_pNext;
 
-        float rate = (n->m_ModelIdx != 0) ? 0.75f : 1.0f;
-        n->m_Timer += dt * n->m_RateMul * 40.0f * rate;
+    Mortar::List<SliceEffect>::Iterator it = g_fruitData.s_slices->Begin();
+    while (it.Okay()) {
+        // Capture next before potentially removing this node.
+        Mortar::List<SliceEffect>::Iterator nextIt = it.Next();
+        SliceNode* n = it.Get();
+
+        float rate = (n->value.m_ModelIdx != 0) ? 0.75f : 1.0f;
+        n->value.m_Timer += dt * n->value.m_RateMul * 40.0f * rate;
 
         // Fruit-link clamp: if the linked fruit has been sliced, clear the link;
         // clamp timer to minimum 3.0 while the link was active.
-        if (n->m_pFruit) {
+        if (n->value.m_pFruit) {
             // Sentinel check: only real Fruit* instances have m_bSliced.
             // Sentinels 0/1/3 must not be dereferenced -- check size_t > 3.
-            uintptr_t fp = (uintptr_t)n->m_pFruit;
+            uintptr_t fp = (uintptr_t)n->value.m_pFruit;
             if (fp > 3) {
-                if (n->m_pFruit->m_bSliced) {
-                    n->m_pFruit = 0;
+                if (n->value.m_pFruit->m_bSliced) {
+                    n->value.m_pFruit = 0;
                 }
             }
-            if (n->m_Timer < 3.0f) {
-                n->m_Timer = 3.0f;
+            if (n->value.m_Timer < 3.0f) {
+                n->value.m_Timer = 3.0f;
             }
         }
 
-        if (n->m_Timer < 6.0f) {
-            if (n->m_Timer >= 0.0f) {
+        if (n->value.m_Timer < 6.0f) {
+            if (n->value.m_Timer >= 0.0f) {
                 // pass gate: pass==false draws modelIdx!=3; pass==true draws modelIdx==3
-                if ((!pass) == (n->m_ModelIdx != 3)) {
-                    int f = (int)n->m_Timer;
+                if ((!pass) == (n->value.m_ModelIdx != 3)) {
+                    int f = (int)n->value.m_Timer;
                     if (f < 0) f = 0;
                     if (f > 5) f = 5;
-                    float frac = n->m_Timer - (float)f;
+                    float frac = n->value.m_Timer - (float)f;
                     const Vec3& kA = SLICE_KEYFRAMES[f];
                     const Vec3& kB = SLICE_KEYFRAMES[f + 1];
                     Vec3 scale(
@@ -2073,18 +2044,18 @@ void DrawSlices(float dt, bool pass)
                         kA.y + (kB.y - kA.y) * frac,
                         kA.z + (kB.z - kA.z) * frac
                     );
-                    if (n->m_pFruit) {
+                    if (n->value.m_pFruit) {
                         scale.y *= 0.9f;
                     }
 
-                    int idx = n->m_ModelIdx;
+                    int idx = n->value.m_ModelIdx;
                     if (idx < 0 || idx > 3) idx = 0;
                     Mortar::Model* model = g_fruitData.s_sliceModel[idx].Get();
                     if (model) {
-                        uint16_t a = (uint16_t)(int)(n->m_AngleDeg * 182.0f);
+                        uint16_t a = (uint16_t)(int)(n->value.m_AngleDeg * 182.0f);
                         Matrix44 m = Matrix44::Scale44(scale);
                         m.RotZ44(SinIdx(a), CosIdx(a));
-                        m.GlobalTranslate44(n->m_Pos);
+                        m.GlobalTranslate44(n->value.m_Pos);
                         model->Draw(m);
                     }
                 }
@@ -2094,7 +2065,7 @@ void DrawSlices(float dt, bool pass)
             g_fruitData.s_pool->Push(n);
         }
 
-        n = next;
+        it = nextIt;
     }
 }
 
@@ -2269,11 +2240,12 @@ void Fruit::LoadFruitModels() {
 
     // Allocate slice list and pool (binary: new(0x14) each in LoadInfo @0x001e10c4).
     // Port: allocate here as equivalent lazy-init. Pool created with capacity 100.
+    // The list's m_pPool field points to s_pool (list owns/points its pool per binary).
     if (!g_fruitData.s_slices) {
-        g_fruitData.s_slices = new SliceNodeList();
+        g_fruitData.s_slices = new Mortar::List<SliceEffect>();
     }
     if (!g_fruitData.s_pool) {
-        g_fruitData.s_pool = new Mortar::MemoryPool<SliceEffect::Node>();
+        g_fruitData.s_pool = new Mortar::MemoryPool<SliceNode>();
     }
     if (g_fruitData.s_pool->Capacity() == 0) {
         g_fruitData.s_pool->Create(100);
@@ -2823,15 +2795,19 @@ void Fruit::DestroyFruitModels() {
     // Step 3: pool destroy (binary: two T_2024 pool-destroy calls @+0x8c/+0x90, matching
     // MemoryPool::Destroy()'s delete[]+free() for m_Backing and m_FreeList -- accept-cosmetic).
     // Port: heap-allocated; also delete the object itself (binary stores inline at +0x68).
+    // Destroy pool BEFORE the list so any Remove() calls during list dtor don't
+    // attempt to push into a freed pool. List<SliceEffect> dtor calls Clear() which
+    // gates on m_Active==1; since AddNodeToHead sets m_Active==2, Clear() just
+    // zeroes pointers without touching the already-destroyed pool nodes.
     if (g_fruitData.s_pool) {
         g_fruitData.s_pool->Destroy();
         delete g_fruitData.s_pool;
-        g_fruitData.s_pool = nullptr;
+        g_fruitData.s_pool = 0;
     }
     // Port: heap-allocated slice list; delete (binary stores inline at +0x00).
     if (g_fruitData.s_slices) {
         delete g_fruitData.s_slices;
-        g_fruitData.s_slices = nullptr;
+        g_fruitData.s_slices = 0;
     }
     // Step 4: null the 4 slice models (binary T_2039 x4 @+0x58..+0x64).
     for (int i = 0; i < 4; ++i)
