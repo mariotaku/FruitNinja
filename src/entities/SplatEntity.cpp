@@ -586,6 +586,9 @@ void SplatEntity::CreatePool(int capacity) {
     s_Pool.Create(capacity);
 }
 
+// bool flag matching BSS+0x24 in the SplatEntity global block (v1.6.1 CleanUpSplat @0x001ec88c).
+static bool s_loadedSplat = false;
+
 void SplatEntity::DestroyPool() {
     s_Pool.Destroy();
     s_SplatTex.SetNull();
@@ -595,10 +598,34 @@ void SplatEntity::LoadContent() {
     if (!s_SplatTex.IsValid()) {
         s_SplatTex = Mortar::TextureManager::LoadLocalisedTexture("white_splash.tex");
     }
+    s_loadedSplat = true;
 }
 
+// ASM-spec v1.6.1 SplatEntity::CleanUp @ 0x001eb404 (note: stale 0x0017eee0 in header = v1.5.x).
+// Destroys the SplatEntity MemoryPool: calls dtors on live pool slots,
+// frees the backing allocation, nulls the pool pointer, zeroes poolCount.
+// The port wraps s_Pool.Destroy() which performs the same sequence.
+// PORT BUG FIX: prior body incorrectly did s_SplatTex.SetNull() here;
+// texture nulling belongs in CleanUpSplat() (the binary never touches
+// textures inside SplatEntity::CleanUp).
 void SplatEntity::CleanUp() {
+    s_Pool.Destroy();
+}
+
+// ASM-spec v1.6.1 CleanUpSplat @ 0x001ec88c (capital U — DISTINCT from CleanupSplat).
+// 1. SplatEntity::CleanUp() -- destroys pool
+// 2. s_loadedSplat = false
+// 3. null s_SplatTex (BSS+0x28)
+void CleanUpSplat() {
+    SplatEntity::CleanUp();
+    s_loadedSplat = false;
     s_SplatTex.SetNull();
+    // TODO: v1.6.1 CleanUpSplat @0x001ec88c -- binary nulls a 2nd SmartPtr<Texture> at +0x2c;
+    // SplatEntity::LoadContent not yet RE'd to identify it.
+}
+
+// Defunct: dead code in v1.6.1 -- in export table but never called; v1.6.1 CleanupSplat @0x001ed0ec
+void CleanupSplat() {
 }
 
 SplatEntity* SplatEntity::GetFree() {

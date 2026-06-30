@@ -2822,6 +2822,71 @@ void Fruit::DestroyFruitModels() {
 }
 
 
+// ASM-spec v1.6.1 CleanupFruit @ 0x001defd4.
+// Full fruit-subsystem teardown (shutdown path, distinct from Fruit::DestroyFruitModels
+// which is the mid-game reload path). Steps match binary order exactly.
+void CleanupFruit() {
+    // Step 1: null 7 texture SmartPtrs in the binary's non-sequential order.
+    g_fruitData.s_globalFruitAtlas[0].SetNull();
+    g_fruitData.s_atlas2[0].SetNull();
+    g_fruitData.s_globalFruitAtlas[1].SetNull();
+    g_fruitData.s_atlas2[1].SetNull();
+    g_fruitData.s_texSlots[1].SetNull();
+    g_fruitData.s_texSlots[2].SetNull();
+    g_fruitData.s_texSlots[0].SetNull();
+
+    // Step 2: if models were loaded, null m_HalfA, m_HalfB, m_Whole for every fruit
+    // type (NOT m_pMpModel; binary outer loop is field index 0=HalfA/1=HalfB/2=Whole,
+    // inner is fruit type index). m_pMpModel is handled by ~FruitModelInfo in step 5.
+    if (g_fruitData.s_fruitModelsLoaded) {
+        int count = *reinterpret_cast<int*>((char*)g_fruitData.s_fruitModels - 4);
+        for (int j = 0; j < count; j++) {
+            g_fruitData.s_fruitModels[j].m_HalfA.SetNull();
+        }
+        for (int j = 0; j < count; j++) {
+            g_fruitData.s_fruitModels[j].m_HalfB.SetNull();
+        }
+        for (int j = 0; j < count; j++) {
+            g_fruitData.s_fruitModels[j].m_Whole.SetNull();
+        }
+    }
+
+    // Step 3: destroy s_slices list (clear -> dtor -> delete -> null).
+    if (g_fruitData.s_slices) {
+        g_fruitData.s_slices->Clear();
+    }
+    if (g_fruitData.s_slices) {
+        delete g_fruitData.s_slices;
+        g_fruitData.s_slices = 0;
+    }
+
+    // Step 4: destroy s_pool (dtor -> delete -> null).
+    if (g_fruitData.s_pool) {
+        delete g_fruitData.s_pool;
+        g_fruitData.s_pool = 0;
+    }
+
+    // Step 5: destroy s_fruitModels backing alloc (backward dtor walk + delete raw-8).
+    // Raw header: [0]=elemSize, [4]=count, [8]=FruitModelInfo[count] (v1.6.1 @0x001defd4).
+    if (g_fruitData.s_fruitModels) {
+        int count = *reinterpret_cast<int*>((char*)g_fruitData.s_fruitModels - 4);
+        FruitModelInfo* end = g_fruitData.s_fruitModels + count;
+        while (end != g_fruitData.s_fruitModels) {
+            --end;
+            end->~FruitModelInfo();
+        }
+        ::operator delete((char*)g_fruitData.s_fruitModels - 8);
+        g_fruitData.s_fruitModels = 0;
+    }
+
+    // Step 6: binary heap-frees Fruit::fruitInfo (count*0x338+8 alloc).
+    // DIFFERS: binary heap-frees fruitInfo; port FruitInfo is a static array -> no free needed
+    // (v1.6.1 CleanupFruit @0x001defd4 step6)
+
+    // Step 7: mark unloaded.
+    g_fruitData.s_fruitModelsLoaded = 0;
+}
+
 // ASM-spec v1.6.1 Fruit::AddShadow @0x001dbbe8.
 // SSM Player 2 swaps shadow-offset axes; offset rotates 90 deg and the
 // sign follows the fruit's screen-half (pos.x < 0 -> negative).

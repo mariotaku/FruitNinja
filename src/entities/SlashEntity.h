@@ -532,4 +532,9 @@ extern SlashEntity* g_pSlashEntities[16];
 // Backward-compat: aliased to g_pSlashEntities[0].
 extern SlashEntity* g_pSlashEntity;
 
+// v1.6.1 CleanupSlash @ 0x001e8204 -- nulls 3 slash SmartPtr<Texture> globals,
+// releases 8 SlashEntityGhost ring entries (deferred: SlashEntityGhost not yet ported),
+// clears the loaded flag. Called from GameDestroy after CleanUpSplat.
+void CleanupSlash();
+
 #endif
