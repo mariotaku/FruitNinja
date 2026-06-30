@@ -1,4 +1,5 @@
 #include "asset/Effect.h"
+#include "asset/DataStreamReader.h"
 #include "util/Immutable.h"
 #include <algorithm>
 #include <cstring>
@@ -97,6 +98,150 @@ int EffectGroup::MergeProperties(
         }
     }
     return 1;
+}
+
+// ------------------------------------------------------------------
+// Effect::LoadPlatformData
+// ------------------------------------------------------------------
+
+// Defunct: GLES1 platform pass data -- no-op stub; v1.6.1 Effect::LoadPlatformData @0x00263360
+// Binary body: if (tag != 0x31534569u) return; else Read<Effect_GLES1::Pass,alloc>(reader, m_Passes).
+// Port is a no-op: GLES1 pass data is defunct in the SDL2 port. The Read(SmartPtr<Effect>&)
+// caller advances the main reader cursor by dataSize bytes externally, so the stub is correct.
+void Effect::LoadPlatformData(unsigned long tag, DataStreamReader& reader) {
+    (void)tag;
+    (void)reader;
+}
+
+// ------------------------------------------------------------------
+// Read overloads for Effect types
+// ------------------------------------------------------------------
+
+// ASM-spec v1.6.1 Mortar::Read(DataStreamReader&, EffectPropertyDefinition&) @0x0025f4d4
+void Read(DataStreamReader& reader, EffectPropertyDefinition& def) {
+    reader >> def.m_Name;
+    unsigned long v = 0;
+    reader.ReadBasicType<unsigned long>(v);
+    def.m_Type = (uint32_t)v;
+    reader.ReadBasicType<unsigned long>(v);
+    def.m_Count = (uint32_t)v;
+}
+
+// ASM-spec v1.6.1 Mortar::Read(DataStreamReader&, VertexElementBase&) @0x0025f4b4
+void Read(DataStreamReader& reader, VertexElementBase& ve) {
+    reader >> ve.m_Name;
+    unsigned long v = 0;
+    reader.ReadBasicType<unsigned long>(v);
+    ve.m_Index = (uint32_t)v;
+}
+
+// ASM-spec v1.6.1 Mortar::Read<EffectPropertyDefinition,allocator> @0x00261210
+// Stride 0xc (12 bytes). On m_Error mid-read, truncates vector to last good index.
+void Read(DataStreamReader& reader,
+          std::vector<EffectPropertyDefinition,
+                      std::allocator<EffectPropertyDefinition> >& vec) {
+    vec.clear();
+    unsigned long count = 0;
+    reader.ReadBasicType<unsigned long>(count);
+    vec.resize(count);
+    for (unsigned long i = 0; i < count; ++i) {
+        Read(reader, vec[i]);
+        if (reader.m_Error) {
+            vec.resize(i);
+            return;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 Mortar::Read<VertexElementBase,allocator> @0x002615b0
+// Stride 8 bytes. On m_Error mid-read, truncates vector to last good index.
+void Read(DataStreamReader& reader,
+          std::vector<VertexElementBase,
+                      std::allocator<VertexElementBase> >& vec) {
+    vec.clear();
+    unsigned long count = 0;
+    reader.ReadBasicType<unsigned long>(count);
+    vec.resize(count);
+    for (unsigned long i = 0; i < count; ++i) {
+        Read(reader, vec[i]);
+        if (reader.m_Error) {
+            vec.resize(i);
+            return;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 Mortar::operator>>(DataStreamReader&, Effect::DebugInfo&) @0x00261674
+// Reads DebugInfo: m_Name (length-prefixed string), then m_PropDefs, then m_VertexElements.
+DataStreamReader& operator>>(DataStreamReader& reader, Effect::DebugInfo& di) {
+    reader.Read(di.m_Name);
+    Read(reader, di.m_PropDefs);
+    Read(reader, di.m_VertexElements);
+    return reader;
+}
+
+// ASM-spec v1.6.1 Mortar::Read<Effect::DebugInfo,allocator> @0x00261aa8
+// Stride 0x1c (28 bytes). On m_Error mid-read, truncates vector to last good index.
+void Read(DataStreamReader& reader,
+          std::vector<Effect::DebugInfo,
+                      std::allocator<Effect::DebugInfo> >& vec) {
+    vec.clear();
+    unsigned long count = 0;
+    reader.ReadBasicType<unsigned long>(count);
+    vec.resize(count);
+    for (unsigned long i = 0; i < count; ++i) {
+        reader >> vec[i];
+        if (reader.m_Error) {
+            vec.resize(i);
+            return;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 Mortar::Read(DataStreamReader&, SmartPtr<Effect>&) @0x0025f590
+// Allocates 0x38 bytes for Effect (new Effect()), reads m_Name, loops over platform
+// data blocks (each delegated to LoadPlatformData no-op + cursor-skip), then reads
+// m_DebugInfo vector. The 0xffffffff r2 in the Ghidra decompile is a stale-register
+// artefact; Read<DebugInfo,alloc> takes only 2 args (reader, vec).
+void Read(DataStreamReader& reader, SmartPtr<Effect>& sp) {
+    Effect* effect = new Effect();
+    sp.SetPtr(effect);
+
+    reader.Read(effect->m_Name);
+
+    unsigned long passCount = 0;
+    reader.ReadBasicType<unsigned long>(passCount);
+    while (passCount > 0) {
+        --passCount;
+        unsigned long platformID = 0;
+        reader.ReadRaw<unsigned long>(platformID);
+        unsigned long dataSize = 0;
+        reader.ReadBasicType<unsigned long>(dataSize);
+        DataStreamReader subReader;
+        subReader.MakeSubReader(reader);
+        effect->LoadPlatformData(platformID, subReader);
+        reader.m_pCursor = (uint8_t*)reader.m_pCursor + dataSize;
+    }
+
+    Read(reader, effect->m_DebugInfo);
+}
+
+// ASM-spec v1.6.1 Mortar::Read<SmartPtr<Effect>,allocator> @0x00261e48
+// Stride 4 bytes. On m_Error mid-read, truncates vector to last good index.
+void Read(DataStreamReader& reader,
+          std::vector<SmartPtr<Effect>,
+                      std::allocator<SmartPtr<Effect> > >& vec) {
+    vec.clear();
+    unsigned long count = 0;
+    reader.ReadBasicType<unsigned long>(count);
+    vec.resize(count);
+    for (unsigned long i = 0; i < count; ++i) {
+        Read(reader, vec[i]);
+        if (reader.m_Error) {
+            vec.resize(i);
+            return;
+        }
+    }
 }
 
 // ASM-spec v1.6.1 Mortar::operator<(SmartPtr<Effect> const&, SmartPtr<Effect> const&) @0x0025f3d8:
