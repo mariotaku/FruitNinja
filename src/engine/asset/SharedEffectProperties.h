@@ -7,14 +7,17 @@
 // Phase 2: real bodies for EffectPropertyList::Contains / GetProperty /
 // InitPropertyList, and SharedEffectProperties ctors.
 //
-// Binary layout refs:
-//   SharedEffectProperties ctor (range) @ 0x001b2708
-//   SharedEffectProperties ctor (4-def) @ 0x001b2788
-//   EffectPropertyList::Contains(def&)  @ 0x001b6828
-//   EffectPropertyList::Contains(range) @ 0x001b1938
-//   EffectPropertyList::GetProperty     @ 0x001b67b8
-//   EffectPropertyList::InitPropertyList@ 0x001b25b4
-//   TrySetMatrix_EffectProp free helper @ 0x001b0c28
+// Binary layout refs (v1.6.1):
+//   EffectProperty ctor                   @ 0x0025d6e0
+//   EffectPropertyList ctor               @ 0x00274c54
+//   EffectPropertyList::~EffectPropertyList@ 0x00264e88
+//   EffectPropertyList::InitPropertyList  @ 0x00274ac8
+//   EffectPropertyList::GetProperty(char*)@ 0x0025d650
+//   EffectPropertyList::Contains(def&)    @ TODO: verify addr
+//   EffectPropertyList::Contains(range)   @ 0x002738b8
+//   SharedEffectProperties ctor (range)   @ TODO: verify addr
+//   SharedEffectProperties ctor (4-def)   @ TODO: verify addr
+//   TrySetMatrix_EffectProp free helper   @ TODO: verify addr
 
 #include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
@@ -230,22 +233,25 @@ public:
     }
 
 private:
-    // Comparator for lower_bound / sort: compares EffectProperty* by name vs char*.
+    // Comparator for lower_bound / sort: compares EffectProperty by name vs char*.
     struct NameLessThan {
-        bool operator()(const EffectProperty* p, const char* n) const {
-            return std::strcmp(p->m_Def.m_Name.c_str(), n) < 0;
+        bool operator()(const EffectProperty& p, const char* n) const {
+            return std::strcmp(p.m_Def.m_Name.c_str(), n) < 0;
         }
-        // Overload for std::sort (both sides are EffectProperty*).
-        bool operator()(const EffectProperty* a, const EffectProperty* b) const {
-            return std::strcmp(a->m_Def.m_Name.c_str(), b->m_Def.m_Name.c_str()) < 0;
+        // Overload for std::sort (both sides are EffectProperty by value).
+        bool operator()(const EffectProperty& a, const EffectProperty& b) const {
+            return std::strcmp(a.m_Def.m_Name.c_str(), b.m_Def.m_Name.c_str()) < 0;
         }
     };
 
     void SortProperties();
 
-    SmartPtr<SharedEffectProperties> m_Parent;    // +0x00, 4 bytes
-    EffectPropertyValues*            m_Values;    // +0x04, 4 bytes (owned raw ptr)
-    std::vector<EffectProperty*>     m_Props;     // +0x08, 12 bytes
+    SmartPtr<SharedEffectProperties> m_Parent;  // +0x00, 4 bytes
+    // DIFFERS: binary uses std::auto_ptr<EffectPropertyValues> (v1.6.1 EffectPropertyList @0x00264e88),
+    // using raw ptr because MSVC 2022 STL removes auto_ptr via _HAS_AUTO_PTR_ETC in practice;
+    // layout is identical (4 bytes on ARM32).
+    EffectPropertyValues*            m_Values;  // +0x04, 4 bytes
+    std::vector<EffectProperty>      m_Props;   // +0x08, 12 bytes (by value; matches binary EStack_34 push pattern)
     // total: 4 + 4 + 12 = 20 = 0x14
 };
 
@@ -289,7 +295,7 @@ private:
 // InitPropertyList template body — must live in the header for implicit instantiation,
 // and must appear after SharedEffectProperties is complete so GCC 4.4.1 two-phase
 // lookup can resolve m_Parent->GetList() at template-definition time.
-// Binary @ 0x001b25b4.
+// Binary v1.6.1 @ 0x00274ac8.
 template <typename Iter>
 void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
                                           SmartPtr<SharedEffectProperties> parent) {
@@ -316,12 +322,12 @@ void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
     m_Props.reserve(newCount);
     for (Iter p = begin; p != end; ++p) {
         if (m_Parent.IsValid() && m_Parent->GetList().Contains(*p)) continue;
-        EffectProperty* prop = new EffectProperty();
-        prop->m_Def    = *p;
-        prop->m_Owner  = m_Values;
-        prop->m_Offset = bucketOffsets[p->m_Type];
+        EffectProperty prop;
+        prop.m_Def    = *p;
+        prop.m_Owner  = m_Values;
+        prop.m_Offset = bucketOffsets[p->m_Type];
         m_Props.push_back(prop);
-        // Pass 2 advances by m_Count without the ?:1 fallback — per binary @ 0x001b25b4.
+        // Pass 2 advances by m_Count without the ?:1 fallback — per binary v1.6.1 @ 0x00274ac8.
         bucketOffsets[p->m_Type] += p->m_Count;
     }
 
