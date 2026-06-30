@@ -376,7 +376,8 @@ void BakedStringTTF::FullInternalRebuild()
 // Word-wrap line-breaker: modifies ioText in-place to the head that fits within maxWidth,
 // sets outRemainder to the overflow tail, outWidth to the measured advance of the head,
 // and outTruncated when an unbreakable word overflows.
-// +1.0 inter-glyph gap; whitespace/0x200b/0x0a = break point.
+// per-glyph advance = advance (binary's +1.0 and alignArg*fontScale=-1.0 cancel);
+// whitespace/0x200b/0x0a = break point.
 void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                        std::string& outRemainder, float fontSize,
                                        long maxWidth, int /*mode*/,
@@ -405,7 +406,13 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
             breakCursor = cursor;
         }
         const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontSize);
-        float adv = g ? (g->advanceX + 1.0f) : 0.0f;
+        // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
+        //   per-glyph: total += advance + alignArg*fontScaleFactor + 1.0f.
+        //   alignArg = -1 (all v1.6.1 call sites), fontScaleFactor = *(*(fc+0x10c)+0x10) = 1.0
+        //   -> net = advance + (-1.0) + 1.0 = advance. The earlier port kept the +1.0 but
+        //   dropped the -1.0 term, over-measuring by 1px/glyph -> MenuButton arc labels
+        //   (curved ring text) were over-shrunk.
+        float adv = g ? g->advanceX : 0.0f;
         total += adv;
         if (total > (float)maxWidth) {
             if (breakCursor) {
