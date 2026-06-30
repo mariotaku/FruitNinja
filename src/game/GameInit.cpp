@@ -332,6 +332,25 @@ void UnpauseSlices() {
     }
 }
 
+// ASM-spec v1.6.1 InstantLevelDestroy @ 0x001cbcd8
+// DIFFERS: binary s_bombSound @0x00316770 = standalone static; port uses ts->m_pBombFuseSound (established convention)
+void InstantLevelDestroy() {
+    GameTaskState* ts = GetTaskState();
+    Mortar::MortarSound* fuse = ts->m_pBombFuseSound;
+    if (fuse)
+        fuse->SetVolume(0.0f);
+    game_work.retryFlag = 0;                    // +0x06; strb @0x001cbd10
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+    game_work.bM_bPaused = 1;                   // +0x05; strb @0x001cbd20
+    SplatEntity::RemoveAllSplats();
+    ClearPause();
+    ResetGameEntities(true);
+    RemoveFlashEntities();
+    game_work.bM_bPaused = 1;                   // set twice -- binary is literal; strb @0x001cbd3c
+    game_work.m_GameDt = 0.0f;                 // +0x0C (Ghidra: flM_PauseAmount); vstr @0x001cbd40
+    game_work.retryFlag = 0;                    // set twice -- binary is literal; strb @0x001cbd44
+}
+
 // ASM-spec v1.6.1 TouchReleasedCallback @ 0x001ca838
 // Called when a finger lifts; routes the release to the active input sink with the
 // per-finger spawn position. Registered via SetTouchReleasedCallback in StartNewsRender
@@ -341,6 +360,18 @@ int TouchReleasedCallback(InputEvent* event) {
     int finger = event->fingerId;
     game_work.m_pActiveTouchSink->TouchReleased(event, &game_work.m_FingerSpawnPos[finger]);
     return 1;
+}
+
+// ASM-spec v1.6.1 IsSingleTouchPressed @ 0x001ca6f8
+bool IsSingleTouchPressed() {
+    int count = 0;
+    for (unsigned int finger = 0; finger < 16; finger++) {
+        if (IsTouchDown(finger))
+            count++;
+    }
+    if (game_work.m_bTouchDownThisFrame != 0)
+        return (count == 1);
+    return false;
 }
 
 void GameUpdate(float dt, bool active) {
@@ -602,7 +633,7 @@ void GameUpdate(float dt, bool active) {
     }
 
     // --- Post-HUD quickener recovery (binary: gated on IsSingleTouchPressed) ---
-    // TODO: v1.6.1 0x001CF534 (GameUpdate) -- quickener recovery from touch state.
+    // TODO: v1.6.1 0x001CF534 (GameUpdate) -- quickener recovery body (IsSingleTouchPressed() is now available).
 
     // --- Bomb fuse sound (0x001cfd08..0x001cfe2c) ---
     {

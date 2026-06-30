@@ -164,6 +164,11 @@ PauseScreen* GetPauseScreen();
 void ClearPause();
 bool GetPausedBy();
 
+// IsSingleTouchPressed v1.6.1 @ 0x001ca6f8 — returns true iff exactly one finger is currently down
+// (IsTouchDown loop over slots 0..15) AND m_bTouchDownThisFrame edge flag fired this frame.
+// Used to gate quickener recovery in GameUpdate.
+bool IsSingleTouchPressed();
+
 // v1.6.1 GetPauseAmount @0x001ca528: clamped PauseScreen::GetTime(), or 0.0 if no pause screen active.
 // Returns the current pause blend amount in [0,1]: 0=not paused, 1=fully paused.
 float GetPauseAmount();
