@@ -87,6 +87,7 @@ DojoScreen::DojoScreen(Game& g)
     , m_TransitionDelay(0.0f)   // +0xb0
     , m_pVersionText(nullptr)   // +0xb4
     , m_pAboutScreen(nullptr)   // port-only tail
+    , m_bChildPushed(false)     // port-only: gate latch (see DIFFERS in Update)
     , game(g)
 {
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x0016bad8");
@@ -212,6 +213,7 @@ void DojoScreen::Init() {
     m_State = 0;
     m_TransitionAlpha = 0.0f;
     m_Active = 1;
+    m_bChildPushed = false;
     // ASM-spec v1.6.1 DojoScreen::Init @0x00169e80: calls Reset() -> CreateButtons()
     Reset();
 }
@@ -224,6 +226,7 @@ void DojoScreen::Reset() {
     m_State = 0;
     // ASM-spec v1.6.1 DojoScreen::Reset @0x0016b568: sets m_TransitionDelay=0.2f before CreateButtons.
     m_TransitionDelay = 0.2f;
+    m_bChildPushed = false;
     CreateButtons();
 }
 
@@ -262,14 +265,16 @@ void DojoScreen::Release() {
 
 // ===================================================================
 // Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1)
-// Binary nulls only m_pShopButton. Back and about have no RemoveCallback,
-// so m_pBackButton/m_pAboutButton dangle non-null after HUD frees them.
-// That dangling latch is intentional: Update states 2/3 @0x0016b778 test
-// m_pBackButton != nullptr as the transition gate, firing ~3 frames after
-// the button is freed. The #269 UAF is closed instead by a one-shot
-// m_State==1 guard at the top of each callback (ShopCallback/AboutCallback/PlayCallback).
+// Binary nulls only m_pShopButton (no RemoveCallback installed for back/about).
+// DIFFERS: binary leaves back/about dangling (no RemoveCallback; v1.6.1 ButtonDeleted
+//   @0x00169e94 nulls only m_pShopButton). Port nulls them because MSVC poisons freed
+//   memory -> the *Callback m_pBackButton->m_pTrackedFruit deref + CreateButtons'
+//   null-guard recreation would otherwise UAF on a freed button.
+// Gate latch moved to m_bChildPushed (see DIFFERS in Update state-2/3/4 block).
 // ===================================================================
 void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
+    if (ctrl == (HUDControl*)m_pBackButton)  m_pBackButton  = nullptr;
+    if (ctrl == (HUDControl*)m_pAboutButton) m_pAboutButton = nullptr;
     if (ctrl == (HUDControl*)m_pShopButton)  m_pShopButton  = nullptr;
 }
 
@@ -297,6 +302,7 @@ void DojoScreen::CreateButtons() {
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                             bombFruitType, Vec3(0, 0, 0), nullptr);
         m_pBackButton->m_bRespondsToBackKey = 1;
+        m_pBackButton->m_bBackdropActive = 1; // v1.6.1 DojoScreen::CreateButtons @0x0016afe8
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_HudScale.x=0.375, m_HudScale.y=-0.3
         m_pBackButton->m_HudScale.x = 0.375f;
@@ -315,6 +321,7 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[0],
             game_work.m_RingColours[1],
             31.0f, 10.0f, true, true);
+        m_pBackButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
         m_pBackButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pBackButton);
@@ -374,6 +381,7 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[10],
             game_work.m_RingColours[11],
             39.5f, 10.0f, true, true);
+        m_pAboutButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
         m_pAboutButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pAboutButton);
@@ -430,8 +438,13 @@ void DojoScreen::Update(float dt) {
             Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
             bool cleared = (am && am->GetNumEntities(1) == 0 && am->GetNumEntities(0) == 0);
             if (cleared) m_TransitionDelay -= dt;
-            if (cleared && m_pBackButton != nullptr && m_TransitionDelay <= 0.0f) {
+            // DIFFERS: binary uses dangling m_pBackButton != nullptr as the gate's one-shot
+            //   latch (compare-only @0x0016b7e8); port uses m_bChildPushed because STEP 1
+            //   (RemoveCallback on back/about) nulls m_pBackButton at ~T+9, before entities
+            //   fully clear at ~T+12 -- so the binary latch would fail and soft-lock.
+            if (cleared && !m_bChildPushed && m_TransitionDelay <= 0.0f) {
                 int prevState = m_State;
+                m_bChildPushed = true;
                 m_pBackButton  = nullptr;  // field_0x94
                 m_TransitionAlpha = 0.0f;
                 m_pShopButton  = nullptr;  // field_0x98
@@ -548,12 +561,10 @@ void DojoScreen::Draw(float* hudScaleRaw) {
 // Binary: SFXPlay("menu-bomb"), state=6, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::PlayCallback() {
-    // Port specific: defensive one-shot guard. These callbacks fire only from the
-    // idle state in the binary; a ring slice during the in-progress fade (state 2/3/6)
-    // must not re-enter and deref a freed back button. Binary survives the dangling
-    // *Callback deref only because Bada doesn't poison freed memory.
-    // (v1.6.1 ShopCallback@0x0016a3f8 / AboutCallback@0x0016a48c deref m_pBackButton unconditionally.)
-    if (m_State != 1) return;
+    // Port specific: allow callbacks only from intro(0)/idle(1) where buttons are alive;
+    // block the in-progress fade (2/3/6) where a re-entrant slice would deref a freed back
+    // button (binary survives the dangling deref; MSVC poisons freed memory).
+    if (m_State != 0 && m_State != 1) return;
     // 1. SFX
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
@@ -585,8 +596,10 @@ void DojoScreen::PlayCallback() {
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
-    // Port specific: defensive one-shot guard (same as PlayCallback above).
-    if (m_State != 1) return;
+    // Port specific: allow callbacks only from intro(0)/idle(1) where buttons are alive;
+    // block the in-progress fade (2/3/6) where a re-entrant slice would deref a freed back
+    // button (binary survives the dangling deref; MSVC poisons freed memory).
+    if (m_State != 0 && m_State != 1) return;
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
@@ -611,8 +624,10 @@ void DojoScreen::ShopCallback() {
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
-    // Port specific: defensive one-shot guard (same as PlayCallback above).
-    if (m_State != 1) return;
+    // Port specific: allow callbacks only from intro(0)/idle(1) where buttons are alive;
+    // block the in-progress fade (2/3/6) where a re-entrant slice would deref a freed back
+    // button (binary survives the dangling deref; MSVC poisons freed memory).
+    if (m_State != 0 && m_State != 1) return;
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 

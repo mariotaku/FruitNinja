@@ -145,7 +145,7 @@ MenuButton::MenuButton()
       m_bHasHitArea(0),
       m_bAcceptsTouch(1),
       m_pTrackedFruit(nullptr),
-      m_bBackdropActive(1),
+      m_bBackdropActive(0),
       m_ShakeScale(1.0f, 0.85f, 0.85f),
       m_LabelExtraAlpha(0.0f),
       m_LabelRadius(0.0f),
@@ -196,11 +196,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_RestScale.z     = hitBounds.z;
     SetHasHitArea((fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f);
     m_bAcceptsTouch   = 1;
-    // TODO: v1.6.1 MenuButton::Init @0x0019b994 -- binary sets m_bBackdropActive=0 here;
-    // DojoScreen::CreateButtons then writes 1 for the back button specifically.
-    // Port defaults to 1 (ring visible for all buttons). Functionally harmless since
-    // Draw doesn't gate the ring on this field, but the field is inverted vs binary.
-    m_bBackdropActive = 1;
+    // ASM-spec v1.6.1 MenuButton::Init @0x0019b994: m_bBackdropActive(+0x150)=0 default;
+    // only each screen's back/regress ring sets it to 1 (back-key force-slice gate @0x0019ad28).
+    m_bBackdropActive = 0;
     m_GrowInTimer    = 0.0f;
     m_AnimPhase      = 0;
     m_LabelRadius    = 0.0f;
@@ -633,6 +631,11 @@ void MenuButton::Update(float dt) {
                     d.z = f->vel.z - f->m_SecondVel.z;
                     float magSqr = d.x*d.x + d.y*d.y + d.z*d.z;
                     if (magSqr > 0.001f) {   // SLICE_EPS @0x0019ac50 (binary ble-skip => strictly >)
+                        // Diagnostic: log where a menu fruit slice registered + fired its callback.
+                        LOG_INFO("MENUBTN/Slice",
+                                 "FRUIT slice fired: fruitType=%d backKey=%d pos=(%.1f,%.1f) velMag=%.3f",
+                                 m_FruitType, (int)m_bRespondsToBackKey,
+                                 entity->pos.x, entity->pos.y, magSqr);
                         m_ClickCallback();
                         // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
                         entity->scale = m_BaseScale;
@@ -660,6 +663,11 @@ void MenuButton::Update(float dt) {
                 // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- Bomb::Enabled() check; use existing Enabled() method
                 Bomb* b = static_cast<Bomb*>(m_pEntity);
                 if (b && !b->Enabled()) {
+                    // Diagnostic: log where a menu bomb slice registered.
+                    LOG_INFO("MENUBTN/Slice",
+                             "BOMB slice fired: fruitType=%d backKey=%d pos=(%.1f,%.1f)",
+                             m_FruitType, (int)m_bRespondsToBackKey,
+                             entity->pos.x, entity->pos.y);
                     m_pEntity = nullptr;
                     entity->scale = m_BaseScale;
                 }

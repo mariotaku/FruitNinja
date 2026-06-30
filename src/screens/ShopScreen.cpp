@@ -830,6 +830,7 @@ void ShopScreen::Update(float dt) {
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
+                m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
                 // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =

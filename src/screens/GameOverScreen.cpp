@@ -885,6 +885,7 @@ void GameOverScreen::CreateQuitButton() {
         m_pQuitBtn->m_RestScale = m_pRetryBtn->m_RestScale;
     }
     m_pQuitBtn->m_bRespondsToBackKey = 1;
+    m_pQuitBtn->m_bBackdropActive = 1; // v1.6.1 GameOverScreen::CreateQuitButton @0x00186430
 
     game_work.mHud->AddControl(m_pQuitBtn, false);
     m_pQuitBtn->m_RemoveCallback =
