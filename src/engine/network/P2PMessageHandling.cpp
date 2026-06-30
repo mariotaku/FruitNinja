@@ -1,15 +1,41 @@
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
-// All functions in this module are empty {} in the binary (Bada build omits P2P).
+// Defunct: P2P multiplayer -- no-op stub.
+// Binary: most functions in this module are empty {} (Bada build omits P2P runtime).
 // GameModeScreen::P2PConnectCallback @ 0x1810dc calls into this module.
 
 #include "P2PMessageHandling.h"
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
+namespace Mortar {
+
+// Defunct: P2P error -- no-op stub; v1.6.1 Mortar::DefaultP2PErrorHandler
+void DefaultP2PErrorHandler(P2PMessage msg) {
+    (void)msg;
+}
+
+// Defunct: P2P init -- no-op stub; v1.6.1 Mortar::DefaultP2PInitializationHandler
+void DefaultP2PInitializationHandler(bool success, bool isHost) {
+    (void)success;
+    (void)isHost;
+}
+
+// Defunct: P2P message -- no-op stub; v1.6.1 Mortar::DefaultP2PMessageHandler
+void DefaultP2PMessageHandler(P2PMessage msg, NetworkPacket* packet) {
+    (void)msg;
+    (void)packet;
+}
+
+// Defunct: P2P voice chat -- no-op stub; v1.6.1 Mortar::DefaultP2PVoiceChatOpponentSpeakingCallback
+void DefaultP2PVoiceChatOpponentSpeakingCallback(bool isSpeaking) {
+    (void)isSpeaking;
+}
+
+} // namespace Mortar
+
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0010c36c
 void P2PConnect(bool host) {
     (void)host;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x001053b4
 void DisconnectP2P(bool sendDisconnect) {
     (void)sendDisconnect;
 }

@@ -14,12 +14,28 @@ namespace Mortar {
 enum P2PMessage {
     P2PMSG_NONE = 0
 };
+
+// Defunct: P2P default handler callbacks -- no-op stubs.
+// Installed by NetworkManager as the default handlers before game code overrides them.
+
+// Defunct: P2P error -- no-op stub; v1.6.1 Mortar::DefaultP2PErrorHandler
+void DefaultP2PErrorHandler(P2PMessage msg);
+
+// Defunct: P2P init -- no-op stub; v1.6.1 Mortar::DefaultP2PInitializationHandler
+void DefaultP2PInitializationHandler(bool success, bool isHost);
+
+// Defunct: P2P message -- no-op stub; v1.6.1 Mortar::DefaultP2PMessageHandler
+void DefaultP2PMessageHandler(P2PMessage msg, NetworkPacket* packet);
+
+// Defunct: P2P voice chat -- no-op stub; v1.6.1 Mortar::DefaultP2PVoiceChatOpponentSpeakingCallback
+void DefaultP2PVoiceChatOpponentSpeakingCallback(bool isSpeaking);
+
 } // namespace Mortar
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0010c36c
 void P2PConnect(bool host);
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x001053b4
 void DisconnectP2P(bool sendDisconnect);
 
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)

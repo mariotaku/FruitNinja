@@ -13,6 +13,37 @@ int GetSocialNetworkProvider() {
     return 0;
 }
 
+// Defunct: social publish -- no-op stub; v1.6.1 Mortar::DefaultPublishTextCallback
+void DefaultPublishTextCallback(int result) {
+    (void)result;
+}
+
+// Defunct: push notifications -- no-op stub; v1.6.1 Mortar::DefaultNotificationCallback
+void DefaultNotificationCallback(const char* name, int i1, int i2) {
+    (void)name;
+    (void)i1;
+    (void)i2;
+}
+
+// Defunct: leaderboard retrieval -- no-op stub; v1.6.1 Mortar::DefaultRetrieveScoreCallback
+void DefaultRetrieveScoreCallback(const char* board, int score, int rank, void* userdata) {
+    (void)board;
+    (void)score;
+    (void)rank;
+    (void)userdata;
+}
+
+// Defunct: online user data -- no-op stub; v1.6.1 Mortar::DefaultDownloadUserDataCallback
+void DefaultDownloadUserDataCallback(const char* board, void* data, int size) {
+    (void)board;
+    (void)data;
+    (void)size;
+}
+
+// Defunct: social network registration -- no-op stub; v1.6.1 Mortar::RegisterSocial
+void RegisterSocial() {
+}
+
 } // namespace Mortar
 
 // Defunct: online leaderboard -- no-op stub; v1.6.1 IsProviderOnline @0x0011f534.
@@ -49,4 +80,15 @@ void SetPrefNetwork(long /*v*/) {
 // Sets m_bUpdatesSuspended=1 on notification-shown (see GameWork.h +0x195).
 // Stub does nothing; online notifications are never shown.
 void CustomNotificationCallback(const char* /*name*/, int /*i1*/, int /*i2*/) {
+}
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001270c8
+void CurrentUserName(char* buf, int size, Mortar::NetworkProvider /*provider*/) {
+    if (buf && size > 0) {
+        buf[0] = '\0';
+    }
+}
+
+// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0010c144
+void GPostCallback(int /*result*/) {
 }
