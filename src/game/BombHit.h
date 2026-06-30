@@ -61,6 +61,13 @@ void DrawCritHit();
 // Called by UpdateBombHit, EndRetryLevel, and InstantLevelDestroy.
 void RemoveFlashEntities();
 
+// InstantLevelDestroy v1.6.1 @ 0x001cbcd8 — mute bomb fuse, zero retry/pause/dt state,
+// clear all splats, unpause screen, reset all entities and flash blasts.
+// Called via function pointer (power-up nuke dispatch); no direct call-graph xrefs in binary.
+// DIFFERS: binary reads s_bombSound static @ 0x00316770; port uses ts->m_pBombFuseSound
+// (established convention, same source of truth).
+void InstantLevelDestroy();
+
 // UnpauseSlices v1.6.1 @ 0x001da910 — clear m_pFruit on every active SliceEffect
 // so they keep animating after the host fruit is removed.
 void UnpauseSlices();
