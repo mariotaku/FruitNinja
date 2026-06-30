@@ -22,6 +22,7 @@
 // (Tex1 maps fmt byte -> GL directly in the upload layer).
 
 #include "asset/TextureSource.h"
+#include "asset/DataStreamReader.h"
 #include <cstdint>
 
 namespace Mortar {
@@ -107,6 +108,40 @@ extern const uint32_t kTex3FourCC; // = 0x01584554
 // g_readers[4] -- the 4-entry reader registry @ 0x2cf8e8 in the binary.
 // Index order matches binary: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
 extern TextureReadFn g_readers[4];
+
+// ---------------------------------------------------------------------------
+// TextureInfo Read<T> overloads -- deserialise texture format descriptors from
+// a DataStreamReader byte stream.
+// Binary: Mortar namespace (NOT inside TextureFileFormat namespace).
+// Home TU: TextureFileFormat.cpp.
+// ---------------------------------------------------------------------------
+
+// Fixed N-element array read (general template, no body -- only <ChannelDescription,4u>
+// instantiation exists in the binary; that specialisation is defined in TextureFileFormat.cpp).
+// Binary v1.6.1 Read<TextureInfo::ChannelDescription, 4u> @0x0026bc94.
+template<typename T, unsigned int N>
+void Read(DataStreamReader& reader, T (&arr)[N]);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::ChannelDescription&) @0x0026bb0c
+void Read(DataStreamReader& reader, TextureInfo::ChannelDescription& cd);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::Compression&) @0x0026bb84
+void Read(DataStreamReader& reader, TextureInfo::Compression& c);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::NumberFormat&) @0x0026bb44
+void Read(DataStreamReader& reader, TextureInfo::NumberFormat& nf);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::TextureType&) @0x0026bba4
+void Read(DataStreamReader& reader, TextureInfo::TextureType& tt);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::PixelFormat&) @0x0026bbc0
+// DIFFERS: binary uses TextureInfo::PixelFormat (named sub-fields);
+// port uses Mortar::PixelFormat (opaque blob, same 12-byte layout) to avoid
+// changing DataInfo::pixelFormat's type and all consumers.
+void Read(DataStreamReader& reader, PixelFormat& pf);
+
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::DataInfo&) @0x0026bbec
+void Read(DataStreamReader& reader, TextureInfo::DataInfo& di);
 
 } // namespace Mortar
 

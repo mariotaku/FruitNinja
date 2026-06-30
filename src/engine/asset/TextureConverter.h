@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-namespace TextureInfo { struct ChannelDescription; }
+namespace Mortar { namespace TextureInfo { struct ChannelDescription; } }
 
 namespace Mortar {
 

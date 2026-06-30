@@ -54,18 +54,46 @@ enum NumberFormat_e {
     NF_SINT    = 4
 };
 
-} // namespace Mortar
 
+// ----------------------------------------------------------------------------
+// TextureInfo sub-namespace -- format/layout descriptors.
+// Binary: Mortar::TextureInfo::* (v1.6.1).
+// A global alias `namespace TextureInfo = Mortar::TextureInfo;` is defined at
+// the bottom of this header so existing TextureInfo::Foo uses compile unchanged.
+// ----------------------------------------------------------------------------
 namespace TextureInfo {
 
 // TextureInfo::ChannelDescription -- 2-byte channel descriptor.
 // Binary v1.6.1 Mortar::TextureInfo::ChannelDescription (2 bytes).
 // Used by PixelFormat[4] channel array and GetConversionChannelRank.
-// NOTE: binary namespace is Mortar::TextureInfo; port uses global TextureInfo
-// (pending DataStreamReader/TextureInfo namespace migration).
 struct ChannelDescription {
     uint8_t m_Bits;     // +0x00 -- bit depth
     uint8_t m_TypeFlag; // +0x01 -- channel type (low 7 bits); bit 7 = extra flag
+};
+
+// TextureInfo::Compression -- 2-byte compression descriptor.
+// Binary v1.6.1 Mortar::TextureInfo::Compression (2 bytes).
+// ASM-spec v1.6.1 Read(DataStreamReader&, Compression&) @0x0026bb84: ReadRaw x2.
+struct Compression {
+    uint8_t m_Field0; // +0x00
+    uint8_t m_Field1; // +0x01
+};
+
+// TextureInfo::NumberFormat -- 2-byte number format descriptor.
+// Binary v1.6.1 Mortar::TextureInfo::NumberFormat (2 bytes).
+// ASM-spec v1.6.1 Read(DataStreamReader&, NumberFormat&) @0x0026bb44:
+//   reads 2 raw bytes; m_Field1 is bit-shuffled from the on-disk packed format.
+struct NumberFormat {
+    uint8_t m_Field0; // +0x00 -- read raw
+    uint8_t m_Field1; // +0x01 -- bit shuffle: (raw>>7)|((raw&0x7f)>>4)<<1|((raw&0x0f)<<4)
+};
+
+// TextureInfo::TextureType -- 1-byte texture type.
+// Binary v1.6.1 Mortar::TextureInfo::TextureType (1 byte).
+// ASM-spec v1.6.1 Read(DataStreamReader&, TextureType&) @0x0026bba4:
+//   ReadBasicType<unsigned long>(v); m_Value = (uint8_t)v.
+struct TextureType {
+    uint8_t m_Value; // +0x00
 };
 
 // TextureInfo::DataInfo -- 0x20-byte header describing one texture layer.
@@ -120,8 +148,6 @@ namespace { struct _DataInfoSizeCheck {
 #endif
 
 } // namespace TextureInfo
-
-namespace Mortar {
 
 // Forward declaration for AutoLock.
 class TextureSource;
@@ -215,5 +241,10 @@ namespace { struct _TextureSourceLayoutCheck {
 #endif
 
 } // namespace Mortar
+
+// Global alias so existing TextureInfo::Foo uses in consumers compile unchanged.
+// Binary namespace is Mortar::TextureInfo; the alias makes unqualified TextureInfo::
+// references resolve to it without editing every consumer TU.
+namespace TextureInfo = Mortar::TextureInfo;
 
 #endif // FN_ENGINE_ASSET_TEXTURE_SOURCE_H
