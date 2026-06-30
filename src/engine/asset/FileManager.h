@@ -45,7 +45,7 @@ public:
 
     // Binary @ 0x00250ed4 — Bada-specific save-root path resolution.
     // Defunct: GetSaveRootDirectory — no-op stub; binary's body is also `return 0`.
-    //          The only caller (GetUserFilePath @ 0x0012b09c) is itself unused.
+    //          The only caller (GetUserFilePath @ 0x00154494) is itself unused.
     //          Port uses platform-specific paths via FileSystemPosix/Win32 directly.
     int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir);
 

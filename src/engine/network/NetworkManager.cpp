@@ -44,6 +44,10 @@ void DefaultDownloadUserDataCallback(const char* board, void* data, int size) {
 void RegisterSocial() {
 }
 
+// Defunct: NetworkManager/social popup UI -- no-op stub; v1.6.1 Mortar::DefaultButtonCallback @0x00231084
+void DefaultButtonCallback() {
+}
+
 } // namespace Mortar
 
 // Defunct: online leaderboard -- no-op stub; v1.6.1 IsProviderOnline @0x0011f534.

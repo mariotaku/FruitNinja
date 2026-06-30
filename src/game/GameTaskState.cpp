@@ -105,7 +105,7 @@ void GameTaskExit() {
 // Used on app-suspend (Paused/SaveOnExit) instead of GameTaskExit so in-game state is preserved.
 void GameTaskSaveOnExit() {
     game_work.m_bUpdatesSuspended = 1;
-    // TODO: v1.6.1 0x001ce178 (GetIsSavingBool) — not yet ported; skip the in-progress-save early return
+    // TODO: v1.6.1 0x001ca458 (GetIsSavingBool) — wire the in-progress-save early return: if (*GetIsSavingBool() != 0) return;
     if (!game_work.mHud) return;
     game_work.mHud->Save();
     FruitNinja_SaveCurrentData(true);

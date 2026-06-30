@@ -96,6 +96,14 @@ public:
     Mortar::SmartPtr<Texture> LoadIndependent(int);
 };
 
+// v1.6.1 Mortar::DefragVRamNeeded @0x00229a68 -- `mov r0,#0; bx lr` (always false).
+// Port specific: Bada VRAM is managed by the driver; no-op on SDL/OpenGL (faithful: binary is also constant false).
+bool DefragVRamNeeded();
+
+// v1.6.1 Mortar::DefragVRam @0x00229a70 -- `bx lr` (true no-op).
+// Port specific: Bada VRAM management; no-op on SDL/OpenGL (faithful: binary is also a no-op).
+void DefragVRam();
+
 } // namespace Mortar
 
 // ASM-spec v1.6.1 LoadTexture @0x14f88c: free function (global namespace).

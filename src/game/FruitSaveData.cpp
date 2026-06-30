@@ -14,6 +14,7 @@
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
 #include "engine/core/SystemManager.h"
+#include "engine/asset/FileManager.h"
 
 #include <cstdio>
 #include <cstring>
@@ -779,4 +780,32 @@ const char* GetSaveFileFullPath() {
 //   using GetSavePath() for port I/O because the asset tree layout differs on host.
 const char* GetLoadFileFullPath() {
     return "FruitySave.xml";
+}
+
+// File-global re-entrant-save guard (v1.6.1 isSaving). Accessed via GetIsSavingBool().
+// Set to true at save start to prevent re-entrant saves on suspend; cleared after save.
+// NOTE: set/clear around the actual save body is deferred pending RE of SaveGame/SaveCurrentData
+// entry/exit sites. This pass adds only the global + accessor.
+static bool isSaving = false;
+
+// v1.6.1 GetIsSavingBool @0x001ca458 (_Z14GetIsSavingBoolv)
+bool* GetIsSavingBool() {
+    return &isSaving;
+}
+
+// v1.6.1 GetUserFilePath @0x00154494 (_Z15GetUserFilePathPcPKci)
+// Dead function in binary (no live callers; only EXTERNAL entry-point xref).
+// Resolves user-data file path: appends filename to save-root dir if available,
+// otherwise falls back to a bounded copy of filename alone.
+// Port: GetSaveRootDirectory is a defunct no-op stub returning 0, so the fallback
+// branch (snprintf) is always taken.
+char* GetUserFilePath(char* outBuf, const char* filename, int maxLen) {
+    FileManager& fm = FileManager::GetInstance();
+    int ok = fm.GetSaveRootDirectory(outBuf, "\\Halfbrick\\FruitNinja\\", true);
+    if (ok == 0) {
+        snprintf(outBuf, (size_t)maxLen, "%s", filename);
+    } else {
+        strcat(outBuf, filename);
+    }
+    return outBuf;
 }

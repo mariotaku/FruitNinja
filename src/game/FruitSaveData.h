@@ -429,4 +429,14 @@ const char* GetSaveFileFullPath();
 // Returns 1 (success indicator for the download callback protocol).
 int DlTwVal(const char* key, int val, int count, void* data);
 
+// GetUserFilePath -- v1.6.1 @0x00154494 (_Z15GetUserFilePathPcPKci).
+// Resolves a user-data file path into outBuf (max maxLen bytes) and returns outBuf.
+// Dead function: no live callers in v1.6.1 binary.
+char* GetUserFilePath(char* outBuf, const char* filename, int maxLen);
+
+// GetIsSavingBool -- v1.6.1 @0x001ca458 (_Z14GetIsSavingBoolv).
+// Returns pointer to the file-global isSaving flag (see FruitSaveData.cpp).
+// Used by GameTaskSaveOnExit to guard against re-entrant saves.
+bool* GetIsSavingBool();
+
 #endif  // FN_FRUIT_SAVE_DATA_H

@@ -125,6 +125,17 @@ Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(int) {
     return Mortar::SmartPtr<Texture>();
 }
 
+// Port specific: Bada VRAM is managed by the driver; no-op on SDL/OpenGL (faithful: binary is also constant false).
+// v1.6.1 Mortar::DefragVRamNeeded @0x00229a68
+bool DefragVRamNeeded() {
+    return false;
+}
+
+// Port specific: Bada VRAM management; no-op on SDL/OpenGL (faithful: binary is also a no-op).
+// v1.6.1 Mortar::DefragVRam @0x00229a70
+void DefragVRam() {
+}
+
 }  // namespace Mortar
 
 // ASM-spec v1.6.1 LoadTexture @0x14f88c: appends ".tex" to name, delegates to
