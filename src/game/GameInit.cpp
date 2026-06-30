@@ -591,12 +591,18 @@ void GameUpdate(float dt, bool active) {
     if (game_work.m_QuitTransitionTimer > 0.0f) {
         game_work.m_QuitTransitionTimer -= dt;
         if (game_work.m_QuitTransitionTimer <= 0.0f) {
-            // Binary: blx CleanupAndReturnToMainMenu v1.6.1 @0x00157620 (empty body in v1.6.1).
+            CleanupAndReturnToMainMenu();
         }
     }
 
     // --- Per-frame dirty flag clear ---
     game_work.m_bFrameDirty = false;
+}
+
+// v1.6.1 CleanupAndReturnToMainMenu @ 0x00157620 -- bx lr (empty body in v1.6.1; may
+// have had teardown logic in earlier builds). Call site: GameUpdate quit-transition timer.
+// ASM-verified-spec v1.6.1 CleanupAndReturnToMainMenu @0x00157620 -- empty stub.
+void CleanupAndReturnToMainMenu() {
 }
 
 // Matches GameDraw (v1.6.1 @0x001cd720, 211 lines) -- full render frame.

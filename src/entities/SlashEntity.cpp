@@ -227,6 +227,25 @@ void SlashEntity::ReleaseContent() {
     g_BladeTex.SetNull();
 }
 
+// ASM-spec v1.6.1 CleanupSlash @ 0x001e8204.
+// 1. Null 3 SmartPtr<Texture> at BSS offsets +0xd0, +0xd8, +0xd4 (exact binary order).
+//    Port maps: g_BladeTex (+0xd0) and g_ModTexture (+0xd4 or +0xd8); one of them covers
+//    the +0xd8 slot and one covers +0xd4; the third is unidentified (RE gap below).
+// 2. For i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred (SlashEntityGhost not ported).
+// 3. Clear loaded flag (bool at BSS+0xcc -- not yet tracked in port).
+void CleanupSlash() {
+    // Step 1: null the 3 slash textures in binary order (+0xd0, +0xd8, +0xd4).
+    // Port identifies g_BladeTex and g_ModTexture; only 2 of 3 slots are mapped.
+    g_BladeTex.SetNull();
+    g_ModTexture.SetNull();
+    // TODO: v1.6.1 CleanupSlash @0x001e8204 nulls 3 slash textures (+0xd0/+0xd4/+0xd8);
+    // only g_BladeTex and g_ModTexture mapped -- RE SlashEntity::LoadContent for the third.
+
+    // Step 2: deferred -- SlashEntityGhost not yet ported.
+    // TODO: v1.6.1 CleanupSlash @0x001e8204 -- 8x SlashEntityGhost::Release(ghost_ring[i]);
+    // blocked on SlashEntityGhost port.
+}
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------

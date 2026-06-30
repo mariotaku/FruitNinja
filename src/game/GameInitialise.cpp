@@ -462,7 +462,13 @@ void GameDestroy() {
     // TODO: FileManager::ClearSystems
     PSPParticleManager::GetInstance().Destroy();
     StringTableUtilUnloadTable(0);  // closes StringTableUtilUnloadTable TODO (v1.6.1 @0x14c9f8)
-    // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
+    // Binary GameDestroy @0x0011d1b4 calls CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash
+    // here. The port does NOT call them: entity teardown is already done above via the
+    // actorManager deletion (the "Port specific" substitution at step 3.5), so calling these
+    // would DOUBLE-FREE the fruit/splat/slash pools + models. The functions are ported (for
+    // asm-verify symbol coverage) but left uncalled until the port's teardown is reconciled
+    // with the binary's (use the Cleanup* path OR the actorManager path, not both).
+    // TODO: reconcile GameDestroy teardown to the binary's CleanupBomb/Fruit/Splat/Slash path.
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
     { delete game->inputManager; game->inputManager = nullptr; }

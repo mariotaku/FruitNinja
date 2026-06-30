@@ -311,6 +311,13 @@ public:
     // (MoveFruitZPositionToBack de-method'd to free fn — see below)
 };
 
+// v1.6.1 CleanupFruit @ 0x001defd4 — full fruit-subsystem teardown (shutdown path).
+// Nulls 7 texture SmartPtrs, destroys model SmartPtrs for each fruit type (3 fields),
+// destroys s_slices list and s_pool, walks+destroys s_fruitModels array.
+// Distinct from Fruit::DestroyFruitModels (the mid-game reload path).
+// Called from GameDestroy after CleanupBomb, before CleanUpSplat.
+void CleanupFruit();
+
 // Binary @ 0x001690cc — return next z-slot for a newly spawned fruit.
 // Decrements a static counter (step=100, range [-2499..-500], wraps to -500).
 float GetFruitZPosition();

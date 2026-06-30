@@ -260,4 +260,8 @@ void GameUpdate(float dt, bool active);
 void GameDraw(float dt, bool active);
 void GameExit(); // v1.6.1 GameExit @0x001cfed4
 
+// v1.6.1 CleanupAndReturnToMainMenu @ 0x00157620 -- bx lr (empty body in v1.6.1).
+// Called from GameUpdate quit-transition timer path.
+void CleanupAndReturnToMainMenu();
+
 #endif

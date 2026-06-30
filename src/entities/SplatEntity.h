@@ -117,7 +117,8 @@ public:
     // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
     static void RemoveAllSplats();
     static void LoadContent();
-    // Binary: SplatEntity::CleanUp @ 0x0017eee0
+    // Binary: SplatEntity::CleanUp @ 0x001eb404 (v1.6.1; stale 0x0017eee0 was v1.5.x).
+    // Destroys the SplatEntity MemoryPool (dtors + free). Does NOT touch textures.
     static void CleanUp();
 
     // Pool walker -- calls fn(splat) for each pool slot.
@@ -136,6 +137,16 @@ public:
 
 // Free fn (binary: _Z9PlaySplati @ 0x0017f5ec) -- plays one of 6 splat impact SFX.
 void PlaySplat(int splatSize);
+
+// v1.6.1 CleanUpSplat @ 0x001ec88c (capital U -- DISTINCT from CleanupSplat).
+// Full SplatEntity teardown: destroys pool (SplatEntity::CleanUp), clears load flag,
+// nulls splat texture(s). Called from GameDestroy in order after CleanupFruit.
+void CleanUpSplat();
+
+// v1.6.1 CleanupSplat @ 0x001ed0ec (lowercase u -- DISTINCT from CleanUpSplat).
+// Dead code in v1.6.1: present in export table but has no callers.
+// Stub preserved per "defunct symbols -- stub, never skip" policy.
+void CleanupSplat();
 
 // Layout asserts -- only valid on 32-bit ARM cross-compile where pointers are 4 bytes.
 // Run under #ifdef __bada__ so the 64-bit port build skips vtable-affected offsets.
