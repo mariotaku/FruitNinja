@@ -129,9 +129,8 @@ public:
     // lerp between consecutive palette entries.
     void UpdateModColour(Colour* outColour, float dt);
 
-    // Test whether the current blade trail intersects a collision sphere.
-    // Returns true if any trail segment intersects the sphere. On a hit,
-    // writes the segment delta (end - start) into outBladeVel.
+    // Deprecated: not in the binary blade path; superseded by CollideWithEntity (#306).
+    // Port-invented helper that tested an infinite multi-segment trail (no segment bound).
     bool CollideWithSphere(const ColSphere& sphere,
                            Vec3& outBladeVel) const;
 
@@ -419,9 +418,9 @@ public:
 
     // ---- STUBS (binary) ----
 
-    // Binary @ 0x17B570 -- tests blade ColLine against entity->m_Col (ColSphere).
-    // Port's Update slice loop calls CollideWithSphere() per-entity directly;
-    // this binary entry point is unreached.
+    // ASM-spec v1.6.1 SlashEntity::CollideWithEntity @0x001e6420 -- ColLine vs entity
+    // collider. Infinite-line broad phase (ColSphereLine) + m_SegLenSq endpoint bound;
+    // returns true iff the blade segment actually reaches the hit chord.
     bool CollideWithEntity(Mortar::Entity* entity);
 
     // Binary @ 0x17B3BC -- 2-instruction stub `movs r0,#0; bx lr`.

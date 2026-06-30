@@ -1569,11 +1569,11 @@ void SlashEntity::Update(float dt) {
                     if (!fruit->IsActive()) continue;
 
                     Vec3 bladeVel;
-                    bool hit = CollideWithSphere(*(static_cast<ColSphere*>(fruit->m_Col)), bladeVel);
+                    bool hit = CollideWithSphere(*(ColSphere*)fruit->m_Col, bladeVel);
 
                     if (hit) {
                         // --- HIT PATH ---
-                        m_SliceBladeDir = bladeVel;
+                        m_SliceBladeDir = m_BladeDir;
                         m_SliceFruitPos = fruit->pos;
                         m_SliceFruitType = (int)fruit->m_FruitType;
                         m_SplatTimer     = 0.0f;
@@ -1643,7 +1643,7 @@ void SlashEntity::Update(float dt) {
                         // v1.6.1 SlashEntity::Update @0x001e867c: hitter MUST be the SlashEntity (this) --
                         // nullptr made Fruit::CollisionResponse @0x001dd500 take the early-return path and never
                         // reach AddToCurrentScore @0x0011a4c0 -> zero score (#100).
-                        // TODO: v1.6.1 -- binary's 4th arg (bladeVel) may be null; confirm via asm-inspector before changing.
+                        // TODO: v1.6.1 -- binary's 4th arg (blade dir) may be null; confirm via asm-inspector before changing.
                         fruit->CollisionResponse(this, 0, 0, &bladeVel);
 
                         // Critical fruit: adjust fruit type and scale
@@ -1701,14 +1701,13 @@ void SlashEntity::Update(float dt) {
                     if (!bomb) continue;
                     if (!bomb->IsActive()) continue;
 
-                    Vec3 bladeVel;
                     Vec3 bladeDirCopy = m_BladeDir; // binary saves dir before test
-                    bool hit = CollideWithSphere(*(static_cast<ColSphere*>(bomb->m_Col)), bladeVel);
+                    bool hit = CollideWithSphere(*(ColSphere*)bomb->m_Col, bladeDirCopy);
 
                     if (hit) {
                         if ((s_ModPowerMask & 0x10) == 0) {
                             // Normal bomb hit (ModPowerMask bit 4 NOT set: no push)
-                            bomb->CollisionResponse(this, 0, 0, &bladeVel);
+                            bomb->CollisionResponse(this, 0, 0, &bladeDirCopy);
                             g_StopCounter = 0;
                             g_Stop = 1;
                             if (bomb->m_bHit && !bomb->m_bMenuBombHit) {
@@ -1980,6 +1979,14 @@ void SlashEntity::Update(float dt) {
 // CollideWithSphere -- blade segment vs entity sphere test.
 // The binary's ColLine (head<->tail) is updated by UpdatePoints each frame.
 // Port iterates vertex pairs for sub-frame multi-segment precision.
+// DIFFERS: binary uses SlashEntity::CollideWithEntity @0x001e6420 (single
+// mid->tail ColLine + m_SegLenSq bound), but that path is gated on the
+// trail-shift machinery (UpdatePoints @0x1e6914, m_TrailShiftA/B) which is
+// NOT yet ported (indices stay -1 -> m_SegLenSq stays -1 -> no collision).
+// Port uses a segment-CLAMPED ribbon-pair test here as a faithful-geometry
+// stand-in (blade must actually cross the sphere) -> fixes #306 blank-space
+// over-trigger without the unported gate. Remove this when CollideWithEntity
+// is activated.
 // ---------------------------------------------------------------------------
 bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
                                      Vec3& outBladeVel) const {
@@ -1996,12 +2003,23 @@ bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
     // Buffer model: spine points are at even indices (0, 2, 4, ...).
     // Both buffers share the same spine x,y,z at even slots. Iterate consecutive
     // spine pairs (step 2) to reconstruct the trail centre segments for collision.
+    // Segment-clamped distance test: project sphere center onto [a,b], clamp t to
+    // [0,1] (bounded segment, not infinite line), check distance <= radius.
+    Vec3 c = sphere.center();
+    float r = sphere.radius;
     for (int i = 0; i + 2 < m_PointCount; i += 2) {
         Vec3 a(m_pLeftBuffer[i].x,   m_pLeftBuffer[i].y,   m_pLeftBuffer[i].z);
         Vec3 b(m_pLeftBuffer[i+2].x, m_pLeftBuffer[i+2].y, m_pLeftBuffer[i+2].z);
-        ColLine seg(a, b);
-        if (sphere.IntersectsLine(seg)) {
-            outBladeVel = Vec3(b.x - a.x, b.y - a.y, b.z - a.z);
+        Vec3 ab(b.x - a.x, b.y - a.y, b.z - a.z);
+        float abLenSq = ab.MagnitudeSqr();
+        float t = (abLenSq > 1e-12f)
+            ? ((c.x - a.x) * ab.x + (c.y - a.y) * ab.y + (c.z - a.z) * ab.z) / abLenSq
+            : 0.0f;
+        if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+        Vec3 closest(a.x + ab.x * t, a.y + ab.y * t, a.z + ab.z * t);
+        Vec3 d(closest.x - c.x, closest.y - c.y, closest.z - c.z);
+        if (d.x * d.x + d.y * d.y + d.z * d.z <= r * r) {
+            outBladeVel = ab;
             return true;
         }
     }
@@ -2375,9 +2393,39 @@ const Colour* SlashEntity::GetPalette()                           { return g_Pal
 // Binary @ 0x17CE0C -- main per-point append (binary symbol parity).
 // The 3-arg AddPoint above IS the binary-faithful implementation.
 
-// Binary @ 0x17B570 -- ColLine vs ColSphere test; port's Update uses
-// CollideWithSphere() per-entity directly so this entry point is unreached.
-bool SlashEntity::CollideWithEntity(Mortar::Entity* /*entity*/) { return false; }
+// TODO: v1.6.1 SlashEntity::CollideWithEntity @0x001e6420 -- faithful blade collision;
+// NOT yet wired because m_SegLenSq depends on the trail-shift machinery
+// (UpdatePoints @0x1e6914) that is unported (m_TrailShiftA/B never set valid).
+// Activate + route the slice loops here once trail-shift is ported; until then
+// CollideWithSphere (segment-clamped) is used.
+bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
+    ColLine* L = static_cast<ColLine*>(m_Col);
+    if (!L || !(m_SegLenSq > 0.0f) || !entity) return false;
+    Col* eCol = entity->m_Col;
+    if (!eCol || game_work.bM_Mode || game_work.retryFlag) return false;
+    Vec3 pen;
+    if (eCol->GetType() != Col::TYPE_SPHERE) {
+        return L->Collide(eCol, &pen) != 0;
+    }
+    ColSphere* S = static_cast<ColSphere*>(eCol);
+    if (ColSphere::ColSphereLine(S, L, &pen) == 0) return false;
+    float eR2 = S->radius * S->radius;
+    Vec3 anchor  = L->a();
+    Vec3 eCenter = S->center();
+    if ((anchor - eCenter).MagnitudeSqr() < eR2) return true;
+    Vec3 contactBase = pen + eCenter;
+    Vec3 chordOffset(0.0f, 0.0f, 0.0f);
+    if (pen.MagnitudeSqr() < eR2) {
+        float half = sqrtf(eR2 - pen.MagnitudeSqr());
+        chordOffset = Vec3::Cross(pen, Vec3(0.0f, 0.0f, 1.0f));
+        chordOffset.Normalise();
+        chordOffset = chordOffset * (S->radius - half);
+    }
+    Vec3 hitA = contactBase + chordOffset;
+    if ((anchor - hitA).MagnitudeSqr() < m_SegLenSq) return true;
+    Vec3 hitB = contactBase - chordOffset;
+    return (anchor - hitB).MagnitudeSqr() < m_SegLenSq;
+}
 
 // Binary @ 0x17B3BC -- 1-instruction stub `mov r0,#0; bx lr`.
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
