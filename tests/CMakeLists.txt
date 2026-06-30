@@ -169,6 +169,15 @@ target_link_libraries(test_stringhash PRIVATE mortar_engine)
 target_include_directories(test_stringhash PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
 add_test(NAME stringhash COMMAND test_stringhash)
 
+# Batch 4 of task #195: FileStringHash / HashTypeConvert / EncodeUTF8FromUCS.
+# FileStringHash: dsstofile normalization (backslash->slash, A-Z->a-z), == StringHash for lowercase input.
+# HashTypeConvert: 7-entry type-hash table (fruit/bomb/coin/slash/blast/jiblet/fruitray).
+# EncodeUTF8FromUCS: ASCII, 2-byte (U+00E9), 3-byte (U+4E2D) codepoints.
+# Uses fn_add_game_test (fruit-ninja-game carries HashTypeConvert); no SDL_Init needed.
+fn_add_game_test(test_math_utils test_math_utils.cpp)
+add_test(NAME math_utils COMMAND test_math_utils)
+set_tests_properties(math_utils PROPERTIES TIMEOUT 30)
+
 # Vec3 / _Vector3<float> math (Dot/Magnitude/Normalise incl. zero/near-zero). Header-only.
 add_executable(test_vec3 test_vec3.cpp)
 target_include_directories(test_vec3 PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)

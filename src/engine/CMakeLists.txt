@@ -13,6 +13,7 @@ add_library(mortar_engine ${FN_LIB_TYPE}
     util/StringHash.cpp
     util/AsciiString.cpp
     util/Transition.cpp
+    util/Utf8Encode.cpp
     util/StringTable.cpp
     util/Localisation.cpp
     util/PathCI.cpp

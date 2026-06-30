@@ -83,6 +83,48 @@ uint32_t decode_next_unicode_character(const char** cursor) {
     return cp;
 }
 
+// ASM-spec v1.6.1 Mortar::utf8::encode_unicode_character @ 0x0022dd7c
+// RFC 2279 UTF-8 encoder. Writes 1-6 bytes into buf[*len_ptr..]; updates *len_ptr.
+// Encoding ranges (from decompile @ 0x0022dd7c):
+//   cp < 0x80:       1 byte  (ASCII passthrough)
+//   cp < 0x800:      2 bytes (0xC0 lead)
+//   cp < 0x10000:    3 bytes (0xE0 lead)
+//   cp < 0x200000:   4 bytes (0xF0 lead)
+//   cp < 0x4000000:  5 bytes (0xF8 lead)
+//   cp < 0x80000000: 6 bytes (0xFC lead)
+//   cp >= 0x80000000: no output
+void encode_unicode_character(char* buf, int* len_ptr, uint32_t codepoint) {
+    if (codepoint < 0x80u) {
+        buf[(*len_ptr)++] = (char)codepoint;
+    } else if (codepoint < 0x800u) {
+        buf[(*len_ptr)++] = (char)(0xC0u | (codepoint >> 6));
+        buf[(*len_ptr)++] = (char)(0x80u | (codepoint & 0x3Fu));
+    } else if (codepoint < 0x10000u) {
+        buf[(*len_ptr)++] = (char)(0xE0u | (codepoint >> 12));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 6) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | (codepoint & 0x3Fu));
+    } else if (codepoint < 0x200000u) {
+        buf[(*len_ptr)++] = (char)(0xF0u | (codepoint >> 18));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 12) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 6) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | (codepoint & 0x3Fu));
+    } else if (codepoint < 0x4000000u) {
+        buf[(*len_ptr)++] = (char)(0xF8u | (codepoint >> 24));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 18) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 12) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 6) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | (codepoint & 0x3Fu));
+    } else if (codepoint < 0x80000000u) {
+        buf[(*len_ptr)++] = (char)(0xFCu | (codepoint >> 30));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 24) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 18) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 12) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | ((codepoint >> 6) & 0x3Fu));
+        buf[(*len_ptr)++] = (char)(0x80u | (codepoint & 0x3Fu));
+    }
+    // codepoint >= 0x80000000: no output (binary: returns without writing)
+}
+
 } // namespace utf8
 
 // Binary @ 0x00235a70 — stack-builds a Utf8StringProxy (binary @ 0x0021eb98),

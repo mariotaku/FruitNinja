@@ -8,6 +8,13 @@
 #include "math/MathUtil.h"
 #include <cstdint>
 
+// ASM-spec v1.6.1 InverseSquareTransition @0x0014e8cc
+// Ease-out quadratic. Second param s entirely ignored (confirmed by disassembly):
+//   vmov.f32 s15,1.0; vsub.f32 s0,s15,s0; vmls.f32 s15,s0,s0; vmov.f32 s0,s15; bx lr
+float InverseSquareTransition(float t, float /*s -- binary ignores*/) {
+    return 1.0f - (1.0f - t) * (1.0f - t);
+}
+
 // ASM-spec v1.6.1 SquareTransition @0x0014e8c4
 // s is ignored; binary disassembly: vmul.f32 s0,s0,s0; bx lr.
 float SquareTransition(float t, float /*s*/) {

@@ -31,6 +31,12 @@ namespace utf8 {
     // Standard UTF-8 1-6 byte decoder. Advances *cursor past the decoded bytes.
     // Returns 0 when *cursor points at '\0'; returns 0xFFFD on malformed input.
     uint32_t decode_next_unicode_character(const char** cursor);
+
+    // ASM-spec v1.6.1 Mortar::utf8::encode_unicode_character @ 0x0022dd7c:
+    //   Standard RFC 2279 multi-byte UTF-8 encoder.
+    //   buf: pre-allocated output char buffer; *len_ptr: current byte offset, updated in-place.
+    //   codepoint: UCS-4 value. Writes 1-6 bytes; no output for cp >= 0x80000000.
+    void encode_unicode_character(char* buf, int* len_ptr, uint32_t codepoint);
 }
 
 class Utf8StringIterator {

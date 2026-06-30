@@ -16,6 +16,23 @@ inline float Lerp(float a, float b, float t) {
     return a + (b - a) * t;
 }
 
+// ASM-spec v1.6.1 GetSmallestDelta @ 0x001da7e0:
+//   Returns signed angular delta from b to a, wrapped to (-180, +180].
+//   Math::Abs<float> in binary (PLT @ 0x00114b38) = fabsf().
+inline float GetSmallestDelta(float a, float b) {
+    float delta = a - b;
+    if (fabsf(delta) > 180.0f) {
+        if (a <= b)
+            return (a + 360.0f) - b;
+        else
+            return delta - 360.0f;
+    }
+    return delta;
+}
+
+// TODO: v1.6.1 0x001d8d74 (GetSmallestDeltaIdx) -- 16-bit angle-index analog of
+//   GetSmallestDelta; wraps in the 16-bit index domain. Not yet RE'd.
+
 // Matches Math::SinIdx / Math::CosIdx (0x00194d50 / 0x00194dcc).
 // Binary reads from a 4096-entry float LUT keyed by (idx >> 4);
 // we use sinf/cosf directly — same output, no LUT needed on modern FPUs.
