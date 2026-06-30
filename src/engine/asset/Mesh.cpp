@@ -34,7 +34,7 @@ Mesh::Mesh()
 // (_Rb_tree::_M_erase(m_GroupsByName), m_OwnGroup.Clear(), ~vector(m_Geometries),
 // ~vector(m_BoneBindings), ~AsciiString(m_Name)) -- port relies on implicit member
 // dtors in reverse-declaration order (same members, same logical order; std::map vs
-// _Rb_tree, std::string vs AsciiString).
+// _Rb_tree container layer).
 Mesh::~Mesh() {
     // VBO/IBO cleanup now handled by Geometry::~Geometry (each SmartPtr<Geometry>
     // will Release() here as m_Geometries is destroyed).
@@ -212,7 +212,7 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> parent, AsciiString const& name)
     , m_WorldProp(NULL), m_ViewProp(NULL), m_ProjProp(NULL), m_WVPProp(NULL)
 {
     // Defunct: SharedEffectProperties subsystem -- shape preserved; v1.6.1 binary @ 0x002730ac
-    m_Name = name.c_str();
+    m_Name = name;
     EffectPropertyDefinition defs[4];
     defs[0].m_Name  = kMeshName_World;
     defs[0].m_Type  = 3;

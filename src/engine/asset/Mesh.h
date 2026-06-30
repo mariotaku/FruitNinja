@@ -14,7 +14,6 @@
 #include <vector>
 #include <map>
 #include <cstdint>
-#include <string>
 #include "math/Colour.h"
 #include "util/ReferenceCounter.h"
 #include "asset/Effect.h"
@@ -90,7 +89,7 @@ public:
 
     // --- Original fields (matching offsets where applicable) ---
 
-    std::string m_Name;                         // +0x0C equiv: Mesh name
+    AsciiString m_Name;                          // +0x0C: Mesh name (40 bytes)
 
     std::vector<BoneBinding> m_BoneBindings;    // +0x34: Bone binding array (12 bytes)
 
@@ -150,7 +149,7 @@ public:
     int GetGeometryCount() const override { return (int)m_Geometries.size(); }
 
     // vtable[3]: Matches Mesh::GetName (0x001b15e0)
-    const std::string& GetName() const override { return m_Name; }
+    const AsciiString& GetName() const override { return m_Name; }
 
     // Binary @ 0x001b225c -- GetGeometry returns SmartPtr<Geometry>.
     // Port uses the same storage type now. The GetGeometryEntry name is retained
@@ -299,6 +298,11 @@ typedef Mesh::BoneBinding BoneBinding;
 
 #if defined(__bada__)
 #include <cstddef>
+// Mesh (v1.6.1 Mortar::Mesh @0x0023890c LoadMesh / sizeof from operator new caller):
+// m_Name is AsciiString (40B) @ +0x0C; m_BoneBindings vector @ +0x34; sizeof == 0x7C.
+static_assert(sizeof(Mortar::Mesh)                                == 0x7C, "sizeof(Mesh) must be 0x7C");
+static_assert(__builtin_offsetof(Mortar::Mesh, m_Name)           == 0x0C, "Mesh::m_Name offset (+0x0C)");
+static_assert(__builtin_offsetof(Mortar::Mesh, m_BoneBindings)   == 0x34, "Mesh::m_BoneBindings offset (+0x34)");
 static_assert(sizeof(Mortar::Mesh::BoneBinding)                   == 0x44, "Mortar::Mesh::BoneBinding size");
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_BoneName)    == 0x00, "BoneBinding::m_BoneName offset");
 static_assert(offsetof(Mortar::Mesh::BoneBinding, m_Bounds)      == 0x28, "BoneBinding::m_Bounds offset");

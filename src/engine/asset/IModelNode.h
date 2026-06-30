@@ -8,7 +8,6 @@
 #include "asset/AnimationState.h"
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
-#include <string>
 #include <vector>
 
 namespace Mortar {
@@ -33,8 +32,8 @@ class IModelNode : public Mortar::ReferenceCounter {
 public:
     virtual ~IModelNode() {}
 
-    // vtable[3]: const std::string& GetName() const
-    virtual const std::string& GetName() const = 0;
+    // vtable[3]: const AsciiString& GetName() const
+    virtual const AsciiString& GetName() const = 0;
 
     // vtable[4]: void Draw(const Matrix44& worldMatrix)
     virtual void Draw(const Matrix44& worldMatrix) = 0;

@@ -304,7 +304,7 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
         return SmartPtr<Mesh>(mesh);
     }
     AsciiString meshName = rl.ReadString();
-    mesh->m_Name = meshName.CStr();
+    mesh->m_Name = meshName;
 
     // Read<ulong> -> boneCount + per-bone BoneBinding data
     if (rl.m_ReadCursor + 4 > (int32_t)rl.DataSize()) {
