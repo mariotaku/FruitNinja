@@ -71,7 +71,7 @@ static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pul
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00148e00 (re-analyst)
 // Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
 // Same-screen MP does not split saved stats; no "Score_P2" key exists.
-static int GetCurrentScore(int playerIdx) {
+int GetCurrentScore(int playerIdx) {
     if (playerIdx != 0) return 0;
     Game* game = Game::GetInstance();
     return game ? game_work.currentScore : 0;
@@ -79,14 +79,14 @@ static int GetCurrentScore(int playerIdx) {
 
 // GetScoreMultiplyer: returns PowerUpManager::GetScoreGainMultiplier().
 // Arcade-only in binary (DefaultScoreDelegate, DefaultScoreDelegate §5.1).
-static int GetScoreMultiplyer(int /*playerIdx*/) {
+int GetScoreMultiplyer(int /*playerIdx*/) {
     return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
 }
 
 // ASM-verified: 2026-05-03T00:00 v1.6.1 GetCurrentModeHighscore @ 0x00115444 (asm-inspector)
 // Binary: GetCurrentModeHighscore @ 0x00115444.
 // pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
-static int GetCurrentModeHighscore() {
+int GetCurrentModeHighscore() {
     Game* gd = Game::GetInstance();
     if (gd && game_work.gameMode < 4 && game_work.m_SaveData)
         return game_work.m_SaveData->m_ModeHighScores[game_work.gameMode];

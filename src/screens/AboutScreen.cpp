@@ -91,7 +91,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
 // ASM-spec v1.6.1 Game::SelfVersion @0x0011fbd8: returns literal "1.6.1".
 // DIFFERS: v1.5.1 port had "1.5.1"; updated to match v1.6.1 binary.
 // -----------------------------------------------------------------------
-static const char* GetVersionString()
+const char* GetVersionString()
 {
     return "1.6.1";
 }

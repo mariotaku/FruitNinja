@@ -20,7 +20,7 @@
 // scale. Port collapses this into a single static state + fade timer
 // rendered by DrawCriticalFlash during GameDraw. Used by Fruit slice
 // for critical-hit and rare (special fruit) feedback.
-void CriticalFlash(const Vec3& pos, const Colour& colour);
+void CriticalFlash(Vec3 pos, Colour colour);
 
 // Matches ResetGameEntities (binary address pending RE). Walks every
 // live entity in Mortar::ActorManager and deactivates fruit + bombs. Called

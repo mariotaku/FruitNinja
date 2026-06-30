@@ -170,15 +170,9 @@ static Quaternion RandomStartAngle() {
     return q;
 }
 
-// SetupLighting @0x001da5e8 — single `bx lr`, a genuine no-op stub in
-// the shipped binary. Both Bomb::LoadContent (0x001727d8) and
-// Fruit::LoadFruitModels (0x001e08ec) reach it via PLT trampoline.
-// No material / mesh / GL state is touched.
-// NOTE: this is a separate file-local in Fruit.cpp (Bomb.cpp has its own
-// static copy; the binary's single function serves both TUs via PLT).
-static Mortar::SmartPtr<Mortar::Model>& SetupLighting(Mortar::SmartPtr<Mortar::Model>& model) {
-    return model;
-}
+// SetupLighting is a no-op free function at 0x001ca5e8 (see Bomb.h / Bomb.cpp).
+// The binary's single symbol serves both Bomb + Fruit TUs via PLT trampoline.
+// Forward-declared here for call sites in LoadFruitModels.
 
 Fruit::Fruit()
     : m_FruitType(0)

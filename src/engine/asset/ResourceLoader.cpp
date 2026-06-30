@@ -14,7 +14,7 @@ namespace Mortar {
 // PathGetParent: returns the parent directory of 'path' (up to and including the
 // last '/' or '\', or empty string if no separator). Used by the path ctor
 // (0x00255730) to derive m_BasePath from the file path.
-static AsciiString PathGetParent(const AsciiString& path)
+AsciiString PathGetParent(const AsciiString& path)
 {
     const char* s = path.CStr();
     if (!s) return AsciiString("");

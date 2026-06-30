@@ -56,11 +56,10 @@ static const int16_t ANGLE_SCALE      = 0xB6;
 // Global bomb data (v1.6.1 binary @ 0x31785C, size 0x48). Layout declared in Bomb.h.
 BombGlobalData g_bombData;
 
-// SetupLighting @ 0x00175018 -- single `bx lr`, genuine no-op stub in binary.
+// SetupLighting @ 0x001ca5e8 — single `bx lr`, genuine no-op stub in binary.
 // Both Bomb::LoadContent and Fruit::LoadFruitModels reach it via PLT trampoline.
-static Mortar::SmartPtr<Mortar::Model>& SetupLighting(Mortar::SmartPtr<Mortar::Model>& model) {
-    return model;
-}
+// No material / mesh / GL state is touched.
+void SetupLighting(const Mortar::SmartPtr<Mortar::Model>&) {}
 
 // --- Bomb::LoadContent / CleanupBomb ---
 
@@ -605,7 +604,7 @@ bool BombFlashFull() {
 
 // ASM-spec v1.6.1 HitBomb @ 0x1cf27c
 // Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
-void HitBomb(const Vec3& pos) {
+void HitBomb(Vec3 pos) {
     if (game_work.bM_bPaused) return;
     if (game_work.m_SaveData)
         game_work.m_SaveData->AddToTotal("bomb", 1);
@@ -623,7 +622,7 @@ void HitBomb(const Vec3& pos) {
 // ASM-spec v1.6.1 HitMenuBomb @ 0x1cf42c
 // Arcade/menu bomb hit: timer=2.0, flash-flag=1, SFX, store hit pos.
 // TODO: v1.6.1 0x1cf42c (HitMenuBomb) -- body not fully decompiled; keeping port semantics
-void HitMenuBomb(const Vec3& pos) {
+void HitMenuBomb(Vec3 pos) {
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {
         ts->m_bMenuBombFlashFlag = 1;
