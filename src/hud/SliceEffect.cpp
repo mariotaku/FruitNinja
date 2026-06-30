@@ -1,8 +1,8 @@
 // SliceEffect.cpp -- keyframe table constant only.
 //
-// AddSlice, DrawSlices, s_slices, s_pool, and s_sliceModel[4] all live in
-// Fruit.cpp (Fruit TU), matching the binary layout where the pool and
-// list are owned by the fruit subsystem.
+// AddSlice, DrawSlices, and the slice-state fields (s_slices, s_pool, s_sliceModel[4])
+// all live in Fruit.cpp as part of FruitGlobalData g_fruitData, matching the binary
+// layout @ 0x332910 where the pool and list are owned by the fruit subsystem.
 //
 // v1.6.1 binary refs:
 //   AddSlice   @0x001dc990  (Fruit TU)
