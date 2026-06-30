@@ -1,7 +1,7 @@
 // FruitSaveData -- save/load to FruitySave.xml + slice-total maps.
 //
-// Implements binary SaveGame @ 0x0012a2fc and
-// LoadGame @ 0x0012be74. Coin balance is owned by ItemSave.xml
+// Implements binary SaveGame @ 0x001530dc and
+// LoadGame @ 0x0015591c. Coin balance is owned by ItemSave.xml
 // via ItemManager and is only mirrored here for in-memory access.
 //
 // Analysed: 2026-04-23T02:00, REVISED 2026-05-02T00:00
@@ -359,7 +359,7 @@ bool FruitSaveData::PlayedModeToday(int gameMode) {
 }
 
 // ----------------------------------------------------------------------
-// SaveGame @ 0x0012a2fc
+// ASM-spec v1.6.1 SaveGame @ 0x001530dc
 // ----------------------------------------------------------------------
 void SaveGame(FruitSaveData* save) {
     if (!save) return;
@@ -506,7 +506,7 @@ void SaveGame(FruitSaveData* save) {
 }
 
 // ----------------------------------------------------------------------
-// LoadGame @ 0x0012be74
+// ASM-spec v1.6.1 LoadGame @ 0x0015591c
 // ----------------------------------------------------------------------
 bool LoadGame(FruitSaveData* save) {
     if (!save) return false;
@@ -674,7 +674,18 @@ bool LoadGame(FruitSaveData* save) {
 }
 
 // ----------------------------------------------------------------------
-// FruitNinja_SaveCurrentData @ 0x0016ccc8
+// isSaving flag -- v1.6.1 @0x001ca458 (GetIsSavingBool)
+// Set by SaveCurrentData at entry; cleared after SaveGame returns.
+// GameTaskSaveOnExit reads it to avoid re-entrant saves.
+// ----------------------------------------------------------------------
+static bool isSaving = false;
+
+bool* GetIsSavingBool() {
+    return &isSaving;
+}
+
+// ----------------------------------------------------------------------
+// ASM-spec v1.6.1 SaveCurrentData @ 0x001cde20
 //
 // Binary builds a STACK-LOCAL snapshot of pSaveData with live game state
 // copied in (so the writer sees the most-recent score/missCount/etc.
@@ -683,9 +694,11 @@ bool LoadGame(FruitSaveData* save) {
 // SaveGame(&snapshot). pSaveData itself is left untouched so existing
 // in-memory state survives the save.
 // ----------------------------------------------------------------------
-void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
+void SaveCurrentData(bool /*fullSave*/) {
     Game* g = Game::GetInstance();
     if (!g || !game_work.m_SaveData) return;
+
+    *GetIsSavingBool() = true;
 
     // ItemSave.xml is always written (coin balance + bought/equipped).
     ItemManager::GetInstance()->SaveItemInfo();
@@ -699,7 +712,7 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     snapshot.m_CriticalChance   = game_work.m_ScoreThreshold;
 
     // Snapshot combo globals into save fields before writing.
-    // Binary: SaveCurrentData @ 0x0016cd08/0x0016cd34.
+    // Binary: SaveCurrentData @ 0x001cde20 offset 0x001ccd08/0x001ccd34.
     snapshot.SnapshotComboState();
 
     // Binary does NOT update +0x40 in SaveCurrentData; it is rebuilt as the
@@ -711,13 +724,7 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     snapshot.m_BombHitTimer = game_work.m_BombHitTimer;
 
     SaveGame(&snapshot);
-}
-
-// ----------------------------------------------------------------------
-// FruitNinja_SaveOnExit @ 0x0016cf40
-// ----------------------------------------------------------------------
-void FruitNinja_SaveOnExit() {
-    FruitNinja_SaveCurrentData(true);
+    *GetIsSavingBool() = false;
 }
 
 // Defunct: online tweaks -- no-op stub; v1.6.1 binary @ 0x0012a080
@@ -780,17 +787,6 @@ const char* GetSaveFileFullPath() {
 //   using GetSavePath() for port I/O because the asset tree layout differs on host.
 const char* GetLoadFileFullPath() {
     return "FruitySave.xml";
-}
-
-// File-global re-entrant-save guard (v1.6.1 isSaving). Accessed via GetIsSavingBool().
-// Set to true at save start to prevent re-entrant saves on suspend; cleared after save.
-// NOTE: set/clear around the actual save body is deferred pending RE of SaveGame/SaveCurrentData
-// entry/exit sites. This pass adds only the global + accessor.
-static bool isSaving = false;
-
-// v1.6.1 GetIsSavingBool @0x001ca458 (_Z14GetIsSavingBoolv)
-bool* GetIsSavingBool() {
-    return &isSaving;
 }
 
 // v1.6.1 GetUserFilePath @0x00154494 (_Z15GetUserFilePathPcPKci)

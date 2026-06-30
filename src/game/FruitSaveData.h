@@ -4,8 +4,8 @@
 // FruitSaveData -- the persistent save-data subsystem.
 //
 // Full struct is 0x240 (576) bytes; layout from
-// re-analyst dump of FruitNinja_SaveGame @ 0x0012a2fc /
-// FruitNinja_LoadGame @ 0x0012be74 (v1.6.1 binary). Serialises via
+// re-analyst dump of SaveGame @ 0x001530dc /
+// LoadGame @ 0x0015591c (v1.6.1 binary). Serialises via
 // TinyXML to /Home/FruitySave.xml; port writes to <data_dir>/FruitySave.xml.
 //
 // Coin balance is NOT a member of FruitSaveData. In the binary the coin
@@ -390,19 +390,20 @@ static_assert(sizeof(FruitSaveData) == 576, "FruitSaveData size mismatch (binary
 // Save/Load free functions (binary calls them as file-scope fns)
 // ----------------------------------------------------------------------
 
-// 0x0016ccc8. Snapshot live Game state into pSaveData and write to disk.
-// fullSave=true triggers WaveManager::SaveWaveInfo.
-void FruitNinja_SaveCurrentData(bool fullSave = true);
+// v1.6.1 @0x001cde20 (_Z15SaveCurrentDatab). Snapshot live Game state into
+// pSaveData and write to disk. fullSave=true triggers WaveManager::SaveWaveInfo.
+void SaveCurrentData(bool fullSave = true);
 
-// 0x0012a2fc. Serialise a FruitSaveData to FruitySave.xml.
+// v1.6.1 @0x001530dc (_Z8SaveGameP13FruitSaveData). Serialise a FruitSaveData to FruitySave.xml.
 void SaveGame(FruitSaveData* save);
 
-// 0x0012be74. Load FruitySave.xml into the given FruitSaveData.
+// v1.6.1 @0x0015591c (_Z8LoadGameP13FruitSaveData). Load FruitySave.xml into the given FruitSaveData.
 // Returns true on success.
 bool LoadGame(FruitSaveData* save);
 
-// 0x0016cf40. Called on app termination.
-void FruitNinja_SaveOnExit();
+// v1.6.1 @0x001ca458 (_Z13GetIsSavingBoolv). Returns pointer to the file-scope isSaving flag.
+// True while SaveCurrentData is executing; GameTaskSaveOnExit checks to avoid re-entrant saves.
+bool* GetIsSavingBool();
 
 // ParseVersionInfo -- v1.6.1 @0x00152f30 (_Z16ParseVersionInfoPKcP13FruitSaveData).
 // Parses the save-file version string and writes the packed int to sd->m_VersionInfo.

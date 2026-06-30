@@ -761,7 +761,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             // Binary @ 0x00154dbc: SaveCurrentData(false) before RetryLevel.
-            FruitNinja_SaveCurrentData(false);
+            SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
@@ -803,7 +803,7 @@ void PauseScreen::Update(float dt) {
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_BOMB_FLASH), "Update/QUIT_EXIT faded");
             m_State = PAUSE_STATE_BOMB_FLASH;
             m_Alpha = 1.0f;
-            FruitNinja_SaveCurrentData(false);
+            SaveCurrentData(false);
             UnpauseGame();
         }
         break;
