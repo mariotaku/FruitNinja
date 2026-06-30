@@ -132,13 +132,13 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
         if (strncmp(aname, "min-", 4) == 0) {
             const char* fruitName = aname + 4;
             if (fruitName[0]) {
-                uint64_t key = (uint64_t)StringHash(fruitName);
+                uint32_t key = StringHash(fruitName);
                 m_MinFruit[key] = atoi(attr.Value());
             }
         } else if (strncmp(aname, "max-", 4) == 0) {
             const char* fruitName = aname + 4;
             if (fruitName[0]) {
-                uint64_t key = (uint64_t)StringHash(fruitName);
+                uint32_t key = StringHash(fruitName);
                 m_MaxFruit[key] = atoi(attr.Value());
             }
         }
@@ -156,6 +156,9 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
             m_NameTemplate[--len] = '\0';
         }
     }
+
+    // TODO: v1.6.1 Bonus::Parse -- populate m_PatternHashes from the pattern XML attr
+    // (currently never filled; IsAchieved pattern loop is a no-op)
 
     // ASM-verified: 2026-05-22 v1.6.1 Bonus::Parse @ 0x001036e8 (re-analyst). Binary's
     // Bonus::Parse calls GETSTRING_CAST_0_STR on the inner text BEFORE
@@ -194,7 +197,7 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
 //   5. return m_Tier (0 on any fail).
 // DIFFERS: original param name was `score` -- renamed to `score` kept; the
 //   second param is fruitCounts (binary param_2). Cosmetic only; no ABI change.
-int Bonus::IsAchieved(int score, std::map<uint64_t, int>& fruitCounts) {
+int Bonus::IsAchieved(int score, std::map<uint32_t, int>& fruitCounts) {
     // Gate -- unconditional bounds + divisible-by (binary 0010df3e-0010df62).
     if (score < m_MinSliced) return 0;
     if (score > m_MaxSliced) return 0;
@@ -204,14 +207,14 @@ int Bonus::IsAchieved(int score, std::map<uint64_t, int>& fruitCounts) {
     // Missing key in m_MinFruit defaults to 0; missing key in m_MaxFruit defaults
     // to DAT_0010e090 = 1,000,000.
     static const int kNoMaxSentinel = 1000000;  // DAT_0010e090 = 0x000f4240
-    for (std::map<uint64_t, int>::iterator fc = fruitCounts.begin();
+    for (std::map<uint32_t, int>::iterator fc = fruitCounts.begin();
          fc != fruitCounts.end(); ++fc) {
         int count = fc->second;
 
-        std::map<uint64_t, int>::const_iterator minIt = m_MinFruit.find(fc->first);
+        std::map<uint32_t, int>::const_iterator minIt = m_MinFruit.find(fc->first);
         int minVal = (minIt != m_MinFruit.end()) ? minIt->second : 0;
 
-        std::map<uint64_t, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
+        std::map<uint32_t, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
         int maxVal = (maxIt != m_MaxFruit.end()) ? maxIt->second : kNoMaxSentinel;
 
         if (count < minVal || count > maxVal) return 0;
@@ -222,7 +225,7 @@ int Bonus::IsAchieved(int score, std::map<uint64_t, int>& fruitCounts) {
     bool firstPattern = true;
     int refCount = -1;
     for (size_t i = 0; i < m_PatternHashes.size(); ++i) {
-        std::map<uint64_t, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
+        std::map<uint32_t, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
         if (fc == fruitCounts.end()) return 0;  // pattern fruit absent
         if (firstPattern) {
             refCount = fc->second;
@@ -299,7 +302,7 @@ void BonusType::Parse(TiXmlElement* e) {
             char* end = tok + strlen(tok) - 1;
             while (end > tok && *end == ' ') { *end = '\0'; --end; }
             if (*tok) {
-                uint64_t key = (uint64_t)StringHash(tok);
+                uint32_t key = StringHash(tok);
                 m_RequiredHashes[key] = 0;
             }
             tok = strtok(NULL, ",");
@@ -321,7 +324,7 @@ int GetBonusTotal(unsigned long hash);
 // ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0010ecc8 (re-analyst).
 Bonus* BonusType::GetBest() {
     int totalAcrossFruits = 0;
-    for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
+    for (std::map<uint32_t, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
         int total = GetBonusTotal((unsigned long)it->first);
         it->second = total;
@@ -373,7 +376,7 @@ bool BonusType::UnlockAchievements() {
     if (!m_HasAchievement) return false;
 
     int totalAcrossFruits = 0;
-    for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
+    for (std::map<uint32_t, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
         int total = GetBonusTotal((unsigned long)it->first);
         it->second = total;

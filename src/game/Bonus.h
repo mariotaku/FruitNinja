@@ -21,13 +21,13 @@ class Bonus {
 public:
     int                             m_MinSliced;        // +0x00
     int                             m_MaxSliced;        // +0x04
-    std::map<uint64_t, int>         m_MinFruit;         // +0x08  sizeof 24
-    std::map<uint64_t, int>         m_MaxFruit;         // +0x20  sizeof 24
+    std::map<uint32_t, int>         m_MinFruit;         // +0x08  sizeof 24
+    std::map<uint32_t, int>         m_MaxFruit;         // +0x20  sizeof 24
     int                             m_DivisibleBy;      // +0x38
     int                             m_Tier;             // +0x3C  (binary ctor default 5; -1 used as invalid sentinel)
     char                            m_NameTemplate[64]; // +0x40
     char                            m_DisplayName[64];  // +0x80
-    std::vector<uint64_t>           m_PatternHashes;    // +0xC0  sizeof 12
+    std::vector<uint32_t>           m_PatternHashes;    // +0xC0  sizeof 12
     uint32_t                        m_AchievementHash;  // +0xCC
     Mortar::SmartPtr<Mortar::Texture>       m_StarTexture;      // +0xD0  sizeof 4
 
@@ -37,7 +37,7 @@ public:
     Bonus& operator=(const Bonus& rhs);
 
     void Parse(TiXmlElement* e, const char* parentTexName = NULL); // Binary @ 0x0010e61c
-    int  IsAchieved(int score, std::map<uint64_t, int>& fruitCounts); // Binary @ 0x0010df38
+    int  IsAchieved(int score, std::map<uint32_t, int>& fruitCounts); // Binary @ 0x0010df38
 
     bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (binary @ 0x0010ed2c)
 };
@@ -45,7 +45,7 @@ public:
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
 // sizeof(Bonus) = 0xD4 (212). ASM: new_allocator<Bonus>::allocate @0x00130360 element stride
 // #0xd4 (overflow guard 0x013521CF = 2^32/0xD4). No std::map tail-padding -- map members hold
-// 4-aligned _Rb_tree pointers (uint64_t keys in heap nodes), so max alignment is 4 and the
+// 4-aligned _Rb_tree pointers (uint32_t keys in heap nodes), so max alignment is 4 and the
 // struct ends at m_StarTexture(0xD0)+4 = 0xD4.
 #ifdef __bada__
 static_assert(sizeof(Bonus) == 0xD4, "Bonus size mismatch");
@@ -68,7 +68,7 @@ static_assert(__builtin_offsetof(Bonus, m_StarTexture)    == 0xD0, "Bonus::m_Sta
 // ---------------------------------------------------------------------------
 class BonusType {
 public:
-    std::map<uint64_t, int>   m_RequiredHashes; // +0x00  sizeof 24
+    std::map<uint32_t, int>   m_RequiredHashes; // +0x00  sizeof 24
     std::vector<Bonus>        m_Bonuses;         // +0x18  sizeof 12
     bool                      m_HasAchievement;  // +0x24
 
