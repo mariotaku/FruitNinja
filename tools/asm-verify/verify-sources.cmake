@@ -26,6 +26,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/MenuBackground.cpp"
     "${_PROJECT_ROOT}/src/engine/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AlternativeTextureLoader.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/AnimationList.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AnimationManager.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AnimationState.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/EffectDataTypes.cpp"

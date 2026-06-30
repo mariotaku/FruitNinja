@@ -64,6 +64,7 @@ target_sources(mortar_engine PRIVATE
     asset/VectorDataReader.cpp
     asset/ResourceLoader.cpp
     asset/AnimationState.cpp
+    asset/AnimationList.cpp
     asset/AnimationManager.cpp
     asset/Skeleton.cpp
     asset/Geometry.cpp

@@ -93,23 +93,26 @@ private:
 //   port hand-assigns stable IDs via enum to avoid non-determinism.
 // v1.6.1 TypeInfo<T>::ID: monotonic counter assigned at static-init time.
 enum LoaderTypeEnum {
-    TYPEID_IVertexStream = 1,
-    TYPEID_IIndexStream  = 2,
-    TYPEID_Model         = 3,
-    TYPEID_Mesh          = 4
+    TYPEID_IVertexStream  = 1,
+    TYPEID_IIndexStream   = 2,
+    TYPEID_Model          = 3,
+    TYPEID_Mesh           = 4,
+    TYPEID_AnimationList  = 5
 };
 
-// Forward declarations for the four registered types.
+// Forward declarations for registered types.
 class IVertexStream;
 class IIndexStream;
 class Model;
 class Mesh;
+class AnimationList;
 
 template<typename T> struct LoaderTypeId;
-template<> struct LoaderTypeId<IVertexStream> { static const uint32_t value = TYPEID_IVertexStream; };
-template<> struct LoaderTypeId<IIndexStream>  { static const uint32_t value = TYPEID_IIndexStream; };
-template<> struct LoaderTypeId<Model>         { static const uint32_t value = TYPEID_Model; };
-template<> struct LoaderTypeId<Mesh>          { static const uint32_t value = TYPEID_Mesh; };
+template<> struct LoaderTypeId<IVertexStream>  { static const uint32_t value = TYPEID_IVertexStream; };
+template<> struct LoaderTypeId<IIndexStream>   { static const uint32_t value = TYPEID_IIndexStream; };
+template<> struct LoaderTypeId<Model>          { static const uint32_t value = TYPEID_Model; };
+template<> struct LoaderTypeId<Mesh>           { static const uint32_t value = TYPEID_Mesh; };
+template<> struct LoaderTypeId<AnimationList>  { static const uint32_t value = TYPEID_AnimationList; };
 
 // ============================================================
 // ResourceLoader (68 bytes = 0x44)
@@ -243,6 +246,14 @@ public:
     // ResourceLoader over PathGetParent(path), then dispatches Load<Model>().
     SmartPtr<Model> LoadModel(const AsciiString& path);
 };
+
+// Read<AsciiString> specialization: routes to ReadString() so callers can use
+// rl.Read<AsciiString>() without hitting the generic memcpy path.
+// Binary calls ReadString via ResourceLoader::Read<AsciiString> at LoadAnims @0x0026f3fc.
+template<>
+inline AsciiString ResourceLoader::Read<AsciiString>() {
+    return ReadString();
+}
 
 // SmartPtrCast<U>: downcast SmartPtr<ReferenceCounter> to SmartPtr<U> via static_cast.
 // Used by ResourceLoader::Load<T>() to recover the typed pointer from the base result.

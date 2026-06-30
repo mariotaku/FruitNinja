@@ -49,6 +49,8 @@ struct VectorTrack {
         : m_knots_begin(0), m_knots_end(0), m_knots_cap(0)
         , m_channelType(0), m_dim(1), m_data(0)
     {}
+    // dtor @ 0x00109e6c: frees m_data (delete[]) and destroys the knots vector overlay.
+    ~VectorTrack();
 };
 // sizeof VectorTrack == 0x14 + 0x28 == 0x3c
 
