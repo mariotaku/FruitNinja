@@ -15,6 +15,7 @@
 #endif
 
 struct Renderer;
+namespace Mortar { class MortarSound; }
 
 class HUDControl {
 public:
@@ -135,5 +136,10 @@ public:
         // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cdd0 (re-analyst)
     }
 };
+
+// v1.6.1 DefaultSoundRemovedCallback @0x00151a74 -- default sound-remove no-op callback.
+// 30+ call sites use this as the default when no specific cleanup is needed on sound removal.
+// Returns 0 always.
+int DefaultSoundRemovedCallback(Mortar::MortarSound* snd);
 
 #endif

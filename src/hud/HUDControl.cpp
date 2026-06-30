@@ -1,4 +1,5 @@
 #include "HUDControl.h"
+#include "engine/audio/MortarSound.h"
 
 #ifndef __bada__
 #include "debug/Logger.h"
@@ -17,6 +18,13 @@ const std::list<HUDControl*>& HUDControl::GetActiveControls() {
 void DefaultDeleteCallback(HUDControl* control)
 {
     (void)control;
+}
+
+// v1.6.1 DefaultSoundRemovedCallback @0x00151a74 -- default sound-remove no-op callback.
+// Used at 30+ call sites as the default when no specific cleanup is needed on sound removal.
+int DefaultSoundRemovedCallback(Mortar::MortarSound* /*snd*/)
+{
+    return 0;
 }
 
 HUDControl::HUDControl()

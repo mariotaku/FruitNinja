@@ -383,6 +383,10 @@ void DefaultDownloadUserDataCallback(const char* board, void* data, int size);
 // Registers social network handlers with the network layer on startup.
 void RegisterSocial();
 
+// Defunct: NetworkManager/social popup UI -- no-op stub; v1.6.1 Mortar::DefaultButtonCallback @0x00231084
+// Reset callback stored in popup alert button delegates when DeregisterPopupAlertButton is called.
+void DefaultButtonCallback();
+
 } // namespace Mortar
 
 // Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
