@@ -17,6 +17,17 @@ struct MortarRectangle {
     int Height() const { return bottom - top; }
 };
 
+// MortarRectangleT<T> — float/double typed rect; binary uses MortarRectangleT<float>
+// for clip rects (e.g. scissor rect passed to SetupQuad). Cross-build: template
+// bodies must be in-header; GCC 4.4 handles this fine.
+template<typename T>
+struct MortarRectangleT {
+    T left, top, right, bottom;
+
+    T Width()  const { return right - left; }
+    T Height() const { return bottom - top; }
+};
+
 } // namespace Mortar
 
 // Convenient type aliases. typedef rather than `using` so the cross-build

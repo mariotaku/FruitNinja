@@ -1,12 +1,13 @@
-// Analysed: 2026-04-25T14:45
 //
-// MenuBackground — ChangeBackground + GetCurrentBackground.
-// Binary: ChangeBackground @ 0x0016ae8c, GetCurrentBackground @ 0x0016af28.
+// MenuBackground — ChangeBackground + GetCurrentBackground + UpdateBackground.
+// v1.6.1: ChangeBackground @ 0x001cc938, UpdateBackground @ 0x001cc9f0.
+//   GetCurrentBackground address TBD (TODO: confirm via search_functions).
 // File-static g_BackgroundTexture (Mortar::SmartPtr<Mortar::Texture>) at BSS 0x231500
 //   (_ZL17backgroundTexture, GOT+0x000452d4+0xfc).
 
 #include "MenuBackground.h"
 #include "asset/TextureManager.h"
+#include "game/ItemManager.h"
 #include <cstdio>
 #include <cstring>
 
@@ -22,7 +23,7 @@ bool IsFastHardware() {
     return true;
 }
 
-// ChangeBackground @ 0x0016ae8c
+// ChangeBackground (v1.6.1) @ 0x001cc938
 // Binary behaviour:
 //   bool fast = IsFastHardware();
 //   if (texName == NULL) texName = "gb_game";  // 0x001bc79d
@@ -42,7 +43,7 @@ void ChangeBackground(const char* texName) {
     g_BackgroundTexture = tmp;
 }
 
-// GetCurrentBackground @ 0x0016af28
+// GetCurrentBackground (v1.6.1) — address TBD
 // Reads back from the same file-static slot. Returns raw pointer (NULL if empty).
 Mortar::Texture* GetCurrentBackground() {
     return g_BackgroundTexture.Get();
@@ -50,4 +51,15 @@ Mortar::Texture* GetCurrentBackground() {
 
 void UnloadBackground() {
     g_BackgroundTexture.SetNull();
+}
+
+// ASM-spec v1.6.1 UpdateBackground @ 0x001cc9f0
+// Reads the equipped background item from ItemManager and calls ChangeBackground()
+// to keep the rendered background in sync with the shop-equipped item.
+void UpdateBackground() {
+    ItemManager* im = ItemManager::GetInstance();
+    if (!im) return;
+    ItemInfo* bg = im->GetEquipped(ITEM_TYPE_BACKGROUND);  // slot 1
+    if (!bg) return;
+    ChangeBackground(bg->m_pTextureName);  // +0x30 char*
 }

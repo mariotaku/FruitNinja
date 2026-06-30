@@ -126,6 +126,12 @@ public:
     // no-op when m_ZoomT<=0.
     Vec3 TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const;
 
+    // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
+    // Returns true when the view is in its standard (non-zoomed, non-rotated) state.
+    // TODO: verify exact predicate against binary; assumed m_ZoomT<=0 (consistent
+    //   with TranslatePos no-op gate and the DrawBackground normal-path gate).
+    bool ViewIsNormal() const;
+
     // Zoom API. Binary symbols: FruitCamera::Transition @ 0x1bef54 (zoom-in),
     // FruitCamera::TransitionOut @ 0x1bede8 (zoom-out). UpdateCamera @ 0x1edf24 runs the lerp.
     // StartZoomIn = Transition(target, zoomScale, rollScale, onDone): mode=2, sets ZoomScale/

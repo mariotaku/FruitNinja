@@ -257,6 +257,13 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     mm.GetWorldStack().Reset();
 }
 
+// ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
+// Assumed predicate: m_ZoomT<=0.0f (view not zoomed/rotated).
+// Consistent with TranslatePos no-op gate. TODO: verify exact predicate in binary.
+bool FruitCamera::ViewIsNormal() const {
+    return m_ZoomT <= 0.0f;
+}
+
 // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
 // ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180d10..0x00180d68 (re-analyst).
 // DIFFERS: original = Math::Atan2Idx 16-bit-angle-index trig; port uses
