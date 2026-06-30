@@ -121,6 +121,11 @@ public:
     // Helpers: IdleCamera @ 0x1ed77c (sets mode 0)
     void IdleCamera();
 
+    // ASM-spec v1.6.1 FruitCamera::TranslatePos @0x001ed840: view<->world;
+    // inverse=view->world = RotZ(-m_RollOut)*pos*m_Zoom + (m_LookAt-center);
+    // no-op when m_ZoomT<=0.
+    Vec3 TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const;
+
     // Zoom API. Binary symbols: FruitCamera::Transition @ 0x1bef54 (zoom-in),
     // FruitCamera::TransitionOut @ 0x1bede8 (zoom-out). UpdateCamera @ 0x1edf24 runs the lerp.
     // StartZoomIn = Transition(target, zoomScale, rollScale, onDone): mode=2, sets ZoomScale/

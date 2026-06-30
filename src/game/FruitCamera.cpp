@@ -138,6 +138,44 @@ void FruitCamera::UpdateCamera(float dt) {
     m_bDirty = true;
 }
 
+// ASM-spec v1.6.1 FruitCamera::TranslatePos @0x001ed840
+// view<->world coordinate transform through the current zoom state.
+// inverse=false: world->view (subtract lookAt offset, divide by zoom, rotate by +m_RollOut)
+// inverse=true:  view->world (rotate by -m_RollOut, multiply by zoom, add lookAt offset)
+// useZeroCenter=true: center = (0,0,0); false: center = (m_Target.x, m_Target.y, 0)
+// Returns pos unchanged when m_ZoomT <= 0 (not zooming).
+Vec3 FruitCamera::TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const {
+    if (m_ZoomT <= 0.0f) return pos;
+    Vec3 center = useZeroCenter ? Vec3(0.0f, 0.0f, 0.0f)
+                                : Vec3(m_Target.x, m_Target.y, 0.0f);
+    if (inverse) {
+        // view-space -> world-space: RotZ(-m_RollOut) * pos * m_Zoom + (m_LookAt - center)
+        uint16_t negIdx = (uint16_t)(-(int)m_RollOut);
+        float sinA = Math::SinIdx(negIdx);
+        float cosA = Math::CosIdx(negIdx);
+        Matrix44 rot;
+        rot.RotZ44(sinA, cosA);
+        // rot.m[0]=cosA, rot.m[1]=sinA, rot.m[4]=-sinA, rot.m[5]=cosA after RotZ44 on identity
+        pos = Vec3(rot.m[0] * pos.x + rot.m[4] * pos.y,
+                   rot.m[1] * pos.x + rot.m[5] * pos.y,
+                   pos.z);
+        pos = pos * m_Zoom;
+        pos = pos + (m_LookAt - center);
+    } else {
+        // world-space -> view-space: (pos - (m_LookAt - center)) / m_Zoom, then RotZ(+m_RollOut)
+        pos = pos - (m_LookAt - center);
+        pos = pos / m_Zoom;
+        float sinA = Math::SinIdx(m_RollOut);
+        float cosA = Math::CosIdx(m_RollOut);
+        Matrix44 rot;
+        rot.RotZ44(sinA, cosA);
+        pos = Vec3(rot.m[0] * pos.x + rot.m[4] * pos.y,
+                   rot.m[1] * pos.x + rot.m[5] * pos.y,
+                   pos.z);
+    }
+    return pos;
+}
+
 // 0x1ed77c (v1.6.1 IdleCamera — sets mode 0)
 void FruitCamera::IdleCamera() {
     m_pFollowEntity = 0;

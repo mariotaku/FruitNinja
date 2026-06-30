@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdio>
 #include "game/GameWork.h"
+#include "game/FruitCamera.h"
 #include "Coin.h"
 #include "hud/MissControl.h"
 #include "math/Random.h"
@@ -677,6 +678,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
         return;
     }
 
+    // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1ea214: m_TrailShiftA = m_PointCount-2 (activity gate, pre-AddPoint).
+    m_TrailShiftA = m_PointCount - 2;
+
     Vec3 dir;
     if (isSeed) {
         // Binary LAB_001ea1b4: copy current touch pos into all three anchors.
@@ -743,6 +747,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
              m_PrevHeadPos.x, m_PrevHeadPos.y,
              m_PointCount);
 #endif
+
+    // ASM-spec v1.6.1 @0x1ea3bc: m_TrailShiftB = m_PointCount-2 (post-AddPoint).
+    m_TrailShiftB = m_PointCount - 2;
 
     // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
@@ -1568,8 +1575,7 @@ void SlashEntity::Update(float dt) {
                     if (fruit->Sliced()) continue;
                     if (!fruit->IsActive()) continue;
 
-                    Vec3 bladeVel;
-                    bool hit = CollideWithSphere(*(ColSphere*)fruit->m_Col, bladeVel);
+                    bool hit = CollideWithEntity(fruit);
 
                     if (hit) {
                         // --- HIT PATH ---
@@ -1644,7 +1650,7 @@ void SlashEntity::Update(float dt) {
                         // nullptr made Fruit::CollisionResponse @0x001dd500 take the early-return path and never
                         // reach AddToCurrentScore @0x0011a4c0 -> zero score (#100).
                         // TODO: v1.6.1 -- binary's 4th arg (blade dir) may be null; confirm via asm-inspector before changing.
-                        fruit->CollisionResponse(this, 0, 0, &bladeVel);
+                        fruit->CollisionResponse(this, 0, 0, &m_SliceBladeDir);
 
                         // Critical fruit: adjust fruit type and scale
                         if (fruit->m_bCritical) {
@@ -1702,7 +1708,7 @@ void SlashEntity::Update(float dt) {
                     if (!bomb->IsActive()) continue;
 
                     Vec3 bladeDirCopy = m_BladeDir; // binary saves dir before test
-                    bool hit = CollideWithSphere(*(ColSphere*)bomb->m_Col, bladeDirCopy);
+                    bool hit = CollideWithEntity(bomb);
 
                     if (hit) {
                         if ((s_ModPowerMask & 0x10) == 0) {
@@ -1957,74 +1963,20 @@ void SlashEntity::Update(float dt) {
             if (m_SliceFruitType < 0x100) {
                 Fruit::FruitInfo(m_SliceFruitType);
             }
-            // TranslatePos via camera (binary: FruitCamera::TranslatePos)
-            // TODO: v1.6.1 0x1e96c0 -- FruitCamera::TranslatePos not yet ported;
-            // using raw m_RawTouchPos as position for splat.
-            Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
-                   m_SliceBladeDir.y * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
+            // ASM-spec v1.6.1 SlashEntity::Update @0x001e97cc: splat world-pos =
+            // FruitCamera::TranslatePos(this->pos, inverse=true, useZeroCenter=true).
+            // this->pos is the live blade position (Entity +0x10), so splats trail the blade
+            // across the multi-frame spawn (NOT frozen at the fruit). Camera = game_work.m_FruitCamera.
+            Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(0.75f) + 0.75f),
+                   m_SliceBladeDir.y * (Math::g_Random.RandF(0.75f) + 0.75f),
                    0.0f);
-            // DIFFERS: binary param3 passes incidental register-reuse bits, not a designed flag. Pass false.
-#if !defined(__bada__)
-            // Port specific: binary uses FruitCamera::TranslatePos for splat position;
-            // port caches last SDL touch in m_RawTouchPos as an approximation.
-            s->MakeSplat(m_RawTouchPos, v, false, m_SliceFruitType);
-#else
-            s->MakeSplat(Vec3(0,0,0), v, false, m_SliceFruitType);
-#endif
+            // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
+            FruitCamera* cam = game_work.m_FruitCamera;
+            Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
+            // TODO: v1.6.1 @0x1e9810 MakeSplat binary is 5-arg: param3=1 (hardcoded, not the port's false) and a 5th arg = FruitInfo[m_SliceFruitType].field_0x330; the port collapsed to 4-arg. Separate fidelity fix.
+            s->MakeSplat(splatPos, v, false, m_SliceFruitType);
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// CollideWithSphere -- blade segment vs entity sphere test.
-// The binary's ColLine (head<->tail) is updated by UpdatePoints each frame.
-// Port iterates vertex pairs for sub-frame multi-segment precision.
-// DIFFERS: binary uses SlashEntity::CollideWithEntity @0x001e6420 (single
-// mid->tail ColLine + m_SegLenSq bound), but that path is gated on the
-// trail-shift machinery (UpdatePoints @0x1e6914, m_TrailShiftA/B) which is
-// NOT yet ported (indices stay -1 -> m_SegLenSq stays -1 -> no collision).
-// Port uses a segment-CLAMPED ribbon-pair test here as a faithful-geometry
-// stand-in (blade must actually cross the sphere) -> fixes #306 blank-space
-// over-trigger without the unported gate. Remove this when CollideWithEntity
-// is activated.
-// ---------------------------------------------------------------------------
-bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
-                                     Vec3& outBladeVel) const {
-    const bool bladeInactive = (m_BladeActive == 0);
-    if (bladeInactive || m_PointCount < 2) {
-        outBladeVel = Vec3(0, 0, 0);
-        return false;
-    }
-    if (!m_pLeftBuffer || !m_pRightBuffer) {
-        outBladeVel = Vec3(0, 0, 0);
-        return false;
-    }
-
-    // Buffer model: spine points are at even indices (0, 2, 4, ...).
-    // Both buffers share the same spine x,y,z at even slots. Iterate consecutive
-    // spine pairs (step 2) to reconstruct the trail centre segments for collision.
-    // Segment-clamped distance test: project sphere center onto [a,b], clamp t to
-    // [0,1] (bounded segment, not infinite line), check distance <= radius.
-    Vec3 c = sphere.center();
-    float r = sphere.radius;
-    for (int i = 0; i + 2 < m_PointCount; i += 2) {
-        Vec3 a(m_pLeftBuffer[i].x,   m_pLeftBuffer[i].y,   m_pLeftBuffer[i].z);
-        Vec3 b(m_pLeftBuffer[i+2].x, m_pLeftBuffer[i+2].y, m_pLeftBuffer[i+2].z);
-        Vec3 ab(b.x - a.x, b.y - a.y, b.z - a.z);
-        float abLenSq = ab.MagnitudeSqr();
-        float t = (abLenSq > 1e-12f)
-            ? ((c.x - a.x) * ab.x + (c.y - a.y) * ab.y + (c.z - a.z) * ab.z) / abLenSq
-            : 0.0f;
-        if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
-        Vec3 closest(a.x + ab.x * t, a.y + ab.y * t, a.z + ab.z * t);
-        Vec3 d(closest.x - c.x, closest.y - c.y, closest.z - c.z);
-        if (d.x * d.x + d.y * d.y + d.z * d.z <= r * r) {
-            outBladeVel = ab;
-            return true;
-        }
-    }
-    outBladeVel = Vec3(0, 0, 0);
-    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -2393,11 +2345,7 @@ const Colour* SlashEntity::GetPalette()                           { return g_Pal
 // Binary @ 0x17CE0C -- main per-point append (binary symbol parity).
 // The 3-arg AddPoint above IS the binary-faithful implementation.
 
-// TODO: v1.6.1 SlashEntity::CollideWithEntity @0x001e6420 -- faithful blade collision;
-// NOT yet wired because m_SegLenSq depends on the trail-shift machinery
-// (UpdatePoints @0x1e6914) that is unported (m_TrailShiftA/B never set valid).
-// Activate + route the slice loops here once trail-shift is ported; until then
-// CollideWithSphere (segment-clamped) is used.
+// ASM-spec v1.6.1 SlashEntity::CollideWithEntity @0x001e6420
 bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
     ColLine* L = static_cast<ColLine*>(m_Col);
     if (!L || !(m_SegLenSq > 0.0f) || !entity) return false;
