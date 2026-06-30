@@ -7,6 +7,7 @@
 #include "util/Delegate.h"
 #include "asset/DataReader.h"
 #include "asset/Skeleton.h"
+#include "math/Vec3.h"
 #include <vector>
 #include <map>
 #include <cstdint>
@@ -250,6 +251,26 @@ template<typename U>
 inline SmartPtr<U> SmartPtrCast(const SmartPtr<ReferenceCounter>& sp) {
     return SmartPtr<U>(static_cast<U*>(sp.Get()));
 }
+
+// ---------------------------------------------------------------------------
+// Binary chunk-stream reader free functions.
+// These are DISTINCT from ResourceLoader::ReadString() (which reads uint16 length).
+// These free functions read the format used by font binary chunk loading:
+//   ReadString:   [uint32 len][bytes][\0]  — cursor advances by 4+len+1
+//   ReadChunkHash:[uint32 len][bytes][\0]  — returns StringHash(bytes,len)
+//   ReadFloat:    [4 bytes as float]       — cursor advances by 4
+//   ReadVec3:     [12 bytes as 3 floats]   — cursor advances by 12
+//
+// ASM-spec v1.6.1:
+//   Mortar::ReadString    @0x002381e0
+//   Mortar::ReadChunkHash @0x0023819c
+//   Mortar::ReadFloat     @0x00238250
+//   Mortar::ReadVec3      @0x00238260
+// ---------------------------------------------------------------------------
+AsciiString ReadString(unsigned char** cursor);
+uint32_t    ReadChunkHash(unsigned char** cursor);
+float       ReadFloat(unsigned char** cursor);
+Vec3        ReadVec3(unsigned char** cursor);
 
 } // namespace Mortar
 

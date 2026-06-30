@@ -7,6 +7,7 @@
 #include "asset/Mesh.h"
 #include "asset/Model.h"
 #include "util/PathFunctions.h"
+#include "util/StringHash.h"
 #include "debug/Logger.h"
 #include <cstring>
 
@@ -215,5 +216,62 @@ template SmartPtr<IVertexStream> ResourceLoader::Load<IVertexStream>();
 template SmartPtr<IIndexStream>  ResourceLoader::Load<IIndexStream>();
 template SmartPtr<Model>         ResourceLoader::Load<Model>();
 template SmartPtr<Mesh>          ResourceLoader::Load<Mesh>();
+
+// ---------------------------------------------------------------------------
+// Binary chunk-stream reader free functions.
+// These read a different stream format than ResourceLoader::ReadString()
+// (which reads uint16 length prefix, no trailing null).
+// ---------------------------------------------------------------------------
+
+// ASM-spec v1.6.1 Mortar::ReadString @0x002381e0
+// Stream: [uint32 len][len bytes][\0]  -- cursor advances by 4 + len + 1.
+// Length is clamped to 511 (binary uses 512-byte stack buffer).
+AsciiString ReadString(unsigned char** cursor) {
+    unsigned char* p = *cursor;
+    uint32_t len = *(uint32_t*)p;
+    p += 4;                         // advance past 4-byte length
+    if (len > 511) len = 511;
+    char buf[512];
+    memcpy(buf, p, len);
+    buf[len] = '\0';
+    *cursor = p + len + 1;          // advance past string bytes + null terminator
+    return AsciiString(buf);
+}
+
+// ASM-spec v1.6.1 Mortar::ReadChunkHash @0x0023819c
+// Stream: [uint32 len][len bytes][\0].
+// If len >= 101, returns 0 (sanity guard). Otherwise returns StringHash(bytes, len).
+uint32_t ReadChunkHash(unsigned char** cursor) {
+    uint32_t len = **(uint32_t**)cursor;
+    if (len >= 101) return 0;
+    unsigned char* p = *(unsigned char**)cursor + 4;  // skip uint32 length
+    *(unsigned char**)cursor = p;                     // advance past length
+    uint32_t hash = StringHash((const char*)p, (int)len);
+    *(unsigned char**)cursor = p + len + 1;           // advance past string + null
+    return hash;
+}
+
+// ASM-spec v1.6.1 Mortar::ReadFloat @0x00238250
+// Reads 4 bytes as float (plain VFP load); advances cursor by 4.
+// Decompile was misleading (Ghidra missed VFP hard-float ABI return in s0);
+// the disassembly confirms: vldmia r3!, {s0}; str r3, [r0].
+float ReadFloat(unsigned char** cursor) {
+    float* p = (float*)*cursor;
+    float val = *p;
+    *cursor = (unsigned char*)(p + 1);  // advance by sizeof(float) = 4
+    return val;
+}
+
+// ASM-spec v1.6.1 Mortar::ReadVec3 @0x00238260
+// Reads 12 bytes as 3 consecutive floats (x, y, z); advances cursor by 12.
+Vec3 ReadVec3(unsigned char** cursor) {
+    unsigned char* p = *cursor;
+    *cursor = p + 12;
+    Vec3 out;
+    out.x = *(float*)(p + 0);
+    out.y = *(float*)(p + 4);
+    out.z = *(float*)(p + 8);
+    return out;
+}
 
 } // namespace Mortar
