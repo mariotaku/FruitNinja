@@ -1912,10 +1912,15 @@ typedef Mortar::List<SliceEffect>::Node SliceNode;
 
 struct FruitGlobalData {
     Mortar::List<SliceEffect>*              s_slices;              // +0x00 (heap ptr)
-    Vec3                                    s_sliceParams[7];      // +0x04..+0x57 (opaque runtime params)
+    Vec3                                    s_sliceParams[7];      // +0x04..+0x57 (slice-effect tuning Vec3s; HLE-confirmed floats)
     Mortar::SmartPtr<Mortar::Model>         s_sliceModel[4];       // +0x58..+0x67
     Mortar::MemoryPool<SliceNode>*          s_pool;                // +0x68 (heap ptr)
-    char                                    _pad6C[0x20];          // +0x6C..+0x8B (other statics)
+    // +0x6C..+0x8B: NOT FruitGlobalData members -- in the binary these 8 ints are
+    // function-local statics of GetFact (@0x1db7b4: 2 __cxa_guard + cached
+    // FruitType("red apple"/"apple")) and RandomFruit (@0x1dc5d8: 4 spawn-chance
+    // accumulators) that the linker parked right after the block. The port's
+    // GetFact/RandomFruit keep their own locals, so this is layout padding only.
+    char                                    _pad6C[0x20];          // +0x6C..+0x8B (GetFact/RandomFruit statics in binary)
     Mortar::SmartPtr<Mortar::Texture2D>     s_globalFruitAtlas[2]; // +0x8C..+0x93
     Mortar::SmartPtr<Mortar::Texture2D>     s_atlas2[2];           // +0x94..+0x9B (opaque)
     Mortar::SmartPtr<Mortar::Texture>       s_texSlots[3];         // +0x9C..+0xA7 (opaque)
@@ -1993,7 +1998,7 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
     n->value.m_ModelIdx = modelIdx;
     n->value.m_pFruit   = fruit;
     n->value.m_RateMul  = v.z;
-    n->value.field_0x24 = 0;
+    n->value.m_Reserved24 = 0;
 
     g_fruitData.s_slices->AddNodeToHead(n);
 }

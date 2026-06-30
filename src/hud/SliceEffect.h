@@ -37,15 +37,15 @@ struct SliceEffect {
     int      m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
     Fruit*   m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
     float    m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
-    // TODO: confirm actual field name at +0x24 (v1.6.1 AddSlice @0x001dc990);
-    // the binary writes a value here but the semantic is not yet RE'd.
-    // Previously mis-labeled 'm_pNext' (it is NOT a list pointer).
-    uint32_t field_0x24;   // +0x24: real payload field, purpose unknown
+    // +0x24: dead reserved word -- AddSlice @0x001dc990 memset-0's it and never
+    // writes a real value; DrawSlices @0x001dae7c never reads it. (Earlier RE
+    // mis-labeled it 'm_pNext'; the list prev/next are at +0x28/+0x2c.)
+    uint32_t m_Reserved24; // +0x24: unused, always 0
 
     SliceEffect()
         : m_Timer(0.f), m_Impulse(0.f), m_AngleDeg(0.f),
           m_Pos(0.f, 0.f, 0.f), m_ModelIdx(0), m_pFruit(0),
-          m_RateMul(1.f), field_0x24(0) {}
+          m_RateMul(1.f), m_Reserved24(0) {}
 };
 
 #ifdef __bada__
@@ -61,7 +61,7 @@ static_assert(__builtin_offsetof(SliceEffect, m_Pos)      == 0x0c, "SliceEffect:
 static_assert(__builtin_offsetof(SliceEffect, m_ModelIdx) == 0x18, "SliceEffect::m_ModelIdx");
 static_assert(__builtin_offsetof(SliceEffect, m_pFruit)   == 0x1c, "SliceEffect::m_pFruit");
 static_assert(__builtin_offsetof(SliceEffect, m_RateMul)  == 0x20, "SliceEffect::m_RateMul");
-static_assert(__builtin_offsetof(SliceEffect, field_0x24) == 0x24, "SliceEffect::field_0x24");
+static_assert(__builtin_offsetof(SliceEffect, m_Reserved24) == 0x24, "SliceEffect::m_Reserved24");
 
 // List<SliceEffect>::Node probe: the 0x30-byte doubly-linked node that wraps
 // SliceEffect payload. m_pPrev and m_pNext are provided by the List<T>::Node wrapper.
