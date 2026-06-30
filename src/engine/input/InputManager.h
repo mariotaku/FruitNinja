@@ -2,22 +2,22 @@
 #define FN_ENGINE_INPUT_INPUTMANAGER_H
 
 // InputManager — binary @ 0x00196980 area.
-// sizeof 0x10 (16 bytes):
+// sizeof 0x14 (20 bytes):
 //   vptr    (4)  — binary isPolymorphic=true; vtableAddr 0x001eb318;
 //                  first vfunc slot 0x0019603c (SetQueueEventsUntilUpdate).
 //   field_0x4 (1, bool) — m_loadingConfig
 //   field_0x5 (1, bool) — m_inUpdate
 //   pad [0x06..0x07] (2)
-//   m_inputDevices std::list<InputDevice*> (8, Sourcery 2010q1) — +0x08
+//   m_inputDevices std::vector<InputDevice*> (12: begin/end/capEnd) — +0x08
 //
-// Architecture: broadcaster over std::list<InputDevice*>.
+// Architecture: broadcaster over std::vector<InputDevice*>.
 // RegisterInputCallback forwards to each device (bindings live on device, not manager).
 // Update gates on m_loadingConfig, sets m_inUpdate, broadcasts Update(dt).
 
 #include "input/InputDevice.h"
 #include "input/InputEvent.h"
 #include "util/Delegate.h"
-#include <list>
+#include <vector>
 #include <cstdint>
 
 // Callback type alias (matches binary Mortar::Delegate1<bool, InputEvent*>).
@@ -31,7 +31,7 @@ public:
 
     // Binary @ 0x00196980 — ctor: both flags = 0.
     InputManager();
-    // Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
+    // Binary @ 0x00196924 — dtor: vector dtor only; does NOT call Destroy.
     // Virtual to match binary isPolymorphic=true (vptr at +0x00).
     // Binary vtable slot 0: 0x001eb318 area (dtor is implicitly first slot).
     virtual ~InputManager();
@@ -42,7 +42,7 @@ public:
     void Init(unsigned long flags);
 
     // Binary @ 0x001968a0 — Destroy: clear flags, ClearActions(all=true) on first
-    //   device, then Destroy+dtor on each device, list.clear().
+    //   device, then Destroy+dtor on each device, vector.clear().
     void Destroy();
 
     // Binary @ 0x00196138 — Update: gate m_loadingConfig, m_inUpdate=true,
@@ -100,13 +100,13 @@ public:
     bool m_loadingConfig;                    // +0x04
     bool m_inUpdate;                         // +0x05
     // +0x06..0x07 padding (implicit)
-    std::list<InputDevice*> m_inputDevices;  // +0x08 (8B, Sourcery 2010q1 pre-C++11)
+    std::vector<InputDevice*> m_inputDevices; // +0x08 (12B: begin/end/capEnd)
 };
 
 } // namespace Mortar
 
 #if defined(__bada__)
-static_assert(sizeof(Mortar::InputManager) == 16, "InputManager size mismatch");
+static_assert(sizeof(Mortar::InputManager) == 20, "InputManager size mismatch");
 #endif
 
 // Global-namespace free functions implemented in InputManager.cpp.

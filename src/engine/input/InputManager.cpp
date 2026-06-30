@@ -9,7 +9,7 @@ namespace Mortar {
 
 InputManager* InputManager::s_instance = nullptr;
 
-// Binary @ 0x00196980 — ctor: both flags = 0, list default-inits.
+// Binary @ 0x00196980 — ctor: both flags = 0, vector default-inits (all three pointers zeroed).
 InputManager::InputManager()
     : m_loadingConfig(false)
     , m_inUpdate(false)
@@ -17,11 +17,11 @@ InputManager::InputManager()
     s_instance = this;
 }
 
-// Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
+// Binary @ 0x00196924 — dtor: vector dtor only; does NOT call Destroy.
 // Virtual to match binary isPolymorphic=true.
 InputManager::~InputManager() {
     s_instance = nullptr;
-    // Note: binary does NOT call Destroy() in dtor — list goes out of scope only.
+    // Note: binary does NOT call Destroy() in dtor — vector goes out of scope only.
     // Devices leaked intentionally (matches binary behavior at 0x00196924).
 }
 
@@ -49,7 +49,7 @@ void InputManager::Destroy() {
         InputDevice* first = m_inputDevices.front();
         first->ClearActions(0, true);
     }
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->Destroy();
         delete *it;
@@ -62,7 +62,7 @@ void InputManager::Destroy() {
 void InputManager::Update(float dt) {
     if (m_loadingConfig) return;
     m_inUpdate = true;
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->Update(dt);
     }
@@ -78,7 +78,7 @@ int InputManager::LoadConfigFile(const char* path) {
 
 // Binary @ 0x001960f8 — broadcast to devices.
 void InputManager::AddActionMapper(InputActionMapper* mapper) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->AddActionMapper(mapper);
     }
@@ -86,10 +86,10 @@ void InputManager::AddActionMapper(InputActionMapper* mapper) {
 
 // Binary @ 0x001961d0 — broadcast ClearActions(hash, last=true on final).
 void InputManager::ClearActions(unsigned long actionHash) {
-    std::list<InputDevice*>::iterator it = m_inputDevices.begin();
-    std::list<InputDevice*>::iterator end = m_inputDevices.end();
+    std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
+    std::vector<InputDevice*>::iterator end = m_inputDevices.end();
     while (it != end) {
-        std::list<InputDevice*>::iterator next = it;
+        std::vector<InputDevice*>::iterator next = it;
         ++next;
         bool last = (next == end);
         (*it)->ClearActions(actionHash, last);
@@ -99,7 +99,7 @@ void InputManager::ClearActions(unsigned long actionHash) {
 
 // Binary @ 0x00195fe8 — search devices by GetDeviceType.
 bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         if ((*it)->GetDeviceType() == type) {
             if (out) *out = *it;
@@ -112,7 +112,7 @@ bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
 
 // Binary @ 0x00196bc8 — broadcast.
 void InputManager::OnAxisExtentsChanged() {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->OnAxisExtentsChanged();
     }
@@ -205,7 +205,7 @@ unsigned long InputManager::ParseKey(unsigned long hash) {
 // Binary @ 0x0019683c — broadcast to devices (2-param; bindings live on device).
 // DIFFERS: original = per-device binding store, see v1.6.1 Mortar::InputManager::RegisterInputCallback @0x0024475c
 void InputManager::RegisterInputCallback(unsigned long actionHash, InputCallback cb) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         InputDeviceCallback devcb;
         devcb = cb;
@@ -215,7 +215,7 @@ void InputManager::RegisterInputCallback(unsigned long actionHash, InputCallback
 
 // Binary @ 0x00196194 — broadcast Reset().
 void InputManager::ResetDevices() {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->Reset();
     }
@@ -223,7 +223,7 @@ void InputManager::ResetDevices() {
 
 // Binary @ 0x0019603c — broadcast.
 void InputManager::SetQueueEventsUntilUpdate(bool v) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->SetQueueEventsUntilUpdate(v);
     }
@@ -231,7 +231,7 @@ void InputManager::SetQueueEventsUntilUpdate(bool v) {
 
 // Binary @ 0x0019607c — broadcast.
 void InputManager::SetSendDownCallbacksEachUpdate(bool v) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->SetSendDownCallbacksEachUpdate(v);
     }
@@ -244,7 +244,7 @@ bool InputManager::ValidCharacter(unsigned char c) {
 
 // Port-side: dispatch through all devices.
 void InputManager::DispatchEvent(InputEvent* event) {
-    for (std::list<InputDevice*>::iterator it = m_inputDevices.begin();
+    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
         (*it)->DispatchEvent(event);
     }
