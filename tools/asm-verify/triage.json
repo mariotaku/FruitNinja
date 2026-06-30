@@ -9201,6 +9201,12 @@
     "asm_hash": "4cd525a525a1235b",
     "decided_at": "2026-06-26T00:00Z"
   },
+  "_ZN6Mortar14BakedStringTTF16FitStringToWidthEPNS_18FontCacheObjectTTFERSsS3_fliPfPb": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Real bug fixed in commit 9b6e816d (per-glyph advance = advanceX, matching binary net advance). Residual divergence is structural/algorithmic, not a bug: binary reads Bada-IFont sub-object field (fc+0x10c->+0x10 fontScaleFactor) and uses GlyphTTF::GetKerning (per non-first glyph) + WordWrap::CanBreakLineAt (CJK break logic). Port substitutes FontCacheObjectTTF::GetGlyph/advanceX glyph cache + simple break set (space/0x200b/0x0a) -- Bada-IFont field is unportable, kerning is ~0 for Latin/CJK ring labels in v1.6.1, and port is shorter (no bloat). Behavior verified: bakedstringttf + font_align tests pass; gamemode/shop ring labels render correctly sized.",
+    "asm_hash": "364ab263c32d11c1",
+    "decided_at": "2026-06-30T00:00Z"
+  },
   "_Z11UnpauseGamev": {
     "verdict": "ACCEPT-cosmetic",
     "reason": "Binary accesses g_repauseDelay/g_unpause_game as game_work-struct members at fixed offsets; port uses separate GOT-referenced globals. Different addressing, same values. Confirmed by src/screens/PauseScreen.cpp:130.",
