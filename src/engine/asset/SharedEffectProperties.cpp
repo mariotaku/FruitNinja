@@ -50,15 +50,11 @@ EffectPropertyValues::~EffectPropertyValues() {
     }
 }
 
-// EffectPropertyList dtor — frees arena and all heap-allocated EffectProperty entries.
+// ASM-spec v1.6.1 EffectPropertyList::~EffectPropertyList @ 0x00264e88:
+// purely implicit body — ~vector(m_Props) + ~auto_ptr(m_Values) + SmartPtr::Clear(m_Parent).
+// m_Props stores EffectProperty by value so vector dtor handles element cleanup.
 EffectPropertyList::~EffectPropertyList() {
-    for (std::vector<EffectProperty*>::iterator it = m_Props.begin();
-         it != m_Props.end(); ++it) {
-        delete *it;
-    }
-    m_Props.clear();
-    delete m_Values;
-    m_Values = NULL;
+    delete m_Values;  // mirrors auto_ptr dtor; see header DIFFERS comment @+0x04
 }
 
 // SortProperties — sorts m_Props by name so binary-search in GetProperty works.
@@ -66,14 +62,14 @@ void EffectPropertyList::SortProperties() {
     std::sort(m_Props.begin(), m_Props.end(), NameLessThan());
 }
 
-// GetProperty(char*) @ 0x001b67b8.
-// Binary-searches m_Props (sorted by interned name ptr) for `name`, then
+// GetProperty(char*) @ 0x0025d650 (v1.6.1).
+// Binary-searches m_Props (sorted by name) for `name`, then
 // recurses to parent list if not found.
 EffectProperty* EffectPropertyList::GetProperty(const char* name) const {
-    std::vector<EffectProperty*>::const_iterator lo =
+    std::vector<EffectProperty>::const_iterator lo =
         std::lower_bound(m_Props.begin(), m_Props.end(), name, NameLessThan());
-    if (lo != m_Props.end() && std::strcmp((*lo)->m_Def.m_Name.c_str(), name) == 0)
-        return *lo;
+    if (lo != m_Props.end() && std::strcmp(lo->m_Def.m_Name.c_str(), name) == 0)
+        return const_cast<EffectProperty*>(&*lo);
     if (m_Parent.IsValid())
         return m_Parent->GetList().GetProperty(name);
     return NULL;
@@ -95,7 +91,7 @@ bool EffectPropertyList::Contains(const EffectPropertyDefinition* def) const {
     return Contains(*def);
 }
 
-// Contains(begin, end) @ 0x001b1938 — range overload; true iff all defs present.
+// Contains(begin, end) @ 0x002738b8 (v1.6.1) — range overload; true iff all defs present.
 bool EffectPropertyList::Contains(const EffectPropertyDefinition* begin,
                                   const EffectPropertyDefinition* end) const {
     for (const EffectPropertyDefinition* p = begin; p != end; ++p) {
