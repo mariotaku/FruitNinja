@@ -1017,13 +1017,14 @@ static const float SCALE_MARGIN_MULT   =   50.0f; // DAT_00175564
 static const float WARP_THRESH_RIGHT   =  360.0f; // DAT_00175568
 static const float WARP_THRESH_LEFT    = -360.0f; // DAT_0017556c
 
-// ASM-spec v1.6.1 Fruit::CheckHasGoneOffsceen @0x001df304 (constants confirmed by decompile;
-//   old DAT_0017554x..0017556x slots are stale v1.5.x -- re-verify v1.6.1 DAT addresses).
+// ASM-spec v1.6.1 Fruit::CheckHasGoneOffsceen @0x001df304: each off-screen gate is (<grav test>) || gZero;
+// zero-gravity flung menu entities reap only via gZero. Block-5 (+X) return-true restored.
 bool Fruit::CheckHasGoneOffscreen() {
     const float margin = SCALE_MARGIN_MULT * scale.y;
+    const bool gZero = (m_Gravity.x == 0.0f && m_Gravity.y == 0.0f && m_Gravity.z == 0.0f);
 
     // === Horizontal gravity early exit (sliced + |m_Gravity.x| > 0) ===
-    if (m_bSliced && fabsf(m_Gravity.x) > 0.0f) {
+    if (m_bSliced && (fabsf(m_Gravity.x) > 0.0f || gZero)) {
         float yBound = OFFSCREEN_BASE + margin;
         if (pos.y <= -yBound || pos.y >= yBound) {
             if (m_SecondPos.y <= -yBound || m_SecondPos.y >= yBound)
@@ -1033,7 +1034,7 @@ bool Fruit::CheckHasGoneOffscreen() {
 
     // === Downward gravity (m_Gravity.y < 0) ===
     bool halfA_gone = false;
-    if (m_Gravity.y < 0.0f) {
+    if (m_Gravity.y < 0.0f || gZero) {
         // Warp: sliced half that drifts above +240 gets teleported to
         // -320 (far below screen) so it counts as "gone" immediately.
         if (m_bSliced && pos.y > WARP_THRESH_TOP) {
@@ -1063,7 +1064,7 @@ bool Fruit::CheckHasGoneOffscreen() {
     }
 
     // === Upward gravity (m_Gravity.y > 0) ===
-    if (m_Gravity.y > 0.0f) {
+    if (m_Gravity.y > 0.0f || gZero) {
         if (m_bSliced && pos.y < WARP_THRESH_BOT) {
             pos.y = WARP_CLAMP_BOT;
             vel.y = 1.0f;
@@ -1090,7 +1091,7 @@ bool Fruit::CheckHasGoneOffscreen() {
     }
 
     // === Negative horizontal gravity (m_Gravity.x < 0) ===
-    if (m_Gravity.x < 0.0f) {
+    if (m_Gravity.x < 0.0f || gZero) {
         if (m_bSliced) {
             if (pos.x > WARP_THRESH_RIGHT) {
                 pos.x = WARP_CLAMP_RIGHT;
@@ -1110,15 +1111,20 @@ bool Fruit::CheckHasGoneOffscreen() {
     }
 
     // === Positive horizontal gravity (m_Gravity.x > 0) ===
-    if (m_Gravity.x > 0.0f && m_bSliced) {
-        if (pos.x < WARP_THRESH_LEFT) {
-            pos.x = WARP_CLAMP_LEFT;
-            vel.x = 1.0f;
+    if (m_Gravity.x > 0.0f || gZero) {
+        if (m_Gravity.x > 0.0f && m_bSliced) {
+            if (pos.x < WARP_THRESH_LEFT) {
+                pos.x = WARP_CLAMP_LEFT;
+                vel.x = 1.0f;
+            }
+            if (m_SecondPos.x < WARP_THRESH_LEFT) {
+                m_SecondPos.x = WARP_CLAMP_LEFT;
+                m_SecondVel.x = 1.0f;
+            }
         }
-        if (m_SecondPos.x < WARP_THRESH_LEFT) {
-            m_SecondPos.x = WARP_CLAMP_LEFT;
-            m_SecondVel.x = 1.0f;
-        }
+        float rightBound = margin + WARP_THRESH_TOP; // scale.y * 50 + 240
+        if (((rightBound <= pos.x && vel.x > 0.0f) || halfA_gone) && m_SliceTimer <= 0.0f && rightBound <= m_SecondPos.x)
+            return m_SecondVel.x > 0.0f;
     }
 
     return false;
