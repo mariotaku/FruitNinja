@@ -1,7 +1,7 @@
 // Analysed: 2026-05-03T00:00
 // Bonus / BonusType implementation.
 // Binary addresses: Bonus ctor @ 0x0010005c, dtor @ 0x0010fa40.
-// BonusType ctor @ 0x0010df00, Parse @ 0x0010e7ec.
+// BonusType ctor @ 0x0010df00, Parse @ 0x0012f3a4.
 
 #include "Bonus.h"
 #include "FruitSaveData.h"
@@ -78,7 +78,7 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 }
 
 // ---------------------------------------------------------------------------
-// Bonus::Parse -- Binary @ 0x0010e61c
+// Bonus::Parse -- Binary @ 0x0012f0f8
 //
 // Reads attributes from a <bonus> XML element (real bonusawards.xml schema):
 //   min      = int          -> m_MinSliced (lower bound on totalAcrossFruits)
@@ -112,6 +112,11 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
     const char* achievement = e->Attribute("achievement");
     if (achievement && achievement[0]) {
         m_AchievementHash = StringHash(achievement);
+        // Binary: achievement present + points absent => m_Tier = -1 (achievement-only
+        // bonus; never selected as "best" in BonusType::GetBest since bestTier starts at 0).
+        if (!e->Attribute("points")) {
+            m_Tier = -1;
+        }
     }
 
     // Texture: per-bonus override first, then parent bonusType fallback.
@@ -157,8 +162,21 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
         }
     }
 
-    // TODO: v1.6.1 Bonus::Parse -- populate m_PatternHashes from the pattern XML attr
-    // (currently never filled; IsAchieved pattern loop is a no-op)
+    // ASM-spec v1.6.1 Bonus::Parse @0x0012f0f8: valuesEqual -> m_PatternHashes
+    // Attribute("valuesEqual") -> comma-split (trim leading space after each comma,
+    // skip empties) -> StringHash each token -> push_back (uint32_t).
+    const char* valuesEq = e->Attribute("valuesEqual");
+    if (valuesEq && valuesEq[0]) {
+        char buf[256];
+        strncpy(buf, valuesEq, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        char* tok = strtok(buf, ",");
+        while (tok) {
+            while (*tok == ' ') ++tok;
+            if (*tok) m_PatternHashes.push_back(StringHash(tok));
+            tok = strtok(NULL, ",");
+        }
+    }
 
     // ASM-verified: 2026-05-22 v1.6.1 Bonus::Parse @ 0x001036e8 (re-analyst). Binary's
     // Bonus::Parse calls GETSTRING_CAST_0_STR on the inner text BEFORE
@@ -278,7 +296,7 @@ BonusType& BonusType::operator=(const BonusType& rhs) {
 }
 
 // ---------------------------------------------------------------------------
-// BonusType::Parse -- Binary @ 0x0010e7ec
+// BonusType::Parse -- Binary @ 0x0012f3a4
 //
 // Reads a <bonusType> element (real bonusawards.xml schema):
 //   "total" attr (CSV of fruit/stat names) -> m_RequiredHashes keys (values=0)
