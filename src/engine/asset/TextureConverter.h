@@ -20,12 +20,12 @@ namespace TextureInfo { struct ChannelDescription; }
 
 namespace Mortar {
 
-// COUNT_BITS(unsigned int) -- parallel bit-population count (Hamming weight).
+// COUNT_BITS(unsigned long) -- parallel bit-population count (Hamming weight).
 // Implements the standard parallel-popcount algorithm with the binary's exact
 // step-4 mask (0xFFFF00FF on the shifted half, per Ghidra decompile).
 // For 32-bit inputs the result is identical to __builtin_popcount.
 // Binary v1.6.1 Mortar::COUNT_BITS @0x0026ba14.
-unsigned int COUNT_BITS(unsigned int x);
+int COUNT_BITS(unsigned long x);
 
 // CorrectHalfTexel(float, float&, float&) -- shrink or expand a UV [u,v] range
 // by halfTexel on each endpoint to avoid texel-bleed at atlas boundaries.
