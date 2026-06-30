@@ -1,7 +1,7 @@
 #ifndef FN_SLICE_EFFECT_H
 #define FN_SLICE_EFFECT_H
 
-// SliceEffect subsystem — slash-line visual effects.
+// SliceEffect subsystem -- slash-line visual effects.
 //
 // v1.6.1 binary refs:
 //   AddSlice     @0x001dc990  (_Z8AddSlice8_Vector3IfEffiP5Fruitf)
@@ -11,49 +11,70 @@
 //
 // Owner: Fruit TU statics (s_slices + s_pool).
 // AddSlice / DrawSlices are top-level free functions (no namespace).
+//
+// The 0x30-byte binary node is Mortar::List<SliceEffect>::Node:
+//   +0x00..+0x27  SliceEffect value   (payload -- 0x28 bytes)
+//   +0x28         Node* m_pPrev       (doubly-linked prev, set by AddNodeToHead)
+//   +0x2c         Node* m_pNext       (doubly-linked next, set by AddNodeToHead)
+// The List<SliceEffect> head (20 bytes) lives at s_slices (heap pointer in FruitGlobalData).
 
 #include "math/Vec3.h"
+#include "util/List.h"
 #include <cstdint>
 
 class Fruit;
 
-// SliceEffect::Node — 0x30 (48) bytes.
+// SliceEffect -- 0x28-byte payload for one slash-line visual effect instance.
+// Used as T in Mortar::List<SliceEffect>; Mortar::List<SliceEffect>::Node wraps
+// it with m_pPrev and m_pNext at +0x28 and +0x2c (prev BEFORE next).
+//
 // Binary layout verified against AddSlice @0x001dc990.
 struct SliceEffect {
-    // Intrusive doubly-linked list node for s_slices.
-    // Pool-managed: MemoryPool<Node> owns the backing storage.
-    struct Node {
-        float  m_Timer;      // +0x00: 0..6 lifetime clock; expire at >=6.0
-        float  m_Impulse;    // +0x04: v.y (length-scale hint)
-        float  m_AngleDeg;   // +0x08: v.x (degrees-offset angle)
-        Vec3   m_Pos;        // +0x0c: world position (+0x0c..+0x17)
-        int    m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
-        Fruit* m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
-        float  m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
-        Node*  m_pNext;      // +0x24: intrusive list next
-        Node*  m_pPrev;      // +0x28: intrusive list prev
-        uint32_t _pad;       // +0x2c: padding to 0x30
+    float    m_Timer;      // +0x00: 0..6 lifetime clock; expire at >=6.0
+    float    m_Impulse;    // +0x04: v.y (length-scale hint)
+    float    m_AngleDeg;   // +0x08: v.x (degrees-offset angle)
+    Vec3     m_Pos;        // +0x0c: world position (+0x0c..+0x17)
+    int      m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
+    Fruit*   m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
+    float    m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
+    // TODO: confirm actual field name at +0x24 (v1.6.1 AddSlice @0x001dc990);
+    // the binary writes a value here but the semantic is not yet RE'd.
+    // Previously mis-labeled 'm_pNext' (it is NOT a list pointer).
+    uint32_t field_0x24;   // +0x24: real payload field, purpose unknown
 
-        Node() : m_Timer(0.0f), m_Impulse(0.0f), m_AngleDeg(0.0f),
-                 m_Pos(0.0f, 0.0f, 0.0f), m_ModelIdx(0),
-                 m_pFruit(0), m_RateMul(1.0f),
-                 m_pNext(0), m_pPrev(0), _pad(0) {}
-    };
+    SliceEffect()
+        : m_Timer(0.f), m_Impulse(0.f), m_AngleDeg(0.f),
+          m_Pos(0.f, 0.f, 0.f), m_ModelIdx(0), m_pFruit(0),
+          m_RateMul(1.f), field_0x24(0) {}
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(SliceEffect::Node) == 0x30,
-              "SliceEffect::Node must be 0x30 bytes (v1.6.1 AddSlice @0x001dc990)");
-static_assert(offsetof(SliceEffect::Node, m_Timer)    == 0x00, "");
-static_assert(offsetof(SliceEffect::Node, m_Impulse)  == 0x04, "");
-static_assert(offsetof(SliceEffect::Node, m_AngleDeg) == 0x08, "");
-static_assert(offsetof(SliceEffect::Node, m_Pos)      == 0x0c, "");
-static_assert(offsetof(SliceEffect::Node, m_ModelIdx) == 0x18, "");
-static_assert(offsetof(SliceEffect::Node, m_pFruit)   == 0x1c, "");
-static_assert(offsetof(SliceEffect::Node, m_RateMul)  == 0x20, "");
-static_assert(offsetof(SliceEffect::Node, m_pNext)    == 0x24, "");
-static_assert(offsetof(SliceEffect::Node, m_pPrev)    == 0x28, "");
+// SliceEffect payload must be exactly 0x28 bytes so that List<SliceEffect>::Node
+// gets m_pPrev at +0x28 and m_pNext at +0x2c (binary: AddSlice @0x001dc990).
+static_assert(sizeof(SliceEffect) == 0x28,
+    "SliceEffect payload must be 0x28 bytes (v1.6.1 AddSlice @0x001dc990)");
+static_assert(__builtin_offsetof(SliceEffect, m_Timer)    == 0x00, "SliceEffect::m_Timer");
+static_assert(__builtin_offsetof(SliceEffect, m_Impulse)  == 0x04, "SliceEffect::m_Impulse");
+static_assert(__builtin_offsetof(SliceEffect, m_AngleDeg) == 0x08, "SliceEffect::m_AngleDeg");
+static_assert(__builtin_offsetof(SliceEffect, m_Pos)      == 0x0c, "SliceEffect::m_Pos");
+static_assert(__builtin_offsetof(SliceEffect, m_ModelIdx) == 0x18, "SliceEffect::m_ModelIdx");
+static_assert(__builtin_offsetof(SliceEffect, m_pFruit)   == 0x1c, "SliceEffect::m_pFruit");
+static_assert(__builtin_offsetof(SliceEffect, m_RateMul)  == 0x20, "SliceEffect::m_RateMul");
+static_assert(__builtin_offsetof(SliceEffect, field_0x24) == 0x24, "SliceEffect::field_0x24");
+
+// List<SliceEffect>::Node probe: the 0x30-byte doubly-linked node that wraps
+// SliceEffect payload. m_pPrev and m_pNext are provided by the List<T>::Node wrapper.
+// v1.6.1: this is the node type that AddNodeToHead @0x001e3158 and Remove @0x001e36c8 manage.
+namespace {
+typedef Mortar::List<SliceEffect>::Node _SliceNode;
+}
+static_assert(sizeof(_SliceNode) == 0x30,
+    "List<SliceEffect>::Node must be 0x30 bytes (v1.6.1 AddSlice @0x001dc990)");
+static_assert(__builtin_offsetof(_SliceNode, m_pPrev) == 0x28,
+    "List<SliceEffect>::Node::m_pPrev must be at +0x28");
+static_assert(__builtin_offsetof(_SliceNode, m_pNext) == 0x2c,
+    "List<SliceEffect>::Node::m_pNext must be at +0x2c");
 #endif
 
 // 7-frame keyframe scale table (frame index = int(m_Timer), frac = m_Timer - int).
