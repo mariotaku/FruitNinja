@@ -21,6 +21,7 @@
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/network/P2PMessageHandling.h"
+#include "entities/EntityTracker.h"
 #include "debug/Logger.h"
 
 // Port-only debug logging: the binary has no equivalent. Suppressed in non-debug
@@ -599,7 +600,7 @@ void WaveManager::Reset(bool fullReset) {
     m_NextBlitzTime = m_Random.RandF(10.0f) + 10.0f;
     SetScore(0, -1);       // Binary @ 0x0010a4b8; playerIdx -1 = all (defunct MP sig)
     SetMissCount(0, -1);   // Binary @ 0x0010a4e8
-    // ET_ClearKnownEntities(-1) -- TODO: not ported
+    ET_ClearKnownEntities(-1);
 
     // 4. Per-player wave state.
     m_WaveActive = 1;          // wave-active flag (player 0)

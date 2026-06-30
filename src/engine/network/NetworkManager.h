@@ -363,6 +363,26 @@ static_assert(sizeof(NetworkManager) == 668,
 // no-op stub; binary addr unknown.
 int GetSocialNetworkProvider();
 
+// Defunct: social publish -- no-op stub; v1.6.1 Mortar::DefaultPublishTextCallback
+// Default callback for NetworkManager::PublishTextWithCallback.
+void DefaultPublishTextCallback(int result);
+
+// Defunct: push notifications -- no-op stub; v1.6.1 Mortar::DefaultNotificationCallback
+// Default handler for incoming push notifications.
+void DefaultNotificationCallback(const char* name, int i1, int i2);
+
+// Defunct: leaderboard retrieval -- no-op stub; v1.6.1 Mortar::DefaultRetrieveScoreCallback
+// Default callback for NetworkManager::RetrieveLeaderboardScore.
+void DefaultRetrieveScoreCallback(const char* board, int score, int rank, void* userdata);
+
+// Defunct: online user data -- no-op stub; v1.6.1 Mortar::DefaultDownloadUserDataCallback
+// Default callback for NetworkManager::DownloadUserDataFromLeaderboard.
+void DefaultDownloadUserDataCallback(const char* board, void* data, int size);
+
+// Defunct: social network registration -- no-op stub; v1.6.1 Mortar::RegisterSocial
+// Registers social network handlers with the network layer on startup.
+void RegisterSocial();
+
 } // namespace Mortar
 
 // Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
@@ -383,5 +403,13 @@ void SetPrefNetwork(long v);
 
 // Defunct: online-services notification -- no-op stub; v1.6.1 CustomNotificationCallback @0x001cf0cc
 void CustomNotificationCallback(const char* name, int i1, int i2);
+
+// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001270c8
+// Fills buf with an empty string (online services not available).
+void CurrentUserName(char* buf, int size, Mortar::NetworkProvider provider);
+
+// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0010c144
+// Called by GameCenter integration layer with a result code.
+void GPostCallback(int result);
 
 #endif // FN_ENGINE_NETWORK_NETWORK_MANAGER_H
