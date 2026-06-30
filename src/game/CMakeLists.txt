@@ -54,4 +54,5 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Leaderboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Licensing.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Social.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DeviceQuery.cpp
 )

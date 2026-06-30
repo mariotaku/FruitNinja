@@ -423,4 +423,10 @@ const char* GetLoadFileFullPath();
 // DIFFERS: port I/O uses GetSavePath() returning <data_dir>/FruitySave.xml; binary hardcodes Bada home.
 const char* GetSaveFileFullPath();
 
+// DlTwVal -- v1.6.1 @0x00152dc4 (_Z7DlTwValPKciiPv) ("Downloaded Tweak Value")
+// Server-side configuration callback. Validates key (must start with "FNT") and
+// count > 0, then calls FruitSaveData::DownloadedTweakValue(key, val).
+// Returns 1 (success indicator for the download callback protocol).
+int DlTwVal(const char* key, int val, int count, void* data);
+
 #endif  // FN_FRUIT_SAVE_DATA_H

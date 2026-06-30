@@ -164,4 +164,13 @@ PauseScreen* GetPauseScreen();
 void ClearPause();
 bool GetPausedBy();
 
+// Device/orientation query stubs (src/game/DeviceQuery.cpp).
+// Binary: Bada accelerometer / OS version queries. Port: SDL fixed-landscape constants.
+int CurrentOrientation();         // v1.6.1 @0x0011f4c4 — reads theGame+0x104
+const char* GetHardwareString();  // v1.6.1 @0x0011f4e4 — free fn; distinct from MortarGame::GetHardwareString()
+const char* GetSoftwareString();  // v1.6.1 @0x0011f504 — reads theGame+0x208 (Bada OS version)
+int DeviceUpsideDown();           // v1.6.1 @0x0011a14c — accelerometer; dead in binary, returns 0
+bool IsDeviceUpsideDown();        // v1.6.1 @0x0011a154 — game_work.m_UpsideDownTimer > 0
+bool UpdateUpsideDown(float dt);  // v1.6.1 @0x0011a184 — drives upside-down timer
+
 #endif

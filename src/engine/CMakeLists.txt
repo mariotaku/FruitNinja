@@ -118,6 +118,7 @@ target_sources(mortar_engine PRIVATE
     network/P2PMessageHandling.cpp
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
+    system/PlatformFuncs.cpp
     # Debug logger (SDL_Log backend)
 )
 if(NOT FN_ASM_VERIFY)
