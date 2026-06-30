@@ -432,6 +432,19 @@ fn_add_game_test(test_slash_reset test_slash_reset.cpp)
 add_test(NAME slash_reset COMMAND test_slash_reset)
 set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
 
+# SlashEntity::CollideWithSphere blade-vs-sphere segment-clamp regression guard.
+# Covers three cases:
+#   (1) CROSSING HIT  -- ribbon through sphere center; segment-closest=center -> HIT
+#   (2) BLANK MISS    -- far-corner stroke; segment-clamped closest >> radius -> MISS
+#                        (pre-#306 infinite-line over-trigger would still miss here, but
+#                        segment-reversal regressions are caught by the clamp-to-1 path)
+#   (3) NEAR-BOUNDARY -- closest just outside radius -> MISS; just inside -> HIT
+# Pure buffer-content check: no SDL init, no GL, no audio -- follows test_slash_reset.cpp
+# bootstrap pattern (fn_add_game_test, SlashEntity::Init only).
+fn_add_game_test(test_slash_collision test_slash_collision.cpp)
+add_test(NAME slash_collision COMMAND test_slash_collision)
+set_tests_properties(slash_collision PROPERTIES TIMEOUT 30)
+
 # InputTranslatorSDL drain/dispatch split invariant (#173 bridge-to-origin fix).
 # Verifies that DrainSDLEvent() accumulates pending state WITHOUT dispatching
 # and DispatchForSimTick() consumes pending state. Pins the invariant that
