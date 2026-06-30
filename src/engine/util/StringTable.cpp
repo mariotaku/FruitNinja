@@ -19,6 +19,7 @@
 #include "StringTable.h"
 #include "asset/File.h"
 #include "debug/Logger.h"
+#include "game/GameWork.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -58,6 +59,8 @@ void StringTableUtilUnloadTable(int /*idx*/) {
 
 // Default instance used by the port's static wrappers
 static Mortar::StringTable s_DefaultTable;
+// v1.6.1 tables_loaded @0x00314244: set unconditionally by StringTableUtilLoadStrings().
+static bool s_tables_loaded = false;
 
 // ASM-spec v1.6.1 StringTableUtilLoadStringsTable @0x0014ca5c: switch on bM_LangId (+0x03).
 static const char* const kLanguageSuffix[] = {
@@ -380,4 +383,49 @@ const char* GETSTRING_CAST_0(LocalizedString id) {
 
 const char* GETSTRING_CAST_0_STR(const char* key) {
     return GETSTRING_STR(key, 0);
+}
+
+// ASM-spec v1.6.1 StringTableUtilLoaded @0x0014c984
+bool StringTableUtilLoaded() {
+    return s_tables_loaded;
+}
+
+// ASM-spec v1.6.1 StringTableUtilUnload @0x0014ca24
+void StringTableUtilUnload() {
+    if (!s_tables_loaded) return;
+    StringTableUtilUnloadTable(0);
+    s_tables_loaded = false;
+}
+
+// ASM-spec v1.6.1 StringTableUtilLoadStringsTable @0x0014ca5c
+// game_work.languageFlag indexes kLanguageSuffix[]; slot!=0 is never reached in v1.6.1.
+bool StringTableUtilLoadStringsTable(int slot) {
+    if (s_tables_loaded)
+        StringTableUtilUnloadTable(slot);
+
+    int flag = (int)game_work.languageFlag;
+    if (flag >= kLanguageCount) flag = 0;
+    const char* lang = kLanguageSuffix[flag];
+
+    const char* base = (slot == 0) ? "translations" : 0;
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "stringtables/%s_header.str", base);
+    s_DefaultTable.LoadHeader(buf);
+
+    snprintf(buf, sizeof(buf), "stringtables/%s_%s.str", base, lang);
+    bool ok = s_DefaultTable.LoadLanguage(buf);
+    if (!ok) {
+        snprintf(buf, sizeof(buf), "stringtables/%s_english_us.str", base);
+        ok = s_DefaultTable.LoadLanguage(buf);
+    }
+    return ok;
+}
+
+// ASM-spec v1.6.1 StringTableUtilLoadStrings @0x0014cccc
+// s_tables_loaded is set UNCONDITIONALLY, even when load fails (binary behaviour).
+bool StringTableUtilLoadStrings() {
+    bool ok = StringTableUtilLoadStringsTable(0);
+    s_tables_loaded = true;
+    return ok;
 }

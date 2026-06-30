@@ -105,10 +105,12 @@ struct AsciiStringLayoutAssert {
 };
 #endif
 
-// Binary @ TBD -- returns true iff name == "..".
+// Binary @ v1.6.1 Mortar::IsParentFolderToken @ 0x00251d20 -- returns true iff name == "..".
+// Body in PathFunctions.cpp (same binary TU as g_PathSeperators global ctor).
 bool IsParentFolderToken(const AsciiString& name);
 
-// Binary @ TBD -- returns true iff name == ".".
+// Binary @ v1.6.1 Mortar::IsThisFolderToken @ 0x00251d6c -- returns true iff name == ".".
+// Body in PathFunctions.cpp (same binary TU as g_PathSeperators global ctor).
 bool IsThisFolderToken(const AsciiString& name);
 
 }  // namespace Mortar

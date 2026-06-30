@@ -251,6 +251,23 @@ void StringTableUtilInit();
 // v1.6.1 StringTableUtilUnloadTable @0x14c9f8: clears one string table slot by index.
 void StringTableUtilUnloadTable(int idx);
 
+// ASM-spec v1.6.1 StringTableUtilLoaded @0x0014c984: returns the tables_loaded flag.
+// NOTE: set unconditionally by StringTableUtilLoadStrings(); NOT the same as IsLoaded().
+bool StringTableUtilLoaded();
+
+// ASM-spec v1.6.1 StringTableUtilUnload @0x0014ca24: guard + unload slot 0 + clear flag.
+void StringTableUtilUnload();
+
+// ASM-spec v1.6.1 StringTableUtilLoadStringsTable @0x0014ca5c: reads game_work.languageFlag,
+// builds paths "stringtables/translations_{header,<lang>}.str", loads slot.
+// Only slot==0 is used in v1.6.1; slot>0 produces NULL base (undefined in binary,
+// never reached).
+bool StringTableUtilLoadStringsTable(int slot);
+
+// ASM-spec v1.6.1 StringTableUtilLoadStrings @0x0014cccc: loads slot 0 for current language,
+// sets tables_loaded=1 UNCONDITIONALLY (even on failure).
+bool StringTableUtilLoadStrings();
+
 // Free wrapper: binary @ 0x0011f958.
 // Looks up string ID in table index tableIdx (0 = default table).
 const char* GETSTRING(LocalizedString id, int tableIdx);

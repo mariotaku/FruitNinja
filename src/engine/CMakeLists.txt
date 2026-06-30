@@ -17,6 +17,7 @@ add_library(mortar_engine ${FN_LIB_TYPE}
     util/StringTable.cpp
     util/Localisation.cpp
     util/PathCI.cpp
+    util/PathFunctions.cpp
     util/LinkedHeap.cpp
     # Phase 2 — Core Singletons
     render/MatrixManager.cpp
@@ -112,6 +113,8 @@ target_sources(mortar_engine PRIVATE
 if(NOT FN_ASM_VERIFY)
     target_sources(mortar_engine PRIVATE xml/TiXml.cpp)
 endif()
+# BinaryXml.cpp stubs ParseBinary/WriteBinary (no tinyxml2 dep; cross-build safe).
+target_sources(mortar_engine PRIVATE xml/BinaryXml.cpp)
 target_sources(mortar_engine PRIVATE
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
