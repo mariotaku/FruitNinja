@@ -224,6 +224,19 @@ target_link_libraries(test_datareader PRIVATE mortar_engine)
 target_include_directories(test_datareader PRIVATE ${CMAKE_SOURCE_DIR}/src/engine ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME datareader COMMAND test_datareader)
 
+# DataStreamReader unit test (task #195 Wave B).
+# High-fan-in parser leaf: ReadBasicType/ReadRaw/Read(string)/MakeSubReader/
+# operator>>(Immutable) against a hand-built LE byte buffer.
+# Pure CPU: no GL, no SDL, no audio.
+add_executable(test_datastreamreader test_datastreamreader.cpp)
+target_link_libraries(test_datastreamreader PRIVATE mortar_engine)
+target_include_directories(test_datastreamreader PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME datastreamreader COMMAND test_datastreamreader)
+set_tests_properties(datastreamreader PROPERTIES TIMEOUT 30)
+
 # EffectPropertyValues / EffectPropertyList / GetColourRGB unit test.
 # Exercises the 9-def mesh-material property set, SetValue/TryGetValue for
 # float/bool/Vec3/Texture2D types, and parent-chain lookup.

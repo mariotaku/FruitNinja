@@ -40,6 +40,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/asset/Mesh.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/MeshManager.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Model.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/DataStreamReader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Effect.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/ResourceLoader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/SharedEffectProperties.cpp"

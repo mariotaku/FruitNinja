@@ -59,6 +59,7 @@ target_sources(mortar_engine PRIVATE
     asset/TextureLoader.cpp
     asset/AlternativeTextureLoader.cpp
     asset/DataReader.cpp
+    asset/DataStreamReader.cpp
     asset/FileDataReader.cpp
     asset/VectorDataReader.cpp
     asset/ResourceLoader.cpp
