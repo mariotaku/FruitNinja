@@ -416,6 +416,12 @@ private:
 bool PowersEnabled();
 SpawnPlacement ParsePlacement(const char* side);
 
+// v1.6.1 GetRandomPowerSpawner @0x0012403c: returns a pointer to one of three function-local
+// static SPAWNER_INFO entries (bottom-center, right-side, left-side), lazily initialised.
+// includeCenter=true picks from all 3 entries; false skips entry 0 (center) and picks from
+// entries 1/2 (right/left) only.
+SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter);
+
 // v1.6.1 ReachedEnd @0x1253c0: saves "limitsReached" stat, plays "time-up" SFX, calls GameOver.
 void ReachedEnd();
 

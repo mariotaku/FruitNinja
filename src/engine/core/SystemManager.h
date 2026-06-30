@@ -105,4 +105,14 @@ float GetApparentWindowWidth();
 // ASM-spec v1.6.1 GetApparentWindowHeight @0x11baf4: returns 320 when ar>1.5, else GetAspectHvW*480.
 float GetApparentWindowHeight();
 
+// ASM-spec v1.6.1 GetVersionTotal @0x0011f420: returns theGame->m_versionCombined (+0xA4).
+int GetVersionTotal();
+
+// ASM-spec v1.6.1 LowResBackgrounds @0x0011f3c0: reads the slow-hw/low-res byte at Game+0x100.
+// DIFFERS: field is the binary's slow-hardware/low-res flag; port names it m_appState (same
+// offset, misnamed). Returns false until RenderAtHalfFrames sets it.
+// TODO: rename m_appState to m_bLowResBackgrounds after MortarGame struct re-layout
+// (adding m_StartupTexture at MortarGame+0xFC shifts Game-subclass fields to start at +0x100).
+bool LowResBackgrounds();
+
 #endif

@@ -164,6 +164,22 @@ PauseScreen* GetPauseScreen();
 void ClearPause();
 bool GetPausedBy();
 
+// v1.6.1 GetPauseAmount @0x001ca528: clamped PauseScreen::GetTime(), or 0.0 if no pause screen active.
+// Returns the current pause blend amount in [0,1]: 0=not paused, 1=fully paused.
+float GetPauseAmount();
+
+// v1.6.1 GetStartupTexture @0x0011f570: returns the startup splash texture (HB_logo.tex),
+// lazy-loading it on first call. Also clears isStartupTexturePortrait to false on load.
+// DIFFERS: binary dispatches via Game vtable +0x70/+0x74 (SetStartupTexture/GetStartupTexture
+// virtual slots); port accesses pSplashTex directly (vtable slots not yet declared).
+// TODO: extend Game vtable with slots 24-29 (separate task) and move pSplashTex to
+// MortarGame::m_StartupTexture at +0xFC after MortarGame sizeof fix.
+Mortar::SmartPtr<Mortar::Texture> GetStartupTexture();
+
+// v1.6.1 ReleaseStartupTexture @0x0011f64c: clears the startup texture reference (null SmartPtr).
+// DIFFERS: binary dispatches via Game vtable slot +0x70 (SetStartupTexture); port accesses directly.
+void ReleaseStartupTexture();
+
 // Device/orientation query stubs (src/game/DeviceQuery.cpp).
 // Binary: Bada accelerometer / OS version queries. Port: SDL fixed-landscape constants.
 int CurrentOrientation();         // v1.6.1 @0x0011f4c4 — reads theGame+0x104

@@ -4,6 +4,8 @@
 #include "game/GameWork.h"
 #include <algorithm>
 #include <cstdlib>
+// Game.h pulled in for LowResBackgrounds() which reads Game::m_appState (+0x100).
+#include "Game.h"
 
 SystemManager::SystemManager()
     : m_bRunning(1)
@@ -157,4 +159,18 @@ float GetApparentWindowHeight() {
     float ar = dm.GetAspectWvH();
     if (1.5f < ar) return 320.0f;
     return dm.GetAspectHvW() * 480.0f;
+}
+
+// ASM-spec v1.6.1 GetVersionTotal @0x0011f420: loads theGame->m_versionCombined (+0xA4).
+int GetVersionTotal() {
+    return Mortar::MortarGame::GetInstance()->m_versionCombined;
+}
+
+// ASM-spec v1.6.1 LowResBackgrounds @0x0011f3c0: reads the slow-hw/low-res byte at Game+0x100.
+// DIFFERS: binary field is the low-res flag at Game+0x100; port reuses m_appState (same offset,
+// misnamed) -- returns 0/false until set.
+// TODO: rename m_appState to m_bLowResBackgrounds after MortarGame struct re-layout
+// (adding m_StartupTexture at MortarGame+0xFC shifts Game-subclass fields to start at +0x100).
+bool LowResBackgrounds() {
+    return (bool)Game::GetInstance()->m_appState;
 }

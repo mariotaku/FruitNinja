@@ -976,6 +976,13 @@ void PauseScreen::SkipTo() {
     m_Alpha = 1.0f;
 }
 
+// ASM-spec v1.6.1 PauseScreen::GetTime @0x001d00ec
+// Binary asm: ldr r3,[r0,#0xd8]; cmp r3,#6; vldrne s0,[r0,#0x7c]; vmoveq.f32 s0,1.0f; bx lr
+float PauseScreen::GetTime() const {
+    if (m_State == PAUSE_STATE_QUIT_EXIT) return 1.0f;
+    return m_Alpha;
+}
+
 // ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153fe8 (re-analyst)
 // Binary @ 0x00153fe8: external entry (no in-screen button binds it).
 // Likely call site: shop/tutorial popup-dismiss handler. Advances state
