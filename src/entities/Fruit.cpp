@@ -148,26 +148,22 @@ static const float kSplatTaperMin    = 0.3f;     // DAT_0017706c -- TODO: re-RE 
 static const float kSplatVelXYBoost  = 1.2f;     // *(GOT+DAT_001774b0) @ 0x001F3E28 -- TODO: re-RE inner offset vs v1.6.1 Fruit::Slice 0x001dcba0
 static const float kSplatScaleBoost  = 1.5f;     // *(GOT+DAT_001774b4) @ 0x001F3E24 -- TODO: re-RE inner offset vs v1.6.1 Fruit::Slice 0x001dcba0
 
-// Matches RandomStartAngle(Quat&, false) @0x001db39c — gives the fruit a
-// uniformly random orientation on the sphere by picking a random axis in
-// the unit cube, normalising, and combining with a random ~16-bit angle.
-// The old port used FromAxisAngle(Vec3(1,0,0), RandRange(pi)) which locked
-// every fruit's initial spin to the X axis — visible as all fruits starting
-// level/upright instead of at varied tilts.
-// RNG source: binary uses the WaveManager-owned PRNG (ASM-spec v1.6.1 RandomStartAngle @0x001db39c).
-static Quaternion RandomStartAngle() {
-    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
-    float ax = rng.RandF(2.0f) - 1.0f;   // [-1, 1]
-    float ay = rng.RandF(2.0f) - 1.0f;
-    float az = rng.RandF(2.0f) - 1.0f;
-    float len = sqrtf(ax*ax + ay*ay + az*az);
-    if (len < 1e-6f) { ax = 1.0f; ay = 0.0f; az = 0.0f; len = 1.0f; }
-    ax /= len; ay /= len; az /= len;
-    // Binary: Rand32(0xff3a) — ~full turn in 16-bit angle units.
-    uint32_t angle16 = rng.Rand32(0xff3aU);
-    Quaternion q;
-    q.CreateFromAxisAngle(ax, ay, az, angle16);
-    return q;
+// ASM-spec v1.6.1 RandomStartAngle @0x001db39c
+void RandomStartAngle(Quaternion& out, bool use2D) {
+    if (!use2D) {
+        Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+        float ax = rng.RandF(2.0f) - 1.0f;
+        float ay = rng.RandF(2.0f) - 1.0f;
+        float az = rng.RandF(2.0f) - 1.0f;
+        Vec3 axis(ax, ay, az);
+        axis.Normalise();
+        uint32_t angle16 = rng.Rand32(0xff3aU) & 0xffff;
+        out = Quaternion::Identity();
+        out.CreateFromAxisAngle(axis.x, axis.y, axis.z, angle16);
+    } else {
+        out = Quaternion::Identity();
+        out.CreateFromAxisAngle(-1.0f, 0.0f, 0.0f, 0xce2c);
+    }
 }
 
 // SetupLighting is a no-op free function at 0x001ca5e8 (see Bomb.h / Bomb.cpp).
@@ -278,9 +274,9 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     }
     m_RotVel2 = m_RotVel1;
 
-    // Random start rotation — random axis + random angle (binary
-    // RandomStartAngle @0x001db39c, called with false from Fruit::Init).
-    m_Rot1 = RandomStartAngle();
+    // Random start rotation — random axis + random angle.
+    // Binary: Fruit::Init calls RandomStartAngle(@0x001db39c) with use2D=false.
+    RandomStartAngle(m_Rot1, false);
     m_Rot2 = m_Rot1;
 
     // Default gravity — confirmed from v1.6.1 Fruit::Init @0x001e2898: literal -12.0, y-DAT=0.0
@@ -1801,10 +1797,6 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, int sliceDirFlag) {
 // optionally applies an alignment rotation. Sets m_RotVel1/m_RotVel2
 // to spinVelAxis * random magnitude.
 //
-// RandomStartAngle @0x001db39c: sets rot to axis=(-1,0,0),
-//   angle16=0xce2c via CreateFromAxisAngle @0x001bfe88, then resets to
-//   Identity if w==0.
-//
 // Spin magnitude: +(2 + RandF(2.0)) or -(2 + RandF(2.0)). Binary uses
 //   WaveManager's Random instance; port substitutes rand() since this
 //   only affects display orientation, not gameplay.
@@ -1818,15 +1810,8 @@ void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
         Quaternion* rot    = (i == 0) ? &m_Rot1 : &m_Rot2;
         Vec3*       rotVel = (i == 0) ? &m_RotVel1 : &m_RotVel2;
 
-        // Step 1: RandomStartAngle(rot, fixedAxis=true)
-        // Binary: Identity, then CreateFromAxisAngle(-1, 0, 0, 0xce2c).
-        // halfAngle = (0xce2c >> 1) / 65536.0 * 2pi
-        {
-            float halfAngle = (float)(0xce2c >> 1) / 65536.0f * 6.2831853f;
-            float c = cosf(halfAngle), s = sinf(halfAngle);
-            *rot = Quaternion(-1.0f * s, 0.0f, 0.0f, c);
-            if (rot->w == 0.0f) *rot = Quaternion::Identity();
-        }
+        // Step 1: RandomStartAngle(rot, use2D=true)
+        RandomStartAngle(*rot, true);
 
         // Step 2: optional facing-up alignment (alignToFacing=false at MP call site)
         if (alignToFacing) {
