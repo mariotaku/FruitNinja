@@ -6,33 +6,11 @@
 #include "asset/IStreamTypes.h"
 #include "asset/Mesh.h"
 #include "asset/Model.h"
+#include "util/PathFunctions.h"
 #include "debug/Logger.h"
 #include <cstring>
 
 namespace Mortar {
-
-// PathGetParent: returns the parent directory of 'path' (up to and including the
-// last '/' or '\', or empty string if no separator). Used by the path ctor
-// (0x00255730) to derive m_BasePath from the file path.
-AsciiString PathGetParent(const AsciiString& path)
-{
-    const char* s = path.CStr();
-    if (!s) return AsciiString("");
-    size_t len = strlen(s);
-    size_t i = len;
-    while (i > 0) {
-        --i;
-        if (s[i] == '/' || s[i] == '\\') {
-            char buf[512];
-            size_t n = i + 1;
-            if (n >= sizeof(buf)) n = sizeof(buf) - 1;
-            memcpy(buf, s, n);
-            buf[n] = '\0';
-            return AsciiString(buf);
-        }
-    }
-    return AsciiString("");
-}
 
 // Default ctor (no binary equivalent; port convenience for m_Children push_back).
 ResourceLoader::ResourceLoader()

@@ -6,6 +6,7 @@
 #include "asset/SharedEffectProperties.h"
 #include "asset/Effect.h"
 #include "util/Immutable.h"
+#include "util/PathFunctions.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <string>
@@ -382,8 +383,10 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
             for (size_t j = 0; j < texPath.size(); j++)
                 if (texPath[j] == '\\') texPath[j] = '/';
 
-            std::string fullPath = std::string(rl.BasePathGet().CStr()) + texPath;
-            loadedTexture = TextureManager::GetInstance().Load(fullPath.c_str());
+            // PathGetParent now returns NO trailing slash (faithful binary behavior).
+            // Use PathConcatenate to join correctly regardless of whether basePath is empty.
+            AsciiString fullPathStr = PathConcatenate(rl.BasePathGet(), AsciiString(texPath.c_str()));
+            loadedTexture = TextureManager::GetInstance().Load(fullPathStr.CStr());
         }
 
         // Read 4 color u32 + float specular from Material_Old stream.

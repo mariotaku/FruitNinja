@@ -236,7 +236,10 @@ target_include_directories(test_effectproperties PRIVATE
 add_test(NAME effectproperties COMMAND test_effectproperties)
 
 add_executable(test_localisation test_localisation.cpp)
-target_link_libraries(test_localisation PRIVATE mortar_engine)
+# Links fruit-ninja-game (not just mortar_engine) because StringTableUtilLoadStringsTable
+# reads game_work.languageFlag (v1.6.1 @0x0014ca5c -- the binary's StringTableUtil* live in
+# the game code range and read game state), so the engine StringTable TU references game_work.
+target_link_libraries(test_localisation PRIVATE fruit-ninja-game mortar_engine)
 target_include_directories(test_localisation PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
 )
@@ -282,6 +285,15 @@ target_include_directories(test_linkedheap PRIVATE
 )
 target_compile_definitions(test_linkedheap PRIVATE FN_TEST)
 add_test(NAME linkedheap COMMAND test_linkedheap)
+
+# Mortar path-utility functions -- Tokenize, PathFromTokens, PathGetParent,
+# PathNormalize, PathConcatenate, PathGetRelative. Pure in-process: no GPU/audio/IO.
+# Guards the PathGetParent trailing-slash fix (ResourceLoader.cpp).
+add_executable(test_path_utils test_path_utils.cpp)
+target_link_libraries(test_path_utils PRIVATE mortar_engine)
+target_include_directories(test_path_utils PRIVATE ${CMAKE_SOURCE_DIR}/src/engine)
+add_test(NAME path_utils COMMAND test_path_utils)
+set_tests_properties(path_utils PROPERTIES TIMEOUT 30)
 
 # Mortar::Delegate template -- size + bind + invoke correctness.
 add_executable(test_delegate test_delegate.cpp)
