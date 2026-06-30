@@ -11,13 +11,13 @@ namespace Mortar {
 // Step 4 uses mask 0xFFFF00FF on the shifted half per binary decompile (not the
 // textbook 0x00FF00FF); the result is equivalent for 32-bit input because no
 // byte exceeds 8 after step 3, so the upper 16 bits of (v>>8) cannot overflow.
-unsigned int COUNT_BITS(unsigned int x) {
-    unsigned int v = x;
+int COUNT_BITS(unsigned long x) {
+    unsigned int v = (unsigned int)x;
     v = ((v >> 1) & 0x55555555u) + (v & 0x55555555u);
     v = ((v >> 2) & 0x33333333u) + (v & 0x33333333u);
     v = ((v >> 4) & 0x0F0F0F0Fu) + (v & 0x0F0F0F0Fu);
     v = ((v >> 8) & 0xFFFF00FFu) + (v & 0x00FF00FFu);
-    return (v >> 16) + (v & 0x0000FFFFu);
+    return (int)((v >> 16) + (v & 0x0000FFFFu));
 }
 
 // ASM-spec v1.6.1 Mortar::CorrectHalfTexel @0x0025805c:
