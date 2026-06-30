@@ -79,9 +79,8 @@ public:
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
     // Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1).
-    // Binary only installs RemoveCallback on the shop button; back and about
-    // are intentionally left without one so m_pBackButton/m_pAboutButton
-    // dangle non-null until Update's state-2/3 gate clears (see .cpp).
+    // Binary only nulls m_pShopButton. Port also nulls back and about
+    // because MSVC poisons freed memory (see DIFFERS in ButtonDeleted body).
     void ButtonDeleted(HUDControl* ctrl);
 
     // Port-specific: remove callback helper for AboutScreen child pointer.
@@ -104,6 +103,9 @@ private:
     // Port-only tail (beyond binary 0xb8 boundary, does not shift binary fields):
     // Child AboutScreen when state==3 triggers. nullptr when not shown.
     AboutScreen* m_pAboutScreen;
+    // Port specific: one-shot latch for the state-2/3/4 gate (replaces binary's
+    // dangling m_pBackButton != nullptr check -- see DIFFERS in Update).
+    bool m_bChildPushed;
 
     // Port specific: binary accesses Game via GOT; port stores a reference here.
     Game& game;
@@ -173,10 +175,10 @@ public:
     void TestFireShopSlice()  { ::ClearMenuItems(); ShopCallback();  }
     // Read current state machine index (BaseScreen::m_State, protected member).
     int  TestGetState()        const { return m_State; }
-    // True once the Update state-2/3 transition block ran and nulled m_pBackButton.
-    // m_pBackButton is kept non-null (dangling) between button-free and gate-fire;
-    // this check is compare-only and safe regardless of pointer validity.
-    bool TestTransitionFired() const { return m_pBackButton == nullptr; }
+    // True once the Update state-2/3/4 transition gate fired (m_bChildPushed set).
+    // Reliable regardless of MSVC heap poisoning: uses the dedicated port latch
+    // instead of comparing the (potentially dangling) m_pBackButton pointer.
+    bool TestTransitionFired() const { return m_bChildPushed; }
     // The AboutScreen child pushed during state-3 transition; null otherwise.
     AboutScreen* TestGetAboutScreen() const { return m_pAboutScreen; }
 private:

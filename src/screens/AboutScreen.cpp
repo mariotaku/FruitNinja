@@ -364,6 +364,7 @@ void AboutScreen::CreateBackButton()
                         nullptr);
 
     m_pBackButton->m_bRespondsToBackKey = 1;
+    m_pBackButton->m_bBackdropActive = 1; // v1.6.1 AboutScreen::CreateButtons @0x0015c894
     game_work.mHud->AddControl(m_pBackButton);
 
     if (game_work.m_TutorialControl) {
