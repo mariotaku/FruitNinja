@@ -193,12 +193,7 @@ void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float*
             }
         }
         if (m_pPurchaseInfo) {
-            Game* game = Game::GetInstance();
-            if (game) {
-                // AddCoins(-cost): coin balance lives in game_work (+0x20), not FruitSaveData.
-                // Binary AddCoins @ 0x0010a3bc: m_CoinsBalance += delta (no m_CoinsTotal update for negative).
-                game_work.m_CoinsBalance -= m_pPurchaseInfo->m_Cost;
-            }
+            AddCoins(-m_pPurchaseInfo->m_Cost);  // v1.6.1 PowerUp::Activate calls AddCoins(-cost) @0x00119f78
         }
     }
     for (std::list<GameModifier*>::iterator it = m_ModList.begin();

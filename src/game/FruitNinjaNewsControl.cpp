@@ -16,6 +16,9 @@ FruitNinjaNewsControl::~FruitNinjaNewsControl() {
 }
 
 // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2074
+// Binary @ 0x1a2074 calls SetTouchReleasedCallback(TouchReleasedCallback) @ 0x001a385c
+// to register the per-finger lift handler.  Port omits the call (SetTouchReleasedCallback
+// not yet ported; Defunct: online news -- dead path in any case).
 void FruitNinjaNewsControl::StartNewsRender(const Mortar::SmartPtr<Mortar::Texture>& tex, Mortar::Font* font) {
     (void)tex;
     (void)font;

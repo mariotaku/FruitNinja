@@ -210,7 +210,7 @@ void SuperFruitControl::Update(float dt)
             }
             // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
             StopAllFruit();
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- UnpauseSlices (function not yet ported)
+            UnpauseSlices();
             if (m_pLinkedSlasher) {
                 // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- clear *(int*)(m_pLinkedSlasher+0x7c) = 0 (SlashEntity field +0x7c)
             }
@@ -720,7 +720,7 @@ void SuperFruitControl::Reset()
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- UnpauseSlices (function not yet ported)
+    UnpauseSlices();
 
     // Walk ActorManager type 6, OR 0x10 (ENT_KILLED) into each entity's flags(+0x0c)
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();

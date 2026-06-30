@@ -56,6 +56,15 @@ void RetryUpdate(float dt);
 // Lazy-loads "flash.tex" on first call.
 void DrawCritHit();
 
+// RemoveFlashEntities v1.6.1 @ 0x001cb4b0 — iterate type-4 (BombBlast) entities and
+// OR ENT_SKIP_MASK (0x11 = ENT_INACTIVE | ENT_KILLED) into each entity's flags.
+// Called by UpdateBombHit, EndRetryLevel, and InstantLevelDestroy.
+void RemoveFlashEntities();
+
+// UnpauseSlices v1.6.1 @ 0x001da910 — clear m_pFruit on every active SliceEffect
+// so they keep animating after the host fruit is removed.
+void UnpauseSlices();
+
 namespace FN {
 // Per-frame advance of the CriticalFlash fade timer. Called from
 // GameUpdate after Mortar::ActorManager::Update.

@@ -37,6 +37,7 @@
 #include "render/gl_funcs.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
+#include "input/InputSink.h"
 #include "util/StringHash.h"
 #include "debug/DebugFlags.h"
 #include "UpdateMusic.h"
@@ -292,6 +293,55 @@ static float quickener     = 1.0f;    // _ZL9quickener @ 0x002d8cd8 (ST .data 0x
 float g_unpauseDelay  = 0.0f;   // @ 0x00316708
 int   g_unpause_game  = 0;      // @ 0x0031670c  (byte in binary; int here for portability)
 float g_repauseDelay  = 0.0f;   // @ 0x00316710
+
+// ASM-spec v1.6.1 AddCoins @ 0x00119f78
+void AddCoins(int delta) {
+    game_work.m_CoinsBalance += delta;
+    if (delta > 0)
+        game_work.m_CoinsTotalEarned += delta;
+}
+
+// ASM-spec v1.6.1 SlowTime @ 0x001ca37c
+void SlowTime(float scale, float duration) {
+    slowTimeTime  = 1.0f;
+    slowTime      = scale;
+    slowTimeSpeed = 1.0f / duration;
+}
+
+// ASM-spec v1.6.1 RemoveFlashEntities @ 0x001cb4b0
+// Iterate type-4 (BombBlast) entities and set ENT_SKIP_MASK (0x11) on each.
+// Binary ORs ENT_INACTIVE|ENT_KILLED = 0x11; DeactivateAllEntities only sets 0x10 -- real bug.
+void RemoveFlashEntities() {
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(4, it);
+    while (e != NULL) {
+        e->flags |= ENT_SKIP_MASK;
+        e = am->GetEntityNext(4, it);
+    }
+}
+
+// ASM-spec v1.6.1 UnpauseSlices @ 0x001da910
+// Clear m_pFruit on every active SliceEffect so trails keep animating after host fruit removal.
+void UnpauseSlices() {
+    Mortar::List<SliceEffect>* list =
+        static_cast<Mortar::List<SliceEffect>*>(GetTaskState()->pSliceEffectList);
+    if (!list) return;
+    for (Mortar::List<SliceEffect>::Iterator it(list->m_pHead); it.Okay(); ++it) {
+        (*it).m_pFruit = 0;
+    }
+}
+
+// ASM-spec v1.6.1 TouchReleasedCallback @ 0x001ca838
+// Called when a finger lifts; routes the release to the active input sink with the
+// per-finger spawn position. Registered via SetTouchReleasedCallback in StartNewsRender
+// (defunct online news path -- see FruitNinjaNewsControl::StartNewsRender).
+int TouchReleasedCallback(InputEvent* event) {
+    if (game_work.m_pActiveTouchSink == NULL) return 0;
+    int finger = event->fingerId;
+    game_work.m_pActiveTouchSink->TouchReleased(event, &game_work.m_FingerSpawnPos[finger]);
+    return 1;
+}
 
 void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();

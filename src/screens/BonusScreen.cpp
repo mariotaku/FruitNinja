@@ -44,9 +44,31 @@ static const float REVEAL_END     = 1.0f;
 static const float FINALE_HOLD    = 0.5f;
 static const float DISMISS_BUFFER = 0.5f;
 
-// Transition-in slide duration (init value for m_Timer; binary loads from rodata).
-// TODO: resolve exact init constant from ctor v1.6.1 BonusScreen::BonusScreen @0x00162d1c
-static const float TRANSITION_IN_TIME = 1.0f;
+// SET_DEFINES globals — set on every BonusScreen::Update by SET_DEFINES() @ 0x00162090.
+// Non-const so SET_DEFINES can write them; initial values match what SET_DEFINES writes.
+static float TRANSITION_IN_TIME  = 0.333333f;  // was 1.0f (WRONG); binary = 0x3eaa7efa (~1/3)
+static float TRANSITION_OUT_TIME = 0.25f;       // 0x3e800000
+static float TIME_PER_AWARD      = 1.0f;        // 0x3f800000
+static float FIRST_AWARD         = 0.666667f;   // 0x3f2a7efa (~2/3)
+static float TOTAL_TIME          = 7.0f;        // 0x40e00000
+static float AWARD_Y_DIF         = -42.0f;      // 0xc2280000
+static float TOTAL_POS_X         = 50.0f;       // DAT_003144b0
+static float TOTAL_POS_Y         = -88.0f;      // DAT_003144b4 (was DAT_003144b8 in spec; adj offset)
+static float TOTAL_POS_Z         = 0.0f;        // DAT_003144bc
+
+// ASM-spec v1.6.1 SET_DEFINES @ 0x00162090 (static, same TU as BonusScreen::Update).
+// Called at the top of every BonusScreen::Update to (re-)initialize tuning constants.
+static void SET_DEFINES() {
+    TRANSITION_IN_TIME  = 0.333333f;
+    TRANSITION_OUT_TIME = 0.25f;
+    TIME_PER_AWARD      = 1.0f;
+    FIRST_AWARD         = 0.666667f;
+    TOTAL_TIME          = 7.0f;
+    AWARD_Y_DIF         = -42.0f;
+    TOTAL_POS_X         = 50.0f;
+    TOTAL_POS_Y         = -88.0f;
+    TOTAL_POS_Z         = 0.0f;
+}
 
 // ---------------------------------------------------------------------------
 // BonusScreen ctor (v1.6.1 BonusScreen::BonusScreen @0x00162d1c)
@@ -309,6 +331,8 @@ void BonusScreen::BuildBonusText() {
 
 // v1.6.1 @0x00163dd0
 void BonusScreen::Update(float dt) {
+    SET_DEFINES();  // v1.6.1 @ 0x00163dec (called at top of every Update)
+
     // Advance phase timer unconditionally each frame.
     m_Timer += dt;
 

@@ -691,6 +691,6 @@ void UpdateBombHit(float prevTimer) {
     }
 
     if (currentTimer > 0.0f && currentTimer < BOMB_BLAST_PURGE_THR) {
-        BombBlast::RemoveAll();
+        RemoveFlashEntities();  // v1.6.1 UpdateBombHit @ 0x001cbbac calls RemoveFlashEntities @ 0x001cb4b0
     }
 }

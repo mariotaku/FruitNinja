@@ -23,6 +23,7 @@
 #include "Bomb.h"
 #include "ActorManager.h"
 #include "Game.h"
+#include "game/BombHit.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -208,15 +209,11 @@ void BombBlast::DrawActiveBlasts() {
     g_bombData.m_blastTexture->UnSet();
 }
 
-// Matches RemoveFlashEntities (0x169ca0) — called by UpdateBombHit when
-// Game.bombHitTimer drops below 1.55s.
+// Port redirect: binary symbol is RemoveFlashEntities @ 0x001cb4b0 (free function).
+// BombBlast::RemoveAll() is a port artifact; delegates to the faithful free function
+// so call sites that haven't been updated yet still get the correct 0x11 flag OR.
 void BombBlast::RemoveAll() {
-    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (!am) return;
-    // Binary DeactivateAllEntities(type) @ 0x0016fb44 — set ENT_KILLED on
-    // every entity of the given type. Next Update sweep returns them to
-    // the free pool.
-    am->DeactivateAllEntities(4);
+    RemoveFlashEntities();
 }
 
 // Binary @ 0x171354 — emit this blast's 6 vertices (two triangles) into the
