@@ -49,6 +49,11 @@ namespace Mortar { class BakedStringBox; }
 
 class MenuButton;
 class AboutScreen;
+
+// Free function (MenuButton.h): flings all live menu entities so the dojo
+// entity-count transition gate clears. Forward-declared for the FN_TEST inline
+// TestFire*Slice helpers below (avoids pulling MenuButton.h into this header).
+void ClearMenuItems();
 struct Game;
 
 class DojoScreen : public BaseScreen {
@@ -73,9 +78,10 @@ public:
     // back to STATE_SLIDE_IN.
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
-    // Matches DojoScreen::ButtonDeleted @ 0x0016bad8 region.
-    // Remove callback for the shop button (field_0x98). Binary only
-    // installs this on the shop button, not play or about.
+    // Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1).
+    // Binary only installs RemoveCallback on the shop button; back and about
+    // are intentionally left without one so m_pBackButton/m_pAboutButton
+    // dangle non-null until Update's state-2/3 gate clears (see .cpp).
     void ButtonDeleted(HUDControl* ctrl);
 
     // Port-specific: remove callback helper for AboutScreen child pointer.
@@ -153,6 +159,27 @@ public:
 
 #ifdef __bada__
     friend struct DojoScreenLayoutAssert;
+#endif
+
+#ifdef FN_TEST
+public:
+    // Test-only: simulate slicing the About ring.
+    // Calls ClearMenuItems() (same as MenuButton::Update's slice path) then
+    // AboutCallback(), reproducing the exact call sequence the ring-slice fires.
+    // Inline so the body links into the FN_TEST test exe (DojoScreen.cpp builds
+    // into fruit-ninja-game.lib WITHOUT FN_TEST, so out-of-line bodies vanish).
+    void TestFireAboutSlice() { ::ClearMenuItems(); AboutCallback(); }
+    // Test-only: simulate slicing the Shop ring (ClearMenuItems + ShopCallback).
+    void TestFireShopSlice()  { ::ClearMenuItems(); ShopCallback();  }
+    // Read current state machine index (BaseScreen::m_State, protected member).
+    int  TestGetState()        const { return m_State; }
+    // True once the Update state-2/3 transition block ran and nulled m_pBackButton.
+    // m_pBackButton is kept non-null (dangling) between button-free and gate-fire;
+    // this check is compare-only and safe regardless of pointer validity.
+    bool TestTransitionFired() const { return m_pBackButton == nullptr; }
+    // The AboutScreen child pushed during state-3 transition; null otherwise.
+    AboutScreen* TestGetAboutScreen() const { return m_pAboutScreen; }
+private:
 #endif
 };
 

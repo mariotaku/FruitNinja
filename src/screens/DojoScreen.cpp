@@ -261,18 +261,16 @@ void DojoScreen::Release() {
 }
 
 // ===================================================================
-// DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1) — extended
-// DIFFERS: v1.6.1 DojoScreen::ButtonDeleted @0x00169e94 nulls only m_pShopButton.
-//   Back/about extended to close the binary's latent use-after-free: HUD::Update
-//   @0x0018c44c frees a ring MenuButton (deleting-dtor) ~2-3 frames before
-//   DojoScreen::Update @0x0016b6a4 nulls the screen pointer; a ring slice in that
-//   window fires a callback that derefs the dangling pointer. (Bada's allocator hid
-//   this; MSVC's freed-memory poison makes it a deterministic crash.)
+// Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1)
+// Binary nulls only m_pShopButton. Back and about have no RemoveCallback,
+// so m_pBackButton/m_pAboutButton dangle non-null after HUD frees them.
+// That dangling latch is intentional: Update states 2/3 @0x0016b778 test
+// m_pBackButton != nullptr as the transition gate, firing ~3 frames after
+// the button is freed. The #269 UAF is closed instead by a one-shot
+// m_State==1 guard at the top of each callback (ShopCallback/AboutCallback/PlayCallback).
 // ===================================================================
 void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
     if (ctrl == (HUDControl*)m_pShopButton)  m_pShopButton  = nullptr;
-    if (ctrl == (HUDControl*)m_pBackButton)  m_pBackButton  = nullptr;
-    if (ctrl == (HUDControl*)m_pAboutButton) m_pAboutButton = nullptr;
 }
 
 // ===================================================================
@@ -300,9 +298,6 @@ void DojoScreen::CreateButtons() {
                             bombFruitType, Vec3(0, 0, 0), nullptr);
         m_pBackButton->m_bRespondsToBackKey = 1;
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-        // DIFFERS: binary has no m_RemoveCallback on back button; installed here to close the
-        //   latent UAF (see ButtonDeleted comment above).
-        m_pBackButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_HudScale.x=0.375, m_HudScale.y=-0.3
         m_pBackButton->m_HudScale.x = 0.375f;
         m_pBackButton->m_HudScale.y = -0.3f;
@@ -373,9 +368,6 @@ void DojoScreen::CreateButtons() {
                              Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                              aboutFruitType, Vec3(0, 0, 0), nullptr);
         m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-        // DIFFERS: binary has no m_RemoveCallback on about button; installed here to close the
-        //   latent UAF (see ButtonDeleted comment above).
-        m_pAboutButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [10],[11]
         m_pAboutButton->SetText(
             GETSTRING_CAST_0(LSTR_ABOUT_TITLE),
@@ -556,6 +548,12 @@ void DojoScreen::Draw(float* hudScaleRaw) {
 // Binary: SFXPlay("menu-bomb"), state=6, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::PlayCallback() {
+    // Port specific: defensive one-shot guard. These callbacks fire only from the
+    // idle state in the binary; a ring slice during the in-progress fade (state 2/3/6)
+    // must not re-enter and deref a freed back button. Binary survives the dangling
+    // *Callback deref only because Bada doesn't poison freed memory.
+    // (v1.6.1 ShopCallback@0x0016a3f8 / AboutCallback@0x0016a48c deref m_pBackButton unconditionally.)
+    if (m_State != 1) return;
     // 1. SFX
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
@@ -587,6 +585,8 @@ void DojoScreen::PlayCallback() {
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
+    // Port specific: defensive one-shot guard (same as PlayCallback above).
+    if (m_State != 1) return;
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
@@ -611,6 +611,8 @@ void DojoScreen::ShopCallback() {
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
+    // Port specific: defensive one-shot guard (same as PlayCallback above).
+    if (m_State != 1) return;
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 
@@ -686,3 +688,7 @@ void DojoScreen::SwitchCallback() {}
 void DojoScreen::SwitchNetworkButton(MenuButton*, float, ScreenButton&) {}
 // Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; TODO: re-verify v1.6.1 address (not present in Bada v1.6.1 binary)
 void DojoScreen::TwitterFacbookButtons(MenuButton*, float, ScreenButton&) {}
+
+// FN_TEST helpers TestFireAboutSlice/TestFireShopSlice are inline in DojoScreen.h
+// (this TU compiles into fruit-ninja-game.lib without FN_TEST, so out-of-line
+// bodies here would never be emitted -> unresolved externals in the test exe).
