@@ -61,7 +61,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
-// Matches ClearMenuItems v1.6.1 @0x0016ac7c -- binary-exact.
+// Matches ClearMenuItems v1.6.1 @0x001cc6d0 -- binary-exact.
 static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
