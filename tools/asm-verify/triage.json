@@ -4385,6 +4385,12 @@
     "score": 7900,
     "verdict": "ACCEPT-deferred"
   },
+  "_ZN16FruitFactControl12RegisterPageEP13FruitFactPage": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "std::vector::push_back inline-vs-out-of-line codegen divergence, NOT a wrong-field bug. get_struct_layout + the port's passing __bada__ offset asserts confirm m_Pages (std::vector<FruitFactPage*>) is at the correct offset +0xAC (begin=0xAC/end=0xB0/cap=0xB4); the +172/176/180 values the classifier flagged ARE those vector pointers at the right offsets in both binary and port. m_PageFlag@+0x9C(156) also matches. The port's RegisterPage body is byte-faithful to the binary (push_back; if size-1 != m_PageFlag -> HidePage vtable slot16/+0x40; copy size Vec3). The 22.5% LCS divergence is purely that the binary inlines std::vector::push_back's fast-path (capacity check @176/180 + inline store) while the port emits it out-of-line (CALL _M_realloc_insert). Same libstdc++ family, optimizer-dependent inlining choice -- irreducible cosmetic. The classifier's wrong-field HIGH label is a false positive on the inline-vs-out-of-line push_back. #209 (FruitFactControl v1.5.1 residue) is already cleaned on this branch; the binary genuinely uses std::vector<FruitFactPage*> (confirmed in RegisterPage + GameOverScreen::Update decompiles), so the port's std::vector is faithful, not a substitution.",
+    "asm_hash": "6a89e3016963f034",
+    "decided_at": "2026-06-30T00:00Z"
+  },
   "_ZN16FruitFactControl12RightPressedEP10InputEvent": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 1900,
