@@ -213,6 +213,11 @@ struct GameWork {
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised
 
+// Free functions defined in GameInit.cpp (binary free functions in the game-task TU).
+// AddCoins v1.6.1 @ 0x00119f78 — add delta to coin balance; if delta > 0, also
+// accumulates in m_CoinsTotalEarned.
+void AddCoins(int delta);
+
 // Pause flag block @ 0x00316700 (binary .bss).
 // Defined in GameInit.cpp (same TU as slowTimeTime @ 0x316704).
 // PauseGame @0x001ca48c writes g_unpauseDelay / clears g_unpause_game.

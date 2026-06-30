@@ -68,14 +68,10 @@ static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 // ---------------------------------------------------------------------------
 // CoinArrived — static helper @ 0x0017320C.
 // Free function in binary; kept as static member of Coin.cpp for greppability.
-// Binary AddCoins @ 0x0010a3bc: adds delta to game_work.m_CoinsBalance;
-// if delta > 0 also adds to m_CoinsTotalEarned. Coin balance lives in
-// game_work (+0x20/+0x24), not FruitSaveData.
+// Coin balance lives in game_work (+0x20/+0x24), not FruitSaveData.
 // ---------------------------------------------------------------------------
 void CoinArrived(Coin* coin) {
-    int delta = coin->m_CoinValue;
-    game_work.m_CoinsBalance += delta;
-    if (delta > 0) game_work.m_CoinsTotalEarned += delta;
+    AddCoins(coin->m_CoinValue);
 }
 
 // ---------------------------------------------------------------------------

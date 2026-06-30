@@ -266,11 +266,7 @@ int ItemManager::BuyItem(uint32_t hash) {
 
     // ARM idiom: "if (-1 < cost && cost <= coins)" = if (cost >= 0 && cost <= coins)
     if (cost >= 0 && cost <= coins) {
-        // TODO: v1.6.1 0x001389c4 (BuyItem) -- binary calls AddCoins(-cost) @0x0010a3bc.
-        // AddCoins is not yet ported as a separate callable; inline the balance deduction.
-        // For negative delta, AddCoins only adjusts m_CoinsBalance (no m_CoinsTotalEarned
-        // update), so this inline is functionally equivalent.
-        game_work.m_CoinsBalance -= cost;
+        AddCoins(-cost);  // v1.6.1 0x001389c4 (BuyItem) calls AddCoins(-cost) @0x00119f78
         item->m_Cost = -1;  // mark purchased
         return 1;
     }

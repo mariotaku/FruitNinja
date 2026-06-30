@@ -332,7 +332,7 @@ void EndRetryLevel() {
     game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
 
     ResetGameEntities(false);                      // 0x16a24e
-    BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
+    RemoveFlashEntities();                             // 0x16a252 v1.6.1 @ 0x001cb4b0
     WaveManager::GetInstance()->Reset(true);           // 0x16a25c
 
     game_work.retryFlag            = 0;                // 0x16a26e [+0x06]
