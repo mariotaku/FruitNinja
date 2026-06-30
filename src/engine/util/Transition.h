@@ -9,6 +9,9 @@
 // FruitCamera.cpp and ExplodyFruitModifier.cpp inline copies (follow-up: switch
 // those inline copies to call SinTransition directly once this TU exists).
 
+// ASM-spec v1.6.1 InverseSquareTransition @0x0014e8cc -- 1-(1-t)^2, s ignored
+float InverseSquareTransition(float t, float s);
+
 // ASM-spec v1.6.1 SquareTransition @0x0014e8c4  -- t*t, s ignored
 float SquareTransition(float t, float s);
 

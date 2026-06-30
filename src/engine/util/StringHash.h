@@ -13,6 +13,12 @@ uint32_t StringHash(const char* str, int len);
 
 inline uint32_t StringHash(const char* str) { return StringHash(str, (int)strlen(str)); }
 
+// Jenkins lookup3 hash for file paths — same seeds as StringHash but per-char normalization
+// via dsstofile (backslash->slash, A-Z->a-z) instead of plain tolower.
+// v1.6.1 FileStringHash(char const*) @ 0x00252e98
+// Bit-exact with StringHash for already-lowercase-no-backslash input.
+uint32_t FileStringHash(const char* str);
+
 // Raw-byte Jenkins lookup3 hash — identical to StringHash but WITHOUT case-folding.
 // v1.6.1 MemHash(void const*, unsigned long) @ 0x00252c88
 // Mangled: _Z7MemHashPKvm — second param is unsigned long (ARM32 == 4 bytes).

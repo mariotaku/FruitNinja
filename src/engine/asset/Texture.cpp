@@ -423,3 +423,15 @@ Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
 }
 
 } // namespace Mortar
+
+// ASM-spec v1.6.1 GetTextureScale1to1 @ 0x0014fa48
+// Returns Vec3(GetWidth(), GetHeight(), 0) for a valid texture; Vec3::Zero otherwise.
+// Binary: (w*480)/480 = w, (h*320)/320 = h (compiler artefact -- nets to identity).
+_Vector3<float> GetTextureScale1to1(Mortar::SmartPtr<Mortar::Texture> tex) {
+    if (tex) {
+        float w = (float)tex->GetWidth();
+        float h = (float)tex->GetHeight();
+        return _Vector3<float>(w, h, 0.0f);
+    }
+    return _Vector3<float>::Zero();
+}

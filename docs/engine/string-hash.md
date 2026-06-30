@@ -22,7 +22,12 @@ The canonical implementation is in `src/engine/util/StringHash.cpp`.
 - **Little-endian byte packing**: bytes assembled as `b0 + (b1<<8) + (b2<<16) + (b3<<24)`
 - **Used for**: FRUIT_INFO name hashes, particle emitter IDs, stat keys, achievement IDs, sound name lookups
 
-## Also: FileStringHash (0x0019c394)
+## Also: FileStringHash @ 0x00252e98 (v1.6.1)
 
-101 lines. Similar Jenkins hash but with different initial values and used for file path hashing. Not needed for gameplay port.
+Same Jenkins lookup3 seeds as `StringHash` (a=b=0x9e3779b9, c=0x805, c+=len).
+Per-character normalization via `dsstofile` (backslash->slash, A-Z->a-z) instead of
+plain tolower. Bit-exact with `StringHash` for already-lowercase-no-backslash input.
+Implemented in `src/engine/util/StringHash.cpp` alongside `StringHash` and `MemHash`.
+
+Note: the v1.5.1 address 0x0019c394 cited in the old note is stale; corrected to 0x00252e98.
 

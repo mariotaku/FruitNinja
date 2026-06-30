@@ -1,6 +1,7 @@
 #include "Colour.h"
 
 #include <cstdio>
+#include <cmath>
 
 // Binary @ 0x00183f58 -- Colour::Lerp(Colour const&, float) const
 // Builds local copies of `a` and `*this`, then delegates to the 3-arg
@@ -47,6 +48,21 @@ Colour* Colour::Lerp(Colour a, Colour b, float t) {
 const Colour Colour::Red(255, 0, 0, 255);
 const Colour Colour::White(255, 255, 255, 255);
 const Colour Colour::Black(0, 0, 0, 255);
+
+// ASM-spec v1.6.1 LerpColourFromArray @ 0x0014f254
+// Interpolates within a colour gradient array. Returns arr[count-1] as default
+// (guard: isnan(t) || count==1 || t<=0). Uses Colour::Lerp(a=arr[idx+1], b=arr[idx], frac).
+Colour LerpColourFromArray(float t, Colour* arr, int count) {
+    if (!std::isnan(t) && count != 1 && t > 0.0f) {
+        float scaled = t * (float)(count - 1);
+        int idx = (int)scaled;
+        float frac = (float)fmod((double)scaled, 1.0);
+        Colour result;
+        result.Lerp(arr[idx + 1], arr[idx], frac);
+        return result;
+    }
+    return arr[count - 1];
+}
 
 // Binary @ 0x00183f98 -- Colour::ToString() const
 // snprintf into a single shared 0x100 static buffer; format is

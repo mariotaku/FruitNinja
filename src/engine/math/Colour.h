@@ -76,4 +76,12 @@ public:
     static const Colour Black;  // Colour::Black = Colour(0,0,0,255)
 };
 
+// ASM-spec v1.6.1 LerpColourFromArray @ 0x0014f254:
+//   Interpolates within a colour gradient array.
+//   t: normalised position [0,1] across the array. arr: array of count Colour entries.
+//   Guard: returns arr[count-1] if isnan(t) || count==1 || t<=0.
+//   Otherwise: scaled=t*(count-1); idx=(int)scaled; frac=fmod(scaled,1.0);
+//   result.Lerp(arr[idx+1], arr[idx], frac) -- a=arr[idx+1], b=arr[idx] (binary arg order).
+Colour LerpColourFromArray(float t, Colour* arr, int count);
+
 #endif

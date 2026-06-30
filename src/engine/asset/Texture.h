@@ -5,6 +5,7 @@
 #include "util/SmartPtr.h"
 #include "asset/TextureSource.h"
 #include "render/gl_funcs.h"
+#include "math/_Vector3.h"
 #include <string>
 #include <vector>
 
@@ -243,5 +244,11 @@ static_assert(offsetof(Mortar::Bada::Texture2D_Bada, m_TexId)    == 0x58, "Textu
 static_assert(offsetof(Mortar::Bada::Texture2D_Bada, m_Pad5c)    == 0x5c, "Texture2D_Bada::m_Pad5c offset");
 static_assert(offsetof(Mortar::Bada::Texture2D_Bada, m_Source)   == 0x60, "Texture2D_Bada::m_Source offset");
 #endif
+
+// ASM-spec v1.6.1 GetTextureScale1to1 @ 0x0014fa48:
+//   Returns the scale vector for displaying a texture at 1:1 pixel resolution.
+//   if tex valid: Vec3(tex->GetWidth(), tex->GetHeight(), 0). else: Vec3::Zero.
+//   Binary multiplied/divided by 480/320 (compiler artefact = identity).
+_Vector3<float> GetTextureScale1to1(Mortar::SmartPtr<Mortar::Texture> tex);
 
 #endif // MORTAR_TEXTURE_H
