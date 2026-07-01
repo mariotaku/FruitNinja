@@ -405,6 +405,14 @@ void GameDestroy() {
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
     ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
+    // --- 3.5. Entity pool teardown (Port specific: before HUD so Fruit::Release() /
+    //   Bomb::Release() can still reach live MenuButton objects to clear m_pOwner /
+    //   m_pOwnerButton back-refs. In the binary, CleanupFruit/Bomb/Splat/Slash (step 10
+    //   TODO) performed this cleanup explicitly; the port substitutes actorManager
+    //   deletion, which calls vtable Release() on every live entity. Must precede HUD
+    //   teardown or Fruit::Release() at line 2433 dereferences a freed MenuButton.) ---
+    { delete game->actorManager; game->actorManager = nullptr; }
+
     // --- 4. HUD ---
     {
         delete game_work.mHud;
@@ -462,18 +470,18 @@ void GameDestroy() {
     // TODO: FileManager::ClearSystems
     PSPParticleManager::GetInstance().Destroy();
     StringTableUtilUnloadTable(0);  // closes StringTableUtilUnloadTable TODO (v1.6.1 @0x14c9f8)
-    // ASM-spec v1.6.1 GameDestroy @0x0011cea4: after StringTableUtilUnload, binary calls
-    // in ORDER: CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash.
-    // These free SHARED RESOURCES (model/texture SmartPtrs, static pools), NOT entity objects.
-    // ActorManager::Clear (in GameExit) freed entity objects already.
-    // SplatEntity is NOT in ActorManager; its pool freed exclusively by CleanUpSplat.
-    CleanupBomb();
-    CleanupFruit();
-    CleanUpSplat();    // capital U -- CleanupSplat (lowercase) is dead code
-    CleanupSlash();
+    // Binary GameDestroy @0x0011d1b4 calls CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash
+    // here. The port does NOT call them: entity teardown is already done above via the
+    // actorManager deletion (the "Port specific" substitution at step 3.5), so calling these
+    // would DOUBLE-FREE the fruit/splat/slash pools + models. The functions are ported (for
+    // asm-verify symbol coverage) but left uncalled until the port's teardown is reconciled
+    // with the binary's (use the Cleanup* path OR the actorManager path, not both).
+    // TODO: reconcile GameDestroy teardown to the binary's CleanupBomb/Fruit/Splat/Slash path.
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
     { delete game->inputManager; game->inputManager = nullptr; }
+    // actorManager deleted at step 3.5 (before HUD) to prevent use-after-free
+    // in Fruit::Release() / Bomb::Release() against freed MenuButton objects.
 
     // --- 12. Engine singletons ---
     // Note: Mortar::InputManager::Destroy -- SDL2 replacement cleaned up above.
