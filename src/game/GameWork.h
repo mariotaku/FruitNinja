@@ -119,8 +119,12 @@ struct GameWork {
     HUDControl* m_pActiveHUDControl; // +0x170: currently-active dismissible HUD overlay
     uint8_t m_bMPRetryPending;     // +0x174
     uint8_t _pad_0x175[3];         // +0x175..+0x177
-    // TODO: v1.6.1 0x002d931c+0x178 (GameContext::pM_pLastScoredSaveEntry) — port has int fruitTotal; binary is void*; confirm role.
-    int     fruitTotal;            // +0x178
+    // ASM-spec v1.6.1 GameContext::pM_pLastScoredSaveEntry @GameWork+0x178:
+    //   Holds the int count returned by FruitSaveData::AddToTotal("all",...) in
+    //   AddToCurrentScore, stored as void* (type-pun: binary stores int-as-ptr,
+    //   GameOverScreen reads back as (int)game_work.m_pLastScoredSaveEntry).
+    //   Used ONLY by GameOverScreen::Update state-6 to pass to UnlockTotalFruitAchievement.
+    void*   m_pLastScoredSaveEntry; // +0x178
     CoinCounter* mCoinCounter;     // +0x17C
     Mortar::SmartPtr<Mortar::Texture> m_CountdownTex; // +0x180: countdown background texture (Ghidra: m_CountdownTex)
     TimeControl* mCountDown;       // +0x184
