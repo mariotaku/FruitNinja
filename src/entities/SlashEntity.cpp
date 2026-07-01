@@ -824,7 +824,7 @@ void SlashEntity::OnTouchReleased() {
 // Scroll cap: if m_SplitPoint-2 <= m_PointCount, slide buffers down by one pair
 //   and set m_PointCount = m_SplitPoint-4.
 // ---------------------------------------------------------------------------
-void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) {
+void SlashEntity::AddPoint(float pressure, const Vec3* center, Vec3* dir) {
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
     if (!center || !dir) return;
 
@@ -848,32 +848,51 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
     // shrink rate (45*dt) -> every point retired -> empty blade.
     const float halfWidth = pressure * 9.0f * g_Scale1;
 
-    // Ghost-ring averaging bookkeeping (dir-history update @ 0x1e9918).
+    // ASM-spec v1.6.1 SlashEntity::AddPoint @0x001e9918
+    // Ghost-ring bookkeeping: normalize before storing so m_GhostDir averages unit vectors;
+    // average PREVIOUS slots only (binary excludes the current write);
+    // m_GhostIndex is always 0..5 (binary invariant).
     {
-        unsigned int slot = m_GhostIndex % 6;
-        m_GhostDirRing[slot] = *dir;
+        int slot = (int)m_GhostIndex;   // 0..5 invariant maintained below
 
-        if (m_GhostCount < 6) m_GhostCount++;
-        m_GhostIndex++;
+        if (dir->x == 0.0f && dir->y == 0.0f && dir->z == 0.0f) {
+            // dir zero: binary substitutes m_BladeDir for the rest of AddPoint
+            // so that downstream m_BladeDir=*dir keeps the previous direction.
+            *dir = m_BladeDir;
+            m_GhostDirRing[slot] = Vec3(0.0f, 0.0f, 0.0f);
+        } else if (m_GhostCount == 0) {
+            // First stroke point: write zero to ring (binary special case).
+            m_GhostDirRing[slot] = Vec3(0.0f, 0.0f, 0.0f);
+        } else {
+            // Normal: copy dir then normalize in-place (binary _Vector3::Normalise @0x00138ce8).
+            m_GhostDirRing[slot] = *dir;
+            m_GhostDirRing[slot].Normalise();
+        }
 
-        // Average over filled ghost slots -> m_GhostDir.
-        Vec3 sumDir(0, 0, 0);
-        {
-            unsigned int nn = m_GhostCount;
-            for (unsigned int i = 0; i < nn; ++i) {
-                sumDir = sumDir + m_GhostDirRing[i];
+        // Average PREVIOUS slots only, excluding the just-written current slot.
+        m_GhostDir = Vec3(0.0f, 0.0f, 0.0f);
+        if (m_GhostCount > 1) {
+            for (int i = 1; i < (int)m_GhostCount; ++i) {
+                int prevSlot = (int)(((unsigned int)m_GhostIndex + 18u - (unsigned int)i) % 6u);
+                m_GhostDir.x += m_GhostDirRing[prevSlot].x;
+                m_GhostDir.y += m_GhostDirRing[prevSlot].y;
+                m_GhostDir.z += m_GhostDirRing[prevSlot].z;
             }
-            if (nn > 0) { sumDir.x /= (float)nn; sumDir.y /= (float)nn; sumDir.z /= (float)nn; }
+            float denom = (float)(m_GhostCount - 1);
+            m_GhostDir.x /= denom;
+            m_GhostDir.y /= denom;
+            m_GhostDir.z /= denom;
+            // Binary: MagnitudeSqr(m_GhostDir) > 1.69f (DAT_001e9ea8=1.69, DAT_001e9eac=0.095).
+            // With normalized ring entries this never fires; port faithfully --
+            // removes the false-firing that occurred with raw distance vectors.
+            if (m_GhostDir.MagnitudeSqr() > 1.69f) {
+                m_ComboTimer = 0.095f;
+            }
         }
-        Vec3 newest(dir->x, dir->y, dir->z);
 
-        Vec3 diff(sumDir.x - newest.x, sumDir.y - newest.y, sumDir.z - newest.z);
-        // Binary @ 0x1e9bf4: if (MagnitudeSqr(avgDir-newest) > 1.69f)
-        //   m_ComboTimer = 0.095f. (DAT_001e9ea8=1.69, DAT_001e9eac=0.095)
-        if (diff.MagnitudeSqr() > 1.69f) {
-            m_ComboTimer = 0.095f;
-        }
-        m_GhostDir = sumDir;
+        // Update ring state (binary order: count capped then index mod 6).
+        if (m_GhostCount < 6) m_GhostCount++;
+        m_GhostIndex = (m_GhostIndex + 1u) % 6u;
     }
 
     // Update blade direction and angle index.
