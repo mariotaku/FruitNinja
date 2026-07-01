@@ -385,6 +385,29 @@ add_test(NAME bakedstringbox_baseline COMMAND test_bakedstringbox_baseline)
 set_tests_properties(bakedstringbox_baseline PROPERTIES TIMEOUT 30
     LABELS "category_rendering;component_bakedstringbox")
 
+# MenuButton scratch-backdrop anchor regression guard.
+# Pins GetAdjustedPos() = pos + Vec3(480,320,0)*m_HudScale for two cases:
+#   1. quit-bomb: pos=(0,0,0), m_HudScale=(0.375,-0.3,0) -> (180,-96,0) NOT (0,0,0)
+#   2. pos-anchored: pos=(16,-66,0), m_HudScale=(0,0,0) -> pos unchanged
+# Binary refs: v1.6.1 MenuButton::Draw @0x0019c2e4, GetAdjustedPos @0x136c2c.
+# Before the fix, Draw used raw pos for the scratch decal anchor; the quit-bomb
+# carries its position in m_HudScale (pos=0), so the backdrop appeared at (0,0).
+# Pure in-process: no GPU, no audio, no SDL. Cross-build safe.
+add_executable(test_menubutton_anchor
+    test_menubutton_anchor.cpp
+    ${CMAKE_SOURCE_DIR}/src/hud/HUDControl.cpp
+)
+# No __bada__ — HUDControl.cpp compiles the same way fruit-ninja-game does.
+# The test file provides a no-op Debug::Log stub to satisfy the linker without
+# pulling in the SDL-bound src/debug/LoggerSDL.cpp.
+target_link_libraries(test_menubutton_anchor PRIVATE mortar_engine)
+target_include_directories(test_menubutton_anchor PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME menubutton_anchor COMMAND test_menubutton_anchor)
+set_tests_properties(menubutton_anchor PROPERTIES TIMEOUT 30)
+
 # ---------------------------------------------------------------------------
 # Visual / component tests (SDL + GL + TestHarness)
 # All use fn_add_game_test for shared link/copy boilerplate.
