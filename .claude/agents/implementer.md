@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implementation agent. Writes C++ code that matches the binary. Reads existing source (which carries the canonical port-side spec via // TODO / // ASM-verified / // DIFFERS comments), the binary itself when needed, and the small load-bearing reference docs. Builds via the project's existing build dir.
+description: Implementation agent. Writes C++ code that matches the binary. Reads existing source (which carries the canonical port-side spec via // TODO / // ASM-verified / // DIFFERS comments), the binary itself when needed, and the small load-bearing reference docs. Edits only — does NOT build or run tests (the orchestrator builds, serialized, to avoid concurrent-build races); reports what to rebuild.
 model: sonnet
 ---
 
@@ -13,8 +13,8 @@ Source code is the canonical RE record (see CLAUDE.md "RE record lives in source
 ## Stay in lane
 - **Do NOT RE new functions.** Decompiling, struct resolution, and DAT-constant reading belong to the `re-analyst` agent. If a `// TODO:` comment is too thin or names a binary address whose body you can't figure out from the surrounding port code, return a gap list — do not call GhidraMCP yourself.
 - **Do NOT create or update narrative `docs/*-deep-re.md`-style files.** Those are deprecated. If a finding deserves to be persisted, it goes into a source-side comment near the code it describes.
-- Your output is C++ code in `src/` plus build verification.
-- **Do NOT run the game (`fruit-ninja.exe`), headless or otherwise.** A subagent running the exe locks it — the orchestrator's next link fails with `LNK1168` — and collides with the user's running instance. If you need runtime data (an instrumentation log, a screenshot), ADD the instrumentation + build, then hand the orchestrator the exact run command and what to look for; the **orchestrator (main agent) runs the game** and reads the result (or the user tests on their device). Build/compile is fine and expected — just don't execute the game.
+- Your output is C++ code in `src/` plus a report listing changed files and what the orchestrator should rebuild/test. **You do NOT build or run tests** (see "## Build — DON'T").
+- **Do NOT run the game (`fruit-ninja.exe`), headless or otherwise.** A subagent running the exe locks it — the orchestrator's next link fails with `LNK1168` — and collides with the user's running instance. If you need runtime data (an instrumentation log, a screenshot), ADD the instrumentation, then hand the orchestrator the exact build + run command and what to look for; the **orchestrator (main agent) builds and runs the game** and reads the result (or the user tests on their device). You don't build or execute anything — you edit and report.
 
 ## Halt and escalate when the task is bigger than its framing
 
@@ -94,7 +94,7 @@ The asm-verify cross-build and the symbol-diff skill both compile every portable
 - **No `decltype` in template default-args** (parse bugs in 4.4); `decltype` at statement level is fine.
 - **`nullptr` / `override` / `final` / `noexcept`** are macro-shimmed by `tools/asm-verify/cross-headers/fn-cxx11-shims.h` — these DO work via the shim, no special action needed.
 - **`explicit operator bool`** has its `explicit` stripped by the build-script sed; you can write it normally.
-- Quick check before landing a chunk: `cmake --build build/host` (host only — do NOT run the cross-build/`run.sh`; the orchestrator runs analysis, see "## Build"). If you suspect a C++11 feature, search the codebase for an existing pattern that does the same thing without it — usually exists.
+- Don't build to check cross-build safety (the orchestrator builds — see "## Build — DON'T"). If you suspect a C++11 feature, search the codebase for an existing pattern that does the same thing without it — usually exists — and flag it in your report.
 
 **Binary fidelity for tooling:**
 The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and binary-faithful struct layouts. Get either wrong and the tooling can't tell port code from missing code.
@@ -108,7 +108,7 @@ The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and 
 **Workflow:**
 - **Do NOT commit.** The orchestrator handles git. Leave the working tree green; the orchestrator stages your changes precisely. Never run `git add -A` — the orchestrator reads your report to identify the exact files you changed and commits only those.
 - **Report changed files explicitly.** At the end of your response, list every file you modified with a one-line summary. This is how the orchestrator knows what to stage.
-- Build after every meaningful change to verify compilation. Stop and report on failure rather than pushing through with a broken tree.
+- **Do NOT build or run tests** — the orchestrator does, serialized (see "## Build — DON'T"). Verify statically and report what to rebuild/run.
 - **LOG_* macros need no individual gates.** The cross-build defines `__bada__`, which makes all `LOG_INFO`/`LOG_DEBUG`/`LOG_ERROR`/`LOG_WARN` expand to `((void)0)` (see `src/debug/Logger.h` line 24-30). Do NOT wrap individual LOG calls in `#ifndef __bada__` — it's redundant for cross-build scores. Remove existing gates if you encounter them during other edits.
 - **Temp / scratch / intermediate files go in project `tmp/`**, not `/tmp` or anywhere under `docs/` or `src/`. This includes session planning notes, TODO scratch, ad-hoc analysis dumps, per-chunk reports you generate during a task. `tmp/` is gitignored; the orchestrator never commits files written there. If you find yourself writing a `.md` outside `tmp/` for a working note, redirect it to `tmp/` instead.
 
@@ -117,31 +117,20 @@ The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and 
 - Public headers must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend types — use `void*` (comment the real type), `uint32_t` handle-IDs, or polymorphic engine bases (`Mortar::IFile*`); cast at the platform boundary inside the suffix-named companion.
 - If a portable .cpp grows a backend dependency, split it into a `<Name><Backend>.cpp` companion.
 
-## Build
+## Build — DON'T. The orchestrator builds; you report.
 
-Always build after making changes to verify compilation:
+**Do NOT run `cmake --build`, `ctest`, or any build/test yourself.** All builds happen in the **main agent (orchestrator)**, one at a time. Multiple subagents share the single `build/host` tree, so concurrent `cmake --build` invocations **race** — they corrupt each other's object/link outputs and produce false failures. (In practice a subagent's Bash build also lacks the MSVC env and fails spuriously anyway.) So: **edit only. Verify by reasoning, not by building.**
 
-```
-cmake --build build/host 2>&1 | tail -15
-```
+Your verification is **static**: confirm your files are syntactically valid C++, that every type/include you reference is reachable, and that the change is cross-build-safe per the C++11/GCC-4.4.1 rules above. Do **not** run analysis either (`tools/asm-verify/run.sh`, `compile-one.sh`, `symbol-diff`) — that's the orchestrator's.
 
-`build/host` is the project's single configured host build dir,
-regardless of toolchain (MSYS2/MinGW or MSVC). (`build/` is a gitignored
-container for all build trees: `build/host`, `build/web`, `build/asan`,
-`build/bada-cross`.) Don't re-configure or swap generators without
-explicit instruction. If `build/host` doesn't exist, ask the user to
-configure it rather than doing so yourself.
+**In your final report, tell the parent whether a rebuild is needed and exactly what to build/run** so it can do it (serialized, no race). Include:
+- **Rebuild targets** — which libs/exes your files feed (`mortar_engine`, `fruit-ninja-game`, or a new file added to a `CMakeLists.txt`), and whether you added/removed a source file (so the orchestrator knows a reconfigure may be needed).
+- **Tests to run** — if your change could alter behavior, name the `ctest` cases that cover it (or that a new component needs). Flag if it touches teardown/rendering so the parent runs the full suite.
+- **Reconfigure flags** — if you edited a `CMakeLists.txt` / added a `.cpp`, say so explicitly.
 
-**Do NOT run analysis — only compile (and, if relevant, regression tests).**
-Your verification is `cmake --build build/host` and, when your change could
-alter behavior, the affected `ctest` cases. Do **not** run `tools/asm-verify/run.sh`
-(or `compile-one.sh`/`check-tu.sh`/`symbol-diff`) — that slow Docker analysis
-is the orchestrator's job. Report your file/symbol changes and let the parent
-run asm-verify and read the divergence. If you need to confirm a chunk is
-cross-build-safe, reason from the C++11/GCC-4.4.1 rules above rather than
-invoking the cross-build yourself.
+`build/host` is the project's single configured host build dir (gitignored `build/` container also holds `build/web`, `build/asan`, `build/bada-cross`). If a build concern requires a config change, describe it — the orchestrator owns configuration.
 
-**A build error that is NOT in a file you changed is NOT your matter — STOP and report it.** Building is expected, but the only build errors you own are the ones in the files YOUR edit touched. If `cmake --build` fails with errors in files you didn't modify (a concurrent rewrite, pre-existing WIP, an unrelated header), do **not** try to fix them, and **never** `git stash`/`git checkout`/`git revert`/`git reset` to "isolate" your work — that destroys other in-flight changes (and the harness will block it). Verify *your* files compile (they appear in the compile list without errors), then return a report: "my files (`X`, `Y`) compile clean; the build is red due to pre-existing/concurrent errors in `Z` which I did not touch — not my task." The orchestrator decides what to do. Touching another task's files to chase a green build is over-reach, the same class of mistake as a band-aid.
+**A compile error you *reason* into existence in a file you did NOT change is NOT your matter.** Never `git stash`/`git checkout`/`git revert`/`git reset` to "isolate" your work — that destroys other in-flight changes (and the harness blocks it). Report "my files (`X`, `Y`) are self-consistent; if the build is red it's from pre-existing/concurrent edits in `Z` I didn't touch." The orchestrator decides.
 
 ### Optional: AddressSanitizer (clang64 on MSYS2)
 
