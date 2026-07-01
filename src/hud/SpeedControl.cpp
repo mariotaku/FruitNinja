@@ -35,10 +35,10 @@ SpeedControl::SpeedControl()
     // 0x001bb184, PC-relative load at 0x00161352..0x0016135a. The filename
     // is misleading: "loading.tex" IS the 8-frame vertical speed-gauge atlas,
     // shared with (or repurposed from) the loading-screen spinner.
-    // TextureManager::LoadLocalisedTexture (binary @ 0x0010a758) does NOT
-    // remap or localise -- it just does snprintf("textures/%s", name) plus
-    // a File::Exists gate. The "Localised" in the function name is a
-    // misnomer carried over from an earlier engine version.
+    // TextureManager::LoadLocalisedTexture v1.6.1 @ 0x0011a768 DOES remap textures
+    // by language: checks textures/<lang>/<name> first (File::Exists gate), then
+    // falls back to textures/<name>. See TextureManager.cpp for the locale switch.
+    // DIFFERS from v1.5.x @0x0010a758 (base path only -- no locale switch).
     // Slicing math (texH * 0.125f) matches binary's vmov.f32 s15,0x3e000000;
     // vmul.f32 s1,s14,s15 at 0x001613c0.
     int texW = 0, texH = 0;

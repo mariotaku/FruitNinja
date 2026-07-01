@@ -23,9 +23,12 @@ public:
     Mortar::SmartPtr<Texture> Load(const char* path,
         Mortar::SmartPtr<Mortar::TextureSource> source = Mortar::SmartPtr<Mortar::TextureSource>());
 
-    // Matches LoadLocalisedTexture (0x0010a758)
+    // v1.6.1 LoadLocalisedTexture @ 0x0011a768 (thunk @ 0x00112d3c)
     // Loads texture by name from the data/textures/ directory.
-    // Tries localised path first (e.g. "textures/en/name"), falls back to "textures/name".
+    // If game_work.languageFlag selects a known locale (2=fr/3=es/4=de/5=it/11=ko/12=ja/13=zh),
+    // tries "textures/<lang>/<name>" first (File::Exists gate). Falls back to "textures/<name>".
+    // Returns empty SmartPtr if neither path exists on disk.
+    // DIFFERS from v1.5.x @0x0010a758 (base path only -- no locale switch).
     static Mortar::SmartPtr<Texture> LoadLocalisedTexture(const char* name);
 
     // Set the base data directory for texture loading (e.g. "/path/to/Data")
