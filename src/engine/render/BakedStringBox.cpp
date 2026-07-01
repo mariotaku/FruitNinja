@@ -152,7 +152,7 @@ void BakedStringBox::SetHorizontalLineSpacing(int spacing) {
 }
 
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetTranslation @0x00246238: (_Vector3<float>, bool preShift).
-void BakedStringBox::SetTranslation(const Vec3& pos, bool preShift) {
+void BakedStringBox::SetTranslation(Vec3 pos, bool preShift) {
     Vec3 p = pos;
     if (preShift) {
         // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: preShift!=0 pre-shifts

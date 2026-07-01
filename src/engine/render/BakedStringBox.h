@@ -21,7 +21,7 @@
 //   SetColour(Colour, bool eager)     — binary writes m_FillTop + m_ColourMode; see TODO in .cpp
 //   SetHorizontalLineSpacing(int)     — binary writes m_AlignMode; pass -1 for auto
 //   FitIntoVerticalBounds()
-//   SetTranslation(const Vec3&, bool preShift)
+//   SetTranslation(Vec3, bool preShift)
 //   Draw(Vec2 scale, float rotation, bool center)
 
 #include "math/Vec2.h"
@@ -103,7 +103,7 @@ public:
     // and +(boxH/2) in Y (integer truncation, v1.6.1 BakedStringBox::SetTranslation @0x00246238).
     // Does NOT dirty the layout — position is a draw-time anchor only.
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetTranslation @0x00246238: (_Vector3<float>, bool).
-    void SetTranslation(const Vec3& pos, bool preShift);
+    void SetTranslation(Vec3 pos, bool preShift);
 
     // Draw the laid-out glyph quads.
     //   scale    : Vec2(1,1) in the binary call site
