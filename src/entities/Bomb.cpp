@@ -89,13 +89,16 @@ void Bomb::LoadContent() {
     g_bombData.loaded = true;
 }
 
-// ASM-spec v1.6.1 CleanupBomb @ 0x1d6758
+// ASM-spec v1.6.1 CleanupBomb @ 0x001d6758 — exact binary order:
+// 1-2. null model[0], model[1]; 3. BombFlash::CleanUp(); 4-7. null 4 textures.
 void CleanupBomb() {
-    for (int i = 0; i < 2; i++)
-        g_bombData.model[i] = Mortar::SmartPtr<Mortar::Model>();
-    g_bombData.texMinus10 = Mortar::SmartPtr<Mortar::Texture>();
-    g_bombData.m_blastTexture = Mortar::SmartPtr<Mortar::Texture>();
+    g_bombData.model[0] = Mortar::SmartPtr<Mortar::Model>();
+    g_bombData.model[1] = Mortar::SmartPtr<Mortar::Model>();
     BombFlash::CleanUp();
+    g_bombData.s_flashTexture0.SetNull();  // BSS+0x04 dead: never loaded in v1.6.1
+    g_bombData.s_flashTexture1.SetNull();  // BSS+0x08 dead: never loaded in v1.6.1
+    g_bombData.m_blastTexture.SetNull();   // BSS+0x2C
+    g_bombData.texMinus10.SetNull();       // BSS+0x1C
 }
 
 // --- Bomb implementation ---

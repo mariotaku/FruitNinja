@@ -161,7 +161,8 @@ uint32_t SlashEntity::s_ModPowerMask = 0;
 const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 = 2500)
 
 // --- Global content ---
-static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;
+static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;        // BSS+0xD0
+static Mortar::SmartPtr<Mortar::Texture> g_SlashGlowTex;    // BSS+0xD4 "rave_blade_glow.tex"
 
 // --- Global instances ---
 SlashEntity* g_pSlashEntities[16] = {0};
@@ -215,11 +216,15 @@ static uint32_t ResolveEmitterHash(const char* path) {
 }
 
 // ---------------------------------------------------------------------------
-// Content load -- matches LoadContent (0x17C948)
+// ASM-spec v1.6.1 SlashEntity::LoadContent @ 0x001e7e08: guards on !g_BladeTex.IsValid(),
+// loads blade.tex (BSS+0xD0) then rave_blade_glow.tex (BSS+0xD4).
 // ---------------------------------------------------------------------------
 void SlashEntity::LoadContent() {
     if (!g_BladeTex.IsValid()) {
-        g_BladeTex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
+        g_BladeTex     = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
+        g_SlashGlowTex = Mortar::TextureManager::LoadLocalisedTexture("rave_blade_glow.tex");
+        // TODO: v1.6.1 SlashEntity::LoadContent @0x001e7e08 -- init 8-slot ghost ring (alloc
+        //   2x 0x16C8-byte buffers per ghost); blocked on SlashEntityGhost port.
     }
 }
 
@@ -227,23 +232,18 @@ void SlashEntity::ReleaseContent() {
     g_BladeTex.SetNull();
 }
 
-// ASM-spec v1.6.1 CleanupSlash @ 0x001e8204.
-// 1. Null 3 SmartPtr<Texture> at BSS offsets +0xd0, +0xd8, +0xd4 (exact binary order).
-//    Port maps: g_BladeTex (+0xd0) and g_ModTexture (+0xd4 or +0xd8); one of them covers
-//    the +0xd8 slot and one covers +0xd4; the third is unidentified (RE gap below).
-// 2. For i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred (SlashEntityGhost not ported).
-// 3. Clear loaded flag (bool at BSS+0xcc -- not yet tracked in port).
+// ASM-spec v1.6.1 CleanupSlash @ 0x001e8204 — exact binary order:
+// 1. null BSS+0xD0 (g_BladeTex), BSS+0xD8 (g_ModTexture), BSS+0xD4 (g_SlashGlowTex).
+// 2. for i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred.
+// 3. clear loaded flag BSS+0xCC.
 void CleanupSlash() {
-    // Step 1: null the 3 slash textures in binary order (+0xd0, +0xd8, +0xd4).
-    // Port identifies g_BladeTex and g_ModTexture; only 2 of 3 slots are mapped.
-    g_BladeTex.SetNull();
-    g_ModTexture.SetNull();
-    // TODO: v1.6.1 CleanupSlash @0x001e8204 nulls 3 slash textures (+0xd0/+0xd4/+0xd8);
-    // only g_BladeTex and g_ModTexture mapped -- RE SlashEntity::LoadContent for the third.
-
-    // Step 2: deferred -- SlashEntityGhost not yet ported.
+    g_BladeTex.SetNull();        // BSS+0xD0
+    g_ModTexture.SetNull();      // BSS+0xD8
+    g_SlashGlowTex.SetNull();    // BSS+0xD4 (rave_blade_glow.tex)
     // TODO: v1.6.1 CleanupSlash @0x001e8204 -- 8x SlashEntityGhost::Release(ghost_ring[i]);
-    // blocked on SlashEntityGhost port.
+    // SlashEntityGhost::Release @ 0x00103044 (PLT stub): frees 2 vertex buffers per ghost
+    //   (ghost+4 = m_pRightBuffer, ghost+8 = m_pLeftBuffer, each 0x16C8 bytes).
+    // Blocked on SlashEntityGhost port.
 }
 
 // ---------------------------------------------------------------------------
