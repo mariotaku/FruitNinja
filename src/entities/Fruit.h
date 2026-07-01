@@ -197,11 +197,16 @@ public:
     // rotation slot. See Fruit.cpp for full algorithm.
     void RotateFacingUp(bool flag, Vec3 axisScale);
 
+    // Binary @ 0x001dc054 — set m_FruitType and recalculate visual scale + collision sphere.
+    // Called from ShopScreen::SetSelected when the player browses the equipment ring.
+    // scaleParam multiplies the collision radius (1.0f at all known call sites).
+    void SetFruitType(int fruitType, float scaleParam);
+
     // Matches Fruit::FruitType (0x00175b10). Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and
     // comparing against m_NameHash / m_NameHashUpper. If not found:
-    //   fallbackRandom=true → returns Random::Rand32(count-1)
-    //   fallbackRandom=false → returns -1 (0xFFFFFFFF)
+    //   fallbackRandom=true -> returns Random::Rand32(count-1)
+    //   fallbackRandom=false -> returns -1 (0xFFFFFFFF)
     static int FruitType(const char* name, bool fallbackRandom);
 
     // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
