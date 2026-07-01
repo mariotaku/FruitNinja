@@ -593,8 +593,28 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
     return unlocked;
 }
 
-// Defunct: achievements parse -- no-op stub; v1.6.1 ParseAchievements @0x001094ec
-// Binary: walks TiXmlElement tree, populating FruitSaveData achievement records.
-// Stub does nothing; save data has no achievements to parse from server.
-void ParseAchievements(TiXmlElement* /*root*/, FruitSaveData* /*save*/, bool /*reset*/) {
+// ASM-spec v1.6.1 ParseAchievements @0x001094ec
+// Loads the per-<ach> achievement records out of a <que> (pending) or <unlocked>
+// (confirmed) container into the FruitSaveData maps. Invoked by ParseSaveFile:
+// que -> pending=true (also reads the "time" countdown attr), unlocked -> pending=false.
+// Each <ach name="..."> keys its record by StringHash(name).
+// (The online-publish side stays defunct; the local-save records are live and
+// drive IsAchievementUnlocked / AddToQue / Update, so this parse is required.)
+void ParseAchievements(TiXmlElement* root, FruitSaveData* save, bool pending) {
+    if (!root || !save) return;
+    for (TiXmlElement e = root->FirstChildElement("ach"); e;
+         e = e.NextSiblingElement("ach")) {
+        const char* name = e.Attribute("name");
+        if (!name || !*name) continue;
+        AchievementItem item;
+        strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
+        item.m_Name[sizeof(item.m_Name) - 1] = '\0';
+        uint32_t hash = StringHash(name);
+        if (pending) {
+            e.QueryFloatAttribute("time", &item.m_Timer);
+            save->m_PendingUnlocks[hash] = item;
+        } else {
+            save->m_UnlockedAchievements[hash] = item;
+        }
+    }
 }

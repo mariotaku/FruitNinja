@@ -664,6 +664,16 @@ fn_add_game_test(test_scorecontrol test_scorecontrol.cpp)
 add_test(NAME screenshot_scorecontrol COMMAND test_scorecontrol --screenshot)
 set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60)
 
+# FruitSaveData SaveGame/LoadGame round-trip (#291 Part 2).
+# Builds a representative FruitSaveData, SaveGame's it to ./FruitySave.xml, LoadGame's
+# it into a fresh object, and asserts every round-tripped field plus that the emitted
+# XML uses the BINARY element names (<state>/<total>/<unlocked>, not <que>-for-state/
+# <SliceTotal>/<achievements>). Pure in-process: constructs a Game only for the
+# MortarGame version singleton; no SDL/GL/audio.
+fn_add_game_test(test_save_roundtrip test_save_roundtrip.cpp)
+add_test(NAME save_roundtrip COMMAND test_save_roundtrip)
+set_tests_properties(save_roundtrip PROPERTIES TIMEOUT 30)
+
 # AddToCurrentScore clamp regression guard (#222 fix).
 # Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
 # + penalty=-5 -> 0; score 0 + gain=50 -> 50. Uses TestHarness so

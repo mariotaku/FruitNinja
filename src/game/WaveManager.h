@@ -416,6 +416,10 @@ private:
 bool PowersEnabled();
 SpawnPlacement ParsePlacement(const char* side);
 
+// ParseSpawner -- v1.6.1 @0x00129314. Parses a <Spawn> element into SPAWNER_INFO.
+// Returns 1 if the element's tag hashes to StringHash("Spawn"), else 0.
+int ParseSpawner(TiXmlElement* elem, SPAWNER_INFO* out);
+
 // v1.6.1 GetRandomPowerSpawner @0x0012403c: returns a pointer to one of three function-local
 // static SPAWNER_INFO entries (bottom-center, right-side, left-side), lazily initialised.
 // includeCenter=true picks from all 3 entries; false skips entry 0 (center) and picks from

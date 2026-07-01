@@ -11,10 +11,17 @@
 #include "Game.h"
 #include "ItemManager.h"
 #include "AchievementManager.h"
+#include "PowerUpManager.h"
+#include "GameMode.h"
+#include "ScreenEffect.h"
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
 #include "engine/core/SystemManager.h"
 #include "engine/asset/FileManager.h"
+
+// GetVersionString -- v1.6.1 Game::SelfVersion @0x0011fbd8 (defined in AboutScreen.cpp);
+// returns the literal build version "1.6.1". No public header declares it.
+const char* GetVersionString();
 
 #include <cstdio>
 #include <cstring>
@@ -323,6 +330,34 @@ void MakeModeAttr(char* out, size_t outsz, int mode, const char* suffix) {
     snprintf(out, outsz, "%s%s", k_ModeNames[mode], suffix);
 }
 
+// Build a comma-separated "v0,v1,...,vN-1" string into buf (no trailing comma).
+// Used by SaveGame for the <state> typesToPickFrom / best_combo attrs.
+void BuildIntCsv(char* buf, size_t bufsz, const int* vals, int count) {
+    if (bufsz == 0) return;
+    buf[0] = '\0';
+    size_t pos = 0;
+    for (int i = 0; i < count; ++i) {
+        int n = snprintf(buf + pos, bufsz - pos, (i == 0) ? "%d" : ",%d", vals[i]);
+        if (n < 0 || (size_t)n >= bufsz - pos) break;
+        pos += (size_t)n;
+    }
+}
+
+// Parse a comma-separated int CSV into vals[maxCount]; returns the count parsed.
+// Inverse of BuildIntCsv; used by ParseSaveFile for typesToPickFrom / best_combo.
+int ParseIntCsv(const char* s, int* vals, int maxCount) {
+    if (!s) return 0;
+    int count = 0;
+    const char* p = s;
+    while (*p && count < maxCount) {
+        while (*p == ' ' || *p == ',') ++p;
+        if (!*p) break;
+        vals[count++] = atoi(p);
+        while (*p && *p != ',') ++p;
+    }
+    return count;
+}
+
 // Resolve the on-disk save path. Binary uses /Home/FruitySave.xml on
 // Bada; the port writes to <data_dir>/FruitySave.xml so the file lives
 // next to the asset tree.
@@ -337,12 +372,6 @@ std::string GetSavePath() {
     return g->data_dir + "/FruitySave.xml";
 #endif
 }
-
-// Save format version. Binary uses GetVersionTotal() which encodes
-// build info; port pins to a single byte for now and bumps when the
-// schema changes.
-// const not constexpr (4.4 doesn't accept constexpr).
-static const int k_SaveVersion = 1;
 
 } // namespace
 
@@ -359,7 +388,16 @@ bool FruitSaveData::PlayedModeToday(int gameMode) {
 }
 
 // ----------------------------------------------------------------------
-// ASM-spec v1.6.1 SaveGame @ 0x001530dc
+// ASM-spec v1.6.1 SaveGame @0x001530dc
+//
+// Emits the binary's FruitySave.xml schema: root <save_file> + <total>
+// (cumulative then session) + <que> pending unlocks + <unlocked> confirmed
+// + <state> game-state (gated) with child <wave_info>/<wave>/<spawner>
+// + <wave_counts_MODE> x4 (always) + <powers> (always, last).
+// Full element/attr/field/offset map: tmp/port291/save_load_spec.md.
+//
+// Deferred: the <state> live-actor <ent> list (read from the live ActorManager,
+// not from m_EntityStates) -- see the TODO inside the <state> block.
 // ----------------------------------------------------------------------
 void SaveGame(FruitSaveData* save) {
     if (!save) return;
@@ -367,15 +405,13 @@ void SaveGame(FruitSaveData* save) {
     TiXmlDocument doc;
     TiXmlElement root = doc.NewElement("save_file");
 
-    // Top-level scalar attributes (per binary writer order).
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%d.%d.%d", k_SaveVersion, 0, 0);
-    root.SetAttribute("version", buf);
+    // --- root attrs ---
+    root.SetAttribute("version", GetVersionString());
     root.SetAttribute("highscore", save->m_highscore);
 
-    // Per-mode attrs: "<MODE>highscore", "<MODE>_unposted" (combo, only
-    // if > 0), "<MODE>_dolg" (play count).
-    char attrName[32];
+    // Per-mode attrs (interleaved per mode, matching the binary loop):
+    // "<MODE>highscore", "<MODE>_unposted" (only if > 0), "<MODE>_dolg".
+    char attrName[40];
     for (int m = 0; m < 4; m++) {
         MakeModeAttr(attrName, sizeof(attrName), m, "highscore");
         root.SetAttribute(attrName, save->m_ModeHighScores[m]);
@@ -392,108 +428,160 @@ void SaveGame(FruitSaveData* save) {
     root.SetAttribute("critical_chance", save->m_CriticalChance);
     root.SetAttribute("rated",         save->m_bDojoBGUnlocked ? "true" : "false");
     root.SetAttribute("p2pCancelled",  save->m_bP2PCancelled   ? "true" : "false");
+    root.SetAttribute("appLicensedState", game_work.m_gameDataLicensedState);
 
-    // SliceTotal elements: cumulative totals first, then session-only.
-    // Range-for replaced with iterator form for GCC 4.4 (asm-verify cross
-    // toolchain) parser compatibility; same semantics in both compilers.
+    // --- <total> elements: cumulative totals first, then session-only ---
     for (std::map<uint32_t, SliceTotal>::iterator it = save->m_Totals.begin();
          it != save->m_Totals.end(); ++it) {
-        TiXmlElement e = doc.NewElement("SliceTotal");
-        e.SetAttribute("name",  it->second.name.c_str());
-        e.SetAttribute("count", it->second.count);
+        TiXmlElement e = doc.NewElement("total");
+        e.SetAttribute("type",  it->second.name.c_str());
+        e.SetAttribute("score", it->second.count);
         root.InsertEndChild(e);
     }
     for (std::map<uint32_t, SliceTotal>::iterator it = save->m_SessionTotals.begin();
          it != save->m_SessionTotals.end(); ++it) {
-        TiXmlElement e = doc.NewElement("SliceTotal");
+        TiXmlElement e = doc.NewElement("total");
         e.SetAttribute("u", "true");
-        e.SetAttribute("name",  it->second.name.c_str());
-        e.SetAttribute("count", it->second.count);
+        e.SetAttribute("type",  it->second.name.c_str());
+        e.SetAttribute("score", it->second.count);
         root.InsertEndChild(e);
     }
 
-    // Pending unlocks map ("unlocked" container with timer attr).
-    if (!save->m_PendingUnlocks.empty()) {
-        TiXmlElement ach = doc.NewElement("unlocked");
+    // --- <que>: pending unlocks (ALWAYS emitted) ---
+    {
+        TiXmlElement que = doc.NewElement("que");
         for (std::map<uint32_t, AchievementItem>::iterator it = save->m_PendingUnlocks.begin();
              it != save->m_PendingUnlocks.end(); ++it) {
-            TiXmlElement e = doc.NewElement("achievement");
+            TiXmlElement e = doc.NewElement("ach");
             e.SetAttribute("name", it->second.m_Name);
-            e.SetAttribute("timer", it->second.m_Timer);
-            ach.InsertEndChild(e);
+            e.SetDoubleAttribute("time", (double)it->second.m_Timer);
+            que.InsertEndChild(e);
         }
-        root.InsertEndChild(ach);
+        root.InsertEndChild(que);
     }
 
-    // Unlocked achievements ("achievements" container).
-    if (!save->m_UnlockedAchievements.empty()) {
-        TiXmlElement unl = doc.NewElement("achievements");
+    // --- <unlocked>: confirmed unlocks (ALWAYS emitted) ---
+    {
+        TiXmlElement unl = doc.NewElement("unlocked");
         for (std::map<uint32_t, AchievementItem>::iterator it = save->m_UnlockedAchievements.begin();
              it != save->m_UnlockedAchievements.end(); ++it) {
-            TiXmlElement e = doc.NewElement("achievement");
+            TiXmlElement e = doc.NewElement("ach");
             e.SetAttribute("name", it->second.m_Name);
             unl.InsertEndChild(e);
         }
         root.InsertEndChild(unl);
     }
 
-    // Per-mode score history (<wave_counts_MODE> blocks).
+    // --- <state>: game state. Gate: active game OR bomb-hit in flight. ---
+    if (save->m_bHasActiveGame != 0 || save->m_BombHitTimer > 0.0f) {
+        TiXmlElement st = doc.NewElement("state");
+        st.SetAttribute("hasDropped",       save->m_bWasGameOver ? "true" : "false");
+        st.SetAttribute("score",            save->m_CurrentScore);
+        st.SetAttribute("misses",           save->m_CurrentMissCount);
+        st.SetAttribute("mode",             GetModeName((GAME_MODE)save->m_GameMode));
+        st.SetAttribute("consecutiveCount", save->m_ComboCount);
+        st.SetAttribute("consecutiveType",  save->m_LastSlasher);
+        st.SetDoubleAttribute("timer",      (double)save->m_TimeRemainingSave);
+        st.SetDoubleAttribute("gameTime",   (double)game_work.m_ElapsedGameTime);
+
+        // globalWaveDt <- m_WaveScalar_v161 (+0x150), written as a "%f" string
+        // (binary OS_SPrintf's it into a stack buffer then SetAttribute as a string).
+        char waveDtBuf[32];
+        snprintf(waveDtBuf, sizeof(waveDtBuf), "%f", save->m_WaveScalar_v161);
+        st.SetAttribute("globalWaveDt", waveDtBuf);
+
+        if (save->m_FruitQueueCount > 0) {
+            char csv[256];
+            BuildIntCsv(csv, sizeof(csv), save->m_FruitQueue, save->m_FruitQueueCount);
+            st.SetAttribute("typesToPickFrom", csv);
+        }
+        if (save->m_BestComboLength > 0) {
+            char csv[128];
+            BuildIntCsv(csv, sizeof(csv), save->m_BestComboFruits, save->m_BestComboLength);
+            st.SetAttribute("best_combo", csv);
+        }
+
+        st.SetAttribute("go_state",            save->m_GameOverScreenState);
+        st.SetDoubleAttribute("go_time",       (double)save->m_GameOverTimer);
+        st.SetDoubleAttribute("go_bombHitTime", (double)save->m_BombHitTimer);
+        st.SetDoubleAttribute("go_transition", (double)save->m_NextComboBonus);
+        st.SetAttribute("go_body",  save->m_GameOverField1);
+        st.SetAttribute("go_head",  save->m_GameOverField2);
+        st.SetAttribute("go_fruit", save->m_GameOverField3);
+        st.SetAttribute("go_fact",  save->m_GameOverField4);
+        st.SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
+        st.SetAttribute("go_setScore",      save->secondaryFlag   ? "true" : "false");
+
+        // Speed block: only when desiredSpeed (m_Speed_P0_alias) > 0.
+        if (save->m_Speed_P0_alias > 0.0f) {
+            st.SetDoubleAttribute("speedLossTime",  (double)save->m_Speed_P0);
+            st.SetDoubleAttribute("desiredSpeed",   (double)save->m_Speed_P0_alias);
+            st.SetDoubleAttribute("nextComboBonus", (double)save->m_Speed_P1);
+        }
+
+        st.SetDoubleAttribute("shake_time", (double)save->m_ShakeIntensity);
+        // DIFFERS: original SaveGame @0x001530dc writes shake_max_time from m_ShakeIntensity
+        // (+0x138) -- the SAME field as shake_time, NOT m_ShakeDecay. ParseSaveFile loads
+        // shake_max_time into m_ShakeDecay, so a round-trip sets m_ShakeDecay := m_ShakeIntensity.
+        // Replicated intentionally as a faithful binary quirk.
+        st.SetDoubleAttribute("shake_max_time", (double)save->m_ShakeIntensity);
+
+        // child <wave_info> (ParseWaveInfo inverse) + <wave>/<spawner> lists.
+        {
+            TiXmlElement wi = doc.NewElement("wave_info");
+            wi.SetAttribute("waveCount",            save->m_pCurrentWave_P1);
+            wi.SetAttribute("numberOfWavesSpawned", (int)save->m_WaveDelay);
+            wi.SetDoubleAttribute("waveDelay",      (double)save->m_WaveWait);
+            wi.SetDoubleAttribute("waveWait",       (double)save->m_ProbabilityOverideFlag);
+            wi.SetAttribute("blitzSpawnedThisGame",     save->m_blitzSpawnedThisGame);
+            wi.SetAttribute("blitzForceSpawnedCounter", save->m_blitzForceSpawnedCounter);
+            wi.SetDoubleAttribute("blitzSpawnTime",     (double)save->m_blitzSpawnTime);
+
+            for (std::list<WaveState>::iterator wit = save->m_WaveStates.begin();
+                 wit != save->m_WaveStates.end(); ++wit) {
+                TiXmlElement w = doc.NewElement("wave");
+                w.SetAttribute("inc",   (int)wit->waveIdx);
+                w.SetAttribute("index", (int)wit->index);
+                for (std::list<SpawnState>::iterator sit = wit->spawners.begin();
+                     sit != wit->spawners.end(); ++sit) {
+                    TiXmlElement sp = doc.NewElement("spawner");
+                    sp.SetDoubleAttribute("delay", (double)sit->timer);
+                    sp.SetAttribute("toSpawn",     (int)sit->count);
+                    w.InsertEndChild(sp);
+                }
+                wi.InsertEndChild(w);
+            }
+            st.InsertEndChild(wi);
+        }
+
+        // TODO: v1.6.1 0x001530dc <ent>/<powers> live-actor serialisation
+        // (needs ActorManager::GetEntityFirst/Next + SuperFruitControl::
+        // SaveSuperFruitState wiring). The <state> entity list is read from the
+        // live ActorManager, not from m_EntityStates -- deferred for now.
+
+        root.InsertEndChild(st);
+    }
+
+    // --- <wave_counts_MODE> x4: per-mode score history (ALWAYS, even if empty) ---
     for (int m = 0; m < 4; m++) {
-        if (save->m_ModeScoreHistory[m].empty()) continue;
-        char tag[48];
+        char tag[40];
         snprintf(tag, sizeof(tag), "wave_counts_%s", k_ModeNames[m]);
         TiXmlElement container = doc.NewElement(tag);
         for (std::map<int, int>::iterator it = save->m_ModeScoreHistory[m].begin();
              it != save->m_ModeScoreHistory[m].end(); ++it) {
             TiXmlElement e = doc.NewElement("game_count");
-            e.SetAttribute("score",   it->first);
-            e.SetAttribute("waveIdx", it->second);
+            e.SetAttribute("waveIdx", it->first);
+            e.SetAttribute("games",   it->second);
             container.InsertEndChild(e);
         }
         root.InsertEndChild(container);
     }
 
-    // ActiveGame <que> block: only when m_bHasActiveGame is set.
-    // Port skips entity/wave list serialisation for now; just emits
-    // the scalar resume fields so resume coordinates persist across
-    // a non-clean exit.
-    if (save->m_bHasActiveGame) {
-        TiXmlElement que = doc.NewElement("que");
-        que.SetAttribute("mode",            k_ModeNames[save->m_GameMode <= 3 ? save->m_GameMode : 0]);
-        que.SetAttribute("hasDropped",      save->m_bWasGameOver ? "true" : "false");
-        que.SetAttribute("count",           save->m_CurrentScore);
-        que.SetAttribute("misses",          save->m_CurrentMissCount);
-        que.SetAttribute("count1",          save->m_ComboCount);
-        que.SetAttribute("count2",          save->m_LastSlasher);
-        que.SetAttribute("timer",           save->m_TimeRemainingSave);
-        que.SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
-        que.SetAttribute("go_state",        save->m_GameOverScreenState);
-        que.SetAttribute("go_time",         save->m_GameOverTimer);
-        que.SetAttribute("go_bombHitTime",  save->m_BombHitTimer);
-        que.SetAttribute("go_body",         save->m_GameOverField1);
-        que.SetAttribute("go_head",         save->m_GameOverField2);
-        que.SetAttribute("go_fruit",        save->m_GameOverField3);
-        que.SetAttribute("go_fact",         save->m_GameOverField4);
-        que.SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
-        que.SetAttribute("go_setScore",     save->secondaryFlag ? "true" : "false");
-        que.SetAttribute("nextComboBonus",  save->m_NextComboBonus);
-        que.SetAttribute("shake_time",      save->m_ShakeIntensity);
-        que.SetAttribute("shake_max_time",  save->m_ShakeDecay);
-
-        // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
-        // Using "waveScalar" as placeholder; round-trip is self-consistent regardless.
-        que.SetAttribute("waveScalar", save->m_WaveScalar_v161);
-
-        TiXmlElement wi = doc.NewElement("wave_info");
-        wi.SetAttribute("waveCount",                save->m_pCurrentWave_P1);
-        wi.SetAttribute("waveDelay",                save->m_WaveDelay);
-        wi.SetAttribute("waveWait",                 save->m_WaveWait);
-        wi.SetAttribute("blitzSpawnedThisGame",     save->m_blitzSpawnedThisGame);
-        wi.SetAttribute("blitzForceSpawnedCounter", save->m_blitzForceSpawnedCounter);
-        wi.SetAttribute("blitzSpawnTime",           save->m_blitzSpawnTime);
-        que.InsertEndChild(wi);
-
-        root.InsertEndChild(que);
+    // --- <powers> (ALWAYS, last): active power-up state via SaveActivePowerUps ---
+    {
+        TiXmlElement powers = doc.NewElement("powers");
+        PowerUpManager::GetInstance()->SaveActivePowerUps(&powers);
+        root.InsertEndChild(powers);
     }
 
     doc.InsertEndChild(root);
@@ -506,7 +594,212 @@ void SaveGame(FruitSaveData* save) {
 }
 
 // ----------------------------------------------------------------------
-// ASM-spec v1.6.1 LoadGame @ 0x0015591c
+// ASM-spec v1.6.1 ParseWaveInfo @0x00154510
+//
+// Reads the <wave_info> scalar attrs into the WaveManager-resume fields, then
+// rebuilds m_WaveStates from the <wave>/<spawner> child lists. Always returns 1.
+// NOTE the binary's attr->field map: "numberOfWavesSpawned"->m_WaveDelay (read as
+// an int into the float slot), "waveDelay"->m_WaveWait, "waveWait"->m_ProbabilityOverideFlag.
+// ----------------------------------------------------------------------
+int ParseWaveInfo(TiXmlElement* elem, FruitSaveData* data) {
+    if (!elem || !data) return 1;
+
+    elem->QueryIntAttribute("waveCount", &data->m_pCurrentWave_P1);   // +0x140
+
+    // +0x144 is read as an int in the binary; the port slot is a float, so read
+    // into an int and cast (the field semantically holds an integer wave count).
+    int nws = (int)data->m_WaveDelay;
+    elem->QueryIntAttribute("numberOfWavesSpawned", &nws);
+    data->m_WaveDelay = (float)nws;
+
+    elem->QueryFloatAttribute("waveDelay", &data->m_WaveWait);                 // +0x148
+    elem->QueryFloatAttribute("waveWait",  &data->m_ProbabilityOverideFlag);   // +0x14c
+    elem->QueryIntAttribute("blitzSpawnedThisGame",     &data->m_blitzSpawnedThisGame);
+    elem->QueryIntAttribute("blitzForceSpawnedCounter", &data->m_blitzForceSpawnedCounter);
+    elem->QueryFloatAttribute("blitzSpawnTime",         &data->m_blitzSpawnTime);
+
+    data->m_WaveStates.clear();   // +0x154
+    for (TiXmlElement w = elem->FirstChildElement("wave"); w;
+         w = w.NextSiblingElement("wave")) {
+        WaveState ws;
+        // "inc" is a float in the binary (counter stored as float); the port slot
+        // is an int, so read into a float and round.
+        float inc = (float)ws.waveIdx;
+        w.QueryFloatAttribute("inc", &inc);
+        ws.waveIdx = (int)inc;
+        int idx = (int)ws.index;
+        w.QueryIntAttribute("index", &idx);
+        ws.index = (uint32_t)idx;
+
+        for (TiXmlElement sp = w.FirstChildElement("spawner"); sp;
+             sp = sp.NextSiblingElement("spawner")) {
+            SpawnState ss;
+            sp.QueryFloatAttribute("delay", &ss.timer);   // SpawnState.timer
+            int toSpawn = (int)ss.count;
+            sp.QueryIntAttribute("toSpawn", &toSpawn);     // SpawnState.count (read as int)
+            ss.count = (float)toSpawn;
+            ws.spawners.push_back(ss);
+        }
+        data->m_WaveStates.push_back(ws);
+    }
+    return 1;
+}
+
+// ----------------------------------------------------------------------
+// ASM-spec v1.6.1 ParseSaveFile @0x00154c8c (_Z13ParseSaveFileP9TiXmlNodeP13FruitSaveData)
+//
+// Recursive tag-walker. Container tags (save_file, state) read their own attrs
+// then fall through to recurse into element children; leaf handlers fully
+// consume their subtree and return. Uses the binary's exact element/attr names.
+// ----------------------------------------------------------------------
+void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
+    if (!node || !node->m_node || !data) return;
+    TiXmlElement self(node->m_node);
+    const char* tag = self.Name();
+    if (!tag || !*tag) return;
+
+    if (strcmp(tag, "save_file") == 0) {
+        const char* ver = self.Attribute("version");
+        if (ver) ParseVersionInfo(ver, data);
+        self.QueryIntAttribute("highscore",        &data->m_highscore);
+        self.QueryIntAttribute("critical_chance",  &data->m_CriticalChance);
+        self.QueryIntAttribute("appLicensedState", &game_work.m_gameDataLicensedState);
+        const char* rated = self.Attribute("rated");
+        if (rated) data->m_bDojoBGUnlocked = (strcmp(rated, "true") == 0) ? 1 : 0;
+        const char* p2p = self.Attribute("p2pCancelled");
+        if (p2p) data->m_bP2PCancelled = (strcmp(p2p, "true") == 0) ? 1 : 0;
+        char an[40];
+        for (int m = 0; m < 4; m++) {
+            snprintf(an, sizeof(an), "%shighscore", k_ModeNames[m]);
+            self.QueryIntAttribute(an, &data->m_ModeHighScores[m]);
+            snprintf(an, sizeof(an), "%s_unposted", k_ModeNames[m]);
+            self.QueryIntAttribute(an, &data->m_ModeBestCombos[m]);
+            snprintf(an, sizeof(an), "%s_dolg", k_ModeNames[m]);
+            self.QueryIntAttribute(an, &data->m_LastPlayedDay[m]);
+        }
+        // fall through to recurse into children (total/que/unlocked/state/wave_counts_*)
+    } else if (strcmp(tag, "que") == 0) {
+        ParseAchievements(&self, data, true);   // pending unlocks
+        return;
+    } else if (strcmp(tag, "unlocked") == 0) {
+        ParseAchievements(&self, data, false);  // confirmed unlocks
+        return;
+    } else if (strcmp(tag, "total") == 0) {
+        const char* type = self.Attribute("type");
+        if (type && *type) {
+            int score = 0;
+            self.QueryIntAttribute("score", &score);
+            const char* u = self.Attribute("u");
+            bool isSession = (u && strcmp(u, "true") == 0);
+            data->AddToTotal(type, StringHash(type), score, isSession, false);
+        }
+        return;
+    } else if (strcmp(tag, "ent") == 0) {
+        // Version guard: only resume entities for a matching build.
+        if (data->m_GameMode <= 3 && data->m_VersionInfo == GetVersionTotal()) {
+            EntityState es;
+            const char* vel  = self.Attribute("vel");
+            const char* pos  = self.Attribute("pos");
+            const char* grav = self.Attribute("grav");
+            if (vel)  { Vec3 v = ParseVector(vel);  es.m_Velocity[0] = v.x; es.m_Velocity[1] = v.y; es.m_Velocity[2] = v.z; }
+            if (pos)  { Vec3 v = ParseVector(pos);  es.m_Position[0] = v.x; es.m_Position[1] = v.y; es.m_Position[2] = v.z; }
+            if (grav) { Vec3 v = ParseVector(grav); es.m_Overlay[0]  = v.x; es.m_Overlay[1]  = v.y; es.m_Overlay[2]  = v.z; }
+            self.QueryIntAttribute("type", &es.m_KindIndex);
+            const char* hit = self.Attribute("hit");
+            if (hit) es.m_BombHitFlag = (uint8_t)((strcmp(hit, "true") == 0) ? 1 : 0);
+            // TODO: v1.6.1 0x00154c8c <ent> wait/sliceWait/<superFruitState> are not
+            // represented in the port's lean EntityState resume struct; only
+            // pos/vel/grav/type/hit are restored. (Save side defers <ent> entirely.)
+            data->m_EntityStates.push_back(es);
+        }
+        return;
+    } else if (strcmp(tag, "powers") == 0) {
+        if (data->m_GameMode <= 3 && data->m_VersionInfo == GetVersionTotal()) {
+            PowerUpManager::GetInstance()->LoadActivePowerUps(&self, (int)data->m_GameMode);
+        }
+        return;
+    } else if (strcmp(tag, "state") == 0) {
+        // game_work._137 = 1 in the binary marks "resume snapshot present". The port's
+        // resume path keys off FruitSaveData::m_bHasActiveGame instead (WaveManager::Resume
+        // gate @ WaveManager.cpp + GameInit), so set that as the _137 stand-in.
+        // TODO: v1.6.1 game_work._137 offset unconfirmed -- set that field instead once resolved.
+        data->m_bHasActiveGame = 1;
+        data->m_EntityStates.clear();
+
+        const char* mode = self.Attribute("mode");
+        if (mode) {
+            unsigned int gm = ParseGameMode(StringHash(mode));
+            if (gm < 4) data->m_GameMode = gm;
+        }
+        self.QueryIntAttribute("score",  &data->m_CurrentScore);
+        self.QueryIntAttribute("misses", &data->m_CurrentMissCount);
+        const char* hasDropped = self.Attribute("hasDropped");
+        if (hasDropped) data->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
+        self.QueryIntAttribute("consecutiveCount", &data->m_ComboCount);
+        self.QueryIntAttribute("consecutiveType",  &data->m_LastSlasher);
+        self.QueryFloatAttribute("timer",    &data->m_TimeRemainingSave);
+        self.QueryFloatAttribute("gameTime", &game_work.m_ElapsedGameTime);
+        self.QueryFloatAttribute("globalWaveDt", &data->m_WaveScalar_v161);   // +0x150
+
+        const char* types = self.Attribute("typesToPickFrom");
+        if (types) data->m_FruitQueueCount = ParseIntCsv(types, data->m_FruitQueue, 32);
+        const char* bc = self.Attribute("best_combo");
+        if (bc) data->m_BestComboLength = ParseIntCsv(bc, data->m_BestComboFruits, 11);
+
+        self.QueryIntAttribute("go_head",  &data->m_GameOverField2);
+        self.QueryIntAttribute("go_body",  &data->m_GameOverField1);
+        self.QueryIntAttribute("go_fruit", &data->m_GameOverField3);
+        self.QueryIntAttribute("go_fact",  &data->m_GameOverField4);
+        const char* shs = self.Attribute("go_showHighScore");
+        if (shs) data->newBestThisGame = (strcmp(shs, "true") == 0) ? 1 : 0;
+        const char* ssa = self.Attribute("go_setScore");
+        if (ssa) data->secondaryFlag = (strcmp(ssa, "true") == 0) ? 1 : 0;
+        self.QueryIntAttribute("go_state",  &data->m_GameOverScreenState);
+        self.QueryFloatAttribute("go_time", &data->m_GameOverTimer);
+        self.QueryFloatAttribute("go_bombHitTime", &data->m_BombHitTimer);
+        self.QueryFloatAttribute("go_transition",  &data->m_NextComboBonus);
+        self.QueryFloatAttribute("shake_time",     &data->m_ShakeIntensity);
+        // shake_max_time -> m_ShakeDecay (binary quirk: SaveGame wrote it from m_ShakeIntensity).
+        self.QueryFloatAttribute("shake_max_time", &data->m_ShakeDecay);
+        self.QueryFloatAttribute("speedLossTime",  &data->m_Speed_P0);
+        self.QueryFloatAttribute("desiredSpeed",   &data->m_Speed_P0_alias);
+        self.QueryFloatAttribute("nextComboBonus", &data->m_Speed_P1);
+        // fall through to recurse into children (wave_info / ent / powers)
+    } else if (strcmp(tag, "wave_info") == 0) {
+        if (data->m_GameMode <= 3 && data->m_VersionInfo == GetVersionTotal()) {
+            ParseWaveInfo(&self, data);
+        }
+        return;
+    } else {
+        // wave_counts_<MODE> dispatch; otherwise fall through to recurse.
+        for (int m = 0; m < 4; m++) {
+            char wc[40];
+            snprintf(wc, sizeof(wc), "wave_counts_%s", k_ModeNames[m]);
+            if (strcmp(tag, wc) == 0) {
+                for (TiXmlElement e = self.FirstChildElement("game_count"); e;
+                     e = e.NextSiblingElement("game_count")) {
+                    int waveIdx = 0, games = 0;
+                    e.QueryIntAttribute("waveIdx", &waveIdx);
+                    e.QueryIntAttribute("games",   &games);
+                    data->m_ModeScoreHistory[m][waveIdx] = games;
+                }
+                return;
+            }
+        }
+        // unknown tag: recurse into its children.
+    }
+
+    // RECURSE: walk element children.
+    for (TiXmlElement c = self.FirstChildElement(); c; c = c.NextSiblingElement())
+        ParseSaveFile(&c, data);
+}
+
+// ----------------------------------------------------------------------
+// ASM-spec v1.6.1 LoadGame @0x0015591c
+//
+// Loads FruitySave.xml and dispatches the whole document through ParseSaveFile
+// (binary pattern). Applies the version-mismatch reset (discard stale
+// version-sensitive stats) and the post-parse game-mode clamp.
 // ----------------------------------------------------------------------
 bool LoadGame(FruitSaveData* save) {
     if (!save) return false;
@@ -523,145 +816,14 @@ bool LoadGame(FruitSaveData* save) {
     save->m_EntityStates.clear();
     save->m_WaveStates.clear();
 
-    // Top-level scalar attributes.
-    root.QueryIntAttribute("highscore", &save->m_highscore);
+    ParseSaveFile(&root, save);
 
-    char attrName[32];
-    for (int m = 0; m < 4; m++) {
-        snprintf(attrName, sizeof(attrName), "%shighscore", k_ModeNames[m]);
-        root.QueryIntAttribute(attrName, &save->m_ModeHighScores[m]);
-
-        snprintf(attrName, sizeof(attrName), "%s_unposted", k_ModeNames[m]);
-        root.QueryIntAttribute(attrName, &save->m_ModeBestCombos[m]);
-
-        snprintf(attrName, sizeof(attrName), "%s_dolg", k_ModeNames[m]);
-        root.QueryIntAttribute(attrName, &save->m_LastPlayedDay[m]);
-    }
-
-    root.QueryIntAttribute("critical_chance", &save->m_CriticalChance);
-
-    const char* ratedAttr = root.Attribute("rated");
-    if (ratedAttr) save->m_bDojoBGUnlocked = (strcmp(ratedAttr, "true") == 0) ? 1 : 0;
-
-    const char* p2pAttr = root.Attribute("p2pCancelled");
-    if (p2pAttr) save->m_bP2PCancelled = (strcmp(p2pAttr, "true") == 0) ? 1 : 0;
-
-    // SliceTotal elements (cumulative + session).
-    for (TiXmlElement e = root.FirstChildElement("SliceTotal"); e;
-         e = e.NextSiblingElement("SliceTotal")) {
-        const char* name = e.Attribute("name");
-        if (!name || !*name) continue;
-        int count = 0;
-        e.QueryIntAttribute("count", &count);
-        const char* uAttr = e.Attribute("u");
-        bool isSession = (uAttr && strcmp(uAttr, "true") == 0);
-
-        uint32_t hash = StringHash(name);
-        if (isSession) {
-            save->m_SessionTotals[hash] = SliceTotal(name, count);
-        } else {
-            save->m_Totals[hash] = SliceTotal(name, count);
-        }
-    }
-
-    // Pending unlocks: <unlocked> container (with timer attr).
-    {
-        TiXmlElement progress = root.FirstChildElement("unlocked");
-        if (progress) {
-            for (TiXmlElement e = progress.FirstChildElement("achievement"); e;
-                 e = e.NextSiblingElement("achievement")) {
-                const char* name = e.Attribute("name");
-                if (!name || !*name) continue;
-                AchievementItem item;
-                strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
-                item.m_Name[sizeof(item.m_Name) - 1] = '\0';
-                e.QueryFloatAttribute("timer", &item.m_Timer);
-                save->m_PendingUnlocks[StringHash(name)] = item;
-            }
-        }
-    }
-
-    // Unlocked achievements: <achievements> container.
-    {
-        TiXmlElement unl = root.FirstChildElement("achievements");
-        if (unl) {
-            for (TiXmlElement e = unl.FirstChildElement("achievement"); e;
-                 e = e.NextSiblingElement("achievement")) {
-                const char* name = e.Attribute("name");
-                if (!name || !*name) continue;
-                AchievementItem item;
-                strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
-                item.m_Name[sizeof(item.m_Name) - 1] = '\0';
-                save->m_UnlockedAchievements[StringHash(name)] = item;
-            }
-        }
-    }
-
-    // Per-mode score history.
-    for (int m = 0; m < 4; m++) {
-        char tag[48];
-        snprintf(tag, sizeof(tag), "wave_counts_%s", k_ModeNames[m]);
-        TiXmlElement container = root.FirstChildElement(tag);
-        if (!container) continue;
-        for (TiXmlElement e = container.FirstChildElement("game_count"); e;
-             e = e.NextSiblingElement("game_count")) {
-            int score = 0, waveIdx = 0;
-            e.QueryIntAttribute("score",   &score);
-            e.QueryIntAttribute("waveIdx", &waveIdx);
-            save->m_ModeScoreHistory[m][score] = waveIdx;
-        }
-    }
-
-    // ActiveGame <que> block.
-    {
-        TiXmlElement que = root.FirstChildElement("que");
-        if (que) {
-            save->m_bHasActiveGame = 1;
-            const char* mode = que.Attribute("mode");
-            if (mode) {
-                for (int m = 0; m < 4; m++) {
-                    if (strcmp(mode, k_ModeNames[m]) == 0) {
-                        save->m_GameMode = (uint32_t)m;
-                        break;
-                    }
-                }
-            }
-            const char* hasDropped = que.Attribute("hasDropped");
-            if (hasDropped) save->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
-            que.QueryIntAttribute("count",   &save->m_CurrentScore);
-            que.QueryIntAttribute("misses",  &save->m_CurrentMissCount);
-            que.QueryIntAttribute("count1",  &save->m_ComboCount);
-            que.QueryIntAttribute("count2",  &save->m_LastSlasher);
-            que.QueryFloatAttribute("timer",          &save->m_TimeRemainingSave);
-            que.QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
-            que.QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
-            que.QueryFloatAttribute("go_time",        &save->m_GameOverTimer);
-            que.QueryFloatAttribute("go_bombHitTime", &save->m_BombHitTimer);
-            que.QueryIntAttribute("go_body",          &save->m_GameOverField1);
-            que.QueryIntAttribute("go_head",          &save->m_GameOverField2);
-            que.QueryIntAttribute("go_fruit",         &save->m_GameOverField3);
-            que.QueryIntAttribute("go_fact",          &save->m_GameOverField4);
-            const char* showHs = que.Attribute("go_showHighScore");
-            if (showHs) save->newBestThisGame = (strcmp(showHs, "true") == 0) ? 1 : 0;
-            const char* setScore = que.Attribute("go_setScore");
-            if (setScore) save->secondaryFlag = (strcmp(setScore, "true") == 0) ? 1 : 0;
-            que.QueryFloatAttribute("nextComboBonus", &save->m_NextComboBonus);
-            que.QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
-            que.QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
-            // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
-            // ParseSaveFile @ 0x154c8c loads it as a float; using "waveScalar" as placeholder.
-            que.QueryFloatAttribute("waveScalar", &save->m_WaveScalar_v161);
-
-            TiXmlElement wi = que.FirstChildElement("wave_info");
-            if (wi) {
-                wi.QueryIntAttribute("waveCount",   &save->m_pCurrentWave_P1);
-                wi.QueryFloatAttribute("waveDelay", &save->m_WaveDelay);
-                wi.QueryFloatAttribute("waveWait",  &save->m_WaveWait);
-                wi.QueryIntAttribute("blitzSpawnedThisGame",     &save->m_blitzSpawnedThisGame);
-                wi.QueryIntAttribute("blitzForceSpawnedCounter", &save->m_blitzForceSpawnedCounter);
-                wi.QueryFloatAttribute("blitzSpawnTime",         &save->m_blitzSpawnTime);
-            }
-        }
+    // Version-mismatch reset: when the save predates the running build, discard
+    // the version-sensitive stats (binary LoadGame @0x0015591c tail).
+    if (save->m_VersionInfo != GetVersionTotal()) {
+        save->ClearTotal(StringHash("unrated_games"));
+        for (int m = 0; m < 4; m++) save->m_ModeScoreHistory[m].clear();
+        save->m_bDojoBGUnlocked = 0;
     }
 
     // Validate game mode (clamp to 0..3).
