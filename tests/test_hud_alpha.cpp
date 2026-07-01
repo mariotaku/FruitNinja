@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
     game_work.m_SaveData = &saveData;
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
     game_work.currentScore = 100;
-    game_work.m_GameDt     = 0.0f;  // active-play state (not suppressed)
+    game_work.m_PauseAmount     = 0.0f;  // active-play state (not suppressed)
     game_work.bM_bPaused   = 0;
 
     // -------------------------------------------------------------------------
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
         // Restore active-play state (Update may have reset game_work fields via
         // control callbacks; re-seed to keep the Draw gate open).
-        game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount = 0.0f;
 
         // Call ScoreControl::Draw directly to check the alpha assignment.
         float hudScaleRaw[3] = { 1.0f, 1.0f, 1.0f };
@@ -114,13 +114,13 @@ int main(int argc, char* argv[]) {
         // Warm up the ScoreControl so m_DisplayedScore is set.
         for (int i = 0; i < 5; ++i) {
             game_work.currentScore = 100;
-            game_work.m_GameDt = 0.0f;
+            game_work.m_PauseAmount = 0.0f;
             game_work.mHud->Update(1.0f / 60.0f);
         }
 
         // Set slow-mo AFTER the final Update tick.
         game_work.mHud->m_globalTimeScale = 0.0f;
-        game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount = 0.0f;
 
         // PreDraw internally assigns `alpha` from the HUD field and would use it
         // for digit rendering. The simplest observable check is via the same

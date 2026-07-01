@@ -298,7 +298,7 @@ int main(int argc, char* argv[]) {
         // (persisting MainScreen model).
         game_work.mMainScreen->DeleteMenuButtons();
     }
-    game_work.m_GameDt = 0.0f;
+    game_work.m_PauseAmount = 0.0f;
 
     // Settle the camera + HUD into gameplay.
     h.RunHeadless(60);

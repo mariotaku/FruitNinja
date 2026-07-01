@@ -284,10 +284,10 @@ static int RunBonus(fn::TestHarness& h) {
 //
 // Setup:
 //   gameMode = CLASSIC (0), currentScore = 266, highscore = 200 -> NEW BEST.
-//   m_GameDt = 1.0f (fully faded; required by fast-path gate).
+//   m_PauseAmount = 1.0f (fully faded; required by fast-path gate).
 //   Construct in fast-path (param2=STATE_MAIN_DISPLAY, param3=0.0f) which sets
 //   m_bScoreSubmitted=1 and immediately calls Update(0.0f) inside Initialise
-//   (fast-path gate: param2>5 && m_GameDt>0.999).
+//   (fast-path gate: param2>5 && m_PauseAmount>0.999).
 //   Add GameOverScreen + ScoreControl to HUD, run 60 frames to settle.
 //
 // Stubbed:
@@ -306,7 +306,7 @@ static int RunGameOver(fn::TestHarness& h) {
     // Classic mode, score 266.  Highscore 200 < 266 -> NEW BEST fires.
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
     game_work.currentScore = 266;
-    game_work.m_GameDt     = 1.0f;  // fully faded; required by fast-path gate
+    game_work.m_PauseAmount     = 1.0f;  // fully faded; required by fast-path gate
     game_work.bM_bPaused   = 0;
 
     FruitSaveData saveData;
@@ -316,7 +316,7 @@ static int RunGameOver(fn::TestHarness& h) {
     game_work.m_SaveData = &saveData;
 
     // Fast-path ctor: param2=STATE_MAIN_DISPLAY(6)>5, param3=0.0f satisfies
-    // the gate (param2>=0 && param3>=0.0f && param2>5 && m_GameDt>0.999).
+    // the gate (param2>=0 && param3>=0.0f && param2>5 && m_PauseAmount>0.999).
     // Initialise calls Update(0.0f) and sets m_bScoreSubmitted=1 immediately.
     GameOverScreen* gos = new GameOverScreen(
         "Classic",
@@ -349,7 +349,7 @@ static int RunGameOver(fn::TestHarness& h) {
     // the 0x80 pass then draws the button face + Retry/Quit label. A single
     // all-bits pass misses the 0x80 visit so only the scratch backdrop renders.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 266;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -405,7 +405,7 @@ static int RunGameOverZen(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ZEN;
     game_work.currentScore = 456;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     GameOverScreen* gos = new GameOverScreen(
@@ -436,7 +436,7 @@ static int RunGameOverZen(fn::TestHarness& h) {
     // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
     // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 456;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -508,7 +508,7 @@ static int RunGameOverArcade(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
     game_work.currentScore = 789;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     // starCount=3: shows 3 stars on the arcade results board header.
@@ -540,7 +540,7 @@ static int RunGameOverArcade(fn::TestHarness& h) {
     // Per-layer passes matching GameDraw's HUD::Draw order so Retry/Quit MenuButtons
     // render their face+label (0x80 pass) after the scratch backdrop (0x40 pass).
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 789;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -726,7 +726,7 @@ mesh_done:
 //
 // Purpose: verify ScoreControl renders at the correct position in the full
 // game-over flow (same top-left position as the isolated test_scorecontrol).
-// Settled state confirmed matching: m_GameDt=1.0, pos=(-418,138),
+// Settled state confirmed matching: m_PauseAmount=1.0, pos=(-418,138),
 // m_DrawPosX=-160.71 (lerped to anchor), m_DrawPosY=80.
 //
 // Output screenshot: tmp/test/screenshots/temp/gameover_with_scorecontrol.png
@@ -739,7 +739,7 @@ static int RunGameOverWithScore(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
     game_work.currentScore = 266;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     // FruitSaveData with highscore 200 < 266 -> triggers NEW BEST path.
@@ -750,8 +750,8 @@ static int RunGameOverWithScore(fn::TestHarness& h) {
     game_work.m_SaveData = &saveData;
 
     // Create GameOverScreen (fast-path to STATE_MAIN_DISPLAY).
-    // Its Update() in STATE_MAIN_DISPLAY always writes game_work.m_GameDt=1.0f
-    // at step 5 (line: "game_work.m_GameDt = 1.0f; m_State = STATE_MAIN_DISPLAY").
+    // Its Update() in STATE_MAIN_DISPLAY always writes game_work.m_PauseAmount=1.0f
+    // at step 5 (line: "game_work.m_PauseAmount = 1.0f; m_State = STATE_MAIN_DISPLAY").
     GameOverScreen* gos = new GameOverScreen(
         "Classic",
         GameOverScreen::STATE_MAIN_DISPLAY,
@@ -777,10 +777,10 @@ static int RunGameOverWithScore(fn::TestHarness& h) {
     }
 
     // Settle 60 frames using the multi-pass layer order (same as RunGameOver).
-    // GameOverScreen::Update writes game_work.m_GameDt=1.0f each frame in
-    // STATE_MAIN_DISPLAY, so ScoreControl::Update sees m_GameDt=1.0 each tick.
+    // GameOverScreen::Update writes game_work.m_PauseAmount=1.0f each frame in
+    // STATE_MAIN_DISPLAY, so ScoreControl::Update sees m_PauseAmount=1.0 each tick.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 266;
         h.RunComponentHeadlessMultiPass(1);
     }

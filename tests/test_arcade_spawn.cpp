@@ -1,6 +1,6 @@
 // test_arcade_spawn -- Regression guard for arcade mode sustained spawning.
 //
-// Drives the REAL arcade game-start path (m_GameDt=0.0f + Reset(true)) and
+// Drives the REAL arcade game-start path (m_PauseAmount=0.0f + Reset(true)) and
 // asserts that fruit spawns are sustained over time, not just the first wave.
 //
 // This test specifically exercises the scenario the user reported: "spawns 1
@@ -9,7 +9,7 @@
 //
 // The test is designed to match the game's STATE_GAME_START path:
 //   - game_work.gameMode = ARCADE
-//   - game_work.m_GameDt = 0.0f  (camera-fade settled)
+//   - game_work.m_PauseAmount = 0.0f  (camera-fade settled)
 //   - WaveManager::Reset(true)   (fullReset = NewGame = PUM::Reset(true))
 //   - bM_bPaused = 0, bM_Mode = false  (gameplay active)
 //
@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     // bM_Mode=false: gameplay-active gate (GameUpdate canUpdate=true path)
     // so WaveManager::Update(dt) is called with real dt, not frozen 0.0f.
     game_work.gameMode   = (uint8_t)Mortar::GAME_MODE_ARCADE;
-    game_work.m_GameDt   = 0.0f;
+    game_work.m_PauseAmount   = 0.0f;
     game_work.bM_bPaused = 0;
     game_work.bM_Mode    = false;
 
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
         game_work.gameMode   = (uint8_t)Mortar::GAME_MODE_ARCADE;
         game_work.bM_Mode    = false;
         game_work.bM_bPaused = 0;
-        game_work.m_GameDt   = 0.0f;
+        game_work.m_PauseAmount   = 0.0f;
 
         h.RunHeadless(1);
 

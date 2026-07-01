@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
     // Put MainScreen into the gameplay-active state so it does not fight
     // the transition timer.
     if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
-    game_work.m_GameDt = 1.0f;  // fully faded in
+    game_work.m_PauseAmount = 1.0f;  // fully faded in
 
     // Drain any entities so the BONUS_PHASE gate clears immediately.
     DrainEntities(h.game);
@@ -271,7 +271,7 @@ int main(int argc, char* argv[])
         }
 
         // Ensure m_TransitionTimer satisfies RetryCallback's alpha gate.
-        game_work.m_GameDt = 1.0f;
+        game_work.m_PauseAmount = 1.0f;
 
         // ---- Sub-test A: RetryCallback via retry button (m_pRetryBtn) click delegate ----
         printf("[bonus_phase] Sub-test A: RetryCallback\n");
@@ -323,7 +323,7 @@ int main(int argc, char* argv[])
         // the fast path: param2=6(>5 gate), param3=0.0f, with waveAlpha=1.0f.
         // The fast-path block at Initialise L448 requires param2>5 && waveAlpha>kWaveAlphaGate.
         // We set m_TransitionTimer=1.0f (satisfies the gate) before construction.
-        game_work.m_GameDt = 1.0f;
+        game_work.m_PauseAmount = 1.0f;
         GameOverScreen* gos2 = new GameOverScreen(
             "arcade",
             /*param2=state=*/GameOverScreen::STATE_MAIN_DISPLAY,
@@ -347,7 +347,7 @@ int main(int argc, char* argv[])
             }
         }
 
-        game_work.m_GameDt = 1.0f;
+        game_work.m_PauseAmount = 1.0f;
 
         printf("[bonus_phase]   state before = %d, m_pQuitBtn = %p\n",
                gos2->m_State, (void*)gos2->m_pQuitBtn);

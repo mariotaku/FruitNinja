@@ -1,4 +1,4 @@
-#ifndef FN_PAUSE_SCREEN_H
+﻿#ifndef FN_PAUSE_SCREEN_H
 #define FN_PAUSE_SCREEN_H
 
 // Analysed: 2026-05-02T00:00
@@ -181,7 +181,7 @@ void PauseGame();
 void UnpauseGame();
 
 // v1.6.1 SkipToPause @0x001cb424 — snap PauseScreen to ACTIVE state instantly.
-// Freezes gameplay (m_GameDt=0, bM_Mode=true), hides MainScreen, skips all HUD controls,
+// Freezes gameplay (m_PauseAmount=0, bM_Mode=true), hides MainScreen, skips all HUD controls,
 // and preloads in-game sounds. force=true bypasses the IsEnabled() gate (used during
 // session restore from save). Call from Game::Paused() and WaveManager::Resume().
 void SkipToPause(bool force);

@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
         PrepareForLevelStart();
         game_work.bM_bPaused = 0;
         // Simulate the GameModeScreen state-6 snap (binary @ 0x0013f2b0):
-        //   game_work.m_GameDt = 0.0f
+        //   game_work.m_PauseAmount = 0.0f
         //   mainScreen.m_State    = STATE_CAMERA_FADE (0x11)
         // Without the state push, MainScreen stays in STATE_CAMERA_ZOOM
         // (initial state) and lerps the timer toward -1 every frame, which
@@ -180,7 +180,7 @@ int main(int argc, char* argv[]) {
         // (off-screen left). STATE_CAMERA_FADE is the gameplay-active state
         // and its update only writes timer when timer < 0.
         if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
-        game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount = 0.0f;
         // Sanity: confirm at least one ScoreControl + one MissControl exist
         // in HUD (created by GameInit step 3/4). If they're missing, the
         // test will print a diagnostic but not fail the smoke pass.
@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
         // snap leaves MainScreen in STATE_CAMERA_FADE then GameOverScreen
         // ramps timer toward +1).
         if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
-        game_work.m_GameDt = 0.5f;  // mid-transition; not the fast-path
+        game_work.m_PauseAmount = 0.5f;  // mid-transition; not the fast-path
         // ctor args: (modeName, initialState, initialTimer,
         //             expressionIdx, bgPatternIdx, pomCount, starCount).
         // initialState=6 + initialTimer=0.0 puts us straight into the
@@ -275,14 +275,14 @@ int main(int argc, char* argv[]) {
             }
         }
         // Real game has MainScreen in STATE_CAMERA_FADE during gameplay;
-        // that state only writes game_work.m_GameDt when it's < 0
+        // that state only writes game_work.m_PauseAmount when it's < 0
         // (gate matches binary @ 0x0014c19a). Initial state in test is
         // STATE_CAMERA_ZOOM which lerps timer toward -1 every frame --
         // would fight GameOverScreen's ramp toward +1.
         if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
         game_work.gameMode = 0;       // Classic
         game_work.currentScore = 1234;
-        game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount = 0.0f;
         // Seed a saved highscore so the layer-0x80 highscore-text block runs
         if (game_work.m_SaveData) game_work.m_SaveData->m_highscore = 5000;
 
@@ -310,10 +310,10 @@ int main(int argc, char* argv[]) {
         }
 
         // 2. m_TransitionTimer should have ramped to ~1.0.
-        if (game_work.m_GameDt < 0.99f) {
+        if (game_work.m_PauseAmount < 0.99f) {
             fprintf(stderr,
                 "FAIL: m_TransitionTimer should reach ~1.0, got %f\n",
-                game_work.m_GameDt);
+                game_work.m_PauseAmount);
             failures++;
         }
 
@@ -409,7 +409,7 @@ int main(int argc, char* argv[]) {
         }
         fprintf(stdout, "PASS: gameover-transition all assertions ok "
                         "(state=%d, alpha=%f, fact=%s, retry=%s, quit=%s)\n",
-                s->m_State, game_work.m_GameDt,
+                s->m_State, game_work.m_PauseAmount,
                 (s->m_pFruitFact && s->m_pFruitFact->m_FactText) ? "ok" : "MISSING",
                 s->m_pRetryBtn ? "ok" : "MISSING",
                 s->m_pQuitBtn ? "ok" : "MISSING");

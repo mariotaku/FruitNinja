@@ -1,4 +1,4 @@
-//
+﻿//
 // State 2 handlers: GameInit, GameUpdate, GameDraw, GameExit
 // Binary v1.6.1: GameInit @0x001ce1c0 (18 steps), GameUpdate @0x001cf534,
 //                GameDraw @0x001cd720 (211 lines), GameExit @0x001cfed4 (98 lines)
@@ -196,7 +196,7 @@ void GameInit(unsigned long) {
         // ASM-verified: 2026-06-20T00:00Z v1.6.1 GameInit @ 0x001ce1c0 (asm-inspector)
         game_work.bM_Mode   = false;      // +0x02: gameplay-mode gate = inactive (menu)
         game_work.bM_bPaused = 1;         // +0x05: pause/inactive gate = suppressed
-        game_work.m_GameDt  = -1.0f;     // +0x0C: flM_PauseAmount
+        game_work.m_PauseAmount  = -1.0f;     // +0x0C: flM_PauseAmount
     }
 
     // Step 11: AddControls to HUD (order: MainScreen, PauseScreen, TutorialControl)
@@ -347,7 +347,7 @@ void InstantLevelDestroy() {
     ResetGameEntities(true);
     RemoveFlashEntities();
     game_work.bM_bPaused = 1;                   // set twice -- binary is literal; strb @0x001cbd3c
-    game_work.m_GameDt = 0.0f;                 // +0x0C (Ghidra: flM_PauseAmount); vstr @0x001cbd40
+    game_work.m_PauseAmount = 0.0f;                 // +0x0C (Ghidra: flM_PauseAmount); vstr @0x001cbd40
     game_work.retryFlag = 0;                    // set twice -- binary is literal; strb @0x001cbd44
 }
 
@@ -446,14 +446,14 @@ void GameUpdate(float dt, bool active) {
 
         // Clear slow-motion flag, then camera-settle auto-clear.
         // v1.6.1 GameUpdate @0x001cfaec (param_2==0 / menu path):
-        //   pa = game_work.m_GameDt (+0x0c flM_PauseAmount);
+        //   pa = game_work.m_PauseAmount (+0x0c flM_PauseAmount);
         //   settled = (pa >= 0) ? (pa > 0.999f) : (pa < -0.999f);
         //   if (settled && (ps == 0 || ps->m_State != 3)) bM_Mode = 0;
         // This is THE auto-clear; QuitToMenu/UnpauseGame never write bM_Mode directly.
         game_work.m_bSlowMotion = false;
         {
             static const float THR = 0.99896961f;  // DAT_0x001cfe74
-            const float pa = game_work.m_GameDt;
+            const float pa = game_work.m_PauseAmount;
             const bool settled = (pa >= 0.0f)
                 ? (pa > THR)
                 : (pa < -THR);
@@ -557,7 +557,7 @@ void GameUpdate(float dt, bool active) {
                 game_work.m_BombHitTimer -= fVar9;
 
                 // Double-drain in Arcade mode during pause transition
-                if (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f) {
+                if (game_work.gameMode == 2 && game_work.m_PauseAmount < 1.0f) {
                     game_work.m_BombHitTimer -= fVar9;
                 }
 
@@ -580,9 +580,9 @@ void GameUpdate(float dt, bool active) {
                 }
 
                 // BombFlash+ActorManager frozen (dt=0) during bomb hit,
-                // unless in pause transition where m_GameDt < 0.
+                // unless in pause transition where m_PauseAmount < 0.
                 fVar11 = 0.0f;
-                if (game_work.m_GameDt < 0.0f) {
+                if (game_work.m_PauseAmount < 0.0f) {
                     fVar11 = fVar9;
                 }
             }

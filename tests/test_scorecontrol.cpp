@@ -4,9 +4,9 @@
 //   test_scorecontrol [--screenshot|--interactive|--headless]
 //
 // Renders ScoreControl in three cases and captures each to a PNG:
-//   scorecontrol/default    -- m_GameDt=1.0f (fully faded/game-over state)
-//   scorecontrol/active     -- m_GameDt=0.0f (active gameplay, score visible, no wordmark)
-//   scorecontrol/suppressed -- m_GameDt=-1.0f (camera pulled back, score fully suppressed)
+//   scorecontrol/default    -- m_PauseAmount=1.0f (fully faded/game-over state)
+//   scorecontrol/active     -- m_PauseAmount=0.0f (active gameplay, score visible, no wordmark)
+//   scorecontrol/suppressed -- m_PauseAmount=-1.0f (camera pulled back, score fully suppressed)
 //
 // Isolation approach: InitComponent() (boot + 120 burn-in + HUD cleared),
 // then a ScoreControl is constructed and added as the sole HUD control.
@@ -19,15 +19,15 @@
 //     (currentScore 266 > highscore 200 -> NEW BEST path, S6 popup fires)
 //   - m_bDirty=1 (already set by ctor), so first Update snaps m_ScoreSmoothed to 266
 //
-// "default" (m_GameDt=1.0f): renders S1 (score.tex wordmark), S2 (animated score number),
+// "default" (m_PauseAmount=1.0f): renders S1 (score.tex wordmark), S2 (animated score number),
 //   S4 (BEST: banner), and S6 (NEW BEST! IngamePopup popup via m_BannerScaleTime=1.0 seeded
 //   after Skip()).
 //
-// "active" (m_GameDt=0.0f): renders S2 (score number) + watermelon icon only.
+// "active" (m_PauseAmount=0.0f): renders S2 (score number) + watermelon icon only.
 //   The "SCORE" wordmark (Section D) is gated off (requires transTimer > 0.0).
-//   Binary draw gate: Draw() passes (m_GameDt >= -1.0), PreDraw Section A fires.
+//   Binary draw gate: Draw() passes (m_PauseAmount >= -1.0), PreDraw Section A fires.
 //
-// "suppressed" (m_GameDt=-1.0f): Draw() passes (m_GameDt == -1.0, not < -1.0),
+// "suppressed" (m_PauseAmount=-1.0f): Draw() passes (m_PauseAmount == -1.0, not < -1.0),
 //   PreDraw Section A fires (transTimer >= -1.0), but pos.x slides to -418 (fully
 //   off-screen). Section D and E are gated off. Effectively a blank frame.
 
@@ -72,13 +72,13 @@ int main(int argc, char* argv[]) {
     game_work.m_SaveData = &saveData;
 
     // -------------------------------------------------------------------------
-    // Case 1: "default" -- m_GameDt=1.0f (fully faded, game-over state)
+    // Case 1: "default" -- m_PauseAmount=1.0f (fully faded, game-over state)
     // Same setup as the original single-case test.
     // -------------------------------------------------------------------------
     {
         game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
         game_work.currentScore = 266;
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.bM_bPaused   = 0;
 
         ScoreControl* sc = new ScoreControl();
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
         game_work.mHud->AddControl(sc);
 
         for (int i = 0; i < 60; ++i) {
-            game_work.m_GameDt     = 1.0f;
+            game_work.m_PauseAmount     = 1.0f;
             game_work.currentScore = 266;
             h.RunComponentHeadless(1, 0x7FFFFFFF);
         }
@@ -111,25 +111,25 @@ int main(int argc, char* argv[]) {
     }
 
     // -------------------------------------------------------------------------
-    // Case 2: "active" -- m_GameDt=0.0f (active gameplay)
+    // Case 2: "active" -- m_PauseAmount=0.0f (active gameplay)
     // Score number + watermelon icon render; SCORE wordmark (Section D) is OFF.
     // Expected: m_DrawPosX = SCORE_BASE_POS_X + 24 = -218 + 24 = -194
     // -------------------------------------------------------------------------
     {
         game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
         game_work.currentScore = 266;
-        game_work.m_GameDt     = 0.0f;
+        game_work.m_PauseAmount     = 0.0f;
         game_work.bM_bPaused   = 0;
 
         ScoreControl* sc = new ScoreControl();
         sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
-        // Do NOT call Skip() -- at m_GameDt=0.0 the banner is already gated off
+        // Do NOT call Skip() -- at m_PauseAmount=0.0 the banner is already gated off
         // (wantBanner requires waveTimer > SCORE_BANNER_TIMER_THRESH ~= 1.0).
         // m_BannerScaleTime starts at -2.0 from ctor, decays further, stays hidden.
         game_work.mHud->AddControl(sc);
 
         for (int i = 0; i < 60; ++i) {
-            game_work.m_GameDt     = 0.0f;
+            game_work.m_PauseAmount     = 0.0f;
             game_work.currentScore = 266;
             h.RunComponentHeadless(1, 0x7FFFFFFF);
         }
@@ -149,8 +149,8 @@ int main(int argc, char* argv[]) {
     }
 
     // -------------------------------------------------------------------------
-    // Case 3: "suppressed" -- m_GameDt=-1.0f (camera pulled back / menu state)
-    // Draw() gate: m_GameDt < -1.0f returns early -- at exactly -1.0f it does
+    // Case 3: "suppressed" -- m_PauseAmount=-1.0f (camera pulled back / menu state)
+    // Draw() gate: m_PauseAmount < -1.0f returns early -- at exactly -1.0f it does
     // NOT return early (strict less-than). However pos.x slides to
     //   SCORE_BASE_POS_X - SCORE_MP_X_STRIDE * abs(-1.0) = -218 - 200 = -418
     // which is fully off-screen (screen half-width = 240 in Y, 160 in X).
@@ -161,7 +161,7 @@ int main(int argc, char* argv[]) {
     {
         game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
         game_work.currentScore = 266;
-        game_work.m_GameDt     = -1.0f;
+        game_work.m_PauseAmount     = -1.0f;
         game_work.bM_bPaused   = 0;
 
         ScoreControl* sc = new ScoreControl();
@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
         game_work.mHud->AddControl(sc);
 
         for (int i = 0; i < 60; ++i) {
-            game_work.m_GameDt     = -1.0f;
+            game_work.m_PauseAmount     = -1.0f;
             game_work.currentScore = 266;
             h.RunComponentHeadless(1, 0x7FFFFFFF);
         }

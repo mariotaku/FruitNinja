@@ -1,4 +1,4 @@
-#include "Bomb.h"
+﻿#include "Bomb.h"
 #include "game/GameMode.h"
 #include "network/P2PMessageHandling.h"
 #include "ActorManager.h"
@@ -328,7 +328,7 @@ void Bomb::Update(float /*dt*/) {
         const uint32_t hash = g_bombData.fuseHash[(variant != 0) ? 1 : 0];
         m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
             hash, nullptr,
-            /*updateWhenPaused*/ game_work.m_GameDt == 0.0f);
+            /*updateWhenPaused*/ game_work.m_PauseAmount == 0.0f);
         if (m_pEmitter)
             m_pEmitter->m_Pos = pos;
     }

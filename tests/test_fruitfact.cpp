@@ -321,7 +321,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
     game_work.currentScore = 321;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     GameOverScreen* gos = new GameOverScreen(
@@ -351,7 +351,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
 
     // One settle frame to wire up the HUD after the Initialise fast-path.
     {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 321;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -376,7 +376,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
     // Settle 60 frames with the per-layer multi-pass so MenuButton scratch
     // backdrop (0x40 pass) and face+label (0x80 pass) both render correctly.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 321;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -455,7 +455,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
     game_work.currentScore = 789;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     GameOverScreen* gos = new GameOverScreen(
@@ -485,7 +485,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
 
     // 60 frames with per-layer passes so MenuButton scratch/face/label render.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 789;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -499,7 +499,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
     if (g_FactOverride >= 0 && ctrl) {
         ApplyFactOverride(ctrl, g_FactOverride);
         for (int i = 0; i < 5; ++i) {
-            game_work.m_GameDt     = 1.0f;
+            game_work.m_PauseAmount     = 1.0f;
             game_work.currentScore = 789;
             h.RunComponentHeadlessMultiPass(1);
         }
@@ -556,7 +556,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
 
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ZEN;
     game_work.currentScore = 456;
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
 
     GameOverScreen* gos = new GameOverScreen(
@@ -586,7 +586,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
 
     // 60 frames with per-layer passes.
     for (int i = 0; i < 60; ++i) {
-        game_work.m_GameDt     = 1.0f;
+        game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 456;
         h.RunComponentHeadlessMultiPass(1);
     }
@@ -600,7 +600,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
     if (g_FactOverride >= 0 && ctrl) {
         ApplyFactOverride(ctrl, g_FactOverride);
         for (int i = 0; i < 5; ++i) {
-            game_work.m_GameDt     = 1.0f;
+            game_work.m_PauseAmount     = 1.0f;
             game_work.currentScore = 456;
             h.RunComponentHeadlessMultiPass(1);
         }
