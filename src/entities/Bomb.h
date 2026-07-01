@@ -167,11 +167,11 @@ public:
     // v1.6.1 @ 0x1d56b4
     static void ClearUnspawned();
 
-    // v1.6.1 @ 0x00126390
-    static void SetForPlayer(Bomb* b, int playerIdx);
+    // ASM-spec v1.6.1 Bomb::SetForPlayer @0x00126390
+    void SetForPlayer(int playerIdx);
 
-    // v1.6.1 @ 0x00126384
-    static void SetHit(Bomb* b, float speed);
+    // ASM-spec v1.6.1 Bomb::SetHit @0x0012c9e4
+    void SetHit(float speed);
 
     // ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
     static float GetHeighestBomb();

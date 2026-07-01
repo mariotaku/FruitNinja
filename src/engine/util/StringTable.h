@@ -232,10 +232,10 @@ public:
     // "korean", "english_uk", etc. Case-insensitive. Returns -1 on no match.
     static int LanguageFlagFromName(const char* name);
 
-    // v1.6.1 StringTableUtilUnloadTable @0x14c9f8: clears one string table slot.
-    // Binary calls this via game_work.m_StringTable[idx]; port treats as no-op
-    // because m_StringTable is a placeholder uint8_t[0x50], not a real array.
-    static void Clear(StringTable* st);
+    // ASM-spec v1.6.1 Mortar::StringTable::Clear (called by StringTableUtilUnloadTable @0x14c9f8).
+    // Clears one string table slot. Binary frees FileData allocations + zeroes fields.
+    // Port: no-op stub; game_work.m_StringTable is a placeholder with no live allocs.
+    void Clear();
 
 };
 

@@ -674,7 +674,7 @@ void WaveManager::Reset(bool fullReset) {
         for (int i = 0; ; i++) {
             Mortar::Entity* e = am->GetEntity(0, i);
             if (!e) break;
-            Fruit::Disable(static_cast<Fruit*>(e));
+            static_cast<Fruit*>(e)->Disable();
         }
         for (int i = 0; ; i++) {
             Mortar::Entity* e = am->GetEntity(1, i);
@@ -836,13 +836,13 @@ void WaveManager::Resume() {
             // Binary @ 0x00124b1c (kind==1 overlay restore).
             Bomb* b = static_cast<Bomb*>(e);
             b->m_AccelForce = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
-            if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
+            if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) b->SetForPlayer(1);
             // Chuck/SetHit gate: m_ChuckMag > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
             if (es.m_ChuckMag > 0.0f) {
                 if (es.m_BombHitFlag == 0)
                     b->Chuck(es.m_ChuckMag);
                 else
-                    Bomb::SetHit(b, es.m_ChuckMag);
+                    b->SetHit(es.m_ChuckMag);
             }
         } else if (kind == 0) {
             // Fruit overlay: m_Overlay = gravity Vec3.
@@ -2007,7 +2007,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
 
         Game* game = Game::GetInstance();
         if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE)
-            Bomb::SetForPlayer(b, 1);  // arcade single-player
+            b->SetForPlayer(1);  // arcade single-player
     }
 }
 

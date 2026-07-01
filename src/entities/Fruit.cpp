@@ -2405,8 +2405,8 @@ void Fruit::ClearUnspawned(bool clearAll) {
 
 // Matches v1.6.1 Fruit::Disable @0x0012c9cc: one-byte store of 1 to m_bNoPowerUp.
 // ASM-spec v1.6.1 Fruit::Disable @0x0012c9cc
-void Fruit::Disable(Fruit* f) {
-    f->m_bNoPowerUp = 1;
+void Fruit::Disable() {
+    m_bNoPowerUp = 1;
 }
 
 // Matches Fruit::DrawShadows (0x001dea40) + AddShadow (0x001dbbe8).
