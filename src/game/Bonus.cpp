@@ -79,6 +79,7 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 
 // ---------------------------------------------------------------------------
 // Bonus::Parse -- Binary @ 0x0012f0f8
+// ASM-spec v1.6.1 Bonus::Parse @0x0012f0f8
 //
 // Reads attributes from a <bonus> XML element (real bonusawards.xml schema):
 //   min      = int          -> m_MinSliced (lower bound on totalAcrossFruits)
@@ -86,15 +87,14 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 //   equals   = int          -> m_MinSliced = m_MaxSliced = val (exact match)
 //   multiple = int          -> m_DivisibleBy
 //   points   = int          -> m_Tier (award tier; absent -> stays 0)
-//   texture  = string       -> m_StarTexture (loads "<name>.tex"); if absent,
-//                              caller (BonusType::Parse) may inject via parentTexName
+//   texture  = string       -> m_StarTexture (loads "<name>.tex")
 //   achievement = string    -> m_AchievementHash (StringHash)
 //   min-<fruit> = int       -> m_MinFruit[StringHash(fruit)]
 //   max-<fruit> = int       -> m_MaxFruit[StringHash(fruit)]
 // Inner text -> m_NameTemplate (stripped)
-// parentTexName: fallback texture from parent <bonusType texture="...">; may be NULL.
+// Parent-texture fallback is done by BonusType::Parse after this returns (binary @0x0012f3a4).
 // ---------------------------------------------------------------------------
-void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
+void Bonus::Parse(TiXmlElement* e) {
     if (!e) return;
 
     e->QueryIntAttribute("min",      &m_MinSliced);
@@ -119,16 +119,14 @@ void Bonus::Parse(TiXmlElement* e, const char* parentTexName) {
         }
     }
 
-    // Texture: per-bonus override first, then parent bonusType fallback.
     const char* texName = e->Attribute("texture");
-    if (!texName || !texName[0]) {
-        texName = parentTexName;
-    }
     if (texName && texName[0]) {
         char texPath[128];
         snprintf(texPath, sizeof(texPath), "%s.tex", texName);
         m_StarTexture = TextureManager::LoadLocalisedTexture(texPath);
     }
+    // Parent-texture fallback is handled by BonusType::Parse AFTER this returns
+    // (binary BonusType::Parse @0x0012f3a4: SmartPtr::operator= on m_StarTexture if !bool(m_StarTexture)).
 
     // Walk all attributes to pick up "min-<fruit>" and "max-<fruit>" prefixes.
     for (TiXmlAttribute attr = e->FirstAttribute(); attr; attr = attr.Next()) {
@@ -297,17 +295,26 @@ BonusType& BonusType::operator=(const BonusType& rhs) {
 
 // ---------------------------------------------------------------------------
 // BonusType::Parse -- Binary @ 0x0012f3a4
+// ASM-spec v1.6.1 BonusType::Parse @0x0012f3a4
 //
 // Reads a <bonusType> element (real bonusawards.xml schema):
 //   "total" attr (CSV of fruit/stat names) -> m_RequiredHashes keys (values=0)
-//   "texture" attr                         -> parent texture passed to Bonus::Parse
+//   "texture" attr                         -> parentTexSmart (SStack_20 in binary)
 //   <bonus> children                       -> m_Bonuses
+// After each Bonus::Parse, if m_StarTexture is null, assigns parentTexSmart
+// (binary: SmartPtr::operator= at 0x0012f3a4+offset).
 // ---------------------------------------------------------------------------
 void BonusType::Parse(TiXmlElement* e) {
     if (!e) return;
 
-    // Parent-level texture fallback for child <bonus> elements that omit texture=.
-    const char* parentTex = e->Attribute("texture");
+    // Load parent-level texture SmartPtr (binary BonusType::Parse @0x0012f3a4: SStack_20).
+    Mortar::SmartPtr<Mortar::Texture> parentTexSmart;
+    const char* parentTexAttr = e->Attribute("texture");
+    if (parentTexAttr && parentTexAttr[0]) {
+        char texPath[128];
+        snprintf(texPath, sizeof(texPath), "%s.tex", parentTexAttr);
+        parentTexSmart = TextureManager::LoadLocalisedTexture(texPath);
+    }
 
     const char* total = e->Attribute("total");
     if (total && total[0]) {
@@ -330,7 +337,10 @@ void BonusType::Parse(TiXmlElement* e) {
     for (TiXmlElement child = e->FirstChildElement("bonus");
          child; child = child.NextSiblingElement("bonus")) {
         Bonus b;
-        b.Parse(&child, parentTex);
+        b.Parse(&child);
+        if (!b.m_StarTexture) {  // binary: SmartPtr::operator_cast_to_bool(auStack_100+0xD0)
+            b.m_StarTexture = parentTexSmart;
+        }
         if (b.m_AchievementHash != 0) m_HasAchievement = true;
         m_Bonuses.push_back(b);
     }
