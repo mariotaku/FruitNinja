@@ -162,6 +162,14 @@ const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 =
 
 // --- Global content ---
 static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;
+// ASM-spec v1.6.1 s_slashFlashTexture @0x00332b4c ("rave_blade_glow.tex")
+static Mortar::SmartPtr<Mortar::Texture> g_SlashFlashTex;
+// ASM-spec v1.6.1 loaded @0x00332b44 -- one-shot LoadContent guard
+static uint8_t s_loaded = 0;
+// ASM-spec v1.6.1 s_currentSlashIdx @0x00332ab0 -- ghost ring write index (0..7)
+static uint32_t s_currentSlashIdx = 0;
+// ASM-spec v1.6.1 s_ghosts @0x00332ab4 -- 8 ghost slots (stride 0x10 = sizeof SlashEntityGhost)
+static SlashEntityGhost s_ghosts[8];
 
 // --- Global instances ---
 SlashEntity* g_pSlashEntities[16] = {0};
@@ -215,35 +223,135 @@ static uint32_t ResolveEmitterHash(const char* path) {
 }
 
 // ---------------------------------------------------------------------------
-// Content load -- matches LoadContent (0x17C948)
+// SlashEntityGhost -- method implementations
+// ---------------------------------------------------------------------------
+
+// ASM-spec v1.6.1 SlashEntityGhost() @0x001eaacc
+SlashEntityGhost::SlashEntityGhost()
+    : m_Alpha(0.0f)
+    , m_pLeftBuffer(nullptr)
+    , m_pRightBuffer(nullptr)
+    , m_PointCount(0)
+{
+}
+
+// ASM-spec v1.6.1 SlashEntityGhost::Reset @0x001eaaec
+void SlashEntityGhost::Reset() {
+    m_PointCount = 0;
+    m_Alpha      = 0.0f;
+}
+
+// ASM-spec v1.6.1 SlashEntityGhost::Release @0x001eaf10
+void SlashEntityGhost::Release() {
+    if (m_pLeftBuffer) {
+        delete[] m_pLeftBuffer;
+        m_pLeftBuffer = nullptr;
+    }
+    if (m_pRightBuffer) {
+        delete[] m_pRightBuffer;
+        m_pRightBuffer = nullptr;
+    }
+}
+
+// ASM-spec v1.6.1 SlashEntityGhost::StartEffect @0x001eb048
+// Binary does a 9-word per-vertex copy then overwrites the colour word (index 6)
+// with Colour(255,255,255,0).PlatformColour() -- equivalent to struct assign + colour overwrite.
+// srcBufs[0]=left strip, srcBufs[1]=right strip. Called with &slashEntity->m_pLeftBuffer
+// so srcBufs[1] is the adjacent m_pRightBuffer field (struct layout: +0x5c/+0x60).
+void SlashEntityGhost::StartEffect(QUADCUSTOMVERTEX** srcBufs, int pointCount) {
+    m_PointCount = pointCount;
+    m_Alpha      = 1.0f;
+    uint32_t zeroAlphaWhite = Colour(255, 255, 255, 0).PlatformColour();
+    QUADCUSTOMVERTEX* dstBufs[2] = { m_pLeftBuffer, m_pRightBuffer };
+    for (int b = 0; b < 2; b++) {
+        QUADCUSTOMVERTEX* src = srcBufs[b];
+        QUADCUSTOMVERTEX* dst = dstBufs[b];
+        for (int i = 0; i <= pointCount; i++) {
+            dst[i]        = src[i];
+            dst[i].colour = zeroAlphaWhite;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 SlashEntityGhost::Update @0x001eaf4c
+// Decay rate 0.5f encoded as ARM VMOV.F32 immediate (vmov.f32 s15,0xbf000000 @0x001eaf6c).
+// Per-vertex alpha: index>>1 divided by m_PointCount, scaled by m_Alpha*200.
+// 200.0f literal @0x001eb040, 255.0f literal @0x001eb044.
+void SlashEntityGhost::Update(float dt) {
+    if (m_Alpha <= 0.0f) return;
+    m_Alpha -= dt * 0.5f;
+    for (int i = 0; i <= m_PointCount; i++) {
+        float alpha_f = ((float)(i >> 1) / (float)m_PointCount)
+                        * m_Alpha * 200.0f;
+        uint32_t alpha_byte;
+        if (alpha_f <= 0.0f)
+            alpha_byte = 0;
+        else if (alpha_f >= 255.0f)
+            alpha_byte = 0xff;
+        else
+            alpha_byte = (uint32_t)alpha_f & 0xff;
+        uint32_t packed = Colour(255, 255, 255, (uint8_t)alpha_byte).PlatformColour();
+        m_pLeftBuffer[i].colour  = packed;
+        m_pRightBuffer[i].colour = packed;
+    }
+}
+
+// ASM-spec v1.6.1 SlashEntityGhost::Draw @0x001eb0f8
+// Z=-5400.0f literal at literal pool 0x001eb1cc (0xc5a8c000).
+// Uses g_SlashFlashTex (s_slashFlashTexture @0x00332b4c) -- "rave_blade_glow.tex".
+// DIFFERS: adds TexEnvModulate() before Set()/after UnSet() following DrawSlice port convention
+// for GLES2 state safety; not present in the binary.
+void SlashEntityGhost::Draw() {
+    if (m_Alpha <= 0.0f) return;
+    if (!g_SlashFlashTex.IsValid()) return;
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, -5400.0f));
+    mm.UploadModelViewOnly();
+    TexEnvModulate();
+    g_SlashFlashTex->Set();
+    Mortar::Mesh::DrawTriStrip(m_pLeftBuffer,  m_PointCount + 1, false, NULL);
+    Mortar::Mesh::DrawTriStrip(m_pRightBuffer, m_PointCount + 1, false, NULL);
+    g_SlashFlashTex->UnSet();
+    TexEnvModulate();
+}
+
+// ---------------------------------------------------------------------------
+// Content load -- ASM-spec v1.6.1 SlashEntity::LoadContent @0x001e7e08
 // ---------------------------------------------------------------------------
 void SlashEntity::LoadContent() {
-    if (!g_BladeTex.IsValid()) {
-        g_BladeTex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
+    if (s_loaded != 0) return;
+    s_loaded = 1;
+    g_BladeTex      = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
+    g_SlashFlashTex = Mortar::TextureManager::LoadLocalisedTexture("rave_blade_glow.tex");
+    for (int i = 0; i < 8; i++) {
+        s_ghosts[i].Release();
+        s_ghosts[i].m_pLeftBuffer  = new QUADCUSTOMVERTEX[162];
+        s_ghosts[i].m_pRightBuffer = new QUADCUSTOMVERTEX[162];
+        s_ghosts[i].Reset();
     }
 }
 
 void SlashEntity::ReleaseContent() {
     g_BladeTex.SetNull();
+    g_SlashFlashTex.SetNull();
+    for (int i = 0; i < 8; i++) {
+        s_ghosts[i].Release();
+    }
+    s_loaded = 0;
 }
 
-// ASM-spec v1.6.1 CleanupSlash @ 0x001e8204.
-// 1. Null 3 SmartPtr<Texture> at BSS offsets +0xd0, +0xd8, +0xd4 (exact binary order).
-//    Port maps: g_BladeTex (+0xd0) and g_ModTexture (+0xd4 or +0xd8); one of them covers
-//    the +0xd8 slot and one covers +0xd4; the third is unidentified (RE gap below).
-// 2. For i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred (SlashEntityGhost not ported).
-// 3. Clear loaded flag (bool at BSS+0xcc -- not yet tracked in port).
+// ASM-spec v1.6.1 CleanupSlash @0x001e8204
+// Nulls 3 SmartPtr<Texture> in binary order (BSS +0xd0/+0xd8/+0xd4), releases all 8
+// SlashEntityGhost buffer pairs, and clears the loaded flag.
 void CleanupSlash() {
-    // Step 1: null the 3 slash textures in binary order (+0xd0, +0xd8, +0xd4).
-    // Port identifies g_BladeTex and g_ModTexture; only 2 of 3 slots are mapped.
-    g_BladeTex.SetNull();
-    g_ModTexture.SetNull();
-    // TODO: v1.6.1 CleanupSlash @0x001e8204 nulls 3 slash textures (+0xd0/+0xd4/+0xd8);
-    // only g_BladeTex and g_ModTexture mapped -- RE SlashEntity::LoadContent for the third.
-
-    // Step 2: deferred -- SlashEntityGhost not yet ported.
-    // TODO: v1.6.1 CleanupSlash @0x001e8204 -- 8x SlashEntityGhost::Release(ghost_ring[i]);
-    // blocked on SlashEntityGhost port.
+    g_BladeTex.SetNull();       // BSS +0xd0 @0x00332b48
+    g_ModTexture.SetNull();     // BSS +0xd8 @0x00332b50
+    g_SlashFlashTex.SetNull();  // BSS +0xd4 @0x00332b4c
+    for (int i = 0; i < 8; i++) {
+        s_ghosts[i].Release();
+    }
+    s_loaded = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -479,13 +587,16 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 
 void SlashEntity::PostUpdate(float /*dt*/) {}
 
-// ASM-spec v1.6.1 SlashEntity::PreUpdate @0x1e7920
+// ASM-spec v1.6.1 SlashEntity::PreUpdate @0x001e7950
 void SlashEntity::PreUpdate(float dt) {
-    // ASM-spec v1.6.1 SlashEntity::PreUpdate @0x1e7920: STOP debounce countdown
+    // ASM-spec v1.6.1 SlashEntity::PreUpdate @0x001e7950: tick all 8 ghost slots.
+    for (int i = 0; i < 8; i++) {
+        s_ghosts[i].Update(dt);
+    }
+    // ASM-spec v1.6.1 SlashEntity::PreUpdate @0x001e7950: STOP debounce countdown
     if (g_StopCounter < 5) g_StopCounter += 1;
     else                   g_Stop = 0;
-    // Port specific: SlashEntityGhost ring (8 slots) deferred.
-    // Port specific: ItemManager::PushSwipeLoopVolume deferred.
+    // TODO: ItemManager::PushSwipeLoopVolume deferred.
     if (g_ColourType == 1 /* PER_SLASH */) {
         UpdateModColour(nullptr, dt);
     }
@@ -533,10 +644,12 @@ float SlashEntity::GetHeadThicknessScale() const {
     return scale;
 }
 
-// Binary @ 0x17B82C -- snapshot blade vertex strips into global ghost ring.
-// Port specific: SlashEntityGhost ring not yet ported. No-op stub.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B82C (re-analyst)
+// ASM-spec v1.6.1 SlashEntity::CreateGhost @0x001e67f4
+// Passes &m_pLeftBuffer so StartEffect receives srcBufs[0]=m_pLeftBuffer and
+// srcBufs[1]=m_pRightBuffer via struct-field adjacency (+0x5c/+0x60).
 void SlashEntity::CreateGhost() {
+    s_currentSlashIdx = (s_currentSlashIdx + 1) & 7u;
+    s_ghosts[s_currentSlashIdx].StartEffect(&m_pLeftBuffer, m_PointCount);
 }
 
 // ---------------------------------------------------------------------------
@@ -2502,6 +2615,9 @@ bool SlashEntity::TouchUp(InputEvent* /*event*/) {
     return true;
 }
 
-// @ 0x0017e504. Ghost slots not yet ported -- no-op stub.
+// ASM-spec v1.6.1 SlashEntity::PreDraw @0x001e8538
 void SlashEntity::PreDraw() {
+    for (int i = 0; i < 8; i++) {
+        s_ghosts[i].Draw();
+    }
 }
