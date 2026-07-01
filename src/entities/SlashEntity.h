@@ -52,6 +52,47 @@
 #include "engine/util/Event.h"
 #include <cstdint>
 
+// ---------------------------------------------------------------------------
+// SlashEntityGhost -- after-image blade trail (sizeof == 0x10, no vtable).
+// Stores a snapshot of a live SlashEntity's vertex strips and fades them over
+// time using a per-vertex alpha gradient.
+// 8 global slots (s_ghosts[8]) live in file-scope in SlashEntity.cpp.
+// PreUpdate ticks all 8 each frame; PreDraw renders any with m_Alpha > 0.
+// ---------------------------------------------------------------------------
+struct SlashEntityGhost {
+    float              m_Alpha;        // +0x00  fade intensity [0..1]; 0.0 = inactive
+    QUADCUSTOMVERTEX*  m_pLeftBuffer;  // +0x04  162-vert heap array (new QUADCUSTOMVERTEX[162])
+    QUADCUSTOMVERTEX*  m_pRightBuffer; // +0x08  162-vert heap array
+    int                m_PointCount;   // +0x0c  active trail vertex count; 0 after Reset
+
+    // ASM-spec v1.6.1 SlashEntityGhost() @0x001eaacc
+    SlashEntityGhost();
+
+    // ASM-spec v1.6.1 SlashEntityGhost::Reset @0x001eaaec
+    // Clears m_PointCount and m_Alpha to 0; does NOT free buffers.
+    void Reset();
+
+    // ASM-spec v1.6.1 SlashEntityGhost::Release @0x001eaf10
+    // delete[]s m_pLeftBuffer and m_pRightBuffer; idempotent on null.
+    void Release();
+
+    // ASM-spec v1.6.1 SlashEntityGhost::StartEffect @0x001eb048
+    // Snapshots pointCount+1 verts from srcBufs[0/1] into this ghost's buffers,
+    // sets m_Alpha=1.0f, m_PointCount=pointCount, zeroes all vertex alpha.
+    // srcBufs[0]=left strip ptr, srcBufs[1]=right strip ptr.
+    void StartEffect(QUADCUSTOMVERTEX** srcBufs, int pointCount);
+
+    // ASM-spec v1.6.1 SlashEntityGhost::Update @0x001eaf4c
+    // Decays m_Alpha by dt*0.5f; applies per-vertex alpha gradient (0 at tail,
+    // up to m_Alpha*200 at head, clamped [0,255]) to both buffers.
+    void Update(float dt);
+
+    // ASM-spec v1.6.1 SlashEntityGhost::Draw @0x001eb0f8
+    // Renders both strips with g_SlashFlashTex at Z=-5400 (behind live blade).
+    // No-op when m_Alpha <= 0 or texture not loaded.
+    void Draw();
+};
+
 struct PSPParticleEmitter;
 struct InputEvent;
 
@@ -109,8 +150,9 @@ public:
     // v1.6.1 @ 0x1e684c -- derive head taper scale.
     float GetHeadThicknessScale() const;
 
-    // Binary @ 0x17B82C -- push next ghost slot, snapshot blade vertex strips.
-    // Port specific: SlashEntityGhost ring deferred; body is a no-op stub.
+    // ASM-spec v1.6.1 SlashEntity::CreateGhost @0x001e67f4
+    // Advances s_currentSlashIdx (mod 8) and calls StartEffect on the next ghost slot,
+    // snapshotting this blade's vertex strips. Called from Update when g_ScaleFlag1 is set.
     void CreateGhost();
 
     // Binary @ 0x17B388 -- clear back-pointer to combo MissControl when deleted.
@@ -401,7 +443,7 @@ public:
     // ColoursChanged v1.6.1 @ 0x1e76fc. Per-instance live-update.
     void ColoursChanged();
 
-    // @ 0x0016ba84 -- blade pre-pass.
+    // ASM-spec v1.6.1 SlashEntity::PreDraw @0x001e8538 -- draws 8 ghost slots each frame.
     void PreDraw();
 
     static const Mortar::SmartPtr<Mortar::Texture>& GetModTexture();
@@ -526,6 +568,13 @@ struct SlashEntityLayoutAssert {
     static_assert(offsetof(SlashEntity, m_ComboOnlineMode)                   == 0x180, "m_ComboOnlineMode offset");
     static_assert(offsetof(SlashEntity, m_AngleIndex)                        == 0x184, "m_AngleIndex offset");
 };
+struct SlashEntityGhostLayoutAssert {
+    static_assert(sizeof(SlashEntityGhost)                       == 0x10, "SlashEntityGhost size");
+    static_assert(offsetof(SlashEntityGhost, m_Alpha)        == 0x00, "SlashEntityGhost::m_Alpha");
+    static_assert(offsetof(SlashEntityGhost, m_pLeftBuffer)  == 0x04, "SlashEntityGhost::m_pLeftBuffer");
+    static_assert(offsetof(SlashEntityGhost, m_pRightBuffer) == 0x08, "SlashEntityGhost::m_pRightBuffer");
+    static_assert(offsetof(SlashEntityGhost, m_PointCount)   == 0x0c, "SlashEntityGhost::m_PointCount");
+};
 #endif
 
 // Per-finger SlashEntity instances (binary has SlashEntity[16] @ BSS).
@@ -534,9 +583,10 @@ extern SlashEntity* g_pSlashEntities[16];
 // Backward-compat: aliased to g_pSlashEntities[0].
 extern SlashEntity* g_pSlashEntity;
 
-// v1.6.1 CleanupSlash @ 0x001e8204 -- nulls 3 slash SmartPtr<Texture> globals,
-// releases 8 SlashEntityGhost ring entries (deferred: SlashEntityGhost not yet ported),
-// clears the loaded flag. Called from GameDestroy after CleanUpSplat.
+// ASM-spec v1.6.1 CleanupSlash @0x001e8204
+// Nulls g_BladeTex / g_ModTexture / g_SlashFlashTex (binary order +0xd0/+0xd8/+0xd4),
+// releases all 8 SlashEntityGhost buffer pairs, clears the loaded flag.
+// Called from GameDestroy after CleanUpSplat.
 void CleanupSlash();
 
 #endif
