@@ -1,4 +1,6 @@
 #include "asset/TextureManager.h"
+#include "asset/File.h"
+#include "game/GameWork.h"
 #include <cstdio>
 #include <cstring>
 
@@ -95,11 +97,41 @@ const char* TextureManager::GetDataDir() {
     return s_DataDir;
 }
 
-// Matches LoadLocalisedTexture (0x0010a758)
+// ASM-spec v1.6.1 LoadLocalisedTexture @ 0x0011a768 (thunk 0x00112d3c):
+//  1. Switch on game_work.bM_LangId (+0x03 byte):
+//       2=fr, 3=es, 4=de, 5=it, 11=ko, 12=ja, 13=zh; others -> no localized dir
+//  2. If lang has a dir: sprintf(buf, "textures/<lang>/%s", name)
+//     File::Exists(buf,0) -> if true, goto load
+//  3. Fallback: snprintf(buf, 0x200, "textures/%s", name)
+//     File::Exists(buf,0) -> if false, return empty SmartPtr
+//  4. load: return TextureManager::GetInstance().Load(buf)
+// Note: v1.5.x (0x0010a758) did NOT have the locale switch; this changed in v1.6.1.
+// Note: no textures/<lang>/ subdirs exist in the current asset tree; the fallback
+//       fires for English assets. The localized path is latent until localized assets
+//       are present.
 Mortar::SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
-    char path[512];
-    snprintf(path, sizeof(path), "textures/%s", name);
-    return TextureManager::GetInstance().Load(path);
+    static const char* kLangSuffix[14] = {
+        NULL, NULL, "fr", "es", "de", "it",
+        NULL, NULL, NULL, NULL, NULL,
+        "ko", "ja", "zh"
+    };
+    const char* suffix = (game_work.languageFlag < 14)
+        ? kLangSuffix[game_work.languageFlag] : NULL;
+
+    char buf[512];
+
+    if (suffix != NULL) {
+        snprintf(buf, sizeof(buf), "textures/%s/%s", suffix, name);
+        if (Mortar::File::Exists(buf, 0)) {
+            return TextureManager::GetInstance().Load(buf);
+        }
+    }
+
+    snprintf(buf, sizeof(buf), "textures/%s", name);
+    if (!Mortar::File::Exists(buf, 0)) {
+        return Mortar::SmartPtr<Texture>();
+    }
+    return TextureManager::GetInstance().Load(buf);
 }
 
 } // namespace Mortar
