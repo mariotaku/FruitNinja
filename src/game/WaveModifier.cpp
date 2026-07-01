@@ -149,9 +149,12 @@ void WaveQue::RandomiseOrder(bool doSwap) {
     }
 }
 
-// WaveQue::AddSpecials — binary @ 0x00121b20
+// WaveQue::AddSpecials — binary @ 0x0012ce8c
 // For each spawner-op in each item: with Rand32(100)<5 (or specials counter>=4),
 // and if item.specialsCount<2, set op=3 (special).
+// TODO: v1.6.1 0x0012ce8c (WaveQue::AddSpecials) — this is a port-invented
+//   approximation; the binary has 3 extra CALL blocks. Faithful body is
+//   blocked on the Combo/Survival wave-mode port (asm-verify HIGH, ACCEPT-deferred).
 void WaveQue::AddSpecials() {
     Math::Random& rng = WaveManager::GetInstance()->m_Random;
     for (std::list<WaveQueItem>::iterator it = m_Items.begin();

@@ -5594,10 +5594,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit14RotateFacingUpEb8_Vector3IfE": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "Fruit::RotateFacingUp -- port uses cosf/sinf for quaternion; binary uses precomputed angle-16 lookup. Both access same quaternion fields (+0xE0-+0x10C). ASM-verified 2026-05-20. Score 78020/94.",
-    "asm_hash": "183eaafcdecfcd63",
-    "decided_at": "2026-06-21T00:00Z"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines Quaternion::Multiply (many VFP vmul/vadd/vsub/vmla ops) where binary calls out-of-line helpers; port uses cosf/sinf vs binary's angle-16 LUT (movw #20020 = 0x4E34 constant confirmed in diff). RandomStartAngle bl confirmed faithful this session. RotVel stores at correct +0x100/+0x10C, quaternion stores via stm to m_Rot1/m_Rot2 at +0xE0/+0xF0. Large instruction count is inlining artifact; no offset or semantic divergence.",
+    "asm_hash": "b44550aede03e225",
+    "decided_at": "2026-07-01T00:00Z"
   },
   "_ZN5Fruit15EnableCollisionEb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -9039,6 +9039,12 @@
     "asm_hash": "68c9e5f4a64927cc",
     "decided_at": "2026-06-26T00:00Z"
   },
+  "_Z11DrawCritHitv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Three real divergences: (1) binary-only CALL blocks in the conditional path -- 3 missing bl targets after cmp/branch, indicating an unreplicated code path when the timer/game-ptr check fires; (2) colour loading: binary ldrb [GREG, #140..#143] (bytes from a struct field) vs port strb to sp+68..71 from a different computed source -- s_CritFlashColour may not match; (3) binary-only tail: ldrb [#143/142/141/140] + VFP vcvt + vmul block after the quad draw, and ldr [GREG, #144] + CALL<SYM> that is absent in port. Implementer should RE binary null-path block and confirm s_CritFlashColour source vs binary +0x8C/+0xF0 colour field.",
+    "asm_hash": "fd557070e47f6231",
+    "decided_at": "2026-07-01T00:00Z"
+  },
   "_Z16GetLeaderboardIDii": {
     "verdict": "ACCEPT-defunct",
     "reason": "Defunct: online leaderboard -- no-op stub; src/game/Leaderboard.cpp:10. Port returns 0; binary does 2D table lookup.",
@@ -9648,8 +9654,9 @@
     "decided_at": "2026-07-01T00:00Z"
   },
   "_ZN7WaveQue11AddSpecialsEv": {
-    "verdict": "FIX-NEEDED",
-    "reason": "sig-mismatch: binary WaveQue::AddSpecials() vs port AddSpecials(Math::Random&). Port adds Math::Random& param not in binary. Fix: drop the param; binary uses its own RNG source.",
+    "verdict": "ACCEPT-deferred",
+    "reason": "Sig-mismatch resolved this session (Math::Random& param dropped). Body at src/game/WaveModifier.cpp:155 is a port-invented approximation (std::list/vector iterators, simplified condition); binary @0x0012ce8c has 3 extra CALL<SYM> blocks not present in port. Faithful body blocked pending Combo/Survival wave-mode port. Spec comment at WaveModifier.cpp:152. Add a // TODO marker there.",
+    "asm_hash": "7d74b9e4feb28e72",
     "decided_at": "2026-07-01T00:00Z"
   },
   "_ZN7WaveQue7AddWaveEP8WaveInfob": {
