@@ -127,7 +127,6 @@ static const uint8_t BASE_A = 255;
 
 static Mortar::MemoryPool<SplatEntity> s_Pool;
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
-static Mortar::SmartPtr<Mortar::Texture>       s_SplatTexDead; // BSS+0x2C dead layout field -- nulled by CleanUpSplat, never loaded
 
 static const int MAX_SPLATS_PER_FRAME = 128;
 static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
@@ -617,12 +616,12 @@ void SplatEntity::CleanUp() {
 // 1. SplatEntity::CleanUp() -- destroys pool
 // 2. s_loadedSplat = false
 // 3. null s_SplatTex (BSS+0x28)
-// 4. null s_SplatTexDead (BSS+0x2C) -- dead slot, never loaded in v1.6.1
 void CleanUpSplat() {
     SplatEntity::CleanUp();
     s_loadedSplat = false;
     s_SplatTex.SetNull();
-    s_SplatTexDead.SetNull();  // v1.6.1 CleanUpSplat @0x001ec88c nulls BSS+0x2C dead slot
+    // TODO: v1.6.1 CleanUpSplat @0x001ec88c -- binary nulls a 2nd SmartPtr<Texture> at +0x2c;
+    // SplatEntity::LoadContent not yet RE'd to identify it.
 }
 
 // Defunct: dead code in v1.6.1 -- in export table but never called; v1.6.1 CleanupSplat @0x001ed0ec
