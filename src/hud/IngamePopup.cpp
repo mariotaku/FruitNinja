@@ -179,9 +179,9 @@ IngamePopup::~IngamePopup() {
     m_TextBoxes.clear();
 }
 
-// Draw(float scale, Vec3* pos) -- v1.6.1 @0x0016d3ec
+// Draw(Vec3 pos, float scale) -- v1.6.1 @0x0016d3ec
 // Two loops: (A) text boxes, (B) textures.
-void IngamePopup::Draw(float scale, Vec3* pos) {
+void IngamePopup::Draw(Vec3 pos, float scale) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // Convert m_VerticalOffset from degrees to radians for cos/sin.
@@ -211,9 +211,9 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
 
         const Vec3& textPos = m_TextPositions[i];
         Vec3 finalPos(
-            pos->x + scale * textPos.x + rx,
-            pos->y + scale * textPos.y + ry,
-            pos->z + scale * textPos.z
+            pos.x + scale * textPos.x + rx,
+            pos.y + scale * textPos.y + ry,
+            pos.z + scale * textPos.z
         );
 
         box->SetTranslation(finalPos, 1);
@@ -236,9 +236,9 @@ void IngamePopup::Draw(float scale, Vec3* pos) {
 
         // pos2 = pos + texPos[i] * scale * texScale[i]
         Vec3 pos2(
-            pos->x + texPos.x * scale * texScale.x,
-            pos->y + texPos.y * scale * texScale.y,
-            pos->z + texPos.z * scale * texScale.z
+            pos.x + texPos.x * scale * texScale.x,
+            pos.y + texPos.y * scale * texScale.y,
+            pos.z + texPos.z * scale * texScale.z
         );
 
         tex->Set();

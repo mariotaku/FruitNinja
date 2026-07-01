@@ -61,8 +61,9 @@ public:
     // Matches DisplayManagerBada::SetDepthBufferWrite (0x0019de0c)
     void SetDepthBufferWrite(bool enable);
 
-    // Matches DisplayManagerBada::SetGlobalAmbience (0x0019dd40)
-    void SetGlobalAmbience(const Colour& c);
+    // v1.6.1 DisplayManager::SetGlobalAmbience @0x002569fc -- stores packed ulong directly
+    // into m_GlobalAmbience (4-byte Colour field). Binary: this->m_GlobalAmbience = param_1.
+    void SetGlobalAmbience(unsigned long packedRGBA);
 
     // Matches 0x0019dc94
     MortarRectangle GetWindowSize() const;

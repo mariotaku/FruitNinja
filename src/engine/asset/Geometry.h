@@ -124,9 +124,15 @@ public:
     virtual ~Geometry();
 
     // v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
-    // DIFFERS: structural -- binary walks m_Binding->GetBindings()[idx].m_PassBindings and re-derives
-    //   the glVertexPointer/glDrawElements args per draw; port draws from the load-cached
-    //   m_Vbo/m_Ibo/m_Layout (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
+    // DIFFERS: (1) binary Render() takes NO params -- reads matrices from m_PropList via
+    //   EffectPropertyList::GetValue<Matrix44> (key hash 0x2a0798 = "WorldViewProjection")
+    //   and DisplayManager::m_ProjMatrix (field not mapped in port), then calls GLES1
+    //   glMatrixMode/glLoadMatrixf. Port passes a pre-computed WVP matrix (Mesh::Draw:185-188)
+    //   because m_PropList is NULL (BuildPropList defunct) and GLES1 matrix stack absent.
+    //   Symbol will NOT pair in asm-verify (different mangled name) -- accepted DIFFERS.
+    //   TODO: v1.6.1 DisplayManager::m_ProjMatrix field unmapped.
+    // DIFFERS: (2) port walks load-cached m_Vbo/m_Ibo/m_Layout instead of
+    //   m_Binding->GetBindings()[idx].m_PassBindings (same GL calls, byte-equivalent output).
     //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
     void Render(Matrix44 const& mvp);
 

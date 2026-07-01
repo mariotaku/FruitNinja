@@ -8,7 +8,7 @@
 //   +0x04  int    m_RefCount        (ReferenceCounter strong count)
 //   +0x08  int    m_WeakCount       (ReferenceCounter weak-data ptr; port: inline int)
 //   +0x0c  8B     m_OnFormatChanged (Event0 = std::list<Delegate0<void>>, sentinel-only)
-//   +0x14  8B     m_OnDataChanged   (Event1<Rectangle<long>> = std::list<Delegate1<...>>, sentinel)
+//   +0x14  8B     m_OnDataChanged   (Event1<MortarRectangleT<long>> = std::list<Delegate1<...>>, sentinel)
 //   +0x1c  end
 //
 // Binary vtable @ 0x2cf8f8 (TextureLoader concrete slots):
@@ -16,7 +16,7 @@
 //   [1] @0x00227200  ~dtor deleting
 //   [2] @0x00159e6c  GetRefCounter()      (returns void; ReferenceCounter slot)
 //   [3] @0x00226374  TriggerFormatChanged() fires m_OnFormatChanged (Event0 via PTR@0x2d646c)
-//   [4] @0x00226674  TriggerDataChanged(Rect<long>) fires m_OnDataChanged (Event1)
+//   [4] @0x00226674  TriggerDataChanged(MortarRectangleT<long>) fires m_OnDataChanged (Event1)
 //   [5] @0x00226ee8  LockLayers() -> Data*
 //   [6] @0x00226e74  UnlockLayers(Data const*)
 //   [7] @0x00227154  GetHash() const -> *(this+0x50)
@@ -28,6 +28,7 @@
 #include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
 #include "util/Event.h"
+#include "core/MortarTypes.h"
 #include <cstdint>
 
 namespace Mortar {
@@ -149,24 +150,74 @@ namespace { struct _DataInfoSizeCheck {
 
 } // namespace TextureInfo
 
-// Forward declaration for AutoLock.
-class TextureSource;
+// Forward declarations.
+class TextureSourceAutoLock;
 
-// TextureSource::Data -- base class for the locked-layer payload returned by
-// LockLayers(). Each concrete TextureFileFormat reader subclasses this.
-// Holds DataInfo + a pointer to the raw pixel blob.
+// Mortar::TextureSource -- abstract ref-counted texture data provider.
+// Binary size = 0x1c.
+//
+// TextureSource::Data is the NESTED base class for locked-layer payloads returned
+// by LockLayers(). Declared inside TextureSource so that UnlockLayers mangles as
+//   _ZN...13TextureSource12UnlockLayersEPKNS0_4DataE (nested type)
+// matching the binary's mangled symbols exactly.
 //
 // Binary: each reader allocates a different concrete Data subclass
 //   (Tex1Data @0x48, Tex2Data @0x48, DDSTextureData @0x44, Tex3Data @0x4c).
 // Port: all concrete Data types share this common base.
-struct TextureSourceData {
-    TextureInfo::DataInfo info;   // parsed header fields
-    const void*           pixels; // pointer into the mapped file buffer (not owned)
-    unsigned long         pixelsSize;
+class TextureSource : public ReferenceCounter {
+public:
+    // Nested Data -- locked-layer payload base class.
+    // Declared here (not globally) so UnlockLayers(Data const*) mangles as
+    // TextureSource::Data, matching v1.6.1 binary mangled names.
+    struct Data {
+        TextureInfo::DataInfo info;   // parsed header fields
+        const void*           pixels; // pointer into the mapped file buffer (not owned)
+        unsigned long         pixelsSize;
 
-    TextureSourceData() : pixels(0), pixelsSize(0) {}
-    virtual ~TextureSourceData() {}
+        Data() : pixels(0), pixelsSize(0) {}
+        virtual ~Data() {}
+    };
+
+    // Convenience typedefs (in-class scope).
+    typedef TextureSourceAutoLock AutoLock;
+
+    // Binary ctor: init self-referential sentinel lists.
+    TextureSource();
+    // Binary ~TextureSource @0x2268d8: clears +0x14 list then +0x0c list.
+    virtual ~TextureSource();
+
+    // Vtable slot [2] @0x00159e6c -- GetRefCounter (no-op stub; base calls into ReferenceCounter)
+    virtual void GetRefCounter() {}
+
+    // Vtable slot [3] @0x00226374 -- fires m_OnFormatChanged Event0
+    virtual void TriggerFormatChanged();
+
+    // Vtable slot [4] @0x00226674 -- fires m_OnDataChanged with a MortarRectangleT<long> arg.
+    // Binary v1.6.1 TriggerDataChanged(MortarRectangleT<long>) @0x00226674.
+    virtual void TriggerDataChanged(MortarRectangleT<long> rect);
+
+    // Vtable slot [5] @0x00226ee8 -- return locked pixel data (concrete override)
+    virtual Data* LockLayers() = 0;
+
+    // Vtable slot [6] @0x00226e74 -- release locked data (concrete override)
+    virtual void UnlockLayers(Data const* data) = 0;
+
+    // Vtable slot [7] @0x00227154 -- hash (overridden by TextureLoader to return m_PathHash)
+    virtual unsigned int GetHash() const { return 0; }
+
+    // Vtable slot [8] @0x00227000 -- debug string (not used in live paths)
+    virtual const char* Debug_ToString() const { return "TextureSource"; }
+
+    // +0x0c: format-changed event (Event0 = list<Delegate0<void>>)
+    Event0 m_OnFormatChanged;
+    // +0x14: data-changed event (Event1<MortarRectangleT<long>>)
+    Event1<MortarRectangleT<long> > m_OnDataChanged;
 };
+
+// Global typedef so existing consumers using TextureSourceData compile unchanged.
+// The canonical type is TextureSource::Data (nested); this alias resolves identically
+// in mangling (C++ mangler uses declaration site, not typedef alias).
+typedef Mortar::TextureSource::Data TextureSourceData;
 
 // TextureSource::AutoLock -- RAII helper that calls LockLayers/UnlockLayers.
 // Binary: {TextureSource* source @+0x00, TextureSourceData* data @+0x04}.
@@ -180,53 +231,6 @@ public:
     explicit TextureSourceAutoLock(TextureSource* src);
     // Binary dtor: calls m_source->UnlockLayers(m_data).
     ~TextureSourceAutoLock();
-};
-
-// Mortar::TextureSource -- abstract ref-counted texture data provider.
-// Binary size = 0x1c.
-//
-// The two Event list fields (+0x0c, +0x14) are port-typed as std::list-backed
-// Event0 / Event1<long> to match the 8-byte sentinel layout on ARM32.
-// The event argument type for slot [4] is Rectangle<long> in the binary;
-// the port uses long as a placeholder (event firing is implemented but no
-// subscribers register in the current live paths).
-class TextureSource : public ReferenceCounter {
-public:
-    // Binary ctor: init self-referential sentinel lists.
-    TextureSource();
-    // Binary ~TextureSource @0x2268d8: clears +0x14 list then +0x0c list.
-    virtual ~TextureSource();
-
-    // Vtable slot [2] @0x00159e6c -- GetRefCounter (no-op stub; base calls into ReferenceCounter)
-    virtual void GetRefCounter() {}
-
-    // Vtable slot [3] @0x00226374 -- fires m_OnFormatChanged Event0
-    virtual void TriggerFormatChanged();
-
-    // Vtable slot [4] @0x00226674 -- fires m_OnDataChanged with a rect arg
-    // Binary arg type: Rectangle<long>. Port: long placeholder (value unused in live paths).
-    virtual void TriggerDataChanged(long rect);
-
-    // Vtable slot [5] @0x00226ee8 -- return locked pixel data (concrete override)
-    virtual TextureSourceData* LockLayers() = 0;
-
-    // Vtable slot [6] @0x00226e74 -- release locked data (concrete override)
-    virtual void UnlockLayers(TextureSourceData const* data) = 0;
-
-    // Vtable slot [7] @0x00227154 -- hash (overridden by TextureLoader to return m_PathHash)
-    virtual unsigned int GetHash() const { return 0; }
-
-    // Vtable slot [8] @0x00227000 -- debug string (not used in live paths)
-    virtual const char* Debug_ToString() const { return "TextureSource"; }
-
-    // Convenience typedef for the Data payload.
-    typedef TextureSourceData Data;
-    typedef TextureSourceAutoLock AutoLock;
-
-    // +0x0c: format-changed event (Event0 = list<Delegate0<void>>)
-    Event0 m_OnFormatChanged;
-    // +0x14: data-changed event (Event1<long> = list<Delegate1<void,long>>)
-    Event1<long> m_OnDataChanged;
 };
 
 #if defined(__bada__)

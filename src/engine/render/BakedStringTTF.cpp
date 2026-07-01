@@ -575,8 +575,8 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 // When refRect is non-null, bounds read from refRect; else computed from this object's glyph verts.
 // TranslateLocal(alignOffset); Scale; RotZ; Translate(anchor); Upload.
 // per surface (m_DrawMode<0): DrawTriList via vertex array.
-void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align,
-                           MortarRectangle* refRect)
+void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
+                           MortarRectangleT<long>* refRect)
 {
     if (!m_SurfacesBuilt) FullInternalRebuild();
     if (m_Surfaces.empty() || m_Glyphs.empty()) return;

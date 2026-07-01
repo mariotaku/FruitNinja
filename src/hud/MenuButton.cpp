@@ -867,17 +867,17 @@ void MenuButton::Draw(float* hudScaleRaw) {
 
         // TODO: v1.6.1 BakedStringTTF::Draw @0x002497a8 -- pass FG-label refRect for glow/shadow layer registration (needs UpdateBounds @0x00247ed0)
         if (m_pLabelGlow) {
-            m_pLabelGlow->Draw(anchor, scaleV, rotZ, 0xf);
+            m_pLabelGlow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
             if (m_LabelRadius > 0.0f)
-                m_pLabelGlow->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+                m_pLabelGlow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
         }
-        m_pLabelFg->Draw(anchor, scaleV, rotZ, 0xf);
+        m_pLabelFg->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
         if (m_LabelRadius > 0.0f)
-            m_pLabelFg->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+            m_pLabelFg->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
         if (m_pLabelShadow) {
-            m_pLabelShadow->Draw(anchor, scaleV, rotZ, 0xf);
+            m_pLabelShadow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
             if (m_LabelRadius > 0.0f)
-                m_pLabelShadow->Draw(anchor, scaleV, rotZ + 180.0f, 0xf);
+                m_pLabelShadow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
         }
     }
 
@@ -893,7 +893,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
             Vec3 anchor = GetAdjustedPos();
             anchor.x += m_ShakeScale.y * m_RestScale.x * 0.5f;
             anchor.y += m_ShakeScale.z * m_RestScale.y * 0.5f + bob;
-            popup->Draw(scale, &anchor);
+            popup->Draw(anchor, scale);
         }
     }
 

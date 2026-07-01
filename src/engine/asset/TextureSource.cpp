@@ -43,9 +43,9 @@ void TextureSource::TriggerFormatChanged() {
 }
 
 // Vtable slot [4] @0x00226674 -- fires m_OnDataChanged event with rect arg.
-// Binary arg type: Rectangle<long>; port uses long placeholder (value is
-// forwarded to registered listeners, none in the current live paths).
-void TextureSource::TriggerDataChanged(long rect) {
+// Binary v1.6.1 TriggerDataChanged(MortarRectangleT<long>) @0x00226674.
+// No subscribers register in the current live paths.
+void TextureSource::TriggerDataChanged(MortarRectangleT<long> rect) {
     m_OnDataChanged(rect);
 }
 

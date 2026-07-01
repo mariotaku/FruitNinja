@@ -661,7 +661,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         IngamePopup* popup = GetIngamePopup(0x0F);
         if (popup) {
             Vec3 bannerPos(-100.0f, 70.0f, 0.0f);
-            popup->Draw(animScale, &bannerPos);
+            popup->Draw(bannerPos, animScale);
         }
     }
 }
