@@ -2,11 +2,13 @@
 //
 // PowerUpShop : HUDControl3d — in-game power-up purchase screen.
 //
-// Binary vtable @ 0x001e9cb0 (15 slots); class size 0x138.
+// Binary vtable @ 0x002cdd88 (vptr->0x002cdd90) (15 slots); class size 0x138.
 //
-// TODO: <no addr resolved> — PowerUpShop instantiation site not yet RE'd; see
-// tmp/re-powerupshop.md. Likely a HUD method that listens for a "show shop"
-// event during gameplay.
+// ASM-spec v1.6.1 PowerUpShop -- DEAD CODE in this SKU: ctors @0x001a81f0/0x001a81a4 have
+//   zero call-site xrefs (EXTERNAL only); LoadContent @0x001a7fdc is empty; s_boardTexture
+//   @0x0031650c never loaded; GameModeScreen::CreateControls @0x001819bc doesn't create it;
+//   BuyNow @0x00181290 routes to GotoFruitNinjaPage. Per CLAUDE.md linked-but-unreferenced =
+//   dead code, do NOT instantiate. Class/vtable/bodies preserved for asm-verify coverage.
 
 #include "screens/PowerUpShop.h"
 #include "debug/Logger.h"
@@ -34,6 +36,8 @@
 // Binary @ 0x_GLOBAL__I_PowerUpShop_cpp:
 // File-static Mortar::SmartPtr<Texture> singletons, nulled by UnLoadContent.
 // LoadContent is empty; textures are resolved on first use via TextureManager.
+// Field mapping: g_BuyBg = s_boardTexture; g_Arrow = s_strokeTexture (plausible-but-untraced);
+//   g_FruitIcons[0..2] = s_buttonTextures[0..2].
 static Mortar::SmartPtr<Mortar::Texture> g_BuyBg;
 static Mortar::SmartPtr<Mortar::Texture> g_Arrow;
 static Mortar::SmartPtr<Mortar::Texture> g_FruitIcons[3];
@@ -102,17 +106,18 @@ PowerUpShop::~PowerUpShop() {
 }
 
 // ============================================================
-// LoadContent @ 0x00155b50 — empty body (file-static SmartPtrs resolve on first use).
+// LoadContent @ 0x001a7fdc — empty body (file-static SmartPtrs resolve on first use).
 // ============================================================
 void PowerUpShop::LoadContent() {
-    // Binary @ 0x00155b50: empty.
+    // Binary @ 0x001a7fdc: empty.
 }
 
 // ============================================================
-// UnLoadContent @ 0x00155dc4 — null three file-static Mortar::SmartPtr<Texture>s.
+// UnLoadContent @ 0x001a830c — nulls five file-static Mortar::SmartPtr<Texture>s
+//   (g_BuyBg/g_Arrow/g_FruitIcons[0..2]).
 // ============================================================
 void PowerUpShop::UnLoadContent() {
-    // Binary @ 0x00155dc4:
+    // Binary @ 0x001a830c:
     g_BuyBg.SetNull();
     g_Arrow.SetNull();
     g_FruitIcons[0].SetNull();
@@ -135,8 +140,7 @@ void PowerUpShop::Init() {
     m_FruitScale        = 1.0f;
 
     // ASM-spec v1.6.1 PowerUpShop::Init @0x001a94b0: size = boardTex(w,h,0)
-    // Binary reads g_BuyBg (board bg texture); GetWidth/GetHeight execute only when IsValid().
-    // In-game the caller loads g_BuyBg before Init; headless guard keeps it crash-safe.
+    // Port specific: null guard; binary reads unconditionally but PowerUpShop is dead code in v1.6.1.
     if (g_BuyBg.IsValid()) {
         size = Vec3((float)g_BuyBg->GetWidth(), (float)g_BuyBg->GetHeight(), 0.0f);
     }
@@ -145,7 +149,7 @@ void PowerUpShop::Init() {
 
     // Iterate PowerUpManager::m_PurchasablePowers (GetFirstPurchasable / GetNextPurchasable
     // are not in the port; walk the list directly — equivalent traversal).
-    // Binary @ 0x00156b08: push_back each purchasable; if p->m_bCloned != 0, m_PurchasedCount++.
+    // Binary (PowerUpShop::Init @0x001a94b0): push_back each purchasable; if p->m_bCloned != 0, m_PurchasedCount++.
     PowerUpManager* pum = PowerUpManager::GetInstance();
     std::list<PowerUp*>::iterator it = pum->m_PurchasablePowers.begin();
     std::list<PowerUp*>::iterator end = pum->m_PurchasablePowers.end();
@@ -158,7 +162,7 @@ void PowerUpShop::Init() {
     }
 
     // Build m_SlotLayout: count entries, x = i*(250/(count-1)) - 192, y=24, z=1.
-    // Binary @ 0x00156b08 centred horizontal layout.
+    // Binary (PowerUpShop::Init @0x001a94b0): centred horizontal layout.
     int count = (int)m_PurchasablePowerUps.size();
     m_SlotLayout.clear();
     for (int i = 0; i < count; ++i) {
@@ -180,10 +184,10 @@ void PowerUpShop::Init() {
 }
 
 // ============================================================
-// Release @ 0x0015685c (vtable slot 3)
+// Release @ 0x001a9124 (vtable slot 3)
 // ============================================================
 void PowerUpShop::Release() {
-    // Binary @ 0x0015685c: tear down dynamic buy-fruit MenuButton.
+    // Binary @ 0x001a9124: tear down dynamic buy-fruit MenuButton.
     if (m_BuyButton != NULL) {
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit != NULL) {
@@ -253,8 +257,9 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
     UploadMatrices();
 
     // Step 2: draw buy background quad via g_BuyBg.
-    // Binary @ 0x00155e08: calls g_BuyBg->Set(), Mesh::DrawQuadUnCached(Colour*, fx),
-    // g_BuyBg->UnSet(). Binary @ 0x00194180: default 1x1 quad with current world matrix.
+    // Binary @ 0x001a8364: calls g_BuyBg->Set(), Mesh::DrawQuadUnCached(Colour*, fx),
+    // g_BuyBg->UnSet(). Default 1x1 quad with current world matrix.
+    // Port specific: null guard; binary reads unconditionally but PowerUpShop is dead code in v1.6.1.
     if (g_BuyBg.IsValid()) {
         g_BuyBg->Set();
         Mortar::Mesh::DrawQuadUnCached(g_White, NULL);
@@ -262,7 +267,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
     }
 
     // Step 3: draw m_BuyText (header label) via font.
-    // Binary @ 0x00155e08: pos = (shop.x, shop.y + 75), size 20, anchor 3, white.
+    // Binary (PowerUpShop::Draw @0x001a8364): pos = (shop.x, shop.y + 75), size 20, anchor 3, white.
     if (game_work.pFontMain.IsValid()) {
         Vec3 textPos(pos.x, pos.y + 75.0f, 0.0f);
         game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f, m_BuyText, textPos,
@@ -554,10 +559,10 @@ void PowerUpShop::Update(float dt) {
 }
 
 // ============================================================
-// SetBuyButtonState @ 0x00155c4c (non-virtual)
+// SetBuyButtonState @ 0x001a8124 (non-virtual)
 // ============================================================
 void PowerUpShop::SetBuyButtonState() {
-    // Binary @ 0x00155c4c:
+    // Binary @ 0x001a8124:
     if (m_PurchasablePowerUps.empty()) {
         return;
     }
@@ -582,7 +587,7 @@ void PowerUpShop::SetBuyButtonState() {
 }
 
 // ============================================================
-// ButtonSliced @ 0x00155b5c (non-virtual; bound as Mortar::Delegate0<void>)
+// ButtonSliced @ 0x001a7fe8 (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
 void PowerUpShop::ButtonSliced() {
     // Binary @ 0x00155b70: split predicate (avoids GCC 16-bit load-fuse on
@@ -622,16 +627,16 @@ void PowerUpShop::ButtonSliced() {
 }
 
 // ============================================================
-// ButtonDeleted @ 0x00156aac (non-virtual; bound as Mortar::Delegate1<void,HUDControl*>)
+// ButtonDeleted @ 0x001a9438 (non-virtual; bound as Mortar::Delegate1<void,HUDControl*>)
 // ============================================================
 void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
-    // Binary @ 0x00156aac:
+    // Binary @ 0x001a9438:
     if (deletedCtrl != m_BuyButton) {
         return;
     }
     if (m_BuyTriggered != 0 && m_BuyButton->m_pTrackedFruit != NULL) {
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
-        // Binary @ 0x00156aac (instruction-traced):
+        // Binary @ 0x001a9438 (instruction-traced):
         //   0xc3f00000 = -480.0f (DAT_00156b04); 0xc1200000 = -10.0f.
         // Kick the falling buy-fruit piece off-screen:
         //   vstr s15(-480), [r5,#0xbc] -> m_SecondPos.y (+0xBC)

@@ -6,10 +6,10 @@
 // PowerUpShop : HUDControl3d (size = 0x138, 312 bytes)
 // In-game power-up purchase screen.
 //
-// Binary vtable @ 0x001e9cb0 (15 slots).
-// ctors @ 0x00155cac (C1) / 0x00155ce4 (C2)
+// Binary vtable @ 0x002cdd88 (vptr->0x002cdd90) (15 slots).
+// ctors @ 0x001a81a4 (C1) / 0x001a81f0 (C2)
 //
-// Instantiation site not in resolved call-graph; see TODO in PowerUpShop.cpp.
+// DEAD CODE in v1.6.1: zero call-site xrefs; see ASM-spec in PowerUpShop.cpp.
 
 #include "hud/HUDControl3d.h"
 #include "game/PowerUp.h"
@@ -70,32 +70,35 @@ public:
     PowerUpShop();
     ~PowerUpShop();
 
-    // vtable slot 2 @ 0x00156b08
+    // vtable slot 2 @ 0x001a94b0
     void Init() override;
 
-    // vtable slot 3 @ 0x0015685c
+    // vtable slot 3 @ 0x001a9124
     void Release() override;
 
-    // vtable slot 4 @ 0x00155b54 — empty
+    // vtable slot 4 @ 0x001a7fe0 — empty
     void Reset() override;
 
-    // vtable slot 6 @ 0x00155b58 — identity (returns hudScale)
+    // vtable slot 6 @ 0x001a7fe4 — identity (returns hudScale)
     void PreDraw(float* hudScale) override;
 
-    // vtable slot 7 @ 0x00155e08
+    // vtable slot 7 @ 0x001a8364
     void Draw(float* hudScaleRaw) override;
 
-    // vtable slot 10 @ 0x00156398
+    // vtable slot 10 @ 0x001a8b04
     void Update(float dt) override;
 
     // Static content management (bodies in PowerUpShop.cpp)
-    static void LoadContent();    // @ 0x00155b50 — empty body
-    static void UnLoadContent(); // @ 0x00155dc4 — nulls three file-static Mortar::SmartPtr<Texture>s
+    static void LoadContent();    // @ 0x001a7fdc — empty body
+    static void UnLoadContent(); // @ 0x001a830c — nulls five file-static Mortar::SmartPtr<Texture>s
+                                 //   (s_boardTexture/s_strokeTexture/s_buttonTextures[0..2]
+                                 //    = g_BuyBg/g_Arrow/g_FruitIcons[0..2]);
+                                 //   s_strokeTexture->g_Arrow role is plausible-but-untraced
 
     // Non-virtual members
-    void SetBuyButtonState();                     // @ 0x00155c4c
-    void ButtonSliced();                          // @ 0x00155b5c
-    void ButtonDeleted(HUDControl* deletedCtrl);  // @ 0x00156aac
+    void SetBuyButtonState();                     // @ 0x001a8124
+    void ButtonSliced();                          // @ 0x001a7fe8
+    void ButtonDeleted(HUDControl* deletedCtrl);  // @ 0x001a9438
 };
 
 #ifdef __bada__
