@@ -58,6 +58,7 @@
 #include <ctime>
 #include <string>
 #include "game/GameWork.h"
+#include "engine/render/FontCacheObjectTTF.h"  // GetAtlas()->InitialiseData for #282 lang scale
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
 void GamePreInitialise() {
