@@ -777,17 +777,26 @@ void GameModeScreen::CommingsSoonCallback() {
     }
 }
 
-// Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy;
-//                       online-MP slot also flings the orphan fruit off-screen.
-void GameModeScreen::DeletedMenuButton(MenuButton* btn) {
+// Binary @ 0x00183814 (v1.6.1) — clears m_p*Button cache on HUDControl destroy;
+//                               online-MP slot also flings the orphan fruit off-screen.
+void GameModeScreen::DeletedMenuButton(HUDControl* ctrl) {
+    MenuButton* btn = static_cast<MenuButton*>(ctrl);
+    // DIFFERS: port-specific back-button reap; v1.6.1 DeletedMenuButton @0x00183814
+    // does not null field_0xa0 (m_pBackButton) -- binary handles only classic/zen/arcade
+    // slots. Kept: guards against UAF if m_pBackButton is accessed after HUD reaps the
+    // button. Binary relies on HUD lifetime ordering the port may not fully replicate.
     if (btn == m_pBackButton)    { m_pBackButton    = nullptr; return; }
     if (btn == m_pClassicButton) { m_pClassicButton = nullptr; return; }
     if (btn == m_pZenButton)     { m_pZenButton     = nullptr; return; }
-    if (btn == m_pArcadeButton)  { m_pArcadeButton  = nullptr; return; }
+    if (btn == m_pArcadeButton)  {
+        m_pArcadeButton = nullptr;
+        // TODO: v1.6.1 0x00183814 -- arcade fruit fling on button delete (reads +0x18 fruit ptr, writes offscreen pos) not ported
+        return;
+    }
 #if !defined(__bada__)
     if (btn == m_pOnlineMpButton) {
         m_pOnlineMpButton = nullptr;
-        // Defunct: online-MP detached fruit fling (v1.6.1 binary @ 0x0013f6ac)
+        // Defunct: online-MP detached fruit fling (v1.6.1 binary @ 0x00183814)
     }
 #endif
 }

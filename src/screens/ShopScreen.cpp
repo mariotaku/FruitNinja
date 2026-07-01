@@ -588,22 +588,24 @@ void ShopScreen::SetSelected(ShopListItem* item) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::ClickedOnShopItem(ScrollingMenuItem*) @ 0x0015d4b4
+// ShopScreen::ClickedOnShopItem(ScrollingMenuItem*) @ 0x001b2df4
+// Binary sig: Delegate1<void,ScrollingMenuItem*> (confirmed via CopyConstruct @0x001b6ffc).
 // Binary: if item->m_pItemInfo null OR IsLocked: play SFX, alpha=0.25.
 //         else if m_pEquipButton != null: TutorialControl::ButtonPressedAtPos.
 // ---------------------------------------------------------------------------
-void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
+void ShopScreen::ClickedOnShopItem(ScrollingMenuItem* item) {
     if (!item) return;
+    ShopListItem* si = static_cast<ShopListItem*>(item);
 
-    if (!item->m_pItemInfo || item->m_pItemInfo->IsLocked() != 0) {
+    if (!si->m_pItemInfo || si->m_pItemInfo->IsLocked() != 0) {
         // Binary: GameSound::SFXPlay(gameSound, "equip-locked", 1.0, 1.0)
         if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
         }
-        item->m_LockFlashAlpha = 0.25f;   // 0x3e800000 in binary; offset +0x264
+        si->m_LockFlashAlpha = 0.25f;   // 0x3e800000 in binary; offset +0x264
     } else {
         if (m_pEquipButton) {
-            // Matches ShopScreen::ClickedOnShopItem @ 0x0015d4e4
+            // Matches ShopScreen::ClickedOnShopItem @ 0x001b2e24
             if (game_work.m_TutorialControl)
                 game_work.m_TutorialControl->ButtonPressedAtPos(m_pEquipButton);
         }

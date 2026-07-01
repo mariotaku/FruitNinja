@@ -18,7 +18,7 @@
 //   SetupLevel               0x0013e21c
 //   SetIsChallenge           0x0013df84
 //   CommingsSoonCallback     0x0013e124
-//   DeletedMenuButton        0x0013f6ac
+//   DeletedMenuButton        0x00183814
 //   CasinoModeCallback       0x0013dfdc
 //   VersusModeCallback       0x0013e01c
 //   P2PConnectCallback       0x0013dfd4
@@ -86,9 +86,11 @@ public:
     static void LoadContent();    // 0x13e330
     static void UnLoadContent();  // 0x13e5a8
 
-    // Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy.
+    // Binary @ 0x00183814 (v1.6.1) — clears m_p*Button cache on HUDControl destroy.
+    // Binary sig: DeletedMenuButton(HUDControl*) -- body casts to MenuButton* since
+    // only MenuButtons are ever registered via BtnDeletedFn.
     // Public: called from BtnDeletedFn helper in GameModeScreen.cpp.
-    void DeletedMenuButton(MenuButton* btn);
+    void DeletedMenuButton(HUDControl* ctrl);
 
 public:
     // Binary struct layout (0xDC = 220 bytes total):

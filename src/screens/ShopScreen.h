@@ -14,7 +14,7 @@
 //   Draw             0x0015dd50
 //   SetSelected      0x0015c870
 //   ShrinkBuyButton  0x0015c4cc
-//   ClickedOnShopItem 0x0015d4b4
+//   ClickedOnShopItem 0x001b2df4
 //   QuitShopCallback 0x0015d55c
 //   EquipCallback    0x0015d630
 //   NewItem          0x0015c498
@@ -84,6 +84,7 @@
 class MenuButton;
 class DojoScreen;
 class ScrollingMenu;
+class ScrollingMenuItem;
 class ShopListItem;
 class HUD;
 
@@ -207,10 +208,13 @@ public:
     // Calls ItemManager::SetEquippedItem with selected item, plays equip SFX.
     void EquipCallback();
 
-    // Matches ShopScreen::ClickedOnShopItem(ScrollingMenuItem*) @ 0x0015d4b4
-    // If item locked: play SFX, set item alpha=0.25. If equip button exists:
-    // call TutorialControl::ButtonPressedAtPos.
-    void ClickedOnShopItem(ShopListItem* item);
+    // Matches ShopScreen::ClickedOnShopItem(ScrollingMenuItem*) @ 0x001b2df4
+    // Binary sig: Delegate1<void,ScrollingMenuItem*> confirmed via CopyConstruct
+    //   @0x001b6ffc. If item locked: play SFX, set item alpha=0.25. If equip
+    //   button exists: call TutorialControl::ButtonPressedAtPos.
+    // Param is ScrollingMenuItem*; body casts to ShopListItem* (only ShopListItems
+    // are ever placed in the list).
+    void ClickedOnShopItem(ScrollingMenuItem* item);
 
     // Matches ShopScreen::SetSelected(ShopListItem*) @ 0x0015c870
     // Updates m_pSelectedItem, resolves fruit types for buy/equip button display.
