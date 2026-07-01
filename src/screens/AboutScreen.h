@@ -152,7 +152,9 @@ private:
     // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,
     // m_HeadingBox (via DrawMarquee), m_VersionBox, m_CreditLine0..5 at
     // positions derived from panelPos. Also gates DrawMarquee on alpha > 0.6.
-    void NewDraw(float yDrawn);
+    // Binary reads m_Texture->GetWidth() (+0x28) to compute panelBaseY internally
+    // (no param -- corrected from port's erroneous float yDrawn param).
+    void NewDraw();
 
     // v1.6.1: CreateCreditsMarquee @0x0015ac0c
     // Builds m_Marquees by calling AddLine per credit entry, then lays out positions.
@@ -160,7 +162,9 @@ private:
 
     // v1.6.1: AddLine @0x0015aaf0
     // Allocates a BakedStringBox, sets text/colour/clip/updates, wraps in a MarqueeText.
-    void AddLine(const char* text, const Colour& colour, float fontSize);
+    // Binary sig: AddLine(char const*, Colour, int) -- 3rd param is int; cast to float
+    // internally before passing to BakedStringBox ctor (VectorSignedToFloat in binary).
+    void AddLine(const char* text, const Colour& colour, int fontSize);
 
     // v1.6.1: DrawMarquee @0x0015a138
     // Draws each m_Marquees item translated by the transition offset, plus the

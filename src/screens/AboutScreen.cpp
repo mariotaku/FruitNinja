@@ -455,8 +455,8 @@ void AboutScreen::Update(float dt)
 // -----------------------------------------------------------------------
 // AboutScreen::NewDraw  @ 0x0015a264
 // Draws BakedStringBox credit text over the haiku board panel.
-// Called from Draw() after the textured quads, passing yDrawn (the
-// panel's animated Y position).
+// Called from Draw() after the textured quads. Computes panel Y
+// position internally from m_Texture->GetWidth() and m_TransitionAlpha.
 //
 // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: SetTranslation flag 0, credit y-deltas.
 //   base coords: x0 = (int)(BG_X - 160) = -210, y0 = (int)(yDrawn + 64)
@@ -472,10 +472,17 @@ void AboutScreen::Update(float dt)
 //   Each box is drawn with Draw(0, Vec2(1,1), 1).
 //   DrawMarquee gate: if (m_TransitionAlpha > 0.6f) DrawMarquee();
 // -----------------------------------------------------------------------
-void AboutScreen::NewDraw(float yDrawn)
+void AboutScreen::NewDraw()
 {
+    // Binary reads m_Texture->GetWidth() (+0x28 = texture width) to compute panelBaseY.
+    // panelBaseY = texWidth * 0.5 + BG_Y_CACHE(160); panelY lerps toward BG_Y_REST(63).
     const int x0 = (int)(BG_X - 160.0f);    // -210
-    const int y0 = (int)(yDrawn + 64.0f);
+    float panelY = 0.0f;
+    if (m_Texture.IsValid()) {
+        const float panelBaseY = (float)m_Texture->GetWidth() * 0.5f + BG_Y_CACHE;
+        panelY = panelBaseY - (panelBaseY - BG_Y_REST) * m_TransitionAlpha;
+    }
+    const int y0 = (int)(panelY + 64.0f);
 
     // Credit lines
     if (m_CreditLine0) {
@@ -635,7 +642,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
     // Block E: NewDraw -- BakedStringBox credit text
     // ASM-spec v1.6.1 AboutScreen::Draw @0x0015a654: calls NewDraw after quads.
     // ================================================================
-    NewDraw(yDrawn);
+    NewDraw();
 }
 
 // -----------------------------------------------------------------------
@@ -646,12 +653,12 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
 //   new BakedStringBox(font, fontSize, 350, 20, ...)
 //   SetText(text), SetColour(colour, 1), SetWorldspaceClipping(-240,-46,400,108), Update()
 // -----------------------------------------------------------------------
-void AboutScreen::AddLine(const char* text, const Colour& colour, float fontSize)
+void AboutScreen::AddLine(const char* text, const Colour& colour, int fontSize)
 {
     Mortar::FontCacheObjectTTF* font = GetAboutTTFFont();
     if (!font) return;
 
-    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, fontSize, 350, 20, 0xf, 1, 0);
+    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, (float)fontSize, 350, 20, 0xf, 1, 0);
     box->SetText(text);
     box->SetColour(colour, 1);
     box->SetWorldspaceClipping(-240, -46, 400, 108);
@@ -674,36 +681,36 @@ void AboutScreen::CreateCreditsMarquee()
     const Colour& titleColour = game_work.m_TitleColour;
 
     // LSTR 0x349 -- heading line (Colour(0xB9,0x4F,0x37), fontSize 12)
-    AddLine(GETSTRING(LSTR_ABOUT_HEADING, 0), Colour(0xB9, 0x4F, 0x37, 255), 12.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_HEADING, 0), Colour(0xB9, 0x4F, 0x37, 255), 12);
 
     // Lang gate: if languageFlag in {0x0D=13, 0x0E=14, 0x14=20}, add blank padding.
     // ASM-spec v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c: langId gate.
     {
         const int langId = (int)game_work.languageFlag;
         if (langId == 0x0D || langId == 0x0E || langId == 0x14) {
-            AddLine("", Colour(0, 0, 0, 0), 8.0f);
+            AddLine("", Colour(0, 0, 0, 0), 8);
         }
     }
 
     // LSTR 0x347 -- colour-leader line 0 (Colour(0x68,0x9A,0x27), fontSize 10)
-    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD0, 0), Colour(0x68, 0x9A, 0x27, 255), 10.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD0, 0), Colour(0x68, 0x9A, 0x27, 255), 10);
 
     // 6 dev-name lines -- Colour = m_TitleColour, fontSize 8
-    AddLine("Luke Muscat, Shath, Steven Last,",                           titleColour, 8.0f);
-    AddLine("Jason Harwood, Adam Wood, Jesse Higginson,",                 titleColour, 8.0f);
-    AddLine("Brent Hobson, Matt Ross, Jason Maundrell,",                  titleColour, 8.0f);
-    AddLine("Richard McKinney, Will Goddard, Hugh Walters,",              titleColour, 8.0f);
-    AddLine("Grant Peters, Joe Gatling,",                                  titleColour, 8.0f);
-    AddLine("Peter McNeill, Michael Szewczyk, Paul McNab",                 titleColour, 8.0f);
+    AddLine("Luke Muscat, Shath, Steven Last,",                           titleColour, 8);
+    AddLine("Jason Harwood, Adam Wood, Jesse Higginson,",                 titleColour, 8);
+    AddLine("Brent Hobson, Matt Ross, Jason Maundrell,",                  titleColour, 8);
+    AddLine("Richard McKinney, Will Goddard, Hugh Walters,",              titleColour, 8);
+    AddLine("Grant Peters, Joe Gatling,",                                  titleColour, 8);
+    AddLine("Peter McNeill, Michael Szewczyk, Paul McNab",                 titleColour, 8);
 
     // LSTR 0x348 -- colour-leader line 1 (Colour(0x8D,0x4A,0xB9), fontSize 10)
-    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
-    AddLine("Shainiel Deo, Phil Larsen, Tony Takoushi,",                  Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10);
+    AddLine("Shainiel Deo, Phil Larsen, Tony Takoushi,",                  Colour(0x8D, 0x4A, 0xB9, 255), 8);
 
     // LSTR 0x34A -- colour-leader line 2 (Colour(0x8D,0x4A,0xB9), fontSize 10)
-    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD2, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10.0f);
-    AddLine("Natalie Clarke, Chloe Pearson,",                             Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
-    AddLine("Char + Emma Wood, Nell + Calyb Rehua",                       Colour(0x8D, 0x4A, 0xB9, 255), 8.0f);
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD2, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10);
+    AddLine("Natalie Clarke, Chloe Pearson,",                             Colour(0x8D, 0x4A, 0xB9, 255), 8);
+    AddLine("Char + Emma Wood, Nell + Calyb Rehua",                       Colour(0x8D, 0x4A, 0xB9, 255), 8);
 
     // Lay out positions: Vec3(-220, 47 - 12*i, 0) per item (i = 0..n-1).
     for (int i = 0; i < (int)m_Marquees.size(); ++i) {
