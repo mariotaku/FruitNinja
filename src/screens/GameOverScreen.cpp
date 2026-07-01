@@ -1169,7 +1169,7 @@ void GameOverScreen::Update(float dt) {
                     save->AddToTotal("totalscore", score);
                     save->UnlockTotals();
                     AchievementManager::GetInstance()->UnlockScoreAchievement(score);
-                    AchievementManager::GetInstance()->UnlockTotalFruitAchievement(game_work.fruitTotal);
+                    AchievementManager::GetInstance()->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);
                     AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, GetCurrentModeHighscore());
 
                     // Defunct: leaderboard score submit -- no-op stub; v1.6.1 GameOverScreen @0x00186c80

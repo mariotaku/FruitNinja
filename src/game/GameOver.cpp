@@ -91,14 +91,30 @@ void GameOver(int endReason, float endScore, int endParam) {
 // GetScoreMultiplyer returns PowerUpManager::GetScoreGainMultiplier() (default 1),
 // so normal fruit gains are unchanged. DefaultScoreDelegate multiplies negative
 // deltas by GetScoreLossMultiplier() so bomb penalty magnitude is delegate-controlled.
-// TODO: v1.6.1 @0x0011a4c0 tail -- NEW_LIFE_AT extra-life miss-restore + AddToTotal("all")/upside_down stat + P2P PointsPacket (out of scope, defunct P2P)
-void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param3*/) {
+// TODO: v1.6.1 @0x0011a4c0 tail -- NEW_LIFE_AT extra-life miss-restore
+void AddToCurrentScore(int points, int param1, bool param2, bool /*param3*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
     int mult  = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
     int delta = g_ScoreDelegate(points * mult);
     game_work.currentScore += delta;
     if (game_work.currentScore < 0) game_work.currentScore = 0;
+    // Binary AddToCurrentScore @0x0011a4c0: cache "all" cumulative count in
+    // game_work for achievement gating in GameOverScreen::Update state-6.
+    if (points > 0 && param2 && param1 < 2) {
+        if (game_work.m_SaveData) {
+            static const uint32_t s_allHash = StringHash("all");
+            game_work.m_pLastScoredSaveEntry =
+                (void*)(intptr_t)game_work.m_SaveData->AddToTotal(
+                    "all", s_allHash, points, true, false);
+            if (game_work.m_bUpsideDownActive) {
+                static const uint32_t s_upHash = StringHash("upside_down_points");
+                game_work.m_SaveData->AddToTotal(
+                    "upside_down_points", s_upHash, points, false, true);
+            }
+        }
+    }
+    // Defunct: P2P PointsPacket (param3 && param1==1) -- no-op stub; v1.6.1 AddToCurrentScore @0x0011a4c0
 }
 
 // Binary free functions @ 0x001138f0 / 0x001151ec.
