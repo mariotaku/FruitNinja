@@ -355,7 +355,9 @@ private:
     // Signature: pressure FIRST (s0 register), then center, then dir.
     // Guards: IsNearZero(*dir) || IsNearZero(m_BladeDir) -> return.
     // Updates ghost ring, m_BladeDir, m_AngleIndex, m_Angle.
-    void AddPoint(float pressure, const Vec3* center, const Vec3* dir);
+    // Binary AddPoint @0x001e9918 mutates dir in the zero-dir case (*dir = m_BladeDir), so
+    // dir is non-const to match; callers pass a mutable local Vec3.
+    void AddPoint(float pressure, const Vec3* center, Vec3* dir);
 
     // Binary @ 0x1e6914 -- per-frame full geometry re-derivation (miter, UV, alpha,
     // m_Col, head cap). Replaces previous linear-fade approximation.
