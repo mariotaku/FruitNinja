@@ -9,8 +9,8 @@
 //   QuitCallback -> HitMenuBomb (sets m_BombHitTimer ~2.0) -> STATE_QUIT_WAIT (9).
 //   STATE_QUIT_WAIT gates on GetNumEntities(0)==0 -> DoQuitToMenu() ->
 //     bM_bPaused=1, SetMoreGamesTimer(0.5f), MainScreen->STATE_CAMERA_ZOOM.
-//   STATE_FINAL_FADE (11): if(m_GameDt < 0.0f) SetTerminate().
-//   m_GameDt goes negative only when MainScreen::STATE_CAMERA_ZOOM SETTLE branch
+//   STATE_FINAL_FADE (11): if(m_PauseAmount < 0.0f) SetTerminate().
+//   m_PauseAmount goes negative only when MainScreen::STATE_CAMERA_ZOOM SETTLE branch
 //   runs: HOLD branch fires while f0>0 OR m_BombHitTimer>1.45.
 //   m_BombHitTimer decays in GameUpdate ACTIVE branch (active=!bM_Mode && pmState==0).
 //
@@ -107,12 +107,12 @@ int main(int argc, char* argv[]) {
     }
 
     // -----------------------------------------------------------------------
-    // SETUP: Classic mode, no pause, m_GameDt=1.0 (fully faded in)
+    // SETUP: Classic mode, no pause, m_PauseAmount=1.0 (fully faded in)
     // -----------------------------------------------------------------------
     game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_CLASSIC;
     game_work.bM_bPaused   = 0;
     game_work.bM_Mode      = 0;   // game-active (not paused/suspended)
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.m_BombHitTimer = 0.0f;
 
     // Put MainScreen in a stable state so it doesn't fight the transition.
@@ -134,8 +134,8 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     // PHASE 1: Create GameOverScreen in STATE_MAIN_DISPLAY via fast path.
     //
-    // Fast-path gate (Initialise): param2 > 5 && game_work.m_GameDt > 0.999f.
-    // With param2=6 (STATE_MAIN_DISPLAY=6) and m_GameDt=1.0f this fires,
+    // Fast-path gate (Initialise): param2 > 5 && game_work.m_PauseAmount > 0.999f.
+    // With param2=6 (STATE_MAIN_DISPLAY=6) and m_PauseAmount=1.0f this fires,
     // which internally calls Update(0.0f) -> creates m_pFruitFact + Classic page.
     // -----------------------------------------------------------------------
     // NOTE: FruitSaveData contains std::map members (m_Totals, m_SessionTotals).
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
     }
     game_work.currentScore = 150;
 
-    game_work.m_GameDt = 1.0f;
+    game_work.m_PauseAmount = 1.0f;
     GameOverScreen* gos = new GameOverScreen(
         "Classic",
         GameOverScreen::STATE_MAIN_DISPLAY,  // param2=6 -> fast path
@@ -175,7 +175,7 @@ int main(int argc, char* argv[]) {
     // ticks normally. The fast-path in Initialise already called Update(0.0f)
     // once, so m_pFruitFact should be non-null immediately.
     // -----------------------------------------------------------------------
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
     game_work.bM_Mode      = 0;
     game_work.m_BombHitTimer = 0.0f;
@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
     // do not crowd the entity pool (we need type-0 count == 0 for QUIT_WAIT gate).
     int setupFrames = 0;
     for (int i = 0; i < 120; ++i) {
-        game_work.m_GameDt = 1.0f;
+        game_work.m_PauseAmount = 1.0f;
         if (h.game.actorManager) {
             h.game.actorManager->DeactivateAllEntities(0);
             h.game.actorManager->DeactivateAllEntities(1);
@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
             break;
     }
 
-    game_work.m_GameDt = 1.0f;   // restore after settle
+    game_work.m_PauseAmount = 1.0f;   // restore after settle
 
     printf("[setup] after %d settle frames:\n", setupFrames);
     printf("  gos->m_State         = %d (expect %d=STATE_MAIN_DISPLAY)\n",
@@ -283,7 +283,7 @@ int main(int argc, char* argv[]) {
     // If the quit button is available, fire through m_ClickCallback (real path).
     // Otherwise call QuitCallback equivalent directly via gos->m_pQuitBtn.
     // -----------------------------------------------------------------------
-    game_work.m_GameDt     = 1.0f;
+    game_work.m_PauseAmount     = 1.0f;
     game_work.bM_bPaused   = 0;
     game_work.bM_Mode      = 0;
 
@@ -311,7 +311,7 @@ int main(int argc, char* argv[]) {
     // would interfere with the QUIT_WAIT gate).
     // Log every 10 frames, plus the first 5 and last 5.
     // -----------------------------------------------------------------------
-    printf("\n[trace] frame | bM_Mode bM_bPaused | m_BombHitTimer | m_GameDt"
+    printf("\n[trace] frame | bM_Mode bM_bPaused | m_BombHitTimer | m_PauseAmount"
            " | gos_state | ms_state | pGOS | fruitfacts | sensei\n");
 
     static const int TRACE_FRAMES = 180;
@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
         int   bm_mode    = (int)game_work.bM_Mode;
         int   bm_paused  = (int)game_work.bM_bPaused;
         float bomb_timer = game_work.m_BombHitTimer;
-        float game_dt    = game_work.m_GameDt;
+        float game_dt    = game_work.m_PauseAmount;
         int   gos_state  = gos ? gos->m_State : -1;
         int   ms_state   = game_work.mMainScreen ? game_work.mMainScreen->m_State : -1;
         void* pGOS       = (void*)game_work.pGameOverScreen;
@@ -381,7 +381,7 @@ int main(int argc, char* argv[]) {
                    " bm_mode=%d bm_paused=%d game_dt=%.4f\n",
                    CountFruitFactControls(), senseiInHudNow,
                    (int)game_work.bM_Mode, (int)game_work.bM_bPaused,
-                   game_work.m_GameDt);
+                   game_work.m_PauseAmount);
 
             // Run one more frame so HUD::Update can process m_bPendingRemoval on
             // any sensei children whose flags were set during the teardown delete chain.
@@ -402,7 +402,7 @@ int main(int argc, char* argv[]) {
                    " bm_mode=%d bm_paused=%d game_dt=%.4f\n",
                    CountFruitFactControls(), senseiInHudNow,
                    (int)game_work.bM_Mode, (int)game_work.bM_bPaused,
-                   game_work.m_GameDt);
+                   game_work.m_PauseAmount);
             break;
         }
     }
@@ -422,13 +422,13 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,
             "  STUCK GATE DIAGNOSIS:\n"
             "  -> gos->m_State=%d (expect STATE_FINAL_FADE=11 -> SetTerminate)\n"
-            "  -> game_work.m_GameDt=%.4f (must be < 0 for STATE_FINAL_FADE to terminate)\n"
+            "  -> game_work.m_PauseAmount=%.4f (must be < 0 for STATE_FINAL_FADE to terminate)\n"
             "  -> game_work.m_BombHitTimer=%.4f (must be <= 1.45 for SETTLE branch in case-0)\n"
             "  -> game_work.bM_Mode=%d (must be 0 for ACTIVE branch / BombHitTimer decay)\n"
             "  -> game_work.bM_bPaused=%d\n"
             "  -> MainScreen->m_State=%d (must be STATE_CAMERA_ZOOM=0)\n",
             gos ? gos->m_State : -1,
-            game_work.m_GameDt,
+            game_work.m_PauseAmount,
             game_work.m_BombHitTimer,
             (int)game_work.bM_Mode,
             (int)game_work.bM_bPaused,
@@ -490,9 +490,9 @@ int main(int argc, char* argv[]) {
             "  See per-frame [trace] above and assertion messages.\n"
             "  Stuck gates to check:\n"
             "    -> m_BombHitTimer not decaying: bM_Mode must be 0 for ACTIVE branch\n"
-            "    -> m_GameDt never < 0: MainScreen STATE_CAMERA_ZOOM SETTLE branch requires\n"
+            "    -> m_PauseAmount never < 0: MainScreen STATE_CAMERA_ZOOM SETTLE branch requires\n"
             "       m_BombHitTimer <= 1.45 AND TexMoreGamesF0() <= 0\n"
-            "    -> GOS STATE_FINAL_FADE (11) requires m_GameDt < 0 to call SetTerminate\n");
+            "    -> GOS STATE_FINAL_FADE (11) requires m_PauseAmount < 0 to call SetTerminate\n");
         h.Shutdown();
         return 1;
     }

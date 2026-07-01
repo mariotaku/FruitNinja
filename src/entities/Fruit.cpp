@@ -1,4 +1,4 @@
-#include "Fruit.h"
+﻿#include "Fruit.h"
 #include "SuperFruitControl.h"
 #include "debug/Logger.h"
 #include "game/GameMode.h"
@@ -318,10 +318,10 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     }
 
     // ASM-spec v1.6.1 Fruit::Init @0x001e2898.
-    // Arcade-only (gameMode==2, m_GameDt<1.0) duplicate-pineapple + power-fruit
+    // Arcade-only (gameMode==2, m_PauseAmount<1.0) duplicate-pineapple + power-fruit
     // spam gate. Runs BEFORE the g_PowerFruitCount increment so the kill branch
     // doesn't need an undo-decrement.
-    if (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f) {
+    if (game_work.gameMode == 2 && game_work.m_PauseAmount < 1.0f) {
         // (1) Re-roll while we'd spawn another black_pineapple this frame.
         //     BOMB_PINEAPPLE binary literal -> port "black_pineapple" per fruitlist.xml.
         static const int kBlackPineappleType = Fruit::FruitType("black_pineapple", false);
@@ -446,7 +446,7 @@ void Fruit::Update(float dt) {
             const bool gate =
                 !game_work.bM_Mode
                 && game_work.m_BombHitTimer <= 0.0f
-                && (   (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f)
+                && (   (game_work.gameMode == 2 && game_work.m_PauseAmount < 1.0f)
                     ||  game_work.bM_bPaused == 0);
             if (gate) {
                 m_SpawnDelay -= game_work.dt;   // +0x38, NOT dt*m_TimeScale
@@ -1319,17 +1319,17 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //   && ( GameTaskState+0x05 (bM_bPaused) == 0   -- normal play
     //        || bombHitWindow )                       -- or inside the bomb-hit
     //                                                   cinematic window
-    // The bomb-hit window: (gameMode - 2u) < 2u && m_GameDt < 0.95f && m_GameDt > -0.1f.
+    // The bomb-hit window: (gameMode - 2u) < 2u && m_PauseAmount < 0.95f && m_PauseAmount > -0.1f.
     // Binary field gameMode (+0x04) for window, bM_bPaused (+0x05) for outer gate.
     // ASM-verified: 2026-06-07 v1.6.1 Fruit::CollisionResponse @0x001dd500 (re-analyst).
     int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
     {
         // v1.6.1 Fruit::CollisionResponse @0x001dd500:
         // OUTER gate uses bM_bPaused (+0x05); bomb-window uses gameMode (+0x04) and
-        // m_GameDt (+0x0C = flM_PauseAmount in binary), NOT m_BombHitTimer (+0x10).
+        // m_PauseAmount (+0x0C = flM_PauseAmount in binary), NOT m_BombHitTimer (+0x10).
         const bool bombHitWindowGate = (uint8_t)(game_work.gameMode - 2u) < 2u
-            && game_work.m_GameDt < kBombHitMax
-            && game_work.m_GameDt > kBombHitMin;
+            && game_work.m_PauseAmount < kBombHitMax
+            && game_work.m_PauseAmount > kBombHitMin;
         if (game_work.retryFlag == 0
             && hitter != nullptr
             && !m_bNoPowerUp
@@ -1401,12 +1401,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x001dd500 (re-analyst).
         // Powerup-fruit slice fires either during normal gameplay (bM_bPaused==0) OR
         // inside the bomb-hit cinematic window (gameMode in {2,3} = timed-game modes
-        // AND m_GameDt in (-0.1f, 0.95f)). Binary field: gameMode (+0x04) for window,
-        // bM_bPaused (+0x05) for outer; m_GameDt (+0x0C = flM_PauseAmount in binary).
+        // AND m_PauseAmount in (-0.1f, 0.95f)). Binary field: gameMode (+0x04) for window,
+        // bM_bPaused (+0x05) for outer; m_PauseAmount (+0x0C = flM_PauseAmount in binary).
         // v1.6.1 Fruit::CollisionResponse @0x001dd500
         const bool bombHitWindow = (uint8_t)(game_work.gameMode - 2u) < 2u
-            && game_work.m_GameDt < kBombHitMax
-            && game_work.m_GameDt > kBombHitMin;
+            && game_work.m_PauseAmount < kBombHitMax
+            && game_work.m_PauseAmount > kBombHitMin;
         if (info->m_pPowers && !m_bNoPowerUp
             && (game_work.bM_bPaused == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();

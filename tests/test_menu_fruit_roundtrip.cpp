@@ -461,11 +461,11 @@ int main(int argc, char* argv[]) {
         settleFrames += 10;
         // Diagnostic: log state every 50 frames to see why buttons aren't recreating.
         if (settleFrames % 50 == 0) {
-            printf("[RT settle f%d] msState=%d pPlay=%p pDojo=%p m_GameDt=%.4f"
+            printf("[RT settle f%d] msState=%d pPlay=%p pDojo=%p m_PauseAmount=%.4f"
                    " m_BombHitTimer=%.4f m_Timer2=%.4f bPaused=%d\n",
                    settleFrames, ms->m_State,
                    (void*)ms->m_pGameModeButton, (void*)ms->m_pStoreButton,
-                   game_work.m_GameDt, game_work.m_BombHitTimer,
+                   game_work.m_PauseAmount, game_work.m_BombHitTimer,
                    ms->m_Timer2, (int)game_work.bM_bPaused);
         }
     }

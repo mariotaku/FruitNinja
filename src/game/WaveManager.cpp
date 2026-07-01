@@ -1,4 +1,4 @@
-#include "WaveManager.h"
+﻿#include "WaveManager.h"
 #include "game/GlobalProbabilityOveride.h"
 #include "GameMode.h"
 #include "ScoreState.h"
@@ -1115,7 +1115,7 @@ void WaveManager::Update(float dt) {
     {
         float comboDt = dt * m_ComboSpeedDivisor;   // +0x80, always 1.0
         PowerUpManager* pum = PowerUpManager::GetInstance();
-        if (game_work.m_GameDt >= 1.0f || !PowersEnabled()) {   // flM_PauseAmount @+0x0C
+        if (game_work.m_PauseAmount >= 1.0f || !PowersEnabled()) {   // flM_PauseAmount @+0x0C
             pum->SetDefaults();
             m_SpeedScale = 1.0f;
         } else {
@@ -1451,17 +1451,17 @@ epilogue:
 void WaveManager::UpdateComboSpeed(float dtIn) {
     // v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc
     // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00122f5e (re-analyst). DUAL gate:
-    //   (game_work.m_GameDt == 0.0f) AND (gameMode == ARCADE)
-    // game_work.m_GameDt (+0x0C) is the pause/fade indicator: 0.0f during
+    //   (game_work.m_PauseAmount == 0.0f) AND (gameMode == ARCADE)
+    // game_work.m_PauseAmount (+0x0C) is the pause/fade indicator: 0.0f during
     // active gameplay, non-zero during pause/gameover/quit transitions
     // (e.g. -1.0f post-quit-to-main). The previous port comment claiming
-    // "m_GameDt not in port" was wrong (see GameWork.h:39).
-    // Without the m_GameDt == 0 half, quit-to-main from Arcade leaves
+    // "m_PauseAmount not in port" was wrong (see GameWork.h:39).
+    // Without the m_PauseAmount == 0 half, quit-to-main from Arcade leaves
     // gameMode==ARCADE and the body lazy-recreates SpeedControl in the
     // menu HUD, leaking the empty-gauge frame.
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (game_work.m_GameDt != 0.0f) return;
+    if (game_work.m_PauseAmount != 0.0f) return;
     if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) return;
 
     // Ease m_ComboSpeed (+0x58) toward target (or 0 if target < 2.9).

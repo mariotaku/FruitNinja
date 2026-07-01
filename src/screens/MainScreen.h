@@ -1,4 +1,4 @@
-#ifndef FN_MAIN_SCREEN_H
+﻿#ifndef FN_MAIN_SCREEN_H
 #define FN_MAIN_SCREEN_H
 
 //
@@ -229,7 +229,7 @@ private:
     // Font SmartPtr for the BakedStringBox (binary manages this differently; port convenience).
     Mortar::SmartPtr<Mortar::Font> m_BakedStrSmart;
 
-    // Camera transition lives on game_work.m_GameDt (binary single source of truth).
+    // Camera transition lives on game_work.m_PauseAmount (binary single source of truth).
     float m_GlobalAlphaTarget;
     float m_Time;
 

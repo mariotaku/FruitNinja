@@ -1,4 +1,4 @@
-// GameOverScreen -- binary ctor 0x001882a0, Initialise 0x00187c90, Update 0x00186c80
+﻿// GameOverScreen -- binary ctor 0x001882a0, Initialise 0x00187c90, Update 0x00186c80
 // PreDrawOrder 0x00186894, DrawOrder 0x00186484, Release 0x00185970, dtor 0x00185d40.
 // vtable @ 0x002cd5c0. Size 0x160 (operator new @ 0x001cb788).
 
@@ -143,7 +143,7 @@ static void DoQuitToMenu() {
     game_work.bM_bPaused = 1;
     // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
     // The camera-settle auto-clear in GameUpdate @0x001cfaec handles it once
-    // m_GameDt settles and PauseScreen leaves state ACTIVE.
+    // m_PauseAmount settles and PauseScreen leaves state ACTIVE.
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0
@@ -411,7 +411,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_reservedA0        = 0;
     m_pBonusScreen    = 0;
     m_AnimCounter     = 0;
-    m_FruitFactAlpha  = game ? game_work.m_GameDt : 0.0f;
+    m_FruitFactAlpha  = game ? game_work.m_PauseAmount : 0.0f;
     m_pSlotA8         = 0;
     m_pQuitBtn        = 0;   // +0xB0
     m_pSlotB4         = 0;
@@ -481,8 +481,8 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90
     if (param2 >= 0 && param3 >= 0.0f) {
         FindMostOfFruit();
-        if (param2 > 5 && game && game_work.m_GameDt > 0.999f) {
-            game_work.m_GameDt = 0.9998f;
+        if (param2 > 5 && game && game_work.m_PauseAmount > 0.999f) {
+            game_work.m_PauseAmount = 0.9998f;
             m_State              = STATE_MAIN_DISPLAY;
             m_bScoreSubmitted    = 1;
             m_FruitFactAlpha     = 1.0f;
@@ -686,7 +686,7 @@ void GameOverScreen::PostCallback(int result) {
 void GameOverScreen::LeaderboardsCallback() {
     if (m_State == STATE_ENTRY_ANIM || m_State == STATE_MAIN_DISPLAY) {
         Game* game = Game::GetInstance();
-        if (game && game_work.m_GameDt > 0.999f) {
+        if (game && game_work.m_PauseAmount > 0.999f) {
             m_Timer = 0.0f;
             m_State = STATE_LEADERBOARD;
         }
@@ -833,7 +833,7 @@ void GameOverScreen::RetryCallback() {
     if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
-    if (game_work.m_GameDt <= 0.989945f) return;
+    if (game_work.m_PauseAmount <= 0.989945f) return;
     CancelHUDProgressionTimer();
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
@@ -1063,7 +1063,7 @@ void GameOverScreen::Update(float dt) {
     case STATE_RETRY_PREPARE: {
         Mortar::ActorManager* am = game ? game->actorManager : 0;
         if (am && am->GetNumEntities(0) != 0 && m_pSlotA8 == 0) {
-            game_work.m_GameDt = 1.0f;
+            game_work.m_PauseAmount = 1.0f;
             // fall through to STATE_MAIN_DISPLAY (state stays 7 until game_work sets it to 8)
         } else {
             game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
@@ -1143,7 +1143,7 @@ void GameOverScreen::Update(float dt) {
         }
 
         // 3) Alpha ramp
-        float& alpha = game_work.m_GameDt;
+        float& alpha = game_work.m_PauseAmount;
         if (alpha >= 0.999f) {
             if (m_FruitFactAlpha < 1.0f)
                 m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
@@ -1219,7 +1219,7 @@ void GameOverScreen::Update(float dt) {
         }
 
         // 5) Reset alpha, state
-        game_work.m_GameDt = 1.0f;
+        game_work.m_PauseAmount = 1.0f;
         m_State = STATE_MAIN_DISPLAY;
 
         // 6) Spawn buttons only when entering from state 6
@@ -1239,7 +1239,7 @@ void GameOverScreen::Update(float dt) {
 
         // 8) Settle (always): if(pos.y < 212.8)
         if (pos.y < 212.8f) {
-            float a = game_work.m_GameDt;
+            float a = game_work.m_PauseAmount;
             size.x = m_TitleSize.x * (2.0f - a);
             size.y = m_TitleSize.y * (2.0f - a);
             size.z = m_TitleSize.z * (2.0f - a);
@@ -1254,7 +1254,7 @@ void GameOverScreen::Update(float dt) {
     // State 8: retry fade
     // -----------------------------------------------------------------------
     case STATE_RETRY_FADE: {
-        float& alpha = game_work.m_GameDt;
+        float& alpha = game_work.m_PauseAmount;
         alpha *= 0.75f;
         m_FruitFactAlpha = alpha;
 
@@ -1307,7 +1307,7 @@ void GameOverScreen::Update(float dt) {
     // State 11: final fade
     // -----------------------------------------------------------------------
     case STATE_FINAL_FADE: {
-        if (game_work.m_GameDt < 0.0f) SetTerminate();
+        if (game_work.m_PauseAmount < 0.0f) SetTerminate();
         break;
     }
 

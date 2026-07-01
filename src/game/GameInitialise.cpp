@@ -1,4 +1,4 @@
-//
+﻿//
 // GameInitialise — one-time engine bootstrap
 // Original: 0x10bdfc (305 lines)
 //
@@ -68,7 +68,7 @@ void GamePreInitialise() {
     game_work.bM_Mode = false;
     game_work.gameMode = 0;
     game_work.bM_bPaused = 0;
-    game_work.m_GameDt = 0;
+    game_work.m_PauseAmount = 0;
     game_work.m_BombHitTimer = 0;
     game_work.dt = 0;
     game_work.mHud = nullptr;
@@ -245,7 +245,7 @@ void GameInitialise(void* window, const char* config) {
     // This is the seed value that puts UpdateMusic into the transition
     // branch on its first eligible frame, so SongPlay("Music-menu") fires
     // first instead of SongPlay("background").
-    game_work.m_GameDt = -1.0f;
+    game_work.m_PauseAmount = -1.0f;
 
     // Note: PowerUpManager::Load is called above (step 11). LeaderboardManager is defunct.
 

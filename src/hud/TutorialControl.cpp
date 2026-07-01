@@ -1,4 +1,4 @@
-//
+﻿//
 // TutorialControl -- "swipe here" arrow for first-play tutorial.
 // See TutorialControl.h for binary refs.
 //
@@ -105,7 +105,7 @@ bool TutorialControl::CanShowTute() {
     if (!game) return false;
 
     // Binary @ 0x00162fce: DAT = 0x3F7D70A4 (0.99f).
-    if (fabsf(game_work.m_GameDt) > 0.99f)
+    if (fabsf(game_work.m_PauseAmount) > 0.99f)
         return true;
 
     // Binary checks pGameOverScreen (+0x164): null -> return false.

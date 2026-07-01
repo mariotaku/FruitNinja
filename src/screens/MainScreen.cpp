@@ -1,4 +1,4 @@
-//
+﻿//
 // MainScreen — v1.6.1 faithful port
 // v1.6.1 addresses:
 //   ctor @0x0019811c, Update @0x00196e1c, Draw @0x001993ac,
@@ -250,8 +250,8 @@ void MainScreen::Update(float dt) {
         // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide.
         // Binary case-0 sub-block: read m_TexMoreGames.f0; if f0>0 OR bombHitTimer>1.45,
         // tick the countdown and hold the camera; otherwise settle branch: gameMode=0,
-        // m_Timer2 += dt, ramp m_GameDt toward -1. Advance to state 1 when camera
-        // settled (m_GameDt < threshold) AND m_Timer2 > 0.15f.
+        // m_Timer2 += dt, ramp m_PauseAmount toward -1. Advance to state 1 when camera
+        // settled (m_PauseAmount < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
         // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); port aliases a
@@ -264,9 +264,9 @@ void MainScreen::Update(float dt) {
             // v1.6.1 @0x00197430: gameMode=0 fires in both branches when single-player.
             game_work.gameMode = 0;
             TexMoreGamesF0() = f0 - dt;
-            game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
-            if (game_work.m_GameDt < 0.0f) {
-                game_work.m_GameDt = 0.0f;
+            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+            if (game_work.m_PauseAmount < 0.0f) {
+                game_work.m_PauseAmount = 0.0f;
             }
         } else {
 #endif // !defined(__bada__)
@@ -274,7 +274,7 @@ void MainScreen::Update(float dt) {
             // v1.6.1 @0x00197430: gameMode=0 in both branches (single-player path).
             game_work.gameMode = 0;
             m_Timer2 += dt;
-            game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
+            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
 #ifndef __bada__
         }
 #endif // !defined(__bada__)
@@ -284,9 +284,9 @@ void MainScreen::Update(float dt) {
 
         // v1.6.1 MainScreen::Update @0x00196e1c case 0 (binary @0x00197334..0x00197360):
         //   advance iff (m_Timer2 > 0.15) AND (flM_PauseAmount < 0.0). Binary uses bmi
-        //   (branch-if-negative). The settle branch ramps m_GameDt toward -1.0, so the
+        //   (branch-if-negative). The settle branch ramps m_PauseAmount toward -1.0, so the
         //   gate tests < 0, not >= 0 (an earlier RE mis-read the bmi sign as >=).
-        if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt < 0.0f) {
+        if (m_Timer2 > TIMER2_THRESHOLD && game_work.m_PauseAmount < 0.0f) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
         }
@@ -303,20 +303,20 @@ void MainScreen::Update(float dt) {
             CreateButtons();
         }
 
-        game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
+        game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
 
         const float sizeY_1 = size.y;
-        const float alpha_1 = -game_work.m_GameDt;
+        const float alpha_1 = -game_work.m_PauseAmount;
         pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * alpha_1) * 0.5f;
         break;
     }
 
     case STATE_GAME_START: {
         // v1.6.1 MainScreen::Update @0x00197468: WaveManager::Reset(true) + bM_bPaused=1 fire
-        // UNCONDITIONALLY inside the m_GameDt guard (no latch in binary).
+        // UNCONDITIONALLY inside the m_PauseAmount guard (no latch in binary).
         // Port adds m_bGameStartReset latch (one-shot, port-only) to prevent repeated
         // resets on re-entry; guard only the latch reads/writes, not the binary calls.
-        if (-game_work.m_GameDt > 0.999f
+        if (-game_work.m_PauseAmount > 0.999f
 #ifndef __bada__
             && !m_bGameStartReset
 #endif // !defined(__bada__)
@@ -329,9 +329,9 @@ void MainScreen::Update(float dt) {
             // v1.6.1 @0x00197468: snapshot coins at game-start (cold path; no inbound xrefs in binary)
             game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
         }
-        game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-        if (fabsf(game_work.m_GameDt) < 0.001f) {
-            game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+        if (fabsf(game_work.m_PauseAmount) < 0.001f) {
+            game_work.m_PauseAmount = 0.0f;
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Update/GAME_START camera settled");
             m_State = STATE_CAMERA_FADE;
 #ifndef __bada__
@@ -341,7 +341,7 @@ void MainScreen::Update(float dt) {
         }
 
         const float sizeY_2 = size.y;
-        const float alpha_2 = fabsf(game_work.m_GameDt);
+        const float alpha_2 = fabsf(game_work.m_PauseAmount);
         const float tt_2 = sizeY_2 * alpha_2;
         pos.y = (sizeY_2 + 320.0f - 2.0f * tt_2) * 0.5f;
         break;
@@ -390,7 +390,7 @@ void MainScreen::Update(float dt) {
             if (m_Timer2 > STATE_8_DURATION) {
                 // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c case-8 exit:
                 // binary sets m_Timer2=0.15f, m_TexMoreGames.f0=0.0f, m_State=STATE_CAMERA_ZOOM.
-                // Does NOT touch m_GameDt/flM_PauseAmount on this path.
+                // Does NOT touch m_PauseAmount/flM_PauseAmount on this path.
                 // f0=0.0f means case-0's hold branch is skipped immediately on the next tick,
                 // so the slide-in animation starts right away on return.
                 m_Timer2 = STATE_8_RESET_TIMER;
@@ -458,10 +458,10 @@ void MainScreen::Update(float dt) {
 
     case STATE_CAMERA_FADE:
         // v1.6.1 MainScreen::Update @0x00197828
-        if (game_work.m_GameDt < 0.0f) {
-            game_work.m_GameDt *= 0.75f;
-            if (game_work.m_GameDt > -0.001f) {
-                game_work.m_GameDt = 0.0f;
+        if (game_work.m_PauseAmount < 0.0f) {
+            game_work.m_PauseAmount *= 0.75f;
+            if (game_work.m_PauseAmount > -0.001f) {
+                game_work.m_PauseAmount = 0.0f;
                 game_work.bM_bPaused = 0;
                 LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to 0.0f, levelTransitionFlag cleared");
             }
@@ -542,7 +542,7 @@ void MainScreen::Update(float dt) {
         elapsedTime = m_Timer2;
         break;
     default:
-        elapsedTime = -game_work.m_GameDt;
+        elapsedTime = -game_work.m_PauseAmount;
         break;
     }
 
@@ -576,9 +576,9 @@ void MainScreen::Update(float dt) {
     UpdateScreenElements(dt, elapsedTime);
 }
 
-// v1.6.1 MainScreen: Game+0x0c is the camera-transition timer (game_work.m_GameDt).
-float MainScreen::GetCameraTransition() const { return game_work.m_GameDt; }
-void  MainScreen::SetCameraTransition(float v) { game_work.m_GameDt = v; }
+// v1.6.1 MainScreen: Game+0x0c is the camera-transition timer (game_work.m_PauseAmount).
+float MainScreen::GetCameraTransition() const { return game_work.m_PauseAmount; }
+void  MainScreen::SetCameraTransition(float v) { game_work.m_PauseAmount = v; }
 
 // Helper: setup world matrix for a textured quad at given position
 static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
@@ -688,7 +688,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
 //              Bounce: vel += dt * -55; pos += vel * dt * 15.
 //              Since dt ≈ 0.0167, these are small per-frame increments.
 //   stateVar = state-dependent timer (used for settle gate: stateVar > 0.99).
-//              Menu idle: stateVar = -m_GameDt ≈ 1.0 → settle active.
+//              Menu idle: stateVar = -m_PauseAmount ≈ 1.0 → settle active.
 //              Transitions: stateVar = m_Timer2 (decays from 1.0) → settle only early.
 //   tute = static local; set to 1.0 when dt > 0 (always during gameplay), set to 0.0
 //          ONLY by the floor-bounce settle path. NEVER reset to 0 when dt drops to 0.

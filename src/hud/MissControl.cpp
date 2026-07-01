@@ -1,4 +1,4 @@
-// Analysed: 2026-05-03T00:00
+﻿// Analysed: 2026-05-03T00:00
 #include "MissControl.h"
 #include "particle/PSPParticleManager.h"
 #include "HUD.h"
@@ -181,7 +181,7 @@ Vec3 MissControl::GetDrawPos() const {
             const bool failureEnabled =
                 Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
             if (failureEnabled) {
-                p.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
+                p.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount);
             } else {
                 p.y -= 3.0f * pos.y;
             }
@@ -727,7 +727,7 @@ void MissControl::Update(float dt) {
 //
 //     if (m_LifeTimer <= 0.0f):               // passive miss-marker path only
 //         if (FailureEnabled() && !IsMultiplayer()):
-//             drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
+//             drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount)
 //         else:
 //             drawPos.y -= 3.0f * pos.y    // Zen / MP: park off-screen
 //
@@ -794,7 +794,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         const bool failureEnabled =
             Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
         if (failureEnabled) {
-            drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
+            drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount);
         } else {
             drawPos.y -= 3.0f * pos.y;
         }

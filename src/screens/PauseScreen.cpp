@@ -1,4 +1,4 @@
-// Analysed: 2026-05-02T00:00
+﻿// Analysed: 2026-05-02T00:00
 //
 // PauseScreen — Tier-1 implementation.
 // Binary: PauseScreen::PauseScreen @ 0x001a7204 (ctor), Update @ 0x001a5ebc.
@@ -139,12 +139,12 @@ void UnpauseGame() {
 // -------------------------------------------------------------------------
 
 // ASM-spec v1.6.1 SkipToPause @ 0x001cb424
-// Binary body: if (force || (ps && ps->IsEnabled())) { m_GameDt=0; SkipTo;
+// Binary body: if (force || (ps && ps->IsEnabled())) { m_PauseAmount=0; SkipTo;
 //   bM_bPaused=0; bM_Mode=true; MainScreen::Hide; HUD::Skip; PreloadInGameSounds. }
 void SkipToPause(bool force) {
     PauseScreen* pauseScreen = GetTaskState()->pPauseScreen;
     if (force || (pauseScreen && pauseScreen->IsEnabled())) {
-        game_work.m_GameDt = 0.0f;
+        game_work.m_PauseAmount = 0.0f;
         if (pauseScreen) pauseScreen->SkipTo();
         game_work.bM_bPaused = 0;
         game_work.bM_Mode = true;
@@ -167,7 +167,7 @@ void SkipToPause(bool force) {
 // started mirroring the camera transition (settles to 0 during gameplay),
 // the inversion hid the pause button entirely.
 bool PauseScreen::IsEnabled() {
-    if (fabsf(game_work.m_GameDt) >= 0.001f) return false;  // [+0xc] epsilon
+    if (fabsf(game_work.m_PauseAmount) >= 0.001f) return false;  // [+0xc] epsilon
     if (game_work.m_BombHitTimer > 0.0f)                return false;  // [+0x10]
     return (game_work.bM_bPaused ^ 1) != 0;                           // [+0x05] XOR 1
 }
@@ -193,7 +193,7 @@ void QuitToMenu() {
     game_work.bM_bPaused = 1;                          // v1.6.1 QuitToMenu @0x001cb6e4: strb 1, [+0x05]
     // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
     // The camera-settle auto-clear in GameUpdate @0x001cfaec clears bM_Mode once
-    // m_GameDt settles and PauseScreen leaves state ACTIVE (m_State != 3).
+    // m_PauseAmount settles and PauseScreen leaves state ACTIVE (m_State != 3).
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0
@@ -533,14 +533,14 @@ void PauseScreen::PauseGameCallback2() {
 // Binary @ 0x00153ebc QuitGameCallback():
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
-//   game_work.m_bTutorialShown = 0; m_LastHitButton = 0; m_State = 6;
+//   game_work.m_bResumeSnapshotPresent = 0; m_LastHitButton = 0; m_State = 6;
 // NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    game_work.m_bTutorialShown = 0;
+    game_work.m_bResumeSnapshotPresent = 0;
     m_LastHitButton = 0;
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
     m_State = PAUSE_STATE_QUIT_EXIT;
@@ -555,7 +555,7 @@ void PauseScreen::QuitGameCallback() {
 void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
     m_LastHitButton = 1;
-    game_work.m_bTutorialShown = 0;
+    game_work.m_bResumeSnapshotPresent = 0;
 }
 
 // ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153f68 (re-analyst)
@@ -564,7 +564,7 @@ void PauseScreen::QuitGameCallback2() {
 //   if (game_work.m_ElapsedGameTime < 10.5f)
 //       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
 //   Math::SeedGlobalRng(game_work.m_FrameTimer);  // binary @ 0x00153f20
-//   game_work.m_bTutorialShown = 0;
+//   game_work.m_bResumeSnapshotPresent = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
 void PauseScreen::RetryGameCallback() {
@@ -579,7 +579,7 @@ void PauseScreen::RetryGameCallback() {
     // counter so retried runs are deterministic-from-frame-state rather
     // than boot-clock-seeded. Re-analyst confirmed g_Random @ 0x0026C8B0.
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
-    game_work.m_bTutorialShown = 0;
+    game_work.m_bResumeSnapshotPresent = 0;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
@@ -718,7 +718,7 @@ void PauseScreen::Update(float dt) {
             PowerUpManager::GetInstance()->Reset(false);
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
             m_State = PAUSE_STATE_HIDDEN;
-            game_work.m_GameDt = -1.0f;
+            game_work.m_PauseAmount = -1.0f;
         }
         break;
 
@@ -990,9 +990,9 @@ float PauseScreen::GetTime() const {
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     m_State = PAUSE_STATE_RESUME_EXIT;
-    if (game_work.m_bTutorialShown != 0) {
+    if (game_work.m_bResumeSnapshotPresent != 0) {
         // Binary @ 0x00153f20: re-seed g_Random; see RetryGameCallback notes.
         Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     }
-    game_work.m_bTutorialShown = 0;
+    game_work.m_bResumeSnapshotPresent = 0;
 }

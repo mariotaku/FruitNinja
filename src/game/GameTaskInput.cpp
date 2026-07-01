@@ -1,4 +1,4 @@
-// Analysed: 2026-05-03T00:00
+﻿// Analysed: 2026-05-03T00:00
 // GameTaskInitInput -- binary @ 0x00169670 (357 lines).
 
 #include "game/GameTaskInput.h"
@@ -194,7 +194,7 @@ bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
-    if (game_work.m_GameDt == 0.0f && !game_work.bM_Mode) {
+    if (game_work.m_PauseAmount == 0.0f && !game_work.bM_Mode) {
         game_work.m_bFrameDirty = 1;
     }
     return true;

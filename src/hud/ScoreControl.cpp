@@ -1,4 +1,4 @@
-// Analysed: 2026-04-30T00:00
+﻿// Analysed: 2026-04-30T00:00
 
 #include "ScoreControl.h"
 #include "game/GameMode.h"
@@ -323,7 +323,7 @@ void ScoreControl::Update(float dt) {
     float pulseSin = SinIdx(m_PulseAngle);
 
     // waveTimer from m_TransitionTimer (g_GameData+0x0C)
-    float waveTimer = game_work.m_GameDt;
+    float waveTimer = game_work.m_PauseAmount;
     m_ScalePulse = (waveTimer > 0.0f) ? ((waveTimer >= 1.0f) ? 2.0f : 1.0f + waveTimer) : 1.0f;
 
     // Stage 5: highscore tracking
@@ -411,7 +411,7 @@ void ScoreControl::Draw(float* hudScaleRaw) {
     if (!game) return;
 
     // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
-    if (game_work.m_GameDt < -1.0f) return;
+    if (game_work.m_PauseAmount < -1.0f) return;
 
     // Binary @0x1abce8: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
     float intensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
@@ -432,7 +432,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     // Binary @0x1aceac: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
     float cameraIntensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
     uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
-    float transTimer = game_work.m_GameDt;  // g_GameData.someTimer
+    float transTimer = game_work.m_PauseAmount;  // g_GameData.someTimer
 
     if (transTimer >= -1.0f) {
         // Section A: Score digits

@@ -1,4 +1,4 @@
-// SDL backend for Game — init / run / runFrames live here so the rest of
+﻿// SDL backend for Game — init / run / runFrames live here so the rest of
 // Game.cpp stays portable for the asm-verify cross-build. The void* fields
 // in Game.h are cast to SDL_Window* / SDL_GLContext at the SDL boundary.
 
@@ -221,8 +221,8 @@ void Game::pollInput() {
                     ev.window.event == SDL_WINDOWEVENT_RESTORED)) {
             // Port specific: window focus restored -> binary FruitNinja::OnForeground @0x001ef6cc
             // -> Game::UnPaused (vtable +0x4c). Ends audio interruption. Game stays paused
-            // (user must dismiss PauseScreen) because UnPaused gates UnpauseGame on m_GameDt!=0,
-            // and SkipToPause has set m_GameDt=0.
+            // (user must dismiss PauseScreen) because UnPaused gates UnpauseGame on m_PauseAmount!=0,
+            // and SkipToPause has set m_PauseAmount=0.
             UnPaused();
             LOG_INFO("GameSDL", "focus-gained unpause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
         } else if (ev.type == SDL_APP_DIDENTERFOREGROUND) {

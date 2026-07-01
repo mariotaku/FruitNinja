@@ -1,4 +1,4 @@
-#ifndef FN_GAME_GAMEWORK_H
+﻿#ifndef FN_GAME_GAMEWORK_H
 #define FN_GAME_GAMEWORK_H
 
 // game_work -- binary symbol at .bss 0x002d931c (size 0x6a4 / 1700 bytes).
@@ -44,7 +44,7 @@ struct GameWork {
     uint8_t retryFlag;             // +0x06
     uint8_t m_reserved07;          // +0x07: purpose unknown -- written-never-read (zero-init only; no binary xref to game_work+0x07)
     float   retryTimer;            // +0x08
-    float   m_GameDt;              // +0x0C: per-frame dt accumulator (Ghidra: m_GameDt; was m_TransitionTimer in port)
+    float   m_PauseAmount;         // +0x0C: pause/fade indicator, range [-1,1] (binary: flM_PauseAmount); 0.0=settled/active, -1.0=fading in, +1.0=fully settled. NOT a time-step.
     float   m_BombHitTimer;        // +0x10
     uint8_t missCount;             // +0x14: miss count (3-strikes; binary bM_MissCount). NOT combo -- combo is the separate g_ComboCount global.
     uint8_t _pad_0x15[3];          // +0x15..+0x17
@@ -94,7 +94,11 @@ struct GameWork {
     Mortar::SmartPtr<Mortar::Font> pFontBlue2;        // +0x84: fonts/fruit_ninja_numbers_blue2.fnt
 
     uint8_t _pad_0x88;             // +0x88
-    uint8_t m_bTutorialShown;      // +0x89
+    // v1.6.1 game_work._137 (decimal 137 = 0x89): resume-snapshot-present flag.
+    // ParseSaveFile @0x00154c8c sets =1 when a <state> tag is present in the save file.
+    // InitialiseData @0x0011c3f0 zeroes it. PauseGameCallback @0x001a5978 reads and clears it.
+    // QuitGameCallback @0x001a55e0 and RetryGameCallback @0x001a5800 also clear it unconditionally.
+    uint8_t m_bResumeSnapshotPresent; // +0x89
     uint8_t _pad_0x8a[2];          // +0x8A..+0x8B
     // v1.6.1 GameContext+0x8C flM_BombSize: bomb/fruit display scale (CreateFruit@0x0019b8fc, Bomb::Init@0x001d6b90; SetupGameWork writes 50.0f). NOT gravity.
     float   flM_BombSize;          // +0x8C
@@ -240,7 +244,7 @@ static_assert(offsetof(GameWork, bM_Mode)               == 0x02,  "GameWork::bM_
 static_assert(offsetof(GameWork, gameMode)              == 0x04,  "GameWork::gameMode");
 static_assert(offsetof(GameWork, bM_bPaused)            == 0x05,  "GameWork::bM_bPaused");
 static_assert(offsetof(GameWork, retryFlag)             == 0x06,  "GameWork::retryFlag");
-static_assert(offsetof(GameWork, m_GameDt)              == 0x0c,  "GameWork::m_GameDt");
+static_assert(offsetof(GameWork, m_PauseAmount)         == 0x0c,  "GameWork::m_PauseAmount");
 static_assert(offsetof(GameWork, m_BombHitTimer)        == 0x10,  "GameWork::m_BombHitTimer");
 static_assert(offsetof(GameWork, rawDt)                 == 0x3c,  "GameWork::rawDt");
 static_assert(offsetof(GameWork, mHud)                  == 0x40,  "GameWork::mHud");
@@ -248,7 +252,7 @@ static_assert(offsetof(GameWork, m_bSoundOn)            == 0x48,  "GameWork::m_b
 static_assert(offsetof(GameWork, m_bMusicOn)            == 0x49,  "GameWork::m_bMusicOn");
 static_assert(offsetof(GameWork, m_FruitCamera)         == 0x4c,  "GameWork::m_FruitCamera");
 static_assert(offsetof(GameWork, m_SaveData)            == 0x50,  "GameWork::m_SaveData");
-static_assert(offsetof(GameWork, m_bTutorialShown)      == 0x89,  "GameWork::m_bTutorialShown");
+static_assert(offsetof(GameWork, m_bResumeSnapshotPresent)      == 0x89,  "GameWork::m_bResumeSnapshotPresent");
 static_assert(offsetof(GameWork, flM_BombSize)          == 0x8c,  "GameWork::flM_BombSize");
 static_assert(offsetof(GameWork, flM_BombCollision)     == 0x90,  "GameWork::flM_BombCollision");
 static_assert(offsetof(GameWork, worldPos)              == 0x94,  "GameWork::worldPos");

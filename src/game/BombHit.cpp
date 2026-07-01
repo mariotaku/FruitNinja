@@ -1,4 +1,4 @@
-//
+﻿//
 // BombHit.cpp — CriticalFlash + DrawCritHit + bomb-hit state helpers.
 // v1.6.1 symbols: CriticalFlash @ 0x001cca50, DrawCritHit @ 0x001ccfa0.
 //
@@ -336,18 +336,18 @@ void EndRetryLevel() {
     WaveManager::GetInstance()->Reset(true);           // 0x16a25c
 
     game_work.retryFlag            = 0;                // 0x16a26e [+0x06]
-    game_work.m_GameDt             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
+    game_work.m_PauseAmount             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
     game_work.bM_bPaused = 0;               // 0x16a274 [+0x05]
 
     // ASM-spec: GameInit binary @ 0x0016ca7c steps 11/13 creates a fresh
-    // MainScreen (m_State=0) and sets m_GameDt = -1.0f. Port collapses
+    // MainScreen (m_State=0) and sets m_PauseAmount = -1.0f. Port collapses
     // Frontend/Game task split into one task so MainScreen drifts past
     // STATE_CAMERA_ZOOM into STATE_GAME_START during gameplay entry,
-    // leaving m_GameDt = 0. This breaks the Pause->Retry recovery path
-    // (|m_GameDt| > 0.998969 threshold in GameUpdate !active branch never
+    // leaving m_PauseAmount = 0. This breaks the Pause->Retry recovery path
+    // (|m_PauseAmount| > 0.998969 threshold in GameUpdate !active branch never
     // fires). Reach the binary's same end-state by resetting here.
     // re-analyst RE: 2026-05-20.
-    game_work.m_GameDt = -1.0f;
+    game_work.m_PauseAmount = -1.0f;
     if (game_work.mMainScreen) {
         game_work.mMainScreen->ResetTimers();  // GameInit step 11: fresh ctor values
     }

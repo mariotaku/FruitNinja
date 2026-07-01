@@ -1,4 +1,4 @@
-//
+﻿//
 // Game — singleton, SDL entry, main loop
 // Matches original lifecycle: Game::Game -> GamePreInitialise -> GameInitialise ->
 //   [GameTaskUpdate loop] -> GameDestroy
@@ -142,10 +142,10 @@ void Game::UnPaused() {
         Mortar::SoundManager::GetInstance().EndInterruption();
         game_work.mGameSound->Unpause();
     }
-    // Binary @ 0x0010dae8: gate UnpauseGame on m_GameDt != 0.0f
+    // Binary @ 0x0010dae8: gate UnpauseGame on m_PauseAmount != 0.0f
     // (the camera transition isn't mid-fade). UnpauseGame
-    // sets gs->m_GameDt=0.4f, gs->bM_Mode=1.
-    if (game_work.m_GameDt != 0.0f) {
+    // sets gs->m_PauseAmount=0.4f, gs->bM_Mode=1.
+    if (game_work.m_PauseAmount != 0.0f) {
         UnpauseGame();
     }
 }
@@ -203,7 +203,7 @@ PauseScreen* GetPauseScreen() {
 
 // ASM-spec v1.6.1 ClearPause @0x1ca3bc
 // Deactivates the pause overlay: resets m_State then clears bM_Mode.
-// Does NOT restore m_GameDt (that happens in the unpause/settle path).
+// Does NOT restore m_PauseAmount (that happens in the unpause/settle path).
 void ClearPause() {
     if (game_work.bM_Mode) {
         PauseScreen* ps = GetPauseScreen();

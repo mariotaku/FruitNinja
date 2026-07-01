@@ -551,7 +551,7 @@ set_tests_properties(zen_spawn     PROPERTIES TIMEOUT 120)
 
 # Arcade spawn-stall regression guard (WaveManager slot-collapse bug fix).
 # Reproduces the "1 fruit then nothing" arcade stall: drives Reset(true) +
-# m_GameDt=0.0f (the STATE_GAME_START conditions that triggered UpdateComboSpeed
+# m_PauseAmount=0.0f (the STATE_GAME_START conditions that triggered UpdateComboSpeed
 # to fill m_SpeedControl[0], permanently closing the UpdateWave spawn-pump gate).
 # Must FAIL on the old [0]-collapse code and PASS after the [0]/[1] split fix.
 # Asserts >= 3 wave transitions in 600 frames (10s of simulated gameplay).
@@ -659,7 +659,7 @@ set_tests_properties(screenshot_badges PROPERTIES TIMEOUT 60)
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
 # in isolation on a clean background. Seeded state: score=266, highscore=200 (new best),
-# m_GameDt=1.0f (fully faded in). Output: tmp/test/screenshots/scorecontrol/default.png.
+# m_PauseAmount=1.0f (fully faded in). Output: tmp/test/screenshots/scorecontrol/default.png.
 fn_add_game_test(test_scorecontrol test_scorecontrol.cpp)
 add_test(NAME screenshot_scorecontrol COMMAND test_scorecontrol --screenshot)
 set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60)

@@ -1,4 +1,4 @@
-// UpdateMusic — music crossfade state machine
+﻿// UpdateMusic — music crossfade state machine
 // Binary: v1.6.1 UpdateMusic @0x001cc18c (entry; body 0x001cc18c-0x001cc593).
 // NOTE: the inline per-instruction 0x0016a6xx / string-data 0x001bcxxx
 // addresses below are STALE v1.5.1 residue (the function moved to 0x001cxxxx
@@ -149,7 +149,7 @@ void UpdateMusic(float dt) {
     //   AND GetNumEntities(Bomb==1)  != 0
     // -----------------------------------------------------------------------
     if (!g_armedIngame) {                                // 0x0016a6a0
-        if (game_work.m_GameDt >= 0.0f) {           // 0x0016a6ba: vcmpe / blt
+        if (game_work.m_PauseAmount >= 0.0f) {           // 0x0016a6ba: vcmpe / blt
             bool skip_arm = false;
             if (g_currentVolume < 0.0f) {               // 0x0016a6c4: bpl
                 // Only skip arming if fruits AND bombs are both present
@@ -191,7 +191,7 @@ void UpdateMusic(float dt) {
     // -----------------------------------------------------------------------
     if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {    // 0x0016a726
         if (!g_armedArcade) {                            // 0x0016a730
-            if (game_work.m_GameDt >= 0.0f) {       // 0x0016a742
+            if (game_work.m_PauseAmount >= 0.0f) {       // 0x0016a742
                 bool skip_arm = false;
                 if (g_currentVolume < 0.0f) {            // 0x0016a74c: bpl
                     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -252,7 +252,7 @@ void UpdateMusic(float dt) {
     } else {
         // ---- Music ENABLED branch (0x0016a7b6) ----
         // Check if gameplay is in "transition" (m_TransitionTimer < 0)
-        if (game_work.m_GameDt < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
+        if (game_work.m_PauseAmount < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
             // Transition active: ramp DOWN toward -1.0 (kill gameplay music)
             float v = g_currentVolume - delta;           // 0x0016a7d0: vsub s16,s14,s16
             if (v <= -1.0f) {                            // 0x0016a7d4: vcmpe s16,s15 (s15=-1.0)
