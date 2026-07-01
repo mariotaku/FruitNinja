@@ -52,7 +52,7 @@ static void RunBadgeFrames(fn::TestHarness& h, IngamePopup* popup,
             160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
         Vec3 pos(posX, posY, 0.0f);
-        popup->Draw(scale, &pos);
+        popup->Draw(pos, scale);
 
         SDL_GL_SwapWindow(h.window);
     }

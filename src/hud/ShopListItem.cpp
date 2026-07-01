@@ -426,7 +426,7 @@ void ShopListItem::DrawFloatingText() {
         // TODO: v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 -- binary modulates
         //   Draw scale by alpha^2 (65x33 matrix pre-built with alpha^2 factor). IngamePopup::Draw
         //   has no internal alpha pulse; the modulation must be applied to the scale arg here.
-        if (popup) popup->Draw(0.8f, &anchor);
+        if (popup) popup->Draw(anchor, 0.8f);
     }
 
     // SELECTED badge (popup 0x11, scale 0.5).
@@ -437,7 +437,7 @@ void ShopListItem::DrawFloatingText() {
         IngamePopup* popup = GetIngamePopup(0x11);
         // TODO: v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 -- same alpha^2 scale
         //   modulation applies to SELECTED badge (scale 0.5 * alpha^2 factor).
-        if (popup) popup->Draw(0.5f, &anchor);
+        if (popup) popup->Draw(anchor, 0.5f);
     }
 }
 

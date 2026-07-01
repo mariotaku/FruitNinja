@@ -94,8 +94,13 @@ void DisplayManager::SetDepthBufferWrite(bool enable) {
     glDepthMask(enable ? GL_TRUE : GL_FALSE);
 }
 
-void DisplayManager::SetGlobalAmbience(const Colour& c) {
-    m_GlobalAmbience = c;
+void DisplayManager::SetGlobalAmbience(unsigned long packedRGBA) {
+    // Binary @ 0x002569fc: raw little-endian 4-byte store of packed ulong into m_GlobalAmbience.
+    // Colour layout is b,g,r,a at offsets +0,+1,+2,+3 so byte 0 of the ulong goes to .b.
+    m_GlobalAmbience.b = (uint8_t)(packedRGBA & 0xff);
+    m_GlobalAmbience.g = (uint8_t)((packedRGBA >> 8)  & 0xff);
+    m_GlobalAmbience.r = (uint8_t)((packedRGBA >> 16) & 0xff);
+    m_GlobalAmbience.a = (uint8_t)((packedRGBA >> 24) & 0xff);
 }
 
 MortarRectangle DisplayManager::GetWindowSize() const {

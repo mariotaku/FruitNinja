@@ -518,8 +518,8 @@ void DebugFps_Draw(float fps) {
 
     const Vec3 anchor(kAnchorX, kAnchorY, kZ);
     const Vec2 scale(1.0f, 1.0f);
-    // align 0x4: bits 0-1 = 0 (left), bits 2-3 = 4 (vAlign=4, no y offset).
-    s_FpsBaked->Draw(anchor, scale, 0.0f, 0x4);
+    // align 0x4: bits 0-1 = 0 (left-H), bits 2-3 = 4 (V-top, no y offset).
+    s_FpsBaked->Draw(anchor, scale, 0.0f, (Mortar::ALIGNMENT_TYPE)0x4);
 }
 
 // Build a thick line segment (two triangles = one quad) from (x0,y0) to (x1,y1)

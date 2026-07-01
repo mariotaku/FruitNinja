@@ -11,7 +11,7 @@
 //   +0x00  vptr
 //   +0x04  ReferenceCounter base data (8 bytes; total RC size = 12)
 //   +0x0C  std::vector<Pass>                          m_Passes
-//   +0x18  std::vector<EffectPropertyDefinition_Bada> m_PropertyDefs
+//   +0x18  std::vector<EffectPropertyDefinition_GLES1> m_PropertyDefs
 //
 // Effect (extends Effect_Bada with):
 //   +0x24  std::vector<DebugInfo>  m_DebugInfo
@@ -39,17 +39,17 @@ namespace Mortar {
 
 class DataStreamReader;  // forward declaration for LoadPlatformData + Read overloads
 
-// EffectPropertyDefinition_Bada -- element type of Effect's m_PropertyDefs
+// EffectPropertyDefinition_GLES1 -- element type of Effect's m_PropertyDefs
 // vector and EffectGroup's m_MergedDefs vector. Per binary RE on
 // EffectGroup::MergeProperties, only the +0x0C `m_Name` string is read
 // by PropertyDefLessThanCompare; rest of the layout is unused by the
 // port's reachable code paths. Forward-decl-with-name suffices for the
 // vector types to instantiate (the merge body can compare via accessor).
-struct EffectPropertyDefinition_Bada {
-    // Minimal layout to keep vector<EffectPropertyDefinition_Bada>
+struct EffectPropertyDefinition_GLES1 {
+    // Minimal layout to keep vector<EffectPropertyDefinition_GLES1>
     // instantiable. The real binary struct is larger; only m_Name is
     // load-bearing for the merge comparator. TODO: 0x???? -- RE the
-    // full EffectPropertyDefinition_Bada layout if any port code other
+    // full EffectPropertyDefinition_GLES1 layout if any port code other
     // than EffectGroup::MergeProperties ever reads it.
     std::string m_Name;  // +0x0C in real binary (with leading vector data)
 };
@@ -89,7 +89,7 @@ public:
     virtual ~Effect_Bada();
 
     std::vector<Pass>                           m_Passes;        // +0x0C
-    std::vector<EffectPropertyDefinition_Bada>  m_PropertyDefs;  // +0x18
+    std::vector<EffectPropertyDefinition_GLES1>  m_PropertyDefs;  // +0x18
 };
 
 // Effect adds DebugInfo + name. Properties() / m_Name make this class
@@ -111,7 +111,7 @@ public:
     // Binary @ 0x001a3214: `adds r0,#0x18; bx lr`. Two-instruction leaf,
     // NOT virtual. Returns &m_PropertyDefs (the +0x18 field on the
     // Effect_Bada base).
-    const std::vector<EffectPropertyDefinition_Bada>& Properties() const {
+    const std::vector<EffectPropertyDefinition_GLES1>& Properties() const {
         return m_PropertyDefs;
     }
 
@@ -178,7 +178,7 @@ public:
     // m_MergedDefs at its lower_bound position. Incoming `props` is the
     // per-Effect on-disk _Bada vector; m_MergedDefs is the runtime type.
     // Returns 1 on success, 0 if any def conflicts.
-    int MergeProperties(const std::vector<EffectPropertyDefinition_Bada>& props);
+    int MergeProperties(const std::vector<EffectPropertyDefinition_GLES1>& props);
 };
 
 // Free Read overloads for streaming Effect types -- defined in Effect.cpp.

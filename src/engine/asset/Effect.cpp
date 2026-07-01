@@ -55,17 +55,17 @@ void EffectGroup::AddEffect(SmartPtr<Effect> effect) {
 }
 
 // EffectGroup::MergeProperties (binary @ 0x001a2030) — fold each
-// EffectPropertyDefinition_Bada in `props` into `m_MergedDefs` at its
+// EffectPropertyDefinition_GLES1 in `props` into `m_MergedDefs` at its
 // lower_bound position keyed on `m_Name`. Returns 1 on success, 0 if
 // any incoming def conflicts with an existing same-named entry that
 // isn't structurally equal (binary uses
 // `EffectPropertyDefinition::operator!=`; port stub treats any same-
 // name pair as equal since the rest of the def isn't RE'd yet).
 int EffectGroup::MergeProperties(
-    const std::vector<EffectPropertyDefinition_Bada>& props)
+    const std::vector<EffectPropertyDefinition_GLES1>& props)
 {
     for (size_t i = 0; i < props.size(); i++) {
-        const EffectPropertyDefinition_Bada& incoming = props[i];
+        const EffectPropertyDefinition_GLES1& incoming = props[i];
 
         // PropertyDefLessThanCompare: string-compare on m_Name.
         // m_MergedDefs entries are EffectPropertyDefinition (Immutable<string>

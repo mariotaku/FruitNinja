@@ -22,6 +22,7 @@
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "core/MortarTypes.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -30,7 +31,6 @@ namespace Mortar {
 
 class FontCacheObjectTTF;
 struct GlyphAtlasEntry;
-struct MortarRectangle;  // forward declaration for Draw refRect param
 
 // FONT_EFFECT type -- values from binary (v1.6.1 BakedStringTTF ctor @0x00249a5c).
 // 0 = no effect, 1 = bold/outline driven by m_FmtCount.
@@ -197,9 +197,8 @@ public:
     // When refRect is non-null, alignment bounds are read from refRect instead of
     // computed from this object's glyph verts (binary: FG-label bbox for glow/shadow layer
     // registration). Zero visual change for all existing callers that pass no refRect.
-    // DIFFERS: binary uses MortarRectangleT<long>; port uses MortarRectangle (int-based).
-    void Draw(const Vec3& anchor, Vec2 scale, float rotZ, uint32_t align,
-              MortarRectangle* refRect = 0);
+    void Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
+              MortarRectangleT<long>* refRect = 0);
 
     // Returns total advance (field_60) set by ApplyFormatting_LeftJustify.
     float GetTotalAdvance() const;

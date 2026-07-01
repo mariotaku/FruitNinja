@@ -32,9 +32,9 @@ public:
     ~IngamePopup();
 
     // Draw v1.6.1 IngamePopup::Draw @0x0016d3ec
+    // pos = world-space anchor (by value, Vec3 first per binary mangled sig).
     // scale = animation curve supplied by caller (IngamePopup has no Update).
-    // pos = world-space anchor.
-    void Draw(float scale, Vec3* pos);
+    void Draw(Vec3 pos, float scale);
 
     // +0x00
     std::vector<Mortar::BakedStringBox*> m_TextBoxes;       // +0x00 (12 bytes ARM32)

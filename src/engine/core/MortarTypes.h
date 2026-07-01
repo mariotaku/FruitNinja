@@ -28,6 +28,17 @@ struct MortarRectangleT {
     T Height() const { return bottom - top; }
 };
 
+// Binary v1.6.1 Mortar::ALIGNMENT_TYPE (1 byte under -fshort-enums).
+// Bits 0-1: H-align (3=centre, 2=right, 0/1=left). Bits 2-3: V-align (0xc=centre-V).
+// Values verified from BakedStringTTF::Draw mangled sig + BakedStringBox ctor callers.
+enum ALIGNMENT_TYPE {
+    ALIGN_LEFT     = 0x0,
+    ALIGN_RIGHT    = 0x2,
+    ALIGN_H_CENTRE = 0x3,
+    ALIGN_V_CENTRE = 0xc,
+    ALIGN_CENTRE   = 0xf,
+};
+
 } // namespace Mortar
 
 // Convenient type aliases. typedef rather than `using` so the cross-build
