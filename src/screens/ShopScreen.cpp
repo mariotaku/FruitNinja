@@ -553,38 +553,36 @@ void ShopScreen::SetSelected(ShopListItem* item) {
     if (!item || !item->m_pItemInfo) return;
     if (m_State != 1) return;
 
-    // Binary: lazily init two fruit-type globals (guarded by __cxa_guard_acquire)
-    //   type_unlocked = Fruit::FruitType(DAT_0015c970, false)  -> "watermelon"
-    //   type_locked   = Fruit::FruitType(DAT_0015c974, false)  -> "coconut"
-    // Strings confirmed by RE report (tmp/re-shopscreen.md §9): watermelon = green
-    // piece for unlocked (slice-friendly), coconut = brown piece for locked.
-    // Binary uses __cxa_guard_acquire one-shot init; port calls FruitType each time
-    // (idempotent -- FruitType lookup is a pure string lookup returning a cached int).
+    // ASM-spec v1.6.1 ShopScreen::SetSelected @0x001b24f0 (DAT_0028350f="pineapple", DAT_00283509="black_pineapple")
+    // Binary lazily inits three locals via __cxa_guard_acquire; port calls FruitType each time
+    // (idempotent -- pure string lookup, safe to call repeatedly).
+    // DAT_0028350f is a pointer into the middle of "black_pineapple\0" at offset +6 = "pineapple\0".
+    // DAT_00283519 = "starfruit" is initialised but never read in the dispatch (dead init).
     ItemInfo* info = item->m_pItemInfo;
-    const int type_unlocked = Fruit::FruitType("watermelon", false);  // DAT_0015c970
-    const int type_locked   = Fruit::FruitType("coconut",    false);  // DAT_0015c974
+    const int type_unlocked = Fruit::FruitType("pineapple",       false);  // DAT_0028350f
+    const int type_locked   = Fruit::FruitType("black_pineapple", false);  // DAT_00283509
     Fruit* equipFruit = m_pEquipButton->m_pTrackedFruit;
     if (info->IsLocked() == 0) {
         // ASM-spec v1.6.1 ShopScreen::SetSelected @0x001b24f0: unlocked branch
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- m_RingTex[1] (blue_ring.tex)
-        //         Fruit::SetFruitType(fruit, type_unlocked, 1.0f) @ 0x0017621c
+        //         Fruit::SetFruitType(fruit, type_unlocked, 1.0f) @ 0x001dc054
         m_pEquipButton->m_Texture = game_work.m_RingTex[1];
         m_pEquipButton->SetText(GETSTRING_CAST_0((LocalizedString)0xed),
             game_work.m_RingColours[4], game_work.m_RingColours[5],
             39.0f, 12.0f, true, true);
         if (equipFruit) {
-            equipFruit->m_FruitType = type_unlocked;
+            equipFruit->SetFruitType(type_unlocked, 1.0f);
         }
     } else {
         // ASM-spec v1.6.1 ShopScreen::SetSelected @0x001b24f0: locked branch
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- m_RingTex[10] (locked_ring.tex)
-        //         Fruit::SetFruitType(fruit, type_locked, 1.0f) @ 0x0017621c
+        //         Fruit::SetFruitType(fruit, type_locked, 1.0f) @ 0x001dc054
         m_pEquipButton->m_Texture = game_work.m_RingTex[10];
         m_pEquipButton->SetText(GETSTRING_CAST_0((LocalizedString)0x3c7),
             game_work.m_RingColours[12], game_work.m_Colour69C,
             39.0f, 12.0f, true, true);
         if (equipFruit) {
-            equipFruit->m_FruitType = type_locked;
+            equipFruit->SetFruitType(type_locked, 1.0f);
         }
     }
 }

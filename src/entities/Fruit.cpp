@@ -369,6 +369,22 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
 
 }
 
+// Binary @ 0x001dc054 — set m_FruitType and recalculate visual scale + collision sphere.
+// Called from ShopScreen::SetSelected when browsing the equipment ring (scaleParam=1.0).
+void Fruit::SetFruitType(int fruitType, float scaleParam) {
+    m_FruitType = (uint8_t)fruitType;
+    const FruitInfoData* info = FruitInfo_Get(fruitType);
+    float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
+    m_VisualScale = Vec3::One() * fruitScale;
+    const float fScale   = info ? info->m_Scale          : 25.0f;
+    const float fColBase = info ? info->m_CollisionScale : 1.0f;
+    const float radius   = (fColBase + COL_RADIUS_FACTOR * fScale) * scaleParam;
+    if (!m_Col) m_Col = new ColSphere();
+    ColSphere* cs = static_cast<ColSphere*>(m_Col);
+    cs->center() = Vec3(pos.x, pos.y, 0.0f);
+    cs->radius = radius;
+}
+
 // ASM-spec v1.6.1 Fruit::Chuck @0x001db5f0
 // Binary semantics: cache pos into m_SecondPos, clamp negative delay to
 // 0.125, set m_SpawnDelay. NO flags write, NO m_ScaleAnim write,
