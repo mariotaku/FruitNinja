@@ -22,6 +22,8 @@
 #include <string>
 
 class HUD;
+class TiXmlNode;
+class TiXmlElement;
 
 // SliceTotal -- per-key counter struct stored inside m_Totals /
 // m_SessionTotals maps. Binary layout has the name at +0x14 and the
@@ -226,10 +228,9 @@ public:
     float    m_ProbabilityOverideFlag; // +0x14c  WaveManager::m_SpeedAccum (+0x78)
 
     // +0x150: wave speed scalar (v1.6.1 NEW). Default 1.0f.
-    // Persisted in the <que> block (XML attr TBD -- GOT 0xfffb06e6 unresolved).
+    // Persisted in the <state> block as XML attr "globalWaveDt" (written by SaveGame
+    // as a "%f" string; read back by ParseSaveFile @0x00154c8c via QueryFloatAttribute).
     // SaveWaveInfo @ 0x001254b0 writes it from WaveManager+0x78.
-    // ParseSaveFile @ 0x154c8c loads it as a float.
-    // TODO: resolve XML attr literal name (GOT 0xfffb06e6); round-trip safe regardless.
     // TODO: re-check WaveManager::Resume inverse mapping when resume is wired.
     float    m_WaveScalar_v161;             // +0x150
 
@@ -408,6 +409,17 @@ bool* GetIsSavingBool();
 // ParseVersionInfo -- v1.6.1 @0x00152f30 (_Z16ParseVersionInfoPKcP13FruitSaveData).
 // Parses the save-file version string and writes the packed int to sd->m_VersionInfo.
 void ParseVersionInfo(const char* s, FruitSaveData* sd);
+
+// ParseSaveFile -- v1.6.1 @0x00154c8c (_Z13ParseSaveFileP9TiXmlNodeP13FruitSaveData).
+// Recursive tag-walker invoked by LoadGame on the <save_file> root element. Dispatches
+// each element by tag name into the matching field group; container tags (save_file,
+// state) recurse into their children. Uses the binary's exact element/attr names.
+void ParseSaveFile(TiXmlNode* node, FruitSaveData* data);
+
+// ParseWaveInfo -- v1.6.1 @0x00154510 (_Z13ParseWaveInfoP12TiXmlElementP13FruitSaveData).
+// Reads the <wave_info> attrs (waveCount/numberOfWavesSpawned/waveDelay/waveWait/blitz*)
+// and rebuilds m_WaveStates from <wave>/<spawner> children. Always returns 1.
+int ParseWaveInfo(TiXmlElement* elem, FruitSaveData* data);
 
 // FruitCounter -- v1.6.1 @0x00159f10 (_Z12FruitCounterPKciiPv).
 // Iteration callback with (name, count, extra, ctx) signature.

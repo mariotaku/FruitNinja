@@ -17,6 +17,7 @@
 #include "xml/TiXml.h"
 #include "GameOver.h"
 #include "PowerUpManager.h"
+#include "ScreenEffect.h"
 #include "hud/TimeControl.h"
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
@@ -90,6 +91,58 @@ SpawnPlacement ParsePlacement(const char* side) {
     if (strcmp(side, "RIGHT") == 0) return PLACEMENT_RIGHT;
     if (strcmp(side, "LEFT_RIGHT") == 0 || strcmp(side, "RANDOM") == 0) return PLACEMENT_RANDOM_SIDE;
     return PLACEMENT_BOTTOM;
+}
+
+// ASM-spec v1.6.1 ParseSpawner @0x00129314
+// Parses a <Spawn> element into SPAWNER_INFO. Returns 1 if the element's tag hashes
+// to StringHash("Spawn"), else 0. Faithful standalone port of the binary's spawner
+// parser. NOTE: WaveManager::Init still uses its own inline <Spawn> loop (which
+// additionally resolves fruit-type hashes eagerly and accumulates m_TotalWeight);
+// consolidating Init onto ParseSpawner would require wiring SPAWNER_INFO::SelectTypes,
+// which is a wave-loading change out of scope for the save/load round-trip (#291).
+int ParseSpawner(TiXmlElement* elem, SPAWNER_INFO* out) {
+    if (!elem || !out) return 0;
+    static uint32_t s_spawnHash = StringHash("Spawn");
+    const char* tag = elem->Name();
+    if (!tag || StringHash(tag) != s_spawnHash) return 0;
+
+    const char* types = elem->Attribute("type");
+    out->m_FruitTypeCount = WaveManager::SplitWords(types, out->m_FruitTypeNames);
+    if (out->m_FruitTypeCount > 0) {
+        out->m_pFruitTypeHashes = new int[out->m_FruitTypeCount];
+        for (int i = 0; i < out->m_FruitTypeCount; ++i)
+            out->m_pFruitTypeHashes[i] = -1;   // -1 = unresolved (SelectTypes resolves later)
+    }
+
+    elem->QueryFloatAttribute("min",      &out->m_SpawnMin);
+    elem->QueryFloatAttribute("max",      &out->m_SpawnMax);
+    elem->QueryFloatAttribute("mininc",   &out->m_GrowthInc);
+    elem->QueryFloatAttribute("maxinc",   &out->m_GrowthInc);   // maxinc overwrites mininc (binary)
+    elem->QueryFloatAttribute("delay",    &out->m_Delay);
+    elem->QueryFloatAttribute("delayinc", &out->m_DelayInc);
+    elem->QueryFloatAttribute("horizmin", &out->m_HorizMin);
+    elem->QueryFloatAttribute("horizmax", &out->m_HorizMax);
+    elem->QueryFloatAttribute("velscale", &out->m_VelXScale);
+    out->m_VelYScale = out->m_VelXScale;
+    elem->QueryFloatAttribute("velXscale", &out->m_VelXScale);
+    elem->QueryFloatAttribute("velYscale", &out->m_VelYScale);
+    elem->QueryFloatAttribute("dt",        &out->m_TimeScale);
+
+    const char* grav = elem->Attribute("gravity");
+    if (grav && *grav) {
+        Vec3 g = ParseVector(grav);
+        out->m_Gravity_x = g.x;
+        out->m_Gravity_y = g.y;
+        out->m_Gravity_z = g.z;
+    }
+
+    const char* placement = elem->Attribute("placement");
+    out->m_SpawnType = placement ? ParsePlacement(placement) : PLACEMENT_BOTTOM;
+
+    const char* mirror = elem->Attribute("mirror");
+    out->m_bMirror = (uint8_t)((mirror && strcmp("true", mirror) == 0) ? 1 : 0);
+
+    return 1;
 }
 
 // ----------------------------------------------------------------------------
