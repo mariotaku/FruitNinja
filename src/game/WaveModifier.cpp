@@ -78,7 +78,8 @@ int PROBABILITY_OVERIDE::GetType() {
 // ----------------------------------------------------------------------------
 
 // WaveQue::AddWave — binary @ 0x00124334
-void WaveQue::AddWave(WAVE_INFO* wi, bool isLast, Math::Random& rng) {
+void WaveQue::AddWave(WaveInfo* wi, bool isLast) {
+    Math::Random& rng = WaveManager::GetInstance()->m_Random;
     WaveQueItem item;
     item.m_WaveIndex = wi->m_WaveIndex;
 
@@ -151,7 +152,8 @@ void WaveQue::RandomiseOrder(bool doSwap) {
 // WaveQue::AddSpecials — binary @ 0x00121b20
 // For each spawner-op in each item: with Rand32(100)<5 (or specials counter>=4),
 // and if item.specialsCount<2, set op=3 (special).
-void WaveQue::AddSpecials(Math::Random& rng) {
+void WaveQue::AddSpecials() {
+    Math::Random& rng = WaveManager::GetInstance()->m_Random;
     for (std::list<WaveQueItem>::iterator it = m_Items.begin();
          it != m_Items.end(); ++it) {
         int specialsCount = 0;

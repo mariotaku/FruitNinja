@@ -11,7 +11,7 @@
 #include <vector>
 #include <cstdint>
 
-struct WAVE_INFO;
+struct WaveInfo;
 struct SPAWNER_INFO;
 struct PROBABILITY_OVERIDE;
 struct DEFAULT_WAVE_INFO;
