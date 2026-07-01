@@ -454,11 +454,15 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_PostInProgress   = 0;
 
     // 16. Coin label
+    // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90: OS_SPrintf(m_DaysLeftLabel,
+    //   0x40, "YOU JUST EARNT %i COINS", m_CoinsBalance - m_CoinsAtGameStart). The format
+    //   string is a hardcoded English literal at 0x00282A04 -- the binary does NOT localize
+    //   this label via StringTable (#284 premise was wrong), so the port stays English too.
     {
         const int coinsEarned = game
             ? (game_work.m_CoinsBalance - game_work.m_CoinsAtGameStart) : 0;
         snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel),
-                 "YOU JUST EARNT %d COINS", coinsEarned);
+                 "YOU JUST EARNT %i COINS", coinsEarned);
     }
     m_reserved145 = 1;
 
