@@ -94,30 +94,28 @@ FruitSaveData::~FruitSaveData() {}
 // Stat tracking
 // ----------------------------------------------------------------------
 
-// AddToTotal @ 0x0012b21c.
-// Inserts/updates SliceTotal entry, returns new count.
+// ASM-spec v1.6.1 FruitSaveData::AddToTotal @ 0x001546f0
+// Binary: if (trackSession != 0) shifts `this` by +0x18 (m_SessionTotals base);
+// all subsequent map ops use the SHIFTED this->m_Totals -- resolving to either
+// real m_Totals (trackSession=false) or real m_SessionTotals (trackSession=true).
+// EITHER/OR selection: never touches both maps. Returns selected map's new count.
+// sendNetPacket param gates AchievementManager::UnlockSpecificFruitAchievement
+// (no-op stub in port).
 int FruitSaveData::AddToTotal(const char* name, uint32_t hash, int count,
                               bool trackSession, bool /*sendNetPacket*/) {
     if (!name || !*name) return 0;
 
-    auto it = m_Totals.find(hash);
-    if (it == m_Totals.end()) {
-        m_Totals[hash] = SliceTotal(name, count);
-    } else {
+    std::map<uint32_t, SliceTotal>& target = trackSession ? m_SessionTotals : m_Totals;
+    std::map<uint32_t, SliceTotal>::iterator it = target.find(hash);
+    if (it != target.end()) {
         it->second.count += count;
+        // Defunct: sendNetPacket gated AchievementManager::UnlockSpecificFruitAchievement
+        //   in binary; stub is a no-op in the port.
+        return it->second.count;
+    } else {
+        target[hash] = SliceTotal(name, count);
+        return count;
     }
-
-    if (trackSession) {
-        auto sit = m_SessionTotals.find(hash);
-        if (sit == m_SessionTotals.end()) {
-            m_SessionTotals[hash] = SliceTotal(name, count);
-        } else {
-            sit->second.count += count;
-        }
-    }
-
-    // Network packet: defunct -- no-op.
-    return m_Totals[hash].count;
 }
 
 int FruitSaveData::AddToTotal(const char* name, int count) {

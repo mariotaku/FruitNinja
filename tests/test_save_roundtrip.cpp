@@ -198,8 +198,10 @@ int main() {
     CHECK_EQ(dst.m_Totals[StringHash("banana")].count, 50);
     CHECK_EQ(dst.m_SessionTotals[StringHash("sess_combo")].count, 7);
     CHECK(dst.m_SessionTotals[StringHash("sess_combo")].name == "sess_combo");
-    // Note: sess_combo ALSO appears in dst.m_Totals -- AddToTotal(isSession=true) adds
-    // to both maps. That is the faithful binary behavior, so we don't assert m_Totals.size().
+    // Binary AddToTotal(trackSession=true) selects m_SessionTotals ONLY -- EITHER/OR,
+    // not both. v1.6.1 @ 0x001546f0 shifts `this` by +0x18 (m_SessionTotals base);
+    // m_Totals is never touched when trackSession=true.
+    CHECK(dst.m_Totals.find(StringHash("sess_combo")) == dst.m_Totals.end());
 
     // --- Achievements ---
     {
