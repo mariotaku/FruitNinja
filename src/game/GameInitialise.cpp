@@ -333,6 +333,13 @@ void GameInitialise(void* window, const char* config) {
     // Must run before MenuButton::LoadContent so GetSharedTTFFont() finds it.
     PreloadFontsTTF();
 
+    // ASM-spec v1.6.1 InitialiseData @0x0011c3f0: per-language globalSizeScale.
+    // Only langId 0x13 (russian) gets 0.9; all others are 1.0.
+    if (game_work.m_pTTFFontMain) {
+        float scale = (game_work.languageFlag == 0x13) ? 0.9f : 1.0f;
+        game_work.m_pTTFFontMain->GetAtlas()->InitialiseData(1.0f, scale);
+    }
+
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas SmartPtr slot).
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();

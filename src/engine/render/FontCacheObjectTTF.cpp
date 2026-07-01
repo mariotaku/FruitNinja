@@ -27,7 +27,9 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library ftLib, const char* path,
     }
     m_Atlas = new FontInterface(512);
     // Mirror binary Initialize @ 0x00250470: fontScale=1.0, globalSizeScale=1.0.
-    // Caller may invoke InitialiseData again with a language-specific globalSizeScale.
+    // GameInitialise re-invokes InitialiseData with 0.9 for russian (langId 0x13)
+    // per InitialiseData @0x0011c3f0. Port: default 1.0 here; override applied after
+    // PreloadFontsTTF() in GameInitialise.cpp if game_work.languageFlag == 0x13.
     m_Atlas->InitialiseData(1.0f, 1.0f);
 }
 

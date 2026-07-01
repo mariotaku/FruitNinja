@@ -71,7 +71,7 @@ public:
     ~FontInterface();
 
     // Mirrors binary Initialize @ 0x00250470: sets fontScale/invFontScale/globalSizeScale.
-    // Call once after construction. languageByte is game_work+3 (0x13 = Korean, scale 0.9).
+    // Call once after construction. languageByte is game_work+3 (0x13 = russian, scale 0.9).
     void InitialiseData(float fontScale, float globalSizeScale);
 
     // Pack a glyph bitmap (8-bit alpha, width x height bytes) into the atlas.
@@ -105,7 +105,7 @@ public:
     int   m_CacheSize;         // FT DPI: 100 (binary FontInterface ctor @ 0x002502e0)
     float m_FontScale;         // super-sampling factor: 1.0 (binary Initialize @ 0x00250470)
     float m_InvFontScale;      // 1/m_FontScale: 1.0
-    float m_GlobalSizeScale;   // 1.0 normally; 0.9 for Korean (lang byte 0x13)
+    float m_GlobalSizeScale;   // 1.0 normally; 0.9 for russian (lang byte 0x13)
 
 private:
     int m_Size;                          // page dimension (e.g. 512)
