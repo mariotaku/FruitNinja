@@ -827,7 +827,12 @@ void MenuButton::Draw(float* hudScaleRaw) {
             Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
                                                m_BackdropScale,
                                                m_BackdropScale);
-            mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
+            // Binary MenuButton::Draw @0x0019c2e4 uses vtable slot 15 GetAdjustedPos @0x136c2c
+            // (= pos + Vec3(480,320,0)*m_HudScale), NOT raw pos. The quit-bomb button stores
+            // its whole position in m_HudScale (pos=(0,0,0)), so raw pos put the scratch at
+            // screen center; the other buttons keep their coords in pos so it was masked.
+            Vec3 adjPos = GetAdjustedPos();
+            mat.GlobalTranslate44(Vec3(adjPos.x, adjPos.y, -5500.0f));
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
