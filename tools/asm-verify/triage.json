@@ -9296,5 +9296,480 @@
     "reason": "False positive (task #200 asm-inspector confirmation). Binary `vcmpe.f32 s14(curTime), s15(m_DeferTime)` + `bhi` returns 0 when curTime > m_DeferTime, i.e. m_DeferTime < curTime -- identical to the port's `if (m_DeferTime < curTime) return 0;`. The prior triage conflated the vcmpe operand order; movhi/bhi with (curTime, m_DeferTime) is exactly equivalent to the port's movmi/bpl with the operands swapped -- same semantic, different encoding.",
     "asm_hash": "f92aa1c993d665aa",
     "decided_at": "2026-06-26T12:00Z"
+  },
+  "_ZN11FruitCamera16SetupPerspectiveENS_15PERSPECIVE_TYPEEb": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary FruitCamera::PERSPECIVE_TYPE (scoped enum) vs port PERSPECIVE_TYPE (unscoped). Same underlying int; ABI-identical on ARM32. Cosmetic demangler difference.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN17ScrollingMenuItem4MoveE8_Vector3IfE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary Move(Vec3 by-value) vs port Move(float,float,float). On ARM32 Vec3 members pass in r0/r1/r2 identically to three float args. ABI-identical.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN12ShopListItem4MoveE8_Vector3IfE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary Move(Vec3 by-value) vs port Move(float,float,float). ARM32 ABI-identical -- Vec3 struct layout passes identically to three floats.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11SlashEntity8AddPointE8_Vector3IfES1_f": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary AddPoint(Vec3,Vec3,float) vs port AddPoint(float,Vec3 const*,Vec3 const*). RE 0x1e9918 confirmed: Vec3 passed by ptr (r1,r2), float in s0 regardless of source order -- identical ARM32 registers. (Separate real bug: ghost-ring un-normalized dir tracked as task #273.)",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Mesh11DrawTriListEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary DrawTriList has trailing TextureAtlasPage* param; port drops it. TextureAtlasPage atlas-binding is handled differently in the port's GLES2 renderer path. Documented port difference.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Mesh12DrawTriStripEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary DrawTriStrip has trailing TextureAtlasPage* param; port drops it. Same documented renderer difference as DrawTriList.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Mesh8DrawTrisEPK16QUADCUSTOMVERTEXlibPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary DrawTris has trailing TextureAtlasPage* param; port drops it. Same documented renderer difference as DrawTriList.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManager24SetTextureOverloadPrefixERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary takes Mortar::AsciiString const&, port takes char const*. AsciiString->char* is a documented project-wide substitution; both are pointer-to-char in ARM32 ABI.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar11MeshManager4LoadERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary takes Mortar::AsciiString const&, port takes char const*. Same documented AsciiString->char* substitution as SetTextureOverloadPrefix.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN4Math18ClosestPointOnLineER8_Vector3IfES2_S2_S2_": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "sig-mismatch: binary all 4 params non-const ref, port first 3 by-value + last by ref. On ARM32, Vec3 by-value vs by-non-const-ref is ABI-identical (both pass pointer). Cosmetic cv qualifier difference only.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11FNHighscoreC1Ev": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary FNHighscore() default ctor vs port FNHighscore(char const*, unsigned long, int, int, void*, char const*) with online-service params. Defunct online leaderboard service; stub ctor shape differs. No gameplay impact.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl14DrawLinkButtonEPN6Mortar16MortarRectangleTIfEE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary DrawLinkButton(MortarRectangleT<float>*) vs port DrawLinkButton(). Defunct news control; port no-ops the draw. Stub shape acceptable.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl13InputSinkDownEP10InputEventRK8_Vector3IfE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary InputSinkDown(InputEvent*, Vec3 const&) vs port InputSinkDown(uint, float, float). Defunct news input; port uses simplified SDL input protocol. No gameplay impact.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl14InputSinkMoveXEP10InputEventRK8_Vector3IfE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary InputSinkMoveX(InputEvent*, Vec3 const&) vs port (uint,float,float). Defunct news input.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl14InputSinkMoveYEP10InputEventRK8_Vector3IfE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary InputSinkMoveY(InputEvent*, Vec3 const&) vs port (uint,float,float). Defunct news input.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl17InputSinkReleasedEP10InputEventRK8_Vector3IfE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary InputSinkReleased(InputEvent*, Vec3 const&) vs port (uint,float,float). Defunct news input.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN21FruitNinjaNewsControl8ParseUrlEii": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary ParseUrl(int,int) (URL index parameters) vs port ParseUrl(char const*). Defunct news URL handling; no gameplay impact.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN10MainScreen29CreateNormalLeaderboardButtonEf": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary CreateNormalLeaderboardButton(float) vs port CreateNormalLeaderboardButton(). Defunct online leaderboard button; float param was leaderboard opacity or timing arg. No gameplay impact.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_Z16SetScoreDelegateN6Mortar9Delegate1IiiEE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary SetScoreDelegate(Delegate1<int,int>) vs port SetScoreDelegate(ScoreModifier*). Defunct score delegation system replaced with port-local ScoreModifier. No gameplay impact.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar21OpenFeintNewsRenderer15StartNewsRenderERKNS_8SmartPtrINS_7TextureEEEPNS_4FontE": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "sig-mismatch: binary StartNewsRender(SmartPtr<Texture> const&, Font*) vs port (void*, void*). Defunct OpenFeint news renderer; port stubs with void* to avoid pulling in unported types.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11AboutScreen7AddLineEPKc6Colouri": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary AboutScreen::AddLine(char const*, Colour, int) vs port (char const*, Colour const&, float). Last param int->float is a real type error. Fix: change port's float param to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11AboutScreen7NewDrawEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary AboutScreen::NewDraw() vs port AboutScreen::NewDraw(float). Port adds float param not in binary. Fix: drop the float param from port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN4Bomb12SetForPlayerEi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Bomb::SetForPlayer(int) member vs port Bomb::SetForPlayer(Bomb*, int) static. Port declares as static with explicit this pointer. Fix: make it a regular non-static member function.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN4Bomb6SetHitEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Bomb::SetHit(float) member vs port Bomb::SetHit(Bomb*, float) static. Same static-vs-member error as SetForPlayer. Fix: make regular member.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN5Bonus10IsAchievedEiRSt3mapImiSt4lessImESaISt4pairIKmiEEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Bonus::IsAchieved(int, map<unsigned long, int>&) vs port (int, map<unsigned long long, int>&). Binary uses 32-bit ulong (ARM32); port uses 64-bit ulonglong (host x64). Fix: change port map key type from unsigned long long to unsigned long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN5Bonus5ParseEP12TiXmlElement": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Bonus::Parse(TiXmlElement*) vs port (TiXmlElement*, char const*). Port has extra parentTexName param not in binary. Fix was claimed in session (#305) but still shows in current cross-build report -- re-build required. Fix: drop the char const* param from port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN4Coin8InitCoinE8_Vector3IfES1_timmN6Mortar9Delegate1IvPS_EEfb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Coin::InitCoin(Vec3,Vec3,ushort,int,ulong,ulong,Delegate1,float,bool) vs port (Vec3,Vec3,ushort,int,ushort,int,char*,char*,Delegate1,float,bool). Port adds 4 extra params (ushort,int,char*,char*) for texture IDs not present in binary. Fix: remove extra texture-name params; use the existing ulong hash params to identify textures.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN4Coin9MakeCoinsEii8_Vector3IfEttPS1_ffPKcS4_N6Mortar9Delegate1IvPS_EEb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Coin::MakeCoins(int,int,Vec3,ushort,ushort,Vec3*,float,float,char*,char*,Delegate1,bool) vs port drops the two floats (speed params). Fix: add the two float params back to port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN10DojoScreen14UpdateBSButtonEP8BSButtonfm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary DojoScreen::UpdateBSButton(BSButton*, float, unsigned long) vs port (BSButton*, float, int). Last param ulong->int. On ARM32 ulong=32-bit; ABI same width but types differ in mangling causing non-pairing. Fix: change port param from int to unsigned long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11FileManager20GetSaveRootDirectoryEPcPKcbb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary FileManager::GetSaveRootDirectory(char*, char const*, bool, bool) vs port (char*, char const*, bool). Port drops the fourth bool param. Fix: add the missing bool to port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN5Fruit7DisableEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Fruit::Disable() member vs port Fruit::Disable(Fruit*) static. Same static-vs-member error as Bomb::SetForPlayer. Fix: make regular member.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN13FruitSaveData15PlayedModeTodayE9GAME_MODE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary FruitSaveData::PlayedModeToday(GAME_MODE) vs port (int). With Tag_ABI_enum_size:small the enum may not be 32-bit; int param changes mangling and potentially ABI. Fix: use GAME_MODE enum type in port signature.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN14GameModeScreen17DeletedMenuButtonEP10HUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary GameModeScreen::DeletedMenuButton(HUDControl*) vs port (MenuButton*). Binary passes base class pointer; port narrows to derived class. Fix: change port param to HUDControl*.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN14GameModeScreen14SetIsChallengeEii": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary GameModeScreen::SetIsChallenge(int,int) vs port (int,void*). Second param int->void* is wrong. Fix: change void* to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN9GameSound6UpdateEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary GameSound::Update() vs port GameSound::Update(float). Port adds float param not in binary. Fix: drop the float param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_Z11GetModeName9GAME_MODE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary GetModeName(GAME_MODE) vs port GetModeName(Mortar::GameMode). Two different enum types; callers pass GAME_MODE but port expects Mortar::GameMode. Fix: port should use GAME_MODE, not Mortar::GameMode.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11IngamePopup4DrawE8_Vector3IfEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary IngamePopup::Draw(Vec3, float) vs port Draw(float, Vec3*). Param order swapped AND Vec3 by-value vs by-pointer. Fix: change port to match binary param order and use Vec3 by-value.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11ItemManager8GetFirstERN9__gnu_cxx17__normal_iteratorIPP8ItemInfoSt6vectorIS3_SaIS3_EEEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ItemManager::GetFirst(__gnu_cxx::iterator<ItemInfo**>&) vs port GetFirst(int&) const. Completely different iteration protocol -- port uses int index vs binary's std::vector iterator. Fix: port ItemManager iterator API to match binary's iterator-based interface.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11ItemManager7GetNextERN9__gnu_cxx17__normal_iteratorIPP8ItemInfoSt6vectorIS3_SaIS3_EEEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ItemManager::GetNext(__gnu_cxx::iterator<ItemInfo**>&) vs port GetNext(int&) const. Same iterator-vs-index divergence as GetFirst. Fix together with GetFirst.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11ItemManager15SetEquippedItemE8ItemTypeP8ItemInfo": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ItemManager::SetEquippedItem(ItemType, ItemInfo*) vs port (int, ItemInfo*). ItemType->int loses the enum type. Fix: use ItemType enum in port signature.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Jiblet4InitEiR8_Vector3IfEfS1_N6Mortar8SmartPtrINS3_5ModelEEEmfS1_": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Jiblet::Init(int, Vec3&, float, Vec3, SmartPtr<Model>, ulong, float, Vec3) vs port (float, float, int, Vec3*, Vec3*, SmartPtr<Model> const&, ulong, Vec3*). Major param reorder + value vs pointer divergence. Fix: restructure port Init to match binary param order and passing conventions.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager21RegisterHashConverterENS_9Delegate2IlmRbEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ActorManager::RegisterHashConverter(Delegate2<long,ulong,bool&>) vs port (long(*)(ulong,bool&)) function pointer. Binary uses Delegate2 object, port uses raw function pointer. Fix: use Mortar::Delegate2 in port signature.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox4DrawE8_Vector2IfEfb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::Draw(Vec2, float, bool) vs port Draw(float, Vec2, int). Params reordered AND bool->int. Fix: reorder port params to match binary and change int to bool.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox13ReshapeBoundsEiiii": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::ReshapeBounds(int,int,int,int) vs port (float,float,int,int). First two params int->float. Fix: change first two params back to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox9SetColourE6Colourb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::SetColour(Colour, bool) vs port (Colour const&, int). Second param bool->int. Fix: change port second param from int to bool.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox24SetHorizontalLineSpacingEi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::SetHorizontalLineSpacing(int) vs port (float). int->float type error. Fix: change port param from float to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox9SetShadowEf6Colour8_Vector3IfEi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::SetShadow(float, Colour, Vec3, int) vs port (float, Colour, Vec3, bool). Last param int->bool. Fix: change port last param from bool to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox14SetTranslationE8_Vector3IfEb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::SetTranslation(Vec3, bool) vs port (Vec3 const&, int). Second param bool->int. Fix: change port second param from int to bool.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBox21SetWorldspaceClippingEiiii": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringBox::SetWorldspaceClipping(int,int,int,int) vs port (float,float,float,float). All params int->float. Fix: change all port params from float to int.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringTTF4DrawERK8_Vector3IfE8_Vector2IfEfNS_14ALIGNMENT_TYPEEPNS_16MortarRectangleTIlEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BakedStringTTF::Draw(Vec3&, Vec2, float, ALIGNMENT_TYPE, MortarRectangleT<long>*) vs port (Vec3&, Vec2, float, ulong). Port drops the MortarRectangleT clipping rect param and encodes alignment as ulong instead of ALIGNMENT_TYPE. Fix: add MortarRectangleT<long>* param and use ALIGNMENT_TYPE.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManager17SetGlobalAmbienceEm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary DisplayManager::SetGlobalAmbience(unsigned long) packed RGBA vs port (Colour const&) struct. Binary uses packed ulong colour; port uses Colour struct. Fix: change port param to unsigned long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar11EffectGroup15MergePropertiesERKSt6vectorINS_30EffectPropertyDefinition_GLES1ESaIS2_EE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary EffectGroup::MergeProperties takes vector<EffectPropertyDefinition_GLES1> vs port vector<EffectPropertyDefinition_Bada>. Binary struct name is GLES1; port renamed to Bada. Fix: rename port struct EffectPropertyDefinition_Bada to EffectPropertyDefinition_GLES1.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZNK6Mortar18EffectPropertyList11GetPropertyEPKc": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary EffectPropertyList::GetProperty(char const*) const vs port GetProperty(std::string const&) const. Binary uses char*, port uses std::string. Fix: change port param to char const*.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZNK6Mortar4Font7GetPageEm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Font::GetPage(unsigned long) const vs port Font::GetPage(int) const. ulong->int width error. Fix: change port param from int to unsigned long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar8Geometry6RenderEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Geometry::Render() vs port Geometry::Render(Matrix44 const&). Port adds a matrix param not in binary. Fix: drop the matrix param; retrieve matrix internally as the binary does.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar15GeometryBinding14IndexStreamSetERKNS_8SmartPtrINS_12IIndexStreamEEERKSs": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary GeometryBinding::IndexStreamSet(SmartPtr<IIndexStream> const&, std::string const&) vs port (SmartPtr<IIndexStream>, AsciiString const&). Binary uses std::string for second param; port uses AsciiString. Fix: use std::string const& for second param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar15InputDeviceBada4InitEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary InputDeviceBada::Init() vs port Init(unsigned long). Port adds a ulong param not in binary. Fix: drop the param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar8Skeleton11BuildArraysEm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary Skeleton::BuildArrays(unsigned long) vs port BuildArrays(int). ulong->int type error. Fix: change port param from int to unsigned long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar11StringTable5ClearEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary StringTable::Clear() member vs port StringTable::Clear(StringTable*) static. Same static-vs-member error as Bomb::SetForPlayer. Fix: make regular member function.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar35SubstituteApparentSizeTextureSource12UnlockLayersEPKNS_13TextureSource4DataE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary SubstituteApparentSizeTextureSource::UnlockLayers(TextureSource::Data const*) (nested type) vs port (TextureSourceData const*) (flat type). Fix: use TextureSource::Data as nested type.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar13TextureLoader12UnlockLayersEPKNS_13TextureSource4DataE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary TextureLoader::UnlockLayers(TextureSource::Data const*) nested type vs port (TextureSourceData const*) flat type. Same pattern as SubstituteApparentSizeTextureSource::UnlockLayers. Fix: use TextureSource::Data nested type.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14TextureManager15LoadIndependentEPvi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary TextureManager::LoadIndependent(void*, int) vs port LoadIndependent(int). Port drops the void* param. Fix: add the void* param back.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar13TextureSource18TriggerDataChangedENS_16MortarRectangleTIlEE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary TextureSource::TriggerDataChanged(MortarRectangleT<long>) vs port TriggerDataChanged(long). Binary passes full rect struct; port passes only a long. Fix: change port param to MortarRectangleT<long>.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_Z14ParseMaskWordsPKcPmi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ParseMaskWords(char const*, unsigned long*, int) vs port ParseMaskWords(char const*) (static local). Port drops the output buffer and count params. Fix: add the ulong* and int params to port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN10ShopScreen17ClickedOnShopItemEP17ScrollingMenuItem": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary ShopScreen::ClickedOnShopItem(ScrollingMenuItem*) vs port (ShopListItem*). Binary uses the base ScrollingMenuItem class; port uses the derived ShopListItem. Fix: change port param to ScrollingMenuItem*.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11SplatEntity9MakeSplatE8_Vector3IfES1_bbl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary SplatEntity::MakeSplat(Vec3,Vec3,bool,bool,long) vs port (Vec3,Vec3,bool,int,bool). Param 4: binary bool, port int. Param 5: binary long, port bool. Real type divergence. Fix: change param 4 from int to bool and param 5 from bool to long.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN17SuperFruitControl19SaveSuperFruitStateEP5FruitP12TiXmlElement": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary SuperFruitControl::SaveSuperFruitState(Fruit*, TiXmlElement*) vs port (TiXmlElement*). Port drops the Fruit* param. Fix: add Fruit* as first param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN17SuperFruitControl9SpawnJibsEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary SuperFruitControl::SpawnJibs() vs port SpawnJibs(int). Port adds int param not in binary. Fix: drop the int param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN15SuperFruitState14WriteToElementEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary SuperFruitState::WriteToElement() vs port WriteToElement(TiXmlElement*) const. Port adds a TiXmlElement* param and const-qualifies. Fix: remove the param and const.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN11WaveManager9SpawnBombElP12SPAWNER_INFOi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary WaveManager::SpawnBomb(long, SPAWNER_INFO*, int) vs port (long, long, SPAWNER_INFO*, int). Port inserts an extra long param. Fix: remove the extra long from port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN7WaveQue11AddSpecialsEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary WaveQue::AddSpecials() vs port AddSpecials(Math::Random&). Port adds Math::Random& param not in binary. Fix: drop the param; binary uses its own RNG source.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN7WaveQue7AddWaveEP8WaveInfob": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary WaveQue::AddWave(WaveInfo*, bool) vs port AddWave(WAVE_INFO*, bool, Math::Random&). Port uses WAVE_INFO (different type name from WaveInfo) and adds Math::Random& param. Fix: rename WAVE_INFO to WaveInfo and drop the Math::Random& param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN10BaseScreen17AddGenericControlEP17GenericHUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary BaseScreen::AddGenericControl(GenericHUDControl*) vs port (HUDControl*). Binary uses GenericHUDControl* (a distinct class in the binary); port uses the base HUDControl*. Fix: use GenericHUDControl* in port signature.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN20ExplodyFruitModifier13FruitSplosionC1EP5Fruitffffi": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary ExplodyFruitModifier::FruitSplosion(Fruit*, float, float, float, float, int) vs port (float, float, float, float, Entity*, int). Fruit*->Entity* type and param reorder. Fix: use Fruit* as first param and match binary order.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN9GameSound7SFXPlayEPKcffN6Mortar9Delegate1IbPNS2_11MortarSoundEEEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary GameSound::SFXPlay has 5-param overload (adds trailing float fadeDuration) not present in port. Port only has 3-param and 4-param overloads. Fix: add the 5-param overload to port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN10MenuButtonC1EN6Mortar8SmartPtrINS0_7TextureEEE8_Vector3IfENS0_9Delegate0IvEEiS5_S7_": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary MenuButton ctors take SmartPtr/Vec3/Delegate by value; port takes them by pointer. Also binary has string-based ctor; port has different overload set. Major ctor divergence. Fix: restructure MenuButton ctors to match binary's by-value passing conventions.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Bada14Texture2D_Bada9SetSourceERKNS_8SmartPtrINS_13TextureSourceEEEm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Texture2D_Bada::SetSource(SmartPtr<TextureSource> const&, unsigned long) vs port (SmartPtr<TextureSource>, unsigned int). ulong->uint width difference (32-bit binary vs 32-bit but different mangling). Fix: use unsigned long for texture flags param.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Bada14Texture2D_BadaC1ERKNS_8SmartPtrINS_13TextureSourceEEEm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Texture2D_Bada::Texture2D_Bada(SmartPtr<TextureSource> const&, unsigned long) vs port Texture2D_Bada(). Port has only a default ctor; binary requires SmartPtr and ulong params. Fix: add the SmartPtr const& and unsigned long params to ctor.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringBoxC1EPNS_18FontCacheObjectTTFEfiiNS_14ALIGNMENT_TYPEEii": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary BakedStringBox ctor(FontCacheObjectTTF*, float, int, int, ALIGNMENT_TYPE, int, int) vs port (FontCacheObjectTTF*, float, float, float, int, int, int). Params 3-4 int->float and ALIGNMENT_TYPE->int. Fix: change params 3 and 4 back to int and use ALIGNMENT_TYPE for param 5.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14BakedStringTTFC1EPNS_18FontCacheObjectTTFEPKcf6ColourlfNS1_16FONT_EFFECT_ENUME": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary BakedStringTTF ctor last param FontCacheObjectTTF::FONT_EFFECT_ENUM (scoped) vs port Mortar::FONT_EFFECT (unscoped). Different enum types with different manglings. Fix: use FontCacheObjectTTF::FONT_EFFECT_ENUM in port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManager13SetWindowSizeEllll": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary SetWindowSize has 4-param (long,long,long,long) and 5-param (long,long,long,long,bool) overloads; port has only 4-param (int,int,int,int). Missing 5-param overload; long->int width error. Fix: add 5-param overload and use long (not int) for all params.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar20EffectPropertyValuesC1ERA10_Km": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary EffectPropertyValues ctor has (unsigned long const (&)[10]) array-ref overload and copy ctor; port has only (unsigned long const*) pointer overload. Array-ref vs pointer is a real type difference. Fix: add array-ref ctor overload and copy ctor.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar4Font10DrawStringENS_18Utf8StringIteratorE8_Vector3IfE6Colourf8_Vector2IfEifPNS_16MortarRectangleTIfEEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: port Font::DrawString has extra overloads beyond binary's two (MortarRectangleTIlE->MortarRectangleDec rename + 3 extra port-only overloads). Binary has exactly 2 overloads; port adds 3 non-binary overloads. Fix: remove port-only DrawString overloads; use only the two that match binary signatures. Also MortarRectangleT<float>->MortarRectangleDec rename needs reverting for the paired overloads.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar13FontInterfaceC1Ev": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary FontInterface::FontInterface() default ctor vs port FontInterface::FontInterface(int). Port adds an int param. Fix: drop the int param from port ctor.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar8Geometry11GetPropertyEPKc": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Geometry::GetProperty(char const*) and GetProperty(char const*) const vs port GetProperty(unsigned long). Complete type divergence -- binary uses char* name lookup, port uses ulong hash lookup. Fix: change port to use char const* param with name-based lookup.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar17InputActionMapperC1E10InputEventNS_9Delegate1IbPS1_EEmm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary InputActionMapper ctor(InputEvent, Delegate1<bool,InputEvent*>, ulong, ulong) vs port default ctor(). Port has only default ctor; binary has full initialization ctor. Fix: add the full ctor overload to port.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZNK6Mortar5Model4DrawERK9_Matrix44IfE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Model::Draw(Matrix44 const&) const vs port Model::Draw(Matrix44 const&) (non-const). Binary has const member function; port is non-const. Fix: add const to port's Draw method.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar14ResourceLoaderC2ERKS0_": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary ResourceLoader has copy ctor (ResourceLoader const&); port has default ctor() and (char const*) string ctor, no copy ctor. Port overload set diverges from binary. Fix: add copy ctor to port; verify if default and string ctors are port-only additions.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZNK6Mortar11StringTable9GetStringEPKNS_15StringTableData12HeaderLookupE": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary StringTable::GetString uses nested type StringTableData::HeaderLookup; port uses unscoped HeaderLookup. Also port has LocalizedString-based overload not in binary. Fix: qualify HeaderLookup as StringTableData::HeaderLookup in port; remove LocalizedString overload if not in binary.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar39SubstituteApparentSizeTextureSourceDataC1ERKNS_8SmartPtrINS_13TextureSourceEEEmm": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary SubstituteApparentSizeTextureSourceData ctor(SmartPtr<TextureSource> const&, ulong, ulong) vs port (TextureSource*, ulong, ulong). Binary takes SmartPtr by const-ref; port takes raw pointer. Fix: change port first param to SmartPtr<TextureSource> const&.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar5Touch9FindTouchEj": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Touch::FindTouch(unsigned int) non-const vs port Touch::FindTouch(unsigned long) const. Two issues: uint->ulong width AND added const. Fix: use unsigned int and remove const.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar5Touch13GetTouchDeltaEjRfS1_": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Touch::GetTouchDelta(unsigned int, float&, float&) non-const vs port (unsigned long, float&, float&) const. uint->ulong + added const. Fix: use unsigned int and remove const.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar5Touch11GetTouchPosEjRfS1_": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch MED: binary Touch::GetTouchPos(unsigned int, float&, float&) non-const vs port (unsigned long, float&, float&) const. uint->ulong + added const. Fix: use unsigned int and remove const.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN5Fruit19SetupSliceRotationsEbb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary (bool, bool) vs port (bool, int). Second param bool->int. Fix: change second port param back to bool.",
+    "decided_at": "2026-07-01T00:00Z"
+  },
+  "_ZN6Mortar18EffectPropertyList11GetPropertyEPKc": {
+    "verdict": "FIX-NEEDED",
+    "reason": "sig-mismatch: binary (char const*) vs port (std::string const&) const. Port changed param type to std::string and added const. Fix: use (char const*) non-const.",
+    "decided_at": "2026-07-01T00:00Z"
   }
 }
