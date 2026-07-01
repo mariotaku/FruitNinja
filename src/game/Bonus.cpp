@@ -213,7 +213,7 @@ void Bonus::Parse(TiXmlElement* e) {
 //   5. return m_Tier (0 on any fail).
 // DIFFERS: original param name was `score` -- renamed to `score` kept; the
 //   second param is fruitCounts (binary param_2). Cosmetic only; no ABI change.
-int Bonus::IsAchieved(int score, std::map<uint32_t, int>& fruitCounts) {
+int Bonus::IsAchieved(int score, std::map<unsigned long, int>& fruitCounts) {
     // Gate -- unconditional bounds + divisible-by (binary 0010df3e-0010df62).
     if (score < m_MinSliced) return 0;
     if (score > m_MaxSliced) return 0;
@@ -223,14 +223,14 @@ int Bonus::IsAchieved(int score, std::map<uint32_t, int>& fruitCounts) {
     // Missing key in m_MinFruit defaults to 0; missing key in m_MaxFruit defaults
     // to DAT_0010e090 = 1,000,000.
     static const int kNoMaxSentinel = 1000000;  // DAT_0010e090 = 0x000f4240
-    for (std::map<uint32_t, int>::iterator fc = fruitCounts.begin();
+    for (std::map<unsigned long, int>::iterator fc = fruitCounts.begin();
          fc != fruitCounts.end(); ++fc) {
         int count = fc->second;
 
-        std::map<uint32_t, int>::const_iterator minIt = m_MinFruit.find(fc->first);
+        std::map<unsigned long, int>::const_iterator minIt = m_MinFruit.find(fc->first);
         int minVal = (minIt != m_MinFruit.end()) ? minIt->second : 0;
 
-        std::map<uint32_t, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
+        std::map<unsigned long, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
         int maxVal = (maxIt != m_MaxFruit.end()) ? maxIt->second : kNoMaxSentinel;
 
         if (count < minVal || count > maxVal) return 0;
@@ -241,7 +241,7 @@ int Bonus::IsAchieved(int score, std::map<uint32_t, int>& fruitCounts) {
     bool firstPattern = true;
     int refCount = -1;
     for (size_t i = 0; i < m_PatternHashes.size(); ++i) {
-        std::map<uint32_t, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
+        std::map<unsigned long, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
         if (fc == fruitCounts.end()) return 0;  // pattern fruit absent
         if (firstPattern) {
             refCount = fc->second;
@@ -352,9 +352,9 @@ int GetBonusTotal(unsigned long hash);
 // ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0010ecc8 (re-analyst).
 Bonus* BonusType::GetBest() {
     int totalAcrossFruits = 0;
-    for (std::map<uint32_t, int>::iterator it = m_RequiredHashes.begin();
+    for (std::map<unsigned long, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
-        int total = GetBonusTotal((unsigned long)it->first);
+        int total = GetBonusTotal(it->first);
         it->second = total;
         totalAcrossFruits += total;
     }
@@ -404,9 +404,9 @@ bool BonusType::UnlockAchievements() {
     if (!m_HasAchievement) return false;
 
     int totalAcrossFruits = 0;
-    for (std::map<uint32_t, int>::iterator it = m_RequiredHashes.begin();
+    for (std::map<unsigned long, int>::iterator it = m_RequiredHashes.begin();
          it != m_RequiredHashes.end(); ++it) {
-        int total = GetBonusTotal((unsigned long)it->first);
+        int total = GetBonusTotal(it->first);
         it->second = total;
         totalAcrossFruits += total;
     }

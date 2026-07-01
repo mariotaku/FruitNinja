@@ -610,8 +610,8 @@ Font::CharTemplate* Font::GetCharTemplate(uint32_t cp) const {
     return nullptr;
 }
 
-Font::Page* Font::GetPage(int idx) const {
-    if (idx >= 0 && idx < m_PageCount) return &m_Pages[idx];
+Font::Page* Font::GetPage(unsigned long idx) const {
+    if (idx < static_cast<unsigned long>(m_PageCount)) return &m_Pages[idx];
     return nullptr;
 }
 

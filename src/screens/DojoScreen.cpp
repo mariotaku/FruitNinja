@@ -652,7 +652,7 @@ void DojoScreen::AboutCallback() {
 // Repositions a BSButton each frame along a slide-in direction proportional
 // to the screen's transition alpha.
 // ===================================================================
-void DojoScreen::UpdateBSButton(BSButton* btn, float /*dt*/, int idx) {
+void DojoScreen::UpdateBSButton(BSButton* btn, float /*dt*/, unsigned long idx) {
     // ASM-spec v1.6.1 T_1162 @0x0016a274 + UpdateBSButton @0x0016a2f4:
     //   anchor = (152, 100 - 46*idx, 0); slide = normalize(8,-1,0);
     //   pos = anchor + slide * (1 - m_TransitionAlpha) * 248.

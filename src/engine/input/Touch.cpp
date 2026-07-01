@@ -182,7 +182,7 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
 
 // Binary @ 0x00195424 -- FindTouch(uint touchId).
 // Linear scan states1; return slot index or -1.
-int Touch::FindTouch(uint32_t touchId) const {
+int Touch::FindTouch(uint32_t touchId) {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (states1[i].touchId == touchId) return i;
     }
@@ -209,7 +209,7 @@ uint32_t Touch::GetMostRecentTouch() {
 // ASM-spec v1.6.1 Touch::GetTouchPos @0x002429d4: (uint, float&, float&).
 // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
 // Binary leaves *x/*y UNTOUCHED on miss -- do not zero them.
-int Touch::GetTouchPos(uint32_t touchId, float& x, float& y) const {
+int Touch::GetTouchPos(uint32_t touchId, float& x, float& y) {
     int slot = FindTouch(touchId);
     if (slot < 0) return 0;
     x = states1[slot].currX;
@@ -219,7 +219,7 @@ int Touch::GetTouchPos(uint32_t touchId, float& x, float& y) const {
 
 // ASM-spec v1.6.1 Touch::GetTouchDelta @0x00242a20: (uint, float&, float&).
 // Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
-int Touch::GetTouchDelta(uint32_t touchId, float& dx, float& dy) const {
+int Touch::GetTouchDelta(uint32_t touchId, float& dx, float& dy) {
     int slot = FindTouch(touchId);
     if (slot < 0 || states1[slot].phase >= 1) { dx = 0.0f; dy = 0.0f; return 0; }
     if (states1[slot].phase < 0) {
