@@ -125,9 +125,9 @@ struct SPAWNER_INFO {
     }
 };
 
-// WAVE_INFO — size 0x78 (120 bytes).
+// WaveInfo — size 0x78 (120 bytes).
 // Field offsets per binary WaveManager::Init @ 0x0012393c and §6 of audit.
-struct WAVE_INFO {
+struct WaveInfo {
     // +0x00
     int                      m_ScoreThreshold;   // waveNo attr (mirror of m_WaveNumber)
     // +0x04
@@ -200,7 +200,7 @@ struct WAVE_INFO {
     // Not a binary struct field — used only for wave range selection logic.
     int                      m_WaveNumber;
 
-    WAVE_INFO()
+    WaveInfo()
         : m_ScoreThreshold(0), m_EndScore(-1)
         , m_pSpawners(nullptr), m_SpawnerCount(0)
         , m_WaveDt(1.0f), m_WaveDtInc(0.0f), m_WaveDtSpInc(0.0f)
@@ -224,7 +224,7 @@ struct WAVE_INFO {
         memset(_pad3a, 0, sizeof(_pad3a));
     }
 
-    ~WAVE_INFO() {
+    ~WaveInfo() {
         delete[] m_pSpawners;
         m_pSpawners = nullptr;
     }
@@ -374,9 +374,9 @@ struct PROBABILITY_OVERIDE {
     int GetType();
 };
 
-// v1.6.1 alias: WaveQue::AddWave demangled as AddWave(WaveInfo*,bool) in 1.6.1.
-// The struct is field-identical to WAVE_INFO; only the name changed.
-typedef WAVE_INFO WaveInfo;
+// WAVE_INFO is the legacy port-side name. Binary struct is WaveInfo.
+// Alias kept so existing callers (WaveManager.cpp etc.) compile unchanged.
+typedef WaveInfo WAVE_INFO;
 
 // WaveQueItem — binary @ 0x001268fc ctor. Size 0x1c (28 bytes).
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
@@ -419,11 +419,11 @@ struct WaveQue {
 
     WaveQue() : m_Budget(0.0f) {}
 
-    // WaveQue::AddWave — binary @ 0x00124334.
+    // WaveQue::AddWave @0x0012d014.
     // Builds a WaveQueItem for wi and appends it to m_Items.
     // isLast controls the alternating-spawn policy code.
-    // rng = WaveManager::GetInstance()->GetRandom() (binary uses global Random pointer).
-    void AddWave(WAVE_INFO* wi, bool isLast, Math::Random& rng);
+    // RNG = WaveManager::GetInstance()->m_Random (when the body is implemented).
+    void AddWave(WaveInfo* wi, bool isLast);
 
     // WaveQue::PopWave — binary @ 0x00123258.
     // Pops front of m_Items into *out. Returns true if an item was available.
@@ -433,11 +433,11 @@ struct WaveQue {
     // Walks the list and alternately flips spawner-ops 1<->2 at every other position.
     void RandomiseOrder(bool doSwap);
 
-    // WaveQue::AddSpecials — binary @ 0x00121b20.
+    // WaveQue::AddSpecials @0x0012ce8c.
     // Iterates all items; for each spawner-op with Rand32(100)<5 (or counter>=4),
     // sets the op to 3 (special) if specialsCount<2.
-    // rng = WaveManager::GetInstance()->GetRandom() (binary uses global Random pointer).
-    void AddSpecials(Math::Random& rng);
+    // RNG = WaveManager::GetInstance()->m_Random (when the body is implemented).
+    void AddSpecials();
 };
 
 #ifdef __bada__
