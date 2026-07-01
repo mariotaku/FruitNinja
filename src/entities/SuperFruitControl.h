@@ -154,7 +154,8 @@ public:
     static bool SpawnFinalPomegranate();
 
     // Binary @ 0x001ba73c. Serializes the active super-fruit state to XML for save.
-    static void SaveSuperFruitState(TiXmlElement* parent);
+    // Binary sig: (Fruit*, TiXmlElement*) — fruit param is unused in port (map lookup).
+    static void SaveSuperFruitState(Fruit* fruit, TiXmlElement* parent);
 
     // Binary @ 0x001bb52c. Resets global time scale to 1.0, re-enables input,
     // flags all type-6 entities with kill-flag, clears SuperFruitControls map.
@@ -189,7 +190,7 @@ public:
 
     // Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
     // PSPParticleManager hookup implemented; Jiblet mesh spawn pending Jiblet/MeshManager port.
-    void SpawnJibs(int count);
+    void SpawnJibs();
 
     // Binary @ 0x001b9c6c. Per-frame: radially shove every nearby bomb (type-list 1)
     // away from the host fruit. Called while Timer < Lifetime (throw/anticipation phase).

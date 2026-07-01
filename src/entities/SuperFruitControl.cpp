@@ -236,7 +236,7 @@ void SuperFruitControl::Update(float dt)
                 // one-shot: the actual blast
                 // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
                 ExplodeSuperFruit();
-                SpawnJibs(0);
+                SpawnJibs();
                 StopRays();
                 // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
             }
@@ -680,21 +680,17 @@ bool SuperFruitControl::SpawnFinalPomegranate()
 }
 
 // Binary @ 0x001ba73c. Serializes active super-fruit state to XML.
-void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
+// fruit param matches binary sig; port uses SuperFruitControls map lookup instead.
+void SuperFruitControl::SaveSuperFruitState(Fruit* /*fruit*/, TiXmlElement* parent)
 {
     if (!parent) return;
     if (SuperFruitControls.empty()) return;
 
-    // Serialize first active controller (binary stores at most one active at a time)
+    // Serialize first active controller (binary stores at most one active at a time).
     std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.begin();
     if (it == SuperFruitControls.end() || !it->second) return;
 
     SuperFruitControl* ctrl = it->second;
-
-    TiXmlDocument doc = parent->GetDocument();
-    if (!doc) return;
-    TiXmlElement elem = doc.NewElement("superFruit");
-    if (!elem) return;
 
     SuperFruitState state;
     state.m_Timer      = ctrl->m_Timer;
@@ -704,10 +700,14 @@ void SuperFruitControl::SaveSuperFruitState(TiXmlElement* parent)
     // ctrl+0x2c is the controller's Entity-base scale.y (Entity::scale is the
     // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
     // controller's own scale.y as the saved spin/rotation value.
-    state.m_Spin       = ctrl->scale.y;
-    state.WriteToElement(&elem);
+    state.m_Spin = ctrl->scale.y;
 
-    parent->InsertEndChild(elem);
+    // Binary: state.WriteToElement() returns a newly heap-allocated TiXmlElement*
+    // ("superFruitState") which is then inserted as a child of parent.
+    // DIFFERS: WriteToElement returns null in port (tinyxml2 standalone-element limit);
+    // InsertEndChild is skipped. Save path is deferred (#291).
+    TiXmlElement stateElem = state.WriteToElement();
+    if (stateElem) parent->InsertEndChild(stateElem);
 }
 
 // Binary @ 0x001bb52c. Global time-scale restore + type-6 ENT_KILLED walk +
@@ -876,7 +876,7 @@ void SuperFruitControl::StopRays()
 // Also spawns 8 Jiblet mesh actors via ActorManager (type 5, Jiblet::Init) --
 // Jiblet/MeshManager not yet ported; only the PSPParticleManager hookup is
 // implemented here.
-void SuperFruitControl::SpawnJibs(int /*count*/)
+void SuperFruitControl::SpawnJibs()
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
 
