@@ -63,8 +63,8 @@ uint32_t Skeleton::FindIndex(const char* name) const {
 // Binary allocates ONE block new Matrix44[count*3], partitions into 3 pointers.
 // No per-element Identity() -- memory left uninitialized.
 // Port uses resize (still calls Matrix44 ctor per element; port limitation).
-void Skeleton::BuildArrays(int count) {
-    if (count == (int)m_LocalMatrices.size() && !m_LocalMatrices.empty()) return;
+void Skeleton::BuildArrays(unsigned long count) {
+    if (count == m_LocalMatrices.size() && !m_LocalMatrices.empty()) return;
     if (count == 0) {
         m_LocalMatrices.clear();
         m_WorldMatrices.clear();

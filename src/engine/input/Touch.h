@@ -118,7 +118,7 @@ public:
 
     // Binary @ 0x00195424 -- FindTouch(uint touchId).
     // Linear scan states1; return slot index or -1.
-    int FindTouch(uint32_t touchId) const;
+    int FindTouch(uint32_t touchId);
 
     // Binary @ 0x001954fc -- GetAnyTouch().
     // First slot with phase < 1; returns touchId or 0.
@@ -131,11 +131,11 @@ public:
     // ASM-spec v1.6.1 Touch::GetTouchPos @0x002429d4: (uint, float&, float&).
     // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
     // Binary leaves *x/*y UNTOUCHED on miss.
-    int GetTouchPos(uint32_t touchId, float& x, float& y) const;
+    int GetTouchPos(uint32_t touchId, float& x, float& y);
 
     // ASM-spec v1.6.1 Touch::GetTouchDelta @0x00242a20: (uint, float&, float&).
     // Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
-    int GetTouchDelta(uint32_t touchId, float& dx, float& dy) const;
+    int GetTouchDelta(uint32_t touchId, float& dx, float& dy);
 
     // Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.

@@ -127,7 +127,7 @@ private:
     // ASM-spec v1.6.1 DojoScreen::UpdateBSButton @0x0016a2f4 + T_1162 @0x0016a274:
     //   slides btn to anchor=(152, 100-46*idx, 0) along dir=norm(8,-1,0)
     //   by offset (1 - m_TransitionAlpha) * 248. Called every frame.
-    void UpdateBSButton(BSButton* btn, float dt, int idx);
+    void UpdateBSButton(BSButton* btn, float dt, unsigned long idx);
 
     // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580:
     //   loops m_pBSButton0/1 (idx 0/1) and defunct m_pButton4/m_ResetValue

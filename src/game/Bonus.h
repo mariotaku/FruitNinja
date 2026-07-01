@@ -21,8 +21,8 @@ class Bonus {
 public:
     int                             m_MinSliced;        // +0x00
     int                             m_MaxSliced;        // +0x04
-    std::map<uint32_t, int>         m_MinFruit;         // +0x08  sizeof 24
-    std::map<uint32_t, int>         m_MaxFruit;         // +0x20  sizeof 24
+    std::map<unsigned long, int>     m_MinFruit;         // +0x08  sizeof 24
+    std::map<unsigned long, int>     m_MaxFruit;         // +0x20  sizeof 24
     int                             m_DivisibleBy;      // +0x38
     int                             m_Tier;             // +0x3C  (binary ctor default 5; -1 used as invalid sentinel)
     char                            m_NameTemplate[64]; // +0x40
@@ -37,7 +37,7 @@ public:
     Bonus& operator=(const Bonus& rhs);
 
     void Parse(TiXmlElement* e); // Binary @ 0x0012f0f8
-    int  IsAchieved(int score, std::map<uint32_t, int>& fruitCounts); // Binary @ 0x0010df38
+    int  IsAchieved(int score, std::map<unsigned long, int>& fruitCounts); // Binary @ 0x0010df38
 
     bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (binary @ 0x0010ed2c)
 };
@@ -68,7 +68,7 @@ static_assert(__builtin_offsetof(Bonus, m_StarTexture)    == 0xD0, "Bonus::m_Sta
 // ---------------------------------------------------------------------------
 class BonusType {
 public:
-    std::map<uint32_t, int>   m_RequiredHashes; // +0x00  sizeof 24
+    std::map<unsigned long, int>   m_RequiredHashes; // +0x00  sizeof 24
     std::vector<Bonus>        m_Bonuses;         // +0x18  sizeof 12
     bool                      m_HasAchievement;  // +0x24
 

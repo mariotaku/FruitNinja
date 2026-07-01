@@ -201,7 +201,7 @@ public:
     // 0x00199854) add the result to the cursor advance, but it's always
     // 0. Port matches exactly; do NOT replace with a real lookup.
     float         GetKerning(uint32_t /*a*/, uint32_t /*b*/) const { return 0.0f; }
-    Page*         GetPage(int idx) const;
+    Page*         GetPage(unsigned long idx) const;
 
 private:
     float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const;

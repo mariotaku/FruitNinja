@@ -97,7 +97,7 @@ public:
 private:
     // Matches Skeleton::BuildArrays (0x001aa700)
     // Allocates matrix arrays for N bones.
-    void BuildArrays(int count);
+    void BuildArrays(unsigned long count);
 
     // Matches Skeleton::BuildLocalMatrices @ 0x002372fc
     // Converts per-bone TRS (quaternion + vec3 + mat3) -> local Matrix44.
