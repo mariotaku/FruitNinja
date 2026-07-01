@@ -167,7 +167,7 @@ public:
     // v1.6.1 @ 0x1d56b4
     static void ClearUnspawned();
 
-    // ASM-spec v1.6.1 Bomb::SetForPlayer @0x00126390
+    // ASM-spec v1.6.1 Bomb::SetForPlayer @0x0012702c
     void SetForPlayer(int playerIdx);
 
     // ASM-spec v1.6.1 Bomb::SetHit @0x0012c9e4
