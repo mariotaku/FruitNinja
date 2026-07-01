@@ -553,16 +553,15 @@ void Bomb::ClearUnspawned() {
 
 // ASM-verified: 2026-05-03 v1.6.1 Bomb::SetHit @0x0012c9e4 (re-analyst)
 // ASM-spec v1.6.1 Bomb::SetHit @0x0012c9e4
-void Bomb::SetHit(Bomb* b, float speed) {
-    if (!b) return;
-    b->m_SpawnTimer = speed;
-    b->m_bHit       = 1;
+void Bomb::SetHit(float speed) {
+    m_SpawnTimer = speed;
+    m_bHit       = 1;
 }
 
 // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00126390 (asm-inspector)
-// ASM-spec v1.6.1 Bomb::SetForPlayer @ 0x0012702c
-void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
-    b->m_BombVariant = playerIdx;
+// ASM-spec v1.6.1 Bomb::SetForPlayer @0x00126390
+void Bomb::SetForPlayer(int playerIdx) {
+    m_BombVariant = playerIdx;
 }
 
 // ASM-spec v1.6.1 Bomb::MakeFat @ 0x1d6fd4

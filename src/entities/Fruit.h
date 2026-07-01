@@ -241,7 +241,7 @@ public:
     // Matches Fruit::Disable (binary @ 0x00126374). Sets m_bNoPowerUp = 1,
     // suppressing miss penalty and power-up activation for this fruit.
     // Used by ClearMenuItems on dojo-transition retract path.
-    static void Disable(Fruit* f);
+    void Disable();
 
     // @ 0x0016ba6e — draw drop-shadows for all active fruits.
     static void DrawShadows();
