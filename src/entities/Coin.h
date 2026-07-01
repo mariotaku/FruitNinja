@@ -105,17 +105,13 @@ public:
     //   +0x58 m_CollectFXHash = (raw uint32, NOT a name)
     //   +0x68/+0x6c emitters = 0 ; +0x70 m_OnArrived = onArrived ; +0x50 = 0
     //
-    // DIFFERS: original InitCoin takes pre-hashed flyFXHash / collectFXHash
-    //   (uint32, hashed by MakeCoins via StringHash before the call); the port
-    //   passes the FX names through and StringHashes them inside InitCoin
-    //   (Coin.cpp). Net effect is identical (StringHash(name) lands in the same
-    //   field). The earlier "port over-ported names the binary lacks" note was
-    //   wrong: the binary's FX-name args are real, with "coin_fly"/"coin_collect"
-    //   defaults built in MakeCoins (DAT_00173784/DAT_00173788). The 9-vs-11
-    //   "param count" gap was an HFA decompiler artifact (Vec3-by-value counts
-    //   as one logical arg but three VFP regs; hidden `this`).
-    void InitCoin(Vec3 pos, Vec3 gravity, uint16_t baseAngle,
-                  int playerIdx, uint16_t launchAngle, int coinValue,
+    // ASM-spec v1.6.1 Coin::InitCoin @0x001d7d84: binary sig (9 params, this excluded):
+    //   (Vec3 pos, Vec3 gravity, ushort angle, int coinValue,
+    //    ulong flyFXHash, ulong collectFXHash, Delegate1<void,Coin*>, float delay, bool silent)
+    // DIFFERS: original takes pre-hashed flyFXHash/collectFXHash (uint32 each, hashed by
+    //   MakeCoins via StringHash; defaults "coin_fly"/"coin_collect" @ DAT_00173784/88).
+    //   Port passes the FX names through and StringHashes inside InitCoin -- same net effect.
+    void InitCoin(Vec3 pos, Vec3 gravity, uint16_t angle, int coinValue,
                   const char* flyFXName, const char* collectFXName,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
@@ -123,32 +119,24 @@ public:
     void Arrived();
 
     // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
-    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x00173568 (disassembly inspected).
+    // ASM-spec v1.6.1 Coin::MakeCoins @0x001d7ec8: binary sig (12 params, this excluded):
+    //   (int totalCoins, int coinsPerCoin, Vec3 delay, ushort baseAngle, ushort angleSpread,
+    //    Vec3* spawnPos, float delayStep, float delayCap, char* flyFXName,
+    //    char* collectFXName, Delegate1<void,Coin*>, bool silent)
+    //   delayStep/delayCap exact semantics unconfirmed (labeled s0/s1 in Ghidra decompile);
+    //   port maps them to per-coin delay step and max delay cap respectively.
+    // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- confirm delayStep/delayCap semantic
+    //   against full binary decompile (currently inferred from per-coin stagger logic).
     //
-    // Binary signature (HFA): MakeCoins(int totalCoins /*r0*/,
-    //   int coinsPerCoin /*r1*/, _Vector3<float> delay /*s0-s2*/,
-    //   ushort baseAngle /*sp+0xc0 -> r11*/, ushort angleSpread,
-    //   _Vector3<float>* spawnPos /*r2 -> r7*/, char* flyFXName /*sp+0xc4*/,
-    //   char* collectFXName /*sp+0xc8*/, Delegate1<void,Coin*> onArrived
-    //   /*sp+0xd0*/, bool silent /*sp+0xd4*/).
-    //
-    // Behaviour proven from disassembly:
-    //   - flyFXName  default = DAT_00173784 (-> r6 base) when null  (0x1735e0)
-    //   - collectFXName default = DAT_00173788 when null            (0x1735ee)
-    //   - both names StringHash'd here (0x1735e8/0x1735f6) and the resulting
-    //     uint32 hashes passed to InitCoin (NOT the names themselves).
-    //   - per-coin loop: ActorManager::GetInstance()->Add(2,true), random
-    //     launch angle baseAngle +/- spread (Rand32 + SinIdx/CosIdx scatter),
-    //     up to 10 retries against screen bounds, then InitCoin(...).
-    //
-    // DIFFERS: the "extra float between spawnPos and flyFXName" in the earlier
-    //   note was an HFA mis-read of the `delay` Vec3 (s0/s1/s2). There is no
-    //   stray scalar: the binary has exactly the args listed above. Port keeps
-    //   `Vec3 delay` (delay.x = per-coin step, delay.y = total cap) and passes
-    //   names to InitCoin (hashing deferred into InitCoin) — same net effect.
+    // Behaviour: default FX names ("coin_fly"/"coin_collect") filled from DAT_00173784/88
+    //   when null; both StringHash'd and passed to InitCoin.
+    //   Per-coin loop: ActorManager::Add(2,true), random angle in baseAngle+/-spread,
+    //   up to 10 retries against screen bounds, then InitCoin.
+    // DIFFERS: port passes FX names to InitCoin (hashing deferred); binary pre-hashes here.
     static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                           uint16_t baseAngle, uint16_t angleSpread,
                           Vec3* spawnPos,
+                          float delayStep, float delayCap,
                           const char* flyFXName, const char* collectFXName,
                           Mortar::Delegate1<void, Coin*> onArrived, bool silent);
 

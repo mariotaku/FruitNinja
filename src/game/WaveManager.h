@@ -311,8 +311,9 @@ public:
 
     // --- Spawning -----------------------------------------------------
 
-    // 0x00121fa8: spawn N bombs.
-    void SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx);
+    // 0x001247c4: spawn N bombs. spawner=nullptr for default-bottom spawn.
+    // ASM-spec v1.6.1 WaveManager::SpawnBomb @0x001247c4: (long count, SPAWNER_INFO* spawner, int playerIdx)
+    void SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx);
 
     // 0x001225a0 (248 lines): spawn N fruits. Returns the last spawned Entity*
     // (binary @ 0x00124298 returns this_00); NULL if count < 1 or no entity allocated.

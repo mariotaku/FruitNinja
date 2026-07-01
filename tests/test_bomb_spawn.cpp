@@ -114,7 +114,7 @@ static bool RunVariantSlice(Game& game, bool visual) {
 
     // Step 1: spawn a single bomb (bare bottom, like variant A).
     SPAWNER_INFO spawner;
-    WaveManager::GetInstance()->SpawnBomb(1, 1, &spawner, 0);
+    WaveManager::GetInstance()->SpawnBomb(1, &spawner, 0);
     printf("[slice] spawned: bombs=%d\n", BombCount(game));
 
     // Step 2: let the bomb fall + fuse SFX spin up.
@@ -203,7 +203,7 @@ static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner, bool
 
     // Bypass the wave pump; call SpawnBomb directly.
     WaveManager* wm = WaveManager::GetInstance();
-    wm->SpawnBomb(1, 1, &spawner, 0);
+    wm->SpawnBomb(1, &spawner, 0);
 
     printf("[test_bomb_spawn] %s: spawned, bombs_before=%d bombs_now=%d\n",
            name, bombsBefore, BombCount(game));

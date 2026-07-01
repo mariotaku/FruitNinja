@@ -204,9 +204,7 @@ void Jiblet::Update(float dt) {
             Vec3 sp = pos;
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
             Vec3 sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
-            // MakeSplat(pos, vel, param3=false, fruitType). Binary 5-arg form is
-            // (pos, vel, 0, 1, fruitType); port collapses the two bool flags.
-            s->MakeSplat(sp, sv, false, m_FruitType);
+            s->MakeSplat(sp, sv, false, false, (long)m_FruitType);
             m_SplatTimer += 1.0f / m_FadeRate;
         }
     }

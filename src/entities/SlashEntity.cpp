@@ -2023,7 +2023,8 @@ void SlashEntity::Update(float dt) {
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
                             Coin::MakeCoins(bonusCoins, 1,
                                             Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                                            &coinPos, nullptr, nullptr,
+                                            &coinPos, 0.02f, 0.15f,
+                                            nullptr, nullptr,
                                             Coin::DefaultArrivedDelegate(), true);
                         }
                         // (d) Achievement unlock.
@@ -2124,8 +2125,10 @@ void SlashEntity::Update(float dt) {
             // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
             FruitCamera* cam = game_work.m_FruitCamera;
             Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
-            // TODO: v1.6.1 @0x1e9810 MakeSplat binary is 5-arg: param3=1 (hardcoded, not the port's false) and a 5th arg = FruitInfo[m_SliceFruitType].field_0x330; the port collapsed to 4-arg. Separate fidelity fix.
-            s->MakeSplat(splatPos, v, false, m_SliceFruitType);
+            // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false)
+            //   and fruitType = FruitInfo[m_SliceFruitType].field_0x330 (not m_SliceFruitType directly).
+            //   landImmediately=false is correct here.
+            s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType);
         }
     }
 }

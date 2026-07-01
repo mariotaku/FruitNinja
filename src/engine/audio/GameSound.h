@@ -85,7 +85,7 @@ public:
     void Unpause();
 
     // Binary @ 0x0012930c
-    void Update(float dt);
+    void Update();
 
     // Binary @ 0x00129170 -- static
     static void DestroySoundInternals(Mortar::MortarSound* sound);

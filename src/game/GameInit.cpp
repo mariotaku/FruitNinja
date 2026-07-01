@@ -415,7 +415,7 @@ void GameUpdate(float dt, bool active) {
 
     // --- Common update block: sound + music (0x001cf6b8..0x001cf7d0) ---
     // Binary gates this on LoadingJob::IsLoaded(); port calls unconditionally.
-    game_work.mGameSound->Update(dt);
+    game_work.mGameSound->Update();
     UpdateMusic(dt);
 
     // --- Per-frame slot-array re-snap + touch-released dispatch (0x001cf63c..0x001cf6a8) ---
