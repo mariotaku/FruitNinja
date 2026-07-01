@@ -559,7 +559,7 @@ void Bomb::SetHit(float speed) {
 }
 
 // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00126390 (asm-inspector)
-// ASM-spec v1.6.1 Bomb::SetForPlayer @0x00126390
+// ASM-spec v1.6.1 Bomb::SetForPlayer @0x0012702c
 void Bomb::SetForPlayer(int playerIdx) {
     m_BombVariant = playerIdx;
 }

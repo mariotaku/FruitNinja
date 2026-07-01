@@ -110,6 +110,23 @@ docker run --rm \
     fi
 ) || true
 
+# Host-side: stale-marker lint (#204 regression guard). Checks every src/ @0x
+# marker against the binary symbol table (report.json). Non-fatal -- surfaces
+# STALE / MID-SYMBOL-MISMATCH (wrong-address mis-stamps) the same run they're
+# introduced, not sessions later.
+(
+    cd "$PROJECT_ROOT" || exit 0
+    PY=""
+    command -v python > /dev/null 2>&1 && PY=python
+    [ -z "$PY" ] && command -v py > /dev/null 2>&1 && PY=py
+    if [ -n "$PY" ]; then
+        echo
+        echo "=== stale-marker lint (#204 guard) ==="
+        "$PY" tools/asm-verify/stale-marker-lint.py 2>&1 \
+            | grep -iE "Total markers|MID-SYMBOL-MISMATCH|^ +STALE |NO-VERSION" | head -8
+    fi
+) || true
+
 echo
 echo "Report:    tmp/asm-verify/report.md"
 echo "report.json enriched with per-symbol cause + likelihood (ranked shortlist printed above)."
