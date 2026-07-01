@@ -1274,7 +1274,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         : -1;
 
                     if (fruitType == -2) {
-                        SpawnBomb(1, (long)(intptr_t)(&spawner), &spawner, playerIdx);
+                        SpawnBomb(1, &spawner, playerIdx);
                     } else if (fruitType == -1) {
                         // Probabilistic override blitz selection.
                         int chosenType = -1;
@@ -1906,20 +1906,20 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
 // SpawnBomb — per wave-system-impl.md §2
 // ----------------------------------------------------------------------------
 
-void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx) {
+void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     for (long i = 1; i <= count; ++i) {
         float minAngle, maxAngle;
-        if (type == 0) { minAngle = -1.0f; maxAngle = 1.0f; }
-        else           { minAngle = spawner->m_HorizMin; maxAngle = spawner->m_HorizMax; }
+        if (spawner == nullptr) { minAngle = -1.0f; maxAngle = 1.0f; }
+        else                    { minAngle = spawner->m_HorizMin; maxAngle = spawner->m_HorizMax; }
 
         float range = minAngle * (-150.0f) + maxAngle * 150.0f;  // DAT_00122208/0c
         uint32_t r1 = (range > 0.0f) ? m_Random.Rand32((uint32_t)range) : 0;
         int baseDeg = (int)((float)r1 + minAngle * 150.0f);
 
-        float spread = (type == 0 || spawner->m_SpawnType < 2) ? 20.0f : 12.0f;
+        float spread = (spawner == nullptr || spawner->m_SpawnType < 2) ? 20.0f : 12.0f;
         long center  = (long)(((float)baseDeg / -300.0f) * spread * 0.5f);  // DAT_00122210
         long lo      = (long)((float)center + spread * -0.5f);
         long hi      = (long)((float)center + spread *  0.5f);
@@ -1929,9 +1929,9 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float speed = m_Random.RandF(1.5f) + 9.5f;
         float sin_a = SinIdx(angle);
         float cos_a = CosIdx(angle);
-        float velMultX = (type == 0) ? 1.0f : spawner->m_VelXScale;
-        float velMultY = (type == 0) ? 1.0f : spawner->m_VelYScale;
-        float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
+        float velMultX = (spawner == nullptr) ? 1.0f : spawner->m_VelXScale;
+        float velMultY = (spawner == nullptr) ? 1.0f : spawner->m_VelYScale;
+        float zOffset  = (spawner == nullptr) ? 0.0f : spawner->m_SpawnTimer;
 
         // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001220e2 (bomb) (re-analyst).
         // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
@@ -1953,7 +1953,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float spawnY = -160.0f;
         float spawnZ = (float)i * 32.0f;  // DAT_00122580
 
-        if (type != 0) {
+        if (spawner != nullptr) {
             SpawnPlacement st = spawner->m_SpawnType;
             if (st == PLACEMENT_RANDOM_SIDE)
                 st = (m_Random.Rand32(2) == 0) ? PLACEMENT_LEFT : PLACEMENT_RIGHT;
@@ -2000,9 +2000,9 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         b->pos.y += -100.0f * b->scale.y;               // DAT_00122588 = -100
         b->Chuck(chuckDelay);
 
-        // Binary @ 0x00121fa8 tail: if default-spawner bomb and bomb-multiplier
+        // Binary @ 0x001247c4 tail: if default-spawner bomb and bomb-multiplier
         // powerup active (playerIdx > 0), scale the bomb up.
-        if (type == 0 && playerIdx > 0)
+        if (spawner == nullptr && playerIdx > 0)
             b->MakeFat(false);
 
         Game* game = Game::GetInstance();

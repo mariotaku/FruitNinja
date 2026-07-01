@@ -253,10 +253,10 @@ bool SplatEntity::s_RandKillEnabled = true;
 //
 // Bugfix #6: m_ScaleSpawn snapshot added after m_Scale is set.
 //
-// landImmediately (5th param, binary byte arg 2): if true, skip the airborne
-// phase and land the splat instantly. Binary 6-arg ExplodeSuperFruit path
-// passes (0, 1) for (param3, landImmediately).
-void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool landImmediately) {
+// landImmediately (4th param, binary bool arg 2): if true, skip the airborne
+// phase and land the splat instantly. ExplodeSuperFruit path passes true here.
+// ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910
+void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, long fruitType) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.

@@ -269,7 +269,7 @@ void Bomb::Update(float /*dt*/) {
                     pos.y = OFFSCREEN_Y;
                     vel = Vec3(0.0f, -1.0f, 0.0f);
                 } else if (iVar7 != 1) {
-                    wm->SpawnBomb(iVar7 - 1, 0, nullptr, 0);
+                    wm->SpawnBomb(iVar7 - 1, nullptr, 0);
                 }
             }
         }

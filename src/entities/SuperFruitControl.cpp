@@ -412,7 +412,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         SplatEntity* s = SplatEntity::GetFree();
         if (s) {
             Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
-            s->MakeSplat(hostPos, vel, /*param3=*/false, (int)hostFruitType, /*landImmediately=*/true);
+            s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType);
 
             // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
             float taper = 1.0f - (float)(i - 2) / (float)N;

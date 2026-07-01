@@ -157,7 +157,7 @@ void GameSound::Unpause() {
 }
 
 // ASM-verified: 2026-05-04T11:00 v1.6.1 binary @ 0x0012930c (asm-inspector)
-void GameSound::Update(float /*dt*/) {
+void GameSound::Update() {
     if (m_PausedForInterrupt) {
         SoundManager& mgr = SoundManager::GetInstance();
         if (mgr.IsInterrupted()) return;

@@ -159,16 +159,15 @@ void Coin::Arrived() {
 }
 
 // ---------------------------------------------------------------------------
-// InitCoin @ 0x00173454
+// InitCoin @ 0x001d7d84
 // ---------------------------------------------------------------------------
-void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t /*baseAngle*/,
-                    int /*playerIdx*/, uint16_t launchAngle, int coinValue,
+void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t angle, int coinValue,
                     const char* flyFXName, const char* collectFXName,
                     Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
 {
     // flags &= 0xEE — clear active+dead bits (bits 0 and 4: ENT_INACTIVE | ENT_KILLED)
     flags &= 0xEE;
-    m_Angle      = launchAngle;
+    m_Angle      = angle;
     m_State      = 0;
     m_CoinValue  = coinValue;
     // Speed formula: (500 + rand(524287)/524287 * 550) * 0.66
@@ -453,6 +452,7 @@ void Coin::ClearCoins(bool arrive) {
 void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                      uint16_t baseAngle, uint16_t angleSpread,
                      Vec3* spawnPos,
+                     float delayStep, float delayCap,
                      const char* flyFXName, const char* collectFXName,
                      Mortar::Delegate1<void, Coin*> onArrived, bool silent)
 {
@@ -464,10 +464,10 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
     // Number of coins spawned (each represents coinsPerCoin value)
     int numCoinEntities = (totalCoins + coinsPerCoin - 1) / coinsPerCoin;
     (void)numCoinEntities;
-    // delay.x = per-coin delay increment (negative); delay.y = max total delay cap (negative).
-    // Each coin i gets delay.x * (i+1), clamped so it never exceeds delay.y in magnitude.
-    float perStep = delay.x;
-    float maxDelay = delay.y;
+    // delayStep = per-coin delay increment (negative); delayCap = max total delay cap (negative).
+    // Each coin i gets delayStep * (i+1), clamped so it never exceeds delayCap in magnitude.
+    float perStep = delayStep;
+    float maxDelay = delayCap;
 
     Vec3 gravity = COIN_DEFAULT_GRAVITY;
 
@@ -511,7 +511,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
         if (maxDelay < 0.0f && coinDelay < maxDelay) coinDelay = maxDelay;
         int coinValue = remaining < coinsPerCoin ? remaining : coinsPerCoin;
 
-        coin->InitCoin(coinPos, gravity, baseAngle, 0, randAngle, coinValue,
+        coin->InitCoin(coinPos, gravity, randAngle, coinValue,
                        flyFXName, collectFXName, onArrived, coinDelay, silent);
 
         remaining -= coinsPerCoin;

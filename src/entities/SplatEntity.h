@@ -97,12 +97,11 @@ public:
     // Destructor pair (vtable slots 0 and 1)
     virtual ~SplatEntity();
 
-    // Matches SplatEntity::MakeSplat (0x0017f2f0).
-    // Binary 6-arg form: param3=byte0, landImmediately=byte1.
-    // landImmediately=1 forces the splat to skip the airborne phase and land instantly
-    // (used by ExplodeSuperFruit radial jibs; binary decompile: MakeSplat(this, pos*, vel*, 0, 1, fruitType)).
-    // Existing 4-arg callers leave landImmediately at its default (0 = airborne).
-    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, int fruitType, bool landImmediately = false);
+    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910:
+    //   (Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType)
+    // landImmediately=true forces the splat to skip the airborne phase and land instantly
+    // (ExplodeSuperFruit radial jibs path). param3 biases landing RNG toward large types 4/5.
+    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType);
 
     // --- Pool API ---
     static void CreatePool(int capacity);
