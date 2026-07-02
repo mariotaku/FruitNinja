@@ -248,7 +248,7 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
 
 // Matches DrawTriList (0x00240e34) — QUADCUSTOMVERTEX stride 0x24 with
 // per-vertex RGBA colour in `verts->colour` (packed BGRA uint32).
-void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
+void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc) {
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
     glMatrixMode(GL_PROJECTION);
@@ -278,7 +278,11 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
     // alpha=255) is unaffected by enabling blend.
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // v1.6.1 Mesh::DrawTris @0x240c30 toggles GL_BLEND only, never glBlendFunc;
+    // particle caller owns the func (Material::Set).
+    if (setBlendFunc) {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
 
     glDrawArrays(GL_TRIANGLES, 0, vertCount);
 
