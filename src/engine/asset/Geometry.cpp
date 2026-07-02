@@ -86,14 +86,10 @@ Geometry::~Geometry() {
 void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
-    // CULL_FACE: do NOT enable. The binary's Geometry::Render @0x00264468
-    // guards its `glEnable(GL_CULL_FACE)` behind a one-shot static byte
-    // (TODO: re-verify v1.6.1 DAT; was DAT_001a4050 stale v1.5.x) -- after frame 0, that byte is set, the enable never
-    // executes again, and DisplayManagerBada::BeginFrame's two glDisable
-    // calls (TODO: re-verify v1.6.1 BeginFrame offsets; were 0x0019e012/0x0019e066 stale v1.5.x) leave CULL_FACE off for the rest
-    // of the program's life. Net effect: the binary renders 3D meshes
-    // with cull disabled. Asm-inspector confirmed via Geometry::Render
-    // disassembly + BeginFrame trace.
+    // ASM-spec v1.6.1 Geometry::Render @0x00264468 (+ GlClientStates::Reset @0x00258000): GLES1 3D-mesh pass forces BLEND off + CULL_FACE on. The v1.5.x BeginFrame cull-disable (0x0019e012/66) is GONE in v1.6.1; Reset disables cull at frame top, Render re-enables it, so cull is ON only during 3D mesh draws. Effect PCDX render-states are not consumed by GLES1.
+    glDisable(GL_BLEND);        // f00c one-shot: 3D mesh pass blend OFF
+    glEnable(GL_CULL_FACE);     // f00d one-shot: 3D mesh pass cull ON
+    glCullFace(GL_BACK);        // GL default; binary relies on InitGL/default
 
     // Matrix stacks: push current, load MVP, pop on exit. Binary splits
     // the upload into PROJECTION = screenRot*World and MODELVIEW = view
