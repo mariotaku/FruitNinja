@@ -39,7 +39,7 @@ public:
     float    m_ScoreSmoothed;      // eased toward GetCurrentScore
     int      m_DisplayedScore;     // (int)m_ScoreSmoothed — drives formatted text
     int      m_HighscoreToShow;    // highscore value in banner (0 = no banner)
-    // Defunct: unused +0x8C float; v1.6.1 binary @ 0x00158c7c init -1.0f only (re-analyst)
+    // Defunct: unused +0x8C float; v1.6.1 ScoreControl::ScoreControl @ 0x001ad5fc init -1.0f only (re-analyst)
     float    _pad8C;               // +0x8C: written -1.0f in ctor, never read/written again
 
     // +0x90
