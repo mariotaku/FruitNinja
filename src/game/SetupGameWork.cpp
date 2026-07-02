@@ -1,4 +1,4 @@
-// SetupGameWork -- binary @ 0x0010ed34.
+// SetupGameWork -- binary @ 0x0011c06c (0x0010ed34 is a PLT/GOT thunk to it).
 
 #include "game/SetupGameWork.h"
 #include "Game.h"
@@ -6,15 +6,15 @@
 #include "util/StringHash.h"
 #include "game/GameWork.h"
 
-// ASM-verified: 2026-05-03 v1.6.1 SetupGameWork @ 0x0010ed34 (re-analyst)
+// ASM-verified: 2026-07-03T00:00:00Z v1.6.1 SetupGameWork @ 0x0011c06c (re-analyst)
 
-// Binary @ 0x0010ed34: 23 field stores + plays_total bump.
+// Binary @ 0x0011c06c: 23 field stores + sessions bump.
 void SetupGameWork() {
     Game* app = Game::GetInstance();
     FruitSaveData* save = game_work.m_SaveData;
 
-    // Bump cumulative play count.
-    save->AddToTotal("plays_total", StringHash("plays_total"), 1, true, true);
+    // Bump cumulative session count (key confirmed via decompile: "sessions", #335).
+    save->AddToTotal("sessions", StringHash("sessions"), 1, true, true);
 
     // 23 field stores (binary @ 0x0010ed34 disasm-confirmed):
 
