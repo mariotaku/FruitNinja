@@ -2570,11 +2570,26 @@ void Fruit::CheckFruitDropped() {
     GameOver(-1, -1.0f, 0);
 }
 
-// Counts active fruits that have active power-ups.
-// TODO: v1.6.1 -- binary addr unresolved; port stub returns 0 (conservative: no powerup fruits).
-// Used by GlobalProbabilityOveride::CanSpawn; returning 0 means the progression gate is checked.
+// ASM-spec v1.6.1 Fruit::NumberOfPowerupFruits @0x001db0ac
+// Counts type-0 (fruit) entities whose FruitInfo has a power-up table
+// (m_pPowers != nullptr). `this` is unused in the binary body -- CanSpawn calls
+// it via a WaveManager* cast to Fruit* (thiscall convention artifact), but the
+// function never dereferences the receiver.
 int Fruit::NumberOfPowerupFruits() {
-    return 0;
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    int count = 0;
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(0, it);
+    while (e) {
+        Fruit* f = static_cast<Fruit*>(e);
+        const ::FruitInfo* info = Fruit::FruitInfo((long)f->m_FruitType);
+        if (info && info->m_pPowers != NULL) {
+            ++count;
+        }
+        am = Mortar::ActorManager::GetInstance();
+        e = am->GetEntityNext(0, it);
+    }
+    return count;
 }
 
 // v1.6.1 Fruit::IsOffscreen @0x001da83c — gravity-axis projection offscreen check.

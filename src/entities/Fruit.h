@@ -275,10 +275,8 @@ public:
     // v1.5.x @ 0x00176184 had per-player live-count gating (maps to FruitFactLeaderboard region); removed in v1.6.1.
     static void CheckFruitDropped();
 
-    // Binary @0x001b98f4 area (called from CanSpawnFinalPomegranate).
-    // Returns the count of active fruits that have active power-up info.
-    // Port stub returns 0 (no powerup fruits active); safe conservative default.
-    // TODO: v1.6.1 -- NumberOfPowerupFruits exact binary addr unresolved; impl pending RE
+    // ASM-spec v1.6.1 Fruit::NumberOfPowerupFruits @0x001db0ac
+    // Counts active type-0 fruit entities whose FruitInfo::m_pPowers != nullptr.
     static int NumberOfPowerupFruits();
 
 
