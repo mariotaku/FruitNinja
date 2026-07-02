@@ -1274,6 +1274,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     } else if (fruitType == -1) {
                         // Probabilistic override blitz selection.
                         int chosenType = -1;
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave override block @0x00126124-0x0012676c:
+                        // corner-spawner pick, set only when the override block below resolves a
+                        // super-fruit or a still-active-power skip; overrides blitzSpawner/spawner.
+                        SPAWNER_INFO* powerSpawner = 0;
 
                         int blitzAdvance = 0;
                         bool gateOpen = false;
@@ -1364,16 +1368,44 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                     if (m_BlitzSpawnCount > 5) pc >>= 1;
                                     cumulative += pc;
                                     if (roll < cumulative || (po.m_PercentChance > 0 && blitzAdvance != 0)) {
+                                        // ASM-spec v1.6.1 WaveManager::UpdateWave override block
+                                        // @0x00126124-0x0012676c: retry GetType() up to 30x while the
+                                        // picked type's powers are already active elsewhere (avoid
+                                        // stacking duplicate power-fruits), then pick a corner spawner
+                                        // for super-fruits / power-fruits and gate the blitz-spawn count.
                                         chosenType = po.GetType();
-                                        if (chosenType >= 0) {
-                                            const FruitInfo* fi = FruitInfo_Get(chosenType);
-                                            if (fi && fi->m_pPowers && fi->m_pPowers->AnyActivePowers()) {
-                                                chosenType = -1;
-                                                break;
-                                            }
-                                            po.m_Counter++;
-                                            m_BlitzSpawnCount++;
+                                        const FruitInfo* fi = (chosenType >= 0) ? FruitInfo_Get(chosenType) : nullptr;
+                                        const FRUIT_POWERS* powers = fi ? fi->m_pPowers : nullptr;
+                                        bool hasPowers = false;
+                                        for (int n = 30; ; --n) {
+                                            hasPowers = (powers != nullptr);
+                                            if (!powers || n == 0) break;
+                                            if (!powers->AnyActivePowers()) break;  // usable type found
+                                            chosenType = po.GetType();              // retry
+                                            fi = (chosenType >= 0) ? FruitInfo_Get(chosenType) : nullptr;
+                                            powers = fi ? fi->m_pPowers : nullptr;
                                         }
+
+                                        if (fi && fi->m_bIsSuperFruit)
+                                            powerSpawner = GetRandomPowerSpawner(false);  // exclude centre
+                                        if (hasPowers) {
+                                            if (powers->AnyActivePowers()) {
+                                                // Retries exhausted, still colliding with an active
+                                                // power -- spawn goes ahead with this chosenType as-is,
+                                                // no corner override, no blitz-count credit.
+                                            } else {
+                                                powerSpawner = GetRandomPowerSpawner(true);  // include centre; overrides corner pick
+                                                // TODO: #339 Fruit::NumberOfPowerupFruits is stubbed to
+                                                // always return 0, so this term is always permissive
+                                                // until the real active-powerup-fruit count is ported.
+                                                if (m_FruitChance > 0.0f && Fruit::NumberOfPowerupFruits() < 1
+                                                        && (game_work.m_SaveData->m_TimeRemainingSave >= 8.0f
+                                                            || powers->m_pArray[0].m_PowerHash == StringHash("freeze"))
+                                                        && !powers->AnyActivePowers())
+                                                    m_BlitzSpawnCount++;
+                                            }
+                                        }
+                                        po.m_Counter++;
                                         break;
                                     }
                                 }
@@ -1390,7 +1422,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             chosenType = Fruit::RandomFruit(false);
                         }
                         Mortar::Entity* spawnedGPO = SpawnFruit(1, chosenType,
-                            blitzSpawner ? blitzSpawner : &spawner, playerIdx);
+                            powerSpawner ? powerSpawner : (blitzSpawner ? blitzSpawner : &spawner), playerIdx);
                         // Subscribe Entity events for GPO re-arm when the super-fruit is killed/expires.
                         // ASM-spec v1.6.1 UpdateWave @0x001263ec: onKilled (+0x178) -> FruitWasKilled,
                         //   onThrown (+0x180) -> FruitWasThrown.
