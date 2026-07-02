@@ -53,6 +53,13 @@ void GameTaskUpdate(float rawDt) {
         game_work.m_FrameTimer += (int)frameMs;
         s_taskState.totalTime += dt;
 
+        // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: per-frame FruitSaveData::Update
+        // (gated bomb-hit-timer<=0) before state dispatch. Runs every frame, all modes
+        // incl arcade -- drives achievement/combo save progression.
+        if (game_work.m_BombHitTimer <= 0.0f && game_work.m_SaveData) {
+            game_work.m_SaveData->Update(dt, game_work.mHud);
+        }
+
         if (!s_taskState.initialized) {
             // First frame of new state: call init handler
             s_taskState.prevState = stateIdx;
