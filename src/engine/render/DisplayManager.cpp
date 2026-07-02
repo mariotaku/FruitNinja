@@ -39,10 +39,12 @@ DisplayManager::DisplayManager()
 // clear is transparent black. Port diverged by setting white clear color,
 // causing a white flash during/after the splash phase.
 void DisplayManager::BeginFrame() {
-    // TODO: v1.6.1 GlClientStates::Reset @0x00258000 disables GL_BLEND at frame top;
-    // port BeginFrame enables it (anti-faithful) -- make faithful after auditing
-    // font/particle 2D paths for the same per-draw-enable need.
-    glEnable(GL_BLEND);
+    // ASM-spec v1.6.1 GlClientStates::Reset @0x00258000: frame top disables GL_BLEND
+    // (+ CULL_FACE, TEXTURE_2D, client arrays) and sets glBlendFunc(SRC_ALPHA,
+    // ONE_MINUS_SRC_ALPHA) once. Every draw path owns its own blend enable
+    // (Renderer 2D quads/tris + Geometry::Render 3D mesh) -- audit confirmed no
+    // path relies on a global enable, so this matches the binary faithfully.
+    glDisable(GL_BLEND);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -62,8 +64,8 @@ void DisplayManager::BeginFrame() {
     glDepthMask(GL_TRUE);
 
     glClearDepthf(1.0f);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    // 0x302, 0x303
+    glDisable(GL_BLEND);                                  // v1.6.1 Reset: blend cap OFF at frame top
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    // 0x302, 0x303 (func set once, draws own the enable)
     glDisable(GL_LIGHTING);                               // 0xb50
     glDisable(GL_CULL_FACE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
