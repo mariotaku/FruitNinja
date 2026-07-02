@@ -1434,9 +1434,13 @@ wave_end_check:
             if (wait > 0.0f)
                 goto epilogue;
         }
-        // v1.6.1 binary @ 0x0012666c-0x00126780: freeze powerup check;
-        // if freeze active and !onlineMultiplayer, suppress GetNextWave.
-        // Port stubs freeze check (PowerUpManager::GetActiveSingle not yet wired).
+        // v1.6.1 WaveManager::UpdateWave @0x0012666c: freeze wave-hold gate.
+        // Advance UNLESS single-player + game_work.bM_bPaused + freeze NOT active.
+        if (!IsOnlineMultiplayer() && game_work.bM_bPaused != 0) {
+            static uint32_t s_FreezeHash = StringHash("freeze");
+            if (PowerUpManager::GetInstance()->GetActiveSingle(s_FreezeHash) == 0)
+                goto epilogue;
+        }
         GetNextWave(playerIdx);
     }
 
