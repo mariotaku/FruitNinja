@@ -79,8 +79,7 @@ public:
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
     // Matches DojoScreen::ButtonDeleted @ 0x00169e94 (v1.6.1).
-    // Binary only nulls m_pShopButton. Port also nulls back and about
-    // because MSVC poisons freed memory (see DIFFERS in ButtonDeleted body).
+    // Binary nulls only m_pShopButton; no RemoveCallback for back/about.
     void ButtonDeleted(HUDControl* ctrl);
 
     // Port-specific: remove callback helper for AboutScreen child pointer.
@@ -103,9 +102,6 @@ private:
     // Port-only tail (beyond binary 0xb8 boundary, does not shift binary fields):
     // Child AboutScreen when state==3 triggers. nullptr when not shown.
     AboutScreen* m_pAboutScreen;
-    // Port specific: one-shot latch for the state-2/3/4 gate (replaces binary's
-    // dangling m_pBackButton != nullptr check -- see DIFFERS in Update).
-    bool m_bChildPushed;
 
     // Port specific: binary accesses Game via GOT; port stores a reference here.
     Game& game;
@@ -175,10 +171,10 @@ public:
     void TestFireShopSlice()  { ::ClearMenuItems(); ShopCallback();  }
     // Read current state machine index (BaseScreen::m_State, protected member).
     int  TestGetState()        const { return m_State; }
-    // True once the Update state-2/3/4 transition gate fired (m_bChildPushed set).
-    // Reliable regardless of MSVC heap poisoning: uses the dedicated port latch
-    // instead of comparing the (potentially dangling) m_pBackButton pointer.
-    bool TestTransitionFired() const { return m_bChildPushed; }
+    // True once the Update state-2/3/4 transition gate fired (m_pBackButton nulled).
+    // Binary: compare-only m_pBackButton != NULL at @0x0016b6a4; the pointer dangles
+    // after back button self-removes but is never dereferenced in the gate.
+    bool TestTransitionFired() const { return m_pBackButton == nullptr; }
     // The AboutScreen child pushed during state-3 transition; null otherwise.
     AboutScreen* TestGetAboutScreen() const { return m_pAboutScreen; }
 private:
