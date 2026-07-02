@@ -2060,16 +2060,8 @@ float WaveManager::GetCriticalChance(int playerIdx) {
 }
 
 bool WaveManager::CriticalMode(int playerIdx) {
-    // Binary @ 0x001219e4: returns
-    //   (float)((int64_t)*(int*)g_RandomState / 2) < GetCriticalChance(p)
-    // The LHS is a huge quasi-random float [INT_MIN/2..INT_MAX/2]; comparison
-    // against a small [0..N] chance makes it effectively a sign-of-seed coin
-    // flip. Requires Math::Random::PeekState() (currently absent in port's
-    // Random class) -- peeks the first 4 bytes of the LCG state without
-    // advancing. Returning false (no crits) is safe -- minor cosmetic gap
-    // until Random::PeekState() is added.
-    (void)playerIdx;
-    return false;
+    // ASM-spec v1.6.1 WaveManager::CriticalMode @0x001219e4: GetCriticalChance(p) > (float)((int64_t)LCG_state/2) (peek, no consume)
+    return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2);
 }
 
 float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
