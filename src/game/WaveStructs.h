@@ -321,7 +321,7 @@ static_assert(sizeof(COIN_CHANCEINATOR) == 8, "COIN_CHANCEINATOR size mismatch")
 static_assert(sizeof(COIN_CHANCEINATOR::Entry) == 0xc, "COIN_CHANCEINATOR::Entry size mismatch");
 #endif
 
-// PROBABILITY_OVERIDE — size 0x78. Binary ctor @ 0x00126870.
+// PROBABILITY_OVERIDE — size 0x84 (v1.6.1; was 0x78 pre-+0x78 field). Binary ctor @ 0x00126870.
 // Field order matches binary layout exactly.
 struct PROBABILITY_OVERIDE {
     // +0x00: selection weight (XML "percentageChance"). Binary stores as int.
@@ -344,6 +344,12 @@ struct PROBABILITY_OVERIDE {
     int                      m_PerWaveCount;     // +0x70
     // +0x74: last selected type index (-1 = unset). SelectType picks randomly.
     int                      m_SelectedType;     // +0x74
+    // +0x78: per-active-timed-power allow percentage (XML child <PowerAllowance
+    // allowPercentage="N">, one per element). UpdateWave @0x00126124 indexes this by
+    // min(GetNumActiveTimedPowers(), size-1) and rejects the override roll (falls through
+    // to GlobalProbabilityOveride/RandomFruit) when the indexed percentage rolls below
+    // Rand32(100). Empty on all shipped arcadewavelist.xml data -- reject never fires.
+    std::vector<int>         m_PowerAllowance;   // +0x78
 
     PROBABILITY_OVERIDE()
         : m_PercentChance(0), m_PerWave(0), m_Counter(0)
@@ -373,6 +379,13 @@ struct PROBABILITY_OVERIDE {
     // Restore fruitlist.xml entry if starfruit override (arcadewavelist.xml OverideProbability) should work.
     int GetType();
 };
+
+#ifdef __bada__
+// std::vector<int> is 12 bytes on 32-bit bada; host x64 std::vector is 24 bytes
+// (0x78 + 24 = 0x90), so this assert is bada-only per project policy (offset/size
+// asserts must not fire on 32-bit-assuming layouts under a 64-bit host build).
+static_assert(sizeof(PROBABILITY_OVERIDE) == 0x84, "PROBABILITY_OVERIDE size mismatch");
+#endif
 
 // WAVE_INFO is the legacy port-side name. Binary struct is WaveInfo.
 // Alias kept so existing callers (WaveManager.cpp etc.) compile unchanged.

@@ -1368,6 +1368,17 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                     if (m_BlitzSpawnCount > 5) pc >>= 1;
                                     cumulative += pc;
                                     if (roll < cumulative || (po.m_PercentChance > 0 && blitzAdvance != 0)) {
+                                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00126124: timed-power
+                                        // allowance reject. Empty on all shipped data (m_PowerAllowance
+                                        // never populated by arcadewavelist.xml) -- inert, kept for call-graph
+                                        // parity (#340).
+                                        int allowSz = (int)po.m_PowerAllowance.size();
+                                        if (allowSz > 0) {
+                                            int numActive = PowerUpManager::GetInstance()->GetNumActiveTimedPowers();
+                                            int idx = (numActive < allowSz) ? numActive : (allowSz - 1);
+                                            if (po.m_PowerAllowance[idx] <= (int)m_Random.Rand32(100))
+                                                break;
+                                        }
                                         // ASM-spec v1.6.1 WaveManager::UpdateWave override block
                                         // @0x00126124-0x0012676c: retry GetType() up to 30x while the
                                         // picked type's powers are already active elsewhere (avoid
