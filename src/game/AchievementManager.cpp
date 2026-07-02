@@ -79,19 +79,26 @@ AchievementManager* AchievementManager::GetInstance() {
 }
 
 // ---------------------------------------------------------------------------
-// LoadAchievementInfo  (Binary @ 0x00113c50)
+// LoadAchievementInfo  (Binary @ 0x00118198)
 // ---------------------------------------------------------------------------
 
 void AchievementManager::LoadAchievementInfo() {
-    // ASM-verified: 2026-05-23 v1.6.1 AchievementManager::LoadAchievementInfo @ 0x00113c50 (re-analyst)
+    // ASM-verified: 2026-05-23 v1.6.1 AchievementManager::LoadAchievementInfo @ 0x00118198 (re-analyst)
     // Binary loads "achievment_banner.tex" (sic) into DAT_001096a8 BEFORE opening the XML doc.
     s_AchievementBannerTex = TextureManager::LoadLocalisedTexture("achievment_banner.tex");
     // TODO: DAT_001096ac -- load second preamble texture (identity not yet RE'd).
     // TODO: DAT_001096b0 -- load third preamble texture (identity not yet RE'd).
 
-    // Binary @ 0x00109200: TiXmlDocument("xml/achievementList.xml")
+    // Binary @ 0x00118198: TiXmlDocument("xml/achievementList.xml")
+    // Port specific: prepend data_dir for platform-relative asset access (mirrors
+    // ItemManager::LoadItemData). The raw relative "xml/..." doesn't resolve on
+    // Emscripten/webOS (CWD is not the data dir). Keep the binary-faithful
+    // "achievementList.xml" case: TiXmlDocument::LoadFile applies ResolvePathCI, so
+    // the capital-L path resolves against the lowercase-extracted asset on
+    // case-sensitive FS (no asset rename needed).
     TiXmlDocument doc;
-    if (!doc.LoadFile("xml/achievementList.xml")) return;
+    std::string achPath = Game::GetInstance()->data_dir + "/xml/achievementList.xml";
+    if (!doc.LoadFile(achPath.c_str())) return;
 
     TiXmlElement root = doc.FirstChildElement("achievementManagerFile");
     if (!root) return;
@@ -103,24 +110,33 @@ void AchievementManager::LoadAchievementInfo() {
     for (TiXmlElement e = root.FirstChildElement("achievement");
          e; e = e.NextSiblingElement("achievement"))
     {
-        // Read "name" attribute — also the save-key string
-        const char* nameAttr = e.Attribute("name");
-        if (!nameAttr || nameAttr[0] == '\0') continue;
+        // Read "id" attribute — the unique save/map key matching ItemInfo::m_Hash hash space.
+        // Binary @ 0x00118198 (LoadAchievementInfo): m_All keyed by StringHash(e.Attribute("id")).
+        const char* idAttr = e.Attribute("id");
+        if (!idAttr || idAttr[0] == '\0') continue;
 
-        uint32_t nameHash = StringHash(nameAttr);
+        uint32_t idHash = StringHash(idAttr);
+
+        // Read "name" attribute — localized display name.
+        // Binary: GETSTRING(nameAttr) stored into AchievementInfo +0x00.
+        // TODO: v1.6.1 0x00118198 (AchievementManager::LoadAchievementInfo) — binary stores
+        //   GETSTRING(name attr) into m_Description (+0x00); port currently stores the XML
+        //   "description" attr there (pre-existing mismatch, out of scope for #323).
+        const char* nameAttr = e.Attribute("name");
+        (void)nameAttr;
 
         // Skip if already unlocked (binary: game_work.m_SaveData->IsAchievementUnlocked)
-        if (game_work.m_SaveData && game_work.m_SaveData->IsAchievementUnlocked(nameHash)) continue;
+        if (game_work.m_SaveData && game_work.m_SaveData->IsAchievementUnlocked(idHash)) continue;
 
-        // Skip if already loaded (duplicate in XML)
-        if (m_All.find(nameHash) != m_All.end()) continue;
+        // Skip if already loaded (id is unique per entry, unlike name which is shared)
+        if (m_All.find(idHash) != m_All.end()) continue;
 
         AchievementInfo* info = new AchievementInfo();
 
-        // name
-        strncpy(info->m_Name, nameAttr, sizeof(info->m_Name) - 1);
+        // id is the save-key and map key (must match ItemInfo::m_Hash for AchievementExists gates)
+        strncpy(info->m_Name, idAttr, sizeof(info->m_Name) - 1);
         info->m_Name[sizeof(info->m_Name) - 1] = '\0';
-        info->m_NameHash = nameHash;
+        info->m_NameHash = idHash;
 
         // description (localised)
         const char* descAttr = e.Attribute("description");
@@ -195,7 +211,7 @@ void AchievementManager::LoadAchievementInfo() {
         }
 
         // Insert into m_All (owning map)
-        m_All[nameHash] = info;
+        m_All[idHash] = info;
 
         // Insert into m_ByType secondary map
         // Key selection rule per RE:

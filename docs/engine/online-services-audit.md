@@ -33,7 +33,7 @@ Binary addresses are for FruitNinja_v1_6_1.exe v1.6.1 (0x10000 image base).
 | **FruitNinjaNewsControl** (: OpenFeintNewsRenderer) | ALREADY-STUBBED-OK | IsDisplayingNews, OnNewsFinished/CancelNews | false / void | ctor 0x1a13d0 |
 | **FriendLeaderboardItem** (: LeaderboardItem) | ALREADY-STUBBED-OK | ctor, CollideWithButton | false | ctor 0x13d210 |
 | **GameSpyScreen** | EMPTY-TU-OK | none | — | only _GLOBAL__I_ at 0x1891e4 |
-| **AchievementManager** | ALREADY-STUBBED-OK | AchievementExists (ItemManager init-time) | 0 | header-only inline |
+| **AchievementManager** | LIVE-LOAD-BEARING | LoadAchievementInfo (GameInitialise step 13), AchievementExists (ItemManager init-time) | populates m_All keyed by StringHash(id); gates shop item lock state | ctor 0x00108930, LoadAchievementInfo 0x00118198, AchievementExists 0x00108ea4 |
 | **FruitFactLeaderboard::Init** | STUBBED-COSMETIC | calls stubbed LeaderboardManager | empty board | ctor 0x176980 |
 
 **STUBBED-COSMETIC note:** FruitFactLeaderboard::Init carries a TODO comment
@@ -61,7 +61,7 @@ HasUnreadNews / IsP2POnline all return their offline defaults (false / 0 / nullp
 | `PauseScreen::QuitToMenu` | `src/screens/PauseScreen.cpp:112` | NetworkManager reference | **comment** — text reference only |
 | `BonusScreen::Update` | `src/screens/BonusScreen.cpp` | LeaderboardManager::RefreshLeaderboard | **dead** — routed to nullptr return |
 | `FruitFactControl::Update` | `src/screens/FruitFactControl.cpp` | GetSocialNetworkProvider + LeaderboardManager | **dead** — routed to no-op stubs |
-| `ItemManager::LoadItemData` | `src/game/ItemManager.cpp:121-122` | AchievementManager::AchievementExists (init-time) | **init** — returns 0, branches correct |
+| `ItemManager::LoadItemData` | `src/game/ItemManager.cpp:121-122` | AchievementManager::AchievementExists (init-time) | **live** — load-bearing: m_All must be populated by LoadAchievementInfo (called before LoadItemData in GameInitialise step 13); gates whether cost>0 items are locked |
 | `GameInitialise` / `FruitSaveData` | various | AchievementManager / LeaderboardManager / NetworkManager | **comments** — text references, not calls |
 
 ## 3. Verdict
