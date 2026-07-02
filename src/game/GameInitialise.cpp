@@ -37,6 +37,7 @@
 #include "PreloadSounds.h"
 #include "PreloadRings.h"
 #include "PowerUpManager.h"
+#include "AchievementManager.h"
 // Analysed: 2026-04-25T12:00
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
@@ -211,9 +212,6 @@ void GameInitialise(void* window, const char* config) {
     // SongPlay("background").
 
     // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
-    // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
-    // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.
-    // Called after AchievementManager::LoadAchievementInfo (step 13).
 
     // Step 1 of InitialiseData (must run before any XML parser that calls
     // GETSTRING_CAST_0_STR -- i.e. before LoadItemData, LoadAchievementInfo,
@@ -221,6 +219,15 @@ void GameInitialise(void* window, const char* config) {
     //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
     Localisation::Load(game->data_dir.c_str(), (int)game_work.languageFlag);
 
+    // Step 13 of InitialiseData: AchievementManager::LoadAchievementInfo
+    // Binary: InitialiseData @ 0x0010b7ca, step 13 of 15.
+    // Populates m_All keyed by StringHash(id); AchievementExists gates
+    // ItemManager cost>0 shop items (items with cost require an unlocked achievement).
+    // Must run before LoadItemData (step 14).
+    AchievementManager::GetInstance()->LoadAchievementInfo();
+
+    // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
+    // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.
     ItemManager::GetInstance()->LoadItemData();
 
     // Step 11 (call #22): PowerUpManager::Load — parse poweruplist.xml

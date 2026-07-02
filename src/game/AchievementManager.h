@@ -16,7 +16,7 @@
 //   dtor (regular)                0x00109028
 //   dtor (deleting)               0x00109078
 //   GetInstance                   0x00108f64
-//   LoadAchievementInfo           0x00109200
+//   LoadAchievementInfo           0x00118198
 //   UnLoadAchievementInfo         0x00108fb4
 //   AchievementExists             0x00108ea4
 //   UnlockBonusAchievement        0x00108af0  (was 0x00108de4)
