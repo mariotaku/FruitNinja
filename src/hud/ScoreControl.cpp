@@ -67,7 +67,7 @@ static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pul
 
 // GetCurrentScore: returns score for the given player index.
 // Player 1 (idx=0) uses game_work.currentScore. Player 2 is not yet ported.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00148e00 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 GetCurrentScore @ 0x00113704 (re-analyst)
 // Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
 // Same-screen MP does not split saved stats; no "Score_P2" key exists.
 int GetCurrentScore(int playerIdx) {
@@ -213,7 +213,7 @@ void ScoreControl::Reset() {
     m_LayerFlags = 1 << m_PlayerIdx;
 }
 
-// ASM-verified: 2026-05-14T00:00 v1.6.1 binary @ 0x001581a0 (re-analyst)
+// ASM-verified: 2026-05-14T00:00 v1.6.1 ScoreControl::Skip @ 0x001abc6c (re-analyst)
 // +0x4C (game_work.m_SaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
 // Prior port incorrectly tested game_work.bM_bPaused (engine pause flag) instead.
 void ScoreControl::Skip() {
@@ -350,7 +350,7 @@ void ScoreControl::Update(float dt) {
         m_DrawPosY = pos.y;
         m_DrawPosZ = pos.z;
         // wave-mode: recentre score banner via lerp toward anchor. binary @ 0x001589f0..0x00158ac6
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00158a64 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (re-analyst)
         // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
         if (game_work.pFontNumbers.IsValid()) {
             char scoreBuf[32];
@@ -532,7 +532,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
-        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00159240..0x0015925e (re-analyst).
+        // ASM-verified: 2026-05-10 v1.6.1 ScoreControl::PreDraw @ 0x001ace80 (re-analyst).
         // Anchor uses raw pos (m_Pos.x/y), NOT m_DrawPosX/Y:
         //   X = pos.x - 18.0   (literal 0x41900000)
         //   Y = pos.y - 52.0   (DAT_001593d4 = 0x42500000)
@@ -555,7 +555,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
         if (m_HighscoreToShow > 0 && transTimer > -1.0f && transTimer < 1.0f) {
             // Binary @ 0x001591BC: green-pulse lerp on highscore-reached banner.
-            // ASM-verified: 2026-05-03T00:00 v1.6.1 binary @ 0x00159334..0x001594e0 (asm-inspector)
+            // ASM-verified: 2026-05-03T00:00 v1.6.1 ScoreControl::PreDraw @ 0x001ace80 (asm-inspector)
             Colour col(0xB4, 0x80, 0x05, 200);  // base orange
             if (m_HighscoreToShow == m_DisplayedScore) {
                 s_BannerSinIdx += (!game_work.bM_Mode) ? 6 : 0;
