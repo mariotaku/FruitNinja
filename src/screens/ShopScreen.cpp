@@ -14,6 +14,7 @@
 #include "hud/TutorialControl.h"
 #include "hud/ScrollingMenu.h"
 #include "hud/ShopListItem.h"
+#include "hud/IngamePopup.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
@@ -1160,11 +1161,6 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     // Port uses a function-local static — same lifetime (process lifetime).
     static float s_DialAlpha = 0.0f;  // static_block+0x84
 
-    // Static one-time cache for ring scale Vec3 (static_block+0x74 / +0x78 in binary).
-    // binary uses __cxa_guard_acquire; port uses a bool + Vec3 static pair.
-    static bool  s_RingVecInited = false;  // static_block+0x74
-    static Vec3  s_RingVec(0.0f, 0.0f, 1.0f);  // static_block+0x78
-
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // All quads use white full-alpha colour (*(Colour**)(GOT+0x73a4) at runtime).
@@ -1367,47 +1363,14 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
         }
     }
 
-    // --- One-time cache init for ring scale Vec3 ---
-    // Binary: __cxa_guard_acquire(static_block+0x74), then init Vec3 at +0x78.
-    // Port: plain bool guard (equivalent lifetime).
-    if (!s_RingVecInited && s_TexSelected.IsValid()) {
-        float w = (float)(s_TexSelected->GetWidth());
-        float h = (float)(s_TexSelected->GetHeight());
-        // z = 1.0f  (local_44 = 0x3f800000 from binary stack)
-        s_RingVec = Vec3(w + 1.0f, h + 1.0f, 1.0f);
-        s_RingVecInited = true;
-    }
-
-    // --- Apply sin pulse scale ---
-    Vec3 scaleVec = s_RingVec;  // copy from cache (static_block+0x78)
-
-    if (m_AnimFrame < 0x3ffc) {
-        // sin_ratio = SinIdx((uint16_t)m_AnimFrame) / SinIdx(0x3ffc)
-        // Math::SinIdx @ 0x000fc858; port uses SinIdx() from MathUtil.h
-        float sinNum   = SinIdx((uint16_t)m_AnimFrame);
-        float sinDenom = SinIdx((uint16_t)0x3ffc);
-        float sin_ratio = (sinDenom != 0.0f) ? (sinNum / sinDenom) : sinNum;
-        // _Vector3::operator*=(Vec3*, float) — scale Vec3 in-place
-        scaleVec = scaleVec * sin_ratio;
-    }
-
-    // Build scale matrix then translate
-    Matrix44 matB = Matrix44::Scale44(scaleVec.x, scaleVec.y, scaleVec.z);
-    // Translate to (slide_X, 104.0, 0.0)  DAT_0015e060=104.0f, DAT_0015e05c=0.0f
-    matB.GlobalTranslate44(slide_X, 104.0f, 0.0f);  // DAT_0015e060=104.0f
-
-    mm.GetWorldStack().Reset();
-    mm.GetWorldStack().SetCurrentMatrix(matB);
-    mm.UploadModelViewOnly();
-
-    // SmartPtr copy for ref-count safety (binary: SmartPtr ctor copy of +0x38 slot)
-    // +0x38 in static block = s_TexSelected (selected.tex)
-    if (s_TexSelected.IsValid()) {
-        s_TexSelected->Set();
-        Colour c = colourWhite;
-        Mortar::Mesh::DrawQuadUnCached(c, NULL);
-        s_TexSelected->UnSet();
-    }
+    // v1.6.1 DrawOrder Block B @0x001b4f9c: big stamp = IngamePopup pM_Popups[0x11]
+    // (localized SELECTED/已选择 via GETSTRING 0x3C5 + selected_outline.tex), NOT selected.tex.
+    // The selected.tex-dims Vec3 the binary computes is dead; dropped.
+    float sinDenom = SinIdx((uint16_t)0x3ffc);
+    float ratio = (sinDenom != 0.0f) ? (SinIdx((uint16_t)m_AnimFrame) / sinDenom)
+                                      : SinIdx((uint16_t)m_AnimFrame);
+    IngamePopup* popup = GetIngamePopup(0x11);
+    if (popup) popup->Draw(Vec3(slide_X, 104.0f, 0.0f), ratio);
 }
 
 // Binary @ 0x0015c568 (re-analyst 2026-05-18). 3-way branch on selected
