@@ -1,5 +1,8 @@
 # Project: FruitNinja.exe Reverse Engineering & Port
 
+## Response style — short
+User reads replies on a phone. Keep answers **simple, short, precise**: lead with the result, no preamble/recap, thought process in 1-3 terse bullets, prefer bullets over paragraphs. Same for subagent prompts (task + constraints tight, no narrative). Long detail only on explicit request.
+
 ## Port Goal
 - **Fidelity first** — match the original game as closely as possible
 - Preserve all gameplay mechanics, physics, scoring, timing, and visual behavior
