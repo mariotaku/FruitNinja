@@ -272,9 +272,9 @@ void ShopListItem::NewDraw() {
     // SetText(m_pItemInfo->m_pTitle), SetShadow(0,black,Vec3(4,-4,0),1), Update.
     if (!m_pBox0) {
         // ASM-verified v1.6.1 ShopListItem::NewDraw @0x001b58e8: title/category align = 0x0E
-        // (RIGHT-horizontal | center-vertical), NOT 0x0d. RebuildAlignments @0x00245c78
-        // low-2-bits: 2=right. Right edge -> local x=195; translate x=pos.x-195 puts the
-        // shared right edge at pos.x (rest pos.x=-95). 0x0d (left) overflowed long titles left.
+        // (RIGHT-horizontal | center-vertical). low-2-bits: 2=right, width=195 px.
+        // Binary base = pos + m_Size(60,13,0), then box0 offset (-195,+16,0):
+        //   title right edge = (pos.x+60)-195+195 = pos.x+60; icon left ~ pos.x+63 -> ~3px gap.
         m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0e, 1, 0);
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
@@ -305,14 +305,13 @@ void ShopListItem::NewDraw() {
     }
 
     // --- Set colour and draw both boxes ---
-    // box0 translate = pos + (-175,16,0) + (-20,0,0) = pos + (-195,16,0)
-    // box1 translate = pos + (-175,-10,0)
+    // v1.6.1 NewDraw @0x001b58e8: base = pos + m_Size(60,13,0), then + (-195,16,0)/(-20,0,0) for box0 ; + (-175,-10,0) for box1.
     m_pBox0->SetColour(itemColour, 0);
-    m_pBox0->SetTranslation(Vec3(pos.x - 195.0f, pos.y + 16.0f, 0.0f), 0);
+    m_pBox0->SetTranslation(Vec3(pos.x + m_Size.x - 195.0f, pos.y + m_Size.y + 16.0f, 0.0f), 0);
     m_pBox0->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
 
     m_pBox1->SetColour(itemColour, 0);
-    m_pBox1->SetTranslation(Vec3(pos.x - 175.0f, pos.y - 10.0f, 0.0f), 0);
+    m_pBox1->SetTranslation(Vec3(pos.x + m_Size.x - 175.0f, pos.y + m_Size.y - 10.0f, 0.0f), 0);
     m_pBox1->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
 
     // --- Helper chain ---
