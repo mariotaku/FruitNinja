@@ -283,14 +283,14 @@ void Game::renderFrame(float alpha, int steps) {
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().ApplyForDraw(alpha);
 #endif
-    // Port specific: #168 -- Draw-path effects integrate by dt; on interpolated
-    // frames (no sim step) zero the Draw dt so they don't outrun the 60Hz sim.
-    // Affects: particleDt in GameDraw, HUD anim timers, SliceEffect timer,
-    // ShopScreen dial-alpha.  On steps>=1 leave dt unchanged (particles already
-    // advanced in the sim step(s); scaling by steps would over-advance).
+    // Port specific: #168/#337 -- GameTaskDraw no longer uses this dt param (it
+    // ignores it and consumes the s_drawDt accumulator internally, matching the
+    // binary). The manual "steps==0 -> zero dt" band-aid this used to need is
+    // gone: s_drawDt is naturally 0 on interpolated (no-sim-tick) frames since
+    // GameTaskUpdate didn't run, and naturally sums all accumulated ticks on
+    // steps>1 catch-up frames -- both cases the old zeroing handled wrongly.
     float savedDt = game_work.dt;
-    if (steps == 0) game_work.dt = 0.0f;
-    GameTaskDraw(game_work.dt);   // UNMODIFIED: binary-faithful, asm-verified
+    GameTaskDraw(game_work.dt);
     game_work.dt = savedDt;
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().RestoreAfterDraw();
