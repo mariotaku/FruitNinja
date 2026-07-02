@@ -116,3 +116,15 @@ set_tests_properties(fruit_splat PROPERTIES TIMEOUT 60)
 add_scene_test(scene_slash_blade_scene scene_slash_blade.cpp)
 add_test(NAME slash_blade COMMAND scene_slash_blade_scene)
 set_tests_properties(slash_blade PROPERTIES TIMEOUT 120)
+
+# ---- scene_special_fruit: special fruit / powerup render test ----
+# Renders each special fruit / powerup spawn object (arcade bananas, special
+# score fruits, bomb) and writes a PNG per object to
+# tmp/test/screenshots/special_fruit/<name>.png.
+# Exposes white-solid (untextured) renders as white PNGs + WARN log lines.
+# Currently frenzy banana is expected to WARN (banana_speed texture bug).
+# Exits 1 only if any object produces 0 non-background pixels (total failure).
+# Port specific: standalone special fruit / powerup render test
+add_scene_test(scene_special_fruit scene_special_fruit.cpp)
+add_test(NAME special_fruit COMMAND scene_special_fruit)
+set_tests_properties(special_fruit PROPERTIES TIMEOUT 120)
