@@ -59,7 +59,6 @@ constexpr float SCORE_BANNER_X_CENTRE   = 64.0f;       // DAT_001597c4
 constexpr float SCORE_BANNER_Y_OFFSET   = 28.8f;       // DAT_001597c8
 constexpr float SCORE_ICON_X_SP         = -160.0f;     // DAT_001597a4
 constexpr float SCORE_ICON_X_MP_STRIDE  = 320.0f;      // DAT_001597a0
-constexpr float SCORE_LABEL_BASELINE    = 48.0f;       // DAT_00159798
 
 // Static caches (GOT+0x45180 block in binary — 3 cxa-guard-protected statics).
 static float s_SfxCooldown     = 0.0f;  // bonus SFX rate-limiter
@@ -569,68 +568,25 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 col.a = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.a + (int)((green.a - col.a) * t)));
             }
             col.a = alpha;
-            // Highscore "BEST" + digits: binary uses pFontMain (+0x54) for both
-            // calls and SHARES the anchor position; alignment flags (RIGHT vs
-            // CENTER) do the actual positioning so the label sits left of the
-            // anchor and the digit centers on it.
-            //
-            // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00159500..0x001596a4 (re-analyst).
-            // Constants:
-            //   - both calls scale = 20.0f, anchor = pos + (cursorX + 28, -28.8, 0)
-            //   - cursorX = MeasureString(label)*20 - 48 (DAT_00159798 = 48.0)
-            //   - Y offset = pos.y - 28.8 (DAT_001597c8 = 0x41e66667)
-            //   - X micro-shift = +28.0 (literal 0x41e00000)
-            //   - label Y-scale param2 = 0.9 (DAT_0015979c = 0x3f666666)
-            //   - label alignment = 0x0E (RIGHT)
-            //   - digit alignment = 0x0D (CENTER)
-            if (game_work.pFontMain.IsValid()) {
-                char hsBuf[32];
-                snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
-                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x001592c4..0x001592c8
-                // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
-                // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
-                // resolves to "BEST:" (with trailing colon) in english_us.
+            // ASM-spec v1.6.1 ScoreControl::NewDrawBestScore @0x001abd98: BEST label =
+            // BakedStringBox(TTF) "%s %d" GETSTRING_CAST_0(LSTR_BEST=200), single draw.
+            {
                 const char* label = GETSTRING_CAST_0(LSTR_BEST);
-                float labelW  = game_work.pFontMain->MeasureWidth(20.0f, label);
-                float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
-                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00159588..0x001596a6 (re-analyst).
-                // Anchor uses raw pos (m_Pos.x/y at +0x8/+0xc), NOT m_DrawPosX/Y
-                // at +0x94/+0x98. Earlier port pulled m_DrawPosX (= pos.x + 24)
-                // which shifted the BEST label/digit +24 px right of correct.
-                const Vec3 anchor(pos.x + cursorX + 28.0f,
-                                  pos.y - 28.8f,
-                                  0.0f);
-                const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
-                const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
-                // Label call: binary uses the full Font_DrawString @ 0x00198e44
-                // directly (NOT the wrapper) so it can pass yLineFactor = 0.9
-                // (DAT_0015979c). The port's flat wrapper hardcodes 1.0 to
-                // match the binary wrapper @ 0x00199aa0; this label needs the
-                // full path.
-                {
-                    Mortar::Utf8StringIterator iterLabel(label);
-                    Vec2 maxWH(0.0f, 0.0f);
-                    game_work.pFontMain->DrawString(20.0f, /*yLineFactor=*/0.9f,
-                        /*rotZ=*/0.0f, iterLabel, anchor, col, maxWH,
-                        kAlignLabel, /*z=*/0.0f, nullptr);
+                char buf[512];
+                snprintf(buf, sizeof(buf), "%s %d", label, m_HighscoreToShow);
+                if (!m_pStringBox100) {
+                    Mortar::FontCacheObjectTTF* font = GetScoreControlTTFFont();
+                    if (font) {
+                        m_pStringBox100 = new Mortar::BakedStringBox(font, 12.0f, 100, 20, 0xd, 1, 0);
+                        m_pStringBox100->SetHorizontalLineSpacing(-1);
+                    }
                 }
-                // Digit call: binary @ 0x0015969c routes through PLT
-                // 0x000fd80c which resolves to Font::DrawString @ 0x00199aa0
-                // -- the wrapper, NOT a separate full overload.
-                // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00199aa0 (asm-inspector).
-                // Caller emits s2=0.0 (DAT 0x001597c0) which the wrapper
-                // stores as anchor.z, NOT as yLineFactor. Internally, the
-                // wrapper hardcodes yLineFactor=1.0 (vmov.f32 s1,#0x3f800000
-                // at 0x00199b1c) when delegating to the Vec3-anchor overload
-                // at 0x00198e44. So the effective yLineFactor at the
-                // alignment compute is 1.0 -- which matches the port's flat
-                // wrapper that also forwards through the yLineFactor=1.0
-                // hardcoding path. Earlier port change to call the full
-                // overload with yLineFactor=0.0 was wrong: it bypassed the
-                // wrapper hardcode and produced a 9 px y mismatch vs the
-                // label.
-                game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                    hsBuf, anchor, col, kAlignDigit);
+                if (m_pStringBox100) {
+                    m_pStringBox100->SetColour(col, 1);
+                    m_pStringBox100->SetText(buf);
+                    m_pStringBox100->SetTranslation(Vec3(pos.x - 19.0f, pos.y - 23.8f, 0.0f), 0);
+                    m_pStringBox100->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+                }
             }
         }
     }
