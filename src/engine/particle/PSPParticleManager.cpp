@@ -454,7 +454,10 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
             glBlendFunc(GL_SRC_ALPHA, dstFactor);
             glBindTexture(GL_TEXTURE_2D, tex->GetTexId());
             if (Renderer* r = Renderer::GetInstance()) {
-                r->DrawTriList(verts.data(), (int)verts.size());
+                // setBlendFunc=false: the glBlendFunc above (dstFactor may be
+                // additive GL_ONE) must survive the draw -- DrawTriList must not
+                // clobber it with the default alpha blend func.
+                r->DrawTriList(verts.data(), (int)verts.size(), false);
             }
         }
     }

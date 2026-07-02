@@ -45,7 +45,12 @@ struct Renderer {
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24).
     // Matches original DrawTriList (0x00240e34) / DrawTriStrip.
-    void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount);
+    // setBlendFunc: binary Mesh::DrawTris @0x240c30 never touches glBlendFunc --
+    // only the per-template Material sets it, before the draw call, and it must
+    // survive the draw. Most callers don't set their own func and rely on the
+    // default alpha blend below; pass false when the caller (e.g. additive
+    // particle templates) has already set its own glBlendFunc.
+    void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc = true);
     void DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount);
 };
 
