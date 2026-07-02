@@ -107,8 +107,12 @@ public:
     // to allow subclass int overrides (Score=2, Time=0, Wave=1, Slash=3, etc.)
     virtual int GetType() { return -1; }
 
-    // [8] ApplyModifier(bool,float*) — PURE in binary (0x360434); base body
-    // writes m_BonusAccum = m_Duration (subclasses call this via super).
+    // [8] ApplyModifier(bool,float*) — PURE in binary (0x360434); base body @
+    // 0x140890 is the SAME compiled function as OnDeferComplete (slot 5) — the
+    // fold m_Duration into m_BonusAccum + pExtra clamp + overtime/freeze
+    // PowerUpManager clamp+scale. Subclasses call this via super() as the last
+    // step of their own override (see #331); the port body delegates to
+    // OnDeferComplete() so both call sites share one implementation.
     virtual void ApplyModifier(bool isPurchased, float* extra) = 0;
 
     // [9] ParseSpecific — PURE in binary (0x360434)

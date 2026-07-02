@@ -97,24 +97,26 @@ void GameModifier::ParseSpecific(TiXmlElement* /*xml*/) {
 }
 
 // Binary @ 0x00140890 (GOT thunk 0x00114f04) -- GameModifier::ApplyModifier(bool, float*)
-// base body. PURE in binary vtable (slot 8 = __cxa_pure_virtual); however the
-// base body exists as a real function that all 7 subclass ApplyModifier
-// overrides call directly as a non-virtual "super()" (confirmed xrefs into the
-// 0x00114f04 GOT thunk from ExplodyFruitModifier/ScoreModifier/SlashModifier/
-// TimeSinkModifier/ComboModifier/SpawnModifier/WaveModifier::ApplyModifier).
-// 0x00133378 (previously cited here) is the GameModifier ctor, not this body.
+// base body. PURE in binary vtable (slot 8 = __cxa_pure_virtual); the base body
+// exists as a real function that all 7 subclass ApplyModifier overrides call
+// directly as a non-virtual "super()" (confirmed xrefs into the 0x00114f04 GOT
+// thunk from ExplodyFruitModifier/ScoreModifier/SlashModifier/TimeSinkModifier/
+// ComboModifier/SpawnModifier/WaveModifier::ApplyModifier).
 //
-// TODO: v1.6.1 0x00140890 (GameModifier::ApplyModifier) -- Ghidra confirms the
-// function AT this exact address is byte-identical to GameModifier::OnDeferComplete
-// below (same fold-m_Duration-into-m_BonusAccum, pExtra-clamp, then "overtime"/
-// "freeze" PowerUpManager-hash clamp+scale by m_WaveDtModPrev): the binary's slot-5
-// virtual dispatch (OnDeferComplete) and the non-virtual base-body call site
-// (ApplyModifier "super()") are the SAME compiled function. This port's simplified
-// `m_BonusAccum = m_Duration` body is incomplete versus that. Left as-is to keep
-// this change scoped to the subscription-order fix (#331); port the full body
-// (mirror OnDeferComplete's already-ported logic) in a follow-up (#338).
-void GameModifier::ApplyModifier(bool /*isPurchased*/, float* /*extra*/) {
-    m_BonusAccum = m_Duration;
+// ASM-spec v1.6.1 GameModifier::ApplyModifier @0x00140890: re-confirmed via
+// decompile -- Ghidra's own demangled name for the function AT this address is
+// "GameModifier::ApplyModifier", and vtable slot 5 (0x2cc6f4, read from the
+// live vtable @ 0x2cc6d8) ALSO stores this exact address. The compiler folded
+// GameModifier::ApplyModifier (base body, called non-virtually by every
+// subclass override's super() chain) and GameModifier::OnDeferComplete (slot 5,
+// virtual dispatch from Update) into ONE compiled function -- both take the
+// same (bool, float*) signature and perform the identical fold-clamp-scale
+// body (ICF). The two remain distinct C++ methods in the port (OnDeferComplete
+// is still reached polymorphically via vtable slot 5 from Update); ApplyModifier
+// delegates to it so both call sites run byte-identical logic, matching the
+// binary's single merged function.
+void GameModifier::ApplyModifier(bool isPurchased, float* extra) {
+    OnDeferComplete(isPurchased, extra);
 }
 
 // Binary @ 0x00117DA0 -- GameModifier::Parse(TiXmlElement*)
