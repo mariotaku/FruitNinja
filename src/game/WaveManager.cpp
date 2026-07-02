@@ -1395,9 +1395,6 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                                 // no corner override, no blitz-count credit.
                                             } else {
                                                 powerSpawner = GetRandomPowerSpawner(true);  // include centre; overrides corner pick
-                                                // TODO: #339 Fruit::NumberOfPowerupFruits is stubbed to
-                                                // always return 0, so this term is always permissive
-                                                // until the real active-powerup-fruit count is ported.
                                                 if (m_FruitChance > 0.0f && Fruit::NumberOfPowerupFruits() < 1
                                                         && (game_work.m_SaveData->m_TimeRemainingSave >= 8.0f
                                                             || powers->m_pArray[0].m_PowerHash == StringHash("freeze"))
