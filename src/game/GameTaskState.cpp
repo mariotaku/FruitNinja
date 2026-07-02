@@ -30,6 +30,18 @@ static StateExitFn   s_exitFuncs[3]   = { SplashExit,    FrontendExit,   GameExi
 // Flag: state change was requested during init
 static bool s_stateChangeRequested = false;
 
+// ASM-spec v1.6.1 GameTaskUpdate @0x0011a290 / GameTaskExit @0x00119e84: `updated` file static
+// (GameTask.cpp, not a GameTaskState struct field). Set true in the same-state active-update
+// branch before the Update dispatch; cleared by GameTaskExit. GameTaskDraw gates on this (not
+// on "initialized") -- the binary does not draw the single frame between Init and first Update.
+static bool s_updated = false;
+
+// ASM-spec v1.6.1 GameTaskDraw @0x00119dfc / GameTaskUpdate @0x0011a290: drawDt accumulator
+// (GameTask.cpp file static, not a GameTaskState struct field). GameTaskUpdate accumulates
+// clamped dt into this every update; GameTaskDraw consumes it (ignoring its own dt param) and
+// resets it to 0 after dispatch.
+static float s_drawDt = 0.0f;
+
 GameTaskState* GetTaskState() { return &s_taskState; }
 
 // Matches GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
@@ -51,7 +63,7 @@ void GameTaskUpdate(float rawDt) {
 
         game_work.dt = dt;
         game_work.m_FrameTimer += (int)frameMs;
-        s_taskState.totalTime += dt;
+        s_drawDt += dt;
 
         // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: per-frame FruitSaveData::Update
         // (gated bomb-hit-timer<=0) before state dispatch. Runs every frame, all modes
@@ -78,6 +90,7 @@ void GameTaskUpdate(float rawDt) {
             Mortar::PowerManager::GetInstance()->Update();
             uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
             bool canUpdate = (!game_work.bM_Mode) && (pmState == 0);
+            s_updated = true;
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new
@@ -90,21 +103,26 @@ void GameTaskUpdate(float rawDt) {
 }
 
 // Matches GameTaskDraw (v1.6.1 @ 0x00119dfc, 23 lines)
-void GameTaskDraw(float dt) {
+// The dt param is ignored (matches binary -- Game::Draw's dt is discarded); the
+// accumulated s_drawDt is used and reset instead. See s_drawDt comment above.
+void GameTaskDraw(float /*dt*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
     uint8_t stateIdx = game_work.taskStateIndex;
-    if (stateIdx == s_taskState.prevState && s_taskState.initialized) {
-        s_drawFuncs[stateIdx](dt, true);
+    if (stateIdx == s_taskState.prevState && s_updated) {
+        game_work.dt = s_drawDt;
+        s_drawFuncs[stateIdx](s_drawDt, true);
+        s_drawDt = 0.0f;
     }
 }
 
-// Matches GameTaskExit (v1.6.1 @ 0x0011a320, 22 lines)
+// Matches GameTaskExit (v1.6.1 @ 0x00119e84, 22 lines)
 void GameTaskExit() {
     if (s_taskState.initialized) {
         s_exitFuncs[s_taskState.prevState]();
         s_taskState.initialized = false;
+        s_updated = false;
     }
 }
 
