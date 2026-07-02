@@ -147,8 +147,10 @@ public:
     TiXmlDocument(const TiXmlDocument& other);
     TiXmlDocument& operator=(const TiXmlDocument& other);
 
-    // ASM-spec v1.6.1 TiXmlDocument::LoadFile @0x001157a4
-    // Folds in CI path-resolution (tries exact path, then ResolvePathCI fallback).
+    // ASM-spec v1.6.1 TiXmlDocument::LoadFile @0x002206a4
+    // Bare relative paths route through FileManager (data-root prepended centrally;
+    // CI resolution in FileSystem_Direct layer). Absolute paths go to tinyxml2 directly
+    // (port-specific save-file callers only).
     // Returns true on success (TinyXML-1 API; binary returns bool).
     bool LoadFile(const char* path);
     bool SaveFile(const char* path) const;

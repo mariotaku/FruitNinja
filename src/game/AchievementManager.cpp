@@ -90,15 +90,8 @@ void AchievementManager::LoadAchievementInfo() {
     // TODO: DAT_001096b0 -- load third preamble texture (identity not yet RE'd).
 
     // Binary @ 0x00118198: TiXmlDocument("xml/achievementList.xml")
-    // Port specific: prepend data_dir for platform-relative asset access (mirrors
-    // ItemManager::LoadItemData). The raw relative "xml/..." doesn't resolve on
-    // Emscripten/webOS (CWD is not the data dir). Keep the binary-faithful
-    // "achievementList.xml" case: TiXmlDocument::LoadFile applies ResolvePathCI, so
-    // the capital-L path resolves against the lowercase-extracted asset on
-    // case-sensitive FS (no asset rename needed).
     TiXmlDocument doc;
-    std::string achPath = Game::GetInstance()->data_dir + "/xml/achievementList.xml";
-    if (!doc.LoadFile(achPath.c_str())) return;
+    if (!doc.LoadFile("xml/achievementList.xml")) return;
 
     TiXmlElement root = doc.FirstChildElement("achievementManagerFile");
     if (!root) return;

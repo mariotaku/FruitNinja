@@ -20,6 +20,14 @@
 #include <cstdint>
 #include <string>
 
+#ifdef _WIN32
+#include <direct.h>
+#define fn_getcwd _getcwd
+#else
+#include <unistd.h>
+#define fn_getcwd getcwd
+#endif
+
 #include "game/FruitSaveData.h"
 #include "Game.h"
 #include "game/GameWork.h"
@@ -54,7 +62,13 @@ int main() {
 
     // --- Minimal environment: MortarGame singleton + version + save path ---
     Game* game = new Game();  // intentionally leaked
-    game->data_dir = ".";     // GetSavePath -> "./FruitySave.xml"
+    // Absolute data_dir: save/load use absolute paths (like the real game), which
+    // bypass the FileManager data-root routing in TiXmlDocument::LoadFile. A bare
+    // "." would be treated as a relative asset path and routed through FileManager.
+    {
+        char cwd[1024];
+        game->data_dir = fn_getcwd(cwd, sizeof(cwd)) ? std::string(cwd) : std::string(".");
+    }
     Mortar::MortarGame::GetInstance()->m_versionCombined =
         GetVersionFromString(GetVersionString());
 

@@ -11,11 +11,9 @@
 #include "entities/SlashEntity.h"
 #include "hud/TimeControl.h"
 #include "util/StringHash.h"
-#include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "debug/Logger.h"
 #include <cstring>
-#include <string>
 #include "game/GameWork.h"
 #include "hud/HUD.h"
 #include "game/WaveManager.h"
@@ -454,18 +452,8 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
 
 // @ 0x00119cb0
 void PowerUpManager::Load() {
-    // Build path: Data/xml/powerUpList.xml
-    std::string path;
-    const char* dataDir = Mortar::TextureManager::GetDataDir();
-    if (dataDir && dataDir[0]) {
-        path = dataDir;
-        path += "/xml/powerUpList.xml";
-    } else {
-        path = "xml/powerUpList.xml";
-    }
-
     TiXmlDocument doc;
-    if (!doc.LoadFile(path.c_str())) {
+    if (!doc.LoadFile("xml/powerUpList.xml")) {
         return;
     }
 
@@ -474,7 +462,7 @@ void PowerUpManager::Load() {
     // BonusManager's bonusawards.xml schema mismatch.
     TiXmlElement root = doc.FirstChildElement("powerInfoFile");
     if (!root) {
-        LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in '%s'", path.c_str());
+        LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in xml/powerUpList.xml");
         return;
     }
 

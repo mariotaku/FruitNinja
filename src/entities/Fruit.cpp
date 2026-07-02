@@ -39,7 +39,6 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <string>
 #include <vector>
 #include "game/GameWork.h"
 
@@ -1878,11 +1877,7 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
 // Also creates s_pool (capacity=100) and loads s_sliceModel[0/1/3] when fruitInfo==0
 // (first call), matching the lazy-init guard @0x001e10c4.
 void Fruit::LoadInfo() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
-    std::string xmlPath = game->data_dir + "/xml/fruitlist.xml";
-    FruitInfo_Load(xmlPath.c_str());
+    FruitInfo_Load("xml/fruitlist.xml");
 }
 
 // --- FruitGlobalData (v1.6.1 binary static block @ 0x332910) ---------------
