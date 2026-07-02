@@ -2207,25 +2207,22 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager10ResetSpeedEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 5800,
-    "reason": "WaveManager::ResetSpeed -- score drift 7000->7310/6100 post R9 swap. GOT layout change. [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7310/6100 -> 7945/5800]",
-    "score": 7945,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "playerIdx ignored in port (single-player uses P0 only). Binary uses (22+playerIdx)*4 array indexing; port writes fixed offsets +0x58/+0x5c/+0x50. Functionally equivalent for SP arcade (playerIdx always 0). TODO at src/game/WaveManager.cpp:2117.",
+    "asm_hash": "115556c4df6aaa79",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager10SpawnFruitEllP12SPAWNER_INFOi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 33100,
-    "reason": "Port uses named ActorManager API vs binary GOT blx chain. commit 421e895 fixed side-spawn pos/vel sources (pos.x=+/-240, pos.y=baseDeg*320/480, velX boost 1.075f) per ASM-verified spec. Score improved 46045->45430/36700. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 46280/36700 -> 45561/33100]",
-    "score": 45561,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port uses named ActorManager API vs binary GOT blx chain. Binary has extra velocity/position setup blocks (out-of-line vs port inlined). Large LCS gap (26%) is mostly std:: container overhead + out-of-line call differences, not semantic. Core spawn path present. Binary @ 0x00114298.",
+    "asm_hash": "8fa1590efd8b6133",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager10UpdateWaveEfii": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 64900,
-    "reason": "Stale refresh: score improved 98406->85719. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 91257/53600 -> 102193/64900]",
-    "score": 102193,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Core state machine correct: pre-spawn delay, spawner timer, wave-end detection, wait timer, GetNextWave call. Binary's missing blocks are defunct MP retry timers (m_NetTimerA/B at +0x44/+0x48) and freeze-check before GetNextWave (PowerUpManager::GetActiveSingle not yet wired). Port uses named API vs binary GOT blx chain; std:: container overhead inflates LCS gap. Binary @ 0x00115d7c.",
+    "asm_hash": "cdb677ccb9f74b9f",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager11GetInstanceEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2242,11 +2239,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12CriticalModeEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1800,
-    "reason": "Stubbed return false until global Random state is exposed. See src/game/WaveManager.cpp:1418-1424 // TODO: 0x001219e4. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2500/2000 -> 2300/1800]",
-    "score": 2300,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "Port always returns false. Binary @ 0x001219e4: GetCriticalChance(p) > (float)(*(int*)g_RandomState / 2) — approximately a 50% coin flip per call (RNG state sign). Called from Fruit::RandomFruit (Fruit.cpp:2325) to select special-only vs all-fruit spawning; with port always false, special-only fruit selection never activates, directly changing spawn composition each wave. Also called from SlashEntity.cpp:1805 (trail scale, visual). Fix: add Math::Random::PeekState() and implement: return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2). See src/game/WaveManager.cpp:2062.",
+    "asm_hash": "091a8973cd1c7501",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager12RecievedSyncEif": {
     "decided_at": "2026-06-18T01:24Z",
@@ -2270,11 +2266,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12SetupWaveQueEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 23100,
-    "reason": "Wave queue setup uses port containers. See src/game/WaveManager.cpp SetupWaveQue path. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 23800/23500 -> 23600/23100]",
-    "score": 23600,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Explicit documented stub: only called in Combo/Survival modes (not shipped). m_pWaveQue stays null; GetNextWave null-queue early-out handles Classic/Arcade/Zen. See src/game/WaveManager.cpp:1693. Binary @ 0x00113458.",
+    "asm_hash": "5bfc4d75d763a20c",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager13ResetGlobalDtEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2303,11 +2298,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager16ResetWaveChancesEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 12700,
-    "reason": "Stale refresh: score improved 16090->15640. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15955/13000 -> 16910/12700]",
-    "score": 16910,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port iterates std::vector<WAVE_INFO*> via iterator; binary uses mla stride + add #180 raw array traversal. Binary also does extra work after main loop (accesses [76]/[80] with mul+408 addressing — likely probability override reset); port uses different container iteration. Core m_CurrentChance/m_CurrentRegrowth/m_RevisitCounter resets present. Binary @ 0x0011b87c.",
+    "asm_hash": "25fbdcbb8dffbe54",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager16UpdateComboSpeedEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2324,18 +2318,16 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager17GetCriticalChanceEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 800,
-    "reason": "WaveManager::GetCriticalChance -- score 1220/900. Port vmul operand order swapped (commutative FP mul); early-exit branch direction differs. Semantically identical. [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 1215/900 -> 1520/800]",
-    "score": 1520,
-    "verdict": "ACCEPT-cosmetic"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "MATCH (100% LCS). Commutative vmul operand order; early-exit branch direction. Semantically identical. Binary @ 0x00113174.",
+    "asm_hash": "be6ef3cdb3afc49b",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager18AddToSpeedLossTimeEfi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1400,
-    "reason": "Fixed inverted clamp: now `if (v > 1.0f) v = 1.0f` matching binary `it pl; vmovpl`. Remaining diff is register-name variants and trailing nops only. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 420/1400 -> 1420/1400]",
-    "score": 1420,
-    "verdict": "ACCEPT-cosmetic"
+    "verdict": "ACCEPT-deferred",
+    "reason": "playerIdx ignored in port: binary reads/writes (20+playerIdx)*4 indexed slot; port uses fixed offset +0x50 (m_ComboTimer P0 only). vcmpe vs vcmp encoding and vmovpl vs vmovgt are functionally equivalent for the input range. SP arcade always uses P0 (playerIdx=0) so result is correct. TODO at src/game/WaveManager.cpp:2103.",
+    "asm_hash": "22f7ec802105464d",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager18DeleteSpeedControlEP10HUDControl": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2401,11 +2393,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager6UpdateEf": {
-    "decided_at": "2026-06-18T01:56Z",
-    "max_score": 15300,
-    "reason": "WaveManager::Update -- score drift 16925->17065/16700 post R9 swap. Existing TODO gaps. [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 16930/16700 -> 16670/15300]",
-    "score": 16660,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port adds Game::GetInstance() null-guard (absent in binary). Binary checks flag at struct[417] before speed calc (port skips — likely game-active flag; SP always active so no effect). Fixed-step loop and bM_bPaused gate are equivalent. Binary @ 0x001167a0.",
+    "asm_hash": "14b7aa24473d8f5b",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager7DestroyEv": {
     "verdict": "ACCEPT-deferred",
@@ -2435,18 +2426,16 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager8GetSpeedEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 400,
-    "reason": "Fixed struct padding: m_Speed now at binary offset +0x54. Diff is trailing nops only; `vldr s0, [r1, #0x54]` now byte-identical to binary. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 200/300 -> 510/400]",
-    "score": 510,
-    "verdict": "ACCEPT-cosmetic"
+    "verdict": "ACCEPT-deferred",
+    "reason": "playerIdx ignored in port: binary reads (22+playerIdx)*4 indexed slot; port returns m_ComboSpeed (+0x58) always. For SP arcade playerIdx is always 0, so this+88 == m_ComboSpeed — correct result. TODO at src/game/WaveManager.cpp:2034. Binary @ 0x00112fa0.",
+    "asm_hash": "84fd9fd0a114abc2",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManager9GetWavedtEi": {
-    "decided_at": "2026-06-18T07:20Z",
-    "max_score": 4600,
-    "reason": "Pre-existing WaveManager layout divergences (m_pCurrentWave +0x22c vs binary +0x234; m_Speed +0x54 vs binary +0x58; dtMod fields +0x74/+0x78 vs binary +0x78/+0x7c). Score 3875->6750 is a recompile-artifact hash-change from GameWork.h ring fix ([13]->[15] at +0x668, non-POD from m_RingTex SmartPtr zero-init): no WaveManager field offset moved, no game_work access in this function, no new logic divergence introduced. Same inherent residual, raw-DIVERGE only because score drifted past threshold on recompile. [ring-fix retriage 2026-06-14]",
-    "score": 6750,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "playerIdx ignored in port: binary uses (22+playerIdx)*4 indexed read; port reads m_ComboSpeed (+0x58) fixed. Binary also has two additional early-exit clamping paths (bxls/bxge) the port folds into one branch — same semantic for normal input range. SP arcade always uses P0 (playerIdx=0). Binary @ 0x00113050.",
+    "asm_hash": "7a166865dada0303",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN11WaveManagerC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -9650,8 +9639,9 @@
   },
   "_ZN11WaveManager9SpawnBombElP12SPAWNER_INFOi": {
     "verdict": "FIX-NEEDED",
-    "reason": "sig-mismatch: binary WaveManager::SpawnBomb(long, SPAWNER_INFO*, int) vs port (long, long, SPAWNER_INFO*, int). Port inserts an extra long param. Fix: remove the extra long from port.",
-    "decided_at": "2026-07-01T00:00Z"
+    "reason": "sig-mismatch: binary WaveManager::SpawnBomb(long, SPAWNER_INFO*, int) vs port (long, long, SPAWNER_INFO*, int). Port inserts an extra long param. Fix: remove the extra long from port. Binary @ 0x001147c4.",
+    "asm_hash": "a6a434a0249a7c31",
+    "decided_at": "2026-07-02T00:00Z"
   },
   "_ZN7WaveQue11AddSpecialsEv": {
     "verdict": "ACCEPT-deferred",
