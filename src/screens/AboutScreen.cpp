@@ -354,17 +354,30 @@ void AboutScreen::CreateBackButton()
 
     m_pBackButton = new MenuButton();
 
-    // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: button m_Texture = back_icon
-    //   (game_work.pM_Textures[0x10]) set BEFORE Init; HUDControl3d::Draw early-returns on null m_Texture.
-    if (!s_TexBackIcon.IsValid())
-        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-    m_pBackButton->m_Texture = s_TexBackIcon;
+    // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: m_Texture = pM_Textures[0x10]
+    //   = game_work.m_RingTex[16] -- the shared PLAIN menu-ring texture (same slot DojoScreen
+    //   uses for its back button), set BEFORE Init. This is NOT a file "back_icon.tex": the
+    //   prior port loaded an English-"BACK"-baked ring via LoadLocalisedTexture, which then
+    //   double-printed with the SetText 返回 overlay below. The binary's ring is plain; the
+    //   localized "back" label comes solely from SetText (verified vs HLE: clean 返回).
+    m_pBackButton->m_Texture = game_work.m_RingTex[16];
 
     m_pBackButton->Init(POS_BACK_BUTTON,
                         Mortar::Delegate0<void>::Make(this, &AboutScreen::QuitGameCallback),
                         bombFruitType,
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
+
+    // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350 (state==0 branch, @0x0015c894):
+    // SetText ring label = GETSTRING(LSTR_DJ_BACK_BUTTON 0x352), m_RingColours[0]/[1],
+    // radius 31, fontScale 10, glow+innerGlow. Identical to DojoScreen::CreateButtons.
+    // (Was omitted -> ring showed the English "BACK" baked into back_icon.tex with no
+    // localized overlay; add it so About's back ring localizes like Dojo's, e.g. 返回.)
+    m_pBackButton->SetText(
+        GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),
+        game_work.m_RingColours[0],
+        game_work.m_RingColours[1],
+        31.0f, 10.0f, true, true);
 
     m_pBackButton->m_bRespondsToBackKey = 1;
     m_pBackButton->m_bBackdropActive = 1; // v1.6.1 AboutScreen::CreateButtons @0x0015c894
