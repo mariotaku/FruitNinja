@@ -278,7 +278,8 @@ void ShopListItem::NewDraw() {
         m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0e, 1, 0);
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
-        m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
+        // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
+        m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 64), Vec3(4.0f, -4.0f, 0.0f), true);
         m_pBox0->Update();
     }
 
@@ -297,7 +298,8 @@ void ShopListItem::NewDraw() {
             default: catStr = nullptr; break;
         }
         if (catStr) m_pBox1->SetText(catStr);
-        m_pBox1->SetShadow(0.0f, Colour(0, 0, 0, 255), Vec3(4.0f, -4.0f, 0.0f), true);
+        // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
+        m_pBox1->SetShadow(0.0f, Colour(0, 0, 0, 64), Vec3(4.0f, -4.0f, 0.0f), true);
         m_pBox1->Update();
         m_TintA = (uint8_t)m_pItemInfo->m_Type;
     }
@@ -525,12 +527,13 @@ void ShopListItem::DrawDescription() {
             const char* promptStr = GETSTRING_CAST_0(promptId);
             if (promptStr) m_pBox4->SetText(promptStr);
             m_pBox4->Update();
+            m_pBox4->FitIntoVerticalBounds();
 
             // Colour: red if not met, green if met.
             Colour promptColour = conditionMet
                 ? Colour(0xA0, 0xDC, 0, alpha)
                 : Colour(0xBD, 0, 0, alpha);
-            m_pBox4->SetColour(promptColour, 0);
+            m_pBox4->SetColour(promptColour, 1);
         }
     }
 
@@ -555,7 +558,7 @@ void ShopListItem::DrawDescription() {
         } else {
             descColour = Colour(0x74, 0x5D, 0x3B, alpha);
         }
-        m_pBox3->SetColour(descColour, 0);
+        m_pBox3->SetColour(descColour, 1);
         m_pBox3->SetTranslation(Vec3(xPos, 42.0f, 0.0f), 0);
         m_pBox3->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
     }
