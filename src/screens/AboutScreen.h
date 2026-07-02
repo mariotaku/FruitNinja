@@ -146,7 +146,6 @@ private:
 
     // Helpers
     void CreateBackButton();
-    void RemoveBackButton();
 
     // v1.6.1: NewDraw -- BakedStringBox credit text pass
     // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,

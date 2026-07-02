@@ -332,8 +332,11 @@ void AboutScreen::Init()
 // -----------------------------------------------------------------------
 void AboutScreen::Release()
 {
-    RemoveBackButton();
-
+    // ASM-spec v1.6.1 AboutScreen::Release @0x0015bd70: nulls texture SmartPtrs, zeroes m_TransitionScale,
+    // removes ONLY the OFN button (binary m_pCreditsButton +0x94). The back button is NOT torn down here --
+    // it self-reaps via MenuButton::Update @0x0019acbc shrink-out after its tap flings the bomb.
+    // (Removing the port-invented RemoveBackButton() fixes #317: it was pending-removing Dojo's
+    // heap-reused back button mid-grow-in.)
     if (m_pOFNButton) {
         m_pOFNButton->SetPendingRemoval();
         m_pOFNButton = nullptr;
@@ -375,17 +378,6 @@ void AboutScreen::CreateBackButton()
     if (m_pBackButton->m_pTrackedFruit) {
         m_pBackButton->m_pTrackedFruit->scale =
             m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;
-    }
-}
-
-// -----------------------------------------------------------------------
-// RemoveBackButton
-// -----------------------------------------------------------------------
-void AboutScreen::RemoveBackButton()
-{
-    if (m_pBackButton) {
-        m_pBackButton->SetPendingRemoval();
-        m_pBackButton = nullptr;
     }
 }
 
