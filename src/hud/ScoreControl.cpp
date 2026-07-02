@@ -137,13 +137,10 @@ ScoreControl::ScoreControl()
     // TODO: v1.6.1 0x001ad5fc (ScoreControl::ScoreControl) — font resolved from
     //   game_work+0x614 (FontCacheObjectTTF* at GameWork+1556), not yet in port's
     //   game_work struct; using file-local GetScoreControlTTFFont() as DIFFERS stand-in.
-    // TODO: v1.6.1 0x001ad5fc (ScoreControl::ScoreControl) — BakedStringBox fontSize arg
-    //   not RE'd from binary; spec gives only box dimensions (width=0x8C, height=0x1E).
-    //   Using fontSize=10.0f as stand-in until the float register at ctor entry is confirmed.
     Mortar::FontCacheObjectTTF* font = GetScoreControlTTFFont();
     if (font) {
         m_pScoreBox = new Mortar::BakedStringBox(
-            font, 10.0f, (float)0x8C, (float)0x1E, 0xf, 1, 0.0f);
+            font, 30.0f, (float)0x8C, (float)0x1E, 0xf, 1, 0.0f);
         m_pScoreBox->SetGradient(
             Colour(0xFF, 0xFC, 0x5A, 255),
             Colour(0xE7, 0x83, 0x08, 255),
