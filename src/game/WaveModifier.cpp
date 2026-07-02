@@ -60,6 +60,15 @@ void PROBABILITY_OVERIDE::Parse(TiXmlElement* xml) {
     xml->QueryIntAttribute("perWave",              &m_PerWave);
     xml->QueryFloatAttribute("disableWhenPowered", &m_DisableWhenPowered);
     xml->QueryIntAttribute("numWaves",             &m_SelectedType);
+
+    // v1.6.1 PROBABILITY_OVERIDE::Parse @0x00121500: one <PowerAllowance
+    // allowPercentage="N"> child per timed-power-count bucket.
+    for (TiXmlElement child = xml->FirstChildElement("PowerAllowance");
+         child; child = child.NextSiblingElement("PowerAllowance")) {
+        int allowPercentage = 0;
+        child.QueryIntAttribute("allowPercentage", &allowPercentage);
+        m_PowerAllowance.push_back(allowPercentage);
+    }
 }
 
 // PROBABILITY_OVERIDE::GetType — binary @ 0x001217e4
