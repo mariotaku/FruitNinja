@@ -234,13 +234,11 @@ void GameInitialise(void* window, const char* config) {
     PowerUpManager::GetInstance()->Load();
 
     // Step 12: PSPParticleManager — load particle XML templates.
-    // texCategory feeds TextureManager::Load (IFile chain — must be logical;
-    // FileSystem_Direct prepends data_dir). xmlPath feeds tinyxml2 raw fopen
-    // and needs the absolute path.
+    // texCategory feeds TextureManager::Load (IFile chain — logical path).
+    // xmlPath is a bare relative path; FileManager prepends data-root centrally.
     {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
-        std::string partXml = game->data_dir + "/particles/particles_fast.xml";
-        pm.LoadFile("particles", partXml.c_str());
+        pm.LoadFile("particles", "particles/particles_fast.xml");
     }
 
     // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)

@@ -6,7 +6,7 @@
 // are separate symbols not yet matched by the asm-verify pipeline.
 
 #include "TiXml.h"
-#include "util/PathCI.h"
+#include "asset/FileManager.h"
 #include "debug/Logger.h"
 #include <tinyxml2.h>
 
@@ -220,19 +220,41 @@ TiXmlDocument& TiXmlDocument::operator=(const TiXmlDocument& other) {
     return *this;
 }
 
-// ASM-spec v1.6.1 TiXmlDocument::LoadFile @0x001157a4
-// Folds in CI logic (formerly XmlLoad.cpp): try exact path, then ResolvePathCI fallback.
+// ASM-spec v1.6.1 TiXmlDocument::LoadFile @0x002206a4: wraps Mortar::File ->
+// FileManager::GetFileData (data-root prepended in file layer) -> tinyxml2 Parse.
+// Callers pass bare relative paths.
+// Port specific: absolute paths (save files) bypass FileManager and go to tinyxml2 directly.
+// CI resolution lives in FileSystem_Direct::GetFileData (applies after TranslateFileName).
 bool TiXmlDocument::LoadFile(const char* path) {
-    if (!m_node) return false;
+    if (!m_node || !path) return false;
     tinyxml2::XMLDocument* doc = AsDoc(m_node);
-    tinyxml2::XMLError err = doc->LoadFile(path);
-    if (err != tinyxml2::XML_SUCCESS) {
-        std::string ci = Mortar::ResolvePathCI(path);
-        if (!ci.empty()) err = doc->LoadFile(ci.c_str());
+
+    // Detect absolute paths: save-file callers use OS-absolute paths not routed via FileManager.
+    bool isAbsolute = (path[0] == '/'
+#ifdef _WIN32
+        || (path[0] != '\0' && path[1] == ':')
+#endif
+    );
+
+    if (isAbsolute) {
+        tinyxml2::XMLError err = doc->LoadFile(path);
+        if (err != tinyxml2::XML_SUCCESS)
+            LOG_ERROR("TiXml", "failed to load '%s' (err=%d)", path, (int)err);
+        return err == tinyxml2::XML_SUCCESS;
     }
-    if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("TiXml", "failed to load '%s' (err=%d)", path, (int)err);
+
+    void* buf = 0;
+    unsigned long size = 0;
+    bool owned = false;
+    if (!FileManager::GetInstance().GetFileData(path, &buf, &size, 0, owned)) {
+        LOG_ERROR("TiXml", "failed to load '%s'", path);
+        return false;
     }
+    tinyxml2::XMLError err = doc->Parse(static_cast<const char*>(buf), (size_t)size);
+    if (owned)
+        delete[] static_cast<unsigned char*>(buf);
+    if (err != tinyxml2::XML_SUCCESS)
+        LOG_ERROR("TiXml", "failed to parse '%s' (err=%d)", path, (int)err);
     return err == tinyxml2::XML_SUCCESS;
 }
 bool TiXmlDocument::SaveFile(const char* path) const {

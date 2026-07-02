@@ -5,7 +5,6 @@
 #include "BonusManager.h"
 #include "FruitSaveData.h"
 #include "Game.h"
-#include "engine/asset/TextureManager.h"
 #include "engine/math/Random.h"
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
@@ -14,8 +13,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-using Mortar::TextureManager;
 
 // ---------------------------------------------------------------------------
 // Singleton
@@ -47,24 +44,14 @@ void BonusManager::Init() {
     m_ComboTotalsByLevel.clear();
     m_BestBonuses.clear();
 
-    std::string path;
-    const char* dataDir = TextureManager::GetDataDir();
-    if (dataDir && dataDir[0]) {
-        path = dataDir;
-        path += "/xml/bonusAwards.xml";
-    } else {
-        path = "xml/bonusAwards.xml";
-    }
-
     TiXmlDocument doc;
-    if (!doc.LoadFile(path.c_str())) {
+    if (!doc.LoadFile("xml/bonusAwards.xml")) {
         return;
     }
 
     TiXmlElement root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
-        printf("BonusManager::Init -- no <bonusAwardsFile> root in '%s'\n",
-               path.c_str());
+        printf("BonusManager::Init -- no <bonusAwardsFile> root\n");
         return;
     }
 

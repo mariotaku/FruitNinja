@@ -75,20 +75,14 @@ static std::string BuildItemSaveFullPath() {
 
 // -----------------------------------------------------------------------
 // LoadItemData @ v1.6.1 0x00139d68
-// Parse itemlist.xml, then load ItemSave.xml for persistence.
+// Parse itemList.xml, then load ItemSave.xml for persistence.
 // DIFFERS: original = Mortar TiXml (operator new(0x48)) (v1.6.1 LoadItemData @0x00139d68),
 //   using tinyxml2 because the TiXml subsystem is unported -- container/iteration logic matches.
-// DIFFERS: original = hardcoded "xml/itemList.xml" path (v1.6.1 @0x00139d68); port uses
-//   Game::data_dir + "/xml/itemlist.xml" (lowercase) for platform-relative asset access.
-//   Lowercase is required: Emscripten MEMFS and webOS/Linux are case-sensitive; the
-//   on-disk asset is lowercase (matching siblings fruitlist.xml, poweruplist.xml).
 // DIFFERS: original = saves at GetItemSavePath() return ("ItemSave.xml", same directory);
 //   port uses BuildItemSaveFullPath() which routes to /save/ on Emscripten.
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
-    // Phase 1: Parse itemlist.xml
-    std::string itemListPath = Game::GetInstance()->data_dir + "/xml/itemlist.xml";
-
+    // Phase 1: Parse itemList.xml (binary path v1.6.1 LoadItemData @0x00139d68)
     m_ByHash.clear();
     m_Items.clear();
     for (int i = 0; i < 4; i++) m_ByHashType[i].clear();
@@ -96,7 +90,7 @@ void ItemManager::LoadItemData() {
 
     {
         TiXmlDocument doc;
-        if (doc.LoadFile(itemListPath.c_str())) {
+        if (doc.LoadFile("xml/itemList.xml")) {
             TiXmlElement root = doc.FirstChildElement("itemManagerFile");  // 0x1ba075
             if (root) {
                 for (TiXmlElement e = root.FirstChildElement("item");  // 0x1b9e95

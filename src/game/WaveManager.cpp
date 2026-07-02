@@ -211,10 +211,7 @@ WaveManager* WaveManager::GetInstance() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::Init() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
-    LOG_DEBUG("WaveManager", "Init: data_dir=%s", game->data_dir.c_str());
+    LOG_DEBUG("WaveManager", "Init");
 
     for (int mode = 0; mode < 4; ++mode) {
         // Free any previously-loaded wave infos for this mode.
@@ -224,9 +221,8 @@ void WaveManager::Init() {
             delete *it;
         m_WaveInfo[mode].clear();
 
-        std::string path = game->data_dir + "/" + s_WaveXML[mode];
         TiXmlDocument doc;
-        if (!doc.LoadFile(path.c_str())) {
+        if (!doc.LoadFile(s_WaveXML[mode])) {
             continue;
         }
 
@@ -473,7 +469,7 @@ void WaveManager::Init() {
 
     // v1.6.1 WaveManager::Init @0x00129934: call ParseGlobalProbabilityOverides at tail.
     // ASM-spec v1.6.1 ParseGlobalProbabilityOverides @0x00129718
-    ParseGlobalProbabilityOverides((game->data_dir + "/xml/globalprobabilities.xml").c_str());
+    ParseGlobalProbabilityOverides("xml/globalprobabilities.xml");
 }
 
 // ----------------------------------------------------------------------------
