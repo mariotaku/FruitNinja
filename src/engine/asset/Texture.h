@@ -100,6 +100,16 @@ public:
     // +0x2C: alpha flag (ctor=true).
     bool m_HasAlpha;
 
+    // Mirrors binary global Bada::g__CurrentlySetTexture, read by
+    // Mesh::DrawQuadUnCached @0x00240a70 to decide the opaque-fast-path blend
+    // disable (tint.a==255 && (!tex || !tex->m_HasAlpha)). Set to `this` in
+    // Set(), cleared to NULL wherever the texture is unbound / bind fails.
+    // A static member doesn't affect sizeof(Texture)/offsets, so unlike
+    // s_LastBoundTexId below this is declared unconditionally -- it stands in
+    // for real binary global state and must stay reachable under __bada__
+    // cross-builds too.
+    static Mortar::Texture* s_CurrentlySetTexture;
+
     // Port specific: file path for debugging/reload.
     // The binary keeps the source path on TextureSource/TextureLoader (+0x1c),
     // not on the Texture itself. This field is a port convenience only; it is

@@ -115,6 +115,11 @@ void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
     SetupFF2D(identity.ptr(), tex,
               Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 
+    // Port specific: fullscreen quad, no binary counterpart -- enable blend explicitly.
+    // Relies on no ambient GL_BLEND state (per-draw DrawQuad no longer leaves it on).
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableClientState(GL_VERTEX_ARRAY);
     glVertexPointer(3, GL_FLOAT, 20, verts);
@@ -173,6 +178,20 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     TexEnvModulate();
     glDisable(GL_LIGHTING);
     glColor4ub(tint.r, tint.g, tint.b, tint.a);
+
+    // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: 2D quad sets cull off +
+    // per-draw blend -- OFF only if tint.a==255 && (no texture || texture has no alpha),
+    // else ON. No trailing restore -- every draw path owns its own state (this replaces
+    // relying on a global BeginFrame-time glEnable(GL_BLEND) that other draws, e.g.
+    // Geometry::Render, correctly disable per-draw and would otherwise leak into here).
+    glDisable(GL_CULL_FACE);
+    if (tint.a == 255 && (!Mortar::Texture::s_CurrentlySetTexture ||
+                          !Mortar::Texture::s_CurrentlySetTexture->m_HasAlpha)) {
+        glDisable(GL_BLEND);
+    } else {
+        glEnable(GL_BLEND);
+    }
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableClientState(GL_VERTEX_ARRAY);
