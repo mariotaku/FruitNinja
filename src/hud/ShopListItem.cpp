@@ -418,9 +418,13 @@ void ShopListItem::DrawFloatingText() {
     if (m_NewItemAlpha > 0.0f && m_pBox0 != 0) {
         float boxW = m_pBox0->GetTextWidth();
         Vec3 anchor(baseX - boxW - 4.0f, baseY + 8.0f + s_ShimmerY, 0.0f);
-        // ShopScreen state-1 clamp: pushes the badge off-screen during a shop transition.
+        // v1.6.1 DrawFloatingText @0x001b4cd4 (VNMLS): clampX = 0.25*65*alpha^2 - 240.0
+        // (negative floor, -240..-223.75). max(anchor.x, clampX) leaves on-screen badges at
+        // their computed anchor; only floors X during off-screen fade. (Prior port formula
+        // was sign-inverted -> +224, pinning every NEW badge off-screen since m_State==1 is
+        // the shop's normal Active state.)
         if (m_pShopScreen != 0 && m_pShopScreen->m_State == 1) {
-            float clampX = 240.0f - 0.25f * (65.0f * m_NewItemAlpha * m_NewItemAlpha);
+            float clampX = 0.25f * (65.0f * m_NewItemAlpha * m_NewItemAlpha) - 240.0f;
             if (clampX > anchor.x) anchor.x = clampX;
         }
         IngamePopup* popup = GetIngamePopup(0x10);
