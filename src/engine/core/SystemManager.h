@@ -3,6 +3,7 @@
 
 #include "core/Singleton.h"
 #include "core/UniqueDeviceID.h"
+#include "engine/util/Event.h"
 #include <cstdint>
 
 // SystemManager -- polymorphic singleton (vtable @ 0x001eaee0, group base 0x001eaed8).
@@ -91,9 +92,8 @@ extern bool isStartupTexturePortrait;
 // ASM-spec v1.6.1 CombosEnabled @0x119fd0: returns game_work.gameMode != 1 (combos off in Zen).
 bool CombosEnabled();
 
-// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns pointer to 8-byte s_scoreNotification global.
-// Field semantics not yet RE'd; callers mutate through the pointer.
-void* GetScoreNotification();
+// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns &s_scoreNotification (Event2<int,int>, ctor'd by Game.cpp global ctor)
+Mortar::Event2<int,int>& GetScoreNotification();
 
 // ASM-spec v1.6.1 GetVersionFromString @0x152e78: parses "M.m.p" -> major*10000 + minor*100 + patch.
 // DIFFERS: binary scales single-digit sections x10; port uses direct semver to match SetVersion.

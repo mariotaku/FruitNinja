@@ -39,9 +39,17 @@ public:
     void ResetSpecific() override;
     int  UpdateSpecific(float dt) override;
 
-    // @ 0x0014dc88 — when not deferred and +0x24>=0, registers
-    // ScoreNotification as Delegate2<void,int,int> on the score signal.
+    // @ 0x0014dc88 — when m_BonusAccum(+0x0c)<=0 && m_Accumulator(+0x24)>=0,
+    // registers ScoreNotification as Delegate2<void,int,int> on the score
+    // signal (GetScoreNotification(), Event2<int,int> @ 0x00104390) BEFORE
+    // chaining base GameModifier::ApplyModifier (register-under-gate first,
+    // base last -- the base sets m_BonusAccum = m_Duration).
     void ApplyModifier(bool isPurchased, float* extra) override;
+
+    // @ 0x0014db60 — unsubscribes ScoreNotification from GetScoreNotification()
+    // (mirrors ApplyModifier's +=). Base RemoveModifier is a no-op (GameModifier
+    // slot [6]); this override supplies the actual unsubscribe.
+    void RemoveModifier() override;
 
     int GetType() override { return 4; }
 
@@ -50,9 +58,9 @@ public:
 
     GameModifier* Clone() override;
 
-    // Delegate target: called when score changes (int points, int extra)
-    // @ 0x0014dac4 — accumulate or immediately call TimeControl::AddTime
-    // TODO: v1.6.1 TimeSinkModifier::ScoreNotification @0x0014dac4 — wire to score notification signal
+    // Delegate target: called when score changes (int points, int extra).
+    // Subscribed/unsubscribed on GetScoreNotification() by ApplyModifier /
+    // RemoveModifier. @ 0x0014dac4 — accumulate or immediately call TimeControl::AddTime
     void ScoreNotification(int points, int extra);
 
     // Delegate target: called when fruit is sliced (Fruit*, int score, Entity* slasher).

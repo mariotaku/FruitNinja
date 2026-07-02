@@ -7,6 +7,7 @@
 #include "entities/Fruit.h"
 #include "hud/TimeControl.h"
 #include "engine/util/Delegate.h"
+#include "engine/core/SystemManager.h"
 
 TimeSinkModifier::TimeSinkModifier()
     : GameModifier()
@@ -32,20 +33,19 @@ int TimeSinkModifier::UpdateSpecific(float /*dt*/) { return 0; }
 // sets m_BonusAccum = m_Duration and would make the gate false if checked
 // after). Register-under-gate first, base last.
 //
-// GetScoreNotification() is currently a raw `void*` returning an untyped
-// 8-byte {int,int} data struct (src/engine/core/SystemManager.{h,cpp}), NOT
-// an Event2<int,int> signal object with += subscription support — the score
-// notification Event2<int,int> itself is unported. The FruitWasSlicedSink
-// subscription previously here was wrong: FruitWasSlicedSink is a
-// per-fruit-slice variant subscribed nowhere in this function per the binary;
-// ApplyModifier only ever wires ScoreNotification.
+// FruitWasSlicedSink is a per-fruit-slice variant subscribed nowhere in this
+// function per the binary; ApplyModifier only ever wires ScoreNotification.
 void TimeSinkModifier::ApplyModifier(bool isPurchased, float* extra) {
     if (m_BonusAccum <= 0.0f && m_Accumulator >= 0.0f) {
-        // TODO: v1.6.1 0x00104390 GetScoreNotification (Event2<int,int>) unported -- subscribe
-        // TimeSinkModifier::ScoreNotification here when available:
-        //   GetScoreNotification() += Mortar::Delegate2<void,int,int>::Make(this, &TimeSinkModifier::ScoreNotification);
+        GetScoreNotification() += Mortar::Delegate2<void,int,int>::Make(this, &TimeSinkModifier::ScoreNotification);
     }
     GameModifier::ApplyModifier(isPurchased, extra);
+}
+
+// @ 0x0014db60 — unsubscribe ScoreNotification from the score signal
+// (mirrors ApplyModifier's +=; no gate on the -= side in the binary).
+void TimeSinkModifier::RemoveModifier() {
+    GetScoreNotification() -= Mortar::Delegate2<void,int,int>::Make(this, &TimeSinkModifier::ScoreNotification);
 }
 
 // @ 0x0014dbf4

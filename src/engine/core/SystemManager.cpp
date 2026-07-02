@@ -115,13 +115,14 @@ bool CombosEnabled() {
     return game_work.gameMode != 1;
 }
 
-// 8-byte global accumulating score-notification data.
-// Binary @ 0x2d92e4. Field semantics not yet RE'd; callers mutate via pointer.
-static struct { int a; int b; } s_scoreNotification;
+// Event2<int,int> score-notification signal. Binary @ 0x2d92e4, ctor'd by the
+// Game.cpp keyed global ctor. Fired on score change; TimeSinkModifier is the
+// only subscriber (ApplyModifier @ 0x0014dc88 / RemoveModifier @ 0x0014db60).
+static Mortar::Event2<int,int> s_scoreNotification;
 
-// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns &s_scoreNotification.
-void* GetScoreNotification() {
-    return &s_scoreNotification;
+// ASM-spec v1.6.1 GetScoreNotification @0x119fb0: returns &s_scoreNotification (Event2<int,int>, ctor'd by Game.cpp global ctor)
+Mortar::Event2<int,int>& GetScoreNotification() {
+    return s_scoreNotification;
 }
 
 // ASM-spec v1.6.1 GetVersionFromString @0x152e78: parse "M.m.p" -> packed int.
