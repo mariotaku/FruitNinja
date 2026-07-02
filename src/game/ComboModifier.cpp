@@ -49,21 +49,25 @@ int ComboModifier::UpdateSpecific(float /*dt*/) {
 }
 
 // @ 0x00132e34
-// Binary: chain base ApplyModifier, then register:
-//   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this, &ComboModifier::FruitWasSliced)
-//     += g_FruitWasSliced (file-static in Fruit.cpp, GOT 0x332a34)
+// Binary: if m_BonusAccum(+0x0c)<=0 (not already active), register in order:
 //   Delegate1<void,SlashEntity*>::Make(this, &ComboModifier::ComboWasCanceled)
-//     += g_OnComboCancel (file-static in Slash.cpp, GOT 0x332bd8)
+//     += g_OnComboCancel (file-static in Slash.cpp, GOT 0x332bd8)     [1st]
+//   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this, &ComboModifier::FruitWasSliced)
+//     += g_FruitWasSliced (file-static in Fruit.cpp, GOT 0x332a34)   [2nd]
+// BEFORE chaining base ApplyModifier (which sets m_BonusAccum = m_Duration and
+// would make the gate false if checked after). Register-under-gate first, base last.
 void ComboModifier::ApplyModifier(bool isPurchased, float* extra) {
+    if (m_BonusAccum <= 0) {
+        // Subscribe to g_OnComboCancel — binary @ 0x132b7c (GOT load 0x332bd8) += delegate.
+        SlashEntity::OnComboCancelEvent() +=
+            Mortar::Delegate1<void, SlashEntity*>::Make(
+                this, &ComboModifier::ComboWasCanceled);
+        // Subscribe to g_FruitWasSliced — binary @ 0x132e98 (GOT load 0x332a34) += delegate.
+        Fruit::FruitWasSlicedEvent() +=
+            Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+                this, &ComboModifier::FruitWasSliced);
+    }
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Subscribe to g_FruitWasSliced — binary @ 0x132e98 (GOT load 0x332a34) += delegate.
-    Fruit::FruitWasSlicedEvent() +=
-        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
-            this, &ComboModifier::FruitWasSliced);
-    // Subscribe to g_OnComboCancel — binary @ 0x132b7c (GOT load 0x332bd8) += delegate.
-    SlashEntity::OnComboCancelEvent() +=
-        Mortar::Delegate1<void, SlashEntity*>::Make(
-            this, &ComboModifier::ComboWasCanceled);
 }
 
 // @ 0x00132e10
