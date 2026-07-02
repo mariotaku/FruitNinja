@@ -265,23 +265,19 @@ static void BootWait(void* arg) {
         }
     }
 
+    // Port specific: set languageFlag BEFORE game.init() so GameInitialise
+    // loads the correct string table before ItemManager::LoadItemData bakes
+    // item titles and descriptions. Mirrors mainSDL.cpp locale-before-init order.
+    // (Previously this write was deferred to after init(), which fixed live UI
+    // strings via a redundant Localisation::Load but left the baked title/desc
+    // in English -- see #320.)
+    if (g_langOverride >= 0) {
+        game_work.languageFlag = (uint8_t)g_langOverride;
+    }
+
     if (!g_game.init(ba->window, ba->gl)) {
         fprintf(stderr, "Failed to init game\n");
         return;
-    }
-
-    // Port specific: apply ?lang= override after init so the first frame sees
-    // the chosen language.  Localisation::Load handles the missing-file fallback.
-    if (g_langOverride >= 0) {
-        static const char* const kLangNames[] = {
-            "english_us", "german", "dutch", "french", "spanish", "italian",
-            "swedish", "danish", "norwegian", "finnish", "korean", "japanese",
-            "english_uk", "chinese", "english_us"
-        };
-        game_work.languageFlag = (uint8_t)g_langOverride;
-        Localisation::Load(g_game.data_dir.c_str(), g_langOverride);
-        printf("[lang] override applied: flag=%d (%s)\n",
-               g_langOverride, kLangNames[g_langOverride]);
     }
 
     // Port specific: web audio (#73) -- resume the suspended AudioContext on the
