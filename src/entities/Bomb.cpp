@@ -392,16 +392,12 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));
 
-    // DIFFERS: original = GL_CULL_FACE off (Bada driver's Z-tie breaks deterministically
-    // for the outer shell); port = scoped GL_CULL_FACE on for bomb only.
-    // bomb.mmd ships with a duplicate back-face interior shell (156 outward / 158 inward
-    // winding, ~50/50). GLES2 drivers don't guarantee Z-tie ordering the same way as
-    // the Bada GLES1 driver, so the inner shell sometimes wins (white sphere). Enabling
-    // GL_CULL_FACE drops the inverted-winding interior shell regardless of Z ordering.
-    // Scoped to bomb only: all other meshes in the game are fine with cull off.
-    glEnable(GL_CULL_FACE);
+    // Cull for bomb.mmd's duplicate back-face interior shell (156 outward /
+    // 158 inward winding) is now handled faithfully by Geometry::Render
+    // (v1.6.1 @0x00264468 forces GL_CULL_FACE on for every 3D-mesh draw) --
+    // no bomb-local scoped toggle needed; the stale per-bomb workaround
+    // (which assumed the binary drew meshes with cull off) is removed.
     modelPtr->Draw(mat);
-    glDisable(GL_CULL_FACE);
 }
 
 // ASM-spec v1.6.1 Bomb::KillBomb @ 0x1d5660

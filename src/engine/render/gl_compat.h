@@ -46,6 +46,8 @@
     #define GL_BLEND 0x0BE2
     #define GL_DEPTH_TEST 0x0B71
     #define GL_CULL_FACE 0x0B44
+    #define GL_FRONT 0x0404
+    #define GL_BACK 0x0405
     #define GL_LEQUAL 0x0203
     #define GL_LESS 0x0201
     #define GL_SRC_ALPHA 0x0302
@@ -115,6 +117,7 @@
         void glClear(GLbitfield);
         void glEnable(GLenum);
         void glDisable(GLenum);
+        void glCullFace(GLenum);
         void glBlendFunc(GLenum, GLenum);
         void glScissor(GLint, GLint, GLsizei, GLsizei);
         void glPixelStorei(GLenum, GLint);
