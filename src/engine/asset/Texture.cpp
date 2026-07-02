@@ -10,6 +10,8 @@
 
 namespace Mortar {
 
+Mortar::Texture* Texture::s_CurrentlySetTexture = 0;
+
 #if !defined(__bada__)
 GLuint Texture::s_LastBoundTexId = 0;
 #endif
@@ -95,12 +97,14 @@ void Texture2D_Bada::Set() {
             s_warned = true;
         }
         Texture::s_LastBoundTexId = 0;
+        Texture::s_CurrentlySetTexture = 0;
         return;
     }
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
     Texture::s_LastBoundTexId = m_TexId;
+    Texture::s_CurrentlySetTexture = this;
 #endif
 }
 
@@ -110,6 +114,7 @@ void Texture2D_Bada::UnSet(bool /*flag*/) {
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     Texture::s_LastBoundTexId = 0;
+    Texture::s_CurrentlySetTexture = 0;
 #endif
 }
 

@@ -39,6 +39,9 @@ DisplayManager::DisplayManager()
 // clear is transparent black. Port diverged by setting white clear color,
 // causing a white flash during/after the splash phase.
 void DisplayManager::BeginFrame() {
+    // TODO: v1.6.1 GlClientStates::Reset @0x00258000 disables GL_BLEND at frame top;
+    // port BeginFrame enables it (anti-faithful) -- make faithful after auditing
+    // font/particle 2D paths for the same per-draw-enable need.
     glEnable(GL_BLEND);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
