@@ -211,16 +211,18 @@ void ExplodyFruitModifier::ResetSpecific() {
 int ExplodyFruitModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x00135574
-// Binary: chain base ApplyModifier, then (if m_BonusAccum+0x0c<=0) register
+// Binary: if m_BonusAccum(+0x0c)<=0 (not already active), register
 //   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this,&ExplodyFruitModifier::FruitWasSliced)
-//     += g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
+//     += g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34)
+// BEFORE chaining base ApplyModifier (which sets m_BonusAccum = m_Duration and
+// would make the gate false if checked after). Register-under-gate first, base last.
 void ExplodyFruitModifier::ApplyModifier(bool isPurchased, float* extra) {
-    GameModifier::ApplyModifier(isPurchased, extra);
     if (m_BonusAccum <= 0) {
         Fruit::FruitWasSlicedEvent() +=
             Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
                 this, &ExplodyFruitModifier::FruitWasSliced);
     }
+    GameModifier::ApplyModifier(isPurchased, extra);
 }
 
 // @ 0x0013514c

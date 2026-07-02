@@ -96,11 +96,23 @@ void GameModifier::ParseSpecific(TiXmlElement* /*xml*/) {
     // Base: no-op. Subclasses may call this via super without ill effect.
 }
 
-// Binary @ 0x00133378 -- GameModifier::ApplyModifier(bool, float*) base body.
-// PURE in binary vtable (slot 8 = __cxa_pure_virtual); however the base body
-// exists as a non-virtual thunk that subclasses call directly
-// (ScoreModifier::ApplyModifier, etc. chain via GameModifier::ApplyModifier).
-// Body: set m_BonusAccum = m_Duration.
+// Binary @ 0x00140890 (GOT thunk 0x00114f04) -- GameModifier::ApplyModifier(bool, float*)
+// base body. PURE in binary vtable (slot 8 = __cxa_pure_virtual); however the
+// base body exists as a real function that all 7 subclass ApplyModifier
+// overrides call directly as a non-virtual "super()" (confirmed xrefs into the
+// 0x00114f04 GOT thunk from ExplodyFruitModifier/ScoreModifier/SlashModifier/
+// TimeSinkModifier/ComboModifier/SpawnModifier/WaveModifier::ApplyModifier).
+// 0x00133378 (previously cited here) is the GameModifier ctor, not this body.
+//
+// TODO: v1.6.1 0x00140890 (GameModifier::ApplyModifier) -- Ghidra confirms the
+// function AT this exact address is byte-identical to GameModifier::OnDeferComplete
+// below (same fold-m_Duration-into-m_BonusAccum, pExtra-clamp, then "overtime"/
+// "freeze" PowerUpManager-hash clamp+scale by m_WaveDtModPrev): the binary's slot-5
+// virtual dispatch (OnDeferComplete) and the non-virtual base-body call site
+// (ApplyModifier "super()") are the SAME compiled function. This port's simplified
+// `m_BonusAccum = m_Duration` body is incomplete versus that. Left as-is to keep
+// this change scoped to the subscription-order fix (#331); port the full body
+// (mirror OnDeferComplete's already-ported logic) in a follow-up (#338).
 void GameModifier::ApplyModifier(bool /*isPurchased*/, float* /*extra*/) {
     m_BonusAccum = m_Duration;
 }
