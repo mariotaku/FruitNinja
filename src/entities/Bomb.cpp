@@ -493,9 +493,6 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         }
     } else if (m_bMenuBombHit != 0) {
         // Menu-bomb re-hit: gate ClearMenuItems on m_bClearsMenuItems
-        // TODO: v1.6.1 0x1d5d4c (Bomb::CollisionResponse) -- verify exact MenuButton gate
-        // field at binary +0x13A matches m_bClearsMenuItems (spec says m_bClearsMenuItems;
-        // port previously used m_bEnabled which is a v1.0 compat field)
         if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bClearsMenuItems != 0) {
             ClearMenuItems();
         }
