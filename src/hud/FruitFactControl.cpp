@@ -268,8 +268,10 @@ void FruitFactControl::Update(float /*dt*/) {
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactControl::LeftButton);
         Vec3 sz = arrowSize;
-        Mortar::Delegate1<void, HUDControl*> onRemove;   // T_1070: empty/Global no-op
-        m_NextButton = new MenuButton(&tex, &spawnPos, &onTap, -1, &sz, &onRemove);
+        // v1.6.1 MenuButton::MenuButton @0x0019bb08: param6 is Delegate0<void> deletedCb,
+        // not a Delegate1<void,HUDControl*> onRemove. Global no-op @0x19a620.
+        m_NextButton = new MenuButton(tex, spawnPos, onTap, -1, sz,
+                                       Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
         m_NextButton->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
         m_NextButton->Init();                            // vtable slot 2 (0-arg Init)
         // Next arrow re-uses the right-arrow texture mirrored: UVLeft=1, UVRight=0.
@@ -285,8 +287,8 @@ void FruitFactControl::Update(float /*dt*/) {
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactControl::RightButton);
         Vec3 sz = arrowSize;
-        Mortar::Delegate1<void, HUDControl*> onRemove;
-        m_PrevButton = new MenuButton(&tex, &spawnPos, &onTap, -1, &sz, &onRemove);
+        m_PrevButton = new MenuButton(tex, spawnPos, onTap, -1, sz,
+                                       Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
         m_PrevButton->Init();                            // vtable slot 2
         m_PrevButton->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
         if (game_work.mHud) game_work.mHud->AddControl(m_PrevButton);

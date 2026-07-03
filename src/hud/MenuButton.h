@@ -254,13 +254,20 @@ public:
     float           m_ShakeTimer;          // +0x174
 
 
+    // DIFFERS: the binary has no default ctor -- v1.6.1 MenuButton::MenuButton
+    // only exists as the value-ctor below (@0x0019bb08 etc). The port keeps this
+    // parameterless ctor for the ~22 call sites that build-then-Init() separately;
+    // each replicates the value-ctor's field defaults via the member init-list below.
     MenuButton();
 
-    // Binary ctors @ 0x0019bb08 / 0x0019bcac / 0x0019be50 / 0x0019bff8 (all forward to Init).
-    MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
-               Mortar::Delegate0<void>* onTap,
-               int fruitType, Vec3* restPos,
-               Mortar::Delegate1<void, HUDControl*>* onRemove);
+    // v1.6.1 MenuButton::MenuButton C1 @0x0019bb08 / C2 @0x0019bcac (also
+    // 0x0019be50 / 0x0019bff8 char*-text variants -- not yet ported). ALL params
+    // by value. param6 is Delegate0<void> -> forwarded to Init as deletedCb
+    // (m_DeletedCallback +0xAC); the binary ctor never touches m_RemoveCallback (+0x38).
+    MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
+               Mortar::Delegate0<void> clickCb,
+               int fruitType, Vec3 hitBounds,
+               Mortar::Delegate0<void> deletedCb);
 
     ~MenuButton();
 

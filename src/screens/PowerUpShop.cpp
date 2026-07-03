@@ -500,21 +500,25 @@ void PowerUpShop::Update(float dt) {
             Mortar::Delegate1<void, HUDControl*>::QCallee(
                 this, &PowerUpShop::ButtonDeleted);
 
-        // Binary sequence:
+        // Binary sequence @0x1a8fbc/0x1a8ffc:
         //   m_BuyButton = new MenuButton(NULL, &spawnPos, &slicedCb, fruitType,
-        //                                &origin, &deletedCb)
+        //                                &origin, &deletedCb)   -- param6 Delegate0<void>
+        //                                                          deletedCb -> Global no-op @0x19a620
         //   m_BuyButton->Init()          — vtable no-arg Init (calls Reset, no-op)
         //   m_BuyButton->vel.x = 0
         //   m_BuyButton->m_bAcceptsTouch = 0  (v1.0 field_0x123 -> v1.6.1 m_bAcceptsTouch +0x149)
+        //   m_BuyButton->m_RemoveCallback = removeCb   -- Delegate1<void,HUDControl*> @0x1a8ffc,
+        //                                                 AFTER ctor/Init (order preserved)
         //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
         Vec3 restPos = g_Origin;
-        m_BuyButton = new MenuButton(static_cast<Mortar::SmartPtr<Mortar::Texture>*>(NULL),
-                                     &spawnPos, &slicedCb,
-                                     fruitType, &restPos, &removeCb);
+        m_BuyButton = new MenuButton(Mortar::SmartPtr<Mortar::Texture>(), spawnPos, slicedCb,
+                                     fruitType, restPos,
+                                     Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
         m_BuyButton->Init();
+        m_BuyButton->m_RemoveCallback = removeCb;
         // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
         // Binary: m_BuyButton->m_bEnabled = 0 (field_0x123 in v1.0 comment; v1.6.1 = m_bAcceptsTouch=0)
         m_BuyButton->m_bAcceptsTouch = 0;
