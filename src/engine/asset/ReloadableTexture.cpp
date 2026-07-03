@@ -1,27 +1,20 @@
-// Mortar::ReloadableTexture — 8-byte reloadable texture record.
-// Binary ctor inlined in PurchaseInfo ctor @ 0x0011bdd8.
-// Unload @ 0x00118334 (three calls, ASM-verified 2026-05-18).
+// Mortar::ReloadableTexture — see header for the full binary-layout spec.
 
 #include "asset/ReloadableTexture.h"
 #include "asset/TextureManager.h"
-#include "asset/Texture.h"
-#include "render/gl_funcs.h"
 
+// v1.6.1 ReloadableTexture::Load @0x0014fad8.
+void Mortar::ReloadableTexture::Load() {
+    if (m_pPath && !m_Texture.IsValid()) {
+        m_Texture = ::LoadTexture(m_pPath);
+    }
+}
+
+// Port specific: see header comment -- filename is already fully-suffixed by the
+// caller, so load directly instead of going through Load()'s ".tex" auto-append.
 void Mortar::ReloadableTexture::Load(const char* filename) {
-    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture(filename);
-    if (tex.IsValid()) {
-        m_Handle = tex->GetTexId();
-    } else {
-        m_Handle = 0;
+    *this = filename;
+    if (m_pPath && !m_Texture.IsValid()) {
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(m_pPath);
     }
-}
-
-void Mortar::ReloadableTexture::Set() const {
-    if (m_Handle != 0) {
-        glBindTexture(GL_TEXTURE_2D, m_Handle);
-    }
-}
-
-void Mortar::ReloadableTexture::UnSet() const {
-    glBindTexture(GL_TEXTURE_2D, 0);
 }

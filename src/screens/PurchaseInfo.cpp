@@ -5,8 +5,10 @@
 // fields (m_MaxUses, m_Cost, m_CurrentUses). m_Description and m_DisplayName are
 // left uninitialised by the ctor (callers set them via Parse).
 //
-// Dtor: trivial destructor (no heap frees; ReloadableTexture subobjects
-// destruct in place). Binary dtor @ 0x00118664 is near-empty per RE.
+// Dtor: NOT trivial as of #359 -- each ReloadableTexture subobject now owns a
+// heap m_pPath buffer, freed by its own destructor when the three subobjects
+// destruct in place. Binary dtor @ 0x00118664 is near-empty per RE (the frees
+// happen in the base ReloadableTexture dtors, not in PurchaseInfo's own body).
 
 #include "screens/PurchaseInfo.h"
 #include <cstring>
@@ -29,8 +31,9 @@ PurchaseInfo::PurchaseInfo()
 }
 
 PurchaseInfo::~PurchaseInfo() {
-    // Binary dtor @ 0x00118664: trivial — no explicit cleanup beyond
-    // subobject destruction of three ReloadableTexture members.
+    // Binary dtor @ 0x00118664: no explicit body of its own -- cleanup happens
+    // via subobject destruction of the three ReloadableTexture members, each of
+    // which now frees an owned m_pPath heap buffer (#359).
 }
 
 // Binary @ 0x00118474
