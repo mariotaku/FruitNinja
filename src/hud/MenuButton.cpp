@@ -338,22 +338,21 @@ void MenuButton::CreateFruit() {
     if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
 }
 
-// v1.6.1 MenuButton::Release @0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (asm-inspector)
-// DIFFERS: v1.6.1 MenuButton::Release @0x0019d064 only clears m_pTrackedFruit's backref and leaves
-// the menu fruit alive; port KILLS the tracked fruit/bomb here (mirrors SetToMultiplayerState) so an
-// orphaned menu fruit never outlives its freed button and later reads freed heap -- on wasm-32 the
-// freed MenuButton block is reused by a ring Texture (the binary's allocator + slice-fling-falloff
-// timing tolerate the dangle; the port does not). Removes both the orphan pile-up and the #348/#364
-// ring-texture UAF.
+// v1.6.1 MenuButton::Release @0x0019d064 -- clears the tracked entity's owner backref (leaves the
+// entity ALIVE), deletes the 3 labels, DeletePeices, releases m_Texture.
+// ASM-verified: 2026-07-03T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (re-analyst disasm):
+//   ldr m_pTrackedFruit(+0x14C); if non-null: if m_FruitType(+0x84) < MAX_FRUIT_TYPES ->
+//   fruit->m_pOwner(+0x160)=0 else if == -> bomb->m_pOwnerButton(+0x84)=0. Does NOT kill the fruit.
+// (An earlier port attempt force-KillFruit'd here to remove orphans; that prematurely pools the menu
+//  fruit -> DojoScreen::CreateFruit recycles it -> e->Init() call_indirect OOB. Reverted to faithful.)
 void MenuButton::Release() {
     if (m_pTrackedFruit) {
         Mortar::Entity* e = static_cast<Mortar::Entity*>(m_pTrackedFruit);
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
-            static_cast<Fruit*>(e)->KillFruit(false);
+            static_cast<Fruit*>(e)->m_pOwner = nullptr;
         } else if (m_FruitType == bombThreshold) {
-            static_cast<Bomb*>(e)->KillBomb();
+            static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
     }
     delete m_pLabelFg;     m_pLabelFg     = nullptr;
