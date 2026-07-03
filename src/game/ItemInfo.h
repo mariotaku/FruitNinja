@@ -181,11 +181,14 @@ struct LoopingSound {
 // SlashModInfo : ItemInfo (0x118 bytes)
 // Extends ItemInfo for SLASH_MODIFIER items.
 // Binary vtable overrides Parse at slot +0x10 with ParseSlashModInfo.
-// ctor @ 0x0013ae78; parse @ 0x001126c0.
+// ctor @ 0x0013ae78; outer parse @ 0x0013935c wraps inner parse @ 0x001126c0.
 // -----------------------------------------------------------------------
 class SlashModInfo : public ItemInfo {
 public:
-    // +0x48  Colour*    m_pColours          heap array of <colour> entries; NULL if count==0
+    // +0x48  Colour*    m_pColours          heap array of <colour> entries.
+    // Parse() (v1.6.1 SlashModInfo::Parse @0x0013935c) guarantees this is never
+    // left NULL: if no <colour> children were found, it falls back to a single
+    // default-constructed (opaque black) Colour with m_ColourCount=1.
     Colour*  m_pColours;
     // +0x4c  int        m_ColourCount        number of <colour> child elements parsed
     int      m_ColourCount;
