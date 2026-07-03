@@ -8,6 +8,7 @@
 #include "MenuBackground.h"
 #include "asset/TextureManager.h"
 #include "game/ItemManager.h"
+#include "Game.h"
 #include <cstdio>
 #include <cstring>
 
@@ -16,11 +17,11 @@
 static Mortar::SmartPtr<Mortar::Texture> g_BackgroundTexture;
 
 // IsFastHardware — binary: _Z14IsFastHardwarev @0x0011f394 (v1.6.1)
-// Reads a hardware-capability flag set during platform init.
-// Port: always true (no slow-hardware path needed on SDL2 target).
+// Reads theGame's MortarGame::m_bFastHardware (+0xF4), set by
+// Game::Init -> SetHardware("BADA", true) (Bada Wave is fast hardware).
 // Binary: the slow branch appends "_sml" suffix (rodata 0x001bc7a5).
 bool IsFastHardware() {
-    return true;
+    return Game::GetInstance()->IsFastHardware();
 }
 
 // ChangeBackground (v1.6.1) @ 0x001cc938
