@@ -499,7 +499,7 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
         SmartPtr<GeometryBinding> binding(new GeometryBinding());
         binding->EffectGroupSet(effectGroup);
         if (ib.IsValid()) {
-            binding->IndexStreamSet(ib, AsciiString(""));
+            binding->IndexStreamSet(ib, std::string());
         }
         if (vb.IsValid()) {
             binding->VertexStreamAdd(vb);

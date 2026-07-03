@@ -26,10 +26,10 @@ GeometryBinding::GeometryBinding() {
 GeometryBinding::~GeometryBinding() {
 }
 
-// v1.6.1 Mortar::GeometryBinding::VertexStreamAdd @0x002640c8 -- find-or-push_back SmartPtr<IVertexStream> into m_VertexStreams.
+// ASM-spec v1.6.1 GeometryBinding::VertexStreamAdd @0x002640c8: find-or-push_back SmartPtr<IVertexStream> into m_VertexStreams.
 // The binary's body: searches m_VertexStreams for a matching ptr (by address comparison);
 // if not found, push_back. In LoadMesh, each stream is unique so the push_back path always fires.
-void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
+void GeometryBinding::VertexStreamAdd(const Mortar::SmartPtr<IVertexStream>& stream) {
     // Search for duplicate (matching binary -- linear scan before push_back).
     for (std::vector<SmartPtr<IVertexStream> >::iterator it = m_VertexStreams.begin();
          it != m_VertexStreams.end(); ++it) {
@@ -38,15 +38,25 @@ void GeometryBinding::VertexStreamAdd(SmartPtr<IVertexStream> stream) {
     m_VertexStreams.push_back(stream);
 }
 
-// v1.6.1 Mortar::GeometryBinding::IndexStreamSet @0x00264108 -- stores stream into m_IndexStream;
-// name is unused by LoadMesh (always passed as ""). No lookup into m_NamedIndexStreams in this path.
-void GeometryBinding::IndexStreamSet(SmartPtr<IIndexStream> stream,
-                                     const AsciiString& /*name*/) {
-    m_IndexStream = stream;
+// ASM-spec v1.6.1 GeometryBinding::IndexStreamSet @0x00264108: name.empty() -> m_IndexStream
+// path (ptr-equality early-out, then assign); non-empty name -> m_NamedIndexStreams[name] path.
+// LoadMesh @0x0023890c always passes "", so only the empty-name path is exercised in practice.
+void GeometryBinding::IndexStreamSet(const Mortar::SmartPtr<IIndexStream>& stream,
+                                     const std::string& name) {
+    if (name.empty()) {
+        if (m_IndexStream.Get() == stream.Get()) return;
+        m_IndexStream = stream;
+    } else {
+        // TODO: v1.6.1 0x00264108 (IndexStreamSet) -- non-empty name -> m_NamedIndexStreams[name]
+        // ptr-equality early-out + assign (map path unported; m_NamedIndexStreams is a raw pad).
+        if (m_IndexStream.Get() == stream.Get()) return;
+        m_IndexStream = stream;
+    }
+    // Defunct: GLES1 binding rebuild -- GeometryBinding_GLES1::Rebind @tail-call from binary 0x0026416c (no-op in port GL path)
 }
 
-// v1.6.1 Mortar::GeometryBinding::EffectGroupSet @0x0026406c -- stores EffectGroup into m_EffectGroup.
-void GeometryBinding::EffectGroupSet(SmartPtr<EffectGroup> group) {
+// ASM-spec v1.6.1 GeometryBinding::EffectGroupSet @0x0026406c: stores EffectGroup into m_EffectGroup.
+void GeometryBinding::EffectGroupSet(const Mortar::SmartPtr<EffectGroup>& group) {
     m_EffectGroup = group;
 }
 
