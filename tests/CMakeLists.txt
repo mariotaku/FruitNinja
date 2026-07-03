@@ -937,3 +937,13 @@ set_tests_properties(screenshot_dojo_nav_about PROPERTIES TIMEOUT 120
     LABELS "category_rendering;screen_about;nav_dojo_to_about")
 set_tests_properties(screenshot_dojo_nav_shop PROPERTIES TIMEOUT 120
     LABELS "category_rendering;screen_shop;nav_dojo_to_shop")
+
+# Fruit::Init pool-reuse event-clear regression guard (#346).
+# Drives the REAL ActorManager pool-reuse path: Add(0) -> subscribe dummy
+# delegates to m_OnSliced/m_OnKilled/m_OnExpired -> Deactivate -> Add(0) again
+# (recycle) -> Init() -> asserts all three events are Empty(). Fails if the
+# three Clear() calls at the top of Fruit::Init are removed. Headless -- no
+# screenshot, no audio played.
+fn_add_game_test(test_fruit_pool_reuse test_fruit_pool_reuse.cpp)
+add_test(NAME fruit_pool_reuse COMMAND test_fruit_pool_reuse)
+set_tests_properties(fruit_pool_reuse PROPERTIES TIMEOUT 60)

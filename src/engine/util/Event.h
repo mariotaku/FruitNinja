@@ -77,6 +77,10 @@ public:
     // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
     void Clear() { m_List.clear(); }
 
+    // True if no subscribers. Used by pool-reuse regression guards (#346) to
+    // confirm Clear() ran on entity Init.
+    bool Empty() const { return m_List.empty(); }
+
 private:
     ListT m_List;
 };
@@ -117,6 +121,10 @@ public:
 
     // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
     void Clear() { m_List.clear(); }
+
+    // True if no subscribers. Used by pool-reuse regression guards (#346) to
+    // confirm Clear() ran on entity Init.
+    bool Empty() const { return m_List.empty(); }
 
 private:
     ListT m_List;
@@ -159,6 +167,10 @@ public:
     // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
     void Clear() { m_List.clear(); }
 
+    // True if no subscribers. Used by pool-reuse regression guards (#346) to
+    // confirm Clear() ran on entity Init.
+    bool Empty() const { return m_List.empty(); }
+
 private:
     ListT m_List;
 };
@@ -199,6 +211,10 @@ public:
 
     // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
     void Clear() { m_List.clear(); }
+
+    // True if no subscribers. Used by pool-reuse regression guards (#346) to
+    // confirm Clear() ran on entity Init.
+    bool Empty() const { return m_List.empty(); }
 
 private:
     ListT m_List;
