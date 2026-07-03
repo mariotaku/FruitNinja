@@ -350,7 +350,7 @@ public:
     // Save / Load
     // ------------------------------------------------------------------
 
-    // 0x00129ca8. Resets the active-game snapshot (entity list, resume).
+    // v1.6.1 @0x0015286c: m_EntityStates.clear() only (dead code; zero callers).
     void SaveGameState();
 
     // Daily-reset logic. Stub.
