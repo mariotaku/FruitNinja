@@ -423,11 +423,11 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
 
     // FG label: weight=0, white base colour, then gradient applied.
     m_pLabelFg = new Mortar::BakedStringTTF(font, text, actualFontScale,
-        Colour(255, 255, 255, 255), 0L, 0.0f, Mortar::FONT_EFFECT_NONE);
+        Colour(255, 255, 255, 255), 0L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
     if (wantGlow) {
         // Outer glow: weight=5, black.
         m_pLabelGlow = new Mortar::BakedStringTTF(font, text, actualFontScale,
-            Colour(0, 0, 0, 255), 5L, 0.0f, Mortar::FONT_EFFECT_NONE);
+            Colour(0, 0, 0, 255), 5L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
         if (m_LabelRadius > 0.0f)
             m_pLabelGlow->ApplyFormatting_Circle(m_LabelRadius);
     }
@@ -452,7 +452,7 @@ void MenuButton::SetInnerGlow(const char* text, Colour colour, float radius,
     if (!font || !text) return;
     // weight=2 for inner glow (shadow).
     m_pLabelShadow = new Mortar::BakedStringTTF(font, text, fontScale,
-        colour, 2L, 0.0f, Mortar::FONT_EFFECT_NONE);
+        colour, 2L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
     if (radius > 0.0f)
         m_pLabelShadow->ApplyFormatting_Circle(radius);
 }

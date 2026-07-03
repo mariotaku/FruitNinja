@@ -22,6 +22,7 @@
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "render/FontCacheObjectTTF.h"
 #include "core/MortarTypes.h"
 #include <vector>
 #include <string>
@@ -29,15 +30,7 @@
 
 namespace Mortar {
 
-class FontCacheObjectTTF;
 struct GlyphAtlasEntry;
-
-// FONT_EFFECT type -- values from binary (v1.6.1 BakedStringTTF ctor @0x00249a5c).
-// 0 = no effect, 1 = bold/outline driven by m_FmtCount.
-enum FONT_EFFECT {
-    FONT_EFFECT_NONE     = 0,
-    FONT_EFFECT_BOLD     = 1
-};
 
 // GlyphTTF -- per-baked-glyph state. sizeof 0x44 (=68).
 // v1.6.1 Mortar::GlyphTTF @0x00248b28 (BuildGlyphs allocation site).
@@ -147,7 +140,7 @@ static_assert(sizeof(BakedStringEffectBase) == 0x38, "BakedStringEffectBase size
 class BakedStringTTF {
 public:
     // ctor @0x00249a5c: (FontCacheObjectTTF* fc, const char* text, float fontScale,
-    //   Colour col, long alignSigned, float, FONT_EFFECT eff)
+    //   Colour col, long alignSigned, float, FontCacheObjectTTF::FONT_EFFECT_ENUM eff)
     // op_new(100). weight = clamp(ceil(alignSigned*fc[0x10c][0x0c]),0,0x20);
     // if(eff==0 && n>0) eff=1; m_FmtCount=n; m_Flag=eff.
     // m_ScaledHeight = fontScale * atlas[+0x14]. AddColour(col, 0.0).
@@ -159,7 +152,7 @@ public:
                    Colour col,
                    long alignSigned,
                    float,
-                   FONT_EFFECT eff);
+                   FontCacheObjectTTF::FONT_EFFECT_ENUM eff);
     ~BakedStringTTF();
 
     // FullInternalRebuild @0x00249780: BuildGlyphs + ApplyFormatting_LeftJustify +
