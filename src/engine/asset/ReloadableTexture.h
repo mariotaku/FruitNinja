@@ -1,69 +1,136 @@
 #ifndef FN_ENGINE_ASSET_RELOADABLE_TEXTURE_H
 #define FN_ENGINE_ASSET_RELOADABLE_TEXTURE_H
 
-// Mortar::ReloadableTexture — 8-byte texture handle record.
+// Mortar::ReloadableTexture — 8-byte texture handle record. NO vtable.
 //
 // Binary layout (sizeof = 8, v1.6.1 ReloadableTexture::ReloadableTexture ctor @0x0014f8e8):
-//   +0x00  Mortar::SmartPtr<Mortar::Texture>  (4 bytes, base sub-object)
-//   +0x04  char*  m_pPath                     (4 bytes)
+//   +0x00  Mortar::SmartPtr<Mortar::Texture>  m_Texture  (4 bytes)
+//   +0x04  char*                              m_pPath    (4 bytes; OWNED heap buffer,
+//                                                          new[]/delete[]/strcpy -- NOT a
+//                                                          raw pointer into XML/caller data)
 //
-// DIFFERS: original = SmartPtr<Texture>(4B) base + char* m_pPath(4B) from v1.6.1 ReloadableTexture::ReloadableTexture ctor @0x0014f8e8;
-//   port = char m_Name[4] + GLuint m_Handle (same 8-byte total size, different field types).
-//   sizeof matches (8 == 8) so PurchaseInfo member offsets (+0xA8/+0xB0/+0xB8) are correct.
-//   Changing to the binary layout would require porting SmartPtr<Texture> as the base class
-//   and all the Load/Set/UnSet methods differently; deferred until ReloadableTexture is
-//   fully RE'd.
+// Methods (all non-virtual __thiscall):
+//   ctor()                    @0x0014f8e8: m_Texture() null, m_pPath=0.
+//   ctor(const char*)         @0x0014f9c0: init + operator=(path).
+//   copy ctor                 @0x0014f920: init, operator=(rhs.m_pPath) [deep-copy path],
+//                                          then m_Texture=rhs.m_Texture.
+//   operator=(const char*)    @0x0014f7fc: path==NULL -> delete[] m_pPath; m_pPath=0.
+//                                          Else strlen; if existing buffer length differs,
+//                                          delete[] + new[](len+1); strcpy. (Reuses buffer
+//                                          on equal length.) Does NOT load.
+//   Load() (no-arg)           @0x0014fad8: if (m_pPath && !m_Texture.IsValid())
+//                                          m_Texture = LoadTexture(m_pPath).
+//   Unload()                  @0x0014f878: m_Texture.SetNull().
+//   GetTexture()               @0x0011344c: return &m_Texture.
+//   dtor: delete[] m_pPath (+ SmartPtr auto-release). Inlined at call sites in the binary;
+//         the port gives it a real out-of-line body.
 //
-// Ctor zero-inits both fields (inlined in PurchaseInfo ctor 0x0011bdd8).
-// Unload() zeroes m_Handle (ASM-verified v1.6.1 ReloadableTexture::Unload @0x0014f878).
-//
-// Used as embedded fields in PurchaseInfo (+0xA8, +0xB0, +0xB8, 8 bytes each).
+// Rule-of-three is MANDATORY: EffectImage (which derives from this class) lives in a
+// std::vector<EffectImage>; a vector reallocation copies the base sub-object, which owns
+// m_pPath. Without a deep-copying copy-ctor/copy-assign, a reallocation double-frees or
+// leaks the path buffer.
 
+#include <cstddef>
+#include <cstring>
+#include "util/SmartPtr.h"
+#include "asset/Texture.h"
 #include "render/gl_funcs.h"
 
 namespace Mortar {
 
 class ReloadableTexture {
 public:
-    // DIFFERS: original = SmartPtr<Texture> base at +0x00; port = char m_Name[4]
-    char   m_Name[4];   // +0x00
-    // DIFFERS: original = char* m_pPath at +0x04; port = GLuint m_Handle
-    GLuint m_Handle;    // +0x04
+    // +0x00
+    Mortar::SmartPtr<Mortar::Texture> m_Texture;
+    // +0x04: owned heap buffer (new[]/delete[]/strcpy).
+    char* m_pPath;
 
-    ReloadableTexture() : m_Handle(0) {
-        m_Name[0] = '\0';
-        m_Name[1] = '\0';
-        m_Name[2] = '\0';
-        m_Name[3] = '\0';
+    // v1.6.1 ReloadableTexture::ReloadableTexture @0x0014f8e8.
+    ReloadableTexture() : m_Texture(), m_pPath(nullptr) {}
+
+    // v1.6.1 ReloadableTexture::ReloadableTexture(const char*) @0x0014f9c0.
+    explicit ReloadableTexture(const char* path) : m_Texture(), m_pPath(nullptr) {
+        *this = path;
     }
 
-    // Zeroes the GL handle (matches v1.6.1 ReloadableTexture::Unload @0x0014f878).
-    void Unload() {
-        m_Handle = 0;
+    // v1.6.1 ReloadableTexture copy ctor @0x0014f920: deep-copies m_pPath, then
+    // copies the SmartPtr.
+    ReloadableTexture(const ReloadableTexture& rhs) : m_Texture(), m_pPath(nullptr) {
+        *this = rhs.m_pPath;
+        m_Texture = rhs.m_Texture;
     }
 
-    // Port-specific: loads the texture named by filename via TextureManager::LoadLocalisedTexture
-    // and stores the resulting GL handle. The binary's ReloadableTexture::Load reads the filename
-    // from elsewhere (see PurchaseInfo::m_TextureFilenames[]); this method is a port-side bridge.
+    ReloadableTexture& operator=(const ReloadableTexture& rhs) {
+        if (this != &rhs) {
+            *this = rhs.m_pPath;
+            m_Texture = rhs.m_Texture;
+        }
+        return *this;
+    }
+
+    ~ReloadableTexture() {
+        delete[] m_pPath;
+    }
+
+    // v1.6.1 ReloadableTexture::operator=(const char*) @0x0014f7fc: NULL frees the
+    // owned buffer; otherwise reuses the buffer if the new string is the same length,
+    // else delete[]+new[](len+1). Does not load.
+    ReloadableTexture& operator=(const char* path) {
+        if (!path) {
+            delete[] m_pPath;
+            m_pPath = nullptr;
+            return *this;
+        }
+        size_t newLen = strlen(path);
+        size_t oldLen = m_pPath ? strlen(m_pPath) : (size_t)-1;
+        if (oldLen != newLen) {
+            delete[] m_pPath;
+            m_pPath = new char[newLen + 1];
+        }
+        strcpy(m_pPath, path);
+        return *this;
+    }
+
+    // v1.6.1 ReloadableTexture::Load @0x0014fad8: if (m_pPath && !m_Texture.IsValid())
+    // m_Texture = LoadTexture(m_pPath). LoadTexture (global, TextureManager.h) appends
+    // ".tex" and forwards to TextureManager::LoadLocalisedTexture.
+    void Load();
+
+    // Port specific: convenience bridge for callers (PurchaseInfo) that already carry
+    // a fully-suffixed filename (e.g. "arcade_item_01_buy.tex"). Sets the path directly
+    // and loads via TextureManager without the ".tex" auto-append Load() applies via the
+    // global LoadTexture() -- calling the bare Load() here would double-suffix ".tex.tex"
+    // for those callers. Not a binary method; the binary has no such overload.
     void Load(const char* filename);
 
+    // v1.6.1 ReloadableTexture::Unload @0x0014f878: m_Texture.SetNull().
+    void Unload() { m_Texture.SetNull(); }
+
+    // v1.6.1 ReloadableTexture::GetTexture @0x0011344c: return &m_Texture.
+    Mortar::SmartPtr<Mortar::Texture>* GetTexture() { return &m_Texture; }
+
     // Bind this texture for rendering (equivalent to Texture::Set()).
-    void Set() const;
+    void Set() const {
+        if (m_Texture.IsValid()) {
+            glBindTexture(GL_TEXTURE_2D, m_Texture->GetTexId());
+        }
+    }
 
     // Unbind (bind texture 0).
-    void UnSet() const;
+    void UnSet() const {
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 
-    // True if a valid GL texture is loaded.
-    bool IsLoaded() const { return m_Handle != 0; }
+    // True if a valid texture is loaded.
+    bool IsLoaded() const { return m_Texture.IsValid(); }
 };
 
 } // namespace Mortar
 
-#ifdef __bada__
-#include <cstddef>
+#if defined(__bada__)
 static_assert(sizeof(Mortar::ReloadableTexture) == 8, "ReloadableTexture sizeof mismatch");
-static_assert(offsetof(Mortar::ReloadableTexture, m_Name)   == 0x00, "ReloadableTexture m_Name offset");
-static_assert(offsetof(Mortar::ReloadableTexture, m_Handle) == 0x04, "ReloadableTexture m_Handle offset");
+static_assert(offsetof(Mortar::ReloadableTexture, m_Texture) == 0x00, "ReloadableTexture m_Texture offset");
+static_assert(offsetof(Mortar::ReloadableTexture, m_pPath)   == 0x04, "ReloadableTexture m_pPath offset");
 #endif
 
 #endif // FN_ENGINE_ASSET_RELOADABLE_TEXTURE_H

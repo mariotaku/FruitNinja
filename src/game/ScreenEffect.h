@@ -60,12 +60,8 @@ struct Emmiter {
 // Binary: EffectImage::EffectImage @ 0x0011eae8, copy ctor @ 0x0011ba7c.
 // Instance size 124 (0x7c): vector stride 0x7c in _M_insert_aux @ 0x0011ec64.
 struct EffectImage : public Mortar::ReloadableTexture {
-    // Base: Mortar::ReloadableTexture at +0x00 (8 bytes).
-    // Binary's base has SmartPtr<Texture> at +0x00 and char* m_pName at +0x04.
-    // Port's ReloadableTexture has char m_Name[4]+GLuint m_Handle (same 8 bytes).
-    // DIFFERS: binary base = SmartPtr<Texture>@+0x00 + char*@+0x04;
-    //   port base = char[4]+GLuint (same 8-byte size, different field types).
-    //   Binary @ 0x001213f0 base ctor.
+    // Base: Mortar::ReloadableTexture at +0x00 (8 bytes, byte-faithful: SmartPtr<Texture>
+    // @+0x00 + char* m_pPath @+0x04). Binary base ctor @ 0x001213f0.
 
     // Field semantics verified v1.6.1 EffectImage copy-ctor @ 0x00145bd4 and
     // ScreenEffect::Update @ 0x00148844 (re-analyst #164). Names match how Update
@@ -127,25 +123,6 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // +0x78  bool  low-end-only gate (XML "lowEndOnly"); padding +0x79..+0x7b to 0x7c.
     bool         m_bLowEndOnly;      // +0x78
 
-    // ---- Port specific: fields below are NOT in the 124-byte binary struct ----
-    // Binary stores texture identity in the ReloadableTexture base (SmartPtr<Texture>
-    // at +0x00). Port's base uses GLuint instead, so the loaded SmartPtr must be
-    // cached here for transfer to HUDControl3d::m_Texture in Activate().
-    // ReloadableTexture::LoadTextures trampolines to ReloadableTexture::Load @
-    // 0x001213b8 which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex").
-    // Port specific: mirrors the base's SmartPtr slot using port-side texture handle.
-#if !defined(__bada__)
-    Mortar::SmartPtr<Mortar::Texture> m_Texture;
-    // Port specific: texture asset name from XML "texture" attr (binary stores
-    // in base ReloadableTexture::m_pName char*; port base has char m_Name[4]
-    // which is too short, so we store the full name here).
-    char         m_TexName[64];
-    // Port specific: exit slide offset from "transitionMoveOut" XML attr.
-    // Binary stores m_SizeIn/m_SizeOut as separate Vec3 fields at +0x44/+0x50.
-    // Port maps transitionMoveIn->m_SizeIn, transitionMoveOut->m_VelOut (port alias).
-    Vec3         m_VelOut;
-#endif
-
     // EffectImage ctor defaults -- v1.6.1 EffectImage::EffectImage @0x0014a508
     EffectImage()
         : Mortar::ReloadableTexture()
@@ -163,10 +140,6 @@ struct EffectImage : public Mortar::ReloadableTexture {
         , m_Tint(255,255,255,255)
         , m_FlagBits(0), m_bLowEndOnly(false)
     {
-#if !defined(__bada__)
-        m_TexName[0] = '\0';
-        m_VelOut = Vec3(0,0,0);
-#endif
     }
 
     void Parse(TiXmlElement* xml);

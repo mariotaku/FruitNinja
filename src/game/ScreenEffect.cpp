@@ -130,20 +130,28 @@ void EffectImage::Parse(TiXmlElement* xml) {
     const char* moveOut = xml->Attribute("transitionMoveOut");
     if (moveOut) {
         m_SizeOut = ParseVector(moveOut);
-#if !defined(__bada__)
-        m_VelOut = m_SizeOut;
-#endif
     }
 
     // "texture" -> load texture; set m_ColourScale = (texWidth, texHeight, 0)
     // v1.6.1 EffectImage::Parse @0x001491e4: VectorUnsignedToFloat from tex+0x24/+0x28
+    // DIFFERS: original ReloadableTexture::operator=(const char*) (base class,
+    //   @0x0014f7fc) does NOT load -- the base Parse only stashes m_pPath, so a
+    //   binary-faithful Parse would leave m_ColourScale at (0,0,0) here and defer
+    //   the texture-dims read to LoadTextures(). This port loads eagerly (needed
+    //   so m_ColourScale is populated before the first Activate/Update); kept as
+    //   an intentional behavioural deviation, not a fidelity bug -- do not "fix"
+    //   without re-verifying whether LoadTextures() runs before first use.
     const char* tex = xml->Attribute("texture");
     if (tex) {
-#if !defined(__bada__)
-        strncpy(m_TexName, tex, sizeof(m_TexName) - 1);
-        m_TexName[sizeof(m_TexName) - 1] = '\0';
+        // Qualified call, not `*this = tex`: EffectImage's implicit copy-assignment
+        // operator= (const EffectImage&) hides ALL base operator= overloads
+        // (ordinary C++ member-hiding rules), so an unqualified `*this = tex`
+        // would try to construct a temporary EffectImage from const char* and
+        // fail to compile. Calling the base overload by qualified name bypasses
+        // the hiding and performs the real deep-copy-into-m_pPath assignment.
+        ReloadableTexture::operator=(tex);
         char texPath[80];
-        snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
+        snprintf(texPath, sizeof(texPath), "%s.tex", m_pPath);
         Mortar::SmartPtr<Mortar::Texture> loaded =
             Mortar::TextureManager::LoadLocalisedTexture(texPath);
         if (loaded.IsValid()) {
@@ -152,7 +160,6 @@ void EffectImage::Parse(TiXmlElement* xml) {
                                  (float)loaded->GetHeight(),
                                  0.0f);
         }
-#endif
     }
 
     // "scale" -> m_ColourScale (explicit override; binary *=1.0 no-op after)
@@ -245,26 +252,13 @@ void EffectImage::Parse(TiXmlElement* xml) {
 // if(m_pPath && !m_Texture.IsValid()) m_Texture=LoadTexture(path). No colour-scale.
 // Binary @ 0x0011d1e4 trampolines directly to this base impl (no reimplementation,
 // no m_ColourScale side effect -- texture dims are set only by Parse).
-// Port: m_TexName is the port's m_pPath equivalent; m_Texture the SmartPtr slot.
-// NOTE: m_TexName/m_Texture are declared `#if !defined(__bada__)` in ScreenEffect.h
-// (Port specific -- substitute for the base ReloadableTexture's SmartPtr<Texture>+
-// char* m_pPath, which this port's ReloadableTexture base does not carry; see
-// ReloadableTexture.h DIFFERS note, deferred until that base is ported byte-faithful).
-// Every other use of these fields in this file (Parse's "texture" attr block,
-// Activate's ctrl->m_Texture assignment) is guarded the same way, so this guard is
-// a structural necessity tied to that deferred base-class rework, not a fidelity
-// band-aid: under __bada__ the fields do not exist, so this body legitimately has
-// nothing to execute yet.
-#if !defined(__bada__)
 void EffectImage::LoadTextures() {
-    if (m_TexName[0] == '\0' || m_Texture.IsValid()) return;
-    char texPath[80];
-    snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
-    m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
+    if (m_pPath && !m_Texture.IsValid()) {
+        char texPath[80];
+        snprintf(texPath, sizeof(texPath), "%s.tex", m_pPath);
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
+    }
 }
-#else
-void EffectImage::LoadTextures() {}
-#endif
 
 // ---- ScreenTint::Parse -------------------------------------------------------
 
@@ -482,9 +476,7 @@ void ScreenEffect::Activate() {
         // no texture and HUDControl3d::Draw's `if (m_Texture)` gate skips
         // rendering -- which is the root cause of arcade_60seconds /
         // arcade_go / blitz_1..6 / ice_cover never appearing on screen.
-#if !defined(__bada__)
         ctrl->m_Texture = img.m_Texture;
-#endif
         // Binary @ 0x0011dd2e: `str r1, [r2, #0x34]` -- raw copy of
         // EffectImage::m_GroupMask, no `?: 1` fallback. If data has 0,
         // the binary writes 0 (HUD_LAYER_NONE -> the control is filtered

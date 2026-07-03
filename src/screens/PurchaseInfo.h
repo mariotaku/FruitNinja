@@ -9,6 +9,10 @@
 // m_GreyTexture (three inline calls), then zero-inits m_MaxUses, m_Cost, m_CurrentUses.
 // m_Description and m_DisplayName are NOT cleared by ctor (set externally via Parse).
 //
+// Dtor is NOT trivial: each of the three ReloadableTexture members now owns a heap
+// path buffer (m_pPath, see ReloadableTexture.h #359), so ~PurchaseInfo frees three
+// buffers via the ReloadableTexture subobject destructors.
+//
 // Layout verified against binary field access patterns (re-analyst pass 2026-05-20).
 //
 // m_TextureFilenames[3] are port-only fields (beyond 0xC4) used to stash the
