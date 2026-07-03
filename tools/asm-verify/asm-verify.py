@@ -44,6 +44,23 @@ BINARY_SYMBOL_DIR = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BIN_SYMBOL_DIR",
     PROJECT_ROOT / "bada-binary" / "symbols"))
 
+# Ghidra loads this ELF at image_base 0x10000; nm/LIEF report raw ELF
+# .st_value with no such offset. Every source-side `@0x<addr>` marker and
+# every Ghidra address is image_base-relative (canonical definition:
+# stale-marker-lint.py's load_binary_symbols). The manifest's "addr" field
+# (from discover-symbols.py's nm read) is RAW -- it must STAY raw, since
+# export-binary-symbols.py uses it as a literal `objdump --start-address`
+# into the unmodified ELF. Only the report-facing `addr` (report.md /
+# report.json, consumed by humans + asm-triager cross-referencing markers)
+# is converted to Ghidra convention -- see verify_one().
+GHIDRA_IMAGE_BASE = 0x10000
+
+
+def _to_ghidra_addr(raw_hex: str) -> str:
+    """Convert a raw nm/LIEF addr string ("0x00109dfc") to Ghidra convention
+    ("0x00119dfc" = raw + GHIDRA_IMAGE_BASE) for report display."""
+    return "0x{:08x}".format(int(raw_hex, 16) + GHIDRA_IMAGE_BASE)
+
 # Triage sidecar: sticky decisions that downgrade SUSPICIOUS/DIVERGE rows
 # the user (or asm-triager agent) has already classified as "accept". Keyed
 # by the symbol's mangled name; an entry is invalidated when the normalized
@@ -415,21 +432,31 @@ def classify_lcs(port_lines, bin_lines):
 
 def verify_one(s: dict) -> dict:
     name = s["mangled"]
+    # s["addr"] (from the manifest) is RAW nm/LIEF convention. Every returned
+    # dict below overrides "addr" with the Ghidra-convention value (report
+    # display) and keeps the raw value under "raw_addr" (internal bookkeeping;
+    # nothing downstream needs it -- extraction already happened by name in
+    # export-binary-symbols.py -- but it's cheap to keep for debugging).
+    raw_addr = s["addr"]
+    addr = _to_ghidra_addr(raw_addr)
     bin_asm_path = BINARY_SYMBOL_DIR / f"{name}.s"
     # `port` may be project-relative or absolute (Linux container path).
     port_obj_path = pathlib.Path(s["port"])
     if not port_obj_path.is_absolute():
         port_obj_path = PROJECT_ROOT / port_obj_path
     if not bin_asm_path.exists():
-        return {**s, "verdict": "UNPAIRED", "reason": f"binary asm missing: {bin_asm_path.name}", "diff": []}
+        return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
+                "reason": f"binary asm missing: {bin_asm_path.name}", "diff": []}
 
     # Semantic normalize + LCS scoring (primary path).
     try:
         port_text = disasm_port_symbol(port_obj_path, name)
     except Exception as e:
-        return {**s, "verdict": "UNPAIRED", "reason": f"port disasm failed: {e}", "diff": []}
+        return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
+                "reason": f"port disasm failed: {e}", "diff": []}
     if not port_text.strip():
-        return {**s, "verdict": "UNPAIRED", "reason": "port symbol not found in .o", "diff": []}
+        return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
+                "reason": "port symbol not found in .o", "diff": []}
 
     bin_lines = normalize(bin_asm_path.read_text())
     port_lines = normalize(port_text)
@@ -442,8 +469,8 @@ def verify_one(s: dict) -> dict:
     asm_hash = hashlib.sha256(
         ("\n".join(bin_lines) + "\x00" + "\n".join(port_lines)).encode("utf-8")
     ).hexdigest()[:16]
-    return {**s, "verdict": verdict, "reason": reason, "diff": diff,
-            "score": score, "max_score": max_score, "asm_hash": asm_hash,
+    return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": verdict, "reason": reason,
+            "diff": diff, "score": score, "max_score": max_score, "asm_hash": asm_hash,
             "port_norm": port_lines, "bin_norm": bin_lines}
 
 
@@ -531,7 +558,8 @@ def write_report(results: list[dict]) -> pathlib.Path:
     for r in results:
         json_payload.append({
             "mangled": r.get("mangled"),
-            "addr":    r.get("addr"),
+            "addr":    r.get("addr"),       # Ghidra convention (raw + 0x10000) -- matches src markers + Ghidra.
+            "raw_addr": r.get("raw_addr"),  # raw nm/LIEF convention (objdump/ELF-native).
             "verdict": r.get("verdict"),
             "reason":  r.get("reason"),
             "score":   r.get("score"),
