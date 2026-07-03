@@ -139,7 +139,9 @@ public:
     ResourceLoader(const AsciiString& filePath);
     // Binary ctor @ 0x002556B4: m_ReadCursor=0 first, BasePath.Set(basePath), Initialize(reader)
     ResourceLoader(DataReader& reader, const AsciiString& basePath);
-    // Binary copy ctor @ 0x00255B84: memberwise copy of m_ReadCursor, m_BasePath, m_Data, m_Children
+    // v1.6.1 ResourceLoader::ResourceLoader(ResourceLoader const&) @0x00255b84: memberwise copy
+    // (compiler-generated, emitted out-of-line); declared explicitly so the symbol exists for asm-verify.
+    ResourceLoader(const ResourceLoader& other);
     ~ResourceLoader();
 
     // Binary Initialize(DataReader&) @ 0x002554EC: HBR0 parser (skip, childCount, children, typeIds, rawSize, data)
