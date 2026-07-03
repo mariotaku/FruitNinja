@@ -114,9 +114,7 @@ void GameInitialise(void* window, const char* config) {
     // Step 4: DisplayManager::GetInstance() → SetWindowSize, SetClearColour, SetLightDirection
     {
         Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
-        // Port specific: original is SetWindowSize(0, 320, 0, 480) for portrait Bada.
-        // Port uses landscape 960×640; FruitCamera reads these for ortho extent.
-        dm.SetWindowSize(0, 0, FN_SCREEN_W, FN_SCREEN_H);
+        dm.SetWindowSize(0, FN_SCREEN_H, 0, FN_SCREEN_W);
         dm.SetClearColour(Colour(0, 0, 0, 255));
         // DIFFERS: first component unknown (DAT in docs). GameDraw overwrites with worldPos anyway.
         dm.SetLightDirection(Vec3(0.0f, -10.0f, -5.0f));
