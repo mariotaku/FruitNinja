@@ -9,8 +9,8 @@
 // Binary refs (v1.6.1):
 //   StringTableUtilLoadStrings         0x0014cccc
 //   StringTableUtilLoadStringsTable    0x0014ca5c
-//   Mortar::StringTable::GetInfo       0x14d1a4
-//   Mortar::StringTable::GetString(int)        0x14d1dc
+//   Mortar::StringTable::GetInfo(ulong)       0x14d1a4  (unported overload)
+//   Mortar::StringTable::GetString(ulong)       0x14d1dc
 //   Mortar::StringTable::GetString(HeaderLookup*)  0x14d1c0
 //   Mortar::StringTable::GetString(char*)      0x14d1f8
 //   Mortar::StringTable::GetInfo(char*)        0x22d630
@@ -117,40 +117,35 @@ enum LocalizedString {
     LSTR_MENU_TEXTURE_53 = 0x3c5, // "SELECTED"  -- type 0x11 shop selected-item badge
 };
 
-// --- StringEntry (12 bytes) ---
-// StringEntry[str_idx].str_offset + str_blob_base -> const char* translation
-struct StringEntry {
-    uint32_t str_offset;       // byte offset into str_blob
-    uint32_t strlen_cached;    // strlen of translated string (unused by port)
-    uint32_t strlen_cached2;   // duplicate of above (unused by port)
-};
-
-// --- HeaderLookup (40 bytes) ---
-// One entry per key, sorted ascending by key for binary search.
-struct HeaderLookup {
-    const char* key_ptr;    // pointer into key_blob (set at load time)
-    uint32_t    unknown1;   // observed == keylen
-    uint32_t    keylen;     // strlen of key (no null) -- used by GetInfo
-    uint32_t    unknown2;   // 0x3c05 in all observed entries
-    uint32_t    unknown3;
-    uint32_t    unknown4;
-    uint32_t    unknown5;
-    uint32_t    unknown6;
-    uint32_t    unknown7;
-    uint32_t    str_idx;    // at +0x24: index into StringEntry[]
-};
-
 namespace Mortar {
 
-// --- FileData<T> (8 bytes) ---
-// Binary: Mortar::StringTable::FileData<T> {void* m_pData @+0, uint32_t m_Count @+4}.
-// Ctor @ 0x0018a4d4 zeroes both words.
-template<typename T>
-struct StringTableFileData {
-    T*       m_pData;   // +0x00
-    uint32_t m_Count;   // +0x04
+// --- StringTableData (nesting wrapper matching binary layout) ---
+// Binary GetString mangles ...NS_15StringTableData12HeaderLookupE, proving
+// StringEntry / HeaderLookup are nested inside Mortar::StringTableData
+// rather than free structs.
+struct StringTableData {
+    // --- StringEntry (12 bytes) ---
+    // StringEntry[str_idx].str_offset + str_blob_base -> const char* translation
+    struct StringEntry {
+        uint32_t str_offset;       // byte offset into str_blob
+        uint32_t strlen_cached;    // strlen of translated string (unused by port)
+        uint32_t strlen_cached2;   // duplicate of above (unused by port)
+    };
 
-    StringTableFileData() : m_pData(0), m_Count(0) {}
+    // --- HeaderLookup (40 bytes) ---
+    // One entry per key, sorted ascending by key for binary search.
+    struct HeaderLookup {
+        const char* key_ptr;    // pointer into key_blob (set at load time)
+        uint32_t    unknown1;   // observed == keylen
+        uint32_t    keylen;     // strlen of key (no null) -- used by GetInfo
+        uint32_t    unknown2;   // 0x3c05 in all observed entries
+        uint32_t    unknown3;
+        uint32_t    unknown4;
+        uint32_t    unknown5;
+        uint32_t    unknown6;
+        uint32_t    unknown7;
+        uint32_t    str_idx;    // at +0x24: index into StringEntry[]
+    };
 };
 
 // Mortar::StringTable -- binary sizeof == 0x50 (80).
@@ -166,15 +161,36 @@ struct StringTableFileData {
 //   +0x48  FileData<StringTableData::StringEntry>  m_StringEntries (8B)
 //   Total: 0x50 (80)
 //
-// Ctors: 0x0018a374 (C1) / 0x0018a394 (C2) — identical bodies.
-// Dtor:  0x0018a324 — destroys two FileData members in reverse.
+// Ctors: 0x0022d604 (C1/C2) — identical bodies.
+// Dtor:  0x0022d6dc — destroys two FileData members in reverse.
 // Binary methods:
-//   LoadHeader   @ 0x0022d800
-//   LoadLanguage @ 0x0022d74c
-//   GetInfo      @ 0x0018a2cc (binary search by key)
-//   GetString    @ 0x0011fec8
+//   LoadHeader(char*)          @ 0x0022d800
+//   LoadHeader(File&)          @ 0x0022d7b0
+//   LoadLanguage(char*)        @ 0x0022d74c
+//   LoadLanguage(File&)        @ 0x0022d6fc
+//   GetInfo(char*)             @ 0x0022d630 (binary search by key)
+//   GetInfo(ulong)             @ 0x0014d1a4 (unported overload)
+//   GetString(HeaderLookup*)   @ 0x0014d1c0
+//   GetString(ulong)           @ 0x0014d1dc
+//   GetString(char*)           @ 0x0014d1f8
+//   Clear                      @ 0x0022d6b4
+//   FileHeader::Check          @ 0x0022d598
+//   FileData<HeaderLookup>::Load @ 0x0022d95c
+//   FileData<StringEntry>::Load  @ 0x0022d8cc
 class StringTable {
 public:
+    // --- FileData<T> (8 bytes) ---
+    // Binary: Mortar::StringTable::FileData<T> {uint32_t m_Count @+0, T* m_pData @+4}.
+    // TODO: re-verify v1.6.1 addr -- ctor cited as 0x0018a4d4 predates this pass,
+    // not in the restamp list; zeroes both words.
+    template<typename T>
+    struct FileData {
+        uint32_t m_Count;   // +0x00
+        T*       m_pData;   // +0x04
+
+        FileData() : m_Count(0), m_pData(0) {}
+    };
+
     StringTable();
     ~StringTable();
 
@@ -187,14 +203,14 @@ public:
     // Returns true on success.
     //
     // Binary also has File& overloads:
-    //   LoadHeader(Mortar::File&) @ 0x0021d7b0
-    //   LoadLanguage(Mortar::File&) @ 0x0021d6fc
+    //   LoadHeader(Mortar::File&) @ 0x0022d7b0
+    //   LoadLanguage(Mortar::File&) @ 0x0022d6fc
     bool LoadHeader(const char* path);
     bool LoadHeader(Mortar::File& file);
     bool LoadLanguage(const char* path);
     bool LoadLanguage(Mortar::File& file);
 
-    // Mirrors Mortar::StringTableData::FileHeader::Check @ 0x0018a3b4.
+    // Mirrors Mortar::StringTableData::FileHeader::Check @ 0x0022d598.
     // file_guid points at the 64-byte token field (file offset +4) of the
     // just-read FileHeader. Validates magic==1, then: if the token equals the
     // already-loaded m_HeaderBuffer it passes; if m_HeaderBuffer is still all
@@ -203,20 +219,20 @@ public:
     // first word.
     bool CheckHeader(uint32_t magic, const uint8_t* file_guid);
 
-    // Binary search -- mirrors Mortar::StringTable::GetInfo at 0x0018a2cc.
-    const HeaderLookup* GetInfo(const char* key) const;
+    // Binary search -- mirrors Mortar::StringTable::GetInfo(char*) at 0x0022d630.
+    const StringTableData::HeaderLookup* GetInfo(const char* key) const;
 
-    // Binary @ 0x0011fec8 -- instance lookup by integer ID.
-    const char* GetString(LocalizedString id) const;
-    // Binary @ 0x0011fec8 -- instance lookup by string key.
+    // Binary @ 0x0014d1dc -- instance lookup by integer ID.
+    const char* GetString(unsigned long id) const;
+    // Binary @ 0x0014d1f8 -- instance lookup by string key.
     const char* GetString(const char* key) const;
-    // Pre-resolved overload.
-    const char* GetString(const HeaderLookup* pre) const;
+    // Pre-resolved overload. Binary @ 0x0014d1c0.
+    const char* GetString(const StringTableData::HeaderLookup* pre) const;
 
     // --- Binary instance fields ---
     uint8_t m_HeaderBuffer[64];                          // +0x00
-    StringTableFileData<HeaderLookup> m_HeaderLookup;    // +0x40 (8B)
-    StringTableFileData<StringEntry>  m_StringEntries;   // +0x48 (8B)
+    FileData<StringTableData::HeaderLookup> m_HeaderLookup;    // +0x40 (8B)
+    FileData<StringTableData::StringEntry>  m_StringEntries;   // +0x48 (8B)
 
     // --- Port-side static API wrapper ---
     // The static methods below provide the global single-table API used by
@@ -226,13 +242,13 @@ public:
     static const char* GetStringS(LocalizedString id);
     static const char* GetStringS(const char* key);
     static bool IsLoaded();
-    static const HeaderLookup* GetInfoS(const char* key);
+    static const StringTableData::HeaderLookup* GetInfoS(const char* key);
 
     // Returns the language flag (0..21) for a language name like "french",
     // "korean", "english_uk", etc. Case-insensitive. Returns -1 on no match.
     static int LanguageFlagFromName(const char* name);
 
-    // ASM-spec v1.6.1 Mortar::StringTable::Clear (called by StringTableUtilUnloadTable @0x14c9f8).
+    // ASM-spec v1.6.1 Mortar::StringTable::Clear @ 0x0022d6b4 (called by StringTableUtilUnloadTable @0x14c9f8).
     // Clears one string table slot. Binary frees FileData allocations + zeroes fields.
     // Port: no-op stub; game_work.m_StringTable is a placeholder with no live allocs.
     void Clear();
