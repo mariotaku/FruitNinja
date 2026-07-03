@@ -15,9 +15,9 @@
 //   Coin::_Update     0x00173790  (5-state machine)
 //   Coin::Draw        0x00173CC4
 //   Coin::DrawUpdate  0x0017318C  (empty)
-//   Coin::InitCoin    0x00173454
+//   Coin::InitCoin    v1.6.1 @0x001d7d84  (v1.5.1 was 0x00173454)
 //   Coin::Arrived     0x00173190
-//   Coin::MakeCoins   0x00173568
+//   Coin::MakeCoins   v1.6.1 @0x001d7ec8  (v1.5.1 was 0x00173568)
 //   Coin::ClearCoins  0x001731B8
 //   Coin::LoadContent   0x00173114
 //   Coin::UnLoadContent 0x00173CA8
@@ -84,8 +84,7 @@ public:
 
     // --- Public API ------------------------------------------------------
 
-    // 0x00173454 — set up all coin fields for a launch.
-    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x00173454 (disassembly inspected).
+    // v1.6.1 Coin::InitCoin @0x001d7d84 — set up all coin fields for a launch.
     //
     // Binary signature (HFA): InitCoin(_Vector3<float> gravity /*s0-s2*/,
     //   _Vector3<float>* pos /*r1*/, _Vector3<float>* target /*r2*/,
@@ -101,25 +100,22 @@ public:
     //   +0x3c m_CoinValue                       (str [r4,#0x3c])
     //   +0x4c m_Speed   = (500 + rand/524287*550) * 0.66
     //   +0x10 pos       = *r1 ; +0x5c target = *r2 ; +0x1c vel = DAT vec
-    //   +0x54 m_FlyFXHash     = (raw uint32, NOT a name)
-    //   +0x58 m_CollectFXHash = (raw uint32, NOT a name)
+    //   +0x54 m_FlyFXHash     = flyFXHash raw (uint32, stored as-is -- NOT hashed here)
+    //   +0x58 m_CollectFXHash = collectFXHash raw (uint32, stored as-is -- NOT hashed here)
     //   +0x68/+0x6c emitters = 0 ; +0x70 m_OnArrived = onArrived ; +0x50 = 0
     //
-    // ASM-spec v1.6.1 Coin::InitCoin @0x001d7d84: binary sig (9 params, this excluded):
-    //   (Vec3 pos, Vec3 gravity, ushort angle, int coinValue,
-    //    ulong flyFXHash, ulong collectFXHash, Delegate1<void,Coin*>, float delay, bool silent)
-    // DIFFERS: original takes pre-hashed flyFXHash/collectFXHash (uint32 each, hashed by
-    //   MakeCoins via StringHash; defaults "coin_fly"/"coin_collect" @ DAT_00173784/88).
-    //   Port passes the FX names through and StringHashes inside InitCoin -- same net effect.
+    // The null-name -> "coin_fly"/"coin_collect" default substitution and the
+    // StringHash() call both happen in the CALLER (MakeCoins @0x001d7ec8), not here.
+    // InitCoin takes pre-hashed StringHashes and stores them raw.
     void InitCoin(Vec3 pos, Vec3 gravity, uint16_t angle, int coinValue,
-                  const char* flyFXName, const char* collectFXName,
+                  unsigned long flyFXHash, unsigned long collectFXHash,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
     // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
 
-    // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
-    // ASM-spec v1.6.1 Coin::MakeCoins @0x001d7ec8: binary sig (12 params, this excluded):
+    // v1.6.1 Coin::MakeCoins @0x001d7ec8 — spawn N coins via Mortar::ActorManager::Add(2).
+    // Binary sig (12 params, this excluded):
     //   (int totalCoins, int coinsPerCoin, Vec3 delay, ushort baseAngle, ushort angleSpread,
     //    Vec3* spawnPos, float delayStep, float delayCap, char* flyFXName,
     //    char* collectFXName, Delegate1<void,Coin*>, bool silent)
@@ -129,10 +125,9 @@ public:
     //   against full binary decompile (currently inferred from per-coin stagger logic).
     //
     // Behaviour: default FX names ("coin_fly"/"coin_collect") filled from DAT_00173784/88
-    //   when null; both StringHash'd and passed to InitCoin.
+    //   when null; both StringHash'd here and the hashes passed to InitCoin.
     //   Per-coin loop: ActorManager::Add(2,true), random angle in baseAngle+/-spread,
     //   up to 10 retries against screen bounds, then InitCoin.
-    // DIFFERS: port passes FX names to InitCoin (hashing deferred); binary pre-hashes here.
     static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                           uint16_t baseAngle, uint16_t angleSpread,
                           Vec3* spawnPos,

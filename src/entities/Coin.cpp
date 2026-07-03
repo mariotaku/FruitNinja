@@ -159,10 +159,12 @@ void Coin::Arrived() {
 }
 
 // ---------------------------------------------------------------------------
-// InitCoin @ 0x001d7d84
+// v1.6.1 Coin::InitCoin @ 0x001d7d84
+// Stores flyFXHash/collectFXHash raw -- the null-name -> default substitution
+// and the StringHash() call both happen in the caller (MakeCoins).
 // ---------------------------------------------------------------------------
 void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t angle, int coinValue,
-                    const char* flyFXName, const char* collectFXName,
+                    unsigned long flyFXHash, unsigned long collectFXHash,
                     Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
 {
     // flags &= 0xEE — clear active+dead bits (bits 0 and 4: ENT_INACTIVE | ENT_KILLED)
@@ -181,9 +183,9 @@ void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t angle, int coinValue,
     m_TargetZ    = gravity.z;
     vel          = Vec3(0.0f, 0.0f, 0.0f);
     scale        = COIN_SCALE;
-    m_FlyFXHash      = StringHash(flyFXName ? flyFXName : "");
+    m_FlyFXHash      = flyFXHash;
     m_Silent         = silent ? 1 : 0;
-    m_CollectFXHash  = StringHash(collectFXName ? collectFXName : "");
+    m_CollectFXHash  = collectFXHash;
     m_pFlyEmitter      = nullptr;
     m_pCollectEmitter  = nullptr;
     m_OnArrived  = onArrived;
@@ -444,7 +446,7 @@ void Coin::ClearCoins(bool arrive) {
 }
 
 // ---------------------------------------------------------------------------
-// MakeCoins @ 0x00173568
+// v1.6.1 Coin::MakeCoins @ 0x001d7ec8
 // Spawn N coins via Mortar::ActorManager::Add(2).
 // delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
 // Retry spawn position up to 10x if out of screen bounds.
@@ -460,6 +462,12 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
+
+    // Null -> default FX name substitution (DAT_00173784/88), then hash once.
+    if (!flyFXName)     flyFXName     = "coin_fly";
+    if (!collectFXName) collectFXName = "coin_collect";
+    unsigned long flyHash     = StringHash(flyFXName);
+    unsigned long collectHash = StringHash(collectFXName);
 
     // Number of coins spawned (each represents coinsPerCoin value)
     int numCoinEntities = (totalCoins + coinsPerCoin - 1) / coinsPerCoin;
@@ -512,7 +520,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
         int coinValue = remaining < coinsPerCoin ? remaining : coinsPerCoin;
 
         coin->InitCoin(coinPos, gravity, randAngle, coinValue,
-                       flyFXName, collectFXName, onArrived, coinDelay, silent);
+                       flyHash, collectHash, onArrived, coinDelay, silent);
 
         remaining -= coinsPerCoin;
         idx++;
