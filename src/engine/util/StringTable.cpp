@@ -4,13 +4,17 @@
 // Binary refs (v1.6.1):
 //   StringTableUtilLoadStrings         0x0014cccc
 //   StringTableUtilLoadStringsTable    0x0014ca5c
-//   Mortar::StringTable::LoadHeader    0x0022d800
-//   Mortar::StringTable::LoadLanguage  0x0022d74c
-//   Mortar::StringTable::GetInfo       0x14d1a4
+//   Mortar::StringTable::LoadHeader(char*)     0x0022d800
+//   Mortar::StringTable::LoadHeader(File&)     0x0022d7b0
+//   Mortar::StringTable::LoadLanguage(char*)   0x0022d74c
+//   Mortar::StringTable::LoadLanguage(File&)   0x0022d6fc
+//   Mortar::StringTable::GetInfo(ulong)        0x14d1a4  (unported overload)
 //   Mortar::StringTable::GetInfo(char*)        0x22d630
-//   Mortar::StringTable::GetString(int)        0x14d1dc
+//   Mortar::StringTable::GetString(ulong)      0x14d1dc
 //   Mortar::StringTable::GetString(HeaderLookup*)  0x14d1c0
 //   Mortar::StringTable::GetString(char*)      0x14d1f8
+//   Mortar::StringTable::Clear                 0x22d6b4
+//   Mortar::StringTable::FileHeader::Check     0x22d598
 //   GETSTRING                          0x14c9a0
 //   GETSTRING_STR                      0x0011fb40
 //   GETSTRING_CAST_0                   0x0010cff0
@@ -32,7 +36,7 @@ Mortar::StringTable::StringTable() {
 }
 
 Mortar::StringTable::~StringTable() {
-    // Dtor @ 0x0018a324 — destroys two FileData members (frees heaps) in reverse.
+    // Dtor @ 0x0022d6dc — destroys two FileData members (frees heaps) in reverse.
     free(m_StringEntries.m_pData);
     m_StringEntries.m_pData  = 0;
     m_StringEntries.m_Count  = 0;
@@ -41,7 +45,7 @@ Mortar::StringTable::~StringTable() {
     m_HeaderLookup.m_Count   = 0;
 }
 
-// ASM-spec v1.6.1 Mortar::StringTable::Clear (called by StringTableUtilUnloadTable @0x14c9f8).
+// ASM-spec v1.6.1 Mortar::StringTable::Clear @ 0x0022d6b4 (called by StringTableUtilUnloadTable @0x14c9f8).
 // Defunct: game_work.m_StringTable is a uint8_t[0x50] placeholder, not a real array.
 // In the binary, Clear frees the two FileData allocations and zeroes all fields.
 // Port: no-op stub because the placeholder slot never holds live allocations.
@@ -99,7 +103,7 @@ static const uint32_t kLangEntrySize    = 12;  // sizeof(StringEntry) in file
 
 // --- Instance methods ---
 
-// CheckHeader -- mirrors Mortar::StringTableData::FileHeader::Check @ 0x0018a3b4.
+// CheckHeader -- mirrors Mortar::StringTableData::FileHeader::Check @ 0x0022d598.
 // Validates the 72-byte FileHeader wrapper shared by both .str files.
 bool Mortar::StringTable::CheckHeader(uint32_t magic, const uint8_t* file_guid) {
     if (magic != 1) return false;                          // 0x0018a3ba cmp #1
@@ -125,7 +129,7 @@ bool Mortar::StringTable::LoadHeader(const char* path) {
     return LoadHeader(file);
 }
 
-// File& overload -- binary @ 0x0021d7b0. Reads from an already-opened file
+// File& overload -- binary @ 0x0022d7b0. Reads from an already-opened file
 // (positioned at offset 0, immediately after Open).
 bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
 
@@ -154,12 +158,12 @@ bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
     // Layout: [HeaderLookup entries] [key blob data]
     // key_ptr in each entry points into the key blob tail.
     uint32_t key_blob_size = raw_size - count * kHeaderEntrySize;
-    size_t final_size = count * sizeof(HeaderLookup) + key_blob_size;
+    size_t final_size = count * sizeof(StringTableData::HeaderLookup) + key_blob_size;
     uint8_t* buf = (uint8_t*)malloc(final_size);
     if (!buf) { free(raw); return false; }
 
-    HeaderLookup* entries = (HeaderLookup*)buf;
-    char* key_blob = (char*)(buf + count * sizeof(HeaderLookup));
+    StringTableData::HeaderLookup* entries = (StringTableData::HeaderLookup*)buf;
+    char* key_blob = (char*)(buf + count * sizeof(StringTableData::HeaderLookup));
 
     // Copy key blob.
     memcpy(key_blob, raw + count * kHeaderEntrySize, key_blob_size);
@@ -204,7 +208,7 @@ bool Mortar::StringTable::LoadLanguage(const char* path) {
     return LoadLanguage(file);
 }
 
-// File& overload -- binary @ 0x0021d6fc. Reads from an already-opened file.
+// File& overload -- binary @ 0x0022d6fc. Reads from an already-opened file.
 bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
 
     // Read FileHeader: magic(4) + token[64] + blob_byte_size(4) + count(4) = 76 bytes.
@@ -232,7 +236,7 @@ bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
     // str blob that follows the entries) to alloc-relative (offset from alloc[0]
     // to the string).  On 32-bit ARM the binary stores an absolute pointer in
     // this uint32_t field; the port uses alloc-relative for x64 safety.
-    StringEntry* entries = (StringEntry*)alloc;
+    StringTableData::StringEntry* entries = (StringTableData::StringEntry*)alloc;
     for (uint32_t i = 0; i < count; i++) {
         entries[i].str_offset += count * kLangEntrySize;
     }
@@ -243,14 +247,14 @@ bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
     return true;
 }
 
-// GetInfo -- binary search @ 0x14d1a4 (v1.6.1).
-const HeaderLookup* Mortar::StringTable::GetInfo(const char* key) const {
+// GetInfo(char*) -- binary search @ 0x22d630 (v1.6.1).
+const Mortar::StringTableData::HeaderLookup* Mortar::StringTable::GetInfo(const char* key) const {
     if (!m_HeaderLookup.m_pData || m_HeaderLookup.m_Count == 0) return 0;
     size_t key_len = strlen(key);
     size_t lo = 0, hi = m_HeaderLookup.m_Count;
     while (lo != hi) {
         size_t mid = lo + (hi - lo) / 2;
-        const HeaderLookup* e = &m_HeaderLookup.m_pData[mid];
+        const StringTableData::HeaderLookup* e = &m_HeaderLookup.m_pData[mid];
         size_t cmp_len = (e->keylen <= key_len) ? e->keylen : key_len;
         int c = memcmp(key, e->key_ptr, cmp_len + 1);
         if (c < 0)
@@ -263,31 +267,31 @@ const HeaderLookup* Mortar::StringTable::GetInfo(const char* key) const {
     return 0;
 }
 
-// GetString(id) -- binary @ 0x14d1dc (v1.6.1) int-ID overload.
-const char* Mortar::StringTable::GetString(LocalizedString id) const {
-    uint32_t idx = (uint32_t)(int32_t)id;
+// GetString(id) -- binary @ 0x14d1dc (v1.6.1) ulong-ID overload.
+const char* Mortar::StringTable::GetString(unsigned long id) const {
+    uint32_t idx = (uint32_t)id;
     if (!m_HeaderLookup.m_pData || idx >= m_HeaderLookup.m_Count) return kStringNotFound;
-    const HeaderLookup* e = &m_HeaderLookup.m_pData[idx];
+    const StringTableData::HeaderLookup* e = &m_HeaderLookup.m_pData[idx];
     if (!m_StringEntries.m_pData || e->str_idx >= m_StringEntries.m_Count) return kStringNotFound;
-    const StringEntry* entry = &m_StringEntries.m_pData[e->str_idx];
+    const StringTableData::StringEntry* entry = &m_StringEntries.m_pData[e->str_idx];
     return (const char*)m_StringEntries.m_pData + entry->str_offset;
 }
 
 // GetString(key) -- binary @ 0x14d1f8 (v1.6.1) string-key overload.
 const char* Mortar::StringTable::GetString(const char* key) const {
     if (!key) return kStringNotFound;
-    const HeaderLookup* info = GetInfo(key);
+    const StringTableData::HeaderLookup* info = GetInfo(key);
     if (!info) return kStringNotFound;
     if (!m_StringEntries.m_pData || info->str_idx >= m_StringEntries.m_Count) return kStringNotFound;
-    const StringEntry* entry = &m_StringEntries.m_pData[info->str_idx];
+    const StringTableData::StringEntry* entry = &m_StringEntries.m_pData[info->str_idx];
     return (const char*)m_StringEntries.m_pData + entry->str_offset;
 }
 
-// GetString(pre-resolved)
-const char* Mortar::StringTable::GetString(const HeaderLookup* pre) const {
+// GetString(pre-resolved) -- binary @ 0x14d1c0.
+const char* Mortar::StringTable::GetString(const StringTableData::HeaderLookup* pre) const {
     if (!pre) return kStringNotFound;
     if (!m_StringEntries.m_pData || pre->str_idx >= m_StringEntries.m_Count) return kStringNotFound;
-    const StringEntry* entry = &m_StringEntries.m_pData[pre->str_idx];
+    const StringTableData::StringEntry* entry = &m_StringEntries.m_pData[pre->str_idx];
     return (const char*)m_StringEntries.m_pData + entry->str_offset;
 }
 
@@ -342,7 +346,7 @@ bool Mortar::StringTable::IsLoaded() {
     return s_DefaultTable.m_StringEntries.m_pData != 0;
 }
 
-const HeaderLookup* Mortar::StringTable::GetInfoS(const char* key) {
+const Mortar::StringTableData::HeaderLookup* Mortar::StringTable::GetInfoS(const char* key) {
     return s_DefaultTable.GetInfo(key);
 }
 
