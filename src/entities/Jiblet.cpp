@@ -38,7 +38,7 @@ Jiblet::Jiblet()
     , m_EmitterHash(0)
     , m_pEmitter(0)
     , m_Rotation()
-    , m_FadeRate(0.0f)
+    , m_DripRate(0.0f)
     , m_FruitType(0)
     , m_GravBase(0.0f, 0.0f, 0.0f)
     , m_SpinRateX(0.0f)
@@ -52,42 +52,39 @@ Jiblet::Jiblet()
 Jiblet::~Jiblet() {}
 
 // Init @ 0x1e50c0  (faithful arg-to-field map + resolved DATs)
+// _ZN6Jiblet4InitEiR8_Vector3IfEfS1_N6Mortar8SmartPtrINS3_5ModelEEEmfS1_
 //
-// Real binary signature (HFA/VFP order; Ghidra reshuffles it):
-//   Jiblet::Init(float gravScale,            // s0  -> accel = ZeroVec * gravScale
-//                float fadeRate,             // s1  -> m_FadeRate(+0x8c) + splat timer
-//                int   fruitType,            // r1  -> m_FruitType(+0x90)
-//                Vec3* pos,                  // r2  -> pos(+0x10)
-//                Vec3* vel,                  // r3  -> vel(+0x1c)
-//                const SmartPtr<Model>& mdl, // [sp+0x48] -> m_pModel(+0x40) operator=
-//                uint32_t emitterHash,       // [sp+0x4c] -> m_EmitterHash(+0x44)
-//                Vec3* gravBase)             // [sp+0x50] -> m_GravBase(+0x94)
+// Binary signature:
+//   Jiblet::Init(int   fruitType,            // r1  -> m_FruitType(+0x90)
+//                Vec3& pos,                  // r2  -> pos(+0x10)
+//                float scale,                // s0  -> m_Scale(+0x28) = (scale,scale,scale)
+//                Vec3  vel,                  // r3  -> vel(+0x1c)
+//                SmartPtr<Model> mdl,        // [sp] -> m_pModel(+0x40) operator=
+//                unsigned long emitterHash,  // [sp] -> m_EmitterHash(+0x44)
+//                float dripRate,             // s1  -> m_DripRate(+0x8c) + splat timer
+//                Vec3  grav)                 // [sp] -> m_GravBase(+0x94)
 //
 // Resolved DAT constants (v1.6.1):
 //   DAT_001e52cc = -0.04f   -> m_Age(+0xac) initial value
-//   DAT_001e52d0 =  100.0f  -> m_SplatTimer when fadeRate<=0 (drip loop disabled)
+//   DAT_001e52d0 =  100.0f  -> m_SplatTimer when dripRate<=0 (drip loop disabled)
 //   DAT_001e52d4 = -100.0f  -> spin-rate lower bound
 //   DAT_001e52d8 =    0.0f  -> splat-timer lower bound
-//   GOT[0x75d4]  -> global ZeroVec (0,0,0): accel = ZeroVec*gravScale = (0,0,0)
+//   GOT[0x75d4]  -> global One (1,1,1): m_Scale = One*scale = (scale,scale,scale)
 //   GOT[0x6ba4]  -> global identity Matrix44: m_Rotation seeded to identity
 //   T_796(a,b) @ 0x1e508c = a + (b-a)*rand01  (linear-random lerp, rand01 in [0,1))
-void Jiblet::Init(float gravScale, float fadeRate, int fruitType,
-                  Vec3* posIn, Vec3* velIn,
-                  const Mortar::SmartPtr<Mortar::Model>& mdl,
-                  uint32_t emitterHash, Vec3* gravBase) {
-    // pos / vel / gravBase copied from caller pointers (binary ldmia/stmia).
-    pos = *posIn;
+void Jiblet::Init(int fruitType, Vec3& pos_, float scale_, Vec3 vel_,
+                  Mortar::SmartPtr<Mortar::Model> mdl,
+                  unsigned long emitterHash, float dripRate, Vec3 grav_) {
+    pos = pos_;
     m_pModel = mdl;                 // SmartPtr::operator= @ +0x40 (binary 0x114c10)
-    vel = *velIn;
-    m_GravBase = *gravBase;         // +0x94
+    vel = vel_;
+    m_GravBase = grav_;             // +0x94
 
-    // accel(+0x28) = global ZeroVec * gravScale.
-    // DIFFERS: original reads the engine-shared ZeroVec global (GOT[0x75d4]);
-    //   that singleton is (0,0,0), so the product is identically (0,0,0). The
-    //   downward acceleration is supplied separately via gravBase/Update, not here.
-    scale.x = 0.0f * gravScale;     // scale field aliases Jiblet accel (verlet)
-    scale.y = 0.0f * gravScale;
-    scale.z = 0.0f * gravScale;
+    // m_Scale(+0x28) = One * scale.
+    // ASM-spec v1.6.1 Jiblet::Init @0x001e50c0: m_Scale = One*scale = (scale,scale,scale)
+    scale.x = scale_;
+    scale.y = scale_;
+    scale.z = scale_;
 
     m_Age = -0.04f;                 // +0xac, DAT_001e52cc
 
@@ -111,13 +108,13 @@ void Jiblet::Init(float gravScale, float fadeRate, int fruitType,
     m_SpinRateY = JibT796(-100.0f, 100.0f);
     m_SpinRateZ = JibT796(-100.0f, 100.0f);
 
-    m_FadeRate = fadeRate;          // +0x8c
+    m_DripRate = dripRate;          // +0x8c
     m_FruitType = fruitType;        // +0x90
 
-    if (fadeRate <= 0.0f) {
+    if (dripRate <= 0.0f) {
         m_SplatTimer = 100.0f;      // +0x3c, DAT_001e52d0 (drip loop disabled)
     } else {
-        m_SplatTimer = JibT796(0.0f, 1.0f / fadeRate);  // +0x3c
+        m_SplatTimer = JibT796(0.0f, 1.0f / dripRate);  // +0x3c
     }
 
     m_EmitterHash = emitterHash;    // +0x44
@@ -192,10 +189,10 @@ void Jiblet::Update(float dt) {
         }
         m_Rotation = newRot;
 
-        // Drip loop: spawn SplatEntity on interval (1/m_FadeRate seconds).
-        // Binary: while (m_SplatTimer < 0 && m_FadeRate > 0).
+        // Drip loop: spawn SplatEntity on interval (1/m_DripRate seconds).
+        // Binary: while (m_SplatTimer < 0 && m_DripRate > 0).
         m_SplatTimer -= dt;
-        while (m_SplatTimer < 0.0f && m_FadeRate > 0.0f) {
+        while (m_SplatTimer < 0.0f && m_DripRate > 0.0f) {
             // 16-bit random angle index -> SinIdx/CosIdx (Rand32 & 0xffff).
             uint16_t a16 = (uint16_t)(Math::g_Random.Rand32(0x10000) & 0xffff);
             // Magnitude T_796(1.0, 40.0): random in [1,40] (DAT_001e5734 = 40.0).
@@ -205,7 +202,7 @@ void Jiblet::Update(float dt) {
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
             Vec3 sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
             s->MakeSplat(sp, sv, false, false, (long)m_FruitType);
-            m_SplatTimer += 1.0f / m_FadeRate;
+            m_SplatTimer += 1.0f / m_DripRate;
         }
     }
 
