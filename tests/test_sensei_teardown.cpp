@@ -26,6 +26,7 @@
 #include "screens/BaseScreen.h"
 #include "hud/FruitFactControl.h"
 #include "hud/HUDControl.h"
+#include "hud/GenericHUDControl.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "entities/ActorManager.h"
@@ -67,10 +68,10 @@ static int CountHudType(int type) {
 static int CountPageChildrenInHud(BaseScreen* page) {
     if (!page || !game_work.mHud) return 0;
     int count = 0;
-    const std::list<HUDControl*>& pageChildren = page->GetHUDControlsForTest();
-    std::list<HUDControl*>::const_iterator pit;
+    const std::list<GenericHUDControl*>& pageChildren = page->GetHUDControlsForTest();
+    std::list<GenericHUDControl*>::const_iterator pit;
     for (pit = pageChildren.begin(); pit != pageChildren.end(); ++pit) {
-        HUDControl* child = *pit;
+        HUDControl* child = static_cast<HUDControl*>(*pit);
         if (!child) continue;
         std::list<HUDControl*>::iterator hit;
         for (hit = game_work.mHud->controls.begin();
@@ -249,10 +250,10 @@ int main(int argc, char* argv[]) {
     HUDControl* senseiPtrs[MAX_SENSEI];
     int numSensei = 0;
     if (pClassicPage) {
-        const std::list<HUDControl*>& children = pClassicPage->GetHUDControlsForTest();
-        std::list<HUDControl*>::const_iterator it;
+        const std::list<GenericHUDControl*>& children = pClassicPage->GetHUDControlsForTest();
+        std::list<GenericHUDControl*>::const_iterator it;
         for (it = children.begin(); it != children.end() && numSensei < MAX_SENSEI; ++it) {
-            senseiPtrs[numSensei++] = *it;
+            senseiPtrs[numSensei++] = static_cast<HUDControl*>(*it);
         }
     }
     int preQuitSensei = CountPageChildrenInHud(pClassicPage);

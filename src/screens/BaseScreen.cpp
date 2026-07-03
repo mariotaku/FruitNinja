@@ -384,7 +384,7 @@ void BaseScreen::UpdateButtons(float dt) {
 // Matches the GenericHUDControl* push_back in binary
 // (called when creating child screens like AboutScreen).
 // ===================================================================
-void BaseScreen::AddGenericControl(HUDControl* ctrl) {
+void BaseScreen::AddGenericControl(GenericHUDControl* ctrl) {
     // ASM-spec v1.6.1 BaseScreen::AddGenericControl @0x001606e8:
     //   HUD::AddControl(game_work.pM_pHud, ctrl, false) -- registers the child with the
     //   global HUD so the HUD draw loop renders it; THEN records it in m_HUDControls for
@@ -405,9 +405,9 @@ void BaseScreen::AddGenericControl(HUDControl* ctrl) {
 // using pos directly -- same net effect since callers always pass this->pos).
 // ===================================================================
 void BaseScreen::SetExtraControlsDefaultPos() {
-    for (std::list<HUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
-        HUDControl* c = *it;
-        if (c) static_cast<GenericHUDControl*>(c)->m_BasePos2 = pos;
+    for (std::list<GenericHUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
+        GenericHUDControl* c = *it;
+        if (c) c->m_BasePos2 = pos;
     }
 }
 
@@ -420,7 +420,7 @@ void BaseScreen::SetExtraControlsDefaultPos() {
 // ===================================================================
 void BaseScreen::Release() {
     // 1. Mark all registered HUDControls for pending removal
-    for (std::list<HUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
+    for (std::list<GenericHUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
         if (*it) {
             (*it)->m_bPendingRemoval = 1;
         }
