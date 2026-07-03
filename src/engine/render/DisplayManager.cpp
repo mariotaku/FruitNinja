@@ -112,11 +112,15 @@ MortarRectangle DisplayManager::GetWindowSize() const {
     return m_WindowRect;
 }
 
-void DisplayManager::SetWindowSize(int l, int t, int r, int b) {
+void DisplayManager::SetWindowSize(long t, long b, long l, long r) {
     m_WindowRect.left = l;
     m_WindowRect.top = t;
     m_WindowRect.right = r;
     m_WindowRect.bottom = b;
+}
+
+void DisplayManager::SetWindowSize(long t, long b, long l, long r, bool) {
+    // Defunct: cross-SKU display hook -- no-op stub; v1.6.1 Mortar::DisplayManager::SetWindowSize(long,long,long,long,bool) @0x00256940
 }
 
 void DisplayManager::SetClearColour(const Colour& c) {

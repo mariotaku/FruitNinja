@@ -74,8 +74,10 @@ public:
     // Matches original SetLightDirection
     void SetLightDirection(const Vec3& dir);
 
-    // Matches 0x0019da3c
-    void SetWindowSize(int l, int t, int r, int b);
+    // ASM-spec v1.6.1 Mortar::DisplayManager::SetWindowSize @0x002566e8: param order (top,bottom,left,right); stores l->+0x0c,t->+0x10,r->+0x14,b->+0x18.
+    void SetWindowSize(long t, long b, long l, long r);
+    // Defunct: cross-SKU display hook -- no-op stub; v1.6.1 Mortar::DisplayManager::SetWindowSize(long,long,long,long,bool) @0x00256940 (body bx lr; bool meaning unknown from this SKU; no v1.6.1 callers)
+    void SetWindowSize(long t, long b, long l, long r, bool);
 
     // Matches 0x0019da58
     void SetTextureOverloadPrefix(const char* prefix);
