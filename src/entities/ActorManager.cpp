@@ -31,9 +31,9 @@ ActorManager::ActorManager()
     , m_FactoryDelegate(nullptr)
     , m_HashDelegate(nullptr)
 {
-    // Binary ctor @ 0x00170500: constructs delegates then clears m_Listeners.
-    // Port delegates are raw fnptrs (set to nullptr above); m_Listeners was
-    // default-constructed by the compiler; clear() matches binary epilogue.
+    // Binary ctor @ 0x00170500: constructs delegates (default/empty state)
+    // then clears m_Listeners; m_Listeners was default-constructed by the
+    // compiler, clear() matches the binary epilogue.
     m_Listeners.clear();
 }
 
@@ -381,12 +381,11 @@ int ActorManager::GetEntityIdx(Entity* entity) {
 
 // --- Factory / hash converter registration --------------------------------
 
-// Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
-// Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
-// Stores the hash-converter delegate into m_HashDelegate.
-// TODO: implement full delegate.
-void ActorManager::RegisterHashConverter(HashFn fn) {
-    m_HashDelegate = fn;
+// ASM-spec v1.6.1 Mortar::ActorManager::RegisterHashConverter @0x001d0460:
+// `m_HashDelegate = param;` (by-value Delegate2 copy-assign).
+// Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04 with HashTypeConvert.
+void ActorManager::RegisterHashConverter(Mortar::Delegate2<long, unsigned long, bool&> converter) {
+    m_HashDelegate = converter;
 }
 
 // --- Find variants --------------------------------------------------------

@@ -3,13 +3,13 @@
 
 // ActorManager — binary-faithful port.
 //
-// Binary class is 4204 bytes. Gameplay relies on:
+// Binary class is 4204 bytes (0x106C). Gameplay relies on:
 //   - per-type std::list<Entity*> so GetNumEntities(type) is O(1) and
 //     DeactivateAllEntities(type) / iterator walks work as expected;
 //   - a 512-slot free pool used to recycle entities between waves
 //     instead of new/delete churn;
-//   - a factory Mortar::Delegate1<Entity*, long> at +0x1024 registered once from
-//     GameInitialise; callers of Add never construct entities directly.
+//   - a factory Mortar::Delegate1<Entity*, long> at +0x1024 registered once
+//     from GameInit; callers of Add never construct entities directly.
 //
 // Field names / offsets match binary ctor + RE of Initialise, Add,
 // Deactivate, Update, Draw, Find, SendMessage (2026-05-04).
@@ -19,14 +19,15 @@
 //   - LinkedHeap allocator at +0x000 — port uses new[] for the type-list
 //     array and leaves m_pHeap as an opaque non-null sentinel so the
 //     binary's `if (m_pHeap != nullptr)` gate in Update/Draw still behaves.
-//   - Mortar::Delegate2<long, ulong, bool&> hash converter at +0x1048 — not
-//     called from any live FruitNinja code path.
-//   - LoadEntity / PostLoad — tied to serialisation we don't implement.
+//   - LoadEntity / PostLoad — tied to serialisation we don't implement. The
+//     hash-converter delegate at +0x1048 IS wired (RegisterHashConverter is
+//     real), but its only binary caller is LoadEntity, itself dead code.
 //
 // Analysed: 2026-05-04T00:00
 
 #include "Entity.h"
 #include "Message.h"
+#include "engine/util/Delegate.h"
 #include <cstdint>
 #include <list>
 #include <cstddef>
@@ -42,9 +43,6 @@ class ActorManager {
 public:
     // Binary: Entity*[0x200] flat array at +0x008.
     static const int FREE_POOL_CAP = 512;
-
-    // Factory delegate signature — matches Mortar::Delegate1<Entity*, long>.
-    typedef Entity* (*FactoryFn)(long entityType);
 
     // --- Fields mirrored from binary layout (sizes/offsets in comments) -
 
@@ -85,11 +83,13 @@ public:
     // +0x1020
     bool m_DebugDraw;
 
-    // +0x1024 (binary): factory function is Mortar::Delegate1<Entity*, long> object (36 bytes).
-    // DIFFERS: binary uses Mortar::Delegate1<Entity*, long> object (36 bytes); port stores
-    //          raw fnptr (4 bytes) at the same logical offset. Functionally equivalent
-    //          for the singular call site. Layout deviates by 32 bytes from binary.
-    FactoryFn m_FactoryDelegate;
+    // +0x1024: Mortar::Delegate1<Entity*, long> (36 bytes in binary).
+    Mortar::Delegate1<Entity*, long> m_FactoryDelegate;
+
+    // +0x1048: Mortar::Delegate2<long, unsigned long, bool&> (36 bytes in binary).
+    // Registered from GameInit with HashTypeConvert; never invoked at runtime
+    // (its only binary caller is LoadEntity, itself dead code).
+    Mortar::Delegate2<long, unsigned long, bool&> m_HashDelegate;
 
     // Singleton — binary uses Meyers static local `em` inside
     // GetInstance (0x001705f0). Port exposes the same access pattern.
@@ -108,26 +108,14 @@ public:
 
     // --- Factory / listener registration --------------------------------
 
-    // 0x0016d870.
-    void RegisterFactory(FactoryFn factory) { m_FactoryDelegate = factory; }
+    // 0x0016d870 (RegisterFactory @0x001d0378: `m_FactoryDelegate = param;`).
+    // By-value Delegate1 param matches the binary's copy-in mangling.
+    void RegisterFactory(Mortar::Delegate1<Entity*, long> factory) { m_FactoryDelegate = factory; }
 
-    // Hash converter delegate signature --
-    //   Mortar::Delegate2<long entityType, unsigned long& outHash, bool& outOk>.
-    // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
-    // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
-    // RE-gap: exact function body behind GOT slots [0x0016ccbc..0x0016ccc0].
-    // Binary signature: entityType is the return value; takes (StringHash key, bool& outFound).
-    typedef long (*HashFn)(unsigned long key, bool& outFound);
-
-    // Stores the hash-converter function into m_HashDelegate.
-    // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
-    // TODO: implement.
-    void RegisterHashConverter(HashFn fn);
-
-    // +0x1048 (binary): hash converter is Mortar::Delegate2<long, ulong, bool&> object (36 bytes).
-    // DIFFERS: binary uses Mortar::Delegate2 object (36 bytes); port stores raw fnptr (4 bytes).
-    //          Binary offset +0x1048; port offset drifts further due to Mortar::Delegate1 size diff.
-    HashFn m_HashDelegate;
+    // v1.6.1 Mortar::ActorManager::RegisterHashConverter @0x001d0460.
+    // Body: `m_HashDelegate = param;` (by-value Delegate2 param).
+    // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04 with HashTypeConvert.
+    void RegisterHashConverter(Mortar::Delegate2<long, unsigned long, bool&> converter);
 
     // --- Entity API -----------------------------------------------------
 
@@ -246,6 +234,12 @@ public:
     // 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
     // Port stub returns false -- not used by FruitNinja runtime.
     // Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170728.
+    //
+    // Spec for the (unimplemented) invoke shape, now that m_HashDelegate is a
+    // real Delegate2 object:
+    //   bool found = false;
+    //   long t = m_HashDelegate(hash, found);
+    //   if (t == -1 || !Add(t, found)) return false;
     bool LoadEntity(EntityChunk* chunk, void* hdr, long hdrLen, long lod);
 
     // --- Heap diagnostics -----------------------------------------------
@@ -343,9 +337,10 @@ public:
 #endif
 };
 
-// Layout asserts. m_FactoryDelegate / m_HashDelegate offsets deviate from binary because:
-//   m_FactoryDelegate is raw fnptr (4B) vs Mortar::Delegate1 object (36B) (+32B drift)
-// Those two offsets are excluded. All list-containing fields use 8B (Sourcery 2010q1).
+// Layout asserts -- 32-bit (__bada__) only. Mortar::Delegate<Sig> is 36 bytes
+// on any 32-bit ABI (40 bytes on x64, see Delegate.h), so m_FactoryDelegate /
+// m_HashDelegate offsets and the final sizeof only line up with the binary
+// under the bada cross-build; they are not checked on the x64 host build.
 #ifdef __bada__
 struct ActorManagerLayoutAssert {
     static_assert(__builtin_offsetof(ActorManager, m_FreePool)          == 0x008,  "m_FreePool offset");
@@ -356,6 +351,9 @@ struct ActorManagerLayoutAssert {
     static_assert(__builtin_offsetof(ActorManager, m_Listeners)         == 0x1014, "m_Listeners offset");
     static_assert(__builtin_offsetof(ActorManager, m_NumTypes)          == 0x101C, "m_NumTypes offset");
     static_assert(__builtin_offsetof(ActorManager, m_DebugDraw)         == 0x1020, "m_DebugDraw offset");
+    static_assert(__builtin_offsetof(ActorManager, m_FactoryDelegate)   == 0x1024, "m_FactoryDelegate offset");
+    static_assert(__builtin_offsetof(ActorManager, m_HashDelegate)      == 0x1048, "m_HashDelegate offset");
+    static_assert(sizeof(ActorManager)                                  == 0x106C, "sizeof(ActorManager)");
 };
 #endif
 
