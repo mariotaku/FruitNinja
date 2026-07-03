@@ -35,6 +35,7 @@
 
 #include <cstdint>
 #include <map>
+#include <vector>
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 
@@ -148,18 +149,24 @@ private:
     int  QueAchievement(AchievementInfo* info,
                         std::map<uint32_t, AchievementInfo*>::iterator& it);
 
-    // Binary layout: 12 std::map<uint32_t,AchievementInfo*> (each 24 bytes, ARM32 Sourcery).
-    // Ctor @ 0x00108930 constructs m_All at +0x000, then 11 m_ByType at +0x018..+0x108.
-    // Dtor @ 0x00109028 destroys them from +0x120 down to +0x000 (12 total, stride 0x18).
+    // Binary layout (v1.6.1 ctor @0x00117494): 12 std::map<uint32_t,AchievementInfo*>
+    // (each 24 bytes, ARM32 Sourcery) at +0x000..+0x120, then a std::vector<uint32_t>
+    // at +0x120. sizeof == 0x12c. (Prior comment cited stale v1.5.x ctor 0x00108930 +
+    // omitted the vector -> asserted the port's own wrong 0x120.)
     // Preamble textures (DAT_001096a8/ac/b0) are module-level statics in BSS, NOT struct members.
     std::map<uint32_t, AchievementInfo*> m_All;         // +0x000 (owns)
     std::map<uint32_t, AchievementInfo*> m_ByType[11];  // +0x018..+0x108 (non-owning views)
+    // v1.6.1 ctor @0x00117494 constructs a std::vector<u32> at +0x120; LoadAchievementInfo
+    // @0x00118198 push_back's each kept achievement id-hash. DEAD FIELD in v1.6.1: no
+    // reader (all 14 GetInstance callers audited; zero xrefs to +0x120) -- relic of a
+    // refactored-out OpenFeint bulk-publish path. Kept for byte-faithful layout.
+    std::vector<uint32_t> m_AllHashes;                  // +0x120
 };
-// sizeof(AchievementManager) == 0x120 (288 bytes) on ARM32 binary:
-// 12 * sizeof(std::map) = 12 * 24 = 288.
+// sizeof(AchievementManager) == 0x12c on ARM32 binary: 12*24 (maps) + 12 (vector).
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(AchievementManager) == 0x120, "AchievementManager size mismatch");
+static_assert(sizeof(AchievementManager) == 0x12c, "AchievementManager size mismatch");
+static_assert(offsetof(AchievementManager, m_AllHashes) == 0x120, "m_AllHashes offset");
 #endif
 
 class TiXmlElement;
