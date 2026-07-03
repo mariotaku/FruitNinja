@@ -578,6 +578,18 @@ fn_add_game_test(test_arcade_then_gamemode test_arcade_then_gamemode.cpp)
 add_test(NAME arcade_then_gamemode COMMAND test_arcade_then_gamemode)
 set_tests_properties(arcade_then_gamemode PROPERTIES TIMEOUT 180)
 
+# Ring-texture refcount imbalance ASAN driver -- round-trips GameModeScreen
+# creation/teardown 6x and asserts game_work.m_RingTex[16] (red_ring) /
+# m_RingTex[13] (arcade ring) SmartPtr<Texture> refcounts return to baseline
+# after EVERY round trip, then confirms both survive into a DojoScreen entry
+# (DojoScreen::CreateButtons also assigns m_RingTex[16] to its own back
+# button -- the exact site a drifting refcount eventually crashes). A single
+# transition (test_mainscreen_to_gamemode) cannot catch a slow per-visit
+# drift; only repetition does.
+fn_add_game_test(test_ring_texture_lifecycle test_ring_texture_lifecycle.cpp)
+add_test(NAME ring_texture_lifecycle COMMAND test_ring_texture_lifecycle)
+set_tests_properties(ring_texture_lifecycle PROPERTIES TIMEOUT 240)
+
 # Per-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn with
 # full pos/vel/gravity parameters plus per-wave spawner config so
 # divergences vs. binary expectations are readable line-by-line. Always
