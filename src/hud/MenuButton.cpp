@@ -180,8 +180,16 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
     }
 }
 
-// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::~MenuButton @ 0x0019d130 (asm-inspector)
-MenuButton::~MenuButton() {}
+// ASM-spec v1.6.1 MenuButton::~MenuButton D0 @0x0019d130 / D1 @0x0019d1dc: both
+// call Release() FIRST (then ~list(m_AddOns)/~Delegate/~HUDControl3d). Release()
+// @0x0019d064 clears the tracked fruit's m_pOwner back-pointer (+0x160) / the
+// bomb's owner-button field, deletes the 3 labels + pieces, and SetNulls
+// m_Texture. The port previously had an EMPTY dtor, so Release() never ran on any
+// reap/delete path -> tracked fruits kept a dangling m_pOwner (Fruit::KillFruit UB)
+// and the resulting dangling seed corrupted reused heap, over-freeing the shared
+// red_ring texture (GameModeScreen::CreateControls SmartPtr assign trap). Refcount-
+// safe: Release SetNulls m_Texture once; the base ~HUDControl3d then sees null.
+MenuButton::~MenuButton() { Release(); }
 
 // MenuButton::Init @ 0x0019b994
 void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
