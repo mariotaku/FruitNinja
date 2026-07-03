@@ -56,13 +56,11 @@ public:
     // Binary @ 0x001290e8
     int FindFree();
 
-    // Binary @ 0x00151d04 -- 4-arg form; 3-arg overload omits finishCallback.
-    // 3rd param is a gain multiplier (binary: SetVolume = (1-(1-master)*vol)*gain).
-    // The binary's 5th param (real pitch) feeds MortarSound::SetPitch @0x00230218, which
-    // is a no-op stub, so dropping it is faithful.
-    Mortar::MortarSound* SFXPlay(const char* name, float vol, float gain,
-                                 Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback);
-    Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float gain = 1.0f);
+    // v1.6.1 GameSound::SFXPlay @0x00151d04 -- single 5-param symbol. Trailing float = pitch;
+    // fed once to MortarSound::SetPitch (@0x00230218 no-op stub on Bada), never stored.
+    Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float gain = 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback = Mortar::Delegate1<bool, Mortar::MortarSound*>(),
+        float pitch = 0.0f);
 
     // Binary @ 0x00151aa8
     bool IsPlaying(int hash);

@@ -39,11 +39,12 @@ int GameSound::FindFree() {
     return -1;
 }
 
-// ASM-verified: 2026-05-04T11:00 v1.6.1 binary @ 0x00151d04 (asm-inspector)
+// ASM-spec v1.6.1 GameSound::SFXPlay @0x00151d04
 // DIFFERS: binary @ 0x00151d04 calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain,
-                                 Mortar::Delegate1<bool, MortarSound*> finishCallback) {
+                                 Mortar::Delegate1<bool, MortarSound*> finishCallback,
+                                 float pitch) {
     int i = FindFree();
     if (i == -1) {
         LOG_INFO("SFX", "SFXPlay('%s', vol=%.2f, gain=%.2f) -- NO FREE SLOT",
@@ -65,13 +66,9 @@ MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain,
 
     float finalVol = (1.0f - (1.0f - m_MasterVolume) * vol) * gain;
     m_Slots[i].sound->SetVolume(finalVol);
+    m_Slots[i].sound->SetPitch(pitch);
 
     return m_Slots[i].sound;
-}
-
-// 3-arg overload -- no finish-callback.
-MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain) {
-    return SFXPlay(name, vol, gain, Mortar::Delegate1<bool, MortarSound*>());
 }
 
 // Binary @ 0x00151aa8
