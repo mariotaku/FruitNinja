@@ -104,7 +104,7 @@ MissControl::~MissControl() = default;
 
 // --- vtable overrides -------------------------------------------------------
 
-// Binary @ 0x001513cc -- vtable[5]. Drops m_Texture SmartPtr ref.
+// v1.6.1 MissControl::Release @0x0019f0b8 -- vtable[5]. Tail-calls m_Texture(+0x74).SetPtr(NULL); no base chain.
 void MissControl::Release() {
     m_Texture.SetNull();
 }
