@@ -8,21 +8,23 @@
 // triggers. Same pool services Fruit critical/rare slices, Bomb zen-hit
 // "X", and combo indicators (combo_3.tex .. combo_10.tex).
 //
-// Binary addresses:
-//   ctor                     0x001511a0
-//   dtor                     0x001513d8 / 0x00151468 / 0x001514f0
-//   vtable                   0x001e9b28  (17 slots, slot 16 = SetPlayer)
-//   GetFree                  0x00150da4
-//   MakeCritical             0x00151764
-//   MakeRare                 0x001518d8
-//   MakeDisappear            0x00151d94
-//   Update                   0x00151a60
-//   Draw                     0x00151f60
-//   PreUpdate                0x00150e04
-//   GetType                  0x00152660
-//   Skip                     0x00150e3c
-//   Init (vtable[4])         0x00150fa4
-//   Reset (vtable[6])        0x00150f14
+// v1.6.1 binary addresses:
+//   ctor                     v1.6.1 MissControl::MissControl @0x0019ed44
+//   dtor (D0 deleting)       v1.6.1 MissControl::~MissControl @0x0019f0c0
+//   dtor (D1 complete)       v1.6.1 MissControl::~MissControl @0x0019f198
+//   dtor (D2 base)           // TODO: re-verify v1.6.1 addr
+//   vtable                   // TODO: re-verify v1.6.1 addr (17 slots, slot 16 = SetPlayer)
+//   GetFree                  v1.6.1 MissControl::GetFree @0x0019dcd8
+//   MakeCritical             v1.6.1 MissControl::MakeCritical @0x0019e810
+//   MakeRare                 v1.6.1 MissControl::MakeRare @0x0019e994
+//   MakeDisappear            v1.6.1 MissControl::MakeDisappear @0x0019f338
+//   Update                   v1.6.1 MissControl::Update @0x0019e15c
+//   Draw                     v1.6.1 MissControl::Draw @0x0019f54c
+//   PreUpdate                v1.6.1 MissControl::PreUpdate @0x0019dde4
+//   GetType                  v1.6.1 MissControl::GetType @0x0019fe24
+//   Skip                     v1.6.1 MissControl::Skip @0x0019de28
+//   Init (vtable[4])         v1.6.1 MissControl::Init @0x0019e07c
+//   Reset (vtable[6])        v1.6.1 MissControl::Reset @0x0019df5c
 //
 // Lifecycle:
 //   1. GameInitialise constructs the 12-slot pool, which on first ctor
@@ -150,7 +152,7 @@ public:
     // vtable[9] @ 0x00151f60 -- render textured quad with UV crop + rotation
     void Draw(float* hudScaleRaw) override;
 
-    // Binary @ 0x001513cc — vtable[5]. Drops m_Texture ref (single-line helper).
+    // v1.6.1 MissControl::Release @0x0019f0b8 -- vtable[5]. Tail-calls m_Texture(+0x74).SetPtr(NULL); no base chain.
     void Release() override;
 
     // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
