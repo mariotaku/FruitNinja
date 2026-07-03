@@ -533,15 +533,15 @@ void GameOverScreen::Release() {
         game_work.pGameOverScreen = 0;
     }
 
-    // Detach the retry/quit button callbacks before this object becomes invalid.
-    // m_pRetryBtn and m_pQuitBtn are HUD-owned (not deleted here per binary spec),
-    // but their m_RemoveCallback points to this->DeletedControl. If HUD::Release()
-    // fires these callbacks after this GameOverScreen has been deleted it is a
-    // use-after-free. Clear them now while |this| is still alive so HUD::Release()
-    // will skip the callback and just delete the buttons safely.
-    // ASM-spec v1.6.1 GameOverScreen::Release @0x00185970
-    if (m_pRetryBtn) m_pRetryBtn->m_RemoveCallback = nullptr;
-    if (m_pQuitBtn)  m_pQuitBtn->m_RemoveCallback  = nullptr;
+    // NOTE: do NOT touch m_pRetryBtn / m_pQuitBtn here. They are HUD-owned and are
+    // reaped (~MenuButton) by HUD::Update BEFORE this Release runs, so both are
+    // dangling raw pointers by now. The binary GameOverScreen::Release @0x00185970
+    // never reads or writes them (verified: its RemoveControl/delete slots are
+    // m_pFruitFact/m_pZenPage/.../m_pNoticeCtrl/m_pSlotA8/m_pSlotB4, then
+    // BonusManager::ClearBestBonuses -- retry/quit at +0xA4/+0xB0 never appear).
+    // A prior port added `m_pRetryBtn->m_RemoveCallback = nullptr` here; that
+    // Delegate::operator= read m_bEmpty inside the freed button (+0x58) = the
+    // ASan-confirmed wasm heap-use-after-free (#367). Removed.
 
     // Full 12-slot RemoveControl pass (exact order per spec)
     // ASM-spec v1.6.1 GameOverScreen::Release @0x00185970
