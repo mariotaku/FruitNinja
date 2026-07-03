@@ -110,11 +110,16 @@ void GameTaskDraw(float /*dt*/) {
     if (!game) return;
 
     uint8_t stateIdx = game_work.taskStateIndex;
+    // ASM-verified: 2026-07-03T00:00Z v1.6.1 GameTaskDraw @ 0x00119dfc (asm-inspector)
+    // flM_Dt assign and drawDt reset are UNCONDITIONAL -- only the draw dispatch itself
+    // is gated. Previously both were nested inside the gate, so during a screen
+    // transition (gate false, s_updated cleared by GameTaskExit) s_drawDt accumulated
+    // across many frames, producing a huge dt on the first post-transition draw (#346).
+    game_work.dt = s_drawDt;
     if (stateIdx == s_taskState.prevState && s_updated) {
-        game_work.dt = s_drawDt;
         s_drawFuncs[stateIdx](s_drawDt, true);
-        s_drawDt = 0.0f;
     }
+    s_drawDt = 0.0f;
 }
 
 // Matches GameTaskExit (v1.6.1 @ 0x00119e84, 22 lines)
