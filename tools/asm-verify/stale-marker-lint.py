@@ -72,6 +72,44 @@ Usage:
 Output:
     tmp/stale-markers/report.json  (machine-readable, full detail)
     stdout                         (ranked summary: mismatches first)
+
+Additional audit checks (informational; do not gate --check by default):
+
+  HOLLOW-MARKER (Check A) -- a '// ASM-verified:' or '// ASM-spec' marker sits
+      on a port function whose body is trivial (empty / bare 'return;') while
+      the cited binary function is non-trivial in size. Catches false
+      confirmations like the MenuButton::~MenuButton empty-dtor bug, where the
+      marker claimed verification but the port body never called the real
+      logic. Bodies following a '// Defunct:' comment are intentionally-empty
+      stubs and are skipped (see CLAUDE.md "Defunct features -- stub, never
+      skip"). Only markers whose address is an EXACT binary symbol-table
+      start are sized -- containment-fallback sizing was tried and produces
+      false positives (a 4-byte unsymboled local stub can land inside an
+      unrelated 676-byte neighbour's range). report.json['hollow_markers']
+      carries the full list.
+
+  DEFER-BLOCKER-REQUIRED (Check B, PRIMARY defer rule) -- every ACCEPT-deferred
+      triage.json entry must name a CONCRETE blocker: an unported subsystem/
+      symbol ("blocked on X", "X not ported", "X unported") or a linked task
+      id ("#123", "task #123"). A reason that doesn't name one is vague
+      ("further RE needed", "Same.", copy-paste dtor boilerplate, empty) and
+      is auto-flagged for mandatory re-triage REGARDLESS of score -- if you
+      can't name a concrete unported dependency, ACCEPT-deferred is a
+      FIX-NEEDED being dodged. This is how Fruit::Init slipped through twice
+      on "further RE needed" without ever naming what RE was blocked on.
+      Legitimate defer = named blocker, so when that subsystem lands, every
+      entry deferred on it can be swept for re-triage together.
+      report.json['deferred_no_blocker'] carries the full list.
+
+  DEFERRED-HIGH-RATIO (Check C, secondary signal) -- reads
+      tools/asm-verify/triage.json and flags ACCEPT-deferred entries whose
+      score/max_score ratio exceeds DEFERRED_RATIO_THRESHOLD. A high ratio on
+      a small-weight divergence is a secondary real-bug tell (see project
+      memory feedback_asm_verify_ratio_scan.md -- it previously surfaced
+      MatrixManager/ColSphere/Utf8 bugs and would have caught Fruit::Init,
+      which sat at ratio 1.7 re-affirmed twice without re-triage). Ratio is
+      now secondary to Check B's blocker-reason validation.
+      report.json['deferred_high_ratio'] carries the full list.
 """
 import argparse
 import json
@@ -102,6 +140,55 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent
 BINARY_DEFAULT = PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"
 SRC_DIR      = PROJECT_ROOT / "src"
 OUT_DIR      = PROJECT_ROOT / "tmp" / "stale-markers"
+TRIAGE_DEFAULT = SCRIPT_DIR / "triage.json"
+
+# ---------------------------------------------------------------------------
+# Check A (HOLLOW-MARKER) thresholds
+# ---------------------------------------------------------------------------
+# Binary functions at or below this size are plausibly trivial themselves
+# (thunks, tiny accessors) -- only flag a hollow port body when the cited
+# binary function is bigger than this, i.e. it plausibly DOES something.
+HOLLOW_MIN_BINARY_SIZE = 64  # bytes
+# How many lines forward of the marker (and of the '{') we're willing to scan
+# looking for the function signature / matching closing brace, before giving
+# up. Generous enough for real bodies; hollow ones are short by definition.
+HOLLOW_MAX_SCAN_LINES = 12
+
+# Port bodies that normalise (whitespace-collapsed, comments stripped) to one
+# of these strings are considered "hollow" -- no observable side effect.
+_TRIVIAL_BODIES = frozenset([
+    '', 'return;', 'return 0;', 'return false;', 'return true;',
+    'return nullptr;', 'return NULL;',
+])
+
+# ---------------------------------------------------------------------------
+# Check B (DEFER-BLOCKER-REQUIRED) -- primary defer rule
+# ---------------------------------------------------------------------------
+# An ACCEPT-deferred reason must name a CONCRETE blocker to be legitimate:
+# an unported subsystem/symbol ("blocked on X" / "X not ported" / "X
+# unported" / "awaiting X" / "pending X port") or a linked task id ("#123",
+# "task #123"). Anything else ("further RE needed", "Same.", empty,
+# copy-paste boilerplate) is vague and gets auto-flagged for re-triage
+# regardless of score -- see module docstring (Fruit::Init precedent).
+_BLOCKER_RE = re.compile(
+    r'blocked\s+(?:on|by)\s+\S'
+    r'|\bnot\s+(?:yet\s+)?ported\b'
+    r'|\bunported\b'
+    r'|\bawaiting\s+\S'
+    r'|\bpending\s+\S+\s+port\b'
+    r'|#\d+'
+    r'|\btask\s*#?\d+',
+    re.IGNORECASE)
+
+# ---------------------------------------------------------------------------
+# Check C (DEFERRED-HIGH-RATIO) -- secondary signal
+# ---------------------------------------------------------------------------
+# score/max_score ratio at/above which an ACCEPT-deferred triage.json entry is
+# treated as a likely real bug rather than genuine cosmetic drift (see project
+# memory feedback_asm_verify_ratio_scan.md: small-weight high-ratio divergences
+# are the documented tell; found MatrixManager/ColSphere/Utf8 bugs this way).
+# Secondary to Check B's blocker-reason validation.
+DEFERRED_RATIO_THRESHOLD = 1.5
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +326,16 @@ _PATTERNS = [
         ),
     ),
 ]
+
+
+def _ascii_safe(s: str) -> str:
+    """Best-effort ASCII-fold for stdout printing (Windows console codepages
+    like cp932 crash on stray non-ASCII bytes -- e.g. an em-dash '—' in a
+    triage.json reason string). Runtime output must be ASCII only per project
+    convention; this only affects what we print, not the JSON report file."""
+    if not s:
+        return s
+    return s.encode('ascii', 'replace').decode('ascii')
 
 
 def _demangle(mangled: str) -> str:
@@ -781,6 +878,255 @@ def apply_fixes(markers: list, project_root: pathlib.Path) -> dict:
     return counts
 
 
+_LINE_COMMENT_RE  = re.compile(r'//.*$', re.MULTILINE)
+_BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+
+
+def _strip_comments(text: str) -> str:
+    """Strip // and /* */ comments from a chunk of C++ source (best-effort;
+    does not understand string/char literals, which is an acceptable risk for
+    this heuristic since marker-adjacent signatures rarely contain braces
+    inside string literals)."""
+    text = _BLOCK_COMMENT_RE.sub('', text)
+    text = _LINE_COMMENT_RE.sub('', text)
+    return text
+
+
+def _find_function_body(lines: list, marker_line_idx: int):
+    """Locate the braced body of the function a marker sits on.
+
+    Starting at marker_line_idx (0-based), skips forward over blank/comment
+    lines (the rest of the marker's comment block) to the function signature,
+    then finds the first '{' and its matching '}' via brace-depth counting.
+
+    Returns (body_text, is_defunct, has_init_list):
+      body_text     -- text strictly between the braces, or None if no braced
+                       body was found within HOLLOW_MAX_SCAN_LINES (e.g. a bare
+                       declaration ending in ';', or the scan window ran out).
+      is_defunct    -- True if a '// Defunct:' comment was seen in the marker's
+                       own line or the comment block leading to the signature --
+                       those are legitimate no-op stubs and must be skipped.
+      has_init_list -- True if a non-empty ctor member-initializer list
+                       (': Base(), m_Field(0), ...') sits between the
+                       signature and the body brace. A ctor that zeroes/inits
+                       every field this way is NOT hollow even if its {} body
+                       is empty -- the initializer list IS the ctor logic
+                       (observed false positives: ColSphere::ColSphere(),
+                       InputDeviceBada::InputDeviceBada(),
+                       GlobalProbabilityOveride::GlobalProbabilityOveride()).
+    """
+    n = len(lines)
+    is_defunct = 'Defunct:' in lines[marker_line_idx] if marker_line_idx < n else False
+
+    j = marker_line_idx + 1
+    scanned = 0
+    while j < n and scanned < HOLLOW_MAX_SCAN_LINES:
+        stripped = lines[j].strip()
+        if not stripped:
+            j += 1; scanned += 1; continue
+        if stripped.startswith('//'):
+            if 'Defunct:' in stripped:
+                is_defunct = True
+            j += 1; scanned += 1; continue
+        break
+    if j >= n:
+        return None, is_defunct, False
+
+    # Generous window: real (non-hollow) bodies may run long, but we only
+    # need to positively identify HOLLOW ones -- if the window runs out we
+    # simply give up on this marker (informational check, safe to under-flag).
+    window_end = min(n, j + HOLLOW_MAX_SCAN_LINES * 4)
+    text = ''.join(_strip_comments(l) + '\n' for l in lines[j:window_end])
+
+    brace_pos = text.find('{')
+    semi_pos  = text.find(';')
+    if brace_pos == -1:
+        return None, is_defunct, False
+    if semi_pos != -1 and semi_pos < brace_pos:
+        return None, is_defunct, False  # bare declaration (e.g. 'void Foo();')
+
+    # Ctor member-initializer list: a ':' between the signature and '{' that
+    # isn't part of a '::' qualifier. Any non-whitespace content after it
+    # counts as real initialization work.
+    pre_brace = text[:brace_pos]
+    init_match = re.search(r'(?<!:):(?!:)(.*)$', pre_brace, re.DOTALL)
+    has_init_list = bool(init_match and init_match.group(1).strip())
+
+    depth = 0
+    body_start = None
+    for idx in range(brace_pos, len(text)):
+        ch = text[idx]
+        if ch == '{':
+            depth += 1
+            if depth == 1:
+                body_start = idx + 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return text[body_start:idx], is_defunct, has_init_list
+    return None, is_defunct, False  # unbalanced within window -- give up
+
+
+def _is_hollow_body(body_text: str) -> bool:
+    """True if body_text (already comment-stripped) normalises to a trivial
+    no-op per _TRIVIAL_BODIES (whitespace-collapsed comparison)."""
+    stripped = re.sub(r'\s+', ' ', body_text).strip()
+    return stripped in _TRIVIAL_BODIES
+
+
+def _binary_fn_size(addr: int, addr_to_size: dict):
+    """Byte size of the binary function at addr, EXACT symbol-start only.
+
+    Deliberately does NOT fall back to the containment check: local/static
+    functions that lack their own symbol-table entry get silently subsumed
+    into whatever unrelated exported symbol's [start,end) range happens to
+    span their address (observed case: two 4-byte AsinIdx/AcosIdx stubs in
+    MathUtil.cpp landed inside ListBox::{ctor}'s 676-byte range, which would
+    have wrongly flagged their genuinely-4-byte-stub 'return 0;' bodies as
+    hollow-but-binary-is-big). Only trust a size when addr IS a real symbol
+    start, so Check A stays a high-confidence signal, not containment noise.
+    """
+    return addr_to_size.get(addr)
+
+
+def check_hollow_markers(markers: list, addr_to_size: dict,
+                          project_root: pathlib.Path) -> list:
+    """Check A: flag ASM-verified/ASM-spec markers sitting on a trivial port
+    body while the cited binary function is non-trivial in size.
+
+    Only markers whose cited_addr is an EXACT binary symbol-table start are
+    considered (see _binary_fn_size) -- this keeps the check high-confidence
+    instead of attributing an unrelated enclosing symbol's size to a small
+    unsymboled local function.
+
+    Returns a list of dicts: file, line, kind, cited_sym, addr_str,
+    port_body (the hollow text, or '(empty)'), binary_fn_size.
+    """
+    results = []
+    file_cache = {}
+    for m in markers:
+        if m['kind'] not in ('ASM-verified', 'ASM-spec'):
+            continue
+        f_rel = m['file']
+        if f_rel not in file_cache:
+            f_abs = project_root / f_rel
+            try:
+                file_cache[f_rel] = f_abs.read_text(
+                    encoding='utf-8', errors='replace').splitlines()
+            except Exception:
+                file_cache[f_rel] = None
+        lines = file_cache[f_rel]
+        if lines is None:
+            continue
+
+        marker_idx = m['line'] - 1
+        if marker_idx < 0 or marker_idx >= len(lines):
+            continue
+
+        body, is_defunct, has_init_list = _find_function_body(lines, marker_idx)
+        if is_defunct or body is None or has_init_list:
+            continue
+        if not _is_hollow_body(body):
+            continue
+
+        bsize = _binary_fn_size(m['cited_addr'], addr_to_size)
+        if bsize is None or bsize <= HOLLOW_MIN_BINARY_SIZE:
+            continue
+
+        results.append({
+            'file':           m['file'],
+            'line':           m['line'],
+            'kind':           m['kind'],
+            'cited_sym':      m['cited_sym'],
+            'addr_str':       m['addr_str'],
+            'port_body':      body.strip() or '(empty)',
+            'binary_fn_size': bsize,
+        })
+    return results
+
+
+def _load_triage(triage_path: pathlib.Path) -> dict:
+    """Load triage.json (symbol -> {verdict, score, max_score, reason, ...}).
+    Returns {} if the file doesn't exist."""
+    if not triage_path.exists():
+        return {}
+    with triage_path.open('r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _has_concrete_blocker(reason: str) -> bool:
+    """True if reason names a concrete unported dependency or linked task id
+    per _BLOCKER_RE (see module docstring / Check B)."""
+    if not reason or not reason.strip():
+        return False
+    return bool(_BLOCKER_RE.search(reason))
+
+
+def check_deferred_no_blocker(triage: dict) -> list:
+    """Check B (PRIMARY defer rule): ACCEPT-deferred entries whose reason does
+    NOT name a concrete blocker. Flagged regardless of score/ratio -- a defer
+    with no named blocker is a FIX-NEEDED being dodged (see module docstring).
+
+    Returns a list of dicts: symbol, ratio (or None if max_score missing),
+    score, max_score, reason, decided_at. Sorted descending by ratio (ratio-
+    less entries last) so the highest-signal candidates surface first.
+    """
+    results = []
+    for sym, entry in triage.items():
+        if entry.get('verdict') != 'ACCEPT-deferred':
+            continue
+        reason = entry.get('reason', '')
+        if _has_concrete_blocker(reason):
+            continue
+        score     = entry.get('score')
+        max_score = entry.get('max_score')
+        ratio = (score / max_score) if max_score else None
+        results.append({
+            'symbol':     sym,
+            'ratio':      ratio,
+            'score':      score,
+            'max_score':  max_score,
+            'reason':     reason,
+            'decided_at': entry.get('decided_at'),
+        })
+    results.sort(key=lambda r: (r['ratio'] is not None, r['ratio'] or 0), reverse=True)
+    return results
+
+
+def check_deferred_high_ratio(triage: dict) -> list:
+    """Check C (secondary signal): ACCEPT-deferred entries whose score/
+    max_score ratio is >= DEFERRED_RATIO_THRESHOLD -- see module docstring.
+    Sorted descending by ratio.
+
+    Returns a list of dicts: symbol, ratio, score, max_score, reaffirm_count
+    (informational: how many times 're-affirmed' appears in the reason text),
+    reason, decided_at.
+    """
+    results = []
+    for sym, entry in triage.items():
+        if entry.get('verdict') != 'ACCEPT-deferred':
+            continue
+        score     = entry.get('score')
+        max_score = entry.get('max_score')
+        if not max_score:
+            continue
+        ratio = score / max_score
+        if ratio < DEFERRED_RATIO_THRESHOLD:
+            continue
+        reason = entry.get('reason', '')
+        results.append({
+            'symbol':         sym,
+            'ratio':          ratio,
+            'score':          score,
+            'max_score':      max_score,
+            'reaffirm_count': reason.count('re-affirmed'),
+            'reason':         reason,
+            'decided_at':     entry.get('decided_at'),
+        })
+    results.sort(key=lambda r: r['ratio'], reverse=True)
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -790,6 +1136,8 @@ def main():
                     help='Path to FruitNinja ELF binary')
     ap.add_argument('--out',    default=str(OUT_DIR / 'report.json'),
                     help='Output JSON path')
+    ap.add_argument('--triage', default=str(TRIAGE_DEFAULT),
+                    help='Path to triage.json (for the DEFERRED-HIGH-RATIO check)')
     ap.add_argument('--fix',    action='store_true',
                     help='auto-correct safely-resolvable mis-stamps in place '
                          '(comment-only address rewrites)')
@@ -814,6 +1162,14 @@ def main():
     print(f"  {len(addr_to_mangled)} unique symbol addresses loaded.")
     print(f"  {len(sym_ranges)} symbols with size (for containment check).")
 
+    # addr -> size for exact symbol-start lookups (Check A). Keep the largest
+    # when multiple size-bearing symbols share a start address (thunks).
+    addr_to_size = {}
+    for (start, end, _mangled) in sym_ranges:
+        sz = end - start
+        if sz > addr_to_size.get(start, 0):
+            addr_to_size[start] = sz
+
     print(f"Scanning {src_dir} for RE markers ...", flush=True)
     markers = scan_sources(src_dir)
     print(f"  {len(markers)} markers found.")
@@ -837,10 +1193,36 @@ def main():
         markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
         markers = _dedupe_sort(markers)
 
+    # -----------------------------------------------------------------------
+    # Check A: HOLLOW-MARKER -- ASM-verified/ASM-spec marker on a trivial
+    # port body while the cited binary function is non-trivial in size.
+    # -----------------------------------------------------------------------
+    print("Checking for hollow markers (Check A) ...", flush=True)
+    hollow_markers = check_hollow_markers(markers, addr_to_size, src_dir.parent)
+    print(f"  {len(hollow_markers)} hollow marker(s) found.")
+
+    # -----------------------------------------------------------------------
+    # Check B (primary) / Check C (secondary): mine triage.json ACCEPT-
+    # deferred entries -- B for a missing concrete blocker, C for high ratio.
+    # -----------------------------------------------------------------------
+    triage_path = pathlib.Path(args.triage)
+    triage = _load_triage(triage_path)
+    print(f"Checking triage.json ACCEPT-deferred entries for a named blocker (Check B) ...", flush=True)
+    deferred_no_blocker = check_deferred_no_blocker(triage)
+    print(f"  {len(deferred_no_blocker)} ACCEPT-deferred entr(y/ies) with no named blocker.")
+    print(f"Checking triage.json for high-ratio deferred entries (Check C) ...", flush=True)
+    deferred_high_ratio = check_deferred_high_ratio(triage)
+    print(f"  {len(deferred_high_ratio)} high-ratio ACCEPT-deferred entr(y/ies) found.")
+
     # Write JSON report
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open('w', encoding='utf-8') as f:
-        json.dump({'markers': markers}, f, indent=2)
+        json.dump({
+            'markers':             markers,
+            'hollow_markers':      hollow_markers,
+            'deferred_no_blocker': deferred_no_blocker,
+            'deferred_high_ratio': deferred_high_ratio,
+        }, f, indent=2)
     print(f"\nFull report: {out_path}")
 
     # -----------------------------------------------------------------------
@@ -857,7 +1239,51 @@ def main():
         c = verdict_counts.get(v, 0)
         if c:
             print(f"  {v:<32}: {c}")
+    print(f"  {'HOLLOW-MARKER':<32}: {len(hollow_markers)}")
+    print(f"  {'DEFER-NO-BLOCKER':<32}: {len(deferred_no_blocker)}")
+    print(f"  {'DEFERRED-HIGH-RATIO':<32}: {len(deferred_high_ratio)}")
     print()
+
+    # --- Check A: HOLLOW-MARKER -- trivial port body, non-trivial binary fn.
+    if hollow_markers:
+        print(f"--- HOLLOW-MARKER ({len(hollow_markers)}) -- marker claims verification but "
+              f"port body is trivial ---")
+        for h in hollow_markers:
+            print(f"  {h['file']}:{h['line']}  [{h['kind']}] {h['cited_sym'] or '(none)'} "
+                  f"@ {h['addr_str']}")
+            print(f"    port body:  {_ascii_safe(h['port_body'])!r}")
+            print(f"    binary fn size: {h['binary_fn_size']} bytes "
+                  f"(> {HOLLOW_MIN_BINARY_SIZE} threshold)")
+        print()
+
+    # --- Check B (PRIMARY): DEFER-NO-BLOCKER -- ACCEPT-deferred with no named
+    # blocker, i.e. likely a FIX-NEEDED being dodged. Shown before Check C
+    # since this is now the primary defer rule.
+    if deferred_no_blocker:
+        print(f"--- DEFER-NO-BLOCKER ({len(deferred_no_blocker)}) -- ACCEPT-deferred with no "
+              f"concrete blocker named; mandatory re-triage ---")
+        for d in deferred_no_blocker:
+            ratio_s = f"{d['ratio']:.2f}x" if d['ratio'] is not None else '?'
+            reason = _ascii_safe(d['reason']) or '(empty)'
+            if len(reason) > 100:
+                reason = reason[:97] + '...'
+            print(f"  {d['symbol']}  ratio={ratio_s}  score={d['score']}/{d['max_score']}  "
+                  f"decided_at={d['decided_at']}")
+            print(f"    reason: {reason}")
+        print()
+
+    # --- Check C (secondary): DEFERRED-HIGH-RATIO.
+    if deferred_high_ratio:
+        print(f"--- DEFERRED-HIGH-RATIO ({len(deferred_high_ratio)}) -- ratio >= "
+              f"{DEFERRED_RATIO_THRESHOLD} on an ACCEPT-deferred entry (secondary signal) ---")
+        for d in deferred_high_ratio:
+            reason = _ascii_safe(d['reason']) or '(empty)'
+            if len(reason) > 90:
+                reason = reason[:87] + '...'
+            print(f"  {d['symbol']}  ratio={d['ratio']:.2f}x  score={d['score']}/{d['max_score']}  "
+                  f"reaffirm_count={d['reaffirm_count']}")
+            print(f"    reason: {reason}")
+        print()
 
     # Show MID-SYMBOL-MISMATCH rows FIRST (the real bugs: cited name lands
     # inside a DIFFERENT function than the one it names).
