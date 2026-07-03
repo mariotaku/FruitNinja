@@ -56,6 +56,13 @@ ResourceLoader::ResourceLoader(DataReader& reader, const AsciiString& basePath)
     Initialize(reader);
 }
 
+// v1.6.1 ResourceLoader::ResourceLoader(ResourceLoader const&) @0x00255b84: pure memberwise copy
+// of m_ReadCursor, m_BasePath, m_Data, m_Children -- no refcount/side-effects.
+ResourceLoader::ResourceLoader(const ResourceLoader& other)
+    : m_ReadCursor(other.m_ReadCursor), m_BasePath(other.m_BasePath), m_Data(other.m_Data), m_Children(other.m_Children)
+{
+}
+
 // Binary dtor @ 0x002554A0 -- destroys m_Children (+0x38), then m_Data (+0x2c), then
 // m_BasePath (+0x04). C++ destroys members in reverse declaration order
 // (m_Children, m_Data, m_BasePath), which is identical to the binary's order, so
