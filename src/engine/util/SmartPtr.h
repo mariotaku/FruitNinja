@@ -63,6 +63,13 @@ public:
 
     // Binary @ 0x0012ee80 (SetNull<Texture>) -- delegates to SetPtr(nullptr) -> Release-old.
     void SetNull() { assign(nullptr); }
+
+    // Test/debug-only accessor: exposes the pointee's ReferenceCounter strong count
+    // (Mortar::ReferenceCounter::GetRefCount(), +0x04). Returns -1 when null. No
+    // production call sites -- used by refcount-imbalance regression tests
+    // (e.g. tests/test_ring_texture_lifecycle.cpp) to detect AddRef/Release drift
+    // across repeated screen create/teardown cycles on a shared texture.
+    int DebugRefCount() const { return m_ptr ? m_ptr->GetRefCount() : -1; }
 };
 
 // Binary @ 0x001ae748 (WrapPtr<AnimationList>), 0x001928e0 (WrapPtr<AnimationState>),
