@@ -137,6 +137,11 @@ void Bomb::Release() {
     if (m_pOwnerButton && m_pOwnerButton->m_pTrackedFruit == reinterpret_cast<Fruit*>(this)) {
         m_pOwnerButton->m_pTrackedFruit = nullptr;
     }
+    // DIFFERS: binary (v1.6.1 Bomb::Release @0x1d5720) leaves m_pOwnerButton set;
+    // port nulls it to prevent a cross-heap use-after-free (freed MenuButton block
+    // reused by a ring Texture on wasm-32) that the binary's allocator tolerates.
+    // Completes the #348/#349 dangling-owner UAF family.
+    m_pOwnerButton = nullptr;
     if (g_bombData.pTrackedBomb == this) {
         g_bombData.pTrackedBomb = nullptr;
     }
@@ -406,6 +411,11 @@ void Bomb::KillBomb() {
     if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pTrackedFruit) == static_cast<void*>(this)) {
         m_pOwnerButton->m_pTrackedFruit = nullptr;
     }
+    // DIFFERS: binary (v1.6.1 Bomb::KillBomb @0x1d5660) leaves m_pOwnerButton set;
+    // port nulls it to prevent a cross-heap use-after-free (freed MenuButton block
+    // reused by a ring Texture on wasm-32) that the binary's allocator tolerates.
+    // Completes the #348/#349 dangling-owner UAF family.
+    m_pOwnerButton = nullptr;
     if (m_pEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
