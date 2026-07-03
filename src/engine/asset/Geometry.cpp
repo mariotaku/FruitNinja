@@ -191,10 +191,9 @@ void Geometry::BuildPropList(SmartPtr<SharedEffectProperties> /*props*/) {
     m_PropList = NULL;
 }
 
-// v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c — 3-instruction wrapper matching binary body.
-EffectProperty* Geometry::GetProperty(uint32_t nameHash) {
-    if (!m_PropList) return nullptr;
-    return m_PropList->GetProperty((const char*)nameHash);
+// v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c -- matches binary body exactly.
+EffectProperty* Geometry::GetProperty(const char* name) {
+    return m_PropList ? m_PropList->GetProperty(name) : NULL;
 }
 
 }  // namespace Mortar
