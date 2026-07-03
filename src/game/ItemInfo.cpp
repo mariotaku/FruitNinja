@@ -421,7 +421,7 @@ void SlashModInfo::SetEquipped() {
     m_ComboSounds.Reset();   // +0xdc
 }
 
-// ParseSlashModInfo @ 0x001126c0
+// SlashModInfo::Parse @ 0x0013935c wraps the inner ParseSlashModInfo @ 0x001126c0.
 // DIFFERS: binary ParseSlashModInfo does NOT call ItemInfo::Parse and reads
 // slash-specific attributes directly from the root element (no child wrapper).
 // Port adaptation keeps ItemInfo::Parse + <slashModInfo> child navigation
@@ -431,104 +431,118 @@ void SlashModInfo::Parse(TiXmlElement* e) {
     ItemInfo::Parse(e);
 
     TiXmlElement smi = e->FirstChildElement("slashModInfo");
-    if (!smi) return;
+    if (smi) {
+        const char* trueStr = "true";
 
-    const char* trueStr = "true";
+        // `type` attr -> m_ColourType via ParseSlashModColourType
+        const char* typeStr = smi.Attribute("type");
+        m_ColourType = ParseSlashModColourType(typeStr);
 
-    // `type` attr -> m_ColourType via ParseSlashModColourType
-    const char* typeStr = smi.Attribute("type");
-    m_ColourType = ParseSlashModColourType(typeStr);
+        // DIFFERS: binary allocates 64-byte buffer + snprintf("%s.tex") for m_pTextureName2.
+        // Port stores the raw attribute value directly because the asset XML may or may not
+        // include ".tex" in the attribute value (v1.6.1 ParseSlashModInfo @0x001126c0).
+        const char* tex2 = smi.Attribute("texture");
+        CloneString(&m_pTextureName2, tex2);
 
-    // DIFFERS: binary allocates 64-byte buffer + snprintf("%s.tex") for m_pTextureName2.
-    // Port stores the raw attribute value directly because the asset XML may or may not
-    // include ".tex" in the attribute value (v1.6.1 ParseSlashModInfo @0x001126c0).
-    const char* tex2 = smi.Attribute("texture");
-    CloneString(&m_pTextureName2, tex2);
+        // `speed` attr (float); default 1.0f already set in ctor
+        smi.QueryFloatAttribute("speed", &m_Speed);
 
-    // `speed` attr (float); default 1.0f already set in ctor
-    smi.QueryFloatAttribute("speed", &m_Speed);
+        // `particles_directional` attr
+        const char* dirPart = smi.Attribute("particles_directional");
+        m_bDirectionalParticles = (CompareWords(trueStr, dirPart) != 0);
 
-    // `particles_directional` attr
-    const char* dirPart = smi.Attribute("particles_directional");
-    m_bDirectionalParticles = (CompareWords(trueStr, dirPart) != 0);
+        // `particles` attr — stored verbatim; SetModColours looks up by StringHash
+        const char* particles = smi.Attribute("particles");
+        if (particles != nullptr && particles[0] != '\0') {
+            free(m_pParticlePath);
+            m_pParticlePath = strdup(particles);
+        }
 
-    // `particles` attr — stored verbatim; SetModColours looks up by StringHash
-    const char* particles = smi.Attribute("particles");
-    if (particles != nullptr && particles[0] != '\0') {
-        free(m_pParticlePath);
-        m_pParticlePath = strdup(particles);
-    }
+        // `contact_particles` attr
+        const char* contactPart = smi.Attribute("contact_particles");
+        CloneString(&m_pContactParticle, contactPart);
 
-    // `contact_particles` attr
-    const char* contactPart = smi.Attribute("contact_particles");
-    CloneString(&m_pContactParticle, contactPart);
+        // `release_particles` attr
+        const char* releasePart = smi.Attribute("release_particles");
+        CloneString(&m_pReleaseParticle, releasePart);
 
-    // `release_particles` attr
-    const char* releasePart = smi.Attribute("release_particles");
-    CloneString(&m_pReleaseParticle, releasePart);
+        // `slash_flash` attr
+        const char* slashFlash = smi.Attribute("slash_flash");
+        m_bSlashFlash = (CompareWords(trueStr, slashFlash) != 0);
 
-    // `slash_flash` attr
-    const char* slashFlash = smi.Attribute("slash_flash");
-    m_bSlashFlash = (CompareWords(trueStr, slashFlash) != 0);
+        // `flipForUpsideDown` attr
+        const char* flip = smi.Attribute("flipForUpsideDown");
+        m_bFlipForUpsideDown = (CompareWords(trueStr, flip) != 0);
 
-    // `flipForUpsideDown` attr
-    const char* flip = smi.Attribute("flipForUpsideDown");
-    m_bFlipForUpsideDown = (CompareWords(trueStr, flip) != 0);
+        // <scales> child element
+        TiXmlElement scales = smi.FirstChildElement("scales");
+        if (scales) {
+            scales.QueryFloatAttribute("start_thickness", &m_ScaleStartThickness);
+            scales.QueryFloatAttribute("end_thickness",   &m_ScaleEndThickness);
+            scales.QueryFloatAttribute("length",          &m_ScaleLength);
+            scales.QueryFloatAttribute("point_scale",     &m_ScalePointScale);
+            scales.QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
+        }
 
-    // <scales> child element
-    TiXmlElement scales = smi.FirstChildElement("scales");
-    if (scales) {
-        scales.QueryFloatAttribute("start_thickness", &m_ScaleStartThickness);
-        scales.QueryFloatAttribute("end_thickness",   &m_ScaleEndThickness);
-        scales.QueryFloatAttribute("length",          &m_ScaleLength);
-        scales.QueryFloatAttribute("point_scale",     &m_ScalePointScale);
-        scales.QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
-    }
-
-    // <colour>R,G,B</colour> children -> m_pColours array.
-    // Binary @ 0x001127ee-0x0011287a: counts <colour> children (storing to
-    // m_ColourCount each iteration), then allocates (count+2)*4 bytes with
-    // a header: [element_size=4, count], storing the data pointer at offset +8.
-    int count = 0;
-    TiXmlElement c = smi.FirstChildElement("colour");
-    while (c) {
-        count++;
-        m_ColourCount = count;
-        c = c.NextSiblingElement("colour");
-    }
-    count = m_ColourCount;
-    if (count > 0) {
-        // Allocate header + data: two ints (element_size, count) then Colour array
-        int* raw = (int*)malloc((count + 2) * 4);
-        raw[0] = 4;               // element size = sizeof(Colour)
-        raw[1] = count;           // element count
-        Colour* colourPtr = (Colour*)(raw + 2);
-        m_pColours = colourPtr;
-
-        c = smi.FirstChildElement("colour");
+        // <colour>R,G,B</colour> children -> m_pColours array.
+        // Binary @ 0x001127ee-0x0011287a: counts <colour> children (storing to
+        // m_ColourCount each iteration), then allocates (count+2)*4 bytes with
+        // a header: [element_size=4, count], storing the data pointer at offset +8.
+        int count = 0;
+        TiXmlElement c = smi.FirstChildElement("colour");
         while (c) {
-            const char* cval = c.GetText();
-            if (cval) ParseColour(*colourPtr, cval);
-            colourPtr++;
+            count++;
+            m_ColourCount = count;
             c = c.NextSiblingElement("colour");
+        }
+        count = m_ColourCount;
+        if (count > 0) {
+            // Allocate header + data: two ints (element_size, count) then Colour array
+            int* raw = (int*)malloc((count + 2) * 4);
+            raw[0] = 4;               // element size = sizeof(Colour)
+            raw[1] = count;           // element count
+            Colour* colourPtr = (Colour*)(raw + 2);
+            m_pColours = colourPtr;
+
+            c = smi.FirstChildElement("colour");
+            while (c) {
+                const char* cval = c.GetText();
+                if (cval) ParseColour(*colourPtr, cval);
+                colourPtr++;
+                c = c.NextSiblingElement("colour");
+            }
+        }
+
+        // Sound sections — binary calls SlashSoundMods::Parse for each child.
+        TiXmlElement swipeElem = smi.FirstChildElement("swipeSounds");
+        if (swipeElem) {
+            m_SwipeSounds.Parse(&swipeElem);
+            m_LoopingSound.Parse(&swipeElem);  // "loop" attr lives on the same element
+        }
+
+        TiXmlElement impactElem = smi.FirstChildElement("impactSounds");
+        if (impactElem) {
+            m_ImpactSounds.Parse(&impactElem);
+        }
+
+        TiXmlElement comboElem = smi.FirstChildElement("comboSounds");
+        if (comboElem) {
+            m_ComboSounds.Parse(&comboElem);
         }
     }
 
-    // Sound sections — binary calls SlashSoundMods::Parse for each child.
-    TiXmlElement swipeElem = smi.FirstChildElement("swipeSounds");
-    if (swipeElem) {
-        m_SwipeSounds.Parse(&swipeElem);
-        m_LoopingSound.Parse(&swipeElem);  // "loop" attr lives on the same element
-    }
-
-    TiXmlElement impactElem = smi.FirstChildElement("impactSounds");
-    if (impactElem) {
-        m_ImpactSounds.Parse(&impactElem);
-    }
-
-    TiXmlElement comboElem = smi.FirstChildElement("comboSounds");
-    if (comboElem) {
-        m_ComboSounds.Parse(&comboElem);
+    // ASM-spec v1.6.1 SlashModInfo::Parse @0x0013935c: default 1x opaque-black
+    // colour when no <colour> children were parsed (m_pColours still null).
+    // Binary allocates the same (count+2)*4-byte header+data block as the
+    // count>0 path above, with count=1, then default-constructs one Colour
+    // (opaque black: b=0,g=0,r=0,a=255) into the data slot.
+    if (m_pColours == nullptr) {
+        int* raw = (int*)malloc(3 * 4);
+        raw[0] = 4;  // element size = sizeof(Colour)
+        raw[1] = 1;  // element count
+        m_pColours = (Colour*)(raw + 2);
+        *m_pColours = Colour();  // opaque black (0,0,0,255)
+        m_ColourCount = 1;
     }
 }
 
