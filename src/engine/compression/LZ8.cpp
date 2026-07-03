@@ -4,13 +4,13 @@
 
 namespace Math {
 
-// Binary @ 0x00195154
+// v1.6.1 Math::GetUncompressedSizeLZ8 @0x00242644
 unsigned int GetUncompressedSizeLZ8(const void* src) {
     const unsigned char* p = (const unsigned char*)src;
     return (unsigned int)p[1] | ((unsigned int)p[2] << 8) | ((unsigned int)p[3] << 16);
 }
 
-// Binary @ 0x00195168 — LZSS (PSP/GBA style, magic 0x10)
+// v1.6.1 Math::UncompressLZ8 @0x00242660 — LZSS (PSP/GBA style, magic 0x10)
 // Header: byte[0]=0x10, byte[1..3]=uncompressed size (24-bit LE)
 // Each block: 1 flag byte (MSB first), then 8 tokens.
 //   flag bit=1 -> literal byte, copy to dst
@@ -42,9 +42,9 @@ void UncompressLZ8(const void* src, void* dst) {
     }
 }
 
-// Binary @ 0x0019500c — asset re-compression not needed at runtime
+// v1.6.1 Math::CompressLZ @0x00242420 — asset re-compression not needed at runtime
 unsigned int CompressLZ(const unsigned char* /*src*/, unsigned long /*size*/, unsigned char* /*dst*/) {
-    // Defunct: asset re-compression not needed at runtime; v1.6.1 binary @ 0x0019500c
+    // Defunct: asset re-compression not needed at runtime; v1.6.1 Math::CompressLZ @0x00242420
     return 0;
 }
 
