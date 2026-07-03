@@ -905,20 +905,6 @@ void Fruit::Draw(Renderer& r) {
 void Fruit::Deactivate() {
     // No Fruit-specific emitter cleanup needed here; emitters are cleared
     // by KillFruit before the entity is deactivated.
-
-    // DIFFERS: binary (v1.6.1 Fruit::Deactivate) does not clear the owner backref
-    // here; port mirrors KillFruit's owner-clear so a Fruit that deactivates
-    // without going through KillFruit still severs its link to a possibly-freed
-    // MenuButton, preventing a cross-heap use-after-free (freed MenuButton block
-    // reused by a ring Texture on wasm-32) that the binary's allocator tolerates.
-    // Completes the #348/#349 dangling-owner UAF family.
-    if (m_pOwner) {
-        MenuButton* owner = reinterpret_cast<MenuButton*>(m_pOwner);
-        if (owner->m_pTrackedFruit == this) {
-            owner->m_pTrackedFruit = nullptr;
-        }
-        m_pOwner = nullptr;
-    }
 }
 
 // Matches v1.6.1 Fruit::KillFruit @0x001deba8.
@@ -991,11 +977,6 @@ void Fruit::KillFruit(bool doMissPenalty) {
         if (owner->m_pTrackedFruit == this) {
             owner->m_pTrackedFruit = nullptr;
         }
-        // DIFFERS: binary (v1.6.1 Fruit::KillFruit @0x001deba8) does not null
-        // m_pOwner here; port does, to prevent a cross-heap use-after-free
-        // (freed MenuButton block reused by a ring Texture on wasm-32) that the
-        // binary's allocator tolerates. Same #348/#349 dangling-owner UAF
-        // family as Bomb::KillBomb/Release and Fruit::Deactivate above.
         m_pOwner = nullptr;
     }
     // 2. Decrement g_PowerFruitCount on natural-expiry path (flag 0x10 not yet set)
