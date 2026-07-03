@@ -149,6 +149,12 @@ private:
     int  QueAchievement(AchievementInfo* info,
                         std::map<uint32_t, AchievementInfo*>::iterator& it);
 
+public:
+    // Layout members kept public (matches BonusManager/WaveManager/ActorManager
+    // convention in this codebase) so the __bada__ offsetof asserts below can see
+    // them from namespace scope -- GCC 4.4.1 enforces access control on
+    // __builtin_offsetof, unlike some other offsetof() implementations.
+    //
     // Binary layout (v1.6.1 ctor @0x00117494): 12 std::map<uint32_t,AchievementInfo*>
     // (each 24 bytes, ARM32 Sourcery) at +0x000..+0x120, then a std::vector<uint32_t>
     // at +0x120. sizeof == 0x12c. (Prior comment cited stale v1.5.x ctor 0x00108930 +
