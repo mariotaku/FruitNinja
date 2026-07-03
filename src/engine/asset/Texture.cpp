@@ -73,13 +73,23 @@ Texture2D::~Texture2D() {
 namespace Mortar {
 namespace Bada {
 
-// Binary ctor @0x0022a7d8.
+// Port specific: no binary counterpart (used by the UploadTex1ToGL DIFFERS load path).
 Texture2D_Bada::Texture2D_Bada()
     : m_PrimType(0)
     , m_TexId(0)
     , m_Pad5c(0)
     , m_Source()
 {
+}
+
+// Binary ctor @0x0022a7d8.
+Texture2D_Bada::Texture2D_Bada(const Mortar::SmartPtr<TextureSource>& src, unsigned long param2)
+    : m_PrimType(0)
+    , m_TexId(0)
+    , m_Pad5c(0)
+    , m_Source()
+{
+    SetSource(src, param2);
 }
 
 // Binary dtor @0x00229b8c (in-place).
@@ -234,10 +244,9 @@ void Texture2D_Bada::Cache() {
 }
 
 // SetSource @0x0022a7a8.
-void Texture2D_Bada::SetSource(Mortar::SmartPtr<TextureSource> src, unsigned int primType) {
+void Texture2D_Bada::SetSource(const Mortar::SmartPtr<TextureSource>& src, unsigned long /*param2*/) {
     ReleaseCache();
-    m_Source   = src;
-    m_PrimType = primType;
+    m_Source = src;
     Cache();
 }
 
@@ -328,7 +337,7 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
 
 // Texture2D::Load @0x0022a854.
 // Binary flow: src null -> null SmartPtr; else operator new(100) -> Texture2D_Bada ctor
-//   -> SetSource(src,primType).
+//   -> SetSource(src,param2).
 // Port: we don't have a TextureSource at Load(path) time, so we create the Texture2D_Bada
 // and call Cache() directly after parsing the Tex1 data.
 // DIFFERS: binary calls SetSource which calls Cache(); port calls UploadTex1ToGL inline
