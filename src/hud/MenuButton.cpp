@@ -160,24 +160,17 @@ MenuButton::MenuButton()
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
 }
 
-MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
-                       Mortar::Delegate0<void>* onTap,
-                       int fruitType, Vec3* restPos,
-                       Mortar::Delegate1<void, HUDControl*>* onRemove)
+MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
+                       Mortar::Delegate0<void> clickCb,
+                       int fruitType, Vec3 hitBounds,
+                       Mortar::Delegate0<void> deletedCb)
     // Port specific: ARM32 heap may be zero-initialized by Bada's operator new;
     // x64 heap is not. Initialize label pointers to null so MenuButton::Draw's
     // m_pLabelFg != nullptr guard doesn't read garbage.
     : m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
 {
-    if (tex) m_Texture = *tex;
-    Init(*spawnPos,
-         onTap ? *onTap : Mortar::Delegate0<void>(),
-         fruitType,
-         restPos ? *restPos : Vec3(0.0f, 0.0f, 0.0f),
-         Mortar::Delegate0<void>());
-    if (onRemove) {
-        m_RemoveCallback = *onRemove;
-    }
+    m_Texture = tex;
+    Init(spawnPos, clickCb, fruitType, hitBounds, deletedCb);
 }
 
 // ASM-spec v1.6.1 MenuButton::~MenuButton D0 @0x0019d130 / D1 @0x0019d1dc: both
