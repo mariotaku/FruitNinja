@@ -192,12 +192,12 @@ void SliderControl::SetText(const char* str) {
 
 // ---------------------------------------------------------------------------
 // Private non-virtual helper called by Update while touch is held.
-// Binary @ 0x0015ffb0 (~80 instructions)
+// v1.6.1 SliderControl::UpdateTouchPosition @0x001b713c (~80 instructions)
 // Maps live touch position (from g_TouchTable[m_TouchId].pos) into
 // m_CurrentValue in [m_MinValue, m_MaxValue]. Fires m_OnValueChanged
 // when m_CurrentValue changes. Quirk: value mapping is ratio*(min+max)/2
 // which is only correct when min==0.
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffb0
+// Defunct: SliderControl -- no-op stub; v1.6.1 SliderControl::UpdateTouchPosition @0x001b713c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::UpdateTouchPosition() {

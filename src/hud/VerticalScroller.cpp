@@ -141,9 +141,9 @@ void VerticalScroller::SetPosition(float x, float y) {
 
 // ---------------------------------------------------------------------------
 // Private non-virtual helper called by Update while touch is held.
-// Binary @ 0x00167E70 (~80 instructions)
+// v1.6.1 VerticalScroller::UpdateTouchPosition @0x001c8e10 (~80 instructions)
 // Drag-mode: reads live touch position -> maps touch.y into [m_MinValue, m_MaxValue].
-// Defunct: VerticalScroller -- no-op stub; v1.6.1 binary @ 0x00167E70
+// Defunct: VerticalScroller -- no-op stub; v1.6.1 VerticalScroller::UpdateTouchPosition @0x001c8e10
 void VerticalScroller::UpdateTouchPosition() {
     // Stub: binary reads touch slot via GOT[+0x7990] (touch table, 12-byte stride),
     // stores into m_LastTouchPos, then (if m_State==3) maps touch.y into m_CurrentValue.
