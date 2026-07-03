@@ -107,7 +107,13 @@ void Game::Init(int argc, char** argv) {
     (void)argc; (void)argv;
     GamePreInitialise();
     game_work.languageFlag = 0;         // g_GameData[3] = 0
-    SetHardware("BADA", false);
+    // v1.6.1 Game::Init @0x0010dbe4: Bada Wave (S8500, Cortex-A8 + SGX540) is
+    // fast hardware -> MortarGame::m_bFastHardware (+0xF4) is true at runtime.
+    // Game::RenderAtHalfFrames @0x001207f0's slow/half-frame path only trips on
+    // iPhone-1G/3G-class device strings, never "BADA". Gates: Fruit::Update's
+    // fruit_flight flight-trail fallback (Fruit.cpp:501), SuperFruitControl jib
+    // count (25 vs 10), FruitInfo fruit_shadow load, ScreenEffect fast/slow filters.
+    SetHardware("BADA", true);
     GameInitialise(nullptr, nullptr);
     m_bLanguageSet = 1;
 }
