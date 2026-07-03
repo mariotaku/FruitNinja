@@ -71,21 +71,13 @@ public:
     // SaveItemInfo @ v1.6.1 0x00138610 — write ItemSave.xml
     void SaveItemInfo();
 
-    // GetFirst / GetNext @ 0x0015fbc8 / 0x0015fbf4 — iteration over m_Items
-    ItemInfo* GetFirst(int& it) const;
-    ItemInfo* GetNext(int& it) const;
+    // GetFirst / GetNext @ v1.6.1 ItemManager::GetFirst @0x001b6bc8 / GetNext @0x001b6c08
+    // — iteration over m_Items via vector iterator (caller owns the iterator storage).
+    ItemInfo* GetFirst(std::vector<ItemInfo*>::iterator& it);
+    ItemInfo* GetNext(std::vector<ItemInfo*>::iterator& it);
 
     // Access equipped item slot (helper for ShopScreen)
     ItemInfo* GetEquipped(int type) const;
-
-    // --- Port helpers for ShopScreen (not in binary public API) --------
-    // Returns total item count.
-    int GetNumItems() const { return (int)m_Items.size(); }
-    // Returns item at index (by position in m_Items vector).
-    ItemInfo* GetItemAt(int index) const {
-        if (index < 0 || (size_t)index >= m_Items.size()) return nullptr;
-        return m_Items[index];
-    }
 
     // +0x00..+0x0f: default (equipped) item per type (binary: m_DefaultItems[4])
     // [0]=BLADE [1]=BACKGROUND [2]=UPSELL [3]=REMOVEADS (always null)

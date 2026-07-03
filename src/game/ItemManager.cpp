@@ -381,26 +381,22 @@ bool ItemManager::UnlockItem(uint32_t hash) {
 }
 
 // -----------------------------------------------------------------------
-// GetFirst @ 0x0015fbc8 — begin iteration over m_Items
-// it = 0 on entry; returns item at m_Items[0] or nullptr
+// ASM-spec v1.6.1 ItemManager::GetFirst @ 0x001b6bc8 — begin iteration over m_Items
+// it = m_Items.begin(); returns *it or nullptr if empty
 // -----------------------------------------------------------------------
-// DIFFERS: original = vector::iterator& (4 bytes); port uses int& index (4 bytes,
-//          functionally equivalent — both are 4-byte references walked over m_Items).
-ItemInfo* ItemManager::GetFirst(int& it) const {
-    it = 0;
-    if (m_Items.empty()) return nullptr;
-    return m_Items[0];
+ItemInfo* ItemManager::GetFirst(std::vector<ItemInfo*>::iterator& it) {
+    it = m_Items.begin();
+    if (it == m_Items.end()) return nullptr;
+    return *it;
 }
 
 // -----------------------------------------------------------------------
-// GetNext @ 0x0015fbf4 — advance + return next item
+// ASM-spec v1.6.1 ItemManager::GetNext @ 0x001b6c08 — advance + return next item
 // -----------------------------------------------------------------------
-// DIFFERS: original = vector::iterator& (4 bytes); port uses int& index (4 bytes,
-//          functionally equivalent — both are 4-byte references walked over m_Items).
-ItemInfo* ItemManager::GetNext(int& it) const {
-    it++;
-    if (it < 0 || (size_t)it >= m_Items.size()) return nullptr;
-    return m_Items[it];
+ItemInfo* ItemManager::GetNext(std::vector<ItemInfo*>::iterator& it) {
+    ++it;
+    if (it == m_Items.end()) return nullptr;
+    return *it;
 }
 
 // -----------------------------------------------------------------------
