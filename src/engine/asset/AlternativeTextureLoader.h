@@ -40,7 +40,9 @@ struct SubstituteApparentSizeTextureSourceData : public TextureSourceData {
     uint16_t m_apparentH;
 
     // Binary ctor @0x00226524: AutoLock inner, copy DataInfo, override w/h.
-    SubstituteApparentSizeTextureSourceData(TextureSource* inner,
+    // ASM-spec v1.6.1 SubstituteApparentSizeTextureSourceData::ctor @0x00226524:
+    // (SmartPtr<TextureSource> const&, ulong, ulong).
+    SubstituteApparentSizeTextureSourceData(const SmartPtr<TextureSource>& inner,
                                             unsigned long apparentW,
                                             unsigned long apparentH);
 };
@@ -50,10 +52,12 @@ struct SubstituteApparentSizeTextureSourceData : public TextureSourceData {
 // Binary: operator new(0x28).
 // Layout (0x28 bytes):
 //   +0x00  0x1c  TextureSource base
-//   +0x1c  4     TextureSource* m_DataSource         (SetSource: real pixels)
-//   +0x20  4     TextureSource* m_ApparentSizeSource (SetApparentSize: W/H)
+//   +0x1c  4     SmartPtr<TextureSource> m_DataSource         (SetSource: real pixels)
+//   +0x20  4     SmartPtr<TextureSource> m_ApparentSizeSource (SetApparentSize: W/H)
 //   +0x24  2     u16 m_ApparentW
 //   +0x26  2     u16 m_ApparentH
+// SmartPtr<T> is a single 4-byte T* (see util/SmartPtr.h), so these offsets/size
+// are identical to the previous raw-pointer layout; only ownership semantics change.
 //
 // Ctors:
 //   default @0x002259 3c  -- all null
@@ -93,10 +97,10 @@ public:
     void SetApparentSize(uint16_t w, uint16_t h);
 
     // --- Binary-faithful field layout ---
-    TextureSource* m_DataSource;         // +0x1c
-    TextureSource* m_ApparentSizeSource; // +0x20
-    uint16_t       m_ApparentW;          // +0x24
-    uint16_t       m_ApparentH;          // +0x26
+    SmartPtr<TextureSource> m_DataSource;         // +0x1c
+    SmartPtr<TextureSource> m_ApparentSizeSource; // +0x20
+    uint16_t                m_ApparentW;          // +0x24
+    uint16_t                m_ApparentH;          // +0x26
 };
 
 #if defined(__bada__)

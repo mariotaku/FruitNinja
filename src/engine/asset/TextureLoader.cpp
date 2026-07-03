@@ -69,20 +69,19 @@ TextureSourceData* TextureLoader::LockLayers() {
     return m_LoadedData;
 }
 
-// Binary @0x00226e74 -- TextureLoader::UnlockLayers.
-// Body: decrement m_LockCount; on zero: File::Unload, delete File, delete Data.
+// ASM-spec v1.6.1 TextureLoader::UnlockLayers @0x00226e74:
+//  1. identity guard (arg IS checked), 2. plain --lockcount, 3. File released first, 4. then Data (virtual D0).
 void TextureLoader::UnlockLayers(TextureSourceData const* data) {
-    (void)data; // binary ignores the arg; m_LoadedData is the tracked pointer
-    if (m_LockCount > 0 && --m_LockCount == 0) {
-        if (m_LoadedData) {
-            delete m_LoadedData;
-            m_LoadedData = 0;
-        }
-        if (m_File) {
-            m_File->Unload();
-            delete m_File;
-            m_File = 0;
-        }
+    if (m_LoadedData != data) return;
+    if (--m_LockCount != 0) return;
+    if (m_File) {
+        m_File->Unload();
+        delete m_File;
+        m_File = 0;
+    }
+    if (m_LoadedData) {
+        delete m_LoadedData;
+        m_LoadedData = 0;
     }
 }
 
