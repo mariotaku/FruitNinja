@@ -44,7 +44,7 @@ public:
     // Nested class FruitSplosion : HUDControl3d (size 0xa4)
     // ctor @ 0x135620. Spawned per-fruit-slice; manages explody particle burst.
     // Binary fields (own, starting at HUDControl3d base 0x7c):
-    //   +0x7c: entity ptr (fruit param)
+    //   +0x7c: Fruit* (fruit param)
     //   +0x80: const DAT_135868
     //   +0x84: m_p0 (forceMin)
     //   +0x88: m_p1 (forceInc)
@@ -60,7 +60,7 @@ public:
     class FruitSplosion : public HUDControl3d {
     public:
         // Own fields (HUDControl3d base = 0x7c)
-        Mortar::Entity* m_pEntity;  // +0x7c
+        Fruit* m_pFruit;  // +0x7c
         float           m_Const80;  // +0x80: DAT_135868=0; timer accumulator (dt*wavedt)
         float           m_p0;       // +0x84: forceMin
         float           m_p1;       // +0x88: forceInc
@@ -71,17 +71,17 @@ public:
         FruitSplosion*  m_pChainHead; // +0x9c
         int             m_ChainCount; // +0xa0
 
-        // ctor(forceMin, forceInc, forceMax, radius, entity, typeIndex)
+        // ctor(fruit, forceMin, forceInc, forceMax, radius, typeIndex)
         // @ 0x135620
-        FruitSplosion(float p0, float p1, float p2, float p3,
-                      Mortar::Entity* entity, int typeIndex);
+        FruitSplosion(Fruit* fruit, float forceMin, float forceInc, float forceMax,
+                      float radius, int typeIndex);
         ~FruitSplosion() override;
 
         void Update(float dt) override;
         // RE-ported: 0x00134E00 — thunks to HUDControl3d::DrawOrder (no custom body).
         void DrawOrder(float* hudScaleRaw, int layerMask) override;
 
-        // Delegate target: called when tracked fruit is killed (nulls m_pEntity).
+        // Delegate target: called when tracked fruit is killed (nulls m_pFruit).
         // RE-ported: 0x00134DEC
         void FruitWasKilled(Fruit* fruit);
         // Delegate target: removal callback registered on chain head.
