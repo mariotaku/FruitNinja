@@ -556,6 +556,28 @@ fn_add_game_test(test_gamemode_destructor test_gamemode_destructor.cpp)
 add_test(NAME gamemode_destructor COMMAND test_gamemode_destructor)
 set_tests_properties(gamemode_destructor PROPERTIES TIMEOUT 60)
 
+# MainScreen -> GameModeScreen transition ASAN driver ("slicing NEW GAME").
+# Fires the REAL MenuButton::Update slice gate on the NEW GAME ring's tracked
+# fruit (m_bSliced + diverging vel/m_SecondVel), then steps the frame loop one
+# frame at a time through GameModeCallback -> STATE_MODE_SELECT ->
+# GameModeScreen construction + HUD insertion, so the transition's crash
+# window (a WEB/wasm32 UAF the native host build otherwise tolerates
+# silently) is exercised under ASAN (build/asan) on every frame.
+fn_add_game_test(test_mainscreen_to_gamemode test_mainscreen_to_gamemode.cpp)
+add_test(NAME mainscreen_to_gamemode COMMAND test_mainscreen_to_gamemode)
+set_tests_properties(mainscreen_to_gamemode PROPERTIES TIMEOUT 60)
+
+# Arcade-round-then-GameModeScreen ASAN driver -- reproduces a UAF on the
+# SHARED red_ring texture (game_work.m_RingTex[16]) that only surfaces on the
+# SECOND GameModeScreen::CreateControls call (MainScreen -> GameModeScreen ->
+# Arcade -> GameOver -> menu -> GameModeScreen again). A fresh-boot single
+# transition (test_mainscreen_to_gamemode) does not exercise the prior
+# release/reacquire cycle on m_RingTex[16] across MainScreen/GameModeScreen/
+# GameOverScreen, so it passes even when this over-release bug is present.
+fn_add_game_test(test_arcade_then_gamemode test_arcade_then_gamemode.cpp)
+add_test(NAME arcade_then_gamemode COMMAND test_arcade_then_gamemode)
+set_tests_properties(arcade_then_gamemode PROPERTIES TIMEOUT 180)
+
 # Per-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn with
 # full pos/vel/gravity parameters plus per-wave spawner config so
 # divergences vs. binary expectations are readable line-by-line. Always
