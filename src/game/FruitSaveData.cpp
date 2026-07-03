@@ -380,7 +380,7 @@ std::string GetSavePath() {
 // (m_LastPlayedDay[gameMode] == GetDaysSince1900()) and the per-mode
 // "<MODE>_today" total is > 0.
 // Key format confirmed via GameOver.cpp AddToTotal site (0x00169f94).
-bool FruitSaveData::PlayedModeToday(int gameMode) {
+bool FruitSaveData::PlayedModeToday(Mortar::GameMode gameMode) {
     if (gameMode < 0 || gameMode >= 4) return false;
     if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
     char buf[68];

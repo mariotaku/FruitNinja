@@ -50,7 +50,8 @@ public:
     int IsEquipped(ItemInfo* item) const;
 
     // SetEquippedItem @ v1.6.1 0x00139b1c — sets slot + side effects
-    void SetEquippedItem(int type, ItemInfo* item);
+    // ASM-spec v1.6.1 ItemManager::SetEquippedItem @0x00139b1c: 1st param is ItemType (enum), not int.
+    void SetEquippedItem(ItemType type, ItemInfo* item);
 
     // BuyItem @ v1.6.1 0x001389c4 — deducts coins, marks item purchased
     // Returns 1 on success, 0 if item not found or insufficient coins

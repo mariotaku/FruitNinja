@@ -66,8 +66,11 @@ struct GlyphAtlasEntry {
 
 class FontInterface {
 public:
-    // atlasSize: dimension of each square atlas page (must be power-of-two).
-    explicit FontInterface(int atlasSize = 512);
+    // ASM-spec v1.6.1 Mortar::FontInterface::FontInterface @0x002502e0: no-arg ctor
+    // (decompile confirms param_count=1, i.e. only `this` -- no atlasSize parameter in
+    // the binary). Atlas page dimension is fixed at 512 internally (port DIFFERS: binary
+    // uses 256x256 TextureAtlas pages -- see file header note above).
+    FontInterface();
     ~FontInterface();
 
     // Mirrors binary Initialize @ 0x00250470: sets fontScale/invFontScale/globalSizeScale.

@@ -188,7 +188,7 @@ void ItemManager::LoadItemData() {
     // UPSELL slot doesn't short-circuit via funcCalls guard.
     m_DefaultItems[2] = nullptr;
     for (int i = 0; i < 4; i++) {
-        SetEquippedItem(i, m_DefaultItems[i]);
+        SetEquippedItem((ItemType)i, m_DefaultItems[i]);
     }
 }
 
@@ -206,7 +206,7 @@ int ItemManager::IsEquipped(ItemInfo* item) const {
 // struct field or file-scope global. It is never reset by LoadItemData;
 // LoadItemData instead zeroes m_DefaultItems[2] before calling the loop.
 // -----------------------------------------------------------------------
-void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
+void ItemManager::SetEquippedItem(ItemType type, ItemInfo* item) {
     static int funcCalls = 0;
 
     if (type == ITEM_TYPE_BACKGROUND) {
@@ -426,7 +426,7 @@ int ItemManager::EquipItem(unsigned int hash) {
     if (current != nullptr) {
         current->UnEquip();
     }
-    SetEquippedItem((int)(int8_t)item->m_Type, item);
+    SetEquippedItem((ItemType)(int8_t)item->m_Type, item);
     return 1;
 }
 
@@ -441,7 +441,7 @@ bool ItemManager::UnequipItem(unsigned long hash) {
     if (it == m_ByHash.end()) return false;
     ItemInfo* item = it->second;
     item->UnEquip();
-    SetEquippedItem((int)(int8_t)item->m_Type, nullptr);
+    SetEquippedItem((ItemType)(int8_t)item->m_Type, nullptr);
     return true;
 }
 

@@ -81,7 +81,8 @@ public:
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
     // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
-    void SetIsChallenge(int challengeId, void* data);
+    // ASM-spec v1.6.1 GameModeScreen::SetIsChallenge @0x0013df84: 2nd param is int, not void*.
+    void SetIsChallenge(int challengeId, int data);
 
     static void LoadContent();    // 0x13e330
     static void UnLoadContent();  // 0x13e5a8
@@ -106,7 +107,7 @@ public:
     //   +0xb9  m_bChallenge       (= 0; set by SetIsChallenge)
     //   +0xba..+0xbb  2-byte pad
     //   +0xbc  m_ChallengeId      (= 0)
-    //   +0xc0  m_pChallengeData   (= NULL)
+    //   +0xc0  m_pChallengeData   (int; = 0)
     //   +0xc4  m_LayerFlagsAlt    (0x80; int32)
     //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
     //   +0xcc  m_pArcadeButton    (arcade_mode.tex, banana)
@@ -127,7 +128,7 @@ public:
     uint8_t m_bChallenge;            // +0xb9: set by SetIsChallenge
     uint8_t _pad_0xba[2];            // +0xba: 2-byte alignment pad to bring m_ChallengeId to 0xbc
     int     m_ChallengeId;           // +0xbc: challenge invite id
-    void*   m_pChallengeData;        // +0xc0: challenge data ptr
+    int     m_pChallengeData;        // +0xc0: challenge data (int, not ptr -- SetIsChallenge's 2nd param is int)
     int     m_LayerFlagsAlt;         // +0xc4: = 0x80
     float   m_FrameTimer;            // +0xc8: drives DrawConnectTexture animation
     MenuButton* m_pArcadeButton;     // +0xcc: arcade_mode.tex, banana, ArcadeModeCallback

@@ -85,7 +85,7 @@ void SlashModifier::RemoveModifier() {
         if (--ItemManager::EquippedSlashModCount <= 0) {
             ItemManager* mgr = ItemManager::GetInstance();
             ItemInfo* def = *reinterpret_cast<ItemInfo**>(mgr);  // first field
-            mgr->SetEquippedItem(0, def);
+            mgr->SetEquippedItem(ITEM_TYPE_BLADE, def);
         }
     }
 }
