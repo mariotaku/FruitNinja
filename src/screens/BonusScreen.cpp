@@ -231,7 +231,7 @@ void BonusScreen::BuildBonusText() {
                 13.0f,   // label font: 13px for ALL rows
                 220.0f,  // 0xDC
                 10.0f,
-                0x01,    // LEFT
+                (Mortar::ALIGNMENT_TYPE)0x01,    // LEFT
                 0,       // maxLines
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(13+0) = 13px)
             );
@@ -251,7 +251,7 @@ void BonusScreen::BuildBonusText() {
                 16.0f,   // value font: 16px for ALL rows
                 60.0f,   // 0x3C
                 10.0f,
-                0x0F,    // center-H + center-V (binary @0x162324)
+                (Mortar::ALIGNMENT_TYPE)0x0F,    // center-H + center-V (binary @0x162324)
                 0,
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
             );
@@ -273,7 +273,7 @@ void BonusScreen::BuildBonusText() {
             30.0f,
             220.0f,  // 0xDC
             30.0f,   // 0x1E
-            0x0F,
+            (Mortar::ALIGNMENT_TYPE)0x0F,
             0,
             0        // lineSpacing (binary 7th arg = 0; step = (int)(30+0) = 30px)
         );
@@ -309,7 +309,7 @@ void BonusScreen::BuildBonusText() {
             20.0f,
             90.0f,   // 0x5A
             20.0f,   // 0x14
-            0x0F,
+            (Mortar::ALIGNMENT_TYPE)0x0F,
             0,
             0        // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
         );

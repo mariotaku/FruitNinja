@@ -61,7 +61,7 @@ IngamePopup::IngamePopup(int type)
             20.0f,        // pointSize
             0x40,         // boxW = 64
             0x2c,         // boxH = 44
-            0x0d,         // align = centred+fit
+            (Mortar::ALIGNMENT_TYPE)0x0d,         // align = centred+fit
             0,            // maxLines (0 = binary default, no shrink)
             0             // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
         );
@@ -92,7 +92,7 @@ IngamePopup::IngamePopup(int type)
             16.0f,        // pointSize
             0x2c,         // boxW = 44
             0x0e,         // boxH = 14
-            0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
+            (Mortar::ALIGNMENT_TYPE)0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
             1,            // maxLines = 1 (binary arg6)
             0             // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
         );
@@ -140,7 +140,7 @@ IngamePopup::IngamePopup(int type)
             17.0f,        // pointSize
             0x76,         // boxW = 118
             0x12,         // boxH = 18
-            0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
+            (Mortar::ALIGNMENT_TYPE)0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
             1,            // maxLines = 1 (binary arg6)
             0             // lineSpacing (binary 7th arg = 0; step = (int)(17+0) = 17px)
         );

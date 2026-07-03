@@ -365,7 +365,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     {
         Mortar::FontCacheObjectTTF* font = GetGameOverTTFFont();
         if (font) {
-            m_pTitleString = new Mortar::BakedStringBox(font, 56.0f, 450, 40, 0xf, 1, 0);
+            m_pTitleString = new Mortar::BakedStringBox(font, 56.0f, 450, 40, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
 
             // 6. SetShadow
             // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90

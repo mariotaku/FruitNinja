@@ -116,7 +116,7 @@ void BSButton::Init() {
         10.0f,    // fontSize
         0x50,     // width  = 80
         0x28,     // height = 40
-        0xf,      // align flags
+        (Mortar::ALIGNMENT_TYPE)0xf,      // align flags
         1,        // maxLines
         3         // lineSpacing (binary 7th arg = 3; step = (int)(10+3) = 13px)
     );

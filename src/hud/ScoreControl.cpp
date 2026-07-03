@@ -140,7 +140,7 @@ ScoreControl::ScoreControl()
     Mortar::FontCacheObjectTTF* font = GetScoreControlTTFFont();
     if (font) {
         m_pScoreBox = new Mortar::BakedStringBox(
-            font, 30.0f, (float)0x8C, (float)0x1E, 0xf, 1, 0.0f);
+            font, 30.0f, (float)0x8C, (float)0x1E, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0.0f);
         m_pScoreBox->SetGradient(
             Colour(0xFF, 0xFC, 0x5A, 255),
             Colour(0xE7, 0x83, 0x08, 255),
@@ -574,7 +574,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 if (!m_pStringBox100) {
                     Mortar::FontCacheObjectTTF* font = GetScoreControlTTFFont();
                     if (font) {
-                        m_pStringBox100 = new Mortar::BakedStringBox(font, 12.0f, 100, 20, 0xd, 1, 0);
+                        m_pStringBox100 = new Mortar::BakedStringBox(font, 12.0f, 100, 20, (Mortar::ALIGNMENT_TYPE)0xd, 1, 0);
                         m_pStringBox100->SetHorizontalLineSpacing(-1);
                     }
                 }

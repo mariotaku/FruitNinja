@@ -147,7 +147,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
                 12.0f,       // fontSize (binary s0=0x41400000=12.0f)
                 148,         // boxW     (binary r2=0x94=148)
                 14,          // boxH     (binary r3=0xe=14)
-                0xf,         // align    (binary sp+0=15)
+                (Mortar::ALIGNMENT_TYPE)0xf,         // align    (binary sp+0=15)
                 1,           // maxLines (binary sp+4=1)
                 3            // lineSpacing (binary sp+8=3; step = (int)(12+3) = 15px)
             );
@@ -198,7 +198,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
                 10.0f,       // fontSize (binary s0=0x41200000=10.0f)
                 130,         // boxW     (binary r2=0x82=130)
                 120,         // boxH     (binary r3=0x78=120)
-                0xf,         // align    (binary sp+0=15)
+                (Mortar::ALIGNMENT_TYPE)0xf,         // align    (binary sp+0=15)
                 9,           // maxLines (binary sp+4=9)
                 3            // lineSpacing (binary sp+8=3; step = (int)(10+3) = 13px)
             );

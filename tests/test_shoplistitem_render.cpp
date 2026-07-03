@@ -148,7 +148,7 @@ static void DrawPass(
 
         for (int i = 0; i < kNumRows; ++i) {
             // align=0x0f: H-center (bits 0-1=3) + V-center (bits 2-3=3); flag=1 centers on pos.
-            Mortar::BakedStringBox lbl(verdanaFont, fontSize, boxW, boxH, 0x0f, 1, 0);
+            Mortar::BakedStringBox lbl(verdanaFont, fontSize, boxW, boxH, (Mortar::ALIGNMENT_TYPE)0x0f, 1, 0);
             lbl.SetText(kRowCaptions[i]);
             lbl.SetColour(Colour(200, 200, 200, 255), 0);
             Vec3 captionPos(captionCX, kRowY[i], 0.0f);

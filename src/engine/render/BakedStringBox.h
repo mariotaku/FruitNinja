@@ -28,6 +28,7 @@
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "core/MortarTypes.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -63,7 +64,7 @@ public:
     //   width       : wrap box width  (int in binary, field +0x24; stored as int)
     //   height      : max box height  (int in binary, field +0x28; stored as int)
     //   align       : alignment flags (e.g. 0x0f = centre-H+centre-V; bits 0-1: 3=centre-H, 2=right, 0/1=left; bits 2-3: 0xc=centre-V)
-    //                 binary type is ALIGNMENT_TYPE enum; port uses int (same underlying value).
+    //                 binary type is ALIGNMENT_TYPE enum (1 byte, -fshort-enums); port matches.
     //   maxLines    : binary arg6; stored as m_MaxLines; FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
     //   lineSpacing : extra leading stored at m_LineSpacing; step = (int)(fontSize + lineSpacing)
     //                 Typical values: 0 (no extra gap), 3 (+3px/line), 5, 7.
@@ -72,7 +73,7 @@ public:
                    float fontSize,
                    int width,
                    int height,
-                   int align,
+                   ALIGNMENT_TYPE align,
                    int maxLines,
                    int lineSpacing);
     ~BakedStringBox();
@@ -238,7 +239,7 @@ private:
     int     m_BoxWidth;            // +0x24 (int in binary; was float)
     int     m_BoxHeight;           // +0x28 (int in binary; was float)
     int     m_MaxLines;            // +0x2c FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
-    int     m_Align;               // +0x30 alignment flags; 1B enum in binary, stored as int
+    ALIGNMENT_TYPE m_Align;        // +0x30 alignment flags; 1B enum in binary (matches, -fshort-enums)
     char*   m_Text;                // +0x34 strdup'd string; null until SetText called
     Vec3    m_Pos;                 // +0x38 (12B)
     int     m_AlignMode;           // +0x44 written by SetHorizontalLineSpacing; -1 = auto

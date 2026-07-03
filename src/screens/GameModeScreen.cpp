@@ -213,7 +213,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         // multi-line step = (int)(fontSize+lineSpacing) = (int)(12+6) = 18px. The port
         // previously passed maxLines=3/lineSpacing=0 -> step 12px (6px too tight = crammed).
         Mortar::BakedStringBox* tbox = new Mortar::BakedStringBox(
-            font, 12.0f, 73, 53, 0xf, 4, 6);
+            font, 12.0f, 73, 53, (Mortar::ALIGNMENT_TYPE)0xf, 4, 6);
         {
             const char* s0 = GETSTRING_CAST_0((LocalizedString)0x3be); // "NO BOMBS!"
             const char* s1 = GETSTRING_CAST_0((LocalizedString)0x3bf); // "NO LIVES!"
@@ -232,7 +232,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         // m_pDescBox: single-line "MODE SELECT"
         // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
         Mortar::BakedStringBox* dbox = new Mortar::BakedStringBox(
-            font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
+            font, 22.0f, 200.0f, 22.0f, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0.0f);
         dbox->SetText(GETSTRING_CAST_0((LocalizedString)0x3ba)); // "MODE SELECT"
         // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
         // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
@@ -249,7 +249,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
         // m_pInfoBox: single-line "MULTIPLAYER"
         // fontSize=22, w=200, h=22, align=0xf, maxLines=1, lineSpacing=0
         Mortar::BakedStringBox* ibox = new Mortar::BakedStringBox(
-            font, 22.0f, 200.0f, 22.0f, 0xf, 1, 0.0f);
+            font, 22.0f, 200.0f, 22.0f, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0.0f);
         ibox->SetText(GETSTRING_CAST_0((LocalizedString)0x39f)); // "MULTIPLAYER"
         // Binary SetMetallicGradient @0x002458e0 (4-stop metallic, m_ColourMode=4).
         // Port: renders 2-stop top/bottom via SetMetallicGradient; full 4-stop pending.
