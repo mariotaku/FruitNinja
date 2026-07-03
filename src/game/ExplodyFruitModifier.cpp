@@ -27,15 +27,15 @@ static ExplodyFruitModifier::FruitSplosion* s_pChainHead = nullptr;
 
 // ctor @ 0x135620
 ExplodyFruitModifier::FruitSplosion::FruitSplosion(
-    float p0, float p1, float p2, float p3,
-    Mortar::Entity* entity, int typeIndex)
+    Fruit* fruit, float forceMin, float forceInc, float forceMax,
+    float radius, int typeIndex)
     : HUDControl3d()
-    , m_pEntity(entity)
+    , m_pFruit(fruit)
     , m_Const80(0)
-    , m_p0(p0)
-    , m_p1(p1)
-    , m_p2(p2)
-    , m_p3(p3)
+    , m_p0(forceMin)
+    , m_p1(forceInc)
+    , m_p2(forceMax)
+    , m_p3(radius)
     , m_typeIndex(typeIndex)
     , m_pChainNext(nullptr)
     , m_pChainHead(nullptr)
@@ -43,15 +43,14 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
 {
     // ASM @ 0x00135620 (disasm 0x135654..0x135824).
     // HUDControl3d() base ctor already ran (member-init list). The scalar fields
-    // m_p0..m_p3 (+0x84..+0x90), m_Const80 (+0x80 = DAT_00135868 = 0), m_pEntity
+    // m_p0..m_p3 (+0x84..+0x90), m_Const80 (+0x80 = DAT_00135868 = 0), m_pFruit
     // (+0x7c), m_typeIndex (+0x94), m_pChainNext/m_pChainHead (+0x98/+0x9c = 0)
     // are set by the init list above, matching the binary's stores.
 
-    // +0x08 m_Pos = entity pos (binary loads entity+0x10..0x18 via ldmia,
-    // stores to this+0x08..0x10). Mortar::Entity::pos is the Vec3 at +0x10.
-    if (m_pEntity) {
-        pos = m_pEntity->pos;
-    }
+    // +0x08 m_Pos = fruit pos (binary loads fruit+0x10..0x18 via ldmia,
+    // stores to this+0x08..0x10, unconditionally — no null-check on the fruit
+    // param). Mortar::Entity::pos is the Vec3 at +0x10.
+    pos = m_pFruit->pos;
     // +0x10 m_Pos.z overwritten with DAT_0013586c = 0xC59C3800f = -5000.0f
     // (binary: vstr s15,[r4,#0x10] right after the pos copy).
     pos.z = -5000.0f;
@@ -59,16 +58,17 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
     // +0x34 m_LayerFlags = 0x80 (binary: mov r3,#0x80; str r3,[r4,#0x34]).
     m_LayerFlags = 0x80;
 
-    // +0x74 m_Texture = LoadLocalisedTexture("explosion_radius.tex")
-    // (binary: r1 = GOT-rel string @ 0x00280d8c; bl LoadLocalisedTexture 0x0010a758;
-    //  result SmartPtr<Texture>::operator= into this+0x74).
-    m_Texture = Mortar::TextureManager::LoadLocalisedTexture("explosion_radius.tex");
-
     // RE-ported: 0x001356b8 — subscribe FruitWasKilled to the per-fruit kill event.
     // Binary: Delegate1<void,Fruit*>::Make(this,&FruitSplosion::FruitWasKilled)
-    // then Event1<Fruit*>::operator+= on (m_pEntity + 0x178).
-    static_cast<Fruit*>(m_pEntity)->m_OnKilled +=
+    // then Event1<Fruit*>::operator+= on (m_pFruit + 0x178).
+    m_pFruit->m_OnKilled +=
         Mortar::Delegate1<void, Fruit*>::Make(this, &FruitSplosion::FruitWasKilled);
+
+    // +0x74 m_Texture = LoadLocalisedTexture("explosion_radius.tex")
+    // (binary: r1 = GOT-rel string @ 0x00280d8c; bl LoadLocalisedTexture 0x0010a758;
+    //  result SmartPtr<Texture>::operator= into this+0x74). Binary loads this AFTER
+    // subscribing to m_OnKilled (see disasm order 0x1356b8 subscribe -> 0x1356?? texture).
+    m_Texture = Mortar::TextureManager::LoadLocalisedTexture("explosion_radius.tex");
 
     // RE-ported: 0x001356fc — chain into the file-static FruitSplosion combo list.
     if (s_pChainHead == nullptr) {
@@ -94,9 +94,9 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
 
 ExplodyFruitModifier::FruitSplosion::~FruitSplosion()
 {
-    // RE-ported: 0x134EC0/0x134F88 — unsubscribe kill-event only if entity still alive.
-    if (m_pEntity) {
-        static_cast<Fruit*>(m_pEntity)->m_OnKilled -=
+    // RE-ported: 0x134EC0/0x134F88 — unsubscribe kill-event only if fruit still alive.
+    if (m_pFruit) {
+        m_pFruit->m_OnKilled -=
             Mortar::Delegate1<void, Fruit*>::Make(this, &FruitSplosion::FruitWasKilled);
     }
 }
@@ -127,7 +127,7 @@ void ExplodyFruitModifier::FruitSplosion::Update(float dt)
              ent != nullptr;
              ent = am->GetEntityNext(0, it))
         {
-            if (ent == m_pEntity) continue;
+            if (ent == m_pFruit) continue;
             Fruit* fruit = static_cast<Fruit*>(ent);
             if (fruit->IsActive() && !fruit->Sliced()) {
                 Vec3 d = ent->pos - pos;
@@ -135,7 +135,7 @@ void ExplodyFruitModifier::FruitSplosion::Update(float dt)
                     d.Normalise();
                     d *= 10.0f;
                     s_pChainHead = this;
-                    ent->CollisionResponse(m_pEntity, 0, 0, nullptr);
+                    ent->CollisionResponse(m_pFruit, 0, 0, nullptr);
                     s_pChainHead = nullptr;
                 }
             }
@@ -172,8 +172,8 @@ void ExplodyFruitModifier::FruitSplosion::DrawOrder(
 // RE-ported: 0x00134DEC — null the back-reference when the tracked fruit dies.
 void ExplodyFruitModifier::FruitSplosion::FruitWasKilled(Fruit* fruit)
 {
-    if (m_pEntity == static_cast<Mortar::Entity*>(fruit))
-        m_pEntity = nullptr;
+    if (m_pFruit == fruit)
+        m_pFruit = nullptr;
 }
 
 // RE-ported: 0x00134E04 — removal callback for chain head; 'this' is the HEAD.
@@ -279,8 +279,8 @@ void ExplodyFruitModifier::FruitWasSliced(
     if (info->m_bIsSuperFruit != 0) return;   // FRUIT_INFO+0x330: super-fruit doesn't explode
 
     FruitSplosion* splosion = new FruitSplosion(
-        m_ForceMin, m_ForceInc, m_ForceMax, m_Radius,
-        fruit, (int)m_FruitTypeIndex);
+        fruit, m_ForceMin, m_ForceInc, m_ForceMax, m_Radius,
+        (int)m_FruitTypeIndex);
 
     game_work.mHud->AddControl(splosion, false);
 }
