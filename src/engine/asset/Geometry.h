@@ -124,13 +124,16 @@ public:
     virtual ~Geometry();
 
     // v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
-    // DIFFERS: (1) binary Render() takes NO params -- reads matrices from m_PropList via
-    //   EffectPropertyList::GetValue<Matrix44> (key hash 0x2a0798 = "WorldViewProjection")
-    //   and DisplayManager::m_ProjMatrix (field not mapped in port), then calls GLES1
-    //   glMatrixMode/glLoadMatrixf. Port passes a pre-computed WVP matrix (Mesh::Draw:185-188)
-    //   because m_PropList is NULL (BuildPropList defunct) and GLES1 matrix stack absent.
+    // DIFFERS: original = param-less Geometry::Render() (v1.6.1 @0x00264468) reads
+    //   "World"(0x2a07af) + "SceneCamera.View"(0x2a07b5) from m_PropList -> MODELVIEW, and
+    //   "SceneCamera.Projection"(0x2a0798) * DisplayManager::m_ProjMatrix -> PROJECTION (NOT a
+    //   WVP read -- Render never reads a combined WorldViewProjection key; Mesh::Draw @0x00272e98
+    //   writes WVP into the EffectGroup props but Render only consumes World/View/Projection),
+    //   then calls GLES1 glMatrixMode/glLoadMatrixf. Using precomputed Matrix44 const& mvp passed
+    //   from Mesh.cpp because the EffectProperty Matrix44 storage + BuildPropList child-list
+    //   (parent-chained to Mesh's EffectGroup props) + DisplayManager::m_ProjMatrix are not yet
+    //   revived (see task #374 -- too invasive to do as part of this fix, all 3D rendering at risk).
     //   Symbol will NOT pair in asm-verify (different mangled name) -- accepted DIFFERS.
-    //   TODO: v1.6.1 DisplayManager::m_ProjMatrix field unmapped.
     // DIFFERS: (2) port walks load-cached m_Vbo/m_Ibo/m_Layout instead of
     //   m_Binding->GetBindings()[idx].m_PassBindings (same GL calls, byte-equivalent output).
     //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
@@ -145,10 +148,12 @@ public:
     // Accessor for m_PropList (used by Fruit::LoadFruitModels for DiffuseMap property extraction).
     EffectPropertyList* GetPropList() const { return m_PropList; }
 
-    // v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c — 3-instruction wrapper; nameHash is cast to const char*
-    // for the binary's interned-string lookup (port's m_PropList is null while
-    // BuildPropList is defunct, so this always returns null in the current port).
-    EffectProperty* GetProperty(uint32_t nameHash);
+    // v1.6.1 Mortar::Geometry::GetProperty @0x0025ee7c -- return m_PropList ? m_PropList->GetProperty(name) : NULL;
+    // No hashing -- EffectPropertyList::GetProperty does a string compare against stored names
+    // (see SharedEffectProperties.cpp). Call sites pass literal property names, e.g. "DiffuseMap"
+    // (0x2843d1 is the rodata ADDRESS of that string literal in the binary, not a hash).
+    // Port's m_PropList is null while BuildPropList is defunct, so this always returns null.
+    EffectProperty* GetProperty(const char* name);
 
     // === port-only fields populated by MeshManager loader; appended after the
     //     binary fields so m_ActiveBindingIdx/m_Binding/m_PropList stay at

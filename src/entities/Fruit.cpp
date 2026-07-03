@@ -2085,7 +2085,8 @@ void DrawSlices(float dt, bool pass)
 //   3. For each fruit i:
 //      a. Load half-pieces 1/2, whole, outline from "models/Fruit/<name>_%c_..."
 //      b. File::Exists guard before single.mmd
-//      c. Per loaded model: SetupLighting + GetNode(0)->Geometry::GetProperty(0x2843d1)
+//      c. Per loaded model: SetupLighting + GetNode(0)->Geometry::GetProperty("DiffuseMap")
+//         (0x2843d1 = rodata address of the "DiffuseMap" string literal, not a hash)
 //      d. T_2044(effect, model) when whole valid AND FruitInfo[i]+0x330 (m_bIsSuperFruit) != 0
 //   4. Load slice_fx.mmd / slice_fx_crit.mmd into static globals
 //   5. Extract fruit atlas texture from s_fruitModels[0].m_pWholeEffect
@@ -2135,9 +2136,10 @@ void Fruit::LoadFruitModels() {
             // Binary @ 0x001e0a2c: SetupLighting(model)
             SetupLighting(model);
 
-            // ASM-spec v1.6.1 @ 0x001e0a50: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty(0x2843d1)
-            // 0x2843d1 = StringHash("DiffuseMap"). Stores the EffectProperty* into the
-            // FruitModelInfo EffectProperty slot for shared atlas-texture resolution.
+            // ASM-spec v1.6.1 @ 0x001e0a50: Model::GetNode(0)->GetGeometryEntry(0)->GetProperty("DiffuseMap")
+            // (0x2843d1 = rodata address of the "DiffuseMap" string literal, not a hash --
+            // Geometry::GetProperty does a plain string lookup). Stores the EffectProperty*
+            // into the FruitModelInfo EffectProperty slot for shared atlas-texture resolution.
             // Port: Geometry::GetProperty returns nullptr while BuildPropList is
             // defunct (m_PropList always null), so this currently always null.
             Mortar::EffectProperty* prop = nullptr;
@@ -2146,7 +2148,7 @@ void Fruit::LoadFruitModels() {
                 if (node0) {
                     Mortar::Geometry* geom = node0->GetGeometryEntry(0);
                     if (geom) {
-                        prop = geom->GetProperty(0x2843d1);
+                        prop = geom->GetProperty("DiffuseMap");
                     }
                 }
             }
@@ -2176,11 +2178,12 @@ void Fruit::LoadFruitModels() {
                 Mortar::EffectProperty* prop = nullptr;
                 {
                     Mortar::Mesh* node0 = wholeModel->GetNode(0UL).Get();
-                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
+                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty("DiffuseMap") (0x2843d1 = rodata
+                    // address of the string literal, not a hash)
                     if (node0) {
                         Mortar::Geometry* geom = node0->GetGeometryEntry(0);
                         if (geom) {
-                            prop = geom->GetProperty(0x2843d1);
+                            prop = geom->GetProperty("DiffuseMap");
                         }
                     }
                 }
@@ -2218,11 +2221,12 @@ void Fruit::LoadFruitModels() {
                 Mortar::EffectProperty* prop = nullptr;
                 {
                     Mortar::Mesh* node0 = outlineModel->GetNode(0UL).Get();
-                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty(0x2843d1) for DiffuseMap
+                    // ASM-spec v1.6.1 @ 0x001e0a50: GetProperty("DiffuseMap") (0x2843d1 = rodata
+                    // address of the string literal, not a hash)
                     if (node0) {
                         Mortar::Geometry* geom = node0->GetGeometryEntry(0);
                         if (geom) {
-                            prop = geom->GetProperty(0x2843d1);
+                            prop = geom->GetProperty("DiffuseMap");
                         }
                     }
                 }
