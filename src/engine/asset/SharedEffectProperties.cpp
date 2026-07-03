@@ -12,7 +12,7 @@ namespace Mortar {
 // alignment, concatenated in type-index order.  ArrayItem::m_Begin for each
 // bucket points into the buffer at the appropriate offset.
 EffectPropertyValues::EffectPropertyValues(
-        const unsigned long bucketSizes[EffectDataTypes::kNumTypes]) {
+        const unsigned long (&bucketSizes)[EffectDataTypes::kNumTypes]) {
     uint32_t total = 0;
     for (int i = 0; i < EffectDataTypes::kNumTypes; ++i) {
         unsigned long bytes = bucketSizes[i] * EffectDataTypes::s_TypeSize[i];

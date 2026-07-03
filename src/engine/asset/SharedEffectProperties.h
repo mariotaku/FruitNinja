@@ -86,7 +86,8 @@ public:
 
     // Ctor: takes per-bucket element counts; computes total bytes, allocates,
     // initialises ArrayItem pointers with correct alignment per s_TypeSize.
-    explicit EffectPropertyValues(const unsigned long bucketSizes[EffectDataTypes::kNumTypes]);
+    // ASM-spec v1.6.1 Mortar::EffectPropertyValues::EffectPropertyValues @0x0025d774 -> ValueBuffer @0x0025d730 (param is ref-to-array const ulong(&)[kNumTypes])
+    explicit EffectPropertyValues(const unsigned long (&bucketSizes)[EffectDataTypes::kNumTypes]);
     ~EffectPropertyValues();
 
     template<typename T>
