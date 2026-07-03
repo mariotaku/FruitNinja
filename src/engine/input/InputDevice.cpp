@@ -3,20 +3,29 @@
 
 namespace Mortar {
 
-// Binary @ 0x001b356c — InputActionMapper ctor.
-InputActionMapper::InputActionMapper()
+// v1.6.1 InputActionMapper::InputActionMapper @0x002756b0.
+// ev is a by-value template event: only its actionFlags/keycode/m_mapper
+// fields feed the filter, matching the binary reading its 3 relevant words
+// out of the by-value InputEvent (0x14 bytes -- see InputEvent.h).
+// DIFFERS: binary also stores bool m_Flag40(+0x40)=true; the port's
+// Delegate1 (36 bytes) overlays that byte position (see header DIFFERS),
+// so there's no separate field left to set it in.
+InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
+                                      unsigned long actionHash,
+                                      unsigned long configSourceHash)
     : m_Enabled(true)
-    , m_ActionHash(0)
-    , m_ConfigSourceHash(0)
-    , m_ActionMask(0)
-    , m_MatchValue(0)
-    , m_KeyMask(0)
+    , m_ActionHash(actionHash)
+    , m_ConfigSourceHash(configSourceHash)
+    , m_ActionMask(ev.actionFlags)
+    , m_MatchValue(ev.keycode << 16)
+    , m_KeyMask((uint32_t)(uintptr_t)ev.m_mapper)
     , m_Param4(0)
     , m_Param5(0)
+    , m_callback(cb)
 {
 }
 
-// Binary @ 0x001b3508 — ProcessEvent.
+// v1.6.1 InputActionMapper::ProcessEvent @0x00275728.
 // Filters the incoming event against this mapper's template and fires
 // m_callback(event) when it matches. Control flow ported 1:1 from the binary:
 //
@@ -33,7 +42,7 @@ InputActionMapper::InputActionMapper()
 //     default:        return;
 //   if (match) m_callback(event);
 //
-// DIFFERS: the binary reads a 12-byte InputEvent (combined action-word at +0x00,
+// DIFFERS: the binary reads a 0x14-byte InputEvent (combined action-word at +0x00,
 //   ushort keycode at +0x06, InputActionMapper* at +0x08). The port's InputEvent
 //   reinterprets those bytes into named fields. eventWord maps to actionFlags
 //   (carries the 0x10000/0x20000/0x80000 type bits), the +0x06 keycode maps to
@@ -100,7 +109,7 @@ void InputDevice::AxisEvent(long, unsigned long, float, float, unsigned long, lo
 // Binary @ 0x???? — ButtonPressed stub.
 void InputDevice::ButtonPressed(unsigned long, unsigned long, float, unsigned long, long) {}
 
-// Binary @ 0x001b36b0 — CheckActions: iterate m_ActionMappers list, call ProcessEvent.
+// v1.6.1 InputDevice::CheckActions @0x00275fc7. Iterate m_ActionMappers list, call ProcessEvent.
 void InputDevice::CheckActions(InputEvent* event) {
     for (std::list<InputActionMapper*>::iterator it = m_ActionMappers.begin();
          it != m_ActionMappers.end(); ++it) {
