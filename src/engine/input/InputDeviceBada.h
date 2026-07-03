@@ -10,7 +10,7 @@
 // sizeof = 28 (0x1c), from operator new(0x1c) @ InputManager::Init 0x00196cd4.
 // Layout:
 //   +0x00: vptr (port) / InputDevice base (binary fns*)
-//   +0x04: std::list<InputActionMapper*> actionMappers (8B, from InputDevice base)
+//   +0x04: std::list<InputActionMapper*> m_ActionMappers (8B, from InputDevice base)
 //   +0x0c: uint32_t m_ActiveTouchId (ctor-zero)
 //   +0x10: uint32_t m_LastTouchX    (ctor-zero)
 //   +0x14: uint32_t m_LastTouchY    (ctor-zero)

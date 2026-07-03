@@ -50,7 +50,7 @@ namespace Mortar {
 //   in binary) is overlaid by the port Delegate1's trailing m_bEmpty/pad bytes.
 //   InputActionMapper is only ever used through pointers so no ABI mismatch at
 //   call sites. Total sizeof matches: both binary and port = 0x44.
-// ActionMappers are held by pointer in InputDevice::actionMappers
+// ActionMappers are held by pointer in InputDevice::m_ActionMappers
 // (std::list<InputActionMapper*>). CheckActions iterates the list and calls
 // ProcessEvent per element.
 class InputActionMapper {
@@ -61,7 +61,7 @@ public:
     InputActionMapper();
 
     // TODO: v1.6.1 InputActionMapper::ProcessEvent — confirm v1.6.1 addr.
-    // Called by InputDevice::CheckActions per mapper in actionMappers list.
+    // Called by InputDevice::CheckActions per mapper in m_ActionMappers list.
     // Compares the incoming event against this mapper's filter template and
     // fires m_callback(event) on a match.
     void ProcessEvent(InputEvent* event);
@@ -124,14 +124,14 @@ public:
     void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
 
     // TODO: v1.6.1 InputDevice::CheckActions — confirm v1.6.1 addr (stale 0x001b36b0 was v1.5.x).
-    // Iterates actionMappers, calls ProcessEvent per element.
+    // Iterates m_ActionMappers, calls ProcessEvent per element.
     void CheckActions(InputEvent* event);
     // ---- end STUBS ----
 
     // TODO: v1.6.1 InputDevice — confirm v1.6.1 data-layout addr (stale 0x001b3794 was v1.5.x).
     // +0x00: implicit vptr (port) / explicit fns* (binary) — layout equivalent
-    // +0x04: std::list<InputActionMapper*> actionMappers (8 bytes, Sourcery 2010q1)
-    std::list<InputActionMapper*> actionMappers;  // +0x04
+    // +0x04: std::list<InputActionMapper*> m_ActionMappers (8 bytes, Sourcery 2010q1)
+    std::list<InputActionMapper*> m_ActionMappers;  // +0x04
 };
 
 } // namespace Mortar

@@ -36,9 +36,11 @@ InputDeviceBada::~InputDeviceBada() {
 void InputDeviceBada::Init(unsigned long /*flags*/) {
 }
 
+// ASM-spec v1.6.1 InputDeviceBada::Destroy @0x0024278c: tail-calls base InputDevice::Destroy, nothing else.
 void InputDeviceBada::Destroy() {
+    InputDevice::Destroy();
 #if !defined(__bada__)
-    m_bindings.clear();
+    m_bindings.clear();  // Port specific: SDL dispatch map, no binary counterpart
 #endif
 }
 
@@ -132,7 +134,7 @@ callbacks:
 }
 
 void InputDeviceBada::AddActionMapper(InputActionMapper* mapper) {
-    actionMappers.push_back(mapper);
+    m_ActionMappers.push_back(mapper);
 }
 
 // Binary @ 0x001961d0 — ClearActions: clear matching bindings.
