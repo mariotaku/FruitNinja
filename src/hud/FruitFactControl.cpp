@@ -222,11 +222,13 @@ void FruitFactControl::SetPos(const Vec3& p) {
 }
 
 // ---------------------------------------------------------------------------
-// BeginDraw  (Binary @ 0x00170804 -- no-op)
+// BeginDraw  (Binary @ 0x00170804)
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::BeginDraw(float /*dt*/) {
-    // Binary @ 0x00170804: bare BX LR (no-op).
+    // ASM-spec v1.6.1 FruitFactControl::BeginDraw @0x00170804: unconditional
+    // m_LayerFlags(+0x34)=0x80 each draw.
+    m_LayerFlags = 0x80;                                  // this+0x34
 }
 
 // ---------------------------------------------------------------------------

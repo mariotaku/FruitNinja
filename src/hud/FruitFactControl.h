@@ -18,7 +18,7 @@
 //   Reset      0x00170800  (no-op)
 //   Release    0x00171808
 //   SetPos     0x00170814
-//   BeginDrawing 0x00170804  (no-op)
+//   BeginDrawing 0x00170804  (mov r3,#0x80; str r3,[r0,#0x34] -- sets m_LayerFlags)
 //   DrawOrder  0x00170810  (no-op)
 //   GetType    0x001720dc  -> returns 0xc (12)
 //   SetPage(int,bool)        0x0017132c
@@ -82,7 +82,7 @@ public:
     // Binary @ 0x00170814 -- SetPos(_Vector3)
     void SetPos(const Vec3& p);
 
-    // Binary @ 0x00170804 -- BeginDrawing (no-op in binary)
+    // Binary @ 0x00170804 -- BeginDrawing: sets m_LayerFlags(+0x34)=0x80 every draw
     void BeginDraw(float dt) override;
 
     // Binary @ 0x00170810 -- DrawOrder (no-op in binary)
