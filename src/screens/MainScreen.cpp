@@ -174,7 +174,7 @@ MainScreen::MainScreen(Game& g)
                 9.0f,   // fontSize
                 75.0f,  // width
                 30.0f,  // height
-                0x0d,   // align: centre-H(0x01) | centre-V(0x04) | fit(0x08)
+                (Mortar::ALIGNMENT_TYPE)0x0d,   // align: centre-H(0x01) | centre-V(0x04) | fit(0x08)
                 3,      // maxLines
                 3.0f    // lineSpacing
             );

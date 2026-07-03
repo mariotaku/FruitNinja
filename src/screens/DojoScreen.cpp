@@ -102,7 +102,7 @@ DojoScreen::DojoScreen(Game& g)
     m_pVersionText = new Mortar::BakedStringBox(
         game_work.m_pTTFFontMain,
         30.0f, 110.0f, 30.0f,
-        0xf, 1, 0);
+        (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
     m_pVersionText->SetGradient(Colour(1, 146, 208, 255), Colour(0, 26, 69, 255), false);
     m_pVersionText->SetText(GETSTRING_CAST_0(LSTR_DOJO_TITLE));
     m_pVersionText->SetHorizontalLineSpacing(-1);

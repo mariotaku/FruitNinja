@@ -111,7 +111,7 @@ void FruitFactBonusFactPage::Init() {
             // fontSize=10, w=160(0xa0), h=10, align=1, wrap=1, ls=0.
             Mortar::SmartPtr<Mortar::Texture> noTex1;
             Mortar::BakedStringBox* nameBox = new Mortar::BakedStringBox(
-                font, 10.0f, 160.0f, 10.0f, 1, 1, 0.0f);
+                font, 10.0f, 160.0f, 10.0f, (Mortar::ALIGNMENT_TYPE)1, 1, 0.0f);
             nameBox->SetColour(*tint, 0);
             nameBox->SetText(b->m_DisplayName);
             GenericHUDControl* cName = new GenericHUDControl(
@@ -126,7 +126,7 @@ void FruitFactBonusFactPage::Init() {
             Vec3 valOff(184.0f, 2.0f, 0.0f);
             Vec3 valFinal = namePos + valOff;
             Mortar::BakedStringBox* valBox = new Mortar::BakedStringBox(
-                font, 10.0f, 20.0f, 10.0f, 0xf, 1, 0.0f);
+                font, 10.0f, 20.0f, 10.0f, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0.0f);
             valBox->SetColour(*tint, 0);
             valBox->SetText(buf);
             GenericHUDControl* cVal = new GenericHUDControl(

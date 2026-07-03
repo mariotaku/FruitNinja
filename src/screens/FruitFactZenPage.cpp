@@ -190,7 +190,7 @@ void FruitFactZenPage::Init() {
 
         if (font) {
             Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-                font, 10.0f, 128.0f, 10.0f, 0xf, 3, 5);
+                font, 10.0f, 128.0f, 10.0f, (Mortar::ALIGNMENT_TYPE)0xf, 3, 5);
             // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_ComboLevel))
             // GetComboStarText returns a LSTR id; GETSTRING converts to a C string.
             unsigned int starStrId = GetComboStarText((COMBO_TYPE)m_ComboLevel);
@@ -229,7 +229,7 @@ void FruitFactZenPage::Init() {
             if (font) {
                 // box1: width=0xa0=160, height=0x28=40, align=0xf, wrap=3, ls=7
                 Mortar::BakedStringBox* box1 = new Mortar::BakedStringBox(
-                    font, 10.0f, 160.0f, 40.0f, 0xf, 3, 7);
+                    font, 10.0f, 160.0f, 40.0f, (Mortar::ALIGNMENT_TYPE)0xf, 3, 7);
                 box1->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),
@@ -260,7 +260,7 @@ void FruitFactZenPage::Init() {
             if (font) {
                 // box2: width=0xad=173, height=0x28=40, align=0xf, wrap=3, ls=7
                 Mortar::BakedStringBox* box2 = new Mortar::BakedStringBox(
-                    font, 10.0f, 173.0f, 40.0f, 0xf, 3, 7);
+                    font, 10.0f, 173.0f, 40.0f, (Mortar::ALIGNMENT_TYPE)0xf, 3, 7);
                 box2->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),
@@ -284,7 +284,7 @@ void FruitFactZenPage::Init() {
             if (font) {
                 // box3: same dims as box2
                 Mortar::BakedStringBox* box3 = new Mortar::BakedStringBox(
-                    font, 10.0f, 173.0f, 40.0f, 0xf, 3, 7);
+                    font, 10.0f, 173.0f, 40.0f, (Mortar::ALIGNMENT_TYPE)0xf, 3, 7);
                 box3->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),

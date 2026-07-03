@@ -275,7 +275,7 @@ void ShopListItem::NewDraw() {
         // (RIGHT-horizontal | center-vertical). low-2-bits: 2=right, width=195 px.
         // Binary base = pos + m_Size(60,13,0), then box0 offset (-195,+16,0):
         //   title right edge = (pos.x+60)-195+195 = pos.x+60; icon left ~ pos.x+63 -> ~3px gap.
-        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, 0x0e, 1, 0);
+        m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, (Mortar::ALIGNMENT_TYPE)0x0e, 1, 0);
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
         // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
@@ -288,7 +288,7 @@ void ShopListItem::NewDraw() {
     // typeNames (filled by Create @0x001b27f0): BLADE=0xCA, BG=0xC9, FULL=0xCB, SPECIAL=0x12F.
     if (!m_pBox1 || m_TintA != (uint8_t)m_pItemInfo->m_Type) {
         delete m_pBox1;
-        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175, 30, 0x0e, 1, 0);
+        m_pBox1 = new Mortar::BakedStringBox(ttfFont, 14.0f, 175, 30, (Mortar::ALIGNMENT_TYPE)0x0e, 1, 0);
         const char* catStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
             case 0: catStr = GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break; // 0xCA
@@ -497,7 +497,7 @@ void ShopListItem::DrawDescription() {
     if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
         delete m_pBox3;
         // ASM-verified v1.6.1 DrawDescription @0x001b1f20: desc align=0x0F (center), maxLines=7, lineSpacing=4.
-        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, 0x0f, 7, 4);
+        m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, (Mortar::ALIGNMENT_TYPE)0x0f, 7, 4);
         m_pBox3->SetText(m_DescText);
         m_pBox3->Update();
         m_pBox3->FitIntoVerticalBounds();
@@ -508,7 +508,7 @@ void ShopListItem::DrawDescription() {
         if (!m_pBox4) {
             delete m_pBox4;
             // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, lineSpacing=4.
-            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, 0x0f, 2, 4);
+            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, (Mortar::ALIGNMENT_TYPE)0x0f, 2, 4);
 
             // Determine prompt string id and colour.
             LocalizedString promptId;

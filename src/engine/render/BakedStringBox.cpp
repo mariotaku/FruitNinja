@@ -55,7 +55,7 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                float fontSize,
                                int width,
                                int height,
-                               int align,
+                               ALIGNMENT_TYPE align,
                                int maxLines,
                                int lineSpacing)
     : m_Dirty(true)                           // +0x00

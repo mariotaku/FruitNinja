@@ -419,7 +419,7 @@ static bool TE_RenderCell(
         const float textCentreX = (float)TE_CELL_W * 0.5f;
         const float textCentreY = (float)TE_LABEL_H + (float)(TE_CELL_H - TE_LABEL_H) * 0.5f;
 
-        Mortar::BakedStringBox box(cellFont, desc.fontSize, boxW, boxH, desc.align, 1, 0);
+        Mortar::BakedStringBox box(cellFont, desc.fontSize, boxW, boxH, (Mortar::ALIGNMENT_TYPE)desc.align, 1, 0);
         box.SetText(desc.sample);
         TE_ApplyEffect(&box, desc.effIdx);
         if (desc.clipMode != 0) {
@@ -459,7 +459,7 @@ static bool TE_RenderCell(
         const int lblBoxH = TE_LABEL_H;
         const float lblSize = 9.0f;
 
-        Mortar::BakedStringBox lblBox(verdanaFont, lblSize, lblBoxW, lblBoxH, 0x0f, 1, 0);
+        Mortar::BakedStringBox lblBox(verdanaFont, lblSize, lblBoxW, lblBoxH, (Mortar::ALIGNMENT_TYPE)0x0f, 1, 0);
         lblBox.SetText(desc.caption);
         lblBox.SetColour(Colour(210, 210, 210, 255), 0);
 

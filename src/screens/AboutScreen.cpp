@@ -179,7 +179,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // Title box -- LSTR 0x3c3
         // fontSize 20, width 0xa0(160), align 0xf, height 30, maxLines 1
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
-        m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160, 30, 0xf, 1, 0);
+        m_TitleBox = new Mortar::BakedStringBox(font, 20.0f, 160, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_TitleBox->SetText(GETSTRING(LSTR_ABOUT_TITLE, 0));
         m_TitleBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
@@ -187,7 +187,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // fontSize 20, width 0x64(100), align 0xf, height 30, maxLines 1
         // Colour RGB(0xB9, 0x4F, 0x37), setBase=1
         // Constructed for layout parity; NOT drawn in NewDraw (binary never positions/draws it).
-        m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100, 30, 0xf, 1, 0);
+        m_HeadingBox = new Mortar::BakedStringBox(font, 20.0f, 100, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_HeadingBox->SetText(GETSTRING(LSTR_ABOUT_HEADING, 0));
         m_HeadingBox->SetColour(Colour(0xB9, 0x4F, 0x37, 255), 1);
 
@@ -198,7 +198,7 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         //   OS_SPrintf(buf, 0x200, "%s %s", "V", GetVersionString())
         char vbuf[32];
         snprintf(vbuf, sizeof(vbuf), "%s %s", "V", GetVersionString());
-        m_VersionBox = new Mortar::BakedStringBox(font, 10.0f, 80, 30, 1, 1, 0);
+        m_VersionBox = new Mortar::BakedStringBox(font, 10.0f, 80, 30, (Mortar::ALIGNMENT_TYPE)1, 1, 0);
         m_VersionBox->SetText(vbuf);
         m_VersionBox->SetColour(Colour(0x74, 0x5D, 0x3C, 255), 1);
         m_VersionBox->SetHorizontalLineSpacing(-1);
@@ -216,32 +216,32 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // 0x0b. All 6 boxes use the one gangofchinese.ttf face (m_pTTFFontMain); the
         // chunky English look is that CJK face's own Latin glyphs, NOT a bitmap font.
         // Chinese (0x0d) has all 6 translated -> no mix.
-        m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine0 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine0->SetText(GETSTRING(LSTR_ABOUT_CREDIT0, 0));
         m_CreditLine0->SetColour(creditColour, 0);
         m_CreditLine0->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine1 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine1->SetText(GETSTRING(LSTR_ABOUT_CREDIT1, 0));
         m_CreditLine1->SetColour(creditColour, 0);
         m_CreditLine1->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine2 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine2->SetText(GETSTRING(LSTR_ABOUT_CREDIT2, 0));
         m_CreditLine2->SetColour(creditColour, 0);
         m_CreditLine2->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine3 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine3->SetText(GETSTRING(LSTR_ABOUT_CREDIT3, 0));
         m_CreditLine3->SetColour(creditColour, 0);
         m_CreditLine3->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine4 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine4->SetText(GETSTRING(LSTR_ABOUT_CREDIT4, 0));
         m_CreditLine4->SetColour(creditColour, 0);
         m_CreditLine4->SetHorizontalLineSpacing(-1);
 
-        m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, 0xf, 1, 0);
+        m_CreditLine5 = new Mortar::BakedStringBox(font, 12.0f, 320, 30, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
         m_CreditLine5->SetText(GETSTRING(LSTR_ABOUT_CREDIT5, 0));
         m_CreditLine5->SetColour(creditColour, 0);
         m_CreditLine5->SetHorizontalLineSpacing(-1);
@@ -663,7 +663,7 @@ void AboutScreen::AddLine(const char* text, const Colour& colour, int fontSize)
     Mortar::FontCacheObjectTTF* font = GetAboutTTFFont();
     if (!font) return;
 
-    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, (float)fontSize, 350, 20, 0xf, 1, 0);
+    Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, (float)fontSize, 350, 20, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
     box->SetText(text);
     box->SetColour(colour, 1);
     box->SetWorldspaceClipping(-240, -46, 400, 108);
