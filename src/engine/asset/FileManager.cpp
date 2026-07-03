@@ -121,8 +121,8 @@ bool FileManager::GetFileData(const char* name, void** outBuf, unsigned long* ou
 }
 
 // Defunct: GetSaveRootDirectory — no-op stub; v1.6.1 binary @ 0x00250ed4 body is `return 0`.
-//          Only caller GetUserFilePath @ 0x0012b09c is unused in the binary's call graph.
-int FileManager::GetSaveRootDirectory(char* /*outBuf*/, const char* /*relPath*/, bool /*createDir*/) {
+//          Only caller GetUserFilePath @ 0x00154494 is unused in the binary's call graph.
+int FileManager::GetSaveRootDirectory(char* /*outBuf*/, const char* /*relPath*/, bool /*createDir*/, bool /*unknownFlag*/) {
     return 0;
 }
 

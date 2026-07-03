@@ -960,7 +960,7 @@ const char* GetLoadFileFullPath() {
 // branch (snprintf) is always taken.
 char* GetUserFilePath(char* outBuf, const char* filename, int maxLen) {
     FileManager& fm = FileManager::GetInstance();
-    int ok = fm.GetSaveRootDirectory(outBuf, "\\Halfbrick\\FruitNinja\\", true);
+    int ok = fm.GetSaveRootDirectory(outBuf, "\\Halfbrick\\FruitNinja\\", true, false);
     if (ok == 0) {
         snprintf(outBuf, (size_t)maxLen, "%s", filename);
     } else {

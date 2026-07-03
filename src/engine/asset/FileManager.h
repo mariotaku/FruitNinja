@@ -47,7 +47,8 @@ public:
     // Defunct: GetSaveRootDirectory — no-op stub; binary's body is also `return 0`.
     //          The only caller (GetUserFilePath @ 0x00154494) is itself unused.
     //          Port uses platform-specific paths via FileSystemPosix/Win32 directly.
-    int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir);
+    // 4th bool: unused by the Bada stub body (mov r0,#0; bx lr) -- semantic unresolvable from this SKU; sole binary caller passes false.
+    int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir, bool unknownFlag);
 
 private:
     FileManager();
