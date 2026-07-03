@@ -190,7 +190,7 @@ static_assert(offsetof(Mortar::Texture2D, m_Indices)  == 0x48, "Texture2D::m_Ind
 // Mortar::Bada::Texture2D_Bada — 100 bytes (0x64).
 // Binary ctor @0x0022a7d8; dtor @0x00229b8c.
 // Construction flow:
-//   Load @0x0022a854 -> new(100) -> Texture2D_Bada ctor -> SetSource(src,primType)
+//   Load @0x0022a854 -> new(100) -> Texture2D_Bada ctor -> SetSource(src,param2)
 //   SetSource @0x0022a7a8: ReleaseCache -> m_Source=src -> Cache()
 //   Cache @0x0022a4f4: fill DataInfo dims/format, apparentW/H, UV verts/indices,
 //                      glGenTextures, bind, filters, glTexImage2D.
@@ -208,8 +208,10 @@ namespace Bada {
 
 class Texture2D_Bada : public Texture2D {
 public:
-    // Binary ctor @0x0022a7d8.
+    // Port specific: no binary counterpart (used by the UploadTex1ToGL DIFFERS load path).
     Texture2D_Bada();
+    // Binary ctor @0x0022a7d8: base ctors, m_TexId=0 etc. (as the default ctor above), then SetSource(src, param2).
+    Texture2D_Bada(const Mortar::SmartPtr<TextureSource>& src, unsigned long param2);
     // Binary dtor @0x00229b8c (in-place) / @0x00229c04 (deleting).
     virtual ~Texture2D_Bada();
 
@@ -228,7 +230,8 @@ public:
     virtual GLuint GetTexId() const { return m_TexId; }
 
     // SetSource @0x0022a7a8: ReleaseCache, set m_Source, call Cache.
-    void SetSource(Mortar::SmartPtr<TextureSource> src, unsigned int primType);
+    // param2: always 0, unused in v1.6.1 (Cache sets m_PrimType from source data).
+    void SetSource(const Mortar::SmartPtr<TextureSource>& src, unsigned long param2);
     // Cache @0x0022a4f4: fill DataInfo, glGenTextures, upload pixels.
     void Cache();
     // ReleaseCache: delete GL texture, reset m_TexId.
