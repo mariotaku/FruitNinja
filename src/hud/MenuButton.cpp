@@ -893,7 +893,11 @@ void MenuButton::Draw(float* hudScaleRaw) {
         IngamePopup* popup = GetIngamePopup(0x10);
         if (popup) {
             float scale = (m_RestScale.x != 0.0f) ? (size.x / m_RestScale.x) : 0.0f;
-            const float sinV = SinIdx((uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f));
+            // v1.6.1 MenuButton::Draw @0x0019c2e4: SinIdx angle index wraps mod 65536
+            // (binary: `(int)(timer*180.0*182.0) & 0xffff`). float->u32->u16 replicates that
+            // wrap; a direct float->u16 cast is UB on native and TRAPS on wasm when the
+            // product exceeds 65535 (#346).
+            const float sinV = SinIdx((uint16_t)(uint32_t)(m_NewIndicatorTimer * 180.0f * 182.0f));
             const float bob  = (sinV < 0.0f ? -sinV : sinV) * 8.0f;
             Vec3 anchor = GetAdjustedPos();
             anchor.x += m_ShakeScale.y * m_RestScale.x * 0.5f;
