@@ -612,6 +612,16 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
         }
     }
     FlushParticleVerts(s_verts, curTmpl, m_pTextureRefs, m_NumTextureRefs);
+
+    // Restore the engine-default blend func. FlushParticleVerts sets
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE) for additive templates and intentionally
+    // does NOT restore it (setBlendFunc=false), so the additive func leaked as
+    // global GL state into whatever drew next -- washing later geometry toward
+    // white (the "gray/washed menu text after slicing into a screen" bug, only
+    // visible once #370 enabled menu slice particles). The binary never leaks:
+    // v1.6.1 Mesh::DrawTris sets blend per draw (glState<3042>). Restore it here.
+    // Same blend-leak family as #327/#328/#329.
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
