@@ -248,16 +248,11 @@ void EffectImage::Parse(TiXmlElement* xml) {
     if (scaleToScreen) m_bLowEndOnly = (strcmp(scaleToScreen, "true") == 0);
 }
 
-// ASM-spec v1.6.1 EffectImage::LoadTextures = ReloadableTexture::Load @0x0014fad8:
-// if(m_pPath && !m_Texture.IsValid()) m_Texture=LoadTexture(path). No colour-scale.
-// Binary @ 0x0011d1e4 trampolines directly to this base impl (no reimplementation,
-// no m_ColourScale side effect -- texture dims are set only by Parse).
+// ASM-spec v1.6.1 EffectImage::LoadTextures @0x001481d0: single-instruction tail-call thunk
+// b -> ReloadableTexture::Load @0x0014fad8. All path building ("%s.tex", buf[64]) is in
+// global ::LoadTexture @0x0014f88c, not here.
 void EffectImage::LoadTextures() {
-    if (m_pPath && !m_Texture.IsValid()) {
-        char texPath[80];
-        snprintf(texPath, sizeof(texPath), "%s.tex", m_pPath);
-        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
-    }
+    ReloadableTexture::Load();
 }
 
 // ---- ScreenTint::Parse -------------------------------------------------------
