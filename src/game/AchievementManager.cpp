@@ -205,6 +205,9 @@ void AchievementManager::LoadAchievementInfo() {
 
         // Insert into m_All (owning map)
         m_All[idHash] = info;
+        // v1.6.1 LoadAchievementInfo @0x00118198 tail: push_back the kept id-hash.
+        // Write-only in v1.6.1 (no reader; kept for byte-faithful behavior).
+        m_AllHashes.push_back(idHash);
 
         // Insert into m_ByType secondary map
         // Key selection rule per RE:
@@ -250,6 +253,7 @@ void AchievementManager::UnLoadAchievementInfo() {
     for (int i = 0; i < 11; ++i) {
         m_ByType[i].clear();
     }
+    m_AllHashes.clear();  // v1.6.1: UnLoadAchievementInfo also clears the id-hash vector
 }
 
 // ---------------------------------------------------------------------------
