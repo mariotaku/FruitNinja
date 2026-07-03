@@ -313,7 +313,13 @@ void ShopScreen::Release() {
     }
 
     if (m_pShopList) {
-        m_pShopList->SetPendingRemoval();
+        // v1.6.1 ShopScreen::Release @0x001b498c: HUD::RemoveControl (synchronous unlink) then
+        // the list's deleting-dtor (~ScrollingMenu -> DestroyList frees ShopListItems). The prior
+        // SetPendingRemoval() deferred this, giving the ScrollingMenu one more HUD Update/Draw pass
+        // AFTER ~ShopScreen freed the screen -> ShopListItem::Move derefed the freed ShopScreen
+        // (m_pShopScreen->GetSelectedItem()) = heap-use-after-free (ASan-confirmed on wasm).
+        if (game_work.mHud) game_work.mHud->RemoveControl(m_pShopList);
+        if (!m_pShopList->m_bNoDestructor) delete m_pShopList;
         m_pShopList = nullptr;
     }
 }
