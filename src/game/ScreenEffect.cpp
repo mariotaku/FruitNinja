@@ -241,31 +241,30 @@ void EffectImage::Parse(TiXmlElement* xml) {
     if (scaleToScreen) m_bLowEndOnly = (strcmp(scaleToScreen, "true") == 0);
 }
 
-void EffectImage::LoadTextures() {
-    // Binary @ 0x0011d1e4 trampolines to ReloadableTexture::Load (0x001213b8)
-    // which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex"). XML
-    // attribute values omit the .tex suffix (e.g. `texture="arcade_60seconds"`
-    // -> file `arcade_60seconds.tex`). Mirror the binary's name+".tex" append.
-    // Parse already loads and sets m_ColourScale from texture dims; this is a
-    // reload path used when the texture cache is flushed and restored.
+// ASM-spec v1.6.1 EffectImage::LoadTextures = ReloadableTexture::Load @0x0014fad8:
+// if(m_pPath && !m_Texture.IsValid()) m_Texture=LoadTexture(path). No colour-scale.
+// Binary @ 0x0011d1e4 trampolines directly to this base impl (no reimplementation,
+// no m_ColourScale side effect -- texture dims are set only by Parse).
+// Port: m_TexName is the port's m_pPath equivalent; m_Texture the SmartPtr slot.
+// NOTE: m_TexName/m_Texture are declared `#if !defined(__bada__)` in ScreenEffect.h
+// (Port specific -- substitute for the base ReloadableTexture's SmartPtr<Texture>+
+// char* m_pPath, which this port's ReloadableTexture base does not carry; see
+// ReloadableTexture.h DIFFERS note, deferred until that base is ported byte-faithful).
+// Every other use of these fields in this file (Parse's "texture" attr block,
+// Activate's ctrl->m_Texture assignment) is guarded the same way, so this guard is
+// a structural necessity tied to that deferred base-class rework, not a fidelity
+// band-aid: under __bada__ the fields do not exist, so this body legitimately has
+// nothing to execute yet.
 #if !defined(__bada__)
-    if (m_TexName[0] == '\0') return;
-    if (m_Texture.IsValid()) return;  // already loaded (Parse loads on first call)
+void EffectImage::LoadTextures() {
+    if (m_TexName[0] == '\0' || m_Texture.IsValid()) return;
     char texPath[80];
     snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
-    Mortar::SmartPtr<Mortar::Texture> loaded =
-        Mortar::TextureManager::LoadLocalisedTexture(texPath);
-    if (loaded.IsValid()) {
-        m_Texture     = loaded;
-        // Restore m_ColourScale dims if they were zeroed after an unload
-        if (m_ColourScale.x == 0.0f && m_ColourScale.y == 0.0f) {
-            m_ColourScale = Vec3((float)loaded->GetWidth(),
-                                 (float)loaded->GetHeight(),
-                                 0.0f);
-        }
-    }
-#endif
+    m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
 }
+#else
+void EffectImage::LoadTextures() {}
+#endif
 
 // ---- ScreenTint::Parse -------------------------------------------------------
 
