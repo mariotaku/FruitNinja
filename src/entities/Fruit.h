@@ -165,7 +165,8 @@ public:
     // per-half spin axes and angular velocities, then builds the initial
     // m_Rot1/2 quaternions from the slice arc angle.
     // Called at the end of Slice() with (FruitInfo->m_bIsSuperFruit, sliceDirFlag).
-    void SetupSliceRotations(bool isSuperFruit, int sliceDirFlag);
+    // ASM-spec v1.6.1 Fruit::SetupSliceRotations @0x001da968: 2nd param is bool, not int.
+    void SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag);
 
     // Matches Fruit::Sliced @ 0x001401c8. Pure predicate: returns true
     // if the fruit is already sliced (m_bSliced) OR if a slice countdown

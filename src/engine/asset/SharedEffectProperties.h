@@ -202,11 +202,18 @@ public:
     bool Contains(const EffectPropertyDefinition* begin,
                   const EffectPropertyDefinition* end) const;
 
-    // GetProperty(char*) @ 0x001b67b8 — binary-search m_Props by name; recurse to
-    // parent list if not found.
+    // ASM-spec v1.6.1 Mortar::EffectPropertyList::GetProperty @0x0025d650: binary-search
+    // m_Props by name; recurse to parent list if not found. Binary signature is non-const
+    // (decompile shows `EffectPropertyList *this`, not const-qualified) -- this is the
+    // primary overload asm-verify pairs against.
+    EffectProperty* GetProperty(const char* name);
+
+    // Const overload -- port-only convenience so const call sites (this class's own
+    // Contains(), which is const) can still resolve. Delegates via const_cast to the
+    // non-const primary; GetProperty performs no mutation.
     EffectProperty* GetProperty(const char* name) const;
 
-    // GetProperty(string&) @ 0x001b6820 — forwards to char* overload.
+    // GetProperty(string&) — port-only convenience; forwards to char* overload.
     EffectProperty* GetProperty(const std::string& name) const;
 
     void SetParent(SmartPtr<SharedEffectProperties> parent) {

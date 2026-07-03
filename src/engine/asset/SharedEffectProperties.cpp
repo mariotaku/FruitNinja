@@ -62,17 +62,22 @@ void EffectPropertyList::SortProperties() {
     std::sort(m_Props.begin(), m_Props.end(), NameLessThan());
 }
 
-// GetProperty(char*) @ 0x0025d650 (v1.6.1).
+// ASM-spec v1.6.1 EffectPropertyList::GetProperty @0x0025d650 (non-const, matches binary).
 // Binary-searches m_Props (sorted by name) for `name`, then
 // recurses to parent list if not found.
-EffectProperty* EffectPropertyList::GetProperty(const char* name) const {
-    std::vector<EffectProperty>::const_iterator lo =
+EffectProperty* EffectPropertyList::GetProperty(const char* name) {
+    std::vector<EffectProperty>::iterator lo =
         std::lower_bound(m_Props.begin(), m_Props.end(), name, NameLessThan());
     if (lo != m_Props.end() && std::strcmp(lo->m_Def.m_Name.c_str(), name) == 0)
-        return const_cast<EffectProperty*>(&*lo);
+        return &*lo;
     if (m_Parent.IsValid())
         return m_Parent->GetList().GetProperty(name);
     return NULL;
+}
+
+// Const overload -- delegates to the non-const primary above (no mutation occurs).
+EffectProperty* EffectPropertyList::GetProperty(const char* name) const {
+    return const_cast<EffectPropertyList*>(this)->GetProperty(name);
 }
 
 // GetProperty(string&) @ 0x001b6820 — forwards to char* overload.

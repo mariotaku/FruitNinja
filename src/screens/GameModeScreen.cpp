@@ -180,7 +180,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_bIsFromPause(isFromPause)   // +0xb8
     , m_bChallenge(0)               // +0xb9
     , m_ChallengeId(0)              // +0xbc
-    , m_pChallengeData(nullptr)     // +0xc0
+    , m_pChallengeData(0)           // +0xc0
     , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
     , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
     , m_pArcadeButton(nullptr)      // +0xcc
@@ -758,7 +758,7 @@ void GameModeScreen::ArcadeModeCallback() {
 
 // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
 //                       (entry from challenge-invite flow)
-void GameModeScreen::SetIsChallenge(int challengeId, void* data) {
+void GameModeScreen::SetIsChallenge(int challengeId, int data) {
     m_bChallenge     = 1;
     m_ChallengeId    = challengeId;
     m_pChallengeData = data;

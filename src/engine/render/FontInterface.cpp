@@ -7,12 +7,15 @@
 namespace Mortar {
 
 // ASM-verified: 2026-06-14T00:00Z v1.6.1 binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
-FontInterface::FontInterface(int atlasSize)
+// ASM-spec v1.6.1 Mortar::FontInterface::FontInterface @0x002502e0: signature fixed to
+// no-arg ctor to match the binary (decompile: param_count=1, only `this`). The port's
+// atlasSize is hardcoded to 512 -- the only value the single call site ever passed.
+FontInterface::FontInterface()
     : m_CacheSize(100)
     , m_FontScale(1.0f)
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
-    , m_Size(atlasSize)
+    , m_Size(512)
 {
     // Port specific: pages are allocated lazily on first PackGlyph (binary
     // TextureAtlas @0x00269c9c starts empty; port follows the same model).

@@ -721,7 +721,7 @@ void ShopScreen::EquipCallback() {
                   (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
         #endif
         if (im) {
-            im->SetEquippedItem((int)info->m_Type, info);
+            im->SetEquippedItem((ItemType)info->m_Type, info);
             #ifndef __bada__
             LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
                       (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
@@ -1102,7 +1102,7 @@ void ShopScreen::Update(float dt) {
                         ItemManager* im = ItemManager::GetInstance();
                         ItemInfo* prevInfo = slotItem ? slotItem->m_pItemInfo : nullptr;
                         if (im) {
-                            im->SetEquippedItem((int)type, prevInfo);
+                            im->SetEquippedItem((ItemType)type, prevInfo);
                         }
                     }
                 }
@@ -1399,14 +1399,14 @@ void ShopScreen::BuyButtonCallback() {
 
     if (mgr->IsEquipped(info)) {
         // EQUIPPED -> unequip; clear slot cache.
-        mgr->SetEquippedItem(type, nullptr);
+        mgr->SetEquippedItem((ItemType)type, nullptr);
         if (type >= 0 && type < 4) m_pSlotItems[type] = nullptr;
         return;
     }
 
     // UNLOCKED & NOT EQUIPPED -> swap into slot.
     if (type >= 0 && type < 4) m_pSlotItems[type] = sel;
-    mgr->SetEquippedItem(type, info);
+    mgr->SetEquippedItem((ItemType)type, info);
 }
 
 // Binary @ 0x0015c758 (re-analyst 2026-05-18). Commits the in-flight

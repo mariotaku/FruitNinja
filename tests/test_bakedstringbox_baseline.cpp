@@ -158,12 +158,12 @@ void Renderer::DrawColorQuad(const Colour&) {}
 // ---------------------------------------------------------------------------
 namespace Mortar {
 
-FontInterface::FontInterface(int sz)
+FontInterface::FontInterface()
     : m_CacheSize(100)
     , m_FontScale(1.0f)
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
-    , m_Size(sz)
+    , m_Size(512)
 {}
 FontInterface::~FontInterface() {}
 void FontInterface::InitialiseData(float fs, float gs) {

@@ -1701,7 +1701,7 @@ void Fruit::Slice() {
 // SUPER path  (isSuperFruit!=0): builds axes from blade direction (m_SliceArcAngle),
 //   derives spin magnitudes from the same RandF/Rand32 pattern.
 // Both paths: build m_Rot[idx] = (qx*qy)*qz from fixed 0x3FC0 angles + m_SliceArcAngle.
-void Fruit::SetupSliceRotations(bool isSuperFruit, int sliceDirFlag) {
+void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
 
     // super-path: local_e4 starts 0, += 0xB4 per half (0, 180).

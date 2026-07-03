@@ -266,7 +266,7 @@ void GameInit(unsigned long) {
     // Re-apply equipped blade now that SlashEntities exist
     {
         ItemManager* im = ItemManager::GetInstance();
-        im->SetEquippedItem(0, im->GetEquipped(0));
+        im->SetEquippedItem(ITEM_TYPE_BLADE, im->GetEquipped(0));
     }
 }
 

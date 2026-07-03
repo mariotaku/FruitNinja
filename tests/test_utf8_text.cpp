@@ -163,12 +163,12 @@ void Renderer::DrawColorQuad(const Colour&) {}
 // ---------------------------------------------------------------------------
 namespace Mortar {
 
-FontInterface::FontInterface(int sz)
+FontInterface::FontInterface()
     : m_CacheSize(100)
     , m_FontScale(1.0f)
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
-    , m_Size(sz)
+    , m_Size(512)
     // m_Pages (std::vector) default-constructs to empty — no explicit init needed.
 {}
 

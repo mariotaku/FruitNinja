@@ -20,6 +20,7 @@
 #include <map>
 #include <list>
 #include <string>
+#include "GameMode.h"
 
 class HUD;
 class TiXmlNode;
@@ -358,7 +359,8 @@ public:
 
     // 0x0012a248. Returns true iff gameMode was played today (m_LastPlayedDay[gameMode]
     // matches GetDaysSince1900()) AND the per-mode "<MODE>_today" total is > 0.
-    bool PlayedModeToday(int gameMode);
+    // ASM-spec v1.6.1 FruitSaveData::PlayedModeToday @0x0012a248: param is Mortar::GameMode (enum), not int.
+    bool PlayedModeToday(Mortar::GameMode gameMode);
 
     // Network tweak download (defunct online service). No-op.
     static void DownloadTweaks();
