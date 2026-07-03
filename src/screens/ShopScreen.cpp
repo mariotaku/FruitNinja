@@ -372,10 +372,8 @@ void ShopScreen::CreateShopList() {
 
     ItemManager* im = ItemManager::GetInstance();
     if (im) {
-        int n = im->GetNumItems();
-        for (int i = 0; i < n; i++) {
-            ItemInfo* info = im->GetItemAt(i);
-            if (!info) continue;
+        std::vector<ItemInfo*>::iterator it;
+        for (ItemInfo* info = im->GetFirst(it); info != nullptr; info = im->GetNext(it)) {
             ShopListItem* row = new ShopListItem();
             // Binary: ShopListItem::Create(row, info, this) called immediately after ctor.
             // This sets GetHeight() = 80.0f (row pitch = 160 units per item).
