@@ -28,9 +28,6 @@ enum InputDeviceTypes {
 
 namespace Mortar {
 
-// TODO: v1.6.1 InputActionMapper::InputActionMapper — confirm ctor addr, resolve
-//   v1.6.1 addresses for ProcessEvent and CheckActions (stale v1.5.x markers removed).
-//
 // Mortar::InputActionMapper — non-polymorphic action-filter node.
 // Binary sizeof = 0x44 (68 bytes). True binary layout (from ctor field stores):
 //   +0x00  bool      m_Enabled
@@ -55,12 +52,14 @@ namespace Mortar {
 // ProcessEvent per element.
 class InputActionMapper {
 public:
-    // TODO: v1.6.1 InputActionMapper::InputActionMapper — confirm v1.6.1 ctor addr.
-    // Params: InputEvent ev, Delegate1<bool,InputEvent*> cb,
-    //         unsigned long, unsigned long.
-    InputActionMapper();
+    // v1.6.1 InputActionMapper::InputActionMapper @0x002756b0.
+    // Binary has no default ctor -- every instance is fully initialised from
+    // an InputEvent template + callback + two hashes. `ev` is only used as a
+    // field-value source (action mask / keycode / mapper pointer), not stored.
+    InputActionMapper(InputEvent ev, InputDeviceCallback cb,
+                       unsigned long actionHash, unsigned long configSourceHash);
 
-    // TODO: v1.6.1 InputActionMapper::ProcessEvent — confirm v1.6.1 addr.
+    // v1.6.1 InputActionMapper::ProcessEvent @0x00275728.
     // Called by InputDevice::CheckActions per mapper in m_ActionMappers list.
     // Compares the incoming event against this mapper's filter template and
     // fires m_callback(event) on a match.
@@ -123,7 +122,7 @@ public:
     void AxisEvent(long, unsigned long, float, float, unsigned long, long);
     void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
 
-    // TODO: v1.6.1 InputDevice::CheckActions — confirm v1.6.1 addr (stale 0x001b36b0 was v1.5.x).
+    // v1.6.1 InputDevice::CheckActions @0x00275fc7.
     // Iterates m_ActionMappers, calls ProcessEvent per element.
     void CheckActions(InputEvent* event);
     // ---- end STUBS ----
