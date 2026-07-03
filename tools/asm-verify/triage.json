@@ -1825,11 +1825,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl7ReleaseEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 200,
-    "reason": "MissControl method stub/divergence. Score 2010/400. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2010/400 -> 2200/200]",
+    "decided_at": "2026-07-03T15:25Z",
     "score": 2200,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 200,
+    "verdict": "FIX-NEEDED",
+    "reason": "Re-triaged #356 batch2: the existing port comment (src/hud/MissControl.cpp:107, \"Binary @ 0x001513cc -- vtable[5]. Drops m_Texture SmartPtr ref.\") cites a WRONG address -- 0x001513cc decompiles to std::vector<PROBABILITY_OVERIDE>::_M_range_insert (an unrelated WaveModifier-side vector helper), not MissControl::Release. The Ghidra symbol table also shows a second, inconsistent MissControl cluster (_ZTV11MissControl vtable @0x002cdb40 resolves to slots in the 0x0019Exxx/0x0019Fxxx range) that does NOT match any of the extensively ASM-verified MissControl method addresses already in this file (Init@0x00150fa4, Reset@0x00150f14, Draw@0x00151f60, Update@0x00151a60, etc, all in 0x0015xxxx) -- classic Ghidra duplicate/mislabeled-type collision (see reference_ghidra_dup_types). The real MissControl::Release address could not be reliably pinned down in this pass (0x00150fa4 area has code but no Function boundary in the current Ghidra DB). Leaning FIX-NEEDED per policy (uncertain, and the existing citation is proven false) rather than leaving an ACCEPT-deferred resting on a debunked address. Needs a fresh re-analyst pass to locate the true vtable slot 5 body and confirm src/hud/MissControl.cpp:108-110 () against it."
   },
   "_ZN11MissControl8MakeRareE8_Vector3IfE": {
     "decided_at": "2026-06-18T05:57Z",
@@ -2251,7 +2251,7 @@
   "_ZN11SlashEntity4InitEPvlP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 9300,
-    "reason": "SlashEntity::Init(void*,long,Vec3*) — binary does full 3-arg init (alloc, set state flags, copy vectors); port delegates to Init(0) as documented stub at src/entities/SlashEntity.cpp:1125. Binary path not yet ported. Score 9510/9200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12255/9200 -> 14785/9300]",
+    "reason": "SlashEntity::Init(void*,long,Vec3*) \u2014 binary does full 3-arg init (alloc, set state flags, copy vectors); port delegates to Init(0) as documented stub at src/entities/SlashEntity.cpp:1125. Binary path not yet ported. Score 9510/9200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12255/9200 -> 14785/9300]",
     "score": 14785,
     "verdict": "ACCEPT-deferred"
   },
@@ -2512,7 +2512,7 @@
   "_ZN11TimeControl6UpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 35600,
-    "reason": "TimeControl::Update — IsTimedGame() gate removed and single slow-clock join point added per binary spec (0x001524a4). Remaining score divergence (47450/34700) driven by struct field offset mismatches: mMainScreen->m_TimeRemainingDisplay at port +0x134 vs binary +0x10c, and other pre-existing GameWork/MainScreen layout differences. Logic structure now matches binary. ACCEPT-deferred pending struct layout fixes. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 47920/34700 -> 51050/35600]",
+    "reason": "TimeControl::Update \u2014 IsTimedGame() gate removed and single slow-clock join point added per binary spec (0x001524a4). Remaining score divergence (47450/34700) driven by struct field offset mismatches: mMainScreen->m_TimeRemainingDisplay at port +0x134 vs binary +0x10c, and other pre-existing GameWork/MainScreen layout differences. Logic structure now matches binary. ACCEPT-deferred pending struct layout fixes. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 47920/34700 -> 51050/35600]",
     "score": 51050,
     "verdict": "ACCEPT-deferred"
   },
@@ -2579,7 +2579,7 @@
   "_ZN11WaveManager12CriticalModeEi": {
     "asm_hash": "091a8973cd1c7501",
     "decided_at": "2026-07-02T00:00Z",
-    "reason": "Port always returns false. Binary @ 0x001219e4: GetCriticalChance(p) > (float)(*(int*)g_RandomState / 2) — approximately a 50% coin flip per call (RNG state sign). Called from Fruit::RandomFruit (Fruit.cpp:2325) to select special-only vs all-fruit spawning; with port always false, special-only fruit selection never activates, directly changing spawn composition each wave. Also called from SlashEntity.cpp:1805 (trail scale, visual). Fix: add Math::Random::PeekState() and implement: return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2). See src/game/WaveManager.cpp:2062.",
+    "reason": "Port always returns false. Binary @ 0x001219e4: GetCriticalChance(p) > (float)(*(int*)g_RandomState / 2) \u2014 approximately a 50% coin flip per call (RNG state sign). Called from Fruit::RandomFruit (Fruit.cpp:2325) to select special-only vs all-fruit spawning; with port always false, special-only fruit selection never activates, directly changing spawn composition each wave. Also called from SlashEntity.cpp:1805 (trail scale, visual). Fix: add Math::Random::PeekState() and implement: return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2). See src/game/WaveManager.cpp:2062.",
     "verdict": "FIX-NEEDED"
   },
   "_ZN11WaveManager12RecievedSyncEif": {
@@ -2638,7 +2638,7 @@
   "_ZN11WaveManager16ResetWaveChancesEv": {
     "asm_hash": "25fbdcbb8dffbe54",
     "decided_at": "2026-07-02T00:00Z",
-    "reason": "Port iterates std::vector<WAVE_INFO*> via iterator; binary uses mla stride + add #180 raw array traversal. Binary also does extra work after main loop (accesses [76]/[80] with mul+408 addressing — likely probability override reset); port uses different container iteration. Core m_CurrentChance/m_CurrentRegrowth/m_RevisitCounter resets present. Binary @ 0x0011b87c.",
+    "reason": "Port iterates std::vector<WAVE_INFO*> via iterator; binary uses mla stride + add #180 raw array traversal. Binary also does extra work after main loop (accesses [76]/[80] with mul+408 addressing \u2014 likely probability override reset); port uses different container iteration. Core m_CurrentChance/m_CurrentRegrowth/m_RevisitCounter resets present. Binary @ 0x0011b87c.",
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager16UpdateComboSpeedEf": {
@@ -2733,7 +2733,7 @@
   "_ZN11WaveManager6UpdateEf": {
     "asm_hash": "14b7aa24473d8f5b",
     "decided_at": "2026-07-02T00:00Z",
-    "reason": "Port adds Game::GetInstance() null-guard (absent in binary). Binary checks flag at struct[417] before speed calc (port skips — likely game-active flag; SP always active so no effect). Fixed-step loop and bM_bPaused gate are equivalent. Binary @ 0x001167a0.",
+    "reason": "Port adds Game::GetInstance() null-guard (absent in binary). Binary checks flag at struct[417] before speed calc (port skips \u2014 likely game-active flag; SP always active so no effect). Fixed-step loop and bM_bPaused gate are equivalent. Binary @ 0x001167a0.",
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager7DestroyEv": {
@@ -2766,13 +2766,13 @@
   "_ZN11WaveManager8GetSpeedEi": {
     "asm_hash": "84fd9fd0a114abc2",
     "decided_at": "2026-07-02T00:00Z",
-    "reason": "playerIdx ignored in port: binary reads (22+playerIdx)*4 indexed slot; port returns m_ComboSpeed (+0x58) always. For SP arcade playerIdx is always 0, so this+88 == m_ComboSpeed — correct result. TODO at src/game/WaveManager.cpp:2034. Binary @ 0x00112fa0.",
+    "reason": "playerIdx ignored in port: binary reads (22+playerIdx)*4 indexed slot; port returns m_ComboSpeed (+0x58) always. For SP arcade playerIdx is always 0, so this+88 == m_ComboSpeed \u2014 correct result. TODO at src/game/WaveManager.cpp:2034. Binary @ 0x00112fa0.",
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager9GetWavedtEi": {
     "asm_hash": "7a166865dada0303",
     "decided_at": "2026-07-02T00:00Z",
-    "reason": "playerIdx ignored in port: binary uses (22+playerIdx)*4 indexed read; port reads m_ComboSpeed (+0x58) fixed. Binary also has two additional early-exit clamping paths (bxls/bxge) the port folds into one branch — same semantic for normal input range. SP arcade always uses P0 (playerIdx=0). Binary @ 0x00113050.",
+    "reason": "playerIdx ignored in port: binary uses (22+playerIdx)*4 indexed read; port reads m_ComboSpeed (+0x58) fixed. Binary also has two additional early-exit clamping paths (bxls/bxge) the port folds into one branch \u2014 same semantic for normal input range. SP arcade always uses P0 (playerIdx=0). Binary @ 0x00113050.",
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager9SpawnBombElP12SPAWNER_INFOi": {
@@ -2830,11 +2830,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager16ClearBestBonusesEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 200,
-    "reason": "BonusManager method stub/divergence. Score 1950/400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1950/400 -> 2100/200]",
-    "score": 2100,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Real binary function exists: v1.6.1 BonusManager::ClearBestBonuses @0x0012eb38 (a thunk at @0x0010d7b8 also resolves to it -- both confirmed via decompile_function; search_functions with pattern 'BonusManager' misses it for the same namespace-index quirk as the FruitFactControl pair above, but pattern 'Bonus' finds it). Decompiled body is a single call: `this->m_BestBonuses.clear();` (std::list<Bonus>::clear) -- matches port src/game/BonusManager.cpp:79-81 exactly (`void BonusManager::ClearBestBonuses() { m_BestBonuses.clear(); }`). No semantic gap; prior 'method stub/divergence' entry was a vague asm-verify LCS score with no concrete blocker.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN12BonusManager16GetNextBestBonusERSt14_List_iteratorI5BonusE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3088,7 +3086,7 @@
   "_ZN12ScoreControl6UpdateEf": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 56000,
-    "reason": "ScoreControl::Update — very large function (169%); port adds P2 score path stub and PowerUpManager integration. Documented gap at src/hud/ScoreControl.cpp:55 // TODO: P2 score when MP is ported. Additional structural divergence from PowerUpManager lerp changes on this branch. Score 99605/58800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 100120/58800 -> 100660/56000]",
+    "reason": "ScoreControl::Update \u2014 very large function (169%); port adds P2 score path stub and PowerUpManager integration. Documented gap at src/hud/ScoreControl.cpp:55 // TODO: P2 score when MP is ported. Additional structural divergence from PowerUpManager lerp changes on this branch. Score 99605/58800. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 100120/58800 -> 100660/56000]",
     "score": 100660,
     "verdict": "ACCEPT-deferred"
   },
@@ -3289,11 +3287,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12SlashModInfo5ParseEP12TiXmlElement": {
-    "decided_at": "2026-06-18T02:22Z",
-    "max_score": 3700,
-    "reason": "New symbol (TiXmlElement signature match). Score 42984/3700. [auto-triaged 2026-06-18T02:22Z]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 42984,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 3700,
+    "reason": "FIX-NEEDED #356 batch2 (was never actually triaged -- prior entry was auto-triaged sig-match only): decompiled binary SlashModInfo::Parse @0x0013935c -- after ParseSlashModInfo() runs, if m_pColours is still null (no <colour> XML children), binary allocates ONE default-constructed Colour (opaque black 0/0/0/255 per src/engine/math/Colour.h:11) and sets m_ColourCount=1 (fallback so every slash mod has at least one colour). Port src/game/ItemInfo.cpp:492-515 only populates m_pColours/m_ColourCount inside `if (count > 0)` (count = number of <colour> children); when a mod's XML has zero <colour> children, port leaves m_pColours=nullptr and m_ColourCount=0 -- the default-colour fallback is entirely missing. Impact: any slash mod without an explicit <colour> block (likely the common case) gets m_ColourCount==0, which risks div-by-zero/no-colour in downstream SetModColours indexing and a missing/undefined blade colour visually. Fix: after the `if (count > 0) {...}` block (ItemInfo.cpp:515), add an else-equivalent: if m_pColours is still null, malloc a 1-element Colour buffer with the same (element_size=4,count=1) header layout used elsewhere in this function, default-construct one Colour, and set m_ColourCount=1.",
+    "verdict": "FIX-NEEDED"
   },
   "_ZN12SlashModInfo7UnEquipEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3305,7 +3303,7 @@
   "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
     "decided_at": "2026-06-18T02:35Z",
     "max_score": 7000,
-    "reason": "SpeedControl::SoundNeedsLooping — binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7724/7100 -> 9239/7000]",
+    "reason": "SpeedControl::SoundNeedsLooping \u2014 binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7724/7100 -> 9239/7000]",
     "score": 8763,
     "verdict": "ACCEPT-deferred"
   },
@@ -3464,18 +3462,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12WaveModifierD1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 2100,
-    "reason": "WaveModifier method stub/divergence. Score 16865/2300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 16865/2300 -> 16255/2100]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 16255,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 2100,
+    "reason": "Re-triaged #356 batch2: decompiled binary WaveModifier::~WaveModifier @0x0015048c -- destroys std::vector<PROBABILITY_OVERIDE> m_Overrides then chains GameModifier::~GameModifier. Port src/game/WaveModifier.cpp:250 `WaveModifier::~WaveModifier() {}` -- empty body still triggers the SAME implicit member (m_Overrides vector) + base (GameModifier) destructor chaining per C++ object model; explicit body content is irrelevant to that chaining. Semantically identical. ACCEPT-cosmetic.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN12WaveModifierD2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 2100,
-    "reason": "WaveModifier method stub/divergence. Score 16865/2300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 16865/2300 -> 16255/2100]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 16255,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 2100,
+    "reason": "Same as D1Ev (C1/C2 dtor alias). See _ZN12WaveModifierD1Ev reason.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN13FruitSaveData10AddToTotalEPKcmibb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3686,7 +3684,7 @@
   "_ZN13ScoreModifier11DeferPointsEi": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 1000,
-    "reason": "ScoreModifier::DeferPoints — documented stub; binary accumulates directly into m_DeferredPoints via field at +0x38 while port dispatches through m_pOwner->AddDeferedPoints(). Semantics equivalent. See src/game/ScoreModifier.cpp:94 // ScoreModifier::DeferPoints is not yet RE'd. Score 1860/1000. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 500/1000 -> 700/1000]",
+    "reason": "ScoreModifier::DeferPoints \u2014 documented stub; binary accumulates directly into m_DeferredPoints via field at +0x38 while port dispatches through m_pOwner->AddDeferedPoints(). Semantics equivalent. See src/game/ScoreModifier.cpp:94 // ScoreModifier::DeferPoints is not yet RE'd. Score 1860/1000. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 500/1000 -> 700/1000]",
     "score": 700,
     "verdict": "ACCEPT-deferred"
   },
@@ -4528,7 +4526,7 @@
   "_ZN14PowerUpManager11SetDefaultsEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 3200,
-    "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
+    "reason": "PowerUpManager::SetDefaults \u2014 binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
     "score": 2860,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -4549,7 +4547,7 @@
   "_ZN14PowerUpManager14UnloadTexturesEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 4100,
-    "reason": "PowerUpManager::UnloadTextures — binary uses single std::map iterator loop pattern with binary STL; port iterates m_AllPowerUps then m_ScreenEffectPool with port std::map iterators. Semantically identical two-loop UnloadTextures walk. GOT/iterator codegen differences only. Score 4295/4100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4295/4100 -> 4100/4100]",
+    "reason": "PowerUpManager::UnloadTextures \u2014 binary uses single std::map iterator loop pattern with binary STL; port iterates m_AllPowerUps then m_ScreenEffectPool with port std::map iterators. Semantically identical two-loop UnloadTextures walk. GOT/iterator codegen differences only. Score 4295/4100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4295/4100 -> 4100/4100]",
     "score": 4100,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -4859,11 +4857,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl11LoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6900,
-    "reason": "FruitFactControl method stub/divergence. Score 63403/27600. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 63403/27600 -> 66256/6900]",
-    "score": 66256,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Real binary function exists at v1.6.1 FruitFactControl::LoadContent @0x00170b1c (same namespace-qualification quirk as UnLoadContent -- confirmed via get_function_by_address: __thiscall LoadContent(FruitFactControl*this)). Decompiled body: guard check, then 3x LoadLocalisedTexture() into s_boardTexture/s_senseiHead/s_buttonTexture statics -- matches port src/hud/FruitFactControl.cpp:45-51 exactly (fact_board.tex, sensei_head.tex, arcade_results_arrow.tex loaded into g_factTex0/1/2 under the same guard). No semantic gap.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN16FruitFactControl11RightButtonEv": {
     "decided_at": "2026-06-18T02:35Z",
@@ -4886,11 +4882,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl13UnLoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 2100,
-    "reason": "FruitFactControl method stub/divergence. Score 28040/7900. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 28040/7900 -> 30165/2100]",
-    "score": 30165,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Real binary function exists at v1.6.1 FruitFactControl::UnLoadContent @0x00171a4c (Ghidra search_functions with pattern 'FruitFactControl' misses it because the symbol isn't namespace-qualified in the index, but get_function_by_address/decompile_function confirm __thiscall UnLoadContent(FruitFactControl*this)). Decompiled body: clear guard byte then 3x SmartPtr<Texture>::~SmartPtr release calls (T_1073 x3) -- matches port src/hud/FruitFactControl.cpp:53-60 exactly (g_factContentLoaded=false; g_factTex0/1/2.SetNull()). No semantic gap; prior 'method stub/divergence' entry was a vague asm-verify LCS score with no concrete blocker cited.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN16FruitFactControl4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4914,11 +4908,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl9BeginDrawEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 300,
-    "reason": "FruitFactControl method stub/divergence. Score 2995/3000. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2995/3000 -> 3205/300]",
-    "score": 3205,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "Binary v1.6.1 FruitFactControl::BeginDraw @0x00170804 is NOT a no-op: disassembly is `mov r3,#0x80; str r3,[r0,#0x34]; bx lr` -- it writes this->m_LayerFlags (offset +0x34) = 0x80 on every draw call. The port's BeginDraw at src/hud/FruitFactControl.cpp:228-230 is an empty body with a comment claiming 'Binary @ 0x00170804: bare BX LR (no-op)' -- that comment actually describes the ADJACENT function FruitFactControl::Reset @0x00170800 (4 bytes earlier, confirmed via disassemble_function: 0x00170800 is a bare `bx lr`), a marker-vs-real-function mixup (danger class d). Impact: FruitFactControl::Update() (src/hud/FruitFactControl.cpp:247) also sets m_LayerFlags=0x80 every frame, so this is currently masked in the common case, but BeginDraw fires on every DRAW call independent of Update's timing (e.g. a paused/extra draw tick without an Update call) -- in that case the port leaves m_LayerFlags stale while the binary unconditionally forces it to 0x80. Fix: add `m_LayerFlags = 0x80;` to BeginDraw(float) matching the binary.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN16FruitFactControl9UpPressedEP10InputEvent": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5338,18 +5330,14 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18AchievementManagerC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1500,
-    "reason": "AchievementManager ctor C1 -- R8 added std::list sentinel init for achievement lists; score 13130/1300 [refreshed 2026-05-24 post R8]. Binary has compact ctor vs port full sentinel init. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12630/1300 -> 13020/1500]",
-    "score": 13020,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "Missing struct field + missing population logic, found while pinning down the real ctor address (the port header's whole 'Binary addresses:' block is stale/wrong -- see below). The REAL v1.6.1 AchievementManager ctor bodies are at 0x00117494 (C1) / 0x001174d0 (C2) (identical bodies; thunk @ 0x001143a4 is called from the LIVE GetInstance @ 0x00117e08, confirmed via xrefs -- Meyers-singleton lazy-init with __cxa_guard_acquire). Ctor decompile shows: map pM_All ctor, then an 11-iteration loop constructing pM_ByType[0..10], THEN an explicit `std::vector<unsigned_long>::vector(&this->m_AllHashes)` -- a 12th field the port does not have. Confirmed real (not dead/vestigial) by two more facts: (a) dtor @ 0x00117f58 destroys m_AllHashes explicitly before the map-array teardown loop, and the loop's upper bound is `&this->pM_ByType_0`, proving m_AllHashes sits immediately after pM_ByType[10] in memory; (b) AchievementManager::LoadAchievementInfo @ 0x00118198 (the real, live per-XML-load parse) does `std::vector<unsigned_long>::push_back(&this->m_AllHashes, &local_34)` for every loaded achievement's idHash -- real, non-defunct logic executed on every game boot. Port: src/game/AchievementManager.h:155-156 declares only `m_All` + `m_ByType[11]` (static_assert sizeof==0x120 at line 162); m_AllHashes is entirely absent, so sizeof is wrong (binary is 0x12C = 300 bytes; port asserts 0x120 = 288) and src/game/AchievementManager.cpp's LoadAchievementInfo (lines 85-237) never collects the per-achievement hash list. Impact: whatever downstream code reads m_AllHashes in the binary is silently missing its data source in the port -- consumer not yet located, needs a re-analyst follow-up (xrefs to the m_AllHashes field / vector reads in AchievementManager methods) before a fix can land. Also flagging: AchievementManager.h's entire address-list comment (lines 12-34) is unreliable -- spot check on the ctor's own cited address (0x00108930) resolves to a COMPLETELY unrelated function, `Mortar::ResourceLoaderHelper::ReadType<Mortar::Skeleton::Bone>` (confirmed via get_function_by_address), and GetInstance/UnLoadAchievementInfo/AchievementExists/UnlockedAchievement/UnlockTotalFruitAchievement/UnlockScoreAchievement/etc addresses in that same comment block (0x00108xxx-0x00109xxx range) match NEITHER of the two real compiled copies actually present in the binary (thunks at 0x00103xxx-0x00105xxx + 0x00108000-0x00113xxx range, real bodies at 0x00116xxx-0x00118xxx range) -- looks like stale carried-over v1.5.1 addresses per the project's marker-staleness rule. A couple of individual .cpp markers do spot-match the real Set-A-thunk addresses (QueAchievement 0x001106a4, UnlockBonusAchievement 0x0010f7c4, UnlockAchievementInNetwork 0x0010bd34) so those specific ones are fine; the header's summary block as a whole needs a re-analyst re-verify pass.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN18AchievementManagerC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1500,
-    "reason": "AchievementManager ctor C2 alias of C1. Score 13130/1300 [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12630/1300 -> 13020/1500]",
-    "score": 13020,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "FIX-NEEDED",
+    "reason": "Same finding as _ZN18AchievementManagerC1Ev (C1/C2 Itanium ABI pair, identical ctor bodies at v1.6.1 0x00117494 / 0x001174d0): binary ctor constructs an extra `std::vector<unsigned long> m_AllHashes` field after the 11 pM_ByType maps, populated by LoadAchievementInfo @ 0x00118198 via push_back per achievement idHash, destroyed by dtor @ 0x00117f58. Port's src/game/AchievementManager.h:155-156 / .cpp have no such field. See the C1Ev entry for full evidence chain (ctor/dtor/LoadAchievementInfo decompiles, xref confirmation of which of the two duplicate AchievementManager implementations is live, and the stale-address audit of the header's binary-addresses comment block).",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN18AchievementManagerD1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5407,11 +5395,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager6UpdateEfb": {
-    "decided_at": "2026-06-17T00:00Z",
-    "max_score": 5200,
-    "reason": "PSPParticleManager::Update: score improved 60905->49865/5200. Intrusive list walk with address-of-link cursor + template live-list particle aging pass. Significant diff remains from std::vector<PSPEmitterTemplate> iteration in aging pass. [PSP storage rewrite 2026-06-17]",
-    "score": 49865,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary function DOES exist (prior sweep's search missed it): PSPParticleManager::Update (float,bool) @ v1.6.1 0x0013cee8 (thunk @ 0x0010c8d8). Decompiled body: walks m_pActiveEmitters as an intrusive singly-linked list via a &next-field cursor (ppPVar2/this_01->m_Next), calling PSPParticleEmitter::Update per active+non-paused emitter, then expiry-checks each against its template's m_MaxLifetime (keep if Timer<MaxLifetime, or if MaxLifetime<=0 keep iff !PSPEmitterTemplate::Ends()), splicing expired emitters back into the MemoryPool via MemoryPool::Push. Port: src/engine/particle/PSPParticleManager.cpp:387-419 (PSPParticleManager::Update) is a line-for-line match of this exact algorithm: same intrusive-list cursor walk over m_pActiveEmitters/m_Next, same started/RateScale/paused gate calling a helper (UpdateEmitter, mirroring PSPParticleEmitter::Update) per active emitter, same keep-condition logic (MaxLifetime>0 -> Timer<MaxLifetime; else -> !EmitterTemplateEnds()), same MemoryPool::Push splice-out. Correcting the prior triage note: there is NO std::vector<PSPEmitterTemplate> anywhere in this file or PSPParticleManager.h -- particle templates are a byte-faithful raw blob (uint8_t* m_pTemplates, fixed 0xB8 stride, static_assert'd offsets) and emitter templates are a variable-stride blob walk (GetEmitterTemplate/FindTemplate), exactly matching the binary's custom structures per the project's faithful-impl-over-std policy. The 'aging pass' (per-particle integrate) lives in PSPParticleManager::Draw, not Update, and it also walks per-template intrusive live-lists (tmpl->m_LiveHead / particle->m_NextLink), not a std::vector. The old note's claim of a std::vector-based aging pass appears to be stale/inaccurate; no fidelity gap found on re-decompile.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN18PSPParticleManager7DestroyEv": {
     "decided_at": "2026-06-18T05:57Z",
@@ -5484,11 +5470,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN19NotificationControl7ReleaseEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 300,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1000/500 -> 2110/300]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 2110,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 300,
+    "reason": "Re-triaged #356 batch2: decompiled binary NotificationControl::Release @0x001a46d8 -- body is exactly `m_Texture.SetPtr(nullptr)` (Mortar::SmartPtr<Texture>::SetPtr). Port src/hud/NotificationControl.cpp:267-269 is byte-identical in semantics (m_Texture.SetPtr(nullptr)). Diff is SmartPtr template codegen/reg-alloc boilerplate only. ACCEPT-cosmetic.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN19NotificationControlC1EPKciN6Mortar8SmartPtrINS2_7TextureEEENS_16NotificationTypeE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5738,11 +5724,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN3HUD4InitEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 100,
-    "reason": "Binary calls blx e6d38 (std::list _M_init, sentinel-only, trivial). Port expands controls.clear() to a node-iteration + _ZdlPv loop before resetting sentinels. Functional semantics match (empty list after Init). Container-layer expansion from std::list::clear(). See src/hud/HUD.cpp:21-23. Score 1330/300. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1330/300 -> 1500/100]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 1500,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 100,
+    "reason": "Re-triaged #356 batch2: no standalone binary HUD::Init exists -- HUD init is folded entirely into the ctor HUD::HUD @0x0018c1a0 (std::list::list sentinel init + 7 float fields set to 1.0f), already ASM-verified separately (src/hud/HUD.cpp:10-17). The asm-verify pairing mis-diffs the port's distinct HUD::Init() (src/hud/HUD.cpp:25-27, `controls.clear()`) against that ctor -- comparing a fresh-empty-list constructor to a clear-existing-list method is an invalid pairing (no true binary Init counterpart to diverge from). `controls.clear()` on std::list<HUDControl*> is standard node-dealloc container boilerplate, not a semantic gap. ACCEPT-cosmetic (mis-paired diff, no binary Init to defer against).",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN3HUD4SaveEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6960,11 +6946,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable10LoadHeaderERNS_4FileE": {
-    "decided_at": "2026-06-18T03:11Z",
-    "max_score": 2000,
-    "reason": "New symbol. [auto 2026-06-18T03:11Z]",
-    "score": 17100,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary function DOES exist (prior sweep's search missed the overload): Mortar::StringTable::LoadHeader(Mortar::File&) @ v1.6.1 0x0022d7b0. Decompiled body: reads a 76-byte FileHeader via File::Read<FileHeader>, calls FileHeader::Check, then on success delegates to the generic engine helper FileData<HeaderLookup>::Load(...) which does the single alloc (entries+key-blob) + key_ptr fixup. Port: src/engine/util/StringTable.cpp:130-189 hand-implements that same alloc-once + key-blob-fixup algorithm inline rather than calling a generic FileData<T>::Load template helper -- same pattern as the accepted 'inlined std::container::op' exception (a generic engine helper manually reimplemented, not a custom-binary-structure substitution). NOTE (comment-only bug, not a functional gap): the port's own citation at StringTable.cpp:128 'binary @ 0x0021d7b0' is WRONG -- that address actually resolves to FreeType's open_face_from_buffer (confirmed via get_function_by_address), a totally unrelated function; real address is 0x0022d7b0 (off by 0x10000). Same bug at StringTable.cpp:207 citing LoadLanguage(File&) @ '0x0021d6fc' (resolves to FreeType's FT_GlyphLoader_CopyPoints); real address is 0x0022d6fc. Flagging for a follow-up doc-only fix; does not block this triage since LoadHeader's actual behavior matches the binary.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN6Mortar11StringTable12LoadLanguageEPKc": {
     "decided_at": "2026-06-18T03:11Z",
@@ -7292,11 +7276,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12IFile_Direct4TellEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 200,
-    "reason": "Port has full Tell implementation; binary has bx lr stub. ACCEPT-deferred. Score 1705/200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 1705,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 200,
+    "reason": "Re-triaged #356 batch2: corrected -- binary Mortar::IFile_Direct::Tell @0x002550fc is NOT a bx-lr stub (old reason was wrong); it does `return this->m_Position` (cached field). Port src/engine/asset/IFile_Direct.cpp:81-86 instead calls ftell(m_fp) every time and refreshes m_cursor as a side effect (falling back to cached m_cursor only if m_fp is null). Port's Read()/Write() never update m_cursor themselves (only Seek() does), so the live ftell() call is load-bearing for port correctness today -- but the OS file cursor and binary's m_Position track the same value after every Read/Write/Seek, so both return the same observable position. Divergence is an implementation-strategy difference (cached field vs recomputed syscall), not an output bug. ACCEPT-cosmetic.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12IFile_Direct5CloseEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7517,11 +7501,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 500,
-    "reason": "Binary (0x0019cec0) was a 3-instruction wrapper; port implements full BST-walk using AsciiString::Compare. Address not yet pinned. Body inferred from std::map tree traversal. Tier-2 gap. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4030/500 -> 3830/500]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 3830,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 500,
+    "reason": "Re-triaged #356 batch2: corrected wrong marker -- old reason cited 0x0019cec0 as the binary address, but that address resolves to MenuButton::AddPiece (unrelated function), not AnimationState::GetAnimIter. Correct binary address is 0x0026ed8c (non-const overload): body is `std::_Rb_tree::find((this->m_AnimList).f0 + 0xc, param_1)` -- a 5-instruction thunk taking &m_AnimList's _Rb_tree sub-object and tail-calling the real libstdc++ find(). This is the inlined-std-container base+offset trap: if the port hand-rolls a BST walk with AsciiString::Compare instead of calling std::map::find, offsetof is identical and semantics match as long as AsciiString::Compare matches std::less<AsciiString> ordering (lexicographic) -- not a layout bug. ACCEPT-cosmetic, with the address citation corrected for future re-triage.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationState11GetAnimIterEm": {
     "decided_at": "2026-06-18T01:24Z",
@@ -7924,11 +7908,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar15InputDeviceBada7DestroyEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 100,
-    "reason": "InputManager/InputDeviceBada stub; see src/engine/input/InputDeviceBada.cpp TODOs. Score 1340/300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1340/300 -> 1500/100]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 1500,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 100,
+    "reason": "FIX-NEEDED #356 batch2: binary InputDeviceBada::Destroy @0x0024278c tail-calls base Mortar::InputDevice::Destroy @0x00275938, which clears m_ActionMappers (std::list<InputActionMapper*>::_M_clear + sentinel reset). Port src/engine/input/InputDeviceBada.cpp:39-43 does NOT call the base Destroy() at all -- instead clears an unrelated port-only member (m_bindings). Port base src/engine/input/InputDevice.cpp:87 `InputDevice::Destroy() {}` is an empty stub with an unverified `Binary @ 0x????` marker (never RE'd) -- should clear `actionMappers`. Impact: actionMappers list never cleared on device teardown; if InputManager re-Update()s a destroyed device or a mapper is freed elsewhere, this is a dangling-list/UAF-class risk, not just cosmetic. Fix: port InputDevice::Destroy() to clear actionMappers (matches binary @0x00275938), and have InputDeviceBada::Destroy() chain to base (matches binary tail-call @0x0024278c) before/in addition to clearing m_bindings.",
+    "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar15InputDeviceBadaC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8199,11 +8183,9 @@
     "verdict": "ACCEPT-defunct"
   },
   "_ZN6Mortar4Mesh11AddGeometryERKNS_8SmartPtrINS_8GeometryEEE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 200,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 900/400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 2810/400 -> 2800/200]",
-    "score": 2800,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary function DOES exist (prior sweep's search missed it): Mortar::Mesh::AddGeometry(SmartPtr<Geometry> const&) @ v1.6.1 0x00272fc8 (thunk @ 0x00108d18), decompiled body is `m_Geometries.push_back(param_1)` -- a plain std::vector push_back, no custom binary structure involved. Port: src/engine/asset/Mesh.cpp:250-252 `Mesh::AddGeometry(SmartPtr<Geometry> geom) { m_Geometries.push_back(geom); }` -- identical algorithm, same container type (std::vector<SmartPtr<Geometry>>) on both sides. No fidelity gap.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN6Mortar4Mesh11DrawTriListEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8258,11 +8240,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh4DrawERK9_Matrix44IfE": {
-    "decided_at": "2026-06-18T07:20Z",
-    "max_score": 7600,
-    "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
-    "score": 62550,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Decompiled binary @ v1.6.1 0x00272e98 confirms algorithm order matches port exactly: (1) single-bone-count branch composing finalWorld via GetBoneVertTransform*worldTransform, else worldTransform unchanged; (2) SetValue on m_WorldProp/m_ViewProp/m_ProjProp; (3) conditional WVP = Proj*(View*World) compute + SetValue when m_WVPProp != null; (4) loop over m_Geometries calling Geometry::Render per entry. Port: src/engine/asset/Mesh.cpp:156-201 (Mesh::Draw), which already carries detailed DIFFERS/Port-specific comments (lines 148-155) explaining the two known structural divergences: EffectProperty SetValue calls are defunct-stubbed no-ops (call shape preserved), and Geometry::Render takes an explicit wvp arg (GLES2 shader path) vs the binary's fixed-function GL1.x matrix-stack global read -- same fixed-function GL output, different mechanism, already documented project-wide. Confirms the prior 'cross-build ASM stable (0 raw DIVERGE)' finding; promoting out of permanent-limbo 'deferred for re-verify' to a firm ACCEPT-cosmetic since no new gap was found on re-decompile.",
+    "decided_at": "2026-07-03T15:20Z"
   },
   "_ZN6Mortar4Mesh8DrawCubeEfff6ColourPNS_19DrawEffectContainerE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8411,7 +8391,7 @@
   "_ZN6Mortar5Touch11GetAnyTouchEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 1500,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 7195,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -8442,14 +8422,14 @@
   "_ZN6Mortar5Touch28SendIndividualTouchCallbacksEPNS_11InputDeviceE": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 8400,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 56420,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar5Touch5ClearEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 1500,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 7500,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -8463,7 +8443,7 @@
   "_ZN6Mortar5Touch7_UpdateEv": {
     "decided_at": "2026-06-17T16:29Z",
     "max_score": 2000,
-    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
+    "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port \u2014 functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
     "score": 8565,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -8856,7 +8836,7 @@
   "_ZN7PowerUp16SetDeferedPointsEi": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 2900,
-    "reason": "PowerUp::SetDeferedPoints — binary and port both walk m_ModList and call DeferPoints on type-2 (ScoreModifier) entries. Diff is entirely std::list iterator codegen: binary uses Sourcery-GCC 4.4.1 linked-list node traversal directly; port uses C++11-style iterator. Logic confirmed ASM-verified. Score 3210/2900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3800/2900 -> 3600/2900]",
+    "reason": "PowerUp::SetDeferedPoints \u2014 binary and port both walk m_ModList and call DeferPoints on type-2 (ScoreModifier) entries. Diff is entirely std::list iterator codegen: binary uses Sourcery-GCC 4.4.1 linked-list node traversal directly; port uses C++11-style iterator. Logic confirmed ASM-verified. Score 3210/2900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 3800/2900 -> 3600/2900]",
     "score": 3600,
     "verdict": "ACCEPT-cosmetic"
   },
@@ -9556,11 +9536,11 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZNK6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 500,
-    "reason": "Binary (0x0019ce74) was a short wrapper; port implements full BST-walk using AsciiString::Compare. Same Tier-2 gap as non-const variant. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4175/1000 -> 3830/500]",
+    "decided_at": "2026-07-03T15:10Z",
     "score": 3830,
-    "verdict": "ACCEPT-deferred"
+    "max_score": 500,
+    "reason": "Re-triaged #356 batch2: corrected wrong marker -- old reason cited 0x0019ce74, which resolves to MenuButton::AddPiece (unrelated), not AnimationState::GetAnimIter. Correct binary address is 0x0026ed54 (const overload): identical 5-instruction thunk to the non-const variant, `std::_Rb_tree::find((this->m_AnimList).f0 + 0xc, param_1)`. Same inlined-std-container base+0xc trap as the non-const variant -- ACCEPT-cosmetic, address citation corrected.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZNK6Mortar14AnimationState11GetAnimIterEm": {
     "decided_at": "2026-06-18T01:24Z",
