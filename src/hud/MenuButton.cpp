@@ -341,7 +341,14 @@ void MenuButton::CreateFruit() {
 // v1.6.1 MenuButton::Release @0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (asm-inspector)
 void MenuButton::Release() {
-    Mortar::Entity* e = m_pTrackedFruit ? static_cast<Mortar::Entity*>(m_pTrackedFruit) : m_pEntity;
+    // v1.6.1 MenuButton::Release @0x0019d064 reads ONLY m_pTrackedFruit (+0x14C).
+    // Fruit::KillFruit/Fruit::Release null m_pTrackedFruit (and the fruit's m_pOwner)
+    // but leave m_pEntity dangling at the freed/recycled fruit. The old
+    // `m_pTrackedFruit ? : m_pEntity` fallback wrote m_pOwner=0 through that dangling
+    // m_pEntity into freed heap -- on wasm that block is reused by a Texture, so the
+    // write clobbered a ring texture's refcount/vtable -> over-freed m_RingTex[13]/[16]
+    // -> #348 SmartPtr::assign UAF trap in GameModeScreen::CreateControls.
+    Mortar::Entity* e = m_pTrackedFruit ? static_cast<Mortar::Entity*>(m_pTrackedFruit) : nullptr;
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
