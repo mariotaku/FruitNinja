@@ -36,9 +36,9 @@ public:
     // with random angles. Update: accumulated via quaternion spin each frame.
     Matrix44 m_Rotation;                        // +0x4C
 
-    // +0x8C: drip rate (controls SplatEntity spawn interval). Init = param_2.
-    // >0 gates splat spawning in Update drip loop.
-    float m_FadeRate;                           // +0x8C
+    // +0x8C: drip rate, drips/sec (controls SplatEntity spawn interval; interval = 1/rate).
+    // Init = dripRate param. >0 gates splat spawning in Update drip loop.
+    float m_DripRate;                           // +0x8C
 
     // +0x90: fruit type index. Init = param_4; passed to MakeSplat.
     int m_FruitType;                            // +0x90
@@ -61,12 +61,16 @@ public:
     Jiblet();
     virtual ~Jiblet();
 
-    // Binary @ 0x1e50c0 — bespoke 9-arg spawn entry called by Fruit slice code.
+    // Binary @ 0x1e50c0 — bespoke 8-arg spawn entry. Callers: SuperFruitControl::
+    // ExplodeSuperFruit @0x1baa20, SuperFruitControl::SpawnJibs @0x1bc748.
     // NOT an override of Entity::Init vtable slot; distinct function.
-    void Init(float gravScale, float fadeRate, int fruitType,
-              Vec3* posIn, Vec3* velIn,
-              const Mortar::SmartPtr<Mortar::Model>& mdl,
-              uint32_t emitterHash, Vec3* gravBase);
+    //
+    // Binary-faithful signature (source-level; by-value Vec3/SmartPtr required
+    // so the mangled name matches the binary for asm-verify pairing):
+    //   _ZN6Jiblet4InitEiR8_Vector3IfEfS1_N6Mortar8SmartPtrINS3_5ModelEEEmfS1_
+    void Init(int fruitType, Vec3& pos, float scale, Vec3 vel,
+              Mortar::SmartPtr<Mortar::Model> mdl,
+              unsigned long emitterHash, float dripRate, Vec3 grav);
 
     // Vtable slot 4: Binary @ 0x1e5330.
     // Quaternion-spin integrator, drip loop (SplatEntity::GetFree), emitter sync, bounds kill.
@@ -85,7 +89,7 @@ static_assert(__builtin_offsetof(Jiblet, m_pModel)       == 0x40, "m_pModel bina
 static_assert(__builtin_offsetof(Jiblet, m_EmitterHash)  == 0x44, "m_EmitterHash binary offset wrong");
 static_assert(__builtin_offsetof(Jiblet, m_pEmitter)     == 0x48, "m_pEmitter binary offset wrong");
 static_assert(__builtin_offsetof(Jiblet, m_Rotation)     == 0x4C, "m_Rotation binary offset wrong");
-static_assert(__builtin_offsetof(Jiblet, m_FadeRate)     == 0x8C, "m_FadeRate binary offset wrong");
+static_assert(__builtin_offsetof(Jiblet, m_DripRate)     == 0x8C, "m_DripRate binary offset wrong");
 static_assert(__builtin_offsetof(Jiblet, m_FruitType)    == 0x90, "m_FruitType binary offset wrong");
 static_assert(__builtin_offsetof(Jiblet, m_GravBase)     == 0x94, "m_GravBase binary offset wrong");
 static_assert(__builtin_offsetof(Jiblet, m_SpinRateX)    == 0xA0, "m_SpinRateX binary offset wrong");

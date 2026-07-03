@@ -486,10 +486,10 @@ void SuperFruitControl::ExplodeSuperFruit()
         // angular velocity: dirN * 700.0  (DAT_001bae64=700.0f)
         Vec3 angVel = dirN * 700.0f;
 
-        // Jiblet::Init(gravScale=1.0, fadeRate=0.0, fruitType, pos=&m_WorkVec5, vel, mdl, emitterHash=0, angVel)
+        // Jiblet::Init(fruitType, pos=this->m_WorkVec5, scale=1.0, vel, mdl, emitterHash=0, dripRate=0.0, grav=angVel)
         // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: pos arg is &this->m_WorkVec5
         // (SuperFruitControl+0xf0, the explosion origin). The prior host+0x74 cast was wrong.
-        jiblet->Init(1.0f, 0.0f, (int)hostFruitType, &m_WorkVec5, &vel, mdl, 0, &angVel);
+        jiblet->Init((int)hostFruitType, m_WorkVec5, 1.0f, vel, mdl, 0, 0.0f, angVel);
 
         // post-init writes: copy host transform onto the jib actor
         jiblet->m_Age = 0.0f;                // jib+0xac = 0 (reset age set by Init to -0.04)
