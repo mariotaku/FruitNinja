@@ -480,7 +480,7 @@ void DebugFps_Draw(float fps) {
             fc, buf, 12.0f,
             Colour(255, 255, 255, 255),
             0L, 0.0f,
-            Mortar::FONT_EFFECT_NONE);
+            Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
         // Do NOT call ApplyGradient_TopBottom here.
         // BuildSurfaces (called by the ctor) bakes all vertices to the ctor
         // base colour (255,255,255,255) -- flat white.  ApplyGradient_TopBottom

@@ -55,6 +55,12 @@ struct GlyphCacheKey {
 
 class FontCacheObjectTTF {
 public:
+    // FONT_EFFECT_ENUM -- values from binary (v1.6.1 BakedStringTTF ctor @0x00249a5c).
+    // 0 = no effect, 1 = bold/outline driven by m_FmtCount.
+    // Nested per the binary's mangled name (Mortar::FontCacheObjectTTF::FONT_EFFECT_ENUM),
+    // NOT a namespace-level Mortar::FONT_EFFECT.
+    enum FONT_EFFECT_ENUM { FONT_EFFECT_NONE = 0, FONT_EFFECT_BOLD = 1 };
+
     // Loads the TTF face from a file path.
     // pixelSize is the default pixel height; GetGlyph accepts per-call sizes.
     FontCacheObjectTTF(FT_Library ftLib, const char* path, int defaultPixelSize);
