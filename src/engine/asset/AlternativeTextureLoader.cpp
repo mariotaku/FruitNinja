@@ -26,7 +26,7 @@ AsciiString AlternativeTextureLoader::Postfix;
 // AutoLocks the inner data source, copies DataInfo, overrides w/h with apparent values.
 // ---------------------------------------------------------------------------
 SubstituteApparentSizeTextureSourceData::SubstituteApparentSizeTextureSourceData(
-        TextureSource* inner,
+        const SmartPtr<TextureSource>& inner,
         unsigned long apparentW,
         unsigned long apparentH)
     : m_innerLock(inner) // TextureSourceAutoLock: calls inner->LockLayers()
@@ -90,37 +90,25 @@ SubstituteApparentSizeTextureSource::SubstituteApparentSizeTextureSource(
 }
 
 SubstituteApparentSizeTextureSource::~SubstituteApparentSizeTextureSource() {
-    if (m_DataSource) {
-        m_DataSource->Release();
-        m_DataSource = 0;
-    }
-    if (m_ApparentSizeSource) {
-        m_ApparentSizeSource->Release();
-        m_ApparentSizeSource = 0;
-    }
+    // m_DataSource / m_ApparentSizeSource are SmartPtr<TextureSource>; their own
+    // dtors Release automatically.
 }
 
 // SetSource @0x00225c0c: un/register as callee on inner source events, store at +0x1c.
 // Binary: un-registers old source's Event1(+0x14) and Event0(+0x0c) callbacks,
 //   SetPtrCast into +0x1c, re-registers + TriggerFormatChanged.
-// Port: simplified -- store raw pointer (AddRef on set, Release on previous).
+// Port: SmartPtr assignment performs the AddRef(new)/Release(old) via SetPtrCast.
 void SubstituteApparentSizeTextureSource::SetSource(SmartPtr<TextureSource>& src) {
-    TextureSource* prev = m_DataSource;
-    m_DataSource = src.Get();
-    if (m_DataSource) m_DataSource->AddRef();
-    if (prev)         prev->Release();
+    m_DataSource = src;
     if (m_DataSource) {
         TriggerFormatChanged();
     }
 }
 
 // SetApparentSize(SmartPtr&) @0x00225b0c: register on apparent source Event0, store at +0x20.
-// Port: simplified -- store raw pointer.
+// Port: SmartPtr assignment performs the AddRef(new)/Release(old) via SetPtrCast.
 void SubstituteApparentSizeTextureSource::SetApparentSize(SmartPtr<TextureSource>& src) {
-    TextureSource* prev = m_ApparentSizeSource;
-    m_ApparentSizeSource = src.Get();
-    if (m_ApparentSizeSource) m_ApparentSizeSource->AddRef();
-    if (prev)                 prev->Release();
+    m_ApparentSizeSource = src;
 }
 
 // SetApparentSize(u16, u16): store w/h into +0x24/+0x26.

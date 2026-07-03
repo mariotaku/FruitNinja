@@ -8,20 +8,19 @@
 
 namespace Mortar {
 
-// AutoLock ctor: calls LockLayers on the wrapped source.
-TextureSourceAutoLock::TextureSourceAutoLock(TextureSource* src)
+// AutoLock ctor @0x002264e0: AddRef src into m_source, unconditionally LockLayers
+// (binary has no null guard here -- all live call sites already checked non-null).
+TextureSourceAutoLock::TextureSourceAutoLock(const Mortar::SmartPtr<TextureSource>& src)
     : m_source(src)
     , m_data(0)
 {
-    if (src) {
-        m_data = src->LockLayers();
-    }
+    m_data = src.Get()->LockLayers();
 }
 
-// AutoLock dtor: releases the locked data.
+// AutoLock dtor: releases the locked data (m_source's SmartPtr dtor handles Release).
 TextureSourceAutoLock::~TextureSourceAutoLock() {
-    if (m_source && m_data) {
-        m_source->UnlockLayers(m_data);
+    if (m_data) {
+        m_source.Get()->UnlockLayers(m_data);
     }
 }
 

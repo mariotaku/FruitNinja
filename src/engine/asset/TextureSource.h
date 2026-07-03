@@ -176,6 +176,9 @@ public:
 
         Data() : pixels(0), pixelsSize(0) {}
         virtual ~Data() {}
+        // TODO: v1.6.1 0x2cf7e0 (TextureSource::Data vtable) -- binary base Data has a pure-virtual
+        // GetLayer(unsigned long,unsigned long,unsigned long&) const (Tex1Data/SubstituteApparentSize
+        // override it); port Data has only a virtual dtor. Vtable-shape divergence, defer to #376.
     };
 
     // Convenience typedefs (in-class scope).
@@ -220,16 +223,19 @@ public:
 typedef Mortar::TextureSource::Data TextureSourceData;
 
 // TextureSource::AutoLock -- RAII helper that calls LockLayers/UnlockLayers.
-// Binary: {TextureSource* source @+0x00, TextureSourceData* data @+0x04}.
-// Size = 8 bytes (two 4-byte pointers on ARM32).
+// Binary: {SmartPtr<TextureSource> source @+0x00, TextureSourceData* data @+0x04}.
+// Size = 8 bytes (SmartPtr<T> is a single 4-byte T* + a 4-byte data ptr on ARM32).
+// ASM-spec v1.6.1 TextureSource::AutoLock @0x002264e0: SmartPtr member (AddRef via
+// SetPtrCast), LockLayers unconditional; dtor UnlockLayers if m_data then Release.
 class TextureSourceAutoLock {
 public:
-    TextureSource*     m_source;
-    TextureSourceData* m_data;
+    Mortar::SmartPtr<TextureSource> m_source;
+    TextureSourceData*              m_data;
 
-    // Binary ctor: calls inner->LockLayers() and stores result.
-    explicit TextureSourceAutoLock(TextureSource* src);
-    // Binary dtor: calls m_source->UnlockLayers(m_data).
+    // Binary ctor @0x002264e0: AddRef via SmartPtr copy, then unconditional LockLayers
+    // (no null guard in the binary).
+    explicit TextureSourceAutoLock(const Mortar::SmartPtr<TextureSource>& src);
+    // Binary dtor: UnlockLayers(m_data) if m_data, then SmartPtr releases m_source.
     ~TextureSourceAutoLock();
 };
 
