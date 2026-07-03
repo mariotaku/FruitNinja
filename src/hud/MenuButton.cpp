@@ -340,21 +340,20 @@ void MenuButton::CreateFruit() {
 
 // v1.6.1 MenuButton::Release @0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (asm-inspector)
+// DIFFERS: v1.6.1 MenuButton::Release @0x0019d064 only clears m_pTrackedFruit's backref and leaves
+// the menu fruit alive; port KILLS the tracked fruit/bomb here (mirrors SetToMultiplayerState) so an
+// orphaned menu fruit never outlives its freed button and later reads freed heap -- on wasm-32 the
+// freed MenuButton block is reused by a ring Texture (the binary's allocator + slice-fling-falloff
+// timing tolerate the dangle; the port does not). Removes both the orphan pile-up and the #348/#364
+// ring-texture UAF.
 void MenuButton::Release() {
-    // v1.6.1 MenuButton::Release @0x0019d064 reads ONLY m_pTrackedFruit (+0x14C).
-    // Fruit::KillFruit/Fruit::Release null m_pTrackedFruit (and the fruit's m_pOwner)
-    // but leave m_pEntity dangling at the freed/recycled fruit. The old
-    // `m_pTrackedFruit ? : m_pEntity` fallback wrote m_pOwner=0 through that dangling
-    // m_pEntity into freed heap -- on wasm that block is reused by a Texture, so the
-    // write clobbered a ring texture's refcount/vtable -> over-freed m_RingTex[13]/[16]
-    // -> #348 SmartPtr::assign UAF trap in GameModeScreen::CreateControls.
-    Mortar::Entity* e = m_pTrackedFruit ? static_cast<Mortar::Entity*>(m_pTrackedFruit) : nullptr;
-    if (e) {
+    if (m_pTrackedFruit) {
+        Mortar::Entity* e = static_cast<Mortar::Entity*>(m_pTrackedFruit);
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
-            static_cast<Fruit*>(e)->m_pOwner = nullptr;
+            static_cast<Fruit*>(e)->KillFruit(false);
         } else if (m_FruitType == bombThreshold) {
-            static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
+            static_cast<Bomb*>(e)->KillBomb();
         }
     }
     delete m_pLabelFg;     m_pLabelFg     = nullptr;
