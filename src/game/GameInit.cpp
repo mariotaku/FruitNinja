@@ -25,6 +25,7 @@
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
 #include "entities/EntityFactory.h"
+#include "game/EntityTypes.h"
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
 #include "entities/BombFlash.h"
@@ -164,10 +165,8 @@ void GameInit(unsigned long) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         // Binary uses 7 types (port previously had 5). Matches v1.6.1 @ 0x001ce1c0.
         am->Initialise(7, 0x2000);
-        am->RegisterFactory(&CreateEntity);
-        // DIFFERS: binary registers HashTypeConvert delegate; port passes
-        // nullptr (hash converter only used by LoadEntity, which is defunct).
-        am->RegisterHashConverter(nullptr);
+        am->RegisterFactory(Mortar::Delegate1<Mortar::Entity*, long>::MakeFree(&CreateEntity));
+        am->RegisterHashConverter(Mortar::Delegate2<long, unsigned long, bool&>::MakeFree(&HashTypeConvert));
     }
 
     // Step 8: TutorialControl (sizeof 0xA0 = 160 bytes)
