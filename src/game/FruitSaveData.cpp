@@ -237,11 +237,14 @@ int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
 // Save game-state snapshot
 // ----------------------------------------------------------------------
 
-// SaveGameState @ 0x00129ca8 -- resets resume snapshot (entities + waves).
+// v1.6.1 FruitSaveData::SaveGameState @0x0015286c: body is ONLY m_EntityStates.clear()
+// (2-instruction thunk; dead code -- zero callers in the binary). m_WaveStates /
+// m_bHasActiveGame are reset elsewhere (WaveManager::SaveWaveInfo @0x001254b0 on a
+// throwaway copy; GameInit toggles bHasActiveGame), NOT here -- the port previously
+// double-reset them, wiping wave-resume state at this call site. (Old marker cited
+// 0x00129ca8, which is inside WaveManager::Init.)
 void FruitSaveData::SaveGameState() {
     m_EntityStates.clear();
-    m_WaveStates.clear();
-    m_bHasActiveGame = 0;
 }
 
 void FruitSaveData::CheckDatesHaveChanged() {
