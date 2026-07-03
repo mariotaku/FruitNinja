@@ -962,9 +962,11 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
 void Font::DrawString(float scale, float yLineFactor, float rotZ,
                       Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                       Vec2 maxWH, int alignment, float z,
-                      MortarRectangleDec* clipRect)
+                      Mortar::MortarRectangleT<float>* clipRect)
 {
-    // DIFFERS: clipRect path not implemented -- no shipping caller uses it
+    // TODO: v1.6.1 0x0024c7f0 (Font::DrawString) -- clipRect path unimplemented (deferred): entry translate(-pos)+Scale(1/scale);
+    // per-glyph clamp quad to rect + UV lerp (Centre @0x001a3900 recentres); exit Scale(scale)+translate(+pos).
+    // LIVE caller: ScrollingMenuItem::Draw passes parent-menu bounds. See task tracker.
     (void)clipRect;
     (void)z;
 
@@ -1422,7 +1424,7 @@ void Font::DrawString(Mortar::Utf8StringIterator& iter,
                       const Colour& colour, int alignment,
                       float posX, float posY, float posZ,
                       float scale, float maxWHx, float maxWHy, float rotZ,
-                      MortarRectangleDec* clip)
+                      Mortar::MortarRectangleT<float>* clip)
 {
     if (iter.IsEmpty()) return;
     Vec3 pos(posX, posY, posZ);
@@ -1463,7 +1465,7 @@ void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
 // The binary's wrapper pins yLineFactor = 1.0 (vmov.f32 s1, 0x3f800000 @
 // 0x00199b1c); this shape originates from that wrapper, so yLineFactor = 1.0.
 void Font::DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
-                      Vec2 maxWH, int alignment, float rotZ, MortarRectangleDec* clipRect,
+                      Vec2 maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect,
                       float z)
 {
     DrawString(scale, /*yLineFactor=*/1.0f, rotZ, iter, pos, colour, maxWH, alignment, z, clipRect);
@@ -1475,7 +1477,7 @@ void Font::DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float sc
 // DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,maxWHy,rotZ,clip).
 void Font::DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
                       Colour colour, float scale, float maxWHx, float maxWHy,
-                      int alignment, MortarRectangleDec* clip, float rotZ)
+                      int alignment, Mortar::MortarRectangleT<float>* clip, float rotZ)
 {
     DrawString(iter, colour, alignment, posX, posY, posZ, scale, maxWHx, maxWHy, rotZ, clip);
 }

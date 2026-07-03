@@ -2,6 +2,7 @@
 #define MORTAR_TYPES_H
 
 #include <cstdint>
+#include "math/Vec2.h"
 
 // Screen constants (use FN_ prefix to avoid MSYS2 conflicts)
 #define FN_SCREEN_W 480
@@ -26,6 +27,12 @@ struct MortarRectangleT {
 
     T Width()  const { return right - left; }
     T Height() const { return bottom - top; }
+
+    // v1.6.1 MortarRectangleT<float>::Scale(float) @0x0024e194 -- uniform scale of all 4 edges.
+    void Scale(T s) { left *= s; top *= s; right *= s; bottom *= s; }
+
+    // v1.6.1 MortarRectangleT<float>::Centre() @0x001a3900 -- returns rect midpoint (binary: _Point2D<float>).
+    Vec2 Centre() const { return Vec2((left + right) * (T)0.5, (top + bottom) * (T)0.5); }
 };
 
 // Binary v1.6.1 Mortar::ALIGNMENT_TYPE (1 byte under -fshort-enums).

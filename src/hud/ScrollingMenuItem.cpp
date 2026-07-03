@@ -86,8 +86,8 @@ void ScrollingMenuItem::Draw() {
 
     // (3) Clip rect derived from the parent menu's centre + width/height.
     // Only built when this item has a parent; otherwise no clipping.
-    Mortar::MortarRectangleDec clipRect;
-    Mortar::MortarRectangleDec* pClip = nullptr;
+    Mortar::MortarRectangleT<float> clipRect;
+    Mortar::MortarRectangleT<float>* pClip = nullptr;
     if (m_pParent != nullptr) {
         float h = m_pParent->GetHeight();   // vtable +0x44 -> ScrollingMenu +0xa0
         float w = m_pParent->GetWidth();    // vtable +0x48 -> ScrollingMenu +0xa4

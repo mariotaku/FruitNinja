@@ -8,6 +8,7 @@
 #include "math/Vec2.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
+#include "core/MortarTypes.h"
 #include <vector>
 
 namespace Mortar {
@@ -21,13 +22,6 @@ enum FontAlignment {
     FONT_ALIGN_MIDDLE = 0x04,
     FONT_ALIGN_BOTTOM = 0x08,
     FONT_ALIGN_WRAP   = 0x10
-};
-
-// Stub for clip-rect parameter (shipping callers always pass nullptr)
-struct MortarRectangleDec {
-    float left, top, right, bottom;
-    float Width()  const { return right - left; }
-    float Height() const { return bottom - top; }
 };
 
 // Non-polymorphic: no vtable (binary ctor @ 0x00198534 writes no PTR_/vptr).
@@ -122,7 +116,7 @@ public:
     void DrawString(float scale, float yLineFactor, float rotZ,
                     Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                     Vec2 maxWH, int alignment, float z,
-                    MortarRectangleDec* clipRect = nullptr);
+                    Mortar::MortarRectangleT<float>* clipRect = nullptr);
 
     // Binary-shape wrapper @ 0x00199aa0.
     //
@@ -136,7 +130,7 @@ public:
     //   s3 = scale
     //   s4 = maxWHx, s5 = maxWHy
     //   s6 = rotZ
-    //   [sp+0] = MortarRectangleDec*
+    //   [sp+0] = Mortar::MortarRectangleT<float>*
     // Internally hardcodes yLineFactor = 1.0 when forwarding to the full
     // Font_DrawString @ 0x00198e44. Use this overload when matching binary
     // call sites byte-for-byte; for ad-hoc port-side text rendering prefer
@@ -145,7 +139,7 @@ public:
                     const Colour& colour, int alignment,
                     float posX, float posY, float posZ,
                     float scale, float maxWHx, float maxWHy, float rotZ,
-                    MortarRectangleDec* clip = nullptr);
+                    Mortar::MortarRectangleT<float>* clip = nullptr);
 
     // Port-side convenience wrapper. Forwards to the binary-shape overload
     // above with maxWH = (0, 0). NOT a binary ABI match -- the second arg
@@ -215,13 +209,13 @@ public:
     // forwards to DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,
     // z,clipRect) with yLineFactor pinned to 1.0 (binary @ 0x00199b1c).
     void DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
-                    Vec2 maxWH, int alignment, float rotZ, MortarRectangleDec* clipRect, float z);
+                    Vec2 maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect, float z);
     // Binary @ 0x0024d6b8 (v1.6.1; stale 0x00199aa0 v1.5.x) -- by-value-arg ABI shape of the binary DrawString wrapper;
     // forwards to DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,
     // maxWHy,rotZ,clip).
     void DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
                     Colour colour, float scale, float maxWHx, float maxWHy,
-                    int alignment, MortarRectangleDec* clip, float rotZ);
+                    int alignment, Mortar::MortarRectangleT<float>* clip, float rotZ);
     // TODO: v1.6.1 Font::FindAdvanceOfNextWord @0x0024c2a0 -- word-advance helper for word-wrap. BLOCKED on the
     // Mortar::WordWrap subsystem (CanBreakLineAt + East-Asian line-break tables).
     // Binary return type is Utf8StringIterator/char* (start iter if word fits,
