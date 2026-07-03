@@ -216,6 +216,10 @@ Fruit::~Fruit() {
 //  against v1.6.1 Fruit::Init before re-marking ASM-verified.)
 // v1.6.1 Fruit::Init @0x001e2898 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
+    // v1.6.1 Fruit::Init @0x001e2898: reset per-fruit event lists on pooled reuse (drops stale GPO subscribers so a recycled fruit never fires a delegate bound to a freed object).
+    m_OnSliced.Clear();
+    m_OnKilled.Clear();
+    m_OnExpired.Clear();
     // v1.6.1 Fruit::Init @0x001e2898: range-check fruitType; out-of-range falls back to RandomFruit(true).
     if (fruitType >= 0 && fruitType < (long)FruitInfo_GetCount()) {
         m_FruitType = (uint8_t)fruitType;

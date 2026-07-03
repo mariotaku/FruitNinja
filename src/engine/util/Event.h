@@ -74,6 +74,9 @@ public:
         }
     }
 
+    // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
+    void Clear() { m_List.clear(); }
+
 private:
     ListT m_List;
 };
@@ -111,6 +114,9 @@ public:
             (*it)(a1);
         }
     }
+
+    // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
+    void Clear() { m_List.clear(); }
 
 private:
     ListT m_List;
@@ -150,6 +156,9 @@ public:
         }
     }
 
+    // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
+    void Clear() { m_List.clear(); }
+
 private:
     ListT m_List;
 };
@@ -187,6 +196,9 @@ public:
             (*it)(a1, a2, a3);
         }
     }
+
+    // Drop all subscribers (matches binary's "assign fresh-empty EventN" reset idiom).
+    void Clear() { m_List.clear(); }
 
 private:
     ListT m_List;
