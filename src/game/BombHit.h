@@ -49,11 +49,12 @@ void RetryLevel();
 // negative (visually shrinks them to zero) over the retryTimer window.
 void RetryUpdate(float dt);
 
-// DrawCritHit (v1.6.1) @ 0x001ccfa0 — draws the current CriticalFlash tint
-// as a full-screen textured quad. Called from GameDraw after the slice-line
-// pass and before the HUD overlays, so the flash sits under the logo/buttons.
-// No-op when the timer is 0 or >= CRITICAL_FLASH_TIME.
-// Lazy-loads "flash.tex" on first call.
+// ASM-spec v1.6.1 DrawCritHit @0x001ccfa0: lazy-loads shared "flash.tex" but draws
+// UNTEXTURED -- Texture vtable slot 4 UnSet(true) before matrix setup + again after
+// Mesh::DrawQuadUnCached(tint, NULL). Slot map: vptr+0xc=Set, vptr+0x10=UnSet(bool).
+// Draws the current CriticalFlash tint as a full-screen flat-colour quad. Called
+// from GameDraw after the slice-line pass and before the HUD overlays, so the
+// flash sits under the logo/buttons. No-op when the timer is 0 or >= CRITICAL_FLASH_TIME.
 void DrawCritHit();
 
 // RemoveFlashEntities v1.6.1 @ 0x001cb4b0 — iterate type-4 (BombBlast) entities and

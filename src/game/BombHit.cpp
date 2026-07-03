@@ -16,10 +16,10 @@
 #include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
 #include "render/MatrixManager.h"
-#include "render/Renderer.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
+#include "asset/Mesh.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
@@ -91,18 +91,20 @@ void UpdateCriticalFlash(float dt) {
 }
 } // namespace FN
 
-// ASM-spec v1.6.1 DrawCritHit @ 0x001ccfa0. Called from GameDraw between
-// HUD::Draw(0x08) and HUD::Draw(0x100). Draws a textured full-screen quad
-// whose size + alpha track Game::m_CritTimer. Lazy-loads "flash.tex" on
-// first call.
+// ASM-spec v1.6.1 DrawCritHit @0x001ccfa0: lazy-loads shared "flash.tex" but draws
+// UNTEXTURED -- Texture vtable slot 4 UnSet(true) before matrix setup + again after
+// Mesh::DrawQuadUnCached(tint, NULL). Slot map: vptr+0xc=Set, vptr+0x10=UnSet(bool).
+// flash.tex is loaded here (lazily) but only ever BOUND by DrawBombHit / PauseScreen
+// (shared static) -- DrawCritHit always draws it unbound, i.e. a flat-colour quad.
 //
 // Fix summary (vs. prior FN::DrawCriticalFlash port):
 //   Bug 1 — fade formula: binary uses denom=(FLASH_TIME-FLASH_FULL)=0.1,
 //            num=(t-FLASH_FULL); renders for t in [0,0.5) with norm>1 for
 //            t<0.4 (clamped to screen dims). Port was using START_FADE-based
 //            formula which only rendered the narrow (0.3,0.4) window.
-//   Bug 2 — texture: binary lazy-loads "flash.tex"; port used DrawColorQuad
-//            (untextured). Fixed: s_flashTexture BSS global, Set/UnSet around draw.
+//   Bug 2 — texture: binary calls UnSet(true) both times (untextured flat-colour
+//            quad); a prior RE mis-read vtable slot +0x10 as "Set(1)" and the port
+//            drew a textured quad. Fixed below (task #316 / drain #39).
 //   Bug 3 — scale constant: 15002.0f -> 15000.0f (stale DAT_0016b714 comment).
 void DrawCritHit() {
     Game* game = Game::GetInstance();
@@ -115,7 +117,11 @@ void DrawCritHit() {
     // norm > 1 for t < FULL (clamped by 480/320 caps), 1.0 at t=FULL,
     // 0 at t=TIME. Old port checked norm<1.0 which blocked the full-screen phase.
     const float norm = 1.0f - (t - CRITICAL_FLASH_FULL) / (CRITICAL_FLASH_TIME - CRITICAL_FLASH_FULL);
-    float scale = norm * CRITICAL_FLASH_SCALE_MUL;
+    // Binary clamps norm to [0,1] before the *15000 multiply.
+    float normClamped = norm;
+    if (normClamped < 0.0f) normClamped = 0.0f;
+    if (normClamped > 1.0f) normClamped = 1.0f;
+    float scale = normClamped * CRITICAL_FLASH_SCALE_MUL;
     if (scale <= 0.0f) return;
 
     float sx = scale; if (sx > CRITICAL_FLASH_MAX_X) sx = CRITICAL_FLASH_MAX_X;
@@ -131,28 +137,26 @@ void DrawCritHit() {
                       s_CritFlashColour.b,
                       (uint8_t)alpha);
 
-    // Bug 2 fix: lazy-load "flash.tex" and bind for textured draw.
-    // DIFFERS: binary calls Set(1) (GL_TEXTURE1 slot); port's Texture::Set()
-    //   has no slot param and binds to GL_TEXTURE0. Single-texture draw path
-    //   is functionally equivalent (no simultaneous multi-texture use here).
+    // Lazy-load "flash.tex" (shared static; only ever bound elsewhere).
     if (!s_flashTexture.Get()) {
         s_flashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
     }
+
+    // Bug 2 fix: vtable slot 4 = UnSet(bool), called BOTH times -- texturing off.
     if (s_flashTexture.Get()) {
-        s_flashTexture.Get()->Set();
+        s_flashTexture.Get()->UnSet(true);
     }
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    Matrix44 mat = Matrix44::MakeScale(sx, sy, 1.0f);
-    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
-    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.GetWorldStack().Scale(Vec3(sx, sy, 1.0f));
+    mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, 0.0f));
     mm.UploadModelViewOnly();
 
-    Renderer::GetInstance()->DrawQuad(tint, 0.0f, 1.0f, 0.0f, 1.0f);
+    Mortar::Mesh::DrawQuadUnCached(tint, NULL);
 
     if (s_flashTexture.Get()) {
-        s_flashTexture.Get()->UnSet();
+        s_flashTexture.Get()->UnSet(true);
     }
 }
 
