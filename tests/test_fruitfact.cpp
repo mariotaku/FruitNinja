@@ -114,13 +114,13 @@ static void ResetPageFactBoxes(FruitFactPage* page, FruitFactControl* ctrl) {
         return;
     }
     // Zen and Bonus pages: fact-title at index 2, fact-text at index 3.
-    const std::list<HUDControl*>& controls = page->GetHUDControlsForTest();
+    const std::list<GenericHUDControl*>& controls = page->GetHUDControlsForTest();
     if (controls.size() < 4) return;
-    std::list<HUDControl*>::const_iterator it = controls.begin();
+    std::list<GenericHUDControl*>::const_iterator it = controls.begin();
     std::advance(it, 2);
-    GenericHUDControl* titleCtrl = dynamic_cast<GenericHUDControl*>(*it);
+    GenericHUDControl* titleCtrl = *it;
     ++it;
-    GenericHUDControl* textCtrl = dynamic_cast<GenericHUDControl*>(*it);
+    GenericHUDControl* textCtrl = *it;
     if (titleCtrl && titleCtrl->m_pLabel)
         titleCtrl->m_pLabel->SetColour(ctrl->m_FactColour, 0);
     if (textCtrl && textCtrl->m_pLabel)
@@ -276,8 +276,8 @@ static void RenderIsolated(fn::TestHarness& h, GameOverScreen* gos,
     for (std::vector<FruitFactPage*>::iterator it = ctrl->m_Pages.begin();
          it != ctrl->m_Pages.end(); ++it) {
         keep.insert(*it);
-        const std::list<HUDControl*>& kids = (*it)->GetHUDControlsForTest();
-        for (std::list<HUDControl*>::const_iterator k = kids.begin(); k != kids.end(); ++k)
+        const std::list<GenericHUDControl*>& kids = (*it)->GetHUDControlsForTest();
+        for (std::list<GenericHUDControl*>::const_iterator k = kids.begin(); k != kids.end(); ++k)
             keep.insert(*k);
     }
 

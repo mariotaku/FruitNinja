@@ -28,6 +28,7 @@
 #include <list>
 
 namespace Mortar { class BakedStringBox; }
+class GenericHUDControl;
 
 // DIFFERS: binary vtable slot 10 (Update) = __cxa_pure_virtual (0x360434) — BaseScreen is abstract.
 // v1.6.1 ctor @ 0x16cd40; Release @ 0x160d90; Reset @ 0x161860; D0 @ 0x161bb0; D1 @ 0x161b20.
@@ -69,9 +70,9 @@ public:
     // so they follow the page when the page is translated.
     void SetExtraControlsDefaultPos();
 
-    // AddGenericControl — registers a HUDControl in m_HUDControls
+    // AddGenericControl — registers a GenericHUDControl in m_HUDControls
     // so Release() marks it pending-removal on teardown.
-    void AddGenericControl(HUDControl* ctrl);
+    void AddGenericControl(GenericHUDControl* ctrl);
 
     // Release @ 0x00130dd8 — marks m_HUDControls pending-removal,
     // clears list, disables ScreenButton MenuButtons.
@@ -88,8 +89,10 @@ protected:
     std::list<ScreenButton> m_ScreenButtons;
 
     // +0x84: secondary HUD controls for Release() cleanup.
-    // Binary: std::list<HUDControl*>. Port: matches.
-    std::list<HUDControl*> m_HUDControls;
+    // Binary: std::list<GenericHUDControl*> (proven by SetExtraControlsDefaultPos
+    // iterating _List_iterator<GenericHUDControl*> and writing m_BasePos2 with
+    // no cast). Port: matches.
+    std::list<GenericHUDControl*> m_HUDControls;
 
 #ifdef FN_TEST
 public:
@@ -97,7 +100,7 @@ public:
     // Used by test_sensei_teardown to snapshot child control pointers for
     // teardown verification (by pointer identity, not GetType(), since
     // GenericHUDControl::GetType()==1 is shared with many other controls).
-    const std::list<HUDControl*>& GetHUDControlsForTest() const { return m_HUDControls; }
+    const std::list<GenericHUDControl*>& GetHUDControlsForTest() const { return m_HUDControls; }
 protected:
 #endif
 
