@@ -75,7 +75,7 @@ void InputActionMapper::ProcessEvent(InputEvent* event) {
 }
 
 // Binary @ 0x001b3794 — InputDevice ctor: set fns ptr, list ctor, list clear.
-// Port: standard C++ ctor (vptr set by compiler, actionMappers default-constructed).
+// Port: standard C++ ctor (vptr set by compiler, m_ActionMappers default-constructed).
 InputDevice::InputDevice() {
 }
 
@@ -83,8 +83,10 @@ InputDevice::InputDevice() {
 InputDevice::~InputDevice() {
 }
 
-// Binary @ 0x???? — Destroy stub.
-void InputDevice::Destroy() {}
+// ASM-spec v1.6.1 InputDevice::Destroy @0x00275938: m_ActionMappers.clear() (list nodes only, payloads borrowed).
+void InputDevice::Destroy() {
+    m_ActionMappers.clear();
+}
 
 // Binary @ 0x???? — ClearActions stub.
 void InputDevice::ClearActions(unsigned long, bool) {}
@@ -98,10 +100,10 @@ void InputDevice::AxisEvent(long, unsigned long, float, float, unsigned long, lo
 // Binary @ 0x???? — ButtonPressed stub.
 void InputDevice::ButtonPressed(unsigned long, unsigned long, float, unsigned long, long) {}
 
-// Binary @ 0x001b36b0 — CheckActions: iterate actionMappers list, call ProcessEvent.
+// Binary @ 0x001b36b0 — CheckActions: iterate m_ActionMappers list, call ProcessEvent.
 void InputDevice::CheckActions(InputEvent* event) {
-    for (std::list<InputActionMapper*>::iterator it = actionMappers.begin();
-         it != actionMappers.end(); ++it) {
+    for (std::list<InputActionMapper*>::iterator it = m_ActionMappers.begin();
+         it != m_ActionMappers.end(); ++it) {
         (*it)->ProcessEvent(event);
     }
 }
