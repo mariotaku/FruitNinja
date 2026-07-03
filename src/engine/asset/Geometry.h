@@ -3,11 +3,11 @@
 
 #include "util/SmartPtr.h"
 #include "util/ReferenceCounter.h"
-#include "util/AsciiString.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include <cstring>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace Mortar {
@@ -56,7 +56,7 @@ public:
     SmartPtr<EffectGroup>                  m_EffectGroup;   // +0x0C, 4 bytes
     std::vector<SmartPtr<IVertexStream> >  m_VertexStreams; // +0x10, 12 bytes
     SmartPtr<IIndexStream>                 m_IndexStream;   // +0x1C, 4 bytes
-    // TODO: re-verify v1.6.1 GeometryBinding_Bada address (was: 0x001a57bc stale v1.5.x) -- m_NamedIndexStreams: map<AsciiString,SmartPtr<IIndexStream>> (24B)
+    // TODO: re-verify v1.6.1 GeometryBinding_Bada address (was: 0x001a57bc stale v1.5.x) -- m_NamedIndexStreams: std::map<std::string,SmartPtr<IIndexStream>> (24B)
     char _pad_namedstreams[24];  // +0x20..+0x37: m_NamedIndexStreams placeholder
     // TODO: re-verify v1.6.1 GeometryBinding_Bada address (was: 0x001a57bc stale v1.5.x) -- m_EffectBindings: vector<EffectBinding> (12B, EffectBinding unported)
     char _pad_effectbindings[12]; // +0x38..+0x43: m_EffectBindings placeholder
@@ -84,18 +84,19 @@ public:
 
     Event1_GeometryBinding m_OnDestroyed;  // +0x44 (8 bytes)
 
-    // v1.6.1 Mortar::GeometryBinding::VertexStreamAdd @0x002640c8 -- find-or-push_back into m_VertexStreams.
+    // ASM-spec v1.6.1 GeometryBinding::VertexStreamAdd @0x002640c8: find-or-push_back into m_VertexStreams.
     // v1.6.1 LoadMesh @0x0023890c calls this after EffectGroupSet.
-    void VertexStreamAdd(SmartPtr<IVertexStream> stream);
+    void VertexStreamAdd(const Mortar::SmartPtr<IVertexStream>& stream);
 
-    // v1.6.1 Mortar::GeometryBinding::IndexStreamSet @0x00264108 -- sets m_IndexStream; name ignored by LoadMesh (empty string).
+    // ASM-spec v1.6.1 GeometryBinding::IndexStreamSet @0x00264108: name selects m_IndexStream (empty)
+    // vs. an entry in m_NamedIndexStreams (non-empty). LoadMesh always passes "".
     // v1.6.1 LoadMesh @0x0023890c calls this before VertexStreamAdd.
-    void IndexStreamSet(SmartPtr<IIndexStream> stream, const AsciiString& name);
+    void IndexStreamSet(const Mortar::SmartPtr<IIndexStream>& stream, const std::string& name);
 
-    // v1.6.1 Mortar::GeometryBinding::EffectGroupSet @0x0026406c -- stores EffectGroup ptr into m_EffectGroup.
+    // ASM-spec v1.6.1 GeometryBinding::EffectGroupSet @0x0026406c: stores EffectGroup ptr into m_EffectGroup.
     // v1.6.1 LoadMesh @0x0023890c calls this after creating the binding.
     // Binary body is minimal (1-2 instructions in the stub); shape preserved.
-    void EffectGroupSet(SmartPtr<EffectGroup> group);
+    void EffectGroupSet(const Mortar::SmartPtr<EffectGroup>& group);
 };
 
 // Vertex attribute layout (from PSP vertex declaration).
