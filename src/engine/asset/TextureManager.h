@@ -96,7 +96,7 @@ public:
     // (the body is just `SmartPtr<Texture>(nullptr)` written to the RVO return
     // slot). The int arg is accepted but never used. Faithful behaviour is to
     // return a null texture handle.
-    Mortar::SmartPtr<Texture> LoadIndependent(int);
+    Mortar::SmartPtr<Texture> LoadIndependent(void* data, int size);
 };
 
 // v1.6.1 Mortar::DefragVRamNeeded @0x00229a68 -- `mov r0,#0; bx lr` (always false).

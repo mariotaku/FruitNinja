@@ -152,8 +152,8 @@ void TextureManager::Initialise(int) {
 void TextureManager::InitialiseInternal() {
 }
 
-// Binary @ 0x00227230 -- returns empty SmartPtr<Texture>.
-Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(int) {
+// ASM-spec v1.6.1 Mortar::TextureManager::LoadIndependent(void*, int) @0x00227230: ignores both params, returns SmartPtr<Texture>(NULL). No callers in v1.6.1 (dead API).
+Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(void* /*data*/, int /*size*/) {
     return Mortar::SmartPtr<Texture>();
 }
 
