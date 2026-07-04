@@ -1,9 +1,8 @@
 #ifndef FN_HUD_SCREENFADECONTROL_H
 #define FN_HUD_SCREENFADECONTROL_H
 
-// Analysed: 2026-05-04T00:00
 // ScreenFadeControl — full-screen alpha fade overlay.
-// Binary: sizeof 0xB8, ctor @ 0x0015AA1C, symbol ScreenFadeControl::* (no Mortar:: namespace).
+// Binary: sizeof 0xB8, ctor C1 @0x001aefd4 / C2 @0x001af0c0, symbol ScreenFadeControl::* (no Mortar:: namespace).
 //
 // Layout relative to HUDControl3d base (0x7C bytes):
 //   +0x7C: m_bVisible       uint8_t
@@ -30,36 +29,41 @@
 
 class ScreenFadeControl : public HUDControl3d {
 public:
-    // Binary @ 0x0015AA1C
+    // Binary: ctor C1 @0x001aefd4 / C2 @0x001af0c0 (identical bodies).
+    // Member init: m_Colour() default-constructs to opaque BLACK (Colour::Colour() @0x0011afa8,
+    // b=g=r=0, a=0xFF) -- NOT white. Only m_Colour.a is ever touched afterward (StartFade/Update),
+    // so the fade renders alpha-only over black, matching the binary's GL_MODULATE draw.
     ScreenFadeControl();
-    virtual ~ScreenFadeControl();
+    virtual ~ScreenFadeControl();  // Binary @ 0x1aeeec
 
-    // vtable +0x08: Binary @ 0x0015A724
+    // vtable +0x08: Binary @ 0x1aebf4
     virtual void Init() override;
     // vtable +0x0C: Binary @ 0x0015A730 -- empty
     virtual void Release() override {}
-    // vtable +0x10: Binary @ 0x0015A734
+    // vtable +0x10: Binary @ 0x1aec0c
     virtual void Reset() override;
-    // vtable +0x18: Binary @ 0x0015A750 -- pass-through
+    // vtable +0x18: Binary @ 0x1aec2c -- pass-through
     virtual void PreDraw(float* hudScale) override { (void)hudScale; }
-    // vtable +0x28: Binary @ 0x0015A798
+    // vtable +0x28: Binary @ 0x1aec80
     virtual void Update(float dt) override;
-    // vtable +0x1C: Binary @ 0x0015A868
+    // vtable +0x1C: Binary @ 0x1aed74
     virtual void Draw(float* hudScaleRaw) override;
-    // vtable +0x2C: Binary @ 0x0015A754 -- Reset(); return false
+    // vtable +0x2C: Binary @ 0x1aec30 -- Reset(); return false
     virtual bool SetToMultiplayerState() override;
-    // vtable +0x30: Binary @ 0x0015AEA0
+    // vtable +0x30: Binary @ 0x1af5ec
     virtual int GetType() override { return 0xC; }
 
-    // Binary @ 0x0015A7F0 -- replace prior fade; alpha 0<->255 over duration.
+    // Binary @ 0x001aece0 -- replace prior fade; alpha 0<->255 over duration.
+    // NOTE: `color` param is a dead-store in the binary (m_Colour RGB is never updated after
+    // construction, only .a) -- kept for signature fidelity, has no visible effect.
     void StartFade(bool inOrOut, float duration, const Colour& color,
                    Mortar::Delegate0<void> onComplete);
 
-    // Binary @ 0x0015A764 -- clears visible+animating; does NOT fire OnComplete
+    // Binary @ 0x1aec4c -- clears visible+animating; does NOT fire OnComplete
     void CancelFade();
 
 private:
-    // Binary @ 0x0015A770
+    // Binary: private helper called from Update @0x1aec80; no separate v1.6.1 address confirmed
     void OnFadeComplete();
 
     uint8_t  m_bVisible;             // +0x7C
