@@ -981,3 +981,19 @@ set_tests_properties(screenshot_dojo_nav_shop PROPERTIES TIMEOUT 120
 fn_add_game_test(test_fruit_pool_reuse test_fruit_pool_reuse.cpp)
 add_test(NAME fruit_pool_reuse COMMAND test_fruit_pool_reuse)
 set_tests_properties(fruit_pool_reuse PROPERTIES TIMEOUT 60)
+
+# SlashEntity blade-trail texture/colour "black blob" regression investigation.
+# Drives a single isolated SlashEntity through GameInit(0) + direct touch-API
+# calls (no HUD/menu). Captures 4 passes: the intrinsic first-slash black
+# reproduction (diagnostic only, not a hard failure), the self-corrected
+# white ribbon, and a leaked-vs-clean GL blend/texenv comparison (hard
+# assertions -- DrawSlice/DrawTriStrip must self-reset blend+texenv).
+# Headless -- passes with ctest -E screenshot (still needs a GL context).
+# Screenshot variant writes tmp/test/screenshots/slashtexture/*.png (need GPU).
+fn_add_game_test(test_slash_texture_render test_slash_texture_render.cpp)
+add_test(NAME slash_texture_render COMMAND test_slash_texture_render)
+set_tests_properties(slash_texture_render PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_slashentity")
+add_test(NAME screenshot_slash_texture COMMAND test_slash_texture_render --screenshot)
+set_tests_properties(screenshot_slash_texture PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_slashentity")
