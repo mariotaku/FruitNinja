@@ -547,7 +547,7 @@ void DojoScreen::Draw(float* hudScaleRaw) {
 // Binary: SFXPlay("menu-bomb"), state=6, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::PlayCallback() {
-    // DIFFERS: MSVC memory-safety guard -- binary @0x0016b980 (QuitCallback) has no guard;
+    // DIFFERS: MSVC memory-safety guard -- binary v1.6.1 DojoScreen::QuitCallback @0x0016b980 has no guard;
     // MSVC can reuse the dangling m_pBackButton and deref its m_pTrackedFruit (UAF).
     // Guard prevents the crash the binary's allocator layout avoids.
     if (m_State != 0 && m_State != 1) return;
@@ -582,7 +582,7 @@ void DojoScreen::PlayCallback() {
 // Binary: state=2, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::ShopCallback() {
-    // DIFFERS: MSVC memory-safety guard -- binary @0x0016a3f8 (ShopCallback) has no guard;
+    // DIFFERS: MSVC memory-safety guard -- binary v1.6.1 DojoScreen::ShopCallback @0x0016a3f8 has no guard;
     // MSVC can reuse the dangling m_pBackButton and deref its m_pTrackedFruit (UAF).
     // Guard prevents the crash the binary's allocator layout avoids.
     if (m_State != 0 && m_State != 1) return;
@@ -610,7 +610,7 @@ void DojoScreen::ShopCallback() {
 // Binary: state=3, fling fruit piece, ResetTutePos
 // ===================================================================
 void DojoScreen::AboutCallback() {
-    // DIFFERS: MSVC memory-safety guard -- binary @0x0016a48c (AboutCallback) has no guard;
+    // DIFFERS: MSVC memory-safety guard -- binary v1.6.1 DojoScreen::AboutCallback @0x0016a48c has no guard;
     // MSVC can reuse the dangling m_pBackButton and deref its m_pTrackedFruit (UAF).
     // Guard prevents the crash the binary's allocator layout avoids.
     if (m_State != 0 && m_State != 1) return;
