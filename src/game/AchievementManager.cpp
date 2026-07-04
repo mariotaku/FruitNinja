@@ -375,8 +375,12 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Total <= total && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            if (QueAchievement(info, it)) ++unlocked;
-            // it was pre-advanced by QueAchievement; don't ++it
+            if (QueAchievement(info, it)) {
+                ++unlocked;
+                // it was pre-advanced by QueAchievement; don't ++it
+            } else {
+                ++it;  // binary always advances, even when QueAchievement fails
+            }
         } else {
             ++it;
         }
@@ -385,7 +389,7 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockScoreAchievement  (Binary @ 0x00108d44)
+// UnlockScoreAchievement  (Binary @ 0x00117bd0)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockScoreAchievement(int score) {
@@ -396,7 +400,12 @@ int AchievementManager::UnlockScoreAchievement(int score) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            if (QueAchievement(info, it)) ++unlocked;
+            if (QueAchievement(info, it)) {
+                ++unlocked;
+                // it was pre-advanced by QueAchievement; don't ++it
+            } else {
+                ++it;  // binary always advances, even when QueAchievement fails
+            }
         } else {
             ++it;
         }
@@ -405,7 +414,7 @@ int AchievementManager::UnlockScoreAchievement(int score) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockScoreUnsulliedAchievement  (Binary @ 0x00108d94)
+// UnlockScoreUnsulliedAchievement  (Binary @ 0x00117c8c)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
@@ -416,7 +425,12 @@ int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            if (QueAchievement(info, it)) ++unlocked;
+            if (QueAchievement(info, it)) {
+                ++unlocked;
+                // it was pre-advanced by QueAchievement; don't ++it
+            } else {
+                ++it;  // binary always advances, even when QueAchievement fails
+            }
         } else {
             ++it;
         }
@@ -425,22 +439,28 @@ int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockEndScoreAchievement  (Binary @ 0x00108e14)
+// UnlockEndScoreAchievement  (Binary @ 0x00117880)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
-    // Binary: iterates m_ByType[END_SCORE]; threshold <= score AND score > hiScore/2
-    // (end-of-game high-score beat check)
+    // v1.6.1 AchievementManager::UnlockEndScoreAchievement @0x00117880: iterates
+    // m_ByType[END_SCORE]; exact-match/sentinel test, NOT a "score>threshold" test --
+    //   match = (score == info->m_Total) || (info->m_Total < 0 && score == hiScore)
+    // Prior port condition (info->m_Total <= score && score > hiScore/2) was fabricated.
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_END_SCORE];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Total <= score &&
-            score > hiScore / 2 &&
-            ModeBitmaskAllows(info->m_ModeBitmask))
-        {
-            if (QueAchievement(info, it)) ++unlocked;
+        const bool match = (score == info->m_Total) ||
+                            (info->m_Total < 0 && score == hiScore);
+        if (match && ModeBitmaskAllows(info->m_ModeBitmask)) {
+            if (QueAchievement(info, it)) {
+                ++unlocked;
+                // it was pre-advanced by QueAchievement; don't ++it
+            } else {
+                ++it;  // binary always advances, even when QueAchievement fails
+            }
         } else {
             ++it;
         }

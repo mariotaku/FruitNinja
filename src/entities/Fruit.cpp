@@ -29,6 +29,8 @@
 #include "engine/util/StringTable.h"
 #include "engine/util/Event.h"
 #include "game/FruitSaveData.h"
+#include "game/AchievementManager.h"
+#include "hud/ScoreControl.h"
 #include "util/StringHash.h"
 #include "Game.h"
 #include "engine/asset/File.h"
@@ -1369,6 +1371,14 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             // critical hit and calls Coin::MakeCoins(...); no Coin::MakeCoins call exists
             // anywhere in Fruit.cpp yet. Out of scope for this fix (see batch1-realgap-specs.json).
 
+            // v1.6.1 Fruit::CollisionResponse @0x001dd500: on an unsullied run (no misses
+            // yet this game), tests the running score against SCORE_UNSULLIED achievements.
+            // AchievementManager::UnlockScoreUnsulliedAchievement had zero call sites in the
+            // port before this fix.
+            if (game_work.m_bUnsullied == 0) {
+                AchievementManager::GetInstance()->UnlockScoreUnsulliedAchievement(GetCurrentScore(0));
+            }
+
             // Per-fruit-name save totals.
             if (game_work.m_SaveData) {
                 game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
@@ -1436,6 +1446,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             g_ComboFruitType = (int)m_FruitType;
         }
         g_ComboCount += 1;
+        // TODO: v1.6.1 Fruit::CollisionResponse — RE whether the binary calls
+        // AchievementManager::UnlockConsecutiveAchievement(g_ComboCount, nameHash) here.
+        // Removed an unverified (implementer-inferred) call site; needs re-analyst confirmation
+        // of the exact call + args against @0x001dd500 before re-adding.
         }
     }
 

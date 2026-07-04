@@ -23,9 +23,9 @@
 //   UnlockComboAchievement        0x00108a10  (was 0x00108b3c)
 //   UnlockComboStarAchievement    0x00108c40  (was incorrectly namespaced in old stub)
 //   UnlockConsecutiveAchievement  0x00108c40
-//   UnlockEndScoreAchievement     0x00108e14
-//   UnlockScoreAchievement        0x00108d44
-//   UnlockScoreUnsulliedAchievement 0x00108d94
+//   UnlockEndScoreAchievement     0x00117880  (was stale v1.5.x 0x00108e14)
+//   UnlockScoreAchievement        0x00117bd0  (was stale v1.5.x 0x00108d44)
+//   UnlockScoreUnsulliedAchievement 0x00117c8c  (was stale v1.5.x 0x00108d94 -- that addr now resolves to SystemManager::QuitGame)
 //   UnlockSpecificFruitAchievement  0x00108a88
 //   UnlockSpecificOrderAchievement  0x00108b58  (was 0x001089cc -- that addr is SpecificOrder::Check)
 //   UnlockTotalFruitAchievement   0x00108eec
