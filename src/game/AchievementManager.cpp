@@ -534,16 +534,19 @@ int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeH
 }
 
 // ---------------------------------------------------------------------------
-// UnlockSpecificOrderAchievement  (Binary @ 0x001089cc)
+// UnlockSpecificOrderAchievement
+// ASM-spec v1.6.1 AchievementManager::UnlockSpecificOrderAchievement @ 0x001177e0
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockSpecificOrderAchievement(uint32_t newFruitHash) {
-    // Binary @ 0x00108b58: iterates m_All (NOT m_ByType[SPECIFIC_ORDER]).
-    // No mode gate here; mode-gating is implicit at load time (only achievements
-    // for the current mode are inserted into m_All via LoadAchievementInfo).
+    // v1.6.1 @0x001177e0: iterates m_ByType[ACHIEVEMENT_TYPE_SPECIFIC_ORDER] (pM_ByType_9),
+    // NOT m_All -- port previously walked every achievement type (m_All), evaluating the
+    // SpecificOrder gate against unrelated types. No mode gate here; mode-gating is implicit
+    // at load time (only achievements for the current mode are inserted via LoadAchievementInfo).
     // Every entry with a m_SpecificOrder pointer is checked via Check(newFruitHash).
     int unlocked = 0;
-    for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC_ORDER];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info || !info->m_SpecificOrder) { ++it; continue; }
         if (info->m_SpecificOrder->Check(newFruitHash) != 0) {
@@ -561,11 +564,16 @@ int AchievementManager::UnlockSpecificOrderAchievement(uint32_t newFruitHash) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockComboAchievement  (Binary @ 0x00108b3c)
+// UnlockComboAchievement
+// ASM-spec v1.6.1 AchievementManager::UnlockComboAchievement @ 0x001175e8 (thunk @ 0x0010ce60)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
-    // Binary @ 0x00108a10: iterates m_All (NOT m_ByType[COMBO]).
+    // v1.6.1 @0x001175e8: iterates m_ByType[ACHIEVEMENT_TYPE_COMBO] (pM_ByType_7), NOT m_All --
+    // confirmed by LoadAchievementInfo @0x00118198 (unlockTypeHashes[7]==StringHash("COMBO") into
+    // pM_ByType_0+7) and QueAchievement @0x0011750c (erases from pM_ByType_0+info->m_TypeIndex).
+    // Port previously walked every achievement type (m_All), evaluating combo-threshold/mode/
+    // SpecificOrder/unsullied gates against unrelated types (score/specific/etc.) -> false unlocks.
     // threshold <= comboLen + mode gate.
     // SpecificOrder gate (COMBO semantics): count fruitArr entries whose hash
     //   matches GetFirstFruitTypeHash(); require count >= threshold.
@@ -573,7 +581,8 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
     // RequiresUnsullied gate: pTimeCtrl != NULL AND comboLen > 2 AND
     //   pTimeCtrl->m_TimeRemaining <= 0. See gate body below.
     int unlocked = 0;
-    for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_COMBO];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
 
