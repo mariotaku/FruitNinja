@@ -76,15 +76,14 @@ MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain,
     return m_Slots[i].sound;
 }
 
-// Binary @ 0x00151aa8
+// ASM-spec v1.6.1 GameSound::IsPlaying(int) @0x00151aa8: breaks the slot scan at the
+// FIRST id-matching slot and returns MortarSound::IsPlaying() for that slot verbatim
+// (no further scanning of later slots, even on false).
 bool GameSound::IsPlaying(int hash) {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (!m_Slots[i].isFree && m_Slots[i].id == hash) {
-            // Early exit: slot matched but sound is NULL
             if (m_Slots[i].sound == NULL) return false;
-            if (m_Slots[i].sound->IsPlaying()) {
-                return true;
-            }
+            return m_Slots[i].sound->IsPlaying();
         }
     }
     return false;

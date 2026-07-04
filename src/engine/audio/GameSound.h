@@ -62,9 +62,11 @@ public:
         Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback = Mortar::Delegate1<bool, Mortar::MortarSound*>(),
         float pitch = 0.0f);
 
-    // Binary @ 0x00151aa8
+    // v1.6.1 GameSound::IsPlaying(int) @0x00151aa8 -- first-match short-circuit:
+    // returns MortarSound::IsPlaying() for the FIRST id-matching slot verbatim,
+    // does not keep scanning later slots even if that result is false.
     bool IsPlaying(int hash);
-    // Binary @ 0x00151ae4 -- hashes name, delegates to IsPlaying(int).
+    // v1.6.1 GameSound::IsPlaying(char const*) @0x00151ae4 -- hashes name, delegates to IsPlaying(int).
     bool IsPlaying(const char* name);
 
     // Binary @ 0x00129138
