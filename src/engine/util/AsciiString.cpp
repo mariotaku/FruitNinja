@@ -273,9 +273,15 @@ void AsciiString::Append(char c)
 // v1.6.1 AsciiString ctor @0x0021e684 / Set(s,len) @0x0021e594.
 // len is strlen (NOT including null). Stores m_size = len+1.
 // Inline when len <= 31 (m_size <= 32); heap when len >= 32 (m_size > 32).
+// ASM-spec v1.6.1 AsciiString::Set @0x0021e594: binary special-cases s==NULL by
+// tail-calling Resize(this,0), ignoring len entirely (always yields the canonical
+// empty string). Forcing len=0 here reproduces that for all three shared callers
+// (Set(s,len), the (s,len) ctor, and operator=).
 void AsciiString::SetFromCStr(const char* s, unsigned long len)
 {
     m_hashCache = 0;
+
+    if (!s) len = 0;
 
     bool wasHeap = IsHeap();
     // v1.6.1 MicroBuffer::Resize @0x0021e6ec: heap when byteCount (=len+1) > 32.
