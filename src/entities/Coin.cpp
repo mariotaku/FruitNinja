@@ -426,18 +426,22 @@ void Coin::_Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// Update @ 0x0017312C — fixed-timestep wrapper
-// Subdivides incoming dt into 1/60 steps; calls _Update each step.
+// Update @ 0x001c7940 — fixed-timestep wrapper
+// Binary ignores its own dt param and drives the substep loop from the
+// global game_work.dt (+0x38) instead; some call sites zero/alter the
+// passed dt for freeze effects (GameInit.cpp bomb-hit freeze, WaveManager.cpp
+// settle-pass) while game_work.dt stays nonzero, so using the parameter here
+// wrongly froze coins in those scenarios. Break-gate is flags & ENT_SKIP_MASK
+// (0x11), not just ENT_KILLED.
 // ---------------------------------------------------------------------------
-void Coin::Update(float dt) {
-    float acc = dt;
-    while (acc >= COIN_FIXED_DT) {
-        _Update(COIN_FIXED_DT);
+void Coin::Update(float /*dt*/) {
+    float acc = game_work.dt;
+    while (acc > 0.0f) {
+        float step = (acc <= COIN_FIXED_DT) ? acc : COIN_FIXED_DT;
+        _Update(step);
+        if (flags & ENT_SKIP_MASK) return;
         acc -= COIN_FIXED_DT;
-        // Stop early if entity was killed (Arrived() set ENT_KILLED)
-        if (flags & ENT_KILLED) return;
     }
-    // Any fractional remainder is discarded — matches binary fixed-step pattern.
 }
 
 // ---------------------------------------------------------------------------
