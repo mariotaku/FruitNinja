@@ -14,6 +14,11 @@ CoinCounter::CoinCounter()
     , m_ScaleReset(0.0f)
 {
     std::memset(m_CountText, 0, sizeof(m_CountText));
+    // v1.6.1 CoinCounter::CoinCounter @0x001676a4: mov r3,#1; strb r3,[r4,#0x4]
+    // (HUDControl::m_Singular, +0x4). Without this HUD::SetToMultiplayerState()
+    // (via Game::TellGameToStart) sweeps the CoinCounter at game start, same
+    // bug class as MissControl.cpp:104-107.
+    m_Singular = 1;
 }
 
 // dtor @ v1.6.1 0x001675f4
