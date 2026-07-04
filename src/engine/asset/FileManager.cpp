@@ -97,13 +97,17 @@ bool FileManager::FileExists(const char* name, unsigned long idFilter) {
     return false;
 }
 
-// Binary @ 0x0019af18
+// ASM-verified: 2026-07-04T00:00 v1.6.1 FileManager::FileSize @ 0x00250d98
+// Loop only returns early on success (result != 0xFFFFFFFF); a failing system falls
+// through to the next id-matching node instead of returning immediately (matches
+// FileExists/OpenFile above). ASM @0x00250dd8: cmn r0,#1 / ldmiane ... pc.
 unsigned int FileManager::FileSize(const char* name, unsigned long idFilter) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
         if (idFilter != 0 && sys->m_systemId != idFilter) continue;
-        return sys->FileSize(name);    // first id-matching system wins, regardless of result
+        unsigned int sz = sys->FileSize(name);
+        if (sz != 0xFFFFFFFFu) return sz;  // else fall through to next system
     }
     return 0xFFFFFFFFu;                // sentinel: no matching system (not 0 = empty file)
 }
