@@ -102,8 +102,8 @@ float TimeControl::GetCountDown() const {
     // v1.6.1 TimeControl::GetCountDown @ 0x001c08e8
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
-    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE && !IsMultiplayer())
-        return ARCADE_START_TIME;    // DAT_0016215c fallback
+    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer())
+        return ARCADE_START_TIME;    // DAT_001c0924 = 60.9
     return m_CountdownStart;
 }
 
