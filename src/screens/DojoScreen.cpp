@@ -16,6 +16,7 @@
 #include "ShopScreen.h"
 #include "MainScreen.h"
 #include "game/FruitSaveData.h"
+#include "game/ItemManager.h"
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -406,10 +407,11 @@ void DojoScreen::Update(float dt) {
 
     // ---- STATE 1: Idle ----
     case 1:
-        // Binary: poll ItemManager::AreNewItems() each frame for shop badge.
-        // ItemManager not ported — badge always hidden.
+        // v1.6.1 DojoScreen::Update @0x0016b6a4 case 1: poll ItemManager::AreNewItems()
+        // each frame for the shop badge, then return immediately (skips shared tail).
         if (m_pShopButton) {
-            m_pShopButton->SetNewSymbol(false);
+            m_pShopButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
+            return;
         }
         break;
 
