@@ -59,8 +59,26 @@ SpeedControl::SpeedControl()
     m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
 }
 
-// dtor @ 0x00161558 / 0x001615d4 / 0x00161650
-SpeedControl::~SpeedControl() {}
+// ASM-spec v1.6.1 SpeedControl::~SpeedControl @0x001b8ba4 (base/D2), @0x001b8c4c
+// (complete/D1), @0x001b8cf4 (deleting/D0): releases the active combo-blitz
+// backing-stream m_pSound via GameSound::Release (name indexed by m_SoundIdx),
+// nulls m_pSound, and restores game_work.mGameSound->m_MasterVolume to 1.0
+// before falling through to the base ~HUDControl3d chain. The m_Texture
+// SmartPtr release the binary also performs at this scope is redundant with
+// HUDControl3d's own SmartPtr<Texture> member dtor -- no port action needed.
+SpeedControl::~SpeedControl() {
+    if (m_pSound) {
+        static const char* const kSfxNames[2] = {
+            "Combo-Blitz-Backing-Light",
+            "Combo-Blitz-Backing"
+        };
+        if (game_work.mGameSound) {
+            game_work.mGameSound->Release(static_cast<Mortar::MortarSound*>(m_pSound), kSfxNames[m_SoundIdx]);
+            m_pSound = nullptr;
+            game_work.mGameSound->m_MasterVolume = 1.0f;
+        }
+    }
+}
 
 // ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00160dc4 (re-analyst)
 // Binary computes ducking + per-frame lerps for the Combo-Blitz speed
