@@ -42,10 +42,13 @@
 #include <vector>
 #include "game/GameWork.h"
 
-// Binary static: critical/charged fruit blend-target colour for blade flash.
-// Used by SlashEntity::UpdatePoints colour-blend path (v1.6.1 SlashEntity::UpdatePoints @0x001e6914).
-// TODO: re-verify exact RGB from Ghidra (v1.6.1 SlashEntity::UpdatePoints @0x001e6914 blends toward this when m_Scale>0).
-const Colour Fruit::CRITICAL_COLOUR(255, 128, 0, 255);
+// Binary static: critical/charged fruit blend-target colour for blade flash,
+// AND the CriticalFlash tint colour in CollisionResponse. Real value comes
+// from fruitlist.xml's <critical colour="0,140,245,170"/> attr, loaded by
+// Fruit::LoadInfo -> FruitInfo_Load (see FruitInfo_GetCriticalColour). This
+// initializer is only the pre-XML-load fallback.
+// ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084 / SlashEntity::UpdatePoints @0x001e6914.
+Colour Fruit::CRITICAL_COLOUR(255, 128, 0, 255);
 
 // File-scope global: multicast event fired on every fruit slice.
 // Binary: file-static in Fruit.cpp, ctor'd in global.ctors (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c).
@@ -1167,12 +1170,14 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     m_bCritical = 0;
 
     // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500.
-    // kCritScoreBound and kCritResetBase are GOT-indirect int32 globals.
-    // -> *0x001f3e34 = 5 ; -> *0x001f3e38 = 30
-    // Used as: bound = min(m_ScoreThreshold, 5); on crit hit: m_ScoreThreshold = 30 + 5 = 35.
-    // TODO: re-verify v1.6.1 DAT slots for these GOT loads (old DAT_001784fc/DAT_00178504 stale v1.5.x).
-    static const int kCritScoreBound = 5;
-    static const int kCritResetBase  = 30;
+    // kCritScoreBound = CRITICAL_CHANCE (@0x002d8d4c, "chance" attr, fruitlist.xml = 50).
+    // kCritResetBase  = CRITICAL_CHANCE_START_INC ("chance_inc" attr, fruitlist.xml = 30).
+    // Used as: bound = min(m_ScoreThreshold, CRITICAL_CHANCE);
+    //          on crit hit: m_ScoreThreshold = CRITICAL_CHANCE_START_INC + CRITICAL_CHANCE.
+    // Previously hardcoded 5/30 -- the wrong bound (5 instead of 50) made crits
+    // fire far more often than the original.
+    const int kCritScoreBound = FruitInfo_GetCriticalChance();
+    const int kCritResetBase  = FruitInfo_GetCriticalChanceStartInc();
 
     // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
     const bool canCritFruit = info->m_bScorable;
@@ -1287,20 +1292,21 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     }
 
     // Full-screen tint flash. Matches CriticalFlash @ 0x0016a9a4.
-    // Critical: v1.6.1 Fruit::CollisionResponse @0x001dd500 passes the sliced fruit's OWN per-type
-    // colour (FRUIT_INFO m_FruitColour, same object FruitTypeColour returns),
-    // NOT a gold literal. The previous Colour(255,215,0,192) was a fabrication
-    // with no binary basis. DrawCritHit applies the time fade; alpha comes from
-    // m_FruitColour[3]. Special (score==0x32): white half-alpha (v1.6.1 Fruit::CollisionResponse @0x001dd500).
+    // Critical: v1.6.1 Fruit::CollisionResponse @0x001dd500 passes the GLOBAL
+    // CRITICAL_COLOUR (loaded from fruitlist.xml <critical colour="0,140,245,170"/>),
+    // NOT the sliced fruit's own per-type FruitTypeColour(). The previous
+    // FruitTypeColour(m_FruitType) call here was a fabrication with no binary basis.
+    // Special (score==0x32): white half-alpha (v1.6.1 Fruit::CollisionResponse @0x001dd500).
     if (isCritical) {
-        CriticalFlash(pos, FruitTypeColour((long)m_FruitType));
+        CriticalFlash(pos, CRITICAL_COLOUR);
     } else if (isSpecial) {
         CriticalFlash(pos, Colour(255, 255, 255, 128));
     }
 
-    // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: CRITICAL_SCORE=5 (@0x002d8d48),
-    // CRITICAL_CHANCE=5 (@0x002d8d4c); single-player crit = CriticalFlash only, no
-    // MakeCritical popup (that is online-MP only). No MakeCritical/MakeRare here.
+    // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: CRITICAL_SCORE (@0x002d8d48,
+    // fruitlist.xml "score" attr = 10), CRITICAL_CHANCE (@0x002d8d4c, "chance" attr = 50);
+    // single-player crit = CriticalFlash only, no MakeCritical popup (that is
+    // online-MP only). No MakeCritical/MakeRare here.
 
     // White slice-line visual — matches AddSlice call in binary
     // v1.6.1 Fruit::CollisionResponse @0x001dd500. Binary builds sliceInfo as:
@@ -1341,7 +1347,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x001dd500 (re-analyst).
         // Formula:
         //   score = info->m_Score                               // FRUIT_INFO+0x314
-        //   if (critical) score += 5                            // CRITICAL_SCORE @ 0x002d8d48
+        //   if (critical) score += CRITICAL_SCORE               // @ 0x002d8d48 (fruitlist.xml "score" attr = 10)
         //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
         //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
         // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
@@ -1349,7 +1355,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // The only x2 in the binary is on COINS, not score -- no score *= 2.
         {
             int score = info->m_Score;
-            if (m_bCritical) score += 5;
+            if (m_bCritical) score += FruitInfo_GetCriticalScore();
             if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
                 const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
                 score = info->m_CoinsMin
@@ -1358,6 +1364,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
             AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
+            // TODO: v1.6.1 Fruit::CollisionResponse @0x001dd500 -- crit coin-drop unported.
+            // Binary tail multiplies the fruit's coin drop by (CRITICAL_SCORE/2) on a
+            // critical hit and calls Coin::MakeCoins(...); no Coin::MakeCoins call exists
+            // anywhere in Fruit.cpp yet. Out of scope for this fix (see batch1-realgap-specs.json).
 
             // Per-fruit-name save totals.
             if (game_work.m_SaveData) {
@@ -1882,6 +1892,9 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
 // (first call), matching the lazy-init guard @0x001e10c4.
 void Fruit::LoadInfo() {
     FruitInfo_Load("xml/fruitlist.xml");
+    // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084: CRITICAL_COLOUR is the
+    // <critical colour="..."/> global, copied here after the XML parse.
+    CRITICAL_COLOUR = FruitInfo_GetCriticalColour();
 }
 
 // --- FruitGlobalData (v1.6.1 binary static block @ 0x332910) ---------------
