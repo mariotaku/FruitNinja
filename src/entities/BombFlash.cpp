@@ -3,13 +3,16 @@
 #include <new>
 
 // v1.6.1 BombFlash ctor @0x001d5fa8
+// m_Colour0/m_Colour1/m_pTexture are member-default-constructed (opaque black /
+// null SmartPtr), mirroring the binary's explicit Colour::Colour/SmartPtr::SmartPtr
+// calls. m_Timer/m_SinAngle/m_CosAngle/m_Pos/m_Dir/m_Scale/m_AngleIdx are left
+// uninitialized, matching the binary.
 BombFlash::BombFlash() {
-    // ctor initializes vtable, Colour fields, SmartPtr, sets m_bActive = 0.
-    // m_padBefore and m_padAfter are uninitialized junk at construction time.
     m_bActive = 0;
 }
 
 // v1.6.1 BombFlash dtor @0x001d5ac0 / 0x001d5b80
+// Compiler-generated member destruction releases m_pTexture's SmartPtr.
 BombFlash::~BombFlash() {}
 
 // v1.6.1 BombFlash::Init @0x001d4dbc — stub (real init logic not yet ported)

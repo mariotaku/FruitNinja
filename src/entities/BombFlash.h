@@ -36,12 +36,26 @@
 class BombFlash {
 public:
     // +0x00: vtable pointer (implicit)
-    // +0x04..+0x3f: colour, texture, position, direction, scale, angles, timer
-    uint8_t m_padBefore[0x3C];
+    // +0x04: uninitialized by binary ctor (set later by MakeFlash/Update)
+    float m_Timer;
+    // +0x08 / +0x0C: default-constructed opaque black (Colour::Colour @0x0011afa8)
+    Colour m_Colour0;
+    Colour m_Colour1;
+    // +0x10 / +0x14: uninitialized by binary ctor
+    float m_SinAngle;
+    float m_CosAngle;
+    // +0x18: null-constructed by binary (SmartPtr<Texture>::SmartPtr @0x0010c3a4)
+    Mortar::SmartPtr<Mortar::Texture> m_pTexture;
+    // +0x1C / +0x28 / +0x34: uninitialized by binary ctor
+    Vec3 m_Pos;
+    Vec3 m_Dir;
+    Vec3 m_Scale;
     // +0x40: active flag (read by GetFree stride 0x44)
-    uint8_t m_bActive;
-    // +0x41..+0x43: padding to size 0x44
-    uint8_t m_padAfter[0x03];
+    bool m_bActive;
+    // +0x41: padding
+    uint8_t m_pad41;
+    // +0x42: uninitialized by binary ctor
+    uint16_t m_AngleIdx;
 
     BombFlash();
     virtual ~BombFlash();
@@ -77,5 +91,21 @@ public:
     // v1.6.1 BombFlash::CleanUp @0x001d5afc — destructs entries backward, frees heap block.
     static void CleanUp();
 };
+
+#if defined(__bada__)
+// Binary-faithful offsets (32-bit Bada cross-build). Binary total = 0x44 (68 bytes).
+static_assert(__builtin_offsetof(BombFlash, m_Timer)    == 0x04, "m_Timer binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Colour0)  == 0x08, "m_Colour0 binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Colour1)  == 0x0C, "m_Colour1 binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_SinAngle) == 0x10, "m_SinAngle binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_CosAngle) == 0x14, "m_CosAngle binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_pTexture) == 0x18, "m_pTexture binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Pos)      == 0x1C, "m_Pos binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Dir)      == 0x28, "m_Dir binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Scale)    == 0x34, "m_Scale binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_bActive)  == 0x40, "m_bActive binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_AngleIdx) == 0x42, "m_AngleIdx binary offset wrong");
+static_assert(sizeof(BombFlash)                         == 0x44, "sizeof(BombFlash) wrong (binary 0x44 / 68)");
+#endif
 
 #endif // FN_ENTITIES_BOMB_FLASH_H
