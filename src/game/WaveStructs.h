@@ -107,9 +107,11 @@ struct SPAWNER_INFO {
         m_pFruitTypeHashes = nullptr;
     }
 
-    // Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.
+    // ASM-spec v1.6.1 SPAWNER_INFO::SelectTypes @0x0012dcc8 (thunk veneer @0x00114654).
+    // Re-rolls fruit-type indices from string-name vector.
     // Resolves each name in m_FruitTypeNames to a hash-based type index.
-    // BOMB / BOMB_PINEAPPLE -> -2; RANDOM -> Fruit::RandomFruit(false); else Fruit::FruitType.
+    // "bomb"/"Bomb" (case-insensitive) -> -2; "1fruit" (case-insensitive) ->
+    // Fruit::RandomFruit(false) resolved once here; else Fruit::FruitType(name,false).
     void SelectTypes();
 
     // Reset spawner for a new wave. waveRevisitCounter = wave->m_RevisitCounter.
@@ -367,9 +369,10 @@ struct PROBABILITY_OVERIDE {
     // Parse XML attributes into this struct. binary @ 0x001231d8
     void Parse(TiXmlElement* xml);
 
-    // Binary @ 0x00122b44. Populates m_TypeQueue[] from m_Types names.
-    // Three lazy-init guarded statics: BOMB_HASH, BOMB_PINEAPPLE_HASH, RANDOM_HASH.
-    // BOMB/BOMB_PINEAPPLE -> m_TypeQueue[i]=-2; RANDOM -> RandomFruit(false); else FruitType(name,false).
+    // ASM-spec v1.6.1 PROBABILITY_OVERIDE::SelectType @0x00121000. Populates m_TypeQueue[]
+    // from m_Types names. Two lazy-init guarded statics: Bomb hash, 1fruit hash.
+    // "bomb"/"Bomb" (case-insensitive) -> m_TypeQueue[i]=-2;
+    // "1fruit" (case-insensitive) -> RandomFruit(false); else FruitType(name,false).
     void SelectType();
 
     // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_TypeCount)].

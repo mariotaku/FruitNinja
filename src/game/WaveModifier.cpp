@@ -11,38 +11,41 @@
 #include "math/Random.h"
 #include <cstdlib>
 
-// Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.
+// ASM-spec v1.6.1 SPAWNER_INFO::SelectTypes @0x0012dcc8 (thunk veneer @0x00114654).
+// Re-rolls fruit-type indices from string-name vector.
 // m_FruitTypeNames holds one name per fruit slot (from XML "type" attr, split by SplitWords).
-// BOMB / BOMB_PINEAPPLE -> -2 (bomb sentinel); RANDOM -> RandomFruit(false); else FruitType lookup.
+// "bomb"/"Bomb" (case-insensitive) -> -2 (bomb sentinel); "1fruit" (case-insensitive) ->
+// Fruit::RandomFruit(false) resolved once here (fixed for the spawner until next Reset);
+// else Fruit::FruitType(name,false) lookup (returns -1 for names not in fruitlist.xml,
+// e.g. "random", which is the deliberate sentinel routed into WaveManager::UpdateWave's
+// per-spawn override/blitz-selection path).
 void SPAWNER_INFO::SelectTypes() {
-    static const uint32_t kHashBomb        = StringHash("BOMB");
-    static const uint32_t kHashBombPineapp = StringHash("BOMB_PINEAPPLE");
-    static const uint32_t kHashRandom      = StringHash("RANDOM");
+    static const uint32_t kHashBomb     = StringHash("BOMB");
+    static const uint32_t kHashOneFruit = StringHash("1fruit");
     for (int i = 0; i < m_FruitTypeCount; ++i) {
         m_pFruitTypeHashes[i] = -1;
         uint32_t h = StringHash(m_FruitTypeNames[i].c_str());
-        if (h == kHashBomb || h == kHashBombPineapp)
+        if (h == kHashBomb)
             m_pFruitTypeHashes[i] = -2;
-        else if (h == kHashRandom)
+        else if (h == kHashOneFruit)
             m_pFruitTypeHashes[i] = Fruit::RandomFruit(false);
         else
             m_pFruitTypeHashes[i] = Fruit::FruitType(m_FruitTypeNames[i].c_str(), false);
     }
 }
 
-// PROBABILITY_OVERIDE::SelectType — binary @ 0x00122b44.
+// ASM-spec v1.6.1 PROBABILITY_OVERIDE::SelectType @0x00121000.
 // Populates m_TypeQueue[] from m_Types string names.
-// Three lazy-init guarded statics (Bomb / BombPineapple / Random hashes).
+// Same two lazy-init guarded statics as SelectTypes above (Bomb / 1fruit hashes).
 void PROBABILITY_OVERIDE::SelectType() {
-    static const uint32_t kHashBomb        = StringHash("Bomb");
-    static const uint32_t kHashBombPineapp = StringHash("BombPineapple");
-    static const uint32_t kHashRandom      = StringHash("Random");
+    static const uint32_t kHashBomb     = StringHash("Bomb");
+    static const uint32_t kHashOneFruit = StringHash("1fruit");
     int n = (int)m_Types.size();
     for (int i = 0; i < n && i < 20; ++i) {
         uint32_t h = StringHash(m_Types[i].c_str());
-        if (h == kHashBomb || h == kHashBombPineapp)
+        if (h == kHashBomb)
             m_TypeQueue[i] = -2;
-        else if (h == kHashRandom)
+        else if (h == kHashOneFruit)
             m_TypeQueue[i] = Fruit::RandomFruit(false);
         else
             m_TypeQueue[i] = Fruit::FruitType(m_Types[i].c_str(), false);
