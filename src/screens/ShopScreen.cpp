@@ -1044,8 +1044,12 @@ void ShopScreen::Update(float dt) {
         {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
-            // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: BACK ring uses m_RingTex[16] (red_ring.tex).
-            m_pBuyButton->m_Texture = game_work.m_RingTex[16];
+            // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: state-3 (post-purchase) back
+            // button uses game_work+0x180 (m_CountdownTex), NOT m_RingTex[16] -- confirmed
+            // via disasm `add r1,r1,#0x180` @0x001b3ac0 inside the case-3 handler
+            // (case-3 jump target 0x001b3a80). Distinct from the state-0 creation below
+            // (line ~829), which correctly uses m_RingTex[16].
+            m_pBuyButton->m_Texture = game_work.m_CountdownTex;
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);

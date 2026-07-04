@@ -344,7 +344,13 @@ void GameInitialise(void* window, const char* config) {
         game_work.m_pTTFFontMain->GetAtlas()->InitialiseData(1.0f, scale);
     }
 
-    // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas SmartPtr slot).
+    // Step 22: LoadLocalisedTexture -> game_work.m_CountdownTex (+0x180).
+    // Binary order @0x0011da48-0x0011da6c: LoadLocalisedTexture -> assign -> MenuButton::LoadContent.
+    // TODO: v1.6.1 0x0011da48 (GameInitialise::InitialiseData) -- resolve exact .tex filename
+    // (GOT/GOTOFF chase to ~0x2CBCE2 did not yield readable ASCII this pass). Left unassigned
+    // (null-safe: ShopScreen's state-3 back button just draws without a texture) until resolved.
+    // game_work.m_CountdownTex = Mortar::TextureManager::LoadLocalisedTexture("<TBD>.tex");
+
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();
 
