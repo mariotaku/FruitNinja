@@ -20,6 +20,7 @@
 
 #include <cstring>
 #include "game/GameWork.h"
+#include "game/GameMode.h"
 
 using Mortar::TextureManager;
 
@@ -79,54 +80,11 @@ AchievementManager* AchievementManager::GetInstance() {
 }
 
 // ---------------------------------------------------------------------------
-// ParseGameMode / GetModeBitMask / ParseModeMask
-// v1.6.1 ParseModeMask @0x0014f320 (thunk @0x00116674), called from
-// LoadAchievementInfo @0x00118198. ParseModeMask calls ParseGameMode
-// (thunk @0x0011bf6c) and GetModeBitMask (thunk @0x0010445c).
-// ---------------------------------------------------------------------------
-
-// Case-sensitive match against the four named game modes -- XML "mode" data
-// is always uppercase ("CLASSIC","ARCADE","ZEN","ALL","ANY"). No match
-// (including "ALL"/"ANY") -> sentinel 4.
-static int ParseGameMode(const char* token, size_t len) {
-    static const char* const names[4] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
-    for (int i = 0; i < 4; ++i) {
-        if (strlen(names[i]) == len && strncmp(token, names[i], len) == 0) return i;
-    }
-    return 4;
-}
-
-// idx 0-3 -> single bit (GAME_MODE_CLASSIC/CASINO/ARCADE/ZEN); idx==4
-// (unrecognized token) -> wildcard, all bits set.
-static uint32_t GetModeBitMask(int idx) {
-    if (idx == 4) return 0xFFFFFFFFu;
-    return 1u << idx;
-}
-
-// Absent/empty mode attr -> wildcard (all modes allowed), matching the
-// binary's early-return default. Otherwise split modeAttr on ',', trim
-// surrounding spaces per token, and OR GetModeBitMask(ParseGameMode(token))
-// for every token (so "CLASSIC, ZEN" -> bit0|bit3; "ALL"/"ANY" -> wildcard
-// since neither matches one of the 4 named modes).
-static uint32_t ParseModeMask(const char* modeAttr) {
-    if (!modeAttr || modeAttr[0] == '\0') return GetModeBitMask(4);
-
-    uint32_t mask = 0;
-    const char* p = modeAttr;
-    while (*p) {
-        while (*p == ' ' || *p == ',') ++p;
-        if (!*p) break;
-        const char* start = p;
-        while (*p && *p != ',') ++p;
-        const char* end = p;
-        while (end > start && end[-1] == ' ') --end;
-        mask |= GetModeBitMask(ParseGameMode(start, (size_t)(end - start)));
-    }
-    return mask;
-}
-
-// ---------------------------------------------------------------------------
 // LoadAchievementInfo  (Binary @ 0x00118198)
+//
+// mode-mask parsing uses the shared GameMode.h global ParseModeMask
+// (v1.6.1 @0x00116674 / real body @0x0014f320) -- see GameMode.cpp for the
+// implementation; no local copy here.
 // ---------------------------------------------------------------------------
 
 void AchievementManager::LoadAchievementInfo() {
