@@ -643,7 +643,10 @@ void MenuButton::Update(float dt) {
                                  m_FruitType, (int)m_bRespondsToBackKey,
                                  entity->pos.x, entity->pos.y, magSqr);
                         m_ClickCallback();
-                        // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
+                        // v1.6.1 MenuButton::Update @0x0019aa78: thunk 0x00105ec4 -> TutorialControl::ResetTutePos(nullptr)
+                        if (game_work.m_TutorialControl) {
+                            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
+                        }
                         entity->scale = m_BaseScale;
                         // Binary @ 0x19aa34..0x19ac20 (Site B): set respawn flag if halves are
                         // already at rest on the same frame as the slice (rare; normally Site A
@@ -773,13 +776,22 @@ void MenuButton::Update(float dt) {
                     const bool insideNow =
                         m_TouchX >= left && m_TouchX <= right &&
                         m_TouchY >= bottom && m_TouchY <= top;
-                    if (!insideNow) {
+                    if (insideNow) {
+                        // v1.6.1 MenuButton::Update @0x0019aeac-0x0019af6c: PRESS_SCALE
+                        // shrink while held (literal @0x0019ac6c = 0.95f).
+                        size.x = m_RestScale.x * 0.95f;
+                        size.y = m_RestScale.y * 0.95f;
+                    } else {
                         size.x = m_RestScale.x;
                         size.y = m_RestScale.y;
-                        m_TouchSlot = -1;
+                        // v1.6.1 MenuButton::Update @0x0019af3c: touch-slot detach is
+                        // gated on m_bRespondsToBackKey -- buttons that also respond to
+                        // the back key keep their touch slot on drag-off.
+                        if (!m_bRespondsToBackKey) {
+                            m_TouchSlot = -1;
+                        }
                     }
                 }
-                // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
             }
         }
     }
