@@ -167,10 +167,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z11DrawCritHitv": {
-    "asm_hash": "fd557070e47f6231",
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "Three real divergences: (1) binary-only CALL blocks in the conditional path -- 3 missing bl targets after cmp/branch, indicating an unreplicated code path when the timer/game-ptr check fires; (2) colour loading: binary ldrb [GREG, #140..#143] (bytes from a struct field) vs port strb to sp+68..71 from a different computed source -- s_CritFlashColour may not match; (3) binary-only tail: ldrb [#143/142/141/140] + VFP vcvt + vmul block after the quad draw, and ldr [GREG, #144] + CALL<SYM> that is absent in port. Implementer should RE binary null-path block and confirm s_CritFlashColour source vs binary +0x8C/+0xF0 colour field.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "drain #316: source faithful (untextured DrawQuadUnCached); residual = SDL/GL platform render substitution",
+    "asm_hash": "48dc8986fd43c89b",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_Z11GameDestroyv": {
     "decided_at": "2026-06-14T07:00Z",
@@ -1398,11 +1398,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11EffectImage12LoadTexturesEv": {
-    "decided_at": "2026-07-03T14:30Z",
-    "max_score": 100,
-    "reason": "Re-triaged #356: binary EffectImage::LoadTextures (thunk 0x0010d9e4/0x001481d0) is exactly ReloadableTexture::Load(this) (base impl @0x0014fad8): if (m_pPath && !m_Texture.IsValid()) { m_Texture = LoadTexture(path); } -- no colour-scale logic at all. Port (src/game/ScreenEffect.cpp:244-268) reimplements the load inline (snprintf+TextureManager::LoadLocalisedTexture) INSTEAD of calling a shared ReloadableTexture::Load() (violates preserve-function-boundaries), AND adds an invented 'restore m_ColourScale from texture dims if zero' block not present in the binary at this callsite (nor in ReloadableTexture::Load). Worse: the whole body is wrapped #if !defined(__bada__), which empties the function under the asm-verify cross-build -- misapplies the port-only-FIELD guard convention to a real ported FUNCTION BODY, silencing the divergence rather than fixing it (band-aid). Fix: port ReloadableTexture::Load() as its own method matching the binary guard, call it from EffectImage::LoadTextures (matches binary's 1-bl call graph), drop the __bada__ guard, and drop the invented colour-scale restore unless separately RE'd against the real binary Parse/Load path.",
-    "score": 6300,
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "3c1b1f9509ed36b8",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN11EffectImage5ParseEP12TiXmlElement": {
     "decided_at": "2026-06-18T02:22Z",
@@ -1459,9 +1458,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11FileManager20GetSaveRootDirectoryEPcPKcbb": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch: binary FileManager::GetSaveRootDirectory(char*, char const*, bool, bool) vs port (char*, char const*, bool). Port drops the fourth bool param. Fix: add the missing bool to port.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "afa9d7fefdda6d14",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN11FileManager8FileSizeEPKcm": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3948,11 +3948,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN13SliderControl19UpdateTouchPositionEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6700,
-    "reason": "Score 7700/7200. Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7700/7200 -> 7200/6700]",
-    "score": 7200,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "dead code: all SliderControl ctors have 0 call xrefs in v1.6.1",
+    "asm_hash": "998604d6c1036abf",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN13SliderControl4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4908,9 +4907,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl9BeginDrawEf": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Binary v1.6.1 FruitFactControl::BeginDraw @0x00170804 is NOT a no-op: disassembly is `mov r3,#0x80; str r3,[r0,#0x34]; bx lr` -- it writes this->m_LayerFlags (offset +0x34) = 0x80 on every draw call. The port's BeginDraw at src/hud/FruitFactControl.cpp:228-230 is an empty body with a comment claiming 'Binary @ 0x00170804: bare BX LR (no-op)' -- that comment actually describes the ADJACENT function FruitFactControl::Reset @0x00170800 (4 bytes earlier, confirmed via disassemble_function: 0x00170800 is a bare `bx lr`), a marker-vs-real-function mixup (danger class d). Impact: FruitFactControl::Update() (src/hud/FruitFactControl.cpp:247) also sets m_LayerFlags=0x80 every frame, so this is currently masked in the common case, but BeginDraw fires on every DRAW call independent of Update's timing (e.g. a paused/extra draw tick without an Update call) -- in that case the port leaves m_LayerFlags stale while the binary unconditionally forces it to 0x80. Fix: add `m_LayerFlags = 0x80;` to BeginDraw(float) matching the binary.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "9e20956ccac4e290",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN16FruitFactControl9UpPressedEP10InputEvent": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4988,11 +4988,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN16VerticalScroller19UpdateTouchPositionEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 9600,
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11500/11000 -> 9900/9600]",
-    "score": 9900,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "dead code: ComboBox->ListBox->VerticalScroller creation chain has 0 xrefs in v1.6.1",
+    "asm_hash": "e053fcd98ebe7402",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN16VerticalScroller4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6030,11 +6029,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Math10CompressLZEPKhmPh": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 13700,
-    "reason": "Port has bx lr stub vs binary LZ compression. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14105/13800 -> 14200/13700]",
-    "score": 14200,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-deferred",
+    "reason": "authoring-only: 0 runtime xrefs; game only decompresses",
+    "asm_hash": "c47f174196d1d2e3",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN4Math11DivAsyncGetEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7612,9 +7610,10 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar14BakedStringBox24SetHorizontalLineSpacingEi": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch: binary BakedStringBox::SetHorizontalLineSpacing(int) vs port (float). int->float type error. Fix: change port param from float to int.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "37c5f80bd436a558",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN6Mortar14BakedStringBox4DrawE8_Vector2IfEfb": {
     "decided_at": "2026-07-01T00:00Z",
@@ -7908,11 +7907,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar15InputDeviceBada7DestroyEv": {
-    "decided_at": "2026-07-03T15:10Z",
-    "score": 1500,
-    "max_score": 100,
-    "reason": "FIX-NEEDED #356 batch2: binary InputDeviceBada::Destroy @0x0024278c tail-calls base Mortar::InputDevice::Destroy @0x00275938, which clears m_ActionMappers (std::list<InputActionMapper*>::_M_clear + sentinel reset). Port src/engine/input/InputDeviceBada.cpp:39-43 does NOT call the base Destroy() at all -- instead clears an unrelated port-only member (m_bindings). Port base src/engine/input/InputDevice.cpp:87 `InputDevice::Destroy() {}` is an empty stub with an unverified `Binary @ 0x????` marker (never RE'd) -- should clear `actionMappers`. Impact: actionMappers list never cleared on device teardown; if InputManager re-Update()s a destroyed device or a mapper is freed elsewhere, this is a dangling-list/UAF-class risk, not just cosmetic. Fix: port InputDevice::Destroy() to clear actionMappers (matches binary @0x00275938), and have InputDeviceBada::Destroy() chain to base (matches binary tail-call @0x0024278c) before/in addition to clearing m_bindings.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "3c1b1f9509ed36b8",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN6Mortar15InputDeviceBadaC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7990,9 +7988,10 @@
     "verdict": "ACCEPT-defunct"
   },
   "_ZN6Mortar35SubstituteApparentSizeTextureSource12UnlockLayersEPKNS_13TextureSource4DataE": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch: binary SubstituteApparentSizeTextureSource::UnlockLayers(TextureSource::Data const*) (nested type) vs port (TextureSourceData const*) (flat type). Fix: use TextureSource::Data as nested type.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "33c977d201b6e3fa",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN6Mortar39SubstituteApparentSizeTextureSourceDataC1ERKNS_8SmartPtrINS_13TextureSourceEEEmm": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8621,9 +8620,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar8Geometry11GetPropertyEPKc": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch MED: binary Geometry::GetProperty(char const*) and GetProperty(char const*) const vs port GetProperty(unsigned long). Complete type divergence -- binary uses char* name lookup, port uses ulong hash lookup. Fix: change port to use char const* param with name-based lookup.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "drain #9: char* param faithful; residual cosmetic (m_PropList null path)",
+    "asm_hash": "d0ad4e16a3ec47ca",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZN6Mortar8Geometry6RenderEv": {
     "decided_at": "2026-07-01T00:00Z",
@@ -9578,9 +9578,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar18EffectPropertyList11GetPropertyEPKc": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch: binary EffectPropertyList::GetProperty(char const*) const vs port GetProperty(std::string const&) const. Binary uses char*, port uses std::string. Fix: change port param to char const*.",
-    "verdict": "FIX-NEEDED"
+    "verdict": "MATCH",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "asm_hash": "3c1b1f9509ed36b8",
+    "decided_at": "2026-07-04T00:00Z"
   },
   "_ZNK6Mortar4Bada14Texture2D_Bada7GetHashEv": {
     "asm_hash": "901245a0fbee046c",
