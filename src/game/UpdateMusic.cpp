@@ -17,6 +17,7 @@
 #include "debug/Logger.h"
 #include <cmath>
 #include "game/GameWork.h"
+#include "screens/MainScreen.h"
 
 // ---------------------------------------------------------------------------
 // Static state (binary: BSS, zero-initialised at process start)
@@ -30,6 +31,7 @@
 static float g_currentVolume = 0.0f;
 
 // g_trackId: which track is currently playing.
+//   -2 = Dojo/About track ("Music-Dojo")
 //   -1 = menu track ("Music-menu")
 //   +1 = gameplay track ("background")
 //    0 = no track (initial / transient)
@@ -224,7 +226,7 @@ void UpdateMusic(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // BLOCK 5: Volume ramp — split on m_bMusicOn flag (+0x45)
+    // BLOCK 5: Volume ramp — split on m_bMusicOn flag (+0x49)
     // -----------------------------------------------------------------------
     if (game_work.m_bMusicOn == 0) {
         // ---- Music DISABLED branch (0x0016a868) ----
@@ -253,24 +255,47 @@ void UpdateMusic(float dt) {
         // ---- Music ENABLED branch (0x0016a7b6) ----
         // Check if gameplay is in "transition" (m_TransitionTimer < 0)
         if (game_work.m_PauseAmount < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
-            // Transition active: ramp DOWN toward -1.0 (kill gameplay music)
-            float v = g_currentVolume - delta;           // 0x0016a7d0: vsub s16,s14,s16
-            if (v <= -1.0f) {                            // 0x0016a7d4: vcmpe s16,s15 (s15=-1.0)
-                v = -1.0f;                               // 0x0016a7de: vmov.le.f32 s16,s15
-            }
-            g_currentVolume = v;                         // 0x0016a7e2: vstr s16,[r3]
-            // If still negative (ramping), or already on menu track: skip SongPlay
-            if (v >= 0.0f) {                             // 0x0016a7e6: bpl -> LAB_end_ramp
-                goto LAB_end_ramp;
-            }
-            if (g_trackId == -1) {                       // 0x0016a7f6: cmp r2, #0xffffffff
-                goto LAB_end_ramp;                       // already on menu track, no re-play
-            }
-            // Flip track ID to -1 (menu) and call SongPlay("Music-menu")
-            g_trackId = -1;                              // 0x0016a800: str r2,[r3]
-            {
-                Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();  // 0x0016a802
-                sm.SongPlay("Music-menu");               // 0x0016a860: string at 0x001bc787
+            // Transition active: 3-way split on MainScreen::m_State
+            // (v1.6.1 UpdateMusic @0x001cc18c, disasm 0x001cc350-0x001cc3ec).
+            MainScreen* ms = game_work.mMainScreen;
+            if (ms != nullptr && ms->m_State == STATE_DOJO_WAIT_B) {
+                // About/Dojo wait: ramp UP toward +1.0, play the Dojo track.
+                float v = g_currentVolume + delta * 0.33f;   // 0x1cc37c: vmla, const 0.33f @0x1cc594
+                if (v >= 1.0f) {                             // 0x1cc380/0x1cc38c: const 0x3f800000
+                    v = 1.0f;
+                }
+                g_currentVolume = v;
+                if (v <= 0.0f) {                             // 0x1cc39c
+                    goto LAB_end_ramp;
+                }
+                if (g_trackId == -2) {                       // 0x1cc3ac: cmn r2,#2
+                    goto LAB_end_ramp;                       // already on Dojo track, no re-play
+                }
+                g_trackId = -2;                              // 0x1cc3b4
+                {
+                    Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
+                    sm.SongPlay("Music-Dojo");               // 0x1cc3c4: string @0x00283e1f
+                }
+            } else {
+                // Ramp DOWN toward -1.0 (kill gameplay music)
+                float v = g_currentVolume - delta;           // 0x0016a7d0: vsub s16,s14,s16
+                if (v <= -1.0f) {                            // 0x0016a7d4: vcmpe s16,s15 (s15=-1.0)
+                    v = -1.0f;                               // 0x0016a7de: vmov.le.f32 s16,s15
+                }
+                g_currentVolume = v;                         // 0x0016a7e2: vstr s16,[r3]
+                // If still negative (ramping), or already on menu track: skip SongPlay
+                if (v >= 0.0f) {                             // 0x0016a7e6: bpl -> LAB_end_ramp
+                    goto LAB_end_ramp;
+                }
+                if (g_trackId == -1) {                       // 0x0016a7f6: cmp r2, #0xffffffff
+                    goto LAB_end_ramp;                       // already on menu track, no re-play
+                }
+                // Flip track ID to -1 (menu) and call SongPlay("Music-menu")
+                g_trackId = -1;                              // 0x0016a800: str r2,[r3]
+                {
+                    Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();  // 0x0016a802
+                    sm.SongPlay("Music-menu");               // 0x0016a860: string at 0x001bc787
+                }
             }
         } else {
             // No transition: gameplay / menu determination by vol sign + entity counts
