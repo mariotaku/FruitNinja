@@ -3,7 +3,8 @@
 
 //
 // FRUIT_INFO — per-fruit-type data loaded from Data/xml/fruitlist.xml
-// Original: 0x330 bytes per entry, allocated as 8 + count * 0x330
+// Original: 0x338 bytes per entry, allocated as 8 + count * 0x338
+// (v1.6.1 Fruit::FruitType @0x001db6c8 array stride; LoadInfo operator_new(0x338))
 // Loaded by Fruit::LoadInfo (0x17987c, 527 lines)
 //
 // Analysed: 2026-04-13T14:00
@@ -57,7 +58,7 @@ struct FRUIT_POWERS {
 // Port alias so existing code using FruitPowers still compiles
 typedef FRUIT_POWERS FruitPowers;
 
-// Matches FRUIT_INFO (0x330 = 816 bytes per entry)
+// Matches FRUIT_INFO (0x338 = 824 bytes per entry)
 // LoadInfo @ 0x0017987c
 struct FruitInfo {
     // String fields (char[0x40] = 64 bytes each)
@@ -141,6 +142,12 @@ struct FruitInfo {
     // and SuperFruitControl::SuperFruitSliced (@ 0x001bbf48 / 0x001be630).
     uint8_t m_bIsSuperFruit;      // +0x330
     uint8_t _pad_331[3];          // +0x331..+0x333 (alignment pad)
+
+    // TODO: v1.6.1 0x001e1084 (Fruit::LoadInfo) -- what populates this field is not
+    // yet RE'd. Zeroed in the binary FRUIT_INFO ctor (v1.6.1 @0x001e3d88); gates
+    // diffuse-map attach in Fruit::LoadFruitModels (v1.6.1 @0x001e0b30/0x001e0cb8)
+    // via `fruitInfo[i]+0x334 != 0`. Placeholder name pending purpose RE.
+    int32_t m_Field334;           // +0x334
 };
 
 // Layout asserts.
@@ -172,12 +179,7 @@ static_assert(__builtin_offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
 static_assert(__builtin_offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
 static_assert(__builtin_offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactCount)       == 0x270, "");
-// DIFFERS: original binary sizeof(FruitInfo) = 0x330; port extends to 0x334
-// by adding m_bIsSuperFruit (uint8_t) + 3 bytes pad at +0x330..+0x333.
-// The binary accesses this byte via FRUIT_INFO[type]+0x330 in SuperFruitControl
-// (@ 0x001bbf48 / 0x001be630); extending the struct is the faithful port approach
-// since the binary always allocates the full entry size.
-static_assert(sizeof(FruitInfo) == 0x334, "FruitInfo size mismatch -- extended by super-fruit flag");
+static_assert(sizeof(FruitInfo) == 0x338, "FruitInfo size mismatch -- v1.6.1 Fruit::FruitType @0x001db6c8 stride is 0x338");
 static_assert(__builtin_offsetof(FruitInfo, m_pFacts)          == 0x274, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactTexture)     == 0x278, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactColour)      == 0x2F8, "");
@@ -196,6 +198,7 @@ static_assert(__builtin_offsetof(FruitInfo, m_CoinsMin)        == 0x324, "");
 static_assert(__builtin_offsetof(FruitInfo, m_CoinsMax)        == 0x328, "");
 static_assert(__builtin_offsetof(FruitInfo, m_pPowers)         == 0x32C, "");
 static_assert(__builtin_offsetof(FruitInfo, m_bIsSuperFruit)   == 0x330, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Field334)        == 0x334, "");
 #endif
 
 // Maximum fruit types
