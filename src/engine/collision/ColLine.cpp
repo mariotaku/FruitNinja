@@ -3,7 +3,8 @@
 #include "collision/ColSphere.h"
 #include "collision/ColAABB.h"
 
-ColLine::ColLine() : Col(), b() {}
+// v1.6.1 ColLine::ColLine() @0x0025c9d0 -- binary stores b=(1.0,0.0,0.0), a=(0,0,0).
+ColLine::ColLine() : Col(), b(1.0f, 0.0f, 0.0f) {}
 
 ColLine::ColLine(Vec3 start, Vec3 end) : Col(), b(end) {
     m_PrimaryPoint = start;
