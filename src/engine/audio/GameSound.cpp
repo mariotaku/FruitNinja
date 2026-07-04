@@ -26,9 +26,14 @@ GameSound::GameSound()
     }
 }
 
+// ASM-spec v1.6.1 GameSound::~GameSound @0x00151ebc (D1) / @0x00151f58 (D2, identical)
 GameSound::~GameSound() {
-    KillAll();
-    // sound objects are owned by SoundManager, not destroyed here
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        if (m_Slots[i].sound) {
+            delete m_Slots[i].sound;   // virtual dtor -> MortarSound::~MortarSound() -> InternalDestroy()
+            m_Slots[i].sound = nullptr;
+        }
+    }
 }
 
 // Binary @ 0x001290e8
