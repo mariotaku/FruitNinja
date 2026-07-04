@@ -341,17 +341,22 @@ void MissControl::CleanPool() {
 // --- GetFree ---------------------------------------------------------------
 
 // v1.6.1 MissControl::GetFree @0x0019dcd8
-// Round-robin: cursor left at FOUND slot (not +1). On exhaustion: cursor
-// left at last-tried idx, return that slot anyway (evict).
+// Round-robin: cursor left at FOUND slot (not +1). On full-pool exhaustion,
+// the binary's break-before-advance while-loop leaves the cursor frozen at
+// the ORIGINAL entry idx (revisits it after poolCount steps), so sustained
+// overflow always evicts the same slot -- NOT idx+1.
 MissControl* MissControl::GetFree() {
     if (!s_pPool) return 0;
     int idx = s_CurentFree;
-    for (int tries = 0; tries <= s_PoolCount; ++tries) {
+    int tries = 0;
+    while (true) {
         if (!s_pPool[idx].m_Active) {
             s_CurentFree = idx;
             return &s_pPool[idx];
         }
+        if (tries >= s_PoolCount) break;  // break BEFORE advancing idx (binary order)
         idx = (idx + 1) % s_PoolCount;
+        ++tries;
     }
     s_CurentFree = idx;
     return &s_pPool[idx];
