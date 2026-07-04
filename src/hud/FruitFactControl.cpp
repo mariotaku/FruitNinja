@@ -173,14 +173,16 @@ void FruitFactControl::Init() {
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::Release() {
-    // Binary @ 0x00171808. Order from disassembly:
-    //   1) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x74 (HUDControl3d base
-    //      texture slot, not a named member in this port -- unmodeled here).
+    // v1.6.1 FruitFactControl::Release @0x00171808. Order from disassembly:
+    //   1) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x74 (m_Texture, inherited
+    //      from HUDControl3d -- HUDControl3d::Release() is a no-op, so
+    //      subclasses must clear it themselves).
     //   2) SmartPtr<Texture>::SetPtr(NULL) on slot @+0x88 (m_FactTexture).
     //   3) if (m_NextButton)  HUD::RemoveControl(hud, m_NextButton);  delete it (vtable+4 deleting dtor); null it.
     //   4) if (m_PrevButton) HUD::RemoveControl(hud, m_PrevButton); delete it; null it.
     // The binary does NOT touch the m_Pages vector in Release -- m_Pages is
     // destroyed by ~vector in the destructor (0x001718ac), not here.
+    m_Texture.SetNull();
     m_FactTexture.SetNull();
 
     // HUD owner: binary reads [singleton+0x40]; the port models this as game_work.mHud.
@@ -427,7 +429,7 @@ bool FruitFactControl::RightPressed(InputEvent* /*ev*/) {
 }
 
 bool FruitFactControl::UpPressed(InputEvent* /*ev*/) {
-    // Binary @ 0x00170a20 -- next-fruit fact navigation (NOT "forward to page").
+    // v1.6.1 FruitFactControl::UpPressed @0x00170a20 -- next-fruit fact navigation (NOT "forward to page").
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
     int fruitCount = FruitInfo_GetCount();
@@ -447,13 +449,13 @@ bool FruitFactControl::UpPressed(InputEvent* /*ev*/) {
     {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(ca));
-        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+        m_FactTexture = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
     return true;
 }
 
 bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
-    // Binary @ 0x00170924 -- prev-fruit fact navigation (NOT "forward to page").
+    // v1.6.1 FruitFactControl::DownPressed @0x00170924 -- prev-fruit fact navigation (NOT "forward to page").
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
     int fruitCount = FruitInfo_GetCount();
@@ -473,7 +475,7 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
     {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(ca));
-        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+        m_FactTexture = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
     return true;
 }
