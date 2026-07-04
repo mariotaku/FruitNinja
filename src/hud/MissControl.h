@@ -190,6 +190,13 @@ public:
     // Binary @ 0x001515a4 — combo overlay textures: [0..1]=NULL, [2..9]=combo_3..combo_10.
     // MakeCombo index = clamp(comboCount-1, 0, 9) — see MissControl.cpp.
     static Mortar::SmartPtr<Mortar::Texture> s_ComboTextures[10];
+
+    // Instance refcount for the shared static textures (s_TexCritical/s_TexRare/
+    // s_TexCross/s_ComboTextures). Incremented per ctor, decremented per dtor;
+    // hitting 0 releases the shared textures so the next CreatePool cycle's
+    // ctor (gated on s_refCount==0) reloads them fresh.
+    // v1.6.1 MissControl::MissControl @0x0019ed44 / ~MissControl @0x0019f198
+    static int s_refCount;
 };
 
 #ifdef __bada__
