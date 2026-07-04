@@ -2,8 +2,10 @@
 #include "core/MortarGame.h"
 #include "render/DisplayManager.h"
 #include "game/GameWork.h"
+#include "engine/math/Random.h"
 #include <algorithm>
 #include <cstdlib>
+#include <ctime>
 // Game.h pulled in for LowResBackgrounds() which reads Game::m_appState (+0x100).
 #include "Game.h"
 
@@ -23,13 +25,14 @@ SystemManager::SystemManager()
     }
 }
 
-// Matches 0x0018b024: m_reserved50=DAT_0018b078(=0), m_bRunning=1,
-// then records clock() into a Bada clock-calibration struct (port-skip),
-// then _RetrieveDeviceID (port-skip: Bada device ID).
+// v1.6.1 SystemManager::Init @0x0022e544: m_reserved50=0, m_bRunning=1,
+// seeds Math::g_Random with clock(), then _RetrieveDeviceID.
 void SystemManager::Init() {
-    m_reserved50 = 0.0f;  // DAT_0018b078 = 0x00000000 (float literal)
+    m_reserved50 = 0.0f;
     m_bRunning = 1;
-    // Port specific: Bada clock calibration and _RetrieveDeviceID omitted
+    // ASM-spec v1.6.1 SystemManager::Init @0x0022e544: seeds Math::g_random state word with clock()
+    Math::SeedGlobalRng((uint32_t)clock());
+    // Defunct/no-op: _RetrieveDeviceID (v1.6.1 @0x0022e3be) confirmed `return 0;` in binary -- correctly omitted.
 }
 
 bool SystemManager::Update(float* dt) {
