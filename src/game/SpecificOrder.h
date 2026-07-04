@@ -3,19 +3,24 @@
 
 // Analysed: 2026-05-03T00:00
 // SpecificOrder — pattern matcher for SPECIFIC_ORDER achievements.
-// Parses a comma-separated (or parenthesised alternation) spec string into
-// up to 10 sequence slots, each accepting up to 10 alternative fruit hashes.
-// Binary @ 0x001085b0 (ctor). sizeof=0x1C0 = 448 bytes.
+// Spec format: comma-separated tokens; a "(...)" group holds comma-separated
+// alternatives for that one slot (the SAME separator as top level, only
+// disambiguated by paren nesting -- binary has no '|' alternation delimiter).
+//   "apple,orange"        -> slot[0]={apple}, slot[1]={orange}
+//   "apple,(orange,lime)" -> slot[0]={apple}, slot[1]={orange,lime}
+// Parses into up to 10 sequence slots, each accepting up to 10 alternative
+// fruit hashes. Binary @ v1.6.1 SpecificOrder::SpecificOrder @0x00116efc
+// (C2 base-object ctor; identical body at C1 @0x001171c8). sizeof=0x1C0 = 448 bytes.
 
 #include <cstdint>
 
-// Binary @ 0x001085b0 (ctor). sizeof=0x1C0.
+// Binary @ v1.6.1 SpecificOrder::SpecificOrder @0x00116efc. sizeof=0x1C0.
 // Pattern matcher for SPECIFIC_ORDER achievements (consume fruits in a
 // declared order). Up to 10 sequence slots; each slot can match any of up
 // to 10 alternative fruit hashes.
 class SpecificOrder {
 public:
-    explicit SpecificOrder(const char* spec);   // 0x001085b0
+    explicit SpecificOrder(const char* spec);   // v1.6.1 @0x00116efc
     ~SpecificOrder() {}
 
     // Binary @ 0x0010846c

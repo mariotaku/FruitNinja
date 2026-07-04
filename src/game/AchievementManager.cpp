@@ -159,17 +159,21 @@ void AchievementManager::LoadAchievementInfo() {
         const char* typeAttr = e.Attribute("type");
         info->m_TypeIndex = 0xb;  // sentinel (binary ctor default)
         if (typeAttr) {
-            if      (strcmp(typeAttr, "total")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_TOTAL;
-            else if (strcmp(typeAttr, "score")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SCORE;
-            else if (strcmp(typeAttr, "score_unsullied")  == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SCORE_UNSULLIED;
-            else if (strcmp(typeAttr, "end_score")        == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_END_SCORE;
-            else if (strcmp(typeAttr, "specific")         == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SPECIFIC;
-            else if (strcmp(typeAttr, "consecutive")      == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_CONSECUTIVE;
-            else if (strcmp(typeAttr, "consecutive_any")  == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_CONSECUTIVE_ANY;
-            else if (strcmp(typeAttr, "combo")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_COMBO;
-            else if (strcmp(typeAttr, "combo_star")       == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_COMBO_STAR;
-            else if (strcmp(typeAttr, "specific_order")   == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SPECIFIC_ORDER;
-            else if (strcmp(typeAttr, "bonus")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_BONUS;
+            // v1.6.1 AchievementManager::LoadAchievementInfo @0x00118198: type-string
+            // literals are UPPERCASE in the binary; achievementlist.xml uses uppercase
+            // "type" values exclusively, so lowercase literals here never matched and
+            // every m_TypeIndex stayed at the 0xb sentinel.
+            if      (strcmp(typeAttr, "TOTAL")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_TOTAL;
+            else if (strcmp(typeAttr, "SCORE")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SCORE;
+            else if (strcmp(typeAttr, "SCORE_UNSULLIED")  == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SCORE_UNSULLIED;
+            else if (strcmp(typeAttr, "END_SCORE")        == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_END_SCORE;
+            else if (strcmp(typeAttr, "SPECIFIC")         == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SPECIFIC;
+            else if (strcmp(typeAttr, "CONSECUTIVE")      == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_CONSECUTIVE;
+            else if (strcmp(typeAttr, "CONSECUTIVE_ANY")  == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_CONSECUTIVE_ANY;
+            else if (strcmp(typeAttr, "COMBO")            == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_COMBO;
+            else if (strcmp(typeAttr, "COMBO_STAR")       == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_COMBO_STAR;
+            else if (strcmp(typeAttr, "SPECIFIC_ORDER")   == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_SPECIFIC_ORDER;
+            else if (strcmp(typeAttr, "BONUS_ACHIEVED")   == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_BONUS;
         }
 
         // mode bitmask (e.g. "classic,arcade,zen" — binary packs as bit flags)
@@ -192,15 +196,6 @@ void AchievementManager::LoadAchievementInfo() {
         const char* texAttr = e.Attribute("texture");
         if (texAttr) {
             info->m_Texture = TextureManager::LoadLocalisedTexture(texAttr);
-        }
-
-        // specific_order child
-        TiXmlElement soElem = e.FirstChildElement("specific_order");
-        if (soElem) {
-            const char* soStr = soElem.GetText();
-            if (soStr) {
-                info->m_SpecificOrder = new SpecificOrder(soStr);
-            }
         }
 
         // Insert into m_All (owning map)
@@ -234,6 +229,25 @@ void AchievementManager::LoadAchievementInfo() {
             } else {
                 secondaryKey = (uint32_t)info->m_Total;
             }
+
+            // v1.6.1 LoadAchievementInfo @0x00118198: SpecificOrder construction --
+            // NOT from an invented "<specific_order>" child element (no such element
+            // exists in the real XML schema); built from the existing "specific_type"
+            // attribute instead.
+            if (ti == ACHIEVEMENT_TYPE_SPECIFIC_ORDER) {
+                // Binary constructs unconditionally, even if specific_type is absent
+                // (ctor treats null/empty spec as a no-op, zero slots parsed).
+                const char* soAttr = e.Attribute("specific_type");
+                info->m_SpecificOrder = new SpecificOrder(soAttr ? soAttr : "");
+            } else if (ti == ACHIEVEMENT_TYPE_COMBO) {
+                // "SpecificOrder gate (COMBO semantics)": COMBO achievements also get a
+                // SpecificOrder when specific_type is present and non-empty.
+                const char* soAttr = e.Attribute("specific_type");
+                if (soAttr && soAttr[0] != '\0') {
+                    info->m_SpecificOrder = new SpecificOrder(soAttr);
+                }
+            }
+
             m_ByType[ti][secondaryKey] = info;
         }
     }

@@ -1,17 +1,20 @@
 // Analysed: 2026-05-03T00:00
 // SpecificOrder — SPECIFIC_ORDER achievement sequence matcher.
-// Binary @ 0x001085b0 (ctor) / 0x0010846c (Check) / 0x00108468 (GetFirstFruitTypeHash).
+// Binary @ v1.6.1 SpecificOrder::SpecificOrder @0x00116efc (ctor; C1 twin
+// @0x001171c8, identical body) / 0x0010846c (Check) / 0x00108468 (GetFirstFruitTypeHash).
 
 #include "SpecificOrder.h"
 #include "engine/util/StringHash.h"
 #include <cstring>
 #include <cstdio>
 
-// Binary @ 0x001085b0
+// v1.6.1 SpecificOrder::SpecificOrder @0x00116efc
 // Parses spec string into up to 10 slots x up to 10 hashes/slot.
-// Format: comma-separated tokens; parenthesised groups allow alternatives.
+// Format: comma-separated tokens; a "(...)" group holds comma-separated
+// alternatives for that one slot -- same separator as top level, only
+// disambiguated by paren nesting (binary has NO '|' alternation delimiter).
 //   "apple,orange"        -> slot[0]={apple}, slot[1]={orange}
-//   "apple,(orange|lime)" -> slot[0]={apple}, slot[1]={orange,lime}
+//   "apple,(orange,lime)" -> slot[0]={apple}, slot[1]={orange,lime}
 // Each token is fed through StringHash.
 SpecificOrder::SpecificOrder(const char* spec)
     : m_CurrentSlot(0)
@@ -30,29 +33,25 @@ SpecificOrder::SpecificOrder(const char* spec)
         if (*p == '\0') break;
 
         if (*p == '(') {
-            // Parenthesised alternation group: (tokenA|tokenB|...)
+            // Parenthesised alternation group: (tokenA,tokenB,...) -- SAME
+            // comma separator as top level, disambiguated only by paren nesting.
             ++p;  // skip '('
             int hashIdx = 0;
             while (*p != ')' && *p != '\0' && hashIdx < 10) {
-                // Read until '|' or ')'
+                // Read until ',' or ')'
                 const char* start = p;
-                while (*p != '|' && *p != ')' && *p != '\0') ++p;
+                while (*p != ',' && *p != ')' && *p != '\0') ++p;
                 // Extract token
                 char token[64];
                 int len = (int)(p - start);
                 if (len > 63) len = 63;
                 memcpy(token, start, (size_t)len);
                 token[len] = '\0';
-                // Trim trailing whitespace
-                int tlen = len;
-                while (tlen > 0 && (token[tlen-1] == ' ' || token[tlen-1] == '\t')) {
-                    token[--tlen] = '\0';
-                }
-                if (tlen > 0) {
+                if (len > 0) {
                     m_Slots[slotIdx].hashes[hashIdx] = StringHash(token);
                     ++hashIdx;
                 }
-                if (*p == '|') ++p;  // skip '|'
+                if (*p == ',') ++p;  // skip ','
             }
             if (*p == ')') ++p;  // skip ')'
             m_Slots[slotIdx].count = hashIdx;
@@ -66,12 +65,7 @@ SpecificOrder::SpecificOrder(const char* spec)
             if (len > 63) len = 63;
             memcpy(token, start, (size_t)len);
             token[len] = '\0';
-            // Trim trailing whitespace
-            int tlen = len;
-            while (tlen > 0 && (token[tlen-1] == ' ' || token[tlen-1] == '\t')) {
-                token[--tlen] = '\0';
-            }
-            if (tlen > 0) {
+            if (len > 0) {
                 m_Slots[slotIdx].hashes[0] = StringHash(token);
                 m_Slots[slotIdx].count = 1;
                 ++slotIdx;
