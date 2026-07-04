@@ -236,10 +236,15 @@ public:
     void DeletedMenuItem(HUDControl* removed);
 
     // Matches ShopScreen::NewItem @ 0x0015c498
-    // Sets s_NewItemAlpha = 1.0f (binary: *(GOT + DAT_0015c4b4) = 0x3f800000).
+    // Sets s_ScrollOffset = 1.0f (binary: *(GOT + DAT_0015c4b4) = 0x3f800000).
     // Called when a new item is available in the shop.
     void NewItem();
-    static float s_NewItemAlpha;
+
+    // Scroll-position sentinel/cache (NOT an alpha, despite the old name).
+    //   1.0f  = sentinel: "recompute scroll target on next Init" (set by NewItem()).
+    //   other = cached m_pShopList->m_Velocity.y, persisted across screen re-Init
+    //           (written every Update tail; read back by CreateShopList/Init).
+    static float s_ScrollOffset;
 
     // Helper — create the scrolling item list and populate from ItemManager.
     // Binary: this happens during Init (or the list is passed externally via

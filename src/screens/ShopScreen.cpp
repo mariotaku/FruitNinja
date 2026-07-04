@@ -387,6 +387,12 @@ void ShopScreen::CreateShopList() {
     ItemManager* im = ItemManager::GetInstance();
     ShopListItem* firstRow = nullptr;
     ShopListItem* lastRow  = nullptr;
+    // v1.6.1 ShopScreen::Init @0x001b42ac: running row-height accumulator, used to
+    // capture the offset of the first not-yet-seen (unowned) row for the
+    // auto-scroll-to-first-unowned-item kick below.
+    float cumHeight = 0.0f;
+    float firstUnownedOffset = 0.0f;
+    bool foundFirstUnowned = false;
     if (im) {
         std::vector<ItemInfo*>::iterator it;
         for (ItemInfo* info = im->GetFirst(it); info != nullptr; info = im->GetNext(it)) {
@@ -394,6 +400,13 @@ void ShopScreen::CreateShopList() {
             // Binary: ShopListItem::Create(row, info, this) called immediately after ctor.
             // This sets GetHeight() = 80.0f (row pitch = 160 units per item).
             row->Create(info, this);
+
+            // Capture BEFORE adding this row's height (binary: pIVar5->m_Owned == 0).
+            if (!foundFirstUnowned && !info->m_bSeen) {
+                firstUnownedOffset = cumHeight;
+                foundFirstUnowned = true;
+            }
+            cumHeight += row->GetHeight();
 
             // v1.6.1 ShopScreen::Init @0x001b42ac, 0x1b43e0-0x1b4424: wire the per-row
             // tap-release click callback. Without this, ScrollingMenu::Update's
@@ -430,10 +443,14 @@ void ShopScreen::CreateShopList() {
     }
 
     // TODO: v1.6.1 0x001b42ac (ShopScreen::Init) -- onscreen-flag alternation
-    // (m_bOnscreenItem toggling 1/0/1/0.. per row) and the post-loop auto-scroll-to-
-    // first-unowned-item kick (ShopScreen::ScrollOffset static + m_pShopList->m_Velocity.y)
-    // are gated behind ScrollingMenu being a stub with no real scroll physics; port once
-    // ScrollingMenu gets real scroll physics.
+    // (m_bOnscreenItem toggling 1/0/1/0.. per row) not yet ported.
+
+    // v1.6.1 ShopScreen::Init @0x001b42ac tail: auto-scroll-to-first-unowned-item kick.
+    // `if (0.0 < ScrollOffset) ScrollOffset = -fVar10; ... m_pShopList->m_Velocity.y = ScrollOffset;`
+    if (s_ScrollOffset > 0.0f) {
+        s_ScrollOffset = -firstUnownedOffset;
+    }
+    m_pShopList->m_Velocity.y = s_ScrollOffset;
 
     if (game_work.mHud) {
         game_work.mHud->AddControl(m_pShopList);
@@ -469,13 +486,15 @@ void ShopScreen::RemoveEquipButton() {
 // ---------------------------------------------------------------------------
 // ShopScreen::NewItem @ 0x0015c498
 // Binary: **(undefined4**)(GOT+offset) = 0x3f800000 (1.0f)
-// Sets a static float to 1.0f -- a scroll-position indicator that the
-// shop list reads to highlight rows whose ItemInfo->m_bSeen is false.
+// Sets s_ScrollOffset = 1.0f -- the sentinel meaning "recompute scroll target
+// on next Init". CreateShopList (Init) reads this back: when > 0.0f, it
+// replaces it with -firstUnownedOffset so the shop auto-scrolls to reveal
+// the first not-yet-seen (unowned) item.
 // ---------------------------------------------------------------------------
-float ShopScreen::s_NewItemAlpha = 0.0f;
+float ShopScreen::s_ScrollOffset = 0.0f;
 
 void ShopScreen::NewItem() {
-    s_NewItemAlpha = 1.0f;
+    s_ScrollOffset = 1.0f;
 }
 
 // ---------------------------------------------------------------------------
@@ -1175,12 +1194,14 @@ void ShopScreen::Update(float dt) {
 
     // --- Animate scrolling list position ---
     // Binary: set m_pShopList->pos.x = (1 - alpha) * LIST_SLIDE_MUL * -1.5 - LIST_SLIDE_OFF
-    //         and copy a colour/timer from m_pShopList to a global
+    //         and cache m_pShopList->m_Velocity.y into s_ScrollOffset (see below)
     if (m_pShopList) {
         float slideX = (1.0f - m_TransitionAlpha) * LIST_SLIDE_MUL * -1.5f - LIST_SLIDE_OFF;
         m_pShopList->pos.x = slideX;
         m_pShopList->pos.y = LIST_POS_Y;
         m_pShopList->pos.z = LIST_POS_Z;
+        // v1.6.1 ShopScreen::Update tail @0x001b3ec8: ScrollOffset = m_pShopList->m_Velocity.y
+        s_ScrollOffset = m_pShopList->m_Velocity.y;
     }
 
     // --- Animate HUD controls that moved during alpha change ---
