@@ -162,25 +162,33 @@ void WaveQue::RandomiseOrder(bool doSwap) {
     }
 }
 
-// WaveQue::AddSpecials — binary @ 0x0012ce8c
-// For each spawner-op in each item: with Rand32(100)<5 (or specials counter>=4),
-// and if item.specialsCount<2, set op=3 (special).
-// TODO: v1.6.1 0x0012ce8c (WaveQue::AddSpecials) — this is a port-invented
-//   approximation; the binary has 3 extra CALL blocks. Faithful body is
-//   blocked on the Combo/Survival wave-mode port (asm-verify HIGH, ACCEPT-deferred).
+// ASM-spec v1.6.1 WaveQue::AddSpecials @ 0x0012ce8c
+// idleItems (binary r6) is a CROSS-ITEM counter declared outside the outer loop: it
+// persists across all m_Items, is bumped once per item after the inner slot loop, and
+// is reset to 0 only when a special is placed (anywhere). Per-item cap is
+// it->m_SpecialsCount (WaveQueItem +0x1c, distinct from idleItems). On placement, the
+// slot-selected counter (m_Count0/m_Count1/m_WaveIndex) is decremented.
 void WaveQue::AddSpecials() {
     Math::Random& rng = WaveManager::GetInstance()->m_Random;
+    int idleItems = 0;
     for (std::list<WaveQueItem>::iterator it = m_Items.begin();
          it != m_Items.end(); ++it) {
-        int specialsCount = 0;
         for (std::vector<int>::iterator oit = it->m_SlotList.begin();
              oit != it->m_SlotList.end(); ++oit) {
             uint32_t r = rng.Rand32(100);
-            if ((r < 5u || specialsCount >= 4) && specialsCount < 2) {
+            if ((r < 5u || idleItems > 4) && it->m_SpecialsCount < 2) {
+                int slot = *oit;
+                idleItems = 0;
+                switch (slot) {
+                    case 0: it->m_Count0--;    break;
+                    case 1: it->m_Count1--;    break;
+                    case 2: it->m_WaveIndex--; break;
+                }
                 *oit = 3;
-                ++specialsCount;
+                ++it->m_SpecialsCount;
             }
         }
+        ++idleItems;
     }
 }
 

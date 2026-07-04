@@ -394,7 +394,7 @@ static_assert(sizeof(PROBABILITY_OVERIDE) == 0x84, "PROBABILITY_OVERIDE size mis
 // Alias kept so existing callers (WaveManager.cpp etc.) compile unchanged.
 typedef WaveInfo WAVE_INFO;
 
-// WaveQueItem — binary @ 0x001268fc ctor. Size 0x1c (28 bytes).
+// WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
 struct WaveQueItem {
     // +0x00..+0x0b: per-spawn slot indices; push_back of {0,1,2} for each unit
@@ -407,8 +407,11 @@ struct WaveQueItem {
     int m_Count1;                   // +0x14
     // +0x18: wave-id seed AND counter slot 2; seeded from WAVE_INFO::m_WaveIndex
     int m_WaveIndex;                // +0x18
+    // +0x1c: per-item cap on AddSpecials placements (<2). Distinct from AddSpecials'
+    // cross-item cooldown counter (which is a local, not stored here).
+    int m_SpecialsCount;             // +0x1c
 
-    WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_WaveIndex(0) {}
+    WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_WaveIndex(0), m_SpecialsCount(0) {}
 
     // v1.6.1: PopPlayer — binary @ 0x0012cf6c.
     // Pops front of m_SlotList into *out. Returns true if an item was available.
@@ -422,7 +425,7 @@ struct WaveQueItem {
 };
 
 #ifdef __bada__
-static_assert(sizeof(WaveQueItem) == 0x1c, "WaveQueItem size mismatch");
+static_assert(sizeof(WaveQueItem) == 0x20, "WaveQueItem size mismatch");
 #endif
 
 // WaveQue — operator new(0xc) @ SetupWaveQue 0x00123494; ctor @ 0x00126b10.
@@ -450,9 +453,10 @@ struct WaveQue {
     void RandomiseOrder(bool doSwap);
 
     // WaveQue::AddSpecials @0x0012ce8c.
-    // Iterates all items; for each spawner-op with Rand32(100)<5 (or counter>=4),
-    // sets the op to 3 (special) if specialsCount<2.
-    // RNG = WaveManager::GetInstance()->m_Random (when the body is implemented).
+    // Iterates all items; for each spawner-op with Rand32(100)<5 (or the cross-item idle
+    // cooldown counter > 4), sets the op to 3 (special) if item.m_SpecialsCount<2, and
+    // decrements the slot-selected counter (m_Count0/m_Count1/m_WaveIndex).
+    // RNG = WaveManager::GetInstance()->m_Random.
     void AddSpecials();
 };
 
