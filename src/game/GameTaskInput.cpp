@@ -1,5 +1,4 @@
-﻿// Analysed: 2026-05-03T00:00
-// GameTaskInitInput -- binary @ 0x00169670 (357 lines).
+﻿// GameTaskInitInput -- v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c).
 
 #include "game/GameTaskInput.h"
 #include "Game.h"
@@ -11,7 +10,7 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
-// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00169670 (re-analyst)
+// ASM-spec v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c): pending re-verification
 
 // 16-slot touch zone position table.
 // Binary: g_TaskState+0xa0..0xa8 region, 12-byte stride (Vec3).
@@ -31,16 +30,18 @@ static bool PauseGameCallback(InputEvent* ev);
 bool RegressMenuCallback(InputEvent* ev);
 bool ShowPauseMenuCallback(InputEvent* ev);
 
-// TouchDownCallback -- used in per-zone loop for "TouchReleased_<i>" action.
-// Binary name from the zone-loop registration (distinct from PointerDownCallback
-// at 0x00168e24 which handles global "PointerPressed").
-// TODO: implement full body (binary addr TBD from zone-loop decompile).
+// TouchDownCallback -- registered for "TouchDown_<i>" in the per-zone loop.
+// v1.6.1 TouchDownCallback @ 0x001cbf18 dispatches InputSink::TouchDown /
+// SlashEntity::TouchDown for key codes 0x89+i (distinct from PointerDownCallback
+// at 0x001ca2bc which handles global "PointerPressed").
+// TODO: v1.6.1 0x001cbf18 (TouchDownCallback) -- port full body once
+// InputSink/key-code-0x89+i dispatch is RE'd.
 bool TouchDownCallback(InputEvent* ev);
 
 
-// GameTaskInitInput() @ 0x00169670
+// GameTaskInitInput() -- v1.6.1 @ 0x001cae0c (thunk @ 0x0011512c)
 // Initialises per-session input bindings: config load, 16 touch zones,
-// and 7 global action callbacks.
+// and 6 global action callbacks.
 void GameTaskInitInput() {
     // --- Section A: Config load @ 0x16967e ---
     // TODO: implement Mortar::InputManager::LoadConfigFile (binary @ 0x1969d8)
@@ -52,8 +53,7 @@ void GameTaskInitInput() {
     Mortar::InputManager* im = Mortar::InputManager::GetInstance();
     if (!im) return;
 
-    // --- Section B: 16-zone loop @ 0x169690 ---
-    // Binary @ 0x00169670: TouchDown registered TWICE, TouchMove_X computed but unused -- preserve verbatim.
+    // --- Section B: 16-zone loop, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
     //
     // DIFFERS: binary creates 16 pooled SlashEntity instances here (one per
     //   touch zone). Port owns SlashEntity as a singleton (g_pSlashEntity)
@@ -79,33 +79,39 @@ void GameTaskInitInput() {
         snprintf(nameMove, sizeof(nameMove), "TouchMove_X%d", i);
         snprintf(nameUp,   sizeof(nameUp),   "TouchReleased_%d", i);
 
-        // Binary @ 0x00169670: TouchDown_<i> registered TWICE -- preserve verbatim.
         // Binary RegisterInputCallback(hash, fnPtr) is 2-arg (no actionFlags).
-        im->RegisterInputCallback(StringHash(nameDown), PointerMoveCallback);
-        im->RegisterInputCallback(StringHash(nameDown), PointerMoveCallback);
-        im->RegisterInputCallback(StringHash(nameUp),   TouchDownCallback);
+        im->RegisterInputCallback(StringHash(nameMove), PointerMoveCallback);
+        nameMove[10] = 'Y';  // binary in-place byte patch X->Y (local_7a=0x59 @ 0x001caf68)
+        im->RegisterInputCallback(StringHash(nameMove), PointerMoveCallback);
+        im->RegisterInputCallback(StringHash(nameDown), TouchDownCallback);
 
-        // nameMove hash is computed but never registered in binary -- snprintf
-        // called to match binary stack layout; hash deliberately not registered.
-        (void)nameMove;
+        // nameUp ("TouchReleased_<i>") is snprintf'd for stack-layout fidelity
+        // only -- v1.6.1 GameTaskInitInput @ 0x001cae0c never hashes/registers
+        // it (confirmed by disassembly: no bl StringHash/RegisterInputCallback
+        // follows the 3rd snprintf at 0x001caee4).
+        (void)nameUp;
     }
 
-    // --- Section C: 7 global named callbacks @ 0x169a32 ---
+    // --- Section C: 6 global named callbacks, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
     // Binary RegisterInputCallback(hash, fnPtr) is 2-arg (no actionFlags param).
-    im->RegisterInputCallback(StringHash("PointerMove"),     PointerMoveCallback);       // binary @ 0x0016a4b4
-    im->RegisterInputCallback(StringHash("PointerPressed"),  PointerDownCallback);       // binary @ 0x00168e24
-    im->RegisterInputCallback(StringHash("PointerReleased"), PointerUpCallback);         // binary @ 0x00168e48
-    im->RegisterInputCallback(StringHash("PointerPressedX"), PointerDownXboxCallback);   // binary @ 0x0016a41c
-    im->RegisterInputCallback(StringHash("PauseGame"),       PauseGameCallback);         // binary @ 0x00168fd8
-    im->RegisterInputCallback(StringHash("RegressMenu"),     RegressMenuCallback);       // binary @ 0x00168e9c
-    im->RegisterInputCallback(StringHash("ShowPauseMenu"),   ShowPauseMenuCallback);     // binary @ 0x00168e6c
+    im->RegisterInputCallback(StringHash("PointerMove"),     PointerMoveCallback);       // v1.6.1 @ 0x001cbfcc
+    im->RegisterInputCallback(StringHash("PointerPressed"),  PointerDownCallback);       // v1.6.1 @ 0x001ca2bc
+    im->RegisterInputCallback(StringHash("PointerReleased"), PointerUpCallback);         // v1.6.1 @ 0x001ca2e4
+    im->RegisterInputCallback(StringHash("PointerPressedX"), PointerDownXboxCallback);   // v1.6.1 @ 0x001cbec8
+    im->RegisterInputCallback(StringHash("RegressMenu"),     RegressMenuCallback);       // v1.6.1 @ 0x001ca350
+    im->RegisterInputCallback(StringHash("ShowPauseMenu"),   ShowPauseMenuCallback);     // v1.6.1 @ 0x001ca310
+    // TODO: v1.6.1 PauseScreen::Update @0x001a5f1c -- verify PauseGameCallback
+    // (body @ 0x001a5978, thunk @ 0x0010d2ec) wiring site; not registered here
+    // in v1.6.1 GameTaskInitInput -- PauseScreen::Update wires it directly.
 }
 
 // --- Input callback stubs ---
 // Full bodies require InputEvent struct shape + Game field offsets.
-// Binary addresses in comments are from the decompile of GameTaskInitInput.
+// TODO: v1.6.1 -- the 6 addresses below were resolved but bodies not
+// re-decompiled against v1.6.1 in this pass (only GameTaskInitInput's call
+// sites were corrected); re-verify each body against its v1.6.1 address.
 
-// PointerMoveCallback @ 0x0016a4b4 (re-analyst 2026-05-18)
+// PointerMoveCallback -- v1.6.1 @ 0x001cbfcc
 // DIFFERS: binary multiplexes by event action ID (0x74/0x75/0xCC/0xCD +
 // zone ranges 0x99..0xA8/0xA9..0xB8), writing Game.worldPos.x/y,
 // per-zone Entity pos.y/z, and dispatching SlashEntity::TouchMoveX/Y
@@ -119,7 +125,7 @@ bool PointerMoveCallback(InputEvent* /*ev*/) {
     return false;  // pass-through; per-finger handlers do the real work
 }
 
-// PointerDownCallback @ 0x00168e24 -- Game[+0x9c]=1, Game[+0x9e]=1.
+// PointerDownCallback -- v1.6.1 @ 0x001ca2bc -- Game[+0x9c]=1, Game[+0x9e]=1.
 // Both fields are per-frame "pointer-down-this-frame" flags consumed
 // elsewhere (binary readers not RE'd; cleared per frame somewhere in
 // GameUpdate). Wiring them keeps the call-graph binary-faithful.
@@ -131,7 +137,7 @@ bool PointerDownCallback(InputEvent* /*ev*/) {
     return false;
 }
 
-// PointerUpCallback @ 0x00168e48 -- Game[+0x9d]=1, Game[+0x9e]=0.
+// PointerUpCallback -- v1.6.1 @ 0x001ca2e4 -- Game[+0x9d]=1, Game[+0x9e]=0.
 bool PointerUpCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
@@ -140,7 +146,7 @@ bool PointerUpCallback(InputEvent* /*ev*/) {
     return false;
 }
 
-// PointerDownXboxCallback @ 0x0016a41c (re-analyst 2026-05-18)
+// PointerDownXboxCallback -- v1.6.1 @ 0x001cbec8
 // Despite the "Xbox" name this is the down-edge handler used when the
 // input config supplies a "PointerPressedX" action. Binary writes same
 // Game fields as PointerDownCallback then dispatches SlashEntity::
@@ -155,10 +161,12 @@ bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     return false;
 }
 
-// PauseGameCallback @ 0x00168fd8
+// PauseGameCallback -- v1.6.1 body @ 0x001a5978 (thunk @ 0x0010d2ec).
+// Wired from PauseScreen::Update (@ 0x001a5f1c/0x001a5f24), not from
+// GameTaskInitInput -- see TODO above Section C.
 // Binary: if (ev != NULL) { if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame(); }
 // g_GameData[+2] = pausedFlag in port (false=running, true=paused).
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168fd8 (re-analyst)
+// ASM-spec v1.6.1 PauseGameCallback @ 0x001a5978: pending re-verification
 static bool PauseGameCallback(InputEvent* ev) {
     if (!ev) return true;
     Game* game = Game::GetInstance();
@@ -171,12 +179,12 @@ static bool PauseGameCallback(InputEvent* ev) {
     return true;
 }
 
-// RegressMenuCallback @ 0x00168e9c
+// RegressMenuCallback -- v1.6.1 @ 0x001ca350
 // Binary: g_GameData[+0x604] = 1; (unconditional)
 // +0x604 is m_bFrameDirty in port (same slot ShowPauseMenuCallback writes
 // when its gate passes -- both actions flip the same "menu input pending"
 // latch consumed downstream).
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e9c (re-analyst)
+// ASM-spec v1.6.1 RegressMenuCallback @ 0x001ca350: pending re-verification
 bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
@@ -185,11 +193,11 @@ bool RegressMenuCallback(InputEvent* ev) {
     return true;
 }
 
-// ShowPauseMenuCallback @ 0x00168e6c
+// ShowPauseMenuCallback -- v1.6.1 @ 0x001ca310
 // Binary: if (m_TransitionTimer == 0.0f && pausedFlag == 0)
 //             g_GameData[+0x604] = 1;
 // +0x604 is m_bFrameDirty -- same field as RegressMenuCallback.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00168e6c (re-analyst)
+// ASM-spec v1.6.1 ShowPauseMenuCallback @ 0x001ca310: pending re-verification
 bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
@@ -200,11 +208,11 @@ bool ShowPauseMenuCallback(InputEvent* ev) {
     return true;
 }
 
-// TouchDownCallback -- misnamed; registered for "TouchReleased_<i>" actions
-// in the zone loop (binary GOT slot 0x00169a64 trampoline). Per re-analyst
-// the binary dispatches SlashEntity::TouchUp on the matching per-zone entity.
-// Port covers this via per-finger TouchUp_n callbacks bound in SlashEntity::
-// Init directly -- so this global hook is a no-op pass-through.
+// TouchDownCallback -- registered for "TouchDown_<i>" actions in the zone
+// loop. v1.6.1 TouchDownCallback @ 0x001cbf18 dispatches InputSink::TouchDown
+// / SlashEntity::TouchDown for key codes 0x89+i. Port covers this via
+// per-finger TouchDown_n callbacks bound in SlashEntity::Init directly --
+// so this global hook is a no-op pass-through.
 bool TouchDownCallback(InputEvent* /*ev*/) {
-    return false;  // pass-through; per-finger TouchUp_n handlers do the work
+    return false;  // pass-through; per-finger TouchDown_n handlers do the work
 }
