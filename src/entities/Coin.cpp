@@ -142,21 +142,19 @@ void Coin::Deactivate() {
 }
 
 // ---------------------------------------------------------------------------
-// Arrived v1.6.1 (thunk @ 0x00106f40 -> real body in the D1/ClearCoins cluster)
-// Invoke the OnArrived delegate, clear emitters, mark entity dead.
+// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 Coin::Arrived @ 0x001d79bc
+// Only m_pFlyEmitter is torn down here; m_pCollectEmitter is left running so
+// the collect/sparkle burst plays to completion (InitCoin re-nulls it on
+// next reuse, so there's no leak). flags |= 0x11, but ENT_INACTIVE is dead
+// for Coin (force-cleared on recycle) -- keep ENT_KILLED-only.
 // ---------------------------------------------------------------------------
 void Coin::Arrived() {
     if (m_OnArrived) {
         m_OnArrived(this);
     }
-    // Clear both emitters on arrival
     if (m_pFlyEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
         m_pFlyEmitter = nullptr;
-    }
-    if (m_pCollectEmitter) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
-        m_pCollectEmitter = nullptr;
     }
     flags |= ENT_KILLED;
 }
