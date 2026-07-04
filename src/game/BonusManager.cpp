@@ -1,6 +1,5 @@
-// Analysed: 2026-05-03T00:00
 // BonusManager -- post-game bonus award tracker singleton.
-// sizeof 0x20 binary, Init @ 0x0010e8fc.
+// sizeof 0x20 binary, Init @ v1.6.1 0x0012f53c.
 
 #include "BonusManager.h"
 #include "FruitSaveData.h"
@@ -32,12 +31,16 @@ BonusManager::~BonusManager() {
 }
 
 // ---------------------------------------------------------------------------
-// Init -- Binary @ 0x0010e8fc
+// Init -- v1.6.1 BonusManager::Init @0x0012f53c
+// (thunk @0x001043e4 tail-calls this body; header's old 0x0010e8fc was
+// unversioned v1.5.x residue.)
 //
 // Parses xml/bonusAwards.xml:
 //   Root element: <bonusAwardsFile>
 //   <bonusType> children -> BonusType::Parse -> m_AllBonuses
-//   <l N="value"> children -> m_ComboTotalsByLevel
+//   <combo bonus="N"/> children -> m_ComboTotalsByLevel (push_back by
+//   document order; the "length" attribute is unread by the binary --
+//   AddCombo indexes this vector positionally by comboLen-3, clamped)
 // ---------------------------------------------------------------------------
 void BonusManager::Init() {
     m_AllBonuses.clear();
@@ -64,10 +67,10 @@ void BonusManager::Init() {
             BonusType bt;
             bt.Parse(&child);
             m_AllBonuses.push_back(bt);
-        } else if (strcmp(tag, "l") == 0) {
-            // <l N="value"> combo level entry
+        } else if (strcmp(tag, "combo") == 0) {
+            // <combo length="N" bonus="X"/> combo level entry
             int val = 0;
-            child.QueryIntAttribute("N", &val);
+            child.QueryIntAttribute("bonus", &val);
             m_ComboTotalsByLevel.push_back(val);
         }
     }

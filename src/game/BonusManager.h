@@ -1,10 +1,9 @@
 #ifndef FN_GAME_BONUS_MANAGER_H
 #define FN_GAME_BONUS_MANAGER_H
 
-// Analysed: 2026-05-03T00:00
 // BonusManager -- post-game bonus award tracker.
 // sizeof 0x20 = 32 bytes.
-// Singleton ctor @ binary BSS, Init @ 0x0010e8fc, ClearBestBonuses @ 0x000feb20.
+// Singleton ctor @ binary BSS, Init @ v1.6.1 0x0012f53c, ClearBestBonuses @ 0x000feb20.
 
 #include "Bonus.h"
 #include <vector>
@@ -21,7 +20,7 @@ public:
 
     static BonusManager* GetInstance();
 
-    void Init();                                // Binary @ 0x0010e8fc
+    void Init();                                // v1.6.1 BonusManager::Init @0x0012f53c
     void ClearBestBonuses();                    // Binary @ 0x000feb20
     void SetUpBonusScreen(BonusScreen* screen); // Binary @ 0x0010e404
     void AddCombo(int comboLen);                // Binary @ 0x0010de24
