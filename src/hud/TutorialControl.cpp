@@ -52,10 +52,16 @@ static const float TRAIL_FADE_OUT_START = 2.0f;  // from binary phase logic
 TutorialControl::TutorialControl()
     : m_AnimTimer(ANIM_INACTIVE)
     , m_DrawPos(0, 0, 0)
-    , m_Colour()  // DIFFERS(fixed): was m_Colour(255,255,255,255) WHITE; binary calls
-                  // Colour::Colour() default ctor @0x0011afa8 = (0,0,0,255) BLACK opaque.
-                  // Update() only ever writes m_Colour.a, so this ctor value is the
-                  // arrow's tint for its whole lifetime (v1.6.1 TutorialControl::TutorialControl @0x001c2fdc).
+    , m_Colour(255, 255, 255, 255)
+                  // The arrow quad (swipe_fruit_begin) is drawn via Mesh::DrawQuadUnCached(m_Colour,...)
+                  // which MODULATES vertex RGB x texture; a black RGB (the earlier "binary default is
+                  // Colour::Colour()=black" change) rendered the arrow as a solid BLACK BLOB. White RGB
+                  // (matching the trail quads' Colour(255,255,255,alpha)) shows the texture. Update() only
+                  // writes m_Colour.a, so this RGB is the arrow's tint for its lifetime.
+                  // TODO(asm-inspector): confirm whether v1.6.1 TutorialControl::Draw @0x001636f8 passes
+                  //   a black m_Colour into a NON-modulating (REPLACE) arrow-quad texenv (=> mark // DIFFERS),
+                  //   or genuinely uses white (=> faithful). White is required either way given the port's
+                  //   modulating DrawQuadUnCached.
     , m_bHidden(1)
     , m_HalfWidth(0.0f)
     , m_bFlipX(false)
