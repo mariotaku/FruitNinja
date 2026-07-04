@@ -200,8 +200,14 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
         } else if (pItemInfo->m_pTotalStatKey == nullptr) {
             src = pItemInfo->m_pLockedText;
         } else {
-            int remaining = pItemInfo->m_CountDownFrom;
-            if (remaining < 0) remaining = 0;
+            // ASM-spec v1.6.1 ShopListItem::Create @0x1b2864-0x1b28b0: remaining count is
+            // the target minus the player's actual save-data progress, not the raw target.
+            int total = game_work.m_SaveData ? game_work.m_SaveData->GetTotal(pItemInfo->m_pTotalStatKey) : 0;
+            int remaining = total;
+            if (pItemInfo->m_CountDownFrom > 0) {
+                remaining = pItemInfo->m_CountDownFrom - total;
+                if (remaining < 0) remaining = 0;
+            }
             if (pItemInfo->m_pProgressFmt && remaining == 1) {
                 src = pItemInfo->m_pProgressFmt;
             } else if (pItemInfo->m_pLockedText) {
