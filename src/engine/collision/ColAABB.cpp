@@ -4,14 +4,17 @@
 #include "collision/ColLine.h"
 #include "math/Math.h"
 #include "math/MathUtil.h"
-#include <cstring>
 #include <cmath>
 
-ColAABB::ColAABB() : Col(), m_HalfExtents() {
-    memset(m_Corners, 0, sizeof(m_Corners));
+// Binary @ 0x00275d7c -- default ctor sets m_HalfExtents = Vector3::One (1,1,1), not zero,
+// then rebuilds the cached corner verts -- a fresh ColAABB is a unit box, not a degenerate
+// zero-size box. No live port-side callers of this no-arg ctor currently exist; fixed for
+// fidelity regardless since a future caller should get the binary's actual init.
+ColAABB::ColAABB() : Col(), m_HalfExtents(1.0f, 1.0f, 1.0f) {
+    UpdateVertices();
 }
 
-// Binary @ 0x001b5a88 -- ctor(centre, halfExtents): stores arg0->centre, arg1->half-extents,
+// Binary @ 0x00275e2c -- ctor(centre, halfExtents): stores arg0->centre, arg1->half-extents,
 // clears collide flag, then rebuilds cached corner verts.
 ColAABB::ColAABB(Vec3 center, Vec3 halfExtents) : Col(), m_HalfExtents(halfExtents) {
     m_PrimaryPoint = center;
@@ -19,7 +22,8 @@ ColAABB::ColAABB(Vec3 center, Vec3 halfExtents) : Col(), m_HalfExtents(halfExten
     UpdateVertices();
 }
 
-// Binary @ 0x001b58b8 -- rebuild the 8 cached corner verts from centre +- half-extents.
+// Binary @ 0x00275ccc (duplicate body @ 0x00110320, called by the no-arg ctor) --
+// rebuild the 8 cached corner verts from centre +- half-extents.
 // Corner ordering preserves the binary's field-write pattern (see header layout).
 void ColAABB::UpdateVertices() {
     float cx = m_PrimaryPoint.x, cy = m_PrimaryPoint.y, cz = m_PrimaryPoint.z;
@@ -47,7 +51,7 @@ void ColAABB::UpdateVertices() {
     m_Corners[21] = minX; m_Corners[22] = maxY; m_Corners[23] = minZ;
 }
 
-// Binary @ 0x001b594c -- AABB-vs-AABB overlap test + min-penetration face normal.
+// Binary @ 0x00275ecc -- AABB-vs-AABB overlap test + min-penetration face normal.
 // d = box1.centre - box2.centre; per-axis overlap = |d.axis| - (h1.axis + h2.axis).
 // Any axis with overlap >= 0 => separated. Otherwise pick the axis of smallest
 // penetration depth and emit out.axis = -(depth * sign(d.axis)); other axes 0.
@@ -86,7 +90,7 @@ bool ColAABB::ColAABBAABB(ColAABB* box1, ColAABB* box2, Vec3* out) {
     return true;
 }
 
-// Binary @ 0x001b6224 -- AABB-vs-Sphere closest-point test + penetration normal.
+// Binary @ 0x002760c4 -- AABB-vs-Sphere closest-point test + penetration normal.
 // box == this, sphere->m_Center() is the sphere centre, sphere->radius the radius.
 bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
     Vec3 d = box->m_Center() - sphere->center();
@@ -144,7 +148,7 @@ bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
     return true;
 }
 
-// Binary @ 0x001b5ca8 -- AABB-vs-Line (segment) separating-axis test + penetration normal.
+// Binary @ 0x002763b4 -- AABB-vs-Line (segment) separating-axis test + penetration normal.
 // box == this, param line. Treats the segment as a degenerate box (midpoint + half-direction)
 // for the broadphase, then tests one perpendicular SAT axis derived from the segment.
 bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, Vec3* out) {
@@ -234,7 +238,7 @@ bool ColAABB::IntersectsLine(const ColLine& line) {
     return ColAABBLine(this, l, 0);
 }
 
-// Binary slot 3 @ 0x001b64d0 -- double-dispatch by other->GetType().
+// Binary slot 3 @ 0x0027674c -- double-dispatch by other->GetType().
 // SPHERE/LINE results are NEGATED before storing (binary points from sphere/line
 // INTO the AABB); AABB-vs-AABB is stored as-is. On hit, both collide flags are set.
 int ColAABB::Collide(Col* other, Vec3* outNormal) {
@@ -258,7 +262,7 @@ int ColAABB::Collide(Col* other, Vec3* outNormal) {
     return hit ? 1 : 0;
 }
 
-// Binary slot 4
+// Binary slot 4 @ 0x00276020
 void ColAABB::DrawDebug() {
     // Port specific: debug wireframe draw uses GL fixed-function (Mesh::DrawCube);
     // no gameplay effect and no GLES2 debug-draw path is wired. No-op.
