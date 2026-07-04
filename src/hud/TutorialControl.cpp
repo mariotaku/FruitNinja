@@ -121,22 +121,22 @@ bool TutorialControl::CanShowTute() {
 }
 
 // ===================================================================
-// Matches TutorialControl::ResetTutePos(MenuButton*) @ 0x00162f04
+// Matches TutorialControl::ResetTutePos(MenuButton*) @ 0x001c2658
 // ===================================================================
 void TutorialControl::ResetTutePos(MenuButton* btn) {
     if (btn) {
         // Copy button position
         pos = btn->pos;
 
-        // halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0 - 10.0
-        // v1.6.1 TutorialControl::ResetTutePos @0x00162f2c reads MenuButton+0x164 (m_LabelRadius).
-        float halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0f - 10.0f;
+        // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
+        // ASM-spec v1.6.1 TutorialControl::ResetTutePos @ 0x001c2658: reads MenuButton+0x168 (m_HitInsetX)
+        float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162f44: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_FlipDirection != 0)
-        // Binary v1.6.1 TutorialControl::ResetTutePos @0x00162f2c: exact form
+        // Binary v1.6.1 TutorialControl::ResetTutePos @0x001c2658: exact form
         m_bFlipX = (pos.x > 0.0f) != (btn->m_FlipDirection != 0);
     }
     m_AnimTimer = ANIM_INACTIVE;
@@ -152,7 +152,7 @@ void TutorialControl::ResetTutePos(const Vec3& targetPos) {
 }
 
 // ===================================================================
-// Matches TutorialControl::ButtonPressedAtPos @ 0x00162e58
+// Matches TutorialControl::ButtonPressedAtPos @ 0x001c259c
 // Advances timer by 9.5: shifts -10.0 sentinel to -0.5, so animation
 // starts ~0.5 s after the next Update.  Guard: only fires when inactive.
 // ===================================================================
@@ -162,15 +162,15 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
     if (btn != nullptr) {
         pos = btn->pos;
 
-        // halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0 - 10.0
-        // v1.6.1 TutorialControl::ButtonPressedAtPos @0x00162e58 reads MenuButton+0x164 (m_LabelRadius).
-        float halfWidth = btn->m_RestScale.x - btn->m_LabelRadius * 2.0f - 10.0f;
+        // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
+        // ASM-spec v1.6.1 TutorialControl::ButtonPressedAtPos @ 0x001c259c: reads MenuButton+0x168 (m_HitInsetX)
+        float halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162ea6: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR (btn->m_FlipDirection != 0)
-        // Binary v1.6.1 TutorialControl::ButtonPressedAtPos @0x00162e58: exact form
+        // Binary v1.6.1 TutorialControl::ButtonPressedAtPos @0x001c259c: exact form
         m_bFlipX = (pos.x > 0.0f) != (btn->m_FlipDirection != 0);
     }
 
