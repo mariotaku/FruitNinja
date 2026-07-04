@@ -6,7 +6,7 @@
 // TutorialControl : HUDControl3d (size = 0xa0 / 160 bytes)
 //
 // Binary refs:
-//   Constructor         0x001636f8
+//   Constructor         v1.6.1 @0x001c2fdc (C1) / dup C2 @0x001c30cc (asm-verified 2026-07-04)
 //   Init                0x00162e38
 //   Reset               0x00162e4c
 //   Release             0x00162e48 (no-op)
