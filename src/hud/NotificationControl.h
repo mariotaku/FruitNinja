@@ -1,9 +1,8 @@
 #ifndef FN_HUD_NOTIFICATION_CONTROL_H
 #define FN_HUD_NOTIFICATION_CONTROL_H
 
-// Analysed: 2026-05-03T00:00
 // NotificationControl — HUD popup for achievement unlock notifications.
-// Binary @ 0x001a4428 (ctor) / 0x00152a00 (Update) / 0x001531f8 (Draw).
+// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw).
 // sizeof 0x114 = 276 bytes. operator new(0x114) @ 0x00118104.
 
 #include "HUDControl3d.h"
@@ -14,22 +13,22 @@
 
 struct AchievementInfo;
 
-// Binary @ 0x001a4428 (ctor) / 0x00152a00 (Update) / 0x001531f8 (Draw). sizeof=0x114.
+// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw). sizeof=0x114.
 class NotificationControl : public HUDControl3d {
 public:
     // Binary enum name: NotificationType (not NotifType).
     enum NotificationType { Type_Numeric = 1, Type_Named = 2 };
 
-    // Binary @ 0x00152ed0 — takes SmartPtr by value and NotificationType enum.
+    // v1.6.1 NotificationControl::NotificationControl @0x001a4428 — takes SmartPtr by value and NotificationType enum.
     NotificationControl(const char* name, int points,
                         Mortar::SmartPtr<Mortar::Texture> icon,
                         NotificationType type);
     ~NotificationControl() override;
 
-    // Binary @ 0x00152a00
+    // v1.6.1 NotificationControl::Update @0x001a3c7c
     void Update(float dt) override;
 
-    // Binary @ 0x001531f8
+    // v1.6.1 NotificationControl::Draw @0x001a4860
     void Draw(float* hudScaleRaw) override;
 
     // Binary ctor stores the icon SmartPtr into the base HUDControl3d::m_Texture slot (+0x74).

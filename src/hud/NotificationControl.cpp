@@ -1,6 +1,5 @@
-// Analysed: 2026-05-03T00:00
 // NotificationControl — HUD popup for achievement unlock / score notifications.
-// Binary @ 0x00152ed0 (ctor) / 0x00152a00 (Update) / 0x001531f8 (Draw).
+// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw).
 
 #include "NotificationControl.h"
 #include "hud/HUDLayer.h"
@@ -27,17 +26,18 @@ static const float NOTIF_SLIDE_IN_END  = 0.2f;   // DAT from binary (ctor state 
 static const float NOTIF_SETTLE_END    = 2.7f;
 static const float NOTIF_SLIDE_OUT_END = 2.9f;
 
-// Y positions from binary (origin = settled target position, slide comes from off-screen)
-// TODO: exact DAT addresses not resolved — use placeholder positions until RE'd.
-// DIFFERS: original DAT constants not yet extracted; these are structural placeholders.
-static const float NOTIF_Y_SETTLED   = 195.0f;  // settled Y in centered coords (DIFFERS: original DAT unknown)
-static const float NOTIF_Y_OFFSCREEN = 260.0f;  // Y when fully off-screen   (DIFFERS: original DAT unknown)
+// v1.6.1 NotificationControl::Update @0x001a3c7c: pos.x is pinned constant; only pos.y animates.
+static const float NOTIF_X = -95.0f;
+
+// Per-NotificationType Y constants (v1.6.1 NotificationControl::Update @0x001a3c7c).
+// Type_Numeric offscreen/settled/delta = 184.0f / 147.0f / -37.0f
+// Type_Named   offscreen/settled/delta = 192.0f / 128.0f / -64.0f
 
 // Interval between particle spawns during unlock flash (binary: every 0.125s, first 0.5s)
 static const float NOTIF_PARTICLE_INTERVAL = 0.125f;
 static const float NOTIF_PARTICLE_WINDOW   = 0.5f;
 
-// Binary @ 0x00152ed0
+// v1.6.1 NotificationControl::NotificationControl @0x001a4428
 NotificationControl::NotificationControl(const char* name, int points,
                                           Mortar::SmartPtr<Mortar::Texture> icon,
                                           NotificationType type)
@@ -89,49 +89,67 @@ NotificationControl::NotificationControl(const char* name, int points,
     }
 
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
-
-    // Initial position: off-screen above
-    pos.x = NOTIF_Y_OFFSCREEN;
-    pos.y = 0.0f;
-    pos.z = 0.0f;
+    // Binary ctor @0x001a4428 does not write pos at all -- Update() (@0x001a3c7c)
+    // always runs before the first Draw() and sets pos unconditionally.
 }
 
 NotificationControl::~NotificationControl() {}
 
-// Binary @ 0x00152a00
-// 4-phase state machine:
+// v1.6.1 NotificationControl::Update @0x001a3c7c
+// 4-phase state machine, animates pos.y only (pos.x pinned at NOTIF_X):
 //   0.0..0.2s  slide-in  (Y interpolates from off-screen to settled with t^2 * yDelta)
 //   0.2..2.7s  settled rest
 //   2.7..2.9s  slide-out (t = (timer - 2.7) / -0.2 + 1.0, then t^2 * yDelta)
-//   >=2.9s     m_bPendingRemoval = true
+//   >=2.9s     clamp m_StateTimer to 2.9, m_bPendingRemoval = true -- NO early return;
+//              falls through and recomputes pos (t collapses to 0, snapping to offscreen Y)
+//              and still runs the Type_Named particle-window gate below.
 void NotificationControl::Update(float dt) {
-    m_StateTimer += dt;
-
-    float yDelta = NOTIF_Y_SETTLED - NOTIF_Y_OFFSCREEN;
-
-    if (m_StateTimer < NOTIF_SLIDE_IN_END) {
-        float t = m_StateTimer / NOTIF_SLIDE_IN_END;
-        pos.x = NOTIF_Y_OFFSCREEN + t * t * yDelta;
-    } else if (m_StateTimer < NOTIF_SETTLE_END) {
-        pos.x = NOTIF_Y_SETTLED;
-    } else if (m_StateTimer < NOTIF_SLIDE_OUT_END) {
-        float t = (m_StateTimer - NOTIF_SETTLE_END) / -(NOTIF_SLIDE_IN_END) + 1.0f;
-        pos.x = NOTIF_Y_OFFSCREEN + t * t * yDelta;
+    float offscreenY, settledY, deltaY;
+    if (m_NotifType == Type_Named) {
+        offscreenY = 192.0f; settledY = 128.0f; deltaY = -64.0f;
     } else {
-        m_bPendingRemoval = 1;
-        return;
+        offscreenY = 184.0f; settledY = 147.0f; deltaY = -37.0f;
     }
 
-    // Type_Named only: spawn "achievement_unlock" particle emitter every 0.125s in first 0.5s
-    if (m_NotifType == Type_Named && m_StateTimer < NOTIF_PARTICLE_WINDOW) {
-        // TODO: spawn "achievement_unlock" particle emitter at pos
-        // Requires Mortar::ActorManager / ParticleEmitter to be ported.
-        // Binary: Mortar::ActorManager::GetInstance()->SpawnEmitter("achievement_unlock", pos, ...)
-        (void)NOTIF_PARTICLE_INTERVAL;
+    float oldTimer = m_StateTimer;
+    m_StateTimer += dt;
+
+    pos.x = NOTIF_X;
+    pos.z = 0.0f;
+
+    if (m_StateTimer <= NOTIF_SETTLE_END) {
+        if (m_StateTimer >= NOTIF_SLIDE_IN_END) {
+            pos.y = settledY;
+        } else {
+            float t = m_StateTimer / NOTIF_SLIDE_IN_END;
+            pos.y = offscreenY + t * t * deltaY;
+        }
+    } else {
+        if (m_StateTimer >= NOTIF_SLIDE_OUT_END) {
+            m_StateTimer = NOTIF_SLIDE_OUT_END;
+            m_bPendingRemoval = 1;
+        }
+        float t = (m_StateTimer - NOTIF_SETTLE_END) / -(NOTIF_SLIDE_IN_END) + 1.0f;
+        pos.y = offscreenY + t * t * deltaY;
+    }
+
+    // Type_Named only: spawn "confetti" particle emitter on each 1/8s tick crossing
+    // within the first 0.5s (floor(oldTimer*8) != floor(newTimer*8) && floor(newTimer*8) < 4).
+    if (m_NotifType == Type_Named) {
+        int oldTick = (int)(oldTimer * 8.0f);
+        int newTick = (int)(m_StateTimer * 8.0f);
+        if (oldTick != newTick && newTick < 4) {
+            // TODO: v1.6.1 0x001a3c7c (NotificationControl::Update) — spawn "confetti" particle
+            // emitter (StringHash("confetti",9)) at pos ~= ((rand/524287*20-10-100)+idx*100, 160-rand5-25, 0),
+            // alpha=1.0, some flag byte set; then burns one more Rand32() call (0xe38) regardless.
+            // Requires Mortar::PSPParticleManager / ParticleEmitter to be ported.
+            (void)NOTIF_PARTICLE_INTERVAL;
+            (void)NOTIF_PARTICLE_WINDOW;
+        }
     }
 }
 
-// Binary @ 0x001531f8
+// v1.6.1 NotificationControl::Draw @0x001a4860
 // Per-type render path:
 //   Type 1 (numeric): banner quad + icon + name text + points text right-aligned.
 //   Type 2 (named):   unlock-banner + larger icon + name text only.
@@ -167,7 +185,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Icon quad
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
@@ -184,7 +202,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Name text
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y, pos.z);
@@ -193,7 +211,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Points text (right-aligned)
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_PointsText[0] != '\0' && game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 ptPos(pos.x + 186.0f, pos.y, pos.z);
@@ -224,7 +242,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Larger icon quad
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
@@ -242,7 +260,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Name text only (no points text for named type)
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001531f8 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y + 16.0f, pos.z);
