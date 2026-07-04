@@ -408,7 +408,7 @@ void SetPrefNetwork(long v);
 // Defunct: online-services notification -- no-op stub; v1.6.1 CustomNotificationCallback @0x001cf0cc
 void CustomNotificationCallback(const char* name, int i1, int i2);
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001270c8
+// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001370c8
 // Fills buf with an empty string (online services not available).
 void CurrentUserName(char* buf, int size, Mortar::NetworkProvider provider);
 

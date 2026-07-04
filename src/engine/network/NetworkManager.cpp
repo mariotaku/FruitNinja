@@ -86,7 +86,7 @@ void SetPrefNetwork(long /*v*/) {
 void CustomNotificationCallback(const char* /*name*/, int /*i1*/, int /*i2*/) {
 }
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001270c8
+// Defunct: online leaderboard -- no-op stub; v1.6.1 CurrentUserName @0x001370c8
 void CurrentUserName(char* buf, int size, Mortar::NetworkProvider /*provider*/) {
     if (buf && size > 0) {
         buf[0] = '\0';

@@ -16,12 +16,12 @@
 // by these defunct stubs and does not affect the port's real Entity layout.
 namespace Mortar { class Entity; }
 
-// Defunct: P2P entity tracker -- no-op stub; v1.6.1 ET_ClearKnownEntities @0x001c970c
+// Defunct: P2P entity tracker -- no-op stub; v1.6.1 ET_ClearKnownEntities @0x001d970c
 // Clears the EntityTracker registry for a given player partition.
 // Called from WaveManager::StartWave with playerIdx=-1 (clear all).
 void ET_ClearKnownEntities(int playerIdx);
 
-// Defunct: P2P entity tracker -- no-op stub; v1.6.1 ET_NewEntity @0x001c97d8
+// Defunct: P2P entity tracker -- no-op stub; v1.6.1 ET_NewEntity @0x001d97d8
 // Registers a newly-spawned entity with the EntityTracker for P2P sync.
 void ET_NewEntity(Mortar::Entity* entity, int type, unsigned short id);
 

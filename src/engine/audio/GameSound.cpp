@@ -40,7 +40,7 @@ int GameSound::FindFree() {
 }
 
 // ASM-spec v1.6.1 GameSound::SFXPlay @0x00151d04
-// DIFFERS: binary @ 0x00151d04 calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
+// DIFFERS: binary v1.6.1 GameSound::SFXPlay @0x00151d04 calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain,
                                  Mortar::Delegate1<bool, MortarSound*> finishCallback,

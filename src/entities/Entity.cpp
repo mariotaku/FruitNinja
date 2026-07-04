@@ -121,7 +121,7 @@ uint16_t ET_GetFreeIdent(int treeIdx) {
     if (m.find(s_currentIdent) != m.end()) {
         s_currentIdent++;
         if (s_currentIdent == 0) s_currentIdent = 1;
-        // DIFFERS: binary @0x1d95bc re-probes find() here and discards result; port drops the dead call.
+        // DIFFERS: binary v1.6.1 ET_GetFreeIdent @0x1d95bc re-probes find() here and discards result; port drops the dead call.
     }
     return s_currentIdent;
 }

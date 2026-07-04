@@ -81,7 +81,7 @@ public:
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
     // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
-    // ASM-spec v1.6.1 GameModeScreen::SetIsChallenge @0x0013df84: 2nd param is int, not void*.
+    // ASM-spec v1.6.1 GameModeScreen::SetIsChallenge @0x00181078: 2nd param is int, not void*.
     void SetIsChallenge(int challengeId, int data);
 
     static void LoadContent();    // 0x13e330
