@@ -8,12 +8,14 @@
 // TimeControl::Update (zero on game-over), WaveManager::Reset (zero).
 extern int g_ComboCount;
 
-// g_LastSlasher: BSS @ 0x001f3e4c, GOT[0x7478] -> last-slasher player index.
-// Sentinel -1 = no player has slashed yet (cold-boot / after game-over).
+// g_ComboFruitType: BSS @ 0x001f3e4c, GOT[0x7478] -> Ghidra Fruit::s_consecutiveType.
+// Fruit-TYPE (m_FruitType, Fruit+0x3c) of the last fruit that continued the
+// current combo streak -- NOT a player index and NOT the digit/combo count.
+// Sentinel -1 = no fruit has continued a streak yet (cold-boot / after game-over).
 // Binary uses 0xFFFFFFFF (= -1 as signed int) in TimeControl game-over branch
 // and 1 in WaveManager::Reset; port uses -1 throughout for consistency with
 // cold-boot sentinel.
-extern int g_LastSlasher;
+extern int g_ComboFruitType;
 
 // Identity pass-throughs used as score-accumulation helpers.
 // v1.6.1 AddScoreNomal @0x1478b4, AddScoreNomals @0x1adee0

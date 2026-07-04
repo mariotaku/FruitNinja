@@ -115,7 +115,7 @@ int main() {
     src.m_GameMode = 2;              // ARCADE
     src.m_bWasGameOver = 0;
     src.m_ComboCount = 4;            // consecutiveCount
-    src.m_LastSlasher = 1;          // consecutiveType
+    src.m_ComboFruitType = 1;       // consecutiveType
     src.m_TimeRemainingSave = 45.5f;
     src.m_WaveScalar_v161 = 1.5f;   // globalWaveDt
     src.m_GameOverScreenState = 3;
@@ -242,7 +242,7 @@ int main() {
     CHECK_EQ(dst.m_GameMode, 2u);          // ARCADE
     CHECK_EQ(dst.m_bWasGameOver, 0);
     CHECK_EQ(dst.m_ComboCount, 4);         // consecutiveCount
-    CHECK_EQ(dst.m_LastSlasher, 1);        // consecutiveType
+    CHECK_EQ(dst.m_ComboFruitType, 1);     // consecutiveType
     CHECK_F(dst.m_TimeRemainingSave, 45.5);
     CHECK_F(dst.m_WaveScalar_v161, 1.5);   // globalWaveDt
     CHECK_EQ(dst.m_GameOverScreenState, 3);

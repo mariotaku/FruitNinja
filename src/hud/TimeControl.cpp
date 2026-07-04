@@ -197,8 +197,8 @@ void TimeControl::Update(float dt) {
                 GameOver(-1, -1.0f, -1);
                 m_TimeRemaining = 0.0f;
                 // Reset combo on Arcade timeout.
-                g_ComboCount  = 0;
-                g_LastSlasher = -1;
+                g_ComboCount     = 0;
+                g_ComboFruitType = -1;
                 m_DrawColour = Colour(255, 100, 100, 255);
                 if (game_work.mGameSound) game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
             } else {
