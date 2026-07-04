@@ -13,11 +13,17 @@ ColLine::ColLine(Vec3 start, Vec3 end) : Col(), b(end) {
 int ColLine::Collide(Col* other, Vec3* outNormal) {
     int t = other->GetType();
     int hit = 0;
+    // ASM-spec v1.6.1 ColLine::Collide @ 0x0025ccf0: TYPE_SPHERE calls ColSphereLine
+    // directly (no negate); TYPE_AABB calls ColAABBLine then unconditionally negates
+    // and stores outNormal regardless of hit.
     if (t == TYPE_SPHERE) {
         ColSphere* s = static_cast<ColSphere*>(other);
-        hit = s->IntersectsLine(*this) ? 1 : 0;
-        // TODO: outNormal from SphereLine -- compute penetration vector, then negate
-        //   per binary convention (binary @ 0x... points INTO sphere from line). Not yet ported.
+        Vec3 norm;
+        hit = ColSphere::ColSphereLine(s, this, &norm);
+        // Binary 0x0025cd60-cd7c: calls ColSphereLine(sphere, line, outNormal)
+        // directly -- no post-negate (matches ColSphereLine's own hit-only
+        // write convention).
+        if (hit && outNormal) *outNormal = norm;
     } else if (t == TYPE_LINE) {
         // Binary @ 0x0019f8ae: type-2 branch calls ColLineLine and uses its
         // return as the hit flag; the helper writes outNormal itself.
@@ -25,8 +31,13 @@ int ColLine::Collide(Col* other, Vec3* outNormal) {
         hit = ColLineLine(this, line, outNormal);
     } else if (t == TYPE_AABB) {
         ColAABB* box = static_cast<ColAABB*>(other);
-        hit = box->IntersectsLine(*this) ? 1 : 0;
-        // TODO: outNormal
+        Vec3 norm;
+        hit = box->ColAABBLine(box, this, &norm) ? 1 : 0;
+        // Binary 0x0025cd2c-cd5c: calls ColAABBLine(box, line, outNormal) then
+        // unconditionally negates the result and stores it (store happens even
+        // when hit==0) -- matches the negate convention already ported in
+        // ColAABB::Collide's SPHERE/LINE branches (ColAABB.cpp:246-250).
+        if (outNormal) *outNormal = -norm;
     } else {
         return other->Collide(this, outNormal);
     }
