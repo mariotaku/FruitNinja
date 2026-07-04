@@ -1451,6 +1451,14 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // Removed an unverified (implementer-inferred) call site; needs re-analyst confirmation
         // of the exact call + args against @0x001dd500 before re-adding.
         }
+
+        // ASM-verified: 2026-07-04 v1.6.1 Fruit::CollisionResponse @0x001dd500 (call at
+        // 0x001ddcf0). Binary control flow converges here regardless of the hitter/paused
+        // branch above; the ONLY gate on this specific call is retryFlag==0 (game_work+0x6),
+        // NOT the stricter hitter/paused/critical compound gate at line 1344-1347.
+        if (game_work.retryFlag == 0) {
+            AchievementManager::GetInstance()->UnlockSpecificOrderAchievement(info->m_NameHash);
+        }
     }
 
     // Fire g_FruitWasSliced — binary @ 0x1de5a0 (main slice path) and
