@@ -5,7 +5,7 @@
 #include "render/MortarCamera.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
-#include "math/math3d.h"
+#include "math/MathUtil.h"
 
 namespace Mortar {
 
@@ -122,18 +122,15 @@ void MortarCamera::SetupPerspective() {
         mm.SetupLookAt(m_pos, m_up, m_lookAt);
         m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-        // DIFFERS: v1.6.1 binary @ 0x00257aac computes half=m_fovY*182.0 (DAT_00257d60,
-        // deg->16bit-angle units), then calls MatrixManager::SetupPerspective(
-        //   s=Math::SinIdx(half&0xffff), c=Math::CosIdx(half&0xffff),
-        //   aspect=m_fovX/m_fovY, near=m_fovOrNear(+0x124), far=m_farPlane(+0x128)).
-        // Port substitutes glibc mat4_perspective (no SinIdx/CosIdx LUT) AND
-        // passes m_fovOrNear as fovy and m_fovX as znear -- both wrong scalars.
-        // Port specific: mat4_perspective substitution pending MatrixManager::SetupPerspective port.
+        // v1.6.1 MortarCamera::SetupPerspective @0x00257aac: half=m_fovY*182.0
+        // (deg->16-bit-angle-index units), then MatrixManager::SetupPerspective(
+        // s=SinIdx(half&0xffff), c=CosIdx(half&0xffff), aspect=m_fovX/m_fovY,
+        // near=m_fovOrNear, far=m_farPlane) -- already-ported faithful routine.
+        uint16_t idx = (uint16_t)(m_fovY * 182.0f) & 0xffff;
+        float s = Math::SinIdx(idx);
+        float c = Math::CosIdx(idx);
         float aspect = (m_fovY != 0.0f) ? m_fovX / m_fovY : 1.0f;
-        Matrix44 proj;
-        mat4_perspective(proj.ptr(), m_fovOrNear, aspect,
-                         m_fovX > 0 ? m_fovX : 0.1f, m_farPlane);
-        mm.GetProjectionStack().SetCurrentMatrix(proj);
+        mm.SetupPerspective(s, c, aspect, m_fovOrNear, m_farPlane, 0);
 
         m_projection = mm.GetProjectionStack().m_Current;
         m_bDirty = false;
