@@ -223,9 +223,9 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
 }
 
 // ASM-spec v1.6.1 Bomb::Update @ 0x1d6098
-void Bomb::Update(float /*dt*/) {
-    const float gameDt   = game_work.dt;
-    const float scaledDt = gameDt * m_SpeedMult;
+void Bomb::Update(float dt) {
+    const float gameDt   = game_work.dt;               // countdown/SFX/spawn-timer gating only, ASM @0x1d60ec/0x1d6350
+    const float scaledDt = dt * m_SpeedMult;            // v1.6.1 @0x1d6098: scaledDt derives from the incoming dt param, NOT game_work.dt
     const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
 
     if (m_bHit == 0) {
@@ -280,9 +280,11 @@ void Bomb::Update(float /*dt*/) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
-        // Binary: plain int16 add each frame, no fractional accumulator
-        m_RotX = (int16_t)(m_RotX + m_RotVelX);
-        m_RotY = (int16_t)(m_RotY + m_RotVelY);
+        // Binary: plain int16 add each frame, no fractional accumulator; gated on scaledDt>0 (ASM v1.6.1 Bomb::Update @0x1d6244)
+        if (scaledDt > 0.0f) {
+            m_RotX = (int16_t)(m_RotX + m_RotVelX);
+            m_RotY = (int16_t)(m_RotY + m_RotVelY);
+        }
 
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
 
@@ -306,8 +308,17 @@ void Bomb::Update(float /*dt*/) {
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * dtNorm;
-            m_RotX = (int16_t)(m_RotX + m_RotVelX);
-            m_RotY = (int16_t)(m_RotY + m_RotVelY);
+            // ASM-spec v1.6.1 Bomb::Update @ 0x1d6650: gated on scaledDt>0, same as ALIVE branch.
+            // Binary's menu-hit rotation math also differs from the ALIVE branch (float-converted
+            // RotVel*dtNorm with negative-floor, not a plain int16 add) -- needs a dedicated
+            // asm-inspector pass on 0x1d624c before porting exactly; keep the ALIVE-branch formula
+            // here (gated) as the safe faithful-but-incomplete stand-in.
+            // TODO: v1.6.1 0x1d624c (Bomb::Update MENU-HIT rotation) -- confirm VFP signed-short-to-float
+            // conversion + negative clamp semantics via asm-inspector before replacing this formula.
+            if (scaledDt > 0.0f) {
+                m_RotX = (int16_t)(m_RotX + m_RotVelX);
+                m_RotY = (int16_t)(m_RotY + m_RotVelY);
+            }
         }
 
         // Hide collision sphere
