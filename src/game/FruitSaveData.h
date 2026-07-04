@@ -164,10 +164,11 @@ public:
     // +0x70: was-game-over flag at save time.
     uint8_t  m_bWasGameOver;
 
-    // +0x74: last-slasher player index snapshot (default -1, sentinel = no slash yet).
-    // XML attr "count2". Confirmed: WaveManager::Resume @ 0x00124b54 writes
-    // g_LastSlasher = save[+0x74]; SaveCurrentData @ 0x0016cd08 writes save[+0x74] = g_LastSlasher.
-    int      m_LastSlasher;        // +0x74
+    // +0x74: last combo-streak fruit-type snapshot (default -1, sentinel = no streak yet).
+    // XML attr "count2" ("consecutiveType" in the later attr set). Confirmed:
+    // WaveManager::Resume @ 0x00124b54 writes g_ComboFruitType = save[+0x74];
+    // SaveCurrentData @ 0x0016cd08 writes save[+0x74] = g_ComboFruitType.
+    int      m_ComboFruitType;     // +0x74
 
     // +0x78: combo count snapshot (default 0).
     // XML attr "count1". Confirmed: WaveManager::Resume @ 0x00124b68 writes
@@ -316,11 +317,11 @@ public:
     // 0x0012a034. Decrements modifier counters at end of round.
     void FinishedGame();
 
-    // Copy g_LastSlasher / g_ComboCount globals into m_LastSlasher / m_ComboCount.
+    // Copy g_ComboFruitType / g_ComboCount globals into m_ComboFruitType / m_ComboCount.
     // Called by SaveCurrentData before writing to disk.
     void SnapshotComboState();
 
-    // Copy m_LastSlasher / m_ComboCount back into g_LastSlasher / g_ComboCount.
+    // Copy m_ComboFruitType / m_ComboCount back into g_ComboFruitType / g_ComboCount.
     // Called by WaveManager::Resume when restoring an interrupted game.
     void RestoreComboState();
 

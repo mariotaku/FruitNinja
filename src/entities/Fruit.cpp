@@ -959,7 +959,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                         if (game_work.missCount > 2) {
                             // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8 -- combo reset only inside game-over branch
                             g_ComboCount  = 0;
-                            g_LastSlasher = -1;  // binary writes 0xFFFFFFFF (v1.6.1 Fruit::KillFruit @0x001deba8)
+                            g_ComboFruitType = -1;  // binary writes 0xFFFFFFFF (v1.6.1 Fruit::KillFruit @0x001deba8)
                             GameOver(-1, -1.0f, -1);
                         }
                     }
@@ -1428,12 +1428,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         }
 
         // Combo counter increment.
-        // TODO: re-verify combo addr -- combo counter moved into
-        // v1.6.1 SlashEntity::Update @0x001e867c (old v1.5.x @0x001787a8..0x001787b0 are stale).
-        int slasher = (int)m_PlayerIdx;
-        if (g_LastSlasher != slasher) {
-            g_ComboCount  = 0;
-            g_LastSlasher = slasher;
+        // ASM-verified v1.6.1 Fruit::CollisionResponse @0x001dddec/0x1dde14/0x1dde1c:
+        // combo resets when a DIFFERENT fruit TYPE continues the streak, not when a
+        // different player slashes. g_ComboFruitType == Fruit::s_consecutiveType.
+        if (g_ComboFruitType != (int)m_FruitType) {
+            g_ComboCount     = 0;
+            g_ComboFruitType = (int)m_FruitType;
         }
         g_ComboCount += 1;
         }

@@ -47,7 +47,7 @@ FruitSaveData::FruitSaveData()
     , m_CurrentMissCount(0)
     , m_GameMode(0)
     , m_bWasGameOver(0)
-    , m_LastSlasher(-1)
+    , m_ComboFruitType(-1)
     , m_ComboCount(0)
     , m_FruitQueueCount(0)
     , m_Speed_P0(0.0f)
@@ -168,20 +168,20 @@ void FruitSaveData::FinishedGame() {
     }
 }
 
-// SnapshotComboState -- copy g_LastSlasher / g_ComboCount into save fields.
-// Binary: SaveCurrentData @ 0x0016cd08 writes save[+0x74] = *GOT[lastSlasher]
+// SnapshotComboState -- copy g_ComboFruitType / g_ComboCount into save fields.
+// Binary: SaveCurrentData @ 0x0016cd08 writes save[+0x74] = *GOT[comboFruitType]
 //         and @ 0x0016cd34 writes save[+0x78] = *GOT[comboCount].
 void FruitSaveData::SnapshotComboState() {
-    m_LastSlasher = g_LastSlasher;
-    m_ComboCount  = g_ComboCount;
+    m_ComboFruitType = g_ComboFruitType;
+    m_ComboCount     = g_ComboCount;
 }
 
-// RestoreComboState -- copy save fields back into g_LastSlasher / g_ComboCount.
-// Binary: WaveManager::Resume @ 0x00124b54 writes *GOT[lastSlasher] = save[+0x74]
+// RestoreComboState -- copy save fields back into g_ComboFruitType / g_ComboCount.
+// Binary: WaveManager::Resume @ 0x00124b54 writes *GOT[comboFruitType] = save[+0x74]
 //         and @ 0x00124b68 writes *GOT[comboCount] = save[+0x78].
 void FruitSaveData::RestoreComboState() {
-    g_LastSlasher = m_LastSlasher;
-    g_ComboCount  = m_ComboCount;
+    g_ComboFruitType = m_ComboFruitType;
+    g_ComboCount     = m_ComboCount;
 }
 
 // SetCurrentModeHighscore @ 0x0010a388.
@@ -481,7 +481,7 @@ void SaveGame(FruitSaveData* save) {
         st.SetAttribute("misses",           save->m_CurrentMissCount);
         st.SetAttribute("mode",             GetModeName((GAME_MODE)save->m_GameMode));
         st.SetAttribute("consecutiveCount", save->m_ComboCount);
-        st.SetAttribute("consecutiveType",  save->m_LastSlasher);
+        st.SetAttribute("consecutiveType",  save->m_ComboFruitType);
         st.SetDoubleAttribute("timer",      (double)save->m_TimeRemainingSave);
         st.SetDoubleAttribute("gameTime",   (double)game_work.m_ElapsedGameTime);
 
@@ -737,7 +737,7 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
         const char* hasDropped = self.Attribute("hasDropped");
         if (hasDropped) data->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
         self.QueryIntAttribute("consecutiveCount", &data->m_ComboCount);
-        self.QueryIntAttribute("consecutiveType",  &data->m_LastSlasher);
+        self.QueryIntAttribute("consecutiveType",  &data->m_ComboFruitType);
         self.QueryFloatAttribute("timer",    &data->m_TimeRemainingSave);
         self.QueryFloatAttribute("gameTime", &game_work.m_ElapsedGameTime);
         self.QueryFloatAttribute("globalWaveDt", &data->m_WaveScalar_v161);   // +0x150

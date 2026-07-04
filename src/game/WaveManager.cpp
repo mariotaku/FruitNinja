@@ -616,8 +616,8 @@ void WaveManager::Reset(bool fullReset) {
     // adjacent last-slasher write. Binary writes 1 to last-slasher at reset;
     // port uses -1 (cold-boot sentinel) to keep consistent with TimeControl
     // game-over path and avoid a spurious same-player guard on first slice.
-    g_ComboCount  = 0;
-    g_LastSlasher = -1;
+    g_ComboCount     = 0;
+    g_ComboFruitType = -1;
 
     LOG_DEBUG("WaveManager", "Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu",
               fullReset ? 1 : 0, (int)game_work.gameMode, (int)game_work.gameMode,

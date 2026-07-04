@@ -241,8 +241,15 @@ void ScoreControl::Update(float dt) {
     if (digitsActive > 15) digitsActive = 15;
     m_DigitCount = digitsActive;
 
+    // TODO: v1.6.1 0x001ac5c0 (ScoreControl::Update) -- WaveManager::Reset g_LastSlasher
+    // rename to g_ComboFruitType deferred, WAVEDIAG diagnostic in tree
+
+    // ASM-verified v1.6.1 ScoreControl::Update @0x001ac630-64c: the cascade gate compares
+    // m_LastDigitCount against Fruit::s_consecutiveType (g_ComboFruitType), not digitsActive;
+    // on mismatch-then-decay-to-zero it captures g_ComboFruitType (read at function entry),
+    // not the digit count. digitsActive/g_ComboCount stays the loop bound / m_DigitCount source.
     if (game_work.gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
-        if (digitsActive == m_LastDigitCount) {
+        if (g_ComboFruitType == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
                 if (m_DigitAlpha[i] > 1.0f) m_DigitAlpha[i] = 1.0f;
@@ -253,13 +260,13 @@ void ScoreControl::Update(float dt) {
                 if (m_DigitAlpha[i] < 0.0f) m_DigitAlpha[i] = 0.0f;
             }
             if (m_DigitAlpha[0] <= 0.0f) {
-                m_LastDigitCount = digitsActive;
+                m_LastDigitCount = g_ComboFruitType;
             }
         }
     } else {
         s_StaticTimer += dt;
         if (s_StaticTimer >= 0.25f) {
-            if (digitsActive == m_LastDigitCount) {
+            if (g_ComboFruitType == m_LastDigitCount) {
                 for (int i = 0; i < digitsActive; i++) {
                     m_DigitAlpha[i] += 6.0f * dt;
                     if (m_DigitAlpha[i] > 1.0f) m_DigitAlpha[i] = 1.0f;
@@ -270,7 +277,7 @@ void ScoreControl::Update(float dt) {
                     if (m_DigitAlpha[i] < 0.0f) m_DigitAlpha[i] = 0.0f;
                 }
                 if (m_DigitAlpha[0] <= 0.0f) {
-                    m_LastDigitCount = digitsActive;
+                    m_LastDigitCount = g_ComboFruitType;
                 }
             }
         }
@@ -470,9 +477,11 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Section B: per-digit combo overlay.
         // ASM-verified gate v1.6.1 ScoreControl::PreDraw @0x001ace80: gameMode == 1.
         if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
-            // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
+            // Texture rebind: pick FRUIT_INFO icon by clamped combo fruit type.
+            // ASM-verified v1.6.1 ScoreControl::PreDraw @0x001ad0b8-1ad0e4: reads
+            // Fruit::s_consecutiveType (g_ComboFruitType) directly, not m_LastDigitCount.
             // Executed once before the per-digit loop.
-            int comboCount = m_LastDigitCount;
+            int comboCount = g_ComboFruitType;
             if (comboCount < 0) comboCount = 0;
             int fruitInfoCount = FruitInfo_GetCount();
             int idx = (comboCount < 1) ? 0 : (comboCount < fruitInfoCount ? comboCount : fruitInfoCount - 1);
