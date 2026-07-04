@@ -67,8 +67,11 @@ public:
     //   WaveManager to m_OverideProbabilityPool wave, SelectType() each override entry,
     //   and append m_OverideEntries into WaveManager's current override list, then clear.
     void ApplyModifier(bool isPurchased, float* extra) override;
-    // @ 0x00150590 -- if WaveManager current wave < 0 and >= m_OverideProbabilityPool,
-    //   reset WaveManager current wave to (5, 0.25, 0).
+    // @ 0x00150590 -- if WaveManager current wave < 0, >= m_OverideProbabilityPool,
+    //   and not online MP, reset WaveManager current wave to (5, 0.25, 0). Then
+    //   always erases the front m_OverrideCount entries from
+    //   WaveManager::m_ProbabilityOverride[gameMode], undoing the prepend done by
+    //   ApplyModifier/OnDeferComplete.
     void RemoveModifier() override;
     // @ 0x00150374 -- empty override in binary (no specific reset work); no-op is faithful.
     void ResetSpecific() override;
