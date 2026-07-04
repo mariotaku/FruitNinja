@@ -33,8 +33,9 @@ class SystemManager : public Mortar::Singleton<SystemManager> {
     virtual ~SystemManager() {}
 
 public:
-    // Matches 0x0018b024: sets m_reserved50=0, m_bRunning=1, records clock base (Bada),
-    // calls _RetrieveDeviceID (Bada). Port: only the two field writes are meaningful.
+    // v1.6.1 SystemManager::Init @0x0022e544: sets m_reserved50=0, m_bRunning=1,
+    // seeds Math::g_Random with clock() (time-varying early RNG), calls
+    // _RetrieveDeviceID (confirmed no-op `return 0;`, correctly omitted).
     void Init();
 
     // Returns m_bRunning. Outputs dt via pointer.
