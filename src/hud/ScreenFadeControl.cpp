@@ -1,6 +1,5 @@
-// Analysed: 2026-05-04T00:00
 // ScreenFadeControl — full-screen alpha fade overlay.
-// Binary: ctor @ 0x0015AA1C, sizeof 0xB8.
+// Binary: ctor C1 @0x001aefd4 / C2 @0x001af0c0 (identical bodies), sizeof 0xB8.
 
 #include "ScreenFadeControl.h"
 #include "hud/HUDLayer.h"
@@ -10,7 +9,7 @@
 #include "math/Matrix44.h"
 #include "render/gl_funcs.h"
 
-// Binary @ 0x0015AA1C
+// Binary: ctor C1 @0x001aefd4 / C2 @0x001af0c0
 ScreenFadeControl::ScreenFadeControl()
     : m_bVisible(0),
       m_bAnimating(0),
@@ -18,7 +17,7 @@ ScreenFadeControl::ScreenFadeControl()
       _pad7F(0),
       m_Timer(0.0f),
       m_Duration(0.0f),
-      m_Colour(255, 255, 255, 255),
+      m_Colour(),
       m_StartAlpha(0),
       m_FromAlpha(0),
       m_TargetAlpha(0),
@@ -34,13 +33,13 @@ ScreenFadeControl::ScreenFadeControl()
 
 ScreenFadeControl::~ScreenFadeControl() {}
 
-// Binary @ 0x0015A724
+// Binary @ 0x1aebf4
 void ScreenFadeControl::Init()
 {
     Reset();
 }
 
-// Binary @ 0x0015A734
+// Binary @ 0x1aec0c
 void ScreenFadeControl::Reset()
 {
     m_bAnimating = 0;
@@ -49,7 +48,7 @@ void ScreenFadeControl::Reset()
     m_Timer      = 0.0f;
 }
 
-// Binary @ 0x0015A798
+// Binary @ 0x1aec80
 void ScreenFadeControl::Update(float dt)
 {
     if (!m_bAnimating) return;
@@ -65,7 +64,7 @@ void ScreenFadeControl::Update(float dt)
     m_Colour.a = (a > 0.0f) ? (uint8_t)(int)a : 0;
 }
 
-// Binary @ 0x0015A868
+// Binary @ 0x1aed74
 void ScreenFadeControl::Draw(float* hudScaleRaw)
 {
     (void)hudScaleRaw;
@@ -94,15 +93,17 @@ void ScreenFadeControl::Draw(float* hudScaleRaw)
     tex->UnSet();
 }
 
-// Binary @ 0x0015A754
+// Binary @ 0x1aec30
 bool ScreenFadeControl::SetToMultiplayerState()
 {
     Reset();
     return false;
 }
 
-// Binary @ 0x0015A7F0
-// DIFFERS: binary's Colour const& param is a dead-store -- m_Colour stays at ctor-default (white); fade is alpha-only
+// Binary @ 0x001aece0
+// DIFFERS: binary's Colour const& param is a dead-store -- only m_Colour.a (m_StartAlpha)
+// is ever touched; m_Colour stays at ctor-default (opaque BLACK, Colour::Colour() @0x0011afa8),
+// so the fade is alpha-only over a black quad, not the caller-supplied tint.
 void ScreenFadeControl::StartFade(bool inOrOut, float duration, const Colour& color,
                                    Mortar::Delegate0<void> onComplete)
 {
@@ -128,14 +129,14 @@ void ScreenFadeControl::StartFade(bool inOrOut, float duration, const Colour& co
     m_bAnimating         = 1;
 }
 
-// Binary @ 0x0015A764
+// Binary @ 0x1aec4c
 void ScreenFadeControl::CancelFade()
 {
     m_bVisible   = 0;
     m_bAnimating = 0;
 }
 
-// Binary @ 0x0015A770
+// Binary: private helper called from Update @0x1aec80; no separate v1.6.1 address confirmed
 void ScreenFadeControl::OnFadeComplete()
 {
     m_Colour.a = m_TargetAlpha;
