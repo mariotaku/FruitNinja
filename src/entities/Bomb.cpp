@@ -164,11 +164,17 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     m_Field_0xAC = 0.0f;
     m_SpawnTimer = SPAWN_TIMER_INIT;
 
-    // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot)
-    m_RotVelX = (int16_t)(rand() % 7 + 1);
-    m_RotX    = (int16_t)(rand() % 0x167);
-    m_RotVelY = (int16_t)(rand() % 7 + 1);
-    m_RotY    = (int16_t)(rand() % 0x167);
+    // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot),
+    // drawn from the shared seeded WaveManager::m_Random (not libc rand()) so bomb
+    // spawns stay in sync with SeedGlobalRng-driven determinism.
+    // ASM-spec v1.6.1 Bomb::Init @ 0x1d69e0: loop at 0x1d6b28-0x1d6b60 draws
+    // Rand32(7), Rand32(0x167), Rand32(7), Rand32(0x167) in order via WaveManager's
+    // shared Math::Random (not libc rand()).
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+    m_RotVelX = (int16_t)(rng.Rand32(7) + 1);
+    m_RotX    = (int16_t)rng.Rand32(0x167);
+    m_RotVelY = (int16_t)(rng.Rand32(7) + 1);
+    m_RotY    = (int16_t)rng.Rand32(0x167);
 
     m_bMenuBombHit = 0;
     m_pEmitter = nullptr;
