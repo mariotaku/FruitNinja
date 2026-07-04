@@ -17,6 +17,7 @@
 #include <cstddef>
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
+#include "math/Colour.h"
 
 // Impact sound entry (0xC = 12 bytes)
 // Binary: ImpactSound struct, sizeof confirmed = 12
@@ -212,6 +213,23 @@ FruitInfo* FruitInfo_GetArray();
 // in fruitlist.xml. Binary stores these on g_pFruitInfo+0x88/+0x8C.
 float FruitInfo_GetBombSize();
 float FruitInfo_GetBombCollision();
+
+// Global critical-hit tuning from the <critical .../> element in fruitlist.xml.
+// ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084 (critical block @0x1e128c-0x1e12a4).
+// These are game globals (NOT per-FruitInfo fields) consumed by
+// Fruit::CollisionResponse @0x001dd500 for the critical-hit roll, score bonus
+// and CriticalFlash tint colour.
+int   FruitInfo_GetCriticalNewLifeAt();        // "new_life_at" attr
+int   FruitInfo_GetCriticalScore();            // "score" attr      -> CRITICAL_SCORE @0x002d8d48
+int   FruitInfo_GetCriticalChance();           // "chance" attr     -> CRITICAL_CHANCE @0x002d8d4c
+int   FruitInfo_GetCriticalChanceStartInc();   // "chance_inc" attr -> CRITICAL_CHANCE_START_INC
+int   FruitInfo_GetCriticalSplats();           // "splats" attr
+float FruitInfo_GetCriticalSplatScale();       // "scale" attr
+float FruitInfo_GetCriticalSplatSpread();      // "spread" attr
+float FruitInfo_GetCriticalDisappearSpeed();   // "disappear_speed" attr
+// "colour" CSV -> direct R,G,B,A field order (NOT byte-swapped like the
+// per-fruit m_FruitColour BGRA parse above).
+const Colour& FruitInfo_GetCriticalColour();
 
 // Shadow texture (FRUIT_INFO_HEADER->shadowTex equivalent, binary +0xC0).
 // Loaded by FruitInfo_Load step 0 from "fruit_shadow.tex".

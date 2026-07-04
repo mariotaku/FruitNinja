@@ -260,11 +260,12 @@ public:
     // Binary @ 0x00174f80 — FRUIT_INFO[type].m_FruitColour; one-fruit override via g_SpecialFruitIdx/g_SpecialFruitColour (unresolved DATs)
     static Colour FruitTypeColour(long type);
 
-    // Binary static: critical / charged fruit blend target colour for blade flash.
-    // Used by SlashEntity::UpdatePoints to blend m_BaseColour toward CRITICAL_COLOUR
-    // when m_Scale > 0 (hit-flash active). Exact binary address and value:
-    // TODO: v1.6.1 SlashEntity::UpdatePoints @0x001e6914 -- verify CRITICAL_COLOUR RGB values from Ghidra (likely orange/yellow).
-    static const Colour CRITICAL_COLOUR;
+    // Binary static: critical / charged fruit blend target colour for blade flash,
+    // AND the CriticalFlash tint colour in CollisionResponse. Loaded from
+    // fruitlist.xml's <critical colour="R,G,B,A"/> attr by FruitInfo_Load
+    // (see FruitInfo_GetCriticalColour) and copied here by Fruit::LoadInfo --
+    // NOT a compile-time constant. ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084.
+    static Colour CRITICAL_COLOUR;
     // Binary @ 0x00174fc8 — return FRUIT_INFO[type].m_FactColour
     static Colour FruitFactColour(long type);
     // Binary @ 0x00174ff8 — equivalent of FruitInfo_Get(); preserved for binary call-shape parity

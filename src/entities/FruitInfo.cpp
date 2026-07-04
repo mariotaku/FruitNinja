@@ -25,6 +25,20 @@ static int s_FruitInfoCount = 0;
 static float s_BombSize      = 55.0f;  // default from original fruitlist.xml
 static float s_BombCollision = 25.0f;  // default from original fruitlist.xml
 
+// Parsed from <critical .../>. Binary: game globals @0x002d8d48 etc (NOT
+// per-FruitInfo). ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084.
+// Defaults match the shipped fruitlist.xml <critical> block so behaviour is
+// sane even before the XML loads.
+static int   s_CriticalNewLifeAt      = 0;
+static int   s_CriticalScore          = 10;
+static int   s_CriticalChance         = 50;
+static int   s_CriticalChanceStartInc = 30;
+static int   s_CriticalSplats         = 15;
+static float s_CriticalSplatScale     = 1.25f;
+static float s_CriticalSplatSpread    = 1.25f;
+static float s_CriticalDisappearSpeed = 1.0f;
+static Colour s_CriticalColour(0, 140, 245, 170);
+
 // --- Helpers ---
 
 // Parse comma-separated ints "R,G,B,A" into 4 bytes (up to maxCount)
@@ -80,20 +94,30 @@ void FruitInfo_Load(const char* xmlPath)
     }
 
     // --- Parse <critical> element (global game settings) ---
-    // Original: "colour" CSV -> global bytes, 5x QueryIntAttribute, 3x QueryFloatAttribute
-    // These go to game globals (not per-fruit FRUIT_INFO).
+    // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084 (critical block @0x1e128c-0x1e12a4,
+    // confirmed by get_xrefs_to on CRITICAL_SCORE @0x002d8d48 / CRITICAL_CHANCE @0x002d8d4c).
+    // 5x QueryIntAttribute + 3x QueryFloatAttribute (game globals, NOT per-FruitInfo),
+    // plus a "colour" CSV (R,G,B,A ints, NOT byte-swapped -- direct field order).
     TiXmlElement critElem = root.FirstChildElement("critical");
     if (critElem)
     {
-        // Binary 0x179914-0x179a10 (<critical> element):
-        //   5 QueryIntAttribute (game globals, NOT per-FruitInfo):
-        //     "new_life_at", "score", "chance", "chance_inc", "splats"
-        //   3 QueryFloatAttribute (game globals): "scale", "spread", "disappear_speed"
-        //   "colour" CSV -> BGRA bytes at *(byte**)(GOT+DAT_0017a280) (global border colour).
-        // TODO: implement once g_GameData has the corresponding global slots:
-        //   g_NewLifeAt, g_CritScoreThreshold, g_CritChance, g_CritChanceInc,
-        //   g_CritSplats, g_CritScale, g_CritSpread, g_CritDisappearSpeed,
-        //   g_CritBorderColour.
+        critElem.QueryIntAttribute("new_life_at",      &s_CriticalNewLifeAt);
+        critElem.QueryIntAttribute("score",             &s_CriticalScore);
+        critElem.QueryIntAttribute("chance",            &s_CriticalChance);
+        critElem.QueryIntAttribute("chance_inc",        &s_CriticalChanceStartInc);
+        critElem.QueryIntAttribute("splats",            &s_CriticalSplats);
+        critElem.QueryFloatAttribute("scale",           &s_CriticalSplatScale);
+        critElem.QueryFloatAttribute("spread",          &s_CriticalSplatSpread);
+        critElem.QueryFloatAttribute("disappear_speed", &s_CriticalDisappearSpeed);
+
+        const char* colourStr = critElem.Attribute("colour");
+        if (colourStr && *colourStr)
+        {
+            int rgba[4] = {0, 0, 0, 0};
+            ParseCSV(colourStr, rgba, 4);
+            s_CriticalColour = Colour((uint8_t)rgba[0], (uint8_t)rgba[1],
+                                       (uint8_t)rgba[2], (uint8_t)rgba[3]);
+        }
     }
 
     // --- Parse <bomb> element (global bomb settings) ---
@@ -393,6 +417,20 @@ float FruitInfo_GetBombSize()
 float FruitInfo_GetBombCollision()
 {
     return s_BombCollision;
+}
+
+int FruitInfo_GetCriticalNewLifeAt()      { return s_CriticalNewLifeAt; }
+int FruitInfo_GetCriticalScore()          { return s_CriticalScore; }
+int FruitInfo_GetCriticalChance()         { return s_CriticalChance; }
+int FruitInfo_GetCriticalChanceStartInc() { return s_CriticalChanceStartInc; }
+int FruitInfo_GetCriticalSplats()         { return s_CriticalSplats; }
+float FruitInfo_GetCriticalSplatScale()     { return s_CriticalSplatScale; }
+float FruitInfo_GetCriticalSplatSpread()    { return s_CriticalSplatSpread; }
+float FruitInfo_GetCriticalDisappearSpeed() { return s_CriticalDisappearSpeed; }
+
+const Colour& FruitInfo_GetCriticalColour()
+{
+    return s_CriticalColour;
 }
 
 const FruitInfo* FruitInfo_Get(int type)
