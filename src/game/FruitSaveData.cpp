@@ -99,23 +99,27 @@ FruitSaveData::~FruitSaveData() {}
 // all subsequent map ops use the SHIFTED this->m_Totals -- resolving to either
 // real m_Totals (trackSession=false) or real m_SessionTotals (trackSession=true).
 // EITHER/OR selection: never touches both maps. Returns selected map's new count.
-// sendNetPacket param gates AchievementManager::UnlockSpecificFruitAchievement
-// (no-op stub in port).
+// achievementGate, when true, additionally calls
+// AchievementManager::UnlockSpecificFruitAchievement(hash, newCount) -- confirmed
+// live, non-defunct local achievement system (AchievementManager.cpp:486).
 int FruitSaveData::AddToTotal(const char* name, uint32_t hash, int count,
-                              bool trackSession, bool /*sendNetPacket*/) {
+                              bool trackSession, bool achievementGate) {
     if (!name || !*name) return 0;
 
     std::map<uint32_t, SliceTotal>& target = trackSession ? m_SessionTotals : m_Totals;
     std::map<uint32_t, SliceTotal>::iterator it = target.find(hash);
+    int newCount;
     if (it != target.end()) {
         it->second.count += count;
-        // Defunct: sendNetPacket gated AchievementManager::UnlockSpecificFruitAchievement
-        //   in binary; stub is a no-op in the port.
-        return it->second.count;
+        newCount = it->second.count;
     } else {
         target[hash] = SliceTotal(name, count);
-        return count;
+        newCount = count;
     }
+    if (achievementGate) {
+        AchievementManager::GetInstance()->UnlockSpecificFruitAchievement((int)hash, (unsigned int)newCount);
+    }
+    return newCount;
 }
 
 int FruitSaveData::AddToTotal(const char* name, int count) {
@@ -212,9 +216,22 @@ int FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
     return (m_UnlockedAchievements.find(hash) != m_UnlockedAchievements.end()) ? 1 : 0;
 }
 
+// ASM-spec v1.6.1 FruitSaveData::UnlockTotals @ 0x00154344
+// Iterates m_SessionTotals then m_Totals, calling
+// AchievementManager::UnlockSpecificFruitAchievement(hash, count) for each entry
+// so SPECIFIC-type achievements whose threshold is already met (e.g. from a
+// loaded save, or totals accumulated before the achievement was defined) get
+// unlocked. Called from WaveManager::GetNextWave and GameOverScreen.
 void FruitSaveData::UnlockTotals() {
-    // Note: AchievementManager is a no-op stub (#52 audit confirmed safe to skip).
-    // 0x00124f10 -- "total-X" thresholds; full impl blocked on AchievementManager port.
+    AchievementManager* am = AchievementManager::GetInstance();
+    for (std::map<uint32_t, SliceTotal>::iterator it = m_SessionTotals.begin();
+         it != m_SessionTotals.end(); ++it) {
+        am->UnlockSpecificFruitAchievement((int)it->first, (unsigned int)it->second.count);
+    }
+    for (std::map<uint32_t, SliceTotal>::iterator it = m_Totals.begin();
+         it != m_Totals.end(); ++it) {
+        am->UnlockSpecificFruitAchievement((int)it->first, (unsigned int)it->second.count);
+    }
 }
 
 // Binary @ 0x00154918. Queue an achievement unlock. Skip if already pending or unlocked.
@@ -249,10 +266,8 @@ void FruitSaveData::SaveGameState() {
     m_EntityStates.clear();
 }
 
-void FruitSaveData::CheckDatesHaveChanged() {
-    // Daily-reset stub. Binary compares stored timestamp against today
-    // and resets daily counters when the day rolls over.
-}
+// FruitSaveData::CheckDatesHaveChanged -- v1.6.1 @ 0x00153050 (implementation
+// below GetDaysSince1900, near PlayedModeToday, since it needs that file-scope helper).
 
 void FruitSaveData::DownloadTweaks() {
     // Defunct online service.
@@ -378,6 +393,23 @@ std::string GetSavePath() {
 
 } // namespace
 
+// ASM-spec v1.6.1 FruitSaveData::CheckDatesHaveChanged @ 0x00153050
+// For each of the 4 game modes, if the mode's last-played day is neither
+// today nor yesterday (streak broken), reset the "<MODE>_days" streak
+// counter -- gates the SPECIFIC play-N-days-in-a-row achievements
+// (achievementlist.xml specific_type="ZEN_days" etc.) and itemlist.xml
+// "showIfPlayedToday" requirements keyed on the same total.
+void FruitSaveData::CheckDatesHaveChanged() {
+    int today = GetDaysSince1900();
+    for (int mode = 0; mode < 4; mode++) {
+        if (m_LastPlayedDay[mode] != today && m_LastPlayedDay[mode] != today - 1) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%s_days", GetModeName((GAME_MODE)mode));
+            ClearTotal(StringHash(buf));
+        }
+    }
+}
+
 // PlayedModeToday @ 0x0012a248. Returns true iff gameMode was played today
 // (m_LastPlayedDay[gameMode] == GetDaysSince1900()) and the per-mode
 // "<MODE>_today" total is > 0.
@@ -404,6 +436,9 @@ bool FruitSaveData::PlayedModeToday(Mortar::GameMode gameMode) {
 // ----------------------------------------------------------------------
 void SaveGame(FruitSaveData* save) {
     if (!save) return;
+
+    // ASM-spec v1.6.1 SaveGame @ 0x001530dc (first statement).
+    save->CheckDatesHaveChanged();
 
     TiXmlDocument doc;
     TiXmlElement root = doc.NewElement("save_file");
@@ -905,10 +940,10 @@ void FruitSaveData::PublishUnlockedAchievements() {}
 // old = GetTotal(name); AddToTotal(name, hash, value-old, ...); return old.
 // The delta (value - old) makes the cumulative total settle at exactly `value`.
 unsigned int FruitSaveData::SetTotal(char const* name, int value,
-                                     bool trackSession, bool sendNetPacket) {
+                                     bool trackSession, bool achievementGate) {
     unsigned int old = (unsigned int)GetTotal(name);
     uint32_t hash = StringHash(name);
-    AddToTotal(name, hash, value - (int)old, trackSession, sendNetPacket);
+    AddToTotal(name, hash, value - (int)old, trackSession, achievementGate);
     return old;
 }
 
