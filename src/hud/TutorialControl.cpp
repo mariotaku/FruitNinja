@@ -53,15 +53,13 @@ TutorialControl::TutorialControl()
     : m_AnimTimer(ANIM_INACTIVE)
     , m_DrawPos(0, 0, 0)
     , m_Colour(255, 255, 255, 255)
-                  // The arrow quad (swipe_fruit_begin) is drawn via Mesh::DrawQuadUnCached(m_Colour,...)
-                  // which MODULATES vertex RGB x texture; a black RGB (the earlier "binary default is
-                  // Colour::Colour()=black" change) rendered the arrow as a solid BLACK BLOB. White RGB
-                  // (matching the trail quads' Colour(255,255,255,alpha)) shows the texture. Update() only
-                  // writes m_Colour.a, so this RGB is the arrow's tint for its lifetime.
-                  // TODO(asm-inspector): confirm whether v1.6.1 TutorialControl::Draw @0x001636f8 passes
-                  //   a black m_Colour into a NON-modulating (REPLACE) arrow-quad texenv (=> mark // DIFFERS),
-                  //   or genuinely uses white (=> faithful). White is required either way given the port's
-                  //   modulating DrawQuadUnCached.
+                  // DIFFERS: original = m_Colour BLACK (0,0,0,255) from Colour::Colour() @0x0011afa8
+                  // (v1.6.1 TutorialControl::TutorialControl @0x001c2fdc; Update @0x001c27ac only animates m_Colour.a).
+                  // Using WHITE (255,255,255,255) because the binary's per-texture COMBINE texenv
+                  // (v1.6.1 Texture2D_Bada::Set @0x00229758: COMBINE_ALPHA=REPLACE, SRC0_ALPHA=PRIMARY_COLOR)
+                  // takes RGB from the texture and only alpha from the vertex, so black vertex RGB does NOT tint
+                  // the colour swipe_fruit_begin hand. The port's Mesh::DrawQuadUnCached modulates vertex RGB x texture,
+                  // which would blacken it; white gives the faithful colour-hand output.
     , m_bHidden(1)
     , m_HalfWidth(0.0f)
     , m_bFlipX(false)
