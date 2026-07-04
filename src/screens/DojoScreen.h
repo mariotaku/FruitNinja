@@ -37,7 +37,6 @@
 // Port specific:
 //   - No sensei 3D animation (binary has an animated 3D model).
 //   - Shop button stub -- returns to MainScreen instead of opening ShopScreen.
-//   - No "new item" badge (needs ItemManager).
 //
 
 #include "BaseScreen.h"
