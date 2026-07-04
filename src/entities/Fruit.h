@@ -203,7 +203,7 @@ public:
     // scaleParam multiplies the collision radius (1.0f at all known call sites).
     void SetFruitType(int fruitType, float scaleParam);
 
-    // Matches Fruit::FruitType (0x00175b10). Resolves a fruit name
+    // v1.6.1 Fruit::FruitType @0x001db6c8. Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and
     // comparing against m_NameHash / m_NameHashUpper. If not found:
     //   fallbackRandom=true -> returns Random::Rand32(count-1)
