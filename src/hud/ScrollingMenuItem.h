@@ -122,8 +122,11 @@ public:
     // selection here. Inserted at slot 10 in v1.6.1 between SetOnscreen and SetText.
     virtual int Update(float /*dt*/) { return 1; }
 
-    // vtable +0x2C (slot 11): SetText(char*)
-    // Binary 0x001afb14: stores the pointer at +0x54.
+    // vtable +0x2C (slot 11): SetText(char const*)
+    // ASM-verified: 2026-07-04T00:00Z v1.6.1 ScrollingMenuItem::SetText @ 0x001afb14 (asm-inspector)
+    // Binary owns the string: delete[] any existing m_pText, then (if text != nullptr)
+    // new char[strlen(text)+1] + strcpy into m_pText. Caller's buffer is copied, not
+    // aliased -- safe to pass a transient (e.g. stack snprintf) buffer.
     virtual void SetText(const char* text);
 
     // vtable +0x30 (slot 12): Draw() -- renders this item
@@ -213,8 +216,8 @@ public:
     // Port uses Mortar::Delegate1 directly -- same 36-byte ABI.
     Mortar::Delegate1<void, ScrollingMenuItem*> m_Delegate;
 
-    // +0x54: display text pointer
-    // Binary: SetText 0x0015b124 stores at *(this+0x54).
+    // +0x54: display text pointer -- OWNED (new[]/delete[]) by this class.
+    // Binary: SetText @ 0x001afb14 stores at *(this+0x54); dtor @ 0x001b1488 frees it.
     const char* m_pText;              // +0x54
 
     // Binary ScrollingMenuItem ends here at +0x58 (total size 88 bytes on ARM32).
