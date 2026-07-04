@@ -1497,18 +1497,24 @@ void ShopScreen::ConfirmCallback() {
     }
 }
 
-// Binary @ 0x0015c7f0 (re-analyst 2026-05-18). Skip the slot-commit;
-// transition to state 6. Same tutorial-ninja reposition as Confirm.
-// TODO: v1.6.1 0x0015c7f0 (ShopScreen::CancelCallback) -- unverified: may
-// share ConfirmCallback's bug (wrong ResetTutePos overload / missing
-// buy-button fruit fling, see asm-verify report b9__ZN10ShopScreen15Confi).
-// Needs its own re-analyst pass against the real v1.6.1 address before
-// changing; do not assume identical.
+// v1.6.1 ShopScreen::CancelCallback @0x001b244c (stale comment previously
+// cited 0x0015c7f0). Skip the slot-commit; transition to state 6.
+// Byte-identical in shape to ConfirmCallback: same gate on
+// m_pBuyButton->m_pTrackedFruit, same fling formula, same MenuButton*
+// overload of ResetTutePos(nullptr) to hide the tutorial arrow.
 void ShopScreen::CancelCallback() {
     m_State = 6;
-    if (game_work.m_TutorialControl) {
-        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
-        float ry = -((float)(rand() % 500) / 100.0f);
-        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
+
+    // TODO: v1.6.1 0x001b244c (ShopScreen::CancelCallback) -- Entity+0x80 flag
+    // byte set to 1 on the tracked fruit; no known reader (same undocumented
+    // flag ConfirmCallback also writes and skips).
+    if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
+        Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
+        float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        fruit->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        if (game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
+        }
     }
 }
