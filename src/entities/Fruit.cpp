@@ -1453,6 +1453,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         AchievementManager::GetInstance()->UnlockConsecutiveAchievement(g_ComboCount, info->m_NameHash);
         }
 
+        // Defunct: P2P MP slice-broadcast block intentionally omitted -- v1.6.1 Fruit::CollisionResponse
+        //   @0x001ddf1c (IsOnlineMultiplayer()-gated, ~380 instrs). Dead at runtime (IsOnlineMultiplayer
+        //   always false); the call graph is already preserved by the SendP2PPacket / FruitSlicedPacket
+        //   no-op stubs at their real defunct call sites. Replaying the exact block here would only chase
+        //   the asm-verify LCS for zero gameplay value and requires restructuring the merged score path.
+
         // ASM-verified: 2026-07-04 v1.6.1 Fruit::CollisionResponse @0x001dd500 (call at
         // 0x001ddcf0). Binary control flow converges here regardless of the hitter/paused
         // branch above; the ONLY gate on this specific call is retryFlag==0 (game_work+0x6),
