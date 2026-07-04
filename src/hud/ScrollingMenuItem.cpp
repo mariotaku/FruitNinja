@@ -177,3 +177,9 @@ void ScrollingMenuItem::CallClickedMenuItemCallback() {
     }
 }
 
+// v1.6.1 ScrollingMenuItem::SetClickedFocusedCallback (called per-row from
+// ShopScreen::Init @0x001b42ac, 0x1b43e0-0x1b4424).
+void ScrollingMenuItem::SetClickedFocusedCallback(Mortar::Delegate1<void, ScrollingMenuItem*> callback) {
+    m_Delegate = callback;
+}
+

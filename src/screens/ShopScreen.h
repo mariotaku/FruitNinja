@@ -6,9 +6,12 @@
 // Sensei's Swag — the in-game blade/background shop.
 //
 // Binary refs:
-//   ctor             0x0015cdac  ShopScreen(DojoScreen*)
+//   ctor             0x001b3f94  ShopScreen(DojoScreen*) (older 0x0015cdac was stale v1.5.x)
 //   dtor             0x0015ce98 / 0x0015ced8 / 0x0015cf14
-//   LoadContent      0x0015cb08  (static, loads 11+ textures)
+//   Init             0x001b42ac  (older 0x0015f7ac/0x0015cdac were stale v1.5.x; same
+//                                0x1b4xxx family as DrawOrder@0x001b4e48)
+//   LoadContent      0x001b2a20  (static, loads 10 textures; PLT thunk @0x001047b8;
+//                                older 0x001b61c8/0x0015cb08 were stale)
 //   UnLoadContent    0x0015d080  (static, clears all textures)
 //   Update           0x0015e1f4  (387 lines)
 //   Draw             0x0015dd50
@@ -98,8 +101,9 @@ public:
     // Matches ~ShopScreen @ 0x0015ce98
     ~ShopScreen() override;
 
-    // Matches vtable Init slot — called from DojoScreen state 2 launch:
-    //   (**(code**)(*(int*)shop + 8))(shop)  == shop->Init()
+    // Matches ShopScreen::Init @ 0x001b42ac (vtable slot 2) — called from DojoScreen
+    // state 2 launch: (**(code**)(*(int*)shop + 8))(shop)  == shop->Init()
+    // Body is the CreateShopList per-item population loop (see ShopScreen.cpp).
     void Init() override;
 
     // Matches vtable Release slot
@@ -116,8 +120,9 @@ public:
 
     int GetType() override { return 1; }
 
-    // Matches ShopScreen::LoadContent @ 0x0015cb08
-    // Loads all static textures. Called lazily from ctor if not yet loaded.
+    // Matches ShopScreen::LoadContent @ 0x001b2a20 (PLT thunk @0x001047b8)
+    // Loads all static textures. No internal guard -- the guard lives at the ctor
+    // call site (`if (!s_bContentLoaded) LoadContent();`).
     static void LoadContent();
 
     // Matches ShopScreen::UnLoadContent @ 0x0015d080

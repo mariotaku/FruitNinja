@@ -1,6 +1,7 @@
 // ShopScreen — Sensei's Swag blade/background shop, launched from DojoScreen.
 // Binary: ShopScreen(DojoScreen*) @ 0x001b3f94, Update @ 0x001b321c (387 lines),
-//         DrawOrder @ 0x001b4e48, LoadContent @ 0x001b61c8.
+//         DrawOrder @ 0x001b4e48, Init @ 0x001b42ac, LoadContent @ 0x001b2a20
+//         (thunk @ 0x001047b8; the older 0x001b61c8/0x0015cb08 addresses were stale).
 //
 // Analysed: 2026-04-28T14:00
 
@@ -159,15 +160,18 @@ static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::LoadContent @ 0x001b61c8
+// ShopScreen::LoadContent @ 0x001b2a20 (PLT thunk @ 0x001047b8)
 // Loads 10 textures into static slots (binary-faithful: no guard).
 // Binary pattern: LoadLocalisedTexture(name) -> store in static slot.
 // Conditional at end: if LowResBackgrounds() load BG_store_sml.tex else BG_store.tex.
+// The call-site guard (`if (!s_bContentLoaded) LoadContent();`) lives in the ctor
+// (ShopScreen::ShopScreen @0x001b3f94, 0x001b3fbc-0x001b3fd4) -- LoadContent itself
+// has no internal guard.
 // ---------------------------------------------------------------------------
 void ShopScreen::LoadContent() {
-    // Binary @ 0x0015cb08 has NO singleton guard — loads unconditionally,
-    // then sets s_isContentLoaded = 1 at the end.
-    // Corrected slot order from LoadContent @ 0x0015cb08 disasm + string reads.
+    // Binary @ 0x001b2a20 has NO singleton guard — loads unconditionally,
+    // then sets s_bContentLoaded = 1 at the end.
+    // Corrected slot order from LoadContent @ 0x001b2a20 disasm + string reads.
     // Slot +0x14: locked.tex          DAT_0015ccb8 -> 0x001bc15e
     s_TexLocked          = Mortar::TextureManager::LoadLocalisedTexture("locked.tex");
     // Slot +0x18: select_item.tex     DAT_0015ccbc -> 0x001bc169
@@ -235,8 +239,11 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_AnimFrame(0)
     , m_State(0)
 {
-    // Binary: call LoadContent if guard not set
-    LoadContent();
+    // v1.6.1 ShopScreen::ShopScreen @0x001b3f94, 0x001b3fbc-0x001b3fd4: LoadContent is
+    // gated at the ctor call site (`if (s_bContentLoaded=='\0') LoadContent();`), not
+    // inside LoadContent() itself -- LoadContent has no internal guard, so calling it
+    // unconditionally here reloaded/decoded all 10 textures on every shop entry.
+    if (!s_bContentLoaded) LoadContent();
 
     // Binary: field_0x34 (m_LayerFlags from HUDControl base) = 0x80
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
@@ -269,14 +276,16 @@ ShopScreen::~ShopScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::Init (vtable slot 2, called by DojoScreen after AddControl)
+// ShopScreen::Init @ 0x001b42ac (vtable slot 2, called by DojoScreen after AddControl)
 // Binary: (**(code**)(*(int*)shop + 8))(shop)
-// HUDControl3d::Init sets m_Active = 1 typically. No symbol in binary
-// for ShopScreen::Init — inherited or trivial override.
+// Real v1.6.1 address confirmed via the sibling ShopScreen::DrawOrder match at
+// 0x001b4e48 (same 0x1b4xxx family) -- the header's older 0x0015f7ac/0x0015cdac
+// addresses were stale v1.5.x. Body is the CreateShopList per-item population loop
+// (0x001b4394-0x001b44d8): SetWidth/SetHeight/SetItemHeight, then per ItemInfo from
+// GetFirst/GetNext: ctor -> Create -> click-callback wiring -> equip-slot cache ->
+// AddItem, then last-item new-badge + first-item auto-select after the loop.
 // ---------------------------------------------------------------------------
 void ShopScreen::Init() {
-    // Binary: InitVec3_ShopScreen @ 0x00153f20 sets a global Vec3 to (0,0,0)
-    // Binary: ZeroInit_ShopScreen @ 0x00154460 zeros a global scroll var
     // Port: create the shop list here since the binary's Init populates it.
     CreateShopList();
 }
@@ -338,13 +347,18 @@ void ShopScreen::CreateShopList() {
     // pre-populated from items.xml at init time. Port creates a local one.
     m_pShopList = new ScrollingMenu();
 
-    // Binary ShopScreen::Init (0x0015f7ac) makes THREE setter calls in order:
-    //   @ 0x0015f7fc: vtable[+0x50](290.0f) -- SetWidth(290)     writes +0xa4 (m_ItemHeight) + 4 derived region fields
-    //   @ 0x0015f810: vtable[+0x4c](80.0f)  -- SetHeight(80)     writes +0xa0 (m_Height) = scroll-boundary field
-    //   @ 0x0015f828: vtable[+0x54](80.0f)  -- SetItemHeight(80) writes +0x9c (m_Width)
+    // v1.6.1 ShopScreen::Init @0x001b42ac makes THREE setter calls in order:
+    //   vtable[+0x50](290.0f) -- SetWidth(290)     writes +0xa4 (m_ItemHeight) + 4 derived region fields
+    //   vtable[+0x4c](80.0f)  -- SetHeight(80)     writes +0xa0 (m_Height) = scroll-boundary field
+    //   vtable[+0x54](80.0f)  -- SetItemHeight(80) writes +0x9c (m_Width)
     // Port field names (m_Width/m_Height/m_ItemHeight) are name-swapped vs binary semantics
     // -- preserved to avoid mangled-symbol drift.
-    // ASM-verified: 2026-06-06 v1.6.1 binary @ 0x0015f7fc (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
+    // TODO: v1.6.1 0x001b42ac (ShopScreen::Init) -- the previously ASM-verified sub-offsets
+    // (0x0015f7fc/0x0015f810/0x0015f828) predate the discovery that Init actually lives at
+    // 0x001b42ac (same 0x1b4xxx family as DrawOrder@0x001b4e48); the SetWidth/SetHeight/
+    // SetItemHeight *call order and values* are still correct (re-confirmed against the
+    // 0x001b4394-0x001b44d8 disasm range for this task) but the individual sub-addresses
+    // above need re-stamping to their real 0x1b4xxx equivalents -- flag for re-analyst.
     m_pShopList->SetWidth(290.0f);
     m_pShopList->SetHeight(80.0f);
     m_pShopList->SetItemHeight(80.0f);
@@ -359,18 +373,20 @@ void ShopScreen::CreateShopList() {
     m_pShopList->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Populate from ItemManager
-    // Binary (ShopScreen::Init @ 0x0015f7ac): for each ItemInfo from GetFirst/GetNext:
-    //   operator_new(0x284) -> ShopListItem::ShopListItem() -> ShopListItem::Create(item, screen)
-    //   -> ScrollingMenu::AddItem()
+    // v1.6.1 ShopScreen::Init @0x001b42ac, 0x001b4394-0x001b44d8: for each ItemInfo from
+    // GetFirst/GetNext: operator_new(0x284) -> ShopListItem::ShopListItem() ->
+    // ShopListItem::Create(item, screen) -> click-callback wiring -> equip-slot cache ->
+    // ScrollingMenu::AddItem().
     // ShopListItem::Create sets m_ParamWidth (+0x24) = 80.0f (DAT_0015cae8),
     // which is what GetHeight() returns, giving each row a pitch of 80 units.
-    // TODO: Init zebra-stripe m_Colour.b toggle -- see tmp/re-shopscreen.md Init body
-    // Binary Init @ 0x0015f820: bVar11 starts = 1, toggles (^= 1) per row.
-    // Written to ShopListItem::m_Colour.b. Exact byte position within the
-    // packed unsigned int m_Colour (ScrollingMenuItem +0x14) not confirmed
-    // from ShopListItem RE -- dispatch re-analyst on ShopListItem::Create to verify.
+    // TODO: v1.6.1 0x001b42ac (ShopScreen::Init) -- zebra-stripe m_Colour.b toggle
+    // (bVar11 starts = 1, toggles (^= 1) per row, written to ShopListItem::m_Colour.b).
+    // Exact byte position within the packed unsigned int m_Colour (ScrollingMenuItem +0x14)
+    // not confirmed from ShopListItem RE -- dispatch re-analyst on ShopListItem::Create to verify.
 
     ItemManager* im = ItemManager::GetInstance();
+    ShopListItem* firstRow = nullptr;
+    ShopListItem* lastRow  = nullptr;
     if (im) {
         std::vector<ItemInfo*>::iterator it;
         for (ItemInfo* info = im->GetFirst(it); info != nullptr; info = im->GetNext(it)) {
@@ -378,9 +394,46 @@ void ShopScreen::CreateShopList() {
             // Binary: ShopListItem::Create(row, info, this) called immediately after ctor.
             // This sets GetHeight() = 80.0f (row pitch = 160 units per item).
             row->Create(info, this);
+
+            // v1.6.1 ShopScreen::Init @0x001b42ac, 0x1b43e0-0x1b4424: wire the per-row
+            // tap-release click callback. Without this, ScrollingMenu::Update's
+            // CallClickedMenuItemCallback() fires into an empty delegate and
+            // ShopScreen::ClickedOnShopItem is dead code.
+            row->SetClickedFocusedCallback(
+                Mortar::Delegate1<void, ScrollingMenuItem*>::QCallee(this, &ShopScreen::ClickedOnShopItem));
+
+            // v1.6.1 ShopScreen::Init @0x001b42ac, 0x1b4460-0x1b447c: pre-populate the
+            // per-slot equipped-item cache so the first equip/confirm this session sees
+            // the real already-equipped row instead of nullptr.
+            if (im->IsEquipped(info) && (int)info->m_Type < 4) {
+                m_pSlotItems[(int)info->m_Type] = row;
+            }
+
+            if (!firstRow) firstRow = row;
+            lastRow = row;
+
             m_pShopList->AddItem(row);
         }
     }
+
+    // v1.6.1 ShopScreen::Init @0x001b42ac, 0x1b4510-0x1b4514: unconditionally mark the
+    // last-created row as "new" (drives ShopListItem::DrawDarkness's loading.tex badge).
+    if (lastRow) {
+        lastRow->m_bIsNew = true;
+    }
+
+    // v1.6.1 ShopScreen::Init @0x001b42ac, 0x1b4498-0x1b44b0: select the first row on
+    // the first loop iteration.
+    if (firstRow) {
+        SetSelected(firstRow);
+        firstRow->m_bSelected = true;
+    }
+
+    // TODO: v1.6.1 0x001b42ac (ShopScreen::Init) -- onscreen-flag alternation
+    // (m_bOnscreenItem toggling 1/0/1/0.. per row) and the post-loop auto-scroll-to-
+    // first-unowned-item kick (ShopScreen::ScrollOffset static + m_pShopList->m_Velocity.y)
+    // are gated behind ScrollingMenu being a stub with no real scroll physics; port once
+    // ScrollingMenu gets real scroll physics.
 
     if (game_work.mHud) {
         game_work.mHud->AddControl(m_pShopList);

@@ -156,8 +156,13 @@ public:
     // m_Size from global default Vec3, m_Colour from global white singleton.
     ScrollingMenuItem(float, float, const char*, Mortar::Delegate1<void, ScrollingMenuItem*>);
 
-    // CallClickedMenuItemCallback -- fires m_Callback
+    // CallClickedMenuItemCallback -- fires m_Delegate
     void CallClickedMenuItemCallback();
+
+    // SetClickedFocusedCallback -- installs the tap-release callback (m_Delegate, +0x30).
+    // v1.6.1 ShopScreen::Init @0x001b42ac calls this per-row (0x1b43e0-0x1b4424) with a
+    // Delegate1<void,ScrollingMenuItem*>::QCallee<ShopScreen>(this, ClickedOnShopItem).
+    void SetClickedFocusedCallback(Mortar::Delegate1<void, ScrollingMenuItem*> callback);
 
     // --- Position (set by Move, read by Draw) ---
     // +0x04..+0x0F
