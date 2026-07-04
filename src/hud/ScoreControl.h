@@ -49,6 +49,7 @@ public:
     float    m_DrawPosZ;           // cached draw Z (always 0)
 
     // +0xA0
+    // Defunct: unused +0xA0/+0xA4 SmartPtr<Texture>; v1.6.1 ScoreControl::ScoreControl @ 0x001ad5fc default-constructs only, never loaded/read (re-analyst)
     Mortar::SmartPtr<Mortar::Texture> m_ScoreIconTex;       // score.tex
     Mortar::SmartPtr<Mortar::Texture> m_HighscoreBannerTex; // new_best_score.tex
     float    m_BannerScaleTime;    // banner scale anim timer; -2.0 = inactive sentinel

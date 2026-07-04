@@ -118,14 +118,14 @@ ScoreControl::ScoreControl()
 
     // Load hud_fruit.tex into m_FruitDigitTex (+0xF8)
     m_FruitDigitTex = TextureManager::LoadLocalisedTexture("hud_fruit.tex");
-    // Load score.tex into m_ScoreIconTex (+0xA0) — the "SCORE" wordmark that
-    // appears above the digits during game-over (PreDraw Section D quad).
-    // Load new_best_score.tex into m_HighscoreBannerTex (+0xA4) — the "NEW
-    // BEST!" banner shown when the run beats the saved highscore (Section E).
-    // Earlier port only loaded hud_fruit.tex, so Section D/E quads were
-    // gated out by IsValid() and the SCORE wordmark never rendered.
-    m_ScoreIconTex        = TextureManager::LoadLocalisedTexture("score.tex");
-    m_HighscoreBannerTex  = TextureManager::LoadLocalisedTexture("new_best_score.tex");
+    // m_ScoreIconTex (+0xA0) / m_HighscoreBannerTex (+0xA4) are left
+    // default-constructed null SmartPtrs here, matching the binary: the ctor
+    // @0x001ad5fc only issues ONE LoadLocalisedTexture call (feeding
+    // m_FruitDigitTex); it never loads score.tex/new_best_score.tex. Those
+    // fields are unread anywhere (PreDraw/Draw/Update) -- the "SCORE"
+    // wordmark is drawn via m_pScoreBox (BakedStringBox) and the "NEW BEST"
+    // banner via IngamePopup::Draw(popup 0x0F), both already correct below
+    // in PreDraw Section D/E.
 
     for (int i = 0; i < 16; i++) m_DigitAlpha[i] = 0.0f;
 
