@@ -1446,10 +1446,11 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             g_ComboFruitType = (int)m_FruitType;
         }
         g_ComboCount += 1;
-        // TODO: v1.6.1 Fruit::CollisionResponse — RE whether the binary calls
-        // AchievementManager::UnlockConsecutiveAchievement(g_ComboCount, nameHash) here.
-        // Removed an unverified (implementer-inferred) call site; needs re-analyst confirmation
-        // of the exact call + args against @0x001dd500 before re-adding.
+        // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: unconditional call
+        // (not gated on hitter) right after the combo increment. arg1 = post-increment
+        // g_ComboCount, arg2 = info->m_NameHash (FruitInfo+0x250, same hash passed to
+        // UnlockSpecificOrderAchievement below).
+        AchievementManager::GetInstance()->UnlockConsecutiveAchievement(g_ComboCount, info->m_NameHash);
         }
 
         // ASM-verified: 2026-07-04 v1.6.1 Fruit::CollisionResponse @0x001dd500 (call at
