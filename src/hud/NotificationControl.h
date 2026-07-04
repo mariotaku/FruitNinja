@@ -41,9 +41,12 @@ public:
     char    m_PointsText[4]; // +0x108
     uint8_t m_NotifType;     // +0x10C
     uint8_t _pad[3];         // +0x10D..+0x10F
-    // +0x110: owned BakedStringBox* (ctor operator-new(0x18), ctor @0x001a3c60, init @0x0011551c;
-    //   str r7,[r4,#0x110] @0x001a4640). Ghidra name: m_pBakedString.
-    // TODO: v1.6.1 0x001a4428 (NotificationControl::NotificationControl) — confirm +0x110 sub-object type (size 0x18 doesn't match BakedStringBox(0xc8)); may be a different BakedString variant.
+    // +0x110: owned BakedStringBox* — v1.6.1 NotificationControl::NotificationControl
+    // @0x001a4178/0x001a4428: operator_new(0xc8)=200B matches BakedStringBox's own
+    // sizeof(200) exactly (ctor @0x001a3c60 == BakedStringBox ctor thunk; init
+    // @0x0011551c; str r7,[r4,#0x110] @0x001a4640). 0x18=24 in the ctor call is the
+    // BakedStringBox `height` constructor argument, not an allocation size.
+    // Owns the TTF-rendered name-text label drawn in Draw(); freed in ~NotificationControl().
     Mortar::BakedStringBox* m_pBakedString;  // +0x110
 
     // ---- HUDControl3d lifecycle overrides ----

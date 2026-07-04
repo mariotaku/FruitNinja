@@ -72,8 +72,8 @@ enum HUDLayer : uint32_t {
     //   FPSCounter, ScrollingMenu, ScrollingMenuItem.
     HUD_LAYER_DEFAULT     = 0x0001,
 
-    // 0x08 — buttons / pause / notifications / tutorial.
-    // Writers: NotificationControl, PauseScreen, TutorialControl.
+    // 0x08 — buttons / pause / tutorial.
+    // Writers: PauseScreen, TutorialControl.
     HUD_LAYER_BUTTONS     = 0x0008,
 
     // 0x100 — multiplayer P1 (right-side) score.
@@ -85,7 +85,7 @@ enum HUDLayer : uint32_t {
     HUD_LAYER_SLIDER      = 0x0200,
 
     // 0x400 — screen fade + modal scrollers (drawn LAST, on top of all).
-    // Writers: ScreenFadeControl, ListBox, VerticalScroller.
+    // Writers: ScreenFadeControl, ListBox, VerticalScroller, NotificationControl.
     HUD_LAYER_FADE_MODAL  = 0x0400,
 
     // 0x800 — top-most overlay; maps to drawOrder="top_most" in effect XML
