@@ -20,7 +20,9 @@ typedef int (*ScoreDelegateFn)(int);
 // binary @ 0x001fa388 (StackAllocatedPointer<BaseDelegate,32>)
 extern ScoreDelegateFn g_ScoreDelegate;
 
-// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c
+// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c: applies the PowerUpManager gain/loss
+// multiplier only when game_work.gameMode == Mortar::GAME_MODE_ARCADE; all other modes
+// return n unchanged.
 int DefaultScoreDelegate(int n);
 
 // ASM-spec v1.6.1 SetScoreDelegate @ 0x0011a440: installs Callee<ScoreModifier> trampoline
