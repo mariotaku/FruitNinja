@@ -1466,9 +1466,15 @@ void ShopScreen::BuyButtonCallback() {
     mgr->SetEquippedItem((ItemType)type, info);
 }
 
-// Binary @ 0x0015c758 (re-analyst 2026-05-18). Commits the in-flight
-// selection to the per-type slot cache and transitions to state 5 (exit
-// confirm sub-screen). Repositions tutorial ninja off-screen.
+// v1.6.1 ShopScreen::ConfirmCallback @0x001b2388 (stale comment previously
+// cited 0x0015c758). Commits the in-flight selection to the per-type slot
+// cache and transitions to state 5 (exit confirm sub-screen). Binary gates
+// the fling/tutorial-reposition block on m_pBuyButton->m_pTrackedFruit
+// (+0x14C), not unconditionally on m_TutorialControl: it flings the buy
+// button's tracked fruit (same formula as QuitShopCallback) and only then
+// calls the MenuButton* overload of ResetTutePos(nullptr) to hide the
+// tutorial arrow. If there's no tracked fruit, ResetTutePos is not called
+// at all.
 void ShopScreen::ConfirmCallback() {
     ShopListItem* sel = m_pSelectedItem;
     if (sel && sel->m_pItemInfo) {
@@ -1476,15 +1482,28 @@ void ShopScreen::ConfirmCallback() {
         if (type >= 0 && type < 4) m_pSlotItems[type] = sel;
     }
     m_State = 5;
-    if (game_work.m_TutorialControl) {
-        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
-        float ry = -((float)(rand() % 500) / 100.0f);
-        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
+
+    // TODO: v1.6.1 0x001b2388 (ShopScreen::ConfirmCallback) -- Entity+0x80 flag
+    // byte set to 1 on the tracked fruit; no known reader (same undocumented
+    // flag QuitShopCallback also writes and skips).
+    if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
+        Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
+        float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        fruit->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        if (game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
+        }
     }
 }
 
 // Binary @ 0x0015c7f0 (re-analyst 2026-05-18). Skip the slot-commit;
 // transition to state 6. Same tutorial-ninja reposition as Confirm.
+// TODO: v1.6.1 0x0015c7f0 (ShopScreen::CancelCallback) -- unverified: may
+// share ConfirmCallback's bug (wrong ResetTutePos overload / missing
+// buy-button fruit fling, see asm-verify report b9__ZN10ShopScreen15Confi).
+// Needs its own re-analyst pass against the real v1.6.1 address before
+// changing; do not assume identical.
 void ShopScreen::CancelCallback() {
     m_State = 6;
     if (game_work.m_TutorialControl) {
