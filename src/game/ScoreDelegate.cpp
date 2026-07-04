@@ -3,12 +3,14 @@
 #include "ScoreDelegate.h"
 #include "ScoreModifier.h"
 #include "PowerUpManager.h"
+#include "game/GameWork.h"
+#include "game/GameMode.h"
 
-// TODO: read game-state byte at GameTaskState+0x4 (current state-machine slot).
-// == 2 means "playing". Binary gates the gain/loss multiply on play-state; port applies unconditionally.
-
-// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c: gates multiply on game-state==2; port applies unconditionally (TODO above).
+// ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c: gates the PowerUpManager gain/loss multiply
+// on GameWork::gameMode==GAME_MODE_ARCADE(2) (ldrb r3,[r3,#0x4]; cmp #2; bne -> return n unmodified).
+// All other modes pass n through unchanged.
 int DefaultScoreDelegate(int n) {
+    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) return n;
     if (n > 0)  return n * PowerUpManager::GetInstance()->GetScoreGainMultiplier();
     if (n <= 0) return n * PowerUpManager::GetInstance()->GetScoreLossMultiplier();
     return n;
