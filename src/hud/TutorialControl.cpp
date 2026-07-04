@@ -125,8 +125,10 @@ bool TutorialControl::CanShowTute() {
 // ===================================================================
 void TutorialControl::ResetTutePos(MenuButton* btn) {
     if (btn) {
-        // Copy button position
-        pos = btn->pos;
+        // Binary reads pos through vtable slot 15 = HUDControl::GetAdjustedPos()
+        // (pos + Vec3(480,320,0)*m_HudScale @0x00136c2c), not raw pos -- anchors
+        // to the animated (slide-in/out) position, not the rest position.
+        pos = btn->GetAdjustedPos();
 
         // halfWidth = btn->m_RestScale.x - btn->m_HitInsetX * 2.0 - 10.0
         // ASM-spec v1.6.1 TutorialControl::ResetTutePos @ 0x001c2658: reads MenuButton+0x168 (m_HitInsetX)
