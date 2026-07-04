@@ -88,12 +88,30 @@ NotificationControl::NotificationControl(const char* name, int points,
         }
     }
 
-    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // v1.6.1 NotificationControl::NotificationControl @0x001a4178/0x001a4428:
+    // operator_new(0xc8)=200B == sizeof(BakedStringBox); allocates the TTF label
+    // used for the name text in Draw() (replaces the bitmap Font::DrawString path).
+    m_pBakedString = new Mortar::BakedStringBox(
+        game_work.m_pTTFFontMain, 10.0f, 145, 24, (Mortar::ALIGNMENT_TYPE)0xf, 2, 3);
+    m_pBakedString->SetText(m_DisplayName);
+    m_pBakedString->SetHorizontalLineSpacing(-1);
+    // TODO verify alpha: T_851's alpha channel for this Colour(50,50,50,?) wasn't
+    // isolated in the RE pass; using 255 (opaque) to match every other
+    // Colour(50,50,50,255) use in this file's Draw().
+    m_pBakedString->SetColour(Colour(50, 50, 50, 255), false);
+
+    // v1.6.1 NotificationControl::NotificationControl @0x001a4178/0x001a4428:
+    // mov r3,#0x400; str r3,[r4,#0x34] -- HUDControl::m_LayerFlags = HUD_LAYER_FADE_MODAL.
+    m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;
     // Binary ctor @0x001a4428 does not write pos at all -- Update() (@0x001a3c7c)
     // always runs before the first Draw() and sets pos unconditionally.
 }
 
-NotificationControl::~NotificationControl() {}
+// v1.6.1 ~NotificationControl @0x001a4764: ~BakedStringBox() then operator_delete, then null.
+NotificationControl::~NotificationControl() {
+    delete m_pBakedString;
+    m_pBakedString = nullptr;
+}
 
 // v1.6.1 NotificationControl::Update @0x001a3c7c
 // 4-phase state machine, animates pos.y only (pos.x pinned at NOTIF_X):
@@ -201,13 +219,11 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             }
         }
 
-        // Name text
-        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
-        if (game_work.pFontMain.IsValid()) {
-            Colour col(50, 50, 50, 255);
-            Vec3 textPos(pos.x + 18.0f, pos.y, pos.z);
-            game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
-                m_DisplayName, textPos, col, 0x0C);
+        // Name text -- TTF BakedStringBox path (replaces bitmap Font::DrawString).
+        // v1.6.1 NotificationControl::Draw @0x001a4860
+        if (m_pBakedString) {
+            m_pBakedString->SetTranslation(Vec3(pos.x + 18.0f + 71.0f, pos.y + 1.0f, 0.0f), true);
+            m_pBakedString->Draw(Vec2(1.0f, 1.0f), 0.0f, true);
         }
 
         // Points text (right-aligned)
@@ -259,13 +275,11 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             }
         }
 
-        // Name text only (no points text for named type)
-        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
-        if (game_work.pFontMain.IsValid()) {
-            Colour col(50, 50, 50, 255);
-            Vec3 textPos(pos.x + 18.0f, pos.y + 16.0f, pos.z);
-            game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
-                m_DisplayName, textPos, col, 0x0C);
+        // Name text only (no points text for named type) -- TTF BakedStringBox path.
+        // v1.6.1 NotificationControl::Draw @0x001a4860
+        if (m_pBakedString) {
+            m_pBakedString->SetTranslation(Vec3(pos.x + 18.0f + 73.0f, pos.y + 17.0f, 0.0f), true);
+            m_pBakedString->Draw(Vec2(1.0f, 1.0f), 0.0f, true);
         }
     }
 }
