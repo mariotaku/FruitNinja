@@ -98,6 +98,17 @@ MissControl::MissControl()
     // both routes end with m_bNoDestructor == 1 before the first Update tick).
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
     m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
+    // v1.6.1 MissControl::MissControl @0x0019ed44: mov r3,#1; strb r3,[r5,#0x4]
+    // (HUDControl::m_Singular, +0x4). Without this every MissControl is swept
+    // by HUDControl::SetToMultiplayerState() on Game::TellGameToStart.
+    m_Singular      = 1;
+    // TODO: v1.6.1 0x0019ed44 (MissControl::MissControl) -- ctor should call
+    // the real Init() (vtable slot 4, thunk @0x00102a38 -> 0x00150fa4) right
+    // after the shared-texture lazy-load block, then override m_Active back
+    // to 0, like the binary does. Currently masked: every activation site
+    // (MakeCritical/MakeRare/MakeCombo/MakeDisappear here, and the 3-widget
+    // setup in src/game/GameInit.cpp) individually sets the fields Init()
+    // would set. Init() itself has zero live call sites in src/ today.
 }
 
 MissControl::~MissControl() = default;
