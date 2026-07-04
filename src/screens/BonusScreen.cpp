@@ -6,8 +6,10 @@
 #include "BonusScreen.h"
 #include "hud/HUD.h"
 #include "Game.h"
+#include "game/GameWork.h"
 #include "engine/audio/MortarSound.h"
 #include "engine/audio/SoundManager.h"
+#include "engine/audio/GameSound.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Mesh.h"
 #include "engine/math/MathUtil.h"
@@ -37,18 +39,20 @@ static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
 }
 
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
-// TODO: resolve phase-timer rodata @ DAT_00162cdc (v1.6.1 BonusScreen::Update @0x00163dd0)
+// REVEAL_END / FINALE_HOLD / DISMISS_BUFFER removed: superseded by the memory-verified
+// revealEnd formula and m_bPendingRemoval latch below (v1.6.1 BonusScreen::Update @0x00163dd0).
+// TODO: resolve phase-timer rodata @ DAT_00162cdc for the remaining two (PRE_OFFSET slide-in,
+// AWARD_SPACING per-award stagger -- v1.6.1 BonusScreen::Update @0x00163dd0)
 static const float PRE_OFFSET     = 1.0f;
 static const float AWARD_SPACING  = 0.5f;
-static const float REVEAL_END     = 1.0f;
-static const float FINALE_HOLD    = 0.5f;
-static const float DISMISS_BUFFER = 0.5f;
 
 // SET_DEFINES globals — set on every BonusScreen::Update by SET_DEFINES() @ 0x00162090.
 // Non-const so SET_DEFINES can write them; initial values match what SET_DEFINES writes.
-static float TRANSITION_IN_TIME  = 0.333333f;  // was 1.0f (WRONG); binary = 0x3eaa7efa (~1/3)
+// Values memory-verified 2026-07-04 against the resolved tuning struct @0x002d8c3c
+// (v1.6.1 BonusScreen::Update @0x00163dd0, re-analyst batch1 spec).
+static float TRANSITION_IN_TIME  = 0.333333f;  // 0x3eaa7efa (~1/3)
 static float TRANSITION_OUT_TIME = 0.25f;       // 0x3e800000
-static float TIME_PER_AWARD      = 1.0f;        // 0x3f800000
+static float TIME_PER_AWARD      = 0.6f;        // 0x3f19999a -- was WRONG 1.0f (0x3f800000)
 static float FIRST_AWARD         = 0.666667f;   // 0x3f2a7efa (~2/3)
 static float TOTAL_TIME          = 7.0f;        // 0x40e00000
 static float AWARD_Y_DIF         = -42.0f;      // 0xc2280000
@@ -61,7 +65,7 @@ static float TOTAL_POS_Z         = 0.0f;        // DAT_003144bc
 static void SET_DEFINES() {
     TRANSITION_IN_TIME  = 0.333333f;
     TRANSITION_OUT_TIME = 0.25f;
-    TIME_PER_AWARD      = 1.0f;
+    TIME_PER_AWARD      = 0.6f;
     FIRST_AWARD         = 0.666667f;
     TOTAL_TIME          = 7.0f;
     AWARD_Y_DIF         = -42.0f;
@@ -344,15 +348,64 @@ void BonusScreen::Update(float dt) {
         // TODO: resolve exact slide-in math from binary v1.6.1 BonusScreen::Update @0x00163dd0
         m_AnimPos.y = m_Timer * PRE_OFFSET;
 
-        // Start rush SFX once.
-        // TODO: SoundManager::PreLoadSound / play "BonusRush" into m_RushLoopSFX
+        // NOTE: binary's rush-loop SFX start/stop gate (m_RushLoopSFX, "Bonus-drum-roll")
+        // requires m_Timer>0, so it never fires during this slide-in phase -- it is
+        // implemented below (after the revealEnd computation), not here.
         return;
     }
 
     // -----------------------------------------------------------------------
-    // Phase B: per-award reveal (0 <= timer < REVEAL_END + awards * AWARD_SPACING)
+    // Reveal-end threshold (binary @0x00163e00-0163e24).
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163e00: revealEnd = FIRST_AWARD +
+    //   TIME_PER_AWARD * ((float)m_Awards.size() + 0.25f). Memory-verified against
+    //   the tuning struct @0x002d8c3c and the immediate 0.25f encoded at 0x00163e14
+    //   (was WRONG in the port: REVEAL_END + (count-1)*AWARD_SPACING).
     // -----------------------------------------------------------------------
-    float revealEnd = REVEAL_END + (float)(m_Awards.size() > 0 ? (int)m_Awards.size() - 1 : 0) * AWARD_SPACING;
+    float revealEnd = FIRST_AWARD + TIME_PER_AWARD * ((float)m_Awards.size() + 0.25f);
+
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163e28-0163e3c: sets HUDControl's
+    // inherited m_bPendingRemoval (+0x33) once m_Timer passes TOTAL_TIME+TRANSITION_OUT_TIME.
+    // NOTE: the batch1 re-analyst spec called this "field_0x33, new field needed" --
+    // that claim was stale/wrong against the port: BonusScreen already inherits
+    // m_bPendingRemoval at exactly +0x33 from HUDControl (see HUDControl.h). No new
+    // field needed. Binary uses a conditional store (strbgt) -- only ever sets it to
+    // true, never clears it here, matching a plain `if` with no `else`. This replaces
+    // the old dismissAt (finaleStart+FINALE_HOLD+DISMISS_BUFFER) guess below.
+    if (m_Timer > TOTAL_TIME + TRANSITION_OUT_TIME) {
+        m_bPendingRemoval = 1;
+    }
+
+    // -----------------------------------------------------------------------
+    // Rush-loop SFX start gate (binary @0x00163e40-0163ef8).
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163e40: while m_RushLoopSFX(+0xb4)==
+    //   nullptr and 0<m_Timer<revealEnd, starts "Bonus-drum-roll" (rodata 0x00281e62 --
+    //   memory-verified, same sound preloaded in the ctor via PreLoadSoundEx) through
+    //   GameSound::SFXPlay(name, vol, gain, finishCallback, pitch) @0x0010b4c8, storing
+    //   the result into m_RushLoopSFX. Binary passes vol=0.0f, gain=1.0f, pitch=0.0f
+    //   (memory-verified literal @0x0016426c == 0.0f, shared by both args), then
+    //   immediately calls MortarSound::SetVolume(0.0f) @0x001108c4 on the freshly
+    //   returned sound -- ported verbatim even though it appears to silence the loop
+    //   immediately after starting it.
+    // -----------------------------------------------------------------------
+    if (m_RushLoopSFX == 0 && m_Timer > 0.0f && m_Timer < revealEnd) {
+        Game* game = Game::GetInstance();
+        if (game && game_work.mGameSound) {
+            // TODO: v1.6.1 0x00162a74 (T.1223) -- binary builds a BaseDelegate thunk here
+            // and wraps it into the Delegate1 finishCallback below (likely a loop-restart
+            // callback consumed by GameSound::Update's finishCallback dispatch); needs a
+            // follow-up RE pass to name/port it. Passing a no-op delegate until then.
+            m_RushLoopSFX = game_work.mGameSound->SFXPlay(
+                "Bonus-drum-roll", 0.0f, 1.0f,
+                Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+            if (m_RushLoopSFX) {
+                m_RushLoopSFX->SetVolume(0.0f);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase B: per-award reveal (0 <= timer < revealEnd)
+    // -----------------------------------------------------------------------
     if (m_Timer < revealEnd) {
         int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
@@ -391,7 +444,22 @@ void BonusScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Phase C: finale one-shot (timer >= REVEAL_END + ..., only once)
+    // Rush-loop SFX stop gate (binary @0x00164154-0164188): fires once m_Timer has
+    // left the reveal window (m_Timer >= revealEnd, guaranteed by control flow here
+    // since Phase B returned above otherwise).
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00164160: GameSound::Release(mGameSound,
+    //   m_RushLoopSFX, "Bonus-drum-roll") @0x0010dd00, then m_RushLoopSFX = nullptr.
+    // -----------------------------------------------------------------------
+    if (m_RushLoopSFX != 0) {
+        Game* game = Game::GetInstance();
+        if (game && game_work.mGameSound) {
+            game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
+        }
+        m_RushLoopSFX = 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase C: finale one-shot (timer >= revealEnd, only once)
     // -----------------------------------------------------------------------
     float finaleStart = revealEnd;
     if (m_Timer >= finaleStart && !m_FinaleFired) {
@@ -409,12 +477,11 @@ void BonusScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Phase D: dismiss (timer past finale + hold + buffer)
+    // Phase D: dismiss -- superseded by the m_bPendingRemoval latch computed
+    // earlier (TOTAL_TIME+TRANSITION_OUT_TIME threshold, ASM-spec above). The old
+    // dismissAt=finaleStart+FINALE_HOLD+DISMISS_BUFFER formula used unresolved
+    // placeholder constants and has been removed.
     // -----------------------------------------------------------------------
-    float dismissAt = finaleStart + FINALE_HOLD + DISMISS_BUFFER;
-    if (m_Timer >= dismissAt) {
-        m_bPendingRemoval = 1;
-    }
 
     // -----------------------------------------------------------------------
     // Shake update (independent of phase)
