@@ -37,7 +37,12 @@ ScrollingMenuItem::ScrollingMenuItem()
     pos.z = 0.0f;
 }
 
+// ASM-verified: 2026-07-04T00:00Z v1.6.1 ScrollingMenuItem::~ScrollingMenuItem @ 0x001b1488 (asm-inspector)
 ScrollingMenuItem::~ScrollingMenuItem() {
+    if (m_pText != nullptr) {
+        delete[] m_pText;
+        m_pText = nullptr;
+    }
     // m_Delegate destroyed automatically.
 }
 
@@ -49,8 +54,17 @@ void ScrollingMenuItem::SetParent(ScrollingMenu* parent) {
     m_pParent = parent;
 }
 
+// ASM-verified: 2026-07-04T00:00Z v1.6.1 ScrollingMenuItem::SetText @ 0x001afb14 (asm-inspector)
 void ScrollingMenuItem::SetText(const char* text) {
-    m_pText = text;
+    if (m_pText != nullptr) {
+        delete[] m_pText;
+        m_pText = nullptr;
+    }
+    if (text != nullptr) {
+        char* buf = new char[strlen(text) + 1];
+        strcpy(buf, text);
+        m_pText = buf;
+    }
 }
 
 // Binary @ 0x001afd40 -- ScrollingMenuItem::Draw (v1.6.1 vtable slot 12, +0x30).
