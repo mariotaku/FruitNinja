@@ -162,7 +162,7 @@ BonusScreen::~BonusScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// AddAward -- TODO: re-verify v1.6.1 addr (prior 0x00133664 stale v1.5.x)
+// AddAward -- v1.6.1 BonusScreen::AddAward @ 0x00163234
 // ---------------------------------------------------------------------------
 
 void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
@@ -176,7 +176,8 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
     entry.m_TierBase       = tier;
     entry.m_DisplayedScore = 0;
     entry.m_Colour         = colour;
-    entry.m_Alpha          = 1.0f;
+    entry.m_Colour2        = colour;
+    entry.m_Alpha          = 0.0f;
     m_TotalScore          += tier;
     m_Awards.push_back(entry);
 }
