@@ -19,7 +19,6 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "util/SmartPtr.h"
-#include "util/MemoryPool.h"
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -125,7 +124,16 @@ static const uint8_t BASE_A = 255;
 // Pool + shared content
 // ---------------------------------------------------------------------
 
-static Mortar::MemoryPool<SplatEntity> s_Pool;
+// Binary flat pool (v1.6.1 SplatEntity::CreatePool @0x001eb490 / GetFree @0x001eb318).
+// Round-robin scan over m_bAlive; GetFree() never returns null once the pool
+// exists -- it steals the cursor slot (overwriting a live splat) when full.
+// Replaces the earlier Mortar::MemoryPool<SplatEntity> LIFO free-list, whose
+// Pop() returned nullptr on exhaustion and caused MakeSplat call sites to
+// silently drop splats under heavy slicing load.
+static SplatEntity* s_PoolBase   = nullptr;
+static int          s_PoolCount  = 0;
+static int          s_CurrentFree = 0;
+
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 
 static const int MAX_SPLATS_PER_FRAME = 128;
@@ -190,7 +198,7 @@ SplatEntity::SplatEntity()
     , m_bAlive(0)
 {
     // SplatEntity is NOT an Mortar::Entity subclass (binary @ 0x0017ed58 ctor).
-    // Pool managed by s_Pool; m_bAlive is the live/dead flag.
+    // Pool managed by s_PoolBase/s_PoolCount; m_bAlive is the live/dead flag.
     // Binary ctor only sets vptr, default-inits Colour, m_SplatType=-1, m_bAlive=0.
     // The pad fields are left uninitialised (not zeroed by the binary).
     pad1A[0] = 0; pad1A[1] = 0;
@@ -582,15 +590,26 @@ void PlaySplat(int splatSize) {
 // Pool / static ops
 // ---------------------------------------------------------------------
 
+// ASM-spec v1.6.1 SplatEntity::CreatePool @0x001eb490:
+//   if (s_PoolBase) delete[] s_PoolBase;   // runs dtors on the old array
+//   s_PoolBase = new SplatEntity[capacity];
+//   s_PoolCount = capacity;
+//   s_CurrentFree = 0;
 void SplatEntity::CreatePool(int capacity) {
-    s_Pool.Create(capacity);
+    if (s_PoolBase) delete[] s_PoolBase;
+    s_PoolBase = new SplatEntity[capacity];
+    s_PoolCount = capacity;
+    s_CurrentFree = 0;
 }
 
 // bool flag matching BSS+0x24 in the SplatEntity global block (v1.6.1 CleanUpSplat @0x001ec88c).
 static bool s_loadedSplat = false;
 
 void SplatEntity::DestroyPool() {
-    s_Pool.Destroy();
+    delete[] s_PoolBase;
+    s_PoolBase = nullptr;
+    s_PoolCount = 0;
+    s_CurrentFree = 0;
     s_SplatTex.SetNull();
 }
 
@@ -602,14 +621,16 @@ void SplatEntity::LoadContent() {
 }
 
 // ASM-spec v1.6.1 SplatEntity::CleanUp @ 0x001eb404 (note: stale 0x0017eee0 in header = v1.5.x).
-// Destroys the SplatEntity MemoryPool: calls dtors on live pool slots,
-// frees the backing allocation, nulls the pool pointer, zeroes poolCount.
-// The port wraps s_Pool.Destroy() which performs the same sequence.
+// Destroys the flat pool: dtors on all slots via delete[], frees the backing
+// allocation, nulls s_PoolBase, zeroes s_PoolCount/s_CurrentFree.
 // PORT BUG FIX: prior body incorrectly did s_SplatTex.SetNull() here;
 // texture nulling belongs in CleanUpSplat() (the binary never touches
 // textures inside SplatEntity::CleanUp).
 void SplatEntity::CleanUp() {
-    s_Pool.Destroy();
+    delete[] s_PoolBase;
+    s_PoolBase = nullptr;
+    s_PoolCount = 0;
+    s_CurrentFree = 0;
 }
 
 // ASM-spec v1.6.1 CleanUpSplat @ 0x001ec88c (capital U — DISTINCT from CleanupSplat).
@@ -628,11 +649,25 @@ void CleanUpSplat() {
 void CleanupSplat() {
 }
 
+// ASM-spec v1.6.1 SplatEntity::GetFree @0x001eb318:
+// Round-robin scan for a dead slot starting at s_CurrentFree. Never returns
+// null once CreatePool has run -- if every slot is alive (pool exhausted),
+// the scan lands back on its starting cursor and that slot is stolen
+// (overwritten) rather than returning nullptr.
 SplatEntity* SplatEntity::GetFree() {
-    SplatEntity* s = s_Pool.Pop();
-    if (!s) return 0;
-    s->m_bAlive = 0;
-    return s;
+    int idx = s_CurrentFree;
+    int tries = 0;
+    for (;;) {
+        if (!s_PoolBase[idx].m_bAlive) {
+            s_CurrentFree = idx;
+            return &s_PoolBase[idx];
+        }
+        if (tries >= s_PoolCount) break;
+        idx = (idx + 1) % s_PoolCount;
+        ++tries;
+    }
+    s_CurrentFree = idx;
+    return &s_PoolBase[idx];
 }
 
 // Cache populated by UpdateActiveSplats; NumActiveSplats returns this.
@@ -694,19 +729,18 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         else                  s_SpringRate = raw + 1.25f;
     }
 
-    // (d) Pool loop -- update each alive splat, push dead ones back,
-    //     write the new active count to s_NumActiveSplats LAST.
-    const int N = s_Pool.Capacity();
+    // (d) Pool loop -- update each alive splat; the flat pool has no
+    //     separate free list, so a dead slot just sits with m_bAlive=0
+    //     until GetFree's round-robin scan reuses it.
+    //     Write the new active count to s_NumActiveSplats LAST.
     int activeCount = 0;
-    for (int i = 0; i < N; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
+    for (int i = 0; i < s_PoolCount; ++i) {
+        SplatEntity* s = &s_PoolBase[i];
         if (!s->m_bAlive) continue;
 
         s->UpdateSplat(dt);
 
-        if (!s->m_bAlive) {
-            s_Pool.Push(s);
-        } else {
+        if (s->m_bAlive) {
             ++activeCount;
         }
     }
@@ -715,23 +749,17 @@ void SplatEntity::UpdateActiveSplats(float dt) {
 
 void SplatEntity::RemoveAllSplats() {
     // Binary @0x0017eea4: iterates ALL pool slots by raw stride 0x78,
-    // calls D1 dtor (no-op) on each. No m_bAlive check, no pool-return
-    // since the binary MemoryPool does not maintain a separate free list.
-    // Port: clear per-slot alive flag + bulk-reset the pool's free list
-    // to match the "all slots freed" semantics.
-    const int N = s_Pool.Capacity();
-    for (int i = 0; i < N; ++i) {
-        s_Pool.SlotAt(i)->m_bAlive = 0;
+    // calls D1 dtor (no-op) on each. No m_bAlive check needed -- the flat
+    // pool has no separate free list to reset.
+    for (int i = 0; i < s_PoolCount; ++i) {
+        s_PoolBase[i].m_bAlive = 0;
     }
-    s_Pool.Reset();
 }
 
 void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
     if (!fn) return;
-    const int N = s_Pool.Capacity();
-    for (int i = 0; i < N; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
-        if (s) fn(s, user);
+    for (int i = 0; i < s_PoolCount; ++i) {
+        fn(&s_PoolBase[i], user);
     }
 }
 
@@ -864,11 +892,9 @@ void SplatEntity::DrawActiveSplats() {
         s_CurrentTintRGB = &game_work.mHud->scales[3];
     }
 
-    const int N = s_Pool.Capacity();
-
-    for (int i = 0; i < N && s_NumActiveSplats < MAX_SPLATS_PER_FRAME; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->m_bAlive)     continue;
+    for (int i = 0; i < s_PoolCount && s_NumActiveSplats < MAX_SPLATS_PER_FRAME; ++i) {
+        SplatEntity* s = &s_PoolBase[i];
+        if (!s->m_bAlive)           continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
 
         s->DrawSplat();

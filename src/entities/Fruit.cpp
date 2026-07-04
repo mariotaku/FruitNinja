@@ -1582,8 +1582,9 @@ void Fruit::Slice() {
         SplatEntity* s = SplatEntity::GetFree();
         // Binary passes param3 = isCritical for crit splats (biases
         // MakeSplat's landing-type RNG toward types 4/5, the larger
-        // variants).
-        if (s) s->MakeSplat(pos, sv, isCritical, false, (long)m_FruitType);
+        // variants). GetFree() never returns null (v1.6.1 SplatEntity::GetFree
+        // @0x001eb318 -- flat round-robin pool steals the cursor slot when full).
+        s->MakeSplat(pos, sv, isCritical, false, (long)m_FruitType);
 
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00177070..0x001770f0 -- stale v1.5.x) -- per-splat post-MakeSplat taper.

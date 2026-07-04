@@ -1995,28 +1995,28 @@ void SlashEntity::Update(float dt) {
         float B = m_SplatInterval + Math::g_Random.RandF(1.0f) * 0.5f + 0.01f;
         m_SplatInterval = (B >= 0.03f) ? B : 0.03f;
         m_SplatTimer += m_SplatInterval;
+        // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
+        // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
-        if (s) {
-            // FruitInfo call (binary side-effect: looks up the template, may
-            // be used by splat to determine splat texture/colour).
-            if (m_SliceFruitType < 0x100) {
-                Fruit::FruitInfo(m_SliceFruitType);
-            }
-            // ASM-spec v1.6.1 SlashEntity::Update @0x001e97cc: splat world-pos =
-            // FruitCamera::TranslatePos(this->pos, inverse=true, useZeroCenter=true).
-            // this->pos is the live blade position (Entity +0x10), so splats trail the blade
-            // across the multi-frame spawn (NOT frozen at the fruit). Camera = game_work.m_FruitCamera.
-            Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(0.75f) + 0.75f),
-                   m_SliceBladeDir.y * (Math::g_Random.RandF(0.75f) + 0.75f),
-                   0.0f);
-            // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
-            FruitCamera* cam = game_work.m_FruitCamera;
-            Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
-            // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false)
-            //   and fruitType = FruitInfo[m_SliceFruitType].field_0x330 (not m_SliceFruitType directly).
-            //   landImmediately=false is correct here.
-            s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType);
+        // FruitInfo call (binary side-effect: looks up the template, may
+        // be used by splat to determine splat texture/colour).
+        if (m_SliceFruitType < 0x100) {
+            Fruit::FruitInfo(m_SliceFruitType);
         }
+        // ASM-spec v1.6.1 SlashEntity::Update @0x001e97cc: splat world-pos =
+        // FruitCamera::TranslatePos(this->pos, inverse=true, useZeroCenter=true).
+        // this->pos is the live blade position (Entity +0x10), so splats trail the blade
+        // across the multi-frame spawn (NOT frozen at the fruit). Camera = game_work.m_FruitCamera.
+        Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(0.75f) + 0.75f),
+               m_SliceBladeDir.y * (Math::g_Random.RandF(0.75f) + 0.75f),
+               0.0f);
+        // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
+        FruitCamera* cam = game_work.m_FruitCamera;
+        Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
+        // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false)
+        //   and fruitType = FruitInfo[m_SliceFruitType].field_0x330 (not m_SliceFruitType directly).
+        //   landImmediately=false is correct here.
+        s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType);
     }
 }
 

@@ -18,7 +18,9 @@
 // Analysed: 2026-05-04T00:00
 //
 // NOTE: SplatEntity is NOT an Mortar::Entity subclass (confirmed from ctor at
-// 0x0017ed58: does NOT call Mortar::Entity::Entity). Managed by s_Pool, NOT Mortar::ActorManager.
+// 0x0017ed58: does NOT call Mortar::Entity::Entity). Managed by a flat
+// round-robin pool (s_PoolBase/s_PoolCount/s_CurrentFree), NOT Mortar::ActorManager
+// and NOT Mortar::MemoryPool<T> -- see SplatEntity::GetFree @0x001eb318.
 //
 
 #include "math/Vec3.h"
@@ -104,8 +106,13 @@ public:
     void MakeSplat(Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType);
 
     // --- Pool API ---
+    // Binary: SplatEntity::CreatePool @ 0x001eb490 -- flat round-robin pool
+    // (s_PoolBase/s_PoolCount/s_CurrentFree), NOT Mortar::MemoryPool<T>.
     static void CreatePool(int capacity);
     static void DestroyPool();
+    // Binary: SplatEntity::GetFree @ 0x001eb318. Round-robin scan for a dead
+    // slot starting at s_CurrentFree; NEVER returns null once a pool exists --
+    // when every slot is alive it steals (overwrites) the slot at the cursor.
     static SplatEntity* GetFree();
     // Binary: SplatEntity::NumActiveSplats @ 0x0017ee34
     static int NumActiveSplats();
@@ -117,7 +124,7 @@ public:
     static void RemoveAllSplats();
     static void LoadContent();
     // Binary: SplatEntity::CleanUp @ 0x001eb404 (v1.6.1; stale 0x0017eee0 was v1.5.x).
-    // Destroys the SplatEntity MemoryPool (dtors + free). Does NOT touch textures.
+    // Destroys the flat pool (dtors + free). Does NOT touch textures.
     static void CleanUp();
 
     // Pool walker -- calls fn(splat) for each pool slot.

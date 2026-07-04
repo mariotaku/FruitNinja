@@ -409,19 +409,19 @@ void SuperFruitControl::ExplodeSuperFruit()
         float t1607 = Math::g_Random.RandF(1.0f) - 0.5f;
         float spd = (baseSpeed + t1607 * baseSpeed) * ((float)i * 0.2f + 5.0f);  // DAT_001bae50=0.2
 
+        // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
+        // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
-        if (s) {
-            Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
-            s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType);
+        Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
+        s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType);
 
-            // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
-            float taper = 1.0f - (float)(i - 2) / (float)N;
-            if (taper < 0.3f) taper = 0.3f;   // DAT_001bae58=0.3
-            if (taper > 1.0f) taper = 1.0f;
-            // DIFFERS: binary writes raw SplatEntity+0x64; port layout: m_Vel is +0x5C,
-            //   so +0x64 = m_Vel.z (last component). Binary scales the landed vel tail by taper.
-            s->m_Vel.z *= taper;
-        }
+        // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
+        float taper = 1.0f - (float)(i - 2) / (float)N;
+        if (taper < 0.3f) taper = 0.3f;   // DAT_001bae58=0.3
+        if (taper > 1.0f) taper = 1.0f;
+        // DIFFERS: binary writes raw SplatEntity+0x64; port layout: m_Vel is +0x5C,
+        //   so +0x64 = m_Vel.z (last component). Binary scales the landed vel tail by taper.
+        s->m_Vel.z *= taper;
     }
 
     // ---- (B) white critical screen-flash ----

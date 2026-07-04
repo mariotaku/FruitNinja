@@ -197,6 +197,8 @@ void Jiblet::Update(float dt) {
             uint16_t a16 = (uint16_t)(Math::g_Random.Rand32(0x10000) & 0xffff);
             // Magnitude T_796(1.0, 40.0): random in [1,40] (DAT_001e5734 = 40.0).
             float vmag = JibT796(1.0f, 40.0f);
+            // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
+            // flat round-robin pool steals the cursor slot when full).
             SplatEntity* s = SplatEntity::GetFree();
             Vec3 sp = pos;
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
