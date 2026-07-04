@@ -1000,7 +1000,7 @@ void GameExit() {
     // ActorManager owns SlashEntity[16] + all fruits/bombs. Clear before
     // we null the SlashEntity pointers so the entity destruction order is
     // ActorManager-driven (Release + delete per slot via the type-list walk).
-    Coin::ClearCoins(false);
+    Coin::ClearCoins(true);  // v1.6.1 GameExit @0x001cfed4 passes r0=1 (true), not false
     SaveCurrentData();           // writes FruitSaveData XML; v1.6.1 GameExit @0x001cfed4
     WaveManager::GetInstance()->Destroy();  // frees per-session wave state; v1.6.1 WaveManager::Destroy @0x001c1be8
     PSPParticleManager::GetInstance().ClearEmitters();
