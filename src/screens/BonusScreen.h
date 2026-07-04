@@ -99,8 +99,11 @@ public:
     // STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
     void LoadContent();
 
-    // STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
-    void Shake(float amplitude, float duration);
+    // v1.6.1 BonusScreen::Shake @ 0x00162054 (thunk 0x0011601c).
+    // Seeds the per-award shake wobble: writes m_ShakeTimer/m_ShakeDuration/
+    // m_ShakeAmplitude and a random m_ShakeAngle. Called from Update's
+    // per-award reveal block with (0.1f, 10.0f).
+    void Shake(float duration, float amplitude);
 
     // STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
     void UnLoadContent();
@@ -113,7 +116,8 @@ public:
     void BuildBonusText();
 
 private:
-    // TODO: re-verify v1.6.1 addr (prior 0x0013260C stale v1.5.x)
+    // v1.6.1 BonusScreen::AwardScores @ 0x0015393c. One-shot finale fired once
+    // from Update when the per-award reveal window ends (m_FinaleFired latch).
     void AwardScores();
 };
 

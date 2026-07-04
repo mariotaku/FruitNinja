@@ -20,7 +20,13 @@
 #include "engine/render/FontTTFRegistry.h"
 #include "engine/render/Font.h"
 #include "engine/util/StringTable.h"
+#include "engine/util/StringHash.h"
 #include "engine/math/Vec2.h"
+#include "engine/math/Random.h"
+#include "engine/particle/PSPParticleManager.h"
+#include "entities/Coin.h"
+#include "game/FruitCamera.h"
+#include "hud/ScoreControl.h"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -192,23 +198,80 @@ float BonusScreen::GetTimePerAward() { return 0.0f; }
 // STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
 void BonusScreen::LoadContent() {}
 
-// STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
-void BonusScreen::Shake(float /*amplitude*/, float /*duration*/) {}
+// v1.6.1 BonusScreen::Shake @ 0x00162054 (thunk 0x0011601c).
+// ASM-spec: vstr s0->+0x94 (m_ShakeTimer), vstr s0->+0x98 (m_ShakeDuration),
+// vstr s1->+0x90 (m_ShakeAmplitude), bl Math::Random::Rand32(g_random, 0xff3a)
+// -> strh result -> +0x9c (m_ShakeAngle).
+void BonusScreen::Shake(float duration, float amplitude) {
+    m_ShakeTimer = duration;
+    m_ShakeDuration = duration;
+    m_ShakeAmplitude = amplitude;
+    m_ShakeAngle = (uint16_t)Math::g_Random.Rand32(0xff3a);
+}
 
 // STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
 void BonusScreen::UnLoadContent() {}
 
 // ---------------------------------------------------------------------------
-// AwardScores -- TODO: re-verify v1.6.1 addr (prior 0x0013260C stale v1.5.x)
-// One-shot finale: coin spawn, camera shake, big particle, finish SFX.
+// AwardScores -- v1.6.1 BonusScreen::AwardScores @ 0x0015393c.
+// One-shot finale: 1-2 coin bursts (Coin::MakeCoins), a camera shake, an
+// "impact_fx" particle emitter, and an "equip-unlock" SFX.
 // ---------------------------------------------------------------------------
 
 void BonusScreen::AwardScores() {
-    // TODO: Coin::MakeCoins(m_TotalScore / 6)
-    // TODO: FruitCamera::CreateCameraShake(...)
-    // TODO: PSPParticleManager::AddEmitter(...) big finale particle
-    // TODO: play "BonusFinale" SFX via m_RushLoopSFX or SoundManager
-    (void)m_TotalScore;
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0015393c: base = pos + m_AnimPos
+    // + Vec3(-230,150,0) -- same constant reused for the coin spawn point, the
+    // camera shake impact vector, and the particle emitter position below.
+    Vec3 base = pos + m_AnimPos + Vec3(-230.0f, 150.0f, 0.0f);
+
+    int total = m_TotalScore;
+    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- delayVec/baseAngle/
+    // angleSpread/delayStep/delayCap/flyFXName/collectFXName args below are
+    // provisional (reused from the analogous already-verified combo-coin burst
+    // at SlashEntity.cpp:1911-1915, same angleSpread=0xff3a full-circle constant
+    // as Shake()'s Rand32 range); asm-inspector needed to confirm the exact
+    // literals this call site uses, and whether the >=6 branch's second burst
+    // spawns from a distinct "base2" position (not yet resolved -- reusing
+    // `base` here rather than guessing a second position).
+    if (total < 6) {
+        Coin::MakeCoins(total, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                         &base, 0.02f, 0.15f, nullptr, nullptr,
+                         Coin::DefaultArrivedDelegate(), false);
+    } else {
+        Coin::MakeCoins(6, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                         &base, 0.02f, 0.15f, nullptr, nullptr,
+                         Coin::DefaultArrivedDelegate(), false);
+        total = m_TotalScore;  // re-read (unchanged, just re-fetched -- matches binary)
+        Coin::MakeCoins(total - 6, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                         &base, 0.02f, 0.15f, nullptr, nullptr,
+                         Coin::DefaultArrivedDelegate(), false);
+    }
+
+    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- Ghidra's decompile of
+    // the CreateCameraShake args (impact=(0.3,1.0,extraout_s2)) is flagged as a
+    // likely VFP-tracking artifact by the RE report; using the analogous
+    // already-ported constant from AddToScoreOnArrival (Coin.cpp) instead.
+    // asm-inspector needed to confirm exact intensity/dirScale floats.
+    if (game_work.m_FruitCamera) {
+        game_work.m_FruitCamera->CreateCameraShake(base, 0.15f, 0.75f);
+    }
+
+    PSPParticleEmitter* fxEmitter =
+        PSPParticleManager::GetInstance().AddEmitter(StringHash("impact_fx"), 0, false);
+    if (fxEmitter) {
+        fxEmitter->m_Pos = base;
+    }
+
+    GetCurrentScore(0);  // ASM-spec: call only, return value unused here (cache refresh side-effect).
+
+    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- SFXPlay's exact
+    // vol/gain/pitch args and whether a finishCallback is passed are unresolved
+    // (Ghidra shows one confirmed 1.0f literal, second float unclear); using
+    // the vol=1.0f,gain=1.0f default pattern seen elsewhere (e.g. Coin.cpp
+    // AddToScoreOnArrival) until asm-inspector confirms.
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("equip-unlock", 1.0f, 1.0f);
+    }
 }
 
 // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
@@ -426,6 +489,9 @@ void BonusScreen::Update(float dt) {
                 // TODO: PSPParticleManager::AddEmitter x3 for award[i]
                 // TODO: FruitCamera::CreateCameraShake(...)
                 // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
+                // ASM-spec v1.6.1 BonusScreen::Update @0x00164534: memory-verified
+                // literals s0=0.1f (@0x1642bc), s1=10.0f (@0x41200000).
+                Shake(0.1f, 10.0f);
             }
 
             // Alpha pulse on reveal -- TODO: resolve exact formula from binary v1.6.1 BonusScreen::Update @0x00163dd0
