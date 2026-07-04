@@ -1,7 +1,8 @@
 // AboutScreen -- credits/about page launched from DojoScreen.
 // v1.6.1 binary refs:
 //   ctor                  0x0015b764  (AboutScreen::AboutScreen(DojoScreen*))
-//   LoadContent           0x0015b6d4  (static)
+//   LoadContent           0x0015a548  (static)
+//   UnLoadContent         0x0015c2c0  (static)
 //   Draw                  0x0015a654  (board panel + credits quad + sensei quads)
 //   NewDraw               0x0015a264  (BakedStringBox credit text pass + DrawMarquee gate)
 //   CreateCreditsMarquee  0x0015ac0c  (builds m_Marquees scrolling credits list)
@@ -85,6 +86,7 @@ static const float SENSEI2_Y       =  56.0f;
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;    // binary: s_boardTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;  // binary: m_creditsTexture
 Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;   // binary: m_senseiTexture
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexNetworkSwitch; // binary: s_switchNetworkTexture (defunct)
 static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
 // s_bContentLoaded: not ported (redundant -- never read)
 
@@ -118,9 +120,10 @@ static Mortar::FontCacheObjectTTF* GetAboutTTFFont()
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::LoadContent  @ 0x0015b6d4
+// AboutScreen::LoadContent  @ 0x0015a548
 // Binary loads haikus.tex, credits.tex, sensei.tex unconditionally
-// (no early-return guard).
+// (no early-return guard). s_switchNetworkTexture is NOT set here --
+// it stays null until AskUserToChoosePreferredNetwork (defunct) fires.
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::LoadContent()
@@ -131,8 +134,10 @@ void AboutScreen::LoadContent()
 }
 
 // -----------------------------------------------------------------------
-// AboutScreen::UnLoadContent  @ 0x0012efd8
-// Binary nulls all three static texture SmartPtrs.
+// AboutScreen::UnLoadContent  @ 0x0015c2c0
+// Binary nulls all four static texture SmartPtrs (s_boardTexture,
+// m_creditsTexture, m_senseiTexture, s_switchNetworkTexture) and clears
+// s_isContentLoaded.
 // -----------------------------------------------------------------------
 // static
 void AboutScreen::UnLoadContent()
@@ -140,6 +145,7 @@ void AboutScreen::UnLoadContent()
     s_TexHaiku.SetNull();
     s_TexCredits.SetNull();
     s_TexSensei.SetNull();
+    s_TexNetworkSwitch.SetNull();
     s_TexBackIcon.SetNull();
 }
 
