@@ -217,15 +217,17 @@ void FruitSaveData::UnlockTotals() {
     // 0x00124f10 -- "total-X" thresholds; full impl blocked on AchievementManager port.
 }
 
-// Binary @ 0x0012b38c. Queue an achievement unlock. Skip if already pending or unlocked.
-// Stagger semantics: if any popup is still in the queue, delay the new one by 3.0s
-// so popups don't stomp each other; otherwise fire on the next Update tick (0.0f).
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b38c (re-analyst)
+// Binary @ 0x00154918. Queue an achievement unlock. Skip if already pending or unlocked.
+// Stagger semantics: default stagger timer is 2.9s (0x4039999a, loaded
+// unconditionally); overridden to 3.0s only when m_PendingUnlocks is
+// non-empty, so a popup already queued doesn't get stomped by the new one.
+// ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::AddToQue @ 0x00154918 (re-analyst)
 //   ldr.w r3,[this,#0x170]  -> m_PendingUnlocks._M_node_count (std::map
-//   stores its cached size at base+0x14; map base = +0x15c).
+//   stores its cached size at base+0x14; map base = +0x15c). cmp r3,#0;
+//   vmovne.f32 s15,0x40400000 (3.0f) overrides the default vmov.f32 s15,0x4039999a (2.9f).
 int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
     if (IsAchievementUnlocked(hash) != 0) return 0;
-    float timer = m_PendingUnlocks.empty() ? 0.0f : 3.0f;
+    float timer = m_PendingUnlocks.empty() ? 2.9f : 3.0f;
     AchievementItem& slot = m_PendingUnlocks[hash];
     strncpy(slot.m_Name, name, sizeof(slot.m_Name) - 1);
     slot.m_Name[sizeof(slot.m_Name) - 1] = '\0';

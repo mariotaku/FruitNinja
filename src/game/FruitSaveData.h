@@ -39,9 +39,9 @@ struct SliceTotal {
 
 // AchievementItem -- pending / unlocked achievement entry stored inside
 // FruitSaveData::m_PendingUnlocks (+0x15c) and m_UnlockedAchievements (+0x174).
-// Binary layout @ FruitSaveData::AddToQue (0x0012b38c):
+// Binary layout @ v1.6.1 FruitSaveData::AddToQue @0x00154918:
 //   +0x00  char  name[128]  -- strcpy'd from AchievementInfo::m_Name
-//   +0x80  float timer      -- 3.0f or 0.0f; counts down each Update tick
+//   +0x80  float timer      -- 3.0f (queue non-empty) or 2.9f (queue empty); counts down each Update tick
 // sizeof = 0x84 (132 bytes).
 struct AchievementItem {
     char  m_Name[128];  // +0x00
@@ -240,7 +240,7 @@ public:
     std::list<WaveState> m_WaveStates;
 
     // +0x15c: queued pending unlocks; populated by AddToQue, ticked by Update.
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b38c (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::AddToQue @ 0x00154918 (re-analyst)
     std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
     // +0x174: fully unlocked achievements; persisted in <achievements> XML block.
@@ -344,8 +344,9 @@ public:
     // 0x00124f10. Unlocks "total-X" achievements when thresholds hit.
     void UnlockTotals();
 
-    // 0x0012b38c. Queues an achievement unlock by name+hash. Skips if
+    // v1.6.1 @0x00154918. Queues an achievement unlock by name+hash. Skips if
     // IsAchievementUnlocked returns non-zero. Returns 1 on success, 0 if skipped.
+    // Stagger timer: 2.9f default (empty queue), 3.0f if a popup is already pending.
     int AddToQue(const char* name, uint32_t hash);
 
     // ------------------------------------------------------------------
