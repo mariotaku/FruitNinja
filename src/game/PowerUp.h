@@ -21,7 +21,7 @@
 //   IsTimed         0x0011a1dc
 //   IsSpecial       (inline / vtable)
 //   GetCurrentTimeProgress 0x0011a1f0
-//   GetLongestMod   0x00117aec
+//   GetLongestMod   v1.6.1 0x0013ff38 (stale 0x00117aec was v1.5.1)
 //   SetCurrentTime  0x0011a210
 //   SetTotalTime    0x001180d4
 //   SetOnScreenAmt  0x0011a1c4
@@ -158,7 +158,7 @@ public:
     // @ 0x0011a1f0
     float GetCurrentTimeProgress() const { return m_LongestRemaining; }
 
-    // @ 0x00117aec — max m_BonusAccum across all modifiers
+    // v1.6.1 PowerUp::GetLongestMod @0x0013ff38 — max m_Duration across all modifiers
     float GetLongestMod();
 
     // @ 0x0011a210

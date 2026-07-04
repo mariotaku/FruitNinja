@@ -353,13 +353,16 @@ void PowerUp::LoadTextures() {
     if (m_pPurchaseInfo)  m_pPurchaseInfo->LoadTextures();
 }
 
-// GetLongestMod (binary @ 0x00117aec)
+// GetLongestMod: v1.6.1 PowerUp::GetLongestMod @0x0013ff38 (stale header/cpp
+// addr 0x00117aec was v1.5.1). Max of m_Duration (+0x04) across all mods,
+// initial floor -1.0f (vmov s16,#-1.0) -- was wrongly maxing m_BonusAccum
+// (+0x0c) with a 0.0f floor.
 float PowerUp::GetLongestMod() {
-    float longest = 0.0f;
+    float longest = -1.0f;
     for (std::list<GameModifier*>::const_iterator it = m_ModList.begin();
          it != m_ModList.end(); ++it) {
-        if ((*it)->m_BonusAccum > longest)
-            longest = (*it)->m_BonusAccum;
+        if ((*it)->m_Duration > longest)
+            longest = (*it)->m_Duration;
     }
     return longest;
 }
