@@ -19,6 +19,13 @@ public:
     // Binary enum name: NotificationType (not NotifType).
     enum NotificationType { Type_Numeric = 1, Type_Named = 2 };
 
+    // v1.6.1 NotificationControl::s_banner / s_unlockBanner (mangled
+    // _ZN19NotificationControl8s_bannerE / _ZN19NotificationControl14s_unlockBannerE).
+    // Loaded once by AchievementManager::LoadAchievementInfo @0x00118198; Draw()
+    // reads these via IsValid()/Get() to gate the banner quad.
+    static Mortar::SmartPtr<Mortar::Texture> s_banner;       // "achievment_banner.tex" (sic)
+    static Mortar::SmartPtr<Mortar::Texture> s_unlockBanner; // "hud_unlocked_dialog.tex"
+
     // v1.6.1 NotificationControl::NotificationControl @0x001a4428 — takes SmartPtr by value and NotificationType enum.
     NotificationControl(const char* name, int points,
                         Mortar::SmartPtr<Mortar::Texture> icon,

@@ -15,10 +15,10 @@
 #include <algorithm>
 #include "game/GameWork.h"
 
-// File-scope banner texture statics.
-// TODO: load notification banner textures — loader function not yet identified in binary.
-static Mortar::SmartPtr<Mortar::Texture> s_banner;        // numeric-type banner (notification_banner.tex or similar)
-static Mortar::SmartPtr<Mortar::Texture> s_unlockBanner;  // named-type unlock banner
+// v1.6.1 NotificationControl::s_banner / s_unlockBanner — class-static preamble
+// banner textures, assigned by AchievementManager::LoadAchievementInfo @0x00118198.
+Mortar::SmartPtr<Mortar::Texture> NotificationControl::s_banner;
+Mortar::SmartPtr<Mortar::Texture> NotificationControl::s_unlockBanner;
 
 // Slide animation constants from binary.
 // Binary: slide-in phase 0..0.2s, settled 0.2..2.7s, slide-out 2.7..2.9s, remove >=2.9s.
