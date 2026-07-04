@@ -5,6 +5,8 @@
 #include "WaveStructs.h"
 #include "Game.h"
 #include "FruitSaveData.h"
+#include "AchievementManager.h"
+#include "hud/ScoreControl.h"
 #include "audio/GameSound.h"
 #include "entities/ActorManager.h"
 #include "entities/Fruit.h"
@@ -1569,6 +1571,18 @@ void WaveManager::GetNextWave(int playerIdx) {
 #endif
     Game* game = Game::GetInstance();
     if (!game) return;
+
+    // ASM-spec v1.6.1 WaveManager::GetNextWave @ 0x00125790 (head, before wave-select logic):
+    //   AchievementManager* am = AchievementManager::GetInstance();
+    //   game_work.m_SaveData->UnlockTotals();                 // FruitSaveData::UnlockTotals
+    //   int score = GetCurrentScore(0);
+    //   am->UnlockScoreAchievement(score);
+    //   am->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);
+    AchievementManager* am = AchievementManager::GetInstance();
+    if (game_work.m_SaveData) game_work.m_SaveData->UnlockTotals();
+    int liveScore = GetCurrentScore(0);
+    am->UnlockScoreAchievement(liveScore);
+    am->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);
 
     waveCount++;
     LOG_DEBUG("WaveManager", "GetNextWave(p=%d) waveCount=%d mode=%d waveInfos=%zu",
