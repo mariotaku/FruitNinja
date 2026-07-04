@@ -46,7 +46,9 @@ static const float ALPHA_DECAY    = 0.75f;
 static const float ALPHA_OUT_DONE = 0.001f;
 
 // Back button position  (DAT_0012f300 = 185.0, DAT_0012f304 = -106.0)
-static const Vec3 POS_BACK_BUTTON(185.0f, -106.0f, 0.0f);
+// ASM-verified pos=Vec3::Zero (matches DojoScreen/MainScreen/ShopScreen back-button
+// convention); final screen anchor comes from m_HudScale below, not this Vec3.
+static const Vec3 POS_BACK_BUTTON(0.0f, 0.0f, 0.0f);
 static const float BACK_SCALE = 0.825f;
 
 // OFN button position -- off-screen right, defunct
@@ -367,6 +369,14 @@ void AboutScreen::CreateBackButton()
                         bombFruitType,
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
+
+    // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: m_pOkButton->m_HudScale.x=0.375f
+    // (vmul 0.5*0.75, str [+0x14] @0x0015c848-0x15c85c), .y=-0.3f (vmul -0.5*0.6,
+    // str [+0x18] @0x0015c860-0x15c86c). Same idiom as DojoScreen/MainScreen/ShopScreen
+    // back buttons -- GetAdjustedPos() moves from pos=Zero to (480*0.375, 320*-0.3, 0)
+    // = (180, -96, 0).
+    m_pBackButton->m_HudScale.x = 0.375f;
+    m_pBackButton->m_HudScale.y = -0.3f;
 
     // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350 (state==0 branch, @0x0015c894):
     // SetText ring label = GETSTRING(LSTR_DJ_BACK_BUTTON 0x352), m_RingColours[0]/[1],
