@@ -600,6 +600,13 @@ void WaveManager::Reset(bool fullReset) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
+    // ASM-spec v1.6.1 WaveManager::Reset @ 0x0012ba78: when not online-multiplayer,
+    // unconditionally reseeds this WaveManager's own RNG from a fresh
+    // Math::g_random.Rand32(0) draw, before the arcade-texture-load block below.
+    if (!IsOnlineMultiplayer()) {
+        m_Random.Seed(Math::g_Random.Rand32(0));
+    }
+
     // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00125bfe..0x00125c0a (re-analyst).
     // Reset prologue: load arcade powerup textures unconditionally on every
     // Reset when gameMode == ARCADE, independent of fullReset. This is the
