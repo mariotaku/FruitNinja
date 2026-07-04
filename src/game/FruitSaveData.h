@@ -291,9 +291,11 @@ public:
     // ------------------------------------------------------------------
 
     // 0x0012b21c. Increments an entry in m_Totals (and m_SessionTotals
-    // when trackFruit is set). Returns the new total. Hashes name.
+    // when trackSession is set). Returns the new total. Hashes name.
+    // achievementGate, when true, additionally calls
+    // AchievementManager::UnlockSpecificFruitAchievement(hash, newCount).
     int AddToTotal(const char* name, uint32_t hash, int count,
-                   bool trackSession = false, bool sendNetPacket = false);
+                   bool trackSession = false, bool achievementGate = false);
     int AddToTotal(const char* name, int count);
 
     // Binary @ 0x00152e58 -- hashes name, delegates to GetTotal(hash).
@@ -341,7 +343,8 @@ public:
     // Binary: non-static; checks m_PendingUnlocks then m_UnlockedAchievements.
     int IsAchievementUnlocked(uint32_t hash);
 
-    // 0x00124f10. Unlocks "total-X" achievements when thresholds hit.
+    // v1.6.1 @0x00154344. Unlocks SPECIFIC-type achievements whose threshold is
+    // already met by an accumulated total (m_SessionTotals then m_Totals).
     void UnlockTotals();
 
     // v1.6.1 @0x00154918. Queues an achievement unlock by name+hash. Skips if
@@ -356,7 +359,8 @@ public:
     // v1.6.1 @0x0015286c: m_EntityStates.clear() only (dead code; zero callers).
     void SaveGameState();
 
-    // Daily-reset logic. Stub.
+    // v1.6.1 @0x00153050. Resets the per-mode "<MODE>_days" streak counter
+    // when the mode wasn't played today or yesterday. Called from SaveGame.
     void CheckDatesHaveChanged();
 
     // 0x0012a248. Returns true iff gameMode was played today (m_LastPlayedDay[gameMode]
@@ -380,7 +384,7 @@ public:
     void PublishUnlockedAchievements();
     // Binary @ 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal,
     // AddToTotal(delta); returns the OLD total (uint) prior to the set.
-    unsigned int SetTotal(char const* name, int value, bool trackSession, bool sendNetPacket);
+    unsigned int SetTotal(char const* name, int value, bool trackSession, bool achievementGate);
     // Binary @ 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash).
     bool TotalExists(char const* name);
     // Binary @ 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals.

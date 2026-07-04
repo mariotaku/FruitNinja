@@ -615,8 +615,13 @@ bool BombFlashFull() {
 // Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
 void HitBomb(Vec3 pos) {
     if (game_work.bM_bPaused) return;
-    if (game_work.m_SaveData)
-        game_work.m_SaveData->AddToTotal("bomb", 1);
+    if (game_work.m_SaveData) {
+        // ASM-spec v1.6.1 HitBomb @ 0x1cf27c: AddToTotal(saveData,"bomb",hash,1,true,true)
+        // -- trackSession=true, achievementGate=true (unlike other AddToTotal call
+        // sites in this file, which pass both flags false).
+        game_work.m_SaveData->AddToTotal("bomb", StringHash("bomb"), 1,
+                                          /*trackSession=*/true, /*achievementGate=*/true);
+    }
     game_work.m_BombHitTimer = 3.2f;
     if (game_work.m_FruitCamera)
         game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
