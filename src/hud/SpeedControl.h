@@ -1,21 +1,17 @@
 #ifndef FN_HUD_SPEED_CONTROL_H
 #define FN_HUD_SPEED_CONTROL_H
 
-// Analysed: 2026-05-03T00:00
-//
 // SpeedControl : HUDControl3d (sizeof = 0xAC)
-// Binary @ 0x0016133c (ctor), 0x00160dc4 (Update).
 // Combo-speed gauge (Arcade only). Created lazily by WaveManager::UpdateComboSpeed.
 // Owned by WaveManager (pointer at WaveManager+0x00). Destroyed via DeleteSpeedControl.
 //
 // Binary addresses:
-//   ctor (real)     0x0016133c
-//   ctor (alias)    0x00161444
-//   ctor thunk      0x000ffd38
-//   dtor (regular)  0x00161558
-//   dtor (inplace)  0x001615d4
-//   dtor (deleting) 0x00161650
-//   Update          0x00160dc4
+//   ctor (C1)          v1.6.1 SpeedControl::SpeedControl @0x001b892c
+//   ctor (C2)          v1.6.1 SpeedControl::SpeedControl @0x001b8a64
+//   dtor (base/D2)     v1.6.1 SpeedControl::~SpeedControl @0x001b8ba4
+//   dtor (complete/D1) v1.6.1 SpeedControl::~SpeedControl @0x001b8c4c
+//   dtor (deleting/D0) v1.6.1 SpeedControl::~SpeedControl @0x001b8cf4
+//   Update             v1.6.1 SpeedControl::Update @0x00160dc4
 
 #include "HUDControl3d.h"
 #include "engine/audio/MortarSound.h"
@@ -37,7 +33,7 @@ public:
     float    m_Speed;
     // +0x98: smoothed alpha [0..1]
     float    m_SmoothedAlpha;
-    // +0x9C: sound object pointer (stub: always null)
+    // +0x9C: looping combo-blitz backing-stream MortarSound* (see Update / ~SpeedControl)
     void*    m_pSound;
     // +0xA0: particle emitter pointer (stub: always null)
     void*    m_pEmitter;
