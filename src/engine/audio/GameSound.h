@@ -73,7 +73,7 @@ public:
     // Binary @ 0x0012917c
     void Release(Mortar::MortarSound* sound, const char* name);
 
-    // Binary @ 0x001291e0
+    // Binary @ 0x00151c00
     void KillAll();
 
     // Binary @ 0x00129248
@@ -85,7 +85,7 @@ public:
     // Binary @ 0x0012930c
     void Update();
 
-    // Binary @ 0x00129170 -- static
+    // Binary @ 0x00151b60 -- static
     static void DestroySoundInternals(Mortar::MortarSound* sound);
 };
 

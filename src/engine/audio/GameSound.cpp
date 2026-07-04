@@ -120,14 +120,20 @@ void GameSound::Release(MortarSound* sound, const char* name) {
     }
 }
 
-// Binary @ 0x001291e0 -- unconditional clear of all slots.
+// Binary @ 0x00151c00 -- per-slot Stop+DestroySoundInternals gated on !isFree;
+// isFree/pausedBySystem/id reset unconditionally for every slot.
 void GameSound::KillAll() {
     for (int i = 0; i < MAX_SLOTS; i++) {
-        if (m_Slots[i].sound) {
-            m_Slots[i].sound->Stop(0.0f);
+        Slot* s = &m_Slots[i];
+        if (!s->isFree) {
+            if (s->sound) {
+                s->sound->Stop(0.0f);
+                DestroySoundInternals(s->sound);
+            }
         }
-        m_Slots[i].isFree = true;
-        m_Slots[i].id     = 0;
+        s->isFree         = true;
+        s->pausedBySystem = 0;
+        s->id             = 0;
     }
 }
 
@@ -190,7 +196,7 @@ void GameSound::Update() {
     }
 }
 
-// Binary @ 0x00129170 -- static
+// Binary @ 0x00151b60 -- static
 void GameSound::DestroySoundInternals(MortarSound* sound) {
     sound->Destroy();
 }
