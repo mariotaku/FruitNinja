@@ -6,6 +6,7 @@
 #include "WaveStructs.h"
 #include "GameWork.h"
 #include "ItemParseUtil.h"
+#include "engine/network/P2PMessageHandling.h"
 #include "entities/Fruit.h"
 #include "util/StringHash.h"
 #include "math/Random.h"
@@ -346,14 +347,28 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     m_OverideEntries.clear();
 }
 
-// Binary @ 0x00128128. If the WaveManager current wave counter (+0x230 = SP
-// m_WaveCount[0]) is < 0 AND m_OverideProbabilityPool <= that counter, reset the
-// wave to SetCurrentWave(5, 0.25f, 0).
+// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 WaveModifier::RemoveModifier @ 0x00150590
+// If the WaveManager current wave counter (m_WaveCount[0]) is < 0 AND
+// m_OverideProbabilityPool <= that counter and we're not in online MP, reset the
+// wave to SetCurrentWave(5, 0.25f, 0). Then, regardless of that gate, erase the
+// FRONT m_OverrideCount entries from m_ProbabilityOverride[gameMode] -- undoing
+// the PREPEND that ApplyModifier/OnDeferComplete performed when the modifier
+// was applied.
 void WaveModifier::RemoveModifier() {
     WaveManager* w = WaveManager::GetInstance();
     if (w->m_WaveCount[0] < 0 &&
-        m_OverideProbabilityPool <= WaveManager::GetInstance()->m_WaveCount[0]) {
+        m_OverideProbabilityPool <= WaveManager::GetInstance()->m_WaveCount[0] &&
+        !IsOnlineMultiplayer()) {
         WaveManager::GetInstance()->SetCurrentWave(5, 0.25f, 0);
+    }
+
+    std::vector<PROBABILITY_OVERIDE>& dst =
+        WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
+    std::vector<PROBABILITY_OVERIDE>::iterator it = dst.begin();
+    int count = 0;
+    while (it != dst.end() && count < m_OverrideCount) {
+        it = dst.erase(it);
+        ++count;
     }
 }
 
