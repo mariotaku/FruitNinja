@@ -518,7 +518,10 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
             // @0x00148960: hard on/off: ON iff wEnd <= currentLongest <= wStart
             bool on = (currentLongest >= wEnd && currentLongest <= wStart);
             img.m_CurrentVis = on ? 1.0f : 0.0f;
-            useMoveIn = on;
+            // v1.6.1 ScreenEffect::Update @0x00148844: r7=1 always in this branch
+            // (0x00148978/0x0014897c both fall into 0x00148984 `mov r7,#0x1`), not
+            // gated on `on` -- the OFF state still slides using m_SizeIn.
+            useMoveIn = true;
         } else if (currentLongest > wStart) {
             // @0x001488f4: not started yet
             img.m_CurrentVis = 0.0f;
@@ -575,11 +578,13 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
             ? ((float)img.m_Tint.a * img.m_CurrentVis)
             : (float)img.m_Tint.a;
         if (alpha < 0.0f) alpha = 0.0f;
-        // TODO: v1.6.1 @0x00148844 -- binary reads hud+0x24 and multiplies into alpha.
-        //   HUD+0x24 = m_globalTimeScale (slow-mo), HUD+0x20 = m_DrawAlpha (per-frame draw-alpha).
-        //   RE-confirmed: v1.6.1 HUD::Update @0x0018c44c writes 1.0 to +0x20; ScoreControl/
-        //   MissControl read +0x20. Need to verify whether ScreenEffect reads +0x20 or +0x24.
-        // TODO: v1.6.1 -- verify HUD alpha read +0x20 vs +0x24 (slow-mo) against the binary
+        // v1.6.1 ScreenEffect::Update @0x00148aa4-0x00148ad0: unconditionally
+        // multiplies the alpha byte by HUD::m_globalTimeScale (+0x24), for every
+        // image whenever HUD exists -- not just fade-flagged ones.
+        if (game_work.mHud) {
+            alpha = alpha * game_work.mHud->m_globalTimeScale;
+            if (alpha < 0.0f) alpha = 0.0f;
+        }
         img.m_pHudCtrl->m_DrawColour = Colour(
             img.m_Tint.r,
             img.m_Tint.g,
