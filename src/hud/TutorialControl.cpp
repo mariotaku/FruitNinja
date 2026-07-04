@@ -175,7 +175,7 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
 }
 
 // ===================================================================
-// Matches TutorialControl::Update @ 0x00163014
+// Matches v1.6.1 TutorialControl::Update @0x001c27ac
 // Animation lifecycle: -10=inactive, 0..2.75=animating
 // ===================================================================
 void TutorialControl::Update(float dt) {
@@ -230,7 +230,8 @@ void TutorialControl::Update(float dt) {
         float f = m_AnimTimer - PHASE_FADEIN;
         m_DrawPos.y = m_DrawPos.y + f * 4.0f * (-BOUNCE_OFFSET) + BOUNCE_OFFSET;
         m_bHidden = 0;
-        m_Colour.a = 255;
+        // Binary never writes m_Colour.a in this sub-phase -- alpha carries
+        // over unchanged from whatever the fade-in phase last computed.
     } else if (m_AnimTimer < PHASE_HOLD_END) {
         // Phase 3: hold (0.6..2.25). Binary @ 0x001631d0-0x001631f8 has three
         // early-exits (1.0, 1.5, 2.25) leaving m_bHidden=1 and alpha unchanged.

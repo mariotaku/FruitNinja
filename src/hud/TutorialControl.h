@@ -10,12 +10,15 @@
 //   Init                0x00162e38
 //   Reset               0x00162e4c
 //   Release             0x00162e48 (no-op)
-//   Update              0x00163014
+//   Update              v1.6.1 @0x001c27ac
 //   Draw                0x00163360
 //   ResetTutePos        0x00162f04 (MenuButton* overload)
 //   ResetTutePos        0x00162f84 (Vec3 overload)
 //   CanShowTute         0x00162fb8
 //   ButtonPressedAtPos  0x00162e58
+//
+// TODO: v1.6.1 0x001c2728 (TutorialControl::PreDraw) -- not yet ported
+// TODO: v1.6.1 0x001c272c (TutorialControl::SetToMultiplayerState) -- not yet ported
 //
 // Tutorial arrow that appears over menu buttons during first-play.
 // Only visible during slow-motion (timeScale < 1.0) or transitions.
