@@ -97,14 +97,17 @@ Coin::Coin()
 }
 
 // ---------------------------------------------------------------------------
-// ~Coin (D1) @ 0x00173218
+// ~Coin (D1) @ 0x001d7a90
+// ASM-spec v1.6.1 Coin::~Coin (D1) @ 0x001d7a90:
+//  - dtor only tears down m_OnArrived (Delegate1) + base Mortar::Entity;
+//  - does NOT call Release() -- Release is vtable-dispatch-only, invoked by
+//    ActorManager deactivation paths, never from the destructor.
 // ---------------------------------------------------------------------------
 Coin::~Coin() {
-    Release();
 }
 
 // ---------------------------------------------------------------------------
-// Release @ 0x001731F4 — clear fly emitter
+// Release v1.6.1 @ 0x001d7a5c — clear fly emitter
 // ---------------------------------------------------------------------------
 void Coin::Release() {
     if (m_pFlyEmitter) {
@@ -139,7 +142,7 @@ void Coin::Deactivate() {
 }
 
 // ---------------------------------------------------------------------------
-// Arrived @ 0x00173190
+// Arrived v1.6.1 (thunk @ 0x00106f40 -> real body in the D1/ClearCoins cluster)
 // Invoke the OnArrived delegate, clear emitters, mark entity dead.
 // ---------------------------------------------------------------------------
 void Coin::Arrived() {
@@ -496,9 +499,13 @@ void Coin::UnLoadContent() {
 }
 
 // ---------------------------------------------------------------------------
-// ClearCoins @ 0x001731B8
-// Iterates all type-2 entities via Mortar::ActorManager iterator pair.
-// If arrive=true, calls Arrived() on each (credits coins); otherwise kills.
+// ClearCoins v1.6.1 @ 0x001d7a00 (thunk 0x00106eb8)
+// Iterates all type-2 entities via Mortar::ActorManager iterator pair,
+// unconditionally (no IsActive() gate in the binary loop).
+// If arrive=true, calls Arrived() on each (credits coins, clears emitters);
+// otherwise the binary ORs ENT_INACTIVE|ENT_KILLED (0x11) directly, not
+// solely ENT_KILLED -- same 0x11-vs-0x10 pattern as BombHit.h/GameInit.cpp
+// DeactivateAllEntities.
 // ---------------------------------------------------------------------------
 void Coin::ClearCoins(bool arrive) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -510,12 +517,10 @@ void Coin::ClearCoins(bool arrive) {
         // Advance iterator before potentially modifying the entity
         Mortar::Entity* next_e = am->GetEntityNext(2, it);
         Coin* coin = static_cast<Coin*>(e);
-        if (coin->IsActive()) {
-            if (arrive) {
-                coin->Arrived();
-            } else {
-                coin->flags |= ENT_KILLED;
-            }
+        if (arrive) {
+            coin->Arrived();
+        } else {
+            coin->flags |= ENT_INACTIVE | ENT_KILLED;
         }
         e = next_e;
     }

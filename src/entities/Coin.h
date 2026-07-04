@@ -7,10 +7,11 @@
 // Binary references:
 //   Coin::Coin   (C1)  0x00173394
 //   Coin::Coin   (C2)  0x001732D4
-//   ~Coin        (D1)  0x00173218
-//   ~Coin        (D0)  0x00173290
+//   ~Coin        (D1)  v1.6.1 @0x001d7a90
+//   ~Coin        (D2)  v1.6.1 @0x001d7ae4  (base object dtor, identical body)
+//   ~Coin        (D0)  v1.6.1 @0x001d7b38
 //   Coin::Init        0x0019D5FC  (stub/empty)
-//   Coin::Release     0x001731F4
+//   Coin::Release     v1.6.1 @0x001d7a5c  (vtable-dispatch only; NOT called from dtor)
 //   Coin::Update      0x0017312C  (fixed-timestep wrapper)
 //   Coin::_Update     v1.6.1 @0x001d81bc  (5-state machine; v1.5.1 was 0x00173790)
 //   Coin::Draw        0x00173CC4
@@ -18,7 +19,7 @@
 //   Coin::InitCoin    v1.6.1 @0x001d7d84  (v1.5.1 was 0x00173454)
 //   Coin::Arrived     0x00173190
 //   Coin::MakeCoins   v1.6.1 @0x001d7ec8  (v1.5.1 was 0x00173568)
-//   Coin::ClearCoins  0x001731B8
+//   Coin::ClearCoins  v1.6.1 @0x001d7a00  (thunk 0x00106eb8)
 //   Coin::LoadContent   0x00173114
 //   Coin::UnLoadContent 0x00173CA8
 //   CoinArrived (free) 0x0017320C
@@ -70,7 +71,8 @@ public:
     // is kept so the compiler knows the virtual is satisfied (same function ptr).
     void Init(void* p1, long p2, Vec3* p3) override;
 
-    // 0x001731F4 — clear fly emitter; called from dtor
+    // v1.6.1 @0x001d7a5c — clear fly emitter; vtable-dispatch only, NOT called
+    // from the destructor (D1 body has no bl to Release; confirmed via xref check).
     void Release() override;
 
     // 0x0017312C — fixed-timestep wrapper; subdivides dt by 1/60
@@ -138,7 +140,9 @@ public:
                           const char* flyFXName, const char* collectFXName,
                           Mortar::Delegate1<void, Coin*> onArrived, bool silent);
 
-    // 0x001731B8 — mark all active coins dead (arrive=true: credit them first)
+    // v1.6.1 @0x001d7a00 (thunk 0x00106eb8) — unconditional sweep of all type-2
+    // entities (no IsActive() gate); arrive=true credits via Arrived(), else
+    // ORs ENT_INACTIVE|ENT_KILLED (0x11) directly.
     static void ClearCoins(bool arrive);
 
     // Returns a Delegate1<void,Coin*> bound to the file-static CoinArrived helper
