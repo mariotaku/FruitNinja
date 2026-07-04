@@ -268,9 +268,11 @@ WaveModifier::~WaveModifier() {}
 //       DIFFERS block, matching the rest of this file's convention.
 //   (3) if m_OverideEntries empty, return.
 //   (4) SelectType() each of the first m_OverrideCount override entries.
-//   (5) insert the whole m_OverideEntries range into the WaveManager current
-//       override list (GetCurrentOverideList(0) == m_ProbabilityOverride[gameMode]),
-//       then clear m_OverideEntries.
+//   (5) PREPEND the whole m_OverideEntries range (dst.insert(dst.begin(), ...))
+//       into the WaveManager current override list (GetCurrentOverideList(0) ==
+//       m_ProbabilityOverride[gameMode]), then clear m_OverideEntries. See TODO
+//       below: this method's own insert direction was not independently
+//       disassembled, inferred from the ApplyModifier sibling body.
 void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
     GameModifier::OnDeferComplete(unused, pExtra);
 
@@ -292,7 +294,13 @@ void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
 
     std::vector<PROBABILITY_OVERIDE>& dst =
         WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
-    dst.insert(dst.end(), m_OverideEntries.begin(), m_OverideEntries.end());
+    // TODO: v1.6.1 0x0015068c (WaveModifier::OnDeferComplete) -- the dst.insert
+    //   direction here (front vs back) was inferred from ApplyModifier's
+    //   independently-disassembled sibling body (@0x001282d4, confirmed
+    //   dst.insert(dst.begin(), ...)), not from this method's own instructions.
+    //   Re-verify against OnDeferComplete's actual disassembly if it is ever
+    //   independently checked.
+    dst.insert(dst.begin(), m_OverideEntries.begin(), m_OverideEntries.end());
     m_OverideEntries.clear();
 }
 
@@ -300,9 +308,12 @@ void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
 //   (1) if m_OverideProbabilityPool <= 9999 (i.e. < 10000) && !isPurchased &&
 //       m_OverideProbabilityPool < WaveManager current wave, rewind via
 //       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
-//   (2) call SelectType() on every m_OverideEntries entry, append them all into
-//       the WaveManager's current override list (GetCurrentOverideList(0)), then
-//       clear m_OverideEntries.
+//   (2) call SelectType() on every m_OverideEntries entry, then PREPEND them all
+//       (dst.insert(dst.begin(), ...)) into the WaveManager's current override
+//       list (GetCurrentOverideList(0)), then clear m_OverideEntries. Front-
+//       insertion matters: UpdateWave's override picker walks front-to-back and
+//       stops at the first cumulative-probability match, so insert order picks
+//       the winner when multiple overrides are active.
 // Binary reads WaveManager+0x230 as the current wave counter; in SP that slot is
 // m_WaveCount[0] (see WaveManager.h +0x230 dual-purpose note).
 void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
@@ -320,13 +331,18 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
         it->SelectType();
     }
 
-    // Append the (now type-selected) override entries into the WaveManager's
+    // Prepend the (now type-selected) override entries into the WaveManager's
     // current override list. The binary's GetCurrentOverideList(0) returns the
     // vector header at m_ProbabilityOverride[gameMode] (playerIdx 0 = primary
-    // slot); insert the whole m_OverideEntries range, then clear it.
+    // slot); dst.insert(dst.begin(), ...) -- binary-verified instruction-by-
+    // instruction @0x0015068c -- inserts the whole m_OverideEntries range at the
+    // FRONT of dst, then clears it. Front-insertion matters: WaveManager::UpdateWave's
+    // override picker walks dst front-to-back and stops at the first cumulative-
+    // probability match, so insertion order determines which override wins when
+    // multiple are active.
     std::vector<PROBABILITY_OVERIDE>& dst =
         WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
-    dst.insert(dst.end(), m_OverideEntries.begin(), m_OverideEntries.end());
+    dst.insert(dst.begin(), m_OverideEntries.begin(), m_OverideEntries.end());
     m_OverideEntries.clear();
 }
 
