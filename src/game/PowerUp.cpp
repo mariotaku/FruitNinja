@@ -384,9 +384,16 @@ void PowerUp::AddModifier(GameModifier* mod) {
     m_ModList.push_back(mod);
 }
 
-// SetTotalTime (binary @ 0x001180d4 — de-inlined)
+// SetTotalTime — v1.6.1 PowerUp::SetTotalTime @ 0x001407c0 (stale 0x001180d4 was v1.5.1)
 void PowerUp::SetTotalTime(float t) {
     m_TotalTime = t;
+    float elapsed = t - m_LongestRemaining;
+    float ramp = elapsed * 4.0f;
+    if (ramp > 1.0f) ramp = 1.0f;   // clamp UPPER only, no lower clamp
+    m_BarRamp = ramp;
+    if (m_pScreenEffect) {
+        m_pScreenEffect->Update(elapsed, m_LongestRemaining, t);
+    }
 }
 
 // PowerUp::PowerUp(PowerUp*) copy ctor — v1.6.1 @0x00141b58 (C1) / 0x00141c88 (C2)

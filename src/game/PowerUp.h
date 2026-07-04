@@ -23,7 +23,7 @@
 //   GetCurrentTimeProgress 0x0011a1f0
 //   GetLongestMod   v1.6.1 0x0013ff38 (stale 0x00117aec was v1.5.1)
 //   SetCurrentTime  0x0011a210
-//   SetTotalTime    0x001180d4
+//   SetTotalTime    v1.6.1 0x001407c0 (stale 0x001180d4 was v1.5.1)
 //   SetOnScreenAmt  0x0011a1c4
 //   AddDeferedPoints 0x00117a50
 //   LoadTextures    0x001183f0
@@ -164,7 +164,7 @@ public:
     // @ 0x0011a210
     void SetCurrentTime(float t) { m_LongestRemaining = t; }
 
-    // @ 0x001180d4
+    // v1.6.1 PowerUp::SetTotalTime @ 0x001407c0 (stale 0x001180d4 was v1.5.1)
     void SetTotalTime(float t);
 
     // @ 0x0011a1c4
