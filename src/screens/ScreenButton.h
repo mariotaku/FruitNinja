@@ -75,22 +75,32 @@ struct ScreenButton {
     // +0x9C: button world position
     Vec3 m_pos;
 
-    // +0xA8: fruit/badge position (6th param to MenuButton ctor)
+    // +0xA8: fruit/badge position (6th param to MenuButton ctor).
+    // NOTE: fruitPos.z (+0xB0) doubles as the optional conditional rest-scale
+    // multiplier -- the binary has no separate "m_scaleA" field, it just reads
+    // this Vec3's z component. ASM v1.6.1 BaseScreen::UpdateButtons @0x00160430.
     Vec3 m_fruitPos;
 
-    // +0xB4: optional scale (applied to m_TargetSize if != 0.0)
-    float m_scaleA;
-
-    // +0xB8: always-applied scale on m_TargetSize
+    // +0xB4: always-applied scale on m_TargetSize.
+    // ASM v1.6.1 BaseScreen::UpdateButtons @0x00160450/0x001604d0.
     float m_scaleB;
 
-    // +0xBC: fruit facing rotation X
+    // +0xB8: fruit facing rotation X. ASM v1.6.1 UpdateButtons @0x001604fc.
     float m_rotX;
 
-    // +0xC0: fruit facing rotation Y
+    // +0xBC: fruit facing rotation Y. ASM v1.6.1 UpdateButtons @0x00160504.
     float m_rotY;
 
-    // +0xC4: flag set by ShrinkButtonCall (fruit shrink done)
+    // +0xC0: gate that must be nonzero (together with !m_bSliced) before the
+    // rotate-facing-up block runs at all; independent of m_rotX/m_rotY, which
+    // only decide the bool ARGUMENT passed to RotateFacingUp once the gate is
+    // open. ASM v1.6.1 UpdateButtons @0x001604ec/0x001604f4 (vcmp #0, beq 0x160570).
+    float m_bRotateGate;
+
+    // +0xC4: flag set by ShrinkButtonCall (fruit shrink done).
+    // TODO: v1.6.1 ScreenButton::ShrinkButtonCall @0x001300f0 -- this offset was
+    // assumed, not confirmed by UpdateButtons' own disasm (which never reads it).
+    // Re-verify against ShrinkButtonCall's disassembly before trusting +0xC4.
     uint8_t m_bShrunk;
 
     ScreenButton()
@@ -100,10 +110,10 @@ struct ScreenButton {
         , m_updateCb(Mortar::Delegate3<bool, MenuButton*, float, ScreenButton&>::MakeFree(&ScreenButtonDefaults::NoUpdate))  // 0x001300ec
         , m_pos(0, 0, 0)
         , m_fruitPos(0, 0, 0)
-        , m_scaleA(0.0f)
         , m_scaleB(1.0f)
         , m_rotX(0.0f)
         , m_rotY(0.0f)
+        , m_bRotateGate(0.0f)
         , m_bShrunk(0)
     {}
 

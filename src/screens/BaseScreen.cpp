@@ -334,22 +334,28 @@ void BaseScreen::UpdateButtons(float dt) {
             }
             sb.m_pButton = btn;
 
-            // Scale: optional m_scaleA (if != 0), then always m_scaleB
-            if (sb.m_scaleA != 0.0f)
-                btn->m_RestScale = btn->m_RestScale * sb.m_scaleA;
+            // Scale: optional conditional multiplier (fruitPos.z, if != 0), then always m_scaleB
+            // ASM v1.6.1 BaseScreen::UpdateButtons @0x00160430: reads sb+0xB0 (=m_fruitPos.z),
+            // not a standalone field -- the binary has no separate "scaleA" member.
+            if (sb.m_fruitPos.z != 0.0f)
+                btn->m_RestScale = btn->m_RestScale * sb.m_fruitPos.z;
             btn->m_RestScale = btn->m_RestScale * sb.m_scaleB;
 
             // Wire ControlDeleted as remove callback
             btn->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(&sb, &ScreenButton::ControlDeleted);
 
-            // Apply fruit piece scale + optional rotation
+            // Apply fruit piece scale + optional rotation.
+            // ASM v1.6.1 BaseScreen::UpdateButtons @0x001604ec-0x00160568: the
+            // rotate block is gated by sb.m_bRotateGate (independent of rotX/rotY,
+            // which only decide RotateFacingUp's bool ARGUMENT once the gate is open).
             if (btn->m_pTrackedFruit) {
                 btn->m_pTrackedFruit->scale =
                     btn->m_pTrackedFruit->scale * sb.m_scaleB;
                 if (!btn->m_pTrackedFruit->m_bSliced &&
-                    (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f) {
+                    sb.m_bRotateGate != 0.0f) {
+                    bool doRotate = (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f;
                     btn->m_pTrackedFruit->RotateFacingUp(
-                        true, Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
+                        doRotate, Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
                 }
             }
 
