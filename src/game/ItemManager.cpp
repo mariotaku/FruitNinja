@@ -118,7 +118,7 @@ void ItemManager::LoadItemData() {
                         if (!am->AchievementExists(item->m_Hash) && item->m_Cost > 0) {
                             item->m_bSeen = false;
                             item->m_Cost = -1;
-                            ShopScreen::s_NewItemAlpha = 1.0f;
+                            ShopScreen::s_ScrollOffset = 1.0f;
                         }
                     }
 
