@@ -18,8 +18,33 @@ BombFlash::~BombFlash() {}
 // v1.6.1 BombFlash::Init @0x001d4dbc — stub (real init logic not yet ported)
 void BombFlash::Init(void*, long, Vec3*) {}
 
-// v1.6.1 BombFlash::Update @0x001d4dd4 — stub (quadratic scale + alpha anim not yet ported)
-void BombFlash::Update(float /*dt*/) {}
+// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 BombFlash::Update @ 0x001d4dd4 (asm-inspector)
+// Quadratic scale-grow + linear fade-in / quadratic fade-out over a 0.6s lifetime;
+// deactivates and returns the slot to the pool once m_Timer exceeds 0.6s.
+void BombFlash::Update(float dt) {
+    m_Timer += dt;
+    float t = m_Timer / 0.6f;
+    m_Scale = Vec3(50.0f * t * t + 150.0f, 200.0f * t * t + 100.0f, 0.0f);
+
+    float maxAlpha = (float)(uint8_t)m_Colour0.a;
+    float alpha;
+    if (m_Timer < 0.2f) {
+        alpha = maxAlpha * (m_Timer / 0.2f);
+    } else if (m_Timer < 0.6f) {
+        float f = (0.6f - m_Timer) / 0.4f;
+        alpha = maxAlpha * f * f;
+    } else {
+        alpha = 0.0f;
+    }
+    if (alpha < 0.0f) alpha = 0.0f;
+    uint8_t a8 = (alpha >= maxAlpha) ? (uint8_t)maxAlpha : (uint8_t)(int)alpha;
+    m_Colour1.a = a8;
+
+    if (m_Timer > 0.6f) {
+        m_bActive = false;
+        m_Timer = 0.0f;
+    }
+}
 
 // v1.6.1 BombFlash::Draw @0x001d6910 — stub (draw not yet ported)
 void BombFlash::Draw() {}
