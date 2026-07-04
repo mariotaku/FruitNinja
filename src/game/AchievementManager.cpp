@@ -79,6 +79,53 @@ AchievementManager* AchievementManager::GetInstance() {
 }
 
 // ---------------------------------------------------------------------------
+// ParseGameMode / GetModeBitMask / ParseModeMask
+// v1.6.1 ParseModeMask @0x0014f320 (thunk @0x00116674), called from
+// LoadAchievementInfo @0x00118198. ParseModeMask calls ParseGameMode
+// (thunk @0x0011bf6c) and GetModeBitMask (thunk @0x0010445c).
+// ---------------------------------------------------------------------------
+
+// Case-sensitive match against the four named game modes -- XML "mode" data
+// is always uppercase ("CLASSIC","ARCADE","ZEN","ALL","ANY"). No match
+// (including "ALL"/"ANY") -> sentinel 4.
+static int ParseGameMode(const char* token, size_t len) {
+    static const char* const names[4] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
+    for (int i = 0; i < 4; ++i) {
+        if (strlen(names[i]) == len && strncmp(token, names[i], len) == 0) return i;
+    }
+    return 4;
+}
+
+// idx 0-3 -> single bit (GAME_MODE_CLASSIC/CASINO/ARCADE/ZEN); idx==4
+// (unrecognized token) -> wildcard, all bits set.
+static uint32_t GetModeBitMask(int idx) {
+    if (idx == 4) return 0xFFFFFFFFu;
+    return 1u << idx;
+}
+
+// Absent/empty mode attr -> wildcard (all modes allowed), matching the
+// binary's early-return default. Otherwise split modeAttr on ',', trim
+// surrounding spaces per token, and OR GetModeBitMask(ParseGameMode(token))
+// for every token (so "CLASSIC, ZEN" -> bit0|bit3; "ALL"/"ANY" -> wildcard
+// since neither matches one of the 4 named modes).
+static uint32_t ParseModeMask(const char* modeAttr) {
+    if (!modeAttr || modeAttr[0] == '\0') return GetModeBitMask(4);
+
+    uint32_t mask = 0;
+    const char* p = modeAttr;
+    while (*p) {
+        while (*p == ' ' || *p == ',') ++p;
+        if (!*p) break;
+        const char* start = p;
+        while (*p && *p != ',') ++p;
+        const char* end = p;
+        while (end > start && end[-1] == ' ') --end;
+        mask |= GetModeBitMask(ParseGameMode(start, (size_t)(end - start)));
+    }
+    return mask;
+}
+
+// ---------------------------------------------------------------------------
 // LoadAchievementInfo  (Binary @ 0x00118198)
 // ---------------------------------------------------------------------------
 
@@ -176,17 +223,16 @@ void AchievementManager::LoadAchievementInfo() {
             else if (strcmp(typeAttr, "BONUS_ACHIEVED")   == 0) info->m_TypeIndex = ACHIEVEMENT_TYPE_BONUS;
         }
 
-        // mode bitmask (e.g. "classic,arcade,zen" — binary packs as bit flags)
+        // mode bitmask (e.g. "CLASSIC,ZEN" — binary packs as bit flags)
+        // v1.6.1 LoadAchievementInfo @0x00118198: info->m_ModeBitmask = ParseModeMask(modeAttr)
+        // unconditionally -- ParseModeMask itself defaults an absent/empty attr to the
+        // wildcard (all bits), NOT 0. Previous port bug: case-sensitive strstr against
+        // lowercase literals never matched the XML's uppercase mode values, and the
+        // absent-attr default was 0 (deny-all) instead of the binary's -1 (allow-all),
+        // so every achievement's m_ModeBitmask stayed 0 and ModeBitmaskAllows() always
+        // returned false.
         const char* modeAttr = e.Attribute("mode");
-        info->m_ModeBitmask = 0;
-        if (modeAttr) {
-            // Binary stores: bit0=classic, bit1=arcade, bit2=zen, bit3=attack
-            // (exact bitmask encoding from XML "mode" attribute — each substring maps to a bit)
-            if (strstr(modeAttr, "classic"))  info->m_ModeBitmask |= (1u << 0);
-            if (strstr(modeAttr, "arcade"))   info->m_ModeBitmask |= (1u << 1);
-            if (strstr(modeAttr, "zen"))      info->m_ModeBitmask |= (1u << 2);
-            if (strstr(modeAttr, "attack"))   info->m_ModeBitmask |= (1u << 3);
-        }
+        info->m_ModeBitmask = ParseModeMask(modeAttr);
 
         // game-over / unsullied flag
         const char* unsullied = e.Attribute("requires_unsullied");

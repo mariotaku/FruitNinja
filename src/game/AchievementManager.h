@@ -68,7 +68,8 @@ enum AchievementType {
 //   0x8c  int m_Total                    XML "value" attribute threshold
 //   0x90  int m_Score                    XML "points" attribute
 //   0x94  uint32_t m_TypeIndex           0xb (11) sentinel in ctor; 0..10 on valid entry
-//   0x98  uint32_t m_ModeBitmask         bit0=classic bit1=arcade bit2=zen bit3=attack
+//   0x98  uint32_t m_ModeBitmask         bit(GAME_MODE_CLASSIC=0)|bit(CASINO=1)|bit(ARCADE=2)|bit(ZEN=3);
+//                                        0xFFFFFFFF wildcard for absent/unrecognized mode attr (ALL/ANY)
 //   0x9c  bool m_IsGameOver              requires_unsullied flag
 //   0x9d  char _pad[7]
 //   0xa4  SpecificOrder* m_SpecificOrder
