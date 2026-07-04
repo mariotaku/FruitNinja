@@ -6,8 +6,8 @@
 //
 // v1.6.1 binary refs:
 //   Constructor           0x0015b764  (AboutScreen(DojoScreen*))
-//   LoadContent           0x0015b6d4  (static, loads textures)
-//   UnLoadContent         (static, releases texture SmartPtrs)
+//   LoadContent           0x0015a548  (static, loads textures)
+//   UnLoadContent         0x0015c2c0  (static, releases texture SmartPtrs)
 //   Draw                  0x0015a654  (board panel + credits quad + sensei quads)
 //   NewDraw               0x0015a264  (BakedStringBox credit text pass)
 //   CreateCreditsMarquee  0x0015ac0c  (builds m_Marquees scrolling credits list)
@@ -143,6 +143,10 @@ private:
     static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex (binary: s_boardTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (binary: m_creditsTexture)
     static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex (binary: m_senseiTexture)
+    // Defunct: Bada dual-SIM preferred-network button icon; v1.6.1 s_switchNetworkTexture,
+    // gated in AboutScreen::Update @0x0015c428 via AskUserToChoosePreferredNetwork;
+    // never set by LoadContent, only cleared here -- stays null on port.
+    static Mortar::SmartPtr<Mortar::Texture> s_TexNetworkSwitch;
 
     // Helpers
     void CreateBackButton();
