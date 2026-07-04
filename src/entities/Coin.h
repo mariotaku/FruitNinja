@@ -12,7 +12,7 @@
 //   Coin::Init        0x0019D5FC  (stub/empty)
 //   Coin::Release     0x001731F4
 //   Coin::Update      0x0017312C  (fixed-timestep wrapper)
-//   Coin::_Update     0x00173790  (5-state machine)
+//   Coin::_Update     v1.6.1 @0x001d81bc  (5-state machine; v1.5.1 was 0x00173790)
 //   Coin::Draw        0x00173CC4
 //   Coin::DrawUpdate  0x0017318C  (empty)
 //   Coin::InitCoin    v1.6.1 @0x001d7d84  (v1.5.1 was 0x00173454)
@@ -42,13 +42,16 @@ public:
 
     int      m_CoinValue;        // +0x3C  coin value credited on arrival
     int      m_State;            // +0x40  0=waiting,1=arrived,2=flying,3=decel,4=homing
-    float    m_Timer;            // +0x44  delay countdown (state 0) / elapsed (states 3,4)
+    float    m_Timer;            // +0x44  delay countdown (state 0) / elapsed (states 3,4);
+                                  //        state 4 elapsed also drives the HOMING rampFactor
+                                  //        curve (v1.6.1 Coin::_Update @0x001d81bc)
     uint8_t  m_Silent;           // +0x48  if nonzero, skip SFX on launch
     float    m_Speed;            // +0x4C  launch speed (computed in InitCoin)
     uint16_t m_SpinAngle;        // +0x50  Y-axis visual spin accumulator
     uint32_t m_FlyFXHash;        // +0x54  StringHash of fly particle effect name
     uint32_t m_CollectFXHash;    // +0x58  StringHash of collect particle effect name
-    float    m_TargetX;          // +0x5C  homing target X (also carries gravity.x in state 0-3)
+    // states 3/4 only -- NOT a gravity accel (v1.6.1 Coin::_Update @0x001d81bc)
+    float    m_TargetX;          // +0x5C  homing target X
     float    m_TargetY;          // +0x60  homing target Y
     float    m_TargetZ;          // +0x64  homing target Z
     PSPParticleEmitter* m_pFlyEmitter;      // +0x68
@@ -150,7 +153,7 @@ public:
     static void UnLoadContent();
 
 private:
-    // 0x00173790 — 5-state machine, called by Update wrapper
+    // v1.6.1 @0x001d81bc — 5-state machine, called by Update wrapper
     void _Update(float dt);
 };
 
