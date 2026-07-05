@@ -713,6 +713,17 @@ fn_add_game_test(test_badges test_badges.cpp)
 add_test(NAME screenshot_badges COMMAND test_badges --screenshot)
 set_tests_properties(screenshot_badges PROPERTIES TIMEOUT 60)
 
+# Achievement-unlock popup screenshot test (NotificationControl, Type_Named).
+# There is no achievements-list screen in v1.6.1 (AchievementsScreen is a
+# defunct stub) -- this is the only on-screen achievement "drawing": the
+# slide-in unlock popup that AchievementManager::UnlockedAchievement
+# constructs. Renders a real AchievementInfo entry pulled from
+# AchievementManager::m_All, settled in its resting position.
+# Output: tmp/test/screenshots/achievement/unlock.png.
+fn_add_game_test(test_achievement_notification test_achievement_notification.cpp)
+add_test(NAME screenshot_achievement COMMAND test_achievement_notification --screenshot)
+set_tests_properties(screenshot_achievement PROPERTIES TIMEOUT 60 LABELS "category_rendering;component_notificationcontrol")
+
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
 # in isolation on a clean background. Seeded state: score=266, highscore=200 (new best),

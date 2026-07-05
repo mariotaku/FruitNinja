@@ -124,8 +124,7 @@ struct TestHarness {
     // Flag semantics:
     //   default (no flags)     -- interactive=m_interactiveDefault, screenshot=false
     //   --interactive          -- force visible window (overrides --headless)
-    //   --screenshot           -- one-shot: visible window (Windows needs a shown
-    //                             window for a readable framebuffer), dump image, exit
+    //   --screenshot           -- one-shot: render (hidden window), dump image, exit
     //   --headless             -- force hidden window, no screenshot dump
     //   --frames N             -- override headless run frame count (stored in frames)
     //   --duration S           -- override headless run in seconds at 60fps (frames = S*60)
