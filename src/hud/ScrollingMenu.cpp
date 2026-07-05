@@ -1,7 +1,8 @@
 // Analysed: 2026-04-25T21:45
 //
 // ScrollingMenu full Update implementation.
-// Binary: ctor 0x0015b3b0, Update 0x0015b747 (377 lines), AddItem 0x0015be54.
+// Binary: ctor 0x0015b3b0 (TODO: re-verify v1.6.1), v1.6.1 ScrollingMenu::Update @0x001b03b4,
+// AddItem 0x0015be54 (TODO: re-verify v1.6.1).
 // Touch physics: drag detection, velocity integration, spring-back, per-item layout.
 
 #include "ScrollingMenu.h"
@@ -137,7 +138,7 @@ ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
 }
 
 // ---------------------------------------------------------------------------
-// ScrollingMenu::Update @ 0x0015b747
+// v1.6.1 ScrollingMenu::Update @0x001b03b4
 //
 // 7-phase touch-based scrolling physics:
 //   Phase 1: clear m_bTouchProcessed
@@ -359,6 +360,14 @@ void ScrollingMenu::Update(float /*dt*/) {
     float closestDist = CLOSEST_SENTINEL;  // DAT_0015be10
     m_ClosestIdx = 0;                       // field76_0xbc reset
 
+    // Binary local pSVar4 (mirrors the loop's per-frame drag-target snap
+    // pointer). Set ONLY in the m_DragTargetIdx == i branch below -- stays
+    // null on every other path (including the "no drag target" branch and
+    // all non-matching iterations). Phase 6's click gate reads THIS, not
+    // GetItemClosestToZero() (which always resolves once any item has been
+    // focused, and is wrong for the click gate -- see Phase 6 below).
+    ScrollingMenuItem* dragTargetItem = nullptr;
+
     // Running layout cursor (binary: _Stack_68 = pos - velocity).
     // Earlier port had `m_Velocity.y - pos.y` (sign flipped); the binary's
     // `_Vector3<float>::operator-(out, pos)` call carries m_Velocity in
@@ -391,6 +400,7 @@ void ScrollingMenu::Update(float /*dt*/) {
             m_ClosestIdx = m_DragTargetIdx;
             closestDist = curY - pos.y;
             if (closestDist < 0.0f) closestDist = -closestDist;
+            dragTargetItem = item;  // binary: pSVar4 = pSVar10
         }
 
         // Binary advances cursor by halfH BEFORE the Move call so the item
@@ -444,12 +454,15 @@ void ScrollingMenu::Update(float /*dt*/) {
                 m_bTouchProcessed = 1;
 
                 // Binary gate: iVar2 == -1 means m_DragTargetIdx was -1 before Phase 3
-                // (no drag target active at frame start). Port uses GetItemClosestToZero()
-                // in place of binary's latched this_00 pointer (equivalent when closest
-                // search correctly updates m_ClosestIdx, which it does).
-                ScrollingMenuItem* closest = GetItemClosestToZero();
-                if (iVar2 == -1 && closest) {
-                    closest->CallClickedMenuItemCallback();
+                // (no drag target active at frame start). Binary's click target is
+                // pSVar4, a LOCAL set only in Phase 5's `m_DragTargetIdx == i` branch
+                // (see dragTargetItem above) -- NOT GetItemClosestToZero()/m_ClosestIdx,
+                // which always resolves to a valid item once anything has been focused.
+                // Using GetItemClosestToZero() here fired the click callback (and its
+                // "equip-locked" SFX, which has no debounce) every settled frame instead
+                // of only on the drag-target-snap edge.
+                if (iVar2 == -1 && dragTargetItem) {
+                    dragTargetItem->CallClickedMenuItemCallback();
                 }
             }
         }
