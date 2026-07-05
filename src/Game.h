@@ -110,9 +110,9 @@ struct Game : public Mortar::MortarGame {
     void SetAppLicensed(bool licensed) override;            // slot 19; v1.6.1 Game::SetAppLicensed @0x0011fc7c
     int GetAppLicensedState() override;                     // slot 20; v1.6.1 Game::GetAppLicensedState @0x0011fcbc
 
-    // Non-virtual -- mirrors Game::SetLanguage (TODO: re-verify v1.6.1 Game::SetLanguage address; not a vtable override;
+    // Implicit override of virtual MortarGame::SetLanguage (TODO: re-verify v1.6.1 Game::SetLanguage address;
     // binary's slot 21 still points to MortarGame::SetLanguage base impl).
-    void SetLanguage(const char* lang);
+    void SetLanguage(const char* lang) override;
 
     // === Methods ===
     Game();

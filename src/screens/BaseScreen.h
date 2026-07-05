@@ -40,7 +40,7 @@ public:
     // vtable slot 10 — PURE in binary (0x00360434 = __cxa_pure_virtual).
     // Every concrete subclass (DojoScreen, GameModeScreen, FruitFactPage and its
     // derived pages) provides its own Update override.
-    virtual void Update(float dt) = 0;
+    virtual void Update(float dt) override = 0;
 
     // Static texture management — two global textures shared by all
     // BaseScreen subclasses (sml_title.tex + blurry_backing.tex).

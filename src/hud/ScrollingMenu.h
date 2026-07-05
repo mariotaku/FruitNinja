@@ -211,7 +211,7 @@ public:
     // Binary @ 0x0015af28 -- Init: chains to vtable+0x10 (HUDControl::Init, a no-op).
     void Init() override;
     // Binary @ 0x0015af34 -- PreDraw(float*): empty no-op in binary (return only).
-    void PreDraw(float* viewVec);
+    void PreDraw(float* viewVec) override;
     // Binary @ 0x0015b034 -- Release: calls DestroyList() to clear+delete all items.
     void Release() override;
     // Binary @ 0x0015aeb8 -- Reset: m_DragTargetIdx=-1, m_TouchId=-1, m_pCollidedItem=0,

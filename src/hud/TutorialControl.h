@@ -50,7 +50,7 @@ public:
 
     // Reset animation timer to -10 (inactive sentinel).
     // Matches vtable slot 4 @ 0x00162e4c.
-    void Reset();
+    void Reset() override;
 
     // Matches TutorialControl::ResetTutePos @ 0x00162f04.
     // Copies button position, computes arrow width/flip, resets timer.
