@@ -144,7 +144,15 @@ void FruitInfo_Load(const char* xmlPath)
          elem = elem.NextSiblingElement("FruitInfo"), idx++)
     {
         FruitInfo& fi = s_FruitInfos[idx];
-        memset(&fi, 0, sizeof(fi));
+        // Port note: FruitInfo is not trivially-copyable (m_HudTexture/m_ZenTexture are
+        // Mortar::SmartPtr<Texture>, refcounted), so a raw memset() over a live element
+        // would corrupt/skip refcount bookkeeping if this entry ever held a texture.
+        // Value-initialising a temporary zeroes the POD fields exactly like the binary's
+        // FRUIT_INFO ctor memset (@0x0017ae20), and default-constructs the SmartPtrs to
+        // null; assigning it over fi runs SmartPtr::operator= (AddRef-null/Release-old),
+        // which is a safe no-op on the first (only) FruitInfo_Load call and would also
+        // correctly release any previously-held texture were this ever called again.
+        fi = FruitInfo();
         // Re-apply FRUIT_INFO ctor defaults (binary @ 0x0017ae20). The XML
         // parser uses TinyXML QueryIntAttribute / QueryFloatAttribute which
         // leave the destination unchanged when the attr is missing -- so

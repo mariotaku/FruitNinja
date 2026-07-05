@@ -95,7 +95,9 @@ void SlashModifier::RemoveModifier() {
 //   - speed -> m_ColourSpeed (default 1.0) via QueryDoubleAttribute
 //   - type -> ParseSlashModColourType (unconditional, null-safe)
 //   - particles -> CloneString (unconditional, null-safe)
-//   - texture -> new char[0x40], snprintf( ,4,"%s.tex", ) (confirmed at 0x0011f4d4)
+//   - texture -> new char[0x40], snprintf( ,4,"%s.tex", ) -- size arg is really 4,
+//     not 0x40 (re-confirmed by decompile 2026-07-05; the "0x0011f4d4" address
+//     previously cited here resolved to an unrelated function, CurrentOrientation)
 //   - <slash_power type="..."/> children -> m_PowerMask OR
 //   - <colour> children: binary reads m_NumColours directly (no zero reset),
 //     increments each iteration, then uses post-loop value for alloc.
@@ -116,8 +118,25 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
 
     const char* texture = xml->Attribute("texture");
     if (texture && texture[0]) {
+        // ASM-spec v1.6.1 SlashModifier::ParseSpecific @ 0x0014b310 (direct decompile,
+        // not yet asm-inspector-diffed): binary allocates 0x40 (operator_new[](0x40)) but calls
+        // _OS_snprintf(pcVar4, 4, "%s.tex", pcVar3) -- the size arg really is the
+        // literal 4, not 0x40 -- so any name longer than 3 chars is truncated to
+        // "%.3s" + NUL. Confirmed by direct decompile, not a port transcription bug;
+        // ported verbatim. -Wformat-truncation (GCC-only warning) can't see the size
+        // arg is intentional, so it's silenced locally rather than "fixed" into
+        // non-fidelity. Silenced on host GCC + web clang (both honor the GCC
+        // diagnostic pragma + -Wformat-truncation); skipped only on the Sourcery
+        // 4.4.1 cross-build (__bada__), which has neither push/pop nor this warning.
+#if defined(__GNUC__) && !defined(__bada__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
         m_pTexture2 = new char[0x40];
         snprintf(m_pTexture2, 4, "%s.tex", texture);
+#if defined(__GNUC__) && !defined(__bada__)
+#pragma GCC diagnostic pop
+#endif
     }
 
     // <slash_power type="..."/> children
