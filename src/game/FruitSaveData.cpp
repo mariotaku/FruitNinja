@@ -410,12 +410,22 @@ void FruitSaveData::CheckDatesHaveChanged() {
     }
 }
 
-// PlayedModeToday @ 0x0012a248. Returns true iff gameMode was played today
+// ASM-spec v1.6.1 FruitSaveData::PlayedModeToday @ 0x00152fd8 (direct decompile,
+// not yet asm-inspector-diffed). Returns true iff gameMode was played today
 // (m_LastPlayedDay[gameMode] == GetDaysSince1900()) and the per-mode
-// "<MODE>_today" total is > 0.
-// Key format confirmed via GameOver.cpp AddToTotal site (0x00169f94).
+// "<MODE>_today" total is > 0. Key format confirmed via GameOver.cpp
+// AddToTotal site (0x00169f94).
+// The previous "@ 0x0012a248" citation here was wrong -- that address is
+// WaveManager::Init, not this function; the correct address matches the
+// ASM-spec already on the declaration in FruitSaveData.h.
+// The binary does NOT bounds-check gameMode before indexing m_LastPlayedDay /
+// calling GetModeName -- it indexes/calls unconditionally. The port's
+// `if (gameMode < 0 || gameMode >= 4) return false;` was a port-invented guard
+// with no binary counterpart; since Mortar::GameMode only declares 0..3, the
+// compiler proves it tautologically false (-Wtautological-constant-out-of-range-compare)
+// and it is also dead at the port's sole call site (ShopListItem.cpp passes
+// the GAME_MODE_ZEN literal). Removed to match the binary exactly.
 bool FruitSaveData::PlayedModeToday(Mortar::GameMode gameMode) {
-    if (gameMode < 0 || gameMode >= 4) return false;
     if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
     char buf[68];
     snprintf(buf, sizeof(buf), "%s_today", k_ModeNames[gameMode]);
