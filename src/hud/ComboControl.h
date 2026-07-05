@@ -44,10 +44,10 @@ public:
     // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00137124 (re-analyst) -- returns 6
     int GetType() override { return 6; }
 
-    void Init();
+    void Init() override;
     void PreDraw();
-    void Release();
-    void Skip();
+    void Release() override;
+    void Skip() override;
 };
 
 #endif // FN_HUD_COMBO_CONTROL_H

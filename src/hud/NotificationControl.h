@@ -66,7 +66,7 @@ public:
     // Binary @ 0x001529F8 -- no-op.
     void Reset() override;
     // Binary @ 0x001529FC -- no-op.
-    void PreDraw(float* viewVec);
+    void PreDraw(float* viewVec) override;
     // ---- end lifecycle overrides ----
 };
 
