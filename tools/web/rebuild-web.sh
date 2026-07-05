@@ -23,7 +23,10 @@ WASM="$(ls -t "$BUILD_WEB"/fruit-ninja-*.wasm 2>/dev/null | head -1)"
 TMP="$PROJ/tmp"
 LOG="$TMP/web-rebuild.log"
 LOCK="$TMP/web-rebuild.lock"
-IMAGE="emscripten/emsdk:latest"
+# Pinned (not :latest): a floating tag silently changed the default wasm STACK_SIZE
+# (5MB -> 64KB at emscripten 3.1.27), which overflowed the HUD-text render path into
+# static globals. Pin to a concrete version so the toolchain can't drift underneath us.
+IMAGE="emscripten/emsdk:6.0.0"
 
 [ -d "$BUILD_WEB" ] || exit 0      # web build not configured -> nothing to do
 
