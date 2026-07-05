@@ -65,8 +65,17 @@ typedef int          GLint_t;
 typedef unsigned int GLsizei_t;
 typedef unsigned int GLenum_t;
 typedef void         GLvoid_t;
-typedef void (*PFN_glReadPixels)(GLint_t, GLint_t, GLsizei_t, GLsizei_t,
-                                 GLenum_t, GLenum_t, GLvoid_t*);
+// Windows GL entry points are __stdcall (APIENTRY). On x86, calling glReadPixels
+// through a default (__cdecl) pointer corrupts ESP -> _RTC_CheckEsp abort in debug
+// builds. Match the platform GL calling convention (harmless/no-op off Win32 and
+// on x64 where conventions are unified).
+#if defined(_WIN32)
+#  define FN_GL_APIENTRY __stdcall
+#else
+#  define FN_GL_APIENTRY
+#endif
+typedef void (FN_GL_APIENTRY *PFN_glReadPixels)(GLint_t, GLint_t, GLsizei_t, GLsizei_t,
+                                                GLenum_t, GLenum_t, GLvoid_t*);
 
 namespace fn {
 
@@ -115,7 +124,8 @@ struct TestHarness {
     // Flag semantics:
     //   default (no flags)     -- interactive=m_interactiveDefault, screenshot=false
     //   --interactive          -- force visible window (overrides --headless)
-    //   --screenshot           -- headless one-shot: run hidden, dump PPM, exit
+    //   --screenshot           -- one-shot: visible window (Windows needs a shown
+    //                             window for a readable framebuffer), dump image, exit
     //   --headless             -- force hidden window, no screenshot dump
     //   --frames N             -- override headless run frame count (stored in frames)
     //   --duration S           -- override headless run in seconds at 60fps (frames = S*60)
