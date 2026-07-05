@@ -19,6 +19,10 @@ galleries.  Output layout (default: pages/):
       play_button.webp
       sound.webp
       sound_cross.webp
+      manifest.webmanifest        <- PWA manifest (static, unhashed by design)
+      sw.js                       <- service worker (root scope; runtime caching)
+      favicon.ico
+      icons/                      <- PWA icon PNGs (16/32/180/192/512/maskable)
 
 The game's index.html references its assets by bare relative name (same
 directory), so placing them next to index.html at the root needs no
@@ -49,6 +53,18 @@ GAME_EXTRA_FILES = [
     "sound.webp",
     "sound_cross.webp",
 ]
+
+# PWA files copied from build/web/ into pages/ root as-is.  Static and
+# UNHASHED by design: the manifest / service worker / favicon must keep
+# stable names across builds (web-hash-assets.py leaves them alone).
+PWA_FILES = [
+    "manifest.webmanifest",
+    "sw.js",
+    "favicon.ico",
+]
+
+# PWA icon PNG directory, copied wholesale to pages/icons/.
+ICONS_DIRNAME = "icons"
 
 # Hashed file patterns: stem -> (pattern, ext)
 # web-hash-assets.py renames canonical files to stem-<8hex>.ext.
@@ -179,6 +195,25 @@ def main():
         if os.path.isfile(src_path):
             sz = copy_file(src_path, os.path.join(out, gf))
             summary.append(("pages/" + gf, sz))
+
+    # PWA files (manifest.webmanifest, sw.js, favicon.ico) -- static, unhashed.
+    for pf in PWA_FILES:
+        src_path = os.path.join(SRC_BUILD_WEB, pf)
+        if os.path.isfile(src_path):
+            sz = copy_file(src_path, os.path.join(out, pf))
+            summary.append(("pages/" + pf, sz))
+        else:
+            print("WARNING: expected PWA file missing:", pf)
+
+    # PWA icons directory -> pages/icons/.
+    icons_src = os.path.join(SRC_BUILD_WEB, ICONS_DIRNAME)
+    if os.path.isdir(icons_src):
+        icons_dst = os.path.join(out, ICONS_DIRNAME)
+        shutil.copytree(icons_src, icons_dst)
+        icon_files, icon_bytes = count_tree(icons_dst)
+        summary.append(("pages/icons/ ({} files)".format(icon_files), icon_bytes))
+    else:
+        print("WARNING: expected PWA icons directory missing: build/web/icons/")
 
     # ------------------------------------------------------------------
     # Summary

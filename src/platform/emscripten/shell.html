@@ -10,6 +10,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Fruit Ninja</title>
+  <!-- PWA: manifest + icons + install metas.  The referenced files are staged
+       as siblings of the built index.html (CMake POST_BUILD copies
+       manifest.webmanifest / sw.js / favicon.ico / icons/ into build/web/;
+       build_pages.py mirrors them to the pages/ root), so relative hrefs
+       resolve at the deploy root. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Fruit Ninja">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -969,6 +984,18 @@
                  (r && r.stack) ? String(r.stack) : null);
     }
   });
+
+  /* PWA: register the service worker (sw.js at the deploy root -> root scope)
+     AFTER the window load event so registration never competes with the game
+     download / boot-direct flow above.  sw.js does hash-agnostic runtime
+     caching, so after one full online load the game works offline.
+     Guarded + .catch: unsupported browsers, file://, or a missing sw.js are a
+     silent no-op. */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
   </script>
 
   <!-- Module must be defined in its own <script> block,

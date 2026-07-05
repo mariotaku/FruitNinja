@@ -487,14 +487,30 @@ if (EMSCRIPTEN)
     # populated.  splash.webp is the loading-screen backdrop (HB_logo.tex region);
     # play_button/sound/sound_cross are the shell overlay UI (also consumed by
     # tools/web/build_pages.py, which reads them from build/web/).
+    # Also stages the PWA files (manifest.webmanifest, sw.js, favicon.ico at the
+    # output root; icon PNGs under icons/) referenced by the shell's <head> --
+    # these keep stable, unhashed names by design (web-hash-assets.py does not
+    # touch them) so the manifest / service-worker / favicon URLs never change.
     add_custom_command(TARGET fruit-ninja POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/play_button.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound_cross.webp
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/manifest.webmanifest
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sw.js
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/favicon.ico
             ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Copying shell image assets (splash + UI webp) to web build output"
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/icons
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-16.png
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-32.png
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-180.png
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-192.png
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-512.png
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/icon-maskable-512.png
+            ${CMAKE_CURRENT_BINARY_DIR}/icons
+        COMMENT "Copying shell image assets + PWA files (manifest, sw.js, favicon, icons) to web build output"
         VERBATIM
     )
     # Port specific: content-hash web output files to defeat browser/mobile caching.
