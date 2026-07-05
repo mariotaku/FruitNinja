@@ -103,6 +103,66 @@ if (ENABLE_ASAN)
     )
 endif()
 
+# --- Emscripten AddressSanitizer (web UAF debugging) ---
+# Instruments the whole wasm build with ASan so heap-use-after-free / OOB in the
+# web build produce a real alloc/free stack trace in the browser console (which
+# host x64 ASan can't reproduce -- wasm heap layout differs). ASan needs the
+# frame pointers + names and a large reserved heap for its shadow memory.
+# Enable with: cmake -B build/web ... -DFN_WEB_ASAN=ON  (then rebuild via Docker).
+option(FN_WEB_ASAN "Emscripten AddressSanitizer for the web build" OFF)
+if (FN_WEB_ASAN)
+    if (NOT EMSCRIPTEN)
+        message(WARNING "FN_WEB_ASAN=ON but this is not an Emscripten build; ignoring.")
+    else()
+        message(STATUS "Emscripten AddressSanitizer enabled (FN_WEB_ASAN)")
+        add_compile_options(
+            -fsanitize=address
+            -fno-omit-frame-pointer
+            -O1
+            -g
+        )
+        add_link_options(
+            -fsanitize=address
+            -fno-omit-frame-pointer
+            # ASan reserves shadow memory over the whole heap; give it a large
+            # fixed reservation so allocation doesn't fail under the 49MB asset
+            # preload + runtime heap. Named frames + assertions for readable traces.
+            "SHELL:-sINITIAL_MEMORY=1073741824"
+            "SHELL:-sASSERTIONS=1"
+            "SHELL:--profiling-funcs"
+        )
+    endif()
+endif()
+
+# --- Emscripten DWARF debug build (Chrome source-level debugging) ---
+# Build the wasm with full DWARF debug info so the Chrome "C/C++ DevTools
+# Support (DWARF)" extension can set C++ source breakpoints and inspect locals
+# on the actual failing target (some bugs reproduce only on wasm, not native).
+# DWARF is emitted to a SEPARATE sidecar file (fruit-ninja.debug.wasm): the main
+# .wasm carries only a small `external_debug_info` custom section naming the sidecar,
+# which Chrome's DWARF extension fetches on demand. Keeps the shipped .wasm lean
+# while giving full source-level debugging. Serve the .debug.wasm beside the .wasm.
+# Pair with -DCMAKE_BUILD_TYPE=Debug for -O0 so locals aren't optimised out and
+# stepping is 1:1.
+# Enable: cmake -B build/web ... -DFN_WEB_DEBUG=ON -DCMAKE_BUILD_TYPE=Debug
+option(FN_WEB_DEBUG "Emscripten separate-DWARF debug build for Chrome source-level debugging" OFF)
+if (FN_WEB_DEBUG)
+    if (NOT EMSCRIPTEN)
+        message(WARNING "FN_WEB_DEBUG=ON but this is not an Emscripten build; ignoring.")
+    else()
+        message(STATUS "Emscripten separate-DWARF debug build enabled (FN_WEB_DEBUG)")
+        add_compile_options(-g)
+        # Link: extract DWARF into fruit-ninja.debug.wasm (relative to the wasm output
+        # dir) and reference it via external_debug_info in the main .wasm.
+        add_link_options("SHELL:-gseparate-dwarf=fruit-ninja.debug.wasm")
+        # Crash LOUDLY on stack overflow instead of silently clobbering statics.
+        # =2 instruments every function to check SP vs the limit, so it aborts AT
+        # the overflowing frame (the failure mode that caused the game_work /
+        # AchievementManager corruption). Debug-only; production build omits it.
+        add_link_options("SHELL:-sSTACK_OVERFLOW_CHECK=2")
+    endif()
+endif()
+
 # --- GL backend selection ---
 #
 # The port targets the same fixed-function pipeline the binary uses
@@ -384,6 +444,18 @@ if (EMSCRIPTEN)
         "SHELL:-sLEGACY_GL_EMULATION=1"
         "SHELL:-sGL_FFP_ONLY=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        # Port specific: emscripten 3.1.27+ dropped the default stack to 64 KB
+        # (older emscripten defaulted to 5 MB). 64 KB is far below the original
+        # Bada platform's stack: the deepest path in the game -- HUD text render
+        # (ScoreControl::PreDraw -> Font::DrawString -> Renderer::DrawTriStrip ->
+        # MatrixManager::GetMVP -> Matrix44::operator*, several 64-byte Matrix44
+        # temps) -- overflows 64 KB and the stack descends into the static-data
+        # segment, silently clobbering globals (game_work / AchievementManager /
+        # MatrixManager). The HUD-text path peaks at ~112 KB of stack; size the
+        # wasm stack to 1 MB (~9x headroom, embedded/native-comparable). Any deeper
+        # path that ever exceeds this aborts loudly via STACK_OVERFLOW_CHECK (debug)
+        # rather than silently corrupting -- so 1 MB is safe, not a gamble.
+        "SHELL:-sSTACK_SIZE=1048576"
         "SHELL:-sEXIT_RUNTIME=0"
         # Port specific: custom HTML shell (Phase 5+7: letterbox + loading bar
         # + TAP TO START overlay that doubles as the audio gesture unlock).
@@ -425,12 +497,18 @@ if (EMSCRIPTEN)
     # rewrites all internal cross-references (wasm/data refs in js, js/splash refs
     # in html), and prunes stale hashed files from prior builds.
     # fruit-ninja.html stays unhashed (stable entry point).
-    add_custom_command(TARGET fruit-ninja POST_BUILD
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/web-hash-assets.py
-                        ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Content-hashing web output files (cache busting)"
-        VERBATIM
-    )
+    # Skipped under FN_WEB_DEBUG: the -O0/-g emscripten shell emits a different
+    # script-tag/locateFile literal form the hasher can't rewrite, which breaks
+    # the html->js reference. Debug builds keep the un-hashed default names
+    # (fruit-ninja.{html,js,wasm,data}), which are internally consistent.
+    if (NOT FN_WEB_DEBUG)
+        add_custom_command(TARGET fruit-ninja POST_BUILD
+            COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/web-hash-assets.py
+                            ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Content-hashing web output files (cache busting)"
+            VERBATIM
+        )
+    endif()
 else()
     # Native desktop/webOS entry point.
     add_executable(fruit-ninja src/mainSDL.cpp)
