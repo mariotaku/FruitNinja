@@ -90,7 +90,7 @@ def main():
     ip = lan_ip()
     print("serving %s/ on http://%s:%d/  (index no-store, hashed assets immutable, gzip)"
           % (a.dir, ip, a.port))
-    print("  phone -> http://%s:%d/fruit-ninja.html" % (ip, a.port))
+    print("  phone -> http://%s:%d/" % (ip, a.port))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

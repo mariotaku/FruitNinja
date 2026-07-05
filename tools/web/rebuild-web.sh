@@ -5,7 +5,10 @@
 #
 # Dispatcher (default): gate on src-change vs the existing wasm, then launch the
 #   worker DETACHED (nohup) so the agent turn never blocks on the ~30-60s build.
-# Worker (--worker): run the actual incremental Docker build (same image as CI).
+# Worker (--worker): run the incremental Docker build via tools/web/build.sh --
+#   the same in-container entrypoint CI (.github/workflows/pages.yml) uses, so
+#   local and CI share one pipeline (pre-clean, race-safe two-step build,
+#   verify + link retry).
 #
 # No-op when build/web/ is absent, no src file is newer than the wasm, or a build
 # is already running (lockfile). Output/errors -> tmp/web-rebuild.log.
@@ -35,18 +38,14 @@ if [ "${1:-}" = "--worker" ]; then
     # Windows/MSYS: keep /src and -w literal; hand Docker a native host path.
     export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
     if command -v cygpath >/dev/null 2>&1; then HOST="$(cygpath -m "$PROJ")"; else HOST="$PROJ"; fi
-    # Clear only the executable's link outputs (NOT the 49MB .data, which is
-    # incremental + reused by web-hash). This avoids a corrupted/truncated wasm
-    # intermediate surviving across builds (wasm-metadce "Section extends beyond
-    # end of input"). Keeps fruit-ninja-<hash>.data so web-hash reuses it.
-    rm -f "$BUILD_WEB"/fruit-ninja.wasm "$BUILD_WEB"/fruit-ninja.html "$BUILD_WEB"/fruit-ninja.js
     {
         echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)"
-        # Build the static lib FIRST, then the executable: the parallel -j build
-        # of fruit-ninja.html can otherwise race ahead of libfruit-ninja-game.a's
-        # rule ("No rule to make target ... libfruit-ninja-game.a" / 168-byte wasm).
+        # Single in-container pipeline shared with CI: build.sh owns the
+        # pre-clean of link outputs, the lib-first race workaround, and the
+        # verify + link-retry. No flags = respect the existing build/web
+        # configure (preserves a locally-configured FN_WEB_DEBUG build).
         docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" \
-            sh -c "cmake --build build/web --target fruit-ninja-game -j && cmake --build build/web -j"
+            bash /src/tools/web/build.sh
         code=$?
         if [ "$code" -eq 0 ]; then echo "[$(date -Is 2>/dev/null || date)] rebuild OK"
         else echo "[$(date -Is 2>/dev/null || date)] rebuild FAILED (exit $code)"; fi

@@ -147,24 +147,19 @@ jobs:
           rm -rf tmp-outer tmp-inner fruit-ninja-assets.zip
 
       # ---- Build web target with Emscripten (Docker) ----------------------
-      # Uses the same emscripten/emsdk Docker image as local development
-      # (emcc 6.0.0) so the build is reproducible and matches the environment
-      # the shell.html / LEGACY_GL_EMULATION / glTexEnvi code was verified on.
-      - name: Configure (emcmake cmake via Docker)
+      # Single in-container entrypoint shared with local dev
+      # (tools/web/rebuild-web.sh calls the same script): configure-if-needed,
+      # race-safe two-step build, output verify + link retry. Same pinned
+      # emsdk image (emcc 6.0.0) so the build is reproducible and matches the
+      # environment the shell.html / LEGACY_GL_EMULATION / glTexEnvi code was
+      # verified on.
+      - name: Build web bundle (tools/web/build.sh via Docker)
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE":/src \
             -w /src \
             "$EMSDK_IMAGE" \
-            emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build (cmake via Docker)
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE":/src \
-            -w /src \
-            "$EMSDK_IMAGE" \
-            cmake --build build/web -j
+            bash /src/tools/web/build.sh --release
 
       - name: Verify build outputs
         run: |
