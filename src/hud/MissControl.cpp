@@ -79,6 +79,8 @@ float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
 // Binary @ 0x001515a4 -- combo overlay textures [0..9] = combo_2..combo_11.
 Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 
+int MissControl::s_refCount = 0;
+
 // --- ctor / dtor -----------------------------------------------------------
 
 MissControl::MissControl()
@@ -91,6 +93,7 @@ MissControl::MissControl()
     , m_ComboCount(0)
     , m_DragScale(1.0f)
 {
+    ++s_refCount;
     m_Active        = 0;   // pool slot starts free; Init/Make* sets to 1
     // m_bNoDestructor is NOT set here -- binary writes it in CreatePool AFTER
     // HUD::AddControl per binary @ 0x001513ac. Setting it in the ctor would
@@ -111,11 +114,16 @@ MissControl::MissControl()
     // would set. Init() itself has zero live call sites in src/ today.
 }
 
-// TODO: v1.6.1 MissControl::~MissControl @0x0019f198 -- binary refcount-releases 13 shared static
-// textures on last instance; the port's s_refCount attempt (e720f57c) was REVERTED because it
-// underflowed and caused a wasm heap-corruption UAF (rings/bg/blade textures went black). Re-do
-// with a sound, ctor/dtor-balanced refcount + wasm32 validation. See task backlog.
-MissControl::~MissControl() = default;
+// ASM-spec v1.6.1 MissControl::~MissControl @0x0019f198
+MissControl::~MissControl() {
+    if (--s_refCount <= 0) {
+        s_TexCritical.SetNull();
+        s_TexRare.SetNull();
+        s_TexCross.SetNull();
+        for (int i = 0; i < 10; ++i) s_ComboTextures[i].SetNull();
+        s_TexturesLoaded = false;  // allow next LoadContent() call to reload
+    }
+}
 
 // --- vtable overrides -------------------------------------------------------
 
