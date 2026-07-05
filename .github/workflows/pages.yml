@@ -55,7 +55,10 @@ env:
   # If archive.org swaps the build, the extract step fails -- update this (and the
   # ASSET_FILENAME/header hashes) only after confirming the new build is correct.
   EXPECTED_BIN_MD5: "ab60ff54a272abed1cbd403c5dcb7c55"
-  EMSDK_IMAGE: "emscripten/emsdk:latest"
+  # Pinned (not :latest): a floating tag silently changed the default wasm STACK_SIZE
+  # (5MB -> 64KB at emscripten 3.1.27) and corrupted static globals via HUD-text stack
+  # overflow. Pin to a concrete version for reproducible CI builds.
+  EMSDK_IMAGE: "emscripten/emsdk:6.0.0"
 
 jobs:
   # -------------------------------------------------------------------------
