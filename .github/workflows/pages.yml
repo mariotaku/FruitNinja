@@ -178,14 +178,11 @@ jobs:
 
       - name: Verify pages/ structure
         run: |
-          echo "=== pages/ top-level ==="
+          echo "=== pages/ (flat, game at root) ==="
           ls -la pages/
-          echo "=== pages/game/ ==="
-          ls -lh pages/game/
-          echo "=== pages/models/ ==="
-          ls -lh pages/models/
-          echo "=== pages/textures/ (top) ==="
-          ls -la pages/textures/
+          test -f pages/index.html
+          test -f pages/.nojekyll
+          ls pages/fruit-ninja-*.js pages/fruit-ninja-*.wasm pages/fruit-ninja-*.data
 
       # ---- Upload artifact ------------------------------------------------
       - name: Configure GitHub Pages

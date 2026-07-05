@@ -5,30 +5,28 @@ tools/web/build_pages.py -- assemble the GitHub Pages output directory.
 Usage:
     python tools/web/build_pages.py [--out <dir>]
 
-Output layout (default: pages/):
+The deployed site is just the game at the root -- no landing page, no
+galleries.  Output layout (default: pages/):
+
     pages/
       .nojekyll
-      index.html          <- web/index.html
-      game/
-        index.html        <- build/web/index.html (entry, renamed from
-                             fruit-ninja.html by tools/web/build.sh)
-        fruit-ninja.js
-        fruit-ninja.wasm
-        fruit-ninja.data
-        splash.webp
-        play_button.webp
-        sound.webp
-        sound_cross.webp
-      models/
-        index.html        <- docs/gallery/models/index.html
-        models.json
-        fruit_atlas.png
-      textures/
-        index.html        <- docs/gallery/textures/index.html
-        Data/             <- docs/gallery/textures/Data/ (recursive)
+      index.html                  <- build/web/index.html (entry, renamed from
+                                     fruit-ninja.html by tools/web/build.sh)
+      fruit-ninja-<sha8>.js
+      fruit-ninja-<sha8>.wasm
+      fruit-ninja-<sha8>.data
+      splash-<sha8>.webp
+      play_button.webp
+      sound.webp
+      sound_cross.webp
 
-Run from the repository root.  Idempotent: clears pages/ before each run.
-Errors if build/web/ is missing or index.html is absent.
+The game's index.html references its assets by bare relative name (same
+directory), so placing them next to index.html at the root needs no
+reference rewriting.
+
+Run from the repository root.  Idempotent: removes and recreates the output
+directory each run so stale files from previous layouts don't linger.
+Errors if build/web/index.html is missing.
 """
 
 import argparse
@@ -42,12 +40,9 @@ import sys
 # ---------------------------------------------------------------------------
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SRC_LANDING     = os.path.join(REPO_ROOT, "web", "index.html")
-SRC_BUILD_WEB   = os.path.join(REPO_ROOT, "build", "web")
-SRC_MODELS_DIR  = os.path.join(REPO_ROOT, "docs", "gallery", "models")
-SRC_TEX_DIR     = os.path.join(REPO_ROOT, "docs", "gallery", "textures")
+SRC_BUILD_WEB = os.path.join(REPO_ROOT, "build", "web")
 
-# Non-hashed extra assets copied from build/web/ into pages/game/ as-is.
+# Non-hashed extra assets copied from build/web/ into pages/ as-is.
 # These are NOT referenced by name in HTML/JS so they don't need hashing.
 GAME_EXTRA_FILES = [
     "play_button.webp",
@@ -83,37 +78,15 @@ def find_hashed_file(build_web_dir, stem, ext):
         print("WARNING: multiple hashed files for {}.{}: {}".format(stem, ext, matches))
     return matches[0]
 
-# Files we copy from docs/gallery/models/ into pages/models/
-MODELS_FILES = [
-    "index.html",
-    "models.json",
-    "fruit_atlas.png",
-]
-
 
 def die(msg):
     print("ERROR:", msg, file=sys.stderr)
     sys.exit(1)
 
 
-def ensure_dir(path):
-    os.makedirs(path, exist_ok=True)
-
-
 def copy_file(src, dst):
-    ensure_dir(os.path.dirname(dst))
     shutil.copy2(src, dst)
     return os.path.getsize(dst)
-
-
-def copy_tree(src, dst):
-    """Recursively copy src directory into dst (dst must not exist yet)."""
-    shutil.copytree(src, dst)
-    total = 0
-    for dirpath, _, filenames in os.walk(dst):
-        for fname in filenames:
-            total += os.path.getsize(os.path.join(dirpath, fname))
-    return total
 
 
 def fmt_bytes(n):
@@ -144,9 +117,6 @@ def main():
     # ------------------------------------------------------------------
     # Pre-flight checks
     # ------------------------------------------------------------------
-    if not os.path.isfile(SRC_LANDING):
-        die("web/index.html not found -- expected at: " + SRC_LANDING)
-
     game_html_src = os.path.join(SRC_BUILD_WEB, "index.html")
     if not os.path.isdir(SRC_BUILD_WEB):
         die("build/web/ directory not found.\n"
@@ -171,25 +141,14 @@ def main():
         if not os.path.isfile(p_path):
             print("WARNING: expected extra game file missing:", gf)
 
-    if not os.path.isdir(SRC_MODELS_DIR):
-        die("docs/gallery/models/ not found at: " + SRC_MODELS_DIR)
-    if not os.path.isdir(SRC_TEX_DIR):
-        die("docs/gallery/textures/ not found at: " + SRC_TEX_DIR)
-
     # ------------------------------------------------------------------
-    # Clean output -- non-destructive to top-level files.
-    # Only clean the regenerated SUBDIRS (game/models/textures) so the copytree
-    # targets get a clean dest; the top-level files (index.html, .nojekyll) are
-    # overwritten in place by the copy steps below and any extra files are kept.
-    # (Previously this rmtree'd the whole output dir, deleting index.html + any
-    # extra/deployed files and breaking a live server mid-publish.)
+    # Clean output -- remove and recreate so stale files from previous
+    # layouts (old landing page, game/, models/, textures/) don't linger.
     # ------------------------------------------------------------------
-    ensure_dir(out)
-    for _sub in ("game", "models", "textures"):
-        _subpath = os.path.join(out, _sub)
-        if os.path.isdir(_subpath):
-            shutil.rmtree(_subpath)
-            print("Cleaned subdir:", _subpath)
+    if os.path.isdir(out):
+        shutil.rmtree(out)
+        print("Cleaned:", out)
+    os.makedirs(out)
 
     summary = []
 
@@ -201,70 +160,25 @@ def main():
     summary.append(("pages/.nojekyll", 0))
 
     # ------------------------------------------------------------------
-    # pages/index.html
+    # pages/index.html  <- build/web/index.html (the game entry, at root)
     # ------------------------------------------------------------------
-    sz = copy_file(SRC_LANDING, os.path.join(out, "index.html"))
-    summary.append(("pages/index.html", sz))
-
-    # ------------------------------------------------------------------
-    # pages/game/
-    # ------------------------------------------------------------------
-    game_dir = os.path.join(out, "game")
-    ensure_dir(game_dir)
-
-    # build/web/index.html -> game/index.html
-    sz = copy_file(game_html_src, os.path.join(game_dir, "index.html"))
-    summary.append(("pages/game/index.html (from build/web/index.html)", sz))
+    sz = copy_file(game_html_src, os.path.join(out, "index.html"))
+    summary.append(("pages/index.html (from build/web/index.html)", sz))
 
     # Hashed files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
+    # The game HTML/JS references these by bare same-dir name -- no rewriting.
     for gf in hashed_game_files:
         src_path = os.path.join(SRC_BUILD_WEB, gf)
         if os.path.isfile(src_path):
-            sz = copy_file(src_path, os.path.join(game_dir, gf))
-            summary.append(("pages/game/" + gf, sz))
+            sz = copy_file(src_path, os.path.join(out, gf))
+            summary.append(("pages/" + gf, sz))
 
     # Non-hashed extra assets (not referenced by name in HTML/JS).
     for gf in GAME_EXTRA_FILES:
         src_path = os.path.join(SRC_BUILD_WEB, gf)
         if os.path.isfile(src_path):
-            sz = copy_file(src_path, os.path.join(game_dir, gf))
-            summary.append(("pages/game/" + gf, sz))
-
-    # ------------------------------------------------------------------
-    # pages/models/
-    # ------------------------------------------------------------------
-    models_dir = os.path.join(out, "models")
-    ensure_dir(models_dir)
-
-    for mf in MODELS_FILES:
-        src_path = os.path.join(SRC_MODELS_DIR, mf)
-        if os.path.isfile(src_path):
-            sz = copy_file(src_path, os.path.join(models_dir, mf))
-            summary.append(("pages/models/" + mf, sz))
-        else:
-            print("WARNING: models file not found:", mf)
-
-    # ------------------------------------------------------------------
-    # pages/textures/
-    # ------------------------------------------------------------------
-    tex_dst = os.path.join(out, "textures")
-
-    # Copy textures/index.html separately, then the Data/ tree
-    tex_index_src = os.path.join(SRC_TEX_DIR, "index.html")
-    if not os.path.isfile(tex_index_src):
-        die("docs/gallery/textures/index.html not found")
-
-    ensure_dir(tex_dst)
-    sz = copy_file(tex_index_src, os.path.join(tex_dst, "index.html"))
-    summary.append(("pages/textures/index.html", sz))
-
-    tex_data_src = os.path.join(SRC_TEX_DIR, "Data")
-    if os.path.isdir(tex_data_src):
-        copy_tree(tex_data_src, os.path.join(tex_dst, "Data"))
-        n_files, n_bytes = count_tree(os.path.join(tex_dst, "Data"))
-        summary.append(("pages/textures/Data/ ({} files)".format(n_files), n_bytes))
-    else:
-        print("WARNING: docs/gallery/textures/Data/ not found -- textures gallery will be incomplete")
+            sz = copy_file(src_path, os.path.join(out, gf))
+            summary.append(("pages/" + gf, sz))
 
     # ------------------------------------------------------------------
     # Summary
@@ -272,7 +186,7 @@ def main():
     total_files, total_bytes = count_tree(out)
     print()
     print("=" * 60)
-    print("  pages/ assembled successfully")
+    print("  pages/ assembled successfully (game at root)")
     print("=" * 60)
     for label, sz in summary:
         print("  {:<52} {}".format(label, fmt_bytes(sz)))
@@ -282,7 +196,7 @@ def main():
     print()
     print("  Preview locally:")
     print("    cd pages && python -m http.server 8000")
-    print("    open http://localhost:8000")
+    print("    open http://localhost:8000/")
     print()
 
 
