@@ -178,10 +178,12 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
 // @0x0019d064 clears the tracked fruit's m_pOwner back-pointer (+0x160) / the
 // bomb's owner-button field, deletes the 3 labels + pieces, and SetNulls
 // m_Texture. The port previously had an EMPTY dtor, so Release() never ran on any
-// reap/delete path -> tracked fruits kept a dangling m_pOwner (Fruit::KillFruit UB)
-// and the resulting dangling seed corrupted reused heap, over-freeing the shared
-// red_ring texture (GameModeScreen::CreateControls SmartPtr assign trap). Refcount-
-// safe: Release SetNulls m_Texture once; the base ~HUDControl3d then sees null.
+// reap/delete path -> tracked fruits kept a dangling m_pOwner back-pointer
+// (Fruit::KillFruit UB); restoring the dtor->Release() call is binary-faithful.
+// Refcount-safe: Release SetNulls m_Texture once; the base ~HUDControl3d then sees
+// null. (NOTE: the "menu ring texture corruption" once attributed to a dangling seed
+// over-freeing the shared red_ring was actually the wasm 64KB stack-overflow spray,
+// now root-fixed via STACK_SIZE=1MB -- unrelated to this dtor.)
 MenuButton::~MenuButton() { Release(); }
 
 // MenuButton::Init @ 0x0019b994
