@@ -14,6 +14,28 @@
 #include "game/GameWork.h"
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
+#include <cstdio>
+
+// Port specific: SDL's default log output function writes to stderr on every
+// platform. On Emscripten, stderr maps to console.error, which prints a full
+// JS call stack per line -- useless noise for routine SDL_Log/LOG_* traffic.
+// Route SDL's own logs to stdout (console.log) instead; genuine JS errors/
+// aborts still hit stderr/console.error since they never go through this
+// callback. Format mirrors SDL's built-in output function ("<PRIORITY>: <message>").
+static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriority priority, const char* message) {
+    const char* p = "INFO";
+    switch (priority) {
+        case SDL_LOG_PRIORITY_VERBOSE:  p = "VERBOSE"; break;
+        case SDL_LOG_PRIORITY_DEBUG:    p = "DEBUG";   break;
+        case SDL_LOG_PRIORITY_INFO:     p = "INFO";    break;
+        case SDL_LOG_PRIORITY_WARN:     p = "WARN";    break;
+        case SDL_LOG_PRIORITY_ERROR:    p = "ERROR";   break;
+        case SDL_LOG_PRIORITY_CRITICAL: p = "CRITICAL";break;
+        default: break;
+    }
+    fprintf(stdout, "%s: %s\n", p, message);
+    fflush(stdout);
+}
 
 // Port specific: Game instance lives as a file-static so the C callback
 // can reach it.  Must outlive the emscripten main loop.
@@ -339,6 +361,11 @@ int main(int argc, char* argv[]) {
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 
+    // Port specific: route SDL_Log output to stdout (see FnSdlLogToStdout above)
+    // so it lands on console.log instead of console.error's noisy call-stack dump.
+    // Registered as early as possible so every subsequent SDL log goes through it.
+    SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -351,6 +378,9 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+    // Port specific: opaque WebGL surface (alpha:false) -- binary used an opaque Bada EGL surface;
+    // default alpha:true canvas alpha-composites semi-transparent HUD labels over the page bg -> desaturation
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 
     SDL_Window* window = SDL_CreateWindow(
         "Fruit Ninja",

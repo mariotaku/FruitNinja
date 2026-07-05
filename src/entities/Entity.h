@@ -93,20 +93,14 @@ public:
     // bit-faithful with the binary; no port code reads it yet.
     uint8_t m_RecycleFlag;
 
-    // +0x35: entity type byte in the binary. Port widens to int since
-    // gameplay code indexes with regular ints; value range is still 0..4.
-    // DIFFERS: binary = uint8_t at +0x35; port = int (desktop). Under
-    //   __bada__ it reverts to uint8_t so binary-faithful offsetof checks
-    //   hold for the cross-build assertion block.
-#ifdef __bada__
+    // +0x35: entity type byte. Binary-faithful uint8_t on every target
+    // (value range 0..6); uint8_t promotes to int in expressions/varargs
+    // so gameplay code that indexes/compares with plain ints needs no cast.
     uint8_t entityType;
-#else
-    int entityType;
-#endif
 
     // +0x36: 16-bit angle used by LoadEntity and Coin::Draw (Y-rotation index).
     // Binary @ 0x0019d88c ctor: zeroed by memset. BombBlast::Init writes random.
-    uint16_t m_Angle;        // +0x36 in binary; offset may differ in port due to entityType widening
+    uint16_t m_Angle;        // +0x36 in binary
 
     // +0x38: collision primitive pointer (nullable).
     Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
@@ -215,8 +209,8 @@ public:
 };
 
 #ifdef __bada__
-// Binary-faithful layout asserts (cross-build only). Under __bada__, entityType
-// reverts to uint8_t matching the binary, so all post-m_RecycleFlag offsets hold.
+// Binary-faithful layout asserts (cross-build only). entityType is uint8_t
+// everywhere now, matching the binary bit-for-bit.
 static_assert(offsetof(Entity, m_RuntimeID)  == 0x04, "m_RuntimeID offset wrong");
 static_assert(offsetof(Entity, m_TrackerID)  == 0x08, "m_TrackerID offset wrong");
 static_assert(offsetof(Entity, flags)        == 0x0C, "flags offset wrong");
@@ -224,15 +218,15 @@ static_assert(offsetof(Entity, pos)          == 0x10, "pos offset wrong");
 static_assert(offsetof(Entity, vel)          == 0x1C, "vel offset wrong");
 static_assert(offsetof(Entity, scale)        == 0x28, "scale offset wrong");
 static_assert(offsetof(Entity, m_RecycleFlag)== 0x34, "m_RecycleFlag offset wrong");
-static_assert(offsetof(Entity, entityType)   == 0x35, "entityType offset wrong (binary uint8_t)");
+static_assert(offsetof(Entity, entityType)   == 0x35, "entityType offset wrong");
 static_assert(offsetof(Entity, m_Angle)      == 0x36, "m_Angle offset wrong");
 static_assert(offsetof(Entity, m_Col)        == 0x38, "m_Col offset wrong");
 static_assert(sizeof(Entity)                 == 0x3C, "sizeof(Entity) wrong");
-#elif !defined(__EMSCRIPTEN__)
+#elif !defined(__EMSCRIPTEN__) && (defined(_WIN64) || defined(__LP64__) || defined(_LP64) || defined(_M_X64) || defined(__x86_64__) || defined(__aarch64__))
 // Always-on port layout asserts (desktop x64 MSVC/MinGW). Offsets reflect:
-// 8-byte vtable ptr on 64-bit, int-widened entityType, Col* at 8-byte pointer size.
-// Port specific: Emscripten (wasm32) has 4-byte pointers like Bada ARM32 so
-// these x64-specific offsets don't apply there; skip to avoid false failures.
+// 8-byte vtable ptr + 8-byte Col* on 64-bit; entityType is uint8_t (binary-
+// faithful) so the tail no longer has an int-widen gap, just 8-byte pointer
+// alignment padding before m_Col.
 static_assert(offsetof(Entity, m_RuntimeID)  == 0x08, "m_RuntimeID port offset drift");
 static_assert(offsetof(Entity, m_TrackerID)  == 0x0C, "m_TrackerID port offset drift");
 static_assert(offsetof(Entity, flags)        == 0x10, "flags port offset drift");
@@ -240,10 +234,10 @@ static_assert(offsetof(Entity, pos)          == 0x14, "pos port offset drift");
 static_assert(offsetof(Entity, vel)          == 0x20, "vel port offset drift");
 static_assert(offsetof(Entity, scale)        == 0x2C, "scale port offset drift");
 static_assert(offsetof(Entity, m_RecycleFlag)== 0x38, "m_RecycleFlag port offset drift");
-static_assert(offsetof(Entity, entityType)   == 0x3C, "entityType port offset drift (int, binary +0x35 uint8_t)");
-static_assert(offsetof(Entity, m_Angle)      == 0x40, "m_Angle port offset drift (binary +0x36)");
-static_assert(offsetof(Entity, m_Col)        == 0x48, "m_Col port offset drift (binary +0x38)");
-static_assert(sizeof(Entity)                 == 0x50, "sizeof(Entity) port drift (binary 0x3C)");
+static_assert(offsetof(Entity, entityType)   == 0x39, "entityType port offset drift (binary +0x35)");
+static_assert(offsetof(Entity, m_Angle)      == 0x3A, "m_Angle port offset drift (binary +0x36)");
+static_assert(offsetof(Entity, m_Col)        == 0x40, "m_Col port offset drift (binary +0x38)");
+static_assert(sizeof(Entity)                 == 0x48, "sizeof(Entity) port drift (binary 0x3C)");
 #endif
 
 }  // namespace Mortar
