@@ -8,7 +8,30 @@
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
 #include "game/GameWork.h"
+#include <cstdio>
 #include <cstring>
+
+// Port specific: SDL's default log output function writes to stderr on every
+// platform. On Emscripten, stderr maps to console.error, which prints a full
+// JS call stack per line -- useless noise for routine SDL_Log/LOG_* traffic.
+// Route SDL's own logs to stdout (console.log) instead, on every platform
+// (harmless on native); genuine JS errors/aborts still hit stderr/console.error
+// since they never go through this callback. Format mirrors SDL's built-in
+// output function ("<PRIORITY>: <message>").
+static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriority priority, const char* message) {
+    const char* p = "INFO";
+    switch (priority) {
+        case SDL_LOG_PRIORITY_VERBOSE:  p = "VERBOSE"; break;
+        case SDL_LOG_PRIORITY_DEBUG:    p = "DEBUG";   break;
+        case SDL_LOG_PRIORITY_INFO:     p = "INFO";    break;
+        case SDL_LOG_PRIORITY_WARN:     p = "WARN";    break;
+        case SDL_LOG_PRIORITY_ERROR:    p = "ERROR";   break;
+        case SDL_LOG_PRIORITY_CRITICAL: p = "CRITICAL";break;
+        default: break;
+    }
+    fprintf(stdout, "%s: %s\n", p, message);
+    fflush(stdout);
+}
 
 int main(int argc, char* argv[]) {
     // Port specific: parse launch parameters for debug flags.
@@ -45,6 +68,10 @@ int main(int argc, char* argv[]) {
     // We want exactly one touch per physical pointer action: mouse is
     // converted to touch (one-way) and the input path is touch-only.
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
+    // Port specific: route SDL_Log output to stdout (see FnSdlLogToStdout above).
+    // Registered as early as possible so every subsequent SDL log goes through it.
+    SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
