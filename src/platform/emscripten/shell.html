@@ -318,6 +318,41 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+    /* Copyright credit / disclaimer: persistent, unobtrusive footer line pinned
+       to the bottom window edge -- normally sits in the black letterbox bar
+       below the canvas (the canvas is flex-centered in #viewport, so at any
+       non-3:2 window aspect there is bar space here).  Low-opacity small text,
+       pointer-events:none so a slice that ends over it still reaches the
+       canvas.  z-index 15 keeps it above the canvas/splash (10/11/12) but below
+       the fullscreen button (25) and the overlays (20/30).
+       Hidden in fullscreen (see body.is-fullscreen rule below). */
+    #credit {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 3px;
+      z-index: 15;
+      padding: 0 8px;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.35;
+      color: rgba(255, 255, 255, 0.38);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Fullscreen = game canvas only: when the page is fullscreen (class set on
+       <body> by the fullscreenchange handler), hide the page chrome -- the
+       fullscreen toggle button and the copyright credit.  !important beats the
+       button's inline style.display='flex' (set by JS when the game starts).
+       Exiting is via Esc / system gesture (browser default). */
+    body.is-fullscreen #fullscreen-btn,
+    body.is-fullscreen #credit {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -393,6 +428,15 @@
          tools/web/web-hash-assets.py. Shown over the splash during loading and
          removed together with the splash once the game has loaded. -->
     <div id="fn-build">build __FN_BUILD__</div>
+  </div>
+
+  <!-- Copyright credit / disclaimer: page footer OUTSIDE the viewport/canvas
+       container, pinned to the bottom letterbox bar.  Persistent (never removed)
+       but hidden while fullscreen (body.is-fullscreen rule). -->
+  <div id="credit" class="credit">
+    Fruit Ninja and all game assets are (c) 2011 Halfbrick Studios.
+    This is a non-commercial fan reverse-engineering / preservation port and is
+    not affiliated with, endorsed by, or supported by Halfbrick Studios.
   </div>
 
   <script>
@@ -831,6 +875,12 @@
 
     function _onFullscreenChange() {
       var fs = _isFullscreen();
+      /* Fullscreen = game canvas only: toggle a body class that CSS uses to
+         hide the page chrome (fullscreen button + copyright credit).  Keys off
+         document.fullscreenElement so it works regardless of WHICH element was
+         fullscreened (we request it on #viewport) and regardless of how the
+         user exits (Esc, system gesture, or a future in-page control). */
+      document.body.classList.toggle('is-fullscreen', fs);
       if (_fullscreenIcon) {
         var path = _fullscreenIcon.querySelector('path');
         if (path) path.setAttribute('d', fs ? EXIT_PATH : ENTER_PATH);
