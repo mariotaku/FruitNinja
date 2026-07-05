@@ -1160,7 +1160,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                               unsigned long /*flagsB*/,
                               Vec3* bladeVelPtr) {
     // Guard: already sliced or slice timer is positive -> double-hit.
-    if (m_bSliced || m_SliceTimer > -1.0f) return 1;
+    if (m_bSliced || m_SliceTimer > -1.0f) {
+        return 1;
+    }
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
 
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
@@ -1334,13 +1336,25 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // Binary field gameMode (+0x04) for window, bM_bPaused (+0x05) for outer gate.
     // ASM-verified: 2026-06-07 v1.6.1 Fruit::CollisionResponse @0x001dd500 (re-analyst).
     int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
+
+    // v1.6.1 Fruit::CollisionResponse @0x001dd500:
+    // OUTER gate uses bM_bPaused (+0x05); bomb-window uses gameMode (+0x04) and
+    // m_PauseAmount (+0x0C = flM_PauseAmount in binary), NOT m_BombHitTimer (+0x10).
+    // Hoisted above the scoring block: the same compound term also drives the
+    // event-fire tail gate below (gateEarlyReturn), not just the scoring dispatch.
+    const bool bombHitWindowGate = (uint8_t)(game_work.gameMode - 2u) < 2u
+        && game_work.m_PauseAmount < kBombHitMax
+        && game_work.m_PauseAmount > kBombHitMin;
+
+    // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: two-path tail.
+    // TRUE  -> binary returns early WITHOUT firing FruitSliced/m_OnSliced (no
+    //          event-subscriber walk); a super fruit still gets a reduced notify.
+    // FALSE -> full main-path tail (scoring dispatch below, then the
+    //          unconditional event fire further down) runs as today.
+    const bool gateEarlyReturn = (hitter == nullptr) || m_bNoPowerUp
+        || (game_work.bM_bPaused != 0 && !bombHitWindowGate);
+
     {
-        // v1.6.1 Fruit::CollisionResponse @0x001dd500:
-        // OUTER gate uses bM_bPaused (+0x05); bomb-window uses gameMode (+0x04) and
-        // m_PauseAmount (+0x0C = flM_PauseAmount in binary), NOT m_BombHitTimer (+0x10).
-        const bool bombHitWindowGate = (uint8_t)(game_work.gameMode - 2u) < 2u
-            && game_work.m_PauseAmount < kBombHitMax
-            && game_work.m_PauseAmount > kBombHitMin;
         if (game_work.retryFlag == 0
             && hitter != nullptr
             && !m_bNoPowerUp
@@ -1468,6 +1482,19 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         }
     }
 
+    // ASM-verified: 2026-07-05T09:06:43Z v1.6.1 Fruit::CollisionResponse gated tail @0x001dea10 (asm-inspector)
+    // Gated early-return path (binary two-paths the tail at 0x001ddcf4 -> 0x001dea10 -> 0x001de99c):
+    // only a super fruit (FruitInfo+0x330 m_bIsSuperFruit) still notifies, and only when
+    // hitter != 0; it fires the real FruitSliced/m_OnSliced Event3s with points=0
+    // (Event3::operator() @0x0010c6c8, same fn as the full path). NOT SuperFruitSliced.
+    if (gateEarlyReturn) {
+        if (info->m_bIsSuperFruit && hitter != nullptr) {
+            g_FruitWasSliced(this, 0, hitter);   // 0x1de9b8, points=0
+            m_OnSliced(this, 0, hitter);         // 0x1de9cc, points=0
+        }
+        return 0;
+    }
+
     // Fire g_FruitWasSliced — binary @ 0x1de5a0 (main slice path) and
     // 0x1de9b8 (early-disappear path). Args: (this, points=r7, slasher=param_1).
     // r7 in binary = the score local from the scoring block; port carries it via
@@ -1526,8 +1553,16 @@ void Fruit::Slice() {
                               (6.2831853f / 65536.0f);
         // Wrap both into [-pi, pi] and take signed delta.
         float delta = rotAngleRad - sliceAngleRad;
-        while (delta >  3.1415926f) delta -= 6.2831853f;
-        while (delta < -3.1415926f) delta += 6.2831853f;
+        {
+            while (delta >  3.1415926f) {
+                delta -= 6.2831853f;
+            }
+        }
+        {
+            while (delta < -3.1415926f) {
+                delta += 6.2831853f;
+            }
+        }
         if (delta < 0.0f) flipSide = true;
     }
 
@@ -2014,7 +2049,9 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
         }
     }
 
-    if (!g_fruitData.s_slices || !g_fruitData.s_pool) return;
+    if (!g_fruitData.s_slices || !g_fruitData.s_pool) {
+        return;
+    }
 
     // Dedup: walk s_slices via Iterator; expire (set m_Timer=6.0) any earlier node
     // whose m_pFruit key matches this fruit/ident.
@@ -2031,7 +2068,9 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
     }
 
     SliceNode* n = g_fruitData.s_pool->Pop();
-    if (!n) return;
+    if (!n) {
+        return;
+    }
 
     // Initialise the payload fields of the new node.
     n->value.m_Timer    = 0.f;
