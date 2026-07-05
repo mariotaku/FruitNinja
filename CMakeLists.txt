@@ -482,14 +482,19 @@ if (EMSCRIPTEN)
     if (FN_DEBUG_TOUCH)
         target_link_options(fruit-ninja PRIVATE "SHELL:--profiling-funcs")
     endif()
-    # Port specific: copy the shell's splash image next to fruit-ninja.html
-    # so the loading screen can reference it by relative URL before MEMFS is
-    # populated.  splash.webp is the loading-screen backdrop (HB_logo.tex region).
+    # Port specific: copy the shell's image assets next to fruit-ninja.html
+    # so the loading screen can reference them by relative URL before MEMFS is
+    # populated.  splash.webp is the loading-screen backdrop (HB_logo.tex region);
+    # play_button/sound/sound_cross are the shell overlay UI (also consumed by
+    # tools/web/build_pages.py, which reads them from build/web/).
     add_custom_command(TARGET fruit-ninja POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.webp
-            ${CMAKE_CURRENT_BINARY_DIR}/splash.webp
-        COMMENT "Copying shell image assets (splash) to web build output"
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/play_button.webp
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound.webp
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound_cross.webp
+            ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Copying shell image assets (splash + UI webp) to web build output"
         VERBATIM
     )
     # Port specific: content-hash web output files to defeat browser/mobile caching.

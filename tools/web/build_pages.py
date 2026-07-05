@@ -10,7 +10,8 @@ Output layout (default: pages/):
       .nojekyll
       index.html          <- web/index.html
       game/
-        index.html        <- build/web/fruit-ninja.html (renamed)
+        index.html        <- build/web/index.html (entry, renamed from
+                             fruit-ninja.html by tools/web/build.sh)
         fruit-ninja.js
         fruit-ninja.wasm
         fruit-ninja.data
@@ -27,7 +28,7 @@ Output layout (default: pages/):
         Data/             <- docs/gallery/textures/Data/ (recursive)
 
 Run from the repository root.  Idempotent: clears pages/ before each run.
-Errors if build/web/ is missing or fruit-ninja.html is absent.
+Errors if build/web/ is missing or index.html is absent.
 """
 
 import argparse
@@ -146,15 +147,15 @@ def main():
     if not os.path.isfile(SRC_LANDING):
         die("web/index.html not found -- expected at: " + SRC_LANDING)
 
-    game_html_src = os.path.join(SRC_BUILD_WEB, "fruit-ninja.html")
+    game_html_src = os.path.join(SRC_BUILD_WEB, "index.html")
     if not os.path.isdir(SRC_BUILD_WEB):
         die("build/web/ directory not found.\n"
             "       Run the Emscripten build first:\n"
-            "         emcmake cmake -S . -B build/web -DCMAKE_BUILD_TYPE=Release\n"
-            "         cmake --build build/web -j")
+            "         bash tools/web/build.sh --release   (inside emscripten/emsdk)")
     if not os.path.isfile(game_html_src):
-        die("build/web/fruit-ninja.html not found -- build/web/ exists but "
-            "build may be incomplete.")
+        die("build/web/index.html not found -- build/web/ exists but the build "
+            "may be incomplete (tools/web/build.sh renames fruit-ninja.html to "
+            "index.html after a verified build).")
 
     # Discover hashed game files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
     hashed_game_files = []
@@ -211,9 +212,9 @@ def main():
     game_dir = os.path.join(out, "game")
     ensure_dir(game_dir)
 
-    # fruit-ninja.html -> game/index.html
+    # build/web/index.html -> game/index.html
     sz = copy_file(game_html_src, os.path.join(game_dir, "index.html"))
-    summary.append(("pages/game/index.html (from fruit-ninja.html)", sz))
+    summary.append(("pages/game/index.html (from build/web/index.html)", sz))
 
     # Hashed files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
     for gf in hashed_game_files:
