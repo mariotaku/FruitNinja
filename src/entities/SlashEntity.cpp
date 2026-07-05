@@ -656,6 +656,10 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #if !defined(__bada__)
     // Port specific: cache SDL touch coordinates for splat emission (lacks Bada InputEvent pipeline).
     m_RawTouchPos = newPos;
+    pos = newPos;   // Binary wires TouchMoveX/Y straight into Entity::pos
+                    // (base.m_Position @0x001e785c / @0x001e77b4); the port cached
+                    // only to m_RawTouchPos, leaving pos at (0,0) so trail-splats
+                    // (and ModPowerMask repel/attract) used screen center.
 #endif
 
     const Vec3 lastCenter = m_TailPos;
