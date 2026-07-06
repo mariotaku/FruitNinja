@@ -29,7 +29,7 @@
 //   UnlockSpecificFruitAchievement  0x00108a88
 //   UnlockSpecificOrderAchievement  0x00108b58  (was 0x001089cc -- that addr is SpecificOrder::Check)
 //   UnlockTotalFruitAchievement   0x00108eec
-//   UnlockedAchievement           0x001090d0
+//   UnlockedAchievement           0x001180a8
 //   UnlockAchievementInNetwork    0x001085a0
 //   QueAchievement                0x00108978  (was 0x001084a0)
 
@@ -60,30 +60,30 @@ enum AchievementType {
 // AchievementInfo — sizeof 0xa8 (168 bytes) on ARM32.
 // Binary: operator new(0xa8) @0x00118198 v1.6.1 AchievementInfo ctor.
 // Layout (ARM32, 4-byte ptrs, short-enums ABI):
-//   0x00  char m_Description[64]         XML "description" attribute (GETSTRING key)
-//   0x40  char m_Name[64]                XML "name" attribute (also save-key string)
-//   0x80  uint32_t m_NameHash            StringHash(m_Name)
+//   0x00  char m_DisplayName[64]         GETSTRING(name attr) -- localized, drawn by popup
+//   0x40  char m_Name[64]                raw "id" attribute -- keying/type/AddToQue
+//   0x80  uint32_t m_NameHash            StringHash(m_Name) (== id hash; map key)
 //   0x84  SmartPtr<Texture> m_Texture    4 bytes (single T*)
-//   0x88  uint32_t m_NumberedStringHash  StringHash of XML <longText> child text (0 if absent)
-//   0x8c  int m_Total                    XML "value" attribute threshold
-//   0x90  int m_Score                    XML "points" attribute
+//   0x88  const char* m_pDescription     GETSTRING key pointer (constructed *_DESC_XX key); 0 if none
+//   0x8c  int m_Total                    XML "total" attribute threshold
+//   0x90  int m_Score                    XML "score" attribute
 //   0x94  uint32_t m_TypeIndex           0xb (11) sentinel in ctor; 0..10 on valid entry
 //   0x98  uint32_t m_ModeBitmask         bit(GAME_MODE_CLASSIC=0)|bit(CASINO=1)|bit(ARCADE=2)|bit(ZEN=3);
 //                                        0xFFFFFFFF wildcard for absent/unrecognized mode attr (ALL/ANY)
-//   0x9c  bool m_IsGameOver              requires_unsullied flag
+//   0x9c  bool m_IsGameOver              XML "isGameOver" attribute == 1
 //   0x9d  char _pad[7]
 //   0xa4  SpecificOrder* m_SpecificOrder
 struct AchievementInfo {
-    char      m_Description[64];         // 0x00
-    char      m_Name[64];                // 0x40
+    char      m_DisplayName[64];         // 0x00 localized, drawn by popup
+    char      m_Name[64];                // 0x40 raw id: keying/type/AddToQue
     uint32_t  m_NameHash;                // 0x80
     Mortar::SmartPtr<Mortar::Texture> m_Texture; // 0x84 (4 bytes on ARM32)
-    uint32_t  m_NumberedStringHash;      // 0x88 (StringHash of <longText> text; 0 if absent)
-    int       m_Total;                   // 0x8c (XML "value" attr)
-    int       m_Score;                   // 0x90 (XML "points" attr)
+    const char* m_pDescription;          // 0x88 (GETSTRING key ptr; 0 if none)
+    int       m_Total;                   // 0x8c (XML "total" attr)
+    int       m_Score;                   // 0x90 (XML "score" attr)
     uint32_t  m_TypeIndex;               // 0x94 (0xb sentinel; 0..10)
     uint32_t  m_ModeBitmask;             // 0x98
-    bool      m_IsGameOver;              // 0x9c (requires_unsullied flag)
+    bool      m_IsGameOver;              // 0x9c (XML "isGameOver" attr == 1)
     char      _pad[7];                   // 0x9d
     SpecificOrder* m_SpecificOrder;      // 0xa4
 
@@ -97,7 +97,7 @@ static_assert(sizeof(AchievementInfo) == 0xa8, "AchievementInfo size mismatch (v
 static_assert(__builtin_offsetof(AchievementInfo, m_Name)               == 0x40, "AchievementInfo::m_Name");
 static_assert(__builtin_offsetof(AchievementInfo, m_NameHash)           == 0x80, "AchievementInfo::m_NameHash");
 static_assert(__builtin_offsetof(AchievementInfo, m_Texture)            == 0x84, "AchievementInfo::m_Texture");
-static_assert(__builtin_offsetof(AchievementInfo, m_NumberedStringHash) == 0x88, "AchievementInfo::m_NumberedStringHash");
+static_assert(__builtin_offsetof(AchievementInfo, m_pDescription)       == 0x88, "AchievementInfo::m_pDescription");
 static_assert(__builtin_offsetof(AchievementInfo, m_Total)              == 0x8c, "AchievementInfo::m_Total");
 static_assert(__builtin_offsetof(AchievementInfo, m_Score)              == 0x90, "AchievementInfo::m_Score");
 static_assert(__builtin_offsetof(AchievementInfo, m_TypeIndex)          == 0x94, "AchievementInfo::m_TypeIndex");
@@ -136,7 +136,7 @@ public:
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
     int  UnlockTotalFruitAchievement(int total);
 
-    // Binary @ 0x001090d0 — show popup via NotificationControl
+    // Binary @ 0x001180a8 — show popup via NotificationControl (v1.6.1 AchievementManager::UnlockedAchievement)
     int  UnlockedAchievement(uint32_t hash, HUD* hud);
 
     // Binary @ 0x001085a0 — Defunct: NetworkManager — no-op stub

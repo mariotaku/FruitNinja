@@ -518,7 +518,7 @@ bool MenuButton::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// v1.6.1 MenuButton::SetNewSymbol @0x0019a534
+// v1.6.1 MenuButton::SetNewSymbol @0x0019a564
 void MenuButton::SetNewSymbol(bool show) {
     if (show) {
         if (m_NewIndicatorTimer < 0.0f)
@@ -538,7 +538,6 @@ void MenuButton::Update(float dt) {
         m_GrowInTimer -= dt;
         if (fruit) {
             // mark hidden while waiting
-            // TODO: v1.6.1 MenuButton::Update @0x0019a860 -- confirm exact flag bit written to fruit->flags(+0xc) for hidden
             fruit->flags |= 1;
         }
         return;

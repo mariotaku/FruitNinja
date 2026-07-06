@@ -17,6 +17,7 @@
 #include "entities/EntityFactory.h"
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
+#include "entities/SuperFruitControl.h"
 #include "FruitSaveData.h"
 #include "audio/GameSound.h"
 #include "hud/MissControl.h"
@@ -120,6 +121,16 @@ void GameInitialise(void* window, const char* config) {
         dm.SetLightDirection(Vec3(0.0f, -10.0f, -5.0f));
     }
 
+    // ASM-spec v1.6.1 GameInitialise @0x0011d22c: strings loaded before managers that
+    // parse localized data (InitialiseStrings @0x0011c1c8 position). Binary loads the
+    // string table right after DisplayManager, BEFORE ParticleManager/PowerUpManager/
+    // InitialiseData -- so BonusManager::Init (inside InitialiseData) and every XML
+    // parser that calls GETSTRING_CAST_0_STR (LoadAchievementInfo/LoadItemData/
+    // Bonus::Parse) bake real strings instead of the "STRING NOT FOUND" fallback.
+    // Needs FileSystem (added above) + game_work.languageFlag (set by main before
+    // game.init()); both are ready here.
+    Localisation::Load(game->data_dir.c_str(), (int)game_work.languageFlag);
+
     // Step 8: MeshManager::Initialise(0x26C00) — mesh cache
     {
         static Mortar::MeshManager meshMgr;
@@ -194,8 +205,10 @@ void GameInitialise(void* window, const char* config) {
     // InitialiseData step 12: per-power-up slash colour table
     SlashEntity::InitModColours();
 
-    // InitialiseData step 15: BonusManager (combo/streak tracker)
-    BonusManager::GetInstance()->Init();
+    // BonusManager::Init moved DOWN to after LoadAchievementInfo + strings load
+    // (v1.6.1 GameInitialise @0x0011d22c: BonusManager::Init runs inside InitialiseData
+    // AFTER LoadAchievementInfo). Its Bonus::Parse bakes localized award names, so it
+    // must run after the string table is loaded.
 
     // SDL2 audio backend init. Opens audio device at 16kHz mono S16LE
     // (matches MAMAudioThread sampleRate=16000). Must be called before GameSound.
@@ -211,11 +224,10 @@ void GameInitialise(void* window, const char* config) {
 
     // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
 
-    // Step 1 of InitialiseData (must run before any XML parser that calls
-    // GETSTRING_CAST_0_STR -- i.e. before LoadItemData, LoadAchievementInfo,
-    // etc.): load the localisation tables. Binary:
-    //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
-    Localisation::Load(game->data_dir.c_str(), (int)game_work.languageFlag);
+    // Step 1 of InitialiseData (localisation-table load) now happens EARLY, right after
+    // DisplayManager setup (see the Localisation::Load call there). Loading it here --
+    // after BonusManager::Init used to run -- baked "STRING NOT FOUND" into every bonus
+    // award name (v1.6.1 GameInitialise @0x0011d22c loads strings first).
 
     // Step 13 of InitialiseData: AchievementManager::LoadAchievementInfo
     // Binary: InitialiseData @ 0x0010b7ca, step 13 of 15.
@@ -223,6 +235,11 @@ void GameInitialise(void* window, const char* config) {
     // ItemManager cost>0 shop items (items with cost require an unlocked achievement).
     // Must run before LoadItemData (step 14).
     AchievementManager::GetInstance()->LoadAchievementInfo();
+
+    // InitialiseData step 15: BonusManager (combo/streak tracker). Binary runs this
+    // inside InitialiseData AFTER LoadAchievementInfo and after strings load
+    // (v1.6.1 GameInitialise @0x0011d22c), so Bonus::Parse bakes localized award names.
+    BonusManager::GetInstance()->Init();
 
     // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
     // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.
@@ -344,6 +361,13 @@ void GameInitialise(void* window, const char* config) {
         game_work.m_pTTFFontMain->GetAtlas()->InitialiseData(1.0f, scale);
     }
 
+    // Port specific: task #28 first-screen-open frame-spike mitigation -- warm the
+    // TTF glyph cache (ASCII + known menu-label strings) and flush the atlas here,
+    // at boot (masked by the load screen), instead of on first Dojo/ModeSelect/Shop
+    // open. Must run after the InitialiseData scale override above (the glyph cache
+    // key depends on m_GlobalSizeScale/m_FontScale). See PreloadFontsTTF.h.
+    WarmTTFGlyphCache();
+
     // Step 22: LoadLocalisedTexture -> game_work.m_CountdownTex (+0x180).
     // Binary order @0x0011da48-0x0011da6c: LoadLocalisedTexture -> assign -> MenuButton::LoadContent.
     // TODO: v1.6.1 0x0011da48 (GameInitialise::InitialiseData) -- resolve exact .tex filename
@@ -374,7 +398,16 @@ void GameInitialise(void* window, const char* config) {
     // runs AFTER the HUD is created).
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
     PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
+    // v1.6.1 GameInitialise @0x0011daa8: after PowerUpShop::LoadContent
+    SuperFruitControl::LoadContent();
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
+    // Port specific: task #28 first-screen-open frame-spike mitigation -- decode+upload
+    // Dojo (6 .tex) and Shop (10 .tex) textures at boot instead of on first open.
+    // Idempotent: TextureManager::Load caches by StringHash(path), so the later
+    // ctor-triggered LoadContent() call (DojoScreen ctor / ShopScreen ctor guard) is a
+    // cache hit, not a re-decode. No binary counterpart -- v1.6.1 loads these lazily.
+    DojoScreen::LoadContent();
+    ShopScreen::LoadContent();
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // 0x0010b204 — preload WAVs (implemented + ASM-verified, see PreloadSounds.cpp)
 

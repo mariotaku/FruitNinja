@@ -602,6 +602,20 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     SuperFruitControls[fruit] = ctrl;
 }
 
+// v1.6.1 SuperFruitControl::LoadContent @0x001bda74: subscribes the slice/throw
+// delegates and loads super-fruit visuals. Called from GameInitialise @0x0011daa8.
+void SuperFruitControl::LoadContent() {
+    // Subscribe SuperFruitSliced (static fn) to the global FruitSliced Event3.
+    Fruit::FruitWasSlicedEvent() +=
+        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::MakeFree(&SuperFruitControl::SuperFruitSliced);
+
+    // TODO: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 -- also loads
+    //   SuperFruitGlow::GlowTexture, ShockWaveTexture, FruitRay::RayTexture
+    //   (3x LoadLocalisedTexture, filenames unresolved) + JibletModel =
+    //   MeshManager::Load("models/fruit/pomegranate_jiblet.mmd"). Blocked: those
+    //   globals/entities (FruitRay) are unported. Wire when those entities land.
+}
+
 // Binary @ 0x001be630. Slice dispatch: lookup map, forward or create.
 void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Entity* slashEntity)
 {

@@ -17,8 +17,6 @@
 #include "engine/render/MatrixManager.h"
 #include "engine/render/BakedStringBox.h"
 #include "engine/render/FontCacheObjectTTF.h"
-#include "engine/render/FontTTFRegistry.h"
-#include "engine/render/Font.h"
 #include "engine/util/StringTable.h"
 #include "engine/util/StringHash.h"
 #include "engine/math/Vec2.h"
@@ -34,14 +32,11 @@
 
 using Mortar::TextureManager;
 
-// Shared TTF face for BonusScreen BakedStringBox labels.
-// DIFFERS: original = *(game_work+0x614) shared TTF face; using a file-local SmartPtr<Font>
-//   + FontTTFRegistry::Lookup. v1.6.1 BonusScreen::BuildBonusText @0x001621dc.
+// ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc: uses the shared game-wide
+// TTF face (game_work+0x614 / m_pTTFFontMain) -- arabic.ttf when bM_LangId==0x14,
+// gangofchinese.ttf otherwise (set once at boot by PreloadFontsTTF @0x0011c1fc).
 static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
-    static Mortar::SmartPtr<Mortar::Font> s_Font =
-        Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
-    if (!s_Font.IsValid()) return 0;
-    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
+    return game_work.m_pTTFFontMain;
 }
 
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
@@ -58,7 +53,10 @@ static const float AWARD_SPACING  = 0.5f;
 // (v1.6.1 BonusScreen::Update @0x00163dd0, re-analyst batch1 spec).
 static float TRANSITION_IN_TIME  = 0.333333f;  // 0x3eaa7efa (~1/3)
 static float TRANSITION_OUT_TIME = 0.25f;       // 0x3e800000
-static float TIME_PER_AWARD      = 0.6f;        // 0x3f19999a -- was WRONG 1.0f (0x3f800000)
+// ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c / BuildBonusText @0x001621dc (asm-inspector,
+// fresh binary read): TIME_PER_AWARD = 1.0f. The prior 0.6f (0x3f19999a) was WRONG -- it had
+// grabbed the FIRST_AWARD initial-delay constant (0.666667f) by mistake.
+static float TIME_PER_AWARD      = 1.0f;        // 0x3f800000
 static float FIRST_AWARD         = 0.666667f;   // 0x3f2a7efa (~2/3)
 static float TOTAL_TIME          = 7.0f;        // 0x40e00000
 static float AWARD_Y_DIF         = -42.0f;      // 0xc2280000
@@ -71,7 +69,7 @@ static float TOTAL_POS_Z         = 0.0f;        // DAT_003144bc
 static void SET_DEFINES() {
     TRANSITION_IN_TIME  = 0.333333f;
     TRANSITION_OUT_TIME = 0.25f;
-    TIME_PER_AWARD      = 0.6f;
+    TIME_PER_AWARD      = 1.0f;
     FIRST_AWARD         = 0.666667f;
     TOTAL_TIME          = 7.0f;
     AWARD_Y_DIF         = -42.0f;
@@ -102,7 +100,7 @@ BonusScreen::BonusScreen()
       m_RushLoopSFX(nullptr),
       m_ScoreBox(nullptr),
       m_TotalBox(nullptr),
-      m_bSkipIntro(false),
+      m_bBonusTextBuilt(false),
       m_Timer(-TRANSITION_IN_TIME),
       m_AnimPos(0.0f, 0.0f, 0.0f)
 {
@@ -117,10 +115,12 @@ BonusScreen::BonusScreen()
 
     // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162d1c: loads "arcade_diolog_box.tex"
     // (rodata @0x00281e4c); size = (tex+0x24 width, tex+0x28 height).
-    // Note: v1.6.1 arcade_diolog_box.tex (RGBA4444 512x256) does NOT have BONUS/TOTAL text
-    //   baked in -- the texture contains only the board frame, parchment, and star decorations.
-    //   The BONUS title (top band) and TOTAL text (bottom band) are drawn by code.
-    //   (The docs/gallery PNG showing baked BONUS/TOTAL text is from v1.5.x, not v1.6.1.)
+    // NOTE (correction): a prior pass claimed this texture has "empty bands only" (no baked
+    //   BONUS/TOTAL text). Full plate-alignment RE (see BonusScreen::Draw FIRST_NAME_OFFSET
+    //   spec below) found the v1.6.1 plate art likely has baked BONUS/TOTAL bands that the
+    //   code-drawn m_ScoreBox/m_TotalBox text overlays at matching positions once the
+    //   FIRST_NAME_OFFSET origin shift is applied. Not re-verified pixel-exact here; texture
+    //   content itself is unchanged by this pass.
     // TODO: v1.6.1 0x00162d5c (BonusScreen::BonusScreen) — binary caches backing tex in a load-once static
     Mortar::SmartPtr<Mortar::Texture> bgTex =
         TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
@@ -275,21 +275,28 @@ void BonusScreen::AwardScores() {
 }
 
 // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
+// ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
+//   maxLines=1 (not 0) on m_ScoreBox/m_TotalBox, and per-award row colour = m_Awards[i].m_Colour
+//   (not a fixed palette) -- both corrected below; supersedes the prior (stale) verified pass.
 void BonusScreen::BuildBonusText() {
+    // +0xD8 build-once latch (was mis-named m_bSkipIntro; binary sets it inside
+    // BuildBonusText @0x001621dc, not at the Update call site).
+    if (m_bBonusTextBuilt) return;
+
     Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
+    // Guard: m_pTTFFontMain is set once at boot by PreloadFontsTTF, but placed
+    // BEFORE the latch-set below so a transiently-null font can't burn the
+    // create-once latch (matches binary null-check shape at 0x001621dc).
     if (!font) return;
+    m_bBonusTextBuilt = true;
 
     // Per-award label/value boxes (loop i=0..count-1, up to 3).
     // Binary: r6+=4 per iteration == [i].
     // ASM-verified: label font=13px ALL rows, value font=16px ALL rows (constants, not a per-row array).
-    // ASM-verified: fixed 3-entry colour palette indexed by row, NOT m_Awards[i].m_Colour:
-    //   row0=Colour(0xAD,0x7E,0x00,0xFF) gold, row1=Colour(0xA0,0x05,0x05,0xFF) red,
-    //   row2=Colour(0x01,0x5C,0x95,0xFF) blue.
-    static const Colour kRowColours[3] = {
-        Colour(0xAD, 0x7E, 0x00, 0xFF),  // row0: gold (TASTY FRUIT)
-        Colour(0xA0, 0x05, 0x05, 0xFF),  // row1: red  (FRUIT MIX)
-        Colour(0x01, 0x5C, 0x95, 0xFF),  // row2: blue
-    };
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c / BuildBonusText @0x001621dc (asm-inspector,
+    // fresh binary read): row colour is the per-award element's OWN animated m_Colour (+0x50),
+    // NOT a fixed 3-entry palette. The prior "fixed gold/red/blue palette" ASM-verified marker
+    // here was WRONG and has been removed.
     for (int i = 0; i < (int)m_Awards.size() && i < 3; ++i) {
         if (!m_RankLabelBoxes[i]) {
             // m_RankLabelBoxes[i] (+0xC0): name label, w=220, h=10, align=1 (LEFT).
@@ -303,7 +310,7 @@ void BonusScreen::BuildBonusText() {
                 0,       // maxLines
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(13+0) = 13px)
             );
-            m_RankLabelBoxes[i]->SetColour(kRowColours[i], 0);
+            m_RankLabelBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
             m_RankLabelBoxes[i]->SetText(m_Awards[i].m_Name);
             m_RankLabelBoxes[i]->Update();
         }
@@ -323,18 +330,20 @@ void BonusScreen::BuildBonusText() {
                 0,
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
             );
-            m_RankValueBoxes[i]->SetColour(kRowColours[i], 0);
+            m_RankValueBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
             m_RankValueBoxes[i]->SetText(valBuf);
             m_RankValueBoxes[i]->Update();
         }
     }
 
     // m_ScoreBox (+0xB8): the "_ BONUS _" title drawn at top of board pos+(105,+51).
-    // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b:
-    //   fontSize=30, w=220, h=30, align=0x0F, text=sprintf("_ %s _", GETSTRING(0x31E)),
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
+    //   fontSize=30, w=220, h=30, align=0x0F, maxLines=1, text=sprintf("_ %s _", GETSTRING(0x31E)),
     //   gradient red->dark-red (top 0xFF0000, bottom 0xB40000),
     //   stroke(2-colour) 2.0 gold (0xFFDC50, 0xFFC887),
     //   shadow 5.0 brown 0x5D280C offset Vec3(0,-3,0). STATIC.
+    // maxLines was WRONG at 0 (unlimited wrap -- caused the trailing "_" star to wrap to a
+    // second line); binary passes maxLines=1 (single line, no wrap).
     if (!m_ScoreBox) {
         m_ScoreBox = new Mortar::BakedStringBox(
             font,
@@ -342,7 +351,7 @@ void BonusScreen::BuildBonusText() {
             220.0f,  // 0xDC
             30.0f,   // 0x1E
             (Mortar::ALIGNMENT_TYPE)0x0F,
-            0,
+            1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
             0        // lineSpacing (binary 7th arg = 0; step = (int)(30+0) = 30px)
         );
         m_ScoreBox->SetGradient(
@@ -367,10 +376,11 @@ void BonusScreen::BuildBonusText() {
     }
 
     // m_TotalBox (+0xBC): raw "TOTAL" label drawn at bottom of board pos+(75,-128).
-    // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b:
-    //   fontSize=20, w=90, h=20, align=0x0F, text=GETSTRING(0x31F) raw (NO wrapper),
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
+    //   fontSize=20, w=90, h=20, align=0x0F, maxLines=1, text=GETSTRING(0x31F) raw (NO wrapper),
     //   gradient yellow->orange (top 0xFFEF00, bottom 0xEF7700),
     //   stroke(single-colour) 2.0 red-orange 0xDC1300, NO shadow. STATIC.
+    // maxLines was WRONG at 0 (unlimited wrap); binary passes maxLines=1 (single line, no wrap).
     if (!m_TotalBox) {
         m_TotalBox = new Mortar::BakedStringBox(
             font,
@@ -378,7 +388,7 @@ void BonusScreen::BuildBonusText() {
             90.0f,   // 0x5A
             20.0f,   // 0x14
             (Mortar::ALIGNMENT_TYPE)0x0F,
-            0,
+            1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
             0        // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
         );
         m_TotalBox->SetGradient(
@@ -401,11 +411,15 @@ void BonusScreen::BuildBonusText() {
 void BonusScreen::Update(float dt) {
     SET_DEFINES();  // v1.6.1 @ 0x00163dec (called at top of every Update)
 
-    // Advance phase timer unconditionally each frame.
-    m_Timer += dt;
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: Update NEVER stores m_Timer (+0xdc).
+    // The phase timer is driven externally by GameOverScreen::Update @0x00187104
+    // (GOS+0x90 += dt; store to bonusScreen->m_Timer -- see GameOverScreen.cpp
+    // STATE_BONUS_PHASE, m_pBonusScreen->m_Timer = m_Timer). Do NOT self-advance here.
 
     // -----------------------------------------------------------------------
-    // Phase A: pre-show slide-in (timer < 0)
+    // Phase A: pre-show slide-in (timer < 0). Sets m_AnimPos only -- NO early return:
+    // binary Update has no early returns; every path converges into the per-award loop,
+    // shake, and the unconditional BuildBonusText() tail below.
     // -----------------------------------------------------------------------
     if (m_Timer < 0.0f) {
         // Slide-in from off-screen. m_AnimPos.y interpolates toward 0.
@@ -413,9 +427,8 @@ void BonusScreen::Update(float dt) {
         m_AnimPos.y = m_Timer * PRE_OFFSET;
 
         // NOTE: binary's rush-loop SFX start/stop gate (m_RushLoopSFX, "Bonus-drum-roll")
-        // requires m_Timer>0, so it never fires during this slide-in phase -- it is
-        // implemented below (after the revealEnd computation), not here.
-        return;
+        // requires m_Timer>0, so it never fires during this slide-in phase; the m_Timer>0
+        // / m_Timer<revealEnd guards below skip it while sliding in.
     }
 
     // -----------------------------------------------------------------------
@@ -507,17 +520,16 @@ void BonusScreen::Update(float dt) {
             totalDisplayed += entry.m_DisplayedScore;
         }
         m_DisplayedScore = totalDisplayed;
-        return;
     }
 
     // -----------------------------------------------------------------------
     // Rush-loop SFX stop gate (binary @0x00164154-0164188): fires once m_Timer has
-    // left the reveal window (m_Timer >= revealEnd, guaranteed by control flow here
-    // since Phase B returned above otherwise).
+    // left the reveal window (m_Timer >= revealEnd). Now that Phase B no longer
+    // early-returns, the reveal-window check is made explicit here.
     // ASM-spec v1.6.1 BonusScreen::Update @0x00164160: GameSound::Release(mGameSound,
     //   m_RushLoopSFX, "Bonus-drum-roll") @0x0010dd00, then m_RushLoopSFX = nullptr.
     // -----------------------------------------------------------------------
-    if (m_RushLoopSFX != 0) {
+    if (m_Timer >= revealEnd && m_RushLoopSFX != 0) {
         Game* game = Game::GetInstance();
         if (game && game_work.mGameSound) {
             game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
@@ -562,11 +574,10 @@ void BonusScreen::Update(float dt) {
         (void)wobble;
     }
 
-    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: Update tail calls BuildBonusText
-    // when m_bSkipIntro is set (create-once: boxes are null-checked inside BuildBonusText).
-    if (m_bSkipIntro) {
-        BuildBonusText();
-    }
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: tail @0x001648f0 calls
+    // BuildBonusText unconditionally every tick (create-once latch is inside
+    // BuildBonusText).
+    BuildBonusText();
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +585,18 @@ void BonusScreen::Update(float dt) {
 // ---------------------------------------------------------------------------
 
 // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::Draw @0x0016492c..0x00164e4c (asm-inspector)
+// ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector, fresh binary read): added the
+//   missing total-score number draw, per-row reveal gate, per-award m_Colour (not fixed palette),
+//   and corrected star icon offset to pos+(-2,+6) -- see inline notes below. Supersedes the
+//   prior (stale) verified pass for those specific sub-blocks; base-box / m_ScoreBox / m_TotalBox
+//   offset findings above are unaffected and remain correct.
+// ASM-spec v1.6.1 BonusScreen::Draw @0x00164a68 (2 independent RE passes + Bada-HLE visual
+//   ground truth, not yet asm-inspector-diffed -- a prior asm-inspector run wrongly denied this
+//   because it only checked static init of the global, not that the value is read-only
+//   thereafter): pos += FIRST_NAME_OFFSET (global Vec3 @0x003144cc = (-105,+40,0)) is applied
+//   once, after the base plate draw, before all content draws; see inline note at the shift
+//   site below. This supersedes the "restore pos immediately after base draw" behaviour the
+//   prior ASM-verified pass above had left in place.
 void BonusScreen::Draw(float* hudScaleRaw) {
     // Binary saves pos at entry @0x0016494c, restores at exit @0x00164e38.
     // The per-award loop steps pos.y by -42 each row.
@@ -584,34 +607,60 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     pos.y += m_AnimPos.y;
     pos.z += m_AnimPos.z;
 
-    // Base box draw (HUDControl3d::Draw handles the dialog background via m_Texture@0x74).
+    // Base box draw (HUDControl3d::Draw handles the dialog background via m_Texture@0x74),
+    // centered on pos (savedPos + m_AnimPos), BEFORE the FIRST_NAME_OFFSET content shift below.
     HUDControl3d::Draw(hudScaleRaw);
 
-    // Restore pos to original (no AnimPos) for all text/award draws below.
-    // TODO: v1.6.1 BonusScreen::Draw @0x0016492c -- intro animation: binary shifts pos by
-    //   (m_AnimPos + m_ShakeOffset) at Draw entry and draws ALL elements (board+score+total+rows)
-    //   at that shifted pos, restoring only at function exit. Port restores pos immediately
-    //   after the base draw and omits m_ShakeOffset. Needs asm-verify before reworking.
-    pos = savedPos;
+    // Total-score NUMBER -- binary draws it BEFORE the FIRST_NAME_OFFSET shift (@0x001649b0,
+    // which precedes @0x00164a68), at the UNSHIFTED pos + TOTAL_POS. So it is NOT moved -105
+    // left with the boxes/rows (it lands ~+50 right of plate center, not -55 left). font =
+    // game_work.pFontArcade (pM_Fonts[7], arcade_results_numbers.fnt), align 0xF, colour white.
+    //   size = (m_DisplayedScore>0 ? 26 + 14*m_DisplayedScore/m_TotalScore : 26) * m_NamePulseScale.
+    if (game_work.pFontArcade.IsValid()) {
+        char totalBuf[16];
+        snprintf(totalBuf, sizeof(totalBuf), "%d", m_DisplayedScore);
+        float scoreScale = (m_DisplayedScore > 0)
+            ? (26.0f + 14.0f * (float)m_DisplayedScore / (float)m_TotalScore)
+            : 26.0f;
+        scoreScale *= m_NamePulseScale;
+        game_work.pFontArcade->DrawString(
+            scoreScale, 1.0f, 0.0f, totalBuf,
+            Vec3(pos.x + TOTAL_POS_X, pos.y + TOTAL_POS_Y, pos.z + TOTAL_POS_Z),
+            Colour(255, 255, 255, 255), 0xF);
+    }
+
+    // TODO: v1.6.1 BonusScreen::Draw @0x00164968 -- binary applies `pos += m_AnimPos +
+    //   m_ShakeOffset` (this port only adds m_AnimPos above, m_ShakeOffset still omitted).
+    //   Existing gap, unrelated to the FIRST_NAME_OFFSET fix below.
+
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x00164a68: pos += FIRST_NAME_OFFSET.
+    // FIRST_NAME_OFFSET is a global Vec3 @0x003144cc = (-105.0f, +40.0f, 0.0f), static-init'd
+    // by the TU global ctor @0x001634fc and never modified afterward (confirmed by 2
+    // independent RE passes + Bada-HLE visual ground truth -- a prior asm-inspector pass
+    // wrongly denied this shift because it only checked static init, not that the value is
+    // read-only thereafter). Applied ONCE here, at the origin, AFTER the base plate draw and
+    // BEFORE any content draw. All content offsets below (BONUS box, TOTAL box, total-number,
+    // star, per-award rows) are relative to this shifted origin and are NOT themselves
+    // re-compensated by -105/+40 -- do not double-apply the shift at each content offset.
+    // pos stays shifted through every content draw in this function; the binary (and this
+    // port) restores pos to savedPos only once, at function exit @0x00164e38.
+    pos.x += -105.0f;
+    pos.y +=   40.0f;
 
     // -----------------------------------------------------------------------
     // Pre-loop draws: "_ BONUS _" title (m_ScoreBox) + "TOTAL" label (m_TotalBox).
     // ASM-verified: 2026-06-27T00:00:00Z v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector)
     // Both boxes are static (text set once in BuildBonusText; no per-frame SetText here).
     //
-    // OFFSET FIDELITY NOTE (verified by 3 independent RE passes -- do not "fix"):
-    //   m_ScoreBox ("_ BONUS _") draws at pos+(105, 51, 0) -- binary literal @0x164dc0/0x164dc4.
-    //   m_TotalBox ("TOTAL")     draws at pos+(75, -128, 0) -- binary literal @0x164dc8/0x164dcc.
+    // OFFSET FIDELITY NOTE: these offsets (+105/+51 and +75/-128) are relative to the
+    //   FIRST_NAME_OFFSET-shifted pos set above, NOT the plate-centered pos.
+    //   m_ScoreBox ("_ BONUS _") draws at (shifted pos)+(105, 51, 0) -- binary literal @0x164dc0/0x164dc4.
+    //   m_TotalBox ("TOTAL")     draws at (shifted pos)+(75, -128, 0) -- binary literal @0x164dc8/0x164dcc.
     //   Full transform: BakedStringBox::SetTranslation(flag=1) @0x00246238 subtracts boxW/2;
     //   RebuildAlignments @0x00245c78 adds it back; net text-center = pos.x + offset.x.
-    //   The board (HUDControl3d::Draw @0x0018b544) is centered at pos (m_HudScale +0x14 = 0),
-    //   so BONUS lands RIGHT-of-center by design in v1.6.1 Bada.
-    //
-    // WARNING: do NOT center these to match Android/Froyo screenshots -- that is a different
-    //   SKU. Android has baked-centered text; v1.6.1 Bada arcade_diolog_box.tex has empty bands
-    //   + code-drawn text at +105. Centering DIVERGES from the Bada target.
-    //   The dead literal-pool slots @0x164db4/@0x164db8 (values 105.0/51.0) are NOT the offsets
-    //   and previously misled RE.
+    //   Net of the FIRST_NAME_OFFSET shift (-105,+40) plus this literal: BONUS lands at
+    //   (0, +91) relative to the plate-centered pos -- i.e. horizontally CENTERED on the
+    //   512x256 plate (the plate itself is centered on the unshifted pos by HUDControl3d::Draw).
     // -----------------------------------------------------------------------
 
     // m_ScoreBox (+0xB8): "_ BONUS _" title at pos+(105,+51). SetTranslation flag=1.
@@ -632,68 +681,70 @@ void BonusScreen::Draw(float* hudScaleRaw) {
         m_TotalBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
     }
 
+    // (Total-score number is drawn ABOVE, before the FIRST_NAME_OFFSET shift -- see note there.)
+
     // -----------------------------------------------------------------------
     // Per-award loop: star + label + value. pos.y steps -42 each row.
-    // TODO: v1.6.1 0x00164b64 -- reveal gate: `if (m_Timer - 0.666 < i*0.6) break`.
-    //   For stable screenshot, draw all rows (no gate).
-    // ASM-verified: v1.6.1 BonusScreen::Draw @0x0016492c..0x00164e4c (asm-inspector)
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector, fresh binary read):
+    //   per-row reveal gate `m_Timer - FIRST_AWARD >= i * TIME_PER_AWARD`
+    //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=1.0f).
+    //   Row colour = the per-award element's OWN animated m_Colour (+0x50), NOT a fixed palette
+    //   (the prior kDrawRowColours 3-entry palette here was WRONG and has been removed).
     // -----------------------------------------------------------------------
-    // Fixed 3-entry colour palette indexed by row; NOT entry.m_Colour.
-    static const Colour kDrawRowColours[3] = {
-        Colour(0xAD, 0x7E, 0x00, 0xFF),  // row0: gold
-        Colour(0xA0, 0x05, 0x05, 0xFF),  // row1: red
-        Colour(0x01, 0x5C, 0x95, 0xFF),  // row2: blue
-    };
     MatrixManager& mm = MatrixManager::GetInstance();
     for (int i = 0; i < (int)m_Awards.size(); ++i) {
         const BonusAwardHud& entry = m_Awards[i];
 
-        // Star icon draw (only if texture is valid).
-        // Mirrors BSButton::Draw API: SetUnCached -> Scale44 -> GlobalTranslate44 ->
-        // SetCurrentMatrix -> UploadModelViewOnly -> DrawQuadUnCached -> UnSetUnCached.
-        if (entry.m_StarTex.IsValid()) {
-            float texW = (float)entry.m_StarTex->GetWidth();
-            float texH = (float)entry.m_StarTex->GetHeight();
+        bool revealed = (m_Timer - FIRST_AWARD) >= (float)i * TIME_PER_AWARD;
+        if (revealed) {
+            // Star icon draw (only if texture is valid).
+            // Mirrors BSButton::Draw API: SetUnCached -> Scale44 -> GlobalTranslate44 ->
+            // SetCurrentMatrix -> UploadModelViewOnly -> DrawQuadUnCached -> UnSetUnCached.
+            if (entry.m_StarTex.IsValid()) {
+                float texW = (float)entry.m_StarTex->GetWidth();
+                float texH = (float)entry.m_StarTex->GetHeight();
 
-            entry.m_StarTex->SetUnCached();
+                entry.m_StarTex->SetUnCached();
 
-            // ASM-verified: 2026-06-26 v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector)
-            // star corner = pos - 35*UnitX (literal 35.0 @0x164dd0).
-            Matrix44 mat = Matrix44::Scale44(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
-            mat.GlobalTranslate44(Vec3(pos.x - 35.0f, pos.y, pos.z));
-            mm.GetWorldStack().SetCurrentMatrix(mat);
-            mm.UploadModelViewOnly();
+                // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c-0x0016434: star icon quad is
+                // +/-0.5 centered on the translate pos, so the translate IS the star CENTER, at
+                // pos+(-35,+0) (net -140 from plate center after the -105 FIRST_NAME_OFFSET); the
+                // label sits at pos+(-2,+6) (net -107), 33px right of the star. (A prior
+                // asm-inspector pass mis-read the star translate Y as +6 -- RE confirms +0.)
+                Matrix44 mat = Matrix44::Scale44(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
+                mat.GlobalTranslate44(Vec3(pos.x - 35.0f, pos.y, pos.z));
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
 
-            Mortar::Mesh::DrawQuadUnCached(entry.m_Colour, NULL);
+                Mortar::Mesh::DrawQuadUnCached(entry.m_Colour, NULL);
 
-            entry.m_StarTex->UnSetUnCached();
+                entry.m_StarTex->UnSetUnCached();
+            }
+
+            // m_RankLabelBoxes[i]: pos+(-2,+6), SetTranslation flag=0 (left-aligned).
+            // ASM-verified: v1.6.1 BonusScreen::Draw @0x164cec flag=0.
+            if (i < 3 && m_RankLabelBoxes[i]) {
+                m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
+                m_RankLabelBoxes[i]->SetTranslation(
+                    Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
+                    0
+                );
+                m_RankLabelBoxes[i]->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+            }
+
+            // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
+            // ASM-verified: v1.6.1 BonusScreen::Draw @0x164d7c mov r2,#0 -> flag=0.
+            if (i < 3 && m_RankValueBoxes[i]) {
+                m_RankValueBoxes[i]->SetColour(entry.m_Colour, 0);
+                m_RankValueBoxes[i]->SetTranslation(
+                    Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
+                    0
+                );
+                m_RankValueBoxes[i]->Draw(Vec2(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
+            }
         }
 
-        const Colour& rowCol = (i < 3) ? kDrawRowColours[i] : kDrawRowColours[2];
-
-        // m_RankLabelBoxes[i]: pos+(-2,+6), SetTranslation flag=0 (left-aligned).
-        // ASM-verified: v1.6.1 BonusScreen::Draw @0x164cec flag=0.
-        if (i < 3 && m_RankLabelBoxes[i]) {
-            m_RankLabelBoxes[i]->SetColour(rowCol, 0);
-            m_RankLabelBoxes[i]->SetTranslation(
-                Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
-                0
-            );
-            m_RankLabelBoxes[i]->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
-        }
-
-        // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
-        // ASM-verified: v1.6.1 BonusScreen::Draw @0x164d7c mov r2,#0 -> flag=0.
-        if (i < 3 && m_RankValueBoxes[i]) {
-            m_RankValueBoxes[i]->SetColour(rowCol, 0);
-            m_RankValueBoxes[i]->SetTranslation(
-                Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
-                0
-            );
-            m_RankValueBoxes[i]->Draw(Vec2(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
-        }
-
-        // Row step: pos.y -= 42 at loop tail.
+        // Row step: pos.y -= 42 at loop tail (unconditional -- runs even for unrevealed rows).
         pos.y += -42.0f;
     }
 

@@ -440,7 +440,7 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 InitPoints @ 0x1e75d0 (re-analyst)
     void InitPoints(long count);
 
-    // Binary non-const Colour* overload of SetModColours (@ 0x17CA0C).
+    // v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- non-const Colour* overload.
     static void SetModColours(Colour* colours, int colourCount, int colourType,
                               float lifeScale, const char* particlePath,
                               const char* textureName2, bool directional,

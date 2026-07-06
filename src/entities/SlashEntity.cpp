@@ -1616,6 +1616,7 @@ void SlashEntity::Update(float dt) {
                     if (!fruit) continue;
                     if (fruit->Sliced()) continue;
                     if (!fruit->IsActive()) continue;
+                    if (fruit->flags & 0x01) continue; // v1.6.1 @0x001e8830: skip ENT_INACTIVE (MenuButton grow-in)
 
                     bool hit = CollideWithEntity(fruit);
 
@@ -1748,6 +1749,7 @@ void SlashEntity::Update(float dt) {
                     Bomb* bomb = static_cast<Bomb*>(*itBomb);
                     if (!bomb) continue;
                     if (!bomb->IsActive()) continue;
+                    if (bomb->flags & 0x01) continue; // v1.6.1 @0x001e8ce0: skip ENT_INACTIVE (MenuButton grow-in)
 
                     Vec3 bladeDirCopy = m_BladeDir; // binary saves dir before test
                     bool hit = CollideWithEntity(bomb);
@@ -2266,7 +2268,10 @@ void SlashEntity::SetModColours(
         g_Palette[i] = colours ? colours[i] : Colour(255, 255, 255, 255);
     }
 
-    g_PaletteProgress = 1.0f;
+    // ASM-spec v1.6.1 SlashEntity::SetModColours @0x001e7f24: colourOut = ModColours[0];
+    // ModColourTime = 0.0f; if (ModColourType==2) ModColourTime = (float)Rand32(count).
+    g_ModColourOut    = g_Palette[0];
+    g_PaletteProgress = 0.0f;
     if (g_ColourType == 2 && g_ColourCount > 0) {
         g_PaletteProgress = (float)((unsigned)rand() % (unsigned)g_ColourCount);
     }
@@ -2424,7 +2429,7 @@ bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
                                     unsigned long /*mask2*/, Vec3* /*bladeVel*/) { return 0; }
 
-// Binary @ 0x17CA0C -- non-const Colour* overload; body identical to const overload.
+// v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- non-const Colour* overload; body identical to const overload.
 void SlashEntity::SetModColours(
     Colour*     colours,
     int         colourCount,

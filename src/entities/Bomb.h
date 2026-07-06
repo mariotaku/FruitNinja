@@ -152,6 +152,12 @@ public:
     // ASM-verified: 2026-04-28T00:00 v1.6.1 binary @ 0x0012637c (asm-inspector)
     void Disable() { m_bCollisionGuard = 1; }
 
+    // v1.6.1 Bomb::IsActive @0x001e2ec0: m_Countdown <= 0
+    // Non-virtual name-hiding of Mortar::Entity::IsActive -- NOT an override.
+    // Binary declares this per-type predicate (chuck-delay gate), not the
+    // base flags&0x11 test. Callers must hold a Bomb* for this to apply.
+    bool IsActive() const { return m_Countdown <= 0.0f; }
+
     // v1.6.1 @ 0x1d6fd4 — scale up + reduce speed (bomb-multiplier powerup)
     void MakeFat(bool skipSpawnFx);
 

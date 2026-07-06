@@ -91,7 +91,8 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 //   achievement = string    -> m_AchievementHash (StringHash)
 //   min-<fruit> = int       -> m_MinFruit[StringHash(fruit)]
 //   max-<fruit> = int       -> m_MaxFruit[StringHash(fruit)]
-// Inner text -> m_NameTemplate (stripped)
+// Inner text -> m_NameTemplate (localised via GETSTRING_CAST_0_STR; TinyXML
+// already condenses surrounding whitespace, so no manual trim is needed)
 // Parent-texture fallback is done by BonusType::Parse after this returns (binary @0x0012f3a4).
 // ---------------------------------------------------------------------------
 void Bonus::Parse(TiXmlElement* e) {
@@ -147,17 +148,17 @@ void Bonus::Parse(TiXmlElement* e) {
         }
     }
 
-    // Inner text -> m_NameTemplate (strip whitespace)
+    // ASM-spec v1.6.1 Bonus::Parse @0x0012f0f8: strcpy(m_NameTemplate,
+    // GETSTRING_CAST_0_STR(GetText())) -- template holds the LOCALIZED string;
+    // m_DisplayName written ONLY by IsAchieved @0x0012e708
+    // snprintf(m_DisplayName,0x40,m_NameTemplate,score).
     const char* text = e->GetText();
-    if (text) {
-        while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n') ++text;
-        strncpy(m_NameTemplate, text, sizeof(m_NameTemplate) - 1);
+    if (!text) {
+        m_NameTemplate[0] = '\0';
+    } else {
+        const char* localised = GETSTRING_CAST_0_STR(text);
+        strncpy(m_NameTemplate, localised ? localised : text, sizeof(m_NameTemplate) - 1);
         m_NameTemplate[sizeof(m_NameTemplate) - 1] = '\0';
-        int len = (int)strlen(m_NameTemplate);
-        while (len > 0 && (m_NameTemplate[len-1] == ' ' || m_NameTemplate[len-1] == '\t'
-               || m_NameTemplate[len-1] == '\r' || m_NameTemplate[len-1] == '\n')) {
-            m_NameTemplate[--len] = '\0';
-        }
     }
 
     // ASM-spec v1.6.1 Bonus::Parse @0x0012f0f8: valuesEqual -> m_PatternHashes
@@ -175,16 +176,6 @@ void Bonus::Parse(TiXmlElement* e) {
             tok = strtok(NULL, ",");
         }
     }
-
-    // ASM-verified: 2026-05-22 v1.6.1 Bonus::Parse @ 0x001036e8 (re-analyst). Binary's
-    // Bonus::Parse calls GETSTRING_CAST_0_STR on the inner text BEFORE
-    // strcpy -- the <bonus>GAME_TEXTURE_13</bonus> text is a localisation
-    // key, not the display text. Without this lookup the raw key renders
-    // verbatim on BonusScreen.
-    const char* localised = GETSTRING_CAST_0_STR(m_NameTemplate);
-    strncpy(m_DisplayName, localised ? localised : m_NameTemplate,
-            sizeof(m_DisplayName) - 1);
-    m_DisplayName[sizeof(m_DisplayName) - 1] = '\0';
 }
 
 // ---------------------------------------------------------------------------
