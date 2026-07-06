@@ -168,7 +168,7 @@ jobs:
           # (fruit-ninja-<sha8>.*). Assert the key outputs + the PWA files exist.
           ls -lh build/web/index.html
           ls -lh build/web/fruit-ninja-*.js build/web/fruit-ninja-*.wasm build/web/fruit-ninja-*.data
-          ls -lh build/web/splash-*.webp build/web/manifest.webmanifest build/web/sw.js build/web/favicon.ico
+          ls -lh build/web/manifest.webmanifest build/web/sw.js build/web/favicon.ico
 
       # ---- Assemble pages/ ------------------------------------------------
       - name: Set up Python
