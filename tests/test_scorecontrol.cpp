@@ -3,10 +3,12 @@
 // Usage:
 //   test_scorecontrol [--screenshot|--interactive|--headless]
 //
-// Renders ScoreControl in three cases and captures each to a PNG:
+// Renders ScoreControl in four cases and captures each to a PNG:
 //   scorecontrol/default    -- m_PauseAmount=1.0f (fully faded/game-over state)
 //   scorecontrol/active     -- m_PauseAmount=0.0f (active gameplay, score visible, no wordmark)
 //   scorecontrol/suppressed -- m_PauseAmount=-1.0f (camera pulled back, score fully suppressed)
+//   scorecontrol/arcade_x2  -- Arcade mode, GetScoreGainMultiplier()==2 -> "x2" badge
+//                              (ScoreControl.cpp:548-558, PreDraw @0x001ace80)
 //
 // Isolation approach: InitComponent() (boot + 120 burn-in + HUD cleared),
 // then a ScoreControl is constructed and added as the sole HUD control.
@@ -30,12 +32,19 @@
 // "suppressed" (m_PauseAmount=-1.0f): Draw() passes (m_PauseAmount == -1.0, not < -1.0),
 //   PreDraw Section A fires (transTimer >= -1.0), but pos.x slides to -418 (fully
 //   off-screen). Section D and E are gated off. Effectively a blank frame.
+//
+// "arcade_x2" (gameMode=ARCADE, m_PauseAmount=0.0f, GetScoreGainMultiplier()==2):
+//   renders S2 (score number) + the Arcade-only "x2" badge in pFontBlue2 (blue
+//   numbers), anchored at (pos.x-18, pos.y-52) = (-236, 86) -- left of and just
+//   above the running score. Previously untested: only Classic-mode cases ran,
+//   so this gate (gameMode==GAME_MODE_ARCADE, ScoreControl.cpp:548) never fired.
 
 #include "test_harness.h"
 #include "hud/ScoreControl.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
 #include "game/FruitSaveData.h"
+#include "game/PowerUpManager.h"
 #include "hud/HUDLayer.h"
 #include <cstdio>
 
@@ -186,6 +195,53 @@ int main(int argc, char* argv[]) {
         sc->m_bPendingRemoval = 1;
         h.RunComponentHeadless(1, 0x7FFFFFFF);
         std::printf("PASS: scorecontrol/suppressed complete\n");
+    }
+
+    // -------------------------------------------------------------------------
+    // Case 4: "arcade_x2" -- Arcade mode, GetScoreGainMultiplier()==2
+    // Exercises the Arcade-gated "x%d" badge block (ScoreControl.cpp:548-558,
+    // PreDraw @0x001ace80), previously untested (badge is drawn only when
+    // gameMode == GAME_MODE_ARCADE). Anchor: (pos.x - 18, pos.y - 52) with
+    // pos = (-218, 138) -> badge center at roughly (-236, 86), left of and
+    // just above the running score.
+    // -------------------------------------------------------------------------
+    {
+        game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
+        game_work.currentScore = 266;
+        game_work.m_PauseAmount     = 0.0f;
+        game_work.bM_bPaused   = 0;
+
+        // Force GetScoreGainMultiplier() == 2 ("x2" badge). SetDefaults (run
+        // during boot) leaves m_ScoreGainMult == m_ScoreGainFactor == 1, so a
+        // single *= 2 gives the multiplier == 2.
+        PowerUpManager::GetInstance()->AddToScoreGainMultiply(2);
+
+        ScoreControl* sc = new ScoreControl();
+        sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+        game_work.mHud->AddControl(sc);
+
+        for (int i = 0; i < 60; ++i) {
+            game_work.gameMode     = (uint8_t)Mortar::GAME_MODE_ARCADE;
+            game_work.currentScore = 266;
+            game_work.m_PauseAmount     = 0.0f;
+            PowerUpManager::GetInstance()->m_ScoreGainMult = 2;
+            h.RunComponentHeadless(1, 0x7FFFFFFF);
+        }
+
+        LogScoreControlPos("arcade_x2", sc);
+        std::printf("[scorecontrol/arcade_x2] GetScoreGainMultiplier()=%d\n",
+                    PowerUpManager::GetInstance()->GetScoreGainMultiplier());
+
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("scorecontrol/arcade_x2")) {
+                game_work.m_SaveData = prevSaveData;
+                return 3;
+            }
+        }
+
+        sc->m_bPendingRemoval = 1;
+        h.RunComponentHeadless(1, 0x7FFFFFFF);
+        std::printf("PASS: scorecontrol/arcade_x2 complete\n");
     }
 
     game_work.m_SaveData = prevSaveData;

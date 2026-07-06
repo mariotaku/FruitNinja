@@ -59,7 +59,7 @@
 static const char* PlacementName(int p) {
     switch (p) {
     case 0: return "BOTTOM";
-    case 1: return "BOTTOM_SLOW";
+    case 1: return "TOP";
     case 2: return "LEFT";
     case 3: return "RIGHT";
     case 4: return "RANDOM_SIDE";

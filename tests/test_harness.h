@@ -83,6 +83,10 @@ namespace fn {
 // early (e.g. internal state-machine condition). Returning true continues.
 typedef bool (*OnTickFn)(Game& game, int frame, void* userdata);
 
+// Per-frame hook for RunComponentHeadlessHooked. Runs once per frame either
+// before or after the isolated HUD draw. userdata is passed through opaquely.
+typedef void (*ComponentFrameFn)(void* userdata, float dt);
+
 struct TestHarness {
     // -------- ctor / opts --------
     TestHarness(int argc_, char** argv_, const char* label_)
@@ -333,6 +337,51 @@ struct TestHarness {
                 game_work.mHud->BeginDraw(kDt);
                 game_work.mHud->Draw(layerMask);
             }
+
+            SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+        }
+    }
+
+    // Like RunComponentHeadless but wraps the per-frame HUD update+draw with two
+    // caller-supplied hooks, so a test can drive extra per-frame subsystems that
+    // draw OUTSIDE the HUD control list (e.g. PowerUpManager::Draw, which renders
+    // meter bars directly through MatrixManager rather than via HUDControl).
+    //
+    // Per-frame order (single BeginFrame / ortho / SwapWindow, matching
+    // RunComponentHeadless):
+    //   preDraw(userdata, dt)   -- run BEFORE the HUD (advance/settle subsystem state)
+    //   mHud->Update / BeginDraw / Draw(layerMask)
+    //   postDraw(userdata, dt)  -- run AFTER the HUD (draw overlays on top)
+    // Either hook may be NULL. dt is fixed 1/60. Same ortho as the HUD path.
+    void RunComponentHeadlessHooked(int n,
+                                    ComponentFrameFn preDraw,
+                                    ComponentFrameFn postDraw,
+                                    void* userdata,
+                                    int layerMask = 0x7FFFFFFF) {
+        static const float kDt = 1.0f / 60.0f;
+        for (int i = 0; i < n; ++i) {
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_QUIT) return;
+            }
+
+            int ww = 0, wh = 0;
+            SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+            glViewport(0, 0, ww, wh);
+
+            Mortar::DisplayManager::GetInstance().BeginFrame();
+            MatrixManager::GetInstance().SetupOrtho(
+                160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+
+            if (preDraw) preDraw(userdata, kDt);
+
+            if (game_work.mHud) {
+                game_work.mHud->Update(kDt);
+                game_work.mHud->BeginDraw(kDt);
+                game_work.mHud->Draw(layerMask);
+            }
+
+            if (postDraw) postDraw(userdata, kDt);
 
             SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
         }

@@ -1,12 +1,15 @@
 // test_screenshot -- per-screen golden-screenshot driver.
 //
 // Usage: test_screenshot <screen> [--interactive|--screenshot|--headless]
+//                                  [--content=<key>] [--lang=<code>]
 //
 // Drives the named screen to a fully-drawn, stable state and captures the
 // framebuffer to tmp/test/screenshots/<suite>/<case>.png.
 //
 // Supported screens (suite/case mapping):
-//   bonus               -> bonus/default
+//   bonus               -> bonus/default (no --content given)
+//                       -> bonus/<content>_<lang> otherwise (task #32 matrix;
+//                          --content=one|two|three|big, --lang=<code>; see RunBonus)
 //   gameover            -> gameover/classic    (score 266, highscore 200, NEW BEST, ScoreControl)
 //   gameover_zen        -> gameover/zen        (score 456, highscore 400, NEW BEST, ScoreControl)
 //   gameover_arcade     -> gameover/arcade     (score 789, highscore 700, NEW BEST, ScoreControl)
@@ -48,6 +51,11 @@
 // Output goes to debug/bonus_textbounds.png instead of the normal label.
 static bool g_DebugTextBounds = false;
 
+// Port specific: --content=<key> selects the BonusScreen content x locale
+// matrix case (task #32). NULL (no flag) keeps the original single-case
+// "bonus/default" fixture byte-for-byte for back-compat. See RunBonus.
+static const char* g_ContentArg = NULL;
+
 // ---------------------------------------------------------------------------
 // Forward declarations for per-screen fixture functions.
 // ---------------------------------------------------------------------------
@@ -86,8 +94,10 @@ static const ScreenCase kScreens[] = {
 static int FailUsage() {
     fprintf(stderr,
         "usage: test_screenshot <screen> [--interactive|--screenshot|--headless]\n"
+        "                                [--content=<key>] [--lang=<code>]\n"
         "  screens: bonus gameover gameover_zen gameover_arcade drawquad mesh\n"
         "           gameover_withscore\n"
+        "  bonus --content=one|two|three|big  (default: original 3-award fixture)\n"
         "  (fruitfact per-mode: see test_fruitfact classic|arcade|zen)\n");
     return 1;
 }
@@ -109,15 +119,26 @@ int main(int argc, char* argv[]) {
         return FailUsage();
     }
 
-    // Detect --debug-textbounds before TestHarness parses flags.
+    // Detect --debug-textbounds / --content= / --lang= before TestHarness parses
+    // flags. --lang= is parsed again here (independently of TestHarness::ParseFlags,
+    // which applies it to languageFlag/StringTable) purely to build the composite
+    // screenshot label -- same pattern as test_achievement_notification.cpp.
+    const char* langArg = "default";
     for (int i = 2; i < argc; ++i) {
         if (std::strcmp(argv[i], "--debug-textbounds") == 0) {
             g_DebugTextBounds = true;
+        } else if (std::strncmp(argv[i], "--content=", 10) == 0) {
+            g_ContentArg = argv[i] + 10;
+        } else if (std::strncmp(argv[i], "--lang=", 7) == 0) {
+            langArg = argv[i] + 7;
         }
     }
 
     // When --debug-textbounds is set, redirect the output label so the overlay
     // screenshot goes to a separate path and doesn't overwrite the normal golden.
+    // Otherwise, an explicit --content= for the bonus screen builds a
+    // "bonus/<content>_<lang>" label; no --content keeps "bonus/default" verbatim.
+    char contentLabelBuf[128];
     const char* label = sc->label;
     if (g_DebugTextBounds) {
         if (std::strcmp(sc->name, "bonus") == 0) {
@@ -125,6 +146,10 @@ int main(int argc, char* argv[]) {
         } else if (std::strcmp(sc->name, "gameover") == 0) {
             label = "debug/gameover_textbounds";
         }
+    } else if (std::strcmp(sc->name, "bonus") == 0 && g_ContentArg != NULL) {
+        std::snprintf(contentLabelBuf, sizeof(contentLabelBuf), "bonus/%s_%s",
+                      g_ContentArg, langArg);
+        label = contentLabelBuf;
     }
 
     fn::TestHarness h(argc, argv, label);
@@ -150,8 +175,11 @@ int main(int argc, char* argv[]) {
 // No MainScreen/menu, no background texture, no particles, no game state machine.
 //
 // Setup mirrors test_bonus_screen.cpp:
-//   3 awards (names/tiers/multipliers), pos (0,-20,0), added to mHud.
-//   m_Timer pinned to 2.5f (past all award reveals), m_bPendingRemoval=0.
+//   1-3 awards (names/tiers/multipliers), pos (0,0,0), added to mHud.
+//   m_Timer pinned past every award's reveal gate, m_bPendingRemoval=0.
+//
+// g_ContentArg selects the content x locale matrix (task #32) -- see the
+// content-selection block inside RunBonus for the one/two/three/big cases.
 // ---------------------------------------------------------------------------
 static const float kDtFixed = 1.0f / 60.0f;
 
@@ -222,14 +250,60 @@ static int RunBonus(fn::TestHarness& h) {
     const char* name2 = GETSTRING_STR("GAME_TEXTURE_23",  0);
     if (!name2 || !name2[0]) name2 = "NO FRUIT DROPPED!";
 
-    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), icon0, name0,      50);  // slot0 gold
-    bs->AddAward(Colour(0xA0, 0x05, 0x05, 0xFF), icon1, name1buf,   55);  // slot1 red
-    bs->AddAward(Colour(0x01, 0x5C, 0x95, 0xFF), icon2, name2,      50);  // slot2 blue
-    // Representative total score so m_ScoreBox shows a number.
-    // Note: AddAward already sums tier into m_TotalScore (50+55+50=155); override to 1234.
-    bs->m_TotalScore = 1234;
-    // m_bSkipIntro triggers BuildBonusText on first Update call.
-    bs->m_bSkipIntro = true;
+    // -------------------------------------------------------------------
+    // Content selection (task #32 content x locale matrix).
+    // g_ContentArg == NULL reproduces the original single-case fixture
+    // byte-for-byte (3 awards, m_TotalScore overridden to 1234, m_Timer
+    // pinned to 2.5f) so the plain `screenshot_bonus` ctest is unaffected.
+    // An explicit --content=<key> selects a curated award count / total:
+    //   three -- 3 awards (gold/red/blue), natural total (50+55+50=155)
+    //   two   -- first 2 awards (gold, red), natural total (105)
+    //   one   -- first 1 award (gold), natural total (50)
+    //   big   -- 3 awards, m_DisplayedScore/m_TotalScore forced to a
+    //            6-digit value post-Update to exercise the TOTAL number's
+    //            size-scale formula (26 + 14*displayed/total; BonusScreen.cpp
+    //            Draw @0x00164a68 area) at its ratio=1.0 max (scale 40px)
+    //            and confirm a 6-digit string still fits the bottom band.
+    // -------------------------------------------------------------------
+    int nAwards = 3;
+    bool bigTotal = false;
+    if (g_ContentArg != NULL) {
+        if      (std::strcmp(g_ContentArg, "one")   == 0) nAwards = 1;
+        else if (std::strcmp(g_ContentArg, "two")   == 0) nAwards = 2;
+        else if (std::strcmp(g_ContentArg, "three") == 0) nAwards = 3;
+        else if (std::strcmp(g_ContentArg, "big")   == 0) { nAwards = 3; bigTotal = true; }
+        else {
+            std::fprintf(stderr, "FAIL: unknown --content=%s (want one|two|three|big)\n", g_ContentArg);
+            delete bs;
+            return 5;
+        }
+    }
+
+    if (g_ContentArg == NULL) {
+        bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), icon0, name0,      50);  // slot0 gold
+        bs->AddAward(Colour(0xA0, 0x05, 0x05, 0xFF), icon1, name1buf,   55);  // slot1 red
+        bs->AddAward(Colour(0x01, 0x5C, 0x95, 0xFF), icon2, name2,      50);  // slot2 blue
+        // Representative total score so m_ScoreBox shows a number.
+        // Note: AddAward already sums tier into m_TotalScore (50+55+50=155); override to 1234.
+        bs->m_TotalScore = 1234;
+    } else {
+        const Colour kColours[3] = {
+            Colour(0xAD, 0x7E, 0x00, 0xFF),   // slot0 gold
+            Colour(0xA0, 0x05, 0x05, 0xFF),   // slot1 red
+            Colour(0x01, 0x5C, 0x95, 0xFF),   // slot2 blue
+        };
+        Mortar::SmartPtr<Mortar::Texture> icons[3] = { icon0, icon1, icon2 };
+        const char* names[3] = { name0, name1buf, name2 };
+        const int   tiers[3] = { 50, 55, 50 };
+        for (int i = 0; i < nAwards; ++i) {
+            bs->AddAward(kColours[i], icons[i], names[i], tiers[i]);
+        }
+        // No m_TotalScore override here: AddAward's natural sum is left in
+        // place for one/two/three (m_ScoreBox shows the real accumulated tier
+        // total); "big" overrides it below, after the finale fires.
+    }
+    // BuildBonusText is now called unconditionally every Update tick (fixed
+    // create-once latch, task #26) -- no manual trigger needed here.
 
     // Add BonusScreen as the ONLY control in the isolated HUD.
     // InitComponent() already cleared the game-state controls (MainScreen, etc.)
@@ -243,18 +317,61 @@ static int RunBonus(fn::TestHarness& h) {
         return h.Shutdown();
     }
 
-    // Pin to fully-revealed stable state: timer 2.5s covers all 3 awards
-    // (~0.6s each, revealEnd=2.0s), finale already fired, well before dismiss(3.0s).
-    // HUD::Update advances m_Timer by 1/60 each frame; after 10 frames the timer
-    // is ~2.67s, still below the 3.0s dismiss threshold. Reset m_bPendingRemoval
-    // each frame defensively (in case timer drifts past dismiss).
-    bs->m_Timer = 2.5f;
-    bs->m_bPendingRemoval = 0;
-    // Manually run one Update cycle to populate per-award scales/scores before
-    // any draw call, without relying on RunComponentHeadless's own Update.
-    // This primes m_Awards[i].m_DisplayedScore = tierBase * multiplier.
-    bs->Update(kDtFixed);
-    bs->m_bPendingRemoval = 0; // suppress dismiss in case Update crossed the threshold
+    if (g_ContentArg == NULL) {
+        // Pin to fully-revealed stable state: timer 2.5s covers all 3 awards
+        // (~0.6s each, revealEnd=2.0s), finale already fired, well before dismiss(3.0s).
+        // HUD::Update advances m_Timer by 1/60 each frame; after 10 frames the timer
+        // is ~2.67s, still below the 3.0s dismiss threshold. Reset m_bPendingRemoval
+        // each frame defensively (in case timer drifts past dismiss).
+        bs->m_Timer = 2.5f;
+        bs->m_bPendingRemoval = 0;
+        // Manually run one Update cycle to populate per-award scales/scores before
+        // any draw call, without relying on RunComponentHeadless's own Update.
+        // This primes m_Awards[i].m_DisplayedScore = tierBase * multiplier.
+        bs->Update(kDtFixed);
+        bs->m_bPendingRemoval = 0; // suppress dismiss in case Update crossed the threshold
+    } else {
+        // Reveal-gate formula (BonusScreen.cpp Update @0x00163dd0 / Draw's per-row
+        // gate): row i is revealed once m_Timer - FIRST_AWARD >= i*TIME_PER_AWARD,
+        // and the one-shot finale (which snaps m_DisplayedScore to the natural sum)
+        // fires once m_Timer >= FIRST_AWARD + TIME_PER_AWARD*(count+0.25). FIRST_AWARD/
+        // TIME_PER_AWARD are file-static in BonusScreen.cpp (not exported); the
+        // literal values are duplicated here from that file's ASM-verified constants.
+        const float kFirstAward   = 0.666667f;  // FIRST_AWARD
+        const float kTimePerAward = 1.0f;       // TIME_PER_AWARD
+        // +nAwards*kTimePerAward comfortably clears both the last row's per-row gate
+        // (needs (nAwards-1)*kTimePerAward) and revealEnd (needs (nAwards+0.25)*kTimePerAward
+        // minus the +0.5 margin below already covers the +0.25 slack); still well under
+        // the TOTAL_TIME+TRANSITION_OUT_TIME=7.25s dismiss threshold for nAwards<=3.
+        bs->m_Timer = kFirstAward + kTimePerAward * (float)nAwards + 0.5f;
+        bs->m_bPendingRemoval = 0;
+        bs->Update(kDtFixed);
+        bs->m_bPendingRemoval = 0;
+
+        if (bigTotal) {
+            // Synthetic content override (test fixture, not RE'd binary data): force
+            // a 6-digit TOTAL to exercise the size-scale formula's worst case
+            // (displayed/total ratio=1.0 -> max scale 40px) and confirm the digit
+            // string still fits the bottom band. Safe to poke post-Update: the
+            // one-shot finale latch (m_FinaleFired) already fired above, so Update
+            // never rewrites m_DisplayedScore again on the settle ticks below.
+            bs->m_DisplayedScore = 123456;
+            bs->m_TotalScore     = 123456;
+        }
+    }
+
+    // Content-built guard (task #26 regression check): BuildBonusText must have
+    // fired through the production Update() call above, not a hand-set latch.
+    if (!bs->m_bBonusTextBuilt || !bs->m_ScoreBox || !bs->m_TotalBox
+     || !bs->m_RankLabelBoxes[0] || !bs->m_RankValueBoxes[0]) {
+        std::fprintf(stderr,
+            "FAIL: BuildBonusText did not populate content boxes via production Update() "
+            "(built=%d score=%p total=%p rank0=%p val0=%p)\n",
+            (int)bs->m_bBonusTextBuilt, (void*)bs->m_ScoreBox, (void*)bs->m_TotalBox,
+            (void*)bs->m_RankLabelBoxes[0], (void*)bs->m_RankValueBoxes[0]);
+        return 4;
+    }
+    std::printf("OK: content boxes built via production Update() (m_ScoreBox/m_TotalBox/rank boxes non-null)\n");
 
     // Settle 5 frames in isolation mode. RunComponentHeadless calls HUD::Update
     // each frame, so m_Timer advances slightly -- keep suppressing m_bPendingRemoval.
@@ -265,14 +382,14 @@ static int RunBonus(fn::TestHarness& h) {
         bs->m_bPendingRemoval = 0;
     }
 
-    std::printf("[bonus/default] stable state reached (timer=%.2f, isolation mode)\n",
-                bs->m_Timer);
+    std::printf("[%s] stable state reached (timer=%.2f, isolation mode)\n",
+                h.label, bs->m_Timer);
 
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng()) return 3;
     }
 
-    std::printf("PASS: bonus/default screenshot complete\n");
+    std::printf("PASS: %s screenshot complete\n", h.label);
     return h.Shutdown();
 }
 

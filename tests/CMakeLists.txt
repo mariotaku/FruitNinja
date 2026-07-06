@@ -654,6 +654,28 @@ add_test(NAME screenshot_gameover COMMAND test_screenshot gameover --screenshot)
 set_tests_properties(screenshot_bonus    PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_gameover PROPERTIES TIMEOUT 60)
 
+# --- BonusScreen content x language matrix (task #32) ---
+# Reproduce all of them with:   ctest -R screenshot_bonus   (or slice via -L)
+# Each writes tmp/test/screenshots/bonus/<content>_<lang>.png. Content keys
+# (curated award count / total-score magnitude, see RunBonus in
+# test_screenshot.cpp for exact award data):
+#   one   -- 1 award (gold, natural total 50)
+#   two   -- 2 awards (gold+red, natural total 105)
+#   three -- 3 awards (gold+red+blue, natural total 155)
+#   big   -- 3 awards, TOTAL number forced to a 6-digit value (123456) to
+#            exercise the size-scale formula's worst case and bottom-band fit
+# The plain `screenshot_bonus` test above (no --content) is untouched and
+# keeps producing bonus/default byte-for-byte for back-compat.
+foreach(_bonus_content one two three big)
+    foreach(_bonus_lang english_us chinese japanese korean arabic)
+        add_test(NAME screenshot_bonus_${_bonus_content}_${_bonus_lang}
+                 COMMAND test_screenshot bonus --screenshot
+                         --content=${_bonus_content} --lang=${_bonus_lang})
+        set_tests_properties(screenshot_bonus_${_bonus_content}_${_bonus_lang} PROPERTIES TIMEOUT 60
+            LABELS "category_rendering;component_bonusscreen;lang_${_bonus_lang}")
+    endforeach()
+endforeach()
+
 # Per-mode FruitFact board screenshot driver.
 # Drives a per-mode GameOverScreen to STATE_MAIN_DISPLAY so the corresponding
 # FruitFactPage is created and rendered. Outputs:
@@ -724,13 +746,51 @@ fn_add_game_test(test_achievement_notification test_achievement_notification.cpp
 add_test(NAME screenshot_achievement COMMAND test_achievement_notification --screenshot)
 set_tests_properties(screenshot_achievement PROPERTIES TIMEOUT 60 LABELS "category_rendering;component_notificationcontrol")
 
+# --- Achievement x language matrix (i18n render check) ---
+# Reproduce all of them with:   ctest -R screenshot_achievement   (or slice via -L)
+# Each writes tmp/test/screenshots/achievement/<achievement>_<lang>.png
+# Curated 5 achievements (from FruitNinjaBada/Data/xml/achievementlist.xml), one
+# per interesting case:
+#   BAMBOO_BLADE  -- item unlock, no icon texture (name key ACHIEVEMENT_NEWBLADE)
+#   DISCO_SLASH   -- item unlock WITH a working icon (item_discoblade; name key ACHIEVEMENT_NEWBLADE)
+#   background9   -- background unlock (name key ACHIEVEMENT_NEWBACKGROUND, distinct text)
+#   261524        -- numeric id, name key ACHIEVEMENT_03 (>= 03 resolves in string tables)
+#   350264        -- numeric id, name key ACHIEVEMENT_19 (>= 03 resolves in string tables)
+foreach(_ach_id BAMBOO_BLADE DISCO_SLASH background9 261524 350264)
+    foreach(_ach_lang english_us french german russian japanese korean chinese arabic)
+        add_test(NAME screenshot_achievement_${_ach_id}_${_ach_lang}
+                 COMMAND test_achievement_notification --screenshot --lang=${_ach_lang} --achievement=${_ach_id})
+        set_tests_properties(screenshot_achievement_${_ach_id}_${_ach_lang} PROPERTIES TIMEOUT 60
+            LABELS "category_rendering;component_notificationcontrol;lang_${_ach_lang}")
+    endforeach()
+endforeach()
+
+# Arcade powerup HUD (PowerUpManager) screenshot test. Renders the FROZEN /
+# FRENZY / x2 banana powerups (meter bars + overlay images) in isolation for the
+# 7 non-empty combinations of 1..3 active powers. Each combo activates the
+# matching poweruplist.xml powers, settles them in their steady window, then
+# captures. NOTE: FRENZY (speed) has no persistent overlay image -- only its
+# meter bar renders. Bars overlap for multi-power combos (faithful layout; see
+# the fidelity note in test_powerup_hud.cpp).
+# Reproduce with:   ctest -R screenshot_powerup   (or slice via -L component_powerup_hud)
+# Each writes tmp/test/screenshots/powerup/<combo>.png
+fn_add_game_test(test_powerup_hud test_powerup_hud.cpp)
+foreach(_pu_combo freeze frenzy x2 freeze+frenzy freeze+x2 frenzy+x2 all3)
+    add_test(NAME screenshot_powerup_${_pu_combo}
+             COMMAND test_powerup_hud --screenshot --combo=${_pu_combo})
+    set_tests_properties(screenshot_powerup_${_pu_combo} PROPERTIES TIMEOUT 60
+        LABELS "category_rendering;component_powerup_hud")
+endforeach()
+
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
-# (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup)
-# in isolation on a clean background. Seeded state: score=266, highscore=200 (new best),
-# m_PauseAmount=1.0f (fully faded in). Output: tmp/test/screenshots/scorecontrol/default.png.
+# (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup,
+# plus the Arcade-only "x%d" score-multiplier badge) in isolation on a clean background.
+# Runs 4 sequential cases in one executable: default / active / suppressed / arcade_x2.
+# Output: tmp/test/screenshots/scorecontrol/{default,active,suppressed,arcade_x2}.png.
 fn_add_game_test(test_scorecontrol test_scorecontrol.cpp)
 add_test(NAME screenshot_scorecontrol COMMAND test_scorecontrol --screenshot)
-set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_scorecontrol")
 
 # FruitSaveData SaveGame/LoadGame round-trip (#291 Part 2).
 # Builds a representative FruitSaveData, SaveGame's it to ./FruitySave.xml, LoadGame's
