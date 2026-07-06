@@ -20,6 +20,8 @@
 #include "entities/Fruit.h"
 #include "hud/HUD.h"
 #include <cstring>
+#include <list>
+#include <map>
 
 static int FailUsage() {
     fprintf(stderr,
@@ -94,22 +96,48 @@ int main(int argc, char* argv[]) {
     }
 
     // Tick ~3 seconds of frames (180 @ 60Hz) and look for spawn activity.
-    // We can't easily count fruit (ActorManager::Add returns recycled
-    // entities; counting active fruits via flag bits is the right path).
+    //
+    // Spawn detection: per-tick snapshot of live type-0 entities keyed by
+    // pointer, storing m_SpawnDelay. A spawn this tick is either
+    //   (a) a pointer not live before the tick, or
+    //   (b) a live pointer whose m_SpawnDelay INCREASED (ActorManager::Add
+    //       recycled a freed slot and WaveManager::SpawnFruit re-Chucked it --
+    //       m_SpawnDelay only decreases after launch, so an increase proves a
+    //       fresh Chuck; v1.6.1 Fruit::Chuck @0x001db5f0).
+    // The previous detector compared net GetNumEntities(0) counts, which is
+    // masked whenever a fruit dies in the same tick another spawns (flung
+    // menu fruits from the burn-in die throughout the first seconds). That
+    // made the test flaky, and reliably 0 for arcade once the v1.6.1-faithful
+    // SpawnFruit (@0x00124298) launch offset (pos += throwDir*(scale.y*100),
+    // @0x00124714) lengthened fruit flight times and shifted the death/spawn
+    // overlap.
     int spawnCount = 0;
     int waveTransitions = 0;
     WAVE_INFO* prevWave = wm->m_pCurrentWave[0];
+    std::map<Mortar::Entity*, float> liveBefore;
     for (int i = 0; i < 180; ++i) {
-        // Take a snapshot of (wave, active-fruit-count) before the tick;
-        // any change in active count between ticks proves spawn activity.
         Mortar::ActorManager* am = h.game.actorManager;
-        int fruitsBefore = am ? am->GetNumEntities(0) : 0;
+        liveBefore.clear();
+        if (am) {
+            std::list<Mortar::Entity*>::iterator it;
+            for (Mortar::Entity* e = am->GetEntityFirst(0, it); e;
+                 e = am->GetEntityNext(0, it)) {
+                liveBefore[e] = static_cast<Fruit*>(e)->m_SpawnDelay;
+            }
+        }
 
         h.RunHeadless(1);
 
-        int fruitsAfter = am ? am->GetNumEntities(0) : 0;
-        if (fruitsAfter > fruitsBefore) {
-            spawnCount += (fruitsAfter - fruitsBefore);
+        if (am) {
+            std::list<Mortar::Entity*>::iterator it;
+            for (Mortar::Entity* e = am->GetEntityFirst(0, it); e;
+                 e = am->GetEntityNext(0, it)) {
+                std::map<Mortar::Entity*, float>::iterator prev = liveBefore.find(e);
+                if (prev == liveBefore.end() ||
+                    static_cast<Fruit*>(e)->m_SpawnDelay > prev->second) {
+                    ++spawnCount;
+                }
+            }
         }
         if (wm->m_pCurrentWave[0] != prevWave) {
             waveTransitions++;

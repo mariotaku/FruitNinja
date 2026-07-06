@@ -300,19 +300,23 @@ static void test_multi_line_center_v() {
 }
 
 static void test_top_anchored() {
-    // top-anchored: -(ascentSpan*0.5) - step*0.5 - descent
+    // top-anchored: -(ascentSpan*0.5) - step*0.5 + descent  (v1.6.1 RebuildAlignments
+    //   @0x00245c78; task #31 fixed a flipped descent sign -- was `- descent`).
     // ascentSpan = maxBearingY - minBottom, descent = -minBottom
     // maxBearingY=10, minBottom=-2, step=12
     // ascentSpan=12, descent=2
-    // expected = -(12*0.5) - 12*0.5 - 2 = -6 - 6 - 2 = -14
+    // expected = -(12*0.5) - 12*0.5 + 2 = -6 - 6 + 2 = -10
+    //   -> ink-center = baselineY + (maxBearingY+minBottom)/2 = -10 + 4 = -6 = -step/2,
+    //      i.e. ink-center = translationY - step/2 (metric terms cancel, as the binary does).
+    //   The prior -14 expectation encoded the flipped-descent bug (ink 2*descent=4px too low).
     float r = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 1, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f, 0.0f);
-    CHECK_NEAR(r, -14.0f, 1e-5f);
-    std::printf("  top-anchored: %.6f == -14.0 OK\n", (double)r);
+    CHECK_NEAR(r, -10.0f, 1e-5f);
+    std::printf("  top-anchored: %.6f == -10.0 OK\n", (double)r);
 
     // nLines > 1 should give same formula (top-anchored uses line0 metrics only, no per-line term at call site).
     float r3 = BakedStringBox::ComputeBaselineY(ALIGN_TOP, 3, 0, 10.0f, -2.0f, 50.0f, 12.0f, 0.0f, 0.0f);
-    CHECK_NEAR(r3, -14.0f, 1e-5f);
-    std::printf("  top-anchored (nLines=3): %.6f == -14.0 OK\n", (double)r3);
+    CHECK_NEAR(r3, -10.0f, 1e-5f);
+    std::printf("  top-anchored (nLines=3): %.6f == -10.0 OK\n", (double)r3);
 
     std::printf("test_top_anchored: PASS\n");
 }
