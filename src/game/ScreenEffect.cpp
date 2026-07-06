@@ -4,6 +4,8 @@
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
 #include "hud/HUDControl3d.h"
+#include "hud/ScoreMultiplyerBoard.h"
+#include "hud/TimeSinkControl.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "audio/GameSound.h"
@@ -236,11 +238,19 @@ void EffectImage::Parse(TiXmlElement* xml) {
         }
     }
 
-    // "deferPoints" / "defer" -> m_bIsMultiplyerBoard
+    // "deferPoints"/"defer" -> m_DeferKind (0=none,1=points,2=time)
     // v1.6.1 EffectImage::Parse @0x001491e4
-    const char* defer = xml->Attribute("deferPoints");
-    if (!defer) defer = xml->Attribute("defer");
-    if (defer) m_bIsMultiplyerBoard = (strcmp(defer, "true") == 0 || strcmp(defer, "1") == 0);
+    const char* deferPoints = xml->Attribute("deferPoints");
+    if (deferPoints && strcmp(deferPoints, "true") == 0) {
+        m_DeferKind = 1;
+    } else {
+        const char* defer = xml->Attribute("defer");
+        if (defer) {
+            if (strcmp(defer, "none") == 0)        m_DeferKind = 0;
+            else if (strcmp(defer, "points") == 0) m_DeferKind = 1;
+            else if (strcmp(defer, "time") == 0)   m_DeferKind = 2;
+        }
+    }
 
     // "scaleToScreen" -> m_bLowEndOnly
     // v1.6.1 EffectImage::Parse @0x001491e4
@@ -418,7 +428,7 @@ void ScreenEffect::Parse(TiXmlElement* xml) {
     }
 }
 
-// ---- ScreenEffect::Activate (binary @ 0x0011dbb8) ----------------------------
+// ---- ScreenEffect::Activate (binary @ 0x00148f08) ----------------------------
 
 void ScreenEffect::Activate() {
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
@@ -444,11 +454,22 @@ void ScreenEffect::Activate() {
         EffectImage& img = m_Images[i];
         if (img.m_bAddedToHUD) continue;
 
-        // Binary @ 0x0011dbb8: if m_bIsMultiplyerBoard, create ScoreMultiplyerBoard;
-        // otherwise create HUDControl3d.
-        // ScoreMultiplyerBoard is not yet ported — stub as HUDControl3d.
-        // TODO: create ScoreMultiplyerBoard when that class is ported.
-        HUDControl3d* ctrl = new HUDControl3d();
+        // v1.6.1 ScreenEffect::Activate @0x00148f08: dispatch on m_DeferKind --
+        // 1="points" -> ScoreMultiplyerBoard (Arcade x2 deferred-points board);
+        // 2="time" -> TimeSinkControl (Berry-Blast time-defer board, stub);
+        // 0="none" -> plain HUDControl3d.
+        HUDControl3d* ctrl;
+        if (img.m_DeferKind == 1) {
+            ScoreMultiplyerBoard* board = new ScoreMultiplyerBoard();
+            board->m_pOwner = m_pOwnerPowerUp;
+            ctrl = board;
+        } else if (img.m_DeferKind == 2) {
+            TimeSinkControl* sink = new TimeSinkControl();
+            sink->m_pOwner = m_pOwnerPowerUp;
+            ctrl = sink;
+        } else {
+            ctrl = new HUDControl3d();
+        }
         // pos offset (480, 320, 0) added internally by HUDControl3d::Draw
         ctrl->pos = img.m_Pos;
         // Size comes from m_ColourScale (= texture dims written by Parse);
@@ -543,13 +564,17 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         float e = 1.0f - img.m_CurrentVis;
         e = e * e;
 
-        // ctrl.pos = m_Pos * (480,320,0) + move_offset * e
-        // m_Pos is in normalised [0..1] space; multiply by screen dims
-        // v1.6.1 @0x00148844: pos = m_Pos*(480,320,0) + (useMoveIn?m_SizeIn:m_SizeOut)*e
+        // v1.6.1 ScreenEffect::Update @0x00148844:
+        //   pos = m_Pos + Vec3(480,320,0)(componentwise)*m_Vel(anchor,+0x1c) + moveOffset*e
+        // FIX: the previous port multiplied m_Pos itself by (480,320,0) (treating it as
+        // a normalised [0..1] fraction of the screen) and dropped the anchor term (m_Vel,
+        // +0x1c) entirely. m_Pos is already an absolute centered-ortho position (matches
+        // every other position in this codebase -- see docs/engine/coordinate-system.md);
+        // the (480,320,0) screen-anchor scales the XML "anchor" attribute instead. This is
+        // a general fix (affects every EffectImage, not just the x2 board).
         const Vec3& moveOffset = useMoveIn ? img.m_SizeIn : img.m_SizeOut;
-        img.m_pHudCtrl->pos.x = img.m_Pos.x * 480.0f + moveOffset.x * e;
-        img.m_pHudCtrl->pos.y = img.m_Pos.y * 320.0f + moveOffset.y * e;
-        img.m_pHudCtrl->pos.z = img.m_Pos.z * 0.0f   + moveOffset.z * e;
+        static const Vec3 kScreenAnchor(480.0f, 320.0f, 0.0f);
+        img.m_pHudCtrl->pos = img.m_Pos + kScreenAnchor * img.m_Vel + moveOffset * e;
 
         // Size = m_ColourScale * ((m_FlagBits & 1) ? (1 - e) : 1.0f)
         // m_ColourScale holds texture dims (written by Parse)
@@ -644,7 +669,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     }
 }
 
-// ---- ScreenEffect::Deactivate (binary @ 0x0011d43c) --------------------------
+// ---- ScreenEffect::Deactivate (binary @ 0x00148510) --------------------------
 
 void ScreenEffect::Deactivate() {
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
@@ -659,8 +684,31 @@ void ScreenEffect::Deactivate() {
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
         if (img.m_pHudCtrl) {
-            // TODO: if m_bIsMultiplyerBoard, trigger dismiss animation instead.
-            img.m_pHudCtrl->m_bPendingRemoval = 1;
+            // v1.6.1 ScreenEffect::Deactivate @0x00148510
+            if (img.m_DeferKind == 1) {
+                // Arcade x2 board: bank final payout (doubled points if the window ran
+                // to completion), snapshot position, detach from ScreenEffect -- the
+                // control STAYS in the HUD and self-animates the payout/dismiss.
+                ScoreMultiplyerBoard* board = static_cast<ScoreMultiplyerBoard*>(img.m_pHudCtrl);
+                bool nearComplete = m_pOwnerPowerUp && m_pOwnerPowerUp->GetCurrentTimeProgress() <= 0.01f;
+                board->m_ScoreValue = nearComplete ? (m_pOwnerPowerUp->m_DeferredPoints * 2) : 0;
+                board->m_BasePosition = board->pos;
+                board->m_pOwner = 0;
+            } else if (img.m_DeferKind == 2) {
+                // Berry-Blast time-sink board (stub -- see TimeSinkControl TODO).
+                TimeSinkControl* sink = static_cast<TimeSinkControl*>(img.m_pHudCtrl);
+                sink->m_pOwner = 0;
+                if (m_pOwnerPowerUp && m_pOwnerPowerUp->GetCurrentTimeProgress() > 0.01f) {
+                    sink->m_Field80 = 0;
+                }
+                // TODO: v1.6.1 0x001c19dc (TimeSinkControl) -- real removal timing depends
+                // on the unported Update/DrawOrder (may self-animate like ScoreMultiplyerBoard).
+                // Marking pending-removal immediately (kind0 behaviour) as a safe stub default
+                // so a deactivated stub control doesn't linger on-screen forever.
+                img.m_pHudCtrl->m_bPendingRemoval = 1;
+            } else {
+                img.m_pHudCtrl->m_bPendingRemoval = 1;
+            }
             img.m_pHudCtrl  = nullptr;
             img.m_bAddedToHUD = false;
         }

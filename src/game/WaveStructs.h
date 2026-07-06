@@ -20,11 +20,12 @@ namespace Math { class Random; }
 #include <vector>
 #include <string>
 
-// Spawn-side enum. ParsePlacement maps XML "side" attr to this.
-// 0=bottom, 1=bottom-slow, 2=left, 3=right, 4=random-side
+// Spawn-side enum. ParsePlacement maps XML "placement" attr to this.
+// v1.6.1 ParsePlacement @0x001291c0: BOTTOM=0, TOP=1, LEFT=2, RIGHT=3, LEFT_RIGHT=4.
+// (There is no "BOTTOM_SLOW" string in the binary; type 1 is TOP.)
 enum SpawnPlacement : uint8_t {
     PLACEMENT_BOTTOM      = 0,
-    PLACEMENT_BOTTOM_SLOW = 1,
+    PLACEMENT_TOP         = 1,
     PLACEMENT_LEFT        = 2,
     PLACEMENT_RIGHT       = 3,
     PLACEMENT_RANDOM_SIDE = 4,

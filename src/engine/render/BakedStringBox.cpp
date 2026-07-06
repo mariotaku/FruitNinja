@@ -642,10 +642,13 @@ void BakedStringBox::BakeGradient() {
         baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
                      + (step * (float)nLines) * 0.5f) - minDescent;
     } else if ((m_Align & 0x8) == 0) {
+        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78: top-anchored
+        // ink-center = translationY - step/2 (descent sign was flipped; kept in sync with
+        // ComputeBaselineY's top-anchored branch).
         const BakedStringBoxLine& l0 = m_Lines[0];
         float ascentSpan = l0.maxBearingY - l0.minBottom;
         float descent    = -l0.minBottom;
-        baselineY = -(ascentSpan * 0.5f) - step * 0.5f - descent;
+        baselineY = -(ascentSpan * 0.5f) - step * 0.5f + descent;
     } else {
         baselineY = m_BoxHeight;
     }
@@ -875,9 +878,11 @@ float BakedStringBox::ComputeBaselineY(int align, int nLines, int lineIdx,
         // Top-anchored: binary RebuildAlignments @0x00245c78.
         // ascentSpan = maxBearingY - minBottom (total glyph cap-to-descent span, >0).
         // descent    = -minBottom (descent magnitude, >=0, since minBottom<=0).
+        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78: top-anchored
+        // ink-center = translationY - step/2 (descent sign was flipped).
         float ascentSpan = maxBearingY - minBottom;
         float descent    = -minBottom;
-        return -(ascentSpan * 0.5f) - step * 0.5f - descent;
+        return -(ascentSpan * 0.5f) - step * 0.5f + descent;
     } else {
         // Bottom-anchored: binary RebuildAlignments @0x00245c78.
         return boxH;

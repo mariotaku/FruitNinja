@@ -25,10 +25,6 @@ public:
     // Float random in [0, range)
     // ~19 bits of precision (2^19 - 1 = 524287)
     float RandF(float range);
-
-    // Peek the current LCG state word without advancing (binary reads *g_RandomState directly).
-    // Returns the low 32 bits of m_State as a signed int — sign determines crit-mode coin flip.
-    int32_t PeekState() const;
 };
 
 // Engine-wide RNG instance (binary @ 0x0026C8B0). Populated with the

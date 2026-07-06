@@ -126,6 +126,10 @@ void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
         sp.QueryFloatAttribute("velYscale", &s->m_VelYScale);
         sp.QueryFloatAttribute("horizmin",  &s->m_HorizMin);
         sp.QueryFloatAttribute("horizmax",  &s->m_HorizMax);
+        // dt -> m_TimeScale (+0x14). Binary ParseSpecific @0x0014be94 delegates to the
+        // shared ParseSpawner @0x00129314 which parses this; the coconut waterfall/spawn_mod
+        // sets dt=0.5, so the spawned fruit falls at half speed (m_TimeScale flows to Fruit).
+        sp.QueryFloatAttribute("dt",        &s->m_TimeScale);
         s->m_bMirror = 0;
         if (const char* mir = sp.Attribute("mirror"))
             s->m_bMirror = (strcmp(mir, "false") != 0) ? 1 : 0;

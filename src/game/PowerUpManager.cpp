@@ -121,13 +121,15 @@ void PowerUpManager::Update(float dt) {
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
     while (it != m_ActivePowerUps.end()) {
         PowerUp* pwr = *it;
-        float perPowerDt = pwr->IsPurchaseable() ? dt : (dt * prevWaveDtMod);
+        // ASM-spec v1.6.1 PowerUpManager::Update @0x00141484: gate is Purchaseable()
+        // (cost-based), not the m_bIsPurchasable flag -- freeze (cost 0) ticks at dt*waveDtMod.
+        float perPowerDt = pwr->Purchaseable() != 0 ? dt : (dt * prevWaveDtMod);
         int expired = pwr->Update(perPowerDt);
 
         if (expired == 0) {
             float p = pwr->GetCurrentTimeProgress();
             if (p > m_HighestActiveProgress) {
-                if (!pwr->IsPurchaseable()) {
+                if (pwr->Purchaseable() == 0) {
                     m_HighestActiveProgress = p;
                     m_pActiveSpecial = pwr;
                 } else if (m_HighestActiveProgress < 0.001f) {    // DAT_00118b90
@@ -292,9 +294,13 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
     if (byHash != m_ActiveByHash.end()) {
         // (A) Already active -> re-activate same instance with new position/extra.
         PowerUp* existing = byHash->second;
-        existing->GetLongestMod();   // observed call in binary; result discarded
+        // ASM-spec v1.6.1 PowerUpManager::ActivatePower @0x00142934 (@0x001429f0): re-slicing an
+        // already-active power resets its timer -- showPopup=FALSE (mov r1,#0) and extraParam =
+        // &(existing->GetLongestMod() result) (vstr'd s0 at sp+0x4c), NOT purchaseExtra. Without
+        // this, re-slicing freeze never reset the 7s timer.
+        float longestMod = existing->GetLongestMod();
         Vec3 posCopy(position);
-        existing->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
+        existing->Activate(false, (purchaseExtra != NULL), posCopy, &longestMod);
         clone = existing;
     } else {
         // (B) Not yet active -> clone template, push back, decide path.
@@ -315,8 +321,10 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
             clone->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         } else {
             // (B2) Purge-other-specials path.
-            // Note: shortestTime computation below is in the binary but the result is
-            // discarded (leftover from a refactor). Replicate exactly.
+            // ASM-spec v1.6.1 PowerUpManager::ActivatePower @0x00142934 (@0x00142b30/@0x00142b94):
+            // shortestTime IS used, not discarded -- its address is passed as extraParam to both
+            // the other-specials' purge Activate() and the final clone Activate(), clamping each
+            // purged special's m_BonusAccum (purge semantics).
             float shortestTime = clone->GetLongestMod();
             for (std::list<PowerUp*>::iterator pit = m_ActivePowerUps.begin();
                  pit != m_ActivePowerUps.end(); ++pit) {
@@ -325,24 +333,26 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
                     if (lm < shortestTime) shortestTime = lm;
                 }
             }
-            (void)shortestTime;  // binary discards this; suppress unused-variable warning
 
-            // Activate(false, false, ZERO_VEC, NULL) on every other special.
+            // Activate(false, false, ZERO_VEC, &shortestTime) on every other special.
             Vec3 ghostPos(0.0f, 0.0f, 0.0f);  // DAT_001199d0 canonical zero Vec3
             for (std::list<PowerUp*>::iterator pit = m_ActivePowerUps.begin();
                  pit != m_ActivePowerUps.end(); ++pit) {
                 if ((*pit)->IsSpecial() && *pit != clone) {
                     Vec3 gp(ghostPos);
-                    (*pit)->Activate(false, false, gp, NULL);
+                    (*pit)->Activate(false, false, gp, &shortestTime);
                 }
             }
             Vec3 posCopy(position);
-            clone->Activate(true, false, posCopy, NULL);
+            clone->Activate(true, false, posCopy, &shortestTime);
         }
 
-        // (B-tail) Assign Y-position for HUD bar.
+        // (B-tail) Assign initial X-position for HUD bar.
+        // ASM-spec v1.6.1 PowerUpManager::ActivatePower @0x00142934 tail: initial x uses 55,
+        // not the 110 spacing used by Update's easing target -- Update eases m_BarXPos toward
+        // the 110-spaced slot over subsequent frames (0.2f/frame lerp).
         int n = GetNumActiveTimedPowers();
-        clone->m_BarXPos = (float)n * 110.0f;   // DAT_001199c8 = 110.0f
+        clone->m_BarXPos = (float)n * 55.0f;
 
         if (clone->m_bIsPurchasable) {
             m_ActiveByHash[hash] = clone;

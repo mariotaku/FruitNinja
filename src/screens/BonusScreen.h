@@ -64,7 +64,7 @@ public:
     Mortar::BakedStringBox*           m_TotalBox;             // +0xBC
     Mortar::BakedStringBox*           m_RankLabelBoxes[3];    // +0xC0..+0xCB
     Mortar::BakedStringBox*           m_RankValueBoxes[3];    // +0xCC..+0xD7
-    bool                              m_bSkipIntro;           // +0xD8
+    bool                              m_bBonusTextBuilt;      // +0xD8 build-once latch
     uint8_t                           _padD9[3];              // +0xD9
     float                             m_Timer;                // +0xDC  (ctor = -TRANSITION_IN_TIME)
     Vec3                              m_AnimPos;              // +0xE0  (3 floats, 12 bytes -> ends 0xEC)
@@ -111,7 +111,8 @@ public:
 
     // BuildBonusText -- v1.6.1 @0x001621dc..0x0016267b
     // Creates all BakedStringBox members (rank label/value, BONUS title, TOTAL label).
-    // Called once from Update tail when m_bSkipIntro becomes true.
+    // Called unconditionally every Update tick; the create-once latch (m_bBonusTextBuilt,
+    // +0xD8) lives INSIDE this function, not at the call site.
     // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
     void BuildBonusText();
 
@@ -131,7 +132,7 @@ static_assert(offsetof(BonusScreen, m_ScoreBox)          == 0xB8,  "BonusScreen:
 static_assert(offsetof(BonusScreen, m_TotalBox)          == 0xBC,  "BonusScreen::m_TotalBox offset");
 static_assert(offsetof(BonusScreen, m_RankLabelBoxes)    == 0xC0,  "BonusScreen::m_RankLabelBoxes offset");
 static_assert(offsetof(BonusScreen, m_RankValueBoxes)    == 0xCC,  "BonusScreen::m_RankValueBoxes offset");
-static_assert(offsetof(BonusScreen, m_bSkipIntro)        == 0xD8,  "BonusScreen::m_bSkipIntro offset");
+static_assert(offsetof(BonusScreen, m_bBonusTextBuilt)   == 0xD8,  "BonusScreen::m_bBonusTextBuilt offset");
 static_assert(offsetof(BonusScreen, m_Timer)             == 0xDC,  "BonusScreen::m_Timer offset");
 static_assert(offsetof(BonusScreen, m_AnimPos)           == 0xE0,  "BonusScreen::m_AnimPos offset");
 static_assert(sizeof(BonusScreen)                        == 0xEC,  "BonusScreen size mismatch");

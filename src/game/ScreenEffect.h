@@ -9,10 +9,10 @@
 //   ctor          0x0011d568
 //   copy ctor     0x0011bc78
 //   dtor          0x0011d5a0
-//   Parse         0x0011e150
-//   Activate      0x0011dbb8
+//   Parse         0x001491e4
+//   Activate      0x00148f08
 //   Update        0x00148844
-//   Deactivate    0x0011d43c
+//   Deactivate    0x00148510
 //   LoadTextures  0x0011d1ec
 
 #include <cstdint>
@@ -74,9 +74,11 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // +0x0c  bool  added-to-HUD guard. DIFFERS: binary default ctor sets 1; port
     //               initialises false (HUD attach happens in Activate either way).
     bool         m_bAddedToHUD;      // +0x0c
-    // +0x0d  bool  multiplyer-board kind flag (XML "multiplyer"; Activate kind byte
-    //               selects ScoreMultiplyerBoard vs HUDControl3d).
-    bool         m_bIsMultiplyerBoard; // +0x0d
+    // +0x0d  uint8_t  defer kind: 0=none, 1=points (ScoreMultiplyerBoard / Arcade x2),
+    //               2=time (TimeSinkControl / Berry-Blast time-sink). XML
+    //               deferPoints="true" -> 1; else "defer"="none"/"points"/"time" -> 0/1/2.
+    //               Activate @0x00148f08 dispatches HUDControl3d subtype on this byte.
+    uint8_t      m_DeferKind;        // +0x0d
     // +0x0e..+0x0f  implicit padding for Vec3 alignment
     // +0x10  Vec3  base position (XML "pos"); Update writes ctrl->pos.
     Vec3         m_Pos;              // +0x10
@@ -128,7 +130,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
         : Mortar::ReloadableTexture()
         , m_pHudCtrl(nullptr)
         , m_bAddedToHUD(true)    // binary default = 1 (v1.6.1 @0x0014a508)
-        , m_bIsMultiplyerBoard(false)
+        , m_DeferKind(0)
         , m_Pos(0,0,0), m_Vel(0,0,0)
         , m_GroupMask(0)
         , m_SinIdx(0)
@@ -151,7 +153,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
 static_assert(sizeof(EffectImage)                        == 0x7c, "EffectImage size");
 static_assert(offsetof(EffectImage, m_pHudCtrl)          == 0x08, "EffectImage::m_pHudCtrl @ +0x08");
 static_assert(offsetof(EffectImage, m_bAddedToHUD)       == 0x0c, "EffectImage::m_bAddedToHUD @ +0x0c");
-static_assert(offsetof(EffectImage, m_bIsMultiplyerBoard)== 0x0d, "EffectImage::m_bIsMultiplyerBoard @ +0x0d");
+static_assert(offsetof(EffectImage, m_DeferKind)         == 0x0d, "EffectImage::m_DeferKind @ +0x0d");
 static_assert(offsetof(EffectImage, m_Pos)               == 0x10, "EffectImage::m_Pos @ +0x10");
 static_assert(offsetof(EffectImage, m_Vel)               == 0x1c, "EffectImage::m_Vel @ +0x1c");
 static_assert(offsetof(EffectImage, m_GroupMask)         == 0x28, "EffectImage::m_GroupMask @ +0x28");
@@ -223,13 +225,13 @@ public:
     ~ScreenEffect();
     ScreenEffect& operator=(const ScreenEffect& rhs);
 
-    // Binary @ 0x0011e150
+    // Binary @ 0x001491e4
     void Parse(TiXmlElement* xml);
-    // Binary @ 0x0011dbb8
+    // Binary @ 0x00148f08
     void Activate();
     // Binary @ 0x00148844
     void Update(float dt, float currentLongest, float maxTotal);
-    // Binary @ 0x0011d43c
+    // Binary @ 0x00148510
     void Deactivate();
     // Binary @ 0x0011d1ec
     void LoadTextures();

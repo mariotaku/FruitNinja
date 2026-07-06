@@ -85,10 +85,11 @@ int WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001231d8 (re-analyst)
 }
 
+// v1.6.1 ParsePlacement @0x001291c0: StringHash(side) vs {BOTTOM,TOP,LEFT,RIGHT,LEFT_RIGHT}.
 SpawnPlacement ParsePlacement(const char* side) {
     if (!side) return PLACEMENT_BOTTOM;
     if (strcmp(side, "BOTTOM") == 0 || strcmp(side, "bottom") == 0) return PLACEMENT_BOTTOM;
-    if (strcmp(side, "BOTTOM_SLOW") == 0) return PLACEMENT_BOTTOM_SLOW;
+    if (strcmp(side, "TOP") == 0) return PLACEMENT_TOP;
     if (strcmp(side, "LEFT") == 0) return PLACEMENT_LEFT;
     if (strcmp(side, "RIGHT") == 0) return PLACEMENT_RIGHT;
     if (strcmp(side, "LEFT_RIGHT") == 0 || strcmp(side, "RANDOM") == 0) return PLACEMENT_RANDOM_SIDE;
@@ -1114,9 +1115,11 @@ void WaveManager::Update(float dt) {
     m_FruitChance    = 1.0f;
     m_CritChanceMult = 1.0f;
     // v1.6.1 WaveManager::Update @0x001267a0: drive m_SpeedScale from PowerUpManager's
-    // m_DtMod (modifier dt mult: freeze<1 slows, frenzy>1 speeds spawn cadence). PUM::Update
-    // IS ported (the old "not ported" note was stale) -- this was why arcade freeze/frenzy
-    // never affected spawn cadence.
+    // m_DtMod (modifier dt mult). PUM::Update IS ported (the old "not ported" note was stale).
+    // NOTE: UpdateWave @0x00125d7c clamps m_SpeedScale<1.0 back up to 1.0 before the spawn-timer
+    // tick (see the `if (dtMod < 1.0f) dtMod = 1.0f;` clamp below), so freeze (m_DtMod<1) does
+    // NOT slow spawn cadence -- only frenzy (m_DtMod>1) speeds it up. Freeze's visible slow-mo
+    // is actor dt via GameUpdate/GetWavedt, not spawn cadence.
     {
         float comboDt = dt * m_ComboSpeedDivisor;   // +0x80, always 1.0
         PowerUpManager* pum = PowerUpManager::GetInstance();
@@ -1327,7 +1330,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             k_BlitzSpawners[0].m_HorizMax   = 0.0f;
                             k_BlitzSpawners[0].m_SpawnMin   = -0.5f;
                             k_BlitzSpawners[0].m_SpawnMax   = 0.5f;
-                            k_BlitzSpawners[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+                            k_BlitzSpawners[0].m_SpawnType  = PLACEMENT_TOP;
                             k_BlitzSpawners[1].m_TimeScale  = 0.75f;
                             k_BlitzSpawners[1].m_Gravity_x  = 0.0f;
                             k_BlitzSpawners[1].m_Gravity_y  = -1.1f;
@@ -1820,151 +1823,133 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
 }
 
 // ----------------------------------------------------------------------------
-// SpawnFruit — per docs/functions/wave.md
+// SpawnFruit — v1.6.1 WaveManager::SpawnFruit @0x00124298
 // ----------------------------------------------------------------------------
 
 Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int playerIdx) {
+    // Binary @0x001242a8: `count` is only a >=1 guard -- exactly ONE fruit spawns per
+    // call (no loop, pos.z=0 @0x00124510). The multiplier-cascade caller passes cnt-1
+    // and still gets a single fruit.
+    if (count < 1) return NULL;
+
+    float minAngle = info ? info->m_HorizMin : -1.0f;
+    float maxAngle = info ? info->m_HorizMax :  1.0f;
+
+    // Stage 1: degree baseline (-150.0 / +150.0).
+    float baseRange = -150.0f * minAngle + 150.0f * maxAngle;
+    uint32_t roll1 = (baseRange > 0.0f) ? m_Random.Rand32((uint32_t)baseRange) : 0;
+    int iBase = (int)((float)roll1 + minAngle * 150.0f);
+
+    // Stage 2: parabolic spread. spread = 20 for BOTTOM/TOP (spawner==0 or type<2), 12 for LEFT/RIGHT.
+    float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
+    float r      = m_Random.RandF(1.0f);
+    float halfR  = (r < 0.5f) ? r : (1.0f - r);
+    float sign   = (r < 0.5f) ? -1.0f : 1.0f;
+    int center   = (int)(((float)iBase / -150.0f) * spread * 0.5f);
+    int off      = (int)(spread * (halfR * halfR * -2.0f + 0.5f) * sign);
+    uint16_t angle = (uint16_t)(((short)(center + off)) * 0xb6);   // 0xb6 = 182
+
+    float speed = m_Random.RandF(1.5f) + 9.5f;   // 9.5..11.0
+    float sin_a = SinIdx(angle);
+    float cos_a = CosIdx(angle);
+
+    float velMultX = info ? info->m_VelXScale : 1.0f;
+    float velMultY = info ? info->m_VelYScale : 1.0f;
+    // The 1.075f boost is on the VERTICAL (cos -> vel.y) component.
+    float velX = sin_a * speed * velMultX;
+    float velY = cos_a * speed * 1.075f * velMultY;
+
+    SpawnPlacement spawnType = info ? info->m_SpawnType : PLACEMENT_BOTTOM;
+
+    // Post-Init launch direction (binary local_74). Applied after Init as
+    // pos += throwDir * (scale.y * 100). BOTTOM:-UnitY, TOP:+UnitY, LEFT:-UnitX, RIGHT:+UnitX.
+    Vec3 throwDir(0.0f, -1.0f, 0.0f);   // BOTTOM default = -UnitY
+    float posX = (float)iBase;
+    float posY = -160.0f;               // off-screen below (binary default arm iVar3=-0xa0)
+
+    switch (spawnType) {
+    case PLACEMENT_BOTTOM:
+    default:
+        break;
+    case PLACEMENT_TOP:
+        // Binary @0x0012449c: sign vector (-1,-1,-1) negates pos+vel; throwDir=+UnitY; velY halved.
+        posX = -(float)iBase;
+        posY = 160.0f;                  // -(-160)
+        velX = -velX;
+        velY = -(velY * 0.5f);
+        throwDir = Vec3(0.0f, 1.0f, 0.0f);   // +UnitY
+        break;
+    case PLACEMENT_RANDOM_SIDE: {
+        bool goLeft = (m_Random.Rand32(2) == 0);
+        spawnType = goLeft ? PLACEMENT_LEFT : PLACEMENT_RIGHT;
+    }   /* fall through */
+    case PLACEMENT_LEFT:
+    case PLACEMENT_RIGHT: {
+        // Binary @0x0012456c: velocity sources swapped between axes, then LEFT/RIGHT sign applied.
+        //   pos.x = (int)(240 * sign);              pos.y = (int)(iBase * 320 / 480)
+        //   vel.x = velY_pre * -0.75 * sign;        vel.y = velX_pre + speed*gravY*-0.65
+        //   sign  = -1 for LEFT (throwDir -UnitX), +1 for RIGHT (throwDir +UnitX)
+        float gravY = info ? info->m_Gravity_y : 0.0f;
+        float signX = (spawnType == PLACEMENT_LEFT) ? -1.0f : 1.0f;
+        posX = (float)((long)(240.0f * signX));
+        posY = (float)((long)(((float)iBase * 320.0f) / 480.0f));
+        float newVelX = velY * (-0.75f) * signX;
+        float newVelY = velX + speed * gravY * (-0.65f);
+        velX = newVelX;
+        velY = newVelY;
+        throwDir = (spawnType == PLACEMENT_LEFT) ? Vec3(-1.0f, 0.0f, 0.0f)
+                                                 : Vec3( 1.0f, 0.0f, 0.0f);
+        break;
+    }
+    }
+
+    float zOffset = info ? info->m_SpawnTimer : 0.0f;   // +0x5c
+
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return NULL;
-
-    // Binary @ 0x00124298 returns the last spawned Entity* (this_00).
-    Mortar::Entity* lastSpawned = NULL;
-
-    // Z-stride loop counter starts at 1 (binary iVar8 = 1, increments each iteration).
-    // binary @ 0x001225a0
-    for (long i = 0; i < count; ++i) {
-        float minAngle = info ? info->m_HorizMin : -1.0f;
-        float maxAngle = info ? info->m_HorizMax :  1.0f;
-
-        // Stage 1: degree baseline. DAT_00122844=-150.0, DAT_00122848=+150.0.
-        // binary @ 0x001225e2..0x00122610
-        float baseRange = -150.0f * minAngle + 150.0f * maxAngle;
-        uint32_t roll1 = (baseRange > 0.0f) ? m_Random.Rand32((uint32_t)baseRange) : 0;
-        int iBase = (int)((float)roll1 + minAngle * 150.0f);
-
-        // Stage 2: parabolic spread. binary @ 0x00122614..0x0012267e
-        // spread = 20 for BOTTOM/BOTTOM_SLOW (spawner==0 or type<2), 12 for LEFT/RIGHT.
-        float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
-        float r      = m_Random.RandF(1.0f);
-        // ASM-verified: 2026-05-26 v1.6.1 binary @ 0x00122644 (re-analyst)
-        // vsub.f32 s0,s0,s15 (s0=r-0.5); vadd.mi.f32 s15,s0,s15 (s15=r) if r<0.5,
-        // else vsub.pl.f32 s15,s15,s0 (s15=1-r). halfR in [0,0.5]; sign flips neg when r<0.5.
-        float halfR  = (r < 0.5f) ? r : (1.0f - r);
-        float sign   = (r < 0.5f) ? -1.0f : 1.0f;
-        int center   = (int)(((float)iBase / -150.0f) * spread * 0.5f);
-        int off      = (int)(spread * (halfR * halfR * -2.0f + 0.5f) * sign);
-        // Final multiplier 0xb6=182 applied after spread. binary @ 0x0012267c
-        uint16_t angle = (uint16_t)(((short)(center + off)) * 0xb6);
-
-        float speed = m_Random.RandF(1.5f) + 9.5f;   // 9.5..11.0
-        float sin_a = SinIdx(angle);
-        float cos_a = CosIdx(angle);
-
-        float velMultX = info ? info->m_VelXScale : 1.0f;
-        float velMultY = info ? info->m_VelYScale : 1.0f;
-        // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00122744 (fruit) (re-analyst).
-        // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
-        // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
-        // over-scattered horizontal arrival.
-        float velX = sin_a * speed * velMultX;
-        float velY = cos_a * speed * 1.075f * velMultY;
-
-        float posX = 0.0f;
-        float posY = 0.0f;
-
-        SpawnPlacement spawnType = info ? info->m_SpawnType : PLACEMENT_BOTTOM;
-
-        switch (spawnType) {
-        case PLACEMENT_BOTTOM:
-        default:
-            // spawnX = iBase, spawnY = -160 * Vec3::One.y = -160. Binary
-            // literal at 0x00122776 = mvn r9,#0x9f = -160; multiplied by the
-            // GOT-resident _Vector3<float>::One (confirmed (1,1,1) so the
-            // multiplication is a no-op). Binary @ 0x001228ca/0xce.
-            posX = (float)iBase;
-            posY = -160.0f;
-            break;
-        case PLACEMENT_BOTTOM_SLOW:
-            posX = (float)iBase;
-            posY = -160.0f;
-            velY *= 0.5f;
-            break;
-        case PLACEMENT_RANDOM_SIDE: {
-            bool goLeft = (m_Random.Rand32(2) == 0);
-            spawnType = goLeft ? PLACEMENT_LEFT : PLACEMENT_RIGHT;
-        }   /* fall through */
-        case PLACEMENT_LEFT:
-        case PLACEMENT_RIGHT: {
-            // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001227fe..0x0012828e + 0x001228d2 (asm-inspector).
-            // Binary swaps velocity sources between axes (vel.x basis = velY_orig*-0.75,
-            // vel.y basis = velX_orig + gravity term), then applies the LEFT/RIGHT sign
-            // vector via a unified Vec3 multiply at the join: vel.x and pos.x both get
-            // scaled by signX; vel.y and pos.y by 1.0. Net:
-            //   pos.x = (int)(240.0f * sign)               // DAT_00122870 = int 240
-            //   pos.y = (int)(baseDeg * 320 / 480)         // DAT_00122850/54
-            //   vel.x = velY_orig * -0.75f * sign          // sign applies HERE TOO
-            //   vel.y = velX_orig + speed * spawner.m_Gravity_y * -0.65f
-            //   sign  = -1 for LEFT, +1 for RIGHT
-            float gravY = info ? info->m_Gravity_y : 0.0f;
-            float signX = (spawnType == PLACEMENT_LEFT) ? -1.0f : 1.0f;
-            posX = (float)((long)(240.0f * signX));
-            posY = (float)((long)(((float)iBase * 320.0f) / 480.0f));
-            float newVelX = velY * (-0.75f) * signX;
-            float newVelY = velX + speed * gravY * (-0.65f);
-            velX = newVelX;
-            velY = newVelY;
-            break;
-        }
-        }
-
-        // chuckDelay: binary always uses m_SpawnTimer (+0x5c) at fire moment.
-        // At fire, m_SpawnTimer is ~0 or slightly negative, so chuckDelay = 0.21 always in normal play.
-        float zOffset = info ? info->m_SpawnTimer : 0.0f;
-        float chuckDelay = (zOffset > 0.0f) ? zOffset + 0.21f : 0.21f;
-
-        Mortar::Entity* e = am->Add(0, true);
-        if (!e) {
-            LOG_WARN("WAVE/SpawnFruit", "ActorManager::Add returned null");
-            continue;
-        }
-        Fruit* f = static_cast<Fruit*>(e);
-        // Z stride: (i+1)*32. binary iVar8 starts at 1. binary @ 0x001229..
-        f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
-        f->vel  = Vec3(velX, velY, 0.0f);
-        f->Init(nullptr, (long)fruitType, nullptr);
-        // DIFFERS: v1.6.1 binary @ 0x00122a00 only writes m_PlayerIdx in the online-MP branch
-        // via SetForPlayer(newFruit, 0). For SSM (same-screen split-touch), per-fruit
-        // attribution is required by AddShadow / KillFruit -> MissControl::MakeDisappear,
-        // so we wire it from the spawn parameter. The binary's omission appears to be a
-        // Halfbrick bug; the port honors SSM design intent inferred from the downstream
-        // consumers.
-        // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00122a00 (re-analyst).
-        f->m_PlayerIdx = playerIdx;
-        // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
-        LOG_VERBOSE("Spawn", "fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d",
-                    fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
-
-        // Post-Init gravity from spawner Vec3. binary @ 0x00122954..0x0012299e
-        // f->m_Gravity = spawner.gravityVec3 * (-f->m_Gravity.y)
-        if (info) {
-            float negGravY = -f->m_Gravity.y;
-            f->m_Gravity = Vec3(info->m_Gravity_x * negGravY,
-                                info->m_Gravity_y * negGravY,
-                                info->m_Gravity_z * negGravY);
-            // ±0.01 nudge for side-spawned fruit. binary @ 0x00122a2c/0x00122a30
-            if (spawnType == PLACEMENT_LEFT)  f->m_Gravity.x += 0.01f;
-            else if (spawnType == PLACEMENT_RIGHT) f->m_Gravity.x -= 0.01f;
-        }
-        if (info) f->m_TimeScale = info->m_TimeScale;  // spawner+0x14
-
-        f->Chuck(chuckDelay);
-        lastSpawned = e;
+    Mortar::Entity* e = am->Add(0, true);
+    if (!e) {
+        LOG_WARN("WAVE/SpawnFruit", "ActorManager::Add returned null");
+        return NULL;
     }
-    return lastSpawned;
+    Fruit* f = static_cast<Fruit*>(e);
+    f->pos = Vec3(posX, posY, 0.0f);   // binary z literal = 0 @0x00124510
+    f->vel = Vec3(velX, velY, 0.0f);
+    f->Init(nullptr, (long)fruitType, nullptr);
+    // DIFFERS: original = X, using Y because v1.6.1 @0x00124298 only writes the player
+    // index in the online-MP branch via SetForPlayer(newFruit, 0). For SSM (same-screen
+    // split-touch), per-fruit attribution is required by AddShadow / KillFruit ->
+    // MissControl::MakeDisappear, so the port wires it from the spawn parameter.
+    f->m_PlayerIdx = playerIdx;
+    f->m_TimeScale = info ? info->m_TimeScale : 1.0f;   // spawner+0x14 (binary sets 1.0 when info==0)
+
+    // Post-Init gravity from spawner Vec3: m_Gravity = spawnerGrav * (-m_Gravity.y).
+    if (info) {
+        float negGravY = -f->m_Gravity.y;
+        f->m_Gravity = Vec3(info->m_Gravity_x * negGravY,
+                            info->m_Gravity_y * negGravY,
+                            info->m_Gravity_z * negGravY);
+        // +/-0.01 nudge for side-spawned fruit (WaveManager::SpawnFruit gravity arm @0x00124298).
+        if (spawnType == PLACEMENT_LEFT)  f->m_Gravity.x += 0.01f;
+        else if (spawnType == PLACEMENT_RIGHT) f->m_Gravity.x -= 0.01f;
+    }
+
+    // Launch offset (binary @0x00124714): pos += throwDir * (scale.y * 100), literal @0x00124518.
+    f->pos += throwDir * (f->scale.y * 100.0f);
+
+    LOG_VERBOSE("Spawn", "fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) place=%d",
+                fruitType, posX, posY, velX, velY, (int)spawnType);
+
+    // Chuck skipped when spawner is idle (m_SpawnTimer <= -10). Binary @0x00124754.
+    if (zOffset > -10.0f) {
+        float chuckDelay = (zOffset >= 0.0f) ? zOffset + 0.21f : 0.21f;
+        f->Chuck(chuckDelay);
+    }
+    return e;
 }
 
 // ----------------------------------------------------------------------------
-// SpawnBomb — per wave-system-impl.md §2
+// SpawnBomb — v1.6.1 WaveManager::SpawnBomb @0x001247c4
 // ----------------------------------------------------------------------------
 
 void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
@@ -1976,12 +1961,12 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         if (spawner == nullptr) { minAngle = -1.0f; maxAngle = 1.0f; }
         else                    { minAngle = spawner->m_HorizMin; maxAngle = spawner->m_HorizMax; }
 
-        float range = minAngle * (-150.0f) + maxAngle * 150.0f;  // DAT_00122208/0c
+        float range = minAngle * (-150.0f) + maxAngle * 150.0f;
         uint32_t r1 = (range > 0.0f) ? m_Random.Rand32((uint32_t)range) : 0;
         int baseDeg = (int)((float)r1 + minAngle * 150.0f);
 
         float spread = (spawner == nullptr || spawner->m_SpawnType < 2) ? 20.0f : 12.0f;
-        long center  = (long)(((float)baseDeg / -300.0f) * spread * 0.5f);  // DAT_00122210
+        long center  = (long)(((float)baseDeg / -300.0f) * spread * 0.5f);
         long lo      = (long)((float)center + spread * -0.5f);
         long hi      = (long)((float)center + spread *  0.5f);
         long rng2    = (hi > lo) ? (long)m_Random.Rand32((uint32_t)(hi - lo)) : 0;
@@ -1994,25 +1979,16 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         float velMultY = (spawner == nullptr) ? 1.0f : spawner->m_VelYScale;
         float zOffset  = (spawner == nullptr) ? 0.0f : spawner->m_SpawnTimer;
 
-        // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001220e2 (bomb) (re-analyst).
-        // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
-        // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
-        // over-scattered horizontal arrival.
+        // The 1.075f boost is on the VERTICAL (cos -> vel.y) component.
         float velX = sin_a * speed * velMultX;
         float velY = cos_a * speed * 1.075f * velMultY;
 
-        // Spawn position (bottom default).
+        // Spawn position (BOTTOM default). Binary @0x001247c4 default arm: iVar11 = -0xa0
+        // (posY base = -160, off-screen below the visible y=0..-160 strip); the post-Init
+        // pos.y += -100*scale.y nudge then places it at y~-260 (rising into view).
         float spawnX = (float)baseDeg;
-        // ASM-verified: 2026-05-27 binary @ DAT_00122240 (re-analyst).
-        // pos.y basis for default-bottom bomb is -160 (off-screen below the visible
-        // y=0..-160 strip), NOT the per-spread angle floor `lo`. Binary stores
-        // iVar16 = -160 in the fall-through arm of the spawn-type switch, clobbering
-        // the lo value used only for the angle-band randomisation above. Symptom of
-        // the prior wrong value: bomb spawns near y=-10 instead of -160, so after the
-        // post-Init pos.y += -100*scale.y nudge it appears at y~-110 (visible) instead
-        // of y~-260 (off-screen, rising into view).
         float spawnY = -160.0f;
-        float spawnZ = (float)i * 32.0f;  // DAT_00122580
+        float spawnZ = (float)i * 32.0f;   // z stride = i*32 (binary iVar8*32)
 
         if (spawner != nullptr) {
             SpawnPlacement st = spawner->m_SpawnType;
@@ -2023,45 +1999,50 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
             case PLACEMENT_BOTTOM:
             default:
                 break;
-            case PLACEMENT_BOTTOM_SLOW:
-                velY *= 0.5f;
+            case PLACEMENT_TOP:
+                // Binary @0x00124968: sign vector (-1,-1,-1) negates pos+vel; velY halved.
+                spawnX = -spawnX;          // -baseDeg
+                spawnY = -spawnY;          // -(-160) = +160
+                velX   = -velX;
+                velY   = -(velY * 0.5f);
                 break;
             case PLACEMENT_RIGHT:
             case PLACEMENT_LEFT: {
-                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x00121fa8 (side-spawn block
-                // mirrors SpawnFruit @ 0x001225a0) (asm-inspector). Formula:
-                //   pos.x = (int)(240.0f * sign)                  // DAT_00122228 = int 240
-                //   pos.y = (int)(baseDeg * 320 / 480)            // DAT_0012221c/20
-                //   vel.x = (velX_pre * -0.75f) * sign            // DAT 0xBF400000
-                //   vel.y = velY_pre + speed * spawner.m_Gravity_y * -0.65f  // DAT_00122224
+                // ASM-spec v1.6.1 WaveManager::SpawnBomb @0x00124a18: side-spawn mirrors
+                // SpawnFruit -- velocity sources are SWAPPED between axes, then the
+                // LEFT/RIGHT sign is applied:
+                //   pos.x = (int)(240 * sign);          pos.y = (int)(baseDeg * 320 / 480)
+                //   vel.x = velY_pre * -0.75 * sign;    vel.y = velX_pre + speed*gravY*-0.65
                 //   sign  = -1 for LEFT, +1 for RIGHT
-                // Previous "2026-05-16" port spec was wrong on two counts: X-basis is
-                // the constant 240 (not baseDeg), and the velocity sources are NOT
-                // swapped (vel.x <- velX_pre * -0.75, NOT velY_pre * -0.75).
                 float signX = (st == PLACEMENT_LEFT) ? -1.0f : 1.0f;
                 spawnX = (float)((long)(240.0f * signX));
                 spawnY = (float)((long)(((float)baseDeg * 320.0f) / 480.0f));
-                velX   = velX * (-0.75f) * signX;
-                velY   = velY + speed * spawner->m_Gravity_y * (-0.65f);
+                float newVelX = velY * (-0.75f) * signX;
+                float newVelY = velX + speed * spawner->m_Gravity_y * (-0.65f);
+                velX = newVelX;
+                velY = newVelY;
                 break;
             }
             case PLACEMENT_RANDOM_SIDE: break;  // handled above
             }
         }
 
-        float chuckDelay = (zOffset >= 0.0f) ? zOffset + 0.21f : 0.21f;  // DAT_0012258c
-
-        // Single-player path only (MP not ported).
+        // Single-player path only (MP defunct/not ported); binary else-arm @0x001247c4.
         Mortar::Entity* e = am->Add(1, true);
         if (!e) continue;
         Bomb* b = static_cast<Bomb*>(e);
         b->pos = Vec3(spawnX, spawnY, spawnZ);
-        b->vel = Vec3(velX, velY, 0.0f);                 // DAT_00122584 = 0
+        b->vel = Vec3(velX, velY, 0.0f);
         b->Init(nullptr, 0, nullptr);
-        b->pos.y += -100.0f * b->scale.y;               // DAT_00122588 = -100
-        b->Chuck(chuckDelay);
+        // Post-Init launch offset (BOTTOM only, always Y-axis): pos.y += -100 * scale.y.
+        b->pos.y += -100.0f * b->scale.y;
+        // Chuck skipped when spawner is idle (m_SpawnTimer <= -10). Binary @0x00124754.
+        if (zOffset > -10.0f) {
+            float chuckDelay = (zOffset >= 0.0f) ? zOffset + 0.21f : 0.21f;
+            b->Chuck(chuckDelay);
+        }
 
-        // Binary @ 0x001247c4 tail: if default-spawner bomb and bomb-multiplier
+        // Binary @0x001247c4 tail: if default-spawner bomb and bomb-multiplier
         // powerup active (playerIdx > 0), scale the bomb up.
         if (spawner == nullptr && playerIdx > 0)
             b->MakeFat(false);
@@ -2125,8 +2106,11 @@ float WaveManager::GetCriticalChance(int playerIdx) {
 }
 
 bool WaveManager::CriticalMode(int playerIdx) {
-    // ASM-spec v1.6.1 WaveManager::CriticalMode @0x001219e4: GetCriticalChance(p) > (float)((int64_t)LCG_state/2) (peek, no consume)
-    return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2);
+    // ASM-spec v1.6.1 WaveManager::CriticalMode @0x00123194: GetCriticalChance(p) > (float)(Fruit::CRITICAL_CHANCE / 2)
+    // (integer div-by-2 BEFORE the float cast; Fruit::CRITICAL_CHANCE == FruitInfo_GetCriticalChance(), fruitlist.xml
+    // <critical chance="50">). NOT a function of RNG state -- port previously compared against the raw LCG word,
+    // which made this return true ~50% of frames and bumped trail-emitter blade m_Scale/colour every other tick.
+    return GetCriticalChance(playerIdx) > (float)(FruitInfo_GetCriticalChance() / 2);
 }
 
 float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
@@ -2380,8 +2364,8 @@ SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
     if (!s_inited) {
         s_inited = true;
 
-        // Entry 0: centre-bottom slow (PLACEMENT_BOTTOM_SLOW)
-        spinfos[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+        // Entry 0: top-drop (PLACEMENT_TOP, binary type 1)
+        spinfos[0].m_SpawnType  = PLACEMENT_TOP;
         spinfos[0].m_Gravity_x  = 0.0f;
         spinfos[0].m_Gravity_y  = -1.1f;
         spinfos[0].m_Gravity_z  = 0.0f;

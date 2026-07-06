@@ -137,6 +137,12 @@ public:
     // idx = slash index; slashEntity = the SlashEntity that triggered the collision.
     static void SuperFruitSliced(Fruit* fruit, int idx, Mortar::Entity* slashEntity);
 
+    // Binary @ 0x001bda74. Called once from GameInitialise @ 0x0011daa8 (after
+    // PowerUpShop::LoadContent). Subscribes SuperFruitSliced to the global
+    // Fruit::FruitWasSlicedEvent() so a slice on a super fruit dispatches here
+    // without Fruit::CollisionResponse calling it directly.
+    static void LoadContent();
+
     // Binary @ 0x001b9828. Returns true while a super fruit is active.
     // Implementation: SuperFruitControls._M_node_count (+0x14) != 0, i.e. !empty().
     static bool IsInSuperFruitState();

@@ -16,6 +16,8 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ShopListItem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TimeControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ScoreMultiplyerBoard.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TimeSinkControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ComboControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpeedControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoinCounter.cpp

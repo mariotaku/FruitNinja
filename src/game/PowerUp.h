@@ -153,7 +153,10 @@ public:
     // @ 0x0011a1dc — true iff m_TotalTime > 0
     bool IsTimed() const { return m_TotalTime > 0.0f; }
 
-    bool IsSpecial() const { return m_bIsSpecial; }
+    // ASM-spec v1.6.1 PowerUp::IsSpecial @0x00143868: IsTimed() && !m_bIsSpecial && Purchaseable()==0.
+    // Despite the name, "special" here means "regular timed banana power" (freeze/frenzy/x2),
+    // NOT the "automatic" m_bIsSpecial flag (that's the opposite: zen-mode auto-activated powers).
+    bool IsSpecial() const { return IsTimed() && !m_bIsSpecial && Purchaseable() == 0; }
 
     // @ 0x0011a1f0
     float GetCurrentTimeProgress() const { return m_LongestRemaining; }

@@ -177,6 +177,12 @@ public:
         return m_bSliced != 0 || (m_SliceTimer > -1.0f);
     }
 
+    // v1.6.1 Fruit::IsActive @0x00121c80: m_SpawnDelay <= 0
+    // Non-virtual name-hiding of Mortar::Entity::IsActive -- NOT an override.
+    // Binary declares this per-type predicate (chuck-delay gate), not the
+    // base flags&0x11 test. Callers must hold a Fruit* for this to apply.
+    bool IsActive() const { return m_SpawnDelay <= 0.0f; }
+
     // Matches binary `Fruit::Chuck(float)`. Velocity is read from this->vel
     // -- callers must set `vel` before calling.
     void Chuck(float delay);

@@ -343,7 +343,7 @@ public:
     // 0x001219c4: returns waveCritChance * m_CritChanceMult.
     float GetCriticalChance(int playerIdx);
 
-    // 0x001219e4: returns true if a slice should be "critical" this tick.
+    // v1.6.1 WaveManager::CriticalMode @0x00123194: returns true if a slice should be "critical" this tick.
     bool  CriticalMode(int playerIdx);
 
     // 0x00121840: combo bonus progression [0..1].

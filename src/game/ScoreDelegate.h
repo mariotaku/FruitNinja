@@ -31,4 +31,13 @@ void SetScoreDelegate(ScoreModifier* m);
 // Installs Global<int,int>(&DefaultScoreDelegate) — addr unresolved in v1.6.1 .symtab
 void SetDefaultScoreDelegate();
 
+// ASM-spec v1.6.1 AddScoreNomals @0x001adee0: identity score delegate. Used by
+// ScoreMultiplyerBoard::Update/Save to bank the x2 payout via AddToCurrentScore
+// without DefaultScoreDelegate re-applying the ARCADE gain multiplier a second
+// time (m_ScoreValue is already the doubled total). Installed directly via
+// `g_ScoreDelegate = &AddScoreNomals;` (matches the plain-fn-pointer storage
+// model above); PowerUpManager::SetAppropriateScoreCallback() restores the
+// normal delegate afterward.
+int AddScoreNomals(int n);
+
 #endif // FN_GAME_SCORE_DELEGATE_H

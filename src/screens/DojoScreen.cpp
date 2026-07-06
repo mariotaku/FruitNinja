@@ -350,11 +350,14 @@ void DojoScreen::CreateButtons() {
             game_work.m_RingColours[6],
             game_work.m_RingColours[7],
             54.5f, 14.0f, true, true);
+        // ASM-spec v1.6.1 DojoScreen::CreateButtons @0x0016ad9c (call @0x0016b334):
+        // badge set from AreNewItems() AT CREATION so it grows in with the button's
+        // m_AnimPhase sine ramp (badge scale = size.x/m_RestScale.x in MenuButton::Draw).
+        m_pShopButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_GrowInTimer=0.25 before AddControl
         m_pShopButton->m_GrowInTimer = 0.25f;
         game_work.mHud->AddControl(m_pShopButton);
         if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
-        m_pShopButton->SetNewSymbol(false);
     }
 
     // --- field_0x9c: About button (orange ring, m_RingTex[12]) ---

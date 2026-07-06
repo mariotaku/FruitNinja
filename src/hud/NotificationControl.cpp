@@ -183,21 +183,26 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // --- Numeric notification (score/points pop-up) ---
 
         // Banner quad
-        // TODO: draw s_banner quad via Mesh::DrawQuadUnCached when banner texture is loaded
-        // Binary: MatrixManager::SetCurrentMatrix(Scale(banner_w, banner_h)) then DrawQuad
+        // ASM-spec v1.6.1 NotificationControl::Draw @0x001a4860: banner quad is
+        // screen-centered (translate.x = 0.0f, NOT pos.x -- pos.x=-95 is the
+        // icon/text anchor only), translate.y = pos.y - 16.0f, scale is the
+        // literal 257.0f x 65.0f (not bannerTex->GetWidth()/GetHeight()).
+        // s_banner is a 2-row stacked texture: top half (v 0..0.46875) when no
+        // points text is shown, bottom half (v 0.5..0.96875) when it is.
         if (s_banner.IsValid()) {
             Mortar::Texture* bannerTex = s_banner.Get();
             if (bannerTex) {
-                float bw = (float)bannerTex->GetWidth();
-                float bh = (float)bannerTex->GetHeight();
                 mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(bw, bh, 1.0f);
-                mat.GlobalTranslate44(pos);
+                Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
+                mat.GlobalTranslate44(Vec3(0.0f, pos.y - 16.0f, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
+                bool showPoints = (m_PointsText[0] != '\0');
+                float vMin = showPoints ? 0.5f : 0.0f;
+                float vMax = showPoints ? 0.96875f : 0.46875f;
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, vMin, vMax);
                 bannerTex->UnSet();
             }
         }
@@ -239,20 +244,22 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // --- Named notification (achievement unlock banner) ---
 
         // Unlock-banner quad
-        // TODO: draw s_unlockBanner quad when banner texture is loaded
+        // ASM-spec v1.6.1 NotificationControl::Draw @0x001a4860: banner quad is
+        // screen-centered (translate.x = 0.0f, NOT pos.x -- pos.x=-95 is the
+        // icon/text anchor only), translate.y = pos.y (unchanged for Type_Named),
+        // scale is the literal 257.0f x 65.0f (not bannerTex->GetWidth()/GetHeight()).
+        // V range is 0.0 .. 0.984375, not the full 0..1.
         if (s_unlockBanner.IsValid()) {
             Mortar::Texture* bannerTex = s_unlockBanner.Get();
             if (bannerTex) {
-                float bw = (float)bannerTex->GetWidth();
-                float bh = (float)bannerTex->GetHeight();
                 mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(bw, bh, 1.0f);
-                mat.GlobalTranslate44(pos);
+                Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
+                mat.GlobalTranslate44(Vec3(0.0f, pos.y, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
                 Colour col(255, 255, 255, 255);
-                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 1.0f);
+                g->renderer.DrawQuad(col, 0.0f, 1.0f, 0.0f, 0.984375f);
                 bannerTex->UnSet();
             }
         }

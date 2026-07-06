@@ -44,9 +44,10 @@ struct MatrixStack {
         m_Version = 1;
     }
 
-    // TODO: re-verify v1.6.1 MatrixStack::Reset address (cited 0x001175d4 was stale
-    // v1.5.x -- resolves to QueAchievement in v1.6.1; method is inlined into
-    // MatrixManager, no standalone symbol confirmed)
+    // ASM-spec v1.6.1 MatrixStack::Reset @0x0010436c: standalone symbol resolved
+    // (supersedes the stale 0x001175d4 v1.5.x citation, which maps to
+    // QueAchievement in v1.6.1). SpeedControl.cpp's Draw call sites use this
+    // through MatrixManager::GetWorldStack().Reset().
     void Reset();
 
     // Port specific: no binary equivalent (GL push/pop happens inside
@@ -60,9 +61,9 @@ struct MatrixStack {
     // inlined into MatrixManager, no standalone symbol confirmed)
     void Scale(const Vec3& s);
 
-    // TODO: re-verify v1.6.1 MatrixStack::Translate address (cited 0x0012f97c was
-    // stale v1.5.x -- resolves to a BonusManager static-ctor blob in v1.6.1; method
-    // is inlined into MatrixManager, no standalone symbol confirmed)
+    // ASM-spec v1.6.1 MatrixStack::Translate @0x00107d84: standalone symbol resolved
+    // (supersedes the stale 0x0012f97c v1.5.x citation, which maps to a
+    // BonusManager static-ctor blob in v1.6.1).
     void Translate(const Vec3& t);
 
     // TODO: re-verify v1.6.1 MatrixStack::SetCurrentMatrix address (cited 0x0011a130

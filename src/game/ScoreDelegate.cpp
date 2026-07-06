@@ -37,3 +37,6 @@ static int TrampolineCall(int n) {
     if (s_activeMod) return s_activeMod->DeferPoints(n);
     return n;
 }
+
+// AddScoreNomals (identity score delegate, v1.6.1 @0x001adee0) is defined once in
+// ScoreState.cpp; declared in ScoreDelegate.h for ScoreMultiplyerBoard's use.

@@ -19,6 +19,7 @@
 #include "hud/TimeControl.h"
 
 #include <cstring>
+#include <cctype>
 #include "game/GameWork.h"
 #include "game/GameMode.h"
 
@@ -30,7 +31,7 @@ using Mortar::TextureManager;
 
 AchievementInfo::AchievementInfo()
     : m_NameHash(0)
-    , m_NumberedStringHash(0)
+    , m_pDescription(nullptr)
     , m_Total(0)
     , m_Score(0)
     , m_TypeIndex(0xb)  // binary ctor sentinel = 11 (v1.6.1 AchievementInfo @0x00118198)
@@ -38,7 +39,7 @@ AchievementInfo::AchievementInfo()
     , m_IsGameOver(false)
     , m_SpecificOrder(nullptr)
 {
-    m_Description[0] = '\0';
+    m_DisplayName[0] = '\0';
     m_Name[0]        = '\0';
 }
 
@@ -108,12 +109,9 @@ void AchievementManager::LoadAchievementInfo() {
         uint32_t idHash = StringHash(idAttr);
 
         // Read "name" attribute — localized display name.
-        // Binary: GETSTRING(nameAttr) stored into AchievementInfo +0x00.
-        // TODO: v1.6.1 0x00118198 (AchievementManager::LoadAchievementInfo) — binary stores
-        //   GETSTRING(name attr) into m_Description (+0x00); port currently stores the XML
-        //   "description" attr there (pre-existing mismatch, out of scope for #323).
+        // ASM-spec v1.6.1 LoadAchievementInfo @0x00118198: strcpy(info->m_DisplayName,
+        // GETSTRING_CAST_0_STR(nameAttr)) -- localized name, drawn by the unlock popup.
         const char* nameAttr = e.Attribute("name");
-        (void)nameAttr;
 
         // Skip if already unlocked (binary: game_work.m_SaveData->IsAchievementUnlocked)
         if (game_work.m_SaveData && game_work.m_SaveData->IsAchievementUnlocked(idHash)) continue;
@@ -128,29 +126,45 @@ void AchievementManager::LoadAchievementInfo() {
         info->m_Name[sizeof(info->m_Name) - 1] = '\0';
         info->m_NameHash = idHash;
 
-        // description (localised)
-        const char* descAttr = e.Attribute("description");
-        if (descAttr) {
-            const char* localised = GETSTRING_CAST_0_STR(descAttr);
-            strncpy(info->m_Description, localised ? localised : descAttr,
-                    sizeof(info->m_Description) - 1);
-            info->m_Description[sizeof(info->m_Description) - 1] = '\0';
+        // display name (localised) -- ASM-spec v1.6.1 LoadAchievementInfo @0x00118198
+        if (nameAttr) {
+            strncpy(info->m_DisplayName, GETSTRING_CAST_0_STR(nameAttr),
+                    sizeof(info->m_DisplayName) - 1);
+            info->m_DisplayName[sizeof(info->m_DisplayName) - 1] = '\0';
         }
 
-        // numbered string hash (optional <longText> child element — binary stores StringHash)
-        TiXmlElement longElem = e.FirstChildElement("longText");
-        if (longElem) {
-            const char* txt = longElem.GetText();
-            if (txt) {
-                info->m_NumberedStringHash = StringHash(txt);
+        // description key (constructed, NOT read from an XML "description" attribute).
+        // ASM-spec v1.6.1 LoadAchievementInfo @0x00118198: the binary derives the
+        // GETSTRING key by patching a two-digit numeric suffix, lifted out of
+        // nameAttr, into one of two fixed literal templates:
+        //   strlen(nameAttr) >= 0x13 && isdigit(nameAttr[0x11])
+        //     -> key = "LITE_ACHIEVEMENT_DESC_XX" with nameAttr[0x11..0x12] at [22..23]
+        //   strlen(nameAttr) > 0xd && isdigit(nameAttr[0xc])
+        //     -> key = "ACHIEVEMENT_DESC_XX" with nameAttr[0xc..0xd] at [17..18]
+        //   otherwise -> m_pDescription = 0 (no description)
+        info->m_pDescription = 0;
+        if (nameAttr) {
+            size_t nameLen = strlen(nameAttr);
+            if (nameLen >= 0x13 && isdigit((unsigned char)nameAttr[0x11])) {
+                char key[32];
+                strncpy(key, "LITE_ACHIEVEMENT_DESC_XX", sizeof(key));
+                key[22] = nameAttr[0x11];
+                key[23] = nameAttr[0x12];
+                info->m_pDescription = GETSTRING_CAST_0_STR(key);
+            } else if (nameLen > 0xd && isdigit((unsigned char)nameAttr[0xc])) {
+                char key[32];
+                strncpy(key, "ACHIEVEMENT_DESC_XX", sizeof(key));
+                key[17] = nameAttr[0xc];
+                key[18] = nameAttr[0xd];
+                info->m_pDescription = GETSTRING_CAST_0_STR(key);
             }
         }
 
-        // value (threshold)
-        e.QueryIntAttribute("value", &info->m_Total);
+        // total (threshold)
+        e.QueryIntAttribute("total", &info->m_Total);
 
-        // points
-        e.QueryIntAttribute("points", &info->m_Score);
+        // score
+        e.QueryIntAttribute("score", &info->m_Score);
 
         // type index
         const char* typeAttr = e.Attribute("type");
@@ -184,9 +198,11 @@ void AchievementManager::LoadAchievementInfo() {
         const char* modeAttr = e.Attribute("mode");
         info->m_ModeBitmask = ParseModeMask(modeAttr);
 
-        // game-over / unsullied flag
-        const char* unsullied = e.Attribute("requires_unsullied");
-        info->m_IsGameOver = (unsullied && strcmp(unsullied, "true") == 0);
+        // game-over flag -- ASM-spec v1.6.1 LoadAchievementInfo @0x00118198: reads
+        // "isGameOver" attribute, true when == 1 (not "requires_unsullied"/"true").
+        int isGameOverVal = 0;
+        e.QueryIntAttribute("isGameOver", &isGameOverVal);
+        info->m_IsGameOver = (isGameOverVal == 1);
 
         // texture
         const char* texAttr = e.Attribute("texture");
@@ -316,21 +332,22 @@ int AchievementManager::QueAchievement(AchievementInfo* info,
 }
 
 // ---------------------------------------------------------------------------
-// UnlockedAchievement  (Binary @ 0x001090d0)
+// UnlockedAchievement  (Binary @ 0x001180a8)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
-    // Binary @ 0x001090d0
+    // ASM-spec v1.6.1 AchievementManager::UnlockedAchievement @ 0x001180a8
     std::map<uint32_t, AchievementInfo*>::iterator it = m_All.find(hash);
     if (it == m_All.end()) return 0;
     AchievementInfo* a = it->second;
-    // Binary: name[0] in '0'..'9' => Type_Numeric (1), else Type_Named (2)
+    // Binary: m_Name[0] (raw id) in '0'..'9' => Type_Numeric (1), else Type_Named (2)
     NotificationControl::NotificationType notifType =
         (a->m_Name[0] >= '0' && a->m_Name[0] <= '9')
         ? NotificationControl::Type_Numeric
         : NotificationControl::Type_Named;
+    // v1.6.1 @0x001180a8: ctor arg 1 is m_DisplayName (localized), not the raw id.
     NotificationControl* ctrl = new NotificationControl(
-        a->m_Name, a->m_Score, a->m_Texture, notifType);
+        a->m_DisplayName, a->m_Score, a->m_Texture, notifType);
     ctrl->Init();
     if (hud) hud->AddControl(ctrl, false);
     return 1;

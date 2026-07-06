@@ -304,25 +304,18 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         // Vec3::One at BSS 0x1F4334 — a constant singleton for (1,1,1), not a
         // mutable scale variable. Matches binary: _Vector3::operator*(Vec3*, float*)
         // in Fruit::SetFruitType @0x001dc054 multiplies Vec3::One by m_Scale then 0.01.
-        const FruitInfoData* info = FruitInfo_Get(fruitType);
+        // (scale is an Entity member SetFruitType itself never touches -- Init sets
+        // it directly here, separate from the SetFruitType call below.)
+        const FruitInfoData* info = FruitInfo_Get(m_FruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
-        m_VisualScale = scale;  // ASM-spec v1.6.1 Fruit::SetFruitType @0x001dc054; writes 0xAC/B0/B4
 
-        // Collision sphere (Fruit::SetFruitType @0x001dc054).
-        //   radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam
-        // where scaleParam is the SetFruitType arg (1.0 at the common
-        // call site). m_Scale is the XML "scale" attr (e.g. watermelon
-        // = 75); m_CollisionScale is the XML "collision" attr (5 for
-        // every fruit in fruitlist.xml). Defaults if FRUIT_INFO is
-        // missing: m_Scale = 25.0, m_CollisionScale = 1.0.
-        const float fScale  = info ? info->m_Scale          : 25.0f;
-        const float fColBase = info ? info->m_CollisionScale : 1.0f;
-        const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
-        if (!m_Col) m_Col = new ColSphere();
-        ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center() = Vec3(pos.x, pos.y, 0.0f);
-        cs->radius = radius;
+        // ASM-spec v1.6.1 Fruit::Init @0x001e2898: calls SetFruitType(this, m_FruitType, scaleVec.x)
+        // for m_VisualScale + collision-sphere setup. scaleVec is not supplied at this call site
+        // (common-case scaleParam == 1.0). SetFruitType internally gates the sphere on
+        // base<=0.0 (e.g. locked black_pineapple equip fruit: scale=60, collision=-105 ->
+        // base=-73.8 -> no ColSphere -> unsliceable/unequippable).
+        SetFruitType(m_FruitType, 1.0f);
     }
 
     // ASM-spec v1.6.1 Fruit::Init @0x001e2898.
@@ -379,6 +372,13 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
 
 // Binary @ 0x001dc054 — set m_FruitType and recalculate visual scale + collision sphere.
 // Called from ShopScreen::SetSelected when browsing the equipment ring (scaleParam=1.0).
+//
+// ASM-spec v1.6.1 Fruit::SetFruitType @0x001dc054: base = m_CollisionScale + COL_RADIUS_FACTOR*m_Scale.
+// When base <= 0.0, the binary DELETES the ColSphere (vtable slot1 dtor) and nulls m_Col (+0x38)
+// instead of storing a negative radius. Locked shop equip fruits use a negative m_CollisionScale
+// (e.g. black_pineapple: m_Scale=60, m_CollisionScale=-105 -> base=-73.8) specifically so they have
+// NO collision sphere and can't be sliced/equipped. Downstream radius*radius squaring made a stored
+// negative radius test as positive -- that was the port bug (locked items sliceable+equippable).
 void Fruit::SetFruitType(int fruitType, float scaleParam) {
     m_FruitType = (uint8_t)fruitType;
     const FruitInfoData* info = FruitInfo_Get(fruitType);
@@ -386,11 +386,16 @@ void Fruit::SetFruitType(int fruitType, float scaleParam) {
     m_VisualScale = Vec3::One() * fruitScale;
     const float fScale   = info ? info->m_Scale          : 25.0f;
     const float fColBase = info ? info->m_CollisionScale : 1.0f;
-    const float radius   = (fColBase + COL_RADIUS_FACTOR * fScale) * scaleParam;
-    if (!m_Col) m_Col = new ColSphere();
-    ColSphere* cs = static_cast<ColSphere*>(m_Col);
-    cs->center() = Vec3(pos.x, pos.y, 0.0f);
-    cs->radius = radius;
+    const float base = fColBase + COL_RADIUS_FACTOR * fScale;
+    if (base <= 0.0f) {
+        delete m_Col;
+        m_Col = nullptr;
+    } else {
+        if (!m_Col) m_Col = new ColSphere();
+        ColSphere* cs = static_cast<ColSphere*>(m_Col);
+        cs->center() = Vec3(pos.x, pos.y, 0.0f);
+        cs->radius = base * scaleParam;
+    }
 }
 
 // ASM-spec v1.6.1 Fruit::Chuck @0x001db5f0
@@ -552,11 +557,13 @@ void Fruit::Update(float dt) {
                     pos.y        = -320.0f;
                     vel          = Vec3(0.0f, -1.0f, 0.0f);
                 } else if (cnt != 1) {
-                    // Spawn (cnt-1) extra fruits via a random side-template.
-                    // Binary @ 0x001dfdf4. Three stack-built SPAWNER_INFOs;
-                    // each starts from SPAWNER_INFO ctor defaults then overrides.
+                    // Multiplier cascade: pick one of three templates and spawn ONE extra
+                    // fruit. Binary (Fruit::Update @0x001df828) calls SpawnFruit(cnt-1, ...)
+                    // once, but v1.6.1 SpawnFruit spawns exactly one fruit (count is only the
+                    // >=1 guard), so cnt-1 here yields a single extra fruit.
+                    // template[0]=TOP (slow drift down), [1]=LEFT, [2]=RIGHT.
                     SPAWNER_INFO templates[3];
-                    templates[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+                    templates[0].m_SpawnType  = PLACEMENT_TOP;
                     templates[0].m_Gravity_x  = 0.0f;
                     templates[0].m_Gravity_y  = -0.05f;
                     templates[0].m_Gravity_z  = 0.0f;
@@ -1448,7 +1455,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             && (game_work.bM_bPaused == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();
             Vec3 localPos = pos;
-            PowerUpManager::GetInstance()->ActivatePower(hash, localPos, reinterpret_cast<float*>(&localPos));
+            // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500 (@0x001ddd9c): purchaseExtra
+            // arg is NULL (mov r3,#0x0) -- a slice never passes a touch-pos "extra" value. Passing
+            // &localPos here made ActivatePower treat the slice as a purchase (isPurchased=true,
+            // blocks wave rewind) and GameModifier::OnDeferComplete read the slice's X coord as
+            // m_BonusAccum, collapsing freeze duration to ~0.01s (one tick) instead of ~7s.
+            PowerUpManager::GetInstance()->ActivatePower(hash, localPos, NULL);
         }
 
         // Combo counter increment.
@@ -1505,9 +1517,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // the two binary paths are merged into one in the current CollisionResponse port.
     m_OnSliced(this, g_FruitWasSliced_points, hitter);
 
-    // v1.6.1 super-fruit: notify slice path.
-    // Binary @ 0x001be630: SuperFruitControl::SuperFruitSliced gates on FruitInfo[+0x330].
-    SuperFruitControl::SuperFruitSliced(this, 0, hitter);
+    // v1.6.1 Fruit::CollisionResponse @0x001dd500: super-fruit slice runs via the
+    // FruitSliced event subscription (SuperFruitControl::LoadContent @0x001bda74),
+    // not a direct call.
 
     return 0;
 }

@@ -51,11 +51,6 @@ float Random::RandF(float range) {
     return ((float)v / 524287.0f) * range;
 }
 
-// Binary reads *(int*)g_RandomState — low 32 bits of m_State as signed int, no LCG step.
-int32_t Random::PeekState() const {
-    return (int32_t)(uint32_t)(m_State);
-}
-
 // Engine-wide RNG instance (binary @ 0x0026C8B0).
 Random g_Random;
 
