@@ -484,16 +484,17 @@ if (EMSCRIPTEN)
     endif()
     # Port specific: copy the shell's image assets next to fruit-ninja.html
     # so the loading screen can reference them by relative URL before MEMFS is
-    # populated.  splash.webp is the loading-screen backdrop (HB_logo.tex region);
-    # play_button/sound/sound_cross are the shell overlay UI (also consumed by
-    # tools/web/build_pages.py, which reads them from build/web/).
+    # populated.  play_button/sound/sound_cross are the shell overlay UI (also
+    # consumed by tools/web/build_pages.py, which reads them from build/web/).
+    # splash.webp is NOT copied/shipped -- the loading-screen backdrop is now
+    # an inline BlurHash placeholder decoded client-side in shell.html; the
+    # source .webp stays in-repo only as the hash's provenance reference.
     # Also stages the PWA files (manifest.webmanifest, sw.js, favicon.ico at the
     # output root; icon PNGs under icons/) referenced by the shell's <head> --
     # these keep stable, unhashed names by design (web-hash-assets.py does not
     # touch them) so the manifest / service-worker / favicon URLs never change.
     add_custom_command(TARGET fruit-ninja POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/play_button.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound_cross.webp
@@ -514,9 +515,9 @@ if (EMSCRIPTEN)
         VERBATIM
     )
     # Port specific: content-hash web output files to defeat browser/mobile caching.
-    # Renames fruit-ninja.{wasm,data,js} and splash.webp to name-<sha8>.ext,
-    # rewrites all internal cross-references (wasm/data refs in js, js/splash refs
-    # in html), and prunes stale hashed files from prior builds.
+    # Renames fruit-ninja.{wasm,data,js} to name-<sha8>.ext, rewrites all
+    # internal cross-references (wasm/data refs in js, js ref in html), and
+    # prunes stale hashed files from prior builds.
     # fruit-ninja.html stays unhashed (stable entry point).
     # Skipped under FN_WEB_DEBUG: the -O0/-g emscripten shell emits a different
     # script-tag/locateFile literal form the hasher can't rewrite, which breaks
