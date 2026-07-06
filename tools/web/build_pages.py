@@ -15,7 +15,6 @@ galleries.  Output layout (default: pages/):
       fruit-ninja-<sha8>.js
       fruit-ninja-<sha8>.wasm
       fruit-ninja-<sha8>.data
-      splash-<sha8>.webp
       play_button.webp
       sound.webp
       sound_cross.webp
@@ -73,7 +72,6 @@ _HASHED_STEMS = [
     ("fruit-ninja", "js"),
     ("fruit-ninja", "wasm"),
     ("fruit-ninja", "data"),
-    ("splash",      "webp"),
 ]
 
 
@@ -143,7 +141,7 @@ def main():
             "may be incomplete (tools/web/build.sh renames fruit-ninja.html to "
             "index.html after a verified build).")
 
-    # Discover hashed game files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
+    # Discover hashed game files (fruit-ninja-<hash>.{js,wasm,data}).
     hashed_game_files = []
     for stem, ext in _HASHED_STEMS:
         name = find_hashed_file(SRC_BUILD_WEB, stem, ext)
@@ -181,7 +179,7 @@ def main():
     sz = copy_file(game_html_src, os.path.join(out, "index.html"))
     summary.append(("pages/index.html (from build/web/index.html)", sz))
 
-    # Hashed files (fruit-ninja-<hash>.{js,wasm,data}, splash-<hash>.webp).
+    # Hashed files (fruit-ninja-<hash>.{js,wasm,data}).
     # The game HTML/JS references these by bare same-dir name -- no rewriting.
     for gf in hashed_game_files:
         src_path = os.path.join(SRC_BUILD_WEB, gf)

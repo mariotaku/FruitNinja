@@ -5,7 +5,7 @@ tools/web/web-hash-assets.py -- Content-hash web output files to defeat browser 
 Usage:
     python3 tools/web/web-hash-assets.py <build/web>
 
-Every build, ALL of wasm + data + js (+ splash) end up as content-hashed
+Every build, ALL of wasm + data + js end up as content-hashed
 fruit-ninja-<sha8>.ext files, and fruit-ninja.js / fruit-ninja.html are rewritten
 to reference those hashed names. fruit-ninja.html keeps its stable (unhashed) name
 as the entry point.
@@ -44,7 +44,6 @@ _DATA_LITERALS = [
 _DATA_DEP_LITERAL = '"datafile_fruit-ninja.data"'
 _WASM_LITERAL = 'locateFile("fruit-ninja.wasm")'
 _HTML_SCRIPT_LITERAL = '<script async src=fruit-ninja.js>'
-_HTML_SPLASH_LITERAL = 'src=splash.webp'
 
 
 def sha8(path):
@@ -147,14 +146,12 @@ def main():
 
     print("[web-hash] starting in: {}".format(os.path.abspath(out_dir)))
 
-    # --- Step 1: resolve content hashes for wasm + data + splash --------------
+    # --- Step 1: resolve content hashes for wasm + data ------------------------
     # (each becomes / stays fruit-ninja-<sha8>.ext; digest reused if unchanged)
     wasm_digest, wasm_how = resolve_asset(out_dir, STEM, "wasm")
     print("[web-hash] wasm   digest={} ({})".format(wasm_digest, wasm_how))
     data_digest, data_how = resolve_asset(out_dir, STEM, "data")
     print("[web-hash] data   digest={} ({})".format(data_digest, data_how))
-    splash_digest, splash_how = resolve_asset(out_dir, "splash", "webp")
-    print("[web-hash] splash digest={} ({})".format(splash_digest, splash_how))
 
     if data_digest is None:
         print("[web-hash] ERROR: no fruit-ninja.data (canonical or hashed) found -- "
@@ -205,13 +202,6 @@ def main():
             h = replace_report(h, _HTML_SCRIPT_LITERAL,
                                _HTML_SCRIPT_LITERAL.replace("fruit-ninja.js",
                                                             hashed_name(STEM, js_digest, "js")), "html")
-        if splash_digest is not None:
-            h = replace_report(h, _HTML_SPLASH_LITERAL,
-                               _HTML_SPLASH_LITERAL.replace("splash.webp",
-                                                            hashed_name("splash", splash_digest, "webp")), "html")
-        if wasm_digest is not None and "__FN_BUILD__" in h:
-            h = h.replace("__FN_BUILD__", wasm_digest)
-            print("[web-hash] html: __FN_BUILD__ -> {}".format(wasm_digest))
         write_text(html, h)
         print("[web-hash] html: rewrites applied -> fruit-ninja.html")
     else:
@@ -219,7 +209,7 @@ def main():
 
     # --- Step 4: prune stale hashes (keep current) ----------------------------
     for stem, ext, dig in [(STEM, "wasm", wasm_digest), (STEM, "data", data_digest),
-                           (STEM, "js", js_digest), ("splash", "webp", splash_digest)]:
+                           (STEM, "js", js_digest)]:
         if dig is not None:
             for name in prune_stale(out_dir, stem, ext, dig):
                 print("[web-hash] pruned stale: {}".format(name))
@@ -239,7 +229,7 @@ def main():
     print("[web-hash] done.")
     print("[web-hash] current set:")
     for name in sorted(os.listdir(out_dir)):
-        if re.search(r"-[0-9a-f]{8}\.(js|wasm|data|webp)$", name) or name == "fruit-ninja.html":
+        if re.search(r"-[0-9a-f]{8}\.(js|wasm|data)$", name) or name == "fruit-ninja.html":
             print("[web-hash]   {} ({} bytes)".format(name, os.path.getsize(p(name))))
 
     sys.exit(0 if ok else 2)

@@ -3,7 +3,8 @@
      Boot-direct: game starts immediately on load-complete (no tap-to-play cushion).
      Audio starts muted; SFX is enabled on the first in-game gesture (see
      mainEmscripten.cpp one-shot hook); music remains opt-in via in-game toggle.
-     Letterboxed 3:2 canvas, loading progress bar, splash image.
+     Letterboxed 3:2 canvas on a solid black background, centred loading
+     progress bar (no splash image, no shade).
      Required Emscripten placeholder: {{{ SCRIPT }}} -->
 <html lang="en">
 <head>
@@ -114,62 +115,9 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* splash image sits inside #viewport as an absolute sibling
-       of the canvas.  resize() sets its CSS width/height to the same letterboxed
-       dimensions as the canvas (scale*960 x scale*640), so the splash always
-       covers exactly the game viewport rectangle.
-
-       object-fit:fill (NOT cover) matches how the GAME renders its in-game
-       splash: DrawStartFade (src/game/StartupEffects.cpp) draws a unit quad
-       scaled to FN_SCREEN_W x FN_SCREEN_H (480x320) under the game ortho
-       (SetupOrtho(160,-160,-240,240,...)), so the splash quad spans the ENTIRE
-       480x320 logical area = the ENTIRE 960x640 canvas, with no preserved
-       aspect (the texture is stretched to fill the whole 3:2 rect).  The shell
-       splash.webp IS the same asset the game draws: the visible logo region of
-       Data/textures/HB_logo.tex (the v1.6.1 game splash texture) cropped to the
-       game's UV rect (u 0.03125..0.96875, v 0.1875..0.8125 of the 512x512 tex
-       = a 480x320 3:2 region) and re-encoded as WebP.  Earlier this file shipped
-       an unrelated 800x480 (5:3) "(c) 2010 Halfbrick" image; HB_logo.tex reads
-       "(c) 2011 Halfbrick", so the shell and the in-game splash showed two
-       different copyright lines at the WebGL hand-off.  object-fit:fill maps the
-       whole image onto the whole canvas rect exactly like the game's quad, so
-       the hand-off is seamless.
-       The black letterbox bars outside #viewport's flex-centered child area are
-       #viewport's own black background -- the splash never bleeds past the
-       canvas rect.
-       z-index 10 sits above the canvas (which has no explicit z-index). */
-    #splash-img {
-      position: absolute;
-      display: block;
-      object-fit: fill;
-      z-index: 10;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* Loading cover: a black, soft-edged strip that sits over the splash's
-       baked "Loading..." text (z-index 11, above the splash at 10) so the
-       progress bar can replace that label.  border-radius rounds the corners
-       and the black box-shadow spread acts as a same-colour drop shadow that
-       feathers the edges into the dark splash -- no hard rectangle outline.
-       resize() centres it on the "Loading..." label (fLabel) via the same
-       object-fit:cover mapping used for the bar. */
-    #loading-cover {
-      position: absolute;
-      background: #000;
-      border-radius: 12px;
-      /* Asymmetric feather: the negative Y offset shifts the shadow up so the
-         DOWNWARD reach (blur+spread+offsetY = 14+4-8) is only ~10px and stops
-         short of the copyright lines, while the top/sides stay soft (~26px). */
-      box-shadow: 0 -8px 14px 4px #000;
-      z-index: 11;
-      pointer-events: none;
-    }
-
-    /* Progress bar: absolutely positioned inside #viewport, drawn OVER the
-       "Loading..." label -- on top of #loading-cover (z-index 12 > 11).
-       JS resize() maps fLabel through object-fit:cover geometry to compute the
-       screen Y; horizontal centering tracks the canvas width.
+    /* Progress bar: absolutely positioned inside #viewport, vertically centred
+       in the canvas rect (resize() computes barTop from the letterboxed
+       height); horizontal centering tracks the canvas width.
        Style: classic Apple boot-bar -- thin pill track with hairline border,
        solid white fill growing left-to-right.  No gradient, no glow. */
     #progress-bar-wrap {
@@ -313,24 +261,6 @@
        positioning keeps it pinned regardless of letterbox bars; pointer-events
        are its own so taps here never reach the canvas/game.  Semi-transparent
        dark pill with an inline-SVG glyph that JS swaps between enter/exit. */
-    /* build identifier (wasm hash) pinned bottom-left of the loading screen.
-       Always shown over the splash so the loaded build is visible every load
-       (a cache/freshness check); removed together with the splash once the game
-       has rendered its first frame.  position:absolute (inside #viewport, which
-       is position:relative) so the resize() container-relative coords place it
-       on the splash even with the capped/centered game area. */
-    #fn-build {
-      position: absolute;
-      left: 6px;
-      bottom: 4px;
-      z-index: 30;
-      font: 11px/1.2 monospace;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
-      pointer-events: none;
-      display: block;
-      user-select: none;
-    }
     #fullscreen-btn {
       position: fixed;
       top: 10px;
@@ -398,33 +328,21 @@
   </style>
 </head>
 <body>
-  <!-- splash, progress bar, and canvas all live INSIDE
-       the viewport div so they are naturally clipped to the game-viewport
-       rectangle (scale*960 x scale*640, flex-centered with black letterbox bars
-       outside). resize() sets explicit CSS dimensions so they all coincide. -->
+  <!-- progress bar and canvas both live INSIDE the viewport div so they are
+       naturally clipped to the game-viewport rectangle (scale*960 x scale*640,
+       flex-centered with black letterbox bars outside). resize() sets
+       explicit CSS dimensions so they coincide. -->
   <div id="viewport">
     <!-- Canvas: id="canvas" is what Emscripten looks up.  Backing size is
          960x640 (set by SDL_CreateWindow in mainEmscripten.cpp); JS resize()
          sets canvas.style.width/height so the CSS size letterboxes to the
          window without changing the backing resolution, keeping
-         TransformTouchNormalized coords valid. -->
+         TransformTouchNormalized coords valid.  #viewport's black background
+         shows through until the progress bar fades and the game renders. -->
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
-    <!-- Splash image: absolute sibling of canvas inside the viewport div.
-         resize() sizes it identically to the canvas (same letterboxed rect).
-         object-fit:cover fills the 3:2 rect from the 512x512 PNG.
-         Referenced by relative URL -- loads immediately, before .data bundle. -->
-    <img id="splash-img" src="splash.webp" alt="" draggable="false">
-
-    <!-- Loading cover: black, feathered (radius + drop-shadow) strip drawn over
-         the splash's baked "Loading..." text. resize() centres it on the label
-         so the progress bar can replace that text. -->
-    <div id="loading-cover"></div>
-
-    <!-- Progress bar: absolute inside the viewport div.
-         resize() maps fLabel (the "Loading..." label centre in the 512x512
-         splash) through the object-fit:cover transform to find the screen Y,
-         then centers the bar over that label, on top of #loading-cover. -->
+    <!-- Progress bar: absolute inside the viewport div, vertically centred in
+         the canvas rect by resize(). -->
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
     </div>
@@ -465,11 +383,6 @@
         <path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"></path>
       </svg>
     </div>
-
-    <!-- build identifier; __FN_BUILD__ is replaced with the wasm sha8 by
-         tools/web/web-hash-assets.py. Shown over the splash during loading and
-         removed together with the splash once the game has loaded. -->
-    <div id="fn-build">build __FN_BUILD__</div>
   </div>
 
   <!-- Copyright credit / disclaimer: a real <footer> in normal document flow,
@@ -484,17 +397,15 @@
 
   <script>
   /* all overlay elements are inside the viewport div as absolute
-     siblings of the canvas.  resize() sizes the canvas, splash, loading cover,
-     and progress bar to the letterboxed CSS rect.
-     Black letterbox bars outside the 3:2 area are the viewport div's background. */
+     siblings of the canvas.  resize() sizes the canvas and progress bar to
+     the letterboxed CSS rect.  Black letterbox bars outside the 3:2 area are
+     the viewport div's background -- that same black shows through as the
+     "loading" background (no splash image). */
   (function () {
     var GAME_W = 960, GAME_H = 640;
     var viewportEl   = document.getElementById('viewport');
     var canvas       = document.getElementById('canvas');
-    var splashImg    = document.getElementById('splash-img');
-    var loadingCover = document.getElementById('loading-cover');
     var progressWrap = document.getElementById('progress-bar-wrap');
-    var buildOverlay = document.getElementById('fn-build');
 
     function resize() {
       /* Size against the #viewport CONTAINER, not the window: the container
@@ -503,7 +414,7 @@
          game rect.  In fullscreen the container fills the screen and this
          same math letterboxes to the full viewport.  All overlay coords
          below are relative to #viewport (position:relative ancestor of the
-         absolute-positioned splash / cover / bar / build-id). */
+         absolute-positioned progress bar). */
       var ww = viewportEl.clientWidth, wh = viewportEl.clientHeight;
       var scale = Math.min(ww / GAME_W, wh / GAME_H);
       var cw = Math.floor(GAME_W * scale);
@@ -513,73 +424,21 @@
       canvas.style.width  = cw + 'px';
       canvas.style.height = ch + 'px';
 
-      /* Splash: same dimensions as canvas, centered via absolute positioning
-         that mirrors flexbox centering (left/top from center). */
-      if (splashImg) {
-        splashImg.style.width  = cw + 'px';
-        splashImg.style.height = ch + 'px';
-        splashImg.style.left   = Math.floor((ww - cw) / 2) + 'px';
-        splashImg.style.top    = Math.floor((wh - ch) / 2) + 'px';
-      }
-
-      /* Build-id overlay: pin to the SPLASH's bottom-left corner (not the
-         container's) so it sits on the splash image even when letterboxed.
-         (wh-ch)/2 is the gap from the container bottom up to the splash bottom. */
-      if (buildOverlay) {
-        buildOverlay.style.left   = (Math.floor((ww - cw) / 2) + 6) + 'px';
-        buildOverlay.style.bottom = (Math.floor((wh - ch) / 2) + 4) + 'px';
-      }
-
-      /* Loading cover + progress bar: both centre on the splash's baked
-         "Loading..." label so the bar visually replaces that text.
-         The splash is now the cropped HB_logo.tex region (480x320, 3:2) the game
-         itself draws -- the SAME asset, baked "Loading..." text and all.  fLabel
-         is the "Loading..." text centre as a fraction of the splash height.
-         The splash uses object-fit:fill (see #splash-img comment) to match the
-         in-game splash quad, so the whole 480x320 image is mapped onto the whole
-         canvas rect with no crop: the image rect IS the canvas rect.  Both axes
-         scale linearly, so the source-pixel measurements below scale by cw/IMG_W
-         and ch/IMG_H. */
-      var IMG_W = 480, IMG_H = 320;
       var canvasLeft = Math.floor((ww - cw) / 2);
       var canvasTop  = Math.floor((wh - ch) / 2);
-      /* fill: image covers the canvas rect exactly, so the per-axis scale for
-         positioning the cover/bar (which are measured in source-image pixels)
-         is cw/IMG_W horizontally and ch/IMG_H vertically. */
-      var imgScaleX  = cw / IMG_W;
-      var imgScaleY  = ch / IMG_H;
-      var fLabel     = 0.85;   /* "Loading..." text centre in the 800x480 splash */
-      var labelCenterY = Math.round(canvasTop + fLabel * ch);
-
-      /* Black feathered cover over the baked "Loading..." text.  Sized from the
-         measured text box in the 480x320 splash -- the "Loading..." glyphs span
-         ~92x18 px centred at y~0.85 -- plus margin, then scaled per-axis so
-         the cover tracks the splash at every viewport size and always fully
-         blankets the text.  The box-shadow feather (CSS) extends further still. */
-      if (loadingCover) {
-        var coverW = Math.round(133 * imgScaleX);  /* 92px text + ~20px margin/side */
-        var coverH = Math.round(34  * imgScaleY);  /* 18px text + ~8px margin/side */
-        var coverTop = labelCenterY - Math.floor(coverH / 2);
-        loadingCover.style.width  = coverW + 'px';
-        loadingCover.style.height = coverH + 'px';
-        loadingCover.style.left   = (canvasLeft + Math.floor((cw - coverW) / 2)) + 'px';
-        loadingCover.style.top    = coverTop + 'px';
-      }
 
       /* Progress bar: scales linearly with the 480x320 base resolution.
          uiScale maps the letterboxed canvas width back to the 480-wide base
          (cw==480 -> 1x, cw==960 -> 2x), so the bar grows from the centre in
          lock-step with the viewport.  Base bar is 156x4 px at 1x, giving the
          previous 312x8 px at the 960x640 backing size.  Height/border-radius
-         scale too so the pill keeps its proportions at every size. */
+         scale too so the pill keeps its proportions at every size.
+         Centered in the middle of the canvas rect (both axes). */
       if (progressWrap) {
         var uiScale = cw / 480;
         var barW = Math.round(156 * uiScale);
         var barH = Math.max(Math.round(4 * uiScale), 2);
-        var barTop = labelCenterY - Math.floor(barH / 2);
-        /* Clamp so bar stays within the canvas rect. */
-        if (barTop < canvasTop) barTop = canvasTop;
-        if (barTop > canvasTop + ch - barH) barTop = canvasTop + ch - barH;
+        var barTop = canvasTop + Math.floor((ch - barH) / 2);
         progressWrap.style.width        = barW + 'px';
         progressWrap.style.height       = barH + 'px';
         progressWrap.style.borderRadius = Math.round(barH / 2) + 'px';
@@ -598,9 +457,6 @@
 
   var _progressBar  = document.getElementById('progress-bar');
   var _progressWrap = document.getElementById('progress-bar-wrap');
-  var _loadingCover = document.getElementById('loading-cover');
-  var _splashImg    = document.getElementById('splash-img');
-  var _buildOverlay = document.getElementById('fn-build');
   var _fullscreenBtn = document.getElementById('fullscreen-btn');
   var _fullscreenIcon = document.getElementById('fullscreen-icon');
   var _errorOverlay = document.getElementById('error-overlay');
@@ -611,8 +467,8 @@
   var _runtimeReady  = false;
   var _loadFailed    = false;
   var _restartShown  = false;
-  /* Guard so the splash fade runs once even if both the C++ first-frame hook and
-     the _startDirectly safety-timeout call it. */
+  /* Guard so the progress-bar fade runs once even if both the C++ first-frame
+     hook and the _startDirectly safety-timeout call it. */
   var _splashFadeStarted = false;
   /* Anchored at script parse time; updated by Module.setStatus on each progress
      tick.  The stall watchdog compares Date.now() against this value. */
@@ -623,22 +479,21 @@
 
   /* web autoplay -- boot-direct start.
      Called when Module.calledRun is true (runtime loaded, BEFORE game init).
-     Hides the loading UI (progress bar + cover + splash), then immediately
-     signals fn_user_started() so BootWait proceeds without any tap overlay.
+     Hides the loading UI (progress bar), then immediately signals
+     fn_user_started() so BootWait proceeds without any tap overlay.
      Audio starts muted (both flags OFF via GameInitialise.cpp web guard);
      the first in-game gesture enables SFX via the one-shot in mainEmscripten.cpp. */
   function _startDirectly() {
     if (_runtimeReady) return;
     _runtimeReady = true;
-    /* HOLD the loading bar + shadow cover AND the splash up after the download
-       completes. Download-complete only means the wasm runtime started -- the
-       game still has to init and render its first frames, during which the canvas
-       is blank. Keeping the progress bar + shadow over the splash through that gap
-       gives continuous loading indication (instead of a static splash with the
-       baked "Loading..." text re-exposed) until the game has actually rendered, at
-       which point the C++ first-frame hook (mainEmscripten.cpp) calls
-       window._fnFadeSplash() and the bar + shadow + splash fade out together
-       (seamless hand-off to the game's own identical in-game HB_logo splash).
+    /* HOLD the loading bar up after the download completes. Download-complete
+       only means the wasm runtime started -- the game still has to init and
+       render its first frames, during which the canvas is blank. The black
+       viewport/canvas background already covers that gap, and keeping the
+       progress bar up through it gives continuous loading indication until
+       the game has actually rendered, at which point the C++ first-frame
+       hook (mainEmscripten.cpp) calls window._fnFadeSplash() and the bar
+       fades out, uncovering the game underneath.
        (Fading on load-complete -- the older behaviour -- uncovered the still-blank
        canvas for a few frames -> visible flash; deferring to the first rendered
        frame avoids it.) */
@@ -647,7 +502,7 @@
     /* Signal BootWait to proceed -- no tap required. */
     _notifyUserStarted();
     /* Safety net: if the first-frame hook never fires (e.g. init stalls), fade the
-       splash anyway after 3s so it cannot linger forever over a running game. */
+       bar anyway after 3s so it cannot linger forever over a running game. */
     setTimeout(_removeOverlayFade, 3000);
   }
 
@@ -757,59 +612,41 @@
   })();
 
   function _removeOverlayNow() {
-    /* Immediate DOM removal -- called after fade-out transition completes.
-       The held progress bar + loading cover are removed alongside the splash so
-       neither the bar nor the baked "Loading..." text it hid reappears as the
-       splash is torn down. */
+    /* Immediate DOM removal -- called after the fade-out transition completes,
+       so the held progress bar never reappears once the game is showing. */
     if (_progressWrap && _progressWrap.parentNode) _progressWrap.parentNode.removeChild(_progressWrap);
-    if (_loadingCover && _loadingCover.parentNode) _loadingCover.parentNode.removeChild(_loadingCover);
-    if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
-    /* The build-id overlay lives only on the loading screen -- remove it with the splash. */
-    if (_buildOverlay && _buildOverlay.parentNode) _buildOverlay.parentNode.removeChild(_buildOverlay);
   }
 
   function _removeOverlayFade() {
-    /* Fade out the splash (opacity 1 -> 0), then remove from DOM.
+    /* Fade out the progress bar (opacity 1 -> 0), then remove from DOM. The
+       black #viewport/#canvas background is already what's showing behind
+       it, and the game's first frame is already drawn on the canvas
+       underneath, so this fade is the entire loading -> game transition.
        Idempotent: guarded so the C++ first-frame hook and the _startDirectly
        safety-timeout can both call it without double-fading.
-       pointer-events:none is set immediately so the fading splash cannot
-       intercept input during the transition.
        transitionend fires once; setTimeout fallback covers browsers that
        suppress transitionend when the element is already gone or hidden. */
     if (_splashFadeStarted) return;
     _splashFadeStarted = true;
-    /* Fade the held progress bar + shadow cover out together with the splash so
-       the loading UI and the splash hand off to the game as one unit. */
-    if (_progressWrap) {
-      _progressWrap.style.transition = 'opacity 0.3s ease';
-      _progressWrap.style.opacity = '0';
-    }
-    if (_loadingCover) {
-      _loadingCover.style.transition = 'opacity 0.3s ease';
-      _loadingCover.style.opacity = '0';
-    }
-    if (_buildOverlay) {
-      _buildOverlay.style.transition = 'opacity 0.3s ease';
-      _buildOverlay.style.opacity = '0';
-    }
-    if (!_splashImg) { _removeOverlayNow(); return; }
-    _splashImg.style.pointerEvents = 'none';
-    _splashImg.style.transition = 'opacity 0.3s ease';
-    _splashImg.style.opacity = '0';
+    if (!_progressWrap) { _removeOverlayNow(); return; }
+    _progressWrap.style.pointerEvents = 'none';
+    _progressWrap.style.transition = 'opacity 0.3s ease';
+    _progressWrap.style.opacity = '0';
     var _done = false;
     function _onFadeDone() {
       if (_done) return;
       _done = true;
       _removeOverlayNow();
     }
-    _splashImg.addEventListener('transitionend', _onFadeDone);
+    _progressWrap.addEventListener('transitionend', _onFadeDone);
     /* 350ms fallback: slightly longer than the 0.3s CSS transition. */
     setTimeout(_onFadeDone, 350);
   }
 
   /* web (#73) -- exposed so the C++ first-frame hook
-     (mainEmscripten.cpp EmscriptenFrame) can trigger the splash fade once the
-     canvas has actually rendered content, masking the few-frame blank flash. */
+     (mainEmscripten.cpp EmscriptenFrame) can trigger the progress-bar fade
+     once the canvas has actually rendered content, masking the few-frame
+     blank flash. */
   window._fnFadeSplash = _removeOverlayFade;
 
   function _notifyUserStarted() {
