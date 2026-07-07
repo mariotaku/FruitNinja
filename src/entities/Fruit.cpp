@@ -318,24 +318,26 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         SetFruitType(m_FruitType, 1.0f);
     }
 
-    // ASM-spec v1.6.1 Fruit::Init @0x001e2898.
-    // Arcade-only (gameMode==2, m_PauseAmount<1.0) duplicate-pineapple + power-fruit
-    // spam gate. Runs BEFORE the g_PowerFruitCount increment so the kill branch
-    // doesn't need an undo-decrement.
+    // ASM-spec v1.6.1 Fruit::Init @0x001e2898: power-fruit spawn gate =
+    // NumberOfPowerupFruits() < 2 (live scan @0x001db0ac), freeze exempt, re-roll "banana".
     if (game_work.gameMode == 2 && game_work.m_PauseAmount < 1.0f) {
-        // (1) Re-roll while we'd spawn another black_pineapple this frame.
-        //     BOMB_PINEAPPLE binary literal -> port "black_pineapple" per fruitlist.xml.
-        static const int kBlackPineappleType = Fruit::FruitType("black_pineapple", false);
-        while ((int)m_FruitType == kBlackPineappleType) {
+        // (1) Re-roll while we'd spawn a plain banana this frame (DAT_00280768 = "banana";
+        //     the banana model is reserved for the power-fruit skin, never a plain fruit).
+        static const int kBananaType = Fruit::FruitType("banana", false);
+        while ((int)m_FruitType == kBananaType) {
             m_FruitType = (uint8_t)Fruit::RandomFruit(true);
         }
 
-        // (2) Power-fruit spam gate. Pre-increment test.
+        // (2) Power-fruit spam gate. Live scan, not the write-only g_PowerFruitCount
+        // (that counter goes stuck >=1 whenever a fruit is destroyed without KillFruit,
+        // permanently insta-killing every subsequent power-fruit). The scan counts
+        // active power-fruits including self (this fruit is already registered in
+        // ActorManager by the time Init runs), so >=2 means "another one is already live".
         const FruitInfoData* gateInfo = FruitInfo_Get(m_FruitType);
         if (gateInfo && gateInfo->m_pPowers) {
-            static const uint32_t kScoreMultHash = StringHash("score_mult");
+            static const uint32_t kFreezeHash = StringHash("freeze");
             bool kill = false;
-            if (g_PowerFruitCount > 0) {
+            if (NumberOfPowerupFruits() >= 2) {
                 kill = true;
             } else {
                 const float tRem = (game_work.m_SaveData
@@ -343,7 +345,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
                                     : 0.0f);
                 if (tRem < 8.0f
                         && gateInfo->m_pPowers->m_pArray
-                        && gateInfo->m_pPowers->m_pArray[0].m_PowerHash != kScoreMultHash) {
+                        && gateInfo->m_pPowers->m_pArray[0].m_PowerHash != kFreezeHash) {
                     kill = true;
                 } else if (gateInfo->m_pPowers->AnyActivePowers()) {
                     kill = true;

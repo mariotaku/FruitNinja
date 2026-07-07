@@ -35,6 +35,35 @@ void SPAWNER_INFO::SelectTypes() {
     }
 }
 
+// ASM-verified: 2026-07-06 v1.6.1 SPAWNER_INFO::GetRandCount @0x0012df30 (re-analyst).
+// Random spawn count in [lo,hi]. lo/hi grow with the wave revisit counter; the low
+// bound uses m_MinGrowthInc (+0x3c, unwritten by Init -> 0), the high bound m_GrowthInc (+0x44).
+int SPAWNER_INFO::GetRandCount(float waveRevisitCounter) {
+    int lo = (int)(m_SpawnMin + waveRevisitCounter * m_MinGrowthInc);
+    int hi = (int)(m_SpawnMax + waveRevisitCounter * m_GrowthInc);
+    int range = hi - lo;
+    if (range < 1) return lo;
+    return lo + (int)WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)range);
+}
+
+// ASM-verified: 2026-07-06 v1.6.1 SPAWNER_INFO::ResetDelay @0x0012dfa0 (re-analyst).
+// m_SpawnTimer = max(0, m_Delay + revisit*m_DelayInc). The revisit term is ADDED (vmla).
+void SPAWNER_INFO::ResetDelay(float waveRevisitCounter) {
+    float t = m_Delay + waveRevisitCounter * m_DelayInc;
+    if (t < 0.0f) t = 0.0f;
+    m_SpawnTimer = t;
+}
+
+// ASM-verified: 2026-07-06 v1.6.1 SPAWNER_INFO::Reset @0x0012dfc8 (re-analyst).
+void SPAWNER_INFO::Reset(float waveRevisitCounter) {
+    float count = (float)GetRandCount(waveRevisitCounter);
+    m_reserved58     = 0;
+    m_RemainingCount = (int)count;
+    m_SpawnCountF    = count;
+    SelectTypes();
+    ResetDelay(waveRevisitCounter);
+}
+
 // ASM-spec v1.6.1 PROBABILITY_OVERIDE::SelectType @0x00121000.
 // Populates m_TypeQueue[] from m_Types string names.
 // Same two lazy-init guarded statics as SelectTypes above (Bomb / 1fruit hashes).

@@ -60,11 +60,14 @@ struct SPAWNER_INFO {
     uint8_t                  _pad35[3];
     // +0x38: "min" attr
     float                    m_SpawnMin;         // +0x38
-    // +0x3c: binary ctor=0, not written by Init
-    float                    m_SpawnMax_unused;  // +0x3c
+    // +0x3c: min-growth-inc (revisit multiplier for the low spawn-count bound).
+    // v1.6.1 SPAWNER_INFO::GetRandCount @0x0012df30 reads this: lo = (int)(m_SpawnMin + revisit*m_MinGrowthInc).
+    // Never written by Init (both "mininc"/"maxinc" write +0x44), so it stays ctor 0 -> lo has no growth. Binary-faithful.
+    float                    m_MinGrowthInc;     // +0x3c
     // +0x40: "max" attr
     float                    m_SpawnMax;         // +0x40
-    // +0x44: mininc AND maxinc BOTH write here (maxinc wins); single slot in binary.
+    // +0x44: max-growth-inc (revisit multiplier for the high bound in GetRandCount).
+    // mininc AND maxinc BOTH write here (maxinc wins); single slot in binary.
     float                    m_GrowthInc;        // +0x44
     // +0x48: "delay" attr (chuck delay base, XML attr name "delay")
     float                    m_Delay;            // +0x48
@@ -92,7 +95,7 @@ struct SPAWNER_INFO {
         , m_HorizMin(-1.0f), m_HorizMax(1.0f)
         , m_SpawnType(PLACEMENT_BOTTOM)
         // ASM-verified: v1.6.1 SPAWNER_INFO::SPAWNER_INFO @0x00122ec4 sets m_SpawnMin=0.0, m_SpawnMax=0.0
-        , m_SpawnMin(0.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(0.0f)
+        , m_SpawnMin(0.0f), m_MinGrowthInc(0.0f), m_SpawnMax(0.0f)
         , m_GrowthInc(0.0f)
         , m_Delay(0.0f), m_DelayInc(0.0f)
         , m_RemainingCount(0), m_SpawnCountF(0.0f), m_reserved58(0)
@@ -115,17 +118,21 @@ struct SPAWNER_INFO {
     // Fruit::RandomFruit(false) resolved once here; else Fruit::FruitType(name,false).
     void SelectTypes();
 
-    // Reset spawner for a new wave. waveRevisitCounter = wave->m_RevisitCounter.
-    void Reset(float waveRevisitCounter) {
-        float spawnCount = m_SpawnMin + m_GrowthInc * waveRevisitCounter;
-        float spawnMax   = m_SpawnMax + m_GrowthInc * waveRevisitCounter;
-        (void)spawnMax;
-        m_SpawnCountF    = spawnCount;
-        m_RemainingCount = (int)spawnCount;
-        float delay = m_Delay - m_DelayInc * waveRevisitCounter;
-        if (delay < 0.0f) delay = 0.0f;
-        m_SpawnTimer = delay;
-    }
+    // v1.6.1 SPAWNER_INFO::GetRandCount @0x0012df30. Returns a RANDOM spawn count in
+    // [lo,hi]: lo=(int)(m_SpawnMin + revisit*m_MinGrowthInc), hi=(int)(m_SpawnMax +
+    // revisit*m_GrowthInc); count = lo + ((hi-lo)<1 ? 0 : Rand32(hi-lo)), where the RNG
+    // is WaveManager::GetInstance()->GetRandom(). (The previous port always used lo.)
+    int  GetRandCount(float waveRevisitCounter);
+
+    // v1.6.1 SPAWNER_INFO::ResetDelay @0x0012dfa0. m_SpawnTimer = max(0, m_Delay +
+    // revisit*m_DelayInc). NOTE: the revisit term is ADDED (binary vmla), not subtracted.
+    void ResetDelay(float waveRevisitCounter);
+
+    // v1.6.1 SPAWNER_INFO::Reset @0x0012dfc8. Reset spawner for a new wave;
+    // waveRevisitCounter = wave->m_RevisitCounter. Order: count=GetRandCount(revisit);
+    // m_reserved58=0; m_RemainingCount/m_SpawnCountF=count; SelectTypes() (resolves ONE
+    // fixed fruit type per wave for a "1fruit" spawner); ResetDelay(revisit).
+    void Reset(float waveRevisitCounter);
 };
 
 // WaveInfo — size 0x78 (120 bytes).
@@ -170,8 +177,9 @@ struct WaveInfo {
     // +0x3c: "chance" attr (selection weight)
     int                      m_Chance;           // +0x3c
     // +0x40: running copy of m_Chance; ResetWaveChances writes +0x40 = +0x3c
-    // ASM-verified: v1.6.1 WaveManager::ResetWaveChances @0x0012b87c writes +0x40 = +0x3c
-    // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined; no standalone symbol)
+    // ASM-verified: v1.6.1 WaveManager::ResetWaveChances @0x0012b8c0 writes +0x40 = +0x3c.
+    // NOTE: WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0 does NOT write +0x40; it is
+    // seeded to m_Chance either by ResetWaveChances or by WaveManager::Init post-parse.
     // Replaces former port-tail field m_CurrentMax (which was off-struct).
     int                      m_CurrentChance;    // +0x40
     // +0x44: "chanceRegrowth" attr
@@ -211,11 +219,13 @@ struct WaveInfo {
         , m_NextWaveDelay(2.0f), m_NextWaveDelayInc(0.0f)
         , m_NextWaveWait(0.0f), m_reserved2c(0.0f)
         , m_NextWaveWaitSpInc(0.0f)
-        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); revisit counter starts at 1.
-        , m_RevisitCounter(1.0f)
-        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); sets BOTH to 1.
+        // ASM-verified: 2026-07-06 v1.6.1 WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0 (re-analyst):
+        // the ctor stores flM_RevisitCounter = 0.0 (not 1.0). ResetWaveChances @0x0012b8c0 later
+        // sets it to 1.0 at Reset; the ctor default is 0.0.
+        , m_RevisitCounter(0.0f)
+        // v1.6.1 WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0 copies BOTH wait flags from <defaults>.
         , m_bWaitForEntities(1), m_bWaitForProcessing(1)
-        // TODO: re-verify v1.6.1 WAVE_INFO::WAVE_INFO ctor address (inlined); m_Chance=10, m_ChanceRegrowth=0.25
+        // v1.6.1 WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0: m_Chance<-waveChance(10), m_ChanceRegrowth<-waveChanceRegrowth(0.25)
         , m_Chance(10), m_CurrentChance(10)
         , m_ChanceRegrowth(0.25f), m_CurrentRegrowth(0.25f)
         , m_GamesMin(-1), m_GamesMax(-1)
@@ -234,13 +244,15 @@ struct WaveInfo {
 };
 
 // DEFAULT_WAVE_INFO — size 0x40 (64 bytes), stored at WaveManager+0xdc per mode.
-// ASM-verified: 2026-05-27 v1.6.1 binary @ 0x0012630c (re-analyst) -- Reset writes all defaults.
-// WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) @ 0x001267c8 copies these into per-wave WAVE_INFOs.
+// ASM-verified: 2026-07-06 v1.6.1 DefaultWaveInfo::Reset @0x00126fa8 (re-analyst) -- writes all defaults.
+// WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0 copies these into per-wave WaveInfos.
 struct DEFAULT_WAVE_INFO {
     int     m_WaveChance;            // +0x00 XML "waveChance"           default 10
     float   m_WaveChanceRegrowth;    // +0x04 XML "waveChanceGrowth"     default 0.25
-    float   m_SpawnTimeScale;        // +0x08 XML "dt"                   default 1.0  (-> WAVE_INFO+0x10 m_WaveDt)
-    float   m_CritChanceVal;         // +0x0c XML "criticalChance"       default 1.0  (-> WAVE_INFO+0x64 m_CriticalChance)
+    // +0x08/+0x0c disasm-verified SWAPPED vs earlier port: Init parses criticalChance->+0x08,
+    // dt->+0x0c; the ctor @0x0012a9f0 flows +0x08 -> WaveInfo m_CriticalChance and +0x0c -> m_WaveDt.
+    float   m_CritChanceVal;         // +0x08 XML "criticalChance"       default 1.0  (-> WAVE_INFO+0x64 m_CriticalChance)
+    float   m_SpawnTimeScale;        // +0x0c XML "dt"                   default 1.0  (-> WAVE_INFO+0x10 m_WaveDt)
     float   m_DtInc;                 // +0x10 XML "dtInc"                default 0.0
     float   m_DtSpInc;               // +0x14 XML "dtSpInc"              default 0.0
     float   m_BeforeDelay;           // +0x18 XML "beforeDelay"          default 2.0
@@ -269,8 +281,8 @@ struct DEFAULT_WAVE_INFO {
     DEFAULT_WAVE_INFO()
         : m_WaveChance(10)
         , m_WaveChanceRegrowth(0.25f)
-        , m_SpawnTimeScale(1.0f)
         , m_CritChanceVal(1.0f)
+        , m_SpawnTimeScale(1.0f)
         , m_DtInc(0.0f)
         , m_DtSpInc(0.0f)
         , m_BeforeDelay(2.0f)
