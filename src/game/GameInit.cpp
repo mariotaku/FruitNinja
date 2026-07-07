@@ -887,6 +887,12 @@ void GameDraw(float dt, bool active) {
         // HUD::Draw(0x08) -- buttons (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
+        // ASM-spec v1.6.1 GameDraw @0x001cd720: pass order 0x08 -> 0x400 -> PostEffects
+        // -> CritHit -> 0x100 -> DrawBombHit -> 0x200. Binary draws HUD::Draw(0x400) here,
+        // BEFORE the bomb-hit white flash -- so game-over fact-board text (layer 0x400)
+        // is covered by the flash on quit instead of popping on top of it. (#35)
+        game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
+
         // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720)
         game_work.mMainScreen->DrawPostEffects();
 
@@ -921,10 +927,6 @@ void GameDraw(float dt, bool active) {
         FN::DebugHUDBounds_Draw();
         FN::DebugBladeTrails_Draw();
 #endif
-
-        // HUD::Draw(0x400) -- top layer (v1.6.1 GameDraw @0x001cd720), ALWAYS fires
-        // (binary places it OUTSIDE the `active` block).
-        game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
 
         // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
         // Restore ScreenEffect-modified values so the next SetDefaults reset starts from

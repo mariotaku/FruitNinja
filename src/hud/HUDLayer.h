@@ -6,10 +6,11 @@
 //
 // HUDControl::m_LayerFlags bit semantics.
 //
-// Catalogued from binary RE 2026-05-10 (re-analyst). HUD::Draw(layerMask)
-// iterates active HUDControls and tests `(layerMask & m_LayerFlags) != 0`.
-// GameDraw @ 0x0016B888 invokes HUD::Draw seven times in this chronological
-// order, interleaved with fixed (non-layer-dispatched) draws:
+// Catalogued from binary RE (re-analyst), re-verified against v1.6.1 GameDraw
+// @0x001cd720 for task #35 (game-over text popping through the bomb-hit flash
+// on quit). HUD::Draw(layerMask) iterates active HUDControls and tests
+// `(layerMask & m_LayerFlags) != 0`. GameDraw invokes HUD::Draw eight times in
+// this chronological order, interleaved with fixed (non-layer-dispatched) draws:
 //
 //   1.  HUD::BeginDraw(dt)
 //   2.  HUD::Draw(0x40)   — menu fruit backdrop
@@ -27,14 +28,19 @@
 //   14. pm.Draw(1)                              — particles, foreground tier
 //   15. WaveManager::Draw(0)
 //   16. HUD::Draw(0x08)   — pause / notifications / tutorial
-//   17. MainScreen::DrawPostEffects() (conditional)
-//   18. DrawCritHit() (conditional)
-//   19. HUD::Draw(0x100)  — multiplayer P1 score
-//   20. DrawBombHit() (conditional)
-//   21. HUD::Draw(0x200)  — slider / freeze flash
-//   22. NetworkManager::DrawNews() (conditional, defunct in port)
-//   23. DrawStartFade() (conditional)
-//   24. HUD::Draw(0x400)  — screen fade / modal scrollers / keyboard popup
+//   17. HUD::Draw(0x400)  — screen fade / modal scrollers / keyboard popup.
+//       Drawn HERE, BEFORE the bomb-hit white flash -- NOT last. This is why
+//       the game-over fact-board text (layer 0x400) despawns under the flash
+//       on quit in the binary, instead of popping on top of it.
+//   18. MainScreen::DrawPostEffects() (conditional)
+//   19. DrawCritHit() (conditional)
+//   20. HUD::Draw(0x100)  — multiplayer P1 score
+//   21. DrawBombHit() (conditional)              — bomb-hit white flash
+//   22. HUD::Draw(0x200)  — slider / freeze flash
+//   23. NetworkManager::DrawNews() (conditional, defunct in port)
+//   24. DrawStartFade() (conditional)
+//   25. HUD::Draw(0x800)  — top-most overlay, fires unconditionally at the very
+//       end of GameDraw, OUTSIDE the active-guard (see item below).
 //
 // HUDControl::HUDControl ctor (binary @ 0x00144104) defaults m_LayerFlags=1.
 // Subclass ctors / Init may overwrite. Bits 0x02, 0x04, 0x10, 0x20 are
@@ -84,13 +90,15 @@ enum HUDLayer : uint32_t {
     // Writers: SliderControl ctor.
     HUD_LAYER_SLIDER      = 0x0200,
 
-    // 0x400 — screen fade + modal scrollers (drawn LAST, on top of all).
-    // Writers: ScreenFadeControl, ListBox, VerticalScroller, NotificationControl.
+    // 0x400 — screen fade + modal scrollers. Drawn right after 0x08 (buttons),
+    // BEFORE DrawPostEffects/DrawCritHit/DrawBombHit -- NOT last (v1.6.1
+    // GameDraw @0x001cd720; task #35). Writers: ScreenFadeControl, ListBox,
+    // VerticalScroller, NotificationControl.
     HUD_LAYER_FADE_MODAL  = 0x0400,
 
     // 0x800 — top-most overlay; maps to drawOrder="top_most" in effect XML
-    // (EffectImage::Parse table @0x2d8bf0, v1.6.1). No HUD::Draw caller for
-    // this bit observed in gameplay yet; reserved for effect images only.
+    // (EffectImage::Parse table @0x2d8bf0, v1.6.1). Fires unconditionally at
+    // the very end of GameDraw @0x001cd720, outside the active-guard.
     HUD_LAYER_TOP_MOST    = 0x0800,
 };
 

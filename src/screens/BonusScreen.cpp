@@ -5,6 +5,7 @@
 
 #include "BonusScreen.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "game/GameWork.h"
 #include "engine/audio/MortarSound.h"
@@ -104,6 +105,13 @@ BonusScreen::BonusScreen()
       m_Timer(-TRANSITION_IN_TIME),
       m_AnimPos(0.0f, 0.0f, 0.0f)
 {
+    // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162d1c: m_LayerFlags =
+    // HUD_LAYER_POST_ACTOR (0x80) -- draws before the particle passes so
+    // bonus FX land in front. HUDControl ctor default (0x01) would otherwise
+    // leave this drawing under GameDraw's HUD_LAYER_DEFAULT pass, AFTER the
+    // particle tiers.
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
+
     m_RankLabelBoxes[0] = nullptr;
     m_RankLabelBoxes[1] = nullptr;
     m_RankLabelBoxes[2] = nullptr;
@@ -213,41 +221,43 @@ void BonusScreen::Shake(float duration, float amplitude) {
 void BonusScreen::UnLoadContent() {}
 
 // ---------------------------------------------------------------------------
-// AwardScores -- v1.6.1 BonusScreen::AwardScores @ 0x0015393c.
+// AwardScores -- v1.6.1 BonusScreen::AwardScores @ 0x0016393c.
 // One-shot finale: 1-2 coin bursts (Coin::MakeCoins), a camera shake, an
 // "impact_fx" particle emitter, and an "equip-unlock" SFX.
 // ---------------------------------------------------------------------------
 
 void BonusScreen::AwardScores() {
-    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0015393c: base = pos + m_AnimPos
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: base = pos + m_AnimPos
     // + Vec3(-230,150,0) -- same constant reused for the coin spawn point, the
     // camera shake impact vector, and the particle emitter position below.
     Vec3 base = pos + m_AnimPos + Vec3(-230.0f, 150.0f, 0.0f);
 
     int total = m_TotalScore;
-    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- delayVec/baseAngle/
-    // angleSpread/delayStep/delayCap/flyFXName/collectFXName args below are
-    // provisional (reused from the analogous already-verified combo-coin burst
-    // at SlashEntity.cpp:1911-1915, same angleSpread=0xff3a full-circle constant
-    // as Shake()'s Rand32 range); asm-inspector needed to confirm the exact
-    // literals this call site uses, and whether the >=6 branch's second burst
-    // spawns from a distinct "base2" position (not yet resolved -- reusing
-    // `base` here rather than guessing a second position).
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: flyFXName/collectFXName
+    // literal refs @0x001639f4/0x00163a0c (<6 branch) and @0x00163ad8/0x00163ba4
+    // (>=6 branch) resolve to "bonus_star_trail"/"bonus_star_impact"; delayStep/
+    // delayCap are -0.05f/-0.3f for the <6 branch and -0.05f/-0.5f for the >=6
+    // branch (both bursts in that branch share the branch's tuning).
+    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- baseAngle/angleSpread
+    // (0, 0xff3a) reused from the analogous already-verified combo-coin burst at
+    // SlashEntity.cpp:1911-1915 pending asm-inspector confirmation; whether the
+    // >=6 branch's second burst spawns from a distinct "base2" position is also
+    // unresolved (reusing `base` here rather than guessing a second position).
     if (total < 6) {
-        Coin::MakeCoins(total, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                         &base, 0.02f, 0.15f, nullptr, nullptr,
+        Coin::MakeCoins(total, 6, Vec3(-0.05f, -0.3f, 0.0f), 0, 0xff3a,
+                         &base, -0.05f, -0.3f, "bonus_star_trail", "bonus_star_impact",
                          Coin::DefaultArrivedDelegate(), false);
     } else {
-        Coin::MakeCoins(6, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                         &base, 0.02f, 0.15f, nullptr, nullptr,
+        Coin::MakeCoins(6, 6, Vec3(-0.05f, -0.5f, 0.0f), 0, 0xff3a,
+                         &base, -0.05f, -0.5f, "bonus_star_trail", "bonus_star_impact",
                          Coin::DefaultArrivedDelegate(), false);
         total = m_TotalScore;  // re-read (unchanged, just re-fetched -- matches binary)
-        Coin::MakeCoins(total - 6, 6, Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                         &base, 0.02f, 0.15f, nullptr, nullptr,
+        Coin::MakeCoins(total - 6, 6, Vec3(-0.05f, -0.5f, 0.0f), 0, 0xff3a,
+                         &base, -0.05f, -0.5f, "bonus_star_trail", "bonus_star_impact",
                          Coin::DefaultArrivedDelegate(), false);
     }
 
-    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- Ghidra's decompile of
+    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- Ghidra's decompile of
     // the CreateCameraShake args (impact=(0.3,1.0,extraout_s2)) is flagged as a
     // likely VFP-tracking artifact by the RE report; using the analogous
     // already-ported constant from AddToScoreOnArrival (Coin.cpp) instead.
@@ -264,7 +274,7 @@ void BonusScreen::AwardScores() {
 
     GetCurrentScore(0);  // ASM-spec: call only, return value unused here (cache refresh side-effect).
 
-    // TODO: v1.6.1 0x0015393c (BonusScreen::AwardScores) -- SFXPlay's exact
+    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- SFXPlay's exact
     // vol/gain/pitch args and whether a finishCallback is passed are unresolved
     // (Ghidra shows one confirmed 1.0f literal, second float unclear); using
     // the vol=1.0f,gain=1.0f default pattern seen elsewhere (e.g. Coin.cpp

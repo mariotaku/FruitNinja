@@ -133,7 +133,7 @@ static void DoSetTerminate(GameOverScreen* self) {
 // the binary (QuitToMenu @0x001cb6e4) never hops task state or tears down HUD/WaveManager;
 // GameExit @0x001cfed4 runs only on real app exit. #179
 // STATE_QUIT_WAIT gates on GetNumEntities(0)==0, so in-game fruit are already flung by
-// ResetGameEntities (via Bomb::HitMenuBomb -> UpdateBombHit @0x0016a1a8 1.5s threshold)
+// ResetGameEntities (via Bomb::HitMenuBomb -> UpdateBombHit @0x001cbbac 1.5s threshold)
 // before this fires. No taskStateIndex hop or WaveManager::Destroy needed here.
 static void DoQuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);

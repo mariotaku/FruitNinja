@@ -22,7 +22,7 @@ public:
 
     void Init();                                // v1.6.1 BonusManager::Init @0x0012f53c
     void ClearBestBonuses();                    // Binary @ 0x000feb20
-    void SetUpBonusScreen(BonusScreen* screen); // Binary @ 0x0010e404
+    void SetUpBonusScreen(BonusScreen* screen); // v1.6.1 BonusManager::SetUpBonusScreen @0x0012ede8
     void AddCombo(int comboLen);                // Binary @ 0x0010de24
     bool UnlockPostGameAchievements();          // Binary @ 0x0010e1cc
 
