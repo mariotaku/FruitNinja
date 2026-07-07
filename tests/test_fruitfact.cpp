@@ -536,13 +536,20 @@ static int RunFruitFactZen(fn::TestHarness& h) {
         return 1;
     }
 
-    // Seeded with 4-fruit combo + highscore 400 < 456 -> NEW BEST fires.
+    // Seeded with an N-fruit combo (--combo=N, default 4) + highscore 400 < 456
+    // -> NEW BEST fires. combo>2 = hasCombo branch (fruit icons + star); combo<=2
+    // = the no-combo branch (matches the in-game zen game-over when best combo is
+    // not recorded).
+    int comboLen = h.OptInt("combo", 4);
     FruitSaveData zenSave;
-    zenSave.m_BestComboLength = 4;
-    zenSave.m_BestComboFruits[0] = 0;
-    zenSave.m_BestComboFruits[1] = 1;
-    zenSave.m_BestComboFruits[2] = 2;
-    zenSave.m_BestComboFruits[3] = 0;
+    zenSave.m_BestComboLength = comboLen;
+    // Seed one valid fruit type per combo slot (cycle apple/banana/orange) so
+    // combos > 4 render every icon -- the array holds 11 (unseeded = -1 = no icon).
+    int nFruits = comboLen;
+    if (nFruits > 11) nFruits = 11;
+    for (int fi = 0; fi < nFruits; ++fi) {
+        zenSave.m_BestComboFruits[fi] = fi % 3;
+    }
     zenSave.m_ModeHighScores[Mortar::GAME_MODE_ZEN] = 400;
     zenSave.newBestThisGame = 1;
 
@@ -579,8 +586,11 @@ static int RunFruitFactZen(fn::TestHarness& h) {
         return h.Shutdown();
     }
 
-    // 60 frames with per-layer passes.
-    for (int i = 0; i < 60; ++i) {
+    // Settle long enough to cover the staggered zen icon+star fade (0.25s per
+    // icon; star fadeIn = final icon's), which scales with comboLen. A fixed
+    // 60-frame settle hid later icons/star for higher combos.
+    int settle = (int)((0.25f * comboLen + 2.0f) * 60.0f) + 10;
+    for (int i = 0; i < settle; ++i) {
         game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 456;
         h.RunComponentHeadlessMultiPass(1);
