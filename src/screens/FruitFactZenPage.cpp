@@ -242,9 +242,8 @@ void FruitFactZenPage::Init() {
                 // TODO: v1.6.1 FruitFactZenPage::Init @0x00180320 -- c1pos.x -= box1->m_BakedWidth/2; c1pos.y -= box1->m_BakedHeight/2
                 //   (field_0x24 / field_0x28 in BakedStringBox); using declared ctor dims (160, 40) as
                 //   approximation until BakedStringBox layout is confirmed.
-                c1pos.x -= 80.0f;
-                c1pos.y -= 20.0f;
-                c1->pos = c1pos;
+                c1->m_BasePos.x -= 80.0f;
+                c1->m_BasePos.y += 20.0f;   // binary subtracts (w/2, -h/2, 0) => +h/2 on Y
             }
             AddGenericControl(c1);
         }
@@ -269,6 +268,8 @@ void FruitFactZenPage::Init() {
                 box2->SetText("_");                   // DAT_00180ee8 @ 0x00281E11 = "_"
                 box2->SetHorizontalLineSpacing(-1);
                 c2->SetText(box2);
+                c2->m_BasePos.x -= 173.0f;
+                c2->m_BasePos.y += 20.0f;
             }
             AddGenericControl(c2);
         }
