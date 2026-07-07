@@ -165,7 +165,10 @@ void FruitFactZenPage::Init() {
         // Combo star classification from the just-filled m_Facts array.
         int outDominant = 0;
         m_ComboLevel = FruitFact::CheckCombo(m_Facts, comboCount, &outDominant);
-        Mortar::SmartPtr<Mortar::Texture> starTex = GetComboStarTexture((COMBO_TYPE)m_ComboLevel);
+        // Binary stores GetComboStarTexture's result in the write-only member at +0xd0
+        // (m_pComboStarTexture) and NEVER draws it -- the star visual is the "* {name}"
+        // font text below, not this sprite. Keeping the load faithful holds the ref.
+        m_pComboStarTexture = GetComboStarTexture((COMBO_TYPE)m_ComboLevel);
 
         // Star position: if span < 140.0 (DAT_1806dc), use compressed X; else stagger=42.0 (DAT_1806e8).
         float starX;
@@ -182,8 +185,11 @@ void FruitFactZenPage::Init() {
         float starFadeOut = starFadeIn + 0.5f;
         Vec3 scStar(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
         Colour colStar(255, 255, 255, 255);
-        // Star + label are the same GenericHUDControl in the binary (pGVar5).
-        GenericHUDControl* cStar = new GenericHUDControl(starFadeIn, starFadeOut, starTex, NULL, starPos, scStar, colStar, 0x400);
+        // Star + label are the same GenericHUDControl in the binary (pGVar5). The binary
+        // builds this control with NO texture -- the star sprite is never drawn; only the
+        // "* {localized name}" BakedStringBox text below renders. Pass an empty texture.
+        Mortar::SmartPtr<Mortar::Texture> emptyStarTex;
+        GenericHUDControl* cStar = new GenericHUDControl(starFadeIn, starFadeOut, emptyStarTex, NULL, starPos, scStar, colStar, 0x400);
         // Binary: T_1022 default block memcpy'd to cStar+0x28 (6 words = 0x18 bytes).
         // GenericHUDControl ctor already zero-initializes all TranisitionInfo/PulseInfo fields; no-op.
         cStar->AddSound("achievement", 1.0f, 0.0f);  // DAT_00180704 @ 0x0027F593
