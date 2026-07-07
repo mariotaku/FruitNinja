@@ -325,6 +325,27 @@
     body.is-fullscreen #credit {
       display: none !important;
     }
+
+    /* MOBILE LANDSCAPE: iOS Safari has no Fullscreen API, so .is-fullscreen never
+       gets set there and the game stays capped with the footer showing, wasting
+       space. On a touch device held in landscape, apply the same maximisation as
+       fullscreen WITHOUT needing the API: drop the 90% width cap so the 3:2 canvas
+       fills the viewport, and hide the footer credit. The window 'resize' listener
+       re-letterboxes the canvas to the new #viewport size. Selector mirrors the
+       non-fullscreen cap rule so specificity ties and this later rule wins.
+       (hover:none + pointer:coarse targets phones/tablets, so desktop landscape --
+       where the fullscreen button works -- keeps its chrome.) */
+    @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+      body:not(.is-fullscreen) #viewport {
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        margin: 0;
+      }
+      #credit {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
