@@ -1852,6 +1852,7 @@ void SlashEntity::Update(float dt) {
     //     m_ComboCount tracks the current combo swing length.
     // =====================================================================
     {
+        // ASM-verified v1.6.1 SlashEntity::Update combo-resolve @0x001e90d8: gate/save on m_ComboCounter (+0x17c), not m_ComboCount (+0x178, always -1). Restores combos/achievements/coins in all modes.
         static const float kComboFireThresh = 0.095f;   // DAT_001e9224
         static const float kComboIdleValue  = 0.1f;     // DAT_001e9220
         if (m_ComboTimer >= kComboIdleValue) {
@@ -1868,25 +1869,25 @@ void SlashEntity::Update(float dt) {
                 m_ComboTimer = kComboIdleValue;
                 // Fire g_OnComboCancel -- ComboModifier::ComboWasCanceled subscribes.
                 g_OnComboCancel(this);
-                if (m_ComboCount > 1 && m_ComboFruitTypes[0] >= 0) {
+                if (m_ComboCounter > 1 && m_ComboFruitTypes[0] >= 0) {
                     // (a) Score-threshold refund.
                     {
-                        int threshold = game_work.m_ScoreThreshold - m_ComboCount;
+                        int threshold = game_work.m_ScoreThreshold - m_ComboCounter;
                         if (threshold < 2) threshold = 2;
                         game_work.m_ScoreThreshold = threshold;
                     }
                     // (b) Combo body: only if count > 2 AND m_ComboFruitTypes[1] >= 0.
-                    if (m_ComboCount > 2 && m_ComboFruitTypes[1] >= 0) {
+                    if (m_ComboCounter > 2 && m_ComboFruitTypes[1] >= 0) {
                         if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                             LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
-                                       m_ComboCount, (float)m_ComboCount / 3.0f);
+                                       m_ComboCounter, (float)m_ComboCounter / 3.0f);
                             WaveManager::GetInstance()->AddSpeed(
-                                (float)m_ComboCount / 3.0f, 0);
-                            AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, true);
+                                (float)m_ComboCounter / 3.0f, 0);
+                            AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, true);
                         } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboOnlineMode != 2) {
-                            AddToCurrentScore(m_ComboCount, m_ComboOnlineMode, true, false);
+                            AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, false);
                         }
-                        BonusManager::GetInstance()->AddCombo(m_ComboCount);
+                        BonusManager::GetInstance()->AddCombo(m_ComboCounter);
                         if (game && game_work.m_SaveData) {
                             char buf[64];
                             snprintf(buf, sizeof(buf), "%s_combos", GetModeName((GAME_MODE)game_work.gameMode));
@@ -1895,7 +1896,7 @@ void SlashEntity::Update(float dt) {
                             if (s_StrawberryType == -2)
                                 s_StrawberryType = Fruit::FruitType("strawberry", false);
                             if (s_StrawberryType >= 0) {
-                                for (int i = 0; i < m_ComboCount; ++i) {
+                                for (int i = 0; i < m_ComboCounter; ++i) {
                                     if (m_ComboFruitTypes[i] == s_StrawberryType) {
                                         static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
                                         game_work.m_SaveData->AddToTotal(
@@ -1908,9 +1909,9 @@ void SlashEntity::Update(float dt) {
                         // (c) Combo coin spawn.
                         {
                             int bonusCoins = 0;
-                            for (int i = 0; i < m_ComboCount; ++i) {
+                            for (int i = 0; i < m_ComboCounter; ++i) {
                                 const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboFruitTypes[i]);
-                                if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
+                                if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCounter; break; }
                             }
                             Vec3 coinPos = m_SliceFruitPos;
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
@@ -1921,29 +1922,29 @@ void SlashEntity::Update(float dt) {
                                             Coin::DefaultArrivedDelegate(), true);
                         }
                         // (d) Achievement unlock.
-                        AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboFruitTypes);
+                        AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCounter, m_ComboFruitTypes);
                         // (e) Best-combo save + CheckCombo cache.
                         {
                             FruitSaveData* sd = game_work.m_SaveData;
-                            if (sd && m_ComboCount > sd->m_BestComboLength) {
+                            if (sd && m_ComboCounter > sd->m_BestComboLength) {
                                 // ASM-spec v1.6.1 SlashEntity::Update @0x1e9504 / @0x1e95a8: writer copies 11 ints via a
                                 // stepping ptr from +0x150; the 11th read is +0x178 (m_ComboCount), one past the 10-elem
                                 // m_ComboFruitTypes. Reproduce the 11th-slot write explicitly (NOT i<11 -- that would read
                                 // m_ComboFruitTypes[10] out of bounds on the port's 10-element array).
                                 for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
                                 sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
-                                sd->m_BestComboLength = m_ComboCount;
-                                s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
-                            } else if (sd && m_ComboCount == sd->m_BestComboLength) {
+                                sd->m_BestComboLength = m_ComboCounter;
+                                s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
+                            } else if (sd && m_ComboCounter == sd->m_BestComboLength) {
                                 if (s_CheckComboFlag == -1)
-                                    s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCount, nullptr);
-                                int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCount, nullptr);
+                                    s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCounter, nullptr);
+                                int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
                                 if (s_CheckComboFlag < newScore) {
                                     // ASM-spec v1.6.1 SlashEntity::Update @0x1e95a8: same 11-int stepping-ptr copy as
                                     // the new-high path -- 11th slot is m_ComboCount (+0x178 spill).
                                     for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
                                     sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
-                                    sd->m_BestComboLength = m_ComboCount;
+                                    sd->m_BestComboLength = m_ComboCounter;
                                 }
                             }
                         }
