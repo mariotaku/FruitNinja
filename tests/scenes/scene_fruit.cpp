@@ -11,7 +11,7 @@
 //   click / tap  -- cycle through all fruit types then BOMB then back to fruit 0
 //   F12          -- screenshot (BMP via GameSDL.cpp handler)
 //   --screenshot  -- headless one-shot: run hidden, dump PPM to
-//                    tmp/test/screenshots/scene_fruit.ppm, exit
+//                    tmp/test/screenshots/scene_fruit.png, exit
 //   --headless    -- hidden window, no screenshot
 //   --chuck       -- ballistic arc mode (old behaviour: launches upward with gravity)
 //   (bare launch) -- visible window, fruit centered and spinning
@@ -313,7 +313,7 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < 60; ++i) {
             SceneFrameTick(&sceneData, h.game, static_cast<SDL_Window*>(h.window));
         }
-        if (h.IsScreenshot()) h.Screenshot();
+        if (h.IsScreenshot()) h.ScreenshotPng();
     }
 
     return h.Shutdown();

@@ -12,7 +12,7 @@
 //   R               -- reset the blade trail (SlashEntity::Reset)
 //   F12             -- screenshot (BMP via GameSDL handler)
 //   --screenshot    -- headless one-shot: inject synthetic swipe, dump PPM,
-//                      exit. Output: tmp/test/screenshots/scene_slash.ppm
+//                      exit. Output: tmp/test/screenshots/scene_slash.png
 //   --headless      -- hidden window, no screenshot
 //   (bare launch)   -- visible window, mouse drag drives the blade
 
@@ -269,7 +269,7 @@ int main(int argc, char* argv[]) {
         // no retraction). The blade is at peak length (~60 points).
         // We need to capture before SDL_GL_SwapWindow so glReadPixels reads
         // the just-rendered back buffer. Do a final render frame without a
-        // screenshot, but capture via h.Screenshot() which calls glReadPixels
+        // screenshot, but capture via h.ScreenshotPng() which calls glReadPixels
         // before the swap in the NEXT tick -- or just shoot now after the last
         // tick (the last SceneFrameTick already swapped; the back buffer now
         // holds the OLD front buffer which had the rendered frame).
@@ -294,7 +294,7 @@ int main(int argc, char* argv[]) {
             }
             // Do NOT call SDL_GL_SwapWindow -- leave the just-rendered content
             // in the back buffer so glReadPixels captures it.
-            if (h.IsScreenshot()) h.Screenshot();
+            if (h.IsScreenshot()) h.ScreenshotPng();
             // Now swap to display it (optional for headless but keeps state clean).
             SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
         }

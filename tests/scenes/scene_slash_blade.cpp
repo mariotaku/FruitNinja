@@ -22,7 +22,7 @@
 //
 // Port specific: standalone blade-skin diagnostic / regression scene.
 //
-// Screenshot: tmp/test/screenshots/scene_slash_blade_<skin>.ppm
+// Screenshot: tmp/test/screenshots/scene_slash_blade_<skin>.png
 //
 // Controls (interactive mode, --interactive flag):
 //   ESC -- quit
@@ -46,10 +46,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
-#include <sys/stat.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // ---------------------------------------------------------------------------
 // Skin definitions
@@ -367,25 +363,11 @@ static bool RunSkin(fn::TestHarness& h, const SkinDef& skin) {
         return false;
     }
 
-    // --- Save screenshot ---
+    // --- Save screenshot (re-reads the intact back buffer) ---
     {
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
-        char path[256];
-        snprintf(path, sizeof(path),
-                 "tmp/test/screenshots/scene_slash_blade_%s.ppm", skin.name);
-        FILE* f = fopen(path, "wb");
-        if (f) {
-            fprintf(f, "P6\n%d %d\n255\n", fw, fh);
-            for (int y = fh - 1; y >= 0; --y) {
-                fwrite(pixels + (size_t)y * fw * 3, 1, (size_t)fw * 3, f);
-            }
-            fclose(f);
-            printf("[blade_skin]   screenshot: %s (%dx%d)\n", path, fw, fh);
-        }
+        char name[256];
+        snprintf(name, sizeof(name), "scene_slash_blade_%s", skin.name);
+        h.ScreenshotPng(name);
     }
 
     // --- Compute dominant readback colour ---

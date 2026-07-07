@@ -119,40 +119,32 @@ int main(int argc, char* argv[]) {
         return FailUsage();
     }
 
-    // Detect --debug-textbounds / --content= / --lang= before TestHarness parses
-    // flags. --lang= is parsed again here (independently of TestHarness::ParseFlags,
-    // which applies it to languageFlag/StringTable) purely to build the composite
+    fn::TestHarness h(argc, argv, sc->label);
+
+    // Read --debug-textbounds / --content= / --lang= via the harness accessors.
+    // --lang= is read here (independently of TestHarness::ParseFlags, which
+    // applies it to languageFlag/StringTable) purely to build the composite
     // screenshot label -- same pattern as test_achievement_notification.cpp.
-    const char* langArg = "default";
-    for (int i = 2; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--debug-textbounds") == 0) {
-            g_DebugTextBounds = true;
-        } else if (std::strncmp(argv[i], "--content=", 10) == 0) {
-            g_ContentArg = argv[i] + 10;
-        } else if (std::strncmp(argv[i], "--lang=", 7) == 0) {
-            langArg = argv[i] + 7;
-        }
-    }
+    g_DebugTextBounds   = h.OptFlag("debug-textbounds");
+    g_ContentArg        = h.Opt("content", NULL);
+    const char* langArg = h.Opt("lang", "default");
 
     // When --debug-textbounds is set, redirect the output label so the overlay
     // screenshot goes to a separate path and doesn't overwrite the normal golden.
     // Otherwise, an explicit --content= for the bonus screen builds a
     // "bonus/<content>_<lang>" label; no --content keeps "bonus/default" verbatim.
     char contentLabelBuf[128];
-    const char* label = sc->label;
     if (g_DebugTextBounds) {
         if (std::strcmp(sc->name, "bonus") == 0) {
-            label = "debug/bonus_textbounds";
+            h.label = "debug/bonus_textbounds";
         } else if (std::strcmp(sc->name, "gameover") == 0) {
-            label = "debug/gameover_textbounds";
+            h.label = "debug/gameover_textbounds";
         }
     } else if (std::strcmp(sc->name, "bonus") == 0 && g_ContentArg != NULL) {
         std::snprintf(contentLabelBuf, sizeof(contentLabelBuf), "bonus/%s_%s",
                       g_ContentArg, langArg);
-        label = contentLabelBuf;
+        h.label = contentLabelBuf;
     }
-
-    fn::TestHarness h(argc, argv, label);
     // 120 burn-in frames: lets GameInit run through the Splash->Game state
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
@@ -207,11 +199,9 @@ static int RunBonus(fn::TestHarness& h) {
     }
 
     bs->pos = Vec3(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
-    // Binary layer for BonusScreen is HUD_LAYER_POST_ACTOR (0x80), drawn at
-    // GameDraw step 8. HUDControl ctor defaults m_LayerFlags=0x01 (DEFAULT),
-    // so set the correct layer here -- mirrors what the binary sets during
-    // the GameOver->BonusScreen transition.
-    bs->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
+    // m_LayerFlags = HUD_LAYER_POST_ACTOR is now set by the BonusScreen ctor
+    // itself (v1.6.1 BonusScreen::BonusScreen @0x00162d1c); no manual patch
+    // needed here anymore.
 
     // Per-award icons (bonus_icon_*.tex). NOTE: the real award icon is the
     // bonusType's m_StarTexture, a small per-award bonus_icon -- NOT star_awards.tex
@@ -227,6 +217,12 @@ static int RunBonus(fn::TestHarness& h) {
     // slot0 gold: b=0x00,g=0x7E,r=0xAD -> Colour(0xAD,0x7E,0x00,0xFF)
     // slot1 red:  b=0x05,g=0x05,r=0xA0 -> Colour(0xA0,0x05,0x05,0xFF)
     // slot2 blue: b=0x95,g=0x5C,r=0x01 -> Colour(0x01,0x5C,0x95,0xFF)
+    //
+    // NOTE (#34): this fixture calls BonusScreen::AddAward directly with its
+    // own alpha=0xFF colours -- it does NOT exercise BonusManager::SetUpBonusScreen,
+    // so it never caught the alpha=0x00 bug that lived in BonusManager.cpp's
+    // hardcoded k_TierColours (fixed separately). Production alpha coverage
+    // for that path is BonusManager.cpp's own constants, not this test.
     //
     // Award names are localization keys (Bonus::Parse uses GETSTRING_CAST_0_STR):
     //   GAME_TEXTURE_17  = "COMBO GOD!!!!"

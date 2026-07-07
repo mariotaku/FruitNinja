@@ -20,7 +20,7 @@
 //   ctest -R fruit_splat -C Debug --output-on-failure
 //   ./build/host/tests/scenes/Debug/scene_fruit_splat.exe --interactive
 //
-// Screenshot: tmp/test/screenshots/scene_fruit_splat.ppm
+// Screenshot: tmp/test/screenshots/scene_fruit_splat.png
 
 #include "../test_harness.h"
 #include "entities/Fruit.h"
@@ -39,10 +39,6 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
-#include <sys/stat.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // Background colour: bright green (R=0, G=255, B=0).
 static const unsigned char BG_R = 0;
@@ -290,26 +286,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Save screenshot.
-    {
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
-        FILE* f = fopen("tmp/test/screenshots/scene_fruit_splat.ppm", "wb");
-        if (f) {
-            fprintf(f, "P6\n%d %d\n255\n", fw, fh);
-            for (int y = fh - 1; y >= 0; --y) {
-                fwrite(pixels + (size_t)y * fw * 3, 1, (size_t)fw * 3, f);
-            }
-            fclose(f);
-            printf("[scene_fruit_splat] screenshot: tmp/test/screenshots/scene_fruit_splat.ppm (%dx%d)\n",
-                   fw, fh);
-        } else {
-            fprintf(stderr, "[scene_fruit_splat] WARN: could not write screenshot\n");
-        }
-    }
+    // Save screenshot (re-reads the intact back buffer).
+    h.ScreenshotPng("scene_fruit_splat");
 
     int drawnPixels = CountNonBackground(pixels, fw, fh);
     free(pixels);

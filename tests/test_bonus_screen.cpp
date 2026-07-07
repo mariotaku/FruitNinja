@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
     std::printf("DEBUG: bright=%d dark-in-dialog-center=%d\n", bright, darkInDialog);
     std::free(px);
 
-    if (h.IsScreenshot()) h.Screenshot();
+    if (h.IsScreenshot()) h.ScreenshotPng();
 
     if (bright < 5000) {
         std::fprintf(stderr, "FAIL: only %d bright pixels (dialog likely invisible)\n", bright);

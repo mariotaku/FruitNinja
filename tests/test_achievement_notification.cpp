@@ -54,19 +54,12 @@
 #include <cstring>
 
 int main(int argc, char* argv[]) {
-    // Parsed independently of TestHarness::ParseFlags() (which only handles
-    // --lang= for its own purposes and ignores unknown flags).
-    const char* achArg  = NULL;
-    const char* langArg = "default";
-    for (int i = 1; i < argc; ++i) {
-        if (std::strncmp(argv[i], "--achievement=", 14) == 0) {
-            achArg = argv[i] + 14;
-        } else if (std::strncmp(argv[i], "--lang=", 7) == 0) {
-            langArg = argv[i] + 7;
-        }
-    }
-
     fn::TestHarness h(argc, argv, "achievement/unlock");
+
+    // Read independently of TestHarness::ParseFlags() (which only handles --lang=
+    // for its own purposes). --lang= is also read here to compose the label.
+    const char* achArg  = h.Opt("achievement", NULL);
+    const char* langArg = h.Opt("lang", "default");
     // 120 burn-in frames: lets GameInitialise -> AchievementManager::LoadAchievementInfo
     // run so xml/achievementList.xml entries + icon textures + the TTF font are loaded
     // before we pull an entry and draw.
