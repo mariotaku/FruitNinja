@@ -534,10 +534,8 @@ void ShopScreen::ShrinkBuyButton() {
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
-    #ifndef __bada__
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
-    #endif
     fruit->m_bSliced                      = true;  // *(fruit+0xb8) = 1
     g_bShopButtonShrinking                = true;
     m_pEquipButton->m_bClearsMenuItems    = 0;     // *(button+0x13a) = 0 (suppresses ClearMenuItems)
@@ -788,17 +786,13 @@ void ShopScreen::EquipCallback() {
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
-        #ifndef __bada__
         LOG_DEBUG("Shop", "EquipCallback user-path: type=%d name='%s' im=%p",
                   (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
-        #endif
         if (im) {
             im->SetEquippedItem((ItemType)info->m_Type, info);
-            #ifndef __bada__
             LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
                       (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
                       im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
-            #endif
 
             // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
