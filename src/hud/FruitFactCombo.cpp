@@ -175,9 +175,23 @@ Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType) {
 }
 
 // GetComboStarText  binary: _Z16GetComboStarText10COMBO_TYPE @0x001325f8 (v1.6.1)
-// TODO: v1.6.1 GetComboStarText @0x001325f8 -- static LUT (DAT_132558, 0..24 entries) not yet dumped; returns 0
+// ASM-spec v1.6.1 GetComboStarText @0x001325f8: per-COMBO_TYPE LSTR-id LUT
+// (stickerNames @0x00280480, 28-byte entries: +0 count, then up to 3 u16 ids),
+// random pick via Math::g_Random.Rand32(count). 25 valid types; ct>0x18 -> 0.
+// Ids index translations_header.str (GAME_TEXTURE_55..85); caller GETSTRING-casts.
+struct ComboStarTextEntry { uint8_t count; uint16_t ids[3]; };
+static const ComboStarTextEntry kComboStarText[25] = {
+    {2,{814,819,0}},{2,{834,830,0}},{2,{822,808,0}},{2,{829,829,0}},
+    {3,{812,813,824}},{2,{804,809,0}},{1,{818,0,0}},{1,{833,0,0}},
+    {1,{817,0,0}},{1,{825,0,0}},{1,{810,0,0}},{1,{823,0,0}},{1,{816,0,0}},
+    {1,{827,0,0}},{1,{806,0,0}},{1,{828,0,0}},{1,{820,0,0}},{1,{821,0,0}},
+    {1,{826,0,0}},{1,{805,0,0}},{1,{815,0,0}},{1,{832,0,0}},{1,{831,0,0}},
+    {1,{811,0,0}},{1,{807,0,0}},
+};
 unsigned int GetComboStarText(COMBO_TYPE comboType) {
-    if ((uint8_t)comboType > 0x18) return 0;
-    // TODO: v1.6.1 GetComboStarText @0x001325f8 -- static LUT contents (DAT_132558) not yet dumped; return 0
-    return 0;
+    uint8_t ct = (uint8_t)comboType;
+    if (ct > 0x18) return 0;
+    const ComboStarTextEntry& e = kComboStarText[ct];
+    uint32_t idx = (e.count > 1) ? Math::g_Random.Rand32(e.count) : 0;
+    return e.ids[idx];
 }
