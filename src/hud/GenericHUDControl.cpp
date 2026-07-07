@@ -56,20 +56,20 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
         m_UVBottom = parentRect[1].y;   // max.y
     }
 
-    // ASM-spec v1.6.1 GenericHUDControl::GenericHUDControl @0x00189f60: zero scale ->
-    // auto-size from texture dims * UV span. When scale.x==0 && scale.y==0, compute
-    // sx = texW*(uvRight-uvLeft), sy = texH*(uvBottom-uvTop); guard texture valid, else
-    // (1,1,1). z defaults to 1 if 0. Store as m_BaseScale (ctor param scale).
+    // ASM-verified: 2026-07-07T00:00Z v1.6.1 GenericHUDControl ctor @0x00189f60
+    //   (disasm 0x18a080-0x18a110, asm-inspector-equivalent RE):
+    //   auto-scale = base * scale.z (uniform scalar multiply of the whole vector);
+    //   scale.z forced to 1.0 when it is 0. Textured base.z = 0.0 (NOT scale.z) before
+    //   the multiply, so resolved.z == 0.0 in the textured branch.
     Vec3 resolvedScale = scale;
     if (scale.x == 0.0f && scale.y == 0.0f) {
+        float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
         if (tex.IsValid()) {
             float sx = (float)tex->GetWidth()  * (m_UVRight - m_UVLeft);
             float sy = (float)tex->GetHeight() * (m_UVBottom - m_UVTop);
-            float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
-            resolvedScale = Vec3(sx, sy, sz);
+            resolvedScale = Vec3(sx * sz, sy * sz, 0.0f); // binary: Vec3(sx,sy,0.0) * sz
         } else {
-            float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
-            resolvedScale = Vec3(1.0f, 1.0f, sz);
+            resolvedScale = Vec3(sz, sz, sz);             // binary: Vector3::One * sz
         }
     }
     m_BaseScale = resolvedScale;

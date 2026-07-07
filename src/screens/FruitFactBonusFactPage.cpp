@@ -17,6 +17,7 @@
 #include "engine/util/StringTable.h"
 #include "game/BonusManager.h"
 #include "game/Bonus.h"
+#include "game/GameWork.h"
 #include <cstdio>
 #include <list>
 
@@ -44,9 +45,11 @@ FruitFactBonusFactPage::~FruitFactBonusFactPage() {
 
 // Binary @ 0x001743b8 (ctor body mapped to Init() in the port).
 // Builds the bonus fact page: bg tex, title, divider, sensei fact title/text,
-// up to 3 bonus rows (icon + name + value), then sensei head.
+// up to 3 bonus rows (border + star medal + name + value), then sensei head.
 // Row colours (BGRA, alpha=0xFF): gold=(R=0x00,G=0x7e,B=0xad), red=(0x05,0x05,0xa0),
 // blue=(0x95,0x5c,0x01). GenericHUDControl sizeof=0x1d8, BakedStringBox sizeof=0xc8.
+// ASM-spec v1.6.1 FruitFactBonusFactPage @0x001743b8: 4 controls/row -- number-border(95,58,native,white)
+//   + star medal(starPos,native*0.5,tier tint) + name(-100,62) + value(+184,+2); rows step y-=20.
 void FruitFactBonusFactPage::Init() {
     // Page background texture.
     // TODO: v1.6.1 FruitFactBonusFactPage @0x001743b8 -- resolve bg tex name from DAT_17484c string pool;
@@ -71,6 +74,7 @@ void FruitFactBonusFactPage::Init() {
     // Shared constants for all row controls (DAT_17485c, DAT_174860).
     // scZero triggers auto-size from texture dims for icon controls (binary: callers pass zero scale).
     Vec3 scZero(0.0f, 0.0f, 0.0f);
+    Vec3 scHalf(0.0f, 0.0f, 0.5f); // auto-size x0.5 (GenericHUDControl ctor @0x00189f60: scale.x==0&&scale.y==0 -> native*scale.z)
     Vec3 scUnit(1.0f, 1.0f, 1.0f);
     Colour white(255, 255, 255, 255);
 
@@ -78,11 +82,9 @@ void FruitFactBonusFactPage::Init() {
     Vec3 iconPos(95.0f, 58.0f, 0.0f);   // DAT_174830=95, DAT_174834=58
     Vec3 namePos(-100.0f, 62.0f, 0.0f); // DAT_174838=-100, DAT_17483c=62
 
-    // DIFFERS: original reads g_GameData+3 (a languageFlag/bool byte) and uses
-    //   it to nudge the value column X by 8px (fVar10=8 if byte==0, else 0).
-    //   Port defaults to the byte==0 branch (fVar10=0.0, no shift).
-    //   Binary valPos.X = -118.0 - fVar10 (DAT_174840=-118).
-    //   Value final position is namePos + Vec3(184,2,0) per binary pseudocode.
+    // langShift: game_work.languageFlag (bM_LangId, +0x03) == 0 -> 0px, else -> 8px.
+    float langShift = (game_work.languageFlag == 0) ? 0.0f : 8.0f;
+    Vec3 starPos(-118.0f - langShift, 58.0f, 0.0f); // DAT_174840=-118, star-medal column
 
     Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
 
@@ -93,12 +95,22 @@ void FruitFactBonusFactPage::Init() {
     while (b != 0 && row < 3) {
         Colour* tint = &rowCol[row];
 
-        // (a) Star / icon control (DAT_174834=58 Y, DAT_174830=95 X).
+        // (a1) Number-border box (DAT_174834=58 Y, DAT_174830=95 X).
+        // Binary ctor @0x001743b8: LoadLocalisedTexture("arcade_bonus_number_border.tex"),
+        // scale (0,0,0) -> auto native size x1.0.
+        Mortar::SmartPtr<Mortar::Texture> borderTex =
+            Mortar::TextureManager::LoadLocalisedTexture("arcade_bonus_number_border.tex");
+        GenericHUDControl* cBorder = new GenericHUDControl(
+            0.0f, 0.0f, borderTex, NULL, iconPos, scZero, white, 8);
+        AddGenericControl(cBorder);
+
+        // (a2) Star medal (DAT_174840=-118 X - langShift, 58 Y).
         // Binary ctor @0x001743b8: SmartPtr::SmartPtr(&dst, (SmartPtr*)(bonus + 0xD0))
         // Bonus::m_StarTexture is at +0xD0 (confirmed from Bonus.h layout assert).
+        // scale (0,0,0.5) -> auto native size x0.5; tinted per-row (rowCol[row]).
         Mortar::SmartPtr<Mortar::Texture> iconTex = b->m_StarTexture;
         GenericHUDControl* cIcon = new GenericHUDControl(
-            0.0f, 0.0f, iconTex, NULL, iconPos, scZero, white, 8);
+            0.0f, 0.0f, iconTex, NULL, starPos, scHalf, *tint, 8);
         AddGenericControl(cIcon);
 
         // (b) Format value string from bonus->m_Tier (+0x3c).
@@ -140,6 +152,7 @@ void FruitFactBonusFactPage::Init() {
         row++;
         iconPos.y -= 20.0f;
         namePos.y -= 20.0f;
+        starPos.y -= 20.0f;
     }
 
     // Sensei head at scale 68.0 (DAT_17486c).
