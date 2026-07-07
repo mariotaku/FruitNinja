@@ -291,40 +291,63 @@ void WaveManager::Init() {
             } else if (strcmp(elName, "WaveInfo") == 0) {
                 WAVE_INFO* wi = new WAVE_INFO();
                 wi->m_WaveIndex = waveIndex++;
-                // ASM-verified: 2026-05-22 v1.6.1 binary @ 0x001267c8 (re-analyst).
-                // WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) copies m_bWaitForEntities (+0x2c)
-                // and m_bWaitForProcessing (+0x2d) from the per-mode DEFAULT_WAVE_INFO.
-                wi->m_bWaitForEntities   = m_DefaultWaveInfo[mode].m_bWaitForEntities;
-                wi->m_bWaitForProcessing = m_DefaultWaveInfo[mode].m_bWaitForProcessing;
-                // v1.6.1 WaveManager::GetNextWave @0x001267c8: WAVE_INFO ctor copies
-                // m_OverideProbabilityPool (+0x34) from DEFAULT_WAVE_INFO -> WAVE_INFO+0x70.
-                // Without this, SpeedWaves inherit ctor default 100 instead of XML default 150.
-                wi->m_OverideProbabilityPool = m_DefaultWaveInfo[mode].m_OverideProbabilityPool;
+                // ASM-verified: 2026-07-06 v1.6.1 WaveInfo::WaveInfo(DefaultWaveInfo*) @0x0012a9f0
+                // (re-analyst): the binary constructs each WaveInfo FROM the per-mode DefaultWaveInfo,
+                // copying ALL <defaults> fields; the XML parse below then overrides per-wave. The port
+                // previously copied only wfe/wfp/pool, so waves without a <NextWaveDelay> child kept the
+                // C++ ctor's m_NextWaveDelay=2.0 instead of inheriting the mode default (arcade
+                // beforeDelay=0) -- a ~2s pre-spawn delay on every such wave. Copy the full set here.
+                DEFAULT_WAVE_INFO& dwi = m_DefaultWaveInfo[mode];
+                wi->m_WaveDt             = dwi.m_SpawnTimeScale;   // +0x0c "dt"        -> +0x10
+                wi->m_WaveDtInc          = dwi.m_DtInc;            //       "dtInc"     -> +0x14
+                wi->m_WaveDtSpInc        = dwi.m_DtSpInc;          //       "dtSpInc"   -> +0x18
+                wi->m_NextWaveSpeedLoss  = dwi.m_SpeedLoss;        //       "speedLoss" -> +0x1c
+                wi->m_NextWaveDelay      = dwi.m_BeforeDelay;      //       "beforeDelay"    -> +0x20
+                wi->m_NextWaveDelayInc   = dwi.m_BeforeDelayInc;   //       "beforeDelayInc" -> +0x24
+                wi->m_NextWaveWait       = dwi.m_NextDelay;        //       "nextDelay"      -> +0x28
+                wi->m_reserved2c         = dwi.m_NextDelayInc;     //       "nextDelayInc"   -> +0x2c
+                wi->m_NextWaveWaitSpInc  = dwi.m_NextDelaySpInc;   //       "nextDelaySpInc" -> +0x30
+                wi->m_Chance             = dwi.m_WaveChance;       //       "waveChance"     -> +0x3c
+                wi->m_ChanceRegrowth     = dwi.m_WaveChanceRegrowth; //     "waveChanceGrowth" -> +0x44
+                wi->m_CurrentRegrowth    = dwi.m_WaveChanceRegrowth; // ctor sets BOTH regrowth fields -> +0x48
+                wi->m_CriticalChance     = dwi.m_CritChanceVal;   // +0x08 "criticalChance" -> +0x64
+                wi->m_bWaitForEntities   = dwi.m_bWaitForEntities;   // +0x2c -> +0x38
+                wi->m_bWaitForProcessing = dwi.m_bWaitForProcessing; // +0x2d -> +0x39
+                wi->m_OverideProbabilityPool = dwi.m_OverideProbabilityPool; // +0x34 -> +0x70
 
                 // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
                 // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
+                // ASM-spec v1.6.1 WaveManager::Init @0x00129934: waveNo is stored into
+                // m_ScoreThreshold UNCONDITIONALLY only for mode==2 (Arcade); other modes
+                // only store when waveNo>=0 -- a negative/"forever" waveNo on a non-Arcade
+                // mode leaves m_ScoreThreshold/m_WaveNumber at the ctor default (0).
                 const char* waveNoStr = el.Attribute("waveNo");
                 if (waveNoStr) {
-                    if (strcmp(waveNoStr, "forever") == 0)
-                        wi->m_WaveNumber = -2;
-                    else
-                        wi->m_WaveNumber = atoi(waveNoStr);
+                    int waveNo = (strcmp(waveNoStr, "forever") == 0) ? -2 : atoi(waveNoStr);
+                    if (mode == 2 || waveNo >= 0) {
+                        wi->m_WaveNumber = waveNo;
+                        wi->m_ScoreThreshold = waveNo;
+                    }
                 }
-                wi->m_ScoreThreshold = wi->m_WaveNumber;
 
                 // overideProbabiltyPool at +0x70 — typo matches binary literal. Writes same slot as waveNo in binary.
                 el.QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
 
-                // until attr -> m_EndScore (+0x04).
+                // until attr -> m_EndScore (+0x04). Ctor default is -1 (unresolved); the
+                // per-mode post-pass below (after the whole mode's wave file is parsed;
+                // see the marker there) fills in the bounded m_EndScore for waves that
+                // stay at -1. Explicit until accepted only when non-empty, >=0, and >= waveNo.
                 const char* untilStr = el.Attribute("until");
-                if (untilStr) {
-                    if (strcmp(untilStr, "forever") == 0)
+                if (untilStr && *untilStr) {
+                    if (strcmp(untilStr, "forever") == 0) {
                         wi->m_EndScore = -2;
-                    else
-                        wi->m_EndScore = atoi(untilStr);
-                } else {
-                    wi->m_EndScore = -2;
+                    } else {
+                        int untilVal = atoi(untilStr);
+                        if (untilVal >= 0 && untilVal >= wi->m_ScoreThreshold)
+                            wi->m_EndScore = untilVal;
+                    }
                 }
+                // else: leave m_EndScore at ctor default -1 -- post-pass below derives it.
 
                 // "chance" -> m_Chance (+0x3c). "chanceRegrowth" -> m_ChanceRegrowth (+0x44).
                 el.QueryIntAttribute("chance",           &wi->m_Chance);
@@ -407,18 +430,16 @@ void WaveManager::Init() {
                         if (types) {
                             SplitWords(types, s.m_FruitTypeNames);
                             s.m_FruitTypeCount = (int)s.m_FruitTypeNames.size();
-                            // Build hash array.
+                            // v1.6.1 ParseSpawner @0x00129314: Init leaves every type hash
+                            // UNRESOLVED (-1). SPAWNER_INFO::SelectTypes @0x0012dcc8 (called by
+                            // Reset per wave) resolves them: "bomb"->-2, "1fruit"->RandomFruit(false)
+                            // ONCE per wave (one fixed type for the whole wave), else FruitType.
+                            // Resolving eagerly here made a "1fruit" spawner (FruitType("1fruit")==-1)
+                            // fall into the per-spawn random path -> a different fruit every spawn.
                             if (s.m_FruitTypeCount > 0) {
                                 s.m_pFruitTypeHashes = new int[s.m_FruitTypeCount];
-                                for (int ti = 0; ti < s.m_FruitTypeCount; ++ti) {
-                                    const std::string& tn = s.m_FruitTypeNames[ti];
-                                    if (tn == "random")
-                                        s.m_pFruitTypeHashes[ti] = -1;
-                                    else if (tn == "bomb")
-                                        s.m_pFruitTypeHashes[ti] = -2;
-                                    else
-                                        s.m_pFruitTypeHashes[ti] = Fruit::FruitType(tn.c_str(), false);
-                                }
+                                for (int ti = 0; ti < s.m_FruitTypeCount; ++ti)
+                                    s.m_pFruitTypeHashes[ti] = -1;
                             }
                         }
 
@@ -465,6 +486,23 @@ void WaveManager::Init() {
                 m_WaveInfo[mode].push_back(wi);
             }
         } // end single-pass document-order walk
+
+        // ASM-spec v1.6.1 WaveManager::Init @0x00129934 (tail, per-mode): waves without "until" get m_EndScore = (smallest waveNo strictly greater than this wave's) - 1, or -2 (forever) if none is greater. Explicit until accepted only when non-empty, >=0, and >= waveNo.
+        {
+            std::vector<WAVE_INFO*>& waves = m_WaveInfo[mode];
+            for (std::vector<WAVE_INFO*>::size_type wIdx = 0; wIdx < waves.size(); ++wIdx) {
+                WAVE_INFO* wi = waves[wIdx];
+                if (wi->m_EndScore != -1) continue;
+                wi->m_EndScore = -2;
+                int best = 1000000;
+                for (std::vector<WAVE_INFO*>::size_type oIdx = 0; oIdx < waves.size(); ++oIdx) {
+                    WAVE_INFO* o = waves[oIdx];
+                    if (wi->m_ScoreThreshold < o->m_ScoreThreshold && o->m_ScoreThreshold <= best)
+                        best = o->m_ScoreThreshold - 1;
+                }
+                if (best < 1000000) wi->m_EndScore = best;
+            }
+        }
 
         LOG_DEBUG("WaveManager", "Init: mode %d -> %d waves from %s",
                   mode, (int)m_WaveInfo[mode].size(), s_WaveXML[mode]);
@@ -698,10 +736,11 @@ void WaveManager::Reset(bool fullReset) {
         pit->SelectType();
 
     // Binary resets m_RecentFruitCount and clears the fruit queue here.
+    // v1.6.1 WaveManager::Reset @0x0012ba78: seeds m_RecentFruitCount[0] = 1 (fruit-queue seed).
     for (int j = 0; j < 32; ++j)
         m_FruitQueue[j] = -1;
     m_MaxWaveIdP0 = 0;
-    m_RecentFruitCount[0] = 0;
+    m_RecentFruitCount[0] = 1;
 
     // 7. Kick first wave if waves loaded.
     if (!m_WaveInfo[game_work.gameMode].empty()) {
@@ -1274,6 +1313,20 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     }
 
                     // Pick a random type from the spawner's list.
+                    // TODO: v1.6.1 WaveManager::UpdateWave @0x0012630c -- port the remaining
+                    // type-dispatch refinements from the binary (deferred; bigger scope than the
+                    // spawn-timing/type-per-wave fix):
+                    //   * anti-bomb-majority re-roll: when the picked slot is a bomb (-2) and
+                    //     more than half the wave's spawns so far have been bombs (iVar8/2 <= local_a0),
+                    //     re-roll the type index until it is non-bomb (@0x0012659c loop).
+                    //   * name=="1fruit" divert: a slot whose NAME compares equal to "1fruit"
+                    //     (std::string::compare, @LAB_00125f5c) is routed through the override
+                    //     block even though its resolved hash is a concrete fruit type.
+                    //   * m_BombChance / m_FruitChance gates guard SpawnBomb / SpawnFruit
+                    //     (@LAB_001263ec: only spawn a bomb when m_BombChance>0, a fruit when m_FruitChance>0).
+                    //   * GPO / corner-spawner selection currently only runs on the -1 path; the binary
+                    //     also applies it to fixed-type ("1fruit"-diverted) spawns.
+                    //   * WaveInfo::ExclusiveTag gate (GetNextWave candidate filter, +0x78) -- not ported.
                     int typeIdx = (spawner.m_FruitTypeCount > 1)
                         ? (int)m_Random.Rand32((uint32_t)spawner.m_FruitTypeCount)
                         : 0;
@@ -1288,7 +1341,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         int chosenType = -1;
                         // ASM-spec v1.6.1 WaveManager::UpdateWave override block @0x00126124-0x0012676c:
                         // corner-spawner pick, set only when the override block below resolves a
-                        // super-fruit or a still-active-power skip; overrides blitzSpawner/spawner.
+                        // super-fruit or a still-active-power skip; overrides spawner.
                         SPAWNER_INFO* powerSpawner = 0;
 
                         int blitzAdvance = 0;
@@ -1305,7 +1358,11 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             }
                         }
 
-                        if (!gateOpen && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c: blitz state machine
+                        // is Arcade-only. Non-Arcade must never advance m_BlitzState/m_NextBlitzTime.
+                        if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) {
+                            blitzAdvance = 0;
+                        } else if (!gateOpen) {
                             blitzAdvance = 0;
                         } else if (m_BlitzState == 0) {
                             m_BlitzState = 1;
@@ -1318,41 +1375,11 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             blitzAdvance = 0;
                         }
 
-                        static bool s_BlitzSpawnersInited = false;
-                        static SPAWNER_INFO k_BlitzSpawners[3];
-                        if (!s_BlitzSpawnersInited) {
-                            s_BlitzSpawnersInited = true;
-                            k_BlitzSpawners[0].m_TimeScale  = 0.75f;
-                            k_BlitzSpawners[0].m_Gravity_x  = 0.0f;
-                            k_BlitzSpawners[0].m_Gravity_y  = -1.1f;
-                            k_BlitzSpawners[0].m_Gravity_z  = 0.0f;
-                            k_BlitzSpawners[0].m_HorizMin   = 0.6660f;
-                            k_BlitzSpawners[0].m_HorizMax   = 0.0f;
-                            k_BlitzSpawners[0].m_SpawnMin   = -0.5f;
-                            k_BlitzSpawners[0].m_SpawnMax   = 0.5f;
-                            k_BlitzSpawners[0].m_SpawnType  = PLACEMENT_TOP;
-                            k_BlitzSpawners[1].m_TimeScale  = 0.75f;
-                            k_BlitzSpawners[1].m_Gravity_x  = 0.0f;
-                            k_BlitzSpawners[1].m_Gravity_y  = -1.1f;
-                            k_BlitzSpawners[1].m_Gravity_z  = 0.0f;
-                            k_BlitzSpawners[1].m_HorizMin   = 0.6660f;
-                            k_BlitzSpawners[1].m_HorizMax   = 0.0f;
-                            k_BlitzSpawners[1].m_SpawnMin   = -1.0f;
-                            k_BlitzSpawners[1].m_SpawnMax   = -0.5f;
-                            k_BlitzSpawners[1].m_SpawnType  = PLACEMENT_RIGHT;
-                            k_BlitzSpawners[2].m_TimeScale  = 0.75f;
-                            k_BlitzSpawners[2].m_Gravity_x  = 0.0f;
-                            k_BlitzSpawners[2].m_Gravity_y  = -1.1f;
-                            k_BlitzSpawners[2].m_Gravity_z  = 0.0f;
-                            k_BlitzSpawners[2].m_HorizMin   = 0.6660f;
-                            k_BlitzSpawners[2].m_HorizMax   = 0.75f;
-                            k_BlitzSpawners[2].m_SpawnMin   = -1.0f;
-                            k_BlitzSpawners[2].m_SpawnMax   = -0.5f;
-                            k_BlitzSpawners[2].m_SpawnType  = PLACEMENT_LEFT;
-                        }
-                        SPAWNER_INFO* blitzSpawner = (blitzAdvance && game_work.gameMode == Mortar::GAME_MODE_ARCADE)
-                            ? &k_BlitzSpawners[m_Random.Rand32(3)]
-                            : nullptr;
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c: the binary passes
+                        // only the resolved wave/corner spawner here -- there is no separate
+                        // blitz-spawner table (k_BlitzSpawners was a field-shifted misread of the
+                        // power-spawner data). Removed; blitzAdvance still gates the force-spawn
+                        // bypass below.
                         int mode = game_work.gameMode;
                         std::vector<PROBABILITY_OVERIDE>& overrides = m_ProbabilityOverride[mode];
 
@@ -1371,14 +1398,24 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                             && po.m_PerWaveCount > 0
                                             && waveCount < po.m_PerWaveCount) continue;
                                     if (po.m_DisableWhenPowered > 0.0f) {
+                                        // ASM-spec v1.6.1 UpdateWave @0x00125d7c: progression lookahead
+                                        // uses the pending chuck delay (0.21f), not 0.0f -- predicts
+                                        // whether the active power will still be running by the time a
+                                        // fruit spawned now would actually land.
                                         float prog = PowerUpManager::GetInstance()
-                                                         ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
+                                                         ? PowerUpManager::GetInstance()->GetActiveProgression(0.21f)
                                                          : 2.0f;
                                         if (po.m_DisableWhenPowered >= prog) continue;
                                     }
                                     int pc = po.m_PercentChance;
                                     if (m_BlitzSpawnCount > 5) pc >>= 1;
                                     cumulative += pc;
+                                    // TODO: v1.6.1 UpdateWave @0x00125d7c -- binary's
+                                    // (m_PercentChance>0 && blitzAdvance) force-spawn bypasses the
+                                    // m_PerWave/waveCount/m_DisableWhenPowered `continue`s above (checked
+                                    // before those gates, not after); port currently `continue`s past a
+                                    // gated entry before this OR can fire. Delicate control-flow reorder,
+                                    // deferred -- do not rewrite without re-tracing 0x00125d7c in full.
                                     if (roll < cumulative || (po.m_PercentChance > 0 && blitzAdvance != 0)) {
                                         // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00126124: timed-power
                                         // allowance reject. Empty on all shipped data (m_PowerAllowance
@@ -1413,9 +1450,15 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                             powerSpawner = GetRandomPowerSpawner(false);  // exclude centre
                                         if (hasPowers) {
                                             if (powers->AnyActivePowers()) {
-                                                // Retries exhausted, still colliding with an active
-                                                // power -- spawn goes ahead with this chosenType as-is,
-                                                // no corner override, no blitz-count credit.
+                                                // TODO: v1.6.1 UpdateWave @0x00125d7c -- binary jumps to
+                                                // LAB_001263e8 here with chosenType=-1 (falls through to
+                                                // Fruit::RandomFruit(false) below -- a PLAIN fruit, not
+                                                // chosenType) and skips po.m_Counter++ entirely. Port
+                                                // currently keeps chosenType as-is and still bumps
+                                                // m_Counter below. Delicate control-flow reorder (affects
+                                                // the shared `break` and po.m_Counter++ at the end of this
+                                                // loop iteration), deferred -- do not rewrite without
+                                                // re-tracing 0x00125d7c in full.
                                             } else {
                                                 powerSpawner = GetRandomPowerSpawner(true);  // include centre; overrides corner pick
                                                 if (m_FruitChance > 0.0f && Fruit::NumberOfPowerupFruits() < 1
@@ -1442,7 +1485,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             chosenType = Fruit::RandomFruit(false);
                         }
                         Mortar::Entity* spawnedGPO = SpawnFruit(1, chosenType,
-                            powerSpawner ? powerSpawner : (blitzSpawner ? blitzSpawner : &spawner), playerIdx);
+                            powerSpawner ? powerSpawner : &spawner, playerIdx);
                         // Subscribe Entity events for GPO re-arm when the super-fruit is killed/expires.
                         // ASM-spec v1.6.1 UpdateWave @0x001263ec: onKilled (+0x178) -> FruitWasKilled,
                         //   onThrown (+0x180) -> FruitWasThrown.
@@ -1462,7 +1505,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     m_WaveActive = 1;
                     spawner.m_RemainingCount--;
 
-                    float spawnDt = spawner.m_Delay - spawner.m_DelayInc * pCurrentWave->m_RevisitCounter;
+                    // ASM-verified: 2026-07-06 v1.6.1 WaveManager::UpdateWave @0x0012630c
+                    // (LAB_00126568, re-analyst): re-arm delay = Max(0, m_Delay + m_DelayInc*revisit).
+                    // The revisit term is ADDED (vmla), same as ResetDelay @0x0012dfa0; was subtracted.
+                    float spawnDt = spawner.m_Delay + spawner.m_DelayInc * pCurrentWave->m_RevisitCounter;
                     if (spawnDt < 0.0f) spawnDt = 0.0f;
                     spawner.m_SpawnTimer += spawnDt;
                 }
@@ -1626,8 +1672,10 @@ void WaveManager::GetNextWave(int playerIdx) {
          wit != m_WaveInfo[gm].end(); ++wit) {
         WAVE_INFO* wi = *wit;
         // Regrowth: grow m_CurrentChance toward m_Chance.
-        if (wi->m_ChanceRegrowth > 0.0f && wi->m_CurrentChance < wi->m_Chance) {
-            float growth = (float)wi->m_Chance * wi->m_ChanceRegrowth;
+        // ASM-verified: 2026-07-06 v1.6.1 WaveManager::GetNextWave @0x00125790 (re-analyst):
+        // the growth rate reads the RUNNING regrowth m_CurrentRegrowth (+0x48), NOT m_ChanceRegrowth (+0x44).
+        if (wi->m_CurrentRegrowth > 0.0f && wi->m_CurrentChance < wi->m_Chance) {
+            float growth = (float)wi->m_Chance * wi->m_CurrentRegrowth;
             if (growth < 1.0f) growth = 1.0f;
             wi->m_CurrentChance = std::min(wi->m_Chance, (int)(wi->m_CurrentChance + growth));
         }
@@ -1664,8 +1712,11 @@ void WaveManager::GetNextWave(int playerIdx) {
               wave ? wave->m_SpawnerCount : -1);
     if (!wave) return;
 
-    // Decrement selected wave's chance (depletes until regrowth restores it).
-    if (wave->m_CurrentChance > 0) wave->m_CurrentChance--;
+    // Zero the selected wave's running chance (regrowth restores it over later picks).
+    // ASM-verified: 2026-07-06 v1.6.1 WaveManager::GetNextWave @0x00125790 (re-analyst):
+    // the binary writes +0x40 (m_CurrentChance) = 0 outright, not a decrement -- decrementing
+    // let the same wave keep winning and starved the others.
+    wave->m_CurrentChance = 0;
 
     // Build ChooseFrom fruit queue if wave has one (m_SpecialFruits at +0x54).
     if (!wave->m_SpecialFruits.empty()) {
@@ -2355,7 +2406,7 @@ void WaveManager::RequestCoins() {
 
 // ASM-spec v1.6.1 GetRandomPowerSpawner @0x0012403c
 // Function-local static SPAWNER_INFO[3]: centre-bottom, right-side, left-side.
-// Lazy-initialised on first call (C++ static guard). Mirrors k_BlitzSpawners idiom above.
+// Lazy-initialised on first call (C++ static guard).
 // includeCenter=true: picks from all 3 entries (base=0, range=3).
 // includeCenter=false: skips entry 0 (centre), picks from entries 1/2 (base=1, range=2).
 SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
@@ -2377,11 +2428,12 @@ SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
         spinfos[0].m_SpawnTimer = -3.0f;     // immediately ready
 
         // Entry 1: right-side (PLACEMENT_RIGHT)
+        // ASM-spec v1.6.1 GetRandomPowerSpawner @0x0012403c: only entry 0 (top/centre)
+        // gets m_TimeScale=0.75; side spawners keep the ctor default 1.0.
         spinfos[1].m_SpawnType  = PLACEMENT_RIGHT;
         spinfos[1].m_VelYScale  = 0.75f;
         spinfos[1].m_HorizMin   = -1.0f;
         spinfos[1].m_HorizMax   = -0.5f;
-        spinfos[1].m_TimeScale  =  0.75f;
         spinfos[1].m_SpawnTimer = -3.0f;
 
         // Entry 2: left-side (PLACEMENT_LEFT)
@@ -2389,7 +2441,6 @@ SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
         spinfos[2].m_VelYScale  = 0.75f;
         spinfos[2].m_HorizMin   = -1.0f;
         spinfos[2].m_HorizMax   = -0.5f;
-        spinfos[2].m_TimeScale  =  0.75f;
         spinfos[2].m_SpawnTimer = -3.0f;
     }
 

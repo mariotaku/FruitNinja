@@ -156,11 +156,12 @@ void PowerUp::Parse(TiXmlElement* elem) {
                 mod = new ComboModifier();
             } else if (strcmp(tag, "spawn_mod") == 0) {
                 mod = new SpawnModifier();
-            } else if (strcmp(tag, "timesink_mod") == 0) {
+            } else if (strcmp(tag, "time_sink_mod") == 0) {
                 mod = new TimeSinkModifier();
-            } else if (strcmp(tag, "explodyfruit_mod") == 0) {
+            } else if (strcmp(tag, "explody_mod") == 0) {
                 mod = new ExplodyFruitModifier();
             }
+            // ASM-spec v1.6.1 PowerUp::Parse @0x00142388: modifier tags "time_sink_mod"/"explody_mod"
             if (mod) {
                 mod->Parse(&child);
                 AddModifier(mod);
@@ -178,6 +179,9 @@ void PowerUp::Parse(TiXmlElement* elem) {
          it != m_ModList.end(); ++it) {
         if ((*it)->m_Duration > m_TotalTime) m_TotalTime = (*it)->m_Duration;
     }
+
+    // TODO: v1.6.1 PowerUp::Parse @0x00142388 tail -- clear GameModifier+0x19 when
+    // m_Duration < m_TotalTime-0.1 (semantics unresolved).
 }
 
 // Step 4: Activate (binary @ 0x00119134)
