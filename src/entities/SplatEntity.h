@@ -8,8 +8,8 @@
 //
 // Binary refs:
 //   SplatEntity ctor            0x0017ed58
-//   SplatEntity::MakeSplat      0x0017f2f0
-//   SplatEntity::Update         0x0017f774
+//   SplatEntity::MakeSplat      v1.6.1 @0x001eb910
+//   SplatEntity::Update         v1.6.1 @0x001ebee0
 //   SplatEntity::DrawSplat      0x001eb5d8
 //   SplatEntity::DrawActiveSplats 0x001ece34
 //   UV atlas table              0x001bd014 (6 entries x 4 floats)
@@ -32,8 +32,8 @@ class SplatEntity {
 public:
     // +0x00: vtable pointer (set by ctor to vtable+8 @ 0x001ea5f0)
 
-    // +0x04: colour-lerp phase. Starts at 0 (fruit-typed) or 0.75 (default path).
-    //        Ticks toward 0 in Update.
+    // +0x04: colour-lerp phase. Starts at 0 (fruit-typed) or 1.5 (default/invalid
+    //        fruitType path). Ticks toward 0 in Update.
     float    m_ColourPhase;      // +0x04
 
     // +0x08: BGRA colour bytes (Colour::Colour() default at ctor, overwritten by MakeSplat)
@@ -84,7 +84,7 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
     virtual void DrawSplat();
 
-    // --- Vtable slot 5: Update (binary @ 0x0017f774) ---
+    // --- Vtable slot 5: Update (v1.6.1 SplatEntity::Update @0x001ebee0) ---
     // Per-splat physics, landing transition, slide/colour decay.
     virtual void UpdateSplat(float dt);
 
@@ -116,7 +116,7 @@ public:
     static SplatEntity* GetFree();
     // Binary: SplatEntity::NumActiveSplats @ 0x0017ee34
     static int NumActiveSplats();
-    // Binary: SplatEntity::UpdateActiveSplats @ 0x0017fd68
+    // Binary: SplatEntity::UpdateActiveSplats v1.6.1 @0x001ec5d8
     static void UpdateActiveSplats(float dt);
     // Binary: SplatEntity::DrawActiveSplats @ 0x001ece34
     static void DrawActiveSplats();
