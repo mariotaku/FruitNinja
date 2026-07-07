@@ -36,10 +36,11 @@ static const float kSlideRate[6] = { 2.5f, 2.5f, 2.5f, 2.9f, 0.0f, 0.0f };
 // Per-type post-landing scale multiplier. Applied as: m_Scale *= kLandScale[type] * 2.5f.
 static const float kLandScale[6] = { 1.6f, 1.6f, 1.6f, 1.6f, 2.9f, 2.9f };
 
-// MakeSplat @ 0x0017f2f0
+// MakeSplat -- v1.6.1 SplatEntity::MakeSplat @0x001eb910
 static const float MS_Z_ZERO          = 0.0f;     // DAT_0017f564 = 0x00000000
 static const float MS_Z_BIAS          = 150.0f;   // DAT_0017f568 = 0x43160000
-static const float MS_COL_PHASE_DEF   = 0.75f;    //           0x3fc00000
+// ASM-verified: 2026-07-07T00:00Z v1.6.1 SplatEntity::MakeSplat @0x001eb910 (implementer)
+static const float MS_COL_PHASE_DEF   = 1.5f;     // fruitType >= MAX_FRUIT_TYPES path
 static const float MS_VEL_FINAL_MULT  = 6.0f;
 static const float MS_VEL_Y_STRETCH   = 1.5f;
 static const float MS_Z_RAND_RANGE    = 10.0f;
@@ -47,7 +48,7 @@ static const float MS_Z_RAND_RANGE    = 10.0f;
 static const float MS_SCALE_BASE      = 10.0f;    // sc = Rand(10) + 10
 static const float MS_SCALE_RAND      = 10.0f;
 
-// Update @ 0x0017f774
+// Update -- v1.6.1 SplatEntity::Update @0x001ebee0
 static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing threshold)
 
 // Verified 2026-04-15 from instruction at 0x0017fa90:
@@ -85,7 +86,7 @@ static float s_SpringRate = 1.25f;
 // While > 0, PlaySplat suppresses re-fire for that size.
 static float s_SplatSfxGate[3] = { 0.0f, 0.0f, 0.0f };
 
-// Binary: SplatEntity::Update @ 0x0017fa56 + UpdateActiveSplats @ 0x0017fd68
+// Binary: v1.6.1 SplatEntity::Update @0x001ebee0 + v1.6.1 SplatEntity::UpdateActiveSplats @0x001ec5d8
 // Pulp-drip ambient SFX gate.
 //   > 0   : armed, counting down to fire edge
 //   0..-0.5: cooldown soak (no re-arm allowed)
@@ -249,7 +250,7 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
 // default behaviour is byte-identical.
 bool SplatEntity::s_RandKillEnabled = true;
 
-// Binary @ 0x0017f2f0 -- MakeSplat
+// v1.6.1 SplatEntity::MakeSplat @0x001eb910
 // Initialises a free pool slot. Called from Fruit::Slice (0x00177028) and
 // Fruit::Update juice-trail (0x0017e342).
 //
@@ -394,7 +395,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, l
     }
 }
 
-// Binary @ 0x0017f774 -- SplatEntity::Update (vtable slot 5)
+// v1.6.1 SplatEntity::Update @0x001ebee0 (vtable slot 5)
 // Two phases: airborne (m_SplatType < 0) does physics + z check;
 // landed (m_SplatType >= 0) does slide + decay.
 //
@@ -417,7 +418,13 @@ void SplatEntity::UpdateSplat(float dt) {
 
     if (m_SplatType < 0) {
         // --- Airborne phase ---
-        m_Vel.y += UP_GRAVITY * dt;
+        // ASM-verified: 2026-07-07T00:00Z v1.6.1 SplatEntity::Update @0x001ebee0 (implementer)
+        // Binary reads the scaled per-frame dt (game_work.flM_Dt), NOT the
+        // dt parameter passed into this function (`this->m_Vel.y = this->m_Vel.y
+        // + game_work.flM_Dt * -10.0`). Only the m_bSSMPHorizGravity==0 arm is
+        // reachable -- the SSMP branch is defunct (m_bSSMPHorizGravity is
+        // always stubbed to 0 in MakeSplat).
+        m_Vel.y += UP_GRAVITY * game_work.dt;
 
         // Binary clamps velocity ONLY in the slide-decay phase (below); the
         // airborne phase does not floor-clamp. (asm-inspector 2026-05-06)
@@ -534,7 +541,7 @@ void SplatEntity::UpdateSplat(float dt) {
     const float aF = rawAlpha < m_AlphaBase ? rawAlpha : m_AlphaBase;
     m_ColA = (uint8_t)Clampf(aF, 0.0f, 255.0f);
 
-    // Colour lerp -- binary @ 0x0017f774 ticks m_ColourPhase down each
+    // Colour lerp -- v1.6.1 SplatEntity::Update @0x001ebee0 ticks m_ColourPhase down each
     // Update and writes the resulting RGBA back into m_ColR/G/B/A.
     // DrawSplat reads the stored fields directly (no re-computation).
     if (m_ColourPhase > 0.0f) {
@@ -685,8 +692,8 @@ int SplatEntity::NumActiveSplats() {
     return s_NumActiveSplats;
 }
 
-// ASM-verified: 2026-05-06T18:00 v1.6.1 binary @ 0x0017fd68 (asm-inspector)
-// Body order matches binary 0x0017fd7c..0x0017ff38:
+// ASM-verified: 2026-05-06T18:00 v1.6.1 SplatEntity::UpdateActiveSplats @0x001ec5d8 (asm-inspector)
+// Body order:
 //   (a) Per-impact splat-SFX gate ticks (3-iter loop).
 //   (b) Pulp-drip-gate timer + positive->non-positive fire edge.
 //   (c) Spring-rate compute -- consumes the PRIOR-frame cached count

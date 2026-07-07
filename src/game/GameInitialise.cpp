@@ -388,7 +388,14 @@ void GameInitialise(void* window, const char* config) {
 
     // Step 25: LoadContent calls (binary: 0x10c41a region)
     SplatEntity::LoadContent();
-    SplatEntity::CreatePool(48);     // binary calls CreatePool(30-50)
+    // SplatEntity::CreatePool is NOT called here in the binary -- the earlier
+    // CreatePool(48) here was a stale v1.5.x fabrication. The binary allocates
+    // the splat pool exactly once, from GameInit (v1.6.1 @0x001ce1c0, capacity
+    // 0x100=256; see GameInit.cpp step 15), which runs on first gameplay entry
+    // and unconditionally replaces any pre-existing pool (CreatePool deletes
+    // the old array before allocating). Allocating a smaller pool here would
+    // only matter if splats could spawn before that first GameInit call, which
+    // they cannot (splats are gameplay-only).
     // SliceEffect pool (capacity=100) is created in Fruit::LoadFruitModels (v1.6.1 @0x001e10c4)
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
