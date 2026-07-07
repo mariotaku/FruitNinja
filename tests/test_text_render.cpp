@@ -39,9 +39,6 @@
 #include <cstring>
 #include <cmath>
 #include <SDL_image.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // ---------------------------------------------------------------------------
 // GL extension function pointers (FBO + readpixels)
@@ -431,7 +428,8 @@ static const int LANG_EFF_MASK[LANG_COUNT] = {
 
 static bool TR_SaveGrid(
     const unsigned char* const* cells,  // [LANG_COUNT * EFF_COUNT] row-major, each CELL_W*CELL_H*4 (bottom-up GL)
-    const char* path)
+    fn::TestHarness& h,
+    const char* name)
 {
     const int totalW = NUM_EFFS  * CELL_W;
     const int totalH = NUM_LANGS * CELL_H;
@@ -501,15 +499,12 @@ static bool TR_SaveGrid(
         std::free(canvas);
         return false;
     }
-    int rc = IMG_SavePNG(surf, path);
+    bool ok = h.SavePng(surf, name);
     SDL_FreeSurface(surf);
     std::free(canvas);
-    if (rc != 0) {
-        fprintf(stderr, "[text_render] IMG_SavePNG(%s) failed: %s\n", path, IMG_GetError());
-        return false;
-    }
-    printf("[text_render] wrote %s (%dx%d, %d langs x %d effects)\n",
-           path, totalW, totalH, NUM_LANGS, NUM_EFFS);
+    if (!ok) return false;
+    printf("[text_render] grid %dx%d (%d langs x %d effects)\n",
+           totalW, totalH, NUM_LANGS, NUM_EFFS);
     return true;
 }
 
@@ -666,22 +661,9 @@ int main(int argc, char* argv[]) {
     // Save output PNG.
     bool saved = false;
     if (h.IsScreenshot()) {
-        // Create output directory.
-#ifdef _WIN32
-        _mkdir("tmp");
-        _mkdir("tmp/test");
-        _mkdir("tmp/test/screenshots");
-        _mkdir("tmp/test/screenshots/text_render");
-#else
-        mkdir("tmp", 0755);
-        mkdir("tmp/test", 0755);
-        mkdir("tmp/test/screenshots", 0755);
-        mkdir("tmp/test/screenshots/text_render", 0755);
-#endif
         const unsigned char* const* constCells =
             (const unsigned char* const*)cellPixels;
-        saved = TR_SaveGrid(constCells,
-                            "tmp/test/screenshots/text_render/grid.png");
+        saved = TR_SaveGrid(constCells, h, "text_render/grid");
         if (!saved) {
             fprintf(stderr, "FAIL: could not save grid PNG\n");
         }

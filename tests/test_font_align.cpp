@@ -56,9 +56,6 @@
 #include <cstring>
 #include <cmath>
 #include <SDL_image.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // ---------------------------------------------------------------------------
 // FBO helpers (matches test_renderer.cpp pattern)
@@ -269,27 +266,13 @@ static bool FA_RenderAndScan(AlignFBO& fbo, Mortar::Font* font, const char* text
 // PNG composite save helpers.
 // ---------------------------------------------------------------------------
 
-// Create tmp/test/screenshots/font_align/ directory.
-static void FA_MakeDir() {
-#ifdef _WIN32
-    _mkdir("tmp");
-    _mkdir("tmp/test");
-    _mkdir("tmp/test/screenshots");
-    _mkdir("tmp/test/screenshots/font_align");
-#else
-    mkdir("tmp",                              0755);
-    mkdir("tmp/test",                         0755);
-    mkdir("tmp/test/screenshots",             0755);
-    mkdir("tmp/test/screenshots/font_align",  0755);
-#endif
-}
-
 // Save one row's RGBA pixels (FA_W x FA_H, bottom-up GL) as a PNG after:
 //   - flipping vertically (GL bottom-up -> top-down for PNG viewers)
 //   - painting a 2-px wide magenta vertical line at anchorX
-// path: absolute or relative path to write.
+// name: <suite>/<case> screenshot name (harness builds the path + dirs).
 // Returns true on success.
-static bool FA_SaveRowPng(const unsigned char* glPixels, int anchorX, const char* path) {
+static bool FA_SaveRowPng(fn::TestHarness& h, const unsigned char* glPixels,
+                          int anchorX, const char* name) {
     // Flip bottom-up to top-down into a working buffer.
     unsigned char* flipped = (unsigned char*)std::malloc((size_t)FA_W * FA_H * 4);
     if (!flipped) return false;
@@ -325,22 +308,17 @@ static bool FA_SaveRowPng(const unsigned char* glPixels, int anchorX, const char
         std::free(flipped);
         return false;
     }
-    int rc = IMG_SavePNG(surf, path);
+    bool ok = h.SavePng(surf, name);
     SDL_FreeSurface(surf);
     std::free(flipped);
-    if (rc != 0) {
-        fprintf(stderr, "[font_align] IMG_SavePNG(%s) failed: %s\n", path, IMG_GetError());
-        return false;
-    }
-    printf("[font_align] wrote %s (%dx%d)\n", path, FA_W, FA_H);
-    return true;
+    return ok;
 }
 
 // Save composite PNG: numRows rows stacked vertically, each FA_W x FA_H.
 // glPixelRows: array of numRows pointers, each pointing to FA_W*FA_H*4 bytes (GL bottom-up RGBA).
 // Returns true on success.
-static bool FA_SaveCompositePng(const unsigned char* const* glPixelRows,
-                                int numRows, int anchorX, const char* path) {
+static bool FA_SaveCompositePng(fn::TestHarness& h, const unsigned char* const* glPixelRows,
+                                int numRows, int anchorX, const char* name) {
     int totalH = FA_H * numRows;
     unsigned char* canvas = (unsigned char*)std::malloc((size_t)FA_W * totalH * 4);
     if (!canvas) return false;
@@ -394,16 +372,11 @@ static bool FA_SaveCompositePng(const unsigned char* const* glPixelRows,
         std::free(canvas);
         return false;
     }
-    int rc = IMG_SavePNG(surf, path);
+    bool ok = h.SavePng(surf, name);
     SDL_FreeSurface(surf);
     std::free(canvas);
-    if (rc != 0) {
-        fprintf(stderr, "[font_align] composite IMG_SavePNG(%s) failed: %s\n",
-                path, IMG_GetError());
-        return false;
-    }
-    printf("[font_align] wrote composite %s (%dx%d, %d rows)\n",
-           path, FA_W, totalH, numRows);
+    if (!ok) return false;
+    printf("[font_align] composite %dx%d (%d rows)\n", FA_W, totalH, numRows);
     return true;
 }
 
@@ -494,7 +467,7 @@ static void SM_SetupPixelOrtho() {
 
 // Render scale x alignment matrix and save scale_matrix.png.
 // Must be called while the GL context is live (before Shutdown).
-static void SM_RenderMatrix(Mortar::Font* font, const char* text) {
+static void SM_RenderMatrix(fn::TestHarness& h, Mortar::Font* font, const char* text) {
     SmMatrixFBO smfbo;
     if (!smfbo.Create()) {
         fprintf(stderr, "[scale_matrix] SmMatrixFBO create failed -- skipping\n");
@@ -592,22 +565,18 @@ static void SM_RenderMatrix(Mortar::Font* font, const char* text) {
         }
     }
 
-    const char* kPath = "tmp/test/screenshots/font_align/scale_matrix.png";
     SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
         canvas, totalW, totalH,
         32, totalW * 4,
         0x000000FFu, 0x0000FF00u, 0x00FF0000u, 0xFF000000u);
     if (surf) {
-        int rc = IMG_SavePNG(surf, kPath);
-        SDL_FreeSurface(surf);
-        if (rc == 0) {
-            printf("[font_align] wrote scale_matrix.png (%dx%d)\n", totalW, totalH);
+        if (h.SavePng(surf, "font_align/scale_matrix")) {
+            printf("[font_align] scale_matrix %dx%d\n", totalW, totalH);
             printf("[font_align] cols left->right: LEFT(0x00) CTR(0x03) RIGHT(0x02) 0x0D 0x0F\n");
             printf("[font_align] rows top->bottom: 16 24 32 48 64 96 px\n");
             printf("[font_align] magenta=anchor; LEFT:text right, CTR:straddles, RIGHT:text left\n");
-        } else {
-            fprintf(stderr, "[font_align] IMG_SavePNG(%s) failed: %s\n", kPath, IMG_GetError());
         }
+        SDL_FreeSurface(surf);
     } else {
         fprintf(stderr, "[font_align] SDL_CreateRGBSurfaceFrom failed for scale_matrix\n");
     }
@@ -935,10 +904,9 @@ int main(int argc, char* argv[]) {
     // painted into every row so the viewer can see exactly where the anchor is.
     // -----------------------------------------------------------------------
     printf("[font_align] writing PNG output to tmp/test/screenshots/font_align/\n");
-    FA_MakeDir();
 
     // Scale x alignment matrix (6 scales x 5 align flags).
-    SM_RenderMatrix(font, kText);
+    SM_RenderMatrix(h, font, kText);
 
     // Per-flag individual PNGs.
     {
@@ -946,10 +914,9 @@ int main(int argc, char* argv[]) {
         static const char* const kFlagNames[FA_NUM_CASES] = { "00", "02", "03", "0d", "0f" };
         for (int i = 0; i < FA_NUM_CASES; ++i) {
             if (!pixBufs[i]) continue;
-            char path[256];
-            std::snprintf(path, sizeof(path),
-                          "tmp/test/screenshots/font_align/%s.png", kFlagNames[i]);
-            FA_SaveRowPng(pixBufs[i], anchorX, path);
+            char name[256];
+            std::snprintf(name, sizeof(name), "font_align/%s", kFlagNames[i]);
+            FA_SaveRowPng(h, pixBufs[i], anchorX, name);
         }
     }
 
@@ -959,8 +926,7 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < FA_NUM_CASES; ++i) {
             rowPtrs[i] = pixBufs[i];
         }
-        FA_SaveCompositePng(rowPtrs, FA_NUM_CASES, anchorX,
-                            "tmp/test/screenshots/font_align/all.png");
+        FA_SaveCompositePng(h, rowPtrs, FA_NUM_CASES, anchorX, "font_align/all");
     }
 
     // Free pixel capture buffers.

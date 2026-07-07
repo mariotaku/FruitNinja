@@ -31,7 +31,7 @@ macro(add_scene_test _target _source)
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
 
-    # SDL2_image: test_harness.h uses IMG_SavePNG / IMG_SaveJPG.
+    # SDL2_image: test_harness.h uses IMG_SavePNG.
     if (TARGET SDL2_image::SDL2_image)
         target_link_libraries(${_target} PRIVATE SDL2_image::SDL2_image)
     endif()

@@ -19,6 +19,7 @@
 #include "entities/ActorManager.h"
 #include "entities/Fruit.h"
 #include "hud/HUD.h"
+#include "screens/MainScreen.h"
 #include <cstring>
 #include <list>
 #include <map>
@@ -29,9 +30,12 @@ static int FailUsage() {
     return 1;
 }
 
-// Interactive tick callback: just keeps ticking. Returns true always so the
-// loop runs until ESC / window close.
-static bool GameplayTick(Game& /*game*/, int /*frame*/, void* /*userdata*/) {
+// Interactive tick callback: re-asserts the requested game mode each tick
+// as a defensive guard (see the SetCameraTransition/SetState fix in main() for
+// the real root-cause fix) and keeps ticking until ESC / window close.
+static bool GameplayTick(Game& /*game*/, int /*frame*/, void* userdata) {
+    game_work.gameMode   = *(const uint8_t*)userdata;
+    game_work.bM_bPaused = 0;
     return true;
 }
 
@@ -88,10 +92,32 @@ int main(int argc, char* argv[]) {
     // that state machine, so clear it manually to enable the spawn pump.
     game_work.bM_bPaused = 0;
 
+    // Root-cause fix (#37): the REAL "mode picked" transition -- v1.6.1
+    // GameModeScreen::Update @0x1829e4 cases 3-6 (GameModeScreen.cpp:508-535) --
+    // does THREE things once the camera-out fade crosses its threshold, not just
+    // PrepareForLevelStart()/SetupLevel():
+    //   1. MainScreen::SetCameraTransition(0.0f)  -- i.e. game_work.m_PauseAmount = 0.0f
+    //   2. game_work.bM_bPaused = 0                (already done above)
+    //   3. MainScreen::SetState(STATE_CAMERA_FADE)
+    // This test only ever did PrepareForLevelStart() + bM_bPaused=0, so
+    // m_PauseAmount was left at GameInit's -1.0f for the entire run (MainScreen
+    // idles in STATE_CREATE_BUTTONS once the intro zoom settles -- it never
+    // reaches case STATE_CAMERA_ZOOM/STATE_GAME_START again, and neither of
+    // those write m_PauseAmount toward 0 on their own; STATE_GAME_START is in
+    // fact dead code in v1.6.1 -- zero inbound xrefs, see MainScreen.cpp:959).
+    // arcade_spawn_real avoids this by forcing m_PauseAmount=0.0f directly
+    // every frame; mirror the binary's real call sequence here instead of
+    // re-deriving the same fix ad hoc.
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetCameraTransition(0.0f);
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+    }
+
+    uint8_t gameModeByte = (uint8_t)gameMode;
     if (h.IsInteractive()) {
         // After SetupLevel, keep ticking until ESC so the tester can watch
         // gameplay for the chosen mode.
-        h.RunInteractive(GameplayTick, NULL, /*maxFrames=*/-1);
+        h.RunInteractive(GameplayTick, &gameModeByte, /*maxFrames=*/-1);
         return h.Shutdown();
     }
 
@@ -111,11 +137,31 @@ int main(int argc, char* argv[]) {
     // SpawnFruit (@0x00124298) launch offset (pos += throwDir*(scale.y*100),
     // @0x00124714) lengthened fruit flight times and shifted the death/spawn
     // overlap.
+    // Arcade's first wave is "BlankWave" (waveNo=0, Spawn min=0 max=0 -> spawns
+    // NOTHING, NextWaveDelay delay=0.85) per the WaveManager::Init @0x00129934
+    // "until" auto-derivation: waves without an explicit until end at (next
+    // higher waveNo)-1, so waveNo=0 BlankWave is the only waveCount==0 match.
+    // The first REAL fruit comes from the waveNo=1 waves after GetNextWave
+    // fires (~frame 55+).
+    //
+    // Belt-and-suspenders: re-assert gameMode/bM_bPaused/bM_Mode/m_PauseAmount
+    // every frame, mirroring arcade_spawn_real's per-frame reassertion. Nothing
+    // in the current call graph should overwrite these mid-run once the
+    // SetCameraTransition/SetState fix above has fired, but MainScreen's
+    // STATE_CAMERA_ZOOM/STATE_GAME_START handlers (dead in this run, since
+    // MainScreen already idles in STATE_CREATE_BUTTONS/STATE_CAMERA_FADE
+    // outside of this test) do write gameMode=0 / m_PauseAmount if ever
+    // re-entered -- guard against that class of regression cheaply.
     int spawnCount = 0;
     int waveTransitions = 0;
     WAVE_INFO* prevWave = wm->m_pCurrentWave[0];
     std::map<Mortar::Entity*, float> liveBefore;
     for (int i = 0; i < 180; ++i) {
+        game_work.gameMode      = (uint8_t)gameMode;
+        game_work.bM_bPaused    = 0;
+        game_work.bM_Mode       = false;
+        game_work.m_PauseAmount = 0.0f;
+
         Mortar::ActorManager* am = h.game.actorManager;
         liveBefore.clear();
         if (am) {
@@ -142,6 +188,15 @@ int main(int argc, char* argv[]) {
         if (wm->m_pCurrentWave[0] != prevWave) {
             waveTransitions++;
             prevWave = wm->m_pCurrentWave[0];
+            // Diagnostic (cheap; stays in for future regressions): confirm the
+            // post-transition wave is a real, non-empty arcade wave, not an
+            // empty/classic-list pick.
+            WAVE_INFO* w = prevWave;
+            printf("[test_gameplay] frame %d: wave transition -> waveNo=%d spawners=%d "
+                   "wfe=%d gameMode=%d m_PauseAmount=%.3f bM_Mode=%d\n",
+                   i, w ? w->m_WaveNumber : -999, w ? w->m_SpawnerCount : -1,
+                   w ? (int)w->m_bWaitForEntities : -1,
+                   (int)game_work.gameMode, game_work.m_PauseAmount, (int)game_work.bM_Mode);
         }
     }
 
@@ -158,7 +213,7 @@ int main(int argc, char* argv[]) {
         printf("[test_gameplay] WARN: no wave transitions in 3s; first wave still active.\n");
     }
 
-    if (h.IsScreenshot()) h.Screenshot();
+    if (h.IsScreenshot()) h.ScreenshotPng();
 
     printf("PASS: gameplay mode '%s' OK (%d spawns, %d wave transitions)\n",
            modeName, spawnCount, waveTransitions);

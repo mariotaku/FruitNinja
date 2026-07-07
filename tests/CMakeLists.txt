@@ -31,7 +31,7 @@ macro(fn_add_game_test _target _source)
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
 
-    # SDL2_image: used by test_harness.h for IMG_SavePNG / IMG_SaveJPG.
+    # SDL2_image: used by test_harness.h for IMG_SavePNG.
     # Only linked to test targets, never to game/engine targets.
     if (TARGET SDL2_image::SDL2_image)
         target_link_libraries(${_target} PRIVATE SDL2_image::SDL2_image)
@@ -489,6 +489,17 @@ fn_add_game_test(test_bonus_phase test_bonus_phase.cpp)
 add_test(NAME bonus_phase COMMAND test_bonus_phase)
 set_tests_properties(bonus_phase PROPERTIES TIMEOUT 120)
 
+# BONUS SCREEN -> GAME OVER transition crash repro (task #40). Boots Arcade,
+# activates the x2 (score_mult) + freeze powerups so their ScreenEffect HUD
+# controls (ScoreMultiplyerBoard / TimeSinkControl) are live, then ticks the
+# full game loop through the bonus finale + STATE_MAIN_DISPLAY handoff while the
+# powerups expire and their boards linger in the HUD. Meant to be run under
+# ASAN to catch the wasm "index out of bounds" (stale-vtable/UAF) natively with
+# a symbolized stack. PASSES when the flow completes without a crash/stall.
+fn_add_game_test(test_bonus_crash test_bonus_crash.cpp)
+add_test(NAME bonus_crash COMMAND test_bonus_crash)
+set_tests_properties(bonus_crash PROPERTIES TIMEOUT 180)
+
 # BonusScreen unit test. Constructs a BonusScreen directly with 3 faked
 # awards (no BonusManager), ticks frames, asserts size populated, score
 # advances, dismiss timer fires. Catches ctor / Update / phase-timer
@@ -781,6 +792,15 @@ foreach(_pu_combo freeze frenzy x2 freeze+frenzy freeze+x2 frenzy+x2 all3)
     set_tests_properties(screenshot_powerup_${_pu_combo} PROPERTIES TIMEOUT 60
         LABELS "category_rendering;component_powerup_hud")
 endforeach()
+
+# Arcade "60 SECONDS ... GO!!" start intro (ready_set_go automatic power,
+# ScreenEffect-driven arcade_60seconds/arcade_go images). See --combo=intro
+# doc comment in test_powerup_hud.cpp for the window-timing derivation.
+# Writes tmp/test/screenshots/powerup/intro_60seconds.png and intro_go.png.
+add_test(NAME screenshot_arcade_intro
+         COMMAND test_powerup_hud --screenshot --combo=intro)
+set_tests_properties(screenshot_arcade_intro PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_screeneffect")
 
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup,

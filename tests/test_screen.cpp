@@ -467,7 +467,7 @@ int main(int argc, char* argv[]) {
         if (h.IsScreenshot()) {
             char screenshotName[64];
             snprintf(screenshotName, sizeof(screenshotName), "screen_%s", screenName);
-            h.Screenshot(screenshotName);
+            h.ScreenshotPng(screenshotName);
         }
     }
 

@@ -226,17 +226,11 @@ int main(int argc, char* argv[]) {
     // 120 burn-in frames: lets GameInit run through the Splash->Game state
     // transition so fonts/textures are loaded before we strip the HUD.
     h.SetInitFrames(120);
-    for (int _ai = 2; _ai < argc; ++_ai) {
-        if (std::strcmp(argv[_ai], "--isolated") == 0) {
-            g_Isolated = true;
-        } else if (std::strncmp(argv[_ai], "--fact=", 7) == 0) {
-            g_FactOverride = std::atoi(argv[_ai] + 7);
-        } else if (std::strncmp(argv[_ai], "--lang=", 7) == 0) {
-            // Parse here for label composition; TestHarness::ParseFlags()
-            // also parses this arg to apply the actual locale.
-            g_LangFlag = ParseLanguageArg(argv[_ai] + 7);
-        }
-    }
+    g_Isolated     = h.OptFlag("isolated");
+    g_FactOverride = h.OptInt("fact", g_FactOverride);
+    // Parse --lang= for label composition; TestHarness::ParseFlags() also parses
+    // it to apply the actual locale.
+    if (const char* langv = h.Opt("lang", NULL)) g_LangFlag = ParseLanguageArg(langv);
     if (!h.ParseFlags()) return 1;
     if (!h.InitComponent()) return 1;
 
@@ -431,7 +425,8 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
         std::strncpy(b.m_DisplayName, name, sizeof(b.m_DisplayName) - 1);
         b.m_DisplayName[sizeof(b.m_DisplayName) - 1] = '\0';
         b.m_Tier = 50;
-        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
+        // use the real bonusawards.xml icon (result_board_star.tex does not exist -> iconless screenshot)
+        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("bonus_icon_total_combo.tex");
         bm->m_BestBonuses.push_back(b);
     }
 
@@ -442,7 +437,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
         std::strncpy(b.m_DisplayName, name, sizeof(b.m_DisplayName) - 1);
         b.m_DisplayName[sizeof(b.m_DisplayName) - 1] = '\0';
         b.m_Tier = 50;
-        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("result_board_star.tex");
+        b.m_StarTexture = Mortar::TextureManager::LoadLocalisedTexture("bonus_icon_no_fruit_dropped.tex");
         bm->m_BestBonuses.push_back(b);
     }
 

@@ -64,12 +64,10 @@ static int CountNewControls(const std::list<HUDControl*>& existing) {
 }
 
 int main(int argc, char* argv[]) {
-    bool doAbout = false;
-    bool doShop  = false;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--mode=about") == 0) doAbout = true;
-        else if (strcmp(argv[i], "--mode=shop") == 0) doShop  = true;
-    }
+    fn::TestHarness h(argc, argv, "dojo_nav");
+    const char* mode = h.Opt("mode", NULL);
+    bool doAbout = mode && strcmp(mode, "about") == 0;
+    bool doShop  = mode && strcmp(mode, "shop")  == 0;
     if (!doAbout && !doShop) {
         fprintf(stderr, "FAIL: pass --mode=about or --mode=shop\n");
         return 1;
@@ -78,8 +76,7 @@ int main(int argc, char* argv[]) {
     const char* modeName = doAbout ? "about" : "shop";
     char shotLabel[256];
     snprintf(shotLabel, sizeof(shotLabel), "dojo_nav/%s", modeName);
-
-    fn::TestHarness h(argc, argv, shotLabel);
+    h.label = shotLabel;
     // 60 burn-in frames: game boots, fonts/textures live, MainScreen initialises its
     // menu entities. Full game init (NOT component mode) so ActorManager::Update()
     // runs each frame and can process entity physics / reap flung entities.

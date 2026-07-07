@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (h.IsScreenshot()) h.Screenshot();
+    if (h.IsScreenshot()) h.ScreenshotPng();
 
     printf("PASS: arcade_spawn_real -- %d wave transitions in 600 frames\n",
            waveTransitions);

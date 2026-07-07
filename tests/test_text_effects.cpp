@@ -38,9 +38,6 @@
 #include <cstring>
 #include <cmath>
 #include <SDL_image.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // ---------------------------------------------------------------------------
 // GL extension function pointers (FBO + readpixels)
@@ -489,7 +486,8 @@ static bool TE_RenderCell(
 
 static bool TE_SaveGrid(
     const unsigned char* const* cells, // [TE_NCELLS] row-major, each TE_CELL_W*TE_CELL_H*4 (bottom-up GL)
-    const char* path)
+    fn::TestHarness& h,
+    const char* name)
 {
     const int totalW = TE_NCOLS * TE_CELL_W;
     const int totalH = TE_NROWS * TE_CELL_H;
@@ -555,15 +553,12 @@ static bool TE_SaveGrid(
         std::free(canvas);
         return false;
     }
-    int rc = IMG_SavePNG(surf, path);
+    bool ok = h.SavePng(surf, name);
     SDL_FreeSurface(surf);
     std::free(canvas);
-    if (rc != 0) {
-        fprintf(stderr, "[text_effects] IMG_SavePNG(%s) failed: %s\n", path, IMG_GetError());
-        return false;
-    }
-    printf("[text_effects] wrote %s (%dx%d, %d rows x %d cols)\n",
-           path, totalW, totalH, TE_NROWS, TE_NCOLS);
+    if (!ok) return false;
+    printf("[text_effects] grid %dx%d (%d rows x %d cols)\n",
+           totalW, totalH, TE_NROWS, TE_NCOLS);
     return true;
 }
 
@@ -700,19 +695,8 @@ int main(int argc, char* argv[]) {
     // Write PNG.
     bool saved = false;
     if (h.IsScreenshot()) {
-#ifdef _WIN32
-        _mkdir("tmp");
-        _mkdir("tmp/test");
-        _mkdir("tmp/test/screenshots");
-        _mkdir("tmp/test/screenshots/text_effects");
-#else
-        mkdir("tmp", 0755);
-        mkdir("tmp/test", 0755);
-        mkdir("tmp/test/screenshots", 0755);
-        mkdir("tmp/test/screenshots/text_effects", 0755);
-#endif
         const unsigned char* const* constCells = (const unsigned char* const*)cellPixels;
-        saved = TE_SaveGrid(constCells, "tmp/test/screenshots/text_effects/grid.png");
+        saved = TE_SaveGrid(constCells, h, "text_effects/grid");
         if (!saved) {
             fprintf(stderr, "FAIL: could not save effects grid PNG\n");
         }

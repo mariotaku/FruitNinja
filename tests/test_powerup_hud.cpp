@@ -3,7 +3,18 @@
 //
 // Usage: test_powerup_hud [--screenshot|--interactive|--headless] [--combo=<name>]
 //   --combo one of: freeze | frenzy | x2 | freeze+frenzy | freeze+x2 |
-//                   frenzy+x2 | all3   (default: all3)
+//                   frenzy+x2 | all3 | intro   (default: all3)
+//
+// --combo=intro exercises a different power: "ready_set_go" (poweruplist.xml),
+// the automatic="true" power activated by PowerUpManager::Reset(true) at Arcade
+// start. Its <effect> spawns two EffectImages -- arcade_60seconds.tex and
+// arcade_go.tex -- gated on PowerUp::m_LongestRemaining (counts DOWN from
+// m_TotalTime=2.0 to 0) via ScreenEffect::Update's (wEnd,wStart] window (see
+// ScreenEffect.cpp @0x00148844): "60 SECONDS" shows for elapsed in [0.3,1.1]s,
+// "GO!!" for elapsed in [1.2,2.0]s. Unlike the other combos, we do NOT pin the
+// timer -- we drive real dt so the two images cross their real windows, and
+// screenshot at t=0.5s and t=1.5s (tmp/test/screenshots/powerup/intro_60seconds.png,
+// powerup/intro_go.png).
 //
 // The three arcade "banana" powerups are activated by StringHash of their XML
 // name (FruitNinjaBada/Data/xml/poweruplist.xml):
@@ -55,6 +66,7 @@
 #include "game/GameModifier.h"
 #include "game/GameMode.h"
 #include "game/GameWork.h"
+#include "game/FruitSaveData.h"
 #include "hud/HUD.h"
 #include "engine/util/StringHash.h"
 #include "math/Vec3.h"
@@ -90,6 +102,14 @@ static void PowerUpPostFrame(void* ud, float /*dt*/) {
     static_cast<PowerUpManager*>(ud)->Draw();
 }
 
+// Pre-HUD hook for --combo=intro: unlike PowerUpPreFrame, this does NOT pin
+// m_BonusAccum -- ready_set_go's arcade_60seconds/arcade_go images are gated
+// on the real, decreasing m_LongestRemaining, so we must let time actually
+// advance for the two images to cross their windows.
+static void IntroPreFrame(void* ud, float dt) {
+    static_cast<PowerUpManager*>(ud)->Update(dt);
+}
+
 // Resolve a --combo key to the set of powerup XML names to activate.
 // Returns the count; fills names[0..count-1]. Unknown -> all3.
 static int ComboNames(const char* combo, const char* names[3]) {
@@ -105,16 +125,13 @@ static int ComboNames(const char* combo, const char* names[3]) {
 }
 
 int main(int argc, char* argv[]) {
-    const char* combo = "all3";
-    for (int i = 1; i < argc; ++i) {
-        if (std::strncmp(argv[i], "--combo=", 8) == 0) combo = argv[i] + 8;
-    }
+    fn::TestHarness h(argc, argv, "powerup");
+    const char* combo = h.Opt("combo", "all3");
 
     // label = "powerup/<combo>"; kept alive for the harness lifetime (TestHarness
     // stores the const char* by pointer).
     std::string label = std::string("powerup/") + combo;
-
-    fn::TestHarness h(argc, argv, label.c_str());
+    h.label = label.c_str();
     // 120 burn-in frames: lets GameInitialise -> PowerUpManager::Load parse
     // poweruplist.xml (templates + screen effects) before we clone/activate.
     h.SetInitFrames(120);
@@ -133,6 +150,42 @@ int main(int argc, char* argv[]) {
     // WaveManager::LoadTextures normally primes the powerup icon/bar textures on
     // wave start; the isolated boot may not have reached a wave, so do it here.
     pum->LoadTextures();
+
+    if (std::strcmp(combo, "intro") == 0) {
+        Vec3 origin(0.0f, 0.0f, 0.0f);
+        // Real arcade seeds time-remaining via TimeControl::Reset (v1.6.1 @0x001c0930)
+        // BEFORE ready_set_go activates. Without it, GameModifier::OnDeferComplete
+        // (v1.6.1 @0x00140890) clamps m_BonusAccum 2.0 -> 0.1 (target=0 < 2.0), collapsing
+        // the 2s intro to ~6 frames so it's gone before the screenshots. Seed the precondition.
+        if (game_work.m_SaveData) game_work.m_SaveData->m_TimeRemainingSave = 60.9f;
+        PowerUp* p = pum->ActivatePower(StringHash("ready_set_go"), origin, NULL);
+        std::printf("[%s] activate \"ready_set_go\" -> %p\n", label.c_str(), (void*)p);
+        if (!p) {
+            std::printf("SKIP: %s ready_set_go did not activate "
+                        "(hash mismatch or template not loaded)\n", label.c_str());
+            return h.Shutdown();
+        }
+
+        // Drive real time: 30 frames (0.5s) lands inside arcade_60seconds' window
+        // (elapsed 0.3-1.1s); another 60 frames (total 90 = 1.5s) lands inside
+        // arcade_go's window (elapsed 1.2-2.0s). See ScreenEffect::Update window math.
+        h.RunComponentHeadlessHooked(30, IntroPreFrame, NULL, pum);
+        std::printf("[%s] t=0.5s longest=%.2f total=%.2f\n",
+                    label.c_str(), p->m_LongestRemaining, p->m_TotalTime);
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("powerup/intro_60seconds")) return 2;
+        }
+
+        h.RunComponentHeadlessHooked(60, IntroPreFrame, NULL, pum);
+        std::printf("[%s] t=1.5s longest=%.2f total=%.2f\n",
+                    label.c_str(), p->m_LongestRemaining, p->m_TotalTime);
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("powerup/intro_go")) return 2;
+        }
+
+        std::printf("PASS: %s rendered\n", label.c_str());
+        return h.Shutdown();
+    }
 
     const char* names[3] = { NULL, NULL, NULL };
     int count = ComboNames(combo, names);

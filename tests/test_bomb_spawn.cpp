@@ -342,7 +342,7 @@ int main(int argc, char* argv[]) {
         h.RunInteractive(IdleTick, NULL, /*maxFrames=*/60 * 60 * 5);
     }
 
-    if (h.IsScreenshot()) h.Screenshot();
+    if (h.IsScreenshot()) h.ScreenshotPng();
 
     if (failures > 0) {
         fprintf(stderr, "FAIL: %d variant(s) failed\n", failures);

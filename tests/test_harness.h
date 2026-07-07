@@ -2,7 +2,7 @@
 //
 // Factors out the ~80 lines of duplicated SDL+GL+window+Game boilerplate
 // each test was carrying, plus the --interactive / --screenshot flag
-// parsing and the glReadPixels-based PPM dumper.
+// parsing and the glReadPixels-based PNG dumper.
 //
 // Usage:
 //   #include "test_harness.h"
@@ -20,15 +20,21 @@
 //           h.RunHeadless(210);                     // 180 transition + 30 idle frames
 //           // ...assertions...
 //       }
-//       if (h.IsScreenshot()) h.Screenshot();       // writes tmp/test/screenshots/<suite>/<case>.ppm
+//       if (h.IsScreenshot()) h.ScreenshotPng();    // writes tmp/test/screenshots/<suite>/<case>.png
 //
 //       return h.Shutdown();                        // SDL/GL teardown + final PASS line
 //   }
 //
+// PNG is the single framebuffer-capture format:
+//   ScreenshotPng(name)  -- capture the live framebuffer to a PNG.
+//   SavePng(surf, name)  -- save a caller-composed SDL_Surface to a PNG
+//                           (font/text grid tests that build their own image).
+// Both share the <suite>/<case> path convention below.
+//
 // Screenshot paths use a <suite>/<case> scheme: the name (or nameOverride)
-// passed to Screenshot/ScreenshotPng/ScreenshotJpg may contain a single '/'
-// separating suite from case. The intermediate subdirectory is created
-// automatically (e.g. "gameover/classic" -> tmp/test/screenshots/gameover/classic.png).
+// passed to ScreenshotPng/SavePng may contain a single '/' separating suite
+// from case. The intermediate subdirectory is created automatically
+// (e.g. "gameover/classic" -> tmp/test/screenshots/gameover/classic.png).
 //
 // The harness is header-only / inline; no separate .cpp. Header-only keeps
 // link-line surgery off the test CMake list. Cross-build (asm-verify
@@ -184,6 +190,47 @@ struct TestHarness {
     // Returns true if --frames or --duration was parsed; test should use frames
     // instead of its own default frame count.
     bool HasFramesOverride() const { return frames >= 0; }
+
+    // -------- generic option accessors --------
+    // Centralised per-test CLI parsing so individual tests stop hand-rolling
+    // strncmp(argv[i], "--key=", ...) loops. CLI spelling is the conventional
+    // "--key=value" (Opt / OptInt) or a bare "--key" boolean (OptFlag). These
+    // scan argv on each call -- argv is tiny for tests, so no caching needed.
+    // They are independent of ParseFlags(); a caller may use them with or
+    // without having called ParseFlags().
+    //
+    //   Opt("content", "default")   -> value of --content=VALUE, else the default.
+    //   OptInt("fact", 3)           -> atoi of --fact=VALUE, else 3.
+    //   OptFlag("debug-textbounds") -> true if a bare --debug-textbounds is present.
+    //
+    // Opt returns a pointer INTO argv (valid for the process lifetime) or the
+    // caller-supplied default pointer. It never returns a dangling pointer.
+    const char* Opt(const char* key, const char* def = NULL) const {
+        size_t klen = std::strlen(key);
+        for (int i = 1; i < argc; ++i) {
+            const char* a = argv[i];
+            if (a[0] == '-' && a[1] == '-' &&
+                std::strncmp(a + 2, key, klen) == 0 && a[2 + klen] == '=') {
+                return a + 2 + klen + 1;
+            }
+        }
+        return def;
+    }
+
+    // atoi of Opt(key); returns def when --key=VALUE is absent.
+    int OptInt(const char* key, int def) const {
+        const char* v = Opt(key, NULL);
+        return v ? std::atoi(v) : def;
+    }
+
+    // True if a bare "--key" argument is present (exact match, no '=').
+    bool OptFlag(const char* key) const {
+        for (int i = 1; i < argc; ++i) {
+            const char* a = argv[i];
+            if (a[0] == '-' && a[1] == '-' && std::strcmp(a + 2, key) == 0) return true;
+        }
+        return false;
+    }
 
     // -------- init --------
     bool Init() {
@@ -508,45 +555,8 @@ struct TestHarness {
     }
 
     // -------- screenshot --------
-    // Writes tmp/test/screenshots/<suite>/<case>.ppm. Returns true on success.
-    // The name (nameOverride or label) may contain a '/' to place the file in
-    // a suite subdirectory, e.g. "gameover/classic" ->
-    // tmp/test/screenshots/gameover/classic.ppm.
-    bool Screenshot(const char* nameOverride = NULL) {
-        int ww = 0, wh = 0;
-        SDL_GL_GetDrawableSize(window, &ww, &wh);
-        unsigned char* pixels = (unsigned char*)std::malloc((size_t)ww * wh * 3);
-        if (!pixels) return false;
-        if (!m_glReadPixels) {
-            m_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
-        }
-        if (!m_glReadPixels) {
-            std::fprintf(stderr, "[%s] glReadPixels unavailable\n", label);
-            std::free(pixels);
-            return false;
-        }
-        const unsigned int GL_RGB_           = 0x1907;
-        const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
-        m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, pixels);
-
-        const char* name = nameOverride ? nameOverride : label;
-        MakeScreenshotDir_(name);
-        char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.ppm", name);
-        FILE* f = std::fopen(path, "wb");
-        if (!f) { std::free(pixels); return false; }
-        std::fprintf(f, "P6\n%d %d\n255\n", ww, wh);
-        // Flip bottom-up -> top-down for viewers.
-        for (int y = wh - 1; y >= 0; --y) {
-            std::fwrite(pixels + (size_t)y * ww * 3, 1, (size_t)ww * 3, f);
-        }
-        std::fclose(f);
-        std::printf("[%s] wrote %s (%dx%d)\n", label, path, ww, wh);
-        std::free(pixels);
-        return true;
-    }
-
-    // Writes tmp/test/screenshots/<suite>/<case>.png (compressed PNG, RGB, top-down).
+    // Writes tmp/test/screenshots/<suite>/<case>.png (compressed PNG, RGB, top-down)
+    // by capturing the live framebuffer. PNG is the ONE framebuffer-capture format.
     // The name (nameOverride or label) may contain a '/' for suite/case nesting.
     // Uses SDL2_image IMG_SavePNG. Returns true on success.
     bool ScreenshotPng(const char* nameOverride = NULL) {
@@ -556,9 +566,8 @@ struct TestHarness {
         SDL_GL_GetDrawableSize(window, &ww, &wh);
 
         const char* name = nameOverride ? nameOverride : label;
-        MakeScreenshotDir_(name);
         char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.png", name);
+        BuildScreenshotPath_(name, "png", path, sizeof(path));
 
         SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
             pixels, ww, wh,
@@ -585,42 +594,24 @@ struct TestHarness {
         return true;
     }
 
-    // Writes tmp/test/screenshots/<suite>/<case>.jpg (JPEG, RGB, top-down).
-    // The name (nameOverride or label) may contain a '/' for suite/case nesting.
-    // quality: 0-100 (default 90). Uses SDL2_image IMG_SaveJPG.
-    bool ScreenshotJpg(const char* nameOverride = NULL, int quality = 90) {
-        unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
-        if (!pixels) return false;
-        int ww = 0, wh = 0;
-        SDL_GL_GetDrawableSize(window, &ww, &wh);
-
-        const char* name = nameOverride ? nameOverride : label;
-        MakeScreenshotDir_(name);
+    // Save a caller-composed SDL_Surface as a PNG, using the SAME <suite>/<case>
+    // path convention + auto directory creation as ScreenshotPng ('name' may
+    // contain one '/'). For tests that build their own image (font/text grids)
+    // instead of capturing the live framebuffer.
+    //
+    // Does NOT take ownership of 'surf' -- the caller still frees it (and any
+    // backing pixel buffer). Returns true on success.
+    bool SavePng(SDL_Surface* surf, const char* name) {
+        if (!surf || !name) return false;
         char path[256];
-        std::snprintf(path, sizeof(path), "tmp/test/screenshots/%s.jpg", name);
-
-        SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
-            pixels, ww, wh,
-            24,
-            ww * 3,
-            0x000000FFu,
-            0x0000FF00u,
-            0x00FF0000u,
-            0u);
-        if (!surf) {
-            std::fprintf(stderr, "[%s] SDL_CreateRGBSurfaceFrom failed: %s\n",
-                         label, SDL_GetError());
-            std::free(pixels);
-            return false;
-        }
-        int rc = IMG_SaveJPG(surf, path, quality);
-        SDL_FreeSurface(surf);
-        std::free(pixels);
+        BuildScreenshotPath_(name, "png", path, sizeof(path));
+        int rc = IMG_SavePNG(surf, path);
         if (rc != 0) {
-            std::fprintf(stderr, "[%s] IMG_SaveJPG failed: %s\n", label, IMG_GetError());
+            std::fprintf(stderr, "[%s] IMG_SavePNG(%s) failed: %s\n",
+                         label, path, IMG_GetError());
             return false;
         }
-        std::printf("[%s] wrote %s (%dx%d, quality=%d)\n", label, path, ww, wh, quality);
+        std::printf("[%s] wrote %s\n", label, path);
         return true;
     }
 
@@ -719,6 +710,16 @@ private:
         }
         std::free(tmp);
         return flip;
+    }
+
+    // Create the output directory tree for 'name' and build the full
+    // "tmp/test/screenshots/<name>.<ext>" path into outBuf. Shared by
+    // ScreenshotPng and SavePng so both honour the <suite>/<case> convention
+    // and identical directory auto-creation.
+    void BuildScreenshotPath_(const char* name, const char* ext,
+                              char* outBuf, size_t bufSize) {
+        MakeScreenshotDir_(name);
+        std::snprintf(outBuf, bufSize, "tmp/test/screenshots/%s.%s", name, ext);
     }
 
     // Create tmp/test/screenshots/ and any subdirectory implied by 'name'.

@@ -22,7 +22,7 @@
 //   ./build/host/tests/scenes/scene_bomb_scale.exe --screenshot
 //   ./build/host/tests/scenes/scene_bomb_scale.exe --interactive   (visual check)
 //
-// Screenshot written to: tmp/test/screenshots/scene_bomb_scale.ppm
+// Screenshot written to: tmp/test/screenshots/scene_bomb_scale.png
 
 #include "../test_harness.h"
 #include "entities/Bomb.h"
@@ -39,10 +39,6 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
-#include <sys/stat.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
 // Scale constants matching test_menubutton_scale / test_dojoscreen_bomb_scale.
 // Home bomb scale (from FruitInfo_GetBombSize() * 0.01 * 1.0 in Bomb::Init with
@@ -258,26 +254,8 @@ int main(int argc, char* argv[]) {
         return h.Shutdown();
     }
 
-    // Save screenshot for visual inspection.
-    {
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
-        // Write PPM (same format as TestHarness::Screenshot, bottom-up -> top-down flip).
-        FILE* f = fopen("tmp/test/screenshots/scene_bomb_scale.ppm", "wb");
-        if (f) {
-            fprintf(f, "P6\n%d %d\n255\n", fw, fh);
-            for (int y = fh - 1; y >= 0; --y)
-                fwrite(pixels + (size_t)y * fw * 3, 1, (size_t)fw * 3, f);
-            fclose(f);
-            printf("[scene_bomb_scale] screenshot: tmp/test/screenshots/scene_bomb_scale.ppm (%dx%d)\n",
-                   fw, fh);
-        } else {
-            fprintf(stderr, "[scene_bomb_scale] WARN: could not write screenshot\n");
-        }
-    }
+    // Save screenshot for visual inspection (re-reads the intact back buffer).
+    h.ScreenshotPng("scene_bomb_scale");
 
     // Measure each half.
     // The window is 960x640 (from TestHarness::Init).
