@@ -117,7 +117,7 @@ public:
     void BuildBonusText();
 
 private:
-    // v1.6.1 BonusScreen::AwardScores @ 0x0015393c. One-shot finale fired once
+    // v1.6.1 BonusScreen::AwardScores @ 0x0016393c. One-shot finale fired once
     // from Update when the per-award reveal window ends (m_FinaleFired latch).
     void AwardScores();
 };

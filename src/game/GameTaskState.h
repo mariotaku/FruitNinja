@@ -119,8 +119,8 @@ struct GameTaskState {
     // Gap +0xDC..+0xF7: unnamed binary fields not yet RE'd
     uint8_t _gap_dc[0xf8 - 0xdc];  // 0x1c bytes (+0xdc..+0xf7)
 
-    // +0xf8: "Menu-bomb flash" flag. Set to 1 by HitMenuBomb (binary @ 0x0016b234)
-    // before arming bombHitTimer=2.0; cleared to 0 by HitBomb (binary @ 0x0016b0fc)
+    // +0xf8: "Menu-bomb flash" flag. Set to 1 by HitMenuBomb (v1.6.1 @ 0x001cf42c)
+    // before arming bombHitTimer=2.0; cleared to 0 by HitBomb (v1.6.1 @ 0x001cf27c)
     // before arming bombHitTimer=3.2. Gates the GameUpdate cross-1.5 GameOver
     // trigger so that Quit-from-GameOverScreen / PauseScreen quit / Zen-mode bomb
     // penalty animations don't re-fire GameOver.

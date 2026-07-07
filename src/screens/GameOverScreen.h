@@ -179,7 +179,7 @@ private:
     void PostCallback(int result);        // v1.6.1 @ 0x00184d2c
     void LeaderboardsCallback();          // v1.6.1 @ 0x001405a0
     void RetryCallback();                 // v1.6.1 @ 0x0014105c
-    void QuitCallback();                  // v1.6.1 @ 0x00140620
+    void QuitCallback();                  // v1.6.1 @ 0x00184d6c
     void OnRetryClicked();
     void OnQuitClicked();
     void DeletedControl(HUDControl* ctrl);// v1.6.1 @ 0x00140558

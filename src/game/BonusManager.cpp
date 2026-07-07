@@ -84,7 +84,7 @@ void BonusManager::ClearBestBonuses() {
 }
 
 // ---------------------------------------------------------------------------
-// SetUpBonusScreen -- Binary @ 0x0010e404
+// SetUpBonusScreen -- v1.6.1 BonusManager::SetUpBonusScreen @0x0012ede8
 //
 // Binary flow:
 //   1. ClearBestBonuses()
@@ -96,21 +96,24 @@ void BonusManager::ClearBestBonuses() {
 //
 // Port: step 2 shuffle not yet implemented; iteration is in-order.
 // Hardcoded award colours (BGRA):
-//   tier 0: BGRA(0xAD, 0x7E, 0x00, 0x00)  gold
-//   tier 1: BGRA(0xA0, 0x05, 0x05, 0x00)  red
-//   tier 2: BGRA(0x01, 0x5C, 0x95, 0x00)  blue
+//   tier 0: BGRA(0xAD, 0x7E, 0x00, 0xFF)  gold
+//   tier 1: BGRA(0xA0, 0x05, 0x05, 0xFF)  red
+//   tier 2: BGRA(0x01, 0x5C, 0x95, 0xFF)  blue
 // ---------------------------------------------------------------------------
 void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
     ClearBestBonuses();
 
     // Hardcoded tier colours matching binary constants.
+    // ASM-spec v1.6.1 BonusManager::SetUpBonusScreen @0x0012ede8: award colours
+    // built via 3-arg Colour ctor @0x0012eb1c, which hardwires byte[3]=0xFF
+    // (alpha). The alpha=0x00 previously here made every award row invisible.
     static const Colour k_TierColours[3] = {
-        // BGRA: B=0xAD, G=0x7E, R=0x00, A=0x00
-        Colour(0x00, 0x7E, 0xAD, 0x00),  // gold
-        // BGRA: B=0xA0, G=0x05, R=0x05, A=0x00
-        Colour(0x05, 0x05, 0xA0, 0x00),  // red
-        // BGRA: B=0x01, G=0x5C, R=0x95, A=0x00
-        Colour(0x95, 0x5C, 0x01, 0x00),  // blue
+        // BGRA: B=0xAD, G=0x7E, R=0x00, A=0xFF
+        Colour(0x00, 0x7E, 0xAD, 0xFF),  // gold
+        // BGRA: B=0xA0, G=0x05, R=0x05, A=0xFF
+        Colour(0x05, 0x05, 0xA0, 0xFF),  // red
+        // BGRA: B=0x01, G=0x5C, R=0x95, A=0xFF
+        Colour(0x95, 0x5C, 0x01, 0xFF),  // blue
     };
 
     // Get best from each BonusType and push directly into m_BestBonuses.
