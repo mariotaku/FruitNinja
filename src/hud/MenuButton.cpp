@@ -270,16 +270,20 @@ void MenuButton::CreateFruit() {
     Mortar::Entity* e = game->actorManager->Add(entityType, true);
     if (!e) return;
 
-    e->pos = pos;
+    // Binary MenuButton::CreateFruit @0x0019b608: pos = GetAdjustedPos(), then
+    // vel = Vector3::Zero, THEN Init. Zeroing vel is load-bearing: ActorManager::Add
+    // recycles a pooled Bomb carrying stale velocity from its prior ClearMenuItems fling;
+    // without this, Bomb::Update's ungated `pos += vel` drifts the collision sphere off
+    // the pinned draw position -> menu-bomb slice near-misses (worse after dojo re-entry).
+    e->pos = GetAdjustedPos();
+    e->vel = Vec3(0.0f, 0.0f, 0.0f);              // binary @0x0019b67c: entity->m_Velocity = Vector3::Zero
     e->Init(nullptr, (long)m_FruitType, nullptr);
     e->flags &= ~0x10;
     m_pEntity = e;
     // Binary: raw word store; entity may be Bomb. reinterpret_cast matches ARM str.
     m_pTrackedFruit = reinterpret_cast<Fruit*>(e);
-#ifndef __bada__
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
-#endif
 
     if (entityType == 0) {
         Fruit* fruit = static_cast<Fruit*>(e);
