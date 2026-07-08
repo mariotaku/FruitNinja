@@ -17,8 +17,8 @@ Referenced in code/XML but **not present** in `FruitNinjaBada/Data/`.
 
 | Texture | Source(s) | Status | Notes |
 |---------|-----------|--------|-------|
-| `fruit_shadow.tex` | `src/entities/FruitInfo.cpp` | **LIVE** | Fruit drop shadow drawn during gameplay. Confirmed absent from **every accessible Mortar SKU** — v1.6.1 Bada (HLE ground truth), Android 1.5.4 and 1.7.4 (447-`.tex` APKs, same format) — so the binary never drew it there either → port faithful. Present only in the iOS build, packed unreachably in `fileArcive.bin`. Not fillable. |
-| `comming_soon.tex` | `src/screens/MainScreen.cpp:~1993ac` | **LIVE** | "Coming Soon" banner drawn on MainScreen carousel. Confirmed absent from Bada 1.6.1 **and** Android 1.5.4/1.7.4 → drew nothing there → port faithful. iOS-packed only. |
+| `fruit_shadow.tex` | `src/entities/FruitInfo.cpp` | **LIVE** | Fruit drop shadow drawn during gameplay. Confirmed absent from **every** Mortar SKU including iOS — v1.6.1 Bada (HLE ground truth), Android 1.5.4/1.7.4 (447-`.tex` APKs), and **iOS 1.6.1** (`fileArcive.bin` RE'd, see §4). The string `fruit_shadow.tex` exists in the iOS binary but the asset is **not packed** in `fileArcive.bin` → iOS load returns empty too. Never shipped anywhere → port faithful, unfillable. |
+| `comming_soon.tex` | `src/screens/MainScreen.cpp:~1993ac` | **LIVE** | "Coming Soon" banner drawn on MainScreen carousel. Absent from Bada 1.6.1, Android 1.5.4/1.7.4, **and** iOS 1.6.1 pack. iOS has no `comming_soon`/`coming_soon` `.tex` at all — its `coming_soon` string is a game-**mode identifier** (sits beside `mode_sensei.tex`/`mode_select.tex`), not a texture → port faithful, unfillable. |
 | `checked.tex` | `src/hud/CheckBox.cpp` | **DEAD** | CheckBox ctor loads texture; CheckBox is never instantiated in any live code path (class exists as dead code only). |
 | `unchecked.tex` | `src/hud/CheckBox.cpp` | **DEAD** | Same as `checked.tex` — dead class, zero instantiations. |
 | `clock_backing` | `poweruplist.xml` | **DEAD** | Time Sink powerup, commented out in active itemlist.xml; present only in never-loaded `itemlistnfc.xml` (NFC variant). |
@@ -27,7 +27,7 @@ Referenced in code/XML but **not present** in `FruitNinjaBada/Data/`.
 | `comming_soon_highscore.tex` | `src/screens/GameOverScreen.cpp` | **DEAD** | String `"comming_soon_highscore"` appears in code but is **never loaded by any call path** (binary OR port). |
 | `<TBD>.tex` | `src/game/GameInitialise.cpp` | **DEAD** | Code placeholder; `<TBD>` is not a valid filename. |
 
-**Summary:** The two LIVE textures (`fruit_shadow`, `comming_soon`) are **not port bugs** — a cross-SKU hunt (Bada 1.6.1 via HLE; Android 1.5.4 + 1.7.4 APKs, both same Mortar `.tex` format) found neither in **any** accessible non-iOS build, confirming the original binary never drew them on Bada/Android. They ship only in the iOS SKU, packed in `fileArcive.bin` (hashed index, no plaintext names — not extractable). The port is faithful; these gaps are unfillable and left as-is.
+**Summary:** The two LIVE textures (`fruit_shadow`, `comming_soon`) are **not port bugs**. A cross-SKU hunt now covers **every** accessible build — Bada 1.6.1 (HLE ground truth), Android 1.5.4 + 1.7.4 APKs, and iOS 1.6.1 (`fileArcive.bin` fully RE'd, §4) — and found neither texture in **any** of them. The original binary never drew them on any platform. The gaps are genuine asset-drop omissions, unfillable, left as-is. (This supersedes an earlier assumption that they were "iOS-packed only"; the iOS pack was decoded and does **not** contain them.)
 
 The DEAD entries are features never activated (CheckBox unused, powers commented-out, NFC mode never loaded).
 
@@ -114,8 +114,19 @@ python tools/asset-audit/scan_unused_textures.py > tmp/audit_unused.txt
 
 **Scope:** `.tex` textures only (in `textures/` and `particles/` subdirs). Other asset types (`.mad`/`.mmd` models, `.fnt` bitmap fonts, `.sfx` audio) are not yet audited.
 
+## 4. iOS 1.6.1 `fileArcive.bin` pack format (RE'd)
+
+The iOS SKU packs all game assets into one archive (there are **no** loose `.tex` in the `.ipa` — only OpenFeint `OF*.png`). Decoded so the missing-texture hunt could cover iOS:
+
+- **`fileArciveFat.bin`** = index: `N` × 12-byte records `{ uint32 hash, uint32 size, uint32 offset }`, little-endian, **sorted ascending by hash** (binary-searchable). v1.6.1 = 847 entries.
+- **`fileArcive.bin`** = payload: blobs concatenated contiguously (`offset[i] = offset[i-1] + size[i-1]`; sizes sum to the file length).
+- **Key** = the game's own `Mortar::StringHash` (case-insensitive Jenkins lookup3) of the **forward-slash relative path with extension** — the exact string the loader builds, e.g. `textures/watermelon.tex`. Verified: **707/847** entries match known Bada asset paths bit-for-bit under this convention (`mode_sensei.tex`, `locked.tex`, `hud_unlocked_dialog.tex`, … all resolve).
+- Blobs are raw Mortar **`.tex`** (same format as Bada). Many are byte-identical to the Bada copy; some are exactly 2× size (retina/@2x variants). The remaining ~139 unmatched entries have non-power-of-2 sizes (compressed/PNG, iOS-only).
+- **`fruit_shadow.tex` and `comming_soon.tex` are NOT in the pack** under any name/path variant — proven by hashing every convention against the FAT. So iOS does not ship them either (see §1).
+- Extractor + hash impl: `tmp/ios-pack/lookup.py` (scratch; the iOS blobs are directly convertible if ever needed).
+
 ## Notes
 
-- The missing LIVE textures (`fruit_shadow`, `comming_soon`) are confirmed absent from the v1.6.1 Bada data set the HLE executes, proving the original binary never drew them. These are asset-drop gaps, not port bugs.
+- The missing LIVE textures (`fruit_shadow`, `comming_soon`) are confirmed absent from **every** SKU — Bada 1.6.1 (HLE), Android 1.5.4/1.7.4, and iOS 1.6.1 (§4) — proving the original binary never drew them. These are asset-drop gaps, not port bugs.
 - The unused list is **not a deletion list**; it is a heuristic hint. Group B (dynamic construction) is proof the scan cannot resolve all references. Treat entries in Group C as "verify before acting" only.
 - For tool usage documentation and data format specs, see [`docs/resources.md`](resources.md).
