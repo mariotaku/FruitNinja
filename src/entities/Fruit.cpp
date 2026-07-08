@@ -1658,11 +1658,14 @@ void Fruit::Slice() {
         Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
 
         SplatEntity* s = SplatEntity::GetFree();
-        // Binary passes param3 = isCritical for crit splats (biases
-        // MakeSplat's landing-type RNG toward types 4/5, the larger
-        // variants). GetFree() never returns null (v1.6.1 SplatEntity::GetFree
-        // @0x001eb318 -- flat round-robin pool steals the cursor slot when full).
-        s->MakeSplat(pos, sv, isCritical, false, (long)m_FruitType);
+        // v1.6.1 Fruit::Slice @0x001dcf5c: a critical slice passes fruitType = m_FruitType + count
+        // (out of range) so MakeSplat sets m_ColourPhase=1.5 -- the critical-flash trigger.
+        // SplatEntity::Update recovers the real colour via (fruitType % count). The 3rd arg
+        // (m_bParam3) is a constant 0 here (binary `mov r3,#0`), not isCritical. GetFree() never
+        // returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 -- flat round-robin pool steals
+        // the cursor slot when full).
+        const long splatFruitType = (long)m_FruitType + (isCritical ? FruitInfo_GetCount() : 0);
+        s->MakeSplat(pos, sv, /*m_bParam3=*/false, /*landImmediately=*/false, splatFruitType);
 
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00177070..0x001770f0 -- stale v1.5.x) -- per-splat post-MakeSplat taper.
@@ -2620,8 +2623,12 @@ Colour Fruit::FruitTypeColour(long type) {
     // to FRUIT_INFO[type]. Re-enable when those spawners port.
     const FruitInfoData* info = FruitInfo_Get((int)type);
     if (!info) return Colour(255, 255, 255, 255);
-    return Colour(info->m_FruitColour[0], info->m_FruitColour[1],
-                  info->m_FruitColour[2], info->m_FruitColour[3]);
+    // FIX (v1.6.1 Fruit::FruitTypeColour @0x001da524): m_FruitColour bytes are [B,G,R,A]
+    // (FruitInfo.cpp:271-274). Passing them positionally into Colour(r,g,b,a) swapped R<->B
+    // (orange 255,115,0 came out blue 0,115,255). Map r=[2], b=[0] to un-swap -- mirrors
+    // FruitFactColour below. Only caller is the critical-flash lerp (SplatEntity.cpp:553).
+    return Colour(info->m_FruitColour[2], info->m_FruitColour[1],
+                  info->m_FruitColour[0], info->m_FruitColour[3]);
 }
 
 // v1.6.1 Fruit::FruitFactColour @0x001da584
