@@ -456,7 +456,7 @@ void ScreenEffect::Activate() {
 
         // v1.6.1 ScreenEffect::Activate @0x00148f08: dispatch on m_DeferKind --
         // 1="points" -> ScoreMultiplyerBoard (Arcade x2 deferred-points board);
-        // 2="time" -> TimeSinkControl (Berry-Blast time-defer board, stub);
+        // 2="time" -> TimeSinkControl (Berry-Blast time-defer board);
         // 0="none" -> plain HUDControl3d.
         HUDControl3d* ctrl;
         if (img.m_DeferKind == 1) {
@@ -465,7 +465,7 @@ void ScreenEffect::Activate() {
             ctrl = board;
         } else if (img.m_DeferKind == 2) {
             TimeSinkControl* sink = new TimeSinkControl();
-            sink->m_pOwner = m_pOwnerPowerUp;
+            sink->m_pPowerUp = m_pOwnerPowerUp;
             ctrl = sink;
         } else {
             ctrl = new HUDControl3d();
@@ -695,17 +695,18 @@ void ScreenEffect::Deactivate() {
                 board->m_BasePosition = board->pos;
                 board->m_pOwner = 0;
             } else if (img.m_DeferKind == 2) {
-                // Berry-Blast time-sink board (stub -- see TimeSinkControl TODO).
+                // Berry-Blast time-sink board: mirror the ScoreMultiplyerBoard detach
+                // pattern -- clear the owner, zero the payout if the window was
+                // aborted early, and leave the control in the HUD to self-animate.
+                // v1.6.1 ScreenEffect::Deactivate @0x00148510
                 TimeSinkControl* sink = static_cast<TimeSinkControl*>(img.m_pHudCtrl);
-                sink->m_pOwner = 0;
+                sink->m_pPowerUp = 0;
                 if (m_pOwnerPowerUp && m_pOwnerPowerUp->GetCurrentTimeProgress() > 0.01f) {
-                    sink->m_Field80 = 0;
+                    sink->m_TargetScore = 0;
                 }
-                // TODO: v1.6.1 0x001c19dc (TimeSinkControl) -- real removal timing depends
-                // on the unported Update/DrawOrder (may self-animate like ScoreMultiplyerBoard).
-                // Marking pending-removal immediately (kind0 behaviour) as a safe stub default
-                // so a deactivated stub control doesn't linger on-screen forever.
-                img.m_pHudCtrl->m_bPendingRemoval = 1;
+                // Board stays in the HUD and self-animates via
+                // TimeSinkControl::Update (marks m_bPendingRemoval itself once
+                // m_TimeElapsed > 1.08f, after banking the time award).
             } else {
                 img.m_pHudCtrl->m_bPendingRemoval = 1;
             }

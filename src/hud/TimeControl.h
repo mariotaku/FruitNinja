@@ -46,7 +46,6 @@ public:
     void  CountDown(float startSeconds);
     // Binary: 0x00162134
     float GetCountDown() const;
-    // Binary: 0x001204f0
     void  AddTime(float delta);
 
 private:
