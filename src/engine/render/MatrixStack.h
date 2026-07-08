@@ -80,7 +80,7 @@ struct MatrixStack {
     // which adds a world-space offset to the translation column (T*M).
     void TranslateLocal(const Vec3& t);
 
-    // Row/left scale (S*M) via Matrix44::ScaleRows. NOT MatrixStack::Scale, which
+    // Row/left scale (S*M) via Matrix44::Scale44. NOT MatrixStack::Scale, which
     // scales columns (M*S) -- the wrong side for BakedStringTTF::Draw's pipeline.
     void ScaleRows(float sx, float sy, float sz);
 };

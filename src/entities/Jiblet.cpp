@@ -236,7 +236,7 @@ void Jiblet::Draw(Renderer& /*r*/) {
     // Binary instance _Matrix44<float>::Scale44(sx,sy,sz) @ 0x0015d06c scales
     // ROWS 0/1/2 by scale.x/y/z (offsets {0,0x10,0x20,0x30}=row0, etc.) -- this
     // is a row-scale, NOT the column-scale of Matrix44::ApplyScale nor the
-    // static Scale44 factory, so it is inlined here to stay binary-faithful.
+    // static MakeScale factory, so it is inlined here to stay binary-faithful.
     {
         float sx = scale.x;
         float sy = scale.y;

@@ -729,7 +729,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
                 // pos+(-35,+0) (net -140 from plate center after the -105 FIRST_NAME_OFFSET); the
                 // label sits at pos+(-2,+6) (net -107), 33px right of the star. (A prior
                 // asm-inspector pass mis-read the star translate Y as +6 -- RE confirms +0.)
-                Matrix44 mat = Matrix44::Scale44(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
+                Matrix44 mat = Matrix44::MakeScale(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
                 mat.GlobalTranslate44(Vec3(pos.x - 35.0f, pos.y, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();

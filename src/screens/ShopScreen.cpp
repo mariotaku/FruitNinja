@@ -1274,7 +1274,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             }
 
             // Scale Vec3 = (291, 321, 0)  DAT_0015e064, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA1L = Matrix44::Scale44(291.0f, 321.0f, 0.0f);
+            Matrix44 matA1L = Matrix44::MakeScale(291.0f, 321.0f, 0.0f);
 
             // Translate by (scroll_x, 0, 0) where scroll_x = m_pShopList->pos.x
             // m_pShopList + 0x8 = pos.x (ScrollingMenu inherits HUDControl3d whose
@@ -1304,7 +1304,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;  // DAT_0015e054 / DAT_0015e058
 
             // Scale Vec3 = (191, 321, 0)  DAT_0015e074, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA1R = Matrix44::Scale44(191.0f, 321.0f, 0.0f);
+            Matrix44 matA1R = Matrix44::MakeScale(191.0f, 321.0f, 0.0f);
             matA1R.GlobalTranslate44(slide_X, 0.0f, 0.0f);
 
             mm.GetWorldStack().Reset();
@@ -1332,7 +1332,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             // ---------------------------------------------------------------
 
             // Scale Vec3 = (481, 321, 0)  DAT_0015e078, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA2 = Matrix44::Scale44(481.0f, 321.0f, 0.0f);
+            Matrix44 matA2 = Matrix44::MakeScale(481.0f, 321.0f, 0.0f);
             // no GlobalTranslate44 — disasm confirms SetMatrix gets pure scale
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matA2);
@@ -1374,7 +1374,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             // Scale Vec3 = (texW+1, texH+1, 0) * 1.0f (identity multiply)
             // The decompile multiplies by local_44=1.0f via _Vector3::operator* — no-op.
             // DAT_0015e1e0 = 0.0f for z
-            Matrix44 matA3 = Matrix44::Scale44(texW + 1.0f, texH + 1.0f, 0.0f);
+            Matrix44 matA3 = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 0.0f);
 
             // Translate by (slide_X - 4.0, -3.0, 0.0)
             // 4.0f hardcoded (0x40800000), -3.0f hardcoded (0xc0400000)

@@ -352,7 +352,7 @@ void ShopListItem::DrawDividers() {
     // Divider 1: pos + UnitY * GetHeight()/2 (row top edge).
     float halfRowH = m_Height * 0.5f;
     {
-        Matrix44 mat = Matrix44::Scale44(257.0f, 17.0f, 0.0f);
+        Matrix44 mat = Matrix44::MakeScale(257.0f, 17.0f, 0.0f);
         mat.GlobalTranslate44(pos.x, pos.y + halfRowH, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -366,7 +366,7 @@ void ShopListItem::DrawDividers() {
 
     // Divider 2: only when m_bIsNew; pos - UnitY * GetHeight()/2 (row bottom), grey.
     if (m_bIsNew) {
-        Matrix44 mat2 = Matrix44::Scale44(257.0f, 17.0f, 0.0f);
+        Matrix44 mat2 = Matrix44::MakeScale(257.0f, 17.0f, 0.0f);
         mat2.GlobalTranslate44(pos.x, pos.y - halfRowH, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(mat2);
@@ -391,7 +391,7 @@ void ShopListItem::DrawIcon() {
     const Colour colWhite(255, 255, 255, 255);
 
     // Binary: scale 64x64, translate = Vec3(0,0,0) + m_IconPos.
-    Matrix44 mat = Matrix44::Scale44(64.0f, 64.0f, 0.0f);
+    Matrix44 mat = Matrix44::MakeScale(64.0f, 64.0f, 0.0f);
     mat.GlobalTranslate44(m_IconPos.x, m_IconPos.y, m_IconPos.z);
     mm.GetWorldStack().Reset();
     mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -590,7 +590,7 @@ void ShopListItem::DrawDarkness() {
     ShopScreen::s_TexLoading->Set();
 
     {
-        Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);
+        Matrix44 matTop = Matrix44::MakeScale(290.0f, 120.0f, 0.0f);
         matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(matTop);
@@ -598,7 +598,7 @@ void ShopListItem::DrawDarkness() {
         Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);
     }
     {
-        Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);
+        Matrix44 matBot = Matrix44::MakeScale(290.0f, 120.0f, 0.0f);
         matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(matBot);

@@ -2176,7 +2176,7 @@ void DrawSlices(float dt, bool pass)
                     Mortar::Model* model = g_fruitData.s_sliceModel[idx].Get();
                     if (model) {
                         uint16_t a = (uint16_t)(int)(n->value.m_AngleDeg * 182.0f);
-                        Matrix44 m = Matrix44::Scale44(scale);
+                        Matrix44 m = Matrix44::MakeScale(scale);
                         m.RotZ44(SinIdx(a), CosIdx(a));
                         m.GlobalTranslate44(n->value.m_Pos);
                         model->Draw(m);
