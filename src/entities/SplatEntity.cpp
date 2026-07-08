@@ -527,6 +527,38 @@ void SplatEntity::UpdateSplat(float dt) {
         m_Scale.y = nsy;
     }
 
+    // Critical-flash colour lerp -- v1.6.1 SplatEntity::Update @0x001ebee0,
+    // gated block @0x001ec448-0x001ec570. Runs ONLY while m_ColourPhase > 0,
+    // and BEFORE the life-decay/m_ColA computation below (binary order:
+    // colour -> life -> m_ColA), so the alpha calc reads the freshly
+    // updated m_AlphaBase.
+    // ASM-verified: 2026-07-08T00:00Z v1.6.1 SplatEntity::Update critical-flash @ 0x001ebee0 (asm-inspector)
+    // Block @0x001ec448-0x001ec570: lerp CRITICAL_COLOUR->fresh FruitTypeColour,
+    // w=clamp(1-2*m_ColourPhase,0,1); updates m_AlphaBase.
+    if (m_ColourPhase > 0.0f) {
+        // Binary reads the scaled per-frame dt (game_work.flM_Dt), matching
+        // the airborne-gravity precedent above -- NOT the dt parameter.
+        m_ColourPhase -= game_work.dt;
+        if (m_ColourPhase < 0.0f) m_ColourPhase = 0.0f;
+
+        float w = 1.0f - 2.0f * m_ColourPhase;
+        if (w < 0.0f) w = 0.0f;
+        else if (w > 1.0f) w = 1.0f;
+
+        // m_FruitType may be an out-of-range placeholder (MakeSplat's
+        // "no FruitInfo" fallback); wrap into the valid table range before
+        // re-fetching the fruit's true colour (binary's module-by-count guard).
+        const int fruitCount = FruitInfo_GetCount();
+        const long freshType = (fruitCount > 0) ? (m_FruitType % fruitCount) : 0;
+        const Colour fresh = Fruit::FruitTypeColour(freshType);
+        const Colour& crit = Fruit::CRITICAL_COLOUR;
+
+        m_ColR = (uint8_t)ClampInt((int)(crit.r + ((int)fresh.r - (int)crit.r) * w), 0, 255);
+        m_ColG = (uint8_t)ClampInt((int)(crit.g + ((int)fresh.g - (int)crit.g) * w), 0, 255);
+        m_ColB = (uint8_t)ClampInt((int)(crit.b + ((int)fresh.b - (int)crit.b) * w), 0, 255);
+        m_AlphaBase = (float)crit.a + ((int)fresh.a - (int)crit.a) * w;  // float, unclamped
+    }
+
     // Life decay.
     // Binary @ 0x0017fcea: m_Life -= dt * s_SpringRate * m_DecayRate.
     m_Life -= dt * s_SpringRate * m_DecayRate;
@@ -540,25 +572,6 @@ void SplatEntity::UpdateSplat(float dt) {
     const float rawAlpha = m_AlphaBase * m_Life;
     const float aF = rawAlpha < m_AlphaBase ? rawAlpha : m_AlphaBase;
     m_ColA = (uint8_t)Clampf(aF, 0.0f, 255.0f);
-
-    // Colour lerp -- v1.6.1 SplatEntity::Update @0x001ebee0 ticks m_ColourPhase down each
-    // Update and writes the resulting RGBA back into m_ColR/G/B/A.
-    // DrawSplat reads the stored fields directly (no re-computation).
-    if (m_ColourPhase > 0.0f) {
-        m_ColourPhase -= dt;
-        if (m_ColourPhase < 0.0f) m_ColourPhase = 0.0f;
-    }
-    {
-        float fade = m_ColourPhase * 2.0f;
-        if (fade < 0.0f) fade = 0.0f;
-        if (fade > 1.0f) fade = 1.0f;
-        const int rMix = (int)m_ColR + (int)(((int)BASE_R - (int)m_ColR) * fade);
-        const int gMix = (int)m_ColG + (int)(((int)BASE_G - (int)m_ColG) * fade);
-        const int bMix = (int)m_ColB + (int)(((int)BASE_B - (int)m_ColB) * fade);
-        m_ColR = (uint8_t)ClampInt(rMix, 0, 255);
-        m_ColG = (uint8_t)ClampInt(gMix, 0, 255);
-        m_ColB = (uint8_t)ClampInt(bMix, 0, 255);
-    }
 }
 
 // ---------------------------------------------------------------------
