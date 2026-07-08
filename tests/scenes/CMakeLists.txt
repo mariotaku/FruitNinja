@@ -136,3 +136,15 @@ set_tests_properties(slash_blade PROPERTIES TIMEOUT 120)
 add_scene_test(scene_special_fruit scene_special_fruit.cpp)
 add_test(NAME special_fruit COMMAND scene_special_fruit)
 set_tests_properties(special_fruit PROPERTIES TIMEOUT 120)
+
+# ---- scene_coin: Coin currency-sprite spawn/state/draw regression test ----
+# Spawns 5 coins via the exact crit-slice/fruit-kill call convention
+# (Coin::MakeCoins silent=true, matching Fruit::CollisionResponse), ticks
+# through WAITING -> FLYING -> HOMING, and captures 3 PNGs:
+#   tmp/test/screenshots/coin/just_spawned.png (state 0, no draw by design)
+#   tmp/test/screenshots/coin/mid_flight.png   (state 2, asserts drawn)
+#   tmp/test/screenshots/coin/homing.png       (state 4, asserts drawn)
+# Port specific: standalone coin spawn/state/draw regression test
+add_scene_test(scene_coin scene_coin.cpp)
+add_test(NAME scene_coin COMMAND scene_coin)
+set_tests_properties(scene_coin PROPERTIES TIMEOUT 60)
