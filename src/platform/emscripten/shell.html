@@ -820,6 +820,16 @@
 
   window.onerror = function (msg, src, line, col, err) {
     console.error('[onerror]', msg, src, line, col, err);
+    /* Opaque cross-origin ("Script error.") report: the browser masks the
+       details for CORS, so it arrives with no src/line/error object and the
+       generic message. It is non-actionable, and on some TV/embedded browsers
+       (e.g. webOS) it fires for a benign reason while the game loads and runs
+       fine -- so never treat it as a fatal load error. A REAL load failure
+       surfaces through the Module abort / load-timeout paths (with detail),
+       not through this. Log it and bail. */
+    var opaque = (!src) && !line && !err &&
+                 (!msg || String(msg).indexOf('Script error') !== -1);
+    if (opaque) return;
     if (!_runtimeReady) {
       /* A JS error during load = fatal; show the load error UI instead of
          leaving the user staring at a frozen progress bar or play button. */
