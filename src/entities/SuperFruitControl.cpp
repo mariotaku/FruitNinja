@@ -9,7 +9,12 @@
 #include "SuperFruitControl.h"
 #include "SuperFruitGlow.h"
 #include "hud/HUD.h"
-#include "engine/render/BakedStringBox.h"
+#include "engine/render/FancyBakedString.h"
+#include "engine/render/MatrixManager.h"
+#include "engine/asset/Texture.h"
+#include "engine/asset/TextureManager.h"
+#include "engine/asset/Mesh.h"
+#include "math/Vec2.h"
 #include "hud/MissControl.h"
 #include "SuperFruitState.h"
 #include "Fruit.h"
@@ -30,6 +35,7 @@
 #include "engine/particle/PSPParticleManager.h"
 #include "math/MathUtil.h"
 #include "math/Random.h"
+#include "engine/util/Transition.h"
 #include "engine/asset/MeshManager.h"
 #include "util/StringHash.h"
 #include "debug/Logger.h"
@@ -42,6 +48,28 @@
 
 // Static map definition (24-byte std::map per CLAUDE.md).
 std::map<Fruit*, SuperFruitControl*> SuperFruitControl::SuperFruitControls;
+
+// Finale visuals loaded by LoadContent @0x001bda74 (file-static BSS SmartPtrs in
+// the binary). ShockWaveTexture = "explosion_radius.tex" ring sprite;
+// JibletModel = pomegranate jiblet mesh flung on explode.
+static Mortar::SmartPtr<Mortar::Texture> ShockWaveTexture;
+static Mortar::SmartPtr<Mortar::Model>   JibletModel;
+
+// ---- ChangeText colour-morph helpers -----------------------------------------
+// The finale text fill (colourA) and stroke (colourB) morph across three keys as
+// the combo count grows (t = clamp(m_SliceCount/35, 0, 1)); key0 at t=0, key1 at
+// t=0.5, key2 at t=1.
+static inline Colour SuperFruitLerpColour(Colour a, Colour b, float t) {
+    return Colour(
+        (uint8_t)((float)a.r + ((float)b.r - (float)a.r) * t),
+        (uint8_t)((float)a.g + ((float)b.g - (float)a.g) * t),
+        (uint8_t)((float)a.b + ((float)b.b - (float)a.b) * t),
+        (uint8_t)((float)a.a + ((float)b.a - (float)a.a) * t));
+}
+static inline Colour SuperFruitColourMorph3(Colour k0, Colour k1, Colour k2, float t) {
+    if (t < 0.5f) return SuperFruitLerpColour(k0, k1, t * 2.0f);
+    return SuperFruitLerpColour(k1, k2, (t - 0.5f) * 2.0f);
+}
 
 // ---- Finale ramp/lerp helpers (binary inlined templates T_1616 / T_1629) -----
 // T_1616(v,a,b): clamp-ramp -- (v-a)/(b-a) clamped to [0,1]; a==b degenerates to
@@ -150,9 +178,12 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
         this, &SuperFruitControl::ComboCancel);
 
+    // First-slice popup label.
+    ChangeText("SLICE!", false, NULL);
+
     // TODO: v1.6.1 SuperFruitControl::SuperFruitControl @0x001be1c8 -- BLOCKED deps:
-    //   FruitCamera::Transition(...) throw-orbit camera move; ChangeText(this,"SLICE!",0,NULL)
-    //   (FancyBakedString); slice-SFX GameSound::SFXPlay(pitch 0.125). Wire when ported.
+    //   FruitCamera::Transition(...) throw-orbit camera move; slice-SFX
+    //   GameSound::SFXPlay(pitch 0.125). Wire when ported.
 }
 
 // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
@@ -288,7 +319,7 @@ void SuperFruitControl::Update(float dt)
 
     // one-shot edge: PrevTimer<0 && Timer>=0 && SliceCount==1 -> first ChangeText
     if (m_PrevTimer < 0.0f && m_Timer >= 0.0f && m_SliceCount == 1) {
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, DAT_001bcd78, 0, NULL) (needs FancyBakedString)
+        ChangeText("1 HIT", false, NULL);   // DAT_001bcd78 = "1 HIT"
     }
 
     // pre-roll slowdown: while Timer < Lifetime+0.5
@@ -348,7 +379,10 @@ void SuperFruitControl::Update(float dt)
                 ExplodeSuperFruit();
                 SpawnJibs();
                 StopRays();
-                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_pScoreText) (needs FancyBakedString; 4th arg is &m_pScoreText +0x9c)
+                // Score payoff popup (DAT_001bcd84 = "+%i"); target = &m_pScoreText (+0x9c).
+                char scoreBuf[64];
+                snprintf(scoreBuf, sizeof(scoreBuf), "+%i", m_SliceCount);
+                ChangeText(scoreBuf, false, &m_pScoreText);
             }
         }
 
@@ -486,29 +520,135 @@ void SuperFruitControl::Update(float dt)
     m_PrevTimer = m_Timer;  // commit edge tracker (+0x8c = +0x88)
 }
 
-// ASM-spec v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8. Layer-gated finale draw:
-// the 0x80 layer draws the combo/score text (fade via SinTransition), the 0x200
-// layer draws the explosion shockwave rings. Only the layer-gate skeleton is ported;
-// every actual draw is BLOCKED (FancyBakedString text + ShockWaveTexture rings) and
-// the fadeIn/fadeOut SinTransition thresholds are not yet RE'd -- do NOT invent them.
-void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask)
+// ASM-spec v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4. Create-or-replace a
+// combo/score popup FancyBakedString. Fill (main) + stroke (INNER_GLOW) colours
+// morph across three keys by t = clamp(m_SliceCount/35, 0, 1); stroke drawn only
+// on fast hardware (layers == 3).
+void SuperFruitControl::ChangeText(const char* text, bool resetFade,
+                                   Mortar::FancyBakedString** target)
 {
-    if (layerMask == 0x200) {
-        // Explosion shockwave layer.
-        // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- BLOCKED: DrawExplosion(this)
-        //   draws the ShockWaveTexture inner/outer rings (m_InnerRadius/m_OuterRadius).
-        //   ShockWaveTexture is unported (see LoadContent TODO). Wire when it lands.
-        return;
+    if (target == NULL) target = &m_pComboText;
+
+    // Create-or-replace: drop any existing label in this slot first.
+    if (*target) {
+        delete *target;
+        *target = NULL;
     }
 
-    if (layerMask == 0x80) {
-        // Combo/score text layer.
-        // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- BLOCKED: draw m_pComboText /
-        //   m_pScoreText via FancyBakedString, with fadeIn/fadeOut computed via SinTransition
-        //   (engine/util/Transition.h). The exact fade thresholds/args are not yet RE'd; do NOT
-        //   invent placeholder text or fade constants.
-        return;
+    Game* g = Game::GetInstance();
+    int layers = (g && g->IsFastHardware()) ? 3 : 0;   // stroke on fast HW only
+
+    float t = (float)m_SliceCount / 35.0f;             // colour-morph key
+    if (t < 0.0f) t = 0.0f;
+    else if (t > 1.0f) t = 1.0f;
+
+    // Fill colour (main layer): yellow -> orange -> purple as the combo grows.
+    Colour colourA = SuperFruitColourMorph3(
+        Colour(255, 218, 46, 255),
+        Colour(255, 119, 54, 255),
+        Colour(137, 46, 255, 255), t);
+    // Stroke colour (INNER_GLOW layer); only applied when layers == 3.
+    Colour colourB = SuperFruitColourMorph3(
+        Colour(170, 120, 0, 255),
+        Colour(170, 35, 0, 255),
+        Colour(55, 0, 170, 255), t);
+
+    float strokeSize = (layers == 3) ? 3.0f : 0.0f;
+
+    *target = new Mortar::FancyBakedString(
+        game_work.m_pTTFFontMain, text, 50.0f, colourA,
+        0.0f, Colour(0, 0, 0, 255),   // shadow (unused)
+        0.0f, Colour(0, 0, 0, 255),   // glow (unused)
+        strokeSize, colourB);          // stroke (fast HW only)
+
+    // TODO: v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4 -- the exact 3-stop
+    //   vertical gradient (ApplyGradientSplit y=0.55 -> colourC, y=0.5 -> colourD,
+    //   y=0.0 -> colourA) needs the colourC/colourD DAT constants, which are
+    //   unmapped. The main fill (colourA) already makes the label visible; do NOT
+    //   guess the two gradient stop colours.
+
+    if (resetFade) m_FadeIn = 0.0f;
+}
+
+// ASM-spec v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8. Layer-gated finale
+// draw: the 0x80/1 layer draws the combo/score text (fade via SinTransition +
+// zoom follow), the 0x200 layer draws the explosion shockwave rings.
+void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask)
+{
+    if (m_pComboText && (layerMask == 0x80 || layerMask == 1)) {
+        float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
+        float tOut = m_Lifetime + 2.3f + modeBias;
+
+        // Anchor re-based to the (480,320) screen anchor by per-control hud scale.
+        Vec3 p = pos + Vec3(480.0f, 320.0f, 0.0f) * m_HudScale;
+        // Past the explosion, drift the text toward the zoom target by (1 - zoomT).
+        if (m_Timer > m_Lifetime && game_work.m_FruitCamera) {
+            float zoomT = game_work.m_FruitCamera->m_ZoomT;
+            p += (m_ZoomTarget - p) * (1.0f - zoomT);
+        }
+
+        // Fade envelope: fade-out approaching tOut, fade-in from anticipation.
+        float env = SinTransition(T_1616(m_Timer, tOut + 0.15f, tOut), 115.0f)
+                  * SinTransition(T_1616(m_Timer, -2.0f, -1.85f), 115.0f);
+
+        float s = (size.x + JumpySinPulse(m_FadeIn, 3.0f) * 0.25f * size.x) * env;
+        if (m_Timer < 0.0f) {
+            float q = SinPulse(m_Timer, 8.0f) * 0.125f;
+            s *= (q < 0.0f) ? 1.0f : (q + 1.0f);
+        }
+
+        m_pComboText->Draw(p, Vec2(s, s), HUDControl::m_Timer, Mortar::ALIGN_CENTRE);
+
+        if (m_pScoreText) {
+            float f2 = SinTransition(
+                T_1616(m_Timer, m_Lifetime + 1.5f, m_Lifetime + 1.75f), 115.0f);
+            float zoomT2 = game_work.m_FruitCamera ? game_work.m_FruitCamera->m_ZoomT : 0.0f;
+            // Lerp from the zoom target to the explosion origin by zoomT.
+            Vec3 sp = m_ZoomTarget + (m_ExplodeOrigin - m_ZoomTarget) * zoomT2;
+            float s2 = f2 * env * size.x;
+            m_pScoreText->Draw(sp, Vec2(2.0f * s2, 2.0f * s2),
+                               HUDControl::m_Timer, Mortar::ALIGN_CENTRE);
+        }
     }
+
+    if (layerMask == 0x200) {
+        DrawExplosion();
+    }
+}
+
+// ASM-spec v1.6.1 SuperFruitControl::DrawExplosion @0x001bd4d8. Inner ring fades
+// out ending at Lifetime+0.85, outer ring ending at Lifetime+2.05.
+void SuperFruitControl::DrawExplosion()
+{
+    DrawRing(m_InnerRadius, m_Lifetime + 0.85f);   // +0xe8
+    DrawRing(m_OuterRadius, m_Lifetime + 2.05f);   // +0xec
+}
+
+// ASM-spec v1.6.1 SuperFruitControl::DrawRing @0x001bd4d8. One ShockWaveTexture
+// ring: scaled to r, alpha fading over the 0.25s window ending at `base`. Same
+// Reset/Scale/Translate/Upload/DrawQuadUnCached idiom as BombHit::DrawCritHit.
+void SuperFruitControl::DrawRing(float r, float base)
+{
+    Mortar::Texture* tex = ShockWaveTexture.Get();
+    float env = (base + 0.25f - m_Timer) / 0.25f;
+    if (env < 0.0f) env = 0.0f;
+    else if (env > 1.0f) env = 1.0f;
+    if (env <= 0.0f || r <= 0.0f || !tex) return;
+
+    float s = r * 2.0f / 0.84375f;
+    int a = (int)(env * 128.0f);
+    if (a < 0) a = 0;
+    else if (a > 255) a = 255;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().Scale(Vec3(s, s, s));
+    mm.GetWorldStack().Translate(m_ExplodeOrigin);
+    mm.UploadModelViewOnly();
+
+    tex->Set();
+    Mortar::Mesh::DrawQuadUnCached(Colour(255, 150, 175, (unsigned char)a), NULL);
+    tex->UnSet(true);
 }
 
 // Binary @ 0x001bb994. Per-hit combo response.
@@ -573,8 +713,13 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         m_pLinkedSlasher = nullptr;
     }
 
-    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED remaining: ChangeText(this,"%i HITS",...)
-    //   (FancyBakedString); pome-slice SFX (GameSound::SFXPlay); SpawnRay on odd m_SliceCount;
+    // Combo-count popup label (resets the fade-in each hit).
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%i HITS", m_SliceCount);
+    ChangeText(buf, true, NULL);
+
+    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED remaining:
+    //   pome-slice SFX (GameSound::SFXPlay); SpawnRay on odd m_SliceCount;
     //   PSP emitter hookup. Wire when those subsystems land.
 
     LOG_INFO("SUPERFRUIT", "Sliced() hit %d", m_SliceCount);
@@ -815,11 +960,22 @@ void SuperFruitControl::LoadContent() {
     Fruit::FruitWasSlicedEvent() +=
         Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::MakeFree(&SuperFruitControl::SuperFruitSliced);
 
+    // Load the finale visuals.
+    ShockWaveTexture = Mortar::TextureManager::LoadLocalisedTexture("explosion_radius.tex");
+    if (Mortar::MeshManager::GetInstance()) {
+        JibletModel = Mortar::MeshManager::GetInstance()->Load("models/fruit/pomegranate_jiblet.mmd");
+    }
+
     // TODO: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 -- also loads
-    //   SuperFruitGlow::GlowTexture, ShockWaveTexture, FruitRay::RayTexture
-    //   (3x LoadLocalisedTexture, filenames unresolved) + JibletModel =
-    //   MeshManager::Load("models/fruit/pomegranate_jiblet.mmd"). Blocked: those
-    //   globals/entities (FruitRay) are unported. Wire when those entities land.
+    //   SuperFruitGlow::GlowTexture + FruitRay::RayTexture (2x LoadLocalisedTexture,
+    //   filenames unresolved). Blocked: FruitRay is unported. Wire when it lands.
+}
+
+// Frees the finale visuals loaded by LoadContent. Nulls the file-static SmartPtr
+// globals (releases their refcount).
+void SuperFruitControl::UnLoadContent() {
+    ShockWaveTexture = NULL;
+    JibletModel = NULL;
 }
 
 // Binary @ 0x001be630. Slice dispatch: lookup map, forward or create.
@@ -1209,8 +1365,28 @@ void SuperFruitControl::SpawnJibs()
                 e->m_DirSin = SinIdx(ang);
             }
         }
-    }
 
-    // TODO: v1.6.1 SuperFruitControl::SpawnJibs @0x001bc748 -- BLOCKED: spawn 8 JibletModel
-    //   mesh actors (needs the JibletModel global; unported). Wire when it lands.
+        // Spawn 8 JibletModel mesh actors in a radial fan (one per 45-degree sector).
+        if (JibletModel.Get()) {
+            Game* g = Game::GetInstance();
+            float dripRate = (g && g->IsFastHardware()) ? 50.0f : 20.0f;
+            float angBase = SuperFruitUniform(0.0f, 45.0f);
+            char jb[64];
+            snprintf(jb, sizeof(jb), "%s_jiblet", modelName);
+            uint32_t jh = StringHash(jb);
+
+            Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+            for (int i = 0; i < 8; ++i) {
+                Jiblet* j = am ? static_cast<Jiblet*>(am->Add(5, true)) : 0;
+                if (!j) continue;
+                float ang = SuperFruitUniform((i + 0.2f) * 45.0f, (i + 0.8f) * 45.0f);
+                uint16_t a16 = (uint16_t)((int)((angBase + ang) * 182.0f) & 0xffff);
+                Vec3 dir(CosIdx(a16), SinIdx(a16), 0.0f);
+                j->Init((int)m_pHostFruit->m_FruitType, m_ExplodeOrigin,
+                        SuperFruitUniform(0.8f, 1.25f),
+                        dir * SuperFruitUniform(500.0f, 900.0f),
+                        JibletModel, jh, dripRate, dir * 45.0f);
+            }
+        }
+    }
 }
