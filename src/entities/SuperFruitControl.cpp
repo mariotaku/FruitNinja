@@ -344,11 +344,16 @@ void SuperFruitControl::PostUpdate(float /*dt*/)
 // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- slash particles, combo-pitch SFX, FancyBakedString popup not yet ported
 void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 {
-    if (m_SliceCooldown > 0) return;
+    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: entry gate.
+    if (m_Timer < 0.0f) {
+        m_Timer = 0.0f;            // first slice: start the finale timer, proceed
+    } else if (m_Timer >= m_Lifetime || m_HitCount > 1.5f) {
+        return;                   // finale running/over, or hit-count exceeded -> ignore
+    }
+    // TODO: v1.6.1 SuperFruitControl m_SliceCooldown (+0xdc) -- role unresolved; binary's Sliced gate uses m_Timer/m_Lifetime/m_HitCount, not this. Re-RE if kept.
 
     ++m_SliceCount;
     m_HitCount += 1.0f;
-    m_SliceCooldown = 6;  // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- resolve cooldown value from binary DAT
 
     // Null out linked slasher (binary @ 0x001bb994 nulls the stored SlashEntity).
     if (slashEntity) {
