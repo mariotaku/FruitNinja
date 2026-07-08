@@ -108,7 +108,6 @@ float TimeControl::GetCountDown() const {
 }
 
 void TimeControl::AddTime(float delta) {
-    // 0x001204f0
     m_TimeRemaining += delta;
 }
 

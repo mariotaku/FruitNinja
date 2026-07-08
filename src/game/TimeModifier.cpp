@@ -33,7 +33,7 @@ int TimeModifier::UpdateSpecific(float dt) {
             Game* game = Game::GetInstance();
             // TODO: route through HUD::GetTimeControl() once exposed
             if (game && game_work.mCountDown)
-                game_work.mCountDown->AddTime(m_AddTime);   // binary @ 0x001204f0
+                game_work.mCountDown->AddTime(m_AddTime);
             return 1;
         }
     }
