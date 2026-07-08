@@ -2,9 +2,16 @@
 #define FN_SUPER_FRUIT_CONTROL_H
 
 // SuperFruitControl — one instance per active super fruit (pomegranate/starfruit
-// frenzy). Entity-derived controller attached to a host Fruit. Drives the multi-
-// hit combo state machine: freeze/slow global time, accept repeated slashes, award
-// bonus score, then explode with a finale VFX burst.
+// frenzy). HUDControl3d-derived controller attached to a host Fruit. Drives the
+// multi-hit combo state machine: freeze/slow global time, accept repeated slashes,
+// award bonus score, then explode with a finale VFX burst.
+//
+// ASM-spec v1.6.1 SuperFruitControl @0x001be1c8: class SuperFruitControl : HUDControl3d : HUDControl
+//   (NOT Entity). vptr @0x002ce470, sizeof 0x108. Overrides Release+0x0c, DrawOrder+0x24 @0x001bd7c8,
+//   Update+0x28 @0x001bca10. HUD::Update/HUD::Draw drive it; ctor sets m_LayerFlags=0x80.
+//
+// Registered via HUD::AddControl (born on first slice, in SuperFruitSliced); the
+// SuperFruitControls map is a SEPARATE lookup index, NOT the HUD tick list.
 //
 // Binary sizes: ctor @ 0x001be1c8, restore-from-save ctor @ 0x001bea90.
 // sizeof(SuperFruitControl) = 0x108 (confirmed via operator new @ 0x001be630).
@@ -30,7 +37,7 @@
 //   +0xf0: Vec3          m_WorkVec5        (explosion-origin / work vector -- purpose unresolved)
 //   +0xfc: Vec3          m_WorkVec6        (work vector -- purpose unresolved)
 
-#include "Entity.h"
+#include "hud/HUDControl3d.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include <map>
@@ -39,15 +46,13 @@ class Fruit;
 class SlashEntity;
 class SuperFruitGlow;
 struct SuperFruitState;
-struct Renderer;
 #include "engine/xml/TiXmlElement.h"
 
-namespace Mortar { class BakedStringBox; }
+namespace Mortar { class BakedStringBox; class Entity; }
 
-class SuperFruitControl : public Mortar::Entity {
+class SuperFruitControl : public HUDControl3d {
 public:
-    // +0x3c..+0x7b: Entity base + gap (binary fields unresolved past Entity's 0x3c)
-    uint8_t _pad_own[64];         // +0x3c..+0x7b
+    // HUDControl3d base is 0x7c bytes; own fields follow at +0x7c.
 
     // +0x7c: host fruit pointer
     Fruit* m_pHostFruit;          // +0x7c
@@ -57,7 +62,7 @@ public:
     // +0x84: combo hit count (float; incremented per slice, decays over time)
     float m_HitCount;             // +0x84
 
-    // +0x88: life-clock accumulator (starts at 0, += dt per frame)
+    // +0x88: life-clock accumulator (ctor inits -2.0; first slice sets 0, then += dt per frame)
     float m_Timer;                // +0x88
 
     // +0x8c: previous-frame timer (for phase edge detection)
@@ -115,12 +120,11 @@ public:
     ~SuperFruitControl();
 
     // -----------------------------------------------------------------------
-    // Entity vtable overrides
+    // HUDControl vtable overrides
     // -----------------------------------------------------------------------
-    void Update(float dt) override;     // 0x001bca10 -- state machine
-    void Draw(Renderer& r) override;    // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 (binary symbol at this addr)
-    void PostUpdate(float dt) override; // TODO
-    void Release() override;            // 0x001bb664
+    void Update(float dt) override;                          // slot +0x28 @0x001bca10 -- state machine
+    void DrawOrder(float* hudScaleRaw, int layerMask) override; // slot +0x24 @0x001bd7c8 -- finale VFX
+    void Release() override;                                  // slot +0x0c @0x001bb664
 
     // -----------------------------------------------------------------------
     // Static spawn/query interface
@@ -165,7 +169,10 @@ public:
 
     // Binary @ 0x001bb52c. Resets global time scale to 1.0, re-enables input,
     // flags all type-6 entities with kill-flag, clears SuperFruitControls map.
-    static void Reset();
+    // Named ResetAll (not Reset) because HUDControl3d now brings in a virtual
+    // void Reset() -- GCC 4.4.1 rejects a static member hiding an inherited
+    // virtual of the same name; this is a class-level (not per-instance) helper.
+    static void ResetAll();
 
     // Binary @ 0x001ba460. Stops (freezes/kills) all fruit entities during super state.
     // Instance method: reads explosion centre from this->m_WorkVec5 (+0xf0).
@@ -206,11 +213,6 @@ public:
     // when the combo is cancelled while the super fruit is still in anticipation phase
     // (Timer < Lifetime). Subscribed to SlashEntity::OnComboCancelEvent().
     void ComboCancel(SlashEntity* se);
-
-private:
-    // Spawn the glow entity and attach it to m_pHostFruit.
-    // Called from both ctors.
-    void AttachGlow();
 };
 
 #ifdef __bada__

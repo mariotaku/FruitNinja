@@ -42,17 +42,14 @@
 // Static map definition (24-byte std::map per CLAUDE.md).
 std::map<Fruit*, SuperFruitControl*> SuperFruitControl::SuperFruitControls;
 
-// Port specific: side-map for glow entities excluded from the binary struct
-// to preserve sizeof(SuperFruitControl)==0x108. Binary spawns glow in
-// SuperFruitThrown @0x001bbf48 as a free entity, never stored on the controller.
-static std::map<SuperFruitControl*, SuperFruitGlow*> s_GlowMap;
-
-// Binary @ 0x001be1c8: fresh controller ctor.
+// Binary @ 0x001be1c8: fresh controller ctor. Born on the first slice
+// (SuperFruitSliced); the glow halo is spawned separately at throw time
+// (SuperFruitThrown), so this ctor does NOT attach a glow.
 SuperFruitControl::SuperFruitControl(Fruit* fruit)
     : m_pHostFruit(fruit)
     , m_HitCount(0.0f)
-    , m_Timer(0.0f)
-    , m_PrevTimer(0.0f)
+    , m_Timer(-2.0f)      // binary inits -2.0; the Sliced finale gate checks m_Timer<0
+    , m_PrevTimer(-2.0f)
     , m_SliceCount(0)
     , m_pLinkedSlasher(nullptr)
     , m_pComboText(nullptr)
@@ -62,8 +59,7 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     , m_Scale(0.0f)
     , m_SliceCooldown(0)
 {
-    entityType = 6;  // super-fruit type in binary
-    memset(_pad_own, 0, sizeof(_pad_own));
+    m_LayerFlags = 0x80;  // +0x34; HUD::Draw skips the control without a matching layer bit
     memset(_pad_80, 0, sizeof(_pad_80));
     memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
     memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
@@ -77,8 +73,6 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     // after setting m_pHostFruit2/m_PrevTimer, before glow/transition work.
     SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
         this, &SuperFruitControl::ComboCancel);
-
-    AttachGlow();
 }
 
 // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
@@ -99,8 +93,7 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     , m_Scale(1.0f)
     , m_SliceCooldown(0)
 {
-    entityType = 6;
-    memset(_pad_own, 0, sizeof(_pad_own));
+    m_LayerFlags = 0x80;  // +0x34; HUD::Draw layer gate
     memset(_pad_80, 0, sizeof(_pad_80));
     memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
     memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
@@ -110,9 +103,11 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
-    // Restore the saved spin into the controller's Entity-base scale.y (+0x2c),
-    // the same field SaveSuperFruitState serialized as XML attr "rot".
-    scale.y = state.m_Spin;
+    // Restore the saved spin into the controller's base m_Timer (+0x2c), the same
+    // field SaveSuperFruitState serialized as XML attr "rot". (HUDControl::m_Timer
+    // is the +0x2c slot; explicit base qualifier avoids the shadow by the derived
+    // finale-clock m_Timer at +0x88.)
+    HUDControl::m_Timer = state.m_Spin;
 
     // TODO: v1.6.1 DAT_002d928c/9290 -- super-fruit restore tint/spinAxis Y,Z (unmapped; cosmetic).
     // The tint / spin-axis work vectors are left zero-initialised (memset above) as a
@@ -178,9 +173,6 @@ void SuperFruitControl::Release()
         delete m_pScoreText;
         m_pScoreText = nullptr;
     }
-
-    // Port specific: clean side-map entry (binary has no equivalent; glow is self-managed).
-    s_GlowMap.erase(this);
 }
 
 // Binary @ 0x001bca10. Per-frame phase-ladder state machine.
@@ -271,7 +263,7 @@ void SuperFruitControl::Update(float dt)
 
         // (c) after blast (Timer >= Lifetime+0.5): explosion update + late shake + time un-slow
         if (m_Timer >= m_Lifetime + 0.5f) {
-            m_RecycleFlag = 1;    // binary +0x34 = 1 (draw-layer/state flag)
+            m_LayerFlags = 1;    // binary +0x34 = 1 (HUD draw-layer flag)
             UpdateExplosion(dt);
             float tLateShake = m_Lifetime + 0.5f + 0.35f + 0.4f;  // DAT_001bcd9c=0.35, DAT_001bcd90=0.4
             if (m_PrevTimer < tLateShake && tLateShake <= m_Timer) {
@@ -302,7 +294,7 @@ void SuperFruitControl::Update(float dt)
         // (e) kill host fruit window: Lifetime+0.5+0.35+0.55+0.65+0.25+0.55
         float tKill = m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + 0.55f;
         if (m_Timer > tKill) {
-            m_RecycleFlag = 0x80;   // binary +0x34 = 0x80 (post-blast draw-layer marker)
+            m_LayerFlags = 0x80;   // binary +0x34 = 0x80 (post-blast HUD draw-layer marker)
             if (m_pHostFruit && m_PrevTimer <= tKill) {
                 m_pHostFruit->KillFruit(false);     // Fruit::KillFruit(hostFruit, 0)
                 m_pHostFruit = nullptr;             // +0x7c = 0
@@ -326,7 +318,7 @@ void SuperFruitControl::Update(float dt)
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
             //   (HUD+0x24); end ts=1.
             if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
-            flags |= ENT_KILLED;                    // this->done(+0x33) = 1
+            m_bPendingRemoval = 1;                  // +0x33 = 1: HUD::Update removes this control
         }
     } else {
         // ===== Timer still < Lifetime: throw/anticipation phase =====
@@ -375,11 +367,7 @@ void SuperFruitControl::Update(float dt)
 }
 
 // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- DrawOrder ray/explosion VFX (needs ray-entity + explosion subsystem)
-void SuperFruitControl::Draw(Renderer& /*r*/)
-{
-}
-
-void SuperFruitControl::PostUpdate(float /*dt*/)
+void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/)
 {
 }
 
@@ -576,19 +564,6 @@ void SuperFruitControl::PushBombsAway(float dt)
     }
 }
 
-// Port specific: spawn glow and add it to the HUD. The binary spawns glow
-// in SuperFruitThrown @0x001bbf48 as a free HUDControl entity added to the HUD;
-// it is never stored on the controller. The side-map s_GlowMap holds the ptr
-// so Release can clean up and sizeof(SuperFruitControl)==0x108 is preserved.
-void SuperFruitControl::AttachGlow()
-{
-    SuperFruitGlow* glow = new SuperFruitGlow(m_pHostFruit);
-    s_GlowMap[this] = glow;
-    if (game_work.mHud) {
-        game_work.mHud->AddControl(glow, false);
-    }
-}
-
 // -----------------------------------------------------------------------
 // Static interface
 // -----------------------------------------------------------------------
@@ -647,8 +622,14 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
             game_work.m_SaveData->AddToTotal(kSpawnedKey, spawnedHash, 1, false, false);
     }
 
-    SuperFruitControl* ctrl = new SuperFruitControl(fruit);
-    SuperFruitControls[fruit] = ctrl;
+    // Binary @ 0x001bbf48 spawns the glow halo (new 0x8c) at throw time and adds it
+    // to the HUD. The SuperFruitControl itself is NOT created here -- it is born on
+    // the first slice (SuperFruitSliced @0x001be630). The glow is self-managed:
+    // it tracks the host fruit and fades + self-removes when the fruit is killed.
+    SuperFruitGlow* glow = new SuperFruitGlow(fruit);
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(glow, false);
+    }
 }
 
 // v1.6.1 SuperFruitControl::LoadContent @0x001bda74: subscribes the slice/throw
@@ -676,8 +657,12 @@ void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Enti
     if (it != SuperFruitControls.end() && it->second) {
         it->second->Sliced(slashEntity);
     } else {
-        // First hit: create controller (binary allocates 0x108 bytes here)
+        // First hit: create controller (binary allocates 0x108 bytes here) and
+        // register it with the HUD so HUD::Update ticks it / HUD::Draw draws it.
         SuperFruitControl* ctrl = new SuperFruitControl(fruit);
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(ctrl, false);
+        }
         ctrl->Sliced(slashEntity);
         SuperFruitControls[fruit] = ctrl;
     }
@@ -765,16 +750,18 @@ void SuperFruitControl::SaveSuperFruitState(Fruit* fruit, TiXmlElement* parent)
     sfs.SetAttribute      ("hits",      ctrl->m_SliceCount);           // +0x90
     sfs.SetDoubleAttribute("sliceTime", (double)ctrl->m_Lifetime);    // +0xa0
     // Binary @ 0x001ba73c reads ctrl+0x2c -> serialized as XML attr "rot".
-    // ctrl+0x2c is the controller's Entity-base scale.y (Entity::scale is the
-    // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
-    // controller's own scale.y as the saved spin/rotation value.
-    sfs.SetDoubleAttribute("rot",       (double)ctrl->scale.y);       // +0x2c
+    // ctrl+0x2c is the controller's base HUDControl::m_Timer slot; the binary
+    // repurposes it as the saved spin/rotation value (explicit base qualifier
+    // avoids the shadow by the derived finale-clock m_Timer at +0x88).
+    sfs.SetDoubleAttribute("rot",       (double)ctrl->HUDControl::m_Timer); // +0x2c
     parent->InsertEndChild(sfs);
 }
 
-// Binary @ 0x001bb52c. Global time-scale restore + type-6 ENT_KILLED walk +
-// WaveManager/PSPParticleManager reset.
-void SuperFruitControl::Reset()
+// Binary @ 0x001bb52c (binary symbol: SuperFruitControl::Reset). Global time-scale
+// restore + type-6 ENT_KILLED walk + WaveManager/PSPParticleManager reset.
+// Port name: ResetAll -- static class-level helper, renamed to avoid colliding
+// with the HUDControl3d-inherited virtual void Reset() (GCC 4.4.1 error).
+void SuperFruitControl::ResetAll()
 {
     WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: byte-clears WaveManager+0x00
