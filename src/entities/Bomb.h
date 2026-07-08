@@ -186,6 +186,11 @@ public:
     // ASM-verified: 2026-06-18 v1.6.1 Bomb::GetHeighestBomb @ 0x001d5138 (asm-verify)
     static float GetHeighestBomb();
 
+    // v1.6.1 Bomb::GetWait @0x0010d4cc -- thunk returning the chuck/fuse delay
+    // countdown (m_Countdown, +0xA4); the Bomb analogue of Fruit::m_SpawnDelay.
+    // Read by SaveGame's <ent> bomb pass to persist the airborne bomb's wait.
+    float GetWait() const;
+
 };
 
 #ifdef __bada__

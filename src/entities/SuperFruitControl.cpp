@@ -81,7 +81,10 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     AttachGlow();
 }
 
-// Binary @ 0x001bea90: restore-from-save ctor.
+// ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
+// self-registers SuperFruitControls[fruit]; m_Timer=m_PrevTimer=state.time;
+// m_SliceCount=state.hits; m_Lifetime=state.sliceTime; base m_Timer(+0x2c)=state.rot;
+// colSphere.m_Radius*=0.775; NO glow/camera/SFX.
 SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     : m_pHostFruit(fruit)
     , m_HitCount(0.0f)
@@ -107,11 +110,33 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
     memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
+    // Restore the saved spin into the controller's Entity-base scale.y (+0x2c),
+    // the same field SaveSuperFruitState serialized as XML attr "rot".
+    scale.y = state.m_Spin;
+
+    // TODO: v1.6.1 DAT_002d928c/9290 -- super-fruit restore tint/spinAxis Y,Z (unmapped; cosmetic).
+    // The tint / spin-axis work vectors are left zero-initialised (memset above) as a
+    // safe placeholder until the two DAT constants are resolved; do NOT guess values.
+
     // (restore ctor: register by symmetry with Release unregister; not byte-confirmed)
     SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
         this, &SuperFruitControl::ComboCancel);
 
-    AttachGlow();
+    // Self-register so IsInSuperFruitState / SuperFruitSliced see the resumed controller.
+    SuperFruitControls[fruit] = this;
+
+    // Close the wave spawn-suppression gate (WaveManager+0x00) during super state.
+    // Mirrors Reset()'s byte-write to the same slot (inverted: Reset opens it with 0).
+#if defined(__bada__)
+    *(uint8_t*)WaveManager::GetInstance() = 1;
+#else
+    WaveManager::GetInstance()->m_SpeedControl[0] = reinterpret_cast<HUDControl3d*>(1);
+#endif
+
+    // Shrink the host fruit's collision sphere (binary: colSphere.m_Radius *= 0.775).
+    if (m_pHostFruit && m_pHostFruit->m_Col) {
+        static_cast<ColSphere*>(m_pHostFruit->m_Col)->radius *= 0.775f;
+    }
 }
 
 SuperFruitControl::~SuperFruitControl()
@@ -717,35 +742,34 @@ bool SuperFruitControl::SpawnFinalPomegranate()
     return true;
 }
 
-// Binary @ 0x001ba73c. Serializes active super-fruit state to XML.
-// fruit param matches binary sig; port uses SuperFruitControls map lookup instead.
-void SuperFruitControl::SaveSuperFruitState(Fruit* /*fruit*/, TiXmlElement* parent)
+// Binary @ 0x001ba73c. Serializes the active super-fruit state as a
+// <superFruitState> child of `parent` (the <ent> element for the host fruit).
+// Looks up the controller for `fruit` in SuperFruitControls; no-op if absent.
+//
+// Fixes #291: SuperFruitState::WriteToElement() returns a null standalone node
+// under the tinyxml2 shim, so super-fruit save was silently dropped. Here we
+// build the element inline through the parent's owning document
+// (parent->GetDocument().NewElement) -- the same doc-owned pattern SaveGame uses --
+// which keeps the binary (Fruit*, TiXmlElement*) signature intact.
+void SuperFruitControl::SaveSuperFruitState(Fruit* fruit, TiXmlElement* parent)
 {
     if (!parent) return;
-    if (SuperFruitControls.empty()) return;
 
-    // Serialize first active controller (binary stores at most one active at a time).
-    std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.begin();
+    std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.find(fruit);
     if (it == SuperFruitControls.end() || !it->second) return;
 
     SuperFruitControl* ctrl = it->second;
 
-    SuperFruitState state;
-    state.m_Timer      = ctrl->m_Timer;
-    state.m_Lifetime   = ctrl->m_Lifetime;
-    state.m_SliceCount = ctrl->m_SliceCount;
+    TiXmlElement sfs = parent->GetDocument().NewElement("superFruitState");
+    sfs.SetDoubleAttribute("time",      (double)ctrl->m_Timer);       // +0x88
+    sfs.SetAttribute      ("hits",      ctrl->m_SliceCount);           // +0x90
+    sfs.SetDoubleAttribute("sliceTime", (double)ctrl->m_Lifetime);    // +0xa0
     // Binary @ 0x001ba73c reads ctrl+0x2c -> serialized as XML attr "rot".
     // ctrl+0x2c is the controller's Entity-base scale.y (Entity::scale is the
     // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
     // controller's own scale.y as the saved spin/rotation value.
-    state.m_Spin = ctrl->scale.y;
-
-    // Binary: state.WriteToElement() returns a newly heap-allocated TiXmlElement*
-    // ("superFruitState") which is then inserted as a child of parent.
-    // DIFFERS: WriteToElement returns null in port (tinyxml2 standalone-element limit);
-    // InsertEndChild is skipped. Save path is deferred (#291).
-    TiXmlElement stateElem = state.WriteToElement();
-    if (stateElem) parent->InsertEndChild(stateElem);
+    sfs.SetDoubleAttribute("rot",       (double)ctrl->scale.y);       // +0x2c
+    parent->InsertEndChild(sfs);
 }
 
 // Binary @ 0x001bb52c. Global time-scale restore + type-6 ENT_KILLED walk +

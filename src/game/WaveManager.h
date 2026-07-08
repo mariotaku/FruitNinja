@@ -270,7 +270,7 @@ public:
     // 0x00125be4: full state reset between games.
     void Reset(bool fullReset);
 
-    // 0x00124b1c: restore state from FruitSaveData.
+    // 0x0012bf58: restore state from FruitSaveData.
     void Resume();
 
     // 0x001247f0: serialise current wave state into FruitSaveData.

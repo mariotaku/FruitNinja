@@ -470,6 +470,11 @@ float Bomb::GetHeighestBomb() {
     return best;
 }
 
+// v1.6.1 Bomb::GetWait @0x0010d4cc -- thunk returning the chuck/fuse delay countdown.
+float Bomb::GetWait() const {
+    return m_Countdown;
+}
+
 // ASM-spec v1.6.1 Bomb::CollisionResponse @ 0x1d5d4c
 // Returns 0. Three branches: arcade bomb hit / classic+zen bomb hit / menu-bomb re-hit.
 int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
