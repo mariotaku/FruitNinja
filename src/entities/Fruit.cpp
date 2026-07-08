@@ -24,6 +24,8 @@
 #include "game/PowerUpManager.h"
 #include "game/ItemManager.h"
 #include "game/GameOver.h"
+#include "Coin.h"
+#include "math/Random.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/network/P2PMessageHandling.h"
 #include "engine/util/StringTable.h"
@@ -1381,6 +1383,8 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         {
             int score = info->m_Score;
             if (m_bCritical) score += FruitInfo_GetCriticalScore();
+            // TODO: v1.6.1 -- verify CoinsMin/Max score-override; binary uses these for
+            // coin count only, not score
             if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
                 const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
                 score = info->m_CoinsMin
@@ -1389,10 +1393,25 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
             AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
-            // TODO: v1.6.1 Fruit::CollisionResponse @0x001dd500 -- crit coin-drop unported.
-            // Binary tail multiplies the fruit's coin drop by (CRITICAL_SCORE/2) on a
-            // critical hit and calls Coin::MakeCoins(...); no Coin::MakeCoins call exists
-            // anywhere in Fruit.cpp yet. Out of scope for this fix (see batch1-realgap-specs.json).
+            // ASM-spec v1.6.1 Fruit::CollisionResponse coin drop @0x001de778-95c:
+            {
+                int coinCount = 0;
+                if (info->m_CoinsMax > 0) {
+                    coinCount = info->m_CoinsMin;
+                    if (info->m_CoinsMin < info->m_CoinsMax) {
+                        const uint32_t coinRange = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
+                        coinCount = info->m_CoinsMin + (int)Math::g_Random.Rand32(coinRange);
+                    }
+                }
+                if (m_bCritical) coinCount = (FruitInfo_GetCriticalScore() / 2) * coinCount;
+                if (coinCount > 0) {
+                    const uint16_t coinAngleSpread =
+                        (uint16_t)Math::Min((coinCount + 1) * 8190, 65520);
+                    Coin::MakeCoins(coinCount, 1, &pos, m_SliceArcAngle, coinAngleSpread,
+                                    /*target=*/nullptr, /*flyFXName=*/nullptr, /*collectFXName=*/nullptr,
+                                    Coin::DefaultArrivedDelegate(), /*silent=*/true, 0.02f, 0.15f);
+                }
+            }
 
             // v1.6.1 Fruit::CollisionResponse @0x001dd500: on an unsullied run (no misses
             // yet this game), tests the running score against SCORE_UNSULLIED achievements.

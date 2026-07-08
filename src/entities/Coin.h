@@ -91,7 +91,10 @@ public:
 
     // v1.6.1 Coin::InitCoin @0x001d7d84 — set up all coin fields for a launch.
     //
-    // Binary signature (HFA): InitCoin(_Vector3<float> gravity /*s0-s2*/,
+    // Binary signature (HFA, stale/unverified against the current 9-param port
+    // signature below -- the "gravity" name here is the same historical misnomer
+    // fixed on the `target` param; needs a follow-up disasm pass to reconcile):
+    //   InitCoin(_Vector3<float> gravity /*s0-s2*/,
     //   _Vector3<float>* pos /*r1*/, _Vector3<float>* target /*r2*/,
     //   ushort baseAngle /*r3*/, ushort launchAngle /*sp+0x.. -> +0x36 angle*/,
     //   int coinValue /*sp -> +0x3c*/, ulong flyFXHash /*sp -> +0x54*/,
@@ -99,20 +102,25 @@ public:
     //   /*sp -> +0x70*/, bool silent /*sp -> +0x48*/).
     //
     // Field writes proven from disassembly:
-    //   +0x44 m_Timer   = -gravity.x           (vneg s16; vstr [r4,#0x44])
+    //   +0x44 m_Timer   = -delay                (vneg; vstr [r4,#0x44])
     //   +0x36 angle     = (ushort)launchAngle  (strh r10,[r4,#0x36])
     //   +0x40 m_State   = 0                     (str r6,[r4,#0x40])
     //   +0x3c m_CoinValue                       (str [r4,#0x3c])
     //   +0x4c m_Speed   = (500 + rand/524287*550) * 0.66
-    //   +0x10 pos       = *r1 ; +0x5c target = *r2 ; +0x1c vel = DAT vec
+    //   +0x10 pos       = *r1 ; +0x5c/+0x60/+0x64 m_TargetX/Y/Z = *r2 ; +0x1c vel = DAT vec
     //   +0x54 m_FlyFXHash     = flyFXHash raw (uint32, stored as-is -- NOT hashed here)
     //   +0x58 m_CollectFXHash = collectFXHash raw (uint32, stored as-is -- NOT hashed here)
     //   +0x68/+0x6c emitters = 0 ; +0x70 m_OnArrived = onArrived ; +0x50 = 0
     //
+    // The `target` param (r2, was misnamed "gravity" -- it is NOT a gravity accel,
+    // it is the homing destination stored into m_TargetX/Y/Z, consumed by states 3/4)
+    // is passed by value here; MakeCoins resolves a NULL Vec3* target to (220,-140,0)
+    // (COIN_DEFAULT_TARGET) before calling InitCoin.
+    //
     // The null-name -> "coin_fly"/"coin_collect" default substitution and the
     // StringHash() call both happen in the CALLER (MakeCoins @0x001d7ec8), not here.
     // InitCoin takes pre-hashed StringHashes and stores them raw.
-    void InitCoin(Vec3 pos, Vec3 gravity, uint16_t angle, int coinValue,
+    void InitCoin(Vec3 pos, Vec3 target, uint16_t angle, int coinValue,
                   unsigned long flyFXHash, unsigned long collectFXHash,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
@@ -121,9 +129,11 @@ public:
 
     // v1.6.1 Coin::MakeCoins @0x001d7ec8 — spawn N coins via Mortar::ActorManager::Add(2).
     // Binary sig (12 params, this excluded):
-    //   (int totalCoins, int coinsPerCoin, Vec3 delay, ushort baseAngle, ushort angleSpread,
-    //    Vec3* spawnPos, float delayStep, float delayCap, char* flyFXName,
-    //    char* collectFXName, Delegate1<void,Coin*>, bool silent)
+    //   (int totalCoins, int coinsPerCoin, Vec3* spawnPos, ushort baseAngle, ushort angleSpread,
+    //    Vec3* target, char* flyFXName, char* collectFXName, Delegate1<void,Coin*> onArrived,
+    //    bool silent, float delayStep, float delayCap)
+    //   target: homing destination passed through to InitCoin; NULL -> resolved here to
+    //   (220,-140,0) (COIN_DEFAULT_TARGET) before the InitCoin call.
     //   delayStep/delayCap exact semantics unconfirmed (labeled s0/s1 in Ghidra decompile);
     //   port maps them to per-coin delay step and max delay cap respectively.
     // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- confirm delayStep/delayCap semantic
@@ -133,12 +143,12 @@ public:
     //   when null; both StringHash'd here and the hashes passed to InitCoin.
     //   Per-coin loop: ActorManager::Add(2,true), random angle in baseAngle+/-spread,
     //   up to 10 retries against screen bounds, then InitCoin.
-    static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
+    static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
                           uint16_t baseAngle, uint16_t angleSpread,
-                          Vec3* spawnPos,
-                          float delayStep, float delayCap,
+                          Vec3* target,
                           const char* flyFXName, const char* collectFXName,
-                          Mortar::Delegate1<void, Coin*> onArrived, bool silent);
+                          Mortar::Delegate1<void, Coin*> onArrived, bool silent,
+                          float delayStep, float delayCap);
 
     // v1.6.1 @0x001d7a00 (thunk 0x00106eb8) — unconditional sweep of all type-2
     // entities (no IsActive() gate); arrive=true credits via Arrived(), else

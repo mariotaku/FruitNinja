@@ -32,7 +32,7 @@ static const float COIN_DECEL_TIME      = 0.05f;    // state 3 hold time (second
 static const float COIN_HOMING_CLOSE    = 30.0f;    // arrival distance (state 4->1)
 static const float COIN_TURN_RATE       = 0.85f;    // homing steering base rate
 static const float COIN_SPIN_RATE       = 32760.0f * 500.0f; // spin = rate * dt (binary: 32760*dt*500)
-static const Vec3  COIN_DEFAULT_GRAVITY(220.0f, -140.0f, 0.0f); // default gravity/target
+static const Vec3  COIN_DEFAULT_TARGET(220.0f, -140.0f, 0.0f);  // default homing target (was misnamed "gravity")
 static const Vec3  COIN_SCALE(0.5f, 0.5f, 0.5f);   // entity visual scale
 
 // Screen bounds for spawn clamping (coin.md "Key Constants")
@@ -86,9 +86,9 @@ Coin::Coin()
     , m_SpinAngle(0)
     , m_FlyFXHash(0)
     , m_CollectFXHash(0)
-    , m_TargetX(COIN_DEFAULT_GRAVITY.x)
-    , m_TargetY(COIN_DEFAULT_GRAVITY.y)
-    , m_TargetZ(COIN_DEFAULT_GRAVITY.z)
+    , m_TargetX(COIN_DEFAULT_TARGET.x)
+    , m_TargetY(COIN_DEFAULT_TARGET.y)
+    , m_TargetZ(COIN_DEFAULT_TARGET.z)
     , m_pFlyEmitter(nullptr)
     , m_pCollectEmitter(nullptr)
 {
@@ -164,7 +164,7 @@ void Coin::Arrived() {
 // Stores flyFXHash/collectFXHash raw -- the null-name -> default substitution
 // and the StringHash() call both happen in the caller (MakeCoins).
 // ---------------------------------------------------------------------------
-void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t angle, int coinValue,
+void Coin::InitCoin(Vec3 pos_in, Vec3 target, uint16_t angle, int coinValue,
                     unsigned long flyFXHash, unsigned long collectFXHash,
                     Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
 {
@@ -179,9 +179,9 @@ void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t angle, int coinValue,
     m_Speed      = (COIN_SPEED_BASE + randFrac * COIN_SPEED_RAND) * COIN_SPEED_SCALE;
     pos          = pos_in;
     m_Timer      = -delay;
-    m_TargetX    = gravity.x;
-    m_TargetY    = gravity.y;
-    m_TargetZ    = gravity.z;
+    m_TargetX    = target.x;
+    m_TargetY    = target.y;
+    m_TargetZ    = target.z;
     vel          = Vec3(0.0f, 0.0f, 0.0f);
     scale        = COIN_SCALE;
     m_FlyFXHash      = flyFXHash;
@@ -252,10 +252,14 @@ void Coin::_Update(float dt) {
         vel.x = SinIdx(m_Angle) * m_Speed * 1.5f;
         vel.y = CosIdx(m_Angle) * m_Speed * 1.5f;
         vel.z = 0.0f;
-        // TODO: v1.6.1 0x001d81bc (Coin::_Update) -- re-analyst spec flags that the
-        // non-silent SFX path may set m_State=4 directly (skipping FLYING) instead
-        // of always 2 (LAB_001d839c, iVar15 2-vs-4); needs a follow-up disasm pass
-        // to confirm before changing the state assignment below.
+        // ASM-spec v1.6.1 Coin::_Update @0x001d81bc: non-silent launch (m_Silent==0) plays the
+        // "achievement" SFX and jumps straight to HOMING (state 4), resetting m_Timer=0; only silent
+        // launches (m_Silent!=0) pass through FLYING (state 2).
+        if (m_Silent == 0) {
+            m_Timer = 0.0f;
+            m_State = 4;
+            return; // skip FLYING processing this tick -- binary jumps straight to HOMING
+        }
         m_State = 2; // immediate transition to FLYING
         // fall through to process FLYING on same tick
         /* FALLTHROUGH */
@@ -271,6 +275,8 @@ void Coin::_Update(float dt) {
         pos.x += vel.x * dt;
         pos.y += vel.y * dt;
         pos.z += vel.z * dt;
+        // TODO: v1.6.1 Coin::_Update @0x001d81bc LAB_001d839c -- trail-emitter respawn guard
+        // differs from binary; needs RE.
         // Spawn/refresh fly (trail) emitter -- shared case 0/2 fallthrough tail.
         if (m_FlyFXHash != 0 && !m_pFlyEmitter &&
             PSPParticleManager::GetInstance().EmitterExists(m_FlyFXHash)) {
@@ -527,15 +533,14 @@ void Coin::ClearCoins(bool arrive) {
 // ---------------------------------------------------------------------------
 // v1.6.1 Coin::MakeCoins @ 0x001d7ec8
 // Spawn N coins via Mortar::ActorManager::Add(2).
-// delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
-void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
+void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
                      uint16_t baseAngle, uint16_t angleSpread,
-                     Vec3* spawnPos,
-                     float delayStep, float delayCap,
+                     Vec3* target,
                      const char* flyFXName, const char* collectFXName,
-                     Mortar::Delegate1<void, Coin*> onArrived, bool silent)
+                     Mortar::Delegate1<void, Coin*> onArrived, bool silent,
+                     float delayStep, float delayCap)
 {
     if (totalCoins <= 0) return;
 
@@ -556,7 +561,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
     float perStep = delayStep;
     float maxDelay = delayCap;
 
-    Vec3 gravity = COIN_DEFAULT_GRAVITY;
+    Vec3 resolvedTarget = target ? *target : COIN_DEFAULT_TARGET;
 
     int idx = 0;
     int remaining = totalCoins;
@@ -593,12 +598,14 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
         }
 
         Vec3 coinPos(spawnX, spawnY, spawnPos->z);
+        // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- per-coin delay stagger differs from
+        // binary; needs RE.
         // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.
         float coinDelay = perStep * (float)(idx + 1);
         if (maxDelay < 0.0f && coinDelay < maxDelay) coinDelay = maxDelay;
         int coinValue = remaining < coinsPerCoin ? remaining : coinsPerCoin;
 
-        coin->InitCoin(coinPos, gravity, randAngle, coinValue,
+        coin->InitCoin(coinPos, resolvedTarget, randAngle, coinValue,
                        flyHash, collectHash, onArrived, coinDelay, silent);
 
         remaining -= coinsPerCoin;

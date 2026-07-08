@@ -1916,10 +1916,11 @@ void SlashEntity::Update(float dt) {
                             Vec3 coinPos = m_SliceFruitPos;
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
                             Coin::MakeCoins(bonusCoins, 1,
-                                            Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                                            &coinPos, 0.02f, 0.15f,
+                                            &coinPos, 0, 0xff3a,
+                                            /*target=*/nullptr,
                                             nullptr, nullptr,
-                                            Coin::DefaultArrivedDelegate(), true);
+                                            Coin::DefaultArrivedDelegate(), true,
+                                            0.02f, 0.15f);
                         }
                         // (d) Achievement unlock.
                         AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCounter, m_ComboFruitTypes);
