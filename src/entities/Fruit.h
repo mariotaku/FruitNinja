@@ -54,6 +54,9 @@ static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match 
 // against Ghidra struct + Init/Update/Ctor/IsOffscreen disassembly.
 class Fruit : public Mortar::Entity {  // Entity = 60 bytes, ends at +0x3B
 public:
+    // ASM-spec v1.6.1 Fruit::NEW_LIFE_AT: score-milestone that restores one life in AddToCurrentScore.
+    static const int NEW_LIFE_AT = 100;
+
     uint8_t  m_FruitType;                  // +0x3C  (binary: u8, NOT int)
     uint8_t  m_bNoPowerUp;                 // +0x3D
     uint8_t  _pad_3E[2];                   // +0x3E..+0x3F

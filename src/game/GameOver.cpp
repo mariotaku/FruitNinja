@@ -9,6 +9,8 @@
 #include "engine/util/StringHash.h"
 #include "ScoreDelegate.h"
 #include "PowerUpManager.h"
+#include "entities/Fruit.h"
+#include "audio/GameSound.h"   // GameSound::SFXPlay (extra-life restore)
 
 #include <algorithm>
 #include <ctime>
@@ -91,14 +93,19 @@ void GameOver(int endReason, float endScore, int endParam) {
 // GetScoreMultiplyer returns PowerUpManager::GetScoreGainMultiplier() (default 1),
 // so normal fruit gains are unchanged. DefaultScoreDelegate multiplies negative
 // deltas by GetScoreLossMultiplier() so bomb penalty magnitude is delegate-controlled.
-// TODO: v1.6.1 @0x0011a4c0 tail -- NEW_LIFE_AT extra-life miss-restore
 void AddToCurrentScore(int points, int param1, bool param2, bool /*param3*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
+    int oldScore = game_work.currentScore;
     int mult  = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
     int delta = g_ScoreDelegate(points * mult);
     game_work.currentScore += delta;
     if (game_work.currentScore < 0) game_work.currentScore = 0;
+    // ASM-spec v1.6.1 AddToCurrentScore @0x0011a4c0: crossing a NEW_LIFE_AT(100) boundary restores one life.
+    if (oldScore / Fruit::NEW_LIFE_AT < game_work.currentScore / Fruit::NEW_LIFE_AT && game_work.missCount > 0) {
+        game_work.missCount--;
+        if (game_work.mGameSound) game_work.mGameSound->SFXPlay("extra-life", 1.0f, 1.0f);
+    }
     // Binary AddToCurrentScore @0x0011a4c0: cache "all" cumulative count in
     // game_work for achievement gating in GameOverScreen::Update state-6.
     if (points > 0 && param2 && param1 < 2) {
