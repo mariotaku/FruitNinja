@@ -75,6 +75,10 @@ struct BakedStringTTF_Surface {
     GlyphTTF*         m_GlyphsBegin;  // +0x3c
     GlyphTTF*         m_GlyphsEnd;    // +0x40
     uint32_t          _pad44;         // +0x44
+
+    // Transform_GradientSplit @0x0024954c: repaint every vertex above the split plane
+    // (plane = y*(rect.top+rect.bottom)) to c. Non-virtual -- does not change layout.
+    void Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect);
 };
 
 #ifdef __bada__
@@ -143,18 +147,18 @@ static_assert(sizeof(BakedStringEffectBase) == 0x38, "BakedStringEffectBase size
 class BakedStringTTF {
 public:
     // ctor @0x00249a5c: (FontCacheObjectTTF* fc, const char* text, float fontScale,
-    //   Colour col, long alignSigned, float, FontCacheObjectTTF::FONT_EFFECT_ENUM eff)
-    // op_new(100). weight = clamp(ceil(alignSigned*fc[0x10c][0x0c]),0,0x20);
+    //   Colour col, long alignSigned, float effectSize, FONT_EFFECT_ENUM eff)
+    // op_new(100). n = clamp(ceil(effectSize*fc[0x10c][0x0c]),0,0x20);  <- 6th float param
     // if(eff==0 && n>0) eff=1; m_FmtCount=n; m_Flag=eff.
     // m_ScaledHeight = fontScale * atlas[+0x14]. AddColour(col, 0.0).
-    // m_Weight = signedToFloat(alignSigned) * fc[+0x10c][+0x10].
+    // m_Weight = signedToFloat(alignSigned) * fc[+0x10c][+0x10].  <- alignSigned drives weight
     // strdup(text)->m_Text. FullInternalRebuild(). FontInterface::AddStringRef(this).
     BakedStringTTF(FontCacheObjectTTF* fc,
                    const char* text,
                    float fontScale,
                    Colour col,
                    long alignSigned,
-                   float,
+                   float effectSize,
                    FontCacheObjectTTF::FONT_EFFECT_ENUM eff);
     ~BakedStringTTF();
 
@@ -208,6 +212,7 @@ public:
     // vertex whose Y is above the split plane (y*(m_BoundsMaxY+m_BoundsMinY)) with c.
     // Split math lifted from BakedStringBox metallic gradient (Transform_GradientSplit).
     // ASM-spec v1.6.1 BakedStringTTF::ApplyGradientSplit @0x00249bf4 / Transform_GradientSplit @0x0024954c.
+    // public: AddColour(c,y) then ApplyGradientSplit_Internal(c,y).
     void ApplyGradientSplit(Colour c, float y);
 
     // Returns total advance (field_60) set by ApplyFormatting_LeftJustify.
@@ -297,6 +302,10 @@ private:
     // ASM-spec v1.6.1 BakedStringTTF::ApplyGradient_TopBottom_Internal @0x00247c54 /
     //   ApplyGradient_TopBottom @0x0024863c: top/bottom passed as explicit params.
     void ApplyGradient_TopBottom_Internal(Colour top, Colour bottom);
+
+    // ApplyGradientSplit_Internal @0x002495fc: loop surfaces, dispatching each to
+    // BakedStringTTF_Surface::Transform_GradientSplit with this object's refRect.
+    void ApplyGradientSplit_Internal(Colour c, float y);
 
     // AddColour: store into m_Base.m_Effect colour stops.
     void AddColour(Colour col, float t);

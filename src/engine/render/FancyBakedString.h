@@ -10,20 +10,29 @@
 // Composes up to six BakedStringTTF layers, each a full copy of the same text baked
 // with a different FONT_EFFECT, drawn back-to-front so the main glyph sits on top of
 // its shadow/glow and under its stroke/bevel highlight:
-//   m_pShadow  BLUR       (gate shadowSize>0)  drawn at pos + m_ShadowOffset
+//   m_pShadow  (shadowMode==1 ? STROKE : BLUR)  (gate shadowSize>0)  at pos + m_ShadowOffset
 //   m_pGlow    STROKE     (gate glowSize>0)
 //   m_pMain    NONE       (always)             owns the shared refRect
 //   m_pStroke  INNER_GLOW (gate strokeSize>0)
 //   m_pExtra1  BEVEL(4)   (gate extraSize>0, created with m_pExtra2)
 //   m_pExtra2  BEVEL(4)   (gate extraSize>0)
 //
+// Each per-layer size arg (shadowSize/glowSize/strokeSize/extraSize) is passed to the
+// BakedStringTTF ctor as its effectSize (6th float, drives the effect radius/count);
+// p5 is passed as alignSigned (weight) to every layer. If circleRadius>0 each created
+// layer gets ApplyFormatting_Circle(circleRadius).
+//
 // Every layer is drawn with the MAIN layer's refRect (BakedStringTTF::GetRefRect) so
 // all layers align to the FG-label bbox regardless of their own effect padding.
 //
 // Usage:
 //   FancyBakedString* s = new FancyBakedString(font, "PLAY", 40.0f, mainCol,
-//                             shadowSize, shadowCol, glowSize, glowCol,
-//                             strokeSize, strokeCol);
+//                             0, 0.0f,              // p5, circleRadius
+//                             glowSize, glowCol,
+//                             shadowSize, shadowCol,
+//                             strokeSize, strokeCol,
+//                             0, 0.0f, 0,           // shadowMode, extraSize, p15
+//                             extraCol1, extraCol2);
 //   s->Draw(pos, Vec2(1,1), 0.0f, Mortar::ALIGN_CENTRE);
 //   s->ApplyGradientSplit(col, 0.5f);   // recolour top/bottom split on the main layer
 //   delete s;                            // Shutdown() frees the 6 layers
@@ -42,28 +51,28 @@ namespace Mortar {
 // FancyBakedString -- sizeof 0x38 (=56). v1.6.1 @0x0024b600.
 class FancyBakedString {
 public:
-    // ctor @0x0024b600 -> Build @0x0024b1c8. Creates each optional layer only when its
-    // size arg > 0; the main layer is always created. m_ShadowColour/m_GlowColour default
-    // to (0,0,0,255). extraSize gates BOTH bevel layers (created together).
-    FancyBakedString(FontCacheObjectTTF* font, const char* text, float size,
-                     Colour mainCol,
-                     float shadowSize, Colour shadowCol,
+    // ctor @0x0024b600 -> FancyBakedStringBuild @0x0024b1c8. Creates each optional layer
+    // only when its size arg > 0; the main layer is always created. extraSize gates BOTH
+    // bevel layers (created together). 17-arg ABI matches the binary exactly.
+    FancyBakedString(FontCacheObjectTTF* font, const char* text, float fontSize,
+                     Colour mainCol, int p5, float circleRadius,
                      float glowSize,   Colour glowCol,
+                     float shadowSize, Colour shadowCol,
                      float strokeSize, Colour strokeCol,
-                     float extraSize = 0.0f,
-                     Colour extraCol1 = Colour(0, 0, 0, 255),
-                     Colour extraCol2 = Colour(0, 0, 0, 255));
+                     int shadowMode, float extraSize, int p15,
+                     Colour extraCol1, Colour extraCol2);
 
     // ~FancyBakedString -> Shutdown @0x0024b738.
     ~FancyBakedString();
 
-    // Build @0x0024b1c8: per-layer gated construction (see class doc).
-    void Build(FontCacheObjectTTF* font, const char* text, float size,
-               Colour mainCol,
-               float shadowSize, Colour shadowCol,
-               float glowSize,   Colour glowCol,
-               float strokeSize, Colour strokeCol,
-               float extraSize,  Colour extraCol1, Colour extraCol2);
+    // FancyBakedStringBuild @0x0024b1c8: per-layer gated construction (see class doc).
+    void FancyBakedStringBuild(FontCacheObjectTTF* font, const char* text, float fontSize,
+                               Colour mainCol, int p5, float circleRadius,
+                               float glowSize,   Colour glowCol,
+                               float shadowSize, Colour shadowCol,
+                               float strokeSize, Colour strokeCol,
+                               int shadowMode, float extraSize, int p15,
+                               Colour extraCol1, Colour extraCol2);
 
     // Shutdown @0x0024b738: delete + null the 6 layers.
     void Shutdown();
@@ -76,6 +85,9 @@ public:
     void ApplyGradientSplit(Colour c, float y);
 
 private:
+    // Init @0x0024b1c8 head: zero the six layer ptrs + offset/colour fields before Build.
+    void Init();
+
     Vec3            m_ShadowOffset; // +0x00 shadow layer draw offset
     Vec3            m_Field0c;      // +0x0c // TODO: +0xc unresolved, candidate m_Translation
     BakedStringTTF* m_pShadow;      // +0x18 BLUR
