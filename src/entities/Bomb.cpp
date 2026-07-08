@@ -561,6 +561,19 @@ void Bomb::ClearUnspawned() {
     }
 }
 
+// ASM-spec v1.6.1 Bomb::DeactivateAll @0x001d5030: for each ActorManager type-1 bomb, call
+//   Bomb::Disable() (@0x0012c9d8: m_bCollisionGuard(+0x78)=1). Static (ignores its Bomb* arg).
+void Bomb::DeactivateAll() {
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return;
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(1, it);
+    while (e) {
+        static_cast<Bomb*>(e)->Disable();
+        e = am->GetEntityNext(1, it);
+    }
+}
+
 // ASM-verified: 2026-05-03 v1.6.1 Bomb::SetHit @0x0012c9e4 (re-analyst)
 // ASM-spec v1.6.1 Bomb::SetHit @0x0012c9e4
 void Bomb::SetHit(float speed) {

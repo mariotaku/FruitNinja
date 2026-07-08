@@ -173,6 +173,10 @@ public:
     // v1.6.1 @ 0x1d56b4
     static void ClearUnspawned();
 
+    // v1.6.1 @ 0x1d5030 — disables every active type-1 bomb (SuperFruitControl
+    // finale bomb-suppress window). Static; ignores its Bomb* arg in the binary.
+    static void DeactivateAll();
+
     // ASM-spec v1.6.1 Bomb::SetForPlayer @0x0012702c
     void SetForPlayer(int playerIdx);
 
