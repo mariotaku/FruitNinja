@@ -631,8 +631,11 @@ void GameUpdate(float dt, bool active) {
         }
     }
 
-    // --- Post-HUD quickener recovery (binary: gated on IsSingleTouchPressed) ---
-    // TODO: v1.6.1 0x001CF534 (GameUpdate) -- quickener recovery body (IsSingleTouchPressed() is now available).
+    // ASM-spec v1.6.1 GameUpdate @0x001cf534 (block 0x001cfc88): during slow-mo, touching ramps quickener x2/frame, clamp 5.
+    if (game_work.m_bSlowMotion) {
+        quickener *= (IsSingleTouchPressed() ? 2.0f : 1.0f);
+        if (quickener > 5.0f) quickener = 5.0f;
+    }
 
     // --- Bomb fuse sound (0x001cfd08..0x001cfe2c) ---
     {
