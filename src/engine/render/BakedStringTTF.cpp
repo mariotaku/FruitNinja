@@ -48,7 +48,7 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
                                float fontScale,
                                Colour col,
                                long alignSigned,
-                               float,
+                               float effectSize,
                                FontCacheObjectTTF::FONT_EFFECT_ENUM eff)
     : m_ScaledHeight(0.0f)
     , m_pFontCache(fc)
@@ -62,25 +62,23 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     // Zero the base struct.
     memset(&m_Base, 0, sizeof(m_Base));
 
-    // Weight and fmt count computation.
+    // Effect count + weight computation.
     // v1.6.1 BakedStringTTF ctor @0x00249a5c:
-    //   n = clamp(ceil(weight * fc[+0x10c][+0x0c]), 0, 0x20)
+    //   n = clamp(ceil(effectSize * fc[+0x10c][+0x0c]), 0, 0x20)   <- 6th float param
     //   if(eff==0 && n>0) eff=1
     //   m_FmtCount(+0x2c)=n; m_Flag(+0x30)=eff
     //   m_Weight(+0x28) = signedToFloat(alignSigned) * fc[+0x10c][+0x10]
-    // fc[+0x10c] is an embedded sub-struct within FontCacheObjectTTF; in the port
-    // there is no matching sub-struct at that offset — this is FontCacheObjectTTF's
-    // binary layout detail. The port approximates: weight affects outline count only.
-    // Using alignSigned directly as the weight multiplier (= alignSigned * 1.0).
-    // TODO: v1.6.1 0x00249a5c (Mortar::BakedStringTTF::BakedStringTTF) -- fc[+0x10c] weight/count fields
-    //   need the full FontCacheObjectTTF binary layout to compute exactly.
-    float weightF = (float)alignSigned;
-    float rawN = ceilf(weightF);
-    int n = (rawN < 0.0f) ? 0 : (rawN > 32.0f) ? 32 : (int)rawN;
+    // The radius/count comes from effectSize (the 6th float), NOT alignSigned;
+    // alignSigned drives the weight multiplier. fc[+0x10c] is an embedded sub-struct
+    // within FontCacheObjectTTF with no port-side counterpart at that offset, so the
+    // two scale factors are approximated as 1.0.
+    float scaleA = 1.0f; // TODO: v1.6.1 fc[+0x10c][+0xc] (m_FontScale); approximated 1.0
+    int n = (int)ceilf(effectSize * scaleA);
+    if (n < 0) n = 0; else if (n > 32) n = 32;
     if (eff == FontCacheObjectTTF::FONT_EFFECT_NONE && n > 0) eff = FontCacheObjectTTF::FONT_EFFECT_STROKE;
     m_Base.m_FmtCount = (uint32_t)n;
     m_Base.m_Flag = (uint8_t)eff;
-    m_Base.m_Weight = weightF;
+    m_Base.m_Weight = (float)alignSigned * 1.0f; // TODO: fc[+0x10c][+0x10] approx 1.0
 
     // m_ScaledHeight = fontScale * atlas->m_FontScale
     // v1.6.1 BakedStringTTF ctor @0x00249a5c: atlas[+0x14] = m_FontScale (=1.0 default)
@@ -168,11 +166,18 @@ void BakedStringTTF::BuildGlyphs()
     DeleteGlyphs();
     if (!m_pFontCache || !m_Text) return;
 
+    // Effect + radius drive a SEPARATE glyph rasterisation (blur/stroke/bevel).
+    // ASM-spec v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28: FetchGlyph passes
+    //   m_FmtCount(radius)+m_Flag(effect). Without these the effect layers rasterise
+    //   the plain sharp glyph, so blur/stroke never render.
+    FontCacheObjectTTF::FONT_EFFECT_ENUM eff = (FontCacheObjectTTF::FONT_EFFECT_ENUM)m_Base.m_Flag;
+    int rad = (int)m_Base.m_FmtCount;
+
     // Pre-render all codepoints so atlas UVs are populated before we read them.
     {
         Utf8StringIterator it(m_Text);
         while (!it.IsEmpty()) {
-            m_pFontCache->GetGlyph(it.m_CurrentCodepoint, m_ScaledHeight);
+            m_pFontCache->GetGlyph(it.m_CurrentCodepoint, m_ScaledHeight, eff, rad);
             it++;
         }
     }
@@ -182,7 +187,7 @@ void BakedStringTTF::BuildGlyphs()
     Utf8StringIterator it(m_Text);
     while (!it.IsEmpty()) {
         uint32_t cp = it.m_CurrentCodepoint;
-        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(cp, m_ScaledHeight);
+        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(cp, m_ScaledHeight, eff, rad);
 
         GlyphTTF* g = new GlyphTTF();
         g->m_CharCode  = cp;
@@ -359,6 +364,11 @@ void BakedStringTTF::BuildSurfaces()
 // vertex extents (truncated to long) into m_Base. Field mapping matches MortarRectangleT<long>:
 //   m_BoundsMinX=left=min(x), m_BoundsMaxX=right=max(x),
 //   m_BoundsMaxY=top=max(y),  m_BoundsMinY=bottom=min(y).
+// TODO: v1.6.1 BakedStringTTF::UpdateBounds @0x00247ed0 -- NOT split into a per-surface
+//   helper (binary folds each surface's +0x28..+0x34 extent fields). The port's
+//   BakedStringTTF_Surface reuses +0x28 for m_PageTextureID and +0x2c..+0x34 as pads,
+//   so storing per-surface bounds there would corrupt the GL texture ID. Kept inline
+//   here; values are already correct. Splitting needs a surface-layout rework first.
 void BakedStringTTF::UpdateBounds()
 {
     long minX =  999999;
@@ -394,18 +404,31 @@ void BakedStringTTF::UpdateBounds()
 void BakedStringTTF::ApplyGradientSplit(Colour c, float y)
 {
     AddColour(c, y);
+    ApplyGradientSplit_Internal(c, y);
+}
+
+// ApplyGradientSplit_Internal @0x002495fc: per-surface split-paint dispatch.
+// Passes this object's m_Base bounds (aliased as a MortarRectangleT<long>) so each
+// surface computes its split plane from the shared FG bbox.
+void BakedStringTTF::ApplyGradientSplit_Internal(Colour c, float y)
+{
     if (!m_SurfacesBuilt) return;
-
-    uint32_t packed = c.PlatformColour();
-    float plane = y * (float)(m_Base.m_BoundsMaxY + m_Base.m_BoundsMinY);
-
     for (size_t si = 0; si < m_Surfaces.size(); ++si) {
         BakedStringTTF_Surface* s = m_Surfaces[si];
         if (!s || !s->m_Verts) continue;
-        for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
-            if (s->m_Verts[vi].y > plane) {
-                s->m_Verts[vi].colour = packed;
-            }
+        s->Transform_GradientSplit(c, y, *GetRefRect());
+    }
+}
+
+// BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c: repaint every vertex
+// above the split plane to c. plane = y * (rect.top + rect.bottom) = y*(maxY+minY).
+void BakedStringTTF_Surface::Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect)
+{
+    uint32_t packed = c.PlatformColour();
+    float plane = y * (float)(rect.top + rect.bottom);
+    for (uint32_t vi = 0; vi < m_VertCount; ++vi) {
+        if (m_Verts[vi].y > plane) {
+            m_Verts[vi].colour = packed;
         }
     }
 }
@@ -610,14 +633,11 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 {
     // Save gradient cache: m_Base[0x1c] <- m_Base[0x18]
     // m_Effect.m_Col1 (at +0x18) raw-copied into m_Effect.m_Tc (at +0x1c).
+    // v1.6.1 ApplyGradient_TopBottom @0x0024863c: only the save + two AddColour +
+    //   Internal; the binary does NOT zero m_Col0/m_T0/m_Col1 (AddColour overwrites
+    //   both stops immediately, and Internal lerps from explicit params anyway).
     uint32_t saved = m_Base.m_Effect.m_Col1.PlatformColour();
     memcpy(&m_Base.m_Effect.m_Tc, &saved, sizeof(float));
-
-    // Reset colour stops and set gradient stops.
-    m_Base.m_Effect.m_Col0 = Colour(0, 0, 0, 0);
-    m_Base.m_Effect.m_T0   = 0.0f;
-    m_Base.m_Effect.m_Col1 = Colour(0, 0, 0, 0);
-    // (m_Tc already written above; AddColour(bottom,1.0) will overwrite)
 
     AddColour(top,    0.0f);
     AddColour(bottom, 1.0f);

@@ -923,6 +923,20 @@ add_test(NAME test_text_effects_screenshot COMMAND test_text_effects --screensho
 set_tests_properties(test_text_effects_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77
     LABELS "category_rendering;component_bakedstringbox")
 
+# Mortar::FancyBakedString layer-stack screenshot grid.
+# Renders a 3-column x 2-row grid exercising the class's whole point -- the
+# shadow/glow/main/stroke back-to-front layer stack -- directly (no HUD/screen):
+#   main only / main+shadow(BLUR) / main+stroke(INNER_GLOW, unwired)
+#   main+glow(STROKE) / main+shadow+stroke combo / main + 3-stop ApplyGradientSplit
+# Hard-asserts every cell draws foreground pixels, and that the shadow cell paints
+# text-area pixels the plain cell does not (proves the BLUR layer's padded
+# rasterisation actually renders, not just a smoke test).
+# Output: tmp/test/screenshots/fancybakedstring/grid.png
+fn_add_game_test(test_fancybakedstring_render test_fancybakedstring_render.cpp)
+add_test(NAME test_fancybakedstring_render_screenshot COMMAND test_fancybakedstring_render --screenshot)
+set_tests_properties(test_fancybakedstring_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77
+    LABELS "category_rendering;component_fancybakedstring")
+
 # ShopListItem TTF box-creation guard (#264).
 # Verifies that after NewDraw() the title (m_pBox0) and category (m_pBox1)
 # BakedStringBox pointers are non-null and m_TintA is cached to m_Type.

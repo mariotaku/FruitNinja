@@ -8,26 +8,18 @@
 
 namespace Mortar {
 
-FancyBakedString::FancyBakedString(FontCacheObjectTTF* font, const char* text, float size,
-                                   Colour mainCol,
-                                   float shadowSize, Colour shadowCol,
+FancyBakedString::FancyBakedString(FontCacheObjectTTF* font, const char* text, float fontSize,
+                                   Colour mainCol, int p5, float circleRadius,
                                    float glowSize,   Colour glowCol,
+                                   float shadowSize, Colour shadowCol,
                                    float strokeSize, Colour strokeCol,
-                                   float extraSize,  Colour extraCol1, Colour extraCol2)
-    : m_ShadowOffset(0.0f, 0.0f, 0.0f)
-    , m_Field0c(0.0f, 0.0f, 0.0f)
-    , m_pShadow(0)
-    , m_pGlow(0)
-    , m_pMain(0)
-    , m_pStroke(0)
-    , m_pExtra1(0)
-    , m_pExtra2(0)
-    , m_ShadowColour(0, 0, 0, 255)
-    , m_GlowColour(0, 0, 0, 255)
+                                   int shadowMode, float extraSize, int p15,
+                                   Colour extraCol1, Colour extraCol2)
 {
-    Build(font, text, size, mainCol,
-          shadowSize, shadowCol, glowSize, glowCol,
-          strokeSize, strokeCol, extraSize, extraCol1, extraCol2);
+    FancyBakedStringBuild(font, text, fontSize, mainCol, p5, circleRadius,
+                          glowSize, glowCol, shadowSize, shadowCol,
+                          strokeSize, strokeCol, shadowMode, extraSize, p15,
+                          extraCol1, extraCol2);
 }
 
 FancyBakedString::~FancyBakedString()
@@ -35,36 +27,64 @@ FancyBakedString::~FancyBakedString()
     Shutdown();
 }
 
-// Build @0x0024b1c8: create each optional layer only when its size arg > 0, each with
-// its FONT_EFFECT. Main layer always created (NONE). Bevel pair gated together.
-void FancyBakedString::Build(FontCacheObjectTTF* font, const char* text, float size,
-                             Colour mainCol,
-                             float shadowSize, Colour shadowCol,
-                             float glowSize,   Colour glowCol,
-                             float strokeSize, Colour strokeCol,
-                             float extraSize,  Colour extraCol1, Colour extraCol2)
+// Init: zero the six layer ptrs + offset/colour fields (Build head @0x0024b1c8).
+void FancyBakedString::Init()
 {
+    m_ShadowOffset = Vec3(0.0f, 0.0f, 0.0f);
+    m_Field0c      = Vec3(0.0f, 0.0f, 0.0f);
+    m_pShadow = 0;
+    m_pGlow   = 0;
+    m_pMain   = 0;
+    m_pStroke = 0;
+    m_pExtra1 = 0;
+    m_pExtra2 = 0;
+    m_ShadowColour = Colour(0, 0, 0, 255);
+    m_GlowColour   = Colour(0, 0, 0, 255);
+}
+
+// FancyBakedStringBuild @0x0024b1c8: create each optional layer only when its size arg
+// > 0, each with its FONT_EFFECT. Main layer always created (NONE). Bevel pair gated
+// together. p5 -> alignSigned (weight); per-layer size -> effectSize (6th float).
+// circleRadius>0 arcs each created layer.
+void FancyBakedString::FancyBakedStringBuild(FontCacheObjectTTF* font, const char* text, float fontSize,
+                                             Colour mainCol, int p5, float circleRadius,
+                                             float glowSize,   Colour glowCol,
+                                             float shadowSize, Colour shadowCol,
+                                             float strokeSize, Colour strokeCol,
+                                             int shadowMode, float extraSize, int /*p15*/,
+                                             Colour extraCol1, Colour extraCol2)
+{
+    Init();
+
     if (shadowSize > 0.0f) {
-        m_pShadow = new BakedStringTTF(font, text, size, shadowCol, (long)shadowSize,
-                                       0.0f, FontCacheObjectTTF::FONT_EFFECT_BLUR);
+        FontCacheObjectTTF::FONT_EFFECT_ENUM se = (shadowMode == 1)
+            ? FontCacheObjectTTF::FONT_EFFECT_STROKE
+            : FontCacheObjectTTF::FONT_EFFECT_BLUR;
+        m_pShadow = new BakedStringTTF(font, text, fontSize, shadowCol, (long)p5, shadowSize, se);
+        if (circleRadius > 0.0f) m_pShadow->ApplyFormatting_Circle(circleRadius);
     }
     if (glowSize > 0.0f) {
-        m_pGlow = new BakedStringTTF(font, text, size, glowCol, (long)glowSize,
-                                     0.0f, FontCacheObjectTTF::FONT_EFFECT_STROKE);
+        m_pGlow = new BakedStringTTF(font, text, fontSize, glowCol, (long)p5, glowSize,
+                                     FontCacheObjectTTF::FONT_EFFECT_STROKE);
+        if (circleRadius > 0.0f) m_pGlow->ApplyFormatting_Circle(circleRadius);
     }
 
-    m_pMain = new BakedStringTTF(font, text, size, mainCol, 0,
-                                 0.0f, FontCacheObjectTTF::FONT_EFFECT_NONE);
+    m_pMain = new BakedStringTTF(font, text, fontSize, mainCol, (long)p5, 0.0f,
+                                 FontCacheObjectTTF::FONT_EFFECT_NONE);
+    if (circleRadius > 0.0f) m_pMain->ApplyFormatting_Circle(circleRadius);
 
     if (strokeSize > 0.0f) {
-        m_pStroke = new BakedStringTTF(font, text, size, strokeCol, (long)strokeSize,
-                                       0.0f, FontCacheObjectTTF::FONT_EFFECT_INNER_GLOW);
+        m_pStroke = new BakedStringTTF(font, text, fontSize, strokeCol, (long)p5, strokeSize,
+                                       FontCacheObjectTTF::FONT_EFFECT_INNER_GLOW);
+        if (circleRadius > 0.0f) m_pStroke->ApplyFormatting_Circle(circleRadius);
     }
     if (extraSize > 0.0f) {
         // BEVEL == 4 (from #257); the port enum tops out at INNER_GLOW(3), so cast.
         FontCacheObjectTTF::FONT_EFFECT_ENUM bevel = (FontCacheObjectTTF::FONT_EFFECT_ENUM)4;
-        m_pExtra1 = new BakedStringTTF(font, text, size, extraCol1, (long)extraSize, 0.0f, bevel);
-        m_pExtra2 = new BakedStringTTF(font, text, size, extraCol2, (long)extraSize, 0.0f, bevel);
+        m_pExtra1 = new BakedStringTTF(font, text, fontSize, extraCol1, (long)p5, extraSize, bevel);
+        if (circleRadius > 0.0f) m_pExtra1->ApplyFormatting_Circle(circleRadius);
+        m_pExtra2 = new BakedStringTTF(font, text, fontSize, extraCol2, (long)p5, extraSize, bevel);
+        if (circleRadius > 0.0f) m_pExtra2->ApplyFormatting_Circle(circleRadius);
     }
 }
 

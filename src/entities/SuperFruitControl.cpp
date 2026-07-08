@@ -553,13 +553,16 @@ void SuperFruitControl::ChangeText(const char* text, bool resetFade,
         Colour(170, 35, 0, 255),
         Colour(55, 0, 170, 255), t);
 
-    float strokeSize = (layers == 3) ? 3.0f : 0.0f;
+    // The finale halo is the GLOW (STROKE) layer, size 3 on fast HW; shadow=0.
+    float glowSize = (layers == 3) ? 3.0f : 0.0f;
 
     *target = new Mortar::FancyBakedString(
-        game_work.m_pTTFFontMain, text, 50.0f, colourA,
-        0.0f, Colour(0, 0, 0, 255),   // shadow (unused)
-        0.0f, Colour(0, 0, 0, 255),   // glow (unused)
-        strokeSize, colourB);          // stroke (fast HW only)
+        game_work.m_pTTFFontMain, text, 50.0f, colourA, /*p5*/0, /*circleRadius*/0.0f,
+        glowSize, colourB,               // glow -> STROKE (the visible halo)
+        0.0f, Colour(0, 0, 0, 255),      // shadow off
+        0.0f, Colour(0, 0, 0, 255),      // stroke off
+        /*shadowMode*/0, /*extraSize*/0.0f, /*p15*/0,
+        Colour(255, 255, 255, 255), Colour(255, 255, 255, 255));
 
     // TODO: v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4 -- the exact 3-stop
     //   vertical gradient (ApplyGradientSplit y=0.55 -> colourC, y=0.5 -> colourD,
