@@ -243,18 +243,23 @@ void BonusScreen::AwardScores() {
     // SlashEntity.cpp:1911-1915 pending asm-inspector confirmation; whether the
     // >=6 branch's second burst spawns from a distinct "base2" position is also
     // unresolved (reusing `base` here rather than guessing a second position).
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: coins spawned here pass
+    // AddToScoreOnArrival (v1.6.1 @0x00162ab8), which credits coin->m_CoinValue to
+    // game_work.currentScore, NOT Coin::DefaultArrivedDelegate()/CoinArrived
+    // (@0x0017320C), which credits the coin wallet. The bonus-board tally must land
+    // in the arcade score / high score.
     if (total < 6) {
         Coin::MakeCoins(total, 6, Vec3(-0.05f, -0.3f, 0.0f), 0, 0xff3a,
                          &base, -0.05f, -0.3f, "bonus_star_trail", "bonus_star_impact",
-                         Coin::DefaultArrivedDelegate(), false);
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);
     } else {
         Coin::MakeCoins(6, 6, Vec3(-0.05f, -0.5f, 0.0f), 0, 0xff3a,
                          &base, -0.05f, -0.5f, "bonus_star_trail", "bonus_star_impact",
-                         Coin::DefaultArrivedDelegate(), false);
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);
         total = m_TotalScore;  // re-read (unchanged, just re-fetched -- matches binary)
         Coin::MakeCoins(total - 6, 6, Vec3(-0.05f, -0.5f, 0.0f), 0, 0xff3a,
                          &base, -0.05f, -0.5f, "bonus_star_trail", "bonus_star_impact",
-                         Coin::DefaultArrivedDelegate(), false);
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);
     }
 
     // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- Ghidra's decompile of
