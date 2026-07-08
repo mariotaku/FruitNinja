@@ -578,6 +578,10 @@ void BakedStringBox::Layout() {
                     for (int k = 0; k < 6; k++) line.verts.push_back(v[k]);
                     // Record which atlas page this glyph belongs to for per-page batching in Draw.
                     line.glyphPageTexIDs.push_back((uint32_t)g->pageTextureID);
+                    // Shadow-blur support (#257): remember codepoint + pre-bearing pen X so
+                    // Draw()'s shadow pass can refetch a BLUR-effect glyph at the same pen slot.
+                    line.glyphCodepoints.push_back(cp);
+                    line.glyphPenX.push_back(curX);
 
                     if (g->bearingY > lineMaxBearingY)
                         lineMaxBearingY = g->bearingY;
@@ -986,40 +990,100 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
 
     // --- Shadow pass (drawn first, behind all other passes) ---
     // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: shadow drawn first at drawPos + m_Translation (m_ShadowOffset).
-    // DIFFERS: original blurs the shadow glyphs (FetchGlyph blur_radius ~= ceil(shadowScale*invFontScale));
-    //   port draws a SOLID offset drop-shadow (no pixel blur) because the port FontCache has no glyph-blur path.
-    // TODO: v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28 -- port glyph-blur for soft shadow/glow edges.
+    // Each shadow glyph is a SEPARATELY-RASTERISED BLUR-effect glyph (v1.6.1 RenderGlyph
+    // @0x0024f5dc, BuildBlur @0x0024f030) refetched via FontCacheObjectTTF::GetGlyph(cp,
+    // size, FONT_EFFECT_BLUR, radius) -- not a solid copy of the sharp glyph mesh.
+    // ASM-verified: 2026-07-08T00:00Z v1.6.1 BakedStringTTF::BakedStringTTF @ 0x00249a5c
+    //   (blur radius = ceil(effectScale * FontInterface.m_FontScale @+0xc); FontInterface::Initialize
+    //   @0x00250470 sets +0xc=m_FontScale, +0x10=m_InvFontScale) (asm-inspector)
+    //   radius = clamp(ceil(m_ShadowScale * atlas->m_FontScale), 0, 32)  [RASTER px]
     {
         const bool doShadow = (!m_ShadowFlag && m_ShadowScale > 0.0f) ||
                               (m_ShadowFlag  && m_ShadowScale >= 0.0f);
         if (doShadow) {
+            // Radius is an atlas/raster-pixel count -> scales by the forward m_FontScale (+0xc),
+            // NOT the inverse. The binary uses m_InvFontScale (+0x10) only for the shadow *offset*.
+            FontInterface* shadowAtlas = m_Font->GetAtlas();
+            float fontScale = shadowAtlas ? shadowAtlas->m_FontScale : 1.0f;
+            float radF = ceilf(m_ShadowScale * fontScale);
+            if (radF < 0.0f) radF = 0.0f;
+            if (radF > 32.0f) radF = 32.0f;
+            const int shadowRadius = (int)radF;
+
+            // Pre-render pass: create/cache every blurred glyph this line set needs
+            // BEFORE the atlas upload below, mirroring Layout()'s pre-render-then-
+            // BuildPendingTextures pattern for the sharp glyphs. Without this, a
+            // newly-rasterised shadow glyph's atlas page would still be dirty when
+            // the batched draw calls below bind it this frame (one-frame stale/blank
+            // glyph on first use).
+            for (size_t pli = 0; pli < m_Lines.size(); pli++) {
+                const BakedStringBoxLine& pline = m_Lines[pli];
+                for (size_t pgi = 0; pgi < pline.glyphCodepoints.size(); pgi++) {
+                    m_Font->GetGlyph(pline.glyphCodepoints[pgi], m_FontSize,
+                                     Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR,
+                                     shadowRadius);
+                }
+            }
+            if (shadowAtlas) shadowAtlas->BuildPendingTextures();
+
             const uint32_t shadowPacked = m_ShadowCol.PlatformColour();
             const float sdx = m_ShadowOffset.x;
             const float sdy = m_ShadowOffset.y;
             for (size_t li = 0; li < m_Lines.size(); li++) {
                 const BakedStringBoxLine& sline = m_Lines[li];
-                if (sline.verts.empty()) continue;
+                const size_t numShadowGlyphs = sline.glyphCodepoints.size();
+                if (numShadowGlyphs == 0) continue;
                 const float localBaseY = baselineY - (float)li * step;
-                const int nVerts = (int)sline.verts.size();
-                std::vector<QUADCUSTOMVERTEX> wv(sline.verts);
+
+                // Build the blurred-glyph shadow mesh for this line (own UVs/quad sizes --
+                // NOT sline.verts, which holds the sharp glyph mesh).
+                std::vector<QUADCUSTOMVERTEX> wv;
+                wv.reserve(numShadowGlyphs * 6);
+                std::vector<uint32_t> shadowPageTexIDs;
+                shadowPageTexIDs.reserve(numShadowGlyphs);
+
+                for (size_t gi = 0; gi < numShadowGlyphs; gi++) {
+                    const GlyphAtlasEntry* g = m_Font->GetGlyph(sline.glyphCodepoints[gi], m_FontSize,
+                                                                Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR,
+                                                                shadowRadius);
+                    if (!g || g->width <= 0.0f || g->height <= 0.0f) continue;
+                    const float penX = sline.glyphPenX[gi];
+                    const float x0 = penX + g->bearingX;
+                    const float y1 = g->bearingY;
+                    const float x1 = x0 + g->width;
+                    const float y0 = y1 - g->height;
+
+                    QUADCUSTOMVERTEX v[6] = {
+                        { x0, y0, 0.f, 0,0,1, shadowPacked, g->u0, g->v1 },
+                        { x0, y1, 0.f, 0,0,1, shadowPacked, g->u0, g->v0 },
+                        { x1, y0, 0.f, 0,0,1, shadowPacked, g->u1, g->v1 },
+                        { x1, y1, 0.f, 0,0,1, shadowPacked, g->u1, g->v0 },
+                    };
+                    v[4] = v[3];
+                    v[5] = v[3];
+                    for (int k = 0; k < 6; k++) wv.push_back(v[k]);
+                    shadowPageTexIDs.push_back((uint32_t)g->pageTextureID);
+                }
+                if (wv.empty()) continue;
+
+                const int nVerts = (int)wv.size();
                 for (int i = 0; i < nVerts; i++) {
                     const float lx = wv[i].x * scale.x;
                     const float ly = (wv[i].y + localBaseY) * scale.y;
                     wv[i].x = cosT * lx - sinT * ly + anchor.x + sdx;
                     wv[i].y = sinT * lx + cosT * ly + anchor.y + sdy;
-                    wv[i].colour = shadowPacked;
                 }
-                for (int gi = 1; gi * 6 < nVerts; gi++) {
-                    wv[gi * 6 - 1] = wv[gi * 6];
+                for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
+                    wv[gi2 * 6 - 1] = wv[gi2 * 6];
                 }
                 // Per-page batch: draw consecutive same-page glyph runs.
                 {
-                    const int numGlyphs = (int)sline.glyphPageTexIDs.size();
+                    const int numGlyphs = (int)shadowPageTexIDs.size();
                     int gIdx = 0;
                     while (gIdx < numGlyphs) {
-                        uint32_t curTex = sline.glyphPageTexIDs[gIdx];
+                        uint32_t curTex = shadowPageTexIDs[gIdx];
                         int runStart = gIdx;
-                        while (gIdx < numGlyphs && sline.glyphPageTexIDs[gIdx] == curTex) gIdx++;
+                        while (gIdx < numGlyphs && shadowPageTexIDs[gIdx] == curTex) gIdx++;
                         glActiveTexture(GL_TEXTURE0);
                         glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
                         glEnable(GL_TEXTURE_2D);
@@ -1032,49 +1096,132 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     }
 
     // --- Stroke (glow) pass (drawn after shadow, before foreground) ---
-    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: m_pGlow (stroke) drawn at drawPos.
-    // DIFFERS: original = single expanded-glyph (blur) pass; port = 8-direction outline copies.
-    // TODO: blur path (see above). Multi-colour stroke (m_StrokeCount>=2/3, ApplyStrokeGradient)
-    //   + the m_Field68 inner-stroke layer are not ported yet.
+    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: m_pGlow (stroke) drawn at drawPos,
+    // BEHIND m_pMain -- a single SDF-outlined glyph (RenderGlyph @0x0024f5dc effect==1 STROKE,
+    // BuildStrokes @0x0024edb8), same pad-then-rasterise pattern as the shadow BLUR pass above.
+    // Radius reuses atlas->m_FontScale exactly like the shadow pass (BakedStringTTF ctor
+    // @0x00249a5c formula), not a separate stroke-specific scale field.
+    // Dead in v1.6.1: INNER_GLOW layer (BuildInnerGlow @0x0024f27c) has no setter writing its
+    //   gate (+0x68) -> zero call sites; not ported.
+    // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: per line, m_StrokeMode(+0x58)
+    //   2 -> ApplyStrokeGradient(Col0,Col1); 3 -> ApplyStrokeGradient(Col0,Col1,Col2); 1 -> solid Col0.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024afb0 (2-arg): top=Col0, bottom=Col1,
+    //   per-vertex top->bottom lerp over the glow(stroke) layer's own mesh Y-bbox, per wrapped line.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024b010 (3-arg): base Col0->Col2 then
+    //   split at 0.5 -> Col1 on the upper half.
     if (m_StrokeWidth > 0.0f && m_StrokeCount >= 1) {
+        FontInterface* strokeAtlas = m_Font->GetAtlas();
+        float strokeFontScale = strokeAtlas ? strokeAtlas->m_FontScale : 1.0f;
+        float strokeRadF = ceilf(m_StrokeWidth * strokeFontScale);
+        if (strokeRadF < 0.0f) strokeRadF = 0.0f;
+        if (strokeRadF > 32.0f) strokeRadF = 32.0f;
+        const int strokeRadius = (int)strokeRadF;
+
+        // Pre-render pass, mirroring the shadow pass above: build/cache every stroke
+        // glyph this line set needs before the batched upload+draw below.
+        for (size_t pli = 0; pli < m_Lines.size(); pli++) {
+            const BakedStringBoxLine& pline = m_Lines[pli];
+            for (size_t pgi = 0; pgi < pline.glyphCodepoints.size(); pgi++) {
+                m_Font->GetGlyph(pline.glyphCodepoints[pgi], m_FontSize,
+                                 Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE,
+                                 strokeRadius);
+            }
+        }
+        if (strokeAtlas) strokeAtlas->BuildPendingTextures();
+
         const uint32_t strokePacked = m_StrokeCol0.PlatformColour();
-        const float sw = m_StrokeWidth;
-        const float sd = sw * 0.707f;
-        const float offX[8] = {  sw, -sw, 0.0f, 0.0f,  sd, -sd,  sd, -sd };
-        const float offY[8] = { 0.0f, 0.0f, sw,  -sw,   sd,  sd, -sd, -sd };
-        for (int dir = 0; dir < 8; dir++) {
-            const float ox = offX[dir];
-            const float oy = offY[dir];
-            for (size_t li = 0; li < m_Lines.size(); li++) {
-                const BakedStringBoxLine& sline = m_Lines[li];
-                if (sline.verts.empty()) continue;
-                const float localBaseY = baselineY - (float)li * step;
-                const int nVerts = (int)sline.verts.size();
-                std::vector<QUADCUSTOMVERTEX> wv(sline.verts);
+        for (size_t li = 0; li < m_Lines.size(); li++) {
+            const BakedStringBoxLine& sline = m_Lines[li];
+            const size_t numStrokeGlyphs = sline.glyphCodepoints.size();
+            if (numStrokeGlyphs == 0) continue;
+            const float localBaseY = baselineY - (float)li * step;
+
+            // Build the SDF-outlined stroke mesh for this line (own UVs/quad sizes --
+            // NOT sline.verts, which holds the sharp glyph mesh).
+            std::vector<QUADCUSTOMVERTEX> wv;
+            wv.reserve(numStrokeGlyphs * 6);
+            std::vector<uint32_t> strokePageTexIDs;
+            strokePageTexIDs.reserve(numStrokeGlyphs);
+
+            for (size_t gi = 0; gi < numStrokeGlyphs; gi++) {
+                const GlyphAtlasEntry* g = m_Font->GetGlyph(sline.glyphCodepoints[gi], m_FontSize,
+                                                            Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE,
+                                                            strokeRadius);
+                if (!g || g->width <= 0.0f || g->height <= 0.0f) continue;
+                const float penX = sline.glyphPenX[gi];
+                const float x0 = penX + g->bearingX;
+                const float y1 = g->bearingY;
+                const float x1 = x0 + g->width;
+                const float y0 = y1 - g->height;
+
+                QUADCUSTOMVERTEX v[6] = {
+                    { x0, y0, 0.f, 0,0,1, strokePacked, g->u0, g->v1 },
+                    { x0, y1, 0.f, 0,0,1, strokePacked, g->u0, g->v0 },
+                    { x1, y0, 0.f, 0,0,1, strokePacked, g->u1, g->v1 },
+                    { x1, y1, 0.f, 0,0,1, strokePacked, g->u1, g->v0 },
+                };
+                v[4] = v[3];
+                v[5] = v[3];
+                for (int k = 0; k < 6; k++) wv.push_back(v[k]);
+                strokePageTexIDs.push_back((uint32_t)g->pageTextureID);
+            }
+            if (wv.empty()) continue;
+
+            const int nVerts = (int)wv.size();
+
+            // 2/3-colour stroke gradient: per-line, over this line's own stroke mesh Y-bbox
+            // (pre-transform local Y, matching the binary's per-FancyBakedString-instance scope).
+            if (m_StrokeCount >= 2) {
+                float yTop = wv[0].y, yBot = wv[0].y;
+                for (int i = 1; i < nVerts; i++) {
+                    if (wv[i].y > yTop) yTop = wv[i].y;
+                    if (wv[i].y < yBot) yBot = wv[i].y;
+                }
+                float range = yTop - yBot;
+                if (range < 1.0f) range = 1.0f;
+                const Colour& topC = m_StrokeCol0;
+                const Colour& botC = (m_StrokeCount == 3) ? m_StrokeCol2 : m_StrokeCol1;
+                const float mid = 0.5f * (yTop + yBot);
                 for (int i = 0; i < nVerts; i++) {
-                    const float lx = wv[i].x * scale.x;
-                    const float ly = (wv[i].y + localBaseY) * scale.y;
-                    wv[i].x = cosT * lx - sinT * ly + anchor.x + ox;
-                    wv[i].y = sinT * lx + cosT * ly + anchor.y + oy;
-                    wv[i].colour = strokePacked;
-                }
-                for (int gi = 1; gi * 6 < nVerts; gi++) {
-                    wv[gi * 6 - 1] = wv[gi * 6];
-                }
-                // Per-page batch for stroke pass.
-                {
-                    const int numGlyphs = (int)sline.glyphPageTexIDs.size();
-                    int gIdx = 0;
-                    while (gIdx < numGlyphs) {
-                        uint32_t curTex = sline.glyphPageTexIDs[gIdx];
-                        int runStart = gIdx;
-                        while (gIdx < numGlyphs && sline.glyphPageTexIDs[gIdx] == curTex) gIdx++;
-                        glActiveTexture(GL_TEXTURE0);
-                        glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
-                        glEnable(GL_TEXTURE_2D);
-                        TexEnvModulate();
-                        renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
+                    const float y = wv[i].y;
+                    const float t = (y >= yTop || y < yBot) ? 0.0f : (yTop - y) / range;
+                    int r = (int)(((topC.r / 255.0f) * (1.0f - t) + (botC.r / 255.0f) * t) * 255.0f);
+                    int g = (int)(((topC.g / 255.0f) * (1.0f - t) + (botC.g / 255.0f) * t) * 255.0f);
+                    int b = (int)(((topC.b / 255.0f) * (1.0f - t) + (botC.b / 255.0f) * t) * 255.0f);
+                    int a = (int)(((topC.a / 255.0f) * (1.0f - t) + (botC.a / 255.0f) * t) * 255.0f);
+                    if (m_StrokeCount == 3 && y > mid) {
+                        r = m_StrokeCol1.r;
+                        g = m_StrokeCol1.g;
+                        b = m_StrokeCol1.b;
+                        a = m_StrokeCol1.a;
                     }
+                    wv[i].colour = Colour((unsigned char)r, (unsigned char)g,
+                                           (unsigned char)b, (unsigned char)a).PlatformColour();
+                }
+            }
+
+            for (int i = 0; i < nVerts; i++) {
+                const float lx = wv[i].x * scale.x;
+                const float ly = (wv[i].y + localBaseY) * scale.y;
+                wv[i].x = cosT * lx - sinT * ly + anchor.x;
+                wv[i].y = sinT * lx + cosT * ly + anchor.y;
+            }
+            for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
+                wv[gi2 * 6 - 1] = wv[gi2 * 6];
+            }
+            // Per-page batch: draw consecutive same-page glyph runs.
+            {
+                const int numGlyphs = (int)strokePageTexIDs.size();
+                int gIdx = 0;
+                while (gIdx < numGlyphs) {
+                    uint32_t curTex = strokePageTexIDs[gIdx];
+                    int runStart = gIdx;
+                    while (gIdx < numGlyphs && strokePageTexIDs[gIdx] == curTex) gIdx++;
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
+                    glEnable(GL_TEXTURE_2D);
+                    TexEnvModulate();
+                    renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
                 }
             }
         }

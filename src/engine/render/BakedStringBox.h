@@ -48,6 +48,13 @@ struct BakedStringBoxLine {
     // Used by Draw to batch consecutive same-page glyphs. Port specific: the binary
     // groups by TextureAtlasPage* implicitly; here we store the resolved GL texture ID.
     std::vector<uint32_t> glyphPageTexIDs;
+    // Shadow-blur support (#257): per-glyph codepoint + pre-bearing pen X, parallel to
+    // glyphPageTexIDs (one entry per DRAWN glyph, i.e. width>0 && height>0 -- matches
+    // every 6-vert run in `verts`). Consumed by BakedStringBox::Draw's shadow pass to
+    // re-fetch a separately-rasterised BLUR-effect glyph (v1.6.1 RenderGlyph @0x0024f5dc)
+    // at the same pen position, instead of reusing the sharp glyph mesh + a solid colour.
+    std::vector<uint32_t> glyphCodepoints;
+    std::vector<float>    glyphPenX;
     float width;        // total world-unit advance (unscaled)
     float height;       // binary step = line pitch (world units)
     float maxBearingY;  // max bearingY across glyphs (above baseline, world units)
@@ -157,16 +164,17 @@ public:
     // Sets the shadow parameters (scale, colour, offset, enable flag).
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
     //
-    // Draw() renders a shadow pass BEFORE the foreground: each glyph is redrawn
-    // in m_ShadowCol at anchor + m_ShadowOffset (world units). The pass fires when:
+    // Draw() renders a shadow pass BEFORE the foreground: each glyph is refetched as a
+    // separately-rasterised BLUR-effect glyph (v1.6.1 RenderGlyph @0x0024f5dc, BuildBlur
+    // @0x0024f030; FontCacheObjectTTF::GetGlyph(cp, size, FONT_EFFECT_BLUR, radius)) and
+    // drawn in m_ShadowCol at anchor + m_ShadowOffset (world units). The pass fires when:
     //   flag==0: m_ShadowScale > 0.0f
     //   flag!=0: m_ShadowScale >= 0.0f  (inner-glow mode; game uses offset=(0,0))
-    //
-    // DIFFERS (v1.6.1 FancyBakedString::Draw @0x0024b8e4): binary blurs the shadow
-    // glyph atlas slice (FetchGlyph with blur_radius = ceil(scale*invFontScale)).
-    // The port draws a solid copy at the offset with no pixel blur, because
-    // FontCacheObjectTTF has no glyph-blur rasterisation path.
-    // TODO: v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28 -- port glyph-blur.
+    // radius = clamp(ceil(m_ShadowScale * atlas->m_FontScale), 0, 32) [RASTER px] -- v1.6.1
+    // BakedStringTTF ctor @0x00249a5c formula, computed in Draw() from the current atlas.
+    // ASM-verified: 2026-07-08 v1.6.1 FontInterface::Initialize @0x00250470 sets +0xc=m_FontScale
+    //   (forward), +0x10=m_InvFontScale; the ctor scales the blur radius by +0xc (m_FontScale),
+    //   and the shadow *offset* by +0x10 (m_InvFontScale). (asm-inspector)
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetShadow @0x002462c0: (float, Colour, _Vector3<float>, int).
     // Note: SetColour/SetTranslation use bool; SetShadow uses int — they are NOT uniform.
     void SetShadow(float scale, Colour col, Vec3 offset, int flag);
@@ -176,13 +184,15 @@ public:
     // count 1/2/3 selects how many concentric stroke colours are layered.
     // Change-detection gate matches SetGradient/SetShadow: dirties the bake on any field change.
     //
-    // Draw() renders the stroke pass as 8 solid copies of the glyph quads offset in
-    // cardinal + diagonal directions by m_StrokeWidth (diagonal scaled by 0.707), all in
-    // m_StrokeCol0. This approximates a solid outline.
+    // Draw() renders the stroke pass as a single SEPARATELY-RASTERISED SDF-outline glyph
+    // (v1.6.1 RenderGlyph @0x0024f5dc effect==1, BuildStrokes @0x0024edb8) refetched via
+    // FontCacheObjectTTF::GetGlyph(cp, size, FONT_EFFECT_STROKE, radius), drawn in
+    // m_StrokeCol0 at the same pen position as the sharp glyph -- matching the shadow
+    // BLUR pass's pattern. radius = clamp(ceil(m_StrokeWidth * atlas->m_FontScale), 0, 32).
     //
-    // DIFFERS (v1.6.1 FancyBakedString::Draw @0x0024b8e4): binary draws ONE blurred
-    // expanded-glyph (m_pGlow) pass. Multi-colour gradient stroke (m_StrokeCount>=2/3,
-    // ApplyStrokeGradient) and the inner-stroke layer (m_Field68) are not yet ported.
+    // 2/3-colour stroke gradient (m_StrokeCount>=2/3): per-line top->bottom lerp over the
+    // glow(stroke) mesh's own Y-bbox; count==3 additionally overpaints m_StrokeCol1 on the
+    // upper half. See ApplyStrokeGradient ASM-spec comments in RebuildMeshes (BakedStringBox.cpp).
     void SetStroke(float width, const Colour& c0);
     void SetStroke(float width, const Colour& c0, const Colour& c1);
     void SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2);

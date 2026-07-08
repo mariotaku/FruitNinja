@@ -39,27 +39,46 @@ namespace Mortar {
 // scaled up to the display window.
 static const int kFontSupersample = 3;
 
-// Key for the glyph cache: (codepoint, scaled_size_26.6).
+// Key for the glyph cache: (codepoint, scaled_size_26.6, effect, radius).
 // scaled_size_26.6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0)
 // Using the FT 26.6 fixed-point value as the key means two requests that
 // produce the same FT_Set_Char_Size call share the same cache entry.
+// effect/radius (#257): a BLUR-effect glyph is a SEPARATE rasterisation (padded +
+// filtered, see GetGlyph), so it must not collide with the sharp (effect=NONE) entry
+// for the same codepoint/size.
 struct GlyphCacheKey {
     uint32_t codepoint;
     long     charHeight26_6; // FT_F26Dot6 value passed to FT_Set_Char_Size
+    uint8_t  effect;         // FONT_EFFECT_ENUM value; 0 (NONE) for the plain sharp glyph
+    uint8_t  radius;         // effect radius in LOGICAL (pre-supersample) px; 0 when effect==NONE
 
     bool operator<(const GlyphCacheKey& o) const {
         if (codepoint != o.codepoint) return codepoint < o.codepoint;
-        return charHeight26_6 < o.charHeight26_6;
+        if (charHeight26_6 != o.charHeight26_6) return charHeight26_6 < o.charHeight26_6;
+        if (effect != o.effect) return effect < o.effect;
+        return radius < o.radius;
     }
 };
 
 class FontCacheObjectTTF {
 public:
-    // FONT_EFFECT_ENUM -- values from binary (v1.6.1 BakedStringTTF ctor @0x00249a5c).
-    // 0 = no effect, 1 = bold/outline driven by m_FmtCount.
+    // FONT_EFFECT_ENUM -- values from binary.
+    // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc: 0 NONE, 1 STROKE, 2 BLUR,
+    // 3 INNER_GLOW, 4..11 BEVEL (bevel-style variants).
     // Nested per the binary's mangled name (Mortar::FontCacheObjectTTF::FONT_EFFECT_ENUM),
     // NOT a namespace-level Mortar::FONT_EFFECT.
-    enum FONT_EFFECT_ENUM { FONT_EFFECT_NONE = 0, FONT_EFFECT_BOLD = 1 };
+    // NONE, BLUR (shadow, #257) and STROKE (glow/outline, #257 follow-up) are wired up.
+    // STROKE rasterises via BuildStrokes (SDF outline, see FontCacheObjectTTF.cpp), reusing
+    // the same pad-then-filter pattern as BLUR/BuildBlur. INNER_GLOW is RE'd but dead in
+    // v1.6.1 (no call site writes its gate -- see BakedStringBox.cpp Draw() note); BEVEL
+    // variants (4..11) have no port-side enumerator yet.
+    enum FONT_EFFECT_ENUM {
+        FONT_EFFECT_NONE       = 0,
+        FONT_EFFECT_STROKE     = 1,
+        FONT_EFFECT_BLUR       = 2,
+        FONT_EFFECT_INNER_GLOW = 3
+        // 4..11: BEVEL variants -- not ported, no port-side enumerator yet.
+    };
 
     // Loads the TTF face from a file path.
     // pixelSize is the default pixel height; GetGlyph accepts per-call sizes.
@@ -68,11 +87,20 @@ public:
 
     bool IsValid() const { return m_Face != nullptr; }
 
-    // Returns a cached GlyphAtlasEntry for (cp, requestedSize).
+    // Returns a cached GlyphAtlasEntry for (cp, requestedSize, effect, radius).
     // requestedSize is the pre-scale font size (e.g. 9.0f).
     // GlyphAtlasEntry metrics are in world units (FT 26.6 / 64 * invFontScale).
+    // effect==FONT_EFFECT_BLUR/STROKE + radius>0 (radius = LOGICAL, pre-supersample pixels)
+    // rasterises a SEPARATELY-BUILT glyph (v1.6.1 RenderGlyph @0x0024f5dc, BuildBlur
+    // @0x0024f030 / BuildStrokes @0x0024edb8): the sharp bitmap is blitted into a padded
+    // buffer and filtered (blur) or SDF-outlined (stroke), then the returned entry's
+    // bearing/size are grown by the pad so the effect quad registers with the sharp
+    // glyph at the same pen position. Callers wanting the ordinary sharp glyph (the
+    // default) pass effect=FONT_EFFECT_NONE.
     // Returns nullptr if the codepoint is absent.
-    const GlyphAtlasEntry* GetGlyph(uint32_t cp, float requestedSize);
+    const GlyphAtlasEntry* GetGlyph(uint32_t cp, float requestedSize,
+                                     FONT_EFFECT_ENUM effect = FONT_EFFECT_NONE,
+                                     int radius = 0);
 
     // Kerning advance in world units between codepoints a and b at requestedSize.
     // Returns 0.0f when no kern table is present (matches binary GetKerning stub).

@@ -214,7 +214,9 @@ static void test_gradient_lerp()
 static void test_font_effect_enum()
 {
     CHECK((int)Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE == 0);
-    CHECK((int)Mortar::FontCacheObjectTTF::FONT_EFFECT_BOLD == 1);
+    CHECK((int)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE == 1);
+    CHECK((int)Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR == 2);
+    CHECK((int)Mortar::FontCacheObjectTTF::FONT_EFFECT_INNER_GLOW == 3);
     std::printf("  FONT_EFFECT enum values: OK\n");
 }
 
@@ -228,7 +230,7 @@ static void test_effect_base_fields()
     base.m_Radius   = 42.0f;
     base.m_Weight   = 2.0f;
     base.m_FmtCount = 3u;
-    base.m_Flag     = (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_BOLD;
+    base.m_Flag     = (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE;
     base.m_Effect.m_Col0 = Colour(255, 128, 0, 255);
     base.m_Effect.m_T0   = 0.0f;
     base.m_Effect.m_Col1 = Colour(0, 0, 255, 128);
@@ -237,7 +239,7 @@ static void test_effect_base_fields()
     CHECK_FLOAT_NEAR(base.m_Radius, 42.0f, 1e-6f);
     CHECK_FLOAT_NEAR(base.m_Weight, 2.0f, 1e-6f);
     CHECK(base.m_FmtCount == 3u);
-    CHECK(base.m_Flag == (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_BOLD);
+    CHECK(base.m_Flag == (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE);
     CHECK(base.m_Effect.m_Col0.r == 255);
     CHECK_FLOAT_NEAR(base.m_Effect.m_Tc, 1.0f, 1e-6f);
 

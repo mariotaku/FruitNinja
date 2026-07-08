@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <vector>
 
 // Pull in FreeType headers only in this translation unit.
 #include <ft2build.h>
@@ -57,6 +58,121 @@ static long ComputeCharHeight26_6(float requestedSize,
     return (long)raw; // trunc toward zero
 }
 
+// BuildBlur -- separable squared-tent blur filter for shadow/glow glyph rasterisation.
+// ASM-spec v1.6.1 Mortar::BuildBlur @0x0024f030:
+//   K = 2*radius+1; per-tap weight w = clamp((1 - |radius-i|/radius) + 0.2, 0, 1); wt = w*w;
+//   normalize wt so sum==1; two-pass separable convolution (vertical pass then horizontal
+//   pass), samples clipped at the buffer edge (no wrap/extend); output floored at 0.
+// Port specific: the binary packs coverage into the high byte of a 16-bit pixel
+// (px=(cov<<8)|0xFF) and filters only that byte; the port's atlas glyph buffer is
+// already a plain 8-bit coverage byte per pixel (FontInterface.h "glyph atlas is
+// RGBA" note), so the filter runs directly on it -- identical weights/math, only the
+// storage width differs.
+static void BuildBlur(uint8_t* buf, int width, int height, int radius) {
+    if (radius <= 0 || width <= 0 || height <= 0) return;
+
+    const int K = 2 * radius + 1;
+    std::vector<float> wt((size_t)K);
+    float sum = 0.0f;
+    for (int i = 0; i < K; i++) {
+        int d = radius - i;
+        if (d < 0) d = -d;
+        float w = (1.0f - (float)d / (float)radius) + 0.2f;
+        if (w < 0.0f) w = 0.0f;
+        if (w > 1.0f) w = 1.0f;
+        wt[i] = w * w;
+        sum += wt[i];
+    }
+    if (sum > 0.0f) {
+        for (int i = 0; i < K; i++) wt[i] /= sum;
+    }
+
+    std::vector<uint8_t> tmp((size_t)width * (size_t)height);
+
+    // Pass 1: vertical (buf -> tmp), clip rows [0,H).
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
+            float acc = 0.0f;
+            for (int k = 0; k < K; k++) {
+                int sy = y + (k - radius);
+                if (sy < 0 || sy >= height) continue;
+                acc += (float)buf[sy * width + x] * wt[k];
+            }
+            int iv = (int)acc;
+            if (iv < 0) iv = 0;
+            if (iv > 255) iv = 255;
+            tmp[(size_t)y * width + x] = (uint8_t)iv;
+        }
+    }
+
+    // Pass 2: horizontal (tmp -> buf), clip cols [0,W).
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            float acc = 0.0f;
+            for (int k = 0; k < K; k++) {
+                int sx = x + (k - radius);
+                if (sx < 0 || sx >= width) continue;
+                acc += (float)tmp[(size_t)y * width + sx] * wt[k];
+            }
+            int iv = (int)acc;
+            if (iv < 0) iv = 0;
+            if (iv > 255) iv = 255;
+            buf[(size_t)y * width + x] = (uint8_t)iv;
+        }
+    }
+}
+
+// ASM-spec v1.6.1 FontCacheObjectTTF::BuildStrokes @0x0024edb8 (SDF outline; uint8_t coverage buf W*H, texel radius R):
+//  pass1: for each px, best = min over dy,dx in [-(R+1)..R+1] of ( sqrt(dx*dx+dy*dy) - cov(yy,xx)/255 ),
+//         counting only texels with cov!=0; dist = found ? best : 99999
+//  pass2: if (R <= dist) a=0; else { t=pow(dist/R, R+1); a = dist>=0.01 ? max(0,(int)((1-t)*255)) : 255 }  buf[i]=a
+static void BuildStrokes(uint8_t* buf, int width, int height, int radius) {
+    if (radius <= 0 || width <= 0 || height <= 0) return;
+
+    const std::vector<uint8_t> src(buf, buf + (size_t)width * (size_t)height);
+    std::vector<float> dist((size_t)width * (size_t)height, 99999.0f);
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            float best = 99999.0f;
+            bool found = false;
+            for (int dy = -(radius + 1); dy <= (radius + 1); dy++) {
+                int yy = y + dy;
+                if (yy < 0 || yy >= height) continue;
+                for (int dx = -(radius + 1); dx <= (radius + 1); dx++) {
+                    int xx = x + dx;
+                    if (xx < 0 || xx >= width) continue;
+                    uint8_t cov = src[(size_t)yy * width + xx];
+                    if (cov == 0) continue;
+                    float d = sqrtf((float)(dx * dx + dy * dy)) - (float)cov / 255.0f;
+                    if (!found || d < best) { best = d; found = true; }
+                }
+            }
+            dist[(size_t)y * width + x] = found ? best : 99999.0f;
+        }
+    }
+
+    const float R = (float)radius;
+    for (int i = 0; i < width * height; i++) {
+        float d = dist[i];
+        uint8_t a;
+        if (R <= d) {
+            a = 0;
+        } else {
+            float t = powf(d / R, R + 1.0f);
+            if (d >= 0.01f) {
+                int iv = (int)((1.0f - t) * 255.0f);
+                if (iv < 0) iv = 0;
+                if (iv > 255) iv = 255;
+                a = (uint8_t)iv;
+            } else {
+                a = 255;
+            }
+        }
+        buf[i] = a;
+    }
+}
+
 bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     if (charHeight_26_6 == m_CurrentCharHeight) return true;
     if (!m_Atlas) return false;
@@ -75,16 +191,23 @@ bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     return true;
 }
 
-const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requestedSize) {
+const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requestedSize,
+                                                     FONT_EFFECT_ENUM effect, int radius) {
     if (!m_Face || !m_Atlas) return nullptr;
 
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
 
+    // Cache-key hygiene: BLUR and STROKE both consume a radius; collapse to 0 only for
+    // NONE so callers that always pass effect=NONE keep sharing the same cache entry.
+    if (effect == FONT_EFFECT_NONE) radius = 0;
+
     GlyphCacheKey key;
     key.codepoint      = cp;
     key.charHeight26_6 = ch26;
+    key.effect          = (uint8_t)effect;
+    key.radius          = (uint8_t)radius;
 
     std::map<GlyphCacheKey, GlyphAtlasEntry>::iterator it = m_Cache.find(key);
     if (it != m_Cache.end()) {
@@ -130,23 +253,80 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     entry.height   = (float)bm.rows   / (float)kFontSupersample;
 
     if (bm.width > 0 && bm.rows > 0) {
-        const uint8_t* src = bm.buffer;
-        uint8_t* compact = nullptr;
-        if (bm.pitch != (int)bm.width) {
-            compact = (uint8_t*)malloc((size_t)(bm.width * bm.rows));
-            if (compact) {
-                for (unsigned int row = 0; row < bm.rows; row++) {
-                    memcpy(compact + row * bm.width,
-                           bm.buffer + row * bm.pitch,
-                           bm.width);
-                }
-                src = compact;
+        if (effect == FONT_EFFECT_BLUR && radius > 0) {
+            // ASM-spec v1.6.1 RenderGlyph @0x0024f5dc (effect==2 BLUR):
+            //   padL = radiusTexel+1, padT = radiusTexel+2 each side;
+            //   buffer W = glyphW + 2*(radiusTexel+1), H = glyphH + 2*(radiusTexel+2);
+            //   blit sharp glyph at (padL, padT); then BuildBlur(buf, W, H, radiusTexel).
+            // radius (the param) is LOGICAL (pre-supersample) px; the port rasters
+            // at kFontSupersample x, so the texel-space radius used for the pad and
+            // the filter kernel is radius * kFontSupersample.
+            const int radiusTexel = radius * kFontSupersample;
+            const int padL = radiusTexel + 1;
+            const int padT = radiusTexel + 2;
+            const int padW = (int)bm.width + 2 * padL;
+            const int padH = (int)bm.rows  + 2 * padT;
+
+            std::vector<uint8_t> padded((size_t)padW * (size_t)padH, 0);
+            for (unsigned int row = 0; row < bm.rows; row++) {
+                memcpy(&padded[(size_t)(row + (unsigned int)padT) * padW + padL],
+                       bm.buffer + row * bm.pitch,
+                       bm.width);
             }
+            BuildBlur(&padded[0], padW, padH, radiusTexel);
+
+            // Grow bearing/size so the blurred (padded) quad registers with the sharp
+            // glyph at the same pen position: bearingX-=padL, bearingY+=padT,
+            // width/height += 2*pad -- all converted back to world/logical units.
+            entry.bearingX -= (float)padL / (float)kFontSupersample;
+            entry.bearingY += (float)padT / (float)kFontSupersample;
+            entry.width     = (float)padW / (float)kFontSupersample;
+            entry.height    = (float)padH / (float)kFontSupersample;
+
+            // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
+            m_Atlas->PackGlyph(padW, padH, &padded[0], &entry);
+        } else if (effect == FONT_EFFECT_STROKE && radius > 0) {
+            // ASM-spec v1.6.1 RenderGlyph @0x0024f5dc effect==1: pad = BLUR pad (padL=R+1, padT=R+2); grow bearing/size same as BLUR branch.
+            const int radiusTexel = radius * kFontSupersample;
+            const int padL = radiusTexel + 1;
+            const int padT = radiusTexel + 2;
+            const int padW = (int)bm.width + 2 * padL;
+            const int padH = (int)bm.rows  + 2 * padT;
+
+            std::vector<uint8_t> padded((size_t)padW * (size_t)padH, 0);
+            for (unsigned int row = 0; row < bm.rows; row++) {
+                memcpy(&padded[(size_t)(row + (unsigned int)padT) * padW + padL],
+                       bm.buffer + row * bm.pitch,
+                       bm.width);
+            }
+            BuildStrokes(&padded[0], padW, padH, radiusTexel);
+
+            entry.bearingX -= (float)padL / (float)kFontSupersample;
+            entry.bearingY += (float)padT / (float)kFontSupersample;
+            entry.width     = (float)padW / (float)kFontSupersample;
+            entry.height    = (float)padH / (float)kFontSupersample;
+
+            // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
+            m_Atlas->PackGlyph(padW, padH, &padded[0], &entry);
+        } else {
+            const uint8_t* src = bm.buffer;
+            uint8_t* compact = nullptr;
+            if (bm.pitch != (int)bm.width) {
+                compact = (uint8_t*)malloc((size_t)(bm.width * bm.rows));
+                if (compact) {
+                    for (unsigned int row = 0; row < bm.rows; row++) {
+                        memcpy(compact + row * bm.width,
+                               bm.buffer + row * bm.pitch,
+                               bm.width);
+                    }
+                    src = compact;
+                }
+            }
+            // PackGlyph always succeeds: allocates a new atlas page if the current one
+            // is full. DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
+            m_Atlas->PackGlyph((int)bm.width, (int)bm.rows, src, &entry);
+            if (compact) free(compact);
         }
-        // PackGlyph always succeeds: allocates a new atlas page if the current one
-        // is full. DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
-        m_Atlas->PackGlyph((int)bm.width, (int)bm.rows, src, &entry);
-        if (compact) free(compact);
     } else {
         entry.u0 = entry.v0 = entry.u1 = entry.v1 = 0.0f;
         entry.pageTextureID = 0;

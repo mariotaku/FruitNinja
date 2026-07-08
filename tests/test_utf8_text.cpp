@@ -240,7 +240,8 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
 FontCacheObjectTTF::~FontCacheObjectTTF() {}
 
 // THE RECORDING METHOD: captures every codepoint BakedStringBox asks about.
-const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float /*requestedSize*/) {
+const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float /*requestedSize*/,
+                                                     FONT_EFFECT_ENUM /*effect*/, int /*radius*/) {
     g_recorded_codepoints.push_back(cp);
     return &s_dummy_glyph;
 }
