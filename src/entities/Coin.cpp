@@ -56,13 +56,11 @@ static bool s_loaded = false;
 // counts 3, 6, and >8 (0).
 static int g_oneInThree = 0;
 
-// R1.6 re-analyst 2026-05-23: prior comment ("load models/coin.mmd") was
-// wrong. Binary @ 0x00173114 Coin::LoadContent is a no-op stub that just
-// sets the loaded flag. s_coinModel is never assigned. Coins render via
-// the fruit-actor pool: Coin::MakeCoins calls ActorManager::Add(type=2,
-// true) at binary @ 0x00173568, and the spawned actor uses fruit graphics.
-// No model file "coin.mmd" exists in Data/models/. Slot kept for vtable
-// parity but is never resolved.
+// Correction (2026-07-08): the 2026-05-23 comment above claiming "no model
+// file coin.mmd exists" was wrong -- FruitNinjaBada/Data/models/Fruit/coin.mmd
+// (+ coin.mad) is present, following the same "models/Fruit/<name>.mmd"
+// convention as Bomb::LoadContent's "models/Fruit/bomb.mmd" /
+// "models/Fruit/bomb_purple.mmd". LoadContent below now loads it.
 static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
@@ -466,7 +464,6 @@ void Coin::Draw(Renderer& /*r*/) {
     // Binary: if (m_Silent == 0) return;  — replicate exactly
     if (m_Silent == 0) return;
 
-    // TODO: load "models/coin.mmd" — s_coinModel is null until asset pipeline is wired
     if (!s_coinModel.IsValid()) return;
 
     // Don't draw if waiting (state 0) or arrived (state 1)
@@ -489,9 +486,8 @@ void Coin::Draw(Renderer& /*r*/) {
 void Coin::LoadContent() {
     if (s_loaded) return;
     s_loaded = true;
-    // TODO: load coin model when asset pipeline is wired:
-    //   Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
-    //   if (mm) s_coinModel = mm->Load("models/coin.mmd");
+    Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
+    if (mm) s_coinModel = mm->Load("models/Fruit/coin.mmd");
 }
 
 // ---------------------------------------------------------------------------

@@ -160,7 +160,7 @@ public:
     // standard arrived callback without needing to know CoinArrived's linkage.
     static Mortar::Delegate1<void, Coin*> DefaultArrivedDelegate();
 
-    // 0x00173114 — set loaded flag; model loaded elsewhere
+    // 0x00173114 — set loaded flag; loads models/Fruit/coin.mmd via MeshManager
     static void LoadContent();
 
     // 0x00173CA8 — null out model SmartPtr
