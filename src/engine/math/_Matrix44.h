@@ -76,6 +76,16 @@ struct _Matrix44 {
         m[8]  *= sz; m[9]  *= sz; m[10] *= sz; m[11] *= sz;
     }
 
+    // ASM-spec v1.6.1 Matrix44::Scale44 @0x0015d06c (row/left scale)
+    // Left-multiply by diag(sx,sy,sz,1) -- scales rows 0/1/2 (S*M). This is the
+    // OPPOSITE side from ApplyScale above (which scales columns, i.e. M*S).
+    // Used by BakedStringTTF::Draw where the scale must apply before rotation.
+    void ScaleRows(T sx, T sy, T sz) {
+        m[0] *= sx; m[4] *= sx; m[8]  *= sx; m[12] *= sx;  // row 0
+        m[1] *= sy; m[5] *= sy; m[9]  *= sy; m[13] *= sy;  // row 1
+        m[2] *= sz; m[6] *= sz; m[10] *= sz; m[14] *= sz;  // row 2
+    }
+
     static _Matrix44 MakeScale(const _Vector3<T>& s) {
         _Matrix44 r;
         for (int i = 0; i < 16; ++i) r.m[i] = T(0);

@@ -1,4 +1,5 @@
 #include "render/MatrixStack.h"
+#include "math/MathUtil.h"
 
 // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001175d4 (asm-inspector)
 void MatrixStack::Reset() {
@@ -41,5 +42,25 @@ void MatrixStack::Translate(const Vec3& t) {
 // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0011a130 (asm-inspector)
 void MatrixStack::SetCurrentMatrix(const Matrix44& mat) {
     m_Current = mat;
+    m_Version++;
+}
+
+// ASM-spec v1.6.1 MatrixStack::RotZ @0x001d0b80
+void MatrixStack::RotZ(float deg) {
+    unsigned short idx = (unsigned short)((int)(deg * 182.0f) & 0xffff);
+    m_Current.RotZ44(Math::SinIdx(idx), Math::CosIdx(idx));  // left-mult
+    m_Version++;
+}
+
+// ASM-spec v1.6.1 MatrixStack::TranslateLocal @0x0024a150
+void MatrixStack::TranslateLocal(const Vec3& t) {
+    m_Current.LocalTranslate44(t.x, t.y, t.z);  // right-mult (M*T)
+    m_Version++;
+}
+
+// Row/left scale (S*M) -- mirrors Matrix44::Scale44 @0x0015d06c. Bumps m_Version
+// like Scale/Translate so MatrixManager re-uploads on the next draw.
+void MatrixStack::ScaleRows(float sx, float sy, float sz) {
+    m_Current.ScaleRows(sx, sy, sz);
     m_Version++;
 }
