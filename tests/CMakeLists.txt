@@ -802,6 +802,18 @@ add_test(NAME screenshot_arcade_intro
 set_tests_properties(screenshot_arcade_intro PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_screeneffect")
 
+# TimeSinkControl ("Berry Blast" time-award board) render test. Drives the
+# real PowerUpManager::ActivatePower("time_sink") activation path (poweruplist.xml),
+# settles the ACTIVE alpha ratchet, forces a natural expiry into the RELEASE
+# self-animation phase, and captures the "+M:SS" fly-in label at 3 points
+# (m_TimeElapsed ~0.1s/0.7s/1.0s). Was a no-op stub before the v1.6.1
+# ASM-spec port (TimeSinkControl.cpp).
+# Output: tmp/test/screenshots/timesinkcontrol/{peak,mid_flyin,near_award}.png
+fn_add_game_test(test_timesinkcontrol_render test_timesinkcontrol_render.cpp)
+add_test(NAME timesinkcontrol_render COMMAND test_timesinkcontrol_render --screenshot)
+set_tests_properties(timesinkcontrol_render PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_timesinkcontrol")
+
 # ScoreControl component screenshot test. Renders the in-game HUD score widget
 # (score.tex wordmark + animated score number + BEST: highscore banner + NEW BEST! popup,
 # plus the Arcade-only "x%d" score-multiplier badge) in isolation on a clean background.
