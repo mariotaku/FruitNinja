@@ -13,6 +13,7 @@
 #include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
 #include "entities/SuperFruitState.h"
+#include "entities/SuperFruitControl.h"
 #include "hud/HUD.h"
 #include "screens/PauseScreen.h"
 #include "math/MathUtil.h"
@@ -906,19 +907,14 @@ void WaveManager::Resume() {
                 f->Chuck(es.m_Wait);
 
             // Rebuild the super-fruit controller if the fruit carried one.
-            // BLOCKED: the binary rebuilds it and registers it into the HUD via
-            //   SuperFruitControl* ctrl = new SuperFruitControl(f, *es.m_pSuperFruitState);
-            //   game_work.mHud->AddControl(ctrl, false);  // ctor self-registers SuperFruitControls[f]
-            // but the port models SuperFruitControl as Mortar::Entity (entityType 6), NOT a
-            // HUDControl, so HUD::AddControl(HUDControl*) will not accept it and the controller
-            // is never ticked anywhere in the port (same gap as the fresh super-fruit path).
-            // Restoring it into SuperFruitControls without a tick source would leave
-            // IsInSuperFruitState() permanently true (never explodes -> never Released).
-            // Consume+free the saved state here (no leak) and defer the rebuild until
-            // SuperFruitControl is re-based onto HUDControl3d.
-            // TODO: v1.6.1 WaveManager::Resume @0x0012bf58 -- rebuild SuperFruitControl on resume;
-            //   blocked on SuperFruitControl base-class re-port (Mortar::Entity -> HUDControl3d).
+            // Binary @ 0x0012bf58: the restore ctor self-registers SuperFruitControls[f];
+            // AddControl is the separate HUD registration that makes HUD::Update tick it
+            // (both needed, no double-register).
             if (es.m_pSuperFruitState != NULL) {
+                SuperFruitControl* ctrl = new SuperFruitControl(f, *es.m_pSuperFruitState);
+                if (game_work.mHud) {
+                    game_work.mHud->AddControl(ctrl, false);
+                }
                 delete es.m_pSuperFruitState;
                 es.m_pSuperFruitState = NULL;
             }
