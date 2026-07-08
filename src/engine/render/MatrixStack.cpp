@@ -61,6 +61,6 @@ void MatrixStack::TranslateLocal(const Vec3& t) {
 // Row/left scale (S*M) -- mirrors Matrix44::Scale44 @0x0015d06c. Bumps m_Version
 // like Scale/Translate so MatrixManager re-uploads on the next draw.
 void MatrixStack::ScaleRows(float sx, float sy, float sz) {
-    m_Current.ScaleRows(sx, sy, sz);
+    m_Current.Scale44(sx, sy, sz);
     m_Version++;
 }

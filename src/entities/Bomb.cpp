@@ -396,7 +396,7 @@ void Bomb::Draw(Renderer& r) {
     // Matrix order: R*S then GlobalTranslate (matches Fruit::Draw, correct visual result).
     // Binary decomp appears to show S * R * T, but Fruit::Draw is verified-correct and
     // uses the same chain; preserve this ordering.
-    Matrix44 mat = Matrix44::Scale44(scale);
+    Matrix44 mat = Matrix44::MakeScale(scale);
 
     Matrix44 rotMat;
     rotMat.RotX44(SinIdx((uint16_t)DRAW_TILT_ANGLE),

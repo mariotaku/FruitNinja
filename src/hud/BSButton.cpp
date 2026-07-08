@@ -171,7 +171,7 @@ void BSButton::Draw(float* hudScaleRaw) {
     m_Texture2->SetUnCached();
 
     // Base scale comes from the button's own extents (+0x98 / +0x9c), not hudScale.
-    Matrix44 mat = Matrix44::Scale44(Vec3(m_ExtentX, m_ExtentY, 1.0f));
+    Matrix44 mat = Matrix44::MakeScale(Vec3(m_ExtentX, m_ExtentY, 1.0f));
 
     // White tint copied from the shared global Colour @ DAT_15e884 (== 0x34e2f8,
     // the engine's "white" mod-colour written by SlashEntity::InitModColours).
@@ -180,7 +180,7 @@ void BSButton::Draw(float* hudScaleRaw) {
     if (m_bPressed != 0) {
         // Pressed-grow: rebuild the scale matrix at DAT_15e874 (= 0.95f) and dim
         // the tint to 50% per channel (TintColour with {0.5,0.5,0.5}).
-        mat = Matrix44::Scale44(Vec3(m_ExtentX * 0.95f, m_ExtentY * 0.95f, 1.0f));
+        mat = Matrix44::MakeScale(Vec3(m_ExtentX * 0.95f, m_ExtentY * 0.95f, 1.0f));
         const float kDim[3] = { 0.5f, 0.5f, 0.5f };
         drawColour = Colour::TintColour(drawColour, kDim);
     }

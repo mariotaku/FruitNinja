@@ -472,7 +472,7 @@ void Coin::Draw(Renderer& /*r*/) {
     // Matrix: Scale × RotY(spin) × RotZ(heading) × Translate
     // Binary: mat = Scale(scale); mat *= RotY(SinIdx(spin), CosIdx(spin));
     //         mat *= RotZ(SinIdx(angle), CosIdx(angle)); mat *= Translate(pos)
-    Matrix44 mat = Matrix44::Scale44(scale);
+    Matrix44 mat = Matrix44::MakeScale(scale);
     mat.RotY44(SinIdx(m_SpinAngle), CosIdx(m_SpinAngle));
     mat.RotZ44(SinIdx(m_Angle), CosIdx(m_Angle));
     mat.GlobalTranslate44(pos);

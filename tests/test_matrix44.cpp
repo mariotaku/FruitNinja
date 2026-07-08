@@ -204,24 +204,6 @@ static void test_apply_scale()
     PASS();
 }
 
-static void test_scale44_alias()
-{
-    TEST("Scale44 alias matches MakeScale");
-    Matrix44 A = Matrix44::MakeScale(2.0f, 5.0f, 3.0f);
-    Matrix44 B = Matrix44::Scale44(2.0f, 5.0f, 3.0f);
-    const float* pa = A.ptr();
-    const float* pb = B.ptr();
-    for (int i = 0; i < 16; ++i) {
-        if (!feq(pa[i], pb[i])) {
-            std::printf("FAIL: Scale44 vs MakeScale differ at [%d]: %f vs %f\n",
-                        i, (double)pb[i], (double)pa[i]);
-            ++g_failures;
-            return;
-        }
-    }
-    PASS();
-}
-
 static void test_scale_translate_composition()
 {
     TEST("Scale(2,3,4) then GlobalTranslate44(10,20,30): (1,1,1) -> (12,23,34)");
@@ -267,7 +249,6 @@ int main()
     test_rotz44_90deg();
     test_rotz44_minus90deg();
     test_apply_scale();
-    test_scale44_alias();
     test_scale_translate_composition();
     test_ptr_access();
 

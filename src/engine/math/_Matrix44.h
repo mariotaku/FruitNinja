@@ -80,7 +80,7 @@ struct _Matrix44 {
     // Left-multiply by diag(sx,sy,sz,1) -- scales rows 0/1/2 (S*M). This is the
     // OPPOSITE side from ApplyScale above (which scales columns, i.e. M*S).
     // Used by BakedStringTTF::Draw where the scale must apply before rotation.
-    void ScaleRows(T sx, T sy, T sz) {
+    void Scale44(T sx, T sy, T sz) {
         m[0] *= sx; m[4] *= sx; m[8]  *= sx; m[12] *= sx;  // row 0
         m[1] *= sy; m[5] *= sy; m[9]  *= sy; m[13] *= sy;  // row 1
         m[2] *= sz; m[6] *= sz; m[10] *= sz; m[14] *= sz;  // row 2
@@ -96,10 +96,6 @@ struct _Matrix44 {
     static _Matrix44 MakeScale(T sx, T sy, T sz) {
         return MakeScale(_Vector3<T>(sx, sy, sz));
     }
-
-    // Alias matching binary `_Matrix44<float>::Scale44` static factory.
-    static _Matrix44 Scale44(const _Vector3<T>& s) { return MakeScale(s); }
-    static _Matrix44 Scale44(T sx, T sy, T sz) { return MakeScale(sx, sy, sz); }
 
     static _Matrix44 MakeTranslate(const _Vector3<T>& t) {
         _Matrix44 r;
