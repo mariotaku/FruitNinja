@@ -903,11 +903,6 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     if (!atlas) return;
     atlas->BuildPendingTextures();
 
-    // Build rotation coefficients.
-    const float theta = rotation * (3.14159265f / 180.0f);
-    const float sinT  = sinf(theta);
-    const float cosT  = cosf(theta);
-
     // Binary RebuildAlignments @ 0x00245c78: step stored per-line in line.height.
     // Compute maxSpan = max(maxBearingY - minBottom) across all lines (binary iVar7,
     // the max glyph ink-span used in the multi-line center-V baseline formula).
@@ -940,12 +935,26 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         anchor.y -= m_BoxHeight * 0.5f - m_BoxHeight * scale.y * 0.5f;
     }
 
-    // Use identity world matrix so vertex transforms are in world space.
+    // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20 (per-line dispatch; matrix via
+    // BakedStringTTF::Draw @0x002497a8): each pass below sets the world matrix per line
+    // as T(anchor[+shadowOffset]) * RotZ(rotation) * ScaleRows(scale) * TranslateLocal(0,localBaseY,0),
+    // algebraically identical to the old per-vertex CPU formula
+    //   x' = cosT*(x*scale.x) - sinT*((y+localBaseY)*scale.y) + anchor.x[+sdx]
+    //   y' = sinT*(x*scale.x) + cosT*((y+localBaseY)*scale.y) + anchor.y[+sdy]
+    // No box-level Push/Pop wrapper -- the binary never wraps at box level; each
+    // per-line Reset() below handles it (mirrors BakedStringTTF::Draw's world.Reset()).
+    // Port specific: MatrixManager/MatrixStack aren't linked by the FN_GL_STUB
+    // unit-test build (which only exercises ComputeBaselineY, never Draw's render
+    // path); `world` is declared under the same guard as its 3 per-pass call
+    // sites below so the stub build never references MatrixManager/MatrixStack.
+    // Guard is FN_GL_STUB only (NOT __bada__ too) -- this is the real binary-faithful
+    // matrix path (mirrors BakedStringTTF::Draw @0x002497a8, which has no such guard
+    // at all) and must run on bada production + the asm-verify cross-build, unlike
+    // the host-only DIFFERS/debug blocks below that legitimately exclude __bada__.
+    // Renderer IS stubbed under FN_GL_STUB, so `renderer` stays unguarded.
+#if !defined(FN_GL_STUB)
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
-    world.Push();
-    world.m_Current.Identity();
-    world.m_Version++;
-    MatrixManager::GetInstance().UploadModelViewOnly();
+#endif
 
     Renderer* renderer = Renderer::GetInstance();
 
@@ -1067,15 +1076,21 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
                 if (wv.empty()) continue;
 
                 const int nVerts = (int)wv.size();
-                for (int i = 0; i < nVerts; i++) {
-                    const float lx = wv[i].x * scale.x;
-                    const float ly = (wv[i].y + localBaseY) * scale.y;
-                    wv[i].x = cosT * lx - sinT * ly + anchor.x + sdx;
-                    wv[i].y = sinT * lx + cosT * ly + anchor.y + sdy;
-                }
+                // Wire degenerate connector between glyphs in the tri-strip (unchanged
+                // topology patch -- NOT a transform; operates on local coordinates now).
                 for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
                     wv[gi2 * 6 - 1] = wv[gi2 * 6];
                 }
+                // Matrix-driven per-line transform (shadow anchor includes m_ShadowOffset).
+                // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
+#if !defined(FN_GL_STUB)
+                world.Reset();
+                world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
+                world.ScaleRows(scale.x, scale.y, 1.0f);
+                world.RotZ(rotation);
+                world.Translate(Vec3(anchor.x + sdx, anchor.y + sdy, anchor.z));
+                MatrixManager::GetInstance().UploadModelViewOnly();
+#endif
                 // Per-page batch: draw consecutive same-page glyph runs.
                 {
                     const int numGlyphs = (int)shadowPageTexIDs.size();
@@ -1200,15 +1215,21 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
                 }
             }
 
-            for (int i = 0; i < nVerts; i++) {
-                const float lx = wv[i].x * scale.x;
-                const float ly = (wv[i].y + localBaseY) * scale.y;
-                wv[i].x = cosT * lx - sinT * ly + anchor.x;
-                wv[i].y = sinT * lx + cosT * ly + anchor.y;
-            }
+            // Wire degenerate connector between glyphs in the tri-strip (unchanged
+            // topology patch -- NOT a transform; operates on local coordinates now).
             for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
                 wv[gi2 * 6 - 1] = wv[gi2 * 6];
             }
+            // Matrix-driven per-line transform (mirrors BakedStringTTF::Draw @0x002497a8).
+            // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
+#if !defined(FN_GL_STUB)
+            world.Reset();
+            world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
+            world.ScaleRows(scale.x, scale.y, 1.0f);
+            world.RotZ(rotation);
+            world.Translate(anchor);
+            MatrixManager::GetInstance().UploadModelViewOnly();
+#endif
             // Per-page batch: draw consecutive same-page glyph runs.
             {
                 const int numGlyphs = (int)strokePageTexIDs.size();
@@ -1244,18 +1265,27 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
 
         const int nVerts = (int)line.verts.size();
 
+        // Local (untransformed) copy: still needed for the tri-strip degenerate-join
+        // patch below (topology fix, NOT a transform -- DrawTriStrip() also requires
+        // a non-const buffer). The rotate/scale/translate math is gone; the matrix
+        // set right after handles it on the GPU.
         std::vector<QUADCUSTOMVERTEX> wv(line.verts);
-        for (int i = 0; i < nVerts; i++) {
-            float lx = wv[i].x * scale.x;
-            float ly = (wv[i].y + localBaseY) * scale.y;
-            wv[i].x = cosT * lx - sinT * ly + anchor.x;
-            wv[i].y = sinT * lx + cosT * ly + anchor.y;
-        }
 
         // Wire degenerate connector between glyphs in the tri-strip.
         for (int gi = 1; gi * 6 < nVerts; gi++) {
             wv[gi * 6 - 1] = wv[gi * 6];
         }
+
+        // Matrix-driven per-line transform (mirrors BakedStringTTF::Draw @0x002497a8).
+        // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
+#if !defined(FN_GL_STUB)
+        world.Reset();
+        world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
+        world.ScaleRows(scale.x, scale.y, 1.0f);
+        world.RotZ(rotation);
+        world.Translate(anchor);
+        MatrixManager::GetInstance().UploadModelViewOnly();
+#endif
 
         // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
         // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
@@ -1276,19 +1306,29 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
             }
         }
 
-        // Accumulate ink bounds from transformed verts for the debug overlay.
+        // Port specific: accumulate ink bounds for the debug overlay. wv is local
+        // (untransformed) now that the actual draw is matrix-driven, so re-derive
+        // world-space corners here for the overlay only -- host debug tooling,
+        // no binary counterpart, independent of the GPU matrix set above.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
         if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+            const float dbgTheta = rotation * (3.14159265f / 180.0f);
+            const float dbgSinT  = sinf(dbgTheta);
+            const float dbgCosT  = cosf(dbgTheta);
             for (int i = 0; i < nVerts; i++) {
+                const float lx = wv[i].x * scale.x;
+                const float ly = (wv[i].y + localBaseY) * scale.y;
+                const float wx = dbgCosT * lx - dbgSinT * ly + anchor.x;
+                const float wy = dbgSinT * lx + dbgCosT * ly + anchor.y;
                 if (!dbgHasInk) {
-                    dbgInkX0 = dbgInkX1 = wv[i].x;
-                    dbgInkY0 = dbgInkY1 = wv[i].y;
+                    dbgInkX0 = dbgInkX1 = wx;
+                    dbgInkY0 = dbgInkY1 = wy;
                     dbgHasInk = true;
                 } else {
-                    if (wv[i].x < dbgInkX0) dbgInkX0 = wv[i].x;
-                    if (wv[i].x > dbgInkX1) dbgInkX1 = wv[i].x;
-                    if (wv[i].y < dbgInkY0) dbgInkY0 = wv[i].y;
-                    if (wv[i].y > dbgInkY1) dbgInkY1 = wv[i].y;
+                    if (wx < dbgInkX0) dbgInkX0 = wx;
+                    if (wx > dbgInkX1) dbgInkX1 = wx;
+                    if (wy < dbgInkY0) dbgInkY0 = wy;
+                    if (wy > dbgInkY1) dbgInkY1 = wy;
                 }
             }
         }
@@ -1321,8 +1361,6 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         glDisable(GL_SCISSOR_TEST);
     }
 #endif
-
-    world.Pop();
 }
 
 // SetWorldspaceClipping  binary @ 0x00245c28 (real body)
