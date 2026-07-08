@@ -392,7 +392,8 @@ static bool TE_RenderCell(
 {
     cfbo.Bind();
 
-    glClearColor(0.09f, 0.09f, 0.09f, 1.0f);
+    // Mid grey so dark drop-shadows (#257 blur) are visible; near-black hid them.
+    glClearColor(0.50f, 0.50f, 0.50f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -689,8 +690,8 @@ int main(int argc, char* argv[]) {
     printf("  Row 4: left-H / center-H / right-H / center-H+top-V (align flags)\n");
     printf("  Row 5: no-clip / left-half / top-half / center-band (worldspace scissor)\n");
     printf("  Row 6: ZH-metallic / JA-shadow+grad / KO-gradient / AR-plain\n");
-    printf("  Shadow/stroke DIFFERS from binary (blurred glyph atlas):\n");
-    printf("    port draws solid copies at offset/8-direction instead of blur.\n");
+    printf("  Shadow and stroke now use real SDF/blurred glyph rasterisation (#257).\n");
+    printf("  Stroke 2/3-color gradient (m_StrokeMode 2/3) applies per-line top->bottom lerp (#257).\n");
 
     // Write PNG.
     bool saved = false;

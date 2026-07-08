@@ -77,7 +77,7 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     float weightF = (float)alignSigned;
     float rawN = ceilf(weightF);
     int n = (rawN < 0.0f) ? 0 : (rawN > 32.0f) ? 32 : (int)rawN;
-    if (eff == FontCacheObjectTTF::FONT_EFFECT_NONE && n > 0) eff = FontCacheObjectTTF::FONT_EFFECT_BOLD;
+    if (eff == FontCacheObjectTTF::FONT_EFFECT_NONE && n > 0) eff = FontCacheObjectTTF::FONT_EFFECT_STROKE;
     m_Base.m_FmtCount = (uint32_t)n;
     m_Base.m_Flag = (uint8_t)eff;
     m_Base.m_Weight = weightF;

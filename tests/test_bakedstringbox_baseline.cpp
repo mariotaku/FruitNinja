@@ -205,7 +205,7 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
     init_dummy_glyph();
 }
 FontCacheObjectTTF::~FontCacheObjectTTF() {}
-const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t, float) {
+const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t, float, FONT_EFFECT_ENUM, int) {
     return &s_dummy_glyph;
 }
 float FontCacheObjectTTF::GetKerningForPair(uint32_t, uint32_t, float) { return 0.0f; }
