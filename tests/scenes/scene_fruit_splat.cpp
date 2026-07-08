@@ -21,6 +21,15 @@
 //   ./build/host/tests/scenes/Debug/scene_fruit_splat.exe --interactive
 //
 // Screenshot: tmp/test/screenshots/scene_fruit_splat.png
+//
+// --critical: critical-flash colour-lerp capture (SplatEntity::Update's
+// CRITICAL_COLOUR -> FruitTypeColour lerp as m_ColourPhase decays 1.5 -> 0).
+// Spawns a splat via MakeSplat with an out-of-range fruitType (matching the
+// real critical-slice call site), lands it, then captures 3 PNGs at
+// m_ColourPhase ~= 1.5 / 0.5 / 0.0:
+//   ctest -R fruit_splat_critical -C Debug --output-on-failure
+//   ./build/host/tests/scenes/Debug/scene_fruit_splat.exe --critical
+// Screenshots (always written, like the default path): tmp/test/screenshots/crit_splat/phase_{150,050,000}.png
 
 #include "../test_harness.h"
 #include "entities/Fruit.h"
@@ -40,10 +49,13 @@
 #include <cmath>
 #include <cstring>
 
-// Background colour: bright green (R=0, G=255, B=0).
-static const unsigned char BG_R = 0;
-static const unsigned char BG_G = 255;
-static const unsigned char BG_B = 0;
+// Background colour: neutral grey (R=128,G=128,B=128). Grey is far from both the
+// critical-flash blue (0,140,245) and fruit colours (e.g. orange 255,115,0), so it
+// works as a chroma-key for the non-background pixel count AND lets the splat colours
+// read true (bright green washed coloured splats toward green).
+static const unsigned char BG_R = 128;
+static const unsigned char BG_G = 128;
+static const unsigned char BG_B = 128;
 static const int BG_THRESHOLD   = 30;
 
 // Minimum non-background pixels to consider the splat "drawn".
@@ -100,7 +112,7 @@ static int CountLandedSplats() {
     return n;
 }
 
-// Render one frame: clear to bright green, draw splats with correct depth state.
+// Render one frame: clear to the BG_* chroma-key colour, draw splats with correct depth state.
 static void RenderSplatFrame(SDL_Window* window) {
     int ww = 0, wh = 0;
     SDL_GL_GetDrawableSize(window, &ww, &wh);
@@ -109,7 +121,7 @@ static void RenderSplatFrame(SDL_Window* window) {
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
     dm.BeginFrame();
 
-    glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+    glClearColor((float)BG_R / 255.0f, (float)BG_G / 255.0f, (float)BG_B / 255.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (game_work.m_FruitCamera) {
@@ -131,6 +143,156 @@ static void RenderSplatFrame(SDL_Window* window) {
     dm.SetDepthBuffer(false);
 }
 
+// --------------------------------------------------------------------
+// Critical-flash colour-lerp capture (--critical).
+//
+// Verifies SplatEntity::Update's critical-flash colour-lerp block
+// (v1.6.1 SplatEntity::Update @0x001ebee0, gated block @0x001ec448-
+// 0x001ec570): m_ColourPhase starts at MS_COL_PHASE_DEF (1.5) via
+// MakeSplat with an OUT-OF-RANGE fruitType (m_FruitType + FruitInfo_
+// GetCount()) -- exactly the construction used by the real critical-slice
+// call site (Fruit::Slice @0x001dcf5c, see Fruit.cpp:1661-1668:
+// `splatFruitType = m_FruitType + (isCritical ? FruitInfo_GetCount() : 0)`).
+// Once landed, UpdateSplat lerps m_ColR/G/B from Fruit::CRITICAL_COLOUR
+// toward the fruit's own Fruit::FruitTypeColour() as phase decays 1.5 -> 0.
+//
+// Captures 3 PNGs (crit_splat/phase_150, phase_050, phase_000) and logs
+// m_ColR/G/B + m_AlphaBase at each so the numbers are checkable against
+// CRITICAL_COLOUR and FruitTypeColour printed at the top.
+static int RunCriticalFlashScene(fn::TestHarness& h) {
+    // GameInit wires: ActorManager pools, FruitCamera, FruitInfo tables,
+    // SplatEntity pool (CreatePool), SlashEntities.
+    // GameInitialise (inside game.init) handles SplatEntity::LoadContent
+    // AND Fruit::LoadInfo (step 24) -- CRITICAL_COLOUR is valid by the
+    // time h.Init() returns.
+    GameInit(0);
+    Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
+
+    int fruitType = Fruit::FruitType("orange", false);
+    if (fruitType < 0) fruitType = Fruit::FruitType("watermelon", false);
+    if (fruitType < 0) fruitType = 0;
+
+    const int fruitCount = FruitInfo_GetCount();
+    const FruitInfo* info = FruitInfo_Get(fruitType);
+    if (!info || fruitCount <= 0) {
+        fprintf(stderr, "[scene_fruit_splat --critical] FAIL: FruitInfo lookup failed "
+                "(fruitType=%d fruitCount=%d)\n", fruitType, fruitCount);
+        return 1;
+    }
+
+    const Colour fresh = Fruit::FruitTypeColour(fruitType);
+    const Colour& crit = Fruit::CRITICAL_COLOUR;
+    printf("[scene_fruit_splat --critical] fruitType=%d (%s)\n", fruitType, info->m_Name);
+    printf("[scene_fruit_splat --critical] Fruit::CRITICAL_COLOUR   RGBA=(%u,%u,%u,%u)\n",
+           (unsigned)crit.r, (unsigned)crit.g, (unsigned)crit.b, (unsigned)crit.a);
+    printf("[scene_fruit_splat --critical] Fruit::FruitTypeColour   RGBA=(%u,%u,%u,%u)\n",
+           (unsigned)fresh.r, (unsigned)fresh.g, (unsigned)fresh.b, (unsigned)fresh.a);
+
+    SplatEntity::s_RandKillEnabled = false;
+
+    // Faithful reproduction of the real critical-slice call site: GetFree()
+    // then MakeSplat directly (no separate Init() call -- MakeSplat itself
+    // sets m_SplatType=-1 / m_bAlive=1 on success, matching Fruit::Slice's
+    // usage pattern at Fruit.cpp:1660-1668).
+    SplatEntity* splat = SplatEntity::GetFree();
+    if (!splat) {
+        fprintf(stderr, "[scene_fruit_splat --critical] FAIL: GetFree() returned null\n");
+        SplatEntity::s_RandKillEnabled = true;
+        return 1;
+    }
+
+    const long criticalFruitType = (long)fruitType + fruitCount;
+    splat->MakeSplat(Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 0.0f),
+                      /*param3=*/false, /*landImmediately=*/false, criticalFruitType);
+
+    if (!splat->m_bAlive) {
+        fprintf(stderr, "[scene_fruit_splat --critical] FAIL: MakeSplat suppressed the "
+                "splat (m_bAlive=0) -- rerun (RandInt suppression should be off)\n");
+        SplatEntity::s_RandKillEnabled = true;
+        return 1;
+    }
+
+    printf("[scene_fruit_splat --critical] spawned: m_FruitType=%d (out-of-range, "
+           "count=%d) m_ColourPhase=%.3f\n", splat->m_FruitType, fruitCount, splat->m_ColourPhase);
+
+    // SplatEntity::Update's colour-lerp block reads game_work.dt (the scaled
+    // per-frame dt), NOT the dt parameter passed to UpdateActiveSplats --
+    // see SplatEntity.cpp:539-541. This test drives UpdateActiveSplats
+    // directly (no GameTaskState::Update pass), so game_work.dt is left at
+    // its GameInitialise default (0) and the colour phase would never decay
+    // without this.
+    game_work.dt = TICK_DT;
+
+    // --- Land the splat. Colour-lerp only runs once landed -- the airborne
+    //     branch returns early before reaching it (SplatEntity.cpp:511-512).
+    bool landed = false;
+    for (int i = 0; i < LAND_TICKS; ++i) {
+        SplatEntity::UpdateActiveSplats(TICK_DT);
+        if (splat->m_SplatType >= 0) { landed = true; break; }
+    }
+    if (!landed) {
+        fprintf(stderr, "[scene_fruit_splat --critical] FAIL: splat never landed within "
+                "%d ticks\n", LAND_TICKS);
+        SplatEntity::s_RandKillEnabled = true;
+        SplatEntity::RemoveAllSplats();
+        return 1;
+    }
+
+    // Run the colour-lerp at least once post-landing (the landing tick
+    // itself returns before reaching the landed-phase code) so m_ColR/G/B
+    // reflect the lerp output (pure CRITICAL_COLOUR at phase>=0.5) rather
+    // than MakeSplat's stale spawn-time placeholder colour.
+    SplatEntity::UpdateActiveSplats(TICK_DT);
+    printf("[scene_fruit_splat --critical] landed: m_ColourPhase=%.3f\n", splat->m_ColourPhase);
+
+    // --- Capture at phase ~= 1.5, 0.5, 0.0 ---------------------------------
+    struct Capture { float targetPhase; const char* name; };
+    static const Capture kCaptures[3] = {
+        { 1.5f, "crit_splat/phase_150" },
+        { 0.5f, "crit_splat/phase_050" },
+        { 0.0f, "crit_splat/phase_000" },
+    };
+    static const int MAX_TICKS_PER_CAPTURE = 500;
+
+    bool allDrawn = true;
+    for (int ci = 0; ci < 3; ++ci) {
+        int guard = 0;
+        while (splat->m_ColourPhase > kCaptures[ci].targetPhase + TICK_DT * 0.5f &&
+               guard < MAX_TICKS_PER_CAPTURE) {
+            SplatEntity::UpdateActiveSplats(TICK_DT);
+            ++guard;
+        }
+
+        // Warm-up + measurement frame, mirroring the default headless path.
+        RenderSplatFrame(static_cast<SDL_Window*>(h.window));
+        SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
+        RenderSplatFrame(static_cast<SDL_Window*>(h.window));
+
+        int fw = 0, fh = 0;
+        unsigned char* pixels = h.ReadPixels(&fw, &fh);
+        int drawnPixels = pixels ? CountNonBackground(pixels, fw, fh) : 0;
+        free(pixels);
+
+        h.ScreenshotPng(kCaptures[ci].name);
+
+        printf("[scene_fruit_splat --critical] %-24s m_ColourPhase=%.3f  "
+               "m_ColRGB=(%u,%u,%u)  m_AlphaBase=%.2f  drawnPixels=%d\n",
+               kCaptures[ci].name, splat->m_ColourPhase,
+               (unsigned)splat->m_ColR, (unsigned)splat->m_ColG, (unsigned)splat->m_ColB,
+               splat->m_AlphaBase, drawnPixels);
+
+        if (drawnPixels < MIN_DRAWN_PIXELS) allDrawn = false;
+    }
+
+    SplatEntity::s_RandKillEnabled = true;
+    SplatEntity::RemoveAllSplats();
+
+    printf("[scene_fruit_splat --critical] %s\n", allDrawn ? "PASS" : "FAIL");
+
+    h.Shutdown();
+    return allDrawn ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     // Port specific: standalone splat spawn+draw regression test
 
@@ -140,6 +302,10 @@ int main(int argc, char* argv[]) {
 
     if (!h.ParseFlags()) return 1;
     if (!h.Init())       return 1;
+
+    if (h.OptFlag("critical")) {
+        return RunCriticalFlashScene(h);
+    }
 
     // GameInit wires: ActorManager pools, FruitCamera, FruitInfo tables,
     // SplatEntity pool (CreatePool), SlashEntities.
