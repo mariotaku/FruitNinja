@@ -349,6 +349,65 @@ void BakedStringTTF::BuildSurfaces()
     }
 
     m_SurfacesBuilt = !m_Surfaces.empty();
+
+    // Binary's only UpdateBounds caller is BuildSurfaces' tail (@0x00248c14).
+    UpdateBounds();
+}
+
+// UpdateBounds @0x00247ed0:
+// Seed {minX=999999, maxY=-999999, maxX=-999999, minY=999999} then fold each surface's
+// vertex extents (truncated to long) into m_Base. Field mapping matches MortarRectangleT<long>:
+//   m_BoundsMinX=left=min(x), m_BoundsMaxX=right=max(x),
+//   m_BoundsMaxY=top=max(y),  m_BoundsMinY=bottom=min(y).
+void BakedStringTTF::UpdateBounds()
+{
+    long minX =  999999;
+    long maxY = -999999;
+    long maxX = -999999;
+    long minY =  999999;
+
+    for (size_t si = 0; si < m_Surfaces.size(); ++si) {
+        BakedStringTTF_Surface* s = m_Surfaces[si];
+        if (!s || !s->m_Verts) continue;
+        for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
+            long x = (long)s->m_Verts[vi].x;
+            long y = (long)s->m_Verts[vi].y;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+            if (y < minY) minY = y;
+        }
+    }
+
+    m_Base.m_BoundsMinX = minX;
+    m_Base.m_BoundsMaxY = maxY;
+    m_Base.m_BoundsMaxX = maxX;
+    m_Base.m_BoundsMinY = minY;
+}
+
+// ApplyGradientSplit @0x00249bf4:
+// AddColour(c, y) records the split stop, then every vertex above the split plane is
+// repainted to c. plane = y * (m_BoundsMaxY + m_BoundsMinY); paint where vertY > plane.
+// Split math is the metallic split lifted from BakedStringBox::BakeGradient
+// (Transform_GradientSplit @0x0024954c): d = -(sum*frac); paint side vertY > -d.
+// ASM-spec v1.6.1 BakedStringTTF::ApplyGradientSplit @0x00249bf4 / Transform_GradientSplit @0x0024954c.
+void BakedStringTTF::ApplyGradientSplit(Colour c, float y)
+{
+    AddColour(c, y);
+    if (!m_SurfacesBuilt) return;
+
+    uint32_t packed = c.PlatformColour();
+    float plane = y * (float)(m_Base.m_BoundsMaxY + m_Base.m_BoundsMinY);
+
+    for (size_t si = 0; si < m_Surfaces.size(); ++si) {
+        BakedStringTTF_Surface* s = m_Surfaces[si];
+        if (!s || !s->m_Verts) continue;
+        for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
+            if (s->m_Verts[vi].y > plane) {
+                s->m_Verts[vi].colour = packed;
+            }
+        }
+    }
 }
 
 // ApplyEffects @0x00249684: tail-branch dispatch.
@@ -596,10 +655,14 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
         float xMin, xMax, yMin, yMax;
         if (refRect) {
             // Binary: read alignment bounds from refRect (FG-label bbox for layer registration).
+            // refRect is a MortarRectangleT<long> aliasing another BakedStringTTF's m_Base:
+            //   left=m_BoundsMinX(min x), right=m_BoundsMaxX(max x),
+            //   top=m_BoundsMaxY(max y),  bottom=m_BoundsMinY(min y).
+            // Map to the same yMin=min / yMax=max convention the computed-bbox path uses.
             xMin = (float)refRect->left;
             xMax = (float)refRect->right;
-            yMin = (float)refRect->top;
-            yMax = (float)refRect->bottom;
+            yMin = (float)refRect->bottom;
+            yMax = (float)refRect->top;
         } else {
             // Compute bounding box from this object's surface verts.
             xMin =  1e30f; xMax = -1e30f;

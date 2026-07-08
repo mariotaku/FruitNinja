@@ -109,6 +109,7 @@ target_sources(mortar_engine PRIVATE
     render/FontTTFRegistry.cpp
     render/BakedStringBox.cpp
     render/BakedStringTTF.cpp
+    render/FancyBakedString.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
 )

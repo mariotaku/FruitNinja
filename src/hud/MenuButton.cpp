@@ -893,19 +893,22 @@ void MenuButton::Draw(float* hudScaleRaw) {
         float rotZ = m_Timer;
         Vec2 scaleV(scaleF, scaleF);
 
-        // TODO: v1.6.1 BakedStringTTF::Draw @0x002497a8 -- pass FG-label refRect for glow/shadow layer registration (needs UpdateBounds @0x00247ed0)
+        // v1.6.1 MenuButton::Draw @0x0019c764: glow/shadow layers align to the FG-label
+        // bbox (BakedStringTTF::UpdateBounds @0x00247ed0 populates m_pLabelFg's refRect at
+        // BuildSurfaces time, i.e. in its ctor).
+        Mortar::MortarRectangleT<long>* labelRR = m_pLabelFg->GetRefRect();
         if (m_pLabelGlow) {
-            m_pLabelGlow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
+            m_pLabelGlow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE, labelRR);
             if (m_LabelRadius > 0.0f)
-                m_pLabelGlow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
+                m_pLabelGlow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE, labelRR);
         }
         m_pLabelFg->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
         if (m_LabelRadius > 0.0f)
             m_pLabelFg->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
         if (m_pLabelShadow) {
-            m_pLabelShadow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE);
+            m_pLabelShadow->Draw(anchor, scaleV, rotZ, Mortar::ALIGN_CENTRE, labelRR);
             if (m_LabelRadius > 0.0f)
-                m_pLabelShadow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE);
+                m_pLabelShadow->Draw(anchor, scaleV, rotZ + 180.0f, Mortar::ALIGN_CENTRE, labelRR);
         }
     }
 
