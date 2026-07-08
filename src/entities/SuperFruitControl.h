@@ -41,6 +41,7 @@
 //   +0xfc: Vec3          m_ZoomTarget      (camera zoom target; clamped host pos)
 
 #include "hud/HUDControl3d.h"
+#include "render/FancyBakedString.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include <map>
@@ -51,7 +52,7 @@ class SuperFruitGlow;
 struct SuperFruitState;
 #include "engine/xml/TiXmlElement.h"
 
-namespace Mortar { class BakedStringBox; class Entity; }
+namespace Mortar { class Entity; }
 
 class SuperFruitControl : public HUDControl3d {
 public:
@@ -79,10 +80,10 @@ public:
     // +0x94: linked SlashEntity (nullable; nulled when slice is consumed)
     SlashEntity* m_pLinkedSlasher;// +0x94
 
-    // +0x98: combo popup text (FancyBakedString* in binary; BakedStringBox in port)
-    Mortar::BakedStringBox* m_pComboText;  // +0x98
-    // +0x9c: score popup text (FancyBakedString* in binary; BakedStringBox in port)
-    Mortar::BakedStringBox* m_pScoreText;  // +0x9c
+    // +0x98: combo popup text (Mortar::FancyBakedString*)
+    Mortar::FancyBakedString* m_pComboText;  // +0x98
+    // +0x9c: score popup text (Mortar::FancyBakedString*)
+    Mortar::FancyBakedString* m_pScoreText;  // +0x9c
 
     // +0xa0: explosion-phase time baseline (set at construction)
     float m_Lifetime;             // +0xa0
@@ -154,6 +155,10 @@ public:
     // without Fruit::CollisionResponse calling it directly.
     static void LoadContent();
 
+    // Frees the super-fruit finale visuals loaded by LoadContent (ShockWaveTexture,
+    // JibletModel). Mirrors LoadContent; nulls the file-static SmartPtr globals.
+    static void UnLoadContent();
+
     // Binary @ 0x001b9828. Returns true while a super fruit is active.
     // Implementation: SuperFruitControls._M_node_count (+0x14) != 0, i.e. !empty().
     static bool IsInSuperFruitState();
@@ -199,6 +204,19 @@ public:
     // fragments, white flash, resets fruit colour.
     // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- full ExplodeSuperFruit VFX not yet ported
     void ExplodeSuperFruit();
+
+    // Binary @ 0x001b9ee4. Create-or-replace a combo/score popup label.
+    //   text     - the string to bake (e.g. "SLICE!", "5 HITS", "+12")
+    //   resetFade - if true, restarts the fade-in (m_FadeIn = 0)
+    //   target   - which slot to (re)build; NULL => &m_pComboText.
+    // Colour-morphs the fill/stroke by m_SliceCount/35; stroke only on fast HW.
+    void ChangeText(const char* text, bool resetFade, Mortar::FancyBakedString** target);
+
+    // Binary @ 0x001bd4d8 (DrawExplosion): draws the two shockwave rings.
+    void DrawExplosion();
+    // Binary @ 0x001bd4d8 (DrawRing): one ShockWaveTexture ring of radius r,
+    // fading over the 0.25s window ending at `base`.
+    void DrawRing(float r, float base);
 
     // Binary @ 0x1baeb8. Per-frame shockwave: writes PSPParticleManager globals
     // +0x00/+0x04/+0x08, then radially pushes Actor types 0/1/5.
