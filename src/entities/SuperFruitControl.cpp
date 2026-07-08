@@ -192,7 +192,9 @@ void SuperFruitControl::Update(float dt)
     // bomb suppression window; fVar = 1.5 if Arcade else 0.5
     float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
     if (m_Timer < m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias) {
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- Bomb::DeactivateAll (needs Bomb::DeactivateAll static)
+        // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: bomb-suppress window fires
+        //   Bomb::DeactivateAll() every frame while Timer < Lifetime+2.3+modeBias.
+        Bomb::DeactivateAll();
     }
 
     // whoosh SFX: one-shot on crossing (Lifetime - 0.1)
@@ -251,7 +253,12 @@ void SuperFruitControl::Update(float dt)
                 // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.6, dur=2.0, pos) (DAT_001bcd94=1.6)
             }
             // ease global time-scale back toward 1.0: ts = (ts-1)*pow(0.75, dt*60) + 1
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 time-scale ease (game_work._pad_0x40 unresolved)
+            // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
+            //   (HUD+0x24); pre-roll ts*=pow(0.75,dt*60); post-blast ts=(ts-1)*pow(0.75,dt*60)+1; end ts=1.
+            if (game_work.mHud) {
+                float& ts = game_work.mHud->m_globalTimeScale;
+                ts = (ts - 1.0f) * powf(0.75f, dt * 60.0f) + 1.0f;
+            }
         }
 
         // (d) score payoff window: Lifetime+0.5+0.35+0.55+0.1
@@ -282,10 +289,18 @@ void SuperFruitControl::Update(float dt)
         float tEnd = m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias2 + 0.15f;  // DAT_001bcda8=0.15
         if (m_Timer > tEnd) {
             WaveManager::GetInstance()->m_SpeedScale = 1.0f;  // SetAbsoluteDtMod(1.0)
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
+            // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: finale end byte-clears WaveManager+0x00
+            //   (m_SpeedControl[0] spawn gate).
+#if defined(__bada__)
+            *(uint8_t*)WaveManager::GetInstance() = 0;
+#else
+            WaveManager::GetInstance()->m_SpeedControl[0] = nullptr;
+#endif
             WaveManager::GetInstance()->GetNextWave(0);
             PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 = 1.0 time-scale restore (game_work._pad_0x40 unresolved)
+            // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
+            //   (HUD+0x24); end ts=1.
+            if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
             flags |= ENT_KILLED;                    // this->done(+0x33) = 1
         }
     } else {
@@ -298,7 +313,11 @@ void SuperFruitControl::Update(float dt)
         }
 
         // global time-scale pre-roll: ts = 0.0 + ts*pow(0.75, dt*60)
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- *(game_work+0x40)->+0x24 *= pow(0.75, dt*60) (DAT_001bd488=0.0 double; game_work._pad_0x40 unresolved)
+        // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
+        //   (HUD+0x24); pre-roll ts*=pow(0.75,dt*60) (eases to 0).
+        if (game_work.mHud) {
+            game_work.mHud->m_globalTimeScale *= powf(0.75f, dt * 60.0f);
+        }
 
         // build the spin-orbit camera transition for the thrown fruit
         // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::Transition(game+0x4c, dist, angle, target, doneCb@DAT_001bd4ac) (needs camera + Math::SinIdx/CosIdx)
@@ -734,9 +753,17 @@ void SuperFruitControl::SaveSuperFruitState(Fruit* /*fruit*/, TiXmlElement* pare
 void SuperFruitControl::Reset()
 {
     WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
+    // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: byte-clears WaveManager+0x00
+    //   (m_SpeedControl[0] spawn gate).
+#if defined(__bada__)
+    *(uint8_t*)WaveManager::GetInstance() = 0;
+#else
+    WaveManager::GetInstance()->m_SpeedControl[0] = nullptr;
+#endif
     PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
+    // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: slow-mo = game_work.mHud->m_globalTimeScale
+    //   (HUD+0x24); restore to 1.0.
+    if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
     UnpauseSlices();
