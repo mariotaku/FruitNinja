@@ -104,10 +104,13 @@ struct BakedStringEffectBase {
     //   UpdateBounds inits {minX=999999, maxY=-big, maxX=-big, minY=999999} then
     //   folds each surface's [+0x28..+0x34] extents in; Draw computes
     //   width = maxX - minX, height = (minY - maxY)/2 - minY.
-    float       m_BoundsMinX;   // +0x00 (Draw: -X for right/centre align)
-    float       m_BoundsMaxY;   // +0x04
-    float       m_BoundsMaxX;   // +0x08 (Draw: width = MaxX - MinX)
-    float       m_BoundsMinY;   // +0x0c (Draw: height basis)
+    // These are `long` in the binary (v1.6.1 BakedStringTTF::UpdateBounds @0x00247ed0
+    // truncates vertex extents to integer). The layout matches MortarRectangleT<long>
+    // (left/top/right/bottom) exactly, which is why GetRefRect can reinterpret `this`.
+    long        m_BoundsMinX;   // +0x00 (MortarRectangleT<long>::left)
+    long        m_BoundsMaxY;   // +0x04 (MortarRectangleT<long>::top)
+    long        m_BoundsMaxX;   // +0x08 (MortarRectangleT<long>::right)
+    long        m_BoundsMinY;   // +0x0c (MortarRectangleT<long>::bottom)
 
     // +0x10: gradient stop container (AddColour targets).
     // Spans +0x10..+0x1f (global BakedStringTTF offsets).
@@ -193,6 +196,20 @@ public:
     void Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
               MortarRectangleT<long>* refRect = 0);
 
+    // GetRefRect: the m_Base bounds (offset 0) ARE a MortarRectangleT<long>
+    // (left=m_BoundsMinX, top=m_BoundsMaxY, right=m_BoundsMaxX, bottom=m_BoundsMinY).
+    // FancyBakedString passes the main layer's refRect to every layer so glow/shadow
+    // align to the FG-label bbox.
+    // ASM-spec v1.6.1: FancyBakedString::Draw @0x0024b8e4 + ApplyGradientSplit_Internal @0x002495fc
+    //   pass (MortarRectangleT<long>*)m_pMain; BakedStringTTF m_Base bounds live at offset 0.
+    MortarRectangleT<long>* GetRefRect() { return reinterpret_cast<MortarRectangleT<long>*>(this); }
+
+    // ApplyGradientSplit @0x00249bf4: AddColour(c,y) into the effect, then paint every
+    // vertex whose Y is above the split plane (y*(m_BoundsMaxY+m_BoundsMinY)) with c.
+    // Split math lifted from BakedStringBox metallic gradient (Transform_GradientSplit).
+    // ASM-spec v1.6.1 BakedStringTTF::ApplyGradientSplit @0x00249bf4 / Transform_GradientSplit @0x0024954c.
+    void ApplyGradientSplit(Colour c, float y);
+
     // Returns total advance (field_60) set by ApplyFormatting_LeftJustify.
     float GetTotalAdvance() const;
 
@@ -254,6 +271,12 @@ private:
     // ApplyEffects @0x001049b0: tail-branch dispatch; no-op in this port pass.
     void ApplyEffects();
 
+    // UpdateBounds @0x00247ed0: seed {minX=999999, maxY=-999999, maxX=-999999,
+    // minY=999999} then fold each surface's vertex int extents into m_Base. Called at
+    // the tail of BuildSurfaces (the binary's only caller). Populates the refRect the
+    // FancyBakedString layers share.
+    void UpdateBounds();
+
     // DeleteGlyphs: free m_Glyphs contents.
     void DeleteGlyphs();
 
@@ -277,6 +300,11 @@ private:
 
     // AddColour: store into m_Base.m_Effect colour stops.
     void AddColour(Colour col, float t);
+
+    // FancyBakedString reads m_SurfacesBuilt directly (FancyBakedString::Draw @0x0024b8e4
+    // rebuilds the main layer before reading its refRect). Friend rather than a public
+    // accessor keeps BakedStringTTF's symbol surface unchanged for existing callers.
+    friend class FancyBakedString;
 
 #ifdef __bada__
     // GCC 4.4 rejects offsetof on private members from namespace scope -- use the
