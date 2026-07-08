@@ -458,6 +458,14 @@ static_assert(offsetof(WaveManager, m_pWaveQueItem) == 0x24,
               "WaveManager m_pWaveQueItem must be at +0x24");
 static_assert(offsetof(WaveManager, m_pWaveQue) == 0x28,
               "WaveManager m_pWaveQue must be at +0x28");
+
+// Guard the tail so the wasm32 build catches future field drift.
+// v1.6.1 WaveManager ctor @0x00123ef8 / GetInstance @0x00123fa4 (static singleton, 0x2f0)
+static_assert(offsetof(WaveManager, m_pCurrentWave)              == 0x234, "");
+static_assert(offsetof(WaveManager, m_NextWaveDelay_P0)          == 0x23c, "");
+static_assert(offsetof(WaveManager, m_FruitQueue)                == 0x24c, "");
+static_assert(offsetof(WaveManager, m_GlobalProbabilityOverride) == 0x2e4, "");
+static_assert(sizeof(WaveManager)                                == 0x2f0, "");
 #endif
 
 #endif  // FN_WAVE_MANAGER_H
