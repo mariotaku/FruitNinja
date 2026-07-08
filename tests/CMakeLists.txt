@@ -1100,3 +1100,18 @@ set_tests_properties(slash_texture_render PROPERTIES TIMEOUT 60
 add_test(NAME screenshot_slash_texture COMMAND test_slash_texture_render --screenshot)
 set_tests_properties(screenshot_slash_texture PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_slashentity")
+
+# SuperFruitControl finale-tick regression guard.
+# Proves the super-fruit finale is actually ticked by HUD::Update after the
+# SuperFruitControl -> HUDControl3d re-base (previously created-but-never-ticked
+# dead code: nothing added the controller to game_work.mHud, so its Update()
+# never ran a single frame). Drives the REAL slice path (Fruit::CollisionResponse
+# -> Fruit::FruitWasSlicedEvent() -> SuperFruitControl::SuperFruitSliced), then
+# ticks the real frame loop and asserts m_Timer advances (the core dead-code
+# proof) and that the full phase ladder runs to completion (m_Timer crosses
+# m_Lifetime, then the controller self-removes from the HUD). Headless -- no
+# screenshot, no GPU pixel readback; verifies tick logic only (DrawOrder finale
+# VFX is a separate unported TODO).
+fn_add_game_test(test_superfruit_finale_tick test_superfruit_finale_tick.cpp)
+add_test(NAME superfruit_finale_tick COMMAND test_superfruit_finale_tick)
+set_tests_properties(superfruit_finale_tick PROPERTIES TIMEOUT 120)
