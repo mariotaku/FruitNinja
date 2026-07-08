@@ -122,6 +122,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Active-play state: the faithful SuperFruitSliced create-gate @0x001be630 skips
+    // creation when (FailureEnabled(mode) && bM_bPaused). Booting the harness leaves
+    // bM_bPaused at its GameInit default of 1 (no real round was started); a live slice
+    // only ever happens in unpaused play, so reflect that here.
+    game_work.bM_bPaused = 0;
+
     // Real slice path: Fruit::CollisionResponse -> Fruit::FruitWasSlicedEvent()
     // -> SuperFruitControl::SuperFruitSliced (subscribed by LoadContent() during
     // GameInitialise, which already ran as part of h.Init()).
@@ -157,7 +163,7 @@ int main(int argc, char* argv[]) {
                 static_cast<void*>(ctrl), timer0, lifetime);
 
     // ---- Core proof: HUD::Update reaches SuperFruitControl::Update ----
-    // Tick 60 real frames (~1s at 60Hz, fixed dt). m_Lifetime defaults to 5.0,
+    // Tick 60 real frames (~1s at 60Hz, fixed dt). m_Lifetime is uniform[2,3)s,
     // so the control is guaranteed to still be alive and registered here --
     // ControlStillInHud() is re-checked anyway before every dereference.
     for (int i = 0; i < 60; ++i) h.game.runFrames(1);

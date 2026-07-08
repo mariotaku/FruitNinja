@@ -338,6 +338,14 @@ public:
     // Driven by m_BladeActive (+0x140), the binary's uchar shift-register latch.
     bool IsBladeActive() const { return m_BladeActive != 0 && m_PointCount >= 2; }
 
+    // v1.6.1 SuperFruitControl::Sliced @0x001bb994: binary does a direct same-engine
+    // member write `slasher.m_HeadPos.x = 0` (SlashEntity+0x7c) to sever the linked
+    // slasher's trail tip. Minimal public mutator exposing that single write without
+    // widening access to the whole field or changing its offset/layout. Not gated by
+    // __bada__ (unlike GetHeadPos() above) so portable callers compiled under the
+    // cross-build can reach it.
+    void ClearHeadPosX() { m_HeadPos.x = 0.0f; }
+
 private:
 
     // -----------------------------------------------------------------------
