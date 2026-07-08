@@ -333,15 +333,21 @@ void BakedStringTTF::BuildSurfaces()
             float u0 = g->m_UvU0, v0 = g->m_UvV0;
             float u1 = g->m_UvU1, v1 = g->m_UvV1;
 
-            // Non-flip winding: BL(u0,v1), TL(u0,v0), BR(u1,v1), TR(u1,v0), BR, TL
-            // v1.6.1 FinishMesh @0x002480a8: 6-vert emit order matches BakedStringBox.
+            // 6-vert TRI-LIST per glyph (two triangles covering the quad):
+            //   tri0 = (BL, TL, BR), tri1 = (TR, BR, TL).
+            // v1.6.1 FinishMesh @0x002480a8 emits a tri-list consumed by Mesh::DrawTriList.
+            // (Previously v[4]=v[5]=TR -- a tri-STRIP+degenerate-padding hack that only
+            //  rendered as a strip via the old Draw's runtime connector wiring; that path
+            //  is gone now that Draw calls DrawTriList over these verts directly, so the
+            //  second triangle must be real. tri1's winding (TR,BR,TL) shares the BR-TL
+            //  diagonal with the old strip -> identical pixel coverage; cull is off.)
             QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
-            v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1;
-            v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0;
-            v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1;
-            v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0;
-            v[4] = v[3];
-            v[5] = v[3];
+            v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
+            v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0; // TL
+            v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1; // BR
+            v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0; // TR
+            v[4] = v[2]; // BR
+            v[5] = v[1]; // TL
             vi += 6;
         }
         surf->m_VertCount = vi;
@@ -648,12 +654,19 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 // Draw @0x002497a8:
 // ASM-spec v1.6.1 BakedStringTTF::Draw @0x002497a8:
 //   (Vec3 anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE, MortarRectangleT<long>* refRect=nullptr)
+//
+// Pure-matrix pipeline (no CPU per-vertex transform, no vertex copy). The world
+// stack composes
+//   M = T(anchor) * RotZ(rotZ) * ScaleRows(scale) * TranslateLocal(alignOff)
+// which is algebraically identical to the previous CPU loop
+//   v' = R(rotZ) * S(scale) * (v + alignOff) + anchor
+// so the on-screen text is unchanged; GL consumes the baked local verts directly.
+//
 // if(!m_SurfacesBuilt) FullInternalRebuild(); if 0 glyphs return.
-// FontInterface::BuildPendingTextures(). MatrixStack reset + identity.
-// if(field_5e==0) apply align (bits0-1 horiz, bits2-3 vert).
-// When refRect is non-null, bounds read from refRect; else computed from this object's glyph verts.
-// TranslateLocal(alignOffset); Scale; RotZ; Translate(anchor); Upload.
-// per surface (m_DrawMode<0): DrawTriList via vertex array.
+// FontInterface::BuildPendingTextures(); world.Reset().
+// Alignment (skipped when field_5e/m_CircleFlag != 0): bits0-1 horiz, bits2-3 vert.
+//   refRect defaults to this (GetRefRect) -- the m_Base bounds aliased as a
+//   MortarRectangleT<long>; bounds are read as long, per the binary.
 void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
                            MortarRectangleT<long>* refRect)
 {
@@ -664,70 +677,52 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
     if (!atlas) return;
     atlas->BuildPendingTextures();
 
-    // Compute alignment offset.
+    // Alignment offset (Vec3; z=0). Skipped entirely for circle-layout (field_5e != 0).
     // v1.6.1 BakedStringTTF::Draw @0x002497a8:
     //   bits0-1 horiz: 2=right -width, 3=centre -width/2
-    //   bits2-3 vert:  4=top, 0xc=centre (skipped when field_5e=1)
-    float alignOffX = 0.0f;
-    float alignOffY = 0.0f;
+    //   bits2-3 vert:  4=top, 0xc=centre
+    Vec3 alignOff(0.0f, 0.0f, 0.0f);
 
     if (m_CircleFlag == 0) {
-        float xMin, xMax, yMin, yMax;
-        if (refRect) {
-            // Binary: read alignment bounds from refRect (FG-label bbox for layer registration).
-            // refRect is a MortarRectangleT<long> aliasing another BakedStringTTF's m_Base:
-            //   left=m_BoundsMinX(min x), right=m_BoundsMaxX(max x),
-            //   top=m_BoundsMaxY(max y),  bottom=m_BoundsMinY(min y).
-            // Map to the same yMin=min / yMax=max convention the computed-bbox path uses.
-            xMin = (float)refRect->left;
-            xMax = (float)refRect->right;
-            yMin = (float)refRect->bottom;
-            yMax = (float)refRect->top;
-        } else {
-            // Compute bounding box from this object's surface verts.
-            xMin =  1e30f; xMax = -1e30f;
-            yMin =  1e30f; yMax = -1e30f;
-            for (size_t si = 0; si < m_Surfaces.size(); ++si) {
-                BakedStringTTF_Surface* s = m_Surfaces[si];
-                for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
-                    float x = s->m_Verts[vi].x;
-                    float y = s->m_Verts[vi].y;
-                    if (x < xMin) xMin = x;
-                    if (x > xMax) xMax = x;
-                    if (y < yMin) yMin = y;
-                    if (y > yMax) yMax = y;
-                }
-            }
-        }
+        // Default refRect to this object's own bounds (binary: GetRefRect() == this).
+        if (refRect == 0) refRect = GetRefRect();
+        // MortarRectangleT<long>: left=m_BoundsMinX(+0), top=m_BoundsMaxY(+4),
+        //                         right=m_BoundsMaxX(+8), bottom=m_BoundsMinY(+0xc).
+        float xMin = (float)refRect->left;
+        float xMax = (float)refRect->right;
+        float yMin = (float)refRect->bottom;
+        float yMax = (float)refRect->top;
         float width  = (xMax > xMin) ? (xMax - xMin) : 0.0f;
         float height = (yMax > yMin) ? (yMax - yMin) : 0.0f;
 
-        // Horiz align (bits 0-1)
+        // Horiz align (bits 0-1) -- binary width formula.
         uint32_t hAlign = align & 0x3u;
         if (hAlign == 2) {
-            alignOffX = -width;
+            alignOff.x = -width;
         } else if (hAlign == 3) {
-            alignOffX = -width * 0.5f;
+            alignOff.x = -width * 0.5f;
         }
-        // Vert align (bits 2-3)
+        // Vert align (bits 2-3) -- KEEP the port's existing result (its local space
+        // is Y-flipped vs the binary; the on-screen positions are already correct).
         uint32_t vAlign = align & 0xcu;
         if (vAlign == 4) {
-            alignOffY = 0.0f;  // top
+            alignOff.y = 0.0f;          // top
         } else if (vAlign == 0xc) {
-            alignOffY = -height * 0.5f;  // centre
+            alignOff.y = -height * 0.5f; // centre
         }
     }
 
-    // Build rotation coefficients for rotZ.
-    float theta = rotZ * (k_PI / 180.0f);
-    float sinT  = sinf(theta);
-    float cosT  = cosf(theta);
-
-    // Use identity world matrix (world space vertex draw).
+    // Build the world matrix. Steps (binary order):
+    //   1 Reset, 2 TranslateLocal(alignOff), 3 ScaleRows(scale) [row/left scale],
+    //   4 RotZ(rotZ), 5 Translate(anchor) [applies anchor.z], 6 OMITTED.
+    // step 6 in the binary is Scale(1, atlas->m_Field150, 1) with m_Field150==1.0 --
+    // a unit-Y no-op, so it is intentionally omitted here.
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
-    world.Push();
-    world.m_Current.Identity();
-    world.m_Version++;
+    world.Reset();
+    world.TranslateLocal(alignOff);
+    world.ScaleRows(scale.x, scale.y, 1.0f);
+    world.RotZ(rotZ);
+    world.Translate(anchor);
     MatrixManager::GetInstance().UploadModelViewOnly();
 
     for (size_t si = 0; si < m_Surfaces.size(); ++si) {
@@ -735,31 +730,15 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
         if (!s || !s->m_Verts || s->m_VertCount == 0) continue;
         if (s->m_DrawMode >= 0) continue;  // only single-buffer path
 
-        const uint32_t nVerts = s->m_VertCount;
-        std::vector<QUADCUSTOMVERTEX> wv(s->m_Verts, s->m_Verts + nVerts);
-
-        // Transform: alignOffset + scale + rotZ + anchor.
-        for (uint32_t vi = 0; vi < nVerts; ++vi) {
-            float lx = (wv[vi].x + alignOffX) * scale.x;
-            float ly = (wv[vi].y + alignOffY) * scale.y;
-            wv[vi].x = cosT * lx - sinT * ly + anchor.x;
-            wv[vi].y = sinT * lx + cosT * ly + anchor.y;
-        }
-
-        // Wire degenerate connectors between glyphs.
-        for (uint32_t gi = 1; (int)(gi * 6) < (int)nVerts; ++gi) {
-            wv[gi * 6 - 1] = wv[gi * 6];
-        }
-
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, (GLuint)s->m_PageTextureID);
         glEnable(GL_TEXTURE_2D);
-        TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
-
-        Renderer::GetInstance()->DrawTriStrip(&wv[0], (int)nVerts);
+        // DIFFERS: v1.6.1 Mesh::DrawTriList @0x00240e34 -> port Renderer::DrawTriList
+        //   (the only platform boundary). DrawTriList sets GL_MODULATE tex-env itself
+        //   and consumes the baked local verts as-is; the world matrix does the
+        //   transform the old CPU loop performed per vertex.
+        Renderer::GetInstance()->DrawTriList(s->m_Verts, (int)s->m_VertCount);
     }
-
-    world.Pop();
 }
 
 float BakedStringTTF::GetTotalAdvance() const

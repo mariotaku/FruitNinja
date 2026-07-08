@@ -70,6 +70,19 @@ struct MatrixStack {
     // was stale v1.5.x -- resolves to SetMissCount in v1.6.1; method is inlined into
     // MatrixManager, no standalone symbol confirmed)
     void SetCurrentMatrix(const Matrix44& mat);
+
+    // ASM-spec v1.6.1 MatrixStack::RotZ @0x001d0b80: convert deg to a 16-bit angle
+    // index (deg*182), then LEFT-multiply m_Current by RotZ44(SinIdx, CosIdx).
+    void RotZ(float deg);
+
+    // ASM-spec v1.6.1 MatrixStack::TranslateLocal @0x0024a150: RIGHT-multiply
+    // m_Current by a local-space translate (M*T). Distinct from Translate above,
+    // which adds a world-space offset to the translation column (T*M).
+    void TranslateLocal(const Vec3& t);
+
+    // Row/left scale (S*M) via Matrix44::ScaleRows. NOT MatrixStack::Scale, which
+    // scales columns (M*S) -- the wrong side for BakedStringTTF::Draw's pipeline.
+    void ScaleRows(float sx, float sy, float sz);
 };
 
 #ifdef __bada__
