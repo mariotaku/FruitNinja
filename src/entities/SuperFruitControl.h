@@ -21,6 +21,7 @@
 //
 // Key field offsets (binary-confirmed from RE spec):
 //   +0x7c: Fruit*        m_pHostFruit      (host fruit entity)
+//   +0x80: Fruit*        m_pHostFruit2     (second host-fruit back-ref, set by ctor)
 //   +0x84: float         m_HitCount        (combo count; += 1.0 per slice, decays -17.5/s)
 //   +0x88: float         m_Timer           (life clock; += dt each frame)
 //   +0x8c: float         m_PrevTimer       (previous-frame timer; edge tests)
@@ -28,14 +29,16 @@
 //   +0x94: SlashEntity*  m_pLinkedSlasher  (linked slash entity; nullable)
 //   +0xa0: float         m_Lifetime        (explode threshold; phase comparisons)
 //   +0xa4: float         m_FadeIn          (0->1 fade-in progress)
-//   +0xa8: Vec3          m_WorkVec1        (spin/vel/lerp work vector -- purpose unresolved)
-//   +0xb4: Vec3          m_WorkVec2        (spin/vel/lerp work vector -- purpose unresolved)
-//   +0xc0: Vec3          m_WorkVec3        (spin/vel/lerp work vector -- purpose unresolved)
-//   +0xcc: Vec3          m_WorkVec4        (spin/vel/lerp work vector -- purpose unresolved)
-//   +0xd8: float         m_Scale           (0->1 scale-in progress)
-//   +0xdc: int           m_SliceCooldown   (decremented; gates re-slice)
-//   +0xf0: Vec3          m_WorkVec5        (explosion-origin / work vector -- purpose unresolved)
-//   +0xfc: Vec3          m_WorkVec6        (work vector -- purpose unresolved)
+//   +0xa8: Vec3          m_SpinAxis        (per-hit slice-dir spin axis; Sliced writes GetSliceDir*3)
+//   +0xb4: Vec3          m_TintCurrent     (currently-displayed fruit tint)
+//   +0xc0: Vec3          m_TintA           (tint lerp endpoint A)
+//   +0xcc: Vec3          m_TintB           (tint lerp endpoint B; per-hit reroll target)
+//   +0xd8: float         m_Scale           (0->1 scale-in progress; Sliced resets to 0 for scale-pop)
+//   +0xdc: int           m_GlowCounter     (per-hit glow reroll counter)
+//   +0xe8: float         m_InnerRadius     (explosion inner shockwave radius)
+//   +0xec: float         m_OuterRadius     (explosion outer shockwave radius)
+//   +0xf0: Vec3          m_ExplodeOrigin   (explosion epicenter; snapshot of host pos)
+//   +0xfc: Vec3          m_ZoomTarget      (camera zoom target; clamped host pos)
 
 #include "hud/HUDControl3d.h"
 #include "math/Vec3.h"
@@ -57,7 +60,9 @@ public:
     // +0x7c: host fruit pointer
     Fruit* m_pHostFruit;          // +0x7c
 
-    uint8_t _pad_80[4];           // +0x80..+0x83
+    // +0x80: second host-fruit back-ref, set by the fresh ctor (binary writes
+    // fruit into both +0x7c and +0x80). Not cleared by Release.
+    Fruit* m_pHostFruit2;         // +0x80
 
     // +0x84: combo hit count (float; incremented per slice, decays over time)
     float m_HitCount;             // +0x84
@@ -85,20 +90,22 @@ public:
     // +0xa4: fade-in progress [0..1]; += dt*3 per frame
     float m_FadeIn;               // +0xa4
 
-    Vec3 m_WorkVec1;              // +0xa8  (spin/vel/lerp work vector -- purpose unresolved)
-    Vec3 m_WorkVec2;              // +0xb4  (spin/vel/lerp work vector -- purpose unresolved)
-    Vec3 m_WorkVec3;              // +0xc0  (spin/vel/lerp work vector -- purpose unresolved)
-    Vec3 m_WorkVec4;              // +0xcc  (spin/vel/lerp work vector -- purpose unresolved)
+    Vec3 m_SpinAxis;              // +0xa8  per-hit slice-dir spin axis (Sliced: GetSliceDir*3)
+    Vec3 m_TintCurrent;           // +0xb4  currently-displayed fruit tint
+    Vec3 m_TintA;                 // +0xc0  tint lerp endpoint A
+    Vec3 m_TintB;                 // +0xcc  tint lerp endpoint B (per-hit reroll target)
 
     // +0xd8: scale-in progress [0..1]
     float m_Scale;                // +0xd8
 
-    // +0xdc: re-slice cooldown counter (decremented per frame; Sliced() gated on == 0)
-    int m_SliceCooldown;          // +0xdc
+    // +0xdc: per-hit glow reroll counter (decremented in Sliced; drives tint/scale pop)
+    int m_GlowCounter;            // +0xdc
 
-    uint8_t _pad_e0[16];          // +0xe0..+0xef  (explosion-origin / colour -- unresolved)
-    Vec3 m_WorkVec5;              // +0xf0  (work vector -- purpose unresolved)
-    Vec3 m_WorkVec6;              // +0xfc  (work vector -- purpose unresolved; spans to 0x107)
+    uint8_t _pad_e0[8];           // +0xe0..+0xe7  (unresolved pad)
+    float m_InnerRadius;          // +0xe8  explosion inner shockwave radius
+    float m_OuterRadius;          // +0xec  explosion outer shockwave radius
+    Vec3 m_ExplodeOrigin;         // +0xf0  explosion epicenter (snapshot of host pos)
+    Vec3 m_ZoomTarget;            // +0xfc  camera zoom target (clamped host pos; spans to 0x107)
 
     // -----------------------------------------------------------------------
     // Static map: indexes all active super-fruit controllers by host fruit.
@@ -175,7 +182,7 @@ public:
     static void ResetAll();
 
     // Binary @ 0x001ba460. Stops (freezes/kills) all fruit entities during super state.
-    // Instance method: reads explosion centre from this->m_WorkVec5 (+0xf0).
+    // Instance method: reads explosion centre from this->m_ExplodeOrigin (+0xf0).
     void StopAllFruit();
 
     // -----------------------------------------------------------------------
@@ -183,7 +190,7 @@ public:
     // -----------------------------------------------------------------------
 
     // Binary @ 0x001bb994. Per-hit combo response: bumps m_SliceCount / m_HitCount,
-    // applies slice cooldown, spawns slash particles, plays combo-pitch SFX,
+    // rerolls the glow counter, spawns slash particles, plays combo-pitch SFX,
     // fires combo-number popup (FancyBakedString::ChangeText). Accrues score.
     // slashEntity = aggressor (nullable).
     void Sliced(Mortar::Entity* slashEntity);  // vtable slot override @ 0x001bb994
@@ -218,6 +225,7 @@ public:
 #ifdef __bada__
 #include <cstddef>
 static_assert(offsetof(SuperFruitControl, m_pHostFruit)      == 0x7c, "SuperFruitControl::m_pHostFruit offset");
+static_assert(offsetof(SuperFruitControl, m_pHostFruit2)     == 0x80, "SuperFruitControl::m_pHostFruit2 offset");
 static_assert(offsetof(SuperFruitControl, m_HitCount)        == 0x84, "SuperFruitControl::m_HitCount offset");
 static_assert(offsetof(SuperFruitControl, m_Timer)           == 0x88, "SuperFruitControl::m_Timer offset");
 static_assert(offsetof(SuperFruitControl, m_PrevTimer)       == 0x8c, "SuperFruitControl::m_PrevTimer offset");
@@ -227,14 +235,16 @@ static_assert(offsetof(SuperFruitControl, m_pComboText)      == 0x98, "SuperFrui
 static_assert(offsetof(SuperFruitControl, m_pScoreText)      == 0x9c, "SuperFruitControl::m_pScoreText offset");
 static_assert(offsetof(SuperFruitControl, m_Lifetime)        == 0xa0, "SuperFruitControl::m_Lifetime offset");
 static_assert(offsetof(SuperFruitControl, m_FadeIn)          == 0xa4, "SuperFruitControl::m_FadeIn offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec1)        == 0xa8, "SuperFruitControl::m_WorkVec1 offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec2)        == 0xb4, "SuperFruitControl::m_WorkVec2 offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec3)        == 0xc0, "SuperFruitControl::m_WorkVec3 offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec4)        == 0xcc, "SuperFruitControl::m_WorkVec4 offset");
+static_assert(offsetof(SuperFruitControl, m_SpinAxis)        == 0xa8, "SuperFruitControl::m_SpinAxis offset");
+static_assert(offsetof(SuperFruitControl, m_TintCurrent)     == 0xb4, "SuperFruitControl::m_TintCurrent offset");
+static_assert(offsetof(SuperFruitControl, m_TintA)           == 0xc0, "SuperFruitControl::m_TintA offset");
+static_assert(offsetof(SuperFruitControl, m_TintB)           == 0xcc, "SuperFruitControl::m_TintB offset");
 static_assert(offsetof(SuperFruitControl, m_Scale)           == 0xd8, "SuperFruitControl::m_Scale offset");
-static_assert(offsetof(SuperFruitControl, m_SliceCooldown)   == 0xdc, "SuperFruitControl::m_SliceCooldown offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec5)        == 0xf0, "SuperFruitControl::m_WorkVec5 offset");
-static_assert(offsetof(SuperFruitControl, m_WorkVec6)        == 0xfc, "SuperFruitControl::m_WorkVec6 offset");
+static_assert(offsetof(SuperFruitControl, m_GlowCounter)     == 0xdc, "SuperFruitControl::m_GlowCounter offset");
+static_assert(offsetof(SuperFruitControl, m_InnerRadius)     == 0xe8, "SuperFruitControl::m_InnerRadius offset");
+static_assert(offsetof(SuperFruitControl, m_OuterRadius)     == 0xec, "SuperFruitControl::m_OuterRadius offset");
+static_assert(offsetof(SuperFruitControl, m_ExplodeOrigin)   == 0xf0, "SuperFruitControl::m_ExplodeOrigin offset");
+static_assert(offsetof(SuperFruitControl, m_ZoomTarget)      == 0xfc, "SuperFruitControl::m_ZoomTarget offset");
 static_assert(sizeof(SuperFruitControl)                      == 0x108, "SuperFruitControl sizeof wrong (binary 0x108, v1.6.1 @0x12c168)");
 #endif
 

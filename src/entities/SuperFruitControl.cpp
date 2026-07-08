@@ -20,6 +20,7 @@
 #include "Jiblet.h"
 #include "ActorManager.h"
 #include "game/GameWork.h"
+#include "game/GameMode.h"
 #include "game/GameOver.h"
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
@@ -42,37 +43,116 @@
 // Static map definition (24-byte std::map per CLAUDE.md).
 std::map<Fruit*, SuperFruitControl*> SuperFruitControl::SuperFruitControls;
 
+// ---- Finale ramp/lerp helpers (binary inlined templates T_1616 / T_1629) -----
+// T_1616(v,a,b): clamp-ramp -- (v-a)/(b-a) clamped to [0,1]; a==b degenerates to
+//   a step (0 below a, 1 at/above a). Works for both increasing (a<b) and
+//   decreasing (a>b) ranges since it is the raw normalised-lerp formula.
+static inline float T_1616(float v, float a, float b) {
+    if (a == b) return v < a ? 0.0f : 1.0f;
+    float t = (v - a) / (b - a);
+    if (t < 0.0f) t = 0.0f;
+    else if (t > 1.0f) t = 1.0f;
+    return t;
+}
+
+// T_1629(a,b): lerp from a toward 1.0 by b -> a + (1-a)*b.
+static inline float T_1629(float a, float b) {
+    return a + (1.0f - a) * b;
+}
+
+// signedRand(x): uniform float in [-x, +x).
+static inline float SuperFruitSignedRand(float x) {
+    return Math::g_Random.RandF(2.0f * x) - x;
+}
+
+// uniformRange(a,b): uniform float in [a, b).
+static inline float SuperFruitUniform(float a, float b) {
+    return a + Math::g_Random.RandF(b - a);
+}
+
 // Binary @ 0x001be1c8: fresh controller ctor. Born on the first slice
 // (SuperFruitSliced); the glow halo is spawned separately at throw time
 // (SuperFruitThrown), so this ctor does NOT attach a glow.
+// ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*) @0x001be1c8:
+//   the fresh ctor IS the first slice hit. Rolls a randomised lifetime [2,3),
+//   marks m_SliceCount=1, snaps the control fully visible (m_FadeIn=m_Scale=1),
+//   primes the host fruit, closes the wave spawn-gate, clears any unspawned
+//   fruit/bombs, and computes the throw-orbit spin + offset position.
 SuperFruitControl::SuperFruitControl(Fruit* fruit)
     : m_pHostFruit(fruit)
+    , m_pHostFruit2(fruit)
     , m_HitCount(0.0f)
-    , m_Timer(-2.0f)      // binary inits -2.0; the Sliced finale gate checks m_Timer<0
+    , m_Timer(-2.0f)      // binary inits -2.0 (throw/anticipation phase runs while <Lifetime)
     , m_PrevTimer(-2.0f)
-    , m_SliceCount(0)
+    , m_SliceCount(1)     // ctor counts the first hit; SuperFruitSliced does NOT re-call Sliced()
     , m_pLinkedSlasher(nullptr)
     , m_pComboText(nullptr)
     , m_pScoreText(nullptr)
-    , m_Lifetime(5.0f)   // default baseline; TODO: v1.6.1 0x001be1c8 (SuperFruitControl) -- resolve from binary DAT
-    , m_FadeIn(0.0f)
-    , m_Scale(0.0f)
-    , m_SliceCooldown(0)
+    , m_Lifetime(SuperFruitUniform(2.0f, 3.0f))  // uniform[2,3); scales the whole finale timeline
+    , m_FadeIn(1.0f)
+    , m_Scale(1.0f)
+    , m_GlowCounter(0)
 {
     m_LayerFlags = 0x80;  // +0x34; HUD::Draw skips the control without a matching layer bit
-    memset(_pad_80, 0, sizeof(_pad_80));
-    memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
-    memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
-    memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
-    memset(&m_WorkVec4, 0, sizeof(m_WorkVec4));
-    memset(_pad_e0, 0, sizeof(_pad_e0));
-    memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
-    memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
-    // Binary ctor @0x001be1c8: registers ComboCancel delegate on ComboCanceledEvent
-    // after setting m_pHostFruit2/m_PrevTimer, before glow/transition work.
+    m_InnerRadius = 0.0f;
+    m_OuterRadius = 0.0f;
+    memset(_pad_e0, 0, sizeof(_pad_e0));
+
+    // TODO: v1.6.1 DAT_002d928c/9290 (SuperFruitControl @0x001be1c8) -- binary inits
+    //   m_SpinAxis/m_TintA/B/Current with (0, DAT_002d928c, DAT_002d9290); the two DAT
+    //   Y/Z tint/spin constants are unmapped, so X=0 and Y/Z left zero (do NOT guess).
+    m_SpinAxis    = Vec3(0.0f, 0.0f, 0.0f);
+    m_TintCurrent = Vec3(0.0f, 0.0f, 0.0f);
+    m_TintA       = Vec3(0.0f, 0.0f, 0.0f);
+    m_TintB       = Vec3(0.0f, 0.0f, 0.0f);
+    m_ExplodeOrigin = Vec3(0.0f, 0.0f, 0.0f);
+    m_ZoomTarget    = Vec3(0.0f, 0.0f, 0.0f);
+
+    // Prime the host fruit.
+    if (m_pHostFruit) {
+        m_pHostFruit->m_SliceTimer = 1.0f;   // Fruit+0xBC
+        m_pHostFruit->m_ZPosition  = 10.0f;  // Fruit+0x9c (binary m_EmitterDepth)
+        // Shrink the host collision sphere (binary: colSphere.m_Radius *= 0.775).
+        if (m_pHostFruit->m_Col) {
+            static_cast<ColSphere*>(m_pHostFruit->m_Col)->radius *= 0.775f;
+        }
+    }
+
+    // Close the wave spawn-suppression gate (WaveManager+0x00) for the duration of
+    // super state. Finale end (Update tEnd) clears it back to 0.
+#if defined(__bada__)
+    *(uint8_t*)WaveManager::GetInstance() = 1;
+#else
+    WaveManager::GetInstance()->m_SpeedControl[0] = reinterpret_cast<HUDControl3d*>(1);
+#endif
+
+    // Clear any still-unspawned fruit/bombs and deactivate live bombs.
+    Fruit::ClearUnspawned(false);
+    Bomb::ClearUnspawned();
+    Bomb::DeactivateAll();
+
+    // Roll the throw-orbit spin: sign * (uniform[-10,10) + 15).
+    float spin = (Math::g_Random.Rand32(2) ? 1.0f : -1.0f)
+               * (SuperFruitSignedRand(10.0f) + 15.0f);
+    HUDControl::m_Timer = -spin;   // base +0x2c
+
+    // Offset the control position along the spin direction, out from the host.
+    size = Vec3(0.5f, 0.5f, 0.5f);
+    if (m_pHostFruit) {
+        pos = Vec3(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
+        uint16_t idx = (uint16_t)(int)(spin * 182.0f);
+        Vec3 dir(CosIdx(idx), SinIdx(idx), 0.0f);
+        pos += dir * (320.0f * 0.4f);
+    }
+
+    // Binary ctor @0x001be1c8: registers ComboCancel delegate on ComboCanceledEvent.
     SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
         this, &SuperFruitControl::ComboCancel);
+
+    // TODO: v1.6.1 SuperFruitControl::SuperFruitControl @0x001be1c8 -- BLOCKED deps:
+    //   FruitCamera::Transition(...) throw-orbit camera move; ChangeText(this,"SLICE!",0,NULL)
+    //   (FancyBakedString); slice-SFX GameSound::SFXPlay(pitch 0.125). Wire when ported.
 }
 
 // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
@@ -81,6 +161,7 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
 // colSphere.m_Radius*=0.775; NO glow/camera/SFX.
 SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     : m_pHostFruit(fruit)
+    , m_pHostFruit2(fruit)
     , m_HitCount(0.0f)
     , m_Timer(state.m_Timer)
     , m_PrevTimer(state.m_Timer)
@@ -91,17 +172,18 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     , m_Lifetime(state.m_Lifetime)
     , m_FadeIn(1.0f)   // already visible when restored
     , m_Scale(1.0f)
-    , m_SliceCooldown(0)
+    , m_GlowCounter(0)
 {
     m_LayerFlags = 0x80;  // +0x34; HUD::Draw layer gate
-    memset(_pad_80, 0, sizeof(_pad_80));
-    memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
-    memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
-    memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
-    memset(&m_WorkVec4, 0, sizeof(m_WorkVec4));
+    m_InnerRadius = 0.0f;
+    m_OuterRadius = 0.0f;
+    memset(&m_SpinAxis, 0, sizeof(m_SpinAxis));
+    memset(&m_TintCurrent, 0, sizeof(m_TintCurrent));
+    memset(&m_TintA, 0, sizeof(m_TintA));
+    memset(&m_TintB, 0, sizeof(m_TintB));
     memset(_pad_e0, 0, sizeof(_pad_e0));
-    memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
-    memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
+    memset(&m_ExplodeOrigin, 0, sizeof(m_ExplodeOrigin));
+    memset(&m_ZoomTarget, 0, sizeof(m_ZoomTarget));
 
     // Restore the saved spin into the controller's base m_Timer (+0x2c), the same
     // field SaveSuperFruitState serialized as XML attr "rot". (HUDControl::m_Timer
@@ -134,8 +216,15 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     }
 }
 
+// Fixes the dangling-map bug: HUD deletes a finished control without calling
+// Release(), so the SuperFruitControls map entry leaked -> IsInSuperFruitState()
+// stuck true forever. Call Release() from the dtor (mirrors MenuButton::~MenuButton).
+// Release() is idempotent: the delegate -= is a no-op if already removed, the map
+// erase is find-guarded, and KillFruit is skipped once m_pHostFruit is null (the
+// finale-end path in Update already nulls it before teardown).
 SuperFruitControl::~SuperFruitControl()
 {
+    Release();
     m_pHostFruit = nullptr;
 }
 
@@ -192,8 +281,10 @@ void SuperFruitControl::Update(float dt)
         }
     }
 
-    // keep host fruit's +0xbc clamped to 1.0 while >0
-    // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- clamp host-fruit field +0xbc to 1.0 (Fruit field not yet named in port)
+    // keep host fruit's slice-timer (+0xbc) pinned to 1.0 while it is still positive
+    if (m_pHostFruit && m_pHostFruit->m_SliceTimer > 0.0f) {
+        m_pHostFruit->m_SliceTimer = 1.0f;
+    }
 
     // one-shot edge: PrevTimer<0 && Timer>=0 && SliceCount==1 -> first ChangeText
     if (m_PrevTimer < 0.0f && m_Timer >= 0.0f && m_SliceCount == 1) {
@@ -225,7 +316,7 @@ void SuperFruitControl::Update(float dt)
         // (a) one-shot at crossing Lifetime: snapshot camera target + zoom
         if (m_PrevTimer < m_Lifetime) {
             if (m_pHostFruit) {
-                m_WorkVec5 = m_pHostFruit->pos;     // explosion centre (+0xf0)
+                m_ExplodeOrigin = m_pHostFruit->pos;     // explosion centre (+0xf0)
             }
             // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
             StopAllFruit();
@@ -242,14 +333,14 @@ void SuperFruitControl::Update(float dt)
                 float zy = hp.y;
                 if (zy < -128.0f) zy = -128.0f;        // DAT_001bcdc0
                 else if (zy >= 128.0f) zy = 128.0f;    // DAT_001bcd70
-                m_WorkVec6 = Vec3(zx, zy, 0.0f);       // +0xfc; DAT_001bcdac = 0.0
+                m_ZoomTarget = Vec3(zx, zy, 0.0f);       // +0xfc; DAT_001bcdac = 0.0
             }
         }
 
         // (b) while PrevTimer < Lifetime+0.5: refresh centre; on crossing fire the bang
         if (m_PrevTimer < m_Lifetime + 0.5f) {
             if (m_pHostFruit) {
-                m_WorkVec5 = m_pHostFruit->pos;         // refresh explosion centre
+                m_ExplodeOrigin = m_pHostFruit->pos;         // refresh explosion centre
             }
             if (m_Timer >= m_Lifetime + 0.5f) {
                 // one-shot: the actual blast
@@ -257,7 +348,7 @@ void SuperFruitControl::Update(float dt)
                 ExplodeSuperFruit();
                 SpawnJibs();
                 StopRays();
-                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
+                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_pScoreText) (needs FancyBakedString; 4th arg is &m_pScoreText +0x9c)
             }
         }
 
@@ -283,9 +374,9 @@ void SuperFruitControl::Update(float dt)
         if (m_PrevTimer < tScore && tScore <= m_Timer) {
             if (game_work.gameMode == 0) {
                 // persist stat (gameMode 0 only)
-                uint32_t statHash = StringHash("super_slices");
+                uint32_t statHash = StringHash("super_fruit_gp_classic");
                 if (game_work.m_SaveData) {
-                    game_work.m_SaveData->AddToTotal("super_slices", statHash, m_SliceCount, false, false);
+                    game_work.m_SaveData->AddToTotal("super_fruit_gp_classic", statHash, m_SliceCount, false, false);
                 }
             }
             AddToCurrentScore(m_SliceCount, 0, false, true);  // flag4=true; raw m_SliceCount
@@ -314,6 +405,11 @@ void SuperFruitControl::Update(float dt)
             WaveManager::GetInstance()->m_SpeedControl[0] = nullptr;
 #endif
             WaveManager::GetInstance()->GetNextWave(0);
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- BLOCKED: binary also writes
+            //   PSPParticleManager+0x00 (m_GlobalTimeMod) = 0.0f here. The port's manager has
+            //   the vptr at +0x00 (no m_GlobalTimeMod field; see PSPParticleManager.cpp:50);
+            //   writing it would clobber the vtable. Needs re-analyst to resolve whether the
+            //   binary manager truly has a vptr at +0x00 or a m_GlobalTimeMod float.
             PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
             //   (HUD+0x24); end ts=1.
@@ -324,8 +420,23 @@ void SuperFruitControl::Update(float dt)
         // ===== Timer still < Lifetime: throw/anticipation phase =====
 
         if (m_pHostFruit) {
-            // host-fruit gravity-based spin angle write (Fruit+0x98), branchy
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- host-fruit spin(+0x98) = T_1616(...) write (Fruit field +0x98 not named in port)
+            // host-fruit time-scale (Fruit+0x98 = m_TimeScale) driven by a position
+            // clamp-ramp. Only the spin.x==0 arm is RE'd; it selects pos.y (when the
+            // fruit is descending) or pos.x (sign by vel.x) as the ramp input.
+            if (m_SpinAxis.x == 0.0f) {
+                float ts;
+                if (m_pHostFruit->vel.y < 0.0f) {
+                    ts = T_1616(m_pHostFruit->pos.y, -128.0f, -96.0f);
+                } else if (m_pHostFruit->vel.x < 0.0f) {
+                    ts = T_1616(m_pHostFruit->pos.x, -216.0f, -144.0f);
+                } else {
+                    ts = T_1616(m_pHostFruit->pos.x, 216.0f, 144.0f);
+                }
+                m_pHostFruit->m_TimeScale = ts;
+            }
+            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- spin.x != 0 arm of the
+            //   host m_TimeScale write is not yet RE'd (m_SpinAxis stays 0 in the port until
+            //   GetSliceDir lands, so this arm is currently dormant).
             PushBombsAway(dt);
         }
 
@@ -343,10 +454,19 @@ void SuperFruitControl::Update(float dt)
         // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- pos(+0x08) orbit recompute from host + dirXY*320*0.25*0.625 (DAT_001bd49c=320.0)
     }
 
-    // tail: LAB_001bd0ac -- runs every frame
-    // ray-entity scaling: for i in 0..2
+    // tail: LAB_001bd0ac -- runs every frame.
+    // HUD scale-fade (was MISLABELED "ray-entity"): while Timer < Lifetime+0.5, fade
+    // the three HUD scales[3..5] (HUD+0x14/+0x18/+0x1c) toward 0.3 by the phase progress.
     if (m_Timer < m_Lifetime + 0.5f) {
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- ray-entity scale update: *(float*)(rg+0x14+i*4) *= T_1629(0.3, prog) for i=0..2 (needs ray-entity subsystem; DAT_001bd4a0=0.3)
+        if (game_work.mHud) {
+            float prog = 1.0f - m_Timer / m_Lifetime;   // DAT_001bd4a0=0.3 (the T_1629 floor)
+            if (prog < 0.0f) prog = 0.0f;
+            else if (prog > 1.0f) prog = 1.0f;
+            float f = T_1629(0.3f, prog);
+            game_work.mHud->scales[3] *= f;
+            game_work.mHud->scales[4] *= f;
+            game_work.mHud->scales[5] *= f;
+        }
     }
 
     // fade-in accumulator: += dt*3, clamp 1
@@ -366,14 +486,34 @@ void SuperFruitControl::Update(float dt)
     m_PrevTimer = m_Timer;  // commit edge tracker (+0x8c = +0x88)
 }
 
-// TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- DrawOrder ray/explosion VFX (needs ray-entity + explosion subsystem)
-void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/)
+// ASM-spec v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8. Layer-gated finale draw:
+// the 0x80 layer draws the combo/score text (fade via SinTransition), the 0x200
+// layer draws the explosion shockwave rings. Only the layer-gate skeleton is ported;
+// every actual draw is BLOCKED (FancyBakedString text + ShockWaveTexture rings) and
+// the fadeIn/fadeOut SinTransition thresholds are not yet RE'd -- do NOT invent them.
+void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask)
 {
+    if (layerMask == 0x200) {
+        // Explosion shockwave layer.
+        // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- BLOCKED: DrawExplosion(this)
+        //   draws the ShockWaveTexture inner/outer rings (m_InnerRadius/m_OuterRadius).
+        //   ShockWaveTexture is unported (see LoadContent TODO). Wire when it lands.
+        return;
+    }
+
+    if (layerMask == 0x80) {
+        // Combo/score text layer.
+        // TODO: v1.6.1 SuperFruitControl::DrawOrder @0x001bd7c8 -- BLOCKED: draw m_pComboText /
+        //   m_pScoreText via FancyBakedString, with fadeIn/fadeOut computed via SinTransition
+        //   (engine/util/Transition.h). The exact fade thresholds/args are not yet RE'd; do NOT
+        //   invent placeholder text or fade constants.
+        return;
+    }
 }
 
 // Binary @ 0x001bb994. Per-hit combo response.
-// Bumps m_SliceCount / m_HitCount, applies cooldown, accrues score.
-// TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- slash particles, combo-pitch SFX, FancyBakedString popup not yet ported
+// ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: entry-gate, bump counts,
+// glow reroll + scale-pop, speed-loss bump, per-hit slash particles, slasher clear.
 void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 {
     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: entry gate.
@@ -382,30 +522,60 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     } else if (m_Timer >= m_Lifetime || m_HitCount > 1.5f) {
         return;                   // finale running/over, or hit-count exceeded -> ignore
     }
-    // TODO: v1.6.1 SuperFruitControl m_SliceCooldown (+0xdc) -- role unresolved; binary's Sliced gate uses m_Timer/m_Lifetime/m_HitCount, not this. Re-RE if kept.
 
     ++m_SliceCount;
     m_HitCount += 1.0f;
 
-    // Null out linked slasher (binary @ 0x001bb994 nulls the stored SlashEntity).
-    if (slashEntity) {
-        m_pLinkedSlasher = nullptr;
+    // Glow-counter reroll + per-hit scale-pop.
+    if (m_GlowCounter > 0) m_GlowCounter--;
+    if (m_GlowCounter < 1) {
+        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: binary also does
+        //   m_TintB += Fruit::GetSliceDir(m_pHostFruit) * rand here; GetSliceDir is unported,
+        //   and the tint DAT constants are unmapped, so the tint term is deferred.
+        m_Scale = 0.0f;               // per-hit scale-pop (re-ramps in Update)
+        m_TintA = m_TintCurrent;
+        m_GlowCounter = 0;
     }
 
+    // Bump the wave speed-loss timer (P0).
+    WaveManager::GetInstance()->AddToSpeedLossTime(0.1f, 0);
+
+    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: Fruit::RemoveTrailParticles(m_pHostFruit)
+    //   (RemoveTrailParticles unported; Fruit only has SetTrailParticles). Wire when it lands.
+
+    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: m_SpinAxis = Fruit::GetSliceDir(m_pHostFruit) * 3.0
+    //   (GetSliceDir unported). m_SpinAxis stays 0 until it lands (keeps the throw-spin arm dormant).
+
     // v1.6.1 SuperFruitControl::Sliced @0x001bb994: two AddSlice effects at the host fruit pos.
-    //   angle = Atan2Idx(vel.x, vel.y) / 182.0  (GOT-relative atan2 of host velocity)
-    //   impulse = Rand32 in [0.8, 1.1], rateMul = 0.65
+    //   impulse = uniform[0.8, 1.1), rateMul = 0.65, pos.z = m_EmitterDepth - 5.0
     //   call A: fruit=(Fruit*)0, call B: fruit=(Fruit*)3
     if (m_pHostFruit) {
+        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- binary derives the slice
+        //   angle from the slash-entity direction (Atan2Idx of the SlashEntity dir field),
+        //   not the host velocity. The exact SlashEntity dir field is unconfirmed, so this
+        //   keeps the host-velocity Atan2Idx as a stand-in until it is RE'd.
         float angleDeg = (float)(int16_t)Math::Atan2Idx(
             m_pHostFruit->vel.y, m_pHostFruit->vel.x) / 182.0f;
         float impulse = 0.8f + Math::g_Random.RandF(0.3f);
         Vec3 hostPos = m_pHostFruit->pos;
+        float sliceZ = m_pHostFruit->m_ZPosition - 5.0f;   // m_EmitterDepth - 5
         AddSlice(Vec3(angleDeg, impulse, 0.65f),
-                 hostPos.x, hostPos.y, 0, (Fruit*)0, hostPos.z);
+                 hostPos.x, hostPos.y, 0, (Fruit*)0, sliceZ);
         AddSlice(Vec3(angleDeg, impulse, 0.65f),
-                 hostPos.x, hostPos.y, 0, (Fruit*)3, hostPos.z);
+                 hostPos.x, hostPos.y, 0, (Fruit*)3, sliceZ);
     }
+
+    // Clear the linked slasher's head anchor and remove it quickly.
+    if (m_pLinkedSlasher) {
+        m_pLinkedSlasher->ClearHeadPosX();   // SlashEntity+0x7c (m_HeadPos.x = 0)
+        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: SuperFruitHitControl::RemoveQuickly(m_pLinkedSlasher)
+        //   (SuperFruitHitControl unported). Null the pointer for now to avoid a dangle.
+        m_pLinkedSlasher = nullptr;
+    }
+
+    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED remaining: ChangeText(this,"%i HITS",...)
+    //   (FancyBakedString); pome-slice SFX (GameSound::SFXPlay); SpawnRay on odd m_SliceCount;
+    //   PSP emitter hookup. Wire when those subsystems land.
 
     LOG_INFO("SUPERFRUIT", "Sliced() hit %d", m_SliceCount);
 }
@@ -523,19 +693,25 @@ void SuperFruitControl::ExplodeSuperFruit()
         // angular velocity: dirN * 700.0  (DAT_001bae64=700.0f)
         Vec3 angVel = dirN * 700.0f;
 
-        // Jiblet::Init(fruitType, pos=this->m_WorkVec5, scale=1.0, vel, mdl, emitterHash=0, dripRate=0.0, grav=angVel)
-        // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: pos arg is &this->m_WorkVec5
+        // Jiblet::Init(fruitType, pos=this->m_ExplodeOrigin, scale=1.0, vel, mdl, emitterHash=0, dripRate=0.0, grav=angVel)
+        // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: pos arg is &this->m_ExplodeOrigin
         // (SuperFruitControl+0xf0, the explosion origin). The prior host+0x74 cast was wrong.
-        jiblet->Init((int)hostFruitType, m_WorkVec5, 1.0f, vel, mdl, 0, 0.0f, angVel);
+        jiblet->Init((int)hostFruitType, m_ExplodeOrigin, 1.0f, vel, mdl, 0, 0.0f, angVel);
 
         // post-init writes: copy host transform onto the jib actor
         jiblet->m_Age = 0.0f;                // jib+0xac = 0 (reset age set by Init to -0.04)
-        jiblet->scale = host->scale;         // jib+0x28 = host scale (+0x28)
         jiblet->m_Rotation = rot;            // jib+0x4c = rot (64-byte Matrix44 copy)
+        // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- BLOCKED: binary writes
+        //   jib->m_LaunchVelocity = host->m_LaunchVelocity (read before the host zero below) and
+        //   does NOT copy scale. m_LaunchVelocity is not yet mapped to a Fruit offset in the port,
+        //   so the scale copy is kept (avoids losing jib scale) until the field is resolved.
+        jiblet->scale = host->scale;         // jib+0x28 (kept until m_LaunchVelocity is mapped)
     }
 
-    // ---- (E) restore host scale ----
-    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
+    // ---- (E) restore host ----
+    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- BLOCKED: binary restore is
+    //   host->m_LaunchVelocity = Vec3(0,0,0) (NOT host->scale = DAT). m_LaunchVelocity's Fruit
+    //   offset is unresolved in the port; wire when re-analyst maps it.
 }
 
 // Binary @ 0x001b9850. Forces host fruit's slice timer negative when combo is cancelled
@@ -655,15 +831,24 @@ void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Enti
 
     std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.find(fruit);
     if (it != SuperFruitControls.end() && it->second) {
+        // Forward the delegate's SlashEntity arg (Event3 arg2 = the aggressor
+        // Entity*) to the live controller.
         it->second->Sliced(slashEntity);
     } else {
+        // Not-found failure gate: in a failure-enabled mode while the game is
+        // paused, swallow the slice (reset host slice-timer) and do NOT create.
+        if (Mortar::FailureEnabled(game_work.gameMode) && game_work.bM_bPaused) {
+            fruit->m_SliceTimer = 0.0f;
+            return;
+        }
         // First hit: create controller (binary allocates 0x108 bytes here) and
         // register it with the HUD so HUD::Update ticks it / HUD::Draw draws it.
+        // The ctor IS the first hit (m_SliceCount=1) -- do NOT call Sliced() here
+        // (that would double-count the slice).
         SuperFruitControl* ctrl = new SuperFruitControl(fruit);
         if (game_work.mHud) {
             game_work.mHud->AddControl(ctrl, false);
         }
-        ctrl->Sliced(slashEntity);
         SuperFruitControls[fruit] = ctrl;
     }
 }
@@ -799,7 +984,7 @@ void SuperFruitControl::ResetAll()
 // super-fruit explosion finale: clears any still-unspawned (chuck-delayed)
 // fruits/bombs, then sweeps every live fruit (ActorManager type 0) and bomb
 // (type 1), redirecting their velocity toward the explosion centre and
-// freezing their physics. The explosion centre is this->m_WorkVec5 (+0xf0).
+// freezing their physics. The explosion centre is this->m_ExplodeOrigin (+0xf0).
 //
 // Per-entity velocity redirect (both fruits and sliced-fruit halves and bombs):
 //   dir    = Normalise(pos - centre)
@@ -815,7 +1000,7 @@ void SuperFruitControl::StopAllFruit()
     if (!am) return;
 
     // Explosion centre lives in this controller's work vector (+0xf0).
-    const Vec3& centre = m_WorkVec5;
+    const Vec3& centre = m_ExplodeOrigin;
 
     // Remove fruits/bombs that haven't actually spawned yet (still in
     // chuck-delay) before redirecting the rest. Binary calls both here.
@@ -877,32 +1062,96 @@ void SuperFruitControl::StopAllFruit()
     }
 }
 
-// Binary @ 0x1baeb8. Per-frame shockwave during the SuperFruit explosion.
-// Writes PSPParticleManager globals, then radially pushes Actor types 0/1/5.
+// ASM-spec v1.6.1 SuperFruitControl::UpdateExplosion @0x001baeb8. Per-frame
+// shockwave: grows the inner/outer radii from T_1616 ramps, writes the particle-
+// manager globals, eases the wave dt-mod, then radially pushes Actor types 0/1/5
+// outward from the epicenter. R = sqrt(384000)*1.2 ~= 743.61.
 //
-// Spec (from RE):
-//   mgr+0x08 (m_GlobalOrigin)  = this+0xf0 (m_WorkVec5, explosion epicenter)
-//   mgr+0x00 (m_GlobalTimeMod) = this+0xe8 (inner-radius field) * DAT_001bb27c
-//   mgr+0x04 (m_GlobalTimeScale) = T_1616(time, ...) ramp
-//   then push types 0/1/5 out by (outerR - dist)*dt*5 from m_GlobalOrigin.
-//
-// +0xe8 / +0xec (inner/outer radii), the T_1616 ramp, and the per-actor slice
-// path require further RE. Faithfully write the globals we have; leave the
-// radial-push and ramp computations as TODO until the remaining fields are named.
-// TODO: 0x1baeb8 — compute inner/outer radii from T_1616 ramps and this+0xe8/+0xec;
-//   DAT_001bb27c scalar not yet read; T_1616 time arg not resolved.
-//   Radial push of types 0/1/5 and slice-on-innerR not yet ported.
-void SuperFruitControl::UpdateExplosion(float /*dt*/)
+// NOTE: the radial-push formula (dir*(outerR-dist)*dt*mult, mults 4.0 fruit /
+// 5.0 bomb+jib) and the inner-radius force-explode branch are ported from the RE
+// spec + the prior TODO; the exact clamp/condition still wants asm-inspector
+// confirmation. The mgr m_GlobalTimeMod write is BLOCKED (see below).
+void SuperFruitControl::UpdateExplosion(float dt)
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
 
-    // Write explosion epicenter into manager global.
-    mgr.m_GlobalOrigin = m_WorkVec5;    // this+0xf0 -> mgr+0x08
+    const float R = Math::Sqrt(384000.0f) * 1.2f;   // ~743.61
 
-    // TODO: 0x1baeb8 — mgr.m_GlobalTimeMod = innerRadius(+0xe8) * DAT_001bb27c
-    // TODO: 0x1baeb8 — mgr.m_GlobalTimeScale = T_1616(time, ...) ramp value
-    // TODO: 0x1baeb8 — radial push: types 0 (Fruit), 1 (Bomb), 5 (Jiblet/SplatEntity)
-    //   out by (outerR - dist)*dt*5 from m_GlobalOrigin; slice fruit in inner ring
+    m_LayerFlags |= 0x200;
+
+    // Inner shockwave radius: ramp 0->R across [Lifetime+0.5, Lifetime+0.85].
+    m_InnerRadius = T_1616(m_Timer, m_Lifetime + 0.5f, m_Lifetime + 0.85f) * R;
+
+    // Ease the wave dt-mod (binary: SetAbsoluteDtMod).
+    WaveManager::GetInstance()->m_SpeedScale =
+        T_1629(0.1f, T_1616(m_Timer, m_Lifetime + 1.25f, m_Lifetime + 1.45f));
+
+    // Outer shockwave radius: ramp 0->R across [Lifetime+1.4, Lifetime+2.05].
+    m_OuterRadius = T_1616(m_Timer, m_Lifetime + 1.4f, m_Lifetime + 2.05f) * R;
+
+    // Write epicenter global.
+    mgr.m_GlobalOrigin = m_ExplodeOrigin;    // this+0xf0 -> mgr+0x08
+
+    // TODO: v1.6.1 SuperFruitControl::UpdateExplosion @0x001baeb8 -- BLOCKED: binary writes
+    //   PSPParticleManager+0x00 (m_GlobalTimeMod) = m_InnerRadius*1.6. The port manager has
+    //   the vptr at +0x00 (no m_GlobalTimeMod; PSPParticleManager.cpp:50); needs re-analyst.
+
+    float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
+    mgr.m_GlobalTimeScale =
+        T_1616(m_Timer, m_Lifetime + 2.3f + modeBias, m_Lifetime + 2.05f);
+
+    // Bounded window for the radial push / force-explode.
+    if (m_Timer <= m_Lifetime + 2.55f) {
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        if (am) {
+            const Vec3& origin = m_ExplodeOrigin;
+            std::list<Mortar::Entity*>::iterator it;
+
+            // -------- type 0: fruits (push mult 4.0) --------
+            Mortar::Entity* e = am->GetEntityFirst(0, it);
+            while (e != NULL) {
+                Fruit* f = static_cast<Fruit*>(e);
+                if (f == m_pHostFruit) {
+                    // Host fruit special-case: freeze in place.
+                    f->m_SliceTimer = 0.5f;
+                    f->vel = Vec3(0.0f, 0.0f, 0.0f);
+                    f->m_SecondVel = Vec3(0.0f, 0.0f, 0.0f);
+                } else {
+                    Vec3 dir = f->pos - origin;
+                    float dist = dir.Normalise();
+                    f->vel += dir * ((m_OuterRadius - dist) * dt * 4.0f);
+                    if (f->Sliced()) {
+                        Vec3 dir2 = f->m_SecondPos - origin;
+                        float dist2 = dir2.Normalise();
+                        f->m_SecondVel += dir2 * ((m_OuterRadius - dist2) * dt * 4.0f);
+                    } else if (dist < m_InnerRadius) {
+                        // Inner ring force-explodes still-whole fruit and scores 1.
+                        f->CollisionResponse(NULL, 0, 0, NULL);
+                        AddToCurrentScore(1, 0, true, true);
+                    }
+                }
+                e = am->GetEntityNext(0, it);
+            }
+
+            // -------- type 1: bombs (push mult 5.0) --------
+            e = am->GetEntityFirst(1, it);
+            while (e != NULL) {
+                Vec3 dir = e->pos - origin;
+                float dist = dir.Normalise();
+                e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
+                e = am->GetEntityNext(1, it);
+            }
+
+            // -------- type 5: jibs (push mult 5.0) --------
+            e = am->GetEntityFirst(5, it);
+            while (e != NULL) {
+                Vec3 dir = e->pos - origin;
+                float dist = dir.Normalise();
+                e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
+                e = am->GetEntityNext(5, it);
+            }
+        }
+    }
 }
 
 // Binary @ 0x1b9b4c. Iterates ActorManager type-6 entities and sets their
@@ -925,40 +1174,43 @@ void SuperFruitControl::StopRays()
 #endif
         e = am->GetEntityNext(6, it);
     }
+
+    // ASM-spec v1.6.1 SuperFruitControl::StopRays @0x001b9b4c: after the ray loop,
+    // zero the host fruit's two per-half spin rates.
+    if (m_pHostFruit) {
+        m_pHostFruit->m_RotVel1 = Vec3(0.0f, 0.0f, 0.0f);   // Fruit+0x100
+        m_pHostFruit->m_RotVel2 = Vec3(0.0f, 0.0f, 0.0f);   // Fruit+0x10c
+    }
 }
 
-// Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
-// Builds the emitter name via sprintf, calls EmitterExists/AddEmitter, sets
-// m_Pos/m_DirCos/m_DirSin/m_bTrailStarted on the allocated emitter.
-// Also spawns 8 Jiblet mesh actors via ActorManager (type 5, Jiblet::Init) --
-// Jiblet/MeshManager not yet ported; only the PSPParticleManager hookup is
-// implemented here.
+// ASM-spec v1.6.1 SuperFruitControl::SpawnJibs @0x001bc748. PSPParticleManager
+// emitter hookup for jib particle trails: emitter name = "<fruitModel>_explode",
+// positioned at the explosion origin with the host fruit's slice-arc direction.
+// The 8 JibletModel mesh-actor spawns are BLOCKED (JibletModel global unported).
 void SuperFruitControl::SpawnJibs()
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
 
     if (m_pHostFruit) {
-        // Build emitter name from fruit type (binary: sprintf("jib_emitter_%d", fruitType)).
-        // TODO: 0x1bc748 — confirm exact format string from binary string table.
-        char buf[64];
-        snprintf(buf, sizeof(buf), "jib_emitter_%d", (int)m_pHostFruit->m_FruitType);
+        // Emitter name = sprintf("%s_explode", <fruit model name>).
+        const ::FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
+        const char* modelName = fi ? fi->m_ModelName : "";
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s_explode", modelName);
         uint32_t hash = StringHash(buf);
 
         if (mgr.EmitterExists(hash)) {
             PSPParticleEmitter* e = mgr.AddEmitter(hash, 0, false);
             if (e) {
-                e->m_bTrailStarted = 1;
-                e->m_Pos = m_WorkVec5;  // explosion world pos (+0xf0)
-                // TODO: 0x1bc748 — angle = *(uint16_t*)(m_pHostFruit + 0xc0);
-                //   binary writes: e->m_DirCos = Math::CosIdx(angle);
-                //                  e->m_DirSin = Math::SinIdx(angle);
-                //   fruit+0xc0 field identity unresolved (overlaps m_SecondPos.z in port layout).
-                e->m_DirCos = 1.0f;
-                e->m_DirSin = 0.0f;
+                e->m_bTrailStarted = 1;         // +0x4d
+                e->m_Pos = m_ExplodeOrigin;     // explosion world pos (+0xf0)
+                uint16_t ang = m_pHostFruit->m_SliceArcAngle;   // Fruit+0xc0
+                e->m_DirCos = CosIdx(ang);
+                e->m_DirSin = SinIdx(ang);
             }
         }
     }
 
-    // TODO: 0x1bc748 — spawn 8 Jiblet mesh actors (ActorManager::Add type 5, Jiblet::Init).
-    //   Needs Jiblet and MeshManager ported.
+    // TODO: v1.6.1 SuperFruitControl::SpawnJibs @0x001bc748 -- BLOCKED: spawn 8 JibletModel
+    //   mesh actors (needs the JibletModel global; unported). Wire when it lands.
 }
