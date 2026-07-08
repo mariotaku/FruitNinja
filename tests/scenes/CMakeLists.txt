@@ -108,6 +108,14 @@ add_scene_test(scene_fruit_splat scene_fruit_splat.cpp)
 add_test(NAME fruit_splat COMMAND scene_fruit_splat)
 set_tests_properties(fruit_splat PROPERTIES TIMEOUT 60)
 
+# ---- scene_fruit_splat --critical: critical-flash colour-lerp capture ----
+# Spawns a splat via MakeSplat with an out-of-range fruitType (matching the
+# real critical-slice call site), lands it, then captures 3 PNGs at
+# m_ColourPhase ~= 1.5 / 0.5 / 0.0 verifying the CRITICAL_COLOUR ->
+# FruitTypeColour lerp. Screenshots: tmp/test/screenshots/crit_splat/*.png
+add_test(NAME fruit_splat_critical COMMAND scene_fruit_splat --critical --screenshot)
+set_tests_properties(fruit_splat_critical PROPERTIES TIMEOUT 60)
+
 # ---- scene_slash_blade: blade-skin colour regression test ----
 # Injects a synthetic swipe for each of: default, flame, shiny_red skins.
 # Reads back the rendered framebuffer and asserts the trail is non-black.
