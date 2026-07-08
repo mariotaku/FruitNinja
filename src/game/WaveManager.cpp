@@ -320,12 +320,11 @@ void WaveManager::Init() {
                 // ASM-spec v1.6.1 WaveManager::Init @0x00129934: waveNo is stored into
                 // m_ScoreThreshold UNCONDITIONALLY only for mode==2 (Arcade); other modes
                 // only store when waveNo>=0 -- a negative/"forever" waveNo on a non-Arcade
-                // mode leaves m_ScoreThreshold/m_WaveNumber at the ctor default (0).
+                // mode leaves m_ScoreThreshold at the ctor default (0).
                 const char* waveNoStr = el.Attribute("waveNo");
                 if (waveNoStr) {
                     int waveNo = (strcmp(waveNoStr, "forever") == 0) ? -2 : atoi(waveNoStr);
                     if (mode == 2 || waveNo >= 0) {
-                        wi->m_WaveNumber = waveNo;
                         wi->m_ScoreThreshold = waveNo;
                     }
                 }
@@ -616,6 +615,15 @@ void WaveManager::ParseGlobalProbabilityOverides(const char* path)
 
     LOG_DEBUG("WaveManager", "ParseGlobalProbabilityOverides: loaded %d entries from %s (sys=%d)",
               (int)m_GlobalProbabilityOverride.size(), path, sys);
+}
+
+// ASM-spec v1.6.1 WaveManager::GetNextWave @0x0012573c (candidate filter 0x001258f4-2c; comparator
+// 0x00108150 is an unresolved ARM veneer). Defunct: no shipped v1.6.1 wave XML sets exclusiveTag ->
+// m_ExclusiveTag always null -> Compare(null,null,x) is a structural no-op. Wire field+call for parity;
+// stub Compare to always-pass (return 0). Re-RE the veneer only if a data file adds exclusiveTag.
+static int CompareExclusiveTag(ExclusiveTag* currentTag, ExclusiveTag* candidateTag) {
+    // Defunct: exclusive-tag candidate filter -- no-op stub; v1.6.1 WaveManager::GetNextWave @0x0012573c
+    return (currentTag == nullptr && candidateTag == nullptr) ? 0 : 0;
 }
 
 // v1.6.1 WaveManager::CheckForGlobalProbabilityOveride @0x00123228
@@ -1303,6 +1311,13 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 
                 spawner.m_SpawnTimer -= dt * dtMod;
 
+                // ASM-verified: 2026-07-08 v1.6.1 WaveManager::UpdateWave reroll+pick @0x00125e5c..0x00125f20 (asm-inspector)
+                // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (pick 0x00125e9c-ebc, reroll-guard 0x00125ec0-edc,
+                // reroll-loop 0x00125ee0-f20): when m_FruitTypeCount>1 and bombs spawned by this spawner this tick
+                // >= half its remaining-count snapshot, reroll while the picked slot is a bomb (-2).
+                int halfRemaining = spawner.m_RemainingCount / 2;
+                int bombsThisTick = 0;
+
                 while (spawner.m_RemainingCount > 0) {
                     if (spawner.m_SpawnTimer > 0.0f) break;
 
@@ -1313,20 +1328,6 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     }
 
                     // Pick a random type from the spawner's list.
-                    // TODO: v1.6.1 WaveManager::UpdateWave @0x0012630c -- port the remaining
-                    // type-dispatch refinements from the binary (deferred; bigger scope than the
-                    // spawn-timing/type-per-wave fix):
-                    //   * anti-bomb-majority re-roll: when the picked slot is a bomb (-2) and
-                    //     more than half the wave's spawns so far have been bombs (iVar8/2 <= local_a0),
-                    //     re-roll the type index until it is non-bomb (@0x0012659c loop).
-                    //   * name=="1fruit" divert: a slot whose NAME compares equal to "1fruit"
-                    //     (std::string::compare, @LAB_00125f5c) is routed through the override
-                    //     block even though its resolved hash is a concrete fruit type.
-                    //   * m_BombChance / m_FruitChance gates guard SpawnBomb / SpawnFruit
-                    //     (@LAB_001263ec: only spawn a bomb when m_BombChance>0, a fruit when m_FruitChance>0).
-                    //   * GPO / corner-spawner selection currently only runs on the -1 path; the binary
-                    //     also applies it to fixed-type ("1fruit"-diverted) spawns.
-                    //   * WaveInfo::ExclusiveTag gate (GetNextWave candidate filter, +0x78) -- not ported.
                     int typeIdx = (spawner.m_FruitTypeCount > 1)
                         ? (int)m_Random.Rand32((uint32_t)spawner.m_FruitTypeCount)
                         : 0;
@@ -1334,11 +1335,30 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         ? spawner.m_pFruitTypeHashes[typeIdx]
                         : -1;
 
+                    // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (pick 0x00125e9c-ebc, reroll-guard 0x00125ec0-edc,
+                    // reroll-loop 0x00125ee0-f20): when m_FruitTypeCount>1 and bombs spawned by this spawner this tick
+                    // >= half its remaining-count snapshot, reroll while the picked slot is a bomb (-2).
+                    if (spawner.m_FruitTypeCount > 1 && bombsThisTick >= halfRemaining) {
+                        while (fruitType == -2) {
+                            typeIdx = (int)m_Random.Rand32((uint32_t)spawner.m_FruitTypeCount);
+                            fruitType = spawner.m_pFruitTypeHashes[typeIdx];
+                        }
+                    }
+
                     if (fruitType == -2) {
-                        SpawnBomb(1, &spawner, playerIdx);
-                    } else if (fruitType == -1) {
+                        // ASM-verified: 2026-07-08 v1.6.1 WaveManager::UpdateWave bomb/fruit-chance gates @0x001263f8/0x0012642c (asm-inspector)
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (0x001263f8-14 bomb gate, 0x0012642c-38 fruit gate):
+                        // SpawnBomb/SpawnFruit only fire when m_BombChance/m_FruitChance > 0. LATENT on shipped data.
+                        if (m_BombChance > 0.0f) SpawnBomb(1, &spawner, playerIdx);
+                        bombsThisTick++;
+                    } else if (fruitType == -1 || spawner.m_FruitTypeNames[typeIdx] == "1fruit") {
+                        // ASM-verified: 2026-07-08 v1.6.1 WaveManager::UpdateWave 1fruit-divert @0x00125f24..0x00125f58 (asm-inspector)
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (0x00125f24-58): a spawner slot whose NAME
+                        // == "1fruit" is diverted into the SAME override/blitz block as the -1 path (its type is already
+                        // resolved to one fixed fruit for the whole wave). chosenType seeds from fruitType so a non-firing
+                        // override reverts to that fixed type, not a fresh RandomFruit(false).
                         // Probabilistic override blitz selection.
-                        int chosenType = -1;
+                        int chosenType = fruitType;
                         // ASM-spec v1.6.1 WaveManager::UpdateWave override block @0x00126124-0x0012676c:
                         // corner-spawner pick, set only when the override block below resolves a
                         // super-fruit or a still-active-power skip; overrides spawner.
@@ -1391,31 +1411,31 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                      oit != overrides.end(); ++oit)
                                 {
                                     PROBABILITY_OVERIDE& po = *oit;
-                                    if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
-                                    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00125606..0x00125622 (re-analyst).
-                                    // Uses m_WaveCount[playerIdx] at binary offset this+0x238+p*4.
-                                    if (waveCount >= 0
-                                            && po.m_PerWaveCount > 0
-                                            && waveCount < po.m_PerWaveCount) continue;
-                                    if (po.m_DisableWhenPowered > 0.0f) {
-                                        // ASM-spec v1.6.1 UpdateWave @0x00125d7c: progression lookahead
-                                        // uses the pending chuck delay (0.21f), not 0.0f -- predicts
-                                        // whether the active power will still be running by the time a
-                                        // fruit spawned now would actually land.
-                                        float prog = PowerUpManager::GetInstance()
-                                                         ? PowerUpManager::GetInstance()->GetActiveProgression(0.21f)
-                                                         : 2.0f;
-                                        if (po.m_DisableWhenPowered >= prog) continue;
+                                    // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (force-fire check 0x00126024-38,
+                                    // gates 0x0012603c-126120, fire 0x00126124): a force-spawn-eligible entry
+                                    // (m_PercentChance>0 && blitzAdvance!=0) bypasses m_PerWave/waveCount/m_DisableWhenPowered
+                                    // entirely -- checked BEFORE those gates, not after.
+                                    if (!(po.m_PercentChance > 0 && blitzAdvance != 0)) {
+                                        if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
+                                        // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x00125606..0x00125622 (re-analyst).
+                                        // Uses m_WaveCount[playerIdx] at binary offset this+0x238+p*4.
+                                        if (waveCount >= 0
+                                                && po.m_PerWaveCount > 0
+                                                && waveCount < po.m_PerWaveCount) continue;
+                                        if (po.m_DisableWhenPowered > 0.0f) {
+                                            // ASM-spec v1.6.1 UpdateWave @0x00125d7c: progression lookahead
+                                            // uses the pending chuck delay (0.21f), not 0.0f -- predicts
+                                            // whether the active power will still be running by the time a
+                                            // fruit spawned now would actually land.
+                                            float prog = PowerUpManager::GetInstance()
+                                                             ? PowerUpManager::GetInstance()->GetActiveProgression(0.21f)
+                                                             : 2.0f;
+                                            if (po.m_DisableWhenPowered >= prog) continue;
+                                        }
                                     }
                                     int pc = po.m_PercentChance;
                                     if (m_BlitzSpawnCount > 5) pc >>= 1;
                                     cumulative += pc;
-                                    // TODO: v1.6.1 UpdateWave @0x00125d7c -- binary's
-                                    // (m_PercentChance>0 && blitzAdvance) force-spawn bypasses the
-                                    // m_PerWave/waveCount/m_DisableWhenPowered `continue`s above (checked
-                                    // before those gates, not after); port currently `continue`s past a
-                                    // gated entry before this OR can fire. Delicate control-flow reorder,
-                                    // deferred -- do not rewrite without re-tracing 0x00125d7c in full.
                                     if (roll < cumulative || (po.m_PercentChance > 0 && blitzAdvance != 0)) {
                                         // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00126124: timed-power
                                         // allowance reject. Empty on all shipped data (m_PowerAllowance
@@ -1450,15 +1470,13 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                             powerSpawner = GetRandomPowerSpawner(false);  // exclude centre
                                         if (hasPowers) {
                                             if (powers->AnyActivePowers()) {
-                                                // TODO: v1.6.1 UpdateWave @0x00125d7c -- binary jumps to
-                                                // LAB_001263e8 here with chosenType=-1 (falls through to
-                                                // Fruit::RandomFruit(false) below -- a PLAIN fruit, not
-                                                // chosenType) and skips po.m_Counter++ entirely. Port
-                                                // currently keeps chosenType as-is and still bumps
-                                                // m_Counter below. Delicate control-flow reorder (affects
-                                                // the shared `break` and po.m_Counter++ at the end of this
-                                                // loop iteration), deferred -- do not rewrite without
-                                                // re-tracing 0x00125d7c in full.
+                                                // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (retry-exhaust 0x0012630c-0x001263e8,
+                                                // commit 0x001263b0-c8): exhaust leaves the spawn-type slot UNWRITTEN (stays at its -1
+                                                // sentinel) and skips po.m_Counter++. Downstream chosenType<0 -> GPO check -> RandomFruit.
+                                                // chosenType seeds from fruitType (A2 coupling): on the raw -1 path this is a no-op
+                                                // (fruitType==-1 already); on a "1fruit"-diverted concrete-type slot it reverts to
+                                                // that fixed type instead of falling through to a fresh RandomFruit(false).
+                                                chosenType = fruitType;
                                             } else {
                                                 powerSpawner = GetRandomPowerSpawner(true);  // include centre; overrides corner pick
                                                 if (m_FruitChance > 0.0f && Fruit::NumberOfPowerupFruits() < 1
@@ -1466,26 +1484,31 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                                             || powers->m_pArray[0].m_PowerHash == StringHash("freeze"))
                                                         && !powers->AnyActivePowers())
                                                     m_BlitzSpawnCount++;
+                                                po.m_Counter++;
                                             }
+                                        } else {
+                                            po.m_Counter++;
                                         }
-                                        po.m_Counter++;
                                         break;
                                     }
                                 }
                             }
                         }
 
-                        // v1.6.1 WaveManager::UpdateWave @LAB_001263ec: GlobalProbabilityOveride check.
-                        // ASM-spec v1.6.1 CheckForGlobalProbabilityOveride @0x00123228.
-                        // Only fires when no per-wave override already picked a type (chosenType < 0).
-                        GlobalProbabilityOveride* gpo = 0;
-                        if (chosenType < 0)
-                            gpo = CheckForGlobalProbabilityOveride(chosenType);
+                        // v1.6.1 WaveManager::UpdateWave: resolve chosenType via RandomFruit fallback first;
+                        // GlobalProbabilityOveride and SpawnFruit are only reached together, gated as a pair.
                         if (chosenType < 0) {
                             chosenType = Fruit::RandomFruit(false);
                         }
-                        Mortar::Entity* spawnedGPO = SpawnFruit(1, chosenType,
-                            powerSpawner ? powerSpawner : &spawner, playerIdx);
+                        // ASM-verified: 2026-07-08 v1.6.1 WaveManager::UpdateWave bomb/fruit-chance gates @0x001263f8/0x0012642c (asm-inspector)
+                        // ASM-spec v1.6.1 CheckForGlobalProbabilityOveride @0x00123228.
+                        GlobalProbabilityOveride* gpo = 0;
+                        Mortar::Entity* spawnedGPO = nullptr;
+                        if (m_FruitChance > 0.0f) {
+                            gpo = CheckForGlobalProbabilityOveride(chosenType);
+                            spawnedGPO = SpawnFruit(1, chosenType,
+                                powerSpawner ? powerSpawner : &spawner, playerIdx);
+                        }
                         // Subscribe Entity events for GPO re-arm when the super-fruit is killed/expires.
                         // ASM-spec v1.6.1 UpdateWave @0x001263ec: onKilled (+0x178) -> FruitWasKilled,
                         //   onThrown (+0x180) -> FruitWasThrown.
@@ -1499,7 +1522,29 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                     &GlobalProbabilityOveride::FruitWasThrown);
                         }
                     } else {
-                        SpawnFruit(1, fruitType, &spawner, playerIdx);
+                        // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (LAB_001263e8 -> DISPATCH 0x0012643c-58): the
+                        // fixed/concrete-type direct path also runs CheckForGlobalProbabilityOveride (may rewrite type in place),
+                        // not just the -1/override path.
+                        int concreteType = fruitType;
+                        // ASM-verified: 2026-07-08 v1.6.1 WaveManager::UpdateWave fixed-type GPO inside fruit-chance gate @0x0012642c..0x00126458 (asm-inspector)
+                        GlobalProbabilityOveride* gpo = 0;
+                        Mortar::Entity* spawnedGPO = nullptr;
+                        if (m_FruitChance > 0.0f) {
+                            gpo = CheckForGlobalProbabilityOveride(concreteType);
+                            spawnedGPO = SpawnFruit(1, concreteType, &spawner, playerIdx);
+                        }
+                        // Subscribe Entity events for GPO re-arm when the super-fruit is killed/expires.
+                        // ASM-spec v1.6.1 UpdateWave @0x001263ec: onKilled (+0x178) -> FruitWasKilled,
+                        //   onThrown (+0x180) -> FruitWasThrown.
+                        if (gpo && spawnedGPO) {
+                            Fruit* spawnedFruit = static_cast<Fruit*>(spawnedGPO);
+                            spawnedFruit->m_OnKilled +=
+                                Mortar::Delegate1<void, Fruit*>::Make(gpo,
+                                    &GlobalProbabilityOveride::FruitWasKilled);
+                            spawnedFruit->m_OnExpired +=
+                                Mortar::Delegate1<void, Fruit*>::Make(gpo,
+                                    &GlobalProbabilityOveride::FruitWasThrown);
+                        }
                     }
 
                     m_WaveActive = 1;
@@ -1662,6 +1707,11 @@ void WaveManager::GetNextWave(int playerIdx) {
     static const int MAX_CANDIDATES = 20;
     WAVE_INFO* candidates[MAX_CANDIDATES];
 
+    // ASM-spec v1.6.1 WaveManager::GetNextWave @0x0012573c: capture the OUTGOING wave's
+    // exclusive tag before pCurrentWave is overwritten below -- the candidate filter
+    // compares each candidate's tag against this, not against the freshly-picked wave.
+    ExclusiveTag* currentWaveTag = pCurrentWave ? pCurrentWave->m_ExclusiveTag : nullptr;
+
     // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 WaveManager::GetNextWave @0x00125884 (re-analyst):
     //   seed m_pCurrentWave[mode] = m_WaveInfo[mode].front() UNCONDITIONALLY before the
     //   match loop, so a no-match (e.g. waveCount==0 right after Reset) never leaves it
@@ -1684,6 +1734,12 @@ void WaveManager::GetNextWave(int playerIdx) {
         bool inRange = (wi->m_ScoreThreshold <= waveCount) &&
                        (waveCount <= wi->m_EndScore || wi->m_EndScore == -2);
         if (!inRange) continue;
+
+        // ASM-verified: 2026-07-08 v1.6.1 WaveManager::GetNextWave ExclusiveTag filter @0x001258f4..0x0012592c (asm-inspector)
+        // ASM-spec v1.6.1 WaveManager::GetNextWave @0x0012573c (candidate filter 0x001258f4-2c;
+        // comparator 0x00108150 is an unresolved ARM veneer). Defunct on shipped data (see
+        // CompareExclusiveTag) -- always matches, kept for candidate-filter parity.
+        if (CompareExclusiveTag(currentWaveTag, wi->m_ExclusiveTag) != 0) continue;
 
         if (matchCount == 0)
             pCurrentWave = wi;
@@ -1708,7 +1764,7 @@ void WaveManager::GetNextWave(int playerIdx) {
     WAVE_INFO* wave = pCurrentWave;
     LOG_DEBUG("WaveManager", "GetNextWave: matchCount=%d totalWeight=%d picked=%p (waveNo=%d, spawners=%d)",
               matchCount, totalWeight, (void*)wave,
-              wave ? wave->m_WaveNumber : -999,
+              wave ? wave->m_ScoreThreshold : -999,
               wave ? wave->m_SpawnerCount : -1);
     if (!wave) return;
 
@@ -2128,7 +2184,9 @@ void WaveManager::DeleteSpeedControl(HUDControl* c) {
 
 float WaveManager::GetSpeed(int /*playerIdx*/) {
     // v1.6.1 @0x00122fa0: reads m_ComboSpeed (+0x58) for P0.
-    // TODO: v1.6.1 @0x00122fa0 -- P1 path reads +0x5c (m_TargetComboSpeed); single-player port returns P0 only.
+    // DIFFERS: v1.6.1 WaveManager::GetSpeed @0x00122fa0 indexes this+off+playerIdx*4, but the combo/speed block is
+    // single-player SCALARS (idx=1 aliases the adjacent field, stride 4) -- not a [2] array. Port
+    // hardcodes P0 (idx=0); no live caller passes idx=1. Nothing to port. (layout-verified 0x2f0)
     return m_ComboSpeed;  // +0x58
 }
 
@@ -2167,7 +2225,9 @@ bool WaveManager::CriticalMode(int playerIdx) {
 float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
     // v1.6.1 WaveManager::GetComboBonusProgression @0x00122fb0
     // Reads m_BlitzLevel (+0x60) + clamp(m_ColdTimer/-2.5+1, 0, 1), /6 clamp<=1.
-    // TODO: v1.6.1 @0x00122fb0 -- binary indexes cold timer by playerIdx; single-field port uses P0 only.
+    // DIFFERS: v1.6.1 WaveManager::GetComboBonusProgression @0x00122fb0 indexes this+off+playerIdx*4, but the
+    // combo/speed block is single-player SCALARS (idx=1 aliases the adjacent field, stride 4) -- not a [2]
+    // array. Port hardcodes P0 (idx=0); no live caller passes idx=1. Nothing to port. (layout-verified 0x2f0)
     float progress = m_ColdTimer / -2.5f + 1.0f;  // m_ColdTimer at +0x64
     if (!(progress >= 0.0f)) progress = 0.0f;  // NaN-safe lower clamp
     if (progress > 1.0f) progress = 1.0f;
@@ -2191,8 +2251,10 @@ PROBABILITY_OVERIDE* WaveManager::GetCurrentOverideList(int playerIdx) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::AddToSpeedLossTime(float amount, int playerIdx) {
-    // Binary @ 0x001218ac. Clamps DOWN to 1.0 -- speed-loss accumulator cannot exceed 1.0.
-    // TODO: v1.6.1 @0x001218ac -- binary indexes combo timer by playerIdx; single-field port uses P0 only.
+    // Binary @ 0x00123018. Clamps DOWN to 1.0 -- speed-loss accumulator cannot exceed 1.0.
+    // DIFFERS: v1.6.1 WaveManager::AddToSpeedLossTime @0x00123018 indexes this+off+playerIdx*4, but the
+    // combo/speed block is single-player SCALARS (idx=1 aliases the adjacent field, stride 4) -- not a [2]
+    // array. Port hardcodes P0 (idx=0); no live caller passes idx=1. Nothing to port. (layout-verified 0x2f0)
     (void)playerIdx;
     if (m_ComboTimer > 0.0f) {
         float v = m_ComboTimer + amount;
@@ -2202,11 +2264,13 @@ void WaveManager::AddToSpeedLossTime(float amount, int playerIdx) {
 }
 
 void WaveManager::ResetSpeed(int playerIdx) {
-    // Binary @ 0x00122e94. Re-verified 2026-05-22 (asm-inspector): clears
+    // Binary @ 0x001237f4. Re-verified 2026-05-22 (asm-inspector): clears
     // both the int blitz-level AND the float cold-timer (binary writes
     // separate stores: `mov r1,#0; str.w r1, [r2,#0x4]` for the int and
     // `vmov r1,s15; str.w r1, [r6,r5,lsl#0x2]` with s15=0.0f for the float).
-    // TODO: v1.6.1 @0x00122e94 -- binary indexes speed/blitz/cold by playerIdx; single-field port uses P0 only.
+    // DIFFERS: v1.6.1 WaveManager::ResetSpeed @0x001237f4 indexes this+off+playerIdx*4, but the combo/speed
+    // block is single-player SCALARS (idx=1 aliases the adjacent field, stride 4) -- not a [2] array. Port
+    // hardcodes P0 (idx=0); no live caller passes idx=1. Nothing to port. (layout-verified 0x2f0)
     (void)playerIdx;
     m_TargetComboSpeed = 0.0f;  // +0x5c
     m_ComboSpeed       = 0.0f;  // +0x58
@@ -2223,8 +2287,8 @@ void WaveManager::ResetSpeed(int playerIdx) {
     m_BlitzLevel = 0;   // +0x60
     m_ColdTimer  = 0.0f;  // +0x64
 
-    // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00122e94 (re-analyst)
-    // Binary @ 0x00122e94: ldr from [r0, #0x4] -> slot [1] (+0x04), the SpeedControl widget.
+    // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x001237f4 (re-analyst)
+    // Binary @ 0x001237f4: ldr from [r0, #0x4] -> slot [1] (+0x04), the SpeedControl widget.
     HUDControl3d* sc = m_SpeedControl[1];
     if (sc) {
         SpeedControl* spc = static_cast<SpeedControl*>(sc);
@@ -2246,7 +2310,9 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     // (vldr.32 / vcmpe / vsub / vmov.f32 #3.0 / vstr.32). The int
     // m_BlitzLevel field at +0x60 only holds the AddToTotal()-returned
     // level counter (1..6+) used to drive score and SFX selection.
-    // TODO: v1.6.1 @0x00124f48 -- binary indexes speed/cold/blitz by playerIdx; single-field port uses P0 only.
+    // DIFFERS: v1.6.1 WaveManager::AddSpeed @0x00124f48 indexes this+off+playerIdx*4, but the combo/speed
+    // block is single-player SCALARS (idx=1 aliases the adjacent field, stride 4) -- not a [2] array. Port
+    // hardcodes P0 (idx=0); no live caller passes idx=1. Nothing to port. (layout-verified 0x2f0)
     (void)playerIdx;
 
     // Accumulate m_TargetComboSpeed (+0x5c), clamp [0, 14].

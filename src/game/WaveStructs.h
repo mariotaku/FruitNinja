@@ -3,10 +3,11 @@
 
 #include "engine/xml/TiXmlElement.h"
 namespace Math { class Random; }
+class ExclusiveTag;   // v1.6.1 WaveManager::GetNextWave @0x0012573c candidate filter; see WaveInfo::m_ExclusiveTag
 
 // Wave data structs — binary layouts (RE'd).
 //
-// WAVE_INFO         : 0x78 bytes
+// WAVE_INFO         : 0x7c bytes
 // SPAWNER_INFO      : 0x64 bytes
 // DEFAULT_WAVE_INFO : 0x40 bytes
 // COIN_CHANCEINATOR : 0x08 bytes
@@ -135,11 +136,11 @@ struct SPAWNER_INFO {
     void Reset(float waveRevisitCounter);
 };
 
-// WaveInfo — size 0x78 (120 bytes).
+// WaveInfo — size 0x7c (124 bytes).
 // Field offsets per binary WaveManager::Init @ 0x0012393c and §6 of audit.
 struct WaveInfo {
     // +0x00
-    int                      m_ScoreThreshold;   // waveNo attr (mirror of m_WaveNumber)
+    int                      m_ScoreThreshold;   // waveNo attr
     // +0x04
     int                      m_EndScore;         // "until" attr; -2=forever
     // +0x08
@@ -207,9 +208,12 @@ struct WaveInfo {
     // +0x74: total weight (sum of spawner (min+max)/2 contributions)
     int                      m_TotalWeight;      // +0x74
 
-    // Port-internal: waveNo stored separately so m_OverideProbabilityPool keeps +0x70.
-    // Not a binary struct field — used only for wave range selection logic.
-    int                      m_WaveNumber;
+    // +0x78: exclusive-tag pointer -- GetNextWave's candidate-eligibility filter.
+    // ASM-spec v1.6.1 WaveManager::GetNextWave @0x0012573c (candidate filter 0x001258f4-2c;
+    // comparator 0x00108150 is an unresolved ARM veneer). Defunct: no shipped v1.6.1 wave XML
+    // sets exclusiveTag -> m_ExclusiveTag is always null -> the comparator call is a structural
+    // no-op. Field wired for parity; see WaveManager.cpp's CompareExclusiveTag stub (always-pass).
+    ExclusiveTag*            m_ExclusiveTag;     // +0x78
 
     WaveInfo()
         : m_ScoreThreshold(0), m_EndScore(-1)
@@ -232,7 +236,7 @@ struct WaveInfo {
         , m_reserved60(0), m_CriticalChance(1.0f)
         , m_WaveIndex(0), m_pCoinChance(nullptr)
         , m_OverideProbabilityPool(100), m_TotalWeight(0)
-        , m_WaveNumber(0)
+        , m_ExclusiveTag(nullptr)
     {
         memset(_pad3a, 0, sizeof(_pad3a));
     }
@@ -477,6 +481,7 @@ struct WaveQue {
 static_assert(sizeof(WaveQue) == 0x0c, "WaveQue size mismatch");
 static_assert(sizeof(SPAWNER_INFO) == 0x64, "SPAWNER_INFO size mismatch"); // v1.6.1 SPAWNER_INFO @0x14be2c
 static_assert(sizeof(WaveInfo) == 0x7c, "WaveInfo size mismatch"); // v1.6.1 WaveInfo @0x122800 (MEDIUM confidence)
+static_assert(offsetof(WaveInfo, m_ExclusiveTag) == 0x78, "WaveInfo m_ExclusiveTag offset mismatch");
 #endif
 
 #endif // FN_WAVE_STRUCTS_H
