@@ -12,6 +12,7 @@
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
+#include "entities/SuperFruitState.h"
 #include "hud/HUD.h"
 #include "screens/PauseScreen.h"
 #include "math/MathUtil.h"
@@ -890,30 +891,48 @@ void WaveManager::Resume() {
             Bomb* b = static_cast<Bomb*>(e);
             b->m_AccelForce = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
             if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) b->SetForPlayer(1);
-            // Chuck/SetHit gate: m_ChuckMag > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
-            if (es.m_ChuckMag > 0.0f) {
+            // Chuck/SetHit gate: m_Wait > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
+            if (es.m_Wait > 0.0f) {
                 if (es.m_BombHitFlag == 0)
-                    b->Chuck(es.m_ChuckMag);
+                    b->Chuck(es.m_Wait);
                 else
-                    b->SetHit(es.m_ChuckMag);
+                    b->SetHit(es.m_Wait);
             }
         } else if (kind == 0) {
             // Fruit overlay: m_Overlay = gravity Vec3.
             Fruit* f = static_cast<Fruit*>(e);
             f->m_Gravity = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
-            if (es.m_ChuckMag > 0.0f)
-                f->Chuck(es.m_ChuckMag);
+            if (es.m_Wait > 0.0f)
+                f->Chuck(es.m_Wait);
+
+            // Rebuild the super-fruit controller if the fruit carried one.
+            // BLOCKED: the binary rebuilds it and registers it into the HUD via
+            //   SuperFruitControl* ctrl = new SuperFruitControl(f, *es.m_pSuperFruitState);
+            //   game_work.mHud->AddControl(ctrl, false);  // ctor self-registers SuperFruitControls[f]
+            // but the port models SuperFruitControl as Mortar::Entity (entityType 6), NOT a
+            // HUDControl, so HUD::AddControl(HUDControl*) will not accept it and the controller
+            // is never ticked anywhere in the port (same gap as the fresh super-fruit path).
+            // Restoring it into SuperFruitControls without a tick source would leave
+            // IsInSuperFruitState() permanently true (never explodes -> never Released).
+            // Consume+free the saved state here (no leak) and defer the rebuild until
+            // SuperFruitControl is re-based onto HUDControl3d.
+            // TODO: v1.6.1 WaveManager::Resume @0x0012bf58 -- rebuild SuperFruitControl on resume;
+            //   blocked on SuperFruitControl base-class re-port (Mortar::Entity -> HUDControl3d).
+            if (es.m_pSuperFruitState != NULL) {
+                delete es.m_pSuperFruitState;
+                es.m_pSuperFruitState = NULL;
+            }
         } else if (kind == 4) {
             // PowerUp ENTITY (ActorManager type 4) -- distinct from game/PowerUp.h
             // (the XML-template/modifier object). ASM @ 0x00124cc0-0x00124cd0:
-            //   ldr r3,[entity+0x0]; vldr s0,[es+0x34]; ldr r3,[r3+0x10]; blx r3
-            // i.e. a virtual call through the entity's own vtable slot +0x10 with
-            // signature (float chuckMag, Entity*). The ported Mortar::Entity base
-            // has Update(float) at +0x10, NOT this (float,Entity*) activate slot,
-            // so the kind-4 PowerUp-entity class is entirely unported and has no
-            // vtable to dispatch through.
-            // TODO: v1.6.1 WaveManager::Resume @0x0012bf58 -- PowerUp-entity (ActorManager type 4) vtable+0x10
-            //   activate(m_ChuckMag, e); blocked on unported PowerUp-entity subsystem.
+            //   ldr r3,[entity+0x0]; vldr s0,[es+0x2c]; ldr r3,[r3+0x10]; blx r3
+            // i.e. a virtual call through the entity's own vtable slot +0x10 -- the
+            // plain Update(float dt) slot -- with dt = es.m_Wait. (The earlier
+            // "(float chuckMag, Entity*)" reading was a misdecode; slot +0x10 is
+            // Update(float).) The port's Mortar::Entity has Update(float) at +0x10,
+            // but the kind-4 PowerUp-entity subclass itself is entirely unported.
+            // TODO: v1.6.1 WaveManager::Resume @0x0012bf58 -- PowerUp-entity (ActorManager type 4)
+            //   Update(es.m_Wait); blocked on unported PowerUp-entity subsystem.
         }
         respawned = true;
     }

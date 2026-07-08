@@ -16,6 +16,12 @@
 #include "ScreenEffect.h"
 #include "engine/util/StringHash.h"
 #include "engine/xml/TiXml.h"
+#include "entities/ActorManager.h"
+#include "entities/Fruit.h"
+#include "entities/Bomb.h"
+#include "entities/FruitInfo.h"
+#include "entities/SuperFruitControl.h"
+#include "entities/SuperFruitState.h"
 #include "engine/core/SystemManager.h"
 #include "engine/asset/FileManager.h"
 
@@ -597,10 +603,73 @@ void SaveGame(FruitSaveData* save) {
             st.InsertEndChild(wi);
         }
 
-        // TODO: v1.6.1 0x001530dc <ent>/<powers> live-actor serialisation
-        // (needs ActorManager::GetEntityFirst/Next + SuperFruitControl::
-        // SaveSuperFruitState wiring). The <state> entity list is read from the
-        // live ActorManager, not from m_EntityStates -- deferred for now.
+        // ASM-spec v1.6.1 SaveGame @0x001530dc (entity block @0x00153b28): 3 ActorManager
+        // passes -> <ent> children of <state>; Fruit(t0 skip sliced||menuFling),
+        // Bomb(t1 skip menuBombHit), PowerUp(t4). The <state> entity list is read from
+        // the live ActorManager, not from m_EntityStates.
+        {
+            Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+            char v3[64];
+
+            // --- Pass 1: Fruit (ActorManager type 0). ---
+            std::list<Mortar::Entity*>::iterator fit;
+            for (Mortar::Entity* e = am->GetEntityFirst(0, fit); e; e = am->GetEntityNext(0, fit)) {
+                Fruit* f = static_cast<Fruit*>(e);
+                if (f->m_bSliced || f->m_bMenuFling) continue;  // +0xb8 / +0x164
+
+                TiXmlElement ent = doc.NewElement("ent");
+                snprintf(v3, sizeof(v3), "%f,%f,%f", f->pos.x, f->pos.y, f->pos.z);          // +0x10
+                ent.SetAttribute("pos", v3);
+                snprintf(v3, sizeof(v3), "%f,%f,%f", f->vel.x, f->vel.y, f->vel.z);          // +0x1c
+                ent.SetAttribute("vel", v3);
+                snprintf(v3, sizeof(v3), "%f,%f,%f", f->m_Gravity.x, f->m_Gravity.y, f->m_Gravity.z); // +0xa0
+                ent.SetAttribute("grav", v3);
+                ent.SetAttribute("type", (int)f->m_FruitType);                              // +0x3c (u8)
+                ent.SetDoubleAttribute("wait",      (double)f->m_SpawnDelay);               // +0x74
+                ent.SetDoubleAttribute("sliceWait", (double)f->m_SliceTimer);               // +0xbc
+
+                const ::FruitInfo* info = Fruit::FruitInfo((long)f->m_FruitType);
+                if (info && info->m_bIsSuperFruit) {                                        // +0x330
+                    SuperFruitControl::SaveSuperFruitState(f, &ent);
+                }
+                st.InsertEndChild(ent);
+            }
+
+            // --- Pass 2: Bomb (ActorManager type 1). ---
+            std::list<Mortar::Entity*>::iterator bit;
+            for (Mortar::Entity* e = am->GetEntityFirst(1, bit); e; e = am->GetEntityNext(1, bit)) {
+                Bomb* b = static_cast<Bomb*>(e);
+                if (b->m_bMenuBombHit) continue;  // +0x88
+
+                TiXmlElement ent = doc.NewElement("ent");
+                snprintf(v3, sizeof(v3), "%f,%f,%f", b->pos.x, b->pos.y, b->pos.z);          // +0x10
+                ent.SetAttribute("pos", v3);
+                snprintf(v3, sizeof(v3), "%f,%f,%f", b->vel.x, b->vel.y, b->vel.z);          // +0x1c
+                ent.SetAttribute("vel", v3);
+                snprintf(v3, sizeof(v3), "%f,%f,%f", b->m_AccelForce.x, b->m_AccelForce.y, b->m_AccelForce.z); // +0x8c
+                ent.SetAttribute("grav", v3);
+                // Binary "MAX_FRUIT_TYPES" sentinel == fruit count (Resume: type >= fruitCount -> Bomb).
+                ent.SetAttribute("type", FruitInfo_GetCount());
+                ent.SetAttribute("hit",  b->m_bHit ? "true" : "false");                     // +0x68
+                ent.SetDoubleAttribute("wait", (double)b->GetWait());                       // +0xa4
+                st.InsertEndChild(ent);
+            }
+
+            // --- Pass 3: PowerUp entity (ActorManager type 4; PowerUp-entity subsystem
+            // unported -> type-4 list is always empty in the port, so this loop is inert).
+            std::list<Mortar::Entity*>::iterator pit;
+            for (Mortar::Entity* e = am->GetEntityFirst(4, pit); e; e = am->GetEntityNext(4, pit)) {
+                TiXmlElement ent = doc.NewElement("ent");
+                snprintf(v3, sizeof(v3), "%f,%f,%f", e->pos.x, e->pos.y, e->pos.z);          // +0x10
+                ent.SetAttribute("pos", v3);
+                // Binary reads the PowerUp entity's wait at +0x6c. No port PowerUp-entity
+                // class exists; this loop never executes (empty type-4 list), so the raw
+                // offset read is never reached. Kept for call-graph shape.
+                ent.SetDoubleAttribute("wait", (double)(*reinterpret_cast<float*>(reinterpret_cast<char*>(e) + 0x6c)));
+                ent.SetAttribute("type", -1);  // Resume: type < 0 -> PowerUp
+                st.InsertEndChild(ent);
+            }
+        }
 
         root.InsertEndChild(st);
     }
@@ -750,9 +819,16 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
             self.QueryIntAttribute("type", &es.m_KindIndex);
             const char* hit = self.Attribute("hit");
             if (hit) es.m_BombHitFlag = (uint8_t)((strcmp(hit, "true") == 0) ? 1 : 0);
-            // TODO: v1.6.1 0x00154c8c <ent> wait/sliceWait/<superFruitState> are not
-            // represented in the port's lean EntityState resume struct; only
-            // pos/vel/grav/type/hit are restored. (Save side defers <ent> entirely.)
+            const char* wait = self.Attribute("wait");
+            if (wait) es.m_Wait = (float)atof(wait);          // +0x2c (default 0)
+            self.QueryFloatAttribute("sliceWait", &es.m_SliceWait);  // +0x30 (default -1.0)
+            // <superFruitState> child -> owned SuperFruitState* (+0x34); consumed by Resume.
+            TiXmlElement sfsElem = self.FirstChildElement("superFruitState");
+            if (sfsElem) {
+                SuperFruitState* sfs = new SuperFruitState();
+                sfs->Parse(&sfsElem);
+                es.m_pSuperFruitState = sfs;
+            }
             data->m_EntityStates.push_back(es);
         }
         return;

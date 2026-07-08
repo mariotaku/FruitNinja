@@ -25,6 +25,7 @@
 class HUD;
 class TiXmlNode;
 class TiXmlElement;
+struct SuperFruitState;
 
 // SliceTotal -- per-key counter struct stored inside m_Totals /
 // m_SessionTotals maps. Binary layout has the name at +0x14 and the
@@ -54,8 +55,8 @@ static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 byt
 // EntityState -- queued resume snapshot for a fruit / bomb / power-up.
 // Binary serialises one per active actor when m_bHasActiveGame is set.
 //
-// ASM-confirmed layout from copy-ctor @ 0x0012c594 and Resume @ 0x00124b1c.
-// sizeof = 0x30 (48 bytes), no trailing padding beyond the last field.
+// ASM-confirmed layout from copy-ctor @ 0x0012c594 and Resume @ 0x0012bf58.
+// sizeof = 0x38 (56 bytes), no trailing padding beyond the last field.
 //
 // Field layout:
 //   +0x00  Vec3f m_Velocity      -- restore -> actor->vel
@@ -63,7 +64,11 @@ static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 byt
 //   +0x18  Vec3f m_Overlay       -- per-kind overlay (see below); +0x25..+0x27 = pad
 //   +0x24  uint8 m_BombHitFlag   -- bomb: 0 = Chuck, != 0 = SetHit; upper 3 bytes pad
 //   +0x28  int32 m_KindIndex     -- kind discriminator AND Init type-index
-//   +0x2C  float m_ChuckMag      -- Chuck/Hit magnitude; applied only if > 0.0f
+//   +0x2C  float m_Wait          -- Chuck/Hit magnitude (chuck delay); applied only if > 0.0f (XML attr "wait")
+//   +0x30  float m_SliceWait     -- Fruit m_SliceTimer snapshot (XML attr "sliceWait"); SAVE-SIZE
+//                                   fidelity only -- Resume never reads it. Default -1.0f.
+//   +0x34  SuperFruitState* m_pSuperFruitState -- non-null when the saved fruit carried an
+//                                   active super-fruit controller (owned; freed by Resume).
 //
 // m_Overlay interpretation by actor kind (derived from m_KindIndex):
 //   Fruit  (kind == 0): m_Overlay = gravity Vec3 -> actor->m_Gravity
@@ -82,15 +87,21 @@ struct EntityState {
     uint8_t  m_BombHitFlag;    // +0x24: 0=Chuck, !=0=SetHit (bomb only)
     // +0x25..+0x27: 3 bytes implicit padding
     int32_t  m_KindIndex;      // +0x28: Init type-index; also selects Fruit/Bomb/PowerUp
-    float    m_ChuckMag;       // +0x2C: Chuck/SetHit magnitude; gate: > 0.0f
+    float    m_Wait;           // +0x2C: Chuck/SetHit magnitude (chuck delay); gate: > 0.0f
+    float    m_SliceWait;      // +0x30: Fruit m_SliceTimer snapshot; SAVE-SIZE only (Resume ignores)
+    SuperFruitState* m_pSuperFruitState;  // +0x34: owned super-fruit restore state (freed by Resume)
 
-    EntityState() : m_BombHitFlag(0), m_KindIndex(0), m_ChuckMag(0.0f) {
+    EntityState()
+        : m_BombHitFlag(0), m_KindIndex(0), m_Wait(0.0f),
+          m_SliceWait(-1.0f), m_pSuperFruitState(0) {
         m_Velocity[0] = m_Velocity[1] = m_Velocity[2] = 0.0f;
         m_Position[0] = m_Position[1] = m_Position[2] = 0.0f;
         m_Overlay[0]  = m_Overlay[1]  = m_Overlay[2]  = 0.0f;
     }
 };
-static_assert(sizeof(EntityState) == 0x30, "EntityState size mismatch (binary: 0x30=48)");
+#ifdef __bada__
+static_assert(sizeof(EntityState) == 0x38, "EntityState size mismatch (binary: 0x38=56)");
+#endif
 
 // SpawnState -- queued spawner info (one per <spawner> child of <wave>).
 // Binary layout (8 bytes): count@+0x00 (float, -> SPAWNER_INFO.m_SpawnCountF/m_RemainingCount),
