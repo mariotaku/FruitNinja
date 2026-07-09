@@ -463,7 +463,11 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
 // @ 0x00119cb0
 void PowerUpManager::Load() {
     TiXmlDocument doc;
-    if (!doc.LoadFile("xml/powerUpList.xml")) {
+    // Asset file is lowercase (poweruplist.xml); case matters on case-sensitive
+    // filesystems (web/emscripten, webOS, HLE). Camel-case "powerUpList.xml"
+    // silently failed there -> empty m_ScreenEffectPool -> no power/combo/blitz
+    // popups. Matches the lowercase xml/fruitlist.xml convention.
+    if (!doc.LoadFile("xml/poweruplist.xml")) {
         return;
     }
 
