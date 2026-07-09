@@ -159,3 +159,16 @@ set_tests_properties(scene_coin PROPERTIES TIMEOUT 60)
 add_scene_test(scene_jiblet scene_jiblet.cpp)
 add_test(NAME scene_jiblet COMMAND scene_jiblet)
 set_tests_properties(scene_jiblet PROPERTIES TIMEOUT 60)
+
+# ---- scene_superfruit_finale: full super-fruit finale render/screenshot test ----
+# Drives the REAL finale end-to-end (Fruit::CollisionResponse -> FruitWasSlicedEvent
+# -> SuperFruitControl::SuperFruitSliced -> HUD::Update ticking, same call chain
+# test_superfruit_finale_tick.cpp proves live) through the full GameTaskDraw
+# pipeline (Game::runFrames), and captures 3 PNGs along the timeline:
+#   tmp/test/screenshots/superfruit_finale/early.png (combo text 3-stop gradient)
+#   tmp/test/screenshots/superfruit_finale/mid.png   (jiblets fanning + shockwave ring ramping)
+#   tmp/test/screenshots/superfruit_finale/late.png  (near self-removal, text still visible)
+# Port specific: standalone super-fruit finale visual capture test
+add_scene_test(scene_superfruit_finale scene_superfruit_finale.cpp)
+add_test(NAME scene_superfruit_finale COMMAND scene_superfruit_finale)
+set_tests_properties(scene_superfruit_finale PROPERTIES TIMEOUT 60)
