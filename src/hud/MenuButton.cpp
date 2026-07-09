@@ -22,6 +22,7 @@
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
+#include "render/QUADCUSTOMVERTEX.h"
 #include "render/BakedStringTTF.h"
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
@@ -382,7 +383,7 @@ bool MenuButton::HasNewSymbol() { return m_NewIndicatorTimer >= 0.0f; }
 // v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608
 bool MenuButton::IsLoadingSymbol() { return m_SparkleTimer >= 0.0f; }
 
-// v1.6.1 MenuButton::SetLoadingSymbol @0x0019a560
+// v1.6.1 MenuButton::SetLoadingSymbol @0x0019a5d0
 void MenuButton::SetLoadingSymbol(bool show) {
     if (m_SparkleTimer < 0.0f) {
         if (show) m_SparkleTimer = 0.0f;
@@ -831,9 +832,11 @@ void MenuButton::UpdateTouchPosition() {
 }
 
 // MenuButton::Draw @ 0x0019c2e4
+// NOTE: no top-level m_DrawColour.a==0 early-out -- the binary always runs the
+// layer 0x40->0x80 demotion side-effect and draws labels/badge/sparkle even at
+// alpha 0 (v1.6.1 MenuButton::Draw @0x0019c2e4 has no alpha gate).
 void MenuButton::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
-    if (m_DrawColour.a == 0) return;
 
     // Compute fade-derived alpha from m_AnimPhase (+0xD0).
     // v1.6.1 MenuButton::Draw @0x0019c2e4: alpha ramp from m_AnimPhase (Q14 phase, 0..0x3ffc).
@@ -875,15 +878,54 @@ void MenuButton::Draw(float* hudScaleRaw) {
         return;
     }
 
-    // Subsequent passes: render the actual button sprite
-    if (m_ShakeTimer > 0.0f) {
-        Vec3 savedPos = pos;
-        pos.x += ((float)(rand() % 600) / 100.0f) - 3.0f;
-        pos.y += ((float)(rand() % 600) / 100.0f) - 3.0f;
-        HUDControl3d::Draw(hudScaleRaw);
-        pos = savedPos;
-    } else {
-        HUDControl3d::Draw(hudScaleRaw);
+    // ---- main button quad (inlined) ----
+    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c48c-0x0019c700: the binary inlines
+    // the quad draw (HUDControl3d::Draw-shaped) rather than calling the base,
+    // adding on top of it: the shake jitter, the press-dim RGB tint and the
+    // anim-alpha override. There is NO m_DrawColour.a==0 gate here (unlike
+    // HUDControl3d::Draw @0x0014428c).
+    if (m_Texture.IsValid()) {
+        m_Texture->Set();
+        MatrixManager& mm = MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+
+        Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);
+        if (m_Timer != 0.0f) {
+            uint16_t idx = (uint16_t)(int)(m_Timer * 182.0f);
+            mat.RotZ44(SinIdx(idx), CosIdx(idx));
+        }
+
+        Vec3 jitter = Vec3::Zero();
+        if (m_ShakeTimer > 0.0f) {
+            jitter += Vec3(((float)(rand() % 600) / 100.0f) - 3.0f,
+                           ((float)(rand() % 600) / 100.0f) - 3.0f, 0.0f);
+        }
+        mat.GlobalTranslate44(GetAdjustedPos() + jitter);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        // Press-dim @0x0019c5c4-0x0019c620: RGB * 0.5 while held/shrunk (or
+        // touch disabled) on non-fruit (toggle) buttons only.
+        float dim[3] = { 1.0f, 1.0f, 1.0f };
+        if ((size != m_RestScale || m_bAcceptsTouch == 0) && m_FruitType < 0) {
+            dim[0] = dim[1] = dim[2] = 0.5f;
+        }
+        Colour quadCol = Colour::TintColour(m_DrawColour, dim);
+        const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
+        quadCol = Colour::TintColour(quadCol, tintRGB);
+
+        // Anim-alpha @0x0019c648-0x0019c690: a = m_DrawColour.a * animAlpha / 255.
+        float fa = ((float)m_DrawColour.a * (float)alpha) / 255.0f;
+        quadCol.a = (fa <= 0.0f) ? 0 : (fa < 255.0f ? (uint8_t)fa : 0xff);
+
+        // Defunct: P2P multiplayer per-player tint -- when m_PlayerColour != White
+        // the binary copies quadCol into a dead stack temp (Colour::operator=
+        // @0x001119ac); result discarded, no observable effect.
+        // v1.6.1 MenuButton::Draw @ 0x0019c694
+
+        Mortar::Mesh::DrawQuadUnCached(quadCol, m_UVLeft, m_UVRight, m_UVTop,
+                                       m_UVBottom, NULL);
+        m_Texture->UnSet();
     }
 
     // Label block v1.6.1 MenuButton::Draw @0x0019c764:
@@ -920,9 +962,11 @@ void MenuButton::Draw(float* hudScaleRaw) {
         }
     }
 
-    // New-indicator badge via IngamePopup::Draw (type 0x10).
-    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c2e4: badge drawn via pM_Popups[0x10]->Draw,
-    // not an inline new_item.tex quad.
+    // ASM-verified-candidate v1.6.1 MenuButton::Draw NEW-badge block @0x0019c858:
+    //  popup = pM_Popups[0x10] ("NEW" badge, IngamePopup ctor @0x0016dbac);
+    //  bob = |SinIdx((int)(m_NewIndicatorTimer*180*182) & 0xffff)| * 8.0 (looping half-sine, 2 bounces/s);
+    //  anchor = GetAdjustedPos() + (ShakeScale.y*RestScale.x*0.5, ShakeScale.z*RestScale.y*0.5 + bob, 0);
+    //  scale = size.x / RestScale.x. Constants @0x0019c730 (180.0f) / 0x0019c734 (182.0f).
     if (m_NewIndicatorTimer >= 0.0f) {
         IngamePopup* popup = GetIngamePopup(0x10);
         if (popup) {
@@ -940,10 +984,74 @@ void MenuButton::Draw(float* hudScaleRaw) {
         }
     }
 
-    // Sparkle ring: armed when m_RotationSpeed(+0xf4) >= 0.
-    // TODO: v1.6.1 MenuButton::Draw @0x0019c2e4 -- sparkle ring 48-vert mesh (binary @ Draw layer3): build ring once into
-    //   static buffer, animate per-vertex colour by rotating index, draw via Mesh::DrawTriList(0x30 tris).
-    //   Scale 0.75, MatrixStack push. Binary entry gates on m_RotationSpeed >= 0.
+    // ---- loading-sparkle ring ----
+    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c98c-0x0019cd04: 8-blade 48-vert
+    // tri list built ONCE into function-local statics (binary locals
+    // Draw::made_mesh / Draw::symbo_tris); per-frame the 8 blade greys rotate
+    // with frame = 7 - ((int)m_SparkleTimer % 8). Texture = class-static slot 2
+    // (blurry_backing.tex) via GOT @0x0019c728.
+    if (m_SparkleTimer >= 0.0f && s_TexBlurryBacking.IsValid()) {
+        static bool made_mesh = false;
+        static QUADCUSTOMVERTEX symbo_tris[48];
+        int frame = 7 - (((int)m_SparkleTimer) % 8);
+        if (!made_mesh) {
+            made_mesh = true;
+            // Blade geometry: per blade at angle index a (45 deg = 0x1ffe in the
+            // binary's 182-per-degree domain, 8 blades -> 0xfff0 total):
+            //   outer = (SinIdx(a), CosIdx(a)) * 0.5
+            //   inner = outer * 0.6                      (const @0x0019c73c)
+            //   half  = (SinIdx(a+90deg), CosIdx(a+90deg)) * 0.075  (@0x0019c738)
+            // Two tris per blade: (outer-half, outer+half, inner-half) and
+            // (inner-half, outer+half, inner+half); UVs (0,0)/(1,0)/(0,1) and
+            // (0,1)/(1,0)/(1,1). z=0, nz=1 on all verts (nx/ny stay zero-init).
+            int vi = 0;
+            uint16_t angle = 0;
+            do {
+                const float outerX = SinIdx(angle) * 0.5f;
+                const float outerY = CosIdx(angle) * 0.5f;
+                const uint16_t perp = (uint16_t)(angle + 0x3ffc);  // +90 deg
+                const float halfX = SinIdx(perp) * 0.075f;
+                const float halfY = CosIdx(perp) * 0.075f;
+                const float innerX = outerX * 0.6f;
+                const float innerY = outerY * 0.6f;
+                QUADCUSTOMVERTEX* q = &symbo_tris[vi];
+                q[0].x = outerX - halfX; q[0].y = outerY - halfY; q[0].u = 0.0f; q[0].v = 0.0f;
+                q[1].x = outerX + halfX; q[1].y = outerY + halfY; q[1].u = 1.0f; q[1].v = 0.0f;
+                q[2].x = innerX - halfX; q[2].y = innerY - halfY; q[2].u = 0.0f; q[2].v = 1.0f;
+                q[3].x = innerX - halfX; q[3].y = innerY - halfY; q[3].u = 0.0f; q[3].v = 1.0f;
+                q[4].x = outerX + halfX; q[4].y = outerY + halfY; q[4].u = 1.0f; q[4].v = 0.0f;
+                q[5].x = innerX + halfX; q[5].y = innerY + halfY; q[5].u = 1.0f; q[5].v = 1.0f;
+                for (int j = 0; j < 6; ++j) { q[j].z = 0.0f; q[j].nz = 1.0f; }
+                vi += 6;
+                angle = (uint16_t)(angle + 0x1ffe);  // 45 deg step
+            } while (angle != 0xfff0);
+        }
+        // Per-blade brightness: clamp(((frame + k) mod 8) * 0x20, 0x40, 0xff),
+        // alpha 200. The binary ALSO computes TintColour(bladeCol, hudScale) and a
+        // copy of it into dead stack temps (@0x0019cbc4-0x0019cbf8) -- results
+        // unused; the vertex colour written is the UNTINTED bladeCol.
+        int blade = frame;
+        for (int vi = 0; vi < 0x30; vi += 6, ++blade) {
+            int bright = (blade % 8) * 0x20;
+            if (bright > 0xff) bright = 0xff;
+            if (bright < 0x40) bright = 0x40;
+            Colour bladeCol((uint8_t)bright, (uint8_t)bright, (uint8_t)bright, 200);
+            for (int j = 0; j < 6; ++j) {
+                symbo_tris[vi + j].colour = bladeCol.PlatformColour();
+            }
+        }
+        s_TexBlurryBacking->Set();
+        MatrixManager& mm = MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+        // Scale = Vector3::One * size.y * 0.75 (0.75 immediate @0x0019cc74),
+        // then Translate(GetAdjustedPos()) on the world stack.
+        Vec3 ringScale = Vec3::One() * size.y * 0.75f;
+        mm.GetWorldStack().Scale(ringScale);
+        mm.GetWorldStack().Translate(GetAdjustedPos());
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawTriList(symbo_tris, 0x30, false, NULL);
+        s_TexBlurryBacking->UnSet();
+    }
 }
 
 // ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::LoadContent @ 0x0019c1a0 (asm-inspector)
