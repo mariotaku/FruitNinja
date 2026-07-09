@@ -520,7 +520,7 @@ void DebugFps_Draw(float fps) {
     // lands near +158, a few units below the top edge (+160).
     // Anchor X = -240 + 5 = -235, just inside the left edge.
     static const float kAnchorX = -235.0f;  // left edge -240 + 5 margin
-    static const float kAnchorY =  148.0f;  // top edge +160 - ~12 margin
+    static const float kAnchorY =  138.0f;  // top edge +160 - ~22 margin (~10px extra top spacing)
     static const float kZ       =   -0.1f;  // in front of game content
 
     const Vec3 anchor(kAnchorX, kAnchorY, kZ);
