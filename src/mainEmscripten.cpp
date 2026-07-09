@@ -207,10 +207,8 @@ static void BootWait(void* arg) {
     // Supported params:
     //   ?hitbox=<0-3> or ?hitboxes=<0-3> -- sets g_DebugHitboxes level directly
     //                                        (same 4 levels F1 cycles through on desktop:
-    //                                        0=off 1=entity 2=+HUD 3=+font). Bare
-    //                                        ?hitbox=1 is a legacy alias for the full
-    //                                        level 3 overlay, since mobile has no F1 to
-    //                                        cycle levels with.
+    //                                        0=off 1=entity 2=+HUD 3=+font). Mobile has
+    //                                        no F1, so the level is set straight from the URL.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
     {
         // hitbox / hitboxes=<level>
@@ -222,7 +220,6 @@ static void BootWait(void* arg) {
                 var v = params.get('hitbox');
                 if (v === null) v = params.get('hitboxes');
                 if (v === null) return 0;
-                if (v === '1') return 3; // legacy alias: full overlay
                 var n = parseInt(v, 10);
                 if (n >= 0 && n <= 3) return n;
                 return 0;
