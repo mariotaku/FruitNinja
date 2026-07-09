@@ -13,25 +13,28 @@
 //   dtor (D0 deleting)       v1.6.1 MissControl::~MissControl @0x0019f0c0
 //   dtor (D1 complete)       v1.6.1 MissControl::~MissControl @0x0019f198
 //   dtor (D2 base)           // TODO: re-verify v1.6.1 addr
-//   vtable                   // TODO: re-verify v1.6.1 addr (17 slots, slot 16 = SetPlayer)
+//   vtable                   v1.6.1 @0x002cdb48 (slot 2 = Init, slot 4 = Reset; 17 slots, slot 16 = SetPlayer)
 //   GetFree                  v1.6.1 MissControl::GetFree @0x0019dcd8
 //   MakeCritical             v1.6.1 MissControl::MakeCritical @0x0019e810
 //   MakeRare                 v1.6.1 MissControl::MakeRare @0x0019e994
+//   MakeCombo                v1.6.1 MissControl::MakeCombo @0x0019e630
 //   MakeDisappear            v1.6.1 MissControl::MakeDisappear @0x0019f338
 //   Update                   v1.6.1 MissControl::Update @0x0019e15c
 //   Draw                     v1.6.1 MissControl::Draw @0x0019f54c
 //   PreUpdate                v1.6.1 MissControl::PreUpdate @0x0019dde4
 //   GetType                  v1.6.1 MissControl::GetType @0x0019fe24
 //   Skip                     v1.6.1 MissControl::Skip @0x0019de28
-//   Init (vtable[4])         v1.6.1 MissControl::Init @0x0019e07c
-//   Reset (vtable[6])        v1.6.1 MissControl::Reset @0x0019df5c
+//   Init (vtable slot 2)     v1.6.1 MissControl::Init @0x0019e07c
+//   Reset (vtable slot 4)    v1.6.1 MissControl::Reset @0x0019df5c
 //
 // Lifecycle:
-//   1. GameInitialise constructs the 12-slot pool, which on first ctor
-//      lazy-loads the 4 shared textures (critical.tex,
-//      ultra_rare_plus_50.tex, hud_cross.tex, and combo_%d.tex for 3..10).
-//   2. Make* picks a pool slot via GetFree, populates pos/texture/anim
-//      state, sets m_Active = 1 (binary field_0x30 = HUDControl::m_Active).
+//   1. GameInit's CreatePool constructs the 12-slot pool; the first ctor
+//      (s_refCount==0) lazy-loads the shared textures (critical.tex,
+//      ultra_rare_plus_50.tex, hud_cross.tex, and combo_%d.tex for 3..10),
+//      then every ctor calls Init() and parks the slot with m_Active = 0.
+//   2. Make* picks a pool slot via GetFree, calls virtual Init() (which
+//      sets m_Active = 1, binary field_0x30 = HUDControl::m_Active, and
+//      tail-calls Reset()), then overrides pos/texture/anim state.
 //   3. Update fades m_FadeAlpha to 0 via linear dt*s_DtMod*m_AlphaScale,
 //      then clears m_bActive so GetFree can re-use the slot.
 //   4. HUD::Draw renders each busy slot via HUDControl3d::Draw.
@@ -98,10 +101,14 @@ public:
     MissControl();
     ~MissControl() override;
 
-    // vtable[4] @ 0x00150fa4 -- Init override
+    // vtable slot 2 -- v1.6.1 MissControl::Init @0x0019e07c. Marks the slot
+    // busy (m_Active=1), restores every Make*-shared default (texture =
+    // s_TexCross, timers, flags, size), then tail-calls Reset() (virtual
+    // slot-4 dispatch @0x0019e134). Called by the ctor and by every Make*.
     void Init() override;
 
-    // vtable[6] @ 0x00150f14 -- Reset override
+    // vtable slot 4 -- v1.6.1 MissControl::Reset @0x0019df5c. Restores tint /
+    // flash state; frees the slot (m_Active=0, alpha=0) when m_LifeTimer > 0.
     void Reset() override;
 
     // vtable[14] @ 0x00152660 -- returns 2 (class-type tag)
@@ -115,7 +122,10 @@ public:
     // binary @ 0x00150e04
     static void PreUpdate(float dt);
 
-    // One-time shared texture load. Must be called once at startup.
+    // Shared texture load, idempotent (guarded by s_TexturesLoaded). The
+    // binary loads these inline in the ctor gated on s_refCount==0; the port
+    // ctor calls this under the same gate. GameInitialise Step 25 also calls
+    // it as a boot-time pre-warm (cache hit for the later ctor path).
     static void LoadContent();
 
     // Allocate the pool, construct each slot, register all with the HUD,
@@ -130,26 +140,32 @@ public:
     // Round-robin through pool; cursor left at FOUND slot (not +1).
     static MissControl* GetFree();
 
-    // 0x00151764 -- activate critical-hit label at a slice point.
+    // v1.6.1 MissControl::MakeCritical @0x0019e810 -- activate critical-hit
+    // label at a slice point. Calls virtual Init() first, then overrides.
     void MakeCritical(Vec3 pos, int playerIdx);
 
-    // 0x001518d8 -- activate rare/special-fruit label.
+    // v1.6.1 MissControl::MakeRare @0x0019e994 -- activate rare/special-fruit
+    // label. Init() first; like MakeCritical but m_DragScale=0.5, no SetPlayer.
     void MakeRare(Vec3 pos);
 
-    // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
+    // v1.6.1 MissControl::MakeDisappear @0x0019f338 -- zen-bomb X overlay and
+    // miss-penalty indicator. Calls virtual Init() first.
     // Binary signature: MakeDisappear(_Vector3<float>, int, SmartPtr<Texture>).
     // Vec3 + SmartPtr are passed BY VALUE (no reference prefix in mangling).
-    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151d94 (re-analyst)
     void MakeDisappear(Vec3 pos, int sizeMult,
                        Mortar::SmartPtr<Mortar::Texture> tex);
 
-    // 0x001515a4 -- activate combo indicator (combo_N.tex for N=clamp(combo,2,10)).
+    // v1.6.1 MissControl::MakeCombo @0x0019e630 -- activate combo indicator
+    // (combo_N.tex for N=clamp(combo,2,10)). Calls virtual Init() first.
     void MakeCombo(Vec3 pos, int comboCount, int entityType);
 
     // vtable[12] @ 0x00151a60 -- fade state machine
     void Update(float dt) override;
 
-    // vtable[9] @ 0x00151f60 -- render textured quad with UV crop + rotation
+    // v1.6.1 MissControl::Draw @0x0019f54c -- render textured quad with UV
+    // crop + rotation. The m_LifeTimer<=0 (passive X-marker) path draws only
+    // when FailureEnabled() && !IsMultiplayer() && fabs(m_PauseAmount) < 1.0
+    // (Zen / MP / settled-pause show no X-marks); see @0x0019f6a4.
     void Draw(float* hudScaleRaw) override;
 
     // v1.6.1 MissControl::Release @0x0019f0b8 -- vtable[5]. Tail-calls m_Texture(+0x74).SetPtr(NULL); no base chain.
@@ -187,7 +203,8 @@ public:
     static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
     static float s_DtMod;         // 0x001f3d6c -- (float)s_NumCriticals + 0.5, set by PreUpdate
 
-    // Binary @ 0x001515a4 — combo overlay textures: [0..1]=NULL, [2..9]=combo_3..combo_10.
+    // Combo overlay textures: [0..1]=NULL, [2..9]=combo_3..combo_10 (loaded in
+    // the ctor tex-block, v1.6.1 MissControl::MissControl @0x0019ed44).
     // MakeCombo index = clamp(comboCount-1, 0, 9) — see MissControl.cpp.
     static Mortar::SmartPtr<Mortar::Texture> s_ComboTextures[10];
 
