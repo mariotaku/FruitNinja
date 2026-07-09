@@ -1,4 +1,5 @@
 #include "render/BakedStringBox.h"
+#include "render/FancyBakedString.h"
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontInterface.h"
 #include "render/MatrixManager.h"
@@ -45,6 +46,20 @@ struct WordToken {
 struct MeasureResult {
     int  lineCount;
     bool overflow;  // true when a line had to force an unbreakable token wider than wrapLimit
+};
+
+// One wrapped-line result from FitStrings(): the reconstructed line text (a raw
+// substring of the original m_Text, preserving original inter-word spacing) plus
+// the ink-extent metrics ComputeBaselineY needs. File-scope (not a class member)
+// because sizeof(BakedStringBox) is pinned at 200B -- these are always recomputed
+// on demand (RebuildMeshes / FitIntoVerticalBounds / TotalHeight / GetTextWidth),
+// never cached on the box itself.
+struct WrappedLineInfo {
+    std::string text;
+    float offsetX;       // horizontal align offset (already truncated to int, world units)
+    float maxBearingY;   // max bearingY across glyphs on this line (above baseline)
+    float minBottom;     // min (bearingY-height) across glyphs on this line (<=0, below baseline)
+    float advanceWidth;  // raw pen-advance width (pre-ink-trim), used by GetTextWidth
 };
 } // anonymous namespace
 
@@ -97,7 +112,7 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_HasClip(false)                        // +0xa4
     , m_FieldA5(false)                        // +0xa5
     , m_ExtraWidth(0.0f)                      // +0xa8
-    , m_FieldAc(0)                            // +0xac
+    , m_ExtraParam(0)                         // +0xac
     , m_Extra1Colour(0, 0, 0, 0)              // +0xb0
     , m_Extra2Colour(0, 0, 0, 0)              // +0xb4
     // m_WrappedLines default-constructed     // +0xb8
@@ -106,10 +121,19 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
 }
 
 BakedStringBox::~BakedStringBox() {
+    DeleteStrings();
     if (m_Text) {
         free(m_Text);
         m_Text = 0;
     }
+}
+
+// DeleteStrings -- delete + clear every FancyBakedString* in m_Lines.
+void BakedStringBox::DeleteStrings() {
+    for (size_t i = 0; i < m_Lines.size(); ++i) {
+        delete m_Lines[i];
+    }
+    m_Lines.clear();
 }
 
 void BakedStringBox::SetText(const char* text) {
@@ -126,8 +150,8 @@ void BakedStringBox::SetText(const char* text) {
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetColour @0x002454e0: (Colour, bool eager).
 // Binary change-detects on m_GradTop(+0x7c); on change writes m_GradTop=colour,
 // m_GradMode(+0x8c)=1, m_MetallicFlag(+0x90)=0; if eager!=0 iterates m_Lines calling
-// FancyBakedString::ApplyGradient per line, else m_Dirty=true.
-// Port: sets m_Dirty in both paths (ApplyGradient per-line is cosmetically divergent).
+// FancyBakedString::ApplyGradient(colour) per line immediately (does NOT set m_Dirty --
+// the existing lines are recoloured in place), else m_Dirty=true (lazy rebuild).
 void BakedStringBox::SetColour(Colour colour, bool eager) {
     if (m_GradTop.r != colour.r || m_GradTop.g != colour.g ||
         m_GradTop.b != colour.b || m_GradTop.a != colour.a) {
@@ -135,9 +159,9 @@ void BakedStringBox::SetColour(Colour colour, bool eager) {
         m_GradMode = 1;
         m_MetallicFlag = 0;
         if (eager) {
-            // binary: iterate m_Lines calling FancyBakedString::ApplyGradient per line
-            // port: BakedStringBoxLine has no such method; cosmetically divergent
-            m_Dirty = true;
+            for (size_t i = 0; i < m_Lines.size(); ++i) {
+                if (m_Lines[i]) m_Lines[i]->ApplyGradient(colour);
+            }
         } else {
             m_Dirty = true;
         }
@@ -163,52 +187,11 @@ void BakedStringBox::SetTranslation(Vec3 pos, bool preShift) {
     }
     // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: writes position
     // fields only; does NOT set m_Dirty. m_Pos is a draw-time translate anchor
-    // consumed in Draw() as Vec3 anchor = m_Pos; it is never read by Layout().
+    // consumed in Draw() as Vec3 anchor = m_Pos; it is never read by RebuildMeshes().
     // The previous port code set m_Dirty=true on position change, causing a full
     // re-layout + GL atlas upload every frame when a caller (e.g. MainScreen::Draw)
     // updates position each frame via SetTranslation (performance fix).
     m_Pos = p;
-}
-
-void BakedStringBox::FitIntoVerticalBounds() {
-    if (!m_Font) return;
-    // ASM-spec v1.6.1 BakedStringBox::FitIntoVerticalBounds @ 0x00246fbc:
-    // Shrinks m_FontSize in 1.0-px steps until total ink height < m_BoxHeight (HEIGHT predicate,
-    // NOT line-count). Binary loop:
-    //   Layout(); N = numLines; if (N == 0) return;
-    //   step = per-line pitch (RebuildAlignments @ 0x00245c78, stored as line.height)
-    //   totalInkHeight = maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
-    //   if (totalInkHeight < m_BoxHeight) return;  // fits
-    //   nextSize = m_FontSize - 1.0f;
-    //   if (nextSize < 6.0f) return;               // floor: stop without applying the too-small size
-    //   SetFontSize(nextSize);  // writes BOTH m_FontSize AND m_BaseFontSize, marks dirty
-    for (;;) {
-        Layout();
-        int N = (int)m_Lines.size();
-        if (N == 0) return;
-
-        float step = m_Lines[0].height;
-        float totalInkHeight = m_Lines[0].maxBearingY
-                             + (float)(N - 1) * step
-                             + (-m_Lines[N - 1].minBottom);
-        if (totalInkHeight < (float)m_BoxHeight) return;
-
-        float nextSize = m_FontSize - 1.0f;
-        if (nextSize < 6.0f) return;
-        SetFontSize(nextSize);
-    }
-}
-
-float BakedStringBox::TotalHeight() const {
-    // Binary FitIntoVerticalBounds @ 0x00246fbc: totalInkHeight = maxBearingY(line0)
-    // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
-    // (= (int)(fontSize + m_LineSpacing)); no separate inter-line spacing term.
-    int N = (int)m_Lines.size();
-    if (N == 0) return 0.0f;
-    const float step = m_Lines[0].height;
-    return m_Lines[0].maxBearingY
-         + (float)(N - 1) * step
-         + (-m_Lines[N - 1].minBottom);
 }
 
 // Measure world-unit advance of a word (ASCII chars, length len) at requestedSize.
@@ -326,64 +309,27 @@ static MeasureResult MeasureWrap(FontCacheObjectTTF* font, const char* text,
     return result;
 }
 
-// Greedy word-wrap layout at m_FontSize into m_Lines.
-// All glyph coordinates and advances are in world units (FT metric / 64 * invFontScale).
-// Binary: ApplyFormatting_LeftJustify @ 0x00247874; RebuildAlignments @ 0x00245c78.
-// Fix (a): GetGlyph now uses FT_Set_Char_Size (DPI=100) and returns world-unit metrics.
-// Fix (b): wrap comparison and geometry are both in world units.
-// Fix (c): line pitch = binary step; centre-origin = binary RebuildAlignments formula.
-// Fix (d): align&3: 3->centre-H, 2->right, 0/1->left.
-void BakedStringBox::Layout() {
-    m_Lines.clear();
-    m_Dirty = false;
+// FitStrings -- word-wrap `text` at `requestedSize` into per-line WrappedLineInfo records:
+// reconstructed line text (raw substring of `text`, preserving original inter-word
+// spacing) + ink-extent metrics (maxBearingY/minBottom) + horizontal align offset +
+// raw advance width. No FancyBakedString/vertex data is produced -- callers decide
+// whether to build line objects (RebuildMeshes) or just measure (FitIntoVerticalBounds,
+// TotalHeight, GetTextWidth).
+// ASM-spec v1.6.1 Mortar::BakedStringBox::FitStrings @0x00246800 (line splitting) /
+//   RebuildAlignments @0x00245c78 (ink-extent + horizontal-offset math).
+static void FitStrings(FontCacheObjectTTF* font, const char* text, float requestedSize,
+                       int boxWidth, ALIGNMENT_TYPE align,
+                       std::vector<WrappedLineInfo>& outLines)
+{
+    outLines.clear();
+    if (!font || !text || text[0] == '\0') return;
 
-    if (!m_Font || !m_Text || m_Text[0] == '\0') {
-        return;
-    }
-
-    // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: shrink font (from
-    // m_BaseFontSize, step 1.0, floor 6.0) until lineCount<=m_MaxLines && no overflow,
-    // then build geometry.
-    // Helpers: FitStrings @0x00246800, FitStringToWidth @0x00248734,
-    //          GetFinalPointSize @0x002468fc (standalone copy of the same loop).
-    {
-        const int cap = (m_MaxLines < 1) ? 999999 : m_MaxLines;
-        m_FontSize = m_BaseFontSize;
-        for (;;) {
-            MeasureResult mr = MeasureWrap(m_Font, m_Text, m_FontSize, (float)m_BoxWidth);
-            if ((mr.lineCount <= cap && !mr.overflow) || m_FontSize <= 6.0f) break;
-            m_FontSize -= 1.0f;
-        }
-    }
-
-    const float requestedSize = m_FontSize;
-    if (requestedSize < 1.0f) {
-        return;
-    }
-
-    const float wrapLimit  = (float)m_BoxWidth;
-    // m_GradTop is the primary fill colour (binary m_FillTop +0x7c). SetColour writes
-    // m_GradTop; Layout() uses it for vertex colours. BakeGradient() overwrites for mode>=2.
-    const uint32_t packed  = m_GradTop.PlatformColour();
-
-    // Pre-render every codepoint in the string so atlas UVs are populated.
-    {
-        Mortar::Utf8StringIterator it(m_Text);
-        while (!it.IsEmpty()) {
-            if (it.m_CurrentCodepoint != (uint32_t)'\n')
-                m_Font->GetGlyph(it.m_CurrentCodepoint, requestedSize);
-            it++;
-        }
-    }
-    FontInterface* atlas = m_Font->GetAtlas();
-    if (atlas) atlas->BuildPendingTextures();
+    const float wrapLimit = (float)boxWidth;
 
     // Tokenise into logical lines split by '\n', then words within each line.
-    // Binary SetText splits on '\n' into separate lines before word-wrapping.
-    // FitIntoVerticalBounds @0x00246fbc then shrinks until all fit within box.
     std::vector<WordToken> words;
     {
-        const char* p = m_Text;
+        const char* p = text;
         while (*p) {
             while (*p == ' ') p++;
             if (!*p) break;
@@ -410,7 +356,7 @@ void BakedStringBox::Layout() {
                 WordToken tok;
                 tok.start     = ws;
                 tok.len       = (int)(lookahead - ws);
-                tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
+                tok.advance   = MeasureWord(font, ws, tok.len, requestedSize);
                 tok.hardBreak = false;
                 tok.cjk       = true;
                 words.push_back(tok);
@@ -425,7 +371,7 @@ void BakedStringBox::Layout() {
                 WordToken tok;
                 tok.start     = ws;
                 tok.len       = (int)(p - ws);
-                tok.advance   = MeasureWord(m_Font, ws, tok.len, requestedSize);
+                tok.advance   = MeasureWord(font, ws, tok.len, requestedSize);
                 tok.hardBreak = false;
                 tok.cjk       = false;
                 words.push_back(tok);
@@ -434,7 +380,7 @@ void BakedStringBox::Layout() {
     }
     if (words.empty()) return;
 
-    const float spAdv = SpaceAdvance(m_Font, requestedSize);
+    const float spAdv = SpaceAdvance(font, requestedSize);
 
     // Greedy line-fill loop. '\n' sentinels force a line break immediately.
     size_t wi = 0;
@@ -475,56 +421,66 @@ void BakedStringBox::Layout() {
 
         // ASM-verified: 2026-06-21T00:00Z v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (re-analyst):
         // per-line align uses ink extent (GetBounds.right-left), NOT advance sum; X truncated to int.
-        //
-        // Pre-pass: compute ink extent for this line. Pen starts at 0 (lineOffsetX not yet known).
-        // inkLeft  = penX_atFirstGlyph + firstGlyph.bearingX
-        // inkRight = penX_atLastGlyph  + lastGlyph.bearingX + lastGlyph.width
-        float lineInkWidth = 0.0f;
-        {
-            float penX = 0.0f;
-            bool firstInkGlyph = true;
-            float inkLeft  = 0.0f;
-            float inkRight = 0.0f;
-            bool firstWordInk = true;
-            size_t prevInkWj = lineStart; // last non-hardBreak word processed
-            for (size_t wj = lineStart; wj < lineEnd; wj++) {
-                if (words[wj].hardBreak) continue;
-                if (!firstWordInk) {
-                    // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no space between adjacent CJK tokens
-                    if (!words[wj].cjk && !words[prevInkWj].cjk) penX += spAdv;
-                }
-                prevInkWj = wj;
-                firstWordInk = false;
-                const char* wp    = words[wj].start;
-                const char* wpEnd = wp + words[wj].len;
-                while (wp < wpEnd) {
-                    uint32_t cp = Mortar::utf8::decode_next_unicode_character(&wp);
-                    if (cp == 0) break;
-                    const GlyphAtlasEntry* g = m_Font->GetGlyph(cp, requestedSize);
-                    if (!g) continue;
-                    if (g->width > 0.0f) {
-                        float gLeft  = penX + g->bearingX;
-                        float gRight = gLeft + g->width;
-                        if (firstInkGlyph) {
-                            inkLeft  = gLeft;
-                            inkRight = gRight;
-                            firstInkGlyph = false;
-                        } else {
-                            if (gRight > inkRight) inkRight = gRight;
-                        }
-                    }
-                    penX += g->advanceX + 1.0f;
-                }
+        // Ink-extent + text-span pass. Pen starts at 0 (lineOffsetX not yet known); the
+        // vertical metrics (bearingY/height) collected here are penX-independent, so this
+        // single pass covers both the horizontal-offset measurement AND the per-line
+        // ink-extent (maxBearingY/minBottom) the old two-pass Layout() computed separately.
+        float penX = 0.0f;
+        bool firstInkGlyph = true;
+        float inkLeft  = 0.0f;
+        float inkRight = 0.0f;
+        bool firstWordInk = true;
+        size_t prevInkWj = lineStart; // last non-hardBreak word processed
+        float lineMaxBearingY = 0.0f;
+        float lineMinBottom   = 0.0f;
+        const char* spanStart = 0;
+        const char* spanEnd   = 0;
+        for (size_t wj = lineStart; wj < lineEnd; wj++) {
+            if (words[wj].hardBreak) continue;
+            if (!firstWordInk) {
+                // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no space between adjacent CJK tokens
+                if (!words[wj].cjk && !words[prevInkWj].cjk) penX += spAdv;
+            } else {
+                spanStart = words[wj].start;
             }
-            lineInkWidth = firstInkGlyph ? lineWidth : (inkRight - inkLeft);
+            spanEnd = words[wj].start + words[wj].len;
+            prevInkWj = wj;
+            firstWordInk = false;
+
+            const char* wp    = words[wj].start;
+            const char* wpEnd = wp + words[wj].len;
+            while (wp < wpEnd) {
+                uint32_t cp = Mortar::utf8::decode_next_unicode_character(&wp);
+                if (cp == 0) break;
+                const GlyphAtlasEntry* g = font->GetGlyph(cp, requestedSize);
+                if (!g) continue;
+                if (g->width > 0.0f) {
+                    float gLeft  = penX + g->bearingX;
+                    float gRight = gLeft + g->width;
+                    if (firstInkGlyph) {
+                        inkLeft  = gLeft;
+                        inkRight = gRight;
+                        firstInkGlyph = false;
+                    } else if (gRight > inkRight) {
+                        inkRight = gRight;
+                    }
+                }
+                if (g->width > 0.0f && g->height > 0.0f) {
+                    if (g->bearingY > lineMaxBearingY) lineMaxBearingY = g->bearingY;
+                    float bottom = g->bearingY - g->height;
+                    if (bottom < lineMinBottom) lineMinBottom = bottom;
+                }
+                penX += g->advanceX + 1.0f;
+            }
         }
+        float lineInkWidth = firstInkGlyph ? lineWidth : (inkRight - inkLeft);
 
         // Fix (d): horizontal alignment.
         // Binary RebuildAlignments @0x00245c78 low-2-bits: 3=centre-H, 2=right, 0/1=left.
         // Uses ink extent (lineInkWidth), NOT advance sum. Result truncated to int.
         float lineOffsetX = 0.0f;
         {
-            const int horizAlign = m_Align & 0x3;
+            const int horizAlign = align & 0x3;
             if (horizAlign == 3) {
                 lineOffsetX = wrapLimit * 0.5f - lineInkWidth * 0.5f;
             } else if (horizAlign == 2) {
@@ -534,224 +490,198 @@ void BakedStringBox::Layout() {
             lineOffsetX = (float)(int)lineOffsetX;
         }
 
-        BakedStringBoxLine line;
-        float curX = lineOffsetX;
-        // Track per-line glyph bounds for RebuildAlignments maxAscent/minDescent.
-        float lineMaxBearingY = 0.0f;   // max bearingY across glyphs (above baseline)
-        float lineMinBottom   = 0.0f;   // min (bearingY - height) across glyphs (below baseline, negative)
-
-        bool firstWordOnLine = true;
-        size_t prevLineWj = lineStart; // last non-hardBreak word drawn on this line
-        for (size_t wj = lineStart; wj < lineEnd; wj++) {
-            if (words[wj].hardBreak) continue; // skip '\n' sentinels
-            if (!firstWordOnLine) {
-                // v1.6.1 WordWrap::CanBreakLineAt @ 0x002509cc: no space between adjacent CJK tokens
-                if (!words[wj].cjk && !words[prevLineWj].cjk) curX += spAdv;
-            }
-            prevLineWj = wj;
-            firstWordOnLine = false;
-            const char* wp    = words[wj].start;
-            const char* wpEnd = wp + words[wj].len;
-            while (wp < wpEnd) {
-                uint32_t cp = Mortar::utf8::decode_next_unicode_character(&wp);
-                if (cp == 0) break;
-                const GlyphAtlasEntry* g = m_Font->GetGlyph(cp, requestedSize);
-                if (!g) continue;
-
-                // Advance per binary ApplyFormatting_LeftJustify @ 0x00247874:
-                // penX += advance (world units) + tracking(=0) + 1.0.
-
-                if (g->width > 0.0f && g->height > 0.0f) {
-                    // Glyph quad: bearingX/Y are world-unit metrics.
-                    float x0 = curX + g->bearingX;
-                    float y1 = g->bearingY;           // top above baseline
-                    float x1 = x0 + g->width;
-                    float y0 = y1 - g->height;        // bottom below baseline
-
-                    QUADCUSTOMVERTEX v[6];
-                    v[0] = { x0, y0, 0.f, 0,0,1, packed, g->u0, g->v1 };
-                    v[1] = { x0, y1, 0.f, 0,0,1, packed, g->u0, g->v0 };
-                    v[2] = { x1, y0, 0.f, 0,0,1, packed, g->u1, g->v1 };
-                    v[3] = { x1, y1, 0.f, 0,0,1, packed, g->u1, g->v0 };
-                    v[4] = v[3];
-                    v[5] = v[3];
-                    for (int k = 0; k < 6; k++) line.verts.push_back(v[k]);
-                    // Record which atlas page this glyph belongs to for per-page batching in Draw.
-                    line.glyphPageTexIDs.push_back((uint32_t)g->pageTextureID);
-                    // Shadow-blur support (#257): remember codepoint + pre-bearing pen X so
-                    // Draw()'s shadow pass can refetch a BLUR-effect glyph at the same pen slot.
-                    line.glyphCodepoints.push_back(cp);
-                    line.glyphPenX.push_back(curX);
-
-                    if (g->bearingY > lineMaxBearingY)
-                        lineMaxBearingY = g->bearingY;
-                    float bottom = g->bearingY - g->height;
-                    if (bottom < lineMinBottom)
-                        lineMinBottom = bottom;
-                }
-
-                curX += g->advanceX + 1.0f;
-            }
+        WrappedLineInfo info;
+        if (spanStart && spanEnd && spanEnd > spanStart) {
+            info.text.assign(spanStart, (size_t)(spanEnd - spanStart));
         }
+        info.offsetX      = lineOffsetX;
+        info.maxBearingY  = lineMaxBearingY;
+        info.minBottom    = lineMinBottom;
+        info.advanceWidth = lineWidth;
+        outLines.push_back(info);
 
-        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @ 0x00245c78:
-        // step = (int)(m_CurrentFontSize + (m_LineSpacing - (m_BaseFontSize - m_CurrentFontSize)*0.5))
-        // Binary truncates (C-cast to int), not rounds. m_BaseFontSize tracks the initial
-        // or last-SetFontSize size; after FitIntoVerticalBounds+SetFontSize both are equal
-        // so the shrink term is 0 and step = (int)(fontSize + m_LineSpacing).
-        float diffShrink = m_BaseFontSize - requestedSize;
-        float step = (float)(int)(requestedSize + ((float)m_LineSpacing - diffShrink * 0.5f));
-
-        line.height       = step;
-        line.width        = lineWidth;
-        line.maxBearingY  = lineMaxBearingY;
-        line.minBottom    = lineMinBottom;
-        m_Lines.push_back(line);
         wi = lineEnd;
-    }
-
-    // Re-bake gradient on every mesh rebuild (mirrors binary ApplyEffects inside FullInternalRebuild).
-    if (m_GradMode >= 2 && !m_Lines.empty()) {
-        BakeGradient();
     }
 }
 
-// BakeGradient — bake-time gradient: mirrors binary ApplyEffects path inside FullInternalRebuild.
-// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
-// FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
-// ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4: c0->c3 base +
-// 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
-void BakedStringBox::BakeGradient() {
-    if (m_Lines.empty()) return;
+void BakedStringBox::FitIntoVerticalBounds() {
+    if (!m_Font) return;
+    // ASM-spec v1.6.1 BakedStringBox::FitIntoVerticalBounds @ 0x00246fbc:
+    // Shrinks m_FontSize in 1.0-px steps until total ink height < m_BoxHeight (HEIGHT predicate,
+    // NOT line-count). Binary loop:
+    //   RebuildMeshes(); N = numLines; if (N == 0) return;
+    //   step = per-line pitch (RebuildAlignments @ 0x00245c78)
+    //   totalInkHeight = maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
+    //   if (totalInkHeight < m_BoxHeight) return;  // fits
+    //   nextSize = m_FontSize - 1.0f;
+    //   if (nextSize < 6.0f) return;               // floor: stop without applying the too-small size
+    //   SetFontSize(nextSize);  // writes BOTH m_FontSize AND m_BaseFontSize, marks dirty
+    //
+    // No per-line ink-extent cache survives on a built FancyBakedString line (sizeof(box)
+    // is pinned at 200B), so this re-measures via FitStrings after each RebuildMeshes call
+    // rather than reading it back off the line objects -- mirrors the binary's likely
+    // multiple near-duplicate measurement loops (GetFinalPointSize is already documented
+    // as "a standalone copy of the same loop").
+    for (;;) {
+        RebuildMeshes();
+        int N = (int)m_Lines.size();
+        if (N == 0) return;
 
-    // Replicate the bbox computation the binary does in Transform_LinearGradient_TopBottom:
-    // yTop/yBot span the whole rendered block (same Y extents Draw used to use at render-time).
-    // The binary's "rectTop" / "rectBottom" are the block-level Y bounds before per-line offset.
-    float minDescent = 0.0f;
-    for (size_t li = 0; li < m_Lines.size(); ++li) {
-        if (m_Lines[li].minBottom < minDescent)
-            minDescent = m_Lines[li].minBottom;
+        std::vector<WrappedLineInfo> wl;
+        FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
+        if (wl.empty()) return;
+
+        float diffShrink = m_BaseFontSize - m_FontSize;
+        float step = (float)(int)(m_FontSize + ((float)m_LineSpacing - diffShrink * 0.5f));
+        float totalInkHeight = wl[0].maxBearingY
+                             + (float)(N - 1) * step
+                             + (-wl[N - 1].minBottom);
+        if (totalInkHeight < (float)m_BoxHeight) return;
+
+        float nextSize = m_FontSize - 1.0f;
+        if (nextSize < 6.0f) return;
+        SetFontSize(nextSize);
     }
-    const float step   = m_Lines[0].height;
-    const int   nLines = (int)m_Lines.size();
+}
 
-    // Vertical anchor formula: mirrors Draw's baselineY computation (centre-V path for bake,
-    // but we need the same Y as Draw will use for actual rendering so colours match geometry).
-    // We replicate the full baselineY logic from Draw so per-line localBaseY is consistent.
-    // TODO: v1.6.1 0x00245c78 (RebuildAlignments) -- BakeGradient should use single-line else-branch
-    //   at nLines==1: -boxH*0.5 - (fontSize+4.0)*0.5 instead of the multi-line formula below.
-    float baselineY = 0.0f;
-    const int vertAlign = m_Align & 0xc;
-    if (vertAlign == 0xc) {
-        baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
-                     + (step * (float)nLines) * 0.5f) - minDescent;
-    } else if ((m_Align & 0x8) == 0) {
-        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78: top-anchored
-        // ink-center = translationY - step/2 (descent sign was flipped; kept in sync with
-        // ComputeBaselineY's top-anchored branch).
-        const BakedStringBoxLine& l0 = m_Lines[0];
-        float ascentSpan = l0.maxBearingY - l0.minBottom;
-        float descent    = -l0.minBottom;
-        baselineY = -(ascentSpan * 0.5f) - step * 0.5f + descent;
-    } else {
-        baselineY = m_BoxHeight;
+float BakedStringBox::TotalHeight() const {
+    // Binary FitIntoVerticalBounds @ 0x00246fbc: totalInkHeight = maxBearingY(line0)
+    // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
+    // (= (int)(fontSize + m_LineSpacing)); no separate inter-line spacing term.
+    std::vector<WrappedLineInfo> wl;
+    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
+    int N = (int)wl.size();
+    if (N == 0) return 0.0f;
+    float diffShrink = m_BaseFontSize - m_FontSize;
+    float step = (float)(int)(m_FontSize + ((float)m_LineSpacing - diffShrink * 0.5f));
+    return wl[0].maxBearingY
+         + (float)(N - 1) * step
+         + (-wl[N - 1].minBottom);
+}
+
+// RebuildMeshes -- thin per-line FancyBakedString dispatcher build path.
+// ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x002469c0: shrink-by-linecount
+// loop (FitStrings/MeasureWrap, floor 6.0px) picks m_FontSize; DeleteStrings() frees the
+// previous line set; then one FancyBakedString per wrapped line is constructed (17-arg
+// ctor), the active gradient/stroke-gradient is applied, and each line's LOCAL draw
+// offset is written into its own LineOffset() via ComputeBaselineY (reused unchanged
+// from the pre-restructure Layout()/RebuildAlignments math).
+void BakedStringBox::RebuildMeshes() {
+    DeleteStrings();
+    m_WrappedLines.clear();
+    m_Dirty = false;
+
+    if (!m_Font || !m_Text || m_Text[0] == '\0') {
+        return;
     }
 
-    // Block Y range: top of first-line ascent to bottom of last-line descent.
-    float gradYTop = baselineY + m_Lines[0].maxBearingY;
-    float lastBaseline = baselineY - (float)(nLines - 1) * step;
-    float gradYBot = lastBaseline + minDescent;
-    float gradYRange = gradYTop - gradYBot;
-    // Binary clamp: if (range < 1.0) range = 1.0  (Transform_LinearGradient_TopBottom @0x00247a48)
-    if (gradYRange < 1.0f) gradYRange = 1.0f;
-
-    // c0=m_GradTop, c3=m_GradCol3 for metallic base lerp; c0=m_GradTop, c1=m_GradBottom for 2-stop.
-    // Binary metallic param order: c0=top, c1=m_GradBottom, c2=m_GradCol2, c3=m_GradCol3.
-    const Colour& colTop    = m_GradTop;
-    const Colour& colBot2   = m_GradBottom;   // metallic c1 / 2-stop bottom
-    const Colour& colBand2  = m_GradCol2;     // metallic c2
-    const Colour& colBot4   = m_GradCol3;     // metallic c3 (full bottom)
-
-    for (size_t li = 0; li < m_Lines.size(); ++li) {
-        BakedStringBoxLine& line = m_Lines[li];
-        const int nVerts = (int)line.verts.size();
-        float localBaseY = baselineY - (float)li * step;
-
-        for (int vi = 0; vi < nVerts; ++vi) {
-            // Layout Y: same expression Draw uses to compute the pre-transform Y.
-            float layoutY = line.verts[vi].y + localBaseY;
-
-            unsigned char r, g, b, a;
-
-            if (m_GradMode == 4) {
-                // Metallic: step 1 — full c0->c3 base lerp (Transform_LinearGradient_TopBottom).
-                // vy >= yTop or vy < yBot -> solid top colour (edge clamp, binary behaviour).
-                float t;
-                if (layoutY >= gradYTop || layoutY < gradYBot) {
-                    t = 0.0f;
-                } else {
-                    t = (gradYTop - layoutY) / gradYRange;
-                }
-                // Per-channel: top*(1-t) + bot*t, normalised /255 then *(int)255, truncated.
-                // t=0 at top (layoutY>=gradYTop) -> top colour; t=1 at bottom -> bottom colour.
-                float fr = (colTop.r / 255.0f) * (1.0f - t) + (colBot4.r / 255.0f) * t;
-                float fg = (colTop.g / 255.0f) * (1.0f - t) + (colBot4.g / 255.0f) * t;
-                float fb = (colTop.b / 255.0f) * (1.0f - t) + (colBot4.b / 255.0f) * t;
-                float fa = (colTop.a / 255.0f) * (1.0f - t) + (colBot4.a / 255.0f) * t;
-                r = (unsigned char)(int)(fr * 255.0f);
-                g = (unsigned char)(int)(fg * 255.0f);
-                b = (unsigned char)(int)(fb * 255.0f);
-                a = (unsigned char)(int)(fa * 255.0f);
-
-                // Metallic: step 2 — ApplyGradientSplit(0.51, c1=m_GradBottom).
-                // ASM-verified v1.6.1 Transform_GradientSplit @0x0024954c: plane d = -(sum*frac)
-                // with sum=(rectTop+rectBottom); per-vertex test paints the side vy + d > eps,
-                // i.e. vy > -d = frac*(gradYTop+gradYBot) (greater-Y / upper side).
-                float plane1 = 0.51f * (gradYTop + gradYBot);
-                if (layoutY > plane1) {
-                    r = colBot2.r;
-                    g = colBot2.g;
-                    b = colBot2.b;
-                    a = colBot2.a;
-                }
-
-                // Metallic: step 3 — ApplyGradientSplit(0.49, c2=m_GradCol2).
-                // 0.49 plane sits below the 0.51 plane, so c2 overpaints c1 above it,
-                // leaving a thin c1 strip between the two planes.
-                float plane2 = 0.49f * (gradYTop + gradYBot);
-                if (layoutY > plane2) {
-                    r = colBand2.r;
-                    g = colBand2.g;
-                    b = colBand2.b;
-                    a = colBand2.a;
-                }
-            } else {
-                // 2-stop gradient (m_GradMode == 2): Transform_LinearGradient_TopBottom.
-                float t;
-                if (layoutY >= gradYTop || layoutY < gradYBot) {
-                    t = 0.0f;
-                } else {
-                    t = (gradYTop - layoutY) / gradYRange;
-                }
-                // top*(1-t) + bot*t: t=0 at top -> top colour, t=1 at bottom -> bottom colour.
-                float fr = (colTop.r / 255.0f) * (1.0f - t) + (colBot2.r / 255.0f) * t;
-                float fg = (colTop.g / 255.0f) * (1.0f - t) + (colBot2.g / 255.0f) * t;
-                float fb = (colTop.b / 255.0f) * (1.0f - t) + (colBot2.b / 255.0f) * t;
-                float fa = (colTop.a / 255.0f) * (1.0f - t) + (colBot2.a / 255.0f) * t;
-                r = (unsigned char)(int)(fr * 255.0f);
-                g = (unsigned char)(int)(fg * 255.0f);
-                b = (unsigned char)(int)(fb * 255.0f);
-                a = (unsigned char)(int)(fa * 255.0f);
-            }
-
-            line.verts[vi].colour = Colour(r, g, b, a).PlatformColour();
+    // Shrink font (from m_BaseFontSize, step 1.0, floor 6.0) until lineCount<=m_MaxLines
+    // && no overflow. Helpers: FitStringToWidth @0x00248734, GetFinalPointSize @0x002468fc
+    // (standalone copy of the same loop).
+    {
+        const int cap = (m_MaxLines < 1) ? 999999 : m_MaxLines;
+        m_FontSize = m_BaseFontSize;
+        for (;;) {
+            MeasureResult mr = MeasureWrap(m_Font, m_Text, m_FontSize, (float)m_BoxWidth);
+            if ((mr.lineCount <= cap && !mr.overflow) || m_FontSize <= 6.0f) break;
+            m_FontSize -= 1.0f;
         }
     }
+
+    const float requestedSize = m_FontSize;
+    if (requestedSize < 1.0f) {
+        return;
+    }
+
+    // Pre-render every codepoint in the string so atlas UVs are populated before the
+    // per-line FancyBakedString ctors below (which each re-measure/re-fetch the same
+    // glyphs at construction time).
+    {
+        Mortar::Utf8StringIterator it(m_Text);
+        while (!it.IsEmpty()) {
+            if (it.m_CurrentCodepoint != (uint32_t)'\n')
+                m_Font->GetGlyph(it.m_CurrentCodepoint, requestedSize);
+            it++;
+        }
+    }
+    FontInterface* atlas = m_Font->GetAtlas();
+    if (atlas) atlas->BuildPendingTextures();
+
+    std::vector<WrappedLineInfo> wl;
+    FitStrings(m_Font, m_Text, requestedSize, m_BoxWidth, m_Align, wl);
+    if (wl.empty()) return;
+
+    const int nLines = (int)wl.size();
+
+    // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @ 0x00245c78:
+    // step = (int)(m_CurrentFontSize + (m_LineSpacing - (m_BaseFontSize - m_CurrentFontSize)*0.5))
+    // Binary truncates (C-cast to int), not rounds. m_BaseFontSize tracks the initial
+    // or last-SetFontSize size; after FitIntoVerticalBounds+SetFontSize both are equal
+    // so the shrink term is 0 and step = (int)(fontSize + m_LineSpacing).
+    float diffShrink = m_BaseFontSize - requestedSize;
+    float step = (float)(int)(requestedSize + ((float)m_LineSpacing - diffShrink * 0.5f));
+
+    // maxSpan = max(maxBearingY - minBottom) across all lines -- multi-line centre-V input.
+    float maxSpan = 0.0f;
+    for (int i = 0; i < nLines; i++) {
+        float span = wl[i].maxBearingY - wl[i].minBottom;
+        if (span > maxSpan) maxSpan = span;
+    }
+
+    for (int i = 0; i < nLines; i++) {
+        m_WrappedLines.push_back(wl[i].text);
+
+        FancyBakedString* line = new FancyBakedString(
+            m_Font, wl[i].text.c_str(), m_FontSize,
+            m_GradTop, m_AlignMode, 0.0f,
+            m_StrokeWidth, m_StrokeCol0,
+            m_ShadowScale, m_ShadowCol,
+            m_StrokeLayerWidth, m_StrokeLayerColour,
+            m_ShadowFlag, m_ExtraWidth, m_ExtraParam,
+            m_Extra1Colour, m_Extra2Colour);
+
+        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: m_MetallicFlag ->
+        // ApplyMetallicGradient; else m_ColourMode==2 -> ApplyGradient(top,bottom);
+        // ==3 -> ApplyGradient(top,mid,bottom). Mode 1 (solid) needs no extra call --
+        // mainCol already carries m_GradTop from the ctor above.
+        if (m_MetallicFlag) {
+            line->ApplyMetallicGradient(m_GradTop, m_GradBottom, m_GradCol2, m_GradCol3);
+        } else if (m_GradMode == 2) {
+            line->ApplyGradient(m_GradTop, m_GradBottom);
+        } else if (m_GradMode == 3) {
+            // No live port setter reaches mode 3 today (only SetColour/SetGradient/
+            // SetMetallicGradient exist, writing modes 1/2/4) -- field mapping inferred
+            // from the metallic layout (top/mid/bottom = m_GradTop/m_GradBottom/m_GradCol2),
+            // ported per stub-don't-skip so the shape matches the binary if a mode-3
+            // setter is added later.
+            line->ApplyGradient(m_GradTop, m_GradBottom, m_GradCol2);
+        }
+
+        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: m_StrokeCount(+0x58)
+        // 2 -> ApplyStrokeGradient(Col0,Col1); 3 -> ApplyStrokeGradient(Col0,Col1,Col2);
+        // 1 -> solid Col0 (already the glowCol passed to the ctor above; no extra call).
+        if (m_StrokeCount == 2) {
+            line->ApplyStrokeGradient(m_StrokeCol0, m_StrokeCol1);
+        } else if (m_StrokeCount == 3) {
+            line->ApplyStrokeGradient(m_StrokeCol0, m_StrokeCol1, m_StrokeCol2);
+        }
+
+        // Per-line LOCAL draw offset (reuses ComputeBaselineY unchanged from the
+        // pre-restructure Layout()/Draw() vertical-baseline math; horizontal offset
+        // is FitStrings' ink-extent-based lineOffsetX, also unchanged).
+        float localBaseY = ComputeBaselineY(m_Align, nLines, i, wl[i].maxBearingY, wl[i].minBottom,
+                                            (float)m_BoxHeight, step, maxSpan, requestedSize);
+        line->LineOffset() = Vec3(wl[i].offsetX, localBaseY, 0.0f);
+
+        m_Lines.push_back(line);
+    }
+
+    m_Visible = true;
 }
 
 // SetGradient  binary @ 0x0024566c
-// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
-// FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
+// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: perGlyph!=0 calls
+// FancyBakedString::ApplyGradient(top,bottom) per existing line immediately (no m_Dirty).
 void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
     if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
@@ -762,8 +692,10 @@ void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
         m_MetallicFlag = 0;
         if (!perGlyph) {
             m_Dirty = true;
-        } else if (!m_Lines.empty()) {
-            BakeGradient();
+        } else {
+            for (size_t i = 0; i < m_Lines.size(); ++i) {
+                if (m_Lines[i]) m_Lines[i]->ApplyGradient(top, bottom);
+            }
         }
     }
 }
@@ -785,7 +717,9 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
         m_GradCol2      = c2;
         m_GradCol3      = c3;
         if (!m_Lines.empty()) {
-            BakeGradient();
+            for (size_t i = 0; i < m_Lines.size(); ++i) {
+                if (m_Lines[i]) m_Lines[i]->ApplyMetallicGradient(top, bottom, c2, c3);
+            }
         } else {
             m_Dirty = true;
         }
@@ -894,39 +828,25 @@ float BakedStringBox::ComputeBaselineY(int align, int nLines, int lineIdx,
 }
 
 // ASM-spec v1.6.1 Mortar::BakedStringBox::Draw @0x00246e20: (Vec2 scale, float rotation, bool center).
+// Thin per-line dispatcher -- NO inline vertex work. All glyph rasterisation, shadow/
+// glow/stroke/bevel layering, and gradient application happens inside FancyBakedString/
+// BakedStringTTF (built by RebuildMeshes). This method only: lazily rebuilds, computes
+// the box-level anchor, and for each line reads its precomputed LineOffset(), rotates/
+// scales it, translates by the anchor, and calls FancyBakedString::Draw.
 void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     if (!m_Font) return;
-    if (m_Dirty) Layout();
+    if (m_Dirty) RebuildMeshes();
     if (m_Lines.empty()) return;
 
     FontInterface* atlas = m_Font->GetAtlas();
     if (!atlas) return;
     atlas->BuildPendingTextures();
 
-    // Binary RebuildAlignments @ 0x00245c78: step stored per-line in line.height.
-    // Compute maxSpan = max(maxBearingY - minBottom) across all lines (binary iVar7,
-    // the max glyph ink-span used in the multi-line center-V baseline formula).
-    float maxSpan = 0.0f;
-    for (size_t li = 0; li < m_Lines.size(); ++li) {
-        float span = m_Lines[li].maxBearingY - m_Lines[li].minBottom;
-        if (span > maxSpan) maxSpan = span;
-    }
-
-    const float step   = m_Lines[0].height;
-    const int   nLines = (int)m_Lines.size();
-
     // World-space anchor.
     Vec3 anchor = m_Pos;
 
-    // Vertical alignment via ComputeBaselineY() (binary RebuildAlignments @ 0x00245c78).
-    // lineIdx=0: the Draw loop below applies the per-line offset via baselineY - li*step.
-    // m_FontSize = m_CurrentFontSize @+0xc4 (possibly shrunk by FitIntoVerticalBounds).
-    float baselineY = ComputeBaselineY(m_Align, nLines, 0,
-                                       m_Lines[0].maxBearingY, m_Lines[0].minBottom,
-                                       m_BoxHeight, step, maxSpan, m_FontSize);
-
     // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20: center recenters only the scale-shrink
-    // delta (0 at scale=1); per-line centering is in Layout/RebuildAlignments.
+    // delta (0 at scale=1); per-line centering is baked into LineOffset() by RebuildMeshes.
     //   anchor.x += boxW*0.5 - boxW*scale.x*0.5
     //   anchor.y -= boxH*0.5 - boxH*scale.y*0.5
     // At scale=(1,1) both correction terms are 0 -> anchor == m_Pos.
@@ -934,29 +854,6 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         anchor.x += m_BoxWidth  * 0.5f - m_BoxWidth  * scale.x * 0.5f;
         anchor.y -= m_BoxHeight * 0.5f - m_BoxHeight * scale.y * 0.5f;
     }
-
-    // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20 (per-line dispatch; matrix via
-    // BakedStringTTF::Draw @0x002497a8): each pass below sets the world matrix per line
-    // as T(anchor[+shadowOffset]) * RotZ(rotation) * ScaleRows(scale) * TranslateLocal(0,localBaseY,0),
-    // algebraically identical to the old per-vertex CPU formula
-    //   x' = cosT*(x*scale.x) - sinT*((y+localBaseY)*scale.y) + anchor.x[+sdx]
-    //   y' = sinT*(x*scale.x) + cosT*((y+localBaseY)*scale.y) + anchor.y[+sdy]
-    // No box-level Push/Pop wrapper -- the binary never wraps at box level; each
-    // per-line Reset() below handles it (mirrors BakedStringTTF::Draw's world.Reset()).
-    // Port specific: MatrixManager/MatrixStack aren't linked by the FN_GL_STUB
-    // unit-test build (which only exercises ComputeBaselineY, never Draw's render
-    // path); `world` is declared under the same guard as its 3 per-pass call
-    // sites below so the stub build never references MatrixManager/MatrixStack.
-    // Guard is FN_GL_STUB only (NOT __bada__ too) -- this is the real binary-faithful
-    // matrix path (mirrors BakedStringTTF::Draw @0x002497a8, which has no such guard
-    // at all) and must run on bada production + the asm-verify cross-build, unlike
-    // the host-only DIFFERS/debug blocks below that legitimately exclude __bada__.
-    // Renderer IS stubbed under FN_GL_STUB, so `renderer` stays unguarded.
-#if !defined(FN_GL_STUB)
-    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
-#endif
-
-    Renderer* renderer = Renderer::GetInstance();
 
     // Apply worldspace scissor clip if set.
     // DIFFERS: original = CPU ClipAgainstPlanes geometry clip (v1.6.1 BakedStringBox::ClipToRectangle
@@ -994,353 +891,38 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     }
 #endif
 
-    // Render lines. Line 0 baseline at baselineY (relative to box centre / anchor.y),
-    // each subsequent line step lower (decreasing Y).
-
-    // --- Shadow pass (drawn first, behind all other passes) ---
-    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: shadow drawn first at drawPos + m_Translation (m_ShadowOffset).
-    // Each shadow glyph is a SEPARATELY-RASTERISED BLUR-effect glyph (v1.6.1 RenderGlyph
-    // @0x0024f5dc, BuildBlur @0x0024f030) refetched via FontCacheObjectTTF::GetGlyph(cp,
-    // size, FONT_EFFECT_BLUR, radius) -- not a solid copy of the sharp glyph mesh.
-    // ASM-verified: 2026-07-08T00:00Z v1.6.1 BakedStringTTF::BakedStringTTF @ 0x00249a5c
-    //   (blur radius = ceil(effectScale * FontInterface.m_FontScale @+0xc); FontInterface::Initialize
-    //   @0x00250470 sets +0xc=m_FontScale, +0x10=m_InvFontScale) (asm-inspector)
-    //   radius = clamp(ceil(m_ShadowScale * atlas->m_FontScale), 0, 32)  [RASTER px]
-    {
-        const bool doShadow = (!m_ShadowFlag && m_ShadowScale > 0.0f) ||
-                              (m_ShadowFlag  && m_ShadowScale >= 0.0f);
-        if (doShadow) {
-            // Radius is an atlas/raster-pixel count -> scales by the forward m_FontScale (+0xc),
-            // NOT the inverse. The binary uses m_InvFontScale (+0x10) only for the shadow *offset*.
-            FontInterface* shadowAtlas = m_Font->GetAtlas();
-            float fontScale = shadowAtlas ? shadowAtlas->m_FontScale : 1.0f;
-            float radF = ceilf(m_ShadowScale * fontScale);
-            if (radF < 0.0f) radF = 0.0f;
-            if (radF > 32.0f) radF = 32.0f;
-            const int shadowRadius = (int)radF;
-
-            // Pre-render pass: create/cache every blurred glyph this line set needs
-            // BEFORE the atlas upload below, mirroring Layout()'s pre-render-then-
-            // BuildPendingTextures pattern for the sharp glyphs. Without this, a
-            // newly-rasterised shadow glyph's atlas page would still be dirty when
-            // the batched draw calls below bind it this frame (one-frame stale/blank
-            // glyph on first use).
-            for (size_t pli = 0; pli < m_Lines.size(); pli++) {
-                const BakedStringBoxLine& pline = m_Lines[pli];
-                for (size_t pgi = 0; pgi < pline.glyphCodepoints.size(); pgi++) {
-                    m_Font->GetGlyph(pline.glyphCodepoints[pgi], m_FontSize,
-                                     Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR,
-                                     shadowRadius);
-                }
-            }
-            if (shadowAtlas) shadowAtlas->BuildPendingTextures();
-
-            const uint32_t shadowPacked = m_ShadowCol.PlatformColour();
-            const float sdx = m_ShadowOffset.x;
-            const float sdy = m_ShadowOffset.y;
-            for (size_t li = 0; li < m_Lines.size(); li++) {
-                const BakedStringBoxLine& sline = m_Lines[li];
-                const size_t numShadowGlyphs = sline.glyphCodepoints.size();
-                if (numShadowGlyphs == 0) continue;
-                const float localBaseY = baselineY - (float)li * step;
-
-                // Build the blurred-glyph shadow mesh for this line (own UVs/quad sizes --
-                // NOT sline.verts, which holds the sharp glyph mesh).
-                std::vector<QUADCUSTOMVERTEX> wv;
-                wv.reserve(numShadowGlyphs * 6);
-                std::vector<uint32_t> shadowPageTexIDs;
-                shadowPageTexIDs.reserve(numShadowGlyphs);
-
-                for (size_t gi = 0; gi < numShadowGlyphs; gi++) {
-                    const GlyphAtlasEntry* g = m_Font->GetGlyph(sline.glyphCodepoints[gi], m_FontSize,
-                                                                Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR,
-                                                                shadowRadius);
-                    if (!g || g->width <= 0.0f || g->height <= 0.0f) continue;
-                    const float penX = sline.glyphPenX[gi];
-                    const float x0 = penX + g->bearingX;
-                    const float y1 = g->bearingY;
-                    const float x1 = x0 + g->width;
-                    const float y0 = y1 - g->height;
-
-                    QUADCUSTOMVERTEX v[6] = {
-                        { x0, y0, 0.f, 0,0,1, shadowPacked, g->u0, g->v1 },
-                        { x0, y1, 0.f, 0,0,1, shadowPacked, g->u0, g->v0 },
-                        { x1, y0, 0.f, 0,0,1, shadowPacked, g->u1, g->v1 },
-                        { x1, y1, 0.f, 0,0,1, shadowPacked, g->u1, g->v0 },
-                    };
-                    v[4] = v[3];
-                    v[5] = v[3];
-                    for (int k = 0; k < 6; k++) wv.push_back(v[k]);
-                    shadowPageTexIDs.push_back((uint32_t)g->pageTextureID);
-                }
-                if (wv.empty()) continue;
-
-                const int nVerts = (int)wv.size();
-                // Wire degenerate connector between glyphs in the tri-strip (unchanged
-                // topology patch -- NOT a transform; operates on local coordinates now).
-                for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
-                    wv[gi2 * 6 - 1] = wv[gi2 * 6];
-                }
-                // Matrix-driven per-line transform (shadow anchor includes m_ShadowOffset).
-                // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
-#if !defined(FN_GL_STUB)
-                world.Reset();
-                world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
-                world.ScaleRows(scale.x, scale.y, 1.0f);
-                world.RotZ(rotation);
-                world.Translate(Vec3(anchor.x + sdx, anchor.y + sdy, anchor.z));
-                MatrixManager::GetInstance().UploadModelViewOnly();
-#endif
-                // Per-page batch: draw consecutive same-page glyph runs.
-                {
-                    const int numGlyphs = (int)shadowPageTexIDs.size();
-                    int gIdx = 0;
-                    while (gIdx < numGlyphs) {
-                        uint32_t curTex = shadowPageTexIDs[gIdx];
-                        int runStart = gIdx;
-                        while (gIdx < numGlyphs && shadowPageTexIDs[gIdx] == curTex) gIdx++;
-                        glActiveTexture(GL_TEXTURE0);
-                        glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
-                        glEnable(GL_TEXTURE_2D);
-                        TexEnvModulate();
-                        renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
-                    }
-                }
-            }
-        }
-    }
-
-    // --- Stroke (glow) pass (drawn after shadow, before foreground) ---
-    // ASM-spec v1.6.1 FancyBakedString::Draw @0x0024b8e4: m_pGlow (stroke) drawn at drawPos,
-    // BEHIND m_pMain -- a single SDF-outlined glyph (RenderGlyph @0x0024f5dc effect==1 STROKE,
-    // BuildStrokes @0x0024edb8), same pad-then-rasterise pattern as the shadow BLUR pass above.
-    // Radius reuses atlas->m_FontScale exactly like the shadow pass (BakedStringTTF ctor
-    // @0x00249a5c formula), not a separate stroke-specific scale field.
-    // Dead in v1.6.1: INNER_GLOW layer (BuildInnerGlow @0x0024f27c) has no setter writing its
-    //   gate (+0x68) -> zero call sites; not ported.
-    // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: per line, m_StrokeMode(+0x58)
-    //   2 -> ApplyStrokeGradient(Col0,Col1); 3 -> ApplyStrokeGradient(Col0,Col1,Col2); 1 -> solid Col0.
-    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024afb0 (2-arg): top=Col0, bottom=Col1,
-    //   per-vertex top->bottom lerp over the glow(stroke) layer's own mesh Y-bbox, per wrapped line.
-    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024b010 (3-arg): base Col0->Col2 then
-    //   split at 0.5 -> Col1 on the upper half.
-    if (m_StrokeWidth > 0.0f && m_StrokeCount >= 1) {
-        FontInterface* strokeAtlas = m_Font->GetAtlas();
-        float strokeFontScale = strokeAtlas ? strokeAtlas->m_FontScale : 1.0f;
-        float strokeRadF = ceilf(m_StrokeWidth * strokeFontScale);
-        if (strokeRadF < 0.0f) strokeRadF = 0.0f;
-        if (strokeRadF > 32.0f) strokeRadF = 32.0f;
-        const int strokeRadius = (int)strokeRadF;
-
-        // Pre-render pass, mirroring the shadow pass above: build/cache every stroke
-        // glyph this line set needs before the batched upload+draw below.
-        for (size_t pli = 0; pli < m_Lines.size(); pli++) {
-            const BakedStringBoxLine& pline = m_Lines[pli];
-            for (size_t pgi = 0; pgi < pline.glyphCodepoints.size(); pgi++) {
-                m_Font->GetGlyph(pline.glyphCodepoints[pgi], m_FontSize,
-                                 Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE,
-                                 strokeRadius);
-            }
-        }
-        if (strokeAtlas) strokeAtlas->BuildPendingTextures();
-
-        const uint32_t strokePacked = m_StrokeCol0.PlatformColour();
-        for (size_t li = 0; li < m_Lines.size(); li++) {
-            const BakedStringBoxLine& sline = m_Lines[li];
-            const size_t numStrokeGlyphs = sline.glyphCodepoints.size();
-            if (numStrokeGlyphs == 0) continue;
-            const float localBaseY = baselineY - (float)li * step;
-
-            // Build the SDF-outlined stroke mesh for this line (own UVs/quad sizes --
-            // NOT sline.verts, which holds the sharp glyph mesh).
-            std::vector<QUADCUSTOMVERTEX> wv;
-            wv.reserve(numStrokeGlyphs * 6);
-            std::vector<uint32_t> strokePageTexIDs;
-            strokePageTexIDs.reserve(numStrokeGlyphs);
-
-            for (size_t gi = 0; gi < numStrokeGlyphs; gi++) {
-                const GlyphAtlasEntry* g = m_Font->GetGlyph(sline.glyphCodepoints[gi], m_FontSize,
-                                                            Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE,
-                                                            strokeRadius);
-                if (!g || g->width <= 0.0f || g->height <= 0.0f) continue;
-                const float penX = sline.glyphPenX[gi];
-                const float x0 = penX + g->bearingX;
-                const float y1 = g->bearingY;
-                const float x1 = x0 + g->width;
-                const float y0 = y1 - g->height;
-
-                QUADCUSTOMVERTEX v[6] = {
-                    { x0, y0, 0.f, 0,0,1, strokePacked, g->u0, g->v1 },
-                    { x0, y1, 0.f, 0,0,1, strokePacked, g->u0, g->v0 },
-                    { x1, y0, 0.f, 0,0,1, strokePacked, g->u1, g->v1 },
-                    { x1, y1, 0.f, 0,0,1, strokePacked, g->u1, g->v0 },
-                };
-                v[4] = v[3];
-                v[5] = v[3];
-                for (int k = 0; k < 6; k++) wv.push_back(v[k]);
-                strokePageTexIDs.push_back((uint32_t)g->pageTextureID);
-            }
-            if (wv.empty()) continue;
-
-            const int nVerts = (int)wv.size();
-
-            // 2/3-colour stroke gradient: per-line, over this line's own stroke mesh Y-bbox
-            // (pre-transform local Y, matching the binary's per-FancyBakedString-instance scope).
-            if (m_StrokeCount >= 2) {
-                float yTop = wv[0].y, yBot = wv[0].y;
-                for (int i = 1; i < nVerts; i++) {
-                    if (wv[i].y > yTop) yTop = wv[i].y;
-                    if (wv[i].y < yBot) yBot = wv[i].y;
-                }
-                float range = yTop - yBot;
-                if (range < 1.0f) range = 1.0f;
-                const Colour& topC = m_StrokeCol0;
-                const Colour& botC = (m_StrokeCount == 3) ? m_StrokeCol2 : m_StrokeCol1;
-                const float mid = 0.5f * (yTop + yBot);
-                for (int i = 0; i < nVerts; i++) {
-                    const float y = wv[i].y;
-                    const float t = (y >= yTop || y < yBot) ? 0.0f : (yTop - y) / range;
-                    int r = (int)(((topC.r / 255.0f) * (1.0f - t) + (botC.r / 255.0f) * t) * 255.0f);
-                    int g = (int)(((topC.g / 255.0f) * (1.0f - t) + (botC.g / 255.0f) * t) * 255.0f);
-                    int b = (int)(((topC.b / 255.0f) * (1.0f - t) + (botC.b / 255.0f) * t) * 255.0f);
-                    int a = (int)(((topC.a / 255.0f) * (1.0f - t) + (botC.a / 255.0f) * t) * 255.0f);
-                    if (m_StrokeCount == 3 && y > mid) {
-                        r = m_StrokeCol1.r;
-                        g = m_StrokeCol1.g;
-                        b = m_StrokeCol1.b;
-                        a = m_StrokeCol1.a;
-                    }
-                    wv[i].colour = Colour((unsigned char)r, (unsigned char)g,
-                                           (unsigned char)b, (unsigned char)a).PlatformColour();
-                }
-            }
-
-            // Wire degenerate connector between glyphs in the tri-strip (unchanged
-            // topology patch -- NOT a transform; operates on local coordinates now).
-            for (int gi2 = 1; gi2 * 6 < nVerts; gi2++) {
-                wv[gi2 * 6 - 1] = wv[gi2 * 6];
-            }
-            // Matrix-driven per-line transform (mirrors BakedStringTTF::Draw @0x002497a8).
-            // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
-#if !defined(FN_GL_STUB)
-            world.Reset();
-            world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
-            world.ScaleRows(scale.x, scale.y, 1.0f);
-            world.RotZ(rotation);
-            world.Translate(anchor);
-            MatrixManager::GetInstance().UploadModelViewOnly();
-#endif
-            // Per-page batch: draw consecutive same-page glyph runs.
-            {
-                const int numGlyphs = (int)strokePageTexIDs.size();
-                int gIdx = 0;
-                while (gIdx < numGlyphs) {
-                    uint32_t curTex = strokePageTexIDs[gIdx];
-                    int runStart = gIdx;
-                    while (gIdx < numGlyphs && strokePageTexIDs[gIdx] == curTex) gIdx++;
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
-                    glEnable(GL_TEXTURE_2D);
-                    TexEnvModulate();
-                    renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
-                }
-            }
-        }
-    }
-
-    // Port specific: accumulate ink bounds across all lines for DebugText_Overlay.
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-    float dbgInkX0 = 0.0f, dbgInkY0 = 0.0f, dbgInkX1 = 0.0f, dbgInkY1 = 0.0f;
-    bool dbgHasInk = false;
-#endif
+    // Per-line dispatch: read LineOffset() (set by RebuildMeshes via ComputeBaselineY),
+    // apply scale then rotation (matches the binary's per-vertex transform order: scale
+    // first, rotate second), translate by the box anchor, hand off to FancyBakedString::
+    // Draw with align=9 (bits0-1=1 "left", bits2-3=0x8 -- both fall through
+    // BakedStringTTF::Draw's align-offset switch as no-ops, since the box has already
+    // baked horizontal/vertical placement into LineOffset()).
+    const bool hasRotation = (rotation != 0.0f);
+    const float theta = rotation * (3.14159265f / 180.0f);
+    const float sinT = hasRotation ? sinf(theta) : 0.0f;
+    const float cosT = hasRotation ? cosf(theta) : 1.0f;
 
     for (size_t li = 0; li < m_Lines.size(); li++) {
-        const BakedStringBoxLine& line = m_Lines[li];
-        if (line.verts.empty()) {
-            continue;
+        FancyBakedString* line = m_Lines[li];
+        if (!line) continue;
+
+        const Vec3& lo = line->LineOffset();
+        float lx = lo.x * scale.x;
+        float ly = lo.y * scale.y;
+        float rx = lx, ry = ly;
+        if (hasRotation) {
+            rx = cosT * lx - sinT * ly;
+            ry = sinT * lx + cosT * ly;
         }
-
-        // Local Y baseline for this line. Lines go downward (decreasing Y in world).
-        float localBaseY = baselineY - (float)li * step;
-
-        const int nVerts = (int)line.verts.size();
-
-        // Local (untransformed) copy: still needed for the tri-strip degenerate-join
-        // patch below (topology fix, NOT a transform -- DrawTriStrip() also requires
-        // a non-const buffer). The rotate/scale/translate math is gone; the matrix
-        // set right after handles it on the GPU.
-        std::vector<QUADCUSTOMVERTEX> wv(line.verts);
-
-        // Wire degenerate connector between glyphs in the tri-strip.
-        for (int gi = 1; gi * 6 < nVerts; gi++) {
-            wv[gi * 6 - 1] = wv[gi * 6];
-        }
-
-        // Matrix-driven per-line transform (mirrors BakedStringTTF::Draw @0x002497a8).
-        // Port specific: guarded -- not linked in the FN_GL_STUB unit-test build.
-#if !defined(FN_GL_STUB)
-        world.Reset();
-        world.TranslateLocal(Vec3(0.0f, localBaseY, 0.0f));
-        world.ScaleRows(scale.x, scale.y, 1.0f);
-        world.RotZ(rotation);
-        world.Translate(anchor);
-        MatrixManager::GetInstance().UploadModelViewOnly();
-#endif
-
-        // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
-        // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
-        // lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas.
-        // Per-page batch: bind each atlas page and draw its consecutive glyph run.
-        {
-            const int numGlyphs = (int)line.glyphPageTexIDs.size();
-            int gIdx = 0;
-            while (gIdx < numGlyphs) {
-                uint32_t curTex = line.glyphPageTexIDs[gIdx];
-                int runStart = gIdx;
-                while (gIdx < numGlyphs && line.glyphPageTexIDs[gIdx] == curTex) gIdx++;
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, (GLuint)curTex);
-                glEnable(GL_TEXTURE_2D);
-                TexEnvModulate();  // must precede DrawTriStrip (it does not set tex-env)
-                renderer->DrawTriStrip(&wv[runStart * 6], (gIdx - runStart) * 6);
-            }
-        }
-
-        // Port specific: accumulate ink bounds for the debug overlay. wv is local
-        // (untransformed) now that the actual draw is matrix-driven, so re-derive
-        // world-space corners here for the overlay only -- host debug tooling,
-        // no binary counterpart, independent of the GPU matrix set above.
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-        if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
-            const float dbgTheta = rotation * (3.14159265f / 180.0f);
-            const float dbgSinT  = sinf(dbgTheta);
-            const float dbgCosT  = cosf(dbgTheta);
-            for (int i = 0; i < nVerts; i++) {
-                const float lx = wv[i].x * scale.x;
-                const float ly = (wv[i].y + localBaseY) * scale.y;
-                const float wx = dbgCosT * lx - dbgSinT * ly + anchor.x;
-                const float wy = dbgSinT * lx + dbgCosT * ly + anchor.y;
-                if (!dbgHasInk) {
-                    dbgInkX0 = dbgInkX1 = wx;
-                    dbgInkY0 = dbgInkY1 = wy;
-                    dbgHasInk = true;
-                } else {
-                    if (wx < dbgInkX0) dbgInkX0 = wx;
-                    if (wx > dbgInkX1) dbgInkX1 = wx;
-                    if (wy < dbgInkY0) dbgInkY0 = wy;
-                    if (wy > dbgInkY1) dbgInkY1 = wy;
-                }
-            }
-        }
-#endif
+        Vec3 pos(rx + anchor.x, ry + anchor.y, lo.z * scale.x + anchor.z);
+        line->Draw(pos, scale, rotation, (ALIGNMENT_TYPE)9);
     }
 
-    // Port specific: draw anchor + box + ink-bounds debug overlay.
+    // Port specific: box + anchor debug overlay. No per-vertex ink-bounds tracking
+    // possible any more (FancyBakedString owns its own vertex data) -- approximate the
+    // ink rect with the declared box rect. No binary counterpart; host debug tooling only.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
-    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay && dbgHasInk) {
-        // Box bounds: m_BoxWidth/m_BoxHeight are declared box dimensions in world units.
-        // Approximate box as centred on anchor (exact origin depends on SetTranslation
-        // flag and align mode; centering is a reasonable approximation for the overlay).
+    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
         const bool hasBox = (m_BoxWidth > 0);
         const float bx0 = anchor.x - m_BoxWidth  * 0.5f;
         const float bx1 = anchor.x + m_BoxWidth  * 0.5f;
@@ -1349,8 +931,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         FN::DebugText_Overlay(anchor.x, anchor.y,
                               hasBox,
                               bx0, by0, bx1, by1,
-                              dbgInkX0, dbgInkY0, dbgInkX1, dbgInkY1);
-        // Unbind texture after debug overlay to restore clean GL state.
+                              bx0, by0, bx1, by1);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
@@ -1384,7 +965,7 @@ void BakedStringBox::SetWorldspaceClipping(int x0, int y0, int w, int h) {
 // Update  binary @ 0x0015ab80 (AddLine call site @0x0015aaf0)
 // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: called after SetWorldspaceClipping.
 void BakedStringBox::Update() {
-    if (m_Dirty) Layout();
+    if (m_Dirty) RebuildMeshes();
 }
 
 // ReshapeBounds  binary @ 0x00245ab8 (v1.6.1 BakedStringBox::ReshapeBounds)
@@ -1414,15 +995,19 @@ void BakedStringBox::SetFontSize(float size) {
 // GetTextWidth  binary v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width
 // ASM-spec v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width: binary returns
 // integer pixel width; port lays out 1:1 world=pixel so float max-line-width is equivalent.
-// Triggers a lazy Layout() if m_Dirty is set (same pattern as Draw()).
+// Triggers a lazy RebuildMeshes() if m_Dirty is set (same pattern as Draw()), then
+// re-measures via FitStrings for the raw advance width (no per-line width cache is
+// kept on a built FancyBakedString line -- sizeof(BakedStringBox) is pinned at 200B).
 // Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges.
 float BakedStringBox::GetTextWidth() const {
     if (m_Dirty) {
-        const_cast<BakedStringBox*>(this)->Layout();
+        const_cast<BakedStringBox*>(this)->RebuildMeshes();
     }
+    std::vector<WrappedLineInfo> wl;
+    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
     float maxW = 0.0f;
-    for (size_t i = 0; i < m_Lines.size(); ++i) {
-        if (m_Lines[i].width > maxW) maxW = m_Lines[i].width;
+    for (size_t i = 0; i < wl.size(); ++i) {
+        if (wl[i].advanceWidth > maxW) maxW = wl[i].advanceWidth;
     }
     return maxW;
 }
