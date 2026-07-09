@@ -553,6 +553,24 @@ target_compile_definitions(test_input_tick_invariant PRIVATE FN_TEST)
 add_test(NAME input_tick_invariant COMMAND test_input_tick_invariant)
 set_tests_properties(input_tick_invariant PROPERTIES TIMEOUT 30)
 
+# Press-vs-motion blade gate regression guard (tap-bridge fix).
+# Drives the REAL chain SDL events -> InputTranslatorSDL -> InputManager ->
+# SlashEntity with synthetic event streams (SDL_INIT_EVENTS only; no GL, no
+# window, no audio). Pins:
+#   * a stationary TAP emits TouchScreen+TouchDown but NO TouchMove;
+#   * 3 discrete taps never bridge into a slash -- with m_BombHitEdge both
+#     clear (per-press Reset re-seeds a degenerate stroke) and latched
+#     (post-bomb game-over: point count must not change at all);
+#   * a SWIPE still tracks (points appended per motion tick) and starts at
+#     the press position, not the previous stroke's stale position;
+#   * a same-tick DOWN+MOTION fast flick still registers on the press frame.
+# MUST FAIL on the old curr!=prev press-frame TouchMove heuristic.
+# FN_TEST exposes InputTranslatorSDL state + the SlashEntity bomb-latch seam.
+fn_add_game_test(test_slash_input test_slash_input.cpp)
+target_compile_definitions(test_slash_input PRIVATE FN_TEST)
+add_test(NAME slash_input COMMAND test_slash_input)
+set_tests_properties(slash_input PROPERTIES TIMEOUT 30)
+
 # ---- Standalone scene test harnesses (visual dev tools, NOT CTest tests) ----
 # scene_fruit_scene.exe  -- single watermelon in a ballistic arc
 # scene_slash_scene.exe  -- blade trail driven by mouse/touch drag

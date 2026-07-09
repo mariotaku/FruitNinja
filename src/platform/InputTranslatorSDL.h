@@ -35,6 +35,16 @@
 // in one pass -- no edge is lost regardless of arrival rate.
 // At 60Hz: one drain feeds one dispatch (1:1, same behaviour as before).
 //
+// Press-vs-motion gate (blade events): TouchMove_XN/YN are emitted ONLY once a
+// real SDL_FINGERMOTION has been drained for that finger since its FINGERDOWN
+// (per-channel motionSinceDown flag). A stationary TAP (DOWN..UP with no
+// MOTION) emits TouchScreen + TouchDown_N + TouchUp_N and NO TouchMove, so the
+// blade (SlashEntity) never receives a tap's position and consecutive taps can
+// never bridge into a slash -- v1.6.1 semantics: a tap alone never moves the
+// blade; only finger motion does. Companion port change: SlashEntity::TouchDown
+// seeds a NEW stroke from the TouchDown event's position (see SlashEntity.h),
+// since no press-frame TouchMove delivers it anymore.
+//
 // Invariant: m_PointCount (SlashEntity::AddPoint) only advances inside a
 // tick that also runs UpdatePoints (which reconciles the head-cap vertex),
 // so DrawSlice never draws a stale head-cap to origin (#168 / #173 fix).
@@ -109,6 +119,12 @@ private:
     bool pendingUp[16];
     bool pendingEdge[16];
 
+    // Port specific: per-channel press-vs-motion gate. false on FINGERDOWN,
+    // true once a real FINGERMOTION drains for that finger. TouchMove_XN/YN
+    // are only dispatched while true -- a stationary tap emits no blade move
+    // (v1.6.1: only real finger motion moves the blade).
+    bool motionSinceDown[16];
+
     // Convert normalized SDL touch coords to game coords (centred ortho).
     void TransformTouchNormalized(float nx, float ny, float& gx, float& gy);
 
@@ -131,6 +147,7 @@ public:
     float TestGetFingerX(int ch) const { return ch >= 0 && ch < 16 ? fingerX[ch] : 0.0f; }
     float TestGetFingerY(int ch) const { return ch >= 0 && ch < 16 ? fingerY[ch] : 0.0f; }
     bool TestGetPrevActive(int ch) const { return ch >= 0 && ch < 16 ? prevActive[ch] : false; }
+    bool TestGetMotionSinceDown(int ch) const { return ch >= 0 && ch < 16 ? motionSinceDown[ch] : false; }
 #endif
 };
 

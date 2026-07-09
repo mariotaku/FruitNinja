@@ -2473,6 +2473,22 @@ bool SlashEntity::TouchDown(InputEvent* event) {
     //   are separate instances and are unaffected.
     bool pressEdge = (event && (event->actionFlags & INPUT_ACTION_DOWN_EDGE));
     if (m_BombHitEdge == 0 && (m_BladeActive == 0 || pressEdge)) {
+#if !defined(__bada__)
+        // Port specific: seed the NEW stroke at this event's press position.
+        // The SDL layer emits no TouchMove on a motionless press frame (a tap
+        // must not move the blade), so m_RawTouchPos still holds the PREVIOUS
+        // stroke's last position here; without this sync the fresh stroke
+        // would seed there and the first real motion would draw a bridge from
+        // that stale point. The binary needs no equivalent: its input device
+        // updates the touch axes (-> Entity::pos) at press claim, before
+        // TouchDown runs. Deliberately INSIDE the stroke-reset gate: when the
+        // bomb-hit latch blocks Reset, the stale position keeps OnTouchActive
+        // in its below-threshold skip path, so a tap appends nothing.
+        if (event) {
+            m_RawTouchPos.x = event->x;
+            m_RawTouchPos.y = event->y;
+        }
+#endif
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);

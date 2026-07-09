@@ -331,6 +331,14 @@ public:
     // Port specific: debug accessor for blade trail endpoints (used by DebugBladeTrails_Draw).
     const Vec3& GetTailPos() const { return m_TailPos; }
     const Vec3& GetHeadPos() const { return m_HeadPos; }
+
+#ifdef FN_TEST
+    // Test-seam: bomb-hit latch (m_BombHitEdge, +0x4c) access. Lets
+    // test_slash_input simulate the post-bomb game-over state where the
+    // latch blocks TouchDown's per-press Reset(). Test targets only.
+    void    TestSetBombHitEdge(uint8_t v) { m_BombHitEdge = v; }
+    uint8_t TestGetBombHitEdge() const    { return m_BombHitEdge; }
+#endif
 #endif // !defined(__bada__)
 
 public:
@@ -455,6 +463,13 @@ public:
                               const char* contactParticle, const char* particle2);
 
     // ASM-spec v1.6.1 SlashEntity::TouchDown @0x001ea420
+    // Port note: on the stroke-reset branch the port first syncs
+    // m_RawTouchPos from the event so a NEW stroke seeds at the press
+    // position -- the SDL layer emits no TouchMove on a motionless press
+    // (a tap never moves the blade; see InputTranslatorSDL.h). When the
+    // bomb-hit latch blocks Reset, no sync happens either: the stale
+    // position keeps OnTouchActive in its skip path, so taps append
+    // nothing (no post-bomb tap-bridge).
     bool TouchDown(InputEvent* event);
 
     // ASM-spec v1.6.1 SlashEntity::TouchMoveX @0x001e785c -- writes pos.x.
