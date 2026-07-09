@@ -559,7 +559,11 @@ void MainScreen::Update(float dt) {
             pMusicToggle->pos.x = 176.0f;
         }
 
-        float pauseAmount = elapsedTime;
+        // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c (tail): t = clamp01(elapsedTime
+        // + GetPauseAmount()); the GetPauseAmount() (PauseScreen reveal 0..1) addend shows
+        // the toggles top-center (x=+20 sound / -20 music, y=135.5) while paused;
+        // slide = 2*size.y*(1-t); SetActive(t > 0.01f).
+        float pauseAmount = elapsedTime + GetPauseAmount();
         if (pauseAmount < 0.0f) pauseAmount = 0.0f;
         if (pauseAmount > 1.0f) pauseAmount = 1.0f;
 
@@ -816,6 +820,7 @@ void MainScreen::CreateToggles() {
         Vec3(32.0f, 32.0f, 1.0f), nullptr);
     pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game_work.mHud->AddControl(pSoundToggle);
+    pSoundToggle->SetSingular();
 
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
@@ -824,6 +829,7 @@ void MainScreen::CreateToggles() {
         Vec3(32.0f, 32.0f, 1.0f), nullptr);
     pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game_work.mHud->AddControl(pMusicToggle);
+    pMusicToggle->SetSingular();
 }
 
 // v1.6.1 MainScreen::CreateButtons @0x001961f8
@@ -983,14 +989,14 @@ void MainScreen::AboutCallback() {
     pToggleA = nullptr;
 }
 
-// v1.6.1 MainScreen::SoundCallback @0x0014af64
+// v1.6.1 MainScreen::SoundCallback @0x00195d14
 void MainScreen::SoundCallback() {
     game_work.m_bSoundOn = !game_work.m_bSoundOn;
     Mortar::SoundManager::GetInstance().SetSFXVolume(
         game_work.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
 }
 
-// v1.6.1 MainScreen::MusicCallback @0x0014ac9c
+// v1.6.1 MainScreen::MusicCallback @0x00195988
 void MainScreen::MusicCallback() {
     game_work.m_bMusicOn = !game_work.m_bMusicOn;
 }
