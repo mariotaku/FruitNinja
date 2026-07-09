@@ -11,6 +11,18 @@
 // ASM-spec v1.6.1 Mortar::BakedStringBox layout @0x002465fc (ctor) -- 200B;
 // field offsets verified vs SetShadow/SetColour/SetWorldspaceClipping/ReshapeBounds.
 //
+// SHAPE: thin per-line FancyBakedString dispatcher (matches v1.6.1 exactly).
+// m_Lines is a std::vector<FancyBakedString*> -- one 6-layer FancyBakedString
+// per wrapped line -- NOT raw glyph quads. RebuildMeshes() @0x002469c0 wraps
+// m_Text into m_WrappedLines, builds one FancyBakedString per line (17-arg
+// ctor), applies the active gradient/stroke-gradient, and stores each line's
+// LOCAL draw offset (horizontal align + vertical baseline) into the line's
+// own LineOffset() (+0x0c). Draw() @0x00246e20 is then a thin loop: read
+// LineOffset(), rotate/scale, translate by the box anchor, call
+// FancyBakedString::Draw per line. All glyph rasterisation, shadow/glow/
+// stroke/bevel layering, and gradient baking happens INSIDE FancyBakedString/
+// BakedStringTTF -- the box no longer touches vertex data directly.
+//
 // API (v1.6.1 BakedStringBox ctor @ 0x002465fc — 7 explicit args):
 //   BakedStringBox(font, fontSize, width, height, align, maxLines, lineSpacing)
 //     width/height  : int in binary (fields +0x24/+0x28); stored as int.
@@ -38,30 +50,8 @@ namespace Mortar {
 
 class Font;
 class FontCacheObjectTTF;
+class FancyBakedString;
 struct GlyphAtlasEntry;
-
-// One laid-out line of glyphs ready to draw.
-struct BakedStringBoxLine {
-    std::vector<QUADCUSTOMVERTEX> verts; // 6 verts per glyph (tri-strip)
-    // One GL texture ID per drawable glyph (parallel to every 6-vert group in verts).
-    // Stored as uint32_t (same bit width as GLuint) to avoid pulling GL headers here.
-    // Used by Draw to batch consecutive same-page glyphs. Port specific: the binary
-    // groups by TextureAtlasPage* implicitly; here we store the resolved GL texture ID.
-    std::vector<uint32_t> glyphPageTexIDs;
-    // Shadow-blur support (#257): per-glyph codepoint + pre-bearing pen X, parallel to
-    // glyphPageTexIDs (one entry per DRAWN glyph, i.e. width>0 && height>0 -- matches
-    // every 6-vert run in `verts`). Consumed by BakedStringBox::Draw's shadow pass to
-    // re-fetch a separately-rasterised BLUR-effect glyph (v1.6.1 RenderGlyph @0x0024f5dc)
-    // at the same pen position, instead of reusing the sharp glyph mesh + a solid colour.
-    std::vector<uint32_t> glyphCodepoints;
-    std::vector<float>    glyphPenX;
-    float width;        // total world-unit advance (unscaled)
-    float height;       // binary step = line pitch (world units)
-    float maxBearingY;  // max bearingY across glyphs (above baseline, world units)
-    float minBottom;    // min (bearingY - height) across glyphs (below baseline, world units, <=0)
-
-    BakedStringBoxLine() : width(0.0f), height(0.0f), maxBearingY(0.0f), minBottom(0.0f) {}
-};
 
 class BakedStringBox {
 public:
@@ -91,9 +81,8 @@ public:
     // Set the glyph colour. eager==true triggers an immediate per-line apply.
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetColour @0x002454e0: change-detect on
     // m_GradTop(+0x7c); on change writes m_GradTop=colour, m_GradMode(+0x8c)=1,
-    // m_MetallicFlag(+0x90)=0; if eager!=0 calls FancyBakedString::ApplyGradient per line,
-    // else m_Dirty=true. Port: sets m_Dirty in both paths (ApplyGradient not ported;
-    // cosmetically divergent for the per-line apply loop).
+    // m_MetallicFlag(+0x90)=0; if eager!=0 calls FancyBakedString::ApplyGradient(colour)
+    // per line (no m_Dirty set -- immediate-only), else m_Dirty=true (lazy rebuild).
     void SetColour(Colour colour, bool eager);
 
     // Set horizontal line spacing / alignment mode. Pass -1 for auto.
@@ -122,7 +111,8 @@ public:
 
     // SetGradient  binary @ 0x0024566c
     // Applies a vertical gradient to laid-out glyphs (gradTop/gradBottom Colours).
-    // perGlyph==0 uses the lazy dirty path; perGlyph==1 applies per-line immediately.
+    // perGlyph==0 uses the lazy dirty path; perGlyph==1 calls FancyBakedString::
+    // ApplyGradient(top,bottom) per existing line immediately (no m_Dirty set).
     void SetGradient(Colour top, Colour bottom, bool perGlyph);
 
     // SetMetallicGradient  binary @ 0x002458e0
@@ -203,11 +193,12 @@ public:
     int GetBoxHeight() const { return m_BoxHeight; }
 
     // GetTextWidth -- binary v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width
-    // Returns the rendered text width in world units: the max m_Lines[i].width across all
-    // laid-out lines (0.0f if no lines). Triggers a lazy Layout() if m_Dirty is set so the
-    // result always reflects the current text. The binary returns integer pixel width;
-    // the port lays out 1:1 world=pixel so the float max-line-width is equivalent.
-    // Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges.
+    // Returns the rendered text width in world units: the max per-line raw advance width
+    // across all wrapped lines (0.0f if no lines). Triggers a lazy RebuildMeshes() if
+    // m_Dirty is set so the result always reflects the current text. The binary returns
+    // integer pixel width; the port lays out 1:1 world=pixel so the float max-line-width
+    // is equivalent. Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor
+    // NEW/SELECTED badges.
     float GetTextWidth() const;
 
     // ComputeBaselineY  binary RebuildAlignments @ 0x00245c78
@@ -242,7 +233,10 @@ private:
     bool    m_Dirty;               // +0x00 true when text/colour/size changed (NOT position)
     bool    m_Visible;             // +0x01 set true by SetWorldspaceClipping
                                    // +0x02..0x03 implicit padding (bool+bool, vector 4-aligned)
-    std::vector<BakedStringBoxLine> m_Lines; // +0x04 (12B on ARM32)
+    // v1.6.1 shape: one 6-layer FancyBakedString per wrapped line (NOT raw glyph quads).
+    // Owned pointers -- DeleteStrings() frees them; RebuildMeshes() rebuilds the whole
+    // vector from m_Text on every dirty pass.
+    std::vector<FancyBakedString*> m_Lines; // +0x04 (12B on ARM32)
     int     m_Field10;             // +0x10 (filler)
     int     m_Field14;             // +0x14 (filler)
     Vec3    m_ShadowOffset;        // +0x18 (12B)
@@ -292,30 +286,33 @@ private:
     bool    m_FieldA5;             // +0xa5 (filler)
                                    // +0xa6..0xa7 implicit padding
     float   m_ExtraWidth;          // +0xa8 extra1/extra2 (BEVEL) layer width
-    unsigned int m_FieldAc;        // +0xac FancyBakedString per-line ctor p15 (extra-layer param)
+    int     m_ExtraParam;          // +0xac FancyBakedString per-line ctor p15 (extra-layer param)
     Colour  m_Extra1Colour;        // +0xb0 extra1 (BEVEL) layer colour
     Colour  m_Extra2Colour;        // +0xb4 extra2 (BEVEL) layer colour
-    std::vector<std::string> m_WrappedLines; // +0xb8 (12B on ARM32; filler)
+    std::vector<std::string> m_WrappedLines; // +0xb8 (12B on ARM32) wrapped-line text, parallel to m_Lines
     float   m_FontSize;            // +0xc4 current render pixel size (shrunk by FitInto)
 
-    // Rebuild the laid-out lines from m_Text at m_FontSize.
+    // RebuildMeshes -- rebuild m_WrappedLines + m_Lines from m_Text at m_BaseFontSize.
+    // ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x002469c0: shrink-by-linecount
+    // loop (FitStrings/MeasureWrap, floor 6.0px) picks m_FontSize; then one FancyBakedString
+    // per wrapped line is constructed (17-arg ctor), the active gradient/stroke-gradient is
+    // applied, and each line's LOCAL draw offset is written into its own LineOffset() via
+    // ComputeBaselineY. DeleteStrings() frees the previous line set first.
     // Tokeniser: East-Asian codepoints (v1.6.1 WordWrap::IsEastAsianChar @0x002508ec)
     // are emitted as individual single-codepoint tokens, so CJK text wraps between
     // any two consecutive characters. Latin/symbol runs stop at spaces, newlines, or
     // the first East-Asian codepoint. Space advances (spAdv) are suppressed between
     // two adjacent CJK tokens everywhere (v1.6.1 WordWrap::CanBreakLineAt @0x002509cc).
-    void Layout();
+    void RebuildMeshes();
 
-    // Bake the active gradient (m_GradMode>=2) into vertex colours across all m_Lines.
-    // ASM-spec v1.6.1 BakedStringBox::SetGradient @0x0024566c: per-glyph bake via
-    // FancyBakedString::ApplyGradient @0x0024accc / Transform_LinearGradient_TopBottom @0x00247a48.
-    // ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4: c0->c3 base +
-    // 2 horizontal-band splits (0.51/0.49) via Transform_GradientSplit @0x0024954c.
-    void BakeGradient();
+    // DeleteStrings -- delete + clear every FancyBakedString* in m_Lines.
+    // Called by RebuildMeshes() (before rebuilding) and ~BakedStringBox().
+    void DeleteStrings();
 
     // Measure total ink height of currently laid-out lines:
     //   maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
-    // where step == m_Lines[0].height (= (int)(fontSize + m_LineSpacing)).
+    // Re-measures via the FitStrings wrap pass (no per-line ink-extent cache is kept on
+    // FancyBakedString lines -- sizeof(BakedStringBox) is pinned at 200B).
     float TotalHeight() const;
 
 #ifdef __bada__

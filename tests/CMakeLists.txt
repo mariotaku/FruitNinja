@@ -372,6 +372,8 @@ add_test(NAME bakedstringttf COMMAND test_bakedstringttf)
 add_executable(test_bakedstringbox_baseline
     test_bakedstringbox_baseline.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/BakedStringBox.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/FancyBakedString.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/render/BakedStringTTF.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringIterator.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/render/Utf8StringProxy.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/math/Colour.cpp

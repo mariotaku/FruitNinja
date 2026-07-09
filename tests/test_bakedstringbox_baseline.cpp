@@ -125,6 +125,13 @@ void MatrixStack::Reset() {}
 void MatrixStack::Scale(const Vec3&) {}
 void MatrixStack::Translate(const Vec3&) {}
 void MatrixStack::SetCurrentMatrix(const Matrix44&) {}
+// RotZ/TranslateLocal/ScaleRows are referenced by BakedStringTTF::Draw (now linked in
+// for the BakedStringBox -> FancyBakedString -> BakedStringTTF dispatcher chain) but
+// never actually invoked by this test (it only exercises the static ComputeBaselineY).
+// Link-only stubs.
+void MatrixStack::RotZ(float) {}
+void MatrixStack::TranslateLocal(const Vec3&) {}
+void MatrixStack::ScaleRows(float, float, float) {}
 
 // ---------------------------------------------------------------------------
 // MatrixManager stubs
@@ -152,6 +159,9 @@ void MatrixManager::SetupPerspective(float, float, float, float, float, Matrix44
 Renderer* Renderer::s_instance = nullptr;
 void Renderer::DrawTriStrip(QUADCUSTOMVERTEX*, int) {}
 void Renderer::DrawColorQuad(const Colour&) {}
+// Link-only stub: BakedStringTTF::Draw calls this; never invoked here (s_instance is
+// null and this test never calls BakedStringBox::Draw / FancyBakedString::Draw).
+void Renderer::DrawTriList(QUADCUSTOMVERTEX*, int, bool) {}
 
 // ---------------------------------------------------------------------------
 // FontInterface stubs
