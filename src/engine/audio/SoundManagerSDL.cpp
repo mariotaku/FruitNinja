@@ -264,13 +264,20 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
         }
     }
 
-    // Mix music voice (same raw-add policy as SFX)
+    // Mix music voice. Port specific: applies s_MusicVolume the same way the
+    // SFX loop above applies per-voice v.volume (float multiply + saturating
+    // clamp) so music actually responds to SetMusicVolume(). Previously this
+    // branch mixed src[] raw and ignored s_MusicVolume entirely -- SongPlay's
+    // existing "global s_MusicVolume scales in callback" comment (see the
+    // m_MusicVoice.volume = 1.0f init) documents this as the intended design
+    // that was never wired up.
     {
         Voice& mv = self->m_MusicVoice;
         if (mv.id != 0 && mv.playing && mv.buf) {
             int16_t* src = mv.buf->samples;
             int total    = mv.buf->sampleCount;
             bool muted   = s_MusicMuted;
+            const float musicVol = s_MusicVolume;   // 0.0..1.0; 1.0 = passthrough.
 
             for (int s = 0; s < nSamples; ) {
                 if (mv.cursor >= total) {
@@ -282,8 +289,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                         break;
                     }
                 }
-                if (!muted) {
-                    int32_t mixed = out[s] + src[mv.cursor];
+                if (!muted && musicVol > 0.0f) {
+                    int32_t scaled = (int32_t)((float)src[mv.cursor] * musicVol);
+                    int32_t mixed  = out[s] + scaled;
                     if (mixed >  32767) mixed =  32767;
                     if (mixed < -32768) mixed = -32768;
                     out[s] = (int16_t)mixed;
