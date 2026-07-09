@@ -455,6 +455,13 @@ static Mortar::FontCacheObjectTTF* EnsureFpsFontCache() {
     return s_FpsFontCache;
 }
 
+// Port specific: shared accessor so OSD_Draw (src/debug/OSD.cpp) renders
+// toasts through the exact same lazily-created TTF font cache as the FPS
+// counter.
+Mortar::FontCacheObjectTTF* DebugFontTTF_Get() {
+    return EnsureFpsFontCache();
+}
+
 void DebugFps_Draw(float fps) {
     if (!g_ShowFps || fps <= 0.0f) return;
 

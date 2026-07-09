@@ -17,6 +17,7 @@
 #include "screens/PauseScreen.h"
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
+#include "debug/OSD.h"    // Port specific: dev toast overlay (binary OSD is a dead stub)
 #include "config.h"
 #include "render/gl_funcs.h"
 #include <cstdio>
@@ -42,6 +43,10 @@ static float  s_currentFps      = 0.0f;
 static double s_fpsWindowSecs   = 0.0;
 static int    s_fpsWindowFrames = 0;
 static const double kFpsWindowTarget = 0.5;  // recompute every ~0.5 seconds
+
+// Port specific: wall-clock timestamp of the previous renderFrame call, used
+// to age OSD toasts at display cadence (independent of the 60 Hz sim rate).
+static Uint64 s_osdLastCounter = 0;
 
 // Port specific: perform glReadPixels + SDL_SaveBMP when g_takeScreenshot is set.
 // Called just before SDL_GL_SwapWindow so GL_BACK holds the finished frame.
@@ -103,6 +108,13 @@ static void do_screenshot_if_requested(SDL_Window* window) {
         }
 #endif
         LOG_INFO("Screenshot", "saved %s", abspath);
+        // Port specific: OSD toast confirmation, posted only on successful save
+        // (binary OSD is a dead stub). Shows on the NEXT frame -- the current
+        // frame's pixels were already read back, so the toast never appears in
+        // the screenshot itself.
+        char osd[64];
+        snprintf(osd, sizeof(osd), "Screenshot saved %s", path);
+        OSD_AddMessage(osd);
     }
 
     SDL_FreeSurface(surf);
@@ -186,19 +198,36 @@ void Game::pollInput() {
             FN::g_DebugHitboxes = (FN::g_DebugHitboxes + 1) % 4;
             LOG_DEBUG("Debug", "Hitboxes level %d (%s)", FN::g_DebugHitboxes,
                       kDebugHitboxLevelNames[FN::g_DebugHitboxes]);
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            char osd[64];
+            snprintf(osd, sizeof(osd), "Hitbox: %s",
+                     kDebugHitboxLevelNames[FN::g_DebugHitboxes]);
+            OSD_AddMessage(osd);
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
             // Port specific: glPolygonMode(GL_LINE) around the 3D
             // entity draw pass. Desktop GL only -- no-op under GLES.
             FN::g_DebugWireframe = !FN::g_DebugWireframe;
             LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            OSD_AddMessage(FN::g_DebugWireframe ? "Wireframe: ON" : "Wireframe: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F3) {
             // Port specific: toggle FPS counter overlay.
             FN::g_ShowFps = !FN::g_ShowFps;
             LOG_DEBUG("Debug", "FPS overlay %s", FN::g_ShowFps ? "ON" : "OFF");
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            OSD_AddMessage(FN::g_ShowFps ? "FPS: ON" : "FPS: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
             LOG_DEBUG("Debug", "timeScale = %.1f", FN::g_DebugTimeScale);
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            if (FN::g_DebugTimeScale == 1.0f) {
+                OSD_AddMessage("Slow-mo: OFF");
+            } else {
+                char osd[64];
+                snprintf(osd, sizeof(osd), "Slow-mo: ON (x%.1f)", FN::g_DebugTimeScale);
+                OSD_AddMessage(osd);
+            }
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.scancode == SDL_SCANCODE_F12) {
             // Port specific: screenshot on F12.
@@ -306,6 +335,23 @@ void Game::renderFrame(float alpha, int steps) {
     // Port specific: FPS counter overlay -- additive, after all game draw calls.
     // Intentionally outside the dt-zero block: DebugFps_Draw does not use game_work.dt.
     FN::DebugFps_Draw(s_currentFps);
+    // Port specific: OSD dev toasts -- aged by wall-clock render dt, drawn
+    // below the FPS counter. Not gated by any debug flag (toasts are
+    // user-triggered confirmations). Binary OSD is a dead stub; see
+    // src/debug/OSD.h.
+    {
+        Uint64 now = SDL_GetPerformanceCounter();
+        float osdDt = 0.0f;
+        if (s_osdLastCounter != 0) {
+            osdDt = static_cast<float>(
+                static_cast<double>(now - s_osdLastCounter) /
+                static_cast<double>(SDL_GetPerformanceFrequency()));
+            if (osdDt > 0.25f) osdDt = 0.25f;   // clamp across stalls/breakpoints
+        }
+        s_osdLastCounter = now;
+        OSD_Update(osdDt);
+        OSD_Draw();
+    }
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
 }
