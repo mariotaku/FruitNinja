@@ -150,12 +150,6 @@ public:
     unsigned int TestGetSize()    const { return m_Size; }
 private:
 #endif
-
-    // Per-op integrity walker gated on FN_HEAPCHECK env var.
-    // Walks the all-blocks list and verifies structural invariants.
-    // On the first violation: logs to stderr and FN_HEAPLOG file (if set),
-    // then calls abort(). opLabel is e.g. "A 320" or "R".
-    bool CheckIntegrity(const char* opLabel);
 };
 
 } // namespace Mortar

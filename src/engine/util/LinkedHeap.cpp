@@ -1,44 +1,11 @@
 // LinkedHeap — variable-size single-buffer block allocator.
 // Binary @ 0x001942fc (adjacent FreeList/StackHeap pool omitted — out of scope).
-//
-// Heap operation log (for crash replay):
-//   Set env var FN_HEAPLOG to a file path at runtime.  Every Allocate/AllocateFixed/
-//   Release call appends one ASCII line:
-//     A <size> <flag> <ptr>   -- allocation: size=requested bytes, flag=2(normal)/4(fixed)
-//     R <ptr>                  -- release
-//   The file is flushed after every line so a crash doesn't lose the tail.
-//   Usage:  FN_HEAPLOG=heap.log ./fruit-ninja.exe
-//   Zero overhead when the env var is unset (single cached-bool check).
 
 #include "util/LinkedHeap.h"
 #include <cstring>
-#include <cstdio>
-#include <cstdlib>
 #include <new>
 
 namespace Mortar {
-
-// Heap-log state -- initialised once on first Allocate/Release call.
-static bool    s_heapLogChecked  = false;
-static FILE*   s_heapLogFile     = 0;
-
-// Heap integrity check state -- initialised alongside heap log.
-static bool    s_heapCheckEnabled = false;
-static unsigned long s_heapOpCount = 0;
-
-static void HeapLogInit()
-{
-    if (s_heapLogChecked) return;
-    s_heapLogChecked = true;
-    const char* path = getenv("FN_HEAPLOG");
-    if (path && *path) {
-        s_heapLogFile = fopen(path, "a");
-    }
-    const char* chk = getenv("FN_HEAPCHECK");
-    if (chk && *chk) {
-        s_heapCheckEnabled = true;
-    }
-}
 
 // Binary @ 0x00194948 — ctor.
 // size is aligned up to 4; buffer allocated; bump/end pointers set; heads zeroed.
@@ -106,16 +73,6 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
         Block* blk = PayloadToBlock(hit);
         blk->SetFlag(flag);
         blk->name = name;
-        HeapLogInit();
-        if (s_heapLogFile) {
-            fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, hit);
-            fflush(s_heapLogFile);
-        }
-        {
-            char label[32];
-            snprintf(label, sizeof(label), "A %u", sz);
-            CheckIntegrity(label);
-        }
         return hit;
     }
 
@@ -141,16 +98,6 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
 
     m_StartAddr += need;
     void* payload = BlockToPayload(blk);
-    HeapLogInit();
-    if (s_heapLogFile) {
-        fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, payload);
-        fflush(s_heapLogFile);
-    }
-    {
-        char label[32];
-        snprintf(label, sizeof(label), "A %u", sz);
-        CheckIntegrity(label);
-    }
     return payload;
 }
 
@@ -167,12 +114,6 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
     Block* blk = PayloadToBlock(payload);
     uint8_t f  = blk->GetFlag();
     if (f == 1 || f == 4) return;  // already free or locked
-
-    HeapLogInit();
-    if (s_heapLogFile) {
-        fprintf(s_heapLogFile, "R %p\n", payload);
-        fflush(s_heapLogFile);
-    }
 
     blk->SetFlag(1);
     blk->name = "freed";
@@ -195,7 +136,6 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
             m_pLastBlock = pr;
             cur = pr;
         }
-        CheckIntegrity("R");
         return;
     }
 
@@ -222,7 +162,6 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
         }
         fwd = fn;
     }
-    CheckIntegrity("R");
 }
 
 // Binary @ 0x001945f8 — shrink block to newSz in place.
@@ -424,136 +363,6 @@ void LinkedHeap::DisplayUsage(bool show)
         (void)cur;
         cur = cur->next;
     }
-}
-
-// FN_HEAPCHECK integrity walker. Called at end of AllocateMemory and Release
-// when FN_HEAPCHECK env var is set. Walks the all-blocks doubly-linked list
-// and checks: pointer range, cross-link consistency, and sane block sizes.
-// On first violation: logs to stderr + FN_HEAPLOG file, then abort().
-
-// Helper: report a structural violation, log it, and abort.
-// GCC 4.4.1 (cross-build) rejects capture-lambdas; use a plain static helper.
-static void HeapCheckReport(
-    unsigned long opCount,
-    const char* opLabel,
-    const LinkedHeap::Block* blk,
-    const char* what,
-    const char* field,
-    uintptr_t badVal)
-{
-    fprintf(stderr,
-        "[HEAPCHECK] op#%lu %s: %s at block %p: field=%s bad=0x%lx"
-        " prev=%p next=%p sizeFlags=0x%08x\n",
-        opCount, opLabel, what,
-        (const void*)blk, field, (unsigned long)badVal,
-        (const void*)(blk ? blk->prev : 0),
-        (const void*)(blk ? blk->next : 0),
-        blk ? blk->sizeFlags : 0u);
-    if (s_heapLogFile) {
-        fprintf(s_heapLogFile,
-            "[HEAPCHECK] op#%lu %s: %s at block %p: field=%s bad=0x%lx"
-            " prev=%p next=%p sizeFlags=0x%08x\n",
-            opCount, opLabel, what,
-            (const void*)blk, field, (unsigned long)badVal,
-            (const void*)(blk ? blk->prev : 0),
-            (const void*)(blk ? blk->next : 0),
-            blk ? blk->sizeFlags : 0u);
-        fflush(s_heapLogFile);
-    }
-    abort();
-}
-
-bool LinkedHeap::CheckIntegrity(const char* opLabel)
-{
-    if (!s_heapCheckEnabled) return true;
-
-    s_heapOpCount++;
-
-    uintptr_t bufStart = reinterpret_cast<uintptr_t>(m_pBuffer);
-    uintptr_t bufEnd   = bufStart + m_Size;
-
-    unsigned int maxBlocks = m_Size / kHeaderSize + 1;
-    unsigned int count = 0;
-    Block* prev = 0;
-    Block* cur  = m_pFirstBlock;
-
-    while (cur) {
-        if (count++ > maxBlocks) {
-            HeapCheckReport(s_heapOpCount, opLabel, cur,
-                "cycle or count overflow", "next", (uintptr_t)cur->next);
-        }
-
-        // prev pointer must be in range.
-        {
-            uintptr_t v = reinterpret_cast<uintptr_t>(cur->prev);
-            if (v != 0 && !(v >= bufStart && v < bufEnd)) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "prev out of range", "prev", v);
-            }
-        }
-        // next pointer must be in range.
-        {
-            uintptr_t v = reinterpret_cast<uintptr_t>(cur->next);
-            if (v != 0 && !(v >= bufStart && v < bufEnd)) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "next out of range", "next", v);
-            }
-        }
-
-        // Cross-link: cur->prev->next == cur.
-        if (cur->prev) {
-            if (cur->prev->next != cur) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "prev->next != cur", "prev->next",
-                    (uintptr_t)cur->prev->next);
-            }
-        } else {
-            // cur->prev == null means cur should be m_pFirstBlock.
-            if (cur != m_pFirstBlock) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "prev==null but not m_pFirstBlock", "m_pFirstBlock",
-                    (uintptr_t)m_pFirstBlock);
-            }
-        }
-
-        // Cross-link: cur->next->prev == cur.
-        if (cur->next) {
-            if (cur->next->prev != cur) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "next->prev != cur", "next->prev",
-                    (uintptr_t)cur->next->prev);
-            }
-        } else {
-            // cur->next == null means cur should be m_pLastBlock.
-            if (cur != m_pLastBlock) {
-                HeapCheckReport(s_heapOpCount, opLabel, cur,
-                    "next==null but not m_pLastBlock", "m_pLastBlock",
-                    (uintptr_t)m_pLastBlock);
-            }
-        }
-
-        // Block size must be at least kHeaderSize and not exceed total buffer.
-        unsigned int sz = cur->GetSize();
-        if (sz < kHeaderSize || sz > m_Size) {
-            HeapCheckReport(s_heapOpCount, opLabel, cur,
-                "block size out of range", "sizeFlags",
-                (uintptr_t)cur->sizeFlags);
-        }
-
-        // The block should lie within the buffer.
-        uintptr_t blkAddr = reinterpret_cast<uintptr_t>(cur);
-        if (blkAddr < bufStart || blkAddr + sz > bufEnd) {
-            HeapCheckReport(s_heapOpCount, opLabel, cur,
-                "block address+size outside buffer", "addr",
-                blkAddr);
-        }
-
-        prev = cur;
-        cur  = cur->next;
-        (void)prev;
-    }
-
-    return true;
 }
 
 }  // namespace Mortar
