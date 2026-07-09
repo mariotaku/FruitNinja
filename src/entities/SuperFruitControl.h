@@ -159,6 +159,11 @@ public:
     // JibletModel). Mirrors LoadContent; nulls the file-static SmartPtr globals.
     static void UnLoadContent();
 
+    // Port specific: diagnostic accessor for tests/tooling. Not a binary symbol --
+    // exposes whether LoadContent's file-static JibletModel SmartPtr loaded
+    // successfully, without giving external code a handle to the SmartPtr itself.
+    static bool HasJibletModel();
+
     // Binary @ 0x001b9828. Returns true while a super fruit is active.
     // Implementation: SuperFruitControls._M_node_count (+0x14) != 0, i.e. !empty().
     static bool IsInSuperFruitState();
