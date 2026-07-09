@@ -729,9 +729,7 @@ void Fruit::Update(float dt) {
     // release the juice emitters so they stop tracking the fruit's position while frozen.
     // Re-armed on next slice/SetTrailParticles.
     if (dtScaled == 0.0f) {
-        PSPParticleManager& pm = PSPParticleManager::GetInstance();
-        if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
-        if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
+        RemoveTrailParticles();
     }
 
     // binary @0x001e034e -- per-frame emitter position/rotation tracking.
@@ -925,14 +923,7 @@ void Fruit::Deactivate() {
 
 // Matches v1.6.1 Fruit::KillFruit @0x001deba8.
 void Fruit::KillFruit(bool doMissPenalty) {
-    if (m_pEmitter1) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
-        m_pEmitter1 = nullptr;
-    }
-    if (m_pEmitter2) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
-        m_pEmitter2 = nullptr;
-    }
+    RemoveTrailParticles();
 
     if (doMissPenalty) {
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
@@ -1253,11 +1244,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // burst + persistent juice emitters below. Mirrors the pattern used
     // by Release/KillFruit so special-fruit trails (from
     // SetTrailParticles) don't leak when the fruit gets sliced.
-    {
-        PSPParticleManager& pm = PSPParticleManager::GetInstance();
-        if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
-        if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
-    }
+    RemoveTrailParticles();
 
     // Impact particle emitter — one-shot, rotated by the blade direction.
     // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
@@ -2775,14 +2762,7 @@ void Fruit::SetForPlayer(int playerIdx) {
 // v1.6.1 Fruit::Release @0x001dbfe4 — virtual Mortar::Entity::Release override.
 // Called by Mortar::ActorManager teardown before the destructor.
 void Fruit::Release() {
-    if (m_pEmitter1) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
-        m_pEmitter1 = nullptr;
-    }
-    if (m_pEmitter2) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
-        m_pEmitter2 = nullptr;
-    }
+    RemoveTrailParticles();
     if (m_pOwner) {
         MenuButton* owner = reinterpret_cast<MenuButton*>(m_pOwner);
         if (owner->m_pTrackedFruit == this) {
@@ -2850,6 +2830,23 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const char* key = chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
     if (!key) return nullptr;
     return GETSTRING_CAST_0_STR(key);
+}
+
+// v1.6.1 Fruit::GetSliceDir @0x001bff08 — unit direction for a slice index, offset by the
+// fruit's blade angle (m_SliceArcAngle, +0xc0). Returns (SinIdx(a), CosIdx(a), 0).
+Vec3 Fruit::GetSliceDir(uint16_t sliceIdx) const {
+    uint16_t a = (uint16_t)(sliceIdx + m_SliceArcAngle);
+    return Vec3(SinIdx(a), CosIdx(a), 0.0f);
+}
+
+// v1.6.1 Fruit::RemoveTrailParticles @0x001db2a8 — release both trail/juice emitters back to
+// the particle manager, then null both slots. Matches the binary's structure: GetInstance()
+// per live emitter, unconditional null of each slot afterward.
+void Fruit::RemoveTrailParticles() {
+    if (m_pEmitter1) { PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1); }
+    m_pEmitter1 = nullptr;
+    if (m_pEmitter2) { PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2); }
+    m_pEmitter2 = nullptr;
 }
 
 // v1.6.1 Fruit::SetTrailParticles @0x001db2f4 — replace m_pEmitter1 with a custom trail emitter.

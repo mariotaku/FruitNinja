@@ -341,7 +341,7 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4
 // ----------------------------------------------------------------------------
 // PSPParticleManager — singleton manager.
 // Binary struct layout (0x38 bytes, v1.6.1 @0x0013bf40):
-//   +0x00  void*                         __vptr
+//   +0x00  float                         m_GlobalPullRadius  (non-polymorphic; NOT a vptr)
 //   +0x04  float                         m_GlobalTimeScale
 //   +0x08  Vec3                          m_GlobalOrigin
 //   +0x14  PSPParticle*                  m_pParticles
@@ -405,15 +405,22 @@ public:
     const uint8_t* FindTemplate(uint32_t hash) const;
 
     // Binary manager global fields (v1.6.1 @0x0013bf40):
+    //   +0x00 m_GlobalPullRadius (ctor = 0.0)
     //   +0x04 m_GlobalTimeScale (ctor = 1.0)
     //   +0x08 m_GlobalOrigin
     // Written each frame by SuperFruitControl::UpdateExplosion.
+    // ASM-spec v1.6.1 PSPParticleManager @0x00013bf40 (non-polymorphic; +0x00 = float
+    //   m_GlobalPullRadius, not a vptr): the ctor writes this->__vptr = 0 -- a plain data
+    //   field, not a real vtable -- so +0x00 is the world-space vortex pull radius (Draw
+    //   pulls free particles toward m_GlobalOrigin within this radius). Removing the port's
+    //   virtual dtor drops the compiler vptr and makes +0x00 available for this float.
+    float m_GlobalPullRadius;    // +0x00  vortex pull radius (0.0 at reset/ctor)
     float m_GlobalTimeScale;     // +0x04  global time speed (1.0 at reset/ctor)
     Vec3  m_GlobalOrigin;        // +0x08  explosion epicenter
 
 private:
     PSPParticleManager();
-    virtual ~PSPParticleManager();  // virtual matches binary vptr at +0x00
+    ~PSPParticleManager();  // non-virtual: binary is non-polymorphic (+0x00 is data, not a vptr)
 
     // Binary-faithful layout fields (+0x14 onwards, following vptr+GlobalTimeScale+GlobalOrigin):
     PSPParticle*                              m_pParticles;           // +0x14  1024-slot flat buffer
@@ -442,8 +449,9 @@ private:
 // The private fields at +0x14..+0x34 follow sequentially after m_GlobalOrigin (+0x08, Vec3=12 bytes)
 // with no holes; their correctness is enforced by the sizeof(PSPParticleManager) check (when port-only
 // tail fields are absent), not by individual offset asserts.
-static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalTimeScale) == 0x04, "");
-static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalOrigin)    == 0x08, "");
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalPullRadius) == 0x00, "");
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalTimeScale)  == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalOrigin)     == 0x08, "");
 #endif
 
 #endif

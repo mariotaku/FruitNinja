@@ -316,6 +316,15 @@ public:
     // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter
     bool SetTrailParticles(unsigned long emitterHash);
 
+    // Binary @ 0x001bff08 — slice-direction unit vector for a slice index, offset by the
+    // fruit's blade angle (m_SliceArcAngle, +0xc0): returns (SinIdx(a), CosIdx(a), 0) where
+    // a = sliceIdx + m_SliceArcAngle.
+    Vec3 GetSliceDir(uint16_t sliceIdx) const;
+
+    // Binary @ 0x001db2a8 — release both trail/juice emitters (m_pEmitter1/+0x40,
+    // m_pEmitter2/+0x44) back to the particle manager and null them. Idempotent.
+    void RemoveTrailParticles();
+
     // Binary @ 0x00175988 — push bombs away from this fruit (X axis) when within 70px and matching velocity
     void UpdateBombAvoidance(float dt);
 
