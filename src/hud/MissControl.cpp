@@ -9,6 +9,8 @@
 #include "engine/audio/GameSound.h"
 #include "game/ItemManager.h"
 #include "game/WaveManager.h"
+#include "game/FruitCamera.h"
+#include "network/P2PMessageHandling.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "render/MatrixManager.h"
@@ -48,9 +50,8 @@ static constexpr float CLAMP_X_LO = -240.0f;
 static constexpr float CLAMP_Y_HI =  160.0f;
 static constexpr float CLAMP_Y_LO = -160.0f;
 
-// Combo separation distance (sqrt = 70 px). DAT_00151d58 = 4900.0
-static constexpr float SEP_DIST_SQR = 4900.0f;
-static constexpr float SEP_TARGET   = 70.0f;   // DAT_00151d5c
+// Combo separation base radius (scaled by zoom^2 in Update). Binary DAT = 70.0f.
+static constexpr float SEP_BASE = 70.0f;
 
 // Sound threshold crossing. DAT_00151d64 = 1.66f
 static constexpr float SOUND_THRESH = 1.66f;
@@ -76,13 +77,15 @@ static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0 = 0x4
 int   MissControl::s_NumCriticals = 0;
 float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
 
-// Binary @ 0x001515a4 -- combo overlay textures [0..9] = combo_2..combo_11.
+// Combo overlay textures: [0..1]=NULL, [2..9]=combo_3..combo_10
+// (loaded in ctor tex-block, v1.6.1 MissControl::MissControl @0x0019ed44).
 Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 
 int MissControl::s_refCount = 0;
 
 // --- ctor / dtor -----------------------------------------------------------
 
+// ASM-spec v1.6.1 MissControl::MissControl @0x0019ed44: if(s_refCount==0) load 3 tex + combo_3..10 inline; ++s_refCount; Init(); m_Active=0.
 MissControl::MissControl()
     : m_AnimState(0)
     , m_bFlashing(0)
@@ -93,25 +96,24 @@ MissControl::MissControl()
     , m_ComboCount(0)
     , m_DragScale(1.0f)
 {
-    ++s_refCount;
-    m_Active        = 0;   // pool slot starts free; Init/Make* sets to 1
-    // m_bNoDestructor is NOT set here -- binary writes it in CreatePool AFTER
-    // HUD::AddControl per binary @ 0x001513ac. Setting it in the ctor would
-    // diverge from binary's initialisation order (cosmetic in practice since
-    // both routes end with m_bNoDestructor == 1 before the first Update tick).
-    // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
-    m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
     // v1.6.1 MissControl::MissControl @0x0019ed44: mov r3,#1; strb r3,[r5,#0x4]
     // (HUDControl::m_Singular, +0x4). Without this every MissControl is swept
     // by HUDControl::SetToMultiplayerState() on Game::TellGameToStart.
     m_Singular      = 1;
-    // TODO: v1.6.1 0x0019ed44 (MissControl::MissControl) -- ctor should call
-    // the real Init() (vtable slot 4, thunk @0x00102a38 -> 0x00150fa4) right
-    // after the shared-texture lazy-load block, then override m_Active back
-    // to 0, like the binary does. Currently masked: every activation site
-    // (MakeCritical/MakeRare/MakeCombo/MakeDisappear here, and the 3-widget
-    // setup in src/game/GameInit.cpp) individually sets the fields Init()
-    // would set. Init() itself has zero live call sites in src/ today.
+    // Binary lazy-loads the shared textures inline here, gated on s_refCount==0.
+    // The port keeps the load body in LoadContent() (guarded by s_TexturesLoaded)
+    // so GameInitialise's Step-25 pre-warm call and this ctor path don't
+    // double-load; the ctor gate mirrors the binary's s_refCount==0 check.
+    if (s_refCount == 0) {
+        LoadContent();
+    }
+    ++s_refCount;
+    Init();
+    m_Active        = 0;   // pool slot starts free; Make* re-runs Init() and sets it to 1
+    // m_bNoDestructor is NOT set here -- binary writes it in CreatePool AFTER
+    // HUD::AddControl. Setting it in the ctor would diverge from binary's
+    // initialisation order (cosmetic in practice since both routes end with
+    // m_bNoDestructor == 1 before the first Update tick).
 }
 
 // ASM-spec v1.6.1 MissControl::~MissControl @0x0019f198
@@ -132,17 +134,19 @@ void MissControl::Release() {
     m_Texture.SetNull();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150fa4 (re-analyst)
-// vtable[4] @ 0x00150fa4
+// ASM-spec v1.6.1 MissControl::Init @0x0019e07c (vtable slot 2, vtable @0x002cdb48):
+// m_Active=1, m_Timer=0, m_bPlaySound=1, m_LayerFlags=1, m_bComboActive=0,
+// m_AnimState=0, m_Texture=s_TexCross, m_bPendingRemoval=0, m_LifeTimer=0,
+// m_bUseComboSound=0, m_ComboCount=0, m_DragScale=1, size=((w>>1)+1,(w>>1)+1,0);
+// tail = virtual slot-4 dispatch (Reset).
+// Live call sites: ctor @0x0019ed44 and every Make* (each starts with Init()).
 void MissControl::Init() {
     m_bComboActive = 0;
     m_Active       = 1;   // binary field_0x30 = 1; marks slot as busy/active
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_bPlaySound     = 1;   // +0x8c = 1 (sound-enable gate)
-    // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
-    m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
+    m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag (+0x34 = 1)
     m_AnimState    = 0;
-    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150fc0 (re-analyst v3)
     // Init defaults m_Texture to s_TexCross (hud_cross.tex), NOT s_TexCritical.
     // This is the red X used by path 2 of MakeDisappear (fruit-miss penalty).
     // MakeCritical/MakeRare/MakeCombo override with their respective textures.
@@ -150,13 +154,11 @@ void MissControl::Init() {
     m_LifeTimer    = 0.0f;
     m_Active       = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
-    m_bPendingRemoval = 0;  // +0x33 = 0 (binary Init @ 0x00150ff6)
+    m_bPendingRemoval = 0;  // +0x33 = 0
     m_bUseComboSound    = 0;
     m_DragScale   = 1.0f;
-    // DIFFERS: binary calls GetWidth() twice (not GetHeight) -- visually incorrect but binary-faithful.
-    // Port uses (W+1, H+1, 0) for visual correctness.
-    // DIFFERS: original = (GetWidth()>>1)+1, (GetWidth()>>1)+1 from Init @ 0x00150fa4;
-    //          port uses (W+1, H+1) -- see spec note 1 for Init.
+    // Binary reads s_TexCritical->GetWidth() TWICE (not GetHeight) for the
+    // default size -- binary-faithful; Make* overwrite size anyway.
     if (s_TexCritical.IsValid()) {
         size = Vec3((float)(s_TexCritical->GetWidth() >> 1) + 1,
                     (float)(s_TexCritical->GetWidth() >> 1) + 1,
@@ -164,12 +166,12 @@ void MissControl::Init() {
     } else {
         size = Vec3(0.0f, 0.0f, 0.0f);
     }
-    // base init for transform -- binary calls vtable[2] base (HUDControl3d base)
-    HUDControl3d::Init();
+    // ASM-verified v1.6.1 MissControl::Init @0x0019e134: tail-calls vtable slot4 = MissControl::Reset @0x0019df5c (not base Init).
+    Reset();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150f14 (re-analyst)
-// vtable[6] @ 0x00150f14
+// ASM-spec v1.6.1 MissControl::Reset @0x0019df5c (vtable slot 4, vtable @0x002cdb48).
+// Also reached as Init()'s tail (virtual slot-4 dispatch @0x0019e134).
 void MissControl::Reset() {
     m_DrawColour   = Colour(255, 255, 255, 255);  // restore RGBA tint from DAT_00150f7c
     m_DrawColour.a = 0xff;
@@ -199,15 +201,14 @@ int MissControl::SetPlayer(int player) {
 Vec3 MissControl::GetDrawPos() const {
     Vec3 p = pos;
     if (m_LifeTimer <= 0.0f) {
-        Game* g = Game::GetInstance();
-        if (g) {
-            const bool failureEnabled =
-                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
-            if (failureEnabled) {
-                p.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount);
-            } else {
-                p.y -= 3.0f * pos.y;
-            }
+        // Mirrors Draw's lifeTimer<=0 gates (v1.6.1 MissControl::Draw @0x0019f6a4):
+        // Draw early-returns (no quad) unless FailureEnabled() && !IsMultiplayer()
+        // && fabs(m_PauseAmount) < 1.0, so the offset only applies under the
+        // same condition. No else-branch (binary has none).
+        const float pause = fabsf(game_work.m_PauseAmount);
+        if (Mortar::FailureEnabled(game_work.gameMode) && !IsMultiplayer() &&
+            pause < 1.0f) {
+            p.y -= 3.0f * pos.y * pause;
         }
     }
     return Vec3(p.x + 480.0f * m_HudScale.x,
@@ -244,8 +245,8 @@ void MissControl::LoadContent() {
     s_TexCritical = Mortar::TextureManager::LoadLocalisedTexture("critical.tex");
     s_TexRare     = Mortar::TextureManager::LoadLocalisedTexture("ultra_rare_plus_50.tex");
     s_TexCross    = Mortar::TextureManager::LoadLocalisedTexture("hud_cross.tex");
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001515a4 (re-analyst)
-    // Binary loop: iVar3=1..10; loads combo_%d.tex only for iVar3>=3.
+    // ASM-spec v1.6.1 MissControl::MissControl @0x0019ed44 (tex-load block):
+    // loop iVar3=1..10; loads combo_%d.tex only for iVar3>=3.
     // Slots [0] and [1] are intentionally NULL (combo=1,2 have no texture).
     // Names: combo_3.tex .. combo_10.tex -> array indices [2..9].
     for (int i = 0; i < 10; ++i) {
@@ -360,27 +361,19 @@ MissControl* MissControl::GetFree() {
 
 // --- Make* -----------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151764 (re-analyst)
-// binary @ 0x00151764: Init() first, then tex + flags, then half/clamp/restore size.
+// ASM-spec v1.6.1 MissControl::MakeCritical @0x0019e810: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then overrides tex/flags/life/pos/size; MakeRare @0x0019e994 identical + m_DragScale=0.5, no SetPlayer.
 void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     LOG_INFO("MissControl", "MakeCritical pos=(%.1f,%.1f,%.1f) player=%d this=%p",
              pos.x, pos.y, pos.z, playerIdx, static_cast<void*>(this));
-    // Init fields (binary inlines Init, does not call virtual Init())
-    m_Active       = 1;
-    m_Timer        = 0.0f;
-    m_bPlaySound   = 1;
-    m_bPendingRemoval = 0;
-    m_bUseComboSound = 0;
-    m_ComboCount   = 0;
-    m_DragScale    = 1.0f;
+    Init();
     m_Texture      = s_TexCritical;
-    m_LifeTimer    = MISS_FADE_INIT;
     m_bFlashing     = 1;
+    m_bComboActive = 1;
+    m_LifeTimer    = MISS_FADE_INIT;
     m_DrawColour.a = 0xff;
     m_AnimState    = 3;
-    this->pos      = pos;
-    m_bComboActive = 1;
     m_FlashTimer  = 0;
+    this->pos      = pos;
     if (s_TexCritical.IsValid()) {
         uint32_t w = (uint32_t)s_TexCritical->GetWidth();
         uint32_t h = (uint32_t)s_TexCritical->GetHeight();
@@ -402,35 +395,26 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
     SetPlayer(playerIdx);
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001518d8 (re-analyst)
-// binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_DragScale=0.5,
-// and does NOT call SetPlayer.
+// ASM-spec v1.6.1 MissControl::MakeRare @0x0019e994: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then identical to MakeCritical but uses s_TexRare, sets m_DragScale=0.5 (before HalfScale), and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
     LOG_INFO("MissControl", "MakeRare pos=(%.1f,%.1f,%.1f) this=%p",
              pos.x, pos.y, pos.z, static_cast<void*>(this));
-    // Init fields (binary inlines Init, does not call virtual Init())
-    m_Active       = 1;
-    m_Timer        = 0.0f;
-    m_bPlaySound   = 1;
-    m_bPendingRemoval = 0;
-    m_bUseComboSound = 0;
-    m_ComboCount   = 0;
-    m_DragScale    = 1.0f;  // overwritten to 0.5f below
+    Init();
     m_Texture      = s_TexRare;
-    m_LifeTimer    = MISS_FADE_INIT;
     m_bFlashing     = 1;
+    m_bComboActive = 1;
+    m_LifeTimer    = MISS_FADE_INIT;
     m_DrawColour.a = 0xff;
     m_AnimState    = 3;
-    this->pos      = pos;
-    m_bComboActive = 1;
     m_FlashTimer  = 0;
+    this->pos      = pos;
     if (s_TexRare.IsValid()) {
         uint32_t w = (uint32_t)s_TexRare->GetWidth();
         uint32_t h = (uint32_t)s_TexRare->GetHeight();
         size.x = (float)(w + 1);
         size.y = (float)(h + 1);
-        size.z = 0.0f;  // DAT_00151a30 = 0.0
-        m_DragScale = 0.5f;  // written between size init and HalfScale (binary @ 0x001518d8)
+        size.z = 0.0f;
+        m_DragScale = 0.5f;  // written between size init and HalfScale (v1.6.1 MakeRare @0x0019e994)
         size.x *= 0.5f;
         size.y *= 0.5f;
         // Screen clamps use HALF size (binary @ 0x00151a2c..0x00151a40)
@@ -445,21 +429,15 @@ void MissControl::MakeRare(Vec3 pos) {
     // MakeRare does NOT call SetPlayer (unlike MakeCritical)
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001515a4 (re-analyst)
-// binary @ 0x001515a4
+// ASM-spec v1.6.1 MissControl::MakeCombo @0x0019e630: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then overrides texture/combo flags/life/pos/size.
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
-// Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.811, anim=3, visible=1.
+// Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.81, anim=3, visible=1.
 void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
              pos.x, pos.y, pos.z, comboCount, entityType, static_cast<void*>(this));
-    // Init fields (binary inlines Init, does not call virtual Init())
-    m_Active       = 1;
-    m_Timer        = 0.0f;
-    m_bPlaySound   = 1;
-    m_bPendingRemoval = 0;
-    m_DragScale    = 1.0f;
+    Init();
     // Texture pick uses CALLER's comboCount (before arcade override).
-    // binary @ 0x001515a4: idx computed before arcade m_ComboCount override.
+    // v1.6.1 MakeCombo @0x0019e630: idx computed before arcade m_ComboCount override.
     int idx;
     if (comboCount < 2)       idx = 0;
     else if (comboCount < 10) idx = comboCount - 1;
@@ -467,13 +445,13 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
     if (s_ComboTextures[idx].IsValid()) {
         m_Texture = s_ComboTextures[idx];
     }
-    // m_bUseComboSound = 1 (binary @ 0x001515a4, written BEFORE arcade override)
+    // m_bUseComboSound = 1 (v1.6.1 MakeCombo @0x0019e630, written BEFORE arcade override)
     m_bUseComboSound    = 1;
     m_bComboActive = 1;
     m_ComboCount   = comboCount;  // caller's value stored first
     // Arcade-mode override: after storing caller's comboCount and picking texture,
     // binary overrides m_ComboCount with (int)(WaveManager::GetSpeed(0) + 0.65f).
-    // binary @ 0x001515a4 (AFTER m_ComboCount = comboCount, AFTER texture lookup)
+    // v1.6.1 MakeCombo @0x0019e630 (AFTER m_ComboCount = comboCount, AFTER texture lookup)
     Game* g = Game::GetInstance();
     if (g && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager* wm = WaveManager::GetInstance();
@@ -504,32 +482,20 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
         size.y += size.y;
     }
     SetPlayer(entityType);
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001515a4 (re-analyst)
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151d94 (re-analyst)
-// binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
-// Common prefix: Init fields inline (binary does not call virtual Init()), then m_DrawColour.a=0xff, then pos.
+// ASM-spec v1.6.1 MissControl::MakeDisappear @0x0019f338: calls virtual Init() (vtbl slot2 @0x0019e07c) first; two-path form based on whether SmartPtr is valid.
+// Common prefix after Init(): m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
                                 Mortar::SmartPtr<Mortar::Texture> tex) {
     LOG_INFO("MissControl", "MakeDisappear pos=(%.1f,%.1f,%.1f) sizeMult=%d tex=%d this=%p",
              inPos.x, inPos.y, inPos.z, sizeMult,
              tex.IsValid() ? 1 : 0, static_cast<void*>(this));
-    // Init fields (binary inlines Init, does not call virtual Init())
-    m_Active       = 1;
-    m_Timer        = 0.0f;
-    m_bPlaySound   = 1;
-    m_bPendingRemoval = 0;
-    m_bUseComboSound = 0;
-    m_ComboCount   = 0;
-    m_DragScale    = 1.0f;
-    m_bComboActive = 0;
-    m_Texture      = s_TexCross;  // path 2 relies on this (no texture arg supplied)
-    m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix, binary @ 0x00151d94)
+    Init();   // sets m_Texture = s_TexCross; path 2 relies on this (no texture arg supplied)
+    m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix)
     pos = inPos;
     if (tex.IsValid()) {
         // Path 1: zen-bomb X overlay (valid SmartPtr supplied).
-        // binary @ 0x00151d94 path 1
         m_bPlaySound     = 0;   // +0x8c = 0 (sound-gate cleared)
         m_Texture      = tex;
         m_bFlashing     = 1;
@@ -546,10 +512,10 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         SetPlayer(sizeMult);
     } else {
         // Path 2: fruit miss-penalty / arcade-bomb cross overlay.
-        // binary @ 0x00151d94 else branch -- does NOT touch m_Texture.
+        // v1.6.1 MakeDisappear @0x0019f338 else branch -- does NOT touch m_Texture.
         // The red X comes from Init()'s default `m_Texture = s_TexCross`
-        // (binary @ 0x00150fc0). Path 2 just updates pose / size / alpha /
-        // anim-state; the texture binding from Init carries through.
+        // (v1.6.1 MissControl::Init @0x0019e07c). Path 2 just updates pose /
+        // size / alpha / anim-state; the texture binding from Init carries through.
         m_FlashTimer  = (sizeMult >= 1) ? 0x1e : 0;
         m_LifeTimer    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
         m_AnimState    = 3;
@@ -582,7 +548,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         if (pos.y >  MISS_CLAMP_HALF_Y - halfY) pos.y =  MISS_CLAMP_HALF_Y - halfY;
         if (pos.y < -MISS_CLAMP_HALF_Y + halfY) pos.y = -MISS_CLAMP_HALF_Y + halfY;
         // Binary path 2 does NOT assign m_Active=1 (Init already set it).
-        // Binary path 2 does NOT assign m_Texture=s_TexCross (keeps Init's s_TexCritical).
+        // Binary path 2 does NOT re-assign m_Texture (keeps Init's s_TexCross default).
     }
 }
 
@@ -618,14 +584,20 @@ void MissControl::Update(float dt) {
         //   pos += acc  =>  a lone combo popup is STATIC for its 1.81s life.
         float accX = 0.0f;
         float accY = 0.0f;
-        // TODO: v1.6.1 0x0019e1e4 (MissControl::Update) -- binary scales radius by FruitCamera::m_Zoom*70 (distSq < (m_Zoom*70)^2); hardcoded 4900/70 assumes zoom==1. See task #82.
+        // ASM-spec v1.6.1 MissControl::Update @0x0019e1e4: separation radius
+        // r = 70 * m_Zoom * m_Zoom (70*zoom^2, NOT (70*zoom)^2); gate is
+        // distSq < r*r; force term uses (r - dist).
+        const FruitCamera* cam = game_work.m_FruitCamera;
+        const float zoom = cam ? cam->m_Zoom : 1.0f;
+        const float sepRadius = SEP_BASE * zoom * zoom;
+        const float sepRadiusSq = sepRadius * sepRadius;
         for (int k = 0; k < s_PoolCount; ++k) {
             MissControl* other = &s_pPool[k];
             if (other == this || !other->m_Active) continue;
             float dx = other->pos.x - pos.x;
             float dy = other->pos.y - pos.y;
             float distSq = dx*dx + dy*dy;
-            if (distSq >= SEP_DIST_SQR) continue;
+            if (distSq >= sepRadiusSq) continue;
             float dist = 1.0f;
             if (distSq <= 0.0f) {
                 // random direction when coincident (binary uses RandUint(0xff3a) -> SinIdx/CosIdx)
@@ -637,14 +609,10 @@ void MissControl::Update(float dt) {
             }
             dx /= dist;
             dy /= dist;
-            // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151b80..0x00151bbc (re-analyst v2)
             // Binary chains three Vec2 *= scalar calls then a -= :
-            //   a_Stack_60 = dir * (70 - dist)
-            //   a_Stack_68 = a_Stack_60 * dt
-            //   _Stack_70  = a_Stack_68 * 15.0
-            //   accel -= _Stack_70                     // repel: self moves AWAY from other
-            // i.e. accel -= dir * (70 - dist) * dt * 15.0
-            float force = (SEP_TARGET - dist) * dt * 15.0f;
+            //   a = dir * (r - dist);  a *= dt;  a *= 15.0;  accel -= a
+            // (repel: self moves AWAY from other), r = 70*zoom^2 from above.
+            float force = (sepRadius - dist) * dt * 15.0f;
             accX -= dx * force;
             accY -= dy * force;
         }
@@ -732,12 +700,9 @@ void MissControl::Update(float dt) {
 //     if (m_FlashTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_FlashTimer--
 //
 //     if (m_LifeTimer <= 0.0f):               // passive miss-marker path only
-//         if (FailureEnabled() && !IsMultiplayer()):
-//             drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount)
-//         else:
-//             drawPos.y -= 3.0f * pos.y    // Zen / MP: park off-screen
-//
-// binary @ 0x00151f60
+//         return unless FailureEnabled() && !IsMultiplayer()
+//                       && fabs(m_PauseAmount) < 1.0     // Zen / MP / settled pause: no X-marks
+//         drawPos.y -= 3.0f * pos.y * fabs(m_PauseAmount)   // no else-branch
 void MissControl::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
     // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00151f60 first ~20 instructions
@@ -794,16 +759,14 @@ void MissControl::Draw(float* hudScaleRaw) {
             }
         }
     } else {
-        // m_LifeTimer <= 0 -- passive miss-marker path: y-shift
+        // m_LifeTimer <= 0 -- passive miss-marker path.
         // Binary has NO Game::GetInstance gate here -- reads game_work directly.
-        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151fe4 (re-analyst)
-        const bool failureEnabled =
-            Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
-        if (failureEnabled) {
-            drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_PauseAmount);
-        } else {
-            drawPos.y -= 3.0f * pos.y;
-        }
+        // ASM-spec v1.6.1 MissControl::Draw @0x0019f6a4: lifeTimer<=0 path returns unless FailureEnabled()&&!IsMultiplayer()&&fabs(m_PauseAmount)<1.0; then drawPos.y -= 3*pos.y*fabs(m_PauseAmount). No else-branch.
+        const float pause = fabsf(game_work.m_PauseAmount);
+        if (!Mortar::FailureEnabled(game_work.gameMode)) return;
+        if (IsMultiplayer()) return;
+        if (pause >= 1.0f) return;
+        drawPos.y -= 3.0f * pos.y * pause;
     }
 
     // Texture validity check (binary @ 0x001520c6 -- after pulse/pos path)
