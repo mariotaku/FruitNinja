@@ -7,7 +7,7 @@
    Old builds' assets accumulate under the same cache name until CACHE is
    bumped; bump the version suffix to force a clean slate. */
 
-var CACHE = 'fruit-ninja-v1';
+var CACHE = 'fruit-ninja-v2';
 
 self.addEventListener('install', function (event) {
   /* Activate the new SW immediately; no precache step. */
