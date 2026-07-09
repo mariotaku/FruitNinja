@@ -37,6 +37,8 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "engine/util/StringTable.h"
+#include "engine/network/NetworkManager.h"
+#include "engine/network/P2PMessageHandling.h"
 #include <cmath>
 #include "game/GameWork.h"
 #include "game/ItemManager.h"
@@ -234,22 +236,57 @@ void MainScreen::Release() {
 }
 
 // v1.6.1 MainScreen::Update @0x00196e1c — state machine
+// ASM-spec v1.6.1 MainScreen::Update @0x00196e1c: toggle create+texswap INLINE at top (no
+// CreateToggles symbol); snapshot elapsedTime=-PauseAmount once; case-0 gate gameMode=0 on
+// !IsMultiplayer(); PauseAmount ramp else=-1.0 clamp.
 void MainScreen::Update(float dt) {
 #ifndef __bada__
     m_Time += dt;
 #endif
 
-    // Binary @ 0x0014b2a4: toggle null-check + create runs at the top of Update,
-    // before the state switch, so destroyed toggles are recreated in any state.
-    if (!pSoundToggle || !pMusicToggle) {
-        CreateToggles();
+    // Binary builds BOTH toggles inline at the top of Update, each under its OWN
+    // null guard (binary sound-toggle field is m_pToggleB), so a destroyed toggle
+    // is recreated in any state. Per toggle: new MenuButton (0x178), Init with
+    // Delegate0, HUD::AddControl, layer=8 (HUD_LAYER_BUTTONS), SetSingular.
+    if (pSoundToggle == nullptr && game_work.mHud) {
+        pSoundToggle = new MenuButton();
+        pSoundToggle->Init(POS_SOUND_TOGGLE,
+            Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
+            Vec3(32.0f, 32.0f, 1.0f), nullptr);
+        game_work.mHud->AddControl(pSoundToggle);
+        pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+        pSoundToggle->SetSingular();
     }
+    if (pMusicToggle == nullptr && game_work.mHud) {
+        pMusicToggle = new MenuButton();
+        pMusicToggle->Init(POS_MUSIC_TOGGLE,
+            Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
+            Vec3(32.0f, 32.0f, 1.0f), nullptr);
+        game_work.mHud->AddControl(pMusicToggle);
+        pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+        pMusicToggle->SetSingular();
+    }
+
+    // Toggle texture swap runs right after creation, BEFORE the state switch
+    // (binary indexes the on/off texture pair by bMusicOn^1 / bSoundOn^1).
+    if (pMusicToggle) {
+        pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
+    }
+    if (pSoundToggle) {
+        pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
+    }
+
+    // Binary snapshots fVar15 = -flM_PauseAmount ONCE here; cases 1/2 use it for
+    // pos.y (computed with the pre-ramp value) and the tail uses it as the
+    // toggle-slide transition timer.
+    float elapsedTime = -game_work.m_PauseAmount;
 
     switch (m_State) {
     case STATE_CAMERA_ZOOM: {
         // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide.
-        // Binary case-0 sub-block: read m_TexMoreGames.f0; if f0>0 OR bombHitTimer>1.45,
-        // tick the countdown and hold the camera; otherwise settle branch: gameMode=0,
+        // Binary case-0 order: CreateButtons(this) first, then gameMode=0 if !IsMultiplayer(),
+        // then the f0 sub-block: read m_TexMoreGames.f0; if f0>0 OR bombHitTimer>1.45,
+        // tick the countdown and hold the camera; otherwise settle branch:
         // m_Timer2 += dt, ramp m_PauseAmount toward -1. Advance to state 1 when camera
         // settled (m_PauseAmount < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
@@ -257,12 +294,20 @@ void MainScreen::Update(float dt) {
         // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); port aliases a
         // port-only float (DIFFERS, x64 8-byte SmartPtr) so the hold branch is bada-excluded
         // -- the settle branch is binary-faithful.
+
+        // v1.6.1 @0x00197430: CreateButtons called FIRST, unconditionally every frame;
+        // internal gate on flM_BombHitTimer<1.45 + per-button null guards.
+        CreateButtons();
+
+        // v1.6.1 @0x00197430: gameMode=0 only when not in a multiplayer session.
+        if (!IsMultiplayer()) {
+            game_work.gameMode = 0;
+        }
+
 #ifndef __bada__
         float f0 = TexMoreGamesF0();
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
-            // v1.6.1 @0x00197430: gameMode=0 fires in both branches when single-player.
-            game_work.gameMode = 0;
             TexMoreGamesF0() = f0 - dt;
             game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
             if (game_work.m_PauseAmount < 0.0f) {
@@ -270,17 +315,17 @@ void MainScreen::Update(float dt) {
             }
         } else {
 #endif // !defined(__bada__)
-            // Settle branch: clear gameMode, advance timer, ramp camera toward -1.
-            // v1.6.1 @0x00197430: gameMode=0 in both branches (single-player path).
-            game_work.gameMode = 0;
+            // Settle branch: advance timer, ramp camera toward -1
+            // (else-arm snaps to -1.0 once past the -0.999 threshold).
             m_Timer2 += dt;
-            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+            if (game_work.m_PauseAmount >= CAMERA_THRESHOLD) {
+                game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+            } else {
+                game_work.m_PauseAmount = -1.0f;
+            }
 #ifndef __bada__
         }
 #endif // !defined(__bada__)
-
-        // v1.6.1 @0x00197430: CreateButtons called unconditionally every frame; internal gate on flM_BombHitTimer<1.45 + per-button null guards.
-        CreateButtons();
 
         // v1.6.1 MainScreen::Update @0x00196e1c case 0 (binary @0x00197334..0x00197360):
         //   advance iff (m_Timer2 > 0.15) AND (flM_PauseAmount < 0.0). Binary uses bmi
@@ -303,11 +348,18 @@ void MainScreen::Update(float dt) {
             CreateButtons();
         }
 
-        game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+        // Binary computes pos.y from the top-of-function -PauseAmount snapshot
+        // (fVar15), BEFORE ramping PauseAmount.
+        {
+            const float sizeY_1 = size.y;
+            pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * elapsedTime) * 0.5f;
+        }
 
-        const float sizeY_1 = size.y;
-        const float alpha_1 = -game_work.m_PauseAmount;
-        pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * alpha_1) * 0.5f;
+        if (game_work.m_PauseAmount >= CAMERA_THRESHOLD) {
+            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+        } else {
+            game_work.m_PauseAmount = -1.0f;
+        }
         break;
     }
 
@@ -340,9 +392,10 @@ void MainScreen::Update(float dt) {
             game_work.bM_bPaused = 0;
         }
 
+        // Binary: pos.y from the top-of-function -PauseAmount snapshot (fVar15),
+        // i.e. the pre-decay value.
         const float sizeY_2 = size.y;
-        const float alpha_2 = fabsf(game_work.m_PauseAmount);
-        const float tt_2 = sizeY_2 * alpha_2;
+        const float tt_2 = sizeY_2 * elapsedTime;
         pos.y = (sizeY_2 + 320.0f - 2.0f * tt_2) * 0.5f;
         break;
     }
@@ -354,6 +407,8 @@ void MainScreen::Update(float dt) {
         const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
         if (fruitCount == 0) {
+            CancelNews();  // Defunct: NetworkManager news -- called in the entity-count-0 block; v1.6.1 MainScreen::Update @0x00197494
+            // DIFFERS: original = flat *0.75 (v1.6.1 MainScreen::Update @0x00197494), port scales by g_DebugTimeScale for debug time-scale tooling
             m_Timer2 *= 1.0f - (1.0f - 0.75f) * FN::g_DebugTimeScale;
         }
 
@@ -409,27 +464,55 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_LEADERBOARD:     // v1.6.1 case 9 @0x0019765c
-    case STATE_MORE_GAMES:      // v1.6.1 case 10 @0x0019765c
-        // Defunct — OpenFeint / GameCenter states (lumped exit block; v1.6.1 MainScreen::Update @0x0019765c).
-        // Binary: m_State=0; f0(+0x11c)=0; m_Timer2=-0.85. No DeleteMenuButtons (persisting instance).
-        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
-        m_State = STATE_CAMERA_ZOOM;
-        SetMoreGamesTimer(0.0f);
-        m_Timer2 = -0.85f;
+    case STATE_MORE_GAMES: {    // v1.6.1 case 10 @0x0019765c
+        // Defunct: NetworkManager states 9/10 — entity-gate + stubbed LaunchDashboard; v1.6.1 @0x0019765c
+        // Binary: gate on GetNumEntities(0)==0; suspend-toggle around LaunchDashboard
+        // (state==10 -> dashboard id 3, clears m_pQuitButton); then m_State=0;
+        // f0(+0x11c)=0; m_Timer2=-0.85. No DeleteMenuButtons (persisting instance).
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        if ((am ? am->GetNumEntities(0) : 0) == 0) {
+            game_work.m_bUpdatesSuspended = 0;
+            Mortar::NetworkManager::GetInstance()->LaunchDashboard(
+                m_State == STATE_MORE_GAMES ? 3 : 0);  // defunct stub
+            if (m_State == STATE_MORE_GAMES) {
+                m_pQuitButton = nullptr;
+            }
+            game_work.m_bUpdatesSuspended = 1;
+            LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
+            m_State = STATE_CAMERA_ZOOM;
+            SetMoreGamesTimer(0.0f);
+            m_Timer2 = -0.85f;
+        }
         break;
+    }
 
-    case STATE_MATCHMAKER:      // v1.6.1 case 0x10 @0x001975f4
-        // Defunct: NetworkManager matchmaker — no-op stub; v1.6.1 @0x001975f4
-        // Binary falls through to CAMERA_ZOOM same as 9/10 but via a distinct block.
-        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-matchmaker state");
-        m_State = STATE_CAMERA_ZOOM;
-        SetMoreGamesTimer(0.0f);
-        m_Timer2 = -0.85f;
+    case STATE_MATCHMAKER: {    // v1.6.1 case 0x10 @0x001975f4
+        // Defunct: NetworkManager::OpenMatchmaker — entity-gate + m_Timer2 decay; v1.6.1 @0x001975f4
+        // Binary: when GetNumEntities(0)==0, decay m_Timer2 *= 0.85; once <= 0.025:
+        // m_Timer2=0, OpenMatchmaker(0,-1,2,2), m_State=0. pos.y follows m_Timer2.
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        if ((am ? am->GetNumEntities(0) : 0) == 0) {
+            m_Timer2 *= 0.85f;
+            if (m_Timer2 <= 0.025f) {
+                m_Timer2 = 0.0f;
+                Mortar::NetworkManager::GetInstance()->OpenMatchmaker(0, -1, 2, 2);  // defunct stub
+                LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-matchmaker state");
+                m_State = STATE_CAMERA_ZOOM;
+            }
+        }
+        {
+            const float sizeY_m = size.y;
+            pos.y = (sizeY_m + 320.0f - 2.0f * sizeY_m * m_Timer2) * 0.5f;
+        }
         break;
+    }
 
     case STATE_NEWS:            // v1.6.1 case 0xb @0x001975c0
-        // Defunct — NetworkManager::UpdateNews.
-        // Binary: m_State=1; f0(+0x11c)=0; m_Timer2=-0.85.
+        // Defunct: NetworkManager::UpdateNews — stub returns 0; v1.6.1 @0x001975c0
+        // Binary: if (UpdateNews(dt) != 0) break; else m_State=1; f0(+0x11c)=0; m_Timer2=-0.85.
+        if (Mortar::NetworkManager::GetInstance()->UpdateNews(dt) != 0) {
+            break;
+        }
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
         m_State = STATE_CREATE_BUTTONS;
         SetMoreGamesTimer(0.0f);
@@ -440,6 +523,7 @@ void MainScreen::Update(float dt) {
     case STATE_MODE_SELECT_2: {
         // v1.6.1 MainScreen::Update @0x00197560 cases 0xe/0xf: decay m_Timer2 and slide pos.y upward.
         const float oldTimer2 = m_Timer2;
+        // DIFFERS: original = flat *0.85 (v1.6.1 MainScreen::Update @0x00197560), port scales by g_DebugTimeScale for debug time-scale tooling
         const float decay = 1.0f - (1.0f - STATE_0E_DECAY) * FN::g_DebugTimeScale;
         m_Timer2 *= decay;
 
@@ -448,6 +532,7 @@ void MainScreen::Update(float dt) {
         pos.y = (sizeY + 320.0f - 2.0f * tt) * 0.5f;
 
         if (oldTimer2 > STATE_0E_THRESHOLD && m_Timer2 <= STATE_0E_THRESHOLD) {
+            CancelNews();  // Defunct: NetworkManager news -- called in the mode-select spawn block; v1.6.1 MainScreen::Update @0x00197560
 #ifndef __bada__
             GameModeScreen* gms = new GameModeScreen(game, false);
             game_work.mHud->AddControl(gms);
@@ -523,26 +608,23 @@ void MainScreen::Update(float dt) {
     }
     }
 
-    // Sound/music toggle texture swap
-    if (pSoundToggle) {
-        pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
-    }
-    if (pMusicToggle) {
-        pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
-    }
-
-    // Compute the state-dependent "elapsedTime" / pause driver.
-    float elapsedTime;
+    // State-dependent override of the toggle-slide driver. The default arm keeps
+    // the -PauseAmount snapshot taken at the top of the function (binary fVar15).
     switch (m_State) {
     case STATE_DOJO_WAIT_A:
     case STATE_DOJO_WAIT_B:
     case STATE_MODE_SELECT:
     case STATE_MODE_SELECT_2:
     case STATE_SLIDE_IN:
+    case STATE_MATCHMAKER:      // v1.6.1 @0x00196e1c tail: case 0x10 slides on m_Timer2
         elapsedTime = m_Timer2;
         break;
+    case STATE_CAMERA_FADE:
+        // v1.6.1 @0x00196e1c tail: fade state forces 0 so the toggles stay hidden
+        // (no slide during the camera fade back into gameplay).
+        elapsedTime = 0.0f;
+        break;
     default:
-        elapsedTime = -game_work.m_PauseAmount;
         break;
     }
 
@@ -572,6 +654,13 @@ void MainScreen::Update(float dt) {
         pMusicToggle->m_Active = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
         pSoundToggle->pos.y += slideOffset;
         pMusicToggle->pos.y += slideOffset;
+
+        // Defunct: SSMP tail — IsSameScreenMultiplayer()&&GetPausedBy() negate toggle pos; v1.6.1 @0x00196e1c
+        // Dead in SP (IsSameScreenMultiplayer() always false); shape preserved.
+        if (IsSameScreenMultiplayer() && -0.01f < game_work.m_PauseAmount && GetPausedBy()) {
+            pSoundToggle->pos = -pos;
+            pMusicToggle->pos = -pos;
+        }
     }
 
     // Binary @ 0x00195a58: UpdateScreenElements(dt, stateVar).
@@ -807,29 +896,6 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
         btn->m_bPendingRemoval = 1;
         btn = nullptr;
     }
-}
-
-void MainScreen::CreateToggles() {
-    if (!game_work.mHud) return;
-
-    // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c: toggle size is literal (32,32,1).
-    pSoundToggle = new MenuButton();
-    pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
-    pSoundToggle->Init(POS_SOUND_TOGGLE,
-        Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
-        Vec3(32.0f, 32.0f, 1.0f), nullptr);
-    pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
-    game_work.mHud->AddControl(pSoundToggle);
-    pSoundToggle->SetSingular();
-
-    pMusicToggle = new MenuButton();
-    pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
-    pMusicToggle->Init(POS_MUSIC_TOGGLE,
-        Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
-        Vec3(32.0f, 32.0f, 1.0f), nullptr);
-    pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
-    game_work.mHud->AddControl(pMusicToggle);
-    pMusicToggle->SetSingular();
 }
 
 // v1.6.1 MainScreen::CreateButtons @0x001961f8

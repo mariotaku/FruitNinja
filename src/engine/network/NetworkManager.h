@@ -182,6 +182,10 @@ public:
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d66c
     void LaunchDashboardWithLeaderboard(const char* /*board*/) {}
 
+    // Defunct: NetworkManager::OpenMatchmaker -- no-op stub; called from
+    // v1.6.1 MainScreen::Update @0x001975f4 as OpenMatchmaker(0,-1,2,2).
+    void OpenMatchmaker(int /*a*/, int /*b*/, int /*c*/, int /*d*/) {}
+
     // Defunct: NetworkManager -- no-op stub
     void PublishText(const char* /*network*/, const char* /*msg*/, const char* /*url*/) {}
 
@@ -258,7 +262,9 @@ public:
     int HasUnreadNews() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d9bc
-    void UpdateNews(float /*dt*/) {}
+    // Returns int (0 = no news being displayed); MainScreen::Update case 0xb
+    // (@0x001975c0) breaks out of the state while this returns nonzero.
+    int UpdateNews(float /*dt*/) { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018dd2c
     void DrawNews() {}

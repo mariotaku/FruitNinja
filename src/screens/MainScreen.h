@@ -247,7 +247,8 @@ private:
 
 
     // --- Internal helpers ---
-    void CreateToggles();
+    // NOTE: no CreateToggles helper — the binary builds both sound/music toggles
+    // INLINE at the top of Update @0x00196e1c, each under its own null guard.
     // v1.6.1 MainScreen::CreateButtons @0x001961f8: gated by flM_BombHitTimer<1.45, then per-button
     // null checks; sets m_ButtonsCreatedFlag=1 on first run. Called per-frame from case 0.
     void CreateButtons();
