@@ -654,18 +654,33 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     {
         GameSound* gs = game_work.mGameSound;
 
-        for (size_t si = 0; si < m_Sounds.size(); ++si) {
+        for (size_t si = 0; si < m_Sounds.size(); ) {
             SoundEffect& sfx = m_Sounds[si];
-            if (currentLongest > maxTotal * sfx.m_StartT) continue;
+            if (currentLongest > maxTotal * sfx.m_StartT) { ++si; continue; }
             sfx.m_StartT = 100.0f;
+
+            if (sfx.m_EndT < 0.0f) {
+                // ASM-spec v1.6.1 ScreenEffect::Update @0x00148da4: one-shot
+                // fire-and-forget path -- plays once at full volume, never stores
+                // a handle, and the record is erased immediately so it can't
+                // retrigger. This is the path freeze/frenzy/fourth_banana/scorex2
+                // stingers use (their XML has no timeEnd attribute).
+                Mortar::Delegate1<bool, Mortar::MortarSound*> emptyDelegate;
+                gs->SFXPlay(sfx.m_SoundName, 1.0f, 1.0f, emptyDelegate);
+                m_Sounds.erase(m_Sounds.begin() + si);
+                continue;
+            }
+
             if (!sfx.m_VoiceHandle) {
                 Mortar::Delegate1<bool, Mortar::MortarSound*> emptyDelegate;
                 sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.6599f, 1.0f, emptyDelegate);
             }
+            ++si;
         }
-        // TODO: v1.6.1 ScreenEffect::Update @0x00148e3c — binary also: (a) while (maxTotal*m_EndT <= currentLongest) erases the
-        //   record, and (b) a separate m_EndT<0 one-shot path (0x148da4) plays at vol 1.0 without
-        //   storing a handle. Port once the loop erase semantics are confirmed.
+        // TODO: v1.6.1 ScreenEffect::Update @0x00148e3c — windowed (m_EndT>=0)
+        //   sounds: binary also `while (maxTotal*m_EndT <= currentLongest) erase`s
+        //   the record once the window closes. Port once the erase-timing
+        //   semantics are confirmed.
     }
 }
 

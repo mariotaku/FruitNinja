@@ -191,7 +191,11 @@ struct SoundEffect {
     float m_EndT;          // +0x24
     Mortar::MortarSound* m_VoiceHandle; // +0x28
 
-    SoundEffect() : m_StartT(0.0f), m_EndT(0.0f), m_VoiceHandle(nullptr) {
+    // ASM-spec v1.6.1 SoundEffect::SoundEffect @0x00149f10: m_StartT=1.0f, m_EndT=-1.0f.
+    // Both were wrongly 0.0f/0.0f in the port, which made ScreenEffect::Update's
+    // skip gate (`if (currentLongest > maxTotal * sfx.m_StartT) continue;`) fail on
+    // nearly every frame -- silencing the freeze/frenzy/fourth_banana/scorex2 stinger.
+    SoundEffect() : m_StartT(1.0f), m_EndT(-1.0f), m_VoiceHandle(nullptr) {
         memset(m_SoundName, 0, sizeof(m_SoundName));
     }
 
