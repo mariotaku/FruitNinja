@@ -89,14 +89,19 @@ GLuint FontInterface::GetPageTextureID(int idx) const {
 // DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c never drops glyphs;
 //   on overflow it allocates a new TextureAtlasPage (256x256) and retries.
 //   Port mirrors this model with 512x512 pages (kFontSupersample=3).
-bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
-                               GlyphAtlasEntry* out) {
+FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
+                                            const uint8_t* bitmap,
+                                            int* outX, int* outY) {
     // Ensure at least one page exists.
     if (m_Pages.empty()) {
         AllocatePage();
     }
 
-    const int padX = 1, padY = 1;
+    // Port specific: inter-glyph margin = kFontSupersample + 1 (= 4). The
+    // binary CalcUVs oversamples each cell by +1 device px (+kFontSupersample
+    // texels here) on the right/bottom; the margin must cover that overscan so
+    // the sampled texels are transparent, never the next glyph.
+    const int padX = 4, padY = 4;
     FontAtlasPage* page = m_Pages.back();
 
     // Advance to next row if glyph doesn't fit horizontally on current page.
@@ -130,15 +135,28 @@ bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
 
     MarkPageDirty(page, page->m_CursorX, page->m_CursorY, width, height);
 
-    const float invS = 1.0f / (float)m_Size;
-    out->u0 = (float)page->m_CursorX              * invS;
-    out->v0 = (float)page->m_CursorY              * invS;
-    out->u1 = (float)(page->m_CursorX + width)    * invS;
-    out->v1 = (float)(page->m_CursorY + height)   * invS;
-    out->pageTextureID = page->m_TextureID;
+    if (outX) *outX = page->m_CursorX;
+    if (outY) *outY = page->m_CursorY;
 
     page->m_CursorX += width + padX;
     if (height > page->m_RowHeight) page->m_RowHeight = height;
+
+    return page;
+}
+
+bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
+                               GlyphAtlasEntry* out) {
+    int x = 0, y = 0;
+    FontAtlasPage* page = PackGlyphCell(width, height, bitmap, &x, &y);
+    if (!page) return false;
+
+    const float invS = 1.0f / (float)m_Size;
+    out->u0 = (float)x            * invS;
+    out->v0 = (float)y            * invS;
+    out->u1 = (float)(x + width)  * invS;
+    out->v1 = (float)(y + height) * invS;
+    out->pageTextureID = page->m_TextureID;
+    out->page          = page;
 
     return true;
 }

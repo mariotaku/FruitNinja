@@ -1,9 +1,10 @@
 // BakedStringTTF — arc-text baking for MenuButton labels.
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
 //
-// Reuses FontCacheObjectTTF::GetGlyph + FontInterface atlas.
-// Draw path mirrors BakedStringBox::Draw (GL triangle strip via vertex array).
-// BakeGradient path mirrors BakedStringBox::BakeGradient (per-vertex Y-lerp).
+// v1.6.1 baked-bearing glyph model: FetchGlyph fills GlyphTTF straight from the
+// atlas rec (bearing baked into the cell origin); ApplyFormatting_LeftJustify
+// places the pen (m_RotBasis); FinishMesh emits the (cell+1)^2 quad around the
+// cell origin. See BakedStringTTF.h for the struct-level contract.
 
 #include "render/BakedStringTTF.h"
 #include "render/FontCacheObjectTTF.h"
@@ -22,14 +23,13 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
-#include <map>
 #include "core/MortarTypes.h"
 
 // Binary constants
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
-static const float k_PI         = 3.14159265f;
-static const float k_DEG2RAD    = 0.017453292f;
-static const float k_HalfTexel  = 0.001953125f;  // 0.5/256
+static const float k_PI      = 3.14159265f;
+static const float k_DEG2RAD = 0.017453292f;
+static const float k_UvInset = 0.001953125f;  // 1/512 -- FinishMesh UV inset
 
 // Rotate a 2D point (x,y) by angle (radians), result in (ox,oy).
 // v1.6.1 Rotate2DVector used in FinishMesh @0x002480a8
@@ -42,6 +42,44 @@ static void Rotate2DVector(float x, float y, float angle, float& ox, float& oy)
 }
 
 namespace Mortar {
+
+// FetchGlyph @0x0024fa24: return a fully-populated heap GlyphTTF for
+// (cp, scaledHeight, radius, effect). Binary: hash -> TextureAtlas::FindItem;
+// miss -> RenderGlyph; new GlyphTTF(0x44) filled from the rec. Port: the
+// hash/render path is FontCacheObjectTTF::GetGlyph (FreeType boundary,
+// // DIFFERS there); this does the rec -> GlyphTTF fill.
+// ASM-spec v1.6.1 FetchGlyph @0x0024fa24.
+GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
+                     uint32_t radius, uint8_t effect)
+{
+    GlyphTTF* g = new GlyphTTF();
+    g->m_CharCode   = cp;
+    g->m_FontSize   = scaledHeight;
+    g->m_Font       = fc;
+    g->m_GlyphScale = Vec2(0.0f, 0.0f);
+    g->m_SurfaceKey = 0;
+    g->m_UvU0 = g->m_UvV0 = g->m_UvV1 = g->m_UvU1 = 0.0f;
+    g->m_QuadMin    = Vec2(0.0f, 0.0f);
+    g->m_RotBasis   = Vec2(0.0f, 0.0f);
+    g->m_QuadSize   = Vec2(0.0f, 0.0f);
+    g->m_RotAngle   = 0.0f;
+
+    const GlyphAtlasEntry* rec = fc
+        ? fc->GetGlyph(cp, scaledHeight,
+                       (FontCacheObjectTTF::FONT_EFFECT_ENUM)effect, (int)radius)
+        : 0;
+    if (rec) {
+        g->m_GlyphScale = Vec2(rec->layoutX, rec->layoutY);
+        g->m_SurfaceKey = rec->page;
+        g->m_UvU0       = rec->cellU0;
+        g->m_UvV0       = rec->cellV0;
+        g->m_UvV1       = rec->cellV1;
+        g->m_UvU1       = rec->cellU1;
+        g->m_QuadMin    = Vec2(rec->cellOriginX, rec->cellOriginY);
+        g->m_QuadSize   = Vec2(rec->cellW, rec->cellH);
+    }
+    return g;
+}
 
 BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
                                const char* text,
@@ -59,8 +97,18 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     , m_reserved5f(255)
     , m_TotalAdvance(0.0f)
 {
-    // Zero the base struct.
-    memset(&m_Base, 0, sizeof(m_Base));
+    // m_Base contains a std::vector (gradient stops) -- init fields explicitly.
+    m_Base.m_BoundsMinX = 0;
+    m_Base.m_BoundsMaxY = 0;
+    m_Base.m_BoundsMaxX = 0;
+    m_Base.m_BoundsMinY = 0;
+    m_Base.m_Alpha      = 0;
+    m_Base.m_AlphaSet   = 0;
+    m_Base._pad12       = 0;
+    m_Base._pad13       = 0;
+    m_Base.m_reserved14 = 0;
+    m_Base.m_Radius     = 0.0f;
+    m_Base.m_reserved34 = 0;
 
     // Effect count + weight computation.
     // v1.6.1 BakedStringTTF ctor @0x00249a5c:
@@ -89,11 +137,8 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     }
     m_ScaledHeight = fontScale * atlasScale;
 
-    // AddColour(col, 0.0) -- store as first gradient stop
+    // AddColour(col, 0.0) -- push the base colour as gradient stop 0.
     AddColour(col, 0.0f);
-
-    // m_Weight: in the binary = signedToFloat(alignSigned) * fc[+0x10c][+0x10]
-    // Port: keep as float cast of alignSigned (already set above)
 
     // strdup(text)
     if (text) {
@@ -117,19 +162,15 @@ BakedStringTTF::~BakedStringTTF()
     }
 }
 
+// AddColour: append a gradient stop to the m_Base+0x18 stop vector.
+// Stop 0 is the base colour (ctor); ApplyGradient_TopBottom clears + re-adds
+// stops 0/1; ApplyGradientSplit appends split stops (i >= 2).
 void BakedStringTTF::AddColour(Colour col, float t)
 {
-    // Store into m_Base.m_Effect colour stop slots.
-    // Slot 0 when t==0.0 exactly; slot 1 for any other t.
-    // The old guard "|| m_T0==0.0f" caused the 2nd AddColour call to overwrite slot 0
-    // when slot 0 held 0.0 from the reset, corrupting both stops.
-    if (t == 0.0f) {
-        m_Base.m_Effect.m_Col0 = col;
-        m_Base.m_Effect.m_T0   = t;
-    } else {
-        m_Base.m_Effect.m_Col1 = col;
-        m_Base.m_Effect.m_Tc   = t;
-    }
+    GradientPoint p;
+    p.m_Colour = col;
+    p.m_T      = t;
+    m_Base.m_GradientStops.push_back(p);
 }
 
 void BakedStringTTF::DeleteGlyphs()
@@ -157,224 +198,233 @@ void BakedStringTTF::DeleteSurfaces()
     m_SurfacesBuilt = false;
 }
 
-// BuildGlyphs @0x00248b28:
-// DeleteGlyphs; Utf8StringIterator(m_Text); per cp:
-//   g = fc->GetGlyph(cp, m_ScaledHeight); alloc GlyphTTF; fill from GlyphAtlasEntry;
-//   m_Glyphs.push_back; m_GlyphsBuilt=true.
+// BuildGlyphs @0x00248b28 (single pass):
+// DeleteGlyphs; per codepoint: g = FetchGlyph(m_pFontCache, m_ScaledHeight, cp,
+// m_FmtCount, m_Flag); m_Glyphs.push_back(g).
+// ASM-spec v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28.
 void BakedStringTTF::BuildGlyphs()
 {
     DeleteGlyphs();
     if (!m_pFontCache || !m_Text) return;
 
-    // Effect + radius drive a SEPARATE glyph rasterisation (blur/stroke/bevel).
-    // ASM-spec v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28: FetchGlyph passes
-    //   m_FmtCount(radius)+m_Flag(effect). Without these the effect layers rasterise
-    //   the plain sharp glyph, so blur/stroke never render.
-    FontCacheObjectTTF::FONT_EFFECT_ENUM eff = (FontCacheObjectTTF::FONT_EFFECT_ENUM)m_Base.m_Flag;
-    int rad = (int)m_Base.m_FmtCount;
-
-    // Pre-render all codepoints so atlas UVs are populated before we read them.
-    {
-        Utf8StringIterator it(m_Text);
-        while (!it.IsEmpty()) {
-            m_pFontCache->GetGlyph(it.m_CurrentCodepoint, m_ScaledHeight, eff, rad);
-            it++;
-        }
-    }
-    FontInterface* atlas = m_pFontCache->GetAtlas();
-    if (atlas) atlas->BuildPendingTextures();
-
     Utf8StringIterator it(m_Text);
     while (!it.IsEmpty()) {
-        uint32_t cp = it.m_CurrentCodepoint;
-        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(cp, m_ScaledHeight, eff, rad);
-
-        GlyphTTF* g = new GlyphTTF();
-        g->m_CharCode  = cp;
-        g->m_FontSize  = m_ScaledHeight;
-        g->m_Font      = m_pFontCache;
-        g->m_SurfaceKey = 0;  // set below from entry->pageTextureID
-        g->m_RotAngle  = 0.0f;
-        g->m_RotBasis  = Vec2(0.0f, 0.0f);
-        g->m_GlyphScale = Vec2(1.0f, 1.0f);
-        g->m_QuadMin  = Vec2(0.0f, 0.0f);
-
-        if (entry) {
-            // UV with half-texel inset (spec: +-0.001953125 = 0.5/256)
-            // v1.6.1 FinishMesh @0x002480a8: UVs get +-halfTexel inset
-            g->m_UvU0 = entry->u0 + k_HalfTexel;
-            g->m_UvV0 = entry->v0 + k_HalfTexel;
-            g->m_UvU1 = entry->u1 - k_HalfTexel;
-            g->m_UvV1 = entry->v1 - k_HalfTexel;
-            g->m_QuadSize = Vec2(entry->width, entry->height);
-            // Store page texture ID as surface key so BuildSurfaces can group by page.
-            // DIFFERS: binary uses TextureAtlasPage* as key; port uses resolved GL texture ID.
-            g->m_SurfaceKey = (void*)(uintptr_t)entry->pageTextureID;
-        } else {
-            g->m_UvU0 = g->m_UvV0 = g->m_UvU1 = g->m_UvV1 = 0.0f;
-            g->m_QuadSize = Vec2(0.0f, 0.0f);
-        }
-
+        GlyphTTF* g = FetchGlyph(m_pFontCache, m_ScaledHeight, it.m_CurrentCodepoint,
+                                 m_Base.m_FmtCount, m_Base.m_Flag);
         m_Glyphs.push_back(g);
         it++;
     }
     m_GlyphsBuilt = true;
 }
 
-// ApplyFormatting_LeftJustify @0x00247874:
-// pen-advance per-glyph position into m_QuadMin.
-// +1.0 inter-glyph gap (binary constant). Sets field_60 = total advance.
+// GetKerning: the baked pen step. Returns g->m_GlyphScale.x and IGNORES the
+// next-glyph argument (NOT a kern delta; no FreeType kerning in pen advance).
+// TODO: v1.6.1 (GetKerning) -- binary symbol/address not yet pinned.
+float BakedStringTTF::GetKerning(GlyphTTF* g, uint32_t /*nextCp -- ignored*/) const
+{
+    return g->m_GlyphScale.x;
+}
+
+// ApplyFormatting_LeftJustify @0x00247874: pen placement into m_RotBasis.
+//   penX = 0; per glyph i: m_RotBasis = (penX, m_GlyphScale.y); m_RotAngle = 0;
+//   step = GetKerning(g) + m_Weight + 1.0;
+//   i < last: penX += step; i == last: m_TotalAdvance = penX + step.
+// ASM-spec v1.6.1 BakedStringTTF::ApplyFormatting_LeftJustify @0x00247874.
 void BakedStringTTF::ApplyFormatting_LeftJustify()
 {
-    if (!m_pFontCache) return;
+    m_CircleFlag = 0;
 
     float penX = 0.0f;
-    for (size_t i = 0; i < m_Glyphs.size(); ++i) {
+    const size_t n = m_Glyphs.size();
+    for (size_t i = 0; i < n; ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(g->m_CharCode, m_ScaledHeight);
-        if (!entry) {
-            g->m_QuadMin = Vec2(penX, 0.0f);
-            continue;
+        g->m_RotBasis = Vec2(penX, g->m_GlyphScale.y);
+        g->m_RotAngle = 0.0f;
+
+        uint32_t nextCp = (i + 1 < n) ? m_Glyphs[i + 1]->m_CharCode : 0;
+        float step = GetKerning(g, nextCp) + m_Base.m_Weight + 1.0f;
+        if (i + 1 < n) {
+            penX += step;
+        } else {
+            m_TotalAdvance = penX + step;
         }
-
-        // m_QuadMin: pen-space left edge of this glyph's quad.
-        // x = penX + bearingX, y = bearingY (above baseline = positive).
-        g->m_QuadMin = Vec2(penX + entry->bearingX, entry->bearingY);
-
-        // Advance: advanceX + 1.0 inter-glyph gap.
-        penX += entry->advanceX + 1.0f;
     }
-    m_TotalAdvance = penX;
+}
+
+// FindOrCreateSurface @0x00248b9c: linear-scan m_Surfaces for m_PageKey == page,
+// else allocate a new surface (0x48) and push_back.
+// ASM-spec v1.6.1 BakedStringTTF::FindOrCreateSurface @0x00248b9c.
+BakedStringTTF_Surface* BakedStringTTF::FindOrCreateSurface(FontAtlasPage* page)
+{
+    for (size_t i = 0; i < m_Surfaces.size(); ++i) {
+        if (m_Surfaces[i]->m_PageKey == page) return m_Surfaces[i];
+    }
+
+    BakedStringTTF_Surface* surf = new BakedStringTTF_Surface();
+    surf->m_PageKey        = page;
+    surf->m_Verts          = 0;
+    surf->m_VertCount      = 0;
+    surf->_pad0c           = 0;
+    surf->_pad10           = 0;
+    surf->_pad14           = 0;
+    surf->_pad18           = 0;
+    surf->_pad1c           = 0;
+    surf->_pad20           = 0;
+    surf->m_DrawMode       = -1;   // single-buffer path
+    surf->m_BoundsMinX     =  999999;
+    surf->m_BoundsMaxY     = -999999;
+    surf->m_BoundsMaxX     = -999999;
+    surf->m_BoundsMinY     =  999999;
+    surf->m_PlatformColour = 0xffffffffu;
+    m_Surfaces.push_back(surf);
+    return surf;
+}
+
+// AddGlyph @0x00248718: push_back into the surface glyph vector (+0x3c).
+void BakedStringTTF_Surface::AddGlyph(GlyphTTF* g)
+{
+    m_Glyphs.push_back(g);
 }
 
 // BuildSurfaces @0x00248c14:
-// Group glyphs by m_SurfaceKey -> one Surface per atlas page.
-// DIFFERS: binary groups by TextureAtlasPage*; port groups by resolved GL texture ID
-//   stored in g->m_SurfaceKey (set in BuildGlyphs from entry->pageTextureID).
-// FinishMesh @0x002480a8 builds the 6-vert/glyph buffer per glyph.
+// if(!m_GlyphsBuilt) BuildGlyphs; per glyph: FindOrCreateSurface(g->m_SurfaceKey)
+// ->AddGlyph(g). Then per surface: m_PlatformColour = PlatformColour(gradient
+// stop 0); FinishMesh(surf). Then UpdateBounds.
+// ASM-spec v1.6.1 BakedStringTTF::BuildSurfaces @0x00248c14.
 void BakedStringTTF::BuildSurfaces()
 {
+    // Port safety: drop the previous build first. The binary's rebuild callers
+    // (FullInternalRebuild path via BuildGlyphs invalidation, Circle_Internal)
+    // clear surfaces before reaching here; keeping the clear local is idempotent
+    // and prevents stale-glyph dangling after DeleteGlyphs.
     DeleteSurfaces();
-    if (!m_GlyphsBuilt || m_Glyphs.empty()) return;
-    if (!m_pFontCache) return;
 
-    // Collect drawable glyph indices grouped by page, preserving page insertion order.
-    // Using a std::vector<uint32_t> for page order and a std::map for index lookup.
-    std::vector<uint32_t> pageOrder;
-    std::map<uint32_t, std::vector<size_t> > pageGlyphs;
+    if (!m_GlyphsBuilt) BuildGlyphs();
 
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
-        uint32_t texID = (uint32_t)(uintptr_t)g->m_SurfaceKey;
-        if (pageGlyphs.find(texID) == pageGlyphs.end()) {
-            pageOrder.push_back(texID);
-            pageGlyphs[texID] = std::vector<size_t>();
-        }
-        pageGlyphs[texID].push_back(i);
+        BakedStringTTF_Surface* surf = FindOrCreateSurface(g->m_SurfaceKey);
+        surf->AddGlyph(g);
     }
 
-    if (pageOrder.empty()) return;
+    // Base colour = gradient stop 0 (the colour passed to the ctor's AddColour).
+    const uint32_t packed = m_Base.m_GradientStops.empty()
+        ? 0xffffffffu
+        : m_Base.m_GradientStops[0].m_Colour.PlatformColour();
 
-    // Base colour from m_Base.m_Effect.m_Col0 (the colour passed to AddColour(col,0)).
-    Colour baseCol = m_Base.m_Effect.m_Col0;
-    uint32_t packed = baseCol.PlatformColour();
-
-    // FinishMesh @0x002480a8: build 6-vert/glyph tri-list per page.
-    // Vertex layout (QUADCUSTOMVERTEX 0x24 bytes):
-    //   +0x00 x, +0x04 y, +0x08 z=0
-    //   +0x0c nx=0, +0x10 ny=0, +0x14 nz=1
-    //   +0x18 colour
-    //   +0x1c u, +0x20 v
-    //
-    // 4 corners = Rotate2DVector(corner, m_RotAngle) + m_QuadMin.
-    // UVs: u0/v0/u1/v1 already have half-texel inset from BuildGlyphs.
-    // Winding order: NON-flip branch (GLES port).
-    // v1.6.1 FinishMesh @0x002480a8: two winding orders by FontInterface+0x14c==1 (RT Y-flip).
-    // Port uses non-flip branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) = standard CCW.
-
-    for (size_t pi = 0; pi < pageOrder.size(); ++pi) {
-        uint32_t texID = pageOrder[pi];
-        const std::vector<size_t>& glyphIdxs = pageGlyphs[texID];
-        if (glyphIdxs.empty()) continue;
-
-        BakedStringTTF_Surface* surf = new BakedStringTTF_Surface();
-        memset(surf, 0, sizeof(BakedStringTTF_Surface));
-
-        surf->m_DrawMode       = -1;  // single-buffer path
-        surf->m_VertCount      = (uint32_t)glyphIdxs.size() * 6;
-        surf->m_Verts          = new QUADCUSTOMVERTEX[surf->m_VertCount];
-        memset(surf->m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * surf->m_VertCount);
-        surf->m_PageTextureID  = texID;
-        surf->m_PlatformColour = packed;
-
-        uint32_t vi = 0;
-        for (size_t ii = 0; ii < glyphIdxs.size(); ++ii) {
-            size_t i = glyphIdxs[ii];
-            GlyphTTF* g = m_Glyphs[i];
-
-            // Quad corners in pen-local space (before rotation + translation).
-            float qx = g->m_QuadMin.x;
-            float qy = g->m_QuadMin.y;
-            float qw = g->m_QuadSize.x;
-            float qh = g->m_QuadSize.y;
-
-            float cx[4] = { 0.0f,  0.0f,  qw,   qw   };
-            float cy[4] = { -qh,   0.0f,  -qh,  0.0f };  // BL, TL, BR, TR
-
-            float wx[4], wy[4];
-            for (int k = 0; k < 4; k++) {
-                float rx, ry;
-                Rotate2DVector(cx[k], cy[k], g->m_RotAngle, rx, ry);
-                wx[k] = qx + rx;
-                wy[k] = qy + ry;
-            }
-
-            float u0 = g->m_UvU0, v0 = g->m_UvV0;
-            float u1 = g->m_UvU1, v1 = g->m_UvV1;
-
-            // 6-vert TRI-LIST per glyph (two triangles covering the quad):
-            //   tri0 = (BL, TL, BR), tri1 = (TR, BR, TL).
-            // v1.6.1 FinishMesh @0x002480a8 emits a tri-list consumed by Mesh::DrawTriList.
-            // (Previously v[4]=v[5]=TR -- a tri-STRIP+degenerate-padding hack that only
-            //  rendered as a strip via the old Draw's runtime connector wiring; that path
-            //  is gone now that Draw calls DrawTriList over these verts directly, so the
-            //  second triangle must be real. tri1's winding (TR,BR,TL) shares the BR-TL
-            //  diagonal with the old strip -> identical pixel coverage; cull is off.)
-            QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
-            v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
-            v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0; // TL
-            v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1; // BR
-            v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0; // TR
-            v[4] = v[2]; // BR
-            v[5] = v[1]; // TL
-            vi += 6;
-        }
-        surf->m_VertCount = vi;
-
-        // Store first and last glyph pointers for this surface.
-        surf->m_GlyphsBegin = m_Glyphs[glyphIdxs.front()];
-        surf->m_GlyphsEnd   = m_Glyphs[glyphIdxs.back()];
-
-        m_Surfaces.push_back(surf);
+    for (size_t si = 0; si < m_Surfaces.size(); ++si) {
+        BakedStringTTF_Surface* s = m_Surfaces[si];
+        s->m_PlatformColour = packed;
+        FinishMesh(s);
     }
 
-    m_SurfacesBuilt = !m_Surfaces.empty();
-
-    // Binary's only UpdateBounds caller is BuildSurfaces' tail (@0x00248c14).
     UpdateBounds();
+    m_SurfacesBuilt = true;
+}
+
+// FinishMesh @0x002480a8: build the surface's 6-vert/glyph tri-list.
+// Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1) x (h+1).
+// Local corners with (Ox,Oy) = m_QuadMin (cell origin, the baked bearing pad):
+//   BL(-Ox,-Oy)  TL(-Ox, h+1-Oy)  BR(w+1-Ox, -Oy)  TR(w+1-Ox, h+1-Oy)
+// Each corner = Rotate2DVector(corner, m_RotAngle) + m_RotBasis (pen).
+// +Y is up; the pen (m_RotBasis.y = layout .y = ink bottom) anchors the quad
+// bottom, so the top corners (larger y) sample the cell-top V (v0).
+// UV inset applied HERE: u0 -= 1/512, v0 += 1/512, v1 -= 1/512, u1 += 1/512.
+// Winding: the binary keys two orders on FontInterface[0x14c]==1 (RT Y-flip);
+// GLES uses the ELSE branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) -- tri-list
+// consumed by Mesh::DrawTriList (port: Renderer::DrawTriList).
+// ASM-spec v1.6.1 BakedStringTTF::FinishMesh @0x002480a8.
+void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
+{
+    if (surf->m_Verts) {
+        delete[] surf->m_Verts;
+        surf->m_Verts = 0;
+    }
+    surf->m_VertCount = 0;
+
+    uint32_t drawable = 0;
+    for (size_t i = 0; i < surf->m_Glyphs.size(); ++i) {
+        GlyphTTF* g = surf->m_Glyphs[i];
+        if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
+        drawable++;
+    }
+    if (drawable == 0) return;
+
+    surf->m_Verts = new QUADCUSTOMVERTEX[drawable * 6];
+    memset(surf->m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * drawable * 6);
+
+    const uint32_t packed = surf->m_PlatformColour;
+    uint32_t vi = 0;
+    for (size_t i = 0; i < surf->m_Glyphs.size(); ++i) {
+        GlyphTTF* g = surf->m_Glyphs[i];
+        float w = g->m_QuadSize.x;
+        float h = g->m_QuadSize.y;
+        if (w < 1.0f || h < 1.0f) continue;
+
+        const float Ox = g->m_QuadMin.x;
+        const float Oy = g->m_QuadMin.y;
+
+        // BL, TL, BR, TR (see function comment).
+        float cx[4] = { -Ox,           -Ox,           w + 1.0f - Ox, w + 1.0f - Ox };
+        float cy[4] = { -Oy,           h + 1.0f - Oy, -Oy,           h + 1.0f - Oy };
+
+        float wx[4], wy[4];
+        for (int k = 0; k < 4; k++) {
+            float rx, ry;
+            Rotate2DVector(cx[k], cy[k], g->m_RotAngle, rx, ry);
+            wx[k] = g->m_RotBasis.x + rx;
+            wy[k] = g->m_RotBasis.y + ry;
+        }
+
+        const float u0 = g->m_UvU0 - k_UvInset;
+        const float v0 = g->m_UvV0 + k_UvInset;
+        const float v1 = g->m_UvV1 - k_UvInset;
+        const float u1 = g->m_UvU1 + k_UvInset;
+
+        QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
+        v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
+        v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0; // TL
+        v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1; // BR
+        v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0; // TR
+        v[4] = v[2]; // BR
+        v[5] = v[1]; // TL
+        vi += 6;
+    }
+    surf->m_VertCount = vi;
+}
+
+// BakedStringTTF_Surface::UpdateBounds @0x00247dd4:
+// Seed +/-999999, then per vert (x=v[0], y=v[1], stride 0x24) fold
+// floor(x) into minX, ceil(x) into maxX, ceil(y) into maxY, floor(y) into minY.
+// ASM-spec v1.6.1 BakedStringTTF_Surface::UpdateBounds @0x00247dd4.
+void BakedStringTTF_Surface::UpdateBounds()
+{
+    m_BoundsMinX =  999999;
+    m_BoundsMaxY = -999999;
+    m_BoundsMaxX = -999999;
+    m_BoundsMinY =  999999;
+
+    if (!m_Verts) return;
+    for (uint32_t vi = 0; vi < m_VertCount; ++vi) {
+        const float x = m_Verts[vi].x;
+        const float y = m_Verts[vi].y;
+        const long fx = (long)floorf(x);
+        const long cxl = (long)ceilf(x);
+        const long fy = (long)floorf(y);
+        const long cyl = (long)ceilf(y);
+        if (fx  < m_BoundsMinX) m_BoundsMinX = fx;
+        if (cxl > m_BoundsMaxX) m_BoundsMaxX = cxl;
+        if (cyl > m_BoundsMaxY) m_BoundsMaxY = cyl;
+        if (fy  < m_BoundsMinY) m_BoundsMinY = fy;
+    }
 }
 
 // UpdateBounds @0x00247ed0:
-// Seed {minX=999999, maxY=-999999, maxX=-999999, minY=999999} then fold each surface's
-// vertex extents (truncated to long) into m_Base. Field mapping matches MortarRectangleT<long>:
-//   m_BoundsMinX=left=min(x), m_BoundsMaxX=right=max(x),
-//   m_BoundsMaxY=top=max(y),  m_BoundsMinY=bottom=min(y).
-// TODO: v1.6.1 BakedStringTTF::UpdateBounds @0x00247ed0 -- NOT split into a per-surface
-//   helper (binary folds each surface's +0x28..+0x34 extent fields). The port's
-//   BakedStringTTF_Surface reuses +0x28 for m_PageTextureID and +0x2c..+0x34 as pads,
-//   so storing per-surface bounds there would corrupt the GL texture ID. Kept inline
-//   here; values are already correct. Splitting needs a surface-layout rework first.
+// Seed {minX=999999, maxY=-999999, maxX=-999999, minY=999999}; per surface call
+// BakedStringTTF_Surface::UpdateBounds @0x00247dd4 then fold the surface's
+// +0x28..+0x34 extents into m_Base. Field mapping matches MortarRectangleT<long>:
+//   m_BoundsMinX=left, m_BoundsMaxY=top, m_BoundsMaxX=right, m_BoundsMinY=bottom.
+// ASM-spec v1.6.1 BakedStringTTF::UpdateBounds @0x00247ed0.
 void BakedStringTTF::UpdateBounds()
 {
     long minX =  999999;
@@ -384,15 +434,13 @@ void BakedStringTTF::UpdateBounds()
 
     for (size_t si = 0; si < m_Surfaces.size(); ++si) {
         BakedStringTTF_Surface* s = m_Surfaces[si];
-        if (!s || !s->m_Verts) continue;
-        for (uint32_t vi = 0; vi < s->m_VertCount; ++vi) {
-            long x = (long)s->m_Verts[vi].x;
-            long y = (long)s->m_Verts[vi].y;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-            if (y < minY) minY = y;
-        }
+        if (!s) continue;
+        s->UpdateBounds();
+        // Empty surfaces keep their seed values; folding them is a no-op.
+        if (s->m_BoundsMinX < minX) minX = s->m_BoundsMinX;
+        if (s->m_BoundsMaxX > maxX) maxX = s->m_BoundsMaxX;
+        if (s->m_BoundsMaxY > maxY) maxY = s->m_BoundsMaxY;
+        if (s->m_BoundsMinY < minY) minY = s->m_BoundsMinY;
     }
 
     m_Base.m_BoundsMinX = minX;
@@ -439,10 +487,37 @@ void BakedStringTTF_Surface::Transform_GradientSplit(Colour c, float y, MortarRe
     }
 }
 
-// ApplyEffects @0x00249684: tail-branch dispatch.
-// Not decompiled this pass; safe no-op (circle/gradient called explicitly by caller).
-// Defunct: ApplyEffects dispatch -- no-op stub; v1.6.1 Mortar::BakedStringTTF::ApplyEffects @ 0x00249684
+// ApplyEffects @0x00249684: tail dispatch, replayed on every rebuild:
+//   1. m_Radius != 0   -> ApplyFormatting_Circle_Internal(m_Radius)
+//   2. stopCount > 1   -> ApplyGradient_TopBottom_Internal(stop0.col, stop1.col);
+//                         per stop i>=2: ApplyGradientSplit_Internal(col, t)
+//   3. m_AlphaSet != 0 -> ApplyAlpha_Internal(m_Alpha)
+// ASM-spec v1.6.1 BakedStringTTF::ApplyEffects @0x00249684.
 void BakedStringTTF::ApplyEffects()
+{
+    if (m_Base.m_Radius != 0.0f) {
+        ApplyFormatting_Circle_Internal(m_Base.m_Radius);
+    }
+
+    const size_t n = m_Base.m_GradientStops.size();
+    if (n > 1) {
+        ApplyGradient_TopBottom_Internal(m_Base.m_GradientStops[0].m_Colour,
+                                         m_Base.m_GradientStops[1].m_Colour);
+        for (size_t i = 2; i < n; ++i) {
+            ApplyGradientSplit_Internal(m_Base.m_GradientStops[i].m_Colour,
+                                        m_Base.m_GradientStops[i].m_T);
+        }
+    }
+
+    if (m_Base.m_AlphaSet != 0) {
+        ApplyAlpha_Internal(m_Base.m_Alpha);
+    }
+}
+
+// ApplyAlpha_Internal: alpha-override repaint dispatched by ApplyEffects.
+// TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- callee address +
+// body not yet RE'd; unreachable (no port path sets m_AlphaSet).
+void BakedStringTTF::ApplyAlpha_Internal(uint8_t /*alpha*/)
 {
 }
 
@@ -450,7 +525,7 @@ void BakedStringTTF::ApplyEffects()
 // 1. BuildGlyphs
 // 2. ApplyFormatting_LeftJustify
 // 3. BuildSurfaces
-// 4. ApplyEffects (no-op)
+// 4. ApplyEffects (replays circle layout / gradient stops / alpha override)
 void BakedStringTTF::FullInternalRebuild()
 {
     BuildGlyphs();
@@ -464,7 +539,9 @@ void BakedStringTTF::FullInternalRebuild()
 // Word-wrap line-breaker: modifies ioText in-place to the head that fits within maxWidth,
 // sets outRemainder to the overflow tail, outWidth to the measured advance of the head,
 // and outTruncated when an unbreakable word overflows.
-// per-glyph advance = advance (binary's +1.0 and alignArg*fontScale=-1.0 cancel);
+// Per-glyph pen step under the baked-bearing model = GetKerning value = layoutX
+// (floor(advance/64) - bitmap_left); binary: step = GetKerning + alignArg*fontScaleFactor
+// + 1.0 with alignArg = -1 (all v1.6.1 call sites) and factor = 1.0 -> net = layoutX.
 // whitespace/0x200b/0x0a = break point.
 void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                        std::string& outRemainder, float fontSize,
@@ -494,13 +571,7 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
             breakCursor = cursor;
         }
         const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontSize);
-        // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
-        //   per-glyph: total += advance + alignArg*fontScaleFactor + 1.0f.
-        //   alignArg = -1 (all v1.6.1 call sites), fontScaleFactor = *(*(fc+0x10c)+0x10) = 1.0
-        //   -> net = advance + (-1.0) + 1.0 = advance. The earlier port kept the +1.0 but
-        //   dropped the -1.0 term, over-measuring by 1px/glyph -> MenuButton arc labels
-        //   (curved ring text) were over-shrunk.
-        float adv = g ? g->advanceX : 0.0f;
+        float adv = g ? g->layoutX : 0.0f;
         total += adv;
         if (total > (float)maxWidth) {
             if (breakCursor) {
@@ -525,13 +596,17 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
 // if(!m_GlyphsBuilt) return;
 // DeleteSurfaces(); ApplyFormatting_LeftJustify(); field_5e=1;
 // degPerUnit = 360.0 / (radius * 2*PI);
-// half = degPerUnit * field_60 * 0.5;
-// for each glyph g:
-//   ang = PI/2 - (degPerUnit*g.x - half) * DEG2RAD;
-//   r   = radius + g.y;
-//   g.x = cos(ang)*r;  g.y = sin(ang)*r;
-//   g.rotZ = (PI/2 - (degPerUnit*((g.x0 + g.adv*0.5) - g.bearingX) - half)*DEG2RAD) - PI/2;
+// half = degPerUnit * m_TotalAdvance * 0.5;
+// per glyph (pen = m_RotBasis after LeftJustify):
+//   ang = PI/2 - (degPerUnit*pen.x - half) * DEG2RAD;
+//   r   = radius + pen.y;
+//   m_RotBasis = (cos(ang)*r, sin(ang)*r);
+//   m_RotAngle = (PI/2 - (degPerUnit*(pen.x + m_GlyphScale.x*0.5) - half)*DEG2RAD) - PI/2;
 // BuildSurfaces();
+// ASM-spec v1.6.1 BakedStringTTF::ApplyFormatting_Circle_Internal @0x00248cc8
+// (mid-advance rot term re-derived under the baked-bearing model: the old
+//  separate-bearing spec "(x0 + adv*0.5) - bearingX" collapses to
+//  penX + m_GlyphScale.x*0.5 when the pen carries no bearing).
 void BakedStringTTF::ApplyFormatting_Circle_Internal(float radius)
 {
     if (!m_GlyphsBuilt) return;
@@ -545,26 +620,16 @@ void BakedStringTTF::ApplyFormatting_Circle_Internal(float radius)
 
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        float gx = g->m_QuadMin.x;
-        float gy = g->m_QuadMin.y;
+        const float penX = g->m_RotBasis.x;
+        const float penY = g->m_RotBasis.y;
 
-        float ang = k_PI * 0.5f - (degPerUnit * gx - half) * k_DEG2RAD;
-        float r   = radius + gy;
+        float ang = k_PI * 0.5f - (degPerUnit * penX - half) * k_DEG2RAD;
+        float r   = radius + penY;
 
-        g->m_QuadMin.x = cosf(ang) * r;
-        g->m_QuadMin.y = sinf(ang) * r;
+        g->m_RotBasis = Vec2(cosf(ang) * r, sinf(ang) * r);
 
-        // Rotation angle: (PI/2 - (degPerUnit*((gx0+adv*0.5) - bearingX) - half)*DEG2RAD) - PI/2
-        // gx0 = original penX (before bearingX offset), adv = advanceX.
-        // Since gx = penX + bearingX, and penX = gx - bearingX:
-        const GlyphAtlasEntry* entry = m_pFontCache->GetGlyph(g->m_CharCode, m_ScaledHeight);
-        float bearingX = entry ? entry->bearingX : 0.0f;
-        float adv      = entry ? entry->advanceX : 0.0f;
-        // penX = gx - bearingX
-        float penX = gx - bearingX;
-        float midAdv = penX + adv * 0.5f;
-        float rotAngle = (k_PI * 0.5f - (degPerUnit * (midAdv - bearingX) - half) * k_DEG2RAD) - k_PI * 0.5f;
-        g->m_RotAngle = rotAngle;
+        float midAdv = penX + g->m_GlyphScale.x * 0.5f;
+        g->m_RotAngle = (k_PI * 0.5f - (degPerUnit * midAdv - half) * k_DEG2RAD) - k_PI * 0.5f;
     }
 
     BuildSurfaces();
@@ -602,7 +667,8 @@ void BakedStringTTF::ApplyGradient_TopBottom_Internal(Colour top, Colour bottom)
     float yRange = yTop - yBot;
     if (yRange < 1.0f) yRange = 1.0f;
 
-    // Gradient stops from explicit params (not m_Base.m_Effect which may be stale).
+    // Gradient stops from explicit params (not the stop vector, which the public
+    // caller has already repopulated).
     Colour colTop = top;
     Colour colBot = bottom;
 
@@ -632,18 +698,12 @@ void BakedStringTTF::ApplyGradient_TopBottom_Internal(Colour top, Colour bottom)
 }
 
 // ApplyGradient_TopBottom @0x0024863c:
-// public: m_Base[0x1c]=m_Base[0x18]; AddColour(top,0.0); AddColour(bottom,1.0); then Internal.
-// Offsets 0x18/0x1c within BakedStringTTF are m_Base.m_Effect.m_Col1 and m_Base.m_Effect.m_Tc.
-// "0x1c <- 0x18" = copy 4 bytes at 0x18 into 0x1c = save m_Col1 raw bits into m_Tc.
+// public: clear the gradient-stop vector (binary: the "+0x1c <- +0x18" store is
+// vector end = begin, i.e. clear() of the POD stops), then AddColour(top,0.0),
+// AddColour(bottom,1.0), then Internal.
 void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 {
-    // Save gradient cache: m_Base[0x1c] <- m_Base[0x18]
-    // m_Effect.m_Col1 (at +0x18) raw-copied into m_Effect.m_Tc (at +0x1c).
-    // v1.6.1 ApplyGradient_TopBottom @0x0024863c: only the save + two AddColour +
-    //   Internal; the binary does NOT zero m_Col0/m_T0/m_Col1 (AddColour overwrites
-    //   both stops immediately, and Internal lerps from explicit params anyway).
-    uint32_t saved = m_Base.m_Effect.m_Col1.PlatformColour();
-    memcpy(&m_Base.m_Effect.m_Tc, &saved, sizeof(float));
+    m_Base.m_GradientStops.clear();
 
     AddColour(top,    0.0f);
     AddColour(bottom, 1.0f);
@@ -667,6 +727,8 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 // Alignment (skipped when field_5e/m_CircleFlag != 0): bits0-1 horiz, bits2-3 vert.
 //   refRect defaults to this (GetRefRect) -- the m_Base bounds aliased as a
 //   MortarRectangleT<long>; bounds are read as long, per the binary.
+// The per-surface GL texture is resolved from m_PageKey at draw time (the binary
+// surface stores no texture ID -- TextureAtlasPage* only).
 void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
                            MortarRectangleT<long>* refRect)
 {
@@ -730,8 +792,11 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
         if (!s || !s->m_Verts || s->m_VertCount == 0) continue;
         if (s->m_DrawMode >= 0) continue;  // only single-buffer path
 
+        FontAtlasPage* page = s->m_PageKey;
+        if (!page || !page->m_TextureID) continue;
+
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, (GLuint)s->m_PageTextureID);
+        glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
         glEnable(GL_TEXTURE_2D);
         // DIFFERS: v1.6.1 Mesh::DrawTriList @0x00240e34 -> port Renderer::DrawTriList
         //   (the only platform boundary). DrawTriList sets GL_MODULATE tex-env itself

@@ -89,14 +89,22 @@ public:
 
     // Returns a cached GlyphAtlasEntry for (cp, requestedSize, effect, radius).
     // requestedSize is the pre-scale font size (e.g. 9.0f).
-    // GlyphAtlasEntry metrics are in world units (FT 26.6 / 64 * invFontScale).
-    // effect==FONT_EFFECT_BLUR/STROKE + radius>0 (radius = LOGICAL, pre-supersample pixels)
-    // rasterises a SEPARATELY-BUILT glyph (v1.6.1 RenderGlyph @0x0024f5dc, BuildBlur
-    // @0x0024f030 / BuildStrokes @0x0024edb8): the sharp bitmap is blitted into a padded
-    // buffer and filtered (blur) or SDF-outlined (stroke), then the returned entry's
-    // bearing/size are grown by the pad so the effect quad registers with the sharp
-    // glyph at the same pen position. Callers wanting the ordinary sharp glyph (the
-    // default) pass effect=FONT_EFFECT_NONE.
+    //
+    // Every glyph is rasterised as a PADDED CELL per the v1.6.1 baked-bearing
+    // model (ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc): the sharp bitmap
+    // is blitted at (padL, padT) inside a cell padded symmetrically by-effect
+    //   NONE/INNER_GLOW/default: padL=0, padT=1
+    //   STROKE/BLUR:             padL=radius+1, padT=radius+2 (then filtered:
+    //                            BuildBlur @0x0024f030 / BuildStrokes @0x0024edb8)
+    //   BEVEL (4..11):           +4 to both pads (filter not ported)
+    // radius is LOGICAL (pre-supersample) px. Ink-less glyphs (spaces) pack a
+    // 1x1 transparent logical cell.
+    //
+    // The returned entry carries both metric contracts -- the baked-bearing cell
+    // fields (cellU0..cellV1 / cellOrigin / layout / cellW/H / page) consumed by
+    // the BakedStringTTF GlyphTTF pipeline, and the legacy separate-bearing
+    // fields (u0..v1 / bearingX/Y / advanceX / width / height) consumed by
+    // BakedStringBox and Font.cpp -- see GlyphAtlasEntry in FontInterface.h.
     // Returns nullptr if the codepoint is absent.
     const GlyphAtlasEntry* GetGlyph(uint32_t cp, float requestedSize,
                                      FONT_EFFECT_ENUM effect = FONT_EFFECT_NONE,

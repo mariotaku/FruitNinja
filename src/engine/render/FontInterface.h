@@ -48,20 +48,47 @@ struct FontAtlasPage {
     int      m_DirtyX1, m_DirtyY1;
 };
 
-// One cached glyph entry in the atlas.
-// All metric fields (bearingX/Y, advanceX, width, height) are in world units:
-//   FT_26.6_metric * invFontScale * (1/64)
-// pageTextureID: GL texture object of the atlas page that holds this glyph.
-//   Callers bind this directly to GL_TEXTURE_2D before drawing the glyph quad.
+// One cached glyph entry in the atlas. Carries TWO metric contracts:
+//
+// 1. Legacy contract (BakedStringBox / Font.cpp consumers) -- separate-bearing
+//    model. u0..v1 / bearingX/Y / advanceX / width / height keep their original
+//    semantics: tight ink rect + FreeType bearings, all in world units
+//    (FT_26.6_metric * invFontScale * (1/64)). For effect glyphs (BLUR/STROKE)
+//    the legacy rect/bearings are grown by the effect pad exactly as before.
+//
+// 2. Baked-bearing contract (BakedStringTTF pipeline, v1.6.1 GlyphTTF model) --
+//    bearing is baked into the atlas cell origin, no separate bearing fields:
+//      cellU0..cellV1  UVs of the padded CELL per binary CalcUVs (span covers
+//                      cellW+1 x cellH+1 device px; NO inset -- FinishMesh
+//                      applies the 1/512 inset at mesh-build time)
+//      cellOriginX/Y   (padL, padT) baked-bearing pad, logical device px
+//      layoutX/Y       layout metrics: x = floor(advance/64) - bitmap_left,
+//                      y = (horiBearingY - height)/64 (bottom-of-ink, baseline-
+//                      relative), logical device px
+//      cellW/cellH     padded cell size, logical device px
+//      page            owning atlas page (binary: TextureAtlasPage* rec[0x40])
+//
+// pageTextureID: GL texture of the page (legacy binding). 0 for ink-less glyphs
+//   (spaces) under the legacy contract; `page` is still valid for those.
 struct GlyphAtlasEntry {
-    float    u0, v0;         // top-left UV (0..1) within pageTextureID
-    float    u1, v1;         // bottom-right UV (0..1) within pageTextureID
-    float    bearingX;       // horiBearingX in world units
-    float    bearingY;       // horiBearingY in world units
-    float    advanceX;       // horiAdvance  in world units
-    float    width;          // bitmap width in world units (logical quad size)
-    float    height;         // bitmap height in world units (logical quad size)
-    GLuint   pageTextureID;  // GL texture of the atlas page containing this glyph
+    float    u0, v0;         // legacy: top-left UV of the tight ink rect
+    float    u1, v1;         // legacy: bottom-right UV of the tight ink rect
+    float    bearingX;       // legacy: horiBearingX in world units
+    float    bearingY;       // legacy: horiBearingY in world units
+    float    advanceX;       // legacy: horiAdvance  in world units
+    float    width;          // legacy: ink width in world units
+    float    height;         // legacy: ink height in world units
+    GLuint   pageTextureID;  // legacy: GL texture of the page (0 if no ink)
+
+    // Baked-bearing cell contract (v1.6.1 GlyphTTF model; see header comment).
+    float    cellU0, cellV0; // cell UV origin (no inset)
+    float    cellU1, cellV1; // cell UV extent = origin + (cell+1 device px)/pageSize
+    float    cellOriginX;    // padL, logical px (GlyphTTF::m_QuadMin.x)
+    float    cellOriginY;    // padT, logical px (GlyphTTF::m_QuadMin.y)
+    float    layoutX;        // floor(adv/64) - bitmap_left (GlyphTTF::m_GlyphScale.x)
+    float    layoutY;        // (horiBearingY - height)/64  (GlyphTTF::m_GlyphScale.y)
+    float    cellW, cellH;   // padded cell size, logical px (GlyphTTF::m_QuadSize)
+    FontAtlasPage* page;     // owning page (GlyphTTF::m_SurfaceKey)
 };
 
 class FontInterface {
@@ -77,11 +104,19 @@ public:
     // Call once after construction. languageByte is game_work+3 (0x13 = russian, scale 0.9).
     void InitialiseData(float fontScale, float globalSizeScale);
 
-    // Pack a glyph bitmap (8-bit alpha, width x height bytes) into the atlas.
-    // Allocates a new page if the current page is full. NEVER drops glyphs.
+    // Pack a glyph cell bitmap (8-bit coverage, width x height bytes) into the
+    // atlas. Allocates a new page if the current page is full. NEVER drops glyphs.
+    // Returns the owning page and writes the packed texel position to
+    // *outX / *outY. UV computation is the CALLER's job (FontCacheObjectTTF
+    // CalcUVs) -- this keeps the binary's TextureAtlas::AddTexture boundary:
+    // the atlas packs, the font cache derives UVs from the packed rec.
     // DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c -- faithful multi-page model.
-    // Fills *out including out->pageTextureID.
-    // Always returns true (kept for API compatibility with old single-page callers).
+    FontAtlasPage* PackGlyphCell(int width, int height, const uint8_t* bitmap,
+                                 int* outX, int* outY);
+
+    // Legacy wrapper over PackGlyphCell: packs and fills out's legacy fields
+    // (tight-rect UVs u0..v1 spanning exactly width x height texels, plus
+    // pageTextureID and page). Retained for old single-entry callers/tests.
     bool PackGlyph(int width, int height, const uint8_t* bitmap, GlyphAtlasEntry* out);
 
     // Upload dirty regions on ALL pages to their GL textures.

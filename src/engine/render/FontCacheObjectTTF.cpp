@@ -227,6 +227,11 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
         return nullptr;
     }
 
+    // FT_Set_Transform is IDENTITY with zero delta in the binary (matrix
+    // {0x10000,0,0,0x10000}) -- the glyph is rasterised at its natural position
+    // and bearing lives in the metrics only. The port never calls
+    // FT_Set_Transform, which is the same thing.
+    // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc.
     FT_Error err = FT_Load_Glyph(m_Face, glyphIndex,
                                   FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL);
     if (err) {
@@ -237,99 +242,135 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     FT_GlyphSlot slot = m_Face->glyph;
     FT_Bitmap&   bm   = slot->bitmap;
 
-    // Convert all metrics to world units: FT 26.6 value * (1/64) * invFontScale.
-    // With invFontScale=1.0 this is simply metric_26.6 / 64.0.
-    // Port specific: HD font supersampling -- divide by kFontSupersample so layout dimensions are
-    // identical to the non-supersampled case (the atlas holds Nx texels but quads are logical-size).
-    const float inv = m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+    // Convert 26.6 metrics to world units: FT 26.6 value * (1/64) * invFontScale.
+    // Port specific: HD font supersampling -- divide by kFontSupersample so layout
+    // dimensions are identical to the non-supersampled case (the atlas holds Nx
+    // texels but quads are logical-size).
+    const int   ss         = kFontSupersample;
+    const float invWorld   = m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)ss);
+    const float invLogical = m_Atlas->m_InvFontScale * (1.0f / (float)ss); // texel -> logical px
 
     GlyphAtlasEntry entry;
-    entry.bearingX = (float)slot->metrics.horiBearingX * inv;
-    entry.bearingY = (float)slot->metrics.horiBearingY * inv;
-    entry.advanceX = (float)slot->advance.x            * inv;
-    // Port specific: HD font supersampling -- width/height are raw atlas pixels (used for atlas packing);
-    // divide by kFontSupersample to restore the logical quad dimensions used by BakedStringBox.
-    entry.width    = (float)bm.width  / (float)kFontSupersample;
-    entry.height   = (float)bm.rows   / (float)kFontSupersample;
+    memset(&entry, 0, sizeof(entry));
+
+    // Legacy separate-bearing contract (BakedStringBox / Font.cpp consumers).
+    entry.bearingX = (float)slot->metrics.horiBearingX * invWorld;
+    entry.bearingY = (float)slot->metrics.horiBearingY * invWorld;
+    entry.advanceX = (float)slot->advance.x            * invWorld;
+    entry.width    = (float)bm.width * invLogical;
+    entry.height   = (float)bm.rows  * invLogical;
+
+    // Baked-bearing layout metrics (v1.6.1 GlyphTTF::m_GlyphScale source values):
+    //   layoutX = floor(advance.x/64) - bitmap_left  (the pen step / GetKerning value)
+    //   layoutY = (horiBearingY - height)/64         (ink bottom, baseline-relative)
+    // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc / FetchGlyph @0x0024fa24.
+    entry.layoutX = ((float)(slot->advance.x >> 6) - (float)slot->bitmap_left)
+                    * m_Atlas->m_InvFontScale * (1.0f / (float)ss);
+    entry.layoutY = (float)(slot->metrics.horiBearingY - slot->metrics.height) * invWorld;
+
+    // Baked-bearing cell padding, LOGICAL device px, symmetric both sides.
+    // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc, per effect:
+    //   NONE(0) / INNER_GLOW(3) / default: padL=0, padT=1
+    //   STROKE(1) / BLUR(2):               padL=radius+1, padT=radius+2
+    //   BEVEL (effect in [4..11]):         +4 to both padL and padT
+    const int e = (int)effect;
+    int padL = 0, padT = 1;
+    if (e == FONT_EFFECT_STROKE || e == FONT_EFFECT_BLUR) {
+        padL = radius + 1;
+        padT = radius + 2;
+    }
+    if (e >= 4 && e <= 11) {
+        padL += 4;
+        padT += 4;
+    }
+
+    const int   pageSize = m_Atlas->GetSize();
+    const float invS     = 1.0f / (float)pageSize;
 
     if (bm.width > 0 && bm.rows > 0) {
-        if (effect == FONT_EFFECT_BLUR && radius > 0) {
-            // ASM-spec v1.6.1 RenderGlyph @0x0024f5dc (effect==2 BLUR):
-            //   padL = radiusTexel+1, padT = radiusTexel+2 each side;
-            //   buffer W = glyphW + 2*(radiusTexel+1), H = glyphH + 2*(radiusTexel+2);
-            //   blit sharp glyph at (padL, padT); then BuildBlur(buf, W, H, radiusTexel).
-            // radius (the param) is LOGICAL (pre-supersample) px; the port rasters
-            // at kFontSupersample x, so the texel-space radius used for the pad and
-            // the filter kernel is radius * kFontSupersample.
-            const int radiusTexel = radius * kFontSupersample;
-            const int padL = radiusTexel + 1;
-            const int padT = radiusTexel + 2;
-            const int padW = (int)bm.width + 2 * padL;
-            const int padH = (int)bm.rows  + 2 * padT;
+        // Port specific: HD font supersampling -- pads scale to texel space so the
+        // LOGICAL cell origin stays the exact binary integers (padL, padT).
+        const int padLT  = padL * ss;
+        const int padTT  = padT * ss;
+        const int cellWT = (int)bm.width + 2 * padLT;
+        const int cellHT = (int)bm.rows  + 2 * padTT;
 
-            std::vector<uint8_t> padded((size_t)padW * (size_t)padH, 0);
-            for (unsigned int row = 0; row < bm.rows; row++) {
-                memcpy(&padded[(size_t)(row + (unsigned int)padT) * padW + padL],
-                       bm.buffer + row * bm.pitch,
-                       bm.width);
-            }
-            BuildBlur(&padded[0], padW, padH, radiusTexel);
-
-            // Grow bearing/size so the blurred (padded) quad registers with the sharp
-            // glyph at the same pen position: bearingX-=padL, bearingY+=padT,
-            // width/height += 2*pad -- all converted back to world/logical units.
-            entry.bearingX -= (float)padL / (float)kFontSupersample;
-            entry.bearingY += (float)padT / (float)kFontSupersample;
-            entry.width     = (float)padW / (float)kFontSupersample;
-            entry.height    = (float)padH / (float)kFontSupersample;
-
-            // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
-            m_Atlas->PackGlyph(padW, padH, &padded[0], &entry);
-        } else if (effect == FONT_EFFECT_STROKE && radius > 0) {
-            // ASM-spec v1.6.1 RenderGlyph @0x0024f5dc effect==1: pad = BLUR pad (padL=R+1, padT=R+2); grow bearing/size same as BLUR branch.
-            const int radiusTexel = radius * kFontSupersample;
-            const int padL = radiusTexel + 1;
-            const int padT = radiusTexel + 2;
-            const int padW = (int)bm.width + 2 * padL;
-            const int padH = (int)bm.rows  + 2 * padT;
-
-            std::vector<uint8_t> padded((size_t)padW * (size_t)padH, 0);
-            for (unsigned int row = 0; row < bm.rows; row++) {
-                memcpy(&padded[(size_t)(row + (unsigned int)padT) * padW + padL],
-                       bm.buffer + row * bm.pitch,
-                       bm.width);
-            }
-            BuildStrokes(&padded[0], padW, padH, radiusTexel);
-
-            entry.bearingX -= (float)padL / (float)kFontSupersample;
-            entry.bearingY += (float)padT / (float)kFontSupersample;
-            entry.width     = (float)padW / (float)kFontSupersample;
-            entry.height    = (float)padH / (float)kFontSupersample;
-
-            // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
-            m_Atlas->PackGlyph(padW, padH, &padded[0], &entry);
-        } else {
-            const uint8_t* src = bm.buffer;
-            uint8_t* compact = nullptr;
-            if (bm.pitch != (int)bm.width) {
-                compact = (uint8_t*)malloc((size_t)(bm.width * bm.rows));
-                if (compact) {
-                    for (unsigned int row = 0; row < bm.rows; row++) {
-                        memcpy(compact + row * bm.width,
-                               bm.buffer + row * bm.pitch,
-                               bm.width);
-                    }
-                    src = compact;
-                }
-            }
-            // PackGlyph always succeeds: allocates a new atlas page if the current one
-            // is full. DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
-            m_Atlas->PackGlyph((int)bm.width, (int)bm.rows, src, &entry);
-            if (compact) free(compact);
+        std::vector<uint8_t> cell((size_t)cellWT * (size_t)cellHT, 0);
+        for (unsigned int row = 0; row < bm.rows; row++) {
+            memcpy(&cell[(size_t)(row + (unsigned int)padTT) * cellWT + padLT],
+                   bm.buffer + row * bm.pitch,
+                   bm.width);
         }
+        if (e == FONT_EFFECT_BLUR && radius > 0) {
+            BuildBlur(&cell[0], cellWT, cellHT, radius * ss);
+        } else if (e == FONT_EFFECT_STROKE && radius > 0) {
+            BuildStrokes(&cell[0], cellWT, cellHT, radius * ss);
+        }
+        // TODO: v1.6.1 0x0024f5dc (Mortar::RenderGlyph) -- BEVEL filter (effect 4..11)
+        // not ported; bevel cells carry the sharp glyph in the padded cell.
+
+        // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
+        int x = 0, y = 0;
+        FontAtlasPage* page = m_Atlas->PackGlyphCell(cellWT, cellHT, &cell[0], &x, &y);
+        entry.page = page;
+
+        // CalcUVs (v1.6.1 rec UVs, no inset -- FinishMesh applies the 1/512 inset):
+        //   U0 = glyphX/pageW, V0 = glyphY/pageH,
+        //   U1 = U0 + (cellW+1)/pageW, V1 = V0 + (cellH+1)/pageH   (device px)
+        // Port specific: +1 device px = +kFontSupersample texels; the port packs
+        // with margin 0 (binary "margin" rec offset is folded into glyphX here).
+        entry.cellU0 = (float)x * invS;
+        entry.cellV0 = (float)y * invS;
+        entry.cellU1 = entry.cellU0 + (float)(cellWT + ss) * invS;
+        entry.cellV1 = entry.cellV0 + (float)(cellHT + ss) * invS;
+
+        entry.cellOriginX = (float)padL * m_Atlas->m_InvFontScale;
+        entry.cellOriginY = (float)padT * m_Atlas->m_InvFontScale;
+        entry.cellW       = (float)cellWT * invLogical;
+        entry.cellH       = (float)cellHT * invLogical;
+
+        // Legacy contract fill. Effect glyphs (STROKE/BLUR/BEVEL) keep the old
+        // grown-by-pad semantics (quad = whole cell, bearings shifted by the pad
+        // so the effect layer registers with the sharp glyph at the same pen);
+        // plain glyphs keep the old tight ink rect (pad excluded) so
+        // BakedStringBox / Font.cpp output is unchanged by the cell padding.
+        const bool grown = (e == FONT_EFFECT_STROKE || e == FONT_EFFECT_BLUR
+                            || (e >= 4 && e <= 11));
+        if (grown) {
+            entry.u0 = (float)x * invS;
+            entry.v0 = (float)y * invS;
+            entry.u1 = (float)(x + cellWT) * invS;
+            entry.v1 = (float)(y + cellHT) * invS;
+            entry.bearingX -= (float)padL * m_Atlas->m_InvFontScale;
+            entry.bearingY += (float)padT * m_Atlas->m_InvFontScale;
+            entry.width  = entry.cellW;
+            entry.height = entry.cellH;
+        } else {
+            entry.u0 = (float)(x + padLT) * invS;
+            entry.v0 = (float)(y + padTT) * invS;
+            entry.u1 = (float)(x + padLT + (int)bm.width) * invS;
+            entry.v1 = (float)(y + padTT + (int)bm.rows)  * invS;
+        }
+        entry.pageTextureID = page ? page->m_TextureID : 0;
     } else {
-        entry.u0 = entry.v0 = entry.u1 = entry.v1 = 0.0f;
-        entry.pageTextureID = 0;
+        // Empty (ink-less) glyph, e.g. space: 1x1 transparent LOGICAL cell,
+        // cellOrigin=(0,0), layout metrics kept from the raw FT metrics above.
+        // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc (empty-glyph branch).
+        std::vector<uint8_t> cell((size_t)(ss * ss), 0);
+        int x = 0, y = 0;
+        FontAtlasPage* page = m_Atlas->PackGlyphCell(ss, ss, &cell[0], &x, &y);
+        entry.page = page;
+        entry.cellU0 = (float)x * invS;
+        entry.cellV0 = (float)y * invS;
+        entry.cellU1 = entry.cellU0 + (float)(ss + ss) * invS;
+        entry.cellV1 = entry.cellV0 + (float)(ss + ss) * invS;
+        entry.cellOriginX = 0.0f;
+        entry.cellOriginY = 0.0f;
+        entry.cellW = (float)ss * invLogical;
+        entry.cellH = (float)ss * invLogical;
+        // Legacy contract: no ink -- tight rect stays zero-size, pageTextureID 0
+        // (preserves the old "empty glyph draws nothing" behaviour for
+        // BakedStringBox / Font.cpp).
     }
 
     m_Cache[key] = entry;
