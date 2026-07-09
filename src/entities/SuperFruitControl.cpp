@@ -564,11 +564,19 @@ void SuperFruitControl::ChangeText(const char* text, bool resetFade,
         /*shadowMode*/0, /*extraSize*/0.0f, /*p15*/0,
         Colour(255, 255, 255, 255), Colour(255, 255, 255, 255));
 
-    // TODO: v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4 -- the exact 3-stop
-    //   vertical gradient (ApplyGradientSplit y=0.55 -> colourC, y=0.5 -> colourD,
-    //   y=0.0 -> colourA) needs the colourC/colourD DAT constants, which are
-    //   unmapped. The main fill (colourA) already makes the label visible; do NOT
-    //   guess the two gradient stop colours.
+    // ASM-spec v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4: 3-stop vertical gradient, same t as fill.
+    // Top (pale) -> mid -> bottom (fill colourA), binary call order 0.55 / 0.50 / 0.00.
+    Colour colourC = SuperFruitColourMorph3(
+        Colour(255, 244, 196, 255),
+        Colour(255, 213, 194, 255),
+        Colour(220, 194, 255, 255), t);
+    Colour colourD = SuperFruitColourMorph3(
+        Colour(217, 166, 46, 255),
+        Colour(240, 86, 64, 255),
+        Colour(109, 46, 239, 255), t);
+    (*target)->ApplyGradientSplit(colourC, 0.55f);
+    (*target)->ApplyGradientSplit(colourD, 0.50f);
+    (*target)->ApplyGradientSplit(colourA, 0.00f);
 
     if (resetFade) m_FadeIn = 0.0f;
 }
