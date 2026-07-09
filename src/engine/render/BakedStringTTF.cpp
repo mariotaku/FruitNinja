@@ -126,7 +126,10 @@ BakedStringTTF::BakedStringTTF(FontCacheObjectTTF* fc,
     if (eff == FontCacheObjectTTF::FONT_EFFECT_NONE && n > 0) eff = FontCacheObjectTTF::FONT_EFFECT_STROKE;
     m_Base.m_FmtCount = (uint32_t)n;
     m_Base.m_Flag = (uint8_t)eff;
-    m_Base.m_Weight = (float)alignSigned * 1.0f; // TODO: fc[+0x10c][+0x10] approx 1.0
+    // ASM-verified: v1.6.1 BakedStringTTF ctor @0x00249a5c + FontInterface::Initialize @0x0010e620:
+    //  fc[+0x10c]=FontInterface*; +0x10=m_InvFontScale. Initialize(1.0,...) => m_InvFontScale==1.0
+    //  for ALL langs, so m_Weight = alignSigned * 1.0 is EXACT (not an approximation).
+    m_Base.m_Weight = (float)alignSigned * 1.0f;
 
     // m_ScaledHeight = fontScale * atlas->m_FontScale
     // v1.6.1 BakedStringTTF ctor @0x00249a5c: atlas[+0x14] = m_FontScale (=1.0 default)
@@ -594,10 +597,11 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
         return;
     }
 
-    // fc[+0x10c][+0x10] -- same embedded sub-struct scale used by the ctor's
-    // m_Weight computation (m_Base.m_Weight = alignSigned * fc[+0x10c][+0x10]);
-    // not ported at that offset, so approximated as 1.0 like the ctor.
-    float scaleB = 1.0f; // TODO: v1.6.1 fc[+0x10c][+0x10]; approximated 1.0
+    // ASM-verified: v1.6.1 BakedStringTTF ctor @0x00249a5c + FontInterface::Initialize @0x0010e620:
+    //  fc[+0x10c]=FontInterface*; +0x10=m_InvFontScale. Initialize(1.0,...) => m_InvFontScale==1.0
+    //  for ALL langs, so m_Weight = alignSigned * 1.0 is EXACT (not an approximation).
+    // Same fc[+0x10c][+0x10] scale as the ctor's m_Weight computation.
+    float scaleB = 1.0f;
     const float weightTerm = (float)weight * scaleB;
 
     const char* text        = ioText.c_str();

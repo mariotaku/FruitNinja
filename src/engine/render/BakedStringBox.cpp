@@ -59,7 +59,8 @@ struct WrappedLineInfo {
     float offsetX;       // horizontal align offset (already truncated to int, world units)
     float maxBearingY;   // max bearingY across glyphs on this line (above baseline)
     float minBottom;     // min (bearingY-height) across glyphs on this line (<=0, below baseline)
-    float advanceWidth;  // raw pen-advance width (pre-ink-trim), used by GetTextWidth
+    float advanceWidth;  // tight (baked-bearing/layoutX) pen-advance width, pre-ink-trim,
+                          // matches the render pen -- used by GetTextWidth
 };
 } // anonymous namespace
 
@@ -454,8 +455,14 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
                 if (cp == 0) break;
                 const GlyphAtlasEntry* g = font->GetGlyph(cp, requestedSize);
                 if (!g) continue;
+                // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x00246944: measures via
+                // the same baked-bearing LeftJustify the render path uses (BakedStringTTF::
+                // GetKerning @0x0024ea78 returns m_GlyphScale.x = layoutX; FullInternalRebuild
+                // places ink AT the pen, no separate bearingX add). Was: penX += advanceX
+                // (full advance) + ink at penX+bearingX -- looser than the render, causing
+                // shrink/alignment decisions to diverge from what actually gets drawn.
                 if (g->width > 0.0f) {
-                    float gLeft  = penX + g->bearingX;
+                    float gLeft  = penX;
                     float gRight = gLeft + g->width;
                     if (firstInkGlyph) {
                         inkLeft  = gLeft;
@@ -470,10 +477,13 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
                     float bottom = g->bearingY - g->height;
                     if (bottom < lineMinBottom) lineMinBottom = bottom;
                 }
-                penX += g->advanceX + 1.0f;
+                penX += g->layoutX + 1.0f;
             }
         }
-        float lineInkWidth = firstInkGlyph ? lineWidth : (inkRight - inkLeft);
+        // penX (tight, layoutX-stepped total for this line) is the fallback for
+        // lines with no visible ink -- consistent with advanceWidth below, both now
+        // baked-bearing tight rather than the old loose (MeasureWord/advanceX) lineWidth.
+        float lineInkWidth = firstInkGlyph ? penX : (inkRight - inkLeft);
 
         // Fix (d): horizontal alignment.
         // Binary RebuildAlignments @0x00245c78 low-2-bits: 3=centre-H, 2=right, 0/1=left.
@@ -497,7 +507,12 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
         info.offsetX      = lineOffsetX;
         info.maxBearingY  = lineMaxBearingY;
         info.minBottom    = lineMinBottom;
-        info.advanceWidth = lineWidth;
+        // advanceWidth: tight (layoutX-stepped) pen total from the ink loop above, NOT
+        // the loose greedy-fill `lineWidth` (MeasureWord/advanceX) used only to decide
+        // where to BREAK the line. GetTextWidth()/FitStringToWidth callers (e.g.
+        // ShopListItem::DrawFloatingText positioning NEW/SELECTED badges against
+        // m_pBox0/m_pBox1) need the width that MATCHES what actually gets drawn.
+        info.advanceWidth = penX;
         outLines.push_back(info);
 
         wi = lineEnd;
@@ -996,9 +1011,11 @@ void BakedStringBox::SetFontSize(float size) {
 // ASM-spec v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width: binary returns
 // integer pixel width; port lays out 1:1 world=pixel so float max-line-width is equivalent.
 // Triggers a lazy RebuildMeshes() if m_Dirty is set (same pattern as Draw()), then
-// re-measures via FitStrings for the raw advance width (no per-line width cache is
-// kept on a built FancyBakedString line -- sizeof(BakedStringBox) is pinned at 200B).
-// Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges.
+// re-measures via FitStrings for the tight (baked-bearing/layoutX) advance width --
+// matches what BakedStringTTF actually renders (no per-line width cache is kept on a
+// built FancyBakedString line -- sizeof(BakedStringBox) is pinned at 200B).
+// Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges --
+// a loose (full-advance) width here over-estimates and misplaces those badges.
 float BakedStringBox::GetTextWidth() const {
     if (m_Dirty) {
         const_cast<BakedStringBox*>(this)->RebuildMeshes();
