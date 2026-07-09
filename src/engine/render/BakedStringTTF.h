@@ -218,24 +218,19 @@ public:
     void FullInternalRebuild();
 
     // FitStringToWidth @0x00248734 (static): word-wrap line-breaker.
+    // Mangled: ...FitStringToWidthEPNS_18FontCacheObjectTTFERSsS3_fliPfPb
     // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
-    //   binary params: (FontCacheObjectTTF*, std::string& ioText, std::string& outRemainder,
-    //    float fontSize, float weight, long maxWidth, float* outWidth, bool* outTruncated)
-    //   -- weight is the 5th binary param, maxWidth (the wrap limit) is the 6th.
-    // Port keeps its historical (fontSize, maxWidth, mode) slot order: the port's
-    // 5th slot (maxWidth here) already carries the wrap limit for its one call site
-    // (MenuButton.cpp arc-text shrink); the 6th slot (mode) is NOT a binary param --
-    // there is no wrap-style/ellipsis/measure switch in the binary. It stands in for
-    // the binary's weight, which the only binary caller (BakedStringBox::FitStrings
-    // @0x00246800) always passes as 0, so the port leaves it unused.
+    //   (FontCacheObjectTTF* fc, std::string& ioText, std::string& outRemainder,
+    //    float fontSize, long weight, int maxWidth, float* outWidth, bool* outTruncated)
     // ioText is modified in-place to the head that fits within maxWidth;
     // outRemainder gets the overflow tail; outWidth gets the measured advance;
     // outTruncated is set when an unbreakable word overflows maxWidth.
-    // Per glyph: total += GetKerning(g) + weight*fontScale + 1.0 (weight always 0
-    // in practice, but the +1.0 per glyph always applies); whitespace/0x200b/0xa = break point.
+    // Per glyph: total += GetKerning(g) + weight*m_FontScale + 1.0 (the only live
+    // caller, BakedStringBox::FitStrings @0x00246800, always passes weight=0);
+    // whitespace/0x200b/0xa = break point.
     static void FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                  std::string& outRemainder, float fontSize,
-                                 long maxWidth, int mode,
+                                 long weight, int maxWidth,
                                  float* outWidth, bool* outTruncated);
 
     // ApplyFormatting_Circle @0x00248dd0: place glyphs on a circular arc.
