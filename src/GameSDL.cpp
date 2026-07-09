@@ -137,7 +137,7 @@ bool Game::init(void* win, void* gl) {
     Mortar::DisplayManager::GetInstance().SetWindowSize(0, FN_SCREEN_H, 0, FN_SCREEN_W);
 
     if (!renderer.init()) {
-        fprintf(stderr, "Failed to init renderer\n");
+        LOG_ERROR("GameSDL", "Failed to init renderer");
         return false;
     }
 
@@ -291,6 +291,10 @@ void Game::pollInput() {
 // DispatchForSimTick contains NO SDL live-finger queries; this makes it safe to
 // call from stepUpdate on web.
 void Game::stepUpdate() {
+    // Port specific: bump the log-line sim-tick counter once per fixed
+    // 1/60s step (see Debug::g_LogTick, src/debug/Logger.h).
+    ++Debug::g_LogTick;
+
     // Flush deferred touch dispatch for this sim tick (before update).
     if (inputTranslator) inputTranslator->DispatchForSimTick();
 

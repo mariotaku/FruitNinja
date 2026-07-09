@@ -192,8 +192,8 @@ void DebugHitbox_Draw() {
                 }
             }
 
-            printf("[DebugHitbox] bM_Mode=%u pmState=%u active=%d colSpheres=%d\n",
-                   (unsigned)bm, (unsigned)pm, active, sphereCount);
+            LOG_DEBUG("DebugHitbox", "bM_Mode=%u pmState=%u active=%d colSpheres=%d",
+                      (unsigned)bm, (unsigned)pm, active, sphereCount);
         }
     }
 

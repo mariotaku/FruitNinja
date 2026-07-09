@@ -9,6 +9,7 @@
 #include "engine/xml/TiXml.h"
 #include "screens/BonusScreen.h"
 #include "game/GameWork.h"
+#include "debug/Logger.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -54,7 +55,7 @@ void BonusManager::Init() {
 
     TiXmlElement root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
-        printf("BonusManager::Init -- no <bonusAwardsFile> root\n");
+        LOG_WARN("BonusManager", "Init -- no <bonusAwardsFile> root");
         return;
     }
 

@@ -21,7 +21,9 @@
 // JS call stack per line -- useless noise for routine SDL_Log/LOG_* traffic.
 // Route SDL's own logs to stdout (console.log) instead; genuine JS errors/
 // aborts still hit stderr/console.error since they never go through this
-// callback. Format mirrors SDL's built-in output function ("<PRIORITY>: <message>").
+// callback. Format is "[NNNNNN][LEVEL][TAG] message" -- the 6-digit
+// zero-padded prefix is the sim-tick counter (Debug::g_LogTick); [TAG] is
+// already embedded in `message` by Debug::Log (src/debug/LoggerSDL.cpp).
 static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriority priority, const char* message) {
     const char* p = "INFO";
     switch (priority) {
@@ -33,7 +35,7 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
         case SDL_LOG_PRIORITY_CRITICAL: p = "CRITICAL";break;
         default: break;
     }
-    fprintf(stdout, "%s: %s\n", p, message);
+    fprintf(stdout, "[%06u][%s]%s\n", Debug::g_LogTick, p, message);
     fflush(stdout);
 }
 
@@ -289,7 +291,7 @@ static void BootWait(void* arg) {
                 if (g_langOverride >= 0) {
                     LOG_INFO("Debug", "URL param: lang=%s -> flag=%d", langBuf, g_langOverride);
                 } else {
-                    fprintf(stderr, "[lang] URL param lang='%s' not recognised, ignored\n", langBuf);
+                    LOG_WARN("lang", "URL param lang='%s' not recognised, ignored", langBuf);
                 }
             }
         }
@@ -306,7 +308,7 @@ static void BootWait(void* arg) {
     }
 
     if (!g_game.init(ba->window, ba->gl)) {
-        fprintf(stderr, "Failed to init game\n");
+        LOG_ERROR("mainEmscripten", "Failed to init game");
         return;
     }
 
@@ -375,7 +377,7 @@ int main(int argc, char* argv[]) {
     SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainEmscripten", "SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
 
@@ -397,14 +399,14 @@ int main(int argc, char* argv[]) {
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
     if (!window) {
-        fprintf(stderr, "Window failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainEmscripten", "Window failed: %s", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
-        fprintf(stderr, "GL context failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainEmscripten", "GL context failed: %s", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
@@ -413,7 +415,7 @@ int main(int argc, char* argv[]) {
     // Port specific: gl_load_functions() is a no-op on non-Windows;
     // under Emscripten all functions resolve via LEGACY_GL_EMULATION shim.
     if (!gl_load_functions()) {
-        fprintf(stderr, "Failed to load required GL functions\n");
+        LOG_ERROR("mainEmscripten", "Failed to load required GL functions");
         return 1;
     }
 

@@ -16,8 +16,10 @@
 // JS call stack per line -- useless noise for routine SDL_Log/LOG_* traffic.
 // Route SDL's own logs to stdout (console.log) instead, on every platform
 // (harmless on native); genuine JS errors/aborts still hit stderr/console.error
-// since they never go through this callback. Format mirrors SDL's built-in
-// output function ("<PRIORITY>: <message>").
+// since they never go through this callback. Format is
+// "[NNNNNN][LEVEL][TAG] message" -- the 6-digit zero-padded prefix is the
+// sim-tick counter (Debug::g_LogTick); [TAG] is already embedded in
+// `message` by Debug::Log (src/debug/LoggerSDL.cpp).
 static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriority priority, const char* message) {
     const char* p = "INFO";
     switch (priority) {
@@ -29,7 +31,7 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
         case SDL_LOG_PRIORITY_CRITICAL: p = "CRITICAL";break;
         default: break;
     }
-    fprintf(stdout, "%s: %s\n", p, message);
+    fprintf(stdout, "[%06u][%s]%s\n", Debug::g_LogTick, p, message);
     fflush(stdout);
 }
 
@@ -74,7 +76,7 @@ int main(int argc, char* argv[]) {
     SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainSDL", "SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
 
@@ -107,14 +109,14 @@ int main(int argc, char* argv[]) {
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
     if (!window) {
-        fprintf(stderr, "Window failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainSDL", "Window failed: %s", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
-        fprintf(stderr, "GL context failed: %s\n", SDL_GetError());
+        LOG_ERROR("mainSDL", "GL context failed: %s", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
@@ -122,7 +124,7 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetSwapInterval(1);
 
     if (!gl_load_functions()) {
-        fprintf(stderr, "Failed to load required GL functions\n");
+        LOG_ERROR("mainSDL", "Failed to load required GL functions");
         return 1;
     }
 
@@ -134,7 +136,7 @@ int main(int argc, char* argv[]) {
     // rendering will be broken in that case, but the game would otherwise
     // silently start with a black screen.
     if (!gl_check_runtime()) {
-        fprintf(stderr, "Aborting: rendering pipeline cannot proceed without a real GL driver.\n");
+        LOG_ERROR("GL", "Aborting: rendering pipeline cannot proceed without a real GL driver.");
         return 1;
     }
 
@@ -145,9 +147,9 @@ int main(int argc, char* argv[]) {
     {
         int gotDepth = 0;
         SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &gotDepth);
-        printf("[GL] depth buffer bits: %d (requested 24)\n", gotDepth);
+        LOG_INFO("GL", "depth buffer bits: %d (requested 24)", gotDepth);
         if (gotDepth == 0) {
-            fprintf(stderr, "[GL] FATAL: context has 0 depth bits; depth test cannot occlude (splats would cover fruits).\n");
+            LOG_ERROR("GL", "FATAL: context has 0 depth bits; depth test cannot occlude (splats would cover fruits).");
             return 1;
         }
     }
@@ -164,13 +166,13 @@ int main(int argc, char* argv[]) {
             "arabic", "fake debug language"
         };
         game_work.languageFlag = (uint8_t)g_langOverride;
-        printf("[lang] override: flag=%d (%s)\n",
-               g_langOverride, kLangNames[g_langOverride]);
+        LOG_INFO("lang", "override: flag=%d (%s)",
+                 g_langOverride, kLangNames[g_langOverride]);
     }
 
     Game game;
     if (!game.init(window, gl)) {
-        fprintf(stderr, "Failed to init game\n");
+        LOG_ERROR("mainSDL", "Failed to init game");
         return 1;
     }
 
