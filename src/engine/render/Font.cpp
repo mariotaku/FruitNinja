@@ -938,7 +938,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
 
     // Port specific: text-bounds debug overlay (F1). Ink bounds from transformed verts.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
-    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+    if (FN::g_DebugHitboxes >= 3 && !FN::g_SuppressTextOverlay) {
         float inkX0 = verts[0].x, inkX1 = verts[0].x;
         float inkY0 = verts[0].y, inkY1 = verts[0].y;
         for (int i = 1; i < totalVerts; i++) {
@@ -949,7 +949,7 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
         }
         FN::DebugText_Overlay(pos.x, pos.y,
                               false, 0.0f, 0.0f, 0.0f, 0.0f,
-                              inkX0, inkY0, inkX1, inkY1);
+                              true, inkX0, inkY0, inkX1, inkY1);
     }
 #endif
 }
@@ -1379,7 +1379,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // Port specific: text-bounds debug overlay (F1). Ink bounds accumulated from
     // all transformed page verts.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
-    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+    if (FN::g_DebugHitboxes >= 3 && !FN::g_SuppressTextOverlay) {
         float inkX0 = 0.0f, inkX1 = 0.0f, inkY0 = 0.0f, inkY1 = 0.0f;
         bool hasInk = false;
         for (int pg = 0; pg < m_PageCount; pg++) {
@@ -1402,7 +1402,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         if (hasInk) {
             FN::DebugText_Overlay(pos.x, pos.y,
                                   false, 0.0f, 0.0f, 0.0f, 0.0f,
-                                  inkX0, inkY0, inkX1, inkY1);
+                                  true, inkX0, inkY0, inkX1, inkY1);
         }
     }
 #endif

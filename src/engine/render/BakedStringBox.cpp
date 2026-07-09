@@ -925,10 +925,13 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     }
 
     // Port specific: box + anchor debug overlay. No per-vertex ink-bounds tracking
-    // possible any more (FancyBakedString owns its own vertex data) -- approximate the
-    // ink rect with the declared box rect. No binary counterpart; host debug tooling only.
+    // possible any more (FancyBakedString owns its own vertex data), so only the
+    // declared box rect is drawn -- pass hasInk=false rather than faking an ink
+    // rect equal to the box rect (that used to draw the same rectangle twice,
+    // once green once yellow, on top of itself). No binary counterpart; host
+    // debug tooling only.
 #if !defined(__bada__) && !defined(FN_GL_STUB)
-    if (FN::g_DebugHitboxes && !FN::g_SuppressTextOverlay) {
+    if (FN::g_DebugHitboxes >= 3 && !FN::g_SuppressTextOverlay) {
         const bool hasBox = (m_BoxWidth > 0);
         const float bx0 = anchor.x - m_BoxWidth  * 0.5f;
         const float bx1 = anchor.x + m_BoxWidth  * 0.5f;
@@ -937,7 +940,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         FN::DebugText_Overlay(anchor.x, anchor.y,
                               hasBox,
                               bx0, by0, bx1, by1,
-                              bx0, by0, bx1, by1);
+                              false, 0.0f, 0.0f, 0.0f, 0.0f);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, 0);
     }

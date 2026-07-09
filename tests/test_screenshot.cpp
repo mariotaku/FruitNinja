@@ -154,8 +154,10 @@ int main(int argc, char* argv[]) {
     if (!h.InitComponent()) return 1;
 
     // Enable text-bounds overlay after init so burn-in frames don't trigger it.
+    // Level 3 = entity + HUD + font overlays (the font-box overlay is what
+    // --debug-textbounds actually wants; g_DebugHitboxes is now a 4-level int).
     if (g_DebugTextBounds) {
-        FN::g_DebugHitboxes = true;
+        FN::g_DebugHitboxes = 3;
     }
 
     return sc->run(h);

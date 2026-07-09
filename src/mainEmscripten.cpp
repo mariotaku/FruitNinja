@@ -205,22 +205,33 @@ static void BootWait(void* arg) {
     // Port specific: parse URL query parameters to set debug flags on web.
     // Enables the hitbox overlay without a physical keyboard (no F1 on mobile).
     // Supported params:
-    //   ?hitbox=1  or  ?hitboxes=1  -- enables g_DebugHitboxes (same as F1 on desktop)
+    //   ?hitbox=<0-3> or ?hitboxes=<0-3> -- sets g_DebugHitboxes level directly
+    //                                        (same 4 levels F1 cycles through on desktop:
+    //                                        0=off 1=entity 2=+HUD 3=+font). Bare
+    //                                        ?hitbox=1 is a legacy alias for the full
+    //                                        level 3 overlay, since mobile has no F1 to
+    //                                        cycle levels with.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
     {
-        // hitbox / hitboxes=1
-        int hitboxParam = EM_ASM_INT({
+        // hitbox / hitboxes=<level>
+        int hitboxLevel = EM_ASM_INT({
             try {
                 var qs = window.location.search;
                 if (!qs) return 0;
                 var params = new URLSearchParams(qs);
-                if (params.get('hitbox') === '1' || params.get('hitboxes') === '1') return 1;
+                var v = params.get('hitbox');
+                if (v === null) v = params.get('hitboxes');
+                if (v === null) return 0;
+                if (v === '1') return 3; // legacy alias: full overlay
+                var n = parseInt(v, 10);
+                if (n >= 0 && n <= 3) return n;
+                return 0;
             } catch(e) {}
             return 0;
         });
-        if (hitboxParam) {
-            FN::g_DebugHitboxes = true;
-            LOG_INFO("Debug", "URL param: hitbox overlay ON");
+        if (hitboxLevel > 0) {
+            FN::g_DebugHitboxes = hitboxLevel;
+            LOG_INFO("Debug", "URL param: hitbox overlay level %d", hitboxLevel);
         }
 
         // timescale=<float>
