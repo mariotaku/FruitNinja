@@ -994,6 +994,11 @@ void SuperFruitControl::UnLoadContent() {
     JibletModel = NULL;
 }
 
+// Port specific: diagnostic accessor for tests/tooling (not a binary symbol).
+bool SuperFruitControl::HasJibletModel() {
+    return JibletModel.Get() != NULL;
+}
+
 // Binary @ 0x001be630. Slice dispatch: lookup map, forward or create.
 void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Entity* slashEntity)
 {
@@ -1363,7 +1368,10 @@ void SuperFruitControl::StopRays()
 // ASM-spec v1.6.1 SuperFruitControl::SpawnJibs @0x001bc748. PSPParticleManager
 // emitter hookup for jib particle trails: emitter name = "<fruitModel>_explode",
 // positioned at the explosion origin with the host fruit's slice-arc direction.
-// The 8 JibletModel mesh-actor spawns are BLOCKED (JibletModel global unported).
+// Then spawns 8 JibletModel mesh actors in a radial fan, unconditionally --
+// same as the 8-fragment loop in ExplodeSuperFruit above, the binary never
+// null-checks JibletModel here (LoadContent always loads it at boot). A null
+// model is safe regardless: Jiblet::Draw gates on `if (!m_pModel) return;`.
 void SuperFruitControl::SpawnJibs()
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
@@ -1388,7 +1396,8 @@ void SuperFruitControl::SpawnJibs()
         }
 
         // Spawn 8 JibletModel mesh actors in a radial fan (one per 45-degree sector).
-        if (JibletModel.Get()) {
+        // Unconditional -- the binary does not null-check JibletModel here.
+        {
             Game* g = Game::GetInstance();
             float dripRate = (g && g->IsFastHardware()) ? 50.0f : 20.0f;
             float angBase = SuperFruitUniform(0.0f, 45.0f);
