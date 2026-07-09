@@ -81,15 +81,54 @@ public:
     // back-to-front, each with the main layer's refRect. Shadow gets pos + m_ShadowOffset.
     void Draw(const Vec3& pos, Vec2 scale, float tilt, ALIGNMENT_TYPE align);
 
+    // Accessor for BakedStringBox::RebuildAlignments @0x00245c78 to write/read the
+    // per-line local draw offset (+0x0c). See m_LineOffset field comment.
+    Vec3& LineOffset() { return m_LineOffset; }
+
     // Passthrough to the main layer's split recolour (finale ChangeText calls it 3x).
     void ApplyGradientSplit(Colour c, float y);
+
+    // ApplyGradient @0x0024ad2c: uniform-colour main-layer gradient (top==bottom==c).
+    // ASM-spec v1.6.1 FancyBakedString::ApplyGradient @0x0024ad2c.
+    void ApplyGradient(Colour c);
+
+    // ApplyGradient @0x0024accc: two-stop top/bottom main-layer gradient.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyGradient @0x0024accc.
+    void ApplyGradient(Colour top, Colour bottom);
+
+    // ApplyGradient @0x0024ae84: three-stop main-layer gradient -- top/bottom base,
+    // then a mid-colour split at the 0.5 plane.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyGradient @0x0024ae84.
+    void ApplyGradient(Colour top, Colour mid, Colour bottom);
+
+    // ApplyMetallicGradient @0x0024abf4: top/bottom base gradient plus two close-set
+    // split bands (0.51/0.49) that fake a metallic highlight streak on the main layer.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4.
+    void ApplyMetallicGradient(Colour c0, Colour c1, Colour c2, Colour c3);
+
+    // ApplyStrokeGradient @0x0024afb0: two-stop top/bottom gradient on the glow/stroke
+    // layer (m_pGlow).
+    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024afb0.
+    void ApplyStrokeGradient(Colour top, Colour bottom);
+
+    // ApplyStrokeGradient @0x0024b010: three-stop gradient on the glow/stroke layer.
+    // ASM-spec v1.6.1 FancyBakedString::ApplyStrokeGradient @0x0024b010.
+    void ApplyStrokeGradient(Colour top, Colour mid, Colour bottom);
 
 private:
     // Init @0x0024b1c8 head: zero the six layer ptrs + offset/colour fields before Build.
     void Init();
 
     Vec3            m_ShadowOffset; // +0x00 shadow layer draw offset
-    Vec3            m_Field0c;      // +0x0c // TODO: +0xc unresolved, candidate m_Translation
+
+    // +0x0c: per-line LOCAL draw offset WITHIN a BakedStringBox (NOT read by
+    // standalone FancyBakedString::Draw -- that method's shadow offset comes from
+    // +0x00/m_ShadowOffset, never from here). WRITTEN by
+    // BakedStringBox::RebuildAlignments @0x00245c78 per line; READ by the box's
+    // per-line Draw as (boxPos + m_LineOffset). x = +0x0c horizontal align offset,
+    // y = +0x10 baseline Y, z = +0x14 unused.
+    // ASM-spec v1.6.1 FancyBakedString::m_LineOffset @+0x0c (RebuildAlignments @0x00245c78).
+    Vec3            m_LineOffset;   // +0x0c
     BakedStringTTF* m_pShadow;      // +0x18 BLUR
     BakedStringTTF* m_pGlow;        // +0x1c STROKE
     BakedStringTTF* m_pMain;        // +0x20 NONE (always present)
@@ -108,7 +147,7 @@ private:
 static_assert(sizeof(FancyBakedString) == 0x38, "FancyBakedString sizeof mismatch");
 struct FancyBakedStringLayoutAssert {
 static_assert(__builtin_offsetof(FancyBakedString, m_ShadowOffset) == 0x00, "m_ShadowOffset offset");
-static_assert(__builtin_offsetof(FancyBakedString, m_Field0c)      == 0x0c, "m_Field0c offset");
+static_assert(__builtin_offsetof(FancyBakedString, m_LineOffset)   == 0x0c, "m_LineOffset offset");
 static_assert(__builtin_offsetof(FancyBakedString, m_pShadow)      == 0x18, "m_pShadow offset");
 static_assert(__builtin_offsetof(FancyBakedString, m_pGlow)        == 0x1c, "m_pGlow offset");
 static_assert(__builtin_offsetof(FancyBakedString, m_pMain)        == 0x20, "m_pMain offset");
