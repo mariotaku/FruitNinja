@@ -428,13 +428,18 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
         m_LabelRadius = 0.0f;
     }
 
-    // FG label: weight=0, white base colour, then gradient applied.
+    // ASM-verified v1.6.1 MenuButton::SetText @0x0019b0ac / SetInnerGlow @0x0019afbc --
+    // arc labels use alignSigned=-1 (uniform m_Weight) for all 3 layers so
+    // ApplyFormatting_Circle's penX-derived arc angle matches across layers; the
+    // stroke/glow expansion size goes in effectSize instead (was swapped, causing
+    // glyph doubling at the arc ends -- "NEW GAME" -> "NNEW GAMEE").
+    // FG label (@0x0019b244): alignSigned=-1, effectSize=0, FONT_EFFECT_NONE.
     m_pLabelFg = new Mortar::BakedStringTTF(font, text, actualFontScale,
-        Colour(255, 255, 255, 255), 0L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
+        Colour(255, 255, 255, 255), -1L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
     if (wantGlow) {
-        // Outer glow: weight=5, black.
+        // Outer glow (@0x0019b2a4): alignSigned=-1, effectSize=5, FONT_EFFECT_BLUR.
         m_pLabelGlow = new Mortar::BakedStringTTF(font, text, actualFontScale,
-            Colour(0, 0, 0, 255), 5L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
+            Colour(0, 0, 0, 255), -1L, 5.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_BLUR);
         if (m_LabelRadius > 0.0f)
             m_pLabelGlow->ApplyFormatting_Circle(m_LabelRadius);
     }
@@ -443,6 +448,7 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
         // Colour ctor r1=0xff,r2=0xff,r3=0xff,[sp+0]=0x80 => Colour(255,255,255,128) -- white
         // at 50% alpha (subtle inner sheen). Port had (255,255,255-vs-128, 255-vs-128) swapped,
         // rendering an opaque light-yellow wash instead of a translucent white highlight.
+        // Shadow/inner-glow effectSize=2 (@0x0019afbc); alignSigned=-1 set inside SetInnerGlow.
         SetInnerGlow(text, Colour(255, 255, 255, 128), m_LabelRadius, actualFontScale, 2.0f);
     }
     if (m_LabelRadius > 0.0f)
@@ -450,16 +456,17 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
     m_pLabelFg->ApplyGradient_TopBottom(gradTop, gradBottom);
 }
 
-// v1.6.1 MenuButton::SetInnerGlow @0x0019afbc
+// ASM-verified v1.6.1 MenuButton::SetInnerGlow @0x0019afbc
 void MenuButton::SetInnerGlow(const char* text, Colour colour, float radius,
-                               float fontScale, float /*weight*/) {
+                               float fontScale, float effectSize) {
     delete m_pLabelShadow;
     m_pLabelShadow = nullptr;
     Mortar::FontCacheObjectTTF* font = GetSharedTTFFont();
     if (!font || !text) return;
-    // weight=2 for inner glow (shadow).
+    // alignSigned=-1 (uniform m_Weight, matches fg/glow layers); effectSize (2.0 from
+    // the caller) drives the inner-glow expansion via FONT_EFFECT_INNER_GLOW.
     m_pLabelShadow = new Mortar::BakedStringTTF(font, text, fontScale,
-        colour, 2L, 0.0f, Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
+        colour, -1L, effectSize, Mortar::FontCacheObjectTTF::FONT_EFFECT_INNER_GLOW);
     if (radius > 0.0f)
         m_pLabelShadow->ApplyFormatting_Circle(radius);
 }

@@ -152,15 +152,15 @@ public:
     // v1.6.1 MenuButton::Draw @0x0019c764: anchor = GetWorldPos() + m_DrawOffset.
     Vec3            m_DrawOffset;          // +0x114..+0x11F
 
-    // +0x120: white FG label (gradient-tinted). BakedStringTTF weight=0.
+    // +0x120: white FG label (gradient-tinted). BakedStringTTF alignSigned=-1, effectSize=0.
     // v1.6.1 MenuButton::SetText @0x0019b0ac.
     Mortar::BakedStringTTF* m_pLabelFg;   // +0x120
 
-    // +0x124: inner glow/shadow label. BakedStringTTF weight=2.
+    // +0x124: inner glow/shadow label. BakedStringTTF alignSigned=-1, effectSize=2 (INNER_GLOW).
     // v1.6.1 MenuButton::SetInnerGlow @0x0019afbc.
     Mortar::BakedStringTTF* m_pLabelShadow; // +0x124
 
-    // +0x128: outer glow label. BakedStringTTF weight=5, black.
+    // +0x128: outer glow label. BakedStringTTF alignSigned=-1, effectSize=5 (BLUR), black.
     // v1.6.1 MenuButton::SetText @0x0019b0ac (wantGlow path).
     Mortar::BakedStringTTF* m_pLabelGlow;  // +0x128
 
@@ -314,7 +314,9 @@ public:
                  bool wantGlow = true, bool wantInnerGlow = true);
 
     // v1.6.1 MenuButton::SetInnerGlow @0x0019afbc: (re)builds m_pLabelShadow.
-    void SetInnerGlow(const char* text, Colour colour, float radius, float fontScale, float weight);
+    // effectSize is the BakedStringTTF effectSize (stroke/glow expansion), not alignSigned --
+    // alignSigned is fixed at -1 inside so all 3 arc layers share the same m_Weight.
+    void SetInnerGlow(const char* text, Colour colour, float radius, float fontScale, float effectSize);
 
     // v1.6.1 MenuButton::Remove @0x0019d148: release fruit piece with upward fling
     void Remove();
