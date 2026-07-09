@@ -724,12 +724,13 @@ void MenuButton::Update(float dt) {
     }
 
     // ASM-spec v1.6.1 MenuButton::Update @0x0019af54: m_FruitType<0 (toggle) buttons
-    //   copy m_RestScale(+0x13C) -> size(+0x20) each frame; icon is scaled from size in
-    //   HUDControl3d::Draw. Without this, size stays 0 and the toggle icon vanishes.
-    //   Touch paths below (drag-cancel, TODO held-press) may override size after this point.
+    //   copy the FULL m_RestScale(+0x13C) Vec3 -> size(+0x20) each frame (x,y,z), then
+    //   the icon is scaled from size in HUDControl3d::Draw. Must copy .z too: Draw's
+    //   press-dim gate is a full Vec3 compare (size != m_RestScale); writing only x/y
+    //   left size.z=0 while m_RestScale.z=1, so the dim fired at rest and toggles
+    //   rendered at half-brightness. Touch paths below may override size after this.
     if (m_FruitType < 0) {
-        size.x = m_RestScale.x;
-        size.y = m_RestScale.y;
+        size = m_RestScale;
     }
 
     // ---- touch handling ----
@@ -796,8 +797,7 @@ void MenuButton::Update(float dt) {
                         size.x = m_RestScale.x * 0.95f;
                         size.y = m_RestScale.y * 0.95f;
                     } else {
-                        size.x = m_RestScale.x;
-                        size.y = m_RestScale.y;
+                        size = m_RestScale;
                         // v1.6.1 MenuButton::Update @0x0019af3c: touch-slot detach is
                         // gated on m_bRespondsToBackKey -- buttons that also respond to
                         // the back key keep their touch slot on drag-off.
