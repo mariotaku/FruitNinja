@@ -6,15 +6,13 @@
 // Binary: v1.6.1 Mortar::BakedStringTTF @0x00249a5c (ctor)
 // sizeof 0x64 (=100; op_new(100) confirmed).
 //
-// Reuses:
-//   FontCacheObjectTTF::GetGlyph    -- per-glyph atlas metrics
-//   FontInterface::GetInstance()    -- single atlas GL texture
-//   BakedStringBox Draw/BakeGradient pattern -- vertex emit + draw path
-//
-// New pieces vs BakedStringBox:
-//   (a) Per-glyph rotation: Rotate2DVector(corner, m_RotAngle) on 4 quad corners
-//   (b) ApplyFormatting_Circle: arc transform placing glyphs on a circle
-//   (c) m_FmtCount/m_Flag effect params (bold/outline count, effect type)
+// Pipeline (v1.6.1 baked-bearing model):
+//   BuildGlyphs @0x00248b28        -- FetchGlyph per codepoint (single pass)
+//   ApplyFormatting_LeftJustify @0x00247874 -- pen placement into m_RotBasis
+//   BuildSurfaces @0x00248c14      -- group by atlas page, FinishMesh per surface
+//   ApplyEffects @0x00249684       -- circle / gradient / alpha re-dispatch
+// Bearing is BAKED into the atlas cell origin (GlyphTTF::m_QuadMin); there are
+// no separate bearingX/bearingY fields anywhere in this pipeline.
 //
 // Cross-build portability: no lambdas, no auto, no range-for, no enum class.
 
@@ -31,50 +29,85 @@
 namespace Mortar {
 
 struct GlyphAtlasEntry;
+struct FontAtlasPage;
 
 // GlyphTTF -- per-baked-glyph state. sizeof 0x44 (=68).
-// v1.6.1 Mortar::GlyphTTF @0x00248b28 (BuildGlyphs allocation site).
+// v1.6.1 Mortar::GlyphTTF; populated by FetchGlyph @0x0024fa24 from the atlas rec.
+//
+// BAKED-BEARING model: the binary never stores separate bearingX/bearingY --
+// bearing is baked into the atlas cell origin (m_QuadMin). Layout metrics
+// (m_GlyphScale) carry the pen step and the baseline-relative ink bottom.
 struct GlyphTTF {
     uint32_t    m_CharCode;     // +0x00
     float       m_FontSize;     // +0x04
-    Vec2        m_GlyphScale;   // +0x08
-    void*       m_SurfaceKey;   // +0x10 atlas-page key (Surface*); port: always FontInterface atlas
-    float       m_UvU0;         // +0x14
-    float       m_UvV0;         // +0x18
+    Vec2        m_GlyphScale;   // +0x08 LAYOUT METRICS: .x = floor(advance/64) - bitmap_left
+                                //       (pen step, = GetKerning value); .y = (horiBearingY -
+                                //       height)/64 (ink bottom, baseline-relative). Both * fontScale.
+    FontAtlasPage* m_SurfaceKey; // +0x10 owning atlas page (binary: TextureAtlasPage* rec[0x40])
+    float       m_UvU0;         // +0x14 cell UVs straight from the rec -- NO inset stored
+    float       m_UvV0;         // +0x18 (the 1/512 inset is applied in FinishMesh)
     float       m_UvV1;         // +0x1c
     float       m_UvU1;         // +0x20
-    Vec2        m_QuadMin;      // +0x24 pen-space min x,y (set by ApplyFormatting_LeftJustify)
-    Vec2        m_RotBasis;     // +0x2c rotation basis (unused in port single-surface path)
-    Vec2        m_QuadSize;     // +0x34 w,h -- skip glyph if w<1 or h<1 (whitespace)
+    Vec2        m_QuadMin;      // +0x24 CELL ORIGIN = (padL, padT) * fontScale -- the baked
+                                //       bearing pad (NOT the pen; set by FetchGlyph)
+    Vec2        m_RotBasis;     // +0x2c PEN (penX, penY) -- on-baseline placement, set by
+                                //       ApplyFormatting_LeftJustify / _Circle_Internal
+    Vec2        m_QuadSize;     // +0x34 cell (w,h) * fontScale -- FinishMesh skips if w<1 or h<1
     float       m_RotAngle;     // +0x3c rotation angle in radians (set by ApplyFormatting_Circle)
     FontCacheObjectTTF* m_Font; // +0x40
 };
 
 #ifdef __bada__
 static_assert(sizeof(GlyphTTF) == 0x44, "GlyphTTF sizeof mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_GlyphScale) == 0x08, "m_GlyphScale offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_SurfaceKey) == 0x10, "m_SurfaceKey offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_QuadMin)    == 0x24, "m_QuadMin offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_RotBasis)   == 0x2c, "m_RotBasis offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_QuadSize)   == 0x34, "m_QuadSize offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_Font)       == 0x40, "m_Font offset mismatch");
 #endif
 
-// BakedStringTTF_Surface -- per-surface draw buffer. sizeof 0x48 (=72).
-// v1.6.1 Mortar::BakedStringTTF_Surface @0x00248c14 (BuildSurfaces allocation site).
+// FetchGlyph @0x0024fa24 -- returns a fully-populated, heap-allocated GlyphTTF
+// for (cp, scaledHeight, radius, effect). Binary: hash -> TextureAtlas::FindItem;
+// miss -> RenderGlyph; new GlyphTTF(0x44) filled from the atlas rec. Port: the
+// hash/FindItem/RenderGlyph path is FontCacheObjectTTF::GetGlyph (the FreeType
+// boundary, // DIFFERS there); this function does the rec -> GlyphTTF fill.
+// Caller owns the returned GlyphTTF.
+GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
+                     uint32_t radius, uint8_t effect);
+
+// BakedStringTTF_Surface -- per-atlas-page draw buffer. sizeof 0x48 (=72).
+// v1.6.1 Mortar::BakedStringTTF_Surface; allocated by FindOrCreateSurface @0x00248b9c.
+// There is NO GL-texture-ID field -- the GL texture is resolved from m_PageKey
+// at draw time (m_PageKey->m_TextureID).
 struct BakedStringTTF_Surface {
-    void*             m_PageKey;      // +0x00 atlas page key (Surface*); port: FontInterface atlas
+    FontAtlasPage*    m_PageKey;      // +0x00 owning atlas page (binary: TextureAtlasPage*)
     QUADCUSTOMVERTEX* m_Verts;        // +0x04 heap buffer (m_VertCount * sizeof(QUADCUSTOMVERTEX))
-    uint32_t          m_VertCount;    // +0x08 total verts (glyphs * 6)
+    uint32_t          m_VertCount;    // +0x08 total verts (drawable glyphs * 6)
     uint32_t          _pad0c;         // +0x0c
     uint32_t          _pad10;         // +0x10
     uint32_t          _pad14;         // +0x14
     uint32_t          _pad18;         // +0x18
     uint32_t          _pad1c;         // +0x1c
     uint32_t          _pad20;         // +0x20
-    int               m_DrawMode;      // +0x24 <0 = single-buffer path (the port's path)
-    uint32_t          m_PageTextureID; // +0x28 GL texture ID of the atlas page for this surface's glyphs
-    uint32_t          _pad2c;         // +0x2c
-    uint32_t          _pad30;         // +0x30
-    uint32_t          _pad34;         // +0x34
+    int               m_DrawMode;     // +0x24 <0 = single-buffer path (the port's path)
+    // Per-surface vertex bounds, written by UpdateBounds @0x00247dd4
+    // (floor for mins, ceil for maxes; init +/-999999) and folded into the
+    // owning BakedStringTTF's m_Base bounds by BakedStringTTF::UpdateBounds.
+    long              m_BoundsMinX;   // +0x28
+    long              m_BoundsMaxY;   // +0x2c
+    long              m_BoundsMaxX;   // +0x30
+    long              m_BoundsMinY;   // +0x34
     uint32_t          m_PlatformColour; // +0x38 base colour packed BGRA
-    GlyphTTF*         m_GlyphsBegin;  // +0x3c
-    GlyphTTF*         m_GlyphsEnd;    // +0x40
-    uint32_t          _pad44;         // +0x44
+    std::vector<GlyphTTF*> m_Glyphs;  // +0x3c begin/end/cap (12B on ARM32; NOT owned --
+                                      //       glyphs belong to BakedStringTTF::m_Glyphs)
+
+    // AddGlyph @0x00248718: push_back into m_Glyphs (+0x3c).
+    void AddGlyph(GlyphTTF* g);
+
+    // UpdateBounds @0x00247dd4: seed +/-999999, then per vert (stride 0x24,
+    // x=v[0], y=v[1]) fold floor(x)/ceil(x)/ceil(y)/floor(y) into the bounds.
+    void UpdateBounds();
 
     // Transform_GradientSplit @0x0024954c: repaint every vertex above the split plane
     // (plane = y*(rect.top+rect.bottom)) to c. Non-virtual -- does not change layout.
@@ -83,22 +116,22 @@ struct BakedStringTTF_Surface {
 
 #ifdef __bada__
 static_assert(sizeof(BakedStringTTF_Surface) == 0x48, "BakedStringTTF_Surface sizeof mismatch");
+static_assert(__builtin_offsetof(BakedStringTTF_Surface, m_BoundsMinX)     == 0x28, "surface bounds offset mismatch");
+static_assert(__builtin_offsetof(BakedStringTTF_Surface, m_PlatformColour) == 0x38, "m_PlatformColour offset mismatch");
+static_assert(__builtin_offsetof(BakedStringTTF_Surface, m_Glyphs)         == 0x3c, "m_Glyphs offset mismatch");
 #endif
 
-// BakedStringEffect -- gradient stop container embedded in BakedStringEffectBase.
-// Occupies +0x10 within BakedStringEffectBase (i.e. at BakedStringTTF offsets 0x10..0x1f).
-// v1.6.1 layout inferred from BakedStringTTF @0x00249a5c ctor (AddColour calls).
-//
-// Note: BakedStringTTF spec says "gradient cache (0x1c<-0x18 in ApplyGradient)" at
-// global offsets 0x18/0x1c -- these ARE within m_Effect (+0x08 = m_Col1, +0x0c = m_Tc).
-// The "save" in ApplyGradient_TopBottom (@0x0024863c) copies offset 0x1c <- 0x18 within
-// BakedStringTTF, which is m_Effect.m_Tc <- *(float*)&m_Effect.m_Col1 (colour reused as float).
-struct BakedStringEffect {
-    Colour      m_Col0;         // +0x00 (BakedStringTTF +0x10) first stop colour
-    float       m_T0;           // +0x04 (BakedStringTTF +0x14) first stop t (=0.0)
-    Colour      m_Col1;         // +0x08 (BakedStringTTF +0x18) second stop colour / gradient cache 0
-    float       m_Tc;           // +0x0c (BakedStringTTF +0x1c) second stop t   / gradient cache 1
+// GradientPoint -- one gradient stop, stored in the m_Base+0x18 vector.
+// v1.6.1 Mortar::GradientPoint (8 bytes: u32 colour + float t).
+struct GradientPoint {
+    Colour      m_Colour;       // +0x00 packed BGRA byte colour
+    float       m_T;            // +0x04 stop position (0.0 = top ... 1.0 = bottom;
+                                //       split stops carry the split fraction)
 };
+
+#ifdef __bada__
+static_assert(sizeof(GradientPoint) == 0x8, "GradientPoint sizeof mismatch");
+#endif
 
 // BakedStringEffectBase -- base object at +0x00 of BakedStringTTF. sizeof 0x38 (=56).
 // v1.6.1 Mortar::BakedStringTTF @0x00249a5c
@@ -116,20 +149,27 @@ struct BakedStringEffectBase {
     long        m_BoundsMaxX;   // +0x08 (MortarRectangleT<long>::right)
     long        m_BoundsMinY;   // +0x0c (MortarRectangleT<long>::bottom)
 
-    // +0x10: gradient stop container (AddColour targets).
-    // Spans +0x10..+0x1f (global BakedStringTTF offsets).
-    BakedStringEffect m_Effect; // +0x10 (16 bytes, ends at +0x20)
+    // +0x10/+0x11: alpha override, read by ApplyEffects @0x00249684
+    // (if m_Base[0x11] != 0 -> ApplyAlpha_Internal(m_Base[0x10])).
+    // TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- the public setter
+    // that writes m_Alpha/m_AlphaSet is not yet RE'd; no port path sets them.
+    uint8_t     m_Alpha;        // +0x10 alpha value passed to ApplyAlpha_Internal
+    uint8_t     m_AlphaSet;     // +0x11 non-zero = alpha override active
+    uint8_t     _pad12;         // +0x12
+    uint8_t     _pad13;         // +0x13
+    uint32_t    m_reserved14;   // +0x14 // purpose unknown (no RE'd read/write)
 
-    // +0x20: gradient-stop list "cap"/end-of-capacity pointer in the binary
-    // (Mortar::GradientPoint*; binary BakedStringEffect at m_Base+0x10 keeps the
-    // gradient stops as a 3-pointer vector at +0x18/+0x1c/+0x20). The port models
-    // the stops inline in m_Effect instead, so this slot is layout-only here.
-    uint32_t    m_GradientCap;  // +0x20 (GradientPoint* in binary; unused in port path)
-    float       m_Radius;       // +0x24 -- stored by ApplyFormatting_Circle
+    // +0x18: gradient stops (AddColour push_back target). 3-pointer std::vector
+    // at +0x18/+0x1c/+0x20 in the binary; the "0x1c <- 0x18" store in
+    // ApplyGradient_TopBottom @0x0024863c is end = begin, i.e. clear().
+    std::vector<GradientPoint> m_GradientStops; // +0x18 (12B on ARM32)
 
-    float       m_Weight;       // +0x28 signedWeight * fc[+0x10c][+0x10]
-    uint32_t    m_FmtCount;     // +0x2c clamp [0,0x20]; bold/outline pass count
-    uint8_t     m_Flag;         // +0x30 FONT_EFFECT (1 = bold)
+    float       m_Radius;       // +0x24 -- stored by ApplyFormatting_Circle; ApplyEffects
+                                //         re-applies the circle layout when != 0
+    float       m_Weight;       // +0x28 signedWeight * fc[+0x10c][+0x10]; added to the
+                                //         per-glyph pen step in ApplyFormatting_LeftJustify
+    uint32_t    m_FmtCount;     // +0x2c clamp [0,0x20]; effect radius passed to FetchGlyph
+    uint8_t     m_Flag;         // +0x30 FONT_EFFECT_ENUM passed to FetchGlyph
     uint8_t     _pad31;         // +0x31
     uint8_t     _pad32;         // +0x32
     uint8_t     _pad33;         // +0x33
@@ -140,6 +180,9 @@ struct BakedStringEffectBase {
 
 #ifdef __bada__
 static_assert(sizeof(BakedStringEffectBase) == 0x38, "BakedStringEffectBase sizeof mismatch");
+static_assert(__builtin_offsetof(BakedStringEffectBase, m_Alpha)         == 0x10, "m_Alpha offset mismatch");
+static_assert(__builtin_offsetof(BakedStringEffectBase, m_GradientStops) == 0x18, "m_GradientStops offset mismatch");
+static_assert(__builtin_offsetof(BakedStringEffectBase, m_Radius)        == 0x24, "m_Radius offset mismatch");
 #endif
 
 // BakedStringTTF -- arc-text class. sizeof 0x64 (=100).
@@ -163,7 +206,7 @@ public:
     ~BakedStringTTF();
 
     // FullInternalRebuild @0x00249780: BuildGlyphs + ApplyFormatting_LeftJustify +
-    //   BuildSurfaces + ApplyEffects (no-op stub).
+    //   BuildSurfaces + ApplyEffects (replays circle/gradient/alpha state).
     void FullInternalRebuild();
 
     // FitStringToWidth @0x00248734 (static): word-wrap line-breaker.
@@ -185,7 +228,8 @@ public:
     void ApplyFormatting_Circle(float radius);
 
     // ApplyGradient_TopBottom @0x0024863c: vertical top-to-bottom gradient.
-    // public: save cache, AddColour(top,0.0), AddColour(bottom,1.0); then Internal.
+    // public: clear gradient stops (binary: end=begin store at +0x1c),
+    // AddColour(top,0.0), AddColour(bottom,1.0); then Internal.
     // Internal @0x00247c54: if(m_SurfacesBuilt) per-surface per-vertex Y-lerp.
     void ApplyGradient_TopBottom(Colour top, Colour bottom);
 
@@ -261,24 +305,56 @@ private:
     // ApplyFormatting_Circle_Internal as the arc-centering half-width basis.
     float   m_TotalAdvance;     // +0x60
 
-    // BuildGlyphs @0x00248b28: DeleteGlyphs; Utf8StringIterator(m_Text);
-    //   per cp: g=fc->GetGlyph(cp, m_ScaledHeight); GlyphTTF alloc; m_Glyphs.push_back.
+    // BuildGlyphs @0x00248b28: DeleteGlyphs; Utf8StringIterator(m_Text); per cp:
+    //   g = FetchGlyph(m_pFontCache, m_ScaledHeight, cp, m_FmtCount, m_Flag);
+    //   m_Glyphs.push_back(g). Single pass; FetchGlyph returns fully-populated glyphs.
     void BuildGlyphs();
 
-    // ApplyFormatting_LeftJustify @0x00247874: pen-advance per-glyph position.
-    //   +1.0 inter-glyph gap; sets field_60 = total advance.
+    // ApplyFormatting_LeftJustify @0x00247874: pen placement into m_RotBasis.
+    //   penX=0; per glyph: m_RotBasis=(penX, m_GlyphScale.y), m_RotAngle=0;
+    //   pen step = GetKerning(g) + m_Weight + 1.0; last step goes to m_TotalAdvance.
     void ApplyFormatting_LeftJustify();
 
-    // BuildSurfaces @0x00248c14: group glyphs -> one Surface per atlas page
-    //   (port: ONE surface). FinishMesh builds 6-vert/glyph buffer with rotation + colour.
+    // GetKerning: returns g->m_GlyphScale.x -- the baked pen step. IGNORES the
+    // next-glyph argument (NOT a kern delta; no FreeType kerning in pen advance).
+    // TODO: v1.6.1 (GetKerning) -- binary symbol/address not yet pinned (called from
+    //   ApplyFormatting_LeftJustify @0x00247874 / FitStringToWidth @0x00248734).
+    float GetKerning(GlyphTTF* g, uint32_t nextCp) const;
+
+    // BuildSurfaces @0x00248c14: if(!m_GlyphsBuilt) BuildGlyphs; per glyph:
+    //   FindOrCreateSurface(g->m_SurfaceKey)->AddGlyph(g). Then per surface:
+    //   m_PlatformColour = PlatformColour(gradientStop0); FinishMesh(surf).
+    //   Then UpdateBounds.
     void BuildSurfaces();
 
-    // ApplyEffects @0x001049b0: tail-branch dispatch; no-op in this port pass.
+    // FindOrCreateSurface @0x00248b9c: linear-scan m_Surfaces for m_PageKey==page,
+    // else new BakedStringTTF_Surface(0x48) + push_back.
+    BakedStringTTF_Surface* FindOrCreateSurface(FontAtlasPage* page);
+
+    // FinishMesh @0x002480a8: build the surface's 6-vert/glyph tri-list.
+    // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1)x(h+1) with local
+    // corners offset by -m_QuadMin (cell origin); each corner is rotated by
+    // m_RotAngle then translated by m_RotBasis (pen). The 1/512 UV inset is
+    // applied here (u0-=, v0+=, v1-=, u1+=). Winding: GLES uses the non-RT-flip
+    // (ELSE) branch of the binary's FontInterface[0x14c] switch.
+    void FinishMesh(BakedStringTTF_Surface* surf);
+
+    // ApplyEffects @0x00249684: tail dispatch, replayed on every rebuild:
+    //   1. m_Radius != 0        -> ApplyFormatting_Circle_Internal(m_Radius)
+    //   2. stopCount > 1        -> ApplyGradient_TopBottom_Internal(stop0, stop1);
+    //                              per stop i>=2: ApplyGradientSplit_Internal(col, t)
+    //   3. m_AlphaSet != 0      -> ApplyAlpha_Internal(m_Alpha)
     void ApplyEffects();
 
+    // ApplyAlpha_Internal: alpha-override repaint dispatched by ApplyEffects.
+    // TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- callee address +
+    //   semantics not yet RE'd; stub (no port path sets m_AlphaSet).
+    void ApplyAlpha_Internal(uint8_t alpha);
+
     // UpdateBounds @0x00247ed0: seed {minX=999999, maxY=-999999, maxX=-999999,
-    // minY=999999} then fold each surface's vertex int extents into m_Base. Called at
-    // the tail of BuildSurfaces (the binary's only caller). Populates the refRect the
+    // minY=999999}; per surface call BakedStringTTF_Surface::UpdateBounds @0x00247dd4
+    // then fold the surface's +0x28..+0x34 extents into m_Base. Called at the tail
+    // of BuildSurfaces (the binary's only caller). Populates the refRect the
     // FancyBakedString layers share.
     void UpdateBounds();
 
@@ -294,11 +370,10 @@ private:
     // ApplyGradient_TopBottom (public, @0x0024863c) / _Internal (@0x00247c54):
     //   Sets a 2-stop top-to-bottom vertical colour gradient on all built surfaces.
     //   Contract: top and bottom colours are passed EXPLICITLY as parameters and are
-    //   used directly for the lerp; the method does NOT read m_Base.m_Effect.m_Col0/1.
-    //   _Internal scans the full Y-extent of all verts, then for each vertex:
-    //     t = (yTop - y) / yRange; colour = lerp(top, bottom, t).
-    //   Caller (ApplyGradient_TopBottom) additionally saves+restores gradient cache
-    //   in m_Base.m_Effect (m_Col1->m_Tc) before calling AddColour to populate stops.
+    //   used directly for the lerp (the stop vector is only the record ApplyEffects
+    //   replays on rebuild). _Internal scans the full Y-extent of all verts, then
+    //   for each vertex: t = (yTop - y) / yRange; colour = lerp(top, bottom, t).
+    //   The public wrapper clears the stop vector first (binary: end=begin store).
     // ASM-spec v1.6.1 BakedStringTTF::ApplyGradient_TopBottom_Internal @0x00247c54 /
     //   ApplyGradient_TopBottom @0x0024863c: top/bottom passed as explicit params.
     void ApplyGradient_TopBottom_Internal(Colour top, Colour bottom);
@@ -307,7 +382,7 @@ private:
     // BakedStringTTF_Surface::Transform_GradientSplit with this object's refRect.
     void ApplyGradientSplit_Internal(Colour c, float y);
 
-    // AddColour: store into m_Base.m_Effect colour stops.
+    // AddColour: push_back a GradientPoint{col, t} onto m_Base.m_GradientStops.
     void AddColour(Colour col, float t);
 
     // FancyBakedString reads m_SurfacesBuilt directly (FancyBakedString::Draw @0x0024b8e4

@@ -133,18 +133,26 @@ static void test_glyphttf_members()
 }
 
 // Test BakedStringTTF_Surface struct members.
+// NOTE: the surface holds a std::vector (m_Glyphs @0x3c) -- no memset allowed.
 static void test_surface_members()
 {
     Mortar::BakedStringTTF_Surface s;
-    memset(&s, 0, sizeof(s));
+    s.m_PageKey        = 0;
     s.m_DrawMode       = -1;    // single-buffer path
     s.m_VertCount      = 6;
     s.m_PlatformColour = 0xFFFFFFFFu;
     s.m_Verts          = 0;
+    s.m_BoundsMinX     =  999999;
+    s.m_BoundsMaxY     = -999999;
+    s.m_BoundsMaxX     = -999999;
+    s.m_BoundsMinY     =  999999;
 
     CHECK(s.m_DrawMode < 0);
     CHECK(s.m_VertCount == 6u);
     CHECK(s.m_PlatformColour == 0xFFFFFFFFu);
+    CHECK(s.m_BoundsMinX == 999999);
+    CHECK(s.m_BoundsMaxY == -999999);
+    CHECK(s.m_Glyphs.empty());
 
     std::printf("  BakedStringTTF_Surface members: OK\n");
 }
@@ -220,28 +228,42 @@ static void test_font_effect_enum()
     std::printf("  FONT_EFFECT enum values: OK\n");
 }
 
-// Test BakedStringEffectBase embedded struct fields via BakedStringTTF_Surface.
-// (Accessing BakedStringEffectBase directly would require including BakedStringTTF.h
-//  which is done above; we just verify the struct is accessible and the field types work.)
+// Test BakedStringEffectBase fields (gradient stops = std::vector<GradientPoint>
+// at m_Base+0x18 in the v1.6.1 model -- no memset allowed).
 static void test_effect_base_fields()
 {
     Mortar::BakedStringEffectBase base;
-    memset(&base, 0, sizeof(base));
-    base.m_Radius   = 42.0f;
-    base.m_Weight   = 2.0f;
-    base.m_FmtCount = 3u;
-    base.m_Flag     = (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE;
-    base.m_Effect.m_Col0 = Colour(255, 128, 0, 255);
-    base.m_Effect.m_T0   = 0.0f;
-    base.m_Effect.m_Col1 = Colour(0, 0, 255, 128);
-    base.m_Effect.m_Tc   = 1.0f;
+    base.m_BoundsMinX = 0;
+    base.m_BoundsMaxY = 0;
+    base.m_BoundsMaxX = 0;
+    base.m_BoundsMinY = 0;
+    base.m_Alpha      = 0;
+    base.m_AlphaSet   = 0;
+    base.m_Radius     = 42.0f;
+    base.m_Weight     = 2.0f;
+    base.m_FmtCount   = 3u;
+    base.m_Flag       = (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE;
+
+    Mortar::GradientPoint p0;
+    p0.m_Colour = Colour(255, 128, 0, 255);
+    p0.m_T      = 0.0f;
+    Mortar::GradientPoint p1;
+    p1.m_Colour = Colour(0, 0, 255, 128);
+    p1.m_T      = 1.0f;
+    base.m_GradientStops.push_back(p0);
+    base.m_GradientStops.push_back(p1);
 
     CHECK_FLOAT_NEAR(base.m_Radius, 42.0f, 1e-6f);
     CHECK_FLOAT_NEAR(base.m_Weight, 2.0f, 1e-6f);
     CHECK(base.m_FmtCount == 3u);
     CHECK(base.m_Flag == (uint8_t)Mortar::FontCacheObjectTTF::FONT_EFFECT_STROKE);
-    CHECK(base.m_Effect.m_Col0.r == 255);
-    CHECK_FLOAT_NEAR(base.m_Effect.m_Tc, 1.0f, 1e-6f);
+    CHECK(base.m_GradientStops.size() == 2u);
+    CHECK(base.m_GradientStops[0].m_Colour.r == 255);
+    CHECK_FLOAT_NEAR(base.m_GradientStops[1].m_T, 1.0f, 1e-6f);
+
+    // ApplyGradient_TopBottom's "0x1c <- 0x18" store = end = begin = clear().
+    base.m_GradientStops.clear();
+    CHECK(base.m_GradientStops.empty());
 
     std::printf("  BakedStringEffectBase fields: OK\n");
 }
