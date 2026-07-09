@@ -391,8 +391,24 @@ void InputTranslatorSDL::DispatchForSimTick() {
             bool  isEdge = pendingEdge[ch];
             pendingEdge[ch] = false;
 
-            TLOG("DispatchForSimTick FINGERDOWN ch=%d slot=%d edge=%d game=(%g,%g)\n",
-                 ch, slot, (int)isEdge, gx, gy);
+            // Port specific: this used to unconditionally synthesize a
+            // TouchMove at the tap location on the press frame, so a
+            // stationary TAP (down+up, no drag) moved the blade to the tap
+            // point (v1.6.1: a tap alone never moves the blade -- only real
+            // finger motion does). Only emit TouchMove here if actual
+            // motion landed in the SAME tick as the press -- a fast swipe
+            // whose DOWN+MOVE both drain before the next DispatchForSimTick
+            // call. Detected via states1[slot] curr != prev: ___UpdateInternal
+            // @0x00195314 sets prevX/Y only once (at press claim) while
+            // currX/Y keeps tracking in-tick moves; the prev<-curr roll
+            // (State::Update) happens AFTER this tick's states1 snapshot,
+            // so a pure tap (no move event queued) still has curr==prev here.
+            bool movedThisTick = (slot >= 0) &&
+                (touch.states1[slot].currX != touch.states1[slot].prevX ||
+                 touch.states1[slot].currY != touch.states1[slot].prevY);
+
+            TLOG("DispatchForSimTick FINGERDOWN ch=%d slot=%d edge=%d moved=%d game=(%g,%g)\n",
+                 ch, slot, (int)isEdge, (int)movedThisTick, gx, gy);
 
             if (mgr) {
                 InputEvent ie;
@@ -405,11 +421,13 @@ void InputTranslatorSDL::DispatchForSimTick() {
                 ie.actionFlags = INPUT_ACTION_DOWN;
                 mgr->DispatchEvent(&ie);
 
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
-                mgr->DispatchEvent(&ie);
-                ie.actionHash  = hashTouchMoveY[ch];
-                mgr->DispatchEvent(&ie);
+                if (movedThisTick) {
+                    ie.actionHash  = hashTouchMoveX[ch];
+                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    mgr->DispatchEvent(&ie);
+                    ie.actionHash  = hashTouchMoveY[ch];
+                    mgr->DispatchEvent(&ie);
+                }
 
                 ie.actionHash  = hashTouchDown[ch];
                 ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);

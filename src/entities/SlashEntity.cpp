@@ -381,6 +381,16 @@ __attribute__((optimize("no-unroll-loops")))
 void SlashEntity::Reset() {
     m_PointCount = 0;
 
+    // ASM-spec v1.6.1 SlashEntity::Reset @0x1e6688: binary clears the bomb-hit
+    // latch as the first write after m_PointCount=0.
+    // Currently unreachable in practice: TouchDown's call site gates Reset()
+    // itself on `m_BombHitEdge == 0`, so once latched it can't self-clear via
+    // this path (matches binary TouchDown @0x1ea420's identical gate) --
+    // ported for struct/behaviour fidelity, not as the fix for the game-over
+    // slash-bridging bug (that's InputTranslatorSDL::DispatchForSimTick no
+    // longer synthesizing a TouchMove on a stationary tap's press frame).
+    m_BombHitEdge = 0;
+
     // Binary @0x1e66c8: re-arm blade direction to the zero vector on every
     // touch-down (ldmia/stmia copies _Vector3::Zero @0x2d9288;
     // DAT_002d928c/002d9290 = 0.0f). Set before the anchor sentinels.
