@@ -611,23 +611,13 @@ void MissControl::Update(float dt) {
         // binary @ 0x00151ac6 -- incremented before the pool loop.
         ++s_NumCriticals;
 
-        // Accel accumulator seed. Binary @ 0x00151abe..0x00151ad4:
-        //   accX = (&MissControl::s_dtMod)[0]   (binary @ 0x00151aca, s15 = [ptr])
-        //   accY = (&MissControl::s_dtMod)[1]   (binary @ 0x00151ac6, s14 = [ptr+4])
-        // The GOT slot DAT_00151d78 (=0x73c4) resolves to &s_dtMod @ BSS 0x001f3d6c
-        // (symbol _ZN11MissControl7s_dtModE, an `undefined4` single float -- the same
-        // global PreUpdate writes and the dt-mod multiplier reads via DAT_00151d80).
-        // accX therefore seeds from the current s_DtMod = (float)prevNumCriticals+0.5.
-        //
-        // DIFFERS: original reads accY from (&s_dtMod)[1], i.e. the 4 bytes
-        //   immediately FOLLOWING s_dtMod in BSS. That word belongs to a separate
-        //   ShopScreen static (@ 0x001f3d70, statically 1.0f) -- a BSS-adjacency
-        //   over-read in the original. During gameplay (shop inactive) that word is
-        //   1.0f, so the port reproduces the observable value: accY = 1.0f. We cannot
-        //   replicate the exact foreign-global aliasing without recreating the
-        //   binary's BSS layout, and that ShopScreen field is irrelevant here.
-        float accX = s_DtMod;
-        float accY = 1.0f;
+        // ASM-spec v1.6.1 MissControl::Update @0x0019e15c:
+        //   repulsion accumulator seeds from _Vector2<float>::Zero (BSS 0x002d92a0) = (0,0)
+        //   (0x0019e1f0/f4: vldr s14,[r3]; vldr s15,[r3,#4], r3 = &Vector2::Zero).
+        //   acc -= dir * (radius - dist) * dt * 15.0 per overlapping active neighbor;
+        //   pos += acc  =>  a lone combo popup is STATIC for its 1.81s life.
+        float accX = 0.0f;
+        float accY = 0.0f;
         // TODO: v1.6.1 0x0019e1e4 (MissControl::Update) -- binary scales radius by FruitCamera::m_Zoom*70 (distSq < (m_Zoom*70)^2); hardcoded 4900/70 assumes zoom==1. See task #82.
         for (int k = 0; k < s_PoolCount; ++k) {
             MissControl* other = &s_pPool[k];
