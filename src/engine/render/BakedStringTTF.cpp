@@ -517,11 +517,41 @@ void BakedStringTTF::ApplyEffects()
     }
 }
 
-// ApplyAlpha_Internal: alpha-override repaint dispatched by ApplyEffects.
-// TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- callee address +
-// body not yet RE'd; unreachable (no port path sets m_AlphaSet).
-void BakedStringTTF::ApplyAlpha_Internal(uint8_t /*alpha*/)
+// ApplyAlpha_Internal @0x00247d7c: alpha-override repaint dispatched by ApplyEffects
+// (replay on rebuild) and ApplyAlpha (immediate). DORMANT in v1.6.1 -- no live call
+// sites set m_AlphaSet -- ported faithfully per stub-don't-skip.
+// ASM-spec v1.6.1 BakedStringTTF::ApplyAlpha_Internal @0x00247d7c.
+void BakedStringTTF::ApplyAlpha_Internal(uint8_t alpha)
 {
+    if (!m_SurfacesBuilt) return;
+    for (size_t si = 0; si < m_Surfaces.size(); ++si) {
+        BakedStringTTF_Surface* s = m_Surfaces[si];
+        if (!s) continue;
+        s->Transform_SetAlpha(alpha);
+    }
+}
+
+// BakedStringTTF_Surface::Transform_SetAlpha @0x00247cf0: overwrite (not multiply)
+// the alpha byte of every vertex's packed colour; RGB untouched.
+// ASM-spec v1.6.1 BakedStringTTF_Surface::Transform_SetAlpha @0x00247cf0.
+void BakedStringTTF_Surface::Transform_SetAlpha(uint8_t alpha)
+{
+    if (!m_Verts) return;
+    uint32_t alphaBits = (uint32_t)alpha << 24;
+    for (uint32_t vi = 0; vi < m_VertCount; ++vi) {
+        m_Verts[vi].colour = (m_Verts[vi].colour & 0x00FFFFFFu) | alphaBits;
+    }
+}
+
+// ApplyAlpha @0x00247dc4: public alpha-override setter. Writes m_Base.m_Alpha/
+// m_AlphaSet then repaints immediately (not lazy -- ApplyEffects also replays this
+// on every FullInternalRebuild). DORMANT in v1.6.1 -- ported per stub-don't-skip.
+// ASM-spec v1.6.1 BakedStringTTF::ApplyAlpha @0x00247dc4.
+void BakedStringTTF::ApplyAlpha(uint8_t alpha)
+{
+    m_Base.m_Alpha = alpha;
+    m_Base.m_AlphaSet = 1;
+    ApplyAlpha_Internal(alpha);
 }
 
 // FullInternalRebuild @0x00249780:
