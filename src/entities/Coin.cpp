@@ -233,8 +233,16 @@ void Coin::_Update(float dt) {
 
     switch (m_State) {
     case 0: // WAITING — timer countdown
-        m_Timer += dt;
-        if (m_Timer < 0.0f) {
+        // ASM-verified: v1.6.1 Coin::_Update @0x001d81bc case 0:
+        //   m_Timer -= dt; if (m_Timer > 0.0f) return;  // still WAITING
+        // Sign is call-site dependent (NOT always negative):
+        //   - BonusScreen (-0.05f) -> m_Timer starts positive -> real multi-frame stagger.
+        //   - Fruit/SlashEntity combo-coin (+0.02f) -> m_Timer starts negative -> WAITING
+        //     never holds -> launches on frame 1 (binary-faithful instant burst).
+        // The port previously had += dt / <0 (inverted): the -0.05 bonus count-up
+        // coins then launched all on frame 1, bursting ~11 overlapping "achievement" SFX.
+        m_Timer -= dt;
+        if (m_Timer > 0.0f) {
             // Still in delay period
             return;
         }
