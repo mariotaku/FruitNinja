@@ -1009,7 +1009,7 @@ void MainScreen::MoreGamesCallback() {
     m_State = STATE_MORE_GAMES;
 }
 
-// ASM-verified: 2026-04-30 v1.6.1 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
+// ASM-verified: v1.6.1 MainScreen::QuitGamesCallback @0x00196008 (re-analyst).
 void MainScreen::QuitGamesCallback() {
     SystemManager::GetInstance().RequestQuit();
 
@@ -1017,7 +1017,10 @@ void MainScreen::QuitGamesCallback() {
         Bomb* bomb = static_cast<Bomb*>(
             static_cast<Mortar::Entity*>(m_pQuitButton->m_pTrackedFruit));
         bomb->m_bMovement = 1;
-        bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);
+        // -(Vector3::UnitY) * 10.0 -- downward accel override (replaces Bomb::Init
+        // -12.0 gravity); decelerates the ClearMenuItems upward pop so the bomb
+        // falls off-screen. Port previously had +10 (up) -> bomb flew upward forever.
+        bomb->m_AccelForce = Vec3(0.0f, -10.0f, 0.0f);
     }
 
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
