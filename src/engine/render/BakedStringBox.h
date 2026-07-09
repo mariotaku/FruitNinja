@@ -258,13 +258,18 @@ private:
     int     m_LineSpacing;         // +0x48 7th ctor arg
     float   m_BaseFontSize;        // +0x4c original font size (binary step formula base)
     FontCacheObjectTTF* m_Font;    // +0x50 non-owning ref (owned by Font + FontTTFRegistry)
-    float   m_StrokeWidth;         // +0x54
+    // Per-line FancyBakedString layer params (v1.6.1 RebuildMeshes @0x002469c0 passes
+    // these into the 17-arg per-line build call):
+    //   m_StrokeWidth/m_StrokeCol0        -> GLOW layer (glowSize/glowCol)
+    //   m_StrokeLayerWidth/m_StrokeLayerColour -> m_pStroke layer (strokeSize/strokeCol)
+    //   m_ExtraWidth/m_Extra1Colour/m_Extra2Colour -> extra1/extra2 BEVEL layers
+    float   m_StrokeWidth;         // +0x54 GLOW layer width (FancyBakedString glowSize)
     int     m_StrokeCount;         // +0x58 0=no stroke, 1/2/3=concentric colours
-    Colour  m_StrokeCol0;          // +0x5c
+    Colour  m_StrokeCol0;          // +0x5c GLOW layer colour (FancyBakedString glowCol)
     Colour  m_StrokeCol1;          // +0x60
     Colour  m_StrokeCol2;          // +0x64
-    float   m_Field68;             // +0x68 (filler)
-    Colour  m_Colour;              // +0x6c layout field (binary colour at this offset)
+    float   m_StrokeLayerWidth;    // +0x68 stroke (m_pStroke) layer width
+    Colour  m_StrokeLayerColour;   // +0x6c stroke (m_pStroke) layer colour
     float   m_ShadowScale;         // +0x70
     Colour  m_ShadowCol;           // +0x74
     int     m_ShadowFlag;          // +0x78 int in binary (was bool)
@@ -286,10 +291,10 @@ private:
     bool    m_HasClip;             // +0xa4
     bool    m_FieldA5;             // +0xa5 (filler)
                                    // +0xa6..0xa7 implicit padding
-    float   m_FieldA8;             // +0xa8 (filler)
-    unsigned int m_FieldAc;        // +0xac (filler)
-    Colour  m_ColourB0;            // +0xb0 (filler)
-    Colour  m_ColourB4;            // +0xb4 (filler)
+    float   m_ExtraWidth;          // +0xa8 extra1/extra2 (BEVEL) layer width
+    unsigned int m_FieldAc;        // +0xac FancyBakedString per-line ctor p15 (extra-layer param)
+    Colour  m_Extra1Colour;        // +0xb0 extra1 (BEVEL) layer colour
+    Colour  m_Extra2Colour;        // +0xb4 extra2 (BEVEL) layer colour
     std::vector<std::string> m_WrappedLines; // +0xb8 (12B on ARM32; filler)
     float   m_FontSize;            // +0xc4 current render pixel size (shrunk by FitInto)
 

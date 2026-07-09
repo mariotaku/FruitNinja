@@ -79,8 +79,8 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_StrokeCol0(0, 0, 0, 255)             // +0x5c
     , m_StrokeCol1(0, 0, 0, 255)             // +0x60
     , m_StrokeCol2(0, 0, 0, 255)             // +0x64
-    , m_Field68(0.0f)                         // +0x68
-    , m_Colour(255, 255, 255, 255)            // +0x6c
+    , m_StrokeLayerWidth(0.0f)                // +0x68
+    , m_StrokeLayerColour(255, 255, 255, 255) // +0x6c
     , m_ShadowScale(0.0f)                     // +0x70
     , m_ShadowCol(255, 255, 255, 255)         // +0x74
     , m_ShadowFlag(0)                         // +0x78
@@ -96,10 +96,10 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_ClipH(0)                              // +0xa0
     , m_HasClip(false)                        // +0xa4
     , m_FieldA5(false)                        // +0xa5
-    , m_FieldA8(0.0f)                         // +0xa8
+    , m_ExtraWidth(0.0f)                      // +0xa8
     , m_FieldAc(0)                            // +0xac
-    , m_ColourB0(0, 0, 0, 0)                  // +0xb0
-    , m_ColourB4(0, 0, 0, 0)                  // +0xb4
+    , m_Extra1Colour(0, 0, 0, 0)              // +0xb0
+    , m_Extra2Colour(0, 0, 0, 0)              // +0xb4
     // m_WrappedLines default-constructed     // +0xb8
     , m_FontSize(fontSize)                    // +0xc4
 {
