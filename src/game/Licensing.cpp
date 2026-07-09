@@ -20,14 +20,14 @@ void BuyAOZ() {
 void BuyMonsterDash() {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 GotoFruitNinjaPage @0x001cbd5c
-// Binary: calls GotoFruitNinjaPage(1,-1) from GameModeScreen::BuyNow @ 0x0013e10c
-void GotoFruitNinjaPage(UPSELL_PLACES /*place*/, float /*param*/) {
+// Defunct: upsell/achievement bookkeeping -- no-op stub; v1.6.1 GotoFruitNinjaPage @0x001cbd5c
+// Binary: calls GotoFruitNinjaPage(1,-1) from GameModeScreen::BuyNow (address TODO, see Licensing.h);
+// GotoFruitNinjaPage(-1.0, 0xd) from FacebookPressed @0x00169f40;
+// GotoFruitNinjaPage(-1.0, 0xc) from TwitterPressed @0x00169f70.
+void GotoFruitNinjaPage(float /*param*/, UPSELL_PLACES /*place*/) {
 }
 
-// Defunct: upsell -- no-op stub; v1.6.1 OpenBrowser @0x001eee64
-void OpenBrowser(const char* /*url*/) {
-}
+// OpenBrowser is implemented in LicensingSDL.cpp (needs SDL_OpenURL; this TU stays portable).
 
 // Defunct: upsell -- no-op stub; v1.6.1 DownloadUDC @0x00195d60
 void DownloadUDC(const char* /*url*/, void* /*buf*/, int /*size*/) {

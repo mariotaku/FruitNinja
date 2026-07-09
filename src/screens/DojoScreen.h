@@ -133,10 +133,9 @@ private:
     void PlayCallback();
     void ShopCallback();
     void AboutCallback();
-    // Defunct: Facebook social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
-    void FacebookPressed();
-    // Defunct: Twitter social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
-    void TwitterPressed();
+    // FacebookPressed/TwitterPressed: binary uses FREE functions bound via
+    // Delegate0<void>::MakeFree, not DojoScreen members -- see game/Social.h
+    // and CreateButtons() in DojoScreen.cpp.
 
 public:
     // Defunct: more-games/online dashboard upsell -- no-op stub; v1.6.1 DojoScreen::MoreGamesCallback @0x00169eec

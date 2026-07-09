@@ -17,6 +17,7 @@
 #include "MainScreen.h"
 #include "game/FruitSaveData.h"
 #include "game/ItemManager.h"
+#include "game/Social.h"
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -111,7 +112,9 @@ DojoScreen::DojoScreen(Game& g)
     // --- m_pBSButton0: Facebook defunct visible stub ---
     // ASM-spec v1.6.1 DojoScreen::DojoScreen @0x0016bad8: operator_new(0xe8),
     //   BSButton(Vec3(152,100,0), GETSTRING(0x11e,0), Vec3(1,1,1)), Init(),
-    //   SetCallback(FacebookPressed), SetTexture("join_fb.tex", true),
+    //   SetCallback(FacebookPressed) -- binary binds the FREE function via a
+    //   free-function Delegate0<void> (MakeFree), not a bound member delegate.
+    //   SetTexture("join_fb.tex", true),
     //   SetTextOffset(Vec3(-70,20,0)), m_pLabelBox->SetColour(0xef,0xf7,0xff),
     //   SetStroke, SetFontSize(14), ReshapeBounds(0x78,0x16,1,0),
     //   m_DrawRotation.x=-7.17, HUD::AddControl(hud, btn, false).
@@ -122,7 +125,7 @@ DojoScreen::DojoScreen(Game& g)
             GETSTRING_CAST_0(LSTR_SOCIAL_FACEBOOK),
             Vec3(1.0f, 1.0f, 1.0f));
         btn->Init();
-        btn->SetCallback(Mortar::Delegate0<void>::Make(this, &DojoScreen::FacebookPressed));
+        btn->SetCallback(Mortar::Delegate0<void>::MakeFree(&FacebookPressed));
         btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_fb.tex"), true);
         btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
         if (btn->m_pLabelBox) {
@@ -150,7 +153,7 @@ DojoScreen::DojoScreen(Game& g)
             GETSTRING_CAST_0(LSTR_SOCIAL_TWITTER),
             Vec3(1.0f, 1.0f, 1.0f));
         btn->Init();
-        btn->SetCallback(Mortar::Delegate0<void>::Make(this, &DojoScreen::TwitterPressed));
+        btn->SetCallback(Mortar::Delegate0<void>::MakeFree(&TwitterPressed));
         btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_tw.tex"), true);
         btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
         if (btn->m_pLabelBox) {
@@ -675,11 +678,9 @@ void DojoScreen::UpdateBSButtons(float dt) {
 }
 
 // ---- Defunct callbacks ----
-
-// Defunct: Facebook social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
-void DojoScreen::FacebookPressed() {}
-// Defunct: Twitter social share -- no-op stub; v1.6.1 DojoScreen::DojoScreen @0x0016bad8
-void DojoScreen::TwitterPressed() {}
+// FacebookPressed/TwitterPressed are FREE functions (see game/Social.h) bound
+// directly via Delegate0<void>::MakeFree in CreateButtons() above -- the binary
+// uses a free-function delegate here, not a DojoScreen member callback.
 
 // ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----
 // See file-header "Defunct: 4 binary symbols compiled into FruitNinja.exe but
