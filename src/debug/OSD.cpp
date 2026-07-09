@@ -39,12 +39,12 @@ static const int   kMaxMsgs    = 6;
 static const float kDefaultTtl = 2.5f;
 static const float kTextSize   = 12.0f;
 
-// Layout: DebugFps_Draw anchors its baseline at (-235, +148) with glyph tops
-// near +158 (top edge +160). The first toast baseline sits at +130 -- one
-// clear line below the FPS counter so the two never overlap -- and each
+// Layout: DebugFps_Draw anchors its baseline at (-235, +138) with glyph tops
+// near +148 (top edge +160, ~22 margin). The first toast baseline sits at +120
+// -- one clear line below the FPS counter so the two never overlap -- and each
 // older message steps 16 units further down (size-12 line height + gap).
 static const float kAnchorX  = -235.0f;
-static const float kAnchorY0 =  130.0f;
+static const float kAnchorY0 =  120.0f;
 static const float kLineStep =   16.0f;
 static const float kZ        =   -0.1f;   // in front of game content, same as FPS overlay
 
