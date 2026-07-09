@@ -85,6 +85,16 @@ public:
     // per-line local draw offset (+0x0c). See m_LineOffset field comment.
     Vec3& LineOffset() { return m_LineOffset; }
 
+    // Rendered mesh ink bounds of the main (foreground) layer -- the same refRect
+    // FancyBakedString::Draw shares with the glow/shadow/stroke/bevel layers.
+    // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78: the per-line
+    // horizontal align width is |GetBounds.right - GetBounds.left| read off the
+    // ALREADY-BUILT line, i.e. the actual rendered extent (BakedStringTTF::UpdateBounds
+    // @0x00247ed0/@0x00247dd4 -- floor(minVertX)..ceil(maxVertX) over every glyph quad),
+    // NOT a pre-render ink-width estimate. The main layer is built eagerly by its ctor
+    // (FullInternalRebuild), so bounds are valid immediately after FancyBakedStringBuild.
+    MortarRectangleT<long>* GetBounds() { return m_pMain ? m_pMain->GetRefRect() : 0; }
+
     // Passthrough to the main layer's split recolour (finale ChangeText calls it 3x).
     void ApplyGradientSplit(Colour c, float y);
 
