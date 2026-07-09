@@ -413,8 +413,9 @@ void MenuButton::SetText(const char* text, Colour gradTop, Colour gradBottom,
             std::string ioText(text);
             std::string remainder;
             bool truncated = false;
-            // TODO: v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734 -- mode param semantics unconfirmed (passed as 0).
-            Mortar::BakedStringTTF::FitStringToWidth(font, ioText, remainder, fontScale, 500L, 0, &outWidth, &truncated);
+            // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734: (fc, in, out,
+            // fontSize, weight, maxWidth, outWidth, outTruncated); weight=0, wrap at 500.
+            Mortar::BakedStringTTF::FitStringToWidth(font, ioText, remainder, fontScale, 0L, 500, &outWidth, &truncated);
         }
         if (outWidth > arcW) {
             float newScale = fontScale / (outWidth / arcW);

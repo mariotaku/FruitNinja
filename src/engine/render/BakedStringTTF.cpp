@@ -569,25 +569,21 @@ void BakedStringTTF::FullInternalRebuild()
 }
 
 // FitStringToWidth @0x00248734 (static):
-// ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734
-// Binary params are (fc, ioText, outRemainder, fontSize, weight, maxWidth, outWidth,
-// outTruncated) -- weight is 5th, maxWidth (the wrap limit) is 6th. The port keeps
-// its historical (fontSize, maxWidth, mode) slot order because its one call site
-// (MenuButton.cpp arc-text shrink) already supplies the wrap limit into the 5th
-// slot; there is no wrap-style/ellipsis/measure "mode" in the binary at all -- the
-// 6th slot here is simply unused (always passed 0), standing in for the binary's
-// weight, which the only binary caller (BakedStringBox::FitStrings @0x00246800)
-// also always passes as 0.
+// Mangled: ...FitStringToWidthEPNS_18FontCacheObjectTTFERSsS3_fliPfPb
+// ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
+//   (FontCacheObjectTTF* fc, std::string& ioText, std::string& outRemainder,
+//    float fontSize, long weight, int maxWidth, float* outWidth, bool* outTruncated)
 // Word-wrap line-breaker: modifies ioText in-place to the head that fits within maxWidth,
 // sets outRemainder to the overflow tail, outWidth to the measured advance of the head,
 // and outTruncated when an unbreakable word overflows.
 // Per-glyph accumulation mirrors ApplyFormatting_LeftJustify's pen step:
-// total += GetKerning(g) [=layoutX] + weight*fontScale + 1.0. weight is always 0
-// from the only binary caller, so the port omits the term but keeps the +1.0.
+// total += GetKerning(g) [=layoutX] + weight*fc[+0x10c][+0x10] + 1.0. The only live
+// caller (BakedStringBox::FitStrings @0x00246800) always passes weight=0, so the
+// term is inert there but ported for fidelity.
 // whitespace/0x200b/0x0a = break point.
 void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                        std::string& outRemainder, float fontSize,
-                                       long maxWidth, int /*mode -- unused; not a binary param, see above*/,
+                                       long weight, int maxWidth,
                                        float* outWidth, bool* outTruncated)
 {
     outRemainder.clear();
@@ -597,6 +593,12 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
         if (outWidth) *outWidth = 0.0f;
         return;
     }
+
+    // fc[+0x10c][+0x10] -- same embedded sub-struct scale used by the ctor's
+    // m_Weight computation (m_Base.m_Weight = alignSigned * fc[+0x10c][+0x10]);
+    // not ported at that offset, so approximated as 1.0 like the ctor.
+    float scaleB = 1.0f; // TODO: v1.6.1 fc[+0x10c][+0x10]; approximated 1.0
+    const float weightTerm = (float)weight * scaleB;
 
     const char* text        = ioText.c_str();
     const char* cursor      = text;
@@ -614,7 +616,7 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
         }
         const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontSize);
         float adv = g ? g->layoutX : 0.0f;
-        total += adv + 1.0f;   // binary: kern + weight*fontScale + 1.0f (weight always 0)
+        total += adv + weightTerm + 1.0f;   // binary: kern + weight*fc[+0x10c][+0x10] + 1.0f
         if (total > (float)maxWidth) {
             if (breakCursor) {
                 // Split at last break: head = [text, breakCursor), tail = rest.
