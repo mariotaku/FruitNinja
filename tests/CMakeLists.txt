@@ -981,6 +981,22 @@ set_tests_properties(screenshot_shoplistitem_english PROPERTIES TIMEOUT 60
 set_tests_properties(screenshot_shoplistitem_chinese PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_shoplistitem;lang_chinese")
 
+# MenuButton isolated state render test.
+# Renders 4 toggle-style MenuButtons side by side, one per Draw feature of the
+# v1.6.1 MenuButton::Draw @0x0019c2e4 reconciliation:
+#   normal quad+curved-label / press-dim RGB*0.5 (m_bAcceptsTouch=0) /
+#   bouncing NEW badge (IngamePopup 0x10, timer pinned mid-swing) /
+#   8-blade loading sparkle ring (blurry_backing.tex, timer pinned mid-anim).
+# Headless: state/texture/popup wiring assertions -- passes with ctest -E screenshot.
+# Screenshot variant writes tmp/test/screenshots/menubutton/states.png (needs GPU).
+fn_add_game_test(test_menubutton_render test_menubutton_render.cpp)
+add_test(NAME menubutton_render COMMAND test_menubutton_render)
+set_tests_properties(menubutton_render PROPERTIES TIMEOUT 60
+    LABELS "component_menubutton")
+add_test(NAME screenshot_menubutton COMMAND test_menubutton_render --screenshot)
+set_tests_properties(screenshot_menubutton PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_menubutton")
+
 # AboutScreen headless layout/structure guard.
 # Verifies the faithful AboutScreen ctor+Init path creates:
 #   - 9 BakedStringBox credit-text controls (title+heading+version+6 credits)

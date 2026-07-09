@@ -56,9 +56,8 @@ struct MatrixStack {
     void Push();
     void Pop();
 
-    // TODO: re-verify v1.6.1 MatrixStack::Scale address (cited 0x0012fa34 was stale
-    // v1.5.x -- resolves to a BonusManager static-ctor blob in v1.6.1; method is
-    // inlined into MatrixManager, no standalone symbol confirmed)
+    // ASM-spec v1.6.1 MatrixStack::Scale @0x0010c428: standalone symbol resolved
+    // (PLT; called from MenuButton::Draw sparkle-ring block @0x0019cca4).
     void Scale(const Vec3& s);
 
     // ASM-spec v1.6.1 MatrixStack::Translate @0x00107d84: standalone symbol resolved

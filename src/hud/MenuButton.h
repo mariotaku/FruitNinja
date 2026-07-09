@@ -24,7 +24,7 @@
 //   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton -- Mortar::ActorManager::Draw)
 //   Layer 1 (2D): Button texture quad (+0x70)
 //   Layer 2 (2D): "New item" star indicator (+0xfc)
-//   Layer 3 (2D): Sparkle ring (+0xf8, armed only when m_RotationSpeed >= 0)
+//   Layer 3 (2D): Sparkle ring (armed when m_SparkleTimer (+0xf8) >= 0)
 //
 // Vtable (17 slots; HUDControl3d order):
 //   0  0x19d1dc ~MenuButton (D1)
@@ -131,14 +131,16 @@ public:
     // +0xF0: Init = 0.0 (random horizontal flip / offset seed; Draw reads sign for flip)
     float           m_RandomOffset;        // +0xF0
 
-    // +0xF4: >= 0 arms the sparkle ring; quad spin speed. Init = -1.0.
+    // +0xF4: quad spin speed (NOT the sparkle-ring gate; Draw gates the ring on
+    // m_SparkleTimer +0xF8). Init = -1.0.
     // Update @ 0x19a860: when m_FruitType>=0 and dt>0, m_Timer(+0x2c) += dt * m_RotationSpeed.
     float           m_RotationSpeed;       // +0xF4
 
     // +0xF8: sparkle timer (>= 0 active; Update += dt*8, clamp 8). Init = -1.0.
     float           m_SparkleTimer;        // +0xF8
 
-    // +0xFC: new-indicator timer (Update += 2*dt; reset to 0 when SparkleTimer<1). Init = -1.0.
+    // +0xFC: new-indicator timer (Update += 2*dt; reset to 0 while SparkleTimer >= 1,
+    // i.e. only while the loading sparkle is active). Init = -1.0.
     float           m_NewIndicatorTimer;   // +0xFC
 
     // +0x100: entity base scale captured on first frame. Init = Vec3(0,0,0).
@@ -247,7 +249,8 @@ public:
     // v1.6.1 MenuButton::Update hit-test block @0x0019ad94 reads +0x16C.
     float           m_HitInsetY;           // +0x16C
 
-    // +0x170: new-bounce phase (Draw gate). Init=100.0 (DAT@0x19baf8=0x42c80000).
+    // +0x170: Init-write-only (100.0, DAT@0x19baf8=0x42c80000); NOT read by Draw --
+    // the NEW-badge gate is m_NewIndicatorTimer (+0xFC). No reader found.
     float           m_NewBouncePhase;      // +0x170
 
     // +0x174: shake timer countdown (Update)
@@ -277,6 +280,11 @@ public:
     void Reset() override;
     void BeginDraw(float dt) override;
     void PreDraw(float* hudScale) override;
+    // v1.6.1 MenuButton::Draw @0x0019c2e4. Draws backdrop pass (layer 0x40,
+    // demotes itself to 0x80) OR quad+labels+NEW-badge+sparkle-ring. The quad is
+    // inlined (NOT delegated to HUDControl3d::Draw): press-dim RGB*0.5, anim-alpha
+    // override, shake jitter. No m_DrawColour.a==0 early-out -- the binary draws
+    // (invisibly) at alpha 0 and always runs the layer demotion.
     void Draw(float* hudScaleRaw) override;
     void Update(float dt) override;
     bool SetToMultiplayerState() override;
@@ -291,7 +299,7 @@ public:
     // Creates the fruit/bomb entity for m_FruitType>=0 (called from Init tail)
     void CreateFruit();
 
-    // v1.6.1 MenuButton::SetNewSymbol @0x0019a534: arms/disarms the new-indicator timer
+    // v1.6.1 MenuButton::SetNewSymbol @0x0019a564: arms/disarms the new-indicator timer
     void SetNewSymbol(bool show);
 
     // v1.6.1 MenuButton::Shake @0x0019a510: sets m_ShakeTimer (+0x174)
@@ -303,7 +311,7 @@ public:
     // v1.6.1 MenuButton::IsLoadingSymbol @0x0019a608: returns (m_SparkleTimer(+0xF8) >= 0)
     bool IsLoadingSymbol();
 
-    // v1.6.1 MenuButton::SetLoadingSymbol @0x0019a560: arms sparkle timer (+0xF8)
+    // v1.6.1 MenuButton::SetLoadingSymbol @0x0019a5d0: arms sparkle timer (+0xF8)
     void SetLoadingSymbol(bool show);
 
     // v1.6.1 MenuButton::SetText @0x0019b0ac: builds curved BakedStringTTF label triple.
