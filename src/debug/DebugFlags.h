@@ -3,6 +3,8 @@
 
 #ifndef __bada__
 
+namespace Mortar { class FontCacheObjectTTF; }
+
 //
 // Port specific: debug-only overlay flags. No binary equivalent.
 // g_DebugHitboxes:  4-level debug overlay cycle. Toggle F1 (cycles 0->1->2->3->0).
@@ -62,6 +64,12 @@ void DebugText_Overlay(float anchorX, float anchorY,
                        float boxX0, float boxY0, float boxX1, float boxY1,
                        bool hasInk,
                        float inkX0, float inkY0, float inkX1, float inkY1);
+
+// Port specific: shared accessor for the debug TTF font cache used by
+// DebugFps_Draw (gangofchinese.ttf, lazily created). OSD_Draw
+// (src/debug/OSD.cpp) reuses it so toasts render through the exact same
+// text path as the FPS counter. Returns null until the font loads.
+Mortar::FontCacheObjectTTF* DebugFontTTF_Get();
 
 } // namespace FN
 
