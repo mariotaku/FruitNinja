@@ -306,8 +306,9 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
         } else if (e == FONT_EFFECT_STROKE && radius > 0) {
             BuildStrokes(&cell[0], cellWT, cellHT, radius * ss);
         }
-        // TODO: v1.6.1 0x0024f5dc (Mortar::RenderGlyph) -- BEVEL filter (effect 4..11)
-        // not ported; bevel cells carry the sharp glyph in the padded cell.
+        // v1.6.1 Mortar::FontCacheObjectTTF::BuildBevel @0x0024ed16 is an empty stub
+        // (bx lr / returns this). Effects 4..11 get the +4/+4 cell pad but NO filter --
+        // the sharp glyph in the padded cell IS the binary's output. Faithful as-is.
 
         // DIFFERS: binary TextureAtlas @0x00269c9c, faithful multi-page model.
         int x = 0, y = 0;

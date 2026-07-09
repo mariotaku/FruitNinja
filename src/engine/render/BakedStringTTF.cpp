@@ -43,12 +43,12 @@ static void Rotate2DVector(float x, float y, float angle, float& ox, float& oy)
 
 namespace Mortar {
 
-// FetchGlyph @0x0024fa24: return a fully-populated heap GlyphTTF for
+// FetchGlyph: return a fully-populated heap GlyphTTF for
 // (cp, scaledHeight, radius, effect). Binary: hash -> TextureAtlas::FindItem;
 // miss -> RenderGlyph; new GlyphTTF(0x44) filled from the rec. Port: the
 // hash/render path is FontCacheObjectTTF::GetGlyph (FreeType boundary,
 // // DIFFERS there); this does the rec -> GlyphTTF fill.
-// ASM-spec v1.6.1 FetchGlyph @0x0024fa24.
+// ASM-verified: 2026-07-09 v1.6.1 Mortar::FontCacheObjectTTF::FetchGlyph @ 0x0024fa24 (asm-inspector)
 GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
                      uint32_t radius, uint8_t effect)
 {
@@ -219,7 +219,8 @@ void BakedStringTTF::BuildGlyphs()
 
 // GetKerning: the baked pen step. Returns g->m_GlyphScale.x and IGNORES the
 // next-glyph argument (NOT a kern delta; no FreeType kerning in pen advance).
-// TODO: v1.6.1 (GetKerning) -- binary symbol/address not yet pinned.
+// ASM-verified: 2026-07-09 v1.6.1 Mortar::GlyphTTF::GetKerning @ 0x0024ea78 (asm-inspector)
+// body: vldr s0,[r0,#0x8]; bx lr -- returns m_GlyphScale.x, ignores the pair arg.
 float BakedStringTTF::GetKerning(GlyphTTF* g, uint32_t /*nextCp -- ignored*/) const
 {
     return g->m_GlyphScale.x;
@@ -569,16 +570,24 @@ void BakedStringTTF::FullInternalRebuild()
 
 // FitStringToWidth @0x00248734 (static):
 // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734
+// Binary params are (fc, ioText, outRemainder, fontSize, weight, maxWidth, outWidth,
+// outTruncated) -- weight is 5th, maxWidth (the wrap limit) is 6th. The port keeps
+// its historical (fontSize, maxWidth, mode) slot order because its one call site
+// (MenuButton.cpp arc-text shrink) already supplies the wrap limit into the 5th
+// slot; there is no wrap-style/ellipsis/measure "mode" in the binary at all -- the
+// 6th slot here is simply unused (always passed 0), standing in for the binary's
+// weight, which the only binary caller (BakedStringBox::FitStrings @0x00246800)
+// also always passes as 0.
 // Word-wrap line-breaker: modifies ioText in-place to the head that fits within maxWidth,
 // sets outRemainder to the overflow tail, outWidth to the measured advance of the head,
 // and outTruncated when an unbreakable word overflows.
-// Per-glyph pen step under the baked-bearing model = GetKerning value = layoutX
-// (floor(advance/64) - bitmap_left); binary: step = GetKerning + alignArg*fontScaleFactor
-// + 1.0 with alignArg = -1 (all v1.6.1 call sites) and factor = 1.0 -> net = layoutX.
+// Per-glyph accumulation mirrors ApplyFormatting_LeftJustify's pen step:
+// total += GetKerning(g) [=layoutX] + weight*fontScale + 1.0. weight is always 0
+// from the only binary caller, so the port omits the term but keeps the +1.0.
 // whitespace/0x200b/0x0a = break point.
 void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                        std::string& outRemainder, float fontSize,
-                                       long maxWidth, int /*mode*/,
+                                       long maxWidth, int /*mode -- unused; not a binary param, see above*/,
                                        float* outWidth, bool* outTruncated)
 {
     outRemainder.clear();
@@ -605,7 +614,7 @@ void BakedStringTTF::FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioTex
         }
         const GlyphAtlasEntry* g = fc->GetGlyph(cp, fontSize);
         float adv = g ? g->layoutX : 0.0f;
-        total += adv;
+        total += adv + 1.0f;   // binary: kern + weight*fontScale + 1.0f (weight always 0)
         if (total > (float)maxWidth) {
             if (breakCursor) {
                 // Split at last break: head = [text, breakCursor), tail = rest.

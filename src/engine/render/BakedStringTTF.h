@@ -219,13 +219,20 @@ public:
 
     // FitStringToWidth @0x00248734 (static): word-wrap line-breaker.
     // ASM-spec v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734:
-    //   (FontCacheObjectTTF*, std::string& ioText, std::string& outRemainder,
-    //    float fontSize, long maxWidth, int mode, float* outWidth, bool* outTruncated)
+    //   binary params: (FontCacheObjectTTF*, std::string& ioText, std::string& outRemainder,
+    //    float fontSize, float weight, long maxWidth, float* outWidth, bool* outTruncated)
+    //   -- weight is the 5th binary param, maxWidth (the wrap limit) is the 6th.
+    // Port keeps its historical (fontSize, maxWidth, mode) slot order: the port's
+    // 5th slot (maxWidth here) already carries the wrap limit for its one call site
+    // (MenuButton.cpp arc-text shrink); the 6th slot (mode) is NOT a binary param --
+    // there is no wrap-style/ellipsis/measure switch in the binary. It stands in for
+    // the binary's weight, which the only binary caller (BakedStringBox::FitStrings
+    // @0x00246800) always passes as 0, so the port leaves it unused.
     // ioText is modified in-place to the head that fits within maxWidth;
     // outRemainder gets the overflow tail; outWidth gets the measured advance;
     // outTruncated is set when an unbreakable word overflows maxWidth.
-    // +1.0 inter-glyph gap; whitespace/0x200b/0xa = break point.
-    // TODO: v1.6.1 BakedStringTTF::FitStringToWidth @0x00248734 -- mode param semantics unconfirmed (passed as 0).
+    // Per glyph: total += GetKerning(g) + weight*fontScale + 1.0 (weight always 0
+    // in practice, but the +1.0 per glyph always applies); whitespace/0x200b/0xa = break point.
     static void FitStringToWidth(FontCacheObjectTTF* fc, std::string& ioText,
                                  std::string& outRemainder, float fontSize,
                                  long maxWidth, int mode,
@@ -332,8 +339,9 @@ private:
 
     // GetKerning: returns g->m_GlyphScale.x -- the baked pen step. IGNORES the
     // next-glyph argument (NOT a kern delta; no FreeType kerning in pen advance).
-    // TODO: v1.6.1 (GetKerning) -- binary symbol/address not yet pinned (called from
-    //   ApplyFormatting_LeftJustify @0x00247874 / FitStringToWidth @0x00248734).
+    // ASM-verified: 2026-07-09 v1.6.1 Mortar::GlyphTTF::GetKerning @ 0x0024ea78 (asm-inspector)
+    // body: vldr s0,[r0,#0x8]; bx lr -- returns m_GlyphScale.x, ignores the pair arg.
+    // (called from ApplyFormatting_LeftJustify @0x00247874 / FitStringToWidth @0x00248734).
     float GetKerning(GlyphTTF* g, uint32_t nextCp) const;
 
     // BuildSurfaces @0x00248c14: if(!m_GlyphsBuilt) BuildGlyphs; per glyph:
