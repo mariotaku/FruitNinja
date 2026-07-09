@@ -31,7 +31,7 @@ FancyBakedString::~FancyBakedString()
 void FancyBakedString::Init()
 {
     m_ShadowOffset = Vec3(0.0f, 0.0f, 0.0f);
-    m_Field0c      = Vec3(0.0f, 0.0f, 0.0f);
+    m_LineOffset   = Vec3(0.0f, 0.0f, 0.0f);
     m_pShadow = 0;
     m_pGlow   = 0;
     m_pMain   = 0;
@@ -118,6 +118,51 @@ void FancyBakedString::Draw(const Vec3& pos, Vec2 scale, float tilt, ALIGNMENT_T
 void FancyBakedString::ApplyGradientSplit(Colour c, float y)
 {
     if (m_pMain) m_pMain->ApplyGradientSplit(c, y);
+}
+
+// ApplyGradient @0x0024ad2c: uniform colour -- top==bottom==c.
+void FancyBakedString::ApplyGradient(Colour c)
+{
+    if (m_pMain) m_pMain->ApplyGradient_TopBottom(c, c);
+}
+
+// ApplyGradient @0x0024accc: two-stop top/bottom gradient.
+void FancyBakedString::ApplyGradient(Colour top, Colour bottom)
+{
+    if (m_pMain) m_pMain->ApplyGradient_TopBottom(top, bottom);
+}
+
+// ApplyGradient @0x0024ae84: top/bottom base gradient plus a mid-colour split at
+// the 0.5 plane.
+void FancyBakedString::ApplyGradient(Colour top, Colour mid, Colour bottom)
+{
+    if (!m_pMain) return;
+    m_pMain->ApplyGradient_TopBottom(top, bottom);
+    m_pMain->ApplyGradientSplit(mid, 0.5f);
+}
+
+// ApplyMetallicGradient @0x0024abf4: top/bottom base gradient (c0/c3) plus two
+// close-set split bands (0.51/0.49) that fake a metallic highlight streak.
+void FancyBakedString::ApplyMetallicGradient(Colour c0, Colour c1, Colour c2, Colour c3)
+{
+    if (!m_pMain) return;
+    m_pMain->ApplyGradient_TopBottom(c0, c3);
+    m_pMain->ApplyGradientSplit(c1, 0.51f);
+    m_pMain->ApplyGradientSplit(c2, 0.49f);
+}
+
+// ApplyStrokeGradient @0x0024afb0: two-stop top/bottom gradient on the glow/stroke layer.
+void FancyBakedString::ApplyStrokeGradient(Colour top, Colour bottom)
+{
+    if (m_pGlow) m_pGlow->ApplyGradient_TopBottom(top, bottom);
+}
+
+// ApplyStrokeGradient @0x0024b010: three-stop gradient on the glow/stroke layer.
+void FancyBakedString::ApplyStrokeGradient(Colour top, Colour mid, Colour bottom)
+{
+    if (!m_pGlow) return;
+    m_pGlow->ApplyGradient_TopBottom(top, bottom);
+    m_pGlow->ApplyGradientSplit(mid, 0.5f);
 }
 
 } // namespace Mortar
