@@ -160,8 +160,20 @@ void GameInitialise(void* window, const char* config) {
     // Mortar::ActorManager (needed for entity creation). Binary uses Meyers
     // singleton in GetInstance @ 0x001705f0; port also lazy-inits via GetInstance.
     // Factory is the free function CreateEntity (binary 0x0017421c) — see EntityFactory.h.
+    //
+    // DIFFERS (residue fix): numTypes MUST match GameInit.cpp step 7's
+    // am->Initialise(7, 0x2000) (v1.6.1 GameInit @ 0x001ce1c0 -- the binary's actual
+    // ActorManager::Initialise call site). ActorManager::Initialise() is idempotent
+    // (`if (m_pHeap != nullptr) return;`), and this GameInitialise() call runs BEFORE
+    // GameInit(), so whichever numTypes lands here wins for the whole session --
+    // GameInit's later Initialise(7,...) silently no-ops. This call used to pass 5
+    // (stale, pre-dating the 7-type fix in GameInit.cpp), which permanently capped
+    // m_NumTypes at 5 and made entity types 5 (Jiblet) and 6 (FruitRay) unreachable
+    // via Add() in every real session -- e.g. SuperFruitControl::SpawnJibs /
+    // ExplodeSuperFruit's am->Add(5, true) silently returned null, so the super-fruit
+    // finale never spawned jiblet fragments. Found via tests/scenes/scene_jiblet.cpp.
     game->actorManager = Mortar::ActorManager::GetInstance();
-    game->actorManager->Initialise(5, 0x2000);
+    game->actorManager->Initialise(7, 0x2000);
     game->actorManager->RegisterFactory(&CreateEntity);
 
     // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor. Binary
