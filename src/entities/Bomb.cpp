@@ -73,8 +73,11 @@ void Bomb::LoadContent() {
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (!meshMgr) return;
 
-    g_bombData.model[0] = meshMgr->Load("models/Fruit/bomb.mmd");
-    g_bombData.model[1] = meshMgr->Load("models/Fruit/bomb_purple.mmd");
+    // Binary casing is capital-B (v1.6.1 literals "models/Fruit/Bomb.mmd" /
+    // "Bomb_purple.mmd"); on-disk extracted asset is lowercase, resolved by
+    // ResolvePathCI in the FS layer. Keep the binary-faithful string.
+    g_bombData.model[0] = meshMgr->Load("models/Fruit/Bomb.mmd");
+    g_bombData.model[1] = meshMgr->Load("models/Fruit/Bomb_purple.mmd");
 
     g_bombData.texMinus10 = Mortar::TextureManager::LoadLocalisedTexture("minus_10.tex");
 

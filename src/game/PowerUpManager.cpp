@@ -460,13 +460,13 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
     }
 }
 
-// @ 0x00119cb0
+// ASM-spec v1.6.1 PowerUpManager::Load @0x00143088 (binary loads "xml/poweruplist.xml", lowercase)
 void PowerUpManager::Load() {
     TiXmlDocument doc;
-    // Asset file is lowercase (poweruplist.xml); case matters on case-sensitive
-    // filesystems (web/emscripten, webOS, HLE). Camel-case "powerUpList.xml"
-    // silently failed there -> empty m_ScreenEffectPool -> no power/combo/blitz
-    // popups. Matches the lowercase xml/fruitlist.xml convention.
+    // Binary literal is lowercase "xml/poweruplist.xml" (byte-exact @0x00143088);
+    // the asset on disk matches. Earlier port used camel-case "powerUpList.xml",
+    // which silently failed on case-sensitive filesystems (web/emscripten, webOS,
+    // HLE) -> empty m_ScreenEffectPool -> no power/combo/blitz popups.
     if (!doc.LoadFile("xml/poweruplist.xml")) {
         return;
     }
@@ -476,7 +476,7 @@ void PowerUpManager::Load() {
     // BonusManager's bonusawards.xml schema mismatch.
     TiXmlElement root = doc.FirstChildElement("powerInfoFile");
     if (!root) {
-        LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in xml/powerUpList.xml");
+        LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in xml/poweruplist.xml");
         return;
     }
 
