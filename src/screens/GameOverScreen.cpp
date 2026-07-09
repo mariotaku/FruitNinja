@@ -1223,18 +1223,24 @@ void GameOverScreen::Update(float dt) {
                     SaveCurrentData(false);
                 }
             }
-        }
 
-        // 5) Reset alpha, state
-        game_work.m_PauseAmount = 1.0f;
-        m_State = STATE_MAIN_DISPLAY;
+            // 5) Reset alpha, state -- NESTED in the m_StarCount==10 guard so it
+            // runs exactly once (the frame the stars finish). Hoisting it out ran
+            // it per-frame: m_State=6 killed the state-7 fall-through (NewGame
+            // unreachable) and the buttons respawned every frame after slicing.
+            // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80: state-commit +
+            // button spawn nested in the m_StarCount==10 guard (runs once);
+            // prevState (binary iVar29) is m_State captured at case entry.
+            game_work.m_PauseAmount = 1.0f;
+            m_State = STATE_MAIN_DISPLAY;
 
-        // 6) Spawn buttons only when entering from state 6
-        if (prevState == STATE_MAIN_DISPLAY && IsAllowedToExit()) {
-            CreateRetryButton();
-        }
-        if (m_pQuitBtn == 0 && prevState == STATE_MAIN_DISPLAY && IsAllowedToExit()) {
-            CreateQuitButton();
+            // 6) Spawn buttons only when entering from state 6
+            if (prevState == STATE_MAIN_DISPLAY && IsAllowedToExit()) {
+                CreateRetryButton();
+            }
+            if (m_pQuitBtn == 0 && prevState == STATE_MAIN_DISPLAY && IsAllowedToExit()) {
+                CreateQuitButton();
+            }
         }
 
         // (Removed: a per-frame LoadLocalisedTexture("comming_soon_highscore.tex"). That
