@@ -1,12 +1,24 @@
-// Defunct: Facebook/Twitter/social sharing -- no-op stubs.
-// These free functions wrap Bada social SDK calls; all are permanently defunct.
+// Defunct: Facebook/Twitter/social sharing -- no-op stubs (except the
+// FacebookPressed/TwitterPressed browser-launch leaf, which is live).
+// These free functions wrap Bada social SDK calls.
 
-// Defunct: social sharing -- no-op stub; v1.6.1 FacebookPressed @0x00169f40
+#include "Social.h"
+#include "Licensing.h"
+
+// ASM-spec v1.6.1 FacebookPressed @0x00169f40:
+//   GotoFruitNinjaPage(-1.0, 0xd); OpenBrowser("http://www.facebook.com/halfbrick");
+// Defunct: GotoFruitNinjaPage achievement bookkeeping -- no-op stub. OpenBrowser is live.
 void FacebookPressed() {
+    GotoFruitNinjaPage(-1.0f, UPSELL_PLACE_FACEBOOK);
+    OpenBrowser("http://www.facebook.com/halfbrick");
 }
 
-// Defunct: social sharing -- no-op stub; v1.6.1 TwitterPressed @0x00169f70
+// ASM-spec v1.6.1 TwitterPressed @0x00169f70:
+//   GotoFruitNinjaPage(-1.0, 0xc); OpenBrowser("http://www.twitter.com/halfbrick");
+// Defunct: GotoFruitNinjaPage achievement bookkeeping -- no-op stub. OpenBrowser is live.
 void TwitterPressed() {
+    GotoFruitNinjaPage(-1.0f, UPSELL_PLACE_TWITTER);
+    OpenBrowser("http://www.twitter.com/halfbrick");
 }
 
 // Defunct: social sharing -- no-op stub; v1.6.1 RegisterSocialNetworks @0x0011efc0
