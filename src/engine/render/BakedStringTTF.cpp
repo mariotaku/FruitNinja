@@ -329,11 +329,14 @@ void BakedStringTTF::BuildSurfaces()
 // Each corner = Rotate2DVector(corner, m_RotAngle) + m_RotBasis (pen).
 // +Y is up; the pen (m_RotBasis.y = layout .y = ink bottom) anchors the quad
 // bottom, so the top corners (larger y) sample the cell-top V (v0).
-// UV inset applied HERE: u0 -= 1/512, v0 += 1/512, v1 -= 1/512, u1 += 1/512.
+// UV inset applied HERE (uniform translate): all-U -= 1/512, all-V += 1/512
+// (u0 -= 1/512, u1 -= 1/512, v0 += 1/512, v1 += 1/512).
 // Winding: the binary keys two orders on FontInterface[0x14c]==1 (RT Y-flip);
 // GLES uses the ELSE branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) -- tri-list
 // consumed by Mesh::DrawTriList (port: Renderer::DrawTriList).
-// ASM-spec v1.6.1 BakedStringTTF::FinishMesh @0x002480a8.
+// ASM-verified: 2026-07-09T04:51:41Z v1.6.1 BakedStringTTF::FinishMesh @ 0x002480a8 (asm-inspector)
+//   quad geometry byte-identical (corners, (w+1)x(h+1) cell, origin sub, rotate+pen,
+//   m_QuadSize skip); UV inset now uniform-translate matching the binary.
 void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
 {
     if (surf->m_Verts) {
@@ -378,8 +381,8 @@ void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
 
         const float u0 = g->m_UvU0 - k_UvInset;
         const float v0 = g->m_UvV0 + k_UvInset;
-        const float v1 = g->m_UvV1 - k_UvInset;
-        const float u1 = g->m_UvU1 + k_UvInset;
+        const float v1 = g->m_UvV1 + k_UvInset;
+        const float u1 = g->m_UvU1 - k_UvInset;
 
         QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
         v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
