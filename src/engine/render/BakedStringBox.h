@@ -193,12 +193,15 @@ public:
     int GetBoxHeight() const { return m_BoxHeight; }
 
     // GetTextWidth -- binary v1.6.1 BakedStringBox::GetBounds + MortarRectangleT::Width
-    // Returns the rendered text width in world units: the max per-line raw advance width
-    // across all wrapped lines (0.0f if no lines). Triggers a lazy RebuildMeshes() if
-    // m_Dirty is set so the result always reflects the current text. The binary returns
-    // integer pixel width; the port lays out 1:1 world=pixel so the float max-line-width
-    // is equivalent. Used by ShopListItem::DrawFloatingText @0x001b4bc8 to anchor
-    // NEW/SELECTED badges.
+    // Returns the rendered text width in world units: the max per-line TIGHT
+    // (baked-bearing/layoutX, matches what BakedStringTTF actually draws) advance
+    // width across all wrapped lines (0.0f if no lines). Triggers a lazy
+    // RebuildMeshes() if m_Dirty is set so the result always reflects the current
+    // text. The binary returns integer pixel width; the port lays out 1:1
+    // world=pixel so the float max-line-width is equivalent. Used by
+    // ShopListItem::DrawFloatingText @0x001b4bc8 to anchor NEW/SELECTED badges --
+    // callers positioning elements off this value get the ACTUAL rendered extent,
+    // not an over-estimate.
     float GetTextWidth() const;
 
     // ComputeBaselineY  binary RebuildAlignments @ 0x00245c78

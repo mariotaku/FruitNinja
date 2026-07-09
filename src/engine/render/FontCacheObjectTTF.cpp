@@ -260,10 +260,10 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     entry.width    = (float)bm.width * invLogical;
     entry.height   = (float)bm.rows  * invLogical;
 
-    // Baked-bearing layout metrics (v1.6.1 GlyphTTF::m_GlyphScale source values):
-    //   layoutX = floor(advance.x/64) - bitmap_left  (the pen step / GetKerning value)
-    //   layoutY = (horiBearingY - height)/64         (ink bottom, baseline-relative)
-    // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc / FetchGlyph @0x0024fa24.
+    // ASM-verified: v1.6.1 RenderGlyph @0x0024f5dc + RenderGlyphMetrics @0x0024fe5c:
+    //  layoutX = trunc(advance.x/64) - bitmap_left (FT_GlyphSlot +0x40 adv, +0x64 bearingL).
+    //  Binary is intentionally tight by bitmap_left/glyph; cellOrigin.x=0 (no re-add). Faithful.
+    // layoutY = (horiBearingY - height)/64 (ink bottom, baseline-relative).
     entry.layoutX = ((float)(slot->advance.x >> 6) - (float)slot->bitmap_left)
                     * m_Atlas->m_InvFontScale * (1.0f / (float)ss);
     entry.layoutY = (float)(slot->metrics.horiBearingY - slot->metrics.height) * invWorld;
