@@ -42,6 +42,7 @@ InputTranslatorSDL::InputTranslatorSDL() : hashTouchScreen(0) {
     memset(pendingDown, 0, sizeof(pendingDown));
     memset(pendingUp, 0, sizeof(pendingUp));
     memset(pendingEdge, 0, sizeof(pendingEdge));
+    memset(motionSinceDown, 0, sizeof(motionSinceDown));
 }
 
 void InputTranslatorSDL::Init() {
@@ -178,6 +179,7 @@ void InputTranslatorSDL::ReleaseAllFingers() {
     memset(pendingDown, 0, sizeof(pendingDown));
     memset(pendingUp, 0, sizeof(pendingUp));
     memset(pendingEdge, 0, sizeof(pendingEdge));
+    memset(motionSinceDown, 0, sizeof(motionSinceDown));
 }
 
 // drain one SDL event into Mortar::Touch ring buffer (channels 0-7) and
@@ -216,6 +218,10 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx;
         fingerY[ch] = gy;
+        // Port specific: re-arm the press-vs-motion gate. Until a real
+        // FINGERMOTION drains for this finger, no TouchMove is dispatched
+        // (a tap alone never moves the blade -- v1.6.1 semantics).
+        motionSinceDown[ch] = false;
         TLOG("FINGERDOWN (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
@@ -250,6 +256,9 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx;
         fingerY[ch] = gy;
+        // Port specific: a real motion event arrived -- open the TouchMove
+        // gate for this finger (sticky until the next FINGERDOWN).
+        motionSinceDown[ch] = true;
         TLOG("MOVE (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
@@ -391,24 +400,24 @@ void InputTranslatorSDL::DispatchForSimTick() {
             bool  isEdge = pendingEdge[ch];
             pendingEdge[ch] = false;
 
-            // Port specific: this used to unconditionally synthesize a
-            // TouchMove at the tap location on the press frame, so a
-            // stationary TAP (down+up, no drag) moved the blade to the tap
-            // point (v1.6.1: a tap alone never moves the blade -- only real
-            // finger motion does). Only emit TouchMove here if actual
-            // motion landed in the SAME tick as the press -- a fast swipe
-            // whose DOWN+MOVE both drain before the next DispatchForSimTick
-            // call. Detected via states1[slot] curr != prev: ___UpdateInternal
-            // @0x00195314 sets prevX/Y only once (at press claim) while
-            // currX/Y keeps tracking in-tick moves; the prev<-curr roll
-            // (State::Update) happens AFTER this tick's states1 snapshot,
-            // so a pure tap (no move event queued) still has curr==prev here.
-            bool movedThisTick = (slot >= 0) &&
-                (touch.states1[slot].currX != touch.states1[slot].prevX ||
-                 touch.states1[slot].currY != touch.states1[slot].prevY);
+            // Port specific: a tap emits no blade move; only real finger
+            // motion moves the blade (v1.6.1 semantics; the SDL synth
+            // previously moved the blade on press). motionSinceDown[ch] is
+            // set ONLY when an SDL_FINGERMOTION drains for this finger --
+            // never by the press itself -- so a stationary TAP (DOWN..UP,
+            // no MOTION) emits TouchScreen + TouchDown and NO TouchMove:
+            // the blade never receives a tap's position and consecutive
+            // taps cannot bridge into a slash (including when SlashEntity's
+            // bomb-hit latch blocks Reset). A fast swipe whose DOWN and
+            // first MOTION drain within the same tick still emits the move
+            // here (the flag is already true by dispatch time).
+            // NB: do NOT gate this on a curr-vs-prev position compare of
+            // touch.states1 -- prevX/Y holds the PREVIOUS stroke's position
+            // on a fresh press, so every tap at a new location compares
+            // unequal and the gate never closes (the old broken heuristic).
 
             TLOG("DispatchForSimTick FINGERDOWN ch=%d slot=%d edge=%d moved=%d game=(%g,%g)\n",
-                 ch, slot, (int)isEdge, (int)movedThisTick, gx, gy);
+                 ch, slot, (int)isEdge, (int)motionSinceDown[ch], gx, gy);
 
             if (mgr) {
                 InputEvent ie;
@@ -421,7 +430,7 @@ void InputTranslatorSDL::DispatchForSimTick() {
                 ie.actionFlags = INPUT_ACTION_DOWN;
                 mgr->DispatchEvent(&ie);
 
-                if (movedThisTick) {
+                if (motionSinceDown[ch]) {
                     ie.actionHash  = hashTouchMoveX[ch];
                     ie.actionFlags = INPUT_ACTION_MOVE;
                     mgr->DispatchEvent(&ie);
@@ -448,12 +457,18 @@ void InputTranslatorSDL::DispatchForSimTick() {
                 ie.x = gx;
                 ie.y = gy;
 
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
-                mgr->DispatchEvent(&ie);
+                // Port specific: same press-vs-motion gate as the press
+                // frame -- a held-but-never-moved finger (long-press tap)
+                // emits TouchDown only (re-arms the blade latch at the
+                // stroke's existing position) and no TouchMove.
+                if (motionSinceDown[ch]) {
+                    ie.actionHash  = hashTouchMoveX[ch];
+                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    mgr->DispatchEvent(&ie);
 
-                ie.actionHash  = hashTouchMoveY[ch];
-                mgr->DispatchEvent(&ie);
+                    ie.actionHash  = hashTouchMoveY[ch];
+                    mgr->DispatchEvent(&ie);
+                }
 
                 ie.actionHash  = hashTouchDown[ch];
                 ie.actionFlags = INPUT_ACTION_DOWN;
@@ -503,11 +518,14 @@ void InputTranslatorSDL::DispatchForSimTick() {
             ie.actionFlags = INPUT_ACTION_DOWN;
             mgr->DispatchEvent(&ie);
 
-            ie.actionHash  = hashTouchMoveX[ch];
-            ie.actionFlags = INPUT_ACTION_MOVE;
-            mgr->DispatchEvent(&ie);
-            ie.actionHash  = hashTouchMoveY[ch];
-            mgr->DispatchEvent(&ie);
+            // Port specific: press-vs-motion gate (see channels 0-7).
+            if (motionSinceDown[ch]) {
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+            }
 
             ie.actionHash  = hashTouchDown[ch];
             ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
@@ -544,12 +562,15 @@ void InputTranslatorSDL::DispatchForSimTick() {
             ie.x = fingerX[ch];
             ie.y = fingerY[ch];
 
-            ie.actionHash  = hashTouchMoveX[ch];
-            ie.actionFlags = INPUT_ACTION_MOVE;
-            mgr->DispatchEvent(&ie);
+            // Port specific: press-vs-motion gate (see channels 0-7).
+            if (motionSinceDown[ch]) {
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
 
-            ie.actionHash  = hashTouchMoveY[ch];
-            mgr->DispatchEvent(&ie);
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+            }
 
             ie.actionHash  = hashTouchDown[ch];
             ie.actionFlags = INPUT_ACTION_DOWN;
