@@ -112,6 +112,12 @@ struct BakedStringTTF_Surface {
     // Transform_GradientSplit @0x0024954c: repaint every vertex above the split plane
     // (plane = y*(rect.top+rect.bottom)) to c. Non-virtual -- does not change layout.
     void Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect);
+
+    // Transform_SetAlpha @0x00247cf0: overwrite (not multiply) the alpha byte of every
+    // vertex's packed colour, RGB untouched. Dispatched by
+    // BakedStringTTF::ApplyAlpha_Internal @0x00247d7c.
+    // ASM-spec v1.6.1 BakedStringTTF_Surface::Transform_SetAlpha @0x00247cf0.
+    void Transform_SetAlpha(uint8_t alpha);
 };
 
 #ifdef __bada__
@@ -151,8 +157,10 @@ struct BakedStringEffectBase {
 
     // +0x10/+0x11: alpha override, read by ApplyEffects @0x00249684
     // (if m_Base[0x11] != 0 -> ApplyAlpha_Internal(m_Base[0x10])).
-    // TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- the public setter
-    // that writes m_Alpha/m_AlphaSet is not yet RE'd; no port path sets them.
+    // Set by the public setter BakedStringTTF::ApplyAlpha @0x00247dc4. DORMANT in
+    // v1.6.1: BakedStringBox::SetAlpha (the only caller shape this mirrors) has no
+    // v1.6.1 call sites, so no live path currently sets these -- ported faithfully
+    // per stub-don't-skip, not dead code.
     uint8_t     m_Alpha;        // +0x10 alpha value passed to ApplyAlpha_Internal
     uint8_t     m_AlphaSet;     // +0x11 non-zero = alpha override active
     uint8_t     _pad12;         // +0x12
@@ -259,6 +267,13 @@ public:
     // public: AddColour(c,y) then ApplyGradientSplit_Internal(c,y).
     void ApplyGradientSplit(Colour c, float y);
 
+    // ApplyAlpha @0x00247dc4: alpha-override setter. Writes m_Base.m_Alpha/m_AlphaSet
+    // then repaints immediately via ApplyAlpha_Internal (not lazy -- ApplyEffects also
+    // replays it on every FullInternalRebuild). DORMANT in v1.6.1 (no call sites; see
+    // m_Alpha/m_AlphaSet field comment) -- ported per stub-don't-skip.
+    // ASM-spec v1.6.1 BakedStringTTF::ApplyAlpha @0x00247dc4.
+    void ApplyAlpha(uint8_t alpha);
+
     // Returns total advance (field_60) set by ApplyFormatting_LeftJustify.
     float GetTotalAdvance() const;
 
@@ -346,9 +361,10 @@ private:
     //   3. m_AlphaSet != 0      -> ApplyAlpha_Internal(m_Alpha)
     void ApplyEffects();
 
-    // ApplyAlpha_Internal: alpha-override repaint dispatched by ApplyEffects.
-    // TODO: v1.6.1 0x00249684 (BakedStringTTF::ApplyEffects) -- callee address +
-    //   semantics not yet RE'd; stub (no port path sets m_AlphaSet).
+    // ApplyAlpha_Internal @0x00247d7c: alpha-override repaint dispatched by ApplyEffects
+    // (replay) and ApplyAlpha (immediate). If !m_SurfacesBuilt, no-op; else per surface
+    // BakedStringTTF_Surface::Transform_SetAlpha(alpha).
+    // ASM-spec v1.6.1 BakedStringTTF::ApplyAlpha_Internal @0x00247d7c.
     void ApplyAlpha_Internal(uint8_t alpha);
 
     // UpdateBounds @0x00247ed0: seed {minX=999999, maxY=-999999, maxX=-999999,
