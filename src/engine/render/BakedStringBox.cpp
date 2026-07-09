@@ -56,7 +56,10 @@ struct MeasureResult {
 // never cached on the box itself.
 struct WrappedLineInfo {
     std::string text;
-    float offsetX;       // horizontal align offset (already truncated to int, world units)
+    // Horizontal align offset is NOT computed here -- ASM-spec v1.6.1 BakedStringBox::
+    // RebuildAlignments @0x00245c78 reads it off the ALREADY-BUILT line's rendered mesh
+    // bounds (FancyBakedString::GetBounds), which don't exist until RebuildMeshes builds
+    // the per-line FancyBakedString. See RebuildMeshes.
     float maxBearingY;   // max bearingY across glyphs on this line (above baseline)
     float minBottom;     // min (bearingY-height) across glyphs on this line (<=0, below baseline)
     float advanceWidth;  // tight (baked-bearing/layoutX) pen-advance width, pre-ink-trim,
@@ -311,15 +314,16 @@ static MeasureResult MeasureWrap(FontCacheObjectTTF* font, const char* text,
 
 // FitStrings -- word-wrap `text` at `requestedSize` into per-line WrappedLineInfo records:
 // reconstructed line text (raw substring of `text`, preserving original inter-word
-// spacing) + ink-extent metrics (maxBearingY/minBottom) + horizontal align offset +
-// raw advance width. No FancyBakedString/vertex data is produced -- callers decide
-// whether to build line objects (RebuildMeshes) or just measure (FitIntoVerticalBounds,
-// TotalHeight, GetTextWidth).
-// ASM-spec v1.6.1 Mortar::BakedStringBox::FitStrings @0x00246800 (line splitting) /
-//   RebuildAlignments @0x00245c78 (ink-extent + horizontal-offset math).
+// spacing) + vertical ink-extent metrics (maxBearingY/minBottom) + raw advance width.
+// No FancyBakedString/vertex data is produced -- callers decide whether to build line
+// objects (RebuildMeshes) or just measure (FitIntoVerticalBounds, TotalHeight, GetTextWidth).
+// Does NOT compute the horizontal align offset -- ASM-spec v1.6.1 BakedStringBox::
+// RebuildAlignments @0x00245c78 reads that off the ALREADY-BUILT line's rendered mesh
+// bounds (FancyBakedString::GetBounds), so RebuildMeshes computes it after constructing
+// each line, not here.
+// ASM-spec v1.6.1 Mortar::BakedStringBox::FitStrings @0x00246800 (line splitting).
 static void FitStrings(FontCacheObjectTTF* font, const char* text, float requestedSize,
-                       int boxWidth, ALIGNMENT_TYPE align,
-                       std::vector<WrappedLineInfo>& outLines)
+                       int boxWidth, std::vector<WrappedLineInfo>& outLines)
 {
     outLines.clear();
     if (!font || !text || text[0] == '\0') return;
@@ -419,16 +423,10 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
             lineEnd   = lineStart + 1;
         }
 
-        // ASM-verified: 2026-06-21T00:00Z v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (re-analyst):
-        // per-line align uses ink extent (GetBounds.right-left), NOT advance sum; X truncated to int.
-        // Ink-extent + text-span pass. Pen starts at 0 (lineOffsetX not yet known); the
-        // vertical metrics (bearingY/height) collected here are penX-independent, so this
-        // single pass covers both the horizontal-offset measurement AND the per-line
-        // ink-extent (maxBearingY/minBottom) the old two-pass Layout() computed separately.
+        // Vertical ink-extent + text-span pass. Pen starts at 0; used for the vertical
+        // metrics (bearingY/height) and the tight advance width. Horizontal align offset
+        // is NOT computed here -- see RebuildMeshes (needs the built line's rendered bounds).
         float penX = 0.0f;
-        bool firstInkGlyph = true;
-        float inkLeft  = 0.0f;
-        float inkRight = 0.0f;
         bool firstWordInk = true;
         size_t prevInkWj = lineStart; // last non-hardBreak word processed
         float lineMaxBearingY = 0.0f;
@@ -460,17 +458,6 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
                 // places ink AT the pen, no separate bearingX add). Was: penX += advanceX
                 // (full advance) + ink at penX+bearingX -- looser than the render, causing
                 // shrink/alignment decisions to diverge from what actually gets drawn.
-                if (g->width > 0.0f) {
-                    float gLeft  = penX;
-                    float gRight = gLeft + g->width;
-                    if (firstInkGlyph) {
-                        inkLeft  = gLeft;
-                        inkRight = gRight;
-                        firstInkGlyph = false;
-                    } else if (gRight > inkRight) {
-                        inkRight = gRight;
-                    }
-                }
                 if (g->width > 0.0f && g->height > 0.0f) {
                     if (g->bearingY > lineMaxBearingY) lineMaxBearingY = g->bearingY;
                     float bottom = g->bearingY - g->height;
@@ -479,31 +466,11 @@ static void FitStrings(FontCacheObjectTTF* font, const char* text, float request
                 penX += g->layoutX + 1.0f;
             }
         }
-        // penX (tight, layoutX-stepped total for this line) is the fallback for
-        // lines with no visible ink -- consistent with advanceWidth below, both now
-        // baked-bearing tight rather than the old loose (MeasureWord/advanceX) lineWidth.
-        float lineInkWidth = firstInkGlyph ? penX : (inkRight - inkLeft);
-
-        // Fix (d): horizontal alignment.
-        // Binary RebuildAlignments @0x00245c78 low-2-bits: 3=centre-H, 2=right, 0/1=left.
-        // Uses ink extent (lineInkWidth), NOT advance sum. Result truncated to int.
-        float lineOffsetX = 0.0f;
-        {
-            const int horizAlign = align & 0x3;
-            if (horizAlign == 3) {
-                lineOffsetX = wrapLimit * 0.5f - lineInkWidth * 0.5f;
-            } else if (horizAlign == 2) {
-                lineOffsetX = wrapLimit - lineInkWidth;
-            }
-            // 0 or 1: left-justified, lineOffsetX = 0.
-            lineOffsetX = (float)(int)lineOffsetX;
-        }
 
         WrappedLineInfo info;
         if (spanStart && spanEnd && spanEnd > spanStart) {
             info.text.assign(spanStart, (size_t)(spanEnd - spanStart));
         }
-        info.offsetX      = lineOffsetX;
         info.maxBearingY  = lineMaxBearingY;
         info.minBottom    = lineMinBottom;
         // advanceWidth: tight (layoutX-stepped) pen total from the ink loop above, NOT
@@ -542,7 +509,7 @@ void BakedStringBox::FitIntoVerticalBounds() {
         if (N == 0) return;
 
         std::vector<WrappedLineInfo> wl;
-        FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
+        FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, wl);
         if (wl.empty()) return;
 
         float diffShrink = m_BaseFontSize - m_FontSize;
@@ -563,7 +530,7 @@ float BakedStringBox::TotalHeight() const {
     // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
     // (= (int)(fontSize + m_LineSpacing)); no separate inter-line spacing term.
     std::vector<WrappedLineInfo> wl;
-    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
+    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, wl);
     int N = (int)wl.size();
     if (N == 0) return 0.0f;
     float diffShrink = m_BaseFontSize - m_FontSize;
@@ -578,8 +545,9 @@ float BakedStringBox::TotalHeight() const {
 // loop (FitStrings/MeasureWrap, floor 6.0px) picks m_FontSize; DeleteStrings() frees the
 // previous line set; then one FancyBakedString per wrapped line is constructed (17-arg
 // ctor), the active gradient/stroke-gradient is applied, and each line's LOCAL draw
-// offset is written into its own LineOffset() via ComputeBaselineY (reused unchanged
-// from the pre-restructure Layout()/RebuildAlignments math).
+// offset is written into its own LineOffset(): vertical baseline via ComputeBaselineY
+// (unchanged), horizontal align offset via the just-built line's rendered GetBounds
+// extent (ASM-spec v1.6.1 RebuildAlignments @0x00245c78 -- see the per-line loop below).
 void BakedStringBox::RebuildMeshes() {
     DeleteStrings();
     m_WrappedLines.clear();
@@ -622,7 +590,7 @@ void BakedStringBox::RebuildMeshes() {
     if (atlas) atlas->BuildPendingTextures();
 
     std::vector<WrappedLineInfo> wl;
-    FitStrings(m_Font, m_Text, requestedSize, m_BoxWidth, m_Align, wl);
+    FitStrings(m_Font, m_Text, requestedSize, m_BoxWidth, wl);
     if (wl.empty()) return;
 
     const int nLines = (int)wl.size();
@@ -681,11 +649,35 @@ void BakedStringBox::RebuildMeshes() {
         }
 
         // Per-line LOCAL draw offset (reuses ComputeBaselineY unchanged from the
-        // pre-restructure Layout()/Draw() vertical-baseline math; horizontal offset
-        // is FitStrings' ink-extent-based lineOffsetX, also unchanged).
+        // pre-restructure Layout()/Draw() vertical-baseline math).
+        //
+        // ASM-spec v1.6.1 BakedStringBox::RebuildAlignments @0x00245c78 (align width =
+        // rendered GetBounds extent): the horizontal offset uses w = |GetBounds.right -
+        // GetBounds.left| read off the line JUST CONSTRUCTED above (its main layer is
+        // built eagerly by the BakedStringTTF ctor -> FullInternalRebuild, so bounds are
+        // already the actual rendered mesh extent -- cellW+1 based, not the ink/bitmap
+        // width). Was: lineInkWidth from FitStrings' pre-render g->width scan, which
+        // undercounts by ~1px/glyph vs what FinishMesh actually draws (cellW+1 per glyph),
+        // drifting right-aligned text off the box edge by up to ~1px/glyph.
+        float lineOffsetX = 0.0f;
+        {
+            const int horizAlign = m_Align & 0x3;
+            if (horizAlign == 2 || horizAlign == 3) {
+                MortarRectangleT<long>* bounds = line->GetBounds();
+                const float w = bounds ? (float)bounds->Width() : 0.0f;
+                if (horizAlign == 3) {
+                    lineOffsetX = (float)m_BoxWidth * 0.5f - w * 0.5f;
+                } else { // == 2: right
+                    lineOffsetX = (float)m_BoxWidth - w;
+                }
+                lineOffsetX = (float)(int)lineOffsetX;
+            }
+            // 0 or 1: left-justified, lineOffsetX = 0.
+        }
+
         float localBaseY = ComputeBaselineY(m_Align, nLines, i, wl[i].maxBearingY, wl[i].minBottom,
                                             (float)m_BoxHeight, step, maxSpan, requestedSize);
-        line->LineOffset() = Vec3(wl[i].offsetX, localBaseY, 0.0f);
+        line->LineOffset() = Vec3(lineOffsetX, localBaseY, 0.0f);
 
         m_Lines.push_back(line);
     }
@@ -1020,7 +1012,7 @@ float BakedStringBox::GetTextWidth() const {
         const_cast<BakedStringBox*>(this)->RebuildMeshes();
     }
     std::vector<WrappedLineInfo> wl;
-    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, m_Align, wl);
+    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, wl);
     float maxW = 0.0f;
     for (size_t i = 0; i < wl.size(); ++i) {
         if (wl[i].advanceWidth > maxW) maxW = wl[i].advanceWidth;
