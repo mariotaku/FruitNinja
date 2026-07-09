@@ -218,12 +218,27 @@ int main(int argc, char* argv[]) {
         game_work.mHud->AddControl(btns[i]);
     }
 
+    // Btn 0 + 1 mirror the REAL main-menu "NEW GAME" button's setup exactly
+    // (MainScreen::CreateButtons @0x001961f8 m_pGameModeButton block):
+    //   texture = m_RingTex[3]; m_RestScale = (texW+1, texH+1, 1) -- overridden
+    //   AFTER Init to the ring texture's own pixel size (NOT our toggle
+    //   hitBounds default); SetText(..., radius=58.0f, fontScale=12.0f, ...).
+    // The prior version used the SetText default radius (42.0f) with a
+    // hitBounds-derived m_RestScale (96,96) -- both mismatched the ring band,
+    // so the curved label arced above/below the ring instead of sitting on it.
+    if (game_work.m_RingTex[3].IsValid()) {
+        const float ringW = (float)(game_work.m_RingTex[3]->GetWidth()  + 1);
+        const float ringH = (float)(game_work.m_RingTex[3]->GetHeight() + 1);
+        btns[0]->m_RestScale = Vec3(ringW, ringH, 1.0f);
+        btns[1]->m_RestScale = Vec3(ringW, ringH, 1.0f);
+    }
+
     // Btn 0: NORMAL -- ring quad + curved 3-layer label (same recipe as the
     // real NEW GAME button: m_RingTex[3] + gradient m_RingColours[4]/[5]).
     btns[0]->m_Texture = game_work.m_RingTex[3];
     btns[0]->SetText("NEW GAME",
                      game_work.m_RingColours[4], game_work.m_RingColours[5],
-                     42.0f, 12.0f, true, true);
+                     58.0f, 12.0f, true, true);
 
     // Btn 1: PRESS-DIM -- identical to btn 0 except touch disabled, which
     // satisfies the Draw press-dim gate (m_FruitType<0 && m_bAcceptsTouch==0)
@@ -231,7 +246,7 @@ int main(int argc, char* argv[]) {
     btns[1]->m_Texture = game_work.m_RingTex[3];
     btns[1]->SetText("NEW GAME",
                      game_work.m_RingColours[4], game_work.m_RingColours[5],
-                     42.0f, 12.0f, true, true);
+                     58.0f, 12.0f, true, true);
     btns[1]->SetAcceptsTouch(false);
 
     // Btn 2: NEW badge armed. Timer is pinned to kNewBadgePin after every
