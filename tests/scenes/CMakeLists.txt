@@ -148,3 +148,14 @@ set_tests_properties(special_fruit PROPERTIES TIMEOUT 120)
 add_scene_test(scene_coin scene_coin.cpp)
 add_test(NAME scene_coin COMMAND scene_coin)
 set_tests_properties(scene_coin PROPERTIES TIMEOUT 60)
+
+# ---- scene_jiblet: Jiblet (super-fruit finale chunk) spawn/fling/draw test ----
+# Spawns 8 pomegranate jiblets via the exact SuperFruitControl::SpawnJibs
+# @0x001bc748 radial-fan call convention (Jiblet::Init with the
+# pomegranate_jiblet.mmd mesh), ticks the fling, and captures 2 PNGs:
+#   tmp/test/screenshots/jiblet/just_spawned.png (all 8 at origin, asserts drawn)
+#   tmp/test/screenshots/jiblet/mid_flight.png   (radial fan, asserts drawn)
+# Port specific: standalone jiblet spawn/fling/draw regression test
+add_scene_test(scene_jiblet scene_jiblet.cpp)
+add_test(NAME scene_jiblet COMMAND scene_jiblet)
+set_tests_properties(scene_jiblet PROPERTIES TIMEOUT 60)
