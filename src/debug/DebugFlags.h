@@ -5,7 +5,11 @@
 
 //
 // Port specific: debug-only overlay flags. No binary equivalent.
-// g_DebugHitboxes:  draw entity collision spheres + HUD bounds. Toggle F1.
+// g_DebugHitboxes:  4-level debug overlay cycle. Toggle F1 (cycles 0->1->2->3->0).
+//                     0 = off
+//                     1 = entity collision spheres + blade trails
+//                     2 = level 1 + HUDControl bounding boxes
+//                     3 = level 2 + font/text-box debug overlays
 // g_DebugWireframe: glPolygonMode(GL_LINE) around 3D entity pass. Toggle F2.
 //                   Desktop GL only (no-op under GLES).
 // g_ShowFps:        "FPS NNN" counter in top-left corner. Toggle F3,
@@ -16,7 +20,7 @@
 
 namespace FN {
 
-extern bool  g_DebugHitboxes;
+extern int   g_DebugHitboxes;          // Port specific: 0=off 1=entity 2=+HUD 3=+font, see comment above
 extern bool  g_DebugWireframe;         // Port specific: desktop GL only
 extern float g_DebugTimeScale;         // Port specific: debug-only, no binary equivalent
 extern bool  g_ShowFps;                // Port specific: FPS counter overlay (toggle F3, --fps, ?fps=1)
@@ -24,13 +28,13 @@ extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Ov
 
 // Render every active Fruit / Bomb / SplatEntity collision sphere as
 // a translucent circle. Call from GameDraw after the entity pass.
-// No-op when g_DebugHitboxes is false.
+// No-op when g_DebugHitboxes < 1.
 void DebugHitbox_Draw();
 
 // Render every active HUDControl bounding box as a magenta AABB outline.
 // Covers all HUDControl subclasses (MenuButton, BonusScreen controls, etc.).
 // Call from GameDraw right after DebugHitbox_Draw().
-// No-op when g_DebugHitboxes is false.
+// No-op when g_DebugHitboxes < 2.
 void DebugHUDBounds_Draw();
 
 // Render "FPS NNN" in the top-left corner of the screen.
@@ -41,18 +45,22 @@ void DebugFps_Draw(float fps);
 // Draw a thick line from m_TailPos to m_HeadPos for every active blade
 // (IsBladeActive() == true). Yellow line + small end-cap markers.
 // Call from GameDraw after DebugHitbox_Draw / DebugHUDBounds_Draw.
-// No-op when g_DebugHitboxes is false.
+// No-op when g_DebugHitboxes < 1.
 void DebugBladeTrails_Draw();
 
 // Draw a text-anchor crosshair (MAGENTA), an optional box rect (GREEN),
-// and an ink-bounds rect (YELLOW) for one text draw call.
+// and an optional ink-bounds rect (YELLOW) for one text draw call.
 // All coordinates are in centred-ortho world space.
 // hasBox: if true, draws [boxX0,boxY0]-[boxX1,boxY1] as the declared text box.
-// Ink bounds [inkX0,inkY0]-[inkX1,inkY1] are always drawn.
-// No-op when g_DebugHitboxes is false.
+// hasInk: if true, draws [inkX0,inkY0]-[inkX1,inkY1] as the measured ink bounds.
+//         Pass false when the caller has no real per-vertex ink measurement
+//         (e.g. BakedStringBox only has a declared box, no ink) -- passing
+//         ink==box there would draw the same rect twice.
+// No-op when g_DebugHitboxes < 3.
 void DebugText_Overlay(float anchorX, float anchorY,
                        bool hasBox,
                        float boxX0, float boxY0, float boxX1, float boxY1,
+                       bool hasInk,
                        float inkX0, float inkY0, float inkX1, float inkY1);
 
 } // namespace FN
@@ -64,7 +72,7 @@ void DebugText_Overlay(float anchorX, float anchorY,
 // that multiply by it compile and reduce to no-op arithmetic.
 namespace FN {
 static const float g_DebugTimeScale      = 1.0f;
-static const bool  g_DebugHitboxes       = false;
+static const int   g_DebugHitboxes       = 0;
 static const bool  g_DebugWireframe      = false;
 static const bool  g_ShowFps             = false;
 static const bool  g_SuppressTextOverlay = false;
@@ -75,6 +83,7 @@ inline void DebugBladeTrails_Draw() {}
 inline void DebugText_Overlay(float, float,
                                bool,
                                float, float, float, float,
+                               bool,
                                float, float, float, float) {}
 } // namespace FN
 

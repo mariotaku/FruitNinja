@@ -32,7 +32,7 @@
 
 namespace FN {
 
-bool  g_DebugHitboxes        = false;
+int   g_DebugHitboxes        = 0;     // Port specific: 0=off 1=entity 2=+HUD 3=+font (F1 cycles)
 bool  g_DebugWireframe       = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale       = 1.0f;  // Port specific: debug-only, no binary equivalent
 bool  g_ShowFps              = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
@@ -158,7 +158,7 @@ static uint32_t ColourFor(int entityType) {
 // ---------------------------------------------------------------------
 
 void DebugHitbox_Draw() {
-    if (!g_DebugHitboxes) return;
+    if (g_DebugHitboxes < 1) return;
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -302,7 +302,7 @@ static const char* StripMangle(const char* s) {
 }
 
 void DebugHUDBounds_Draw() {
-    if (!g_DebugHitboxes) return;
+    if (g_DebugHitboxes < 2) return;
 
     const std::list<HUDControl*>& controls = HUDControl::GetActiveControls();
     if (controls.empty()) return;
@@ -558,9 +558,10 @@ static const float kTextAnchorThk = 0.8f;
 void DebugText_Overlay(float anchorX, float anchorY,
                        bool hasBox,
                        float boxX0, float boxY0, float boxX1, float boxY1,
+                       bool hasInk,
                        float inkX0, float inkY0, float inkX1, float inkY1)
 {
-    if (!g_DebugHitboxes) return;
+    if (g_DebugHitboxes < 3) return;
 
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
@@ -634,7 +635,11 @@ void DebugText_Overlay(float anchorX, float anchorY,
     }
 
     // Ink bounds rect (YELLOW) -- 4 sides * 6 verts = 24 verts.
-    {
+    // Port specific: skipped when hasInk is false -- callers with no real
+    // per-vertex ink measurement (BakedStringBox, which only has a declared
+    // box) used to pass ink==box, drawing the same rect twice (once green,
+    // once yellow) on top of itself. hasInk lets them opt out instead.
+    if (hasInk) {
         static QUADCUSTOMVERTEX iv[24];
         BuildAABBOutline(iv, inkX0, inkX1, inkY0, inkY1, kZ - 0.02f, kThk, kInkCol);
         r->DrawTriList(iv, 24);
@@ -642,7 +647,7 @@ void DebugText_Overlay(float anchorX, float anchorY,
 }
 
 void DebugBladeTrails_Draw() {
-    if (!g_DebugHitboxes) return;
+    if (g_DebugHitboxes < 1) return;
 
     Renderer* r = Renderer::GetInstance();
     if (!r) return;

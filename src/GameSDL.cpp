@@ -179,8 +179,13 @@ void Game::pollInput() {
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
             running = false;
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
-            FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
-            LOG_DEBUG("Debug", "Hitboxes %s", FN::g_DebugHitboxes ? "ON" : "OFF");
+            // Port specific: 4-level debug overlay cycle (dev aid, not in the binary).
+            static const char* kDebugHitboxLevelNames[4] = {
+                "off", "entity", "entity+HUD", "entity+HUD+font"
+            };
+            FN::g_DebugHitboxes = (FN::g_DebugHitboxes + 1) % 4;
+            LOG_DEBUG("Debug", "Hitboxes level %d (%s)", FN::g_DebugHitboxes,
+                      kDebugHitboxLevelNames[FN::g_DebugHitboxes]);
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
             // Port specific: glPolygonMode(GL_LINE) around the 3D
             // entity draw pass. Desktop GL only -- no-op under GLES.
