@@ -173,9 +173,15 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     // Clamp if file was shorter than header claimed
     if (read < sampleCount) sampleCount = read;
 
-    // Apply >>4 sample shift (MAMAudioController::LoadSound behaviour)
+    // DIFFERS: original = >>4 from MAMAudioController::LoadSound (v1.6.1 @0x0022f46c),
+    // using >>2 (+12dB) because the port's AudioCallback mixer (unlike binary
+    // FillBuffer @0x0022f7f0) already SATURATES on overflow, so the binary's
+    // full-16-voice headroom margin (32767>>4=2047, 16*2047=32752) is redundant.
+    // >>2 keeps 4 concurrent full-scale voices clip-free (32767>>2=8191, 4*8191=32764
+    // <= 32767); busier moments are caught by the mixer's saturating clamp, not
+    // int16 wraparound. Fixed louder default (no runtime volume control ported).
     for (int i = 0; i < sampleCount; i++) {
-        raw[i] = raw[i] >> 4;
+        raw[i] = raw[i] >> 2;
     }
 
     SoundBuffer* buf = new SoundBuffer();
