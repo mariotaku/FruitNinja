@@ -111,7 +111,7 @@ public:
     // Binary @ 0x00108f64 — Meyers singleton
     static AchievementManager* GetInstance();
 
-    // Binary @ 0x00109200 — parse xml/achievementlist.xml
+    // Binary @ 0x00109200 — parse xml/achievementList.xml (camelCase, per v1.6.1 literal)
     void LoadAchievementInfo();
 
     // Binary @ 0x00108fb4 — free m_All entries, clear all maps
