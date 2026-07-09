@@ -1278,13 +1278,12 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         } else {
             lineCount = (cursorY < 0.0f) ? (int)(-cursorY + 0.5f) + 1 : 1;
         }
-        printf("FN_FONT_DEBUG DrawString: wrapLimit=%.3f maxWH=(%.3f,%.3f)"
-               " cursorY=%.3f lineCount=%d totalGlyphs=%d alignment=0x%02X"
-               " pos=(%.1f,%.1f) scale=%.1f yLineFactor=%.2f\n",
-               wrapLimit, maxWH.x, maxWH.y, cursorY, lineCount,
-               totalVerts / 6, alignment,
-               pos.x, pos.y, scale, yLineFactor);
-        fflush(stdout);
+        LOG_DEBUG("Font", "DrawString: wrapLimit=%.3f maxWH=(%.3f,%.3f)"
+                  " cursorY=%.3f lineCount=%d totalGlyphs=%d alignment=0x%02X"
+                  " pos=(%.1f,%.1f) scale=%.1f yLineFactor=%.2f",
+                  wrapLimit, maxWH.x, maxWH.y, cursorY, lineCount,
+                  totalVerts / 6, alignment,
+                  pos.x, pos.y, scale, yLineFactor);
     }
 #endif
 

@@ -7,6 +7,8 @@
 
 namespace Debug {
 
+unsigned int g_LogTick = 0;
+
 static SDL_LogPriority ToSDLPriority(LogLevel level) {
     switch (level) {
         case LogLevel_Verbose: return SDL_LOG_PRIORITY_VERBOSE;
