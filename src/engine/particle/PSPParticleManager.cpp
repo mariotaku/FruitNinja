@@ -46,10 +46,13 @@ static uint16_t ParseBlendEnum(const char* s) {
 }
 
 // v1.6.1 PSPParticleManager::PSPParticleManager @0x0013bf40 — manager ctor.
-// Sets m_GlobalTimeScale=1.0; NULLs all owned pointers.
-// BUG FIX: removed m_GlobalTimeMod — +0x00 is the vptr, not a data field.
+// Sets m_GlobalPullRadius=0.0 (+0x00), m_GlobalTimeScale=1.0 (+0x04); NULLs all owned pointers.
+// ASM-spec v1.6.1 PSPParticleManager @0x00013bf40 (non-polymorphic; +0x00 = float
+//   m_GlobalPullRadius, not a vptr): the binary ctor writes this->__vptr = 0, i.e. it zeroes
+//   +0x00 as a data field (the vortex pull radius), not a vtable pointer.
 PSPParticleManager::PSPParticleManager()
-    : m_GlobalTimeScale(1.0f)
+    : m_GlobalPullRadius(0.0f)
+    , m_GlobalTimeScale(1.0f)
     , m_GlobalOrigin(0.0f, 0.0f, 0.0f)
     , m_pParticles(0)
     , m_FreeHead(0)
@@ -480,6 +483,10 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
     mm.UploadModelViewOnly();
 
     m_DrawnParticleCount = 0;
+
+    // TODO: v1.6.1 PSPParticleManager::Draw @0x0013eccc -- pull free particles toward
+    //   m_GlobalOrigin within m_GlobalPullRadius (vortex); read-side not yet ported.
+    //   Write-side (m_GlobalPullRadius set by SuperFruitControl::UpdateExplosion) is wired.
 
     static std::vector<QUADCUSTOMVERTEX> s_verts;
     const PSPParticleTemplate* curTmpl = 0;

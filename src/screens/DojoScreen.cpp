@@ -301,8 +301,8 @@ void DojoScreen::CreateButtons() {
         m_pBackButton->m_HudScale.y = -0.3f;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: field_0x13c(m_RestScale)*=0.825
         m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
-        // TODO: v1.6.1 CreateButtons @0x0016ad9c -- binary does m_pTrackedFruit->m_LaunchVelocity *= 0.825
-        //   (a bomb member); m_LaunchVelocity not yet in entity layout; harmless to symptom.
+        // v1.6.1 CreateButtons @0x0016ad9c: m_pTrackedFruit->m_LaunchVelocity *= 0.825.
+        //   m_LaunchVelocity IS Entity::scale (+0x28), so this is the tracked-fruit scale *= BACK_SCALE.
         if (m_pBackButton->m_pTrackedFruit) {
             m_pBackButton->m_pTrackedFruit->scale =
                 m_pBackButton->m_pTrackedFruit->scale * BACK_SCALE;

@@ -349,7 +349,9 @@ void SuperFruitControl::Update(float dt)
             if (m_pHostFruit) {
                 m_ExplodeOrigin = m_pHostFruit->pos;     // explosion centre (+0xf0)
             }
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
+            // v1.6.1 SuperFruitControl::Update @0x001bca10: FruitCamera::TransitionOut(game+0x4c).
+            //   Port method is StartZoomOut() (binary symbol FruitCamera::TransitionOut @0x1bede8).
+            if (game_work.m_FruitCamera) game_work.m_FruitCamera->StartZoomOut();
             StopAllFruit();
             UnpauseSlices();
             if (m_pLinkedSlasher) {
@@ -439,11 +441,9 @@ void SuperFruitControl::Update(float dt)
             WaveManager::GetInstance()->m_SpeedControl[0] = nullptr;
 #endif
             WaveManager::GetInstance()->GetNextWave(0);
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- BLOCKED: binary also writes
-            //   PSPParticleManager+0x00 (m_GlobalTimeMod) = 0.0f here. The port's manager has
-            //   the vptr at +0x00 (no m_GlobalTimeMod field; see PSPParticleManager.cpp:50);
-            //   writing it would clobber the vtable. Needs re-analyst to resolve whether the
-            //   binary manager truly has a vptr at +0x00 or a m_GlobalTimeMod float.
+            // v1.6.1 SuperFruitControl::Update @0x001bca10: finale end zeroes PSPParticleManager+0x00
+            //   (m_GlobalPullRadius, the vortex pull radius -- a float, not a vptr).
+            PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
             PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
             //   (HUD+0x24); end ts=1.
@@ -672,9 +672,10 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Glow-counter reroll + per-hit scale-pop.
     if (m_GlowCounter > 0) m_GlowCounter--;
     if (m_GlowCounter < 1) {
-        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: binary also does
-        //   m_TintB += Fruit::GetSliceDir(m_pHostFruit) * rand here; GetSliceDir is unported,
-        //   and the tint DAT constants are unmapped, so the tint term is deferred.
+        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: binary also rerolls
+        //   m_TintB here (Magnitude gate -> Rand32 or Atan2Idx-based Cos/Sin * rand). GetSliceDir
+        //   is now ported, but this reroll's exact branch logic + tint DAT constants are unmapped,
+        //   so the tint term stays deferred.
         m_Scale = 0.0f;               // per-hit scale-pop (re-ramps in Update)
         m_TintA = m_TintCurrent;
         m_GlowCounter = 0;
@@ -683,11 +684,15 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Bump the wave speed-loss timer (P0).
     WaveManager::GetInstance()->AddToSpeedLossTime(0.1f, 0);
 
-    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: Fruit::RemoveTrailParticles(m_pHostFruit)
-    //   (RemoveTrailParticles unported; Fruit only has SetTrailParticles). Wire when it lands.
-
-    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: m_SpinAxis = Fruit::GetSliceDir(m_pHostFruit) * 3.0
-    //   (GetSliceDir unported). m_SpinAxis stays 0 until it lands (keeps the throw-spin arm dormant).
+    // v1.6.1 SuperFruitControl::Sliced @0x001bb994: release the host's trail emitters, then
+    //   set the throw-spin axis from the blade direction. The slice index is the throw-orbit
+    //   spin baked as a 16-bit angle: sliceIdx = (uint16)(int)(-182.0 * base m_Timer(+0x2c)),
+    //   where HUDControl::m_Timer holds -spin (see ctor). m_SpinAxis = GetSliceDir(sliceIdx)
+    //   * host->m_SliceArcImpulse(+0xc4) * 3.0 (ASM: two operator* calls, scalars host+0xc4 then 3.0).
+    m_pHostFruit->RemoveTrailParticles();
+    uint16_t sliceIdx = (uint16_t)(int)(-182.0f * HUDControl::m_Timer);
+    m_SpinAxis = m_pHostFruit->GetSliceDir(sliceIdx)
+               * m_pHostFruit->m_SliceArcImpulse * 3.0f;
 
     // v1.6.1 SuperFruitControl::Sliced @0x001bb994: two AddSlice effects at the host fruit pos.
     //   impulse = uniform[0.8, 1.1), rateMul = 0.65, pos.z = m_EmitterDepth - 5.0
@@ -849,17 +854,17 @@ void SuperFruitControl::ExplodeSuperFruit()
         // post-init writes: copy host transform onto the jib actor
         jiblet->m_Age = 0.0f;                // jib+0xac = 0 (reset age set by Init to -0.04)
         jiblet->m_Rotation = rot;            // jib+0x4c = rot (64-byte Matrix44 copy)
-        // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- BLOCKED: binary writes
-        //   jib->m_LaunchVelocity = host->m_LaunchVelocity (read before the host zero below) and
-        //   does NOT copy scale. m_LaunchVelocity is not yet mapped to a Fruit offset in the port,
-        //   so the scale copy is kept (avoids losing jib scale) until the field is resolved.
-        jiblet->scale = host->scale;         // jib+0x28 (kept until m_LaunchVelocity is mapped)
+        // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: jib->m_LaunchVelocity =
+        //   host->m_LaunchVelocity. m_LaunchVelocity IS Entity::scale (+0x28), so this copies the
+        //   host fruit's visual scale onto the jib -- read here, before the host scale-collapse below.
+        jiblet->scale = host->scale;         // jib+0x28 = host+0x28 (Entity::scale = m_LaunchVelocity)
     }
 
-    // ---- (E) restore host ----
-    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- BLOCKED: binary restore is
-    //   host->m_LaunchVelocity = Vec3(0,0,0) (NOT host->scale = DAT). m_LaunchVelocity's Fruit
-    //   offset is unresolved in the port; wire when re-analyst maps it.
+    // ---- (E) restore host: collapse the host fruit's visual scale ----
+    // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: host->m_LaunchVelocity = Vec3(0,0,0).
+    //   m_LaunchVelocity IS Entity::scale (+0x28), so this zeroes the host fruit's visual scale,
+    //   collapsing it after the jiblets (which snapshotted the pre-collapse scale) have spawned.
+    host->scale = Vec3(0.0f, 0.0f, 0.0f);
 }
 
 // Binary @ 0x001b9850. Forces host fruit's slice timer negative when combo is cancelled
@@ -1115,11 +1120,16 @@ void SuperFruitControl::ResetAll()
 #else
     WaveManager::GetInstance()->m_SpeedControl[0] = nullptr;
 #endif
+    // v1.6.1 SuperFruitControl::Reset @0x001bb52c: also zeroes PSPParticleManager+0x00
+    //   (m_GlobalPullRadius, the vortex pull radius -- a float, not a vptr).
+    PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
     PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: slow-mo = game_work.mHud->m_globalTimeScale
     //   (HUD+0x24); restore to 1.0.
     if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
+    // v1.6.1 SuperFruitControl::Reset @0x001bb52c: FruitCamera::TransitionOut(game+0x4c).
+    //   Port method is StartZoomOut() (binary symbol FruitCamera::TransitionOut @0x1bede8).
+    if (game_work.m_FruitCamera) game_work.m_FruitCamera->StartZoomOut();
     // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
     UnpauseSlices();
 
@@ -1229,7 +1239,7 @@ void SuperFruitControl::StopAllFruit()
 // NOTE: the radial-push formula (dir*(outerR-dist)*dt*mult, mults 4.0 fruit /
 // 5.0 bomb+jib) and the inner-radius force-explode branch are ported from the RE
 // spec + the prior TODO; the exact clamp/condition still wants asm-inspector
-// confirmation. The mgr m_GlobalTimeMod write is BLOCKED (see below).
+// confirmation. The mgr+0x00 write (m_GlobalPullRadius = m_InnerRadius*1.6) is wired below.
 void SuperFruitControl::UpdateExplosion(float dt)
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
@@ -1251,9 +1261,9 @@ void SuperFruitControl::UpdateExplosion(float dt)
     // Write epicenter global.
     mgr.m_GlobalOrigin = m_ExplodeOrigin;    // this+0xf0 -> mgr+0x08
 
-    // TODO: v1.6.1 SuperFruitControl::UpdateExplosion @0x001baeb8 -- BLOCKED: binary writes
-    //   PSPParticleManager+0x00 (m_GlobalTimeMod) = m_InnerRadius*1.6. The port manager has
-    //   the vptr at +0x00 (no m_GlobalTimeMod; PSPParticleManager.cpp:50); needs re-analyst.
+    // v1.6.1 SuperFruitControl::UpdateExplosion @0x001baeb8: PSPParticleManager+0x00 =
+    //   m_InnerRadius*1.6. +0x00 is the vortex pull radius (float m_GlobalPullRadius, not a vptr).
+    mgr.m_GlobalPullRadius = m_InnerRadius * 1.6f;
 
     float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
     mgr.m_GlobalTimeScale =
