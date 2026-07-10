@@ -212,6 +212,7 @@ static void BootWait(void* arg) {
     //                                        0=off 1=entity 2=+HUD 3=+font). Mobile has
     //                                        no F1, so the level is set straight from the URL.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
+    //   ?osdsfx=1                    -- per-SFX OSD readout (g_bOsdSfx, F4 on desktop)
     {
         // hitbox / hitboxes=<level>
         int hitboxLevel = EM_ASM_INT({
@@ -266,6 +267,23 @@ static void BootWait(void* arg) {
         if (fpsParam) {
             FN::g_ShowFps = true;
             LOG_INFO("Debug", "URL param: FPS overlay ON");
+        }
+
+        // osdsfx=1 or osdsfx (bare) -- enables the per-SFX OSD readout
+        // (same flag F4 toggles on desktop; mobile has no F4).
+        int osdSfxParam = EM_ASM_INT({
+            try {
+                var qs = window.location.search;
+                if (!qs) return 0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('osdsfx');
+                if (v !== null && v !== '0') return 1;
+            } catch(e) {}
+            return 0;
+        });
+        if (osdSfxParam) {
+            FN::g_bOsdSfx = true;
+            LOG_INFO("Debug", "URL param: SFX OSD ON");
         }
 
         // lang=<code|num> -- language override for i18n testing.

@@ -38,11 +38,14 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 int main(int argc, char* argv[]) {
     // Port specific: parse launch parameters for debug flags.
     //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
+    //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
     //   --lang=<code|num>   : override language (e.g. --lang=french or --lang=3)
     int g_langOverride = -1;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--fps") == 0 || strcmp(argv[i], "--show-fps") == 0) {
             FN::g_ShowFps = true;
+        } else if (strcmp(argv[i], "--osd-sfx") == 0) {
+            FN::g_bOsdSfx = true;
         } else if (strncmp(argv[i], "--lang=", 7) == 0) {
             g_langOverride = ParseLanguageArg(argv[i] + 7);
         }
