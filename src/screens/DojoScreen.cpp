@@ -39,6 +39,7 @@
 #include "engine/util/StringTable.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include "game/GameWork.h"
 
 // --- Constants (resolved from binary via read_memory) ---
@@ -388,6 +389,10 @@ void DojoScreen::CreateButtons() {
 // Matches DojoScreen::Update @ 0x0016b6a4
 // ===================================================================
 void DojoScreen::Update(float dt) {
+    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the transition
+    //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+    float dtN = dt * 60.0f;
+
     // ASM-spec v1.6.1 DojoScreen::Update @0x0016b6a4
     BaseScreen::UpdateButtons(dt);
     // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580: called every frame.
@@ -399,8 +404,9 @@ void DojoScreen::Update(float dt) {
     // Binary: alpha lerp only. CreateButtons() is called from Reset(), not here.
     case 0: {
         // Exponential approach: alpha += (1 - alpha) * 0.25
-        m_TransitionAlpha = m_TransitionAlpha +
-                            (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-in
+        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+        m_TransitionAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
 
         // Transition to state 1 when fully faded in
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
@@ -429,7 +435,9 @@ void DojoScreen::Update(float dt) {
     case 2:
     case 3:
     case 4: {
-        m_TransitionAlpha *= ALPHA_DECAY;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-out
+        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
 
         {
             Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -481,7 +489,9 @@ void DojoScreen::Update(float dt) {
 
     // ---- STATE 6: Back/quit → MainScreen ----
     case 6: {
-        m_TransitionAlpha *= ALPHA_DECAY;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the quit fade-out
+        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
 
         // Binary: if (alpha < 0.001) → mark for removal
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
