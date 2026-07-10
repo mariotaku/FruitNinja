@@ -214,7 +214,10 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bClearsMenuItems = 1;  // binary Init @0x19b9f8 sets 1 for EVERY button: slicing any
                              // menu button clears all menu fruits (ClearMenuItems) so the
                              // type-0 entity count reaches 0 and the target screen can open.
-    m_bDragCancel    = 0;
+    // ASM-spec v1.6.1 MenuButton::Init @0x0019ba28: m_bDragCancel(+0x139)=1 (only writer in binary).
+    // Enables held press-scale (Update @0x0019aeac: size=m_RestScale*0.95) -> Draw @0x0019c2e4
+    // press-dim RGB*0.5 for m_FruitType<0 toggle buttons (main menu + pause).
+    m_bDragCancel    = 1;   // v1.6.1 MenuButton::Init @0x0019ba28: strb r6(=1),[this,#0x139] unconditional
     m_bRespondsToBackKey = 0;
     m_reservedD4     = static_cast<int>(0xffffffff);
     m_TouchSlot      = -1;
@@ -793,9 +796,9 @@ void MenuButton::Update(float dt) {
                         m_TouchY >= bottom && m_TouchY <= top;
                     if (insideNow) {
                         // v1.6.1 MenuButton::Update @0x0019aeac-0x0019af6c: PRESS_SCALE
-                        // shrink while held (literal @0x0019ac6c = 0.95f).
-                        size.x = m_RestScale.x * 0.95f;
-                        size.y = m_RestScale.y * 0.95f;
+                        // shrink while held (literal @0x0019ac6c = 0.95f). Binary sets
+                        // size = m_RestScale * 0.95f (full Vec3).
+                        size = m_RestScale * 0.95f;
                     } else {
                         size = m_RestScale;
                         // v1.6.1 MenuButton::Update @0x0019af3c: touch-slot detach is
