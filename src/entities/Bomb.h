@@ -110,8 +110,16 @@ public:
     // +0xA8: speed multiplier; 1.0 normal, ~0.666 fat
     float m_SpeedMult;                       // +0xA8
 
-    // +0xAC: Init writes 0.0f; not otherwise read (makes sizeof 0xB0)
-    float m_Field_0xAC;                      // +0xAC
+    // +0xAC: binary writes 0.0f in Init and never reads it (pads sizeof to 0xB0).
+    // Port specific: host build repurposes this dead 4-byte slot as the slow-mo spin
+    //   fractional carry (16.16-style two uint16 fixed-point fractions, X/Y) so sub-unit
+    //   slow-motion rotation deltas accumulate instead of truncating to 0 each frame.
+    //   Same offset/size in both branches -> sizeof(Bomb)==0xB0 either way. See Update().
+#ifdef __bada__
+    float m_Field_0xAC;                      // +0xAC faithful field (unused; keeps 0xB0 ABI). Binary writes 0.0f, never reads.
+#else
+    uint16_t m_RotFraction[2];               // +0xAC Port specific: X/Y rotation fractional carry (host only)
+#endif
 
     Bomb();
     ~Bomb();

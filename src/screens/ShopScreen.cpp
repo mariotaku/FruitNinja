@@ -33,6 +33,7 @@
 #include "debug/Logger.h"
 #include "engine/util/StringTable.h"
 #include <cstdlib>
+#include <cmath>
 #include "game/GameWork.h"
 
 // ---------------------------------------------------------------------------
@@ -830,6 +831,10 @@ void ShopScreen::EquipCallback() {
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
 
+    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
+    //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
+    float dtN = dt * 60.0f;
+
     // Binary @ 0x0015e216: demote the panel to 0x40 ONLY when no splats are alive.
     // 0x40 draws before SplatEntity::DrawActiveSplats, but splats only exist during
     // the buy/transition states (never plain browsing), so the 0x40 frames never
@@ -867,7 +872,9 @@ void ShopScreen::Update(float dt) {
     // ---- STATE 0: Transition in ----
     case 0: {
         // Binary: alpha += (1 - alpha) * 0.125
-        float newAlpha = m_TransitionAlpha + (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
+        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
+        float newAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
         m_TransitionAlpha = newAlpha;
 
         if (newAlpha > ALPHA_IN_DONE) {
@@ -1048,7 +1055,9 @@ void ShopScreen::Update(float dt) {
     case 2:
     case 7: {
         // Binary: uses DAT_0015e90c = 0.85f (not 0.75f — state 3 uses 0.75 literal)
-        float newAlpha = ALPHA_DECAY_STATE27 * m_TransitionAlpha;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
+        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
+        float newAlpha = m_TransitionAlpha * powf(ALPHA_DECAY_STATE27, dtN);
         m_TransitionAlpha = newAlpha;
 
         // Binary condition: (newAlpha < DAT_0015e910) && (m_State == 2) && (m_pParent != null)
@@ -1073,7 +1082,9 @@ void ShopScreen::Update(float dt) {
     // ---- STATE 3: Buy animation fade-out ----
     case 3: {
         // Binary: uses literal 0.75f (not the 0.85f from DAT_0015e90c).
-        float newAlpha = m_TransitionAlpha * ALPHA_DECAY_STATE3;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
+        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
+        float newAlpha = m_TransitionAlpha * powf(ALPHA_DECAY_STATE3, dtN);
         m_TransitionAlpha = newAlpha;
 
         // ARM idiom: if (-1 < (int)((uint)(newAlpha < threshold) << 0x1f))
