@@ -77,7 +77,11 @@ main_wasm() {
 }
 
 verify_outputs() {
-    [ -f "$BUILD_DIR/fruit-ninja.html" ] && [ -n "$(main_wasm)" ]
+    # Release: web-hash-assets.py (POST_BUILD) renames fruit-ninja.html ->
+    # index.html; debug: fruit-ninja.html stays until the post-loop mv. Accept
+    # EITHER, else verify wrongly fails after a good release build, forcing a
+    # spurious retry whose re-link objcopy's an already-hashed-away fruit-ninja.wasm.
+    { [ -f "$BUILD_DIR/index.html" ] || [ -f "$BUILD_DIR/fruit-ninja.html" ]; } && [ -n "$(main_wasm)" ]
 }
 
 # --- build (race-safe two-step) ------------------------------------------------
@@ -88,7 +92,13 @@ cmake --build "$BUILD_DIR" --target fruit-ninja-game -j"$NPROC"
 OK=0
 for attempt in 1 2 3; do
     clean_link_outputs
-    if cmake --build "$BUILD_DIR" -j"$NPROC"; then
+    # Link + POST_BUILD content-hash SERIALLY (-j1): the exe link otherwise races
+    # the libfruit-ninja-game.a rule under -j, and the retry loop that raced-link
+    # triggered could pair a .js and .wasm from DIFFERENT link passes -> broken
+    # bundle (wasm LinkError). The lib compile above stays parallel; only this
+    # cheap link+hash step is serialized, so a single pass succeeds and the hash
+    # runs exactly once on one matched link.
+    if cmake --build "$BUILD_DIR" -j1; then
         if verify_outputs; then OK=1; break; fi
     fi
     echo "[build.sh] web build incomplete (attempt $attempt/3); retrying link" >&2
