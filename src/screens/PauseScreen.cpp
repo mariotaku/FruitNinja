@@ -419,12 +419,18 @@ void PauseScreen::BeginDraw(float dt) {
 
 // -------------------------------------------------------------------------
 // vtable[6]: PreDraw -- full-screen black-tinted flash.tex overlay
-// Binary: 0x0016bda0
-// Only runs when m_LayerFlags == 8 (asserted by BeginDraw each frame).
+// Binary: 0x001cd35c
 // alpha = clamp(m_Alpha * 1000.0, 0, 128); tint = (0,0,0,alpha)
 // scale = m_Alpha * 10000.0
 // -------------------------------------------------------------------------
 void PauseScreen::PreDraw(float* /*hudScale*/) {
+
+    // ASM-spec v1.6.1 PauseScreen::PreDraw @0x001cd35c: shade (flash.tex) gated on
+    // m_LayerFlags == 8. BeginDraw (@0x001a557c) sets 0x108 every frame, so the gate
+    // is never true during pause -> the binary draws NO pause dim; toggles (layer 0x08)
+    // + frozen gameplay stay bright. (The ==8 path is a v1.5 vestige, disabled when
+    // BeginDraw moved to 0x108 to render the paused-title in the 0x100 pass.)
+    if (m_LayerFlags != Mortar::HUD_LAYER_BUTTONS) return;   // != 8
 
     if (m_Alpha <= 0.0f) return;
 
