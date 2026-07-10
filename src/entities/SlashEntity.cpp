@@ -2010,8 +2010,16 @@ void SlashEntity::Update(float dt) {
             m_SliceBladeDir = m_BladeDir;
         }
         m_PendingSplats--;
-        float B = m_SplatInterval + Math::g_Random.RandF(1.0f) * 0.5f + 0.01f;
-        m_SplatInterval = (B >= 0.03f) ? B : 0.03f;
+        // ASM-spec v1.6.1 SlashEntity::Update @0x001e96c0: m_SplatInterval is CAPPED at 0.03f
+        // (DAT @0x1e9904), NOT floored. RandF max = 0.05f (@0x1e98f4), addend 0.01f (@0x1e9900).
+        // Prior port used RandF(1.0)*0.5 (10x range) + an INVERTED clamp (B>=0.03?B:0.03), so the
+        // interval accumulated -> backlog drained ~1/s (40s drip). Capping it drains ~33/s (~1.2s).
+        float tmp = m_SplatInterval + Math::g_Random.RandF(0.05f) + 0.01f;
+        if (tmp >= 0.03f) {
+            m_SplatInterval = 0.03f;                                             // clamp DOWN to cap
+        } else {
+            m_SplatInterval = m_SplatInterval + Math::g_Random.RandF(0.05f) + 0.01f;  // fresh reroll (<0.03)
+        }
         m_SplatTimer += m_SplatInterval;
         // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
         // flat round-robin pool steals the cursor slot when full).
