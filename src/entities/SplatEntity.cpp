@@ -94,9 +94,10 @@ static float s_SplatSfxGate[3] = { 0.0f, 0.0f, 0.0f };
 // BSS-zero-initialised.
 static float s_PulpDripGate = 0.0f;
 
-// Cached Moose fruit type index. Binary loads via __cxa_guard at 0x0017fadc.
-// -1 until first resolved; set once via Fruit::FruitType("Moose", false).
-static int s_MooseFruitType = -2;  // -2 = uncached; use -2 so -1 (not found) can cache
+// Cached coconut fruit type index. Binary loads via __cxa_guard; resolved once
+// via Fruit::FruitType("coconut", false).
+// ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: SFX-suppress/size-0 fruit is "coconut" (DAT_0028077a), not "Moose".
+static int s_CoconutFruitType = -2;  // -2 = uncached; use -2 so -1 (not found) can cache
 
 // DrawActiveSplats @ 0x001ece34 -- UV atlas table @ 0x001bd014 (6 x 4 floats)
 // Each entry is {u0, u1, v0, v1} -- verified from raw little-endian dump.
@@ -163,13 +164,13 @@ static float Clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// Returns cached moose fruit type, resolving on first call.
-// Binary @ 0x0017fadc: loaded via __cxa_guard from Fruit::FruitType("Moose", false).
-static int GetMooseFruitType() {
-    if (s_MooseFruitType == -2) {
-        s_MooseFruitType = Fruit::FruitType("Moose", false);
+// Returns cached coconut fruit type, resolving on first call.
+// ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: SFX-suppress/size-0 fruit is "coconut" (DAT_0028077a), not "Moose".
+static int GetCoconutFruitType() {
+    if (s_CoconutFruitType == -2) {
+        s_CoconutFruitType = Fruit::FruitType("coconut", false);
     }
-    return s_MooseFruitType;
+    return s_CoconutFruitType;
 }
 
 // ---------------------------------------------------------------------
@@ -204,7 +205,8 @@ SplatEntity::SplatEntity()
     // The pad fields are left uninitialised (not zeroed by the binary).
     pad1A[0] = 0; pad1A[1] = 0;
     pad35[0] = 0; pad35[1] = 0; pad35[2] = 0;
-    pad76[0] = 0; pad76[1] = 0;
+    m_bMuteSfx = 0;
+    pad77[0] = 0;
 }
 
 SplatEntity::~SplatEntity() {}
@@ -265,13 +267,19 @@ bool SplatEntity::s_RandKillEnabled = true;
 // landImmediately (4th param, binary bool arg 2): if true, skip the airborne
 // phase and land the splat instantly. ExplodeSuperFruit path passes true here.
 // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910
-void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, long fruitType) {
+void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, long fruitType, bool mute) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
     if (s_RandKillEnabled && RandInt(FN_SPLAT_RAND_DENOM) == 0) return;
 
     m_bParam3 = param3 ? 1 : 0;
+
+    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910: m_bMuteSfx = caller mute arg
+    //   = (FruitInfo::m_bIsSuperFruit @+0x330 != 0). Super-fruit splats land silent.
+    // TODO: v1.6.1 0x001eb910 -- confirm MakeSplat 4th arg (port landImmediately vs binary
+    //   m_bParam3/long) against ExplodeSuperFruit @0x001bab08 before trusting param order.
+    m_bMuteSfx = mute ? 1 : 0;
 
     // Colour selection. Binary reads FruitTypeColour(fruitType) when in
     // range, else falls back to a default colour + ColourPhase = 0.75.
@@ -482,11 +490,12 @@ void SplatEntity::UpdateSplat(float dt) {
 
             // Bugfix #3 (binary @ 0x0017f9ce-f9f8): PlaySplat size bucket is
             // determined by m_Scale.x (after the landing scale multiply above),
-            // NOT by m_SplatType/2. Moose fruit type suppresses SFX entirely.
-            {
+            // NOT by m_SplatType/2. Coconut fruit type suppresses SFX entirely.
+            // ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: PlaySplat gated on m_bMuteSfx==0 (super-fruit splats land silent).
+            if (m_bMuteSfx == 0) {
                 int splatSize;
-                if (m_FruitType == GetMooseFruitType()) {
-                    splatSize = 0;   // Moose: bucket 0 -- suppress / no SFX
+                if (m_FruitType == GetCoconutFruitType()) {
+                    splatSize = 0;   // coconut: bucket 0 -- suppress / no SFX
                 } else if (m_Scale.x > SPLAT_SZ_LARGE_THR) {
                     splatSize = 3;   // large (> 50): no SFX (PlaySplat clamps to [0,2])
                 } else if (m_Scale.x > SPLAT_SZ_MEDIUM_THR) {

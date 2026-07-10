@@ -5,6 +5,7 @@
 
 #include "Jiblet.h"
 #include "SplatEntity.h"
+#include "FruitInfo.h"
 #include "math/Quaternion.h"
 #include "engine/math/MathUtil.h"
 #include "engine/math/Random.h"
@@ -203,7 +204,13 @@ void Jiblet::Update(float dt) {
             Vec3 sp = pos;
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
             Vec3 sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
-            s->MakeSplat(sp, sv, false, false, (long)m_FruitType);
+            // MakeSplat mute arg = (FruitInfo+0x330 m_bIsSuperFruit != 0), matching
+            // the trail callers (Fruit::Slice @0x001dcfc8 / @0x001e9788).
+            // TODO: v1.6.1 0x1e5330 (Jiblet::Update) -- confirm the drip-loop caller's
+            //   mute arg against the binary (unverified; assumed same +0x330 read).
+            const FruitInfo* jibInfo = FruitInfo_Get(m_FruitType);
+            s->MakeSplat(sp, sv, false, false, (long)m_FruitType,
+                         /*mute=*/jibInfo != 0 && jibInfo->m_bIsSuperFruit != 0);
             m_SplatTimer += 1.0f / m_DripRate;
         }
     }

@@ -2016,10 +2016,10 @@ void SlashEntity::Update(float dt) {
         // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
         // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
-        // FruitInfo call (binary side-effect: looks up the template, may
-        // be used by splat to determine splat texture/colour).
+        // FruitInfo lookup -- feeds the MakeSplat mute arg below.
+        const ::FruitInfo* sliceInfo = 0;
         if (m_SliceFruitType < 0x100) {
-            Fruit::FruitInfo(m_SliceFruitType);
+            sliceInfo = Fruit::FruitInfo(m_SliceFruitType);
         }
         // ASM-spec v1.6.1 SlashEntity::Update @0x001e97cc: splat world-pos =
         // FruitCamera::TranslatePos(this->pos, inverse=true, useZeroCenter=true).
@@ -2031,10 +2031,12 @@ void SlashEntity::Update(float dt) {
         // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
         FruitCamera* cam = game_work.m_FruitCamera;
         Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
-        // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false)
-        //   and fruitType = FruitInfo[m_SliceFruitType].field_0x330 (not m_SliceFruitType directly).
+        // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false).
         //   landImmediately=false is correct here.
-        s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType);
+        // ASM-spec v1.6.1 trail caller @0x001e9788: mute arg = (FruitInfo+0x330
+        // m_bIsSuperFruit != 0) -- super-fruit splats land silent.
+        s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType,
+                     /*mute=*/sliceInfo != 0 && sliceInfo->m_bIsSuperFruit != 0);
     }
 }
 

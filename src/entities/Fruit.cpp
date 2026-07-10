@@ -1671,7 +1671,10 @@ void Fruit::Slice() {
         // returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 -- flat round-robin pool steals
         // the cursor slot when full).
         const long splatFruitType = (long)m_FruitType + (isCritical ? FruitInfo_GetCount() : 0);
-        s->MakeSplat(pos, sv, /*m_bParam3=*/false, /*landImmediately=*/false, splatFruitType);
+        // ASM-spec v1.6.1 Fruit::Slice @0x001dcfc8: mute arg = (FruitInfo+0x330
+        // m_bIsSuperFruit != 0) -- super-fruit splats land silent.
+        s->MakeSplat(pos, sv, /*m_bParam3=*/false, /*landImmediately=*/false, splatFruitType,
+                     /*mute=*/info->m_bIsSuperFruit != 0);
 
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00177070..0x001770f0 -- stale v1.5.x) -- per-splat post-MakeSplat taper.

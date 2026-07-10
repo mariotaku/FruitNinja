@@ -203,7 +203,8 @@ static int RunCriticalFlashScene(fn::TestHarness& h) {
 
     const long criticalFruitType = (long)fruitType + fruitCount;
     splat->MakeSplat(Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 0.0f),
-                      /*param3=*/false, /*landImmediately=*/false, criticalFruitType);
+                      /*param3=*/false, /*landImmediately=*/false, criticalFruitType,
+                      /*mute=*/false);
 
     if (!splat->m_bAlive) {
         fprintf(stderr, "[scene_fruit_splat --critical] FAIL: MakeSplat suppressed the "

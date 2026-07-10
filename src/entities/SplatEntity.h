@@ -66,7 +66,8 @@ public:
     int      m_SplatType;        // +0x70: -1 = airborne; 0..5 once landed
     uint8_t  m_bSSMPHorizGravity; // +0x74: 1 if SSMP and game->field_0xc == 0 (horizontal-grav)
     uint8_t  m_bAlive;           // +0x75: live/dead flag
-    uint8_t  pad76[2];           // +0x76: tail padding to 0x78
+    uint8_t  m_bMuteSfx;         // +0x76: 1 = suppress landing PlaySplat SFX (super-fruit splats land silent)
+    uint8_t  pad77[1];           // +0x77: tail padding to 0x78
 
     // --- Vtable slot 2: Init (binary @ 0x001eb264) ---
     // Binary signature: (SplatEntity*, void*, long, _Vector3*). All args ignored.
@@ -100,10 +101,14 @@ public:
     virtual ~SplatEntity();
 
     // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910:
-    //   (Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType)
+    //   (Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType, bool mute)
     // landImmediately=true forces the splat to skip the airborne phase and land instantly
     // (ExplodeSuperFruit radial jibs path). param3 biases landing RNG toward large types 4/5.
-    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType);
+    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910: m_bMuteSfx = caller mute arg
+    //   = (FruitInfo::m_bIsSuperFruit @+0x330 != 0). Super-fruit splats land silent.
+    // TODO: v1.6.1 0x001eb910 -- confirm MakeSplat 4th arg (port landImmediately vs binary
+    //   m_bParam3/long) against ExplodeSuperFruit @0x001bab08 before trusting param order.
+    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType, bool mute);
 
     // --- Pool API ---
     // Binary: SplatEntity::CreatePool @ 0x001eb490 -- flat round-robin pool
@@ -180,6 +185,7 @@ static_assert(__builtin_offsetof(SplatEntity, m_DecayRate)         == 0x6C, "");
 static_assert(__builtin_offsetof(SplatEntity, m_SplatType)         == 0x70, "");
 static_assert(__builtin_offsetof(SplatEntity, m_bSSMPHorizGravity) == 0x74, "");
 static_assert(__builtin_offsetof(SplatEntity, m_bAlive)            == 0x75, "");
+static_assert(__builtin_offsetof(SplatEntity, m_bMuteSfx)          == 0x76, "");
 #endif
 
 #endif
