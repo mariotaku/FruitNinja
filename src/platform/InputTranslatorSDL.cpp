@@ -100,21 +100,42 @@ void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
 // v1.6.1 Touch::FindTouch @0x002429a8 loops i<8; GlesForm::OnTouch* gate GetPointId()<8
 // @0x001f1128/0x001f11c4/0x001f10a0). Port uses 16 SDL channels then clamps to
 // MAX_SLOTS=8 before Mortar::Touch -- benign superset.
+//
+// Port specific: MOUSE_CHANNEL is carved out of the 16-channel space for the
+// mouse only (see InputTranslatorSDL.h). The mouse always maps to
+// MOUSE_CHANNEL regardless of press/release history, so re-pressing a mouse
+// button deterministically returns to the same blade instead of drifting
+// onto whatever channel happens to be free. Touch fingers search only the
+// remaining channels, so a touch can never claim MOUSE_CHANNEL and the mouse
+// can never claim a touch's channel.
 int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
-    // Check if already mapped
+    if (id == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+        if (fingerActive[MOUSE_CHANNEL] && fingerMap[MOUSE_CHANNEL] == id)
+            return MOUSE_CHANNEL;
+        if (!fingerActive[MOUSE_CHANNEL]) {
+            fingerMap[MOUSE_CHANNEL] = id;
+            fingerActive[MOUSE_CHANNEL] = true;
+            return MOUSE_CHANNEL;
+        }
+        return -1;  // mouse channel already busy (shouldn't happen -- one mouse device)
+    }
+
+    // Check if this touch id is already mapped (skip the reserved mouse channel).
     for (int i = 0; i < 16; i++) {
+        if (i == MOUSE_CHANNEL) continue;
         if (fingerActive[i] && fingerMap[i] == id)
             return i;
     }
-    // Find free slot
+    // Find a free touch channel (skip the reserved mouse channel).
     for (int i = 0; i < 16; i++) {
+        if (i == MOUSE_CHANNEL) continue;
         if (!fingerActive[i]) {
             fingerMap[i] = id;
             fingerActive[i] = true;
             return i;
         }
     }
-    return -1;  // all 16 channels busy
+    return -1;  // all touch channels busy
 }
 
 void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
@@ -311,15 +332,12 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // synthesizes SDL_FINGERDOWN/MOTION but the UP sometimes arrives as
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
     // Handle it here as the event-driven fallback for the mouse channel.
+    // Port specific: the mouse is always MOUSE_CHANNEL (see MapFingerId), so
+    // no channel scan is needed here.
     case SDL_MOUSEBUTTONUP: {
         SDL_FingerID mouseId = (SDL_FingerID)SDL_TOUCH_MOUSEID;
-        int ch = -1;
-        for (int i = 0; i < 16; i++) {
-            if (fingerActive[i] && fingerMap[i] == mouseId) {
-                ch = i; break;
-            }
-        }
-        if (ch < 0) break;
+        int ch = MOUSE_CHANNEL;
+        if (!fingerActive[ch] || fingerMap[ch] != mouseId) break;
 
         TLOG("MOUSEBUTTONUP (drain) ch=%d game=(%g,%g)\n", ch, fingerX[ch], fingerY[ch]);
 
