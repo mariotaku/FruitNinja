@@ -289,10 +289,12 @@ void Bomb::Update(float dt) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
-        // Binary: plain int16 add each frame, no fractional accumulator; gated on scaledDt>0 (ASM v1.6.1 Bomb::Update @0x1d6244)
+        // ASM-spec v1.6.1 Bomb::Update @0x1d624c: alive-branch rotation is dtNorm-SCALED (vmla),
+        // NOT a plain int16 add -- so it slows under slow-time. dtNorm=1.0 at normal dt.
+        // (0x1d6244 is the scaledDt>0 compare; the add proper is the vmla at 0x1d624c.)
         if (scaledDt > 0.0f) {
-            m_RotX = (int16_t)(m_RotX + m_RotVelX);
-            m_RotY = (int16_t)(m_RotY + m_RotVelY);
+            m_RotX = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotX + (float)(uint16_t)m_RotVelX * dtNorm);
+            m_RotY = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotY + (float)(uint16_t)m_RotVelY * dtNorm);
         }
 
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
@@ -317,13 +319,9 @@ void Bomb::Update(float dt) {
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * dtNorm;
-            // ASM-spec v1.6.1 Bomb::Update @ 0x1d6650: gated on scaledDt>0, same as ALIVE branch.
-            // Binary's menu-hit rotation math also differs from the ALIVE branch (float-converted
-            // RotVel*dtNorm with negative-floor, not a plain int16 add) -- needs a dedicated
-            // asm-inspector pass on 0x1d624c before porting exactly; keep the ALIVE-branch formula
-            // here (gated) as the safe faithful-but-incomplete stand-in.
-            // TODO: v1.6.1 0x1d624c (Bomb::Update MENU-HIT rotation) -- confirm VFP signed-short-to-float
-            // conversion + negative clamp semantics via asm-inspector before replacing this formula.
+            // ASM-spec v1.6.1 Bomb::Update @0x1d6654: menu-hit rotation is a PLAIN int16 add
+            // (no dtNorm scaling), unlike the dtNorm-scaled ALIVE branch (@0x1d624c). Gated on
+            // scaledDt>0. This matches the binary -- leave as-is.
             if (scaledDt > 0.0f) {
                 m_RotX = (int16_t)(m_RotX + m_RotVelX);
                 m_RotY = (int16_t)(m_RotY + m_RotVelY);
