@@ -1,4 +1,4 @@
-// GameOver — v1.6.1 GameOver @ 0x0012b838
+// GameOver — v1.6.1 GameOver @ 0x001cb788
 
 #include "GameOver.h"
 #include "Game.h"
@@ -17,7 +17,7 @@
 #include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
 #include "game/GameWork.h"
 
-// v1.6.1 GameOver @ 0x0012b838
+// v1.6.1 GameOver @ 0x001cb788
 void GameOver(int endReason, float endScore, int endParam) {
     Game* game = Game::GetInstance();
     if (!game) return;

@@ -770,6 +770,11 @@ void SuperFruitControl::ExplodeSuperFruit()
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     uint8_t hostFruitType = host->m_FruitType;
     Vec3 hostPos = host->pos;       // host+0x10
+    // MakeSplat mute arg = (FruitInfo+0x330 m_bIsSuperFruit != 0); the host IS a
+    // super fruit here, so its finale splats land silent (matches the binary's
+    // super-fruit-splat SFX suppression via SplatEntity +0x76 m_bMuteSfx).
+    const FruitInfo* hostInfo = Fruit::FruitInfo((long)hostFruitType);
+    bool hostMute = hostInfo != 0 && hostInfo->m_bIsSuperFruit != 0;
 
     for (int i = 0; i < N; ++i) {
         uint16_t angIdx = (uint16_t)(rng.Rand32(0xfff0) & 0xffff);
@@ -781,7 +786,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
         Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
-        s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType);
+        s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType, hostMute);
 
         // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
         float taper = 1.0f - (float)(i - 2) / (float)N;
