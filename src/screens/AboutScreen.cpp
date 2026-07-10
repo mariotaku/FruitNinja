@@ -31,6 +31,7 @@
 #include "audio/GameSound.h"
 #include "util/StringTable.h"
 #include <cstdio>
+#include <cmath>
 #include "game/GameWork.h"
 
 // -----------------------------------------------------------------------
@@ -418,6 +419,10 @@ void AboutScreen::CreateBackButton()
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float dt)
 {
+    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the transition
+    //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+    float dtN = dt * 60.0f;
+
     // OFN button creation stub (defunct -- OpenFeint/GameCenter)
     if (s_TexSensei.IsValid() && m_pOFNButton == nullptr) {
         (void)POS_OFN_BUTTON;
@@ -426,7 +431,9 @@ void AboutScreen::Update(float dt)
     switch (m_State) {
 
     case 0: {
-        m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-in
+        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+        m_TransitionAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
 
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
@@ -440,7 +447,9 @@ void AboutScreen::Update(float dt)
         break;
 
     case 2: {
-        m_TransitionAlpha *= ALPHA_DECAY;
+        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-out
+        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
 
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             if (m_pParent) {
