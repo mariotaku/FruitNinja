@@ -20,56 +20,57 @@ const char* OSD_AddMessage(const char* s) {
 #else // !__bada__
 
 // Port specific: everything below is port-invented dev tooling (the binary
-// OSD is a dead stub). Rendering reuses the exact DebugFps_Draw text path:
-// same lazily-created TTF font cache (FN::DebugFontTTF_Get), the same
-// BakedStringTTF primitive, and the same Renderer::SetupGameOrtho projection.
+// OSD is a dead stub). Rendering uses the bitmap font "fonts/verdana.fnt"
+// (a bundled game asset, present in the web build's preloaded Data package)
+// through the same Mortar::Font::DrawString path as DebugHUDBounds_Draw.
 
 #include "debug/DebugFlags.h"
 #include "render/Renderer.h"
-#include "render/BakedStringTTF.h"
-#include "render/FontCacheObjectTTF.h"
-#include "math/Vec2.h"
+#include "render/Font.h"
+#include "render/MatrixManager.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include <cstring>
 
 // Port specific: fixed message store -- no heap churn, cross-build-safe
 // plain loops (though this branch never cross-builds).
-static const int   kMaxMsgs    = 6;
+static const int   kMaxMsgs    = 24;
 static const float kDefaultTtl = 2.5f;
-static const float kTextSize   = 12.0f;
+static const float kTextScale  = 8.0f;   // verdana.fnt line height in world units
 
 // Layout: DebugFps_Draw anchors its baseline at (-235, +138) with glyph tops
-// near +148 (top edge +160, ~22 margin). The first toast baseline sits at +120
+// near +148 (top edge +160, ~22 margin). The first toast anchor sits at +120
 // -- one clear line below the FPS counter so the two never overlap -- and each
-// older message steps 16 units further down (size-12 line height + gap).
+// older message steps 10 units further down (size-8 line height + gap).
+// 16 slots span +120 .. -30, well inside the -160 bottom edge.
 static const float kAnchorX  = -235.0f;
 static const float kAnchorY0 =  120.0f;
-static const float kLineStep =   16.0f;
+static const float kLineStep =   10.0f;
 static const float kZ        =   -0.1f;   // in front of game content, same as FPS overlay
+
+// Flat yellow, full opacity so toasts read as distinct from the
+// FPS counter without fully covering the gameplay behind them.
+static const Colour kTextColour(255, 255, 0, 255);
 
 struct OSDMsg {
     char  text[64];
     float ttl;                       // remaining lifetime in seconds
-    Mortar::BakedStringTTF* baked;   // lazily built in OSD_Draw; owned by the slot
 };
 
 // s_Msgs[0] = newest; active slots are 0..s_MsgCount-1.
 static OSDMsg s_Msgs[kMaxMsgs];
 static int    s_MsgCount = 0;
 
-static void FreeSlot(OSDMsg& m) {
-    delete m.baked;
-    m.baked   = 0;
-    m.text[0] = '\0';
-    m.ttl     = 0.0f;
-}
+// Lazy bitmap font (fonts/verdana.fnt) -- bundled asset, loads on desktop
+// AND web (the whole FruitNinjaBada/Data dir is emscripten-preloaded).
+static Mortar::SmartPtr<Mortar::Font> s_OsdFont;
 
 // Port specific: clear the store (host build repurposes the binary's dead
 // init symbol as the toast-store reset).
 void OSD_Init() {
     for (int i = 0; i < s_MsgCount; ++i) {
-        FreeSlot(s_Msgs[i]);
+        s_Msgs[i].text[0] = '\0';
+        s_Msgs[i].ttl     = 0.0f;
     }
     s_MsgCount = 0;
 }
@@ -79,13 +80,10 @@ void OSD_AddMessage(const char* s, float ttl) {
     if (!s || !s[0]) return;
 
     if (s_MsgCount == kMaxMsgs) {
-        FreeSlot(s_Msgs[kMaxMsgs - 1]);
         --s_MsgCount;
     }
 
-    // Shift existing messages down one slot (newest lives at [0]). The baked
-    // pointer moves with its slot; each pointer value ends up in exactly one
-    // active slot, so ownership stays single.
+    // Shift existing messages down one slot (newest lives at [0]).
     for (int i = s_MsgCount; i > 0; --i) {
         s_Msgs[i] = s_Msgs[i - 1];
     }
@@ -93,8 +91,7 @@ void OSD_AddMessage(const char* s, float ttl) {
     OSDMsg& m = s_Msgs[0];
     strncpy(m.text, s, sizeof(m.text) - 1);
     m.text[sizeof(m.text) - 1] = '\0';
-    m.ttl   = ttl;
-    m.baked = 0;
+    m.ttl = ttl;
     ++s_MsgCount;
 }
 
@@ -105,57 +102,52 @@ const char* OSD_AddMessage(const char* s) {
     return s;
 }
 
-// Port specific: age + compact. Expired slots are freed and the survivors
-// slide up so 0..s_MsgCount-1 stays dense (newest first).
+// Port specific: age + compact. Expired slots drop and the survivors slide
+// up so 0..s_MsgCount-1 stays dense (newest first).
 void OSD_Update(float dt) {
     int dst = 0;
     for (int src = 0; src < s_MsgCount; ++src) {
         s_Msgs[src].ttl -= dt;
-        if (s_Msgs[src].ttl <= 0.0f) {
-            FreeSlot(s_Msgs[src]);
-            continue;
-        }
+        if (s_Msgs[src].ttl <= 0.0f) continue;
         if (dst != src) {
             s_Msgs[dst] = s_Msgs[src];
-            s_Msgs[src].baked = 0;   // ownership moved to dst
         }
         ++dst;
     }
     s_MsgCount = dst;
 }
 
-// Port specific: draw the toast stack through the DebugFps_Draw text path.
+// Port specific: draw the toast stack through the same Font::DrawString
+// path as DebugHUDBounds_Draw (scene ortho + identity world matrix).
 void OSD_Draw() {
     if (s_MsgCount == 0) return;
 
-    Mortar::FontCacheObjectTTF* fc = FN::DebugFontTTF_Get();
-    if (!fc) return;
+    if (!s_OsdFont.IsValid()) {
+        s_OsdFont = Mortar::Font::Create("fonts/verdana.fnt");
+        if (!s_OsdFont.IsValid()) return;
+    }
 
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 
     // Restore game ortho so the coordinates match game space (same call and
-    // convention as DebugFps_Draw: X -240..+240, Y -160..+160).
+    // convention as DebugFps_Draw: X -240..+240, Y -160..+160), then reset
+    // the world matrix -- DrawString multiplies the current modelview.
     r->SetupGameOrtho();
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
 
+    // Suppress the level-3 font-debug overlay for our own debug text, same
+    // as DebugHUDBounds_Draw does around its labels.
+    FN::g_SuppressTextOverlay = true;
     for (int i = 0; i < s_MsgCount; ++i) {
-        OSDMsg& m = s_Msgs[i];
-        if (!m.baked) {
-            // Flat yellow, size 12, no effects -- same primitive/params as the
-            // FPS counter but tinted so toasts read as distinct from "FPS NNN".
-            // (No ApplyGradient_TopBottom -- see the gradient-bug note in
-            // DebugFps_Draw.)
-            m.baked = new Mortar::BakedStringTTF(
-                fc, m.text, kTextSize,
-                Colour(255, 255, 0, 255),
-                0L, 0.0f,
-                Mortar::FontCacheObjectTTF::FONT_EFFECT_NONE);
-        }
-        // align 0x4: hAlign left (text extends rightward), vAlign top-baseline
-        // -- identical to the FPS counter's anchor semantics.
         const Vec3 anchor(kAnchorX, kAnchorY0 - kLineStep * (float)i, kZ);
-        m.baked->Draw(anchor, Vec2(1.0f, 1.0f), 0.0f, (Mortar::ALIGNMENT_TYPE)0x4);
+        s_OsdFont->DrawString(kTextScale, 1.0f, 0.0f,
+                              s_Msgs[i].text, anchor, kTextColour,
+                              Mortar::FONT_ALIGN_LEFT);
     }
+    FN::g_SuppressTextOverlay = false;
 }
 
 #endif // !__bada__
