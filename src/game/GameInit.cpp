@@ -887,6 +887,24 @@ void GameDraw(float dt, bool active) {
 
     // === 5. HUD overlay layers + flash effects ===
     {
+        // DIFFERS: original = no pause bg-dim (v1.6.1 GameDraw @0x001cd720). Port injects a full-screen
+        //   ~50% black quad between pass15 (WaveManager::Draw(0)) and pass16 (HUD::Draw(0x08)) so the
+        //   frozen gameplay dims while the pause UI (layers 0x08/0x108/0x100) stays bright.
+        {
+            PauseScreen* ps = ts->pPauseScreen;
+            if (ps && ps->m_Alpha > 0.0f) {
+                MatrixManager& mm = MatrixManager::GetInstance();
+                mm.GetWorldStack().Reset();
+                // Scale(481,321,1) matches DrawBackground's full-ortho-coverage quad above.
+                Matrix44 dimMat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
+                dimMat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+                mm.GetWorldStack().SetCurrentMatrix(dimMat);
+                mm.UploadModelViewOnly();
+                const uint8_t dimAlpha = (uint8_t)(ps->m_Alpha * 128.0f);
+                Renderer::GetInstance()->DrawColorQuad(Colour(0, 0, 0, dimAlpha));
+            }
+        }
+
         // HUD::Draw(0x08) -- buttons (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
