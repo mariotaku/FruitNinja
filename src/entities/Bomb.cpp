@@ -117,9 +117,14 @@ Bomb::Bomb()
       m_pOwnerButton(nullptr),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
-      m_SpeedMult(1.0f),
-      m_Field_0xAC(0.0f)
+      m_SpeedMult(1.0f)
+#ifdef __bada__
+      , m_Field_0xAC(0.0f)
+#endif
 {
+#ifndef __bada__
+    m_RotFraction[0] = m_RotFraction[1] = 0;
+#endif
     entityType = 1;  // Bomb
 }
 
@@ -164,7 +169,11 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     m_bHit = 0;
     m_bMovement = 1;
     m_SpeedMult = 1.0f;
+#ifdef __bada__
     m_Field_0xAC = 0.0f;
+#else
+    m_RotFraction[0] = m_RotFraction[1] = 0;
+#endif
     m_SpawnTimer = SPAWN_TIMER_INIT;
 
     // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot),
@@ -289,12 +298,22 @@ void Bomb::Update(float dt) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
-        // ASM-spec v1.6.1 Bomb::Update @0x1d624c: alive-branch rotation is dtNorm-SCALED (vmla),
-        // NOT a plain int16 add -- so it slows under slow-time. dtNorm=1.0 at normal dt.
-        // (0x1d6244 is the scaledDt>0 compare; the add proper is the vmla at 0x1d624c.)
         if (scaledDt > 0.0f) {
+#ifdef __bada__
+            // faithful int16 truncation (matches binary @0x1d624c)
             m_RotX = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotX + (float)(uint16_t)m_RotVelX * dtNorm);
             m_RotY = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotY + (float)(uint16_t)m_RotVelY * dtNorm);
+#else
+            // Port specific: 16-bit fixed-point fractional carry so slo-mo sub-unit deltas accumulate
+            //   instead of truncating (smooth slow instead of full-stop). Binary @0x1d624c re-casts int16
+            //   each frame; the +0xAC carry (repurposed dead field) accumulates the fraction. sizeof(Bomb)==0xB0.
+            uint32_t accX = (uint32_t)m_RotFraction[0] + (uint32_t)((float)(uint16_t)m_RotVelX * dtNorm * 65536.0f);
+            m_RotX = (int16_t)(uint16_t)((uint16_t)m_RotX + (uint16_t)(accX >> 16));
+            m_RotFraction[0] = (uint16_t)accX;
+            uint32_t accY = (uint32_t)m_RotFraction[1] + (uint32_t)((float)(uint16_t)m_RotVelY * dtNorm * 65536.0f);
+            m_RotY = (int16_t)(uint16_t)((uint16_t)m_RotY + (uint16_t)(accY >> 16));
+            m_RotFraction[1] = (uint16_t)accY;
+#endif
         }
 
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
