@@ -12,12 +12,15 @@
 // beyond the two binary stub signatures is port-invented.
 //
 // Behaviour:
-// - Fixed store of 6 messages, no heap churn (text is copied into a fixed
-//   char[64]; only the lazily-baked string object is heap-allocated).
+// - Fixed store of 16 messages, no heap churn (text is copied into a fixed
+//   char[64]).
 // - OSD_AddMessage posts a toast; when all slots are full the oldest is
 //   evicted. Default lifetime 2.5 s.
 // - Messages stack top-left, newest on top, BELOW the FPS counter line
-//   (DebugFps_Draw), rendered through the same BakedStringTTF text path.
+//   (DebugFps_Draw). Rendered with the bundled bitmap font
+//   "fonts/verdana.fnt" (size 8, yellow at 60% opacity) via the same
+//   Font::DrawString path as DebugHUDBounds_Draw -- a game asset, so it
+//   loads on the web/emscripten build too (whole Data dir is preloaded).
 // - Call OSD_Update(dt) + OSD_Draw() once per display frame in the debug
 //   overlay layer (Game::renderFrame, next to DebugFps_Draw). Toasts are
 //   user-triggered confirmations, so they render regardless of any debug
