@@ -18,6 +18,10 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   or launch with --fps / --show-fps, or web ?fps=1.
 // g_DebugTimeScale: multiplies fixed dt=1/60. 1.0 = normal, 0.1 = slow-mo.
 //                   Toggle F7.
+// g_bOsdSfx:        posts an OSD toast "[tick] <name>" for every SFX played
+//                   (SoundManager::SFXPlay, src/engine/audio/SoundManagerSDL.cpp).
+//                   Display-only -- never gates actual audio. Toggle F4,
+//                   or launch with --osd-sfx (desktop) / web ?osdsfx=1.
 //
 
 namespace FN {
@@ -27,6 +31,7 @@ extern bool  g_DebugWireframe;         // Port specific: desktop GL only
 extern float g_DebugTimeScale;         // Port specific: debug-only, no binary equivalent
 extern bool  g_ShowFps;                // Port specific: FPS counter overlay (toggle F3, --fps, ?fps=1)
 extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Overlay for debug-drawn text
+extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX played (toggle F4, --osd-sfx, ?osdsfx=1)
 
 // Render every active Fruit / Bomb / SplatEntity collision sphere as
 // a translucent circle. Call from GameDraw after the entity pass.
@@ -84,6 +89,7 @@ static const int   g_DebugHitboxes       = 0;
 static const bool  g_DebugWireframe      = false;
 static const bool  g_ShowFps             = false;
 static const bool  g_SuppressTextOverlay = false;
+static const bool  g_bOsdSfx             = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}

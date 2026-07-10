@@ -18,6 +18,9 @@
 #include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include "debug/Logger.h"
+#include "debug/DebugFlags.h"
+#include "debug/OSD.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -342,6 +345,16 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
             if (!buf) return 0;
             m_SoundCache[hash] = buf;
         }
+    }
+
+    // Port specific: dev-tool SFX readout -- when FN::g_bOsdSfx is ON, toast
+    // "[tick] <name>" for every SFX that actually plays. Display-only; the
+    // audio path below is never gated. OSD stacks up to 6 toasts (oldest
+    // evicted), so several SFX in one frame remain visible in sequence.
+    if (FN::g_bOsdSfx) {
+        char osd[64];
+        snprintf(osd, sizeof(osd), "[%06u] %s", Debug::g_LogTick, name);
+        OSD_AddMessage(osd);
     }
 
     // Assign new monotonic ID (matches MAMAudioController::m_NextSoundId increment)
