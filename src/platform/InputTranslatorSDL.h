@@ -13,6 +13,11 @@
 // SDL_FINGER* events from SDL_MOUSE* with finger id = SDL_TOUCH_MOUSEID.
 // This file therefore only handles SDL_FINGERDOWN/MOTION/UP.
 //
+// Port specific: the mouse is a dedicated "finger" pinned to MOUSE_CHANNEL
+// (see below) and never shares a channel with a real touch, nor vice-versa.
+// The binary is touch-only Bada hardware -- there is no mouse device there,
+// so this reservation is host-only SDL glue.
+//
 // Refresh-rate-independent dispatch (Mortar::Touch::Update @0x00242d14):
 //
 //   DrainSDLEvent() -- called once per display frame from pollInput().
@@ -56,6 +61,19 @@
 
 class InputTranslatorSDL {
 public:
+    // Port specific: fixed channel reserved exclusively for the mouse
+    // (SDL_TOUCH_MOUSEID). All mouse buttons collapse onto this one channel
+    // -- one mouse == one finger. Chosen inside the 8-15 "overflow" range
+    // (channels beyond Mortar::Touch::MAX_SLOTS=8) so real touch keeps its
+    // full 8-finger Mortar::Touch capacity (channels 0-7) unchanged; touch
+    // overflow (channels 8-15) loses one slot (8-14 remain). Channel 15
+    // still reaches a real blade: DispatchForSimTick's channel 8-15 loop
+    // dispatches TouchDown_15/TouchMove_X15/Y15/TouchUp_15 through
+    // InputManager exactly like channels 0-7, and
+    // SlashEntity::RegisterInputCallbacks subscribes g_pSlashEntities[15]
+    // (GameInit's 16-blade init loop) to those same hashes.
+    static const int MOUSE_CHANNEL = 15;
+
     // Pre-computed action hashes for 16 touch channels
     uint32_t hashTouchDown[16];
     uint32_t hashTouchMoveX[16];
