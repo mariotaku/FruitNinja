@@ -240,6 +240,11 @@ void MainScreen::Release() {
 // CreateToggles symbol); snapshot elapsedTime=-PauseAmount once; case-0 gate gameMode=0 on
 // !IsMultiplayer(); PauseAmount ramp else=-1.0 clamp.
 void MainScreen::Update(float dt) {
+    // Port specific: dt-normalize the per-frame eases below (dtN = dt*60) so the menu
+    //   camera zoom / slide transitions play at the intended ~60Hz speed regardless of
+    //   render framerate (binary is frame-based@fixed-60Hz).
+    float dtN = dt * 60.0f;
+
 #ifndef __bada__
     m_Time += dt;
 #endif
@@ -309,7 +314,9 @@ void MainScreen::Update(float dt) {
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
             TexMoreGamesF0() = f0 - dt;
-            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+            // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu camera
+            //   zoom plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+            game_work.m_PauseAmount = -1.0f - (-1.0f - game_work.m_PauseAmount) * powf(1.0f - CAMERA_LERP_RATE, dtN);
             if (game_work.m_PauseAmount < 0.0f) {
                 game_work.m_PauseAmount = 0.0f;
             }
@@ -319,7 +326,9 @@ void MainScreen::Update(float dt) {
             // (else-arm snaps to -1.0 once past the -0.999 threshold).
             m_Timer2 += dt;
             if (game_work.m_PauseAmount >= CAMERA_THRESHOLD) {
-                game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+                // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu camera
+                //   zoom plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+                game_work.m_PauseAmount = -1.0f - (-1.0f - game_work.m_PauseAmount) * powf(1.0f - CAMERA_LERP_RATE, dtN);
             } else {
                 game_work.m_PauseAmount = -1.0f;
             }
@@ -356,7 +365,9 @@ void MainScreen::Update(float dt) {
         }
 
         if (game_work.m_PauseAmount >= CAMERA_THRESHOLD) {
-            game_work.m_PauseAmount += (-1.0f - game_work.m_PauseAmount) * CAMERA_LERP_RATE;
+            // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu camera
+            //   zoom plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+            game_work.m_PauseAmount = -1.0f - (-1.0f - game_work.m_PauseAmount) * powf(1.0f - CAMERA_LERP_RATE, dtN);
         } else {
             game_work.m_PauseAmount = -1.0f;
         }
@@ -437,7 +448,9 @@ void MainScreen::Update(float dt) {
         // v1.6.1 MainScreen::Update @0x00196e1c case 8: two-phase lerp + pos.y animation.
         float posAlpha;
         if (m_Timer2 <= STATE_8_LERP_THRESHOLD) {
-            m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE * FN::g_DebugTimeScale;
+            // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu slide-in
+            //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
+            m_Timer2 = 1.0f - (1.0f - m_Timer2) * powf(1.0f - (STATE_8_LERP_RATE * FN::g_DebugTimeScale), dtN);
             posAlpha = m_Timer2;
         } else {
             m_Timer2 += dt;
