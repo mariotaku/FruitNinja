@@ -22,7 +22,7 @@ void DrawNews() {
 }
 } // namespace FN
 
-// DrawStartFade @ 0x0016AB10
+// DrawStartFade @ 0x001cd4fc
 // 3-phase splash overlay: white fill -> logo on white -> fade out.
 // Timer (splashFadeTimer) drains from 1.5 -> 0 at 2*dt per frame.
 // Phases:
@@ -37,6 +37,7 @@ void DrawStartFade() {
     if (!game) return;
 
     // Binary calls FruitCamera::SetupPerspective(camera, 3, 1) to switch to ortho/screen mode.
+    // TODO: v1.6.1 DrawStartFade @0x001cd4fc calls SetupPerspective with mode 4 (mov r1,#0x4); port passes PT_GENERIC(3). Mode-4 semantics unresolved -- verify before changing.
     if (game_work.m_FruitCamera) {
         game_work.m_FruitCamera->SetupPerspective(PT_GENERIC, true);
     }
@@ -58,12 +59,14 @@ void DrawStartFade() {
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W, (float)FN_SCREEN_H, 0.0f);
+    // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: logo scale = Vec3(480,320,0)*scale_mul (grows 1x->2x = the "explode")
+    Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W * alpha_factor, (float)FN_SCREEN_H * alpha_factor, 0.0f);
     mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    float a_f = bright * alpha_factor * 255.0f;
+    // v1.6.1 DrawStartFade @0x001cd4fc: alpha = bright only; growth goes to scale
+    float a_f = bright * 255.0f;
     if (a_f < 0.0f) a_f = 0.0f;
     if (a_f > 255.0f) a_f = 255.0f;
     float r_f = rgb_factor * 255.0f;
