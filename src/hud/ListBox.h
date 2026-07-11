@@ -26,6 +26,19 @@
 // ListBox::Draw @0x00194788 reads the scroller's live scroll offset as
 //   m_pScroller->m_CurrentValue (+0x88)  -- confirmed ldr r3,[r3,#0x88] @0x001947d0
 // and picks the top visible row = items.begin() + m_CurrentValue.
+// ListBox::Update's row hover/commit hit-test adds the SAME m_CurrentValue
+// offset before computing the target row -- omitting it (as an earlier port
+// pass did) makes a scrolled list always hover/commit the row at the top of
+// the visible window instead of the one under the finger.
+//
+// Teardown: Release() (@0x00194528) owns tearing down the VerticalScroller --
+// it is a SEPARATE HUD control the ctor AddControl'd, so nothing else removes
+// it. Release() must HUD::RemoveControl + delete m_pScroller before the base
+// HUDControl3d teardown, or the scroller (and its arrows) never disappears
+// even after the ListBox itself is destroyed. ComboBox::CleanUpListBox must
+// likewise HUD::RemoveControl + delete the ListBox IMMEDIATELY (not merely
+// SetPendingRemoval, which defers to HUD::Update's sweep and does not by
+// itself run ListBox::Release in the same step) so this chain actually fires.
 //
 // Binary (v1.6.1):
 //   ctor  @ 0x00194a74 (C1) / 0x00194d18 (C2)
@@ -76,7 +89,13 @@ private:
     // +0x8C: row text font (game_work.pFontMain == fonts[1]).
     Mortar::Font* m_pTextFont;
 
-    // +0x90: row text colour (default white).
+    // +0x90: row text colour. Default-constructed = opaque BLACK
+    // (Colour::Colour() @0x0011afa8, ASM-confirmed: b=g=r=0, a=0xFF) --
+    // NOT white as earlier assumed. Never written by ComboBox when it spawns
+    // a ListBox (ComboBox::Update @0x00167f70 has no colour-propagation
+    // call in the binary either), so freshly-opened dropdowns always render
+    // row text in black; use SetTextColourForTest() to override for a
+    // legible test-only rendering.
     Colour m_TextColour;
 
     // +0x94: cell-width param (ushort ctor arg); m_CellWidth = this * size.x.
