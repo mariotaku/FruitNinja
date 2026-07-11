@@ -5,11 +5,13 @@
 //
 // Renders:
 //   * CheckBox unchecked + CheckBox checked (two instances) -- the state shows as
-//     a toggle-SWITCH texture (grey pill / knob left = off, green pill / knob
-//     right = on). See MakeSwitchTex below for why: CheckBox::Draw scales a
-//     HARDCODED 128x64 (2:1) quad and swaps between two textures purely by
-//     m_Checked -- that aspect ratio + binary on/off texture pair reads as a
-//     switch, not a square checkbox, so the placeholder mirrors that shape.
+//     a rounded-square CHECKBOX texture (grey outline / transparent interior =
+//     unchecked, green fill + white checkmark tick = checked). See
+//     MakeCheckboxTex below: CheckBox::Draw scales a HARDCODED 128x64 quad and
+//     swaps between two textures purely by m_Checked; the real binary textures
+//     are named checked.tex/unchecked.tex (a tick-box, not an on/off switch),
+//     so the placeholder mirrors that shape, sized to fit within the widget's
+//     hardcoded hit-rect.
 //   * SliderControl with the thumb at min / mid / max value (three instances) --
 //     the thumb quad (a round knob) translates along the track by (value/max).
 //
@@ -43,7 +45,7 @@
 #include <cmath>
 #include <SDL.h>
 
-// Placeholder-art texture makers (MakeSolidTex / MakeSwitchTex / MakeCircleTex
+// Placeholder-art texture makers (MakeSolidTex / MakeCheckboxTex / MakeCircleTex
 // + the SDF helpers) are shared with test_dropdown_render.cpp and
 // test_settings_interactive.cpp -- see the header for details.
 #include "widget_placeholder_art.h"
@@ -92,11 +94,11 @@ int main(int argc, char* argv[]) {
     // Inject BEFORE constructing the sliders: the SliderControl ctor reads the
     // track/thumb texture dims to size its quads.
     //
-    // CheckBox's quad is a HARDCODED 128x64 (2:1) -- generate the switch textures
+    // CheckBox's quad is a HARDCODED 128x64 (2:1) -- generate the checkbox textures
     // at that exact size so the 1:1 texel mapping is crisp (no stretch).
     // -----------------------------------------------------------------------
-    Mortar::SmartPtr<Mortar::Texture> texChecked   = MakeSwitchTex(true,  128, 64); // ON  -- green pill, knob right
-    Mortar::SmartPtr<Mortar::Texture> texUnchecked = MakeSwitchTex(false, 128, 64); // OFF -- grey pill, knob left
+    Mortar::SmartPtr<Mortar::Texture> texChecked   = MakeCheckboxTex(true,  128, 64); // checked   -- green box, white tick
+    Mortar::SmartPtr<Mortar::Texture> texUnchecked = MakeCheckboxTex(false, 128, 64); // unchecked -- empty box, grey outline
     Mortar::SmartPtr<Mortar::Texture> texTrack     = MakeSolidTex(120, 120, 120, 255, 200, 20); // light grey bar
     Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeCircleTex(240, 140, 20, 20, 34);       // round orange knob
 

@@ -4,7 +4,7 @@
 // Unlike the screenshot render tests (test_settings_widgets_render /
 // test_dropdown_render), this opens a REAL clickable window and drives the
 // widgets from live mouse/touch input, each widget bound to an actual app
-// parameter. Toggle a switch / drag a slider / pick a language and watch the
+// parameter. Tick a checkbox / drag a slider / pick a language and watch the
 // bound parameter change (per-change stdout log + an on-screen readout).
 //
 //   Row              Widget          Bound parameter
@@ -250,12 +250,12 @@ int main(int argc, char* argv[]) {
     // the track/thumb dims; the others read on Draw).
     // -----------------------------------------------------------------------
     // Track/thumb sized so the slider reads at comparable visual weight to the
-    // CheckBox's HARDCODED 128x64 switch quad (SliderControl::Draw, can't change --
+    // CheckBox's HARDCODED 128x64 checkbox quad (SliderControl::Draw, can't change --
     // see CheckBox::Draw). SliderControl's ctor sizes m_TrackWidth/Height directly
     // from these texture pixel dims * size (size.x/y == 1 for every slider below),
     // so texture px == on-screen px here.
-    Mortar::SmartPtr<Mortar::Texture> texSwitchOn  = MakeSwitchTex(true,  128, 64);
-    Mortar::SmartPtr<Mortar::Texture> texSwitchOff = MakeSwitchTex(false, 128, 64);
+    Mortar::SmartPtr<Mortar::Texture> texCheckboxOn  = MakeCheckboxTex(true,  128, 64);
+    Mortar::SmartPtr<Mortar::Texture> texCheckboxOff = MakeCheckboxTex(false, 128, 64);
     Mortar::SmartPtr<Mortar::Texture> texTrack     = MakeSolidTex(120, 120, 120, 255, 180, 40);
     Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeCircleTex(240, 140, 20, 46, 46);
     Mortar::SmartPtr<Mortar::Texture> texBar       = MakeSolidTex(40, 40, 60, 255, 8, 8);
@@ -268,7 +268,7 @@ int main(int argc, char* argv[]) {
     Mortar::SmartPtr<Mortar::Texture> texScrThumb  = MakeSolidTex(200, 200, 210, 255, 8, 8);
     Mortar::SmartPtr<Mortar::Texture> texScrArrow  = MakeArrowTex(180, 180, 200, 24, 24);
 
-    CheckBox::SetTexturesForTest(texSwitchOn, texSwitchOff);
+    CheckBox::SetTexturesForTest(texCheckboxOn, texCheckboxOff);
     SliderControl::SetTexturesForTest(texTrack, texThumb);
     ComboBox::SetTexturesForTest(texBar, texArrow);
     ListBox::SetTexturesForTest(texRow);
@@ -459,8 +459,8 @@ int main(int argc, char* argv[]) {
     ComboBox::UnloadContent();
     ListBox::UnloadContent();
     VerticalScroller::UnloadContent();
-    texSwitchOn.SetNull();
-    texSwitchOff.SetNull();
+    texCheckboxOn.SetNull();
+    texCheckboxOff.SetNull();
     texTrack.SetNull();
     texThumb.SetNull();
     texBar.SetNull();
