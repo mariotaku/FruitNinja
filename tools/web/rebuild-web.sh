@@ -37,10 +37,10 @@ LOG="$TMP/web-rebuild.log"
 # a file lock needs a non-atomic test-then-create that two racers can both pass.
 LOCKDIR="$TMP/web-rebuild.lock.d"
 LOCK_WAIT=300        # worker: max seconds to wait for an in-progress build before giving up
-# Pinned (not :latest): a floating tag silently changed the default wasm STACK_SIZE
-# (5MB -> 64KB at emscripten 3.1.27), which overflowed the HUD-text render path into
-# static globals. Pin to a concrete version so the toolchain can't drift underneath us.
-IMAGE="emscripten/emsdk:6.0.0"
+# Emsdk image pin lives in tools/web/config.sh (single source of truth, shared
+# with .github/workflows/pages.yml). See that file for the pinning rationale.
+. "$(dirname "$0")/config.sh"
+IMAGE="$EMSDK_IMAGE"
 
 [ -d "$BUILD_WEB" ] || exit 0      # web build not configured -> nothing to do
 

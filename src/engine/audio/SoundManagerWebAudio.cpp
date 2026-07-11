@@ -12,7 +12,7 @@
 //     there is no per-callback main-thread mix (the SDL emscripten backend's
 //     ScriptProcessorNode ran on the JS main thread and crackled under load).
 //   - Assets are transcoded to sfx/<name>.ogg at build time by
-//     tools/web/transcode-audio-web.py, plus a sfx/sfx-loops.json loop map.
+//     tools/web/stage-web-assets.py, plus a sfx/sfx-loops.json loop map.
 //   - SFX handles stay a monotonic uint32 + JS-side active[] map for API
 //     compatibility with MortarSound / GameSound (which are unchanged).
 //

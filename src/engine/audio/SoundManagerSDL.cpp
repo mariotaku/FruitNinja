@@ -15,7 +15,7 @@
 // Port specific (web only): the .wav.pcm assets this file loads are 16kHz on
 // disk for desktop, but on the Emscripten build the CMake preload is pointed
 // at a build-time-resampled 48kHz copy (tools/web/resample-audio-web.py,
-// fn_web_audio_staging target) so the SDL device (opened at 48000 Hz in
+// fn_web_asset_staging target) so the SDL device (opened at 48000 Hz in
 // Init(), see below) never needs a per-callback resample. This file's
 // loading/mixing code is unaware of the swap -- it just reads whatever is at
 // the (unchanged) virtual data path.
@@ -109,9 +109,9 @@ void SoundManager::Init() {
     // Port specific: open the device at 48000 Hz -- the common browser
     // AudioContext native rate -- instead of the source 16000 Hz. Every SFX/
     // music .wav.pcm asset is pre-resampled to 48000 Hz ONCE at build time
-    // (tools/web/resample-audio-web.py, staged into build/web-audio-staging/
+    // (tools/web/resample-audio-web.py, staged into build/web-staging/
     // and preloaded in place of the real FruitNinjaBada/Data/sfx -- see the
-    // fn_web_audio_staging CMake target). With device rate == AudioContext
+    // fn_web_asset_staging CMake target). With device rate == AudioContext
     // rate == buffer rate, emscripten's SDL2 backend never has to resample
     // a mix-callback buffer, which matters on a slow device (webOS TV
     // Chrome). AudioCallback below is unchanged: it plays buffer samples

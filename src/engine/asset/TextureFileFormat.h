@@ -108,7 +108,7 @@ extern const uint32_t kTex3FourCC; // = 0x01584554
 // Reader [web]: WebP -- Port specific: web compressed textures (libwebp).
 //
 // Has NO binary counterpart. The web build ships textures transcoded to WebP
-// but stored inside .tex-named files (tools/web/transcode-audio-web.py). This
+// but stored inside .tex-named files (tools/web/stage-web-assets.py). This
 // reader detects the RIFF/WEBP magic (WebPGetInfo) and decodes to RGBA8888, so
 // the existing texFmt=0x01 GL upload path handles it unchanged. On desktop the
 // reader is present but inert -- real Tex1 .tex fail WebPGetInfo and fall
