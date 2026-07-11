@@ -1,41 +1,42 @@
-// Analysed: 2026-05-04T11:30
 //
 // SliderControl : HUDControl3d
-// Binary CU range: ~0x0015ff90..0x00160c90
+// v1.6.1 SliderControl @ 0x001b7248..0x001b8148
 //
-// Defunct: SliderControl -- orphaned in binary; zero internal call sites.
-// OptionsScreen was repurposed to PauseScreen, leaving the slider library
-// code unused. All method bodies are no-op stubs per the stub-don't-skip
-// policy. Class shape, vtable layout, and field offsets are preserved exactly
-// to match binary layout.
+// Dead code in v1.6.1 (OptionsScreen was repurposed to PauseScreen so nothing
+// instantiates it), but the class has a complete real implementation, ported
+// faithfully here. Field offsets/names re-derived from the ctor +
+// UpdateTouchPosition instruction stream (Ghidra's struct names were swapped).
+//
 
 #include "SliderControl.h"
 #include "hud/HUDLayer.h"
-#include "render/gl_funcs.h"
-#include <cstring>
+#include "asset/TextureManager.h"
+#include "asset/Mesh.h"
+#include "render/MatrixManager.h"
+#include "render/Font.h"
+#include "render/Utf8StringIterator.h"
+#include "math/Matrix44.h"
+#include "math/Colour.h"
+#include "engine/input/Touch.h"
+#include "engine/util/StringTable.h"
+#include "game/GameWork.h"
+#include <cstdint>
 
 // ---------------------------------------------------------------------------
 // Module-scope static texture handles (binary: Mortar::SmartPtr<Texture> GOT slots).
-// LoadContent loads "box.tex" (track) and "slider_will.tex" (thumb).
-// Port uses GLuint since LoadContent/UnloadContent are no-op stubs.
-static GLuint s_TrackTexture = 0;
-static GLuint s_ThumbTexture = 0;
+// LoadContent loads "_dialog_box.tex" (track) and "slider_will.tex" (thumb).
+static Mortar::SmartPtr<Mortar::Texture> s_box;      // track background
+static Mortar::SmartPtr<Mortar::Texture> s_slider;   // thumb
 
 // ---------------------------------------------------------------------------
-// Constructor
-// Binary @ 0x00160268 (master C2) / 0x00160398 (duplicate C2 variant)
-// Args: pos, size, label, minValue, maxValue, fontSize, initialValue
-//
-// Binary ctor body:
-//   1. HUDControl3d base init
-//   2. Mortar::Utf8StringIterator(&m_Label, label)
-//   3. Mortar::Delegate0<void>(&m_OnValueChanged)
-//   4. Assigns pos, size
-//   5. Samples two fonts via GOT[DAT_00160390] / GOT[DAT_00160394] to compute
-//      m_TrackWidth/Height and m_ThumbWidth/Height from font glyph metrics
-//   6. m_FontSize = fontSize, m_MinValue/MaxValue/CurrentValue
-//   7. m_TouchId = -1
-//   8. m_LayerFlags = 0x200 (layer bit 9)
+// Constructor -- Binary @ 0x001b7474
+// ASM-verified: 2026-07-11T00:00Z v1.6.1 SliderControl::SliderControl @ 0x001b7474 (re-analyst)
+//   Utf8StringIterator ctor on m_Label(+0x9C); Delegate0 ctor on m_OnValueChanged(+0xB8);
+//   size(+0x20); m_FontSize(+0x84); pos(+0x8);
+//   m_TrackWidth (+0x8C) = s_box.width  * size.x;   m_TrackHeight(+0x90) = s_box.height  * size.y;
+//   m_ThumbWidth (+0x94) = s_slider.width * size.x; m_ThumbHeight(+0x98) = s_slider.height * size.y;
+//   m_MinValue(+0x7C); m_MaxValue(+0x80); m_CurrentValue(+0x88); m_TouchId(+0xA8)=-1;
+//   m_LayerFlags(+0x34)=0x400.
 SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
                              const char* label,
                              int32_t minValue, int32_t maxValue,
@@ -50,30 +51,34 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
     , m_TrackHeight(0.0f)
     , m_ThumbWidth(0.0f)
     , m_ThumbHeight(0.0f)
+    , m_Label(label)
     , m_TouchId(-1)
     , m_TouchPos(0.0f, 0.0f, 0.0f)
+    , m_OnValueChanged()
 {
+    _labelPad[0] = _labelPad[1] = 0;
     pos  = inPos;
     size = inSize;
 
-    // Binary @ 0x00160268: label copied via Mortar::Utf8StringIterator ctor.
-    // Port: plain strncpy into char[28] placeholder.
-    if (label) {
-        strncpy(m_Label, label, sizeof(m_Label) - 1);
-        m_Label[sizeof(m_Label) - 1] = '\0';
-    } else {
-        m_Label[0] = '\0';
+    // Track/thumb extents come from the loaded texture dims (binary reads
+    // s_box/s_slider apparentWidth/Height at +0x24/+0x28) scaled by size.
+    if (s_box.IsValid()) {
+        m_TrackWidth  = (float)s_box->GetWidth()  * size.x;
+        m_TrackHeight = (float)s_box->GetHeight() * size.y;
+    }
+    if (s_slider.IsValid()) {
+        m_ThumbWidth  = (float)s_slider->GetWidth()  * size.x;
+        m_ThumbHeight = (float)s_slider->GetHeight() * size.y;
     }
 
-    // Binary computes track/thumb sizes from two font glyph metrics multiplied
-    // by size.x and size.y. Fonts are unresolved in the port (GOT[0x00160390]
-    // and GOT[0x00160394]). Fields stay zero -- widget is never rendered.
-
-    // Binary @ 0x00160268: m_LayerFlags = 0x200
-    m_LayerFlags = Mortar::HUD_LAYER_SLIDER;
+    m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;  // +0x34 = 0x400
 }
 
-// Binary @ 0x00160268 — LocalizedString overload
+// Port convenience overload -- NOT a distinct binary ctor. 0x001b7474/0x001b7594
+// are the Itanium C1/C2 pair for the SINGLE char* ctor above (confirmed identical
+// bodies via decompile; neither calls GETSTRING_CAST_0). Resolves via
+// GETSTRING_CAST_0 for call-site symmetry with CheckBox's genuine
+// ctor(LocalizedString) (0x00166ab8), matching every other GETSTRING_CAST_0 site.
 SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
                              LocalizedString locLabel,
                              int32_t minValue, int32_t maxValue,
@@ -88,152 +93,220 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
     , m_TrackHeight(0.0f)
     , m_ThumbWidth(0.0f)
     , m_ThumbHeight(0.0f)
+    , m_Label(GETSTRING_CAST_0(locLabel))
     , m_TouchId(-1)
     , m_TouchPos(0.0f, 0.0f, 0.0f)
+    , m_OnValueChanged()
 {
+    _labelPad[0] = _labelPad[1] = 0;
     pos  = inPos;
     size = inSize;
 
-    // Binary @ 0x00160268: label copied via Mortar::Utf8StringIterator ctor.
-    // Port: plain strncpy into char[28] placeholder.
-    const char* label = static_cast<const char*>(locLabel);
-    if (label) {
-        strncpy(m_Label, label, sizeof(m_Label) - 1);
-        m_Label[sizeof(m_Label) - 1] = '\0';
-    } else {
-        m_Label[0] = '\0';
+    if (s_box.IsValid()) {
+        m_TrackWidth  = (float)s_box->GetWidth()  * size.x;
+        m_TrackHeight = (float)s_box->GetHeight() * size.y;
+    }
+    if (s_slider.IsValid()) {
+        m_ThumbWidth  = (float)s_slider->GetWidth()  * size.x;
+        m_ThumbHeight = (float)s_slider->GetHeight() * size.y;
     }
 
-    // Binary @ 0x00160268: m_LayerFlags = 0x200
-    m_LayerFlags = Mortar::HUD_LAYER_SLIDER;
+    m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;  // +0x34 = 0x400
 }
 
-// Destructor chain -- Binary @ 0x001601a8 (D2) / 0x00160140 (D1/deleting)
-// D1/D2 call Release(), ~Mortar::Delegate0, ~Mortar::Utf8StringIterator, ~HUDControl3d.
 SliderControl::~SliderControl() {
     Release();
 }
 
-// ---------------------------------------------------------------------------
-// vtable slot 2 -- Binary @ 0x0015ffa0 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa0
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
+// vtable slot 2 -- bx lr; no-op.
 void SliderControl::Init() {
 }
 
-// ---------------------------------------------------------------------------
-// vtable slot 3 -- Binary @ 0x0015ffa4 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa4
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
+// vtable slot 3 -- bx lr; no-op.
 void SliderControl::Release() {
 }
 
-// ---------------------------------------------------------------------------
-// vtable slot 6 -- Binary @ 0x0015ffa8 (single bx lr; explicit SliderControl override)
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffa8
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
+// vtable slot 6 -- bx lr; no-op.
 void SliderControl::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
-// ---------------------------------------------------------------------------
-// vtable slot 7 -- Binary @ 0x0016069c (~224 instructions)
-// Draws: label text (Font::DrawString), track quad (box.tex, black tint),
-//        thumb quad (slider_will.tex, black tint, x-offset per current value).
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016069c
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
-void SliderControl::Draw(float* hudScaleRaw) {
-    (void)hudScaleRaw;
-    // Stub: binary draws label via Font::DrawString at
-    //   (pos.x + 15 + m_TrackWidth*0.5, pos.y + 14),
-    // then renders track background (box.tex) and thumb (slider_will.tex)
-    // as textured quads tinted with s_BgColour=(0,0,0,255).
-    // Widget is never instantiated in-game; port renders nothing.
-}
-
-// ---------------------------------------------------------------------------
-// vtable slot 10 -- Binary @ 0x00160090 (touch state machine)
-// Acquires a touch slot via TouchInRegion centered on pos with half-extents
-// m_TrackWidth*0.5 (X) and m_TrackHeight*0.5 (Y). Releases on touch-up.
-// On each held frame calls UpdateTouchPosition() to update m_CurrentValue.
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x00160090
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
-void SliderControl::Update(float dt) {
-    (void)dt;
-    // Stub: binary polls TouchInRegion / IsTouchDown and calls
-    // UpdateTouchPosition() while m_TouchId != -1.
-    // Port does nothing -- widget is never instantiated in-game.
-}
-
-// ---------------------------------------------------------------------------
-// vtable slot 12 -- Binary @ 0x00160c8c (mov r0,#5; bx lr)
-// Returns the HUDControl type-id for SliderControl. Not defunct -- live data.
+// vtable slot 12 -- Binary @ 0x001b8148 (returns 5).
 int SliderControl::GetType() {
     return 5;
 }
 
-// ---------------------------------------------------------------------------
-// Non-virtual. Binary @ 0x0016010c
-// Updates m_Label: constructs Mortar::Utf8StringIterator from str, assigns to m_Label.
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016010c
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
+// Non-virtual -- reassigns the label pointer (binary rebuilds the Utf8StringIterator).
 void SliderControl::SetText(const char* str) {
     if (str) {
-        strncpy(m_Label, str, sizeof(m_Label) - 1);
-        m_Label[sizeof(m_Label) - 1] = '\0';
+        m_Label = str;
+    }
+}
+
+// HUDControl override -- single bx lr; no-op.
+void SliderControl::UpdateFromGameWork() {
+}
+
+// ---------------------------------------------------------------------------
+// vtable slot 10 -- Binary @ 0x001b7248
+// Touch state machine. Hit-region centered on pos: X half-extent = m_TrackWidth*0.5,
+// Y half-extent = size.y*60*0.5. Acquire a slot via TouchInRegion; hold while
+// IsTouchDown; call UpdateTouchPosition each held frame.
+void SliderControl::Update(float dt) {
+    (void)dt;
+
+    float halfX = m_TrackWidth * 0.5f;
+    float halfY = (size.y * 60.0f) * 0.5f;
+
+    if (m_TouchId == -1) {
+        float minX = pos.x - halfX;
+        float maxX = pos.x + halfX;
+        float minY = pos.y - halfY;
+        float maxY = pos.y + halfY;
+        m_TouchId = TouchInRegion(minX, maxX, minY, maxY, -1);
+        if (m_TouchId != -1) {
+            if (IsTouchDown(m_TouchId) != 2) {
+                m_TouchId = -1;
+            }
+            return;  // acquire frame: no position update
+        }
+        // No slot acquired -- falls through to UpdateTouchPosition (no-op, id == -1).
+    } else {
+        if (IsTouchDown(m_TouchId) == 0) {
+            m_TouchId = -1;
+            return;
+        }
+        // Still held -- falls through to UpdateTouchPosition.
+    }
+    UpdateTouchPosition();
+}
+
+// ---------------------------------------------------------------------------
+// Binary @ 0x001b713c
+// Maps (pos.x - finger.x) across the track into [m_MinValue, m_MaxValue], writes the
+// result to m_CurrentValue, and fires m_OnValueChanged when the value changes.
+// The mapping is ratio*(min+max)/2 -- only exactly correct when min==0 (binary quirk).
+void SliderControl::UpdateTouchPosition() {
+    int   id       = m_TouchId;
+    float extent   = m_TrackWidth * 0.5f;
+    int   oldValue = m_CurrentValue;
+
+    if (id != -1) {
+        m_TouchPos = game_work.m_FingerSpawnPos[id];
+        float d = pos.x - m_TouchPos.x;
+
+        int value;
+        if (d > extent) {
+            value = m_MinValue;
+        } else {
+            int   di   = (int)d;
+            float absd = (float)(di < 0 ? -di : di);
+            if (absd > extent) {
+                value = m_MaxValue;
+            } else {
+                int dm = (int)(d - extent);
+                if (dm < 0) dm = -dm;
+                float ratio    = (float)dm / extent;
+                int   computed = (int)(ratio * (float)(m_MaxValue + m_MinValue) * 0.5f + 0.5f);
+                value = computed;
+                if (m_MaxValue < value) value = m_MaxValue;   // min(max, computed)
+                if (m_MinValue > value) value = m_MinValue;   // max(min, ...)
+            }
+        }
+        m_CurrentValue = value;
+    }
+
+    if (oldValue == m_CurrentValue) {
+        return;
+    }
+    m_OnValueChanged();
+}
+
+// ---------------------------------------------------------------------------
+// vtable slot 7 -- Binary @ 0x001b792c
+// Label (Yellow, tinted by hudScale) at (pos.x + 15 + trackW*0.5, pos.y + 14),
+// font game_work.m_Fonts[1] (= pFontMain), size 24. Track quad (s_box, White)
+// scaled (trackW, trackH) at pos. Thumb quad (s_slider, White) scaled
+// (thumbW, thumbH), translated in X by the current-value ratio across the track.
+void SliderControl::Draw(float* hudScaleRaw) {
+    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+
+    float trackW = m_TrackWidth;
+    float trackH = m_TrackHeight;
+    float thumbW = m_ThumbWidth;
+    float thumbH = m_ThumbHeight;
+    // Positioning uses a normalized thumb width (thumbW * 74/128); the quad scale
+    // uses thumbW directly. Both are the binary's exact arithmetic.
+    float thumbPosW = thumbW * 74.0f * 0.0078125f;
+
+    const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
+    // Colour::Yellow (not defined in the port's Colour) = (255,255,0,255).
+    Colour labelCol = Colour::TintColour(Colour(255, 255, 0, 255), tintRGB);
+
+    if (m_Label && game_work.pFontMain.IsValid()) {
+        Mortar::Utf8StringIterator iter(m_Label);
+        game_work.pFontMain->DrawString(iter,
+                                        pos.x + 15.0f + trackW * 0.5f, pos.y + 14.0f, 0.0f,
+                                        labelCol, 24.0f, 0.0f, 0.0f, 1, NULL, 0.0f);
+    }
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+
+    // --- track quad (s_box) ---
+    mm.GetWorldStack().Reset();
+    if (s_box.IsValid()) {
+        s_box->Set();
+        Matrix44 mat = Matrix44::MakeScale(trackW, trackH, 1.0f);
+        mat.GlobalTranslate44(pos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
+        s_box->UnSet();
+    }
+
+    // --- thumb quad (s_slider) ---
+    mm.GetWorldStack().Reset();
+    if (s_slider.IsValid()) {
+        s_slider->Set();
+        Matrix44 mat = Matrix44::MakeScale(thumbW, thumbH, 1.0f);
+        float value = (float)m_CurrentValue;
+        float maxV  = (float)m_MaxValue;
+        Vec3 thumbPos = pos;
+        thumbPos.x = thumbPosW * 0.5f
+                   + (value / maxV) * (trackW - thumbPosW)
+                   + pos.x
+                   + trackW * -0.5f;
+        mat.GlobalTranslate44(thumbPos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
+        s_slider->UnSet();
     }
 }
 
 // ---------------------------------------------------------------------------
-// Private non-virtual helper called by Update while touch is held.
-// v1.6.1 SliderControl::UpdateTouchPosition @0x001b713c (~80 instructions)
-// Maps live touch position (from g_TouchTable[m_TouchId].pos) into
-// m_CurrentValue in [m_MinValue, m_MaxValue]. Fires m_OnValueChanged
-// when m_CurrentValue changes. Quirk: value mapping is ratio*(min+max)/2
-// which is only correct when min==0.
-// Defunct: SliderControl -- no-op stub; v1.6.1 SliderControl::UpdateTouchPosition @0x001b713c
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
-void SliderControl::UpdateTouchPosition() {
-    // Stub: binary reads g_TouchTable[m_TouchId].pos into m_TouchPos,
-    // then maps touch x-offset to m_CurrentValue, then fires m_OnValueChanged
-    // if value changed. Port does nothing -- widget is never instantiated.
-}
-
-// ---------------------------------------------------------------------------
-// Static -- Binary @ 0x00160890
-// Loads "box.tex" (track background) and "slider_will.tex" (thumb) via
-// TextureManager::LoadLocalisedTexture into static Mortar::SmartPtr<Texture> slots.
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x00160890
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
+// Static -- Binary @ 0x001b7bc0
+// DIFFERS: original loads "_dialog_box.tex" (track) + "slider_will.tex" (thumb) via
+//   LoadLocalisedTexture, but neither texture is shipped in FruitNinjaBada/Data for
+//   v1.6.1 (dialog_box.tex exists, _dialog_box.tex does not; slider_will.tex is
+//   absent). The SliderControl is dead code, so the art was dropped. Faithful names
+//   are kept; the SmartPtrs stay null when the art is absent (ctor then leaves
+//   track/thumb sizes at 0 and Draw no-ops the quads). Port-supplied placeholder art
+//   is a separate task; the visual test injects substitutes via SetTexturesForTest.
+//   v1.6.1 SliderControl::LoadContent @ 0x001b7bc0
 void SliderControl::LoadContent() {
-    // Stub: binary calls TextureManager::LoadLocalisedTexture for:
-    //   s_TrackTexture <- "box.tex"
-    //   s_ThumbTexture <- "slider_will.tex"
-    // Port does nothing -- textures never loaded since widget is never instantiated.
+    s_box    = Mortar::TextureManager::LoadLocalisedTexture("_dialog_box.tex");
+    s_slider = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
 }
 
-// ---------------------------------------------------------------------------
-// Static -- Binary @ 0x0016090c
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0016090c
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
 void SliderControl::UnloadContent() {
-    // Stub: binary calls Mortar::SmartPtr<Texture>::SetNull on s_TrackTexture, s_ThumbTexture.
-    s_TrackTexture = 0;
-    s_ThumbTexture = 0;
+    s_box.SetNull();
+    s_slider.SetNull();
 }
 
-// ---------------------------------------------------------------------------
-// HUDControl override -- Binary @ 0x0015ffac (single bx lr; no-op)
-// Defunct: SliderControl -- no-op stub; v1.6.1 binary @ 0x0015ffac
-//          (no internal call sites; OptionsScreen was repurposed to
-//          PauseScreen, leaving the slider library code unused).
-void SliderControl::UpdateFromGameWork() {}
+// Port/test-only injector (no binary counterpart) -- see header note.
+void SliderControl::SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& track,
+                                       const Mortar::SmartPtr<Mortar::Texture>& thumb) {
+    s_box    = track;
+    s_slider = thumb;
+}

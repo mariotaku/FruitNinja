@@ -1,186 +1,196 @@
 //
 // CheckBox : HUDControl3d
-// Binary @ 0x00134AE4..0x001354D8
+// v1.6.1 CheckBox @ 0x00166a10..0x001674d8
 //
 
-// Analysed: 2026-05-04T00:00
 #include "CheckBox.h"
 #include "hud/HUDLayer.h"
-#include "Game.h"
 #include "asset/TextureManager.h"
-#include "render/Renderer.h"
+#include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
-#include "render/gl_funcs.h"
+#include "render/Utf8StringIterator.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "engine/input/Touch.h"
-#include <cstring>
+#include "engine/util/StringTable.h"
 #include "game/GameWork.h"
+#include <cstdint>
 
 // Class-static texture SmartPtrs.
 // LoadContent loads: "checked.tex" -> s_checked, "unchecked.tex" -> s_unchecked.
-// Binary @ 0x00135010 / 0x0013508C.
 Mortar::SmartPtr<Mortar::Texture> CheckBox::s_checked;
 Mortar::SmartPtr<Mortar::Texture> CheckBox::s_unchecked;
 
-// Binary @ 0x00134CE0
+// Binary @ 0x00166a10
+// ASM-verified: 2026-07-11T00:00Z v1.6.1 CheckBox::CheckBox(Vec3,Vec3,char const*) @ 0x00166a10 (re-analyst)
+//   Field writes: m_Label(+0x80)=label, m_Checked(+0x7C)=1, Delegate0 ctor on
+//   m_OnToggle(+0x94), size(+0x20), pos(+0x8), m_TouchId(+0x84)=-1, m_LayerFlags(+0x34)=0x80.
 CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
     : HUDControl3d()
-    , m_bChecked(1)
-    , _pad7D(0)
-    , _pad7E(0)
-    , _pad7F(0)
-    , m_pLabel(label)
-    , m_TouchSlot(-1)
+    , m_Checked(1)
+    , m_Label(label)
+    , m_TouchId(-1)
+    , m_TouchCapture(0.0f, 0.0f, 0.0f)
+    , m_OnToggle()
 {
+    _pad7D[0] = _pad7D[1] = _pad7D[2] = 0;
     pos           = inPos;
     size          = inSize;
-    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;
+    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;  // +0x34 = 0x80
 }
 
-// Binary @ 0x00134D98
-// ASM-spec v1.6.1 CheckBox::CheckBox(Vec3,Vec3,LocalizedString) @0x00166ab8 -- m_pLabel written from LocalizedString arg.
-//   RE flagged possible delegate-into-stack-temp; asm-verify clean as of R4 W4.
+// Binary @ 0x00166ab8
+// ASM-verified: 2026-07-11T00:00Z v1.6.1 CheckBox::CheckBox(Vec3,Vec3,LocalizedString) @ 0x00166ab8 (re-analyst)
+//   Resolves the string-table id via GETSTRING_CAST_0(param_4), then duplicates the
+//   char* ctor body inline with the resolved string as m_Label.
 CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
     : HUDControl3d()
+    , m_Checked(1)
+    , m_Label(GETSTRING_CAST_0(loc))
+    , m_TouchId(-1)
+    , m_TouchCapture(0.0f, 0.0f, 0.0f)
+    , m_OnToggle()
 {
-    // Cross-build: GCC 4.4 has no C++11 delegating ctors; inline the char* ctor body.
-    m_pLabel      = static_cast<const char*>(loc);
-    m_bChecked    = 1;
+    _pad7D[0] = _pad7D[1] = _pad7D[2] = 0;
     pos           = inPos;
     size          = inSize;
-    m_TouchSlot   = -1;
-    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;
+    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;  // +0x34 = 0x80
 }
 
 CheckBox::~CheckBox() {
 }
 
-// Binary @ 0x00134AE4 -- vtable Init slot; empty in binary (single `bx lr`), no-op is faithful.
+// vtable Init slot -- empty in binary (bx lr), no-op is faithful.
 void CheckBox::Init() {
 }
 
-// Binary @ 0x00134AE8 -- vtable Release slot; empty in binary (single `bx lr`), no-op is faithful.
+// vtable Release slot -- empty in binary (bx lr), no-op is faithful.
 void CheckBox::Release() {
 }
 
-// Binary @ 0x00134B20 -- vtable PreDraw slot; empty in binary (single `bx lr`), no-op is faithful.
+// vtable PreDraw slot -- empty in binary (bx lr), no-op is faithful.
 void CheckBox::PreDraw(float* hudScaleRaw) {
     (void)hudScaleRaw;
 }
 
-// Binary @ 0x00134B24 — empty in binary
-// Binary @ 0x00134B24 -- empty in binary too. Kept for vtable / shape parity.
+// Empty in binary too. Kept for vtable / shape parity.
 void CheckBox::UpdateFromGameWork() {
 }
 
-
-// Binary @ 0x00134AEC
-// Reads touch slot data at g_GameData+0xA0 + (m_TouchSlot * 12). In the binary
-// the x/y/phase values are read inline at each use site (not stored in members).
-// Port calls UpdateTouchPosition() as a named call-site for parity but the binary
-// stores position transiently on the stack, not in struct fields.
-void CheckBox::UpdateTouchPosition() {
-    // no-op: binary reads touch position inline; stored in local registers, not members.
+// Binary @ 0x001674d8 (returns 5)
+int CheckBox::GetType() {
+    return 5;
 }
 
-// Binary @ 0x00134B28
+// Binary @ 0x001667b8
+// While a touch slot is held, capture the finger's PRESS position (spawn pos)
+// into m_TouchCapture. Update() tests this captured position against the rect on
+// release. No-op when m_TouchId == -1.
+void CheckBox::UpdateTouchPosition() {
+    int id = m_TouchId;
+    if (id == -1) {
+        return;
+    }
+    m_TouchCapture = game_work.m_FingerSpawnPos[id];
+}
+
+// Binary @ 0x00166c24
+// Hit-rect is HARDCODED (pos.x +/- 36, pos.y +/- 28.5), NOT pos +/- size.
+// Acquire a slot via TouchInRegion; hold while IsTouchDown == 2; on release
+// (IsTouchDown == 0) toggle m_Checked ONLY if the captured press position is
+// inside the rect, then fire m_OnToggle.
 void CheckBox::Update(float dt) {
     (void)dt;
 
-    // Bounds of the checkbox quad in centered-ortho space (half-extents from pos/size).
-    float left   = pos.x - size.x;
-    float right  = pos.x + size.x;
-    float bottom = pos.y - size.y;
-    float top    = pos.y + size.y;
+    float left   = pos.x - 36.0f;
+    float right  = pos.x + 36.0f;
+    float bottom = pos.y - 28.5f;
+    float top    = pos.y + 28.5f;
 
-    if (m_TouchSlot < 0) {
-        // No active tracking slot — scan for a new touch in our region.
-        // Binary: TouchInRegion(left, right, bottom, top, -1)
-        int slot = TouchInRegion(left, right, bottom, top, -1);
-        if (slot >= 0) {
-            int state = IsTouchDown(slot);
-            if (state != 0) {
-                m_TouchSlot = slot;
-                UpdateTouchPosition();
+    if (m_TouchId == -1) {
+        m_TouchId = TouchInRegion(left, right, bottom, top, -1);
+        if (m_TouchId != -1) {
+            if (IsTouchDown(m_TouchId) == 2) {
+                return;
             }
+            m_TouchId = -1;
+            return;
         }
+        // No slot acquired -- falls through to UpdateTouchPosition (no-op, id == -1).
     } else {
-        UpdateTouchPosition();
-        int state = IsTouchDown(m_TouchSlot);
-        if (state == 0) {
-            // Touch released — check if it ended inside the rect and toggle.
-            const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);
-            if (s) {
-                float tx = static_cast<float>(s->currX);
-                float ty = static_cast<float>(s->currY);
-                bool inside = (tx >= left && tx <= right && ty >= bottom && ty <= top);
-                if (inside) {
-                    m_bChecked = m_bChecked ? 0 : 1;
-                }
-            }
-            m_TouchSlot = -1;
+        if (IsTouchDown(m_TouchId) == 0) {
+            m_TouchId = -1;
+            if (m_TouchCapture.x < left)   return;
+            if (right < m_TouchCapture.x)  return;
+            if (m_TouchCapture.y < bottom) return;
+            if (top < m_TouchCapture.y)    return;
+            m_Checked = (uint8_t)(m_Checked ^ 1);
+            m_OnToggle();
+            return;
         }
+        // Still held -- falls through to UpdateTouchPosition.
     }
+    UpdateTouchPosition();
 }
 
-// ASM-verified: 2026-05-06T16:00 v1.6.1 binary @ 0x00134E70 (asm-inspector)
-// CheckBox in the binary does NOT override the inherited HUDControl3d::Draw;
-// the port's body is the engine-level draw with no per-control GL state
-// mutation. Depth state owned by GameDraw at the pass level.
+// Binary @ 0x001672f8
+// Label at (pos.x+64, pos.y+10), font game_work.m_Fonts[1] (= pFontMain), size 24,
+// colour Yellow (tinted by hudScale). Quad = MatrixStack::Reset -> Scale44(128,64,1)
+// HARDCODED -> translate pos -> Mesh::DrawQuadUnCached(White); texture = checked.tex
+// when m_Checked else unchecked.tex.
 void CheckBox::Draw(float* hudScaleRaw) {
     const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
+    // Colour::Yellow (not defined in the port's Colour) = (255,255,0,255).
+    Colour labelCol = Colour::TintColour(Colour(255, 255, 0, 255), tintRGB);
 
-    // Draw label text.
-    // Binary: Font::DrawString at pos + (10 + size.x / 2, 10, 0).
-    if (m_pLabel && game_work.pFontMain.IsValid()) {
-        Vec3 textPos(pos.x + 10.0f + size.x * 0.5f, pos.y + 10.0f, 0.0f);
-        game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                                    m_pLabel, textPos,
-                                    Colour(255, 255, 255, 255), 0);
+    if (m_Label && game_work.pFontMain.IsValid()) {
+        Mortar::Utf8StringIterator iter(m_Label);
+        game_work.pFontMain->DrawString(iter,
+                                        pos.x + 64.0f, pos.y + 10.0f, 0.0f,
+                                        labelCol, 24.0f, 0.0f, 0.0f, 1, NULL, 0.0f);
     }
 
-    // Select checked or unchecked texture.
-    Mortar::SmartPtr<Mortar::Texture>& texPtr = m_bChecked ? s_checked : s_unchecked;
-    if (!texPtr.IsValid()) return;
-
-    GLuint texId = texPtr->GetTexId();
-    if (!texId) return;
-
-    // Matrix-stack reset / scale / translate / upload — matches HUDControl3d::Draw pattern.
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
-    Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);
-    mat.GlobalTranslate44(pos);
-
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
+    Mortar::SmartPtr<Mortar::Texture>& texPtr = m_Checked ? s_checked : s_unchecked;
+    if (!texPtr.IsValid()) return;
 
     texPtr->Set();
 
-    // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888);
-    // CheckBox::Draw must NOT mutate it -- doing so leaves depth-test OFF for
-    // subsequent same-bucket draws (MenuButton scratchs.tex backdrop).
-    const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
-    Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
-    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
+    Matrix44 mat = Matrix44::MakeScale(128.0f, 64.0f, 1.0f);
+    mat.GlobalTranslate44(pos);
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
 
     texPtr->UnSet();
 }
 
-// Binary @ 0x00135010
+// Binary @ 0x00167214
+// DIFFERS: original loads "checked.tex" / "unchecked.tex" via LoadLocalisedTexture,
+//   but neither texture is shipped in FruitNinjaBada/Data for v1.6.1 (the CheckBox
+//   is dead code). The faithful names are kept; the SmartPtrs stay null when the
+//   art is absent (Draw then no-ops on the quad). Port-supplied placeholder art is
+//   a separate task; the visual test injects substitutes via SetTexturesForTest.
+//   v1.6.1 CheckBox::LoadContent @ 0x00167214
 void CheckBox::LoadContent() {
     s_checked   = Mortar::TextureManager::LoadLocalisedTexture("checked.tex");
     s_unchecked = Mortar::TextureManager::LoadLocalisedTexture("unchecked.tex");
 }
 
-// Binary @ 0x0013508C
 void CheckBox::UnloadContent() {
     s_checked.SetNull();
     s_unchecked.SetNull();
+}
+
+// Port/test-only injector (no binary counterpart) -- see header note.
+void CheckBox::SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& checked,
+                                  const Mortar::SmartPtr<Mortar::Texture>& unchecked) {
+    s_checked   = checked;
+    s_unchecked = unchecked;
 }
