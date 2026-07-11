@@ -31,13 +31,17 @@
 
     html, body {
       width: 100%; height: 100%;
+      /* 100dvh (dynamic viewport height) tracks the mobile URL-bar show/hide
+         so the game area is never taller than the visible viewport; browsers
+         that don't support dvh fall back to the plain 100% above (cascade
+         order matters -- dvh must come second so it wins where supported). */
+      height: 100dvh;
       background: #000;
       overflow: hidden;
-      /* Body is a flex COLUMN: #viewport (game area) takes the available
-         vertical space, the #credit footer takes its natural height below it.
-         This guarantees the footer never overlaps the canvas -- on short
-         viewports the game area shrinks (letterboxed) and the footer stays
-         visible underneath. */
+      /* Immersive: #viewport is now the ONLY body layout child (the credit
+         footer moved into #restart-overlay -- see markup below), so it can
+         simply fill the full viewport; no flex-column footer accounting
+         needed any more. */
       font-family: Arial, Helvetica, sans-serif;
       /* Kill the page-level swipe gestures that yank the browser UI back
          mid-slice on mobile Safari/Chrome:
@@ -56,49 +60,21 @@
       -webkit-touch-callout: none;
     }
 
-    body {
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* #viewport is the game-area flex item of the body column: it takes all
-       the vertical space the footer doesn't (flex:1 1 auto; min-height:0 so
-       it SHRINKS on short viewports instead of pushing the footer out).
-       The canvas is positioned inside it and sized by JS letterbox scaling.
-       We do NOT give #viewport a fixed pixel size -- that was causing the
-       flexbox to collapse the width to ~62px on the 946x938 test window.
-       Instead the canvas gets explicit CSS width/height from the resize()
-       function (which reads THIS container's client size, not the window)
-       and is flex-centered within it. */
+    /* Immersive full-viewport game area: #viewport ALWAYS fills the entire
+       window (fixed, inset:0) regardless of aspect ratio -- wide/height-
+       constrained (TV) or narrow/width-constrained (portrait phone) both
+       just hand their full client box to the JS resize() letterbox math
+       below, which picks whichever dimension is the binding one.  The
+       canvas gets explicit CSS width/height from resize() and is
+       flex-centered within this box; the rest of the box (letterbox bars)
+       shows this element's own black background. */
     #viewport {
-      position: relative;
-      flex: 1 1 auto;
-      min-height: 0;
+      position: fixed;
+      inset: 0;
       background: #000;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    /* NON-fullscreen width cap: the game area is centered and capped at 90%
-       of the window width, never exceeding 800px.  The letterbox JS then fits
-       the 3:2 canvas within this capped width AND the available height
-       (whichever binds), so it never overflows past the footer. */
-    body:not(.is-fullscreen) #viewport {
-      width: 90%;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    /* FULLSCREEN: remove the cap -- the game area fills the whole viewport.
-       (The footer + fullscreen button are hidden by the body.is-fullscreen
-       rules below.)  The UA :fullscreen stylesheet mostly does this already
-       when #viewport is the fullscreened element; this makes it explicit. */
-    body.is-fullscreen #viewport {
-      max-width: none;
-      width: 100%;
-      height: 100%;
-      margin: 0;
     }
 
     /* Canvas backing size is fixed at 960x640 (set by SDL_CreateWindow).
@@ -299,14 +275,13 @@
       stroke-linejoin: round;
     }
 
-    /* Copyright credit / disclaimer: a REAL footer in normal document flow --
-       the flex:0 0 auto item of the body column, so it always sits BELOW the
-       game area and can never overlap the canvas (on short viewports the
-       #viewport flex item shrinks instead).  Low-opacity small text; kept
-       subtle.  Hidden in fullscreen (see body.is-fullscreen rule below). */
+    /* Copyright credit / disclaimer: lives INSIDE #restart-overlay now (see
+       markup) so it only ever appears on the tap-to-restart quit screen, not
+       cluttering the immersive full-viewport canvas.  Footer-ish: small,
+       low-opacity, sits below the restart button. */
     #credit {
-      flex: 0 0 auto;
-      padding: 3px 8px 4px;
+      margin-top: 0.4em;
+      padding: 0 8px;
       text-align: center;
       font-size: 10px;
       line-height: 1.35;
@@ -317,34 +292,12 @@
     }
 
     /* Fullscreen = game canvas only: when the page is fullscreen (class set on
-       <body> by the fullscreenchange handler), hide the page chrome -- the
-       fullscreen toggle button and the copyright credit.  !important beats the
-       button's inline style.display='flex' (set by JS when the game starts).
-       Exiting is via Esc / system gesture (browser default). */
-    body.is-fullscreen #fullscreen-btn,
-    body.is-fullscreen #credit {
+       <body> by the fullscreenchange handler), hide the fullscreen toggle
+       button.  !important beats the button's inline style.display='flex'
+       (set by JS when the game starts).  Exiting is via Esc / system gesture
+       (browser default). */
+    body.is-fullscreen #fullscreen-btn {
       display: none !important;
-    }
-
-    /* MOBILE LANDSCAPE: iOS Safari has no Fullscreen API, so .is-fullscreen never
-       gets set there and the game stays capped with the footer showing, wasting
-       space. On a touch device held in landscape, apply the same maximisation as
-       fullscreen WITHOUT needing the API: drop the 90% width cap so the 3:2 canvas
-       fills the viewport, and hide the footer credit. The window 'resize' listener
-       re-letterboxes the canvas to the new #viewport size. Selector mirrors the
-       non-fullscreen cap rule so specificity ties and this later rule wins.
-       (hover:none + pointer:coarse targets phones/tablets, so desktop landscape --
-       where the fullscreen button works -- keeps its chrome.) */
-    @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
-      body:not(.is-fullscreen) #viewport {
-        width: 100%;
-        max-width: none;
-        height: 100%;
-        margin: 0;
-      }
-      #credit {
-        display: none !important;
-      }
     }
   </style>
 </head>
@@ -383,9 +336,16 @@
 
     <!-- Restart overlay: shown by C++ (EmscriptenFrame) when game->running == false.
          Fixed full-viewport so it covers the canvas but stays below error overlay.
-         The restart button reloads the page. -->
+         The restart button reloads the page.  The copyright credit lives here
+         (not on the main page) so it only shows on this quit screen, keeping
+         the immersive in-game canvas view uncluttered. -->
     <div id="restart-overlay" role="alertdialog" aria-modal="true" aria-label="Game over">
       <button id="restart-btn" tabindex="0">Tap to Restart</button>
+      <footer id="credit">
+        Fruit Ninja and all game assets are (c) 2011 Halfbrick Studios.
+        This is a non-commercial fan reverse-engineering / preservation port and is
+        not affiliated with, endorsed by, or supported by Halfbrick Studios.
+      </footer>
     </div>
 
     <!-- full-screen toggle button.  Fixed to the top-right
@@ -406,16 +366,6 @@
     </div>
   </div>
 
-  <!-- Copyright credit / disclaimer: a real <footer> in normal document flow,
-       the second flex item of the body column -- always BELOW the game area,
-       never overlapping the canvas.  Persistent (never removed) but hidden
-       while fullscreen (body.is-fullscreen rule). -->
-  <footer id="credit">
-    Fruit Ninja and all game assets are (c) 2011 Halfbrick Studios.
-    This is a non-commercial fan reverse-engineering / preservation port and is
-    not affiliated with, endorsed by, or supported by Halfbrick Studios.
-  </footer>
-
   <script>
   /* all overlay elements are inside the viewport div as absolute
      siblings of the canvas.  resize() sizes the canvas and progress bar to
@@ -429,13 +379,16 @@
     var progressWrap = document.getElementById('progress-bar-wrap');
 
     function resize() {
-      /* Size against the #viewport CONTAINER, not the window: the container
-         is width-capped in non-fullscreen (90% / max 800px, CSS) and sits
-         above the in-flow footer, so its client box is the true available
-         game rect.  In fullscreen the container fills the screen and this
-         same math letterboxes to the full viewport.  All overlay coords
-         below are relative to #viewport (position:relative ancestor of the
-         absolute-positioned progress bar). */
+      /* Size against the #viewport CONTAINER (fixed, inset:0 -- always the
+         full viewport, immersive on every device) rather than window.inner*
+         so the same code path works whether #viewport is native-fullscreened
+         or not.  Picks the binding dimension automatically: min(width-ratio,
+         height-ratio) shrinks whichever axis would overflow, preserving the
+         3:2 aspect ratio.  All overlay coords below are relative to
+         the viewport element (position:relative-equivalent ancestor of the
+         absolute-positioned progress bar; #viewport itself is
+         position:fixed, which still establishes the containing block for
+         absolutely-positioned descendants). */
       var ww = viewportEl.clientWidth, wh = viewportEl.clientHeight;
       var scale = Math.min(ww / GAME_W, wh / GAME_H);
       var cw = Math.floor(GAME_W * scale);
