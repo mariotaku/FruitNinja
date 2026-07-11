@@ -16,6 +16,10 @@
 #include <cstring>
 #include <cstdlib>
 
+#if !defined(__bada__)
+#include "webp/decode.h" // Port specific: web compressed textures (libwebp)
+#endif
+
 namespace Mortar {
 
 // ---- Tex3 FourCC ----------------------------------------------------------
@@ -298,15 +302,73 @@ TextureSourceData* TextureFileFormat::ReadTex3Format(const void* data, unsigned 
     return 0;
 }
 
+#if !defined(__bada__)
+// ---- Reader [web]: WebP ---------------------------------------------------
+// Port specific: web compressed textures (libwebp). No binary counterpart.
+// Web textures are transcoded to WebP and stored inside .tex-named files; this
+// reader decodes them. On desktop the reader is present but never fires (real
+// Tex1 .tex fail WebPGetInfo). See TextureFileFormat.h for the ownership note.
+TextureFileFormat::WebPData::~WebPData() {
+    if (m_OwnedPixels) {
+        WebPFree(m_OwnedPixels);
+        m_OwnedPixels = 0;
+    }
+}
+
+TextureSourceData* TextureFileFormat::ReadWebP(const void* data, unsigned long size) {
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+    int w = 0;
+    int h = 0;
+    // Inert on non-WebP input (real Tex1 .tex): WebPGetInfo returns 0.
+    if (WebPGetInfo(bytes, (size_t)size, &w, &h) == 0) {
+        return 0;
+    }
+    uint8_t* rgba = WebPDecodeRGBA(bytes, (size_t)size, &w, &h);
+    if (!rgba) {
+        return 0;
+    }
+
+    WebPData* d = new WebPData();
+    d->m_OwnedPixels = rgba;           // freed by ~WebPData -> WebPFree
+    d->texFmt = 0x01;                  // RGBA8888 -> existing GL upload case 0x01
+    d->wLog2  = 0;                     // dims are non-log2; apparent dims are authoritative
+    d->hLog2  = 0;
+
+    d->info.rawWidth       = (uint16_t)w;
+    d->info.rawHeight      = (uint16_t)h;
+    d->info.depth          = 1;
+    d->info.levels         = 1;
+    d->info.apparentWidth  = (uint32_t)w;
+    d->info.apparentHeight = (uint32_t)h;
+
+    d->pixels     = rgba;
+    d->pixelsSize = (unsigned long)w * (unsigned long)h * 4u;
+
+    return d;
+}
+#endif // !__bada__
+
 // ---- g_readers registry ---------------------------------------------------
-// Binary: 4-entry array @ 0x2cf8e8.
-// Order: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
+// Binary: 4-entry array @ 0x2cf8e8. Order: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
+// Host/web prepend a port-specific WebP reader at index 0 (highest priority) so
+// WebP-in-.tex content is detected before the raw parsers; the __bada__
+// cross-build keeps the binary-exact 4-entry array (see TextureFileFormat.h).
+#if defined(__bada__)
 TextureReadFn g_readers[4] = {
     TextureFileFormat::ReadTex3Format,  // [0] v1.6.1 Tex3Format::Read @0x0022bd7c
     TextureFileFormat::ReadDDSFormat,   // [1] v1.6.1 DDSFormat::Read @0x0022cc04
     TextureFileFormat::ReadTex2Format,  // [2] v1.6.1 Tex2Format::Read @0x0022baf8
     TextureFileFormat::ReadTex1Format   // [3] v1.6.1 Tex1Format::Read @0x0022b324
 };
+#else
+TextureReadFn g_readers[5] = {
+    TextureFileFormat::ReadWebP,        // [0] Port specific: web compressed textures (libwebp)
+    TextureFileFormat::ReadTex3Format,  // [1] v1.6.1 Tex3Format::Read @0x0022bd7c
+    TextureFileFormat::ReadDDSFormat,   // [2] v1.6.1 DDSFormat::Read @0x0022cc04
+    TextureFileFormat::ReadTex2Format,  // [3] v1.6.1 Tex2Format::Read @0x0022baf8
+    TextureFileFormat::ReadTex1Format   // [4] v1.6.1 Tex1Format::Read @0x0022b324
+};
+#endif
 
 // ---------------------------------------------------------------------------
 // TextureInfo Read<T> overloads

@@ -103,11 +103,49 @@ TextureSourceData* ReadTex3Format(const void* data, unsigned long size);
 // The value is identical: bytes { 0x54, 0x45, 0x58, 0x01 }.
 extern const uint32_t kTex3FourCC; // = 0x01584554
 
+#if !defined(__bada__)
+// ---------------------------------------------------------------------------
+// Reader [web]: WebP -- Port specific: web compressed textures (libwebp).
+//
+// Has NO binary counterpart. The web build ships textures transcoded to WebP
+// but stored inside .tex-named files (tools/web/transcode-audio-web.py). This
+// reader detects the RIFF/WEBP magic (WebPGetInfo) and decodes to RGBA8888, so
+// the existing texFmt=0x01 GL upload path handles it unchanged. On desktop the
+// reader is present but inert -- real Tex1 .tex fail WebPGetInfo and fall
+// through to the Tex1 reader. Excluded from the __bada__ cross-build (no libwebp
+// there, and the real device never ships WebP-in-.tex).
+// ---------------------------------------------------------------------------
+
+// WebPData -- Tex1Data whose pixel buffer is OWNED (a WebPDecodeRGBA() heap
+// allocation) and freed with WebPFree in its virtual dtor. Unlike the other
+// readers (whose `pixels` point into the mapped, File-owned buffer), the decoded
+// RGBA does not live in the file bytes, so this Data must own + free it. Deriving
+// from Tex1Data means the Cache()/UploadTex1ToGL static_cast<Tex1Data*> and the
+// texFmt=0x01 upload path work unchanged.
+struct WebPData : public Tex1Data {
+    void* m_OwnedPixels; // WebPDecodeRGBA() buffer; WebPFree'd in ~WebPData
+    WebPData() : m_OwnedPixels(0) {}
+    virtual ~WebPData();
+};
+
+// Returns null (inert) if data is not WebP (real Tex1 .tex), else a WebPData
+// with texFmt=0x01 RGBA8888 and the decoded pixels.
+TextureSourceData* ReadWebP(const void* data, unsigned long size);
+#endif // !__bada__
+
 } // namespace TextureFileFormat
 
-// g_readers[4] -- the 4-entry reader registry @ 0x2cf8e8 in the binary.
-// Index order matches binary: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
-extern TextureReadFn g_readers[4];
+// g_readers -- the reader registry @ 0x2cf8e8 in the binary (4 entries:
+// [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1). The host/web build prepends a
+// port-specific WebP reader at index 0 (FN_TEXTURE_NUM_READERS == 5); the
+// __bada__ cross-build keeps the binary-exact 4-entry array so asm-verify sees
+// no divergence.
+#if defined(__bada__)
+#  define FN_TEXTURE_NUM_READERS 4
+#else
+#  define FN_TEXTURE_NUM_READERS 5
+#endif
+extern TextureReadFn g_readers[FN_TEXTURE_NUM_READERS];
 
 // ---------------------------------------------------------------------------
 // TextureInfo Read<T> overloads -- deserialise texture format descriptors from
