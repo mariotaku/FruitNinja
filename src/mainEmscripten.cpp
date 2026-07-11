@@ -14,6 +14,7 @@
 #include "game/GameWork.h"
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
+#include "audio/SoundManager.h"
 #include <cstdio>
 
 // Port specific: SDL's default log output function writes to stderr on every
@@ -97,12 +98,58 @@ EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
 }
 } // extern "C"
 
+// Port specific: web audio teardown on quit.  Restart is a full page reload,
+// not a same-instance resume -- confirmed by reading shell.html's
+// restart-btn handler (src/platform/emscripten/shell.html ~line 611-627):
+// it does FS.syncfs(false, ...) then location.reload(). A full reload tears
+// down the whole WASM instance/JS context, so it is safe -- and closest to
+// the desktop teardown path -- to run the real g_game.shutdown() teardown
+// here (GameDestroy -> delete mGameSound -> ~SoundManager ->
+// SDL_CloseAudioDevice, same as the desktop path in main()/GameSDL.cpp).
+//
+// This call is actually load-bearing on web: emscripten_set_main_loop_arg()
+// in main() below is invoked with simulate_infinite_loop=1, so main()'s
+// post-loop teardown code (g_game.shutdown() at the bottom of main(), kept
+// "for symmetry") is UNREACHABLE on web -- nothing else will ever call
+// shutdown() unless this function does.
+//
+// SoundManager is a process-lifetime singleton -- GameDestroy does NOT call
+// SoundManager::Destroy() (see GameInitialise.cpp step-10 note: "SoundManager
+// teardown on process exit"), so its SDL audio device is still open even
+// after shutdown() returns.  Explicitly silence it via the real SoundManager
+// vtable API (SFXPauseAll/SongStop) so the mixer stops producing anything but
+// silence, AND suspend the browser AudioContext directly: the emscripten
+// SDL2 backend runs its mix callback via a ScriptProcessorNode independent
+// of the cancelled RAF main loop, so silencing voices alone still leaves the
+// node running (silently) until the context is suspended -- and the user may
+// sit on the restart overlay for a while before actually reloading.
+static void StopWebAudioAndShutdown(Game* game) {
+    Mortar::SoundManager::GetInstance().SFXPauseAll();
+    Mortar::SoundManager::GetInstance().SongStop();
+
+    EM_ASM({
+        try {
+            if (window.FNAudio) {
+                if (typeof window.FNAudio.stopAll === 'function') { window.FNAudio.stopAll(); }
+                var ctx = window.FNAudio.ctx;
+                if (ctx && typeof ctx.suspend === 'function') { ctx.suspend(); }
+            }
+        } catch (e) {}
+    });
+
+    game->shutdown();
+}
+
 // Port specific: free function used as the emscripten main-loop callback.
 // C++ lambdas with captures cannot be passed as C function pointers, so a
 // plain static function is used instead.
 static void EmscriptenFrame(void* arg) {
     Game* game = static_cast<Game*>(arg);
     if (!game->running) {
+        // Port specific: stop audio + run real teardown BEFORE showing the
+        // restart overlay / cancelling the main loop -- see
+        // StopWebAudioAndShutdown() above for why this is needed on web.
+        StopWebAudioAndShutdown(game);
         // Port specific: show the restart overlay so the user can tap to
         // reload the page and play again.  Must be called BEFORE cancelling
         // the main loop -- the overlay is rendered in the DOM, not the canvas.
@@ -139,6 +186,7 @@ static void EmscriptenFrame(void* arg) {
 
     game->pollInput();
     if (!game->running) {
+        StopWebAudioAndShutdown(game);
         EM_ASM({
             if (typeof window._fnShowRestart === 'function') { window._fnShowRestart(); }
         });
@@ -377,16 +425,14 @@ static void BootWait(void* arg) {
     // rejected on mobile FF.  A one-shot JS listener that calls resume() directly in
     // the handler works on every browser.  Listeners are capture+passive so the same
     // tap still reaches the SDL canvas and registers as a slice -- input is not
-    // consumed.  SDL2 stores the context at Module.SDL2.audioContext (verified in the
-    // generated fruit-ninja.js).  The audio device was opened during g_game.init()
-    // above, so the context already exists; resume() on a running context is a no-op,
-    // so leaving the listeners installed is harmless.
+    // consumed.  The Web Audio backend stores its AudioContext at window.FNAudio.ctx
+    // (created in SoundManager::Init -> FNAudio.init during g_game.init() above), so
+    // the context already exists; resume() on a running context is a no-op, so
+    // leaving the listeners installed is harmless.
     EM_ASM({
         var fnWakeAudio = function() {
             try {
-                var ctx = (typeof Module !== 'undefined' && Module.SDL2 && Module.SDL2.audioContext)
-                          ? Module.SDL2.audioContext
-                          : (typeof SDL2 !== 'undefined' ? SDL2.audioContext : null);
+                var ctx = (window.FNAudio && window.FNAudio.ctx) ? window.FNAudio.ctx : null;
                 if (ctx && ctx.state === 'suspended') { ctx.resume(); }
             } catch (e) {}
         };

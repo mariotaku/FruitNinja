@@ -434,9 +434,28 @@ endif()
 # --- Executable ---
 if(NOT FN_ASM_VERIFY)
 if (EMSCRIPTEN)
+    # Port specific: build-time web audio staging. The web build uses the Web
+    # Audio API backend (SoundManagerWebAudio.cpp) rather than the SDL software
+    # mixer, so the browser decodes Ogg/Vorbis and mixes on its own audio
+    # thread. transcode-audio-web.py mirrors FruitNinjaBada/Data into
+    # build/web-audio-staging/Data, TRANSCODING each sfx/*.wav.pcm to
+    # sfx/<name>.ogg (source .wav.pcm NOT copied -- that would re-bloat .data)
+    # and emitting sfx/sfx-loops.json (loop points). Everything else is copied
+    # through unchanged. The real FruitNinjaBada/Data files are never modified;
+    # the staged copy is a build/ artifact (gitignored). add_dependencies below
+    # guarantees this runs before fruit-ninja links (which is when
+    # --preload-file actually reads the staged directory's contents).
+    set(FN_WEB_AUDIO_STAGING_DATA_DIR "${CMAKE_SOURCE_DIR}/build/web-audio-staging/Data")
+    add_custom_target(fn_web_audio_staging
+        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/transcode-audio-web.py ${CMAKE_SOURCE_DIR}
+        COMMENT "Staging web audio assets (sfx transcoded to Ogg/Vorbis + loop JSON, for the Web Audio backend)"
+        VERBATIM
+    )
+
     # Port specific: Emscripten entry point uses emscripten_set_main_loop_arg
     # instead of the blocking Game::run() loop.
     add_executable(fruit-ninja src/mainEmscripten.cpp)
+    add_dependencies(fruit-ninja fn_web_audio_staging)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
@@ -463,7 +482,12 @@ if (EMSCRIPTEN)
         # Port specific: preload read-only assets into MEMFS; exclude the two
         # writable save files so they are NOT packed into the read-only bundle.
         # Saves are routed to /save (IDBFS) at runtime; see mainEmscripten.cpp.
-        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data@/FruitNinjaBada/Data"
+        # Source is the STAGED data dir (sfx transcoded to Ogg/Vorbis + a
+        # sfx-loops.json loop map at build time, everything else identical to
+        # FruitNinjaBada/Data) -- see fn_web_audio_staging above. Virtual mount
+        # path is unchanged, so runtime code (TextureManager::GetDataDir() etc.)
+        # needs no changes; the Web Audio backend reads sfx/<name>.ogg.
+        "SHELL:--preload-file ${FN_WEB_AUDIO_STAGING_DATA_DIR}@/FruitNinjaBada/Data"
         "SHELL:--exclude-file *FruitySave.xml"
         "SHELL:--exclude-file *ItemSave.xml"
         # Port specific: link idbfs.js so FS.mount(IDBFS) is available.

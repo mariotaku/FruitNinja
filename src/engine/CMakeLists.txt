@@ -84,9 +84,19 @@ target_sources(mortar_engine PRIVATE
     audio/GameSound.cpp
 )
 if(NOT FN_ASM_VERIFY)
-    target_sources(mortar_engine PRIVATE
-        audio/SoundManagerSDL.cpp
-    )
+    if(EMSCRIPTEN)
+        # Web build: replace the SDL software mixer with the Web Audio API
+        # backend (browser Ogg/Vorbis decode + off-main-thread float mixing).
+        # SoundManagerSDL.cpp is NOT compiled here; SoundManagerWebAudio.cpp
+        # implements the same SoundManager.h API. See that file's header.
+        target_sources(mortar_engine PRIVATE
+            audio/SoundManagerWebAudio.cpp
+        )
+    else()
+        target_sources(mortar_engine PRIVATE
+            audio/SoundManagerSDL.cpp
+        )
+    endif()
 endif()
 target_sources(mortar_engine PRIVATE
     # Phase 7 — Particles
