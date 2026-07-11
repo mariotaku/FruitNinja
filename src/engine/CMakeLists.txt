@@ -169,5 +169,17 @@ if(NOT FN_ASM_VERIFY)
         # No target_link_libraries call needed here.
     endif()
     target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
+    # Port specific: web compressed textures (libwebp). Decoder linked into the
+    # engine (TextureFileFormat.cpp's ReadWebP). PRIVATE: only the .cpp needs it;
+    # the public header #if's WebP out. Present on desktop too (reader is inert).
+    if (TARGET webpdecoder)
+        target_link_libraries(mortar_engine PRIVATE webpdecoder)
+        # FetchContent source layout puts the public headers at <src>/src/webp/;
+        # add that base so `#include "webp/decode.h"` resolves regardless of what
+        # the webpdecoder target exports as its INTERFACE include dir.
+        if (DEFINED libwebp_SOURCE_DIR)
+            target_include_directories(mortar_engine PRIVATE ${libwebp_SOURCE_DIR}/src)
+        endif()
+    endif()
 endif()
 target_compile_features(mortar_engine PUBLIC cxx_std_11)

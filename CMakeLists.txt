@@ -375,6 +375,34 @@ else()
     endif()
 endif()
 
+# --- libwebp (DECODER only) ---
+# Port specific: web compressed textures (libwebp). Web textures are transcoded
+# to WebP and shipped inside .tex-named files; the WebP reader in
+# TextureFileFormat.cpp decodes them (RGBA8888). Desktop keeps raw .tex (the
+# reader is present but inert). Built for BOTH host and Emscripten (portable C,
+# builds under emcmake). Only the `webpdecoder` target is used
+# (WebPDecodeRGBA / WebPGetInfo / WebPFree); the encoder + all tools/anim/mux
+# are OFF. Kept out of the asm-verify cross-build (that branch defines __bada__
+# and the WebP reader is #if'd out there).
+set(WEBP_BUILD_ANIM_UTILS OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_CWEBP      OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_DWEBP      OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_GIF2WEBP   OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_IMG2WEBP   OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_VWEBP      OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBPINFO   OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_LIBWEBPMUX OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBPMUX    OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_EXTRAS     OFF CACHE BOOL "" FORCE)
+set(WEBP_BUILD_WEBP_JS    OFF CACHE BOOL "" FORCE)
+set(WEBP_LINK_STATIC      ON  CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    libwebp
+    GIT_REPOSITORY https://github.com/webmproject/libwebp.git
+    GIT_TAG        v1.4.0
+)
+FetchContent_MakeAvailable(libwebp)
+
 else()
 # FN_ASM_VERIFY=ON: stub INTERFACE targets. Cross-headers provide replacement
 # headers; no SDL2/GL/FreeType libraries are linked. tinyxml2 headers are

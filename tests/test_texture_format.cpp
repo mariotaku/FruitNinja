@@ -151,7 +151,7 @@ static void test_tex3_magic_guard()
     //     u16@+2 LE = 0x3358 = 13144 != 4 -> reject).
     //   ReadTex1Format: byte[2] = 0x58 = 88 > 0x11 -> reject.
     Mortar::TextureSourceData* none = 0;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < FN_TEXTURE_NUM_READERS; ++i) {
         none = Mortar::g_readers[i](kTex3ASCII, sizeof(kTex3ASCII));
         if (none) {
             delete none;

@@ -52,8 +52,10 @@ TextureSourceData* TextureLoader::LockLayers() {
         m_File = f;
         TextureSourceData* result = 0;
         if (f->Load(0, 0)) {
-            // Iterate the 4-entry reader registry; first non-null wins.
-            for (int i = 0; i < 4; ++i) {
+            // Iterate the reader registry; first non-null wins. Binary has 4
+            // readers; the host/web build prepends a WebP reader at index 0
+            // (FN_TEXTURE_NUM_READERS), so this loop count tracks the array.
+            for (int i = 0; i < FN_TEXTURE_NUM_READERS; ++i) {
                 result = g_readers[i](f->Data(), (unsigned long)f->Size());
                 if (result) break;
             }
