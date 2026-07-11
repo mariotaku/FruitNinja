@@ -38,7 +38,9 @@
 #include <cstdint>
 
 class VerticalScroller : public HUDControl3d {
-public:
+    friend struct VerticalScrollerLayoutAssert;
+
+private:
     // +0x7C: minimum scroll value (ctor arg minValue).
     int32_t  m_MinValue;
 
@@ -51,10 +53,13 @@ public:
     // +0x86: alignment pad (not written by ctor)
     uint16_t _pad86;
 
+public:
     // +0x88: live scroll value. READ EXTERNALLY by ListBox::Draw @0x001947d0
-    // (top visible row = items.begin() + m_CurrentValue).
+    // (top visible row = items.begin() + m_CurrentValue). Public: genuine
+    // cross-class access, not offsetof-only.
     int32_t  m_CurrentValue;
 
+private:
     // +0x8C: total item count; gates thumb visibility and drag enable (must be >= m_TypeId=5).
     uint8_t  m_TotalRows;
 
@@ -94,6 +99,7 @@ public:
     // +0xA8..+0xB3: last sampled touch position (12 bytes, Vec3).
     Vec3     m_LastTouchPos;
 
+public:
     // Binary @ 0x001c9380 (C1) / 0x001c9284 (C2)
     VerticalScroller(Vec3 pos, Vec3 size,
                      int32_t minValue, int32_t maxValue, uint16_t stepSize,
@@ -128,6 +134,10 @@ public:
     // Non-virtual setter.
     void SetPosition(float x, float y);
 
+    // Read-only accessors (test/caller convenience).
+    int32_t MaxValue()  const { return m_MaxValue; }
+    uint8_t TotalRows() const { return m_TotalRows; }
+
     // Private non-virtual helper called by Update while a touch is held.
     // Reached through a PLT veneer @0x00111a?? in Update; captures the finger
     // position and (in drag mode) maps it to m_CurrentValue.
@@ -151,22 +161,24 @@ public:
 };
 
 #ifdef __bada__
-static_assert(sizeof(VerticalScroller) == 0xB4, "VerticalScroller size mismatch");
-static_assert(__builtin_offsetof(VerticalScroller, m_MinValue)       == 0x7C, "m_MinValue offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_MaxValue)       == 0x80, "m_MaxValue offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_StepSize)       == 0x84, "m_StepSize offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_CurrentValue)   == 0x88, "m_CurrentValue offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_TotalRows)      == 0x8C, "m_TotalRows offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_CachedThumbY)   == 0x90, "m_CachedThumbY offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_VisibleHeight)  == 0x94, "m_VisibleHeight offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_TotalHeight)    == 0x96, "m_TotalHeight offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_VisibleHeightPx)== 0x98, "m_VisibleHeightPx offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_TotalHeightPx)  == 0x9C, "m_TotalHeightPx offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_TypeId)         == 0xA0, "m_TypeId offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_bReverse)       == 0xA1, "m_bReverse offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_State)          == 0xA2, "m_State offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_TouchId)        == 0xA4, "m_TouchId offset");
-static_assert(__builtin_offsetof(VerticalScroller, m_LastTouchPos)   == 0xA8, "m_LastTouchPos offset");
+struct VerticalScrollerLayoutAssert {
+    static_assert(sizeof(VerticalScroller) == 0xB4, "VerticalScroller size mismatch");
+    static_assert(__builtin_offsetof(VerticalScroller, m_MinValue)       == 0x7C, "m_MinValue offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_MaxValue)       == 0x80, "m_MaxValue offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_StepSize)       == 0x84, "m_StepSize offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_CurrentValue)   == 0x88, "m_CurrentValue offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_TotalRows)      == 0x8C, "m_TotalRows offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_CachedThumbY)   == 0x90, "m_CachedThumbY offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_VisibleHeight)  == 0x94, "m_VisibleHeight offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_TotalHeight)    == 0x96, "m_TotalHeight offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_VisibleHeightPx)== 0x98, "m_VisibleHeightPx offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_TotalHeightPx)  == 0x9C, "m_TotalHeightPx offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_TypeId)         == 0xA0, "m_TypeId offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_bReverse)       == 0xA1, "m_bReverse offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_State)          == 0xA2, "m_State offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_TouchId)        == 0xA4, "m_TouchId offset");
+    static_assert(__builtin_offsetof(VerticalScroller, m_LastTouchPos)   == 0xA8, "m_LastTouchPos offset");
+};
 #endif
 
 #endif // FN_HUD_VERTICAL_SCROLLER_H

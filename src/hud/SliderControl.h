@@ -41,7 +41,9 @@
 #include <cstdint>
 
 class SliderControl : public HUDControl3d {
-public:
+    friend struct SliderControlLayoutAssert;
+
+private:
     // +0x7C: minimum value (binary: long)
     int32_t  m_MinValue;
 
@@ -87,6 +89,7 @@ public:
     // +0xB8: fires when m_CurrentValue changes (zero-arg, void return); 36B -> ends 0xDC.
     Mortar::Delegate0<void> m_OnValueChanged;
 
+public:
     // Binary @ 0x001b7474 (C2) / 0x001b7594 (C1) -- Itanium ABI complete-object /
     // base-object constructor pair for a SINGLE user-declared signature:
     //   SliderControl(Vec3, Vec3, char const*, long, long, ushort, long)
@@ -141,6 +144,13 @@ public:
 
     int GetValue() const { return m_CurrentValue; }
 
+    // Read-only geometry accessors (test/caller convenience -- computed once in
+    // the ctor from the loaded track/thumb texture dims; see class header note).
+    float TrackWidth()  const { return m_TrackWidth; }
+    float TrackHeight() const { return m_TrackHeight; }
+    float ThumbWidth()  const { return m_ThumbWidth; }
+    float ThumbHeight() const { return m_ThumbHeight; }
+
 private:
     // Private non-virtual helper called by Update while touch is held.
     // Binary @ 0x001b713c -- maps finger position to m_CurrentValue, fires
@@ -154,19 +164,21 @@ public:
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(SliderControl) == 0xDC, "SliderControl size mismatch");   // v1.6.1 ctor @0x001b7474 (Delegate0 @ +0xB8)
-static_assert(offsetof(SliderControl, m_MinValue)       == 0x7C, "m_MinValue offset");
-static_assert(offsetof(SliderControl, m_MaxValue)       == 0x80, "m_MaxValue offset");
-static_assert(offsetof(SliderControl, m_FontSize)       == 0x84, "m_FontSize offset");
-static_assert(offsetof(SliderControl, m_CurrentValue)   == 0x88, "m_CurrentValue offset");
-static_assert(offsetof(SliderControl, m_TrackWidth)     == 0x8C, "m_TrackWidth offset");
-static_assert(offsetof(SliderControl, m_TrackHeight)    == 0x90, "m_TrackHeight offset");
-static_assert(offsetof(SliderControl, m_ThumbWidth)     == 0x94, "m_ThumbWidth offset");
-static_assert(offsetof(SliderControl, m_ThumbHeight)    == 0x98, "m_ThumbHeight offset");
-static_assert(offsetof(SliderControl, m_Label)          == 0x9C, "m_Label offset");
-static_assert(offsetof(SliderControl, m_TouchId)        == 0xA8, "m_TouchId offset");
-static_assert(offsetof(SliderControl, m_TouchPos)       == 0xAC, "m_TouchPos offset");
-static_assert(offsetof(SliderControl, m_OnValueChanged) == 0xB8, "m_OnValueChanged offset");
+struct SliderControlLayoutAssert {
+    static_assert(sizeof(SliderControl) == 0xDC, "SliderControl size mismatch");   // v1.6.1 ctor @0x001b7474 (Delegate0 @ +0xB8)
+    static_assert(offsetof(SliderControl, m_MinValue)       == 0x7C, "m_MinValue offset");
+    static_assert(offsetof(SliderControl, m_MaxValue)       == 0x80, "m_MaxValue offset");
+    static_assert(offsetof(SliderControl, m_FontSize)       == 0x84, "m_FontSize offset");
+    static_assert(offsetof(SliderControl, m_CurrentValue)   == 0x88, "m_CurrentValue offset");
+    static_assert(offsetof(SliderControl, m_TrackWidth)     == 0x8C, "m_TrackWidth offset");
+    static_assert(offsetof(SliderControl, m_TrackHeight)    == 0x90, "m_TrackHeight offset");
+    static_assert(offsetof(SliderControl, m_ThumbWidth)     == 0x94, "m_ThumbWidth offset");
+    static_assert(offsetof(SliderControl, m_ThumbHeight)    == 0x98, "m_ThumbHeight offset");
+    static_assert(offsetof(SliderControl, m_Label)          == 0x9C, "m_Label offset");
+    static_assert(offsetof(SliderControl, m_TouchId)        == 0xA8, "m_TouchId offset");
+    static_assert(offsetof(SliderControl, m_TouchPos)       == 0xAC, "m_TouchPos offset");
+    static_assert(offsetof(SliderControl, m_OnValueChanged) == 0xB8, "m_OnValueChanged offset");
+};
 #endif
 
 #endif // FN_HUD_SLIDER_CONTROL_H

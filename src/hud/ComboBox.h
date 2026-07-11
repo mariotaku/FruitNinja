@@ -45,7 +45,9 @@ namespace Mortar { class Font; }
 class ListBox;
 
 class ComboBox : public HUDControl3d {
-public:
+    friend struct ComboBoxLayoutAssert;
+
+private:
     // +0x7C: item model (binary: std::vector<std::string>&).
     std::vector<std::string>* m_pItems;
 
@@ -103,6 +105,7 @@ public:
     // +0xB0..+0xBB: captured touch position (12 bytes, Vec3).
     Vec3     m_TouchPos;
 
+public:
     // Binary @ 0x001682d4
     ComboBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
              uint16_t defaultIdx, const char* comboLabel, uint8_t textFlag,
@@ -135,6 +138,11 @@ public:
     void CleanUpListBox();
     void UpdateTouchPosition();
 
+    // Read-only accessors (test/caller convenience).
+    float DrawWidth()  const { return m_DrawWidth; }
+    float DrawHeight() const { return m_DrawHeight; }
+    std::string* SelectedIter() const { return m_SelectedIter; }
+
     // Static texture lifecycle. Binary @ 0x00168b3c.
     // Loads blank_dialog_box.tex -> s_bar, expand_arrow.tex -> s_expandArrow.
     static void LoadContent();
@@ -153,22 +161,24 @@ public:
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(ComboBox) == 0xBC, "ComboBox size mismatch");               // v1.6.1 ctor @0x001682d4
-static_assert(offsetof(ComboBox, m_pItems)         == 0x7C, "ComboBox::m_pItems offset");
-static_assert(offsetof(ComboBox, m_SelectedIter)   == 0x80, "ComboBox::m_SelectedIter offset");
-static_assert(offsetof(ComboBox, m_TextFlag)       == 0x84, "ComboBox::m_TextFlag offset");
-static_assert(offsetof(ComboBox, m_pComboLabel)    == 0x88, "ComboBox::m_pComboLabel offset");
-static_assert(offsetof(ComboBox, m_TextScaleX)     == 0x8C, "ComboBox::m_TextScaleX offset");
-static_assert(offsetof(ComboBox, m_TextScaleY)     == 0x8E, "ComboBox::m_TextScaleY offset");
-static_assert(offsetof(ComboBox, m_Width)          == 0x90, "ComboBox::m_Width offset");
-static_assert(offsetof(ComboBox, m_DrawWidth)      == 0x94, "ComboBox::m_DrawWidth offset");
-static_assert(offsetof(ComboBox, m_DrawHeight)     == 0x98, "ComboBox::m_DrawHeight offset");
-static_assert(offsetof(ComboBox, m_pFont)          == 0x9C, "ComboBox::m_pFont offset");
-static_assert(offsetof(ComboBox, m_TextColour)     == 0xA0, "ComboBox::m_TextColour offset");
-static_assert(offsetof(ComboBox, m_pListBox)       == 0xA4, "ComboBox::m_pListBox offset");
-static_assert(offsetof(ComboBox, m_bCleanupPending)== 0xA8, "ComboBox::m_bCleanupPending offset");
-static_assert(offsetof(ComboBox, m_TouchIndex)     == 0xAC, "ComboBox::m_TouchIndex offset");
-static_assert(offsetof(ComboBox, m_TouchPos)       == 0xB0, "ComboBox::m_TouchPos offset");
+struct ComboBoxLayoutAssert {
+    static_assert(sizeof(ComboBox) == 0xBC, "ComboBox size mismatch");               // v1.6.1 ctor @0x001682d4
+    static_assert(offsetof(ComboBox, m_pItems)         == 0x7C, "ComboBox::m_pItems offset");
+    static_assert(offsetof(ComboBox, m_SelectedIter)   == 0x80, "ComboBox::m_SelectedIter offset");
+    static_assert(offsetof(ComboBox, m_TextFlag)       == 0x84, "ComboBox::m_TextFlag offset");
+    static_assert(offsetof(ComboBox, m_pComboLabel)    == 0x88, "ComboBox::m_pComboLabel offset");
+    static_assert(offsetof(ComboBox, m_TextScaleX)     == 0x8C, "ComboBox::m_TextScaleX offset");
+    static_assert(offsetof(ComboBox, m_TextScaleY)     == 0x8E, "ComboBox::m_TextScaleY offset");
+    static_assert(offsetof(ComboBox, m_Width)          == 0x90, "ComboBox::m_Width offset");
+    static_assert(offsetof(ComboBox, m_DrawWidth)      == 0x94, "ComboBox::m_DrawWidth offset");
+    static_assert(offsetof(ComboBox, m_DrawHeight)     == 0x98, "ComboBox::m_DrawHeight offset");
+    static_assert(offsetof(ComboBox, m_pFont)          == 0x9C, "ComboBox::m_pFont offset");
+    static_assert(offsetof(ComboBox, m_TextColour)     == 0xA0, "ComboBox::m_TextColour offset");
+    static_assert(offsetof(ComboBox, m_pListBox)       == 0xA4, "ComboBox::m_pListBox offset");
+    static_assert(offsetof(ComboBox, m_bCleanupPending)== 0xA8, "ComboBox::m_bCleanupPending offset");
+    static_assert(offsetof(ComboBox, m_TouchIndex)     == 0xAC, "ComboBox::m_TouchIndex offset");
+    static_assert(offsetof(ComboBox, m_TouchPos)       == 0xB0, "ComboBox::m_TouchPos offset");
+};
 #endif
 
 #endif // FN_HUD_COMBO_BOX_H

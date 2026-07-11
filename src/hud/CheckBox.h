@@ -82,8 +82,10 @@ public:
     // state only flips via the touch-release toggle in Update). No binary counterpart.
     void SetCheckedForTest(bool checked) { m_Checked = checked ? 1 : 0; }
 
+    friend struct CheckBoxLayoutAssert;
+
 private:
-    uint8_t     m_Checked;         // +0x7C (default 1 = CHECKED)
+    uint8_t     m_Checked;         // +0x7C  default 1 = CHECKED
     uint8_t     _pad7D[3];         // +0x7D..+0x7F
     const char* m_Label;           // +0x80
     int32_t     m_TouchId;         // +0x84 (-1 = none)
@@ -96,12 +98,14 @@ private:
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(CheckBox) == 0xB8, "CheckBox size mismatch");            // v1.6.1 ctor @0x00166a10 (Delegate0 @ +0x94)
-static_assert(offsetof(CheckBox, m_Checked)      == 0x7C, "CheckBox::m_Checked offset");
-static_assert(offsetof(CheckBox, m_Label)        == 0x80, "CheckBox::m_Label offset");
-static_assert(offsetof(CheckBox, m_TouchId)      == 0x84, "CheckBox::m_TouchId offset");
-static_assert(offsetof(CheckBox, m_TouchCapture) == 0x88, "CheckBox::m_TouchCapture offset");
-static_assert(offsetof(CheckBox, m_OnToggle)     == 0x94, "CheckBox::m_OnToggle offset");
+struct CheckBoxLayoutAssert {
+    static_assert(sizeof(CheckBox) == 0xB8, "CheckBox size mismatch");            // v1.6.1 ctor @0x00166a10 (Delegate0 @ +0x94)
+    static_assert(offsetof(CheckBox, m_Checked)      == 0x7C, "CheckBox::m_Checked offset");
+    static_assert(offsetof(CheckBox, m_Label)        == 0x80, "CheckBox::m_Label offset");
+    static_assert(offsetof(CheckBox, m_TouchId)      == 0x84, "CheckBox::m_TouchId offset");
+    static_assert(offsetof(CheckBox, m_TouchCapture) == 0x88, "CheckBox::m_TouchCapture offset");
+    static_assert(offsetof(CheckBox, m_OnToggle)     == 0x94, "CheckBox::m_OnToggle offset");
+};
 #endif
 
 #endif // FN_HUD_CHECKBOX_H
