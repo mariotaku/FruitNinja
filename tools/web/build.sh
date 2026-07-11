@@ -7,6 +7,16 @@
 # splash/UI webp copies, web-hash-assets.py POST_BUILD); this script only
 # sequences the build and validates the link outputs.
 #
+# The audio staging step (tools/web/transcode-audio-web.py, transcodes sfx
+# .wav.pcm to Ogg/Vorbis into build/web-audio-staging/Data + emits a loop-point
+# JSON, for the Web Audio API backend SoundManagerWebAudio.cpp) is a CMake
+# target dependency (fn_web_audio_staging, see CMakeLists.txt) rather than a
+# step in this script -- CMake's dependency graph guarantees it runs before
+# fruit-ninja links regardless of how the build is invoked (this script, a
+# direct `cmake --build`, or an IDE). The transcode encodes Ogg/Vorbis with
+# ffmpeg (libvorbis); this script apt-get installs ffmpeg below so the custom
+# target can find it on PATH.
+#
 # Usage (inside the container, repo mounted at /src, cwd /src):
 #   bash /src/tools/web/build.sh [--debug|--release] [--reconfigure]
 #     (no flags)     reuse the existing build/web configure when present -- this
@@ -36,6 +46,17 @@ set -euo pipefail
 if [ -f /src/CMakeLists.txt ]; then SRC=/src; else SRC="$(pwd)"; fi
 BUILD_DIR="$SRC/build/web"
 NPROC="$(nproc 2>/dev/null || echo 4)"
+
+# --- audio transcode deps -----------------------------------------------------
+# fn_web_audio_staging (CMake custom target) runs transcode-audio-web.py, which
+# shells out to ffmpeg (libvorbis) to encode Ogg/Vorbis. Ensure ffmpeg is on
+# PATH. Skip the apt-get if already present (idempotent, offline-friendly on
+# repeat builds). ffmpeg on the Debian-based emsdk image bundles libvorbis.
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "[build.sh] installing ffmpeg for audio transcode"
+    apt-get update -qq && apt-get install -y -qq ffmpeg \
+        || { echo "[build.sh] FATAL: apt-get install ffmpeg failed" >&2; exit 1; }
+fi
 
 MODE=""          # "" = auto (respect existing configure), or debug/release
 RECONFIGURE=0

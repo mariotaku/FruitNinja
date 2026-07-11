@@ -11,6 +11,14 @@
 // Voices: 16 entries (MAMAudioThread voice limit).
 // Music: TODO -- stub, mp3 streaming not implemented.
 // DIFFERS: music is stubbed (no Osp::Media::Player equivalent yet).
+//
+// Port specific (web only): the .wav.pcm assets this file loads are 16kHz on
+// disk for desktop, but on the Emscripten build the CMake preload is pointed
+// at a build-time-resampled 48kHz copy (tools/web/resample-audio-web.py,
+// fn_web_audio_staging target) so the SDL device (opened at 48000 Hz in
+// Init(), see below) never needs a per-callback resample. This file's
+// loading/mixing code is unaware of the swap -- it just reads whatever is at
+// the (unchanged) virtual data path.
 
 #include "audio/SoundManager.h"
 #include <SDL.h>            // SDL audio backend (SoundManager is SDL-bound)
@@ -93,12 +101,36 @@ void SoundManager::Init() {
     SDL_AudioSpec want, got;
     SDL_memset(&want, 0, sizeof(want));
     // MAMAudioThread: sampleRate=16000, 16-bit, mono
-    want.freq     = 16000;
     want.format   = AUDIO_S16LSB;
     want.channels = 1;
     // Buffer size: ~10ms at 16kHz = 160 samples.
     // Use 256 as next power-of-two (SDL requires power-of-two).
+#if defined(__EMSCRIPTEN__)
+    // Port specific: open the device at 48000 Hz -- the common browser
+    // AudioContext native rate -- instead of the source 16000 Hz. Every SFX/
+    // music .wav.pcm asset is pre-resampled to 48000 Hz ONCE at build time
+    // (tools/web/resample-audio-web.py, staged into build/web-audio-staging/
+    // and preloaded in place of the real FruitNinjaBada/Data/sfx -- see the
+    // fn_web_audio_staging CMake target). With device rate == AudioContext
+    // rate == buffer rate, emscripten's SDL2 backend never has to resample
+    // a mix-callback buffer, which matters on a slow device (webOS TV
+    // Chrome). AudioCallback below is unchanged: it plays buffer samples
+    // 1:1 into the device either way.
+    want.freq = 48000;
+
+    // Buffer size: ~64ms at 48000 Hz, rounded up to a power of two (SDL
+    // requires power-of-two) -> 4096. Emscripten's SDL2 audio backend runs
+    // the mix callback on the JS main thread via a ScriptProcessorNode; a
+    // short buffer is a tight deadline that a slow device misses under
+    // normal frame/GC pressure, causing underruns (crackle/pops). ~64ms
+    // gives enough headroom to absorb a missed callback without audible
+    // dropout (was a hardcoded 1024 @16kHz = 64ms; 4096 @48kHz is the same
+    // 64ms budget at the new rate).
+    want.samples = 4096;
+#else
+    want.freq     = 16000;
     want.samples  = 256;
+#endif
     want.callback = SoundManager::AudioCallback;
     want.userdata = this;
 
