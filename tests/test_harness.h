@@ -234,6 +234,11 @@ struct TestHarness {
 
     // -------- init --------
     bool Init() {
+        // Synthesize SDL_FINGER* events from the mouse (must be set BEFORE
+        // SDL_Init) so interactive tests get touch input the widgets hit-test,
+        // matching mainSDL.cpp. TOUCH_MOUSE_EVENTS=0 stops the reverse round-trip.
+        SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+        SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
             std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
             return false;

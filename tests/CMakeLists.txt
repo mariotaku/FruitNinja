@@ -794,6 +794,18 @@ set_tests_properties(dropdown_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_dropdown PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_combobox;component_listbox;component_verticalscroller")
 
+# Interactive settings-widget dev harness. Opens a REAL clickable window laying
+# out the ported settings widgets (CheckBox / SliderControl / ComboBox stack)
+# each bound to a live app parameter (m_bSoundOn / m_bMusicOn / g_MotionMode /
+# g_MotionSpeedThreshold / SFX+Music volume / languageFlag). Toggle/drag/select
+# and the bound parameter changes (per-change stdout log + on-screen readout).
+# Manual harness -- default is INTERACTIVE (window shown; ESC/close quits). The
+# registered ctest runs --headless as a cheap compile/run smoke (no assertions);
+# launch the interactive window via CLion / `test_settings_interactive`.
+fn_add_game_test(test_settings_interactive test_settings_interactive.cpp)
+add_test(NAME settings_interactive_smoke COMMAND test_settings_interactive --headless --frames 20)
+set_tests_properties(settings_interactive_smoke PROPERTIES TIMEOUT 60)
+
 # Achievement-unlock popup screenshot test (NotificationControl, Type_Named).
 # There is no achievements-list screen in v1.6.1 (AchievementsScreen is a
 # defunct stub) -- this is the only on-screen achievement "drawing": the

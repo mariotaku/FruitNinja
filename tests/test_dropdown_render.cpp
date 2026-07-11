@@ -46,70 +46,11 @@
 #include <cmath>
 #include <SDL.h>
 
-// ---------------------------------------------------------------------------
-// Solid-colour GL texture wrapped in a Texture2D_Bada (valid texId + dims;
-// VerticalScroller::Draw reads GetHeight() to size its arrows/thumb).
-// ---------------------------------------------------------------------------
-static Mortar::SmartPtr<Mortar::Texture> MakeSolidTex(
-    uint8_t r, uint8_t g, uint8_t b, uint8_t a, int w, int h)
-{
-    std::vector<uint8_t> px((size_t)w * (size_t)h * 4);
-    for (int i = 0; i < w * h; ++i) {
-        px[i * 4 + 0] = r;
-        px[i * 4 + 1] = g;
-        px[i * 4 + 2] = b;
-        px[i * 4 + 3] = a;
-    }
-
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
-    t->m_TexId = id;
-    t->SetDimensions(w, h);
-    t->m_HasAlpha = (a != 255);
-    return Mortar::SmartPtr<Mortar::Texture>(t);
-}
-
-// ---------------------------------------------------------------------------
-// Procedural up-arrow (opaque triangle pointing up, transparent elsewhere). The
-// bottom scroller arrow reuses this via the binary's U+V-flipped DrawQuadUnCached.
-// ---------------------------------------------------------------------------
-static Mortar::SmartPtr<Mortar::Texture> MakeArrowTex(
-    uint8_t r, uint8_t g, uint8_t b, int w, int h)
-{
-    std::vector<uint8_t> px((size_t)w * (size_t)h * 4, 0);
-    for (int y = 0; y < h; ++y) {
-        // Row 0 = top (narrow tip); increasing y widens the triangle.
-        float t = (float)y / (float)(h - 1);
-        int half = (int)(t * (float)w * 0.5f);
-        int cx = w / 2;
-        for (int x = cx - half; x <= cx + half; ++x) {
-            if (x < 0 || x >= w) continue;
-            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
-            out[0] = r; out[1] = g; out[2] = b; out[3] = 255;
-        }
-    }
-
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
-    t->m_TexId = id;
-    t->SetDimensions(w, h);
-    t->m_HasAlpha = true;
-    return Mortar::SmartPtr<Mortar::Texture>(t);
-}
+// Placeholder-art texture makers (MakeSolidTex / MakeArrowTex + SDF helpers)
+// are shared with test_settings_widgets_render.cpp and
+// test_settings_interactive.cpp -- see the header for details.
+#include "widget_placeholder_art.h"
+using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
 // Render pass: clear + ortho + draw all widgets. Caller swaps.
