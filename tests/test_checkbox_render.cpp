@@ -41,7 +41,7 @@
 
 // Placeholder-art texture makers (MakeCheckboxTex + the SDF helpers) are shared
 // with test_slider_render.cpp and test_settings_interactive.cpp -- see the header.
-#include "widget_placeholder_art.h"
+#include "hud/WidgetPlaceholderArt.h"
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------

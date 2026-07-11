@@ -59,7 +59,7 @@
 // Placeholder-art texture makers (MakeSolidTex / MakeArrowTex + SDF helpers)
 // are shared with test_settings_widgets_render.cpp and
 // test_settings_interactive.cpp -- see the header for details.
-#include "widget_placeholder_art.h"
+#include "hud/WidgetPlaceholderArt.h"
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
