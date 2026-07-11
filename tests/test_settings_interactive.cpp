@@ -22,6 +22,33 @@
 //   test_settings_interactive --headless [--frames N]   # cheap CI compile/run smoke (default 30 frames)
 //   test_settings_interactive --interactive             # force window (same as default)
 //   Keyboard: ESC quits; M toggles Motion mode (safety net -- see input notes below).
+//   Mouse wheel scrolls the row list; click-drag on empty list background also scrolls.
+//
+// -----------------------------------------------------------------------------
+// LAYOUT (GOAL 1 -- balanced single-column settings list):
+//
+// A single column of rows, each: [label (left column)] [widget (right column)],
+// consistent ROW HEIGHT + even vertical pitch. The LANGUAGE combo sits in a
+// FIXED HEADER strip at the top; the six checkbox/slider rows live in a
+// SCROLLABLE viewport below it, above the bottom readout strip.
+//
+// Widget visual weights are balanced so the checkbox box, slider track, and
+// combo bar read as siblings (all ~30-44 px tall). See the size constants below.
+//
+// LAYOUT (GOAL 2 -- scrollable row list, port-improvement harness feature):
+//   // DIFFERS: no native Mortar widget hosts an arbitrary scrolling list of
+//   controls, so this scroll behaviour is a harness-level addition, not a port
+//   of any binary function. Rows are laid out ONCE in content space; every frame
+//   their pos.y is set to (contentBaseY - scrollOffset) so BOTH the draw and the
+//   touch hit-test move together (widgets read their own pos). glScissor clips
+//   the viewport so scrolled-out rows don't overdraw the header/readout.
+//
+// The LANGUAGE combo is intentionally kept in the fixed header (not scrolled).
+// That sidesteps the dropdown-follow problem: the ListBox a ComboBox spawns is a
+// SEPARATE HUD control created (at tap time) relative to the combo's then-current
+// pos, and the harness does not own that pointer to shift it per frame. With the
+// combo fixed, its dropdown always opens at the right place. See the dropdown
+// caveat note at the bottom of this file.
 //
 // -----------------------------------------------------------------------------
 // INPUT PUMP (the crux -- makes widgets respond to the pointer):
@@ -49,9 +76,17 @@
 //      into it each frame so ListBox's row hover/commit hit-test sees a live
 //      position -- without this, tapping a dropdown ROW silently did nothing.
 //
+// SCROLL vs WIDGET input: on a fresh mouse press we decide whether the press
+// landed on a widget's hit-rect. If it did NOT, subsequent vertical mouse motion
+// while held is treated as a LIST DRAG (adjusts scrollOffset) and is NOT mirrored
+// into m_FingerSpawnPos/worldPos (so it can't accidentally drive a widget). If it
+// DID land on a widget, the normal input pump runs and the drag drives that
+// widget. The mouse wheel always scrolls.
+//
 // Coordinate space (docs/engine/coordinate-system.md): draw-space and touch-space
 // share the same axes -- X horizontal [-240,240], Y vertical [-160,160], +Y up --
-// so a click lands where the widget is drawn (no conversion needed).
+// so a click lands where the widget is drawn (no conversion needed). The window is
+// 960x640, i.e. exactly 2.0 window px per game unit; glScissor uses that factor.
 //
 // Motion-mode note: toggling Motion ON changes the raw-mouse routing inside
 // DrainSDLEvent. In practice the synthesized-finger path still drives a Touch
@@ -91,6 +126,7 @@
 
 #include <cstdio>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <SDL.h>
@@ -123,6 +159,71 @@ static int ClampInt(int v, int lo, int hi) {
     if (v > hi) return hi;
     return v;
 }
+
+static float ClampF(float v, float lo, float hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+// ===========================================================================
+// BALANCED WIDGET SIZES (GOAL 1). Chosen so the checkbox box, slider track, and
+// combo bar read at comparable visual weight (~30-44 px tall) and align in two
+// consistent columns. See per-widget report in the task summary.
+//
+//   Checkbox box  : 44 px (placeholder halfBox 22; inside the +/-36 x / +/-28.5 y
+//                   binary hit-rect -- the 128x64 draw quad and hit-rect are
+//                   binary-faithful and unchanged).
+//   Slider track  : 190 x 16 px (thin bar); thumb 30 x 30 circle.
+//   Combo bar     : 190 x 32 px (matches slider track width; bar height a touch
+//                   taller so the two-line combo text fits).
+// ===========================================================================
+static const int   kCbBoxHalf   = 22;    // checkbox box half-extent in placeholder px (box = 44)
+static const int   kTrackW      = 190;   // slider track width  (px == units, size=1)
+static const int   kTrackH      = 16;    // slider track height
+static const int   kThumbD      = 30;    // slider thumb circle diameter
+static const int   kBarW        = 190;   // combo bar width  (ctor textScaleX)
+static const int   kBarH        = 32;    // combo bar height (ctor textScaleY)
+static const int   kArrowD      = 18;    // combo expand-arrow size
+
+// Two consistent columns (game-space X). Left = label anchor column, right =
+// widget column. The checkbox draws centered on its pos with its label to the
+// RIGHT (pos.x + 64); the slider/combo draw centered with their label to the
+// right of the track. To keep the two widget families visually aligned we place
+// their pos at a common right-column X and let each widget's own label offset
+// handle the text. Labels are drawn by the harness in the LEFT column so every
+// row reads "LABEL .......... [widget]".
+static const float kLabelX      = -220.0f;  // left column: row label left edge
+static const float kWidgetX     =  -30.0f;  // right column: widget pos.x (bar/track/box centred here)
+
+// ===========================================================================
+// SCROLL VIEWPORT (GOAL 2). Fixed header holds the LANGUAGE combo; the readout
+// strip sits at the very bottom; the scrollable rows live between.
+// Game-space Y is [-160, 160], +Y up.
+// ===========================================================================
+// Viewport spans below the combo header down to just above the readout strip.
+// glScissor is derived from the actual drawable size at draw time (HiDPI-safe);
+// the nominal window is 960x640 == 2.0 window px per game unit.
+static const float kViewTop     =   95.0f;   // top of scroll viewport (below combo header)
+static const float kViewBottom  = -128.0f;   // bottom of scroll viewport (above readout)
+
+static const float kRowPitch    =   58.0f;   // even vertical pitch (clears checkbox hit-rect +/-28.5 with margin)
+// Content-space Y of row 0's centre. At scrollOffset==0 row 0 sits just below the
+// viewport top; pos.y = contentY + scrollOffset, so a POSITIVE scrollOffset shifts
+// the content UP (revealing later, lower-in-list rows).
+static const float kRowFirst    =   66.0f;
+
+// ---------------------------------------------------------------------------
+// A scrollable row: a widget plus its fixed content-space Y (its natural, un-
+// scrolled centre). Each frame we set widget->pos.y = contentY + scrollOffset
+// so the draw and hit-test both move. Kept POD/struct (no C++11) for the C++03
+// test TU.
+// ---------------------------------------------------------------------------
+struct ScrollRow {
+    HUDControl* widget;    // the control whose pos we shift
+    const char* label;     // harness-drawn left-column label
+    float       contentY;  // natural content-space centre Y
+};
 
 // ---------------------------------------------------------------------------
 // Binds each widget's live state to its app parameter. Checkbox/slider methods
@@ -228,6 +329,45 @@ static void DrawReadoutLine(const char* s, float x, float y, float size) {
                                     0.0f, 0.0f, 1, NULL, 0.0f);
 }
 
+// Does a game-space point (mouse mapped to touch coords) land inside a widget's
+// clickable hit-rect at its CURRENT (scrolled) pos? Mirrors each widget's own
+// Update() hit-region so a press-on-empty-background can be told apart from a
+// press-on-widget. Combo bar hit-rect matches ComboBox::Update.
+// Is the combo's dropdown currently open? The ListBox a ComboBox spawns is a
+// separate HUD control; scan the HUD's control list for one. When a dropdown is
+// open we must NOT drag-scroll (a tap in the viewport may be a dropdown-row
+// select, which the normal input pump has to see).
+static bool DropdownOpen() {
+    if (!game_work.mHud) return false;
+    std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+    for (; it != game_work.mHud->controls.end(); ++it) {
+        if (dynamic_cast<ListBox*>(*it)) return true;
+    }
+    return false;
+}
+
+static bool PointInAnyWidget(const std::vector<ScrollRow>& rows, float px, float py) {
+    for (size_t i = 0; i < rows.size(); ++i) {
+        HUDControl* w = rows[i].widget;
+        // CheckBox: pos.x +/- 36, pos.y +/- 28.5 (hardcoded).
+        CheckBox* cb = dynamic_cast<CheckBox*>(w);
+        if (cb) {
+            if (px >= cb->pos.x - 36.0f && px <= cb->pos.x + 36.0f &&
+                py >= cb->pos.y - 28.5f && py <= cb->pos.y + 28.5f) return true;
+            continue;
+        }
+        SliderControl* sl = dynamic_cast<SliderControl*>(w);
+        if (sl) {
+            float halfX = sl->TrackWidth() * 0.5f;
+            float halfY = (sl->size.y * 60.0f) * 0.5f;
+            if (px >= sl->pos.x - halfX && px <= sl->pos.x + halfX &&
+                py >= sl->pos.y - halfY && py <= sl->pos.y + halfY) return true;
+            continue;
+        }
+    }
+    return false;
+}
+
 int main(int argc, char* argv[]) {
     fn::TestHarness h(argc, argv, "settings_interactive");
     h.SetInteractiveDefault(true);   // default: show the window (manual harness)
@@ -248,21 +388,21 @@ int main(int argc, char* argv[]) {
     // Placeholder textures (real widget art is not shipped -- see the shared
     // header). Inject BEFORE constructing widgets (the SliderControl ctor reads
     // the track/thumb dims; the others read on Draw).
+    //
+    // Sizes are the BALANCED set (GOAL 1) -- see the size-constant block above.
+    // SliderControl's ctor sizes m_TrackWidth/Height directly from these texture
+    // pixel dims * size (size == 1 for every slider below), so texture px ==
+    // on-screen px here.
     // -----------------------------------------------------------------------
-    // Track/thumb sized so the slider reads at comparable visual weight to the
-    // CheckBox's HARDCODED 128x64 checkbox quad (SliderControl::Draw, can't change --
-    // see CheckBox::Draw). SliderControl's ctor sizes m_TrackWidth/Height directly
-    // from these texture pixel dims * size (size.x/y == 1 for every slider below),
-    // so texture px == on-screen px here.
-    Mortar::SmartPtr<Mortar::Texture> texCheckboxOn  = MakeCheckboxTex(true,  128, 64);
-    Mortar::SmartPtr<Mortar::Texture> texCheckboxOff = MakeCheckboxTex(false, 128, 64);
-    Mortar::SmartPtr<Mortar::Texture> texTrack     = MakeSolidTex(120, 120, 120, 255, 180, 40);
-    Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeCircleTex(240, 140, 20, 46, 46);
+    Mortar::SmartPtr<Mortar::Texture> texCheckboxOn  = MakeCheckboxTex(true,  128, 64, kCbBoxHalf);
+    Mortar::SmartPtr<Mortar::Texture> texCheckboxOff = MakeCheckboxTex(false, 128, 64, kCbBoxHalf);
+    Mortar::SmartPtr<Mortar::Texture> texTrack     = MakeSolidTex(120, 120, 120, 255, kTrackW, kTrackH);
+    Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeCircleTex(240, 140, 20, kThumbD, kThumbD);
     Mortar::SmartPtr<Mortar::Texture> texBar       = MakeSolidTex(40, 40, 60, 255, 8, 8);
     // Expand-arrow quad width = arrowTex.GetWidth() * combo size.x (ComboBox::Draw);
-    // size.x == 1 for langCombo below, so texture px == on-screen px. 16px reads as
-    // a small glyph next to the 140-wide bar (was 32px -- a screen-filling triangle).
-    Mortar::SmartPtr<Mortar::Texture> texArrow     = MakeArrowTex(255, 210, 40, 16, 16);
+    // size.x == 1 for langCombo below, so texture px == on-screen px. Small glyph
+    // next to the bar.
+    Mortar::SmartPtr<Mortar::Texture> texArrow     = MakeArrowTex(255, 210, 40, kArrowD, kArrowD);
     Mortar::SmartPtr<Mortar::Texture> texRow       = MakeSolidTex(255, 255, 255, 255, 8, 8);
     Mortar::SmartPtr<Mortar::Texture> texScrTrack  = MakeSolidTex(70, 70, 90, 255, 8, 8);
     Mortar::SmartPtr<Mortar::Texture> texScrThumb  = MakeSolidTex(200, 200, 210, 255, 8, 8);
@@ -281,45 +421,35 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < kLanguageCount; ++i) langItems.push_back(std::string(kLanguageNames[i]));
 
     // -----------------------------------------------------------------------
-    // Widgets, two columns, top to bottom (screen Y in [-160,160], +Y up):
-    //
-    //   Combo (LANGUAGE)               centered, y=140  (near the top edge --
-    //                                   its dropdown opens DOWNWARD from
-    //                                   y=~111 for 4*16=64 units, clearing
-    //                                   y=~47, well above row 1 below)
-    //   Row 1  SOUND (cb)  / FLICK (sl)     y=25
-    //   Row 2  MUSIC (cb)  / SFX VOL (sl)   y=-40
-    //   Row 3  MOTION (cb) / MUS VOL (sl)   y=-105
-    //
-    // Row pitch 65 clears CheckBox's hardcoded 64-tall quad (hit-rect +/-28.5)
-    // and the slider's Y hit half-extent (size.y*60*0.5 = 30) with margin.
-    // Row 3's lowest edge (checkbox -133.5, slider -135) leaves a clear
-    // y=[-160,-135] strip at the bottom for the readout text (see below).
-    // Left column x=-100 (checkbox hit-rect pos.x+/-36 -> [-136,-64], label to
-    // pos.x+64=-36); right column x=55 (track 180 wide -> label at
-    // pos.x+15+trackW*0.5=145, comfortably inside the +240 edge). See
-    // coordinate note in header.
+    // FIXED HEADER combo (LANGUAGE) -- not scrolled; sits in the header strip.
+    // Balanced bar: kBarW x kBarH (ctor textScaleX/textScaleY). Its dropdown
+    // opens DOWNWARD from just below the bar; since the combo never scrolls the
+    // dropdown always lands correctly. Positioned in the right widget column so
+    // it aligns with the scrollable rows below.
     // -----------------------------------------------------------------------
     uint16_t langDefault = (uint16_t)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
 
-    // Labels are UPPERCASE -- font_fruit_ninja.fnt has no lowercase glyphs
-    // (see kLanguageNames comment above); lowercase letters silently draw
-    // nothing.
-    ComboBox* langCombo = new ComboBox(Vec3(0.0f, 140.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+    // Labels are UPPERCASE -- font_fruit_ninja.fnt has no lowercase glyphs.
+    ComboBox* langCombo = new ComboBox(Vec3(kWidgetX, 128.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
                                        langItems, langDefault, "LANGUAGE",
                                        /*textFlag/visibleRows*/ 4, /*width (label font size)*/ 20,
-                                       /*textScaleX (bar width)*/ 140, /*textScaleY (bar height)*/ 28);
+                                       /*textScaleX (bar width)*/ (uint16_t)kBarW,
+                                       /*textScaleY (bar height)*/ (uint16_t)kBarH);
     langCombo->SetTextColour(Colour(255, 255, 255, 255));
 
-    const float kColL = -100.0f;  // checkbox column
-    const float kColR =   55.0f;  // slider column
-    const float kRow1 =   25.0f;
-    const float kRow2 =  -40.0f;
-    const float kRow3 = -105.0f;
-
-    CheckBox* soundCb  = new CheckBox(Vec3(kColL, kRow1, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "SOUND");
-    CheckBox* musicCb  = new CheckBox(Vec3(kColL, kRow2, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "MUSIC");
-    CheckBox* motionCb = new CheckBox(Vec3(kColL, kRow3, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "MOTION MODE");
+    // -----------------------------------------------------------------------
+    // SCROLLABLE rows (checkboxes + sliders), single column, even pitch. Their
+    // content-space Y descends by kRowPitch from kRowFirst. Six rows at pitch 58
+    // span ~290 units of content, so with a ~223-unit viewport the list scrolls.
+    // -----------------------------------------------------------------------
+    // Empty widget labels -- the harness draws each row's label in the fixed LEFT
+    // column (so every row reads "LABEL ..... [widget]"). CheckBox/SliderControl
+    // still DrawString their own m_Label, but an empty string emits zero glyphs,
+    // so passing "" suppresses the widget's built-in (right-side) label without
+    // touching the faithful Draw path.
+    CheckBox* soundCb  = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
+    CheckBox* musicCb  = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
+    CheckBox* motionCb = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
     soundCb->SetCheckedForTest(game_work.m_bSoundOn);
     musicCb->SetCheckedForTest(game_work.m_bMusicOn);
     motionCb->SetCheckedForTest(FN::g_MotionMode);
@@ -328,12 +458,12 @@ int main(int argc, char* argv[]) {
     int sfx0   = ClampInt((int)(Mortar::SoundManager::s_SFXVolume   * 100.0f + 0.5f), 0, 100);
     int mus0   = ClampInt((int)(Mortar::SoundManager::s_MusicVolume * 100.0f + 0.5f), 0, 100);
 
-    SliderControl* flickSl = new SliderControl(Vec3(kColR, kRow1, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                                               "FLICK", 0, 30, 24, flick0);
-    SliderControl* sfxSl   = new SliderControl(Vec3(kColR, kRow2, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                                               "SFX VOL", 0, 100, 24, sfx0);
-    SliderControl* musSl   = new SliderControl(Vec3(kColR, kRow3, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                                               "MUS VOL", 0, 100, 24, mus0);
+    SliderControl* flickSl = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+                                               "", 0, 30, 24, flick0);
+    SliderControl* sfxSl   = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+                                               "", 0, 100, 24, sfx0);
+    SliderControl* musSl   = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+                                               "", 0, 100, 24, mus0);
 
     // -----------------------------------------------------------------------
     // Bindings -- install the real widget callbacks and prime the combo poll.
@@ -369,7 +499,38 @@ int main(int argc, char* argv[]) {
     game_work.mHud->AddControl(sfxSl,     false);
     game_work.mHud->AddControl(musSl,     false);
 
-    std::printf("[settings_interactive] ready -- %s. Toggle/drag widgets; ESC quits, M=motion.\n",
+    // -----------------------------------------------------------------------
+    // Scrollable-row table: content-space Y in row order (top to bottom).
+    // -----------------------------------------------------------------------
+    std::vector<ScrollRow> rows;
+    {
+        const char* labels[6] = { "SOUND", "MUSIC", "MOTION MODE", "FLICK", "SFX VOL", "MUS VOL" };
+        HUDControl* widgets[6] = { soundCb, musicCb, motionCb, flickSl, sfxSl, musSl };
+        for (int i = 0; i < 6; ++i) {
+            ScrollRow r;
+            r.widget   = widgets[i];
+            r.label    = labels[i];
+            r.contentY = kRowFirst - (float)i * kRowPitch;
+            rows.push_back(r);
+        }
+    }
+
+    // Content extent = distance from the first row centre to the last row centre
+    // plus a half-pitch of padding at each end. Scroll range clamps to
+    // [0, contentHeight - viewportHeight].
+    const float viewportHeight = kViewTop - kViewBottom;
+    const float contentHeight  = (float)rows.size() * kRowPitch;
+    float scrollMax = contentHeight - viewportHeight;
+    if (scrollMax < 0.0f) scrollMax = 0.0f;
+
+    float scrollOffset = 0.0f;
+
+    // Drag-scroll state: -1 = not dragging; else the touch slot we're scrolling with.
+    bool  dragScrolling  = false;
+    float dragLastY      = 0.0f;   // last touch Y (game space) while drag-scrolling
+    bool  pressDecided   = false;  // have we classified the current press yet?
+
+    std::printf("[settings_interactive] ready -- %s. Toggle/drag widgets; wheel/drag scrolls; ESC quits, M=motion.\n",
                 h.IsInteractive() ? "INTERACTIVE (window shown)" : "headless smoke");
 
     // -----------------------------------------------------------------------
@@ -399,15 +560,75 @@ int main(int argc, char* argv[]) {
                                 FN::g_MotionMode ? "ON" : "OFF");
                 }
             }
+            if (ev.type == SDL_MOUSEWHEEL) {
+                // Wheel scrolls the list. SDL wheel y > 0 = scroll up (content
+                // moves down -> reveal earlier rows -> decrease scrollOffset).
+                float dy = (float)ev.wheel.y;
+                if (ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) dy = -dy;
+                scrollOffset = ClampF(scrollOffset - dy * kRowPitch * 0.5f, 0.0f, scrollMax);
+            }
             translator.DrainSDLEvent(ev, h.window);
         }
         if (!running) break;
 
-        // Reuse the game's per-tick ring drain (Touch::Update(0) -> states1),
-        // then mirror the drained pointer position into m_FingerSpawnPos.
+        // Reuse the game's per-tick ring drain (Touch::Update(0) -> states1).
         translator.DispatchForSimTick();
-        SyncFingerSpawnPos();
-        SyncWorldPos();
+
+        // ---- classify the press: widget interaction vs list drag-scroll ----
+        // Find the first active touch slot + its live position.
+        Mortar::Touch& touch = Mortar::Touch::GetInstance();
+        int   activeSlot = -1;
+        float touchX = 0.0f, touchY = 0.0f;
+        for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+            const Mortar::TouchState& st = touch.states1[s];
+            if (st.phase < 1) {
+                activeSlot = s;
+                touchX = st.currX;
+                touchY = st.currY;
+                break;
+            }
+        }
+
+        if (activeSlot == -1) {
+            // Nothing held -- reset the per-press classification.
+            pressDecided  = false;
+            dragScrolling = false;
+        } else {
+            bool inViewport = (touchY <= kViewTop && touchY >= kViewBottom);
+            if (!pressDecided) {
+                pressDecided = true;
+                // A press that lands inside the viewport but NOT on a widget
+                // hit-rect starts a drag-scroll. A press on a widget (or outside
+                // the viewport, e.g. on the combo header) drives that control.
+                if (inViewport && !DropdownOpen() && !PointInAnyWidget(rows, touchX, touchY)) {
+                    dragScrolling = true;
+                    dragLastY     = touchY;
+                } else {
+                    dragScrolling = false;
+                }
+            } else if (dragScrolling) {
+                // Continue the drag: moving the finger UP (touchY decreasing)
+                // scrolls the content up -> reveal later rows -> increase offset.
+                float delta = dragLastY - touchY;   // +Y up: finger-up => delta>0
+                scrollOffset = ClampF(scrollOffset + delta, 0.0f, scrollMax);
+                dragLastY = touchY;
+            }
+        }
+
+        // While drag-scrolling we must NOT feed the pointer into the widget input
+        // path, or the drag would also drive whatever widget it passes over.
+        if (!dragScrolling) {
+            SyncFingerSpawnPos();
+            SyncWorldPos();
+        }
+
+        // ---- apply the scroll offset to every scrollable row's pos ----
+        // pos.y = contentY + scrollOffset: a positive offset shifts content UP
+        // (reveals later rows). Both the draw and the hit-test read pos, so they
+        // move together.
+        for (size_t i = 0; i < rows.size(); ++i) {
+            rows[i].widget->pos.y = rows[i].contentY + scrollOffset;
+        }
 
         int ww = 0, wh = 0;
         SDL_GL_GetDrawableSize(h.window, &ww, &wh);
@@ -416,21 +637,73 @@ int main(int argc, char* argv[]) {
         Mortar::DisplayManager::GetInstance().BeginFrame();
         MatrixManager::GetInstance().SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
-        // Widget Update() hit-tests + fires the checkbox/slider delegates.
+        // Widget Update() hit-tests + fires the checkbox/slider delegates. Runs
+        // with the freshly-scrolled pos so both draw and hit-test agree.
         game_work.mHud->Update(kDt);
+
+        // ------------------------------------------------------------------
+        // Draw the SCROLLABLE rows inside a scissor-clipped viewport so rows
+        // scrolled outside it don't overdraw the header/readout.
+        //
+        // glScissor is in window pixels, origin bottom-left. Convert the
+        // game-space viewport rect: game Y=+160 is window top (y_px = wh),
+        // game Y=-160 is window bottom (y_px = 0). So:
+        //   y_px(gameY) = (gameY + 160) * (wh / 320)   [wh = drawable height]
+        // We use the actual drawable size for robustness on HiDPI.
+        // ------------------------------------------------------------------
+        float sx = (float)ww / 480.0f;   // window px per game unit, X
+        float sy = (float)wh / 320.0f;   // window px per game unit, Y
+        int scX = 0;
+        int scY = (int)((kViewBottom + 160.0f) * sy + 0.5f);
+        int scW = ww;
+        int scH = (int)((kViewTop - kViewBottom) * sy + 0.5f);
+        (void)sx;
+
+        // HUD::Draw is a single monolithic pass over every control, so we cannot
+        // easily draw only the scrollable rows scissored. Two-pass strategy:
+        //   Pass 1: scissor to the viewport band, draw the WHOLE HUD. The combo
+        //           BAR lives in the header ABOVE the band (y=128 > kViewTop=95),
+        //           so it is clipped out here; the scrollable rows draw clipped to
+        //           the band; the open dropdown (which opens downward from ~95
+        //           into the band) draws inside the band.
+        //   Pass 2: with scissor OFF, re-draw just the combo bar so the fixed
+        //           header widget is always fully visible/unclipped.
+        // The combo is drawn visibly in exactly one pass (pass 1 clips it, pass 2
+        // shows it), so there is no double-draw tint artefact on the bar.
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scX, scY, scW, scH);
+
         game_work.mHud->BeginDraw(kDt);
         game_work.mHud->Draw(mask);
+
+        glDisable(GL_SCISSOR_TEST);
+
+        // Pass 2: re-draw the combo (header) unscissored so it is never clipped by
+        // the row viewport.
+        {
+            float hudScale[3] = { 1.0f, 1.0f, 1.0f };
+            langCombo->PreDraw(hudScale);
+            langCombo->Draw(hudScale);
+        }
 
         // Combo has no per-select delegate on the collapsed bar -- poll it.
         bind.PollCombo();
 
+        // Harness-drawn LEFT-column row labels, each at its row's current
+        // (scrolled) Y, clipped to the viewport band so they scroll with the row.
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scX, scY, scW, scH);
+        for (size_t i = 0; i < rows.size(); ++i) {
+            float ry = rows[i].contentY + scrollOffset;
+            if (ry > kViewTop + kRowPitch || ry < kViewBottom - kRowPitch) continue;
+            DrawReadoutLine(rows[i].label, kLabelX, ry - 8.0f, 18.0f);
+        }
+        glDisable(GL_SCISSOR_TEST);
+
         // On-screen readout of the live parameter values, in the clear bottom
-        // strip below row 3 (y in [-160,-135] -- see column-layout comment
-        // above; nothing else draws there, so it never sits on top of a widget).
+        // strip below the viewport (y < kViewBottom). Nothing else draws there.
         char l1[128];
         char l2[192];
-        // UPPERCASE labels -- see kLanguageNames comment (font_fruit_ninja.fnt
-        // has no lowercase glyphs; lowercase letters silently drew nothing).
         std::snprintf(l1, sizeof(l1), "SOUND:%s  MUSIC:%s  MOTION:%s",
                       game_work.m_bSoundOn ? "ON" : "OFF",
                       game_work.m_bMusicOn ? "ON" : "OFF",
