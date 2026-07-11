@@ -18,6 +18,25 @@
 // The binary is touch-only Bada hardware -- there is no mouse device there,
 // so this reservation is host-only SDL glue.
 //
+// Port specific: RELAX MODE (FN::g_RelaxMode, src/debug/DebugFlags.h;
+// toggle F5 / --relax; default OFF; host-only, no binary equivalent).
+// When ON, MOUSE_CHANNEL is driven from RAW SDL_MOUSEMOTION /
+// SDL_MOUSEBUTTONDOWN / SDL_MOUSEBUTTONUP instead of the SDL-synthesized
+// SDL_FINGER* events (SDL_HINT_MOUSE_TOUCH_EVENTS=1 still synthesizes those
+// alongside the raw events; DrainSDLEvent suppresses the synthesized ones
+// for fingerId==SDL_TOUCH_MOUSEID while relax is ON so the two paths never
+// double-drive the channel). Real touch fingers (channels 0-14) are
+// unaffected in both modes.
+//   - Hovering with the cursor inside the window and no button held keeps
+//     MOUSE_CHANNEL pressed and moving -- the blade follows the cursor and
+//     slices without holding a button.
+//   - Pressing any mouse button LIFTS the blade (releases MOUSE_CHANNEL) so
+//     the user can reposition without cutting.
+//   - Releasing the last held button re-presses MOUSE_CHANNEL at the
+//     current position (if the cursor is still inside the window).
+//   - The cursor leaving the window releases MOUSE_CHANNEL.
+// When OFF, behaviour is identical to the pre-relax synthesized-finger path.
+//
 // Refresh-rate-independent dispatch (Mortar::Touch::Update @0x00242d14):
 //
 //   DrainSDLEvent() -- called once per display frame from pollInput().
@@ -151,6 +170,16 @@ private:
     void ReleaseFingerId(SDL_FingerID id);
 
     SDL_FingerID fingerMap[16];
+
+    // Port specific: RELAX MODE raw-mouse-drive helpers for MOUSE_CHANNEL.
+    // Mirror the FINGERDOWN / FINGERUP handling DrainSDLEvent already does
+    // for overflow channels (8-15), reused here so the channel-8..15
+    // pending-bool model (see DispatchForSimTick) stays the single source
+    // of truth for how a press/release reaches InputManager.
+    // RelaxPressMouseChannel is a no-op if MOUSE_CHANNEL is already active.
+    void RelaxPressMouseChannel(float gx, float gy);
+    // RelaxReleaseMouseChannel is a no-op if MOUSE_CHANNEL is not active.
+    void RelaxReleaseMouseChannel();
 
 #ifdef FN_TEST
 public:

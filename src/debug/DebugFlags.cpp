@@ -38,6 +38,7 @@ float g_DebugTimeScale       = 1.0f;  // Port specific: debug-only, no binary eq
 bool  g_ShowFps              = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
 bool  g_SuppressTextOverlay  = false; // Port specific: suppresses DebugText_Overlay for debug-drawn text
 bool  g_bOsdSfx              = false; // Port specific: OSD toast per SFX played (F4, --osd-sfx, ?osdsfx=1)
+bool  g_RelaxMode            = false; // Port specific: hover-to-slice mouse mode (F5, --relax), default OFF
 
 // Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex

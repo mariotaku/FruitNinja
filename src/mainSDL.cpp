@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
     // Port specific: parse launch parameters for debug flags.
     //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
+    //   --relax             : enable hover-to-slice mouse mode (same as F5 at runtime)
     //   --lang=<code|num>   : override language (e.g. --lang=french or --lang=3)
     int g_langOverride = -1;
     for (int i = 1; i < argc; ++i) {
@@ -46,6 +47,8 @@ int main(int argc, char* argv[]) {
             FN::g_ShowFps = true;
         } else if (strcmp(argv[i], "--osd-sfx") == 0) {
             FN::g_bOsdSfx = true;
+        } else if (strcmp(argv[i], "--relax") == 0) {
+            FN::g_RelaxMode = true;
         } else if (strncmp(argv[i], "--lang=", 7) == 0) {
             g_langOverride = ParseLanguageArg(argv[i] + 7);
         }

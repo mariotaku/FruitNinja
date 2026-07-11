@@ -223,6 +223,13 @@ void Game::pollInput() {
             LOG_DEBUG("Debug", "SFX OSD %s", FN::g_bOsdSfx ? "ON" : "OFF");
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
             OSD_AddMessage(FN::g_bOsdSfx ? "SFX OSD: ON" : "SFX OSD: OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F5) {
+            // Port specific: hover-to-slice mouse mode. See
+            // src/platform/InputTranslatorSDL.cpp for the raw-mouse drive logic.
+            FN::g_RelaxMode = !FN::g_RelaxMode;
+            LOG_INFO("RELAX", "relax mode %s", FN::g_RelaxMode ? "ON" : "OFF");
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            OSD_AddMessage(FN::g_RelaxMode ? "Relax mode: ON" : "Relax mode: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
