@@ -50,7 +50,7 @@ ComboBox::ComboBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
     , m_DrawWidth(0.0f)
     , m_DrawHeight(0.0f)
     , m_pFont(game_work.pFontMain.Get())                               // fonts[1]
-    , m_TextColour()                                                   // white
+    , m_TextColour()                                                   // opaque BLACK (Colour::Colour() @0x0011afa8, ASM-confirmed) -- see header
     , m_pListBox(NULL)
     , m_bCleanupPending(0)
     , m_TouchIndex(-1)
@@ -75,9 +75,13 @@ ComboBox::~ComboBox() {
 void ComboBox::Init() {
 }
 
-// vtable slot 3 -- Binary @ 0x001681b8 (tail-calls HUDControl3d::Release)
+// vtable slot 3 -- Binary @ 0x001681b8
+// ASM-spec v1.6.1 ComboBox::Release @0x001681b8: bl CleanUpListBox; m_pFont(+0x9c)=NULL.
+// Does NOT tail-call HUDControl3d::Release -- port previously did, which skipped
+// the listbox/scroller teardown entirely when a ComboBox died while open.
 void ComboBox::Release() {
-    HUDControl3d::Release();
+    CleanUpListBox();
+    m_pFont = NULL;
 }
 
 // vtable slot 6 -- Binary @ 0x00167e40
@@ -234,14 +238,26 @@ void ComboBox::SetPosition(float x, float y) {
     pos.y = y;
 }
 
-// Tears the open ListBox down (removes it from the HUD, which owns it after
-// AddControl, and clears the pointer).
-// ASM-spec v1.6.1 ComboBox::CleanUpListBox (via PLT @0x00113398): flags the
-//   ListBox for HUD removal and nulls m_pListBox. Reconstructed from the call
-//   graph (ListBoxClosed -> m_bCleanupPending -> CleanUpListBox).
+// Tears the open ListBox down: removes it from the HUD control list
+// IMMEDIATELY (not a deferred SetPendingRemoval flag) and destroys it inline,
+// then clears the pointer.
+// ASM-verified: 2026-07-11 v1.6.1 ComboBox::CleanUpListBox @ 0x00167f10 (re-analyst)
+//   if (m_pListBox) { HUD::RemoveControl(hud, m_pListBox);   // immediate list erase
+//                      m_pListBox->vtable[1](); }             // deleting dtor -> ListBox::Release
+//                                                              //   (which in turn tears down the
+//                                                              //   scroller -- see ListBox::Release)
+//   m_pListBox = NULL;
+// The port previously called SetPendingRemoval() (a deferred flag consumed by
+// HUD::Update's own sweep), which orphaned the ListBox's VerticalScroller: the
+// scroller is a SEPARATE HUD control that only ListBox::Release tears down, and
+// that dtor never ran because nothing here (or the deferred sweep) triggered it
+// in the same frame the flag was set -- this was the (b) never-closes bug.
 void ComboBox::CleanUpListBox() {
     if (m_pListBox) {
-        m_pListBox->SetPendingRemoval();
+        if (game_work.mHud) {
+            game_work.mHud->RemoveControl(m_pListBox);
+        }
+        delete m_pListBox;
         m_pListBox = NULL;
     }
 }

@@ -44,7 +44,7 @@ ListBox::ListBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
     , m_HoverIt(items.empty() ? NULL : (&items[0] + items.size()))  // end()
     , m_pScroller(NULL)
     , m_pTextFont(game_work.pFontMain.Get())                          // fonts[1]
-    , m_TextColour()                                                  // white
+    , m_TextColour()                                                  // opaque BLACK (Colour::Colour() @0x0011afa8, ASM-confirmed) -- see header
     , m_CellWidthParam(cellWidthParam)
     , m_FontScaleParam(fontScaleParam)
     , m_CellHeightParam(cellHeightParam)
@@ -103,8 +103,26 @@ ListBox::~ListBox() {
 void ListBox::Init() {
 }
 
-// vtable slot 3 -- Binary @ 0x00194528 (tail-calls HUDControl3d::Release)
+// vtable slot 3 -- Binary @ 0x00194528
+// ASM-verified: 2026-07-11 v1.6.1 ListBox::Release @ 0x00194528 (re-analyst)
+//   if (m_pScroller) { HUD::RemoveControl(hud, m_pScroller);   // +0x88
+//                       m_pScroller->vtable[1](); }             // deleting dtor
+//                       m_pScroller = NULL;
+//   m_pTextFont(+0x8c) = NULL;
+//   -- then base HUDControl3d teardown.
+// The port previously called only HUDControl3d::Release(), which never removed
+// the VerticalScroller from the HUD: it's a SEPARATE control the ctor
+// AddControl'd, and nothing else ever tears it down. That's why the scroller
+// (and its up/down arrows) stayed visible even after the ListBox itself closed.
 void ListBox::Release() {
+    if (m_pScroller) {
+        if (game_work.mHud) {
+            game_work.mHud->RemoveControl(m_pScroller);
+        }
+        delete m_pScroller;
+        m_pScroller = NULL;
+    }
+    m_pTextFont = NULL;
     HUDControl3d::Release();
 }
 
@@ -178,10 +196,14 @@ void ListBox::Draw(float* hudScaleRaw) {
 
 // ---------------------------------------------------------------------------
 // vtable slot 10 -- Binary @ 0x00194298
-// ASM-spec v1.6.1 ListBox::Update @0x00194298: hover + tap-release commit.
-//   Hover: when the live world touch (game_work.worldPos) is inside the row band,
-//   m_HoverIt = begin() + clamp((top - worldPos.y) / rowH, 0). On tap-release
-//   inside a row, m_TopVisibleIt = begin() + that row and m_OnSelect() fires.
+// ASM-verified: 2026-07-11 v1.6.1 ListBox::Update @ 0x00194298 (re-analyst)
+//   Hover: when the live world touch (game_work.worldPos, +0x94/+0x98) is inside
+//   the row band, m_HoverIt = begin() + scrollOfs + clamp((top - worldPos.y) / rowH, 0).
+//   On tap-release inside a row, m_TopVisibleIt = begin() + scrollOfs + that row
+//   and m_OnSelect() fires (Delegate0 @ +0xA4).
+//   scrollOfs = m_pScroller ? m_pScroller->m_CurrentValue : 0 -- the port
+//   previously omitted this add, so a scrolled list always committed/hovered the
+//   row at the TOP of the visible window instead of the one under the finger.
 void ListBox::Update(float dt) {
     (void)dt;
     if (!m_pItems) return;
@@ -196,11 +218,12 @@ void ListBox::Update(float dt) {
     float bottom = (pos.y - rowH * 0.5f) - rowH * (float)(rows > 0 ? rows - 1 : 0);
 
     std::string* base = m_pItems->empty() ? NULL : &(*m_pItems)[0];
+    int scrollOfs = (n > (size_t)m_VisibleRows && m_pScroller) ? m_pScroller->m_CurrentValue : 0;
 
     // Hover: index the row under the live world touch position.
     const Vec3& wp = game_work.worldPos;
     if (wp.x >= left && wp.x <= right && wp.y >= bottom && wp.y <= top && base) {
-        int idx = (int)((top - wp.y) / rowH);
+        int idx = (int)((top - wp.y) / rowH) + scrollOfs;
         if (idx < 0) idx = 0;
         m_HoverIt = base + idx;
     }
@@ -223,7 +246,7 @@ void ListBox::Update(float dt) {
             m_TouchX = -1.0f;
             // Commit only if the release lands inside a valid row band.
             if (m_TouchY < bottom || m_TouchY > top || !base) return;
-            int idx = (int)((top - m_TouchY) / rowH);
+            int idx = (int)((top - m_TouchY) / rowH) + scrollOfs;
             if (idx < 0) idx = 0;
             m_TopVisibleIt = base + idx;
             m_OnSelect();

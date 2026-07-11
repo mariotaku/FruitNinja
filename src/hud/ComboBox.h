@@ -18,6 +18,19 @@
 // which copies the selection back into m_SelectedIter and flags m_bCleanupPending
 // so the next Update tears the ListBox down.
 //
+// CleanUpListBox (@0x00167f10, thunk 0x00113398) tears the ListBox down
+// IMMEDIATELY: HUD::RemoveControl(hud, m_pListBox) then delete m_pListBox (the
+// deleting dtor runs ListBox::Release, which in turn removes+deletes its own
+// VerticalScroller). It is NOT SetPendingRemoval() -- that flag only defers to
+// HUD::Update's end-of-frame sweep and does not, by itself, guarantee
+// ListBox::Release runs in the same step as the cleanup request, which left
+// the scroller (and its arrows) visibly orphaned in an earlier port pass.
+// A second tap on the bar while a ListBox is open (m_pListBox != NULL) also
+// calls CleanUpListBox directly -- closes without changing the selection.
+// Release() (@0x001681b8) is likewise CleanUpListBox() + m_pFont=NULL, NOT a
+// tail-call to HUDControl3d::Release -- a ComboBox destroyed while open must
+// still tear its ListBox/scroller down.
+//
 // Field offsets were re-verified against the ctor @0x001682d4 instruction stream.
 //
 // Binary (v1.6.1):
@@ -87,7 +100,12 @@ private:
     // +0x9C: label font (game_work.pFontMain == fonts[1]).
     Mortar::Font* m_pFont;
 
-    // +0xA0: selected-item text colour (default white).
+    // +0xA0: selected-item text colour. Default-constructed = opaque BLACK
+    // (Colour::Colour() @0x0011afa8, ASM-confirmed: b=g=r=0, a=0xFF) --
+    // NOT white as earlier assumed. Callers must SetTextColour() explicitly
+    // for legible rendering; the binary's own ComboBox::Update (@0x00167f70)
+    // never propagates this colour to the ListBox it spawns either, so a
+    // freshly-opened ListBox's row text also defaults to opaque black.
     Colour   m_TextColour;
 
     // +0xA4: live ListBox while expanded (null when collapsed).
