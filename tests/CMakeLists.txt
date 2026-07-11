@@ -766,6 +766,19 @@ fn_add_game_test(test_badges test_badges.cpp)
 add_test(NAME screenshot_badges COMMAND test_badges --screenshot)
 set_tests_properties(screenshot_badges PROPERTIES TIMEOUT 60)
 
+# Settings-widget (CheckBox + SliderControl) render test. Both widgets are dead
+# code in v1.6.1 but carry complete real implementations. Renders CheckBox
+# unchecked+checked and SliderControl thumb at min/mid/max, injecting in-memory
+# solid-colour substitute textures (the faithful .tex art is not shipped -- see
+# the widget .cpp DIFFERS notes). Validates geometry + value-driven state, not art.
+# Output: tmp/test/screenshots/settings_widgets/widgets.png.
+fn_add_game_test(test_settings_widgets_render test_settings_widgets_render.cpp)
+add_test(NAME settings_widgets_render COMMAND test_settings_widgets_render)
+add_test(NAME screenshot_settings_widgets COMMAND test_settings_widgets_render --screenshot)
+set_tests_properties(settings_widgets_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_settings_widgets PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_checkbox;component_slidercontrol")
+
 # Achievement-unlock popup screenshot test (NotificationControl, Type_Named).
 # There is no achievements-list screen in v1.6.1 (AchievementsScreen is a
 # defunct stub) -- this is the only on-screen achievement "drawing": the

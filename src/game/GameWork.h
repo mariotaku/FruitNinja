@@ -189,9 +189,10 @@ struct GameWork {
     uint8_t _pad_0x5bd[3];         // +0x5BD..+0x5BF
 
     // +0x5C0..+0x60F: embedded Mortar::StringTable (0x50 / 80 bytes).
-    // RESERVE ONLY -- port keeps string table in its own singleton; this field
-    // reserves the correct bytes without pulling in StringTable.h (which would
-    // conflict with CheckBox.h's port-local LocalizedString stub).
+    // RESERVE ONLY -- port keeps string table in its own singleton (Mortar::StringTable
+    // static instance); this field just reserves the correct bytes to preserve
+    // GameWork's binary layout, without pulling StringTable.h's heavier machinery
+    // (File/StringTableData types) into every GameWork.h consumer.
     uint8_t m_StringTable[0x50];      // +0x5C0: binary Mortar::StringTable slot (reserve; sizeof==0x50)
 
     bool    m_bFrameDirty;         // +0x610: per-frame dirty flag (was +0x604 in v1.5.1)
