@@ -1,9 +1,7 @@
 # tools/assets/
 
-`.tex` texture asset conversion (FruitNinjaBada → PNG/gallery).
+`.tex` texture asset conversion (FruitNinjaBada → webp gallery).
 
-- **`convert_tex.py`** — CLI: convert `.tex` files to PNG and emit an `index.html` gallery (PIL). `python tools/assets/convert_tex.py [IN] [OUT]`.
-- **`tex2png.cpp`** — standalone C++ `.tex`→`.png` + HTML gallery (zlib). Build: `g++ -O2 -o tex2png tex2png.cpp -lz`.
-- **`convert_textures.cpp`** — standalone C++ `.tex`→`.png` (minimal, zlib). Build: `g++ -o convert_textures convert_textures.cpp -lz`.
+- **`convert_tex.py`** — CLI: decode `.tex` files to `.webp` and emit an `index.html` gallery (PIL). `python tools/assets/convert_tex.py [IN] [OUT]`.
 
-The `.py` is the convenient default; the `.cpp` variants need compiling and have no Python/PIL dependency.
+Both this and the web build's asset staging (`tools/web/stage-web-assets.py`) share the single `.tex` decode core in [`tools/lib/tex_decoder.py`](../lib/tex_decoder.py) — the only place the Tex1 format is parsed. This gallery emits **lossless** webp for a pixel-faithful reference; the web build emits **lossy-90** webp (via ffmpeg) for size.

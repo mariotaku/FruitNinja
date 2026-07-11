@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert .tex files from FruitNinjaBada to PNG and generate index.html.
+"""Convert .tex files from FruitNinjaBada to WebP and generate index.html.
 
 Usage:
     python tools/assets/convert_tex.py [INPUT_DIR] [OUTPUT_DIR]
@@ -10,92 +10,36 @@ Defaults:
 """
 
 import argparse
-import struct
 import sys
 from pathlib import Path
 from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-FMT_NAMES = {
-    0x00: "RGB888",
-    0x01: "RGBA8888",
-    0x0F: "RGBA5551",
-    0x10: "RGBA4444",
-    0x11: "RGB565",
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import tex_decoder
 
 
 def convert_tex(tex_path: Path, bada_dir: Path, out_dir: Path) -> tuple[int, int, int]:
-    """Convert a .tex file to PNG. Returns (width, height, format)."""
-    data = tex_path.read_bytes()
-    if len(data) < 12:
-        raise ValueError(f"File too small: {len(data)} bytes")
+    """Convert a .tex file to WebP. Returns (width, height, format)."""
+    decoded = tex_decoder.decode_tex(tex_path)
+    if decoded is None:
+        data = tex_path.read_bytes()
+        size = len(data)
+        raise ValueError(f"Not a decodable Tex1 (size={size} bytes)")
+    width, height, rgba = decoded
+    fmt = tex_path.read_bytes()[2]
 
-    width_log2 = data[0]
-    height_log2 = data[1]
-    fmt = data[2]
-    width = 1 << width_log2
-    height = 1 << height_log2
-
-    pixel_data = data[12:]
-
-    if fmt == 0x10:  # RGBA4444
-        img = Image.new("RGBA", (width, height))
-        pixels = []
-        for i in range(width * height):
-            pixel = struct.unpack_from("<H", pixel_data, i * 2)[0]
-            r = ((pixel >> 12) & 0xF) * 17
-            g = ((pixel >> 8) & 0xF) * 17
-            b = ((pixel >> 4) & 0xF) * 17
-            a = ((pixel >> 0) & 0xF) * 17
-            pixels.append((r, g, b, a))
-        img.putdata(pixels)
-    elif fmt == 0x11:  # RGB565
-        img = Image.new("RGB", (width, height))
-        pixels = []
-        for i in range(width * height):
-            pixel = struct.unpack_from("<H", pixel_data, i * 2)[0]
-            r = ((pixel >> 11) & 0x1F) * 255 // 31
-            g = ((pixel >> 5) & 0x3F) * 255 // 63
-            b = ((pixel >> 0) & 0x1F) * 255 // 31
-            pixels.append((r, g, b))
-        img.putdata(pixels)
-    elif fmt == 0x0F:  # RGBA5551
-        img = Image.new("RGBA", (width, height))
-        pixels = []
-        for i in range(width * height):
-            pixel = struct.unpack_from("<H", pixel_data, i * 2)[0]
-            r = ((pixel >> 11) & 0x1F) * 255 // 31
-            g = ((pixel >> 6) & 0x1F) * 255 // 31
-            b = ((pixel >> 1) & 0x1F) * 255 // 31
-            a = (pixel & 0x1) * 255
-            pixels.append((r, g, b, a))
-        img.putdata(pixels)
-    elif fmt == 0x01:  # RGBA8888
-        img = Image.new("RGBA", (width, height))
-        pixels = []
-        for i in range(width * height):
-            off = i * 4
-            r, g, b, a = pixel_data[off], pixel_data[off+1], pixel_data[off+2], pixel_data[off+3]
-            pixels.append((r, g, b, a))
-        img.putdata(pixels)
-    elif fmt == 0x00:  # RGB888
-        img = Image.new("RGB", (width, height))
-        pixels = []
-        for i in range(width * height):
-            off = i * 3
-            r, g, b = pixel_data[off], pixel_data[off+1], pixel_data[off+2]
-            pixels.append((r, g, b))
-        img.putdata(pixels)
-    else:
-        raise ValueError(f"Unsupported format: 0x{fmt:02X}")
+    img = Image.frombytes("RGBA", (width, height), bytes(rgba))
 
     # Output path: keep hierarchy relative to input dir
     rel = tex_path.relative_to(bada_dir)
-    out_path = out_dir / rel.with_suffix(".png")
+    out_path = out_dir / rel.with_suffix(".webp")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out_path, "PNG")
+    # Gallery uses lossless webp for pixel-faithful reference; the web build
+    # (stage-web-assets.py) uses lossy-90 via ffmpeg for size; both share
+    # tex_decoder now.
+    img.save(out_path, "webp", lossless=True, quality=100, method=6)
 
     return width, height, fmt
 
@@ -144,10 +88,10 @@ h2 { color: #cc5500; margin-top: 2em; border-bottom: 1px solid #444; padding-bot
             if r.get("error"):
                 html += f'<div class="card"><p class="error">{r["rel"]}<br>{r["error"]}</p></div>\n'
             else:
-                png_rel = str(Path(r["rel"]).with_suffix(".png")).replace("\\", "/")
+                webp_rel = str(Path(r["rel"]).with_suffix(".webp")).replace("\\", "/")
                 fname = Path(r["rel"]).stem
-                fmt_str = FMT_NAMES.get(r["fmt"], f"0x{r['fmt']:02X}")
-                html += f'<div class="card"><img src="{png_rel}" alt="{fname}"><div class="name">{fname}</div><div class="info">{r["w"]}x{r["h"]} {fmt_str}</div></div>\n'
+                fmt_str = tex_decoder.TEX_FORMAT_NAMES.get(r["fmt"], f"0x{r['fmt']:02X}")
+                html += f'<div class="card"><img src="{webp_rel}" alt="{fname}"><div class="name">{fname}</div><div class="info">{r["w"]}x{r["h"]} {fmt_str}</div></div>\n'
         html += "</div>\n"
 
     html += "</body>\n</html>\n"
@@ -156,11 +100,11 @@ h2 { color: #cc5500; margin-top: 2em; border-bottom: 1px solid #444; padding-bot
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert .tex textures to PNG")
+    parser = argparse.ArgumentParser(description="Convert .tex textures to WebP")
     parser.add_argument("input_dir", nargs="?", default=str(PROJECT_ROOT / "FruitNinjaBada"),
                         help="Directory containing .tex files (default: FruitNinjaBada)")
     parser.add_argument("output_dir", nargs="?", default=str(PROJECT_ROOT / "tmp" / "textures"),
-                        help="Output directory for PNGs (default: tmp/textures)")
+                        help="Output directory for WebP images (default: tmp/textures)")
     args = parser.parse_args()
 
     bada_dir = Path(args.input_dir).resolve()
@@ -176,7 +120,7 @@ def main():
         try:
             w, h, fmt = convert_tex(tex_path, bada_dir, out_dir)
             results.append({"rel": rel, "w": w, "h": h, "fmt": fmt})
-            print(f"  OK: {rel} ({w}x{h}, {FMT_NAMES.get(fmt, f'0x{fmt:02X}')})")
+            print(f"  OK: {rel} ({w}x{h}, {tex_decoder.TEX_FORMAT_NAMES.get(fmt, f'0x{fmt:02X}')})")
         except Exception as e:
             results.append({"rel": rel, "error": str(e)})
             print(f"  ERR: {rel}: {e}")
