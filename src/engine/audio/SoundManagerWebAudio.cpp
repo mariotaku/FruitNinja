@@ -91,15 +91,33 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
             try { data = FS.readFile(path); } catch (e) { return; }
             this.inflight[name] = true;
             // decodeAudioData detaches its ArrayBuffer; hand it a private copy
-            // so the wasm HEAP that FS.readFile viewed is never detached.
+            // so the wasm HEAP that FS.readFile viewed is never detached. Also
+            // guards against FS.readFile returning a Uint8Array VIEW into a
+            // larger backing store (MEMFS often over-allocates) -- slicing by
+            // byteOffset/byteLength yields exactly the file's bytes, never the
+            // whole heap/backing buffer.
             var ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-            this.ctx.decodeAudioData(ab, function(decoded) {
+            var decodePromise = this.ctx.decodeAudioData(ab, function(decoded) {
                 self.buffers[name] = decoded;
                 delete self.inflight[name];
                 if (cb) cb(decoded);
             }, function(err) {
                 delete self.inflight[name];
+                console.warn('FNAudio decode failed: ' + name, err);
+                // Failed/undecoded sound: playSfx/playSong below no-op (no
+                // cached buffer) rather than throw. Non-fatal by design.
             });
+            // decodeAudioData ALSO returns a Promise (spec, even in callback
+            // form) that rejects on the same failure the error callback above
+            // already handled. Without a .catch here that promise is left
+            // unhandled -- Firefox (and some emscripten shells' global
+            // onunhandledrejection hook) surfaces that as a fatal crash
+            // overlay ("buffer passed to decodeAudioData contains invalid
+            // content...") even though the error callback ran fine. Swallow
+            // it; the callback above is the real handler.
+            if (decodePromise && typeof decodePromise.catch === 'function') {
+                decodePromise.catch(function() {});
+            }
         },
 
         playSfx: function(name, handle, gain) {
@@ -278,13 +296,26 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
             this.music.gain.value = this.musicMuted ? 0 : this.musicVol;
         },
 
+        // Quit/teardown hard-stop. Stops every SFX source AND the music
+        // source (this.stop / this.songStop already do real src.stop(0), not
+        // just pause-bookkeeping), then belt-and-suspenders: zero both master
+        // gains directly so even a source that somehow outlives the stop
+        // calls (e.g. a decode-in-flight source that slips past a race) is
+        // silent regardless. Called from mainEmscripten.cpp
+        // StopWebAudioAndShutdown before ctx.suspend().
         stopAll: function() {
             var keys = Object.keys(this.active);
             for (var i = 0; i < keys.length; ++i) this.stop(keys[i]);
             this.songStop();
+            try { this.masterSfx.gain.value = 0; } catch (x) {}
+            try { this.music.gain.value = 0; } catch (x) {}
         }
     };
 
+    // NOTE: must be assigned onto window (not a module-local var) -- the
+    // teardown/resume EM_ASM blocks in src/mainEmscripten.cpp reference
+    // window.FNAudio from a SEPARATE EM_ASM invocation (a different JS
+    // closure), so a bare `var FN` here would be invisible to them.
     window.FNAudio = FN;
 
     // Load the build-time loop metadata (name -> loopStart seconds).
