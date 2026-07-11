@@ -122,7 +122,7 @@
 #include "asset/Texture.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
-#include "widget_placeholder_art.h"
+#include "hud/WidgetPlaceholderArt.h"
 
 #include <cstdio>
 #include <cstdint>

@@ -37,7 +37,7 @@
 
 // Placeholder-art texture makers (MakeSolidTex / MakeCircleTex + the SDF helpers)
 // are shared with test_checkbox_render.cpp and test_settings_interactive.cpp.
-#include "widget_placeholder_art.h"
+#include "hud/WidgetPlaceholderArt.h"
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
