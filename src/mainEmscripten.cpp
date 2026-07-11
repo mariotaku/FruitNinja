@@ -115,23 +115,39 @@ EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
 //
 // SoundManager is a process-lifetime singleton -- GameDestroy does NOT call
 // SoundManager::Destroy() (see GameInitialise.cpp step-10 note: "SoundManager
-// teardown on process exit"), so its SDL audio device is still open even
-// after shutdown() returns.  Explicitly silence it via the real SoundManager
-// vtable API (SFXPauseAll/SongStop) so the mixer stops producing anything but
-// silence, AND suspend the browser AudioContext directly: the emscripten
-// SDL2 backend runs its mix callback via a ScriptProcessorNode independent
-// of the cancelled RAF main loop, so silencing voices alone still leaves the
-// node running (silently) until the context is suspended -- and the user may
-// sit on the restart overlay for a while before actually reloading.
+// teardown on process exit"), so its AudioContext is still open even after
+// shutdown() returns.  Explicitly silence it via the real SoundManager vtable
+// API (SFXPauseAll/SongStop -- these forward into the Web Audio backend's
+// pauseAllSfx()/songStop(), SoundManagerWebAudio.cpp) so the mixer stops
+// producing anything but silence, AND hard-stop + suspend the browser
+// AudioContext directly: window.FNAudio.stopAll() stops every live
+// AudioBufferSourceNode (SFX + music) and zeroes both master gain nodes as a
+// second layer, then ctx.suspend() halts the context clock outright -- the
+// browser's Web Audio graph runs independent of the cancelled RAF main loop,
+// so silencing sources alone could still leave the graph "running" (silently)
+// until the context is suspended, and the user may sit on the restart overlay
+// for a while before actually reloading.
+//
+// Belt-and-suspenders: this EM_ASM ALSO zeroes window.FNAudio.masterSfx/music
+// gain directly (not just via stopAll()) so audio is silenced even if
+// window.FNAudio.stopAll somehow isn't callable (stale/mismatched JS) --
+// gain=0 is a single synchronous property write, unlike ctx.suspend()'s
+// async Promise, so it takes effect immediately regardless of suspend timing.
 static void StopWebAudioAndShutdown(Game* game) {
     Mortar::SoundManager::GetInstance().SFXPauseAll();
     Mortar::SoundManager::GetInstance().SongStop();
 
     EM_ASM({
         try {
-            if (window.FNAudio) {
-                if (typeof window.FNAudio.stopAll === 'function') { window.FNAudio.stopAll(); }
-                var ctx = window.FNAudio.ctx;
+            // NOTE: window.FNAudio -- SoundManagerWebAudio.cpp's fnaudio_init
+            // assigns `window.FNAudio = FN` (not a module-local var), so it is
+            // visible here across this separate EM_ASM JS closure.
+            var FN = window.FNAudio;
+            if (FN) {
+                if (typeof FN.stopAll === 'function') { FN.stopAll(); }
+                try { if (FN.masterSfx) FN.masterSfx.gain.value = 0; } catch (e) {}
+                try { if (FN.music)     FN.music.gain.value     = 0; } catch (e) {}
+                var ctx = FN.ctx;
                 if (ctx && typeof ctx.suspend === 'function') { ctx.suspend(); }
             }
         } catch (e) {}

@@ -788,6 +788,19 @@
     window.addEventListener('orientationchange', _reLetterbox);
   })();
 
+  /* True only for a genuine wasm/emscripten abort (a real game crash) -- NOT
+     for incidental JS errors like a Web Audio decodeAudioData rejection or a
+     benign third-party throw. Gates the crash overlay so only a real game
+     crash surfaces it; everything else is logged to the console only. */
+  function _isGameCrash(msg, err) {
+    if (err && typeof WebAssembly !== 'undefined' && WebAssembly.RuntimeError &&
+        (err instanceof WebAssembly.RuntimeError)) return true;
+    var s = ((msg ? String(msg) : '') + ' ' +
+             (err && err.message ? String(err.message) : '') + ' ' +
+             (err && err.stack ? String(err.stack) : '')).toLowerCase();
+    return /aborted|abort\(|runtimeerror|out of bounds|memory access|unreachable|null function|function signature mismatch|__cxa|stack overflow/.test(s);
+  }
+
   window.onerror = function (msg, src, line, col, err) {
     console.error('[onerror]', msg, src, line, col, err);
     /* Opaque cross-origin ("Script error.") report: the browser masks the
@@ -804,10 +817,12 @@
       /* A JS error during load = fatal; show the load error UI instead of
          leaving the user staring at a frozen progress bar or play button. */
       _showError(msg ? String(msg) : 'A script error occurred while loading.');
-    } else {
-      /* Runtime crash after the game started (e.g. a wasm trap like
-         "index out of bounds") -- surface the stack trace overlay so it can be
-         read/copied on-device without DevTools. */
+    } else if (_isGameCrash(msg, err)) {
+      /* Genuine wasm/game abort after the game started (a trap like
+         "memory access out of bounds", an emscripten abort, etc.) -- surface
+         the stack-trace overlay so it can be read/copied on-device without
+         DevTools. Incidental JS errors (e.g. a Web Audio decode failure) fall
+         through: logged above, never shown as a crash. */
       _showCrash(msg ? String(msg) : 'A runtime error occurred.',
                  (err && err.stack) ? String(err.stack) : null);
     }
@@ -817,7 +832,10 @@
   window.addEventListener('unhandledrejection', function (ev) {
     var r = ev && ev.reason;
     console.error('[unhandledrejection]', r);
-    if (_runtimeReady) {
+    /* Only a genuine wasm abort that arrived as a rejection surfaces the crash
+       overlay. An incidental rejection (e.g. a Web Audio decodeAudioData
+       EncodingError) is logged above and otherwise ignored -- not a crash. */
+    if (_runtimeReady && _isGameCrash(r && r.message, r)) {
       _showCrash((r && r.message) ? String(r.message) : String(r),
                  (r && r.stack) ? String(r.stack) : null);
     }
