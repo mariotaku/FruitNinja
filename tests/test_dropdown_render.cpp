@@ -173,12 +173,12 @@ int main(int argc, char* argv[]) {
                        comboItems, /*defaultIdx*/ 1, "DIFFICULTY",
                        /*textFlag*/ 6, /*width*/ 20, /*scaleX*/ 120, /*scaleY*/ 36);
 
-        if (combo.m_DrawWidth != 120.0f || combo.m_DrawHeight != 36.0f) {
+        if (combo.DrawWidth() != 120.0f || combo.DrawHeight() != 36.0f) {
             std::fprintf(stderr, "FAIL: ComboBox draw extents %.1f x %.1f (expected 120 x 36)\n",
-                         (double)combo.m_DrawWidth, (double)combo.m_DrawHeight);
+                         (double)combo.DrawWidth(), (double)combo.DrawHeight());
             ++failures;
         }
-        if (combo.m_SelectedIter != &comboItems[1]) {
+        if (combo.SelectedIter() != &comboItems[1]) {
             std::fprintf(stderr, "FAIL: ComboBox selection not begin()+defaultIdx\n");
             ++failures;
         }
@@ -203,37 +203,37 @@ int main(int argc, char* argv[]) {
                      /*selIter*/ &listItems[2], /*visibleRows*/ 6,
                      /*cellHeightParam*/ 14, /*cellWidthParam*/ 120, /*fontScaleParam*/ 30);
 
-        if (list.m_pScroller == NULL) {
+        if (list.Scroller() == NULL) {
             std::fprintf(stderr, "FAIL: ListBox overflow (8>6) but no VerticalScroller created\n");
             ++failures;
         }
-        if (list.m_CellWidth != 120.0f || list.m_CellHeight != 30.0f) {
+        if (list.CellWidth() != 120.0f || list.CellHeight() != 30.0f) {
             std::fprintf(stderr, "FAIL: ListBox cell %.1f x %.1f (expected 120 x 30)\n",
-                         (double)list.m_CellWidth, (double)list.m_CellHeight);
+                         (double)list.CellWidth(), (double)list.CellHeight());
             ++failures;
         }
 
-        VerticalScroller* scroller = list.m_pScroller;
+        VerticalScroller* scroller = list.Scroller();
         if (scroller) {
             // Scroller max = items - visibleRows = 2. Confirm the composition wiring.
-            if (scroller->m_MaxValue != 2) {
+            if (scroller->MaxValue() != 2) {
                 std::fprintf(stderr, "FAIL: scroller maxValue %d (expected 2 = 8-6)\n",
-                             (int)scroller->m_MaxValue);
+                             (int)scroller->MaxValue());
                 ++failures;
             }
-            if (scroller->m_TotalRows != 6) {
+            if (scroller->TotalRows() != 6) {
                 std::fprintf(stderr, "FAIL: scroller totalRows %d (expected 6)\n",
-                             (int)scroller->m_TotalRows);
+                             (int)scroller->TotalRows());
                 ++failures;
             }
             // Visual: mid scroll + hover/selection so all three row colours render.
-            scroller->m_CurrentValue = 1;               // thumb mid-track
+            scroller->m_CurrentValue = 1;               // thumb mid-track (genuinely public -- see class header)
         }
         // Selection (Blue) and hover (light blue) rows within the visible window
         // (top row = begin() + m_CurrentValue = index 1).
-        list.m_TopVisibleIt = &listItems[2];            // committed -> Blue
-        list.m_HoverIt      = &listItems[4];            // hovered   -> RGB(0x50,0x96,0xFF)
-        list.m_TextColour   = Colour(20, 20, 30, 255);  // dark text on white/tinted rows
+        list.SetTopVisibleForTest(&listItems[2]);           // committed -> Blue
+        list.SetHoverForTest(&listItems[4]);                // hovered   -> RGB(0x50,0x96,0xFF)
+        list.SetTextColourForTest(Colour(20, 20, 30, 255)); // dark text on white/tinted rows
 
         // ListBox::GetSelected returns the committed row.
         if (list.GetSelected() != &listItems[2]) {

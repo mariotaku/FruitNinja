@@ -54,7 +54,9 @@ namespace Mortar { class Font; }
 class VerticalScroller;
 
 class ListBox : public HUDControl3d {
-public:
+    friend struct ListBoxLayoutAssert;
+
+private:
     // +0x7C: item model (binary: std::vector<std::string>&).
     std::vector<std::string>* m_pItems;
 
@@ -117,6 +119,7 @@ public:
     // +0xD9..+0xDB: pad
     uint8_t _padD9[3];
 
+public:
     // Binary @ 0x00194a74 (C1) / 0x00194d18 (C2)
     ListBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
             std::string* selIter, uint8_t visibleRows,
@@ -143,8 +146,24 @@ public:
     // Non-virtual. Binary @ 0x001691b4: assigns m_OnSelect.
     void SetCallback(const Mortar::Delegate0<void>& cb);
 
+    // Read-only accessors (test/caller convenience).
+    VerticalScroller* Scroller()   const { return m_pScroller; }
+    float             CellWidth()  const { return m_CellWidth; }
+    float             CellHeight() const { return m_CellHeight; }
+
+    // Port/test-only: force the committed/hover row and row text colour to drive
+    // a specific visual state for screenshot tests (the binary only ever writes
+    // these from the internal touch state machine -- see UpdateTouchPosition).
+    // No binary counterpart.
+    void SetTopVisibleForTest(std::string* it) { m_TopVisibleIt = it; }
+    void SetHoverForTest(std::string* it)      { m_HoverIt = it; }
+    void SetTextColourForTest(Colour c)        { m_TextColour = c; }
+
+private:
     // Private helper reached via a PLT veneer in Update; captures the touch world pos.
     void UpdateTouchPosition();
+
+public:
 
     // Static texture lifecycle. Binary @ 0x00194fdc.
     // Loads blank_dialog_box.tex -> s_bar (row background).
@@ -162,23 +181,25 @@ public:
 
 #if defined(__bada__)
 #include <cstddef>
-static_assert(sizeof(ListBox) == 0xDC, "ListBox size mismatch");                 // v1.6.1 ctor @0x00194a74 (operator new(0xDC))
-static_assert(offsetof(ListBox, m_pItems)        == 0x7C, "ListBox::m_pItems offset");
-static_assert(offsetof(ListBox, m_TopVisibleIt)  == 0x80, "ListBox::m_TopVisibleIt offset");
-static_assert(offsetof(ListBox, m_HoverIt)       == 0x84, "ListBox::m_HoverIt offset");
-static_assert(offsetof(ListBox, m_pScroller)     == 0x88, "ListBox::m_pScroller offset");
-static_assert(offsetof(ListBox, m_pTextFont)     == 0x8C, "ListBox::m_pTextFont offset");
-static_assert(offsetof(ListBox, m_TextColour)    == 0x90, "ListBox::m_TextColour offset");
-static_assert(offsetof(ListBox, m_CellWidthParam)  == 0x94, "ListBox::m_CellWidthParam offset");
-static_assert(offsetof(ListBox, m_FontScaleParam)  == 0x96, "ListBox::m_FontScaleParam offset");
-static_assert(offsetof(ListBox, m_CellHeightParam) == 0x98, "ListBox::m_CellHeightParam offset");
-static_assert(offsetof(ListBox, m_CellWidth)     == 0x9C, "ListBox::m_CellWidth offset");
-static_assert(offsetof(ListBox, m_CellHeight)    == 0xA0, "ListBox::m_CellHeight offset");
-static_assert(offsetof(ListBox, m_OnSelect)      == 0xA4, "ListBox::m_OnSelect offset");
-static_assert(offsetof(ListBox, m_ActiveTouchId) == 0xC8, "ListBox::m_ActiveTouchId offset");
-static_assert(offsetof(ListBox, m_TouchX)        == 0xCC, "ListBox::m_TouchX offset");
-static_assert(offsetof(ListBox, m_TouchY)        == 0xD0, "ListBox::m_TouchY offset");
-static_assert(offsetof(ListBox, m_VisibleRows)   == 0xD8, "ListBox::m_VisibleRows offset");
+struct ListBoxLayoutAssert {
+    static_assert(sizeof(ListBox) == 0xDC, "ListBox size mismatch");                 // v1.6.1 ctor @0x00194a74 (operator new(0xDC))
+    static_assert(offsetof(ListBox, m_pItems)        == 0x7C, "ListBox::m_pItems offset");
+    static_assert(offsetof(ListBox, m_TopVisibleIt)  == 0x80, "ListBox::m_TopVisibleIt offset");
+    static_assert(offsetof(ListBox, m_HoverIt)       == 0x84, "ListBox::m_HoverIt offset");
+    static_assert(offsetof(ListBox, m_pScroller)     == 0x88, "ListBox::m_pScroller offset");
+    static_assert(offsetof(ListBox, m_pTextFont)     == 0x8C, "ListBox::m_pTextFont offset");
+    static_assert(offsetof(ListBox, m_TextColour)    == 0x90, "ListBox::m_TextColour offset");
+    static_assert(offsetof(ListBox, m_CellWidthParam)  == 0x94, "ListBox::m_CellWidthParam offset");
+    static_assert(offsetof(ListBox, m_FontScaleParam)  == 0x96, "ListBox::m_FontScaleParam offset");
+    static_assert(offsetof(ListBox, m_CellHeightParam) == 0x98, "ListBox::m_CellHeightParam offset");
+    static_assert(offsetof(ListBox, m_CellWidth)     == 0x9C, "ListBox::m_CellWidth offset");
+    static_assert(offsetof(ListBox, m_CellHeight)    == 0xA0, "ListBox::m_CellHeight offset");
+    static_assert(offsetof(ListBox, m_OnSelect)      == 0xA4, "ListBox::m_OnSelect offset");
+    static_assert(offsetof(ListBox, m_ActiveTouchId) == 0xC8, "ListBox::m_ActiveTouchId offset");
+    static_assert(offsetof(ListBox, m_TouchX)        == 0xCC, "ListBox::m_TouchX offset");
+    static_assert(offsetof(ListBox, m_TouchY)        == 0xD0, "ListBox::m_TouchY offset");
+    static_assert(offsetof(ListBox, m_VisibleRows)   == 0xD8, "ListBox::m_VisibleRows offset");
+};
 #endif
 
 #endif // FN_HUD_LIST_BOX_H

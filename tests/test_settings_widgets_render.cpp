@@ -297,14 +297,14 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "FAIL: slider initial values not stored correctly\n");
             ++failures;
         }
-        // Track width must have been sized from the injected 200px track texture (fields
-        // are public on SliderControl).
+        // Track width must have been sized from the injected 200px track texture
+        // (read via the geometry accessors -- fields are private).
         std::printf("[settings_widgets] slider trackW=%.1f trackH=%.1f thumbW=%.1f thumbH=%.1f\n",
-                    (double)slMin.m_TrackWidth, (double)slMin.m_TrackHeight,
-                    (double)slMin.m_ThumbWidth, (double)slMin.m_ThumbHeight);
-        if (slMin.m_TrackWidth != 200.0f) {
+                    (double)slMin.TrackWidth(), (double)slMin.TrackHeight(),
+                    (double)slMin.ThumbWidth(), (double)slMin.ThumbHeight());
+        if (slMin.TrackWidth() != 200.0f) {
             std::fprintf(stderr, "FAIL: slider trackW=%.1f (expected 200)\n",
-                         (double)slMin.m_TrackWidth);
+                         (double)slMin.TrackWidth());
             ++failures;
         }
 
