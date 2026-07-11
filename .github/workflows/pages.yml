@@ -55,10 +55,9 @@ env:
   # If archive.org swaps the build, the extract step fails -- update this (and the
   # ASSET_FILENAME/header hashes) only after confirming the new build is correct.
   EXPECTED_BIN_MD5: "ab60ff54a272abed1cbd403c5dcb7c55"
-  # Pinned (not :latest): a floating tag silently changed the default wasm STACK_SIZE
-  # (5MB -> 64KB at emscripten 3.1.27) and corrupted static globals via HUD-text stack
-  # overflow. Pin to a concrete version for reproducible CI builds.
-  EMSDK_IMAGE: "emscripten/emsdk:6.0.0"
+  # EMSDK_IMAGE (the pinned emsdk image) is loaded from tools/web/config.sh at
+  # runtime (the "Load pinned emsdk image" step below) so the version lives in
+  # ONE place, shared with tools/web/rebuild-web.sh. See config.sh for rationale.
 
 jobs:
   # -------------------------------------------------------------------------
@@ -69,6 +68,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # ---- Load the pinned emsdk image (single source of truth) ------------
+      - name: Load pinned emsdk image
+        run: |
+          . tools/web/config.sh
+          echo "EMSDK_IMAGE=$EMSDK_IMAGE" >> "$GITHUB_ENV"
 
       # ---- Download game assets from archive.org --------------------------
       - name: Download Fruit Ninja assets from archive.org

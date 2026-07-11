@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-tools/web/transcode-audio-web.py -- Build-phase asset staging for the web target.
+tools/web/stage-web-assets.py -- Build-phase asset staging for the web target.
 
 Usage:
-    python3 tools/web/transcode-audio-web.py <repo_root>
+    python3 tools/web/stage-web-assets.py <repo_root>
 
-Mirrors FruitNinjaBada/Data into build/web-audio-staging/Data. Two web-only
+Mirrors FruitNinjaBada/Data into build/web-staging/Data. Two web-only
 size optimisations happen during the mirror (the real FruitNinjaBada/Data files
 are never modified; the staged copy is a build/ artifact):
 
@@ -56,7 +56,7 @@ faithful SDL mixer + raw .wav.pcm untouched.
 The staged copy is a BUILD ARTIFACT under build/ (gitignored) -- the real
 FruitNinjaBada/Data/*.wav.pcm files (extracted, binary-faithful assets) are
 NEVER modified. CMakeLists.txt's EMSCRIPTEN --preload-file points at the staged
-directory instead of the real Data dir; see the fn_web_audio_staging custom
+directory instead of the real Data dir; see the fn_web_asset_staging custom
 target there, which runs this script before fruit-ninja links.
 
 .wav.pcm format (Mortar::SoundManager::LoadSound, MAMAudioController):
@@ -77,7 +77,7 @@ with a master gain node, so full-scale audio is shipped and loudness is handled
 by MASTER_SFX_GAIN in the JS backend.
 
 Loop metadata: a small JSON file is emitted at
-    build/web-audio-staging/Data/sfx/sfx-loops.json
+    build/web-staging/Data/sfx/sfx-loops.json
 mapping { "<name>": <loopStart_seconds> } for every sfx with loopStart != 0
 (loopStart_seconds = loopStart / sampleRate). Keys are the lowercased bare name
 (no extension), matching the case-folded lookup the JS backend performs (mirrors
@@ -89,9 +89,14 @@ Idempotent and incremental: an already-transcoded .ogg is skipped unless its
 source .wav.pcm is newer; other files use size+mtime copy-if-different. Pure
 Python stdlib + an ffmpeg binary on PATH.
 
-Font subsetting additionally needs the `fontTools` pip package (see build.sh);
-the staged gangofchinese.ttf subset is skipped unless it is older than the
-source .ttf or any translations_*.str body file that feeds its charset.
+This script self-provisions its two external tools (ffmpeg for audio/texture
+transcode, fontTools for the CJK font subset): when either is missing AND it is
+running as root with apt-get available (i.e. inside the emscripten/emsdk
+container), it apt-get installs the tool; otherwise it raises a clear error
+naming the tool. The image's Python is PEP 668 externally-managed, so fontTools
+is installed via the apt `fonttools` package (not pip). The staged
+gangofchinese.ttf subset is skipped unless it is older than the source .ttf or
+any translations_*.str body file that feeds its charset.
 """
 
 import array
@@ -135,6 +140,67 @@ TEX_KNOWN_FORMATS = {
 _EXP5 = tuple(((v << 3) | (v >> 2)) for v in range(32))
 _EXP6 = tuple(((v << 2) | (v >> 4)) for v in range(64))
 _EXP4 = tuple(((v << 4) | v) for v in range(16))
+
+
+# --- tool self-provisioning (install-where-used) -----------------------------
+# ffmpeg (audio + texture transcode) and fontTools (CJK font subset) are the two
+# external tools this script needs. Install them here, at the point of use,
+# rather than in build.sh -- so a direct `python3 stage-web-assets.py` (IDE, bare
+# `cmake --build`) provisions the same tools CI does. Idempotent: skip if already
+# present. Auto-install only when we can (root + apt-get, i.e. inside the
+# emscripten/emsdk container); otherwise raise a clear, actionable error.
+def _can_apt_install():
+    """True if we can apt-get install: running as root with apt-get on PATH."""
+    if shutil.which("apt-get") is None:
+        return False
+    geteuid = getattr(os, "geteuid", None)
+    return geteuid is not None and geteuid() == 0
+
+
+def _apt_install(pkg):
+    print("[stage-web-assets] installing {} via apt-get".format(pkg))
+    if subprocess.run(["apt-get", "update", "-qq"]).returncode != 0:
+        raise RuntimeError("apt-get update failed while installing {}".format(pkg))
+    if subprocess.run(["apt-get", "install", "-y", "-qq", pkg]).returncode != 0:
+        raise RuntimeError("apt-get install {} failed".format(pkg))
+
+
+def ensure_ffmpeg():
+    """ffmpeg (Debian package bundles libvorbis + libwebp) must be on PATH."""
+    if shutil.which("ffmpeg") is not None:
+        return
+    if _can_apt_install():
+        _apt_install("ffmpeg")
+        if shutil.which("ffmpeg") is not None:
+            return
+    raise RuntimeError(
+        "ffmpeg not found on PATH and cannot auto-install (needs root + apt-get, "
+        "i.e. inside the emscripten/emsdk container). Install it: "
+        "apt-get install -y ffmpeg")
+
+
+def ensure_fonttools():
+    """The fontTools module (apt `fonttools`) must be importable. The image's
+    Python is PEP 668 externally-managed, so install via apt, not pip."""
+    try:
+        import fontTools  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if _can_apt_install():
+        _apt_install("fonttools")
+        import importlib
+        importlib.invalidate_caches()
+        try:
+            import fontTools  # noqa: F401
+            return
+        except ImportError:
+            pass
+    raise RuntimeError(
+        "fontTools not found and cannot auto-install (needs root + apt-get, i.e. "
+        "inside the emscripten/emsdk container). Install it: "
+        "apt-get install -y fonttools  (apt, not pip -- the image's Python is "
+        "PEP 668 externally-managed)")
 
 
 def read_header(path):
@@ -544,22 +610,17 @@ def sweep_stale_pcm(dst_root):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: transcode-audio-web.py <repo_root>", file=sys.stderr)
+        print("Usage: stage-web-assets.py <repo_root>", file=sys.stderr)
         sys.exit(1)
 
-    if shutil.which("ffmpeg") is None:
-        print("ERROR: ffmpeg not found on PATH (apt-get install -y ffmpeg)", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        import fontTools  # noqa: F401  -- needed by run_pyftsubset/count_glyphs
-    except ImportError:
-        print("ERROR: fontTools not found (pip install fonttools)", file=sys.stderr)
-        sys.exit(1)
+    # Self-provision the external tools (install-where-used). Raises a clear
+    # error if missing and not auto-installable.
+    ensure_ffmpeg()
+    ensure_fonttools()
 
     repo_root = sys.argv[1]
     src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
-    dst_root = os.path.join(repo_root, "build", "web-audio-staging", "Data")
+    dst_root = os.path.join(repo_root, "build", "web-staging", "Data")
 
     if not os.path.isdir(src_root):
         print("ERROR: source Data dir not found: {}".format(src_root), file=sys.stderr)
@@ -572,7 +633,7 @@ def main():
     # Sibling of dst_root (not inside Data/) so it never gets --preload-file'd.
     font_charset_txt_path = os.path.join(os.path.dirname(dst_root), "gangofchinese-charset.txt")
 
-    print("[transcode-audio-web] staging {} -> {} (sfx -> Ogg/Vorbis via ffmpeg)".format(
+    print("[stage-web-assets] staging {} -> {} (sfx -> Ogg/Vorbis via ffmpeg)".format(
         src_root, dst_root))
     stats, loops = stage_tree(src_root, dst_root, font_codepoints, font_charset_sources,
                                font_charset_txt_path)
@@ -585,30 +646,30 @@ def main():
 
     removed = sweep_stale_pcm(dst_root)
 
-    print("[transcode-audio-web] sfx: {} transcoded, {} unchanged (skipped); {} loop points".format(
+    print("[stage-web-assets] sfx: {} transcoded, {} unchanged (skipped); {} loop points".format(
         stats["sfx_transcoded"], stats["sfx_skipped"], len(loops)))
 
     src_mb = stats["tex_src_bytes"] / (1024.0 * 1024.0)
     webp_mb = stats["tex_webp_bytes"] / (1024.0 * 1024.0)
     ratio = (100.0 * webp_mb / src_mb) if src_mb > 0 else 0.0
-    print("[transcode-audio-web] textures: {} transcoded to WebP, {} verbatim, {} unchanged".format(
+    print("[stage-web-assets] textures: {} transcoded to WebP, {} verbatim, {} unchanged".format(
         stats["tex_transcoded"], stats["tex_copied_verbatim"], stats["tex_skipped"]))
-    print("[transcode-audio-web] texture bytes: {:.1f} MB source -> {:.1f} MB staged ({:.1f}% of original)".format(
+    print("[stage-web-assets] texture bytes: {:.1f} MB source -> {:.1f} MB staged ({:.1f}% of original)".format(
         src_mb, webp_mb, ratio))
 
     if stats["font_action"]:
         font_src_mb = stats["font_src_bytes"] / (1024.0 * 1024.0)
         font_out_mb = stats["font_out_bytes"] / (1024.0 * 1024.0)
-        print("[transcode-audio-web] font {}: {} -- {} codepoints, {} glyphs, "
+        print("[stage-web-assets] font {}: {} -- {} codepoints, {} glyphs, "
               "{:.2f} MB -> {:.2f} MB".format(
                   CJK_FONT_FILENAME, stats["font_action"],
                   stats["font_codepoint_count"], stats["font_glyph_count"],
                   font_src_mb, font_out_mb))
 
-    print("[transcode-audio-web] other assets: {} copied, {} unchanged (skipped)".format(
+    print("[stage-web-assets] other assets: {} copied, {} unchanged (skipped)".format(
         stats["other_copied"], stats["other_skipped"]))
     if removed:
-        print("[transcode-audio-web] swept {} stale .wav.pcm from staging sfx/".format(removed))
+        print("[stage-web-assets] swept {} stale .wav.pcm from staging sfx/".format(removed))
 
 
 if __name__ == "__main__":
