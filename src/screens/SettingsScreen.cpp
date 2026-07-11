@@ -22,6 +22,7 @@
 #include "engine/util/Localisation.h"
 #include "engine/util/Delegate.h"
 #include "render/MatrixManager.h"
+#include "render/NineSlice.h"
 #include "render/Font.h"
 #include "render/Utf8StringIterator.h"
 #include "asset/Mesh.h"
@@ -87,6 +88,10 @@ static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
 // the top combo + its bar-height expand arrow -- inside the inner frame.
 static const float kPlateHalfW = 220.0f;
 static const float kPlateHalfH = 140.0f;
+// 9-slice borders for the plate (dialog_box.tex is 256x128 with a wooden frame):
+// srcBorder = corner inset in TEXELS, destBorder = corner size in WORLD units.
+static const float kPlateBorderSrc = 45.0f;
+static const float kPlateBorderDst = 52.0f;
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -266,16 +271,11 @@ void SettingsScreen::Draw(float* hudScale) {
         m_Backdrop->UnSet();
     }
 
-    // ---- plate panel ----
+    // ---- plate panel (9-slice so the wooden frame/corners stay crisp) ----
     if (m_Plate.IsValid()) {
-        mm.GetWorldStack().Reset();
-        m_Plate->Set();
-        Matrix44 mat = Matrix44::MakeScale(kPlateHalfW * 2.0f, kPlateHalfH * 2.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-        Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
-        m_Plate->UnSet();
+        Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, 0.0f,
+                                kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
+                                kPlateBorderSrc, kPlateBorderDst, Colour::White);
     }
 
     // ---- left-column labels ----

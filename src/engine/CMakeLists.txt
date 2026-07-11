@@ -29,6 +29,7 @@ if(NOT FN_ASM_VERIFY)
         render/gl_funcsSDL.cpp
         render/gl_funcsWin32.cpp
         render/DisplayManagerSDL.cpp
+        render/NineSlice.cpp        # Port specific: 9-slice panel draw (no binary counterpart)
     )
 endif()
 target_sources(mortar_engine PRIVATE
