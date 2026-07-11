@@ -15,6 +15,8 @@
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
 #include "screens/PauseScreen.h"
+#include "screens/SettingsScreen.h"
+#include "hud/HUD.h"                 // Port specific: mHud->AddControl for the ESC settings modal
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "debug/OSD.h"    // Port specific: dev toast overlay (binary OSD is a dead stub)
@@ -47,6 +49,10 @@ static const double kFpsWindowTarget = 0.5;  // recompute every ~0.5 seconds
 // Port specific: wall-clock timestamp of the previous renderFrame call, used
 // to age OSD toasts at display cadence (independent of the 60 Hz sim rate).
 static Uint64 s_osdLastCounter = 0;
+
+// Port specific: tracks the currently-open SettingsScreen modal (NULL when
+// closed). ESC toggles it open/closed -- see pollInput() below.
+static SettingsScreen* s_pSettings = NULL;
 
 // Port specific: perform glReadPixels + SDL_SaveBMP when g_takeScreenshot is set.
 // Called just before SDL_GL_SwapWindow so GL_BACK holds the finished frame.
@@ -189,7 +195,17 @@ void Game::pollInput() {
         if (ev.type == SDL_QUIT) {
             running = false;
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
-            running = false;
+            // Port specific: ESC toggles the settings modal (was: quit). Exit UI TBD.
+            if (s_pSettings == NULL) {
+                s_pSettings = new SettingsScreen();
+                s_pSettings->Init();
+                if (game_work.mHud) {
+                    game_work.mHud->AddControl(s_pSettings, false);
+                }
+            } else {
+                s_pSettings->SetPendingRemoval();
+                s_pSettings = NULL;
+            }
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
             // Port specific: 4-level debug overlay cycle (dev aid, not in the binary).
             static const char* kDebugHitboxLevelNames[4] = {
