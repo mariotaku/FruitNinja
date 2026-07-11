@@ -35,6 +35,23 @@
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
+// Real widget art (assets/ui-widgets/*.svg -> FruitNinjaBada/Data/textures/*.tex,
+// see tools/assets/svg_to_tex.py) is preferred when it loads; procedurally-drawn
+// placeholder art (WidgetPlaceholderArt.h) is the fallback for hosts with no SVG
+// rasterizer installed (LoadLocalisedTexture returns a null SmartPtr on missing
+// file). Port specific: no binary counterpart, this screen has none.
+// ---------------------------------------------------------------------------
+static Mortar::SmartPtr<Mortar::Texture> LoadOrPlaceholder(
+    const char* name, const Mortar::SmartPtr<Mortar::Texture>& placeholder)
+{
+    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture(name);
+    if (tex.IsValid()) {
+        return tex;
+    }
+    return placeholder;
+}
+
+// ---------------------------------------------------------------------------
 // Language display list in languageFlag order. Same list as the interactive
 // harness (tests/test_settings_interactive.cpp kLanguageNames). Only 0..13
 // have shipped .str data; higher flags fall back to english_us inside
@@ -132,19 +149,21 @@ SettingsScreen::~SettingsScreen() {
 void SettingsScreen::Init() {
     m_Active = 1;
 
-    // ---- placeholder textures (see WidgetPlaceholderArt.h) ----
+    // ---- widget textures: real art (assets/ui-widgets/*.svg) preferred, ----
+    // ---- procedural placeholder (WidgetPlaceholderArt.h) as fallback.    ----
     // Sizes mirror the balanced set in test_settings_interactive.cpp.
-    m_TexCheckboxOn  = MakeCheckboxTex(true,  128, 64, 22);
-    m_TexCheckboxOff = MakeCheckboxTex(false, 128, 64, 22);
-    m_TexTrack       = MakeSolidTex(120, 120, 120, 255, 120, 16);
-    m_TexThumb       = MakeCircleTex(240, 140, 20, 30, 30);
+    m_TexCheckboxOn  = LoadOrPlaceholder("checked.tex",  MakeCheckboxTex(true,  128, 64, 22));
+    m_TexCheckboxOff = LoadOrPlaceholder("unchecked.tex", MakeCheckboxTex(false, 128, 64, 22));
+    m_TexTrack       = LoadOrPlaceholder("_dialog_box.tex", MakeSolidTex(120, 120, 120, 255, 120, 16));
+    m_TexThumb       = LoadOrPlaceholder("slider_will.tex", MakeCircleTex(240, 140, 20, 30, 30));
     m_TexRow         = MakeSolidTex(255, 255, 255, 255, 8, 8);
-    m_TexScrTrack    = MakeSolidTex(70, 70, 90, 255, 8, 8);
-    m_TexScrThumb    = MakeSolidTex(200, 200, 210, 255, 8, 8);
-    m_TexScrArrow    = MakeArrowTex(180, 180, 200, 24, 24);
+    m_TexScrTrack    = LoadOrPlaceholder("vbar.tex",    MakeSolidTex(70, 70, 90, 255, 8, 8));
+    m_TexScrThumb    = LoadOrPlaceholder("vslider.tex", MakeSolidTex(200, 200, 210, 255, 8, 8));
+    m_TexScrArrow    = LoadOrPlaceholder("arrow.tex",   MakeArrowTex(180, 180, 200, 24, 24));
     // Wider arrow (ComboBox scales it to bar height ~55): a 40px-wide triangle
     // reads as a proper expander, not a thin spike.
-    m_TexArrow       = MakeArrowTex(255, 210, 40, 40, 40, /*pointDown*/ true);
+    m_TexArrow       = LoadOrPlaceholder("expand_arrow.tex",
+                                          MakeArrowTex(255, 210, 40, 40, 40, /*pointDown*/ true));
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture.
     m_Backdrop       = MakeSolidTex(0, 0, 0, 255, 8, 8);

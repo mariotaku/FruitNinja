@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="16" viewBox="0 0 128 16">
+  <!-- _dialog_box.tex - SliderControl TRACK. Grey inset groove/channel so the
+       thumb reads as sitting IN it. Pill ends. -->
+  <defs>
+    <linearGradient id="trk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5c5c5c"/>
+      <stop offset="0.5" stop-color="#7c7c7c"/>
+      <stop offset="1" stop-color="#9a9a9a"/>
+    </linearGradient>
+  </defs>
+  <!-- channel body -->
+  <rect x="1" y="2" width="126" height="12" rx="6" ry="6" fill="url(#trk)"
+        stroke="#3a3a3a" stroke-width="1"/>
+  <!-- inset top shadow so it reads recessed -->
+  <rect x="3" y="3.5" width="122" height="4.5" rx="2.2" ry="2.2"
+        fill="#000000" fill-opacity="0.22"/>
+  <!-- bottom highlight lip -->
+  <rect x="3" y="11.2" width="122" height="1.6" rx="0.8" ry="0.8"
+        fill="#ffffff" fill-opacity="0.28"/>
+</svg>

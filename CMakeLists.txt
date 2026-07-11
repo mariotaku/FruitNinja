@@ -461,6 +461,20 @@ endif()
 
 # --- Executable ---
 if(NOT FN_ASM_VERIFY)
+    # Port specific: build-time widget texture generation. Rasterizes the
+    # checked-in assets/ui-widgets/*.svg sources to native Tex1 .tex textures
+    # under FruitNinjaBada/Data/textures/ (see tools/assets/svg_to_tex.py).
+    # Applies to BOTH the web (EMSCRIPTEN) and host executable below -- both
+    # define the fruit-ninja target and both load these textures via
+    # Mortar::TextureManager::LoadLocalisedTexture at runtime (SettingsScreen).
+    # Non-fatal when no SVG rasterizer is installed (e.g. a plain Windows
+    # host): the script prints a warning and exits 0; widgets then fall back
+    # to placeholder art (SettingsScreen::LoadOrPlaceholder).
+    add_custom_target(fn_widget_textures
+        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/assets/svg_to_tex.py ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating widget textures from SVG sources (non-fatal if no rasterizer installed)"
+        VERBATIM
+    )
 if (EMSCRIPTEN)
     # Port specific: build-time web asset staging. The web build uses the Web
     # Audio API backend (SoundManagerWebAudio.cpp) rather than the SDL software
@@ -486,7 +500,7 @@ if (EMSCRIPTEN)
     # Port specific: Emscripten entry point uses emscripten_set_main_loop_arg
     # instead of the blocking Game::run() loop.
     add_executable(fruit-ninja src/mainEmscripten.cpp)
-    add_dependencies(fruit-ninja fn_web_asset_staging)
+    add_dependencies(fruit-ninja fn_web_asset_staging fn_widget_textures)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
@@ -589,6 +603,7 @@ if (EMSCRIPTEN)
 else()
     # Native desktop/webOS entry point.
     add_executable(fruit-ninja src/mainSDL.cpp)
+    add_dependencies(fruit-ninja fn_widget_textures)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
     # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds

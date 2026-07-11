@@ -110,6 +110,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import tex_decoder
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "assets"))
+from svg_to_tex import generate as generate_widget_textures
+
 HEADER_FMT = "<5i"
 HEADER_SIZE = 20
 SFX_RELPATH = "sfx"
@@ -163,6 +166,21 @@ def ensure_ffmpeg():
         "ffmpeg not found on PATH and cannot auto-install (needs root + apt-get, "
         "i.e. inside the emscripten/emsdk container). Install it: "
         "apt-get install -y ffmpeg")
+
+
+def ensure_rsvg():
+    """rsvg-convert (Debian package librsvg2-bin) must be on PATH so
+    svg_to_tex.py's rasterizer autodetect finds it inside this container."""
+    if shutil.which("rsvg-convert") is not None:
+        return
+    if _can_apt_install():
+        _apt_install("librsvg2-bin")
+        if shutil.which("rsvg-convert") is not None:
+            return
+    raise RuntimeError(
+        "rsvg-convert not found on PATH and cannot auto-install (needs root + "
+        "apt-get, i.e. inside the emscripten/emsdk container). Install it: "
+        "apt-get install -y librsvg2-bin")
 
 
 def ensure_fonttools():
@@ -541,10 +559,16 @@ def main():
     # error if missing and not auto-installable.
     ensure_ffmpeg()
     ensure_fonttools()
+    ensure_rsvg()
 
     repo_root = sys.argv[1]
     src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
     dst_root = os.path.join(repo_root, "build", "web-staging", "Data")
+
+    # Rasterize assets/ui-widgets/*.svg -> FruitNinjaBada/Data/textures/*.tex
+    # BEFORE mirroring src_root below, so the freshly generated textures are
+    # picked up by the .tex walk (transcoded to WebP) like any other texture.
+    generate_widget_textures(repo_root)
 
     if not os.path.isdir(src_root):
         print("ERROR: source Data dir not found: {}".format(src_root), file=sys.stderr)

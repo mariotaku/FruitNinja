@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="64" viewBox="0 0 32 64">
+  <!-- vslider.tex - VerticalScroller THUMB. Glossy wooden bar.
+       Horizontal gradient from the art bible: #a4560a -> #ec8613 45% -> #a4560a. -->
+  <defs>
+    <linearGradient id="woodbar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a4560a"/>
+      <stop offset="0.45" stop-color="#ec8613"/>
+      <stop offset="1" stop-color="#a4560a"/>
+    </linearGradient>
+  </defs>
+  <rect x="5" y="6" width="22" height="52" rx="10" ry="10" fill="url(#woodbar)"
+        stroke="#5c3006" stroke-width="1.2"/>
+  <!-- top inset highlight -->
+  <rect x="8" y="9" width="16" height="4" rx="2" ry="2"
+        fill="#ffe6bf" fill-opacity="0.45"/>
+  <!-- vertical center sheen -->
+  <rect x="14.5" y="10" width="3" height="44" rx="1.5" ry="1.5"
+        fill="#fff1d0" fill-opacity="0.35"/>
+</svg>
