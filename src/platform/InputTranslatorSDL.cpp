@@ -19,6 +19,7 @@
 #include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
+#include "debug/DebugFlags.h"
 #include <cstring>
 
 #ifdef FN_DEBUG_TOUCH
@@ -147,6 +148,42 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
+// Port specific: RELAX MODE -- FINGERDOWN-equivalent for MOUSE_CHANNEL.
+// MOUSE_CHANNEL (15) is in the 8-15 overflow range (no Mortar::Touch slot),
+// so this mirrors the SDL_FINGERDOWN "ch >= 8" branch exactly: mark the
+// channel active, re-arm the press-vs-motion gate, and set pendingDown/Edge
+// for DispatchForSimTick to pick up on the next sim tick. No-op if the
+// channel is already pressed (repeated hover moves just update position).
+void InputTranslatorSDL::RelaxPressMouseChannel(float gx, float gy) {
+    if (fingerActive[MOUSE_CHANNEL]) return;
+
+    fingerMap[MOUSE_CHANNEL]    = (SDL_FingerID)SDL_TOUCH_MOUSEID;
+    fingerActive[MOUSE_CHANNEL] = true;
+    fingerX[MOUSE_CHANNEL]      = gx;
+    fingerY[MOUSE_CHANNEL]      = gy;
+    motionSinceDown[MOUSE_CHANNEL] = false;
+
+    pendingDown[MOUSE_CHANNEL] = true;
+    pendingEdge[MOUSE_CHANNEL] = true;
+    pendingUp[MOUSE_CHANNEL]   = false;
+    TLOG("RELAX press ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
+}
+
+// Port specific: RELAX MODE -- FINGERUP-equivalent for MOUSE_CHANNEL.
+// Mirrors the SDL_FINGERUP "ch >= 8" branch. No-op if the channel is not
+// currently active.
+void InputTranslatorSDL::RelaxReleaseMouseChannel() {
+    if (!fingerActive[MOUSE_CHANNEL]) return;
+
+    fingerActive[MOUSE_CHANNEL] = false;
+    ReleaseFingerId((SDL_FingerID)SDL_TOUCH_MOUSEID);
+
+    pendingUp[MOUSE_CHANNEL]   = true;
+    pendingDown[MOUSE_CHANNEL] = false;
+    pendingEdge[MOUSE_CHANNEL] = false;
+    TLOG("RELAX release ch=%d\n", MOUSE_CHANNEL);
+}
+
 // legacy wrapper -- no-op. Dispatch is now via DispatchForSimTick().
 // Retained so any callers that invoke BeginFrame() are not broken.
 void InputTranslatorSDL::BeginFrame() {
@@ -232,6 +269,14 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TLOG("SDL_FINGERDOWN fingerId=%lld nx=%.3f ny=%.3f pressure=%.3f\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.pressure);
+        // Port specific: relax mode drives MOUSE_CHANNEL from raw
+        // SDL_MOUSE* events instead -- suppress the SDL-synthesized
+        // finger event so the two paths don't double-drive the channel.
+        // Real touch fingers (fingerId != SDL_TOUCH_MOUSEID) pass through.
+        if (FN::g_RelaxMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+            TLOG("  relax mode: suppressing synthesized mouse FINGERDOWN\n");
+            break;
+        }
         int ch = MapFingerId(ev.tfinger.fingerId);
         if (ch < 0) { TLOG("  -> MapFingerId returned -1 (all 16 channels busy)\n"); break; }
 
@@ -265,6 +310,12 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TLOG("SDL_FINGERMOTION fingerId=%lld nx=%.3f ny=%.3f d(%.3f,%.3f)\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.dx, ev.tfinger.dy);
+        // Port specific: relax mode suppresses the synthesized mouse
+        // finger event -- see SDL_FINGERDOWN above.
+        if (FN::g_RelaxMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+            TLOG("  relax mode: suppressing synthesized mouse FINGERMOTION\n");
+            break;
+        }
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
@@ -295,6 +346,12 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     case SDL_FINGERUP: {
         TLOG("SDL_FINGERUP fingerId=%lld nx=%.3f ny=%.3f\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y);
+        // Port specific: relax mode suppresses the synthesized mouse
+        // finger event -- see SDL_FINGERDOWN above.
+        if (FN::g_RelaxMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
+            TLOG("  relax mode: suppressing synthesized mouse FINGERUP\n");
+            break;
+        }
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
@@ -328,6 +385,50 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         break;
     }
 
+    // Port specific: RELAX MODE -- raw mouse press LIFTS the blade (so the
+    // user can reposition without cutting). Only meaningful while relax is
+    // ON; otherwise the button-down carries no special handling here (the
+    // synthesized SDL_FINGERDOWN drives the channel as usual).
+    case SDL_MOUSEBUTTONDOWN: {
+        if (!FN::g_RelaxMode) break;
+        TLOG("RELAX MOUSEBUTTONDOWN -- lifting blade\n");
+        RelaxReleaseMouseChannel();
+        break;
+    }
+
+    // Port specific: RELAX MODE -- raw mouse motion drives MOUSE_CHANNEL
+    // directly (hover-to-slice). Only while relax is ON and no button is
+    // currently held (ev.motion.state is the button mask AT this motion
+    // event) and the cursor is inside the window. Off: SDL_MOUSEMOTION is
+    // ignored here as before -- the synthesized SDL_FINGERMOTION path (only
+    // emitted while a button is held) drives the blade instead.
+    case SDL_MOUSEMOTION: {
+        if (!FN::g_RelaxMode) break;
+        if (ev.motion.state != 0) break;  // a button is held -- not hovering
+
+        int ww = 0, wh = 0;
+        if (window) SDL_GetWindowSize(window, &ww, &wh);
+        bool inside = (ww > 0 && wh > 0 &&
+                       ev.motion.x >= 0 && ev.motion.x < ww &&
+                       ev.motion.y >= 0 && ev.motion.y < wh);
+        if (!inside) break;
+
+        float nx = (float)ev.motion.x / (float)ww;
+        float ny = (float)ev.motion.y / (float)wh;
+        float gx, gy;
+        TransformTouchNormalized(nx, ny, gx, gy);
+
+        // Ensure pressed (no-op if already active), then apply the move --
+        // same same-tick DOWN+MOTION merge the touch path already relies on
+        // (see the FINGERDOWN comment in DispatchForSimTick).
+        RelaxPressMouseChannel(gx, gy);
+        fingerX[MOUSE_CHANNEL] = gx;
+        fingerY[MOUSE_CHANNEL] = gy;
+        motionSinceDown[MOUSE_CHANNEL] = true;
+        TLOG("RELAX MOUSEMOTION ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
+        break;
+    }
+
     // safety-net for desktop/web -- SDL_HINT_MOUSE_TOUCH_EVENTS=1
     // synthesizes SDL_FINGERDOWN/MOTION but the UP sometimes arrives as
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
@@ -335,6 +436,31 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // Port specific: the mouse is always MOUSE_CHANNEL (see MapFingerId), so
     // no channel scan is needed here.
     case SDL_MOUSEBUTTONUP: {
+        // Port specific: RELAX MODE -- releasing the last held button
+        // re-presses the blade at the current position (if the cursor is
+        // still inside the window). This replaces the plain release
+        // fallback below while relax is ON (RelaxReleaseMouseChannel on
+        // button-down already lifted the blade, so fingerActive is false
+        // here and the fallback code below would be a no-op anyway).
+        if (FN::g_RelaxMode) {
+            int ww = 0, wh = 0;
+            if (window) SDL_GetWindowSize(window, &ww, &wh);
+            bool inside = (ww > 0 && wh > 0 &&
+                           ev.button.x >= 0 && ev.button.x < ww &&
+                           ev.button.y >= 0 && ev.button.y < wh);
+            Uint32 heldMask = SDL_GetMouseState(nullptr, nullptr);
+            if (inside && heldMask == 0) {
+                float nx = (float)ev.button.x / (float)ww;
+                float ny = (float)ev.button.y / (float)wh;
+                float gx, gy;
+                TransformTouchNormalized(nx, ny, gx, gy);
+                RelaxPressMouseChannel(gx, gy);
+                TLOG("RELAX MOUSEBUTTONUP -- re-press ch=%d game=(%g,%g)\n",
+                     MOUSE_CHANNEL, gx, gy);
+            }
+            break;
+        }
+
         SDL_FingerID mouseId = (SDL_FingerID)SDL_TOUCH_MOUSEID;
         int ch = MOUSE_CHANNEL;
         if (!fingerActive[ch] || fingerMap[ch] != mouseId) break;
@@ -351,6 +477,16 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
             pendingUp[ch]   = true;
             pendingDown[ch] = false;
             pendingEdge[ch] = false;
+        }
+        break;
+    }
+
+    // Port specific: RELAX MODE -- the cursor leaving the window releases
+    // MOUSE_CHANNEL (the blade shouldn't stay armed off-screen).
+    case SDL_WINDOWEVENT: {
+        if (FN::g_RelaxMode && ev.window.event == SDL_WINDOWEVENT_LEAVE) {
+            TLOG("RELAX WINDOWEVENT_LEAVE -- releasing blade\n");
+            RelaxReleaseMouseChannel();
         }
         break;
     }
