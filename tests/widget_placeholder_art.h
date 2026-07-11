@@ -259,16 +259,23 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeCircleTex(
 }
 
 // ---------------------------------------------------------------------------
-// Procedural up-arrow (opaque triangle pointing up, transparent elsewhere). The
-// bottom scroller arrow reuses this via the binary's U+V-flipped DrawQuadUnCached.
+// Procedural triangle arrow (opaque, transparent elsewhere). Points UP by default
+// (tip at top): the VerticalScroller's top arrow uses this, and its bottom arrow
+// reuses the same texture via the binary's U+V-flipped DrawQuadUnCached.
+// Pass pointDown=true for a downward tip -- used by the ComboBox expand arrow,
+// the conventional "tap to open a dropdown" indicator. (The real expand_arrow.tex
+// is not shipped in v1.6.1, so its true orientation is unknown; down is a
+// placeholder convention, not a fidelity claim.)
 // ---------------------------------------------------------------------------
 inline Mortar::SmartPtr<Mortar::Texture> MakeArrowTex(
-    uint8_t r, uint8_t g, uint8_t b, int w, int h)
+    uint8_t r, uint8_t g, uint8_t b, int w, int h, bool pointDown = false)
 {
     std::vector<uint8_t> px((size_t)w * (size_t)h * 4, 0);
     for (int y = 0; y < h; ++y) {
-        // Row 0 = top (narrow tip); increasing y widens the triangle.
-        float t = (float)y / (float)(h - 1);
+        // Up: row 0 = top narrow tip, widening downward. Down: mirror vertically
+        // so the tip sits at the bottom.
+        float t = pointDown ? (float)(h - 1 - y) / (float)(h - 1)
+                            : (float)y / (float)(h - 1);
         int half = (int)(t * (float)w * 0.5f);
         int cx = w / 2;
         for (int x = cx - half; x <= cx + half; ++x) {
