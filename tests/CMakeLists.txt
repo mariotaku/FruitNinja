@@ -766,18 +766,29 @@ fn_add_game_test(test_badges test_badges.cpp)
 add_test(NAME screenshot_badges COMMAND test_badges --screenshot)
 set_tests_properties(screenshot_badges PROPERTIES TIMEOUT 60)
 
-# Settings-widget (CheckBox + SliderControl) render test. Both widgets are dead
-# code in v1.6.1 but carry complete real implementations. Renders CheckBox
-# unchecked+checked and SliderControl thumb at min/mid/max, injecting in-memory
-# solid-colour substitute textures (the faithful .tex art is not shipped -- see
-# the widget .cpp DIFFERS notes). Validates geometry + value-driven state, not art.
-# Output: tmp/test/screenshots/settings_widgets/widgets.png.
-fn_add_game_test(test_settings_widgets_render test_settings_widgets_render.cpp)
-add_test(NAME settings_widgets_render COMMAND test_settings_widgets_render)
-add_test(NAME screenshot_settings_widgets COMMAND test_settings_widgets_render --screenshot)
-set_tests_properties(settings_widgets_render PROPERTIES TIMEOUT 60)
-set_tests_properties(screenshot_settings_widgets PROPERTIES TIMEOUT 60
-    LABELS "category_rendering;component_checkbox;component_slidercontrol")
+# CheckBox render test. Dead code in v1.6.1 but a complete real implementation.
+# Renders the checkbox unchecked + checked, injecting in-memory substitute
+# textures (the faithful checked/unchecked.tex art is not shipped -- see the
+# widget .cpp DIFFERS notes). Validates geometry + checked state, not art.
+# Output: tmp/test/screenshots/checkbox/checkbox.png.
+fn_add_game_test(test_checkbox_render test_checkbox_render.cpp)
+add_test(NAME checkbox_render COMMAND test_checkbox_render)
+add_test(NAME screenshot_checkbox COMMAND test_checkbox_render --screenshot)
+set_tests_properties(checkbox_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_checkbox PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_checkbox")
+
+# SliderControl render test. Dead code in v1.6.1 but a complete real
+# implementation. Renders the thumb at min/mid/max, injecting in-memory substitute
+# textures (the faithful slider_will.tex art is not shipped -- see the widget .cpp
+# DIFFERS notes). Validates geometry + value-driven thumb position, not art.
+# Output: tmp/test/screenshots/slider/slider.png.
+fn_add_game_test(test_slider_render test_slider_render.cpp)
+add_test(NAME slider_render COMMAND test_slider_render)
+add_test(NAME screenshot_slider COMMAND test_slider_render --screenshot)
+set_tests_properties(slider_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_slider PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_slidercontrol")
 
 # Dropdown widget stack (ComboBox + ListBox + VerticalScroller) render test. All
 # three are dead code in v1.6.1 but carry complete real implementations. Renders a
