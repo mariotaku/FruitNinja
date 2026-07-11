@@ -24,6 +24,26 @@ are never modified; the staged copy is a build/ artifact):
      Textures that do NOT parse as Tex1 (Tex2/Tex3/DDS/PVRTC/unknown format) are
      copied verbatim so their own readers still handle them.
 
+  3. FONT (fontstruetype/gangofchinese.ttf, ~5 MB): SUBSET down to only the
+     Unicode code points that appear in the loaded stringtables, via fonttools'
+     pyftsubset. gangofchinese.ttf is the SHARED default TTF face for every
+     NON-Arabic language (PreloadFontsTTF @0x0011c1fc picks arabic.ttf only when
+     languageFlag == 0x14 "arabic"; every other language in kLanguageSuffix --
+     english_us/uk, french, spanish, german, italian, dutch, swedish, danish,
+     norwegian, finnish, korean, japanese, (traditional) chinese, latin spanish,
+     polish, portuguese (pt/br), russian, fake debug language -- shares this one
+     face; see src/game/PreloadFontsTTF.cpp, src/engine/util/StringTable.cpp).
+     The web build ships one bundle for every language (the user can switch
+     language at runtime), so the used-glyph set is the UNION of every
+     translations_<lang>.str BODY file except translations_arabic.str (own font)
+     and translations_header.str (ASCII lookup keys, never rendered) -- plus
+     printable ASCII (digits/latin appear inside every language's strings too:
+     mode names, scores). arabic.ttf (99 KB) and every other fontstruetype file
+     are copied verbatim -- only gangofchinese.ttf is subsetted.
+     Glyph lookup is plain FreeType FT_Get_Char_Index per code point (see
+     FontCacheObjectTTF.cpp) -- no HarfBuzz shaping -- so a code-point-based
+     subset (no OpenType layout table retention) renders identically.
+
 Everything else in Data is copied through unchanged.
 
 Why: the web build no longer runs the SDL software mixer. It uses the Web Audio
@@ -68,6 +88,10 @@ bomb-fuse) and music (music-menu).
 Idempotent and incremental: an already-transcoded .ogg is skipped unless its
 source .wav.pcm is newer; other files use size+mtime copy-if-different. Pure
 Python stdlib + an ffmpeg binary on PATH.
+
+Font subsetting additionally needs the `fontTools` pip package (see build.sh);
+the staged gangofchinese.ttf subset is skipped unless it is older than the
+source .ttf or any translations_*.str body file that feeds its charset.
 """
 
 import array
@@ -302,6 +326,135 @@ def transcode_tex_file(src_path, dst_tex, stats):
     stats["tex_webp_bytes"] += os.path.getsize(dst_tex)
 
 
+# --- Font subsetting (web only): CJK/shared TTF subset by used code points --
+FONT_RELPATH = "fontstruetype"
+CJK_FONT_FILENAME = "gangofchinese.ttf"
+STRINGTABLES_RELPATH = "stringtables"
+STRINGTABLE_HEADER_NAME = "translations_header.str"
+# arabic.ttf renders that language (own font, copied verbatim); the header
+# file holds ASCII lookup keys, never user-visible text.
+STRINGTABLE_EXCLUDE = {"translations_arabic.str", STRINGTABLE_HEADER_NAME}
+ASCII_PRINTABLE = range(0x20, 0x7F)
+
+# StringEntry body-file layout (see docs/engine/localisation.md /
+# Mortar::StringTable::LoadLanguage in src/engine/util/StringTable.cpp):
+#   FileHeader wrapper: magic(4) + token[64] + blob_byte_size(4) @0x44 + count(4) @0x48
+#   StringEntry[count] @ 0x4c, 12 bytes each: str_offset(4), len(4), len2(4)
+#   str_blob (null-terminated UTF-8) starts right after the entry array.
+STR_ENTRIES_OFFSET = 0x4c
+STR_ENTRY_SIZE = 12
+
+
+def parse_str_body_codepoints(path):
+    """Parse a translations_<lang>.str BODY file and return the set of Unicode
+    code points appearing in its null-terminated UTF-8 string blob. Returns an
+    empty set if the file is too short / doesn't validate as this format."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if len(data) < STR_ENTRIES_OFFSET + 4:
+        return set()
+    magic = struct.unpack_from("<I", data, 0)[0]
+    if magic != 1:
+        return set()
+    count = struct.unpack_from("<I", data, 0x48)[0]
+    str_blob_off = STR_ENTRIES_OFFSET + count * STR_ENTRY_SIZE
+
+    codepoints = set()
+    for i in range(count):
+        off = STR_ENTRIES_OFFSET + i * STR_ENTRY_SIZE
+        if off + 4 > len(data):
+            break
+        str_offset = struct.unpack_from("<I", data, off)[0]
+        start = str_blob_off + str_offset
+        if start >= len(data):
+            continue
+        end = data.find(b"\x00", start)
+        if end < 0:
+            continue
+        try:
+            text = data[start:end].decode("utf-8")
+        except UnicodeDecodeError:
+            continue  # not expected on real data; skip rather than guess
+        codepoints.update(ord(c) for c in text)
+    return codepoints
+
+
+def gather_cjk_font_charset(stringtables_dir):
+    """Union of code points rendered with gangofchinese.ttf: printable ASCII
+    plus every character in every translations_<lang>.str BODY file except
+    arabic (own font) and header (ASCII keys, never rendered).
+    Returns (codepoints_set, [source .str paths used for the union])."""
+    codepoints = set(ASCII_PRINTABLE)
+    sources = []
+    if not os.path.isdir(stringtables_dir):
+        return codepoints, sources
+    for name in sorted(os.listdir(stringtables_dir)):
+        lower = name.lower()
+        if not (lower.startswith("translations_") and lower.endswith(".str")):
+            continue
+        if lower in STRINGTABLE_EXCLUDE:
+            continue
+        path = os.path.join(stringtables_dir, name)
+        sources.append(path)
+        codepoints |= parse_str_body_codepoints(path)
+    return codepoints, sources
+
+
+def needs_font_subset(src_ttf, dst_ttf, charset_sources):
+    if not os.path.isfile(dst_ttf):
+        return True
+    dst_mtime = os.path.getmtime(dst_ttf)
+    if dst_mtime < os.path.getmtime(src_ttf):
+        return True
+    for p in charset_sources:
+        if dst_mtime < os.path.getmtime(p):
+            return True
+    return False
+
+
+def run_pyftsubset(src_ttf, dst_ttf, codepoints, charset_txt_path):
+    """Write the used-character text file and invoke fontTools' subsetter via
+    `python -m fontTools.subset` (not the pyftsubset console-script entry
+    point, so this works regardless of whether pip put it on PATH)."""
+    chars = "".join(chr(cp) for cp in sorted(codepoints))
+    with open(charset_txt_path, "w", encoding="utf-8") as f:
+        f.write(chars)
+
+    tmp = dst_ttf + ".tmp.ttf"
+    cmd = [
+        sys.executable, "-m", "fontTools.subset", src_ttf,
+        "--text-file=" + charset_txt_path,
+        "--output-file=" + tmp,
+        "--no-hinting",
+        "--desubroutinize",
+    ]
+    proc = subprocess.run(cmd, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError("pyftsubset failed ({}): {}".format(
+            proc.returncode, proc.stderr.decode("utf-8", "replace")))
+    os.replace(tmp, dst_ttf)
+
+
+def count_glyphs(ttf_path):
+    from fontTools.ttLib import TTFont
+    font = TTFont(ttf_path, lazy=True)
+    n = len(font.getGlyphOrder())
+    font.close()
+    return n
+
+
+def subset_cjk_font(src_path, dst_path, codepoints, charset_sources, charset_txt_path, stats):
+    stats["font_src_bytes"] = os.path.getsize(src_path)
+    if needs_font_subset(src_path, dst_path, charset_sources):
+        run_pyftsubset(src_path, dst_path, codepoints, charset_txt_path)
+        stats["font_action"] = "subsetted"
+    else:
+        stats["font_action"] = "skipped (up to date)"
+    stats["font_out_bytes"] = os.path.getsize(dst_path)
+    stats["font_glyph_count"] = count_glyphs(dst_path)
+    stats["font_codepoint_count"] = len(codepoints)
+
+
 def copy_if_different(src_path, dst_path):
     if os.path.isfile(dst_path):
         s_src = os.stat(src_path)
@@ -312,7 +465,7 @@ def copy_if_different(src_path, dst_path):
     return True
 
 
-def stage_tree(src_root, dst_root):
+def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_charset_txt_path):
     stats = {
         "sfx_transcoded": 0,
         "sfx_skipped": 0,
@@ -323,6 +476,11 @@ def stage_tree(src_root, dst_root):
         "tex_skipped": 0,
         "tex_src_bytes": 0,
         "tex_webp_bytes": 0,
+        "font_action": None,
+        "font_src_bytes": 0,
+        "font_out_bytes": 0,
+        "font_glyph_count": 0,
+        "font_codepoint_count": 0,
     }
     loops = {}
 
@@ -333,6 +491,7 @@ def stage_tree(src_root, dst_root):
 
         rel_norm = rel_dir.replace("\\", "/")
         is_sfx_dir = rel_norm == SFX_RELPATH or rel_norm.startswith(SFX_RELPATH + "/")
+        is_font_dir = rel_norm == FONT_RELPATH
 
         for name in files:
             src_path = os.path.join(root, name)
@@ -349,6 +508,10 @@ def stage_tree(src_root, dst_root):
             elif name.lower().endswith(".tex"):
                 dst_tex = os.path.join(dst_dir, name)
                 transcode_tex_file(src_path, dst_tex, stats)
+            elif is_font_dir and name.lower() == CJK_FONT_FILENAME:
+                dst_font = os.path.join(dst_dir, name)
+                subset_cjk_font(src_path, dst_font, font_codepoints,
+                                 font_charset_sources, font_charset_txt_path, stats)
             else:
                 dst_path = os.path.join(dst_dir, name)
                 if copy_if_different(src_path, dst_path):
@@ -386,6 +549,12 @@ def main():
         print("ERROR: ffmpeg not found on PATH (apt-get install -y ffmpeg)", file=sys.stderr)
         sys.exit(1)
 
+    try:
+        import fontTools  # noqa: F401  -- needed by run_pyftsubset/count_glyphs
+    except ImportError:
+        print("ERROR: fontTools not found (pip install fonttools)", file=sys.stderr)
+        sys.exit(1)
+
     repo_root = sys.argv[1]
     src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
     dst_root = os.path.join(repo_root, "build", "web-audio-staging", "Data")
@@ -396,9 +565,15 @@ def main():
 
     os.makedirs(dst_root, exist_ok=True)
 
+    stringtables_dir = os.path.join(src_root, STRINGTABLES_RELPATH)
+    font_codepoints, font_charset_sources = gather_cjk_font_charset(stringtables_dir)
+    # Sibling of dst_root (not inside Data/) so it never gets --preload-file'd.
+    font_charset_txt_path = os.path.join(os.path.dirname(dst_root), "gangofchinese-charset.txt")
+
     print("[transcode-audio-web] staging {} -> {} (sfx -> Ogg/Vorbis via ffmpeg)".format(
         src_root, dst_root))
-    stats, loops = stage_tree(src_root, dst_root)
+    stats, loops = stage_tree(src_root, dst_root, font_codepoints, font_charset_sources,
+                               font_charset_txt_path)
 
     # Emit loop metadata JSON next to the .ogg files.
     loop_json_path = os.path.join(dst_root, SFX_RELPATH, LOOP_JSON_NAME)
@@ -418,6 +593,15 @@ def main():
         stats["tex_transcoded"], stats["tex_copied_verbatim"], stats["tex_skipped"]))
     print("[transcode-audio-web] texture bytes: {:.1f} MB source -> {:.1f} MB staged ({:.1f}% of original)".format(
         src_mb, webp_mb, ratio))
+
+    if stats["font_action"]:
+        font_src_mb = stats["font_src_bytes"] / (1024.0 * 1024.0)
+        font_out_mb = stats["font_out_bytes"] / (1024.0 * 1024.0)
+        print("[transcode-audio-web] font {}: {} -- {} codepoints, {} glyphs, "
+              "{:.2f} MB -> {:.2f} MB".format(
+                  CJK_FONT_FILENAME, stats["font_action"],
+                  stats["font_codepoint_count"], stats["font_glyph_count"],
+                  font_src_mb, font_out_mb))
 
     print("[transcode-audio-web] other assets: {} copied, {} unchanged (skipped)".format(
         stats["other_copied"], stats["other_skipped"]))

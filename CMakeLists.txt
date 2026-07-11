@@ -462,17 +462,20 @@ endif()
 # --- Executable ---
 if(NOT FN_ASM_VERIFY)
 if (EMSCRIPTEN)
-    # Port specific: build-time web audio staging. The web build uses the Web
+    # Port specific: build-time web asset staging. The web build uses the Web
     # Audio API backend (SoundManagerWebAudio.cpp) rather than the SDL software
     # mixer, so the browser decodes Ogg/Vorbis and mixes on its own audio
     # thread. transcode-audio-web.py mirrors FruitNinjaBada/Data into
     # build/web-audio-staging/Data, TRANSCODING each sfx/*.wav.pcm to
-    # sfx/<name>.ogg (source .wav.pcm NOT copied -- that would re-bloat .data)
-    # and emitting sfx/sfx-loops.json (loop points). Everything else is copied
-    # through unchanged. The real FruitNinjaBada/Data files are never modified;
-    # the staged copy is a build/ artifact (gitignored). add_dependencies below
-    # guarantees this runs before fruit-ninja links (which is when
-    # --preload-file actually reads the staged directory's contents).
+    # sfx/<name>.ogg (source .wav.pcm NOT copied -- that would re-bloat .data),
+    # emitting sfx/sfx-loops.json (loop points), re-encoding Tex1 textures as
+    # WebP, and SUBSETTING fontstruetype/gangofchinese.ttf (~5 MB shared
+    # non-Arabic-language TTF) down to only the glyphs the stringtables use.
+    # Everything else is copied through unchanged. The real FruitNinjaBada/Data
+    # files are never modified; the staged copy is a build/ artifact
+    # (gitignored). add_dependencies below guarantees this runs before
+    # fruit-ninja links (which is when --preload-file actually reads the
+    # staged directory's contents).
     set(FN_WEB_AUDIO_STAGING_DATA_DIR "${CMAKE_SOURCE_DIR}/build/web-audio-staging/Data")
     add_custom_target(fn_web_audio_staging
         COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/transcode-audio-web.py ${CMAKE_SOURCE_DIR}
