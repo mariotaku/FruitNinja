@@ -607,9 +607,12 @@ int main(int argc, char* argv[]) {
                     dragScrolling = false;
                 }
             } else if (dragScrolling) {
-                // Continue the drag: moving the finger UP (touchY decreasing)
-                // scrolls the content up -> reveal later rows -> increase offset.
-                float delta = dragLastY - touchY;   // +Y up: finger-up => delta>0
+                // Content-follows-finger (touch-natural, like a phone): drag the
+                // finger DOWN and the content moves DOWN with it (reveals earlier
+                // rows); drag UP reveals later rows. touchY is +Y-up, so finger-up
+                // => touchY increases => delta>0 => scrollOffset increases (content
+                // shifts up).
+                float delta = touchY - dragLastY;
                 scrollOffset = ClampF(scrollOffset + delta, 0.0f, scrollMax);
                 dragLastY = touchY;
             }
