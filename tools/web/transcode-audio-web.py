@@ -276,8 +276,12 @@ def needs_tex_transcode(src_path, dst_tex):
 
 
 def encode_webp(rgba_bytes, w, h, dst_tex):
-    """Pipe flat RGBA8888 to ffmpeg's libwebp encoder; write the WebP bytes to
-    dst_tex (same .tex filename, WebP content)."""
+    """Pipe flat RGBA8888 to ffmpeg's libwebp encoder, writing the WebP to a
+    seekable temp FILE (NOT stdout). The WebP muxer must seek back to patch the
+    RIFF/VP8 chunk sizes after writing the bitstream; a non-seekable stdout pipe
+    leaves those sizes wrong and produces a corrupt bitstream (dwebp
+    BITSTREAM_ERROR) on larger textures -- the fruit atlas decoded to white.
+    Then atomically rename the temp file to dst_tex (same .tex name, WebP bytes)."""
     tmp = dst_tex + ".tmp.webp"
     cmd = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -289,13 +293,11 @@ def encode_webp(rgba_bytes, w, h, dst_tex):
         cmd += ["-lossless", "1"]
     else:
         cmd += ["-quality", WEBP_QUALITY]
-    cmd += ["-compression_level", WEBP_COMPRESSION_LEVEL, "-f", "webp", "pipe:1"]
+    cmd += ["-compression_level", WEBP_COMPRESSION_LEVEL, "-f", "webp", tmp]
 
-    proc = subprocess.run(cmd, input=bytes(rgba_bytes), stdout=subprocess.PIPE)
-    if proc.returncode != 0 or not proc.stdout:
+    proc = subprocess.run(cmd, input=bytes(rgba_bytes))
+    if proc.returncode != 0 or not os.path.exists(tmp) or os.path.getsize(tmp) == 0:
         raise RuntimeError("ffmpeg failed ({}) encoding webp {}".format(proc.returncode, dst_tex))
-    with open(tmp, "wb") as f:
-        f.write(proc.stdout)
     os.replace(tmp, dst_tex)
 
 
