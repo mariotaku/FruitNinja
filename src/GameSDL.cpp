@@ -224,12 +224,28 @@ void Game::pollInput() {
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
             OSD_AddMessage(FN::g_bOsdSfx ? "SFX OSD: ON" : "SFX OSD: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F5) {
-            // Port specific: hover-to-slice mouse mode. See
-            // src/platform/InputTranslatorSDL.cpp for the raw-mouse drive logic.
-            FN::g_RelaxMode = !FN::g_RelaxMode;
-            LOG_INFO("RELAX", "relax mode %s", FN::g_RelaxMode ? "ON" : "OFF");
+            // Port specific: velocity-gated pointer slash. See
+            // src/platform/InputTranslatorSDL.cpp for the cursor-tracking
+            // logic and src/entities/SlashEntity.cpp for the speed gate.
+            FN::g_MotionMode = !FN::g_MotionMode;
+            LOG_INFO("MOTION", "motion mode %s", FN::g_MotionMode ? "ON" : "OFF");
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
-            OSD_AddMessage(FN::g_RelaxMode ? "Relax mode: ON" : "Relax mode: OFF");
+            OSD_AddMessage(FN::g_MotionMode ? "Motion mode: ON" : "Motion mode: OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F6) {
+            // Port specific: live-tune g_MotionSpeedThreshold down (F6) / up (F8).
+            FN::g_MotionSpeedThreshold -= 1.0f;
+            if (FN::g_MotionSpeedThreshold < 0.0f) FN::g_MotionSpeedThreshold = 0.0f;
+            LOG_DEBUG("MOTION", "threshold = %.1f", FN::g_MotionSpeedThreshold);
+            char osd[64];
+            snprintf(osd, sizeof(osd), "Motion threshold: %.1f", FN::g_MotionSpeedThreshold);
+            OSD_AddMessage(osd);
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F8) {
+            // Port specific: live-tune g_MotionSpeedThreshold up (F8) / down (F6).
+            FN::g_MotionSpeedThreshold += 1.0f;
+            LOG_DEBUG("MOTION", "threshold = %.1f", FN::g_MotionSpeedThreshold);
+            char osd[64];
+            snprintf(osd, sizeof(osd), "Motion threshold: %.1f", FN::g_MotionSpeedThreshold);
+            OSD_AddMessage(osd);
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;

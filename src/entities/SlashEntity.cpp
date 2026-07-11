@@ -7,6 +7,7 @@
 #include "SlashEntity.h"
 #include "math/MathUtil.h"
 #include "debug/Logger.h"
+#include "debug/DebugFlags.h"
 #include "ActorManager.h"
 #include "Entity.h"
 #include "hud/HUDControl.h"
@@ -295,6 +296,7 @@ SlashEntity::SlashEntity()
 #if !defined(__bada__)
     , m_FingerId(0)
     , m_RawTouchPos(0, 0, 0)
+    , m_SmoothedSpeed(0.0f)
     , m_pCurrentTarget(nullptr)
 #endif
 {
@@ -455,6 +457,13 @@ void SlashEntity::Reset() {
 
     for (int i = 0; i < 10; ++i) m_ComboFruitTypes[i] = -1;
     m_ComboCount = -1;
+
+#if !defined(__bada__)
+    // Port specific: re-arm the motion-mode speed gate on every new stroke
+    // so a stale high reading from the previous slice can't let an aiming
+    // move through as a cut.
+    m_SmoothedSpeed = 0.0f;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1567,6 +1576,13 @@ void SlashEntity::Update(float dt) {
     // (the ItemManager's swish-loop volume control is not yet ported).
     if (m_BladeActive != 0) {
         float bladeMag = m_BladeDir.Magnitude();
+#if !defined(__bada__)
+        // Port specific: light EMA smoothing of the raw blade speed so a
+        // jittery Magic-Remote/mouse read doesn't flicker the motion-mode
+        // cut gate (see the cut-decision block below). k=0.4 -- fast enough
+        // to follow a real flick, slow enough to average out per-tick noise.
+        m_SmoothedSpeed += (bladeMag - m_SmoothedSpeed) * 0.4f;
+#endif
         float volScale = 1.0f;
         float rawScale = bladeMag / 15.0f;
         if (rawScale >= 0.5f && rawScale <= 1.0f) {
@@ -1610,7 +1626,23 @@ void SlashEntity::Update(float dt) {
         //   ActorManager::GetEntityNext(actorMgr, type, &iter)
         // Both loops guarded by g_Stop == 0 (re-checked each iteration).
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-        if (am) {
+
+        // Port specific: FN::g_MotionMode velocity gate -- the pointer blade
+        // (m_FingerId == FN::POINTER_FINGER_CHANNEL) tracks the cursor every
+        // tick (see InputTranslatorSDL), but a cut only registers once its
+        // smoothed speed clears FN::g_MotionSpeedThreshold: slow movement
+        // aims, a fast flick cuts. Touch blades (m_FingerId 0-14) and
+        // motion-OFF are never gated -- runCut stays true and this block is
+        // byte-identical to the pre-motion-mode fruit+bomb loops below.
+        bool runCut = true;
+#if !defined(__bada__)
+        if (FN::g_MotionMode && m_FingerId == FN::POINTER_FINGER_CHANNEL
+            && m_SmoothedSpeed < FN::g_MotionSpeedThreshold) {
+            runCut = false;
+        }
+#endif
+
+        if (am && runCut) {
             // -----------------------------------------------------------------
             // 8. FRUIT LOOP (type 0)
             // -----------------------------------------------------------------
