@@ -1,33 +1,58 @@
 #ifndef FN_HUD_VERTICAL_SCROLLER_H
 #define FN_HUD_VERTICAL_SCROLLER_H
 
-// Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple --
-// no in-game instantiation found; binary @ 0x00168230 (VerticalScroller),
-// 0x0014A178 (ListBox), 0x00136164 (ComboBox).
-// Class shape preserved per stub-don't-skip policy.
+//
+// VerticalScroller : HUDControl3d (sizeof 0xB4 on ARM32)
+//
+// The scrollbar half of the dead-code dropdown widget stack
+// (ComboBox -> ListBox -> VerticalScroller). No live call site in v1.6.1
+// instantiates a ComboBox, so the whole triple is dead code -- but it carries a
+// complete, faithful implementation (same policy as CheckBox / SliderControl).
+//
+// A ListBox owns exactly one VerticalScroller, created in ListBox::ListBox only
+// when items.size() > visibleRows, positioned at the list's right edge and
+// AddControl'd to the HUD. The scroller's live scroll offset is
+//   m_CurrentValue (+0x88)
+// which ListBox::Draw reads (confirmed @0x001947d0: ldr r3,[m_pScroller,#0x88])
+// to pick the top visible row = items.begin() + m_CurrentValue.
+//
+// Binary (v1.6.1):
+//   ctor  @ 0x001c9380 (C1) / 0x001c9284 (C2)
+//   Init                @ 0x001c8e0c (empty)
+//   PreDraw             @ 0x001c8f90 (empty)
+//   Release             @ 0x001c917c (tail-calls HUDControl3d::Release)
+//   Update              @ 0x001c8f98 (touch state machine)
+//   Draw                @ 0x001c9514 (track + 2 arrows + thumb)
+//   GetType (-> 5)      @ 0x001c9ec0
+//   LoadContent         @ 0x001c98b0 (vbar.tex / vslider.tex / arrow.tex)
+//
+// Field offsets were re-verified against the ctor instruction stream
+// (0x001c9380); m_LayerFlags is 0x800 (top-most overlay), NOT 0x400 -- the
+// earlier port carried a stale v1.5.x value.
+//
 
 #include "HUDControl3d.h"
 #include "math/Vec3.h"
+#include "util/SmartPtr.h"
+#include "asset/Texture.h"
 #include <cstdint>
 
 class VerticalScroller : public HUDControl3d {
 public:
-    // +0x7C: minimum scroll value
-    // Binary: ctor @ 0x00168230 stores r3 here (minValue arg).
+    // +0x7C: minimum scroll value (ctor arg minValue).
     int32_t  m_MinValue;
 
-    // +0x80: maximum scroll value
-    // Binary: ctor stores sp[0x30] here (maxValue arg).
+    // +0x80: maximum scroll value (ctor arg maxValue; ListBox passes items-visibleRows).
     int32_t  m_MaxValue;
 
-    // +0x84: per-arrow-tap step
-    // Binary: ctor stores sp[0x34] here (stepSize arg, uint16).
+    // +0x84: per-arrow-tap step (ctor arg stepSize, uint16; ListBox passes 1).
     uint16_t m_StepSize;
 
     // +0x86: alignment pad (not written by ctor)
     uint16_t _pad86;
 
-    // +0x88: live scroll value; read externally by ListBox::Update @ 0x00149C84.
+    // +0x88: live scroll value. READ EXTERNALLY by ListBox::Draw @0x001947d0
+    // (top visible row = items.begin() + m_CurrentValue).
     int32_t  m_CurrentValue;
 
     // +0x8C: total item count; gates thumb visibility and drag enable (must be >= m_TypeId=5).
@@ -39,7 +64,7 @@ public:
     // +0x90: last computed thumb Y in world coords (written by Draw, not read internally).
     float    m_CachedThumbY;
 
-    // +0x94: visible-rows count; if zero on ctor, defaults to 21.
+    // +0x94: visible-rows count; if zero on ctor, defaults to 21 (0x15).
     uint16_t m_VisibleHeight;
 
     // +0x96: total-rows count (paired with m_VisibleHeight).
@@ -69,58 +94,59 @@ public:
     // +0xA8..+0xB3: last sampled touch position (12 bytes, Vec3).
     Vec3     m_LastTouchPos;
 
-    // Binary @ 0x00168230 (C2) / 0x00168304 (C1)
+    // Binary @ 0x001c9380 (C1) / 0x001c9284 (C2)
     VerticalScroller(Vec3 pos, Vec3 size,
                      int32_t minValue, int32_t maxValue, uint16_t stepSize,
                      int32_t currentValue, bool reverseDir,
                      uint8_t totalRows, uint16_t visibleHeight, uint16_t totalHeight);
 
-    // Binary @ 0x00168178 (D2) / 0x001681B4 (D1) / 0x001681F0 (D0)
+    // Binary @ 0x001c9268 (D0) / 0x001c9250 (D1) region -- D0/D1 call Release() then base dtor.
     virtual ~VerticalScroller();
 
-    // vtable slot 2 -- Binary @ 0x00167E6C (empty bx lr)
+    // vtable slot 2 -- Binary @ 0x001c8e0c (empty bx lr)
     void Init() override;
 
-    // vtable slot 3 -- Binary @ 0x00168170 (calls HUDControl3d::Release)
+    // vtable slot 3 -- Binary @ 0x001c917c (tail-calls HUDControl3d::Release)
     void Release() override;
 
-    // vtable slot 6 -- Binary @ 0x00167FD0 (empty bx lr)
+    // vtable slot 6 -- Binary @ 0x001c8f90 (empty bx lr)
     void PreDraw(float* hudScale) override;
 
-    // vtable slot 7 -- Binary @ 0x00168454 (~224 instructions; renders bar/thumb/arrows)
+    // vtable slot 7 -- Binary @ 0x001c9514 (track quad + top/bottom arrows + thumb)
     void Draw(float* hudScaleRaw) override;
 
-    // vtable slot 10 -- Binary @ 0x00167FD8 (~120 instructions; touch state machine)
+    // vtable slot 10 -- Binary @ 0x001c8f98 (touch state machine)
     void Update(float dt) override;
 
-    // vtable slot 12 -- Binary @ 0x00168B7C (mov r0,#5; bx lr)
+    // vtable slot 12 -- Binary @ 0x001c9ec0 (mov r0,#5; bx lr)
     int GetType() override;
 
-    // Non-virtual. Binary @ 0x0014A908 (in ListBox.cpp CU; also via thunk @ 0x00107754)
-    // Effect: pos.x += m_VisibleHeightPx * 0.5f; (places left edge at original pos.x)
+    // Non-virtual. Effect: pos.x += m_VisibleHeightPx * 0.5f (places left edge at pos.x).
+    // Called by ListBox::ListBox right after construction.
     void AdjustByWidth();
 
-    // Non-virtual. Binary @ 0x0014A920 (in ListBox.cpp CU)
+    // Non-virtual setter.
     void SetPosition(float x, float y);
 
-    // Non-virtual private helper; called by Update each frame while touch is held.
-    // Binary @ 0x00167E70 (~80 instructions; drag-mode touch-to-value mapping)
+    // Private non-virtual helper called by Update while a touch is held.
+    // Reached through a PLT veneer @0x00111a?? in Update; captures the finger
+    // position and (in drag mode) maps it to m_CurrentValue.
     void UpdateTouchPosition();
 
-    // Static texture lifecycle. Binary @ 0x0016872C / 0x001687D0.
-    // Loads / unloads vbar.tex, vslider.tex, arrow.tex via TextureManager.
+    // Static texture lifecycle. Binary @ 0x001c98b0.
+    // Loads vbar.tex -> s_box, vslider.tex -> s_slider, arrow.tex -> s_arrow.
     static void LoadContent();
     static void UnloadContent();
 
-#ifdef __bada__
-    // Layout assertions -- only valid under Bada/ARM cross-toolchain.
-    // sizeof check done as static_assert outside the class body below.
-#endif
+    // Port/test-only: inject substitute textures (the faithful vbar/vslider/arrow
+    // art is NOT shipped in v1.6.1 -- see .cpp DIFFERS). Always compiled (the
+    // static slots live in this TU). No binary counterpart.
+    static void SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& box,
+                                   const Mortar::SmartPtr<Mortar::Texture>& slider,
+                                   const Mortar::SmartPtr<Mortar::Texture>& arrow);
 
-public:
-    // vtable/per-frame hook -- Binary @ 0x00167fd4 (empty bx lr)
-    // Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple --
-    // no-op stub; binary @ 0x00167fd4
+    // vtable/per-frame hook -- Binary empty bx lr.
+    // Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple -- no-op stub.
     void UpdateFromGameWork();
 };
 

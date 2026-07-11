@@ -779,6 +779,21 @@ set_tests_properties(settings_widgets_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_settings_widgets PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_checkbox;component_slidercontrol")
 
+# Dropdown widget stack (ComboBox + ListBox + VerticalScroller) render test. All
+# three are dead code in v1.6.1 but carry complete real implementations. Renders a
+# collapsed ComboBox and an expanded ListBox (8 items > 6 visible rows -> its ctor
+# creates the VerticalScroller) with hover + selected row colours and the scroller
+# thumb at a mid position. Injects in-memory placeholder textures (the dropdown art
+# is not shipped -- see the widget .cpp DIFFERS notes). Validates geometry + the
+# ComboBox->ListBox->VerticalScroller composition wiring, not art.
+# Output: tmp/test/screenshots/dropdown/dropdown.png.
+fn_add_game_test(test_dropdown_render test_dropdown_render.cpp)
+add_test(NAME dropdown_render COMMAND test_dropdown_render)
+add_test(NAME screenshot_dropdown COMMAND test_dropdown_render --screenshot)
+set_tests_properties(dropdown_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_dropdown PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_combobox;component_listbox;component_verticalscroller")
+
 # Achievement-unlock popup screenshot test (NotificationControl, Type_Named).
 # There is no achievements-list screen in v1.6.1 (AchievementsScreen is a
 # defunct stub) -- this is the only on-screen achievement "drawing": the
