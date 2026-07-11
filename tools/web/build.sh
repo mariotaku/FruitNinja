@@ -58,6 +58,18 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
         || { echo "[build.sh] FATAL: apt-get install ffmpeg failed" >&2; exit 1; }
 fi
 
+# transcode-audio-web.py also subsets fontstruetype/gangofchinese.ttf (5 MB) down
+# to only the glyphs the loaded translations_*.str stringtables use, via
+# fonttools' fontTools.subset. Install via apt (the image's Python is
+# externally-managed / PEP 668, so bare `pip install` is refused); the apt
+# `fonttools` package provides the system python3 fontTools module. Skip if
+# already importable.
+if ! python3 -c "import fontTools" >/dev/null 2>&1; then
+    echo "[build.sh] installing fonttools for CJK font subsetting"
+    apt-get update -qq && apt-get install -y -qq fonttools \
+        || { echo "[build.sh] FATAL: apt-get install fonttools failed" >&2; exit 1; }
+fi
+
 MODE=""          # "" = auto (respect existing configure), or debug/release
 RECONFIGURE=0
 for arg in "$@"; do
