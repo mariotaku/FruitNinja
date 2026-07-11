@@ -132,16 +132,23 @@ inline float Coverage(float d)
 // CheckBox's clickable bound is a binary-hardcoded hit-rect, pos.x +/-36 /
 // pos.y +/-28.5 (72x57) -- see CheckBox::Update / CheckBox.cpp lines 106-109 --
 // independent of this placeholder's drawn size (CheckBox::Draw scales a
-// 128x64 quad regardless). So the box is drawn well WITHIN that hit-rect
-// (half-extents ~27.5 < 36 x / 28.5 y) with margin to spare, so the whole
-// visible shape sits inside the clickable area. A real/proper checked.tex
-// should do the same; this placeholder mirrors that constraint.
+// 128x64 quad regardless). So the box is drawn well WITHIN that hit-rect and
+// the whole visible shape sits inside the clickable area. A real/proper
+// checked.tex should do the same; this placeholder mirrors that constraint.
+//
+// `halfBox` is the box half-extent in TEXTURE pixels (mapped 1:1 to on-screen
+// px via the 128x64 draw quad -> actually the 128x64 quad scales the whole
+// texture to 128x64 on screen, so the drawn box size == 2*halfBox * (128/w).
+// For the canonical w=128,h=64 texture, on-screen box size == 2*halfBox px).
+// Callers pass a balanced value (e.g. 22 -> 44px box) so the checkbox reads at
+// the same visual weight as the slider track / combo bar. It MUST stay inside
+// the +/-36 x / +/-28.5 y hit-rect (halfBox <= 28).
 // ---------------------------------------------------------------------------
-inline Mortar::SmartPtr<Mortar::Texture> MakeCheckboxTex(bool checked, int w, int h)
+inline Mortar::SmartPtr<Mortar::Texture> MakeCheckboxTex(bool checked, int w, int h,
+                                                         float halfBox = 27.5f)
 {
     const float cx      = (float)w * 0.5f;
     const float cy      = (float)h * 0.5f;
-    const float halfBox = 27.5f;          // box half-extent, inside the +/-36 x / +/-28.5 y hit-rect
     const float corner  = 6.0f;           // rounded-square corner radius
     const float strokeW = 3.0f;           // outline thickness (unchecked)
 
