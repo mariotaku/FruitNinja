@@ -144,6 +144,11 @@ public:
 
     int GetValue() const { return m_CurrentValue; }
 
+    // Port/test-only: install the value-changed callback. The binary binds
+    // m_OnValueChanged at the (dead) OptionsScreen construction site; there is no
+    // public setter. Lets an interactive harness observe drags. No binary counterpart.
+    void SetOnValueChangedForTest(const Mortar::Delegate0<void>& cb) { m_OnValueChanged = cb; }
+
     // Read-only geometry accessors (test/caller convenience -- computed once in
     // the ctor from the loaded track/thumb texture dims; see class header note).
     float TrackWidth()  const { return m_TrackWidth; }

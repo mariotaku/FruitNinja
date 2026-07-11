@@ -82,6 +82,11 @@ public:
     // state only flips via the touch-release toggle in Update). No binary counterpart.
     void SetCheckedForTest(bool checked) { m_Checked = checked ? 1 : 0; }
 
+    // Port/test-only: install the on-toggle callback. The binary binds m_OnToggle
+    // at the (dead) OptionsScreen construction site; there is no public setter.
+    // Lets an interactive harness observe the real toggle event. No binary counterpart.
+    void SetOnToggleForTest(const Mortar::Delegate0<void>& cb) { m_OnToggle = cb; }
+
     friend struct CheckBoxLayoutAssert;
 
 private:
