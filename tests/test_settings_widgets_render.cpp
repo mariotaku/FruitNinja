@@ -5,9 +5,13 @@
 //
 // Renders:
 //   * CheckBox unchecked + CheckBox checked (two instances) -- the state shows as
-//     a different quad texture (unchecked=grey, checked=green).
+//     a toggle-SWITCH texture (grey pill / knob left = off, green pill / knob
+//     right = on). See MakeSwitchTex below for why: CheckBox::Draw scales a
+//     HARDCODED 128x64 (2:1) quad and swaps between two textures purely by
+//     m_Checked -- that aspect ratio + binary on/off texture pair reads as a
+//     switch, not a square checkbox, so the placeholder mirrors that shape.
 //   * SliderControl with the thumb at min / mid / max value (three instances) --
-//     the thumb quad translates along the track by (value/max).
+//     the thumb quad (a round knob) translates along the track by (value/max).
 //
 // Output PNG (--screenshot mode):
 //   tmp/test/screenshots/settings_widgets/widgets.png
@@ -15,10 +19,11 @@
 // NOTE: this validates widget GEOMETRY + STATE (checkbox on/off, thumb position by
 // value), NOT the final shipped art. The faithful textures (checked.tex,
 // unchecked.tex, _dialog_box.tex, slider_will.tex) are NOT shipped in v1.6.1 (the
-// widgets are dead code), so the test injects in-memory solid-colour substitute
-// textures via CheckBox/SliderControl::SetTexturesForTest. Widget positions are
-// test-chosen (v1.6.1 never places these widgets), only their relative geometry and
-// value-driven state are meaningful here.
+// widgets are dead code), so the test injects in-memory PROCEDURALLY-DRAWN
+// substitute textures via CheckBox/SliderControl::SetTexturesForTest -- rounded-rect
+// (stadium) + circle signed-distance fills, no external image deps. Widget
+// positions are test-chosen (v1.6.1 never places these widgets), only their
+// relative geometry and value-driven state are meaningful here.
 //
 // C++11 / GCC 4.4.1 clean (host-only test TU, but kept lambda/auto/range-for free).
 
@@ -35,6 +40,7 @@
 #include <cstdio>
 #include <vector>
 #include <cstdint>
+#include <cmath>
 #include <SDL.h>
 
 // ---------------------------------------------------------------------------
@@ -65,6 +71,142 @@ static Mortar::SmartPtr<Mortar::Texture> MakeSolidTex(
     t->m_TexId = id;
     t->SetDimensions(w, h);
     t->m_HasAlpha = (a != 255);
+    return Mortar::SmartPtr<Mortar::Texture>(t);
+}
+
+// ---------------------------------------------------------------------------
+// Procedural shape helpers (test-only synthetic bitmaps; no external deps).
+//
+// Signed distance to a "stadium" -- an axis-aligned rounded rect whose corner
+// radius equals its half-height, i.e. a pill/track shape. Negative = inside.
+// ---------------------------------------------------------------------------
+static float StadiumSDF(float px, float py, float cx, float cy,
+                        float halfW, float halfH)
+{
+    float dx = std::fabs(px - cx);
+    float dy = std::fabs(py - cy);
+    float qx = dx - (halfW - halfH);
+    if (qx < 0.0f) qx = 0.0f;
+    return std::sqrt(qx * qx + dy * dy) - halfH;
+}
+
+// Signed distance to a circle. Negative = inside.
+static float CircleSDF(float px, float py, float cx, float cy, float radius)
+{
+    float dx = px - cx;
+    float dy = py - cy;
+    return std::sqrt(dx * dx + dy * dy) - radius;
+}
+
+// Antialiased coverage from a signed distance: 1 fully inside, 0 fully
+// outside, linear ramp across a ~1.5px band at the edge.
+static float Coverage(float d)
+{
+    if (d <= -0.75f) return 1.0f;
+    if (d >=  0.75f) return 0.0f;
+    return 0.5f - (d / 1.5f);
+}
+
+// ---------------------------------------------------------------------------
+// Build a procedural TOGGLE-SWITCH texture: a rounded "pill" track (alpha=0
+// outside the pill so the shape reads as a switch against the background,
+// not a filled rectangle) with a filled circular knob offset toward one end.
+//   on=false (OFF/unchecked): grey pill, light knob centered in the LEFT third.
+//   on=true  (ON/checked):    green pill, light knob centered in the RIGHT third.
+// ---------------------------------------------------------------------------
+static Mortar::SmartPtr<Mortar::Texture> MakeSwitchTex(bool on, int w, int h)
+{
+    const float margin = 4.0f;
+    const float cx     = (float)w * 0.5f;
+    const float cy     = (float)h * 0.5f;
+    const float halfW  = (float)w * 0.5f - margin;
+    const float halfH  = (float)h * 0.5f - margin;
+    const float knobR  = halfH - 3.0f;
+    const float thirdW = (float)w / 3.0f;
+    const float knobCx = on ? ((float)w - thirdW * 0.5f) : (thirdW * 0.5f);
+
+    const uint8_t trackR = on ?  60 : 120;
+    const uint8_t trackG = on ? 190 : 120;
+    const uint8_t trackB = on ?  60 : 120;
+
+    std::vector<uint8_t> px((size_t)w * (size_t)h * 4, 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            float fx = (float)x + 0.5f;
+            float fy = (float)y + 0.5f;
+
+            float trackCov = Coverage(StadiumSDF(fx, fy, cx, cy, halfW, halfH));
+            if (trackCov <= 0.0f) continue;
+
+            float knobCov = Coverage(CircleSDF(fx, fy, knobCx, cy, knobR));
+
+            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
+            if (knobCov > 0.0f) {
+                // Light knob, blended over the track colour at its own edge.
+                out[0] = (uint8_t)(230.0f * knobCov + (float)trackR * (1.0f - knobCov));
+                out[1] = (uint8_t)(230.0f * knobCov + (float)trackG * (1.0f - knobCov));
+                out[2] = (uint8_t)(235.0f * knobCov + (float)trackB * (1.0f - knobCov));
+            } else {
+                out[0] = trackR;
+                out[1] = trackG;
+                out[2] = trackB;
+            }
+            out[3] = (uint8_t)(255.0f * trackCov);
+        }
+    }
+
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
+    t->m_TexId = id;
+    t->SetDimensions(w, h);
+    t->m_HasAlpha = true;
+    return Mortar::SmartPtr<Mortar::Texture>(t);
+}
+
+// ---------------------------------------------------------------------------
+// Build a procedural filled-circle texture (light improvement for the
+// SliderControl thumb -- a round knob instead of a flat rectangle -- trivial
+// reuse of the CircleSDF/Coverage helpers above). Alpha=0 outside the circle.
+// ---------------------------------------------------------------------------
+static Mortar::SmartPtr<Mortar::Texture> MakeCircleTex(
+    uint8_t r, uint8_t g, uint8_t b, int w, int h)
+{
+    const float cx = (float)w * 0.5f;
+    const float cy = (float)h * 0.5f;
+    const float radius = (cx < cy ? cx : cy) - 1.0f;
+
+    std::vector<uint8_t> px((size_t)w * (size_t)h * 4, 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            float cov = Coverage(CircleSDF((float)x + 0.5f, (float)y + 0.5f, cx, cy, radius));
+            if (cov <= 0.0f) continue;
+            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
+            out[0] = r;
+            out[1] = g;
+            out[2] = b;
+            out[3] = (uint8_t)(255.0f * cov);
+        }
+    }
+
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
+    t->m_TexId = id;
+    t->SetDimensions(w, h);
+    t->m_HasAlpha = true;
     return Mortar::SmartPtr<Mortar::Texture>(t);
 }
 
@@ -110,11 +252,14 @@ int main(int argc, char* argv[]) {
     // Substitute textures (real art is not shipped -- see file header note).
     // Inject BEFORE constructing the sliders: the SliderControl ctor reads the
     // track/thumb texture dims to size its quads.
+    //
+    // CheckBox's quad is a HARDCODED 128x64 (2:1) -- generate the switch textures
+    // at that exact size so the 1:1 texel mapping is crisp (no stretch).
     // -----------------------------------------------------------------------
-    Mortar::SmartPtr<Mortar::Texture> texChecked   = MakeSolidTex(40, 200, 40, 255, 64, 64);   // green
-    Mortar::SmartPtr<Mortar::Texture> texUnchecked = MakeSolidTex(70, 70, 70, 255, 64, 64);    // grey
+    Mortar::SmartPtr<Mortar::Texture> texChecked   = MakeSwitchTex(true,  128, 64); // ON  -- green pill, knob right
+    Mortar::SmartPtr<Mortar::Texture> texUnchecked = MakeSwitchTex(false, 128, 64); // OFF -- grey pill, knob left
     Mortar::SmartPtr<Mortar::Texture> texTrack     = MakeSolidTex(120, 120, 120, 255, 200, 20); // light grey bar
-    Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeSolidTex(240, 140, 20, 255, 20, 34);   // orange knob
+    Mortar::SmartPtr<Mortar::Texture> texThumb     = MakeCircleTex(240, 140, 20, 20, 34);       // round orange knob
 
     CheckBox::SetTexturesForTest(texChecked, texUnchecked);
     SliderControl::SetTexturesForTest(texTrack, texThumb);
