@@ -203,9 +203,9 @@
       align-items: center;
       justify-content: center;
       z-index: 20;
-      gap: 0.9em;
       padding: 2em;
       text-align: center;
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
       animation: restartFadeIn 0.4s ease;
     }
 
@@ -214,21 +214,32 @@
       to   { opacity: 1; }
     }
 
-    #restart-btn {
-      margin-top: 0.5em;
-      padding: 0.55em 1.6em;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.45);
-      border-radius: 6px;
+    #restart-title {
+      margin: 0 0 clamp(0.7rem, 2.6vmin, 1.3rem);
+      font-size: clamp(1.6rem, 6.5vmin, 3.2rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
       color: #fff;
-      font-size: 1em;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+    }
+
+    #restart-btn {
+      padding: clamp(0.5em, 1.7vmin, 0.72em) clamp(1.5em, 5vmin, 2.6em);
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 8px;
+      color: #fff;
+      font-size: clamp(1rem, 3.4vmin, 1.5rem);
+      font-weight: 600;
+      letter-spacing: 0.02em;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, transform 0.12s ease;
     }
 
     #restart-btn:hover, #restart-btn:focus {
-      background: rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.24);
+      transform: scale(1.04);
       outline: none;
     }
 
@@ -280,16 +291,21 @@
        cluttering the immersive full-viewport canvas.  Footer-ish: small,
        low-opacity, sits below the restart button. */
     #credit {
-      margin-top: 0.4em;
-      padding: 0 8px;
+      position: absolute;
+      left: 50%;
+      bottom: clamp(0.8rem, 3vmin, 1.8rem);
+      transform: translateX(-50%);
+      width: min(90vw, 34em);
       text-align: center;
-      font-size: 10px;
-      line-height: 1.35;
-      color: rgba(255, 255, 255, 0.38);
+      font-size: clamp(9px, 1.7vmin, 12px);
+      line-height: 1.45;
+      color: rgba(255, 255, 255, 0.42);
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
       user-select: none;
       -webkit-user-select: none;
     }
+    #credit span { display: block; }
+    #credit span + span { margin-top: 0.3em; }
 
     /* Fullscreen = game canvas only: when the page is fullscreen (class set on
        <body> by the fullscreenchange handler), hide the fullscreen toggle
@@ -340,11 +356,12 @@
          (not on the main page) so it only shows on this quit screen, keeping
          the immersive in-game canvas view uncluttered. -->
     <div id="restart-overlay" role="alertdialog" aria-modal="true" aria-label="Game over">
+      <h1 id="restart-title">Fruit Ninja</h1>
       <button id="restart-btn" tabindex="0">Tap to Restart</button>
       <footer id="credit">
-        Fruit Ninja and all game assets are (c) 2011 Halfbrick Studios.
-        This is a non-commercial fan reverse-engineering / preservation port and is
-        not affiliated with, endorsed by, or supported by Halfbrick Studios.
+        <span>Fruit Ninja and all game assets are &copy; 2011 Halfbrick Studios.</span>
+        <span>A non-commercial fan reverse-engineering / preservation port,
+        not affiliated with or endorsed by Halfbrick Studios.</span>
       </footer>
     </div>
 
