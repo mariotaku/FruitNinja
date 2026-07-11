@@ -213,6 +213,7 @@ static void BootWait(void* arg) {
     //                                        no F1, so the level is set straight from the URL.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
     //   ?osdsfx=1                    -- per-SFX OSD readout (g_bOsdSfx, F4 on desktop)
+    //   ?relax=1                     -- relax mode (hover-to-slice mouse/pointer; F5 on desktop)
     {
         // hitbox / hitboxes=<level>
         int hitboxLevel = EM_ASM_INT({
@@ -284,6 +285,23 @@ static void BootWait(void* arg) {
         if (osdSfxParam) {
             FN::g_bOsdSfx = true;
             LOG_INFO("Debug", "URL param: SFX OSD ON");
+        }
+
+        // relax=1 or relax (bare) -- enables relax mode
+        // (same flag F5 toggles on desktop; mobile has no F5).
+        int relaxParam = EM_ASM_INT({
+            try {
+                var qs = window.location.search;
+                if (!qs) return 0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('relax');
+                if (v !== null && v !== '0') return 1;
+            } catch(e) {}
+            return 0;
+        });
+        if (relaxParam) {
+            FN::g_RelaxMode = true;
+            LOG_INFO("Debug", "URL param: relax mode ON");
         }
 
         // lang=<code|num> -- language override for i18n testing.
