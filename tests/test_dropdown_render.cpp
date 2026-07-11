@@ -5,25 +5,35 @@
 //
 // Usage: test_dropdown_render [--screenshot|--interactive|--headless]
 //
-// Renders:
-//   * A COLLAPSED ComboBox -- bar (blank_dialog_box) + expand arrow + the header
-//     label (Yellow) + the selected-item label.
-//   * An EXPANDED view -- a ListBox with 8 items (> its 6 visible rows, so its
-//     ctor creates a VerticalScroller and AddControl's it to the HUD). One row is
-//     the committed selection (Blue), one is the hover row (RGB 0x50,0x96,0xFF),
-//     the rest White. The VerticalScroller (track + top/bottom arrows + thumb at a
-//     mid position) is drawn to its right.
+// Renders the SAME widget in BOTH states, side by side:
+//   * LEFT  -- a COLLAPSED ComboBox: header label (Yellow) + blank_dialog_box bar
+//     + expand arrow + the currently-selected item's text. This is what the combo
+//     looks like before it is tapped.
+//   * RIGHT -- an EXPANDED ComboBox: the same collapsed bar, with the dropdown
+//     ListBox attached directly below it (exactly where ComboBox::Update spawns it:
+//     pos.y - m_DrawHeight - 1). The ListBox holds 8 items (> its 6 visible rows,
+//     so its ctor creates a VerticalScroller and AddControl's it to the HUD). One
+//     row is the committed selection (Blue), one is the hover row (RGB
+//     0x50,0x96,0xFF), the rest White; the scroller (track + top/bottom arrows +
+//     thumb at a mid position) sits to its right.
+//
+// The expanded ListBox is built with the SAME ctor args ComboBox::Update uses when
+// it opens (selIter=combo selection, visibleRows=textFlag, cellHeightParam=14,
+// cellWidthParam=128, fontScaleParam=16), so its rows are the ORIGINAL 16px item
+// height -- identical to a real combo open, no enlargement.
 //
 // Output PNG (--screenshot mode):
 //   tmp/test/screenshots/dropdown/dropdown.png
 //
-// NOTE: validates widget GEOMETRY + STATE (row count/colours, scroller present on
-// overflow, thumb position), NOT the final shipped art. The faithful textures
-// (blank_dialog_box.tex ships, but expand_arrow.tex / vbar.tex / vslider.tex /
-// arrow.tex are NOT shipped in v1.6.1 -- see the widget .cpp DIFFERS notes), so
-// the test injects in-memory PROCEDURALLY-DRAWN substitute textures via each
-// widget's SetTexturesForTest hook. Widget positions are test-chosen (v1.6.1 never
-// places these widgets); only relative geometry + state are meaningful here.
+// NOTE: validates widget GEOMETRY + STATE (collapsed vs expanded, row
+// count/colours, scroller present on overflow, thumb position), NOT the final
+// shipped art. The faithful textures (blank_dialog_box.tex ships, but
+// expand_arrow.tex / vbar.tex / vslider.tex / arrow.tex are NOT shipped in v1.6.1
+// -- see the widget .cpp DIFFERS notes), so the test injects in-memory
+// PROCEDURALLY-DRAWN substitute textures via each widget's SetTexturesForTest hook.
+// Widget positions are test-chosen (v1.6.1 never places these widgets); only
+// relative geometry + state are meaningful here. Item/label strings are UPPERCASE
+// because font_fruit_ninja.fnt carries no lowercase glyphs.
 //
 // C++11 / GCC 4.4.1 clean (host-only test TU; kept lambda/auto/range-for free).
 
@@ -53,9 +63,11 @@
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
-// Render pass: clear + ortho + draw all widgets. Caller swaps.
+// Render pass: clear + ortho + draw both combos (collapsed + expanded) and the
+// expanded combo's dropped ListBox + scroller. Caller swaps.
 // ---------------------------------------------------------------------------
-static void DrawPass(fn::TestHarness& h, ComboBox* combo, ListBox* list,
+static void DrawPass(fn::TestHarness& h, ComboBox* comboCollapsed,
+                     ComboBox* comboExpanded, ListBox* list,
                      VerticalScroller* scroller)
 {
     int ww = 0, wh = 0;
@@ -68,7 +80,8 @@ static void DrawPass(fn::TestHarness& h, ComboBox* combo, ListBox* list,
 
     float hudScale[3] = { 1.0f, 1.0f, 1.0f };
 
-    combo->Draw(hudScale);
+    comboCollapsed->Draw(hudScale);
+    comboExpanded->Draw(hudScale);
     list->Draw(hudScale);
     if (scroller) scroller->Draw(hudScale);
 }
@@ -91,7 +104,7 @@ int main(int argc, char* argv[]) {
     // paths do). Distinct colours so each element reads clearly.
     // -----------------------------------------------------------------------
     Mortar::SmartPtr<Mortar::Texture> texBar   = MakeSolidTex(40, 40, 60, 255, 8, 8);   // bar bg (dark)
-    Mortar::SmartPtr<Mortar::Texture> texArrow = MakeArrowTex(255, 210, 40, 32, 32);     // expand arrow (gold)
+    Mortar::SmartPtr<Mortar::Texture> texArrow = MakeArrowTex(255, 210, 40, 32, 32, /*pointDown*/ true); // expand arrow (gold, points down)
     Mortar::SmartPtr<Mortar::Texture> texRow   = MakeSolidTex(255, 255, 255, 255, 8, 8); // row bg (white -> row colour tints)
     Mortar::SmartPtr<Mortar::Texture> texTrack = MakeSolidTex(70, 70, 90, 255, 8, 8);    // scroller track
     Mortar::SmartPtr<Mortar::Texture> texThumb = MakeSolidTex(200, 200, 210, 255, 8, 8); // scroller thumb
@@ -104,52 +117,60 @@ int main(int argc, char* argv[]) {
     int failures = 0;
 
     {
-        // ---- Collapsed ComboBox ----
-        // DrawWidth = textScaleX*size.x = 120; DrawHeight = textScaleY*size.y = 36.
-        std::vector<std::string> comboItems;
-        comboItems.push_back(std::string("Easy"));
-        comboItems.push_back(std::string("Normal"));
-        comboItems.push_back(std::string("Hard"));
-        ComboBox combo(Vec3(-40.0f, -150.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                       comboItems, /*defaultIdx*/ 1, "DIFFICULTY",
-                       /*textFlag*/ 6, /*width*/ 20, /*scaleX*/ 120, /*scaleY*/ 36);
+        // Shared item model for both combos (8 items -> the expanded list overflows
+        // its 6 visible rows and grows a scroller). UPPERCASE: the game font has no
+        // lowercase glyphs.
+        std::vector<std::string> items;
+        items.push_back(std::string("APPLE"));
+        items.push_back(std::string("BANANA"));
+        items.push_back(std::string("CHERRY"));
+        items.push_back(std::string("DATE"));
+        items.push_back(std::string("ELDER"));
+        items.push_back(std::string("FIG"));
+        items.push_back(std::string("GRAPE"));
+        items.push_back(std::string("KIWI"));
 
-        if (combo.DrawWidth() != 120.0f || combo.DrawHeight() != 36.0f) {
-            std::fprintf(stderr, "FAIL: ComboBox draw extents %.1f x %.1f (expected 120 x 36)\n",
-                         (double)combo.DrawWidth(), (double)combo.DrawHeight());
+        // Bar geometry shared by both combos: DrawWidth = scaleX*size.x = 120,
+        // DrawHeight = scaleY*size.y = 55 (unified to the checkbox box height).
+        const uint16_t kScaleX = 120, kScaleY = 55;
+        const uint8_t  kTextFlag = 6;   // -> the spawned ListBox's visibleRows
+
+        // ---- LEFT: collapsed ComboBox (defaultIdx 1 -> "BANANA") ----
+        ComboBox comboCollapsed(Vec3(-115.0f, 110.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+                                items, /*defaultIdx*/ 1, "COLLAPSED",
+                                kTextFlag, /*width*/ 20, kScaleX, kScaleY);
+        comboCollapsed.SetTextColour(Colour(255, 255, 255, 255));
+
+        // ---- RIGHT: expanded ComboBox (defaultIdx 2 -> "CHERRY") ----
+        ComboBox comboExpanded(Vec3(70.0f, 110.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+                               items, /*defaultIdx*/ 2, "EXPANDED",
+                               kTextFlag, /*width*/ 20, kScaleX, kScaleY);
+        comboExpanded.SetTextColour(Colour(255, 255, 255, 255));
+
+        if (comboExpanded.DrawWidth() != 120.0f || comboExpanded.DrawHeight() != 55.0f) {
+            std::fprintf(stderr, "FAIL: ComboBox draw extents %.1f x %.1f (expected 120 x 55)\n",
+                         (double)comboExpanded.DrawWidth(), (double)comboExpanded.DrawHeight());
             ++failures;
         }
-        if (combo.SelectedIter() != &comboItems[1]) {
-            std::fprintf(stderr, "FAIL: ComboBox selection not begin()+defaultIdx\n");
-            ++failures;
-        }
-        // Default m_TextColour is black (Colour()); set white so the selected
-        // label reads against the dark bar (test-only visual choice).
-        combo.SetTextColour(Colour(255, 255, 255, 255));
 
-        // ---- Expanded ListBox (8 items, 6 visible -> scroller exists) ----
-        std::vector<std::string> listItems;
-        listItems.push_back(std::string("Apple"));
-        listItems.push_back(std::string("Banana"));
-        listItems.push_back(std::string("Cherry"));
-        listItems.push_back(std::string("Date"));
-        listItems.push_back(std::string("Elder"));
-        listItems.push_back(std::string("Fig"));
-        listItems.push_back(std::string("Grape"));
-        listItems.push_back(std::string("Kiwi"));
-
-        // cellHeightParam=14, cellWidthParam=120, fontScaleParam=30 ->
-        //   m_CellWidth=120, m_CellHeight=30, font size = 14 (cellHeightParam*size.x).
-        ListBox list(Vec3(-40.0f, 30.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), listItems,
-                     /*selIter*/ &listItems[2], /*visibleRows*/ 6,
-                     /*cellHeightParam*/ 14, /*cellWidthParam*/ 120, /*fontScaleParam*/ 30);
+        // ---- The dropdown ListBox the expanded combo drops below its bar ----
+        // Reproduces the EXACT ListBox ComboBox::Update spawns on tap: position
+        // (pos.x, pos.y - m_DrawHeight - 1, -1) and ctor args
+        // (selIter, visibleRows=textFlag, cellHeightParam=14, cellWidthParam=128,
+        // fontScaleParam=16) -> m_CellWidth=128, m_CellHeight=16, font size 14.
+        // These are the original item dimensions (no enlargement).
+        Vec3 lbPos(comboExpanded.pos.x,
+                   (comboExpanded.pos.y - comboExpanded.DrawHeight()) - 1.0f, -1.0f);
+        ListBox list(lbPos, Vec3(1.0f, 1.0f, 1.0f), items,
+                     /*selIter*/ comboExpanded.SelectedIter(), /*visibleRows*/ kTextFlag,
+                     /*cellHeightParam*/ 14, /*cellWidthParam*/ 128, /*fontScaleParam*/ 16);
 
         if (list.Scroller() == NULL) {
             std::fprintf(stderr, "FAIL: ListBox overflow (8>6) but no VerticalScroller created\n");
             ++failures;
         }
-        if (list.CellWidth() != 120.0f || list.CellHeight() != 30.0f) {
-            std::fprintf(stderr, "FAIL: ListBox cell %.1f x %.1f (expected 120 x 30)\n",
+        if (list.CellWidth() != 128.0f || list.CellHeight() != 16.0f) {
+            std::fprintf(stderr, "FAIL: ListBox cell %.1f x %.1f (expected 128 x 16)\n",
                          (double)list.CellWidth(), (double)list.CellHeight());
             ++failures;
         }
@@ -172,12 +193,12 @@ int main(int argc, char* argv[]) {
         }
         // Selection (Blue) and hover (light blue) rows within the visible window
         // (top row = begin() + m_CurrentValue = index 1).
-        list.SetTopVisibleForTest(&listItems[2]);           // committed -> Blue
-        list.SetHoverForTest(&listItems[4]);                // hovered   -> RGB(0x50,0x96,0xFF)
+        list.SetTopVisibleForTest(&items[2]);           // committed -> Blue (matches combo selection "CHERRY")
+        list.SetHoverForTest(&items[4]);                // hovered   -> RGB(0x50,0x96,0xFF)
         list.SetTextColourForTest(Colour(20, 20, 30, 255)); // dark text on white/tinted rows
 
         // ListBox::GetSelected returns the committed row.
-        if (list.GetSelected() != &listItems[2]) {
+        if (list.GetSelected() != &items[2]) {
             std::fprintf(stderr, "FAIL: GetSelected() != committed row\n");
             ++failures;
         }
@@ -186,12 +207,12 @@ int main(int argc, char* argv[]) {
         for (int frame = 0; frame < 8; ++frame) {
             SDL_Event ev;
             while (SDL_PollEvent(&ev)) {}
-            DrawPass(h, &combo, &list, scroller);
+            DrawPass(h, &comboCollapsed, &comboExpanded, &list, scroller);
             SDL_GL_SwapWindow(h.window);
         }
 
         if (h.IsScreenshot()) {
-            DrawPass(h, &combo, &list, scroller);
+            DrawPass(h, &comboCollapsed, &comboExpanded, &list, scroller);
             if (!h.ScreenshotPng("dropdown/dropdown")) {
                 std::fprintf(stderr, "FAIL: ScreenshotPng failed\n");
                 ++failures;
@@ -211,7 +232,7 @@ int main(int argc, char* argv[]) {
                         ev.key.keysym.sym == SDLK_ESCAPE) { running = false; break; }
                 }
                 if (!running) break;
-                DrawPass(h, &combo, &list, scroller);
+                DrawPass(h, &comboCollapsed, &comboExpanded, &list, scroller);
                 SDL_GL_SwapWindow(h.window);
                 SDL_Delay(16);
             }
