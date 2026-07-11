@@ -18,24 +18,27 @@
 // The binary is touch-only Bada hardware -- there is no mouse device there,
 // so this reservation is host-only SDL glue.
 //
-// Port specific: RELAX MODE (FN::g_RelaxMode, src/debug/DebugFlags.h;
-// toggle F5 / --relax; default OFF; host-only, no binary equivalent).
+// Port specific: MOTION MODE (FN::g_MotionMode, src/debug/DebugFlags.h;
+// toggle F5 / --motion; default OFF; host-only, no binary equivalent).
 // When ON, MOUSE_CHANNEL is driven from RAW SDL_MOUSEMOTION /
 // SDL_MOUSEBUTTONDOWN / SDL_MOUSEBUTTONUP instead of the SDL-synthesized
 // SDL_FINGER* events (SDL_HINT_MOUSE_TOUCH_EVENTS=1 still synthesizes those
 // alongside the raw events; DrainSDLEvent suppresses the synthesized ones
-// for fingerId==SDL_TOUCH_MOUSEID while relax is ON so the two paths never
-// double-drive the channel). Real touch fingers (channels 0-14) are
-// unaffected in both modes.
+// for fingerId==SDL_TOUCH_MOUSEID while motion mode is ON so the two paths
+// never double-drive the channel). Real touch fingers (channels 0-14) are
+// unaffected in both modes. This file only does CURSOR TRACKING -- the
+// blade always follows the cursor; the velocity gate that decides whether
+// a fast-enough movement actually cuts lives in SlashEntity::Update (so the
+// trail keeps animating while the user is merely aiming).
 //   - Hovering with the cursor inside the window and no button held keeps
-//     MOUSE_CHANNEL pressed and moving -- the blade follows the cursor and
-//     slices without holding a button.
+//     MOUSE_CHANNEL pressed and moving -- the blade follows the cursor.
 //   - Pressing any mouse button LIFTS the blade (releases MOUSE_CHANNEL) so
-//     the user can reposition without cutting.
+//     the user can reposition without cutting. (v1 placeholder for the
+//     button role -- final choice TBD, this mirrors the old always-cut mode.)
 //   - Releasing the last held button re-presses MOUSE_CHANNEL at the
 //     current position (if the cursor is still inside the window).
 //   - The cursor leaving the window releases MOUSE_CHANNEL.
-// When OFF, behaviour is identical to the pre-relax synthesized-finger path.
+// When OFF, behaviour is identical to the pre-motion-mode synthesized-finger path.
 //
 // Refresh-rate-independent dispatch (Mortar::Touch::Update @0x00242d14):
 //
@@ -77,6 +80,7 @@
 #include <SDL.h>
 #include "input/InputManager.h"
 #include "render/Renderer.h"
+#include "debug/DebugFlags.h"
 
 class InputTranslatorSDL {
 public:
@@ -91,7 +95,7 @@ public:
     // InputManager exactly like channels 0-7, and
     // SlashEntity::RegisterInputCallbacks subscribes g_pSlashEntities[15]
     // (GameInit's 16-blade init loop) to those same hashes.
-    static const int MOUSE_CHANNEL = 15;
+    static const int MOUSE_CHANNEL = FN::POINTER_FINGER_CHANNEL;
 
     // Pre-computed action hashes for 16 touch channels
     uint32_t hashTouchDown[16];
@@ -171,15 +175,15 @@ private:
 
     SDL_FingerID fingerMap[16];
 
-    // Port specific: RELAX MODE raw-mouse-drive helpers for MOUSE_CHANNEL.
+    // Port specific: MOTION MODE raw-mouse-drive helpers for MOUSE_CHANNEL.
     // Mirror the FINGERDOWN / FINGERUP handling DrainSDLEvent already does
     // for overflow channels (8-15), reused here so the channel-8..15
     // pending-bool model (see DispatchForSimTick) stays the single source
     // of truth for how a press/release reaches InputManager.
-    // RelaxPressMouseChannel is a no-op if MOUSE_CHANNEL is already active.
-    void RelaxPressMouseChannel(float gx, float gy);
-    // RelaxReleaseMouseChannel is a no-op if MOUSE_CHANNEL is not active.
-    void RelaxReleaseMouseChannel();
+    // PointerPressMouseChannel is a no-op if MOUSE_CHANNEL is already active.
+    void PointerPressMouseChannel(float gx, float gy);
+    // PointerReleaseMouseChannel is a no-op if MOUSE_CHANNEL is not active.
+    void PointerReleaseMouseChannel();
 
 #ifdef FN_TEST
 public:

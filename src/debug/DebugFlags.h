@@ -22,10 +22,19 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   (SoundManager::SFXPlay, src/engine/audio/SoundManagerSDL.cpp).
 //                   Display-only -- never gates actual audio. Toggle F4,
 //                   or launch with --osd-sfx (desktop) / web ?osdsfx=1.
-// g_RelaxMode:      host-only "hover to slice" mode -- the mouse blade is
-//                   driven by raw cursor position instead of button-hold.
-//                   See src/platform/InputTranslatorSDL.cpp. Off by default.
-//                   Toggle F5, or launch with --relax.
+// g_MotionMode:     host-only velocity-gated pointer slash -- the pointer
+//                   blade (channel FN::POINTER_FINGER_CHANNEL) tracks the
+//                   raw cursor position continuously (same plumbing as the
+//                   retired "relax" mode), but a fruit/bomb cut only
+//                   registers when the blade's smoothed speed clears
+//                   g_MotionSpeedThreshold: slow movement aims, a fast
+//                   flick cuts. See src/platform/InputTranslatorSDL.cpp
+//                   (cursor tracking) and src/entities/SlashEntity.cpp
+//                   (the speed gate). Off by default. Toggle F5, or launch
+//                   with --motion / web ?motion=1.
+// g_MotionSpeedThreshold: px-per-sim-tick cut threshold for g_MotionMode.
+//                   Tune live with F6 (down) / F8 (up), --motion-threshold=<f>
+//                   (desktop) or web ?motionthreshold=<f>.
 //
 
 namespace FN {
@@ -36,7 +45,15 @@ extern float g_DebugTimeScale;         // Port specific: debug-only, no binary e
 extern bool  g_ShowFps;                // Port specific: FPS counter overlay (toggle F3, --fps, ?fps=1)
 extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Overlay for debug-drawn text
 extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX played (toggle F4, --osd-sfx, ?osdsfx=1)
-extern bool  g_RelaxMode;              // Port specific: hover-to-slice mouse mode (toggle F5, --relax), default OFF
+extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default OFF
+extern float g_MotionSpeedThreshold;   // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8, --motion-threshold=<f>)
+
+// Port specific: shared pointer/mouse finger channel constant -- single
+// source of truth for InputTranslatorSDL::MOUSE_CHANNEL and SlashEntity's
+// motion-mode gate (channel 15, the pointer's dedicated non-touch channel;
+// see InputTranslatorSDL.h). Lives here (not InputTranslatorSDL.h) so
+// SlashEntity.cpp can reference it without including the SDL translator header.
+static const int POINTER_FINGER_CHANNEL = 15;
 
 // Render every active Fruit / Bomb / SplatEntity collision sphere as
 // a translucent circle. Call from GameDraw after the entity pass.
@@ -95,7 +112,7 @@ static const bool  g_DebugWireframe      = false;
 static const bool  g_ShowFps             = false;
 static const bool  g_SuppressTextOverlay = false;
 static const bool  g_bOsdSfx             = false;
-static const bool  g_RelaxMode           = false;
+static const bool  g_MotionMode          = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}

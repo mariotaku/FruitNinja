@@ -213,7 +213,8 @@ static void BootWait(void* arg) {
     //                                        no F1, so the level is set straight from the URL.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
     //   ?osdsfx=1                    -- per-SFX OSD readout (g_bOsdSfx, F4 on desktop)
-    //   ?relax=1                     -- relax mode (hover-to-slice mouse/pointer; F5 on desktop)
+    //   ?motion=1                    -- velocity-gated pointer slash (mouse/pointer; F5 on desktop)
+    //   ?motionthreshold=<float>     -- sets g_MotionSpeedThreshold (px/sim-tick; F6/F8 on desktop)
     {
         // hitbox / hitboxes=<level>
         int hitboxLevel = EM_ASM_INT({
@@ -287,21 +288,41 @@ static void BootWait(void* arg) {
             LOG_INFO("Debug", "URL param: SFX OSD ON");
         }
 
-        // relax=1 or relax (bare) -- enables relax mode
+        // motion=1 or motion (bare) -- enables motion mode
         // (same flag F5 toggles on desktop; mobile has no F5).
-        int relaxParam = EM_ASM_INT({
+        int motionParam = EM_ASM_INT({
             try {
                 var qs = window.location.search;
                 if (!qs) return 0;
                 var params = new URLSearchParams(qs);
-                var v = params.get('relax');
+                var v = params.get('motion');
                 if (v !== null && v !== '0') return 1;
             } catch(e) {}
             return 0;
         });
-        if (relaxParam) {
-            FN::g_RelaxMode = true;
-            LOG_INFO("Debug", "URL param: relax mode ON");
+        if (motionParam) {
+            FN::g_MotionMode = true;
+            LOG_INFO("Debug", "URL param: motion mode ON");
+        }
+
+        // motionthreshold=<float> -- sets g_MotionSpeedThreshold
+        // (same tuning F6/F8 do on desktop; mobile has no F-keys).
+        double motionThresholdParam = EM_ASM_DOUBLE({
+            try {
+                var qs = window.location.search;
+                if (!qs) return -1.0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('motionthreshold');
+                if (v !== null) {
+                    var f = parseFloat(v);
+                    if (!isNaN(f) && f >= 0.0) return f;
+                }
+            } catch(e) {}
+            return -1.0;
+        });
+        if (motionThresholdParam >= 0.0) {
+            FN::g_MotionSpeedThreshold = (float)motionThresholdParam;
+            LOG_INFO("Debug", "URL param: motion threshold = %.1f", FN::g_MotionSpeedThreshold);
         }
 
         // lang=<code|num> -- language override for i18n testing.
