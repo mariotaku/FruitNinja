@@ -805,6 +805,19 @@ set_tests_properties(dropdown_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_dropdown PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_combobox;component_listbox;component_verticalscroller")
 
+# SettingsScreen render test (port-improvement in-game settings modal). Renders
+# the whole panel -- dialog_box plate + LANGUAGE combo / MOTION MODE / SENSITIVITY
+# / FPS COUNTER rows -- via the screen's own Draw(). The screen self-injects
+# procedural placeholder art in Init(). No binary counterpart; validates the
+# screen constructs + draws without crashing, not a faithful layout.
+# Output: tmp/test/screenshots/settings_screen/settings.png.
+fn_add_game_test(test_settings_screen_render test_settings_screen_render.cpp)
+add_test(NAME settings_screen_render COMMAND test_settings_screen_render)
+add_test(NAME screenshot_settings_screen COMMAND test_settings_screen_render --screenshot)
+set_tests_properties(settings_screen_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_settings_screen PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_settingsscreen")
+
 # Interactive settings-widget dev harness. Opens a REAL clickable window laying
 # out the ported settings widgets (CheckBox / SliderControl / ComboBox stack)
 # each bound to a live app parameter (m_bSoundOn / m_bMusicOn / g_MotionMode /
