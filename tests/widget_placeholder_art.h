@@ -1,7 +1,7 @@
 // widget_placeholder_art.h -- shared in-memory placeholder textures for the
 // dead-code settings/dropdown widget render + interactive tests.
 //
-// The faithful widget .tex art (checked/unchecked switch, slider track/thumb,
+// The faithful widget .tex art (checked/unchecked checkbox, slider track/thumb,
 // dialog bar, expand/scroll arrows) is NOT shipped in v1.6.1 (the widgets are
 // dead code), so the tests inject PROCEDURALLY-DRAWN substitute textures via
 // each widget's SetTexturesForTest hook. These helpers build them.
@@ -82,6 +82,37 @@ inline float CircleSDF(float px, float py, float cx, float cy, float radius)
     return std::sqrt(dx * dx + dy * dy) - radius;
 }
 
+// Signed distance to an axis-aligned rounded rectangle (square-ish box with
+// corner radius `radius`). Negative = inside.
+inline float RoundedRectSDF(float px, float py, float cx, float cy,
+                            float halfW, float halfH, float radius)
+{
+    float dx = std::fabs(px - cx) - (halfW - radius);
+    float dy = std::fabs(py - cy) - (halfH - radius);
+    float qx = dx > 0.0f ? dx : 0.0f;
+    float qy = dy > 0.0f ? dy : 0.0f;
+    float outside = std::sqrt(qx * qx + qy * qy);
+    float inside = (dx > dy ? dx : dy);
+    if (inside > 0.0f) inside = 0.0f;
+    return outside + inside - radius;
+}
+
+// Signed distance to a thick line segment (a..b, half-width `halfW`). Negative
+// = inside the stroke. Used to rasterize the checkmark tick.
+inline float SegmentSDF(float px, float py, float ax, float ay,
+                        float bx, float by, float halfW)
+{
+    float abx = bx - ax, aby = by - ay;
+    float apx = px - ax, apy = py - ay;
+    float abLenSq = abx * abx + aby * aby;
+    float t = abLenSq > 0.0f ? (apx * abx + apy * aby) / abLenSq : 0.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float cx = ax + abx * t, cy = ay + aby * t;
+    float dx = px - cx, dy = py - cy;
+    return std::sqrt(dx * dx + dy * dy) - halfW;
+}
+
 // Antialiased coverage from a signed distance: 1 fully inside, 0 fully
 // outside, linear ramp across a ~1.5px band at the edge.
 inline float Coverage(float d)
@@ -92,36 +123,37 @@ inline float Coverage(float d)
 }
 
 // ---------------------------------------------------------------------------
-// Build a procedural TOGGLE-SWITCH texture: a rounded "pill" track (alpha=0
-// outside the pill so the shape reads as a switch against the background, not a
-// filled rectangle) with a filled circular knob offset toward one end.
-//   on=false (OFF/unchecked): grey pill, light knob centered in the LEFT third.
-//   on=true  (ON/checked):    green pill, light knob centered in the RIGHT third.
+// Build a procedural CHECKBOX texture: a rounded-square box (alpha=0 outside
+// the box so the shape reads as a discrete checkbox against the background,
+// not a filled rectangle), optionally filled + marked with a checkmark tick.
+//   checked=false (unchecked): empty box -- grey outline, transparent interior.
+//   checked=true  (checked):   filled green box + white checkmark tick.
 //
-// Deliberately fills the FULL w x h texture (no hit-rect inset): CheckBox's
-// clickable bound is a binary-hardcoded hit-rect, pos.x +/-36 / pos.y +/-28.5
-// (72x57), independent of this placeholder's drawn size (CheckBox::Draw scales
-// a 128x64 quad; Update tests +/-36/+/-28.5). That means this placeholder's
-// outer margin is honestly visible-but-unclickable, matching how an oversized
-// switch graphic would actually behave against the real hit-rect -- an inset
-// pill would misrepresent the true quad size. A real/proper checked.tex should
-// author its switch graphic WITHIN that hit-rect so visible == clickable;
-// this placeholder does not attempt that.
+// CheckBox's clickable bound is a binary-hardcoded hit-rect, pos.x +/-36 /
+// pos.y +/-28.5 (72x57) -- see CheckBox::Update / CheckBox.cpp lines 106-109 --
+// independent of this placeholder's drawn size (CheckBox::Draw scales a
+// 128x64 quad regardless). So the box is drawn well WITHIN that hit-rect
+// (half-extents ~27.5 < 36 x / 28.5 y) with margin to spare, so the whole
+// visible shape sits inside the clickable area. A real/proper checked.tex
+// should do the same; this placeholder mirrors that constraint.
 // ---------------------------------------------------------------------------
-inline Mortar::SmartPtr<Mortar::Texture> MakeSwitchTex(bool on, int w, int h)
+inline Mortar::SmartPtr<Mortar::Texture> MakeCheckboxTex(bool checked, int w, int h)
 {
-    const float margin = 4.0f;
-    const float cx     = (float)w * 0.5f;
-    const float cy     = (float)h * 0.5f;
-    const float halfW  = (float)w * 0.5f - margin;
-    const float halfH  = (float)h * 0.5f - margin;
-    const float knobR  = halfH - 3.0f;
-    const float thirdW = (float)w / 3.0f;
-    const float knobCx = on ? ((float)w - thirdW * 0.5f) : (thirdW * 0.5f);
+    const float cx      = (float)w * 0.5f;
+    const float cy      = (float)h * 0.5f;
+    const float halfBox = 27.5f;          // box half-extent, inside the +/-36 x / +/-28.5 y hit-rect
+    const float corner  = 6.0f;           // rounded-square corner radius
+    const float strokeW = 3.0f;           // outline thickness (unchecked)
 
-    const uint8_t trackR = on ?  60 : 120;
-    const uint8_t trackG = on ? 190 : 120;
-    const uint8_t trackB = on ?  60 : 120;
+    const uint8_t fillR = 40,  fillG = 170, fillB = 70;   // checked: green fill
+    const uint8_t lineR = 180, lineG = 180, lineB = 180;  // unchecked: mid-grey outline
+    const uint8_t tickR = 255, tickG = 255, tickB = 255;  // checked: white tick
+
+    // Tick geometry: two strokes forming a checkmark, in texture pixels.
+    const float tickHalfW = 3.0f;
+    const float p0x = cx - halfBox * 0.55f, p0y = cy + halfBox * 0.05f;
+    const float p1x = cx - halfBox * 0.12f, p1y = cy + halfBox * 0.45f;
+    const float p2x = cx + halfBox * 0.60f, p2y = cy - halfBox * 0.50f;
 
     std::vector<uint8_t> px((size_t)w * (size_t)h * 4, 0);
     for (int y = 0; y < h; ++y) {
@@ -129,23 +161,39 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeSwitchTex(bool on, int w, int h)
             float fx = (float)x + 0.5f;
             float fy = (float)y + 0.5f;
 
-            float trackCov = Coverage(StadiumSDF(fx, fy, cx, cy, halfW, halfH));
-            if (trackCov <= 0.0f) continue;
+            float boxD = RoundedRectSDF(fx, fy, cx, cy, halfBox, halfBox, corner);
 
-            float knobCov = Coverage(CircleSDF(fx, fy, knobCx, cy, knobR));
-
-            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
-            if (knobCov > 0.0f) {
-                // Light knob, blended over the track colour at its own edge.
-                out[0] = (uint8_t)(230.0f * knobCov + (float)trackR * (1.0f - knobCov));
-                out[1] = (uint8_t)(230.0f * knobCov + (float)trackG * (1.0f - knobCov));
-                out[2] = (uint8_t)(235.0f * knobCov + (float)trackB * (1.0f - knobCov));
+            float cov;
+            uint8_t r, g, b;
+            if (checked) {
+                cov = Coverage(boxD);
+                r = fillR; g = fillG; b = fillB;
+                if (cov > 0.0f) {
+                    float tickCov = Coverage(SegmentSDF(fx, fy, p0x, p0y, p1x, p1y, tickHalfW));
+                    float tickCov2 = Coverage(SegmentSDF(fx, fy, p1x, p1y, p2x, p2y, tickHalfW));
+                    if (tickCov2 > tickCov) tickCov = tickCov2;
+                    if (tickCov > 0.0f) {
+                        r = (uint8_t)((float)tickR * tickCov + (float)fillR * (1.0f - tickCov));
+                        g = (uint8_t)((float)tickG * tickCov + (float)fillG * (1.0f - tickCov));
+                        b = (uint8_t)((float)tickB * tickCov + (float)fillB * (1.0f - tickCov));
+                    }
+                }
             } else {
-                out[0] = trackR;
-                out[1] = trackG;
-                out[2] = trackB;
+                // Outline only: coverage of the outer edge minus coverage of the
+                // inner edge (box shrunk by strokeW) leaves just the border band.
+                float outerCov = Coverage(boxD);
+                float innerCov = Coverage(RoundedRectSDF(fx, fy, cx, cy, halfBox - strokeW, halfBox - strokeW, corner - strokeW));
+                cov = outerCov - innerCov;
+                if (cov < 0.0f) cov = 0.0f;
+                r = lineR; g = lineG; b = lineB;
             }
-            out[3] = (uint8_t)(255.0f * trackCov);
+
+            if (cov <= 0.0f) continue;
+            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
+            out[0] = r;
+            out[1] = g;
+            out[2] = b;
+            out[3] = (uint8_t)(255.0f * cov);
         }
     }
 
