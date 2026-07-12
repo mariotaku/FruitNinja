@@ -688,6 +688,9 @@ float Font::MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const {
             int pixelSize = (int)(scale + 0.5f);
             if (pixelSize < 1)   pixelSize = 1;
             if (pixelSize > 256) pixelSize = 256;
+            // Matches DrawStringTTF's normalization so measured width equals
+            // drawn width (both divide by pixelSize; GetGlyph metrics are
+            // already 1px-per-pixelSize -- see FontCacheObjectTTF::SetCharSize).
             const float invPS = 1.0f / (float)pixelSize;
             float width = 0.0f;
             float maxW  = 0.0f;
@@ -778,6 +781,10 @@ float Font::MeasureString(const char* str) const {
 // Renders a string using the FreeType glyph atlas. Follows the same
 // quad-emit geometry as the .fnt path so call sites need no changes.
 // Pixel size = (int)scale (world units == pixels in original ortho space).
+// GlyphAtlasEntry metrics (bearingX/Y, advanceX, width, height) are already
+// in 1px-per-requested-pixelSize units -- FontCacheObjectTTF::SetCharSize
+// calls FT_Set_Char_Size with resolution 0/0 (FreeType default 72dpi, i.e.
+// 1pt == 1px) precisely so no extra dpi correction is needed here.
 // ---------------------------------------------------------------------------
 
 static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
@@ -838,6 +845,19 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
     const uint32_t packedColour = colour.PlatformColour();
     float cursorX = lineOffset;
 
+    // Port specific: TOP-origin pen shift. GlyphAtlasEntry::bearingY is
+    // baseline-relative (FreeType convention: ink top is `bearingY` px ABOVE
+    // the baseline), so anchoring quads at raw bearingY makes `pos.y` the
+    // BASELINE and all ink renders above it. The bitmap-.fnt path's Y build
+    // (Font.cpp DrawString, "cy = cursorY - g->yoff - g->h*0.5f" with
+    // cursorY starting at 0) instead anchors `pos.y` at the TOP of the line:
+    // g->yoff is the .fnt "top of line -> top of glyph ink" offset, so at
+    // cursorY=0 the glyph top sits at -yoff, i.e. AT OR BELOW pos.y, never
+    // above it. To match that convention here, shift the pen down by the
+    // face ascent so local Y=0 (before the scale+translate transform below)
+    // represents the line's TOP, same as the bitmap path's cursorY=0.
+    const float ascentPx = ttf->GetAscender((float)pixelSize);
+
     Mortar::Utf8StringIterator it = iter;
     while (!it.IsEmpty() && vertCount < MAX_GLYPHS) {
         uint32_t cp = it.m_CurrentCodepoint;
@@ -854,14 +874,22 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
         if (!g) { it++; continue; }
 
         if (g->width > 0 && g->height > 0) {
-            // Glyph quad in pixel space. bearingY is pixels above baseline.
+            // Glyph quad in pixel space. bearingY is pixels above baseline;
+            // subtract the face ascent to re-anchor to the line TOP (see
+            // ascentPx comment above) so this matches the .fnt TOP-origin
+            // convention. Local space feeds textM (pure scale+translate, no
+            // flip) straight into the +Y-up world ortho -- same convention
+            // as the .fnt path's "cy+hh -> top / cy-hh -> bottom"
+            // (Font.cpp ~1237). So y0 (top, paired with v0) must be the
+            // LARGER local Y, not more negative.
             const float x0 = cursorX + (float)g->bearingX;
-            const float y0 = -(float)(g->bearingY);          // top edge (screen-down +Y)
+            const float y0 = (float)g->bearingY - ascentPx;    // top edge (+Y-up), line-top-relative
             const float x1 = x0 + (float)g->width;
-            const float y1 = y0 + (float)g->height;
+            const float y1 = y0 - (float)g->height;           // bottom edge (+Y-up)
 
             // Normalize to lineHeight-normalized space (like .fnt):
-            // divide pixel coords by pixelSize.
+            // divide pixel coords by pixelSize (GetGlyph metrics are already
+            // 1px-per-pixelSize -- see FontCacheObjectTTF::SetCharSize).
             const float invPS = 1.0f / (float)pixelSize;
             const float nx0 = x0 * invPS, nx1 = x1 * invPS;
             const float ny0 = y0 * invPS, ny1 = y1 * invPS;
