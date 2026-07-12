@@ -44,11 +44,13 @@
 // widget has no ScrollingMenuItem children -- rows are drawn directly from
 // m_ScrollOffset each frame).
 //
-// Row content clip: a straddling row's highlight box / text is CUT at the
-// panel's inner viewport edge (true glScissor, inset past the box's rim --
-// see Draw()), not geometrically shrunk -- a shrunk box reads as a squish,
-// not a clip. The scissor rect and Font::DrawString's clipRect use the same
-// world-space bounds so both clip mechanisms agree pixel-for-pixel.
+// Row content clip: a straddling row's highlight box is CUT at the panel's
+// inner viewport TOP/BOTTOM edge (true glScissor, see Draw()), not
+// geometrically shrunk -- a shrunk box reads as a squish, not a clip. The
+// highlight-box scissor is VERTICAL-ONLY (full ortho width) -- it must never
+// clip the box's left/right sides. Row TEXT additionally uses
+// Font::DrawString's clipRect, which IS X-inset (past the box's rim) since
+// per-glyph text clamping doesn't have the same squish/clip distinction.
 //
 // Sign convention: m_ScrollOffset >= 0; 0 = list top (item 0 first row),
 // +maxScroll = list bottom (maxScroll = (itemCount-visibleRows)*rowH).
@@ -138,17 +140,20 @@ private:
     float ComputeMaxScroll() const;
 
     // Top/bottom rounded-corner fade band for the open row list: m_FadeTex
-    // (list_fade.tex -- see its own header comment) NineSlice-drawn at
-    // (kFadeHeightFrac * m_RowH) world-unit height, inset kBoxDestBorderX in
-    // from each side (the same NineSlice border DrawBox's panel box itself
-    // reserves) so the band's rounded top corners line up with the panel's
-    // own rounded corners and never draw over its bevel/rim. Top band drawn
-    // normally; bottom band reuses the SAME texture with flipV=true
-    // (NineSlice::Draw) rather than a second asset. Drawn AFTER the row
-    // loop so a row scrolling past the viewport edge dissolves into it
-    // rather than being hard-cut. No-ops if m_FadeTex was never set.
+    // (list_fade.tex -- see its own header comment) NineSlice-drawn at a
+    // fixed kFadeHeight (10.0f) world-unit height, spanning the SAME X
+    // extent as the row highlight boxes (m_BarW - 2*pad) and flush against
+    // the panel's inner top/bottom viewport edges (not inset further
+    // inward) so the band's rounded top corners line up with the panel's
+    // own rounded corners right at the edge. Top band drawn normally;
+    // bottom band reuses the SAME texture with flipV=true (NineSlice::Draw)
+    // -- opaque + rounded corners at the panel's outer bottom edge, fading
+    // upward toward the list interior -- rather than a second asset. Drawn
+    // AFTER the row loop so a row scrolling past the viewport edge
+    // dissolves into it rather than being hard-cut. No-ops if m_FadeTex was
+    // never set.
     void DrawFadeEdges(float viewportTop, float viewportBottom);
-    static const float kFadeHeightFrac;   // 1/3 -- fraction of m_RowH each fade band spans
+    static const float kFadeHeight;   // 10.0f -- fixed world-unit height per fade band
 
     // Drag/fling/spring-back constants -- ported verbatim from ScrollingMenu
     // (src/hud/ScrollingMenu.cpp); see that file's header comment for the
