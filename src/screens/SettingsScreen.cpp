@@ -168,9 +168,10 @@ void SettingsScreen::Init() {
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture.
     m_Backdrop       = MakeSolidTex(0, 0, 0, 255, 8, 8);
 
-    // blank_dialog_box.tex ships -- use it for the combo bar / list-row bg
-    // instead of a procedural placeholder.
-    m_TexBar = Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
+    // Combo bar: the designed recessed field (combo_bar.tex); fall back to the
+    // shipped blank_dialog_box.tex if the SVG art wasn't generated on this host.
+    m_TexBar = LoadOrPlaceholder("combo_bar.tex",
+                                 Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex"));
 
     CheckBox::SetTexturesForTest(m_TexCheckboxOn, m_TexCheckboxOff);
     SliderControl::SetTexturesForTest(m_TexTrack, m_TexThumb);
