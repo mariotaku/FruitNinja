@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="40" viewBox="0 0 64 40">
+  <!-- box.tex - the binary's shared generic beveled-wood box (LoadContent of
+       ComboBox @0x00168b3c, ListBox @0x00194fdc, SliderControl @0x001b7bc0 all
+       load "box.tex"). Used as the ComboBox value field, ListBox row, and
+       SliderControl track, stretched to each cell. Same three-layer carved-wood
+       construction as checked/unchecked.svg: outer wood rim (rx 5.5, stroke
+       1.5), tan bevel rim (rx 4.5, inset 1.5, stroke 1.3 #a9743a), inner groove
+       (rx 3.5, inset 4, stroke 1.0). -->
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a5326"/>
+      <stop offset="0.5" stop-color="#3c2510"/>
+      <stop offset="1" stop-color="#241608"/>
+    </linearGradient>
+    <linearGradient id="groove" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1008"/>
+      <stop offset="0.5" stop-color="#2a1a0d"/>
+      <stop offset="1" stop-color="#3a2612"/>
+    </linearGradient>
+  </defs>
+  <!-- outer wood rim -->
+  <rect x="2" y="2" width="60" height="36" rx="5.5" ry="5.5" fill="url(#wood)"
+        stroke="#1a0f06" stroke-width="1.5"/>
+  <!-- tan bevel rim (inset 1.5) -->
+  <rect x="3.5" y="3.5" width="57" height="33" rx="4.5" ry="4.5" fill="none"
+        stroke="#a9743a" stroke-width="1.3" stroke-opacity="0.7"/>
+  <!-- inner groove (inset 4) -->
+  <rect x="6" y="6" width="52" height="28" rx="3.5" ry="3.5" fill="url(#groove)"
+        stroke="#0d0803" stroke-width="1.0"/>
+</svg>

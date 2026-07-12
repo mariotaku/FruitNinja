@@ -4,23 +4,22 @@
 // Usage: test_checkbox_render [--screenshot|--interactive|--headless]
 //
 // Renders CheckBox unchecked + CheckBox checked (two instances) -- the state shows
-// as a rounded-square CHECKBOX texture (grey outline / transparent interior =
-// unchecked, green fill + white checkmark tick = checked). CheckBox::Draw scales a
-// HARDCODED 128x64 quad and swaps between two textures purely by m_Checked; the
-// real binary textures are named checked.tex / unchecked.tex (a tick-box, not an
-// on/off switch), so the placeholder mirrors that shape, sized to fit within the
-// widget's hardcoded hit-rect (pos.x +/-36 / pos.y +/-28.5).
+// as a rounded-square CHECKBOX texture (unchecked.tex / checked.tex, a tick-box
+// not an on/off switch). CheckBox::Draw scales a HARDCODED 128x64 quad and swaps
+// between the two textures purely by m_Checked; the art is sized to fit within
+// the widget's hardcoded hit-rect (pos.x +/-36 / pos.y +/-28.5).
 //
 // Output PNG (--screenshot mode):
 //   tmp/test/screenshots/checkbox/checkbox.png
 //
-// NOTE: validates widget GEOMETRY + STATE (checkbox on/off), NOT the final shipped
-// art. The faithful textures (checked.tex / unchecked.tex) are NOT shipped in
-// v1.6.1 (the widget is dead code), so the test injects in-memory
-// PROCEDURALLY-DRAWN substitute textures via CheckBox::SetTexturesForTest --
-// rounded-rect + checkmark signed-distance fills, no external image deps. Widget
-// positions are test-chosen (v1.6.1 never places this widget); only its geometry
-// and checked/unchecked state are meaningful here.
+// NOTE: validates widget GEOMETRY + STATE (checkbox on/off). The port stages the
+// real checked.tex / unchecked.tex art at build time -- generated from
+// assets/ui-widgets/*.svg by fn_asset_staging (tools/assets/svg-to-webp.mjs,
+// mandatory -- fails the build if generation fails) -- so this test LOADS THE
+// REAL TEXTURES via LoadLocalisedTexture and injects them via
+// CheckBox::SetTexturesForTest. Widget positions are test-chosen (v1.6.1 never
+// places this widget); only its geometry and checked/unchecked state are
+// meaningful here.
 //
 // C++11 / GCC 4.4.1 clean (host-only test TU, but kept lambda/auto/range-for free).
 
@@ -28,6 +27,7 @@
 #include "hud/CheckBox.h"
 #include "game/GameWork.h"
 #include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
@@ -38,11 +38,6 @@
 #include <cstdint>
 #include <cmath>
 #include <SDL.h>
-
-// Placeholder-art texture makers (MakeCheckboxTex + the SDF helpers) are shared
-// with test_slider_render.cpp and test_settings_interactive.cpp -- see the header.
-#include "hud/WidgetPlaceholderArt.h"
-using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
 // Render pass: clear + ortho + draw both checkboxes. Caller swaps.
@@ -78,12 +73,19 @@ int main(int argc, char* argv[]) {
     }
 
     // -----------------------------------------------------------------------
-    // Substitute textures (real art is not shipped -- see file header note).
-    // CheckBox's quad is a HARDCODED 128x64 (2:1) -- generate the checkbox textures
-    // at that exact size so the 1:1 texel mapping is crisp (no stretch).
+    // Real staged textures (see file header note). checked.tex / unchecked.tex
+    // are generated at 128x64 to match CheckBox's HARDCODED 128x64 (2:1) draw
+    // quad 1:1 (no stretch).
     // -----------------------------------------------------------------------
-    Mortar::SmartPtr<Mortar::Texture> texChecked   = MakeCheckboxTex(true,  128, 64); // checked   -- green box, white tick
-    Mortar::SmartPtr<Mortar::Texture> texUnchecked = MakeCheckboxTex(false, 128, 64); // unchecked -- empty box, grey outline
+    Mortar::SmartPtr<Mortar::Texture> texChecked   = Mortar::TextureManager::LoadLocalisedTexture("checked.tex");
+    Mortar::SmartPtr<Mortar::Texture> texUnchecked = Mortar::TextureManager::LoadLocalisedTexture("unchecked.tex");
+
+    if (!texChecked.IsValid() || !texUnchecked.IsValid()) {
+        std::fprintf(stderr, "FAIL: failed to load staged checked.tex/unchecked.tex "
+                             "-- check fn_asset_staging ran and FN_DATA_DIR_PATH is set\n");
+        h.Shutdown();
+        return 1;
+    }
 
     CheckBox::SetTexturesForTest(texChecked, texUnchecked);
 
@@ -140,7 +142,7 @@ int main(int argc, char* argv[]) {
         }
     } // widgets destroyed while GL context still alive
 
-    // Release the substitute textures (both the static-slot refs and the local
+    // Release the loaded textures (both the static-slot refs and the local
     // refs) while the GL context is still alive -- glDeleteTextures runs inside the
     // Texture2D_Bada dtor, which must not happen after Shutdown tears down GL.
     CheckBox::UnloadContent();

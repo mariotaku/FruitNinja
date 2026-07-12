@@ -24,7 +24,7 @@
 #include <cstdint>
 
 // Collapsed-bar textures (binary: SmartPtr<Texture> GOT slots).
-static Mortar::SmartPtr<Mortar::Texture> s_bar;          // blank_dialog_box.tex
+static Mortar::SmartPtr<Mortar::Texture> s_bar;          // box.tex (shared with ListBox/SliderControl)
 static Mortar::SmartPtr<Mortar::Texture> s_expandArrow;  // expand_arrow.tex
 
 // ---------------------------------------------------------------------------
@@ -281,13 +281,16 @@ void ComboBox::UpdateTouchPosition() {
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x00168b3c
 // ASM-spec v1.6.1 ComboBox::LoadContent @0x00168b3c: LoadLocalisedTexture
-//   blank_dialog_box.tex -> s_bar, expand_arrow.tex -> s_expandArrow.
-// DIFFERS: blank_dialog_box.tex ships in v1.6.1, but expand_arrow.tex does NOT
-//   (dropdown stack is dead code, so its dedicated art was dropped). The faithful
-//   names are kept; s_expandArrow stays null when absent and Draw no-ops the arrow.
+//   box.tex -> s_bar, expand_arrow.tex -> s_expandArrow.
+// box.tex is the SAME shared texture ListBox (@0x00194fdc) and SliderControl
+//   (@0x001b7bc0) load for their own bar/row/track art -- not a ComboBox-only
+//   asset (Ghidra-confirmed string reference at each LoadContent call site).
+// DIFFERS: box.tex ships in v1.6.1, but expand_arrow.tex does NOT (dropdown
+//   stack is dead code, so its dedicated art was dropped). The faithful name
+//   is kept; s_expandArrow stays null when absent and Draw no-ops the arrow.
 //   The visual test injects a substitute via SetTexturesForTest.
 void ComboBox::LoadContent() {
-    s_bar         = Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
+    s_bar         = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
     s_expandArrow = Mortar::TextureManager::LoadLocalisedTexture("expand_arrow.tex");
 }
 
@@ -296,7 +299,8 @@ void ComboBox::UnloadContent() {
     s_expandArrow.SetNull();
 }
 
-// Port/test-only injector (no binary counterpart) -- see header note.
+// Port/test-only injector (no binary counterpart) -- box.tex ships, but
+// expand_arrow.tex does not -- see header note.
 void ComboBox::SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& bar,
                                   const Mortar::SmartPtr<Mortar::Texture>& arrow) {
     s_bar         = bar;

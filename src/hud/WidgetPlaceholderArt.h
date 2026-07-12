@@ -1,20 +1,16 @@
-// WidgetPlaceholderArt.h -- shared in-memory placeholder textures for the
-// dead-code settings/dropdown widgets (CheckBox / SliderControl / ComboBox /
+// WidgetPlaceholderArt.h -- shared in-memory procedurally-drawn textures for
+// the dead-code settings/dropdown widgets (CheckBox / SliderControl / ComboBox /
 // ListBox / VerticalScroller).
 //
-// The faithful widget .tex art (checked/unchecked checkbox, slider track/thumb,
-// dialog bar, expand/scroll arrows) is NOT shipped in v1.6.1 (the widgets are
-// dead code), so callers inject PROCEDURALLY-DRAWN substitute textures via
-// each widget's SetTexturesForTest hook. These helpers build them.
+// The real widget art (checked/unchecked checkbox, slider track/thumb, combo/
+// dialog bar, expand/scroll arrows) IS shipped -- generated from
+// assets/ui-widgets/*.svg at build time by fn_asset_staging
+// (tools/assets/svg-to-webp.mjs) -- so SettingsScreen and the widget render
+// tests load those directly via LoadLocalisedTexture, no fallback. This header
+// now only supplies the handful of elements with NO real .tex counterpart
+// (SettingsScreen's list-row tint canvas, modal backdrop dim) plus
+// test_settings_interactive.cpp's dev-harness textures.
 //
-// Port specific: procedural placeholder textures for the resurrected dead-code
-// settings widgets. TODO: replace with the commissioned checked/unchecked/
-// slider_will/expand_arrow/vbar/vslider/arrow .tex art when it ships, then
-// delete the injection in SettingsScreen.
-//
-// Originally test-only (test_settings_widgets_render.cpp / test_dropdown_render.cpp /
-// test_settings_interactive.cpp); promoted to src/hud so SettingsScreen (a real,
-// shipped in-game screen) can reuse the same makers. No binary counterpart.
 // Host-only TU (GL + Mortar::Texture); header-only inline functions, safe to
 // include from multiple TUs.
 

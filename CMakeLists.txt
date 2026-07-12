@@ -36,13 +36,17 @@ project(FruitNinja LANGUAGES CXX)
 # (unreliable on Windows).
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-# Optional: node runs tools/assets/svg-to-webp.mjs (widget SVG -> WebP .tex
+# Required: node runs tools/assets/svg-to-webp.mjs (widget SVG -> WebP .tex
 # rasterization via the sharp npm package) as part of fn_asset_staging below.
 # Resolved at CONFIGURE time -- a fresh `cmake` run is needed after installing
-# node for the first time. Not REQUIRED: if node isn't found, the widget
-# rasterization step is simply skipped and widgets fall back to placeholder
-# art (see fn_asset_staging's comment below).
+# node for the first time. REQUIRED: SettingsScreen and the widget render tests
+# load the generated widget textures directly (no placeholder-art runtime
+# fallback), so node must be present to produce them.
 find_program(NODE_EXECUTABLE NAMES node)
+if(NOT FN_ASM_VERIFY AND NOT NODE_EXECUTABLE)
+    message(FATAL_ERROR "node not found -- required to rasterize assets/ui-widgets/*.svg "
+                         "(tools/assets/svg-to-webp.mjs). Install Node.js and re-run cmake.")
+endif()
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -492,13 +496,13 @@ if(NOT FN_ASM_VERIFY)
     # and merging in the pre-generated widget art from
     # assets/ui-widgets/generated/*.tex. That widget art is itself generated
     # AT BUILD TIME (not checked in) by tools/assets/svg-to-webp.mjs -- a
-    # Node/sharp step run FIRST, before stage-assets.py, whenever node was
-    # found at configure time (NODE_EXECUTABLE above); it rasterizes
+    # Node/sharp step run FIRST, before stage-assets.py (NODE_EXECUTABLE is
+    # REQUIRED, see the find_program check above); it rasterizes
     # assets/ui-widgets/*.svg on every platform including Windows/CLion, no
-    # offline pre-generation step needed. If node isn't found, this step is
-    # omitted and widgets fall back to placeholder art (see
-    # SettingsScreen::LoadOrPlaceholder) -- non-fatal either way, since
-    # svg-to-webp.mjs itself is also non-fatal on any internal failure.
+    # offline pre-generation step needed. Widget textures have no runtime
+    # placeholder fallback (SettingsScreen / the widget render tests load them
+    # directly), so svg-to-webp.mjs exits non-zero on any failure and fails
+    # this build step loudly.
     # Under --web (EMSCRIPTEN) stage-assets.py additionally transcodes
     # sfx/*.wav.pcm to Ogg/Vorbis (+ sfx-loops.json) and subsets
     # fontstruetype/gangofchinese.ttf, for the Web Audio backend
@@ -514,17 +518,11 @@ if(NOT FN_ASM_VERIFY)
     # time, not configure time -- FruitNinjaBada/Data need not exist yet when
     # CMake configures, only when this target actually runs).
     set(FN_ASSET_STAGING_COMMANDS
+        COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
                 ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
                 $<$<BOOL:${EMSCRIPTEN}>:--web>
     )
-    if(NODE_EXECUTABLE)
-        list(PREPEND FN_ASSET_STAGING_COMMANDS
-            COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
-        )
-    else()
-        message(STATUS "node not found -- widget SVGs won't be rasterized; using placeholder art")
-    endif()
     # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
     # (FN_DATA_DIR_PATH points there), so staging must run on ANY build -- not just
     # when the fruit-ninja exe target is built. Idempotent (mtime), so it's a no-op

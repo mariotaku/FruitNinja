@@ -50,7 +50,7 @@
 //   GetType (-> 5)      @ 0x001954a8
 //   GetSelected         @ 0x00169104 (returns m_TopVisibleIt)
 //   SetCallback         @ 0x001691b4 (assigns m_OnSelect)
-//   LoadContent         @ 0x00194fdc (blank_dialog_box.tex -> s_bar)
+//   LoadContent         @ 0x00194fdc (box.tex -> s_bar; shared with ComboBox/SliderControl)
 //
 
 #include "HUDControl3d.h"
@@ -191,11 +191,11 @@ private:
 public:
 
     // Static texture lifecycle. Binary @ 0x00194fdc.
-    // Loads blank_dialog_box.tex -> s_bar (row background).
+    // Loads box.tex -> s_bar (row background; shared with ComboBox/SliderControl).
     static void LoadContent();
     static void UnloadContent();
 
-    // Port/test-only: inject the row-background texture (blank_dialog_box.tex ships,
+    // Port/test-only: inject the row-background texture (box.tex ships,
     // but the test uses a placeholder for isolation). No binary counterpart.
     static void SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& bar);
 
