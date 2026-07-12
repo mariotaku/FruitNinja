@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="64" viewBox="0 0 128 64">
-  <!-- combo_bar.tex - ComboBox collapsed BAR. A recessed wooden field the
-       selected value sits in (replaces the generic blank_dialog_box, which
-       stretched to a thin outline). Drawn as a single stretched quad (~120x44),
-       so keep the corner radius small (stretch-tolerant). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="32" viewBox="0 0 128 32">
+  <!-- combo_bar.tex - ComboBox VALUE field (left half of the split field).
+       Rounded LEFT, FLAT/open RIGHT so it butts seamlessly against the caret
+       cell (expand_arrow.tex) drawn immediately to its right. Rendered at the
+       bar height (32) with no vertical stretch (texture is 128x32). -->
   <defs>
     <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#9a6a34"/>
@@ -15,19 +15,16 @@
       <stop offset="1" stop-color="#3a2712"/>
     </linearGradient>
   </defs>
-  <!-- wooden rim -->
-  <rect x="2" y="2" width="124" height="60" rx="8" ry="8" fill="url(#rim)"
-        stroke="#1a0f06" stroke-width="1.5"/>
-  <!-- top brass highlight on the rim -->
-  <rect x="4" y="3.5" width="120" height="2" rx="1" ry="1"
-        fill="#e6b25a" fill-opacity="0.55"/>
-  <!-- recessed inner field -->
-  <rect x="7" y="8" width="114" height="48" rx="5" ry="5" fill="url(#field)"
-        stroke="#0d0803" stroke-width="1"/>
+  <!-- wooden rim: rounded left, flat right (extends to x=128 to meet the caret) -->
+  <path d="M9 1.5 L128 1.5 L128 30.5 L9 30.5 Q2 30.5 2 23.5 L2 8.5 Q2 1.5 9 1.5 Z"
+        fill="url(#rim)" stroke="#1a0f06" stroke-width="1.5"/>
+  <!-- top brass highlight -->
+  <rect x="6" y="3" width="120" height="1.6" fill="#e6b25a" fill-opacity="0.55"/>
+  <!-- recessed inner field: rounded left, flat right -->
+  <path d="M11 6.5 L128 6.5 L128 25.5 L11 25.5 Q7 25.5 7 21.5 L7 10.5 Q7 6.5 11 6.5 Z"
+        fill="url(#field)" stroke="#0d0803" stroke-width="1"/>
   <!-- inner top shadow so the field reads sunken -->
-  <rect x="9" y="9.5" width="110" height="6" rx="3" ry="3"
-        fill="#000000" fill-opacity="0.30"/>
+  <rect x="10" y="8" width="118" height="4" fill="#000000" fill-opacity="0.30"/>
   <!-- bottom inner highlight lip -->
-  <rect x="9" y="52" width="110" height="2" rx="1" ry="1"
-        fill="#7a5228" fill-opacity="0.5"/>
+  <rect x="10" y="22.5" width="118" height="1.6" fill="#7a5228" fill-opacity="0.5"/>
 </svg>

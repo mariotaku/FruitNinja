@@ -1,18 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <!-- expand_arrow.tex - ComboBox down chevron, single state. Gold, beveled.
-       Chevron shape from the art bible polygon (downward). -->
+  <!-- expand_arrow.tex - ComboBox CARET cell (right half of the split field).
+       Rounded RIGHT, FLAT/open LEFT with a divider highlight so it reads as one
+       continuous field split from the value cell (combo_bar.tex) to its left.
+       ComboBox draws it at (textureWidth x barHeight) = 32x32 -> no stretch. -->
   <defs>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="rim2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9a6a34"/>
+      <stop offset="0.5" stop-color="#5c3a18"/>
+      <stop offset="1" stop-color="#3a2410"/>
+    </linearGradient>
+    <linearGradient id="field2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#150f08"/>
+      <stop offset="0.5" stop-color="#28190d"/>
+      <stop offset="1" stop-color="#3a2712"/>
+    </linearGradient>
+    <linearGradient id="caret" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffe98a"/>
       <stop offset="0.5" stop-color="#f2c400"/>
       <stop offset="1" stop-color="#d98600"/>
     </linearGradient>
   </defs>
-  <!-- polygon 50% 82%,8% 22%,26% 10%,50% 52%,74% 10%,92% 22% scaled to 32 -->
-  <path d="M16 26.24 L2.56 7.04 L8.32 3.2 L16 16.64 L23.68 3.2 L29.44 7.04 Z"
-        fill="url(#gold)" stroke="#5a3000" stroke-width="1.4"
-        stroke-linejoin="round"/>
-  <!-- top gloss on the two upper edges -->
-  <path d="M8.32 3.2 L16 16.64 L23.68 3.2" fill="none" stroke="#fff4c0"
-        stroke-width="1" stroke-opacity="0.6" stroke-linejoin="round"/>
+  <!-- wooden rim: flat left (x=0), rounded right -->
+  <path d="M0 1.5 L23 1.5 Q30 1.5 30 8.5 L30 23.5 Q30 30.5 23 30.5 L0 30.5 Z"
+        fill="url(#rim2)" stroke="#1a0f06" stroke-width="1.5"/>
+  <!-- top brass highlight -->
+  <rect x="2" y="3" width="24" height="1.6" fill="#e6b25a" fill-opacity="0.55"/>
+  <!-- recessed inner field: flat left, rounded right -->
+  <path d="M0 6.5 L21 6.5 Q25 6.5 25 10.5 L25 21.5 Q25 25.5 21 25.5 L0 25.5 Z"
+        fill="url(#field2)" stroke="#0d0803" stroke-width="1"/>
+  <!-- divider on the left edge (the split between value + caret) -->
+  <rect x="0" y="5" width="1.6" height="22" fill="#1a0f06"/>
+  <rect x="1.6" y="5" width="1.2" height="22" fill="#e6b25a" fill-opacity="0.45"/>
+  <!-- gold down caret, centred in the visible field (art-bible chevron) -->
+  <path d="M13 19 L7 12.4 L9.6 11.1 L13 15.7 L16.4 11.1 L19 12.4 Z"
+        fill="url(#caret)" stroke="#5a3000" stroke-width="1" stroke-linejoin="round"/>
 </svg>

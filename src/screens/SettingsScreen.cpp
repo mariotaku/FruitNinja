@@ -81,9 +81,11 @@ static int ClampInt(int v, int lo, int hi) {
 // ---------------------------------------------------------------------------
 static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 static const float kComboX      =   55.0f, kComboY      =   85.0f;
-// Bar 44 tall (not 55): ComboBox scales the expand arrow to the bar height, and
-// the combo sits near the panel top -- 44 keeps the arrow inside the frame.
-static const float kComboScaleX =  120.0f, kComboScaleY =   44.0f;
+// Bar 32 tall: ComboBox draws the caret cell (expand_arrow.tex) at
+// (textureWidth x barHeight); a 32-tall bar renders the 32x32 caret 1:1 (no
+// stretch) and matches the 32px checkbox/knob height. combo_bar.tex is 128x32
+// so the value field is unstretched too.
+static const float kComboScaleX =  120.0f, kComboScaleY =   32.0f;
 static const uint8_t kComboVisibleRows = 6;
 static const uint16_t kComboWidth      = 20;
 
