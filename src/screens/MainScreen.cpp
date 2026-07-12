@@ -81,17 +81,32 @@ static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // Port specific: no binary counterpart. BOTTOM-left SETTINGS button. +Y is up
 // (sound/music toggles at y=+135.5 are TOP-right), so the bottom edge is
-// negative y; x near the left edge. HUD-space screen bounds are x in
-// [-240,240], y in [-160,160]; the button's on-screen half-size is 24 (its
-// m_RestScale is 48, matched to the pause icon's idle rendered size -- see
-// m_pSettingsButton setup below). Old (-210,-138) with the old 64-size half-
-// extent (32) put the rect at x[-242,-178] / y[-170,-106], clipping both the
-// left (x<-240) and bottom (y<-160) screen edges. Moved fully inside the
-// screen while staying in the same dark corner pocket that is already clear
-// of the DOJO ring's visible extent (ring centre (-144,-65) ~100 radius --
-// the ring's footprint doesn't reach this far into the corner; confirmed
-// against a render capture).
-static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -132.0f, 0.0f);
+// negative y; x near the left edge.
+//
+// Position/margin matched to the in-game PAUSE resume button's ACTUAL idle
+// on-screen rect (re-verified from PauseScreen::Update, src/screens/
+// PauseScreen.cpp ~line 908-968, with the real steady-state field values --
+// NOT assumed): in PAUSE_STATE_HIDDEN, m_Alpha decays via `*= 0.75` each
+// frame with a hard clamp to exactly 0.0 once < FADE_CLAMP (0.01) -- at idle
+// (any time after the ~16-frame/0.27s decay settles) m_Alpha IS exactly 0.0,
+// confirming m_RestScale = m_ButtonOriginPos*resumeScale = 64*0.75 = 48 (not
+// 64). But position has a second-order effect: PauseScreen::Update's Phase 2
+// on-screen lerp (`pos += (target-pos)*m_Alpha`, target=(-64,-20,0)) is
+// GATED on `m_Alpha > 0.0f` -- since m_Alpha==0.0 exactly at idle, Phase 2
+// NEVER RUNS. The button sits at its Phase-1 BASE position instead:
+//   pos.x = -((244-0.5*OX) + |m_ButtonFadeAlpha|*(10+0.75*OX)), OX=64
+//   pos.y = 0.375*OX - 165
+// with m_ButtonFadeAlpha also decayed to ~0 at idle (same *=0.75 decay,
+// gameplay-enabled branch) so the fade term drops out: pos = (-212,-141).
+// Half-size = 48/2 = 24, so the idle rect is x[-236,-188] / y[-165,-117] --
+// LEFT margin only +4 from the x=-240 screen edge, and BOTTOM margin -5
+// (the icon hangs 5 units off the bottom edge, clipped). This tight/
+// negative-margin corner-hugging placement -- not just the 48 size -- is
+// what makes the pause icon read as "bigger"/edge-tight versus a fully-inset
+// button. Settings mirrors both the size (48) and this exact margin
+// treatment (same corner, same 48 half-size, same +4/-5 margins), landing
+// on the SAME coordinates as the pause button's idle pos: (-212,-141).
+static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
