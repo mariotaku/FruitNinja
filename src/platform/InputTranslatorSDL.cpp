@@ -563,6 +563,32 @@ void InputTranslatorSDL::DispatchForSimTick() {
         bool wasActive = prevActive[ch];
         int  phase     = (slot >= 0) ? touch.states1[slot].phase : 1;
 
+        // v1.6.1 TouchDownCallback @0x001cbf18 -> InputSink::TouchDown: the
+        // binary populates game_work.m_FingerSpawnPos[slot] from the touch
+        // event on press and refreshes .x/.y while held. TouchDownCallback is
+        // stubbed as a no-op pass-through (GameTaskInput.cpp) and InputSink is
+        // unported (GameInit.cpp TODO), so nothing was ever writing this field
+        // -- HUD widgets (UiCheckbox/UiSlider/UiDropdown, CheckBox/SliderControl/
+        // ComboBox/VerticalScroller) read game_work.m_FingerSpawnPos[slot] via
+        // PollTouch and always saw (0,0,0). Populate it here from the already-
+        // drained Touch state (the real position source) instead of reviving
+        // the InputSink call graph. Index by `slot` (Touch::states1 index),
+        // matching what TouchInRegion/IsTouchDown/the widgets themselves use --
+        // NOT `ch` (extId-1), since ___UpdateInternal's rotating-cursor slot
+        // claim means slot != ch in general.
+        // .z is the spawn-anim age counter, independently owned and decremented
+        // by GameInit.cpp's per-frame loop (2 -> 0 -> -1); only stamp it on the
+        // press edge (mirroring the binary's fresh-spawn write) and leave it
+        // alone while held so the aging isn't clobbered every tick.
+        if (slot >= 0 && phase < 1) {
+            Vec3& spawnPos = game_work.m_FingerSpawnPos[slot];
+            spawnPos.x = touch.states1[slot].currX;
+            spawnPos.y = touch.states1[slot].currY;
+            if (phase == -1) {
+                spawnPos.z = 2.0f;
+            }
+        }
+
         if (phase == -1) {
             // Just-pressed this tick.
             float gx = fingerX[ch];
