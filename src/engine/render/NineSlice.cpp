@@ -8,12 +8,14 @@
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
+#include <math.h>
 
 namespace Mortar {
 
 void NineSlice::Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
-                     float srcBorderPx, float destBorder, Colour colour) {
+                     float srcBorderPx, float destBorder, Colour colour,
+                     bool tileCenter, float centerTilePx) {
     if (!tex) return;
     float texW = (float)tex->GetWidth();
     float texH = (float)tex->GetHeight();
@@ -67,6 +69,7 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
     MatrixManager& mm = MatrixManager::GetInstance();
     tex->Set();
     for (int i = 0; i < 9; ++i) {
+        if (i == 4 && tileCenter) continue;         // centre handled below as a tiled grid
         Cell& c = cells[i];
         if (c.w <= 0.0f || c.h <= 0.0f) continue;   // skip a collapsed edge/centre
         mm.GetWorldStack().Reset();
@@ -76,6 +79,239 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawQuadUnCached(colour, c.uMin, c.uMax, c.vMin, c.vMax, NULL);
     }
+
+    // Tiled centre: replace the single stretched centre cell with a grid of
+    // quads, each sampling the SAME fixed centerTilePx x centerTilePx texel
+    // window at the texture's centre (no separate art). Tiled at 1:1 texel
+    // density (centerTilePx world-units per tile) across the centre rect.
+    if (tileCenter && midW > 0.0f && midH > 0.0f && centerTilePx > 0.0f) {
+        float halfPx = centerTilePx * 0.5f;
+        float cuMin = 0.5f - halfPx / texW;
+        float cuSpan = centerTilePx / texW;
+        float cvMin = 0.5f - halfPx / texH;
+        float cvSpan = centerTilePx / texH;
+
+        int cols = (int)ceilf(midW / centerTilePx);
+        int rows = (int)ceilf(midH / centerTilePx);
+        if (cols < 1) cols = 1;
+        if (rows < 1) rows = 1;
+
+        // Centre rect top-left in world space (+X right, +Y up -- top row is high-Y).
+        float left = midCx - midW * 0.5f;
+        float top  = midCy + midH * 0.5f;
+
+        for (int row = 0; row < rows; ++row) {
+            float remH = midH - (float)row * centerTilePx;
+            float h = (remH < centerTilePx) ? remH : centerTilePx;
+            if (h <= 0.0f) continue;
+            float fracV = h / centerTilePx;
+            float cy = top - (float)row * centerTilePx - h * 0.5f;
+
+            for (int col = 0; col < cols; ++col) {
+                float remW = midW - (float)col * centerTilePx;
+                float w = (remW < centerTilePx) ? remW : centerTilePx;
+                if (w <= 0.0f) continue;
+                float fracU = w / centerTilePx;
+                float cx = left + (float)col * centerTilePx + w * 0.5f;
+
+                mm.GetWorldStack().Reset();
+                Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
+                mat.GlobalTranslate44(Vec3(cx, cy, 0.0f));
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
+                Mortar::Mesh::DrawQuadUnCached(colour, cuMin, cuMin + cuSpan * fracU,
+                                               cvMin, cvMin + cvSpan * fracV, NULL);
+            }
+        }
+    }
+
+    tex->UnSet();
+}
+
+namespace {
+
+// One tile along a 1-D tiled span: dest offset/size (from the span's start) and
+// the fraction of the full source-UV extent to sample (1.0 for a full tile, <1.0
+// for the clipped last tile so it doesn't overhang the span).
+struct TileSpan1D {
+    float destOffset;
+    float destSize;
+    float uvFrac;
+};
+
+// Fill `out` (capacity outCap) with tiles covering [0, spanLen) at `tileLen`
+// world-units per tile. Returns the tile count (<= outCap). Skips a degenerate
+// (<=0) trailing tile.
+static int TileSpan(float spanLen, float tileLen, TileSpan1D* out, int outCap) {
+    if (spanLen <= 0.0f || tileLen <= 0.0f) return 0;
+    int count = (int)ceilf(spanLen / tileLen);
+    if (count < 1) count = 1;
+    if (count > outCap) count = outCap;
+    int n = 0;
+    for (int i = 0; i < count; ++i) {
+        float offset = (float)i * tileLen;
+        float rem = spanLen - offset;
+        if (rem <= 0.0f) break;
+        float size = (rem < tileLen) ? rem : tileLen;
+        out[n].destOffset = offset;
+        out[n].destSize = size;
+        out[n].uvFrac = size / tileLen;
+        ++n;
+    }
+    return n;
+}
+
+} // anonymous namespace
+
+void NineSlice::DrawTiled(Texture* tex, float centerX, float centerY,
+                          float destW, float destH,
+                          float srcBorderXPx, float srcBorderYPx,
+                          float worldScale,
+                          float centerTileWPx, float centerTileHPx,
+                          Colour colour) {
+    if (!tex) return;
+    float texW = (float)tex->GetWidth();
+    float texH = (float)tex->GetHeight();
+    if (texW <= 0.0f || texH <= 0.0f || destW <= 0.0f || destH <= 0.0f) return;
+    if (worldScale <= 0.0f) return;
+
+    // Fixed, aspect-correct corner size in world units.
+    float cornerW = srcBorderXPx * worldScale;
+    float cornerH = srcBorderYPx * worldScale;
+    if (cornerW * 2.0f > destW) cornerW = destW * 0.5f;
+    if (cornerH * 2.0f > destH) cornerH = destH * 0.5f;
+
+    // UV splits (u: left/centre/right; v: top/centre/bottom).
+    float ux0 = 0.0f, ux1 = srcBorderXPx / texW, ux2 = 1.0f - srcBorderXPx / texW, ux3 = 1.0f;
+    float uy0 = 0.0f, uy1 = srcBorderYPx / texH, uy2 = 1.0f - srcBorderYPx / texH, uy3 = 1.0f;
+    if (ux1 > 0.5f) { ux1 = 0.5f; ux2 = 0.5f; }
+    if (uy1 > 0.5f) { uy1 = 0.5f; uy2 = 0.5f; }
+
+    // Dest geometry (+X right, +Y up; top row is high-Y, matching Draw()'s convention).
+    float leftCx  = centerX - destW * 0.5f + cornerW * 0.5f;
+    float rightCx = centerX + destW * 0.5f - cornerW * 0.5f;
+    float topCy   = centerY + destH * 0.5f - cornerH * 0.5f;
+    float botCy   = centerY - destH * 0.5f + cornerH * 0.5f;
+    float midW = destW - 2.0f * cornerW;
+    float midH = destH - 2.0f * cornerH;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    tex->Set();
+
+    // -- 4 fixed corners --
+    struct Corner { float x, y, uMin, uMax, vMin, vMax; };
+    Corner corners[4] = {
+        { leftCx,  topCy, ux0, ux1, uy0, uy1 }, // top-left
+        { rightCx, topCy, ux2, ux3, uy0, uy1 }, // top-right
+        { leftCx,  botCy, ux0, ux1, uy2, uy3 }, // bottom-left
+        { rightCx, botCy, ux2, ux3, uy2, uy3 }, // bottom-right
+    };
+    for (int i = 0; i < 4; ++i) {
+        Corner& c = corners[i];
+        if (cornerW <= 0.0f || cornerH <= 0.0f) continue;
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(cornerW, cornerH, 1.0f);
+        mat.GlobalTranslate44(Vec3(c.x, c.y, 0.0f));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(colour, c.uMin, c.uMax, c.vMin, c.vMax, NULL);
+    }
+
+    // -- top/bottom edges: tile the middle-column strip horizontally --
+    if (midW > 0.0f && cornerH > 0.0f) {
+        float srcStripXPx = texW - 2.0f * srcBorderXPx;
+        float tileW = srcStripXPx * worldScale;
+        float uvSpanX = ux2 - ux1;
+        TileSpan1D spans[256];
+        int n = TileSpan(midW, tileW, spans, 256);
+        float left = centerX - midW * 0.5f;
+        for (int i = 0; i < n; ++i) {
+            float w = spans[i].destSize;
+            float cx = left + spans[i].destOffset + w * 0.5f;
+            float uMax = ux1 + uvSpanX * spans[i].uvFrac;
+
+            mm.GetWorldStack().Reset();
+            Matrix44 mat = Matrix44::MakeScale(w, cornerH, 1.0f);
+            mat.GlobalTranslate44(Vec3(cx, topCy, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawQuadUnCached(colour, ux1, uMax, uy0, uy1, NULL);
+
+            mm.GetWorldStack().Reset();
+            mat = Matrix44::MakeScale(w, cornerH, 1.0f);
+            mat.GlobalTranslate44(Vec3(cx, botCy, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawQuadUnCached(colour, ux1, uMax, uy2, uy3, NULL);
+        }
+    }
+
+    // -- left/right edges: tile the middle-row strip vertically --
+    if (midH > 0.0f && cornerW > 0.0f) {
+        float srcStripYPx = texH - 2.0f * srcBorderYPx;
+        float tileH = srcStripYPx * worldScale;
+        float uvSpanY = uy2 - uy1;
+        TileSpan1D spans[256];
+        int n = TileSpan(midH, tileH, spans, 256);
+        float top = centerY + midH * 0.5f;
+        for (int i = 0; i < n; ++i) {
+            float h = spans[i].destSize;
+            float cy = top - spans[i].destOffset - h * 0.5f;
+            float vMax = uy1 + uvSpanY * spans[i].uvFrac;
+
+            mm.GetWorldStack().Reset();
+            Matrix44 mat = Matrix44::MakeScale(cornerW, h, 1.0f);
+            mat.GlobalTranslate44(Vec3(leftCx, cy, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawQuadUnCached(colour, ux0, ux1, uy1, vMax, NULL);
+
+            mm.GetWorldStack().Reset();
+            mat = Matrix44::MakeScale(cornerW, h, 1.0f);
+            mat.GlobalTranslate44(Vec3(rightCx, cy, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawQuadUnCached(colour, ux2, ux3, uy1, vMax, NULL);
+        }
+    }
+
+    // -- centre: tile a small fixed texel window from the texture's own centre --
+    if (midW > 0.0f && midH > 0.0f && centerTileWPx > 0.0f && centerTileHPx > 0.0f) {
+        float cuMin = 0.5f - (centerTileWPx * 0.5f) / texW;
+        float cuSpan = centerTileWPx / texW;
+        float cvMin = 0.5f - (centerTileHPx * 0.5f) / texH;
+        float cvSpan = centerTileHPx / texH;
+        float tileW = centerTileWPx * worldScale;
+        float tileH = centerTileHPx * worldScale;
+
+        TileSpan1D colsArr[256];
+        TileSpan1D rowsArr[256];
+        int cols = TileSpan(midW, tileW, colsArr, 256);
+        int rows = TileSpan(midH, tileH, rowsArr, 256);
+
+        float left = centerX - midW * 0.5f;
+        float top  = centerY + midH * 0.5f;
+
+        for (int row = 0; row < rows; ++row) {
+            float h = rowsArr[row].destSize;
+            float cy = top - rowsArr[row].destOffset - h * 0.5f;
+            float vMax = cvMin + cvSpan * rowsArr[row].uvFrac;
+
+            for (int col = 0; col < cols; ++col) {
+                float w = colsArr[col].destSize;
+                float cx = left + colsArr[col].destOffset + w * 0.5f;
+                float uMax = cuMin + cuSpan * colsArr[col].uvFrac;
+
+                mm.GetWorldStack().Reset();
+                Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
+                mat.GlobalTranslate44(Vec3(cx, cy, 0.0f));
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
+                Mortar::Mesh::DrawQuadUnCached(colour, cuMin, uMax, cvMin, vMax, NULL);
+            }
+        }
+    }
+
     tex->UnSet();
 }
 
