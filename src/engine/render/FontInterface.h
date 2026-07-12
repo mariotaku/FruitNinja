@@ -140,7 +140,9 @@ public:
     void Clear();
 
     // Binary-derived scaling constants (read by FontCacheObjectTTF::SetFontSize).
-    int   m_CacheSize;         // FT DPI: 100 (binary FontInterface ctor @ 0x002502e0)
+    int   m_CacheSize;         // binary Bada IFont cache-slot constant: 100 (binary FontInterface ctor
+                               // @ 0x002502e0). NOT an FT dpi -- FontCacheObjectTTF::SetCharSize does
+                               // NOT pass this to FT_Set_Char_Size (that call uses 0/0 = 72dpi 1:1).
     float m_FontScale;         // super-sampling factor: 1.0 (binary Initialize @ 0x00250470)
     float m_InvFontScale;      // 1/m_FontScale: 1.0
     float m_GlobalSizeScale;   // 1.0 normally; 0.9 for russian (lang byte 0x13)
