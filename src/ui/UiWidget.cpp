@@ -94,12 +94,17 @@ void UiWidget::DrawGlyphQuad(Mortar::Texture* tex, float cx, float cy, float w, 
     tex->UnSet();
 }
 
-void UiWidget::DrawText(const char* s, float x, float yTop, float scale, Colour c) {
+void UiWidget::DrawText(const char* s, float x, float yTop, float scale, Colour c,
+                        const Mortar::MortarRectangleT<float>* clip) {
     if (!s) return;
 
     Mortar::Font* font = m_pFont ? m_pFont : game_work.pFontMain.Get();
     if (!font) return;
 
     Mortar::Utf8StringIterator iter(s);
-    font->DrawString(iter, x, yTop, 0.0f, c, scale, 0.0f, 0.0f, 1, NULL, 0.0f);
+    // Font::DrawString mutates *clip in place (entry/exit transform) then
+    // restores it -- const_cast is safe here, the caller's rect is unchanged
+    // by the time this call returns.
+    font->DrawString(iter, x, yTop, 0.0f, c, scale, 0.0f, 0.0f, 1,
+                     const_cast<Mortar::MortarRectangleT<float>*>(clip), 0.0f);
 }

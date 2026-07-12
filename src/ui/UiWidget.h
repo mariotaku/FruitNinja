@@ -108,8 +108,13 @@ protected:
     void DrawGlyphQuad(Mortar::Texture* tex, float cx, float cy, float w, float h, Colour c);
 
     // Draw text with m_pFont if set, else game_work.pFontMain. `yTop` is the
-    // TOP of the glyphs (Font::DrawString convention).
-    void DrawText(const char* s, float x, float yTop, float scale, Colour c);
+    // TOP of the glyphs (Font::DrawString convention). `clip`, when non-NULL,
+    // is forwarded to Font::DrawString's clipRect (Mortar::MortarRectangleT<float>,
+    // left/top/right/bottom in the SAME world/ortho space as x/yTop) -- per-glyph
+    // clamp+UV-lerp so text partially outside the rect is cut cleanly instead of
+    // spilling past it. See Font::DrawString @0x0024c7f0.
+    void DrawText(const char* s, float x, float yTop, float scale, Colour c,
+                  const Mortar::MortarRectangleT<float>* clip = nullptr);
 
     float m_HalfW;
     float m_HalfH;
