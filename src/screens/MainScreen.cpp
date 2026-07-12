@@ -129,6 +129,7 @@ MainScreen::MainScreen(Game& g)
       , m_bGameStartReset(false)
       , m_pDojoScreen(nullptr)
       , m_pSettingsButton(nullptr)
+      , m_SettingsVisibility(0.0f)
       , game(g)
 #endif
 {
@@ -727,23 +728,60 @@ void MainScreen::Update(float dt) {
     }
 
 #ifndef __bada__
-    // Port specific: no binary counterpart. Settings button visibility/slide
-    // mirrors the sound/music toggle mechanism above (same `elapsedTime +
-    // GetPauseAmount()` signal, clamped 0..1: 1 = idle main screen, 0 = fully
-    // transitioned into gameplay/dojo/other states). m_Active gates Update/Draw
-    // off entirely below PAUSE_VISIBILITY, same as the toggles; the slide pushes
-    // the button toward its own screen edge (bottom-left, since it lives in
-    // that corner) rather than reusing the toggles' +Y-only slide.
+    // Port specific: no binary counterpart. Settings button uses the SAME
+    // m_Active-gate mechanism + PAUSE_VISIBILITY threshold as pSoundToggle/
+    // pMusicToggle immediately above (`pauseAmount > PAUSE_VISIBILITY ? 1 : 0`,
+    // slide = size.y*2*(1-t)) -- but DELIBERATELY on raw `elapsedTime` alone,
+    // WITHOUT the toggles' `+ GetPauseAmount()` addend.
+    //
+    // GetPauseAmount() == PauseScreen::GetTime() (~= m_Alpha) is the pause
+    // OVERLAY's own reveal progress -- it is HIGH while the player is actually
+    // on the pause screen. That addend is precisely what the toggles use to
+    // become VISIBLE (slid to top-center) while paused (see commit 104ea8f8,
+    // "MainScreen: show music/sfx toggles on pause screen" -- binary-faithful,
+    // v1.6.1 shows the audio toggles on the pause overlay on purpose). Settings
+    // has no binary counterpart and must be visible ONLY on the actual main
+    // menu, so it must NOT pick up that pause-reveal signal -- copying the
+    // toggle expression verbatim (including +GetPauseAmount()) would show
+    // settings on the pause screen right along with them.
+    //
+    // Raw elapsedTime is exactly the "is MainScreen actually the foreground
+    // screen" signal: MainScreen::Hide() (called once, at the game-start
+    // transition into gameplay/pause -- see PauseScreen::SkipToPause) sets
+    // m_State = STATE_CAMERA_FADE and nothing changes it back while off-main
+    // (no button-click callback fires without user input on the main menu),
+    // so the switch above pins elapsedTime = 0.0f (STATE_CAMERA_FADE case)
+    // for the entire time MainScreen is not foreground -- covering gameplay,
+    // pause, and (transitively, since dojo/gameover are reached via the same
+    // gameplay task) dojo and gameover too. On the idle main menu itself,
+    // elapsedTime is the normal -m_PauseAmount snapshot (~1.0 at rest).
+    //
+    // elapsedTime itself is a HARD 0/1-ish step on the way out (Hide() flips
+    // m_State to STATE_CAMERA_FADE on a single frame, so the switch above
+    // pins elapsedTime=0.0f instantly -- unlike the way IN, which rides the
+    // binary's own eased m_PauseAmount camera-zoom ramp). Using it directly
+    // would pop the button off-screen with no exit animation. m_SettingsVisibility
+    // (port-only field, MainScreen.h) is an eased 0..1 follower of the same
+    // clamp01(elapsedTime) target, lerped every frame at CAMERA_LERP_RATE (the
+    // same rate/formula the camera-zoom ramp above uses) -- symmetric ease on
+    // both the way in (0->1) and the way out (1->0). Only once the eased
+    // value has settled below PAUSE_VISIBILITY (slide-out essentially
+    // complete) does m_Active actually flip off; the slide itself always
+    // tracks m_SettingsVisibility, never a hard cut.
     if (m_pSettingsButton) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
 
-        float settingsPauseAmount = elapsedTime + GetPauseAmount();
-        if (settingsPauseAmount < 0.0f) settingsPauseAmount = 0.0f;
-        if (settingsPauseAmount > 1.0f) settingsPauseAmount = 1.0f;
+        float settingsTarget = elapsedTime;
+        if (settingsTarget < 0.0f) settingsTarget = 0.0f;
+        if (settingsTarget > 1.0f) settingsTarget = 1.0f;
 
-        float settingsSlide = size.y * 2.0f * (1.0f - settingsPauseAmount);
-        m_pSettingsButton->m_Active = (settingsPauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
+        m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
+        if (m_SettingsVisibility < 0.0f) m_SettingsVisibility = 0.0f;
+        if (m_SettingsVisibility > 1.0f) m_SettingsVisibility = 1.0f;
+
+        float settingsSlide = size.y * 2.0f * (1.0f - m_SettingsVisibility);
+        m_pSettingsButton->m_Active = (m_SettingsVisibility > PAUSE_VISIBILITY) ? 1 : 0;
         m_pSettingsButton->pos.x -= settingsSlide;
         m_pSettingsButton->pos.y -= settingsSlide;
     }
@@ -981,25 +1019,20 @@ void MainScreen::Hide() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
     pos = Vec3(0.0f, 0.0f, 0.0f);
-
-#ifndef __bada__
-    // Port specific: no binary counterpart. m_pSettingsButton is a standalone
-    // HUDControl in the GLOBAL game_work.mHud list (not gated by MainScreen's
-    // own Draw/early-return the way MainScreen's own quad is), so it must be
-    // hard-removed here -- Hide() is the actual "MainScreen stops being the
-    // foreground screen" signal (called from PauseScreen when gameplay starts;
-    // see src/screens/PauseScreen.cpp ~line 151). The m_Active/slide gating in
-    // Update() (see POS_SETTINGS_TOGGLE block) only covers transitions WITHIN
-    // MainScreen's own state machine (dojo/mode-select sub-states, which keep
-    // calling MainScreen::Update every frame and slide the button out smoothly);
-    // it can't protect against leaking onto pause/gameplay/dojo-screen/gameover,
-    // where MainScreen::Update stops running altogether and a slide-based hide
-    // would leave the control sitting fully active (and drawing) forever.
-    // RemoveButton sets m_bPendingRemoval=1 (HUD::Update reaps it that frame)
-    // and nulls our pointer; the null-guarded creation block in Update() rebuilds
-    // it the next time MainScreen actually resumes running frames.
-    RemoveButton(m_pSettingsButton);
-#endif // !defined(__bada__)
+    // Port specific: no binary counterpart. m_pSettingsButton is NOT torn down
+    // here (an earlier attempt did RemoveButton() here, which nulled the
+    // pointer -- but MainScreen::Update keeps running every frame while
+    // gameplay/pause is active, since the menu is the persisting PAUSED Game
+    // task, not a separate suspended screen. The null-guarded creation block
+    // in Update() immediately rebuilt the button off-main the very next frame,
+    // and since Hide() only fires ONCE at the game-start transition, nothing
+    // tore it down again -- it stayed alive and visible for the rest of
+    // gameplay/pause, a regression. Visibility is governed ENTIRELY by the
+    // per-frame m_Active gate in Update() (see POS_SETTINGS_TOGGLE block),
+    // same pattern as pSoundToggle/pMusicToggle: those are also created via
+    // an unconditional null-guard and never torn down by Hide() either --
+    // being on-main vs off-main is purely an m_Active question, not a
+    // create/destroy question.
 }
 
 void MainScreen::RemoveButton(MenuButton*& btn) {
