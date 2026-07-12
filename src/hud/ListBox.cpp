@@ -61,6 +61,8 @@ ListBox::ListBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
     , m_TouchY(0.0f)
     , _padD4(0.0f)
     , m_VisibleRows(visibleRows)
+    , m_SelectedRowColour(0, 0, 255, 255)                             // binary literal default; see header
+    , m_HoverRowColour(0x50, 0x96, 0xFF, 0xFF)                        // binary literal default; see header
 {
     _padD9[0] = _padD9[1] = _padD9[2] = 0;
     pos  = inPos;
@@ -137,8 +139,10 @@ void ListBox::PreDraw(float* hudScale) {
 // ASM-spec v1.6.1 ListBox::Draw @0x00194788: draws up to visibleRows rows top-down
 //   from pos.y. Top visible row = items.begin() + (overflow ? m_pScroller->m_CurrentValue
 //   : 0). Each row = s_bar background quad (scale m_CellWidth x m_CellHeight at
-//   (pos.x, rowY)) tinted: hover row (== m_HoverIt) RGB(0x50,0x96,0xFF); committed
-//   row (== m_TopVisibleIt) Blue; else White. Row text (m_TextColour, tinted by
+//   (pos.x, rowY)) tinted: hover row (== m_HoverIt) m_HoverRowColour (binary literal
+//   default RGB(0x50,0x96,0xFF)); committed row (== m_TopVisibleIt) m_SelectedRowColour
+//   (binary literal default Blue); else White. m_SelectedRowColour/m_HoverRowColour are
+//   port-specific settable overrides -- see header. Row text (m_TextColour, tinted by
 //   hudScale) at (pos.x - m_CellWidth*0.5 + size.x*5, rowY + size.y*7), font size
 //   = m_CellHeightParam * size.x.
 void ListBox::Draw(float* hudScaleRaw) {
@@ -162,9 +166,9 @@ void ListBox::Draw(float* hudScaleRaw) {
         // --- row background quad (s_bar), tinted by row state ---
         Colour rowColour;
         if (topIter == m_HoverIt) {
-            rowColour = Colour(0x50, 0x96, 0xFF, 0xFF);        // hover
+            rowColour = m_HoverRowColour;                      // Port specific: settable (default = binary hover literal)
         } else if (topIter == m_TopVisibleIt) {
-            rowColour = Colour(0, 0, 255, 255);                // Colour::Blue
+            rowColour = m_SelectedRowColour;                   // Port specific: settable (default = binary Colour::Blue)
         } else {
             rowColour = Colour::White;
         }

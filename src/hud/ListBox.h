@@ -138,6 +138,15 @@ private:
     // +0xD9..+0xDB: pad
     uint8_t _padD9[3];
 
+    // Port specific: settable row tint overrides, appended after the binary-
+    // faithful 0xDC layout so sizeof/offsetof asserts below stay intact. No
+    // binary counterpart -- base ListBox is dead code (see file header);
+    // default-initialised to the binary's hardcoded literals so behaviour is
+    // identical until a caller (e.g. SettingsScreen theming its language
+    // dropdown) opts in.
+    Colour m_SelectedRowColour;
+    Colour m_HoverRowColour;
+
 public:
     // Binary @ 0x00194a74 (C1) / 0x00194d18 (C2)
     ListBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
@@ -182,7 +191,14 @@ public:
     // No binary counterpart.
     void SetTopVisibleForTest(std::string* it) { m_TopVisibleIt = it; }
     void SetHoverForTest(std::string* it)      { m_HoverIt = it; }
+
+    // Port specific: no binary counterpart -- see m_TextColour/m_SelectedRowColour/
+    // m_HoverRowColour declarations above. SetTextColourForTest is an alias kept
+    // for existing test call sites.
+    void SetTextColour(Colour c)               { m_TextColour = c; }
     void SetTextColourForTest(Colour c)        { m_TextColour = c; }
+    void SetSelectedRowColour(Colour c)        { m_SelectedRowColour = c; }
+    void SetHoverRowColour(Colour c)           { m_HoverRowColour = c; }
 
 private:
     // Private helper reached via a PLT veneer in Update; captures the touch world pos.
@@ -207,7 +223,12 @@ public:
 #if defined(__bada__)
 #include <cstddef>
 struct ListBoxLayoutAssert {
-    static_assert(sizeof(ListBox) == 0xDC, "ListBox size mismatch");                 // v1.6.1 ctor @0x00194a74 (operator new(0xDC))
+    // Binary-faithful prefix is 0xDC (v1.6.1 ctor @0x00194a74, operator new(0xDC));
+    // +0xDC..+0xE4 is the port-specific m_SelectedRowColour/m_HoverRowColour
+    // tail appended above -- not present in the binary layout.
+    static_assert(sizeof(ListBox) == 0xE4, "ListBox size mismatch");
+    static_assert(offsetof(ListBox, m_SelectedRowColour) == 0xDC, "ListBox::m_SelectedRowColour offset");
+    static_assert(offsetof(ListBox, m_HoverRowColour)    == 0xE0, "ListBox::m_HoverRowColour offset");
     static_assert(offsetof(ListBox, m_pItems)        == 0x7C, "ListBox::m_pItems offset");
     static_assert(offsetof(ListBox, m_TopVisibleIt)  == 0x80, "ListBox::m_TopVisibleIt offset");
     static_assert(offsetof(ListBox, m_HoverIt)       == 0x84, "ListBox::m_HoverIt offset");

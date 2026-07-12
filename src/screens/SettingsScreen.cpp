@@ -334,6 +334,17 @@ void SettingsScreen::Init() {
                                (uint16_t)kComboScaleX, (uint16_t)kComboScaleY);
     m_LangCombo->SetTextColour(SettingsTextColour());
 
+    // Port specific: no binary counterpart -- wood-amber theme for the dropdown
+    // rows. Default ListBox tints (pure blue selected / light blue hover, see
+    // ListBox.cpp) read as jarring cool-blue over the warm box.tex wood grain,
+    // so retint to gold/amber. Row text uses a light parchment/cream rather
+    // than SettingsTextColour()'s dark brown (0x6F,0x46,0x1E) -- that brown is
+    // low-contrast against both the dark wood row background AND the amber
+    // selected/hover tints, whereas a light cream reads clearly on all three.
+    m_LangCombo->SetListSelectedRowColour(Colour(0xF2, 0xC4, 0x00, 0xFF));  // bright gold -- selected row
+    m_LangCombo->SetListHoverRowColour(Colour(0xC9, 0x9A, 0x3A, 0xFF));     // softer warm amber -- hover row
+    m_LangCombo->SetListTextColour(Colour(0xEA, 0xD8, 0xB0, 0xFF));        // parchment/cream -- row text
+
     // Native language names need CJK/Hangul/Cyrillic glyphs the bitmap
     // font_fruit_ninja.fnt doesn't ship; switch the combo (and its dropdown
     // ListBox, via ComboBox::Update's font propagation) to the TTF font.
