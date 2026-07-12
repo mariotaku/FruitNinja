@@ -96,11 +96,32 @@ static const Colour& SettingsTextColour() {
 // Layout constants (game space, ortho x[-240,240] y[-160,160]).
 // ---------------------------------------------------------------------------
 static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
-static const float kComboX      =   55.0f, kComboY      =   85.0f;
-// Bar 32 tall: ComboBox draws the caret cell (expand_arrow.tex) at
-// (textureWidth x barHeight); a 32-tall bar renders the 32x32 caret 1:1 (no
-// stretch) and matches the 32px checkbox/knob height. combo_bar.tex is 128x32
-// so the value field is unstretched too.
+// Port specific: kRightEdge is the shared right edge (x) every right-column
+// control's visible art aligns to, so their right edges line up in a column
+// instead of each widget's own centre-anchored x drifting independently.
+// Chosen just inside the plate's content right bound (~+178, see kPlateHalfW
+// note below) with a small margin. Per-widget x is then back-solved from
+// (kRightEdge - <that widget's own centre-to-right-edge distance>), where the
+// distance is read from each widget's real Draw()/ctor geometry (anchor is
+// always pos == centre; see ComboBox/CheckBox/SliderControl below):
+//   ComboBox:  bar half-width (kComboScaleX*0.5=60) + expand_arrow.tex width
+//              (32, real asset -- see combo_bar.tex/expand_arrow.tex note
+//              above) = 92 -- ComboBox::Draw's arrow quad sits fully to the
+//              RIGHT of the bar (arrowCenter = pos.x + arrowW*0.5 + barW*0.5).
+//   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), half-width 64.
+//   SliderControl: track (_dialog_box.tex, real asset 128x16) half-width 64;
+//              thumb (slider_will.tex, real asset 32x32) protrudes slightly
+//              further when m_CurrentValue==m_MaxValue -- thumb centre reaches
+//              pos.x + trackW*0.5 - thumbPosW*0.5 (SliderControl::Draw's
+//              thumbPos.x formula), thumbPosW=thumbW*74/128=18.5, so thumb
+//              right edge = pos.x + 64 - 9.25 + 16 = pos.x + 70.75 (the
+//              governing, slightly-wider-than-track extent).
+static const float kRightEdge = 175.0f;
+
+// ComboBox: bar 32 tall (see LoadOrPlaceholder note); combo_bar.tex is 128x32
+// so the value field is unstretched. x is centre of the bar (ComboBox::pos);
+// back-solved so bar+arrow right edge == kRightEdge (see kRightEdge note: 92).
+static const float kComboX      =   kRightEdge - 92.0f, kComboY      =   85.0f;
 static const float kComboScaleX =  120.0f, kComboScaleY =   32.0f;
 static const uint8_t kComboVisibleRows = 6;
 // Combo value font size (m_Width). 16 (not 20) so the longest native name --
@@ -108,16 +129,19 @@ static const uint8_t kComboVisibleRows = 6;
 static const uint16_t kComboWidth      = 16;
 
 static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
-static const float kMotionCbX    =   95.0f, kMotionCbY    =   35.0f;
+// CheckBox: x is centre of the 128x64 quad; back-solved so its right edge
+// (pos.x+64) == kRightEdge (see kRightEdge note).
+static const float kMotionCbX    =   kRightEdge - 64.0f, kMotionCbY    =   35.0f;
 
 static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
-// Indented row: the slider sits in the right column (like the checkboxes at x=95)
-// so its 120px track clears the long "SENSITIVITY" label to its left.
-static const float kSensX      =  100.0f, kSensY      = -15.0f;
+// SliderControl: x is centre of the track; back-solved so the thumb's
+// max-value right edge (pos.x+70.75) == kRightEdge (see kRightEdge note).
+static const float kSensX      =  kRightEdge - 70.75f, kSensY      = -15.0f;
 static const int   kSensMin = 0, kSensMax = 100;
 
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
-static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
+// CheckBox: same anchor/width as kMotionCbX above.
+static const float kFpsCbX    =   kRightEdge - 64.0f, kFpsCbY     = -65.0f;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
