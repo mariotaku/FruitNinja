@@ -110,6 +110,10 @@ static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
 // buttonOriginPos(64,64,64) * idleResumeScale(0.75) -- see ctor-site note
 // where this formula is derived from PauseScreen's idle resumeScale.
 static const Vec3 kSettingsRestScale(48.0f, 48.0f, 48.0f);
+// Port specific: how far (world units) the settings button slides toward its
+// bottom-left corner as it hides (driven by the same ring growFactor, so the
+// slide is frame-synced with the scale). 0 = no slide.
+static const float kSettingsSlideOut = 45.0f;
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
@@ -814,13 +818,10 @@ void MainScreen::Update(float dt) {
     // m_AnimPhase grow-in ease (MenuButton.cpp ~706-717) is fruit-only
     // (m_FruitType >= 0) and never runs for toggles, so there is no native
     // pop-in animation to reuse; growFactor below fills that gap by driving
-    // m_RestScale's magnitude from the same elapsedTime the three ring
-    // MenuButtons use, frame-syncing the settings icon's pop with the rings'
-    // grow/shrink. pos stays fixed at POS_SETTINGS_TOGGLE -- no slide.
+    // m_RestScale's magnitude (and a corner slide) from the same live ring
+    // scale the three ring MenuButtons use, frame-syncing the settings icon
+    // with the rings' grow/shrink.
     if (m_pSettingsButton) {
-        m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
-        m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
-
         // Port specific: settings button (a toggle MenuButton -- can only be scaled
         // via m_RestScale, since MenuButton::Update copies m_RestScale->size each
         // frame) mirrors the ring MenuButtons' OWN live scale so it grows/shrinks in
@@ -842,6 +843,14 @@ void MainScreen::Update(float dt) {
             if (f > ringFactor) ringFactor = f;
         }
         float growFactor = ringFactor;
+
+        // pos DOES survive MenuButton::Update for toggles (it only clobbers
+        // size), so slide the button toward its bottom-left corner as it hides
+        // (growFactor 1->0) and back to rest as it grows (0->1) -- same factor
+        // as the scale, so slide + shrink are one frame-synced motion.
+        float slide = (1.0f - growFactor) * kSettingsSlideOut;
+        m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x - slide;
+        m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y - slide;
 
         m_pSettingsButton->m_RestScale = kSettingsRestScale * growFactor;
         m_pSettingsButton->m_Active = (growFactor > PAUSE_VISIBILITY) ? 1 : 0;
