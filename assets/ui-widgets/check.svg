@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- check.tex - standalone lime checkmark glyph (transparent bg), drawn as an
+       overlay on the UiCheckbox box.tex when checked. Lime matches the game's
+       checked.svg tick. Dark under-stroke for contrast, glossy lime on top. -->
+  <defs>
+    <linearGradient id="lime" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c6f078"/>
+      <stop offset="0.5" stop-color="#8cc63f"/>
+      <stop offset="1" stop-color="#3a9e2e"/>
+    </linearGradient>
+  </defs>
+  <!-- dark backing for contrast on light/amber rows -->
+  <path d="M6 16.5 L13 24 L26.5 8.5" fill="none" stroke="#12400f"
+        stroke-width="8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.55"/>
+  <!-- glossy lime tick -->
+  <path d="M6 16.5 L13 24 L26.5 8.5" fill="none" stroke="url(#lime)"
+        stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- caret.tex - standalone gold down-chevron glyph (transparent bg), drawn on
+       the UiDropdown collapsed bar's right side. Gold matches expand_arrow's
+       chevron; no baked-in box (unlike expand_arrow.tex) so it overlays the
+       9-patch box.tex cleanly. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe98a"/>
+      <stop offset="0.5" stop-color="#f2c400"/>
+      <stop offset="1" stop-color="#d98600"/>
+    </linearGradient>
+  </defs>
+  <!-- down chevron (V with thickness), centred in 32x32 -->
+  <path d="M16 22.5 L5.5 11 L9.5 7.4 L16 14.5 L22.5 7.4 L26.5 11 Z"
+        fill="url(#gold)" stroke="#5a3000" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>
