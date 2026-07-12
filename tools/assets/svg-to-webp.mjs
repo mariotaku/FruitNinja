@@ -48,6 +48,10 @@ const MANIFEST = {
   // (@0x001b7bc0) alike -- see box.svg's own header comment.
   box: [64, 40],
   slider_will: [32, 32],
+  // check/caret: standalone transparent glyphs (lime tick, gold chevron) drawn
+  // as overlays on the port UI toolkit's NineSlice box.tex (src/ui/Ui*).
+  check: [32, 32],
+  caret: [32, 32],
   // expand_arrow: NOT 4x supersample-friendly POT -- authored to match
   // ComboBox::Draw's exact caret aspect (32x38; see ComboBox.cpp Draw) so the
   // runtime scale-to-cell is uniform (1:1) instead of stretching.

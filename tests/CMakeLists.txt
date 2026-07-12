@@ -785,6 +785,18 @@ set_tests_properties(checkbox_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_checkbox PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_checkbox")
 
+# UiCheckbox render test. Port-only widget toolkit (src/ui/) -- NO binary
+# counterpart. Renders unchecked + checked using the REAL staged box.tex
+# (NineSlice background) + check.tex (tick glyph) textures. No procedural
+# fallback -- fails if fn_asset_staging hasn't generated them.
+# Output: tmp/test/screenshots/ui_checkbox/ui_checkbox.png.
+fn_add_game_test(test_ui_checkbox_render test_ui_checkbox_render.cpp)
+add_test(NAME ui_checkbox_render COMMAND test_ui_checkbox_render)
+add_test(NAME screenshot_ui_checkbox COMMAND test_ui_checkbox_render --screenshot)
+set_tests_properties(ui_checkbox_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_ui_checkbox PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ui_checkbox")
+
 # SliderControl render test. Dead code in v1.6.1 but a complete real
 # implementation. Renders the thumb at min/mid/max, injecting in-memory substitute
 # textures (the faithful slider_will.tex art is not shipped -- see the widget .cpp
