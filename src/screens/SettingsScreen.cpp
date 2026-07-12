@@ -93,10 +93,11 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 //                UiDropdown::Draw's caretHalf clamp -- it never overhangs)
 static const float kRightEdge = 175.0f;
 
-// UiDropdown bar. x is centre of the bar; back-solved so the bar's right
-// edge (pos.x + kComboScaleX*0.5f) == kRightEdge.
-static const float kComboX      =   kRightEdge - 60.0f, kComboY      =   82.0f;
-static const float kComboScaleX =  120.0f, kComboScaleY =   30.0f;
+// UiDropdown bar. Wider than the other controls + same height as the checkbox
+// (kCheckboxSide) so it reads as a chunky field. x is centre of the bar;
+// back-solved so the bar's right edge (pos.x + kComboScaleX*0.5f) == kRightEdge.
+static const float kComboScaleX =  150.0f, kComboScaleY =   36.0f;
+static const float kComboX      =   kRightEdge - kComboScaleX * 0.5f, kComboY      =   82.0f;
 static const uint8_t kComboVisibleRows = 6;
 // Combo value/row text scale (Font::DrawString's scale param, font-native
 // pixel size) -- fits the longest native name -- "PORTUGUES (BR)" -- without

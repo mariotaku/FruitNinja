@@ -117,19 +117,22 @@ int main(int argc, char* argv[]) {
         ddCollapsed.SetBoxTexture(texBar);
         ddCollapsed.SetCaretTexture(texCaret);
 
-        // (b) RIGHT, force-opened: scrolled to a mid window + a hover row
-        // distinct from the selected row's position, so both highlights show.
-        int midScroll = (int)items.size() / 2 - 2;
-        if (midScroll < 0) midScroll = 0;
+        // (b) RIGHT, force-opened: scrolled to a mid window (float world-Y
+        // offset, not a row index -- see UiDropdown::m_ScrollOffset: 0 = list
+        // top, +maxScroll = list bottom) + a hover row distinct from the
+        // selected row's position, so both highlights show.
+        int midScrollRow = (int)items.size() / 2 - 2;
+        if (midScrollRow < 0) midScrollRow = 0;
         UiDropdown ddOpen(Vec3(70.0f, 100.0f, 0.0f), items, 10, visibleRows, barW, barH);
         ddOpen.SetBoxTexture(texBar);
         ddOpen.SetCaretTexture(texCaret);
         ddOpen.SetOpenForTest(true);
-        ddOpen.SetScrollTopForTest(midScroll);
-        // selected=10 lands at row (10-midScroll); pick a hover row distinct
-        // from it so the gold selected-row and amber hover-row highlights
-        // are both visible simultaneously in the screenshot.
-        int selectedRow = 10 - midScroll;
+        const float rowH = 28.0f;  // matches UiDropdown's default m_RowH
+        ddOpen.SetScrollOffsetForTest((float)midScrollRow * rowH);
+        // selected=10 lands at row (10-midScrollRow); pick a hover row
+        // distinct from it so the gold selected-row and amber hover-row
+        // highlights are both visible simultaneously in the screenshot.
+        int selectedRow = 10 - midScrollRow;
         int hoverRow = (selectedRow == 2) ? 4 : 2;
         ddOpen.SetHoverRowForTest(hoverRow);
 
@@ -151,9 +154,9 @@ int main(int argc, char* argv[]) {
         }
 
         std::printf("[ui_dropdown] ddCollapsed selected=%d open=%d; "
-                     "ddOpen selected=%d open=%d scrollTop=%d hoverRow=%d\n",
+                     "ddOpen selected=%d open=%d scrollTopRow=%d hoverRow=%d\n",
                      ddCollapsed.GetSelected(), (int)ddCollapsed.IsOpen(),
-                     ddOpen.GetSelected(), (int)ddOpen.IsOpen(), midScroll, hoverRow);
+                     ddOpen.GetSelected(), (int)ddOpen.IsOpen(), midScrollRow, hoverRow);
 
         // ---- Settle + screenshot ----
         for (int frame = 0; frame < 8; ++frame) {

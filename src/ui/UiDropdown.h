@@ -33,9 +33,35 @@
 // latch over a WIDER region (bar + panel union) using the same
 // TouchInRegion/IsTouchDown primitives PollTouch uses internally, since the
 // base's single m_HalfW/m_HalfH hit-rect can't express two stacked rects.
-// While held inside the panel, dragging above/below the row band scrolls
-// one row per frame; releasing over a row selects it and fires OnChange
-// (installed via UiWidget::SetOnChange); releasing elsewhere just closes.
+//
+// OPEN-list scrolling mirrors ScrollingMenu's (src/hud/ScrollingMenu.cpp)
+// kinetic drag/fling/spring-back model, re-scoped to a single float content
+// offset instead of ScrollingMenu's per-item layout accumulation (this
+// widget has no ScrollingMenuItem children -- rows are drawn directly from
+// m_ScrollOffset each frame).
+//
+// Sign convention: m_ScrollOffset >= 0; 0 = list top (item 0 first row),
+// +maxScroll = list bottom (maxScroll = (itemCount-visibleRows)*rowH).
+// Increasing m_ScrollOffset shifts every row UP the panel, revealing LATER
+// items -- natural/content-follows-finger, same rule as the shop list: drag
+// up -> later items, drag down -> earlier items. (m_ScrollOffset is the
+// negation of ScrollingMenu's m_Velocity.y, which decreases for the same
+// up-drag; see Update()'s implementation comment for the formula mapping.)
+//   - Held: m_PendingVel damped-follows the finger via
+//     `(m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR`
+//     (DRAG_DELTA_FACTOR=-0.5, delta = currentY - anchorY) every frame, so
+//     the offset eases toward the finger instead of snapping to it 1:1.
+//   - Every frame (held or not): `m_PendingVel *= SCROLL_FRICTION` (0.9),
+//     then `m_ScrollOffset += m_PendingVel` -- this is what makes a flick
+//     coast after release (last frame's velocity decays at 0.9/frame).
+//   - Spring-back only runs while NOT touching (m_TouchId == -1): past the
+//     top (offset<0) -> `offset *= SPRING_BACK_COEF` (0.75); past the
+//     bottom (offset>maxScroll) -> `offset += (maxScroll-offset) *
+//     SPRING_FWD_COEF` (0.25).
+//   - Release selects a row ONLY on a tap: !m_bDragging AND
+//     m_DragDist < DRAG_CANCEL_DIST (5.0) AND |m_PendingVel| < CLICK_VEL_GATE
+//     (0.5). A drag or fling release never selects -- it just leaves the
+//     panel open and coasting/springing.
 //
 
 #include "UiWidget.h"
@@ -70,28 +96,51 @@ public:
     void SetOpenForTest(bool open) {
         m_Open = open;
         if (open) {
-            int maxScroll = ComputeMaxScroll();
-            int st = m_Selected - (int)m_VisibleRows / 2;
-            if (st < 0) st = 0;
+            float maxScroll = ComputeMaxScroll();
+            float st = (float)(m_Selected - (int)m_VisibleRows / 2) * m_RowH;
+            if (st < 0.0f) st = 0.0f;
             if (st > maxScroll) st = maxScroll;
-            m_ScrollTop = st;
+            m_ScrollOffset = st;
         }
+        m_PendingVel = 0.0f;
     }
     // Test-only: force a hover row for the render-test screenshot.
     void SetHoverRowForTest(int row) { m_HoverRow = row; }
-    // Test-only: force the scroll offset for the render-test screenshot.
-    void SetScrollTopForTest(int scrollTop);
+    // Test-only: force the scroll offset (world-Y content shift; 0 = list
+    // top/item 0, +maxScroll = list bottom -- see m_ScrollOffset doc below)
+    // for the render-test screenshot.
+    void SetScrollOffsetForTest(float offset);
 
 private:
-    // Clamp of (items.size() - visibleRows) to >= 0 -- the largest valid
-    // m_ScrollTop. Recomputed on demand rather than cached to avoid the old
-    // ListBox stale-index class of bug.
-    int ComputeMaxScroll() const;
+    // Largest valid m_ScrollOffset (content scrolled to its last row):
+    // (items.size() - visibleRows) * m_RowH, clamped to >= 0. Recomputed
+    // on demand rather than cached to avoid the old ListBox stale-index
+    // class of bug.
+    float ComputeMaxScroll() const;
+
+    // Drag/fling/spring-back constants -- ported verbatim from ScrollingMenu
+    // (src/hud/ScrollingMenu.cpp); see that file's header comment for the
+    // binary DAT provenance of each value.
+    static const float SCROLL_FRICTION;    // 0.9f  -- per-frame velocity decay
+    static const float DRAG_DELTA_FACTOR;  // -0.5f -- damped-follow easing
+    static const float DRAG_THRESHOLD;     // 0.001f -- |delta| to enter drag mode
+    static const float DRAG_CANCEL_DIST;   // 5.0f  -- accumulated drag dist that cancels a tap
+    static const float SPRING_BACK_COEF;   // 0.75f -- spring multiplier past top
+    static const float SPRING_FWD_COEF;    // 0.25f -- spring multiplier past bottom
+    static const float CLICK_VEL_GATE;     // 0.5f  -- |m_PendingVel| gate for tap-select
 
     std::vector<std::string>* m_pItems;   // caller-owned, NOT copied/owned by this class
     int m_Selected;
     bool m_Open;
-    int m_ScrollTop;
+
+    // Kinetic scroll state (mirrors ScrollingMenu's touch-physics fields).
+    float m_ScrollOffset;     // world-Y content shift; >= 0, 0 = list top, +maxScroll = list bottom
+    Vec3  m_TouchAnchorPos;   // finger (x, y, phase) latched at press
+    float m_AnchorOffset;     // m_ScrollOffset at press time
+    float m_PendingVel;       // decaying drag/fling velocity
+    uint8_t m_bDragging;      // 1 once |delta| has exceeded DRAG_THRESHOLD this touch
+    float m_DragDist;         // accumulated |delta| since press, for tap-vs-drag gate
+
     uint8_t m_VisibleRows;
     int m_HoverRow;          // -1 = none
     float m_BarW, m_BarH, m_RowH;
