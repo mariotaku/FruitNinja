@@ -810,6 +810,19 @@ set_tests_properties(ui_slider_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_ui_slider PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_ui_slider")
 
+# UiDropdown render test. Port-only widget toolkit (src/ui/) -- NO binary
+# counterpart. Replaces the dead ComboBox+ListBox+VerticalScroller stack with
+# a single self-contained collapsed-bar + in-place scrollable panel widget.
+# Renders a collapsed dropdown and an open dropdown (scrolled + hovered) using
+# REAL staged box.tex + caret texture. No procedural fallback.
+# Output: tmp/test/screenshots/ui_dropdown/ui_dropdown.png.
+fn_add_game_test(test_ui_dropdown_render test_ui_dropdown_render.cpp)
+add_test(NAME ui_dropdown_render COMMAND test_ui_dropdown_render)
+add_test(NAME screenshot_ui_dropdown COMMAND test_ui_dropdown_render --screenshot)
+set_tests_properties(ui_dropdown_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_ui_dropdown PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ui_dropdown")
+
 # SliderControl render test. Dead code in v1.6.1 but a complete real
 # implementation. Renders the thumb at min/mid/max, injecting in-memory substitute
 # textures (the faithful slider_will.tex art is not shipped -- see the widget .cpp
