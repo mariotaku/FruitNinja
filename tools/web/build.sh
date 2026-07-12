@@ -7,14 +7,14 @@
 # splash/UI webp copies, web-hash-assets.py POST_BUILD); this script only
 # sequences the build and validates the link outputs.
 #
-# The asset staging step (tools/web/stage-web-assets.py, transcodes sfx
-# .wav.pcm to Ogg/Vorbis into build/web-staging/Data + emits a loop-point
-# JSON, re-encodes textures to WebP, and subsets the CJK font, for the Web Audio
+# The asset staging step (tools/assets/stage-assets.py --web, transcodes sfx
+# .wav.pcm to Ogg/Vorbis into the staging dir + emits a loop-point JSON,
+# re-encodes textures to WebP, and subsets the CJK font, for the Web Audio
 # API backend SoundManagerWebAudio.cpp) is a CMake target dependency
-# (fn_web_asset_staging, see CMakeLists.txt) rather than a step in this script --
+# (fn_asset_staging, see CMakeLists.txt) rather than a step in this script --
 # CMake's dependency graph guarantees it runs before fruit-ninja links regardless
 # of how the build is invoked (this script, a direct `cmake --build`, or an IDE).
-# stage-web-assets.py self-provisions its tools (apt-get installs ffmpeg /
+# stage-assets.py self-provisions its tools (apt-get installs ffmpeg /
 # fonttools when missing inside the container), so this script no longer does.
 #
 # Usage (inside the container, repo mounted at /src, cwd /src):
@@ -48,7 +48,7 @@ BUILD_DIR="$SRC/build/web"
 NPROC="$(nproc 2>/dev/null || echo 4)"
 
 # Asset-staging tools (ffmpeg / fonttools) are self-provisioned by
-# tools/web/stage-web-assets.py at the point of use; this script no longer
+# tools/assets/stage-assets.py at the point of use; this script no longer
 # apt-installs them.
 
 MODE=""          # "" = auto (respect existing configure), or debug/release

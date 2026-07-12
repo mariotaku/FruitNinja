@@ -1,63 +1,91 @@
 #!/usr/bin/env python3
 """
-tools/web/stage-web-assets.py -- Build-phase asset staging for the web target.
+tools/assets/stage-assets.py -- Build-phase asset staging, shared by BOTH the
+host and web targets.
 
 Usage:
-    python3 tools/web/stage-web-assets.py <repo_root>
+    python3 stage-assets.py <repo_root> <out_staging_data_dir> [--web]
 
-Mirrors FruitNinjaBada/Data into build/web-staging/Data. Two web-only
-size optimisations happen during the mirror (the real FruitNinjaBada/Data files
-are never modified; the staged copy is a build/ artifact):
+Mirrors FruitNinjaBada/Data into <out_staging_data_dir>. The real
+FruitNinjaBada/Data files are never modified; the staged copy is a build/
+artifact (gitignored). CMakeLists.txt's fn_asset_staging custom target runs
+this before fruit-ninja links (host: FN_DATA_DIR_PATH points straight at the
+staging dir via GameSDL.cpp's existing SetDataDir call, no runtime code
+changes; web: additionally preloaded into MEMFS via --preload-file).
 
-  1. AUDIO: every sfx/*.wav.pcm is TRANSCODED to Ogg/Vorbis (sfx/<name>.ogg)
-     exactly ONCE at build time; the source .wav.pcm is NOT copied into the
-     staging tree (that would re-bloat the .data payload we are shrinking).
+ALWAYS (both host and web):
 
-  2. TEXTURES (// Port specific: web compressed textures (libwebp)): every
-     *.tex whose header parses as a Tex1 with a known pixel format is decoded to
-     RGBA8888 and re-encoded as WebP, then written back under the SAME relative
-     path + SAME .tex filename (WebP bytes inside a .tex-named file). The engine
-     loader (Mortar::TextureFileFormat) dispatches by CONTENT, not extension: a
-     WebP reader registered at g_readers[0] detects the RIFF/WEBP magic and
-     decodes; real Tex1 .tex fall through to the Tex1 reader. So NO path,
-     preload, or platform-branch change is needed -- only the file bytes shrink.
-     Textures that do NOT parse as Tex1 (Tex2/Tex3/DDS/PVRTC/unknown format) are
-     copied verbatim so their own readers still handle them.
+  1. TEXTURES (// Port specific: compressed textures via Pillow/libwebp):
+     every *.tex whose header parses as a Tex1 with a known pixel format is
+     decoded to RGBA8888 and re-encoded as WebP via Pillow (not ffmpeg --
+     this is the point: it works on any host with no ffmpeg-libwebp, no
+     shell dependency), then written back under the SAME relative path +
+     SAME .tex filename (WebP bytes inside a .tex-named file). The engine
+     loader (Mortar::TextureFileFormat) dispatches by CONTENT, not
+     extension: a WebP reader registered at g_readers[0] detects the
+     RIFF/WEBP magic and decodes; real Tex1 .tex fall through to the Tex1
+     reader. So no path, preload, or platform-branch change is needed --
+     only the file bytes shrink. Textures that do NOT parse as Tex1
+     (Tex2/Tex3/DDS/PVRTC/unknown format) are copied verbatim so their own
+     readers still handle them.
 
-  3. FONT (fontstruetype/gangofchinese.ttf, ~5 MB): SUBSET down to only the
-     Unicode code points that appear in the loaded stringtables, via fonttools'
-     pyftsubset. gangofchinese.ttf is the SHARED default TTF face for every
-     NON-Arabic language (PreloadFontsTTF @0x0011c1fc picks arabic.ttf only when
-     languageFlag == 0x14 "arabic"; every other language in kLanguageSuffix --
-     english_us/uk, french, spanish, german, italian, dutch, swedish, danish,
-     norwegian, finnish, korean, japanese, (traditional) chinese, latin spanish,
-     polish, portuguese (pt/br), russian, fake debug language -- shares this one
-     face; see src/game/PreloadFontsTTF.cpp, src/engine/util/StringTable.cpp).
-     The web build ships one bundle for every language (the user can switch
-     language at runtime), so the used-glyph set is the UNION of every
-     translations_<lang>.str BODY file except translations_arabic.str (own font)
-     and translations_header.str (ASCII lookup keys, never rendered) -- plus
-     printable ASCII (digits/latin appear inside every language's strings too:
-     mode names, scores). arabic.ttf (99 KB) and every other fontstruetype file
-     are copied verbatim -- only gangofchinese.ttf is subsetted.
-     Glyph lookup is plain FreeType FT_Get_Char_Index per code point (see
-     FontCacheObjectTTF.cpp) -- no HarfBuzz shaping -- so a code-point-based
-     subset (no OpenType layout table retention) renders identically.
+  2. WIDGET ART MERGE: after the Data mirror, every pre-generated file under
+     assets/ui-widgets/generated/*.tex (repo-relative, sibling of Data, NOT
+     under FruitNinjaBada -- see tools/assets/svg-to-webp.mjs, a Node/sharp
+     build step that the fn_asset_staging CMake target runs BEFORE this
+     script, on every platform including Windows) is copied verbatim into
+     <out>/textures/, overwriting. These are already WebP-encoded lossless
+     .tex files, so no re-encode. If assets/ui-widgets/generated/ is missing
+     or empty (e.g. node wasn't found at configure time), this prints one
+     warning line and continues (non-fatal -- matches the existing "widgets
+     fall back to placeholder art" contract in
+     SettingsScreen::LoadOrPlaceholder).
 
-Everything else in Data is copied through unchanged.
+  Everything else in Data is copied through unchanged (mtime-based
+  copy-if-different).
 
-Why: the web build no longer runs the SDL software mixer. It uses the Web Audio
-API backend (src/engine/audio/SoundManagerWebAudio.cpp), which lets the browser
-decode Ogg/Vorbis and mix on its own audio thread -- off the JS main thread (no
-GC underrun / crackle on a slow webOS TV) -- and compressed assets shrink the
+WEB-ONLY (--web flag):
+
+  3. AUDIO: every sfx/*.wav.pcm is TRANSCODED to Ogg/Vorbis (sfx/<name>.ogg)
+     exactly ONCE at build time via ffmpeg; the source .wav.pcm is NOT
+     copied into the staging tree (that would re-bloat the .data payload we
+     are shrinking). Emits sfx/sfx-loops.json (loop points). Without --web
+     (host build), *.wav.pcm files copy through verbatim like any other
+     file -- the host build plays raw PCM via the existing SDL mixer,
+     unchanged.
+
+  4. FONT (fontstruetype/gangofchinese.ttf, ~5 MB): SUBSET down to only the
+     Unicode code points that appear in the loaded stringtables, via
+     fonttools' pyftsubset. gangofchinese.ttf is the SHARED default TTF face
+     for every NON-Arabic language (PreloadFontsTTF @0x0011c1fc picks
+     arabic.ttf only when languageFlag == 0x14 "arabic"; every other
+     language in kLanguageSuffix -- english_us/uk, french, spanish, german,
+     italian, dutch, swedish, danish, norwegian, finnish, korean, japanese,
+     (traditional) chinese, latin spanish, polish, portuguese (pt/br),
+     russian, fake debug language -- shares this one face; see
+     src/game/PreloadFontsTTF.cpp, src/engine/util/StringTable.cpp). The web
+     build ships one bundle for every language (the user can switch language
+     at runtime), so the used-glyph set is the UNION of every
+     translations_<lang>.str BODY file except translations_arabic.str (own
+     font) and translations_header.str (ASCII lookup keys, never rendered)
+     -- plus printable ASCII (digits/latin appear inside every language's
+     strings too: mode names, scores). arabic.ttf (99 KB) and every other
+     fontstruetype file are copied verbatim -- only gangofchinese.ttf is
+     subsetted. Glyph lookup is plain FreeType FT_Get_Char_Index per code
+     point (see FontCacheObjectTTF.cpp) -- no HarfBuzz shaping -- so a
+     code-point-based subset (no OpenType layout table retention) renders
+     identically. Host build ships the full unsubsetted TTF (copied
+     verbatim like any other file).
+
+Why WEB-only audio/font transcoding: the web build no longer runs the SDL
+software mixer. It uses the Web Audio API backend
+(src/engine/audio/SoundManagerWebAudio.cpp), which lets the browser decode
+Ogg/Vorbis and mix on its own audio thread -- off the JS main thread (no GC
+underrun / crackle on a slow webOS TV) -- and compressed assets shrink the
 .data payload from ~72 MB (uncompressed PCM) to a few MB. Desktop keeps the
-faithful SDL mixer + raw .wav.pcm untouched.
-
-The staged copy is a BUILD ARTIFACT under build/ (gitignored) -- the real
-FruitNinjaBada/Data/*.wav.pcm files (extracted, binary-faithful assets) are
-NEVER modified. CMakeLists.txt's EMSCRIPTEN --preload-file points at the staged
-directory instead of the real Data dir; see the fn_web_asset_staging custom
-target there, which runs this script before fruit-ninja links.
+faithful SDL mixer + raw .wav.pcm untouched. The font subset is likewise
+only needed to shrink the wasm preload payload; the host build has no
+payload-size constraint and ships the full font.
 
 .wav.pcm format (Mortar::SoundManager::LoadSound, MAMAudioController):
     20-byte header, 5 x int32 LE: type(1), sampleRate, bitDepth(16),
@@ -73,30 +101,30 @@ s16le; ffmpeg produces the .ogg. No temp WAV, no soundfile/numpy dependency.
 
 IMPORTANT: no >>4 amplitude shift is applied here (unlike the desktop loader,
 which shifts for 16-voice int-mixer headroom). The web backend mixes in float
-with a master gain node, so full-scale audio is shipped and loudness is handled
-by MASTER_SFX_GAIN in the JS backend.
+with a master gain node, so full-scale audio is shipped and loudness is
+handled by MASTER_SFX_GAIN in the JS backend.
 
-Loop metadata: a small JSON file is emitted at
-    build/web-staging/Data/sfx/sfx-loops.json
+Loop metadata (web only): a small JSON file is emitted at
+    <out>/sfx/sfx-loops.json
 mapping { "<name>": <loopStart_seconds> } for every sfx with loopStart != 0
-(loopStart_seconds = loopStart / sampleRate). Keys are the lowercased bare name
-(no extension), matching the case-folded lookup the JS backend performs (mirrors
-the desktop ResolvePathCI fallback). The C++/JS backend consumes this to set the
-Web Audio loop point (source.loop / loopStart / loopEnd) for looping sfx (e.g.
-bomb-fuse) and music (music-menu).
+(loopStart_seconds = loopStart / sampleRate). Keys are the lowercased bare
+name (no extension), matching the case-folded lookup the JS backend performs
+(mirrors the desktop ResolvePathCI fallback). The C++/JS backend consumes
+this to set the Web Audio loop point (source.loop / loopStart / loopEnd) for
+looping sfx (e.g. bomb-fuse) and music (music-menu).
 
 Idempotent and incremental: an already-transcoded .ogg is skipped unless its
-source .wav.pcm is newer; other files use size+mtime copy-if-different. Pure
-Python stdlib + an ffmpeg binary on PATH.
-
-This script self-provisions its two external tools (ffmpeg for audio/texture
-transcode, fontTools for the CJK font subset): when either is missing AND it is
-running as root with apt-get available (i.e. inside the emscripten/emsdk
-container), it apt-get installs the tool; otherwise it raises a clear error
-naming the tool. The image's Python is PEP 668 externally-managed, so fontTools
-is installed via the apt `fonttools` package (not pip). The staged
-gangofchinese.ttf subset is skipped unless it is older than the source .ttf or
-any translations_*.str body file that feeds its charset.
+source .wav.pcm is newer; other files use size+mtime copy-if-different. This
+script self-provisions Pillow (both host + web need it for texture WebP
+encode) and, under --web only, ffmpeg (audio/texture transcode -- texture
+transcode itself no longer uses ffmpeg, only audio does) and fontTools (CJK
+font subset): when either is missing AND it is running as root with apt-get
+available (i.e. inside the emscripten/emsdk container), it apt-get installs
+the tool; otherwise it raises a clear error naming the tool. The image's
+Python is PEP 668 externally-managed, so fontTools is installed via the apt
+`fonttools` package (not pip). The staged gangofchinese.ttf subset is
+skipped unless it is older than the source .ttf or any translations_*.str
+body file that feeds its charset.
 """
 
 import json
@@ -110,34 +138,38 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import tex_decoder
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "assets"))
-from svg_to_tex import generate as generate_widget_textures
-
 HEADER_FMT = "<5i"
 HEADER_SIZE = 20
 SFX_RELPATH = "sfx"
 LOOP_JSON_NAME = "sfx-loops.json"
 VORBIS_QUALITY = "5"
 
-# --- Texture transcoding (web only): Tex1 .tex -> WebP-in-.tex ---------------
+# Pre-generated widget art (see tools/assets/svg-to-webp.mjs, run by the
+# fn_asset_staging CMake target before this script): repo-relative, sibling
+# of FruitNinjaBada/Data.
+WIDGET_TEX_RELDIR = os.path.join("assets", "ui-widgets", "generated")
+
+# --- Texture transcoding (host + web): Tex1 .tex -> WebP-in-.tex -------------
 # WEBP_QUALITY is the lossy quality 0..100 (higher = better/larger). If UI/text
 # looks soft or shows compression artifacts, flip WEBP_LOSSLESS to True for
-# pixel-exact (larger) output.
+# pixel-exact (larger) output. These are for real game photo-textures; the
+# pre-generated widget art (WIDGET_TEX_RELDIR) is lossless by its own script.
 WEBP_QUALITY = "90"
 WEBP_LOSSLESS = False
-WEBP_COMPRESSION_LEVEL = "6"
 
 # Tex1 header/format constants + the decode core live in tools/lib/tex_decoder.py
 # (shared with tools/assets/convert_tex.py).
 
 
 # --- tool self-provisioning (install-where-used) -----------------------------
-# ffmpeg (audio + texture transcode) and fontTools (CJK font subset) are the two
-# external tools this script needs. Install them here, at the point of use,
-# rather than in build.sh -- so a direct `python3 stage-web-assets.py` (IDE, bare
-# `cmake --build`) provisions the same tools CI does. Idempotent: skip if already
-# present. Auto-install only when we can (root + apt-get, i.e. inside the
-# emscripten/emsdk container); otherwise raise a clear, actionable error.
+# ffmpeg (audio transcode, web only) and fontTools (CJK font subset, web only)
+# are external tools this script needs under --web. Install them here, at the
+# point of use, rather than in build.sh -- so a direct `python3
+# stage-assets.py` (IDE, bare `cmake --build`) provisions the same tools CI
+# does. Idempotent: skip if already present. Auto-install only when we can
+# (root + apt-get, i.e. inside the emscripten/emsdk container); otherwise
+# raise a clear, actionable error. Pillow is self-provisioned unconditionally
+# (both host + web need it for texture WebP encode) via pip.
 def _can_apt_install():
     """True if we can apt-get install: running as root with apt-get on PATH."""
     if shutil.which("apt-get") is None:
@@ -147,15 +179,33 @@ def _can_apt_install():
 
 
 def _apt_install(pkg):
-    print("[stage-web-assets] installing {} via apt-get".format(pkg))
+    print("[stage-assets] installing {} via apt-get".format(pkg))
     if subprocess.run(["apt-get", "update", "-qq"]).returncode != 0:
         raise RuntimeError("apt-get update failed while installing {}".format(pkg))
     if subprocess.run(["apt-get", "install", "-y", "-qq", pkg]).returncode != 0:
         raise RuntimeError("apt-get install {} failed".format(pkg))
 
 
+def _ensure_pillow():
+    try:
+        import PIL  # noqa: F401
+        return
+    except ImportError:
+        pass
+    print("[stage-assets] Pillow not found, installing via pip")
+    proc = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pillow"])
+    if proc.returncode != 0:
+        print("[stage-assets] ERROR: pip install pillow failed", file=sys.stderr)
+        sys.exit(1)
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        print("[stage-assets] ERROR: pillow installed but still not importable", file=sys.stderr)
+        sys.exit(1)
+
+
 def ensure_ffmpeg():
-    """ffmpeg (Debian package bundles libvorbis + libwebp) must be on PATH."""
+    """ffmpeg (Debian package bundles libvorbis) must be on PATH."""
     if shutil.which("ffmpeg") is not None:
         return
     if _can_apt_install():
@@ -166,21 +216,6 @@ def ensure_ffmpeg():
         "ffmpeg not found on PATH and cannot auto-install (needs root + apt-get, "
         "i.e. inside the emscripten/emsdk container). Install it: "
         "apt-get install -y ffmpeg")
-
-
-def ensure_rsvg():
-    """rsvg-convert (Debian package librsvg2-bin) must be on PATH so
-    svg_to_tex.py's rasterizer autodetect finds it inside this container."""
-    if shutil.which("rsvg-convert") is not None:
-        return
-    if _can_apt_install():
-        _apt_install("librsvg2-bin")
-        if shutil.which("rsvg-convert") is not None:
-            return
-    raise RuntimeError(
-        "rsvg-convert not found on PATH and cannot auto-install (needs root + "
-        "apt-get, i.e. inside the emscripten/emsdk container). Install it: "
-        "apt-get install -y librsvg2-bin")
 
 
 def ensure_fonttools():
@@ -284,28 +319,13 @@ def needs_tex_transcode(src_path, dst_tex):
 
 
 def encode_webp(rgba_bytes, w, h, dst_tex):
-    """Pipe flat RGBA8888 to ffmpeg's libwebp encoder, writing the WebP to a
-    seekable temp FILE (NOT stdout). The WebP muxer must seek back to patch the
-    RIFF/VP8 chunk sizes after writing the bitstream; a non-seekable stdout pipe
-    leaves those sizes wrong and produces a corrupt bitstream (dwebp
-    BITSTREAM_ERROR) on larger textures -- the fruit atlas decoded to white.
-    Then atomically rename the temp file to dst_tex (same .tex name, WebP bytes)."""
+    """Encode flat RGBA8888 to WebP via Pillow and atomically write dst_tex
+    (same .tex name, WebP bytes)."""
+    _ensure_pillow()
+    from PIL import Image
+    img = Image.frombuffer("RGBA", (w, h), bytes(rgba_bytes), "raw", "RGBA", 0, 1)
     tmp = dst_tex + ".tmp.webp"
-    cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "rawvideo", "-pix_fmt", "rgba", "-s", "{}x{}".format(w, h),
-        "-i", "pipe:0",
-        "-c:v", "libwebp",
-    ]
-    if WEBP_LOSSLESS:
-        cmd += ["-lossless", "1"]
-    else:
-        cmd += ["-quality", WEBP_QUALITY]
-    cmd += ["-compression_level", WEBP_COMPRESSION_LEVEL, "-f", "webp", tmp]
-
-    proc = subprocess.run(cmd, input=bytes(rgba_bytes))
-    if proc.returncode != 0 or not os.path.exists(tmp) or os.path.getsize(tmp) == 0:
-        raise RuntimeError("ffmpeg failed ({}) encoding webp {}".format(proc.returncode, dst_tex))
+    img.save(tmp, format="WEBP", quality=int(WEBP_QUALITY), lossless=WEBP_LOSSLESS)
     os.replace(tmp, dst_tex)
 
 
@@ -334,6 +354,33 @@ def transcode_tex_file(src_path, dst_tex, stats):
     encode_webp(rgba, w, h, dst_tex)
     stats["tex_transcoded"] += 1
     stats["tex_webp_bytes"] += os.path.getsize(dst_tex)
+
+
+def merge_widget_textures(repo_root, dst_root, stats):
+    """Copy pre-generated assets/ui-widgets/generated/*.tex (already WebP,
+    lossless -- see svg-to-webp.mjs) into <dst_root>/textures/, overwriting.
+    Non-fatal if the dir is missing/empty (widgets fall back to placeholder
+    art)."""
+    src_dir = os.path.join(repo_root, WIDGET_TEX_RELDIR)
+    dst_dir = os.path.join(dst_root, "textures")
+
+    if not os.path.isdir(src_dir):
+        print("[stage-assets] WARNING: {} not found -- widget textures not "
+              "generated yet (needs node on PATH; see tools/assets/"
+              "svg-to-webp.mjs run by fn_asset_staging); widgets will fall "
+              "back to placeholder art".format(src_dir))
+        return
+
+    names = [n for n in os.listdir(src_dir) if n.lower().endswith(".tex")]
+    if not names:
+        print("[stage-assets] WARNING: {} is empty -- widgets will fall back "
+              "to placeholder art".format(src_dir))
+        return
+
+    os.makedirs(dst_dir, exist_ok=True)
+    for name in names:
+        shutil.copy2(os.path.join(src_dir, name), os.path.join(dst_dir, name))
+        stats["widget_tex_copied"] += 1
 
 
 # --- Font subsetting (web only): CJK/shared TTF subset by used code points --
@@ -490,7 +537,8 @@ def copy_if_different(src_path, dst_path):
     return True
 
 
-def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_charset_txt_path):
+def stage_tree(src_root, dst_root, is_web, font_codepoints, font_charset_sources,
+               font_charset_txt_path):
     stats = {
         "sfx_transcoded": 0,
         "sfx_skipped": 0,
@@ -501,6 +549,7 @@ def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_c
         "tex_skipped": 0,
         "tex_src_bytes": 0,
         "tex_webp_bytes": 0,
+        "widget_tex_copied": 0,
         "font_action": None,
         "font_src_bytes": 0,
         "font_out_bytes": 0,
@@ -521,7 +570,7 @@ def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_c
         for name in files:
             src_path = os.path.join(root, name)
 
-            if is_sfx_dir and name.lower().endswith(".wav.pcm"):
+            if is_web and is_sfx_dir and name.lower().endswith(".wav.pcm"):
                 short = sfx_name_from_filename(name)
                 dst_ogg = os.path.join(dst_dir, short + ".ogg")
                 transcode_sfx_file(src_path, dst_ogg, stats)
@@ -533,11 +582,14 @@ def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_c
             elif name.lower().endswith(".tex"):
                 dst_tex = os.path.join(dst_dir, name)
                 transcode_tex_file(src_path, dst_tex, stats)
-            elif is_font_dir and name.lower() == CJK_FONT_FILENAME:
+            elif is_web and is_font_dir and name.lower() == CJK_FONT_FILENAME:
                 dst_font = os.path.join(dst_dir, name)
                 subset_cjk_font(src_path, dst_font, font_codepoints,
                                  font_charset_sources, font_charset_txt_path, stats)
             else:
+                # Host build: *.wav.pcm (not staged above since is_web is
+                # False) falls through here and copies verbatim, same as any
+                # other file -- the host SDL mixer plays raw PCM unchanged.
                 dst_path = os.path.join(dst_dir, name)
                 if copy_if_different(src_path, dst_path):
                     stats["other_copied"] += 1
@@ -549,8 +601,10 @@ def stage_tree(src_root, dst_root, font_codepoints, font_charset_sources, font_c
 
 def sweep_stale_pcm(dst_root):
     """Remove any stale sfx/*.wav.pcm left in staging by the retired resampler.
-    The whole staging Data dir is --preload-file'd, so a lingering .wav.pcm would
-    re-bloat .data. Only .ogg + non-pcm files should remain under sfx/."""
+    Web builds --preload-file the whole staging Data dir, so a lingering
+    .wav.pcm would re-bloat .data. Only .ogg + non-pcm files should remain
+    under sfx/. Host builds intentionally keep .wav.pcm (see stage_tree), so
+    this sweep is web-only."""
     removed = 0
     dst_sfx = os.path.join(dst_root, SFX_RELPATH)
     if not os.path.isdir(dst_sfx):
@@ -566,24 +620,23 @@ def sweep_stale_pcm(dst_root):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: stage-web-assets.py <repo_root>", file=sys.stderr)
+    if len(sys.argv) < 3:
+        print("Usage: stage-assets.py <repo_root> <out_staging_data_dir> [--web]", file=sys.stderr)
         sys.exit(1)
 
-    # Self-provision the external tools (install-where-used). Raises a clear
-    # error if missing and not auto-installable.
-    ensure_ffmpeg()
-    ensure_fonttools()
-    ensure_rsvg()
-
     repo_root = sys.argv[1]
-    src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
-    dst_root = os.path.join(repo_root, "build", "web-staging", "Data")
+    dst_root = sys.argv[2]
+    is_web = "--web" in sys.argv[3:]
 
-    # Rasterize assets/ui-widgets/*.svg -> FruitNinjaBada/Data/textures/*.tex
-    # BEFORE mirroring src_root below, so the freshly generated textures are
-    # picked up by the .tex walk (transcoded to WebP) like any other texture.
-    generate_widget_textures(repo_root)
+    # Self-provision the external tools (install-where-used). Raises a clear
+    # error if missing and not auto-installable. Pillow is needed regardless
+    # of --web (texture transcode runs for host too).
+    _ensure_pillow()
+    if is_web:
+        ensure_ffmpeg()
+        ensure_fonttools()
+
+    src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
 
     if not os.path.isdir(src_root):
         print("ERROR: source Data dir not found: {}".format(src_root), file=sys.stderr)
@@ -591,48 +644,55 @@ def main():
 
     os.makedirs(dst_root, exist_ok=True)
 
-    stringtables_dir = os.path.join(src_root, STRINGTABLES_RELPATH)
-    font_codepoints, font_charset_sources = gather_cjk_font_charset(stringtables_dir)
-    # Sibling of dst_root (not inside Data/) so it never gets --preload-file'd.
+    font_codepoints, font_charset_sources = set(), []
     font_charset_txt_path = os.path.join(os.path.dirname(dst_root), "gangofchinese-charset.txt")
+    if is_web:
+        stringtables_dir = os.path.join(src_root, STRINGTABLES_RELPATH)
+        font_codepoints, font_charset_sources = gather_cjk_font_charset(stringtables_dir)
+        # Sibling of dst_root (not inside Data/) so it never gets --preload-file'd.
 
-    print("[stage-web-assets] staging {} -> {} (sfx -> Ogg/Vorbis via ffmpeg)".format(
-        src_root, dst_root))
-    stats, loops = stage_tree(src_root, dst_root, font_codepoints, font_charset_sources,
-                               font_charset_txt_path)
+    print("[stage-assets] staging {} -> {} ({})".format(
+        src_root, dst_root, "web" if is_web else "host"))
+    stats, loops = stage_tree(src_root, dst_root, is_web, font_codepoints,
+                               font_charset_sources, font_charset_txt_path)
 
-    # Emit loop metadata JSON next to the .ogg files.
-    loop_json_path = os.path.join(dst_root, SFX_RELPATH, LOOP_JSON_NAME)
-    os.makedirs(os.path.dirname(loop_json_path), exist_ok=True)
-    with open(loop_json_path, "w") as f:
-        json.dump(loops, f, indent=0, sort_keys=True)
+    merge_widget_textures(repo_root, dst_root, stats)
 
-    removed = sweep_stale_pcm(dst_root)
+    if is_web:
+        # Emit loop metadata JSON next to the .ogg files.
+        loop_json_path = os.path.join(dst_root, SFX_RELPATH, LOOP_JSON_NAME)
+        os.makedirs(os.path.dirname(loop_json_path), exist_ok=True)
+        with open(loop_json_path, "w") as f:
+            json.dump(loops, f, indent=0, sort_keys=True)
 
-    print("[stage-web-assets] sfx: {} transcoded, {} unchanged (skipped); {} loop points".format(
-        stats["sfx_transcoded"], stats["sfx_skipped"], len(loops)))
+        removed = sweep_stale_pcm(dst_root)
+
+        print("[stage-assets] sfx: {} transcoded, {} unchanged (skipped); {} loop points".format(
+            stats["sfx_transcoded"], stats["sfx_skipped"], len(loops)))
+        if removed:
+            print("[stage-assets] swept {} stale .wav.pcm from staging sfx/".format(removed))
 
     src_mb = stats["tex_src_bytes"] / (1024.0 * 1024.0)
     webp_mb = stats["tex_webp_bytes"] / (1024.0 * 1024.0)
     ratio = (100.0 * webp_mb / src_mb) if src_mb > 0 else 0.0
-    print("[stage-web-assets] textures: {} transcoded to WebP, {} verbatim, {} unchanged".format(
+    print("[stage-assets] textures: {} transcoded to WebP, {} verbatim, {} unchanged".format(
         stats["tex_transcoded"], stats["tex_copied_verbatim"], stats["tex_skipped"]))
-    print("[stage-web-assets] texture bytes: {:.1f} MB source -> {:.1f} MB staged ({:.1f}% of original)".format(
+    print("[stage-assets] texture bytes: {:.1f} MB source -> {:.1f} MB staged ({:.1f}% of original)".format(
         src_mb, webp_mb, ratio))
+    print("[stage-assets] widget textures: {} merged from {}".format(
+        stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
 
-    if stats["font_action"]:
+    if is_web and stats["font_action"]:
         font_src_mb = stats["font_src_bytes"] / (1024.0 * 1024.0)
         font_out_mb = stats["font_out_bytes"] / (1024.0 * 1024.0)
-        print("[stage-web-assets] font {}: {} -- {} codepoints, {} glyphs, "
+        print("[stage-assets] font {}: {} -- {} codepoints, {} glyphs, "
               "{:.2f} MB -> {:.2f} MB".format(
                   CJK_FONT_FILENAME, stats["font_action"],
                   stats["font_codepoint_count"], stats["font_glyph_count"],
                   font_src_mb, font_out_mb))
 
-    print("[stage-web-assets] other assets: {} copied, {} unchanged (skipped)".format(
+    print("[stage-assets] other assets: {} copied, {} unchanged (skipped)".format(
         stats["other_copied"], stats["other_skipped"]))
-    if removed:
-        print("[stage-web-assets] swept {} stale .wav.pcm from staging sfx/".format(removed))
 
 
 if __name__ == "__main__":
