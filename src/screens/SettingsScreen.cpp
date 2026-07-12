@@ -87,9 +87,14 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 // distance is read from each widget's real Draw()/ctor geometry (anchor is
 // always pos == centre; see ComboBox/CheckBox/SliderControl below):
 //   ComboBox:  bar half-width (kComboScaleX*0.5=60) + expand_arrow.tex width
-//              (32, real asset -- see expand_arrow.tex note above) = 92 --
-//              ComboBox::Draw's arrow quad sits fully to the RIGHT of the bar
-//              (arrowCenter = pos.x + arrowW*0.5 + barW*0.5).
+//              (32, real asset -- see expand_arrow.tex note above) = 92,
+//              MINUS the caret's port-specific gap-closing overlap (see
+//              ComboBox.cpp Draw's kBoxTexRightMarginFrac/kCaretOverlapPad:
+//              m_DrawWidth*2/64 + 1*size.x = 120*0.03125+1 = 4.75 at this
+//              widget's own kComboScaleX/size.x) = 87.25 -- ComboBox::Draw's
+//              arrow quad sits to the RIGHT of the bar, pulled slightly left
+//              to butt against the bar's visible (non-transparent-margin)
+//              right edge (arrowCenter = pos.x + arrowW*0.5 + barW*0.5 - overlap).
 //   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), but checked.tex/
 //              unchecked.tex centre their opaque art in the transparent
 //              128x64 canvas -- visible square is texels x=[47,80] (34px),
@@ -127,7 +132,9 @@ static const float kRightEdge = 175.0f;
 // m_DrawHeight/kComboScaleY (only the arrow's on-screen HEIGHT tracks the
 // bar). So the kRightEdge note's 92 = barHalfWidth(60) + arrowWidth(32) holds
 // unchanged after growing kComboScaleY; only the arrow's rendered height grows
-// (cosmetic, no layout effect).
+// (cosmetic, no layout effect). The 4.75-unit gap-closing overlap (see
+// kRightEdge note) is likewise unaffected by kComboScaleY -- it only depends
+// on kComboScaleX/size.x, both unchanged here.
 //
 // kComboY nudged 85->82 (-3) so the taller bar's top (kComboY + kComboScaleY*
 // 0.5 = 82+19 = 101) still lands exactly on the plate's content top bound
@@ -135,7 +142,7 @@ static const float kRightEdge = 175.0f;
 // instead of overflowing by 3 units at the old kComboY=85. Gap to the MOTION
 // MODE checkbox's visible-art top (kMotionCbY(35) + ~17 half of its ~34-unit
 // square = 52) is combo bottom(82-19=63) - 52 = 11 units, still clear.
-static const float kComboX      =   kRightEdge - 92.0f, kComboY      =   82.0f;
+static const float kComboX      =   kRightEdge - 87.25f, kComboY      =   82.0f;
 static const float kComboScaleX =  120.0f, kComboScaleY =   38.0f;
 static const uint8_t kComboVisibleRows = 6;
 // Combo value font size (m_Width). 18 (was 16) to match the taller bar's
