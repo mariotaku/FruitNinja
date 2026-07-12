@@ -821,9 +821,27 @@ void MainScreen::Update(float dt) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
 
-        float growFactor = elapsedTime;
-        if (growFactor < 0.0f) growFactor = 0.0f;
-        if (growFactor > 1.0f) growFactor = 1.0f;
+        // Port specific: settings button (a toggle MenuButton -- can only be scaled
+        // via m_RestScale, since MenuButton::Update copies m_RestScale->size each
+        // frame) mirrors the ring MenuButtons' OWN live scale so it grows/shrinks in
+        // exact lock-step with them. Each ring's instantaneous 0..1 scale is
+        // size.y / m_RestScale.y (MenuButton::Update grow/shrink via m_AnimPhase).
+        // Only the sliced ring shrinks; on return to main all three re-grow from 0.
+        // max() tracks whichever is animating; null-guard (rings are nulled at
+        // slice-callback time / when shrink completes) + divide-by-zero guard + clamp.
+        float ringFactor = 0.0f;
+        const MenuButton* rings[3] = { m_pGameModeButton, m_pStoreButton, m_pQuitButton };
+        for (int i = 0; i < 3; ++i) {
+            const MenuButton* b = rings[i];
+            if (!b) continue;
+            float ry = b->m_RestScale.y;
+            if (ry <= 0.0001f) continue;
+            float f = b->size.y / ry;
+            if (f < 0.0f) f = 0.0f;
+            if (f > 1.0f) f = 1.0f;
+            if (f > ringFactor) ringFactor = f;
+        }
+        float growFactor = ringFactor;
 
         m_pSettingsButton->m_RestScale = kSettingsRestScale * growFactor;
         m_pSettingsButton->m_Active = (growFactor > PAUSE_VISIBILITY) ? 1 : 0;
