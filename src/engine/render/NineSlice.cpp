@@ -14,22 +14,23 @@ namespace Mortar {
 
 void NineSlice::Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
-                     float srcBorderPx, float destBorder, Colour colour,
-                     bool tileCenter, float centerTilePx) {
+                     float srcBorderXPx, float srcBorderYPx,
+                     float destBorderX, float destBorderY,
+                     Colour colour) {
     if (!tex) return;
     float texW = (float)tex->GetWidth();
     float texH = (float)tex->GetHeight();
     if (texW <= 0.0f || texH <= 0.0f || destW <= 0.0f || destH <= 0.0f) return;
 
     // Clamp the dest border per axis so the stretched middle never inverts.
-    float dbx = destBorder;
-    float dby = destBorder;
+    float dbx = destBorderX;
+    float dby = destBorderY;
     if (dbx * 2.0f > destW) dbx = destW * 0.5f;
     if (dby * 2.0f > destH) dby = destH * 0.5f;
 
-    // UV border fractions from the texture's own pixel dimensions.
-    float fu = srcBorderPx / texW;
-    float fv = srcBorderPx / texH;
+    // UV border fractions from the texture's own pixel dimensions (per axis).
+    float fu = srcBorderXPx / texW;
+    float fv = srcBorderYPx / texH;
     if (fu > 0.5f) fu = 0.5f;
     if (fv > 0.5f) fv = 0.5f;
 
@@ -46,7 +47,8 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
     float midCy = centerY;
     float botCy = centerY - destH * 0.5f + dby * 0.5f;
 
-    // UV splits: u left/centre/right, v top/centre/bottom.
+    // UV splits: u left/centre/right, v top/centre/bottom. Full [0,1] coverage --
+    // no cropping -- so corner/edge art (e.g. protruding decor) renders whole.
     float u0 = 0.0f, u1 = fu,        u2 = 1.0f - fu, u3 = 1.0f;
     float v0 = 0.0f, v1 = fv,        v2 = 1.0f - fv, v3 = 1.0f;
 
@@ -69,7 +71,6 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
     MatrixManager& mm = MatrixManager::GetInstance();
     tex->Set();
     for (int i = 0; i < 9; ++i) {
-        if (i == 4 && tileCenter) continue;         // centre handled below as a tiled grid
         Cell& c = cells[i];
         if (c.w <= 0.0f || c.h <= 0.0f) continue;   // skip a collapsed edge/centre
         mm.GetWorldStack().Reset();
@@ -79,52 +80,6 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawQuadUnCached(colour, c.uMin, c.uMax, c.vMin, c.vMax, NULL);
     }
-
-    // Tiled centre: replace the single stretched centre cell with a grid of
-    // quads, each sampling the SAME fixed centerTilePx x centerTilePx texel
-    // window at the texture's centre (no separate art). Tiled at 1:1 texel
-    // density (centerTilePx world-units per tile) across the centre rect.
-    if (tileCenter && midW > 0.0f && midH > 0.0f && centerTilePx > 0.0f) {
-        float halfPx = centerTilePx * 0.5f;
-        float cuMin = 0.5f - halfPx / texW;
-        float cuSpan = centerTilePx / texW;
-        float cvMin = 0.5f - halfPx / texH;
-        float cvSpan = centerTilePx / texH;
-
-        int cols = (int)ceilf(midW / centerTilePx);
-        int rows = (int)ceilf(midH / centerTilePx);
-        if (cols < 1) cols = 1;
-        if (rows < 1) rows = 1;
-
-        // Centre rect top-left in world space (+X right, +Y up -- top row is high-Y).
-        float left = midCx - midW * 0.5f;
-        float top  = midCy + midH * 0.5f;
-
-        for (int row = 0; row < rows; ++row) {
-            float remH = midH - (float)row * centerTilePx;
-            float h = (remH < centerTilePx) ? remH : centerTilePx;
-            if (h <= 0.0f) continue;
-            float fracV = h / centerTilePx;
-            float cy = top - (float)row * centerTilePx - h * 0.5f;
-
-            for (int col = 0; col < cols; ++col) {
-                float remW = midW - (float)col * centerTilePx;
-                float w = (remW < centerTilePx) ? remW : centerTilePx;
-                if (w <= 0.0f) continue;
-                float fracU = w / centerTilePx;
-                float cx = left + (float)col * centerTilePx + w * 0.5f;
-
-                mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
-                mat.GlobalTranslate44(Vec3(cx, cy, 0.0f));
-                mm.GetWorldStack().SetCurrentMatrix(mat);
-                mm.UploadModelViewOnly();
-                Mortar::Mesh::DrawQuadUnCached(colour, cuMin, cuMin + cuSpan * fracU,
-                                               cvMin, cvMin + cvSpan * fracV, NULL);
-            }
-        }
-    }
-
     tex->UnSet();
 }
 

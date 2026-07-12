@@ -26,6 +26,7 @@
 #include "render/Utf8StringIterator.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
+#include "render/NineSlice.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "debug/DebugFlags.h"
@@ -106,19 +107,27 @@ static const int   kSensMin = 0, kSensMax = 100;
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
 static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
 
-// Plate quad -- medbacking.tex stretched to this footprint (see Draw()).
+// Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
+// (no UV cropping) so the wooden corner joints/lashing/log-end decor that
+// protrudes past the frame renders whole rather than being clipped.
+//
 // medbacking.tex is 512x256 -- an HD (2x) backing; its logical size is half
-// (256x128). The framed panel (2:1) is drawn at 440x220 so it keeps that 2:1
-// aspect (no distortion) AND downscales the 512-wide art (~0.86x) so it renders
-// crisp/HD, while still fitting all four rows (labels span x[-150..135]).
-// (The exact half-bitmap size, 256x128, is too small for the 4-row layout.)
+// (256x128), i.e. 1 world unit = 2 texels. 9-patch border thickness (Android
+// .9 semantics): 88px x / 58px y in texture pixels -- the corners (88x58) hold
+// the joint+lashing+log-end art; centre 336x140 + edges stretch. In HD world
+// units that is destBorder 44x29 (texels/2). Content padding for widget
+// layout is 84x/56y texels -> 42x/28y world units per side.
+//
+// Outer footprint: kept at 440x220 (unchanged from the old stretched-quad
+// panel) so the widget layout below is undisturbed. The top row (LANGUAGE
+// combo, half-height 16 at y=85) reaches y=101, which needs a content
+// half-height of >=101+28=129 to clear the 28-unit padding -- wider than the
+// old 110, so the panel is grown to 130 (widget rows unchanged; nothing
+// currently overflows the width padding, x=150 vs a 178 content half-width).
 static const float kPlateHalfW = 220.0f;
-static const float kPlateHalfH = 110.0f;
-// medbacking.tex has transparent padding around the framed panel; crop UV to just
-// the panel (opaque bounds x[55..454]/512, y[28..224]/256) so one stretched quad
-// fills the plate footprint.
-static const float kPlateUvL = 0.10742f, kPlateUvR = 0.88867f;
-static const float kPlateUvT = 0.10938f, kPlateUvB = 0.87891f;
+static const float kPlateHalfH = 130.0f;
+static const float kPlateSrcBorderXPx = 88.0f, kPlateSrcBorderYPx = 58.0f;
+static const float kPlateDestBorderX  = 44.0f, kPlateDestBorderY  = 29.0f;
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -347,18 +356,14 @@ void SettingsScreen::Draw(float* hudScale) {
         m_Backdrop->UnSet();
     }
 
-    // ---- plate panel: medbacking.tex, single stretched quad (UV-cropped to the
-    // panel region to skip the texture's transparent padding) ----
+    // ---- plate panel: medbacking.tex, drawn as a 9-slice (full texture, no UV
+    // cropping -- see kPlateSrcBorder*/kPlateDestBorder* above) ----
     if (m_Plate.IsValid()) {
-        mm.GetWorldStack().Reset();
-        m_Plate->Set();
-        Matrix44 mat = Matrix44::MakeScale(kPlateHalfW * 2.0f, kPlateHalfH * 2.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-        Mortar::Mesh::DrawQuadUnCached(Colour::White,
-                                       kPlateUvL, kPlateUvR, kPlateUvT, kPlateUvB, NULL);
-        m_Plate->UnSet();
+        Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, 0.0f,
+                                kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
+                                kPlateSrcBorderXPx, kPlateSrcBorderYPx,
+                                kPlateDestBorderX, kPlateDestBorderY,
+                                Colour::White);
     }
 
     // ---- left-column labels ----
