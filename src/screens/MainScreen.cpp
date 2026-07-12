@@ -60,12 +60,6 @@ static const float BOUNCE_SETTLE       = 3.0f;
 static const float ALPHA_LERP_RATE     = 0.25f;
 static const float PAUSE_VISIBILITY    = 0.01f;
 static const float SOUND_VOLUME_ON     = 0.5f;
-// Port specific: no binary counterpart. Matches the ring MenuButtons'
-// m_GrowInTimer=0.25f (CreateButtons() sets this on m_pGameModeButton/
-// m_pStoreButton/m_pQuitButton) -- see the m_pSettingsButton visibility
-// block in Update() for how this delays the settings show-ramp to lock-step
-// with the rings' own grow-in hold.
-static const float SETTINGS_SHOW_DELAY = 0.25f;
 
 // Helper: get GLuint from Mortar::SmartPtr<Texture>
 static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
@@ -150,8 +144,6 @@ MainScreen::MainScreen(Game& g)
       , m_bGameStartReset(false)
       , m_pDojoScreen(nullptr)
       , m_pSettingsButton(nullptr)
-      , m_SettingsVisibility(0.0f)
-      , m_SettingsShowDelay(0.0f)
       , game(g)
 #endif
 {
@@ -779,66 +771,49 @@ void MainScreen::Update(float dt) {
     // elapsedTime is the normal -m_PauseAmount snapshot (~1.0 at rest).
     //
     // Retimed to lock-step with the three ring MenuButtons (m_pGameModeButton
-    // NEW GAME / m_pStoreButton DOJO / m_pQuitButton QUIT). Those rings are
-    // entity-backed (fruitType>=0): their visible content is the 3D fruit/
-    // bomb drawn by Mortar::ActorManager::Draw, NOT a HUD quad -- MenuButton
-    // itself only draws their scratchs.tex backdrop (see MenuButton::Draw's
-    // HUD_LAYER_MENU_BG branch). CreateButtons() (called only from
-    // STATE_CAMERA_ZOOM) sets m_GrowInTimer=0.25f on all three; MenuButton::
-    // Update's grow-in gate (m_GrowInTimer>0 -> fruit->flags|=1, hidden) holds
-    // them invisible for that whole 0.25s before their own grow-in ease even
-    // starts -- so raw elapsedTime crossing PAUSE_VISIBILITY (~frame 1, see
-    // CAMERA_LERP_RATE ramp) made settings appear roughly 15 frames/0.25s
-    // BEFORE the rings. SETTINGS_SHOW_DELAY reproduces that same 0.25s hold
-    // (m_SettingsShowDelay, MainScreen.h) so the show-ramp doesn't start
-    // until the rings' own grow-in would also be starting.
+    // NEW GAME / m_pStoreButton DOJO / m_pQuitButton QUIT) and with
+    // MainScreen's own logo/content, which slides on this exact same
+    // `elapsedTime` value (see the pos.y formulas in STATE_CAMERA_ZOOM/
+    // STATE_CREATE_BUTTONS/STATE_GAME_START/STATE_DOJO_WAIT_A/B/
+    // STATE_MODE_SELECT(_2), all `(sizeY+320-2*sizeY*elapsedTime)*0.5`).
     //
-    // On the way out (a ring tapped -> New Game/Dojo selected), the ACTUAL
-    // ring-shrink signal is m_Timer2 itself: GameModeCallback/AboutCallback
-    // arm it to 1.0 the instant a ring is tapped, then STATE_MODE_SELECT(_2)
-    // (case 0xe/0xf, ~line 608-627) and STATE_DOJO_WAIT_A/B (~line 487-518)
-    // decay it every frame (*0.85 / *0.75) and drive the SAME `pos.y =
-    // (sizeY+320-2*sizeY*m_Timer2)*0.5` formula that slides MainScreen's own
-    // logo/content away -- i.e. m_Timer2 IS the ring-shrink factor, and it
-    // starts decaying the SAME FRAME the fruit is sliced/rings begin
-    // shrinking (dojo additionally gates the decay start on fruitCount==0 --
-    // "the fruit gets sliced, fruits drop" -- matching the ring's own visual
-    // cue). The toggle-visibility switch above already aliases
-    // `elapsedTime = m_Timer2` for exactly these two states (case list
-    // ~line 700-706), so settingsTarget (derived from elapsedTime) already
-    // starts falling the instant m_Timer2 does -- no extra gating needed,
-    // the eased follower below picks it up immediately.
+    // `elapsedTime` is ALREADY the single decayed/eased factor for both
+    // directions by the time we reach this point in Update():
+    //  - Enter: elapsedTime = -game_work.m_PauseAmount (top of Update), eased
+    //    every frame via the CAMERA_LERP_RATE ramp in STATE_CAMERA_ZOOM/
+    //    STATE_CREATE_BUTTONS -- the same ramp the rings' own creation timing
+    //    rides on (CreateButtons() runs every frame in STATE_CAMERA_ZOOM).
+    //  - Leave: the state-dependent override switch immediately above
+    //    (STATE_DOJO_WAIT_A/B, STATE_MODE_SELECT(_2), STATE_SLIDE_IN,
+    //    STATE_MATCHMAKER) overwrites elapsedTime = m_Timer2. Ring taps
+    //    (GameModeCallback/AboutCallback) arm m_Timer2 = 1.0f the instant a
+    //    ring is sliced; STATE_MODE_SELECT(_2) decays it *0.85/frame and
+    //    STATE_DOJO_WAIT_A/B decays it *0.75/frame (gated on fruitCount==0,
+    //    i.e. once the sliced fruit has dropped) -- the SAME m_Timer2 that
+    //    drives MainScreen's own pos.y slide-out. So elapsedTime falls in
+    //    lockstep with the rings/logo starting the exact slice frame.
+    //
+    // Previously this block ran elapsedTime through an INDEPENDENT eased
+    // follower (m_SettingsVisibility, own CAMERA_LERP_RATE lerp) plus a fixed
+    // SETTINGS_SHOW_DELAY hold on the show side. Both are removed: since
+    // elapsedTime is already the fully-eased/decayed factor, re-easing it a
+    // second time only added a trailing lag in both directions, and the
+    // rings have no real re-creation delay to mirror (Hide()/
+    // DeleteMenuButtons() is dead code -- the button instances persist across
+    // every return to main, so there is no grow-in hold after the first
+    // launch). Settings now reads elapsedTime directly, clamped 0..1, driving
+    // slide/scale with the identical formula the sound/music toggles use
+    // (minus their `+GetPauseAmount()` pause-reveal addend -- see note above).
     if (m_pSettingsButton) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
 
-        float settingsTarget = elapsedTime;
-        if (settingsTarget < 0.0f) settingsTarget = 0.0f;
-        if (settingsTarget > 1.0f) settingsTarget = 1.0f;
+        float settingsFactor = elapsedTime;
+        if (settingsFactor < 0.0f) settingsFactor = 0.0f;
+        if (settingsFactor > 1.0f) settingsFactor = 1.0f;
 
-        if (settingsTarget > 0.0f && m_SettingsVisibility <= 0.0f) {
-            // Due to (re)become visible from fully hidden: hold off the ease
-            // until the same 0.25s grow-in delay the rings use has elapsed.
-            if (m_SettingsShowDelay < SETTINGS_SHOW_DELAY) {
-                m_SettingsShowDelay += dt;
-            } else {
-                m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
-            }
-        } else {
-            // Already (at least partially) visible, or heading back toward
-            // hidden: ease continuously toward settingsTarget every frame,
-            // same CAMERA_LERP_RATE follower used on the way in. This is
-            // what makes the slide-out track m_Timer2's own decay in
-            // lockstep starting the SAME frame the rings start shrinking,
-            // rather than a delayed or instantly-popped transition.
-            m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
-            m_SettingsShowDelay = 0.0f;
-        }
-        if (m_SettingsVisibility < 0.0f) m_SettingsVisibility = 0.0f;
-        if (m_SettingsVisibility > 1.0f) m_SettingsVisibility = 1.0f;
-
-        float settingsSlide = size.y * 2.0f * (1.0f - m_SettingsVisibility);
-        m_pSettingsButton->m_Active = (m_SettingsVisibility > PAUSE_VISIBILITY) ? 1 : 0;
+        float settingsSlide = size.y * 2.0f * (1.0f - settingsFactor);
+        m_pSettingsButton->m_Active = (settingsFactor > PAUSE_VISIBILITY) ? 1 : 0;
         m_pSettingsButton->pos.x -= settingsSlide;
         m_pSettingsButton->pos.y -= settingsSlide;
     }

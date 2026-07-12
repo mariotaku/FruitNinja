@@ -243,30 +243,18 @@ private:
     // opens the SettingsScreen modal (mirrors the sound/music toggle
     // lifecycle -- created inline in Update(), never torn down while
     // MainScreen persists). See MainScreen::Update and SettingsCallback.
+    //
+    // Slide/scale/m_Active are driven DIRECTLY off `elapsedTime` each frame
+    // in Update() -- the same factor that positions MainScreen's own logo/
+    // content and (via the state-dependent override switch) that IS m_Timer2
+    // during the ring-tapped leave states. No separate eased-follower field:
+    // an earlier version re-eased elapsedTime through its own CAMERA_LERP_RATE
+    // lerp (plus a fixed show-delay), which made the button visibly lag both
+    // the enter and leave transitions relative to the three ring MenuButtons
+    // (m_pGameModeButton/m_pStoreButton/m_pQuitButton). Re-easing an already-
+    // eased/decayed value only adds lag; reading elapsedTime raw keeps this
+    // button in lockstep with the rings every frame.
     MenuButton* m_pSettingsButton;
-
-    // Port specific: no binary counterpart. Eased 0..1 visibility factor for
-    // m_pSettingsButton's slide-out animation, lerped each frame toward the
-    // raw elapsedTime-derived target (see MainScreen::Update). Retimed to
-    // lock-step with the three ring MenuButtons' (m_pGameModeButton/
-    // m_pStoreButton/m_pQuitButton) own show/hide timing rather than a plain
-    // elapsedTime ease -- see m_SettingsShowDelay below for the show-side
-    // half of that retiming; the hide side is a hard cut (see Update), not
-    // an eased tail, matching the rings' own abrupt disappearance (their
-    // visible content is the 3D fruit/bomb ENTITY drawn by ActorManager, cut
-    // instantly once MainScreen stops calling CreateButtons(), not a faded
-    // HUD quad).
-    float m_SettingsVisibility;
-
-    // Port specific: no binary counterpart. Counts down from
-    // SETTINGS_SHOW_DELAY (0.25s -- see MainScreen::Update) each frame while
-    // settings is due to become visible, mirroring the ring buttons' own
-    // m_GrowInTimer=0.25f (CreateButtons() sets this on all three: NEW GAME,
-    // DOJO, QUIT). The rings stay invisible (fruit->flags|=1) for that same
-    // 0.25s after creation before their grow-in ease even starts; delaying
-    // the settings show-ramp by the identical constant keeps it from popping
-    // in before the rings do.
-    float m_SettingsShowDelay;
 #endif // !defined(__bada__)
 
 #ifndef __bada__
