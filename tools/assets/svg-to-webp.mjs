@@ -41,10 +41,14 @@ import { fileURLToPath } from "node:url";
 const MANIFEST = {
   checked: [128, 64],
   unchecked: [128, 64],
-  combo_bar: [128, 32],
+  // combo_bar/expand_arrow: NOT 4x supersample-friendly POT -- authored to
+  // match ComboBox::Draw's exact non-uniform cell aspect (120x38 bar,
+  // 32x38 caret; see SettingsScreen.cpp kComboScaleX/Y + ComboBox.cpp Draw)
+  // so the runtime scale-to-cell is uniform (1:1) instead of stretching.
+  combo_bar: [120, 38],
   _dialog_box: [128, 16],
   slider_will: [32, 32],
-  expand_arrow: [32, 32],
+  expand_arrow: [32, 38],
   vbar: [32, 128],
   vslider: [32, 64],
   arrow: [32, 32],

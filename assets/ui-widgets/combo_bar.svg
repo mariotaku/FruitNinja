@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="32" viewBox="0 0 128 32">
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="38" viewBox="0 0 120 38">
   <!-- combo_bar.tex - ComboBox VALUE field (left half of the split field).
        Rounded LEFT, FLAT/open RIGHT so it butts seamlessly against the caret
-       cell (expand_arrow.tex) drawn immediately to its right. Rendered at the
-       bar height (32) with no vertical stretch (texture is 128x32). -->
+       cell (expand_arrow.tex) drawn immediately to its right. ComboBox::Draw
+       scales this texture to (m_DrawWidth, m_DrawHeight) = (kComboScaleX,
+       kComboScaleY) = (120, 38) unconditionally (src/hud/ComboBox.cpp), so
+       the texture is authored at that exact 120x38 aspect for a uniform
+       (non-distorting) scale; see SettingsScreen.cpp kComboScaleX/Y note. -->
   <defs>
     <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#9a6a34"/>
@@ -15,16 +18,16 @@
       <stop offset="1" stop-color="#3a2712"/>
     </linearGradient>
   </defs>
-  <!-- wooden rim: rounded left, flat right (extends to x=128 to meet the caret) -->
-  <path d="M9 1.5 L128 1.5 L128 30.5 L9 30.5 Q2 30.5 2 23.5 L2 8.5 Q2 1.5 9 1.5 Z"
-        fill="url(#rim)" stroke="#1a0f06" stroke-width="1.5"/>
+  <!-- wooden rim: rounded left, flat right (extends to x=120 to meet the caret) -->
+  <path d="M8.5 1.8 L120 1.8 L120 36.2 L8.5 36.2 Q1.9 36.2 1.9 27.9 L1.9 10.1 Q1.9 1.8 8.5 1.8 Z"
+        fill="url(#rim)" stroke="#1a0f06" stroke-width="1.8"/>
   <!-- top brass highlight -->
-  <rect x="6" y="3" width="120" height="1.6" fill="#e6b25a" fill-opacity="0.55"/>
+  <rect x="5.6" y="3.6" width="112.5" height="1.9" fill="#e6b25a" fill-opacity="0.55"/>
   <!-- recessed inner field: rounded left, flat right -->
-  <path d="M11 6.5 L128 6.5 L128 25.5 L11 25.5 Q7 25.5 7 21.5 L7 10.5 Q7 6.5 11 6.5 Z"
-        fill="url(#field)" stroke="#0d0803" stroke-width="1"/>
+  <path d="M10.3 7.7 L120 7.7 L120 30.3 L10.3 30.3 Q6.6 30.3 6.6 25.5 L6.6 12.5 Q6.6 7.7 10.3 7.7 Z"
+        fill="url(#field)" stroke="#0d0803" stroke-width="1.2"/>
   <!-- inner top shadow so the field reads sunken -->
-  <rect x="10" y="8" width="118" height="4" fill="#000000" fill-opacity="0.30"/>
+  <rect x="9.4" y="9.5" width="110.6" height="4.75" fill="#000000" fill-opacity="0.30"/>
   <!-- bottom inner highlight lip -->
-  <rect x="10" y="22.5" width="118" height="1.6" fill="#7a5228" fill-opacity="0.5"/>
+  <rect x="9.4" y="26.7" width="110.6" height="1.9" fill="#7a5228" fill-opacity="0.5"/>
 </svg>
