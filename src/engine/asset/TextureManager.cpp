@@ -9,6 +9,9 @@ namespace Mortar {
 
 namespace {
     const char* kHdLogTag = "TextureManager";
+    // Port specific: HD art is authored at 2x pixel dimensions of the
+    // normal .tex. See the SetDimensions() call below.
+    const int kHdScale = 2;
 }
 
 char TextureManager::s_DataDir[256] = "";
@@ -64,9 +67,11 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     // non-HD loads of the same logical texture never collide.
     char hdPath[512];
     const char* resolvedPath = path;
+    bool isHd = false;
     if (BuildHdPath(path, hdPath, sizeof(hdPath)) && Mortar::File::Exists(hdPath, 0)) {
         LOG_DEBUG(kHdLogTag, "Using HD texture: %s", hdPath);
         resolvedPath = hdPath;
+        isHd = true;
     }
 
     uint32_t hash = StringHash(resolvedPath);
@@ -84,6 +89,21 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     // -> TextureLoader -> g_readers[].
     Mortar::SmartPtr<Texture> tex = Texture::Load(resolvedPath);
     if (tex.IsValid()) {
+        // Port specific: HD art is authored at 2x pixel dimensions. Halve the
+        // reported apparent size so widgets/sprites that size their quads
+        // from GetWidth()/GetHeight() draw at the SAME on-screen footprint
+        // as the normal texture -- the full-res GL pixels are then sampled
+        // over that (unchanged) footprint, i.e. crisper at no layout cost.
+        // UV/sampling is unaffected: draw calls pass explicit [0,1] (or
+        // Texture2D's precomputed UV verts) independent of apparentWidth/
+        // Height, which are consumed only as (a) the glTexImage2D upload
+        // size (already the full 2x pixels, set before this point by
+        // Texture2D_Bada::Cache/UploadTex1ToGL) and (b) this draw-size
+        // accessor -- so halving here only shrinks the reported size, never
+        // the sampled image.
+        if (isHd) {
+            tex->SetDimensions(tex->GetWidth() / kHdScale, tex->GetHeight() / kHdScale);
+        }
         Add(hash, tex);
     }
     return tex;
