@@ -267,6 +267,18 @@ void UiDropdown::Draw(float* hudScale) {
     // slot, set in Update) can be compared against the absolute item index.
     int firstVisibleIdx = (int)std::floor(m_ScrollOffset / m_RowH + 0.0001f);
 
+    // Row text clip rect = panel inner viewport, in the same centered-ortho
+    // world space Font::DrawString's pos/x/y already use (see Font::DrawString
+    // @0x0024c7f0's clipRect path). The row-culling test above only skips rows
+    // whose box is fully outside the viewport; a row straddling the top/bottom
+    // edge still draws here, so its text needs a real per-glyph clip or it
+    // spills past the panel box.
+    Mortar::MortarRectangleT<float> textClip;
+    textClip.left   = pos.x - m_BarW * 0.5f + textPad;
+    textClip.right  = pos.x + m_BarW * 0.5f - textPad;
+    textClip.top    = viewportTop;
+    textClip.bottom = viewportBottom;
+
     for (int idx = 0; idx < (int)m_pItems->size(); ++idx) {
         float rowCy = curYBase - m_RowH * (idx + 0.5f);
         if (rowCy + m_RowH * 0.5f < viewportBottom || rowCy - m_RowH * 0.5f > viewportTop) {
@@ -281,6 +293,6 @@ void UiDropdown::Draw(float* hudScale) {
 
         DrawText((*m_pItems)[idx].c_str(),
                   pos.x - m_BarW * 0.5f + textPad, rowCy + lineH * 0.5f,
-                  m_TextScale, m_RowTextColour);
+                  m_TextScale, m_RowTextColour, &textClip);
     }
 }

@@ -1019,20 +1019,40 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                       Vec2 maxWH, int alignment, float z,
                       Mortar::MortarRectangleT<float>* clipRect)
 {
-    // TODO: v1.6.1 0x0024c7f0 (Font::DrawString) -- clipRect path unimplemented (deferred): entry translate(-pos)+Scale(1/scale);
-    // per-glyph clamp quad to rect + UV lerp (Centre @0x001a3900 recentres); exit Scale(scale)+translate(+pos).
-    // LIVE caller: ScrollingMenuItem::Draw passes parent-menu bounds. See task tracker.
-    (void)clipRect;
     (void)z;
 
+    // Binary @ 0x0024c824: empty-iterator check happens before the clipRect
+    // transform below, so an empty string never touches the caller's rect.
     if (iter.IsEmpty()) return;
 
+    // ASM-spec v1.6.1 Font::DrawString @0x0024c7f0: clipRect per-glyph clamp+UV-lerp.
+    // Entry transforms the caller's world-space clipRect into the same
+    // lineHeight-normalized local space the glyph loop computes cx/cy in:
+    //   clipRect -= pos; clipRect.Scale(1/scale);
+    // (restored via clipRect.Scale(scale); clipRect += pos; on every exit path,
+    // since the binary mutates the caller's rect by pointer in place.)
+    if (clipRect != nullptr) {
+        clipRect->left   -= pos.x;
+        clipRect->right  -= pos.x;
+        clipRect->top    -= pos.y;
+        clipRect->bottom -= pos.y;
+        clipRect->Scale(1.0f / scale);
+    }
+
     // Port specific: TTF dispatch. The TTF path uses pixel-size glyphs from
-    // FreeType rather than pre-baked atlas quads from a .fnt page.
+    // FreeType rather than pre-baked atlas quads from a .fnt page. Not part of
+    // the binary's clip-rect flow; restore the caller's rect before bailing.
     {
         FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
         if (ttf) {
             DrawStringTTF(ttf, scale, iter, pos, colour, alignment);
+            if (clipRect != nullptr) {
+                clipRect->Scale(scale);
+                clipRect->left   += pos.x;
+                clipRect->right  += pos.x;
+                clipRect->top    += pos.y;
+                clipRect->bottom += pos.y;
+            }
             return;
         }
     }
@@ -1268,13 +1288,63 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             const float hh = g->h * 0.5f;
 
             // UVs already normalized in CharTemplate
-            const float u0 = g->u0;
-            const float v0 = g->v0;
+            float u0 = g->u0;
+            float v0 = g->v0;
             // u1/v1 computed from w/h * (lineHeight / scaleW/H) = raw_w/scaleW
             const float lhDivW = (m_ScaleW > 0) ? m_LineHeight / (float)m_ScaleW : 1.0f;
             const float lhDivH = (m_ScaleH > 0) ? m_LineHeight / (float)m_ScaleH : 1.0f;
-            const float u1 = u0 + g->w * lhDivW;
-            const float v1 = v0 + g->h * lhDivH;
+            float u1 = u0 + g->w * lhDivW;
+            float v1 = v0 + g->h * lhDivH;
+
+            // Quad extents (local space, pre-clamp). top/bottom in the
+            // binary's Y sense: top = cy+hh (screen-top), bottom = cy-hh.
+            float x0 = cx - hw;
+            float x1 = cx + hw;
+            float top = cy + hh;
+            float bottom = cy - hh;
+            bool clipSkip = false;
+
+            // ASM-spec v1.6.1 Font::DrawString @0x0024c7f0..0x0024cfd8: per-glyph
+            // clip clamp + UV lerp. clipRect is already in this function's local
+            // (pre-scale/translate) space via the entry transform above. A glyph
+            // fully outside any one edge is skipped entirely (no vertex emit,
+            // cursor still advances). Otherwise each edge that the quad crosses
+            // is clamped to the rect and its UV is lerped proportionally so the
+            // visible sub-quad samples the correct texels (partial glyph, not a
+            // squashed one). Edges are clamped in order left, right, top, bottom;
+            // each later edge's ratio uses the already-clamped opposite coordinate
+            // (matches the binary's sequential dependency chain).
+            if (clipRect != nullptr) {
+                if (x1 < clipRect->left || x0 > clipRect->right ||
+                    top < clipRect->bottom || bottom > clipRect->top) {
+                    clipSkip = true;
+                } else {
+                    if (x0 < clipRect->left) {
+                        x0 = clipRect->left;
+                        float clampedW = x1 - x0;
+                        float ratio = fabsf(clampedW) / g->w;
+                        u0 = u1 - (u1 - u0) * ratio;
+                    }
+                    if (x1 > clipRect->right) {
+                        x1 = clipRect->right;
+                        float clampedW = x1 - x0;
+                        float ratio = fabsf(clampedW) / g->w;
+                        u1 = u0 + (u1 - u0) * ratio;
+                    }
+                    if (top > clipRect->top) {
+                        top = clipRect->top;
+                        float clampedH = bottom - top;
+                        float ratio = fabsf(clampedH) / g->h;
+                        v0 = v1 - (v1 - v0) * ratio;
+                    }
+                    if (bottom < clipRect->bottom) {
+                        bottom = clipRect->bottom;
+                        float clampedH = bottom - top;
+                        float ratio = fabsf(clampedH) / g->h;
+                        v1 = v0 + (v1 - v0) * ratio;
+                    }
+                }
+            }
 
             // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00199576..0x00199836
             // (asm-inspector). Per-glyph emit is 6 verts in GL_TRIANGLE_STRIP
@@ -1291,28 +1361,30 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             // writes verts[base-1] @ 0x001995ee..0x00199648.)
             // V-axis pairing matches binary: cy+hh (screen-top) -> v0,
             // cy-hh (screen-bottom) -> v1.
-            const float kZ = 0.0f;  // DAT_00199a94 = 0.0f
-            QUADCUSTOMVERTEX v[6];
-            v[0] = { cx - hw, cy - hh, kZ, 0,0,1, curColour, u0, v1 };  // LB
-            v[1] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };  // LT
-            v[2] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };  // RB
-            v[3] = { cx + hw, cy + hh, kZ, 0,0,1, curColour, u1, v0 };  // RT
-            v[4] = v[3];                                                // degenerate
-            v[5] = v[3];                                                // degenerate
+            if (!clipSkip) {
+                const float kZ = 0.0f;  // DAT_00199a94 = 0.0f
+                QUADCUSTOMVERTEX v[6];
+                v[0] = { x0, bottom, kZ, 0,0,1, curColour, u0, v1 };  // LB
+                v[1] = { x0, top,    kZ, 0,0,1, curColour, u0, v0 };  // LT
+                v[2] = { x1, bottom, kZ, 0,0,1, curColour, u1, v1 };  // RB
+                v[3] = { x1, top,    kZ, 0,0,1, curColour, u1, v0 };  // RT
+                v[4] = v[3];                                          // degenerate
+                v[5] = v[3];                                          // degenerate
 
-            const int base = perPageCount[pageIdx] * 6;
-            if (base + 6 <= PAGE_VERT_CAPACITY && pageIdx < (int)m_PageVerts.size()) {
-                QUADCUSTOMVERTEX* dst = &m_PageVerts[pageIdx][base];
-                // Inter-glyph connector overwrite: prev glyph's last slot
-                // becomes this glyph's LB so the strip transition is fully
-                // degenerate. Binary @ 0x001995ee-0x00199648.
-                if (base > 0) {
-                    dst[-1] = v[0];
+                const int base = perPageCount[pageIdx] * 6;
+                if (base + 6 <= PAGE_VERT_CAPACITY && pageIdx < (int)m_PageVerts.size()) {
+                    QUADCUSTOMVERTEX* dst = &m_PageVerts[pageIdx][base];
+                    // Inter-glyph connector overwrite: prev glyph's last slot
+                    // becomes this glyph's LB so the strip transition is fully
+                    // degenerate. Binary @ 0x001995ee-0x00199648.
+                    if (base > 0) {
+                        dst[-1] = v[0];
+                    }
+                    for (int vi = 0; vi < 6; vi++) {
+                        dst[vi] = v[vi];
+                    }
+                    perPageCount[pageIdx]++;
                 }
-                for (int vi = 0; vi < 6; vi++) {
-                    dst[vi] = v[vi];
-                }
-                perPageCount[pageIdx]++;
             }
         }
 
@@ -1462,6 +1534,17 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
 #endif
 
     delete[] perPageCount;
+
+    // Exit transform: restore the caller's clipRect (binary mutates it by
+    // pointer, in/out) -- Scale(scale) then translate(+pos), the inverse of
+    // the entry transform above.
+    if (clipRect != nullptr) {
+        clipRect->Scale(scale);
+        clipRect->left   += pos.x;
+        clipRect->right  += pos.x;
+        clipRect->top    += pos.y;
+        clipRect->bottom += pos.y;
+    }
 }
 
 // ---------------------------------------------------------------------------
