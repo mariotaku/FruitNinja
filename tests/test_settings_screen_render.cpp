@@ -7,8 +7,11 @@
 // Renders the whole modal panel once: the dialog_box plate, the four labelled
 // rows -- LANGUAGE (ComboBox, collapsed), MOTION MODE (CheckBox), SENSITIVITY
 // (SliderControl, indented), FPS COUNTER (CheckBox) -- each drawn by the screen's
-// own Draw(). The screen self-injects procedural placeholder textures in Init()
-// (WidgetPlaceholderArt.h), so no external art is required.
+// own Draw(). The screen loads the real staged widget textures in Init() (see
+// SettingsScreen.cpp) -- generated from assets/ui-widgets/*.svg by
+// fn_asset_staging (tools/assets/svg-to-webp.mjs, mandatory) -- plus a couple of
+// procedural-only fills (WidgetPlaceholderArt.h) for elements with no real .tex
+// counterpart (list-row tint, modal backdrop dim).
 //
 // Output PNG (--screenshot mode):
 //   tmp/test/screenshots/settings_screen/settings.png
@@ -16,7 +19,6 @@
 // NOTE: SettingsScreen is a port-improvement with NO binary counterpart; this test
 // validates that the screen constructs, seeds its widgets from the live globals,
 // and draws its panel + rows without crashing -- NOT any binary-faithful layout.
-// The widget art is procedural placeholder (real .tex art is not shipped).
 //
 // C++11 / GCC 4.4.1 clean (host-only test TU; kept lambda/auto/range-for free).
 
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
     int failures = 0;
 
     {
-        // The screen owns its widgets; Init() builds them + injects placeholder art.
+        // The screen owns its widgets; Init() builds them + loads their textures.
         SettingsScreen screen;
         screen.Init();
 

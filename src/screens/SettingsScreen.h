@@ -90,9 +90,12 @@ private:
     // (and the ListBox it hands the pointer to); released in Release().
     Mortar::SmartPtr<Mortar::Font> m_LangFont;
 
-    // Kept-alive placeholder textures injected into the widgets' static slots
-    // (see WidgetPlaceholderArt.h). Held here so they outlive every widget
-    // that references them and are released in Release().
+    // Kept-alive widget textures injected into the widgets' static slots -- real
+    // staged art (assets/ui-widgets/*.svg via fn_asset_staging) for most slots,
+    // with a couple of procedural-only fills (WidgetPlaceholderArt.h) for
+    // elements with no real .tex counterpart (m_TexRow, m_Backdrop). Held here
+    // so they outlive every widget that references them and are released in
+    // Release().
     Mortar::SmartPtr<Mortar::Texture> m_TexCheckboxOn;
     Mortar::SmartPtr<Mortar::Texture> m_TexCheckboxOff;
     Mortar::SmartPtr<Mortar::Texture> m_TexTrack;

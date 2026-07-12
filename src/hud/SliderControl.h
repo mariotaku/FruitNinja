@@ -131,7 +131,7 @@ public:
     void SetText(const char* str);
 
     // Static texture lifecycle. Binary @ 0x001b7bc0 / UnloadContent.
-    // Loads "_dialog_box.tex" (track) + "slider_will.tex" (thumb).
+    // Loads "box.tex" (track -- shared with ComboBox/ListBox) + "slider_will.tex" (thumb).
     static void LoadContent();
     static void UnloadContent();
 

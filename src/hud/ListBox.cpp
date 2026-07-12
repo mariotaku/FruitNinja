@@ -24,7 +24,8 @@
 #include <cstdint>
 
 // Row-background texture (binary: SmartPtr<Texture> s_bar). LoadContent loads
-// blank_dialog_box.tex.
+// box.tex -- the same shared texture ComboBox/SliderControl load for their
+// own bar/track art.
 static Mortar::SmartPtr<Mortar::Texture> s_bar;
 
 // ---------------------------------------------------------------------------
@@ -286,17 +287,17 @@ void ListBox::UpdateTouchPosition() {
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x00194fdc
 // ASM-spec v1.6.1 ListBox::LoadContent @0x00194fdc: LoadLocalisedTexture
-//   blank_dialog_box.tex -> s_bar.
-// blank_dialog_box.tex DOES ship in v1.6.1 (unlike the VerticalScroller art).
+//   box.tex -> s_bar.
+// box.tex DOES ship in v1.6.1 (unlike the VerticalScroller art).
 void ListBox::LoadContent() {
-    s_bar = Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
+    s_bar = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
 }
 
 void ListBox::UnloadContent() {
     s_bar.SetNull();
 }
 
-// Port/test-only injector (no binary counterpart) -- see header note.
+// Port/test-only injector (no binary counterpart) -- box.tex ships; see header note.
 void ListBox::SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& bar) {
     s_bar = bar;
 }

@@ -38,24 +38,6 @@
 using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
-// Real widget art (assets/ui-widgets/*.svg -> FruitNinjaBada/Data/textures/*.tex,
-// rasterized at build time by tools/assets/svg-to-webp.mjs, see fn_asset_staging
-// in CMakeLists.txt) is preferred when it loads; procedurally-drawn placeholder
-// art (WidgetPlaceholderArt.h) is the fallback for hosts with no node/sharp
-// available (LoadLocalisedTexture returns a null SmartPtr on missing file).
-// Port specific: no binary counterpart, this screen has none.
-// ---------------------------------------------------------------------------
-static Mortar::SmartPtr<Mortar::Texture> LoadOrPlaceholder(
-    const char* name, const Mortar::SmartPtr<Mortar::Texture>& placeholder)
-{
-    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture(name);
-    if (tex.IsValid()) {
-        return tex;
-    }
-    return placeholder;
-}
-
-// ---------------------------------------------------------------------------
 // Language display list in languageFlag order. Same list as the interactive
 // harness (tests/test_settings_interactive.cpp kLanguageNames). Only 0..13
 // have shipped .str data; higher flags fall back to english_us inside
@@ -105,28 +87,31 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 // distance is read from each widget's real Draw()/ctor geometry (anchor is
 // always pos == centre; see ComboBox/CheckBox/SliderControl below):
 //   ComboBox:  bar half-width (kComboScaleX*0.5=60) + expand_arrow.tex width
-//              (32, real asset -- see combo_bar.tex/expand_arrow.tex note
-//              above) = 92 -- ComboBox::Draw's arrow quad sits fully to the
-//              RIGHT of the bar (arrowCenter = pos.x + arrowW*0.5 + barW*0.5).
+//              (32, real asset -- see expand_arrow.tex note above) = 92 --
+//              ComboBox::Draw's arrow quad sits fully to the RIGHT of the bar
+//              (arrowCenter = pos.x + arrowW*0.5 + barW*0.5).
 //   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), but checked.tex/
 //              unchecked.tex centre their opaque art in the transparent
 //              128x64 canvas -- visible square is texels x=[47,80] (34px),
 //              so the ART's right edge is only 16 units right of pos.x
 //              (texel 80 vs quad centre texel 64), not 64.
-//   SliderControl: track (_dialog_box.tex, real asset 128x16) half-width 64;
-//              thumb (slider_will.tex, real asset 32x32) protrudes slightly
-//              further when m_CurrentValue==m_MaxValue -- thumb centre reaches
+//   SliderControl: track (box.tex, stretched to kSensScale via
+//              MakeScale -- see ctor) half-width 64; thumb (slider_will.tex,
+//              real asset 32x32) protrudes slightly further when
+//              m_CurrentValue==m_MaxValue -- thumb centre reaches
 //              pos.x + trackW*0.5 - thumbPosW*0.5 (SliderControl::Draw's
 //              thumbPos.x formula), thumbPosW=thumbW*74/128=18.5, so thumb
 //              right edge = pos.x + 64 - 9.25 + 16 = pos.x + 70.75 (the
 //              governing, slightly-wider-than-track extent).
 static const float kRightEdge = 175.0f;
 
-// ComboBox: bar height 38 (see LoadOrPlaceholder note); combo_bar.tex is
-// 128x32 so the value field is stretched vertically to the new bar height --
-// grown from 32 so the bar's visual mass reads closer to the checkbox's
-// ~34-unit-tall visible square (kMotionCbX/kFpsCbX note below) instead of
-// looking thin next to it. x is centre of the bar (ComboBox::pos); back-solved
+// ComboBox: bar height 38; box.tex (the binary's shared field/row/track
+// texture -- see Init()'s LoadContent comment) is stretched to this bar
+// size via ComboBox::Draw's MakeScale(m_DrawWidth, m_DrawHeight, 1), grown
+// from the texture's native proportions so the bar's visual mass reads
+// closer to the checkbox's ~34-unit-tall visible square (kMotionCbX/kFpsCbX
+// note below) instead of looking thin next to it. x is centre of the bar
+// (ComboBox::pos); back-solved
 // so bar+arrow right edge == kRightEdge (see kRightEdge note: 92 -- unaffected
 // by the height change, see below).
 //
@@ -283,32 +268,31 @@ SettingsScreen::~SettingsScreen() {
 void SettingsScreen::Init() {
     m_Active = 1;
 
-    // ---- widget textures: real art (assets/ui-widgets/*.svg) preferred, ----
-    // ---- procedural placeholder (WidgetPlaceholderArt.h) as fallback.    ----
-    // Sizes mirror the balanced set in test_settings_interactive.cpp.
-    m_TexCheckboxOn  = LoadOrPlaceholder("checked.tex",  MakeCheckboxTex(true,  128, 64, 22));
-    m_TexCheckboxOff = LoadOrPlaceholder("unchecked.tex", MakeCheckboxTex(false, 128, 64, 22));
-    m_TexTrack       = LoadOrPlaceholder("_dialog_box.tex", MakeSolidTex(120, 120, 120, 255, 120, 16));
-    m_TexThumb       = LoadOrPlaceholder("slider_will.tex", MakeCircleTex(240, 140, 20, 30, 30));
+    // ---- widget textures: real art, staged at build time from ----
+    // ---- assets/ui-widgets/*.svg by fn_asset_staging (mandatory --  ----
+    // ---- the build fails if generation fails, see svg-to-webp.mjs). ----
+    m_TexCheckboxOn  = Mortar::TextureManager::LoadLocalisedTexture("checked.tex");
+    m_TexCheckboxOff = Mortar::TextureManager::LoadLocalisedTexture("unchecked.tex");
+    // box.tex is the binary's single shared field/row/track texture -- ComboBox
+    // (@0x00168b3c), ListBox (@0x00194fdc), and SliderControl (@0x001b7bc0) all
+    // LoadLocalisedTexture the SAME "box.tex" (Ghidra-confirmed). One load here,
+    // reused for both the combo bar and the slider track injections below.
+    m_TexTrack       = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
+    m_TexThumb       = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
+    // No dedicated ListBox-row art beyond box.tex (this screen's dropdown never
+    // opens -- kComboVisibleRows keeps it collapsed) -- solid white tint canvas.
     m_TexRow         = MakeSolidTex(255, 255, 255, 255, 8, 8);
-    m_TexScrTrack    = LoadOrPlaceholder("vbar.tex",    MakeSolidTex(70, 70, 90, 255, 8, 8));
-    m_TexScrThumb    = LoadOrPlaceholder("vslider.tex", MakeSolidTex(200, 200, 210, 255, 8, 8));
-    m_TexScrArrow    = LoadOrPlaceholder("arrow.tex",   MakeArrowTex(180, 180, 200, 24, 24));
-    // 40px-wide triangle: ComboBox::Draw uses this texture's own native width
-    // (GetWidth(), fixed) for the arrow quad's scale -- independent of bar
-    // height/kComboScaleY (only the arrow's on-screen HEIGHT tracks the bar,
-    // see kComboScaleY note in the layout-constants block above) -- so 40px
-    // reads as a proper expander rather than a thin spike regardless of bar size.
-    m_TexArrow       = LoadOrPlaceholder("expand_arrow.tex",
-                                          MakeArrowTex(255, 210, 40, 40, 40, /*pointDown*/ true));
+    m_TexScrTrack    = Mortar::TextureManager::LoadLocalisedTexture("vbar.tex");
+    m_TexScrThumb    = Mortar::TextureManager::LoadLocalisedTexture("vslider.tex");
+    m_TexScrArrow    = Mortar::TextureManager::LoadLocalisedTexture("arrow.tex");
+    m_TexArrow       = Mortar::TextureManager::LoadLocalisedTexture("expand_arrow.tex");
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
-    // tint (Colour(0,0,0,160) in Draw()), not baked into the texture.
+    // tint (Colour(0,0,0,160) in Draw()), not baked into the texture. No real
+    // widget counterpart.
     m_Backdrop       = MakeSolidTex(0, 0, 0, 255, 8, 8);
 
-    // Combo bar: the designed recessed field (combo_bar.tex); fall back to the
-    // shipped blank_dialog_box.tex if the SVG art wasn't generated on this host.
-    m_TexBar = LoadOrPlaceholder("combo_bar.tex",
-                                 Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex"));
+    // Combo bar: box.tex, same shared field texture as the slider track above.
+    m_TexBar = m_TexTrack;
 
     CheckBox::SetTexturesForTest(m_TexCheckboxOn, m_TexCheckboxOff);
     SliderControl::SetTexturesForTest(m_TexTrack, m_TexThumb);

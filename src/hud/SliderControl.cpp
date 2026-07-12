@@ -24,7 +24,8 @@
 
 // ---------------------------------------------------------------------------
 // Module-scope static texture handles (binary: Mortar::SmartPtr<Texture> GOT slots).
-// LoadContent loads "_dialog_box.tex" (track) and "slider_will.tex" (thumb).
+// LoadContent loads "box.tex" (track -- the same shared texture ComboBox/
+// ListBox load for their own bar/row art) and "slider_will.tex" (thumb).
 static Mortar::SmartPtr<Mortar::Texture> s_box;      // track background
 static Mortar::SmartPtr<Mortar::Texture> s_slider;   // thumb
 
@@ -286,16 +287,13 @@ void SliderControl::Draw(float* hudScaleRaw) {
 
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x001b7bc0
-// DIFFERS: original loads "_dialog_box.tex" (track) + "slider_will.tex" (thumb) via
-//   LoadLocalisedTexture, but neither texture is shipped in FruitNinjaBada/Data for
-//   v1.6.1 (dialog_box.tex exists, _dialog_box.tex does not; slider_will.tex is
-//   absent). The SliderControl is dead code, so the art was dropped. Faithful names
-//   are kept; the SmartPtrs stay null when the art is absent (ctor then leaves
-//   track/thumb sizes at 0 and Draw no-ops the quads). Port-supplied placeholder art
-//   is a separate task; the visual test injects substitutes via SetTexturesForTest.
-//   v1.6.1 SliderControl::LoadContent @ 0x001b7bc0
+// ASM-spec v1.6.1 SliderControl::LoadContent @0x001b7bc0: LoadLocalisedTexture
+//   box.tex -> s_box (track), slider_will.tex -> s_slider (thumb).
+// box.tex is the SAME shared texture ComboBox (@0x00168b3c) and ListBox
+//   (@0x00194fdc) load for their own bar/row art (Ghidra-confirmed string
+//   reference at each LoadContent call site) -- not a SliderControl-only asset.
 void SliderControl::LoadContent() {
-    s_box    = Mortar::TextureManager::LoadLocalisedTexture("_dialog_box.tex");
+    s_box    = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
     s_slider = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
 }
 

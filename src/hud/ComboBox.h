@@ -10,8 +10,10 @@
 // complete faithful implementation (CheckBox / SliderControl policy).
 //
 // Draw (@0x001687f4) renders a collapsed bar: a combo label (Yellow) + the
-// blank_dialog_box.tex bar + the expand_arrow.tex arrow + the currently-selected
-// item's text. Update (@0x00167f70) hit-tests the bar+arrow rect and, on a fresh
+// box.tex bar (the SAME shared box.tex ListBox/SliderControl load -- Ghidra-
+// confirmed string ref at each LoadContent) + the expand_arrow.tex arrow +
+// the currently-selected item's text. Update (@0x00167f70) hit-tests the
+// bar+arrow rect and, on a fresh
 // press, creates a ListBox (operator new(0xDC)) positioned just below the bar,
 // registers ComboBox::ListBoxClosed as the ListBox's commit callback, and
 // AddControl's it to the HUD. When the ListBox commits it fires ListBoxClosed,
@@ -41,7 +43,7 @@
 //   Draw                @ 0x001687f4
 //   Update              @ 0x00167f70
 //   GetType (-> 5)      @ 0x001690fc
-//   LoadContent         @ 0x00168b3c (blank_dialog_box.tex / expand_arrow.tex)
+//   LoadContent         @ 0x00168b3c (box.tex / expand_arrow.tex)
 //   ListBoxClosed       @ 0x00167de0
 //
 
@@ -162,11 +164,11 @@ public:
     std::string* SelectedIter() const { return m_SelectedIter; }
 
     // Static texture lifecycle. Binary @ 0x00168b3c.
-    // Loads blank_dialog_box.tex -> s_bar, expand_arrow.tex -> s_expandArrow.
+    // Loads box.tex -> s_bar (shared with ListBox/SliderControl), expand_arrow.tex -> s_expandArrow.
     static void LoadContent();
     static void UnloadContent();
 
-    // Port/test-only: inject the bar + arrow textures. blank_dialog_box.tex ships,
+    // Port/test-only: inject the bar + arrow textures. box.tex ships,
     // but expand_arrow.tex is NOT in FruitNinjaBada/Data (see .cpp DIFFERS).
     // No binary counterpart.
     static void SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& bar,

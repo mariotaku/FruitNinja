@@ -6,7 +6,7 @@
 // Usage: test_dropdown_render [--screenshot|--interactive|--headless]
 //
 // Renders the SAME widget in BOTH states, side by side:
-//   * LEFT  -- a COLLAPSED ComboBox: header label (Yellow) + blank_dialog_box bar
+//   * LEFT  -- a COLLAPSED ComboBox: header label (Yellow) + box.tex bar
 //     + expand arrow + the currently-selected item's text. This is what the combo
 //     looks like before it is tapped.
 //   * RIGHT -- an EXPANDED ComboBox: the same collapsed bar, with the dropdown
@@ -26,14 +26,16 @@
 //   tmp/test/screenshots/dropdown/dropdown.png
 //
 // NOTE: validates widget GEOMETRY + STATE (collapsed vs expanded, row
-// count/colours, scroller present on overflow, thumb position), NOT the final
-// shipped art. The faithful textures (blank_dialog_box.tex ships, but
-// expand_arrow.tex / vbar.tex / vslider.tex / arrow.tex are NOT shipped in v1.6.1
-// -- see the widget .cpp DIFFERS notes), so the test injects in-memory
-// PROCEDURALLY-DRAWN substitute textures via each widget's SetTexturesForTest hook.
-// Widget positions are test-chosen (v1.6.1 never places these widgets); only
-// relative geometry + state are meaningful here. Item/label strings are UPPERCASE
-// because font_fruit_ninja.fnt carries no lowercase glyphs.
+// count/colours, scroller present on overflow, thumb position). The port stages
+// the real widget textures at build time -- box.tex ships straight
+// from FruitNinjaBada/Data, and expand_arrow.tex / vbar.tex / vslider.tex /
+// arrow.tex are generated from assets/ui-widgets/*.svg by fn_asset_staging
+// (tools/assets/svg-to-webp.mjs, mandatory -- fails the build if generation
+// fails) -- so this test LOADS THE REAL TEXTURES via LoadLocalisedTexture and
+// injects them via each widget's SetTexturesForTest hook. Widget positions are
+// test-chosen (v1.6.1 never places these widgets); only relative geometry +
+// state are meaningful here. Item/label strings are UPPERCASE because
+// font_fruit_ninja.fnt carries no lowercase glyphs.
 //
 // C++11 / GCC 4.4.1 clean (host-only test TU; kept lambda/auto/range-for free).
 
@@ -44,6 +46,7 @@
 #include "hud/HUD.h"
 #include "game/GameWork.h"
 #include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
@@ -55,12 +58,6 @@
 #include <cstdint>
 #include <cmath>
 #include <SDL.h>
-
-// Placeholder-art texture makers (MakeSolidTex / MakeArrowTex + SDF helpers)
-// are shared with test_settings_widgets_render.cpp and
-// test_settings_interactive.cpp -- see the header for details.
-#include "hud/WidgetPlaceholderArt.h"
-using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
 // Render pass: clear + ortho + draw both combos (collapsed + expanded) and the
@@ -99,16 +96,27 @@ int main(int argc, char* argv[]) {
     }
 
     // -----------------------------------------------------------------------
-    // Substitute textures (real dropdown art is not shipped -- see header note).
-    // Inject BEFORE drawing (widget ctors do not read textures, but the Draw
-    // paths do). Distinct colours so each element reads clearly.
+    // Real staged textures (fn_asset_staging ships box.tex from
+    // FruitNinjaBada/Data and generates expand_arrow/vbar/vslider/arrow.tex from
+    // assets/ui-widgets/*.svg). Inject BEFORE drawing (widget ctors do not read
+    // textures, but the Draw paths do). Same names the shipping widgets load
+    // (ComboBox.cpp / ListBox.cpp / VerticalScroller.cpp LoadContent).
     // -----------------------------------------------------------------------
-    Mortar::SmartPtr<Mortar::Texture> texBar   = MakeSolidTex(40, 40, 60, 255, 8, 8);   // bar bg (dark)
-    Mortar::SmartPtr<Mortar::Texture> texArrow = MakeArrowTex(255, 210, 40, 32, 32, /*pointDown*/ true); // expand arrow (gold, points down)
-    Mortar::SmartPtr<Mortar::Texture> texRow   = MakeSolidTex(255, 255, 255, 255, 8, 8); // row bg (white -> row colour tints)
-    Mortar::SmartPtr<Mortar::Texture> texTrack = MakeSolidTex(70, 70, 90, 255, 8, 8);    // scroller track
-    Mortar::SmartPtr<Mortar::Texture> texThumb = MakeSolidTex(200, 200, 210, 255, 8, 8); // scroller thumb
-    Mortar::SmartPtr<Mortar::Texture> texVArrow = MakeArrowTex(180, 180, 200, 24, 24);   // scroller arrows
+    Mortar::SmartPtr<Mortar::Texture> texBar    = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
+    Mortar::SmartPtr<Mortar::Texture> texArrow  = Mortar::TextureManager::LoadLocalisedTexture("expand_arrow.tex");
+    Mortar::SmartPtr<Mortar::Texture> texRow    = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
+    Mortar::SmartPtr<Mortar::Texture> texTrack  = Mortar::TextureManager::LoadLocalisedTexture("vbar.tex");
+    Mortar::SmartPtr<Mortar::Texture> texThumb  = Mortar::TextureManager::LoadLocalisedTexture("vslider.tex");
+    Mortar::SmartPtr<Mortar::Texture> texVArrow = Mortar::TextureManager::LoadLocalisedTexture("arrow.tex");
+
+    if (!texBar.IsValid() || !texArrow.IsValid() || !texRow.IsValid() ||
+        !texTrack.IsValid() || !texThumb.IsValid() || !texVArrow.IsValid()) {
+        std::fprintf(stderr, "FAIL: failed to load one or more staged widget textures "
+                             "(box/expand_arrow/vbar/vslider/arrow.tex) "
+                             "-- check fn_asset_staging ran and FN_DATA_DIR_PATH is set\n");
+        h.Shutdown();
+        return 1;
+    }
 
     ComboBox::SetTexturesForTest(texBar, texArrow);
     ListBox::SetTexturesForTest(texRow);
@@ -243,7 +251,7 @@ int main(int argc, char* argv[]) {
         // after this block.
     } // widgets destroyed while GL context still alive
 
-    // Release the substitute textures (static-slot refs + local refs) while the GL
+    // Release the loaded textures (static-slot refs + local refs) while the GL
     // context is alive -- glDeleteTextures runs in the Texture2D_Bada dtor.
     ComboBox::UnloadContent();
     ListBox::UnloadContent();

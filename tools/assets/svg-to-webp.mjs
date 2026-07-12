@@ -24,11 +24,13 @@
 // `npm install` in tools/assets/ once (same trick as the Python scripts'
 // _ensure_pillow) and retries the import.
 //
-// Non-fatal by design: ANY failure (node missing sharp prebuilt for this
-// platform/arch, npm install failing, no network, etc.) prints a single
-// ASCII warning line and exits 0. Widgets then fall back to placeholder
-// art (see SettingsScreen.cpp LoadOrPlaceholder) -- this must never fail
-// the build.
+// Fatal by design: the widget textures have no runtime fallback (SettingsScreen
+// / the render tests load them directly via LoadLocalisedTexture, no
+// placeholder substitution), so ANY failure (node missing, sharp missing/no
+// prebuilt for this platform/arch, npm install failing, no network, rasterize
+// error) prints a clear ASCII error and exits NON-ZERO to fail the build loudly
+// instead of silently shipping blank widgets. Install node + let npm install
+// sharp (internet access required once, cached after) to fix.
 //
 // Idempotent: an output .tex newer than its source .svg is skipped.
 
@@ -41,13 +43,14 @@ import { fileURLToPath } from "node:url";
 const MANIFEST = {
   checked: [128, 64],
   unchecked: [128, 64],
-  // combo_bar/expand_arrow: NOT 4x supersample-friendly POT -- authored to
-  // match ComboBox::Draw's exact non-uniform cell aspect (120x38 bar,
-  // 32x38 caret; see SettingsScreen.cpp kComboScaleX/Y + ComboBox.cpp Draw)
-  // so the runtime scale-to-cell is uniform (1:1) instead of stretching.
-  combo_bar: [120, 38],
-  _dialog_box: [128, 16],
+  // box.tex: the binary's single shared generic beveled-wood box, LoadContent'd
+  // by ComboBox (@0x00168b3c), ListBox (@0x00194fdc), and SliderControl
+  // (@0x001b7bc0) alike -- see box.svg's own header comment.
+  box: [64, 40],
   slider_will: [32, 32],
+  // expand_arrow: NOT 4x supersample-friendly POT -- authored to match
+  // ComboBox::Draw's exact caret aspect (32x38; see ComboBox.cpp Draw) so the
+  // runtime scale-to-cell is uniform (1:1) instead of stretching.
   expand_arrow: [32, 38],
   vbar: [32, 128],
   vslider: [32, 64],
@@ -123,6 +126,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.log("[svg-to-webp] WARNING: rasterization failed (" + (err && err.message ? err.message : err) + ") -- widgets will fall back to placeholder art");
-  process.exit(0);
+  console.log("[svg-to-webp] ERROR: rasterization failed (" + (err && err.message ? err.message : err) + ")");
+  console.log("[svg-to-webp] widget textures are required (no runtime fallback) -- install node and ensure npm can install the 'sharp' package (tools/assets/), then rebuild");
+  process.exit(1);
 });
