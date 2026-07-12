@@ -77,33 +77,42 @@ async function main() {
   let generated = 0;
   let skipped = 0;
 
+  // Render one SVG -> <outName>.tex at (w x h), supersampled at `density`.
+  // Returns true if it rendered, false if skipped (output newer than source).
+  async function render(svgPath, outName, w, h, density) {
+    const outPath = path.join(outDir, outName + ".tex");
+    if (existsSync(outPath)) {
+      if (statSync(outPath).mtimeMs >= statSync(svgPath).mtimeMs) {
+        skipped++;
+        return false;
+      }
+    }
+    const tmpPath = outPath + ".tmp.webp";
+    await sharp(svgPath, { density: density })
+      .resize(w, h, { fit: "fill" })
+      .webp({ lossless: true })
+      .toFile(tmpPath);
+    renameSync(tmpPath, outPath);
+    console.log("[svg-to-webp] generated " + outName + ".tex (" + w + "x" + h + ")");
+    generated++;
+    return true;
+  }
+
   for (const [name, [w, h]] of Object.entries(MANIFEST)) {
     const svgPath = path.join(svgDir, name + ".svg");
-    const outPath = path.join(outDir, name + ".tex");
 
     if (!existsSync(svgPath)) {
       console.log("[svg-to-webp] WARNING: missing source SVG " + svgPath + " -- skipping");
       continue;
     }
 
-    if (existsSync(outPath)) {
-      const svgMtime = statSync(svgPath).mtimeMs;
-      const outMtime = statSync(outPath).mtimeMs;
-      if (outMtime >= svgMtime) {
-        skipped++;
-        continue;
-      }
-    }
-
-    const tmpPath = outPath + ".tmp.webp";
-    await sharp(svgPath, { density: DENSITY })
-      .resize(w, h, { fit: "fill" })
-      .webp({ lossless: true })
-      .toFile(tmpPath);
-    renameSync(tmpPath, outPath);
-
-    console.log("[svg-to-webp] generated " + name + ".tex (" + w + "x" + h + ")");
-    generated++;
+    // Nominal-res .tex (baseline / fallback) plus an HD "hd_" sibling at 2x the
+    // pixel dimensions (density doubled to keep the same supersample). The
+    // texture loader (TextureManager::BuildHdPath/Load) silently prefers the
+    // hd_ file and halves its reported apparent size, so widgets draw at the
+    // SAME on-screen footprint but sample 2x the detail -- crisper vector UI.
+    await render(svgPath, name, w, h, DENSITY);
+    await render(svgPath, "hd_" + name, w * 2, h * 2, DENSITY * 2);
   }
 
   console.log("[svg-to-webp] " + generated + " generated, " + skipped + " up to date");
