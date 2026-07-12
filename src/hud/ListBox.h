@@ -140,10 +140,10 @@ private:
 
     // Port specific: settable row tint overrides, appended after the binary-
     // faithful 0xDC layout so sizeof/offsetof asserts below stay intact. No
-    // binary counterpart -- base ListBox is dead code (see file header);
-    // default-initialised to the binary's hardcoded literals so behaviour is
-    // identical until a caller (e.g. SettingsScreen theming its language
-    // dropdown) opts in.
+    // binary counterpart -- base ListBox is dead code with no live call site in
+    // the port (the settings dropdown is now the from-scratch src/ui/UiDropdown,
+    // not this binary widget). Default-initialised to the binary's hardcoded
+    // literals so behaviour is identical unless a caller opts in.
     Colour m_SelectedRowColour;
     Colour m_HoverRowColour;
 
