@@ -81,9 +81,17 @@ static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // Port specific: no binary counterpart. BOTTOM-left SETTINGS button. +Y is up
 // (sound/music toggles at y=+135.5 are TOP-right), so the bottom edge is
-// negative y; x near the left edge. Nudged into the corner to clear the DOJO
-// ring (centre (-144,-65), ~100 radius).
-static const Vec3 POS_SETTINGS_TOGGLE(-210.0f, -138.0f, 0.0f);
+// negative y; x near the left edge. HUD-space screen bounds are x in
+// [-240,240], y in [-160,160]; the button's on-screen half-size is 24 (its
+// m_RestScale is 48, matched to the pause icon's idle rendered size -- see
+// m_pSettingsButton setup below). Old (-210,-138) with the old 64-size half-
+// extent (32) put the rect at x[-242,-178] / y[-170,-106], clipping both the
+// left (x<-240) and bottom (y<-160) screen edges. Moved fully inside the
+// screen while staying in the same dark corner pocket that is already clear
+// of the DOJO ring's visible extent (ring centre (-144,-65) ~100 radius --
+// the ring's footprint doesn't reach this far into the corner; confirmed
+// against a render capture).
+static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -132.0f, 0.0f);
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
@@ -286,13 +294,28 @@ void MainScreen::Update(float dt) {
     // Port specific: no binary counterpart. Bottom-left SETTINGS button;
     // built the same way as the sound/music toggles above (recreated under a
     // null guard, never explicitly torn down while MainScreen persists).
+    //
+    // Size: matched to the in-game PAUSE icon's ACTUAL rendered size, not its
+    // ctor-time m_RestScale=64. PauseScreen::Update (src/screens/PauseScreen.cpp
+    // ~line 913-916) recomputes m_ResumeButton->m_RestScale EVERY frame as
+    // m_ButtonOriginPos * resumeScale, where m_ButtonOriginPos=(64,64,64) is
+    // captured once at lazy-create and resumeScale = m_Alpha*1.25 + 0.75. In
+    // normal (idle, not-paused) gameplay m_State==PAUSE_STATE_HIDDEN decays
+    // m_Alpha to 0 (PauseScreen.cpp line ~700-701), so resumeScale settles at
+    // 0.75 and the pause icon's steady-state rendered size is 64*0.75 = 48, not
+    // 64. Setting the same 48 here (via the same OriginPos*0.75 formula, not a
+    // bare literal) makes the two icons match at the size the player actually
+    // sees side-by-side (pause icon in gameplay HUD vs settings icon on the
+    // main menu) rather than the two buttons' differing ctor-time constants.
     if (m_pSettingsButton == nullptr && game_work.mHud) {
         m_pSettingsButton = new MenuButton();
         m_pSettingsButton->m_Texture = Mortar::TextureManager::LoadLocalisedTexture("settings_button.tex");
         m_pSettingsButton->Init(POS_SETTINGS_TOGGLE,
             Mortar::Delegate0<void>::Make(this, &MainScreen::SettingsCallback), -1,
             Vec3(0.0f, 0.0f, 0.0f), nullptr);
-        m_pSettingsButton->m_RestScale = Vec3(64.0f, 64.0f, 64.0f);
+        const Vec3 buttonOriginPos(64.0f, 64.0f, 64.0f);   // == PauseScreen's m_ButtonOriginPos
+        const float idleResumeScale = 0.0f * 1.25f + 0.75f; // PauseScreen resumeScale at m_Alpha=0 (idle)
+        m_pSettingsButton->m_RestScale = buttonOriginPos * idleResumeScale;  // (48,48,48)
         m_pSettingsButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         game_work.mHud->AddControl(m_pSettingsButton);
         m_pSettingsButton->SetSingular();
@@ -703,6 +726,29 @@ void MainScreen::Update(float dt) {
         }
     }
 
+#ifndef __bada__
+    // Port specific: no binary counterpart. Settings button visibility/slide
+    // mirrors the sound/music toggle mechanism above (same `elapsedTime +
+    // GetPauseAmount()` signal, clamped 0..1: 1 = idle main screen, 0 = fully
+    // transitioned into gameplay/dojo/other states). m_Active gates Update/Draw
+    // off entirely below PAUSE_VISIBILITY, same as the toggles; the slide pushes
+    // the button toward its own screen edge (bottom-left, since it lives in
+    // that corner) rather than reusing the toggles' +Y-only slide.
+    if (m_pSettingsButton) {
+        m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
+        m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
+
+        float settingsPauseAmount = elapsedTime + GetPauseAmount();
+        if (settingsPauseAmount < 0.0f) settingsPauseAmount = 0.0f;
+        if (settingsPauseAmount > 1.0f) settingsPauseAmount = 1.0f;
+
+        float settingsSlide = size.y * 2.0f * (1.0f - settingsPauseAmount);
+        m_pSettingsButton->m_Active = (settingsPauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
+        m_pSettingsButton->pos.x -= settingsSlide;
+        m_pSettingsButton->pos.y -= settingsSlide;
+    }
+#endif // !defined(__bada__)
+
     // Binary @ 0x00195a58: UpdateScreenElements(dt, stateVar).
     // dt = frame delta (used for bounce physics integration and tute gate).
     // stateVar = transition timer (used for settle condition: time > 0.99).
@@ -935,6 +981,25 @@ void MainScreen::Hide() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
     pos = Vec3(0.0f, 0.0f, 0.0f);
+
+#ifndef __bada__
+    // Port specific: no binary counterpart. m_pSettingsButton is a standalone
+    // HUDControl in the GLOBAL game_work.mHud list (not gated by MainScreen's
+    // own Draw/early-return the way MainScreen's own quad is), so it must be
+    // hard-removed here -- Hide() is the actual "MainScreen stops being the
+    // foreground screen" signal (called from PauseScreen when gameplay starts;
+    // see src/screens/PauseScreen.cpp ~line 151). The m_Active/slide gating in
+    // Update() (see POS_SETTINGS_TOGGLE block) only covers transitions WITHIN
+    // MainScreen's own state machine (dojo/mode-select sub-states, which keep
+    // calling MainScreen::Update every frame and slide the button out smoothly);
+    // it can't protect against leaking onto pause/gameplay/dojo-screen/gameover,
+    // where MainScreen::Update stops running altogether and a slide-based hide
+    // would leave the control sitting fully active (and drawing) forever.
+    // RemoveButton sets m_bPendingRemoval=1 (HUD::Update reaps it that frame)
+    // and nulls our pointer; the null-guarded creation block in Update() rebuilds
+    // it the next time MainScreen actually resumes running frames.
+    RemoveButton(m_pSettingsButton);
+#endif // !defined(__bada__)
 }
 
 void MainScreen::RemoveButton(MenuButton*& btn) {
