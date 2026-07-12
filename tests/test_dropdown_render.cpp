@@ -12,10 +12,11 @@
 //   * RIGHT -- an EXPANDED ComboBox: the same collapsed bar, with the dropdown
 //     ListBox attached directly below it (exactly where ComboBox::Update spawns it:
 //     pos.y - m_DrawHeight - 1). The ListBox holds 8 items (> its 6 visible rows,
-//     so its ctor creates a VerticalScroller and AddControl's it to the HUD). One
-//     row is the committed selection (Blue), one is the hover row (RGB
-//     0x50,0x96,0xFF), the rest White; the scroller (track + top/bottom arrows +
-//     thumb at a mid position) sits to its right.
+//     so its ctor creates a VerticalScroller and AddControl's it to the HUD). Themed
+//     to match SettingsScreen's amber language combo (gold selected row 0xF2C400,
+//     amber hover row 0xC99A3A, parchment row text 0xEAD8B0), not the ComboBox/
+//     ListBox default blue; the scroller (track + top/bottom arrows + thumb at a
+//     mid position) sits to its right.
 //
 // The expanded ListBox is built with the SAME ctor args ComboBox::Update uses when
 // it opens (selIter=combo selection, visibleRows=textFlag, cellHeightParam=14,
@@ -154,6 +155,15 @@ int main(int argc, char* argv[]) {
                                items, /*defaultIdx*/ 2, "EXPANDED",
                                kTextFlag, /*width*/ 20, kScaleX, kScaleY);
         comboExpanded.SetTextColour(Colour(255, 255, 255, 255));
+        // Cache the same amber theme on the ComboBox itself (mirrors
+        // SettingsScreen's SetListSelectedRowColour/SetListHoverRowColour/
+        // SetListTextColour calls) so a ListBox this combo opens VIA
+        // ComboBox::Update would also pick it up -- inert here since the
+        // dropdown below is built directly, not through Update(), but keeps
+        // the ComboBox's own pass-through API exercised/documented.
+        comboExpanded.SetListSelectedRowColour(Colour(0xF2, 0xC4, 0x00, 0xFF));
+        comboExpanded.SetListHoverRowColour(Colour(0xC9, 0x9A, 0x3A, 0xFF));
+        comboExpanded.SetListTextColour(Colour(0xEA, 0xD8, 0xB0, 0xFF));
 
         if (comboExpanded.DrawWidth() != 120.0f || comboExpanded.DrawHeight() != 55.0f) {
             std::fprintf(stderr, "FAIL: ComboBox draw extents %.1f x %.1f (expected 120 x 55)\n",
@@ -199,11 +209,21 @@ int main(int argc, char* argv[]) {
             // Visual: mid scroll + hover/selection so all three row colours render.
             scroller->m_CurrentValue = 1;               // thumb mid-track (genuinely public -- see class header)
         }
-        // Selection (Blue) and hover (light blue) rows within the visible window
+        // Selection/hover/text row colours: mirror SettingsScreen's amber
+        // language-combo theme (src/screens/SettingsScreen.cpp, applied via
+        // ComboBox::SetListSelectedRowColour/SetListHoverRowColour/
+        // SetListTextColour) so this test's screenshot shows the SAME themed
+        // list a real settings-screen combo displays, not the ComboBox/ListBox
+        // default blue selection. This ListBox is built directly (not spawned
+        // via ComboBox::Update), so the colours are set here rather than
+        // through the ComboBox pass-throughs.
+        list.SetSelectedRowColour(Colour(0xF2, 0xC4, 0x00, 0xFF));  // bright gold -- selected row
+        list.SetHoverRowColour(Colour(0xC9, 0x9A, 0x3A, 0xFF));     // softer warm amber -- hover row
+        list.SetTextColour(Colour(0xEA, 0xD8, 0xB0, 0xFF));         // parchment/cream -- row text
+        // Selection (gold) and hover (amber) rows within the visible window
         // (top row = begin() + m_CurrentValue = index 1).
-        list.SetTopVisibleForTest(&items[2]);           // committed -> Blue (matches combo selection "CHERRY")
-        list.SetHoverForTest(&items[4]);                // hovered   -> RGB(0x50,0x96,0xFF)
-        list.SetTextColourForTest(Colour(20, 20, 30, 255)); // dark text on white/tinted rows
+        list.SetTopVisibleForTest(&items[2]);           // committed -> gold (matches combo selection "CHERRY")
+        list.SetHoverForTest(&items[4]);                // hovered   -> amber
 
         // ListBox::GetSelected returns the committed row.
         if (list.GetSelected() != &items[2]) {

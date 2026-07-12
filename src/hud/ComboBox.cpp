@@ -102,7 +102,11 @@ void ComboBox::PreDraw(float* hudScale) {
 //      (pos.x + m_DrawWidth*0.5 + size.x*25, pos.y + size.y*7), font size m_Width*size.x
 //   2. bar quad (s_bar, White) scale (m_DrawWidth, m_DrawHeight) at pos
 //   3. expand arrow (s_expandArrow, White) scale (arrowW*size.x, m_DrawHeight) at
-//      (pos.x + arrowW*size.x*0.5 + m_DrawWidth*0.5, pos.y)
+//      (pos.x + arrowW*size.x*0.5 + m_DrawWidth*0.5, pos.y) -- binary formula;
+//      the port additionally pulls this left by a small overlap (see the
+//      kBoxTexRightMarginFrac Port specific note below) to close a visible
+//      gap caused by box.tex's/expand_arrow.tex's own asset margins, not by
+//      this placement formula.
 //   4. selected-item label (m_SelectedIter, m_TextColour tinted) at
 //      (pos.x - m_DrawWidth*0.5 + size.x*5, pos.y + size.y*7), font size m_Width*size.x
 void ComboBox::Draw(float* hudScaleRaw) {
@@ -141,7 +145,21 @@ void ComboBox::Draw(float* hudScaleRaw) {
         s_expandArrow->Set();
         Matrix44 mat = Matrix44::MakeScale(arrowW * size.x, m_DrawHeight, 1.0f);
         Vec3 p = pos;
-        p.x = p.x + arrowW * size.x * 0.5f + m_DrawWidth * 0.5f;
+        // Port specific: box.tex (see box.svg) insets its opaque wood rim
+        // 2px inside its 64px-wide canvas, so the bar quad's own RIGHT edge
+        // (at pos.x + m_DrawWidth*0.5) is ~3% transparent margin, not visible
+        // wood -- edge-adjacent placement (the binary's actual formula, kept
+        // above) reads as a gap between the value box and the caret cell.
+        // expand_arrow.tex's flat-left path starts at canvas x=0 (no margin
+        // of its own), so pull the caret cell left by that same fraction of
+        // the bar's width to butt its flat edge against the bar's real
+        // (visible) right edge; a touch more (kCaretOverlapPad) folds the
+        // caret's rounded-right-corner-vs-box's-square-corner mismatch under
+        // the caret so no wood-rim notch peeks out on the left.
+        static const float kBoxTexRightMarginFrac = 2.0f / 64.0f;
+        static const float kCaretOverlapPad = 1.0f;
+        float overlap = m_DrawWidth * kBoxTexRightMarginFrac + kCaretOverlapPad * size.x;
+        p.x = p.x + arrowW * size.x * 0.5f + m_DrawWidth * 0.5f - overlap;
         mat.GlobalTranslate44(p);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
