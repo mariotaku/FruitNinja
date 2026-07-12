@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- settings_button.tex - corner button icon, matches pause_button.tex style
+       (translucent-white rounded square + white glyph; the game tints it). A
+       cog/gear glyph: 8 teeth + a toothed body with a centre hole. -->
+  <rect x="6" y="6" width="52" height="52" rx="13" ry="13"
+        fill="#ffffff" fill-opacity="0.5"/>
+  <g fill="#ffffff">
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(0 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(45 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(90 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(135 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(180 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(225 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(270 32 32)"/>
+    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(315 32 32)"/>
+  </g>
+  <!-- toothed body + centre hole (even-odd cuts the hole through) -->
+  <path fill="#ffffff" fill-rule="evenodd"
+        d="M32 16 a16 16 0 1 0 0.01 0 Z M32 25 a7 7 0 1 0 0.01 0 Z"/>
+</svg>

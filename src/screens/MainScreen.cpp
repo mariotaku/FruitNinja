@@ -29,6 +29,7 @@
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
+#include "screens/SettingsScreen.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
@@ -78,6 +79,11 @@ static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
 static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
+// Port specific: no binary counterpart. BOTTOM-left SETTINGS button. +Y is up
+// (sound/music toggles at y=+135.5 are TOP-right), so the bottom edge is
+// negative y; x near the left edge. Nudged into the corner to clear the DOJO
+// ring (centre (-144,-65), ~100 radius).
+static const Vec3 POS_SETTINGS_TOGGLE(-210.0f, -138.0f, 0.0f);
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
@@ -114,6 +120,7 @@ MainScreen::MainScreen(Game& g)
       , m_GlobalAlphaTarget(1.0f), m_Time(0.0f)
       , m_bGameStartReset(false)
       , m_pDojoScreen(nullptr)
+      , m_pSettingsButton(nullptr)
       , game(g)
 #endif
 {
@@ -230,6 +237,9 @@ void MainScreen::Release() {
     pToggleB       = nullptr;
     pMusicToggle   = nullptr;
     pSoundToggle   = nullptr;
+#ifndef __bada__
+    m_pSettingsButton = nullptr;
+#endif // !defined(__bada__)
 
     delete m_pSliceInstrBox;
     m_pSliceInstrBox = nullptr;
@@ -271,6 +281,23 @@ void MainScreen::Update(float dt) {
         pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         pMusicToggle->SetSingular();
     }
+
+#ifndef __bada__
+    // Port specific: no binary counterpart. Bottom-left SETTINGS button;
+    // built the same way as the sound/music toggles above (recreated under a
+    // null guard, never explicitly torn down while MainScreen persists).
+    if (m_pSettingsButton == nullptr && game_work.mHud) {
+        m_pSettingsButton = new MenuButton();
+        m_pSettingsButton->m_Texture = Mortar::TextureManager::LoadLocalisedTexture("settings_button.tex");
+        m_pSettingsButton->Init(POS_SETTINGS_TOGGLE,
+            Mortar::Delegate0<void>::Make(this, &MainScreen::SettingsCallback), -1,
+            Vec3(0.0f, 0.0f, 0.0f), nullptr);
+        m_pSettingsButton->m_RestScale = Vec3(64.0f, 64.0f, 64.0f);
+        m_pSettingsButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+        game_work.mHud->AddControl(m_pSettingsButton);
+        m_pSettingsButton->SetSingular();
+    }
+#endif // !defined(__bada__)
 
     // Toggle texture swap runs right after creation, BEFORE the state switch
     // (binary indexes the on/off texture pair by bMusicOn^1 / bSoundOn^1).
@@ -895,6 +922,12 @@ void MainScreen::DeleteMenuButtons() {
     RemoveButton(m_pStoreButton);
     RemoveButton(m_pMoreGamesBtn);
     RemoveButton(m_pQuitButton);
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see m_pSettingsButton note in
+    // MainScreen.h. Torn down alongside the other menu buttons; Update()'s
+    // null-guarded creation block rebuilds it on the next case-0/1 pass.
+    RemoveButton(m_pSettingsButton);
+#endif // !defined(__bada__)
 }
 
 // v1.6.1 MainScreen::Hide @0x0014ad04
@@ -1079,6 +1112,15 @@ void MainScreen::SoundCallback() {
 void MainScreen::MusicCallback() {
     game_work.m_bMusicOn = !game_work.m_bMusicOn;
 }
+
+#ifndef __bada__
+// Port specific: no binary counterpart. Opens/closes the SettingsScreen
+// modal via the shared toggle path (see SettingsScreen::Toggle, also used by
+// the ESC key in src/GameSDL.cpp).
+void MainScreen::SettingsCallback() {
+    SettingsScreen::Toggle();
+}
+#endif // !defined(__bada__)
 
 // v1.6.1 MainScreen::LeaderboardsCallback @0x0014b010
 void MainScreen::LeaderboardsCallback() {
