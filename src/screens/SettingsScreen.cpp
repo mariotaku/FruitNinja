@@ -108,7 +108,11 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 //              (32, real asset -- see combo_bar.tex/expand_arrow.tex note
 //              above) = 92 -- ComboBox::Draw's arrow quad sits fully to the
 //              RIGHT of the bar (arrowCenter = pos.x + arrowW*0.5 + barW*0.5).
-//   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), half-width 64.
+//   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), but checked.tex/
+//              unchecked.tex centre their opaque art in the transparent
+//              128x64 canvas -- visible square is texels x=[47,80] (34px),
+//              so the ART's right edge is only 16 units right of pos.x
+//              (texel 80 vs quad centre texel 64), not 64.
 //   SliderControl: track (_dialog_box.tex, real asset 128x16) half-width 64;
 //              thumb (slider_will.tex, real asset 32x32) protrudes slightly
 //              further when m_CurrentValue==m_MaxValue -- thumb centre reaches
@@ -129,9 +133,15 @@ static const uint8_t kComboVisibleRows = 6;
 static const uint16_t kComboWidth      = 16;
 
 static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
-// CheckBox: x is centre of the 128x64 quad; back-solved so its right edge
-// (pos.x+64) == kRightEdge (see kRightEdge note).
-static const float kMotionCbX    =   kRightEdge - 64.0f, kMotionCbY    =   35.0f;
+// CheckBox: quad is 128x64 (CheckBox::Draw's MakeScale(128,64,1), 1:1
+// texel:unit), but checked.tex/unchecked.tex pack their opaque art centred
+// in a transparent 128x64 canvas -- visible square spans texels x=[47,80]
+// (34px wide), NOT the full quad width. Back-solved so the ART's right edge
+// (pos.x + (80-64)) == kRightEdge, not the padded quad's right edge
+// (pos.x+64) -- aligning to the quad edge left a ~48-unit gap of transparent
+// padding, which is why the checkbox looked mis-aligned vs the ComboBox/
+// SliderControl despite matching kRightEdge on paper (see kRightEdge note).
+static const float kMotionCbX    =   kRightEdge - 16.0f, kMotionCbY    =   35.0f;
 
 static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
 // SliderControl: x is centre of the track; back-solved so the thumb's
@@ -140,8 +150,8 @@ static const float kSensX      =  kRightEdge - 70.75f, kSensY      = -15.0f;
 static const int   kSensMin = 0, kSensMax = 100;
 
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
-// CheckBox: same anchor/width as kMotionCbX above.
-static const float kFpsCbX    =   kRightEdge - 64.0f, kFpsCbY     = -65.0f;
+// CheckBox: same anchor/visible-art offset as kMotionCbX above.
+static const float kFpsCbX    =   kRightEdge - 16.0f, kFpsCbY     = -65.0f;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
