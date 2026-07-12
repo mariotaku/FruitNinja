@@ -1,10 +1,15 @@
 #include "asset/TextureManager.h"
 #include "asset/File.h"
+#include "debug/Logger.h"
 #include "game/GameWork.h"
 #include <cstdio>
 #include <cstring>
 
 namespace Mortar {
+
+namespace {
+    const char* kHdLogTag = "TextureManager";
+}
 
 char TextureManager::s_DataDir[256] = "";
 
@@ -26,9 +31,45 @@ TextureManager::~TextureManager() {
     s_TextureManagerDestroyed = true;
 }
 
+// Port specific: no binary counterpart. Inserts "hd_" before the basename
+// of `path` into `out` (e.g. "textures/fr/checked.tex" ->
+// "textures/fr/hd_checked.tex"; a bare "checked.tex" -> "hd_checked.tex").
+// Returns false (leaves `out` untouched) if `out` is too small or the
+// basename already starts with "hd_" (avoids double-prefixing).
+bool TextureManager::BuildHdPath(const char* path, char* out, size_t outSize) {
+    const char* slash = strrchr(path, '/');
+    const char* basename = slash ? (slash + 1) : path;
+
+    if (strncmp(basename, "hd_", 3) == 0) {
+        return false;
+    }
+
+    size_t prefixLen = (size_t)(basename - path);
+    size_t needed = prefixLen + 3 /* "hd_" */ + strlen(basename) + 1 /* NUL */;
+    if (needed > outSize) {
+        return false;
+    }
+
+    memcpy(out, path, prefixLen);
+    memcpy(out + prefixLen, "hd_", 3);
+    strcpy(out + prefixLen + 3, basename);
+    return true;
+}
+
 Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     Mortar::SmartPtr<Mortar::TextureSource> /*source*/) {
-    uint32_t hash = StringHash(path);
+    // Port specific: no binary counterpart. Opt-in HD texture fallback --
+    // silently prefer an "hd_"-prefixed sibling file when present on disk.
+    // The resolved path (HD or original) becomes the cache key so HD and
+    // non-HD loads of the same logical texture never collide.
+    char hdPath[512];
+    const char* resolvedPath = path;
+    if (BuildHdPath(path, hdPath, sizeof(hdPath)) && Mortar::File::Exists(hdPath, 0)) {
+        LOG_DEBUG(kHdLogTag, "Using HD texture: %s", hdPath);
+        resolvedPath = hdPath;
+    }
+
+    uint32_t hash = StringHash(resolvedPath);
 
     // Check cache first
     Mortar::SmartPtr<Texture> existing = Find(hash);
@@ -41,7 +82,7 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     // handles the Prefix/Postfix path-rewrite when enabled. This is the binary-faithful
     // dispatch order: TextureManager::Load -> Texture::Load -> AlternativeTextureLoader
     // -> TextureLoader -> g_readers[].
-    Mortar::SmartPtr<Texture> tex = Texture::Load(path);
+    Mortar::SmartPtr<Texture> tex = Texture::Load(resolvedPath);
     if (tex.IsValid()) {
         Add(hash, tex);
     }

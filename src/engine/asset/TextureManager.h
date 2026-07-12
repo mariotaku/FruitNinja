@@ -7,6 +7,7 @@
 #include "util/StringHash.h"
 #include "core/Singleton.h"
 #include <map>
+#include <cstddef>
 #include <cstdint>
 
 namespace Mortar {
@@ -20,6 +21,15 @@ public:
     // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
     // DIFFERS: binary has second SmartPtr<TextureSource> param (v1.6.1 Mortar::TextureManager::Load @0x002274d0).
+    //
+    // Port specific: no binary counterpart. Opt-in "HD texture" fallback --
+    // before opening `path`, probes for an "hd_"-prefixed sibling next to the
+    // basename (e.g. "textures/checked.tex" -> "textures/hd_checked.tex").
+    // If that file exists on disk, it is loaded (and cached) INSTEAD of
+    // `path`; the cache key is the HD path actually loaded, so it never
+    // collides with the non-HD entry. Silent fallback to `path` when no HD
+    // variant exists (the common case today -- no hd_ assets ship yet); no
+    // error/log on the miss.
     Mortar::SmartPtr<Texture> Load(const char* path,
         Mortar::SmartPtr<Mortar::TextureSource> source = Mortar::SmartPtr<Mortar::TextureSource>());
 
@@ -54,6 +64,12 @@ public:
 private:
     TextureManager();
     ~TextureManager();
+
+    // Port specific: no binary counterpart. Opt-in HD texture support --
+    // inserts "hd_" before the basename of `path` into `out`. Fails (returns
+    // false) if the buffer is too small or the basename already starts with
+    // "hd_" (avoids double-prefixing on repeat calls / already-HD paths).
+    static bool BuildHdPath(const char* path, char* out, size_t outSize);
 
     // WeakPtr-equivalent cache: stores raw Texture* — the Texture
     // destructor calls OnTextureDestroyed() which removes its entry
