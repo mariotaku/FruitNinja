@@ -95,14 +95,19 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 //              128x64 canvas -- visible square is texels x=[47,80] (34px),
 //              so the ART's right edge is only 16 units right of pos.x
 //              (texel 80 vs quad centre texel 64), not 64.
-//   SliderControl: track (box.tex, stretched to kSensScale via
-//              MakeScale -- see ctor) half-width 64; thumb (slider_will.tex,
-//              real asset 32x32) protrudes slightly further when
+//   SliderControl: track (box.tex) is overridden post-ctor via
+//              SetTrackSize(kSensTrackW, kSensTrackH) -- see kSensTrackW note
+//              below -- to a wide/thin groove (SliderControl::Draw's
+//              MakeScale(trackW,trackH,1) at pos); thumb (slider_will.tex,
+//              real asset 32x32, left at the ctor's native size so the knob
+//              stays round) protrudes past the track's right edge when
 //              m_CurrentValue==m_MaxValue -- thumb centre reaches
 //              pos.x + trackW*0.5 - thumbPosW*0.5 (SliderControl::Draw's
-//              thumbPos.x formula), thumbPosW=thumbW*74/128=18.5, so thumb
-//              right edge = pos.x + 64 - 9.25 + 16 = pos.x + 70.75 (the
-//              governing, slightly-wider-than-track extent).
+//              thumbPos.x formula), thumbPosW=thumbW*74/128=18.5, and the
+//              quad's own half-width (thumbW*0.5=16) extends past its centre,
+//              so thumb right edge = pos.x + trackW*0.5 - 9.25 + 16 =
+//              pos.x + trackW*0.5 + 6.75 (the governing, wider-than-track
+//              extent; see kSensX note below for the trackW=120 instance).
 static const float kRightEdge = 175.0f;
 
 // ComboBox: bar height 38; box.tex (the binary's shared field/row/track
@@ -153,9 +158,18 @@ static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
 static const float kMotionCbX    =   kRightEdge - 21.0f, kMotionCbY    =   35.0f;
 
 static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
+// SliderControl track override (SetTrackSize, see kRightEdge note) -- a wide,
+// thin horizontal groove instead of box.tex's native 64x40 (which read as a
+// chunky switch with a barely-there travel range). 120 matches the old
+// pre-box.tex-consolidation track width; 16 squishes box.tex's simple
+// beveled rect thin (uniform horizontal stretch, vertical squish -- both
+// acceptable per the class header DIFFERS note; box.tex is a port substitute
+// asset, not shipped in v1.6.1).
+static const float kSensTrackW = 120.0f, kSensTrackH = 16.0f;
 // SliderControl: x is centre of the track; back-solved so the thumb's
-// max-value right edge (pos.x+70.75) == kRightEdge (see kRightEdge note).
-static const float kSensX      =  kRightEdge - 70.75f, kSensY      = -15.0f;
+// max-value right edge (pos.x + trackW*0.5 + 6.75 = pos.x + 66.75, see
+// kRightEdge note) == kRightEdge.
+static const float kSensX      =  kRightEdge - 66.75f, kSensY      = -15.0f;
 static const int   kSensMin = 0, kSensMax = 100;
 
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
@@ -342,6 +356,10 @@ void SettingsScreen::Init() {
     int sens0 = ThresholdToSlider(FN::g_MotionSpeedThreshold);
     m_SensSlider = new SliderControl(Vec3(kSensX, kSensY, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
                                      "", kSensMin, kSensMax, 24, sens0);
+    // Wide/thin track override -- see kSensTrackW/kSensTrackH note above. Thumb
+    // (slider_will.tex, native 32x32) is left at the ctor's size=(1,1,1) scale
+    // so the knob stays round; only the track quad is stretched.
+    m_SensSlider->SetTrackSize(kSensTrackW, kSensTrackH);
     m_SensSlider->Init();
 
     m_MotionCb->SetOnToggleForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
