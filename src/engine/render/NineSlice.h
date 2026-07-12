@@ -29,11 +29,47 @@ public:
     // outer size destW x destH. The corners are drawn at destBorder world units;
     // srcBorderPx is the matching corner inset in TEXTURE pixels (drives the UV
     // splits, using the texture's own dimensions). Edges stretch on one axis, the
-    // centre on both. The caller need NOT Set() the texture -- Draw binds+unbinds
-    // it. Degenerate cells (border >= half the panel) are clamped/skipped.
+    // centre on both (or is tiled -- see tileCenter). The caller need NOT Set()
+    // the texture -- Draw binds+unbinds it. Degenerate cells (border >= half the
+    // panel) are clamped/skipped.
+    //
+    // tileCenter=true replaces the single stretched centre cell with a TILED fill
+    // sampled from a centerTilePx x centerTilePx TEXEL window at the CENTER of the
+    // same source texture (no separate art needed). That fixed UV window is
+    // repeated at centerTilePx world-units per tile (1:1 texel density) across the
+    // centre destination rect; the last column/row is a partial tile, clipped in
+    // both dest size and sampled UV extent so it doesn't overhang.
     static void Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
-                     float srcBorderPx, float destBorder, Colour colour);
+                     float srcBorderPx, float destBorder, Colour colour,
+                     bool tileCenter = false, float centerTilePx = 32.0f);
+
+    // Draw a 9-slice panel with FIXED (unstretched, aspect-correct) corners and
+    // TILED (repeated, 1:1 texel density) edges + centre -- unlike Draw(), which
+    // stretches the edges/centre to fill the dest rect. Use when the source art's
+    // border texture has a repeating pattern (e.g. a bamboo-joint frame) that
+    // would smear if stretched.
+    //
+    // worldScale = world units per source texel; it sets both the fixed corner
+    // size (srcBorderXPx*worldScale x srcBorderYPx*worldScale) and the 1:1 tile
+    // pitch for the edges. Border thickness is independent per axis (srcBorderXPx
+    // for left/right, srcBorderYPx for top/bottom) -- unlike Draw()'s single
+    // srcBorderPx, matching source art with asymmetric frame thickness.
+    //
+    // Top/bottom edges tile the source's middle-column strip horizontally; left/
+    // right edges tile the middle-row strip vertically. The centre tiles a small
+    // fixed centerTileWPx x centerTileHPx texel window taken from the texture's
+    // own centre (avoids repeating a baked-in centre highlight/gradient). All
+    // three tiled regions clip their last row/column to the remaining dest space,
+    // scaling the sampled UV extent by the same fraction so the partial tile
+    // doesn't overhang. The caller need NOT Set() the texture -- DrawTiled binds
+    // and unbinds it. Degenerate (<=0) tiles/cells are skipped.
+    static void DrawTiled(Texture* tex, float centerX, float centerY,
+                          float destW, float destH,
+                          float srcBorderXPx, float srcBorderYPx,
+                          float worldScale,
+                          float centerTileWPx, float centerTileHPx,
+                          Colour colour);
 };
 
 } // namespace Mortar

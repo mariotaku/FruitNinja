@@ -112,10 +112,14 @@ static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
 // the top combo + its bar-height expand arrow -- inside the inner frame.
 static const float kPlateHalfW = 220.0f;
 static const float kPlateHalfH = 140.0f;
-// 9-slice borders for the plate (dialog_box.tex is 256x128 with a wooden frame):
-// srcBorder = corner inset in TEXELS, destBorder = corner size in WORLD units.
-static const float kPlateBorderSrc = 45.0f;
-static const float kPlateBorderDst = 52.0f;
+// 9-slice borders for the plate (dialog_box.tex is 256x128 with a bamboo-joint
+// frame). Border thickness is ASYMMETRIC per axis; edges/centre are TILED
+// (repeated at 1:1 texel density), not stretched -- see NineSlice::DrawTiled.
+static const float kPlateSrcBorderX  = 45.0f;   // texels (dialog_box.tex L/R frame)
+static const float kPlateSrcBorderY  = 26.0f;   // texels (top/bottom frame)
+static const float kPlateWorldScale  = 1.6f;    // world units per texel (tune; corner ~= 72x42)
+static const float kPlateCenterTileW = 32.0f;   // center tile window (texels)
+static const float kPlateCenterTileH = 16.0f;
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -308,11 +312,15 @@ void SettingsScreen::Draw(float* hudScale) {
         m_Backdrop->UnSet();
     }
 
-    // ---- plate panel (9-slice so the wooden frame/corners stay crisp) ----
+    // ---- plate panel (9-slice: fixed corners, TILED edges + centre) ----
+    // Edges/centre are tiled (repeated, 1:1 texel density) rather than stretched --
+    // dialog_box.tex's frame is a repeating bamboo-joint pattern that would smear
+    // under stretch. See NineSlice::DrawTiled.
     if (m_Plate.IsValid()) {
-        Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, 0.0f,
-                                kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
-                                kPlateBorderSrc, kPlateBorderDst, Colour::White);
+        Mortar::NineSlice::DrawTiled(m_Plate.Get(), 0.0f, 0.0f,
+                                     kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
+                                     kPlateSrcBorderX, kPlateSrcBorderY, kPlateWorldScale,
+                                     kPlateCenterTileW, kPlateCenterTileH, Colour::White);
     }
 
     // ---- left-column labels ----
