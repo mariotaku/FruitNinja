@@ -793,12 +793,21 @@ void MainScreen::Update(float dt) {
     // (m_SettingsShowDelay, MainScreen.h) so the show-ramp doesn't start
     // until the rings' own grow-in would also be starting.
     //
-    // On the way out, the rings have no equivalent eased fade at all -- they
-    // vanish the instant MainScreen stops being foreground (their entities
-    // stop being driven/drawn), not on a decaying alpha. m_SettingsVisibility
-    // therefore SNAPS to 0 (hard cut, m_Active off + fully slid out same
-    // frame) rather than easing down, matching that abrupt disappearance
-    // instead of lingering visible/slid-partway like before.
+    // On the way out (a ring tapped -> New Game/Dojo selected), the ACTUAL
+    // ring-shrink signal is m_Timer2 itself: GameModeCallback/AboutCallback
+    // arm it to 1.0 the instant a ring is tapped, then STATE_MODE_SELECT(_2)
+    // (case 0xe/0xf, ~line 608-627) and STATE_DOJO_WAIT_A/B (~line 487-518)
+    // decay it every frame (*0.85 / *0.75) and drive the SAME `pos.y =
+    // (sizeY+320-2*sizeY*m_Timer2)*0.5` formula that slides MainScreen's own
+    // logo/content away -- i.e. m_Timer2 IS the ring-shrink factor, and it
+    // starts decaying the SAME FRAME the fruit is sliced/rings begin
+    // shrinking (dojo additionally gates the decay start on fruitCount==0 --
+    // "the fruit gets sliced, fruits drop" -- matching the ring's own visual
+    // cue). The toggle-visibility switch above already aliases
+    // `elapsedTime = m_Timer2` for exactly these two states (case list
+    // ~line 700-706), so settingsTarget (derived from elapsedTime) already
+    // starts falling the instant m_Timer2 does -- no extra gating needed,
+    // the eased follower below picks it up immediately.
     if (m_pSettingsButton) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
@@ -807,18 +816,22 @@ void MainScreen::Update(float dt) {
         if (settingsTarget < 0.0f) settingsTarget = 0.0f;
         if (settingsTarget > 1.0f) settingsTarget = 1.0f;
 
-        if (settingsTarget > 0.0f) {
-            // Due to (re)become visible: hold off the ease until the same
-            // 0.25s grow-in delay the rings use has elapsed.
+        if (settingsTarget > 0.0f && m_SettingsVisibility <= 0.0f) {
+            // Due to (re)become visible from fully hidden: hold off the ease
+            // until the same 0.25s grow-in delay the rings use has elapsed.
             if (m_SettingsShowDelay < SETTINGS_SHOW_DELAY) {
                 m_SettingsShowDelay += dt;
             } else {
                 m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
             }
         } else {
-            // Off-main: hard cut, no eased tail (matches the rings' own
-            // abrupt entity-draw-path disappearance -- see comment above).
-            m_SettingsVisibility = 0.0f;
+            // Already (at least partially) visible, or heading back toward
+            // hidden: ease continuously toward settingsTarget every frame,
+            // same CAMERA_LERP_RATE follower used on the way in. This is
+            // what makes the slide-out track m_Timer2's own decay in
+            // lockstep starting the SAME frame the rings start shrinking,
+            // rather than a delayed or instantly-popped transition.
+            m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
             m_SettingsShowDelay = 0.0f;
         }
         if (m_SettingsVisibility < 0.0f) m_SettingsVisibility = 0.0f;
