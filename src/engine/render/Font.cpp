@@ -689,9 +689,15 @@ float Font::MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const {
             if (pixelSize < 1)   pixelSize = 1;
             if (pixelSize > 256) pixelSize = 256;
             // Matches DrawStringTTF's normalization so measured width equals
-            // drawn width (both divide by pixelSize; GetGlyph metrics are
-            // already 1px-per-pixelSize -- see FontCacheObjectTTF::SetCharSize).
-            const float invPS = 1.0f / (float)pixelSize;
+            // drawn width. GetGlyph metrics render at FT_Set_Char_Size's
+            // vert_res = atlas->m_CacheSize (100, not 72dpi) -- see
+            // FontCacheObjectTTF::SetCharSize -- so the pixelSize-relative
+            // scale needs the extra 72/m_CacheSize factor, not a bare
+            // 1/pixelSize.
+            FontInterface* atlas = ttf->GetAtlas();
+            const float invPS = atlas
+                ? 1.0f / (float)pixelSize * (72.0f / (float)atlas->m_CacheSize)
+                : 1.0f / (float)pixelSize;
             float width = 0.0f;
             float maxW  = 0.0f;
             while (!iter.IsEmpty()) {
@@ -755,7 +761,12 @@ float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
         FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
         if (ttf) {
             const int pixelSize = ttf->GetDefaultPixelSize();
-            const float invPS   = 1.0f / (float)pixelSize;
+            // Same 72/m_CacheSize correction as MeasureWidth/DrawStringTTF --
+            // GetGlyph metrics render at vert_res=m_CacheSize, not 72dpi.
+            FontInterface* atlas = ttf->GetAtlas();
+            const float invPS = atlas
+                ? 1.0f / (float)pixelSize * (72.0f / (float)atlas->m_CacheSize)
+                : 1.0f / (float)pixelSize;
             float width = 0.0f;
             Mortar::Utf8StringIterator scan = iterIn;
             while (!scan.IsEmpty() && scan.m_CurrentCodepoint != '\n') {
@@ -781,10 +792,12 @@ float Font::MeasureString(const char* str) const {
 // Renders a string using the FreeType glyph atlas. Follows the same
 // quad-emit geometry as the .fnt path so call sites need no changes.
 // Pixel size = (int)scale (world units == pixels in original ortho space).
-// GlyphAtlasEntry metrics (bearingX/Y, advanceX, width, height) are already
-// in 1px-per-requested-pixelSize units -- FontCacheObjectTTF::SetCharSize
-// calls FT_Set_Char_Size with resolution 0/0 (FreeType default 72dpi, i.e.
-// 1pt == 1px) precisely so no extra dpi correction is needed here.
+// GlyphAtlasEntry metrics (bearingX/Y, advanceX, width, height) come out of
+// FontCacheObjectTTF::GetGlyph rendered at FT_Set_Char_Size's vert_res =
+// atlas->m_CacheSize (100, NOT 72dpi -- see FontCacheObjectTTF::SetCharSize),
+// so they are pixelSize*(m_CacheSize/72) px, not 1px-per-pixelSize. This
+// path folds in the extra 72/m_CacheSize factor locally (see invPS below) so
+// the caller-requested `scale` still lands correctly in world units.
 // ---------------------------------------------------------------------------
 
 static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
@@ -799,6 +812,20 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
     int pixelSize = (int)(scale + 0.5f);
     if (pixelSize < 1)  pixelSize = 1;
     if (pixelSize > 256) pixelSize = 256;
+
+    // GlyphAtlasEntry metrics (advanceX/bearingX/Y/width/height) come out of
+    // FontCacheObjectTTF::GetGlyph scaled by FT_Set_Char_Size's vert_res =
+    // m_CacheSize (100, not 72dpi) -- see FontCacheObjectTTF::SetCharSize.
+    // So a glyph requested at `pixelSize` actually rasterises pixelSize *
+    // (m_CacheSize/72) device px. BakedStringTTF (the binary-calibrated TTF
+    // consumer) uses these metrics RAW as its world-unit baseline, so this is
+    // not a bug -- but THIS path normalizes by (1/pixelSize) assuming metrics
+    // are 1px-per-pixelSize, which is only true at 72dpi. Fold in the extra
+    // 72/m_CacheSize factor at quad-build time (below) so this path still
+    // lands at the caller-requested `scale` in world units. Keep lineWidth /
+    // cursorX accumulation in RAW glyph units here (matches the un-normalized
+    // g->advanceX they are summed from) and normalize once at quad-build.
+    const float invPS = 1.0f / (float)pixelSize * (72.0f / (float)atlas->m_CacheSize);
 
     // Pass 1: collect glyphs, ensure all are in atlas, measure line width.
     // We need the line width for alignment before emitting vertices.
@@ -887,10 +914,10 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
             const float x1 = x0 + (float)g->width;
             const float y1 = y0 - (float)g->height;           // bottom edge (+Y-up)
 
-            // Normalize to lineHeight-normalized space (like .fnt):
-            // divide pixel coords by pixelSize (GetGlyph metrics are already
-            // 1px-per-pixelSize -- see FontCacheObjectTTF::SetCharSize).
-            const float invPS = 1.0f / (float)pixelSize;
+            // Normalize to lineHeight-normalized space (like .fnt): divide
+            // raw glyph-space coords by pixelSize*(m_CacheSize/72) (see the
+            // invPS comment above -- GetGlyph metrics render at m_CacheSize
+            // dpi, not 1px-per-pixelSize).
             const float nx0 = x0 * invPS, nx1 = x1 * invPS;
             const float ny0 = y0 * invPS, ny1 = y1 * invPS;
 
