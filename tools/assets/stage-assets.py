@@ -192,11 +192,18 @@ def _ensure_pillow():
         return
     except ImportError:
         pass
-    print("[stage-assets] Pillow not found, installing via pip")
-    proc = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pillow"])
-    if proc.returncode != 0:
-        print("[stage-assets] ERROR: pip install pillow failed", file=sys.stderr)
-        sys.exit(1)
+    # Inside the emscripten/emsdk container the Python is PEP 668
+    # externally-managed, so `pip install` is refused -- install via apt
+    # (python3-pil), same as ensure_fonttools. On a bare host (MSYS2/Windows,
+    # not externally-managed) fall back to pip.
+    if _can_apt_install():
+        _apt_install("python3-pil")
+    else:
+        print("[stage-assets] Pillow not found, installing via pip")
+        proc = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pillow"])
+        if proc.returncode != 0:
+            print("[stage-assets] ERROR: pip install pillow failed", file=sys.stderr)
+            sys.exit(1)
     try:
         import PIL  # noqa: F401
     except ImportError:
