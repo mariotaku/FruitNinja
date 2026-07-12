@@ -797,6 +797,19 @@ set_tests_properties(ui_checkbox_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_ui_checkbox PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_ui_checkbox")
 
+# UiSlider render test. Port-only widget toolkit (src/ui/) -- NO binary
+# counterpart. Renders three sliders (value at min/mid/max, track 120x16)
+# using the REAL staged box.tex (NineSlice track) + slider_will.tex (knob)
+# textures. No procedural fallback -- fails if fn_asset_staging hasn't
+# generated them.
+# Output: tmp/test/screenshots/ui_slider/ui_slider.png.
+fn_add_game_test(test_ui_slider_render test_ui_slider_render.cpp)
+add_test(NAME ui_slider_render COMMAND test_ui_slider_render)
+add_test(NAME screenshot_ui_slider COMMAND test_ui_slider_render --screenshot)
+set_tests_properties(ui_slider_render PROPERTIES TIMEOUT 60)
+set_tests_properties(screenshot_ui_slider PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_ui_slider")
+
 # SliderControl render test. Dead code in v1.6.1 but a complete real
 # implementation. Renders the thumb at min/mid/max, injecting in-memory substitute
 # textures (the faithful slider_will.tex art is not shipped -- see the widget .cpp
