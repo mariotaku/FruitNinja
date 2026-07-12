@@ -107,6 +107,9 @@ static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // treatment (same corner, same 48 half-size, same +4/-5 margins), landing
 // on the SAME coordinates as the pause button's idle pos: (-212,-141).
 static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
+// buttonOriginPos(64,64,64) * idleResumeScale(0.75) -- see ctor-site note
+// where this formula is derived from PauseScreen's idle resumeScale.
+static const Vec3 kSettingsRestScale(48.0f, 48.0f, 48.0f);
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
@@ -328,9 +331,7 @@ void MainScreen::Update(float dt) {
         m_pSettingsButton->Init(POS_SETTINGS_TOGGLE,
             Mortar::Delegate0<void>::Make(this, &MainScreen::SettingsCallback), -1,
             Vec3(0.0f, 0.0f, 0.0f), nullptr);
-        const Vec3 buttonOriginPos(64.0f, 64.0f, 64.0f);   // == PauseScreen's m_ButtonOriginPos
-        const float idleResumeScale = 0.0f * 1.25f + 0.75f; // PauseScreen resumeScale at m_Alpha=0 (idle)
-        m_pSettingsButton->m_RestScale = buttonOriginPos * idleResumeScale;  // (48,48,48)
+        m_pSettingsButton->m_RestScale = kSettingsRestScale;
         m_pSettingsButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         game_work.mHud->AddControl(m_pSettingsButton);
         m_pSettingsButton->SetSingular();
@@ -801,21 +802,31 @@ void MainScreen::Update(float dt) {
     // rings have no real re-creation delay to mirror (Hide()/
     // DeleteMenuButtons() is dead code -- the button instances persist across
     // every return to main, so there is no grow-in hold after the first
-    // launch). Settings now reads elapsedTime directly, clamped 0..1, driving
-    // slide/scale with the identical formula the sound/music toggles use
-    // (minus their `+GetPauseAmount()` pause-reveal addend -- see note above).
+    // launch). Settings now reads elapsedTime directly, clamped 0..1 (see
+    // growFactor below).
+    //
+    // Port specific: no binary counterpart for this button (see ctor-site note
+    // above). m_pSettingsButton is a toggle MenuButton (m_FruitType < 0);
+    // MenuButton::Update unconditionally does `size = m_RestScale` every frame
+    // (src/hud/MenuButton.cpp ~line 735-737) AFTER MainScreen::Update runs, so
+    // any direct `size`/pos-slide write here is clobbered before Draw -- the
+    // only surviving levers are m_RestScale (copied into size) and pos. The
+    // m_AnimPhase grow-in ease (MenuButton.cpp ~706-717) is fruit-only
+    // (m_FruitType >= 0) and never runs for toggles, so there is no native
+    // pop-in animation to reuse; growFactor below fills that gap by driving
+    // m_RestScale's magnitude from the same elapsedTime the three ring
+    // MenuButtons use, frame-syncing the settings icon's pop with the rings'
+    // grow/shrink. pos stays fixed at POS_SETTINGS_TOGGLE -- no slide.
     if (m_pSettingsButton) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
 
-        float settingsFactor = elapsedTime;
-        if (settingsFactor < 0.0f) settingsFactor = 0.0f;
-        if (settingsFactor > 1.0f) settingsFactor = 1.0f;
+        float growFactor = elapsedTime;
+        if (growFactor < 0.0f) growFactor = 0.0f;
+        if (growFactor > 1.0f) growFactor = 1.0f;
 
-        float settingsSlide = size.y * 2.0f * (1.0f - settingsFactor);
-        m_pSettingsButton->m_Active = (settingsFactor > PAUSE_VISIBILITY) ? 1 : 0;
-        m_pSettingsButton->pos.x -= settingsSlide;
-        m_pSettingsButton->pos.y -= settingsSlide;
+        m_pSettingsButton->m_RestScale = kSettingsRestScale * growFactor;
+        m_pSettingsButton->m_Active = (growFactor > PAUSE_VISIBILITY) ? 1 : 0;
     }
 #endif // !defined(__bada__)
 
