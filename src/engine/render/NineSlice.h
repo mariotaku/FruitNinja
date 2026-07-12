@@ -26,23 +26,22 @@ class Texture;
 class NineSlice {
 public:
     // Draw a 9-slice panel centred at (centerX, centerY) in HUD/world space, with
-    // outer size destW x destH. The corners are drawn at destBorder world units;
-    // srcBorderPx is the matching corner inset in TEXTURE pixels (drives the UV
-    // splits, using the texture's own dimensions). Edges stretch on one axis, the
-    // centre on both (or is tiled -- see tileCenter). The caller need NOT Set()
-    // the texture -- Draw binds+unbinds it. Degenerate cells (border >= half the
-    // panel) are clamped/skipped.
-    //
-    // tileCenter=true replaces the single stretched centre cell with a TILED fill
-    // sampled from a centerTilePx x centerTilePx TEXEL window at the CENTER of the
-    // same source texture (no separate art needed). That fixed UV window is
-    // repeated at centerTilePx world-units per tile (1:1 texel density) across the
-    // centre destination rect; the last column/row is a partial tile, clipped in
-    // both dest size and sampled UV extent so it doesn't overhang.
+    // outer size destW x destH, and PER-AXIS border thickness -- both in the
+    // source texture (srcBorderXPx/srcBorderYPx, in TEXTURE pixels, drives the UV
+    // splits using the texture's own dimensions) and in the destination
+    // (destBorderX/destBorderY, in world units). The 4 corners are drawn at fixed
+    // destBorderX x destBorderY size; left/right edges stretch vertically;
+    // top/bottom edges stretch horizontally; the centre stretches both axes. UV
+    // always spans the FULL [0,1] texture (no cropping) -- so any art protruding
+    // into the corner/edge cells (e.g. decorative joint/lashing overhang) renders
+    // whole. The caller need NOT Set() the texture -- Draw binds+unbinds it.
+    // Degenerate cells (a border >= half the panel on its axis) are clamped so
+    // edges/centre don't invert.
     static void Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
-                     float srcBorderPx, float destBorder, Colour colour,
-                     bool tileCenter = false, float centerTilePx = 32.0f);
+                     float srcBorderXPx, float srcBorderYPx,
+                     float destBorderX, float destBorderY,
+                     Colour colour);
 
     // Draw a 9-slice panel with FIXED (unstretched, aspect-correct) corners and
     // TILED (repeated, 1:1 texel density) edges + centre -- unlike Draw(), which
