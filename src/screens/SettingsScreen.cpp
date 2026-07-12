@@ -22,7 +22,6 @@
 #include "engine/util/Localisation.h"
 #include "engine/util/Delegate.h"
 #include "render/MatrixManager.h"
-#include "render/NineSlice.h"
 #include "render/Font.h"
 #include "render/Utf8StringIterator.h"
 #include "asset/Mesh.h"
@@ -107,20 +106,16 @@ static const int   kSensMin = 0, kSensMax = 100;
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
 static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
 
-// Plate quad -- built from dialog_box.tex scaled to this footprint (see Draw()).
-// dialog_box.tex's wooden frame is inset from the quad edge, so the plate is sized
-// generously (280 tall, fits the 320 viewport) to keep all four rows -- including
-// the top combo + its bar-height expand arrow -- inside the inner frame.
+// Plate quad -- blank_dialog_box.tex stretched to this footprint (see Draw()).
+// Sized generously (280 tall, fits the 320 viewport) to keep all four rows --
+// incl. the top combo + its expand arrow -- inside the panel.
 static const float kPlateHalfW = 220.0f;
 static const float kPlateHalfH = 140.0f;
-// 9-slice borders for the plate (dialog_box.tex is 256x128 with a bamboo-joint
-// frame). Border thickness is ASYMMETRIC per axis; edges/centre are TILED
-// (repeated at 1:1 texel density), not stretched -- see NineSlice::DrawTiled.
-static const float kPlateSrcBorderX  = 45.0f;   // texels (dialog_box.tex L/R frame)
-static const float kPlateSrcBorderY  = 26.0f;   // texels (top/bottom frame)
-static const float kPlateWorldScale  = 1.6f;    // world units per texel (tune; corner ~= 72x42)
-static const float kPlateCenterTileW = 32.0f;   // center tile window (texels)
-static const float kPlateCenterTileH = 16.0f;
+// blank_dialog_box.tex (512x256) has transparent padding around the framed panel;
+// these UV bounds crop to just the panel (x[112..400]/512, y[43..212]/256) so a
+// single quad stretches the panel to the plate footprint (no tiling/9-slice).
+static const float kPlateUvL = 0.21875f, kPlateUvR = 0.78125f;
+static const float kPlateUvT = 0.16797f, kPlateUvB = 0.82813f;
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -196,7 +191,7 @@ void SettingsScreen::Init() {
     ListBox::SetTexturesForTest(m_TexRow);
     VerticalScroller::SetTexturesForTest(m_TexScrTrack, m_TexScrThumb, m_TexScrArrow);
 
-    m_Plate = Mortar::TextureManager::LoadLocalisedTexture("dialog_box.tex");
+    m_Plate = Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
 
     // ---- language model ----
     m_LangItems.clear();
@@ -318,15 +313,18 @@ void SettingsScreen::Draw(float* hudScale) {
         m_Backdrop->UnSet();
     }
 
-    // ---- plate panel (9-slice: fixed corners, TILED edges + centre) ----
-    // Edges/centre are tiled (repeated, 1:1 texel density) rather than stretched --
-    // dialog_box.tex's frame is a repeating bamboo-joint pattern that would smear
-    // under stretch. See NineSlice::DrawTiled.
+    // ---- plate panel: blank_dialog_box.tex, single stretched quad (UV-cropped
+    // to the panel region to skip the texture's transparent padding) ----
     if (m_Plate.IsValid()) {
-        Mortar::NineSlice::DrawTiled(m_Plate.Get(), 0.0f, 0.0f,
-                                     kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
-                                     kPlateSrcBorderX, kPlateSrcBorderY, kPlateWorldScale,
-                                     kPlateCenterTileW, kPlateCenterTileH, Colour::White);
+        mm.GetWorldStack().Reset();
+        m_Plate->Set();
+        Matrix44 mat = Matrix44::MakeScale(kPlateHalfW * 2.0f, kPlateHalfH * 2.0f, 1.0f);
+        mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        Mortar::Mesh::DrawQuadUnCached(Colour::White,
+                                       kPlateUvL, kPlateUvR, kPlateUvT, kPlateUvB, NULL);
+        m_Plate->UnSet();
     }
 
     // ---- left-column labels ----
