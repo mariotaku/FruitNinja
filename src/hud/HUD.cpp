@@ -1,6 +1,7 @@
 // Analysed: 2026-05-04T00:00
 
 #include "HUD.h"
+#include "HUDLayer.h"
 #include "ScrollingMenu.h"
 #include "game/GameWork.h"
 #include "render/MatrixManager.h"
@@ -12,7 +13,11 @@
 //          (m_globalTimeScale); m_DrawAlpha (+0x20) is left uninitialized by ctor.
 //          Port zero-inits m_DrawAlpha and pre-inits m_globalTimeScale here to
 //          avoid reading uninit floats before the first Update tick.
-HUD::HUD() : m_DrawAlpha(0.0f), m_globalTimeScale(1.0f) {
+HUD::HUD() : m_DrawAlpha(0.0f), m_globalTimeScale(1.0f)
+#if !defined(__bada__)
+    , m_pInputModal(nullptr)
+#endif
+{
     for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
 }
 
@@ -97,9 +102,33 @@ void HUD::Update(float dt) {
     MissControl::PreUpdate(dt);              // global combo-decay pre-tick
     m_DrawAlpha = 1.0f;                     // binary vstr.32 s15,[r4,#0x20] s15=1.0 (v1.6.1 @0x0018c3e0)
 
+#if !defined(__bada__)
+    // Port specific: a modal that closed/deactivated without going through
+    // SetInputModal(NULL) never wedges input off (belt-and-suspenders; the
+    // ESC handler also clears this explicitly).
+    if (m_pInputModal != nullptr &&
+        (!m_pInputModal->m_Active || m_pInputModal->m_bPendingRemoval)) {
+        m_pInputModal = nullptr;
+    }
+#endif
+
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ) {
         HUDControl* ctrl = *it;
+
+#if !defined(__bada__)
+        // Port specific: modal input capture. While a modal is registered
+        // (settings), only it + top-most children (its dropdown ListBox/
+        // VerticalScroller, also HUD_LAYER_TOP_MOST) get Update -- other
+        // controls are frozen so touches don't pass through to menu buttons
+        // behind the modal. No binary counterpart; when m_pInputModal is
+        // NULL this is identical to the un-gated binary loop.
+        bool partOfModal = (m_pInputModal == nullptr) ||
+                            (ctrl == m_pInputModal) ||
+                            (ctrl->m_LayerFlags == Mortar::HUD_LAYER_TOP_MOST);
+        if (ctrl->m_Active && partOfModal) ctrl->Update(dt);
+#else
         if (ctrl->m_Active) ctrl->Update(dt);
+#endif
 
         ctrl = *it;                          // re-read after Update may have mutated *it
         if (!ctrl->m_bPendingRemoval) { ++it; continue; }

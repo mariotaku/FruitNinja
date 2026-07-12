@@ -54,6 +54,24 @@ public:
     void Save();
     void Skip();
     void SetToMultiplayerState();
+
+    // Port specific: modal input capture (e.g. SettingsScreen). While set,
+    // HUD::Update only updates the modal control itself plus any control at
+    // HUD_LAYER_TOP_MOST (its spawned dropdown ListBox/VerticalScroller,
+    // also top-most) -- other controls (menu buttons, gameplay HUD) are
+    // frozen so touches don't pass through to them. No binary counterpart.
+#if !defined(__bada__)
+    void SetInputModal(HUDControl* c) { m_pInputModal = c; }
+    HUDControl* GetInputModal() const { return m_pInputModal; }
+
+private:
+    // Port specific: see SetInputModal/GetInputModal above. Not part of the
+    // binary layout -- excluded on __bada__ builds so sizeof(HUD) stays 0x28.
+    HUDControl* m_pInputModal;
+#else
+    void SetInputModal(HUDControl*) {}
+    HUDControl* GetInputModal() const { return nullptr; }
+#endif
 };
 
 #ifdef __bada__
