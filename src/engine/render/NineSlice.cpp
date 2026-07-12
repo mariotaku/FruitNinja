@@ -16,7 +16,7 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
                      float srcBorderXPx, float srcBorderYPx,
                      float destBorderX, float destBorderY,
-                     Colour colour) {
+                     Colour colour, bool flipV) {
     if (!tex) return;
     float texW = (float)tex->GetWidth();
     float texH = (float)tex->GetHeight();
@@ -52,20 +52,26 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
     float u0 = 0.0f, u1 = fu,        u2 = 1.0f - fu, u3 = 1.0f;
     float v0 = 0.0f, v1 = fv,        v2 = 1.0f - fv, v3 = 1.0f;
 
+    // flipV: swap which V-row each dest row SAMPLES (top dest cell reads the
+    // texture's bottom rows and vice versa) -- geometry (topCy/botCy) is
+    // unchanged, only the UV assignment mirrors. See header doc.
+    float topV0 = flipV ? v2 : v0, topV1 = flipV ? v3 : v1;
+    float botV0 = flipV ? v0 : v2, botV1 = flipV ? v1 : v3;
+
     struct Cell { float x, y, w, h, uMin, uMax, vMin, vMax; };
     Cell cells[9] = {
-        // top row (v0..v1)
-        { leftCx,  topCy, leftW,  topH, u0, u1, v0, v1 },
-        { midCx,   topCy, midW,   topH, u1, u2, v0, v1 },
-        { rightCx, topCy, rightW, topH, u2, u3, v0, v1 },
-        // middle row (v1..v2)
+        // top row (dest top, sampled V per flipV above)
+        { leftCx,  topCy, leftW,  topH, u0, u1, topV0, topV1 },
+        { midCx,   topCy, midW,   topH, u1, u2, topV0, topV1 },
+        { rightCx, topCy, rightW, topH, u2, u3, topV0, topV1 },
+        // middle row (v1..v2, unaffected by flipV -- centre strip is symmetric)
         { leftCx,  midCy, leftW,  midH, u0, u1, v1, v2 },
         { midCx,   midCy, midW,   midH, u1, u2, v1, v2 },
         { rightCx, midCy, rightW, midH, u2, u3, v1, v2 },
-        // bottom row (v2..v3)
-        { leftCx,  botCy, leftW,  botH, u0, u1, v2, v3 },
-        { midCx,   botCy, midW,   botH, u1, u2, v2, v3 },
-        { rightCx, botCy, rightW, botH, u2, u3, v2, v3 }
+        // bottom row (dest bottom, sampled V per flipV above)
+        { leftCx,  botCy, leftW,  botH, u0, u1, botV0, botV1 },
+        { midCx,   botCy, midW,   botH, u1, u2, botV0, botV1 },
+        { rightCx, botCy, rightW, botH, u2, u3, botV0, botV1 }
     };
 
     MatrixManager& mm = MatrixManager::GetInstance();

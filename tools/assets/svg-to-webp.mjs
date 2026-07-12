@@ -47,6 +47,10 @@ const MANIFEST = {
   // by ComboBox (@0x00168b3c), ListBox (@0x00194fdc), and SliderControl
   // (@0x001b7bc0) alike -- see box.svg's own header comment.
   box: [64, 40],
+  // list_fade: UiDropdown's open-list top/bottom edge fade (src/ui/
+  // UiDropdown.cpp DrawFadeEdges) -- see list_fade.svg's own header comment.
+  // Same 64x40 canvas as box.tex so its NineSlice border constants line up.
+  list_fade: [64, 40],
   slider_will: [32, 32],
   // check/caret: standalone transparent glyphs (lime tick, gold chevron) drawn
   // as overlays on the port UI toolkit's NineSlice box.tex (src/ui/Ui*).

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="40" viewBox="0 0 64 40">
+  <!-- list_fade.tex - UiDropdown's open-list top/bottom edge fade (src/ui/
+       UiDropdown.cpp DrawFadeEdges). Same 64x40 canvas + corner metrics as
+       box.svg (rx 3.5 at inset 4) so this NineSlice-draws with the IDENTICAL
+       srcBorderXPx/YPx (9.0) / destBorderX/Y (8.0) constants as box.tex's
+       panel; its rounded top corners line up with the panel's own rounded
+       groove corners exactly. Only the TOP corners are rounded (this asset
+       IS the top fade band); the bottom edge is square. The bottom fade band
+       reuses this same texture drawn upside down (NineSlice::Draw flipV=true,
+       see NineSlice.h) rather than a second source SVG, same reuse
+       convention as arrow.svg (VerticalScroller's up arrow, V-flipped for
+       down).
+
+       Fill: exactly box.svg's #groove gradient middle stop (#2a1a0d, the row/
+       panel interior colour); opaque at the top (panel outer edge) fading
+       to fully transparent at the bottom (dissolving into the row list),
+       matching what DrawFadeEdges' old plain-quad gradient did, now as a
+       proper rounded-corner asset. -->
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1a0d" stop-opacity="1"/>
+      <stop offset="1" stop-color="#2a1a0d" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Top-rounded, bottom-square outline: same rx/inset as box.svg's inner
+         groove rect (x=6 y=6 w=52 h=28 rx=3.5), but only the top two corners
+         curve; the bottom edge runs straight to the canvas bottom so the
+         NineSlice bottom-row cells (which stretch to whatever destH the
+         caller draws) tile a plain straight edge, not a second curve. -->
+    <path id="fadeShape"
+          d="M 6 34
+             L 6 9.5
+             A 3.5 3.5 0 0 1 9.5 6
+             L 54.5 6
+             A 3.5 3.5 0 0 1 58 9.5
+             L 58 34
+             Z"/>
+  </defs>
+  <use href="#fadeShape" fill="url(#fade)"/>
+</svg>

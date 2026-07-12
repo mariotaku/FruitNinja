@@ -37,11 +37,18 @@ public:
     // whole. The caller need NOT Set() the texture -- Draw binds+unbinds it.
     // Degenerate cells (a border >= half the panel on its axis) are clamped so
     // edges/centre don't invert.
+    // flipV (default false): mirror the SAMPLED texture rows top<->bottom
+    // while the 9 dest cells stay in their normal screen position -- i.e. the
+    // texture is drawn upside-down in place, not the geometry. Lets one
+    // asset serve both an upright and an upside-down placement (e.g. a
+    // rounded-top fade band reused mirrored as a rounded-bottom band)
+    // without a second source SVG, matching the existing point-up/point-down
+    // arrow-reuse convention (see hud/WidgetPlaceholderArt.h MakeArrowTex).
     static void Draw(Texture* tex, float centerX, float centerY,
                      float destW, float destH,
                      float srcBorderXPx, float srcBorderYPx,
                      float destBorderX, float destBorderY,
-                     Colour colour);
+                     Colour colour, bool flipV = false);
 
     // Draw a 9-slice panel with FIXED (unstretched, aspect-correct) corners and
     // TILED (repeated, 1:1 texel density) edges + centre -- unlike Draw(), which

@@ -66,6 +66,8 @@ int main(int argc, char* argv[]) {
     // caret.tex is staged (assets/ui-widgets/caret.svg -> generated/caret.tex);
     // no substitution needed.
     Mortar::SmartPtr<Mortar::Texture> texCaret = Mortar::TextureManager::LoadLocalisedTexture("caret.tex");
+    // list_fade.tex: open-list top/bottom edge fade (UiDropdown::DrawFadeEdges).
+    Mortar::SmartPtr<Mortar::Texture> texFade = Mortar::TextureManager::LoadLocalisedTexture("list_fade.tex");
 
     if (!texBar.IsValid()) {
         std::fprintf(stderr, "FAIL: failed to load staged box.tex "
@@ -76,6 +78,10 @@ int main(int argc, char* argv[]) {
     if (!texCaret.IsValid()) {
         std::fprintf(stderr, "[ui_dropdown] warning: caret.tex not staged, "
                              "collapsed-bar caret glyph will be skipped (DrawGlyphQuad guards on validity)\n");
+    }
+    if (!texFade.IsValid()) {
+        std::fprintf(stderr, "[ui_dropdown] warning: list_fade.tex not staged, "
+                             "open-list edge fade will be skipped (DrawFadeEdges guards on validity)\n");
     }
 
     int failures = 0;
@@ -126,6 +132,7 @@ int main(int argc, char* argv[]) {
         UiDropdown ddOpen(Vec3(70.0f, 100.0f, 0.0f), items, 10, visibleRows, barW, barH);
         ddOpen.SetBoxTexture(texBar);
         ddOpen.SetCaretTexture(texCaret);
+        ddOpen.SetFadeTexture(texFade);
         ddOpen.SetOpenForTest(true);
         const float rowH = 28.0f;  // matches UiDropdown's default m_RowH
         ddOpen.SetScrollOffsetForTest((float)midScrollRow * rowH);
@@ -204,6 +211,7 @@ int main(int argc, char* argv[]) {
     // happen after Shutdown tears down GL.
     texBar.SetNull();
     texCaret.SetNull();
+    texFade.SetNull();
 
     if (failures > 0) {
         std::fprintf(stderr, "FAIL: %d check(s) failed\n", failures);
