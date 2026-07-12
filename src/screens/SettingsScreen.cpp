@@ -122,15 +122,36 @@ static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 //              governing, slightly-wider-than-track extent).
 static const float kRightEdge = 175.0f;
 
-// ComboBox: bar 32 tall (see LoadOrPlaceholder note); combo_bar.tex is 128x32
-// so the value field is unstretched. x is centre of the bar (ComboBox::pos);
-// back-solved so bar+arrow right edge == kRightEdge (see kRightEdge note: 92).
-static const float kComboX      =   kRightEdge - 92.0f, kComboY      =   85.0f;
-static const float kComboScaleX =  120.0f, kComboScaleY =   32.0f;
+// ComboBox: bar height 38 (see LoadOrPlaceholder note); combo_bar.tex is
+// 128x32 so the value field is stretched vertically to the new bar height --
+// grown from 32 so the bar's visual mass reads closer to the checkbox's
+// ~34-unit-tall visible square (kMotionCbX/kFpsCbX note below) instead of
+// looking thin next to it. x is centre of the bar (ComboBox::pos); back-solved
+// so bar+arrow right edge == kRightEdge (see kRightEdge note: 92 -- unaffected
+// by the height change, see below).
+//
+// ComboBox::Draw (src/hud/ComboBox.cpp @0x001687f4) scales the arrow quad to
+// (arrowW * size.x, m_DrawHeight) where arrowW = s_expandArrow->GetWidth(),
+// i.e. the arrow's WIDTH comes from the loaded expand_arrow.tex's own native
+// pixel width (fixed, 32 for the real asset) -- it does NOT scale with
+// m_DrawHeight/kComboScaleY (only the arrow's on-screen HEIGHT tracks the
+// bar). So the kRightEdge note's 92 = barHalfWidth(60) + arrowWidth(32) holds
+// unchanged after growing kComboScaleY; only the arrow's rendered height grows
+// (cosmetic, no layout effect).
+//
+// kComboY nudged 85->82 (-3) so the taller bar's top (kComboY + kComboScaleY*
+// 0.5 = 82+19 = 101) still lands exactly on the plate's content top bound
+// (kPlateHalfH(130) - kPlateDestBorderY(29) = 101, see kPlateHalfH note below)
+// instead of overflowing by 3 units at the old kComboY=85. Gap to the MOTION
+// MODE checkbox's visible-art top (kMotionCbY(35) + ~17 half of its ~34-unit
+// square = 52) is combo bottom(82-19=63) - 52 = 11 units, still clear.
+static const float kComboX      =   kRightEdge - 92.0f, kComboY      =   82.0f;
+static const float kComboScaleX =  120.0f, kComboScaleY =   38.0f;
 static const uint8_t kComboVisibleRows = 6;
-// Combo value font size (m_Width). 16 (not 20) so the longest native name --
-// "PORTUGUES (BR)" -- fits the value cell without spilling into the caret.
-static const uint16_t kComboWidth      = 16;
+// Combo value font size (m_Width). 18 (was 16) to match the taller bar's
+// visual mass; still fits the longest native name -- "PORTUGUES (BR)" --
+// without spilling into the caret.
+static const uint16_t kComboWidth      = 18;
 
 static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
 // CheckBox: quad is 128x64 (CheckBox::Draw's MakeScale(128,64,1), 1:1
@@ -141,7 +162,10 @@ static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
 // (pos.x+64) -- aligning to the quad edge left a ~48-unit gap of transparent
 // padding, which is why the checkbox looked mis-aligned vs the ComboBox/
 // SliderControl despite matching kRightEdge on paper (see kRightEdge note).
-static const float kMotionCbX    =   kRightEdge - 16.0f, kMotionCbY    =   35.0f;
+// -16 nudged to -21: the -16 solve still overshot kRightEdge slightly in
+// practice, so back off an extra 5 units for a visual right-edge match with
+// the ComboBox/SliderControl column above/below it.
+static const float kMotionCbX    =   kRightEdge - 21.0f, kMotionCbY    =   35.0f;
 
 static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
 // SliderControl: x is centre of the track; back-solved so the thumb's
@@ -150,8 +174,8 @@ static const float kSensX      =  kRightEdge - 70.75f, kSensY      = -15.0f;
 static const int   kSensMin = 0, kSensMax = 100;
 
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
-// CheckBox: same anchor/visible-art offset as kMotionCbX above.
-static const float kFpsCbX    =   kRightEdge - 16.0f, kFpsCbY     = -65.0f;
+// CheckBox: same anchor/visible-art offset as kMotionCbX above (-21, see note).
+static const float kFpsCbX    =   kRightEdge - 21.0f, kFpsCbY     = -65.0f;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
@@ -270,8 +294,11 @@ void SettingsScreen::Init() {
     m_TexScrTrack    = LoadOrPlaceholder("vbar.tex",    MakeSolidTex(70, 70, 90, 255, 8, 8));
     m_TexScrThumb    = LoadOrPlaceholder("vslider.tex", MakeSolidTex(200, 200, 210, 255, 8, 8));
     m_TexScrArrow    = LoadOrPlaceholder("arrow.tex",   MakeArrowTex(180, 180, 200, 24, 24));
-    // Wider arrow (ComboBox scales it to bar height ~55): a 40px-wide triangle
-    // reads as a proper expander, not a thin spike.
+    // 40px-wide triangle: ComboBox::Draw uses this texture's own native width
+    // (GetWidth(), fixed) for the arrow quad's scale -- independent of bar
+    // height/kComboScaleY (only the arrow's on-screen HEIGHT tracks the bar,
+    // see kComboScaleY note in the layout-constants block above) -- so 40px
+    // reads as a proper expander rather than a thin spike regardless of bar size.
     m_TexArrow       = LoadOrPlaceholder("expand_arrow.tex",
                                           MakeArrowTex(255, 210, 40, 40, 40, /*pointDown*/ true));
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
