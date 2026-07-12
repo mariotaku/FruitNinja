@@ -15,6 +15,7 @@
 #include "hud/ComboBox.h"
 #include "hud/ListBox.h"
 #include "hud/VerticalScroller.h"
+#include "hud/BSButton.h"
 #include "hud/WidgetPlaceholderArt.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -30,6 +31,8 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "debug/DebugFlags.h"
+#include "util/StringTable.h"
+#include "render/BakedStringBox.h"
 #include "Game.h"
 
 using namespace fn_widget_art;
@@ -80,6 +83,15 @@ static int ClampInt(int v, int lo, int hi) {
     return v;
 }
 
+// Panel text colour -- reuses game_work.m_TitleColour (GameWork+0x6a0), the
+// brown Zen-plate colour PreloadRings @0x0011cd44 sets (RGB 0x6F,0x46,0x1E).
+// Same constant MainScreen uses for "SLICE FRUIT TO BEGIN" and AboutScreen/
+// PauseScreen use for their wooden-panel body text -- one source of truth
+// rather than a re-guessed brown literal.
+static const Colour& SettingsTextColour() {
+    return game_work.m_TitleColour;
+}
+
 // ---------------------------------------------------------------------------
 // Layout constants (game space, ortho x[-240,240] y[-160,160]).
 // ---------------------------------------------------------------------------
@@ -128,6 +140,14 @@ static const float kPlateHalfW = 220.0f;
 static const float kPlateHalfH = 130.0f;
 static const float kPlateSrcBorderXPx = 88.0f, kPlateSrcBorderYPx = 58.0f;
 static const float kPlateDestBorderX  = 44.0f, kPlateDestBorderY  = 29.0f;
+
+// Close button at the SCREEN's bottom-right corner (not the panel corner) --
+// same on-screen position as PauseScreen's quit button (bomb at (215,-135),
+// text offset (-29,3) pulling the label onto the bomb face), so the two read
+// identically. Sits outside/below the plate, on the modal backdrop.
+static const float kCloseBtnX = 215.0f;
+static const float kCloseBtnY = -135.0f;
+static const Vec3  kCloseTextOffset(-29.0f, 3.0f, 0.0f);
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -187,6 +207,7 @@ SettingsScreen::SettingsScreen()
     , m_MotionCb(0)
     , m_SensSlider(0)
     , m_FpsCb(0)
+    , m_pCloseButton(0)
 {
     m_LangLast = -1;
     // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. POST_ACTOR
@@ -252,7 +273,7 @@ void SettingsScreen::Init() {
                                m_LangItems, langDefault, NULL,
                                kComboVisibleRows, kComboWidth,
                                (uint16_t)kComboScaleX, (uint16_t)kComboScaleY);
-    m_LangCombo->SetTextColour(Colour(255, 255, 255, 255));
+    m_LangCombo->SetTextColour(SettingsTextColour());
 
     // Native language names need CJK/Hangul/Cyrillic glyphs the bitmap
     // font_fruit_ninja.fnt doesn't ship; switch the combo (and its dropdown
@@ -281,13 +302,47 @@ void SettingsScreen::Init() {
     m_MotionCb->SetOnToggleForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
     m_FpsCb->SetOnToggleForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
     m_SensSlider->SetOnValueChangedForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnSensChanged));
+
+    // ---- close button: BSButton built the same way PauseScreen builds
+    // ---- m_QuitButton (bomb-with-X icon + separate text label) ----
+    m_CloseTex = Mortar::TextureManager::LoadLocalisedTexture("quit_title.tex");
+    m_pCloseButton = new BSButton(
+        Vec3(kCloseBtnX, kCloseBtnY, 0.0f),
+        // Port specific: no dedicated "CLOSE" string table entry exists (this
+        // screen has no binary counterpart). LSTR_DJ_BACK_BUTTON ("BACK") is
+        // reused instead of LSTR_QUIT ("QUIT") -- other screens (AboutScreen,
+        // GameModeScreen, DojoScreen) already reuse this same id for their
+        // back/exit buttons, and "BACK" reads correctly for closing a modal.
+        GETSTRING(LSTR_DJ_BACK_BUTTON, 0),
+        Vec3(1.0f, 1.0f, 1.0f)
+    );
+    m_pCloseButton->Init();
+    m_pCloseButton->SetCallback(
+        Mortar::Delegate0<void>::Make(this, &SettingsScreen::CloseCallback));
+    if (m_pCloseButton->m_pLabelBox) {
+        m_pCloseButton->m_pLabelBox->SetGradient(
+            Colour(0xff, 0x00, 0x00, 0xff),
+            Colour(0x40, 0x00, 0x00, 0xff),
+            false);
+        m_pCloseButton->m_pLabelBox->ReshapeBounds(0x36, 0x14, 1, 0);
+        m_pCloseButton->m_pLabelBox->SetStroke(1.0f, Colour::Black);
+        m_pCloseButton->m_pLabelBox->SetFontSize(14.0f);
+        m_pCloseButton->m_pLabelBox->FitIntoVerticalBounds();
+    }
+    m_pCloseButton->SetTexture(m_CloseTex, true);
+    m_pCloseButton->SetTextOffset(kCloseTextOffset);
+    m_pCloseButton->SetDrawOrder(8);
+    // TOP_MOST so HUD::Update's modal input-capture gate still lets touches
+    // through to this button (see m_LayerFlags note in the ctor above).
+    m_pCloseButton->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 }
 
 void SettingsScreen::Release() {
-    delete m_LangCombo;  m_LangCombo  = 0;
-    delete m_MotionCb;   m_MotionCb   = 0;
-    delete m_SensSlider; m_SensSlider = 0;
-    delete m_FpsCb;      m_FpsCb      = 0;
+    delete m_LangCombo;   m_LangCombo    = 0;
+    delete m_MotionCb;    m_MotionCb     = 0;
+    delete m_SensSlider;  m_SensSlider   = 0;
+    delete m_FpsCb;       m_FpsCb        = 0;
+    delete m_pCloseButton; m_pCloseButton = 0;
 
     CheckBox::UnloadContent();
     SliderControl::UnloadContent();
@@ -308,6 +363,7 @@ void SettingsScreen::Release() {
     m_Plate.SetNull();
     m_Backdrop.SetNull();
     m_LangFont.SetNull();
+    m_CloseTex.SetNull();
 
     HUDControl3d::Release();
 }
@@ -325,10 +381,11 @@ void SettingsScreen::PollCombo() {
 }
 
 void SettingsScreen::Update(float dt) {
-    if (m_LangCombo)  m_LangCombo->Update(dt);
-    if (m_MotionCb)   m_MotionCb->Update(dt);
-    if (m_SensSlider) m_SensSlider->Update(dt);
-    if (m_FpsCb)      m_FpsCb->Update(dt);
+    if (m_LangCombo)    m_LangCombo->Update(dt);
+    if (m_MotionCb)     m_MotionCb->Update(dt);
+    if (m_SensSlider)   m_SensSlider->Update(dt);
+    if (m_FpsCb)        m_FpsCb->Update(dt);
+    if (m_pCloseButton) m_pCloseButton->Update(dt);
 
     PollCombo();
 }
@@ -337,7 +394,7 @@ static void DrawSettingsLabel(const char* s, float x, float y) {
     if (!game_work.pFontMain.IsValid()) return;
     Mortar::Utf8StringIterator it(s);
     game_work.pFontMain->DrawString(it, x, y, 0.0f,
-                                    Colour(255, 255, 255, 255), 18.0f,
+                                    SettingsTextColour(), 18.0f,
                                     0.0f, 0.0f, 1, NULL, 0.0f);
 }
 
@@ -380,6 +437,10 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_MotionCb)   { m_MotionCb->PreDraw(hudScale);   m_MotionCb->Draw(hudScale); }
     if (m_SensSlider) { m_SensSlider->PreDraw(hudScale); m_SensSlider->Draw(hudScale); }
     if (m_FpsCb)      { m_FpsCb->PreDraw(hudScale);      m_FpsCb->Draw(hudScale); }
+
+    // ---- close button: bomb icon + "QUIT"-style text label, own Draw() ----
+    // ---- draws both the textured quad and m_pLabelBox (BSButton::Draw). ----
+    if (m_pCloseButton) { m_pCloseButton->PreDraw(hudScale); m_pCloseButton->Draw(hudScale); }
 }
 
 void SettingsScreen::OnMotionToggle() {
@@ -392,4 +453,12 @@ void SettingsScreen::OnFpsToggle() {
 
 void SettingsScreen::OnSensChanged() {
     FN::g_MotionSpeedThreshold = SliderToThreshold(m_SensSlider->GetValue());
+}
+
+// Port specific: m_pCloseButton's click callback -- runs Toggle()'s close
+// path directly (this instance IS s_pSettings while open, so Toggle() would
+// take the same branch; called directly here to avoid re-deriving that from
+// the button's own scope).
+void SettingsScreen::CloseCallback() {
+    SettingsScreen::Toggle();
 }
