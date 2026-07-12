@@ -178,16 +178,21 @@ bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     if (charHeight_26_6 == m_CurrentCharHeight) return true;
     if (!m_Atlas) return false;
     // Port specific: m_CacheSize (100) is the binary's Bada IFont cache-slot
-    // constant, ASM-verified only as a value the binary passes into its own
-    // (non-FreeType) glyph cache -- NOT an FT dpi. Feeding it into FT_Set_Char_Size's
-    // resolution args scales every metric by 100/72 vs. the 1px-per-unit convention
-    // ComputeCharHeight26_6/invWorld assume. Passing 0/0 makes FreeType default to
-    // 72dpi (1pt == 1px), matching that convention.
+    // constant (v1.6.1 FontInterface ctor @0x002502e0), reused here as the FT
+    // vert_res so glyphs rasterise at charHeight_26_6*(100/72) actual device
+    // pixels. This is NOT a dpi bug -- every consumer of GlyphAtlasEntry's
+    // world-unit metrics (BakedStringTTF's layoutX/Y, cellW/H, cellOrigin, all
+    // consumed RAW with no further scale) is calibrated against this exact
+    // render resolution. Changing vert_res here is a GLOBAL rescale of every
+    // TTF metric and shrinks all TTF text ~1.39x (100/72) vs. the real game --
+    // confirmed via HLE screenshot comparison. Local callers that need a
+    // pixel-size-relative scale (Font.cpp's static DrawStringTTF path) must
+    // normalize locally using the SAME 100/72 factor instead of changing this.
     FT_Error err = FT_Set_Char_Size(m_Face,
                                     /*char_width*/0,
                                     (FT_F26Dot6)charHeight_26_6,
                                     /*horz_res*/0,
-                                    /*vert_res*/0);
+                                    /*vert_res*/(FT_UInt)m_Atlas->m_CacheSize);
     if (err) {
         LOG_ERROR("FontCacheObjectTTF",
                   "FT_Set_Char_Size(0,%ld,0,0) failed (err %d)",
