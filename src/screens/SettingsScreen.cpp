@@ -1,20 +1,13 @@
 //
 // SettingsScreen -- Port specific in-game settings modal (see header note).
-// Binds the dead-code CheckBox/SliderControl/ComboBox widget stack to
-// host-only globals. No binary counterpart; not fidelity-constrained.
-//
-// Widget binding logic (delegate installs, combo polling, slider<->threshold
-// mapping, language list) is lifted from tests/test_settings_interactive.cpp,
-// the interactive dev harness that proved the same widgets against the same
-// live globals.
+// Binds the port-only src/ui/ widget toolkit (UiDropdown/UiCheckbox/UiSlider)
+// to host-only globals. No binary counterpart; not fidelity-constrained.
 //
 
 #include "SettingsScreen.h"
-#include "hud/CheckBox.h"
-#include "hud/SliderControl.h"
-#include "hud/ComboBox.h"
-#include "hud/ListBox.h"
-#include "hud/VerticalScroller.h"
+#include "ui/UiCheckbox.h"
+#include "ui/UiSlider.h"
+#include "ui/UiDropdown.h"
 #include "hud/BSButton.h"
 #include "hud/WidgetPlaceholderArt.h"
 #include "hud/HUD.h"
@@ -79,109 +72,54 @@ static const Colour& SettingsTextColour() {
 // ---------------------------------------------------------------------------
 static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
 // Port specific: kRightEdge is the shared right edge (x) every right-column
-// control's visible art aligns to, so their right edges line up in a column
+// widget's visible art aligns to, so their right edges line up in a column
 // instead of each widget's own centre-anchored x drifting independently.
 // Chosen just inside the plate's content right bound (~+178, see kPlateHalfW
-// note below) with a small margin. Per-widget x is then back-solved from
-// (kRightEdge - <that widget's own centre-to-right-edge distance>), where the
-// distance is read from each widget's real Draw()/ctor geometry (anchor is
-// always pos == centre; see ComboBox/CheckBox/SliderControl below):
-//   ComboBox:  bar half-width (kComboScaleX*0.5=60) + expand_arrow.tex width
-//              (32, real asset -- see expand_arrow.tex note above) = 92,
-//              MINUS the caret's port-specific gap-closing overlap (see
-//              ComboBox.cpp Draw's kBoxTexRightMarginFrac/kCaretOverlapPad:
-//              m_DrawWidth*2/64 + 1*size.x = 120*0.03125+1 = 4.75 at this
-//              widget's own kComboScaleX/size.x) = 87.25 -- ComboBox::Draw's
-//              arrow quad sits to the RIGHT of the bar, pulled slightly left
-//              to butt against the bar's visible (non-transparent-margin)
-//              right edge (arrowCenter = pos.x + arrowW*0.5 + barW*0.5 - overlap).
-//   CheckBox:  hardcoded 128x64 quad (CheckBox::Draw), but checked.tex/
-//              unchecked.tex centre their opaque art in the transparent
-//              128x64 canvas -- visible square is texels x=[47,80] (34px),
-//              so the ART's right edge is only 16 units right of pos.x
-//              (texel 80 vs quad centre texel 64), not 64.
-//   SliderControl: track (box.tex) is overridden post-ctor via
-//              SetTrackSize(kSensTrackW, kSensTrackH) -- see kSensTrackW note
-//              below -- to a wide/thin groove (SliderControl::Draw's
-//              MakeScale(trackW,trackH,1) at pos); thumb (slider_will.tex,
-//              real asset 32x32, left at the ctor's native size so the knob
-//              stays round) protrudes past the track's right edge when
-//              m_CurrentValue==m_MaxValue -- thumb centre reaches
-//              pos.x + trackW*0.5 - thumbPosW*0.5 (SliderControl::Draw's
-//              thumbPos.x formula), thumbPosW=thumbW*74/128=18.5, and the
-//              quad's own half-width (thumbW*0.5=16) extends past its centre,
-//              so thumb right edge = pos.x + trackW*0.5 - 9.25 + 16 =
-//              pos.x + trackW*0.5 + 6.75 (the governing, wider-than-track
-//              extent; see kSensX note below for the trackW=120 instance).
+// note below) with a small margin.
+//
+// Unlike the old resurrected-binary-widget layout, the src/ui/ toolkit's hit
+// rect and drawn box are BOTH exactly pos +/- half-extent (UiWidget::SetSize)
+// -- no transparent-padding / stretched-texture quirks to back-solve around.
+// Each widget's own visible right edge is therefore just pos.x + halfWidth,
+// where halfWidth is the widget's own w/2 (checkbox side, slider track,
+// dropdown bar):
+//   UiCheckbox:  right edge = pos.x + side*0.5f            (DrawBox(side,side))
+//   UiSlider:    right edge = pos.x + trackW*0.5f           (DrawBox(trackW,trackH);
+//                the knob's travel is clamped to [0, trackW-knobD] so its
+//                right edge never exceeds pos.x + trackW*0.5f, see
+//                UiSlider::ComputeKnobX)
+//   UiDropdown:  right edge = pos.x + barW*0.5f              (DrawBox(barW,barH);
+//                the caret glyph is clamped inside the bar, see
+//                UiDropdown::Draw's caretHalf clamp -- it never overhangs)
 static const float kRightEdge = 175.0f;
 
-// ComboBox: bar height 38; box.tex (the binary's shared field/row/track
-// texture -- see Init()'s LoadContent comment) is stretched to this bar
-// size via ComboBox::Draw's MakeScale(m_DrawWidth, m_DrawHeight, 1), grown
-// from the texture's native proportions so the bar's visual mass reads
-// closer to the checkbox's ~34-unit-tall visible square (kMotionCbX/kFpsCbX
-// note below) instead of looking thin next to it. x is centre of the bar
-// (ComboBox::pos); back-solved
-// so bar+arrow right edge == kRightEdge (see kRightEdge note: 92 -- unaffected
-// by the height change, see below).
-//
-// ComboBox::Draw (src/hud/ComboBox.cpp @0x001687f4) scales the arrow quad to
-// (arrowW * size.x, m_DrawHeight) where arrowW = s_expandArrow->GetWidth(),
-// i.e. the arrow's WIDTH comes from the loaded expand_arrow.tex's own native
-// pixel width (fixed, 32 for the real asset) -- it does NOT scale with
-// m_DrawHeight/kComboScaleY (only the arrow's on-screen HEIGHT tracks the
-// bar). So the kRightEdge note's 92 = barHalfWidth(60) + arrowWidth(32) holds
-// unchanged after growing kComboScaleY; only the arrow's rendered height grows
-// (cosmetic, no layout effect). The 4.75-unit gap-closing overlap (see
-// kRightEdge note) is likewise unaffected by kComboScaleY -- it only depends
-// on kComboScaleX/size.x, both unchanged here.
-//
-// kComboY nudged 85->82 (-3) so the taller bar's top (kComboY + kComboScaleY*
-// 0.5 = 82+19 = 101) still lands exactly on the plate's content top bound
-// (kPlateHalfH(130) - kPlateDestBorderY(29) = 101, see kPlateHalfH note below)
-// instead of overflowing by 3 units at the old kComboY=85. Gap to the MOTION
-// MODE checkbox's visible-art top (kMotionCbY(35) + ~17 half of its ~34-unit
-// square = 52) is combo bottom(82-19=63) - 52 = 11 units, still clear.
-static const float kComboX      =   kRightEdge - 87.25f, kComboY      =   82.0f;
-static const float kComboScaleX =  120.0f, kComboScaleY =   38.0f;
+// UiDropdown bar. x is centre of the bar; back-solved so the bar's right
+// edge (pos.x + kComboScaleX*0.5f) == kRightEdge.
+static const float kComboX      =   kRightEdge - 60.0f, kComboY      =   82.0f;
+static const float kComboScaleX =  120.0f, kComboScaleY =   30.0f;
 static const uint8_t kComboVisibleRows = 6;
-// Combo value font size (m_Width). 18 (was 16) to match the taller bar's
-// visual mass; still fits the longest native name -- "PORTUGUES (BR)" --
-// without spilling into the caret.
-static const uint16_t kComboWidth      = 18;
+// Combo value/row text scale (Font::DrawString's scale param, font-native
+// pixel size) -- fits the longest native name -- "PORTUGUES (BR)" -- without
+// spilling into the caret.
+static const float kComboTextScale = 18.0f;
 
 static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
-// CheckBox: quad is 128x64 (CheckBox::Draw's MakeScale(128,64,1), 1:1
-// texel:unit), but checked.tex/unchecked.tex pack their opaque art centred
-// in a transparent 128x64 canvas -- visible square spans texels x=[47,80]
-// (34px wide), NOT the full quad width. Back-solved so the ART's right edge
-// (pos.x + (80-64)) == kRightEdge, not the padded quad's right edge
-// (pos.x+64) -- aligning to the quad edge left a ~48-unit gap of transparent
-// padding, which is why the checkbox looked mis-aligned vs the ComboBox/
-// SliderControl despite matching kRightEdge on paper (see kRightEdge note).
-// -16 nudged to -21: the -16 solve still overshot kRightEdge slightly in
-// practice, so back off an extra 5 units for a visual right-edge match with
-// the ComboBox/SliderControl column above/below it.
-static const float kMotionCbX    =   kRightEdge - 21.0f, kMotionCbY    =   35.0f;
+// UiCheckbox: side 36; x back-solved so the box's right edge
+// (pos.x + side*0.5f) == kRightEdge.
+static const float kCheckboxSide = 36.0f;
+static const float kMotionCbX    =   kRightEdge - kCheckboxSide * 0.5f, kMotionCbY    =   35.0f;
 
 static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
-// SliderControl track override (SetTrackSize, see kRightEdge note) -- a wide,
-// thin horizontal groove instead of box.tex's native 64x40 (which read as a
-// chunky switch with a barely-there travel range). 120 matches the old
-// pre-box.tex-consolidation track width; 16 squishes box.tex's simple
-// beveled rect thin (uniform horizontal stretch, vertical squish -- both
-// acceptable per the class header DIFFERS note; box.tex is a port substitute
-// asset, not shipped in v1.6.1).
+// UiSlider track -- wide, thin horizontal groove (NineSlice box.tex).
 static const float kSensTrackW = 120.0f, kSensTrackH = 16.0f;
-// SliderControl: x is centre of the track; back-solved so the thumb's
-// max-value right edge (pos.x + trackW*0.5 + 6.75 = pos.x + 66.75, see
-// kRightEdge note) == kRightEdge.
-static const float kSensX      =  kRightEdge - 66.75f, kSensY      = -15.0f;
+// UiSlider: x is centre of the track; back-solved so the track's right edge
+// (pos.x + trackW*0.5f) == kRightEdge.
+static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      = -15.0f;
 static const int   kSensMin = 0, kSensMax = 100;
 
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
-// CheckBox: same anchor/visible-art offset as kMotionCbX above (-21, see note).
-static const float kFpsCbX    =   kRightEdge - 21.0f, kFpsCbY     = -65.0f;
+// UiCheckbox: same anchor as kMotionCbX above.
+static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = -65.0f;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
@@ -196,10 +134,8 @@ static const float kFpsCbX    =   kRightEdge - 21.0f, kFpsCbY     = -65.0f;
 //
 // Outer footprint: kept at 440x220 (unchanged from the old stretched-quad
 // panel) so the widget layout below is undisturbed. The top row (LANGUAGE
-// combo, half-height 16 at y=85) reaches y=101, which needs a content
-// half-height of >=101+28=129 to clear the 28-unit padding -- wider than the
-// old 110, so the panel is grown to 130 (widget rows unchanged; nothing
-// currently overflows the width padding, x=150 vs a 178 content half-width).
+// combo, half-height 15 at y=82) reaches y=97, well clear of the panel's
+// content top bound (kPlateHalfH(130) - kPlateDestBorderY(29) = 101).
 static const float kPlateHalfW = 220.0f;
 static const float kPlateHalfH = 130.0f;
 static const float kPlateSrcBorderXPx = 88.0f, kPlateSrcBorderYPx = 58.0f;
@@ -246,9 +182,16 @@ static SettingsScreen* s_pSettings = NULL;
 void SettingsScreen::Toggle() {
     if (s_pSettings == NULL) {
         s_pSettings = new SettingsScreen();
-        s_pSettings->Init();
+        // Port specific: AddControl the screen itself BEFORE Init() so it is
+        // first in game_work.mHud's control list -- Init() AddControl's the
+        // widgets (see Init()), and HUD::Draw has no per-control sort key,
+        // only list order. Screen-first means the plate/backdrop (this
+        // screen's own Draw()) paints behind every widget added afterward.
         if (game_work.mHud) {
             game_work.mHud->AddControl(s_pSettings, false);
+        }
+        s_pSettings->Init();
+        if (game_work.mHud) {
             // Port specific: capture input while the settings modal is open --
             // see HUD::SetInputModal (src/hud/HUD.h).
             game_work.mHud->SetInputModal(s_pSettings);
@@ -267,18 +210,20 @@ bool SettingsScreen::IsOpen() {
 }
 
 SettingsScreen::SettingsScreen()
-    : m_LangCombo(0)
+    : m_LangDrop(0)
     , m_MotionCb(0)
     , m_SensSlider(0)
     , m_FpsCb(0)
     , m_pCloseButton(0)
 {
-    m_LangLast = -1;
-    // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. POST_ACTOR
-    // (0x80) draws early -- default/buttons/modal/slider/top-most all paint over
-    // it (see HUDLayer.h GameDraw order). 0x800 is the last, unconditional pass.
-    // The combo's spawned ListBox is also 0x800 and AddControl'd later, so the
-    // open dropdown still layers above this panel.
+    // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. Every
+    // AddControl'd widget below is ALSO set to TOP_MOST so HUD::Update's
+    // modal input-capture gate (see HUD.h SetInputModal) still delivers
+    // input to them while this screen holds the modal (see HUD.cpp
+    // partOfModal check: ctrl == m_pInputModal || ctrl->m_LayerFlags ==
+    // HUD_LAYER_TOP_MOST). Draw order among same-layer TOP_MOST controls is
+    // pure HUD control-list (AddControl) order -- see Init() for the
+    // plate-then-widgets-then-dropdown ordering.
     m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 }
 
@@ -289,37 +234,20 @@ SettingsScreen::~SettingsScreen() {
 void SettingsScreen::Init() {
     m_Active = 1;
 
-    // ---- widget textures: real art, staged at build time from ----
-    // ---- assets/ui-widgets/*.svg by fn_asset_staging (mandatory --  ----
-    // ---- the build fails if generation fails, see svg-to-webp.mjs). ----
-    m_TexCheckboxOn  = Mortar::TextureManager::LoadLocalisedTexture("checked.tex");
-    m_TexCheckboxOff = Mortar::TextureManager::LoadLocalisedTexture("unchecked.tex");
-    // box.tex is the binary's single shared field/row/track texture -- ComboBox
-    // (@0x00168b3c), ListBox (@0x00194fdc), and SliderControl (@0x001b7bc0) all
-    // LoadLocalisedTexture the SAME "box.tex" (Ghidra-confirmed). One load here,
-    // reused for both the combo bar and the slider track injections below.
-    m_TexTrack       = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
-    m_TexThumb       = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
-    // No dedicated ListBox-row art beyond box.tex (this screen's dropdown never
-    // opens -- kComboVisibleRows keeps it collapsed) -- solid white tint canvas.
-    m_TexRow         = MakeSolidTex(255, 255, 255, 255, 8, 8);
-    m_TexScrTrack    = Mortar::TextureManager::LoadLocalisedTexture("vbar.tex");
-    m_TexScrThumb    = Mortar::TextureManager::LoadLocalisedTexture("vslider.tex");
-    m_TexScrArrow    = Mortar::TextureManager::LoadLocalisedTexture("arrow.tex");
-    m_TexArrow       = Mortar::TextureManager::LoadLocalisedTexture("expand_arrow.tex");
+    // ---- shared widget textures: real art, staged at build time from ----
+    // ---- assets/ui-widgets/*.svg by fn_asset_staging (mandatory -- the ----
+    // ---- build fails if generation fails, see svg-to-webp.mjs). ----
+    // box.tex is the binary's single shared field/row/track texture -- reused
+    // here as the NineSlice background for every src/ui/ widget (checkbox,
+    // slider track, dropdown bar+panel).
+    m_TexBox   = Mortar::TextureManager::LoadLocalisedTexture("box.tex");
+    m_TexCheck = Mortar::TextureManager::LoadLocalisedTexture("check.tex");
+    m_TexCaret = Mortar::TextureManager::LoadLocalisedTexture("caret.tex");
+    m_TexKnob  = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture. No real
     // widget counterpart.
-    m_Backdrop       = MakeSolidTex(0, 0, 0, 255, 8, 8);
-
-    // Combo bar: box.tex, same shared field texture as the slider track above.
-    m_TexBar = m_TexTrack;
-
-    CheckBox::SetTexturesForTest(m_TexCheckboxOn, m_TexCheckboxOff);
-    SliderControl::SetTexturesForTest(m_TexTrack, m_TexThumb);
-    ComboBox::SetTexturesForTest(m_TexBar, m_TexArrow);
-    ListBox::SetTexturesForTest(m_TexRow);
-    VerticalScroller::SetTexturesForTest(m_TexScrTrack, m_TexScrThumb, m_TexScrArrow);
+    m_Backdrop = MakeSolidTex(0, 0, 0, 255, 8, 8);
 
     m_Plate = Mortar::TextureManager::LoadLocalisedTexture("medbacking.tex");
 
@@ -329,60 +257,53 @@ void SettingsScreen::Init() {
         m_LangItems.push_back(std::string(kLanguageNames[i]));
     }
 
-    uint16_t langDefault = (uint16_t)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
-    m_LangLast = (int)langDefault;
-
-    // NULL combo header label: the screen draws its own left-column "LANGUAGE"
-    // label, so suppress the ComboBox's built-in (yellow, right-of-bar) header
-    // to avoid a duplicate.
-    m_LangCombo = new ComboBox(Vec3(kComboX, kComboY, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                               m_LangItems, langDefault, NULL,
-                               kComboVisibleRows, kComboWidth,
-                               (uint16_t)kComboScaleX, (uint16_t)kComboScaleY);
-    m_LangCombo->SetTextColour(SettingsTextColour());
-
-    // Port specific: no binary counterpart -- wood-amber theme for the dropdown
-    // rows. Default ListBox tints (pure blue selected / light blue hover, see
-    // ListBox.cpp) read as jarring cool-blue over the warm box.tex wood grain,
-    // so retint to gold/amber. Row text uses a light parchment/cream rather
-    // than SettingsTextColour()'s dark brown (0x6F,0x46,0x1E) -- that brown is
-    // low-contrast against both the dark wood row background AND the amber
-    // selected/hover tints, whereas a light cream reads clearly on all three.
-    m_LangCombo->SetListSelectedRowColour(Colour(0xF2, 0xC4, 0x00, 0xFF));  // bright gold -- selected row
-    m_LangCombo->SetListHoverRowColour(Colour(0xC9, 0x9A, 0x3A, 0xFF));     // softer warm amber -- hover row
-    m_LangCombo->SetListTextColour(Colour(0xEA, 0xD8, 0xB0, 0xFF));        // parchment/cream -- row text
+    int langDefault = (int)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
 
     // Native language names need CJK/Hangul/Cyrillic glyphs the bitmap
-    // font_fruit_ninja.fnt doesn't ship; switch the combo (and its dropdown
-    // ListBox, via ComboBox::Update's font propagation) to the TTF font.
+    // font_fruit_ninja.fnt doesn't ship; switch the dropdown to the TTF font.
     m_LangFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
-    if (m_LangFont.IsValid()) {
-        m_LangCombo->SetFont(m_LangFont.Get());
-    }
 
-    m_LangCombo->Init();
+    m_LangDrop = new UiDropdown(Vec3(kComboX, kComboY, 0.0f), m_LangItems, langDefault,
+                                kComboVisibleRows, kComboScaleX, kComboScaleY);
+    m_LangDrop->SetBoxTexture(m_TexBox);
+    m_LangDrop->SetCaretTexture(m_TexCaret);
+    m_LangDrop->SetTextColour(SettingsTextColour());
+    m_LangDrop->SetTextScale(kComboTextScale);
+    if (m_LangFont.IsValid()) {
+        m_LangDrop->SetFont(m_LangFont.Get());
+    }
+    // Port specific: no binary counterpart -- wood-amber theme for the dropdown
+    // rows. Row text uses a light parchment/cream rather than
+    // SettingsTextColour()'s dark brown (0x6F,0x46,0x1E) -- that brown is
+    // low-contrast against both the dark wood row background AND the amber
+    // selected/hover tints, whereas a light cream reads clearly on all three.
+    m_LangDrop->SetRowColours(
+        Colour(0xF2, 0xC4, 0x00, 0xFF),   // bright gold -- selected row
+        Colour(0xC9, 0x9A, 0x3A, 0xFF),   // softer warm amber -- hover row
+        Colour(0xEA, 0xD8, 0xB0, 0xFF));  // parchment/cream -- row text
+    m_LangDrop->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnLangChanged));
+    m_LangDrop->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
     // ---- checkboxes / slider, seeded from live globals ----
-    m_MotionCb = new CheckBox(Vec3(kMotionCbX, kMotionCbY, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
-    m_MotionCb->SetCheckedForTest(FN::g_MotionMode);
-    m_MotionCb->Init();
+    m_MotionCb = new UiCheckbox(Vec3(kMotionCbX, kMotionCbY, 0.0f), kCheckboxSide, FN::g_MotionMode);
+    m_MotionCb->SetBoxTexture(m_TexBox);
+    m_MotionCb->SetCheckGlyph(m_TexCheck);
+    m_MotionCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
+    m_MotionCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
-    m_FpsCb = new CheckBox(Vec3(kFpsCbX, kFpsCbY, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
-    m_FpsCb->SetCheckedForTest(FN::g_ShowFps);
-    m_FpsCb->Init();
+    m_FpsCb = new UiCheckbox(Vec3(kFpsCbX, kFpsCbY, 0.0f), kCheckboxSide, FN::g_ShowFps);
+    m_FpsCb->SetBoxTexture(m_TexBox);
+    m_FpsCb->SetCheckGlyph(m_TexCheck);
+    m_FpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
+    m_FpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
     int sens0 = ThresholdToSlider(FN::g_MotionSpeedThreshold);
-    m_SensSlider = new SliderControl(Vec3(kSensX, kSensY, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
-                                     "", kSensMin, kSensMax, 24, sens0);
-    // Wide/thin track override -- see kSensTrackW/kSensTrackH note above. Thumb
-    // (slider_will.tex, native 32x32) is left at the ctor's size=(1,1,1) scale
-    // so the knob stays round; only the track quad is stretched.
+    m_SensSlider = new UiSlider(Vec3(kSensX, kSensY, 0.0f), kSensMin, kSensMax, sens0);
+    m_SensSlider->SetBoxTexture(m_TexBox);
+    m_SensSlider->SetKnobTexture(m_TexKnob);
     m_SensSlider->SetTrackSize(kSensTrackW, kSensTrackH);
-    m_SensSlider->Init();
-
-    m_MotionCb->SetOnToggleForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
-    m_FpsCb->SetOnToggleForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
-    m_SensSlider->SetOnValueChangedForTest(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnSensChanged));
+    m_SensSlider->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnSensChanged));
+    m_SensSlider->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
     // ---- close button: BSButton built the same way PauseScreen builds
     // ---- m_QuitButton (bomb-with-X icon + separate text label) ----
@@ -415,32 +336,43 @@ void SettingsScreen::Init() {
     m_pCloseButton->SetDrawOrder(8);
     // TOP_MOST so HUD::Update's modal input-capture gate still lets touches
     // through to this button (see m_LayerFlags note in the ctor above).
+    // SetDrawOrder(8) above writes m_LayerFlags=8 (BSButton::SetDrawOrder is
+    // a misnomer -- it overwrites the layer mask, not a sort key); this
+    // assignment must run AFTER it to win.
     m_pCloseButton->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+
+    // ---- AddControl every widget to the HUD, TOP_MOST, in draw order ----
+    // HUD::Draw has no per-control sort key -- controls sharing a layer mask
+    // draw in HUD control-list (AddControl) order. This screen itself was
+    // already AddControl'd by Toggle() BEFORE Init() runs (see Toggle()),
+    // so its own Draw() (backdrop + plate + labels) is already first in the
+    // list; add the widgets after it, dropdown last, so the open dropdown
+    // panel overlays every other widget.
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(m_MotionCb, false);
+        game_work.mHud->AddControl(m_FpsCb, false);
+        game_work.mHud->AddControl(m_SensSlider, false);
+        game_work.mHud->AddControl(m_pCloseButton, false);
+        game_work.mHud->AddControl(m_LangDrop, false);
+    }
 }
 
 void SettingsScreen::Release() {
-    delete m_LangCombo;   m_LangCombo    = 0;
-    delete m_MotionCb;    m_MotionCb     = 0;
-    delete m_SensSlider;  m_SensSlider   = 0;
-    delete m_FpsCb;       m_FpsCb        = 0;
-    delete m_pCloseButton; m_pCloseButton = 0;
+    // AddControl'd widgets are torn down via SetPendingRemoval (HUD's own
+    // Update sweep deletes each next tick, matching GameModeScreen::
+    // RemoveButtons' pattern) rather than a direct delete here -- deleting
+    // synchronously while the widget is still linked into game_work.mHud's
+    // control list would leave a dangling pointer in that list.
+    if (m_LangDrop)    { m_LangDrop->SetPendingRemoval();    m_LangDrop    = 0; }
+    if (m_MotionCb)    { m_MotionCb->SetPendingRemoval();    m_MotionCb    = 0; }
+    if (m_SensSlider)  { m_SensSlider->SetPendingRemoval();  m_SensSlider  = 0; }
+    if (m_FpsCb)       { m_FpsCb->SetPendingRemoval();       m_FpsCb       = 0; }
+    if (m_pCloseButton) { m_pCloseButton->SetPendingRemoval(); m_pCloseButton = 0; }
 
-    CheckBox::UnloadContent();
-    SliderControl::UnloadContent();
-    ComboBox::UnloadContent();
-    ListBox::UnloadContent();
-    VerticalScroller::UnloadContent();
-
-    m_TexCheckboxOn.SetNull();
-    m_TexCheckboxOff.SetNull();
-    m_TexTrack.SetNull();
-    m_TexThumb.SetNull();
-    m_TexBar.SetNull();
-    m_TexArrow.SetNull();
-    m_TexRow.SetNull();
-    m_TexScrTrack.SetNull();
-    m_TexScrThumb.SetNull();
-    m_TexScrArrow.SetNull();
+    m_TexBox.SetNull();
+    m_TexCheck.SetNull();
+    m_TexCaret.SetNull();
+    m_TexKnob.SetNull();
     m_Plate.SetNull();
     m_Backdrop.SetNull();
     m_LangFont.SetNull();
@@ -449,26 +381,19 @@ void SettingsScreen::Release() {
     HUDControl3d::Release();
 }
 
-void SettingsScreen::PollCombo() {
-    if (!m_LangCombo) return;
-    std::string* sel = m_LangCombo->SelectedIter();
-    if (!sel || m_LangItems.empty()) return;
-    int idx = (int)(sel - &m_LangItems[0]);
-    if (idx < 0 || idx >= (int)m_LangItems.size()) return;
-    if (idx == m_LangLast) return;
-    m_LangLast = idx;
-    game_work.languageFlag = (uint8_t)idx;
-    Localisation::Load(Game::GetInstance()->data_dir.c_str(), idx);
-}
-
 void SettingsScreen::Update(float dt) {
-    if (m_LangCombo)    m_LangCombo->Update(dt);
-    if (m_MotionCb)     m_MotionCb->Update(dt);
-    if (m_SensSlider)   m_SensSlider->Update(dt);
-    if (m_FpsCb)        m_FpsCb->Update(dt);
-    if (m_pCloseButton) m_pCloseButton->Update(dt);
+    (void)dt;
 
-    PollCombo();
+    // Port specific: while the dropdown panel is open, gate out the other
+    // AddControl'd widgets (checkboxes/slider/close) so they neither receive
+    // input nor draw over the panel -- HUD::Update/Draw both skip inactive
+    // controls (m_Active gate). The dropdown itself stays always-active.
+    // Restored to active the frame the panel closes.
+    uint8_t othersActive = m_LangDrop && m_LangDrop->IsOpen() ? 0 : 1;
+    if (m_MotionCb)    m_MotionCb->m_Active    = othersActive;
+    if (m_SensSlider)  m_SensSlider->m_Active  = othersActive;
+    if (m_FpsCb)       m_FpsCb->m_Active       = othersActive;
+    if (m_pCloseButton) m_pCloseButton->m_Active = othersActive;
 }
 
 static void DrawSettingsLabel(const char* s, float x, float y) {
@@ -480,6 +405,7 @@ static void DrawSettingsLabel(const char* s, float x, float y) {
 }
 
 void SettingsScreen::Draw(float* hudScale) {
+    (void)hudScale;
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // ---- modal dark backdrop, full-screen ----
@@ -506,22 +432,12 @@ void SettingsScreen::Draw(float* hudScale) {
 
     // ---- left-column labels ----
     // +7 vertical: pFontMain->DrawString positions text below the given y, so a
-    // label centred on a row uses rowY + 7 (mirrors ComboBox::Draw's own text at
-    // pos.y + size.y*7). Keeps each label vertically centred on its widget.
+    // label centred on a row uses rowY + 7. Keeps each label vertically
+    // centred on its widget (widgets draw separately, via the HUD).
     DrawSettingsLabel("LANGUAGE",     kLangLabelX,   kLangLabelY   + 7.0f);
     DrawSettingsLabel("MOTION MODE",  kMotionLabelX, kMotionLabelY + 7.0f);
     DrawSettingsLabel("SENSITIVITY",  kSensLabelX,   kSensLabelY   + 7.0f);
     DrawSettingsLabel("FPS COUNTER",  kFpsLabelX,    kFpsLabelY    + 7.0f);
-
-    // ---- widgets ----
-    if (m_LangCombo)  { m_LangCombo->PreDraw(hudScale);  m_LangCombo->Draw(hudScale); }
-    if (m_MotionCb)   { m_MotionCb->PreDraw(hudScale);   m_MotionCb->Draw(hudScale); }
-    if (m_SensSlider) { m_SensSlider->PreDraw(hudScale); m_SensSlider->Draw(hudScale); }
-    if (m_FpsCb)      { m_FpsCb->PreDraw(hudScale);      m_FpsCb->Draw(hudScale); }
-
-    // ---- close button: bomb icon + "QUIT"-style text label, own Draw() ----
-    // ---- draws both the textured quad and m_pLabelBox (BSButton::Draw). ----
-    if (m_pCloseButton) { m_pCloseButton->PreDraw(hudScale); m_pCloseButton->Draw(hudScale); }
 }
 
 void SettingsScreen::OnMotionToggle() {
@@ -534,6 +450,12 @@ void SettingsScreen::OnFpsToggle() {
 
 void SettingsScreen::OnSensChanged() {
     FN::g_MotionSpeedThreshold = SliderToThreshold(m_SensSlider->GetValue());
+}
+
+void SettingsScreen::OnLangChanged() {
+    int idx = m_LangDrop->GetSelected();
+    game_work.languageFlag = (uint8_t)idx;
+    Localisation::Load(Game::GetInstance()->data_dir.c_str(), idx);
 }
 
 // Port specific: m_pCloseButton's click callback -- runs Toggle()'s close

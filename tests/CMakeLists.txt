@@ -850,12 +850,14 @@ set_tests_properties(dropdown_render PROPERTIES TIMEOUT 60)
 set_tests_properties(screenshot_dropdown PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_combobox;component_listbox;component_verticalscroller")
 
-# SettingsScreen render test (port-improvement in-game settings modal). Renders
-# the whole panel -- dialog_box plate + LANGUAGE combo / MOTION MODE / SENSITIVITY
-# / FPS COUNTER rows -- via the screen's own Draw(). The screen self-injects
-# procedural placeholder art in Init(). No binary counterpart; validates the
-# screen constructs + draws without crashing, not a faithful layout.
-# Output: tmp/test/screenshots/settings_screen/settings.png.
+# SettingsScreen render test (port-improvement in-game settings modal). The
+# screen AddControl's its src/ui/ widgets (UiDropdown/UiCheckbox/UiSlider) plus
+# its close BSButton to game_work.mHud at HUD_LAYER_TOP_MOST; the test drives
+# HUD::Update/Draw (component-isolation mode) rather than the screen's own
+# Draw() directly. Captures both the collapsed panel and the LANGUAGE dropdown
+# forced open (draw-order overlay + m_Active input gate). No binary
+# counterpart; validates construction + draw, not a faithful layout.
+# Output: tmp/test/screenshots/settings_screen/{settings,settings_expanded}.png.
 fn_add_game_test(test_settings_screen_render test_settings_screen_render.cpp)
 add_test(NAME settings_screen_render COMMAND test_settings_screen_render)
 add_test(NAME screenshot_settings_screen COMMAND test_settings_screen_render --screenshot)

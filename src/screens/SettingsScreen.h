@@ -8,19 +8,29 @@
 // no settings/options screen (OptionsScreen's widget stack -- CheckBox /
 // SliderControl / ComboBox / ListBox / VerticalScroller -- is dead code with
 // no live call site; see each widget's header). This screen is a
-// port-improvement that reuses those faithfully-ported-but-orphaned widgets to
-// give the port an actual settings UI, wiring them to host-only globals
-// (FN::g_MotionMode / FN::g_MotionSpeedThreshold / FN::g_ShowFps) and
-// game_work.languageFlag. Not fidelity-constrained; no // ASM-verified markers
-// apply to this class itself (only to the widgets it hosts).
+// port-improvement that uses the port-only src/ui/ widget toolkit
+// (UiCheckbox/UiSlider/UiDropdown) to give the port an actual settings UI,
+// wiring it to host-only globals (FN::g_MotionMode / FN::g_MotionSpeedThreshold
+// / FN::g_ShowFps) and game_work.languageFlag. Not fidelity-constrained; no
+// // ASM-verified markers apply to this class (it has no binary counterpart).
 //
-// Usage: `new SettingsScreen(); Init(); game_work.mHud->AddControl(screen, false);`
-// The screen owns its 5 widgets directly (4 settings controls + the
-// m_pCloseButton BSButton; none are added to mHud) -- it drives their
-// Update/Draw itself every frame from its own Update/Draw. Its ComboBox,
-// however, DOES AddControl its spawned ListBox to mHud (that's ComboBox's own
-// faithful behaviour, TOP_MOST-ish HUD_LAYER_POST_ACTOR so the dropdown draws
-// over the modal panel) -- SettingsScreen does not manage that.
+// Usage: `SettingsScreen* s = new SettingsScreen(); game_work.mHud->AddControl(s,
+// false); s->Init();` -- AddControl the SCREEN ITSELF before calling Init():
+// Init() AddControl's the 5 owned widgets (4 settings controls + the
+// m_pCloseButton BSButton), and since HUD::Draw has no per-control sort key
+// (only control-list order), the screen must already be in the list first so
+// its own Draw() (backdrop + plate + labels) paints behind every widget.
+// SettingsScreen::Toggle() follows this exact order; a caller bypassing
+// Toggle() (e.g. a render test) must too.
+//
+// The screen does NOT drive the widgets' Update/Draw directly -- each is
+// AddControl'd to game_work.mHud with m_LayerFlags = HUD_LAYER_TOP_MOST
+// (matching the modal control itself) so HUD::Update's modal input-capture
+// gate (see HUD.h SetInputModal) still delivers input to them while the
+// settings modal owns SetInputModal. Draw order (the plate behind the
+// widgets, the open dropdown panel above its siblings) is controlled purely
+// by HUD control-list order: screen first, then checkboxes/slider/close
+// button, then the dropdown last (see Init()).
 //
 // Lifecycle: call the static SettingsScreen::Toggle() to open/close the modal
 // -- it owns the single file-static instance pointer, the AddControl/Init on
@@ -29,7 +39,9 @@
 // MainScreen.cpp), and m_pCloseButton's tap (CloseCallback) call Toggle() so
 // there is exactly one open/close path.
 // Release() (called by the HUD removal sweep, and by the dtor) tears down the
-// 5 owned widgets and the static injected placeholder textures.
+// 5 owned widgets (SetPendingRemoval + null -- HUD's own Update sweep deletes
+// each, matching GameModeScreen::RemoveButtons' pattern for AddControl'd
+// buttons) and the shared injected textures/font.
 //
 
 #include "hud/HUDControl3d.h"
@@ -39,9 +51,9 @@
 #include <string>
 #include <vector>
 
-class CheckBox;
-class SliderControl;
-class ComboBox;
+class UiCheckbox;
+class UiSlider;
+class UiDropdown;
 class BSButton;
 namespace Mortar { class Font; }
 
@@ -66,10 +78,10 @@ public:
     static bool IsOpen();
 
 private:
-    ComboBox*      m_LangCombo;
-    CheckBox*      m_MotionCb;
-    SliderControl* m_SensSlider;
-    CheckBox*      m_FpsCb;
+    UiDropdown* m_LangDrop;
+    UiCheckbox* m_MotionCb;
+    UiSlider*   m_SensSlider;
+    UiCheckbox* m_FpsCb;
 
     // Port specific: modal close button, bottom-right of the plate. Built the
     // same way PauseScreen builds m_QuitButton (see PauseScreen::Update
@@ -84,45 +96,40 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_Backdrop;   // solid black, modal dim overlay (placeholder art)
     Mortar::SmartPtr<Mortar::Texture> m_CloseTex;   // quit_title.tex, held for m_pCloseButton
 
-    // TTF font for the language ComboBox (native language names need
+    // TTF font for the language UiDropdown (native language names need
     // CJK/Hangul/Cyrillic glyphs the bitmap font_fruit_ninja.fnt lacks).
-    // fontstruetype/gangofchinese.ttf. Held here so it outlives the combo
-    // (and the ListBox it hands the pointer to); released in Release().
+    // fontstruetype/gangofchinese.ttf. Held here so it outlives the dropdown;
+    // released in Release().
     Mortar::SmartPtr<Mortar::Font> m_LangFont;
 
-    // Kept-alive widget textures injected into the widgets' static slots -- real
-    // staged art (assets/ui-widgets/*.svg via fn_asset_staging) for most slots,
-    // with a couple of procedural-only fills (WidgetPlaceholderArt.h) for
-    // elements with no real .tex counterpart (m_TexRow, m_Backdrop). Held here
-    // so they outlive every widget that references them and are released in
-    // Release().
-    Mortar::SmartPtr<Mortar::Texture> m_TexCheckboxOn;
-    Mortar::SmartPtr<Mortar::Texture> m_TexCheckboxOff;
-    Mortar::SmartPtr<Mortar::Texture> m_TexTrack;
-    Mortar::SmartPtr<Mortar::Texture> m_TexThumb;
-    Mortar::SmartPtr<Mortar::Texture> m_TexBar;
-    Mortar::SmartPtr<Mortar::Texture> m_TexArrow;
-    Mortar::SmartPtr<Mortar::Texture> m_TexRow;
-    Mortar::SmartPtr<Mortar::Texture> m_TexScrTrack;
-    Mortar::SmartPtr<Mortar::Texture> m_TexScrThumb;
-    Mortar::SmartPtr<Mortar::Texture> m_TexScrArrow;
+    // Shared widget textures injected into each src/ui/ widget instance --
+    // loaded once here (real staged art from assets/ui-widgets/*.svg via
+    // fn_asset_staging) and handed to every widget's Set*Texture setter.
+    // Held here so they outlive every widget that references them and are
+    // released in Release().
+    Mortar::SmartPtr<Mortar::Texture> m_TexBox;    // box.tex -- shared NineSlice background
+    Mortar::SmartPtr<Mortar::Texture> m_TexCheck;  // check.tex -- checkbox tick glyph
+    Mortar::SmartPtr<Mortar::Texture> m_TexCaret;  // caret.tex -- dropdown caret glyph
+    Mortar::SmartPtr<Mortar::Texture> m_TexKnob;   // slider_will.tex -- slider knob
 
     std::vector<std::string> m_LangItems;
-    int m_LangLast;   // last-polled ComboBox selection index
-
-    void PollCombo();
 
 public:
-    // Delegate targets (Mortar::Delegate0<void> callees) -- see
-    // CheckBox::SetOnToggleForTest / SliderControl::SetOnValueChangedForTest.
+    // Delegate targets (Mortar::Delegate0<void> callees), installed on each
+    // widget's SetOnChange in Init().
     void OnMotionToggle();
     void OnFpsToggle();
     void OnSensChanged();
+    void OnLangChanged();
 
     // Port specific: m_pCloseButton's click callback. Runs the same
     // open/close path as Toggle() (SetInputModal(NULL) + SetPendingRemoval)
     // so tapping Close behaves exactly like the ESC key / settings gear.
     void CloseCallback();
+
+    // Test-only: expose the dropdown so render tests can force it open
+    // (UiDropdown::SetOpenForTest) without a synthetic touch sequence.
+    UiDropdown* GetLangDropForTest() const { return m_LangDrop; }
 };
 
 #endif // FN_SETTINGS_SCREEN_H
