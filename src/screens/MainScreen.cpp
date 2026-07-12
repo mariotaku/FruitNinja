@@ -111,9 +111,11 @@ static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
 // where this formula is derived from PauseScreen's idle resumeScale.
 static const Vec3 kSettingsRestScale(48.0f, 48.0f, 48.0f);
 // Port specific: how far (world units) the settings button slides toward its
-// bottom-left corner as it hides (driven by the same ring growFactor, so the
-// slide is frame-synced with the scale). 0 = no slide.
-static const float kSettingsSlideOut = 45.0f;
+// bottom-left corner as it hides (driven by the ring growFactor, frame-synced
+// with them). Large enough (~55) that the full-size 48px button clears the
+// screen edge BEFORE the m_Active gate cuts it off (so it exits by sliding,
+// not popping). Slide-only -- the button does NOT shrink.
+static const float kSettingsSlideOut = 55.0f;
 
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
@@ -844,15 +846,17 @@ void MainScreen::Update(float dt) {
         }
         float growFactor = ringFactor;
 
-        // pos DOES survive MenuButton::Update for toggles (it only clobbers
-        // size), so slide the button toward its bottom-left corner as it hides
-        // (growFactor 1->0) and back to rest as it grows (0->1) -- same factor
-        // as the scale, so slide + shrink are one frame-synced motion.
+        // SLIDE-ONLY (no shrink): pos DOES survive MenuButton::Update for
+        // toggles (it only clobbers size), so slide the button toward its
+        // bottom-left corner as it hides (growFactor 1->0) and back to rest as
+        // it grows (0->1), frame-synced with the rings. m_RestScale is held at
+        // full size -- the button stays 48px the whole time and simply slides
+        // off/onto the corner.
         float slide = (1.0f - growFactor) * kSettingsSlideOut;
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x - slide;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y - slide;
 
-        m_pSettingsButton->m_RestScale = kSettingsRestScale * growFactor;
+        m_pSettingsButton->m_RestScale = kSettingsRestScale;
         m_pSettingsButton->m_Active = (growFactor > PAUSE_VISIBILITY) ? 1 : 0;
     }
 #endif // !defined(__bada__)
