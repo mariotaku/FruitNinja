@@ -391,7 +391,11 @@ void UiDropdown::Draw(float* hudScale) {
     if (m_CaretTex.IsValid()) {
         float caretSize = ClampF(m_BarH * 0.6f, 0.0f, 16.0f);
         float caretHalf = caretSize * 0.5f;
-        DrawGlyphQuad(m_CaretTex.Get(), pos.x + m_BarW * 0.5f - caretHalf - 2.0f, pos.y,
+        // Right margin matches textPad (the left text margin, 8.0f) rather
+        // than a bare 2.0f -- the old margin sat the caret right against
+        // the bar's inner rim with almost no breathing room; textPad gives
+        // it the same comfortable gap the value text has on the left.
+        DrawGlyphQuad(m_CaretTex.Get(), pos.x + m_BarW * 0.5f - caretHalf - textPad, pos.y,
                       caretSize, caretSize, Colour::White);
     }
 
