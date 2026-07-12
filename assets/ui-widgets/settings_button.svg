@@ -1,20 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <!-- settings_button.tex - corner button icon, matches pause_button.tex style
-       (translucent-white rounded square + white glyph; the game tints it). A
-       cog/gear glyph: 8 teeth + a toothed body with a centre hole. -->
-  <rect x="6" y="6" width="52" height="52" rx="13" ry="13"
-        fill="#ffffff" fill-opacity="0.5"/>
-  <g fill="#ffffff">
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(0 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(45 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(90 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(135 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(180 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(225 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(270 32 32)"/>
-    <rect x="29" y="7" width="6" height="11" rx="1.5" transform="rotate(315 32 32)"/>
+  <!-- settings_button.tex - corner button icon, matched to pause_button.tex /
+       play_button.tex (iPhone-3GS-era glossy button). Sampled from the real
+       textures: translucent frosted rounded square (alpha ~33-47%), a bright
+       specular sheen in the upper third, a "waterline" step at the midline,
+       darker matte lower half, and a SOLID white glyph. Button fills ~72% of
+       the 64px canvas (x 9..55), same footprint as pause_button so it renders
+       the same on-screen size at the shared scale. The game tints it. -->
+  <defs>
+    <!-- frosted-glass vertical gradient: bright glossy top, matte darker
+         bottom, with the classic split at the midline (0.47 -> 0.50). -->
+    <linearGradient id="base" x1="0" y1="9" x2="0" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0.00" stop-color="#dfdfdf" stop-opacity="0.28"/>
+      <stop offset="0.28" stop-color="#e2e2e2" stop-opacity="0.34"/>
+      <stop offset="0.47" stop-color="#cccccc" stop-opacity="0.38"/>
+      <stop offset="0.50" stop-color="#aaaaaa" stop-opacity="0.24"/>
+      <stop offset="0.78" stop-color="#8a8a8a" stop-opacity="0.22"/>
+      <stop offset="1.00" stop-color="#777777" stop-opacity="0.22"/>
+    </linearGradient>
+    <!-- wet-look specular highlight over the top half. -->
+    <linearGradient id="gloss" x1="0" y1="9" x2="0" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- soft emboss shadow so the white glyph reads as raised. -->
+    <filter id="emboss" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.9"/>
+      <feOffset dx="0" dy="1.1" result="sh"/>
+      <feFlood flood-color="#000000" flood-opacity="0.28"/>
+      <feComposite in2="sh" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- frosted base -->
+  <rect x="9" y="9" width="46" height="46" rx="11" ry="11" fill="url(#base)"/>
+  <!-- top specular sheen (rounded top corners; bottom edge sits at the waterline) -->
+  <rect x="9" y="9" width="46" height="22" rx="11" ry="11" fill="url(#gloss)"/>
+  <!-- subtle darker bottom rim (bevel) -->
+  <rect x="9.5" y="9.5" width="45" height="45" rx="10.5" ry="10.5"
+        fill="none" stroke="#000000" stroke-opacity="0.10" stroke-width="1"/>
+
+  <!-- gear glyph: solid white, embossed. 8 teeth + toothed body + centre hole. -->
+  <g fill="#ffffff" filter="url(#emboss)">
+    <g>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(0 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(45 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(90 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(135 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(180 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(225 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(270 32 32)"/>
+      <rect x="29.4" y="17" width="5.2" height="9" rx="1.6" transform="rotate(315 32 32)"/>
+    </g>
+    <!-- toothed body + centre hole (even-odd cuts the hole through) -->
+    <path fill-rule="evenodd"
+          d="M32 21 a11 11 0 1 0 0.01 0 Z M32 28 a4.5 4.5 0 1 0 0.01 0 Z"/>
   </g>
-  <!-- toothed body + centre hole (even-odd cuts the hole through) -->
-  <path fill="#ffffff" fill-rule="evenodd"
-        d="M32 16 a16 16 0 1 0 0.01 0 Z M32 25 a7 7 0 1 0 0.01 0 Z"/>
 </svg>
