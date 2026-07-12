@@ -35,7 +35,20 @@ const float UiDropdown::DRAG_CANCEL_DIST  = 5.0f;
 const float UiDropdown::SPRING_BACK_COEF  = 0.75f;
 const float UiDropdown::SPRING_FWD_COEF   = 0.25f;
 const float UiDropdown::CLICK_VEL_GATE    = 0.5f;
-const float UiDropdown::kFadeHeight       = 10.0f;
+// Derived, not eyeballed -- see list_fade.svg's header comment and
+// DrawFadeEdges' comment for the full derivation against box.svg's
+// inner-groove opening (rect x=6 y=6 w=52 h=28 rx=3.5 stroke-width=1,
+// centred stroke -> opening inset=6.5/rx=3.0 texels).
+const float UiDropdown::kFadeSrcBorderPx  = 10.0f;
+const float UiDropdown::kFadeDestBorderX  = 10.0f * 8.0f / 9.0f;   // ~8.8889 (NineSlice CORNER-CELL width)
+const float UiDropdown::kFadeHeight       = 10.0f * 8.0f / 9.0f;   // ~8.8889 (== kFadeDestBorderX; canvas height == kFadeSrcBorderPx here)
+// The opening's touch point sits at fraction 6.5/kFadeSrcBorderPx across
+// the kFadeDestBorderX-wide corner cell -- NOT at the cell's own edge.
+// Using kFadeDestBorderX directly as the seating inset (an earlier bug)
+// seated the fade a few px past the rim's actual opening, short of tucking
+// into its corners.
+const float UiDropdown::kGrooveOpeningInsetW  = (6.5f / 10.0f) * UiDropdown::kFadeDestBorderX;   // ~5.7778
+const float UiDropdown::kGrooveOpeningRadiusW = (3.0f / 10.0f) * UiDropdown::kFadeDestBorderX;   // ~2.6667
 
 UiDropdown::UiDropdown(const Vec3& inPos, std::vector<std::string>& items, int selected,
                        uint8_t visibleRows, float barW, float barH)
@@ -257,53 +270,104 @@ void UiDropdown::Update(float dt) {
     }
 }
 
-// Top/bottom rounded-corner fade band for the open row list. See header doc.
-// m_FadeTex (list_fade.tex) is NineSlice-drawn at a fixed kFadeHeight
-// (10.0f) world-unit height, spanning the SAME X extent as the row
-// highlight boxes (m_BarW - 2*pad, pad=4.0f -- see the row-highlight
-// DrawBox() calls below) and flush against the panel's inner top/bottom
-// viewport edges (centred so the band's own outer edge lands exactly on
-// viewportTop/viewportBottom, not inset further inward) -- so the fade
-// visually continues the row list right up to the rounded corner, matching
-// what a real edge-vignette should look like. list_fade.svg shares
-// box.svg's exact 64x40/rx=3.5 canvas (hence the same kBoxSrcBorderX/Y
-// src-border constants) so the band's own rounded top corners line up with
-// the panel's rounded groove corners. Drawn AFTER the row loop so a row
-// scrolling past the viewport edge dissolves into the fade rather than
-// being hard-cut. No-ops if m_FadeTex was never injected (SetFadeTexture).
+// Top/bottom rounded-corner fade band for the open row list, geometrically
+// seated on box.svg's inner-groove OPENING. See header doc for the full
+// derivation; summary: box.svg's groove is `rect x=6 y=6 w=52 h=28 rx=3.5
+// stroke-width=1` -- since strokes are path-centred, the OPENING inside the
+// rim (excluding the stroke itself) is that rect inset by half the stroke
+// width: inset=6.5 texels (kGrooveOpeningInsetW in world units), rx=3.0
+// texels (kGrooveOpeningRadiusW) on the 64-wide canvas.
 //
-// Top band drawn upright (opaque + rounded corners at the panel's outer TOP
-// edge, fading down into the list). Bottom band reuses the SAME texture
-// flipV=true (NineSlice::Draw) -- opaque + rounded corners at the panel's
-// outer BOTTOM edge, fading UP into the list -- rather than authoring a
-// second mirrored SVG, same reuse convention as arrow.svg (VerticalScroller's
-// up arrow, V-flipped for the down arrow). flipV mirrors which texture rows
-// each dest row samples (see NineSlice::Draw), not the dest geometry: the
-// list_fade.svg gradient is opaque+rounded at v=0 (texture top) and
-// transparent at v=1 (texture bottom); flipV=true makes the dest-bottom
-// cells sample v=0 (opaque+rounded) and the dest-top cells sample v=1
-// (transparent), which is exactly the mirrored placement this band needs.
-void UiDropdown::DrawFadeEdges(float viewportTop, float viewportBottom) {
+// list_fade.svg is authored with those SAME numbers (inset=6.5, rx=3.0) on
+// its own 64x10 canvas, using its OWN 9-slice border kFadeSrcBorderPx=10 /
+// kFadeDestBorderX (NOT kBoxSrcBorderX=9 -- the groove opening's arc extent,
+// inset+radius=9.5 texels, is larger than box.tex's OUTER-rim-sized 9-texel
+// corner cell and would spill into the stretched middle column) at the
+// SAME 8/9 per-texel scale box.tex's own corner cell uses. Its shape: at
+// texture y=0 (source top / quad TOP once drawn), the outline is at its
+// NARROWEST (x=9.5..54.5, inset by opening-inset+radius -- the corner
+// ARC's peak); as y increases toward the canvas bottom it flares out to
+// the FULL opening width (x=6.5..57.5) by y=kFadeSrcBorderPx. So the
+// quad's TOP edge (narrow, arc-peak side) is what must land at the rim's
+// actual corner peak, kGrooveOpeningInsetW inside the panel's own top
+// edge -- NOT kFadeDestBorderX (that's the whole NineSlice corner-CELL
+// width, a larger value; conflating the two -- an earlier bug -- seated
+// the band a few px past the rim's opening instead of tucking into it).
+// HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0): the top/bottom
+// border rows collapse to zero height so the middle row alone draws the
+// whole image, stretched to kFadeHeight = kFadeSrcBorderPx * 8/9 -- the
+// SAME 8/9 scale as X, so the corner renders as a true circle, not an
+// ellipse (a mismatched X/Y scale would squash the arc).
+//
+// VERTICALLY seated flush against the PANEL RECT's own edges (panelTopY /
+// panelTopY-panelH, passed in), NOT the row-viewport bounds (viewportTop/
+// Bottom, which use an unrelated `pad`=4.0 convention for row culling/
+// scrolling -- see Draw()): the quad's outer (narrow) edge sits
+// kGrooveOpeningInsetW inside the panel rect's own top/bottom edge (Y has
+// no NineSlice border cell -- destBorderY=0 -- so this offset is applied
+// directly to topCy/botCy).
+//
+// HORIZONTALLY, X extent is the FULL m_BarW (matching the panel's own
+// DrawBox() call), NOT further inset by kGrooveOpeningInsetW -- the corner
+// CELL's own internal art (kFadeSrcBorderPx/kFadeDestBorderX, arc authored
+// at texel x=6.5 within it) already positions the touch point at
+// kGrooveOpeningInsetW from the quad's edge, mirroring how box.svg's own
+// corner cell positions the groove relative to the PANEL's edge -- the
+// SAME mechanism the panel's own DrawBox() uses. Insetting fadeW by
+// kGrooveOpeningInsetW too would double-apply that offset (an earlier
+// bug: the corner cell started already inset, then its internal art added
+// a second, similar-sized offset on top).
+//
+// Top band drawn upright (opaque + rounded corners toward the panel's outer
+// TOP edge, fading down into the list). Bottom band reuses the SAME texture
+// flipV=true (NineSlice::Draw's flipV mirrors the middle row too -- see its
+// header doc -- since a horizontal-only 9-slice draws ONLY the middle row)
+// so its rounded corners land at the panel's outer BOTTOM edge instead,
+// fading UP into the list -- rather than authoring a second mirrored SVG,
+// same reuse convention as arrow.svg (VerticalScroller's up arrow, V-
+// flipped for the down arrow). Drawn AFTER the row loop AND after the
+// row-highlight glScissor is disabled (see Draw()) so nothing clips the
+// fade. No-ops if m_FadeTex was never injected (SetFadeTexture).
+void UiDropdown::DrawFadeEdges(float panelTopY, float panelH) {
     if (!m_FadeTex.IsValid()) return;
 
+    float panelBottomY = panelTopY - panelH;
+
     float fadeH = kFadeHeight;
-    float halfSpan = (viewportTop - viewportBottom) * 0.5f;
+    float halfSpan = panelH * 0.5f;
     if (fadeH > halfSpan) fadeH = halfSpan;   // don't let the two fades overlap-invert on a tiny panel
     if (fadeH <= 0.0f) return;
 
-    const float pad = 4.0f;   // matches Draw()'s row-highlight-box X inset
-    float fadeW = m_BarW - 2.0f * pad;
-    if (fadeW <= 0.0f) return;   // degenerate: bar narrower than 2x pad
+    // X extent is the FULL panel width, matching the panel's own DrawBox()
+    // call (DrawBox(pos.x, panelCenterY, m_BarW, panelH, ...)) -- NOT
+    // inset by kGrooveOpeningInsetW. The corner cell's OWN internal
+    // geometry (kFadeSrcBorderPx/kFadeDestBorderX, the arc authored at
+    // texel x=6.5 within it) already positions the touch point at
+    // kGrooveOpeningInsetW from WHATEVER edge the quad's left/right border
+    // cell starts at -- exactly mirroring how box.svg's own corner cell
+    // positions the groove opening relative to the PANEL's edge. Insetting
+    // fadeW by kGrooveOpeningInsetW here would double-apply that offset
+    // (an earlier bug): the corner cell would start ALREADY inset by
+    // kGrooveOpeningInsetW, then its internal art adds a SECOND
+    // kGrooveOpeningInsetW-ish offset on top, landing well short of (or
+    // past, depending on direction) the true corner.
+    float fadeW = m_BarW;
 
-    float topCy = viewportTop - fadeH * 0.5f;
-    float botCy = viewportBottom + fadeH * 0.5f;
+    // Groove-opening-flush position: the quad's OUTER (narrow, arc-peak)
+    // edge sits exactly kGrooveOpeningInsetW inside the panel rect's own
+    // top/bottom edge -- that inset IS the groove opening's actual
+    // world-space touch point (see derivation above).
+    float openingPeakTop = panelTopY - kGrooveOpeningInsetW;
+    float openingPeakBottom = panelBottomY + kGrooveOpeningInsetW;
+    float topCy = openingPeakTop - fadeH * 0.5f;
+    float botCy = openingPeakBottom + fadeH * 0.5f;
 
     Mortar::NineSlice::Draw(m_FadeTex.Get(), pos.x, topCy, fadeW, fadeH,
-                            kBoxSrcBorderX, kBoxSrcBorderY,
-                            kBoxDestBorderX, kBoxDestBorderY, Colour::White);
+                            kFadeSrcBorderPx, 0.0f,
+                            kFadeDestBorderX, 0.0f, Colour::White);
     Mortar::NineSlice::Draw(m_FadeTex.Get(), pos.x, botCy, fadeW, fadeH,
-                            kBoxSrcBorderX, kBoxSrcBorderY,
-                            kBoxDestBorderX, kBoxDestBorderY, Colour::White,
+                            kFadeSrcBorderPx, 0.0f,
+                            kFadeDestBorderX, 0.0f, Colour::White,
                             /*flipV=*/true);
 }
 
@@ -393,18 +457,31 @@ void UiDropdown::Draw(float* hudScale) {
     // selected/hover box's left/right sides, which is wrong (the box's own
     // width, m_BarW - 2*pad, already sits inside the panel and needs no
     // horizontal clip).
+    //
+    // Y bounds are the RIM OPENING (panelTopY/panelBottomY inset by
+    // kGrooveOpeningInsetW -- the SAME groove-opening geometry
+    // DrawFadeEdges seats the fade against, see its derivation), NOT the
+    // tighter row-viewport (viewportTop/Bottom, `pad`=4.0-based). Using the
+    // row-viewport here left a bare-groove GAP between a top/bottom row's
+    // highlight gradient and the rim -- the highlight must fill all the
+    // way up to the rim opening, not just up to the row-viewport margin.
+    // Row TEXT is unaffected (it uses textClip, its own separate per-glyph
+    // clipRect, still row-viewport-bounded so it doesn't spill under the
+    // fade).
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     // Host/SDL+GLES2 only: glGetIntegerv/GL_VIEWPORT aren't in the
     // asm-verify cross-build's GL shim or the unit-test GL stub.
+    float rimOpeningTop = panelTopY - kGrooveOpeningInsetW;
+    float rimOpeningBottom = panelTopY - panelH + kGrooveOpeningInsetW;
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
     const GLint vpX = vp[0], vpY = vp[1];
     const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
     const float orthoH = 320.0f;
     GLint sx = vpX;
-    GLint sy = (GLint)((clipBottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    GLint sy = (GLint)((rimOpeningBottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
     GLint sw = vpW;
-    GLint sh = (GLint)((clipTop - clipBottom) / orthoH * (float)vpH);
+    GLint sh = (GLint)((rimOpeningTop - rimOpeningBottom) / orthoH * (float)vpH);
     if (sh < 0) sh = 0;
     glEnable(GL_SCISSOR_TEST);
     glScissor(sx, sy, sw, sh);
@@ -418,10 +495,38 @@ void UiDropdown::Draw(float* hudScale) {
             continue;
         }
 
-        if (m_HoverRow >= 0 && idx == firstVisibleIdx + m_HoverRow) {
-            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_HoverRowColour);
-        } else if (idx == m_Selected) {
-            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_SelRowColour);
+        bool isHover = m_HoverRow >= 0 && idx == firstVisibleIdx + m_HoverRow;
+        bool isSelected = idx == m_Selected;
+        if (isHover || isSelected) {
+            Colour rowTint = isHover ? m_HoverRowColour : m_SelRowColour;
+            // iOS/iPod-style borderless glossy gradient (list_item.tex,
+            // neutral art MODULATE-tinted per state) replaces the old
+            // bordered box.tex NineSlice highlight -- a plain stretched
+            // quad, no rim, since the gradient is vertical-only (see
+            // SetItemTexture doc). X extent is m_BarW - 2*kGrooveOpeningInsetW
+            // -- the rim-OPENING's actual width (same touch-point geometry
+            // DrawFadeEdges/the row-highlight scissor use), NOT
+            // kBoxDestBorderX (that undershoots -- kBoxDestBorderX is the
+            // panel's OUTER-rim-sized corner cell, 8.0, wider than the
+            // groove opening's real touch point, kGrooveOpeningInsetW
+            // ~5.778 -- leaving a bare-groove margin between the gradient
+            // and the rim). Sized directly rather than drawn full-width and
+            // scissor-trimmed: unlike DrawFadeEdges' NineSlice draw (whose
+            // corner CELL has its own internal touch-point offset baked
+            // into its art), this is a plain quad with no such internal
+            // positioning, and the row-highlight scissor is deliberately
+            // X-unbounded (see its comment -- clips vertically only, so a
+            // straddling row's box is cut at the top/bottom viewport edge
+            // without being cut on its sides), so this quad's OWN width is
+            // what determines its left/right extent. Falls back to the
+            // NineSlice box highlight (its own pre-existing pad-based
+            // width) if the caller never injected list_item.tex.
+            if (m_ItemTex.IsValid()) {
+                float itemW = m_BarW - 2.0f * kGrooveOpeningInsetW;
+                DrawGlyphQuad(m_ItemTex.Get(), pos.x, rowCy, itemW, m_RowH, rowTint);
+            } else {
+                DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, rowTint);
+            }
         }
 
         DrawText((*m_pItems)[idx].c_str(),
@@ -433,6 +538,6 @@ void UiDropdown::Draw(float* hudScale) {
     glDisable(GL_SCISSOR_TEST);
 #endif
 
-    DrawFadeEdges(viewportTop, viewportBottom);
+    DrawFadeEdges(panelTopY, panelH);
 }
 

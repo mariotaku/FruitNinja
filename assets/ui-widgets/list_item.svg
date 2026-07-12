@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="40" viewBox="0 0 128 40">
+  <!-- list_item.tex - UiDropdown open-list row highlight (selected/hover
+       row), drawn in src/ui/UiDropdown.cpp Draw()'s row loop via
+       DrawGlyphQuad. Full-bleed, NO border/rim (unlike box.tex) so a plain
+       stretched quad reads as a borderless gloss bar, not a NineSlice panel.
+
+       iPod/iOS-style vertical gloss: brighter with a soft sheen band near
+       the TOP, darkening through the middle, slightly deeper again at the
+       very bottom edge. Authored NEUTRAL/near-white (not amber) so it can
+       be MODULATE-tinted per state at draw time (UiDropdown::Draw passes
+       m_SelRowColour / m_HoverRowColour as the DrawGlyphQuad tint); one
+       texture serves both the gold selected row and the dimmer amber hover
+       row, whereas a colour-baked asset would need two textures or an
+       untintable fixed hue. -->
+  <defs>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#ffffff"/>
+      <stop offset="0.18" stop-color="#f2f2f2"/>
+      <stop offset="0.5"  stop-color="#c9c9c9"/>
+      <stop offset="1"    stop-color="#b0b0b0"/>
+    </linearGradient>
+    <!-- Sheen: a soft bright band near the top, faded out by y=0.35, the
+         classic thin highlight strip under the top edge of a glossy button. -->
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="128" height="40" fill="url(#gloss)"/>
+  <rect x="0" y="0" width="128" height="40" fill="url(#sheen)"/>
+</svg>

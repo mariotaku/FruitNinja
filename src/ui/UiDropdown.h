@@ -108,10 +108,27 @@ public:
     // open panel's top edge normally, and at the bottom edge flipV=true (see
     // DrawFadeEdges). Optional: DrawFadeEdges no-ops if never set.
     void SetFadeTexture(const Mortar::SmartPtr<Mortar::Texture>& tex) { m_FadeTex = tex; }
+    // list_item.tex -- borderless glossy vertical-gradient row highlight for
+    // the selected/hover row (replaces the old bordered box.tex NineSlice --
+    // see Draw()). Neutral/near-white art, MODULATE-tinted per state
+    // (m_SelRowColour / m_HoverRowColour) via DrawGlyphQuad, sized to
+    // m_BarW - 2*kGrooveOpeningInsetW (the rim OPENING's actual width, same
+    // touch-point geometry DrawFadeEdges uses) so it fills right up to the
+    // rim with no bare-groove margin. Sized directly, not scissor-trimmed --
+    // the row-highlight glScissor is deliberately X-unbounded (vertical
+    // clip only, see Draw()), so this quad's own width IS its left/right
+    // extent. Falls back to the box.tex NineSlice highlight (own pad-based
+    // width) if never set (m_BoxTex still valid).
+    void SetItemTexture(const Mortar::SmartPtr<Mortar::Texture>& tex) { m_ItemTex = tex; }
     void SetRowHeight(float h) { m_RowH = h; }
     void SetTextScale(float s) { m_TextScale = s; }
 
-    void Release() override { m_CaretTex.SetNull(); m_FadeTex.SetNull(); UiWidget::Release(); }
+    void Release() override {
+        m_CaretTex.SetNull();
+        m_FadeTex.SetNull();
+        m_ItemTex.SetNull();
+        UiWidget::Release();
+    }
 
     // Test-only: force-open the panel without a touch sequence, for render tests.
     void SetOpenForTest(bool open) {
@@ -139,21 +156,80 @@ private:
     // class of bug.
     float ComputeMaxScroll() const;
 
-    // Top/bottom rounded-corner fade band for the open row list: m_FadeTex
-    // (list_fade.tex -- see its own header comment) NineSlice-drawn at a
-    // fixed kFadeHeight (10.0f) world-unit height, spanning the SAME X
-    // extent as the row highlight boxes (m_BarW - 2*pad) and flush against
-    // the panel's inner top/bottom viewport edges (not inset further
-    // inward) so the band's rounded top corners line up with the panel's
-    // own rounded corners right at the edge. Top band drawn normally;
-    // bottom band reuses the SAME texture with flipV=true (NineSlice::Draw)
-    // -- opaque + rounded corners at the panel's outer bottom edge, fading
-    // upward toward the list interior -- rather than a second asset. Drawn
-    // AFTER the row loop so a row scrolling past the viewport edge
-    // dissolves into it rather than being hard-cut. No-ops if m_FadeTex was
-    // never set.
-    void DrawFadeEdges(float viewportTop, float viewportBottom);
-    static const float kFadeHeight;   // 10.0f -- fixed world-unit height per fade band
+    // Top/bottom rounded-corner fade band for the open row list, GEOMETRICALLY
+    // seated to coincide exactly with box.svg's inner-groove OPENING (the
+    // hole its black rim stroke encloses), not an eyeballed inset. Full
+    // derivation lives in list_fade.svg's header comment and this method's
+    // .cpp comment; summary:
+    //   - box.svg's groove is `rect x=6 y=6 w=52 h=28 rx=3.5 stroke-width=1`;
+    //     since SVG strokes are path-centred, the OPENING inside the rim is
+    //     the rect inset by half the stroke width: inset=6.5 texels,
+    //     rx=3.0 texels (on box.svg's 64-wide canvas).
+    //   - list_fade.svg is authored with those SAME numbers (inset=6.5,
+    //     rx=3.0) on its own 64x10 canvas, so it can be NineSlice-drawn
+    //     with kFadeSrcBorderPx/kFadeDestBorderX (this asset's OWN 9-slice
+    //     border -- box.tex's kBoxSrcBorderX=9 is sized for the OUTER rim
+    //     and is too small to fully contain the groove opening's 9.5-texel
+    //     arc extent without spillover) at the SAME per-texel scale
+    //     (destBorder/srcBorder = 8/9, box.tex's corner-cell scale) that
+    //     the panel's own box.tex draw uses -- so this asset's inset/radius
+    //     map to the IDENTICAL world-space inset/radius the groove opening
+    //     has relative to the panel rect.
+    //   - HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0): the top/
+    //     bottom border rows collapse to zero height so the middle row
+    //     alone draws the whole image, stretched to kFadeHeight. Canvas
+    //     height (10, == kFadeSrcBorderPx) times the SAME 8/9 scale gives
+    //     kFadeHeight -- keeping the vertical scale equal to the horizontal
+    //     corner-cell scale, so the rounded corner renders as a TRUE CIRCLE
+    //     (not squashed into an ellipse).
+    //   - VERTICALLY seated flush against the PANEL RECT's own top/bottom
+    //     edge (panelTopY / panelTopY-panelH, passed in -- NOT the
+    //     row-viewport bounds, which use an unrelated `pad`=4.0 margin for
+    //     row culling/scrolling), inset by kGrooveOpeningInsetW -- the
+    //     groove opening's ACTUAL world-space touch-point offset (NOT
+    //     kFadeDestBorderX, the whole NineSlice corner-CELL width; the
+    //     opening's touch point sits at fraction 6.5/kFadeSrcBorderPx
+    //     across that cell, a SMALLER value than the cell width itself --
+    //     conflating the two seated the fade a few px past the rim, short
+    //     of tucking into it). Applied directly to topCy/botCy since Y has
+    //     no NineSlice border cell (destBorderY=0).
+    //   - HORIZONTALLY, X extent is the FULL m_BarW (matching the panel's
+    //     own DrawBox() call), NOT further inset by kGrooveOpeningInsetW --
+    //     the corner CELL's own internal art (kFadeSrcBorderPx/
+    //     kFadeDestBorderX, arc authored at texel x=6.5 within it) already
+    //     positions the touch point at kGrooveOpeningInsetW from the
+    //     quad's edge, mirroring how box.svg's own corner cell positions
+    //     the groove relative to the PANEL's edge. Insetting fadeW by
+    //     kGrooveOpeningInsetW too would double-apply that offset (an
+    //     earlier bug).
+    // Top band drawn upright; bottom band reuses the SAME texture
+    // flipV=true so its rounded corners land at the panel's outer bottom
+    // edge instead of a second asset. Drawn AFTER the row loop AND after
+    // the row-highlight glScissor is disabled (see Draw()) so nothing
+    // clips it. No-ops if m_FadeTex was never set.
+    void DrawFadeEdges(float panelTopY, float panelH);
+    // This asset's OWN 9-slice border in source texels (NOT kBoxSrcBorderX
+    // -- box.tex's outer-rim border is too small to fully contain the
+    // groove opening's 9.5-texel arc extent; see list_fade.svg's header).
+    static const float kFadeSrcBorderPx;   // 10.0f
+    // World-unit dest border for the NineSlice CORNER CELL (not the
+    // opening's own touch-point inset -- see kGrooveOpeningInsetW), same
+    // per-texel scale as box.tex's own corner cell (8 world units per 9
+    // src texels: kFadeDestBorderX/kFadeSrcBorderPx == 8/9) so the fade's
+    // authored inset/radius (identical numbers to the groove opening) land
+    // at the groove opening's actual world-space position once mapped
+    // through this cell.
+    static const float kFadeDestBorderX;   // 10.0f * 8.0f/9.0f
+    static const float kFadeHeight;        // kFadeSrcBorderPx * 8.0f/9.0f -- keeps the corner circular
+    // The groove OPENING's actual world-space inset from the panel rect's
+    // edge (box.svg groove-opening inset 6.5 texels, at fraction
+    // 6.5/kFadeSrcBorderPx across the kFadeDestBorderX-wide corner cell) --
+    // THIS is what DrawFadeEdges seats the band against, not the cell
+    // width itself.
+    static const float kGrooveOpeningInsetW;   // (6.5f/10.0f) * kFadeDestBorderX ~= 5.7778
+    // The groove OPENING's world-space corner radius (box.svg groove
+    // rx=3.0 opening radius, mapped through the same per-texel scale).
+    static const float kGrooveOpeningRadiusW;  // (3.0f/10.0f) * kFadeDestBorderX ~= 2.6667
 
     // Drag/fling/spring-back constants -- ported verbatim from ScrollingMenu
     // (src/hud/ScrollingMenu.cpp); see that file's header comment for the
@@ -187,6 +263,8 @@ private:
 
     // Caller-injected via SetFadeTexture() -- see DrawFadeEdges doc.
     Mortar::SmartPtr<Mortar::Texture> m_FadeTex;
+    // Caller-injected via SetItemTexture() -- see SetItemTexture doc.
+    Mortar::SmartPtr<Mortar::Texture> m_ItemTex;
 };
 
 #endif // FN_UI_DROPDOWN_H

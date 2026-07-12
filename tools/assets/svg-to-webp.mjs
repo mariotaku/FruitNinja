@@ -48,9 +48,18 @@ const MANIFEST = {
   // (@0x001b7bc0) alike -- see box.svg's own header comment.
   box: [64, 40],
   // list_fade: UiDropdown's open-list top/bottom edge fade (src/ui/
-  // UiDropdown.cpp DrawFadeEdges) -- see list_fade.svg's own header comment.
-  // Same 64x40 canvas as box.tex so its NineSlice border constants line up.
-  list_fade: [64, 40],
+  // UiDropdown.cpp DrawFadeEdges) -- see list_fade.svg's own header comment
+  // for the full geometric derivation against box.svg's inner-groove
+  // opening. NOT POT (64x10, like expand_arrow's non-POT exception below):
+  // canvas height equals the asset's own 9-slice src border (10.0) so a
+  // horizontal-only NineSlice split scales it uniformly (X and Y match),
+  // keeping the rounded corner a true circle instead of an ellipse.
+  list_fade: [64, 10],
+  // list_item: UiDropdown open-list row highlight (selected/hover) -- see
+  // list_item.svg's own header comment. Borderless glossy gradient, tinted
+  // per-state at draw time; 128x40 (wider than box.tex since it's stretched
+  // full row-width with no NineSlice corner cells to preserve).
+  list_item: [128, 40],
   slider_will: [32, 32],
   // check/caret: standalone transparent glyphs (lime tick, gold chevron) drawn
   // as overlays on the port UI toolkit's NineSlice box.tex (src/ui/Ui*).

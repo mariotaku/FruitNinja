@@ -68,6 +68,8 @@ int main(int argc, char* argv[]) {
     Mortar::SmartPtr<Mortar::Texture> texCaret = Mortar::TextureManager::LoadLocalisedTexture("caret.tex");
     // list_fade.tex: open-list top/bottom edge fade (UiDropdown::DrawFadeEdges).
     Mortar::SmartPtr<Mortar::Texture> texFade = Mortar::TextureManager::LoadLocalisedTexture("list_fade.tex");
+    // list_item.tex: borderless glossy row-highlight gradient (selected/hover).
+    Mortar::SmartPtr<Mortar::Texture> texItem = Mortar::TextureManager::LoadLocalisedTexture("list_item.tex");
 
     if (!texBar.IsValid()) {
         std::fprintf(stderr, "FAIL: failed to load staged box.tex "
@@ -82,6 +84,10 @@ int main(int argc, char* argv[]) {
     if (!texFade.IsValid()) {
         std::fprintf(stderr, "[ui_dropdown] warning: list_fade.tex not staged, "
                              "open-list edge fade will be skipped (DrawFadeEdges guards on validity)\n");
+    }
+    if (!texItem.IsValid()) {
+        std::fprintf(stderr, "[ui_dropdown] warning: list_item.tex not staged, "
+                             "row highlight will fall back to the box.tex NineSlice\n");
     }
 
     int failures = 0;
@@ -133,6 +139,7 @@ int main(int argc, char* argv[]) {
         ddOpen.SetBoxTexture(texBar);
         ddOpen.SetCaretTexture(texCaret);
         ddOpen.SetFadeTexture(texFade);
+        ddOpen.SetItemTexture(texItem);
         ddOpen.SetOpenForTest(true);
         const float rowH = 28.0f;  // matches UiDropdown's default m_RowH
         ddOpen.SetScrollOffsetForTest((float)midScrollRow * rowH);
@@ -212,6 +219,7 @@ int main(int argc, char* argv[]) {
     texBar.SetNull();
     texCaret.SetNull();
     texFade.SetNull();
+    texItem.SetNull();
 
     if (failures > 0) {
         std::fprintf(stderr, "FAIL: %d check(s) failed\n", failures);
