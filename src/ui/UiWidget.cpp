@@ -12,12 +12,16 @@
 #include "engine/input/Touch.h"
 #include "game/GameWork.h"
 
-// Logical (post-HD-halving) box.tex corner size -- box.svg corner art is ~6px
-// at the logical (SD) resolution the TextureManager HD loader normalizes to.
-const float UiWidget::kBoxSrcBorderX  = 6.0f;
-const float UiWidget::kBoxSrcBorderY  = 6.0f;
-const float UiWidget::kBoxDestBorderX = 6.0f;
-const float UiWidget::kBoxDestBorderY = 6.0f;
+// Logical (post-HD-halving) box.tex corner size. box.svg's rounded end spans
+// ~7.5 logical px (2px transparent margin + 5.5 corner radius), so the fixed
+// 9-patch corner must be >= that or the tip of the arc lands in the STRETCHED
+// edge and the ends smear when the box is drawn wide/thin (e.g. the slider
+// track). Src 9 texels fully contains the arc + a hair of the straight rim;
+// dest 8 world units draws every widget's corner at the same crisp size.
+const float UiWidget::kBoxSrcBorderX  = 9.0f;
+const float UiWidget::kBoxSrcBorderY  = 9.0f;
+const float UiWidget::kBoxDestBorderX = 8.0f;
+const float UiWidget::kBoxDestBorderY = 8.0f;
 
 UiWidget::UiWidget()
     : HUDControl3d()
