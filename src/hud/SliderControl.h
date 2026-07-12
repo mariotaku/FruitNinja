@@ -142,6 +142,17 @@ public:
     static void SetTexturesForTest(const Mortar::SmartPtr<Mortar::Texture>& track,
                                    const Mortar::SmartPtr<Mortar::Texture>& thumb);
 
+    // Port-only: override the TRACK quad's on-screen size after construction,
+    // independent of the thumb. The binary ctor ties both m_TrackWidth/Height
+    // AND m_ThumbWidth/Height to the same `size` Vec3 (texture px * size), so a
+    // caller wanting a wide/thin track (box.tex stretched) without also
+    // squashing the round thumb knob has no lever via the ctor alone. This
+    // setter writes m_TrackWidth/m_TrackHeight directly; m_ThumbWidth/
+    // m_ThumbHeight and Update's touch hit-region (which reads m_TrackWidth,
+    // so the hit-region grows with the new track too) are otherwise
+    // unaffected by this call. Call AFTER construction. No binary counterpart.
+    void SetTrackSize(float width, float height);
+
     int GetValue() const { return m_CurrentValue; }
 
     // Port/test-only: install the value-changed callback. The binary binds

@@ -144,6 +144,13 @@ void SliderControl::SetText(const char* str) {
     }
 }
 
+// Port-only -- see header note. Overrides the track quad size independent of
+// the thumb (the ctor's single `size` Vec3 otherwise scales both together).
+void SliderControl::SetTrackSize(float width, float height) {
+    m_TrackWidth  = width;
+    m_TrackHeight = height;
+}
+
 // HUDControl override -- single bx lr; no-op.
 void SliderControl::UpdateFromGameWork() {
 }
