@@ -151,7 +151,12 @@ SettingsScreen::SettingsScreen()
     , m_FpsCb(0)
 {
     m_LangLast = -1;
-    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
+    // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. POST_ACTOR
+    // (0x80) draws early -- default/buttons/modal/slider/top-most all paint over
+    // it (see HUDLayer.h GameDraw order). 0x800 is the last, unconditional pass.
+    // The combo's spawned ListBox is also 0x800 and AddControl'd later, so the
+    // open dropdown still layers above this panel.
+    m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 }
 
 SettingsScreen::~SettingsScreen() {

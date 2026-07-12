@@ -20,6 +20,8 @@
 #include "input/Touch.h"
 #include "util/StringHash.h"
 #include "debug/DebugFlags.h"
+#include "game/GameWork.h"
+#include "hud/HUD.h"
 #include <cstring>
 
 #ifdef FN_DEBUG_TOUCH
@@ -524,6 +526,18 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
 // previous DispatchForSimTick so that a release can be detected exactly once.
 void InputTranslatorSDL::DispatchForSimTick() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+
+    // Port specific: settings modal captures input -- don't feed the slice
+    // blade (SlashEntity's TouchDown_N/TouchMove_XN/YN/TouchUp_N handlers)
+    // while it's open. See HUD::SetInputModal (src/hud/HUD.h). This is the
+    // actual per-finger dispatch site to InputManager (SlashEntity binds its
+    // callbacks directly to these hashes); GameTaskInput.cpp's global
+    // PointerDownCallback/PointerMoveCallback are no-op pass-throughs on
+    // this port and don't drive the blade. Null out mgr rather than early-
+    // returning so the Touch ring buffer still drains this tick (below) and
+    // prevActive/pending bookkeeping stays correct -- otherwise events queue
+    // up while the modal is open and burst-apply once it closes.
+    if (game_work.mHud && game_work.mHud->GetInputModal()) mgr = nullptr;
 
     // Drain the entire Touch ring buffer for this tick. Binary-faithful:
     // v1.6.1 Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the

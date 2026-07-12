@@ -201,8 +201,14 @@ void Game::pollInput() {
                 s_pSettings->Init();
                 if (game_work.mHud) {
                     game_work.mHud->AddControl(s_pSettings, false);
+                    // Port specific: capture input while the settings modal
+                    // is open -- see HUD::SetInputModal (src/hud/HUD.h).
+                    game_work.mHud->SetInputModal(s_pSettings);
                 }
             } else {
+                if (game_work.mHud) {
+                    game_work.mHud->SetInputModal(NULL);
+                }
                 s_pSettings->SetPendingRemoval();
                 s_pSettings = NULL;
             }
