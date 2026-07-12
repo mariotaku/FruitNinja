@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="10" viewBox="0 0 64 10">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="6" viewBox="0 0 64 6">
   <!-- list_fade.tex - UiDropdown's open-list top/bottom edge fade (src/ui/
        UiDropdown.cpp DrawFadeEdges). Geometry is DERIVED, not eyeballed, to
        coincide exactly with box.svg's INNER GROOVE OPENING (the hole its
@@ -14,8 +14,8 @@
        UiWidget::kBoxSrcBorderX/Y (9.0, sized for box.svg's OUTER rim, not
        the inner groove), so reusing that border would spill 0.5px of the
        arc into the stretched middle column. This asset instead uses its
-       OWN 9-slice border, kFadeSrcBorderPx=10.0 (comfortably contains the
-       9.5-texel arc extent) with a matched dest border
+       OWN 9-slice X border, kFadeSrcBorderPx=10.0 (comfortably contains
+       the 9.5-texel arc extent) with a matched dest border
        (UiDropdown::kFadeDestBorderX = 10 times 8/9, the SAME per-texel
        scale box.tex's corner uses: 8 world units per 9 src texels) so the
        corner geometry authored here (inset=6.5, rx=3.0, identical numbers
@@ -24,12 +24,18 @@
        UiDropdown::DrawFadeEdges for the full derivation and the matching
        world-space constants.
 
-       Canvas height (10 texels) intentionally equals kFadeSrcBorderPx so a
-       HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0, the whole
-       image stretches vertically as one piece, see NineSlice::Draw) scales
-       Y by kFadeHeight/10, which UiDropdown sets equal to the SAME 8/9
-       ratio the X corner cells use, keeping the rounded corner a TRUE
-       CIRCLE (not squashed into an ellipse) after the 9-slice draw.
+       Canvas HEIGHT (6 texels) is INDEPENDENT of kFadeSrcBorderPx (10,
+       the X corner-cell border, unchanged, still safely >= the 9.5-texel
+       arc extent); it is sized so that, after a HORIZONTAL-ONLY 9-slice
+       (destBorderY=0/srcBorderYPx=0, the whole image stretches vertically
+       as one piece, see NineSlice::Draw) scales it to kFadeHeight, the
+       resulting Y scale (kFadeHeight/6) EQUALS the SAME 8/9 ratio the X
+       corner cells use (kFadeDestBorderX/kFadeSrcBorderPx), keeping the
+       rounded corner a TRUE CIRCLE (not squashed into an ellipse). This is
+       the 40%-shorter revision of the original 64x10 canvas (kFadeHeight
+       10*8/9 ~= 8.889, reduced to 6*8/9 ~= 5.333), a proportional height
+       cut that preserves circularity without touching the X-axis geometry
+       at all.
 
        Only the TOP corners are rounded (this asset IS the top fade band);
        the bottom edge is square. The bottom fade band reuses this same
@@ -37,23 +43,26 @@
        NineSlice.h) rather than a second source SVG, same reuse convention
        as arrow.svg (VerticalScroller's up arrow, V-flipped for down).
 
-       Fill: box.svg's #groove gradient middle stop (#2a1a0d), opaque at the
-       top (panel outer edge) fading to fully transparent at the bottom
-       (dissolving into the row list). -->
+       Fill: box.svg's #groove gradient middle stop (#2a1a0d), softened:
+       peak opacity 0.6 (not fully opaque) with an eased 3-stop falloff, so
+       the fade reads as a gentle dissolve rather than a hard brown cap at
+       the rim edge. Opaque-most at the top (panel outer edge) fading to
+       fully transparent at the bottom (dissolving into the row list). -->
   <defs>
     <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2a1a0d" stop-opacity="1"/>
-      <stop offset="1" stop-color="#2a1a0d" stop-opacity="0"/>
+      <stop offset="0"    stop-color="#2a1a0d" stop-opacity="0.6"/>
+      <stop offset="0.45" stop-color="#2a1a0d" stop-opacity="0.28"/>
+      <stop offset="1"    stop-color="#2a1a0d" stop-opacity="0"/>
     </linearGradient>
     <!-- Top-rounded (rx=3.0, box.svg groove-opening radius), bottom-square
          outline, inset x=6.5/width=51 (box.svg groove-opening inset/width). -->
     <path id="fadeShape"
-          d="M 6.5 10
+          d="M 6.5 6
              L 6.5 3.0
              A 3.0 3.0 0 0 1 9.5 0
              L 54.5 0
              A 3.0 3.0 0 0 1 57.5 3.0
-             L 57.5 10
+             L 57.5 6
              Z"/>
   </defs>
   <use href="#fadeShape" fill="url(#fade)"/>

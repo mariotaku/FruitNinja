@@ -166,9 +166,9 @@ private:
     //     the rect inset by half the stroke width: inset=6.5 texels,
     //     rx=3.0 texels (on box.svg's 64-wide canvas).
     //   - list_fade.svg is authored with those SAME numbers (inset=6.5,
-    //     rx=3.0) on its own 64x10 canvas, so it can be NineSlice-drawn
+    //     rx=3.0) on its own 64x6 canvas, so it can be NineSlice-drawn
     //     with kFadeSrcBorderPx/kFadeDestBorderX (this asset's OWN 9-slice
-    //     border -- box.tex's kBoxSrcBorderX=9 is sized for the OUTER rim
+    //     X border -- box.tex's kBoxSrcBorderX=9 is sized for the OUTER rim
     //     and is too small to fully contain the groove opening's 9.5-texel
     //     arc extent without spillover) at the SAME per-texel scale
     //     (destBorder/srcBorder = 8/9, box.tex's corner-cell scale) that
@@ -178,10 +178,14 @@ private:
     //   - HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0): the top/
     //     bottom border rows collapse to zero height so the middle row
     //     alone draws the whole image, stretched to kFadeHeight. Canvas
-    //     height (10, == kFadeSrcBorderPx) times the SAME 8/9 scale gives
-    //     kFadeHeight -- keeping the vertical scale equal to the horizontal
-    //     corner-cell scale, so the rounded corner renders as a TRUE CIRCLE
-    //     (not squashed into an ellipse).
+    //     HEIGHT (kFadeSvgCanvasH=6, INDEPENDENT of kFadeSrcBorderPx=10,
+    //     the X-axis border) times the SAME 8/9 scale gives kFadeHeight --
+    //     keeping the vertical scale equal to the horizontal corner-cell
+    //     scale, so the rounded corner renders as a TRUE CIRCLE (not
+    //     squashed into an ellipse) even after shrinking kFadeHeight (a
+    //     40% reduction from the original ~8.889 to ~5.333, done by
+    //     shrinking kFadeSvgCanvasH proportionally rather than touching
+    //     kFadeHeight directly).
     //   - VERTICALLY seated flush against the PANEL RECT's own top/bottom
     //     edge (panelTopY / panelTopY-panelH, passed in -- NOT the
     //     row-viewport bounds, which use an unrelated `pad`=4.0 margin for
@@ -220,7 +224,14 @@ private:
     // at the groove opening's actual world-space position once mapped
     // through this cell.
     static const float kFadeDestBorderX;   // 10.0f * 8.0f/9.0f
-    static const float kFadeHeight;        // kFadeSrcBorderPx * 8.0f/9.0f -- keeps the corner circular
+    // list_fade.svg's own canvas HEIGHT in texels -- INDEPENDENT of
+    // kFadeSrcBorderPx (the X corner-cell border; unrelated axis). kFadeHeight
+    // must equal kFadeSvgCanvasH * (kFadeDestBorderX/kFadeSrcBorderPx) -- the
+    // SAME 8/9 per-texel scale the X corner cells use -- or the horizontal-
+    // only 9-slice's vertical stretch won't match the horizontal scale and
+    // the rounded corner squashes into an ellipse.
+    static const float kFadeSvgCanvasH;    // 6.0f
+    static const float kFadeHeight;        // kFadeSvgCanvasH * 8.0f/9.0f -- keeps the corner circular (~5.333, 40% shorter than the original ~8.889)
     // The groove OPENING's actual world-space inset from the panel rect's
     // edge (box.svg groove-opening inset 6.5 texels, at fraction
     // 6.5/kFadeSrcBorderPx across the kFadeDestBorderX-wide corner cell) --
