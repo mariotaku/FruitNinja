@@ -125,6 +125,17 @@ private:
     // +0xB0..+0xBB: captured touch position (12 bytes, Vec3).
     Vec3     m_TouchPos;
 
+    // Port specific: settable ListBox row-tint theme, cached here (appended
+    // after the binary-faithful 0xBC layout) and applied to m_pListBox both
+    // immediately (if open) and at creation time in Update -- see .cpp. No
+    // binary counterpart.
+    Colour   m_ListSelectedRowColour;
+    Colour   m_ListHoverRowColour;
+    Colour   m_ListTextColour;
+    bool     m_bListSelectedRowColourSet;
+    bool     m_bListHoverRowColourSet;
+    bool     m_bListTextColourSet;
+
 public:
     // Binary @ 0x001682d4
     ComboBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
@@ -158,6 +169,14 @@ public:
     void CleanUpListBox();
     void UpdateTouchPosition();
 
+    // Port specific: no binary counterpart. The dropdown ListBox is created
+    // lazily on tap (see Update, m_pListBox starts NULL) so callers can't reach
+    // it directly; these forward the row-tint theme onto the ListBox once it
+    // exists and cache it so a ListBox opened LATER also picks it up.
+    void SetListSelectedRowColour(Colour c);
+    void SetListHoverRowColour(Colour c);
+    void SetListTextColour(Colour c);
+
     // Read-only accessors (test/caller convenience).
     float DrawWidth()  const { return m_DrawWidth; }
     float DrawHeight() const { return m_DrawHeight; }
@@ -182,7 +201,16 @@ public:
 #if defined(__bada__)
 #include <cstddef>
 struct ComboBoxLayoutAssert {
-    static_assert(sizeof(ComboBox) == 0xBC, "ComboBox size mismatch");               // v1.6.1 ctor @0x001682d4
+    // Binary-faithful prefix is 0xBC (v1.6.1 ctor @0x001682d4); +0xBC..+0xCC is
+    // the port-specific ListBox row-tint cache appended above -- not present in
+    // the binary layout.
+    static_assert(sizeof(ComboBox) == 0xCC, "ComboBox size mismatch");
+    static_assert(offsetof(ComboBox, m_ListSelectedRowColour)     == 0xBC, "ComboBox::m_ListSelectedRowColour offset");
+    static_assert(offsetof(ComboBox, m_ListHoverRowColour)        == 0xC0, "ComboBox::m_ListHoverRowColour offset");
+    static_assert(offsetof(ComboBox, m_ListTextColour)            == 0xC4, "ComboBox::m_ListTextColour offset");
+    static_assert(offsetof(ComboBox, m_bListSelectedRowColourSet) == 0xC8, "ComboBox::m_bListSelectedRowColourSet offset");
+    static_assert(offsetof(ComboBox, m_bListHoverRowColourSet)    == 0xC9, "ComboBox::m_bListHoverRowColourSet offset");
+    static_assert(offsetof(ComboBox, m_bListTextColourSet)        == 0xCA, "ComboBox::m_bListTextColourSet offset");
     static_assert(offsetof(ComboBox, m_pItems)         == 0x7C, "ComboBox::m_pItems offset");
     static_assert(offsetof(ComboBox, m_SelectedIter)   == 0x80, "ComboBox::m_SelectedIter offset");
     static_assert(offsetof(ComboBox, m_TextFlag)       == 0x84, "ComboBox::m_TextFlag offset");

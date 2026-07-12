@@ -55,6 +55,12 @@ ComboBox::ComboBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
     , m_bCleanupPending(0)
     , m_TouchIndex(-1)
     , m_TouchPos(0.0f, 0.0f, 0.0f)
+    , m_ListSelectedRowColour(0, 0, 255, 255)   // unused until m_bListSelectedRowColourSet
+    , m_ListHoverRowColour(0x50, 0x96, 0xFF, 0xFF)  // unused until m_bListHoverRowColourSet
+    , m_ListTextColour()
+    , m_bListSelectedRowColourSet(false)
+    , m_bListHoverRowColourSet(false)
+    , m_bListTextColourSet(false)
 {
     _pad85[0] = _pad85[1] = _pad85[2] = 0;
     _padA9[0] = _padA9[1] = _padA9[2] = 0;
@@ -196,6 +202,18 @@ void ComboBox::Update(float dt) {
                 if (m_pFont) {
                     m_pListBox->SetFont(m_pFont);
                 }
+                // Port specific: no binary counterpart -- propagate any cached
+                // row-tint theme (see SetListSelectedRowColour/etc.) onto the
+                // freshly-created ListBox.
+                if (m_bListSelectedRowColourSet) {
+                    m_pListBox->SetSelectedRowColour(m_ListSelectedRowColour);
+                }
+                if (m_bListHoverRowColourSet) {
+                    m_pListBox->SetHoverRowColour(m_ListHoverRowColour);
+                }
+                if (m_bListTextColourSet) {
+                    m_pListBox->SetTextColour(m_ListTextColour);
+                }
                 Mortar::Delegate0<void> cb =
                     Mortar::Delegate0<void>::QCallee<ComboBox>(this, &ComboBox::ListBoxClosed);
                 m_pListBox->SetCallback(cb);
@@ -243,6 +261,33 @@ void ComboBox::SetFont(Mortar::Font* font) {
 void ComboBox::SetPosition(float x, float y) {
     pos.x = x;
     pos.y = y;
+}
+
+// Port specific: no binary counterpart -- see header. Cache + apply
+// immediately if a ListBox is already open; Update() also applies the cache
+// when it creates a ListBox later.
+void ComboBox::SetListSelectedRowColour(Colour c) {
+    m_ListSelectedRowColour = c;
+    m_bListSelectedRowColourSet = true;
+    if (m_pListBox) {
+        m_pListBox->SetSelectedRowColour(c);
+    }
+}
+
+void ComboBox::SetListHoverRowColour(Colour c) {
+    m_ListHoverRowColour = c;
+    m_bListHoverRowColourSet = true;
+    if (m_pListBox) {
+        m_pListBox->SetHoverRowColour(c);
+    }
+}
+
+void ComboBox::SetListTextColour(Colour c) {
+    m_ListTextColour = c;
+    m_bListTextColourSet = true;
+    if (m_pListBox) {
+        m_pListBox->SetTextColour(c);
+    }
 }
 
 // Tears the open ListBox down: removes it from the HUD control list
