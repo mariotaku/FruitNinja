@@ -37,6 +37,7 @@
 class CheckBox;
 class SliderControl;
 class ComboBox;
+namespace Mortar { class Font; }
 
 class SettingsScreen : public HUDControl3d {
 public:
@@ -58,6 +59,12 @@ private:
 
     Mortar::SmartPtr<Mortar::Texture> m_Plate;      // dialog_box.tex
     Mortar::SmartPtr<Mortar::Texture> m_Backdrop;   // solid black, modal dim overlay (placeholder art)
+
+    // TTF font for the language ComboBox (native language names need
+    // CJK/Hangul/Cyrillic glyphs the bitmap font_fruit_ninja.fnt lacks).
+    // fontstruetype/gangofchinese.ttf. Held here so it outlives the combo
+    // (and the ListBox it hands the pointer to); released in Release().
+    Mortar::SmartPtr<Mortar::Font> m_LangFont;
 
     // Kept-alive placeholder textures injected into the widgets' static slots
     // (see WidgetPlaceholderArt.h). Held here so they outlive every widget

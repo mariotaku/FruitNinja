@@ -57,16 +57,19 @@ static Mortar::SmartPtr<Mortar::Texture> LoadOrPlaceholder(
 // have shipped .str data; higher flags fall back to english_us inside
 // Localisation::Load.
 //
-// UPPERCASE: font_fruit_ninja.fnt (game_work.pFontMain) ships only 92 glyphs
-// (space/punctuation/digits/uppercase A-Z/underscore/accented uppercase
-// Latin-1) -- no lowercase a-z. Lowercase text silently renders as nothing.
-// Port-improvement screen, no fidelity constraint on display casing.
+// Native names, rendered with the TTF font (fontstruetype/gangofchinese.ttf,
+// see m_LangFont) which covers Latin (incl. lowercase/accents), CJK, Hangul,
+// and Cyrillic. gangofchinese.ttf has no Arabic glyphs, so entry 20 falls
+// back to the English word "Arabic" rather than Arabic script.
+// Port-improvement screen, no fidelity constraint on display casing/script.
+// Keep in sync with NATIVE_LANG_NAMES in tools/web/stage-web-assets.py
+// (web font-subset charset).
 // ---------------------------------------------------------------------------
 static const char* const kLanguageNames[] = {
-    "ENGLISH_US", "ENGLISH_UK", "FRENCH", "SPANISH", "GERMAN", "ITALIAN",
-    "DUTCH", "SWEDISH", "DANISH", "NORWEGIAN", "FINNISH", "KOREAN",
-    "JAPANESE", "CHINESE", "TRADITIONAL CHINESE", "LATIN SPANISH", "POLISH",
-    "PORTUGUESE (PT)", "PORTUGUESE (BR)", "RUSSIAN", "ARABIC", "FAKE DEBUG LANGUAGE"
+    "English (US)", "English (UK)", "Fran\303\247ais", "Espa\303\261ol", "Deutsch", "Italiano",
+    "Nederlands", "Svenska", "Dansk", "Norsk", "Suomi", "\355\225\234\352\265\255\354\226\264",
+    "\346\227\245\346\234\254\350\252\236", "\344\270\255\346\226\207", "\347\271\201\351\253\224\344\270\255\346\226\207", "Espa\303\261ol (LA)", "Polski",
+    "Portugu\303\252s (PT)", "Portugu\303\252s (BR)", "\320\240\321\203\321\201\321\201\320\272\320\270\320\271", "Arabic", "Debug"
 };
 static const int kLanguageCount = 22;
 
@@ -87,7 +90,9 @@ static const float kComboX      =   55.0f, kComboY      =   85.0f;
 // so the value field is unstretched too.
 static const float kComboScaleX =  120.0f, kComboScaleY =   32.0f;
 static const uint8_t kComboVisibleRows = 6;
-static const uint16_t kComboWidth      = 20;
+// Combo value font size (m_Width). 16 (not 20) so the longest native name --
+// "PORTUGUES (BR)" -- fits the value cell without spilling into the caret.
+static const uint16_t kComboWidth      = 16;
 
 static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
 static const float kMotionCbX    =   95.0f, kMotionCbY    =   35.0f;
@@ -200,6 +205,15 @@ void SettingsScreen::Init() {
                                kComboVisibleRows, kComboWidth,
                                (uint16_t)kComboScaleX, (uint16_t)kComboScaleY);
     m_LangCombo->SetTextColour(Colour(255, 255, 255, 255));
+
+    // Native language names need CJK/Hangul/Cyrillic glyphs the bitmap
+    // font_fruit_ninja.fnt doesn't ship; switch the combo (and its dropdown
+    // ListBox, via ComboBox::Update's font propagation) to the TTF font.
+    m_LangFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (m_LangFont.IsValid()) {
+        m_LangCombo->SetFont(m_LangFont.Get());
+    }
+
     m_LangCombo->Init();
 
     // ---- checkboxes / slider, seeded from live globals ----
@@ -245,6 +259,7 @@ void SettingsScreen::Release() {
     m_TexScrArrow.SetNull();
     m_Plate.SetNull();
     m_Backdrop.SetNull();
+    m_LangFont.SetNull();
 
     HUDControl3d::Release();
 }

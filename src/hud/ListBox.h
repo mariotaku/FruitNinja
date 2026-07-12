@@ -165,6 +165,12 @@ public:
     // Non-virtual. Binary @ 0x001691b4: assigns m_OnSelect.
     void SetCallback(const Mortar::Delegate0<void>& cb);
 
+    // Non-virtual, port-side. No binary counterpart -- v1.6.1 ComboBox::Update
+    // never propagates its own font to the ListBox it spawns (see
+    // ComboBox.cpp DIFFERS marker). Sets the row text font (m_pTextFont,
+    // +0x8C; ctor default game_work.pFontMain).
+    void SetFont(Mortar::Font* font);
+
     // Read-only accessors (test/caller convenience).
     VerticalScroller* Scroller()   const { return m_pScroller; }
     float             CellWidth()  const { return m_CellWidth; }

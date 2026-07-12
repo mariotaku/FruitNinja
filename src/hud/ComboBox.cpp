@@ -189,6 +189,13 @@ void ComboBox::Update(float dt) {
                 m_pListBox = new ListBox(lbPos, lbSize, *m_pItems, m_SelectedIter,
                                          m_TextFlag, 14, 128, 16);
                 m_pListBox->Init();
+                // DIFFERS: v1.6.1 ComboBox::Update @0x00167f70 leaves the ListBox
+                // on fonts[1]; the port propagates the combo's own font so a TTF
+                // combo (e.g. the language selector's native CJK/Cyrillic names)
+                // renders in the dropdown rows too.
+                if (m_pFont) {
+                    m_pListBox->SetFont(m_pFont);
+                }
                 Mortar::Delegate0<void> cb =
                     Mortar::Delegate0<void>::QCallee<ComboBox>(this, &ComboBox::ListBoxClosed);
                 m_pListBox->SetCallback(cb);

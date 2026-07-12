@@ -272,6 +272,11 @@ void ListBox::SetCallback(const Mortar::Delegate0<void>& cb) {
     m_OnSelect = cb;
 }
 
+// Non-virtual, port-side. No binary counterpart -- see header note.
+void ListBox::SetFont(Mortar::Font* font) {
+    m_pTextFont = font;
+}
+
 // Private helper, reached via a PLT veneer in Update. Captures the live world
 // touch Y each held frame.
 void ListBox::UpdateTouchPosition() {
