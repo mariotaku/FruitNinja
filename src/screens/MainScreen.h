@@ -244,6 +244,18 @@ private:
     // lifecycle -- created inline in Update(), never torn down while
     // MainScreen persists). See MainScreen::Update and SettingsCallback.
     MenuButton* m_pSettingsButton;
+
+    // Port specific: no binary counterpart. Eased 0..1 visibility factor for
+    // m_pSettingsButton, lerped each frame toward the raw elapsedTime-derived
+    // target (see MainScreen::Update). Unlike the sound/music toggles (which
+    // ride the binary's own eased m_PauseAmount camera ramp on the way in and
+    // simply snap via the STATE_CAMERA_FADE hard-zero on the way out --
+    // acceptable there since the toggles reappear eased-in on the PAUSE
+    // overlay via GetPauseAmount()), settings has no such secondary reveal to
+    // land on, so leaving main would otherwise pop off instantly. This factor
+    // gives it a symmetric slide-out, easing toward 0 exactly like the
+    // slide-in eases toward 1.
+    float m_SettingsVisibility;
 #endif // !defined(__bada__)
 
 #ifndef __bada__
