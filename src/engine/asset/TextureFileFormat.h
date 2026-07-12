@@ -107,13 +107,15 @@ extern const uint32_t kTex3FourCC; // = 0x01584554
 // ---------------------------------------------------------------------------
 // Reader [web]: WebP -- Port specific: web compressed textures (libwebp).
 //
-// Has NO binary counterpart. The web build ships textures transcoded to WebP
-// but stored inside .tex-named files (tools/web/stage-web-assets.py). This
+// Has NO binary counterpart. Both host and web builds ship textures
+// transcoded to WebP but stored inside .tex-named files
+// (tools/assets/stage-assets.py, always transcodes; both non-bada builds
+// read from the same staged dir -- see CMakeLists.txt fn_asset_staging). This
 // reader detects the RIFF/WEBP magic (WebPGetInfo) and decodes to RGBA8888, so
-// the existing texFmt=0x01 GL upload path handles it unchanged. On desktop the
-// reader is present but inert -- real Tex1 .tex fail WebPGetInfo and fall
-// through to the Tex1 reader. Excluded from the __bada__ cross-build (no libwebp
-// there, and the real device never ships WebP-in-.tex).
+// the existing texFmt=0x01 GL upload path handles it unchanged. Any real Tex1
+// .tex (e.g. an unstaged/raw FruitNinjaBada/Data run) fails WebPGetInfo and
+// falls through to the Tex1 reader. Excluded from the __bada__ cross-build (no
+// libwebp there, and the real device never ships WebP-in-.tex).
 // ---------------------------------------------------------------------------
 
 // WebPData -- Tex1Data whose pixel buffer is OWNED (a WebPDecodeRGBA() heap

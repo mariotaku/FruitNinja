@@ -1,0 +1,10 @@
+{
+  "name": "fn-asset-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build-time SVG->WebP rasterizer for widget UI art (see svg-to-webp.mjs)",
+  "type": "module",
+  "dependencies": {
+    "sharp": "^0.33"
+  }
+}

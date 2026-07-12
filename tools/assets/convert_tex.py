@@ -36,9 +36,9 @@ def convert_tex(tex_path: Path, bada_dir: Path, out_dir: Path) -> tuple[int, int
     rel = tex_path.relative_to(bada_dir)
     out_path = out_dir / rel.with_suffix(".webp")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    # Gallery uses lossless webp for pixel-faithful reference; the web build
-    # (stage-web-assets.py) uses lossy-90 via ffmpeg for size; both share
-    # tex_decoder now.
+    # Gallery uses lossless webp for pixel-faithful reference; the host/web
+    # asset staging (stage-assets.py) uses lossy-90 via Pillow for size; both
+    # share tex_decoder now.
     img.save(out_path, "webp", lossless=True, quality=100, method=6)
 
     return width, height, fmt

@@ -31,6 +31,13 @@ macro(fn_add_game_test _target _source)
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
 
+    # Tests load assets from FN_STAGING_DATA_DIR (FN_DATA_DIR_PATH points there),
+    # so staging must have run before a test executes. Depend on it so building any
+    # test target also stages (idempotent no-op once staged).
+    if (TARGET fn_asset_staging)
+        add_dependencies(${_target} fn_asset_staging)
+    endif()
+
     # SDL2_image: used by test_harness.h for IMG_SavePNG.
     # Only linked to test targets, never to game/engine targets.
     if (TARGET SDL2_image::SDL2_image)

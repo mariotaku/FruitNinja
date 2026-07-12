@@ -30,6 +30,20 @@ option(FN_DEBUG_TOUCH "Enable touch drain/dispatch debug logging (InputTranslato
 
 project(FruitNinja LANGUAGES CXX)
 
+# Used to invoke tools/assets/stage-assets.py (asset staging: textures ->
+# WebP for both host + web) and tools/web/web-hash-assets.py (web cache
+# busting) portably -- avoids relying on a `python3` shim being on PATH
+# (unreliable on Windows).
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# Optional: node runs tools/assets/svg-to-webp.mjs (widget SVG -> WebP .tex
+# rasterization via the sharp npm package) as part of fn_asset_staging below.
+# Resolved at CONFIGURE time -- a fresh `cmake` run is needed after installing
+# node for the first time. Not REQUIRED: if node isn't found, the widget
+# rasterization step is simply skipped and widgets fall back to placeholder
+# art (see fn_asset_staging's comment below).
+find_program(NODE_EXECUTABLE NAMES node)
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -423,13 +437,22 @@ endif()
 # Subsystem CMakeLists.txt files contribute their sources via
 # target_sources(fruit-ninja-game PRIVATE ...).
 
+# Shared staging dir: fn_asset_staging (below) stages BOTH host and web
+# textures to WebP here (see tools/assets/stage-assets.py). Host reads it
+# directly via FN_DATA_DIR_PATH; web additionally --preload-file's it into
+# MEMFS at /FruitNinjaBada/Data (below).
+set(FN_STAGING_DATA_DIR "${CMAKE_BINARY_DIR}/staging/Data")
+
 if (EMSCRIPTEN)
     # Port specific: assets are preloaded into MEMFS at /FruitNinjaBada/Data.
+    # This is the MEMFS mount path (absolute, POSIX-style) -- NOT a host
+    # filesystem path, so it stays independent of FN_STAGING_DATA_DIR.
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
-    # FN_DATA_DIR for Emscripten: MEMFS mount path (absolute, POSIX-style).
     set(FN_DATA_DIR_PATH "/FruitNinjaBada/Data")
 else()
-    file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
+    # Host now reads from the staged dir (WebP-transcoded textures), not
+    # FruitNinjaBada/Data directly -- see fn_asset_staging below.
+    file(TO_CMAKE_PATH "${FN_STAGING_DATA_DIR}" FN_DATA_DIR_PATH)
 endif()
 
 if(NOT FN_ASM_VERIFY)
@@ -461,46 +484,61 @@ endif()
 
 # --- Executable ---
 if(NOT FN_ASM_VERIFY)
-    # Port specific: build-time widget texture generation. Rasterizes the
-    # checked-in assets/ui-widgets/*.svg sources to native Tex1 .tex textures
-    # under FruitNinjaBada/Data/textures/ (see tools/assets/svg_to_tex.py).
-    # Applies to BOTH the web (EMSCRIPTEN) and host executable below -- both
-    # define the fruit-ninja target and both load these textures via
-    # Mortar::TextureManager::LoadLocalisedTexture at runtime (SettingsScreen).
-    # Non-fatal when no SVG rasterizer is installed (e.g. a plain Windows
-    # host): the script prints a warning and exits 0; widgets then fall back
-    # to placeholder art (SettingsScreen::LoadOrPlaceholder).
-    add_custom_target(fn_widget_textures
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/assets/svg_to_tex.py ${CMAKE_SOURCE_DIR}
-        COMMENT "Generating widget textures from SVG sources (non-fatal if no rasterizer installed)"
+    # Port specific: unified build-time asset staging, feeds BOTH host and web
+    # builds. Runs tools/assets/stage-assets.py, which mirrors
+    # FruitNinjaBada/Data into FN_STAGING_DATA_DIR, transcoding every *.tex
+    # (Tex1) to WebP via Pillow (host + web alike -- see the libwebp reader in
+    # TextureFileFormat.cpp, which dispatches by content magic not extension),
+    # and merging in the pre-generated widget art from
+    # assets/ui-widgets/generated/*.tex. That widget art is itself generated
+    # AT BUILD TIME (not checked in) by tools/assets/svg-to-webp.mjs -- a
+    # Node/sharp step run FIRST, before stage-assets.py, whenever node was
+    # found at configure time (NODE_EXECUTABLE above); it rasterizes
+    # assets/ui-widgets/*.svg on every platform including Windows/CLion, no
+    # offline pre-generation step needed. If node isn't found, this step is
+    # omitted and widgets fall back to placeholder art (see
+    # SettingsScreen::LoadOrPlaceholder) -- non-fatal either way, since
+    # svg-to-webp.mjs itself is also non-fatal on any internal failure.
+    # Under --web (EMSCRIPTEN) stage-assets.py additionally transcodes
+    # sfx/*.wav.pcm to Ogg/Vorbis (+ sfx-loops.json) and subsets
+    # fontstruetype/gangofchinese.ttf, for the Web Audio backend
+    # (SoundManagerWebAudio.cpp) and the wasm preload size budget; the host
+    # build ships raw .wav.pcm (SDL mixer) and the full TTF, unchanged.
+    #
+    # Host: FN_DATA_DIR_PATH (set above) points straight at FN_STAGING_DATA_DIR,
+    # so GameSDL.cpp's existing SetDataDir call transparently reads staged
+    # (WebP) textures -- no runtime code changes. Web: FN_STAGING_DATA_DIR is
+    # additionally --preload-file'd into MEMFS at /FruitNinjaBada/Data (below,
+    # unchanged mechanism from before, new source dir). add_dependencies below
+    # guarantees this runs before fruit-ninja links on both branches (build
+    # time, not configure time -- FruitNinjaBada/Data need not exist yet when
+    # CMake configures, only when this target actually runs).
+    set(FN_ASSET_STAGING_COMMANDS
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
+                ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
+                $<$<BOOL:${EMSCRIPTEN}>:--web>
+    )
+    if(NODE_EXECUTABLE)
+        list(PREPEND FN_ASSET_STAGING_COMMANDS
+            COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
+        )
+    else()
+        message(STATUS "node not found -- widget SVGs won't be rasterized; using placeholder art")
+    endif()
+    # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
+    # (FN_DATA_DIR_PATH points there), so staging must run on ANY build -- not just
+    # when the fruit-ninja exe target is built. Idempotent (mtime), so it's a no-op
+    # once staged.
+    add_custom_target(fn_asset_staging ALL
+        ${FN_ASSET_STAGING_COMMANDS}
+        COMMENT "Staging assets (svg->webp via node/sharp; textures->WebP; web:+ogg+font)"
         VERBATIM
     )
 if (EMSCRIPTEN)
-    # Port specific: build-time web asset staging. The web build uses the Web
-    # Audio API backend (SoundManagerWebAudio.cpp) rather than the SDL software
-    # mixer, so the browser decodes Ogg/Vorbis and mixes on its own audio
-    # thread. stage-web-assets.py mirrors FruitNinjaBada/Data into
-    # build/web-staging/Data, TRANSCODING each sfx/*.wav.pcm to
-    # sfx/<name>.ogg (source .wav.pcm NOT copied -- that would re-bloat .data),
-    # emitting sfx/sfx-loops.json (loop points), re-encoding Tex1 textures as
-    # WebP, and SUBSETTING fontstruetype/gangofchinese.ttf (~5 MB shared
-    # non-Arabic-language TTF) down to only the glyphs the stringtables use.
-    # Everything else is copied through unchanged. The real FruitNinjaBada/Data
-    # files are never modified; the staged copy is a build/ artifact
-    # (gitignored). add_dependencies below guarantees this runs before
-    # fruit-ninja links (which is when --preload-file actually reads the
-    # staged directory's contents).
-    set(FN_WEB_STAGING_DATA_DIR "${CMAKE_SOURCE_DIR}/build/web-staging/Data")
-    add_custom_target(fn_web_asset_staging
-        COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/stage-web-assets.py ${CMAKE_SOURCE_DIR}
-        COMMENT "Staging web audio assets (sfx transcoded to Ogg/Vorbis + loop JSON, for the Web Audio backend)"
-        VERBATIM
-    )
-
     # Port specific: Emscripten entry point uses emscripten_set_main_loop_arg
     # instead of the blocking Game::run() loop.
     add_executable(fruit-ninja src/mainEmscripten.cpp)
-    add_dependencies(fruit-ninja fn_web_asset_staging fn_widget_textures)
+    add_dependencies(fruit-ninja fn_asset_staging)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
@@ -528,11 +566,12 @@ if (EMSCRIPTEN)
         # writable save files so they are NOT packed into the read-only bundle.
         # Saves are routed to /save (IDBFS) at runtime; see mainEmscripten.cpp.
         # Source is the STAGED data dir (sfx transcoded to Ogg/Vorbis + a
-        # sfx-loops.json loop map at build time, everything else identical to
-        # FruitNinjaBada/Data) -- see fn_web_asset_staging above. Virtual mount
-        # path is unchanged, so runtime code (TextureManager::GetDataDir() etc.)
-        # needs no changes; the Web Audio backend reads sfx/<name>.ogg.
-        "SHELL:--preload-file ${FN_WEB_STAGING_DATA_DIR}@/FruitNinjaBada/Data"
+        # sfx-loops.json loop map, textures re-encoded to WebP, at build time,
+        # everything else identical to FruitNinjaBada/Data) -- see
+        # fn_asset_staging above. Virtual mount path is unchanged, so runtime
+        # code (TextureManager::GetDataDir() etc.) needs no changes; the Web
+        # Audio backend reads sfx/<name>.ogg.
+        "SHELL:--preload-file ${FN_STAGING_DATA_DIR}@/FruitNinjaBada/Data"
         "SHELL:--exclude-file *FruitySave.xml"
         "SHELL:--exclude-file *ItemSave.xml"
         # Port specific: link idbfs.js so FS.mount(IDBFS) is available.
@@ -594,7 +633,7 @@ if (EMSCRIPTEN)
     # (fruit-ninja.{html,js,wasm,data}), which are internally consistent.
     if (NOT FN_WEB_DEBUG)
         add_custom_command(TARGET fruit-ninja POST_BUILD
-            COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/web/web-hash-assets.py
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/web/web-hash-assets.py
                             ${CMAKE_CURRENT_BINARY_DIR}
             COMMENT "Content-hashing web output files (cache busting)"
             VERBATIM
@@ -603,7 +642,7 @@ if (EMSCRIPTEN)
 else()
     # Native desktop/webOS entry point.
     add_executable(fruit-ninja src/mainSDL.cpp)
-    add_dependencies(fruit-ninja fn_widget_textures)
+    add_dependencies(fruit-ninja fn_asset_staging)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
     # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds

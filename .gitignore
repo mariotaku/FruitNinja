@@ -76,3 +76,8 @@ __pycache__/
 
 # CTest scratch output
 Testing/
+
+# Build-time generated widget art (tools/assets/svg-to-webp.mjs) + node deps
+assets/ui-widgets/generated/
+tools/assets/node_modules/
+tools/assets/package-lock.json

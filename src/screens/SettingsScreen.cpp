@@ -36,10 +36,11 @@ using namespace fn_widget_art;
 
 // ---------------------------------------------------------------------------
 // Real widget art (assets/ui-widgets/*.svg -> FruitNinjaBada/Data/textures/*.tex,
-// see tools/assets/svg_to_tex.py) is preferred when it loads; procedurally-drawn
-// placeholder art (WidgetPlaceholderArt.h) is the fallback for hosts with no SVG
-// rasterizer installed (LoadLocalisedTexture returns a null SmartPtr on missing
-// file). Port specific: no binary counterpart, this screen has none.
+// rasterized at build time by tools/assets/svg-to-webp.mjs, see fn_asset_staging
+// in CMakeLists.txt) is preferred when it loads; procedurally-drawn placeholder
+// art (WidgetPlaceholderArt.h) is the fallback for hosts with no node/sharp
+// available (LoadLocalisedTexture returns a null SmartPtr on missing file).
+// Port specific: no binary counterpart, this screen has none.
 // ---------------------------------------------------------------------------
 static Mortar::SmartPtr<Mortar::Texture> LoadOrPlaceholder(
     const char* name, const Mortar::SmartPtr<Mortar::Texture>& placeholder)
@@ -62,7 +63,7 @@ static Mortar::SmartPtr<Mortar::Texture> LoadOrPlaceholder(
 // and Cyrillic. gangofchinese.ttf has no Arabic glyphs, so entry 20 falls
 // back to the English word "Arabic" rather than Arabic script.
 // Port-improvement screen, no fidelity constraint on display casing/script.
-// Keep in sync with NATIVE_LANG_NAMES in tools/web/stage-web-assets.py
+// Keep in sync with NATIVE_LANG_NAMES in tools/assets/stage-assets.py
 // (web font-subset charset).
 // ---------------------------------------------------------------------------
 static const char* const kLanguageNames[] = {

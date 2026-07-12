@@ -2,7 +2,7 @@
 """tools/lib/tex_decoder.py -- Shared Tex1 (.tex) decode core.
 
 Single source of truth for parsing and unpacking Fruit Ninja's Tex1 texture
-format, used by both tools/web/stage-web-assets.py (web build staging) and
+format, used by both tools/assets/stage-assets.py (host+web build staging) and
 tools/assets/convert_tex.py (gallery generation). Pure stdlib -- no PIL, no
 ffmpeg/subprocess.
 
