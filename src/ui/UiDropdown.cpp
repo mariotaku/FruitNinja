@@ -35,7 +35,7 @@ const float UiDropdown::DRAG_CANCEL_DIST  = 5.0f;
 const float UiDropdown::SPRING_BACK_COEF  = 0.75f;
 const float UiDropdown::SPRING_FWD_COEF   = 0.25f;
 const float UiDropdown::CLICK_VEL_GATE    = 0.5f;
-const float UiDropdown::kFadeHeightFrac   = 1.0f / 3.0f;
+const float UiDropdown::kFadeHeight       = 10.0f;
 
 UiDropdown::UiDropdown(const Vec3& inPos, std::vector<std::string>& items, int selected,
                        uint8_t visibleRows, float barW, float barH)
@@ -258,31 +258,42 @@ void UiDropdown::Update(float dt) {
 }
 
 // Top/bottom rounded-corner fade band for the open row list. See header doc.
-// m_FadeTex (list_fade.tex) is NineSlice-drawn at height (kFadeHeightFrac *
-// m_RowH), X-inset by kBoxDestBorderX from each side -- the same NineSlice
-// border DrawBox's own panel box reserves for its rounded corner/rim cells
-// (box.svg's rounded groove corners, rx=3.5 texels at inset 4, live inside
-// that border band) -- so the fade band's own rounded top corners (list_fade.
-// svg shares box.svg's exact 64x40/rx=3.5 canvas, hence the same
-// kBoxSrcBorderX/Y src-border constants) line up with the panel's corners
-// and never draw over its bevel/rim. Drawn AFTER the row loop so a row
+// m_FadeTex (list_fade.tex) is NineSlice-drawn at a fixed kFadeHeight
+// (10.0f) world-unit height, spanning the SAME X extent as the row
+// highlight boxes (m_BarW - 2*pad, pad=4.0f -- see the row-highlight
+// DrawBox() calls below) and flush against the panel's inner top/bottom
+// viewport edges (centred so the band's own outer edge lands exactly on
+// viewportTop/viewportBottom, not inset further inward) -- so the fade
+// visually continues the row list right up to the rounded corner, matching
+// what a real edge-vignette should look like. list_fade.svg shares
+// box.svg's exact 64x40/rx=3.5 canvas (hence the same kBoxSrcBorderX/Y
+// src-border constants) so the band's own rounded top corners line up with
+// the panel's rounded groove corners. Drawn AFTER the row loop so a row
 // scrolling past the viewport edge dissolves into the fade rather than
 // being hard-cut. No-ops if m_FadeTex was never injected (SetFadeTexture).
 //
-// Top band drawn upright; bottom band reuses the SAME texture flipV=true
-// (NineSlice::Draw) so its rounded corners appear at the bottom instead of
-// authoring a second mirrored SVG -- same reuse convention as arrow.svg
-// (VerticalScroller's up arrow, V-flipped for the down arrow).
+// Top band drawn upright (opaque + rounded corners at the panel's outer TOP
+// edge, fading down into the list). Bottom band reuses the SAME texture
+// flipV=true (NineSlice::Draw) -- opaque + rounded corners at the panel's
+// outer BOTTOM edge, fading UP into the list -- rather than authoring a
+// second mirrored SVG, same reuse convention as arrow.svg (VerticalScroller's
+// up arrow, V-flipped for the down arrow). flipV mirrors which texture rows
+// each dest row samples (see NineSlice::Draw), not the dest geometry: the
+// list_fade.svg gradient is opaque+rounded at v=0 (texture top) and
+// transparent at v=1 (texture bottom); flipV=true makes the dest-bottom
+// cells sample v=0 (opaque+rounded) and the dest-top cells sample v=1
+// (transparent), which is exactly the mirrored placement this band needs.
 void UiDropdown::DrawFadeEdges(float viewportTop, float viewportBottom) {
     if (!m_FadeTex.IsValid()) return;
 
-    float fadeH = m_RowH * kFadeHeightFrac;
+    float fadeH = kFadeHeight;
     float halfSpan = (viewportTop - viewportBottom) * 0.5f;
     if (fadeH > halfSpan) fadeH = halfSpan;   // don't let the two fades overlap-invert on a tiny panel
     if (fadeH <= 0.0f) return;
 
-    float fadeW = m_BarW - 2.0f * kBoxDestBorderX;
-    if (fadeW <= 0.0f) return;   // degenerate: bar narrower than 2x the border inset
+    const float pad = 4.0f;   // matches Draw()'s row-highlight-box X inset
+    float fadeW = m_BarW - 2.0f * pad;
+    if (fadeW <= 0.0f) return;   // degenerate: bar narrower than 2x pad
 
     float topCy = viewportTop - fadeH * 0.5f;
     float botCy = viewportBottom + fadeH * 0.5f;
@@ -344,16 +355,12 @@ void UiDropdown::Draw(float* hudScale) {
     // slot, set in Update) can be compared against the absolute item index.
     int firstVisibleIdx = (int)std::floor(m_ScrollOffset / m_RowH + 0.0001f);
 
-    // Row content clip rect: the panel's inner viewport, INSET by
-    // kBoxDestBorderX on X (past the box's own reserved corner/rim border --
-    // see UiWidget::kBoxDestBorderX/DrawBox doc) so a straddling row's
-    // highlight box / text never overlaps the dark inner border of the
-    // panel, only the flat interior. Y already sits inside the border via
-    // `pad` (viewportTop/Bottom = panelTopY -+ pad, the panel-box-to-row-
-    // viewport gap set up above). Used both for the GL scissor (highlight
-    // boxes) and Font::DrawString's clipRect (per-glyph text clamp) below --
-    // same rect, two clip mechanisms, so text and highlight box crop
-    // identically.
+    // Text clip rect (Font::DrawString's clipRect, per-glyph): the panel's
+    // inner viewport, INSET by kBoxDestBorderX on X (past the box's own
+    // reserved corner/rim border -- see UiWidget::kBoxDestBorderX/DrawBox
+    // doc) so straddling row TEXT never overlaps the dark inner border of
+    // the panel. Y sits inside the border via `pad` (viewportTop/Bottom =
+    // panelTopY -+ pad, the panel-box-to-row-viewport gap set up above).
     float clipLeft   = pos.x - m_BarW * 0.5f + kBoxDestBorderX;
     float clipRight  = pos.x + m_BarW * 0.5f - kBoxDestBorderX;
     float clipTop    = viewportTop;
@@ -379,6 +386,13 @@ void UiDropdown::Draw(float* hudScale) {
     // left=-240,right=240) -> pixel = (world+halfExtent)/fullExtent *
     // viewportPx + viewportOrigin; glScissor's origin is bottom-left (GL
     // convention) while world Y is top-positive, hence the bottom-edge flip.
+    //
+    // X bounds are the FULL ortho width (-240..240), NOT clipLeft/clipRight
+    // -- the row highlight box must only ever be clipped VERTICALLY (top/
+    // bottom viewport edges); an X-inset scissor here would cut the
+    // selected/hover box's left/right sides, which is wrong (the box's own
+    // width, m_BarW - 2*pad, already sits inside the panel and needs no
+    // horizontal clip).
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     // Host/SDL+GLES2 only: glGetIntegerv/GL_VIEWPORT aren't in the
     // asm-verify cross-build's GL shim or the unit-test GL stub.
@@ -386,13 +400,11 @@ void UiDropdown::Draw(float* hudScale) {
     glGetIntegerv(GL_VIEWPORT, vp);
     const GLint vpX = vp[0], vpY = vp[1];
     const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
-    const float orthoW = 480.0f;
     const float orthoH = 320.0f;
-    GLint sx = (GLint)((clipLeft + orthoW * 0.5f) / orthoW * (float)vpW) + vpX;
+    GLint sx = vpX;
     GLint sy = (GLint)((clipBottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
-    GLint sw = (GLint)((clipRight - clipLeft) / orthoW * (float)vpW);
+    GLint sw = vpW;
     GLint sh = (GLint)((clipTop - clipBottom) / orthoH * (float)vpH);
-    if (sw < 0) sw = 0;
     if (sh < 0) sh = 0;
     glEnable(GL_SCISSOR_TEST);
     glScissor(sx, sy, sw, sh);

@@ -270,7 +270,12 @@ void SettingsScreen::Init() {
     m_LangDrop->SetBoxTexture(m_TexBox);
     m_LangDrop->SetCaretTexture(m_TexCaret);
     m_LangDrop->SetFadeTexture(m_TexFade);
-    m_LangDrop->SetTextColour(SettingsTextColour());
+    // Port specific: white to match the row text colour (m_RowTextColour,
+    // set via SetRowColours below) rather than SettingsTextColour()'s dark
+    // brown -- the collapsed-bar value and the open-list rows read as one
+    // consistent text treatment instead of the bar looking mismatched/amber
+    // against the dark wood box.
+    m_LangDrop->SetTextColour(Colour::White);
     m_LangDrop->SetTextScale(kComboTextScale);
     if (m_LangFont.IsValid()) {
         m_LangDrop->SetFont(m_LangFont.Get());
