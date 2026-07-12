@@ -30,9 +30,13 @@
 //
 // Touch model: collapsed, this behaves like any other UiWidget (PollTouch);
 // tap-release-inside opens the panel. Open, the widget hand-rolls its own
-// latch over a WIDER region (bar + panel union) using the same
-// TouchInRegion/IsTouchDown primitives PollTouch uses internally, since the
-// base's single m_HalfW/m_HalfH hit-rect can't express two stacked rects.
+// latch using the same TouchInRegion/IsTouchDown primitives PollTouch uses
+// internally, since the base's single m_HalfW/m_HalfH hit-rect can't express
+// two stacked rects. The open-state acquire scan is MODAL -- it latches a
+// press-edge touch ANYWHERE on screen (full-screen scrim), not just over the
+// bar+panel, so an outside tap can't fall through to the blade or a sibling
+// widget on the same frame it lands; release then closes the panel (without
+// selecting) unless the captured press was inside the row list.
 //
 // OPEN-list scrolling mirrors ScrollingMenu's (src/hud/ScrollingMenu.cpp)
 // kinetic drag/fling/spring-back model, re-scoped to a single float content

@@ -803,7 +803,8 @@ float Font::MeasureString(const char* str) const {
 static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
                            Mortar::Utf8StringIterator iter,
                            const Vec3& pos, const Colour& colour,
-                           int alignment)
+                           int alignment,
+                           const Mortar::MortarRectangleT<float>* clipRect)
 {
     FontInterface* atlas = ttf->GetAtlas();
     if (!atlas) return;
@@ -918,27 +919,71 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
             // raw glyph-space coords by pixelSize*(m_CacheSize/72) (see the
             // invPS comment above -- GetGlyph metrics render at m_CacheSize
             // dpi, not 1px-per-pixelSize).
-            const float nx0 = x0 * invPS, nx1 = x1 * invPS;
-            const float ny0 = y0 * invPS, ny1 = y1 * invPS;
+            float nx0 = x0 * invPS, nx1 = x1 * invPS;
+            float ny0 = y0 * invPS, ny1 = y1 * invPS;   // ny0=top, ny1=bottom (+Y-up)
 
-            const float u0 = g->u0, v0 = g->v0;
-            const float u1 = g->u1, v1 = g->v1;
+            float u0 = g->u0, v0 = g->v0;
+            float u1 = g->u1, v1 = g->v1;
             const float kZ = 0.0f;
 
-            QUADCUSTOMVERTEX* v = &verts[vertCount * 6];
-            v[0] = { nx0, ny1, kZ, 0,0,1, packedColour, u0, v1 }; // LB
-            v[1] = { nx0, ny0, kZ, 0,0,1, packedColour, u0, v0 }; // LT
-            v[2] = { nx1, ny1, kZ, 0,0,1, packedColour, u1, v1 }; // RB
-            v[3] = { nx1, ny0, kZ, 0,0,1, packedColour, u1, v0 }; // RT
-            v[4] = v[3]; // degenerate
-            v[5] = v[3]; // degenerate
-
-            // Inter-glyph connector (matches .fnt path).
-            if (vertCount > 0) {
-                v[-1] = v[0];
+            // Port specific: per-glyph clip clamp + UV lerp, in this local
+            // (pre-textM) space -- mirrors the .fnt path's clip block
+            // (Font.cpp ~1317-1347), which the TTF path bypassed entirely
+            // before this fix (DrawStringTTF took no clipRect at all, so
+            // UiDropdown's row text -- drawn via a TTF font, see m_LangFont
+            // -- never clamped to the panel viewport regardless of the
+            // caller passing a rect). clipRect is caller-transformed into
+            // this same local space by Font::DrawString before the TTF
+            // dispatch (see the clipRect->Scale(1/scale) entry transform).
+            bool clipSkip = false;
+            if (clipRect != nullptr) {
+                if (nx1 < clipRect->left || nx0 > clipRect->right ||
+                    ny0 < clipRect->bottom || ny1 > clipRect->top) {
+                    clipSkip = true;
+                } else {
+                    if (nx0 < clipRect->left) {
+                        float fullW = nx1 - nx0;
+                        nx0 = clipRect->left;
+                        float ratio = fullW != 0.0f ? (nx1 - nx0) / fullW : 0.0f;
+                        u0 = u1 - (u1 - u0) * ratio;
+                    }
+                    if (nx1 > clipRect->right) {
+                        float fullW = nx1 - nx0;
+                        nx1 = clipRect->right;
+                        float ratio = fullW != 0.0f ? (nx1 - nx0) / fullW : 0.0f;
+                        u1 = u0 + (u1 - u0) * ratio;
+                    }
+                    if (ny0 > clipRect->top) {
+                        float fullH = ny0 - ny1;
+                        ny0 = clipRect->top;
+                        float ratio = fullH != 0.0f ? (ny0 - ny1) / fullH : 0.0f;
+                        v0 = v1 - (v1 - v0) * ratio;
+                    }
+                    if (ny1 < clipRect->bottom) {
+                        float fullH = ny0 - ny1;
+                        ny1 = clipRect->bottom;
+                        float ratio = fullH != 0.0f ? (ny0 - ny1) / fullH : 0.0f;
+                        v1 = v0 + (v1 - v0) * ratio;
+                    }
+                }
             }
-            pageTexIDs[vertCount] = g->pageTextureID;
-            vertCount++;
+
+            if (!clipSkip) {
+                QUADCUSTOMVERTEX* v = &verts[vertCount * 6];
+                v[0] = { nx0, ny1, kZ, 0,0,1, packedColour, u0, v1 }; // LB
+                v[1] = { nx0, ny0, kZ, 0,0,1, packedColour, u0, v0 }; // LT
+                v[2] = { nx1, ny1, kZ, 0,0,1, packedColour, u1, v1 }; // RB
+                v[3] = { nx1, ny0, kZ, 0,0,1, packedColour, u1, v0 }; // RT
+                v[4] = v[3]; // degenerate
+                v[5] = v[3]; // degenerate
+
+                // Inter-glyph connector (matches .fnt path).
+                if (vertCount > 0) {
+                    v[-1] = v[0];
+                }
+                pageTexIDs[vertCount] = g->pageTextureID;
+                vertCount++;
+            }
         }
 
         cursorX += (float)g->advanceX;
@@ -1045,7 +1090,12 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     {
         FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
         if (ttf) {
-            DrawStringTTF(ttf, scale, iter, pos, colour, alignment);
+            // clipRect (if non-NULL) is already in this function's local
+            // (pre-scale/translate) space via the entry transform above --
+            // DrawStringTTF's nx0/ny0/nx1/ny1 quad coords are built in that
+            // SAME normalized local space (pre textM transform), so the rect
+            // can be applied directly, no further conversion needed.
+            DrawStringTTF(ttf, scale, iter, pos, colour, alignment, clipRect);
             if (clipRect != nullptr) {
                 clipRect->Scale(scale);
                 clipRect->left   += pos.x;
