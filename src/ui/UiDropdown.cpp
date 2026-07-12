@@ -7,6 +7,10 @@
 
 #include "engine/input/Touch.h"
 #include "game/GameWork.h"
+#include "hud/WidgetPlaceholderArt.h"
+#include "render/MatrixManager.h"
+#include "render/QUADCUSTOMVERTEX.h"
+#include "asset/Mesh.h"
 
 #include <cmath>
 
@@ -32,6 +36,7 @@ const float UiDropdown::DRAG_CANCEL_DIST  = 5.0f;
 const float UiDropdown::SPRING_BACK_COEF  = 0.75f;
 const float UiDropdown::SPRING_FWD_COEF   = 0.25f;
 const float UiDropdown::CLICK_VEL_GATE    = 0.5f;
+const float UiDropdown::kFadeHeightFrac   = 1.0f / 3.0f;
 
 UiDropdown::UiDropdown(const Vec3& inPos, std::vector<std::string>& items, int selected,
                        uint8_t visibleRows, float barW, float barH)
@@ -154,24 +159,36 @@ void UiDropdown::Update(float dt) {
         }
     } else if (IsTouchDown(m_TouchId) == 0) {
         // --- Release ---
-        bool insidePanelRows =
-            m_TouchCapture.y <= panelTopY - pad &&
-            m_TouchCapture.y >= panelTopY - pad - panelRows * m_RowH &&
-            m_TouchCapture.x >= openLeft && m_TouchCapture.x <= openRight;
+        // Row-hit test: the finger-y must land INSIDE the actual visible row
+        // viewport (below the bar, above the panel's bottom edge) -- NOT a
+        // clamp-into-range of the row index. viewportTop/viewportBottom
+        // mirror Draw()'s own viewport (panelTopY-pad down to
+        // panelTopY-pad-panelRows*m_RowH), so this is the same visible band
+        // the user actually sees rows drawn in. rawIdx is the absolute item
+        // index (curYBase already folds in m_ScrollOffset, same formula
+        // Draw() uses for each row's centre: curYBase - rowH*(idx+0.5)) --
+        // it must ALSO be a valid item (0 <= rawIdx < itemCount); a bar-band
+        // press fails the viewport-y test, a below-last-row press (partial
+        // final row) fails the item-count test.
+        float viewportTop = (panelTopY - pad);
+        float viewportBottom = viewportTop - panelRows * m_RowH;
+        int rawIdx = (int)std::floor((curYBase - m_TouchCapture.y) / m_RowH);
+        bool insideRowList = m_TouchCapture.y <= viewportTop && m_TouchCapture.y >= viewportBottom &&
+                              rawIdx >= 0 && rawIdx < (int)m_pItems->size() &&
+                              m_TouchCapture.x >= openLeft && m_TouchCapture.x <= openRight;
 
         float absVel = m_PendingVel < 0.0f ? -m_PendingVel : m_PendingVel;
         bool isTap = !m_bDragging && m_DragDist < DRAG_CANCEL_DIST && absVel < CLICK_VEL_GATE;
 
-        if (isTap && insidePanelRows) {
-            int idx = ClampInt((int)std::floor((curYBase - m_TouchCapture.y) / m_RowH),
-                                0, (int)m_pItems->size() - 1);
-            m_Selected = idx;
+        if (isTap && insideRowList) {
+            m_Selected = rawIdx;
             m_Open = false;
             if (m_OnChange) {
                 m_OnChange();
             }
-        } else if (!insidePanelRows && !m_bDragging) {
-            // Released outside the panel without ever dragging -> close.
+        } else if (!insideRowList && !m_bDragging) {
+            // Released outside the row list (bar band or off-panel) without
+            // ever dragging -> close, never select.
             m_Open = false;
         }
         // A drag/fling release (m_bDragging or DragDist beyond the cancel
@@ -202,8 +219,22 @@ void UiDropdown::Update(float dt) {
 
         if (!m_bDragging) {
             // Stationary finger: drive hover highlight from the live row.
-            int hoverRow = (int)std::floor((curYBase - currentY) / m_RowH);
-            m_HoverRow = ClampInt(hoverRow, 0, panelRows - 1);
+            // absIdx (curYBase - currentY)/m_RowH is the ABSOLUTE item index
+            // (same formula Draw() uses for row centres); m_HoverRow is
+            // consumed viewport-RELATIVE (Draw(): idx == firstVisibleIdx +
+            // m_HoverRow), so subtract firstVisibleIdx before storing. Reject
+            // (-1, no highlight) rather than clamp when the finger sits in
+            // the BAR band or below the last visible row -- a clamp-into-
+            // range here is what let a bar-band hold visually highlight
+            // row 0 (see the Release-branch comment above for the matching
+            // fix); comparing the RAW absolute index against [0,panelRows)
+            // without the firstVisibleIdx offset (a prior version of this
+            // fix) instead over-rejected every genuinely visible row once
+            // scrolled.
+            int firstVisibleIdx = (int)std::floor(m_ScrollOffset / m_RowH + 0.0001f);
+            int absIdx = (int)std::floor((curYBase - currentY) / m_RowH);
+            int hoverRow = absIdx - firstVisibleIdx;
+            m_HoverRow = (hoverRow >= 0 && hoverRow < panelRows) ? hoverRow : -1;
         } else {
             // A drag is scrolling, not hovering.
             m_HoverRow = -1;
@@ -225,6 +256,87 @@ void UiDropdown::Update(float dt) {
             m_ScrollOffset += (maxScroll - m_ScrollOffset) * SPRING_FWD_COEF;
         }
     }
+}
+
+// Top/bottom soft-gradient overlays for the open row list. See header doc.
+// Fades to kGrooveColour (the box.tex row/panel INTERIOR fill colour), full
+// alpha at the panel's outer edge, easing to zero alpha (kFadeHeightFrac *
+// m_RowH) world units inward -- two 4-vertex TriStrip quads (per-vertex
+// alpha does the fade), bound to a 1x1 solid-white texture (lazily created)
+// so MODULATE passes the vertex colour through unchanged. Drawn AFTER the
+// row loop so a row scrolling past the edge dissolves into the fade rather
+// than being hard-cut by the row-culling test in Draw()'s main loop.
+//
+// DIFFERS-trivial (colour source): NOT m_Tint (that's the box.tex MODULATE
+// tint, White -- fading white->transparent washes the panel edges pale
+// instead of dissolving into the dark wood interior). kGrooveColour is
+// exactly assets/ui-widgets/box.svg's #groove gradient's middle stop
+// (#2a1a0d, RGB 42,26,13) -- the inner carved-wood groove is what box.tex's
+// row/panel background actually renders as; the groove is itself a 3-stop
+// vertical gradient (#1a1008 top / #2a1a0d mid / #3a2612 bottom), so the mid
+// stop is the representative single "interior fill" tone.
+//
+// X-span is inset by kBoxDestBorderX from each side -- the same NineSlice
+// border DrawBox's own panel box reserves for its rounded corner/rim cells
+// (box.svg's rounded groove corners, rx=3.5 texels at inset 4, live inside
+// that border band) -- so this flat quad's square corners sit inside the
+// box's already-flat inner groove interior (same region the row highlight
+// DrawBox() quads already render into) rather than poking past the rounded
+// rim.
+void UiDropdown::DrawFadeEdges(float viewportTop, float viewportBottom) {
+    if (!m_FadeTex.IsValid()) {
+        m_FadeTex = fn_widget_art::MakeSolidTex(255, 255, 255, 255, 1, 1);
+    }
+    if (!m_FadeTex.IsValid()) return;
+
+    float fadeH = m_RowH * kFadeHeightFrac;
+    float halfSpan = (viewportTop - viewportBottom) * 0.5f;
+    if (fadeH > halfSpan) fadeH = halfSpan;   // don't let the two fades overlap-invert on a tiny panel
+    if (fadeH <= 0.0f) return;
+
+    float x0 = pos.x - m_BarW * 0.5f + kBoxDestBorderX;
+    float x1 = pos.x + m_BarW * 0.5f - kBoxDestBorderX;
+    if (x0 > x1) { x0 = x1 = pos.x; }   // degenerate: bar narrower than 2x the border inset
+    static const Colour kGrooveColour(0x2a, 0x1a, 0x0d, 0xFF);  // box.svg #groove middle stop
+    const uint32_t opaque = kGrooveColour.PlatformColour();
+    const uint32_t clear  = Colour(kGrooveColour.r, kGrooveColour.g, kGrooveColour.b, 0).PlatformColour();
+    const float kZ = 0.0f;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    m_FadeTex->Set();
+    TexEnvModulate();  // Set() may leave REPLACE from a prior blade draw; force MODULATE.
+
+    // Top edge: opaque at viewportTop, transparent at viewportTop - fadeH.
+    {
+        const float top = viewportTop;
+        const float bot = viewportTop - fadeH;
+        QUADCUSTOMVERTEX v[4] = {
+            { x0, bot, kZ, 0,0,1, clear,  0.0f, 1.0f },  // LB (transparent, inward)
+            { x0, top, kZ, 0,0,1, opaque, 0.0f, 0.0f },  // LT (opaque, at edge)
+            { x1, bot, kZ, 0,0,1, clear,  1.0f, 1.0f },  // RB
+            { x1, top, kZ, 0,0,1, opaque, 1.0f, 0.0f },  // RT
+        };
+        Mortar::Mesh::DrawTriStrip(v, 4, true, NULL);
+    }
+
+    // Bottom edge: opaque at viewportBottom, transparent at viewportBottom + fadeH.
+    {
+        const float top = viewportBottom + fadeH;
+        const float bot = viewportBottom;
+        QUADCUSTOMVERTEX v[4] = {
+            { x0, bot, kZ, 0,0,1, opaque, 0.0f, 1.0f },  // LB (opaque, at edge)
+            { x0, top, kZ, 0,0,1, clear,  0.0f, 0.0f },  // LT (transparent, inward)
+            { x1, bot, kZ, 0,0,1, opaque, 1.0f, 1.0f },  // RB
+            { x1, top, kZ, 0,0,1, clear,  1.0f, 0.0f },  // RT
+        };
+        Mortar::Mesh::DrawTriStrip(v, 4, true, NULL);
+    }
+
+    m_FadeTex->UnSet();
+    TexEnvModulate();  // restore default so subsequent draws are unaffected
 }
 
 void UiDropdown::Draw(float* hudScale) {
@@ -316,4 +428,7 @@ void UiDropdown::Draw(float* hudScale) {
                   pos.x - m_BarW * 0.5f + textPad, rowCy + lineH * 0.5f,
                   m_TextScale, m_RowTextColour, &textClip);
     }
+
+    DrawFadeEdges(viewportTop, viewportBottom);
 }
+

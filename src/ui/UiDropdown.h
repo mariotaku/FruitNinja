@@ -66,6 +66,11 @@
 //     m_DragDist < DRAG_CANCEL_DIST (5.0) AND |m_PendingVel| < CLICK_VEL_GATE
 //     (0.5). A drag or fling release never selects -- it just leaves the
 //     panel open and coasting/springing.
+//   - The row index is the UNCLAMPED floor((curYBase-fingerY)/rowH), REJECTED
+//     (not selected, panel just closes) if it falls outside [0, itemCount) --
+//     e.g. a press captured in the BAR band above the panel. Do not clamp
+//     this index into range; a clamp aliases an above-panel press into row 0
+//     (same rule for the live hover highlight during Held).
 //
 
 #include "UiWidget.h"
@@ -94,7 +99,7 @@ public:
     void SetRowHeight(float h) { m_RowH = h; }
     void SetTextScale(float s) { m_TextScale = s; }
 
-    void Release() override { m_CaretTex.SetNull(); UiWidget::Release(); }
+    void Release() override { m_CaretTex.SetNull(); m_FadeTex.SetNull(); UiWidget::Release(); }
 
     // Test-only: force-open the panel without a touch sequence, for render tests.
     void SetOpenForTest(bool open) {
@@ -121,6 +126,19 @@ private:
     // on demand rather than cached to avoid the old ListBox stale-index
     // class of bug.
     float ComputeMaxScroll() const;
+
+    // Top/bottom soft-gradient overlays for the open row list: the box.tex
+    // row/panel INTERIOR fill colour (dark wood groove, NOT m_Tint -- see
+    // .cpp), opaque at the panel's outer edge fading to transparent
+    // (kFadeHeightFrac * m_RowH) world units inward, drawn AFTER the row
+    // loop so a row scrolling past the viewport edge dissolves into it
+    // rather than being hard-cut. Inset kBoxDestBorderX in from each side
+    // (the same NineSlice border DrawBox's panel box itself reserves) so
+    // the fade sits within the box's inner content region, not over its
+    // bevel/rim. Port-only (no NineSlice/Font clip primitive supports a
+    // soft edge -- this is a separate 2-quad overlay, per-vertex alpha).
+    void DrawFadeEdges(float viewportTop, float viewportBottom);
+    static const float kFadeHeightFrac;   // 1/3 -- fraction of m_RowH each fade band spans
 
     // Drag/fling/spring-back constants -- ported verbatim from ScrollingMenu
     // (src/hud/ScrollingMenu.cpp); see that file's header comment for the
@@ -151,6 +169,11 @@ private:
     Colour m_SelRowColour, m_HoverRowColour, m_RowTextColour;
     Mortar::SmartPtr<Mortar::Texture> m_CaretTex;
     float m_TextScale;   // default 18.0f, matching SettingsScreen.cpp DrawSettingsLabel's convention
+
+    // Lazily-created 1x1 solid-white texture for DrawFadeEdges' gradient
+    // quads (per-vertex alpha does the fade; the texture just needs to be
+    // opaque white so MODULATE passes vertex colour through unchanged).
+    Mortar::SmartPtr<Mortar::Texture> m_FadeTex;
 };
 
 #endif // FN_UI_DROPDOWN_H
