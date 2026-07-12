@@ -246,6 +246,7 @@ void SettingsScreen::Init() {
     m_TexCaret = Mortar::TextureManager::LoadLocalisedTexture("caret.tex");
     m_TexKnob  = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
     m_TexFade  = Mortar::TextureManager::LoadLocalisedTexture("list_fade.tex");
+    m_TexItem  = Mortar::TextureManager::LoadLocalisedTexture("list_item.tex");
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture. No real
     // widget counterpart.
@@ -270,6 +271,7 @@ void SettingsScreen::Init() {
     m_LangDrop->SetBoxTexture(m_TexBox);
     m_LangDrop->SetCaretTexture(m_TexCaret);
     m_LangDrop->SetFadeTexture(m_TexFade);
+    m_LangDrop->SetItemTexture(m_TexItem);
     // Port specific: white to match the row text colour (m_RowTextColour,
     // set via SetRowColours below) rather than SettingsTextColour()'s dark
     // brown -- the collapsed-bar value and the open-list rows read as one
@@ -382,6 +384,7 @@ void SettingsScreen::Release() {
     m_TexCaret.SetNull();
     m_TexKnob.SetNull();
     m_TexFade.SetNull();
+    m_TexItem.SetNull();
     m_Plate.SetNull();
     m_Backdrop.SetNull();
     m_LangFont.SetNull();

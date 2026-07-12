@@ -1,38 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="40" viewBox="0 0 64 40">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="10" viewBox="0 0 64 10">
   <!-- list_fade.tex - UiDropdown's open-list top/bottom edge fade (src/ui/
-       UiDropdown.cpp DrawFadeEdges). Same 64x40 canvas + corner metrics as
-       box.svg (rx 3.5 at inset 4) so this NineSlice-draws with the IDENTICAL
-       srcBorderXPx/YPx (9.0) / destBorderX/Y (8.0) constants as box.tex's
-       panel; its rounded top corners line up with the panel's own rounded
-       groove corners exactly. Only the TOP corners are rounded (this asset
-       IS the top fade band); the bottom edge is square. The bottom fade band
-       reuses this same texture drawn upside down (NineSlice::Draw flipV=true,
-       see NineSlice.h) rather than a second source SVG, same reuse
-       convention as arrow.svg (VerticalScroller's up arrow, V-flipped for
-       down).
+       UiDropdown.cpp DrawFadeEdges). Geometry is DERIVED, not eyeballed, to
+       coincide exactly with box.svg's INNER GROOVE OPENING (the hole its
+       black rim stroke encloses), so the fade's rounded corners trace the
+       panel's own rim precisely.
 
-       Fill: exactly box.svg's #groove gradient middle stop (#2a1a0d, the row/
-       panel interior colour); opaque at the top (panel outer edge) fading
-       to fully transparent at the bottom (dissolving into the row list),
-       matching what DrawFadeEdges' old plain-quad gradient did, now as a
-       proper rounded-corner asset. -->
+       Derivation (see box.svg): the groove is `rect x=6 y=6 w=52 h=28
+       rx=3.5 stroke="#0d0803" stroke-width=1.0`. SVG strokes are centred on
+       the path, so the OPENING the rim encloses (excluding the stroke
+       itself) is the rect inset by half the stroke width: x=6.5 y=6.5
+       w=51 h=27 rx=3.0. That opening's rounded-corner extent (inset plus
+       radius, 6.5+3.0=9.5 texels) is slightly larger than
+       UiWidget::kBoxSrcBorderX/Y (9.0, sized for box.svg's OUTER rim, not
+       the inner groove), so reusing that border would spill 0.5px of the
+       arc into the stretched middle column. This asset instead uses its
+       OWN 9-slice border, kFadeSrcBorderPx=10.0 (comfortably contains the
+       9.5-texel arc extent) with a matched dest border
+       (UiDropdown::kFadeDestBorderX = 10 times 8/9, the SAME per-texel
+       scale box.tex's corner uses: 8 world units per 9 src texels) so the
+       corner geometry authored here (inset=6.5, rx=3.0, identical numbers
+       to the groove) maps to the IDENTICAL world-space inset/radius the
+       groove opening itself has relative to the panel rect. See
+       UiDropdown::DrawFadeEdges for the full derivation and the matching
+       world-space constants.
+
+       Canvas height (10 texels) intentionally equals kFadeSrcBorderPx so a
+       HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0, the whole
+       image stretches vertically as one piece, see NineSlice::Draw) scales
+       Y by kFadeHeight/10, which UiDropdown sets equal to the SAME 8/9
+       ratio the X corner cells use, keeping the rounded corner a TRUE
+       CIRCLE (not squashed into an ellipse) after the 9-slice draw.
+
+       Only the TOP corners are rounded (this asset IS the top fade band);
+       the bottom edge is square. The bottom fade band reuses this same
+       texture drawn upside down (NineSlice::Draw flipV=true, see
+       NineSlice.h) rather than a second source SVG, same reuse convention
+       as arrow.svg (VerticalScroller's up arrow, V-flipped for down).
+
+       Fill: box.svg's #groove gradient middle stop (#2a1a0d), opaque at the
+       top (panel outer edge) fading to fully transparent at the bottom
+       (dissolving into the row list). -->
   <defs>
     <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2a1a0d" stop-opacity="1"/>
       <stop offset="1" stop-color="#2a1a0d" stop-opacity="0"/>
     </linearGradient>
-    <!-- Top-rounded, bottom-square outline: same rx/inset as box.svg's inner
-         groove rect (x=6 y=6 w=52 h=28 rx=3.5), but only the top two corners
-         curve; the bottom edge runs straight to the canvas bottom so the
-         NineSlice bottom-row cells (which stretch to whatever destH the
-         caller draws) tile a plain straight edge, not a second curve. -->
+    <!-- Top-rounded (rx=3.0, box.svg groove-opening radius), bottom-square
+         outline, inset x=6.5/width=51 (box.svg groove-opening inset/width). -->
     <path id="fadeShape"
-          d="M 6 34
-             L 6 9.5
-             A 3.5 3.5 0 0 1 9.5 6
-             L 54.5 6
-             A 3.5 3.5 0 0 1 58 9.5
-             L 58 34
+          d="M 6.5 10
+             L 6.5 3.0
+             A 3.0 3.0 0 0 1 9.5 0
+             L 54.5 0
+             A 3.0 3.0 0 0 1 57.5 3.0
+             L 57.5 10
              Z"/>
   </defs>
   <use href="#fadeShape" fill="url(#fade)"/>

@@ -54,9 +54,16 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
 
     // flipV: swap which V-row each dest row SAMPLES (top dest cell reads the
     // texture's bottom rows and vice versa) -- geometry (topCy/botCy) is
-    // unchanged, only the UV assignment mirrors. See header doc.
+    // unchanged, only the UV assignment mirrors. See header doc. Also
+    // applied to the middle row: when destBorderY/srcBorderYPx are 0 (a
+    // horizontal-only 9-slice -- fixed-width corners, whole-image middle,
+    // used by UiDropdown's fade band), midV0/midV1 = 0/1 (the FULL texture
+    // height) and the top/bottom border rows collapse to zero height, so
+    // the middle row is the ONLY cell that draws; without flipping IT too,
+    // flipV would have no visible effect on a horizontal-only 9-slice.
     float topV0 = flipV ? v2 : v0, topV1 = flipV ? v3 : v1;
     float botV0 = flipV ? v0 : v2, botV1 = flipV ? v1 : v3;
+    float midV0 = flipV ? v2 : v1, midV1 = flipV ? v1 : v2;
 
     struct Cell { float x, y, w, h, uMin, uMax, vMin, vMax; };
     Cell cells[9] = {
@@ -64,10 +71,10 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
         { leftCx,  topCy, leftW,  topH, u0, u1, topV0, topV1 },
         { midCx,   topCy, midW,   topH, u1, u2, topV0, topV1 },
         { rightCx, topCy, rightW, topH, u2, u3, topV0, topV1 },
-        // middle row (v1..v2, unaffected by flipV -- centre strip is symmetric)
-        { leftCx,  midCy, leftW,  midH, u0, u1, v1, v2 },
-        { midCx,   midCy, midW,   midH, u1, u2, v1, v2 },
-        { rightCx, midCy, rightW, midH, u2, u3, v1, v2 },
+        // middle row (v1..v2, or flipped v2..v1 -- see flipV comment above)
+        { leftCx,  midCy, leftW,  midH, u0, u1, midV0, midV1 },
+        { midCx,   midCy, midW,   midH, u1, u2, midV0, midV1 },
+        { rightCx, midCy, rightW, midH, u2, u3, midV0, midV1 },
         // bottom row (dest bottom, sampled V per flipV above)
         { leftCx,  botCy, leftW,  botH, u0, u1, botV0, botV1 },
         { midCx,   botCy, midW,   botH, u1, u2, botV0, botV1 },
