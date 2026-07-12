@@ -139,6 +139,37 @@ static float SliderToThreshold(int sliderValue) {
     return (1.0f - t) * kSensThresholdMax;
 }
 
+// Port specific: single open/closed instance -- NULL when closed. Owned by
+// Toggle(); see the header note for the open/close contract.
+static SettingsScreen* s_pSettings = NULL;
+
+// Port specific: single open/close path, shared by the ESC key handler
+// (src/GameSDL.cpp) and the MainScreen settings button (src/screens/
+// MainScreen.cpp::SettingsCallback). No binary counterpart -- this screen
+// has none.
+void SettingsScreen::Toggle() {
+    if (s_pSettings == NULL) {
+        s_pSettings = new SettingsScreen();
+        s_pSettings->Init();
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(s_pSettings, false);
+            // Port specific: capture input while the settings modal is open --
+            // see HUD::SetInputModal (src/hud/HUD.h).
+            game_work.mHud->SetInputModal(s_pSettings);
+        }
+    } else {
+        if (game_work.mHud) {
+            game_work.mHud->SetInputModal(NULL);
+        }
+        s_pSettings->SetPendingRemoval();
+        s_pSettings = NULL;
+    }
+}
+
+bool SettingsScreen::IsOpen() {
+    return s_pSettings != NULL;
+}
+
 SettingsScreen::SettingsScreen()
     : m_LangCombo(0)
     , m_MotionCb(0)

@@ -21,10 +21,13 @@
 // ComboBox's own faithful behaviour, TOP_MOST-ish HUD_LAYER_POST_ACTOR so the
 // dropdown draws over the modal panel) -- SettingsScreen does not manage that.
 //
-// Lifecycle: caller toggles visibility by adding/removing the screen from the
-// HUD (see the ESC handler in src/GameSDL.cpp). Release() (called by the HUD
-// removal sweep, and by the dtor) tears down the 4 owned widgets and the
-// static injected placeholder textures.
+// Lifecycle: call the static SettingsScreen::Toggle() to open/close the modal
+// -- it owns the single file-static instance pointer, the AddControl/Init on
+// open, and the SetInputModal(NULL)+SetPendingRemoval on close. Both the ESC
+// key (src/GameSDL.cpp) and the MainScreen settings button (src/screens/
+// MainScreen.cpp) call Toggle() so there is exactly one open/close path.
+// Release() (called by the HUD removal sweep, and by the dtor) tears down the
+// 4 owned widgets and the static injected placeholder textures.
 //
 
 #include "hud/HUDControl3d.h"
@@ -50,6 +53,14 @@ public:
     void Draw(float* hudScaleRaw) override;
 
     int GetType() override { return 1; }
+
+    // Port specific: single open/close path for the modal, shared by the ESC
+    // key (src/GameSDL.cpp) and the MainScreen settings button
+    // (src/screens/MainScreen.cpp). Owns the file-static instance pointer;
+    // Toggle() opens (new + Init + AddControl + SetInputModal(this)) when
+    // closed, or closes (SetInputModal(NULL) + SetPendingRemoval) when open.
+    static void Toggle();
+    static bool IsOpen();
 
 private:
     ComboBox*      m_LangCombo;

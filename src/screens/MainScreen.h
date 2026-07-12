@@ -238,6 +238,12 @@ private:
 
     // Weak pointer to current DojoScreen child; cleared by RemoveCallback.
     DojoScreen* m_pDojoScreen;
+
+    // Port specific: no binary counterpart. Bottom-left SETTINGS button that
+    // opens the SettingsScreen modal (mirrors the sound/music toggle
+    // lifecycle -- created inline in Update(), never torn down while
+    // MainScreen persists). See MainScreen::Update and SettingsCallback.
+    MenuButton* m_pSettingsButton;
 #endif // !defined(__bada__)
 
 #ifndef __bada__
@@ -274,6 +280,11 @@ private:
     void AboutCallback();
     void SoundCallback();
     void MusicCallback();
+#ifndef __bada__
+    // Port specific: no binary counterpart. Opens/closes the SettingsScreen
+    // modal via SettingsScreen::Toggle() (shared with the ESC key).
+    void SettingsCallback();
+#endif // !defined(__bada__)
     void LeaderboardsCallback();
     void MoreGamesCallback();
     void QuitGamesCallback();

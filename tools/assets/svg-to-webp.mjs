@@ -48,6 +48,7 @@ const MANIFEST = {
   vbar: [32, 128],
   vslider: [32, 64],
   arrow: [32, 32],
+  settings_button: [64, 64],
 };
 
 const DENSITY = 288; // 4x supersample over the nominal 72 dpi for crisp edges.
