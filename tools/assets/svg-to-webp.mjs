@@ -50,11 +50,14 @@ const MANIFEST = {
   // list_fade: UiDropdown's open-list top/bottom edge fade (src/ui/
   // UiDropdown.cpp DrawFadeEdges) -- see list_fade.svg's own header comment
   // for the full geometric derivation against box.svg's inner-groove
-  // opening. NOT POT (64x10, like expand_arrow's non-POT exception below):
-  // canvas height equals the asset's own 9-slice src border (10.0) so a
-  // horizontal-only NineSlice split scales it uniformly (X and Y match),
-  // keeping the rounded corner a true circle instead of an ellipse.
-  list_fade: [64, 10],
+  // opening. NOT POT (64x6, like expand_arrow's non-POT exception below):
+  // canvas HEIGHT is independent of the asset's own 9-slice X src border
+  // (kFadeSrcBorderPx, still 10.0, unchanged) -- sized so a horizontal-only
+  // NineSlice split's resulting Y scale (kFadeHeight/6) matches the SAME
+  // 8/9 ratio the X corner cells use, keeping the rounded corner a true
+  // circle instead of an ellipse. (Reduced from 64x10 -- a 40% shorter
+  // kFadeHeight while preserving circularity.)
+  list_fade: [64, 6],
   // list_item: UiDropdown open-list row highlight (selected/hover) -- see
   // list_item.svg's own header comment. Borderless glossy gradient, tinted
   // per-state at draw time; 128x40 (wider than box.tex since it's stretched

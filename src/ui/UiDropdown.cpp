@@ -40,8 +40,18 @@ const float UiDropdown::CLICK_VEL_GATE    = 0.5f;
 // inner-groove opening (rect x=6 y=6 w=52 h=28 rx=3.5 stroke-width=1,
 // centred stroke -> opening inset=6.5/rx=3.0 texels).
 const float UiDropdown::kFadeSrcBorderPx  = 10.0f;
-const float UiDropdown::kFadeDestBorderX  = 10.0f * 8.0f / 9.0f;   // ~8.8889 (NineSlice CORNER-CELL width)
-const float UiDropdown::kFadeHeight       = 10.0f * 8.0f / 9.0f;   // ~8.8889 (== kFadeDestBorderX; canvas height == kFadeSrcBorderPx here)
+const float UiDropdown::kFadeDestBorderX  = 10.0f * 8.0f / 9.0f;   // ~8.8889 (NineSlice CORNER-CELL width, X axis)
+// list_fade.svg's own canvas HEIGHT (6.0 texels) -- INDEPENDENT of
+// kFadeSrcBorderPx (10.0, the X corner-cell border, unchanged) since a
+// horizontal-only 9-slice's Y scale is governed purely by
+// kFadeHeight/kFadeSvgCanvasH, not by the X border at all. Kept as its own
+// named constant (rather than a bare 6.0f literal in kFadeHeight's own
+// derivation) so the circularity relationship stays legible: kFadeHeight
+// MUST equal kFadeSvgCanvasH * (kFadeDestBorderX/kFadeSrcBorderPx), the
+// SAME 8/9 ratio the X corner cells use, or the rounded corner squashes
+// into an ellipse (see list_fade.svg's header comment).
+const float UiDropdown::kFadeSvgCanvasH   = 6.0f;
+const float UiDropdown::kFadeHeight       = 6.0f * 8.0f / 9.0f;    // ~5.3333 (40% shorter than the original ~8.889)
 // The opening's touch point sits at fraction 6.5/kFadeSrcBorderPx across
 // the kFadeDestBorderX-wide corner cell -- NOT at the cell's own edge.
 // Using kFadeDestBorderX directly as the seating inset (an earlier bug)
@@ -279,7 +289,7 @@ void UiDropdown::Update(float dt) {
 // texels (kGrooveOpeningRadiusW) on the 64-wide canvas.
 //
 // list_fade.svg is authored with those SAME numbers (inset=6.5, rx=3.0) on
-// its own 64x10 canvas, using its OWN 9-slice border kFadeSrcBorderPx=10 /
+// its own 64x6 canvas, using its OWN 9-slice X border kFadeSrcBorderPx=10 /
 // kFadeDestBorderX (NOT kBoxSrcBorderX=9 -- the groove opening's arc extent,
 // inset+radius=9.5 texels, is larger than box.tex's OUTER-rim-sized 9-texel
 // corner cell and would spill into the stretched middle column) at the
@@ -287,7 +297,7 @@ void UiDropdown::Update(float dt) {
 // texture y=0 (source top / quad TOP once drawn), the outline is at its
 // NARROWEST (x=9.5..54.5, inset by opening-inset+radius -- the corner
 // ARC's peak); as y increases toward the canvas bottom it flares out to
-// the FULL opening width (x=6.5..57.5) by y=kFadeSrcBorderPx. So the
+// the FULL opening width (x=6.5..57.5) by y=kFadeSvgCanvasH. So the
 // quad's TOP edge (narrow, arc-peak side) is what must land at the rim's
 // actual corner peak, kGrooveOpeningInsetW inside the panel's own top
 // edge -- NOT kFadeDestBorderX (that's the whole NineSlice corner-CELL
@@ -295,8 +305,11 @@ void UiDropdown::Update(float dt) {
 // the band a few px past the rim's opening instead of tucking into it).
 // HORIZONTAL-ONLY 9-slice (destBorderY=0/srcBorderYPx=0): the top/bottom
 // border rows collapse to zero height so the middle row alone draws the
-// whole image, stretched to kFadeHeight = kFadeSrcBorderPx * 8/9 -- the
-// SAME 8/9 scale as X, so the corner renders as a true circle, not an
+// whole image, stretched to kFadeHeight = kFadeSvgCanvasH * 8/9 -- the
+// SAME 8/9 scale as X (kFadeSvgCanvasH is the canvas HEIGHT, independent
+// of kFadeSrcBorderPx, the X-axis border -- shrinking kFadeSvgCanvasH
+// proportionally is how kFadeHeight got 40% shorter without squashing the
+// corner into an ellipse), so the corner renders as a true circle, not an
 // ellipse (a mismatched X/Y scale would squash the arc).
 //
 // VERTICALLY seated flush against the PANEL RECT's own edges (panelTopY /
