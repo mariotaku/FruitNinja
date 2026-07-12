@@ -106,16 +106,19 @@ static const int   kSensMin = 0, kSensMax = 100;
 static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
 static const float kFpsCbX    =   95.0f, kFpsCbY     = -65.0f;
 
-// Plate quad -- blank_dialog_box.tex stretched to this footprint (see Draw()).
-// Sized generously (280 tall, fits the 320 viewport) to keep all four rows --
-// incl. the top combo + its expand arrow -- inside the panel.
+// Plate quad -- medbacking.tex stretched to this footprint (see Draw()).
+// medbacking.tex is 512x256 -- an HD (2x) backing; its logical size is half
+// (256x128). The framed panel (2:1) is drawn at 440x220 so it keeps that 2:1
+// aspect (no distortion) AND downscales the 512-wide art (~0.86x) so it renders
+// crisp/HD, while still fitting all four rows (labels span x[-150..135]).
+// (The exact half-bitmap size, 256x128, is too small for the 4-row layout.)
 static const float kPlateHalfW = 220.0f;
-static const float kPlateHalfH = 140.0f;
-// blank_dialog_box.tex (512x256) has transparent padding around the framed panel;
-// these UV bounds crop to just the panel (x[112..400]/512, y[43..212]/256) so a
-// single quad stretches the panel to the plate footprint (no tiling/9-slice).
-static const float kPlateUvL = 0.21875f, kPlateUvR = 0.78125f;
-static const float kPlateUvT = 0.16797f, kPlateUvB = 0.82813f;
+static const float kPlateHalfH = 110.0f;
+// medbacking.tex has transparent padding around the framed panel; crop UV to just
+// the panel (opaque bounds x[55..454]/512, y[28..224]/256) so one stretched quad
+// fills the plate footprint.
+static const float kPlateUvL = 0.10742f, kPlateUvR = 0.88867f;
+static const float kPlateUvT = 0.10938f, kPlateUvB = 0.87891f;
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -222,7 +225,7 @@ void SettingsScreen::Init() {
     ListBox::SetTexturesForTest(m_TexRow);
     VerticalScroller::SetTexturesForTest(m_TexScrTrack, m_TexScrThumb, m_TexScrArrow);
 
-    m_Plate = Mortar::TextureManager::LoadLocalisedTexture("blank_dialog_box.tex");
+    m_Plate = Mortar::TextureManager::LoadLocalisedTexture("medbacking.tex");
 
     // ---- language model ----
     m_LangItems.clear();
@@ -344,8 +347,8 @@ void SettingsScreen::Draw(float* hudScale) {
         m_Backdrop->UnSet();
     }
 
-    // ---- plate panel: blank_dialog_box.tex, single stretched quad (UV-cropped
-    // to the panel region to skip the texture's transparent padding) ----
+    // ---- plate panel: medbacking.tex, single stretched quad (UV-cropped to the
+    // panel region to skip the texture's transparent padding) ----
     if (m_Plate.IsValid()) {
         mm.GetWorldStack().Reset();
         m_Plate->Set();
