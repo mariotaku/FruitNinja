@@ -42,7 +42,7 @@ import sys
 MANIFEST = {
     "checked":      (128, 64),
     "unchecked":    (128, 64),
-    "combo_bar":    (128, 64),
+    "combo_bar":    (128, 32),
     "_dialog_box":  (128, 16),
     "slider_will":  (32, 32),
     "expand_arrow": (32, 32),
