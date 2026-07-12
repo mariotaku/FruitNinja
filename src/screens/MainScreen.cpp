@@ -60,6 +60,12 @@ static const float BOUNCE_SETTLE       = 3.0f;
 static const float ALPHA_LERP_RATE     = 0.25f;
 static const float PAUSE_VISIBILITY    = 0.01f;
 static const float SOUND_VOLUME_ON     = 0.5f;
+// Port specific: no binary counterpart. Matches the ring MenuButtons'
+// m_GrowInTimer=0.25f (CreateButtons() sets this on m_pGameModeButton/
+// m_pStoreButton/m_pQuitButton) -- see the m_pSettingsButton visibility
+// block in Update() for how this delays the settings show-ramp to lock-step
+// with the rings' own grow-in hold.
+static const float SETTINGS_SHOW_DELAY = 0.25f;
 
 // Helper: get GLuint from Mortar::SmartPtr<Texture>
 static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
@@ -145,6 +151,7 @@ MainScreen::MainScreen(Game& g)
       , m_pDojoScreen(nullptr)
       , m_pSettingsButton(nullptr)
       , m_SettingsVisibility(0.0f)
+      , m_SettingsShowDelay(0.0f)
       , game(g)
 #endif
 {
@@ -771,18 +778,27 @@ void MainScreen::Update(float dt) {
     // gameplay task) dojo and gameover too. On the idle main menu itself,
     // elapsedTime is the normal -m_PauseAmount snapshot (~1.0 at rest).
     //
-    // elapsedTime itself is a HARD 0/1-ish step on the way out (Hide() flips
-    // m_State to STATE_CAMERA_FADE on a single frame, so the switch above
-    // pins elapsedTime=0.0f instantly -- unlike the way IN, which rides the
-    // binary's own eased m_PauseAmount camera-zoom ramp). Using it directly
-    // would pop the button off-screen with no exit animation. m_SettingsVisibility
-    // (port-only field, MainScreen.h) is an eased 0..1 follower of the same
-    // clamp01(elapsedTime) target, lerped every frame at CAMERA_LERP_RATE (the
-    // same rate/formula the camera-zoom ramp above uses) -- symmetric ease on
-    // both the way in (0->1) and the way out (1->0). Only once the eased
-    // value has settled below PAUSE_VISIBILITY (slide-out essentially
-    // complete) does m_Active actually flip off; the slide itself always
-    // tracks m_SettingsVisibility, never a hard cut.
+    // Retimed to lock-step with the three ring MenuButtons (m_pGameModeButton
+    // NEW GAME / m_pStoreButton DOJO / m_pQuitButton QUIT). Those rings are
+    // entity-backed (fruitType>=0): their visible content is the 3D fruit/
+    // bomb drawn by Mortar::ActorManager::Draw, NOT a HUD quad -- MenuButton
+    // itself only draws their scratchs.tex backdrop (see MenuButton::Draw's
+    // HUD_LAYER_MENU_BG branch). CreateButtons() (called only from
+    // STATE_CAMERA_ZOOM) sets m_GrowInTimer=0.25f on all three; MenuButton::
+    // Update's grow-in gate (m_GrowInTimer>0 -> fruit->flags|=1, hidden) holds
+    // them invisible for that whole 0.25s before their own grow-in ease even
+    // starts -- so raw elapsedTime crossing PAUSE_VISIBILITY (~frame 1, see
+    // CAMERA_LERP_RATE ramp) made settings appear roughly 15 frames/0.25s
+    // BEFORE the rings. SETTINGS_SHOW_DELAY reproduces that same 0.25s hold
+    // (m_SettingsShowDelay, MainScreen.h) so the show-ramp doesn't start
+    // until the rings' own grow-in would also be starting.
+    //
+    // On the way out, the rings have no equivalent eased fade at all -- they
+    // vanish the instant MainScreen stops being foreground (their entities
+    // stop being driven/drawn), not on a decaying alpha. m_SettingsVisibility
+    // therefore SNAPS to 0 (hard cut, m_Active off + fully slid out same
+    // frame) rather than easing down, matching that abrupt disappearance
+    // instead of lingering visible/slid-partway like before.
     if (m_pSettingsButton) {
         m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y;
@@ -791,7 +807,20 @@ void MainScreen::Update(float dt) {
         if (settingsTarget < 0.0f) settingsTarget = 0.0f;
         if (settingsTarget > 1.0f) settingsTarget = 1.0f;
 
-        m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
+        if (settingsTarget > 0.0f) {
+            // Due to (re)become visible: hold off the ease until the same
+            // 0.25s grow-in delay the rings use has elapsed.
+            if (m_SettingsShowDelay < SETTINGS_SHOW_DELAY) {
+                m_SettingsShowDelay += dt;
+            } else {
+                m_SettingsVisibility = settingsTarget - (settingsTarget - m_SettingsVisibility) * powf(1.0f - CAMERA_LERP_RATE, dtN);
+            }
+        } else {
+            // Off-main: hard cut, no eased tail (matches the rings' own
+            // abrupt entity-draw-path disappearance -- see comment above).
+            m_SettingsVisibility = 0.0f;
+            m_SettingsShowDelay = 0.0f;
+        }
         if (m_SettingsVisibility < 0.0f) m_SettingsVisibility = 0.0f;
         if (m_SettingsVisibility > 1.0f) m_SettingsVisibility = 1.0f;
 

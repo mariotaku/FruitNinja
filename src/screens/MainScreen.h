@@ -246,16 +246,27 @@ private:
     MenuButton* m_pSettingsButton;
 
     // Port specific: no binary counterpart. Eased 0..1 visibility factor for
-    // m_pSettingsButton, lerped each frame toward the raw elapsedTime-derived
-    // target (see MainScreen::Update). Unlike the sound/music toggles (which
-    // ride the binary's own eased m_PauseAmount camera ramp on the way in and
-    // simply snap via the STATE_CAMERA_FADE hard-zero on the way out --
-    // acceptable there since the toggles reappear eased-in on the PAUSE
-    // overlay via GetPauseAmount()), settings has no such secondary reveal to
-    // land on, so leaving main would otherwise pop off instantly. This factor
-    // gives it a symmetric slide-out, easing toward 0 exactly like the
-    // slide-in eases toward 1.
+    // m_pSettingsButton's slide-out animation, lerped each frame toward the
+    // raw elapsedTime-derived target (see MainScreen::Update). Retimed to
+    // lock-step with the three ring MenuButtons' (m_pGameModeButton/
+    // m_pStoreButton/m_pQuitButton) own show/hide timing rather than a plain
+    // elapsedTime ease -- see m_SettingsShowDelay below for the show-side
+    // half of that retiming; the hide side is a hard cut (see Update), not
+    // an eased tail, matching the rings' own abrupt disappearance (their
+    // visible content is the 3D fruit/bomb ENTITY drawn by ActorManager, cut
+    // instantly once MainScreen stops calling CreateButtons(), not a faded
+    // HUD quad).
     float m_SettingsVisibility;
+
+    // Port specific: no binary counterpart. Counts down from
+    // SETTINGS_SHOW_DELAY (0.25s -- see MainScreen::Update) each frame while
+    // settings is due to become visible, mirroring the ring buttons' own
+    // m_GrowInTimer=0.25f (CreateButtons() sets this on all three: NEW GAME,
+    // DOJO, QUIT). The rings stay invisible (fruit->flags|=1) for that same
+    // 0.25s after creation before their grow-in ease even starts; delaying
+    // the settings show-ramp by the identical constant keeps it from popping
+    // in before the rings do.
+    float m_SettingsShowDelay;
 #endif // !defined(__bada__)
 
 #ifndef __bada__
