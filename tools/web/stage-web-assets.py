@@ -354,6 +354,19 @@ ASCII_PRINTABLE = range(0x20, 0x7F)
 STR_ENTRIES_OFFSET = 0x4c
 STR_ENTRY_SIZE = 12
 
+# Must stay in sync with kLanguageNames in src/screens/SettingsScreen.cpp --
+# the SettingsScreen language ComboBox renders these hardcoded native names
+# with gangofchinese.ttf, but they aren't sourced from any translations_*.str
+# file, so gather_cjk_font_charset() would otherwise drop their glyphs from
+# the web subset. "Arabic" (index 20) is the ASCII fallback name (that font
+# has no Arabic glyphs), so it needs no extra codepoints here.
+NATIVE_LANG_NAMES = [
+    "English (US)", "English (UK)", "Français", "Español", "Deutsch", "Italiano",
+    "Nederlands", "Svenska", "Dansk", "Norsk", "Suomi", "한국어",
+    "日本語", "中文", "繁體中文", "Español (LA)", "Polski",
+    "Português (PT)", "Português (BR)", "Русский", "Arabic", "Debug",
+]
+
 
 def parse_str_body_codepoints(path):
     """Parse a translations_<lang>.str BODY file and return the set of Unicode
@@ -407,6 +420,8 @@ def gather_cjk_font_charset(stringtables_dir):
         path = os.path.join(stringtables_dir, name)
         sources.append(path)
         codepoints |= parse_str_body_codepoints(path)
+    for name in NATIVE_LANG_NAMES:
+        codepoints.update(ord(c) for c in name)
     return codepoints, sources
 
 
