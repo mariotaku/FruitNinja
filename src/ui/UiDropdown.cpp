@@ -108,7 +108,6 @@ void UiDropdown::Update(float dt) {
     int panelRows = m_pItems->size() < (size_t)m_VisibleRows
                         ? (int)m_pItems->size() : (int)m_VisibleRows;
     const float pad = 4.0f;
-    float panelH = panelRows * m_RowH + 2.0f * pad;
     float panelTopY = pos.y - m_BarH * 0.5f;
     // Sign convention: m_ScrollOffset >= 0, 0 = list top (item 0 first),
     // +maxScroll = list bottom. Row idx's centre is curYBase - rowH*(idx+0.5);
@@ -123,12 +122,21 @@ void UiDropdown::Update(float dt) {
 
     float openLeft = pos.x - m_BarW * 0.5f;
     float openRight = pos.x + m_BarW * 0.5f;
-    float openTop = pos.y + m_BarH * 0.5f;
-    float openBottom = panelTopY - panelH;
 
-    // --- Acquire (press-edge inside bar+panel union) ---
+    // --- Acquire (press-edge, full-screen scrim while open) ---
+    // Modal latch: while open, this widget must own EVERY touch press so an
+    // outside tap can't fall through to the blade or a sibling widget on the
+    // same frame it lands. Scanning only the bar+panel rect left presses
+    // outside it unlatched -> the slot stayed visible to slice/blade code
+    // (which reads touch phases directly, not gated by any widget's own
+    // consumption) and, on the SAME press, to any sibling widget's own
+    // TouchInRegion scan. Scanning the full centered-ortho screen (x in
+    // [-160,160], y in [-240,240] -- see docs/engine/coordinate-system.md)
+    // means an outside press is latched here first; Release below already
+    // closes without selecting when the captured position isn't inside the
+    // panel rows.
     if (m_TouchId == -1) {
-        int slot = TouchInRegion(openLeft, openRight, openBottom, openTop, -1);
+        int slot = TouchInRegion(-160.0f, 160.0f, -240.0f, 240.0f, -1);
         if (slot == -1) {
             // Not touching: spring-back can still run below.
         } else if (IsTouchDown(slot) == 2) {
@@ -281,14 +289,27 @@ void UiDropdown::Draw(float* hudScale) {
 
     for (int idx = 0; idx < (int)m_pItems->size(); ++idx) {
         float rowCy = curYBase - m_RowH * (idx + 0.5f);
-        if (rowCy + m_RowH * 0.5f < viewportBottom || rowCy - m_RowH * 0.5f > viewportTop) {
+        float rowTop = rowCy + m_RowH * 0.5f;
+        float rowBottom = rowCy - m_RowH * 0.5f;
+        if (rowTop < viewportBottom || rowBottom > viewportTop) {
             continue;
         }
 
+        // Geometric clamp: NineSlice::Draw/Mesh::DrawQuadUnCached have no
+        // scissor/clip param (raw quad geometry, unlike Font::DrawString's
+        // per-glyph clipRect), so a row straddling the viewport top/bottom
+        // edge is clamped here by shrinking the box to the visible band
+        // (new centre/height from the clamped top/bottom) rather than
+        // drawing its full m_RowH and spilling past the panel.
+        float clampedTop = rowTop < viewportTop ? rowTop : viewportTop;
+        float clampedBottom = rowBottom > viewportBottom ? rowBottom : viewportBottom;
+        float clampedCy = (clampedTop + clampedBottom) * 0.5f;
+        float clampedH = clampedTop - clampedBottom;
+
         if (m_HoverRow >= 0 && idx == firstVisibleIdx + m_HoverRow) {
-            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_HoverRowColour);
+            DrawBox(pos.x, clampedCy, m_BarW - 2.0f * pad, clampedH, m_HoverRowColour);
         } else if (idx == m_Selected) {
-            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_SelRowColour);
+            DrawBox(pos.x, clampedCy, m_BarW - 2.0f * pad, clampedH, m_SelRowColour);
         }
 
         DrawText((*m_pItems)[idx].c_str(),
