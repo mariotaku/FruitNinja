@@ -245,6 +245,7 @@ void SettingsScreen::Init() {
     m_TexCheck = Mortar::TextureManager::LoadLocalisedTexture("check.tex");
     m_TexCaret = Mortar::TextureManager::LoadLocalisedTexture("caret.tex");
     m_TexKnob  = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
+    m_TexFade  = Mortar::TextureManager::LoadLocalisedTexture("list_fade.tex");
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture. No real
     // widget counterpart.
@@ -268,6 +269,7 @@ void SettingsScreen::Init() {
                                 kComboVisibleRows, kComboScaleX, kComboScaleY);
     m_LangDrop->SetBoxTexture(m_TexBox);
     m_LangDrop->SetCaretTexture(m_TexCaret);
+    m_LangDrop->SetFadeTexture(m_TexFade);
     m_LangDrop->SetTextColour(SettingsTextColour());
     m_LangDrop->SetTextScale(kComboTextScale);
     if (m_LangFont.IsValid()) {
@@ -374,6 +376,7 @@ void SettingsScreen::Release() {
     m_TexCheck.SetNull();
     m_TexCaret.SetNull();
     m_TexKnob.SetNull();
+    m_TexFade.SetNull();
     m_Plate.SetNull();
     m_Backdrop.SetNull();
     m_LangFont.SetNull();

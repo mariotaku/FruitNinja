@@ -7,10 +7,9 @@
 
 #include "engine/input/Touch.h"
 #include "game/GameWork.h"
-#include "hud/WidgetPlaceholderArt.h"
-#include "render/MatrixManager.h"
-#include "render/QUADCUSTOMVERTEX.h"
-#include "asset/Mesh.h"
+#include "render/NineSlice.h"
+#include "render/gl_funcs.h"
+#include "asset/Texture.h"
 
 #include <cmath>
 
@@ -136,12 +135,12 @@ void UiDropdown::Update(float dt) {
     // (which reads touch phases directly, not gated by any widget's own
     // consumption) and, on the SAME press, to any sibling widget's own
     // TouchInRegion scan. Scanning the full centered-ortho screen (x in
-    // [-160,160], y in [-240,240] -- see docs/engine/coordinate-system.md)
-    // means an outside press is latched here first; Release below already
-    // closes without selecting when the captured position isn't inside the
-    // panel rows.
+    // [-240,240], y in [-160,160] -- SetupOrtho(160,-160,-240,240,...), see
+    // docs/engine/coordinate-system.md) means an outside press is latched
+    // here first; Release below already closes without selecting when the
+    // captured position isn't inside the panel rows.
     if (m_TouchId == -1) {
-        int slot = TouchInRegion(-160.0f, 160.0f, -240.0f, 240.0f, -1);
+        int slot = TouchInRegion(-240.0f, 240.0f, -160.0f, 160.0f, -1);
         if (slot == -1) {
             // Not touching: spring-back can still run below.
         } else if (IsTouchDown(slot) == 2) {
@@ -258,35 +257,23 @@ void UiDropdown::Update(float dt) {
     }
 }
 
-// Top/bottom soft-gradient overlays for the open row list. See header doc.
-// Fades to kGrooveColour (the box.tex row/panel INTERIOR fill colour), full
-// alpha at the panel's outer edge, easing to zero alpha (kFadeHeightFrac *
-// m_RowH) world units inward -- two 4-vertex TriStrip quads (per-vertex
-// alpha does the fade), bound to a 1x1 solid-white texture (lazily created)
-// so MODULATE passes the vertex colour through unchanged. Drawn AFTER the
-// row loop so a row scrolling past the edge dissolves into the fade rather
-// than being hard-cut by the row-culling test in Draw()'s main loop.
-//
-// DIFFERS-trivial (colour source): NOT m_Tint (that's the box.tex MODULATE
-// tint, White -- fading white->transparent washes the panel edges pale
-// instead of dissolving into the dark wood interior). kGrooveColour is
-// exactly assets/ui-widgets/box.svg's #groove gradient's middle stop
-// (#2a1a0d, RGB 42,26,13) -- the inner carved-wood groove is what box.tex's
-// row/panel background actually renders as; the groove is itself a 3-stop
-// vertical gradient (#1a1008 top / #2a1a0d mid / #3a2612 bottom), so the mid
-// stop is the representative single "interior fill" tone.
-//
-// X-span is inset by kBoxDestBorderX from each side -- the same NineSlice
+// Top/bottom rounded-corner fade band for the open row list. See header doc.
+// m_FadeTex (list_fade.tex) is NineSlice-drawn at height (kFadeHeightFrac *
+// m_RowH), X-inset by kBoxDestBorderX from each side -- the same NineSlice
 // border DrawBox's own panel box reserves for its rounded corner/rim cells
 // (box.svg's rounded groove corners, rx=3.5 texels at inset 4, live inside
-// that border band) -- so this flat quad's square corners sit inside the
-// box's already-flat inner groove interior (same region the row highlight
-// DrawBox() quads already render into) rather than poking past the rounded
-// rim.
+// that border band) -- so the fade band's own rounded top corners (list_fade.
+// svg shares box.svg's exact 64x40/rx=3.5 canvas, hence the same
+// kBoxSrcBorderX/Y src-border constants) line up with the panel's corners
+// and never draw over its bevel/rim. Drawn AFTER the row loop so a row
+// scrolling past the viewport edge dissolves into the fade rather than
+// being hard-cut. No-ops if m_FadeTex was never injected (SetFadeTexture).
+//
+// Top band drawn upright; bottom band reuses the SAME texture flipV=true
+// (NineSlice::Draw) so its rounded corners appear at the bottom instead of
+// authoring a second mirrored SVG -- same reuse convention as arrow.svg
+// (VerticalScroller's up arrow, V-flipped for the down arrow).
 void UiDropdown::DrawFadeEdges(float viewportTop, float viewportBottom) {
-    if (!m_FadeTex.IsValid()) {
-        m_FadeTex = fn_widget_art::MakeSolidTex(255, 255, 255, 255, 1, 1);
-    }
     if (!m_FadeTex.IsValid()) return;
 
     float fadeH = m_RowH * kFadeHeightFrac;
@@ -294,49 +281,19 @@ void UiDropdown::DrawFadeEdges(float viewportTop, float viewportBottom) {
     if (fadeH > halfSpan) fadeH = halfSpan;   // don't let the two fades overlap-invert on a tiny panel
     if (fadeH <= 0.0f) return;
 
-    float x0 = pos.x - m_BarW * 0.5f + kBoxDestBorderX;
-    float x1 = pos.x + m_BarW * 0.5f - kBoxDestBorderX;
-    if (x0 > x1) { x0 = x1 = pos.x; }   // degenerate: bar narrower than 2x the border inset
-    static const Colour kGrooveColour(0x2a, 0x1a, 0x0d, 0xFF);  // box.svg #groove middle stop
-    const uint32_t opaque = kGrooveColour.PlatformColour();
-    const uint32_t clear  = Colour(kGrooveColour.r, kGrooveColour.g, kGrooveColour.b, 0).PlatformColour();
-    const float kZ = 0.0f;
+    float fadeW = m_BarW - 2.0f * kBoxDestBorderX;
+    if (fadeW <= 0.0f) return;   // degenerate: bar narrower than 2x the border inset
 
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    mm.UploadModelViewOnly();
+    float topCy = viewportTop - fadeH * 0.5f;
+    float botCy = viewportBottom + fadeH * 0.5f;
 
-    m_FadeTex->Set();
-    TexEnvModulate();  // Set() may leave REPLACE from a prior blade draw; force MODULATE.
-
-    // Top edge: opaque at viewportTop, transparent at viewportTop - fadeH.
-    {
-        const float top = viewportTop;
-        const float bot = viewportTop - fadeH;
-        QUADCUSTOMVERTEX v[4] = {
-            { x0, bot, kZ, 0,0,1, clear,  0.0f, 1.0f },  // LB (transparent, inward)
-            { x0, top, kZ, 0,0,1, opaque, 0.0f, 0.0f },  // LT (opaque, at edge)
-            { x1, bot, kZ, 0,0,1, clear,  1.0f, 1.0f },  // RB
-            { x1, top, kZ, 0,0,1, opaque, 1.0f, 0.0f },  // RT
-        };
-        Mortar::Mesh::DrawTriStrip(v, 4, true, NULL);
-    }
-
-    // Bottom edge: opaque at viewportBottom, transparent at viewportBottom + fadeH.
-    {
-        const float top = viewportBottom + fadeH;
-        const float bot = viewportBottom;
-        QUADCUSTOMVERTEX v[4] = {
-            { x0, bot, kZ, 0,0,1, opaque, 0.0f, 1.0f },  // LB (opaque, at edge)
-            { x0, top, kZ, 0,0,1, clear,  0.0f, 0.0f },  // LT (transparent, inward)
-            { x1, bot, kZ, 0,0,1, opaque, 1.0f, 1.0f },  // RB
-            { x1, top, kZ, 0,0,1, clear,  1.0f, 0.0f },  // RT
-        };
-        Mortar::Mesh::DrawTriStrip(v, 4, true, NULL);
-    }
-
-    m_FadeTex->UnSet();
-    TexEnvModulate();  // restore default so subsequent draws are unaffected
+    Mortar::NineSlice::Draw(m_FadeTex.Get(), pos.x, topCy, fadeW, fadeH,
+                            kBoxSrcBorderX, kBoxSrcBorderY,
+                            kBoxDestBorderX, kBoxDestBorderY, Colour::White);
+    Mortar::NineSlice::Draw(m_FadeTex.Get(), pos.x, botCy, fadeW, fadeH,
+                            kBoxSrcBorderX, kBoxSrcBorderY,
+                            kBoxDestBorderX, kBoxDestBorderY, Colour::White,
+                            /*flipV=*/true);
 }
 
 void UiDropdown::Draw(float* hudScale) {
@@ -387,17 +344,59 @@ void UiDropdown::Draw(float* hudScale) {
     // slot, set in Update) can be compared against the absolute item index.
     int firstVisibleIdx = (int)std::floor(m_ScrollOffset / m_RowH + 0.0001f);
 
-    // Row text clip rect = panel inner viewport, in the same centered-ortho
-    // world space Font::DrawString's pos/x/y already use (see Font::DrawString
-    // @0x0024c7f0's clipRect path). The row-culling test above only skips rows
-    // whose box is fully outside the viewport; a row straddling the top/bottom
-    // edge still draws here, so its text needs a real per-glyph clip or it
-    // spills past the panel box.
+    // Row content clip rect: the panel's inner viewport, INSET by
+    // kBoxDestBorderX on X (past the box's own reserved corner/rim border --
+    // see UiWidget::kBoxDestBorderX/DrawBox doc) so a straddling row's
+    // highlight box / text never overlaps the dark inner border of the
+    // panel, only the flat interior. Y already sits inside the border via
+    // `pad` (viewportTop/Bottom = panelTopY -+ pad, the panel-box-to-row-
+    // viewport gap set up above). Used both for the GL scissor (highlight
+    // boxes) and Font::DrawString's clipRect (per-glyph text clamp) below --
+    // same rect, two clip mechanisms, so text and highlight box crop
+    // identically.
+    float clipLeft   = pos.x - m_BarW * 0.5f + kBoxDestBorderX;
+    float clipRight  = pos.x + m_BarW * 0.5f - kBoxDestBorderX;
+    float clipTop    = viewportTop;
+    float clipBottom = viewportBottom;
+
     Mortar::MortarRectangleT<float> textClip;
-    textClip.left   = pos.x - m_BarW * 0.5f + textPad;
-    textClip.right  = pos.x + m_BarW * 0.5f - textPad;
-    textClip.top    = viewportTop;
-    textClip.bottom = viewportBottom;
+    textClip.left   = clipLeft;
+    textClip.right  = clipRight;
+    textClip.top    = clipTop;
+    textClip.bottom = clipBottom;
+
+    // True hardware clip for the row highlight boxes: a straddling row's
+    // DrawBox() quad must render at its FULL size and be CUT at the edge,
+    // not geometrically shrunk (a resize reads as a squish, not a clip --
+    // see DrawFadeEdges/this function's git history). NineSlice::Draw /
+    // Mesh::DrawQuadUnCached have no clip param of their own (unlike Font::
+    // DrawString's clipRect), so a real glScissor is the only way to cut a
+    // NineSlice box's geometry without resizing it. Mapping mirrors
+    // BakedStringBox.cpp's established worldspace->scissor conversion
+    // (DIFFERS: original clips via CPU ClipAgainstPlanes, no glScissor
+    // equivalent in the binary -- port-only, GLES2 has no fixed-function
+    // user clip planes): centered ortho SetupOrtho(top=160,bottom=-160,
+    // left=-240,right=240) -> pixel = (world+halfExtent)/fullExtent *
+    // viewportPx + viewportOrigin; glScissor's origin is bottom-left (GL
+    // convention) while world Y is top-positive, hence the bottom-edge flip.
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    // Host/SDL+GLES2 only: glGetIntegerv/GL_VIEWPORT aren't in the
+    // asm-verify cross-build's GL shim or the unit-test GL stub.
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    const GLint vpX = vp[0], vpY = vp[1];
+    const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
+    const float orthoW = 480.0f;
+    const float orthoH = 320.0f;
+    GLint sx = (GLint)((clipLeft + orthoW * 0.5f) / orthoW * (float)vpW) + vpX;
+    GLint sy = (GLint)((clipBottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    GLint sw = (GLint)((clipRight - clipLeft) / orthoW * (float)vpW);
+    GLint sh = (GLint)((clipTop - clipBottom) / orthoH * (float)vpH);
+    if (sw < 0) sw = 0;
+    if (sh < 0) sh = 0;
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(sx, sy, sw, sh);
+#endif
 
     for (int idx = 0; idx < (int)m_pItems->size(); ++idx) {
         float rowCy = curYBase - m_RowH * (idx + 0.5f);
@@ -407,27 +406,20 @@ void UiDropdown::Draw(float* hudScale) {
             continue;
         }
 
-        // Geometric clamp: NineSlice::Draw/Mesh::DrawQuadUnCached have no
-        // scissor/clip param (raw quad geometry, unlike Font::DrawString's
-        // per-glyph clipRect), so a row straddling the viewport top/bottom
-        // edge is clamped here by shrinking the box to the visible band
-        // (new centre/height from the clamped top/bottom) rather than
-        // drawing its full m_RowH and spilling past the panel.
-        float clampedTop = rowTop < viewportTop ? rowTop : viewportTop;
-        float clampedBottom = rowBottom > viewportBottom ? rowBottom : viewportBottom;
-        float clampedCy = (clampedTop + clampedBottom) * 0.5f;
-        float clampedH = clampedTop - clampedBottom;
-
         if (m_HoverRow >= 0 && idx == firstVisibleIdx + m_HoverRow) {
-            DrawBox(pos.x, clampedCy, m_BarW - 2.0f * pad, clampedH, m_HoverRowColour);
+            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_HoverRowColour);
         } else if (idx == m_Selected) {
-            DrawBox(pos.x, clampedCy, m_BarW - 2.0f * pad, clampedH, m_SelRowColour);
+            DrawBox(pos.x, rowCy, m_BarW - 2.0f * pad, m_RowH, m_SelRowColour);
         }
 
         DrawText((*m_pItems)[idx].c_str(),
                   pos.x - m_BarW * 0.5f + textPad, rowCy + lineH * 0.5f,
                   m_TextScale, m_RowTextColour, &textClip);
     }
+
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    glDisable(GL_SCISSOR_TEST);
+#endif
 
     DrawFadeEdges(viewportTop, viewportBottom);
 }

@@ -44,6 +44,12 @@
 // widget has no ScrollingMenuItem children -- rows are drawn directly from
 // m_ScrollOffset each frame).
 //
+// Row content clip: a straddling row's highlight box / text is CUT at the
+// panel's inner viewport edge (true glScissor, inset past the box's rim --
+// see Draw()), not geometrically shrunk -- a shrunk box reads as a squish,
+// not a clip. The scissor rect and Font::DrawString's clipRect use the same
+// world-space bounds so both clip mechanisms agree pixel-for-pixel.
+//
 // Sign convention: m_ScrollOffset >= 0; 0 = list top (item 0 first row),
 // +maxScroll = list bottom (maxScroll = (itemCount-visibleRows)*rowH).
 // Increasing m_ScrollOffset shifts every row UP the panel, revealing LATER
@@ -96,6 +102,10 @@ public:
 
     void SetRowColours(Colour sel, Colour hover, Colour text);
     void SetCaretTexture(const Mortar::SmartPtr<Mortar::Texture>& tex) { m_CaretTex = tex; }
+    // list_fade.tex -- top-rounded-corner fade band NineSlice-drawn at the
+    // open panel's top edge normally, and at the bottom edge flipV=true (see
+    // DrawFadeEdges). Optional: DrawFadeEdges no-ops if never set.
+    void SetFadeTexture(const Mortar::SmartPtr<Mortar::Texture>& tex) { m_FadeTex = tex; }
     void SetRowHeight(float h) { m_RowH = h; }
     void SetTextScale(float s) { m_TextScale = s; }
 
@@ -127,16 +137,16 @@ private:
     // class of bug.
     float ComputeMaxScroll() const;
 
-    // Top/bottom soft-gradient overlays for the open row list: the box.tex
-    // row/panel INTERIOR fill colour (dark wood groove, NOT m_Tint -- see
-    // .cpp), opaque at the panel's outer edge fading to transparent
-    // (kFadeHeightFrac * m_RowH) world units inward, drawn AFTER the row
+    // Top/bottom rounded-corner fade band for the open row list: m_FadeTex
+    // (list_fade.tex -- see its own header comment) NineSlice-drawn at
+    // (kFadeHeightFrac * m_RowH) world-unit height, inset kBoxDestBorderX in
+    // from each side (the same NineSlice border DrawBox's panel box itself
+    // reserves) so the band's rounded top corners line up with the panel's
+    // own rounded corners and never draw over its bevel/rim. Top band drawn
+    // normally; bottom band reuses the SAME texture with flipV=true
+    // (NineSlice::Draw) rather than a second asset. Drawn AFTER the row
     // loop so a row scrolling past the viewport edge dissolves into it
-    // rather than being hard-cut. Inset kBoxDestBorderX in from each side
-    // (the same NineSlice border DrawBox's panel box itself reserves) so
-    // the fade sits within the box's inner content region, not over its
-    // bevel/rim. Port-only (no NineSlice/Font clip primitive supports a
-    // soft edge -- this is a separate 2-quad overlay, per-vertex alpha).
+    // rather than being hard-cut. No-ops if m_FadeTex was never set.
     void DrawFadeEdges(float viewportTop, float viewportBottom);
     static const float kFadeHeightFrac;   // 1/3 -- fraction of m_RowH each fade band spans
 
@@ -170,9 +180,7 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_CaretTex;
     float m_TextScale;   // default 18.0f, matching SettingsScreen.cpp DrawSettingsLabel's convention
 
-    // Lazily-created 1x1 solid-white texture for DrawFadeEdges' gradient
-    // quads (per-vertex alpha does the fade; the texture just needs to be
-    // opaque white so MODULATE passes vertex colour through unchanged).
+    // Caller-injected via SetFadeTexture() -- see DrawFadeEdges doc.
     Mortar::SmartPtr<Mortar::Texture> m_FadeTex;
 };
 
