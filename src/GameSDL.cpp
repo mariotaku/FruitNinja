@@ -208,12 +208,6 @@ void Game::pollInput() {
             LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
             OSD_AddMessage(FN::g_DebugWireframe ? "Wireframe: ON" : "Wireframe: OFF");
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F3) {
-            // Port specific: toggle FPS counter overlay.
-            FN::g_ShowFps = !FN::g_ShowFps;
-            LOG_DEBUG("Debug", "FPS overlay %s", FN::g_ShowFps ? "ON" : "OFF");
-            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
-            OSD_AddMessage(FN::g_ShowFps ? "FPS: ON" : "FPS: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F4) {
             // Port specific: OSD toast per SFX played (SoundManager::SFXPlay).
             // Display-only diagnostic; never gates actual audio.
@@ -221,29 +215,6 @@ void Game::pollInput() {
             LOG_DEBUG("Debug", "SFX OSD %s", FN::g_bOsdSfx ? "ON" : "OFF");
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
             OSD_AddMessage(FN::g_bOsdSfx ? "SFX OSD: ON" : "SFX OSD: OFF");
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F5) {
-            // Port specific: velocity-gated pointer slash. See
-            // src/platform/InputTranslatorSDL.cpp for the cursor-tracking
-            // logic and src/entities/SlashEntity.cpp for the speed gate.
-            FN::g_MotionMode = !FN::g_MotionMode;
-            LOG_INFO("MOTION", "motion mode %s", FN::g_MotionMode ? "ON" : "OFF");
-            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
-            OSD_AddMessage(FN::g_MotionMode ? "Motion mode: ON" : "Motion mode: OFF");
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F6) {
-            // Port specific: live-tune g_MotionSpeedThreshold down (F6) / up (F8).
-            FN::g_MotionSpeedThreshold -= 1.0f;
-            if (FN::g_MotionSpeedThreshold < 0.0f) FN::g_MotionSpeedThreshold = 0.0f;
-            LOG_DEBUG("MOTION", "threshold = %.1f", FN::g_MotionSpeedThreshold);
-            char osd[64];
-            snprintf(osd, sizeof(osd), "Motion threshold: %.1f", FN::g_MotionSpeedThreshold);
-            OSD_AddMessage(osd);
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F8) {
-            // Port specific: live-tune g_MotionSpeedThreshold up (F8) / down (F6).
-            FN::g_MotionSpeedThreshold += 1.0f;
-            LOG_DEBUG("MOTION", "threshold = %.1f", FN::g_MotionSpeedThreshold);
-            char osd[64];
-            snprintf(osd, sizeof(osd), "Motion threshold: %.1f", FN::g_MotionSpeedThreshold);
-            OSD_AddMessage(osd);
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
