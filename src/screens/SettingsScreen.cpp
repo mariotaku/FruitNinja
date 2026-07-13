@@ -13,6 +13,7 @@
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "game/GameWork.h"
+#include "game/SettingsSave.h"
 #include "screens/MainScreen.h"
 #include "engine/util/Localisation.h"
 #include "engine/util/Delegate.h"
@@ -384,10 +385,11 @@ void SettingsScreen::Toggle() {
         s_pSettings->SetPendingRemoval();
         s_pSettings = NULL;
 
+        SaveSettings();
+
         if (langChanged) {
-            // TODO: v1.6.1 -- placeholder until settings persistence exists; quitting is
-            // how the new language takes effect on restart (no live-reload of already-baked
-            // UI strings/fonts).
+            // Port specific: quitting is how the new language takes effect on
+            // restart (no live-reload of already-baked UI strings/fonts).
             //
             // Port specific: DEFER the quit trigger -- do not call
             // MainScreen::TriggerQuitFromSettings() here. This runs mid-teardown

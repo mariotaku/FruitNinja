@@ -8,6 +8,7 @@
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
 #include "game/GameWork.h"
+#include "game/SettingsSave.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -37,6 +38,11 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 }
 
 int main(int argc, char* argv[]) {
+    // Port specific: load persisted settings BEFORE parsing CLI overrides
+    // below, so an explicit --lang/--motion/--fps/--motion-threshold flag
+    // still wins by running after and overwriting the loaded value again.
+    LoadSettings();
+
     // Port specific: parse launch parameters for debug flags.
     //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
