@@ -32,18 +32,38 @@
 // plate (bottom-right of the screen) and never scrolls.
 //
 // Lifecycle: call the static SettingsScreen::Toggle() to open/close the modal
-// -- it owns the single file-static instance pointer, the AddControl/Init on
-// open, and the SetInputModal(NULL)+SetPendingRemoval on close. Both the
+// -- it owns the single file-static instance pointer. Open (s_pSettings ==
+// NULL): new + AddControl + Init(), THEN starts the drop-in animation
+// (m_AnimPhase = ANIM_OPENING, see below) -- the popup is laid out at rest
+// but drawn/updated off-screen until the animation eases it in. Close
+// (s_pSettings != NULL, phase == ANIM_OPEN): starts the drop-out animation
+// (ANIM_CLOSING) instead of tearing down immediately; re-entrant close
+// requests while already ANIM_CLOSING are ignored. The ACTUAL teardown
+// (SetInputModal(NULL) + SetPendingRemoval + SaveSettings + the
+// quit-on-language-change check) runs at the END of the CLOSING animation,
+// in SettingsScreen::UpdateAnim() -- see its comment for why (deferred from
+// Toggle() itself, same steps/order as before, just deferred). Both the
 // MainScreen settings button (src/screens/MainScreen.cpp) and
 // m_pCloseButton's tap (CloseCallback) call Toggle() so there is exactly one
-// open/close path. Toggle()'s close branch additionally quits the app if
-// game_work.languageFlag changed while the modal was open (see m_InitialLanguageFlag).
+// open/close path.
 // Release() (called by the HUD removal sweep, and by the dtor) tears down
 // m_pCloseButton via SetPendingRemoval (it is still AddControl'd -- HUD's own
 // Update sweep deletes it) and directly `delete`s the four un-AddControl'd
 // widgets (they were never linked into game_work.mHud's control list, so
 // there is no dangling-pointer risk), plus the shared injected
 // textures/font.
+//
+// Popup animation: AnimPhase (ANIM_OPENING/ANIM_OPEN/ANIM_CLOSING) +
+// m_PopupOffsetY implement a drop-from-top-with-bounce open / slide-up close,
+// with the backdrop dim fading in/out alongside. m_PopupOffsetY is a single
+// world-space Y offset added to EVERYTHING the popup draws -- the plate, the
+// glScissor clip band, labels/dividers/fade bands/scrollbar, the four
+// widgets' pos.y, and the close button's pos.y -- i.e. it translates the
+// whole popup coordinate space vertically (see UpdateAnim()/Update()/Draw()).
+// Widget touch input (UpdateScroll() + the four widgets' own Update()) only
+// runs while phase == ANIM_OPEN; HUD::SetInputModal(this) stays set for the
+// entire opening+open+closing lifetime so the screen behind stays frozen
+// throughout, not just while OPEN.
 //
 // Scrolling: the four widgets' `pos.y` is rewritten every Update() (base Y,
 // captured once in Init(), plus the live scroll offset) BEFORE each widget's
@@ -79,6 +99,12 @@ public:
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
 
+    // Port specific: popup open/close animation phase. OPENING/CLOSING drive
+    // m_PopupOffsetY (see below) and gate widget input; only ANIM_OPEN accepts
+    // touch. See .cpp UpdateAnim() for the easing/timing and Toggle()'s header
+    // note for how this replaces the old immediate-open/immediate-close model.
+    enum AnimPhase { ANIM_OPENING, ANIM_OPEN, ANIM_CLOSING };
+
     // Port specific: kinetic scroll for the plate's content viewport --
     // drag/fling/spring-back model mirroring UiDropdown::Update's tail (same
     // constants: SCROLL_FRICTION/DRAG_DELTA_FACTOR/SPRING_BACK_COEF/
@@ -86,6 +112,11 @@ public:
     // before the four widgets' own Update(). See the header's Scrolling note
     // above for the pos.y-rewrite contract this feeds.
     void UpdateScroll(float dt);
+
+    // Port specific: advances m_AnimPhase/m_AnimTimer/m_PopupOffsetY/
+    // m_BackdropAlpha each frame. Called first thing in Update(), before
+    // UpdateScroll() and the widgets. See .cpp for the easing curves.
+    void UpdateAnim(float dt);
 
     int GetType() override { return 1; }
 
@@ -108,6 +139,13 @@ public:
     // modal owns the HUD) and fires the real quit trigger then. See
     // MainScreen::Update's poll block (src/screens/MainScreen.cpp).
     static bool s_QuitAfterClose;
+
+    // Test-only: skip straight to ANIM_OPEN / offset 0 / full backdrop alpha
+    // so render-test captures are deterministic without depending on how many
+    // settle frames the harness happens to run (the open animation is
+    // ~0.28s/~17 frames at 60fps, longer than the harness's usual settle
+    // window). See test_settings_screen_render.cpp.
+    void SetAnimOpenForTest();
 
 private:
     UiDropdown* m_LangDrop;
@@ -191,6 +229,17 @@ private:
     // close branch compares against the live value to detect a language change
     // and trigger the quit-to-apply-on-restart path (see .cpp).
     uint8_t m_InitialLanguageFlag;
+
+    // Port specific: popup open/close animation state (see AnimPhase, .cpp
+    // UpdateAnim()). m_PopupOffsetY (world/ortho Y units) is added to every
+    // element the popup draws AND to the four widgets'/close button's pos.y --
+    // i.e. it translates the whole popup coordinate space vertically. +Y is up
+    // in this centered ortho, so the popup starts ABOVE the screen (large
+    // +offset) and animates down to 0 (rest).
+    AnimPhase m_AnimPhase;
+    float     m_AnimTimer;    // seconds elapsed in the current phase
+    float     m_PopupOffsetY; // world units, added to popup Y everywhere (see above)
+    float     m_BackdropAlpha; // 0..1, current backdrop dim fade (eased, not raw progress)
 
     // Drag/fling/spring-back constants -- ported verbatim from UiDropdown
     // (src/ui/UiDropdown.h/.cpp), itself ported from ScrollingMenu
