@@ -37,6 +37,34 @@ static void  (APIENTRYP s_glDeleteBuffers)        (GLsizei, const GLuint*) = nul
 static void  (APIENTRYP s_glBindBuffer)           (GLenum, GLuint) = nullptr;
 static void  (APIENTRYP s_glBufferData)           (GLenum, GLsizeiptr,
                                                    const void*, GLenum) = nullptr;
+// GL 2.0 shader entry points (Renderer 2D shader path).
+static GLuint (APIENTRYP s_glCreateShader)        (GLenum) = nullptr;
+static void  (APIENTRYP s_glShaderSource)         (GLuint, GLsizei,
+                                                   const GLchar* const*,
+                                                   const GLint*) = nullptr;
+static void  (APIENTRYP s_glCompileShader)        (GLuint) = nullptr;
+static void  (APIENTRYP s_glGetShaderiv)          (GLuint, GLenum, GLint*) = nullptr;
+static void  (APIENTRYP s_glGetShaderInfoLog)     (GLuint, GLsizei, GLsizei*,
+                                                   GLchar*) = nullptr;
+static GLuint (APIENTRYP s_glCreateProgram)       (void) = nullptr;
+static void  (APIENTRYP s_glAttachShader)         (GLuint, GLuint) = nullptr;
+static void  (APIENTRYP s_glBindAttribLocation)   (GLuint, GLuint, const GLchar*) = nullptr;
+static void  (APIENTRYP s_glLinkProgram)          (GLuint) = nullptr;
+static void  (APIENTRYP s_glGetProgramiv)         (GLuint, GLenum, GLint*) = nullptr;
+static void  (APIENTRYP s_glGetProgramInfoLog)    (GLuint, GLsizei, GLsizei*,
+                                                   GLchar*) = nullptr;
+static void  (APIENTRYP s_glUseProgram)           (GLuint) = nullptr;
+static GLint (APIENTRYP s_glGetUniformLocation)   (GLuint, const GLchar*) = nullptr;
+static void  (APIENTRYP s_glUniformMatrix4fv)     (GLint, GLsizei, GLboolean,
+                                                   const GLfloat*) = nullptr;
+static void  (APIENTRYP s_glUniform1i)            (GLint, GLint) = nullptr;
+static void  (APIENTRYP s_glVertexAttribPointer)  (GLuint, GLint, GLenum,
+                                                   GLboolean, GLsizei,
+                                                   const void*) = nullptr;
+static void  (APIENTRYP s_glEnableVertexAttribArray)  (GLuint) = nullptr;
+static void  (APIENTRYP s_glDisableVertexAttribArray) (GLuint) = nullptr;
+static void  (APIENTRYP s_glDeleteShader)         (GLuint) = nullptr;
+static void  (APIENTRYP s_glDeleteProgram)        (GLuint) = nullptr;
 
 extern "C" {
 
@@ -69,6 +97,74 @@ void APIENTRY glBufferData(GLenum target, GLsizeiptr size,
     if (s_glBufferData) s_glBufferData(target, size, data, usage);
 }
 
+GLuint APIENTRY glCreateShader(GLenum type) {
+    return s_glCreateShader ? s_glCreateShader(type) : 0;
+}
+void APIENTRY glShaderSource(GLuint shader, GLsizei count,
+                             const GLchar* const* string, const GLint* length) {
+    if (s_glShaderSource) s_glShaderSource(shader, count, string, length);
+}
+void APIENTRY glCompileShader(GLuint shader) {
+    if (s_glCompileShader) s_glCompileShader(shader);
+}
+void APIENTRY glGetShaderiv(GLuint shader, GLenum pname, GLint* params) {
+    if (s_glGetShaderiv) s_glGetShaderiv(shader, pname, params);
+}
+void APIENTRY glGetShaderInfoLog(GLuint shader, GLsizei bufSize,
+                                 GLsizei* length, GLchar* infoLog) {
+    if (s_glGetShaderInfoLog) s_glGetShaderInfoLog(shader, bufSize, length, infoLog);
+}
+GLuint APIENTRY glCreateProgram(void) {
+    return s_glCreateProgram ? s_glCreateProgram() : 0;
+}
+void APIENTRY glAttachShader(GLuint program, GLuint shader) {
+    if (s_glAttachShader) s_glAttachShader(program, shader);
+}
+void APIENTRY glBindAttribLocation(GLuint program, GLuint index, const GLchar* name) {
+    if (s_glBindAttribLocation) s_glBindAttribLocation(program, index, name);
+}
+void APIENTRY glLinkProgram(GLuint program) {
+    if (s_glLinkProgram) s_glLinkProgram(program);
+}
+void APIENTRY glGetProgramiv(GLuint program, GLenum pname, GLint* params) {
+    if (s_glGetProgramiv) s_glGetProgramiv(program, pname, params);
+}
+void APIENTRY glGetProgramInfoLog(GLuint program, GLsizei bufSize,
+                                  GLsizei* length, GLchar* infoLog) {
+    if (s_glGetProgramInfoLog) s_glGetProgramInfoLog(program, bufSize, length, infoLog);
+}
+void APIENTRY glUseProgram(GLuint program) {
+    if (s_glUseProgram) s_glUseProgram(program);
+}
+GLint APIENTRY glGetUniformLocation(GLuint program, const GLchar* name) {
+    return s_glGetUniformLocation ? s_glGetUniformLocation(program, name) : -1;
+}
+void APIENTRY glUniformMatrix4fv(GLint location, GLsizei count,
+                                 GLboolean transpose, const GLfloat* value) {
+    if (s_glUniformMatrix4fv) s_glUniformMatrix4fv(location, count, transpose, value);
+}
+void APIENTRY glUniform1i(GLint location, GLint v0) {
+    if (s_glUniform1i) s_glUniform1i(location, v0);
+}
+void APIENTRY glVertexAttribPointer(GLuint index, GLint size, GLenum type,
+                                    GLboolean normalized, GLsizei stride,
+                                    const void* pointer) {
+    if (s_glVertexAttribPointer)
+        s_glVertexAttribPointer(index, size, type, normalized, stride, pointer);
+}
+void APIENTRY glEnableVertexAttribArray(GLuint index) {
+    if (s_glEnableVertexAttribArray) s_glEnableVertexAttribArray(index);
+}
+void APIENTRY glDisableVertexAttribArray(GLuint index) {
+    if (s_glDisableVertexAttribArray) s_glDisableVertexAttribArray(index);
+}
+void APIENTRY glDeleteShader(GLuint shader) {
+    if (s_glDeleteShader) s_glDeleteShader(shader);
+}
+void APIENTRY glDeleteProgram(GLuint program) {
+    if (s_glDeleteProgram) s_glDeleteProgram(program);
+}
+
 } // extern "C"
 
 bool gl_load_extensions_win32() {
@@ -83,6 +179,26 @@ bool gl_load_extensions_win32() {
     LOAD(glDeleteBuffers);
     LOAD(glBindBuffer);
     LOAD(glBufferData);
+    LOAD(glCreateShader);
+    LOAD(glShaderSource);
+    LOAD(glCompileShader);
+    LOAD(glGetShaderiv);
+    LOAD(glGetShaderInfoLog);
+    LOAD(glCreateProgram);
+    LOAD(glAttachShader);
+    LOAD(glBindAttribLocation);
+    LOAD(glLinkProgram);
+    LOAD(glGetProgramiv);
+    LOAD(glGetProgramInfoLog);
+    LOAD(glUseProgram);
+    LOAD(glGetUniformLocation);
+    LOAD(glUniformMatrix4fv);
+    LOAD(glUniform1i);
+    LOAD(glVertexAttribPointer);
+    LOAD(glEnableVertexAttribArray);
+    LOAD(glDisableVertexAttribArray);
+    LOAD(glDeleteShader);
+    LOAD(glDeleteProgram);
 #undef LOAD
     return true;
 }

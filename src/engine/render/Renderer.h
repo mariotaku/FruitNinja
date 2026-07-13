@@ -4,19 +4,32 @@
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/MatrixManager.h"
+#include "render/ShaderProgram.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 
-// Fixed-function GL renderer — targets the same pipeline as the binary
-// (ES 1.x / desktop-GL compatibility profile). No shaders, no attrib
-// locations, no programs. Every draw call goes through
-// glMatrixMode / glLoadMatrixf / glEnableClientState / glVertexPointer
-// and friends.
+// GL renderer — targets the same behaviour as the binary's ES 1.x pipeline.
+//
+// GLES2 migration phase 2: the 2D quad/UI draws (DrawQuad, DrawTriList,
+// DrawTriStrip, DrawColorQuad, draw_fullscreen_quad) render through a real
+// GLES2 shader program (Shaders.h / ShaderProgram.h) via DrawShaded2D.
+// Everything that funnels through these (font, particles, HUD, screens)
+// rides the shader path with them. 3D Geometry::Render still uses the
+// fixed-function pipeline this phase; DrawShaded2D restores glUseProgram(0)
+// and disables its generic attrib arrays after EVERY draw so both coexist.
 struct Renderer {
     static Renderer* s_instance;
     static Renderer* GetInstance() { return s_instance; }
 
+    Renderer();
+
+    // Sets s_instance and creates the GL resources for the 2D shader path
+    // (program, streaming VBO, 1x1 white texture). Requires a LIVE GL
+    // context + gl_load_functions() already done. Returns false if the
+    // shader program fails to compile/link (GL 2.0 unavailable).
     bool init();
+    // Destroys the GL resources created by init(). Call while the GL
+    // context is still current.
     void shutdown();
 
     // One-shot GL state initialisation, matches FruitNinja::InitGL
@@ -81,6 +94,27 @@ struct Renderer {
     // particle templates) has already set its own glBlendFunc.
     void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc = true);
     void DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount);
+
+private:
+    // Shared GLES2 draw for the 2D paths. Uploads `mvp` to u_mvp, streams
+    // `verts` (vertCount * stride bytes) into m_QuadVBO (orphan + upload),
+    // points attribs 0/1/2 (pos 3xfloat @posOff, uv 2xfloat @uvOff, colour
+    // 4x normalized ubyte @colOff) and glDrawArrays(prim).
+    // tex != 0: binds it on unit 0. tex == 0: keeps the caller's current
+    // unit-0 binding (Texture::Set / draw_sprite's raw glBindTexture own it —
+    // same contract the fixed-function path had).
+    // Blend / cull / scissor state is the CALLER's responsibility, set before
+    // calling (matches the old per-draw FF state decisions).
+    // Coexistence guarantee: always exits via glUseProgram(0) + attrib 0/1/2
+    // disable + GL_ARRAY_BUFFER unbind so the still-fixed-function paths
+    // (Geometry::Render, matrix-stack uploads) see clean state.
+    void DrawShaded2D(const void* verts, int vertCount, int stride,
+                      int posOff, int uvOff, int colOff,
+                      GLenum prim, GLuint tex, const Matrix44& mvp);
+
+    ShaderProgram m_Quad2D;  // the Shaders.h Quad2D program
+    GLuint m_QuadVBO;        // streaming VBO for DrawShaded2D
+    GLuint m_WhiteTex;       // 1x1 opaque white — lets DrawColorQuad reuse the textured shader
 };
 
 #endif

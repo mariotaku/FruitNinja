@@ -1,28 +1,108 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
+#include "render/Shaders.h"
 #include "asset/Texture.h"
 #include "debug/Logger.h"
+#include <cstddef>
 #include <cstdio>
 #include <cmath>
 
-// Fixed-function renderer. Every draw uploads MVP to GL_PROJECTION and
-// leaves GL_MODELVIEW as identity — since MatrixManager::GetMVP already
-// composes proj * view * world, the result is the same and we save a
-// matmul. When we eventually need per-vertex lighting (IsLit=true),
-// this shortcut will need unwinding into proper modelview / projection.
-//
-// Sprite/quad helpers use glColor4f for the tint, GL_MODULATE texenv,
-// and client-array vertex/UV streams drawn as GL_TRIANGLE_STRIP.
+// 2D draws (DrawQuad / DrawTriList / DrawTriStrip / DrawColorQuad /
+// draw_fullscreen_quad) go through the GLES2 Quad2D shader via
+// DrawShaded2D; the MVP that the fixed-function path used to upload via
+// glLoadMatrixf(GL_PROJECTION) is fed to u_mvp instead — same 16 floats
+// (MatrixManager::GetMVP composes proj * view * world). The shader's
+// texture2D(u_tex) * v_color reproduces the old GL_MODULATE texenv.
+// Font / particle / HUD drawing funnels through DrawTriList/DrawTriStrip,
+// so it rides the shader path too; 3D Geometry::Render keeps its own
+// fixed-function client-array path this phase.
 
 Renderer* Renderer::s_instance = nullptr;
 
+// Interleaved vertex for the quad paths (DrawQuad / DrawColorQuad /
+// draw_fullscreen_quad). QUADCUSTOMVERTEX keeps its own binary layout and
+// is fed to DrawShaded2D with its own offsets.
+struct Shaded2DVertex {
+    float x, y, z;
+    float u, v;
+    uint32_t color;   // Colour::PlatformColour() packing (LE bytes r,g,b,a)
+};
+
+Renderer::Renderer() : m_QuadVBO(0), m_WhiteTex(0) {}
+
 bool Renderer::init() {
     s_instance = this;
+
+    if (!m_Quad2D.Compile(FnShaders::Quad2D_VS, FnShaders::Quad2D_FS)) {
+        LOG_ERROR("RENDERER/init", "2D shader program failed to build");
+        return false;
+    }
+
+    glGenBuffers(1, &m_QuadVBO);
+
+    // 1x1 opaque white texture: DrawColorQuad binds it so texture2D samples
+    // 1.0 and the vertex colour passes through (the FF path drew untextured).
+    glGenTextures(1, &m_WhiteTex);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_WhiteTex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    static const unsigned char kWhiteTexel[4] = { 255, 255, 255, 255 };
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, kWhiteTexel);
+    glBindTexture(GL_TEXTURE_2D, 0);
     return true;
 }
 
 void Renderer::shutdown() {
-    // Nothing owned — FF pipeline has no allocated programs.
+    m_Quad2D.Destroy();
+    if (m_WhiteTex) {
+        glDeleteTextures(1, &m_WhiteTex);
+        m_WhiteTex = 0;
+    }
+    if (m_QuadVBO) {
+        glDeleteBuffers(1, &m_QuadVBO);
+        m_QuadVBO = 0;
+    }
+}
+
+// See Renderer.h for the full contract. Never early-return between Use()
+// and the trailing restore -- the glUseProgram(0) + attrib-disable is the
+// coexistence guarantee for the still-fixed-function paths (Geometry::Render
+// and the matrix-stack uploads).
+void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
+                            int posOff, int uvOff, int colOff,
+                            GLenum prim, GLuint tex, const Matrix44& mvp) {
+    m_Quad2D.Use();
+    glUniformMatrix4fv(m_Quad2D.MVPLoc(), 1, GL_FALSE, mvp.ptr());
+
+    glActiveTexture(GL_TEXTURE0);
+    if (tex) {
+        glBindTexture(GL_TEXTURE_2D, tex);
+    }
+    glUniform1i(m_Quad2D.TexLoc(), 0);
+
+    const GLsizeiptr size = (GLsizeiptr)((size_t)vertCount * (size_t)stride);
+    glBindBuffer(GL_ARRAY_BUFFER, m_QuadVBO);
+    glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);      // orphan
+    glBufferData(GL_ARRAY_BUFFER, size, verts, GL_DYNAMIC_DRAW);  // upload
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)(size_t)posOff);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (const void*)(size_t)uvOff);
+    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (const void*)(size_t)colOff);
+
+    glDrawArrays(prim, 0, vertCount);
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glUseProgram(0);
 }
 
 // Matches SetPerspective (binary 0x00181e00, anonymous namespace).
@@ -78,73 +158,42 @@ void Renderer::SetupGameOrtho() {
     mm.GetWorldStack().Reset();
 }
 
-// Shared FF setup for a textured 2D draw with a uniform byte-colour tint.
-// Uploads MVP, binds texture, sets GL_MODULATE so colour * texel is the
-// final fragment colour. Caller handles client-array setup + draw call.
-static void SetupFF2D(const float* mvp, GLuint tex, const Colour& tint) {
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(mvp);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glActiveTexture(GL_TEXTURE0);
-    if (tex) {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, tex);
-        TexEnvModulate();
-    } else {
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDisable(GL_TEXTURE_2D);
-    }
-
-    glDisable(GL_LIGHTING);
-    glColor4ub(tint.r, tint.g, tint.b, tint.a);
-}
-
 void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
     // Clip-space fullscreen quad, identity MVP.
-    static const float verts[] = {
-        // pos(xyz)       uv
-        -1.0f, -1.0f, 0.0f,  0.0f, 1.0f,
-         1.0f, -1.0f, 0.0f,  1.0f, 1.0f,
-        -1.0f,  1.0f, 0.0f,  0.0f, 0.0f,
-         1.0f,  1.0f, 0.0f,  1.0f, 0.0f,
+    const uint32_t c =
+        Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)).PlatformColour();
+    Shaded2DVertex verts[4] = {
+        { -1.0f, -1.0f, 0.0f,  0.0f, 1.0f,  c },
+        {  1.0f, -1.0f, 0.0f,  1.0f, 1.0f,  c },
+        { -1.0f,  1.0f, 0.0f,  0.0f, 0.0f,  c },
+        {  1.0f,  1.0f, 0.0f,  1.0f, 0.0f,  c },
     };
     Matrix44 identity;
-
-    SetupFF2D(identity.ptr(), tex,
-              Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 
     // Port specific: fullscreen quad, no binary counterpart -- enable blend explicitly.
     // Relies on no ambient GL_BLEND state (per-draw DrawQuad no longer leaves it on).
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 20, verts);
-    glClientActiveTexture(GL_TEXTURE0);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, 20, verts + 3);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
+                 (int)offsetof(Shaded2DVertex, x),
+                 (int)offsetof(Shaded2DVertex, u),
+                 (int)offsetof(Shaded2DVertex, color),
+                 GL_TRIANGLE_STRIP, tex, identity);
 }
 
 // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: UV args are (uMin,uMax,vMin,vMax), U-pair then V-pair.
 void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, float vMax) {
     // Unit quad (-0.5..0.5) transformed by current matrix stack MVP.
     // Vertex UV table matches binary DrawQuadUnCached: BL=(uMin,vMax), BR=(uMax,vMax), TL=(uMin,vMin), TR=(uMax,vMin).
-    float verts[] = {
-        // pos(xyz)          uv
-        -0.5f, -0.5f, 0.0f,  uMin, vMax,  // BL
-         0.5f, -0.5f, 0.0f,  uMax, vMax,  // BR
-        -0.5f,  0.5f, 0.0f,  uMin, vMin,  // TL
-         0.5f,  0.5f, 0.0f,  uMax, vMin,  // TR
+    // The old glColor4ub(tint) uniform tint is now per-vertex a_color -- same
+    // texel * colour modulate the GL_MODULATE texenv performed.
+    const uint32_t c = tint.PlatformColour();
+    Shaded2DVertex verts[4] = {
+        { -0.5f, -0.5f, 0.0f,  uMin, vMax,  c },  // BL
+        {  0.5f, -0.5f, 0.0f,  uMax, vMax,  c },  // BR
+        { -0.5f,  0.5f, 0.0f,  uMin, vMin,  c },  // TL
+        {  0.5f,  0.5f, 0.0f,  uMax, vMin,  c },  // TR
     };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
@@ -165,20 +214,6 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     }
 #endif
 
-    // Caller already bound the texture via Texture::Set (which
-    // glBindTexture's to TEXTURE_2D unit 0); re-enable TEXTURE_2D and
-    // set the texenv mode / tint without re-binding.
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(mvp.ptr());
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    TexEnvModulate();
-    glDisable(GL_LIGHTING);
-    glColor4ub(tint.r, tint.g, tint.b, tint.a);
-
     // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: 2D quad sets cull off +
     // per-draw blend -- OFF only if tint.a==255 && (no texture || texture has no alpha),
     // else ON. No trailing restore -- every draw path owns its own state (this replaces
@@ -193,19 +228,13 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     }
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 20, verts);
-    glClientActiveTexture(GL_TEXTURE0);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, 20, verts + 3);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    // tex=0: sample whatever the caller bound on unit 0 (Texture::Set, or
+    // draw_sprite's raw glBindTexture) -- same contract as the FF path.
+    DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
+                 (int)offsetof(Shaded2DVertex, x),
+                 (int)offsetof(Shaded2DVertex, u),
+                 (int)offsetof(Shaded2DVertex, color),
+                 GL_TRIANGLE_STRIP, 0, mvp);
 }
 
 // Port specific: no binary counterpart (GLES2 has no fixed-function user clip
@@ -262,25 +291,27 @@ void Renderer::SetWireframe(bool enabled) {
 }
 
 void Renderer::DrawColorQuad(const Colour& tint) {
-    float verts[] = { -0.5f,-0.5f,0.0f,  0.5f,-0.5f,0.0f,  -0.5f,0.5f,0.0f,  0.5f,0.5f,0.0f };
+    // Untextured in the FF path (texture disabled -> fragment = tint).
+    // Shader path: bind the 1x1 white texture so texture2D samples 1.0 and
+    // the vertex colour passes through -- identical output.
+    const uint32_t c = tint.PlatformColour();
+    Shaded2DVertex verts[4] = {
+        { -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,  c },
+        {  0.5f, -0.5f, 0.0f,  0.0f, 0.0f,  c },
+        { -0.5f,  0.5f, 0.0f,  0.0f, 0.0f,  c },
+        {  0.5f,  0.5f, 0.0f,  0.0f, 0.0f,  c },
+    };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
-
-    SetupFF2D(mvp.ptr(), 0, tint);
 
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 12, verts);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-    glDisableClientState(GL_VERTEX_ARRAY);
+    DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
+                 (int)offsetof(Shaded2DVertex, x),
+                 (int)offsetof(Shaded2DVertex, u),
+                 (int)offsetof(Shaded2DVertex, color),
+                 GL_TRIANGLE_STRIP, m_WhiteTex, mvp);
 }
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
@@ -300,31 +331,9 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
 }
 
 // Matches DrawTriList (0x00240e34) — QUADCUSTOMVERTEX stride 0x24 with
-// per-vertex RGBA colour in `verts->colour` (packed BGRA uint32).
+// per-vertex RGBA colour in `verts->colour` (Colour::PlatformColour packing).
 void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc) {
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(mvp.ptr());
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    TexEnvModulate();
-    glDisable(GL_LIGHTING);
-    glColor4ub(255, 255, 255, 255);  // vertex colour wins via COLOR_ARRAY
-
-    const int stride = sizeof(QUADCUSTOMVERTEX);  // 36
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, stride, &verts->x);
-    glClientActiveTexture(GL_TEXTURE0);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
-    glDisableClientState(GL_NORMAL_ARRAY);
 
     // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
     // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
@@ -337,40 +346,26 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlend
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    glDrawArrays(GL_TRIANGLES, 0, vertCount);
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
+    // tex=0: sample the caller's unit-0 binding (Texture::Set) -- the FF
+    // path never re-bound here either.
+    DrawShaded2D(verts, vertCount, (int)sizeof(QUADCUSTOMVERTEX),
+                 (int)offsetof(QUADCUSTOMVERTEX, x),
+                 (int)offsetof(QUADCUSTOMVERTEX, u),
+                 (int)offsetof(QUADCUSTOMVERTEX, colour),
+                 GL_TRIANGLES, 0, mvp);
 }
 
 void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(mvp.ptr());
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    // ASM-spec v1.6.1 Mesh::DrawTris @0x240c30 does not set tex-env; per-texture Set()
-    // at v1.6.1 Texture2D_Bada::Set @0x229788 owns it (REPLACE for blade, MODULATE for normal).
-    // Do NOT call TexEnvModulate() here -- it clobbers caller-set REPLACE for the blade path.
-    // Callers that need MODULATE must set it before reaching DrawTriStrip.
-    glDisable(GL_LIGHTING);
-    glColor4ub(255, 255, 255, 255);
-
-    const int stride = sizeof(QUADCUSTOMVERTEX);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, stride, &verts->x);
-    glClientActiveTexture(GL_TEXTURE0);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
-    glDisableClientState(GL_NORMAL_ARRAY);
+    // Tex-env note (was: "do NOT TexEnvModulate here"): GLES2 has no texenv;
+    // the Quad2D shader always computes texture2D * v_color (MODULATE). The
+    // per-texture REPLACE-vs-MODULATE distinction that v1.6.1
+    // Texture2D_Bada::Set @0x229788 owned no longer applies. Per the
+    // ASM-verified note in gl_funcs.h, the blade's GL_COMBINE env resolves to
+    // texture.rgb x vertex.rgb with vertex alpha (== MODULATE, blade texel
+    // alpha is uniformly opaque), so the fixed modulate shader is equivalent
+    // for the blade path too.
 
     // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
     // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
@@ -379,9 +374,9 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, vertCount);
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
+    DrawShaded2D(verts, vertCount, (int)sizeof(QUADCUSTOMVERTEX),
+                 (int)offsetof(QUADCUSTOMVERTEX, x),
+                 (int)offsetof(QUADCUSTOMVERTEX, u),
+                 (int)offsetof(QUADCUSTOMVERTEX, colour),
+                 GL_TRIANGLE_STRIP, 0, mvp);
 }

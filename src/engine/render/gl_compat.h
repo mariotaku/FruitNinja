@@ -71,6 +71,13 @@
     #define GL_ARRAY_BUFFER 0x8892
     #define GL_ELEMENT_ARRAY_BUFFER 0x8893
     #define GL_STATIC_DRAW 0x88E4
+    #define GL_DYNAMIC_DRAW 0x88E8
+    // GL 2.0 shader objects (Renderer 2D shader path).
+    #define GL_FRAGMENT_SHADER 0x8B30
+    #define GL_VERTEX_SHADER 0x8B31
+    #define GL_COMPILE_STATUS 0x8B81
+    #define GL_LINK_STATUS 0x8B82
+    #define GL_INFO_LOG_LENGTH 0x8B84
     #define GL_SCISSOR_TEST 0x0C11
     #define GL_UNPACK_ALIGNMENT 0x0CF5
     #define GL_VENDOR 0x1F00
@@ -159,6 +166,27 @@
         void glTexEnvf(GLenum, GLenum, GLfloat);
         void glTexEnvi(GLenum, GLenum, GLint);
         void glPolygonMode(GLenum, GLenum);
+        // GL 2.0 shader entry points (Renderer 2D shader path).
+        GLuint glCreateShader(GLenum);
+        void glShaderSource(GLuint, GLsizei, const GLchar* const*, const GLint*);
+        void glCompileShader(GLuint);
+        void glGetShaderiv(GLuint, GLenum, GLint*);
+        void glGetShaderInfoLog(GLuint, GLsizei, GLsizei*, GLchar*);
+        GLuint glCreateProgram(void);
+        void glAttachShader(GLuint, GLuint);
+        void glBindAttribLocation(GLuint, GLuint, const GLchar*);
+        void glLinkProgram(GLuint);
+        void glGetProgramiv(GLuint, GLenum, GLint*);
+        void glGetProgramInfoLog(GLuint, GLsizei, GLsizei*, GLchar*);
+        void glUseProgram(GLuint);
+        GLint glGetUniformLocation(GLuint, const GLchar*);
+        void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*);
+        void glUniform1i(GLint, GLint);
+        void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+        void glEnableVertexAttribArray(GLuint);
+        void glDisableVertexAttribArray(GLuint);
+        void glDeleteShader(GLuint);
+        void glDeleteProgram(GLuint);
     }
 #elif defined(FRUIT_GL_API_EMSCRIPTEN)
     // Port specific: Emscripten LEGACY_GL_EMULATION -- fixed-function over WebGL.
@@ -237,6 +265,44 @@
     // webOS / embedded Linux. libGLESv1_CM + libEGL.
     #include <GLES/gl.h>
     #include <GLES/glext.h>
+    // Port specific: GL 2.0 shader entry points used by the Renderer 2D
+    // shader path (ShaderProgram.cpp / Renderer.cpp). <GLES/gl.h> is ES 1.1
+    // only, so declare them here to keep the TUs compiling. NOTE:
+    // libGLESv1_CM does NOT export these -- the ES1 backend cannot run the
+    // GLES2 2D path; it must move to an ES2 context (+libGLESv2) as part of
+    // the GLES2 migration, and will fail at LINK time until it does.
+    #ifndef GL_FRAGMENT_SHADER
+    #define GL_FRAGMENT_SHADER 0x8B30
+    #define GL_VERTEX_SHADER 0x8B31
+    #define GL_COMPILE_STATUS 0x8B81
+    #define GL_LINK_STATUS 0x8B82
+    #define GL_INFO_LOG_LENGTH 0x8B84
+    #endif
+    #ifndef GL_DYNAMIC_DRAW
+    #define GL_DYNAMIC_DRAW 0x88E8
+    #endif
+    extern "C" {
+        GLuint glCreateShader(GLenum);
+        void glShaderSource(GLuint, GLsizei, const char* const*, const GLint*);
+        void glCompileShader(GLuint);
+        void glGetShaderiv(GLuint, GLenum, GLint*);
+        void glGetShaderInfoLog(GLuint, GLsizei, GLsizei*, char*);
+        GLuint glCreateProgram(void);
+        void glAttachShader(GLuint, GLuint);
+        void glBindAttribLocation(GLuint, GLuint, const char*);
+        void glLinkProgram(GLuint);
+        void glGetProgramiv(GLuint, GLenum, GLint*);
+        void glGetProgramInfoLog(GLuint, GLsizei, GLsizei*, char*);
+        void glUseProgram(GLuint);
+        GLint glGetUniformLocation(GLuint, const char*);
+        void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*);
+        void glUniform1i(GLint, GLint);
+        void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+        void glEnableVertexAttribArray(GLuint);
+        void glDisableVertexAttribArray(GLuint);
+        void glDeleteShader(GLuint);
+        void glDeleteProgram(GLuint);
+    }
 #elif defined(FRUIT_GL_API_GL_COMPAT)
     // Windows / macOS / Linux desktop. Mesa llvmpipe provides a
     // compatibility profile with full fixed-function support.

@@ -35,6 +35,8 @@ endif()
 target_sources(mortar_engine PRIVATE
     # Phase 3 — Rendering
     render/Renderer.cpp
+    render/Shaders.cpp        # Port specific: GLES2 2D shader sources
+    render/ShaderProgram.cpp  # Port specific: GL program wrapper
     render/MortarCamera.cpp
     render/QuadUtil.cpp
     # Phase 4 — Asset Pipeline
@@ -162,11 +164,17 @@ if(NOT FN_ASM_VERIFY)
         target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
     elseif (FRUIT_GL_API STREQUAL "ES1")
         # webOS / embedded Linux. libGLESv1_CM + libEGL.
+        # TODO: GLES2 2D shader path (Renderer::DrawShaded2D) needs GL2.0 entry
+        # points (glCreateShader etc.) that libGLESv1_CM does not export -- this
+        # target will fail to link until ES1 moves to libGLESv2 or gains a
+        # runtime-loaded GLES2 subset. Out of scope for the GLES2 2D migration
+        # (host/Emscripten only); revisit before building for webOS.
         target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
     elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
-        # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1
-        # -sGL_FFP_ONLY=1). No system GL library to link; the flags live on the
-        # fruit-ninja executable target (root CMakeLists.txt).
+        # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1,
+        # for the still-fixed-function 3D/font paths; the 2D path uses real GLES2
+        # shaders so GL_FFP_ONLY is NOT set). No system GL library to link; the
+        # flags live on the fruit-ninja executable target (root CMakeLists.txt).
         # No target_link_libraries call needed here.
     endif()
     target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)

@@ -185,9 +185,12 @@ endif()
 #
 # The port targets the same fixed-function pipeline the binary uses
 # (ES 1.x): glMatrixMode / glVertexPointer / glMaterialfv / ... —
-# a near 1:1 translation of the binary's PassBinding::Apply.
-# ES 2.0 shader translation was removed to keep fidelity and make it
-# easy to rule out shader-side deviations when comparing behaviour.
+# a near 1:1 translation of the binary's PassBinding::Apply, for the
+# 3D Geometry path (and remaining ES1 desktop/webOS 3D state setup).
+# The 2D quad/UI draw path (DrawQuad/DrawTriList/DrawTriStrip/
+# DrawColorQuad/draw_fullscreen_quad) uses a real GLES2 shader
+# (see src/engine/render/Shaders.h) for pixel-identical output on
+# WebGL/ES2-only targets; see Renderer::DrawShaded2D.
 #
 # FRUIT_GL_API selects which OS header to include:
 #   GL_COMPAT  - Desktop GL compatibility profile (<GL/gl.h>).
@@ -543,7 +546,6 @@ if (EMSCRIPTEN)
         "SHELL:-sUSE_SDL=2"
         "SHELL:-sUSE_FREETYPE=1"
         "SHELL:-sLEGACY_GL_EMULATION=1"
-        "SHELL:-sGL_FFP_ONLY=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         # Port specific: emscripten 3.1.27+ dropped the default stack to 64 KB
         # (older emscripten defaulted to 5 MB). 64 KB is far below the original
