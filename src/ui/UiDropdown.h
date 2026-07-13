@@ -23,6 +23,14 @@
 //   dd.SetOnChange(Delegate0<void>::Make(this, &Screen::OnDropdownChanged));
 //   // every frame: dd.Update(dt); ... dd.Draw(hudScale);  <- draw LAST among
 //   // the screen's widgets so the open panel overlays siblings correctly.
+//   // If the caller has its own content glScissor/scroll-clip (a scrolling
+//   // settings-style panel -- see SettingsScreen.cpp), call DrawBar()
+//   // INSIDE that scissor (it's pure geometry, touches no GL scissor state,
+//   // so the caller's clip governs it) and DrawPanel() AFTER the caller's
+//   // scissor is disabled, so only the popup list is allowed to overflow
+//   // the clipped content -- the bar itself must clip/fade like any other
+//   // row. Draw() (bar+panel together, unclipped) remains correct for a
+//   // dropdown with no surrounding scissor.
 //
 // `items` is caller-owned and NOT copied -- the vector must outlive this
 // widget and must not be resized/reallocated while GetSelected()'s index
@@ -96,7 +104,21 @@ public:
     virtual ~UiDropdown();
 
     void Update(float dt) override;
+    // Composed convenience: DrawBar() then DrawPanel(). Callers that need
+    // the bar to clip with scrolling content (see SettingsScreen.cpp) call
+    // the two halves separately instead -- DrawBar() inside the content
+    // scissor, DrawPanel() after it's disabled.
     void Draw(float* hudScale) override;
+    // Draws ONLY the collapsed bar (DrawBox + value text + caret) -- pure
+    // geometry, touches no GL scissor state, so the caller's own content
+    // scissor clips it. Drawn whether open or closed (matches the old
+    // Draw()'s unconditional bar draw before its open-panel branch).
+    void DrawBar(float* hudScale);
+    // Draws ONLY the open list panel (rows, highlights, fade edges) --
+    // no-op if !IsOpen(). Manages its own internal row-viewport glScissor
+    // (see .cpp); the caller must NOT have its own scissor enabled when
+    // calling this (GL scissor state isn't stacked).
+    void DrawPanel(float* hudScale);
 
     int GetSelected() const { return m_Selected; }
     void SetSelected(int idx);

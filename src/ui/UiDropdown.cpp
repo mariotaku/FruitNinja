@@ -385,6 +385,11 @@ void UiDropdown::DrawFadeEdges(float panelTopY, float panelH) {
 }
 
 void UiDropdown::Draw(float* hudScale) {
+    DrawBar(hudScale);
+    DrawPanel(hudScale);
+}
+
+void UiDropdown::DrawBar(float* hudScale) {
     (void)hudScale;
 
     DrawBox(pos.x, pos.y, m_BarW, m_BarH, m_Tint);
@@ -411,10 +416,21 @@ void UiDropdown::Draw(float* hudScale) {
         DrawGlyphQuad(m_CaretTex.Get(), pos.x + m_BarW * 0.5f - caretHalf - textPad, pos.y,
                       caretSize, caretSize, Colour::White);
     }
+}
+
+void UiDropdown::DrawPanel(float* hudScale) {
+    (void)hudScale;
 
     if (!m_Open) {
         return;
     }
+
+    const float textPad = 8.0f;
+    // Mortar::Font::DrawString's pos.y is a glyph-top anchor (glyph extends
+    // downward by GetLineHeight(scale); see Font.h). To center a line of
+    // text on centerY: yTop = centerY + lineH * 0.5f.
+    Mortar::Font* font = m_pFont ? m_pFont : game_work.pFontMain.Get();
+    const float lineH = font ? font->GetLineHeight(m_TextScale) : m_TextScale;
 
     int panelRows = m_pItems->size() < (size_t)m_VisibleRows
                         ? (int)m_pItems->size() : (int)m_VisibleRows;
