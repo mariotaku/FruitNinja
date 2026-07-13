@@ -57,12 +57,16 @@
 // m_PopupOffsetY implement a drop-from-top-with-bounce open / slide-up close,
 // with the backdrop dim fading in/out alongside. m_PopupOffsetY is a single
 // world-space Y offset added to EVERYTHING the popup draws -- the plate, the
-// glScissor clip band, labels/dividers/fade bands/scrollbar, the four
-// widgets' pos.y, and the close button's pos.y -- i.e. it translates the
-// whole popup coordinate space vertically (see UpdateAnim()/Update()/Draw()).
-// Widget touch input (UpdateScroll() + the four widgets' own Update()) only
-// runs while phase == ANIM_OPEN; HUD::SetInputModal(this) stays set for the
-// entire opening+open+closing lifetime so the screen behind stays frozen
+// glScissor clip band, labels/dividers/fade bands/scrollbar, and the four
+// widgets' pos.y -- i.e. it translates the whole popup coordinate space
+// vertically (see UpdateAnim()/Update()/Draw()). m_pCloseButton is OUTSIDE
+// this coordinate space -- it never drops from the top with the plate.
+// Instead it has its own bottom-right slide-in/out offset
+// (m_CloseBtnOffX/Y), driven by the same AnimPhase/m_AnimTimer lifecycle
+// (see m_CloseBtnOffX/Y field comment below + UpdateAnim()). Widget touch
+// input (UpdateScroll() + the four widgets' own Update()) only runs while
+// phase == ANIM_OPEN; HUD::SetInputModal(this) stays set for the entire
+// opening+open+closing lifetime so the screen behind stays frozen
 // throughout, not just while OPEN.
 //
 // Scrolling: the four widgets' `pos.y` is rewritten every Update() (base Y,
@@ -232,14 +236,27 @@ private:
 
     // Port specific: popup open/close animation state (see AnimPhase, .cpp
     // UpdateAnim()). m_PopupOffsetY (world/ortho Y units) is added to every
-    // element the popup draws AND to the four widgets'/close button's pos.y --
-    // i.e. it translates the whole popup coordinate space vertically. +Y is up
-    // in this centered ortho, so the popup starts ABOVE the screen (large
-    // +offset) and animates down to 0 (rest).
+    // element the popup draws AND to the four in-plate widgets' pos.y -- i.e.
+    // it translates the whole popup coordinate space vertically. +Y is up in
+    // this centered ortho, so the popup starts ABOVE the screen (large
+    // +offset) and animates down to 0 (rest). m_pCloseButton does NOT use
+    // this offset -- see m_CloseBtnOffX/Y below.
     AnimPhase m_AnimPhase;
     float     m_AnimTimer;    // seconds elapsed in the current phase
     float     m_PopupOffsetY; // world units, added to popup Y everywhere (see above)
     float     m_BackdropAlpha; // 0..1, current backdrop dim fade (eased, not raw progress)
+
+    // Port specific: m_pCloseButton is NOT part of the popup coordinate space
+    // above -- it does not translate with m_PopupOffsetY (it never drops from
+    // the top with the plate). Instead it has its own slide-in-from-bottom-
+    // right-corner motion, driven by the SAME m_AnimPhase/m_AnimTimer
+    // lifecycle: a 2D offset added on top of its fixed rest pos
+    // (kCloseBtnX, kCloseBtnY), eased from an off-screen bottom-right start
+    // (+X, -Y) to (0,0) on OPENING (ease-out-back, matching the plate's
+    // bounce), and back out to the start on CLOSING (ease-in). See .cpp
+    // UpdateAnim().
+    float     m_CloseBtnOffX;
+    float     m_CloseBtnOffY;
 
     // Drag/fling/spring-back constants -- ported verbatim from UiDropdown
     // (src/ui/UiDropdown.h/.cpp), itself ported from ScrollingMenu

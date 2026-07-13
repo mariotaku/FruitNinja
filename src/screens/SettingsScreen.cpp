@@ -330,6 +330,16 @@ static const float kPlateDestBorderX  = 44.0f, kPlateDestBorderY  = 29.0f;
 static const float kPopupStartOffsetY = 320.0f;
 static const float kAnimOpenDuration  = 0.28f; // OPENING duration, seconds
 static const float kAnimCloseDuration = 0.20f; // CLOSING duration, seconds
+
+// Port specific: m_pCloseButton's own slide-in-from-bottom-right-corner
+// offset (see header note) -- decoupled from kPopupStartOffsetY/
+// m_PopupOffsetY entirely. Rests at (kCloseBtnX, kCloseBtnY), near the
+// screen's bottom-right corner (below); the off-screen start pushes it
+// further right (+X) and further down (-Y, since +Y is up in this centered
+// ortho) by enough to clear the 320x480 screen with margin regardless of the
+// bomb's own sprite size.
+static const float kCloseBtnStartOffX = 120.0f;
+static const float kCloseBtnStartOffY = -120.0f;
 // Ease-out-back overshoot constant (standard "back" easing family, e.g.
 // easings.net easeOutBack, whose usual literature value is 1.70158 -- NOT
 // used here). Tuned down from that default so the resulting dip, which
@@ -430,6 +440,8 @@ void SettingsScreen::Toggle() {
         s_pSettings->m_AnimTimer     = 0.0f;
         s_pSettings->m_PopupOffsetY  = kPopupStartOffsetY;
         s_pSettings->m_BackdropAlpha = 0.0f;
+        s_pSettings->m_CloseBtnOffX  = kCloseBtnStartOffX;
+        s_pSettings->m_CloseBtnOffY  = kCloseBtnStartOffY;
         if (game_work.mHud) {
             // Port specific: capture input while the settings modal is open --
             // see HUD::SetInputModal (src/hud/HUD.h). Stays set for the whole
@@ -486,6 +498,8 @@ SettingsScreen::SettingsScreen()
     , m_AnimTimer(0.0f)
     , m_PopupOffsetY(0.0f)
     , m_BackdropAlpha(kBackdropTargetAlpha)
+    , m_CloseBtnOffX(0.0f)
+    , m_CloseBtnOffY(0.0f)
 {
     // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. This
     // screen owns the four in-plate widgets directly (NOT AddControl'd, see
@@ -722,7 +736,13 @@ void SettingsScreen::Update(float dt) {
     if (m_MotionCb)   m_MotionCb->pos.y   = m_MotionCbBaseY + off;
     if (m_SensSlider) m_SensSlider->pos.y = m_SensBaseY     + off;
     if (m_FpsCb)      m_FpsCb->pos.y      = m_FpsCbBaseY    + off;
-    if (m_pCloseButton) m_pCloseButton->pos.y = kCloseBtnY + m_PopupOffsetY;
+    // Port specific: m_pCloseButton does NOT track m_PopupOffsetY/off -- it
+    // has its own bottom-right slide-in offset (m_CloseBtnOffX/Y, see header
+    // note + UpdateAnim()), independent of the plate's drop-from-top motion.
+    if (m_pCloseButton) {
+        m_pCloseButton->pos.x = kCloseBtnX + m_CloseBtnOffX;
+        m_pCloseButton->pos.y = kCloseBtnY + m_CloseBtnOffY;
+    }
 
     // ---- kinetic scroll (owns/tracks the touch that drives it) + widget
     // ---- input -- ONLY while fully open; suppressed during
@@ -773,6 +793,10 @@ void SettingsScreen::Update(float dt) {
 // to run synchronously in Toggle()'s close branch (SaveSettings/
 // SetInputModal(NULL)/SetPendingRemoval/s_pSettings=NULL/s_QuitAfterClose),
 // in the same order, just deferred to here.
+// m_pCloseButton is NOT part of the m_PopupOffsetY popup space -- it rides
+// its own (m_CloseBtnOffX, m_CloseBtnOffY) offset on the same timer/phase,
+// sliding in from off-screen bottom-right on OPENING and back out on
+// CLOSING (see header note).
 void SettingsScreen::UpdateAnim(float dt) {
     switch (m_AnimPhase) {
     case ANIM_OPENING: {
@@ -784,6 +808,8 @@ void SettingsScreen::UpdateAnim(float dt) {
             m_AnimTimer = 0.0f;
             m_PopupOffsetY = 0.0f;
             m_BackdropAlpha = kBackdropTargetAlpha;
+            m_CloseBtnOffX = 0.0f;
+            m_CloseBtnOffY = 0.0f;
         } else {
             // EaseOutBack(t) runs 0->1 with an overshoot PAST 1 (peaking above
             // 1, per the "back" family), which maps to offset running
@@ -791,6 +817,12 @@ void SettingsScreen::UpdateAnim(float dt) {
             // (the plate briefly drops below rest before settling back) --
             // exactly the requested bounce.
             m_PopupOffsetY = kPopupStartOffsetY * (1.0f - EaseOutBack(t));
+            // Close button: same ease-out-back progress, own start/rest pair
+            // (bottom-right off-screen -> (0,0)), same overshoot-then-settle
+            // feel as the plate.
+            float bt = 1.0f - EaseOutBack(t);
+            m_CloseBtnOffX = kCloseBtnStartOffX * bt;
+            m_CloseBtnOffY = kCloseBtnStartOffY * bt;
         }
         break;
     }
@@ -802,6 +834,11 @@ void SettingsScreen::UpdateAnim(float dt) {
         float tc = t < 1.0f ? t : 1.0f;
         m_BackdropAlpha = (1.0f - SmoothStep(tc)) * kBackdropTargetAlpha;
         m_PopupOffsetY = kPopupStartOffsetY * EaseInQuad(tc);
+        // Close button slides back out to its bottom-right off-screen start
+        // over the same close window, plain ease-in (no bounce), matching
+        // the plate.
+        m_CloseBtnOffX = kCloseBtnStartOffX * EaseInQuad(tc);
+        m_CloseBtnOffY = kCloseBtnStartOffY * EaseInQuad(tc);
         if (t >= 1.0f) {
             // ---- deferred teardown -- was Toggle()'s close branch ----
             bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
@@ -834,6 +871,8 @@ void SettingsScreen::SetAnimOpenForTest() {
     m_AnimTimer = 0.0f;
     m_PopupOffsetY = 0.0f;
     m_BackdropAlpha = kBackdropTargetAlpha;
+    m_CloseBtnOffX = 0.0f;
+    m_CloseBtnOffY = 0.0f;
 }
 
 // Port specific: kinetic drag/fling/spring-back model for the plate's
