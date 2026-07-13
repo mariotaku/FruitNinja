@@ -354,7 +354,6 @@ void MainScreen::Update(float dt) {
         // Clear FIRST -- TriggerQuitFromSettings() (QuitGamesCallback) sets
         // m_State=STATE_QUIT_WAIT, which must not re-enter this block next frame.
         SettingsScreen::s_QuitAfterClose = false;
-        LOG_INFO("QUITDIAG", "s_QuitAfterClose poll fired; calling TriggerQuitFromSettings"); // TEMP DIAG
         TriggerQuitFromSettings();
     }
 #endif // !defined(__bada__)
@@ -676,14 +675,12 @@ void MainScreen::Update(float dt) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) {
-            LOG_INFO("QUITDIAG", "STATE_QUIT_WAIT stalled: liveEntities(type 0)=%d", liveEntities); // TEMP DIAG
             break;
         }
 
         m_pMoreGamesBtn = nullptr;
 
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
-        LOG_INFO("QUITDIAG", "STATE_QUIT_WAIT entities==0, qs=%d", (int)qs); // TEMP DIAG
         if (qs == 2) {
             HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
@@ -703,11 +700,9 @@ void MainScreen::Update(float dt) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
         if (BombFlashFull()) {
-            LOG_INFO("QUITDIAG", "STATE_QUIT_BOMB: BombFlashFull() true, quitting"); // TEMP DIAG
             SystemManager::GetInstance().QuitGame();
 #ifndef __bada__
             game.running = false;
-            LOG_INFO("QUITDIAG", "game.running = false written"); // TEMP DIAG
 #endif // !defined(__bada__)
         }
         break;
