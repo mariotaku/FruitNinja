@@ -11,10 +11,7 @@
 #include "render/Renderer.h"
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
-#include "game/GameWork.h"
 #include "game/SettingsSave.h"
-#include "engine/util/LanguageArgs.h"
-#include "engine/util/Localisation.h"
 #include "audio/SoundManager.h"
 #include <cstdio>
 
@@ -63,10 +60,6 @@ static double g_lastTime = -1.0;   // last RAF timestamp from emscripten_get_now
 static float  s_emFps             = 0.0f;
 static double s_emFpsWindowMs     = 0.0;
 static int    s_emFpsWindowFrames = 0;
-
-// Port specific: language override from ?lang= URL param. -1 = not set.
-// Set during BootWait URL-param parsing, applied once after g_game.init().
-static int g_langOverride = -1;
 
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
@@ -269,11 +262,11 @@ static void BootWait(void* arg) {
 
     BootArgs* ba = static_cast<BootArgs*>(arg);
 
-    // Port specific: load persisted settings BEFORE parsing any of the URL
-    // param overrides below (lang=, motion=, fps=, motionthreshold=), so an
-    // explicit URL override still wins by running after and overwriting the
-    // loaded value again. Also runs before g_game.init() so GameInitialise's
-    // Localisation::Load step sees the right languageFlag.
+    // Port specific: load persisted settings. Language, motion mode,
+    // sensitivity, and the FPS counter are user-settable via the in-game
+    // Settings UI and persisted through SettingsSave/LoadSettings. Runs
+    // before g_game.init() so GameInitialise's Localisation::Load step
+    // sees the right languageFlag.
     LoadSettings();
 
     // Port specific: parse URL query parameters to set debug flags on web.
@@ -285,8 +278,6 @@ static void BootWait(void* arg) {
     //                                        no F1, so the level is set straight from the URL.
     //   ?timescale=<float>           -- sets g_DebugTimeScale (e.g. ?timescale=0.1 for 10x slow-mo)
     //   ?osdsfx=1                    -- per-SFX OSD readout (g_bOsdSfx, F4 on desktop)
-    //   ?motion=1                    -- velocity-gated pointer slash (mouse/pointer; F5 on desktop)
-    //   ?motionthreshold=<float>     -- sets g_MotionSpeedThreshold (px/sim-tick; F6/F8 on desktop)
     {
         // hitbox / hitboxes=<level>
         int hitboxLevel = EM_ASM_INT({
@@ -327,22 +318,6 @@ static void BootWait(void* arg) {
             LOG_INFO("Debug", "URL param: timescale = %.3f", FN::g_DebugTimeScale);
         }
 
-        // fps=1 or fps (bare) -- enables the FPS counter overlay.
-        int fpsParam = EM_ASM_INT({
-            try {
-                var qs = window.location.search;
-                if (!qs) return 0;
-                var params = new URLSearchParams(qs);
-                var v = params.get('fps');
-                if (v !== null && v !== '0') return 1;
-            } catch(e) {}
-            return 0;
-        });
-        if (fpsParam) {
-            FN::g_ShowFps = true;
-            LOG_INFO("Debug", "URL param: FPS overlay ON");
-        }
-
         // osdsfx=1 or osdsfx (bare) -- enables the per-SFX OSD readout
         // (same flag F4 toggles on desktop; mobile has no F4).
         int osdSfxParam = EM_ASM_INT({
@@ -359,81 +334,6 @@ static void BootWait(void* arg) {
             FN::g_bOsdSfx = true;
             LOG_INFO("Debug", "URL param: SFX OSD ON");
         }
-
-        // motion=1 or motion (bare) -- enables motion mode
-        // (same flag F5 toggles on desktop; mobile has no F5).
-        int motionParam = EM_ASM_INT({
-            try {
-                var qs = window.location.search;
-                if (!qs) return 0;
-                var params = new URLSearchParams(qs);
-                var v = params.get('motion');
-                if (v !== null && v !== '0') return 1;
-            } catch(e) {}
-            return 0;
-        });
-        if (motionParam) {
-            FN::g_MotionMode = true;
-            LOG_INFO("Debug", "URL param: motion mode ON");
-        }
-
-        // motionthreshold=<float> -- sets g_MotionSpeedThreshold
-        // (same tuning F6/F8 do on desktop; mobile has no F-keys).
-        double motionThresholdParam = EM_ASM_DOUBLE({
-            try {
-                var qs = window.location.search;
-                if (!qs) return -1.0;
-                var params = new URLSearchParams(qs);
-                var v = params.get('motionthreshold');
-                if (v !== null) {
-                    var f = parseFloat(v);
-                    if (!isNaN(f) && f >= 0.0) return f;
-                }
-            } catch(e) {}
-            return -1.0;
-        });
-        if (motionThresholdParam >= 0.0) {
-            FN::g_MotionSpeedThreshold = (float)motionThresholdParam;
-            LOG_INFO("Debug", "URL param: motion threshold = %.1f", FN::g_MotionSpeedThreshold);
-        }
-
-        // lang=<code|num> -- language override for i18n testing.
-        // Reads the raw string from location.search, passes to C ParseLanguageArg.
-        // Buffer is 32 bytes; URL params longer than 31 chars are clamped (safe).
-        {
-            char langBuf[32];
-            langBuf[0] = '\0';
-            EM_ASM({
-                try {
-                    var qs = window.location.search;
-                    if (!qs) return;
-                    var params = new URLSearchParams(qs);
-                    var v = params.get('lang');
-                    if (v !== null) {
-                        var s = v.substring(0, 31);
-                        stringToUTF8(s, $0, 32);
-                    }
-                } catch(e) {}
-            }, langBuf);
-            if (langBuf[0] != '\0') {
-                g_langOverride = ParseLanguageArg(langBuf);
-                if (g_langOverride >= 0) {
-                    LOG_INFO("Debug", "URL param: lang=%s -> flag=%d", langBuf, g_langOverride);
-                } else {
-                    LOG_WARN("lang", "URL param lang='%s' not recognised, ignored", langBuf);
-                }
-            }
-        }
-    }
-
-    // Port specific: set languageFlag BEFORE game.init() so GameInitialise
-    // loads the correct string table before ItemManager::LoadItemData bakes
-    // item titles and descriptions. Mirrors mainSDL.cpp locale-before-init order.
-    // (Previously this write was deferred to after init(), which fixed live UI
-    // strings via a redundant Localisation::Load but left the baked title/desc
-    // in English -- see #320.)
-    if (g_langOverride >= 0) {
-        game_work.languageFlag = (uint8_t)g_langOverride;
     }
 
     if (!g_game.init(ba->window, ba->gl)) {

@@ -5,13 +5,9 @@
 #include "debug/CrashHandler.h"
 #include "debug/Logger.h"
 #include "debug/DebugFlags.h"
-#include "engine/util/LanguageArgs.h"
-#include "engine/util/Localisation.h"
-#include "game/GameWork.h"
 #include "game/SettingsSave.h"
 #include <cstdio>
 #include <cstring>
-#include <cstdlib>
 
 // Port specific: SDL's default log output function writes to stderr on every
 // platform. On Emscripten, stderr maps to console.error, which prints a full
@@ -38,29 +34,16 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 }
 
 int main(int argc, char* argv[]) {
-    // Port specific: load persisted settings BEFORE parsing CLI overrides
-    // below, so an explicit --lang/--motion/--fps/--motion-threshold flag
-    // still wins by running after and overwriting the loaded value again.
+    // Port specific: load persisted settings. Language, motion mode,
+    // sensitivity, and the FPS counter are user-settable via the in-game
+    // Settings UI and persisted through SettingsSave/LoadSettings.
     LoadSettings();
 
     // Port specific: parse launch parameters for debug flags.
-    //   --fps / --show-fps  : enable the FPS counter overlay (same as F3 at runtime)
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
-    //   --motion            : enable velocity-gated pointer slash (same as F5 at runtime)
-    //   --motion-threshold=<f> : set the motion-mode cut speed threshold (px/sim-tick)
-    //   --lang=<code|num>   : override language (e.g. --lang=french or --lang=3)
-    int g_langOverride = -1;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--fps") == 0 || strcmp(argv[i], "--show-fps") == 0) {
-            FN::g_ShowFps = true;
-        } else if (strcmp(argv[i], "--osd-sfx") == 0) {
+        if (strcmp(argv[i], "--osd-sfx") == 0) {
             FN::g_bOsdSfx = true;
-        } else if (strcmp(argv[i], "--motion") == 0) {
-            FN::g_MotionMode = true;
-        } else if (strncmp(argv[i], "--motion-threshold=", 20) == 0) {
-            FN::g_MotionSpeedThreshold = strtof(argv[i] + 20, nullptr);
-        } else if (strncmp(argv[i], "--lang=", 7) == 0) {
-            g_langOverride = ParseLanguageArg(argv[i] + 7);
         }
     }
 
@@ -168,22 +151,6 @@ int main(int argc, char* argv[]) {
             LOG_ERROR("GL", "FATAL: context has 0 depth bits; depth test cannot occlude (splats would cover fruits).");
             return 1;
         }
-    }
-
-    // Port specific: set languageFlag BEFORE game.init() so GameInitialise
-    // loads the correct string table before ItemManager::LoadItemData parses
-    // item titles (titles are baked at parse time, not draw time).
-    if (g_langOverride >= 0) {
-        static const char* const kLangNames[] = {
-            "english_us", "english_uk", "french", "spanish", "german", "italian",
-            "dutch", "swedish", "danish", "norwegian", "finnish", "korean",
-            "japanese", "chinese", "traditional chinese", "latin spanish",
-            "polish", "portuguese (pt)", "portuguese (br)", "russian",
-            "arabic", "fake debug language"
-        };
-        game_work.languageFlag = (uint8_t)g_langOverride;
-        LOG_INFO("lang", "override: flag=%d (%s)",
-                 g_langOverride, kLangNames[g_langOverride]);
     }
 
     Game game;
