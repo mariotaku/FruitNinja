@@ -55,7 +55,7 @@ When a deviation is intentional and binary fidelity is sacrificed (e.g. SDL2 rep
 - Resolution: 480x320 landscape original, scaled to display
 - Assets: convert .tex/.mad/.mmd to standard formats (PNG, OBJ/glTF, etc.)
 - Text: keep original .fnt bitmap fonts
-- Rendering: replicate original OpenGL ES 1.x fixed-pipeline approach in ES 2.0 shaders
+- Rendering: native OpenGL ES 2.0 shader pipeline. The renderer was migrated off the binary's ES1 fixed-function approach — **all** draws (2D quads, 3D meshes, font/text, particles) go through hand-written ES2 shaders (`src/engine/render/Shaders.cpp`, `ShaderProgram`, `Renderer::DrawShaded2D`/`DrawMesh3D`); MVP is a uniform, verts are VBO-backed. Zero fixed-function calls remain, so the emscripten build is **pure WebGL/ES2** (no `LEGACY_GL_EMULATION`). Pixel-identical to the original fixed-function output (the shaders replicate `GL_MODULATE`; 3D is unlit — all meshes `IsLit=false`). NOTE: the webOS `libGLESv1_CM` target still needs moving to an ES2 lib before it links; host + web are done.
 
 ## Building & Running
 
