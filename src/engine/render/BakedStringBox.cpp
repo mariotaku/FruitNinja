@@ -631,11 +631,8 @@ void BakedStringBox::RebuildMeshes() {
         } else if (m_GradMode == 2) {
             line->ApplyGradient(m_GradTop, m_GradBottom);
         } else if (m_GradMode == 3) {
-            // No live port setter reaches mode 3 today (only SetColour/SetGradient/
-            // SetMetallicGradient exist, writing modes 1/2/4) -- field mapping inferred
-            // from the metallic layout (top/mid/bottom = m_GradTop/m_GradBottom/m_GradCol2),
-            // ported per stub-don't-skip so the shape matches the binary if a mode-3
-            // setter is added later.
+            // 3-colour SetGradient(top,mid,bottom) @0x00245780: top/mid/bottom =
+            // m_GradTop/m_GradBottom/m_GradCol2 (binary reuses m_FillBottom for MID).
             line->ApplyGradient(m_GradTop, m_GradBottom, m_GradCol2);
         }
 
@@ -701,6 +698,30 @@ void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
         } else {
             for (size_t i = 0; i < m_Lines.size(); ++i) {
                 if (m_Lines[i]) m_Lines[i]->ApplyGradient(top, bottom);
+            }
+        }
+    }
+}
+
+// SetGradient (3-colour)  binary @ 0x00245780
+// ASM-spec v1.6.1 BakedStringBox::SetGradient @0x00245780: 3-stop sibling of
+// SetMetallicGradient -- TopBottom(top,bottom) + single Split(mid,0.5), vs metallic's
+// TopBottom + Split(0.51) + Split(0.49). m_GradMode=3.
+void BakedStringBox::SetGradient(Colour top, Colour mid, Colour bottom, bool perGlyph) {
+    if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
+        m_GradBottom.r != mid.r || m_GradBottom.g != mid.g || m_GradBottom.b != mid.b || m_GradBottom.a != mid.a ||
+        m_GradCol2.r != bottom.r || m_GradCol2.g != bottom.g || m_GradCol2.b != bottom.b || m_GradCol2.a != bottom.a ||
+        m_GradMode != 3 || m_MetallicFlag != 0) {
+        m_GradMode = 3;
+        m_GradTop = top;
+        m_GradBottom = mid;
+        m_GradCol2 = bottom;
+        m_MetallicFlag = 0;
+        if (!perGlyph) {
+            m_Dirty = true;
+        } else {
+            for (size_t i = 0; i < m_Lines.size(); ++i) {
+                if (m_Lines[i]) m_Lines[i]->ApplyGradient(top, mid, bottom);
             }
         }
     }
