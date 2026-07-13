@@ -541,6 +541,13 @@ void SoundManager::SongPlay(const char* name) {
     fnaudio_play_song(lower.c_str(), loopStartSec, s_MusicVolume);
 
     LOG_INFO("MUSIC", "SongPlay('%s') loopStart=%f", lower.c_str(), loopStartSec);
+
+    // Port specific: dev-tool music readout -- mirrors the SFX toast in SFXPlay.
+    if (FN::g_bOsdSfx) {
+        char osd[64];
+        snprintf(osd, sizeof(osd), "[music] %s", lower.c_str());
+        OSD_AddMessage(osd);
+    }
 }
 
 void SoundManager::SongStop()   { fnaudio_song_stop(); LOG_INFO("MUSIC", "SongStop"); }

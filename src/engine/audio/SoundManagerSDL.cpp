@@ -546,6 +546,11 @@ void SoundManager::SongPlay(const char* name) {
         // background.caf isn't shipped -- silent fallthrough so caller-side
         // music attempts don't crash.
         LOG_WARN("MUSIC", "SongPlay('%s'): asset not found, skipping", lower.c_str());
+        if (FN::g_bOsdSfx) {
+            char osd[64];
+            snprintf(osd, sizeof(osd), "[music] %s: not found", lower.c_str());
+            OSD_AddMessage(osd);
+        }
         return;
     }
     buf->loop = true;
@@ -567,6 +572,13 @@ void SoundManager::SongPlay(const char* name) {
     SDL_UnlockAudioDevice(m_AudioDevice);
 
     LOG_INFO("MUSIC", "SongPlay('%s') loopStart=%d", lower.c_str(), (int)buf->loopStart);
+
+    // Port specific: dev-tool music readout -- mirrors the SFX toast above.
+    if (FN::g_bOsdSfx) {
+        char osd[64];
+        snprintf(osd, sizeof(osd), "[music] %s", lower.c_str());
+        OSD_AddMessage(osd);
+    }
 }
 
 void SoundManager::SongStop() {
