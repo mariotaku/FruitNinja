@@ -315,6 +315,17 @@ public:
     // matching the binary where SkipToPause @0x001cb424 calls MainScreen::Hide directly.
     void Hide();
 
+#ifndef __bada__
+    // Port specific: no binary counterpart (SettingsScreen itself has none).
+    // Public forwarder so SettingsScreen::Toggle()'s quit-on-language-change
+    // path can run the SAME full quit sequence as the QUIT ring button
+    // (m_pQuitButton's own click callback is QuitGamesCallback, which is
+    // private -- this just exposes it). Do not hand-roll the RequestQuit()+
+    // m_State write here; QuitGamesCallback also arms the quit button's
+    // tracked bomb's fling velocity, which the hand-rolled version skipped.
+    void TriggerQuitFromSettings() { QuitGamesCallback(); }
+#endif // !defined(__bada__)
+
     // Port-specific: HUD-side timer mirror written by TimeControl::Update every frame.
     // ASM-spec v1.6.1 TimeControl::Update @0x001c0a48 (re-stamp: old addrs 0x001624f6/
     // 0x00162830 were stale BonusScreen functions; TimeControl::Update is the HUD-timer source).

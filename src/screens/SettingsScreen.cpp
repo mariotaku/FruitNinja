@@ -14,7 +14,6 @@
 #include "hud/HUDLayer.h"
 #include "game/GameWork.h"
 #include "screens/MainScreen.h"
-#include "core/SystemManager.h"
 #include "engine/util/Localisation.h"
 #include "engine/util/Delegate.h"
 #include "render/MatrixManager.h"
@@ -385,9 +384,17 @@ void SettingsScreen::Toggle() {
             // TODO: v1.6.1 -- placeholder until settings persistence exists; quitting is
             // how the new language takes effect on restart (no live-reload of already-baked
             // UI strings/fonts).
-            SystemManager::GetInstance().RequestQuit();
+            //
+            // Port specific: run the SAME full quit MainScreen's own QUIT ring
+            // button runs (QuitGamesCallback), not a hand-rolled RequestQuit()+
+            // m_State=STATE_QUIT_WAIT. QuitGamesCallback also arms the quit
+            // button's tracked bomb's fling velocity -- skipping that left the
+            // menu-bomb entity inert, which is cosmetic-only and NOT why the
+            // previous hand-rolled version failed to quit; call the real
+            // callback anyway so this path can never again silently diverge
+            // from the button's behavior as QuitGamesCallback evolves.
             if (game_work.mMainScreen) {
-                game_work.mMainScreen->m_State = STATE_QUIT_WAIT;
+                game_work.mMainScreen->TriggerQuitFromSettings();
             }
         }
     }
