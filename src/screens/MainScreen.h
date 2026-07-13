@@ -22,6 +22,11 @@ class MenuButton;
 class DojoScreen;
 class GameModeScreen;
 
+// Declared in hud/MenuButton.h (v1.6.1 @0x0016ac7c); forward-declared here so
+// TriggerQuitFromSettings() below can call it without pulling in the full
+// MenuButton class definition.
+void ClearMenuItems();
+
 // State enum (verified from v1.6.1 binary; Update @0x00196e1c)
 enum MainScreenState {
     STATE_CAMERA_ZOOM      = 0,    // Camera zoom-in, create toggles + play/dojo
@@ -323,7 +328,28 @@ public:
     // private -- this just exposes it). Do not hand-roll the RequestQuit()+
     // m_State write here; QuitGamesCallback also arms the quit button's
     // tracked bomb's fling velocity, which the hand-rolled version skipped.
-    void TriggerQuitFromSettings() { QuitGamesCallback(); }
+    //
+    // Also fires ClearMenuItems() first, replicating the SLICE path a real
+    // quit-ring tap goes through: Bomb::CollisionResponse's menu-rehit branch
+    // (v1.6.1 @0x1d5d4c, src/entities/Bomb.cpp ~line 533-538) calls
+    // ClearMenuItems() THEN m_HitCallback() (== QuitGamesCallback) in that
+    // order, gated on m_bClearsMenuItems -- which MenuButton::Init defaults
+    // to 1 for every ring button, including the quit button. Without
+    // ClearMenuItems(), sibling ring buttons (GameMode/Store/Leaderboard)
+    // keep their tracked Fruit entities alive forever: MenuButton::Update
+    // re-parks a held entity's position every frame
+    // (entity->pos = GetAdjustedPos(), v1.6.1 @0x0019a860) as long as
+    // m_pEntity != nullptr, and only a slice (fruit: velocity divergence) or
+    // Bomb::Disable() (bomb: !Enabled()) releases that hold. ClearMenuItems()
+    // (src/hud/MenuButton.cpp @0x1cc6d0) is what performs that release in
+    // bulk for every live fruit/bomb. QuitGamesCallback() alone only nudges
+    // the QUIT button's own tracked bomb -- siblings stay parked, so
+    // ActorManager::GetNumEntities(0) never reaches 0 and STATE_QUIT_WAIT
+    // (MainScreen::Update case 0x15) hangs forever. Same gap exists on the
+    // real ring-button TAP path (as opposed to a slice) -- this forwarder is
+    // the one call site that needs the explicit cascade since settings never
+    // slices anything.
+    void TriggerQuitFromSettings() { ClearMenuItems(); QuitGamesCallback(); }
 #endif // !defined(__bada__)
 
     // Port-specific: HUD-side timer mirror written by TimeControl::Update every frame.
