@@ -1026,8 +1026,6 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
             int runStart = gIdx;
             while (gIdx < vertCount && pageTexIDs[gIdx] == curTex) gIdx++;
             glBindTexture(GL_TEXTURE_2D, curTex);
-            glEnable(GL_TEXTURE_2D);
-            TexEnvModulate();  // Set owns tex-env; raw bind skips Set(), so set it here.
             renderer->DrawTriStrip(verts + runStart * 6, (gIdx - runStart) * 6);
         }
     }
@@ -1542,7 +1540,6 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             Page* page = GetPage(pg);
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
-            TexEnvModulate();  // Set owns tex-env (binary model); port Set() doesn't set it.
             renderer->DrawTriStrip(
                 &m_PageVerts[pg][0],
                 perPageCount[pg] * 6);

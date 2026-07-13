@@ -357,8 +357,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
                 barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
 
                 barTex.Set();
-                // Set owns tex-env (binary model); port Set() doesn't set it.
-                if (Renderer* r = Renderer::GetInstance()) r->SetTextureModulate();
+                // Shader modulates texel*color for all Mesh::DrawTriStrip draws now.
                 Mortar::Mesh::DrawTriStrip(barVerts, 4, true, NULL);
                 barTex.UnSet();
             }

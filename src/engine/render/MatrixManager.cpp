@@ -99,10 +99,11 @@ void MatrixManager::UploadModelViewOnly() {
 // left-mul is skipped because the port targets a native-landscape window
 // (already documented on SetupLookAt above).
 //
-// GL_TEXTURE matrix upload goes through the fixed-function shim
-// (glMatrixMode(GL_TEXTURE_MATRIX) + glLoadMatrixf) matching the binary.
-// Port shaders currently sample with raw a_uv and ignore the texture matrix,
-// but the upload is preserved for binary-call-graph fidelity.
+// GLES2 migration phase 4: the GL_TEXTURE matrix upload (glMatrixMode(
+// GL_TEXTURE_MATRIX) + glLoadMatrixf) was removed as dead code -- no shader
+// samples a texture-matrix uniform (all draw paths use raw a_uv), and
+// GetTextureStack() has no callers, so m_Texture.m_Version never advances
+// past Reset(). m_Texture itself is kept for struct/ABI layout fidelity.
 void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
     if (!skipProjection) {
         // Proj or view changed: recompute ProjView *once* and mark both uploaded.
@@ -126,13 +127,6 @@ void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
         }
     }
 
-    // Binary @ 0x00257018 (v1.6.1 _UploadCurrentMatrices): texture-matrix dirty
-    // gate. Runs unconditionally of the skipProjection arg in the binary.
-    if (m_Texture.m_Version != m_TextureVersionUploaded) {
-        glMatrixMode(GL_TEXTURE_MATRIX);
-        glLoadMatrixf(m_Texture.m_Current.ptr());
-        m_TextureVersionUploaded = m_Texture.m_Version;
-    }
 }
 
 Matrix44 MatrixManager::GetMVP() const {

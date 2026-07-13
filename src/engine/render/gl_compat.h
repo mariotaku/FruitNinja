@@ -84,30 +84,6 @@
     #define GL_RENDERER 0x1F01
     #define GL_VERSION 0x1F02
     #define GL_NO_ERROR 0
-    #define GL_MODELVIEW 0x1700
-    #define GL_PROJECTION 0x1701
-    #define GL_TEXTURE_MATRIX 0x0BA8
-    #define GL_VERTEX_ARRAY 0x8074
-    #define GL_NORMAL_ARRAY 0x8075
-    #define GL_COLOR_ARRAY 0x8076
-    #define GL_TEXTURE_COORD_ARRAY 0x8078
-    #define GL_TEXTURE_ENV 0x2300
-    #define GL_TEXTURE_ENV_MODE 0x2200
-    #define GL_MODULATE 0x2100
-    #define GL_REPLACE 0x1E01
-    // GL_COMBINE texenv constants (GL 1.3 / GL ES 1.1 extension).
-    #define GL_COMBINE              0x8570
-    #define GL_COMBINE_RGB          0x8571
-    #define GL_SRC0_RGB             0x8580
-    #define GL_PRIMARY_COLOR        0x8577
-    #define GL_LIGHTING 0x0B50
-    #define GL_LIGHT0 0x4000
-    #define GL_AMBIENT 0x1200
-    #define GL_DIFFUSE 0x1201
-    #define GL_SPECULAR 0x1202
-    #define GL_EMISSION 0x1600
-    #define GL_POSITION 0x1203
-    #define GL_SMOOTH 0x1D01
     #define GL_FRONT_AND_BACK 0x0408
     #define GL_LINE 0x1B01
     #define GL_FILL 0x1B02
@@ -145,26 +121,6 @@
         void glDepthFunc(GLenum);
         void glDepthMask(GLboolean);
         void glClearDepthf(GLclampf);
-        void glMatrixMode(GLenum);
-        void glPushMatrix(void);
-        void glPopMatrix(void);
-        void glLoadMatrixf(const GLfloat*);
-        void glMultMatrixf(const GLfloat*);
-        void glLoadIdentity(void);
-        void glFrustumf(GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat);
-        void glEnableClientState(GLenum);
-        void glDisableClientState(GLenum);
-        void glVertexPointer(GLint, GLenum, GLsizei, const void*);
-        void glNormalPointer(GLenum, GLsizei, const void*);
-        void glColorPointer(GLint, GLenum, GLsizei, const void*);
-        void glTexCoordPointer(GLint, GLenum, GLsizei, const void*);
-        void glClientActiveTexture(GLenum);
-        void glColor4ub(GLubyte, GLubyte, GLubyte, GLubyte);
-        void glMaterialfv(GLenum, GLenum, const GLfloat*);
-        void glLightfv(GLenum, GLenum, const GLfloat*);
-        void glShadeModel(GLenum);
-        void glTexEnvf(GLenum, GLenum, GLfloat);
-        void glTexEnvi(GLenum, GLenum, GLint);
         void glPolygonMode(GLenum, GLenum);
         // GL 2.0 shader entry points (Renderer 2D shader path).
         GLuint glCreateShader(GLenum);
@@ -197,70 +153,17 @@
     // DO NOT include <GL/gl.h> here -- it conflicts with GLES2 types under emcc.
     #include <GLES2/gl2.h>
     // FFP enum values absent from GLES2 headers (provided by emcc shim at link time).
-    #define GL_MODELVIEW                0x1700
-    #define GL_PROJECTION               0x1701
-    #define GL_TEXTURE_MATRIX           0x1702
-    #define GL_MATRIX_MODE              0x0BA0
-    #define GL_LIGHTING                 0x0B50
-    #define GL_LIGHT0                   0x4000
-    #define GL_LIGHT_MODEL_AMBIENT      0x0B53
-    #define GL_NORMALIZE                0x0BA1
-    #define GL_SMOOTH                   0x1D01
-    #define GL_FLAT                     0x1D00
-    #define GL_SHADE_MODEL              0x0B54
-    #define GL_AMBIENT                  0x1200
-    #define GL_DIFFUSE                  0x1201
-    #define GL_SPECULAR                 0x1202
-    #define GL_EMISSION                 0x1600
-    #define GL_POSITION                 0x1203
-    #define GL_SHININESS                0x1601
     #define GL_FRONT                    0x0404
     #define GL_BACK                     0x0405
     #define GL_FRONT_AND_BACK           0x0408
-    #define GL_TEXTURE_ENV              0x2300
-    #define GL_TEXTURE_ENV_MODE         0x2200
-    #define GL_MODULATE                 0x2100
-    #define GL_REPLACE                  0x1E01
-    #define GL_VERTEX_ARRAY             0x8074
-    #define GL_NORMAL_ARRAY             0x8075
-    #define GL_COLOR_ARRAY              0x8076
-    #define GL_TEXTURE_COORD_ARRAY      0x8078
-    #define GL_QUADS                    0x0007
     #define GL_LINE                     0x1B01
     #define GL_FILL                     0x1B02
     #define GL_UNSIGNED_SHORT_4_4_4_4   0x8033
     #define GL_UNSIGNED_SHORT_5_5_5_1   0x8034
     #define GL_UNSIGNED_SHORT_5_6_5     0x8363
-    // FFP entry points provided by the emcc LEGACY_GL_EMULATION shim.
     // Declared extern "C" so the C++ name-mangling doesn't interfere.
     extern "C" {
-        void glMatrixMode(GLenum mode);
-        void glPushMatrix(void);
-        void glPopMatrix(void);
-        void glLoadIdentity(void);
-        void glLoadMatrixf(const GLfloat* m);
-        void glMultMatrixf(const GLfloat* m);
-        void glFrustumf(GLfloat l, GLfloat r, GLfloat b,
-                        GLfloat t, GLfloat n, GLfloat f);
-        void glShadeModel(GLenum mode);
-        void glLightfv(GLenum light, GLenum pname, const GLfloat* params);
-        void glMaterialfv(GLenum face, GLenum pname, const GLfloat* params);
-        void glLightModelfv(GLenum pname, const GLfloat* params);
-        void glTexEnvf(GLenum target, GLenum pname, GLfloat param);
-        void glTexEnvi(GLenum target, GLenum pname, GLint param);
-        void glEnableClientState(GLenum array);
-        void glDisableClientState(GLenum array);
-        void glVertexPointer(GLint size, GLenum type, GLsizei stride, const GLvoid* ptr);
-        void glNormalPointer(GLenum type, GLsizei stride, const GLvoid* ptr);
-        void glColorPointer(GLint size, GLenum type, GLsizei stride, const GLvoid* ptr);
-        void glTexCoordPointer(GLint size, GLenum type, GLsizei stride, const GLvoid* ptr);
-        void glClientActiveTexture(GLenum texture);
-        void glColor4ub(GLubyte r, GLubyte g, GLubyte b, GLubyte a);
         void glClearDepthf(GLclampf depth);
-        // glFrustum (double variant) -- used by gl_funcsSDL glFrustumf shim.
-        // Under LEGACY_GL_EMULATION glFrustumf IS provided directly, but the
-        // shim in gl_funcsSDL.cpp is compiled unconditionally for GL_COMPAT;
-        // under EMSCRIPTEN path gl_funcsSDL's shim is excluded by the #if guard.
     }
 #elif defined(FRUIT_GL_API_ES1)
     // webOS / embedded Linux. libGLESv1_CM + libEGL.

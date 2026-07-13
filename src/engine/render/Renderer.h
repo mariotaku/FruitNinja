@@ -73,11 +73,6 @@ struct Renderer {
     // Disables GL_SCISSOR_TEST (undoes SetClipRect). No-op on __bada__ / FN_GL_STUB.
     void ClearClipRect();
 
-    // Port specific: no binary counterpart. Sets GL_TEXTURE_ENV_MODE = GL_MODULATE
-    // on the active texture unit -- thin wrapper around TexEnvModulate() (gl_funcs.h)
-    // so non-engine TUs (entities/, screens/) don't call raw GL directly.
-    void SetTextureModulate();
-
     // Port specific: no binary counterpart. glActiveTexture(GL_TEXTURE0) +
     // glBindTexture(GL_TEXTURE_2D, texId) -- thin wrapper so debug-overlay code
     // (raw GLuint textures, not Mortar::Texture) doesn't call raw GL directly.

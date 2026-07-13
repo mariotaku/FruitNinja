@@ -845,7 +845,6 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
-        glEnable(GL_TEXTURE_2D);
         // DIFFERS: v1.6.1 Mesh::DrawTriList @0x00240e34 -> port Renderer::DrawTriList
         //   (the only platform boundary). DrawTriList sets GL_MODULATE tex-env itself
         //   and consumes the baked local verts as-is; the world matrix does the
