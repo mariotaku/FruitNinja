@@ -85,14 +85,17 @@ Geometry::~Geometry() {
 
 // v1.6.1 Geometry::Render @0x00264468 -- non-virtual member; called directly by Mesh::Draw.
 // DIFFERS: structural -- binary v1.6.1 Geometry::Render @0x00264468 walks m_Binding->GetBindings()[idx].m_PassBindings
-//   and re-derives the glVertexPointer/glDrawElements args per draw; port draws from the load-cached
-//   m_Vbo/m_Ibo/m_Layout (same fixed-function GL calls, byte-equivalent output). NOT a GLES2 shader path.
+//   and re-derives the vertex-array/glDrawElements args per draw; port draws from the load-cached
+//   m_Vbo/m_Ibo/m_Layout through the GLES2 Mesh3D shader (Renderer::DrawMesh3D) -- the ES1->ES2
+//   translation is the sole allowed deviation, output is byte-equivalent (unlit modulate).
 //   Port uses m_DiffuseTex instead of MeshMaterial for texture binding.
 //   GeometryBinding_GLES1::PassBinding::Apply v1.6.1 @0x00263b7c (thunk 0x00111e24).
 // TODO: v1.6.1 -- binary gates Render on HasActiveEffect; port draws unconditionally (bindings are constructed so the gate would pass)
 // Note: the binary's Geometry::Render @0x00264468 consumes only the 3 matrices + DiffuseMap; IsLit/Ambience/Diffuse/Specular
 //   are NOT applied to GL at draw (no glMaterialfv/glLightfv import) -- one bare glEnable(GL_LIGHTING) -> GL-default white.
-//   The material props are structurally carried but render-dead.
+//   The material props are structurally carried but render-dead. All meshes are IsLit=false
+//   (MeshManager forces SetValue<bool>("IsLit",false)), so the unlit texture2D * v_color shader
+//   IS the fixed-function output; the normal slot is never bound (no normal attribute).
 void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
@@ -101,83 +104,21 @@ void Geometry::Render(Matrix44 const& mvp) {
     glEnable(GL_CULL_FACE);     // f00d one-shot: 3D mesh pass cull ON
     glCullFace(GL_BACK);        // GL default; binary relies on InitGL/default
 
-    // Matrix stacks: push current, load MVP, pop on exit. Binary splits
-    // the upload into PROJECTION = screenRot*World and MODELVIEW = view
-    // composition; our MatrixManager already produced the final MVP, so
-    // we upload it to PROJECTION and leave MODELVIEW as identity.
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadMatrixf(mvp.ptr());
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-
-    if (m_DiffuseTex.IsValid()) {
-        m_DiffuseTex->Set();
-        TexEnvModulate();
-    } else {
-        glDisable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
-    // Always unlit. All meshes in FruitNinja have IsLit=false, so the
-    // former MeshMaterial material-colour branch (ambient/diffuse/emission)
-    // is hardcoded to the unlit path.
-    glDisable(GL_LIGHTING);
-    glColor4ub(255, 255, 255, 255);
-
-    glBindBuffer(GL_ARRAY_BUFFER, m_Vbo);
-    if (m_Ibo) {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_Ibo);
-    }
-
     const VertexLayout& L = m_Layout;
 
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.posOffset);
+    // The FF path bound the texture via m_DiffuseTex->Set() + TexEnvModulate;
+    // the shader path passes the raw tex id and DrawMesh3D binds it (0 ->
+    // Renderer's 1x1 white texture, reproducing the untextured FF fragment).
+    GLuint tex = m_DiffuseTex.IsValid() ? m_DiffuseTex->GetTexId() : 0;
 
-    if (L.normalSize > 0) {
-        glEnableClientState(GL_NORMAL_ARRAY);
-        glNormalPointer(GL_FLOAT, L.totalStride, (void*)(intptr_t)L.normalOffset);
-    } else {
-        glDisableClientState(GL_NORMAL_ARRAY);
-    }
+    // Same gate the FF glColorPointer branch used: only colorFmt==3
+    // (RGBA8888) binds the colour channel; anything else falls back to the
+    // constant white the old glColor4ub(255,255,255,255) provided.
+    const int colSize = (L.colorSize > 0 && L.colorFmt == 3) ? L.colorSize : 0;
 
-    if (L.colorSize > 0 && L.colorFmt == 3) {
-        glEnableClientState(GL_COLOR_ARRAY);
-        glColorPointer(4, GL_UNSIGNED_BYTE, L.totalStride,
-                       (void*)(intptr_t)L.colorOffset);
-    } else {
-        glDisableClientState(GL_COLOR_ARRAY);
-    }
-
-    glClientActiveTexture(GL_TEXTURE0);
-    if (L.texSize > 0) {
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glTexCoordPointer(2, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.texOffset);
-    } else {
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    }
-
-    if (m_Ibo && m_IndexCount > 0) {
-        glDrawElements(m_PrimType, m_IndexCount, GL_UNSIGNED_SHORT, (void*)0);
-    } else {
-        glDrawArrays(m_PrimType, 0, m_VertCount);
-    }
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-
-    // Restore matrix stacks + unbind VBOs, matching the tail of the binary's
-    // Geometry::Render.
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    Renderer::GetInstance()->DrawMesh3D(m_Vbo, m_Ibo, m_VertCount, m_IndexCount, m_PrimType,
+                                        L.totalStride, L.posOffset, L.texOffset, L.colorOffset,
+                                        L.texSize, colSize, tex, mvp);
 }
 
 // v1.6.1 Mortar::Geometry::HasActiveEffect @0x00264440

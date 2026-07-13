@@ -9,6 +9,16 @@
 //   fragment = texture2D(u_tex, v_uv) * vertex colour
 // which reproduces the fixed-function GL_MODULATE texenv these draws used.
 //
+// One 3D program for the mesh path (Geometry::Render via
+// Renderer::DrawMesh3D). Lighting is structurally OFF -- every FruitNinja
+// mesh is IsLit=false (MeshManager forces SetValue<bool>("IsLit",false))
+// and the binary's Geometry::Render applies no glMaterialfv/glLightfv at
+// draw -- so the 3D program is the same unlit modulate as the 2D one:
+//   fragment = texture2D(u_tex, v_uv) * vertex colour
+// (no normal attribute, no normal matrix). Kept as separate named
+// constants + a separate ShaderProgram instance so a future lit path can
+// diverge without touching the 2D program.
+//
 // GLSL is ES 1.00 / desktop 1.10 compatible -- no #version line. The
 // fragment source carries "precision highp float;" on every ES-flavoured
 // backend of the gl_compat.h ladder and omits it on FRUIT_GL_API_GL_COMPAT
@@ -23,6 +33,9 @@ namespace FnShaders {
 
 extern const char* Quad2D_VS;
 extern const char* Quad2D_FS;
+
+extern const char* Mesh3D_VS;
+extern const char* Mesh3D_FS;
 
 }
 

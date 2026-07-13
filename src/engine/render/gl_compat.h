@@ -183,6 +183,7 @@
         void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*);
         void glUniform1i(GLint, GLint);
         void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+        void glVertexAttrib4f(GLuint, GLfloat, GLfloat, GLfloat, GLfloat);
         void glEnableVertexAttribArray(GLuint);
         void glDisableVertexAttribArray(GLuint);
         void glDeleteShader(GLuint);
@@ -298,6 +299,7 @@
         void glUniformMatrix4fv(GLint, GLsizei, GLboolean, const GLfloat*);
         void glUniform1i(GLint, GLint);
         void glVertexAttribPointer(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+        void glVertexAttrib4f(GLuint, GLfloat, GLfloat, GLfloat, GLfloat);
         void glEnableVertexAttribArray(GLuint);
         void glDisableVertexAttribArray(GLuint);
         void glDeleteShader(GLuint);
