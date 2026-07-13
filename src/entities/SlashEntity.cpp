@@ -12,7 +12,7 @@
 #include "Entity.h"
 #include "hud/HUDControl.h"
 #include "render/MatrixManager.h"
-#include "render/gl_funcs.h"
+#include "render/Renderer.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
@@ -2164,12 +2164,13 @@ void SlashEntity::DrawSlice() {
     // ASM-verified v1.6.1 Texture2D_Bada::Set @0x229788: blade tex-env RGB=MODULATE (texture.rgb
     // x vertex.rgb); ALPHA=REPLACE from GL_PRIMARY_COLOR (vertex.alpha). blade.tex alpha is
     // uniformly opaque so REPLACE-alpha == MODULATE-alpha here; plain TexEnvModulate is equivalent.
-    TexEnvModulate();
+    Renderer* r = Renderer::GetInstance();
+    if (r) r->SetTextureModulate();
     bladeTex->Set();
     Mortar::Mesh::DrawTriStrip(m_pLeftBuffer,  m_PointCount + 1, false, NULL);
     Mortar::Mesh::DrawTriStrip(m_pRightBuffer, m_PointCount + 1, false, NULL);
     bladeTex->UnSet();
-    TexEnvModulate();  // restore default so subsequent draws are unaffected
+    if (r) r->SetTextureModulate();  // restore default so subsequent draws are unaffected
 }
 
 // ---------------------------------------------------------------------------

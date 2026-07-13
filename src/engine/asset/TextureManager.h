@@ -113,6 +113,24 @@ public:
     // slot). The int arg is accepted but never used. Faithful behaviour is to
     // return a null texture handle.
     Mortar::SmartPtr<Texture> LoadIndependent(void* data, int size);
+
+    // Port specific: no binary counterpart. Creates a raw GL texture id (not a
+    // cached Mortar::Texture) filled with a single solid RGBA colour -- for
+    // callers that only need a bindable GL_TEXTURE_2D handle (e.g. the vertex-
+    // colour debug-overlay shader, which needs *some* texture bound). Returned
+    // id is uncached/unowned by TextureManager; caller keeps it for the
+    // process lifetime or calls glDeleteTextures itself. Returns 0 on a
+    // __bada__ / FN_GL_STUB build (no GL context there).
+    static uint32_t CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+
+    // Port specific: no binary counterpart. Uploads a caller-supplied w*h RGBA8
+    // pixel buffer (tightly packed, row-major, top row first) to a new raw GL
+    // texture id -- for procedurally-generated art (SDF-rasterized checkbox/
+    // slider/arrow placeholders) that has no on-disk .tex counterpart. Same
+    // uncached/unowned contract as CreateSolidTexture. linearFilter selects
+    // GL_LINEAR (true, smooths procedural edges) vs GL_NEAREST (false).
+    // Returns 0 on a __bada__ / FN_GL_STUB build.
+    static uint32_t CreateTextureFromRGBA(const uint8_t* rgba, int w, int h, bool linearFilter);
 };
 
 // v1.6.1 Mortar::DefragVRamNeeded @0x00229a68 -- `mov r0,#0; bx lr` (always false).

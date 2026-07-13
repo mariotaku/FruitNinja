@@ -8,7 +8,7 @@
 #include "engine/input/Touch.h"
 #include "game/GameWork.h"
 #include "render/NineSlice.h"
-#include "render/gl_funcs.h"
+#include "render/Renderer.h"
 #include "asset/Texture.h"
 
 #include <cmath>
@@ -501,24 +501,14 @@ void UiDropdown::DrawPanel(float* hudScale) {
     // Row TEXT is unaffected (it uses textClip, its own separate per-glyph
     // clipRect, still row-viewport-bounded so it doesn't spill under the
     // fade).
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-    // Host/SDL+GLES2 only: glGetIntegerv/GL_VIEWPORT aren't in the
-    // asm-verify cross-build's GL shim or the unit-test GL stub.
+    // Host/SDL+GLES2 only: Renderer::SetClipRect no-ops on __bada__ / FN_GL_STUB
+    // (glGetIntegerv/GL_VIEWPORT aren't in the asm-verify cross-build's GL shim
+    // or the unit-test GL stub), so this call is unconditional here.
     float rimOpeningTop = panelTopY - kGrooveOpeningInsetW;
     float rimOpeningBottom = panelTopY - panelH + kGrooveOpeningInsetW;
-    GLint vp[4];
-    glGetIntegerv(GL_VIEWPORT, vp);
-    const GLint vpX = vp[0], vpY = vp[1];
-    const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
-    const float orthoH = 320.0f;
-    GLint sx = vpX;
-    GLint sy = (GLint)((rimOpeningBottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
-    GLint sw = vpW;
-    GLint sh = (GLint)((rimOpeningTop - rimOpeningBottom) / orthoH * (float)vpH);
-    if (sh < 0) sh = 0;
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(sx, sy, sw, sh);
-#endif
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->SetClipRect(-240.0f, rimOpeningTop, 240.0f, rimOpeningBottom);
+    }
 
     for (int idx = 0; idx < (int)m_pItems->size(); ++idx) {
         float rowCy = curYBase - m_RowH * (idx + 0.5f);
@@ -567,9 +557,7 @@ void UiDropdown::DrawPanel(float* hudScale) {
                   m_TextScale, m_RowTextColour, &textClip);
     }
 
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-    glDisable(GL_SCISSOR_TEST);
-#endif
+    if (Renderer* r = Renderer::GetInstance()) r->ClearClipRect();
 
     DrawFadeEdges(panelTopY, panelH);
 }

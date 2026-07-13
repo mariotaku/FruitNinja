@@ -208,6 +208,59 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
+// Port specific: no binary counterpart (GLES2 has no fixed-function user clip
+// planes; the original clips via CPU-side ClipAgainstPlanes). World-space rect
+// -> viewport-pixel glScissor, same centered-ortho convention as SetupGameOrtho
+// (SetupOrtho(160,-160,-240,240,...)). Moved here verbatim from the duplicated
+// UiDropdown.cpp / SettingsScreen.cpp inline blocks -- same math, same guard.
+void Renderer::SetClipRect(float left, float top, float right, float bottom) {
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    const float orthoW = 480.0f;
+    const float orthoH = 320.0f;
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    const GLint vpX = vp[0], vpY = vp[1];
+    const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
+
+    GLint sx = (GLint)((left + orthoW * 0.5f) / orthoW * (float)vpW) + vpX;
+    GLint sy = (GLint)((bottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    GLint sw = (GLint)((right - left) / orthoW * (float)vpW);
+    GLint sh = (GLint)((top - bottom) / orthoH * (float)vpH);
+    if (sw < 0) sw = 0;
+    if (sh < 0) sh = 0;
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(sx, sy, sw, sh);
+#else
+    (void)left; (void)top; (void)right; (void)bottom;
+#endif
+}
+
+void Renderer::ClearClipRect() {
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    glDisable(GL_SCISSOR_TEST);
+#endif
+}
+
+void Renderer::SetTextureModulate() {
+    TexEnvModulate();
+}
+
+void Renderer::BindTexture2D(uint32_t texId) {
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
+}
+
+void Renderer::SetWireframe(bool enabled) {
+#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
+    if (glPolygonMode != nullptr) {
+        glPolygonMode(GL_FRONT_AND_BACK, enabled ? GL_LINE : GL_FILL);
+    }
+#else
+    (void)enabled;
+#endif
+}
+
 void Renderer::DrawColorQuad(const Colour& tint) {
     float verts[] = { -0.5f,-0.5f,0.0f,  0.5f,-0.5f,0.0f,  -0.5f,0.5f,0.0f,  0.5f,0.5f,0.0f };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();

@@ -30,7 +30,7 @@
 #include "render/BakedStringBox.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "engine/input/Touch.h"
-#include "render/gl_funcs.h"
+#include "render/Renderer.h"
 #include "Game.h"
 
 #include <cmath>
@@ -1179,24 +1179,14 @@ void SettingsScreen::Draw(float* hudScale) {
     // ---- band moves WITH the plate during the drop-in/out animation --
     // ---- otherwise content would clip at the plate's REST screen position
     // ---- while the plate itself is still animating. Mirrors UiDropdown::
-    // ---- Draw's own worldspace->pixel scissor mapping verbatim (see its
-    // ---- comment for the centered-ortho -> viewport-pixel derivation);
-    // ---- guarded the same way so the asm-verify cross-build and the host
-    // ---- x64 unit-test GL stub (FN_GL_STUB) still compile/link. ----
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-    const float orthoH = 320.0f;
-    GLint vp[4];
-    glGetIntegerv(GL_VIEWPORT, vp);
-    const GLint vpX = vp[0], vpY = vp[1];
-    const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
-    GLint sx = vpX;
-    GLint sy = (GLint)((-kViewportHalfH + m_PopupOffsetY + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
-    GLint sw = vpW;
-    GLint sh = (GLint)((kViewportHalfH * 2.0f) / orthoH * (float)vpH);
-    if (sh < 0) sh = 0;
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(sx, sy, sw, sh);
-#endif
+    // ---- Draw's own worldspace->pixel scissor mapping verbatim (see
+    // ---- Renderer::SetClipRect for the centered-ortho -> viewport-pixel
+    // ---- derivation); Renderer::SetClipRect no-ops on __bada__ / FN_GL_STUB
+    // ---- so this call is unconditional here. ----
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->SetClipRect(-240.0f, kViewportHalfH + m_PopupOffsetY,
+                       240.0f, -kViewportHalfH + m_PopupOffsetY);
+    }
 
     float off = m_ScrollY + m_PopupOffsetY;
 
@@ -1235,9 +1225,7 @@ void SettingsScreen::Draw(float* hudScale) {
         m_LangDrop->DrawBar(hudScale);
     }
 
-#if !defined(__bada__) && !defined(FN_GL_STUB)
-    glDisable(GL_SCISSOR_TEST);
-#endif
+    if (Renderer* r = Renderer::GetInstance()) r->ClearClipRect();
 
     // ---- top/bottom edge fade: soft dissolve over the just-scissored
     // ---- content, replacing the hard glScissor cut. Drawn AFTER content +
