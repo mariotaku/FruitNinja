@@ -24,7 +24,6 @@ set(VERIFY_SOURCES
     # Engine: asset / audio / collision / compression / core / input /
     #         math / network / particle / render / util
     "${_PROJECT_ROOT}/src/engine/MenuBackground.cpp"
-    "${_PROJECT_ROOT}/src/engine/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AlternativeTextureLoader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AnimationList.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/AnimationManager.cpp"
