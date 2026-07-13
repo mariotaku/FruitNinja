@@ -1287,8 +1287,7 @@ void MainScreen::MusicCallback() {
 
 #ifndef __bada__
 // Port specific: no binary counterpart. Opens/closes the SettingsScreen
-// modal via the shared toggle path (see SettingsScreen::Toggle, also used by
-// the ESC key in src/GameSDL.cpp).
+// modal via SettingsScreen::Toggle().
 void MainScreen::SettingsCallback() {
     SettingsScreen::Toggle();
 }

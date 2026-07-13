@@ -15,7 +15,6 @@
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
 #include "screens/PauseScreen.h"
-#include "screens/SettingsScreen.h"
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "debug/OSD.h"    // Port specific: dev toast overlay (binary OSD is a dead stub)
@@ -189,11 +188,6 @@ void Game::pollInput() {
 #endif
         if (ev.type == SDL_QUIT) {
             running = false;
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
-            // Port specific: ESC toggles the settings modal (was: quit). Exit UI TBD.
-            // Shares the open/close path with the MainScreen settings button
-            // via SettingsScreen::Toggle() (src/screens/SettingsScreen.cpp).
-            SettingsScreen::Toggle();
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
             // Port specific: 4-level debug overlay cycle (dev aid, not in the binary).
             static const char* kDebugHitboxLevelNames[4] = {

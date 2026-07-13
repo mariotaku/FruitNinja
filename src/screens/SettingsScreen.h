@@ -33,10 +33,11 @@
 //
 // Lifecycle: call the static SettingsScreen::Toggle() to open/close the modal
 // -- it owns the single file-static instance pointer, the AddControl/Init on
-// open, and the SetInputModal(NULL)+SetPendingRemoval on close. Both the ESC
-// key (src/GameSDL.cpp), the MainScreen settings button (src/screens/
-// MainScreen.cpp), and m_pCloseButton's tap (CloseCallback) call Toggle() so
-// there is exactly one open/close path.
+// open, and the SetInputModal(NULL)+SetPendingRemoval on close. Both the
+// MainScreen settings button (src/screens/MainScreen.cpp) and
+// m_pCloseButton's tap (CloseCallback) call Toggle() so there is exactly one
+// open/close path. Toggle()'s close branch additionally quits the app if
+// game_work.languageFlag changed while the modal was open (see m_InitialLanguageFlag).
 // Release() (called by the HUD removal sweep, and by the dtor) tears down
 // m_pCloseButton via SetPendingRemoval (it is still AddControl'd -- HUD's own
 // Update sweep deletes it) and directly `delete`s the four un-AddControl'd
@@ -88,11 +89,12 @@ public:
 
     int GetType() override { return 1; }
 
-    // Port specific: single open/close path for the modal, shared by the ESC
-    // key (src/GameSDL.cpp) and the MainScreen settings button
-    // (src/screens/MainScreen.cpp). Owns the file-static instance pointer;
-    // Toggle() opens (new + Init + AddControl + SetInputModal(this)) when
-    // closed, or closes (SetInputModal(NULL) + SetPendingRemoval) when open.
+    // Port specific: single open/close path for the modal, shared by the
+    // MainScreen settings button (src/screens/MainScreen.cpp) and
+    // m_pCloseButton's tap (CloseCallback). Owns the file-static instance
+    // pointer; Toggle() opens (new + Init + AddControl + SetInputModal(this))
+    // when closed, or closes (SetInputModal(NULL) + SetPendingRemoval, plus a
+    // quit-to-apply-language-change check) when open.
     static void Toggle();
     static bool IsOpen();
 
@@ -174,6 +176,11 @@ private:
     uint8_t m_ScrollOwnsTouch; // 1 once disambiguation has picked "scroll" for the CURRENT touch -- gates widget Update() out
     float m_ScrollDragDist;    // accumulated |dy| since press, mirrors UiDropdown's m_DragDist
 
+    // Port specific: game_work.languageFlag captured at Init() time. Toggle()'s
+    // close branch compares against the live value to detect a language change
+    // and trigger the quit-to-apply-on-restart path (see .cpp).
+    uint8_t m_InitialLanguageFlag;
+
     // Drag/fling/spring-back constants -- ported verbatim from UiDropdown
     // (src/ui/UiDropdown.h/.cpp), itself ported from ScrollingMenu
     // (src/hud/ScrollingMenu.cpp). See UiDropdown.h for the binary DAT
@@ -210,9 +217,9 @@ public:
     void OnSensChanged();
     void OnLangChanged();
 
-    // Port specific: m_pCloseButton's click callback. Runs the same
-    // open/close path as Toggle() (SetInputModal(NULL) + SetPendingRemoval)
-    // so tapping Close behaves exactly like the ESC key / settings gear.
+    // Port specific: m_pCloseButton's click callback. Calls Toggle() so
+    // tapping Close runs the exact same close path (including the
+    // quit-to-apply-language-change check) as the MainScreen settings gear.
     void CloseCallback();
 
     // Test-only: expose the dropdown so render tests can force it open
