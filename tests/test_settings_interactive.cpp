@@ -150,9 +150,11 @@ static const char* const kLanguageNames[] = {
     "ENGLISH_US", "ENGLISH_UK", "FRENCH", "SPANISH", "GERMAN", "ITALIAN",
     "DUTCH", "SWEDISH", "DANISH", "NORWEGIAN", "FINNISH", "KOREAN",
     "JAPANESE", "CHINESE", "TRADITIONAL CHINESE", "LATIN SPANISH", "POLISH",
-    "PORTUGUESE (PT)", "PORTUGUESE (BR)", "RUSSIAN", "ARABIC", "FAKE DEBUG LANGUAGE"
+    "PORTUGUESE (PT)", "PORTUGUESE (BR)", "RUSSIAN", "ARABIC"
 };
-static const int kLanguageCount = 22;
+// Mirrors SettingsScreen::kLanguageNames: binary langId 21 "fake debug language"
+// is dev-only/unreachable, excluded from the port-invented picker.
+static const int kLanguageCount = 21;
 
 static int ClampInt(int v, int lo, int hi) {
     if (v < lo) return lo;
