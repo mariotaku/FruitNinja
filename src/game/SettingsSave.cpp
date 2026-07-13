@@ -64,6 +64,11 @@ void LoadSettings() {
 
     int languageFlag = 0;
     if (root.QueryIntAttribute("languageFlag", &languageFlag) == TIXML_SUCCESS) {
+        // Clamp: kLanguageNames (SettingsScreen.cpp) has 21 entries (0..20).
+        // A save file written before the langId-21 "Debug" entry was removed
+        // from the picker (or any other garbage value) must not index OOB.
+        if (languageFlag < 0) languageFlag = 0;
+        if (languageFlag > 20) languageFlag = 20;
         game_work.languageFlag = (uint8_t)languageFlag;
     }
 

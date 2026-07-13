@@ -466,7 +466,7 @@ NATIVE_LANG_NAMES = [
     "English (US)", "English (UK)", "Français", "Español", "Deutsch", "Italiano",
     "Nederlands", "Svenska", "Dansk", "Norsk", "Suomi", "한국어",
     "日本語", "中文", "繁體中文", "Español (LA)", "Polski",
-    "Português (PT)", "Português (BR)", "Русский", "Arabic", "Debug",
+    "Português (PT)", "Português (BR)", "Русский", "Arabic",
 ]
 
 

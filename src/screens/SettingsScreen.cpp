@@ -50,14 +50,21 @@ using namespace fn_widget_art;
 // Port-improvement screen, no fidelity constraint on display casing/script.
 // Keep in sync with NATIVE_LANG_NAMES in tools/assets/stage-assets.py
 // (web font-subset charset).
+//
+// The binary's langId 21 ("Debug") is StringTableUtilLoadStringsTable's
+// literal "fake debug language" (@0x2815c5) -- a dev-only entry unreachable
+// via the binary's own locale detection (GetLanguage @0x001eebec caps at
+// langId 0x14/20). This picker is entirely port-invented (v1.6.1 has no
+// language UI; locale is auto-detected), so Debug is excluded rather than
+// exposed as a user-selectable option.
 // ---------------------------------------------------------------------------
 static const char* const kLanguageNames[] = {
     "English (US)", "English (UK)", "Fran\303\247ais", "Espa\303\261ol", "Deutsch", "Italiano",
     "Nederlands", "Svenska", "Dansk", "Norsk", "Suomi", "\355\225\234\352\265\255\354\226\264",
     "\346\227\245\346\234\254\350\252\236", "\344\270\255\346\226\207", "\347\271\201\351\253\224\344\270\255\346\226\207", "Espa\303\261ol (LA)", "Polski",
-    "Portugu\303\252s (PT)", "Portugu\303\252s (BR)", "\320\240\321\203\321\201\321\201\320\272\320\270\320\271", "Arabic", "Debug"
+    "Portugu\303\252s (PT)", "Portugu\303\252s (BR)", "\320\240\321\203\321\201\321\201\320\272\320\270\320\271", "Arabic"
 };
-static const int kLanguageCount = 22;
+static const int kLanguageCount = 21;
 
 static int ClampInt(int v, int lo, int hi) {
     if (v < lo) return lo;
