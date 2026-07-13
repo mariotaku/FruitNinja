@@ -318,6 +318,58 @@ static const float kPlateHalfH = 130.0f;
 static const float kPlateSrcBorderXPx = 88.0f, kPlateSrcBorderYPx = 58.0f;
 static const float kPlateDestBorderX  = 44.0f, kPlateDestBorderY  = 29.0f;
 
+// ---------------------------------------------------------------------------
+// Popup open/close animation -- port specific, no binary counterpart.
+// m_PopupOffsetY translates the ENTIRE popup coordinate space (plate,
+// scissor band, labels/dividers/scrollbar, the four widgets, close button)
+// vertically; see SettingsScreen.h AnimPhase note and UpdateAnim() below.
+// ---------------------------------------------------------------------------
+// Off-screen start offset -- large enough that the plate (kPlateHalfH*2 tall)
+// is fully above the 320-tall ortho screen with margin (a screen height is
+// generously more than enough clearance regardless of the plate's own size).
+static const float kPopupStartOffsetY = 320.0f;
+static const float kAnimOpenDuration  = 0.28f; // OPENING duration, seconds
+static const float kAnimCloseDuration = 0.20f; // CLOSING duration, seconds
+// Ease-out-back overshoot constant (standard "back" easing family, e.g.
+// easings.net easeOutBack, whose usual literature value is 1.70158 -- NOT
+// used here). Tuned down from that default so the resulting dip, which
+// scales with kPopupStartOffsetY (320), lands around 8-12 world units past 0
+// at the curve's peak (measured empirically: c1=1.0 -> peak overshoot
+// fraction ~0.037 -> 320*0.037 ~= 11.85 units).
+static const float kBackOvershoot = 1.0f;
+
+// Standard ease-out-back: overshoots past 1.0 then settles back to 1.0.
+// f(t) = 1 + c3*(t-1)^3 + c1*(t-1)^2, c3 = c1+1.
+static float EaseOutBack(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    const float c1 = kBackOvershoot;
+    const float c3 = c1 + 1.0f;
+    float u = t - 1.0f;
+    return 1.0f + c3 * u * u * u + c1 * u * u;
+}
+
+// Simple ease-in (quadratic accelerate) -- no bounce, used for CLOSING.
+static float EaseInQuad(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t;
+}
+
+// Smoothstep -- used for the backdrop dim fade so it isn't a raw linear
+// timer ratio (matches neither easing family used for the offset; the dim
+// just needs to feel soft on both ends, ease-out on open / ease-in on close).
+// f(t) = 3t^2 - 2t^3.
+static float SmoothStep(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return t * t * (3.0f - 2.0f * t);
+}
+
+// Target backdrop alpha at full OPEN (matches the Colour(255,255,255,160)
+// tint Draw() already applied unconditionally before this animation existed).
+static const float kBackdropTargetAlpha = 160.0f / 255.0f;
+
 // Close button at the SCREEN's bottom-right corner (not the panel corner) --
 // same on-screen position as PauseScreen's quit button (bomb at (215,-135),
 // text offset (-29,3) pulling the label onto the bomb face), so the two read
@@ -371,36 +423,29 @@ void SettingsScreen::Toggle() {
             game_work.mHud->AddControl(s_pSettings, false);
         }
         s_pSettings->Init();
+        // Port specific: start the drop-in animation off-screen -- Init()
+        // above already laid out/AddControl'd everything at rest; UpdateAnim()
+        // (called from Update() every frame) eases m_PopupOffsetY down to 0.
+        s_pSettings->m_AnimPhase     = ANIM_OPENING;
+        s_pSettings->m_AnimTimer     = 0.0f;
+        s_pSettings->m_PopupOffsetY  = kPopupStartOffsetY;
+        s_pSettings->m_BackdropAlpha = 0.0f;
         if (game_work.mHud) {
             // Port specific: capture input while the settings modal is open --
-            // see HUD::SetInputModal (src/hud/HUD.h).
+            // see HUD::SetInputModal (src/hud/HUD.h). Stays set for the whole
+            // opening+open+closing lifetime so the blade/menu behind stays
+            // frozen until the popup has fully closed (see CLOSING branch).
             game_work.mHud->SetInputModal(s_pSettings);
         }
-    } else {
-        bool langChanged = (game_work.languageFlag != s_pSettings->m_InitialLanguageFlag);
-
-        if (game_work.mHud) {
-            game_work.mHud->SetInputModal(NULL);
-        }
-        s_pSettings->SetPendingRemoval();
-        s_pSettings = NULL;
-
-        SaveSettings();
-
-        if (langChanged) {
-            // Port specific: quitting is how the new language takes effect on
-            // restart (no live-reload of already-baked UI strings/fonts).
-            //
-            // Port specific: DEFER the quit trigger -- do not call
-            // MainScreen::TriggerQuitFromSettings() here. This runs mid-teardown
-            // of the modal (SetInputModal(NULL)/SetPendingRemoval above haven't
-            // taken effect for the frame yet), and calling the quit sequence
-            // synchronously at this point left the game stuck: m_State got set
-            // to STATE_QUIT_WAIT but the quit never progressed. Just latch the
-            // flag; MainScreen::Update's poll block fires the real quit trigger
-            // once the modal has fully closed (see s_QuitAfterClose header note).
-            s_QuitAfterClose = true;
-        }
+    } else if (s_pSettings->m_AnimPhase == ANIM_OPEN) {
+        // Port specific: don't tear down immediately -- start the exit
+        // animation; the real teardown (SetInputModal(NULL)/SetPendingRemoval/
+        // SaveSettings/s_QuitAfterClose, previously all done right here) now
+        // runs at the END of the CLOSING animation, see UpdateAnim(). Ignore
+        // further close requests while already ANIM_CLOSING (re-entry guard --
+        // the else-if above only matches ANIM_OPEN).
+        s_pSettings->m_AnimPhase = ANIM_CLOSING;
+        s_pSettings->m_AnimTimer = 0.0f;
     }
 }
 
@@ -437,6 +482,10 @@ SettingsScreen::SettingsScreen()
     , m_ScrollOwnsTouch(0)
     , m_ScrollDragDist(0.0f)
     , m_InitialLanguageFlag(0)
+    , m_AnimPhase(ANIM_OPEN)
+    , m_AnimTimer(0.0f)
+    , m_PopupOffsetY(0.0f)
+    , m_BackdropAlpha(kBackdropTargetAlpha)
 {
     // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. This
     // screen owns the four in-plate widgets directly (NOT AddControl'd, see
@@ -651,18 +700,44 @@ void SettingsScreen::Release() {
 }
 
 void SettingsScreen::Update(float dt) {
-    // ---- kinetic scroll first (owns/tracks the touch that drives it) ----
-    UpdateScroll(dt);
+    // ---- popup open/close animation first -- may perform the deferred
+    // ---- teardown and return early (this instance can be mid-destruction
+    // ---- or SetPendingRemoval'd by the time it returns; nothing below is
+    // ---- safe to touch after that). ----
+    UpdateAnim(dt);
+    if (s_pSettings != this) {
+        // Teardown ran this frame (see UpdateAnim's ANIM_CLOSING-complete
+        // branch) -- s_pSettings was cleared. Don't touch widget state below.
+        return;
+    }
 
     // ---- rewrite each widget's live pos.y from its base Y + scroll offset,
     // ---- BEFORE ticking it, so its own hit-rect/PollTouch tracks the
     // ---- scrolled position. off = +m_ScrollY: increasing m_ScrollY shifts
-    // ---- content UP (see header Scrolling note). ----
-    float off = m_ScrollY;
+    // ---- content UP (see header Scrolling note). m_PopupOffsetY (the popup
+    // ---- drop-in/out animation, see UpdateAnim()) stacks on top so widget
+    // ---- hit-rects track the animated plate position too. ----
+    float off = m_ScrollY + m_PopupOffsetY;
     if (m_LangDrop)   m_LangDrop->pos.y   = m_LangBaseY     + off;
     if (m_MotionCb)   m_MotionCb->pos.y   = m_MotionCbBaseY + off;
     if (m_SensSlider) m_SensSlider->pos.y = m_SensBaseY     + off;
     if (m_FpsCb)      m_FpsCb->pos.y      = m_FpsCbBaseY    + off;
+    if (m_pCloseButton) m_pCloseButton->pos.y = kCloseBtnY + m_PopupOffsetY;
+
+    // ---- kinetic scroll (owns/tracks the touch that drives it) + widget
+    // ---- input -- ONLY while fully open; suppressed during
+    // ---- OPENING/CLOSING so nothing is interactive mid-animation (the modal
+    // ---- input capture, see Toggle(), stays set throughout so the screen
+    // ---- behind stays frozen regardless). ----
+    if (m_AnimPhase != ANIM_OPEN) {
+        return;
+    }
+
+    UpdateScroll(dt);
+    // UpdateScroll may have moved m_ScrollY -- re-derive off/pos.y is not
+    // needed again this frame (widgets read pos.y in their own Update below,
+    // and it already reflects last frame's scroll; matches pre-animation
+    // behaviour where UpdateScroll ran before the pos.y rewrite).
 
     // Port specific: while the dropdown panel is open, gate out the other
     // widgets (checkboxes/slider/close) so they neither receive input nor
@@ -685,6 +760,80 @@ void SettingsScreen::Update(float dt) {
         }
     }
     if (m_LangDrop) m_LangDrop->Update(dt);
+}
+
+// Port specific: advances the popup open/close animation. OPENING eases
+// m_PopupOffsetY from kPopupStartOffsetY down to 0 with EASE-OUT-BACK (a
+// small overshoot PAST 0 to negative before settling -- the "bounce"), CLOSING
+// eases back up to kPopupStartOffsetY with a plain EASE-IN (no bounce).
+// m_BackdropAlpha fades 0->target / target->0 on a SmoothStep of the same
+// timer progress (an easing curve of its own, not the raw linear ratio) so
+// the dim ramps up quickly then settles on open, and eases off on close.
+// When a CLOSING animation completes, performs the ACTUAL teardown that used
+// to run synchronously in Toggle()'s close branch (SaveSettings/
+// SetInputModal(NULL)/SetPendingRemoval/s_pSettings=NULL/s_QuitAfterClose),
+// in the same order, just deferred to here.
+void SettingsScreen::UpdateAnim(float dt) {
+    switch (m_AnimPhase) {
+    case ANIM_OPENING: {
+        m_AnimTimer += dt;
+        float t = m_AnimTimer / kAnimOpenDuration;
+        m_BackdropAlpha = SmoothStep(t < 1.0f ? t : 1.0f) * kBackdropTargetAlpha;
+        if (t >= 1.0f) {
+            m_AnimPhase = ANIM_OPEN;
+            m_AnimTimer = 0.0f;
+            m_PopupOffsetY = 0.0f;
+            m_BackdropAlpha = kBackdropTargetAlpha;
+        } else {
+            // EaseOutBack(t) runs 0->1 with an overshoot PAST 1 (peaking above
+            // 1, per the "back" family), which maps to offset running
+            // kPopupStartOffsetY -> 0 with an overshoot PAST 0 to NEGATIVE
+            // (the plate briefly drops below rest before settling back) --
+            // exactly the requested bounce.
+            m_PopupOffsetY = kPopupStartOffsetY * (1.0f - EaseOutBack(t));
+        }
+        break;
+    }
+    case ANIM_OPEN:
+        break;
+    case ANIM_CLOSING: {
+        m_AnimTimer += dt;
+        float t = m_AnimTimer / kAnimCloseDuration;
+        float tc = t < 1.0f ? t : 1.0f;
+        m_BackdropAlpha = (1.0f - SmoothStep(tc)) * kBackdropTargetAlpha;
+        m_PopupOffsetY = kPopupStartOffsetY * EaseInQuad(tc);
+        if (t >= 1.0f) {
+            // ---- deferred teardown -- was Toggle()'s close branch ----
+            bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
+
+            if (game_work.mHud) {
+                game_work.mHud->SetInputModal(NULL);
+            }
+            SetPendingRemoval();
+            s_pSettings = NULL;
+
+            SaveSettings();
+
+            if (langChanged) {
+                // Port specific: quitting is how the new language takes effect
+                // on restart (no live-reload of already-baked UI strings/
+                // fonts). See the original header note on s_QuitAfterClose for
+                // why this is latched rather than triggered synchronously --
+                // still true here, deferred one step further (end of the
+                // CLOSING animation rather than end of Toggle()).
+                s_QuitAfterClose = true;
+            }
+        }
+        break;
+    }
+    }
+}
+
+void SettingsScreen::SetAnimOpenForTest() {
+    m_AnimPhase = ANIM_OPEN;
+    m_AnimTimer = 0.0f;
+    m_PopupOffsetY = 0.0f;
+    m_BackdropAlpha = kBackdropTargetAlpha;
 }
 
 // Port specific: kinetic drag/fling/spring-back model for the plate's
@@ -946,7 +1095,12 @@ void SettingsScreen::Draw(float* hudScale) {
     (void)hudScale;
     MatrixManager& mm = MatrixManager::GetInstance();
 
-    // ---- modal dark backdrop, full-screen (unclipped) ----
+    // ---- modal dark backdrop, full-screen (unclipped). Alpha tracks
+    // ---- m_BackdropAlpha (eased fade in/out with the popup anim, see
+    // ---- UpdateAnim()) instead of the old constant 160 -- 160/255 IS
+    // ---- kBackdropTargetAlpha, so ANIM_OPEN rest state is unchanged. Not
+    // ---- offset by m_PopupOffsetY -- the backdrop dims the whole screen
+    // ---- regardless of where the plate currently sits. ----
     if (m_Backdrop.IsValid()) {
         mm.GetWorldStack().Reset();
         m_Backdrop->Set();
@@ -954,14 +1108,17 @@ void SettingsScreen::Draw(float* hudScale) {
         bgMat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(bgMat);
         mm.UploadModelViewOnly();
-        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 160), NULL);
+        uint8_t backdropA = (uint8_t)(m_BackdropAlpha * 255.0f + 0.5f);
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, backdropA), NULL);
         m_Backdrop->UnSet();
     }
 
     // ---- plate panel: medbacking.tex, drawn as a 9-slice (full texture, no UV
-    // cropping -- see kPlateSrcBorder*/kPlateDestBorder* above), UNCLIPPED ----
+    // cropping -- see kPlateSrcBorder*/kPlateDestBorder* above), UNCLIPPED.
+    // Y offset by m_PopupOffsetY -- the whole plate translates with the popup
+    // drop-in/out animation (see UpdateAnim()). ----
     if (m_Plate.IsValid()) {
-        Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, 0.0f,
+        Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, m_PopupOffsetY,
                                 kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
                                 kPlateSrcBorderXPx, kPlateSrcBorderYPx,
                                 kPlateDestBorderX, kPlateDestBorderY,
@@ -969,11 +1126,14 @@ void SettingsScreen::Draw(float* hudScale) {
     }
 
     // ---- content scissor: the plate's fixed viewport window (full ortho
-    // ---- width, kViewportHalfH tall). Mirrors UiDropdown::Draw's own
-    // ---- worldspace->pixel scissor mapping verbatim (see its comment for
-    // ---- the centered-ortho -> viewport-pixel derivation); guarded the
-    // ---- same way so the asm-verify cross-build and the host x64 unit-test
-    // ---- GL stub (FN_GL_STUB) still compile/link. ----
+    // ---- width, kViewportHalfH tall), SHIFTED by m_PopupOffsetY so the clip
+    // ---- band moves WITH the plate during the drop-in/out animation --
+    // ---- otherwise content would clip at the plate's REST screen position
+    // ---- while the plate itself is still animating. Mirrors UiDropdown::
+    // ---- Draw's own worldspace->pixel scissor mapping verbatim (see its
+    // ---- comment for the centered-ortho -> viewport-pixel derivation);
+    // ---- guarded the same way so the asm-verify cross-build and the host
+    // ---- x64 unit-test GL stub (FN_GL_STUB) still compile/link. ----
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     const float orthoH = 320.0f;
     GLint vp[4];
@@ -981,7 +1141,7 @@ void SettingsScreen::Draw(float* hudScale) {
     const GLint vpX = vp[0], vpY = vp[1];
     const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
     GLint sx = vpX;
-    GLint sy = (GLint)((-kViewportHalfH + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    GLint sy = (GLint)((-kViewportHalfH + m_PopupOffsetY + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
     GLint sw = vpW;
     GLint sh = (GLint)((kViewportHalfH * 2.0f) / orthoH * (float)vpH);
     if (sh < 0) sh = 0;
@@ -989,7 +1149,7 @@ void SettingsScreen::Draw(float* hudScale) {
     glScissor(sx, sy, sw, sh);
 #endif
 
-    float off = m_ScrollY;
+    float off = m_ScrollY + m_PopupOffsetY;
 
     // ---- row-group dividers: between Language/Motion Mode, and between
     // ---- Sensitivity/FPS Counter (see kDividerY1/kDividerY2), scrolled ----
@@ -1049,15 +1209,15 @@ void SettingsScreen::Draw(float* hudScale) {
         static const float kFadeLeftX  = -kPlateHalfW + kPlateDestBorderX;
         static const float kFadeRightX =  kPlateHalfW - kPlateDestBorderX;
         DrawScrollFade(m_Plate.Get(), kFadeLeftX, kFadeRightX,
-                      kViewportHalfH, kFadeHeight, true);
+                      kViewportHalfH + m_PopupOffsetY, kFadeHeight, true);
         DrawScrollFade(m_Plate.Get(), kFadeLeftX, kFadeRightX,
-                      -kViewportHalfH, kFadeHeight, false);
+                      -kViewportHalfH + m_PopupOffsetY, kFadeHeight, false);
     }
 
     // ---- scrollbar: thin quad on the plate's right inner edge, unclipped,
     // ---- drawn after the content scissor is disabled. No-op if content
     // ---- doesn't overflow the viewport. ----
-    DrawScrollbar(m_TexDivider.Get(), kViewportHalfH, -kViewportHalfH,
+    DrawScrollbar(m_TexDivider.Get(), kViewportHalfH + m_PopupOffsetY, -kViewportHalfH + m_PopupOffsetY,
                   kViewportH, kContentH, m_ScrollY, m_MaxScroll);
 
     // ---- open dropdown panel: drawn LAST, scissor already disabled above --
@@ -1065,7 +1225,9 @@ void SettingsScreen::Draw(float* hudScale) {
     // ---- glScissor (see UiDropdown.cpp) -- GL scissor state is not
     // ---- stacked, so SettingsScreen's own content scissor must already be
     // ---- off before this call, never nested around it. The bar was
-    // ---- already drawn (clipped, above); this only draws the popup list. ----
+    // ---- already drawn (clipped, above); this only draws the popup list.
+    // ---- m_LangDrop->pos.y was already rewritten with m_PopupOffsetY in
+    // ---- Update() (see the `off` there), so the panel follows the bar. ----
     if (m_LangDrop && m_LangDrop->IsOpen()) {
         m_LangDrop->DrawPanel(hudScale);
     }

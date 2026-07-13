@@ -83,6 +83,12 @@ int main(int argc, char* argv[]) {
     SettingsScreen* screen = new SettingsScreen();
     game_work.mHud->AddControl(screen, false);
     screen->Init();
+    // Test-only: skip the drop-in animation (Toggle() would normally start it
+    // in ANIM_OPENING, off-screen) so captures are deterministic at rest
+    // (offset 0, full backdrop alpha) regardless of settle-frame count -- the
+    // real open animation is ~0.28s/~17 frames at 60fps dt, longer than the
+    // settle windows below. See SettingsScreen.h SetAnimOpenForTest().
+    screen->SetAnimOpenForTest();
 
     // ---- Settle (drives every widget's Update via HUD::Update) ----
     h.RunComponentHeadless(8, kLayerMask);
