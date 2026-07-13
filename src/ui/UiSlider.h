@@ -21,6 +21,11 @@
 // track) recomputes the value from the live touch x and fires OnChange
 // (installed via UiWidget::SetOnChange) whenever the value changes.
 //
+// SetSteps(n): quantizes the value to n equal stops across [min,max]; 0
+// (default) leaves the slider continuous. SetDetent(v): a magnetic snap
+// point + visual tick at value v; -1 (default) disables it. Both may be
+// called after construction -- the current value is re-snapped immediately.
+//
 
 #include "UiWidget.h"
 #include "asset/Texture.h"
@@ -43,12 +48,27 @@ public:
     void SetKnobTexture(const Mortar::SmartPtr<Mortar::Texture>& tex) { m_KnobTex = tex; }
     void SetKnobSize(float d) { m_KnobD = d; SetTrackSize(m_TrackW, m_TrackH); }
 
+    // segments == 0 (default): continuous, GetValue() returns any raw int
+    // in [min,max]. segments > 0: [min,max] is divided into `segments`
+    // equal stops and GetValue() only ever returns a stop.
+    void SetSteps(int segments);
+    // value == -1 (default): no detent. Otherwise a magnetic snap point +
+    // visual tick drawn on the track at that value.
+    void SetDetent(int value);
+
     void Release() override { m_KnobTex.SetNull(); UiWidget::Release(); }
 
 private:
     // Knob centre X for the current m_Value, in the same centered-ortho
     // space as pos. See header doc above for the t/travel derivation.
     float ComputeKnobX() const;
+    // Same t/travel math as ComputeKnobX but for an arbitrary value --
+    // shared by ComputeKnobX(m_Value) and the detent tick (m_Detent).
+    float ValueToTrackX(int value) const;
+    // Quantizes rawValue to the step grid (if m_Steps > 0), then pulls to
+    // m_Detent if within the magnetic window (if m_Detent >= 0). Result is
+    // clamped to [m_Min, m_Max].
+    int SnapValue(int rawValue) const;
 
     int m_Min;
     int m_Max;
@@ -56,6 +76,8 @@ private:
     float m_TrackW;
     float m_TrackH;
     float m_KnobD;
+    int m_Steps;
+    int m_Detent;
     Mortar::SmartPtr<Mortar::Texture> m_KnobTex;
 };
 
