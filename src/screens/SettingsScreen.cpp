@@ -70,7 +70,62 @@ static const Colour& SettingsTextColour() {
 // ---------------------------------------------------------------------------
 // Layout constants (game space, ortho x[-240,240] y[-160,160]).
 // ---------------------------------------------------------------------------
-static const float kLangLabelX  = -150.0f, kLangLabelY  =   85.0f;
+// Port specific: shared left margin for every left-column label -- all four
+// (Language / Motion Mode / Sensitivity / FPS Counter) left-align from this
+// same x instead of each being individually centred on its row, which left
+// their left edges ragged (each string's own width shifted its visual start).
+// Chosen just inside the plate's content left bound (-220 + kPlateDestBorderX
+// 44 = -176, see kPlateHalfW note below) with a small margin, mirroring
+// kRightEdge's margin on the opposite side.
+static const float kLabelX = -168.0f;
+// Label font scale (Font::DrawString's scale param). Labels draw with the
+// TTF font (m_LangFont, gangofchinese.ttf) rather than the bitmap
+// font_fruit_ninja.fnt -- the bitmap face is CAPS-ONLY (no lowercase
+// glyphs), and the description line under MOTION MODE needs lowercase, so
+// both labels and description share the TTF for one consistent look.
+// gangofchinese.ttf's Latin glyphs are the Gang of Three display face,
+// which is itself caps-only (no true lowercase forms -- lowercase input
+// renders as small caps), so the label strings stay written in caps.
+// The TTF's glyph metrics render lighter/smaller than the bitmap face at
+// the same nominal size. 19.0f (up from an earlier 17.0f pass) fills the
+// left column more confidently -- slightly above kComboTextScale (18.0f,
+// the collapsed LANGUAGE dropdown's value text) since the left labels are
+// the primary row heading and can afford to read a touch bolder/larger
+// than the right-column widget text, without yet crowding the widgets.
+static const float kLabelScale = 19.0f;
+
+// Port specific: left-column row Y positions use an EVEN vertical rhythm.
+// The plate's usable content range is +-101 (kPlateHalfH(130) -
+// kPlateDestBorderY(29), see kPlateHalfH note below). kRowGap is the
+// top-of-plate / bottom-of-plate padding (above LANGUAGE, below FPS
+// COUNTER) -- unchanged from the original single-uniform-gap derivation.
+// MOTION MODE's row is the tallest allocation (label + 2-line description +
+// SENSITIVITY, 4 lines total) laid out with uniform kRowLineGap spacing
+// between each of its 4 lines; the other two rows (LANGUAGE, FPS COUNTER)
+// are single-line.
+//
+// Divider clearance: each divider (kDividerHeight 15 tall, see DrawDivider)
+// gets a DEDICATED 10-unit gap on each side, beyond the neighbouring label's
+// baseline -- not shared with kRowGap/kRowLineGap. So the baseline-to-
+// baseline gap spanning a divider is kDividerGap = 2*10 (pad) +
+// kDividerHeight = 35; the divider sits centred in it, giving exactly 10
+// units of clearance from each of its edges to the adjacent label baseline.
+//
+// Derivation (content half-height H=101, 3 internal kRowLineGap steps
+// spanning Motion Mode's block, 2 dedicated kDividerGap steps):
+//   kRowGap = (H*2 - 3*kRowLineGap - 2*kDividerGap) / 2
+// so that: kRowGap (top pad) + kLangLabelY row + kDividerGap (Divider1 gap,
+// padded) + [Motion block, 3*kRowLineGap tall] + kDividerGap (Divider2 gap,
+// padded) + kFpsLabelY row + kRowGap (bottom pad) exactly fills [-H, H] at
+// the label-baseline level (kRowGap grew from the old uniform-gap value to
+// absorb the extra divider padding -- see MEASURE note in the .cpp's
+// overflow analysis, content stays within the plate bound using widget
+// extents too).
+static const float kRowLineGap  = 24.0f;
+static const float kDividerPad  = 10.0f;
+static const float kDividerGap  = 2.0f * kDividerPad + 15.0f; // 15 = kDividerHeight (DrawDivider)
+static const float kRowGap      = (101.0f * 2.0f - 3.0f * kRowLineGap - 2.0f * kDividerGap) / 2.0f;
+static const float kLangLabelY  =   101.0f - kRowGap;
 // Port specific: kRightEdge is the shared right edge (x) every right-column
 // widget's visible art aligns to, so their right edges line up in a column
 // instead of each widget's own centre-anchored x drifting independently.
@@ -97,30 +152,72 @@ static const float kRightEdge = 175.0f;
 // (kCheckboxSide) so it reads as a chunky field. x is centre of the bar;
 // back-solved so the bar's right edge (pos.x + kComboScaleX*0.5f) == kRightEdge.
 static const float kComboScaleX =  150.0f, kComboScaleY =   36.0f;
-static const float kComboX      =   kRightEdge - kComboScaleX * 0.5f, kComboY      =   82.0f;
+// kComboY re-centres the dropdown bar on the LANGUAGE label (the bar is
+// taller than a text baseline, so a small downward nudge visually centres
+// it under the label rather than sitting flush with the baseline). Kept
+// small (-2, down from an earlier -8) so the bar's bottom edge
+// (kComboY - kComboScaleY*0.5f) still clears Divider 1 -- see kDividerY1.
+static const float kComboX      =   kRightEdge - kComboScaleX * 0.5f, kComboY      =   kLangLabelY - 2.0f;
 static const uint8_t kComboVisibleRows = 6;
 // Combo value/row text scale (Font::DrawString's scale param, font-native
 // pixel size) -- fits the longest native name -- "PORTUGUES (BR)" -- without
 // spilling into the caret.
 static const float kComboTextScale = 18.0f;
 
-static const float kMotionLabelX = -150.0f, kMotionLabelY =   35.0f;
+// Divider 1 sits centred in kDividerGap below LANGUAGE and above MOTION
+// MODE -- 10 units of dedicated clearance beyond each label's baseline on
+// both sides (see kDividerGap derivation above), not the shared kRowGap.
+static const float kDividerY1 = kLangLabelY - kDividerGap * 0.5f;
+
+// Motion Mode row: TALLEST allocation -- label, then a clear gap, then a
+// 2-line description, then SENSITIVITY, all spaced kRowLineGap apart (the
+// same uniform line spacing used throughout this 4-line block).
+static const float kMotionLabelY = kDividerY1 - kDividerGap * 0.5f;
 // UiCheckbox: side 36; x back-solved so the box's right edge
 // (pos.x + side*0.5f) == kRightEdge.
 static const float kCheckboxSide = 36.0f;
-static const float kMotionCbX    =   kRightEdge - kCheckboxSide * 0.5f, kMotionCbY    =   35.0f;
 
-static const float kSensLabelX = -120.0f, kSensLabelY = -15.0f;
+// Motion Mode description -- smaller, dimmer TWO-line caption drawn under
+// the MOTION MODE label (same kLabelX left margin). Manually split at the
+// natural comma break ("Slow move aims, fast flick cuts" / "(pointer
+// only)") rather than word-wrapped, since Font has no wrap-measurement path
+// wired for this TTF path (see FindAdvanceOfNextWord TODO in Font.h). Only
+// this row gets a sub-description; the other three rows stay single-line.
+static const float kMotionDescY0    = kMotionLabelY - kRowLineGap;
+static const float kMotionDescY1    = kMotionDescY0 - kRowLineGap;
+static const float kMotionDescScale = 11.0f;
+// Dimmer than SettingsTextColour()'s brown (0x6F,0x46,0x1E) -- same hue,
+// lower alpha so it reads as secondary/caption text under the bold label.
+static const Colour kMotionDescColour(0x6F, 0x46, 0x1E, 0xA0);
+
+// kMotionCbY: vertically centred on the MOTION MODE label + 2-line
+// description sub-block (kMotionLabelY..kMotionDescY1).
+static const float kMotionCbX = kRightEdge - kCheckboxSide * 0.5f;
+static const float kMotionCbY = (kMotionLabelY + kMotionDescY1) * 0.5f;
+
+// SENSITIVITY is a TOP-LEVEL row (same kLabelX left margin, same
+// kLabelScale as every other row), the 4th and last line of Motion Mode's
+// block -- kRowLineGap below the description's 2nd line, same spacing as
+// every other step in this block.
+static const float kSensLabelY = kMotionDescY1 - kRowLineGap;
 // UiSlider track -- wide, thin horizontal groove (NineSlice box.tex).
 static const float kSensTrackW = 120.0f, kSensTrackH = 16.0f;
 // UiSlider: x is centre of the track; back-solved so the track's right edge
-// (pos.x + trackW*0.5f) == kRightEdge.
-static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      = -15.0f;
+// (pos.x + trackW*0.5f) == kRightEdge, same pattern every other
+// right-column widget uses (checkbox, combo bar). Centred on the
+// SENSITIVITY label alone.
+static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      = kSensLabelY;
 static const int   kSensMin = 0, kSensMax = 100;
 
-static const float kFpsLabelX = -150.0f, kFpsLabelY = -65.0f;
+// Divider 2 sits centred in kDividerGap below SENSITIVITY and above FPS
+// COUNTER (same dedicated 10-unit clearance as Divider 1).
+static const float kDividerY2 = kSensLabelY - kDividerGap * 0.5f;
+
+// FPS COUNTER: last top-level row, kDividerGap*0.5 below Divider 2 (same
+// dedicated divider clearance as every other divider-adjacent row).
+static const float kFpsLabelY = kDividerY2 - kDividerGap * 0.5f;
 // UiCheckbox: same anchor as kMotionCbX above.
-static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = -65.0f;
+static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
@@ -160,7 +257,7 @@ static const Vec3  kCloseTextOffset(-29.0f, 3.0f, 0.0f);
 //   threshold = 30 * (100 - sliderValue) / 100
 //   sliderValue = 100 - (threshold / 30) * 100, clamped to [0,100]
 // ---------------------------------------------------------------------------
-static const float kSensThresholdMax = 30.0f;
+static const float kSensThresholdMax = 20.0f;
 
 static int ThresholdToSlider(float threshold) {
     float t = ClampInt((int)threshold, 0, (int)kSensThresholdMax) / kSensThresholdMax;
@@ -247,6 +344,7 @@ void SettingsScreen::Init() {
     m_TexKnob  = Mortar::TextureManager::LoadLocalisedTexture("slider_will.tex");
     m_TexFade  = Mortar::TextureManager::LoadLocalisedTexture("list_fade.tex");
     m_TexItem  = Mortar::TextureManager::LoadLocalisedTexture("list_item.tex");
+    m_TexDivider = Mortar::TextureManager::LoadLocalisedTexture("scratch_deviders.tex");
     // Port specific: modal dim backdrop -- solid black, alpha applied via vertex
     // tint (Colour(0,0,0,160) in Draw()), not baked into the texture. No real
     // widget counterpart.
@@ -312,6 +410,8 @@ void SettingsScreen::Init() {
     m_SensSlider->SetBoxTexture(m_TexBox);
     m_SensSlider->SetKnobTexture(m_TexKnob);
     m_SensSlider->SetTrackSize(kSensTrackW, kSensTrackH);
+    m_SensSlider->SetSteps(20);
+    m_SensSlider->SetDetent(ThresholdToSlider(10.0f));
     m_SensSlider->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnSensChanged));
     m_SensSlider->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
@@ -385,6 +485,7 @@ void SettingsScreen::Release() {
     m_TexKnob.SetNull();
     m_TexFade.SetNull();
     m_TexItem.SetNull();
+    m_TexDivider.SetNull();
     m_Plate.SetNull();
     m_Backdrop.SetNull();
     m_LangFont.SetNull();
@@ -408,12 +509,32 @@ void SettingsScreen::Update(float dt) {
     if (m_pCloseButton) m_pCloseButton->m_Active = othersActive;
 }
 
-static void DrawSettingsLabel(const char* s, float x, float y) {
-    if (!game_work.pFontMain.IsValid()) return;
+// Port specific: left-aligned (FONT_ALIGN_LEFT). All four top-level labels
+// (LANGUAGE / MOTION MODE / SENSITIVITY / FPS COUNTER) anchor from the
+// shared kLabelX at kLabelScale. Uses the TTF font (m_LangFont,
+// gangofchinese.ttf -- same font UiDropdown's rows use), NOT
+// game_work.pFontMain: pFontMain is the bitmap font_fruit_ninja.fnt, which
+// is CAPS-ONLY (no lowercase glyphs). Switching to the TTF lets these
+// render in natural mixed case instead of all-caps, and lets the
+// sub-description below share the same font/look.
+static void DrawSettingsLabel(Mortar::Font* font, const char* s, float x, float y,
+                              float scale = kLabelScale) {
+    if (!font) return;
     Mortar::Utf8StringIterator it(s);
-    game_work.pFontMain->DrawString(it, x, y, 0.0f,
-                                    SettingsTextColour(), 18.0f,
-                                    0.0f, 0.0f, 1, NULL, 0.0f);
+    font->DrawString(it, x, y, 0.0f,
+                     SettingsTextColour(), scale,
+                     0.0f, 0.0f, Mortar::FONT_ALIGN_LEFT, NULL, 0.0f);
+}
+
+// Motion Mode sub-description -- smaller, dimmer caption drawn under the
+// MOTION MODE label only. Same left anchor + font as the labels, own
+// scale/colour.
+static void DrawSettingsDesc(Mortar::Font* font, const char* s, float x, float y) {
+    if (!font) return;
+    Mortar::Utf8StringIterator it(s);
+    font->DrawString(it, x, y, 0.0f,
+                     kMotionDescColour, kMotionDescScale,
+                     0.0f, 0.0f, Mortar::FONT_ALIGN_LEFT, NULL, 0.0f);
 }
 
 void SettingsScreen::Draw(float* hudScale) {
@@ -442,14 +563,57 @@ void SettingsScreen::Draw(float* hudScale) {
                                 Colour::White);
     }
 
+    // ---- row-group dividers: between Language/Motion Mode, and between
+    // ---- Sensitivity/FPS Counter (see kDividerY1/kDividerY2) ----
+    DrawDivider(kDividerY1);
+    DrawDivider(kDividerY2);
+
     // ---- left-column labels ----
-    // +7 vertical: pFontMain->DrawString positions text below the given y, so a
-    // label centred on a row uses rowY + 7. Keeps each label vertically
-    // centred on its widget (widgets draw separately, via the HUD).
-    DrawSettingsLabel("LANGUAGE",     kLangLabelX,   kLangLabelY   + 7.0f);
-    DrawSettingsLabel("MOTION MODE",  kMotionLabelX, kMotionLabelY + 7.0f);
-    DrawSettingsLabel("SENSITIVITY",  kSensLabelX,   kSensLabelY   + 7.0f);
-    DrawSettingsLabel("FPS COUNTER",  kFpsLabelX,    kFpsLabelY    + 7.0f);
+    // +7 vertical: DrawString positions text below the given y, so a label
+    // centred on a row uses rowY + 7. Keeps each label vertically centred on
+    // its widget (widgets draw separately, via the HUD). All four labels
+    // share kLabelX (left-aligned) so their left edges line up, and share
+    // the TTF font (m_LangFont) for mixed-case rendering.
+    Mortar::Font* labelFont = m_LangFont.Get();
+    DrawSettingsLabel(labelFont, "LANGUAGE",     kLabelX, kLangLabelY   + 7.0f);
+    DrawSettingsLabel(labelFont, "MOTION MODE",  kLabelX, kMotionLabelY + 7.0f);
+    DrawSettingsDesc(labelFont, "Slow move aims, fast flick cuts",
+                      kLabelX, kMotionDescY0 + 7.0f);
+    DrawSettingsDesc(labelFont, "(pointer only)",
+                      kLabelX, kMotionDescY1 + 7.0f);
+    DrawSettingsLabel(labelFont, "SENSITIVITY", kLabelX, kSensLabelY + 7.0f);
+    DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f);
+}
+
+// Port specific: draws one scratch_deviders.tex separator centred at
+// centerY, spanning from the left-column label edge (kLabelX) to the
+// right-column widget edge (kRightEdge + kCheckboxSide*0.5f -- the
+// checkbox's own right edge, the widest right-column extent). Follows the
+// same NineSlice-free scaled-quad idiom as ShopListItem::DrawDividers
+// (src/hud/ShopListItem.cpp) -- MakeScale + GlobalTranslate44 + reset/set
+// world stack + UploadModelViewOnly + DrawQuadUnCached. Native texture is
+// 257x17; height 15 (slightly under native 17) avoids visibly stretching
+// the art vertically.
+void SettingsScreen::DrawDivider(float centerY) {
+    if (!m_TexDivider.IsValid()) return;
+
+    static const float kDividerHeight = 15.0f;
+    static const float kDividerRightX = kRightEdge + kCheckboxSide * 0.5f;
+    static const float kDividerCenterX = (kLabelX + kDividerRightX) * 0.5f;
+    static const float kDividerWidth   = kDividerRightX - kLabelX;
+    // Muted brown-grey, alpha 0xB0 -- reads as a soft separator on the
+    // parchment/wood plate rather than a hard rule line.
+    static const Colour kDividerColour(0x8A, 0x6A, 0x4A, 0xB0);
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    Matrix44 mat = Matrix44::MakeScale(kDividerWidth, kDividerHeight, 0.0f);
+    mat.GlobalTranslate44(kDividerCenterX, centerY, 0.0f);
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+    m_TexDivider->Set();
+    Mortar::Mesh::DrawQuadUnCached(kDividerColour, NULL);
+    m_TexDivider->UnSet();
 }
 
 void SettingsScreen::OnMotionToggle() {

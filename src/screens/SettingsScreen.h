@@ -113,8 +113,17 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_TexKnob;   // slider_will.tex -- slider knob
     Mortar::SmartPtr<Mortar::Texture> m_TexFade;   // list_fade.tex -- UiDropdown open-list edge fade
     Mortar::SmartPtr<Mortar::Texture> m_TexItem;   // list_item.tex -- UiDropdown row highlight gloss
+    Mortar::SmartPtr<Mortar::Texture> m_TexDivider; // scratch_deviders.tex -- row-group separator
 
     std::vector<std::string> m_LangItems;
+
+    // Port specific: draws one horizontal scratch_deviders.tex separator
+    // centred at the given row-space Y, spanning the left-column label edge
+    // to the right-column widget edge. See DrawDivider's own comment (.cpp)
+    // for the width/height derivation. Needs m_TexDivider (instance state),
+    // so unlike DrawSettingsLabel/DrawSettingsDesc (file-static free
+    // functions in the .cpp) this is a private method.
+    void DrawDivider(float centerY);
 
 public:
     // Delegate targets (Mortar::Delegate0<void> callees), installed on each
