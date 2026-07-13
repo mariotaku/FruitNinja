@@ -293,7 +293,7 @@ private:
     void MusicCallback();
 #ifndef __bada__
     // Port specific: no binary counterpart. Opens/closes the SettingsScreen
-    // modal via SettingsScreen::Toggle() (shared with the ESC key).
+    // modal via SettingsScreen::Toggle().
     void SettingsCallback();
 #endif // !defined(__bada__)
     void LeaderboardsCallback();

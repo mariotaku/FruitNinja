@@ -13,6 +13,8 @@
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "game/GameWork.h"
+#include "screens/MainScreen.h"
+#include "core/SystemManager.h"
 #include "engine/util/Localisation.h"
 #include "engine/util/Delegate.h"
 #include "render/MatrixManager.h"
@@ -350,10 +352,9 @@ static float SliderToThreshold(int sliderValue) {
 // Toggle(); see the header note for the open/close contract.
 static SettingsScreen* s_pSettings = NULL;
 
-// Port specific: single open/close path, shared by the ESC key handler
-// (src/GameSDL.cpp) and the MainScreen settings button (src/screens/
-// MainScreen.cpp::SettingsCallback). No binary counterpart -- this screen
-// has none.
+// Port specific: single open/close path, shared by the MainScreen settings
+// button (src/screens/MainScreen.cpp::SettingsCallback) and m_pCloseButton's
+// tap (CloseCallback). No binary counterpart -- this screen has none.
 void SettingsScreen::Toggle() {
     if (s_pSettings == NULL) {
         s_pSettings = new SettingsScreen();
@@ -372,11 +373,23 @@ void SettingsScreen::Toggle() {
             game_work.mHud->SetInputModal(s_pSettings);
         }
     } else {
+        bool langChanged = (game_work.languageFlag != s_pSettings->m_InitialLanguageFlag);
+
         if (game_work.mHud) {
             game_work.mHud->SetInputModal(NULL);
         }
         s_pSettings->SetPendingRemoval();
         s_pSettings = NULL;
+
+        if (langChanged) {
+            // TODO: v1.6.1 -- placeholder until settings persistence exists; quitting is
+            // how the new language takes effect on restart (no live-reload of already-baked
+            // UI strings/fonts).
+            SystemManager::GetInstance().RequestQuit();
+            if (game_work.mMainScreen) {
+                game_work.mMainScreen->m_State = STATE_QUIT_WAIT;
+            }
+        }
     }
 }
 
@@ -412,6 +425,7 @@ SettingsScreen::SettingsScreen()
     , m_ScrollDragging(0)
     , m_ScrollOwnsTouch(0)
     , m_ScrollDragDist(0.0f)
+    , m_InitialLanguageFlag(0)
 {
     // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. This
     // screen owns the four in-plate widgets directly (NOT AddControl'd, see
@@ -455,6 +469,8 @@ void SettingsScreen::Init() {
     for (int i = 0; i < kLanguageCount; ++i) {
         m_LangItems.push_back(std::string(kLanguageNames[i]));
     }
+
+    m_InitialLanguageFlag = game_work.languageFlag;
 
     int langDefault = (int)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
 
