@@ -98,6 +98,17 @@ public:
     static void Toggle();
     static bool IsOpen();
 
+    // Port specific: no binary counterpart. Toggle()'s close branch used to call
+    // MainScreen::TriggerQuitFromSettings() SYNCHRONOUSLY, mid-teardown of this
+    // modal (before SetInputModal(NULL)/SetPendingRemoval had taken effect for
+    // the frame) -- QuitGamesCallback's m_State=STATE_QUIT_WAIT write landed, but
+    // MainScreen::Update's teardown-order dependencies meant the quit sequence
+    // never progressed. Toggle() now just sets this flag; MainScreen::Update
+    // polls it once the modal has fully closed (s_pSettings==NULL and no input
+    // modal owns the HUD) and fires the real quit trigger then. See
+    // MainScreen::Update's poll block (src/screens/MainScreen.cpp).
+    static bool s_QuitAfterClose;
+
 private:
     UiDropdown* m_LangDrop;
     UiCheckbox* m_MotionCb;
