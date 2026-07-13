@@ -17,8 +17,12 @@
 //     compatibility with MortarSound / GameSound (which are unchanged).
 //
 // DIFFERS: the SDL loader applies a >>4 (div-16) amplitude shift for 16-voice
-// int-mixer headroom. The browser mixes in float, so full-scale Ogg is shipped
-// and single-sound loudness is set by MASTER_SFX_GAIN (0.9) on masterSfxGain.
+// int-mixer headroom (MAMAudioController::LoadSound @0x0022f46c). The browser
+// mixes in float and the .ogg is transcoded from the SAME pre-shift .wav.pcm
+// bytes (tools/assets/stage-assets.py encode_ogg -- full-scale, no shift), so
+// MASTER_SFX_GAIN must reproduce the >>4 scale itself: 1/16 = 0.0625. This
+// makes web single-SFX amplitude == SDL single-SFX amplitude (sample/16 *
+// voiceVol) instead of ~14.4x louder (0.9 vs 1/16).
 // DIFFERS: no fixed 16-voice cap -- the browser allows unlimited concurrent
 // sources; the monotonic-handle + active[] map is kept only for API compat.
 //
@@ -37,11 +41,12 @@
 #include <cstdio>
 #include <string>
 
-// MASTER_SFX_GAIN: tunable master gain on masterSfxGain so single-sound web
-// loudness ~matches desktop (which used a >>4 int-headroom shift instead).
-// Defined in the JS init below (the single place it is used); this constant
-// documents the value for C++-side reference. Tune by ear on the TV.
-static const double MASTER_SFX_GAIN = 0.9;
+// MASTER_SFX_GAIN: master gain on masterSfxGain reproducing SDL's >>4
+// (1/16) int-headroom shift, since the web .ogg is transcoded full-scale
+// from the same pre-shift .wav.pcm (see DIFFERS note above). Defined in the
+// JS init below (the single place it is used); this constant documents the
+// value for C++-side reference.
+static const double MASTER_SFX_GAIN = 0.0625;
 
 // ---------------------------------------------------------------------------
 // JS module: window.FNAudio. Defined once by fnaudio_init(); every other EM_JS
