@@ -21,6 +21,7 @@
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
+#include "render/Renderer.h"
 #include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Random.h"
@@ -356,7 +357,8 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
                 barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
 
                 barTex.Set();
-                TexEnvModulate();  // Set owns tex-env (binary model); port Set() doesn't set it.
+                // Set owns tex-env (binary model); port Set() doesn't set it.
+                if (Renderer* r = Renderer::GetInstance()) r->SetTextureModulate();
                 Mortar::Mesh::DrawTriStrip(barVerts, 4, true, NULL);
                 barTex.UnSet();
             }

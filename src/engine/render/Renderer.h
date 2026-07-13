@@ -43,6 +43,35 @@ struct Renderer {
     // Port specific: untextured tinted quad (binary inlines this in the crit-flash; no standalone symbol).
     void DrawColorQuad(const Colour& tint);
 
+    // Port specific: no binary counterpart (GLES2 has no fixed-function user
+    // clip planes; the original clips via CPU-side geometry math). Enables
+    // GL_SCISSOR_TEST and sets glScissor from a WORLD-space rect in the same
+    // centered-ortho convention as SetupGameOrtho (SetupOrtho(160,-160,-240,
+    // 240,...); see docs/engine/coordinate-system.md). `top`/`bottom` are Y
+    // world coords (top > bottom, +Y is up); `left`/`right` are X world coords.
+    // No-op on __bada__ / FN_GL_STUB builds (glGetIntegerv(GL_VIEWPORT) isn't
+    // available there). GL scissor is not stacked -- only one region can be
+    // active; call ClearClipRect() to disable before drawing unclipped content.
+    void SetClipRect(float left, float top, float right, float bottom);
+
+    // Disables GL_SCISSOR_TEST (undoes SetClipRect). No-op on __bada__ / FN_GL_STUB.
+    void ClearClipRect();
+
+    // Port specific: no binary counterpart. Sets GL_TEXTURE_ENV_MODE = GL_MODULATE
+    // on the active texture unit -- thin wrapper around TexEnvModulate() (gl_funcs.h)
+    // so non-engine TUs (entities/, screens/) don't call raw GL directly.
+    void SetTextureModulate();
+
+    // Port specific: no binary counterpart. glActiveTexture(GL_TEXTURE0) +
+    // glBindTexture(GL_TEXTURE_2D, texId) -- thin wrapper so debug-overlay code
+    // (raw GLuint textures, not Mortar::Texture) doesn't call raw GL directly.
+    void BindTexture2D(uint32_t texId);
+
+    // Port specific: no binary counterpart. Wraps glPolygonMode(GL_FRONT_AND_BACK,
+    // GL_LINE/GL_FILL) for the F2 wireframe debug toggle. No-op where glPolygonMode
+    // is unavailable (GLES / Emscripten) -- same guard the call site used to have.
+    void SetWireframe(bool enabled);
+
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24).
     // Matches original DrawTriList (0x00240e34) / DrawTriStrip.
     // setBlendFunc: binary Mesh::DrawTris @0x240c30 never touches glBlendFunc --

@@ -767,17 +767,11 @@ void GameDraw(float dt, bool active) {
     // by BeginFrame -- binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
-#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
-    // Port specific: wireframe debug mode (F2). glPolygonMode is loaded
-    // optionally by gl_funcs -- stays nullptr on GLES, so the toggle is a
-    // silent no-op there. Absent under Emscripten (WebGL has no polygon mode).
-    const bool wireframe = FN::g_DebugWireframe && glPolygonMode != nullptr;
-    if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-#endif
+    // Port specific: wireframe debug mode (F2). Renderer::SetWireframe is a
+    // no-op where glPolygonMode is unavailable (GLES / Emscripten).
+    if (FN::g_DebugWireframe) game->renderer.SetWireframe(true);
     game->actorManager->Draw(game->renderer);
-#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
-    if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-#endif
+    if (FN::g_DebugWireframe) game->renderer.SetWireframe(false);
 
     // === 2. HUD::BeginDraw + post-actor block ===
     // v1.6.1 GameDraw @0x001cd720 right after Mortar::ActorManager::Draw:

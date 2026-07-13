@@ -2,6 +2,7 @@
 #include "asset/File.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "render/gl_funcs.h"
 #include <cstdio>
 #include <cstring>
 
@@ -216,6 +217,47 @@ void TextureManager::InitialiseInternal() {
 // ASM-spec v1.6.1 Mortar::TextureManager::LoadIndependent(void*, int) @0x00227230: ignores both params, returns SmartPtr<Texture>(NULL). No callers in v1.6.1 (dead API).
 Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(void* /*data*/, int /*size*/) {
     return Mortar::SmartPtr<Texture>();
+}
+
+// Port specific: no binary counterpart. 1x1 (or NxN via px replicate -- always
+// 1x1 today, no caller needs larger) solid-colour GL texture, moved here from
+// the debug-overlay TU so raw GL stays confined to engine/.
+uint32_t TextureManager::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+#if defined(__bada__) || defined(FN_GL_STUB)
+    (void)r; (void)g; (void)b; (void)a;
+    return 0;
+#else
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    const uint8_t px[4] = { r, g, b, a };
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return (uint32_t)id;
+#endif
+}
+
+// Port specific: no binary counterpart. Moved here from src/hud/WidgetPlaceholderArt.h's
+// four Make*Tex helpers, which all duplicated this exact glGenTextures/glTexImage2D
+// sequence -- their SDF pixel-generation logic stays put, only the upload is shared.
+uint32_t TextureManager::CreateTextureFromRGBA(const uint8_t* rgba, int w, int h, bool linearFilter) {
+#if defined(__bada__) || defined(FN_GL_STUB)
+    (void)rgba; (void)w; (void)h; (void)linearFilter;
+    return 0;
+#else
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    const GLint filter = linearFilter ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return (uint32_t)id;
+#endif
 }
 
 // Port specific: Bada VRAM is managed by the driver; no-op on SDL/OpenGL (faithful: binary is also constant false).

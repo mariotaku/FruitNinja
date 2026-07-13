@@ -19,7 +19,7 @@
 #include "render/BakedStringTTF.h"
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
-#include "render/gl_funcs.h"
+#include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "game/GameWork.h"
@@ -45,7 +45,7 @@ float g_MotionSpeedThreshold = 10.0f; // Port specific: g_MotionMode cut speed t
 // Renderer's program_vc samples a texture and multiplies by the vertex
 // color; without a bound texture we'd see undefined samples. A solid
 // white sample lets the vertex colour drive the visible tint.
-static GLuint s_WhiteTex = 0;
+static uint32_t s_WhiteTex = 0;
 
 // Lazy debug font (verdana.fnt) for pointer-address labels in DebugHUDBounds_Draw.
 static Mortar::SmartPtr<Mortar::Font> s_DebugFont;
@@ -57,15 +57,7 @@ static void EnsureDebugFont() {
 
 static void EnsureWhiteTex() {
     if (s_WhiteTex) return;
-    glGenTextures(1, &s_WhiteTex);
-    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
-    static const uint8_t white[4] = { 255, 255, 255, 255 };
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, white);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    s_WhiteTex = Mortar::TextureManager::CreateSolidTexture(255, 255, 255, 255);
 }
 
 // --- Geometry helpers --------------------------------------------------
@@ -218,8 +210,7 @@ void DebugHitbox_Draw() {
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+    r->BindTexture2D(s_WhiteTex);
 
     // Scratch vertex buffer: ring (32*6=192) + crosshair (4*6=24) = 216 verts/entity.
     static QUADCUSTOMVERTEX s_Verts[216];
@@ -328,8 +319,7 @@ void DebugHUDBounds_Draw() {
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+    r->BindTexture2D(s_WhiteTex);
 
     // Magenta at 80% alpha (BGRA: B=0xFF G=0x00 R=0xFF A=0xCC).
     static const uint32_t kHUDBoxColour = 0xCCFF00FF;
@@ -587,8 +577,7 @@ void DebugText_Overlay(float anchorX, float anchorY,
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+    r->BindTexture2D(s_WhiteTex);
 
     // Colour constants (BGRA packed):
     //   MAGENTA anchor crosshair: B=0xFF G=0x00 R=0xFF A=0xFF
@@ -673,8 +662,7 @@ void DebugBladeTrails_Draw() {
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+    r->BindTexture2D(s_WhiteTex);
 
     // Yellow, fully opaque (BGRA: B=0x00 G=0xFF R=0xFF A=0xFF).
     static const uint32_t kBladeLineCol = 0xFF00FFFF;

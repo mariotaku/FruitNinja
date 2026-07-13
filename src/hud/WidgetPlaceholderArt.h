@@ -17,8 +17,8 @@
 #ifndef FN_HUD_WIDGET_PLACEHOLDER_ART_H
 #define FN_HUD_WIDGET_PLACEHOLDER_ART_H
 
-#include "render/gl_funcs.h"
 #include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "util/SmartPtr.h"
 #include <vector>
 #include <cstdint>
@@ -42,13 +42,7 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeSolidTex(
         px[i * 4 + 3] = a;
     }
 
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    uint32_t id = Mortar::TextureManager::CreateTextureFromRGBA(&px[0], w, h, /*linearFilter=*/true);
 
     Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
     t->m_TexId = id;
@@ -79,13 +73,7 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeVerticalAlphaRampTex(
         }
     }
 
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    uint32_t id = Mortar::TextureManager::CreateTextureFromRGBA(&px[0], w, h, /*linearFilter=*/true);
 
     Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
     t->m_TexId = id;
@@ -240,13 +228,7 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeCheckboxTex(bool checked, int w, in
         }
     }
 
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    uint32_t id = Mortar::TextureManager::CreateTextureFromRGBA(&px[0], w, h, /*linearFilter=*/true);
 
     Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
     t->m_TexId = id;
@@ -279,13 +261,7 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeCircleTex(
         }
     }
 
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    uint32_t id = Mortar::TextureManager::CreateTextureFromRGBA(&px[0], w, h, /*linearFilter=*/true);
 
     Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
     t->m_TexId = id;
@@ -321,13 +297,7 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeArrowTex(
         }
     }
 
-    GLuint id = 0;
-    glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    uint32_t id = Mortar::TextureManager::CreateTextureFromRGBA(&px[0], w, h, /*linearFilter=*/true);
 
     Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
     t->m_TexId = id;
