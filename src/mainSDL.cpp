@@ -79,6 +79,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // ASM-spec v1.6.1 FruitNinja::OnAppInitializing @0x001ef9e4:
+    //   calls Osp::System::PowerManager::KeepScreenOnState(true, true) once at end of
+    //   app init, unconditionally, never released -- screen held on for app lifetime.
+    // Port specific: SDL2 has no direct equivalent; SDL_DisableScreenSaver() once at
+    //   startup matches keepScreenOn=true.
+    SDL_DisableScreenSaver();
+
     // Fixed-function GL — matches the binary's pipeline. Picked at
     // CMake configure via FRUIT_GL_API.
 #if defined(FRUIT_GL_API_ES1)
