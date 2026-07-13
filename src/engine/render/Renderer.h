@@ -14,9 +14,12 @@
 // DrawTriStrip, DrawColorQuad, draw_fullscreen_quad) render through a real
 // GLES2 shader program (Shaders.h / ShaderProgram.h) via DrawShaded2D.
 // Everything that funnels through these (font, particles, HUD, screens)
-// rides the shader path with them. 3D Geometry::Render still uses the
-// fixed-function pipeline this phase; DrawShaded2D restores glUseProgram(0)
-// and disables its generic attrib arrays after EVERY draw so both coexist.
+// rides the shader path with them.
+// Phase 3: the 3D mesh path (Geometry::Render) renders through the Mesh3D
+// program via DrawMesh3D (same unlit texture2D * v_color modulate -- all
+// meshes are IsLit=false). Both shader draws restore glUseProgram(0),
+// disable their generic attrib arrays and unbind buffers after EVERY draw
+// so any still-fixed-function path in the frame coexists.
 struct Renderer {
     static Renderer* s_instance;
     static Renderer* GetInstance() { return s_instance; }
@@ -95,6 +98,24 @@ struct Renderer {
     void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc = true);
     void DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount);
 
+    // GLES2 3D mesh draw (Geometry::Render). Draws a static VBO (+ optional
+    // IBO, GL_UNSIGNED_SHORT indices) through the Mesh3D program with `mvp`
+    // uploaded to u_mvp. Vertex layout is passed as plain ints (byte offsets
+    // into `stride`-sized vertices) so the Renderer stays independent of
+    // asset headers: pos = 3 floats @posOff (always present), uv = 2 floats
+    // @uvOff when uvSize > 0, colour = 4 normalized ubytes @colOff when
+    // colSize > 0. When a channel is absent its attrib array is disabled and
+    // a constant generic value is set instead -- colour defaults to WHITE
+    // (GLES2's built-in generic default is (0,0,0,1) opaque black, but the
+    // fixed-function default colour this path replaces was white).
+    // tex == 0 binds m_WhiteTex so texture2D samples 1.0 (untextured FF
+    // behaviour). Blend / cull / depth state is the CALLER's responsibility.
+    // Coexistence guarantee: exits via attrib 0/1/2 disable, both buffer
+    // bindings cleared, glUseProgram(0) -- same contract as DrawShaded2D.
+    void DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount, GLenum prim,
+                    int stride, int posOff, int uvOff, int colOff, int uvSize, int colSize,
+                    GLuint tex, const Matrix44& mvp);
+
 private:
     // Shared GLES2 draw for the 2D paths. Uploads `mvp` to u_mvp, streams
     // `verts` (vertCount * stride bytes) into m_QuadVBO (orphan + upload),
@@ -113,6 +134,7 @@ private:
                       GLenum prim, GLuint tex, const Matrix44& mvp);
 
     ShaderProgram m_Quad2D;  // the Shaders.h Quad2D program
+    ShaderProgram m_Mesh3D;  // the Shaders.h Mesh3D program (3D mesh path)
     GLuint m_QuadVBO;        // streaming VBO for DrawShaded2D
     GLuint m_WhiteTex;       // 1x1 opaque white — lets DrawColorQuad reuse the textured shader
 };

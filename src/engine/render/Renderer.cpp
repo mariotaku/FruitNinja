@@ -14,8 +14,9 @@
 // (MatrixManager::GetMVP composes proj * view * world). The shader's
 // texture2D(u_tex) * v_color reproduces the old GL_MODULATE texenv.
 // Font / particle / HUD drawing funnels through DrawTriList/DrawTriStrip,
-// so it rides the shader path too; 3D Geometry::Render keeps its own
-// fixed-function client-array path this phase.
+// so it rides the shader path too. Phase 3: 3D Geometry::Render draws
+// through the Mesh3D program via DrawMesh3D (unlit -- all meshes are
+// IsLit=false, so the same texture2D * v_color modulate applies).
 
 Renderer* Renderer::s_instance = nullptr;
 
@@ -35,6 +36,12 @@ bool Renderer::init() {
 
     if (!m_Quad2D.Compile(FnShaders::Quad2D_VS, FnShaders::Quad2D_FS)) {
         LOG_ERROR("RENDERER/init", "2D shader program failed to build");
+        return false;
+    }
+
+    if (!m_Mesh3D.Compile(FnShaders::Mesh3D_VS, FnShaders::Mesh3D_FS)) {
+        LOG_ERROR("RENDERER/init", "3D mesh shader program failed to build");
+        m_Quad2D.Destroy();
         return false;
     }
 
@@ -58,6 +65,7 @@ bool Renderer::init() {
 
 void Renderer::shutdown() {
     m_Quad2D.Destroy();
+    m_Mesh3D.Destroy();
     if (m_WhiteTex) {
         glDeleteTextures(1, &m_WhiteTex);
         m_WhiteTex = 0;
@@ -102,6 +110,59 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(2);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glUseProgram(0);
+}
+
+// See Renderer.h for the full contract. Same coexistence discipline as
+// DrawShaded2D: never early-return between Use() and the trailing restore.
+void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount, GLenum prim,
+                          int stride, int posOff, int uvOff, int colOff, int uvSize, int colSize,
+                          GLuint tex, const Matrix44& mvp) {
+    m_Mesh3D.Use();
+    glUniformMatrix4fv(m_Mesh3D.MVPLoc(), 1, GL_FALSE, mvp.ptr());
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex ? tex : m_WhiteTex);
+    glUniform1i(m_Mesh3D.TexLoc(), 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    if (ibo) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    }
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)(size_t)posOff);
+
+    if (uvSize > 0) {
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (const void*)(size_t)uvOff);
+    } else {
+        glDisableVertexAttribArray(1);
+        glVertexAttrib4f(1, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    if (colSize > 0) {
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (const void*)(size_t)colOff);
+    } else {
+        glDisableVertexAttribArray(2);
+        // GLES2's generic-attrib default is (0,0,0,1) opaque black; the
+        // fixed-function default colour this replaces (glColor4ub 255,255,
+        // 255,255 in the old Geometry::Render) is white. Must set explicitly.
+        glVertexAttrib4f(2, 1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    if (ibo && indexCount > 0) {
+        glDrawElements(prim, indexCount, GL_UNSIGNED_SHORT, (const void*)0);
+    } else {
+        glDrawArrays(prim, 0, vertCount);
+    }
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glUseProgram(0);
 }
 

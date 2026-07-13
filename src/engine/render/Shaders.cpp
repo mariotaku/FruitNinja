@@ -37,4 +37,12 @@ const char* Quad2D_FS =
     "    gl_FragColor = texture2D(u_tex, v_uv) * v_color;\n"
     "}\n";
 
+// 3D mesh program (Geometry::Render). Structurally identical to the 2D
+// program -- lighting is off for every mesh (IsLit=false), so the unlit
+// texture2D * v_color modulate IS the fixed-function output. Aliased to
+// the 2D sources; split into real separate strings only if a lit path
+// ever lands.
+const char* Mesh3D_VS = Quad2D_VS;
+const char* Mesh3D_FS = Quad2D_FS;
+
 }

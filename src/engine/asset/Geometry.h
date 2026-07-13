@@ -46,7 +46,7 @@ class EffectGroup;
 // as real typed fields. m_NamedIndexStreams and m_EffectBindings are padded because
 // their element types (EffectBinding/PassBinding) are unported subsystems.
 // Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout rather than walking PassBinding::Apply
-// (structural divergence; both paths are fixed-function GLES1.x -- NOT a GLES2 shader path).
+// (structural divergence; port renders via the GLES2 Mesh3D shader -- Renderer::DrawMesh3D).
 // TODO: re-verify v1.6.1 GeometryBinding_Bada ctor address (symbol absent in Bada v1.6.1 binary; was: 0x001a57bc stale v1.5.x)
 class GeometryBinding_Bada : public ReferenceCounter {
 public:
@@ -73,7 +73,7 @@ struct Event1_GeometryBinding {
 // GeometryBinding -- constructed by LoadMesh to hold stream references and
 // the EffectGroup pointer. Render-time use (PassBinding::Apply chain) is defunct
 // in the port -- Geometry::Render draws from load-cached m_Vbo/m_Ibo/m_Layout
-// (structural divergence; same fixed-function GLES1.x calls, NOT a GLES2 shader path).
+// (structural divergence; port renders via the GLES2 Mesh3D shader).
 // v1.6.1 VertexStreamAdd @0x002640c8, GeometryBinding ctor @0x00263e90,
 //   IndexStreamSet @0x00264108, EffectGroupSet @0x0026406c.
 class GeometryBinding : public GeometryBinding_Bada {
@@ -116,7 +116,7 @@ struct VertexLayout {
 // Binary fields preserved at canonical offsets +0x0C..+0x14 relative to base.
 // Port appends VBO/IBO/material data after the binary fields; the binary's binding-stack
 // pipeline (PassBinding::Apply etc.) is structurally bypassed -- Geometry::Render draws
-// from load-cached m_Vbo/m_Ibo/m_Layout (same fixed-function GLES1.x calls, NOT GLES2 shaders).
+// from load-cached m_Vbo/m_Ibo/m_Layout through the GLES2 Mesh3D shader (Renderer::DrawMesh3D).
 class Geometry : public ReferenceCounter {
 public:
     // TODO: re-verify v1.6.1 Geometry ctor (C1/C2) address (was: 0x001a3c50/0x001a3cc4 stale v1.5.x)
@@ -136,8 +136,10 @@ public:
     //   revived (see task #374 -- too invasive to do as part of this fix, all 3D rendering at risk).
     //   Symbol will NOT pair in asm-verify (different mangled name) -- accepted DIFFERS.
     // DIFFERS: (2) port walks load-cached m_Vbo/m_Ibo/m_Layout instead of
-    //   m_Binding->GetBindings()[idx].m_PassBindings (same GL calls, byte-equivalent output).
-    //   Port uses m_DiffuseTex for texture binding instead of MeshMaterial param.
+    //   m_Binding->GetBindings()[idx].m_PassBindings, and draws through the GLES2
+    //   Mesh3D shader via Renderer::DrawMesh3D (ES1->ES2 translation; byte-equivalent
+    //   unlit modulate output). Port uses m_DiffuseTex for texture binding instead
+    //   of MeshMaterial param.
     void Render(Matrix44 const& mvp);
 
     // v1.6.1 Mortar::Geometry::HasActiveEffect @0x00264440

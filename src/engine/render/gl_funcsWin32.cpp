@@ -61,6 +61,8 @@ static void  (APIENTRYP s_glUniform1i)            (GLint, GLint) = nullptr;
 static void  (APIENTRYP s_glVertexAttribPointer)  (GLuint, GLint, GLenum,
                                                    GLboolean, GLsizei,
                                                    const void*) = nullptr;
+static void  (APIENTRYP s_glVertexAttrib4f)       (GLuint, GLfloat, GLfloat,
+                                                   GLfloat, GLfloat) = nullptr;
 static void  (APIENTRYP s_glEnableVertexAttribArray)  (GLuint) = nullptr;
 static void  (APIENTRYP s_glDisableVertexAttribArray) (GLuint) = nullptr;
 static void  (APIENTRYP s_glDeleteShader)         (GLuint) = nullptr;
@@ -152,6 +154,10 @@ void APIENTRY glVertexAttribPointer(GLuint index, GLint size, GLenum type,
     if (s_glVertexAttribPointer)
         s_glVertexAttribPointer(index, size, type, normalized, stride, pointer);
 }
+void APIENTRY glVertexAttrib4f(GLuint index, GLfloat x, GLfloat y,
+                               GLfloat z, GLfloat w) {
+    if (s_glVertexAttrib4f) s_glVertexAttrib4f(index, x, y, z, w);
+}
 void APIENTRY glEnableVertexAttribArray(GLuint index) {
     if (s_glEnableVertexAttribArray) s_glEnableVertexAttribArray(index);
 }
@@ -195,6 +201,7 @@ bool gl_load_extensions_win32() {
     LOAD(glUniformMatrix4fv);
     LOAD(glUniform1i);
     LOAD(glVertexAttribPointer);
+    LOAD(glVertexAttrib4f);
     LOAD(glEnableVertexAttribArray);
     LOAD(glDisableVertexAttribArray);
     LOAD(glDeleteShader);
