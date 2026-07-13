@@ -15,22 +15,21 @@
 // // ASM-verified markers apply to this class (it has no binary counterpart).
 //
 // Usage: `SettingsScreen* s = new SettingsScreen(); game_work.mHud->AddControl(s,
-// false); s->Init();` -- AddControl the SCREEN ITSELF before calling Init():
-// Init() AddControl's the 5 owned widgets (4 settings controls + the
-// m_pCloseButton BSButton), and since HUD::Draw has no per-control sort key
-// (only control-list order), the screen must already be in the list first so
-// its own Draw() (backdrop + plate + labels) paints behind every widget.
-// SettingsScreen::Toggle() follows this exact order; a caller bypassing
-// Toggle() (e.g. a render test) must too.
-//
-// The screen does NOT drive the widgets' Update/Draw directly -- each is
-// AddControl'd to game_work.mHud with m_LayerFlags = HUD_LAYER_TOP_MOST
-// (matching the modal control itself) so HUD::Update's modal input-capture
-// gate (see HUD.h SetInputModal) still delivers input to them while the
-// settings modal owns SetInputModal. Draw order (the plate behind the
-// widgets, the open dropdown panel above its siblings) is controlled purely
-// by HUD control-list order: screen first, then checkboxes/slider/close
-// button, then the dropdown last (see Init()).
+// false); s->Init();` -- AddControl the SCREEN ITSELF before calling Init().
+// The screen itself is the only thing AddControl'd to game_work.mHud (plus
+// m_pCloseButton, see below) -- the four in-plate widgets (LANGUAGE
+// UiDropdown, MOTION MODE / FPS COUNTER UiCheckbox, SENSITIVITY UiSlider)
+// are owned directly and are NOT AddControl'd: UiWidget.h documents that the
+// owning screen must call each widget's Update()/Draw() itself, and doing so
+// here lets the screen wrap them in a scrolled + glScissor'd viewport (see
+// UpdateScroll()/Draw()) so the plate's content can overflow its visible
+// window and be dragged, like a scroll pane. Widgets poll Mortar::Touch
+// directly (TouchInRegion/IsTouchDown/game_work.m_FingerSpawnPos), so a
+// direct Update() call delivers input identically to being AddControl'd --
+// the HUD's modal input-capture gate only matters for controls it walks
+// itself.
+// m_pCloseButton stays AddControl'd (TOP_MOST) since it sits outside the
+// plate (bottom-right of the screen) and never scrolls.
 //
 // Lifecycle: call the static SettingsScreen::Toggle() to open/close the modal
 // -- it owns the single file-static instance pointer, the AddControl/Init on
@@ -38,16 +37,28 @@
 // key (src/GameSDL.cpp), the MainScreen settings button (src/screens/
 // MainScreen.cpp), and m_pCloseButton's tap (CloseCallback) call Toggle() so
 // there is exactly one open/close path.
-// Release() (called by the HUD removal sweep, and by the dtor) tears down the
-// 5 owned widgets (SetPendingRemoval + null -- HUD's own Update sweep deletes
-// each, matching GameModeScreen::RemoveButtons' pattern for AddControl'd
-// buttons) and the shared injected textures/font.
+// Release() (called by the HUD removal sweep, and by the dtor) tears down
+// m_pCloseButton via SetPendingRemoval (it is still AddControl'd -- HUD's own
+// Update sweep deletes it) and directly `delete`s the four un-AddControl'd
+// widgets (they were never linked into game_work.mHud's control list, so
+// there is no dangling-pointer risk), plus the shared injected
+// textures/font.
+//
+// Scrolling: the four widgets' `pos.y` is rewritten every Update() (base Y,
+// captured once in Init(), plus the live scroll offset) BEFORE each widget's
+// own Update() runs, so their own touch hit-rects/PollTouch track the
+// scrolled position; Draw() reuses the same rewritten pos.y. See
+// UpdateScroll() for the kinetic drag/fling/spring-back model (mirrors
+// UiDropdown's own, same constants) and vertical-vs-horizontal drag
+// disambiguation (a scroll only "steals" the touch from a widget once the
+// drag is predominantly vertical -- see kScrollVerticalBias).
 //
 
 #include "hud/HUDControl3d.h"
 #include "math/Vec3.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -66,6 +77,14 @@ public:
     void Release() override;
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
+
+    // Port specific: kinetic scroll for the plate's content viewport --
+    // drag/fling/spring-back model mirroring UiDropdown::Update's tail (same
+    // constants: SCROLL_FRICTION/DRAG_DELTA_FACTOR/SPRING_BACK_COEF/
+    // SPRING_FWD_COEF/DRAG_CANCEL_DIST). Called first thing in Update(),
+    // before the four widgets' own Update(). See the header's Scrolling note
+    // above for the pos.y-rewrite contract this feeds.
+    void UpdateScroll(float dt);
 
     int GetType() override { return 1; }
 
@@ -117,6 +136,59 @@ private:
 
     std::vector<std::string> m_LangItems;
 
+    // Port specific: base (unscrolled) content-space Y of each of the four
+    // in-plate widgets, captured once in Init() from the existing kXxxY
+    // layout constants. Update() rewrites each widget's live pos.y = baseY +
+    // (+m_ScrollY) every frame; Draw()'s labels/dividers apply the same
+    // offset. Keeping these as instance fields (rather than re-reading the
+    // file-static kXxxY constants at every call site) is just a naming
+    // convenience -- the values ARE those constants, snapshotted once.
+    float m_LangBaseY;
+    float m_MotionCbBaseY;
+    float m_SensBaseY;
+    float m_FpsCbBaseY;
+
+    // Port specific: kinetic scroll state for the plate's content viewport --
+    // same drag/fling/spring-back model as UiDropdown's open-panel scroll
+    // (src/ui/UiDropdown.cpp UiDropdown::Update tail), re-scoped to a whole
+    // screen's worth of widgets instead of a dropdown's rows.
+    //
+    // Sign convention matches UiDropdown: m_ScrollY >= 0, 0 = content top
+    // (nothing scrolled), +m_MaxScroll = content bottom (last row visible).
+    // Draw offset is `off = +m_ScrollY` (increasing m_ScrollY shifts content
+    // UP, revealing lower rows) -- same content-follows-finger convention,
+    // same un-negated sign as UiDropdown's own `off`/`delta` (src/ui/
+    // UiDropdown.cpp ~148).
+    float m_ScrollY;
+    float m_ScrollVel;
+    float m_MaxScroll;         // computed once in Init(): max(0, contentH - viewportH)
+    float m_AnchorScroll;      // m_ScrollY latched at touch-press
+    Vec3  m_ScrollAnchorPos;   // finger (x, y) latched at touch-press
+    int   m_ScrollTouchId;     // -1 = no touch owned/tracked by the scroll acquire scan
+    uint8_t m_ScrollDragging;  // 1 once the held touch has committed to being a scroll (not a widget tap/drag)
+    uint8_t m_ScrollOwnsTouch; // 1 once disambiguation has picked "scroll" for the CURRENT touch -- gates widget Update() out
+    float m_ScrollDragDist;    // accumulated |dy| since press, mirrors UiDropdown's m_DragDist
+
+    // Drag/fling/spring-back constants -- ported verbatim from UiDropdown
+    // (src/ui/UiDropdown.h/.cpp), itself ported from ScrollingMenu
+    // (src/hud/ScrollingMenu.cpp). See UiDropdown.h for the binary DAT
+    // provenance of each value.
+    static const float SCROLL_FRICTION;    // 0.9f  -- per-frame velocity decay
+    static const float DRAG_DELTA_FACTOR;  // -0.5f -- damped-follow easing
+    static const float SPRING_BACK_COEF;   // 0.75f -- spring multiplier past top
+    static const float SPRING_FWD_COEF;    // 0.25f -- spring multiplier past bottom
+    static const float DRAG_CANCEL_DIST;   // 5.0f  -- accumulated drag dist that cancels a tap
+    // Port specific: no UiDropdown counterpart (a dropdown panel has no
+    // sibling widgets to disambiguate against) -- scroll-vs-widget gate for
+    // SettingsScreen's whole-plate drag: a held touch becomes a SCROLL only
+    // once |dy| clears a small dead zone AND |dy| >= |dx| * this bias
+    // (predominantly vertical). Until then the touch is left alone so a tap
+    // or a SENSITIVITY slider's horizontal drag proceeds through the
+    // widget's own PollTouch. 1.0f = no bias toward either axis beyond the
+    // dead zone itself.
+    static const float kScrollVerticalBias; // 1.0f
+    static const float kScrollDeadZone;     // 4.0f -- |dy| before a held touch can become a scroll
+
     // Port specific: draws one horizontal scratch_deviders.tex separator
     // centred at the given row-space Y, spanning the left-column label edge
     // to the right-column widget edge. See DrawDivider's own comment (.cpp)
@@ -141,6 +213,14 @@ public:
     // Test-only: expose the dropdown so render tests can force it open
     // (UiDropdown::SetOpenForTest) without a synthetic touch sequence.
     UiDropdown* GetLangDropForTest() const { return m_LangDrop; }
+
+    // Test-only: force the scroll pane to an arbitrary offset (clamped to
+    // [0, m_MaxScroll], same range UpdateScroll()'s spring-back enforces) so
+    // a render test can capture the scrolled-to-bottom state (FPS COUNTER
+    // row) without a synthetic drag/fling touch sequence.
+    void SetScrollForTest(float scrollY) {
+        m_ScrollY = scrollY < 0.0f ? 0.0f : (scrollY > m_MaxScroll ? m_MaxScroll : scrollY);
+    }
 };
 
 #endif // FN_SETTINGS_SCREEN_H
