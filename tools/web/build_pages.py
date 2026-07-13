@@ -15,9 +15,6 @@ galleries.  Output layout (default: pages/):
       fruit-ninja-<sha8>.js
       fruit-ninja-<sha8>.wasm
       fruit-ninja-<sha8>.data
-      play_button.webp
-      sound.webp
-      sound_cross.webp
       manifest.webmanifest        <- PWA manifest (static, unhashed by design)
       sw.js                       <- service worker (root scope; runtime caching)
       favicon.ico
@@ -47,11 +44,7 @@ SRC_BUILD_WEB = os.path.join(REPO_ROOT, "build", "web")
 
 # Non-hashed extra assets copied from build/web/ into pages/ as-is.
 # These are NOT referenced by name in HTML/JS so they don't need hashing.
-GAME_EXTRA_FILES = [
-    "play_button.webp",
-    "sound.webp",
-    "sound_cross.webp",
-]
+GAME_EXTRA_FILES = []
 
 # PWA files copied from build/web/ into pages/ root as-is.  Static and
 # UNHASHED by design: the manifest / service worker / favicon must keep

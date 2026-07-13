@@ -587,22 +587,15 @@ if (EMSCRIPTEN)
     if (FN_DEBUG_TOUCH)
         target_link_options(fruit-ninja PRIVATE "SHELL:--profiling-funcs")
     endif()
-    # Port specific: copy the shell's image assets next to fruit-ninja.html
-    # so the loading screen can reference them by relative URL before MEMFS is
-    # populated.  play_button/sound/sound_cross are the shell overlay UI (also
-    # consumed by tools/web/build_pages.py, which reads them from build/web/).
-    # splash.webp is NOT copied/shipped -- the loading-screen backdrop is now
-    # an inline BlurHash placeholder decoded client-side in shell.html; the
-    # source .webp stays in-repo only as the hash's provenance reference.
-    # Also stages the PWA files (manifest.webmanifest, sw.js, favicon.ico at the
-    # output root; icon PNGs under icons/) referenced by the shell's <head> --
-    # these keep stable, unhashed names by design (web-hash-assets.py does not
-    # touch them) so the manifest / service-worker / favicon URLs never change.
+    # Port specific: stage the PWA files (manifest.webmanifest, sw.js,
+    # favicon.ico at the output root; icon PNGs under icons/) next to
+    # fruit-ninja.html so the shell's <head> can reference them by relative URL
+    # before MEMFS is populated.  These keep stable, unhashed names by design
+    # (web-hash-assets.py does not touch them) so the manifest / service-worker
+    # / favicon URLs never change.  (The old play_button/sound/sound_cross/
+    # splash .webp overlays went away with the progress-bar-only loading shell.)
     add_custom_command(TARGET fruit-ninja POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/play_button.webp
-            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound.webp
-            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound_cross.webp
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/manifest.webmanifest
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sw.js
             ${CMAKE_SOURCE_DIR}/src/platform/emscripten/icons/favicon.ico
