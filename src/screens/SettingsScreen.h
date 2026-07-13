@@ -209,6 +209,16 @@ private:
     // functions in the .cpp) this is a private method.
     void DrawDivider(float centerY);
 
+    // Port specific: relabels m_pCloseButton's baked text between "BACK" and
+    // "QUIT" depending on whether game_work.languageFlag has diverged from
+    // m_InitialLanguageFlag (i.e. whether closing the modal will trigger the
+    // quit-to-apply-language-change path in Toggle()). BSButton has no
+    // SetText -- its label is baked once into m_pLabelBox at Init() time --
+    // so this reaches into m_pLabelBox->SetText() directly to rebake it.
+    // Called once at the end of Init() and again from OnLangChanged() (the
+    // only place languageFlag can change while the modal is open).
+    void UpdateCloseButtonLabel();
+
 public:
     // Delegate targets (Mortar::Delegate0<void> callees), installed on each
     // widget's SetOnChange in Init().

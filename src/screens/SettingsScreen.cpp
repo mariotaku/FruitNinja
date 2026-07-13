@@ -539,6 +539,11 @@ void SettingsScreen::Init() {
         // reused instead of LSTR_QUIT ("QUIT") -- other screens (AboutScreen,
         // GameModeScreen, DojoScreen) already reuse this same id for their
         // back/exit buttons, and "BACK" reads correctly for closing a modal.
+        // Relabelled to LSTR_QUIT ("QUIT") reactively by UpdateCloseButtonLabel()
+        // once the language selection has changed (see Toggle()'s
+        // quit-to-apply-language-change path) -- this ctor arg is just the
+        // initial bake, immediately overwritten by the UpdateCloseButtonLabel()
+        // call at the end of Init() below.
         GETSTRING(LSTR_DJ_BACK_BUTTON, 0),
         Vec3(1.0f, 1.0f, 1.0f)
     );
@@ -595,6 +600,11 @@ void SettingsScreen::Init() {
     m_ScrollDragging = 0;
     m_ScrollOwnsTouch = 0;
     m_ScrollDragDist = 0.0f;
+
+    // m_InitialLanguageFlag was just captured above, so langChanged is false
+    // here -- this bakes the initial "BACK" label via the same path
+    // OnLangChanged() uses later, rather than duplicating the SetText call.
+    UpdateCloseButtonLabel();
 }
 
 void SettingsScreen::Release() {
@@ -1099,6 +1109,23 @@ void SettingsScreen::OnLangChanged() {
     int idx = m_LangDrop->GetSelected();
     game_work.languageFlag = (uint8_t)idx;
     Localisation::Load(Game::GetInstance()->data_dir.c_str(), idx);
+    UpdateCloseButtonLabel();
+}
+
+// Port specific: rebakes m_pCloseButton's label to LSTR_QUIT ("QUIT") once
+// game_work.languageFlag has diverged from m_InitialLanguageFlag (mirrors the
+// langChanged check in Toggle()'s close branch), else LSTR_DJ_BACK_BUTTON
+// ("BACK"). BSButton has no SetText of its own -- m_pLabel is only baked into
+// m_pLabelBox once, in BSButton::Init() -- so this reaches into m_pLabelBox
+// directly. SetText() marks the box dirty and triggers RebuildMeshes() on the
+// next Draw(); the gradient/stroke/size/bounds styling applied once in Init()
+// (SetGradient/ReshapeBounds/SetStroke/SetFontSize/FitIntoVerticalBounds) are
+// persistent box state, not tied to the text, so they don't need reapplying.
+void SettingsScreen::UpdateCloseButtonLabel() {
+    if (!m_pCloseButton || !m_pCloseButton->m_pLabelBox) return;
+    bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
+    m_pCloseButton->m_pLabelBox->SetText(
+        langChanged ? GETSTRING(LSTR_QUIT, 0) : GETSTRING(LSTR_DJ_BACK_BUTTON, 0));
 }
 
 // Port specific: m_pCloseButton's click callback -- runs Toggle()'s close
