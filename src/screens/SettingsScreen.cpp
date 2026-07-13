@@ -26,7 +26,11 @@
 #include "debug/DebugFlags.h"
 #include "util/StringTable.h"
 #include "render/BakedStringBox.h"
+#include "engine/input/Touch.h"
+#include "render/gl_funcs.h"
 #include "Game.h"
+
+#include <cmath>
 
 using namespace fn_widget_art;
 
@@ -94,38 +98,47 @@ static const float kLabelX = -168.0f;
 // than the right-column widget text, without yet crowding the widgets.
 static const float kLabelScale = 19.0f;
 
-// Port specific: left-column row Y positions use an EVEN vertical rhythm.
-// The plate's usable content range is +-101 (kPlateHalfH(130) -
-// kPlateDestBorderY(29), see kPlateHalfH note below). kRowGap is the
-// top-of-plate / bottom-of-plate padding (above LANGUAGE, below FPS
-// COUNTER) -- unchanged from the original single-uniform-gap derivation.
-// MOTION MODE's row is the tallest allocation (label + 2-line description +
-// SENSITIVITY, 4 lines total) laid out with uniform kRowLineGap spacing
-// between each of its 4 lines; the other two rows (LANGUAGE, FPS COUNTER)
-// are single-line.
+// Port specific: SCROLLABLE layout -- content height is allowed to (and
+// does) EXCEED the plate's visible viewport; SettingsScreen wraps the four
+// widgets + labels + dividers in a scrolled + glScissor'd viewport (see
+// UpdateScroll()/Draw()) rather than compressing everything to fit, like the
+// old non-scrolling layout did. Row Ys below are laid out top-to-bottom in
+// CONTENT space (i.e. the position each element sits at when m_ScrollY==0,
+// which shows the content TOP flush with the viewport top) using a running
+// cursor, not solved backward from a fixed content half-height.
 //
 // Divider clearance: each divider (kDividerHeight 15 tall, see DrawDivider)
-// gets a DEDICATED 10-unit gap on each side, beyond the neighbouring label's
-// baseline -- not shared with kRowGap/kRowLineGap. So the baseline-to-
-// baseline gap spanning a divider is kDividerGap = 2*10 (pad) +
-// kDividerHeight = 35; the divider sits centred in it, giving exactly 10
-// units of clearance from each of its edges to the adjacent label baseline.
+// gets a DEDICATED kDividerPad(10)-unit gap from the ADJACENT WIDGET BOX
+// EDGE on each side -- e.g. Divider 1 sits 10 units below the LANGUAGE
+// dropdown bar's own bottom edge (kComboY - kComboScaleY*0.5), and 10 units
+// above the MOTION MODE label's top. This is real widget-box clearance, not
+// a label-baseline gap (the old layout measured from label baselines only,
+// which is why it never overflowed the plate -- widget boxes are taller
+// than a text line). MOTION MODE's row is the tallest allocation (label +
+// 2-line description + SENSITIVITY, 4 lines total) laid out with uniform
+// kRowLineGap spacing between each of its 4 lines -- unchanged internal
+// spacing, no divider inside this block.
 //
-// Derivation (content half-height H=101, 3 internal kRowLineGap steps
-// spanning Motion Mode's block, 2 dedicated kDividerGap steps):
-//   kRowGap = (H*2 - 3*kRowLineGap - 2*kDividerGap) / 2
-// so that: kRowGap (top pad) + kLangLabelY row + kDividerGap (Divider1 gap,
-// padded) + [Motion block, 3*kRowLineGap tall] + kDividerGap (Divider2 gap,
-// padded) + kFpsLabelY row + kRowGap (bottom pad) exactly fills [-H, H] at
-// the label-baseline level (kRowGap grew from the old uniform-gap value to
-// absorb the extra divider padding -- see MEASURE note in the .cpp's
-// overflow analysis, content stays within the plate bound using widget
-// extents too).
+// kContentPad is the shared top-of-content / bottom-of-content padding
+// (above LANGUAGE's dropdown box, below FPS COUNTER's checkbox box). Top and
+// bottom MUST match -- kContentTop/kContentBottom are solved symmetrically
+// from it (see below) so the column reads visually balanced within the
+// viewport. A single shared constant avoids the two drifting apart; kept as
+// two same-valued aliases (kContentTopPad/kContentBottomPad) since every
+// call site below already names one or the other.
 static const float kRowLineGap  = 24.0f;
 static const float kDividerPad  = 10.0f;
-static const float kDividerGap  = 2.0f * kDividerPad + 15.0f; // 15 = kDividerHeight (DrawDivider)
-static const float kRowGap      = (101.0f * 2.0f - 3.0f * kRowLineGap - 2.0f * kDividerGap) / 2.0f;
-static const float kLangLabelY  =   101.0f - kRowGap;
+static const float kDividerHeight = 15.0f;  // see DrawDivider
+static const float kContentPad = 12.0f;
+static const float kContentTopPad = kContentPad;
+static const float kContentBottomPad = kContentPad;
+static const float kViewportHalfH = 101.0f; // kPlateHalfH(130) - kPlateDestBorderY(29), see kPlateHalfH note below
+
+// LANGUAGE: dropdown bar's top edge sits kContentTopPad below the viewport
+// top; kComboY (bar centre) follows, kLangLabelY keeps the existing -2
+// downward-nudge convention (label baseline sits 2 above the bar centre --
+// see kComboY's original note) so the label still visually centres on the
+// taller bar.
 // Port specific: kRightEdge is the shared right edge (x) every right-column
 // widget's visible art aligns to, so their right edges line up in a column
 // instead of each widget's own centre-anchored x drifting independently.
@@ -152,72 +165,102 @@ static const float kRightEdge = 175.0f;
 // (kCheckboxSide) so it reads as a chunky field. x is centre of the bar;
 // back-solved so the bar's right edge (pos.x + kComboScaleX*0.5f) == kRightEdge.
 static const float kComboScaleX =  150.0f, kComboScaleY =   36.0f;
-// kComboY re-centres the dropdown bar on the LANGUAGE label (the bar is
-// taller than a text baseline, so a small downward nudge visually centres
-// it under the label rather than sitting flush with the baseline). Kept
-// small (-2, down from an earlier -8) so the bar's bottom edge
-// (kComboY - kComboScaleY*0.5f) still clears Divider 1 -- see kDividerY1.
-static const float kComboX      =   kRightEdge - kComboScaleX * 0.5f, kComboY      =   kLangLabelY - 2.0f;
 static const uint8_t kComboVisibleRows = 6;
 // Combo value/row text scale (Font::DrawString's scale param, font-native
 // pixel size) -- fits the longest native name -- "PORTUGUES (BR)" -- without
 // spilling into the caret.
 static const float kComboTextScale = 18.0f;
-
-// Divider 1 sits centred in kDividerGap below LANGUAGE and above MOTION
-// MODE -- 10 units of dedicated clearance beyond each label's baseline on
-// both sides (see kDividerGap derivation above), not the shared kRowGap.
-static const float kDividerY1 = kLangLabelY - kDividerGap * 0.5f;
-
-// Motion Mode row: TALLEST allocation -- label, then a clear gap, then a
-// 2-line description, then SENSITIVITY, all spaced kRowLineGap apart (the
-// same uniform line spacing used throughout this 4-line block).
-static const float kMotionLabelY = kDividerY1 - kDividerGap * 0.5f;
 // UiCheckbox: side 36; x back-solved so the box's right edge
 // (pos.x + side*0.5f) == kRightEdge.
 static const float kCheckboxSide = 36.0f;
-
 // Motion Mode description -- smaller, dimmer TWO-line caption drawn under
 // the MOTION MODE label (same kLabelX left margin). Manually split at the
 // natural comma break ("Slow move aims, fast flick cuts" / "(pointer
 // only)") rather than word-wrapped, since Font has no wrap-measurement path
 // wired for this TTF path (see FindAdvanceOfNextWord TODO in Font.h). Only
 // this row gets a sub-description; the other three rows stay single-line.
-static const float kMotionDescY0    = kMotionLabelY - kRowLineGap;
-static const float kMotionDescY1    = kMotionDescY0 - kRowLineGap;
 static const float kMotionDescScale = 11.0f;
 // Dimmer than SettingsTextColour()'s brown (0x6F,0x46,0x1E) -- same hue,
 // lower alpha so it reads as secondary/caption text under the bold label.
 static const Colour kMotionDescColour(0x6F, 0x46, 0x1E, 0xA0);
+// UiSlider track -- wide, thin horizontal groove (NineSlice box.tex).
+static const float kSensTrackW = 120.0f, kSensTrackH = 16.0f;
+static const int   kSensMin = 0, kSensMax = 100;
+
+// ---------------------------------------------------------------------------
+// Content-space Y layout -- a top-to-bottom running cursor, NOT solved
+// backward from a fixed content half-height (the plate's viewport is now
+// smaller than the content, by design -- see UpdateScroll()/Draw()). Each
+// step advances the cursor by the PREVIOUS element's own half-height (a real
+// widget-box edge) plus a fixed gap, not by a shared uniform row height.
+//
+// kContentTopPad below the viewport top (kViewportHalfH) is the dropdown
+// bar's TOP edge; kComboY (bar centre) and kLangLabelY (label, kept at the
+// bar centre +2 -- the same small downward-nudge convention the old layout
+// used so the label visually centres on the taller bar) follow from it.
+// ---------------------------------------------------------------------------
+static const float kComboY      = kViewportHalfH - kContentTopPad - kComboScaleY * 0.5f;
+static const float kComboX      = kRightEdge - kComboScaleX * 0.5f;
+static const float kLangLabelY  = kComboY + 2.0f;
+
+// Divider 1: kDividerPad below the dropdown bar's own BOTTOM edge (a real
+// widget-box edge, not the label baseline).
+static const float kDividerY1 = (kComboY - kComboScaleY * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
+
+// Motion Mode row: TALLEST allocation -- label, then a clear gap, then a
+// 2-line description, then SENSITIVITY, all spaced kRowLineGap apart (the
+// same uniform line spacing used throughout this 4-line block; no divider
+// inside this block, per design). kMotionLabelY sits kDividerPad below
+// Divider 1's own bottom edge.
+static const float kMotionLabelY = (kDividerY1 - kDividerHeight * 0.5f) - kDividerPad;
+static const float kMotionDescY0    = kMotionLabelY - kRowLineGap;
+static const float kMotionDescY1    = kMotionDescY0 - kRowLineGap;
 
 // kMotionCbY: vertically centred on the MOTION MODE label + 2-line
 // description sub-block (kMotionLabelY..kMotionDescY1).
 static const float kMotionCbX = kRightEdge - kCheckboxSide * 0.5f;
 static const float kMotionCbY = (kMotionLabelY + kMotionDescY1) * 0.5f;
 
-// SENSITIVITY is a TOP-LEVEL row (same kLabelX left margin, same
-// kLabelScale as every other row), the 4th and last line of Motion Mode's
-// block -- kRowLineGap below the description's 2nd line, same spacing as
-// every other step in this block.
+// SENSITIVITY is the 4th and last line of Motion Mode's block -- kRowLineGap
+// below the description's 2nd line, same spacing as every other step in
+// this block.
 static const float kSensLabelY = kMotionDescY1 - kRowLineGap;
-// UiSlider track -- wide, thin horizontal groove (NineSlice box.tex).
-static const float kSensTrackW = 120.0f, kSensTrackH = 16.0f;
 // UiSlider: x is centre of the track; back-solved so the track's right edge
 // (pos.x + trackW*0.5f) == kRightEdge, same pattern every other
 // right-column widget uses (checkbox, combo bar). Centred on the
 // SENSITIVITY label alone.
 static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      = kSensLabelY;
-static const int   kSensMin = 0, kSensMax = 100;
 
-// Divider 2 sits centred in kDividerGap below SENSITIVITY and above FPS
-// COUNTER (same dedicated 10-unit clearance as Divider 1).
-static const float kDividerY2 = kSensLabelY - kDividerGap * 0.5f;
+// Divider 2: kDividerPad below the SENSITIVITY track's own BOTTOM edge (a
+// real widget-box edge, not the label baseline).
+static const float kDividerY2 = (kSensY - kSensTrackH * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
 
-// FPS COUNTER: last top-level row, kDividerGap*0.5 below Divider 2 (same
-// dedicated divider clearance as every other divider-adjacent row).
-static const float kFpsLabelY = kDividerY2 - kDividerGap * 0.5f;
-// UiCheckbox: same anchor as kMotionCbX above.
+// FPS COUNTER: last row, kDividerPad below Divider 2's own bottom edge (same
+// dedicated divider clearance as every other divider-adjacent row). Unlike
+// the MOTION MODE block (where the label baseline is the block's own top
+// edge), the FPS row's checkbox BOX extends kCheckboxSide*0.5 above its own
+// centre/label-baseline -- so the pad must be measured to the checkbox box's
+// top edge, not the label baseline, or the box would eat into the gap.
+static const float kFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kDividerPad - kCheckboxSide * 0.5f;
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
+
+// Content height (dropdown box top .. FPS checkbox box bottom, plus the
+// symmetric top/bottom pads) and the derived viewport/scroll extents. The
+// viewport is the plate's usable content window (kViewportHalfH*2); content
+// EXCEEDS it by design (kContentH > kViewportH), which is the whole point of
+// this scrollable layout -- UpdateScroll()/Draw() clip + scroll it.
+//
+// kContentTop is the dropdown box's own TOP edge -- kViewportHalfH MINUS the
+// reserved top pad (matches kComboY + kComboScaleY*0.5f == kViewportHalfH -
+// kContentTopPad by construction, see kComboY above). Previously this was
+// written as plain kViewportHalfH (no pad subtracted), which silently
+// dropped kContentTopPad's worth of height from kContentH -- undercounting
+// m_MaxScroll by the same amount and leaving FPS COUNTER's row permanently
+// unreachable at the bottom of the scroll range.
+static const float kContentTop    = kViewportHalfH - kContentTopPad;
+static const float kContentBottom = (kFpsCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
+static const float kContentH      = kContentTop - kContentBottom;
+static const float kViewportH     = kViewportHalfH * 2.0f;
 
 // Plate panel -- medbacking.tex drawn as a 9-slice (see Draw()), full texture
 // (no UV cropping) so the wooden corner joints/lashing/log-end decor that
@@ -307,21 +350,42 @@ bool SettingsScreen::IsOpen() {
     return s_pSettings != NULL;
 }
 
+// Scroll constants -- ported verbatim from UiDropdown (see header doc).
+const float SettingsScreen::SCROLL_FRICTION    = 0.9f;
+const float SettingsScreen::DRAG_DELTA_FACTOR  = -0.5f;
+const float SettingsScreen::SPRING_BACK_COEF   = 0.75f;
+const float SettingsScreen::SPRING_FWD_COEF    = 0.25f;
+const float SettingsScreen::DRAG_CANCEL_DIST   = 5.0f;
+const float SettingsScreen::kScrollVerticalBias = 1.0f;
+const float SettingsScreen::kScrollDeadZone     = 4.0f;
+
 SettingsScreen::SettingsScreen()
     : m_LangDrop(0)
     , m_MotionCb(0)
     , m_SensSlider(0)
     , m_FpsCb(0)
     , m_pCloseButton(0)
+    , m_LangBaseY(0.0f)
+    , m_MotionCbBaseY(0.0f)
+    , m_SensBaseY(0.0f)
+    , m_FpsCbBaseY(0.0f)
+    , m_ScrollY(0.0f)
+    , m_ScrollVel(0.0f)
+    , m_MaxScroll(0.0f)
+    , m_AnchorScroll(0.0f)
+    , m_ScrollAnchorPos(0.0f, 0.0f, 0.0f)
+    , m_ScrollTouchId(-1)
+    , m_ScrollDragging(0)
+    , m_ScrollOwnsTouch(0)
+    , m_ScrollDragDist(0.0f)
 {
-    // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. Every
-    // AddControl'd widget below is ALSO set to TOP_MOST so HUD::Update's
-    // modal input-capture gate (see HUD.h SetInputModal) still delivers
-    // input to them while this screen holds the modal (see HUD.cpp
-    // partOfModal check: ctrl == m_pInputModal || ctrl->m_LayerFlags ==
-    // HUD_LAYER_TOP_MOST). Draw order among same-layer TOP_MOST controls is
-    // pure HUD control-list (AddControl) order -- see Init() for the
-    // plate-then-widgets-then-dropdown ordering.
+    // TOP_MOST (0x800): the modal must draw over ALL main-screen HUD. This
+    // screen owns the four in-plate widgets directly (NOT AddControl'd, see
+    // header note) and drives their Update()/Draw() itself, so only this
+    // screen and m_pCloseButton (still AddControl'd, sits outside the
+    // scrolled plate) need HUD::Update's modal input-capture gate (see
+    // HUD.h SetInputModal / HUD.cpp partOfModal check: ctrl == m_pInputModal
+    // || ctrl->m_LayerFlags == HUD_LAYER_TOP_MOST).
     m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 }
 
@@ -451,32 +515,53 @@ void SettingsScreen::Init() {
     // assignment must run AFTER it to win.
     m_pCloseButton->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
-    // ---- AddControl every widget to the HUD, TOP_MOST, in draw order ----
-    // HUD::Draw has no per-control sort key -- controls sharing a layer mask
-    // draw in HUD control-list (AddControl) order. This screen itself was
-    // already AddControl'd by Toggle() BEFORE Init() runs (see Toggle()),
-    // so its own Draw() (backdrop + plate + labels) is already first in the
-    // list; add the widgets after it, dropdown last, so the open dropdown
-    // panel overlays every other widget.
+    // ---- AddControl ONLY the close button ----
+    // The four in-plate widgets are owned directly (see header note) --
+    // this screen calls their Update()/Draw() itself every frame instead of
+    // linking them into game_work.mHud's control list, so a scrolled +
+    // glScissor'd viewport can wrap them (see UpdateScroll()/Draw()).
+    // m_pCloseButton sits outside the plate and never scrolls, so it keeps
+    // the old AddControl'd path.
     if (game_work.mHud) {
-        game_work.mHud->AddControl(m_MotionCb, false);
-        game_work.mHud->AddControl(m_FpsCb, false);
-        game_work.mHud->AddControl(m_SensSlider, false);
         game_work.mHud->AddControl(m_pCloseButton, false);
-        game_work.mHud->AddControl(m_LangDrop, false);
     }
+
+    // ---- capture each widget's base (unscrolled) content-space Y ----
+    // Update() rewrites pos.y = baseY + (-m_ScrollY) every frame; these are
+    // the values pos.y already holds right now (kLangLabelY's row uses
+    // kComboY, not kLangLabelY, since the DROPDOWN BAR is the widget --
+    // kLangLabelY is only the text label's baseline, drawn separately).
+    m_LangBaseY     = kComboY;
+    m_MotionCbBaseY = kMotionCbY;
+    m_SensBaseY     = kSensY;
+    m_FpsCbBaseY    = kFpsCbY;
+
+    // ---- scroll extents ----
+    m_MaxScroll = kContentH - kViewportH;
+    if (m_MaxScroll < 0.0f) m_MaxScroll = 0.0f;
+    m_ScrollY = 0.0f;
+    m_ScrollVel = 0.0f;
+    m_ScrollTouchId = -1;
+    m_ScrollDragging = 0;
+    m_ScrollOwnsTouch = 0;
+    m_ScrollDragDist = 0.0f;
 }
 
 void SettingsScreen::Release() {
-    // AddControl'd widgets are torn down via SetPendingRemoval (HUD's own
-    // Update sweep deletes each next tick, matching GameModeScreen::
-    // RemoveButtons' pattern) rather than a direct delete here -- deleting
-    // synchronously while the widget is still linked into game_work.mHud's
+    // m_pCloseButton is still AddControl'd -- torn down via SetPendingRemoval
+    // (HUD's own Update sweep deletes it next tick, matching GameModeScreen::
+    // RemoveButtons' pattern) rather than a direct delete here, since
+    // deleting synchronously while it's still linked into game_work.mHud's
     // control list would leave a dangling pointer in that list.
-    if (m_LangDrop)    { m_LangDrop->SetPendingRemoval();    m_LangDrop    = 0; }
-    if (m_MotionCb)    { m_MotionCb->SetPendingRemoval();    m_MotionCb    = 0; }
-    if (m_SensSlider)  { m_SensSlider->SetPendingRemoval();  m_SensSlider  = 0; }
-    if (m_FpsCb)       { m_FpsCb->SetPendingRemoval();       m_FpsCb       = 0; }
+    //
+    // The four in-plate widgets were NEVER AddControl'd (see header note) --
+    // no HUD control list holds a pointer to them, so a direct delete here
+    // is safe and is the only way they get torn down (there is no HUD sweep
+    // to do it for them).
+    delete m_LangDrop;    m_LangDrop    = 0;
+    delete m_MotionCb;    m_MotionCb    = 0;
+    delete m_SensSlider;  m_SensSlider  = 0;
+    delete m_FpsCb;       m_FpsCb       = 0;
     if (m_pCloseButton) { m_pCloseButton->SetPendingRemoval(); m_pCloseButton = 0; }
 
     m_TexBox.SetNull();
@@ -495,18 +580,140 @@ void SettingsScreen::Release() {
 }
 
 void SettingsScreen::Update(float dt) {
-    (void)dt;
+    // ---- kinetic scroll first (owns/tracks the touch that drives it) ----
+    UpdateScroll(dt);
+
+    // ---- rewrite each widget's live pos.y from its base Y + scroll offset,
+    // ---- BEFORE ticking it, so its own hit-rect/PollTouch tracks the
+    // ---- scrolled position. off = +m_ScrollY: increasing m_ScrollY shifts
+    // ---- content UP (see header Scrolling note). ----
+    float off = m_ScrollY;
+    if (m_LangDrop)   m_LangDrop->pos.y   = m_LangBaseY     + off;
+    if (m_MotionCb)   m_MotionCb->pos.y   = m_MotionCbBaseY + off;
+    if (m_SensSlider) m_SensSlider->pos.y = m_SensBaseY     + off;
+    if (m_FpsCb)      m_FpsCb->pos.y      = m_FpsCbBaseY    + off;
 
     // Port specific: while the dropdown panel is open, gate out the other
-    // AddControl'd widgets (checkboxes/slider/close) so they neither receive
-    // input nor draw over the panel -- HUD::Update/Draw both skip inactive
-    // controls (m_Active gate). The dropdown itself stays always-active.
+    // widgets (checkboxes/slider/close) so they neither receive input nor
+    // draw over the panel. The dropdown itself stays always-active.
     // Restored to active the frame the panel closes.
     uint8_t othersActive = m_LangDrop && m_LangDrop->IsOpen() ? 0 : 1;
-    if (m_MotionCb)    m_MotionCb->m_Active    = othersActive;
-    if (m_SensSlider)  m_SensSlider->m_Active  = othersActive;
-    if (m_FpsCb)       m_FpsCb->m_Active       = othersActive;
     if (m_pCloseButton) m_pCloseButton->m_Active = othersActive;
+
+    // Port specific: while the scroll drag owns the current touch, skip the
+    // three plain widgets' own Update() -- letting a vertical scroll drag
+    // also fall through to PollTouch would toggle a checkbox / scrub the
+    // slider under the finger at the same time. The dropdown ALWAYS ticks
+    // (it owns its own full-screen modal latch when open, see UiDropdown::
+    // Update, and must still open/close on a simple tap when closed).
+    if (!m_ScrollOwnsTouch) {
+        if (othersActive) {
+            if (m_MotionCb)   m_MotionCb->Update(dt);
+            if (m_SensSlider) m_SensSlider->Update(dt);
+            if (m_FpsCb)      m_FpsCb->Update(dt);
+        }
+    }
+    if (m_LangDrop) m_LangDrop->Update(dt);
+}
+
+// Port specific: kinetic drag/fling/spring-back model for the plate's
+// content viewport, ported verbatim from UiDropdown::Update's scroll tail
+// (src/ui/UiDropdown.cpp ~234-280) -- same constants, same
+// integrate-then-spring-back shape, re-scoped from a dropdown's row list to
+// the whole plate's four widgets.
+void SettingsScreen::UpdateScroll(float dt) {
+    (void)dt;
+
+    // Locked while the dropdown panel is open -- its own modal latch already
+    // owns every touch full-screen (see UiDropdown::Update), so a scroll
+    // drag underneath it would never see a touch anyway; explicitly zeroing
+    // velocity here just avoids a stale fling resuming the instant it closes.
+    if (m_LangDrop && m_LangDrop->IsOpen()) {
+        m_ScrollVel = 0.0f;
+        return;
+    }
+
+    // Plate content rect, in SCREEN space (the viewport doesn't move, only
+    // its content does) -- X spans the plate's inner content bound, Y spans
+    // the fixed viewport half-height (kViewportHalfH).
+    const float plateLeft   = -kPlateHalfW + kPlateDestBorderX;
+    const float plateRight  =  kPlateHalfW - kPlateDestBorderX;
+    const float plateTop    =  kViewportHalfH;
+    const float plateBottom = -kViewportHalfH;
+
+    if (m_ScrollTouchId == -1) {
+        // --- Acquire (press-edge only) ---
+        int slot = TouchInRegion(plateLeft, plateRight, plateBottom, plateTop, -1);
+        if (slot != -1 && IsTouchDown(slot) == 2) {
+            const Mortar::TouchState* ts = Mortar::Touch::GetInstance().GetSlot(slot);
+            if (ts) {
+                m_ScrollTouchId = slot;
+                m_ScrollAnchorPos.x = ts->currX;
+                m_ScrollAnchorPos.y = ts->currY;
+                m_AnchorScroll = m_ScrollY;
+                m_ScrollDragging = 0;
+                m_ScrollOwnsTouch = 0;
+                m_ScrollDragDist = 0.0f;
+            }
+        }
+    } else if (IsTouchDown(m_ScrollTouchId) == 0) {
+        // --- Release ---
+        m_ScrollTouchId = -1;
+        m_ScrollOwnsTouch = 0;
+        m_ScrollDragging = 0;
+        // Velocity/offset keep coasting/springing below -- a fling release
+        // must NOT reset m_ScrollVel.
+    } else {
+        // --- Held: disambiguate scroll-vs-widget, then damped-follow ---
+        const Mortar::TouchState* ts = Mortar::Touch::GetInstance().GetSlot(m_ScrollTouchId);
+        float currentX = ts ? ts->currX : m_ScrollAnchorPos.x;
+        float currentY = ts ? ts->currY : m_ScrollAnchorPos.y;
+        float dx = currentX - m_ScrollAnchorPos.x;
+        float dy = currentY - m_ScrollAnchorPos.y;
+        float absDx = dx < 0.0f ? -dx : dx;
+        float absDy = dy < 0.0f ? -dy : dy;
+
+        float prevAbsDy = m_ScrollDragging ? m_ScrollDragDist : 0.0f;
+        m_ScrollDragDist += (absDy > prevAbsDy) ? (absDy - prevAbsDy) : 0.0f;
+
+        if (!m_ScrollOwnsTouch) {
+            // Become a scroll only once the drag is clearly, predominantly
+            // vertical -- until then leave the touch alone so a tap or a
+            // SENSITIVITY slider's horizontal drag proceeds through the
+            // widget's own PollTouch (called after this, in Update()).
+            if (absDy > kScrollDeadZone && absDy >= absDx * kScrollVerticalBias) {
+                m_ScrollOwnsTouch = 1;
+                m_ScrollDragging = 1;
+            }
+        }
+
+        if (m_ScrollOwnsTouch) {
+            // Damped-follow, mirroring UiDropdown's
+            // `(m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR`
+            // with delta UN-negated, exactly like UiDropdown (src/ui/
+            // UiDropdown.cpp ~148: `curYBase = panelTopY + m_ScrollOffset`,
+            // delta = currentY - anchor.y, not negated). An upward drag
+            // (finger moves up, currentY increases, dy>0) gives delta=dy>0,
+            // so m_ScrollY increases -> off=+m_ScrollY increases -> content
+            // shifts up, revealing later rows (FPS COUNTER) -- matching
+            // UiDropdown's finger-up-reveals-later-items model exactly.
+            float delta = dy;
+            m_ScrollVel = (m_ScrollY - (m_AnchorScroll + delta)) * DRAG_DELTA_FACTOR;
+        }
+    }
+
+    // --- Integrate + friction (every frame) ---
+    m_ScrollVel *= SCROLL_FRICTION;
+    m_ScrollY += m_ScrollVel;
+
+    // --- Spring-back at bounds (only while not touching) ---
+    if (m_ScrollTouchId == -1) {
+        if (m_ScrollY < 0.0f) {
+            m_ScrollY *= SPRING_BACK_COEF;
+        } else if (m_ScrollY > m_MaxScroll) {
+            m_ScrollY += (m_MaxScroll - m_ScrollY) * SPRING_FWD_COEF;
+        }
+    }
 }
 
 // Port specific: left-aligned (FONT_ALIGN_LEFT). All four top-level labels
@@ -537,11 +744,49 @@ static void DrawSettingsDesc(Mortar::Font* font, const char* s, float x, float y
                      0.0f, 0.0f, Mortar::FONT_ALIGN_LEFT, NULL, 0.0f);
 }
 
+// Port specific: thin vertical scrollbar on the plate's right inner edge --
+// height proportional to viewport/content ratio, position tracking
+// m_ScrollY/m_MaxScroll. Drawn UNCLIPPED (no content scissor active), after
+// the content scissor is disabled, using the same raw MatrixManager+Mesh
+// scaled-quad idiom DrawDivider uses (a plain quad, no NineSlice). Reuses
+// m_TexDivider (already loaded, no dedicated scrollbar art) tinted like the
+// divider. No-op when content doesn't overflow the viewport
+// (m_MaxScroll <= 0).
+static void DrawScrollbar(Mortar::Texture* tex, float trackTop, float trackBottom,
+                          float viewportH, float contentH, float scrollY, float maxScroll) {
+    if (!tex || maxScroll <= 0.0f) return;
+
+    static const float kBarX = kPlateHalfW - kPlateDestBorderX * 0.5f;
+    static const float kBarW = 4.0f;
+    static const Colour kBarColour(0x8A, 0x6A, 0x4A, 0xC0);
+
+    float trackH = trackTop - trackBottom;
+    float thumbH = trackH * (viewportH / contentH);
+    if (thumbH < 8.0f) thumbH = 8.0f;
+    if (thumbH > trackH) thumbH = trackH;
+
+    float t = scrollY / maxScroll;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float thumbTop = trackTop - t * (trackH - thumbH);
+    float thumbCy = thumbTop - thumbH * 0.5f;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    Matrix44 mat = Matrix44::MakeScale(kBarW, thumbH, 0.0f);
+    mat.GlobalTranslate44(kBarX, thumbCy, 0.0f);
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+    tex->Set();
+    Mortar::Mesh::DrawQuadUnCached(kBarColour, NULL);
+    tex->UnSet();
+}
+
 void SettingsScreen::Draw(float* hudScale) {
     (void)hudScale;
     MatrixManager& mm = MatrixManager::GetInstance();
 
-    // ---- modal dark backdrop, full-screen ----
+    // ---- modal dark backdrop, full-screen (unclipped) ----
     if (m_Backdrop.IsValid()) {
         mm.GetWorldStack().Reset();
         m_Backdrop->Set();
@@ -554,7 +799,7 @@ void SettingsScreen::Draw(float* hudScale) {
     }
 
     // ---- plate panel: medbacking.tex, drawn as a 9-slice (full texture, no UV
-    // cropping -- see kPlateSrcBorder*/kPlateDestBorder* above) ----
+    // cropping -- see kPlateSrcBorder*/kPlateDestBorder* above), UNCLIPPED ----
     if (m_Plate.IsValid()) {
         Mortar::NineSlice::Draw(m_Plate.Get(), 0.0f, 0.0f,
                                 kPlateHalfW * 2.0f, kPlateHalfH * 2.0f,
@@ -563,26 +808,81 @@ void SettingsScreen::Draw(float* hudScale) {
                                 Colour::White);
     }
 
-    // ---- row-group dividers: between Language/Motion Mode, and between
-    // ---- Sensitivity/FPS Counter (see kDividerY1/kDividerY2) ----
-    DrawDivider(kDividerY1);
-    DrawDivider(kDividerY2);
+    // ---- content scissor: the plate's fixed viewport window (full ortho
+    // ---- width, kViewportHalfH tall). Mirrors UiDropdown::Draw's own
+    // ---- worldspace->pixel scissor mapping verbatim (see its comment for
+    // ---- the centered-ortho -> viewport-pixel derivation); guarded the
+    // ---- same way so the asm-verify cross-build and the host x64 unit-test
+    // ---- GL stub (FN_GL_STUB) still compile/link. ----
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    const float orthoH = 320.0f;
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    const GLint vpX = vp[0], vpY = vp[1];
+    const GLsizei vpW = (GLsizei)vp[2], vpH = (GLsizei)vp[3];
+    GLint sx = vpX;
+    GLint sy = (GLint)((-kViewportHalfH + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    GLint sw = vpW;
+    GLint sh = (GLint)((kViewportHalfH * 2.0f) / orthoH * (float)vpH);
+    if (sh < 0) sh = 0;
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(sx, sy, sw, sh);
+#endif
 
-    // ---- left-column labels ----
+    float off = m_ScrollY;
+
+    // ---- row-group dividers: between Language/Motion Mode, and between
+    // ---- Sensitivity/FPS Counter (see kDividerY1/kDividerY2), scrolled ----
+    DrawDivider(kDividerY1 + off);
+    DrawDivider(kDividerY2 + off);
+
+    // ---- left-column labels, scrolled ----
     // +7 vertical: DrawString positions text below the given y, so a label
     // centred on a row uses rowY + 7. Keeps each label vertically centred on
-    // its widget (widgets draw separately, via the HUD). All four labels
-    // share kLabelX (left-aligned) so their left edges line up, and share
-    // the TTF font (m_LangFont) for mixed-case rendering.
+    // its widget. All four labels share kLabelX (left-aligned) so their left
+    // edges line up, and share the TTF font (m_LangFont) for mixed-case
+    // rendering.
     Mortar::Font* labelFont = m_LangFont.Get();
-    DrawSettingsLabel(labelFont, "LANGUAGE",     kLabelX, kLangLabelY   + 7.0f);
-    DrawSettingsLabel(labelFont, "MOTION MODE",  kLabelX, kMotionLabelY + 7.0f);
+    DrawSettingsLabel(labelFont, "LANGUAGE",     kLabelX, kLangLabelY   + 7.0f + off);
+    DrawSettingsLabel(labelFont, "MOTION MODE",  kLabelX, kMotionLabelY + 7.0f + off);
     DrawSettingsDesc(labelFont, "Slow move aims, fast flick cuts",
-                      kLabelX, kMotionDescY0 + 7.0f);
+                      kLabelX, kMotionDescY0 + 7.0f + off);
     DrawSettingsDesc(labelFont, "(pointer only)",
-                      kLabelX, kMotionDescY1 + 7.0f);
-    DrawSettingsLabel(labelFont, "SENSITIVITY", kLabelX, kSensLabelY + 7.0f);
-    DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f);
+                      kLabelX, kMotionDescY1 + 7.0f + off);
+    DrawSettingsLabel(labelFont, "SENSITIVITY", kLabelX, kSensLabelY + 7.0f + off);
+    DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
+
+    // ---- the three plain widgets, still inside the content scissor.
+    // ---- pos.y was already rewritten (baseY + off) in Update(), so no
+    // ---- offset math here. ----
+    if (m_MotionCb)   m_MotionCb->Draw(hudScale);
+    if (m_FpsCb)      m_FpsCb->Draw(hudScale);
+    if (m_SensSlider) m_SensSlider->Draw(hudScale);
+    // Collapsed dropdown bar draws inside the content scissor too (it's a
+    // plate row like any other); the OPEN panel draws separately below,
+    // unclipped.
+    if (m_LangDrop && !m_LangDrop->IsOpen()) {
+        m_LangDrop->Draw(hudScale);
+    }
+
+#if !defined(__bada__) && !defined(FN_GL_STUB)
+    glDisable(GL_SCISSOR_TEST);
+#endif
+
+    // ---- scrollbar: thin quad on the plate's right inner edge, unclipped,
+    // ---- drawn after the content scissor is disabled. No-op if content
+    // ---- doesn't overflow the viewport. ----
+    DrawScrollbar(m_TexDivider.Get(), kViewportHalfH, -kViewportHalfH,
+                  kViewportH, kContentH, m_ScrollY, m_MaxScroll);
+
+    // ---- open dropdown panel: drawn LAST, scissor already disabled above --
+    // ---- UiDropdown::Draw manages its OWN internal row-viewport glScissor
+    // ---- (see UiDropdown.cpp) -- GL scissor state is not stacked, so
+    // ---- SettingsScreen's own content scissor must already be off before
+    // ---- this call, never nested around it. ----
+    if (m_LangDrop && m_LangDrop->IsOpen()) {
+        m_LangDrop->Draw(hudScale);
+    }
 }
 
 // Port specific: draws one scratch_deviders.tex separator centred at
@@ -597,7 +897,6 @@ void SettingsScreen::Draw(float* hudScale) {
 void SettingsScreen::DrawDivider(float centerY) {
     if (!m_TexDivider.IsValid()) return;
 
-    static const float kDividerHeight = 15.0f;
     static const float kDividerRightX = kRightEdge + kCheckboxSide * 0.5f;
     static const float kDividerCenterX = (kLabelX + kDividerRightX) * 0.5f;
     static const float kDividerWidth   = kDividerRightX - kLabelX;
