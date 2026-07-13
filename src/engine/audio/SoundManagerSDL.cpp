@@ -543,8 +543,9 @@ void SoundManager::SongPlay(const char* name) {
 
     SoundBuffer* buf = LoadSound(lower.c_str());
     if (!buf) {
-        // background.caf isn't shipped — silent fallthrough so caller-side
-        // music attempts don't crash. TODO: log if this becomes noisy.
+        // background.caf isn't shipped -- silent fallthrough so caller-side
+        // music attempts don't crash.
+        LOG_WARN("MUSIC", "SongPlay('%s'): asset not found, skipping", lower.c_str());
         return;
     }
     buf->loop = true;
@@ -564,6 +565,8 @@ void SoundManager::SongPlay(const char* name) {
     m_MusicVoice.volume  = 1.0f;  // global s_MusicVolume scales in callback
     m_MusicVoice.playing = true;
     SDL_UnlockAudioDevice(m_AudioDevice);
+
+    LOG_INFO("MUSIC", "SongPlay('%s') loopStart=%d", lower.c_str(), (int)buf->loopStart);
 }
 
 void SoundManager::SongStop() {
@@ -574,6 +577,8 @@ void SoundManager::SongStop() {
     m_MusicVoice.buf     = nullptr;
     m_MusicVoice.cursor  = 0;
     SDL_UnlockAudioDevice(m_AudioDevice);
+
+    LOG_INFO("MUSIC", "SongStop");
 }
 
 void SoundManager::SongPause() {
@@ -581,6 +586,8 @@ void SoundManager::SongPause() {
     SDL_LockAudioDevice(m_AudioDevice);
     if (m_MusicVoice.id != 0) m_MusicVoice.playing = false;
     SDL_UnlockAudioDevice(m_AudioDevice);
+
+    LOG_INFO("MUSIC", "SongPause");
 }
 
 void SoundManager::SongResume() {
@@ -588,6 +595,8 @@ void SoundManager::SongResume() {
     SDL_LockAudioDevice(m_AudioDevice);
     if (m_MusicVoice.id != 0) m_MusicVoice.playing = true;
     SDL_UnlockAudioDevice(m_AudioDevice);
+
+    LOG_INFO("MUSIC", "SongResume");
 }
 
 // 0x0018c960 -- stub nop

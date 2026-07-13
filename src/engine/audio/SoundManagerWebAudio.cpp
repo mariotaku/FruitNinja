@@ -539,11 +539,13 @@ void SoundManager::SongPlay(const char* name) {
     }
 
     fnaudio_play_song(lower.c_str(), loopStartSec, s_MusicVolume);
+
+    LOG_INFO("MUSIC", "SongPlay('%s') loopStart=%f", lower.c_str(), loopStartSec);
 }
 
-void SoundManager::SongStop()   { fnaudio_song_stop(); }
-void SoundManager::SongPause()  { fnaudio_song_pause(); }
-void SoundManager::SongResume() { fnaudio_song_resume(); }
+void SoundManager::SongStop()   { fnaudio_song_stop(); LOG_INFO("MUSIC", "SongStop"); }
+void SoundManager::SongPause()  { fnaudio_song_pause(); LOG_INFO("MUSIC", "SongPause"); }
+void SoundManager::SongResume() { fnaudio_song_resume(); LOG_INFO("MUSIC", "SongResume"); }
 
 // 0x0018c960 -- stub nop
 void SoundManager::SongSetMemorySize(int size) { (void)size; }
