@@ -55,23 +55,27 @@ IngamePopup::IngamePopup(int type)
 
     if (type == 0x0F) {
         // NEW BEST SCORE banner -- v1.6.1 IngamePopup ctor @0x0016dbac
+        // ASM-spec v1.6.1 IngamePopup ctor @0x0016dbac type 0x0F branch @0x0016df64:
+        //   BakedStringBox(font, 20.0f, boxW=0x40, boxH=0x2c, align=0xf, maxLines=2, lineSpacing=8)
+        //   fill: SetGradient(top=(255,142,0), mid=(149,19,13), bottom=(94,11,0), false) -- 3-stop.
+        //   shadow: SetShadow(5.0, (0,0,0), (0,0,0), 0) -- drop-shadow (flag=0), not inner-glow.
         m_VerticalOffset = 20.0f;
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
             font,
             20.0f,        // pointSize
             0x40,         // boxW = 64
             0x2c,         // boxH = 44
-            (Mortar::ALIGNMENT_TYPE)0x0d,         // align = centred+fit
-            0,            // maxLines (0 = binary default, no shrink)
-            0             // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
+            (Mortar::ALIGNMENT_TYPE)0x0f,         // align = center-H + center-V (bits 0-1=11, bits 2-3=11)
+            2,            // maxLines = 2
+            8             // lineSpacing = 8; step = (int)(20+8) = 28px
         );
-        // SetGradient((255,142,0),(149,19,13),(94,11,0)) -- binary DAT values
-        box->SetGradient(Colour(255, 142, 0), Colour(149, 19, 13), false);
+        // SetGradient(top=(255,142,0), mid=(149,19,13), bottom=(94,11,0)) -- 3-stop, binary DAT values
+        box->SetGradient(Colour(255, 142, 0), Colour(149, 19, 13), Colour(94, 11, 0), false);
         // SetStroke(1.0, (32,0,0))
         box->SetStroke(1.0f, Colour(32, 0, 0));
         // lineSpacing = -1 already set via ctor arg
-        // SetShadow(5.0, (0,0,0), offset(0,0,0))
-        box->SetShadow(5.0f, Colour(0, 0, 0), Vec3(0.0f, 0.0f, 0.0f), true);
+        // SetShadow(5.0, (0,0,0), offset(0,0,0), flag=0) -- drop-shadow, not inner-glow
+        box->SetShadow(5.0f, Colour(0, 0, 0), Vec3(0.0f, 0.0f, 0.0f), 0);
         // SetText(GetString(0x2DC)) = "NEW BEST!"
         const char* str = GETSTRING(LSTR_GAME_TEXTURE_02, 0);
         box->SetText(str ? str : "NEW BEST!");

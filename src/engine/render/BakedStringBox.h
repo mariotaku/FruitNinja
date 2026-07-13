@@ -115,6 +115,13 @@ public:
     // ApplyGradient(top,bottom) per existing line immediately (no m_Dirty set).
     void SetGradient(Colour top, Colour bottom, bool perGlyph);
 
+    // SetGradient (3-colour)  binary @ 0x00245780
+    // ASM-spec v1.6.1 BakedStringBox::SetGradient @0x00245780: m_GradMode=3 (distinct from
+    // 2-colour mode=2 and metallic mode=4). perGlyph==0 -> lazy m_Dirty=true; !=0 -> immediate
+    // FancyBakedString::ApplyGradient(top,mid,bottom) per line. Storage: m_GradTop=top,
+    // m_GradBottom=mid, m_GradCol2=bottom (binary reuses m_FillBottom for MID here).
+    void SetGradient(Colour top, Colour mid, Colour bottom, bool perGlyph);
+
     // SetMetallicGradient  binary @ 0x002458e0
     // 4-stop metallic fill: m_ColourMode=4, m_MetallicFlag=1.
     // Fields: m_FillTop/Bottom at 0x7c/0x80, m_FillCol2/Col3 at 0x84/0x88.
