@@ -366,6 +366,16 @@ static float EaseInQuad(float t) {
     return t * t;
 }
 
+// Port specific: plain ease-out-cubic (decelerate, no overshoot) -- used for
+// the close button's OPENING slide-in so it settles straight to rest with no
+// bounce, unlike the plate's EaseOutBack. f(t) = 1 - (1-t)^3.
+static float EaseOutCubic(float t) {
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float u = 1.0f - t;
+    return 1.0f - u * u * u;
+}
+
 // Smoothstep -- used for the backdrop dim fade so it isn't a raw linear
 // timer ratio (matches neither easing family used for the offset; the dim
 // just needs to feel soft on both ends, ease-out on open / ease-in on close).
@@ -817,10 +827,10 @@ void SettingsScreen::UpdateAnim(float dt) {
             // (the plate briefly drops below rest before settling back) --
             // exactly the requested bounce.
             m_PopupOffsetY = kPopupStartOffsetY * (1.0f - EaseOutBack(t));
-            // Close button: same ease-out-back progress, own start/rest pair
-            // (bottom-right off-screen -> (0,0)), same overshoot-then-settle
-            // feel as the plate.
-            float bt = 1.0f - EaseOutBack(t);
+            // Close button: plain ease-out-cubic (decelerate slide, no
+            // overshoot) -- own start/rest pair (bottom-right off-screen ->
+            // (0,0)), unlike the plate's overshoot-then-settle bounce.
+            float bt = 1.0f - EaseOutCubic(t);
             m_CloseBtnOffX = kCloseBtnStartOffX * bt;
             m_CloseBtnOffY = kCloseBtnStartOffY * bt;
         }
