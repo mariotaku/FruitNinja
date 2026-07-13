@@ -111,7 +111,6 @@ void Texture2D_Bada::Set() {
         return;
     }
     glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
     Texture::s_LastBoundTexId = m_TexId;
     Texture::s_CurrentlySetTexture = this;
@@ -121,7 +120,6 @@ void Texture2D_Bada::Set() {
 // Vtable slot 4 @0x002296ac -- unbind.
 void Texture2D_Bada::UnSet(bool /*flag*/) {
 #if !defined(__bada__)
-    glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     Texture::s_LastBoundTexId = 0;
     Texture::s_CurrentlySetTexture = 0;

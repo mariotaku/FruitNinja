@@ -197,7 +197,6 @@ endif()
 #                Windows/macOS/Linux dev; Mesa llvmpipe for swrast.
 #   ES1        - OpenGL ES 1.1 (<GLES/gl.h>) for webOS / embedded.
 if (EMSCRIPTEN)
-    # Port specific: Emscripten uses LEGACY_GL_EMULATION (fixed-function over WebGL).
     # Force FRUIT_GL_API to the new EMSCRIPTEN path; skip the user-visible cache entry.
     set(FRUIT_GL_API "EMSCRIPTEN")
 else()
@@ -211,8 +210,6 @@ if (FRUIT_GL_API STREQUAL "GL_COMPAT")
 elseif (FRUIT_GL_API STREQUAL "ES1")
     add_compile_definitions(FRUIT_GL_API_ES1=1)
 elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
-    # Port specific: LEGACY_GL_EMULATION injects FFP shim; no separate define needed
-    # beyond __EMSCRIPTEN__ which emcc sets automatically.
     add_compile_definitions(FRUIT_GL_API_EMSCRIPTEN=1)
 else()
     message(FATAL_ERROR "Unknown FRUIT_GL_API '${FRUIT_GL_API}'")
@@ -545,7 +542,6 @@ if (EMSCRIPTEN)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
         "SHELL:-sUSE_FREETYPE=1"
-        "SHELL:-sLEGACY_GL_EMULATION=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         # Port specific: emscripten 3.1.27+ dropped the default stack to 64 KB
         # (older emscripten defaulted to 5 MB). 64 KB is far below the original

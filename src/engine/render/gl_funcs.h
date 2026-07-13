@@ -22,17 +22,17 @@
 #include <cstdint>
 #include <cstdio>
 
-// glClearDepthf / glFrustumf are ES1-only entry points absent from desktop
-// GL headers (and not always exported by libGL even when the driver advertises
-// ARB_ES2_compatibility). gl_funcsSDL.cpp provides real wrappers for them
-// on every GL_COMPAT build -- forwarded to glFrustum / glClearDepth (GL 1.0
-// baseline, always exported).
+// glClearDepthf is an ES1-only entry point absent from desktop GL headers
+// (and not always exported by libGL even when the driver advertises
+// ARB_ES2_compatibility). gl_funcsSDL.cpp provides a real wrapper for it
+// on every GL_COMPAT build -- forwarded to glClearDepth (GL 1.0 baseline,
+// always exported).
 //
-// Under EMSCRIPTEN, LEGACY_GL_EMULATION provides glFrustumf and glClearDepthf
-// directly; they are already declared in the EMSCRIPTEN branch of gl_compat.h.
+// Under EMSCRIPTEN, LEGACY_GL_EMULATION provides glClearDepthf directly;
+// it is already declared in the EMSCRIPTEN branch of gl_compat.h.
 //
-// SDL_opengl.h on Windows declares these with __declspec(dllimport); we
-// re-declare them as plain extern "C" to match our definitions. C4273
+// SDL_opengl.h on Windows declares this with __declspec(dllimport); we
+// re-declare it as plain extern "C" to match our definition. C4273
 // ("inconsistent dll linkage") is suppressed for the small region.
 #if defined(FRUIT_GL_API_GL_COMPAT)
 #if defined(_MSC_VER)
@@ -41,8 +41,6 @@
 #endif
 extern "C" {
     void APIENTRY glClearDepthf(GLclampf depth);
-    void APIENTRY glFrustumf(GLfloat l, GLfloat r, GLfloat b,
-                             GLfloat t, GLfloat n, GLfloat f);
 }
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -68,23 +66,5 @@ bool gl_load_functions();   // No-op except on Windows where it loads
                             // 1.2+ extension wrappers via SDL_GL_GetProcAddress.
 bool gl_check_runtime();    // MS software-ICD diagnostic — prints to stderr
                             // and returns false when the driver is broken.
-
-// Sets GL_TEXTURE_ENV_MODE = GL_MODULATE on the currently active texture unit.
-// The binary uses glTexEnvf((GLfloat)GL_MODULATE), which is the canonical form
-// on ES1/desktop GL. Emscripten's LEGACY_GL_EMULATION only implements the integer
-// ASM-verified v1.6.1 Texture2D_Bada::Set @0x229788: blade (and default) tex-env is
-// GL_COMBINE with COMBINE_RGB default = MODULATE (texture.rgb x vertex.rgb) and
-// COMBINE_ALPHA(0x8572)=REPLACE, SRC0_ALPHA(0x8588)=GL_PRIMARY_COLOR (vertex.alpha).
-// blade.tex alpha is uniformly opaque so REPLACE-alpha == MODULATE-alpha for the blade;
-// plain GL_MODULATE is the correct equivalent for all other callers too.
-// DIFFERS: binary uses glTexEnvf((GLfloat)GL_MODULATE); glTexEnvi is used here
-// on Emscripten builds only -- the only variant LEGACY_GL_EMULATION handles for GL_TEXTURE_ENV_MODE.
-inline void TexEnvModulate() {
-#if defined(__EMSCRIPTEN__)
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-#else
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
-#endif
-}
 
 #endif

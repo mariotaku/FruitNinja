@@ -66,13 +66,8 @@ void DisplayManager::BeginFrame() {
     glClearDepthf(1.0f);
     glDisable(GL_BLEND);                                  // v1.6.1 Reset: blend cap OFF at frame top
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    // 0x302, 0x303 (func set once, draws own the enable)
-    glDisable(GL_LIGHTING);                               // 0xb50
     glDisable(GL_CULL_FACE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glMatrixMode(GL_PROJECTION);                          // 0x1701
-    glLoadIdentity();
-    glMatrixMode(GL_MODELVIEW);                           // 0x1700
-    glLoadIdentity();
 
     m_bRenderingActive = true;
 }

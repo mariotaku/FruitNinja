@@ -2163,14 +2163,12 @@ void SlashEntity::DrawSlice() {
     // Vertex count = m_PointCount + 1 (includes head-cap vertex at [m_PointCount]).
     // ASM-verified v1.6.1 Texture2D_Bada::Set @0x229788: blade tex-env RGB=MODULATE (texture.rgb
     // x vertex.rgb); ALPHA=REPLACE from GL_PRIMARY_COLOR (vertex.alpha). blade.tex alpha is
-    // uniformly opaque so REPLACE-alpha == MODULATE-alpha here; plain TexEnvModulate is equivalent.
-    Renderer* r = Renderer::GetInstance();
-    if (r) r->SetTextureModulate();
+    // uniformly opaque so REPLACE-alpha == MODULATE-alpha here. Shader modulates texel*color
+    // for all Mesh::DrawTriStrip draws now, so no explicit tex-env call is needed.
     bladeTex->Set();
     Mortar::Mesh::DrawTriStrip(m_pLeftBuffer,  m_PointCount + 1, false, NULL);
     Mortar::Mesh::DrawTriStrip(m_pRightBuffer, m_PointCount + 1, false, NULL);
     bladeTex->UnSet();
-    if (r) r->SetTextureModulate();  // restore default so subsequent draws are unaffected
 }
 
 // ---------------------------------------------------------------------------

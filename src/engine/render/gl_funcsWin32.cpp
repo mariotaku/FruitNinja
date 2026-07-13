@@ -28,7 +28,6 @@
 // Type-erased function-pointer slots (avoid PFN* typedef compatibility
 // games across SDL_opengl.h vs SDL_opengl_glext.h vs Khronos glext.h).
 static void  (APIENTRYP s_glActiveTexture)        (GLenum) = nullptr;
-static void  (APIENTRYP s_glClientActiveTexture)  (GLenum) = nullptr;
 static void  (APIENTRYP s_glCompressedTexImage2D) (GLenum, GLint, GLenum,
                                                    GLsizei, GLsizei, GLint,
                                                    GLsizei, const void*) = nullptr;
@@ -72,9 +71,6 @@ extern "C" {
 
 void APIENTRY glActiveTexture(GLenum t) {
     if (s_glActiveTexture) s_glActiveTexture(t);
-}
-void APIENTRY glClientActiveTexture(GLenum t) {
-    if (s_glClientActiveTexture) s_glClientActiveTexture(t);
 }
 void APIENTRY glCompressedTexImage2D(GLenum target, GLint level,
                                      GLenum internalformat,
@@ -179,7 +175,6 @@ bool gl_load_extensions_win32() {
 #define LOAD(name) \
     *(void**)&s_##name = (void*)SDL_GL_GetProcAddress(#name)
     LOAD(glActiveTexture);
-    LOAD(glClientActiveTexture);
     LOAD(glCompressedTexImage2D);
     LOAD(glGenBuffers);
     LOAD(glDeleteBuffers);

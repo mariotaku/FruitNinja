@@ -272,7 +272,6 @@ void BakedString::Draw(float scale, float rotZ, uint32_t align, const Vec3& pos)
         Texture* tex = m_pPageTextures[i].Get();
         if (tex) {
             tex->Set();
-            TexEnvModulate();  // Set owns tex-env (binary model); port Set() doesn't set it.
         }
         Mesh::DrawTriStrip(m_pPageVertices[i], (long)m_pPageQuadCounts[i], false, 0);
         if (tex) {

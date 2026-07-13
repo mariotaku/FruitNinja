@@ -171,10 +171,8 @@ if(NOT FN_ASM_VERIFY)
         # (host/Emscripten only); revisit before building for webOS.
         target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
     elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
-        # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1,
-        # for the still-fixed-function 3D/font paths; the 2D path uses real GLES2
-        # shaders so GL_FFP_ONLY is NOT set). No system GL library to link; the
-        # flags live on the fruit-ninja executable target (root CMakeLists.txt).
+        # Port specific: WebGL is provided by emcc link flags (root CMakeLists.txt,
+        # fruit-ninja executable target). No system GL library to link here.
         # No target_link_libraries call needed here.
     endif()
     target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
