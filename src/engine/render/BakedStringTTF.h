@@ -109,8 +109,12 @@ struct BakedStringTTF_Surface {
     // x=v[0], y=v[1]) fold floor(x)/ceil(x)/ceil(y)/floor(y) into the bounds.
     void UpdateBounds();
 
-    // Transform_GradientSplit @0x0024954c: repaint every vertex above the split plane
-    // (plane = y*(rect.top+rect.bottom)) to c. Non-virtual -- does not change layout.
+    // Transform_GradientSplit @0x0024954c: geometric CSG split of every triangle
+    // against the plane y=(rect.top+rect.bottom)*y (SplitMesh @0x0024940c /
+    // SplitTri @0x00248dd8), inserting new verts exactly on the split line, then
+    // recolours only the kept (upper) side to c. Reallocates m_Verts/m_VertCount
+    // in place (vertex count grows by the straddling triangles' extra verts).
+    // Non-virtual -- does not change layout.
     void Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect);
 
     // Transform_SetAlpha @0x00247cf0: overwrite (not multiply) the alpha byte of every

@@ -457,10 +457,10 @@ void BakedStringTTF::UpdateBounds()
 }
 
 // ApplyGradientSplit @0x00249bf4:
-// AddColour(c, y) records the split stop, then every vertex above the split plane is
-// repainted to c. plane = y * (m_BoundsMaxY + m_BoundsMinY); paint where vertY > plane.
-// Split math is the metallic split lifted from BakedStringBox::BakeGradient
-// (Transform_GradientSplit @0x0024954c): d = -(sum*frac); paint side vertY > -d.
+// AddColour(c, y) records the split stop, then the mesh is geometrically CSG-split
+// against the plane y = (m_BoundsMaxY + m_BoundsMinY) * y (SplitMesh @0x0024940c /
+// SplitTri @0x00248dd8) and only the kept (upper) side is repainted to c -- the band
+// edge lands exactly on the split line rather than snapping to a tessellation row.
 // ASM-spec v1.6.1 BakedStringTTF::ApplyGradientSplit @0x00249bf4 / Transform_GradientSplit @0x0024954c.
 void BakedStringTTF::ApplyGradientSplit(Colour c, float y)
 {
@@ -481,16 +481,249 @@ void BakedStringTTF::ApplyGradientSplit_Internal(Colour c, float y)
     }
 }
 
-// BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c: repaint every vertex
-// above the split plane to c. plane = y * (rect.top + rect.bottom) = y*(maxY+minY).
+// PlaneDist @ inlined in SplitTri/SplitMesh -- signed distance of vertex v from
+// the plane (N, d): N.v + d.
+// ASM-spec v1.6.1 SplitMesh @0x0024940c / SplitTri @0x00248dd8.
+static float PlaneDist(const float N[3], float d, const QUADCUSTOMVERTEX& v)
+{
+    return N[0] * v.x + N[1] * v.y + N[2] * v.z + d;
+}
+
+// Lerp3/Lerp2: plain component lerp, a + (b-a)*t. No binary-side helper is
+// reused here (Vec2/Vec3 carry no Lerp method) -- inlined per spec fallback.
+static void Lerp3(const float a[3], const float b[3], float t, float out[3])
+{
+    out[0] = a[0] + (b[0] - a[0]) * t;
+    out[1] = a[1] + (b[1] - a[1]) * t;
+    out[2] = a[2] + (b[2] - a[2]) * t;
+}
+
+static void Lerp2(const float a[2], const float b[2], float t, float out[2])
+{
+    out[0] = a[0] + (b[0] - a[0]) * t;
+    out[1] = a[1] + (b[1] - a[1]) * t;
+}
+
+// LerpColourComponents: BGRA-unpack both colours to per-channel floats, lerp,
+// repack. Used only when lone.colour != other.colour on a straddling edge --
+// the packed-byte lerp the old port used loses precision and doesn't match
+// the binary's per-channel float path (see Colour::Lerp for the analogous
+// vertex-gradient case in ApplyGradient_TopBottom_Internal).
+static uint32_t LerpColourComponents(uint32_t packedA, uint32_t packedB, float t)
+{
+    Colour a = *reinterpret_cast<const Colour*>(&packedA);
+    Colour b = *reinterpret_cast<const Colour*>(&packedB);
+    Colour out;
+    out.r = (uint8_t)(a.r + ((float)b.r - (float)a.r) * t);
+    out.g = (uint8_t)(a.g + ((float)b.g - (float)a.g) * t);
+    out.b = (uint8_t)(a.b + ((float)b.b - (float)a.b) * t);
+    out.a = (uint8_t)(a.a + ((float)b.a - (float)a.a) * t);
+    return out.PlatformColour();
+}
+
+// SplitTri @0x00248dd8: geometric CSG split of one triangle (3 verts) against
+// `plane` (N[0..2], d=plane[3]).
+//
+// Vertex selection: posCount = # verts with dist > 1e-07f. sign selector
+// s = (posCount==1) ? +1 : -1; the two verts satisfying (s*dist <= s*1e-7)
+// are "otherA" (first match scanning i=0..2) and "otherB" (second match);
+// the remaining vertex is "lone" (the minority vertex).
+//
+// Intersections: t = distLone / (distLone - distOther); endpoint A=lone,
+// B=other. newV_A = Lerp(lone, otherA, t0), colour lerped lone->otherA.
+// newV_B = Lerp(lone, otherB, t1) for POS/UV, but its COLOUR is lerped
+// otherB->otherA at t1 (asymmetric -- replicated exactly per binary).
+//
+// collectOneSide is always true from the caller (Transform_GradientSplit).
+// That path:
+//   posCount==0: emit nothing.
+//   posCount==3: emit tri[0..2] unchanged, push no indices.
+//   posCount==1 (straddle A): emit {otherA, newV_A, newV_B}; push indices
+//     for otherA and newV_A only (not newV_B).
+//   posCount==2 (straddle B): emit {newV_B, newV_A, otherB, otherB, newV_A,
+//     lone}; push indices for slot 0 (newV_B), 1 (newV_A), 4 (2nd newV_A copy).
+// The collectOneSide==false path emits the same straddle geometry but
+// records every emitted vertex's index (no drops) -- kept for completeness,
+// unused by the only live caller.
+// ASM-verified: 2026-07-13T16:31:34Z v1.6.1 SplitTri @0x00248dd8 (asm-inspector)
+static void SplitTri(const QUADCUSTOMVERTEX tri[3],
+                      std::vector<QUADCUSTOMVERTEX>& out,
+                      std::vector<int>* outIdx,
+                      const float plane[4],
+                      bool collectOneSide)
+{
+    const float* N = plane;
+    float dist[3];
+    int posCount = 0;
+    for (int i = 0; i < 3; ++i) {
+        dist[i] = PlaneDist(N, plane[3], tri[i]);
+        if (dist[i] > 1e-07f) posCount++;
+    }
+
+    if (posCount == 0) {
+        if (collectOneSide) return; // emit NOTHING
+        for (int i = 0; i < 3; ++i) {
+            out.push_back(tri[i]);
+            if (outIdx) outIdx->push_back((int)out.size() - 1);
+        }
+        return;
+    }
+    if (posCount == 3) {
+        // Emit unchanged, push NO indices (collectOneSide or not).
+        for (int i = 0; i < 3; ++i) {
+            out.push_back(tri[i]);
+        }
+        return;
+    }
+
+    // Straddle. sign selector: s=+1 when posCount==1 (others = non-positive
+    // pair), s=-1 when posCount==2 (others = positive pair). Scan i=0..2 in
+    // order; the first vertex satisfying (s*dist <= s*1e-7) is otherA, the
+    // second is otherB; the remaining vertex is lone.
+    float s = (posCount == 1) ? 1.0f : -1.0f;
+    int otherA = -1, otherB = -1, loneIdx = -1;
+    for (int i = 0; i < 3; ++i) {
+        if (s * dist[i] <= s * 1e-07f) {
+            if (otherA < 0) otherA = i; else otherB = i;
+        } else {
+            loneIdx = i;
+        }
+    }
+
+    const QUADCUSTOMVERTEX& lone = tri[loneIdx];
+    const QUADCUSTOMVERTEX& oA = tri[otherA];
+    const QUADCUSTOMVERTEX& oB = tri[otherB];
+
+    // t = distLone / (distLone - distOther).
+    float t0 = dist[loneIdx] / (dist[loneIdx] - dist[otherA]);
+    float t1 = dist[loneIdx] / (dist[loneIdx] - dist[otherB]);
+
+    float lonePos[3] = { lone.x, lone.y, lone.z };
+    float oAPos[3] = { oA.x, oA.y, oA.z };
+    float oBPos[3] = { oB.x, oB.y, oB.z };
+    float loneUv[2] = { lone.u, lone.v };
+    float oAUv[2] = { oA.u, oA.v };
+    float oBUv[2] = { oB.u, oB.v };
+
+    // newV_A: POS/UV lerp lone->otherA; colour lerp lone->otherA.
+    QUADCUSTOMVERTEX newV_A = QUADCUSTOMVERTEX();
+    {
+        float outPos[3], outUv[2];
+        Lerp3(lonePos, oAPos, t0, outPos);
+        Lerp2(loneUv, oAUv, t0, outUv);
+        newV_A.x = outPos[0]; newV_A.y = outPos[1]; newV_A.z = outPos[2];
+        newV_A.u = outUv[0]; newV_A.v = outUv[1];
+        newV_A.nx = 0.0f; newV_A.ny = 0.0f; newV_A.nz = 1.0f;
+        newV_A.colour = (lone.colour == oA.colour) ? lone.colour
+                                                    : LerpColourComponents(lone.colour, oA.colour, t0);
+    }
+
+    // newV_B: POS/UV lerp lone->otherB; COLOUR lerp otherB->otherA (asymmetric,
+    // matches the binary exactly).
+    QUADCUSTOMVERTEX newV_B = QUADCUSTOMVERTEX();
+    {
+        float outPos[3], outUv[2];
+        Lerp3(lonePos, oBPos, t1, outPos);
+        Lerp2(loneUv, oBUv, t1, outUv);
+        newV_B.x = outPos[0]; newV_B.y = outPos[1]; newV_B.z = outPos[2];
+        newV_B.u = outUv[0]; newV_B.v = outUv[1];
+        newV_B.nx = 0.0f; newV_B.ny = 0.0f; newV_B.nz = 1.0f;
+        newV_B.colour = (oB.colour == oA.colour) ? oB.colour
+                                                  : LerpColourComponents(oB.colour, oA.colour, t1);
+    }
+
+    if (posCount == 1) {
+        // Emit exactly 3 verts: {otherA, newV_A, newV_B}.
+        out.push_back(oA);
+        int iOA = (int)out.size() - 1;
+        out.push_back(newV_A);
+        int iNewA = (int)out.size() - 1;
+        out.push_back(newV_B);
+        int iNewB = (int)out.size() - 1;
+
+        if (collectOneSide) {
+            // Indices for otherA and newV_A only (NOT newV_B).
+            if (outIdx) {
+                outIdx->push_back(iOA);
+                outIdx->push_back(iNewA);
+            }
+        } else if (outIdx) {
+            outIdx->push_back(iOA);
+            outIdx->push_back(iNewA);
+            outIdx->push_back(iNewB);
+        }
+        return;
+    } else {
+        // Emit exactly 6 verts: {newV_B, newV_A, otherB, otherB, newV_A, lone}.
+        out.push_back(newV_B);
+        int i0 = (int)out.size() - 1;
+        out.push_back(newV_A);
+        int i1 = (int)out.size() - 1;
+        out.push_back(oB);
+        int i2 = (int)out.size() - 1;
+
+        out.push_back(oB);
+        int i3 = (int)out.size() - 1;
+        out.push_back(newV_A);
+        int i4 = (int)out.size() - 1;
+        out.push_back(lone);
+        int i5 = (int)out.size() - 1;
+
+        if (collectOneSide) {
+            // Indices for slot 0 (newV_B), 1 (newV_A), 4 (2nd newV_A copy).
+            if (outIdx) {
+                outIdx->push_back(i0);
+                outIdx->push_back(i1);
+                outIdx->push_back(i4);
+            }
+        } else if (outIdx) {
+            outIdx->push_back(i0);
+            outIdx->push_back(i1);
+            outIdx->push_back(i2);
+            outIdx->push_back(i3);
+            outIdx->push_back(i4);
+            outIdx->push_back(i5);
+        }
+    }
+}
+
+// BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c: geometric CSG
+// split of every triangle against the horizontal plane y = (rect.top+rect.bottom)*y,
+// then recolour only the kept (upper) verts to c. This replaces a vertex-threshold
+// recolour (no geometry split) with the binary's actual mesh subdivision, so the
+// band edge lands exactly on the split line instead of snapping to whichever
+// tessellation row happens to be nearest.
+// ASM-spec v1.6.1 BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c /
+//   SplitMesh @0x0024940c / SplitTri @0x00248dd8.
 void BakedStringTTF_Surface::Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect)
 {
     uint32_t packed = c.PlatformColour();
-    float plane = y * (float)(rect.top + rect.bottom);
-    for (uint32_t vi = 0; vi < m_VertCount; ++vi) {
-        if (m_Verts[vi].y > plane) {
-            m_Verts[vi].colour = packed;
-        }
+
+    // plane.N = (0,1,0); plane.d = -(top+bottom)*y, so dist>0 (kept/upper side)
+    // means vertY > (top+bottom)*y -- same split line as the old threshold test.
+    float plane[4];
+    plane[0] = 0.0f;
+    plane[1] = 1.0f;
+    plane[2] = 0.0f;
+    plane[3] = -(float)(rect.top + rect.bottom) * y;
+
+    std::vector<int> idx;
+    std::vector<QUADCUSTOMVERTEX> newVerts;
+    newVerts.reserve(m_VertCount);
+
+    for (uint32_t tri = 0; tri + 3 <= m_VertCount; tri += 3) {
+        SplitTri(&m_Verts[tri], newVerts, &idx, plane, true);
+    }
+
+    delete[] m_Verts;
+    m_VertCount = (uint32_t)newVerts.size();
+    m_Verts = new QUADCUSTOMVERTEX[m_VertCount];
+    if (m_VertCount > 0) {
+        memcpy(m_Verts, &newVerts[0], m_VertCount * sizeof(QUADCUSTOMVERTEX));
+    }
+
+    for (size_t k = 0; k < idx.size(); ++k) {
+        m_Verts[idx[k]].colour = packed;
     }
 }
 
