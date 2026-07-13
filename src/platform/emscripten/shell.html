@@ -558,6 +558,16 @@
     overlay.style.display = 'flex';
     var btn = document.getElementById('restart-btn');
     if (btn) btn.focus();
+    // Game has quit -- leave browser fullscreen too, so the user is back to
+    // normal browser chrome on the quit/restart screen (the "app" is no longer
+    // running). Inlined (the _exitFullscreen helper lives in a separate IIFE
+    // scope); no-ops if not currently fullscreen.
+    try {
+      if (document.exitFullscreen)            document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (e) {
+      console.log('[fullscreen] exit on quit threw (non-fatal):', e && e.message);
+    }
   }
 
   /* Expose for C++ (EM_ASM) in mainEmscripten.cpp. */
