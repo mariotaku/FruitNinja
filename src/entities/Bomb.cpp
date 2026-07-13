@@ -20,6 +20,7 @@
 #include "asset/Model.h"
 #include "hud/MenuButton.h"
 #include "hud/MissControl.h"
+#include "screens/SettingsScreen.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
@@ -298,7 +299,16 @@ void Bomb::Update(float dt) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
-        if (scaledDt > 0.0f) {
+        // Port specific: freeze menu-ring bomb spin while the SettingsScreen popup is
+        // open. HUD::Update already gates HUDControl updates (incl. MenuButton) behind
+        // the modal, but this Bomb entity is owned by ActorManager and updated via a
+        // separate path (GameUpdate -> ActorManager::Update) not gated by the HUD modal,
+        // so an unsliced ring bomb kept spinning behind the frozen ring buttons. Scoped
+        // to m_bMenuBombHit (set only by MenuButton::CreateFruit via SetCallback) so
+        // real gameplay bombs are never affected; SettingsScreen is only reachable from
+        // the main menu (MainScreen::SettingsCallback), so this can't gate gameplay.
+        const bool freezeMenuSpin = m_bMenuBombHit && SettingsScreen::IsOpen();
+        if (scaledDt > 0.0f && !freezeMenuSpin) {
 #ifdef __bada__
             // faithful int16 truncation (matches binary @0x1d624c)
             m_RotX = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotX + (float)(uint16_t)m_RotVelX * dtNorm);
