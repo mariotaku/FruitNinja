@@ -351,6 +351,10 @@ static float SliderToThreshold(int sliderValue) {
 // Toggle(); see the header note for the open/close contract.
 static SettingsScreen* s_pSettings = NULL;
 
+// Port specific: see header note. Set by Toggle()'s close branch, cleared and
+// acted on by MainScreen::Update's poll block once the modal has fully closed.
+bool SettingsScreen::s_QuitAfterClose = false;
+
 // Port specific: single open/close path, shared by the MainScreen settings
 // button (src/screens/MainScreen.cpp::SettingsCallback) and m_pCloseButton's
 // tap (CloseCallback). No binary counterpart -- this screen has none.
@@ -385,17 +389,15 @@ void SettingsScreen::Toggle() {
             // how the new language takes effect on restart (no live-reload of already-baked
             // UI strings/fonts).
             //
-            // Port specific: run the SAME full quit MainScreen's own QUIT ring
-            // button runs (QuitGamesCallback), not a hand-rolled RequestQuit()+
-            // m_State=STATE_QUIT_WAIT. QuitGamesCallback also arms the quit
-            // button's tracked bomb's fling velocity -- skipping that left the
-            // menu-bomb entity inert, which is cosmetic-only and NOT why the
-            // previous hand-rolled version failed to quit; call the real
-            // callback anyway so this path can never again silently diverge
-            // from the button's behavior as QuitGamesCallback evolves.
-            if (game_work.mMainScreen) {
-                game_work.mMainScreen->TriggerQuitFromSettings();
-            }
+            // Port specific: DEFER the quit trigger -- do not call
+            // MainScreen::TriggerQuitFromSettings() here. This runs mid-teardown
+            // of the modal (SetInputModal(NULL)/SetPendingRemoval above haven't
+            // taken effect for the frame yet), and calling the quit sequence
+            // synchronously at this point left the game stuck: m_State got set
+            // to STATE_QUIT_WAIT but the quit never progressed. Just latch the
+            // flag; MainScreen::Update's poll block fires the real quit trigger
+            // once the modal has fully closed (see s_QuitAfterClose header note).
+            s_QuitAfterClose = true;
         }
     }
 }

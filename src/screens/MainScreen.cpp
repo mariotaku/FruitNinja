@@ -342,6 +342,20 @@ void MainScreen::Update(float dt) {
         game_work.mHud->AddControl(m_pSettingsButton);
         m_pSettingsButton->SetSingular();
     }
+
+    // Port specific: no binary counterpart. Deferred settings-quit poll -- see
+    // SettingsScreen::s_QuitAfterClose header note. SettingsScreen::Toggle()'s
+    // close branch can't call the quit trigger synchronously (it runs
+    // mid-teardown of the modal); instead it latches s_QuitAfterClose and this
+    // poll fires the real quit trigger once the modal has fully closed: no
+    // instance open, and no HUD control still owns input as a modal.
+    if (SettingsScreen::s_QuitAfterClose && !SettingsScreen::IsOpen() &&
+        game_work.mHud && game_work.mHud->GetInputModal() == nullptr) {
+        // Clear FIRST -- TriggerQuitFromSettings() (QuitGamesCallback) sets
+        // m_State=STATE_QUIT_WAIT, which must not re-enter this block next frame.
+        SettingsScreen::s_QuitAfterClose = false;
+        TriggerQuitFromSettings();
+    }
 #endif // !defined(__bada__)
 
     // Toggle texture swap runs right after creation, BEFORE the state switch
