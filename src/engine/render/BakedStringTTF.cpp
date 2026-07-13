@@ -522,35 +522,50 @@ static uint32_t LerpColourComponents(uint32_t packedA, uint32_t packedB, float t
 }
 
 // SplitTri @0x00248dd8: geometric CSG split of one triangle (3 verts) against
-// `plane` (N[0..2], d=plane[3]).
+// `plane` (N[0..2], d=plane[3]). WATERTIGHT -- every input triangle's full
+// area is always represented in the output, split into an upper (dist>0)
+// and lower (dist<=0) polygon so recolouring only the upper indices leaves
+// a crisp seam with no gaps. SplitMesh @0x0024940c always calls this with
+// the cull bool (param_5) == false, so the early-return "drop far-side
+// geometry" behaviour of an older port pass never fires in the binary; that
+// pass's collectOneSide==true drops were the bug (shredded small text into
+// scattered fragments). Backface culling is off for 2D text, so triangle
+// winding is cosmetic -- only full-area coverage + correct per-vertex side
+// colouring matter.
 //
-// Vertex selection: posCount = # verts with dist > 1e-07f. sign selector
-// s = (posCount==1) ? +1 : -1; the two verts satisfying (s*dist <= s*1e-7)
-// are "otherA" (first match scanning i=0..2) and "otherB" (second match);
-// the remaining vertex is "lone" (the minority vertex).
+// Vertex selection: posCount = # verts with dist > 1e-07f.
 //
-// Intersections: t = distLone / (distLone - distOther); endpoint A=lone,
-// B=other. newV_A = Lerp(lone, otherA, t0), colour lerped lone->otherA.
-// newV_B = Lerp(lone, otherB, t1) for POS/UV, but its COLOUR is lerped
-// otherB->otherA at t1 (asymmetric -- replicated exactly per binary).
+// No-straddle (posCount==0 or 3): emit tri[0..2] verbatim as one triangle.
+// Index set: add vertex i's index iff dist[i] > 0 (all-positive tris get
+// all 3 indexed for recolour; all-negative get none).
 //
-// collectOneSide is always true from the caller (Transform_GradientSplit).
-// That path:
-//   posCount==0: emit nothing.
-//   posCount==3: emit tri[0..2] unchanged, push no indices.
-//   posCount==1 (straddle A): emit {otherA, newV_A, newV_B}; push indices
-//     for otherA and newV_A only (not newV_B).
-//   posCount==2 (straddle B): emit {newV_B, newV_A, otherB, otherB, newV_A,
-//     lone}; push indices for slot 0 (newV_B), 1 (newV_A), 4 (2nd newV_A copy).
-// The collectOneSide==false path emits the same straddle geometry but
-// records every emitted vertex's index (no drops) -- kept for completeness,
-// unused by the only live caller.
-// ASM-verified: 2026-07-13T16:31:34Z v1.6.1 SplitTri @0x00248dd8 (asm-inspector)
+// Straddle (posCount==1 or 2): split into upper/lower polygons covering the
+// full original triangle area, duplicating the two edge-intersection verts
+// so upper and lower each get their own copy (required for a crisp colour
+// edge -- a shared vertex would gradient-blend across the band).
+//   posCount==1 (one vert upper="apex", two lower=o0,o1):
+//     upper = 1 tri {apex, I_a, I_b}
+//     lower = quad {I_a, o0, o1, I_b} as 2 tris: {I_a,o0,o1}, {I_a,o1,I_b}
+//     -> 3 triangles / 9 verts total.
+//   posCount==2 (two verts upper=u0,u1; one lower="apex"):
+//     upper = quad {u0, u1, I_b, I_a} as 2 tris: {u0,u1,I_b}, {u0,I_b,I_a}
+//     lower = 1 tri {apex, I_a, I_b}
+//     -> 3 triangles / 9 verts total.
+//   I_a = intersection on edge apex<->o0/u0, I_b = intersection on edge
+//   apex<->o1/u1. t = distApex/(distApex-distOther) from the apex endpoint;
+//   pos/uv interpolated, new vert normal=(0,0,1), colour lerped in
+//   component space (LerpColourComponents) -- copied verbatim if endpoints
+//   already match.
+//   Index set: only the UPPER sub-triangles' vertices (upper-side original
+//   verts + the upper copies of I_a/I_b) are indexed for recolour; the
+//   lower sub-triangles' verts (including their own I_a/I_b copies) are
+//   never indexed, so they keep their base/gradient colour.
+// ASM-spec v1.6.1 SplitMesh @0x0024940c / SplitTri @0x00248dd8 (watertight;
+// cull bool always false, winding cosmetic -- 2D text, no backface cull).
 static void SplitTri(const QUADCUSTOMVERTEX tri[3],
                       std::vector<QUADCUSTOMVERTEX>& out,
                       std::vector<int>* outIdx,
-                      const float plane[4],
-                      bool collectOneSide)
+                      const float plane[4])
 {
     const float* N = plane;
     float dist[3];
@@ -560,26 +575,19 @@ static void SplitTri(const QUADCUSTOMVERTEX tri[3],
         if (dist[i] > 1e-07f) posCount++;
     }
 
-    if (posCount == 0) {
-        if (collectOneSide) return; // emit NOTHING
+    if (posCount == 0 || posCount == 3) {
         for (int i = 0; i < 3; ++i) {
             out.push_back(tri[i]);
-            if (outIdx) outIdx->push_back((int)out.size() - 1);
-        }
-        return;
-    }
-    if (posCount == 3) {
-        // Emit unchanged, push NO indices (collectOneSide or not).
-        for (int i = 0; i < 3; ++i) {
-            out.push_back(tri[i]);
+            if (outIdx && dist[i] > 0.0f) outIdx->push_back((int)out.size() - 1);
         }
         return;
     }
 
-    // Straddle. sign selector: s=+1 when posCount==1 (others = non-positive
-    // pair), s=-1 when posCount==2 (others = positive pair). Scan i=0..2 in
-    // order; the first vertex satisfying (s*dist <= s*1e-7) is otherA, the
-    // second is otherB; the remaining vertex is lone.
+    // Straddle. sign selector: s=+1 when posCount==1 (the pair of "other"
+    // verts are non-positive), s=-1 when posCount==2 (the pair are positive).
+    // Scan i=0..2 in order; the first vertex satisfying (s*dist <= s*1e-7)
+    // is otherA, the second is otherB; the remaining vertex is the apex
+    // ("lone" -- the minority-side vertex).
     float s = (posCount == 1) ? 1.0f : -1.0f;
     int otherA = -1, otherB = -1, loneIdx = -1;
     for (int i = 0; i < 3; ++i) {
@@ -605,85 +613,91 @@ static void SplitTri(const QUADCUSTOMVERTEX tri[3],
     float oAUv[2] = { oA.u, oA.v };
     float oBUv[2] = { oB.u, oB.v };
 
-    // newV_A: POS/UV lerp lone->otherA; colour lerp lone->otherA.
-    QUADCUSTOMVERTEX newV_A = QUADCUSTOMVERTEX();
+    // I_a: POS/UV lerp lone->otherA; colour lerp lone->otherA.
+    QUADCUSTOMVERTEX iaBase = QUADCUSTOMVERTEX();
     {
         float outPos[3], outUv[2];
         Lerp3(lonePos, oAPos, t0, outPos);
         Lerp2(loneUv, oAUv, t0, outUv);
-        newV_A.x = outPos[0]; newV_A.y = outPos[1]; newV_A.z = outPos[2];
-        newV_A.u = outUv[0]; newV_A.v = outUv[1];
-        newV_A.nx = 0.0f; newV_A.ny = 0.0f; newV_A.nz = 1.0f;
-        newV_A.colour = (lone.colour == oA.colour) ? lone.colour
+        iaBase.x = outPos[0]; iaBase.y = outPos[1]; iaBase.z = outPos[2];
+        iaBase.u = outUv[0]; iaBase.v = outUv[1];
+        iaBase.nx = 0.0f; iaBase.ny = 0.0f; iaBase.nz = 1.0f;
+        iaBase.colour = (lone.colour == oA.colour) ? lone.colour
                                                     : LerpColourComponents(lone.colour, oA.colour, t0);
     }
 
-    // newV_B: POS/UV lerp lone->otherB; COLOUR lerp otherB->otherA (asymmetric,
+    // I_b: POS/UV lerp lone->otherB; COLOUR lerp otherB->otherA (asymmetric,
     // matches the binary exactly).
-    QUADCUSTOMVERTEX newV_B = QUADCUSTOMVERTEX();
+    QUADCUSTOMVERTEX ibBase = QUADCUSTOMVERTEX();
     {
         float outPos[3], outUv[2];
         Lerp3(lonePos, oBPos, t1, outPos);
         Lerp2(loneUv, oBUv, t1, outUv);
-        newV_B.x = outPos[0]; newV_B.y = outPos[1]; newV_B.z = outPos[2];
-        newV_B.u = outUv[0]; newV_B.v = outUv[1];
-        newV_B.nx = 0.0f; newV_B.ny = 0.0f; newV_B.nz = 1.0f;
-        newV_B.colour = (oB.colour == oA.colour) ? oB.colour
+        ibBase.x = outPos[0]; ibBase.y = outPos[1]; ibBase.z = outPos[2];
+        ibBase.u = outUv[0]; ibBase.v = outUv[1];
+        ibBase.nx = 0.0f; ibBase.ny = 0.0f; ibBase.nz = 1.0f;
+        ibBase.colour = (oB.colour == oA.colour) ? oB.colour
                                                   : LerpColourComponents(oB.colour, oA.colour, t1);
     }
 
     if (posCount == 1) {
-        // Emit exactly 3 verts: {otherA, newV_A, newV_B}.
-        out.push_back(oA);
-        int iOA = (int)out.size() - 1;
-        out.push_back(newV_A);
-        int iNewA = (int)out.size() - 1;
-        out.push_back(newV_B);
-        int iNewB = (int)out.size() - 1;
-
-        if (collectOneSide) {
-            // Indices for otherA and newV_A only (NOT newV_B).
-            if (outIdx) {
-                outIdx->push_back(iOA);
-                outIdx->push_back(iNewA);
-            }
-        } else if (outIdx) {
-            outIdx->push_back(iOA);
-            outIdx->push_back(iNewA);
-            outIdx->push_back(iNewB);
+        // apex (lone) is the sole upper vert; o0=otherA, o1=otherB are lower.
+        // Upper: 1 triangle {apex, I_a, I_b} -- fully indexed.
+        out.push_back(lone);
+        int iApexUp = (int)out.size() - 1;
+        out.push_back(iaBase);
+        int iIaUp = (int)out.size() - 1;
+        out.push_back(ibBase);
+        int iIbUp = (int)out.size() - 1;
+        if (outIdx) {
+            outIdx->push_back(iApexUp);
+            outIdx->push_back(iIaUp);
+            outIdx->push_back(iIbUp);
         }
+
+        // Lower: quad {I_a, o0, o1, I_b} as 2 triangles, own copies of I_a/I_b,
+        // never indexed (keeps base/gradient colour).
+        out.push_back(iaBase);
+        out.push_back(oA);
+        out.push_back(oB);
+
+        out.push_back(iaBase);
+        out.push_back(oB);
+        out.push_back(ibBase);
         return;
     } else {
-        // Emit exactly 6 verts: {newV_B, newV_A, otherB, otherB, newV_A, lone}.
-        out.push_back(newV_B);
-        int i0 = (int)out.size() - 1;
-        out.push_back(newV_A);
-        int i1 = (int)out.size() - 1;
+        // u0=otherA, u1=otherB are the two upper verts; apex (lone) is lower.
+        // Upper: quad {u0, u1, I_b, I_a} as 2 triangles, own copies of I_a/I_b,
+        // fully indexed.
+        out.push_back(oA);
+        int iU0 = (int)out.size() - 1;
         out.push_back(oB);
-        int i2 = (int)out.size() - 1;
-
-        out.push_back(oB);
-        int i3 = (int)out.size() - 1;
-        out.push_back(newV_A);
-        int i4 = (int)out.size() - 1;
-        out.push_back(lone);
-        int i5 = (int)out.size() - 1;
-
-        if (collectOneSide) {
-            // Indices for slot 0 (newV_B), 1 (newV_A), 4 (2nd newV_A copy).
-            if (outIdx) {
-                outIdx->push_back(i0);
-                outIdx->push_back(i1);
-                outIdx->push_back(i4);
-            }
-        } else if (outIdx) {
-            outIdx->push_back(i0);
-            outIdx->push_back(i1);
-            outIdx->push_back(i2);
-            outIdx->push_back(i3);
-            outIdx->push_back(i4);
-            outIdx->push_back(i5);
+        int iU1 = (int)out.size() - 1;
+        out.push_back(ibBase);
+        int iIbUp = (int)out.size() - 1;
+        if (outIdx) {
+            outIdx->push_back(iU0);
+            outIdx->push_back(iU1);
+            outIdx->push_back(iIbUp);
         }
+
+        out.push_back(oA);
+        int iU0b = (int)out.size() - 1;
+        out.push_back(ibBase);
+        int iIbUp2 = (int)out.size() - 1;
+        out.push_back(iaBase);
+        int iIaUp = (int)out.size() - 1;
+        if (outIdx) {
+            outIdx->push_back(iU0b);
+            outIdx->push_back(iIbUp2);
+            outIdx->push_back(iIaUp);
+        }
+
+        // Lower: 1 triangle {apex, I_a, I_b}, own copies, never indexed.
+        out.push_back(lone);
+        out.push_back(iaBase);
+        out.push_back(ibBase);
+        return;
     }
 }
 
@@ -712,7 +726,7 @@ void BakedStringTTF_Surface::Transform_GradientSplit(Colour c, float y, MortarRe
     newVerts.reserve(m_VertCount);
 
     for (uint32_t tri = 0; tri + 3 <= m_VertCount; tri += 3) {
-        SplitTri(&m_Verts[tri], newVerts, &idx, plane, true);
+        SplitTri(&m_Verts[tri], newVerts, &idx, plane);
     }
 
     delete[] m_Verts;
