@@ -58,6 +58,43 @@ inline Mortar::SmartPtr<Mortar::Texture> MakeSolidTex(
 }
 
 // ---------------------------------------------------------------------------
+// White vertical alpha-ramp texture: RGB fixed at (255,255,255), alpha ramps
+// linearly from `aTop` (row 0, texture top) to `aBottom` (last row). Modulated
+// by a Colour tint at draw time (glColor / vertex-colour path), the tint's own
+// RGB shows through true (unlike a texture with the tint baked into its RGB,
+// which MODULATE-multiplies and darkens/shifts the result) while the alpha
+// ramp still fades the tint in/out -- used for edge-fade bands that must match
+// an arbitrary UI colour rather than a fixed baked-in gradient asset.
+// ---------------------------------------------------------------------------
+inline Mortar::SmartPtr<Mortar::Texture> MakeVerticalAlphaRampTex(
+    uint8_t aTop, uint8_t aBottom, int w, int h)
+{
+    std::vector<uint8_t> px((size_t)w * (size_t)h * 4);
+    for (int y = 0; y < h; ++y) {
+        float t = (h > 1) ? (float)y / (float)(h - 1) : 0.0f;
+        uint8_t a = (uint8_t)((float)aTop + ((float)aBottom - (float)aTop) * t + 0.5f);
+        for (int x = 0; x < w; ++x) {
+            uint8_t* out = &px[((size_t)y * (size_t)w + (size_t)x) * 4];
+            out[0] = 255; out[1] = 255; out[2] = 255; out[3] = a;
+        }
+    }
+
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, &px[0]);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    Mortar::Bada::Texture2D_Bada* t = new Mortar::Bada::Texture2D_Bada();
+    t->m_TexId = id;
+    t->SetDimensions(w, h);
+    t->m_HasAlpha = true;
+    return Mortar::SmartPtr<Mortar::Texture>(t);
+}
+
+// ---------------------------------------------------------------------------
 // Procedural shape helpers (test-only synthetic bitmaps; no external deps).
 //
 // Signed distance to a "stadium" -- an axis-aligned rounded rect whose corner

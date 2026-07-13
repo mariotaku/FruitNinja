@@ -12,7 +12,7 @@
 // rather than calling screen.Draw() directly -- that only paints the
 // backdrop/plate/labels now.
 //
-// Two captures:
+// Three captures:
 //   settings.png          -- collapsed (default state, all rows visible).
 //   settings_expanded.png -- LANGUAGE dropdown forced open (SetOpenForTest via
 //                             SettingsScreen::GetLangDropForTest()), proving the
@@ -20,10 +20,22 @@
 //                             every sibling widget -- see Init()'s AddControl
 //                             order) and the m_Active input/draw gate on the
 //                             other widgets while the panel is open.
+//   settings_scrolled.png -- dropdown closed again, then scrolled to
+//                             m_MaxScroll (SetScrollForTest, which clamps to
+//                             [0, m_MaxScroll]) so BOTH edge fades are
+//                             visible: top fade over the collapsed LANGUAGE
+//                             bar dissolving above, and the FPS COUNTER row
+//                             revealed at the bottom of the viewport.
+//   settings_scrolled_open.png -- pane still scrolled to m_MaxScroll AND the
+//                             LANGUAGE dropdown re-opened (SetOpenForTest),
+//                             to check whether the collapsed dropdown's open
+//                             panel spills over the plate edge when scrolled.
 //
 // Output PNGs (--screenshot mode):
 //   tmp/test/screenshots/settings_screen/settings.png
 //   tmp/test/screenshots/settings_screen/settings_expanded.png
+//   tmp/test/screenshots/settings_screen/settings_scrolled.png
+//   tmp/test/screenshots/settings_screen/settings_scrolled_open.png
 //
 // NOTE: SettingsScreen is a port-improvement with NO binary counterpart; this
 // test validates that the screen constructs, seeds its widgets from the live
@@ -111,6 +123,52 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+
+    // ---- Close the dropdown before scrolling so the scrolled capture shows
+    // the collapsed LANGUAGE bar, not the still-open dropdown panel ----
+    if (drop) {
+        drop->SetOpenForTest(false);
+        h.RunComponentHeadless(1, kLayerMask);
+    }
+
+    // ---- Scrolled: drive to m_MaxScroll (SetScrollForTest clamps), re-settle,
+    // capture, then reset back to 0 ----
+    screen->SetScrollForTest(1000.0f);
+
+    h.RunComponentHeadless(4, kLayerMask);
+
+    if (h.IsScreenshot()) {
+        h.RunComponentHeadless(1, kLayerMask);
+        if (!h.ScreenshotPng("settings_screen/settings_scrolled")) {
+            std::fprintf(stderr, "FAIL: ScreenshotPng (scrolled) failed\n");
+            ++failures;
+        } else {
+            std::printf("[settings_screen] scrolled screenshot written\n");
+        }
+    }
+
+    // ---- Scrolled + open: re-open the dropdown while still scrolled to
+    // m_MaxScroll, re-settle, capture, then reset (close + scroll 0) ----
+    if (drop) {
+        drop->SetOpenForTest(true);
+        screen->SetScrollForTest(1000.0f);
+
+        h.RunComponentHeadless(4, kLayerMask);
+
+        if (h.IsScreenshot()) {
+            h.RunComponentHeadless(1, kLayerMask);
+            if (!h.ScreenshotPng("settings_screen/settings_scrolled_open")) {
+                std::fprintf(stderr, "FAIL: ScreenshotPng (scrolled_open) failed\n");
+                ++failures;
+            } else {
+                std::printf("[settings_screen] scrolled+open screenshot written\n");
+            }
+        }
+
+        drop->SetOpenForTest(false);
+    }
+
+    screen->SetScrollForTest(0.0f);
 
     if (h.IsInteractive()) {
         h.RunComponentInteractive(NULL, NULL, -1, kLayerMask);

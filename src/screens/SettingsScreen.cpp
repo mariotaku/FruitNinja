@@ -26,6 +26,7 @@
 #include "debug/DebugFlags.h"
 #include "util/StringTable.h"
 #include "render/BakedStringBox.h"
+#include "render/QUADCUSTOMVERTEX.h"
 #include "engine/input/Touch.h"
 #include "render/gl_funcs.h"
 #include "Game.h"
@@ -82,6 +83,10 @@ static const Colour& SettingsTextColour() {
 // 44 = -176, see kPlateHalfW note below) with a small margin, mirroring
 // kRightEdge's margin on the opposite side.
 static const float kLabelX = -168.0f;
+// Port specific: SENSITIVITY alone nudges slightly right (indented) of the
+// other three labels -- visually balances against its wider row content
+// (the slider track) the way the other rows' shorter widgets don't need.
+static const float kSensLabelX = kLabelX + 11.0f;
 // Label font scale (Font::DrawString's scale param). Labels draw with the
 // TTF font (m_LangFont, gangofchinese.ttf) rather than the bitmap
 // font_fruit_ninja.fnt -- the bitmap face is CAPS-ONLY (no lowercase
@@ -121,18 +126,38 @@ static const float kLabelScale = 19.0f;
 //
 // kContentPad is the shared top-of-content / bottom-of-content padding
 // (above LANGUAGE's dropdown box, below FPS COUNTER's checkbox box). Top and
-// bottom MUST match -- kContentTop/kContentBottom are solved symmetrically
-// from it (see below) so the column reads visually balanced within the
-// viewport. A single shared constant avoids the two drifting apart; kept as
-// two same-valued aliases (kContentTopPad/kContentBottomPad) since every
-// call site below already names one or the other.
+// bottom padding are otherwise symmetric -- kContentTop is solved from
+// kContentTopPad alone -- except the bottom gets an extra
+// kContentBottomFadeClearance (see below) so FPS COUNTER's own box clears
+// DrawScrollFade's bottom band at max scroll.
 static const float kRowLineGap  = 24.0f;
 static const float kDividerPad  = 10.0f;
 static const float kDividerHeight = 15.0f;  // see DrawDivider
 static const float kContentPad = 12.0f;
 static const float kContentTopPad = kContentPad;
-static const float kContentBottomPad = kContentPad;
-static const float kViewportHalfH = 101.0f; // kPlateHalfH(130) - kPlateDestBorderY(29), see kPlateHalfH note below
+// At m_ScrollY == m_MaxScroll, the content-space screen Y of the FPS box's
+// own bottom edge works out to (kContentBottomPad - kContentTopPad -
+// kViewportHalfH) -- see kContentBottom/kContentH/m_MaxScroll derivation
+// below. With kContentBottomPad == kContentTopPad that lands EXACTLY at
+// -kViewportHalfH, i.e. flush with the viewport bottom -- which is also
+// where DrawScrollFade's bottom band (kFadeHeight == 10, see Draw()) starts,
+// so the FPS box's bottom sliver dissolves into the fade. Padding the
+// bottom by kFadeHeight plus a small clearance margin pushes the FPS box's
+// bottom edge up above the fade band's own top edge, leaving it fully
+// legible at max scroll instead of dissolving into the fade.
+static const float kContentBottomFadeClearance = 14.0f;  // kFadeHeight(10) + 4 margin
+static const float kContentBottomPad = kContentPad + kContentBottomFadeClearance;
+// kPlateHalfH(130) - kPlateDestBorderY(29) = 101 is the plate's exact
+// 9-slice content-cell edge (see kPlateHalfH note below): NineSlice::Draw's
+// centre-cell quad is a hard geometric seam there, with the border cell
+// (beveled wooden frame art) starting immediately past it. kViewportHalfH
+// MUST stay inside that seam -- DrawScrollFade's opaque outer edge is drawn
+// exactly AT kViewportHalfH (see its cellTop/edgeY use below), so parking
+// the constant AT 101 would land that opaque edge pixel-exactly on the
+// seam; 1 world unit (2 HD texels, see kPlateHalfW note's "1 world unit =
+// 2 texels") of headroom keeps the fully-opaque fade pixels on parchment,
+// never on the bevel.
+static const float kViewportHalfH = 100.0f; // kPlateHalfH(130) - kPlateDestBorderY(29) = 101 seam, minus 1-unit fade safety margin
 
 // LANGUAGE: dropdown bar's top edge sits kContentTopPad below the viewport
 // top; kComboY (bar centre) follows, kLangLabelY keeps the existing -2
@@ -180,6 +205,14 @@ static const float kCheckboxSide = 36.0f;
 // wired for this TTF path (see FindAdvanceOfNextWord TODO in Font.h). Only
 // this row gets a sub-description; the other three rows stay single-line.
 static const float kMotionDescScale = 11.0f;
+// Port specific: gap between the two description lines only -- tighter than
+// kRowLineGap. The label->desc0 gap looks visually tighter than a plain
+// numeric kRowLineGap because the label glyphs are drawn at kLabelScale (19)
+// vs the desc lines' much smaller kMotionDescScale (11), so the label's
+// larger glyph height eats into that gap while both desc lines (same small
+// scale) left the full 24 units open, reading as loose. Tighten just the
+// desc0->desc1 gap so the two-line caption reads as one visual block.
+static const float kMotionDescLineGap = 12.6f;
 // Dimmer than SettingsTextColour()'s brown (0x6F,0x46,0x1E) -- same hue,
 // lower alpha so it reads as secondary/caption text under the bold label.
 static const Colour kMotionDescColour(0x6F, 0x46, 0x1E, 0xA0);
@@ -214,7 +247,7 @@ static const float kDividerY1 = (kComboY - kComboScaleY * 0.5f) - kDividerPad - 
 // Divider 1's own bottom edge.
 static const float kMotionLabelY = (kDividerY1 - kDividerHeight * 0.5f) - kDividerPad;
 static const float kMotionDescY0    = kMotionLabelY - kRowLineGap;
-static const float kMotionDescY1    = kMotionDescY0 - kRowLineGap;
+static const float kMotionDescY1    = kMotionDescY0 - kMotionDescLineGap;
 
 // kMotionCbY: vertically centred on the MOTION MODE label + 2-line
 // description sub-block (kMotionLabelY..kMotionDescY1).
@@ -245,7 +278,8 @@ static const float kFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kDividerP
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
 // Content height (dropdown box top .. FPS checkbox box bottom, plus the
-// symmetric top/bottom pads) and the derived viewport/scroll extents. The
+// top/bottom pads -- bottom padded extra by kContentBottomFadeClearance, see
+// kContentBottomPad above) and the derived viewport/scroll extents. The
 // viewport is the plate's usable content window (kViewportHalfH*2); content
 // EXCEEDS it by design (kContentH > kViewportH), which is the whole point of
 // this scrollable layout -- UpdateScroll()/Draw() clip + scroll it.
@@ -782,6 +816,95 @@ static void DrawScrollbar(Mortar::Texture* tex, float trackTop, float trackBotto
     tex->UnSet();
 }
 
+// Port specific: soft top/bottom edge fade for the scrolled content
+// viewport, replacing a hard glScissor cut. Redraws a thin strip of the
+// medbacking plate texture itself (m_Plate) directly on top of the just-
+// scissored content, at the SAME screen position the background plate
+// already shows there, with a per-vertex alpha ramp (opaque at the outer
+// edge next to the frame, alpha 0 at the inner edge). Because the strip
+// samples the identical medbacking texels the background plate draws at
+// that spot, it composites 1:1 over the background and the scrolled
+// content dissolves into the real parchment texture/vignette instead of a
+// flat colour band (a flat fill never blends against the plate's own
+// textured gradient).
+//
+// UV derivation mirrors the plate's own NineSlice::Draw call in Draw()
+// (same kPlateSrcBorder*Px / kPlateDestBorder* / kPlateHalfW / kPlateHalfH
+// constants) so the sampled texels track the plate rect exactly:
+//   - The scroll viewport's content area is the plate's NineSlice CENTER
+//     cell (inside the 9-slice borders): screen X in
+//     [-kPlateHalfW+kPlateDestBorderX, +kPlateHalfW-kPlateDestBorderX],
+//     screen Y in [-kViewportHalfH, +kViewportHalfH] (viewport half-height
+//     equals the center cell's half-height by construction, see
+//     kViewportHalfH's own note above).
+//   - The center cell's UV rectangle (per NineSlice::Draw's u1/u2/v1/v2
+//     split) is [fu, 1-fu] x [fv, 1-fv], where fu/fv are the border
+//     fractions from the texture's own pixel dimensions.
+//   - Each band's screen Y range maps LINEARLY onto that center V range;
+//     U spans the full center U range (the plate's center cell stretches
+//     horizontally to fill destW, so this strip stretches the same way).
+//
+// Per-vertex alpha (not a texture alpha channel -- medbacking.tex is
+// opaque) via Mesh::DrawTriStrip's QUADCUSTOMVERTEX::colour, MODULATEd
+// against the plate texture by Renderer::DrawTriStrip -- same convention
+// SpeedControl::Draw uses for its own per-vertex-tinted textured strip.
+static void DrawScrollFade(Mortar::Texture* plateTex,
+                           float leftX, float rightX,
+                           float edgeY, float height, bool topEdge) {
+    if (!plateTex || height <= 0.0f || rightX <= leftX) return;
+
+    float texW = (float)plateTex->GetWidth();
+    float texH = (float)plateTex->GetHeight();
+    if (texW <= 0.0f || texH <= 0.0f) return;
+
+    // Center-cell UV rect, same fu/fv derivation as NineSlice::Draw.
+    float fu = kPlateSrcBorderXPx / texW;
+    float fv = kPlateSrcBorderYPx / texH;
+    if (fu > 0.5f) fu = 0.5f;
+    if (fv > 0.5f) fv = 0.5f;
+    float centerU0 = fu, centerU1 = 1.0f - fu;
+    float centerV0 = fv, centerV1 = 1.0f - fv;
+
+    // Center-cell screen Y range (== the scroll viewport, by construction).
+    float cellTop = kViewportHalfH, cellBottom = -kViewportHalfH;
+
+    // Map this band's screen Y span linearly into the center cell's V range.
+    // Screen Y and V run opposite directions here: NineSlice's midV0 (at
+    // cellTop, high screen Y) == centerV0 (texture row just past the top
+    // border, LOW v); midV1 (at cellBottom) == centerV1. So v = centerV0 +
+    // (cellTop - y) / (cellTop - cellBottom) * (centerV1 - centerV0).
+    float bandTop    = topEdge ? edgeY : (edgeY + height);
+    float bandBottom = topEdge ? (edgeY - height) : edgeY;
+    float vSpan = centerV1 - centerV0;
+    float vAtTop    = centerV0 + (cellTop - bandTop)    / (cellTop - cellBottom) * vSpan;
+    float vAtBottom = centerV0 + (cellTop - bandBottom) / (cellTop - cellBottom) * vSpan;
+
+    // Outer edge (nearest the frame) is opaque, inner edge fades to 0.
+    uint8_t aTop    = topEdge ? 255 : 0;
+    uint8_t aBottom = topEdge ? 0   : 255;
+    uint32_t packedTop    = Colour(255, 255, 255, aTop).PlatformColour();
+    uint32_t packedBottom = Colour(255, 255, 255, aBottom).PlatformColour();
+
+    QUADCUSTOMVERTEX v[4];
+    // BL, BR, TL, TR -- matches Renderer::DrawQuad's own vertex order/UV
+    // convention (quad top/high-Y samples vMin).
+    v[0].x = leftX;  v[0].y = bandBottom; v[0].z = 0.0f; v[0].nx = 0.0f; v[0].ny = 0.0f; v[0].nz = 1.0f;
+    v[0].u = centerU0; v[0].v = vAtBottom; v[0].colour = packedBottom;
+    v[1].x = rightX; v[1].y = bandBottom; v[1].z = 0.0f; v[1].nx = 0.0f; v[1].ny = 0.0f; v[1].nz = 1.0f;
+    v[1].u = centerU1; v[1].v = vAtBottom; v[1].colour = packedBottom;
+    v[2].x = leftX;  v[2].y = bandTop;    v[2].z = 0.0f; v[2].nx = 0.0f; v[2].ny = 0.0f; v[2].nz = 1.0f;
+    v[2].u = centerU0; v[2].v = vAtTop;    v[2].colour = packedTop;
+    v[3].x = rightX; v[3].y = bandTop;    v[3].z = 0.0f; v[3].nx = 0.0f; v[3].ny = 0.0f; v[3].nz = 1.0f;
+    v[3].u = centerU1; v[3].v = vAtTop;    v[3].colour = packedTop;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+    plateTex->Set();
+    Mortar::Mesh::DrawTriStrip(v, 4, true, NULL);
+    plateTex->UnSet();
+}
+
 void SettingsScreen::Draw(float* hudScale) {
     (void)hudScale;
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -849,7 +972,7 @@ void SettingsScreen::Draw(float* hudScale) {
                       kLabelX, kMotionDescY0 + 7.0f + off);
     DrawSettingsDesc(labelFont, "(pointer only)",
                       kLabelX, kMotionDescY1 + 7.0f + off);
-    DrawSettingsLabel(labelFont, "SENSITIVITY", kLabelX, kSensLabelY + 7.0f + off);
+    DrawSettingsLabel(labelFont, "SENSITIVITY", kSensLabelX, kSensLabelY + 7.0f + off);
     DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
 
     // ---- the three plain widgets, still inside the content scissor.
@@ -858,16 +981,41 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
     if (m_FpsCb)      m_FpsCb->Draw(hudScale);
     if (m_SensSlider) m_SensSlider->Draw(hudScale);
-    // Collapsed dropdown bar draws inside the content scissor too (it's a
-    // plate row like any other); the OPEN panel draws separately below,
-    // unclipped.
-    if (m_LangDrop && !m_LangDrop->IsOpen()) {
-        m_LangDrop->Draw(hudScale);
+    // Bar draws inside the content scissor -- whether open or closed -- so
+    // it clips/fades with the rest of the scrolling content, same as any
+    // other plate row. Only the OPEN panel (drawn below, after the scissor
+    // is disabled) is allowed to overflow the plate.
+    if (m_LangDrop) {
+        m_LangDrop->DrawBar(hudScale);
     }
 
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     glDisable(GL_SCISSOR_TEST);
 #endif
+
+    // ---- top/bottom edge fade: soft dissolve over the just-scissored
+    // ---- content, replacing the hard glScissor cut. Drawn AFTER content +
+    // ---- AFTER the scissor is disabled (so it composites over whatever
+    // ---- content was clipped, unclipped itself) but BEFORE the open
+    // ---- dropdown panel (drawn last, below) so it can never cover it --
+    // ---- the panel already draws unclipped on top of everything else in
+    // ---- this function. No-op if content doesn't overflow the viewport
+    // ---- (nothing is being cut, so nothing needs to fade). Each band is
+    // ---- Port specific: both bands are now unconditional (only gated on
+    // ---- the outer m_MaxScroll > 0 overflow check) rather than also gating
+    // ---- each edge on m_ScrollY reaching that extreme -- avoids a visible
+    // ---- pop of the fade appearing/disappearing right at the scroll limits.
+    // ---- Harmless when there's nothing to fade: it just redraws the real
+    // ---- parchment texels underneath. ----
+    if (m_MaxScroll > 0.0f) {
+        static const float kFadeHeight = 10.0f;
+        static const float kFadeLeftX  = -kPlateHalfW + kPlateDestBorderX;
+        static const float kFadeRightX =  kPlateHalfW - kPlateDestBorderX;
+        DrawScrollFade(m_Plate.Get(), kFadeLeftX, kFadeRightX,
+                      kViewportHalfH, kFadeHeight, true);
+        DrawScrollFade(m_Plate.Get(), kFadeLeftX, kFadeRightX,
+                      -kViewportHalfH, kFadeHeight, false);
+    }
 
     // ---- scrollbar: thin quad on the plate's right inner edge, unclipped,
     // ---- drawn after the content scissor is disabled. No-op if content
@@ -876,12 +1024,13 @@ void SettingsScreen::Draw(float* hudScale) {
                   kViewportH, kContentH, m_ScrollY, m_MaxScroll);
 
     // ---- open dropdown panel: drawn LAST, scissor already disabled above --
-    // ---- UiDropdown::Draw manages its OWN internal row-viewport glScissor
-    // ---- (see UiDropdown.cpp) -- GL scissor state is not stacked, so
-    // ---- SettingsScreen's own content scissor must already be off before
-    // ---- this call, never nested around it. ----
+    // ---- UiDropdown::DrawPanel manages its OWN internal row-viewport
+    // ---- glScissor (see UiDropdown.cpp) -- GL scissor state is not
+    // ---- stacked, so SettingsScreen's own content scissor must already be
+    // ---- off before this call, never nested around it. The bar was
+    // ---- already drawn (clipped, above); this only draws the popup list. ----
     if (m_LangDrop && m_LangDrop->IsOpen()) {
-        m_LangDrop->Draw(hudScale);
+        m_LangDrop->DrawPanel(hudScale);
     }
 }
 
@@ -897,7 +1046,10 @@ void SettingsScreen::Draw(float* hudScale) {
 void SettingsScreen::DrawDivider(float centerY) {
     if (!m_TexDivider.IsValid()) return;
 
-    static const float kDividerRightX = kRightEdge + kCheckboxSide * 0.5f;
+    // Port specific: trims 10 world units off the right end only (left end
+    // unchanged) -- the untrimmed span draws slightly too far into the
+    // plate's right fade/edge.
+    static const float kDividerRightX = kRightEdge + kCheckboxSide * 0.5f - 10.0f;
     static const float kDividerCenterX = (kLabelX + kDividerRightX) * 0.5f;
     static const float kDividerWidth   = kDividerRightX - kLabelX;
     // Muted brown-grey, alpha 0xB0 -- reads as a soft separator on the

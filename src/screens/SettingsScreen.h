@@ -130,9 +130,14 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_TexCheck;  // check.tex -- checkbox tick glyph
     Mortar::SmartPtr<Mortar::Texture> m_TexCaret;  // caret.tex -- dropdown caret glyph
     Mortar::SmartPtr<Mortar::Texture> m_TexKnob;   // slider_will.tex -- slider knob
-    Mortar::SmartPtr<Mortar::Texture> m_TexFade;   // list_fade.tex -- UiDropdown open-list edge fade
+    Mortar::SmartPtr<Mortar::Texture> m_TexFade;   // list_fade.tex -- UiDropdown open-list edge fade (dark wood tone; dropdown panel only)
     Mortar::SmartPtr<Mortar::Texture> m_TexItem;   // list_item.tex -- UiDropdown row highlight gloss
     Mortar::SmartPtr<Mortar::Texture> m_TexDivider; // scratch_deviders.tex -- row-group separator
+    // Note: the plate viewport's own top/bottom scroll-edge fade (see
+    // DrawScrollFade in the .cpp) reuses m_Plate directly -- it redraws a
+    // thin per-vertex-alpha-ramped strip of the SAME medbacking texels the
+    // background plate already shows at that screen position, so it
+    // composites 1:1 over the plate instead of needing its own texture.
 
     std::vector<std::string> m_LangItems;
 
