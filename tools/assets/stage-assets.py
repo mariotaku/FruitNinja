@@ -160,6 +160,28 @@ WEBP_LOSSLESS = False
 # Tex1 header/format constants + the decode core live in tools/lib/tex_decoder.py
 # (shared with tools/assets/convert_tex.py).
 
+# --- "Lite" branding erase (build-time asset edit) ---------------------------
+# DIFFERS: the original title texture hd_sml_title.tex reads "FRUIT NINJA LITE"
+# (v1.6.1 is the free Lite SKU). This port ships the full game, so the "LITE"
+# wordmark is erased by punching its glyphs to transparent (alpha=0) at decode
+# time -- the real .tex under FruitNinjaBada/Data is never touched, only the
+# staged WebP copy. The small sml_title.tex has no "LITE".
+#
+# The last NINJA kanji's lower-right stroke overlaps LITE's "L", so a plain
+# rectangle would clip the kanji. Erase is therefore color-aware over the LITE
+# bounding box [x0,y0,x1,y1] (inclusive, DECODED 512x128 coords): right of
+# x_safe it is pure LITE -> full erase; in the narrow overlap strip [x0,x_safe)
+# the kanji (neutral silver, r~=g~=b) and LITE's L (warm orange/brown,
+# r-b>=warm) interleave, so in the strip only WARM *and BRIGHT* pixels are
+# erased -- LITE's orange body/bevel is bright, while the kanji's dark border
+# is warm-ish only from anti-alias (e.g. rgb(17,0,0)) and must be kept, else it
+# leaves a transparent hole in the outline. Measured from the orange LITE glyph
+# mass (x366..426, y72..106).
+# box = (x0, y0, x1, y1, x_safe, warm_threshold, bright_min)
+TEX_ERASE_BOXES = {
+    "hd_sml_title.tex": [(364, 68, 427, 108, 367, 6, 100)],
+}
+
 
 # --- tool self-provisioning (install-where-used) -----------------------------
 # ffmpeg (audio transcode, web only) and fontTools (CJK font subset, web only)
@@ -336,11 +358,34 @@ def encode_webp(rgba_bytes, w, h, dst_tex):
     os.replace(tmp, dst_tex)
 
 
+def erase_boxes_rgba(rgba, w, h, boxes):
+    """Zero the alpha channel of the LITE wordmark inside each box of a flat
+    top-left-origin RGBA8888 buffer (in place).
+    Box = (x0,y0,x1,y1,x_safe,warm,bright_min): inclusive bounds; at x >= x_safe
+    every opaque pixel is LITE (full erase); in the overlap strip [x0, x_safe)
+    only pixels that are both WARM (red-minus-blue >= warm, i.e. LITE's orange)
+    and BRIGHT (max channel >= bright_min) are erased, so the neutral NINJA
+    kanji AND its dark (warm-ish only from anti-alias) outline both survive."""
+    for (x0, y0, x1, y1, x_safe, warm, bright_min) in boxes:
+        x0 = max(0, x0); y0 = max(0, y0)
+        x1 = min(w - 1, x1); y1 = min(h - 1, y1)
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                i = (y * w + x) * 4
+                r, g, b = rgba[i], rgba[i + 1], rgba[i + 2]
+                if x >= x_safe or ((r - b) >= warm and max(r, g, b) >= bright_min):
+                    rgba[i + 3] = 0
+
+
 def transcode_tex_file(src_path, dst_tex, stats):
     src_size = os.path.getsize(src_path)
     stats["tex_src_bytes"] += src_size
 
-    if not needs_tex_transcode(src_path, dst_tex):
+    # Files with a branding-erase box always re-transcode (bypass the mtime
+    # skip) so the hole is (re)applied even when the staged copy looks current.
+    erase_boxes = TEX_ERASE_BOXES.get(os.path.basename(src_path).lower())
+
+    if erase_boxes is None and not needs_tex_transcode(src_path, dst_tex):
         stats["tex_skipped"] += 1
         stats["tex_webp_bytes"] += os.path.getsize(dst_tex)
         return
@@ -358,6 +403,9 @@ def transcode_tex_file(src_path, dst_tex, stats):
 
     fmt, w, h, body = parsed
     rgba = tex_decoder.unpack_tex1_to_rgba(fmt, w, h, body)
+    if erase_boxes:
+        rgba = bytearray(rgba)
+        erase_boxes_rgba(rgba, w, h, erase_boxes)
     encode_webp(rgba, w, h, dst_tex)
     stats["tex_transcoded"] += 1
     stats["tex_webp_bytes"] += os.path.getsize(dst_tex)
