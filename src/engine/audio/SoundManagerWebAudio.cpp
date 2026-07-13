@@ -26,6 +26,14 @@
 // DIFFERS: no fixed 16-voice cap -- the browser allows unlimited concurrent
 // sources; the monotonic-handle + active[] map is kept only for API compat.
 //
+// DIFFERS: music (sfx/music-*.ogg, sfx/background.ogg) is transcoded by the
+// SAME stage-assets.py encode_ogg path as SFX (tools/assets/stage-assets.py
+// stage_tree treats every sfx/*.wav.pcm identically, is_sfx_dir has no
+// music/sfx split) -- full-scale, no >>4. SDL music loops through the
+// identical MAMAudioController::LoadSound >>4 shift as SFX (SongPlay ->
+// SFXPlayInternal -> PlaySound, see SongPlay below), so MASTER_MUSIC_GAIN
+// applies the same 1/16 to the music gain node, symmetric to MASTER_SFX_GAIN.
+//
 // Case-folding: game code passes Title-Case names ("Clean-Slice-1", "Pause",
 // "Bomb-Fuse"); on-disk assets are lowercase. The desktop path resolves this
 // via Mortar::ResolvePathCI; here the JS backend lowercases every name before
@@ -48,13 +56,18 @@
 // value for C++-side reference.
 static const double MASTER_SFX_GAIN = 0.0625;
 
+// MASTER_MUSIC_GAIN: same 1/16 int-headroom correction as MASTER_SFX_GAIN,
+// applied to the music gain node (see DIFFERS note above). Music amplitude
+// on web must equal SDL music amplitude: sample * (1/16) * s_MusicVolume.
+static const double MASTER_MUSIC_GAIN = 0.0625;
+
 // ---------------------------------------------------------------------------
 // JS module: window.FNAudio. Defined once by fnaudio_init(); every other EM_JS
 // wrapper below just forwards to a window.FNAudio method (guarded so a call
 // before init() is a safe no-op).
 // ---------------------------------------------------------------------------
 
-EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
+EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double masterMusicGain), {
     if (window.FNAudio && window.FNAudio.ctx) { return; }
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) { return; }
@@ -64,7 +77,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
     masterSfx.connect(ctx.destination);
     music.connect(ctx.destination);
     masterSfx.gain.value = masterSfxGain;
-    music.gain.value = 0.45;
+    music.gain.value = 0.45 * masterMusicGain;
 
     var sfxDir = UTF8ToString(dataDirPtr) + '/sfx/';
 
@@ -73,6 +86,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
         masterSfx: masterSfx,
         music: music,
         MASTER_SFX_GAIN: masterSfxGain,
+        MASTER_MUSIC_GAIN: masterMusicGain,
         sfxDir: sfxDir,  // '<GetDataDir()>/sfx/'
         buffers: {},     // name -> AudioBuffer
         inflight: {},    // name -> true while decoding
@@ -226,7 +240,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
             this.songStop();
             if (loopStartSec < 0) { loopStartSec = this.loops[name]; if (loopStartSec === undefined || loopStartSec === null) loopStartSec = 0; }
             this.musicVol = vol;
-            this.music.gain.value = this.musicMuted ? 0 : vol;
+            this.music.gain.value = this.musicMuted ? 0 : (vol * this.MASTER_MUSIC_GAIN);
             var self = this;
             this.songName = name;
             var startSong = function(b) {
@@ -288,7 +302,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
 
         setMusicVol: function(vol) {
             this.musicVol = vol;
-            this.music.gain.value = this.musicMuted ? 0 : vol;
+            this.music.gain.value = this.musicMuted ? 0 : (vol * this.MASTER_MUSIC_GAIN);
         },
 
         setSfxMuted: function(muted) {
@@ -298,7 +312,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain), {
 
         setMusicMuted: function(muted) {
             this.musicMuted = !!muted;
-            this.music.gain.value = this.musicMuted ? 0 : this.musicVol;
+            this.music.gain.value = this.musicMuted ? 0 : (this.musicVol * this.MASTER_MUSIC_GAIN);
         },
 
         // Quit/teardown hard-stop. Stops every SFX source AND the music
@@ -426,7 +440,7 @@ SoundManager::~SoundManager() {
 // the backend reads sfx/<name>.ogg + sfx/sfx-loops.json from.
 void SoundManager::Init() {
     std::string dataDir = TextureManager::GetDataDir();
-    fnaudio_init(dataDir.c_str(), MASTER_SFX_GAIN);
+    fnaudio_init(dataDir.c_str(), MASTER_SFX_GAIN, MASTER_MUSIC_GAIN);
     LOG_INFO("SoundManager", "Web Audio backend initialised (Ogg/Vorbis, no SDL device)");
 }
 
