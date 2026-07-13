@@ -526,12 +526,19 @@ bool SoundManager::IsInterrupted() { return m_Interrupted; }
 // DIFFERS: original = Osp::Media::Player::OpenFile + Play streaming .caf files.
 // Bada package only ships music-menu.wav.pcm (one PCM track); background.caf
 // source is absent. We route the PCM through the existing voice mixer with
-// loop=true. Loop point comes from musicdesc.xml (Music-menu loopPoint=66162);
-// for now hardcoded for the only known track.
+// loop=true.
 //
 // Name mapping: original calls SongPlay("Music-menu") (CamelCase, .caf), but
 // the shipped asset is music-menu.wav.pcm (lowercase). Lowercase the name
-// before passing to LoadSound. TODO: parse musicdesc.xml for full schema.
+// before passing to LoadSound.
+//
+// ASM-spec v1.6.1 SoundManager::SongPlay @0x002307a0 -> SFXPlayInternal @0x002306ec
+//  -> MAMAudioController::PlaySound(isMusic=1) @0x0022fd40. Music runs through the
+// same MAM voice mixer as SFX; isMusic only routes mute. Loop point is from the PCM
+// header word[4] via MAMAudioController::LoadSound @0x0022f46c (music-menu=24004,
+// NOT musicdesc.xml's defunct .caf 66162); PlayNewSound @0x0022f6c4 sets
+// loop=(loopStart!=0); FillBuffer @0x0022f7f0 rewinds to loopStart on end. LoadSound
+// already set buf->loop/buf->loopStart from the header -- do not override.
 void SoundManager::SongPlay(const char* name) {
     if (!m_AudioDevice || !name) return;
 
@@ -553,16 +560,6 @@ void SoundManager::SongPlay(const char* name) {
         }
         return;
     }
-    buf->loop = true;
-    // DIFFERS: loopPoint from musicdesc.xml not parsed yet. The XML says
-    // Music-menu loopPoint=66162 (samples). Hardcode for now.
-    if (lower == "music-menu") {
-        buf->loopStart = 66162;
-        if (buf->loopStart >= buf->sampleCount) buf->loopStart = 0;
-    } else {
-        buf->loopStart = 0;
-    }
-
     SDL_LockAudioDevice(m_AudioDevice);
     m_MusicVoice.id      = ++m_NextSoundId;
     m_MusicVoice.buf     = buf;

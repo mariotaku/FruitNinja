@@ -520,9 +520,16 @@ void SoundManager::EndInterruption() {
 
 bool SoundManager::IsInterrupted() { return m_Interrupted; }
 
-// Music. Lowercase the name (asset is lowercase); loop point from the JS loop
-// map, except music-menu which keeps the binary's hardcoded loopStart=66162
-// (musicdesc.xml) at the 16000 Hz asset rate. Music always loops (matches SDL).
+// ASM-spec v1.6.1 SoundManager::SongPlay @0x002307a0 -> SFXPlayInternal @0x002306ec
+//  -> MAMAudioController::PlaySound(isMusic=1) @0x0022fd40. Music runs through the
+// same MAM voice mixer as SFX; isMusic only routes mute. Loop point is from the PCM
+// header word[4] via MAMAudioController::LoadSound @0x0022f46c (music-menu=24004,
+// NOT musicdesc.xml's defunct .caf 66162); PlayNewSound @0x0022f6c4 sets
+// loop=(loopStart!=0); FillBuffer @0x0022f7f0 rewinds to loopStart on end.
+//
+// Loop point always resolved by the JS loop map (see fnaudio_play_song), which
+// must be header-derived (music-menu=24004, music-dojo=1, background=261549
+// samples @ 16000 Hz) -- not musicdesc.xml's defunct .caf value.
 void SoundManager::SongPlay(const char* name) {
     if (!name) return;
 
@@ -531,12 +538,7 @@ void SoundManager::SongPlay(const char* name) {
         if (lower[i] >= 'A' && lower[i] <= 'Z') lower[i] = (char)(lower[i] + ('a' - 'A'));
     }
 
-    double loopStartSec;
-    if (lower == "music-menu") {
-        loopStartSec = 66162.0 / 16000.0;
-    } else {
-        loopStartSec = -1.0;   // JS resolves from the loop map (or 0)
-    }
+    double loopStartSec = -1.0;   // JS resolves from the loop map (or 0)
 
     fnaudio_play_song(lower.c_str(), loopStartSec, s_MusicVolume);
 
