@@ -13,6 +13,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/GlobalProbabilityOveride.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitSaveData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SettingsSave.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SlashModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreDelegate.cpp

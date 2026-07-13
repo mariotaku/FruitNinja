@@ -12,6 +12,7 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "game/SettingsSave.h"
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
 #include "audio/SoundManager.h"
@@ -267,6 +268,13 @@ static void BootWait(void* arg) {
     emscripten_cancel_main_loop();
 
     BootArgs* ba = static_cast<BootArgs*>(arg);
+
+    // Port specific: load persisted settings BEFORE parsing any of the URL
+    // param overrides below (lang=, motion=, fps=, motionthreshold=), so an
+    // explicit URL override still wins by running after and overwriting the
+    // loaded value again. Also runs before g_game.init() so GameInitialise's
+    // Localisation::Load step sees the right languageFlag.
+    LoadSettings();
 
     // Port specific: parse URL query parameters to set debug flags on web.
     // Enables the hitbox overlay without a physical keyboard (no F1 on mobile).
