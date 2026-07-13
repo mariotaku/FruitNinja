@@ -798,6 +798,58 @@
     window.addEventListener('orientationchange', _reLetterbox);
   })();
 
+  /* ASM-spec v1.6.1 FruitNinja::OnAppInitializing @0x001ef9e4:
+     calls Osp::System::PowerManager::KeepScreenOnState(true, true) once at end
+     of app init, unconditionally, never released -- screen held on for app
+     lifetime (keepScreenOn=true, dimming=true).
+     Port specific: the Screen Wake Lock API is the web equivalent. It requires
+     a user activation to grant, so the first request is deferred to the
+     first pointerdown/touchstart/click (hooked once, then the listeners are
+     removed). Feature-detected and try/catch-guarded -- silently no-ops on
+     unsupported browsers or if the request is rejected.
+     DIFFERS: Wake Lock blocks backlight dimming, where Bada's
+     KeepScreenOnState(dimming=true) still permitted it. */
+  (function () {
+    if (!('wakeLock' in navigator)) return;
+    var _wakeLock = null;
+    var _requested = false;
+
+    function _requestWakeLock() {
+      try {
+        navigator.wakeLock.request('screen').then(function (lock) {
+          _wakeLock = lock;
+        }).catch(function (e) {
+          console.log('[wakelock] request rejected (non-fatal):', e && e.message);
+        });
+      } catch (e) {
+        console.log('[wakelock] request threw (non-fatal):', e && e.message);
+      }
+    }
+
+    function _onFirstGesture() {
+      if (_requested) return;
+      _requested = true;
+      document.removeEventListener('pointerdown', _onFirstGesture, true);
+      document.removeEventListener('touchstart',  _onFirstGesture, true);
+      document.removeEventListener('click',       _onFirstGesture, true);
+      _requestWakeLock();
+    }
+
+    document.addEventListener('pointerdown', _onFirstGesture, true);
+    document.addEventListener('touchstart',  _onFirstGesture, true);
+    document.addEventListener('click',       _onFirstGesture, true);
+
+    // Port specific: the Wake Lock auto-releases when the document is
+    // hidden (spec requirement); re-acquire once it becomes visible again
+    // so the screen stays on for the app's lifetime, matching KeepScreenOnState
+    // never being released.
+    document.addEventListener('visibilitychange', function () {
+      if (_requested && document.visibilityState === 'visible') {
+        _requestWakeLock();
+      }
+    });
+  })();
+
   /* True only for a genuine wasm/emscripten abort (a real game crash) -- NOT
      for incidental JS errors like a Web Audio decodeAudioData rejection or a
      benign third-party throw. Gates the crash overlay so only a real game
