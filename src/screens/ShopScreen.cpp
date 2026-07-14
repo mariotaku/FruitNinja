@@ -74,19 +74,19 @@ static const int   ANIM_FRAME_MAX  = 0x3ffc;       // from decompile literal
 // DAT_0015e55c = 00 00 39 43 = 185.0f
 // DAT_0015e560 = 00 00 d2 c2 = -105.0f
 // DAT_0015e558 = 0.0f (z)
-static const Vec3 POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_0015e55c/560/558
+static const _Vector3<float> POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_0015e55c/560/558
 
 // Equip button position (field_0x8c, created in state 1):
 // DAT_0015e564 = 00 00 11 43 = 145.0f
 // DAT_0015e568 = 00 00 d0 42 = 104.0f
 // z = DAT_0015e558 = 0.0f
-static const Vec3 POS_EQUIP_BUTTON(145.0f, 104.0f, 0.0f);  // DAT_0015e564/568/558
+static const _Vector3<float> POS_EQUIP_BUTTON(145.0f, 104.0f, 0.0f);  // DAT_0015e564/568/558
 
 // State-3 replacement back button position:
 // DAT_0015e918 = 00 00 39 43 = 185.0f (same x)
 // DAT_0015e91c = 00 00 d2 c2 = -105.0f (same y)
 // z = DAT_0015e93c = 00 00 00 00 = 0.0f
-static const Vec3 POS_BACK_BUTTON_NEW(185.0f, -105.0f, 0.0f);  // DAT_0015e918/91c/93c
+static const _Vector3<float> POS_BACK_BUTTON_NEW(185.0f, -105.0f, 0.0f);  // DAT_0015e918/91c/93c
 
 // Post-creation scale multiplier for both buttons:
 // DAT_0015e920 = 33 33 53 3f = 0x3f533333 = 0.825f
@@ -109,7 +109,7 @@ static const float LIST_SLIDE_MUL  = 290.0f;        // DAT_0015eae4
 // SHOP_SHRINK_VEC -- Vec3 stored at .got + 0x77cc, initialised to
 // (1,1,1) by _GLOBAL__I_ShopScreen.cpp @ 0x0015d7a0. Copied to the
 // equip-button fruit's m_HalfB_vel by ShrinkBuyButton @ 0x0015c4cc.
-static const Vec3 SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
+static const _Vector3<float> SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
 
 // Note: the EquipCallback shrink branch uses Vec3::ZERO (not a "fling"
 // vector). The earlier (0,1,0) interpretation came from misreading the
@@ -615,7 +615,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
                 fruit->m_SecondPos.y = -480.0f;
                 fruit->pos.y         = -480.0f;
                 // SHOP_FLING_VEC = (0, 1, 0); negated = (0, -1, 0)
-                fruit->m_Gravity     = Vec3(0.0f, -1.0f, 0.0f);
+                fruit->m_Gravity     = _Vector3<float>(0.0f, -1.0f, 0.0f);
                 fruit->m_SecondVel.y = -10.0f;
                 fruit->vel.y         = -10.0f;
             }
@@ -744,7 +744,7 @@ void ShopScreen::QuitShopCallback() {
         Fruit* piece = m_pBuyButton->m_pTrackedFruit;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
     // Binary: TutorialControl::ResetTutePos(tute, 0) — null MenuButton* hides arrow
@@ -791,9 +791,9 @@ void ShopScreen::EquipCallback() {
             // shrinks the fruit alongside the ring rather than letting
             // physics carry it off-screen.
             fruit->m_SecondPos = fruit->pos;
-            fruit->vel         = Vec3(0.0f, 0.0f, 0.0f);
-            fruit->m_SecondVel = Vec3(0.0f, 0.0f, 0.0f);
-            fruit->m_Gravity   = Vec3(0.0f, 0.0f, 0.0f);
+            fruit->vel         = _Vector3<float>(0.0f, 0.0f, 0.0f);
+            fruit->m_SecondVel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+            fruit->m_Gravity   = _Vector3<float>(0.0f, 0.0f, 0.0f);
         }
         // Does NOT call ItemManager::SetEquippedItem — equip does not happen
         return;
@@ -931,9 +931,9 @@ void ShopScreen::Update(float dt) {
                 // Binary: spawn/rest pos = Vec3::Zero; m_HudScale (below) anchors the
                 // button to lower-right. Port previously passed POS_BACK_BUTTON here AND
                 // set m_HudScale -> double offset -> off-screen.
-                m_pBuyButton->Init(Vec3(0.0f, 0.0f, 0.0f),
+                m_pBuyButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
-                    backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+                    backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
@@ -1022,7 +1022,7 @@ void ShopScreen::Update(float dt) {
                         m_pEquipButton->m_Texture = game_work.m_RingTex[10];
                         m_pEquipButton->Init(POS_EQUIP_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
-                            equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+                            equipFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
                         // Binary (0x0015e5f6): disables touch on equip button at creation
                         m_pEquipButton->m_bAcceptsTouch = 0;
                         // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: EQUIP ring SetText(GETSTRING 0x3c7)
@@ -1056,7 +1056,7 @@ void ShopScreen::Update(float dt) {
                         m_pEquipButton->m_pTrackedFruit->scale =
                             m_pEquipButton->m_pTrackedFruit->scale * EQUIP_BUTTON_SCALE;
                         // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
-                        m_pEquipButton->m_pTrackedFruit->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+                        m_pEquipButton->m_pTrackedFruit->RotateFacingUp(false, _Vector3<float>(0.0f, 1.0f, 0.0f));
                     }
                 }
             }
@@ -1127,7 +1127,7 @@ void ShopScreen::Update(float dt) {
                 Fruit* piece = m_pBuyButton->m_pTrackedFruit;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-                piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+                piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
                 if (game_work.m_TutorialControl)
                     game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -1159,7 +1159,7 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->m_Texture = game_work.m_CountdownTex;
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
-                backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+                backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
             if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
@@ -1189,7 +1189,7 @@ void ShopScreen::Update(float dt) {
             Fruit* piece = m_pBuyButton->m_pTrackedFruit;
             float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-            piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+            piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
             if (game_work.m_TutorialControl)
                 game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -1531,7 +1531,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     float ratio = (sinDenom != 0.0f) ? (SinIdx((uint16_t)m_AnimFrame) / sinDenom)
                                       : SinIdx((uint16_t)m_AnimFrame);
     IngamePopup* popup = GetIngamePopup(0x11);
-    if (popup) popup->Draw(Vec3(slide_X, 104.0f, 0.0f), ratio);
+    if (popup) popup->Draw(_Vector3<float>(slide_X, 104.0f, 0.0f), ratio);
 }
 
 // Binary @ 0x0015c568 (re-analyst 2026-05-18). 3-way branch on selected
@@ -1590,7 +1590,7 @@ void ShopScreen::ConfirmCallback() {
         Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        fruit->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        fruit->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -1612,7 +1612,7 @@ void ShopScreen::CancelCallback() {
         Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        fruit->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        fruit->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }

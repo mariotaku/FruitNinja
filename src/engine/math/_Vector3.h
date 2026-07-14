@@ -5,14 +5,12 @@
 // Mangled symbols in FruitNinja.exe reference `8_Vector3IfE` at global
 // scope (Itanium ABI: name-length 8, name `_Vector3`, template-arg `<float>`).
 //
-// `_Vector3<float>` is the binary's instantiation; the existing port-side
-// `struct Vec3` (src/engine/math/Vec3.h) is the same 12-byte layout but with
-// a non-templated, non-reserved name. This header re-exposes the binary's
-// templated form for code that needs ABI-faithful signatures.
+// `_Vector3<float>` is the binary's instantiation and the port's sole Vec3
+// type -- the old non-templated `Vec3` typedef has been removed.
 //
-// Method bodies mirror Vec3's behaviour 1:1 (same operators, Dot, Magnitude,
-// Normalise, Cross, Zero/One BSS analogues). Template parameter is generic
-// over float/double; the non-trivial sqrt-based methods route through
+// Method bodies mirror the binary's Vec3 behaviour 1:1 (same operators, Dot,
+// Magnitude, Normalise, Cross, Zero/One BSS analogues). Template parameter is
+// generic over float/double; the non-trivial sqrt-based methods route through
 // std::sqrt so both instantiations work.
 
 #include <cmath>

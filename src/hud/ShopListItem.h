@@ -71,7 +71,7 @@
 #include "ScrollingMenuItem.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -217,7 +217,7 @@ public:
     // +0x268: icon translate cache, written by Move each frame.
     // x = pos.x + 95.2f (when m_pIconTex valid), y = pos.y, z = pos.z.
     // ASM-spec v1.6.1 ShopListItem::Move @0x001b54b0
-    Vec3 m_IconPos;                   // +0x268..+0x273 (ARM32)
+    _Vector3<float> m_IconPos;                   // +0x268..+0x273 (ARM32)
 
     // +0x274: item icon texture SmartPtr (4 bytes on ARM32 / 8 bytes x86_64).
     // Fields after m_pIconTex and m_pItemInfo (both pointer-sized) cannot

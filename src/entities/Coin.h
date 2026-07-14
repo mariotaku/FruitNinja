@@ -69,7 +69,7 @@ public:
     // 0x0019D5FC — Coin uses the base no-op Init (vtable slot 2 = base 0x0019d5fc).
     // Coin is fully initialised by its ctor + MakeCoins/InitCoin; this override
     // is kept so the compiler knows the virtual is satisfied (same function ptr).
-    void Init(void* p1, long p2, Vec3* p3) override;
+    void Init(void* p1, long p2, _Vector3<float>* p3) override;
 
     // v1.6.1 @0x001d7a5c — clear fly emitter; vtable-dispatch only, NOT called
     // from the destructor (D1 body has no bl to Release; confirmed via xref check).
@@ -120,7 +120,7 @@ public:
     // The null-name -> "coin_fly"/"coin_collect" default substitution and the
     // StringHash() call both happen in the CALLER (MakeCoins @0x001d7ec8), not here.
     // InitCoin takes pre-hashed StringHashes and stores them raw.
-    void InitCoin(Vec3 pos, Vec3 target, uint16_t angle, int coinValue,
+    void InitCoin(_Vector3<float> pos, _Vector3<float> target, uint16_t angle, int coinValue,
                   unsigned long flyFXHash, unsigned long collectFXHash,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
@@ -143,9 +143,9 @@ public:
     //   when null; both StringHash'd here and the hashes passed to InitCoin.
     //   Per-coin loop: ActorManager::Add(2,true), random angle in baseAngle+/-spread,
     //   up to 10 retries against screen bounds, then InitCoin.
-    static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
+    static void MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos,
                           uint16_t baseAngle, uint16_t angleSpread,
-                          Vec3* target,
+                          _Vector3<float>* target,
                           const char* flyFXName, const char* collectFXName,
                           Mortar::Delegate1<void, Coin*> onArrived, bool silent,
                           float delayStep, float delayCap);

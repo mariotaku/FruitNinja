@@ -39,14 +39,14 @@ void Emmiter::Parse(TiXmlElement* xml) {
     if (off) {
         float x = 0.0f, y = 0.0f, z = 0.0f;
         sscanf(off, "%f %f %f", &x, &y, &z);
-        m_Offset = Vec3(x, y, z);
+        m_Offset = _Vector3<float>(x, y, z);
     }
 
     const char* vel = xml->Attribute("velocityScale");
     if (vel) {
         float x = 1.0f, y = 1.0f, z = 1.0f;
         sscanf(vel, "%f %f %f", &x, &y, &z);
-        m_VelocityScale = Vec3(x, y, z);
+        m_VelocityScale = _Vector3<float>(x, y, z);
     }
 }
 
@@ -54,10 +54,11 @@ void Emmiter::Parse(TiXmlElement* xml) {
 // v1.6.1 EffectImage::Parse @0x001491e4 uses comma-separated vector parsing.
 // Binary: _Z11ParseVectorPKc
 
-Vec3 ParseVector(const char* s) {
+_Vector3<float> ParseVector(const char* s)
+{
     float x = 0.0f, y = 0.0f, z = 0.0f;
     if (s) sscanf(s, "%f,%f,%f", &x, &y, &z);
-    return Vec3(x, y, z);
+    return _Vector3<float>(x, y, z);
 }
 
 // ---- ParseColour: read "r g b a" (space-separated) into Colour ---------------
@@ -122,7 +123,7 @@ void EffectImage::Parse(TiXmlElement* xml) {
     // "transitionMove" -> both m_SizeIn and m_SizeOut
     const char* transMove = xml->Attribute("transitionMove");
     if (transMove) {
-        Vec3 v = ParseVector(transMove);
+        _Vector3<float> v = ParseVector(transMove);
         m_SizeIn  = v;
         m_SizeOut = v;
     }
@@ -158,9 +159,9 @@ void EffectImage::Parse(TiXmlElement* xml) {
             Mortar::TextureManager::LoadLocalisedTexture(texPath);
         if (loaded.IsValid()) {
             m_Texture    = loaded;
-            m_ColourScale = Vec3((float)loaded->GetWidth(),
-                                 (float)loaded->GetHeight(),
-                                 0.0f);
+            m_ColourScale = _Vector3<float>((float)loaded->GetWidth(),
+                                            (float)loaded->GetHeight(),
+                                            0.0f);
         }
     }
 
@@ -288,14 +289,14 @@ void ScreenTint::Parse(TiXmlElement* xml) {
     if (to) {
         float x = 1.0f, y = 1.0f, z = 1.0f;
         sscanf(to, "%f %f %f", &x, &y, &z);
-        m_ColourTo = Vec3(x, y, z);
+        m_ColourTo = _Vector3<float>(x, y, z);
     }
 
     const char* from = xml->Attribute("from");
     if (from) {
         float x = 1.0f, y = 1.0f, z = 1.0f;
         sscanf(from, "%f %f %f", &x, &y, &z);
-        m_ColourFrom = Vec3(x, y, z);
+        m_ColourFrom = _Vector3<float>(x, y, z);
     }
 }
 
@@ -572,14 +573,14 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         // every other position in this codebase -- see docs/engine/coordinate-system.md);
         // the (480,320,0) screen-anchor scales the XML "anchor" attribute instead. This is
         // a general fix (affects every EffectImage, not just the x2 board).
-        const Vec3& moveOffset = useMoveIn ? img.m_SizeIn : img.m_SizeOut;
-        static const Vec3 kScreenAnchor(480.0f, 320.0f, 0.0f);
+        const _Vector3<float>& moveOffset = useMoveIn ? img.m_SizeIn : img.m_SizeOut;
+        static const _Vector3<float> kScreenAnchor(480.0f, 320.0f, 0.0f);
         img.m_pHudCtrl->pos = img.m_Pos + kScreenAnchor * img.m_Vel + moveOffset * e;
 
         // Size = m_ColourScale * ((m_FlagBits & 1) ? (1 - e) : 1.0f)
         // m_ColourScale holds texture dims (written by Parse)
         float scaleFactor = (img.m_FlagBits & 1u) ? (1.0f - e) : 1.0f;
-        Vec3 sz;
+        _Vector3<float> sz;
         sz.x = img.m_ColourScale.x * scaleFactor;
         sz.y = img.m_ColourScale.y * scaleFactor;
         sz.z = img.m_ColourScale.z * scaleFactor;
@@ -632,7 +633,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         if (t.m_FadeIn > 0.0f)
             fade = Clamp(t.m_CurrentT / t.m_FadeIn, 0.0f, 1.0f);
 
-        Vec3 col;
+        _Vector3<float> col;
         col.x = Lerp(t.m_ColourFrom.x, t.m_ColourTo.x, tval) * fade;
         col.y = Lerp(t.m_ColourFrom.y, t.m_ColourTo.y, tval) * fade;
         col.z = Lerp(t.m_ColourFrom.z, t.m_ColourTo.z, tval) * fade;

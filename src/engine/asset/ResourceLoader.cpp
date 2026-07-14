@@ -271,10 +271,11 @@ float ReadFloat(unsigned char** cursor) {
 
 // ASM-spec v1.6.1 Mortar::ReadVec3 @0x00238260
 // Reads 12 bytes as 3 consecutive floats (x, y, z); advances cursor by 12.
-Vec3 ReadVec3(unsigned char** cursor) {
+_Vector3<float> ReadVec3(unsigned char** cursor)
+{
     unsigned char* p = *cursor;
     *cursor = p + 12;
-    Vec3 out;
+    _Vector3<float> out;
     out.x = *(float*)(p + 0);
     out.y = *(float*)(p + 4);
     out.z = *(float*)(p + 8);

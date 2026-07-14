@@ -21,8 +21,8 @@
 // ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x00189f60 (asm-inspector)
 GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
                                      Mortar::SmartPtr<Mortar::Texture> tex,
-                                     Vec2* parentRect,
-                                     Vec3 pos, Vec3 scale,
+                                     _Vector2<float>* parentRect,
+                                     _Vector3<float> pos, _Vector3<float> scale,
                                      Colour col, int flags)
     : HUDControl3d()
     , m_Sounds()
@@ -61,22 +61,22 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
     //   auto-scale = base * scale.z (uniform scalar multiply of the whole vector);
     //   scale.z forced to 1.0 when it is 0. Textured base.z = 0.0 (NOT scale.z) before
     //   the multiply, so resolved.z == 0.0 in the textured branch.
-    Vec3 resolvedScale = scale;
+    _Vector3<float> resolvedScale = scale;
     if (scale.x == 0.0f && scale.y == 0.0f) {
         float sz = (scale.z == 0.0f) ? 1.0f : scale.z;
         if (tex.IsValid()) {
             float sx = (float)tex->GetWidth()  * (m_UVRight - m_UVLeft);
             float sy = (float)tex->GetHeight() * (m_UVBottom - m_UVTop);
-            resolvedScale = Vec3(sx * sz, sy * sz, 0.0f); // binary: Vec3(sx,sy,0.0) * sz
+            resolvedScale = _Vector3<float>(sx * sz, sy * sz, 0.0f); // binary: Vec3(sx,sy,0.0) * sz
         } else {
-            resolvedScale = Vec3(sz, sz, sz);             // binary: Vector3::One * sz
+            resolvedScale = _Vector3<float>(sz, sz, sz);             // binary: Vector3::One * sz
         }
     }
     m_BaseScale = resolvedScale;
 
     // HUDControl base field: size (written via HUDControl3d's computed scale path)
     // Binary seeds +0x20 (size/scale) from default Vec3 in ctor.
-    this->size = Vec3(1.0f, 1.0f, 1.0f);
+    this->size = _Vector3<float>(1.0f, 1.0f, 1.0f);
 
     // +0xb4 = 1.0f (subfield of m_ScaleTrans block)
     m_ScaleTrans.f4 = 1.0f;
@@ -152,8 +152,8 @@ void GenericHUDControl::SetAngle(float angleDeg, float radius) {
     if (radius > 0.0f) {
         uint16_t idx = (uint16_t)((int)(angleDeg * kDegToIdx) & 0xffff);
         if (idx == 0) idx = 1;
-        Vec3 dir(CosIdx(idx), SinIdx(idx), 0.0f);
-        Vec3 off = dir * radius;
+        _Vector3<float> dir(CosIdx(idx), SinIdx(idx), 0.0f);
+        _Vector3<float> off = dir * radius;
         m_AnglePosOffA = off;
         m_AnglePosOffB = off;
     }
@@ -185,7 +185,7 @@ void GenericHUDControl::PreDraw(float* /*hudScaleRaw*/) {
     // Position: base + angle offsets + pos transition GetAmt + pos pulse GetPulseAmt
     // TODO: v1.6.1 GenericHUDControl::PreDraw @0x00189ae4 -- TranisitionInfo::GetAmt and PulseInfo::GetPulseAmt not yet ported;
     //   using base values only until those helpers are implemented.
-    Vec3 worldPos = m_BasePos + m_AnglePosOffA + m_BasePos2;
+    _Vector3<float> worldPos = m_BasePos + m_AnglePosOffA + m_BasePos2;
     this->pos = worldPos;
 
     // Scale: base scale
@@ -219,7 +219,7 @@ void GenericHUDControl::DrawOrder(float* hudScaleRaw, int layerMask) {
     if (m_pLabel) {
         m_pLabel->SetTranslation(this->pos, 0);
         float s = this->size.z;
-        m_pLabel->Draw(Vec2(s, s), this->m_Timer, 1);
+        m_pLabel->Draw(_Vector2<float>(s, s), this->m_Timer, 1);
     }
 }
 

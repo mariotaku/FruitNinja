@@ -16,8 +16,8 @@
 //
 // Cross-build portability: no lambdas, no auto, no range-for, no enum class.
 
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/FontCacheObjectTTF.h"
@@ -40,7 +40,7 @@ struct FontAtlasPage;
 struct GlyphTTF {
     uint32_t    m_CharCode;     // +0x00
     float       m_FontSize;     // +0x04
-    Vec2        m_GlyphScale;   // +0x08 LAYOUT METRICS: .x = floor(advance/64) - bitmap_left
+    _Vector2<float> m_GlyphScale;   // +0x08 LAYOUT METRICS: .x = floor(advance/64) - bitmap_left
                                 //       (pen step, = GetKerning value); .y = (horiBearingY -
                                 //       height)/64 (ink bottom, baseline-relative). Both * fontScale.
     FontAtlasPage* m_SurfaceKey; // +0x10 owning atlas page (binary: TextureAtlasPage* rec[0x40])
@@ -48,11 +48,11 @@ struct GlyphTTF {
     float       m_UvV0;         // +0x18 (the 1/512 inset is applied in FinishMesh)
     float       m_UvV1;         // +0x1c
     float       m_UvU1;         // +0x20
-    Vec2        m_QuadMin;      // +0x24 CELL ORIGIN = (padL, padT) * fontScale -- the baked
+    _Vector2<float> m_QuadMin;      // +0x24 CELL ORIGIN = (padL, padT) * fontScale -- the baked
                                 //       bearing pad (NOT the pen; set by FetchGlyph)
-    Vec2        m_RotBasis;     // +0x2c PEN (penX, penY) -- on-baseline placement, set by
+    _Vector2<float> m_RotBasis;     // +0x2c PEN (penX, penY) -- on-baseline placement, set by
                                 //       ApplyFormatting_LeftJustify / _Circle_Internal
-    Vec2        m_QuadSize;     // +0x34 cell (w,h) * fontScale -- FinishMesh skips if w<1 or h<1
+    _Vector2<float> m_QuadSize;     // +0x34 cell (w,h) * fontScale -- FinishMesh skips if w<1 or h<1
     float       m_RotAngle;     // +0x3c rotation angle in radians (set by ApplyFormatting_Circle)
     FontCacheObjectTTF* m_Font; // +0x40
 };
@@ -259,7 +259,7 @@ public:
     // When refRect is non-null, alignment bounds are read from refRect instead of
     // computed from this object's glyph verts (binary: FG-label bbox for glow/shadow layer
     // registration). Zero visual change for all existing callers that pass no refRect.
-    void Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
+    void Draw(const _Vector3<float>& anchor, _Vector2<float> scale, float rotZ, ALIGNMENT_TYPE align,
               MortarRectangleT<long>* refRect = 0);
 
     // GetRefRect: the m_Base bounds (offset 0) ARE a MortarRectangleT<long>

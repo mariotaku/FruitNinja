@@ -6,7 +6,7 @@
 // Verified from Ghidra: ctor at 0x144104, size = 0x74
 //
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/Delegate.h"
 #include <cstdint>
@@ -24,17 +24,17 @@ public:
     uint8_t m_Singular;
 
     // +0x08: position in centered coords
-    Vec3 pos;
+    _Vector3<float> pos;
 
     // +0x14: per-control HUD-scale multiplier. Multiplied with the
     // (480, 320, 0) screen-anchor in HUDControl3d::Draw / MissControl::Draw
     // / etc. before the per-control pos translate. Named "pivot" in earlier
     // port iterations -- the binary's actual semantic is m_HudScale, set
     // per-frame by the PreDraw chain (per-instance hudScale arg).
-    Vec3 m_HudScale;
+    _Vector3<float> m_HudScale;
 
     // +0x20: size (half-extents)
-    Vec3 size;
+    _Vector3<float> size;
 
     // +0x2c: rotation angle / animation timer
     float m_Timer;
@@ -115,7 +115,7 @@ public:
     // Returns pos + Vec3(480, 320, 0) * m_HudScale.
     // Used by MenuButton::Update to re-anchor the held fruit/bomb entity every
     // frame. DAT_00136c88={480,320,0} confirmed.
-    virtual Vec3 GetAdjustedPos() const;
+    virtual _Vector3<float> GetAdjustedPos() const;
 
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
 
@@ -124,7 +124,7 @@ public:
     // transforms `pos` through a non-identity anchor override this so the
     // overlay AABB matches the rendered quad. Default returns `pos` unmodified.
     // Not in binary; appended after binary vtable.
-    virtual Vec3 GetDrawPos() const { return pos; }
+    virtual _Vector3<float> GetDrawPos() const { return pos; }
 
 #ifndef __bada__
     // Port specific: no binary counterpart -- optional per-PRESENT tick (called

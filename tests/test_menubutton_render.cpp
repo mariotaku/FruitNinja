@@ -44,8 +44,8 @@
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
 #include "engine/util/Delegate.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdlib>
@@ -133,9 +133,9 @@ static void FramePass(fn::TestHarness& h, MenuButton** btns,
                                        (Mortar::ALIGNMENT_TYPE)0x0f, 1, 0);
             lbl.SetText(kCaptions[i]);
             lbl.SetColour(Colour(200, 200, 200, 255), 0);
-            Vec3 captionPos(kButtonX[i], captionY, 0.0f);
+            _Vector3<float> captionPos(kButtonX[i], captionY, 0.0f);
             lbl.SetTranslation(captionPos, 1);
-            lbl.Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+            lbl.Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
         }
     }
 }
@@ -206,12 +206,12 @@ int main(int argc, char* argv[]) {
 
     // --- Build the 4 state buttons (HUD takes ownership on AddControl) ---
     MenuButton* btns[kNumButtons];
-    const Vec3 hitBounds(kButtonSize, kButtonSize, 1.0f);
+    const _Vector3<float> hitBounds(kButtonSize, kButtonSize, 1.0f);
     const Mortar::Delegate0<void> noCb;   // never invoked (no touch input in this test)
 
     for (int i = 0; i < kNumButtons; ++i) {
         btns[i] = new MenuButton();
-        btns[i]->Init(Vec3(kButtonX[i], kButtonY, 0.0f), noCb, -1, hitBounds, noCb);
+        btns[i]->Init(_Vector3<float>(kButtonX[i], kButtonY, 0.0f), noCb, -1, hitBounds, noCb);
         // Toggle-style buttons keep whatever layer the caller assigns
         // (MainScreen uses HUD_LAYER_BUTTONS for its sound/music toggles).
         btns[i]->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
@@ -229,8 +229,8 @@ int main(int argc, char* argv[]) {
     if (game_work.m_RingTex[3].IsValid()) {
         const float ringW = (float)(game_work.m_RingTex[3]->GetWidth()  + 1);
         const float ringH = (float)(game_work.m_RingTex[3]->GetHeight() + 1);
-        btns[0]->m_RestScale = Vec3(ringW, ringH, 1.0f);
-        btns[1]->m_RestScale = Vec3(ringW, ringH, 1.0f);
+        btns[0]->m_RestScale = _Vector3<float>(ringW, ringH, 1.0f);
+        btns[1]->m_RestScale = _Vector3<float>(ringW, ringH, 1.0f);
     }
 
     // Btn 0: NORMAL -- ring quad + curved 3-layer label (same recipe as the

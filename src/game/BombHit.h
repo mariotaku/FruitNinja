@@ -12,7 +12,7 @@
 //   DrawCritHit   @ 0x001ccfa0
 //
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "game/GameWork.h"
 
@@ -22,7 +22,7 @@
 // scale. Port collapses this into a single static state + fade timer
 // rendered by DrawCritHit during GameDraw. Used by Fruit slice
 // for critical-hit and rare (special fruit) feedback.
-void CriticalFlash(Vec3 pos, Colour colour);
+void CriticalFlash(_Vector3<float> pos, Colour colour);
 
 // Matches ResetGameEntities (binary address pending RE). Walks every
 // live entity in Mortar::ActorManager and deactivates fruit + bombs. Called
@@ -80,7 +80,7 @@ void UpdateCriticalFlash(float dt);
 
 // Writes g_BombHitPos (world position of last bomb hit). Called by
 // Bomb::HitBomb / Bomb::HitMenuBomb and legacy FN:: call sites.
-void SetBombHitPos(const Vec3& pos);
+void SetBombHitPos(const _Vector3<float>& pos);
 } // namespace FN
 
 #endif

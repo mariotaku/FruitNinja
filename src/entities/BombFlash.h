@@ -27,7 +27,7 @@
 //
 // Note: BombFlashFull @ 0x001ca40c is a separate variant referenced by Bomb code.
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
@@ -47,9 +47,9 @@ public:
     // +0x18: null-constructed by binary (SmartPtr<Texture>::SmartPtr @0x0010c3a4)
     Mortar::SmartPtr<Mortar::Texture> m_pTexture;
     // +0x1C / +0x28 / +0x34: uninitialized by binary ctor
-    Vec3 m_Pos;
-    Vec3 m_Dir;
-    Vec3 m_Scale;
+    _Vector3<float> m_Pos;
+    _Vector3<float> m_Dir;
+    _Vector3<float> m_Scale;
     // +0x40: active flag (read by GetFree stride 0x44)
     bool m_bActive;
     // +0x41: padding
@@ -61,7 +61,7 @@ public:
     virtual ~BombFlash();
 
     // Virtual dispatch slots (vtable: Init, Update, Draw, DrawUpdate)
-    void Init(void*, long, Vec3*);
+    void Init(void*, long, _Vector3<float>*);
     void Update(float dt);
     void Draw();
     void DrawUpdate(float);
@@ -76,7 +76,7 @@ public:
     static BombFlash* GetFree();
 
     // v1.6.1 BombFlash::MakeFlash @0x001d5bf0 — activate a pooled flash slot.
-    static void MakeFlash(Colour col, Vec3 pos, Vec3 dir,
+    static void MakeFlash(Colour col, _Vector3<float> pos, _Vector3<float> dir,
                           Mortar::SmartPtr<Mortar::Texture> tex);
 
     // v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 — DEFUNCT (bx lr).

@@ -13,7 +13,7 @@
 #include "engine/asset/Texture.h"
 #include "engine/util/Delegate.h"
 #include "engine/util/SmartPtr.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstdint>
 #include <cstddef>
 
@@ -54,13 +54,13 @@ public:
     uint8_t _pada0[4];                              // +0xa0
 
     // +0xa4: text offset Vec3 (ctor arg, stored via Vec3 ctor)
-    Vec3 m_TextOffset;                              // +0xa4..+0xaf
+    _Vector3<float> m_TextOffset;                              // +0xa4..+0xaf
 
     // +0xb0: draw text-offset / rotation seed Vec3
     //   +0xb0: rotation angle seed (Draw reads as angle for optional Z-rotation)
     //   +0xb4: label translate offset (Draw reads as translation X)
     //   +0xb8: (z component, Init writes 0)
-    Vec3 m_DrawRotation;                            // +0xb0..+0xbb
+    _Vector3<float> m_DrawRotation;                            // +0xb0..+0xbb
 
     // +0xbc: padding to +0xc0
     uint8_t _padbc[4];                              // +0xbc
@@ -82,7 +82,7 @@ public:
 
     // ctor: BSButton(Vec3 pos, char const* label, Vec3 textOffset)
     // Binary @ 0x15eb58
-    BSButton(Vec3 pos, const char* label, Vec3 textOffset);
+    BSButton(_Vector3<float> pos, const char* label, _Vector3<float> textOffset);
     virtual ~BSButton();                            // slot 0/1
 
     // slot 2: Init -- builds BakedStringBox, sets touch id, drawOrder
@@ -128,11 +128,11 @@ public:
     void SetTexture(Mortar::SmartPtr<Mortar::Texture> tex, bool updateBounds);
 
     // Writes base pos field (+0x08).
-    void SetPosition(const Vec3& p);
+    void SetPosition(const _Vector3<float>& p);
 
     // Writes label offset: .y -> m_DrawRotation.y (+0xb4), .z -> m_DrawRotation.z (+0xb8).
     // (Draw reads m_DrawRotation.y/.z as label translate offset.)
-    void SetTextOffset(const Vec3& o);
+    void SetTextOffset(const _Vector3<float>& o);
 
 private:
     // BSButton::UpdateBoundsToTex  binary @ 0x0015ede8

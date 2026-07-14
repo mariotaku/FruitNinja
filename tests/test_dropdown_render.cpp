@@ -51,7 +51,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <vector>
@@ -145,13 +145,13 @@ int main(int argc, char* argv[]) {
         const uint8_t  kTextFlag = 6;   // -> the spawned ListBox's visibleRows
 
         // ---- LEFT: collapsed ComboBox (defaultIdx 1 -> "BANANA") ----
-        ComboBox comboCollapsed(Vec3(-115.0f, 110.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+        ComboBox comboCollapsed(_Vector3<float>(-115.0f, 110.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                 items, /*defaultIdx*/ 1, "COLLAPSED",
                                 kTextFlag, /*width*/ 20, kScaleX, kScaleY);
         comboCollapsed.SetTextColour(Colour(255, 255, 255, 255));
 
         // ---- RIGHT: expanded ComboBox (defaultIdx 2 -> "CHERRY") ----
-        ComboBox comboExpanded(Vec3(70.0f, 110.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+        ComboBox comboExpanded(_Vector3<float>(70.0f, 110.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                items, /*defaultIdx*/ 2, "EXPANDED",
                                kTextFlag, /*width*/ 20, kScaleX, kScaleY);
         comboExpanded.SetTextColour(Colour(255, 255, 255, 255));
@@ -177,9 +177,9 @@ int main(int argc, char* argv[]) {
         // (selIter, visibleRows=textFlag, cellHeightParam=14, cellWidthParam=128,
         // fontScaleParam=16) -> m_CellWidth=128, m_CellHeight=16, font size 14.
         // These are the original item dimensions (no enlargement).
-        Vec3 lbPos(comboExpanded.pos.x,
-                   (comboExpanded.pos.y - comboExpanded.DrawHeight()) - 1.0f, -1.0f);
-        ListBox list(lbPos, Vec3(1.0f, 1.0f, 1.0f), items,
+        _Vector3<float> lbPos(comboExpanded.pos.x,
+                              (comboExpanded.pos.y - comboExpanded.DrawHeight()) - 1.0f, -1.0f);
+        ListBox list(lbPos, _Vector3<float>(1.0f, 1.0f, 1.0f), items,
                      /*selIter*/ comboExpanded.SelectedIter(), /*visibleRows*/ kTextFlag,
                      /*cellHeightParam*/ 14, /*cellWidthParam*/ 128, /*fontScaleParam*/ 16);
 

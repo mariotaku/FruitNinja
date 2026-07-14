@@ -186,12 +186,12 @@ void PowerUp::Parse(TiXmlElement* elem) {
 
 // Step 4: Activate (binary @ 0x00119134)
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
-void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float* extraParam) {
+void PowerUp::Activate(bool showPopup, bool isPurchased, const _Vector3<float>& pos, float* extraParam) {
     if (showPopup) {
         if (m_Texture2.IsValid()) {
             MissControl* m = MissControl::GetFree();
             if (m) {
-                Vec3 posCopy(pos);
+                _Vector3<float> posCopy(pos);
                 m->MakeDisappear(posCopy, 0, m_Texture2);
                 m->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
             }

@@ -78,13 +78,13 @@ static const float DRAG_DELTA_FACTOR = -0.5f;  // binary DAT
 // UpdateRealtime()). Matches the binary helper called twice in Update.
 // ---------------------------------------------------------------------------
 #ifdef __bada__
-static void Vec3Scale_ScrollMenu(Vec3* v) {
+static void Vec3Scale_ScrollMenu(_Vector3<float>* v) {
     v->x *= SCROLL_FRICTION;
     v->y *= SCROLL_FRICTION;
     v->z *= SCROLL_FRICTION;
 }
 #else
-static void Vec3Scale_ScrollMenu(Vec3* v, float f) {
+static void Vec3Scale_ScrollMenu(_Vector3<float>* v, float f) {
     v->x *= powf(SCROLL_FRICTION, f);
     v->y *= powf(SCROLL_FRICTION, f);
     v->z *= powf(SCROLL_FRICTION, f);
@@ -314,7 +314,7 @@ void ScrollingMenu::Update(float /*dt*/) {
                         float h = (*it3)->GetHeight();
                         fVar20 -= h;
                     }
-                    m_PendingVelocity = Vec3(0.0f, 0.0f, 0.0f);
+                    m_PendingVelocity = _Vector3<float>(0.0f, 0.0f, 0.0f);
                 }
             } else {
                 // DRAGGING path: friction projection + snap distance computation
@@ -821,11 +821,11 @@ void ScrollingMenu::Reset() {
     // Binary writes byte 1 at HUDControl base +0x32 (m_bNoDestructor).
     m_bNoDestructor     = 1;
     m_bConstrainedView  = 0;
-    m_Velocity          = Vec3(0.0f, 0.0f, 0.0f);
-    m_TouchAnchorPos    = Vec3(0.0f, 0.0f, 0.0f);
-    m_AnchorOffset      = Vec3(0.0f, 0.0f, 0.0f);
+    m_Velocity          = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_TouchAnchorPos    = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_AnchorOffset      = _Vector3<float>(0.0f, 0.0f, 0.0f);
     m_SnapDist          = 1.0f;
-    m_PendingVelocity   = Vec3(0.0f, 0.0f, 0.0f);
+    m_PendingVelocity   = _Vector3<float>(0.0f, 0.0f, 0.0f);
     // Note: binary does NOT clear m_bDragging (+0xc8) in Reset.
     // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015aeb8 (re-analyst)
 }

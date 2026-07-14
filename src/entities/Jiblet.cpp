@@ -73,9 +73,9 @@ Jiblet::~Jiblet() {}
 //   GOT[0x75d4]  -> global One (1,1,1): m_Scale = One*scale = (scale,scale,scale)
 //   GOT[0x6ba4]  -> global identity Matrix44: m_Rotation seeded to identity
 //   T_796(a,b) @ 0x1e508c = a + (b-a)*rand01  (linear-random lerp, rand01 in [0,1))
-void Jiblet::Init(int fruitType, Vec3& pos_, float scale_, Vec3 vel_,
+void Jiblet::Init(int fruitType, _Vector3<float>& pos_, float scale_, _Vector3<float> vel_,
                   Mortar::SmartPtr<Mortar::Model> mdl,
-                  unsigned long emitterHash, float dripRate, Vec3 grav_) {
+                  unsigned long emitterHash, float dripRate, _Vector3<float> grav_) {
     pos = pos_;
     m_pModel = mdl;                 // SmartPtr::operator= @ +0x40 (binary 0x114c10)
     vel = vel_;
@@ -137,7 +137,7 @@ void Jiblet::Update(float dt) {
                 // Binary: *(byte*)(emitter+0x4d) = 1 (trail-started flag).
                 m_pEmitter->m_bTrailStarted = 1;
                 // dir = normalise(vel)
-                Vec3 dir = vel;
+                _Vector3<float> dir = vel;
                 dir.Normalise();
                 // pos -> emitter.m_Pos (+0x08)
                 m_pEmitter->m_Pos = pos;
@@ -201,9 +201,9 @@ void Jiblet::Update(float dt) {
             // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
             // flat round-robin pool steals the cursor slot when full).
             SplatEntity* s = SplatEntity::GetFree();
-            Vec3 sp = pos;
+            _Vector3<float> sp = pos;
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
-            Vec3 sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
+            _Vector3<float> sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
             // MakeSplat mute arg = (FruitInfo+0x330 m_bIsSuperFruit != 0), matching
             // the trail callers (Fruit::Slice @0x001dcfc8 / @0x001e9788).
             // TODO: v1.6.1 0x1e5330 (Jiblet::Update) -- confirm the drip-loop caller's

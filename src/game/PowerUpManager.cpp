@@ -11,7 +11,7 @@
 #include "entities/SlashEntity.h"
 #include "hud/TimeControl.h"
 #include "util/StringHash.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include "game/GameWork.h"
@@ -253,7 +253,7 @@ void PowerUpManager::Reset(bool fullReset) {
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;
                 if (tpl && tpl->m_bIsSpecial) {
-                    Vec3 zero(0.0f, 0.0f, 0.0f);
+                    _Vector3<float> zero(0.0f, 0.0f, 0.0f);
                     ActivatePower(tpl->m_NameHash, zero, NULL);
                 }
             }
@@ -284,7 +284,7 @@ void PowerUpManager::ClearTimedPowers() {
 }
 
 // @ 0x001197c4
-PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purchaseExtra) {
+PowerUp* PowerUpManager::ActivatePower(uint32_t hash, _Vector3<float> position, float* purchaseExtra) {
     std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.find(hash);
     if (it == m_AllPowerUps.end()) return 0;
 
@@ -299,7 +299,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
         // &(existing->GetLongestMod() result) (vstr'd s0 at sp+0x4c), NOT purchaseExtra. Without
         // this, re-slicing freeze never reset the 7s timer.
         float longestMod = existing->GetLongestMod();
-        Vec3 posCopy(position);
+        _Vector3<float> posCopy(position);
         existing->Activate(false, (purchaseExtra != NULL), posCopy, &longestMod);
         clone = existing;
     } else {
@@ -317,7 +317,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
 
         if (skipPurge) {
             // (B1) Single activate, don't purge other specials.
-            Vec3 posCopy(position);
+            _Vector3<float> posCopy(position);
             clone->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         } else {
             // (B2) Purge-other-specials path.
@@ -335,15 +335,15 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3 position, float* purc
             }
 
             // Activate(false, false, ZERO_VEC, &shortestTime) on every other special.
-            Vec3 ghostPos(0.0f, 0.0f, 0.0f);  // DAT_001199d0 canonical zero Vec3
+            _Vector3<float> ghostPos(0.0f, 0.0f, 0.0f);  // DAT_001199d0 canonical zero Vec3
             for (std::list<PowerUp*>::iterator pit = m_ActivePowerUps.begin();
                  pit != m_ActivePowerUps.end(); ++pit) {
                 if ((*pit)->IsSpecial() && *pit != clone) {
-                    Vec3 gp(ghostPos);
+                    _Vector3<float> gp(ghostPos);
                     (*pit)->Activate(false, false, gp, &shortestTime);
                 }
             }
-            Vec3 posCopy(position);
+            _Vector3<float> posCopy(position);
             clone->Activate(true, false, posCopy, &shortestTime);
         }
 
@@ -444,7 +444,7 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         }
         if (skip) continue;
 
-        Vec3 pos(0.0f, 0.0f, 0.0f);
+        _Vector3<float> pos(0.0f, 0.0f, 0.0f);
         PowerUp* p = ActivatePower(hash, pos, &curTime);
         if (!p) continue;
         p->SetCurrentTime(curTime);

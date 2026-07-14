@@ -2,7 +2,7 @@
 #define MORTAR_MATRIX_STACK_H
 
 #include "math/Matrix44.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cassert>
 
 // Matches original MatrixStack (0x848 = 2120 bytes)
@@ -58,12 +58,12 @@ struct MatrixStack {
 
     // ASM-spec v1.6.1 MatrixStack::Scale @0x0010c428: standalone symbol resolved
     // (PLT; called from MenuButton::Draw sparkle-ring block @0x0019cca4).
-    void Scale(const Vec3& s);
+    void Scale(const _Vector3<float>& s);
 
     // ASM-spec v1.6.1 MatrixStack::Translate @0x00107d84: standalone symbol resolved
     // (supersedes the stale 0x0012f97c v1.5.x citation, which maps to a
     // BonusManager static-ctor blob in v1.6.1).
-    void Translate(const Vec3& t);
+    void Translate(const _Vector3<float>& t);
 
     // TODO: re-verify v1.6.1 MatrixStack::SetCurrentMatrix address (cited 0x0011a130
     // was stale v1.5.x -- resolves to SetMissCount in v1.6.1; method is inlined into
@@ -77,7 +77,7 @@ struct MatrixStack {
     // ASM-spec v1.6.1 MatrixStack::TranslateLocal @0x0024a150: RIGHT-multiply
     // m_Current by a local-space translate (M*T). Distinct from Translate above,
     // which adds a world-space offset to the translation column (T*M).
-    void TranslateLocal(const Vec3& t);
+    void TranslateLocal(const _Vector3<float>& t);
 
     // Row/left scale (S*M) via Matrix44::Scale44. NOT MatrixStack::Scale, which
     // scales columns (M*S) -- the wrong side for BakedStringTTF::Draw's pipeline.

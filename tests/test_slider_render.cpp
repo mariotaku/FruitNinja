@@ -36,7 +36,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <vector>
@@ -101,11 +101,11 @@ int main(int argc, char* argv[]) {
         // min=0, max=100. Track length comes from the loaded box.tex's
         // nominal pixel width (64); thumb travels proportionally about pos.x.
         // Separated along pos.y by 80 so the three bars sit stacked.
-        SliderControl slMin(Vec3(0.0f,  80.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+        SliderControl slMin(_Vector3<float>(0.0f,  80.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                             "MIN", 0, 100, 24, 0);
-        SliderControl slMid(Vec3(0.0f,   0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+        SliderControl slMid(_Vector3<float>(0.0f,   0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                             "MID", 0, 100, 24, 50);
-        SliderControl slMax(Vec3(0.0f, -80.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+        SliderControl slMax(_Vector3<float>(0.0f, -80.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                             "MAX", 0, 100, 24, 100);
 
         if (slMin.GetValue() != 0 || slMid.GetValue() != 50 || slMax.GetValue() != 100) {

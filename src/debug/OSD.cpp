@@ -28,7 +28,7 @@ const char* OSD_AddMessage(const char* s) {
 #include "render/Renderer.h"
 #include "render/Font.h"
 #include "render/MatrixManager.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstring>
 
@@ -142,7 +142,7 @@ void OSD_Draw() {
     // as DebugHUDBounds_Draw does around its labels.
     FN::g_SuppressTextOverlay = true;
     for (int i = 0; i < s_MsgCount; ++i) {
-        const Vec3 anchor(kAnchorX, kAnchorY0 - kLineStep * (float)i, kZ);
+        const _Vector3<float> anchor(kAnchorX, kAnchorY0 - kLineStep * (float)i, kZ);
         s_OsdFont->DrawString(kTextScale, 1.0f, 0.0f,
                               s_Msgs[i].text, anchor, kTextColour,
                               Mortar::FONT_ALIGN_LEFT);

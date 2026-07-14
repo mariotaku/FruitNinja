@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
     Fruit* f2 = static_cast<Fruit*>(e2);
 
     // --- Step 4: Init() must clear all three event lists on the recycled fruit ---
-    f2->pos = Vec3(0.0f, 0.0f, 0.0f);
+    f2->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
     f2->Init(nullptr, 0, nullptr);
 
     if (!f2->m_OnSliced.Empty()) {

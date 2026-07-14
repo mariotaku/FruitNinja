@@ -15,8 +15,8 @@
 #include "render/Renderer.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstring>
 #include <cmath>
@@ -56,12 +56,12 @@ GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
     g->m_CharCode   = cp;
     g->m_FontSize   = scaledHeight;
     g->m_Font       = fc;
-    g->m_GlyphScale = Vec2(0.0f, 0.0f);
+    g->m_GlyphScale = _Vector2<float>(0.0f, 0.0f);
     g->m_SurfaceKey = 0;
     g->m_UvU0 = g->m_UvV0 = g->m_UvV1 = g->m_UvU1 = 0.0f;
-    g->m_QuadMin    = Vec2(0.0f, 0.0f);
-    g->m_RotBasis   = Vec2(0.0f, 0.0f);
-    g->m_QuadSize   = Vec2(0.0f, 0.0f);
+    g->m_QuadMin    = _Vector2<float>(0.0f, 0.0f);
+    g->m_RotBasis   = _Vector2<float>(0.0f, 0.0f);
+    g->m_QuadSize   = _Vector2<float>(0.0f, 0.0f);
     g->m_RotAngle   = 0.0f;
 
     const GlyphAtlasEntry* rec = fc
@@ -69,14 +69,14 @@ GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
                        (FontCacheObjectTTF::FONT_EFFECT_ENUM)effect, (int)radius)
         : 0;
     if (rec) {
-        g->m_GlyphScale = Vec2(rec->layoutX, rec->layoutY);
+        g->m_GlyphScale = _Vector2<float>(rec->layoutX, rec->layoutY);
         g->m_SurfaceKey = rec->page;
         g->m_UvU0       = rec->cellU0;
         g->m_UvV0       = rec->cellV0;
         g->m_UvV1       = rec->cellV1;
         g->m_UvU1       = rec->cellU1;
-        g->m_QuadMin    = Vec2(rec->cellOriginX, rec->cellOriginY);
-        g->m_QuadSize   = Vec2(rec->cellW, rec->cellH);
+        g->m_QuadMin    = _Vector2<float>(rec->cellOriginX, rec->cellOriginY);
+        g->m_QuadSize   = _Vector2<float>(rec->cellW, rec->cellH);
     }
     return g;
 }
@@ -242,7 +242,7 @@ void BakedStringTTF::ApplyFormatting_LeftJustify()
     const size_t n = m_Glyphs.size();
     for (size_t i = 0; i < n; ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        g->m_RotBasis = Vec2(penX, g->m_GlyphScale.y);
+        g->m_RotBasis = _Vector2<float>(penX, g->m_GlyphScale.y);
         g->m_RotAngle = 0.0f;
 
         uint32_t nextCp = (i + 1 < n) ? m_Glyphs[i + 1]->m_CharCode : 0;
@@ -935,7 +935,7 @@ void BakedStringTTF::ApplyFormatting_Circle_Internal(float radius)
         float ang = k_PI * 0.5f - (degPerUnit * penX - half) * k_DEG2RAD;
         float r   = radius + penY;
 
-        g->m_RotBasis = Vec2(cosf(ang) * r, sinf(ang) * r);
+        g->m_RotBasis = _Vector2<float>(cosf(ang) * r, sinf(ang) * r);
 
         float midAdv = penX + g->m_GlyphScale.x * 0.5f;
         g->m_RotAngle = (k_PI * 0.5f - (degPerUnit * midAdv - half) * k_DEG2RAD) - k_PI * 0.5f;
@@ -1038,8 +1038,8 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 //   MortarRectangleT<long>; bounds are read as long, per the binary.
 // The per-surface GL texture is resolved from m_PageKey at draw time (the binary
 // surface stores no texture ID -- TextureAtlasPage* only).
-void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_TYPE align,
-                           MortarRectangleT<long>* refRect)
+void BakedStringTTF::Draw(const _Vector3<float>& anchor, _Vector2<float> scale, float rotZ, ALIGNMENT_TYPE align,
+                          MortarRectangleT<long>* refRect)
 {
     if (!m_SurfacesBuilt) FullInternalRebuild();
     if (m_Surfaces.empty() || m_Glyphs.empty()) return;
@@ -1052,7 +1052,7 @@ void BakedStringTTF::Draw(const Vec3& anchor, Vec2 scale, float rotZ, ALIGNMENT_
     // v1.6.1 BakedStringTTF::Draw @0x002497a8:
     //   bits0-1 horiz: 2=right -width, 3=centre -width/2
     //   bits2-3 vert:  4=top, 0xc=centre
-    Vec3 alignOff(0.0f, 0.0f, 0.0f);
+    _Vector3<float> alignOff(0.0f, 0.0f, 0.0f);
 
     if (m_CircleFlag == 0) {
         // Default refRect to this object's own bounds (binary: GetRefRect() == this).

@@ -55,7 +55,7 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/math/Colour.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <vector>
 #include <cstdint>
 
@@ -80,7 +80,7 @@ public:
     void Update(float dt) override;  // Binary @ 0x00170eb4
 
     // Binary @ 0x00170814 -- SetPos(_Vector3)
-    void SetPos(const Vec3& p);
+    void SetPos(const _Vector3<float>& p);
 
     // Binary @ 0x00170804 -- BeginDrawing: sets m_LayerFlags(+0x34)=0x80 every draw
     void BeginDraw(float dt) override;
@@ -132,7 +132,7 @@ public:
     Mortar::SmartPtr<Mortar::Texture> m_FactTexture;       // @+0x88
     // +0x8C: fact offset Vec3 (Init sets (-69,53,0)); replaces old 3x SmartPtr slots
     // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
-    Vec3 m_FactOffset;                                     // @+0x8C..+0x97
+    _Vector3<float> m_FactOffset;                                     // @+0x8C..+0x97
     // +0x98: fact colour (ctor inits (0x74,0x5D,0x3B))
     Colour m_FactColour;                                   // @+0x98
     // +0x9C: current page index (ctor inits 0)

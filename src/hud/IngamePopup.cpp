@@ -10,7 +10,7 @@
 #include "engine/render/MatrixManager.h"
 #include "engine/math/Matrix44.h"
 #include "engine/math/MathUtil.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector2.h"
 #include <cmath>
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Mesh.h"
@@ -75,14 +75,14 @@ IngamePopup::IngamePopup(int type)
         box->SetStroke(1.0f, Colour(32, 0, 0));
         // lineSpacing = -1 already set via ctor arg
         // SetShadow(5.0, (0,0,0), offset(0,0,0), flag=0) -- drop-shadow, not inner-glow
-        box->SetShadow(5.0f, Colour(0, 0, 0), Vec3(0.0f, 0.0f, 0.0f), 0);
+        box->SetShadow(5.0f, Colour(0, 0, 0), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
         // SetText(GetString(0x2DC)) = "NEW BEST!"
         const char* str = GETSTRING(LSTR_GAME_TEXTURE_02, 0);
         box->SetText(str ? str : "NEW BEST!");
         box->Update();
 
         m_TextBoxes.push_back(box);
-        m_TextPositions.push_back(Vec3(0.0f, 33.0f, 0.0f));
+        m_TextPositions.push_back(_Vector3<float>(0.0f, 33.0f, 0.0f));
 
     } else if (type == 0x10) {
         // shop NEW badge -- v1.6.1 IngamePopup ctor @0x0016dbac
@@ -118,7 +118,7 @@ IngamePopup::IngamePopup(int type)
 
         // Binary _Stack_e4 = (0,0,0) always -- text position is NEVER shifted for Arabic.
         // The -4 Arabic shift applies only to the TEXTURE position (_Stack_cc).
-        m_TextPositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
+        m_TextPositions.push_back(_Vector3<float>(0.0f, 0.0f, 0.0f));
 
         // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x10,
         // GOT [0x16dfcc] -> "new_outline.tex" (the bordered badge; "new_sml.tex"
@@ -129,8 +129,8 @@ IngamePopup::IngamePopup(int type)
 
         // Texture position: Arabic lang shifts texture y by -4; text is not shifted.
         float texY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
-        m_TexturePositions.push_back(Vec3(0.0f, texY, 0.0f));
-        m_TextureScales.push_back(Vec3(0.8f, 0.8f, 0.0f));
+        m_TexturePositions.push_back(_Vector3<float>(0.0f, texY, 0.0f));
+        m_TextureScales.push_back(_Vector3<float>(0.8f, 0.8f, 0.0f));
 
     } else if (type == 0x11) {
         // shop SELECTED badge -- v1.6.1 IngamePopup ctor @0x0016dbac
@@ -158,7 +158,7 @@ IngamePopup::IngamePopup(int type)
 
         m_TextBoxes.push_back(box);
         // Binary _Stack_114 = (0,0,0) always -- text position never shifted for Arabic.
-        m_TextPositions.push_back(Vec3(0.0f, 0.0f, 0.0f));
+        m_TextPositions.push_back(_Vector3<float>(0.0f, 0.0f, 0.0f));
 
         // Localised texture -- v1.6.1 IngamePopup ctor @0x0016dbac type 0x11,
         // GOT [0x16e574] -> "selected_outline.tex" (bordered; "selected_sml.tex"
@@ -168,8 +168,8 @@ IngamePopup::IngamePopup(int type)
         m_Textures.push_back(tex);
         // Texture position: Arabic lang shifts texture y by -4 (same pattern as type 0x10).
         float texY = (game_work.languageFlag == 0x14) ? -4.0f : 0.0f;
-        m_TexturePositions.push_back(Vec3(0.0f, texY, 0.0f));
-        m_TextureScales.push_back(Vec3(1.0f, 1.0f, 0.0f));
+        m_TexturePositions.push_back(_Vector3<float>(0.0f, texY, 0.0f));
+        m_TextureScales.push_back(_Vector3<float>(1.0f, 1.0f, 0.0f));
 
     }
     // TODO: type 0x00 (combo popup) -- created on-demand elsewhere, skip this pass.
@@ -185,7 +185,7 @@ IngamePopup::~IngamePopup() {
 
 // Draw(Vec3 pos, float scale) -- v1.6.1 @0x0016d3ec
 // Two loops: (A) text boxes, (B) textures.
-void IngamePopup::Draw(Vec3 pos, float scale) {
+void IngamePopup::Draw(_Vector3<float> pos, float scale) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // Convert m_VerticalOffset from degrees to radians for cos/sin.
@@ -213,8 +213,8 @@ void IngamePopup::Draw(Vec3 pos, float scale) {
         float rx =  hw * (1.0f - cosA) - hh * sinA;
         float ry = -hh * (1.0f - cosA) - hw * sinA;
 
-        const Vec3& textPos = m_TextPositions[i];
-        Vec3 finalPos(
+        const _Vector3<float>& textPos = m_TextPositions[i];
+        _Vector3<float> finalPos(
             pos.x + scale * textPos.x + rx,
             pos.y + scale * textPos.y + ry,
             pos.z + scale * textPos.z
@@ -222,7 +222,7 @@ void IngamePopup::Draw(Vec3 pos, float scale) {
 
         box->SetTranslation(finalPos, 1);
         // Draw((scale,scale), rotDeg, center=1)
-        Vec2 sc(scale, scale);
+        _Vector2<float> sc(scale, scale);
         box->Draw(sc, m_VerticalOffset, 1);
     }
 
@@ -235,11 +235,13 @@ void IngamePopup::Draw(Vec3 pos, float scale) {
         float texW = (tex->GetWidth()  > 0) ? (float)tex->GetWidth()  : 1.0f;
         float texH = (tex->GetHeight() > 0) ? (float)tex->GetHeight() : 1.0f;
 
-        const Vec3& texPos   = (i < m_TexturePositions.size()) ? m_TexturePositions[i] : Vec3(0,0,0);
-        const Vec3& texScale = (i < m_TextureScales.size())    ? m_TextureScales[i]    : Vec3(1,1,0);
+        const _Vector3<float>& texPos = (i < m_TexturePositions.size())
+                                            ? m_TexturePositions[i]
+                                            : _Vector3<float>(0, 0, 0);
+        const _Vector3<float>& texScale = (i < m_TextureScales.size()) ? m_TextureScales[i] : _Vector3<float>(1, 1, 0);
 
         // pos2 = pos + texPos[i] * scale * texScale[i]
-        Vec3 pos2(
+        _Vector3<float> pos2(
             pos.x + texPos.x * scale * texScale.x,
             pos.y + texPos.y * scale * texScale.y,
             pos.z + texPos.z * scale * texScale.z

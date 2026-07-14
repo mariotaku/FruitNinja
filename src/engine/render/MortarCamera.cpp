@@ -74,9 +74,9 @@ void MortarCamera::SetupOrtho() {
         // TODO: v1.6.1 FruitCamera::SetupOrtho @0x00257758 GOT[DAT_00257aa8] — binary passes a GOT-relocated Vec3
         // forward-const as the LookAt target; value not statically readable.
         // Using (0,0,0) as low-confidence placeholder.
-        Vec3 eye(0.0f, 0.0f, 1.0f);
-        Vec3 up(0.0f, 1.0f, 0.0f);
-        Vec3 target(0.0f, 0.0f, 0.0f);
+        _Vector3<float> eye(0.0f, 0.0f, 1.0f);
+        _Vector3<float> up(0.0f, 1.0f, 0.0f);
+        _Vector3<float> target(0.0f, 0.0f, 0.0f);
         mm.SetupLookAt(eye, up, target);
 
         // Cache view as Matrix43

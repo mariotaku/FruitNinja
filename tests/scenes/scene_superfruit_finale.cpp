@@ -60,7 +60,7 @@
 #include "entities/ActorManager.h"
 #include "game/GameWork.h"
 #include "hud/HUD.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "Game.h"
 #include <cstdio>
 #include <cstdint>
@@ -182,9 +182,9 @@ int main(int argc, char* argv[]) {
     // host stays where placed for a clean, non-clipped capture; this is a test
     // fixture choice (no scripted arc is being exercised here either way), not
     // a gameplay-fidelity deviation.
-    fruit->pos = Vec3(0.0f, 0.0f, 0.0f);
-    fruit->vel = Vec3(0.0f, 0.0f, 0.0f);
-    fruit->m_Gravity = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    fruit->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    fruit->m_Gravity = _Vector3<float>(0.0f, 0.0f, 0.0f);
     fruit->flags &= ~(uint32_t)(0x01 | 0x10);  // clear ENT_INACTIVE | ENT_KILLED
 
     // Real hitter entity: GameInit spawns 16 SlashEntity finger-slots at boot;
@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
 
     // -------- interactive path: slice, then let the real loop run free --------
     if (h.IsInteractive()) {
-        Vec3 bladeVel(15.0f, 15.0f, 0.0f);
+        _Vector3<float> bladeVel(15.0f, 15.0f, 0.0f);
         fruit->CollisionResponse(g_pSlashEntities[0], 0, 0, &bladeVel);
         std::printf("[scene_superfruit_finale] interactive: sliced, watch the finale (ESC/close to exit)\n");
         h.game.run();
@@ -221,7 +221,7 @@ int main(int argc, char* argv[]) {
     // -------- real slice path: Fruit::CollisionResponse -> FruitWasSlicedEvent
     //          -> SuperFruitControl::SuperFruitSliced (subscribed by LoadContent,
     //          called from GameInitialise during h.Init()) --------
-    Vec3 bladeVel(15.0f, 15.0f, 0.0f);
+    _Vector3<float> bladeVel(15.0f, 15.0f, 0.0f);
     fruit->CollisionResponse(g_pSlashEntities[0], 0, 0, &bladeVel);
 
     std::map<Fruit*, SuperFruitControl*>::iterator it =

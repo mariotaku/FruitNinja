@@ -60,7 +60,7 @@ const float UiDropdown::kFadeHeight       = 6.0f * 8.0f / 9.0f;    // ~5.3333 (4
 const float UiDropdown::kGrooveOpeningInsetW  = (6.5f / 10.0f) * UiDropdown::kFadeDestBorderX;   // ~5.7778
 const float UiDropdown::kGrooveOpeningRadiusW = (3.0f / 10.0f) * UiDropdown::kFadeDestBorderX;   // ~2.6667
 
-UiDropdown::UiDropdown(const Vec3& inPos, std::vector<std::string>& items, int selected,
+UiDropdown::UiDropdown(const _Vector3<float>& inPos, std::vector<std::string>& items, int selected,
                        uint8_t visibleRows, float barW, float barH)
     : UiWidget()
     , m_pItems(&items)

@@ -127,8 +127,8 @@ template bool EffectPropertyValues::TrySetValue<int>(EffectDataTypes::Type, unsi
 template bool EffectPropertyValues::TrySetValue<float>(EffectDataTypes::Type, unsigned long, const float&);
 template bool EffectPropertyValues::TrySetValue<bool>(EffectDataTypes::Type, unsigned long, const bool&);
 template bool EffectPropertyValues::TrySetValue<Matrix44>(EffectDataTypes::Type, unsigned long, const Matrix44&);
-template bool EffectPropertyValues::TrySetValue<Vec2>(EffectDataTypes::Type, unsigned long, const Vec2&);
-template bool EffectPropertyValues::TrySetValue<Vec3>(EffectDataTypes::Type, unsigned long, const Vec3&);
+template bool EffectPropertyValues::TrySetValue<_Vector2<float>>(EffectDataTypes::Type, unsigned long, const _Vector2<float>&);
+template bool EffectPropertyValues::TrySetValue<_Vector3<float>>(EffectDataTypes::Type, unsigned long, const _Vector3<float>&);
 template bool EffectPropertyValues::TrySetValue<Vec4>(EffectDataTypes::Type, unsigned long, const Vec4&);
 template bool EffectPropertyValues::TrySetValue<EffectTexture2D>(EffectDataTypes::Type, unsigned long, const EffectTexture2D&);
 template bool EffectPropertyValues::TrySetValue<EffectTexture3D>(EffectDataTypes::Type, unsigned long, const EffectTexture3D&);
@@ -138,8 +138,8 @@ template bool EffectPropertyValues::TryGetValue<int>(EffectDataTypes::Type, unsi
 template bool EffectPropertyValues::TryGetValue<float>(EffectDataTypes::Type, unsigned long, float&) const;
 template bool EffectPropertyValues::TryGetValue<bool>(EffectDataTypes::Type, unsigned long, bool&) const;
 template bool EffectPropertyValues::TryGetValue<Matrix44>(EffectDataTypes::Type, unsigned long, Matrix44&) const;
-template bool EffectPropertyValues::TryGetValue<Vec2>(EffectDataTypes::Type, unsigned long, Vec2&) const;
-template bool EffectPropertyValues::TryGetValue<Vec3>(EffectDataTypes::Type, unsigned long, Vec3&) const;
+template bool EffectPropertyValues::TryGetValue<_Vector2<float>>(EffectDataTypes::Type, unsigned long, _Vector2<float>&) const;
+template bool EffectPropertyValues::TryGetValue<_Vector3<float>>(EffectDataTypes::Type, unsigned long, _Vector3<float>&) const;
 template bool EffectPropertyValues::TryGetValue<Vec4>(EffectDataTypes::Type, unsigned long, Vec4&) const;
 template bool EffectPropertyValues::TryGetValue<EffectTexture2D>(EffectDataTypes::Type, unsigned long, EffectTexture2D&) const;
 template bool EffectPropertyValues::TryGetValue<EffectTexture3D>(EffectDataTypes::Type, unsigned long, EffectTexture3D&) const;
@@ -149,8 +149,10 @@ template const int* EffectPropertyValues::GetValueRef<int>(EffectDataTypes::Type
 template const float* EffectPropertyValues::GetValueRef<float>(EffectDataTypes::Type, unsigned long) const;
 template const bool* EffectPropertyValues::GetValueRef<bool>(EffectDataTypes::Type, unsigned long) const;
 template const Matrix44* EffectPropertyValues::GetValueRef<Matrix44>(EffectDataTypes::Type, unsigned long) const;
-template const Vec2* EffectPropertyValues::GetValueRef<Vec2>(EffectDataTypes::Type, unsigned long) const;
-template const Vec3* EffectPropertyValues::GetValueRef<Vec3>(EffectDataTypes::Type, unsigned long) const;
+template const _Vector2<float>* EffectPropertyValues::GetValueRef<_Vector2<float>>(
+    EffectDataTypes::Type, unsigned long) const;
+template const _Vector3<float>* EffectPropertyValues::GetValueRef<_Vector3<float>>(
+    EffectDataTypes::Type, unsigned long) const;
 template const Vec4* EffectPropertyValues::GetValueRef<Vec4>(EffectDataTypes::Type, unsigned long) const;
 template const EffectTexture2D* EffectPropertyValues::GetValueRef<EffectTexture2D>(EffectDataTypes::Type, unsigned long) const;
 template const EffectTexture3D* EffectPropertyValues::GetValueRef<EffectTexture3D>(EffectDataTypes::Type, unsigned long) const;

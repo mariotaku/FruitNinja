@@ -19,9 +19,9 @@ FruitCamera::FruitCamera()
     : m_pFollowEntity(0),                 // +0x12c str r3(=0)
       m_CameraMode(0),                    // +0x130 str r3(=0)
       m_TiltYaw(0), m_TiltPitch(0),       // +0x134/+0x136 strh r3(=0)
-      m_ShakeDir(Vec2::Zero()),           // +0x138 <- ldmia of `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
+      m_ShakeDir(_Vector2<float>::Zero()),           // +0x138 <- ldmia of `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
       m_ShakeAngle(0), _pad142(0),        // +0x140 NOT written by ctor; zeroed for port determinism
-      m_Target(Vec2::Zero()),             // +0x144 <- same `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
+      m_Target(_Vector2<float>::Zero()),             // +0x144 <- same `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
       m_reserved14c(0.0f),                // +0x14c vstr s15 ; s15 = DAT_001edbf0 = 0.0f
       m_LookAt(0.0f, 0.0f, 0.0f),         // +0x150 NOT written by ctor; zeroed for port determinism
       m_Zoom(1.0f),                       // +0x15c vstr s14 = 1.0f (0x3f800000)
@@ -68,7 +68,7 @@ void FruitCamera::UpdateCamera(float dt) {
     // RE-ported: 0x1edf24 — m_LookAt(+0x150) = engine 'Zero' Vec3 global @ 0x002d9288 = (0,0,0).
     // Binary: pfVar5 = *(float**)GOT[0x7118]; ldmia pfVar5,{s?,s?,s?} -> stmia [r4+0x150].
     // Source field is engine Zero (0,0,0), NOT MortarCamera::m_lookAt.
-    m_LookAt = Vec3(0.0f, 0.0f, 0.0f);
+    m_LookAt = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     switch (m_CameraMode) {
     case 0:
@@ -144,10 +144,12 @@ void FruitCamera::UpdateCamera(float dt) {
 // inverse=true:  view->world (rotate by -m_RollOut, multiply by zoom, add lookAt offset)
 // useZeroCenter=true: center = (0,0,0); false: center = (m_Target.x, m_Target.y, 0)
 // Returns pos unchanged when m_ZoomT <= 0 (not zooming).
-Vec3 FruitCamera::TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const {
+_Vector3<float> FruitCamera::TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter) const
+{
     if (m_ZoomT <= 0.0f) return pos;
-    Vec3 center = useZeroCenter ? Vec3(0.0f, 0.0f, 0.0f)
-                                : Vec3(m_Target.x, m_Target.y, 0.0f);
+    _Vector3<float> center = useZeroCenter
+                                 ? _Vector3<float>(0.0f, 0.0f, 0.0f)
+                                 : _Vector3<float>(m_Target.x, m_Target.y, 0.0f);
     if (inverse) {
         // view-space -> world-space: RotZ(-m_RollOut) * pos * m_Zoom + (m_LookAt - center)
         uint16_t negIdx = (uint16_t)(-(int)m_RollOut);
@@ -156,9 +158,9 @@ Vec3 FruitCamera::TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const
         Matrix44 rot;
         rot.RotZ44(sinA, cosA);
         // rot.m[0]=cosA, rot.m[1]=sinA, rot.m[4]=-sinA, rot.m[5]=cosA after RotZ44 on identity
-        pos = Vec3(rot.m[0] * pos.x + rot.m[4] * pos.y,
-                   rot.m[1] * pos.x + rot.m[5] * pos.y,
-                   pos.z);
+        pos = _Vector3<float>(rot.m[0] * pos.x + rot.m[4] * pos.y,
+                              rot.m[1] * pos.x + rot.m[5] * pos.y,
+                              pos.z);
         pos = pos * m_Zoom;
         pos = pos + (m_LookAt - center);
     } else {
@@ -169,9 +171,9 @@ Vec3 FruitCamera::TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const
         float cosA = Math::CosIdx(m_RollOut);
         Matrix44 rot;
         rot.RotZ44(sinA, cosA);
-        pos = Vec3(rot.m[0] * pos.x + rot.m[4] * pos.y,
-                   rot.m[1] * pos.x + rot.m[5] * pos.y,
-                   pos.z);
+        pos = _Vector3<float>(rot.m[0] * pos.x + rot.m[4] * pos.y,
+                              rot.m[1] * pos.x + rot.m[5] * pos.y,
+                              pos.z);
     }
     return pos;
 }
@@ -196,7 +198,7 @@ void FruitCamera::UpdateFollow(float dt) {
     if (m_pFollowEntity == 0) {
         IdleCamera();
     } else {
-        Vec3 delta = m_lookAt - m_pFollowEntity->pos;
+        _Vector3<float> delta = m_lookAt - m_pFollowEntity->pos;
         m_lookAt = m_pFollowEntity->pos;
         m_pos -= delta;
     }
@@ -210,7 +212,7 @@ void FruitCamera::FollowEntity(Mortar::Entity* entity) {
     }
     m_TiltYaw   = 0;
     m_TiltPitch = 0;
-    m_up = Vec3(0.0f, 1.0f, 0.0f);
+    m_up = _Vector3<float>(0.0f, 1.0f, 0.0f);
 }
 
 // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
@@ -235,15 +237,15 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
         return;
     }
 
-    Vec3 eye, at;
+    _Vector3<float> eye, at;
     if (perspType == PT_GENERIC) {
-        eye = Vec3(0.0f, 0.0f, 1.0f);
-        at  = Vec3(0.0f, 0.0f, 0.0f);
+        eye = _Vector3<float>(0.0f, 0.0f, 1.0f);
+        at  = _Vector3<float>(0.0f, 0.0f, 0.0f);
     } else {
-        eye = Vec3(m_Target.x, m_Target.y, 1.0f);
-        at  = Vec3(m_Target.x, m_Target.y, 0.0f);
+        eye = _Vector3<float>(m_Target.x, m_Target.y, 1.0f);
+        at  = _Vector3<float>(m_Target.x, m_Target.y, 0.0f);
     }
-    Vec3 up(0.0f, 1.0f, 0.0f);
+    _Vector3<float> up(0.0f, 1.0f, 0.0f);
     mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
@@ -269,7 +271,7 @@ bool FruitCamera::ViewIsNormal() const {
 // DIFFERS: original = Math::Atan2Idx 16-bit-angle-index trig; port uses
 //          atan2f/sinf/cosf with the (radians to 16-bit-index) conversion
 //          factor 65536/2pi.
-void FruitCamera::CreateCameraShake(Vec3 impact, float intensity, float dirScale) {
+void FruitCamera::CreateCameraShake(_Vector3<float> impact, float intensity, float dirScale) {
     m_ShakeAngle = (uint16_t)(int)(atan2f(impact.y, impact.x) * 65536.0f / 6.2831853f);
 
     float angle_rad = (float)m_ShakeAngle * 6.2831853f / 65536.0f;
@@ -329,8 +331,8 @@ void FruitCamera::UpdateShake(float dt) {
 //   Delegate0::operator=([this+0x184], onDone) (tail b 0x106068).
 // DIFFERS: prior port stub also did `m_ZoomT = 0.0f` — the binary does NOT touch m_ZoomT
 //   in Transition; zoom-in resumes from the current m_ZoomT (ctor inits it 0, zoom-out clamps it to 0).
-void FruitCamera::StartZoomIn(const Vec3& target, float zoomScale, float rollScale,
-                               Mortar::Delegate0<void> onDone) {
+void FruitCamera::StartZoomIn(const _Vector3<float>& target, float zoomScale, float rollScale,
+                              Mortar::Delegate0<void> onDone) {
     m_CameraMode = 2;
     m_ZoomScale  = zoomScale;
     m_RollScale  = rollScale;

@@ -292,11 +292,23 @@ int main(int argc, char* argv[]) {
         game_work.pGameOverScreen = s;
         game_work.mHud->AddControl(s);
 
-        // 1.9s state-0 + ~1s state-6 alpha ramp = ~180 frames at 60fps.
-        h.RunHeadless(180);
-        // Extra idle frames so retry/quit creation (after m_ProgressCounter == 10)
-        // and slide-in animations fully settle.
-        h.RunHeadless(60);
+        // 1.9s state-0 + ~1s state-6 alpha ramp = ~180 frames at 60fps, plus
+        // 60 extra idle frames so retry/quit creation (after m_ProgressCounter
+        // == 10) and slide-in animations fully settle.
+        //
+        // STATE_ENTRY_ANIM's m_Timer is advanced by UpdateRealtime(dtSeconds)
+        // in the port build (see GameOverScreen::UpdateRealtime, #ifndef
+        // __bada__) rather than by the 60Hz Update() -- the real game loop
+        // pumps both per presented frame (Game::run() calls tickRealtimeUi()
+        // alongside stepUpdate(), see GameSDL.cpp). h.RunHeadless only drives
+        // Update() via game.runFrames(), so without also calling
+        // tickRealtimeUi() here the entry timer never advances past 0 and the
+        // screen never leaves state 0. Mirrors the same fix in
+        // test_scrollingmenu_updaterealtime.cpp / test_ring_texture_lifecycle.cpp.
+        for (int i = 0; i < 240; ++i) {
+            h.RunHeadless(1);
+            h.game.tickRealtimeUi(1.0f / 60.0f);
+        }
 
         // ---- Assertions ----
         int failures = 0;

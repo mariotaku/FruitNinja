@@ -12,7 +12,7 @@
 #include <cstdint>
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "render/Font.h"
 #include "render/BakedStringBox.h"
 #include "game/GameWork.h"
@@ -170,7 +170,7 @@ public:
     Mortar::SmartPtr<Mortar::Texture> m_TexFruitText; // +0xe4
 
     // +0xe8  Vec3 m_LogoPos (fruit_text + sliceInstrBox draw pos; 12 bytes)
-    Vec3 m_LogoPos;                                   // +0xe8
+    _Vector3<float> m_LogoPos;                                   // +0xe8
 
     // +0xf4  float m_Lean (logo lean lerp, init 1.0)
     float m_Lean;                                     // +0xf4

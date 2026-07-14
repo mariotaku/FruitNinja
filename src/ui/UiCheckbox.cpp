@@ -5,7 +5,7 @@
 
 #include "UiCheckbox.h"
 
-UiCheckbox::UiCheckbox(const Vec3& inPos, float side, bool checked)
+UiCheckbox::UiCheckbox(const _Vector3<float>& inPos, float side, bool checked)
     : UiWidget()
     , m_Side(side)
     , m_Checked(checked ? 1 : 0)

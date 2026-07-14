@@ -581,7 +581,7 @@ void InputTranslatorSDL::DispatchForSimTick() {
         // press edge (mirroring the binary's fresh-spawn write) and leave it
         // alone while held so the aging isn't clobbered every tick.
         if (slot >= 0 && phase < 1) {
-            Vec3& spawnPos = game_work.m_FingerSpawnPos[slot];
+            _Vector3<float>& spawnPos = game_work.m_FingerSpawnPos[slot];
             spawnPos.x = touch.states1[slot].currX;
             spawnPos.y = touch.states1[slot].currY;
             if (phase == -1) {

@@ -72,8 +72,8 @@
 #include "engine/render/BakedStringBox.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
-#include "engine/math/Vec2.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector2.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include <cstdint>
 #include <cstddef>
@@ -142,17 +142,17 @@ public:
     PulseInfo m_AlphaPulse;                            // +0x164 (40 bytes)
 
     // +0x18c: base position (ctor param6)
-    Vec3 m_BasePos;                                    // +0x18c (12 bytes)
+    _Vector3<float> m_BasePos;                                    // +0x18c (12 bytes)
 
     // +0x198: angle-driven position offsets (SetAngle writes; init 0)
-    Vec3 m_AnglePosOffA;                               // +0x198 (12 bytes)
-    Vec3 m_AnglePosOffB;                               // +0x1a4 (12 bytes)
+    _Vector3<float> m_AnglePosOffA;                               // +0x198 (12 bytes)
+    _Vector3<float> m_AnglePosOffB;                               // +0x1a4 (12 bytes)
 
     // +0x1b0: base scale (ctor param7)
-    Vec3 m_BaseScale;                                  // +0x1b0 (12 bytes)
+    _Vector3<float> m_BaseScale;                                  // +0x1b0 (12 bytes)
 
     // +0x1bc: default Vec3 added in PreDraw (seeded from engine default Vec3 in ctor)
-    Vec3 m_BasePos2;                                   // +0x1bc (12 bytes)
+    _Vector3<float> m_BasePos2;                                   // +0x1bc (12 bytes)
 
     // +0x1c8: base angle (init 0; SetAngle sets to param1)
     float m_BaseAngle;                                 // +0x1c8
@@ -168,8 +168,8 @@ public:
     // ABI: this=r0, fadeIn=s0, fadeOut=s1, tex=r1, parentRect=r2, pos=r3, scale/col/flags on stack.
     GenericHUDControl(float fadeIn, float fadeOut,
                       Mortar::SmartPtr<Mortar::Texture> tex,
-                      Vec2* parentRect,
-                      Vec3 pos, Vec3 scale,
+                      _Vector2<float>* parentRect,
+                      _Vector3<float> pos, _Vector3<float> scale,
                       Colour col, int flags);
 
     // dtor  binary @ 0x00189770 (D0) / 0x001896f4 (D1)

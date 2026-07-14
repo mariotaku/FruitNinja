@@ -20,7 +20,7 @@
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
 #include "asset/TextureManager.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "game/GameWork.h"
 #include "engine/system/PowerManager.h"
@@ -372,7 +372,7 @@ void DebugHUDBounds_Draw() {
                 snprintf(ptrBuf, sizeof(ptrBuf), "ScrollingMenu %p outer=(%.0f..%.0f,%.0f..%.0f)",
                          static_cast<void*>(sm), ox0, ox1, oy0, oy1);
                 static const Colour kSmLabel(0, 255, 255, 255);
-                const Vec3 labelPos(ox0 + 2.0f, oy1 - 2.0f, -0.4f);
+                const _Vector3<float> labelPos(ox0 + 2.0f, oy1 - 2.0f, -0.4f);
                 mm.GetWorldStack().Reset();
                 mm.UploadModelViewOnly();
                 g_SuppressTextOverlay = true;
@@ -386,7 +386,7 @@ void DebugHUDBounds_Draw() {
         const float hh = ctrl->size.y * 0.5f;
         if (hw == 0.0f && hh == 0.0f) continue;
 
-        const Vec3 dp = ctrl->GetDrawPos();
+        const _Vector3<float> dp = ctrl->GetDrawPos();
         const float left   = dp.x - hw;
         const float right  = dp.x + hw;
         const float bottom = dp.y - hh;
@@ -404,8 +404,8 @@ void DebugHUDBounds_Draw() {
             // kLabelScale is 8pt; use the same scale for both lines so the
             // vertical spacing is one line height (kLabelScale pixels).
             const float lineH = kLabelScale + 1.0f;
-            const Vec3 classPos(left + kLabelInsetX, top - kLabelInsetY,        kLabelZ);
-            const Vec3 ptrPos  (left + kLabelInsetX, top - kLabelInsetY - lineH, kLabelZ);
+            const _Vector3<float> classPos(left + kLabelInsetX, top - kLabelInsetY, kLabelZ);
+            const _Vector3<float> ptrPos(left + kLabelInsetX, top - kLabelInsetY - lineH, kLabelZ);
 
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
@@ -517,8 +517,8 @@ void DebugFps_Draw(float fps) {
     static const float kAnchorY =  138.0f;  // top edge +160 - ~22 margin (~10px extra top spacing)
     static const float kZ       =   -0.1f;  // in front of game content
 
-    const Vec3 anchor(kAnchorX, kAnchorY, kZ);
-    const Vec2 scale(1.0f, 1.0f);
+    const _Vector3<float> anchor(kAnchorX, kAnchorY, kZ);
+    const _Vector2<float> scale(1.0f, 1.0f);
     // align 0x4: bits 0-1 = 0 (left-H), bits 2-3 = 4 (V-top, no y offset).
     s_FpsBaked->Draw(anchor, scale, 0.0f, (Mortar::ALIGNMENT_TYPE)0x4);
 }
@@ -685,8 +685,8 @@ void DebugBladeTrails_Draw() {
         if (!se) continue;
         if (!se->IsBladeActive()) continue;
 
-        const Vec3& tail = se->GetTailPos();
-        const Vec3& head = se->GetHeadPos();
+        const _Vector3<float>& tail = se->GetTailPos();
+        const _Vector3<float>& head = se->GetHeadPos();
 
         // Draw the main trail line: tail -> head.
         BuildSegment(s_SegVerts,

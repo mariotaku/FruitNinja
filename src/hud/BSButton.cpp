@@ -17,8 +17,8 @@
 #include "engine/asset/Mesh.h"
 #include "engine/input/Touch.h"
 #include "engine/math/MathUtil.h"
-#include "engine/math/Vec2.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector2.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "game/GameWork.h"
 #include <cstdio>
@@ -55,7 +55,7 @@ static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
 //   8. +0xb0 = 0.0f
 //   9. copy pos Vec3 -> +0x08
 //  10. +0xe4 = 1, +0xe5 = 0
-BSButton::BSButton(Vec3 pos, const char* label, Vec3 textOffset)
+BSButton::BSButton(_Vector3<float> pos, const char* label, _Vector3<float> textOffset)
     : HUDControl3d()
     , m_Texture2()
     , m_pLabel(label)
@@ -135,7 +135,7 @@ void BSButton::Init() {
 
     // Vec3 v(DAT_15eb4c, DAT_15eb4c, DAT_15eb4c)  (DAT_15eb4c = 0.0f)
     // this->+0xb0 = v.x; +0xb4 = v.y; +0xb8 = v.z  -- text-offset Vec3 = (0,0,0)
-    m_DrawRotation = Vec3(0.0f, 0.0f, 0.0f);
+    m_DrawRotation = _Vector3<float>(0.0f, 0.0f, 0.0f);
 }
 
 // BSButton::Release  (slot 3)
@@ -171,7 +171,7 @@ void BSButton::Draw(float* hudScaleRaw) {
     m_Texture2->SetUnCached();
 
     // Base scale comes from the button's own extents (+0x98 / +0x9c), not hudScale.
-    Matrix44 mat = Matrix44::MakeScale(Vec3(m_ExtentX, m_ExtentY, 1.0f));
+    Matrix44 mat = Matrix44::MakeScale(_Vector3<float>(m_ExtentX, m_ExtentY, 1.0f));
 
     // White tint copied from the shared global Colour @ DAT_15e884 (== 0x34e2f8,
     // the engine's "white" mod-colour written by SlashEntity::InitModColours).
@@ -180,7 +180,7 @@ void BSButton::Draw(float* hudScaleRaw) {
     if (m_bPressed != 0) {
         // Pressed-grow: rebuild the scale matrix at DAT_15e874 (= 0.95f) and dim
         // the tint to 50% per channel (TintColour with {0.5,0.5,0.5}).
-        mat = Matrix44::MakeScale(Vec3(m_ExtentX * 0.95f, m_ExtentY * 0.95f, 1.0f));
+        mat = Matrix44::MakeScale(_Vector3<float>(m_ExtentX * 0.95f, m_ExtentY * 0.95f, 1.0f));
         const float kDim[3] = { 0.5f, 0.5f, 0.5f };
         drawColour = Colour::TintColour(drawColour, kDim);
     }
@@ -204,9 +204,9 @@ void BSButton::Draw(float* hudScaleRaw) {
     // Draw the label box at pos + the label offset Vec3 stored at +0xb4
     // (m_DrawRotation.y/.z + padding; the trailing word is zero padding).
     if (m_pLabelBox) {
-        Vec3 labelOffset(m_DrawRotation.y, m_DrawRotation.z, 0.0f);
+        _Vector3<float> labelOffset(m_DrawRotation.y, m_DrawRotation.z, 0.0f);
         m_pLabelBox->SetTranslation(pos + labelOffset, 0);
-        m_pLabelBox->Draw(Vec2(1.0f, 1.0f), m_DrawRotation.x, 1);
+        m_pLabelBox->Draw(_Vector2<float>(1.0f, 1.0f), m_DrawRotation.x, 1);
     }
 }
 
@@ -329,7 +329,7 @@ void BSButton::UpdateBoundsToTex() {
 
 // BSButton::SetPosition
 // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: writes to base pos field (+0x08).
-void BSButton::SetPosition(const Vec3& p) {
+void BSButton::SetPosition(const _Vector3<float>& p) {
     pos = p;
 }
 
@@ -340,7 +340,7 @@ void BSButton::SetPosition(const Vec3& p) {
 //   offset's X (the -29 horizontal pull onto the bomb) must land in .y and the
 //   Y (3) in .z -- i.e. take o.x/o.y, NOT o.y/o.z. (The old o.y/o.z mapping
 //   dropped the -29, leaving "QUIT" off-screen to the right of the bomb.)
-void BSButton::SetTextOffset(const Vec3& o) {
+void BSButton::SetTextOffset(const _Vector3<float>& o) {
     m_DrawRotation.y = o.x;
     m_DrawRotation.z = o.y;
 }

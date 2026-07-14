@@ -7,7 +7,7 @@
 #include "util/Delegate.h"
 #include "asset/DataReader.h"
 #include "asset/Skeleton.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <vector>
 #include <map>
 #include <cstdint>
@@ -283,7 +283,7 @@ inline SmartPtr<U> SmartPtrCast(const SmartPtr<ReferenceCounter>& sp) {
 AsciiString ReadString(unsigned char** cursor);
 uint32_t    ReadChunkHash(unsigned char** cursor);
 float       ReadFloat(unsigned char** cursor);
-Vec3        ReadVec3(unsigned char** cursor);
+_Vector3<float> ReadVec3(unsigned char** cursor);
 
 } // namespace Mortar
 

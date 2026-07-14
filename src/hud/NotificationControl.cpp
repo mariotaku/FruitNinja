@@ -172,7 +172,7 @@ void NotificationControl::Update(float dt) {
 //   Type 1 (numeric): banner quad + icon + name text + points text right-aligned.
 //   Type 2 (named):   unlock-banner + larger icon + name text only.
 void NotificationControl::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     Game* g = Game::GetInstance();
     if (!g) return;
@@ -194,7 +194,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             if (bannerTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
-                mat.GlobalTranslate44(Vec3(0.0f, pos.y - 16.0f, pos.z));
+                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y - 16.0f, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
@@ -227,15 +227,15 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // Name text -- TTF BakedStringBox path (replaces bitmap Font::DrawString).
         // v1.6.1 NotificationControl::Draw @0x001a4860
         if (m_pBakedString) {
-            m_pBakedString->SetTranslation(Vec3(pos.x + 18.0f + 71.0f, pos.y + 1.0f, 0.0f), true);
-            m_pBakedString->Draw(Vec2(1.0f, 1.0f), 0.0f, true);
+            m_pBakedString->SetTranslation(_Vector3<float>(pos.x + 18.0f + 71.0f, pos.y + 1.0f, 0.0f), true);
+            m_pBakedString->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, true);
         }
 
         // Points text (right-aligned)
         // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_PointsText[0] != '\0' && game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
-            Vec3 ptPos(pos.x + 186.0f, pos.y, pos.z);
+            _Vector3<float> ptPos(pos.x + 186.0f, pos.y, pos.z);
             game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
                 m_PointsText, ptPos, col, 0x0C);
         }
@@ -254,7 +254,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             if (bannerTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
-                mat.GlobalTranslate44(Vec3(0.0f, pos.y, pos.z));
+                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
@@ -271,7 +271,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             if (iconTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(32.0f, 32.0f, 32.0f);
-                Vec3 iconPos(pos.x, pos.y + 16.0f, pos.z);
+                _Vector3<float> iconPos(pos.x, pos.y + 16.0f, pos.z);
                 mat.GlobalTranslate44(iconPos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
@@ -285,8 +285,8 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // Name text only (no points text for named type) -- TTF BakedStringBox path.
         // v1.6.1 NotificationControl::Draw @0x001a4860
         if (m_pBakedString) {
-            m_pBakedString->SetTranslation(Vec3(pos.x + 18.0f + 73.0f, pos.y + 17.0f, 0.0f), true);
-            m_pBakedString->Draw(Vec2(1.0f, 1.0f), 0.0f, true);
+            m_pBakedString->SetTranslation(_Vector3<float>(pos.x + 18.0f + 73.0f, pos.y + 17.0f, 0.0f), true);
+            m_pBakedString->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, true);
         }
     }
 }

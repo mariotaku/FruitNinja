@@ -54,7 +54,7 @@ SpeedControl::SpeedControl()
     }
 
     // 8-frame vertical atlas: use 1/8 height per frame.
-    Vec3 sz((float)texW, (float)texH * 0.125f, 0.0f);
+    _Vector3<float> sz((float)texW, (float)texH * 0.125f, 0.0f);
     size      = sz;
     m_BaseSize = sz;
 
@@ -262,7 +262,7 @@ void SpeedControl::Draw(float* /*hudScale*/) {
     float scroll = (float)m_RawSpeed * (1.0f / 65536.0f) * 160.0f - 160.0f;
     for (int i = 0; i < 4; ++i) {
         mm.GetWorldStack().Reset();
-        mm.GetWorldStack().Translate(Vec3(0.0f, scroll, -5550.0f));
+        mm.GetWorldStack().Translate(_Vector3<float>(0.0f, scroll, -5550.0f));
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawTriStrip(v, 6, false, NULL);
         scroll += 160.0f;

@@ -29,7 +29,7 @@
 
 class UiCheckbox : public UiWidget {
 public:
-    UiCheckbox(const Vec3& pos, float side = 32.0f, bool checked = false);
+    UiCheckbox(const _Vector3<float>& pos, float side = 32.0f, bool checked = false);
     virtual ~UiCheckbox();
 
     void Update(float dt) override;

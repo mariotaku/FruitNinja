@@ -31,7 +31,7 @@
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
 #include "entities/Jiblet.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Quaternion.h"
 #include <unordered_map>
 #include <cstdint>
@@ -42,12 +42,12 @@ namespace fn {
 // one union-like struct to keep the map value-type simple.
 struct EntitySnap {
     // Common (all types)
-    Vec3     pos;
-    Vec3     scale;
+    _Vector3<float> pos;
+    _Vector3<float> scale;
 
     // Fruit-specific
     float    zPosFruit;
-    Vec3     secondPos;
+    _Vector3<float> secondPos;
     Quaternion rot1;
     Quaternion rot2;
 
@@ -102,8 +102,10 @@ private:
 
     // Minimal helpers -- no existing lerp utilities in scope here.
     static float Lerpf(float a, float b, float t) { return a + (b - a) * t; }
-    static Vec3  LerpVec3(const Vec3& a, const Vec3& b, float t) {
-        return Vec3(Lerpf(a.x, b.x, t), Lerpf(a.y, b.y, t), Lerpf(a.z, b.z, t));
+
+    static _Vector3<float> LerpVec3(const _Vector3<float>& a, const _Vector3<float>& b, float t)
+    {
+        return _Vector3<float>(Lerpf(a.x, b.x, t), Lerpf(a.y, b.y, t), Lerpf(a.z, b.z, t));
     }
     static Quaternion Slerp(const Quaternion& a, const Quaternion& b, float t);
 };

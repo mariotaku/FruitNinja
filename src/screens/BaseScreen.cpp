@@ -19,7 +19,7 @@
 #include "render/gl_funcs.h"
 #include "render/BakedStringBox.h"
 #include "math/Matrix44.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 #include "math/Colour.h"
 #include <cmath>
 #include "game/GameWork.h"
@@ -31,7 +31,7 @@ Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexBlurryBacking;
 // DrawBorders constants (literal pool @ 0x0013056c, resolved via read_memory)
 // g_slideVec = Vec3(0, 1, 0) — vertical slide direction
 // (initialized in _GLOBAL__I_BaseScreen.cpp @ 0x00130694)
-static const Vec3 SLIDE_VEC(0.0f, 1.0f, 0.0f);
+static const _Vector3<float> SLIDE_VEC(0.0f, 1.0f, 0.0f);
 
 static const float TRI_HALF_H     =   82.0f;     // 0x00130578
 static const float TRI_WIDTH      =  656.0f;     // 0x00130584
@@ -96,7 +96,7 @@ void BaseScreen::UnloadContent() {
 // All geometry at Z=0.0.
 // ===================================================================
 void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
-                             float alpha, Vec3 secondaryTexPos) {
+                             float alpha, _Vector3<float> secondaryTexPos) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---
@@ -140,8 +140,8 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(TRI1_X,
-                TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(TRI1_X,
+                                                  TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawTriList(s_tri1, 3, false, NULL);
@@ -152,8 +152,8 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(TRI2_X,
-                alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(TRI2_X,
+                                                  alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawTriList(s_tri2, 3, false, NULL);
@@ -172,8 +172,8 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
             (float)s_TexSmlTitle->GetWidth() + 1.0f,
             (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-        Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
-                       SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
+        _Vector3<float> decoPos = _Vector3<float>(DECO_X, DECO_Y, 0.0f) +
+            SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -209,8 +209,8 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         // At alpha=0 (slide-out): secPos moves DOWN by SEC_SLIDE_Y
         // (subtracting a +Y slide vector), matching the visual where
         // the bottom-left decoration slides further down off-screen.
-        Vec3 secPos = secondaryTexPos -
-                      SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
+        _Vector3<float> secPos = secondaryTexPos -
+            SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(secPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -230,8 +230,9 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
 // anchor. Returns the anchor Vec3.
 // ASM-verified lhs-rhs at v1.6.1 @0x15fc80: anchor = arg3 - SLIDE_VEC*55*(1-alpha).
 // ===================================================================
-Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
-                             float alpha, Vec3 arg3) {
+_Vector3<float> BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
+                                        float alpha, _Vector3<float> arg3)
+{
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // --- 1. Shade triangles (blurry_backing.tex) --- identical to SmartPtr overload
@@ -258,8 +259,8 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(TRI1_X,
-                TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(TRI1_X,
+                                                  TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawTriList(s_tri1b, 3, false, NULL);
@@ -268,8 +269,8 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(TRI2_X,
-                alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(TRI2_X,
+                                                  alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawTriList(s_tri2b, 3, false, NULL);
@@ -287,8 +288,8 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
             (float)s_TexSmlTitle->GetWidth() + 1.0f,
             (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-        Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
-                       SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
+        _Vector3<float> decoPos = _Vector3<float>(DECO_X, DECO_Y, 0.0f) +
+            SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -299,11 +300,11 @@ Vec3 BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
 
     // --- 3. Anchor and optional BakedStringBox draw ---
     // anchor = arg3 - SLIDE_VEC * SEC_SLIDE_Y * (1 - alpha)
-    Vec3 anchor = arg3 - SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
+    _Vector3<float> anchor = arg3 - SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
 
     if (box != nullptr) {
         box->SetTranslation(anchor, 1);
-        box->Draw(Vec2(1.0f, 1.0f), -7.0f, 1);
+        box->Draw(_Vector2<float>(1.0f, 1.0f), -7.0f, 1);
     }
 
     return anchor;
@@ -355,7 +356,7 @@ void BaseScreen::UpdateButtons(float dt) {
                     sb.m_bRotateGate != 0.0f) {
                     bool doRotate = (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f;
                     btn->m_pTrackedFruit->RotateFacingUp(
-                        doRotate, Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
+                        doRotate, _Vector3<float>(sb.m_rotX, sb.m_rotY, 0.0f));
                 }
             }
 

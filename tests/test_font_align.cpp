@@ -47,8 +47,8 @@
 #include "render/MatrixStack.h"
 #include "render/gl_funcs.h"
 #include "game/GameWork.h"
-#include "math/Vec3.h"
-#include "math/Vec2.h"
+#include "math/_Vector3.h"
+#include "math/_Vector2.h"
 #include "math/Colour.h"
 
 #include <cstdio>
@@ -241,7 +241,7 @@ static bool FA_RenderAndScan(AlignFBO& fbo, Mortar::Font* font, const char* text
     const float anchorY = (float)(FA_H / 2);
     const float scale   = 32.0f;   // render at 32px -- readable but not oversized
 
-    Vec3 pos(anchorX, anchorY, 0.0f);
+    _Vector3<float> pos(anchorX, anchorY, 0.0f);
     Colour white(255, 255, 255, 255);
 
     font->DrawString(scale, 1.0f, 0.0f, text, pos, white, alignment);
@@ -506,7 +506,7 @@ static void SM_RenderMatrix(fn::TestHarness& h, Mortar::Font* font, const char* 
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             SM_SetupPixelOrtho();
 
-            Vec3 pos((float)SM_FBO_ANCHOR_X, (float)SM_FBO_ANCHOR_Y, 0.0f);
+            _Vector3<float> pos((float)SM_FBO_ANCHOR_X, (float)SM_FBO_ANCHOR_Y, 0.0f);
             Colour white(255, 255, 255, 255);
             font->DrawString(scale, 1.0f, 0.0f, text, pos, white, align);
 

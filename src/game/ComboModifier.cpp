@@ -8,7 +8,7 @@
 #include "entities/SlashEntity.h"
 #include "hud/MissControl.h"
 #include "engine/util/Delegate.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstdint>
 #include <list>
 
@@ -98,7 +98,7 @@ void ComboModifier::ComboWasCanceled(SlashEntity* slash) {
     }
 
     // Accumulate average slice position. Binary seeds from a zero global Vec3.
-    Vec3 sum(0.0f, 0.0f, 0.0f);
+    _Vector3<float> sum(0.0f, 0.0f, 0.0f);
 
     std::list<Fruit*>::iterator it = m_SlicedFruit.begin();
     while (it != m_SlicedFruit.end()) {

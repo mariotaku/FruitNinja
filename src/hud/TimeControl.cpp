@@ -36,10 +36,10 @@ TimeControl::TimeControl() {
     m_CountdownStart = -1.0f;
     // pos = ((480 - size.x)*0.5 - 5, (320 + size.y)*0.5 - 5, 0)
     // size = (0, 18, 0)
-    size = Vec3(0.0f, 18.0f, 0.0f);
-    pos  = Vec3((480.0f - size.x) * 0.5f - 5.0f,
-                (320.0f + size.y) * 0.5f - 5.0f,
-                0.0f);
+    size = _Vector3<float>(0.0f, 18.0f, 0.0f);
+    pos  = _Vector3<float>((480.0f - size.x) * 0.5f - 5.0f,
+                           (320.0f + size.y) * 0.5f - 5.0f,
+                           0.0f);
     m_TextBuffer[0]      = '\0';
     m_bNoDestructor      = 0;
     m_PowerupOverlay[0]  = '\0';
@@ -267,7 +267,7 @@ void TimeControl::Update(float dt) {
 
 void TimeControl::Draw(float* hudScaleRaw) {
     // 0x001628d8
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -293,7 +293,7 @@ void TimeControl::Draw(float* hudScaleRaw) {
     // DAT_00162b04 = -0.6, DAT_00162b08 = 0.0
     float drawX = pos.x + TEXT_X_MULT * size.x;
     float drawY = pos.y;
-    Vec3 drawPos(drawX, drawY, 0.0f);
+    _Vector3<float> drawPos(drawX, drawY, 0.0f);
 
     // DAT_00162b0c = 32.0 -- font size for countdown text. binary @ 0x00162982
     font->DrawString(32.0f, 1.0f, 0.0f,
@@ -303,7 +303,7 @@ void TimeControl::Draw(float* hudScaleRaw) {
     // Optional powerup overlay ("+N" time bonus text)
     if (m_PowerupOverlay[0] != '\0') {
         // DAT_00162b0c = 32.0 y-offset
-        Vec3 overlayPos(drawX, drawY - POWERUP_Y_OFFSET, 0.0f);
+        _Vector3<float> overlayPos(drawX, drawY - POWERUP_Y_OFFSET, 0.0f);
         // Binary @ 0x001629d0: green powerup-overlay tint.
         // DAT_00162b1c -> GOT chain -> 0x00268f6c (Colour::Green singleton).
         Colour overlayTint(0, 255, 0, 255);

@@ -379,7 +379,7 @@ int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        TexEnvModulate();
+        // ES2 migration: no glTexEnv; texture*color modulate is done in the shader.
 
         RenderSlashFrame(static_cast<SDL_Window*>(h.window));
         int ww = 0, wh = 0;

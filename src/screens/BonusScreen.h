@@ -10,7 +10,7 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 #include "engine/math/Colour.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/render/BakedStringBox.h"
 #include <vector>
 #include <cstdint>
@@ -53,7 +53,7 @@ public:
     float                             m_ShakeDuration;        // +0x98  (init 1.0)
     uint16_t                          m_ShakeAngle;           // +0x9C
     uint16_t                          _padShake;              // +0x9E
-    Vec3                              m_ShakeOffset;          // +0xA0  (3 floats, 12 bytes)
+    _Vector3<float> m_ShakeOffset;          // +0xA0  (3 floats, 12 bytes)
     float                             m_NamePulseScale;       // +0xAC  (init 1.0)
     bool                              m_FinaleFired;          // +0xB0
     bool                              field_0xB1;             // +0xB1  // TODO: re-verify (ctor writes 0 only)
@@ -67,7 +67,7 @@ public:
     bool                              m_bBonusTextBuilt;      // +0xD8 build-once latch
     uint8_t                           _padD9[3];              // +0xD9
     float                             m_Timer;                // +0xDC  (ctor = -TRANSITION_IN_TIME)
-    Vec3                              m_AnimPos;              // +0xE0  (3 floats, 12 bytes -> ends 0xEC)
+    _Vector3<float> m_AnimPos;              // +0xE0  (3 floats, 12 bytes -> ends 0xEC)
 
     // v1.6.1: ctor @0x00162d1c
     BonusScreen();

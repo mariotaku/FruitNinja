@@ -135,7 +135,7 @@ int ParseSpawner(TiXmlElement* elem, SPAWNER_INFO* out) {
 
     const char* grav = elem->Attribute("gravity");
     if (grav && *grav) {
-        Vec3 g = ParseVector(grav);
+        _Vector3<float> g = ParseVector(grav);
         out->m_Gravity_x = g.x;
         out->m_Gravity_y = g.y;
         out->m_Gravity_z = g.z;
@@ -877,8 +877,8 @@ void WaveManager::Resume() {
         e->Init(nullptr, (long)idx, nullptr);
 
         // Restore velocity then position (binary order: vel first, then pos).
-        e->vel = Vec3(es.m_Velocity[0], es.m_Velocity[1], es.m_Velocity[2]);
-        e->pos = Vec3(es.m_Position[0], es.m_Position[1], es.m_Position[2]);
+        e->vel = _Vector3<float>(es.m_Velocity[0], es.m_Velocity[1], es.m_Velocity[2]);
+        e->pos = _Vector3<float>(es.m_Position[0], es.m_Position[1], es.m_Position[2]);
 
         if (kind == 1) {
             // Bomb overlay -> m_AccelForce (acceleration/gravity Vec3 at binary +0x8c).
@@ -890,7 +890,7 @@ void WaveManager::Resume() {
             // separate fields; SaveWaveInfo stores m_AccelForce here on save.
             // Binary @ 0x00124b1c (kind==1 overlay restore).
             Bomb* b = static_cast<Bomb*>(e);
-            b->m_AccelForce = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
+            b->m_AccelForce = _Vector3<float>(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
             if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) b->SetForPlayer(1);
             // Chuck/SetHit gate: m_Wait > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
             if (es.m_Wait > 0.0f) {
@@ -902,7 +902,7 @@ void WaveManager::Resume() {
         } else if (kind == 0) {
             // Fruit overlay: m_Overlay = gravity Vec3.
             Fruit* f = static_cast<Fruit*>(e);
-            f->m_Gravity = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
+            f->m_Gravity = _Vector3<float>(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
             if (es.m_Wait > 0.0f)
                 f->Chuck(es.m_Wait);
 
@@ -1985,7 +1985,7 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
 
     // Post-Init launch direction (binary local_74). Applied after Init as
     // pos += throwDir * (scale.y * 100). BOTTOM:-UnitY, TOP:+UnitY, LEFT:-UnitX, RIGHT:+UnitX.
-    Vec3 throwDir(0.0f, -1.0f, 0.0f);   // BOTTOM default = -UnitY
+    _Vector3<float> throwDir(0.0f, -1.0f, 0.0f);   // BOTTOM default = -UnitY
     float posX = (float)iBase;
     float posY = -160.0f;               // off-screen below (binary default arm iVar3=-0xa0)
 
@@ -1999,7 +1999,7 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         posY = 160.0f;                  // -(-160)
         velX = -velX;
         velY = -(velY * 0.5f);
-        throwDir = Vec3(0.0f, 1.0f, 0.0f);   // +UnitY
+        throwDir = _Vector3<float>(0.0f, 1.0f, 0.0f);   // +UnitY
         break;
     case PLACEMENT_RANDOM_SIDE: {
         bool goLeft = (m_Random.Rand32(2) == 0);
@@ -2019,8 +2019,8 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         float newVelY = velX + speed * gravY * (-0.65f);
         velX = newVelX;
         velY = newVelY;
-        throwDir = (spawnType == PLACEMENT_LEFT) ? Vec3(-1.0f, 0.0f, 0.0f)
-                                                 : Vec3( 1.0f, 0.0f, 0.0f);
+        throwDir = (spawnType == PLACEMENT_LEFT) ? _Vector3<float>(-1.0f, 0.0f, 0.0f)
+                                                 : _Vector3<float>( 1.0f, 0.0f, 0.0f);
         break;
     }
     }
@@ -2035,8 +2035,8 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         return NULL;
     }
     Fruit* f = static_cast<Fruit*>(e);
-    f->pos = Vec3(posX, posY, 0.0f);   // binary z literal = 0 @0x00124510
-    f->vel = Vec3(velX, velY, 0.0f);
+    f->pos = _Vector3<float>(posX, posY, 0.0f);   // binary z literal = 0 @0x00124510
+    f->vel = _Vector3<float>(velX, velY, 0.0f);
     f->Init(nullptr, (long)fruitType, nullptr);
     // DIFFERS: original = X, using Y because v1.6.1 @0x00124298 only writes the player
     // index in the online-MP branch via SetForPlayer(newFruit, 0). For SSM (same-screen
@@ -2048,9 +2048,9 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
     // Post-Init gravity from spawner Vec3: m_Gravity = spawnerGrav * (-m_Gravity.y).
     if (info) {
         float negGravY = -f->m_Gravity.y;
-        f->m_Gravity = Vec3(info->m_Gravity_x * negGravY,
-                            info->m_Gravity_y * negGravY,
-                            info->m_Gravity_z * negGravY);
+        f->m_Gravity = _Vector3<float>(info->m_Gravity_x * negGravY,
+                                       info->m_Gravity_y * negGravY,
+                                       info->m_Gravity_z * negGravY);
         // +/-0.01 nudge for side-spawned fruit (WaveManager::SpawnFruit gravity arm @0x00124298).
         if (spawnType == PLACEMENT_LEFT)  f->m_Gravity.x += 0.01f;
         else if (spawnType == PLACEMENT_RIGHT) f->m_Gravity.x -= 0.01f;
@@ -2153,8 +2153,8 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         Mortar::Entity* e = am->Add(1, true);
         if (!e) continue;
         Bomb* b = static_cast<Bomb*>(e);
-        b->pos = Vec3(spawnX, spawnY, spawnZ);
-        b->vel = Vec3(velX, velY, 0.0f);
+        b->pos = _Vector3<float>(spawnX, spawnY, spawnZ);
+        b->vel = _Vector3<float>(velX, velY, 0.0f);
         b->Init(nullptr, 0, nullptr);
         // Post-Init launch offset (BOTTOM only, always Y-axis): pos.y += -100 * scale.y.
         b->pos.y += -100.0f * b->scale.y;

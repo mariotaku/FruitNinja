@@ -91,12 +91,12 @@ int main(int argc, char* argv[]) {
     //   - BuyText label: y=+75, within [-240,+240]
     //   - Slot icons: x-coords -192/-67/+58 (for 3 slots), y=+24
     //   - Title/desc: x = pos.x-224 = -224, at the edge of [-240,+240]
-    shop->pos = Vec3(0.0f, 0.0f, 0.0f);
+    shop->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // Init() sets size from g_BuyBg when loaded (binary @0x001a94b0).
     // Fall back to a fixed value when g_BuyBg is unavailable in headless context.
     if (shop->size.x == 0.0f) {
-        shop->size = Vec3(240.0f, 120.0f, 1.0f);
+        shop->size = _Vector3<float>(240.0f, 120.0f, 1.0f);
     }
 
     game_work.mHud->AddControl(shop);

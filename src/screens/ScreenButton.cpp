@@ -11,7 +11,7 @@
 #include "entities/Fruit.h"
 
 // g_slideVec = Vec3(0, 1, 0) — from _GLOBAL__I_BaseScreen.cpp @ 0x00130694
-static const Vec3 SLIDE_VEC(0.0f, 1.0f, 0.0f);
+static const _Vector3<float> SLIDE_VEC(0.0f, 1.0f, 0.0f);
 
 // DAT_00130fbc = -480.0 — off-screen Y for fruit teleport in ControlDeleted
 static const float OFFSCREEN_Y = -480.0f;
@@ -42,7 +42,7 @@ void ScreenButton::ShrinkButtonCall() {
 
     // Freeze: vel = m_SecondVel = m_Gravity = (0, 0, 0)
     // Binary reads from a BSS global (GOT+0x73EC), zero-initialized.
-    Vec3 shrinkTarget(0.0f, 0.0f, 0.0f);
+    _Vector3<float> shrinkTarget(0.0f, 0.0f, 0.0f);
     fruit->vel        = shrinkTarget;
     fruit->m_SecondVel = shrinkTarget;
     fruit->m_Gravity   = shrinkTarget;
@@ -69,7 +69,7 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
         fruit->m_SecondPos.y = OFFSCREEN_Y;
 
         // Set gravity to -g_slideVec = (0, -1, 0) — gentle downward
-        fruit->m_Gravity = Vec3(-SLIDE_VEC.x, -SLIDE_VEC.y, -SLIDE_VEC.z);
+        fruit->m_Gravity = _Vector3<float>(-SLIDE_VEC.x, -SLIDE_VEC.y, -SLIDE_VEC.z);
 
         // Fling velocities (0xC1200000 = -10.0)
         // Binary @ 0x00130fa0: writes -10 to fruit+0xc8 = m_SecondVel.y

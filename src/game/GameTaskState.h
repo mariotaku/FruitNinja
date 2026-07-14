@@ -28,7 +28,7 @@
 #include "asset/Mesh.h"
 #include "asset/Model.h"
 #include "util/SmartPtr.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 
 class PauseScreen;
 class HUDControl;
@@ -84,13 +84,13 @@ struct GameTaskState {
     //   DAT_0016d3f0 = 0x3E99999A = 0.3f
     //   DAT_0016d3f4 = 0x3DCCCCCD = 0.1f
     // Semantic mapping (spawn-rate / variance params) not yet RE'd -- TODO.
-    Vec3 spawnParam0;   // +0x68: (1.0, 1.0, 1.0)  -- likely "global scale" default
-    Vec3 spawnParam1;   // +0x74: (1.7, 0.3, 1.0)  -- TODO: identify
-    Vec3 spawnParam2;   // +0x80: (8.0, 0.1, 1.0)  -- TODO: identify
-    Vec3 spawnParam3;   // +0x8c: (20.0, 0.1, 1.0) -- TODO: identify
-    Vec3 spawnParam4;   // +0x98: (4.0, 0.1, 1.0)  -- TODO: identify
-    Vec3 spawnParam5;   // +0xa4: (0.1, 0.1, 0.1)  -- TODO: identify
-    Vec3 spawnParam6;   // +0xb0: (0.1, 0.1, 0.1)  -- TODO: identify
+    _Vector3<float> spawnParam0;   // +0x68: (1.0, 1.0, 1.0)  -- likely "global scale" default
+    _Vector3<float> spawnParam1;   // +0x74: (1.7, 0.3, 1.0)  -- TODO: identify
+    _Vector3<float> spawnParam2;   // +0x80: (8.0, 0.1, 1.0)  -- TODO: identify
+    _Vector3<float> spawnParam3;   // +0x8c: (20.0, 0.1, 1.0) -- TODO: identify
+    _Vector3<float> spawnParam4;   // +0x98: (4.0, 0.1, 1.0)  -- TODO: identify
+    _Vector3<float> spawnParam5;   // +0xa4: (0.1, 0.1, 0.1)  -- TODO: identify
+    _Vector3<float> spawnParam6;   // +0xb0: (0.1, 0.1, 0.1)  -- TODO: identify
 
     // +0xbc: Mortar::SmartPtr<Model> for "slice_fx.mmd" loaded in step 8.
     Mortar::SmartPtr<Mortar::Model> sliceFxMesh;       // step 8

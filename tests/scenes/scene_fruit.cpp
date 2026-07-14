@@ -92,9 +92,9 @@ static void SpawnSceneFruit(SceneFruitData* d, Game& game) {
         d->bomb->Init(NULL, 0, NULL);
 
         // Centered spinning: suppress gravity + ballistic.
-        d->bomb->pos         = Vec3(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
-        d->bomb->vel         = Vec3(0.0f, 0.0f, 0.0f);
-        d->bomb->m_AccelForce = Vec3(0.0f, 0.0f, 0.0f);
+        d->bomb->pos         = _Vector3<float>(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
+        d->bomb->vel         = _Vector3<float>(0.0f, 0.0f, 0.0f);
+        d->bomb->m_AccelForce = _Vector3<float>(0.0f, 0.0f, 0.0f);
         // Bomb::Init sets random m_RotVelX/Y (1..8); override to a
         // controlled slow spin so it reads well in the viewer.
         d->bomb->m_RotVelX   = (int16_t)2;
@@ -120,26 +120,26 @@ static void SpawnSceneFruit(SceneFruitData* d, Game& game) {
 
         if (d->chuckMode) {
             // Ballistic arc: launch from near bottom, fly upward.
-            d->fruit->pos           = Vec3(SCENE_CENTER_X, CHUCK_START_Y, 0.0f);
-            d->fruit->vel           = Vec3(0.0f, CHUCK_VEL_Y, 0.0f);
-            d->fruit->m_Gravity     = Vec3(0.0f, CHUCK_GRAVITY_Y, 0.0f);
+            d->fruit->pos           = _Vector3<float>(SCENE_CENTER_X, CHUCK_START_Y, 0.0f);
+            d->fruit->vel           = _Vector3<float>(0.0f, CHUCK_VEL_Y, 0.0f);
+            d->fruit->m_Gravity     = _Vector3<float>(0.0f, CHUCK_GRAVITY_Y, 0.0f);
             d->fruit->m_bBallisticEnable = 1;
             d->fruit->Chuck(0.0f);
-            Vec3 spinAxis(1.0f, 1.0f, 1.0f);
+            _Vector3<float> spinAxis(1.0f, 1.0f, 1.0f);
             d->fruit->RotateFacingUp(true, spinAxis);
         } else {
             // Centered spinning: pinned at screen center, no ballistic.
-            d->fruit->pos              = Vec3(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
-            d->fruit->vel              = Vec3(0.0f, 0.0f, 0.0f);
-            d->fruit->m_Gravity        = Vec3(0.0f, 0.0f, 0.0f);
+            d->fruit->pos              = _Vector3<float>(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
+            d->fruit->vel              = _Vector3<float>(0.0f, 0.0f, 0.0f);
+            d->fruit->m_Gravity        = _Vector3<float>(0.0f, 0.0f, 0.0f);
             d->fruit->m_bBallisticEnable = 0;
             // RotateFacingUp sets m_RotVel1/2 = spinVelAxis * random magnitude.
             // We override the velocity afterward to a deterministic slow Y-spin.
-            Vec3 spinAxis(0.0f, 1.0f, 0.0f);
+            _Vector3<float> spinAxis(0.0f, 1.0f, 0.0f);
             d->fruit->RotateFacingUp(false, spinAxis);
             // Override spin to a controlled constant.
-            d->fruit->m_RotVel1 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
-            d->fruit->m_RotVel2 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
+            d->fruit->m_RotVel1 = _Vector3<float>(0.0f, SPIN_MAGNITUDE, 0.0f);
+            d->fruit->m_RotVel2 = _Vector3<float>(0.0f, SPIN_MAGNITUDE, 0.0f);
             // Activate (not killed, not inactive) so ActorManager::Draw picks it up.
             d->fruit->flags &= ~(uint32_t)(0x01 | 0x10);  // clear ENT_INACTIVE | ENT_KILLED
         }

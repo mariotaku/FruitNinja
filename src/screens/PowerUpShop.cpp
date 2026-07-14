@@ -45,8 +45,8 @@ static Mortar::SmartPtr<Mortar::Texture> g_FruitIcons[3];
 
 // Zero-vector and unit-vector constants (from _GLOBAL__I_PowerUpShop_cpp).
 // Binary initialises these as file-static Vec3 (confirmed by GOT references in Update/Release).
-static const Vec3 g_Origin(0.0f, 0.0f, 0.0f);
-static const Vec3 g_OneVec(1.0f, 1.0f, 1.0f);
+static const _Vector3<float> g_Origin(0.0f, 0.0f, 0.0f);
+static const _Vector3<float> g_OneVec(1.0f, 1.0f, 1.0f);
 
 // White Colour (4-byte RGBA packed; used by Draw for text and quad tint).
 static const Colour g_White(255, 255, 255, 255);
@@ -143,7 +143,7 @@ void PowerUpShop::Init() {
     // ASM-spec v1.6.1 PowerUpShop::Init @0x001a94b0: size = boardTex(w,h,0)
     // Port specific: null guard; binary reads unconditionally but PowerUpShop is dead code in v1.6.1.
     if (g_BuyBg.IsValid()) {
-        size = Vec3((float)g_BuyBg->GetWidth(), (float)g_BuyBg->GetHeight(), 0.0f);
+        size = _Vector3<float>((float)g_BuyBg->GetWidth(), (float)g_BuyBg->GetHeight(), 0.0f);
     }
 
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
@@ -173,7 +173,7 @@ void PowerUpShop::Init() {
         } else {
             x = 0.0f;
         }
-        m_SlotLayout.push_back(Vec3(x, 24.0f, 1.0f));
+        m_SlotLayout.push_back(_Vector3<float>(x, 24.0f, 1.0f));
     }
 
     m_BuyButtonState = 0;
@@ -237,7 +237,7 @@ void PowerUpShop::PreDraw(float* hudScale) {
 // Draw v1.6.1 PowerUpShop::Draw @0x001a8364 (vtable slot 7)
 // ============================================================
 void PowerUpShop::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     // Binary v1.6.1 PowerUpShop::Draw @0x001a8364:
     // Step 1: scale + translate world matrix, upload.
@@ -250,7 +250,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
 
     Matrix44 transMat;
     transMat.Identity();
-    transMat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z));
+    transMat.GlobalTranslate44(_Vector3<float>(pos.x, pos.y, pos.z));
 
     // Combine: translate * scale (transMat first, then scale columns)
     Matrix44 combined = transMat * scaleMat;
@@ -270,7 +270,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
     // Step 3: draw m_BuyText (header label) via font.
     // Binary (PowerUpShop::Draw @0x001a8364): pos = (shop.x, shop.y + 75), size 20, anchor 3, white.
     if (game_work.pFontMain.IsValid()) {
-        Vec3 textPos(pos.x, pos.y + 75.0f, 0.0f);
+        _Vector3<float> textPos(pos.x, pos.y + 75.0f, 0.0f);
         game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f, m_BuyText, textPos,
                                         g_White, 3);
     }
@@ -292,7 +292,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         bool affordable = (pi->m_Cost <= coins && m_PurchasedCount < 3
                            && game_work.gameMode < 3);
 
-        Vec3 slot = m_SlotLayout[i];
+        _Vector3<float> slot = m_SlotLayout[i];
         float barScale = slot.z;
         float iconScale = barScale * 64.0f;
 
@@ -300,8 +300,8 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         mm.GetWorldStack().Push();
         Matrix44 slotTrans;
         slotTrans.Identity();
-        slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x,
-                                        pos.y + slot.y, pos.z + slot.z));
+        slotTrans.GlobalTranslate44(_Vector3<float>(pos.x + slot.x,
+                                                    pos.y + slot.y, pos.z + slot.z));
         Matrix44 slotScaleMat;
         slotScaleMat.Identity();
         slotScaleMat.ApplyScale(iconScale, iconScale, 1.0f);
@@ -377,7 +377,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         UploadMatrices();
 
         // Text labels (drawn in centered coordinate space via active world matrix).
-        Vec3 barPos(pos.x + slot.x, pos.y + slot.y, pos.z);
+        _Vector3<float> barPos(pos.x + slot.x, pos.y + slot.y, pos.z);
 
         // Cost-or-READY label: pos (barPos.x, barPos.y - 32*barScale), size 17, anchor 0xF.
         if (game_work.pFontMain.IsValid()) {
@@ -394,7 +394,7 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
                 snprintf(costBuf, sizeof(costBuf), "%i", pi->m_Cost);
                 labelColour = MakeColour(0x80, 0x80, 0x80);
             }
-            Vec3 labelPos(barPos.x, barPos.y + (-32.0f * barScale), barPos.z);
+            _Vector3<float> labelPos(barPos.x, barPos.y + (-32.0f * barScale), barPos.z);
             game_work.pFontMain->DrawString(17.0f, 1.0f, 0.0f,
                                             costBuf, labelPos, labelColour, 0xF);
         }
@@ -403,12 +403,12 @@ void PowerUpShop::Draw(float* hudScaleRaw) {
         // Binary v1.6.1 PowerUpShop::Draw @0x001a8364: title/desc drawn at pos DIRECTLY,
         // not pos+slot (binary reads this->pos, not the per-slot offset).
         if (i == m_SelectedIndex && game_work.pFontMain.IsValid()) {
-            Vec3 titlePos(pos.x - 224.0f, pos.y - 30.0f, pos.z);
+            _Vector3<float> titlePos(pos.x - 224.0f, pos.y - 30.0f, pos.z);
             Colour titleColour = MakeColour(0xD1, 0x25, 0x0B);
             game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                                             pi->m_DisplayName, titlePos, titleColour, 0xF);
 
-            Vec3 descPos(pos.x - 224.0f, pos.y - 54.0f, pos.z);
+            _Vector3<float> descPos(pos.x - 224.0f, pos.y - 54.0f, pos.z);
             Colour descColour = MakeColour(0x74, 0x5D, 0x3B);
             game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                                             pi->m_Description, descPos, descColour, 0xF);
@@ -444,7 +444,7 @@ void PowerUpShop::Update(float dt) {
     // Step 2: per-slot z lerp and touch-rect test.
     Game* game = Game::GetInstance();
     for (int i = 0; i < (int)m_SlotLayout.size(); ++i) {
-        Vec3& slot = m_SlotLayout[i];
+        _Vector3<float>& slot = m_SlotLayout[i];
         float targetZ = (i == m_SelectedIndex) ? 1.25f : 1.0f;
         slot.z += (targetZ - slot.z) * 0.15f;
 
@@ -460,7 +460,7 @@ void PowerUpShop::Update(float dt) {
             const float px = game_work.worldPos.x;
             const float py = game_work.worldPos.y;
             const float HALF = 32.0f;  // DAT_001566a0
-            Vec3 worldPt = pos + slot;
+            _Vector3<float> worldPt = pos + slot;
             if (px > worldPt.x - HALF && px < worldPt.x + HALF &&
                 py > worldPt.y - HALF && py < worldPt.y + HALF) {
                 m_SelectedIndex = i;
@@ -488,7 +488,7 @@ void PowerUpShop::Update(float dt) {
         int fruitType = s_fruitTypeCache[m_BuyButtonState];
 
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
-        Vec3 spawnPos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
+        _Vector3<float> spawnPos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
 
         // Build slicedCb: binary @ 0x00156398 binds PowerUpShop::ButtonSliced as
         // Delegate0<void> via QCallee.
@@ -514,7 +514,7 @@ void PowerUpShop::Update(float dt) {
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
-        Vec3 restPos = g_Origin;
+        _Vector3<float> restPos = g_Origin;
         m_BuyButton = new MenuButton(Mortar::SmartPtr<Mortar::Texture>(), spawnPos, slicedCb,
                                      fruitType, restPos,
                                      Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
@@ -535,13 +535,13 @@ void PowerUpShop::Update(float dt) {
             m_BuyButton->m_pTrackedFruit->m_RotVel1.x *= 0.85f;
             m_BuyButton->m_pTrackedFruit->m_RotVel1.y *= 0.85f;
             // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
-            m_BuyButton->m_pTrackedFruit->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+            m_BuyButton->m_pTrackedFruit->RotateFacingUp(false, _Vector3<float>(0.0f, 1.0f, 0.0f));
         }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
         // Binary: move button to fixed position + set fruit vel.x = m_PulseScale.
-        m_BuyButton->pos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
+        m_BuyButton->pos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
         if (m_BuyButton->m_pTrackedFruit != NULL) {
             m_BuyButton->m_pTrackedFruit->vel.x = m_PulseScale;
         }
@@ -616,7 +616,7 @@ void PowerUpShop::ButtonSliced() {
 
     // Binary: copy g_Origin to stack-local, then ActivatePower(hash, &local, &local.x).
     // r2 AND r3 both point to the same Vec3 -- ActivatePower treats the float* as Vec3*.
-    Vec3 localOrigin = g_Origin;
+    _Vector3<float> localOrigin = g_Origin;
     PowerUpManager* pum = PowerUpManager::GetInstance();
     pum->ActivatePower(hash, localOrigin, reinterpret_cast<float*>(&localOrigin));
 

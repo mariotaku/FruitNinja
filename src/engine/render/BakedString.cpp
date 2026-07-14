@@ -7,7 +7,7 @@
 #include "asset/Mesh.h"
 #include "asset/Texture.h"
 #include "math/Colour.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/MathUtil.h"
 #include <new>
 
@@ -220,7 +220,7 @@ void BakedString::Bake(Font* font, Utf8StringIterator iter, const Colour& colour
 }
 
 // Binary @ 0x0019738c
-void BakedString::Draw(float scale, float rotZ, uint32_t align, const Vec3& pos) {
+void BakedString::Draw(float scale, float rotZ, uint32_t align, const _Vector3<float>& pos) {
     MatrixManager& mm = MatrixManager::GetInstance();
     MatrixStack& world = mm.GetWorldStack();
 

@@ -26,7 +26,7 @@ static bool near_eq(float a, float b) {
     return fabsf(a - b) < 1e-4f;
 }
 
-static bool vec3_near(Vec3 a, Vec3 b) {
+static bool vec3_near(_Vector3<float> a, _Vector3<float> b) {
     return near_eq(a.x, b.x) && near_eq(a.y, b.y) && near_eq(a.z, b.z);
 }
 
@@ -42,13 +42,13 @@ int main() {
     // The scratch-backdrop bug placed the decal at raw pos = (0,0,0) instead.
     {
         HUDControl ctrl;
-        ctrl.pos          = Vec3(0.0f, 0.0f, 0.0f);
+        ctrl.pos          = _Vector3<float>(0.0f, 0.0f, 0.0f);
         ctrl.m_HudScale.x =  0.375f;
         ctrl.m_HudScale.y = -0.3f;
         // m_HudScale.z stays 0; z-contribution in GetAdjustedPos is 0*z anyway
 
-        Vec3 result   = ctrl.GetAdjustedPos();
-        Vec3 expected = Vec3(180.0f, -96.0f, 0.0f);
+        _Vector3<float> result = ctrl.GetAdjustedPos();
+        _Vector3<float> expected = _Vector3<float>(180.0f, -96.0f, 0.0f);
 
         if (!vec3_near(result, expected)) {
             fprintf(stderr,
@@ -70,11 +70,11 @@ int main() {
     // only button that stores its position in m_HudScale rather than pos.
     {
         HUDControl ctrl;
-        ctrl.pos = Vec3(16.0f, -66.0f, 0.0f);  // e.g. DojoScreen play-button pos
+        ctrl.pos = _Vector3<float>(16.0f, -66.0f, 0.0f);  // e.g. DojoScreen play-button pos
         // m_HudScale = (0,0,0) from Vec3 default ctor: no offset contribution
 
-        Vec3 result   = ctrl.GetAdjustedPos();
-        Vec3 expected = ctrl.pos;
+        _Vector3<float> result = ctrl.GetAdjustedPos();
+        _Vector3<float> expected = ctrl.pos;
 
         if (!vec3_near(result, expected)) {
             fprintf(stderr,

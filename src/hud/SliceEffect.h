@@ -18,7 +18,7 @@
 //   +0x2c         Node* m_pNext       (doubly-linked next, set by AddNodeToHead)
 // The List<SliceEffect> head (20 bytes) lives at s_slices (heap pointer in FruitGlobalData).
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "util/List.h"
 #include <cstdint>
 
@@ -33,7 +33,7 @@ struct SliceEffect {
     float    m_Timer;      // +0x00: 0..6 lifetime clock; expire at >=6.0
     float    m_Impulse;    // +0x04: v.y (length-scale hint)
     float    m_AngleDeg;   // +0x08: v.x (degrees-offset angle)
-    Vec3     m_Pos;        // +0x0c: world position (+0x0c..+0x17)
+    _Vector3<float> m_Pos;        // +0x0c: world position (+0x0c..+0x17)
     int      m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
     Fruit*   m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
     float    m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
@@ -79,7 +79,7 @@ static_assert(__builtin_offsetof(_SliceNode, m_pNext) == 0x2c,
 
 // 7-frame keyframe scale table (frame index = int(m_Timer), frac = m_Timer - int).
 // Binary: _GLOBAL__I_GameTask.cpp static ctor @0x0016d0dc.
-extern const Vec3 SLICE_KEYFRAMES[7];
+extern const _Vector3<float> SLICE_KEYFRAMES[7];
 
 // AddSlice -- spawn a new slice-line effect.
 // Binary: _Z8AddSlice8_Vector3IfEffiP5Fruitf @0x001dc990
@@ -87,7 +87,7 @@ extern const Vec3 SLICE_KEYFRAMES[7];
 //   posX/posY/posZ = world position of the slice effect
 //   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
 //   fruit: dedup/clamp link; sentinel values 0, 1, 3 accepted
-void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ);
+void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ);
 
 // DrawSlices -- update timer + draw all active slice nodes.
 // Binary: @0x001dae7c

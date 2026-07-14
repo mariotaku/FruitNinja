@@ -31,7 +31,7 @@ static const float HUD_SCREEN_Z = 0.0f;
 //   - TintColour(m_DrawColour, hudScale) -> DrawQuad(UVs)
 //   - Texture::UnSet
 void HUDControl3d::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     if (!m_Texture.IsValid()) {
         return;
@@ -54,11 +54,11 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     }
 
     // binary @ 0x00144328..0x0014435c: translation = pos + (Vec3(480,320,0) * m_HudScale)
-    Vec3 screenAnchor(HUD_SCREEN_W, HUD_SCREEN_H, HUD_SCREEN_Z);
-    Vec3 scaledAnchor(screenAnchor.x * m_HudScale.x,
-                      screenAnchor.y * m_HudScale.y,
-                      screenAnchor.z * m_HudScale.z);
-    Vec3 translation = pos + scaledAnchor;
+    _Vector3<float> screenAnchor(HUD_SCREEN_W, HUD_SCREEN_H, HUD_SCREEN_Z);
+    _Vector3<float> scaledAnchor(screenAnchor.x * m_HudScale.x,
+                                 screenAnchor.y * m_HudScale.y,
+                                 screenAnchor.z * m_HudScale.z);
+    _Vector3<float> translation = pos + scaledAnchor;
     mat.GlobalTranslate44(translation);
 
     mm.GetWorldStack().SetCurrentMatrix(mat);

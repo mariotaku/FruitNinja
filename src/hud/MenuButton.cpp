@@ -81,7 +81,7 @@ void ClearMenuItems() {
             if (f->m_bSliced == 0) {
                 float vx = RandScaled(10.0f) - 5.0f;
                 float vy = RandScaled(5.0f);
-                f->vel = Vec3(vx, vy, 0.0f);
+                f->vel = _Vector3<float>(vx, vy, 0.0f);
                 f->m_bDrawWhole = true;
                 const float absVx = vx < 0 ? -vx : vx;
                 const float sign  = (f->pos.x < 0.0f) ? -1.0f : 1.0f;
@@ -103,7 +103,7 @@ void ClearMenuItems() {
                 b->Disable();
                 float vx = RandScaled(10.0f) - 5.0f;
                 float vy = RandScaled(5.0f);
-                b->vel = Vec3(vx, vy, 0.0f);
+                b->vel = _Vector3<float>(vx, vy, 0.0f);
             }
             b->m_bMovement = 1;
             e = am->GetEntityNext(1, it);
@@ -162,9 +162,9 @@ MenuButton::MenuButton()
     _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
 }
 
-MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
+MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, _Vector3<float> spawnPos,
                        Mortar::Delegate0<void> clickCb,
-                       int fruitType, Vec3 hitBounds,
+                       int fruitType, _Vector3<float> hitBounds,
                        Mortar::Delegate0<void> deletedCb)
     // Port specific: ARM32 heap may be zero-initialized by Bada's operator new;
     // x64 heap is not. Initialize label pointers to null so MenuButton::Draw's
@@ -189,8 +189,8 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
 MenuButton::~MenuButton() { Release(); }
 
 // MenuButton::Init @ 0x0019b994
-void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
-                      int fruitType, Vec3 hitBounds,
+void MenuButton::Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb,
+                      int fruitType, _Vector3<float> hitBounds,
                       Mortar::Delegate0<void> deletedCb) {
     pos = buttonPos;
     m_ClickCallback  = clickCb;
@@ -228,17 +228,17 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // m_SparkleTimer/m_NewIndicatorTimer +0xF8/+0xFC). CreateFruit re-rolls this random per spawn.
     m_RotationSpeed  = 0.0f;
     m_RandomOffset   = 0.0f;
-    m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
+    m_BaseScale      = _Vector3<float>(0.0f, 0.0f, 0.0f);
     // v1.6.1 MenuButton::Init @0x0019ba50: size (+0x20) <- Vector3::Zero (0,0,0).
     // Without this, a freshly-new'd button's size is garbage; the new-items badge
     // (Draw @0x0019c2e4 uses size.x/m_RestScale.x) flashes full on frame 1 before the
     // AnimPhase grow-in resets size to 0. Fruit-type buttons grow icon+badge from 0.
-    size             = Vec3(0.0f, 0.0f, 0.0f);
+    size             = _Vector3<float>(0.0f, 0.0f, 0.0f);
     m_pFruitPiece_alt = nullptr;
     m_pEntity        = nullptr;
     m_pTrackedFruit  = nullptr;
     // m_ShakeScale @ +0x154: x=1.0, y=0.85, z=0.85 (DAT_0019bafc=0.85f).
-    m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
+    m_ShakeScale     = _Vector3<float>(1.0f, 0.85f, 0.85f);
     // m_FlipDirection @ +0x130: Init writes 0 (*(uchar*)&m_FlipDirection = 0).
     m_FlipDirection  = 0;
 
@@ -284,7 +284,7 @@ void MenuButton::CreateFruit() {
     // without this, Bomb::Update's ungated `pos += vel` drifts the collision sphere off
     // the pinned draw position -> menu-bomb slice near-misses (worse after dojo re-entry).
     e->pos = GetAdjustedPos();
-    e->vel = Vec3(0.0f, 0.0f, 0.0f);              // binary @0x0019b67c: entity->m_Velocity = Vector3::Zero
+    e->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);              // binary @0x0019b67c: entity->m_Velocity = Vector3::Zero
     e->Init(nullptr, (long)m_FruitType, nullptr);
     e->flags &= ~0x10;
     m_pEntity = e;
@@ -346,7 +346,7 @@ void MenuButton::CreateFruit() {
         bomb->SetCallback(m_ClickCallback, this);
         bomb->m_ZPosition = FRUIT_ZPOS;
         // Binary v1.6.1 MenuButton::CreateFruit @0x0019b8c8: m_RestScale = 2.0 * bombBaseSize
-        m_RestScale = Vec3(bombRawSize * 2.0f, bombRawSize * 2.0f, bombRawSize * 2.0f);
+        m_RestScale = _Vector3<float>(bombRawSize * 2.0f, bombRawSize * 2.0f, bombRawSize * 2.0f);
         SetHasHitArea(true);
     }
 }
@@ -492,7 +492,7 @@ void MenuButton::Remove() {
     m_pTrackedFruit->m_bDrawWhole = true;
     float vx = RandScaled(10.0f) - 5.0f;
     float vy = -(RandScaled(5.0f));
-    m_pTrackedFruit->vel = Vec3(vx, vy, 0.0f);
+    m_pTrackedFruit->vel = _Vector3<float>(vx, vy, 0.0f);
     m_pTrackedFruit->m_SecondVel = m_pTrackedFruit->vel;
     m_pEntity = nullptr;
     m_pTrackedFruit = nullptr;
@@ -699,7 +699,7 @@ void MenuButton::Update(float dt) {
                     // which diverge after a real slice. pos/m_SecondPos are BOTH re-anchored to
                     // GetAdjustedPos() every frame, so a pos delta is always 0 -- the old bug
                     // that left m_ClickCallback unfired (no screen change) on a sliced menu fruit.
-                    Vec3 d;
+                    _Vector3<float> d;
                     d.x = f->vel.x - f->m_SecondVel.x;
                     d.y = f->vel.y - f->m_SecondVel.y;
                     d.z = f->vel.z - f->m_SecondVel.z;
@@ -798,7 +798,7 @@ void MenuButton::Update(float dt) {
             if (m_pEntity == nullptr) {
                 TouchReleased();
             } else {
-                Vec3 blade(1.0f, 0.0f, 0.0f);
+                _Vector3<float> blade(1.0f, 0.0f, 0.0f);
                 m_pEntity->CollisionResponse(nullptr, 0, 0, &blade);
             }
         }
@@ -806,7 +806,7 @@ void MenuButton::Update(float dt) {
         // hit rect centered on GetAdjustedPos() (HUDControl slot 15 @0x00136c2c) =
         // pos + Vec3(480,320,0)*m_HudScale -- the SAME anchor the held bomb entity model
         // is drawn at. Using raw pos offset the hit center from the model by that vector.
-        Vec3 hitC = GetAdjustedPos();
+        _Vector3<float> hitC = GetAdjustedPos();
         float hw = m_RestScale.x * 0.5f;
         float hh = m_RestScale.y * 0.5f;
         const float left   = hitC.x - hw - m_HitInsetX;
@@ -912,7 +912,7 @@ void MenuButton::UpdateTouchPosition() {
 // layer 0x40->0x80 demotion side-effect and draws labels/badge/sparkle even at
 // alpha 0 (v1.6.1 MenuButton::Draw @0x0019c2e4 has no alpha gate).
 void MenuButton::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     // Compute fade-derived alpha from m_AnimPhase (+0xD0).
     // v1.6.1 MenuButton::Draw @0x0019c2e4: alpha ramp from m_AnimPhase (Q14 phase, 0..0x3ffc).
@@ -941,8 +941,8 @@ void MenuButton::Draw(float* hudScaleRaw) {
             // (= pos + Vec3(480,320,0)*m_HudScale), NOT raw pos. The quit-bomb button stores
             // its whole position in m_HudScale (pos=(0,0,0)), so raw pos put the scratch at
             // screen center; the other buttons keep their coords in pos so it was masked.
-            Vec3 adjPos = GetAdjustedPos();
-            mat.GlobalTranslate44(Vec3(adjPos.x, adjPos.y, -5500.0f));
+            _Vector3<float> adjPos = GetAdjustedPos();
+            mat.GlobalTranslate44(_Vector3<float>(adjPos.x, adjPos.y, -5500.0f));
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -971,10 +971,10 @@ void MenuButton::Draw(float* hudScaleRaw) {
             mat.RotZ44(SinIdx(idx), CosIdx(idx));
         }
 
-        Vec3 jitter = Vec3::Zero();
+        _Vector3<float> jitter = _Vector3<float>::Zero();
         if (m_ShakeTimer > 0.0f) {
-            jitter += Vec3(((float)(rand() % 600) / 100.0f) - 3.0f,
-                           ((float)(rand() % 600) / 100.0f) - 3.0f, 0.0f);
+            jitter += _Vector3<float>(((float)(rand() % 600) / 100.0f) - 3.0f,
+                                      ((float)(rand() % 600) / 100.0f) - 3.0f, 0.0f);
         }
         mat.GlobalTranslate44(GetAdjustedPos() + jitter);
         mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -1008,7 +1008,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
     // anchor = GetAdjustedPos() + m_DrawOffset; draw order glow->fg->shadow;
     // when m_LabelRadius>0 each label also drawn a 2nd time at rotZ+180.
     if (m_pLabelFg != nullptr) {
-        Vec3 anchor = GetAdjustedPos();
+        _Vector3<float> anchor = GetAdjustedPos();
         anchor.x += m_DrawOffset.x;
         anchor.y += m_DrawOffset.y;
         anchor.z += m_DrawOffset.z;
@@ -1017,7 +1017,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
         float restY = m_RestScale.y;
         float scaleF = (restY != 0.0f) ? (size.y / restY) : 1.0f;
         float rotZ = m_Timer;
-        Vec2 scaleV(scaleF, scaleF);
+        _Vector2<float> scaleV(scaleF, scaleF);
 
         // v1.6.1 MenuButton::Draw @0x0019c764: glow/shadow layers align to the FG-label
         // bbox (BakedStringTTF::UpdateBounds @0x00247ed0 populates m_pLabelFg's refRect at
@@ -1053,7 +1053,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
             // product exceeds 65535 (#346).
             const float sinV = SinIdx((uint16_t)(uint32_t)(m_NewIndicatorTimer * 180.0f * 182.0f));
             const float bob  = (sinV < 0.0f ? -sinV : sinV) * 8.0f;
-            Vec3 anchor = GetAdjustedPos();
+            _Vector3<float> anchor = GetAdjustedPos();
             anchor.x += m_ShakeScale.y * m_RestScale.x * 0.5f;
             anchor.y += m_ShakeScale.z * m_RestScale.y * 0.5f + bob;
             popup->Draw(anchor, scale);
@@ -1121,7 +1121,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
         mm.GetWorldStack().Reset();
         // Scale = Vector3::One * size.y * 0.75 (0.75 immediate @0x0019cc74),
         // then Translate(GetAdjustedPos()) on the world stack.
-        Vec3 ringScale = Vec3::One() * size.y * 0.75f;
+        _Vector3<float> ringScale = _Vector3<float>::One() * size.y * 0.75f;
         mm.GetWorldStack().Scale(ringScale);
         mm.GetWorldStack().Translate(GetAdjustedPos());
         mm.UploadModelViewOnly();
@@ -1151,9 +1151,9 @@ Mortar::SmartPtr<Mortar::Texture>& MenuButton::GetSparkleRingTex() {
 }
 
 // v1.6.1 MenuButton::AddPeice @0x00150240
-void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
                           float rotSpeed, float initialTimer,
-                          Vec3 offset, Vec3 sizeScale,
+                          _Vector3<float> offset, _Vector3<float> sizeScale,
                           Colour tint, int layerFlags) {
     HUDControl3d* c = new HUDControl3d();
     c->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(
@@ -1172,9 +1172,9 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
         const float vSpan = c->m_UVBottom - c->m_UVTop;
         const float texW  = tex.IsValid() ? (float)tex->GetWidth()  : 0.0f;
         const float texH  = tex.IsValid() ? (float)tex->GetHeight() : 0.0f;
-        sizeScale = Vec3(texW * uSpan * sizeScale.z,
-                         texH * vSpan * sizeScale.z,
-                         0.0f);
+        sizeScale = _Vector3<float>(texW * uSpan * sizeScale.z,
+                                    texH * vSpan * sizeScale.z,
+                                    0.0f);
     }
     c->m_Texture = tex;
     c->pos   = pos;

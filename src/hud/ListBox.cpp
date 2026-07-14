@@ -36,7 +36,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_bar;
 //   m_FontScaleParam(+0x96), m_VisibleRows(+0xD8), m_CellWidth(+0x9C)=cellWidthParam*size.x,
 //   m_CellHeight(+0xA0)=fontScaleParam*size.y, m_ActiveTouchId(+0xC8)=-1, m_LayerFlags(+0x34)=0x800.
 //   When items.size() > visibleRows: creates + HUD-adds a VerticalScroller (see header).
-ListBox::ListBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
+ListBox::ListBox(_Vector3<float> inPos, _Vector3<float> inSize, std::vector<std::string>& items,
                  std::string* selIter, uint8_t visibleRows,
                  uint16_t cellHeightParam, uint16_t cellWidthParam, uint16_t fontScaleParam)
     : HUDControl3d()
@@ -82,9 +82,9 @@ ListBox::ListBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
         if (initScroll < 0)                 initScroll = 0;
         else if (initScroll > scrollRange)  initScroll = scrollRange;
 
-        Vec3 scrollerPos(pos.x + m_CellWidth * 0.5f,
-                         pos.y + (float)(visibleRows - 1) * m_CellHeight * -0.5f,
-                         -1.0f);
+        _Vector3<float> scrollerPos(pos.x + m_CellWidth * 0.5f,
+                                    pos.y + (float)(visibleRows - 1) * m_CellHeight * -0.5f,
+                                    -1.0f);
         m_pScroller = new VerticalScroller(scrollerPos, size,
                                            /*min*/ 0, scrollRange, /*step*/ 1,
                                            initScroll, /*reverse*/ true,
@@ -148,7 +148,7 @@ void ListBox::PreDraw(float* hudScale) {
 void ListBox::Draw(float* hudScaleRaw) {
     if (!m_pItems) return;
 
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
 
     size_t n = m_pItems->size();
@@ -177,7 +177,7 @@ void ListBox::Draw(float* hudScaleRaw) {
             mm.GetWorldStack().Reset();
             s_bar->Set();
             Matrix44 mat = Matrix44::MakeScale(m_CellWidth, m_CellHeight, 1.0f);
-            mat.GlobalTranslate44(Vec3(pos.x, rowY, pos.z));
+            mat.GlobalTranslate44(_Vector3<float>(pos.x, rowY, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawQuadUnCached(rowColour, NULL);
@@ -226,7 +226,7 @@ void ListBox::Update(float dt) {
     int scrollOfs = (n > (size_t)m_VisibleRows && m_pScroller) ? m_pScroller->m_CurrentValue : 0;
 
     // Hover: index the row under the live world touch position.
-    const Vec3& wp = game_work.worldPos;
+    const _Vector3<float>& wp = game_work.worldPos;
     if (wp.x >= left && wp.x <= right && wp.y >= bottom && wp.y <= top && base) {
         int idx = (int)((top - wp.y) / rowH) + scrollOfs;
         if (idx < 0) idx = 0;

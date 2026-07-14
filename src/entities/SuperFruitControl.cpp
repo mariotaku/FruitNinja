@@ -14,7 +14,7 @@
 #include "engine/asset/Texture.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Mesh.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 #include "hud/MissControl.h"
 #include "SuperFruitState.h"
 #include "Fruit.h"
@@ -130,12 +130,12 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     // TODO: v1.6.1 DAT_002d928c/9290 (SuperFruitControl @0x001be1c8) -- binary inits
     //   m_SpinAxis/m_TintA/B/Current with (0, DAT_002d928c, DAT_002d9290); the two DAT
     //   Y/Z tint/spin constants are unmapped, so X=0 and Y/Z left zero (do NOT guess).
-    m_SpinAxis    = Vec3(0.0f, 0.0f, 0.0f);
-    m_TintCurrent = Vec3(0.0f, 0.0f, 0.0f);
-    m_TintA       = Vec3(0.0f, 0.0f, 0.0f);
-    m_TintB       = Vec3(0.0f, 0.0f, 0.0f);
-    m_ExplodeOrigin = Vec3(0.0f, 0.0f, 0.0f);
-    m_ZoomTarget    = Vec3(0.0f, 0.0f, 0.0f);
+    m_SpinAxis    = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_TintCurrent = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_TintA       = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_TintB       = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_ExplodeOrigin = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_ZoomTarget    = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // Prime the host fruit.
     if (m_pHostFruit) {
@@ -166,11 +166,11 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     HUDControl::m_Timer = -spin;   // base +0x2c
 
     // Offset the control position along the spin direction, out from the host.
-    size = Vec3(0.5f, 0.5f, 0.5f);
+    size = _Vector3<float>(0.5f, 0.5f, 0.5f);
     if (m_pHostFruit) {
-        pos = Vec3(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
+        pos = _Vector3<float>(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
         uint16_t idx = (uint16_t)(int)(spin * 182.0f);
-        Vec3 dir(CosIdx(idx), SinIdx(idx), 0.0f);
+        _Vector3<float> dir(CosIdx(idx), SinIdx(idx), 0.0f);
         pos += dir * (320.0f * 0.4f);
     }
 
@@ -359,14 +359,14 @@ void SuperFruitControl::Update(float dt)
             }
             // zoom target = host pos clamped x in [-204,204], y in [-128,128]
             if (m_pHostFruit) {
-                Vec3 hp = m_pHostFruit->pos;
+                _Vector3<float> hp = m_pHostFruit->pos;
                 float zx = hp.x;
                 if (zx < -204.0f) zx = -204.0f;        // DAT_001bcd68
                 else if (zx >= 204.0f) zx = 204.0f;    // DAT_001bcd6c
                 float zy = hp.y;
                 if (zy < -128.0f) zy = -128.0f;        // DAT_001bcdc0
                 else if (zy >= 128.0f) zy = 128.0f;    // DAT_001bcd70
-                m_ZoomTarget = Vec3(zx, zy, 0.0f);       // +0xfc; DAT_001bcdac = 0.0
+                m_ZoomTarget = _Vector3<float>(zx, zy, 0.0f);       // +0xfc; DAT_001bcdac = 0.0
             }
         }
 
@@ -591,7 +591,7 @@ void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask)
         float tOut = m_Lifetime + 2.3f + modeBias;
 
         // Anchor re-based to the (480,320) screen anchor by per-control hud scale.
-        Vec3 p = pos + Vec3(480.0f, 320.0f, 0.0f) * m_HudScale;
+        _Vector3<float> p = pos + _Vector3<float>(480.0f, 320.0f, 0.0f) * m_HudScale;
         // Past the explosion, drift the text toward the zoom target by (1 - zoomT).
         if (m_Timer > m_Lifetime && game_work.m_FruitCamera) {
             float zoomT = game_work.m_FruitCamera->m_ZoomT;
@@ -608,16 +608,16 @@ void SuperFruitControl::DrawOrder(float* /*hudScaleRaw*/, int layerMask)
             s *= (q < 0.0f) ? 1.0f : (q + 1.0f);
         }
 
-        m_pComboText->Draw(p, Vec2(s, s), HUDControl::m_Timer, Mortar::ALIGN_CENTRE);
+        m_pComboText->Draw(p, _Vector2<float>(s, s), HUDControl::m_Timer, Mortar::ALIGN_CENTRE);
 
         if (m_pScoreText) {
             float f2 = SinTransition(
                 T_1616(m_Timer, m_Lifetime + 1.5f, m_Lifetime + 1.75f), 115.0f);
             float zoomT2 = game_work.m_FruitCamera ? game_work.m_FruitCamera->m_ZoomT : 0.0f;
             // Lerp from the zoom target to the explosion origin by zoomT.
-            Vec3 sp = m_ZoomTarget + (m_ExplodeOrigin - m_ZoomTarget) * zoomT2;
+            _Vector3<float> sp = m_ZoomTarget + (m_ExplodeOrigin - m_ZoomTarget) * zoomT2;
             float s2 = f2 * env * size.x;
-            m_pScoreText->Draw(sp, Vec2(2.0f * s2, 2.0f * s2),
+            m_pScoreText->Draw(sp, _Vector2<float>(2.0f * s2, 2.0f * s2),
                                HUDControl::m_Timer, Mortar::ALIGN_CENTRE);
         }
     }
@@ -653,7 +653,7 @@ void SuperFruitControl::DrawRing(float r, float base)
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    mm.GetWorldStack().Scale(Vec3(s, s, s));
+    mm.GetWorldStack().Scale(_Vector3<float>(s, s, s));
     mm.GetWorldStack().Translate(m_ExplodeOrigin);
     mm.UploadModelViewOnly();
 
@@ -713,11 +713,11 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         float angleDeg = (float)(int16_t)Math::Atan2Idx(
             m_pHostFruit->vel.y, m_pHostFruit->vel.x) / 182.0f;
         float impulse = 0.8f + Math::g_Random.RandF(0.3f);
-        Vec3 hostPos = m_pHostFruit->pos;
+        _Vector3<float> hostPos = m_pHostFruit->pos;
         float sliceZ = m_pHostFruit->m_ZPosition - 5.0f;   // m_EmitterDepth - 5
-        AddSlice(Vec3(angleDeg, impulse, 0.65f),
+        AddSlice(_Vector3<float>(angleDeg, impulse, 0.65f),
                  hostPos.x, hostPos.y, 0, (Fruit*)0, sliceZ);
-        AddSlice(Vec3(angleDeg, impulse, 0.65f),
+        AddSlice(_Vector3<float>(angleDeg, impulse, 0.65f),
                  hostPos.x, hostPos.y, 0, (Fruit*)3, sliceZ);
     }
 
@@ -769,7 +769,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     }
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     uint8_t hostFruitType = host->m_FruitType;
-    Vec3 hostPos = host->pos;       // host+0x10
+    _Vector3<float> hostPos = host->pos;       // host+0x10
     // MakeSplat mute arg = (FruitInfo+0x330 m_bIsSuperFruit != 0); the host IS a
     // super fruit here, so its finale splats land silent (matches the binary's
     // super-fruit-splat SFX suppression via SplatEntity +0x76 m_bMuteSfx).
@@ -785,7 +785,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         // GetFree() never returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 --
         // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
-        Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
+        _Vector3<float> vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
         s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType, hostMute);
 
         // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
@@ -817,14 +817,14 @@ void SuperFruitControl::ExplodeSuperFruit()
         //   bit1: corner.x = (k&2) ? -1 : +1
         //   bit0: corner.y = (k&1) ? +1 : -1
         //   k<4:  corner.z = +1; k>=4: corner.z = -1
-        Vec3 corner;
+        _Vector3<float> corner;
         corner.x = (k & 2u) ? -1.0f : 1.0f;
         corner.y = (k & 1u) ?  1.0f : -1.0f;
         corner.z = (k + 3 < 7) ? 1.0f : -1.0f;
         corner.Normalise();
 
         // dir = rot.MultVec33(corner) -- multiply upper-left 3x3 of Matrix44 by corner
-        Vec3 dir;
+        _Vector3<float> dir;
         dir.x = rot.m[0] * corner.x + rot.m[4] * corner.y + rot.m[8]  * corner.z;
         dir.y = rot.m[1] * corner.x + rot.m[5] * corner.y + rot.m[9]  * corner.z;
         dir.z = rot.m[2] * corner.x + rot.m[6] * corner.y + rot.m[10] * corner.z;
@@ -835,7 +835,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         Jiblet* jiblet = static_cast<Jiblet*>(jibEnt);
 
         // dirN: dir with z zeroed, then normalised (planar velocity direction)
-        Vec3 dirN = dir;
+        _Vector3<float> dirN = dir;
         dirN.z = 0.0f;   // DAT_001bae54=0.0
         dirN.Normalise();
 
@@ -848,7 +848,7 @@ void SuperFruitControl::ExplodeSuperFruit()
 
         // linear velocity = dirN * T_1628(600, 1000)  (lo=DAT_001bae60, hi=DAT_001bae5c)
         float linSpeed = 600.0f + Math::g_Random.RandF(400.0f);   // uniform [600, 1000)
-        Vec3 vel = dirN * linSpeed;
+        _Vector3<float> vel = dirN * linSpeed;
 
         // load model
         Mortar::SmartPtr<Mortar::Model> mdl;
@@ -857,7 +857,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         }
 
         // angular velocity: dirN * 700.0  (DAT_001bae64=700.0f)
-        Vec3 angVel = dirN * 700.0f;
+        _Vector3<float> angVel = dirN * 700.0f;
 
         // Jiblet::Init(fruitType, pos=this->m_ExplodeOrigin, scale=1.0, vel, mdl, emitterHash=0, dripRate=0.0, grav=angVel)
         // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: pos arg is &this->m_ExplodeOrigin
@@ -877,7 +877,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     // v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: host->m_LaunchVelocity = Vec3(0,0,0).
     //   m_LaunchVelocity IS Entity::scale (+0x28), so this zeroes the host fruit's visual scale,
     //   collapsing it after the jiblets (which snapshotted the pre-collapse scale) have spawned.
-    host->scale = Vec3(0.0f, 0.0f, 0.0f);
+    host->scale = _Vector3<float>(0.0f, 0.0f, 0.0f);
 }
 
 // Binary @ 0x001b9850. Forces host fruit's slice timer negative when combo is cancelled
@@ -898,7 +898,7 @@ void SuperFruitControl::PushBombsAway(float dt)
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     std::list<Mortar::Entity*>::iterator it;
     for (Mortar::Entity* b = am->GetEntityFirst(1, it); b; b = am->GetEntityNext(1, it)) {
-        Vec3 dir = b->pos - m_pHostFruit->pos;       // outward radial
+        _Vector3<float> dir = b->pos - m_pHostFruit->pos;       // outward radial
         float dist = dir.Normalise();                // returns old magnitude
         if (dist < 200.0f) {                         // DAT_001b9d5c
             b->vel += (dir * 100.0f) * k;            // DAT_001b9d58=100.0; vel @ +0x1c
@@ -936,13 +936,13 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     // negating m_Gravity.y, pos.x and vel.x.
     fruit->m_Gravity.x = -5.0f;                          // [fruit+0xa0] = 0xc0a00000
     if (game_work.gameMode == 2) {                       // GAME_MODE_ARCADE; byte at game_work+0x04
-        fruit->pos = Vec3(-35.0f, -260.0f, 0.0f);        // DAT_001bc104/0bc108/0bc10c
-        fruit->vel = Vec3(0.5f, 8.5f, 0.0f);             // 0x3f000000, 0x41080000, DAT_001bc10c
+        fruit->pos = _Vector3<float>(-35.0f, -260.0f, 0.0f);        // DAT_001bc104/0bc108/0bc10c
+        fruit->vel = _Vector3<float>(0.5f, 8.5f, 0.0f);             // 0x3f000000, 0x41080000, DAT_001bc10c
         fruit->m_Gravity.z = -7.5f;                      // [fruit+0xa8] = 0xc0f00000
         fruit->m_Gravity.y = 0.0f;                       // [fruit+0xa4] = DAT_001bc10c
     } else {
-        fruit->pos = Vec3(-340.0f, -100.0f, 0.0f);       // DAT_001bc110/0bc114/0bc10c
-        fruit->vel = Vec3(5.0f, 5.0f, 0.0f);             // 0x40a00000, 0x40a00000, DAT_001bc10c
+        fruit->pos = _Vector3<float>(-340.0f, -100.0f, 0.0f);       // DAT_001bc110/0bc114/0bc10c
+        fruit->vel = _Vector3<float>(5.0f, 5.0f, 0.0f);             // 0x40a00000, 0x40a00000, DAT_001bc10c
         fruit->m_Gravity.z = -4.5f;                      // [fruit+0xa8] = 0xc0900000
         fruit->m_Gravity.y = 0.01f;                      // [fruit+0xa4] = DAT_001bc118
     }
@@ -1187,7 +1187,7 @@ void SuperFruitControl::StopAllFruit()
     if (!am) return;
 
     // Explosion centre lives in this controller's work vector (+0xf0).
-    const Vec3& centre = m_ExplodeOrigin;
+    const _Vector3<float>& centre = m_ExplodeOrigin;
 
     // Remove fruits/bombs that haven't actually spawned yet (still in
     // chuck-delay) before redirecting the rest. Binary calls both here.
@@ -1205,13 +1205,13 @@ void SuperFruitControl::StopAllFruit()
         // plus the byte clear at Fruit+0x70.
         // Binary: vstr 0.0f -> [this,#0x98] (m_TimeScale); stm zero-Vec3 -> [this,#0xa0] (m_Gravity); strb 0 -> [this,#0x70] (m_bBallisticEnable).
         f->m_TimeScale = 0.0f;          // Fruit+0x98 = DAT_001ba6a4 (0.0f)
-        f->m_Gravity = Vec3(0.0f, 0.0f, 0.0f);  // Fruit+0xa0..0xab zero-Vec3 copy
+        f->m_Gravity = _Vector3<float>(0.0f, 0.0f, 0.0f);  // Fruit+0xa0..0xab zero-Vec3 copy
         f->m_bBallisticEnable = 0;      // Fruit+0x70 (strb 0)
 
         // Only sliced fruits get their two half-bodies redirected.
         if (f->Sliced()) {
             // First body: pos +0x10 -> vel +0x1c.
-            Vec3 dir = f->pos - centre;
+            _Vector3<float> dir = f->pos - centre;
             dir.Normalise();
             dir *= 5.0f;
             f->vel = (f->vel + dir) / 2.0f;
@@ -1220,7 +1220,7 @@ void SuperFruitControl::StopAllFruit()
             // DIFFERS: binary reads Fruit+0xc8 and writes Fruit+0xd4; the port's
             // named second-body fields sit at +0xb8/+0xc4, so this redirect uses
             // the same raw +0x10 offset relationship the binary uses (pos->vel).
-            Vec3 dir2 = f->m_SecondPos - centre;
+            _Vector3<float> dir2 = f->m_SecondPos - centre;
             dir2.Normalise();
             dir2 *= 5.0f;
             f->m_SecondVel = (f->m_SecondVel + dir2) / 2.0f;
@@ -1235,13 +1235,13 @@ void SuperFruitControl::StopAllFruit()
         Bomb* b = static_cast<Bomb*>(e);
 
         // Redirect bomb velocity toward the explosion centre (pos +0x10 -> vel +0x1c).
-        Vec3 dir = b->pos - centre;
+        _Vector3<float> dir = b->pos - centre;
         dir.Normalise();
         dir *= 5.0f;
         b->vel = (b->vel + dir) / 2.0f;
 
         // Freeze bomb physics (binary writes at Bomb+0x8c / +0xa8 / +0x80).
-        b->m_AccelForce = Vec3(0.0f, 0.0f, 0.0f);  // Bomb+0x8c zero-Vec3
+        b->m_AccelForce = _Vector3<float>(0.0f, 0.0f, 0.0f);  // Bomb+0x8c zero-Vec3
         b->m_SpeedMult = 0.0f;                      // Bomb+0xa8 = DAT_001ba6a4 (0.0f)
         b->m_bMovement = 0;                         // Bomb+0x80 (strb 0)
 
@@ -1291,7 +1291,7 @@ void SuperFruitControl::UpdateExplosion(float dt)
     if (m_Timer <= m_Lifetime + 2.55f) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
-            const Vec3& origin = m_ExplodeOrigin;
+            const _Vector3<float>& origin = m_ExplodeOrigin;
             std::list<Mortar::Entity*>::iterator it;
 
             // -------- type 0: fruits (push mult 4.0) --------
@@ -1301,14 +1301,14 @@ void SuperFruitControl::UpdateExplosion(float dt)
                 if (f == m_pHostFruit) {
                     // Host fruit special-case: freeze in place.
                     f->m_SliceTimer = 0.5f;
-                    f->vel = Vec3(0.0f, 0.0f, 0.0f);
-                    f->m_SecondVel = Vec3(0.0f, 0.0f, 0.0f);
+                    f->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+                    f->m_SecondVel = _Vector3<float>(0.0f, 0.0f, 0.0f);
                 } else {
-                    Vec3 dir = f->pos - origin;
+                    _Vector3<float> dir = f->pos - origin;
                     float dist = dir.Normalise();
                     f->vel += dir * ((m_OuterRadius - dist) * dt * 4.0f);
                     if (f->Sliced()) {
-                        Vec3 dir2 = f->m_SecondPos - origin;
+                        _Vector3<float> dir2 = f->m_SecondPos - origin;
                         float dist2 = dir2.Normalise();
                         f->m_SecondVel += dir2 * ((m_OuterRadius - dist2) * dt * 4.0f);
                     } else if (dist < m_InnerRadius) {
@@ -1323,7 +1323,7 @@ void SuperFruitControl::UpdateExplosion(float dt)
             // -------- type 1: bombs (push mult 5.0) --------
             e = am->GetEntityFirst(1, it);
             while (e != NULL) {
-                Vec3 dir = e->pos - origin;
+                _Vector3<float> dir = e->pos - origin;
                 float dist = dir.Normalise();
                 e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
                 e = am->GetEntityNext(1, it);
@@ -1332,7 +1332,7 @@ void SuperFruitControl::UpdateExplosion(float dt)
             // -------- type 5: jibs (push mult 5.0) --------
             e = am->GetEntityFirst(5, it);
             while (e != NULL) {
-                Vec3 dir = e->pos - origin;
+                _Vector3<float> dir = e->pos - origin;
                 float dist = dir.Normalise();
                 e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
                 e = am->GetEntityNext(5, it);
@@ -1365,8 +1365,8 @@ void SuperFruitControl::StopRays()
     // ASM-spec v1.6.1 SuperFruitControl::StopRays @0x001b9b4c: after the ray loop,
     // zero the host fruit's two per-half spin rates.
     if (m_pHostFruit) {
-        m_pHostFruit->m_RotVel1 = Vec3(0.0f, 0.0f, 0.0f);   // Fruit+0x100
-        m_pHostFruit->m_RotVel2 = Vec3(0.0f, 0.0f, 0.0f);   // Fruit+0x10c
+        m_pHostFruit->m_RotVel1 = _Vector3<float>(0.0f, 0.0f, 0.0f);   // Fruit+0x100
+        m_pHostFruit->m_RotVel2 = _Vector3<float>(0.0f, 0.0f, 0.0f);   // Fruit+0x10c
     }
 }
 
@@ -1416,7 +1416,7 @@ void SuperFruitControl::SpawnJibs()
                 if (!j) continue;
                 float ang = SuperFruitUniform((i + 0.2f) * 45.0f, (i + 0.8f) * 45.0f);
                 uint16_t a16 = (uint16_t)((int)((angBase + ang) * 182.0f) & 0xffff);
-                Vec3 dir(CosIdx(a16), SinIdx(a16), 0.0f);
+                _Vector3<float> dir(CosIdx(a16), SinIdx(a16), 0.0f);
                 j->Init((int)m_pHostFruit->m_FruitType, m_ExplodeOrigin,
                         SuperFruitUniform(0.8f, 1.25f),
                         dir * SuperFruitUniform(500.0f, 900.0f),

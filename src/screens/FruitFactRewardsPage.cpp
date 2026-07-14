@@ -8,7 +8,7 @@
 #include "engine/render/FontTTFRegistry.h"
 #include "engine/render/Font.h"
 #include "engine/util/StringTable.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 
 // Shared TTF face (same as FruitFactPage.cpp helper; each TU keeps its own
@@ -109,7 +109,7 @@ void FruitFactRewardsPage::Init() {
         box->SetShadow(
             0.0f,
             Colour(0x4b, 0x32, 0x28, 0xc8),
-            Vec3(1.0f, -1.0f, 0.0f),
+            _Vector3<float>(1.0f, -1.0f, 0.0f),
             true);
     }
 }

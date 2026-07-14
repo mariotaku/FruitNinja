@@ -120,7 +120,7 @@
 #include "render/Font.h"
 #include "render/Utf8StringIterator.h"
 #include "asset/Texture.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "hud/WidgetPlaceholderArt.h"
 
@@ -432,7 +432,7 @@ int main(int argc, char* argv[]) {
     uint16_t langDefault = (uint16_t)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
 
     // Labels are UPPERCASE -- font_fruit_ninja.fnt has no lowercase glyphs.
-    ComboBox* langCombo = new ComboBox(Vec3(kWidgetX, 128.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+    ComboBox* langCombo = new ComboBox(_Vector3<float>(kWidgetX, 128.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                        langItems, langDefault, "LANGUAGE",
                                        /*textFlag/visibleRows*/ 4, /*width (label font size)*/ 20,
                                        /*textScaleX (bar width)*/ (uint16_t)kBarW,
@@ -449,9 +449,9 @@ int main(int argc, char* argv[]) {
     // still DrawString their own m_Label, but an empty string emits zero glyphs,
     // so passing "" suppresses the widget's built-in (right-side) label without
     // touching the faithful Draw path.
-    CheckBox* soundCb  = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
-    CheckBox* musicCb  = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
-    CheckBox* motionCb = new CheckBox(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "");
+    CheckBox* soundCb  = new CheckBox(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f), "");
+    CheckBox* musicCb  = new CheckBox(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f), "");
+    CheckBox* motionCb = new CheckBox(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f), "");
     soundCb->SetCheckedForTest(game_work.m_bSoundOn);
     musicCb->SetCheckedForTest(game_work.m_bMusicOn);
     motionCb->SetCheckedForTest(FN::g_MotionMode);
@@ -460,11 +460,11 @@ int main(int argc, char* argv[]) {
     int sfx0   = ClampInt((int)(Mortar::SoundManager::s_SFXVolume   * 100.0f + 0.5f), 0, 100);
     int mus0   = ClampInt((int)(Mortar::SoundManager::s_MusicVolume * 100.0f + 0.5f), 0, 100);
 
-    SliderControl* flickSl = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+    SliderControl* flickSl = new SliderControl(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                                "", 0, 30, 24, flick0);
-    SliderControl* sfxSl   = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+    SliderControl* sfxSl   = new SliderControl(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                                "", 0, 100, 24, sfx0);
-    SliderControl* musSl   = new SliderControl(Vec3(kWidgetX, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f),
+    SliderControl* musSl   = new SliderControl(_Vector3<float>(kWidgetX, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f),
                                                "", 0, 100, 24, mus0);
 
     // -----------------------------------------------------------------------

@@ -31,8 +31,8 @@ ProgressionTimerControl::ProgressionTimerControl()
     , m_bAutoStopOnExpire(false)
     , m_OnExpiredDelegate()
 {
-    pos  = Vec3(-230.0f, 140.0f, 0.0f);
-    size = Vec3(0.0f, 18.0f, 0.0f);
+    pos  = _Vector3<float>(-230.0f, 140.0f, 0.0f);
+    size = _Vector3<float>(0.0f, 18.0f, 0.0f);
     m_TextBuf[0] = '\0';
 }
 

@@ -154,7 +154,7 @@ void Bomb::Release() {
 
 // ASM-spec v1.6.1 Bomb::Init @ 0x1d69e0
 // p1/p2 unused; p3 = scale Vec3* (nullable, default 1.0)
-void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
+void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
     float scaleFactor = 1.0f;
     if (scaleOrNull) scaleFactor = scaleOrNull->x;
 
@@ -196,19 +196,19 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* scaleOrNull) {
     const float bombSize = FruitInfo_GetBombSize();
     const float bombCol  = FruitInfo_GetBombCollision();
     static const float VISUAL_SCALE_MULT = 0.01f;  // DAT_001726b0
-    Vec3 computedScale = Vec3::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
+    _Vector3<float> computedScale = _Vector3<float>::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
 
     if (!m_Col) m_Col = new ColSphere();
     {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center() = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
         cs->radius = bombCol * 0.5f * scaleFactor;
     }
 
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;
-    m_AccelForce = Vec3(0.0f, GRAVITY_Y, 0.0f);
+    m_AccelForce = _Vector3<float>(0.0f, GRAVITY_Y, 0.0f);
     m_ZPosition = GetBombZPosition();
 
     flags &= ~ENT_SKIP_MASK;
@@ -229,7 +229,7 @@ void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
 // Helper: accel-growth block shared by alive-branch and menu-hit-branch in Update.
 // When velocity and accelForce are componentwise aligned, grow accel magnitude
 // by (0.2 * dtNorm * 2) per frame. DAT_00172f30 = 0.2
-static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
+static inline void AccelGrowth(_Vector3<float>& vel, _Vector3<float>& accel, float dtNorm) {
     const bool alignedY = (accel.y < 0.0f && vel.y < 0.0f) ||
                           (accel.y > 0.0f && vel.y > 0.0f);
     const bool alignedX = (accel.x < 0.0f && vel.x < 0.0f) ||
@@ -254,7 +254,7 @@ void Bomb::Update(float dt) {
             if (game_work.m_BombHitTimer > 0.0f || game_work.bM_bPaused != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
-                vel = Vec3(0.0f, -1.0f, 0.0f);
+                vel = _Vector3<float>(0.0f, -1.0f, 0.0f);
             }
 
             const float prevCountdown = m_Countdown;
@@ -286,7 +286,7 @@ void Bomb::Update(float dt) {
                 if (iVar7 < 1) {
                     m_Countdown = 0.0f;
                     pos.y = OFFSCREEN_Y;
-                    vel = Vec3(0.0f, -1.0f, 0.0f);
+                    vel = _Vector3<float>(0.0f, -1.0f, 0.0f);
                 } else if (iVar7 != 1) {
                     wm->SpawnBomb(iVar7 - 1, nullptr, 0);
                 }
@@ -326,7 +326,7 @@ void Bomb::Update(float dt) {
 #endif
         }
 
-        if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
+        if (m_Col) static_cast<ColSphere*>(m_Col)->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
@@ -360,7 +360,7 @@ void Bomb::Update(float dt) {
         // Hide collision sphere
         if (m_Col) {
             ColSphere* cs = static_cast<ColSphere*>(m_Col);
-            cs->center() = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
+            cs->center() = _Vector3<float>(HIT_COL_POS, HIT_COL_POS, 0.0f);
             cs->radius = HIT_COL_RADIUS;
         }
     }
@@ -437,7 +437,7 @@ void Bomb::Draw(Renderer& r) {
                   CosIdx((uint16_t)(m_RotY * ANGLE_SCALE)));
 
     mat = rotMat * mat;
-    mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));
+    mat.GlobalTranslate44(_Vector3<float>(pos.x, pos.y, pos.z + m_ZPosition));
 
     // Cull for bomb.mmd's duplicate back-face interior shell (156 outward /
     // 158 inward winding) is now handled faithfully by Geometry::Render
@@ -510,7 +510,7 @@ float Bomb::GetWait() const {
 int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
                              unsigned long /*flagsA*/,
                              unsigned long /*flagsB*/,
-                             Vec3* /*bladeVelocity*/) {
+                             _Vector3<float>* /*bladeVelocity*/) {
     // Guard: DO NOT set guard=1 here; Disable() sets it
     if (m_bCollisionGuard != 0) return 0;
 
@@ -661,7 +661,7 @@ bool BombFlashFull() {
 
 // ASM-spec v1.6.1 HitBomb @ 0x1cf27c
 // Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
-void HitBomb(Vec3 pos) {
+void HitBomb(_Vector3<float> pos) {
     if (game_work.bM_bPaused) return;
     if (game_work.m_SaveData) {
         // ASM-spec v1.6.1 HitBomb @ 0x1cf27c: AddToTotal(saveData,"bomb",hash,1,true,true)
@@ -684,7 +684,7 @@ void HitBomb(Vec3 pos) {
 // ASM-spec v1.6.1 HitMenuBomb @ 0x1cf42c
 // Arcade/menu bomb hit: timer=2.0, flash-flag=1, SFX, store hit pos.
 // TODO: v1.6.1 0x1cf42c (HitMenuBomb) -- body not fully decompiled; keeping port semantics
-void HitMenuBomb(Vec3 pos) {
+void HitMenuBomb(_Vector3<float> pos) {
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {
         ts->m_bMenuBombFlashFlag = 1;
@@ -696,7 +696,7 @@ void HitMenuBomb(Vec3 pos) {
 
 // --- Bomb-hit overlay ---
 
-Vec3 g_BombHitPos(0.0f, 0.0f, 0.0f);
+_Vector3<float> g_BombHitPos(0.0f, 0.0f, 0.0f);
 
 static const float BOMB_FLASH_START     = 1.55f;   // DAT_0016b864
 static const float BOMB_FLASH_DUR_RECIP = -0.45f;  // DAT_0016b868

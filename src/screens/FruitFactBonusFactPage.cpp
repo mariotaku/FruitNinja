@@ -10,7 +10,7 @@
 #include "engine/render/FontTTFRegistry.h"
 #include "engine/render/Font.h"
 #include "engine/render/MatrixManager.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -73,18 +73,18 @@ void FruitFactBonusFactPage::Init() {
 
     // Shared constants for all row controls (DAT_17485c, DAT_174860).
     // scZero triggers auto-size from texture dims for icon controls (binary: callers pass zero scale).
-    Vec3 scZero(0.0f, 0.0f, 0.0f);
-    Vec3 scHalf(0.0f, 0.0f, 0.5f); // auto-size x0.5 (GenericHUDControl ctor @0x00189f60: scale.x==0&&scale.y==0 -> native*scale.z)
-    Vec3 scUnit(1.0f, 1.0f, 1.0f);
+    _Vector3<float> scZero(0.0f, 0.0f, 0.0f);
+    _Vector3<float> scHalf(0.0f, 0.0f, 0.5f); // auto-size x0.5 (GenericHUDControl ctor @0x00189f60: scale.x==0&&scale.y==0 -> native*scale.z)
+    _Vector3<float> scUnit(1.0f, 1.0f, 1.0f);
     Colour white(255, 255, 255, 255);
 
     // Column anchor positions (DAT_174830..17483c, Z=0).
-    Vec3 iconPos(95.0f, 58.0f, 0.0f);   // DAT_174830=95, DAT_174834=58
-    Vec3 namePos(-100.0f, 62.0f, 0.0f); // DAT_174838=-100, DAT_17483c=62
+    _Vector3<float> iconPos(95.0f, 58.0f, 0.0f);   // DAT_174830=95, DAT_174834=58
+    _Vector3<float> namePos(-100.0f, 62.0f, 0.0f); // DAT_174838=-100, DAT_17483c=62
 
     // langShift: game_work.languageFlag (bM_LangId, +0x03) == 0 -> 0px, else -> 8px.
     float langShift = (game_work.languageFlag == 0) ? 0.0f : 8.0f;
-    Vec3 starPos(-118.0f - langShift, 58.0f, 0.0f); // DAT_174840=-118, star-medal column
+    _Vector3<float> starPos(-118.0f - langShift, 58.0f, 0.0f); // DAT_174840=-118, star-medal column
 
     Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
 
@@ -135,8 +135,8 @@ void FruitFactBonusFactPage::Init() {
             // fontSize=10, w=20(0x14), h=10, align=0xf, wrap=1, ls=0.
             // valFinal = namePos + Vec3(184, 2, 0) (DAT_174864=184, 0x40000000=2).
             Mortar::SmartPtr<Mortar::Texture> noTex2;
-            Vec3 valOff(184.0f, 2.0f, 0.0f);
-            Vec3 valFinal = namePos + valOff;
+            _Vector3<float> valOff(184.0f, 2.0f, 0.0f);
+            _Vector3<float> valFinal = namePos + valOff;
             Mortar::BakedStringBox* valBox = new Mortar::BakedStringBox(
                 font, 10.0f, 20.0f, 10.0f, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0.0f);
             valBox->SetColour(*tint, 0);
@@ -176,14 +176,14 @@ void FruitFactBonusFactPage::DrawOrder(float* /*hudScaleRaw*/, int pass) {
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
-    Vec3 sz((float)(m_Texture->GetWidth() + 1),
-            (float)(m_Texture->GetHeight() + 1),
-            0.0f);
-    Vec3 scaled = sz * 1.0f;
+    _Vector3<float> sz((float)(m_Texture->GetWidth() + 1),
+                       (float)(m_Texture->GetHeight() + 1),
+                       0.0f);
+    _Vector3<float> scaled = sz * 1.0f;
     mm.GetWorldStack().Scale(scaled);
 
-    Vec3 anchor(8.0f, -8.0f, 0.0f);
-    Vec3 t = pos - anchor;
+    _Vector3<float> anchor(8.0f, -8.0f, 0.0f);
+    _Vector3<float> t = pos - anchor;
     mm.GetWorldStack().Translate(t);
 
     mm.UploadModelViewOnly();

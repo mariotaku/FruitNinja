@@ -98,8 +98,8 @@ static void TriggerNewGameSlice(MenuButton* btn) {
     if (!btn || !btn->m_pTrackedFruit) return;
     Fruit* f = btn->m_pTrackedFruit;
     f->m_bSliced   = 1;
-    f->vel         = Vec3(5.0f, 2.0f, 0.0f);
-    f->m_SecondVel = Vec3(-5.0f, -2.0f, 0.0f);
+    f->vel         = _Vector3<float>(5.0f, 2.0f, 0.0f);
+    f->m_SecondVel = _Vector3<float>(-5.0f, -2.0f, 0.0f);
     f->m_bDrawWhole = 1;
 }
 
@@ -178,7 +178,10 @@ int main(int argc, char* argv[]) {
         while (warmup < 600) {
             bool ready = ms->m_pGameModeButton && ms->m_pGameModeButton->m_pTrackedFruit;
             if (ready) break;
-            h.RunHeadless(10);
+            for (int f = 0; f < 10; ++f) {
+                h.game.runFrames(1);
+                h.game.tickRealtimeUi(1.0f / 60.0f);
+            }
             warmup += 10;
         }
         if (!ms->m_pGameModeButton || !ms->m_pGameModeButton->m_pTrackedFruit) {
@@ -194,6 +197,7 @@ int main(int argc, char* argv[]) {
         GameModeScreen* gms = NULL;
         for (int frame = 0; frame < 120; ++frame) {
             h.game.runFrames(1);
+            h.game.tickRealtimeUi(1.0f / 60.0f);
             if (!gms) gms = FindGameModeScreen();
         }
         if (!gms) {
@@ -224,8 +228,19 @@ int main(int argc, char* argv[]) {
         // Also lets MainScreen's SetState(STATE_SLIDE_IN) -> ... -> back to
         // STATE_CAMERA_ZOOM settle so the NEW GAME ring is recreated for the
         // next iteration.
+        //
+        // The state-0xf decay (and its m_bPendingRemoval threshold crossing)
+        // moved to a port-only UpdateRealtime() in ca427a6c so the back-out
+        // fade tracks display refresh; it is NOT advanced by runFrames()'s
+        // 60Hz Update() alone (see GameModeScreen::Update's #else case 0xf,
+        // which is a no-op under the port build). Must also call
+        // tickRealtimeUi() here -- the real game loop pumps both per
+        // presented frame (GameSDL.cpp) -- or GameModeScreen (and its two
+        // buttons holding refs on m_RingTex[16]/[13]) never gets reaped and
+        // the round-trip refcount never returns to baseline.
         for (int frame = 0; frame < 120; ++frame) {
             h.game.runFrames(1);
+            h.game.tickRealtimeUi(1.0f / 60.0f);
         }
 
         const int redCount = game_work.m_RingTex[kRingRed].DebugRefCount();

@@ -813,9 +813,9 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
             const char* vel  = self.Attribute("vel");
             const char* pos  = self.Attribute("pos");
             const char* grav = self.Attribute("grav");
-            if (vel)  { Vec3 v = ParseVector(vel);  es.m_Velocity[0] = v.x; es.m_Velocity[1] = v.y; es.m_Velocity[2] = v.z; }
-            if (pos)  { Vec3 v = ParseVector(pos);  es.m_Position[0] = v.x; es.m_Position[1] = v.y; es.m_Position[2] = v.z; }
-            if (grav) { Vec3 v = ParseVector(grav); es.m_Overlay[0]  = v.x; es.m_Overlay[1]  = v.y; es.m_Overlay[2]  = v.z; }
+            if (vel)  { _Vector3<float> v = ParseVector(vel);  es.m_Velocity[0] = v.x; es.m_Velocity[1] = v.y; es.m_Velocity[2] = v.z; }
+            if (pos)  { _Vector3<float> v = ParseVector(pos);  es.m_Position[0] = v.x; es.m_Position[1] = v.y; es.m_Position[2] = v.z; }
+            if (grav) { _Vector3<float> v = ParseVector(grav); es.m_Overlay[0]  = v.x; es.m_Overlay[1]  = v.y; es.m_Overlay[2]  = v.z; }
             self.QueryIntAttribute("type", &es.m_KindIndex);
             const char* hit = self.Attribute("hit");
             if (hit) es.m_BombHitFlag = (uint8_t)((strcmp(hit, "true") == 0) ? 1 : 0);

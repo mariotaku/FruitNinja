@@ -1,8 +1,8 @@
 #ifndef MORTAR_PSP_PARTICLE_MANAGER_H
 #define MORTAR_PSP_PARTICLE_MANAGER_H
 
-#include "math/Vec3.h"
-#include "math/Vec2.h"
+#include "math/_Vector3.h"
+#include "math/_Vector2.h"
 #include "util/SmartPtr.h"
 #include "util/MemoryPool.h"
 #include "asset/Texture.h"
@@ -190,9 +190,9 @@ static_assert(__builtin_offsetof(PSPEmitterBlob, m_NumSets)     == 0x4B, "");
 // +0x40: uint16 m_NextLink — free-list / live-list chain (0=end).
 // ----------------------------------------------------------------------------
 struct PSPParticle {
-    Vec3     m_Pos;             // +0x00
-    Vec3     m_Vel;             // +0x0C
-    Vec3     m_Gravity;         // +0x18
+    _Vector3<float> m_Pos;             // +0x00
+    _Vector3<float> m_Vel;             // +0x0C
+    _Vector3<float> m_Gravity;         // +0x18
     float    m_Age;             // +0x24
     float    m_Life;            // +0x28
     float    m_SizeStart;       // +0x2C
@@ -223,8 +223,8 @@ struct PSPParticle {
     int16_t  m_AlphaMidDelta;   // +0x7E  colour interp delta, first half (Draw local_f2)
     int16_t  m_AlphaEndDelta;   // +0x80  colour interp delta, second half (Draw local_f0)
     uint16_t m_pad82;           // +0x82
-    Vec2     m_BasisX;          // +0x84  rotated quad basis X (Draw: m_BasisX from RotCycle SinIdx/CosIdx)
-    Vec2     m_BasisY;          // +0x8C  rotated quad basis Y
+    _Vector2<float> m_BasisX;          // +0x84  rotated quad basis X (Draw: m_BasisX from RotCycle SinIdx/CosIdx)
+    _Vector2<float> m_BasisY;          // +0x8C  rotated quad basis Y
     float    m_Basis2Cos;       // +0x94  secondary basis cos*1.41 (Draw flM_Basis2Cos)
     float    m_Basis2Sin;       // +0x98  secondary basis sin*1.41 (Draw flM_Basis2Sin)
     uint8_t  m_NoAttract;       // +0x9C  per-particle flag: when set, skip global-origin attractor pull (Draw local_d3 gate)
@@ -285,8 +285,8 @@ struct PSPParticleEmitter {
     float    m_Timer;                           // +0x00
     uint16_t m_bStarted;                        // +0x04
     uint16_t m_pad06;                           // +0x06
-    Vec3     m_Pos;                             // +0x08
-    Vec3     m_Vel;                             // +0x14
+    _Vector3<float> m_Pos;                             // +0x08
+    _Vector3<float> m_Vel;                             // +0x14
     float    m_RateScale;                       // +0x20
     float    m_SizeBias;                        // +0x24
     float    m_SpinScale;                       // +0x28
@@ -416,7 +416,7 @@ public:
     //   virtual dtor drops the compiler vptr and makes +0x00 available for this float.
     float m_GlobalPullRadius;    // +0x00  vortex pull radius (0.0 at reset/ctor)
     float m_GlobalTimeScale;     // +0x04  global time speed (1.0 at reset/ctor)
-    Vec3  m_GlobalOrigin;        // +0x08  explosion epicenter
+    _Vector3<float> m_GlobalOrigin;        // +0x08  explosion epicenter
 
 private:
     PSPParticleManager();

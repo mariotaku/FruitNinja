@@ -8,7 +8,7 @@ namespace Math {
 // Foot-of-perpendicular on the INFINITE line through A,B (not the segment --
 // despite the name there is no t-clamp). Special cases write only x,y; out.z
 // is left untouched (general path writes z=0). Branch order: A.y==B.y first.
-void ClosestPointOnLine(Vec3 A, Vec3 B, Vec3 P, Vec3& out) {
+void ClosestPointOnLine(_Vector3<float> A, _Vector3<float> B, _Vector3<float> P, _Vector3<float>& out) {
     if (A.y == B.y) {
         out.x = P.x;
         out.y = A.y;
@@ -34,7 +34,7 @@ void ClosestPointOnLine(Vec3 A, Vec3 B, Vec3 P, Vec3& out) {
 // segment's XY bounding box. On success writes only out.x and out.y -- out.z
 // is intentionally untouched (matches binary). DEAD CODE in shipping binary
 // (no callers).
-bool LineIntersect(Vec3 A1, Vec3 A2, Vec3 B1, Vec3 B2, Vec3& out) {
+bool LineIntersect(_Vector3<float> A1, _Vector3<float> A2, _Vector3<float> B1, _Vector3<float> B2, _Vector3<float>& out) {
     float dxA = A2.x - A1.x;
     float dyA = A2.y - A1.y;
     float dxB = B2.x - B1.x;
@@ -75,7 +75,7 @@ bool LineIntersect(Vec3 A1, Vec3 A2, Vec3 B1, Vec3 B2, Vec3& out) {
 // Param 3 is unused. N is NOT mutated. outSigned must be non-null --
 // binary stores unconditionally (no null guard).
 // Asm-inspector misread the Dot PLT thunk as Normalise; corrected by re-RE.
-bool PointOnLineSide(const Vec3* P, const Vec3* B, const Vec3* /*unused*/, const Vec3* N, float* outSigned) {
+bool PointOnLineSide(const _Vector3<float>* P, const _Vector3<float>* B, const _Vector3<float>* /*unused*/, const _Vector3<float>* N, float* outSigned) {
     float signedDist = N->Dot(*P) - N->Dot(*B);
     *outSigned = signedDist;
     return signedDist > 0.0f;
@@ -85,7 +85,9 @@ bool PointOnLineSide(const Vec3* P, const Vec3* B, const Vec3* /*unused*/, const
 // DEAD CODE in shipping binary. Standard Catmull-Rom spline:
 // 0.5 * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t^2 + (-p0+3*p1-3*p2+p3)*t^3)
 // Same constants {2,3,4,5,0.5}, port inlines the Vec3 helper calls; cosmetic.
-Vec3 CatmullRom(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, float t) {
+_Vector3<float> CatmullRom(const _Vector3<float>& p0, const _Vector3<float>& p1, const _Vector3<float>& p2,
+                           const _Vector3<float>& p3, float t)
+{
     float t2 = t * t;
     float t3 = t2 * t;
     return (p1 * 2.0f

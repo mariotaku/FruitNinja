@@ -23,7 +23,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdint>
@@ -82,9 +82,9 @@ int main(int argc, char* argv[]) {
 
         // Stacked along Y so the three bars don't overlap; value at min/mid/max
         // so the knob positions differ visibly (left / center / right).
-        UiSlider slMin(Vec3(0.0f,  80.0f, 0.0f), 0, 100, 0);
-        UiSlider slMid(Vec3(0.0f,   0.0f, 0.0f), 0, 100, 50);
-        UiSlider slMax(Vec3(0.0f, -80.0f, 0.0f), 0, 100, 100);
+        UiSlider slMin(_Vector3<float>(0.0f,  80.0f, 0.0f), 0, 100, 0);
+        UiSlider slMid(_Vector3<float>(0.0f,   0.0f, 0.0f), 0, 100, 50);
+        UiSlider slMax(_Vector3<float>(0.0f, -80.0f, 0.0f), 0, 100, 100);
 
         slMin.SetTrackSize(trackW, trackH);
         slMid.SetTrackSize(trackW, trackH);

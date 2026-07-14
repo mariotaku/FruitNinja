@@ -13,17 +13,17 @@
 ColSphere::ColSphere() : Col(), radius(0.0f) {}
 
 // ASM-spec v1.6.1 ColSphere::ColSphere(Vec3, float) @ 0x0025d024
-ColSphere::ColSphere(Vec3 c, float r) : Col(), radius(r) {
+ColSphere::ColSphere(_Vector3<float> c, float r) : Col(), radius(r) {
     m_PrimaryPoint = c;
 }
 
 // ASM-spec v1.6.1 ColSphere::Collide @ 0x0025d328: vtable slot 3, double-dispatch by other->GetType().
 // Each branch calls the penetration-vector helper which writes outNormal = delta*push
 // (depth-scaled, NOT a unit normal). On hit, sets both collision flags.
-int ColSphere::Collide(Col* other, Vec3* outNormal) {
+int ColSphere::Collide(Col* other, _Vector3<float>* outNormal) {
     int t = other->GetType();
     int hit = 0;
-    Vec3 norm;
+    _Vector3<float> norm;
     if (t == TYPE_SPHERE) {
         hit = ColSphereSphere(this, static_cast<ColSphere*>(other), &norm);
     } else if (t == TYPE_LINE) {
@@ -51,7 +51,7 @@ void ColSphere::DrawDebug() {
     MatrixManager& mm = MatrixManager::GetInstance();
     MatrixStack& world = mm.GetWorldStack();   // m_World @ +0x1094
     world.Reset();
-    world.Scale(Vec3(radius, radius, radius));  // field_0x14 = radius
+    world.Scale(_Vector3<float>(radius, radius, radius));  // field_0x14 = radius
     world.Translate(center());                  // Col::m_PrimaryPoint @ +0x04
     mm.UploadModelViewOnly();                   // binary: _UploadCurrentMatrices(true)
 
@@ -68,22 +68,22 @@ void ColSphere::DrawDebug() {
 }
 
 bool ColSphere::Intersects(const ColSphere& other) const {
-    Vec3 d(center().x - other.center().x, center().y - other.center().y, center().z - other.center().z);
+    _Vector3<float> d(center().x - other.center().x, center().y - other.center().y, center().z - other.center().z);
     float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
     float radSum = radius + other.radius;
     return distSq <= radSum * radSum;
 }
 
 bool ColSphere::IntersectsLine(const ColLine& line) const {
-    Vec3 closest;
+    _Vector3<float> closest;
     Math::ClosestPointOnLine(line.a(), line.b, center(), closest);
-    Vec3 d(closest.x - center().x, closest.y - center().y, closest.z - center().z);
+    _Vector3<float> d(closest.x - center().x, closest.y - center().y, closest.z - center().z);
     float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
     return distSq <= radius * radius;
 }
 
-bool ColSphere::Contains(const Vec3& p) const {
-    Vec3 d(p.x - center().x, p.y - center().y, p.z - center().z);
+bool ColSphere::Contains(const _Vector3<float>& p) const {
+    _Vector3<float> d(p.x - center().x, p.y - center().y, p.z - center().z);
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
@@ -92,13 +92,13 @@ bool ColSphere::Contains(const Vec3& p) const {
 //   closest = ClosestPointOnLine(l.a, l.b, this.center); delta = closest - center;
 //   if MagnitudeSqr(delta) < radius^2: mag = Magnitude(delta); normalise(delta);
 //   push = |radius - mag|; outVec = delta * push; return 1. Else return 0.
-int ColSphere::ColSphereLine(ColSphere* self, ColLine* l, Vec3* outVec) {
+int ColSphere::ColSphereLine(ColSphere* self, ColLine* l, _Vector3<float>* outVec) {
     // Math::ClosestPointOnLine(A, B, P, out): A=line start, B=line end, P=sphere centre.
-    Vec3 closest;
+    _Vector3<float> closest;
     Math::ClosestPointOnLine(l->a(), l->b, self->center(), closest);
 
     // Binary order: operator-(out, this=closest, param=center) -> closest - center.
-    Vec3 delta = closest - self->center();
+    _Vector3<float> delta = closest - self->center();
     float distSq = delta.MagnitudeSqr();
     if (distSq < self->radius * self->radius) {
         float mag = delta.Magnitude();   // computed before Normalise (binary calls both)
@@ -117,12 +117,12 @@ int ColSphere::ColSphereLine(ColSphere* self, ColLine* l, Vec3* outVec) {
 //   radSum = this.radius + other.radius;
 //   if MagnitudeSqr(delta) < radSum^2: d = Sqrt(distSq); push = d - radSum;
 //     if d > 0 delta /= d; outVec = delta * push; return 1. Else (no hit) outVec stays zero, return 0.
-int ColSphere::ColSphereSphere(ColSphere* self, ColSphere* other, Vec3* outVec) {
-    Vec3 delta = self->center() - other->center();
+int ColSphere::ColSphereSphere(ColSphere* self, ColSphere* other, _Vector3<float>* outVec) {
+    _Vector3<float> delta = self->center() - other->center();
     float distSq = delta.MagnitudeSqr();
 
     // Output initialised to zero before the penetration test (matches binary store).
-    *outVec = Vec3::Zero();
+    *outVec = _Vector3<float>::Zero();
 
     float radSum = self->radius + other->radius;
     if (distSq < radSum * radSum) {

@@ -15,7 +15,7 @@
 // onto the shared HUDControl3d fields after construction.
 ScoreMultiplyerBoard::ScoreMultiplyerBoard()
     : HUDControl3d()
-    , m_BasePosition(Vec3::Zero())
+    , m_BasePosition(_Vector3<float>::Zero())
     , m_pOwner(0)
     , m_PendingCount(0)
     , m_ScoreValue(-1)
@@ -54,18 +54,18 @@ void ScoreMultiplyerBoard::Update(float dt) {
     if (m_ScoreValue == 0) {
         // No payout banked (x2 expired without slicing anything) -- retreat
         // and remove; never reaches the payout/slide branch below.
-        pos = m_BasePosition - Vec3(0.0f, -70.0f, 0.0f) * rise;
+        pos = m_BasePosition - _Vector3<float>(0.0f, -70.0f, 0.0f) * rise;
         if (rise > 0.99f) m_bPendingRemoval = 1;
         return;
     }
 
     // Payout branch.
-    pos = m_BasePosition + Vec3(0.0f, -70.0f, 0.0f) * rise;
+    pos = m_BasePosition + _Vector3<float>(0.0f, -70.0f, 0.0f) * rise;
 
     // Exit slide, [1.05, 1.3]: eased quadratic slide-out to the left.
     float slide = Clamp((t - 1.05f) * 4.0f, 0.0f, 1.0f);
     slide *= slide;
-    pos += Vec3(-150.0f, 0.0f, 0.0f) * slide;
+    pos += _Vector3<float>(-150.0f, 0.0f, 0.0f) * slide;
 
     // Green-counter shrink, [0.3, 0.5]: f goes 1->0, m_Scale follows SinIdx(f*16380)
     // (~1.0 -> 0.0, quarter-turn ease).
@@ -79,7 +79,7 @@ void ScoreMultiplyerBoard::Update(float dt) {
     if (tOld < 0.5f && t >= 0.5f) {
         PSPParticleEmitter* emitter = PSPParticleManager::GetInstance().AddEmitter(
             StringHash("bonus_star_impact"), 0, false);
-        if (emitter) emitter->m_Pos = pos + Vec3(0.0f, 10.0f, 0.0f);
+        if (emitter) emitter->m_Pos = pos + _Vector3<float>(0.0f, 10.0f, 0.0f);
     }
 
     // Blue number-pop, [0.5, 0.7]: p goes 0->1, m_Scale = SinIdx(p*20566)/SinIdx(0x5056)*1.35
@@ -105,7 +105,7 @@ void ScoreMultiplyerBoard::Update(float dt) {
 // ASM-spec v1.6.1 ScoreMultiplyerBoard::Draw @0x001ae434
 void ScoreMultiplyerBoard::Draw(float* /*hudScaleRaw*/) {
     m_DrawColour = Colour(255, 255, 255, 255);
-    Vec3 unitScale(1.0f, 1.0f, 1.0f);
+    _Vector3<float> unitScale(1.0f, 1.0f, 1.0f);
     HUDControl3d::Draw(&unitScale.x);
 
     int value;
@@ -125,7 +125,7 @@ void ScoreMultiplyerBoard::Draw(float* /*hudScaleRaw*/) {
 
     if (font.IsValid()) {
         font->DrawString(m_Scale * 35.0f, 1.0f, 0.0f, buf,
-                          pos + Vec3(0.0f, 10.0f, 0.0f), m_DrawColour, 0xF);
+                          pos + _Vector3<float>(0.0f, 10.0f, 0.0f), m_DrawColour, 0xF);
     }
 }
 

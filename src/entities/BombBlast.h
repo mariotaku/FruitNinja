@@ -21,21 +21,21 @@
 //
 
 #include "Entity.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 
 class BombBlast : public Mortar::Entity {
 public:
     // +0x3C: positions extruded along vel1/vel2 (start at vel copies, grow each frame)
-    Vec3 m_PosA;
+    _Vector3<float> m_PosA;
 
     // +0x48
-    Vec3 m_PosB;
+    _Vector3<float> m_PosB;
 
     // +0x54: primary expansion velocity (angle direction, 0.5x magnitude)
-    Vec3 m_Vel1;
+    _Vector3<float> m_Vel1;
 
     // +0x60: perpendicular velocity (full magnitude)
-    Vec3 m_Vel2;
+    _Vector3<float> m_Vel2;
 
     // +0x6C: seconds since spawn — kills at 3.0s
     float m_Lifetime;
@@ -54,7 +54,7 @@ public:
     // All three params are unused at runtime — caller passes (this, 0, 0, 0).
     // The first arg is r0 / `this` (Ghidra's void* p1 is a free-function-rendering
     // artifact); body operates exclusively on `this`.
-    void Init(void* p1, long p2, Vec3* p3) override;
+    void Init(void* p1, long p2, _Vector3<float>* p3) override;
     void Update(float dt) override;
     // Binary @ 0x00171034 — no-op override. Must be present (not pure-virtual abort).
     void Draw(Renderer& r) override;

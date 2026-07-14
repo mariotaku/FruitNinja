@@ -70,7 +70,8 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
 // To match the binary byte-for-byte we'd also need to port the
 // orientation-matrix step (TODO), at which point this can be swapped
 // for the LookAt43 form.
-void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target, Matrix43* out) {
+void MatrixManager::SetupLookAt(const _Vector3<float>& eye, const _Vector3<float>& upHint,
+                                const _Vector3<float>& target, Matrix43* out) {
     Matrix44 view;
     mat4_look_at(view.ptr(),
                  eye.x,    eye.y,    eye.z,

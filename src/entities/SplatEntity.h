@@ -23,7 +23,7 @@
 // and NOT Mortar::MemoryPool<T> -- see SplatEntity::GetFree @0x001eb318.
 //
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include <cstdint>
 #include <cstddef>
@@ -50,16 +50,16 @@ public:
     uint8_t  m_bSpecial;         // +0x19: copy of FRUIT_INFO[m_FruitType].m_bSpecial
     uint8_t  pad1A[2];           // +0x1A: padding
 
-    Vec3     m_AxisA;            // +0x1C: right-axis at m_Angle * 0.5
-    Vec3     m_AxisB;            // +0x28: up-axis at m_Angle+90 * 0.5
+    _Vector3<float> m_AxisA;            // +0x1C: right-axis at m_Angle * 0.5
+    _Vector3<float> m_AxisB;            // +0x28: up-axis at m_Angle+90 * 0.5
 
     uint8_t  m_bFlipV;           // +0x34: random V-flip flag
     uint8_t  pad35[3];           // +0x35: padding
 
-    Vec3     m_Pos;              // +0x38: position (spawn z forced to 0; z < -50 -> land)
-    Vec3     m_Scale;            // +0x44: (sc, -sc, sc) where sc = Rand[10,20); m_Scale.y mutates in slide-decay
-    Vec3     m_ScaleSpawn;       // +0x50: copy of m_Scale at spawn (MakeSplat snapshot; never mutated)
-    Vec3     m_Vel;              // +0x5C: velocity (transformed at spawn)
+    _Vector3<float> m_Pos;              // +0x38: position (spawn z forced to 0; z < -50 -> land)
+    _Vector3<float> m_Scale;            // +0x44: (sc, -sc, sc) where sc = Rand[10,20); m_Scale.y mutates in slide-decay
+    _Vector3<float> m_ScaleSpawn;       // +0x50: copy of m_Scale at spawn (MakeSplat snapshot; never mutated)
+    _Vector3<float> m_Vel;              // +0x5C: velocity (transformed at spawn)
 
     float    m_Life;             // +0x68: life timer (set on LANDING, not on spawn)
     float    m_DecayRate;        // +0x6C: decay rate (set on LANDING, not on spawn)
@@ -72,7 +72,7 @@ public:
     // --- Vtable slot 2: Init (binary @ 0x001eb264) ---
     // Binary signature: (SplatEntity*, void*, long, _Vector3*). All args ignored.
     // Body: m_SplatType=-1; m_bAlive=1.
-    virtual void Init(void* param1 = 0, long param2 = 0, const Vec3* param3 = 0);
+    virtual void Init(void* param1 = 0, long param2 = 0, const _Vector3<float>* param3 = 0);
 
     // --- Vtable slot 3: Release (binary @ 0x0017edd0) ---
     // bx lr (no-op)
@@ -108,7 +108,7 @@ public:
     //   = (FruitInfo::m_bIsSuperFruit @+0x330 != 0). Super-fruit splats land silent.
     // TODO: v1.6.1 0x001eb910 -- confirm MakeSplat 4th arg (port landImmediately vs binary
     //   m_bParam3/long) against ExplodeSuperFruit @0x001bab08 before trusting param order.
-    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType, bool mute);
+    void MakeSplat(_Vector3<float> pos, _Vector3<float> vel, bool param3, bool landImmediately, long fruitType, bool mute);
 
     // --- Pool API ---
     // Binary: SplatEntity::CreatePool @ 0x001eb490 -- flat round-robin pool

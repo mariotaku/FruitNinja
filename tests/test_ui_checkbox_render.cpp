@@ -22,7 +22,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdint>
@@ -74,8 +74,8 @@ int main(int argc, char* argv[]) {
 
     {
         // Two checkboxes spaced apart along X so they don't overlap.
-        UiCheckbox cbUnchecked(Vec3(-60.0f, 0.0f, 0.0f), 40.0f, false);
-        UiCheckbox cbChecked  (Vec3( 60.0f, 0.0f, 0.0f), 40.0f, true);
+        UiCheckbox cbUnchecked(_Vector3<float>(-60.0f, 0.0f, 0.0f), 40.0f, false);
+        UiCheckbox cbChecked  (_Vector3<float>( 60.0f, 0.0f, 0.0f), 40.0f, true);
 
         cbUnchecked.SetBoxTexture(texBox);
         cbChecked.SetBoxTexture(texBox);

@@ -205,8 +205,8 @@ static void TriggerButtonSlice(MenuButton* btn) {
     f->m_bSliced = 1;
     // Give vel and m_SecondVel different values so |vel - m_SecondVel|^2 > 0.001.
     // This matches what Fruit::Slice() does: vel=halfVelB, m_SecondVel=halfVelA.
-    f->vel        = Vec3(5.0f, 2.0f, 0.0f);
-    f->m_SecondVel = Vec3(-5.0f, -2.0f, 0.0f);
+    f->vel        = _Vector3<float>(5.0f, 2.0f, 0.0f);
+    f->m_SecondVel = _Vector3<float>(-5.0f, -2.0f, 0.0f);
     // m_bDrawWhole=1 mirrors ClearMenuItems / slice path.
     f->m_bDrawWhole = 1;
     printf("  [TriggerSlice] btn=%p fruit=%p m_bSliced set, vel=(5,2,0) secondVel=(-5,-2,0)\n",

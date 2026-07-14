@@ -32,7 +32,7 @@
 
 #include "test_harness.h"
 #include "hud/IngamePopup.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstdio>
 
 // Render popup at (posX, posY) with the given scale for nFrames.
@@ -51,7 +51,7 @@ static void RunBadgeFrames(fn::TestHarness& h, IngamePopup* popup,
         MatrixManager::GetInstance().SetupOrtho(
             160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
-        Vec3 pos(posX, posY, 0.0f);
+        _Vector3<float> pos(posX, posY, 0.0f);
         popup->Draw(pos, scale);
 
         SDL_GL_SwapWindow(h.window);

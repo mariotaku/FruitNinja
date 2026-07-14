@@ -31,7 +31,7 @@
 
 #include "hud/HUDControl3d.h"
 #include "engine/util/Delegate.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/audio/GameSound.h"
 #include "engine/audio/MortarSound.h"
 #include "game/GameWork.h"
@@ -194,7 +194,7 @@ public:
     ~UpsellScreenElement() {}
 
     // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreenElement::SetTexture @ 0x00108504
-    void SetTexture(float, float, float, float, float, Vec3* /*pos*/, void* /*tex*/) {}
+    void SetTexture(float, float, float, float, float, _Vector3<float>* /*pos*/, void* /*tex*/) {}
 
     // Defunct: UpsellScreen monetization -- no-op stub
     void SetAngle(unsigned short /*angleIdx*/, float /*duration*/) {}

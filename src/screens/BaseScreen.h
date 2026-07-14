@@ -24,7 +24,7 @@
 #include "ScreenButton.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <list>
 
 namespace Mortar { class BakedStringBox; }
@@ -52,15 +52,15 @@ public:
     //   DrawBorders(Mortar::SmartPtr<Mortar::Texture>, ...) @ v1.6.1 @0x0015fcec
     //   DrawBorders(Mortar::BakedStringBox*, ...) @ v1.6.1 @0x0015f878
     void DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
-                     float alpha, Vec3 secondaryTexPos);
+                     float alpha, _Vector3<float> secondaryTexPos);
 
     // v1.6.1 BakedStringBox* overload @ 0x0015f878.
     // Draws shade triangles + sml_title deco (same geometry as SmartPtr overload,
     // no secondary texture). If box != nullptr, calls box->SetTranslation/Draw.
     // Returns the anchor Vec3 used to position the box.
     // ASM-verified lhs-rhs: v1.6.1 @0x15fc80
-    Vec3 DrawBorders(Mortar::BakedStringBox* box,
-                     float alpha, Vec3 arg3);
+    _Vector3<float> DrawBorders(Mortar::BakedStringBox* box,
+                                float alpha, _Vector3<float> arg3);
 
     // UpdateButtons v1.6.1 @0x001602cc — lazy ScreenButton creation + update.
     void UpdateButtons(float dt);

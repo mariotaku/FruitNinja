@@ -7,7 +7,7 @@
 #include "asset/Texture.h"
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <math.h>
 
 namespace Mortar {
@@ -88,7 +88,7 @@ void NineSlice::Draw(Texture* tex, float centerX, float centerY,
         if (c.w <= 0.0f || c.h <= 0.0f) continue;   // skip a collapsed edge/centre
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(c.w, c.h, 1.0f);
-        mat.GlobalTranslate44(Vec3(c.x, c.y, 0.0f));
+        mat.GlobalTranslate44(_Vector3<float>(c.x, c.y, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawQuadUnCached(colour, c.uMin, c.uMax, c.vMin, c.vMax, NULL);
@@ -179,7 +179,7 @@ void NineSlice::DrawTiled(Texture* tex, float centerX, float centerY,
         if (cornerW <= 0.0f || cornerH <= 0.0f) continue;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(cornerW, cornerH, 1.0f);
-        mat.GlobalTranslate44(Vec3(c.x, c.y, 0.0f));
+        mat.GlobalTranslate44(_Vector3<float>(c.x, c.y, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawQuadUnCached(colour, c.uMin, c.uMax, c.vMin, c.vMax, NULL);
@@ -200,14 +200,14 @@ void NineSlice::DrawTiled(Texture* tex, float centerX, float centerY,
 
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(w, cornerH, 1.0f);
-            mat.GlobalTranslate44(Vec3(cx, topCy, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(cx, topCy, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawQuadUnCached(colour, ux1, uMax, uy0, uy1, NULL);
 
             mm.GetWorldStack().Reset();
             mat = Matrix44::MakeScale(w, cornerH, 1.0f);
-            mat.GlobalTranslate44(Vec3(cx, botCy, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(cx, botCy, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawQuadUnCached(colour, ux1, uMax, uy2, uy3, NULL);
@@ -229,14 +229,14 @@ void NineSlice::DrawTiled(Texture* tex, float centerX, float centerY,
 
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(cornerW, h, 1.0f);
-            mat.GlobalTranslate44(Vec3(leftCx, cy, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(leftCx, cy, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawQuadUnCached(colour, ux0, ux1, uy1, vMax, NULL);
 
             mm.GetWorldStack().Reset();
             mat = Matrix44::MakeScale(cornerW, h, 1.0f);
-            mat.GlobalTranslate44(Vec3(rightCx, cy, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(rightCx, cy, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawQuadUnCached(colour, ux2, ux3, uy1, vMax, NULL);
@@ -272,7 +272,7 @@ void NineSlice::DrawTiled(Texture* tex, float centerX, float centerY,
 
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
-                mat.GlobalTranslate44(Vec3(cx, cy, 0.0f));
+                mat.GlobalTranslate44(_Vector3<float>(cx, cy, 0.0f));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 Mortar::Mesh::DrawQuadUnCached(colour, cuMin, uMax, cvMin, vMax, NULL);

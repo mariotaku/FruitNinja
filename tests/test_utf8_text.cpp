@@ -20,6 +20,7 @@
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontInterface.h"
 #include "render/BakedStringBox.h"
+#include "render/FancyBakedString.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "math/Colour.h"
@@ -119,8 +120,8 @@ extern "C" {
 void MatrixStack::Push() {}
 void MatrixStack::Pop() {}
 void MatrixStack::Reset() {}
-void MatrixStack::Scale(const Vec3&) {}
-void MatrixStack::Translate(const Vec3&) {}
+void MatrixStack::Scale(const _Vector3<float>&) {}
+void MatrixStack::Translate(const _Vector3<float>&) {}
 void MatrixStack::SetCurrentMatrix(const Matrix44&) {}
 
 // ---------------------------------------------------------------------------
@@ -138,7 +139,7 @@ MatrixManager::MatrixManager()
 MatrixManager MatrixManager::s_instance;
 MatrixManager::~MatrixManager() {}
 void MatrixManager::SetupOrtho(float, float, float, float, float, float, Matrix44*) {}
-void MatrixManager::SetupLookAt(const Vec3&, const Vec3&, const Vec3&, Matrix43*) {}
+void MatrixManager::SetupLookAt(const _Vector3<float>&, const _Vector3<float>&, const _Vector3<float>&, Matrix43*) {}
 void MatrixManager::UploadAll() {}
 void MatrixManager::UploadModelViewOnly() {}
 void MatrixManager::ResetAllStacks() {}
@@ -188,6 +189,60 @@ GLuint FontInterface::GetPageTextureID(int) const { return 0; }
 FontAtlasPage* FontInterface::AllocatePage() { return nullptr; }
 void FontInterface::EnsurePageTexture(FontAtlasPage*) {}
 void FontInterface::MarkPageDirty(FontAtlasPage*, int, int, int, int) {}
+
+// ---------------------------------------------------------------------------
+// FancyBakedString stub (link-only).
+//
+// BakedStringBox::RebuildMeshes constructs one FancyBakedString per wrapped
+// line and calls its Apply*/GetBounds/Draw methods; SetText() below drives
+// that path. FancyBakedString.cpp is deliberately NOT in this test's source
+// list (it would cascade into BakedStringTTF.cpp -> Font/Mesh/... -- the
+// whack-a-mole this isolated test exists to avoid), so this TU provides the
+// only definition of the class body the linker sees, mirroring the
+// FontCacheObjectTTF recording-stub pattern above.
+//
+// The ctor stores nothing real (the six BakedStringTTF layer ptrs stay
+// null); GetBounds() returning null is a path BakedStringBox::RebuildMeshes
+// already null-checks (see `bounds ? bounds->Width() : 0.0f`). Draw()/Apply*
+// are no-ops -- this test never renders or recolours, only measures codepoint
+// recording through SetText().
+//
+// MSVC (C2888) rejects `namespace Mortar { void Mortar::FancyBakedString::X() {} }`
+// -- out-of-line member definitions must be at file/global scope with the
+// fully-qualified name, so unlike the other stub blocks in this file these
+// are NOT wrapped in `namespace Mortar { ... }`.
+// ---------------------------------------------------------------------------
+
+Mortar::FancyBakedString::FancyBakedString(Mortar::FontCacheObjectTTF*, const char*, float,
+                                           Colour, int, float,
+                                           float, Colour,
+                                           float, Colour,
+                                           float, Colour,
+                                           int, float, int,
+                                           Colour, Colour)
+    : m_ShadowOffset(0.0f, 0.0f, 0.0f)
+    , m_LineOffset(0.0f, 0.0f, 0.0f)
+    , m_pShadow(nullptr)
+    , m_pGlow(nullptr)
+    , m_pMain(nullptr)
+    , m_pStroke(nullptr)
+    , m_pExtra1(nullptr)
+    , m_pExtra2(nullptr)
+    , m_ShadowColour()
+    , m_GlowColour()
+{}
+
+Mortar::FancyBakedString::~FancyBakedString() {}
+
+void Mortar::FancyBakedString::Draw(const _Vector3<float>&, _Vector2<float>, float, Mortar::ALIGNMENT_TYPE) {}
+
+void Mortar::FancyBakedString::ApplyGradientSplit(Colour, float) {}
+void Mortar::FancyBakedString::ApplyGradient(Colour) {}
+void Mortar::FancyBakedString::ApplyGradient(Colour, Colour) {}
+void Mortar::FancyBakedString::ApplyGradient(Colour, Colour, Colour) {}
+void Mortar::FancyBakedString::ApplyMetallicGradient(Colour, Colour, Colour, Colour) {}
+void Mortar::FancyBakedString::ApplyStrokeGradient(Colour, Colour) {}
+void Mortar::FancyBakedString::ApplyStrokeGradient(Colour, Colour, Colour) {}
 
 // ---------------------------------------------------------------------------
 // RECORDING FontCacheObjectTTF stub

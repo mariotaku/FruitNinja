@@ -7,7 +7,7 @@
 
 #include <cmath>
 
-UiSlider::UiSlider(const Vec3& inPos, int minV, int maxV, int value)
+UiSlider::UiSlider(const _Vector3<float>& inPos, int minV, int maxV, int value)
     : UiWidget()
     , m_Min(minV)
     , m_Max(maxV)

@@ -33,7 +33,7 @@
 
 class UiSlider : public UiWidget {
 public:
-    UiSlider(const Vec3& pos, int minV = 0, int maxV = 100, int value = 0);
+    UiSlider(const _Vector3<float>& pos, int minV = 0, int maxV = 100, int value = 0);
     virtual ~UiSlider();
 
     void Update(float dt) override;

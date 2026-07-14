@@ -8,7 +8,7 @@
 //
 
 #include "Entity.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "render/gl_funcs.h"
 #include "util/Delegate.h"
 #include "util/SmartPtr.h"
@@ -99,10 +99,10 @@ public:
     uint8_t m_bMenuBombHit;                  // +0x88
 
     // +0x8C: gravity vector; Init=(0,-12,0)
-    Vec3 m_AccelForce;                       // +0x8C
+    _Vector3<float> m_AccelForce;                       // +0x8C
 
     // +0x98: scale backup from Init
-    Vec3 m_OrigScale;                        // +0x98
+    _Vector3<float> m_OrigScale;                        // +0x98
 
     // +0xA4: chuck/fuse delay countdown; 0=spawned
     float m_Countdown;                       // +0xA4
@@ -126,7 +126,7 @@ public:
 
     // vtable slot 2 — v1.6.1 @ 0x1d69e0
     // p1/p2 unused; p3 = nullable scale Vec3* (default 1.0)
-    void Init(void* p1, long p2, Vec3* scaleOrNull) override;
+    void Init(void* p1, long p2, _Vector3<float>* scaleOrNull) override;
 
     // vtable slot 3 — v1.6.1 @ 0x1d5720
     // Drops fuse emitter, clears owner-button backref, clears highestBomb, calls Entity::Release.
@@ -144,7 +144,7 @@ public:
     // vtable slot 9 — v1.6.1 @ 0x1d5d4c
     // Returns 0. Triggers bomb hit effects (arcade/zen/menu branch).
     int CollisionResponse(Mortar::Entity* hitter, unsigned long flagsA, unsigned long flagsB,
-                          Vec3* bladeVelocity) override;
+                          _Vector3<float>* bladeVelocity) override;
 
     // v1.6.1 @ 0x1d5660 — set ENT_KILLED + clear owner backref + clear emitter
     void KillBomb();
@@ -243,9 +243,9 @@ float GetBombZPosition();
 // v1.6.1 @ 0x00168f24
 bool BombFlashFull();
 // v1.6.1 @ 0x1cf27c
-void HitBomb(Vec3 pos);
+void HitBomb(_Vector3<float> pos);
 // v1.6.1 @ 0x1cf42c
-void HitMenuBomb(Vec3 pos);
+void HitMenuBomb(_Vector3<float> pos);
 // v1.6.1 @ 0x0016b73c
 void DrawBombHit();
 // v1.6.1 @ 0x0016a1a8
@@ -253,6 +253,6 @@ void UpdateBombHit(float prevTimer);
 
 // World position of the last bomb hit; written by HitBomb / HitMenuBomb.
 // Read by DrawBombHit.
-extern Vec3 g_BombHitPos;
+extern _Vector3<float> g_BombHitPos;
 
 #endif

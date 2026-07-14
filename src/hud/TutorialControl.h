@@ -59,7 +59,7 @@ public:
 
     // Matches TutorialControl::ResetTutePos @ 0x00162f84.
     // Raw position overload -- sets pos directly, resets timer.
-    void ResetTutePos(const Vec3& targetPos);
+    void ResetTutePos(const _Vector3<float>& targetPos);
 
     // Matches TutorialControl::CanShowTute @ 0x00162fb8.
     // Returns true during slow-motion or screen transitions.
@@ -78,7 +78,7 @@ private:
     float m_AnimTimer;                        // +0x7C
 
     // +0x80: computed draw position (scale * pos, with bounce offset)
-    Vec3 m_DrawPos;                           // +0x80
+    _Vector3<float> m_DrawPos;                           // +0x80
 
     // +0x8C: trail texture (press_indicate.tex) -- used for the 4-quad trail loop.
     // Draw uses super.m_Texture (+0x74, swipe_fruit_begin.tex) for the ARROW quad,

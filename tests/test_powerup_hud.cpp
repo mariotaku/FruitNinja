@@ -69,7 +69,7 @@
 #include "game/FruitSaveData.h"
 #include "hud/HUD.h"
 #include "engine/util/StringHash.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
     pum->LoadTextures();
 
     if (std::strcmp(combo, "intro") == 0) {
-        Vec3 origin(0.0f, 0.0f, 0.0f);
+        _Vector3<float> origin(0.0f, 0.0f, 0.0f);
         // Real arcade seeds time-remaining via TimeControl::Reset (v1.6.1 @0x001c0930)
         // BEFORE ready_set_go activates. Without it, GameModifier::OnDeferComplete
         // (v1.6.1 @0x00140890) clamps m_BonusAccum 2.0 -> 0.1 (target=0 < 2.0), collapsing
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
     const char* names[3] = { NULL, NULL, NULL };
     int count = ComboNames(combo, names);
 
-    Vec3 origin(0.0f, 0.0f, 0.0f);
+    _Vector3<float> origin(0.0f, 0.0f, 0.0f);
     for (int i = 0; i < count; ++i) {
         PowerUp* p = pum->ActivatePower(StringHash(names[i]), origin, NULL);
         std::printf("[%s] activate \"%s\" -> %p\n", label.c_str(), names[i], (void*)p);

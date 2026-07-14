@@ -16,7 +16,7 @@ ColAABB::ColAABB() : Col(), m_HalfExtents(1.0f, 1.0f, 1.0f) {
 
 // Binary @ 0x00275e2c -- ctor(centre, halfExtents): stores arg0->centre, arg1->half-extents,
 // clears collide flag, then rebuilds cached corner verts.
-ColAABB::ColAABB(Vec3 center, Vec3 halfExtents) : Col(), m_HalfExtents(halfExtents) {
+ColAABB::ColAABB(_Vector3<float> center, _Vector3<float> halfExtents) : Col(), m_HalfExtents(halfExtents) {
     m_PrimaryPoint = center;
     ClearCollideFlag();
     UpdateVertices();
@@ -55,8 +55,8 @@ void ColAABB::UpdateVertices() {
 // d = box1.centre - box2.centre; per-axis overlap = |d.axis| - (h1.axis + h2.axis).
 // Any axis with overlap >= 0 => separated. Otherwise pick the axis of smallest
 // penetration depth and emit out.axis = -(depth * sign(d.axis)); other axes 0.
-bool ColAABB::ColAABBAABB(ColAABB* box1, ColAABB* box2, Vec3* out) {
-    Vec3 d = box1->m_Center() - box2->m_Center();
+bool ColAABB::ColAABBAABB(ColAABB* box1, ColAABB* box2, _Vector3<float>* out) {
+    _Vector3<float> d = box1->m_Center() - box2->m_Center();
 
     float ox = std::fabs(d.x) - (box1->m_HalfExtents.x + box2->m_HalfExtents.x);
     if (ox >= 0.0f) return false;
@@ -67,7 +67,7 @@ bool ColAABB::ColAABBAABB(ColAABB* box1, ColAABB* box2, Vec3* out) {
 
     if (out == 0) return true;
 
-    *out = Vec3();                 // zero out first (binary loads _Vector3::Zero)
+    *out = _Vector3<float>();                 // zero out first (binary loads _Vector3::Zero)
     ox = std::fabs(ox);
     oy = std::fabs(oy);
     oz = std::fabs(oz);
@@ -92,11 +92,11 @@ bool ColAABB::ColAABBAABB(ColAABB* box1, ColAABB* box2, Vec3* out) {
 
 // Binary @ 0x002760c4 -- AABB-vs-Sphere closest-point test + penetration normal.
 // box == this, sphere->m_Center() is the sphere centre, sphere->radius the radius.
-bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
-    Vec3 d = box->m_Center() - sphere->center();
+bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, _Vector3<float>* out) {
+    _Vector3<float> d = box->m_Center() - sphere->center();
     float r = sphere->radius;
 
-    if (out) *out = Vec3();        // zero out first
+    if (out) *out = _Vector3<float>();        // zero out first
 
     float ox = std::fabs(d.x) - (box->m_HalfExtents.x + r);
     if (ox >= 0.0f) return false;
@@ -106,7 +106,7 @@ bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
     if (oz >= 0.0f) return false;
 
     // Closest point on the box to the sphere centre (clamp sphere centre into box span).
-    Vec3 closest;
+    _Vector3<float> closest;
     float cx = box->m_Center().x, hx = box->m_HalfExtents.x, sx = sphere->center().x;
     if (sx > cx + hx || sx < cx - hx) closest.x = (sx <= cx) ? (cx - hx) : (cx + hx);
     else                              closest.x = sx;
@@ -139,7 +139,7 @@ bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
     }
 
     // Closest point on box surface; push out along (closest - sphere centre).
-    Vec3 delta = closest - sphere->center();
+    _Vector3<float> delta = closest - sphere->center();
     if (delta.MagnitudeSqr() - r * r >= 0.0f) return false;
     float dist = delta.Magnitude();
     delta.Normalise();
@@ -151,18 +151,18 @@ bool ColAABB::ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out) {
 // Binary @ 0x002763b4 -- AABB-vs-Line (segment) separating-axis test + penetration normal.
 // box == this, param line. Treats the segment as a degenerate box (midpoint + half-direction)
 // for the broadphase, then tests one perpendicular SAT axis derived from the segment.
-bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, Vec3* out) {
+bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, _Vector3<float>* out) {
     // Degenerate box guard (binary: half-extents == Zero => no collision).
-    if (box->m_HalfExtents == Vec3()) return false;
+    if (box->m_HalfExtents == _Vector3<float>()) return false;
 
-    Vec3 lb = line->b;
-    Vec3 la = line->a();
-    Vec3 dir = lb - la;                 // segment direction
-    Vec3 halfDir = dir * 0.5f;
-    Vec3 mid = la + halfDir;            // segment midpoint
-    Vec3 lineHalf(std::fabs(halfDir.x), std::fabs(halfDir.y), std::fabs(halfDir.z));
+    _Vector3<float> lb = line->b;
+    _Vector3<float> la = line->a();
+    _Vector3<float> dir = lb - la;                 // segment direction
+    _Vector3<float> halfDir = dir * 0.5f;
+    _Vector3<float> mid = la + halfDir;            // segment midpoint
+    _Vector3<float> lineHalf(std::fabs(halfDir.x), std::fabs(halfDir.y), std::fabs(halfDir.z));
 
-    Vec3 sep = box->m_Center() - mid;   // box.centre - segment midpoint
+    _Vector3<float> sep = box->m_Center() - mid;   // box.centre - segment midpoint
     float ox = std::fabs(sep.x) - (box->m_HalfExtents.x + lineHalf.x);
     if (ox > 0.0f) return false;
     float oy = std::fabs(sep.y) - (box->m_HalfExtents.y + lineHalf.y);
@@ -171,27 +171,27 @@ bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, Vec3* out) {
     if (oz > 0.0f) return false;
 
     // Build the segment's SAT axis (perpendicular candidate) and orient it.
-    Vec3 axis(dir.x, dir.y, -dir.z);
+    _Vector3<float> axis(dir.x, dir.y, -dir.z);
     float side;
     if (Math::PointOnLineSide(&box->m_Center(), &la, &lb, &axis, &side)) {
-        axis = Vec3(-dir.x, dir.y, dir.z);
+        axis = _Vector3<float>(-dir.x, dir.y, dir.z);
     }
     axis.Normalise();
 
     // Project all 8 box corners onto the axis, track [boxMin, boxMax].
     float cx = box->m_Center().x, cy = box->m_Center().y, cz = box->m_Center().z;
     float hx = box->m_HalfExtents.x, hy = box->m_HalfExtents.y, hz = box->m_HalfExtents.z;
-    Vec3 corner;
+    _Vector3<float> corner;
     float boxMin, boxMax, p;
 
-    corner = Vec3(cx + hx, cy + hy, cz + hz); boxMin = boxMax = axis.Dot(corner);
-    corner = Vec3(cx + hx, cy + hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx + hx, cy - hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx + hx, cy - hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx - hx, cy + hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx - hx, cy + hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx - hx, cy - hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
-    corner = Vec3(cx - hx, cy - hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx + hx, cy + hy, cz + hz); boxMin = boxMax = axis.Dot(corner);
+    corner = _Vector3<float>(cx + hx, cy + hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx + hx, cy - hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx + hx, cy - hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx - hx, cy + hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx - hx, cy + hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx - hx, cy - hy, cz + hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
+    corner = _Vector3<float>(cx - hx, cy - hy, cz - hz); p = axis.Dot(corner); boxMin = Math::Min<float>(boxMin, p); boxMax = Math::Max<float>(boxMax, p);
 
     // Project the two segment endpoints; lineMin is the relevant separation bound.
     float pa = axis.Dot(la);
@@ -203,7 +203,7 @@ bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, Vec3* out) {
 
     if (out == 0) return true;         // binary null-checks the out pointer here
 
-    *out = Vec3();
+    *out = _Vector3<float>();
     float aox = std::fabs(ox);
     float aoy = std::fabs(oy);
     float aoverlap = std::fabs(overlap);
@@ -241,7 +241,7 @@ bool ColAABB::IntersectsLine(const ColLine& line) {
 // Binary slot 3 @ 0x0027674c -- double-dispatch by other->GetType().
 // SPHERE/LINE results are NEGATED before storing (binary points from sphere/line
 // INTO the AABB); AABB-vs-AABB is stored as-is. On hit, both collide flags are set.
-int ColAABB::Collide(Col* other, Vec3* outNormal) {
+int ColAABB::Collide(Col* other, _Vector3<float>* outNormal) {
     int t = other->GetType();
     bool hit;
 

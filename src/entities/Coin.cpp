@@ -32,8 +32,8 @@ static const float COIN_DECEL_TIME      = 0.05f;    // state 3 hold time (second
 static const float COIN_HOMING_CLOSE    = 30.0f;    // arrival distance (state 4->1)
 static const float COIN_TURN_RATE       = 0.85f;    // homing steering base rate
 static const float COIN_SPIN_RATE       = 32760.0f * 500.0f; // spin = rate * dt (binary: 32760*dt*500)
-static const Vec3  COIN_DEFAULT_TARGET(220.0f, -140.0f, 0.0f);  // default homing target (was misnamed "gravity")
-static const Vec3  COIN_SCALE(0.5f, 0.5f, 0.5f);   // entity visual scale
+static const _Vector3<float> COIN_DEFAULT_TARGET(220.0f, -140.0f, 0.0f);  // default homing target (was misnamed "gravity")
+static const _Vector3<float> COIN_SCALE(0.5f, 0.5f, 0.5f);   // entity visual scale
 
 // Screen bounds for spawn clamping (coin.md "Key Constants")
 static const float COIN_BOUND_Y_MIN = -240.0f;
@@ -118,7 +118,7 @@ void Coin::Release() {
 // Init @ 0x0019D5FC — base no-op; Coin uses base (vtable slot 2 = 0x0019d5fc).
 // Coin is initialised via ctor + MakeCoins/InitCoin, never through factory-Init.
 // ---------------------------------------------------------------------------
-void Coin::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {}
+void Coin::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 
 // ---------------------------------------------------------------------------
 // PostUpdate (DrawUpdate) @ 0x0017318C — empty in binary
@@ -162,7 +162,7 @@ void Coin::Arrived() {
 // Stores flyFXHash/collectFXHash raw -- the null-name -> default substitution
 // and the StringHash() call both happen in the caller (MakeCoins).
 // ---------------------------------------------------------------------------
-void Coin::InitCoin(Vec3 pos_in, Vec3 target, uint16_t angle, int coinValue,
+void Coin::InitCoin(_Vector3<float> pos_in, _Vector3<float> target, uint16_t angle, int coinValue,
                     unsigned long flyFXHash, unsigned long collectFXHash,
                     Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
 {
@@ -180,7 +180,7 @@ void Coin::InitCoin(Vec3 pos_in, Vec3 target, uint16_t angle, int coinValue,
     m_TargetX    = target.x;
     m_TargetY    = target.y;
     m_TargetZ    = target.z;
-    vel          = Vec3(0.0f, 0.0f, 0.0f);
+    vel          = _Vector3<float>(0.0f, 0.0f, 0.0f);
     scale        = COIN_SCALE;
     m_FlyFXHash      = flyFXHash;
     m_Silent         = silent ? 1 : 0;
@@ -539,9 +539,9 @@ void Coin::ClearCoins(bool arrive) {
 // Spawn N coins via Mortar::ActorManager::Add(2).
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
-void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
+void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos,
                      uint16_t baseAngle, uint16_t angleSpread,
-                     Vec3* target,
+                     _Vector3<float>* target,
                      const char* flyFXName, const char* collectFXName,
                      Mortar::Delegate1<void, Coin*> onArrived, bool silent,
                      float delayStep, float delayCap)
@@ -565,7 +565,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
     float perStep = delayStep;
     float maxDelay = delayCap;
 
-    Vec3 resolvedTarget = target ? *target : COIN_DEFAULT_TARGET;
+    _Vector3<float> resolvedTarget = target ? *target : COIN_DEFAULT_TARGET;
 
     int idx = 0;
     int remaining = totalCoins;
@@ -601,7 +601,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3* spawnPos,
             }
         }
 
-        Vec3 coinPos(spawnX, spawnY, spawnPos->z);
+        _Vector3<float> coinPos(spawnX, spawnY, spawnPos->z);
         // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- per-coin delay stagger differs from
         // binary; needs RE.
         // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.
@@ -635,7 +635,7 @@ void AddToScoreOnArrival(Coin* coin) {
     if (g_oneInThree == 3 || g_oneInThree == 6 || g_oneInThree > 8) {
         FruitCamera* cam = game_work.m_FruitCamera;
         if (cam) {
-            cam->CreateCameraShake(Vec3(-230.0f, 150.0f, 0.0f), 0.15f, 0.75f);
+            cam->CreateCameraShake(_Vector3<float>(-230.0f, 150.0f, 0.0f), 0.15f, 0.75f);
         }
         if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
@@ -643,7 +643,7 @@ void AddToScoreOnArrival(Coin* coin) {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         PSPParticleEmitter* em = pm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
         if (em) {
-            em->m_Pos = Vec3(-230.0f, 150.0f, 0.0f);
+            em->m_Pos = _Vector3<float>(-230.0f, 150.0f, 0.0f);
         }
         // x-offset varies by count: 3=0, 6=57.6, >8=-57.6
         float xoff = (g_oneInThree == 3) ? 0.0f :
@@ -652,7 +652,7 @@ void AddToScoreOnArrival(Coin* coin) {
         float y = Math::g_Random.RandF(10.0f) + 160.0f + 3.0f;
         PSPParticleEmitter* em2 = pm.AddEmitter(StringHash("arcade_confetti"), 0, false);
         if (em2) {
-            em2->m_Pos = Vec3(x, y, 0.0f);
+            em2->m_Pos = _Vector3<float>(x, y, 0.0f);
         }
         if (g_oneInThree > 8) {
             g_oneInThree = 0;

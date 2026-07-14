@@ -28,7 +28,7 @@ ScreenFadeControl::ScreenFadeControl()
     // Binary loads literal "loading.tex" (same GOT offset as SpeedControl).
     // Runtime TextureManager::LoadLocalisedTexture may remap to the actual fade asset.
     m_FadeTexture = Mortar::TextureManager::LoadLocalisedTexture("loading.tex");
-    size = Vec3(0.0f, 0.0f, 1.0f);
+    size = _Vector3<float>(0.0f, 0.0f, 1.0f);
 }
 
 ScreenFadeControl::~ScreenFadeControl() {}

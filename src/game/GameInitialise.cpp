@@ -118,7 +118,7 @@ void GameInitialise(void* window, const char* config) {
         dm.SetWindowSize(0, FN_SCREEN_H, 0, FN_SCREEN_W);
         dm.SetClearColour(Colour(0, 0, 0, 255));
         // DIFFERS: first component unknown (DAT in docs). GameDraw overwrites with worldPos anyway.
-        dm.SetLightDirection(Vec3(0.0f, -10.0f, -5.0f));
+        dm.SetLightDirection(_Vector3<float>(0.0f, -10.0f, -5.0f));
     }
 
     // ASM-spec v1.6.1 GameInitialise @0x0011d22c: strings loaded before managers that
@@ -155,7 +155,7 @@ void GameInitialise(void* window, const char* config) {
     game_work.m_FruitCamera->Init(1.0f, 10000.0f, 16.95f, 11.3f);  // fovOrNear, farClip, fovX, fovY
 
     // Zero g_GameData fields (matches step 15 continued)
-    game_work.worldPos = Vec3(0.0f, 0.0f, 0.0f);
+    game_work.worldPos = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // Mortar::ActorManager (needed for entity creation). Binary uses Meyers
     // singleton in GetInstance @ 0x001705f0; port also lazy-inits via GetInstance.

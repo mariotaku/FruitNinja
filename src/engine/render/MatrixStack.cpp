@@ -28,13 +28,13 @@ void MatrixStack::Pop() {
 }
 
 // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012fa34 (asm-inspector)
-void MatrixStack::Scale(const Vec3& s) {
+void MatrixStack::Scale(const _Vector3<float>& s) {
     m_Current.ApplyScale(s.x, s.y, s.z);
     m_Version++;
 }
 
 // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012f97c (asm-inspector)
-void MatrixStack::Translate(const Vec3& t) {
+void MatrixStack::Translate(const _Vector3<float>& t) {
     m_Current.GlobalTranslate44(t);
     m_Version++;
 }
@@ -53,7 +53,7 @@ void MatrixStack::RotZ(float deg) {
 }
 
 // ASM-spec v1.6.1 MatrixStack::TranslateLocal @0x0024a150
-void MatrixStack::TranslateLocal(const Vec3& t) {
+void MatrixStack::TranslateLocal(const _Vector3<float>& t) {
     m_Current.LocalTranslate44(t.x, t.y, t.z);  // right-mult (M*T)
     m_Version++;
 }

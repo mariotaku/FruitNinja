@@ -12,7 +12,7 @@
 
 #include <cstdint>
 #include <cstddef>
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/render/Font.h"
 #include "engine/util/SmartPtr.h"
@@ -105,13 +105,13 @@ struct GameWork {
     // +0x90 v1.6.1 Bomb::Init@0x001d6a80: ColSphere.m_Radius = flM_BombCollision*0.5*scale
     float   flM_BombCollision;     // +0x90
     // +0x94/+0x98: dual-purpose -- GameDraw light direction AND global pointer X/Y
-    Vec3    worldPos;              // +0x94
+    _Vector3<float> worldPos;              // +0x94
     uint8_t m_bTouchDownThisFrame; // +0xA0: edge flag set by PointerDownCallback; cleared at GameUpdate top
     uint8_t m_bTouchUpThisFrame;   // +0xA1: edge flag set by PointerUpCallback; cleared at GameUpdate top
     uint8_t m_bPointerActive;      // +0xA2
     uint8_t _pad_0xa3;             // +0xA3
     // +0xA4..+0x163: 16 touch/finger slot positions (12 bytes each)
-    Vec3    m_FingerSpawnPos[16];  // +0xA4
+    _Vector3<float> m_FingerSpawnPos[16];  // +0xA4
 
     MainScreen*    mMainScreen;    // +0x164
     GameOverScreen* pGameOverScreen; // +0x168

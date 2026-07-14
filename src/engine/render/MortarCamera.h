@@ -8,7 +8,7 @@
 
 #include "math/Matrix44.h"
 #include "math/Matrix43.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "core/MortarTypes.h"
 
 namespace Mortar {
@@ -28,13 +28,13 @@ public:
     Matrix44 m_projOrtho;
 
     // +0xE4
-    Vec3 m_pos;
+    _Vector3<float> m_pos;
 
     // +0xF0
-    Vec3 m_lookAt;
+    _Vector3<float> m_lookAt;
 
     // +0xFC
-    Vec3 m_up;
+    _Vector3<float> m_up;
 
     // +0x108: = 1 when pos/lookAt changed
     bool m_bDirty;
@@ -83,12 +83,12 @@ public:
     float GetFOVy() const { return m_fovY; }
 
     // Vtable slots 9-14: setters mark dirty, getters return copies
-    void SetLookAt(const Vec3& v) { m_bDirty = true; m_lookAt = v; }
-    Vec3 GetLookAt() const { return m_lookAt; }
-    void SetPos(const Vec3& v) { m_bDirty = true; m_pos = v; }
-    Vec3 GetPos() const { return m_pos; }
-    void SetUp(const Vec3& v) { m_bDirty = true; m_up = v; }
-    Vec3 GetUp() const { return m_up; }
+    void SetLookAt(const _Vector3<float>& v) { m_bDirty = true; m_lookAt = v; }
+    _Vector3<float> GetLookAt() const { return m_lookAt; }
+    void SetPos(const _Vector3<float>& v) { m_bDirty = true; m_pos = v; }
+    _Vector3<float> GetPos() const { return m_pos; }
+    void SetUp(const _Vector3<float>& v) { m_bDirty = true; m_up = v; }
+    _Vector3<float> GetUp() const { return m_up; }
 };
 
 } // namespace Mortar

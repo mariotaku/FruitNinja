@@ -87,13 +87,13 @@ void GameInit(unsigned long) {
         for (int i = 0; i < 3; ++i) {
             MissControl* mc = new MissControl();
             mc->m_Active    = 1;
-            mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f);
-            mc->m_HudScale  = Vec3(0.5f, 0.5f, 0.0f);
+            mc->pos         = _Vector3<float>(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f);
+            mc->m_HudScale  = _Vector3<float>(0.5f, 0.5f, 0.0f);
             mc->m_Timer     = -kMC[i].rot_tbl;
             mc->m_AnimState = i;
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
             const float sz = 32.0f * kMC[i].scale;
-            mc->size = Vec3(sz, sz, sz);
+            mc->size = _Vector3<float>(sz, sz, sz);
             mc->m_Texture = MissControl::GetCrossTexture();
             game_work.mHud->AddControl(mc);
         }
@@ -112,7 +112,7 @@ void GameInit(unsigned long) {
         sc->m_ScoreIconTex       = Mortar::TextureManager::LoadLocalisedTexture("score.tex");
         sc->m_HighscoreBannerTex = Mortar::TextureManager::LoadLocalisedTexture("new_best_score.tex");
         // size = Vec3::One * 64.0
-        sc->size               = Vec3(64.0f, 64.0f, 64.0f);
+        sc->size               = _Vector3<float>(64.0f, 64.0f, 64.0f);
         // pos: binary uses GetScreenWidth/GetScreenHeight
         // Formula: size.x*0.35 + screenW*-7/15, size.y*(-0.35) + screenH*7/15
         {
@@ -711,7 +711,7 @@ void DrawBackground() {
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
-    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -5599.0f));
+    mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, -5599.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
@@ -891,7 +891,7 @@ void GameDraw(float dt, bool active) {
                 mm.GetWorldStack().Reset();
                 // Scale(481,321,1) matches DrawBackground's full-ortho-coverage quad above.
                 Matrix44 dimMat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
-                dimMat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+                dimMat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
                 mm.GetWorldStack().SetCurrentMatrix(dimMat);
                 mm.UploadModelViewOnly();
                 const uint8_t dimAlpha = (uint8_t)(ps->m_Alpha * 128.0f);

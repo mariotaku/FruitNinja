@@ -98,7 +98,7 @@ void SuperFruitGlow::DrawOrder(float* hudScaleRaw, int layerMask) {
     //   5. Draw(hudScaleRaw)               -> HUDControl3d::Draw (2nd blade)
     //   6. m_Timer = -m_Timer               -> restore +0x2c
     //   7. size = saved                     -> restore +0x20 Vec3
-    Vec3 savedSize = size;
+    _Vector3<float> savedSize = size;
     size *= m_Fade;
     HUDControl3d::Draw(hudScaleRaw);
     m_Timer = -m_Timer;

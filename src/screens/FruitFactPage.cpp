@@ -11,8 +11,8 @@
 #include "engine/render/Font.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringTable.h"
-#include "engine/math/Vec2.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector2.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -87,8 +87,8 @@ GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
         g_SenseisHeadTex = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
     }
     Mortar::SmartPtr<Mortar::Texture> tex(g_SenseisHeadTex);
-    Vec3 pos(140.0f, scale, 0.0f);
-    Vec3 sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
+    _Vector3<float> pos(140.0f, scale, 0.0f);
+    _Vector3<float> sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour col(255, 255, 255, 255);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 0x400);
     AddGenericControl(c);
@@ -101,8 +101,8 @@ GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
 void FruitFactPage::CreateHorizontalDivider() {
     Mortar::SmartPtr<Mortar::Texture> tex =
         Mortar::TextureManager::LoadLocalisedTexture("result_board_divider.tex");
-    Vec3 pos(-7.5f, 0.0f, 0.0f);
-    Vec3 sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
+    _Vector3<float> pos(-7.5f, 0.0f, 0.0f);
+    _Vector3<float> sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour col(255, 255, 255, 255);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 8);
     AddGenericControl(c);
@@ -116,11 +116,11 @@ void FruitFactPage::CreateHorizontalDivider() {
 // SetShadow: scale=0.0 (DAT_0017c720).
 // ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c4cc (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
-    Vec3 size(270.0f, 14.0f, 0.0f);
+    _Vector3<float> size(270.0f, 14.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex;
-    Vec3 anchor(-7.5f, 92.0f, 0.0f);
-    Vec3 ppos = anchor - size * 0.5f;
-    Vec3 sc(1.0f, 1.0f, 1.0f);
+    _Vector3<float> anchor(-7.5f, 92.0f, 0.0f);
+    _Vector3<float> ppos = anchor - size * 0.5f;
+    _Vector3<float> sc(1.0f, 1.0f, 1.0f);
     Colour col(255, 255, 255, 255);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, ppos, sc, col, 1);
     c->m_LayerFlags = 0x400;
@@ -136,7 +136,7 @@ GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
         box->SetShadow(
             0.0f,
             Colour(0x4b, 0x32, 0x28, 0xc8),
-            Vec3(1.0f, -1.0f, 0.0f),
+            _Vector3<float>(1.0f, -1.0f, 0.0f),
             true);
         box->SetText(str);
         box->SetHorizontalLineSpacing(-1);
@@ -153,12 +153,12 @@ GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
 // scale=Vec3(1,1,1)*0.85 (DAT_0017c988=0.85).
 // Title colour from controller+0x98 (m_FactColour). LSTR 0xAE.
 GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
-    Vec3 size(270.0f, -14.0f, 0.0f);
+    _Vector3<float> size(270.0f, -14.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex;
-    Vec3 anchor(-8.0f, -8.0f, 0.0f);
-    Vec3 ppos = anchor - size * 0.5f;
+    _Vector3<float> anchor(-8.0f, -8.0f, 0.0f);
+    _Vector3<float> ppos = anchor - size * 0.5f;
     float s = 0.85f;
-    Vec3 sc(s, s, s);
+    _Vector3<float> sc(s, s, s);
     Colour col(255, 255, 255, 255);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, ppos, sc, col, 0x400);
 
@@ -170,7 +170,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
         box->SetShadow(
             5.0f,
             Colour(0x5d, 0x46, 0x20, 255),
-            Vec3(2.0f, -2.0f, 0.0f),
+            _Vector3<float>(2.0f, -2.0f, 0.0f),
             false);
         box->SetText(GETSTRING(LSTR_FRUIT_FACT_TITLE, 0));
         box->SetHorizontalLineSpacing(-1);
@@ -188,9 +188,9 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
 // ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c99c (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     Mortar::SmartPtr<Mortar::Texture> tex;
-    Vec3 ppos(-141.0f, -24.0f, 0.0f);
+    _Vector3<float> ppos(-141.0f, -24.0f, 0.0f);
     float s = 0.85f;
-    Vec3 sc(s, s, s);
+    _Vector3<float> sc(s, s, s);
     Colour col(255, 255, 255, 255);
     GenericHUDControl* c = new GenericHUDControl(0.0f, 0.0f, tex, NULL, ppos, sc, col, 0x400);
 

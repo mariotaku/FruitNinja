@@ -34,7 +34,7 @@
 #include "ScreenEffect.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "engine/xml/TiXmlElement.h"
 
 #include "screens/PurchaseInfo.h"
@@ -128,7 +128,7 @@ public:
     // param2: isPurchased — forwarded to ApplyModifier
     // param3: position — by-value in binary; port uses const& for ergonomics
     // param4: extraParam — NULL on most calls; non-null when re-loading from save
-    void Activate(bool showPopup, bool isPurchased, const Vec3& pos, float* extraParam);
+    void Activate(bool showPopup, bool isPurchased, const _Vector3<float>& pos, float* extraParam);
 
     // @ 0x00117f18 — deactivate, call RemoveModifier on all mods; returns 0
     int Deactivate(bool removeAll);

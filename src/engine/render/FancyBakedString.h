@@ -39,8 +39,8 @@
 //
 // Cross-build portability: no lambdas, no auto, no range-for, no enum class, non-virtual.
 
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 #include "render/BakedStringTTF.h"
@@ -79,11 +79,11 @@ public:
 
     // Draw @0x0024b8e4: rebuild the main layer if needed, then draw all present layers
     // back-to-front, each with the main layer's refRect. Shadow gets pos + m_ShadowOffset.
-    void Draw(const Vec3& pos, Vec2 scale, float tilt, ALIGNMENT_TYPE align);
+    void Draw(const _Vector3<float>& pos, _Vector2<float> scale, float tilt, ALIGNMENT_TYPE align);
 
     // Accessor for BakedStringBox::RebuildAlignments @0x00245c78 to write/read the
     // per-line local draw offset (+0x0c). See m_LineOffset field comment.
-    Vec3& LineOffset() { return m_LineOffset; }
+    _Vector3<float>& LineOffset() { return m_LineOffset; }
 
     // Rendered mesh ink bounds of the main (foreground) layer -- the same refRect
     // FancyBakedString::Draw shares with the glow/shadow/stroke/bevel layers.
@@ -132,7 +132,7 @@ private:
     // Init @0x0024b1c8 head: zero the six layer ptrs + offset/colour fields before Build.
     void Init();
 
-    Vec3            m_ShadowOffset; // +0x00 shadow layer draw offset
+    _Vector3<float> m_ShadowOffset; // +0x00 shadow layer draw offset
 
     // +0x0c: per-line LOCAL draw offset WITHIN a BakedStringBox (NOT read by
     // standalone FancyBakedString::Draw -- that method's shadow offset comes from
@@ -141,7 +141,7 @@ private:
     // per-line Draw as (boxPos + m_LineOffset). x = +0x0c horizontal align offset,
     // y = +0x10 baseline Y, z = +0x14 unused.
     // ASM-spec v1.6.1 FancyBakedString::m_LineOffset @+0x0c (RebuildAlignments @0x00245c78).
-    Vec3            m_LineOffset;   // +0x0c
+    _Vector3<float> m_LineOffset;   // +0x0c
     BakedStringTTF* m_pShadow;      // +0x18 BLUR
     BakedStringTTF* m_pGlow;        // +0x1c STROKE
     BakedStringTTF* m_pMain;        // +0x20 NONE (always present)
