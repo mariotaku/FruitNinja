@@ -143,6 +143,10 @@ void FancyBakedString::ApplyGradient(Colour top, Colour mid, Colour bottom)
 
 // ApplyMetallicGradient @0x0024abf4: top/bottom base gradient (c0/c3) plus two
 // close-set split bands (0.51/0.49) that fake a metallic highlight streak.
+// The gradient look comes from GPU interpolation, not per-vertex ramp math: the
+// splits flat-recolour only the seam (edge-intersection) verts at each plane;
+// every other vertex keeps the TopBottom ramp colour already on it, so GL
+// smooth-shades ramp(outer) -> c1(0.51 seam) and c2(0.49 seam) -> ramp(outer).
 void FancyBakedString::ApplyMetallicGradient(Colour c0, Colour c1, Colour c2, Colour c3)
 {
     if (!m_pMain) return;
