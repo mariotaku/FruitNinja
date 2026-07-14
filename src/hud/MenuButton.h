@@ -287,6 +287,17 @@ public:
     // (invisibly) at alpha 0 and always runs the layer demotion.
     void Draw(float* hudScaleRaw) override;
     void Update(float dt) override;
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Advances m_SparkleTimer / m_NewIndicatorTimer (sparkle-ring + NEW-badge
+    // bounce) dt-scaled, once per PRESENTED frame (Game::tickRealtimeUi via
+    // HUD::UpdateRealtime -- MenuButtons are AddControl'd to game_work.mHud
+    // by their owning screens, so no extra dispatch wiring is needed), so
+    // both animations track the display's actual present rate instead of the
+    // fixed 60Hz sim tick. See MenuButton.cpp for the MB_ADVANCE_F macro and
+    // AdvanceSparkleAndBadge (shared with the __bada__ path via Update()).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
     bool SetToMultiplayerState() override;
     int  GetType() override { return 5; }
     void Skip() override;

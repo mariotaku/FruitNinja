@@ -30,6 +30,7 @@
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -130,7 +131,7 @@ MenuButton::MenuButton()
       m_BackdropOffsetX(0.0f),
       m_BackdropScale(0.0f),
       m_RandomOffset(0.0f),
-      m_RotationSpeed(-1.0f),
+      m_RotationSpeed(0.0f),
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
       m_BaseScale(0.0f, 0.0f, 0.0f),
@@ -223,7 +224,9 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_TouchSlot      = -1;
     m_SparkleTimer   = -1.0f;
     m_NewIndicatorTimer = -1.0f;
-    m_RotationSpeed  = -1.0f;
+    // v1.6.1 MenuButton::Init @0x0019b994: +0xF4 = 0.0f (the -1.0f literals go to
+    // m_SparkleTimer/m_NewIndicatorTimer +0xF8/+0xFC). CreateFruit re-rolls this random per spawn.
+    m_RotationSpeed  = 0.0f;
     m_RandomOffset   = 0.0f;
     m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
     // v1.6.1 MenuButton::Init @0x0019ba50: size (+0x20) <- Vector3::Zero (0,0,0).
@@ -251,6 +254,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
 }
 
 // Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pTrackedFruit.
+// ASM-verified: 2026-07-14T22:20Z v1.6.1 MenuButton::CreateFruit @ 0x0019b608 (asm-inspector)
 void MenuButton::CreateFruit() {
     // v1.6.1 MenuButton::CreateFruit @0x0019b608 -- guard branch @0x0019b910:
     //   if (m_FruitType < 0 || m_pTrackedFruit != nullptr): recompute m_RestScale only, set tracked, return.
@@ -288,6 +292,16 @@ void MenuButton::CreateFruit() {
     m_pTrackedFruit = reinterpret_cast<Fruit*>(e);
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
+
+    // TODO: v1.6.1 0x0019b6fc (MenuButton::CreateFruit) -- binary also rolls
+    // m_BackdropOffsetX(+0xE8) = Rand32(0x28) and an m_RandomOffset(+0xF0) sign
+    // flip = Rand32(2) here, BEFORE the rotation-speed roll below. Order vs the
+    // rotation-speed roll not yet confirmed from disasm; add once verified so the
+    // RNG draw sequence stays byte-faithful.
+
+    // v1.6.1 MenuButton::CreateFruit @0x0019b704: random icon-spin speed +/-[8,12) deg/sec.
+    m_RotationSpeed = 8.0f + Math::g_Random.RandF(4.0f);
+    if (Math::g_Random.Rand32(2) == 0) m_RotationSpeed = -m_RotationSpeed;   // @0x0019b734
 
     if (entityType == 0) {
         Fruit* fruit = static_cast<Fruit*>(e);
@@ -335,10 +349,6 @@ void MenuButton::CreateFruit() {
         m_RestScale = Vec3(bombRawSize * 2.0f, bombRawSize * 2.0f, bombRawSize * 2.0f);
         SetHasHitArea(true);
     }
-
-    // Random rotation speed (8-12 deg/frame, random direction)
-    m_RotationSpeed = 8.0f + (float)(rand() % 40) / 10.0f;
-    if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
 }
 
 // v1.6.1 MenuButton::Release @0x0019d064 -- clears the tracked entity's owner backref (leaves the
@@ -545,7 +555,38 @@ void MenuButton::SetNewSymbol(bool show) {
     }
 }
 
+#ifndef __bada__
+// Port specific: no binary counterpart -- sparkle-ring / NEW-badge advance,
+// called only from UpdateRealtime() below with the REAL per-present dtSeconds.
+// __bada__ keeps the verbatim per-tick block inline in Update() above instead
+// of calling this (which doesn't exist in that build). Factored out so future
+// callers can't drift from the ASM-spec wrap/reset rules.
+//
+// The binary advances these as rate*dt (`m_SparkleTimer += dt*8.0f`,
+// `m_NewIndicatorTimer += 2.0f*dt`) -- i.e. 8/sec and 2/sec at the fixed 60Hz
+// sim dt. Because they are ALREADY rate*time (not per-tick fractional
+// constants like a decay `*=k`), the frame-rate-independent port form is just
+// rate*dtSeconds with the REAL present dt -- NOT an f-scaled step. (An earlier
+// version multiplied the per-second rate by f = dtSeconds*60, advancing 60x
+// too fast and breaking the NEW-badge bounce / sparkle ring.)
+static void AdvanceSparkleAndBadge(float& sparkleTimer, float& newIndicatorTimer, float dtSeconds) {
+    if (sparkleTimer >= 0.0f) {
+        sparkleTimer += 8.0f * dtSeconds;   // binary: += dt*8.0f per 60Hz tick == 8/sec
+        // ASM-spec v1.6.1 MenuButton::Update @0x0019a860: sparkle WRAPS to 0 at >=8.0
+        // (cyclic loading ring), not clamp-and-hold at 8.0.
+        if (sparkleTimer >= 8.0f) sparkleTimer = 0.0f;
+    }
+    if (newIndicatorTimer >= 0.0f) {
+        newIndicatorTimer += 2.0f * dtSeconds;   // binary: += 2.0f*dt per tick == 2/sec
+        // ASM-spec v1.6.1 MenuButton::Update @0x0019a860: reset the NEW-badge bob timer
+        // ONLY when sparkle is active (>=1.0).
+        if (sparkleTimer >= 1.0f) newIndicatorTimer = 0.0f;
+    }
+}
+#endif
+
 // MenuButton::Update @ 0x0019a860 (v1.6.1 pseudocode)
+// ASM-verified: 2026-07-14T21:50Z v1.6.1 MenuButton::Update @ 0x0019a860 (asm-inspector)
 void MenuButton::Update(float dt) {
     Fruit* fruit = m_pTrackedFruit;  // +0x14c
 
@@ -561,6 +602,11 @@ void MenuButton::Update(float dt) {
     if (fruit) fruit->flags &= ~1;       // unhide
 
     // --- sparkle + new-indicator timers ---
+    // DIFFERS: v1.6.1 MenuButton::Update @0x0019a860 advances the sparkle-ring
+    // and NEW-badge bounce phases per 60Hz sim tick; port advances them per
+    // rendered frame (dt-scaled via UpdateRealtime()/AdvanceSparkleAndBadge)
+    // to track display refresh. __bada__ keeps the faithful 60Hz path below.
+#ifdef __bada__
     if (m_SparkleTimer >= 0.0f) {
         m_SparkleTimer += dt * 8.0f;
         // ASM-spec v1.6.1 MenuButton::Update @0x0019a860: sparkle WRAPS to 0 at >=8.0
@@ -574,6 +620,11 @@ void MenuButton::Update(float dt) {
         // (inactive, the menu's resting state) the timer reset every frame -> badge never bobbed.
         if (m_SparkleTimer >= 1.0f) m_NewIndicatorTimer = 0.0f;
     }
+#else
+    // Port: already advanced by UpdateRealtime() (per-present, dt-scaled); this
+    // 60Hz Update() does not touch the timers (nothing downstream in Update()
+    // reads them -- only Draw() does).
+#endif
 
     UpdatePeices(dt);
 
@@ -822,6 +873,28 @@ void MenuButton::Update(float dt) {
         if (m_ShakeTimer < 0.0f) m_ShakeTimer = 0.0f;
     }
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+// Advances the sparkle-ring (m_SparkleTimer) and NEW-badge bounce
+// (m_NewIndicatorTimer) phases dt-scaled, once per PRESENTED frame, so both
+// animations track the display's actual present rate (60/90/120fps) instead
+// of the fixed 60Hz sim tick. Everything else in MenuButton::Update (grow-in
+// gate, entity re-anchor, slice detection, touch handling, m_ShakeTimer
+// countdown) stays at 60Hz in Update() -- those are one-shot/state-decision
+// logic entangled with entity and touch reads, not pure continuous easing.
+//
+// DIFFERS: v1.6.1 MenuButton::Update @0x0019a860 advances the badge/sparkle
+// animations per 60Hz sim tick; port advances them per rendered frame
+// (dt-scaled) to track display refresh. __bada__ keeps the faithful 60Hz path.
+// ---------------------------------------------------------------------------
+void MenuButton::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    AdvanceSparkleAndBadge(m_SparkleTimer, m_NewIndicatorTimer, dtSeconds);
+}
+#endif
 
 // v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0
 void MenuButton::UpdateTouchPosition() {
