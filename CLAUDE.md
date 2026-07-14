@@ -79,7 +79,7 @@ Initial host configure — **CMake presets (vcpkg, MSVC/Ninja)** are the primary
   In CLion: reload using profiles from `CMakePresets.json` and pick `host-local`. vcpkg supplies SDL2 / SDL2_image / FreeType / tinyxml2 (no FetchContent on Windows once installed); CMake falls back to `find_package`→`FetchContent` for any dep not vcpkg-installed and on non-vcpkg platforms. NOTE: never reconfigure a `build/host` that was generated with a *different* generator — delete it first (a stale `_deps/*-subbuild` cached with the old generator fails with `Error: generator : Ninja`).
 - Fallback **MSYS2 / MinGW** (no vcpkg): `cmake -G "MSYS Makefiles" -B build/host`
 
-Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implementer.md`.
+Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implementer.md`. Optional headless-rendering software-GL setup (Mesa llvmpipe) is documented in `tests/README.md`.
 
 ## Testing — unit-test new components with CTest
 

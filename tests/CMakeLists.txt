@@ -1,6 +1,36 @@
 # tests/CMakeLists.txt -- minimal ctest registration.
 
 # ---------------------------------------------------------------------------
+# Unified test-executable output directory.
+#
+# ALL test executables (both the fn_add_game_test / add_scene_test targets
+# below and the standalone add_executable ones further down, including
+# tests/scenes/) land in ONE shared FLAT folder: ${CMAKE_BINARY_DIR}/tests --
+# no per-config subdir. Build type is already separated by the build dir
+# (build/host, build/web, build/asan, ...), so a Debug/ / Release/ subdir under
+# tests/ would be redundant noise. This lets one copy of a software-GL DLL (see
+# tests/README.md) sit next to every test exe.
+#
+# Multi-config generators (Visual Studio) otherwise append /$<CONFIG> per
+# target -- and per-subdirectory CMAKE_CURRENT_BINARY_DIR defaults scatter
+# targets further (tests/scenes/<Config>/ vs tests/<Config>/). Forcing every
+# CMAKE_RUNTIME_OUTPUT_DIRECTORY_<CONFIG> to the SAME flat ${CMAKE_BINARY_DIR}/tests
+# (no <Config> suffix) collapses all of that to one folder; the plain
+# CMAKE_RUNTIME_OUTPUT_DIRECTORY covers single-config generators (Ninja/Makefiles
+# ignore the _<CONFIG> forms). Since only one config is ever built per build
+# dir, there is no Debug-vs-Release collision.
+#
+# Set BEFORE any add_executable/add_subdirectory call in this tree: as a
+# normal (non-cache) variable it is inherited by add_subdirectory(scenes)
+# below, and CMake uses it as each new target's default RUNTIME_OUTPUT_DIRECTORY
+# property at add_executable time -- no per-target set_target_properties needed.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+foreach(_fn_test_cfg Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${_fn_test_cfg}" _fn_test_cfg_upper)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${_fn_test_cfg_upper} "${CMAKE_BINARY_DIR}/tests")
+endforeach()
+
+# ---------------------------------------------------------------------------
 # Helper macro: fn_add_game_test
 #
 # Registers an executable that links against fruit-ninja-game, SDL2::SDL2main,
