@@ -73,6 +73,18 @@ public:
     void Reset() override;                           // Binary @ 0x0013df80 — no-op override stub
     void Release() override;
     void Update(float dt) override;
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Advances the per-present (dt-scaled) VISUAL-ONLY parts of state 2 (alpha
+    // settle + m_SecondaryAlpha lerp) and the WHOLE state-0xf back-out body
+    // (decay + m_SecondaryAlpha mirror + BOTH threshold crossings, kept atomic
+    // -- see GameModeScreen.cpp for why). States 0/1 are NOT split: their alpha
+    // lerp is the only proxy for IsTransitionInFinished and its threshold check
+    // fires CreateControls (a HUD control-list mutation forbidden here), so both
+    // stay together in Update() at 60Hz. Update() also keeps m_ButtonDelay/input
+    // handling (state 2) and states 3-6 entirely.
+    void UpdateRealtime(float dtSeconds) override;
+#endif
     void UpdateSpecific(float dt);                   // Binary @ 0x00140498 — no-op (Update does all work); vtable slot not in ported base yet
     bool IsTransitionInFinished();                   // Binary @ 0x0013df94 — bare BX LR, returns false; vtable slot not in ported base yet
     void Draw(float* hudScaleRaw) override;
