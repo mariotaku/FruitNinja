@@ -37,13 +37,13 @@ struct Quaternion {
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017aa64..0x0017ab9d (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 Matrix33Unit @0x001e3064 / Matrix44Unit @0x001e32cc / Copy33To44 @0x001bf3b8 (asm-inspector)
     // (Matrix33Unit + Copy33To44 pipeline collapsed into a single column-major write;
     //  bit-identical 16-float output -- verified against the binary's row-major M[]
     //  followed by the Copy33To44 padding/fill-with-0/1 pattern.)
     //
-    // Matches _Quaternion::Matrix44Unit (calls Matrix33Unit @ 0x0017aa64 then
-    // Copy33To44 @ 0x0017ab30). The binary writes the 9 rotation values in
+    // Matches _Quaternion::Matrix44Unit (calls Matrix33Unit @ 0x001e3064 then
+    // Copy33To44 @ 0x001bf3b8). The binary writes the 9 rotation values in
     // ROW-MAJOR-flat order into a 16-float buffer; that buffer is uploaded to
     // GL (column-major), so the binary's effective rotation matrix is R(q)^T
     // = R(q^-1) -- the transpose of the standard Hamilton quaternion-to-matrix.

@@ -289,6 +289,23 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     RandomStartAngle(m_Rot1, false);
     m_Rot2 = m_Rot1;
 
+    // ASM-spec v1.6.1 Fruit::Init super-fruit override @0x001e2898 (rng=Math::g_Random; z=GetRandBetween(3,5,0.5))
+    // ASM-verified: 2026-07-15T00:00Z v1.6.1 Fruit::Init super-fruit override @ 0x001e2c94..0x001e2cf8 (asm-inspector)
+    {
+        const ::FruitInfo* info = Fruit::FruitInfo((long)m_FruitType);
+        if (info != nullptr && info->m_bIsSuperFruit) {
+            float angleBase = Math::GetRandBetween(Math::g_Random, 12.0f, 40.0f, 0.0f);
+            uint32_t angle16 = (uint32_t)((int)(angleBase * 182.0f)) & 0xffff;
+            m_Rot1 = Quaternion::Identity();
+            m_Rot1.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, angle16);
+            m_Rot2 = m_Rot1;
+
+            float rotVelZ = Math::GetRandBetween(Math::g_Random, 3.0f, 5.0f, 0.5f);
+            m_RotVel1 = Vec3(10.0f, 0.0f, rotVelZ);
+            m_RotVel2 = m_RotVel1;
+        }
+    }
+
     // Default gravity — confirmed from v1.6.1 Fruit::Init @0x001e2898: literal -12.0, y-DAT=0.0
     m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
 
@@ -1917,9 +1934,11 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
 // optionally applies an alignment rotation. Sets m_RotVel1/m_RotVel2
 // to spinVelAxis * random magnitude.
 //
-// Spin magnitude: +(2 + RandF(2.0)) or -(2 + RandF(2.0)). Binary uses
-//   WaveManager's Random instance; port substitutes rand() since this
-//   only affects display orientation, not gameplay.
+// Spin magnitude: +(2 + RandF(2.0)) or -(2 + RandF(2.0)), sign is a 50/50
+// coin flip off Math::g_Random.Rand32(2). Byte-faithful to the binary --
+// NOT a substitution. The sign only appears to be "always the same" on the
+// port when g_Random's boot seed is near-constant across launches (see
+// SystemManager::Init); that is a seed-entropy bug, not a math bug.
 void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
     // ASM-spec v1.6.1 Fruit::RotateFacingUp @0x001db478 — uses Math::g_Random
     float r    = Math::g_Random.RandF(2.0f);

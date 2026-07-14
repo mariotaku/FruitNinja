@@ -38,6 +38,12 @@ extern Random g_Random;
 // from frame-counter state.
 void SeedGlobalRng(uint32_t seed);
 
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00: uniform draw in
+// [lo, hi) via rng.RandF(hi-lo); if halfChance > 0, a SECOND rng.RandF(1.0f)
+// draw decides sign (<=halfChance flips negative). halfChance == 0 skips the
+// second draw entirely (draw count matters for RNG-sequence fidelity).
+float GetRandBetween(Random& rng, float lo, float hi, float halfChance);
+
 } // namespace Math
 
 #endif
