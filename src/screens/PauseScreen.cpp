@@ -72,6 +72,26 @@ static const float TITLE_SLIDE_MUL  = -130.0f;   // DAT_00154fc4 (was -2.0f, WRO
 static const float TITLE_SLIDE_BASE = 160.0f;    // DAT_00154fd0 (was 240.0f, WRONG)
 static const float SCREEN_RIGHT_X   = 240.0f;    // DAT_00154fc8 (quit.pos.x base)
 
+// ---------------------------------------------------------------------------
+// Rate-independence macros for m_Alpha / m_ButtonFadeAlpha easing (all states).
+// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F pattern (see ShopScreen.cpp),
+// which itself mirrors ScrollingMenu's SM_DECAY_F/SM_SPRING_F. Under __bada__
+// these expand to the ORIGINAL per-60Hz-tick scalar forms (byte-identical to
+// the binary, no powf); under the port the same call sites expand to
+// dt-scaled forms using a local `float f` in scope at each use site
+// (f = clamp(dtSeconds,0,0.1)*60 in UpdateRealtime()) so f==1 exactly
+// reproduces one 60Hz tick's worth of easing.
+// ---------------------------------------------------------------------------
+#ifdef __bada__
+    // v += (to - v) * k  (spring towards `to` by factor k each call)
+    #define PS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (k))
+    // v *= k  (decay towards zero by factor k each call)
+    #define PS_DECAY_F(v, k)         ((v) *= (k))
+#else
+    #define PS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+    #define PS_DECAY_F(v, k)         ((v) *= powf((k), f))
+#endif
+
 // flash.tex overlay: alpha = clamp(m_Alpha * 1000, 0, 128); scale = m_Alpha * 10000
 // Binary: PreDraw @ 0x0016bda0
 static const float FLASH_ALPHA_MUL  = 1000.0f;
@@ -598,6 +618,7 @@ void PauseScreen::RetryGameCallback() {
 // vtable[10]: Update -- state machine + lazy button creation
 // Binary: 0x001a5ebc (569 lines)
 // Tier-1: SP path only (IsSameScreenMultiplayer() branch skipped)
+// ASM-verified: 2026-07-14T21:34Z v1.6.1 PauseScreen::Update @ 0x001a5ebc (asm-inspector)
 // -------------------------------------------------------------------------
 void PauseScreen::Update(float dt) {
     // --- Lazy button creation (SP path only) ---
@@ -697,7 +718,11 @@ void PauseScreen::Update(float dt) {
 
     case PAUSE_STATE_HIDDEN:
         // Alpha decay toward 0
-        m_Alpha *= FADE_DECAY;
+#ifdef __bada__
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime() (per-present, dt-scaled);
+        // this 60Hz tick only reads the current value to fire the threshold check.
         if (m_Alpha < FADE_CLAMP) m_Alpha = 0.0f;
 
         // Reveal timer countdown (Tier-2: gates Resume re-enable)
@@ -731,7 +756,10 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_FADE_IN:
-        m_Alpha += (1.0f - m_Alpha) * FADE_IN_RATE;
+#ifdef __bada__
+        PS_APPROACH_F(m_Alpha, 1.0f, FADE_IN_RATE);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
 
         // Force game pause flag each frame while fading in (SP path only)
         game_work.bM_Mode = true;
@@ -753,7 +781,10 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_RESUME_EXIT:
-        m_Alpha *= FADE_DECAY;
+#ifdef __bada__
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RESUME_EXIT faded");
@@ -766,7 +797,10 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_RETRY_EXIT:
-        m_Alpha *= FADE_DECAY;
+#ifdef __bada__
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
         if (m_Alpha < EXIT_THRESHOLD) {
             // Binary @ 0x00154dbc: SaveCurrentData(false) before RetryLevel.
             SaveCurrentData(false);
@@ -787,8 +821,12 @@ void PauseScreen::Update(float dt) {
         // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00154dc4..0x00154e1e (re-analyst).
         // Binary applies 0.5x extra fast-fade in case 6 then falls through to
         // the common 0.75 decay; both happen each frame.
-        m_Alpha *= 0.5f;
-        m_Alpha *= FADE_DECAY;
+#ifdef __bada__
+        PS_DECAY_F(m_Alpha, 0.5f);
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime() (both factors combined
+        // into one 0.5*FADE_DECAY decay constant there); read current value.
         if (m_Alpha < EXIT_THRESHOLD) {
             LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x001cb6e4", "QUIT_EXIT faded");
             QuitToMenu();
@@ -824,13 +862,17 @@ void PauseScreen::Update(float dt) {
 
     // 1. m_ButtonFadeAlpha decay / restore
     // IsEnabled() reads g_GameData fields (binary @ 0x00153e4c).
+#ifdef __bada__
     const bool isEnabled = IsEnabled();
     if (isEnabled) {
-        m_ButtonFadeAlpha *= FADE_DECAY;
+        PS_DECAY_F(m_ButtonFadeAlpha, FADE_DECAY);
         if (m_ButtonFadeAlpha < 0.0f) m_ButtonFadeAlpha = 0.0f;
     } else {
-        m_ButtonFadeAlpha += (1.0f - m_ButtonFadeAlpha) * FADE_IN_RATE;
+        PS_APPROACH_F(m_ButtonFadeAlpha, 1.0f, FADE_IN_RATE);
     }
+#endif
+    // Port: easing already advanced by UpdateRealtime() (per-present, dt-scaled,
+    // same isEnabled gate re-evaluated there); this 60Hz tick reads the current value.
 
     // 2. State 6 scratch override (binary @ 0x00154eac..0x00154ec4 +
     // 0x00155200..0x00155204).
@@ -975,6 +1017,70 @@ void PauseScreen::Update(float dt) {
     m_Alpha           = savedAlpha;
     m_ButtonFadeAlpha = savedButtonFadeAlpha;
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the state-machine split comment above Update(). Advances m_Alpha (states
+// HIDDEN/FADE_IN/RESUME_EXIT/RETRY_EXIT/QUIT_EXIT) and m_ButtonFadeAlpha (the
+// unconditional isEnabled-gated ramp, mirrored from Update()'s post-switch
+// block 1) per PRESENTED frame, dt-scaled via PS_APPROACH_F/PS_DECAY_F
+// (defined near the top of this file). Update() (60Hz) reads the resulting
+// values to fire the (already rate-independent, threshold-based) state
+// transitions and one-shot side effects -- those stay in Update() exactly
+// like ShopScreen keeps its state-transition side effects in Update() rather
+// than UpdateRealtime().
+//
+// PAUSE_STATE_BOMB_FLASH and PAUSE_STATE_ACTIVE are excluded: both hard-set
+// m_Alpha (unconditional assignment, not an approach/decay ramp) rather than
+// easing it, so there is nothing here to dt-scale for those states.
+//
+// Under __bada__ this function does not exist (see PauseScreen.h); Update()
+// eases m_Alpha/m_ButtonFadeAlpha inline per-state, byte-identical to the binary.
+//
+// DIFFERS: v1.6.1 PauseScreen::Update @0x001a5ebc eases the fade per 60Hz sim tick;
+// port eases per rendered frame (dt-scaled) to track display refresh. __bada__
+// keeps the faithful 60Hz path (macros expand to the original scalar ops).
+// ---------------------------------------------------------------------------
+void PauseScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    switch (m_State) {
+    case PAUSE_STATE_HIDDEN:
+        // Binary: m_Alpha *= 0.75 (FADE_DECAY)
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+        break;
+    case PAUSE_STATE_FADE_IN:
+        // Binary: m_Alpha += (1 - m_Alpha) * 0.25 (FADE_IN_RATE)
+        PS_APPROACH_F(m_Alpha, 1.0f, FADE_IN_RATE);
+        break;
+    case PAUSE_STATE_RESUME_EXIT:
+    case PAUSE_STATE_RETRY_EXIT:
+        // Binary: m_Alpha *= 0.75 (FADE_DECAY)
+        PS_DECAY_F(m_Alpha, FADE_DECAY);
+        break;
+    case PAUSE_STATE_QUIT_EXIT:
+        // Binary: m_Alpha *= 0.5; m_Alpha *= 0.75 -- combine into one 0.375 decay
+        // per tick so f-scaling (powf) is applied once, not compounded twice.
+        PS_DECAY_F(m_Alpha, 0.5f * FADE_DECAY);
+        break;
+    default:
+        // PAUSE_STATE_BOMB_FLASH / PAUSE_STATE_ACTIVE: no alpha easing (hard-set
+        // assignments only); default (safety): no other states exist.
+        break;
+    }
+
+    // Post-switch unconditional m_ButtonFadeAlpha ramp (mirrors Update() block 1).
+    if (IsEnabled()) {
+        PS_DECAY_F(m_ButtonFadeAlpha, FADE_DECAY);
+        if (m_ButtonFadeAlpha < 0.0f) m_ButtonFadeAlpha = 0.0f;
+    } else {
+        PS_APPROACH_F(m_ButtonFadeAlpha, 1.0f, FADE_IN_RATE);
+    }
+}
+#endif
 
 // ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153e34 (re-analyst)
 // Binary @ 0x00153e34: external entry — force overlay fully visible and
