@@ -8,6 +8,7 @@
 #include "debug/DebugFlags.h"
 #include "engine/xml/TiXml.h"
 #include "Game.h"
+#include "debug/Logger.h"
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -46,7 +47,9 @@ void SaveSettings() {
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
 
     doc.InsertEndChild(root);
-    doc.SaveFile(GetSettingsSavePath().c_str());
+    if (!doc.SaveFile(GetSettingsSavePath().c_str())) {
+        LOG_ERROR("SettingsSave", "failed to save '%s'", GetSettingsSavePath().c_str());
+    }
 #if defined(__EMSCRIPTEN__)
     // Port specific: flush the IDBFS /save mount to IndexedDB after each
     // write so data survives page reload/close.
