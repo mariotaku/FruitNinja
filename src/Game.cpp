@@ -200,6 +200,26 @@ void Game::shutdown() {
     // path; we forward-declare InputTranslatorSDL here so we can't delete it.
 }
 
+// Port specific: no binary counterpart -- see Game.h. Dispatches the
+// per-present UI tick by walking game_work.mHud's control list and calling
+// HUDControl::UpdateRealtime(dtSeconds) on each active control (default
+// no-op; see HUDControl.h / HUD::UpdateRealtime). Covers ScrollingMenu
+// (m_pShopList, AddControl'd to the HUD) and SettingsScreen (also
+// AddControl'd to the HUD) alike -- no per-screen special case needed.
+// #ifndef __bada__: HUDControl::UpdateRealtime / HUD::UpdateRealtime don't
+// exist under __bada__ (see HUDControl.h) so the asm-verify cross-build's
+// vtable layout stays byte-identical to the binary; this whole method is a
+// no-op there instead.
+void Game::tickRealtimeUi(float dtSeconds) {
+#ifndef __bada__
+    if (game_work.mHud) {
+        game_work.mHud->UpdateRealtime(dtSeconds);
+    }
+#else
+    (void)dtSeconds;
+#endif
+}
+
 // --- Pause state accessors (free functions, binary global s_pauseScreen maps to GetTaskState()->pPauseScreen) ---
 
 // ASM-spec v1.6.1 GetPauseScreen @0x1ca298

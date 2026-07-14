@@ -143,6 +143,18 @@ void HUD::Update(float dt) {
     }
 }
 
+#ifndef __bada__
+// Port specific: no binary counterpart (see HUD.h). Mirrors HUD::Update's
+// active-only walk but calls UpdateRealtime instead of Update, and never
+// removes/deletes controls (that stays HUD::Update's job at the fixed tick).
+void HUD::UpdateRealtime(float dtSeconds) {
+    for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
+        HUDControl* ctrl = *it;
+        if (ctrl->m_Active) ctrl->UpdateRealtime(dtSeconds);
+    }
+}
+#endif
+
 // TODO: HUD::ResetControls -- v1.6.1 address unconfirmed (old marker 0x00144b78 is stale v1.5.x; needs re-RE)
 void HUD::ResetControls() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {

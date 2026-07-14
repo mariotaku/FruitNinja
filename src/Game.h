@@ -134,6 +134,21 @@ struct Game : public Mortar::MortarGame {
     // Port specific: update the FPS value shown by DebugFps_Draw.
     // Called by platform main loops that compute FPS independently (e.g. mainEmscripten).
     void setCurrentFps(float fps);
+
+    // Port specific: no binary counterpart. Walks game_work.mHud's control
+    // list (HUD::UpdateRealtime, see hud/HUD.h) and calls
+    // HUDControl::UpdateRealtime(dtSeconds) (see hud/HUDControl.h) on every
+    // active control -- covers ScrollingMenu (shop list) and SettingsScreen
+    // alike, since both are AddControl'd to game_work.mHud. Default no-op
+    // per control. Called once per PRESENTED frame (native display refresh,
+    // or the FPS-capped ~60Hz rate when FN::g_FpsCap60 is set) by both
+    // platform main loops -- GameSDL.cpp's Game::renderFrame() and
+    // mainEmscripten.cpp's EmscriptenFrame's `if (doPresent)` block -- NOT
+    // the fixed 60Hz sim step (stepUpdate()). dtSeconds is real elapsed
+    // wall-clock time since the last call, so motion tracks the display's
+    // actual present rate (looks identical at 60 and 120+ fps) instead of
+    // the sim tick rate.
+    void tickRealtimeUi(float dtSeconds);
 };
 
 // Field-offset assertions for Game (binary @ g_MortarGame, ARM32).

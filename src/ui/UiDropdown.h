@@ -70,7 +70,16 @@
 //   - Held: m_PendingVel damped-follows the finger via
 //     `(m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR`
 //     (DRAG_DELTA_FACTOR=-0.5, delta = currentY - anchorY) every frame, so
-//     the offset eases toward the finger instead of snapping to it 1:1.
+//     the offset eases toward the finger instead of snapping to it 1:1. This
+//     stays in Update() (60Hz) since it reads live touch state.
+//   - Integrate + friction + spring-back (`m_PendingVel *= SCROLL_FRICTION`,
+//     `m_ScrollOffset += m_PendingVel`, spring-back at the bounds) has moved
+//     to UpdateRealtime(dtSeconds) -- once per PRESENTED frame, dt-scaled --
+//     so a flick's coast/spring-back tracks the display refresh rate instead
+//     of the fixed 60Hz sim tick (see UpdateRealtime()'s own .cpp comment;
+//     mirrors SettingsScreen::UpdateRealtime's identical split). At
+//     dtSeconds == 1/60 (f=1.0) this reproduces the exact per-tick literal
+//     forms below:
 //   - Every frame (held or not): `m_PendingVel *= SCROLL_FRICTION` (0.9),
 //     then `m_ScrollOffset += m_PendingVel` -- this is what makes a flick
 //     coast after release (last frame's velocity decays at 0.9/frame).
@@ -104,6 +113,22 @@ public:
     virtual ~UiDropdown();
 
     void Update(float dt) override;
+#ifndef __bada__
+    // Port specific: no binary counterpart. Ticks the open-panel scroll
+    // PHYSICS (friction decay + velocity integration + spring-back) once per
+    // PRESENTED frame instead of once per 60Hz sim step, dt-scaled so the
+    // same on-screen motion results at 60 and 120+ fps alike -- mirrors
+    // SettingsScreen::UpdateRealtime's split of the identical model (see
+    // SettingsScreen.h/.cpp). Touch acquire/track/drag-to-velocity (still in
+    // Update(), which now only sets m_PendingVel) is UNCHANGED.
+    //
+    // UiDropdown is a CHILD WIDGET driven directly by its owning screen (NOT
+    // AddControl'd to the HUD -- see the class header usage note), so
+    // HUD::UpdateRealtime's control-list walk never reaches it. The owning
+    // screen must forward its own per-present tick here explicitly while the
+    // panel is open (see SettingsScreen::UpdateRealtime).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
     // Composed convenience: DrawBar() then DrawPanel(). Callers that need
     // the bar to clip with scrolling content (see SettingsScreen.cpp) call
     // the two halves separately instead -- DrawBar() inside the content

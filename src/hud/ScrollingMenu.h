@@ -60,6 +60,19 @@ public:
     // HUDControl overrides
     void Update(float dt) override;
 
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Runs Phase 4 (velocity integrate), Phase 5 (layout), Phase 7 (spring-back)
+    // dt-scaled, once per PRESENTED frame (Game::tickRealtimeUi via
+    // HUD::UpdateRealtime), so shop-list scroll motion tracks the display's
+    // actual present rate (60/90/120fps) instead of the fixed 60Hz sim tick.
+    // Phases 1/2/3 (touch read) and Phase 6 (click-fire) stay in Update() at
+    // 60Hz -- Phase 6 fires a one-shot click SFX on settle and would re-fire
+    // up to 120x/s if run per-present. See ScrollingMenu.cpp for the phase
+    // split and the SM_DECAY_F/SM_SPRING_F macros shared with the __bada__ path.
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     // ScrollingMenu::Draw @ 0x0015af98
     // Pure iterator: calls vtable+0x2C (Draw) on each item in m_Items.
     // No scissor/clip, no per-frame positioning (that is done by Update).
@@ -198,6 +211,18 @@ public:
     //   [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM
     //   Binary: field104_0xf0, field105_0xf4, field106_0xf8, field107_0xfc
     float m_InnerRegion[4];
+
+#ifndef __bada__
+    // Port specific: bridge fields, no binary counterpart. Phase 5 (layout)
+    // publishes these each time it runs (Update() at 60Hz AND UpdateRealtime()
+    // per-present); Phase 6 (click-fire, stays in 60Hz Update()) and Phase 7
+    // (spring-back, moved to UpdateRealtime()) read them. Placed after every
+    // offset-asserted field / the last static_assert below so __bada__
+    // sizeof(ScrollingMenu) and field layout are completely unaffected --
+    // these members do not exist at all under __bada__.
+    ScrollingMenuItem* m_pClickTarget;  // Phase-5 dragTargetItem (binary local pSVar4)
+    float m_ClosestSnapDelta;          // Phase-5 fVar7 = _Stack_6c.y - (pos.y - m_Velocity.y), SIGNED
+#endif
 
 public:
     // Binary @ 0x0015af3c -- ClearTouch: m_TouchId = -1; m_bDragging = 0.

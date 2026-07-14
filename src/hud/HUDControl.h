@@ -126,6 +126,25 @@ public:
     // Not in binary; appended after binary vtable.
     virtual Vec3 GetDrawPos() const { return pos; }
 
+#ifndef __bada__
+    // Port specific: no binary counterpart -- optional per-PRESENT tick (called
+    // once per rendered/presented frame, at native display refresh or the
+    // FPS-capped rate, NOT the fixed 60Hz sim step Update() above runs at).
+    // Default no-op. Only overridden by controls whose visual motion should
+    // track the display refresh rate instead of the sim tick rate (see
+    // SettingsScreen::UpdateRealtime, ScrollingMenu::UpdateRealtime,
+    // UiDropdown::UpdateRealtime -- the latter is a child widget not
+    // AddControl'd to the HUD, so its owning screen forwards the tick
+    // manually rather than this virtual being reached via HUD::UpdateRealtime).
+    // Kept OUT of the __bada__ compile entirely (not just a no-op override) so the
+    // asm-verify cross-build's vtable layout for HUDControl and every subclass
+    // is byte-identical to the binary -- this virtual adds a vtable slot that
+    // has no binary counterpart and must never appear there. Lives on the
+    // HUDControl base (not HUDControl3d) so HUD::UpdateRealtime can dispatch
+    // to plain-HUDControl subclasses too (e.g. ScrollingMenu).
+    virtual void UpdateRealtime(float dtSeconds) { (void)dtSeconds; }
+#endif
+
     void SetSingular() {
         m_Singular = 1;
         // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0014dda8 (re-analyst)

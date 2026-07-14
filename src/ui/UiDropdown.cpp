@@ -263,9 +263,33 @@ void UiDropdown::Update(float dt) {
         }
     }
 
-    // --- Integrate + friction (every frame, held or not) ---
-    m_PendingVel *= SCROLL_FRICTION;
-    m_ScrollOffset += m_PendingVel;
+    // Integrate + friction + spring-back moved to UpdateRealtime() (see
+    // below) -- runs once per PRESENTED frame instead of once per 60Hz sim
+    // step, dt-scaled so it's rate-independent. Update() only tracks touch
+    // and sets m_PendingVel now; it does NOT touch m_ScrollOffset.
+}
+
+#ifndef __bada__
+// Port specific: no binary counterpart (see UiDropdown.h). Runs the scroll
+// velocity->position integration (friction decay + spring-back) that
+// Update()'s tail used to run inline at the fixed 60Hz sim rate. Called by
+// the owning screen (SettingsScreen::UpdateRealtime) once per PRESENTED
+// frame while the panel is open, with dtSeconds = real elapsed time since the
+// last present -- dt-SCALED below so the same on-screen motion results at 60
+// and 120 fps alike (see SettingsScreen::UpdateRealtime's identical comment
+// for the f/pow derivation):
+//   f = dtSeconds * 60                      -- frames-equivalent (1.0 at 60fps)
+//   m_PendingVel   *= SCROLL_FRICTION^f      -- exponential decay, rate-independent
+//   m_ScrollOffset += m_PendingVel * f       -- velocity integrated by frame-equivalents
+//   spring-back: offset += (target - offset) * (1 - SPRING_COEF^f)
+void UiDropdown::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    float f = dtSeconds * 60.0f;
+
+    // --- Integrate + friction (rate-independent) ---
+    m_PendingVel *= powf(SCROLL_FRICTION, f);
+    m_ScrollOffset += m_PendingVel * f;
 
     // --- Spring-back at bounds (only while not touching) ---
     // Past top (offset<0, before item 0) -> spring toward 0.
@@ -273,12 +297,13 @@ void UiDropdown::Update(float dt) {
     if (m_TouchId == -1) {
         float maxScroll = ComputeMaxScroll();
         if (m_ScrollOffset < 0.0f) {
-            m_ScrollOffset *= SPRING_BACK_COEF;
+            m_ScrollOffset += (0.0f - m_ScrollOffset) * (1.0f - powf(SPRING_BACK_COEF, f));
         } else if (m_ScrollOffset > maxScroll) {
-            m_ScrollOffset += (maxScroll - m_ScrollOffset) * SPRING_FWD_COEF;
+            m_ScrollOffset += (maxScroll - m_ScrollOffset) * (1.0f - powf(1.0f - SPRING_FWD_COEF, f));
         }
     }
 }
+#endif
 
 // Top/bottom rounded-corner fade band for the open row list, geometrically
 // seated on box.svg's inner-groove OPENING. See header doc for the full
