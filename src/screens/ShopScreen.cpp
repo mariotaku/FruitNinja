@@ -119,6 +119,25 @@ static const Vec3 SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
 // Fling velocity base (state 3 and QuitShopCallback)
 static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
 
+// ---------------------------------------------------------------------------
+// Rate-independence macros for m_TransitionAlpha easing (states 0/2/3/7).
+// Mirrors ScrollingMenu's SM_DECAY_F/SM_SPRING_F pattern (see ScrollingMenu.cpp):
+// under __bada__ these expand to the ORIGINAL per-60Hz-tick scalar forms
+// (byte-identical to the binary, no powf); under the port the same call sites
+// expand to dt-scaled forms using a local `float f` in scope at each use site
+// (f = clamp(dtSeconds,0,0.1)*60 in UpdateRealtime()) so f==1 exactly
+// reproduces one 60Hz tick's worth of easing.
+// ---------------------------------------------------------------------------
+#ifdef __bada__
+    // v += (to - v) * k  (spring towards `to` by factor k each call)
+    #define SS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (k))
+    // v *= k  (decay towards zero by factor k each call)
+    #define SS_DECAY_F(v, k)         ((v) *= (k))
+#else
+    #define SS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+    #define SS_DECAY_F(v, k)         ((v) *= powf((k), f))
+#endif
+
 struct SplatShiftCtx { float up; float down; };
 static void SplatShiftVisitor(SplatEntity* s, void* user) {
     if (!s || !s->m_bAlive) return;
@@ -827,13 +846,20 @@ void ShopScreen::EquipCallback() {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::Update(float) @ 0x001b321c (387 lines)
+// ASM-verified: 2026-07-14T21:20Z v1.6.1 ShopScreen::Update @ 0x001b321c..0x001b3f8b (asm-inspector)
 // ---------------------------------------------------------------------------
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
 
-    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
-    //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
-    float dtN = dt * 60.0f;
+#ifndef __bada__
+    // Port specific: DIFFERS: v1.6.1 ShopScreen::Update @0x0015e1f4 eases
+    // m_TransitionAlpha per 60Hz sim tick; port eases it per rendered frame
+    // (dt-scaled) so the transition tracks display refresh. __bada__ keeps
+    // the faithful 60Hz path. The easing itself has already been advanced by
+    // UpdateRealtime() (called once per presented frame via HUD::UpdateRealtime);
+    // this 60Hz Update only reads the current m_TransitionAlpha value to fire
+    // the (rate-independent, threshold-based) state transitions below.
+#endif
 
     // Binary @ 0x0015e216: demote the panel to 0x40 ONLY when no splats are alive.
     // 0x40 draws before SplatEntity::DrawActiveSplats, but splats only exist during
@@ -872,10 +898,12 @@ void ShopScreen::Update(float dt) {
     // ---- STATE 0: Transition in ----
     case 0: {
         // Binary: alpha += (1 - alpha) * 0.125
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
-        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
-        float newAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
-        m_TransitionAlpha = newAlpha;
+#ifdef __bada__
+        SS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+#endif
+        // Port: easing already advanced by UpdateRealtime() (per-present, dt-scaled);
+        // this 60Hz tick only reads the current value to fire the state transition.
+        float newAlpha = m_TransitionAlpha;
 
         if (newAlpha > ALPHA_IN_DONE) {
             // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
@@ -1055,10 +1083,11 @@ void ShopScreen::Update(float dt) {
     case 2:
     case 7: {
         // Binary: uses DAT_0015e90c = 0.85f (not 0.75f — state 3 uses 0.75 literal)
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
-        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
-        float newAlpha = m_TransitionAlpha * powf(ALPHA_DECAY_STATE27, dtN);
-        m_TransitionAlpha = newAlpha;
+#ifdef __bada__
+        SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE27);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
+        float newAlpha = m_TransitionAlpha;
 
         // Binary condition: (newAlpha < DAT_0015e910) && (m_State == 2) && (m_pParent != null)
         // Only state 2 triggers the main-screen transition; state 7 fades but does nothing else.
@@ -1082,10 +1111,11 @@ void ShopScreen::Update(float dt) {
     // ---- STATE 3: Buy animation fade-out ----
     case 3: {
         // Binary: uses literal 0.75f (not the 0.85f from DAT_0015e90c).
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the door slides at the
-        //   intended ~60Hz speed regardless of the render framerate (binary is frame-based@fixed-60Hz).
-        float newAlpha = m_TransitionAlpha * powf(ALPHA_DECAY_STATE3, dtN);
-        m_TransitionAlpha = newAlpha;
+#ifdef __bada__
+        SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE3);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
+        float newAlpha = m_TransitionAlpha;
 
         // ARM idiom: if (-1 < (int)((uint)(newAlpha < threshold) << 0x1f))
         //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
@@ -1227,6 +1257,50 @@ void ShopScreen::Update(float dt) {
         SplatEntity::ForEachInPool(SplatShiftVisitor, &ctx);
     }
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the state-machine split comment above Update(). Advances m_TransitionAlpha
+// per PRESENTED frame (dt-scaled via SS_APPROACH_F/SS_DECAY_F, defined near
+// the top of this file), for whichever of states 0/2/3/7 is currently active.
+// Update() (60Hz) reads the resulting value to fire the (already
+// rate-independent, threshold-based) state transitions and one-shot side
+// effects -- those stay in Update() exactly like ScrollingMenu keeps its
+// discrete Phase 6 click-fire in Update() rather than UpdateRealtime().
+//
+// Under __bada__ this function does not exist (see ShopScreen.h); Update()
+// eases m_TransitionAlpha inline per-state, byte-identical to the binary.
+//
+// DIFFERS: v1.6.1 ShopScreen::Update @0x0015e1f4 eases m_TransitionAlpha per
+// 60Hz sim tick; port eases it per rendered frame (dt-scaled) so the
+// transition tracks display refresh. __bada__ keeps the faithful 60Hz path.
+// ---------------------------------------------------------------------------
+void ShopScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    switch (m_State) {
+    case 0:
+        // Binary: alpha += (1 - alpha) * 0.125
+        SS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+        break;
+    case 2:
+    case 7:
+        // Binary: alpha *= 0.85 (DAT_0015e90c)
+        SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE27);
+        break;
+    case 3:
+        // Binary: alpha *= 0.75 (literal)
+        SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE3);
+        break;
+    default:
+        // States 1/4/5/6: no alpha easing in the binary's Update either.
+        break;
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // ShopScreen::DrawOrder(float*, int) @ 0x001b4e48
