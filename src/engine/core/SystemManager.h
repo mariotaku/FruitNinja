@@ -34,8 +34,11 @@ class SystemManager : public Mortar::Singleton<SystemManager> {
 
 public:
     // v1.6.1 SystemManager::Init @0x0022e544: sets m_reserved50=0, m_bRunning=1,
-    // seeds Math::g_Random with clock() (time-varying early RNG), calls
-    // _RetrieveDeviceID (confirmed no-op `return 0;`, correctly omitted).
+    // seeds Math::g_Random (see DIFFERS note in .cpp: port mixes time(NULL) with a
+    // high_resolution_clock tick instead of clock(), since clock() is near-constant
+    // at process boot on Windows/glibc -- Bada's clock() is device uptime and
+    // genuinely varies), calls _RetrieveDeviceID (confirmed no-op `return 0;`,
+    // correctly omitted).
     void Init();
 
     // Returns m_bRunning. Outputs dt via pointer.
