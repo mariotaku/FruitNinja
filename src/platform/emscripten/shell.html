@@ -914,6 +914,141 @@
       navigator.serviceWorker.register('sw.js').catch(function () {});
     });
   }
+
+  /* web-only: capture touches that START OUTSIDE the canvas so they register
+     once the finger slides in.
+     -----------------------------------------------------------------------
+     Root cause (RE-confirmed): SDL2-emscripten registers its touch listeners
+     on the #canvas element only. A browser binds an entire touch stream to
+     whichever element its touchstart hit -- so a gesture starting outside the
+     canvas (e.g. over the letterbox bars or the page background) never
+     reaches SDL, even after the finger slides on top of the canvas.
+
+     This IIFE listens on `document` in the CAPTURE phase (so it sees events
+     before the canvas's own bubble-phase listeners) and, for fingers that
+     started outside the canvas, forwards synthetic DOWN/MOVE/UP calls into
+     C++ (fn_web_synth_touch, mainEmscripten.cpp) once the finger enters the
+     canvas rect. Those synthetic calls push real SDL_FINGER* events onto the
+     SDL queue, so they flow through the exact same pollInput -> DrainSDLEvent
+     -> Mortar::Touch ring buffer -> DispatchForSimTick(60Hz) path as a native
+     touch -- no sim-tick semantics are bypassed.
+
+     Double-fire invariant:
+       - A finger whose touchstart hit the canvas (startedInsideCanvas=true)
+         is native-only: SDL's own canvas-bound listener already has that
+         finger's whole stream (the browser binds by touchstart target), so
+         this handler does nothing for it ever again.
+       - A finger whose touchstart missed the canvas (startedInsideCanvas=
+         false) is bound to whatever outside element it hit -- SDL's canvas
+         listener will NEVER see any of that finger's later events, even once
+         it slides over the canvas. So once jsOwned becomes true for that
+         finger, the JS-forwarded synthetic stream is the ONLY source for it.
+     A finger can therefore never be both native-fed and JS-forwarded --
+     startedInsideCanvas is decided once at touchstart and never changes. */
+  (function () {
+    var canvas = document.getElementById('canvas');
+    if (!canvas) return;
+
+    // Per-finger state, keyed by Touch.identifier.
+    // startedInsideCanvas: decided once at touchstart, never changes.
+    // jsOwned: true once this (outside-started) finger has entered the
+    //          canvas and we've begun forwarding synthetic events for it.
+    var fingers = {};
+
+    function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+    function normFor(touch, rect) {
+      return {
+        nx: clamp01((touch.clientX - rect.left) / rect.width),
+        ny: clamp01((touch.clientY - rect.top)  / rect.height)
+      };
+    }
+
+    function insideRect(touch, rect) {
+      return touch.clientX >= rect.left && touch.clientX <= rect.right &&
+             touch.clientY >= rect.top  && touch.clientY <= rect.bottom;
+    }
+
+    function synth(phase, id, nx, ny) {
+      try {
+        if (typeof Module !== 'undefined' && Module._fn_web_synth_touch) {
+          // Module._fn_web_synth_touch(phase, fingerId, nx, ny) --
+          // ccall-equivalent direct call (function already exported/exists
+          // on Module once the wasm runtime has linked it).
+          Module._fn_web_synth_touch(phase, id, nx, ny);
+        }
+      } catch (e) {
+        console.warn('[outside-touch] fn_web_synth_touch threw (non-fatal):', e);
+      }
+    }
+
+    function onTouchStart(ev) {
+      var rect = canvas.getBoundingClientRect();
+      for (var i = 0; i < ev.changedTouches.length; i++) {
+        var t = ev.changedTouches[i];
+        var inside = insideRect(t, rect);
+        fingers[t.identifier] = { startedInsideCanvas: inside, jsOwned: false };
+        // Inside-started fingers are native SDL input; outside-started ones
+        // are not yet owned (finger hasn't entered the canvas yet). Neither
+        // case forwards anything here, and we do NOT preventDefault so page
+        // behaviour (scroll, fullscreen button, etc.) proceeds normally.
+      }
+    }
+
+    function onTouchMove(ev) {
+      var rect = canvas.getBoundingClientRect();
+      for (var i = 0; i < ev.changedTouches.length; i++) {
+        var t = ev.changedTouches[i];
+        var st = fingers[t.identifier];
+        if (!st || st.startedInsideCanvas) continue; // SDL owns this one natively
+
+        var inside = insideRect(t, rect);
+        if (!st.jsOwned) {
+          if (!inside) continue; // still outside -- nothing to do yet
+          // ENTRY: finger just crossed into the canvas -- synthesize DOWN.
+          st.jsOwned = true;
+          var p = normFor(t, rect);
+          synth(0 /* down */, t.identifier, p.nx, p.ny);
+          if (ev.cancelable) ev.preventDefault();
+        } else {
+          // Already forwarding this finger. If it leaves the canvas, forward
+          // a MOVE clamped to the canvas edge (normFor's clamp01 does this)
+          // so the blade keeps tracking the edge rather than jumping to an
+          // UP -- simplest correct behaviour, and symmetrical with how a
+          // native finger dragged past the window edge still reports clamped
+          // SDL touch coords.
+          var p2 = normFor(t, rect);
+          synth(1 /* move */, t.identifier, p2.nx, p2.ny);
+          if (ev.cancelable) ev.preventDefault();
+        }
+      }
+    }
+
+    function onTouchEnd(ev) {
+      for (var i = 0; i < ev.changedTouches.length; i++) {
+        var t = ev.changedTouches[i];
+        var st = fingers[t.identifier];
+        if (st && st.jsOwned) {
+          var rect = canvas.getBoundingClientRect();
+          var p = normFor(t, rect);
+          synth(2 /* up */, t.identifier, p.nx, p.ny);
+          if (ev.cancelable) ev.preventDefault();
+        }
+        delete fingers[t.identifier];
+      }
+    }
+
+    // Capture phase (true) so this sees the event before the canvas's own
+    // bubble-phase SDL listeners, on `document` so outside-canvas touchstarts
+    // are seen at all (they never hit the canvas element itself).
+    // touchstart/touchend/touchcancel are NOT passive (touchend may
+    // preventDefault for jsOwned fingers); touchmove is not passive either
+    // since it conditionally preventDefaults while forwarding.
+    document.addEventListener('touchstart',  onTouchStart, {capture: true, passive: true});
+    document.addEventListener('touchmove',   onTouchMove,  {capture: true, passive: false});
+    document.addEventListener('touchend',    onTouchEnd,   {capture: true, passive: false});
+    document.addEventListener('touchcancel', onTouchEnd,   {capture: true, passive: false});
+  })();
   </script>
 
   <!-- Module must be defined in its own <script> block,

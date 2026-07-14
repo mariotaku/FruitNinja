@@ -573,11 +573,14 @@ if (EMSCRIPTEN)
         "SHELL:--exclude-file *ItemSave.xml"
         # Port specific: link idbfs.js so FS.mount(IDBFS) is available.
         "SHELL:-lidbfs.js"
-        # Port specific: export fn_idbfs_ready and fn_user_started so JS can
-        # call them as Module._fn_idbfs_ready() / Module._fn_user_started().
+        # Port specific: export fn_idbfs_ready, fn_user_started, and
+        # fn_web_synth_touch so JS can call them as Module._fn_idbfs_ready() /
+        # Module._fn_user_started() / Module._fn_web_synth_touch(). The last
+        # is called by shell.html's document-level outside-canvas touch
+        # capture (see mainEmscripten.cpp fn_web_synth_touch for why).
         # EMSCRIPTEN_KEEPALIVE alone is sufficient for most linker configs but
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
-        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started']"
+        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started','_fn_web_synth_touch']"
     )
     # Debug build (FN_DEBUG_TOUCH): keep C++ function names in the wasm name
     # section so browser crash stack traces name the actual C++ frames.
