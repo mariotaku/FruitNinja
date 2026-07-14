@@ -428,14 +428,78 @@ void Game::run() {
             fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
         }
+
+        // Port specific: no binary counterpart. Per-PRESENT UI tick (see
+        // Game.h tickRealtimeUi) -- runs once per rendered/presented frame
+        // here in run() (the real gameplay loop), NOT in renderFrame() itself,
+        // so the deterministic test paths (Game::runFrames/frameTick, used by
+        // every headless render test) never pick up a wall-clock-dependent
+        // nudge. dtPresent is real elapsed time since the last call to THIS
+        // tick (independent of the sim accumulator's `ms`, which measures
+        // since the last LOOP iteration, not the last UI tick specifically --
+        // same value in practice since both are computed once per iteration
+        // here, but tracked separately for clarity/future-proofing). Clamped
+        // in each HUDControl::UpdateRealtime override (e.g. SettingsScreen,
+        // ScrollingMenu) against stalls.
+        {
+            static Uint64 s_lastRealtimeUiCounter = 0;
+            double dtPresent = 0.0;
+            if (s_lastRealtimeUiCounter != 0) {
+                dtPresent = static_cast<double>(now - s_lastRealtimeUiCounter) / freq;
+            }
+            s_lastRealtimeUiCounter = now;
+            tickRealtimeUi(static_cast<float>(dtPresent));
+        }
+
         renderFrame(static_cast<float>(driver.alpha()), steps);
+
+        // Port specific: "Limit to 60 FPS" (FN::g_FpsCap60, SettingsScreen
+        // checkbox) -- caps PRESENT rate only, sim stays the fixed 60 Hz
+        // accumulator above (driver.advance/stepUpdate are untouched). vsync
+        // stays ON (SDL_GL_SetSwapInterval is never touched here); on a 60 Hz
+        // panel vsync already paces to ~16.7ms so this is a no-op, on 120/144 Hz
+        // it adds the remainder of a 16.667ms budget on top of vsync's shorter
+        // interval. Read live (not cached) so toggling the checkbox takes
+        // effect the very next frame.
+        //
+        // Boundary accumulator (mirrors mainEmscripten.cpp's s_nextPresentMs),
+        // not a fixed since-frame-start budget: s_nextPresentMs advances by
+        // exactly kCapPeriodMs (16.6667ms) from the SCHEDULED time, so the
+        // delay target stays locked to the 1/60s grid and self-corrects when
+        // a frame overshoots -- a fixed "sleep the remainder of this frame's
+        // budget" resets from `now` every frame, so on a 120Hz panel an
+        // overshoot (SDL_Delay ~1ms granularity + jitter) snaps the following
+        // SwapWindow to the next vsync tick (25ms => a 40fps frame) instead of
+        // catching back up, dragging the average under 60. Target the delay
+        // ~1ms short of the schedule so SwapWindow reliably catches the
+        // intended vsync tick rather than overshooting into the next one.
+        static double s_nextPresentMs = -1.0;
+        const double kCapPeriodMs = 1000.0 / 60.0;
+        double capTargetMs = kCapPeriodMs;
+        if (vsyncOn && FN::g_FpsCap60) {
+            double nowMs = static_cast<double>(SDL_GetPerformanceCounter()) * 1000.0 / freq;
+            if (s_nextPresentMs < 0.0) {
+                s_nextPresentMs = nowMs;
+            }
+            double delayMs = s_nextPresentMs - nowMs - 1.0;
+            if (delayMs > 0.0) {
+                SDL_Delay(static_cast<Uint32>(delayMs));
+            }
+            s_nextPresentMs += kCapPeriodMs;
+            if (s_nextPresentMs < nowMs) {
+                s_nextPresentMs = nowMs + kCapPeriodMs;
+            }
+        } else {
+            s_nextPresentMs = -1.0;
+        }
 
         if (!vsyncOn) {
             double frameMs = static_cast<double>(SDL_GetPerformanceCounter() - frameStart) * 1000.0 / freq;
-            if (frameMs < targetMs) {
-                SDL_Delay(static_cast<Uint32>(targetMs - frameMs));
+            double cappedTargetMs = (FN::g_FpsCap60 && capTargetMs > targetMs) ? capTargetMs : targetMs;
+            if (frameMs < cappedTargetMs) {
+                SDL_Delay(static_cast<Uint32>(cappedTargetMs - frameMs));
             }
-        } else if (steps == 0) {
+        } else if (steps == 0 && !FN::g_FpsCap60) {
             SDL_Delay(1);   // vsync on but not blocking (e.g. minimized) -- don't peg a core
         }
     }

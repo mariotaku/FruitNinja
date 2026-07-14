@@ -36,9 +36,10 @@ int   g_DebugHitboxes        = 0;     // Port specific: 0=off 1=entity 2=+HUD 3=
 bool  g_DebugWireframe       = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale       = 1.0f;  // Port specific: debug-only, no binary equivalent
 bool  g_ShowFps              = false; // Port specific: FPS counter overlay (F3, --fps, ?fps=1)
+bool  g_FpsCap60             = false; // Port specific: cap render/present rate to 60fps (SettingsScreen checkbox), default OFF
 bool  g_SuppressTextOverlay  = false; // Port specific: suppresses DebugText_Overlay for debug-drawn text
 bool  g_bOsdSfx              = false; // Port specific: OSD toast per SFX played (F4, --osd-sfx, ?osdsfx=1)
-bool  g_MotionMode           = false; // Port specific: velocity-gated pointer slash (F5, --motion), default OFF
+bool  g_MotionMode           = true;  // Port specific: velocity-gated pointer slash (F5, --motion), default ON (pointer-path only; does not affect touch input)
 float g_MotionSpeedThreshold = 10.0f; // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8)
 
 // Lazy 1x1 white texture for the vertex-colour shader path. The

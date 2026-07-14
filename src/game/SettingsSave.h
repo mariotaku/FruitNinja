@@ -4,9 +4,9 @@
 // Port specific: settings persistence. Binary (v1.6.1) never saved settings
 // to disk -- this whole module has no binary counterpart.
 //
-// Persists 4 port-side globals to a small flat XML file:
+// Persists 5 port-side globals to a small flat XML file:
 //   game_work.languageFlag, FN::g_MotionMode, FN::g_ShowFps,
-//   FN::g_MotionSpeedThreshold.
+//   FN::g_FpsCap60, FN::g_MotionSpeedThreshold.
 //
 // Call LoadSettings() once at startup, before any CLI/URL override write to
 // those globals (so an explicit --lang / ?lang= etc. override still wins by

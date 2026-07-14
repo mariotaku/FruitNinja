@@ -16,6 +16,12 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   Desktop GL only (no-op under GLES).
 // g_ShowFps:        "FPS NNN" counter in top-left corner. Toggle F3,
 //                   or launch with --fps / --show-fps, or web ?fps=1.
+// g_FpsCap60:       Port specific: caps render/present rate to 60 fps
+//                   (sim stays a fixed 60 Hz accumulator either way -- see
+//                   FixedStepDriver). false (default) = native/display-refresh
+//                   present rate; true = "Limit to 60 FPS" (SettingsScreen
+//                   checkbox). Binary is fixed 60 Hz Bada; this is a
+//                   render-only QoL knob for high-refresh desktop/web panels.
 // g_DebugTimeScale: multiplies fixed dt=1/60. 1.0 = normal, 0.1 = slow-mo.
 //                   Toggle F7.
 // g_bOsdSfx:        posts an OSD toast "[tick] <name>" for every SFX played
@@ -43,6 +49,7 @@ extern int   g_DebugHitboxes;          // Port specific: 0=off 1=entity 2=+HUD 3
 extern bool  g_DebugWireframe;         // Port specific: desktop GL only
 extern float g_DebugTimeScale;         // Port specific: debug-only, no binary equivalent
 extern bool  g_ShowFps;                // Port specific: FPS counter overlay (toggle F3, --fps, ?fps=1)
+extern bool  g_FpsCap60;               // Port specific: cap render/present rate to 60fps (SettingsScreen "Limit to 60 FPS"), default OFF (native/display-refresh)
 extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Overlay for debug-drawn text
 extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX played (toggle F4, --osd-sfx, ?osdsfx=1)
 extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default OFF
@@ -110,6 +117,7 @@ static const float g_DebugTimeScale      = 1.0f;
 static const int   g_DebugHitboxes       = 0;
 static const bool  g_DebugWireframe      = false;
 static const bool  g_ShowFps             = false;
+static const bool  g_FpsCap60            = false;
 static const bool  g_SuppressTextOverlay = false;
 static const bool  g_bOsdSfx             = false;
 static const bool  g_MotionMode          = false;
