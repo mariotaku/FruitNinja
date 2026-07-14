@@ -447,6 +447,36 @@ target_include_directories(test_menubutton_anchor PRIVATE
 add_test(NAME menubutton_anchor COMMAND test_menubutton_anchor)
 set_tests_properties(menubutton_anchor PROPERTIES TIMEOUT 30)
 
+# ScrollingMenu::UpdateRealtime f==1.0f equivalence guard (per-present shop
+# scroll rate task). Pins the dt-scaled Phase 4 (integrate) / Phase 5
+# (layout) / Phase 7 (spring-back) forms in UpdateRealtime(1/60) against
+# hand-derived expected values matching the __bada__ per-tick literal forms
+# (pv*=0.9; vel+=pv; spring*=0.75/0.25; snap+=0.1) -- see the phase-split
+# comment above ScrollingMenu::Update in src/hud/ScrollingMenu.cpp.
+#
+# Links the full fruit-ninja-game lib (not a hand-picked source + stub set):
+# ScrollingMenu's dependency graph (MenuBackground -> ItemManager ->
+# ShopScreen/FruitSaveData/AchievementManager/SlashEntity, ...) is coupled
+# enough that hand-picking sources + storage-only stubs for each missing
+# symbol chases an ever-growing tail. The lib already builds and links
+# cleanly for the fn_add_game_test targets below; the test itself still
+# never touches GL/audio/SDL -- it only constructs a ScrollingMenu in-process
+# and calls UpdateRealtime()/AddItem() directly, no SDL_Init/window/GL
+# context. fruit-ninja-game contains no main() (that lives solely in the
+# mainSDL.cpp TU, excluded from the lib -- see "Game library (everything
+# except mainSDL.cpp)" above), so this test's own plain int main() is the
+# only entry point, same as test_shopscreen.cpp etc.
+add_executable(test_scrollingmenu_updaterealtime
+    test_scrollingmenu_updaterealtime.cpp
+)
+target_link_libraries(test_scrollingmenu_updaterealtime PRIVATE fruit-ninja-game)
+target_include_directories(test_scrollingmenu_updaterealtime PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME scrollingmenu_updaterealtime COMMAND test_scrollingmenu_updaterealtime)
+set_tests_properties(scrollingmenu_updaterealtime PROPERTIES TIMEOUT 30)
+
 # ---------------------------------------------------------------------------
 # Visual / component tests (SDL + GL + TestHarness)
 # All use fn_add_game_test for shared link/copy boilerplate.

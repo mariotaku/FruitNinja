@@ -49,6 +49,17 @@ public:
     void BeginDraw(float dt);
     void Draw(int layerMask);
     void Update(float dt);
+#ifndef __bada__
+    // Port specific: no binary counterpart. Per-PRESENT UI tick -- walks
+    // `controls` and calls HUDControl::UpdateRealtime(dtSeconds) on each
+    // active one (default no-op; see HUDControl.h). Generalizes the
+    // per-present dispatch so any HUD control (ScrollingMenu, SettingsScreen,
+    // future widgets) can opt into display-refresh-rate motion instead of the
+    // fixed 60Hz sim step, without Game.cpp needing a per-control special case.
+    // Called by Game::tickRealtimeUi. Excluded under __bada__ since
+    // HUDControl::UpdateRealtime doesn't exist there.
+    void UpdateRealtime(float dtSeconds);
+#endif
     void ResetControls();
     void OnPause();
     void Save();

@@ -45,15 +45,51 @@ static const float CLICK_VEL_GATE    = 0.5f;   // 0x3f000000 — velocity near-z
 static const float DRAG_DELTA_FACTOR = -0.5f;  // binary DAT
 
 // ---------------------------------------------------------------------------
-// Vec3Scale_ScrollMenu @ 0x0015b714
-// Multiplies all 3 components of a Vec3 by SCROLL_FRICTION (0.9).
-// Matches the binary helper called twice in Update.
+// Rate-independence macros for Phase 4/5/7 (Update @0x001b03b4 physics).
+//
+// Under __bada__, SM_DECAY_F/SM_SPRING_F expand to the ORIGINAL per-60Hz-tick
+// scalar forms (`v *= k`, `v += (to - v) * k`) -- byte-identical to the
+// binary, no powf, no extra locals. Under the port, the SAME call sites
+// expand to dt-scaled forms using a local `float f` in scope at each use site
+// (f = 1.0f in the 60Hz Update() phases, f = clamp(dtSeconds,0,0.1)*60 in
+// UpdateRealtime()) so f==1 exactly reproduces the 60Hz tick.
+//
+// This keeps the Phase 4/5/7 arithmetic written ONCE per operation (as a
+// macro body) so the __bada__ verbatim branch and the port's dt-scaled
+// UpdateRealtime() can't drift apart. Do NOT extract these into functions --
+// a real function call adds a `bl` under __bada__ that the binary does not
+// have, which asm-verify would flag as a divergence.
 // ---------------------------------------------------------------------------
+#ifdef __bada__
+    // v *= k  (decay towards zero by factor k each call)
+    #define SM_DECAY_F(v, k)        ((v) *= (k))
+    // v += (to - v) * k  (spring towards `to` by factor k each call)
+    #define SM_SPRING_F(v, to, k)   ((v) += ((to) - (v)) * (k))
+#else
+    #define SM_DECAY_F(v, k)        ((v) *= powf((k), f))
+    #define SM_SPRING_F(v, to, k)   ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+#endif
+
+// ---------------------------------------------------------------------------
+// Vec3Scale_ScrollMenu @ 0x0015b714
+// Multiplies all 3 components of a Vec3 by SCROLL_FRICTION (0.9), rate-scaled
+// under the port (see SM_DECAY_F above). `f` must be in scope at the call site
+// (f=1.0f in Update()'s __bada__-only Phase 4/7 uses; f=frame-equivalent in
+// UpdateRealtime()). Matches the binary helper called twice in Update.
+// ---------------------------------------------------------------------------
+#ifdef __bada__
 static void Vec3Scale_ScrollMenu(Vec3* v) {
     v->x *= SCROLL_FRICTION;
     v->y *= SCROLL_FRICTION;
     v->z *= SCROLL_FRICTION;
 }
+#else
+static void Vec3Scale_ScrollMenu(Vec3* v, float f) {
+    v->x *= powf(SCROLL_FRICTION, f);
+    v->y *= powf(SCROLL_FRICTION, f);
+    v->z *= powf(SCROLL_FRICTION, f);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // ScrollingMenu ctor @ 0x0015b3b0
@@ -79,6 +115,10 @@ ScrollingMenu::ScrollingMenu()
     , m_bConstrainedView(0)
     , m_pad_d1{0, 0, 0}
     , m_Velocity(0.0f, 0.0f, 0.0f)
+#ifndef __bada__
+    , m_pClickTarget(nullptr)
+    , m_ClosestSnapDelta(0.0f)
+#endif
 {
     // Binary ctor helper @ 0x0015b2bc writes { -120, +320, +120, -320 } for both
     // outer and inner: [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM.
@@ -148,6 +188,23 @@ ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
 //   Phase 5: per-item layout + SetOnscreen + closest-item tracking
 //   Phase 6: click callback (tap release without drag)
 //   Phase 7: scroll bounds + spring-back
+//
+// Port scroll-rate split (no binary counterpart -- see HUDControl::UpdateRealtime):
+// Phases 1/2/3 (live touch read) and Phase 6 (discrete click-fire) MUST stay
+// in this 60Hz Update() -- Phase 6 fires a one-shot click callback/SFX on
+// settle with no debounce, and would re-fire up to 120x/s if run per-present.
+// Phases 4 (velocity integrate), 5 (layout), 7 (spring-back) are pure physics
+// with no discrete side effects, so under the port they move to
+// UpdateRealtime() (dt-scaled via the SM_DECAY_F/SM_SPRING_F macros above),
+// which runs once per PRESENTED frame instead of the fixed 60Hz sim tick.
+// Phase 5 still runs here too (at f=1.0f) so Phase 6's click gate reads a
+// freshly-published m_pClickTarget/m_ClosestSnapDelta for the CURRENT touch
+// state every 60Hz tick; Phase 5 is idempotent (recomputes layout from
+// m_Velocity, no accumulation) so running it in both places is safe.
+//
+// Under __bada__ this function compiles to the ORIGINAL single-pass 7-phase
+// body verbatim (byte-identical ASM) -- no split, no UpdateRealtime, no new
+// members exist there at all.
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Update(float /*dt*/) {
     using namespace Mortar;
@@ -337,16 +394,16 @@ void ScrollingMenu::Update(float /*dt*/) {
         }
     }
 
+#ifdef __bada__
     // --- Phase 4: velocity integration + friction ---
     // Vec3Scale_ScrollMenu(&field_0x90)  -- apply friction to pending velocity
     Vec3Scale_ScrollMenu(&m_PendingVelocity);
-
-    // field_0xd4 += field_0x90  (m_Velocity += friction-scaled pending)
     m_Velocity += m_PendingVelocity;
 
     // RE confirmed: binary does NOT zero m_PendingVelocity here; it relies on
     // the 0.9 friction (Vec3Scale_ScrollMenu) at end of phase to decay it
     // naturally over ~20 frames. Earlier clear suppressed scroll motion.
+#endif
 
     // Determine visible range limits
     float rangeTop = RANGE_TOP;  // DAT_0015be04 = -160.0f
@@ -431,6 +488,15 @@ void ScrollingMenu::Update(float /*dt*/) {
         curY -= halfH;
     }
 
+#ifndef __bada__
+    // Port specific: publish Phase-5 outputs for Phase 6 below (this same
+    // 60Hz Update call) AND for Phase 7 in UpdateRealtime() (see bridge
+    // members in ScrollingMenu.h). Copy the SIGNED values verbatim -- do not
+    // re-derive or abs() them here.
+    m_pClickTarget     = dragTargetItem;
+    m_ClosestSnapDelta = m_SnapDist;
+#endif
+
     // --- Phase 6: click callback (tap release without drag) ---
     // fVar18 = closest-item position (the target snap Y for closest item)
     // snapDist = fVar18 - field_0xd8 (how far we are from snapping to closest item)
@@ -468,6 +534,7 @@ void ScrollingMenu::Update(float /*dt*/) {
         }
     }
 
+#ifdef __bada__
     // --- Phase 7: scroll bounds + spring-back (binary-faithful) ---
     // Binary @ 0x0015bd7c reads +0xa0 at 0x0015bd9e (vldr.32 s13,[r4,#0xa0]):
     //   bottom = field_0xa0 - m_TotalHeight  (SetHeight field minus accumulated item heights)
@@ -479,10 +546,10 @@ void ScrollingMenu::Update(float /*dt*/) {
 
     if (offset > 0.0f && m_DragTargetIdx < 0) {
         // PAST TOP: spring back toward 0
-        offset *= SPRING_BACK_COEF;
+        SM_DECAY_F(offset, SPRING_BACK_COEF);
     } else if (offset < totalScrollH && m_DragTargetIdx < 0) {
         // PAST BOTTOM: spring forward toward totalScrollH
-        offset = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
+        SM_SPRING_F(offset, totalScrollH, SPRING_FWD_COEF);
     } else {
         // IN RANGE or being dragged
         if (m_TouchId != -1) return;
@@ -497,7 +564,113 @@ void ScrollingMenu::Update(float /*dt*/) {
     // Apply friction to pending velocity again (end-of-phase)
     // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015b744 Phase 7 (re-analyst)
     Vec3Scale_ScrollMenu(&m_PendingVelocity);
+#endif
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the phase-split comment above Update(). Runs Phase 4 (integrate), Phase 5
+// (layout, idempotent -- re-published bridge members are overwritten next
+// 60Hz Update tick), and Phase 7 (spring-back) dt-scaled via SM_DECAY_F /
+// SM_SPRING_F (defined above Vec3Scale_ScrollMenu) so f==1.0f exactly
+// reproduces one 60Hz Update tick's worth of physics.
+// ---------------------------------------------------------------------------
+void ScrollingMenu::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    // --- Phase 4: velocity integration + friction (decaying IMPULSE) ---
+    // pv *= powf(0.9,f); vel += pv ONCE -- do NOT multiply the add by f,
+    // that would double-count the impulse already decayed above.
+    Vec3Scale_ScrollMenu(&m_PendingVelocity, f);
+    m_Velocity += m_PendingVelocity;
+
+    // Determine visible range limits (mirrors Update()'s Phase 5 preamble)
+    float rangeTop = RANGE_TOP;
+    float rangeBot = RANGE_BOT;
+    if (m_bConstrainedView) {
+        rangeTop = pos.y - m_Height;
+        rangeBot = pos.y;
+    }
+
+    // --- Phase 5: per-item position + SetOnscreen + closest-item tracking ---
+    // Verbatim copy of Update()'s Phase 5 loop (idempotent -- recomputes
+    // layout from m_Velocity every call, no accumulation) so it can run here
+    // AND in Update() without drift. Do not re-derive the curY sign or the
+    // snap delta -- see the sign-convention note in Update() above.
+    float closestDist = CLOSEST_SENTINEL;
+    m_ClosestIdx = 0;
+    ScrollingMenuItem* dragTargetItem = nullptr;
+    float curY = pos.y - m_Velocity.y;
+
+    for (int i = 0; i < (int)m_Items.size(); i++) {
+        ScrollingMenuItem* item = m_Items[(size_t)i];
+        float halfH = item->GetHeight() * 0.5f;
+
+        if (m_DragTargetIdx < 0) {
+            float distToCenter = curY - pos.y;
+            if (distToCenter < 0.0f) distToCenter = -distToCenter;
+            if (distToCenter < closestDist) {
+                m_ClosestIdx = i;
+                m_SnapDist = curY - pos.y;
+                closestDist = distToCenter;
+            }
+        } else if (m_DragTargetIdx == i) {
+            m_ClosestIdx = m_DragTargetIdx;
+            closestDist = curY - pos.y;
+            if (closestDist < 0.0f) closestDist = -closestDist;
+            dragTargetItem = item;
+        }
+
+        curY -= halfH;
+
+        bool onscreen;
+        if (curY + halfH < rangeTop || curY - halfH > rangeBot)
+            onscreen = false;
+        else
+            onscreen = true;
+        item->SetOnscreen(onscreen);
+
+        item->Move(pos.x, curY, pos.z);
+
+        curY -= halfH;
+    }
+
+    // Publish bridge members (Phase 6 in the next 60Hz Update tick reads these).
+    m_pClickTarget     = dragTargetItem;
+    m_ClosestSnapDelta = m_SnapDist;
+
+    float snapDist = m_SnapDist;
+
+    // --- Phase 7: scroll bounds + spring-back (dt-scaled) ---
+    float offset = m_Velocity.y;
+    float totalScrollH = m_Height - m_TotalHeight;
+
+    if (offset > 0.0f && m_DragTargetIdx < 0) {
+        // PAST TOP: spring back toward 0
+        SM_SPRING_F(offset, 0.0f, SPRING_BACK_COEF);
+    } else if (offset < totalScrollH && m_DragTargetIdx < 0) {
+        // PAST BOTTOM: spring forward toward totalScrollH
+        SM_SPRING_F(offset, totalScrollH, SPRING_FWD_COEF);
+    } else {
+        // IN RANGE or being dragged
+        if (m_TouchId != -1) return;
+        float pv = m_PendingVelocity.y;
+        // Threshold gate stays UNSCALED -- pv is a state member already
+        // rate-consistent via the Phase-4 decay above.
+        bool gate = (pv < 0.0f) ? (pv >= VEL_NEAR_ZERO_LO) : (pv <= VEL_NEAR_ZERO_HI);
+        if (!gate) return;
+        m_Velocity.y = offset + snapDist * (1.0f - powf(1.0f - VEL_NEAR_ZERO_HI, f));
+        return;
+    }
+    m_Velocity.y = offset;
+
+    // Apply friction to pending velocity again (end-of-phase)
+    Vec3Scale_ScrollMenu(&m_PendingVelocity, f);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // ScrollingMenu::AddItem @ 0x0015be54
