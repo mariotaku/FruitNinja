@@ -67,4 +67,14 @@ void SeedGlobalRng(uint32_t seed) {
     g_Random = Random((uint64_t)seed);
 }
 
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 Math::GetRandBetween @ 0x001e2f00..0x001e2f74 (asm-inspector)
+float GetRandBetween(Random& rng, float lo, float hi, float halfChance) {
+    float res = lo + rng.RandF(hi - lo);
+    if (halfChance > 0.0f) {
+        if (rng.RandF(1.0f) <= halfChance) res = -res;
+    }
+    return res;
+}
+
 } // namespace Math
