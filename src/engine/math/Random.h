@@ -38,12 +38,17 @@ extern Random g_Random;
 // from frame-counter state.
 void SeedGlobalRng(uint32_t seed);
 
-// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00: uniform draw in
-// [lo, hi) via rng.RandF(hi-lo); if halfChance > 0, a SECOND rng.RandF(1.0f)
-// draw decides sign (<=halfChance flips negative). halfChance == 0 skips the
-// second draw entirely (draw count matters for RNG-sequence fidelity).
-float GetRandBetween(Random& rng, float lo, float hi, float halfChance);
-
 } // namespace Math
+
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00..0x001e2f74: global-scope
+// template (NOT under namespace Math), mangles to _Z14GetRandBetweenIfET_S0_S0_f.
+// Reads Math::g_Random internally (no Random& param). Uniform draw in [lo, hi)
+// via g_Random.RandF(hi-lo); if signFlipProb > 0, a SECOND g_Random.RandF(1.0f)
+// draw decides sign (<=signFlipProb flips negative). signFlipProb == 0 skips the
+// second draw entirely (draw count matters for RNG-sequence fidelity).
+// The trailing `unused` float is a mangling-fidelity param only: the binary's
+// template declares 4 params (T_,S0_,S0_,f) but the <float> instantiation's
+// prologue never reads the 4th (s3) register.
+template<typename T> T GetRandBetween(T lo, T hi, T signFlipProb, float unused);
 
 #endif
