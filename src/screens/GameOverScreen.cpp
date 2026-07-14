@@ -945,10 +945,31 @@ const char* GetComboName(COMBO_TYPE starType) {
 
 // ---------------------------------------------------------------------------
 // Update (vtable slot 10, 0x00186c80)
+// ASM-verified: 2026-07-14T21:45Z v1.6.1 GameOverScreen::Update @ 0x00186c80..0x00187c8f (asm-inspector)
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::Update(float dt) {
     Game* game = Game::GetInstance();
+
+#ifndef __bada__
+    // Port specific: DIFFERS: v1.6.1 GameOverScreen::Update @0x00186c80 eases the
+    // entry-reveal m_Timer per 60Hz sim tick; port eases it per rendered frame
+    // (dt-scaled) so the reveal tracks display refresh. __bada__ keeps the
+    // faithful 60Hz path. The easing itself has already been advanced by
+    // UpdateRealtime() (called once per presented frame via HUD::UpdateRealtime);
+    // this 60Hz Update only reads the current m_Timer value to fire the
+    // (rate-independent, threshold-based) state transitions below.
+    //
+    // m_AnimTimeMs / s_bounceValue (below) and STATE_BONUS_PHASE's m_Timer
+    // advance are NOT converted: m_AnimTimeMs and s_bounceValue are write-only
+    // in this build (no reader anywhere in GameOverScreen -- cosmetic counters
+    // with zero observable effect), and STATE_BONUS_PHASE's m_Timer advance is
+    // gated on live ActorManager entity counts re-evaluated every call --
+    // moving it to UpdateRealtime would require duplicating that gate against
+    // gameplay state that can change between the decoupled Update()/
+    // UpdateRealtime() cadences, risking double/under-advancement. Left
+    // binary-faithful (60Hz-coupled) per the "no clean split point" rule.
+#endif
 
     // Prologue
     // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80
@@ -1001,7 +1022,17 @@ void GameOverScreen::Update(float dt) {
         }
 
         m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+#ifdef __bada__
         m_Timer += dt;
+#endif
+        // DIFFERS: v1.6.1 GameOverScreen::Update @0x00186c80 advances the entry
+        // reveal m_Timer per 60Hz sim tick; port advances it per rendered frame
+        // (dt-scaled) via UpdateRealtime() to track display refresh, so the
+        // 0.2s scale-in and 1.9s state-advance thresholds take the same real
+        // wall-clock time at 60 and 120 Hz alike. __bada__ keeps the faithful
+        // 60Hz path (unconditional += dt above). This 60Hz Update only reads
+        // the current m_Timer value below to derive `size` and fire the
+        // rate-independent, threshold-based state transition.
 
         // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80
         // SIN_FULL=20020 (WRONG in old port: 20000), clamp 0x4E34
@@ -1057,6 +1088,13 @@ void GameOverScreen::Update(float dt) {
                 const float sf = pos.y / -224.0f + 1.0f;
                 size = m_TitleSize * sf;
             }
+            // HALT (no dt-scaling applied here): the advance is gated on
+            // ActorManager entity counts (the outer `if` above) that are
+            // re-evaluated every Update() call -- moving this to
+            // UpdateRealtime() would require duplicating that live-gameplay
+            // gate against a decoupled per-present cadence, risking double-
+            // or under-advancement relative to the binary's single
+            // 60Hz-tick-coupled read. Left binary-faithful (60Hz-coupled).
             m_Timer += dt;
             if (m_pBonusScreen) m_pBonusScreen->m_Timer = m_Timer;
             game_work.m_bSlowMotion = 1;
@@ -1150,6 +1188,19 @@ void GameOverScreen::Update(float dt) {
         }
 
         // 3) Alpha ramp
+        // HALT (no dt-scaling applied here): game_work.m_PauseAmount is a
+        // cross-screen shared global (also written by PauseScreen and read
+        // across FruitCamera/WaveManager/BombHit/etc. -- see game/GameWork.h).
+        // This block reads it to pick a branch, then in the else-branch
+        // advances it AND re-reads the just-written value in the same call
+        // (m_bSlowMotion gate + >=0.999 clamp) with no clean split point --
+        // exactly the "cross-screen shared global" / "write-then-branch in
+        // the same Update()" entanglement that blocks a per-present rewrite
+        // (see MainScreen's equivalent precedent). m_StarCount (the
+        // 0->11 reveal counter) is likewise entangled: it is reset/incremented
+        // in the same branches as alpha and gates the single-shot score-commit
+        // below. Left binary-faithful (60Hz-coupled); do not invent a
+        // port-only cached copy of m_PauseAmount to route around this.
         float& alpha = game_work.m_PauseAmount;
         if (alpha >= 0.999f) {
             if (m_FruitFactAlpha < 1.0f)
@@ -1267,6 +1318,11 @@ void GameOverScreen::Update(float dt) {
     // State 8: retry fade
     // -----------------------------------------------------------------------
     case STATE_RETRY_FADE: {
+        // HALT (no dt-scaling applied here): same shared-global entanglement
+        // as STATE_MAIN_DISPLAY's alpha ramp above -- game_work.m_PauseAmount
+        // is decayed and re-read/branched (WaveManager::Reset + SetTerminate
+        // one-shot side effects) in the same Update() call. Left
+        // binary-faithful (60Hz-coupled).
         float& alpha = game_work.m_PauseAmount;
         alpha *= 0.75f;
         m_FruitFactAlpha = alpha;
@@ -1377,6 +1433,45 @@ void GameOverScreen::Update(float dt) {
     if (m_pSlotA8) m_pSlotA8->pos = Vec3(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -50.0f, 0.0f);
     if (m_pSlotB4) m_pSlotB4->pos = Vec3(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -125.0f, 0.0f);
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the state-machine split comment above Update(). Advances the STATE_ENTRY_ANIM
+// entry-reveal m_Timer per PRESENTED frame using the real measured dtSeconds
+// (m_Timer += dt is a plain linear accumulator in the binary -- already
+// expressed in seconds, not a spring/decay -- so no GOS_APPROACH_F/GOS_DECAY_F
+// rate-conversion is needed here, just decoupling the accumulation from
+// Update()'s call frequency). Update() (60Hz) reads the resulting value to
+// derive `size` (sine-ease scale-in) and fire the (already rate-independent,
+// threshold-based) state transition at m_Timer > 1.9f -- that stays in
+// Update() exactly like ShopScreen/PauseScreen keep their state-transition
+// side effects in Update() rather than UpdateRealtime().
+//
+// Only STATE_ENTRY_ANIM is handled here. STATE_BONUS_PHASE's m_Timer advance,
+// game_work.m_PauseAmount (STATE_MAIN_DISPLAY / STATE_RETRY_FADE), m_AnimTimeMs,
+// and s_bounceValue are intentionally NOT converted -- see the HALT comments
+// at each site in Update() for why (live-gameplay-gated advance / cross-screen
+// shared global entangled with same-call branches / write-only dead counters).
+//
+// Under __bada__ this function does not exist (see GameOverScreen.h); Update()
+// advances m_Timer inline in STATE_ENTRY_ANIM, byte-identical to the binary.
+//
+// DIFFERS: v1.6.1 GameOverScreen::Update @0x00186c80 advances the entry-reveal
+// m_Timer per 60Hz sim tick; port advances it per rendered frame using the real
+// measured dtSeconds to track display refresh. __bada__ keeps the faithful
+// 60Hz path (unconditional += dt in Update()).
+// ---------------------------------------------------------------------------
+void GameOverScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+
+    if (m_State == STATE_ENTRY_ANIM) {
+        // Binary: m_Timer += dt (unconditional every tick in state 0)
+        m_Timer += dtSeconds;
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // PreDrawOrder (vtable slot 8, 0x00186894)

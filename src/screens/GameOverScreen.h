@@ -146,6 +146,24 @@ public:
     void Reset() override;
     void BeginDraw(float dt) override;
     void Update(float dt) override;
+
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Advances the STATE_ENTRY_ANIM entry-reveal m_Timer using the real
+    // measured dtSeconds, once per PRESENTED frame (Game::tickRealtimeUi via
+    // HUD::UpdateRealtime), so the entry reveal (title scale-in + state-advance
+    // timing) tracks the display's actual present rate (60/90/120fps) instead
+    // of the fixed 60Hz sim tick. The STATE MACHINE itself (which state, when
+    // to transition, one-shot side effects) stays in Update() at 60Hz -- it
+    // reads the m_Timer value this function advances and fires
+    // threshold-crossing transitions there, exactly once per sim tick.
+    // STATE_BONUS_PHASE's m_Timer and game_work.m_PauseAmount (shared global,
+    // read+branched same-call in STATE_MAIN_DISPLAY/STATE_RETRY_FADE) are
+    // intentionally NOT handled here -- see the HALT comments at each site in
+    // GameOverScreen.cpp's Update().
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     void PreDrawOrder(float* hudScaleRaw, int layerMask) override;
     void DrawOrder(float* hudScaleRaw, int layerMask) override;
     void Release() override;
