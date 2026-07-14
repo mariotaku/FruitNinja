@@ -183,15 +183,16 @@ static void EmscriptenFrame(void* arg) {
     double elapsed = now - g_lastTime;
     g_lastTime = now;
 
-    // Port specific: accumulate render-frame intervals for the FPS overlay.
+    // Port specific: FPS overlay measures the PRESENT rate, not the RAF rate.
+    // s_emFpsWindowMs sums real wall-clock time every RAF (so the window closes
+    // at a true 500ms regardless of how many presents land in it); the frame
+    // COUNT is incremented only inside `if (doPresent)` below, next to
+    // renderFrame(). With FN::g_FpsCap60 skipping ~2 of every 3 RAFs' presents
+    // (see the doPresent gate below), this yields presents/real-second (~60
+    // when capped). When uncapped, every RAF presents, so frames == RAF count
+    // and the result is unchanged (~120).
     if (FN::g_ShowFps) {
-        s_emFpsWindowMs     += elapsed;
-        s_emFpsWindowFrames += 1;
-        if (s_emFpsWindowMs >= 500.0) {
-            s_emFps             = static_cast<float>(s_emFpsWindowFrames / (s_emFpsWindowMs * 0.001));
-            s_emFpsWindowMs     = 0.0;
-            s_emFpsWindowFrames = 0;
-        }
+        s_emFpsWindowMs += elapsed;
     }
 
     game->pollInput();
@@ -211,12 +212,84 @@ static void EmscriptenFrame(void* arg) {
         fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
     }
-    // Port specific: feed the current FPS to renderFrame so DebugFps_Draw
-    // (called inside renderFrame, before SDL_GL_SwapWindow) shows the right value.
-    // The desktop run() loop does this via s_currentFps in GameSDL.cpp; here we
-    // use the web-specific s_emFps accumulator and push it in via setCurrentFps.
-    game->setCurrentFps(s_emFps);
-    game->renderFrame(static_cast<float>(g_driver.alpha()), steps);
+    // Port specific: "Limit to 60 FPS" (FN::g_FpsCap60, SettingsScreen checkbox)
+    // -- caps the render/PRESENT rate only. RAF stays native (fps=0 above, no
+    // re-registration): pollInput()/g_driver.advance()/stepUpdate() above this
+    // point already ran unconditionally for every RAF regardless of the cap,
+    // so sim tick rate and input latency are identical either way. Only the
+    // draw + SDL_GL_SwapWindow call below (game->renderFrame, which performs
+    // both) is skipped on RAFs that don't cross the next scheduled 1/60s
+    // boundary. Boundary-accumulator, not a fixed since-last-present budget:
+    // s_nextPresentMs advances by exactly kCapPeriodMs (16.6667ms) each
+    // present, so presents AVERAGE 60/s regardless of refresh rate --
+    // alternating 2-/3-frame skips on 144Hz (~6.94ms/RAF), exactly every-2nd
+    // on 120Hz, every-RAF on <=60Hz displays (a fixed since-last budget only
+    // hits clean refresh-rate divisors, e.g. 48fps on 144Hz, never 60). If we
+    // fall far behind the schedule (tab backgrounded, hitch, or a display
+    // slower than 60Hz), rebase to now instead of burst-presenting to catch
+    // up. Read g_FpsCap60 live so toggling the checkbox takes effect the next
+    // RAF; s_nextPresentMs resets to "uninitialized" when uncapped so
+    // re-enabling the cap re-inits cleanly on the next RAF.
+    static double s_nextPresentMs = -1.0;
+    const double kCapPeriodMs = 1000.0 / 60.0;
+    bool doPresent;
+    if (FN::g_FpsCap60) {
+        if (s_nextPresentMs < 0.0) {
+            s_nextPresentMs = now;
+        }
+        if (now >= s_nextPresentMs) {
+            doPresent = true;
+            s_nextPresentMs += kCapPeriodMs;
+            if (s_nextPresentMs < now) {
+                s_nextPresentMs = now + kCapPeriodMs;
+            }
+        } else {
+            doPresent = false;
+        }
+    } else {
+        doPresent = true;
+        s_nextPresentMs = -1.0;
+    }
+
+    if (doPresent) {
+        // Port specific: count this present toward the FPS window (see the
+        // s_emFpsWindowMs accumulation above) and roll the window over once
+        // it reaches real-time 500ms, independent of how many RAFs occurred.
+        if (FN::g_ShowFps) {
+            s_emFpsWindowFrames += 1;
+            if (s_emFpsWindowMs >= 500.0) {
+                s_emFps             = static_cast<float>(s_emFpsWindowFrames / (s_emFpsWindowMs * 0.001));
+                s_emFpsWindowMs     = 0.0;
+                s_emFpsWindowFrames = 0;
+            }
+        }
+        // Port specific: feed the current FPS to renderFrame so DebugFps_Draw
+        // (called inside renderFrame, before SDL_GL_SwapWindow) shows the right value.
+        // The desktop run() loop does this via s_currentFps in GameSDL.cpp; here we
+        // use the web-specific s_emFps accumulator and push it in via setCurrentFps.
+        game->setCurrentFps(s_emFps);
+
+        // Port specific: no binary counterpart. Per-PRESENT UI tick (see
+        // Game.h tickRealtimeUi), mirroring GameSDL.cpp Game::run()'s
+        // placement -- runs once per PRESENTED frame (inside doPresent, so it
+        // naturally follows the FPS-cap gate: native RAF rate when uncapped,
+        // ~60Hz when FN::g_FpsCap60 caps presents). s_lastRealtimeUiMs is a
+        // separate wall-clock timestamp (ms, emscripten_get_now()) from
+        // g_lastTime (which tracks RAF-to-RAF elapsed regardless of
+        // doPresent) since this must measure PRESENT-to-PRESENT time.
+        // Clamped in tickRealtimeUi's callee against stalls/tab-backgrounding.
+        {
+            static double s_lastRealtimeUiMs = -1.0;
+            if (s_lastRealtimeUiMs < 0.0) {
+                s_lastRealtimeUiMs = now;
+            }
+            double dtPresent = (now - s_lastRealtimeUiMs) * 0.001;
+            s_lastRealtimeUiMs = now;
+            game->tickRealtimeUi(static_cast<float>(dtPresent));
+        }
+
+        game->renderFrame(static_cast<float>(g_driver.alpha()), steps);
+    }
 
     // Port specific: web (#73) -- fade the DOM loading splash out once the game has
     // actually rendered a few frames.  The shell keeps the splash fully opaque over
@@ -226,7 +299,7 @@ static void EmscriptenFrame(void* arg) {
     // blank/white flash a fade-on-load-complete produced.  One-shot.
     static int  s_renderedFrames = 0;
     static bool s_splashFaded    = false;
-    if (!s_splashFaded) {
+    if (!s_splashFaded && doPresent) {
         s_renderedFrames += steps;
         if (s_renderedFrames >= 3) {
             s_splashFaded = true;

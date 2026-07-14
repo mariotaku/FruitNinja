@@ -277,18 +277,36 @@ static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      =
 // real widget-box edge, not the label baseline).
 static const float kDividerY2 = (kSensY - kSensTrackH * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
 
-// FPS COUNTER: last row, kDividerPad below Divider 2's own bottom edge (same
-// dedicated divider clearance as every other divider-adjacent row). Unlike
-// the MOTION MODE block (where the label baseline is the block's own top
-// edge), the FPS row's checkbox BOX extends kCheckboxSide*0.5 above its own
-// centre/label-baseline -- so the pad must be measured to the checkbox box's
-// top edge, not the label baseline, or the box would eat into the gap.
-static const float kFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kDividerPad - kCheckboxSide * 0.5f;
+// NATIVE FRAME RATE: a FULL kRowLineGap below Divider 2's own bottom edge
+// (real widget-box edge, not a label baseline) -- wider than the usual
+// kDividerPad divider clearance, since this row and FPS COUNTER below it were
+// previously cramped; both its own gaps (above, to Divider 2/SENSITIVITY;
+// below, to FPS COUNTER) use the full kRowLineGap instead. Port specific: no
+// binary counterpart (see DebugFlags.h g_FpsCap60) -- caps render/present rate
+// to 60fps; sim stays the fixed 60Hz accumulator regardless (FixedStepDriver,
+// untouched by this checkbox). Structurally identical to the MOTION MODE
+// row: bold kLabelScale label ("NATIVE FRAME RATE") + a 2-line dimmer
+// kMotionDescColour description ("Smoother graphics for screens" / "with
+// higher frame rate"), same kMotionDescY0/kMotionDescY1 spacing formula.
+// kNativeFpsCbY centres the checkbox on the label+2-line-desc sub-block, same
+// formula kMotionCbY uses for MOTION MODE's block.
+static const float kNativeFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kRowLineGap;
+static const float kNativeFpsDescY0 = kNativeFpsLabelY - kRowLineGap;
+static const float kNativeFpsDescY1 = kNativeFpsDescY0 - kMotionDescLineGap;
+static const float kNativeFpsCbX = kRightEdge - kCheckboxSide * 0.5f;
+static const float kNativeFpsCbY = (kNativeFpsLabelY + kNativeFpsDescY1) * 0.5f;
+
+// FPS COUNTER: now the BOTTOM-MOST row -- a FULL kRowLineGap below the native
+// row's own checkbox box bottom edge (real widget-box edge, not a label
+// baseline -- same "measure to the box edge" convention kFpsLabelY always
+// used, just re-anchored off the native row's box instead of Divider 2
+// directly now that the native row sits between them).
+static const float kFpsLabelY = (kNativeFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
-// Content height (dropdown box top .. FPS checkbox box bottom, plus the
-// top/bottom pads -- bottom padded extra by kContentBottomFadeClearance, see
-// kContentBottomPad above) and the derived viewport/scroll extents. The
+// Content height (dropdown box top .. FPS COUNTER checkbox box bottom, plus
+// the top/bottom pads -- bottom padded extra by kContentBottomFadeClearance,
+// see kContentBottomPad above) and the derived viewport/scroll extents. The
 // viewport is the plate's usable content window (kViewportHalfH*2); content
 // EXCEEDS it by design (kContentH > kViewportH), which is the whole point of
 // this scrollable layout -- UpdateScroll()/Draw() clip + scroll it.
@@ -298,7 +316,7 @@ static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY    
 // kContentTopPad by construction, see kComboY above). Previously this was
 // written as plain kViewportHalfH (no pad subtracted), which silently
 // dropped kContentTopPad's worth of height from kContentH -- undercounting
-// m_MaxScroll by the same amount and leaving FPS COUNTER's row permanently
+// m_MaxScroll by the same amount and leaving the bottom row permanently
 // unreachable at the bottom of the scroll range.
 static const float kContentTop    = kViewportHalfH - kContentTopPad;
 static const float kContentBottom = (kFpsCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
@@ -482,6 +500,12 @@ bool SettingsScreen::IsOpen() {
     return s_pSettings != NULL;
 }
 
+#ifndef __bada__
+SettingsScreen* SettingsScreen::GetInstance() {
+    return s_pSettings;
+}
+#endif
+
 // Scroll constants -- ported verbatim from UiDropdown (see header doc).
 const float SettingsScreen::SCROLL_FRICTION    = 0.9f;
 const float SettingsScreen::DRAG_DELTA_FACTOR  = -0.5f;
@@ -496,11 +520,13 @@ SettingsScreen::SettingsScreen()
     , m_MotionCb(0)
     , m_SensSlider(0)
     , m_FpsCb(0)
+    , m_NativeFpsCb(0)
     , m_pCloseButton(0)
     , m_LangBaseY(0.0f)
     , m_MotionCbBaseY(0.0f)
     , m_SensBaseY(0.0f)
     , m_FpsCbBaseY(0.0f)
+    , m_NativeFpsCbBaseY(0.0f)
     , m_ScrollY(0.0f)
     , m_ScrollVel(0.0f)
     , m_MaxScroll(0.0f)
@@ -604,6 +630,17 @@ void SettingsScreen::Init() {
     m_MotionCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
     m_MotionCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
+    // Port specific: checkbox polarity is INVERTED vs FN::g_FpsCap60 -- checked
+    // means "use native/display refresh" (the default, g_FpsCap60==false), so
+    // seed with !g_FpsCap60. OnFpsCapToggle() applies the same inversion on
+    // write. Persistence (SettingsSave) is untouched -- it still reads/writes
+    // the global directly, never the checkbox's own polarity.
+    m_NativeFpsCb = new UiCheckbox(Vec3(kNativeFpsCbX, kNativeFpsCbY, 0.0f), kCheckboxSide, !FN::g_FpsCap60);
+    m_NativeFpsCb->SetBoxTexture(m_TexBox);
+    m_NativeFpsCb->SetCheckGlyph(m_TexCheck);
+    m_NativeFpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsCapToggle));
+    m_NativeFpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+
     m_FpsCb = new UiCheckbox(Vec3(kFpsCbX, kFpsCbY, 0.0f), kCheckboxSide, FN::g_ShowFps);
     m_FpsCb->SetBoxTexture(m_TexBox);
     m_FpsCb->SetCheckGlyph(m_TexCheck);
@@ -673,14 +710,16 @@ void SettingsScreen::Init() {
     }
 
     // ---- capture each widget's base (unscrolled) content-space Y ----
-    // Update() rewrites pos.y = baseY + (-m_ScrollY) every frame; these are
-    // the values pos.y already holds right now (kLangLabelY's row uses
-    // kComboY, not kLangLabelY, since the DROPDOWN BAR is the widget --
-    // kLangLabelY is only the text label's baseline, drawn separately).
-    m_LangBaseY     = kComboY;
-    m_MotionCbBaseY = kMotionCbY;
-    m_SensBaseY     = kSensY;
-    m_FpsCbBaseY    = kFpsCbY;
+    // Update() rewrites pos.y = baseY + off (off = m_ScrollY + m_PopupOffsetY)
+    // every frame; these are the values pos.y already holds right now
+    // (kLangLabelY's row uses kComboY, not kLangLabelY, since the DROPDOWN
+    // BAR is the widget -- kLangLabelY is only the text label's baseline,
+    // drawn separately).
+    m_LangBaseY        = kComboY;
+    m_MotionCbBaseY    = kMotionCbY;
+    m_SensBaseY        = kSensY;
+    m_FpsCbBaseY       = kFpsCbY;
+    m_NativeFpsCbBaseY = kNativeFpsCbY;
 
     // ---- scroll extents ----
     m_MaxScroll = kContentH - kViewportH;
@@ -713,6 +752,7 @@ void SettingsScreen::Release() {
     delete m_MotionCb;    m_MotionCb    = 0;
     delete m_SensSlider;  m_SensSlider  = 0;
     delete m_FpsCb;       m_FpsCb       = 0;
+    delete m_NativeFpsCb; m_NativeFpsCb = 0;
     if (m_pCloseButton) { m_pCloseButton->SetPendingRemoval(); m_pCloseButton = 0; }
 
     m_TexBox.SetNull();
@@ -742,23 +782,29 @@ void SettingsScreen::Update(float dt) {
         return;
     }
 
+    // ---- close button: independent of scroll (its own bottom-right
+    // ---- slide-in offset, m_CloseBtnOffX/Y, see header note + UpdateAnim()),
+    // ---- so it can be positioned any time before the widgets are ticked. ----
+    if (m_pCloseButton) {
+        m_pCloseButton->pos.x = kCloseBtnX + m_CloseBtnOffX;
+        m_pCloseButton->pos.y = kCloseBtnY + m_CloseBtnOffY;
+    }
+
     // ---- rewrite each widget's live pos.y from its base Y + scroll offset,
     // ---- BEFORE ticking it, so its own hit-rect/PollTouch tracks the
     // ---- scrolled position. off = +m_ScrollY: increasing m_ScrollY shifts
     // ---- content UP (see header Scrolling note). m_PopupOffsetY (the popup
     // ---- drop-in/out animation, see UpdateAnim()) stacks on top so widget
-    // ---- hit-rects track the animated plate position too. ----
-    float off = m_ScrollY + m_PopupOffsetY;
-    if (m_LangDrop)   m_LangDrop->pos.y   = m_LangBaseY     + off;
-    if (m_MotionCb)   m_MotionCb->pos.y   = m_MotionCbBaseY + off;
-    if (m_SensSlider) m_SensSlider->pos.y = m_SensBaseY     + off;
-    if (m_FpsCb)      m_FpsCb->pos.y      = m_FpsCbBaseY    + off;
-    // Port specific: m_pCloseButton does NOT track m_PopupOffsetY/off -- it
-    // has its own bottom-right slide-in offset (m_CloseBtnOffX/Y, see header
-    // note + UpdateAnim()), independent of the plate's drop-from-top motion.
-    if (m_pCloseButton) {
-        m_pCloseButton->pos.x = kCloseBtnX + m_CloseBtnOffX;
-        m_pCloseButton->pos.y = kCloseBtnY + m_CloseBtnOffY;
+    // ---- hit-rects track the animated plate position too. Runs here (before
+    // ---- the ANIM_OPEN gate) so widgets still track the plate's drop-in/out
+    // ---- motion during OPENING/CLOSING, using this frame's m_PopupOffsetY. ----
+    {
+        float off = m_ScrollY + m_PopupOffsetY;
+        if (m_LangDrop)    m_LangDrop->pos.y    = m_LangBaseY        + off;
+        if (m_MotionCb)    m_MotionCb->pos.y    = m_MotionCbBaseY    + off;
+        if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
+        if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
+        if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
     }
 
     // ---- kinetic scroll (owns/tracks the touch that drives it) + widget
@@ -771,10 +817,19 @@ void SettingsScreen::Update(float dt) {
     }
 
     UpdateScroll(dt);
-    // UpdateScroll may have moved m_ScrollY -- re-derive off/pos.y is not
-    // needed again this frame (widgets read pos.y in their own Update below,
-    // and it already reflects last frame's scroll; matches pre-animation
-    // behaviour where UpdateScroll ran before the pos.y rewrite).
+    // UpdateScroll() only sets m_ScrollVel now (the velocity->position
+    // integration runs in UpdateRealtime(), see SettingsScreen.h), so this
+    // second rewrite is normally a no-op duplicate of the one above -- kept
+    // for structural symmetry with the pre-split code and because a widget's
+    // own Update() below must see pos.y already settled either way.
+    {
+        float off = m_ScrollY + m_PopupOffsetY;
+        if (m_LangDrop)    m_LangDrop->pos.y    = m_LangBaseY        + off;
+        if (m_MotionCb)    m_MotionCb->pos.y    = m_MotionCbBaseY    + off;
+        if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
+        if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
+        if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+    }
 
     // Port specific: while the dropdown panel is open, gate out the other
     // widgets (checkboxes/slider/close) so they neither receive input nor
@@ -794,69 +849,108 @@ void SettingsScreen::Update(float dt) {
             if (m_MotionCb)   m_MotionCb->Update(dt);
             if (m_SensSlider) m_SensSlider->Update(dt);
             if (m_FpsCb)      m_FpsCb->Update(dt);
+            if (m_NativeFpsCb) m_NativeFpsCb->Update(dt);
         }
     }
     if (m_LangDrop) m_LangDrop->Update(dt);
 }
 
-// Port specific: advances the popup open/close animation. OPENING eases
+// Port specific: evaluates the continuous popup easing curves (m_PopupOffsetY/
+// m_BackdropAlpha/m_CloseBtnOffX/Y) at a given phase + timer-ratio `t01`
+// (m_AnimTimer/duration, UNCLAMPED -- pass a value >1.0 and this still
+// produces a valid (if past-target) sample; callers clamp for their own
+// purposes). Shared by UpdateRealtime() (continuous per-present eval, the
+// normal path) and UpdateAnim()'s transition-complete snap (which calls this
+// once more with t01 pinned to exactly 1.0 to land on the precise rest
+// values rather than trusting float accumulation to hit them). OPENING eases
 // m_PopupOffsetY from kPopupStartOffsetY down to 0 with EASE-OUT-BACK (a
-// small overshoot PAST 0 to negative before settling -- the "bounce"), CLOSING
-// eases back up to kPopupStartOffsetY with a plain EASE-IN (no bounce).
-// m_BackdropAlpha fades 0->target / target->0 on a SmoothStep of the same
-// timer progress (an easing curve of its own, not the raw linear ratio) so
-// the dim ramps up quickly then settles on open, and eases off on close.
+// small overshoot PAST 0 to negative before settling -- the "bounce"),
+// CLOSING eases back up to kPopupStartOffsetY with a plain EASE-IN (no
+// bounce). m_BackdropAlpha fades 0->target / target->0 on a SmoothStep of the
+// same ratio (an easing curve of its own, not the raw linear ratio) so the
+// dim ramps up quickly then settles on open, and eases off on close.
+// m_pCloseButton is NOT part of the m_PopupOffsetY popup space -- it rides
+// its own (m_CloseBtnOffX, m_CloseBtnOffY) offset on the same timer/phase,
+// sliding in from off-screen bottom-right on OPENING and back out on CLOSING
+// (see header note).
+static void EvalPopupAnim(SettingsScreen::AnimPhase phase, float t01,
+                           float& popupOffsetY, float& backdropAlpha,
+                           float& closeBtnOffX, float& closeBtnOffY) {
+    float tc = t01 < 0.0f ? 0.0f : (t01 > 1.0f ? 1.0f : t01);
+    switch (phase) {
+    case SettingsScreen::ANIM_OPENING: {
+        backdropAlpha = SmoothStep(tc) * kBackdropTargetAlpha;
+        // EaseOutBack(t) runs 0->1 with an overshoot PAST 1 (peaking above 1,
+        // per the "back" family), which maps to offset running
+        // kPopupStartOffsetY -> 0 with an overshoot PAST 0 to NEGATIVE (the
+        // plate briefly drops below rest before settling back) -- exactly
+        // the requested bounce.
+        popupOffsetY = kPopupStartOffsetY * (1.0f - EaseOutBack(tc));
+        // Close button: plain ease-out-cubic (decelerate slide, no
+        // overshoot) -- own start/rest pair (bottom-right off-screen ->
+        // (0,0)), unlike the plate's overshoot-then-settle bounce.
+        float bt = 1.0f - EaseOutCubic(tc);
+        closeBtnOffX = kCloseBtnStartOffX * bt;
+        closeBtnOffY = kCloseBtnStartOffY * bt;
+        break;
+    }
+    case SettingsScreen::ANIM_OPEN:
+        break;
+    case SettingsScreen::ANIM_CLOSING: {
+        backdropAlpha = (1.0f - SmoothStep(tc)) * kBackdropTargetAlpha;
+        popupOffsetY = kPopupStartOffsetY * EaseInQuad(tc);
+        // Close button slides back out to its bottom-right off-screen start
+        // over the same close window, plain ease-in (no bounce), matching
+        // the plate.
+        closeBtnOffX = kCloseBtnStartOffX * EaseInQuad(tc);
+        closeBtnOffY = kCloseBtnStartOffY * EaseInQuad(tc);
+        break;
+    }
+    }
+}
+
+// Port specific: advances the popup open/close animation PHASE STATE MACHINE
+// (OPENING->OPEN, CLOSING->teardown) at the fixed 60Hz sim rate -- kept here
+// (not moved to UpdateRealtime()) so the deferred teardown (SetInputModal
+// (NULL)/SetPendingRemoval/SaveSettings/s_QuitAfterClose, see below) fires at
+// a deterministic sim tick rather than a variable-rate present. The
+// CONTINUOUS easing math itself (m_PopupOffsetY/m_BackdropAlpha/
+// m_CloseBtnOffX/Y) has moved to UpdateRealtime() (once per PRESENTED frame,
+// dt-scaled -- see its own comment) so the drop/slide motion tracks the
+// display refresh instead of the sim tick; m_AnimTimer is likewise now
+// advanced ONLY there (real seconds, finer-grained than the 60Hz tick at
+// >60fps) -- this function just INSPECTS it against each phase's duration to
+// decide when to transition, mirroring UpdateScroll()/UpdateRealtime()'s own
+// split (UpdateScroll() tracks touch only; the integration that used to run
+// inline moved out to the per-present tick).
 // When a CLOSING animation completes, performs the ACTUAL teardown that used
 // to run synchronously in Toggle()'s close branch (SaveSettings/
 // SetInputModal(NULL)/SetPendingRemoval/s_pSettings=NULL/s_QuitAfterClose),
 // in the same order, just deferred to here.
-// m_pCloseButton is NOT part of the m_PopupOffsetY popup space -- it rides
-// its own (m_CloseBtnOffX, m_CloseBtnOffY) offset on the same timer/phase,
-// sliding in from off-screen bottom-right on OPENING and back out on
-// CLOSING (see header note).
 void SettingsScreen::UpdateAnim(float dt) {
+    (void)dt;
     switch (m_AnimPhase) {
     case ANIM_OPENING: {
-        m_AnimTimer += dt;
-        float t = m_AnimTimer / kAnimOpenDuration;
-        m_BackdropAlpha = SmoothStep(t < 1.0f ? t : 1.0f) * kBackdropTargetAlpha;
-        if (t >= 1.0f) {
+        if (m_AnimTimer >= kAnimOpenDuration) {
             m_AnimPhase = ANIM_OPEN;
             m_AnimTimer = 0.0f;
             m_PopupOffsetY = 0.0f;
             m_BackdropAlpha = kBackdropTargetAlpha;
             m_CloseBtnOffX = 0.0f;
             m_CloseBtnOffY = 0.0f;
-        } else {
-            // EaseOutBack(t) runs 0->1 with an overshoot PAST 1 (peaking above
-            // 1, per the "back" family), which maps to offset running
-            // kPopupStartOffsetY -> 0 with an overshoot PAST 0 to NEGATIVE
-            // (the plate briefly drops below rest before settling back) --
-            // exactly the requested bounce.
-            m_PopupOffsetY = kPopupStartOffsetY * (1.0f - EaseOutBack(t));
-            // Close button: plain ease-out-cubic (decelerate slide, no
-            // overshoot) -- own start/rest pair (bottom-right off-screen ->
-            // (0,0)), unlike the plate's overshoot-then-settle bounce.
-            float bt = 1.0f - EaseOutCubic(t);
-            m_CloseBtnOffX = kCloseBtnStartOffX * bt;
-            m_CloseBtnOffY = kCloseBtnStartOffY * bt;
         }
         break;
     }
     case ANIM_OPEN:
         break;
     case ANIM_CLOSING: {
-        m_AnimTimer += dt;
-        float t = m_AnimTimer / kAnimCloseDuration;
-        float tc = t < 1.0f ? t : 1.0f;
-        m_BackdropAlpha = (1.0f - SmoothStep(tc)) * kBackdropTargetAlpha;
-        m_PopupOffsetY = kPopupStartOffsetY * EaseInQuad(tc);
-        // Close button slides back out to its bottom-right off-screen start
-        // over the same close window, plain ease-in (no bounce), matching
-        // the plate.
-        m_CloseBtnOffX = kCloseBtnStartOffX * EaseInQuad(tc);
-        m_CloseBtnOffY = kCloseBtnStartOffY * EaseInQuad(tc);
-        if (t >= 1.0f) {
+        if (m_AnimTimer >= kAnimCloseDuration) {
+            // Snap to the exact rest values (t01 pinned to 1.0) rather than
+            // trusting whatever UpdateRealtime() last computed at a
+            // slightly-under-1.0 ratio.
+            EvalPopupAnim(ANIM_CLOSING, 1.0f, m_PopupOffsetY, m_BackdropAlpha,
+                          m_CloseBtnOffX, m_CloseBtnOffY);
+
             // ---- deferred teardown -- was Toggle()'s close branch ----
             bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
 
@@ -892,11 +986,12 @@ void SettingsScreen::SetAnimOpenForTest() {
     m_CloseBtnOffY = 0.0f;
 }
 
-// Port specific: kinetic drag/fling/spring-back model for the plate's
-// content viewport, ported verbatim from UiDropdown::Update's scroll tail
-// (src/ui/UiDropdown.cpp ~234-280) -- same constants, same
-// integrate-then-spring-back shape, re-scoped from a dropdown's row list to
-// the whole plate's four widgets.
+// Port specific: kinetic drag-to-velocity TOUCH tracking for the plate's
+// content viewport, ported (with the integrate/spring-back tail moved out,
+// see UpdateRealtime() below) from UiDropdown::Update's scroll tail (src/ui/
+// UiDropdown.cpp ~234-280) -- same constants, re-scoped from a dropdown's row
+// list to the whole plate's four widgets. Runs at the 60Hz sim rate (reads
+// live touch state); only sets m_ScrollVel, does not integrate m_ScrollY.
 void SettingsScreen::UpdateScroll(float dt) {
     (void)dt;
 
@@ -978,19 +1073,103 @@ void SettingsScreen::UpdateScroll(float dt) {
         }
     }
 
-    // --- Integrate + friction (every frame) ---
-    m_ScrollVel *= SCROLL_FRICTION;
-    m_ScrollY += m_ScrollVel;
+    // Integrate + friction + spring-back moved to UpdateRealtime() (see
+    // below) -- runs once per PRESENTED frame instead of once per 60Hz sim
+    // step, dt-scaled so it's rate-independent. UpdateScroll() only tracks
+    // touch and sets m_ScrollVel now; it does NOT touch m_ScrollY.
+}
+
+#ifndef __bada__
+// Port specific: no binary counterpart (see SettingsScreen.h). Runs the
+// scroll velocity->position integration (friction decay + spring-back) that
+// UpdateScroll()'s tail used to run inline at the fixed 60Hz sim rate.
+// Called once per PRESENTED frame (native/120 or capped/60, see
+// Game::tickRealtimeUi), with dtSeconds = real elapsed time since the last
+// present -- dt-SCALED below so the same on-screen motion results at 60 and
+// 120 fps alike:
+//   f = dtSeconds * 60                     -- frames-equivalent (1.0 at 60fps)
+//   m_ScrollVel *= SCROLL_FRICTION^f        -- exponential decay, rate-independent
+//   m_ScrollY   += m_ScrollVel * f           -- velocity integrated by frame-equivalents
+//   spring-back: m_ScrollY += (target - m_ScrollY) * (1 - SPRING_COEF^f)
+// (SCROLL_FRICTION/SPRING_BACK_COEF/SPRING_FWD_COEF are themselves PER-60Hz-
+// FRAME decay factors, e.g. velocity *= 0.9 each 1/60s tick; raising to the
+// f-th power reproduces the same decay over f frame-equivalents regardless of
+// how many times per second this is actually called.)
+// Only integrates while the modal is fully open and not mid-touch --
+// mirrors UpdateScroll()'s own gates (dropdown-open lock, active touch owns
+// the value directly while held). Re-applies the widgets' pos.y from the
+// freshly-integrated m_ScrollY afterward so Draw() (which also runs at
+// present rate) and the widgets' own hit-rects agree this frame.
+void SettingsScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    float f = dtSeconds * 60.0f;
+
+    // --- Popup drop-in/out easing (OPENING/CLOSING only; a no-op sample
+    // --- while ANIM_OPEN -- see EvalPopupAnim's ANIM_OPEN case) ---
+    // m_AnimTimer is real elapsed seconds in the current phase, advanced HERE
+    // (finer-grained than the 60Hz UpdateAnim() tick at >60fps) rather than
+    // in UpdateAnim(), which now only INSPECTS it for the phase transition --
+    // see UpdateAnim()'s comment. Not clamped to the phase duration: letting
+    // it run slightly past 1.0 is harmless (EvalPopupAnim clamps its own
+    // ratio) and UpdateAnim() resets it to 0.0f the instant it observes the
+    // transition.
+    if (m_AnimPhase != ANIM_OPEN) {
+        m_AnimTimer += dtSeconds;
+        float duration = (m_AnimPhase == ANIM_OPENING) ? kAnimOpenDuration : kAnimCloseDuration;
+        float t01 = duration > 0.0f ? m_AnimTimer / duration : 1.0f;
+        EvalPopupAnim(m_AnimPhase, t01, m_PopupOffsetY, m_BackdropAlpha,
+                      m_CloseBtnOffX, m_CloseBtnOffY);
+
+        // Widget touch/scroll stays gated to ANIM_OPEN (see Update()'s own
+        // gate) -- but the widgets still ride the popup's drop-in/out motion,
+        // so re-rewrite pos.y from the freshly-eased m_PopupOffsetY (scroll
+        // offset is unchanged/0-ish during OPENING/CLOSING since UpdateScroll
+        // never runs then).
+        float off = m_ScrollY + m_PopupOffsetY;
+        if (m_LangDrop)    m_LangDrop->pos.y    = m_LangBaseY        + off;
+        if (m_MotionCb)    m_MotionCb->pos.y    = m_MotionCbBaseY    + off;
+        if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
+        if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
+        if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+        return;
+    }
+    if (m_LangDrop && m_LangDrop->IsOpen()) {
+        // Mirrors UpdateScroll()'s own lock -- the dropdown panel owns all
+        // touch full-screen while open, so nothing here should coast/spring.
+        // Also forward the per-present tick to the open dropdown's own scroll
+        // physics -- it is NOT AddControl'd to the HUD (a child widget driven
+        // directly by this screen, see UiDropdown.h/SettingsScreen.h usage
+        // notes), so HUD::UpdateRealtime's control-list walk never reaches
+        // it; this screen must hand it the tick explicitly.
+        if (m_LangDrop) m_LangDrop->UpdateRealtime(dtSeconds);
+        return;
+    }
+
+    // --- Integrate + friction (rate-independent) ---
+    m_ScrollVel *= powf(SCROLL_FRICTION, f);
+    m_ScrollY   += m_ScrollVel * f;
 
     // --- Spring-back at bounds (only while not touching) ---
     if (m_ScrollTouchId == -1) {
         if (m_ScrollY < 0.0f) {
-            m_ScrollY *= SPRING_BACK_COEF;
+            m_ScrollY += (0.0f - m_ScrollY) * (1.0f - powf(SPRING_BACK_COEF, f));
         } else if (m_ScrollY > m_MaxScroll) {
-            m_ScrollY += (m_MaxScroll - m_ScrollY) * SPRING_FWD_COEF;
+            m_ScrollY += (m_MaxScroll - m_ScrollY) * (1.0f - powf(1.0f - SPRING_FWD_COEF, f));
         }
     }
+
+    // Re-rewrite pos.y from the freshly-integrated m_ScrollY, same formula
+    // Update() uses, so Draw() and the widgets' own hit-rects/PollTouch this
+    // present agree with the value just computed above.
+    float off = m_ScrollY + m_PopupOffsetY;
+    if (m_LangDrop)    m_LangDrop->pos.y    = m_LangBaseY        + off;
+    if (m_MotionCb)    m_MotionCb->pos.y    = m_MotionCbBaseY    + off;
+    if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
+    if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
+    if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
 }
+#endif
 
 // Port specific: left-aligned (FONT_ALIGN_LEFT). All four top-level labels
 // (LANGUAGE / MOTION MODE / SENSITIVITY / FPS COUNTER) anchor from the
@@ -1216,12 +1395,18 @@ void SettingsScreen::Draw(float* hudScale) {
     DrawSettingsDesc(labelFont, "(pointer only)",
                       kLabelX, kMotionDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "SENSITIVITY", kSensLabelX, kSensLabelY + 7.0f + off);
+    DrawSettingsLabel(labelFont, "NATIVE FRAME RATE", kLabelX, kNativeFpsLabelY + 7.0f + off);
+    DrawSettingsDesc(labelFont, "Smoother graphics for screens",
+                      kLabelX, kNativeFpsDescY0 + 7.0f + off);
+    DrawSettingsDesc(labelFont, "with higher frame rate",
+                      kLabelX, kNativeFpsDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
 
-    // ---- the three plain widgets, still inside the content scissor.
+    // ---- the four plain widgets, still inside the content scissor.
     // ---- pos.y was already rewritten (baseY + off) in Update(), so no
     // ---- offset math here. ----
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
+    if (m_NativeFpsCb) m_NativeFpsCb->Draw(hudScale);
     if (m_FpsCb)      m_FpsCb->Draw(hudScale);
     if (m_SensSlider) m_SensSlider->Draw(hudScale);
     // Bar draws inside the content scissor -- whether open or closed -- so
@@ -1316,6 +1501,12 @@ void SettingsScreen::OnMotionToggle() {
 
 void SettingsScreen::OnFpsToggle() {
     FN::g_ShowFps = m_FpsCb->IsChecked();
+}
+
+void SettingsScreen::OnFpsCapToggle() {
+    // checked == native/display refresh -> g_FpsCap60 (true == cap to 60) is
+    // the checkbox's INVERSE. See m_NativeFpsCb's header comment.
+    FN::g_FpsCap60 = !m_NativeFpsCb->IsChecked();
 }
 
 void SettingsScreen::OnSensChanged() {

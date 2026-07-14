@@ -17,9 +17,10 @@
 // Usage: `SettingsScreen* s = new SettingsScreen(); game_work.mHud->AddControl(s,
 // false); s->Init();` -- AddControl the SCREEN ITSELF before calling Init().
 // The screen itself is the only thing AddControl'd to game_work.mHud (plus
-// m_pCloseButton, see below) -- the four in-plate widgets (LANGUAGE
-// UiDropdown, MOTION MODE / FPS COUNTER UiCheckbox, SENSITIVITY UiSlider)
-// are owned directly and are NOT AddControl'd: UiWidget.h documents that the
+// m_pCloseButton, see below) -- the five in-plate widgets (LANGUAGE
+// UiDropdown, MOTION MODE / NATIVE FRAME RATE / FPS COUNTER
+// UiCheckbox, SENSITIVITY UiSlider) are owned directly and are NOT
+// AddControl'd: UiWidget.h documents that the
 // owning screen must call each widget's Update()/Draw() itself, and doing so
 // here lets the screen wrap them in a scrolled + glScissor'd viewport (see
 // UpdateScroll()/Draw()) so the plate's content can overflow its visible
@@ -69,14 +70,28 @@
 // opening+open+closing lifetime so the screen behind stays frozen
 // throughout, not just while OPEN.
 //
+// The phase STATE MACHINE (OPENING->OPEN transition, CLOSING->deferred-
+// teardown) stays in UpdateAnim() at the fixed 60Hz sim rate -- deterministic
+// timing for the teardown matters more than smoothness there. The CONTINUOUS
+// easing math that computes m_PopupOffsetY/m_BackdropAlpha/m_CloseBtnOffX/Y
+// from the phase's elapsed-time ratio has moved to UpdateRealtime(), once per
+// PRESENTED frame, so the drop/slide/fade motion itself tracks the display
+// refresh instead of the sim tick; m_AnimTimer is likewise advanced only
+// there now (real seconds). See UpdateAnim()'s .cpp comment for the split.
+//
 // Scrolling: the four widgets' `pos.y` is rewritten every Update() (base Y,
 // captured once in Init(), plus the live scroll offset) BEFORE each widget's
 // own Update() runs, so their own touch hit-rects/PollTouch track the
 // scrolled position; Draw() reuses the same rewritten pos.y. See
-// UpdateScroll() for the kinetic drag/fling/spring-back model (mirrors
+// UpdateScroll() for the kinetic drag-to-velocity model (mirrors
 // UiDropdown's own, same constants) and vertical-vs-horizontal drag
 // disambiguation (a scroll only "steals" the touch from a widget once the
-// drag is predominantly vertical -- see kScrollVerticalBias).
+// drag is predominantly vertical -- see kScrollVerticalBias). The velocity->
+// position integration (friction decay + spring-back) itself runs in
+// UpdateRealtime(), once per PRESENTED frame (native/120 or capped/60)
+// rather than once per 60Hz sim step -- see UpdateRealtime()'s own comment --
+// so scroll motion tracks the display refresh instead of feeling choppy at
+// high refresh rates while touch tracking stays on the sim tick.
 //
 
 #include "hud/HUDControl3d.h"
@@ -102,6 +117,29 @@ public:
     void Release() override;
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
+#ifndef __bada__
+    // Port specific: no binary counterpart (see HUDControl::UpdateRealtime).
+    // Ticks THREE things once per PRESENTED frame instead of once per 60Hz sim
+    // step, so motion tracks the display refresh rate (native/120 or
+    // capped/60) instead of feeling choppy at high refresh -- all dt-scaled
+    // (see .cpp) so the same on-screen motion results regardless of call rate:
+    //   1. Plate scroll PHYSICS (friction decay + velocity integration +
+    //      spring-back). Touch acquire/track/drag-to-velocity (UpdateScroll(),
+    //      still called from the 60Hz Update()) is UNCHANGED -- only the
+    //      velocity->position integration moved here. Also re-applies the
+    //      widgets' pos.y from the freshly-integrated m_ScrollY, same formula
+    //      Update() uses, so the widgets' drawn/hit-tested position matches
+    //      what Draw() shows this present.
+    //   2. Popup drop-in/out CONTINUOUS EASING (m_PopupOffsetY/
+    //      m_BackdropAlpha/m_CloseBtnOffX/Y) -- see UpdateAnim()'s comment for
+    //      why the phase-transition/teardown state machine stays at 60Hz
+    //      while only the easing math moved here.
+    //   3. Forwards this same per-present tick to the open LANGUAGE
+    //      UiDropdown's own scroll physics (UiDropdown::UpdateRealtime) --
+    //      it's a child widget, not AddControl'd to the HUD, so
+    //      HUD::UpdateRealtime's control-list walk never reaches it.
+    void UpdateRealtime(float dtSeconds) override;
+#endif
 
     // Port specific: popup open/close animation phase. OPENING/CLOSING drive
     // m_PopupOffsetY (see below) and gate widget input; only ANIM_OPEN accepts
@@ -109,12 +147,17 @@ public:
     // note for how this replaces the old immediate-open/immediate-close model.
     enum AnimPhase { ANIM_OPENING, ANIM_OPEN, ANIM_CLOSING };
 
-    // Port specific: kinetic scroll for the plate's content viewport --
-    // drag/fling/spring-back model mirroring UiDropdown::Update's tail (same
-    // constants: SCROLL_FRICTION/DRAG_DELTA_FACTOR/SPRING_BACK_COEF/
-    // SPRING_FWD_COEF/DRAG_CANCEL_DIST). Called first thing in Update(),
-    // before the four widgets' own Update(). See the header's Scrolling note
-    // above for the pos.y-rewrite contract this feeds.
+    // Port specific: kinetic scroll TOUCH tracking for the plate's content
+    // viewport -- drag acquire/release/held-drag-to-velocity, mirroring
+    // UiDropdown::Update's tail (same constants: SCROLL_FRICTION/
+    // DRAG_DELTA_FACTOR/SPRING_BACK_COEF/SPRING_FWD_COEF/DRAG_CANCEL_DIST).
+    // Called first thing in Update() (60Hz sim step), before the four
+    // widgets' own Update() -- stays at 60Hz since it reads live touch state.
+    // Sets m_ScrollVel only; does NOT integrate m_ScrollY (see
+    // UpdateRealtime() above, which now owns the friction/integrate/
+    // spring-back tail so scroll position tracks the display's present rate
+    // instead of the sim tick rate). See the header's Scrolling note above
+    // for the pos.y-rewrite contract this feeds.
     void UpdateScroll(float dt);
 
     // Port specific: advances m_AnimPhase/m_AnimTimer/m_PopupOffsetY/
@@ -132,6 +175,13 @@ public:
     // quit-to-apply-language-change check) when open.
     static void Toggle();
     static bool IsOpen();
+#ifndef __bada__
+    // Port specific: no binary counterpart. Lets Game::tickRealtimeUi (the
+    // per-present UI tick, see Game.h) reach the open instance directly
+    // without walking game_work.mHud's control list. Returns NULL when closed
+    // (mirrors IsOpen()'s s_pSettings != NULL check).
+    static SettingsScreen* GetInstance();
+#endif
 
     // Port specific: no binary counterpart. Toggle()'s close branch used to call
     // MainScreen::TriggerQuitFromSettings() SYNCHRONOUSLY, mid-teardown of this
@@ -156,6 +206,12 @@ private:
     UiCheckbox* m_MotionCb;
     UiSlider*   m_SensSlider;
     UiCheckbox* m_FpsCb;
+    // Port specific: "NATIVE FRAME RATE" / "Smoother graphics for screens" +
+    // "with higher frame rate" -- checked = native/display refresh (DEFAULT),
+    // unchecked = cap to 60fps. Inverted vs the
+    // underlying global: FN::g_FpsCap60 stays "true == cap to 60"; only the
+    // UI checkbox polarity flips (see OnFpsCapToggle()/Init()'s seed line).
+    UiCheckbox* m_NativeFpsCb;
 
     // Port specific: modal close button, bottom-right of the plate. Built the
     // same way PauseScreen builds m_QuitButton (see PauseScreen::Update
@@ -207,6 +263,7 @@ private:
     float m_MotionCbBaseY;
     float m_SensBaseY;
     float m_FpsCbBaseY;
+    float m_NativeFpsCbBaseY;
 
     // Port specific: kinetic scroll state for the plate's content viewport --
     // same drag/fling/spring-back model as UiDropdown's open-panel scroll
@@ -242,7 +299,7 @@ private:
     // +offset) and animates down to 0 (rest). m_pCloseButton does NOT use
     // this offset -- see m_CloseBtnOffX/Y below.
     AnimPhase m_AnimPhase;
-    float     m_AnimTimer;    // seconds elapsed in the current phase
+    float     m_AnimTimer;    // seconds elapsed in the current phase -- advanced in UpdateRealtime() (per-present), only INSPECTED by UpdateAnim() (60Hz) for the transition
     float     m_PopupOffsetY; // world units, added to popup Y everywhere (see above)
     float     m_BackdropAlpha; // 0..1, current backdrop dim fade (eased, not raw progress)
 
@@ -301,6 +358,7 @@ public:
     // widget's SetOnChange in Init().
     void OnMotionToggle();
     void OnFpsToggle();
+    void OnFpsCapToggle();
     void OnSensChanged();
     void OnLangChanged();
 

@@ -42,6 +42,7 @@ void SaveSettings() {
     root.SetAttribute("languageFlag", (int)game_work.languageFlag);
     root.SetAttribute("motionMode", FN::g_MotionMode ? "true" : "false");
     root.SetAttribute("showFps", FN::g_ShowFps ? "true" : "false");
+    root.SetAttribute("fpsCap60", FN::g_FpsCap60 ? "true" : "false");
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
 
     doc.InsertEndChild(root);
@@ -80,6 +81,11 @@ void LoadSettings() {
     const char* showFps = root.Attribute("showFps");
     if (showFps) {
         FN::g_ShowFps = (strcmp(showFps, "true") == 0);
+    }
+
+    const char* fpsCap60 = root.Attribute("fpsCap60");
+    if (fpsCap60) {
+        FN::g_FpsCap60 = (strcmp(fpsCap60, "true") == 0);
     }
 
     float motionSpeedThreshold = 0.0f;
