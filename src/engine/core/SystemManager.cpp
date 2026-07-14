@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#ifndef __bada__
+#include <chrono>
+#endif
 // Game.h pulled in for LowResBackgrounds() which reads Game::m_appState (+0x100).
 #include "Game.h"
 
@@ -26,12 +29,28 @@ SystemManager::SystemManager()
 }
 
 // v1.6.1 SystemManager::Init @0x0022e544: m_reserved50=0, m_bRunning=1,
-// seeds Math::g_Random with clock(), then _RetrieveDeviceID.
+// seeds Math::g_Random with a per-launch-varying seed (see DIFFERS below),
+// then _RetrieveDeviceID.
 void SystemManager::Init() {
     m_reserved50 = 0.0f;
     m_bRunning = 1;
     // ASM-spec v1.6.1 SystemManager::Init @0x0022e544: seeds Math::g_random state word with clock()
-    Math::SeedGlobalRng((uint32_t)clock());
+#ifdef __bada__
+    uint32_t seed = (uint32_t)clock();   // v1.6.1 faithful: Bada clock() = device uptime, varies per boot
+#else
+    // DIFFERS: original = clock() (v1.6.1 SystemManager::Init @0x0022e544); Bada clock() is
+    // device-uptime and varies per boot, but on Windows/glibc clock() measures CPU time since
+    // process start, which is a near-constant few ms at this early init call -> the port got the
+    // same seed (and thus the same Math::g_Random.Rand32(2) coin flip, e.g. shop fruit spin
+    // direction in Fruit::RotateFacingUp) on every launch. Port mixes wall-clock seconds
+    // (time(NULL)) with a high_resolution_clock tick count so the seed varies both across
+    // separate-second launches (1s resolution from time()) and rapid successive launches within
+    // the same second (chrono's higher-resolution counter) so the global RNG varies per launch as
+    // the binary intends. Portable to Windows/Linux/emscripten (no SDL/windows.h needed).
+    uint32_t seed = (uint32_t)(std::time(0) ^
+        (uint32_t)std::chrono::high_resolution_clock::now().time_since_epoch().count());
+#endif
+    Math::SeedGlobalRng(seed);
     // Defunct/no-op: _RetrieveDeviceID (v1.6.1 @0x0022e3be) confirmed `return 0;` in binary -- correctly omitted.
 }
 
