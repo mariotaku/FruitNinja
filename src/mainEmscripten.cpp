@@ -14,6 +14,7 @@
 #include "game/SettingsSave.h"
 #include "audio/SoundManager.h"
 #include <cstdio>
+#include <cstring>
 
 // Port specific: SDL's default log output function writes to stderr on every
 // platform. On Emscripten, stderr maps to console.error, which prints a full
@@ -89,6 +90,59 @@ EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
 // BootWait requires g_tap_started=1 before calling g_game.init().
 EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
     g_tap_started = 1;
+}
+
+// Port specific: web-only -- inject a synthetic SDL_FINGER* event for a
+// gesture that started outside the canvas (see shell.html's document-level
+// capture IIFE). SDL2-emscripten only listens for touch events on the canvas
+// element, so a touch whose touchstart landed outside it is bound by the
+// browser to that outside element for its entire lifetime and never reaches
+// SDL natively -- even after the finger slides over the canvas. Called from
+// JS as Module._fn_web_synth_touch(phase, fingerId, nx, ny) once such a
+// finger enters the canvas rect.
+//
+// phase: 0=down, 1=move, 2=up. nx/ny: normalized canvas-local coords in
+// [0,1], already clamped by the JS caller -- matches the SDL touch coord
+// space DrainSDLEvent::TransformTouchNormalized expects (same convention a
+// native SDL_FINGER* event arrives in).
+//
+// Pushed via SDL_PushEvent so it flows through the SAME path pollInput
+// drains every RAF (DrainSDLEvent -> Mortar::Touch ring buffer ->
+// DispatchForSimTick at 60Hz) -- no sim-tick semantics bypassed. A DOWN
+// immediately followed by a MOVE in the same JS callback (both queued before
+// the next drain) is fine: the ring buffer already handles same-tick
+// DOWN+MOVE sequences from native input (see #175 comments above).
+//
+// fingerId space: reuses the browser's Touch.identifier directly, offset by
+// a large constant (0x40000000) so a synthesized finger's id space can never
+// collide with a native SDL_FingerID (SDL/emscripten's synthesized-from-
+// browser-Touch ids and SDL_TOUCH_MOUSEID both live well below this range).
+// InputTranslatorSDL::MapFingerId (src/platform/InputTranslatorSDL.cpp) maps
+// any distinct SDL_FingerID to a free 0-15 channel by equality search/first-
+// free-slot -- it does not interpret the id's bit pattern -- so the offset
+// only needs to guarantee non-collision, which it does.
+EMSCRIPTEN_KEEPALIVE void fn_web_synth_touch(int phase, int fingerId, float nx, float ny) {
+    static const Sint64 kSynthFingerIdOffset = 0x40000000;
+
+    SDL_Event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.tfinger.timestamp = SDL_GetTicks();
+    ev.tfinger.touchId   = 0;
+    ev.tfinger.fingerId  = (SDL_FingerID)(kSynthFingerIdOffset + (Sint64)fingerId);
+    ev.tfinger.x         = nx;
+    ev.tfinger.y         = ny;
+    ev.tfinger.dx        = 0.0f;
+    ev.tfinger.dy        = 0.0f;
+    ev.tfinger.pressure  = 1.0f;
+
+    switch (phase) {
+        case 0:  ev.type = SDL_FINGERDOWN;   break;
+        case 1:  ev.type = SDL_FINGERMOTION; break;
+        case 2:  ev.type = SDL_FINGERUP;     break;
+        default: return;
+    }
+
+    SDL_PushEvent(&ev);
 }
 } // extern "C"
 
