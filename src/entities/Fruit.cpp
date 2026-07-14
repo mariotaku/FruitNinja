@@ -294,13 +294,13 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     {
         const ::FruitInfo* info = Fruit::FruitInfo((long)m_FruitType);
         if (info != nullptr && info->m_bIsSuperFruit) {
-            float angleBase = Math::GetRandBetween(Math::g_Random, 12.0f, 40.0f, 0.0f);
+            float angleBase = GetRandBetween(12.0f, 40.0f, 0.0f, 0.0f);
             uint32_t angle16 = (uint32_t)((int)(angleBase * 182.0f)) & 0xffff;
             m_Rot1 = Quaternion::Identity();
             m_Rot1.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, angle16);
             m_Rot2 = m_Rot1;
 
-            float rotVelZ = Math::GetRandBetween(Math::g_Random, 3.0f, 5.0f, 0.5f);
+            float rotVelZ = GetRandBetween(3.0f, 5.0f, 0.5f, 0.0f);
             m_RotVel1 = Vec3(10.0f, 0.0f, rotVelZ);
             m_RotVel2 = m_RotVel1;
         }

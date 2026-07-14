@@ -67,14 +67,17 @@ void SeedGlobalRng(uint32_t seed) {
     g_Random = Random((uint64_t)seed);
 }
 
-// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00
-// ASM-verified: 2026-07-15T00:00Z v1.6.1 Math::GetRandBetween @ 0x001e2f00..0x001e2f74 (asm-inspector)
-float GetRandBetween(Random& rng, float lo, float hi, float halfChance) {
-    float res = lo + rng.RandF(hi - lo);
-    if (halfChance > 0.0f) {
-        if (rng.RandF(1.0f) <= halfChance) res = -res;
+} // namespace Math
+
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00..0x001e2f74 (global scope,
+// mangles to _Z14GetRandBetweenIfET_S0_S0_f). Explicit specialization (not a
+// bare template definition) so the out-of-line symbol is emitted and pairs
+// with the binary in symbol-diff.
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 GetRandBetween<float> @ 0x001e2f00..0x001e2f74 (asm-inspector)
+template<> float GetRandBetween<float>(float lo, float hi, float signFlipProb, float /*unused*/) {
+    float res = lo + Math::g_Random.RandF(hi - lo);
+    if (signFlipProb > 0.0f) {
+        if (Math::g_Random.RandF(1.0f) <= signFlipProb) res = -res;
     }
     return res;
 }
-
-} // namespace Math
