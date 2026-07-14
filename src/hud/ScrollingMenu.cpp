@@ -635,6 +635,13 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
 
         item->Move(pos.x, curY, pos.z);
 
+        // Port specific: no binary counterpart. Advance item per-frame timers
+        // (e.g. ShopListItem's NEW-badge bounce, selected/cost fades) exactly
+        // ONCE per present with the real dtSeconds -- NOT in Update()'s Phase
+        // 5 (which does not call this), so a 120Hz display doesn't double the
+        // rate. See ScrollingMenuItem::AdvanceAnim / ShopListItem::AdvanceAnim.
+        item->AdvanceAnim(dtSeconds);
+
         curY -= halfH;
     }
 

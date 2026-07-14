@@ -154,6 +154,19 @@ public:
     // vtable +0x40 (slot 16): subclass hook (binary 0x00360324, thunk/pure)
     virtual void Slot16() {}
 
+#ifndef __bada__
+    // Port specific: no binary counterpart, not part of the binary vtable
+    // (compiled out entirely under __bada__, so vtable slot count/order for
+    // the binary build is unaffected). Carries the per-frame timer-advance
+    // portion of a subclass's Move() out so ScrollingMenu::UpdateRealtime
+    // can call it exactly ONCE per present with the real dtSeconds, distinct
+    // from Move() (idempotent positioning) which the port calls from both
+    // ScrollingMenu::Update (60Hz) and ScrollingMenu::UpdateRealtime
+    // (per-present). Base is a no-op; ShopListItem overrides it. See
+    // ShopListItem::AdvanceAnim.
+    virtual void AdvanceAnim(float /*dtSeconds*/) {}
+#endif
+
     // 4-param ctor: float width, float height, char const*, Mortar::Delegate1<...>
     // Binary @ 0x0015b228: param1(width)->m_Height, param2(height)->m_Width,
     // m_Size from global default Vec3, m_Colour from global white singleton.
