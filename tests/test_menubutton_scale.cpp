@@ -47,8 +47,8 @@ static float MeasureBombScale(fn::TestHarness& h, bool dojoShrink) {
     int bombType = FruitInfo_GetCount();
 
     // Position chosen from DojoScreen POS_PLAY_BUTTON: doesn't matter for scale.
-    Vec3 spawnPos(16.0f, -66.0f, 0.0f);
-    Vec3 hitBounds(0.0f, 0.0f, 0.0f);
+    _Vector3<float> spawnPos(16.0f, -66.0f, 0.0f);
+    _Vector3<float> hitBounds(0.0f, 0.0f, 0.0f);
 
     Mortar::Delegate0<void> clickCb  = Mortar::Delegate0<void>::MakeFree(NoOpCb);
     Mortar::Delegate0<void> deleteCb = Mortar::Delegate0<void>::MakeFree(NoOpCb);

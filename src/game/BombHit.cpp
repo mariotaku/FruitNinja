@@ -61,7 +61,7 @@ namespace FN {
 // Writes the bomb-hit world position used by Bomb::DrawBombHit.
 // Bomb::HitBomb and Bomb::HitMenuBomb now write g_BombHitPos directly;
 // this wrapper remains for call sites that use the FN:: form.
-void SetBombHitPos(const Vec3& pos) {
+void SetBombHitPos(const _Vector3<float>& pos) {
     g_BombHitPos = pos;
 }
 } // namespace FN
@@ -70,7 +70,7 @@ void SetBombHitPos(const Vec3& pos) {
 // Game::m_CritTimer to the full duration. The pos arg exists in the
 // binary signature but isn't used by DrawCritHit — the flash is
 // always full-screen at the origin.
-void CriticalFlash(Vec3 pos, Colour colour) {
+void CriticalFlash(_Vector3<float> pos, Colour colour) {
     (void)pos;
     s_CritFlashColour = colour;
     if (Game* game = Game::GetInstance()) {
@@ -149,8 +149,8 @@ void DrawCritHit() {
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    mm.GetWorldStack().Scale(Vec3(sx, sy, 1.0f));
-    mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, 0.0f));
+    mm.GetWorldStack().Scale(_Vector3<float>(sx, sy, 1.0f));
+    mm.GetWorldStack().Translate(_Vector3<float>(0.0f, 0.0f, 0.0f));
     mm.UploadModelViewOnly();
 
     Mortar::Mesh::DrawQuadUnCached(tint, NULL);
@@ -253,7 +253,7 @@ void ResetGameEntities(bool killAll) {
         } else if (e->entityType == 0) {
             // Fruit: chuck reset, optional force-slice, off-screen.
             Fruit* fruit = static_cast<Fruit*>(e);
-            fruit->vel = Vec3(0, 0, 0);
+            fruit->vel = _Vector3<float>(0, 0, 0);
             fruit->Chuck(0.0f);
 
             if (forceSliceAll) {
@@ -267,13 +267,13 @@ void ResetGameEntities(bool killAll) {
             // origin; port simplifies to a unit downward impulse since
             // we don't have a stable camera-origin global yet.
             if (!fruit->m_bSliced) {
-                Vec3 impulse(0.0f, -IMPULSE_LEN, 0.0f);
+                _Vector3<float> impulse(0.0f, -IMPULSE_LEN, 0.0f);
                 // Scale up if the fruit is far from origin (binary's
                 // dist² > 400 normalize-then-multiply-by-20 path).
                 const float distSq = fruit->pos.x * fruit->pos.x +
                                      fruit->pos.y * fruit->pos.y;
                 if (distSq > DIST_SQ_THRESH) {
-                    Vec3 dir(fruit->pos.x, fruit->pos.y, 0.0f);
+                    _Vector3<float> dir(fruit->pos.x, fruit->pos.y, 0.0f);
                     const float len = sqrtf(distSq);
                     if (len > 0.0001f) {
                         impulse = dir * (IMPULSE_LEN / len);
@@ -420,8 +420,8 @@ void RetryUpdate(float dt) {
             Mortar::Entity* e = *it;
             if (!e || !e->IsActive()) continue;
             Bomb* bomb = static_cast<Bomb*>(e);
-            bomb->scale = Vec3(-t, -t, -t);
-            bomb->vel   = Vec3(0.0f, 0.0f, 0.0f);
+            bomb->scale = _Vector3<float>(-t, -t, -t);
+            bomb->vel   = _Vector3<float>(0.0f, 0.0f, 0.0f);
         }
     }
 
@@ -432,9 +432,9 @@ void RetryUpdate(float dt) {
             Mortar::Entity* e = *it;
             if (!e || !e->IsActive()) continue;
             Fruit* fruit = static_cast<Fruit*>(e);
-            fruit->scale      = Vec3(-t, -t, -t);
-            fruit->vel        = Vec3(0.0f, 0.0f, 0.0f);
-            fruit->m_SecondPos = Vec3(0.0f, 0.0f, 0.0f);
+            fruit->scale      = _Vector3<float>(-t, -t, -t);
+            fruit->vel        = _Vector3<float>(0.0f, 0.0f, 0.0f);
+            fruit->m_SecondPos = _Vector3<float>(0.0f, 0.0f, 0.0f);
         }
     }
     (void)dt;

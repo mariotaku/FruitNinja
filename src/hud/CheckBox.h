@@ -33,14 +33,14 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "engine/util/StringTable.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/util/Delegate.h"
 #include <cstdint>
 
 class CheckBox : public HUDControl3d {
 public:
     // Binary @ 0x00166a10
-    CheckBox(Vec3 pos, Vec3 size, const char* label);
+    CheckBox(_Vector3<float> pos, _Vector3<float> size, const char* label);
 
     // Binary @ 0x00166ab8 -- LocalizedString overload (second binary ctor).
     // ASM-verified 0x00166ab8: resolves `loc` via GETSTRING_CAST_0(loc), then
@@ -48,7 +48,7 @@ public:
     // other GETSTRING_CAST_0 call site in the codebase uses).
     // LocalizedString here is the engine's string-table-ID enum
     // (engine/util/StringTable.h), NOT a port-local wrapper type.
-    CheckBox(Vec3 pos, Vec3 size, LocalizedString loc);
+    CheckBox(_Vector3<float> pos, _Vector3<float> size, LocalizedString loc);
 
     virtual ~CheckBox();
 
@@ -94,7 +94,7 @@ private:
     uint8_t     _pad7D[3];         // +0x7D..+0x7F
     const char* m_Label;           // +0x80
     int32_t     m_TouchId;         // +0x84 (-1 = none)
-    Vec3        m_TouchCapture;    // +0x88 captured press pos (game_work.m_FingerSpawnPos[id])
+    _Vector3<float> m_TouchCapture;    // +0x88 captured press pos (game_work.m_FingerSpawnPos[id])
     Mortar::Delegate0<void> m_OnToggle;  // +0x94 fires on toggle (36B) -> ends 0xB8
 
     static Mortar::SmartPtr<Mortar::Texture> s_checked;

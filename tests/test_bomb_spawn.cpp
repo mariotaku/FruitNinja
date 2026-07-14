@@ -137,7 +137,7 @@ static bool RunVariantSlice(Game& game, bool visual) {
         fprintf(stderr, "FAIL: %s -- no bomb to slice\n", name);
         return false;
     }
-    Vec3 bladeVel(15.0f, 15.0f, 0.0f);
+    _Vector3<float> bladeVel(15.0f, 15.0f, 0.0f);
     bomb->CollisionResponse(nullptr, 0, 0, &bladeVel);
     printf("[slice] sliced bomb at pos=(%.1f, %.1f); m_bHit=%d, "
            "bombHitTimer=%.2f\n",

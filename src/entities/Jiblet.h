@@ -9,7 +9,7 @@
 //
 
 #include "Entity.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Matrix44.h"
 #include "util/SmartPtr.h"
 #include "asset/Model.h"
@@ -44,7 +44,7 @@ public:
     int m_FruitType;                            // +0x90
 
     // +0x94: gravity reference direction. Init = *param_9.
-    Vec3 m_GravBase;                            // +0x94
+    _Vector3<float> m_GravBase;                            // +0x94
 
     // +0xA0: spin rate X axis. Init = random T_796.
     float m_SpinRateX;                          // +0xA0
@@ -68,9 +68,9 @@ public:
     // Binary-faithful signature (source-level; by-value Vec3/SmartPtr required
     // so the mangled name matches the binary for asm-verify pairing):
     //   _ZN6Jiblet4InitEiR8_Vector3IfEfS1_N6Mortar8SmartPtrINS3_5ModelEEEmfS1_
-    void Init(int fruitType, Vec3& pos, float scale, Vec3 vel,
+    void Init(int fruitType, _Vector3<float>& pos, float scale, _Vector3<float> vel,
               Mortar::SmartPtr<Mortar::Model> mdl,
-              unsigned long emitterHash, float dripRate, Vec3 grav);
+              unsigned long emitterHash, float dripRate, _Vector3<float> grav);
 
     // Vtable slot 4: Binary @ 0x1e5330.
     // Quaternion-spin integrator, drip loop (SplatEntity::GetFree), emitter sync, bounds kill.

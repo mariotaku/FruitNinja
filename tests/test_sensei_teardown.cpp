@@ -299,7 +299,7 @@ int main(int argc, char* argv[]) {
         // directly and set state to QUIT_WAIT manually.
         printf("[quit] m_pQuitBtn==NULL, forcing STATE_QUIT_WAIT + HitMenuBomb\n");
         gos->m_State = GameOverScreen::STATE_QUIT_WAIT;
-        HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+        HitMenuBomb(_Vector3<float>(163.0f, -96.0f, 0.0f));
     }
 
     printf("[quit] post-fire: gos->m_State=%d m_BombHitTimer=%.4f bM_Mode=%d bM_bPaused=%d\n",

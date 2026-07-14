@@ -86,7 +86,7 @@ void BombBlast::ReleaseContent() {}
 // Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
 // writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
 // Body operates exclusively on `this` and ignores all three explicit params.
-void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
+void BombBlast::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {
 
     // Activate: clear ENT_INACTIVE | ENT_KILLED. Mortar::ActorManager::Add already
     // cleared these on the recycle path; redundant on the factory path
@@ -104,13 +104,13 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
     const float s = sinf(rad);
 
     // Vel1: randomly-angled direction scaled by 0.5 (the "narrow" axis).
-    m_Vel1 = Vec3(c, s, 0.0f) * 0.5f;
+    m_Vel1 = _Vector3<float>(c, s, 0.0f) * 0.5f;
 
     // Vel2: perpendicular (angle + 0x3FFC = +90° in 16-bit), full magnitude.
     //       Binary uses CosIdx/SinIdx on (angle + 0x3FFC) which is literally
     //       +90° — i.e. a rotated copy of Vel1 without the 0.5 scale.
     const float rad2 = rad + 1.5707963f;
-    m_Vel2 = Vec3(cosf(rad2), sinf(rad2), 0.0f);
+    m_Vel2 = _Vector3<float>(cosf(rad2), sinf(rad2), 0.0f);
 
     // Initial m_PosA/m_PosB = copies of the velocities (frame-zero positions).
     m_PosA = m_Vel1;

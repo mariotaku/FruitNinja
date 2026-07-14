@@ -421,7 +421,7 @@ static const float kBackdropTargetAlpha = 160.0f / 255.0f;
 // identically. Sits outside/below the plate, on the modal backdrop.
 static const float kCloseBtnX = 215.0f;
 static const float kCloseBtnY = -135.0f;
-static const Vec3  kCloseTextOffset(-29.0f, 3.0f, 0.0f);
+static const _Vector3<float> kCloseTextOffset(-29.0f, 3.0f, 0.0f);
 
 // ---------------------------------------------------------------------------
 // Sensitivity slider <-> FN::g_MotionSpeedThreshold mapping.
@@ -595,7 +595,7 @@ void SettingsScreen::Init() {
     // font_fruit_ninja.fnt doesn't ship; switch the dropdown to the TTF font.
     m_LangFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
 
-    m_LangDrop = new UiDropdown(Vec3(kComboX, kComboY, 0.0f), m_LangItems, langDefault,
+    m_LangDrop = new UiDropdown(_Vector3<float>(kComboX, kComboY, 0.0f), m_LangItems, langDefault,
                                 kComboVisibleRows, kComboScaleX, kComboScaleY);
     m_LangDrop->SetBoxTexture(m_TexBox);
     m_LangDrop->SetCaretTexture(m_TexCaret);
@@ -624,7 +624,7 @@ void SettingsScreen::Init() {
     m_LangDrop->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
     // ---- checkboxes / slider, seeded from live globals ----
-    m_MotionCb = new UiCheckbox(Vec3(kMotionCbX, kMotionCbY, 0.0f), kCheckboxSide, FN::g_MotionMode);
+    m_MotionCb = new UiCheckbox(_Vector3<float>(kMotionCbX, kMotionCbY, 0.0f), kCheckboxSide, FN::g_MotionMode);
     m_MotionCb->SetBoxTexture(m_TexBox);
     m_MotionCb->SetCheckGlyph(m_TexCheck);
     m_MotionCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
@@ -635,20 +635,20 @@ void SettingsScreen::Init() {
     // seed with !g_FpsCap60. OnFpsCapToggle() applies the same inversion on
     // write. Persistence (SettingsSave) is untouched -- it still reads/writes
     // the global directly, never the checkbox's own polarity.
-    m_NativeFpsCb = new UiCheckbox(Vec3(kNativeFpsCbX, kNativeFpsCbY, 0.0f), kCheckboxSide, !FN::g_FpsCap60);
+    m_NativeFpsCb = new UiCheckbox(_Vector3<float>(kNativeFpsCbX, kNativeFpsCbY, 0.0f), kCheckboxSide, !FN::g_FpsCap60);
     m_NativeFpsCb->SetBoxTexture(m_TexBox);
     m_NativeFpsCb->SetCheckGlyph(m_TexCheck);
     m_NativeFpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsCapToggle));
     m_NativeFpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
-    m_FpsCb = new UiCheckbox(Vec3(kFpsCbX, kFpsCbY, 0.0f), kCheckboxSide, FN::g_ShowFps);
+    m_FpsCb = new UiCheckbox(_Vector3<float>(kFpsCbX, kFpsCbY, 0.0f), kCheckboxSide, FN::g_ShowFps);
     m_FpsCb->SetBoxTexture(m_TexBox);
     m_FpsCb->SetCheckGlyph(m_TexCheck);
     m_FpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
     m_FpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
     int sens0 = ThresholdToSlider(FN::g_MotionSpeedThreshold);
-    m_SensSlider = new UiSlider(Vec3(kSensX, kSensY, 0.0f), kSensMin, kSensMax, sens0);
+    m_SensSlider = new UiSlider(_Vector3<float>(kSensX, kSensY, 0.0f), kSensMin, kSensMax, sens0);
     m_SensSlider->SetBoxTexture(m_TexBox);
     m_SensSlider->SetKnobTexture(m_TexKnob);
     m_SensSlider->SetTrackSize(kSensTrackW, kSensTrackH);
@@ -661,7 +661,7 @@ void SettingsScreen::Init() {
     // ---- m_QuitButton (bomb-with-X icon + separate text label) ----
     m_CloseTex = Mortar::TextureManager::LoadLocalisedTexture("quit_title.tex");
     m_pCloseButton = new BSButton(
-        Vec3(kCloseBtnX, kCloseBtnY, 0.0f),
+        _Vector3<float>(kCloseBtnX, kCloseBtnY, 0.0f),
         // Port specific: no dedicated "CLOSE" string table entry exists (this
         // screen has no binary counterpart). LSTR_DJ_BACK_BUTTON ("BACK") is
         // reused instead of LSTR_QUIT ("QUIT") -- other screens (AboutScreen,
@@ -673,7 +673,7 @@ void SettingsScreen::Init() {
         // initial bake, immediately overwritten by the UpdateCloseButtonLabel()
         // call at the end of Init() below.
         GETSTRING(LSTR_DJ_BACK_BUTTON, 0),
-        Vec3(1.0f, 1.0f, 1.0f)
+        _Vector3<float>(1.0f, 1.0f, 1.0f)
     );
     m_pCloseButton->Init();
     m_pCloseButton->SetCallback(
@@ -1340,7 +1340,7 @@ void SettingsScreen::Draw(float* hudScale) {
         mm.GetWorldStack().Reset();
         m_Backdrop->Set();
         Matrix44 bgMat = Matrix44::MakeScale(480.0f, 320.0f, 1.0f);
-        bgMat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+        bgMat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(bgMat);
         mm.UploadModelViewOnly();
         uint8_t backdropA = (uint8_t)(m_BackdropAlpha * 255.0f + 0.5f);

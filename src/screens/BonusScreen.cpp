@@ -20,7 +20,7 @@
 #include "engine/render/FontCacheObjectTTF.h"
 #include "engine/util/StringTable.h"
 #include "engine/util/StringHash.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector2.h"
 #include "engine/math/Random.h"
 #include "engine/particle/PSPParticleManager.h"
 #include "entities/Coin.h"
@@ -134,7 +134,7 @@ BonusScreen::BonusScreen()
         TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
     m_Texture = bgTex;
     if (bgTex.IsValid()) {
-        size = Vec3((float)bgTex->GetWidth(), (float)bgTex->GetHeight(), 0.0f);
+        size = _Vector3<float>((float)bgTex->GetWidth(), (float)bgTex->GetHeight(), 0.0f);
     }
 
     // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162ea4: preloads
@@ -230,7 +230,7 @@ void BonusScreen::AwardScores() {
     // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: base = pos + m_AnimPos
     // + Vec3(-230,150,0) -- same constant reused for the coin spawn point, the
     // camera shake impact vector, and the particle emitter position below.
-    Vec3 base = pos + m_AnimPos + Vec3(-230.0f, 150.0f, 0.0f);
+    _Vector3<float> base = pos + m_AnimPos + _Vector3<float>(-230.0f, 150.0f, 0.0f);
 
     int total = m_TotalScore;
     // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: flyFXName/collectFXName
@@ -383,7 +383,7 @@ void BonusScreen::BuildBonusText() {
         m_ScoreBox->SetShadow(
             5.0f,
             Colour(0x5D, 0x28, 0x0C, 0xFF),
-            Vec3(0.0f, -3.0f, 0.0f),
+            _Vector3<float>(0.0f, -3.0f, 0.0f),
             true
         );
         char bonusBuf[64];
@@ -618,7 +618,7 @@ void BonusScreen::Update(float dt) {
 void BonusScreen::Draw(float* hudScaleRaw) {
     // Binary saves pos at entry @0x0016494c, restores at exit @0x00164e38.
     // The per-award loop steps pos.y by -42 each row.
-    Vec3 savedPos = pos;
+    _Vector3<float> savedPos = pos;
 
     // Apply m_AnimPos to position before base draw.
     pos.x += m_AnimPos.x;
@@ -643,7 +643,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
         scoreScale *= m_NamePulseScale;
         game_work.pFontArcade->DrawString(
             scoreScale, 1.0f, 0.0f, totalBuf,
-            Vec3(pos.x + TOTAL_POS_X, pos.y + TOTAL_POS_Y, pos.z + TOTAL_POS_Z),
+            _Vector3<float>(pos.x + TOTAL_POS_X, pos.y + TOTAL_POS_Y, pos.z + TOTAL_POS_Z),
             Colour(255, 255, 255, 255), 0xF);
     }
 
@@ -684,19 +684,19 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // m_ScoreBox (+0xB8): "_ BONUS _" title at pos+(105,+51). SetTranslation flag=1.
     if (m_ScoreBox) {
         m_ScoreBox->SetTranslation(
-            Vec3(pos.x + 105.0f, pos.y + 51.0f, pos.z),
+            _Vector3<float>(pos.x + 105.0f, pos.y + 51.0f, pos.z),
             1
         );
-        m_ScoreBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_ScoreBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // m_TotalBox (+0xBC): "TOTAL" label at pos+(75,-128). SetTranslation flag=1.
     if (m_TotalBox) {
         m_TotalBox->SetTranslation(
-            Vec3(pos.x + 75.0f, pos.y - 128.0f, pos.z),
+            _Vector3<float>(pos.x + 75.0f, pos.y - 128.0f, pos.z),
             1
         );
-        m_TotalBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_TotalBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // (Total-score number is drawn ABOVE, before the FIRST_NAME_OFFSET shift -- see note there.)
@@ -729,8 +729,8 @@ void BonusScreen::Draw(float* hudScaleRaw) {
                 // pos+(-35,+0) (net -140 from plate center after the -105 FIRST_NAME_OFFSET); the
                 // label sits at pos+(-2,+6) (net -107), 33px right of the star. (A prior
                 // asm-inspector pass mis-read the star translate Y as +6 -- RE confirms +0.)
-                Matrix44 mat = Matrix44::MakeScale(Vec3(texW + 1.0f, texH + 1.0f, 1.0f));
-                mat.GlobalTranslate44(Vec3(pos.x - 35.0f, pos.y, pos.z));
+                Matrix44 mat = Matrix44::MakeScale(_Vector3<float>(texW + 1.0f, texH + 1.0f, 1.0f));
+                mat.GlobalTranslate44(_Vector3<float>(pos.x - 35.0f, pos.y, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
@@ -744,10 +744,10 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             if (i < 3 && m_RankLabelBoxes[i]) {
                 m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
                 m_RankLabelBoxes[i]->SetTranslation(
-                    Vec3(pos.x - 2.0f, pos.y + 6.0f, pos.z),
+                    _Vector3<float>(pos.x - 2.0f, pos.y + 6.0f, pos.z),
                     0
                 );
-                m_RankLabelBoxes[i]->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+                m_RankLabelBoxes[i]->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
             }
 
             // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
@@ -755,10 +755,10 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             if (i < 3 && m_RankValueBoxes[i]) {
                 m_RankValueBoxes[i]->SetColour(entry.m_Colour, 0);
                 m_RankValueBoxes[i]->SetTranslation(
-                    Vec3(pos.x + 220.0f, pos.y + 5.0f, pos.z),
+                    _Vector3<float>(pos.x + 220.0f, pos.y + 5.0f, pos.z),
                     0
                 );
-                m_RankValueBoxes[i]->Draw(Vec2(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
+                m_RankValueBoxes[i]->Draw(_Vector2<float>(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
             }
         }
 

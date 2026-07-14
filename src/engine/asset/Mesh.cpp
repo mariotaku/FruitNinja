@@ -102,8 +102,8 @@ Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
 // across all bones. Initial values: +/-1e30 (DAT_00272c8c / DAT_00272c90).
 // ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001b07f0 (asm-inspector)
 Bounds3D Mesh::GetBounds() const {
-    Bounds3D out(Vec3( 1e30f,  1e30f,  1e30f),
-                 Vec3(-1e30f, -1e30f, -1e30f));
+    Bounds3D out(_Vector3<float>( 1e30f,  1e30f,  1e30f),
+                 _Vector3<float>(-1e30f, -1e30f, -1e30f));
 
     for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
         const BoneBinding& bone = m_BoneBindings[i];
@@ -111,22 +111,22 @@ Bounds3D Mesh::GetBounds() const {
         const float* M = W.m;  // column-major: col c, row r = M[c*4+r]
 
         // Transform bmin and bmax as homogeneous points (w=1).
-        const Vec3& bmin = bone.m_Bounds.min;
-        const Vec3& bmax = bone.m_Bounds.max;
-        Vec3 wMin(
-            M[0]*bmin.x + M[4]*bmin.y + M[8]*bmin.z  + M[12],
-            M[1]*bmin.x + M[5]*bmin.y + M[9]*bmin.z  + M[13],
-            M[2]*bmin.x + M[6]*bmin.y + M[10]*bmin.z + M[14]
+        const _Vector3<float>& bmin = bone.m_Bounds.min;
+        const _Vector3<float>& bmax = bone.m_Bounds.max;
+        _Vector3<float> wMin(
+            M[0] * bmin.x + M[4] * bmin.y + M[8] * bmin.z + M[12],
+            M[1] * bmin.x + M[5] * bmin.y + M[9] * bmin.z + M[13],
+            M[2] * bmin.x + M[6] * bmin.y + M[10] * bmin.z + M[14]
         );
-        Vec3 wMax(
-            M[0]*bmax.x + M[4]*bmax.y + M[8]*bmax.z  + M[12],
-            M[1]*bmax.x + M[5]*bmax.y + M[9]*bmax.z  + M[13],
-            M[2]*bmax.x + M[6]*bmax.y + M[10]*bmax.z + M[14]
+        _Vector3<float> wMax(
+            M[0] * bmax.x + M[4] * bmax.y + M[8] * bmax.z + M[12],
+            M[1] * bmax.x + M[5] * bmax.y + M[9] * bmax.z + M[13],
+            M[2] * bmax.x + M[6] * bmax.y + M[10] * bmax.z + M[14]
         );
 
         // Reduce both transformed corners into the running AABB.
-        Vec3& outMin = out.min;
-        Vec3& outMax = out.max;
+        _Vector3<float>& outMin = out.min;
+        _Vector3<float>& outMax = out.max;
         if (wMin.x < outMin.x) outMin.x = wMin.x;
         if (wMin.y < outMin.y) outMin.y = wMin.y;
         if (wMin.z < outMin.z) outMin.z = wMin.z;
@@ -342,8 +342,8 @@ void Mesh::DrawCube(float /*x*/, float /*y*/, float /*z*/,
 }
 
 // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193edc
-void Mesh::DrawLine(Vec3 const& /*from*/, Vec3 const& /*to*/, float const& /*width*/,
-                    Colour const& /*colour*/, Vec3 const& /*normal*/,
+void Mesh::DrawLine(_Vector3<float> const& /*from*/, _Vector3<float> const& /*to*/, float const& /*width*/,
+                    Colour const& /*colour*/, _Vector3<float> const& /*normal*/,
                     DrawEffectContainer* /*fx*/) {
     // Defunct: DrawLine is a binary stub (BX LR); no-op stub; v1.6.1 binary @ 0x00193edc
 }
@@ -355,7 +355,7 @@ void Mesh::DrawSphere(float /*radius*/, Colour /*colour*/, DrawEffectContainer* 
 
 // Binary @ 0x00272a3c (v1.6.1 Bada); port ASM-verified at iOS address 0x001b09b0 (re-analyst 2026-05-24)
 void Mesh::DrawQuad(Colour colour, SmartPtr<Texture> texture,
-                    Vec3 const& pos, Vec3 const& scale, float rotZ,
+                    _Vector3<float> const& pos, _Vector3<float> const& scale, float rotZ,
                     float w, float h, float uOff, float vOff,
                     DrawEffectContainer* fx) {
     MatrixManager& mm = MatrixManager::GetInstance();

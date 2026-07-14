@@ -7,8 +7,8 @@
 #include "render/Renderer.h"
 #include "render/Utf8StringIterator.h"
 #include "math/Matrix44.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "render/gl_funcs.h"
 #if !defined(__bada__) && !defined(FN_GL_STUB)
@@ -180,8 +180,8 @@ void BakedStringBox::SetHorizontalLineSpacing(int spacing) {
 }
 
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetTranslation @0x00246238: (_Vector3<float>, bool preShift).
-void BakedStringBox::SetTranslation(Vec3 pos, bool preShift) {
-    Vec3 p = pos;
+void BakedStringBox::SetTranslation(_Vector3<float> pos, bool preShift) {
+    _Vector3<float> p = pos;
     if (preShift) {
         // ASM-spec v1.6.1 BakedStringBox::SetTranslation @0x00246238: preShift!=0 pre-shifts
         // -(boxW/2) in X, +(boxH/2) in Y, using SIGNED INT /2 (truncates: 75/2=37, not 37.5).
@@ -674,7 +674,7 @@ void BakedStringBox::RebuildMeshes() {
 
         float localBaseY = ComputeBaselineY(m_Align, nLines, i, wl[i].maxBearingY, wl[i].minBottom,
                                             (float)m_BoxHeight, step, maxSpan, requestedSize);
-        line->LineOffset() = Vec3(lineOffsetX, localBaseY, 0.0f);
+        line->LineOffset() = _Vector3<float>(lineOffsetX, localBaseY, 0.0f);
 
         m_Lines.push_back(line);
     }
@@ -757,7 +757,7 @@ void BakedStringBox::SetMetallicGradient(Colour top, Colour bottom, Colour c2, C
 // SetShadow  binary @ 0x002462c0
 // ASM-spec v1.6.1 Mortar::BakedStringBox::SetShadow @0x002462c0: (float, Colour, _Vector3<float>, int).
 // Note: SetColour/SetTranslation use bool; SetShadow uses int.
-void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, int flag) {
+void BakedStringBox::SetShadow(float scale, Colour col, _Vector3<float> offset, int flag) {
     if (m_ShadowScale != scale ||
         m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
         m_ShadowOffset.x != offset.x || m_ShadowOffset.y != offset.y || m_ShadowOffset.z != offset.z ||
@@ -860,7 +860,7 @@ float BakedStringBox::ComputeBaselineY(int align, int nLines, int lineIdx,
 // BakedStringTTF (built by RebuildMeshes). This method only: lazily rebuilds, computes
 // the box-level anchor, and for each line reads its precomputed LineOffset(), rotates/
 // scales it, translates by the anchor, and calls FancyBakedString::Draw.
-void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
+void BakedStringBox::Draw(_Vector2<float> scale, float rotation, bool center) {
     if (!m_Font) return;
     if (m_Dirty) RebuildMeshes();
     if (m_Lines.empty()) return;
@@ -870,7 +870,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
     atlas->BuildPendingTextures();
 
     // World-space anchor.
-    Vec3 anchor = m_Pos;
+    _Vector3<float> anchor = m_Pos;
 
     // ASM-spec v1.6.1 BakedStringBox::Draw @0x00246e20: center recenters only the scale-shrink
     // delta (0 at scale=1); per-line centering is baked into LineOffset() by RebuildMeshes.
@@ -933,7 +933,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
         FancyBakedString* line = m_Lines[li];
         if (!line) continue;
 
-        const Vec3& lo = line->LineOffset();
+        const _Vector3<float>& lo = line->LineOffset();
         float lx = lo.x * scale.x;
         float ly = lo.y * scale.y;
         float rx = lx, ry = ly;
@@ -941,7 +941,7 @@ void BakedStringBox::Draw(Vec2 scale, float rotation, bool center) {
             rx = cosT * lx - sinT * ly;
             ry = sinT * lx + cosT * ly;
         }
-        Vec3 pos(rx + anchor.x, ry + anchor.y, lo.z * scale.x + anchor.z);
+        _Vector3<float> pos(rx + anchor.x, ry + anchor.y, lo.z * scale.x + anchor.z);
         line->Draw(pos, scale, rotation, (ALIGNMENT_TYPE)9);
     }
 

@@ -151,7 +151,7 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
 // ===================================================================
 // Matches TutorialControl::ResetTutePos(Vec3) @ 0x00162f84
 // ===================================================================
-void TutorialControl::ResetTutePos(const Vec3& targetPos) {
+void TutorialControl::ResetTutePos(const _Vector3<float>& targetPos) {
     pos = targetPos;
     m_bFlipX = (pos.x > 0.0f);
     m_AnimTimer = ANIM_INACTIVE;
@@ -192,7 +192,7 @@ void TutorialControl::Update(float dt) {
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Default: hide (far off-screen); m_bHidden=1 selects UV frame 1
-    m_DrawPos = Vec3(-1000.0f, -1000.0f, -1000.0f);
+    m_DrawPos = _Vector3<float>(-1000.0f, -1000.0f, -1000.0f);
     m_bHidden = 1;
 
     if (!CanShowTute()) {
@@ -216,9 +216,9 @@ void TutorialControl::Update(float dt) {
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
 
-    Vec3 scaleStart(-0.5f, -0.075f, 0.0f);
-    Vec3 scaleEnd(1.0f, 0.15f, 0.0f);
-    Vec3 scale = scaleStart + scaleEnd * t;
+    _Vector3<float> scaleStart(-0.5f, -0.075f, 0.0f);
+    _Vector3<float> scaleEnd(1.0f, 0.15f, 0.0f);
+    _Vector3<float> scale = scaleStart + scaleEnd * t;
 
     m_DrawPos = scale * m_HalfWidth;
     if (m_bFlipX) m_DrawPos.x = -m_DrawPos.x;
@@ -272,7 +272,7 @@ void TutorialControl::Update(float dt) {
 // arrow: 0 -> u=[0.0,0.5], 1 -> u=[0.5,1.0].
 // ===================================================================
 void TutorialControl::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     if (m_AnimTimer <= 0.0f) return;
     // NOTE: no early-out on m_bHidden -- it is a UV frame selector, not a guard.
 
@@ -289,7 +289,7 @@ void TutorialControl::Draw(float* hudScaleRaw) {
         int rem = (int)(timer * TRAIL_TIMER_SCALE) % (int)TRAIL_MOD_DIV;
 
         // Global ones-Vec3 used for the trail quad scale (binary @ 0x001638f4-0x00163902).
-        const Vec3 ONES_VEC3(1.0f, 1.0f, 1.0f);
+        const _Vector3<float> ONES_VEC3(1.0f, 1.0f, 1.0f);
 
         for (int quad_index = 0; quad_index < 4; ++quad_index) {
             float frac = (float)quad_index + (float)rem / TRAIL_MOD_DIV;
@@ -320,7 +320,7 @@ void TutorialControl::Draw(float* hudScaleRaw) {
             // Binary @ 0x001634a2-0x001634ba: scale = (2*frac)^2 uniform via
             // global Vec3(1,1,1) multiplied by quad-frac squared, NOT m_HalfWidth.
             float quadScale = (2.0f * frac) * (2.0f * frac);
-            Vec3 scaleVec = ONES_VEC3 * quadScale;
+            _Vector3<float> scaleVec = ONES_VEC3 * quadScale;
 
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(scaleVec.x, scaleVec.y, scaleVec.z);
@@ -350,10 +350,10 @@ void TutorialControl::Draw(float* hudScaleRaw) {
             1.0f);
         // Binary @ 0x00163554-0x00163562: offset Vec3 multiplied by ARROW_SCALE
         // (96.0), and result computed as drawAt = m_DrawPos - offset.
-        Vec3 offset(flipSign * -0.125f * ARROW_SCALE,
-                    -0.40625f * ARROW_SCALE,
-                    0.0f);
-        Vec3 drawAt = m_DrawPos - offset;
+        _Vector3<float> offset(flipSign * -0.125f * ARROW_SCALE,
+                               -0.40625f * ARROW_SCALE,
+                               0.0f);
+        _Vector3<float> drawAt = m_DrawPos - offset;
         mat.GlobalTranslate44(drawAt);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();

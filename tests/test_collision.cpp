@@ -20,7 +20,7 @@
 #include "collision/ColSphere.h"
 #include "collision/ColLine.h"
 #include "collision/ColAABB.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -52,8 +52,8 @@ static void test_sphere_sphere_touching()
 {
     // (0,0,0) r=1 and (2,0,0) r=1: radSum=2, dist=2, distSq==radSum^2.
     // Intersects uses <=, so boundary is TRUE.
-    ColSphere a(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere b(Vec3(2.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere a(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere b(_Vector3<float>(2.0f, 0.0f, 0.0f), 1.0f);
     CHECK(a.Intersects(b));
     CHECK(b.Intersects(a));
 }
@@ -61,8 +61,8 @@ static void test_sphere_sphere_touching()
 static void test_sphere_sphere_no_overlap()
 {
     // (0,0,0) r=1 and (3,0,0) r=1: dist=3 > radSum=2.
-    ColSphere a(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere b(Vec3(3.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere a(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere b(_Vector3<float>(3.0f, 0.0f, 0.0f), 1.0f);
     CHECK(!a.Intersects(b));
     CHECK(!b.Intersects(a));
 }
@@ -71,8 +71,8 @@ static void test_sphere_sphere_overlap()
 {
     // (0,0,0) r=1 and (1,0,0) r=1: dist=1, radSum=2, overlap=1.
     // Intersects -> true.
-    ColSphere a(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere b(Vec3(1.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere a(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere b(_Vector3<float>(1.0f, 0.0f, 0.0f), 1.0f);
     CHECK(a.Intersects(b));
     CHECK(b.Intersects(a));
 }
@@ -91,9 +91,9 @@ static void test_sphere_sphere_overlap()
 
 static void test_colspheresphere_penetration()
 {
-    ColSphere self(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere other(Vec3(1.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 out;
+    ColSphere self(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere other(_Vector3<float>(1.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereSphere(&self, &other, &out);
     CHECK(hit == 1);
     // Depth (magnitude of out) == push == |d - radSum| = |1-2| = 1.
@@ -110,18 +110,18 @@ static void test_colspheresphere_penetration()
 static void test_colspheresphere_touching_no_hit()
 {
     // dist = radSum exactly -> distSq == radSum^2 -> NOT < -> returns 0.
-    ColSphere self(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere other(Vec3(2.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 out;
+    ColSphere self(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere other(_Vector3<float>(2.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereSphere(&self, &other, &out);
     CHECK(hit == 0);
 }
 
 static void test_colspheresphere_no_overlap()
 {
-    ColSphere self(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphere other(Vec3(3.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 out;
+    ColSphere self(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphere other(_Vector3<float>(3.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereSphere(&self, &other, &out);
     CHECK(hit == 0);
 }
@@ -133,9 +133,9 @@ static void test_colspheresphere_no_overlap()
 static void test_colspheresphere_zero_radius()
 {
     // r=0 at origin vs r=1 at (0,0,0): same centre, dist=0 < radSum=1 -> hit.
-    ColSphere self(Vec3(0.0f, 0.0f, 0.0f), 0.0f);
-    ColSphere other(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 out;
+    ColSphere self(_Vector3<float>(0.0f, 0.0f, 0.0f), 0.0f);
+    ColSphere other(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereSphere(&self, &other, &out);
     CHECK(hit == 1);
 }
@@ -143,9 +143,9 @@ static void test_colspheresphere_zero_radius()
 static void test_colspheresphere_coincident_no_overlap()
 {
     // Both r=0 at origin: dist=0, radSum=0, distSq==radSum^2 -> NOT < -> returns 0.
-    ColSphere self(Vec3(0.0f, 0.0f, 0.0f), 0.0f);
-    ColSphere other(Vec3(0.0f, 0.0f, 0.0f), 0.0f);
-    Vec3 out;
+    ColSphere self(_Vector3<float>(0.0f, 0.0f, 0.0f), 0.0f);
+    ColSphere other(_Vector3<float>(0.0f, 0.0f, 0.0f), 0.0f);
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereSphere(&self, &other, &out);
     CHECK(hit == 0);
 }
@@ -158,8 +158,8 @@ static void test_sphere_line_through_centre()
 {
     // Sphere (0,0,0) r=1; segment (-2,0,0)->(2,0,0) passes through centre.
     // Closest point = (0,0,0); distSq = 0 <= 1 -> true.
-    ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(-2.0f, 0.0f, 0.0f), Vec3(2.0f, 0.0f, 0.0f));
+    ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine   line(_Vector3<float>(-2.0f, 0.0f, 0.0f), _Vector3<float>(2.0f, 0.0f, 0.0f));
     CHECK(s.IntersectsLine(line));
 }
 
@@ -167,8 +167,8 @@ static void test_sphere_line_far()
 {
     // Sphere (0,0,0) r=1; horizontal segment (-2,2,0)->(2,2,0): infinite line is y=2.
     // Closest on infinite line to origin = (0,2,0); distSq=4 > r^2=1 -> false.
-    ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(-2.0f, 2.0f, 0.0f), Vec3(2.0f, 2.0f, 0.0f));
+    ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine   line(_Vector3<float>(-2.0f, 2.0f, 0.0f), _Vector3<float>(2.0f, 2.0f, 0.0f));
     CHECK(!s.IntersectsLine(line));
 }
 
@@ -176,8 +176,8 @@ static void test_sphere_line_tangent()
 {
     // Sphere (0,0,0) r=1; horizontal segment at y=1 from x=-2 to x=2.
     // Closest point = (0,1,0); distSq=1 == r^2=1 -> IntersectsLine uses <=: true.
-    ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(-2.0f, 1.0f, 0.0f), Vec3(2.0f, 1.0f, 0.0f));
+    ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine   line(_Vector3<float>(-2.0f, 1.0f, 0.0f), _Vector3<float>(2.0f, 1.0f, 0.0f));
     CHECK(s.IntersectsLine(line));
 }
 
@@ -194,9 +194,9 @@ static void test_colsphereline_through_centre()
     // mag=0, push=|r-mag|=1, delta after Normalise is zero-vector (0/0 edge case in
     // the binary: it just normalises a zero vec). The binary normalises before checking,
     // so out = {0,0,0} * 1 = {0,0,0} in this degenerate case. We only assert hit==1.
-    ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(-2.0f, 0.0f, 0.0f), Vec3(2.0f, 0.0f, 0.0f));
-    Vec3 out;
+    ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine   line(_Vector3<float>(-2.0f, 0.0f, 0.0f), _Vector3<float>(2.0f, 0.0f, 0.0f));
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereLine(&s, &line, &out);
     CHECK(hit == 1);
 }
@@ -209,9 +209,9 @@ static void test_colsphereline_far()
     // Horizontal line y=2: infinite line is y=2; closest to origin = (0,2,0), distSq=4 >= 1 -> no hit.
     // (A vertical line through x=0 would be the y-axis -> closest = origin -> a HIT; see
     //  test_colsphereline_through_centre. That is faithful infinite-line behaviour.)
-    ColSphere s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine   line(Vec3(-2.0f, 2.0f, 0.0f), Vec3(2.0f, 2.0f, 0.0f));
-    Vec3 out;
+    ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine   line(_Vector3<float>(-2.0f, 2.0f, 0.0f), _Vector3<float>(2.0f, 2.0f, 0.0f));
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereLine(&s, &line, &out);
     CHECK(hit == 0);
 }
@@ -222,9 +222,9 @@ static void test_colsphereline_offset_centre()
     // Closest point on segment to (0,1,0) = (0,0,0) (foot of perpendicular, clamped within seg).
     // delta = (0,0,0) - (0,1,0) = (0,-1,0); distSq=1 < r^2=4 -> hit.
     // mag=1, push=|2-1|=1, delta normalised=(0,-1,0), out=(0,-1,0)*1=(0,-1,0).
-    ColSphere s(Vec3(0.0f, 1.0f, 0.0f), 2.0f);
-    ColLine   line(Vec3(-5.0f, 0.0f, 0.0f), Vec3(5.0f, 0.0f, 0.0f));
-    Vec3 out;
+    ColSphere s(_Vector3<float>(0.0f, 1.0f, 0.0f), 2.0f);
+    ColLine   line(_Vector3<float>(-5.0f, 0.0f, 0.0f), _Vector3<float>(5.0f, 0.0f, 0.0f));
+    _Vector3<float> out;
     int hit = ColSphere::ColSphereLine(&s, &line, &out);
     CHECK(hit == 1);
     CHECK_NEAR(out.x,  0.0f, 1e-5f);
@@ -239,7 +239,7 @@ static void test_colsphereline_offset_centre()
 // ---------------------------------------------------------------------------
 
 struct ColSphereInspect : public ColSphere {
-    ColSphereInspect(Vec3 c, float r) : ColSphere(c, r) {}
+    ColSphereInspect(_Vector3<float> c, float r) : ColSphere(c, r) {}
     uint8_t flag() const { return m_CollideFlag; }
     void    clearFlag()  { ClearCollideFlag(); }
 };
@@ -251,9 +251,9 @@ struct ColSphereInspect : public ColSphere {
 
 static void test_collide_sphere_vs_sphere_hit()
 {
-    ColSphereInspect a(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphereInspect b(Vec3(1.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 norm;
+    ColSphereInspect a(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphereInspect b(_Vector3<float>(1.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> norm;
     int hit = a.Collide(&b, &norm);
     CHECK(hit == 1);
     // Both flags must be set after a hit.
@@ -263,9 +263,9 @@ static void test_collide_sphere_vs_sphere_hit()
 
 static void test_collide_sphere_vs_sphere_no_hit()
 {
-    ColSphereInspect a(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColSphereInspect b(Vec3(3.0f, 0.0f, 0.0f), 1.0f);
-    Vec3 norm;
+    ColSphereInspect a(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColSphereInspect b(_Vector3<float>(3.0f, 0.0f, 0.0f), 1.0f);
+    _Vector3<float> norm;
     int hit = a.Collide(&b, &norm);
     CHECK(hit == 0);
     CHECK(a.flag() == 0);
@@ -280,9 +280,9 @@ static void test_collide_sphere_vs_sphere_no_hit()
 
 static void test_collide_sphere_vs_line_hit()
 {
-    ColSphereInspect s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine          line(Vec3(-2.0f, 0.0f, 0.0f), Vec3(2.0f, 0.0f, 0.0f));
-    Vec3 norm;
+    ColSphereInspect s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine          line(_Vector3<float>(-2.0f, 0.0f, 0.0f), _Vector3<float>(2.0f, 0.0f, 0.0f));
+    _Vector3<float> norm;
     int hit = s.Collide(&line, &norm);
     CHECK(hit == 1);
 }
@@ -291,9 +291,9 @@ static void test_collide_sphere_vs_line_no_hit()
 {
     // Collide(line) routes through the INFINITE-line ColSphereLine, so the line must
     // stay far on its whole extent: horizontal y=2 -> closest to origin (0,2,0), no hit.
-    ColSphereInspect s(Vec3(0.0f, 0.0f, 0.0f), 1.0f);
-    ColLine          line(Vec3(-2.0f, 2.0f, 0.0f), Vec3(2.0f, 2.0f, 0.0f));
-    Vec3 norm;
+    ColSphereInspect s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
+    ColLine          line(_Vector3<float>(-2.0f, 2.0f, 0.0f), _Vector3<float>(2.0f, 2.0f, 0.0f));
+    _Vector3<float> norm;
     int hit = s.Collide(&line, &norm);
     CHECK(hit == 0);
 }

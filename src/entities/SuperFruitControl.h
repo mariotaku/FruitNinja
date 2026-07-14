@@ -42,7 +42,7 @@
 
 #include "hud/HUDControl3d.h"
 #include "render/FancyBakedString.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <map>
 
@@ -91,10 +91,10 @@ public:
     // +0xa4: fade-in progress [0..1]; += dt*3 per frame
     float m_FadeIn;               // +0xa4
 
-    Vec3 m_SpinAxis;              // +0xa8  per-hit slice-dir spin axis (Sliced: GetSliceDir*3)
-    Vec3 m_TintCurrent;           // +0xb4  currently-displayed fruit tint
-    Vec3 m_TintA;                 // +0xc0  tint lerp endpoint A
-    Vec3 m_TintB;                 // +0xcc  tint lerp endpoint B (per-hit reroll target)
+    _Vector3<float> m_SpinAxis;              // +0xa8  per-hit slice-dir spin axis (Sliced: GetSliceDir*3)
+    _Vector3<float> m_TintCurrent;           // +0xb4  currently-displayed fruit tint
+    _Vector3<float> m_TintA;                 // +0xc0  tint lerp endpoint A
+    _Vector3<float> m_TintB;                 // +0xcc  tint lerp endpoint B (per-hit reroll target)
 
     // +0xd8: scale-in progress [0..1]
     float m_Scale;                // +0xd8
@@ -105,8 +105,8 @@ public:
     uint8_t _pad_e0[8];           // +0xe0..+0xe7  (unresolved pad)
     float m_InnerRadius;          // +0xe8  explosion inner shockwave radius
     float m_OuterRadius;          // +0xec  explosion outer shockwave radius
-    Vec3 m_ExplodeOrigin;         // +0xf0  explosion epicenter (snapshot of host pos)
-    Vec3 m_ZoomTarget;            // +0xfc  camera zoom target (clamped host pos; spans to 0x107)
+    _Vector3<float> m_ExplodeOrigin;         // +0xf0  explosion epicenter (snapshot of host pos)
+    _Vector3<float> m_ZoomTarget;            // +0xfc  camera zoom target (clamped host pos; spans to 0x107)
 
     // -----------------------------------------------------------------------
     // Static map: indexes all active super-fruit controllers by host fruit.

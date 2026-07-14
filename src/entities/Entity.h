@@ -1,7 +1,7 @@
 #ifndef FN_ENTITY_H
 #define FN_ENTITY_H
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "collision/Col.h"
 #include "collision/ColSphere.h"
 #include "collision/ColAABB.h"
@@ -79,14 +79,14 @@ public:
     // memset 0x3C zeroes the whole struct including these gap bytes.
 
     // +0x10..+0x1b: position
-    Vec3 pos;
+    _Vector3<float> pos;
 
     // +0x1c..+0x27: velocity
-    Vec3 vel;
+    _Vector3<float> vel;
 
     // +0x28..+0x33: scale (visual size). Base ctor zeroes this; subclasses that
     // need scale=1 (Fruit, Bomb, BombBlast, Coin) must set it themselves.
-    Vec3 scale;
+    _Vector3<float> scale;
 
     // +0x34: recycle-state byte. Zeroed by ActorManager::Add on the
     // factory path (never on the recycle path). Port tracks it to stay
@@ -133,7 +133,7 @@ public:
     // always pass (nullptr, 0, &scale). Binary @ 0x0019d5fc.
     virtual void Init(void* /*payload, unused at runtime*/,
                       long   /*entityTypeOrLen, ignored except by .lvl loader*/,
-                      Vec3* /*scaleOrNull; defaults to (1,1,1)*/);
+                      _Vector3<float>* /*scaleOrNull; defaults to (1,1,1)*/);
 
     // Vtable slot 3 (+0x0C): Release — Binary @ 0x0019d5e8
     // Base: frees m_Col then nulls it. Subclasses override to release resources.
@@ -169,11 +169,11 @@ public:
     virtual int CollisionResponse(Entity* hitter,
                                   unsigned long /*flagsA*/,
                                   unsigned long /*flagsB*/,
-                                  Vec3*  bladeVelocity);
+                                  _Vector3<float>* bladeVelocity);
 
     // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
     // If m_Col, dispatch m_Col->Collide(col, hitPos)
-    virtual void Collide(Entity* other, Col* col, unsigned long* outFlags, Vec3* hitPos);
+    virtual void Collide(Entity* other, Col* col, unsigned long* outFlags, _Vector3<float>* hitPos);
 
     // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
     // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE

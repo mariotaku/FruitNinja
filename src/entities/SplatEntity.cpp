@@ -214,7 +214,7 @@ SplatEntity::~SplatEntity() {}
 // --- Vtable slot 2: Init (binary @ 0x001eb264) ---
 // Binary signature: (SplatEntity*, void*, long, _Vector3*). All args ignored.
 // Binary body: `this[0x70]=-1; this[0x75]=1; bx lr`
-void SplatEntity::Init(void* /*param1*/, long /*param2*/, const Vec3* /*param3*/) {
+void SplatEntity::Init(void* /*param1*/, long /*param2*/, const _Vector3<float>* /*param3*/) {
     m_SplatType = -1;
     m_bAlive    = 1;
 }
@@ -267,7 +267,7 @@ bool SplatEntity::s_RandKillEnabled = true;
 // landImmediately (4th param, binary bool arg 2): if true, skip the airborne
 // phase and land the splat instantly. ExplodeSuperFruit path passes true here.
 // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910
-void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, long fruitType, bool mute) {
+void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, bool landImmediately, long fruitType, bool mute) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
@@ -349,7 +349,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, l
 
     // Scale triple: sc random [10, 20), stored as (sc, -sc, sc).
     const float sc = MS_SCALE_BASE + RandRange(MS_SCALE_RAND);
-    m_Scale = Vec3(sc, -sc, sc);
+    m_Scale = _Vector3<float>(sc, -sc, sc);
 
     // Bugfix #6: snapshot of scale at spawn (binary @ 0x0017f428: stm r3,{r0,r1,r2}).
     m_ScaleSpawn = m_Scale;
@@ -359,8 +359,8 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, l
     // ASM-verified: 2026-04-29T03:09Z v1.6.1 binary @ 0x0017f1cc (asm-inspector)
     const float angleRad  = m_Angle * (3.1415926f / 180.0f);
     const float axPerpRad = angleRad + 1.5707963f;  // +90 deg
-    m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
-    m_AxisB = Vec3(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.5f;
+    m_AxisA = _Vector3<float>(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
+    m_AxisB = _Vector3<float>(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.5f;
 
     // Defunct: SSMP horizontal-gravity flag -- stubbed to 0; v1.6.1 binary @ 0x0017f438.
     // Binary: m_bSSMPHorizGravity = IsSameScreenMultiplayer() && game->field_0xc == 0
@@ -397,7 +397,7 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, bool landImmediately, l
         const int idx = (type >= 0 && type < 6) ? type : 0;
         m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
         m_Pos.z = UP_LAND_Z;
-        m_Vel   = Vec3(0.0f, 0.0f, 0.0f);
+        m_Vel   = _Vector3<float>(0.0f, 0.0f, 0.0f);
         m_Life      = UP_LIFE_BASE  + RandRange(UP_LIFE_RAND);
         m_DecayRate = UP_DECAY_BASE + RandRange(UP_DECAY_RAND);
     }
@@ -481,7 +481,7 @@ void SplatEntity::UpdateSplat(float dt) {
             // (binary GameDraw @ 0x0016b888), so depth test rejects splats behind fruits.
             // Do NOT nudge z empirically -- keep -50 and the depth-test state.
             m_Pos.z = UP_LAND_Z;
-            m_Vel   = Vec3(0.0f, 0.0f, 0.0f);
+            m_Vel   = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
             // Bugfix #1 (binary @ 0x0017fa1c-fa36): m_Life and m_DecayRate
             // are initialised HERE (on landing), not in MakeSplat.
@@ -938,7 +938,7 @@ void SplatEntity::DrawActiveSplats() {
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, -5500.0f)); // binary: UnitZ * DAT(0xc5abe000); splats live at modelview z=-5500
+    mm.GetWorldStack().Translate(_Vector3<float>(0.0f, 0.0f, -5500.0f)); // binary: UnitZ * DAT(0xc5abe000); splats live at modelview z=-5500
     mm.UploadModelViewOnly();
 
     // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888):

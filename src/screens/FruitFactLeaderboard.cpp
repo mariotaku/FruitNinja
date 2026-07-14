@@ -5,7 +5,7 @@
 #include "hud/FruitFactControl.h"
 #include "hud/GenericHUDControl.h"
 #include "engine/asset/TextureManager.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -56,8 +56,8 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactControl* pCtrl, bool param2)
         // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider0 texture name from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
-        Vec3 pos(-7.5f, 0.0f, 0.0f);
-        Vec3 sc(276.0f, 53.0f, 0.0f);
+        _Vector3<float> pos(-7.5f, 0.0f, 0.0f);
+        _Vector3<float> sc(276.0f, 53.0f, 0.0f);
         Colour col(1.0f, 1.0f, 1.0f, 1.0f);
         GenericHUDControl* ctl = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 8);
         ctl->m_AlphaTrans.f5 = 0.48f;
@@ -69,8 +69,8 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactControl* pCtrl, bool param2)
         // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider1 texture name + size vec from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
-        Vec3 pos(15.0f, 0.0f, 0.0f);
-        Vec3 sc(1.0f, 1.0f, 1.0f);
+        _Vector3<float> pos(15.0f, 0.0f, 0.0f);
+        _Vector3<float> sc(1.0f, 1.0f, 1.0f);
         Colour col(1.0f, 1.0f, 1.0f, 1.0f);
         GenericHUDControl* ctl = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 8);
         ctl->m_AlphaTrans.f5 = 0.5f;
@@ -82,8 +82,8 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactControl* pCtrl, bool param2)
         // TODO: v1.6.1 0x00176d30 (FruitFactLeaderboard::FruitFactLeaderboard) -- resolve divider2 texture name + size vec from GOT string pool
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("leaderboard_vertical_divider_1.tex");
-        Vec3 pos(80.0f, 0.0f, 0.0f);
-        Vec3 sc(1.0f, 1.0f, 1.0f);
+        _Vector3<float> pos(80.0f, 0.0f, 0.0f);
+        _Vector3<float> sc(1.0f, 1.0f, 1.0f);
         Colour col(1.0f, 1.0f, 1.0f, 1.0f);
         GenericHUDControl* ctl = new GenericHUDControl(0.0f, 0.0f, tex, NULL, pos, sc, col, 8);
         ctl->m_AlphaTrans.f5 = 0.5f;

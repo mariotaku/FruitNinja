@@ -36,7 +36,7 @@
 #include "hud/MenuButton.h"
 #include "entities/ActorManager.h"
 #include "game/FruitSaveData.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 
 // ---------------------------------------------------------------------------
 // Helpers

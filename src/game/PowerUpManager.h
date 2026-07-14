@@ -47,7 +47,7 @@
 #include <map>
 #include <list>
 #include "ScreenEffect.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 
 class PowerUp;
 #include "engine/xml/TiXmlElement.h"
@@ -74,7 +74,7 @@ public:
     void ClearTimedPowers();
 
     // v1.6.1 ActivatePower @0x00142934 — 3-arg form; returns active clone (or nullptr)
-    PowerUp* ActivatePower(uint32_t hash, Vec3 position, float* purchaseExtra);
+    PowerUp* ActivatePower(uint32_t hash, _Vector3<float> position, float* purchaseExtra);
 
     // @ 0x001193d0 — re-arm a purchased PowerUp from its template
     void ActivatePurchase(PowerUp* p);

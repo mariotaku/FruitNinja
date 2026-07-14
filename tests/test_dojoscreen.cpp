@@ -213,8 +213,8 @@ int main(int argc, char* argv[]) {
             (int)bsButtons.size());
         ++failures;
     } else {
-        Vec3 pos0 = bsButtons[0]->pos;
-        Vec3 pos1 = bsButtons[1]->pos;
+        _Vector3<float> pos0 = bsButtons[0]->pos;
+        _Vector3<float> pos1 = bsButtons[1]->pos;
         printf("[BSBUTTON] btn0 pos=(%.1f,%.1f,%.1f)  btn1 pos=(%.1f,%.1f,%.1f)\n",
                pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z);
 

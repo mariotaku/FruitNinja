@@ -30,11 +30,11 @@ namespace Mortar {
 // from earlier auto-stub work was fabricated and doesn't exist in the
 // binary.
 struct Bounds3D {
-    Vec3 min;  // +0x00
-    Vec3 max;  // +0x0C
+    _Vector3<float> min;  // +0x00
+    _Vector3<float> max;  // +0x0C
 
     Bounds3D() : min(), max() {}
-    Bounds3D(const Vec3& mn, const Vec3& mx) : min(mn), max(mx) {}
+    Bounds3D(const _Vector3<float>& mn, const _Vector3<float>& mx) : min(mn), max(mx) {}
 };
 
 // Forward declarations for defunct/stub types referenced by binary API.
@@ -238,8 +238,8 @@ public:
 
     // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193edc
     // Binary itself is a stub (BX LR, returns first vec unchanged); port is likewise a no-op.
-    void DrawLine(Vec3 const& from, Vec3 const& to, float const& width,
-                  Colour const& colour, Vec3 const& normal,
+    void DrawLine(_Vector3<float> const& from, _Vector3<float> const& to, float const& width,
+                  Colour const& colour, _Vector3<float> const& normal,
                   DrawEffectContainer* fx);
 
     // Defunct: debug draw primitive -- no-op stub; v1.6.1 binary @ 0x00193ee0
@@ -248,7 +248,7 @@ public:
 
     // Binary @ 0x00272a3c
     void DrawQuad(Colour colour, SmartPtr<Texture> texture,
-                  Vec3 const& pos, Vec3 const& scale, float rotZ,
+                  _Vector3<float> const& pos, _Vector3<float> const& scale, float rotZ,
                   float w, float h, float uOff, float vOff,
                   DrawEffectContainer* fx);
 

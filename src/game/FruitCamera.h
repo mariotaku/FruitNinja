@@ -11,8 +11,8 @@
 //
 
 #include "render/MortarCamera.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "util/Delegate.h"
 #include "entities/Entity.h"
 #include <cstdint>
@@ -45,14 +45,14 @@ public:
     uint16_t m_TiltPitch;
 
     // +0x138: shake direction vector (from impact angle, decays with intensity)
-    Vec2 m_ShakeDir;
+    _Vector2<float> m_ShakeDir;
 
     // +0x140: Atan2Idx result from CreateCameraShake
     uint16_t m_ShakeAngle;
     uint16_t _pad142;
 
     // +0x144: camera target position (shake lerps toward m_ShakeDir)
-    Vec2 m_Target;
+    _Vector2<float> m_Target;
 
     // +0x14C: written 0.0f by ctor; v1.6.1 UpdateCamera @ 0x1edf24 does NOT write
     // or read it (the v1.5.1 (float)m_TiltPitch/(float)m_TiltYaw casts were dropped).
@@ -64,7 +64,7 @@ public:
     // v1.6.1 @ +0x150 (3 floats = Vec3, 12B).
     // DIFFERS: v1.5.1 port had m_field150 (float) + m_DistanceMag (float) + m_LookAtSnapshot (Vec3)
     //   in this region. v1.6.1 collapses to m_LookAt (Vec3) at +0x150 per spec.
-    Vec3 m_LookAt;
+    _Vector3<float> m_LookAt;
 
     // +0x15C: zoom scale applied to perspective. Lerped by zoom state machine. = 1.0 in ctor.
     float m_Zoom;
@@ -77,7 +77,7 @@ public:
     float m_ZoomT;
 
     // +0x168: zoom-target lookAt position (Vec3). = DAT vec in ctor.
-    Vec3 m_ZoomTarget;
+    _Vector3<float> m_ZoomTarget;
 
     // +0x174: zoom depth scale. = 1.0 in ctor.
     float m_ZoomScale;
@@ -107,7 +107,7 @@ public:
     void SetupPerspective(PERSPECIVE_TYPE perspType = PT_STANDARD, bool forceUpdate = false);
 
     // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
-    void CreateCameraShake(Vec3 impact, float intensity, float dirScale);
+    void CreateCameraShake(_Vector3<float> impact, float intensity, float dirScale);
 
     // 0x00180ea0 (v1.5.1 address; v1.6.1 equivalent in UpdateCamera)
     void UpdateShake(float dt);
@@ -124,7 +124,7 @@ public:
     // ASM-spec v1.6.1 FruitCamera::TranslatePos @0x001ed840: view<->world;
     // inverse=view->world = RotZ(-m_RollOut)*pos*m_Zoom + (m_LookAt-center);
     // no-op when m_ZoomT<=0.
-    Vec3 TranslatePos(Vec3 pos, bool inverse, bool useZeroCenter) const;
+    _Vector3<float> TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter) const;
 
     // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
     // Returns true when the view is in its standard (non-zoomed, non-rotated) state.
@@ -136,7 +136,7 @@ public:
     // FruitCamera::TransitionOut @ 0x1bede8 (zoom-out). UpdateCamera @ 0x1edf24 runs the lerp.
     // StartZoomIn = Transition(target, zoomScale, rollScale, onDone): mode=2, sets ZoomScale/
     //   RollScale/ZoomTarget/OnZoomDone. Does NOT reset m_ZoomT.
-    void StartZoomIn(const Vec3& target, float zoomScale, float rollScale,
+    void StartZoomIn(const _Vector3<float>& target, float zoomScale, float rollScale,
                      Mortar::Delegate0<void> onDone);
     // StartZoomOut = TransitionOut(): no args, sets ONLY m_CameraMode=3.
     void StartZoomOut();

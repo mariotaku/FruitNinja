@@ -36,8 +36,8 @@
 //   SetTranslation(Vec3, bool preShift)
 //   Draw(Vec2 scale, float rotation, bool center)
 
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/MortarTypes.h"
@@ -100,14 +100,14 @@ public:
     // and +(boxH/2) in Y (integer truncation, v1.6.1 BakedStringBox::SetTranslation @0x00246238).
     // Does NOT dirty the layout — position is a draw-time anchor only.
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetTranslation @0x00246238: (_Vector3<float>, bool).
-    void SetTranslation(Vec3 pos, bool preShift);
+    void SetTranslation(_Vector3<float> pos, bool preShift);
 
     // Draw the laid-out glyph quads.
     //   scale    : Vec2(1,1) in the binary call site
     //   rotation : tilt in degrees (positive = clockwise on screen)
     //   center   : true = centre the block on m_Pos
     // ASM-spec v1.6.1 Mortar::BakedStringBox::Draw @0x00246e20: (Vec2 scale, float rotation, bool center).
-    void Draw(Vec2 scale, float rotation, bool center);
+    void Draw(_Vector2<float> scale, float rotation, bool center);
 
     // SetGradient  binary @ 0x0024566c
     // Applies a vertical gradient to laid-out glyphs (gradTop/gradBottom Colours).
@@ -174,7 +174,7 @@ public:
     //   and the shadow *offset* by +0x10 (m_InvFontScale). (asm-inspector)
     // ASM-spec v1.6.1 Mortar::BakedStringBox::SetShadow @0x002462c0: (float, Colour, _Vector3<float>, int).
     // Note: SetColour/SetTranslation use bool; SetShadow uses int — they are NOT uniform.
-    void SetShadow(float scale, Colour col, Vec3 offset, int flag);
+    void SetShadow(float scale, Colour col, _Vector3<float> offset, int flag);
 
     // SetStroke  binary @ 0x00245314 (1 colour) / 0x0024536c (2) / 0x002453f0 (3)
     // Outline/stroke of `width` px drawn behind the glyph fill (after shadow, before fg).
@@ -249,13 +249,13 @@ private:
     std::vector<FancyBakedString*> m_Lines; // +0x04 (12B on ARM32)
     int     m_Field10;             // +0x10 (filler)
     int     m_Field14;             // +0x14 (filler)
-    Vec3    m_ShadowOffset;        // +0x18 (12B)
+    _Vector3<float> m_ShadowOffset;        // +0x18 (12B)
     int     m_BoxWidth;            // +0x24 (int in binary; was float)
     int     m_BoxHeight;           // +0x28 (int in binary; was float)
     int     m_MaxLines;            // +0x2c FitIntoVerticalBounds @ 0x00246fbc uses HEIGHT predicate, not this count
     ALIGNMENT_TYPE m_Align;        // +0x30 alignment flags; 1B enum in binary (matches, -fshort-enums)
     char*   m_Text;                // +0x34 strdup'd string; null until SetText called
-    Vec3    m_Pos;                 // +0x38 (12B)
+    _Vector3<float> m_Pos;                 // +0x38 (12B)
     int     m_AlignMode;           // +0x44 written by SetHorizontalLineSpacing; -1 = auto
     // m_LineSpacing: extra leading added to fontSize for the per-line baseline pitch.
     // step = (int)(fontSize + m_LineSpacing - (m_BaseFontSize-m_FontSize)*0.5).

@@ -53,7 +53,7 @@
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
 #include "util/StringTable.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 
 // -------------------------------------------------------------------------
 // Constants from binary (see docs section 4 DAT table)
@@ -339,14 +339,14 @@ PauseScreen::PauseScreen()
 
 #if !defined(__bada__)
     // Title size stored in m_TitleSize for slide-in math (doc section 4 #6)
-    m_TitleSize = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
+    m_TitleSize = _Vector3<float>(m_TitleTexW, m_TitleTexH, 0.0f);
 
     // Initial pos: centered along Y by texture height (doc section 2 notes)
     // pos = (0, (320 - sizeY) * 0.5, 0)
-    pos = Vec3(0.0f, (320.0f - m_TitleTexH) * 0.5f, 0.0f);
+    pos = _Vector3<float>(0.0f, (320.0f - m_TitleTexH) * 0.5f, 0.0f);
 
     // size for HUDControl3d::Draw quad
-    size = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
+    size = _Vector3<float>(m_TitleTexW, m_TitleTexH, 0.0f);
 #endif
 
     // ASM-spec v1.6.1 PauseScreen::PauseScreen @0x001a7204: build m_PausedText.
@@ -471,7 +471,7 @@ void PauseScreen::PreDraw(float* /*hudScale*/) {
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
     // Centered at origin (full-screen coverage)
-    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+    mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
@@ -502,7 +502,7 @@ void PauseScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
 
     if (m_Alpha > 0.0f && m_PausedText) {
         m_PausedText->SetTranslation(this->pos, 1);
-        m_PausedText->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_PausedText->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 }
 
@@ -649,10 +649,10 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->m_Texture = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
-            Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
+            _Vector3<float>(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
             Mortar::Delegate0<void>::Make(this, &PauseScreen::PauseGameCallback),
             /*fruitType=*/-1,             // toggle -- no fruit entity spawned
-            Vec3(0.0f, 0.0f, 0.0f),       // globalCenterVec = HUD::g_GlobalCenterVec
+            _Vector3<float>(0.0f, 0.0f, 0.0f),       // globalCenterVec = HUD::g_GlobalCenterVec
             Mortar::Delegate0<void>()     // TODO: bind HUD::g_DeleteControlDelegate
         );
 
@@ -663,16 +663,16 @@ void PauseScreen::Update(float dt) {
         //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64,64,64)
         //   m_ButtonOriginPos := m_TargetSize  (one-shot capture for OX in
         //   the per-frame position formulas).
-        m_ResumeButton->m_RestScale = Vec3(64.0f, 64.0f, 64.0f);
+        m_ResumeButton->m_RestScale = _Vector3<float>(64.0f, 64.0f, 64.0f);
         m_ButtonOriginPos            = m_ResumeButton->m_RestScale;
     }
 
     // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: if (m_QuitButton==0) build BSButton.
     if (!m_QuitButton) {
         m_QuitButton = new BSButton(
-            Vec3(215.0f, -135.0f, 0.0f),
+            _Vector3<float>(215.0f, -135.0f, 0.0f),
             GETSTRING(LSTR_QUIT, 0),
-            Vec3(1.0f, 1.0f, 1.0f)
+            _Vector3<float>(1.0f, 1.0f, 1.0f)
         );
         m_QuitButton->Init();
         m_QuitButton->SetCallback(
@@ -702,10 +702,10 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->m_Texture = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
-            Vec3(0.0f, 320.0f, 0.0f),
+            _Vector3<float>(0.0f, 320.0f, 0.0f),
             Mortar::Delegate0<void>::Make(this, &PauseScreen::RetryGameCallback),
             /*fruitType=*/-1,
-            Vec3(0.0f, 0.0f, 0.0f),
+            _Vector3<float>(0.0f, 0.0f, 0.0f),
             Mortar::Delegate0<void>()
         );
 
@@ -917,9 +917,9 @@ void PauseScreen::Update(float dt) {
             int active = (m_PressIndex >= 2) ? 0 : (1 - m_PressIndex);
             m_QuitButton->SetActive(active != 0);
             m_QuitButton->m_DrawRotation.x = 0.0f;
-            m_QuitButton->SetPosition(Vec3(215.0f, (1.0f - m_Alpha) * -40.0f - 135.0f, 0.0f));
+            m_QuitButton->SetPosition(_Vector3<float>(215.0f, (1.0f - m_Alpha) * -40.0f - 135.0f, 0.0f));
         }
-        m_QuitButton->SetTextOffset(Vec3(-29.0f, 3.0f, 0.0f));
+        m_QuitButton->SetTextOffset(_Vector3<float>(-29.0f, 3.0f, 0.0f));
     }
 
     // 6. Resume + Retry button position recomputation.
@@ -974,7 +974,7 @@ void PauseScreen::Update(float dt) {
     // Retry base (binary @ 0x00155076..0x00155096):
     //   pos = (240 + 0.5*OX, -20, 0)
     if (m_RetryButton) {
-        m_RetryButton->pos = Vec3(240.0f + 0.5f * OX, -20.0f, 0.0f);
+        m_RetryButton->pos = _Vector3<float>(240.0f + 0.5f * OX, -20.0f, 0.0f);
     }
 
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 tail (re-analyst)
@@ -1000,11 +1000,11 @@ void PauseScreen::Update(float dt) {
     // (Online-MP path substitutes (0,0,0) for both -- defunct.)
     if (m_Alpha > 0.0f) {
         if (m_ResumeButton) {
-            const Vec3 target(-OX, -20.0f, 0.0f);
+            const _Vector3<float> target(-OX, -20.0f, 0.0f);
             m_ResumeButton->pos += (target - m_ResumeButton->pos) * m_Alpha;
         }
         if (m_RetryButton) {
-            const Vec3 target(OX, -20.0f, 0.0f);
+            const _Vector3<float> target(OX, -20.0f, 0.0f);
             m_RetryButton->pos += (target - m_RetryButton->pos) * m_Alpha;
         }
     }

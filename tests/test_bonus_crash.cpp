@@ -63,7 +63,7 @@
 #include "game/GameMode.h"
 #include "game/GameWork.h"
 #include "engine/util/StringHash.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstdio>
 #include <list>
 
@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
     pum->LoadTextures();   // WaveManager normally primes these on wave start
 
     // ---- Phase 1: activate x2 (+freeze) so the boards enter the HUD ----------
-    Vec3 origin(0.0f, 0.0f, 0.0f);
+    _Vector3<float> origin(0.0f, 0.0f, 0.0f);
     PowerUp* pX2     = pum->ActivatePower(StringHash("score_mult"), origin, NULL);
     PowerUp* pFreeze = pum->ActivatePower(StringHash("freeze"),     origin, NULL);
     std::printf("[bonus_crash] activate score_mult -> %p, freeze -> %p\n",

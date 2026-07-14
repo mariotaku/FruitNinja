@@ -38,7 +38,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_slider;   // thumb
 //   m_ThumbWidth (+0x94) = s_slider.width * size.x; m_ThumbHeight(+0x98) = s_slider.height * size.y;
 //   m_MinValue(+0x7C); m_MaxValue(+0x80); m_CurrentValue(+0x88); m_TouchId(+0xA8)=-1;
 //   m_LayerFlags(+0x34)=0x400.
-SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
+SliderControl::SliderControl(_Vector3<float> inPos, _Vector3<float> inSize,
                              const char* label,
                              int32_t minValue, int32_t maxValue,
                              uint16_t fontSize, int32_t initialValue)
@@ -80,7 +80,7 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
 // bodies via decompile; neither calls GETSTRING_CAST_0). Resolves via
 // GETSTRING_CAST_0 for call-site symmetry with CheckBox's genuine
 // ctor(LocalizedString) (0x00166ab8), matching every other GETSTRING_CAST_0 site.
-SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
+SliderControl::SliderControl(_Vector3<float> inPos, _Vector3<float> inSize,
                              LocalizedString locLabel,
                              int32_t minValue, int32_t maxValue,
                              uint16_t fontSize, int32_t initialValue)
@@ -237,7 +237,7 @@ void SliderControl::UpdateTouchPosition() {
 // scaled (trackW, trackH) at pos. Thumb quad (s_slider, White) scaled
 // (thumbW, thumbH), translated in X by the current-value ratio across the track.
 void SliderControl::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     float trackW = m_TrackWidth;
     float trackH = m_TrackHeight;
@@ -279,7 +279,7 @@ void SliderControl::Draw(float* hudScaleRaw) {
         Matrix44 mat = Matrix44::MakeScale(thumbW, thumbH, 1.0f);
         float value = (float)m_CurrentValue;
         float maxV  = (float)m_MaxValue;
-        Vec3 thumbPos = pos;
+        _Vector3<float> thumbPos = pos;
         thumbPos.x = thumbPosW * 0.5f
                    + (value / maxV) * (trackW - thumbPosW)
                    + pos.x

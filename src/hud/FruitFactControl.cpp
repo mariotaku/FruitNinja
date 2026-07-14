@@ -127,7 +127,7 @@ void FruitFactControl::Init() {
 
     // 5. Set the fact offset Vec3.
     // ASM-verified: v1.6.1 FruitFactControl @ 0x0017160c -- Init sets m_FactOffset = Vec3(-69,53,0)
-    m_FactOffset = Vec3(-69.0f, 53.0f, 0.0f);
+    m_FactOffset = _Vector3<float>(-69.0f, 53.0f, 0.0f);
 
     // 6. Combo-mode seed: if game session state+4 == 3 (Zen combo mode).
     if (game_work.m_SaveData) {
@@ -214,7 +214,7 @@ void FruitFactControl::Reset() {
 // SetPos  (Binary @ 0x00170814)
 // ---------------------------------------------------------------------------
 
-void FruitFactControl::SetPos(const Vec3& p) {
+void FruitFactControl::SetPos(const _Vector3<float>& p) {
     pos = p;
     // Binary copies pos into each registered page as well
     for (std::vector<FruitFactPage*>::iterator it = m_Pages.begin();
@@ -261,15 +261,15 @@ void FruitFactControl::Update(float /*dt*/) {
     // screen size FN_SCREEN_W x FN_SCREEN_H (480x320), which is the
     // coordinate space all FruitNinja HUD geometry lives in. The * 1.0
     // scale in the binary is a no-op and is dropped.
-    Vec3 arrowSize((float)FN_SCREEN_W, (float)FN_SCREEN_H, 0.0f);
+    _Vector3<float> arrowSize((float)FN_SCREEN_W, (float)FN_SCREEN_H, 0.0f);
 
     // ---- Next arrow (this+0xA0) ----
     if (m_NextButton == NULL) {                            // ldr r6,[r4,#0xa0]; cmp #0
         Mortar::SmartPtr<Mortar::Texture> tex(s_TexArrow);
-        Vec3 spawnPos = pos;
+        _Vector3<float> spawnPos = pos;
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactControl::LeftButton);
-        Vec3 sz = arrowSize;
+        _Vector3<float> sz = arrowSize;
         // v1.6.1 MenuButton::MenuButton @0x0019bb08: param6 is Delegate0<void> deletedCb,
         // not a Delegate1<void,HUDControl*> onRemove. Global no-op @0x19a620.
         m_NextButton = new MenuButton(tex, spawnPos, onTap, -1, sz,
@@ -285,10 +285,10 @@ void FruitFactControl::Update(float /*dt*/) {
     // ---- Prev arrow (this+0xA4) ----
     if (m_PrevButton == NULL) {                           // ldr r6,[r4,#0xa4]; cmp #0
         Mortar::SmartPtr<Mortar::Texture> tex(s_TexArrow);
-        Vec3 spawnPos = pos;
+        _Vector3<float> spawnPos = pos;
         Mortar::Delegate0<void> onTap =
             Mortar::Delegate0<void>::QCallee(this, &FruitFactControl::RightButton);
-        Vec3 sz = arrowSize;
+        _Vector3<float> sz = arrowSize;
         m_PrevButton = new MenuButton(tex, spawnPos, onTap, -1, sz,
                                        Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
         m_PrevButton->Init();                            // vtable slot 2
@@ -299,9 +299,9 @@ void FruitFactControl::Update(float /*dt*/) {
     // ---- Per-frame repositioning (still inside the pages>1 guard) ----
     m_NextButton->m_Active = 1;                           // strb #1,[nextBtn+0x30]
     // DAT_001712cc=-158.0, vmov 0x41000000=8.0, DAT_001712c8=0.0
-    m_NextButton->pos  = pos + Vec3(-158.0f, 8.0f, 0.0f);
+    m_NextButton->pos  = pos + _Vector3<float>(-158.0f, 8.0f, 0.0f);
     // DAT_001712d0=142.0
-    m_PrevButton->pos = pos + Vec3(142.0f, 8.0f, 0.0f);
+    m_PrevButton->pos = pos + _Vector3<float>(142.0f, 8.0f, 0.0f);
 }
 
 // ---------------------------------------------------------------------------

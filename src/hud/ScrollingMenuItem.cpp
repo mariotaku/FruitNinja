@@ -8,8 +8,8 @@
 #include "ScrollingMenuItem.h"
 #include "ScrollingMenu.h"
 #include "engine/render/Font.h"
-#include "engine/math/Vec2.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector2.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "game/GameWork.h"
 #include <cstring>
@@ -96,7 +96,7 @@ void ScrollingMenuItem::Draw() {
     }
 
     // (2) Text base position = pos + m_Size (binary Vector3::operator+).
-    Vec3 textPos(pos.x + m_Size.x, pos.y + m_Size.y, pos.z + m_Size.z);
+    _Vector3<float> textPos(pos.x + m_Size.x, pos.y + m_Size.y, pos.z + m_Size.z);
 
     // (3) Clip rect derived from the parent menu's centre + width/height.
     // Only built when this item has a parent; otherwise no clipping.
@@ -129,7 +129,7 @@ void ScrollingMenuItem::Draw() {
 
     // maxWH from the global default-size Vec2 (GOT+0x78c0 -> BSS, load-time (0,0)).
     // maxWH.x <= 0 means "no word-wrap"; the parent clip rect bounds the text.
-    Vec2 maxWH(0.0f, 0.0f);
+    _Vector2<float> maxWH(0.0f, 0.0f);
 
     // Binary scale=30.0f, yLineFactor=1.0f, rotZ=0.0f (DAT_0015b5a0), alignment=0xF.
     font->DrawString(30.0f, 1.0f, 0.0f,

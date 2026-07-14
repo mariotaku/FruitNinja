@@ -49,7 +49,7 @@
 class HUD;
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 
 class MissControl : public HUDControl3d {
 public:
@@ -142,22 +142,22 @@ public:
 
     // v1.6.1 MissControl::MakeCritical @0x0019e810 -- activate critical-hit
     // label at a slice point. Calls virtual Init() first, then overrides.
-    void MakeCritical(Vec3 pos, int playerIdx);
+    void MakeCritical(_Vector3<float> pos, int playerIdx);
 
     // v1.6.1 MissControl::MakeRare @0x0019e994 -- activate rare/special-fruit
     // label. Init() first; like MakeCritical but m_DragScale=0.5, no SetPlayer.
-    void MakeRare(Vec3 pos);
+    void MakeRare(_Vector3<float> pos);
 
     // v1.6.1 MissControl::MakeDisappear @0x0019f338 -- zen-bomb X overlay and
     // miss-penalty indicator. Calls virtual Init() first.
     // Binary signature: MakeDisappear(_Vector3<float>, int, SmartPtr<Texture>).
     // Vec3 + SmartPtr are passed BY VALUE (no reference prefix in mangling).
-    void MakeDisappear(Vec3 pos, int sizeMult,
+    void MakeDisappear(_Vector3<float> pos, int sizeMult,
                        Mortar::SmartPtr<Mortar::Texture> tex);
 
     // v1.6.1 MissControl::MakeCombo @0x0019e630 -- activate combo indicator
     // (combo_N.tex for N=clamp(combo,2,10)). Calls virtual Init() first.
-    void MakeCombo(Vec3 pos, int comboCount, int entityType);
+    void MakeCombo(_Vector3<float> pos, int comboCount, int entityType);
 
     // vtable[12] @ 0x00151a60 -- fade state machine
     void Update(float dt) override;
@@ -183,7 +183,7 @@ public:
     // 0x0015215c..0x00152186). For pool slots m_HudScale defaults to
     // (0,0,0) so this is a no-op; for the 3 GameInit passive widgets it
     // shifts the AABB to the top-right cluster where the X markers render.
-    Vec3 GetDrawPos() const override;
+    _Vector3<float> GetDrawPos() const override;
 
     // v1.6.1 MissControl::MakeEmAllDissappear @0x0019dd74
     // Contiguous walk: clamp busy slots' m_FadeAlpha to 0.06917 ceiling.

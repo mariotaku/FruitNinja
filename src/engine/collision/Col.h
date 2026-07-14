@@ -1,7 +1,7 @@
 #ifndef FN_ENGINE_COLLISION_COL_H
 #define FN_ENGINE_COLLISION_COL_H
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdint>
 
 // Col -- polymorphic collision base. Binary @ ctor 0x0019fae8 / vtable 0x001eb5d0.
@@ -21,7 +21,7 @@ public:
 
     // Binary slot 3 -- pure-virtual; double-dispatch entry point
     // Returns nonzero on hit; outNormal receives penetration normal pointing AT this from other.
-    virtual int Collide(Col* other, Vec3* outNormal) = 0;
+    virtual int Collide(Col* other, _Vector3<float>* outNormal) = 0;
 
     // Binary slot 4 -- debug draw; pure on base
     virtual void DrawDebug() = 0;
@@ -32,7 +32,7 @@ public:
     void ClearCollideFlag() { m_CollideFlag = 0; }
 
 protected:
-    Vec3      m_PrimaryPoint;   // +0x04 -- Sphere::center / Line::a / AABB::min (derived owns naming)
+    _Vector3<float> m_PrimaryPoint;   // +0x04 -- Sphere::center / Line::a / AABB::min (derived owns naming)
     uint8_t   m_CollideFlag;    // +0x10 -- set when collided this frame
     // padding +0x11..+0x13 to reach sizeof = 0x14
 };

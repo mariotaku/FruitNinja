@@ -9,8 +9,8 @@
 #include "engine/render/FontTTFRegistry.h"
 #include "engine/render/Font.h"
 #include "engine/asset/Mesh.h"
-#include "engine/math/Vec3.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector3.h"
+#include "engine/math/_Vector2.h"
 #include "engine/math/Colour.h"
 #include "engine/util/StringTable.h"
 #include "hud/GenericHUDControl.h"
@@ -150,8 +150,8 @@ void FruitFactZenPage::Init() {
             }
 
             float x = (span * -0.5f - 8.0f) + (float)i * spacing;
-            Vec3 ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
-            Vec3 sc(0.0f, 0.0f, 0.0f);             // Vec3::Zero -> auto-size from texture dims
+            _Vector3<float> ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
+            _Vector3<float> sc(0.0f, 0.0f, 0.0f);             // Vec3::Zero -> auto-size from texture dims
             Colour col(255, 255, 255, 255);
             GenericHUDControl* c = new GenericHUDControl(fade, fade + 0.25f, iconTex, NULL, ipos, sc, col, 8);
             // Binary: T_1022 default block (all zeros) memcpy'd to c+0xa4 (m_ScaleTrans, 5 words).
@@ -180,10 +180,10 @@ void FruitFactZenPage::Init() {
         if (narrow) {
             starX = span * 0.5f - starX;
         }
-        Vec3 starPos(starX, 53.0f, 0.0f);             // starY=53.0 (DAT_1806e4)
+        _Vector3<float> starPos(starX, 53.0f, 0.0f);             // starY=53.0 (DAT_1806e4)
         float starFadeIn  = fade;
         float starFadeOut = starFadeIn + 0.5f;
-        Vec3 scStar(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
+        _Vector3<float> scStar(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
         Colour colStar(255, 255, 255, 255);
         // Star + label are the same GenericHUDControl in the binary (pGVar5). The binary
         // builds this control with NO texture -- the star sprite is never drawn; only the
@@ -225,8 +225,8 @@ void FruitFactZenPage::Init() {
         // ctrl 1: pos=(-8, 37, 0) (DAT_180ed0=-8, DAT_180ed4=37/0), fadeOut=1.33 (DAT_180710).
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 c1pos(-8.0f, 37.0f, 0.0f);
-            Vec3 sc(1.0f, 1.0f, 1.0f);
+            _Vector3<float> c1pos(-8.0f, 37.0f, 0.0f);
+            _Vector3<float> sc(1.0f, 1.0f, 1.0f);
             Colour col(255, 255, 255, 255);
             GenericHUDControl* c1 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c1pos, sc, col, 8);
             // Binary: T_1022 all-zeros block; already zero-initialized by ctor; no-op.
@@ -257,8 +257,8 @@ void FruitFactZenPage::Init() {
         // ctrl 2: pos=(-8, 37, 0), fadeOut=1.33 (DAT_180ed8). Text=DAT_180ee8="_ " (separator line).
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 c2pos(-8.0f, 37.0f, 0.0f);          // DAT_180ed0=-8.0, DAT_180ed4=37.0
-            Vec3 sc(1.0f, 1.0f, 1.0f);
+            _Vector3<float> c2pos(-8.0f, 37.0f, 0.0f);          // DAT_180ed0=-8.0, DAT_180ed4=37.0
+            _Vector3<float> sc(1.0f, 1.0f, 1.0f);
             Colour col(255, 255, 255, 255);
             GenericHUDControl* c2 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c2pos, sc, col, 8);
 
@@ -283,8 +283,8 @@ void FruitFactZenPage::Init() {
         // ctrl 3: same layout as ctrl 2 per binary (same DAT block, same text "_").
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 c3pos(-8.0f, 37.0f, 0.0f);          // same pos as ctrl 2 per binary
-            Vec3 sc(1.0f, 1.0f, 1.0f);
+            _Vector3<float> c3pos(-8.0f, 37.0f, 0.0f);          // same pos as ctrl 2 per binary
+            _Vector3<float> sc(1.0f, 1.0f, 1.0f);
             Colour col(255, 255, 255, 255);
             GenericHUDControl* c3 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c3pos, sc, col, 8);
 
@@ -336,16 +336,16 @@ void FruitFactZenPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask*/) {
 
     // Scale to (width+1, height+1, 0). Binary reads m_Width (+0x24) / m_Height (+0x28),
     // adds 1, converts unsigned->float, builds Vec3(w, h, 0.0f), then multiplies by 1.0f.
-    Vec3 sz((float)(m_Texture->GetWidth() + 1),
-            (float)(m_Texture->GetHeight() + 1),
-            0.0f);                         // DAT_00181050 = 0.0f
-    Vec3 scaled = sz * 1.0f;               // binary local_24 = 1.0f scalar multiply
+    _Vector3<float> sz((float)(m_Texture->GetWidth() + 1),
+                       (float)(m_Texture->GetHeight() + 1),
+                       0.0f);                         // DAT_00181050 = 0.0f
+    _Vector3<float> scaled = sz * 1.0f;               // binary local_24 = 1.0f scalar multiply
     mm.GetWorldStack().Scale(scaled);
 
     // Translate to pos - (8, -8, 0). Binary: anchor Vec3(8.0f, -8.0f, 0.0f)
     // (0x41000000, 0xc1000000, DAT_00181050); t = (*(Vec3*)(this+8)) - anchor.
-    Vec3 anchor(8.0f, -8.0f, 0.0f);
-    Vec3 t = pos - anchor;                 // pos = HUDControl::pos (binary this+0x8)
+    _Vector3<float> anchor(8.0f, -8.0f, 0.0f);
+    _Vector3<float> t = pos - anchor;                 // pos = HUDControl::pos (binary this+0x8)
     mm.GetWorldStack().Translate(t);
 
     mm.UploadModelViewOnly();              // binary _UploadCurrentMatrices(this, 1)

@@ -7,8 +7,8 @@
 #include "GameOverScreen.h"
 #include "hud/GenericHUDControl.h"
 #include "hud/FruitFactControl.h"
-#include "engine/math/Vec3.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector3.h"
+#include "engine/math/_Vector2.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -59,7 +59,7 @@ FruitFactClassicFactPage::~FruitFactClassicFactPage() {
 //   ctrl2 pos: ctrl1 + Vec3(9, 40, 0) = Vec3(-193, 16, 0)
 //   Both flags=1, scale unit, col white.
 void FruitFactClassicFactPage::Init() {
-    Vec3 scZero(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
+    _Vector3<float> scZero(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour white(255, 255, 255, 255);
 
     // ctrl 1: sensei body background slot (binary: m_senseiBody[bodyIdx=0])
@@ -68,7 +68,7 @@ void FruitFactClassicFactPage::Init() {
     {
         Mortar::SmartPtr<Mortar::Texture> bodyTex =
             GameOverScreen::GetSenseiBodyTex(0);
-        Vec3 pos1(-202.0f, -24.0f, 0.0f);
+        _Vector3<float> pos1(-202.0f, -24.0f, 0.0f);
         GenericHUDControl* c1 = new GenericHUDControl(
             0.0f, 0.0f, bodyTex, NULL, pos1, scZero, white, 1);
         AddGenericControl(c1);
@@ -81,7 +81,7 @@ void FruitFactClassicFactPage::Init() {
     {
         Mortar::SmartPtr<Mortar::Texture> headTex =
             GameOverScreen::GetSenseiHeadTex(0);
-        Vec3 pos2(-202.0f + 9.0f, -24.0f + 40.0f, 0.0f);
+        _Vector3<float> pos2(-202.0f + 9.0f, -24.0f + 40.0f, 0.0f);
         GenericHUDControl* c2 = new GenericHUDControl(
             0.0f, 0.0f, headTex, NULL, pos2, scZero, white, 1);
         AddGenericControl(c2);
@@ -106,8 +106,8 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
         // Scale = Vec3(3.0, 1.4, 0.0) * size
         // Binary: _Stack_4c=(3.0,1.4,0.0); _Stack_58=_Stack_4c * size
         // v1.6.1 @0x001752b0
-        Vec3 scaleBase(3.0f, 1.4f, 0.0f);
-        Vec3 scaled = scaleBase * size;
+        _Vector3<float> scaleBase(3.0f, 1.4f, 0.0f);
+        _Vector3<float> scaled = scaleBase * size;
         mm.GetWorldStack().Scale(scaled);
 
         // Translate: t = (pos - Vec3(1,8,0)) + Vec3(-86,0,0) = pos + Vec3(-87,-8,0).
@@ -116,7 +116,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
         // (A prior decompile read this as "local_64 - pos", REVERSING the operands,
         // which put the board on the opposite side of its own title/body text.)
         // ASM-verified: v1.6.1 FruitFactClassicFactPage::DrawOrder @0x00175368 (operator-), @0x00175378 (operator+)
-        Vec3 t = pos + Vec3(-87.0f, -8.0f, 0.0f);
+        _Vector3<float> t = pos + _Vector3<float>(-87.0f, -8.0f, 0.0f);
         mm.GetWorldStack().Translate(t);
 
         mm.UploadModelViewOnly();
@@ -162,7 +162,7 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
             m_pTitleBox->SetShadow(
                 3.0f,
                 Colour(186, 140, 75, 255),
-                Vec3(2.0f, -2.0f, 0.0f),
+                _Vector3<float>(2.0f, -2.0f, 0.0f),
                 false
             );
 
@@ -180,10 +180,10 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
     // Binary: _Stack_b8=(-88,68,0); _Stack_c4 = pos + _Stack_b8
     // v1.6.1 @0x00175550
     if (m_pTitleBox) {
-        Vec3 titleTrans = pos + Vec3(-88.0f, 68.0f, 0.0f);
+        _Vector3<float> titleTrans = pos + _Vector3<float>(-88.0f, 68.0f, 0.0f);
         m_pTitleBox->SetTranslation(titleTrans, 0);
         // T_994 = BakedStringBox::Draw(Vec2(1,1), 0.0f, 1)
-        m_pTitleBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_pTitleBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // 3. BODY BOX: lazy-build m_pBodyBox once.
@@ -223,10 +223,10 @@ void FruitFactClassicFactPage::DrawOrder(float* /*hudScaleRaw*/, int /*layerMask
     // Binary: _Stack_d0=(-81,41,0); _Stack_dc = pos + _Stack_d0
     // v1.6.1 @0x00175694
     if (m_pBodyBox) {
-        Vec3 bodyTrans = pos + Vec3(-81.0f, 41.0f, 0.0f);
+        _Vector3<float> bodyTrans = pos + _Vector3<float>(-81.0f, 41.0f, 0.0f);
         m_pBodyBox->SetTranslation(bodyTrans, 0);
         // T_994 = BakedStringBox::Draw(Vec2(1,1), 0.0f, 1)
-        m_pBodyBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_pBodyBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // 4. AUTO-SHRINK measurement loop: measures body text height using the

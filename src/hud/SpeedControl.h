@@ -30,7 +30,7 @@ public:
     // +0x84: pulse scale for Draw animation
     float    m_PulseScale;
     // +0x88..+0x90: base size (set from texture dimensions in ctor)
-    Vec3     m_BaseSize;
+    _Vector3<float> m_BaseSize;
     // +0x94: combo timer value (= WaveManager::m_ComboTimer[0] for player 0)
     float    m_Speed;
     // +0x98: smoothed alpha [0..1]

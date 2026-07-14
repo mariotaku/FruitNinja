@@ -8,7 +8,7 @@
 
 #include "asset/SharedEffectProperties.h"
 #include "asset/EffectDataTypes.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -51,25 +51,25 @@ static const int kNumDefs = 9;
 static void test_GetColourRGB()
 {
     // 0x00112233: R=0x33, G=0x22, B=0x11 (byte order: ABGR packed low-to-high).
-    Vec3 c = GetColourRGB(0x00112233u);
+    _Vector3<float> c = GetColourRGB(0x00112233u);
     CHECK_FLOAT(c.x, 0x33 / 255.0f);
     CHECK_FLOAT(c.y, 0x22 / 255.0f);
     CHECK_FLOAT(c.z, 0x11 / 255.0f);
 
     // Pure-white (0x00ffffff) -> (1,1,1).
-    Vec3 w = GetColourRGB(0x00ffffffu);
+    _Vector3<float> w = GetColourRGB(0x00ffffffu);
     CHECK_FLOAT(w.x, 1.0f);
     CHECK_FLOAT(w.y, 1.0f);
     CHECK_FLOAT(w.z, 1.0f);
 
     // Pure-black (0x00000000) -> (0,0,0).
-    Vec3 bk = GetColourRGB(0x00000000u);
+    _Vector3<float> bk = GetColourRGB(0x00000000u);
     CHECK_FLOAT(bk.x, 0.0f);
     CHECK_FLOAT(bk.y, 0.0f);
     CHECK_FLOAT(bk.z, 0.0f);
 
     // Alpha channel must be ignored: 0xff112233 same result as 0x00112233.
-    Vec3 ca = GetColourRGB(0xff112233u);
+    _Vector3<float> ca = GetColourRGB(0xff112233u);
     CHECK_FLOAT(ca.x, 0x33 / 255.0f);
     CHECK_FLOAT(ca.y, 0x22 / 255.0f);
     CHECK_FLOAT(ca.z, 0x11 / 255.0f);
@@ -123,17 +123,17 @@ static void test_EffectPropertyValues_layout()
     CHECK(b == false);
 
     // TrySetValue Vec3 at UVWOffset offsets 0..2.
-    Vec3 uv0(1.0f, 2.0f, 3.0f);
-    Vec3 uv1(4.0f, 5.0f, 6.0f);
-    Vec3 uv2(7.0f, 8.0f, 9.0f);
-    CHECK(vals.TrySetValue<Vec3>(EffectDataTypes::Type_Vec3, 0, uv0));
-    CHECK(vals.TrySetValue<Vec3>(EffectDataTypes::Type_Vec3, 1, uv1));
-    CHECK(vals.TrySetValue<Vec3>(EffectDataTypes::Type_Vec3, 2, uv2));
+    _Vector3<float> uv0(1.0f, 2.0f, 3.0f);
+    _Vector3<float> uv1(4.0f, 5.0f, 6.0f);
+    _Vector3<float> uv2(7.0f, 8.0f, 9.0f);
+    CHECK(vals.TrySetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 0, uv0));
+    CHECK(vals.TrySetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 1, uv1));
+    CHECK(vals.TrySetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 2, uv2));
 
-    Vec3 rv0, rv1, rv2;
-    CHECK(vals.TryGetValue<Vec3>(EffectDataTypes::Type_Vec3, 0, rv0));
-    CHECK(vals.TryGetValue<Vec3>(EffectDataTypes::Type_Vec3, 1, rv1));
-    CHECK(vals.TryGetValue<Vec3>(EffectDataTypes::Type_Vec3, 2, rv2));
+    _Vector3<float> rv0, rv1, rv2;
+    CHECK(vals.TryGetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 0, rv0));
+    CHECK(vals.TryGetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 1, rv1));
+    CHECK(vals.TryGetValue<_Vector3<float>>(EffectDataTypes::Type_Vec3, 2, rv2));
     CHECK(rv0 == uv0);
     CHECK(rv1 == uv1);
     CHECK(rv2 == uv2);
@@ -168,17 +168,17 @@ static void test_EffectPropertyList_SetValue()
     EffectPropertyList& list = sep->GetList();
 
     // SetValue<Vec3> via EffectPropertyList.
-    Vec3 ambColour = GetColourRGB(0x00112233u);
-    CHECK(list.SetValue<Vec3>("Ambience", ambColour));
+    _Vector3<float> ambColour = GetColourRGB(0x00112233u);
+    CHECK(list.SetValue<_Vector3<float>>("Ambience", ambColour));
 
     // GetProperty returns non-null for known key.
     EffectProperty* propAmb = list.GetProperty("Ambience");
     CHECK(propAmb != NULL);
 
     // Read back via TryGetValue.
-    Vec3 readBack;
+    _Vector3<float> readBack;
     CHECK(propAmb->m_Owner != NULL);
-    CHECK(propAmb->m_Owner->TryGetValue<Vec3>(
+    CHECK(propAmb->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propAmb->m_Offset, readBack));
     CHECK_FLOAT(readBack.x, ambColour.x);
     CHECK_FLOAT(readBack.y, ambColour.y);
@@ -209,12 +209,12 @@ static void test_EffectPropertyList_SetValue()
     CHECK(list.GetProperty("NoSuchProperty") == NULL);
 
     // SetValue<Vec3> for Diffuse using GetColourRGB.
-    Vec3 diffColour = GetColourRGB(0x00aabbccu);
-    CHECK(list.SetValue<Vec3>("Diffuse", diffColour));
+    _Vector3<float> diffColour = GetColourRGB(0x00aabbccu);
+    CHECK(list.SetValue<_Vector3<float>>("Diffuse", diffColour));
     EffectProperty* propDiff = list.GetProperty("Diffuse");
     CHECK(propDiff != NULL);
-    Vec3 diffRead;
-    CHECK(propDiff->m_Owner->TryGetValue<Vec3>(
+    _Vector3<float> diffRead;
+    CHECK(propDiff->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propDiff->m_Offset, diffRead));
     CHECK_FLOAT(diffRead.x, diffColour.x);
     CHECK_FLOAT(diffRead.y, diffColour.y);
@@ -239,7 +239,7 @@ static void test_EffectProperty_SetValue_template()
     CHECK_FLOAT(alphaRead, 0.8f);
 
     // Type mismatch on EffectProperty::SetValue must fail.
-    CHECK(!propAlpha->SetValue<Vec3>(Vec3(1.0f, 1.0f, 1.0f)));
+    CHECK(!propAlpha->SetValue<_Vector3<float>>(_Vector3<float>(1.0f, 1.0f, 1.0f)));
 }
 
 static void test_UVWOffset_multi_count()
@@ -256,24 +256,24 @@ static void test_UVWOffset_multi_count()
     // UVWOffset occupies the first 3 slots in the Vec3 bucket.
     // m_Offset should be 0 (first Vec3 in the sorted order — but sort is alphabetical).
     // The property slot is at m_Offset; write at offset + 0, +1, +2 manually.
-    Vec3 uv0(0.1f, 0.2f, 0.3f);
-    Vec3 uv1(0.4f, 0.5f, 0.6f);
-    Vec3 uv2(0.7f, 0.8f, 0.9f);
+    _Vector3<float> uv0(0.1f, 0.2f, 0.3f);
+    _Vector3<float> uv1(0.4f, 0.5f, 0.6f);
+    _Vector3<float> uv2(0.7f, 0.8f, 0.9f);
 
     // Slots are at propUVW->m_Offset + 0, +1, +2.
-    CHECK(propUVW->m_Owner->TrySetValue<Vec3>(
+    CHECK(propUVW->m_Owner->TrySetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 0, uv0));
-    CHECK(propUVW->m_Owner->TrySetValue<Vec3>(
+    CHECK(propUVW->m_Owner->TrySetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 1, uv1));
-    CHECK(propUVW->m_Owner->TrySetValue<Vec3>(
+    CHECK(propUVW->m_Owner->TrySetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 2, uv2));
 
-    Vec3 r0, r1, r2;
-    CHECK(propUVW->m_Owner->TryGetValue<Vec3>(
+    _Vector3<float> r0, r1, r2;
+    CHECK(propUVW->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 0, r0));
-    CHECK(propUVW->m_Owner->TryGetValue<Vec3>(
+    CHECK(propUVW->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 1, r1));
-    CHECK(propUVW->m_Owner->TryGetValue<Vec3>(
+    CHECK(propUVW->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, propUVW->m_Offset + 2, r2));
     CHECK(r0 == uv0);
     CHECK(r1 == uv1);
@@ -322,10 +322,10 @@ static void test_parent_chain()
     CHECK(cIsLit != NULL);
 
     // Set Diffuse on parent and read back via the property pointer.
-    Vec3 diffVal(0.5f, 0.6f, 0.7f);
-    CHECK(pList.SetValue<Vec3>("Diffuse", diffVal));
-    Vec3 readBack;
-    CHECK(cDiffuse->m_Owner->TryGetValue<Vec3>(
+    _Vector3<float> diffVal(0.5f, 0.6f, 0.7f);
+    CHECK(pList.SetValue<_Vector3<float>>("Diffuse", diffVal));
+    _Vector3<float> readBack;
+    CHECK(cDiffuse->m_Owner->TryGetValue<_Vector3<float>>(
         EffectDataTypes::Type_Vec3, cDiffuse->m_Offset, readBack));
     CHECK_FLOAT(readBack.x, 0.5f);
     CHECK_FLOAT(readBack.y, 0.6f);

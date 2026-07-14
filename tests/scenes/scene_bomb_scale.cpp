@@ -172,13 +172,13 @@ int main(int argc, char* argv[]) {
     homeBomb->Init(NULL, 0, NULL);
 
     // Override position and scale to known test values.
-    homeBomb->pos           = Vec3(HOME_POS_X, BOMB_POS_Y, 0.0f);
-    homeBomb->vel           = Vec3(0.0f, 0.0f, 0.0f);
-    homeBomb->m_AccelForce  = Vec3(0.0f, 0.0f, 0.0f);
+    homeBomb->pos           = _Vector3<float>(HOME_POS_X, BOMB_POS_Y, 0.0f);
+    homeBomb->vel           = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    homeBomb->m_AccelForce  = _Vector3<float>(0.0f, 0.0f, 0.0f);
     homeBomb->m_ZPosition   = BOMB_Z_POS;
     // Bomb::Init sets scale = Vec3::One() * (bombSize * 0.01 * scaleFactor).
     // We override to the exact test value.
-    homeBomb->scale         = Vec3(HOME_SCALE, HOME_SCALE, HOME_SCALE);
+    homeBomb->scale         = _Vector3<float>(HOME_SCALE, HOME_SCALE, HOME_SCALE);
     // Lock rotation for a stable screenshot.
     homeBomb->m_RotVelX     = (int16_t)0;
     homeBomb->m_RotVelY     = (int16_t)0;
@@ -197,11 +197,11 @@ int main(int argc, char* argv[]) {
     Bomb* dojoBomb = static_cast<Bomb*>(eDojo);
     dojoBomb->Init(NULL, 0, NULL);
 
-    dojoBomb->pos           = Vec3(DOJO_POS_X, BOMB_POS_Y, 0.0f);
-    dojoBomb->vel           = Vec3(0.0f, 0.0f, 0.0f);
-    dojoBomb->m_AccelForce  = Vec3(0.0f, 0.0f, 0.0f);
+    dojoBomb->pos           = _Vector3<float>(DOJO_POS_X, BOMB_POS_Y, 0.0f);
+    dojoBomb->vel           = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    dojoBomb->m_AccelForce  = _Vector3<float>(0.0f, 0.0f, 0.0f);
     dojoBomb->m_ZPosition   = BOMB_Z_POS;
-    dojoBomb->scale         = Vec3(DOJO_SCALE, DOJO_SCALE, DOJO_SCALE);
+    dojoBomb->scale         = _Vector3<float>(DOJO_SCALE, DOJO_SCALE, DOJO_SCALE);
     dojoBomb->m_RotVelX     = (int16_t)0;
     dojoBomb->m_RotVelY     = (int16_t)0;
     dojoBomb->m_RotX        = (int16_t)0;

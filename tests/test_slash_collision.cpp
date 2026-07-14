@@ -118,7 +118,7 @@ static void test_crossing_hit() {
     std::printf("  test_crossing_hit...\n");
 
     SlashEntity se;
-    se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+    se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
     Touch(se, -60.0f, 0.0f, true);   // seed; m_PointCount=2
     Touch(se, 0.0f,   0.0f, false);  // extend; m_PointCount=4
@@ -132,7 +132,7 @@ static void test_crossing_hit() {
     // Simulate one frame: triggers UpdatePoints, sets ColLine + m_SegLenSq.
     se.Update(0.0f);
 
-    ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
+    ColSphere sphere(_Vector3<float>(0.0f, 0.0f, 0.0f), 40.0f);
     TestEntity ent;
     ent.m_Col = &sphere;
 
@@ -156,7 +156,7 @@ static void test_blank_miss() {
     std::printf("  test_blank_miss...\n");
 
     SlashEntity se;
-    se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+    se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
     Touch(se, -220.0f, 150.0f, true);   // seed at far corner
     Touch(se, -200.0f, 150.0f, false);  // 20-unit step; m_PointCount=4
@@ -168,7 +168,7 @@ static void test_blank_miss() {
 
     se.Update(0.0f);
 
-    ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
+    ColSphere sphere(_Vector3<float>(0.0f, 0.0f, 0.0f), 40.0f);
     TestEntity ent;
     ent.m_Col = &sphere;
 
@@ -202,7 +202,7 @@ static void test_near_boundary() {
     std::printf("  test_near_boundary (near-miss, anchor=45 > r=40)...\n");
     {
         SlashEntity se;
-        se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+        se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
         Touch(se, 30.0f, 0.0f, true);
         Touch(se, 60.0f, 0.0f, false);
@@ -211,7 +211,7 @@ static void test_near_boundary() {
         CHECK(se.IsBladeActive());
         se.Update(0.0f);
 
-        ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
+        ColSphere sphere(_Vector3<float>(0.0f, 0.0f, 0.0f), 40.0f);
         TestEntity ent;
         ent.m_Col = &sphere;
 
@@ -225,7 +225,7 @@ static void test_near_boundary() {
     std::printf("  test_near_boundary (near-hit, anchor=35 < r=40)...\n");
     {
         SlashEntity se;
-        se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+        se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
         Touch(se, 10.0f, 0.0f, true);
         Touch(se, 60.0f, 0.0f, false);
@@ -234,7 +234,7 @@ static void test_near_boundary() {
         CHECK(se.IsBladeActive());
         se.Update(0.0f);
 
-        ColSphere sphere(Vec3(0.0f, 0.0f, 0.0f), 40.0f);
+        ColSphere sphere(_Vector3<float>(0.0f, 0.0f, 0.0f), 40.0f);
         TestEntity ent;
         ent.m_Col = &sphere;
 

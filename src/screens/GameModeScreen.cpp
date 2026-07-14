@@ -24,7 +24,7 @@
 #include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 #include "debug/DebugFlags.h"
 #include "util/StringHash.h"
 #include "util/StringTable.h"
@@ -49,10 +49,10 @@ struct BtnDeletedFn {
 
 // Button positions (offline layout only — P2P variants skipped)
 // Binary button order: back(1) / classic(2) / zen(3) / arcade(4)
-static const Vec3 POS_BACK   ( 195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c — button 1
-static const Vec3 POS_CLASSIC( -70.0f,   71.0f, 0.0f);  // DAT_0013ea18/1c/0c — button 2
-static const Vec3 POS_ZEN    (  88.0f,   48.0f, 0.0f);  // DAT_0013ea58/5c/60 — button 3
-static const Vec3 POS_ARCADE (  19.0f,  -76.0f, 0.0f);  // DAT_0013ea__/__   — button 4
+static const _Vector3<float> POS_BACK(195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c — button 1
+static const _Vector3<float> POS_CLASSIC(-70.0f, 71.0f, 0.0f);  // DAT_0013ea18/1c/0c — button 2
+static const _Vector3<float> POS_ZEN(88.0f, 48.0f, 0.0f);  // DAT_0013ea58/5c/60 — button 3
+static const _Vector3<float> POS_ARCADE(19.0f, -76.0f, 0.0f);  // DAT_0013ea__/__   — button 4
 
 // Button scale multipliers
 static const float BACK_TARGET_SCALE    = 0.75f;  // DAT_0013e59c — button 1 m_TargetSize
@@ -77,16 +77,16 @@ static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
 
 // Draw constants — mode_sensei sits at bottom-left, same pattern as
 // DojoScreen's dojo_sensei. Slides in from left horizontally.
-static const Vec3 POS_BG    (-188.0f,  -32.0f, 0.0f);    // DAT_0013fb84/88
-static const Vec3 POS_BORDER(-115.0f, -130.0f, 0.0f);    // DAT_0013fb8c/90
-static const Vec3 POS_CONNECT(-40.0f,  -53.0f, 0.0f);    // DAT_0013fb94/98
+static const _Vector3<float> POS_BG(-188.0f, -32.0f, 0.0f);    // DAT_0013fb84/88
+static const _Vector3<float> POS_BORDER(-115.0f, -130.0f, 0.0f);    // DAT_0013fb8c/90
+static const _Vector3<float> POS_CONNECT(-40.0f, -53.0f, 0.0f);    // DAT_0013fb94/98
 // Zen sign lerp endpoints (offline branch — network-gated online values
 // at DAT_0013fba0/fba4 skipped).
 //   SRC = resting pos at alpha=1 (DAT_0013fb9c + literals 14.0, 10.0)
 //   DST = start pos at alpha=0  (DAT_0013fba8 + literals 29.0, 10.0)
 // Binary lerp: pos = src + (src - dst) * alpha
-static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // DAT_0013fb9c
-static const Vec3 POS_LOGO_DST( 194.0f, 29.0f, 10.0f);   // DAT_0013fba8
+static const _Vector3<float> POS_LOGO_SRC(314.0f, 14.0f, 10.0f);   // DAT_0013fb9c
+static const _Vector3<float> POS_LOGO_DST(194.0f, 29.0f, 10.0f);   // DAT_0013fba8
 
 // Fruit type name strings resolved at runtime via Fruit::FruitType() — matches binary call.
 // Binary: DAT_0013ea50 = "watermelon" (button 2 classic),
@@ -349,7 +349,7 @@ void GameModeScreen::CreateControls() {
         MenuButton* btn = m_pBackButton;
         m_pBackButton->Init(POS_BACK,
                             Mortar::Delegate0<void>::Make(this, &GameModeScreen::QuitCallback),
-                            FruitInfo_GetCount(), Vec3(0, 0, 0),
+                            FruitInfo_GetCount(), _Vector3<float>(0, 0, 0),
                             Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
@@ -376,7 +376,7 @@ void GameModeScreen::CreateControls() {
         MenuButton* btn = m_pClassicButton;
         m_pClassicButton->Init(POS_CLASSIC,
                                Mortar::Delegate0<void>::Make(this, &GameModeScreen::ClassicModeCallback),
-                               Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0),
+                               Fruit::FruitType(FRUIT_CLASSIC, false), _Vector3<float>(0, 0, 0),
                                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     if (game_work.m_TutorialControl) {
@@ -396,7 +396,7 @@ void GameModeScreen::CreateControls() {
     // Binary computes classicBtn->m_RestScale * 0.85 and stores to a module-level
     // global. Zen and Arcade buttons receive this as an absolute assignment (NOT
     // a multiply of their own size).
-    Vec3 sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
+    _Vector3<float> sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
 
     // --- Button 3: ZEN (plain ring m_RingTex[6], apple_red, ZenModeCallback) ---
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
@@ -406,7 +406,7 @@ void GameModeScreen::CreateControls() {
         MenuButton* btn = m_pZenButton;
         m_pZenButton->Init(POS_ZEN,
                            Mortar::Delegate0<void>::Make(this, &GameModeScreen::ZenModeCallback),
-                           Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0),
+                           Fruit::FruitType(FRUIT_ZEN, false), _Vector3<float>(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     m_pZenButton->m_RestScale = sharedTargetSize;
@@ -432,7 +432,7 @@ void GameModeScreen::CreateControls() {
         m_pArcadeButton->Init(POS_ARCADE,
                               Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
-                              Vec3(0, 0, 0),
+                              _Vector3<float>(0, 0, 0),
                               Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     m_pArcadeButton->m_RestScale = sharedTargetSize;
@@ -441,7 +441,7 @@ void GameModeScreen::CreateControls() {
             m_pArcadeButton->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
         m_pArcadeButton->m_pTrackedFruit->RotateFacingUp(
             false,
-            Vec3(0.0f, 1.0f, 0.0f));
+            _Vector3<float>(0.0f, 1.0f, 0.0f));
     }
     m_pArcadeButton->SetText(
         GETSTRING_CAST_0(LSTR_GM_ARCADE),
@@ -718,7 +718,7 @@ void GameModeScreen::UpdateRealtime(float dtSeconds) {
 // Guards on isP2PSupported flag — port has no P2P, always no-op.
 // Texture at g_instance+0x34 (primary) / +0x38 (alt) — NOT zen_sign.
 // ===================================================================
-void GameModeScreen::DrawConnectTexture(Vec3 pos) {
+void GameModeScreen::DrawConnectTexture(_Vector3<float> pos) {
     (void)pos;
     // Port: no P2P network support — skip entirely.
     // Binary: if (m_FrameTimer <= 0 || !isP2PSupported) return;
@@ -755,7 +755,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
             (float)s_TexModeSensei->GetHeight() + 1.0f,
             1.0f);
         const float slideX = -(float)s_TexModeSensei->GetWidth() * (1.0f - m_SecondaryAlpha);
-        mat.GlobalTranslate44(Vec3(POS_BG.x + slideX, POS_BG.y, POS_BG.z));
+        mat.GlobalTranslate44(_Vector3<float>(POS_BG.x + slideX, POS_BG.y, POS_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -770,14 +770,14 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // DIFFERS: port previously called DrawBorders(s_TexModeSelect,...) which drew mode_select.tex
     // as secondary texture. The binary does NOT draw mode_select.tex in this call path; removing
     // it is binary-faithful. The DrawBorders anchor is used to position m_pDescBox below.
-    Vec3 anchor = DrawBorders(nullptr, m_TransitionAlpha, POS_BORDER);
+    _Vector3<float> anchor = DrawBorders(nullptr, m_TransitionAlpha, POS_BORDER);
 
     // --- 3. DescBox positioned from DrawBorders anchor ---
     // Binary @0x00183c34: anchor += (-24, 11, 0); m_pDescBox->SetTranslation(anchor, 1); rot=-7
     if (m_pDescBox) {
-        anchor += Vec3(-24.0f, 11.0f, 0.0f);
+        anchor += _Vector3<float>(-24.0f, 11.0f, 0.0f);
         m_pDescBox->SetTranslation(anchor, 1);
-        m_pDescBox->Draw(Vec2(1.0f, 1.0f), -7.0f, 1);
+        m_pDescBox->Draw(_Vector2<float>(1.0f, 1.0f), -7.0f, 1);
     }
 
     // --- 4. Connect texture animation ---
@@ -789,7 +789,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // SRC=(314,14,10) (past +240 X edge), as alpha->1 it slides in to
     // rest at DST=(194,29,10) on-screen.
     if (s_TexZenSign.IsValid()) {
-        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
+        _Vector3<float> logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->GetWidth() + 1.0f,
@@ -807,8 +807,8 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
         // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
         // logoPos + (8, 3, 0), rotation -9 degrees, scale (1,1), centered.
         if (m_pTitleBox) {
-            m_pTitleBox->SetTranslation(logoPos + Vec3(8.0f, 3.0f, 0.0f), 1);
-            m_pTitleBox->Draw(Vec2(1.0f, 1.0f), -9.0f, 1);
+            m_pTitleBox->SetTranslation(logoPos + _Vector3<float>(8.0f, 3.0f, 0.0f), 1);
+            m_pTitleBox->Draw(_Vector2<float>(1.0f, 1.0f), -9.0f, 1);
         }
     }
 
@@ -840,7 +840,7 @@ void GameModeScreen::QuitCallback() {
         if (e->entityType == 1) {
             static_cast<Bomb*>(e)->m_bMovement = 1;
         }
-        e->vel = Vec3(rx + 5.0f, -ry, 0.0f);
+        e->vel = _Vector3<float>(rx + 5.0f, -ry, 0.0f);
     }
 
     // 4. Clear any active tutorial arrow

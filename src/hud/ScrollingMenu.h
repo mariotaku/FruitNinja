@@ -141,16 +141,16 @@ public:
     //   .x = touch[slot].x at finger-down  (field_0x78)
     //   .y = touch[slot].y at finger-down  (field_0x7c)
     //   .z = touch[slot].state at finger-down (field_0x80)
-    Vec3 m_TouchAnchorPos;
+    _Vector3<float> m_TouchAnchorPos;
 
     // +0x84..0x8c: velocity/scroll snapshot at finger-down
     //   .x = m_Velocity.x at anchor   (field_0x84)
     //   .y = m_Velocity.y at anchor   (field_0x88 = scroll offset at press)
     //   .z = m_Velocity.z at anchor   (field_0x8c)
-    Vec3 m_AnchorOffset;
+    _Vector3<float> m_AnchorOffset;
 
     // +0x90..0x98: pending velocity Vec3 (accumulated drag delta; friction-scaled each tick)
-    Vec3 m_PendingVelocity;
+    _Vector3<float> m_PendingVelocity;
 
     // +0x9c: scroll area width (DAT_0015b468 = 320.0f)
     float m_Width;
@@ -202,7 +202,7 @@ public:
     // +0xd4..0xdc: velocity Vec3
     //   .y component (field_0xd8) = TRUE scroll offset (items positioned relative to this)
     // Binary: field_0xd4..field_0xdc
-    Vec3 m_Velocity;
+    _Vector3<float> m_Velocity;
 
     // +0xe0..0xec: outer touch region (4 floats relative to pos)
     //   [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM

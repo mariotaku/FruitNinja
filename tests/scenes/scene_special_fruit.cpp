@@ -130,15 +130,15 @@ static Fruit* SpawnFruit(Mortar::ActorManager* am, int fruitType) {
     Fruit* f = static_cast<Fruit*>(e);
     f->Init(NULL, (long)fruitType, NULL);
 
-    f->pos               = Vec3(CENTER_X, CENTER_Y, 0.0f);
-    f->vel               = Vec3(0.0f, 0.0f, 0.0f);
-    f->m_Gravity         = Vec3(0.0f, 0.0f, 0.0f);
+    f->pos               = _Vector3<float>(CENTER_X, CENTER_Y, 0.0f);
+    f->vel               = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    f->m_Gravity         = _Vector3<float>(0.0f, 0.0f, 0.0f);
     f->m_bBallisticEnable = 0;
 
-    Vec3 spinAxis(0.0f, 1.0f, 0.0f);
+    _Vector3<float> spinAxis(0.0f, 1.0f, 0.0f);
     f->RotateFacingUp(false, spinAxis);
-    f->m_RotVel1 = Vec3(0.0f, SPIN_MAG, 0.0f);
-    f->m_RotVel2 = Vec3(0.0f, SPIN_MAG, 0.0f);
+    f->m_RotVel1 = _Vector3<float>(0.0f, SPIN_MAG, 0.0f);
+    f->m_RotVel2 = _Vector3<float>(0.0f, SPIN_MAG, 0.0f);
 
     f->flags &= ~(uint32_t)(0x01 | 0x10); // clear ENT_INACTIVE | ENT_KILLED
     return f;
@@ -150,9 +150,9 @@ static Bomb* SpawnBomb(Mortar::ActorManager* am) {
     Bomb* b = static_cast<Bomb*>(e);
     b->Init(NULL, 0, NULL);
 
-    b->pos          = Vec3(CENTER_X, CENTER_Y, 0.0f);
-    b->vel          = Vec3(0.0f, 0.0f, 0.0f);
-    b->m_AccelForce = Vec3(0.0f, 0.0f, 0.0f);
+    b->pos          = _Vector3<float>(CENTER_X, CENTER_Y, 0.0f);
+    b->vel          = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    b->m_AccelForce = _Vector3<float>(0.0f, 0.0f, 0.0f);
     b->m_RotVelX    = (int16_t)2;
     b->m_RotVelY    = (int16_t)1;
     b->flags       &= ~(uint32_t)(0x01 | 0x10);

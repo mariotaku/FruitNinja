@@ -20,9 +20,9 @@
 #include "engine/render/BakedStringBox.h"
 #include "engine/render/FontCacheObjectTTF.h"
 #include "engine/math/Matrix44.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector2.h"
 #include "engine/math/Colour.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/MathUtil.h"
 #include "asset/TextureManager.h"
 #include "engine/util/StringTable.h"
@@ -359,7 +359,7 @@ void ShopListItem::NewDraw() {
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
         // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
-        m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 64), Vec3(4.0f, -4.0f, 0.0f), true);
+        m_pBox0->SetShadow(0.0f, Colour(0, 0, 0, 64), _Vector3<float>(4.0f, -4.0f, 0.0f), true);
         m_pBox0->Update();
     }
 
@@ -379,7 +379,7 @@ void ShopListItem::NewDraw() {
         }
         if (catStr) m_pBox1->SetText(catStr);
         // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
-        m_pBox1->SetShadow(0.0f, Colour(0, 0, 0, 64), Vec3(4.0f, -4.0f, 0.0f), true);
+        m_pBox1->SetShadow(0.0f, Colour(0, 0, 0, 64), _Vector3<float>(4.0f, -4.0f, 0.0f), true);
         m_pBox1->Update();
         m_TintA = (uint8_t)m_pItemInfo->m_Type;
     }
@@ -387,12 +387,12 @@ void ShopListItem::NewDraw() {
     // --- Set colour and draw both boxes ---
     // v1.6.1 NewDraw @0x001b58e8: base = pos + m_Size(60,13,0), then + (-195,16,0)/(-20,0,0) for box0 ; + (-175,-10,0) for box1.
     m_pBox0->SetColour(itemColour, 0);
-    m_pBox0->SetTranslation(Vec3(pos.x + m_Size.x - 195.0f, pos.y + m_Size.y + 16.0f, 0.0f), 0);
-    m_pBox0->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+    m_pBox0->SetTranslation(_Vector3<float>(pos.x + m_Size.x - 195.0f, pos.y + m_Size.y + 16.0f, 0.0f), 0);
+    m_pBox0->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
 
     m_pBox1->SetColour(itemColour, 0);
-    m_pBox1->SetTranslation(Vec3(pos.x + m_Size.x - 175.0f, pos.y + m_Size.y - 10.0f, 0.0f), 0);
-    m_pBox1->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+    m_pBox1->SetTranslation(_Vector3<float>(pos.x + m_Size.x - 175.0f, pos.y + m_Size.y - 10.0f, 0.0f), 0);
+    m_pBox1->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
 
     // --- Helper chain ---
     DrawDividers();
@@ -497,7 +497,7 @@ void ShopListItem::DrawFloatingText() {
     // NEW badge (popup 0x10, scale 0.8): guard also requires m_pBox0 != null.
     if (m_NewItemAlpha > 0.0f && m_pBox0 != 0) {
         float boxW = m_pBox0->GetTextWidth();
-        Vec3 anchor(baseX - boxW - 4.0f, baseY + 8.0f + s_ShimmerY, 0.0f);
+        _Vector3<float> anchor(baseX - boxW - 4.0f, baseY + 8.0f + s_ShimmerY, 0.0f);
         // v1.6.1 DrawFloatingText @0x001b4cd4 (VNMLS): clampX = 0.25*65*alpha^2 - 240.0
         // (negative floor, -240..-223.75). max(anchor.x, clampX) leaves on-screen badges at
         // their computed anchor; only floors X during off-screen fade. (Prior port formula
@@ -518,7 +518,7 @@ void ShopListItem::DrawFloatingText() {
     if (m_SelectedAlpha > 0.0f) {
         float boxW = (m_pBox1 != 0) ? m_pBox1->GetTextWidth() : 0.0f;
         // binary truncates to int before the float convert (explicit vcvt.s32/f32).
-        Vec3 anchor((float)(int)(baseX - boxW - 32.0f), baseY - 26.0f, 0.0f);
+        _Vector3<float> anchor((float)(int)(baseX - boxW - 32.0f), baseY - 26.0f, 0.0f);
         IngamePopup* popup = GetIngamePopup(0x11);
         // TODO: v1.6.1 ShopListItem::DrawFloatingText @0x001b4bc8 -- same alpha^2 scale
         //   modulation applies to SELECTED badge (scale 0.5 * alpha^2 factor).
@@ -628,8 +628,8 @@ void ShopListItem::DrawDescription() {
     if (bVar6 && m_pBox4) {
         // Position: (xPos, Arabic(0x14) ? -5 : -20, 0).
         float promptY = isArabic ? -5.0f : -20.0f;
-        m_pBox4->SetTranslation(Vec3(xPos, promptY, 0.0f), 0);
-        m_pBox4->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+        m_pBox4->SetTranslation(_Vector3<float>(xPos, promptY, 0.0f), 0);
+        m_pBox4->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
     }
 
     // Draw box3 (description body).
@@ -642,8 +642,8 @@ void ShopListItem::DrawDescription() {
             descColour = Colour(0x74, 0x5D, 0x3B, alpha);
         }
         m_pBox3->SetColour(descColour, 1);
-        m_pBox3->SetTranslation(Vec3(xPos, 42.0f, 0.0f), 0);
-        m_pBox3->Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+        m_pBox3->SetTranslation(_Vector3<float>(xPos, 42.0f, 0.0f), 0);
+        m_pBox3->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
     }
 }
 

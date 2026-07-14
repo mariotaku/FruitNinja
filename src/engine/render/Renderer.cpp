@@ -358,7 +358,7 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
     if (angle != 0.0f) {
         mat.RotZ44(sinf(angle), cosf(angle));
     }
-    mat.GlobalTranslate44(Vec3(x + w * 0.5f, y + h * 0.5f, 0.0f));
+    mat.GlobalTranslate44(_Vector3<float>(x + w * 0.5f, y + h * 0.5f, 0.0f));
     stack.SetCurrentMatrix(mat);
 
     glActiveTexture(GL_TEXTURE0);

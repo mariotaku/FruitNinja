@@ -31,8 +31,8 @@
 #include "render/BakedStringBox.h"
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstring>
@@ -151,9 +151,9 @@ static void DrawPass(
             Mortar::BakedStringBox lbl(verdanaFont, fontSize, boxW, boxH, (Mortar::ALIGNMENT_TYPE)0x0f, 1, 0);
             lbl.SetText(kRowCaptions[i]);
             lbl.SetColour(Colour(200, 200, 200, 255), 0);
-            Vec3 captionPos(captionCX, kRowY[i], 0.0f);
+            _Vector3<float> captionPos(captionCX, kRowY[i], 0.0f);
             lbl.SetTranslation(captionPos, 1);
-            lbl.Draw(Vec2(1.0f, 1.0f), 0.0f, 0);
+            lbl.Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
         }
     }
 }

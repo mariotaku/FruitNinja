@@ -39,7 +39,7 @@
 // ---------------------------------------------------------------------------
 
 // Simple bit-identical comparison for Vec3.
-static bool Vec3Eq(const Vec3& a, const Vec3& b) {
+static bool Vec3Eq(const _Vector3<float>& a, const _Vector3<float>& b) {
     uint32_t ax, ay, az, bx, by, bz;
     memcpy(&ax, &a.x, 4); memcpy(&ay, &a.y, 4); memcpy(&az, &a.z, 4);
     memcpy(&bx, &b.x, 4); memcpy(&by, &b.y, 4); memcpy(&bz, &b.z, 4);
@@ -63,17 +63,17 @@ static bool QuatEq(const Quaternion& a, const Quaternion& b) {
 
 // Struct to capture a Fruit's interpolated fields for comparison.
 struct FruitSnapshot {
-    Vec3       pos;
-    Vec3       scale;
+    _Vector3<float> pos;
+    _Vector3<float> scale;
     float      zPos;
-    Vec3       secondPos;
+    _Vector3<float> secondPos;
     Quaternion rot1;
     Quaternion rot2;
 };
 
 struct BombSnapshot {
-    Vec3    pos;
-    Vec3    scale;
+    _Vector3<float> pos;
+    _Vector3<float> scale;
     float   zPos;
     int16_t rotX;
     int16_t rotY;
@@ -301,11 +301,11 @@ int main(int argc, char* argv[]) {
             // check that the position is not wildly different from the cur pos
             // (if hadPrev is falsely true, the position would jump to a lerp
             // of the old dead entity's position).
-            Vec3 posBefore = newEnt->pos;
+            _Vector3<float> posBefore = newEnt->pos;
             interp.ApplyForDraw(0.5f);
-            Vec3 posAfter = newEnt->pos;
+            _Vector3<float> posAfter = newEnt->pos;
             interp.RestoreAfterDraw();
-            Vec3 posRestored = newEnt->pos;
+            _Vector3<float> posRestored = newEnt->pos;
 
             // If hadPrev == false, ApplyForDraw must NOT have touched the entity:
             // pos before == pos after == pos restored.

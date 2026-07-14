@@ -3,7 +3,7 @@
 
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "render/Utf8StringIterator.h"
 #include <cstdint>
@@ -46,7 +46,7 @@ public:
     //   rotZ   : Z rotation in degrees (s1)
     //   align  : alignment flag bits (r2) — bits 0..1 horiz, bits 2..3 vert
     //   pos    : world-space anchor (r1, by-ref Vec3*)
-    void Draw(float scale, float rotZ, uint32_t align, const Vec3& pos);
+    void Draw(float scale, float rotZ, uint32_t align, const _Vector3<float>& pos);
 
     // Clear cached data (mirrors dtor semantics without destroying the object).
     void Clear();

@@ -130,7 +130,7 @@ void ExplodyFruitModifier::FruitSplosion::Update(float dt)
             if (ent == m_pFruit) continue;
             Fruit* fruit = static_cast<Fruit*>(ent);
             if (fruit->IsActive() && !fruit->Sliced()) {
-                Vec3 d = ent->pos - pos;
+                _Vector3<float> d = ent->pos - pos;
                 if (d.MagnitudeSqr() < reach * reach) {
                     d.Normalise();
                     d *= 10.0f;

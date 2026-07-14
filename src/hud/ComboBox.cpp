@@ -35,7 +35,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_expandArrow;  // expand_arrow.tex
 //   m_Width(+0x90), m_pFont(+0x9C)=fonts[1], m_TouchIndex(+0xAC)=-1, m_pListBox(+0xA4)=0,
 //   m_bCleanupPending(+0xA8)=0, m_LayerFlags(+0x34)=0x80,
 //   m_DrawWidth(+0x94)=m_TextScaleX*size.x, m_DrawHeight(+0x98)=m_TextScaleY*size.y.
-ComboBox::ComboBox(Vec3 inPos, Vec3 inSize, std::vector<std::string>& items,
+ComboBox::ComboBox(_Vector3<float> inPos, _Vector3<float> inSize, std::vector<std::string>& items,
                    uint16_t defaultIdx, const char* comboLabel, uint8_t textFlag,
                    uint16_t width, uint16_t textScaleX, uint16_t textScaleY)
     : HUDControl3d()
@@ -110,7 +110,7 @@ void ComboBox::PreDraw(float* hudScale) {
 //   4. selected-item label (m_SelectedIter, m_TextColour tinted) at
 //      (pos.x - m_DrawWidth*0.5 + size.x*5, pos.y + size.y*7), font size m_Width*size.x
 void ComboBox::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     const float fontSize = (float)m_Width * size.x;
 
@@ -144,7 +144,7 @@ void ComboBox::Draw(float* hudScaleRaw) {
         mm.GetWorldStack().Reset();
         s_expandArrow->Set();
         Matrix44 mat = Matrix44::MakeScale(arrowW * size.x, m_DrawHeight, 1.0f);
-        Vec3 p = pos;
+        _Vector3<float> p = pos;
         // Port specific: box.tex (see box.svg) insets its opaque wood rim
         // 2px inside its 64px-wide canvas, so the bar quad's own RIGHT edge
         // (at pos.x + m_DrawWidth*0.5) is ~3% transparent margin, not visible
@@ -206,8 +206,8 @@ void ComboBox::Update(float dt) {
                 return;
             }
             if (m_pListBox == NULL) {
-                Vec3 lbPos(pos.x, (pos.y - m_DrawHeight) - 1.0f, -1.0f);
-                Vec3 lbSize = size;
+                _Vector3<float> lbPos(pos.x, (pos.y - m_DrawHeight) - 1.0f, -1.0f);
+                _Vector3<float> lbSize = size;
                 // ListBox args: selIter=m_SelectedIter, visibleRows=m_TextFlag,
                 // cellHeightParam=14, cellWidthParam=128, fontScaleParam=16.
                 m_pListBox = new ListBox(lbPos, lbSize, *m_pItems, m_SelectedIter,

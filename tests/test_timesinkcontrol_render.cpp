@@ -71,7 +71,7 @@
 #include "game/GameMode.h"
 #include "game/GameWork.h"
 #include "engine/util/StringHash.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -164,7 +164,7 @@ int main(int argc, char* argv[]) {
     // wave start; the isolated boot may not have reached a wave.
     pum->LoadTextures();
 
-    Vec3 origin(0.0f, 0.0f, 0.0f);
+    _Vector3<float> origin(0.0f, 0.0f, 0.0f);
     PowerUp* p = pum->ActivatePower(StringHash("time_sink"), origin, NULL);
     printf("[timesinkcontrol] activate \"time_sink\" -> %p\n", (void*)p);
     if (!p) {

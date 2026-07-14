@@ -122,15 +122,15 @@ extern "C" {
 void MatrixStack::Push() {}
 void MatrixStack::Pop() {}
 void MatrixStack::Reset() {}
-void MatrixStack::Scale(const Vec3&) {}
-void MatrixStack::Translate(const Vec3&) {}
+void MatrixStack::Scale(const _Vector3<float>&) {}
+void MatrixStack::Translate(const _Vector3<float>&) {}
 void MatrixStack::SetCurrentMatrix(const Matrix44&) {}
 // RotZ/TranslateLocal/ScaleRows are referenced by BakedStringTTF::Draw (now linked in
 // for the BakedStringBox -> FancyBakedString -> BakedStringTTF dispatcher chain) but
 // never actually invoked by this test (it only exercises the static ComputeBaselineY).
 // Link-only stubs.
 void MatrixStack::RotZ(float) {}
-void MatrixStack::TranslateLocal(const Vec3&) {}
+void MatrixStack::TranslateLocal(const _Vector3<float>&) {}
 void MatrixStack::ScaleRows(float, float, float) {}
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ MatrixManager::MatrixManager()
 MatrixManager MatrixManager::s_instance;
 MatrixManager::~MatrixManager() {}
 void MatrixManager::SetupOrtho(float, float, float, float, float, float, Matrix44*) {}
-void MatrixManager::SetupLookAt(const Vec3&, const Vec3&, const Vec3&, Matrix43*) {}
+void MatrixManager::SetupLookAt(const _Vector3<float>&, const _Vector3<float>&, const _Vector3<float>&, Matrix43*) {}
 void MatrixManager::UploadAll() {}
 void MatrixManager::UploadModelViewOnly() {}
 void MatrixManager::ResetAllStacks() {}

@@ -194,7 +194,7 @@ int main(int argc, char* argv[]) {
             WAVE_INFO* w = prevWave;
             printf("[test_gameplay] frame %d: wave transition -> waveNo=%d spawners=%d "
                    "wfe=%d gameMode=%d m_PauseAmount=%.3f bM_Mode=%d\n",
-                   i, w ? w->m_WaveNumber : -999, w ? w->m_SpawnerCount : -1,
+                   i, w ? w->m_ScoreThreshold : -999, w ? w->m_SpawnerCount : -1,
                    w ? (int)w->m_bWaitForEntities : -1,
                    (int)game_work.gameMode, game_work.m_PauseAmount, (int)game_work.bM_Mode);
         }

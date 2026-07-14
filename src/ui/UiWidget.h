@@ -40,7 +40,7 @@
 #include "asset/Texture.h"
 #include "render/Font.h"
 #include "util/SmartPtr.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/Delegate.h"
 
@@ -119,7 +119,7 @@ protected:
     float m_HalfW;
     float m_HalfH;
     int   m_TouchId;
-    Vec3  m_TouchCapture;
+    _Vector3<float> m_TouchCapture;
     Mortar::Delegate0<void> m_OnChange;
     Colour m_Tint;
     Colour m_TextColour;

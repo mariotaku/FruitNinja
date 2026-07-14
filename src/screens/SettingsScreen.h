@@ -95,7 +95,7 @@
 //
 
 #include "hud/HUDControl3d.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include <cstdint>
@@ -280,7 +280,7 @@ private:
     float m_ScrollVel;
     float m_MaxScroll;         // computed once in Init(): max(0, contentH - viewportH)
     float m_AnchorScroll;      // m_ScrollY latched at touch-press
-    Vec3  m_ScrollAnchorPos;   // finger (x, y) latched at touch-press
+    _Vector3<float> m_ScrollAnchorPos;   // finger (x, y) latched at touch-press
     int   m_ScrollTouchId;     // -1 = no touch owned/tracked by the scroll acquire scan
     uint8_t m_ScrollDragging;  // 1 once the held touch has committed to being a scroll (not a widget tap/drag)
     uint8_t m_ScrollOwnsTouch; // 1 once disambiguation has picked "scroll" for the CURRENT touch -- gates widget Update() out

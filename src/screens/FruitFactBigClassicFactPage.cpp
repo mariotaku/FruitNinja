@@ -3,7 +3,7 @@
 
 #include "FruitFactBigClassicFactPage.h"
 #include "hud/GenericHUDControl.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -29,24 +29,24 @@ FruitFactBigClassicFactPage::~FruitFactBigClassicFactPage() {
 // All flags=1 except ctrl3 flags=8. All white col.
 void FruitFactBigClassicFactPage::Init() {
     Mortar::SmartPtr<Mortar::Texture> emptyTex;
-    Vec3 scUnit(1.0f, 1.0f, 1.0f);
+    _Vector3<float> scUnit(1.0f, 1.0f, 1.0f);
     Colour white(1.0f, 1.0f, 1.0f, 1.0f);
 
     // ctrl 1: icon slot A
-    Vec3 pos1(-102.0f, 4.0f, 0.0f);
+    _Vector3<float> pos1(-102.0f, 4.0f, 0.0f);
     GenericHUDControl* c1 = new GenericHUDControl(
         0.0f, 0.0f, emptyTex, NULL, pos1, scUnit, white, 1);
     AddGenericControl(c1);
 
     // ctrl 2: icon slot B (offset +9, +90 from ctrl1)
-    Vec3 pos2(-102.0f + 9.0f, 4.0f + 90.0f, 0.0f);
+    _Vector3<float> pos2(-102.0f + 9.0f, 4.0f + 90.0f, 0.0f);
     GenericHUDControl* c2 = new GenericHUDControl(
         0.0f, 0.0f, emptyTex, NULL, pos2, scUnit, white, 1);
     AddGenericControl(c2);
 
     // ctrl 3: icon slot C; scale Z=0.8 (DAT_172b50), flags=8
-    Vec3 pos3(-20.0f, 90.0f, 0.0f);
-    Vec3 sc3(0.0f, 0.0f, 0.8f);
+    _Vector3<float> pos3(-20.0f, 90.0f, 0.0f);
+    _Vector3<float> sc3(0.0f, 0.0f, 0.8f);
     GenericHUDControl* c3 = new GenericHUDControl(
         0.0f, 0.0f, emptyTex, NULL, pos3, sc3, white, 8);
     AddGenericControl(c3);

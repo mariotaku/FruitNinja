@@ -19,17 +19,17 @@
 // All three Col-vs-Col tests (ColAABBAABB/Line/Sphere) read this representation.
 class ColAABB : public Col {
 public:
-    Vec3         m_HalfExtents; // +0x14 -- per-axis half-size (positive)
+    _Vector3<float> m_HalfExtents; // +0x14 -- per-axis half-size (positive)
     float        m_Corners[24]; // +0x20..+0x7f -- 8 cached corner Vec3, rebuilt by UpdateVertices()
 
     // centre accessor -- returns the Col-base m_PrimaryPoint (binary reuse; no extra storage)
-    Vec3& m_Center()             { return m_PrimaryPoint; }
-    const Vec3& m_Center() const { return m_PrimaryPoint; }
+    _Vector3<float>& m_Center() { return m_PrimaryPoint; }
+    const _Vector3<float>& m_Center() const { return m_PrimaryPoint; }
 
     // v1.6.1 ColAABB::ColAABB @ 0x00275d7c -- default ctor: m_HalfExtents = (1,1,1), UpdateVertices().
     ColAABB();
     // v1.6.1 ColAABB::ColAABB @ 0x00275e2c -- ctor(centre, halfExtents)
-    ColAABB(Vec3 center, Vec3 halfExtents);
+    ColAABB(_Vector3<float> center, _Vector3<float> halfExtents);
 
     virtual ~ColAABB() override {}
 
@@ -37,7 +37,7 @@ public:
     virtual int GetType() const override { return TYPE_AABB; }
 
     // Binary slot 3 -- v1.6.1 ColAABB::Collide @ 0x0027674c -- double-dispatch by other->GetType()
-    virtual int Collide(Col* other, Vec3* outNormal) override;
+    virtual int Collide(Col* other, _Vector3<float>* outNormal) override;
 
     // Binary slot 4 -- v1.6.1 ColAABB::DrawDebug @ 0x00276020
     virtual void DrawDebug() override;
@@ -48,11 +48,11 @@ public:
 
     // ---- binary static helpers (this == box1; out receives penetration normal) ----
     // v1.6.1 ColAABB::ColAABBAABB @ 0x00275ecc -- AABB-vs-AABB overlap + min-penetration face normal into out.
-    bool ColAABBAABB(ColAABB* box1, ColAABB* box2, Vec3* out);
+    bool ColAABBAABB(ColAABB* box1, ColAABB* box2, _Vector3<float>* out);
     // v1.6.1 ColAABB::ColAABBLine @ 0x002763b4 -- AABB-vs-Line SAT test + separating-axis normal into out.
-    bool ColAABBLine(ColAABB* box, ColLine* line, Vec3* out);
+    bool ColAABBLine(ColAABB* box, ColLine* line, _Vector3<float>* out);
     // v1.6.1 ColAABB::ColAABBSphere @ 0x002760c4 -- AABB-vs-Sphere closest-point test + penetration normal into out.
-    bool ColAABBSphere(ColAABB* box, ColSphere* sphere, Vec3* out);
+    bool ColAABBSphere(ColAABB* box, ColSphere* sphere, _Vector3<float>* out);
 
     // ---- convenience wrappers (no separate binary entry; delegate to static helpers) ----
     // TODO: ColAABB::IntersectsSphere binary address unknown -- thin wrapper over ColAABBSphere.

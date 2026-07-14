@@ -7,7 +7,7 @@
 #include "asset/Skeleton.h"
 #include "asset/AnimationState.h"
 #include "math/Matrix44.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <vector>
 
 namespace Mortar {

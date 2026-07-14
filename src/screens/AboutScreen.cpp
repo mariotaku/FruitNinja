@@ -27,7 +27,7 @@
 #include "render/FontCacheObjectTTF.h"
 #include "render/FontTTFRegistry.h"
 #include "math/Colour.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 #include "audio/GameSound.h"
 #include "util/StringTable.h"
 #include <cstdio>
@@ -50,11 +50,11 @@ static const float ALPHA_OUT_DONE = 0.001f;
 // Back button position  (DAT_0012f300 = 185.0, DAT_0012f304 = -106.0)
 // ASM-verified pos=Vec3::Zero (matches DojoScreen/MainScreen/ShopScreen back-button
 // convention); final screen anchor comes from m_HudScale below, not this Vec3.
-static const Vec3 POS_BACK_BUTTON(0.0f, 0.0f, 0.0f);
+static const _Vector3<float> POS_BACK_BUTTON(0.0f, 0.0f, 0.0f);
 static const float BACK_SCALE = 0.825f;
 
 // OFN button position -- off-screen right, defunct
-static const Vec3 POS_OFN_BUTTON(480.0f, 0.0f, 0.0f);
+static const _Vector3<float> POS_OFN_BUTTON(480.0f, 0.0f, 0.0f);
 
 // ---- Draw constants ----
 
@@ -286,14 +286,14 @@ AboutScreen::AboutScreen(DojoScreen* parent)
         // ASM-spec v1.6.1 AboutScreen ctor @0x0015b764: SetShadow(1.0f, white, Vec3(0,0,0), 0) on
         // title/heading/credit boxes. offset (0,0,0) draws the shadow directly under the foreground
         // (near-invisible at runtime) but faithfully matches the binary call.
-        m_TitleBox->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_HeadingBox->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine0->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine1->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine2->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine3->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine4->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
-        m_CreditLine5->SetShadow(1.0f, Colour(255, 255, 255, 255), Vec3(0.0f, 0.0f, 0.0f), 0);
+        m_TitleBox->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_HeadingBox->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine0->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine1->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine2->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine3->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine4->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
+        m_CreditLine5->SetShadow(1.0f, Colour(255, 255, 255, 255), _Vector3<float>(0.0f, 0.0f, 0.0f), 0);
     }
 
     // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: calls CreateCreditsMarquee after text boxes.
@@ -374,7 +374,7 @@ void AboutScreen::CreateBackButton()
     m_pBackButton->Init(POS_BACK_BUTTON,
                         Mortar::Delegate0<void>::Make(this, &AboutScreen::QuitGameCallback),
                         bombFruitType,
-                        Vec3(0.0f, 0.0f, 0.0f),
+                        _Vector3<float>(0.0f, 0.0f, 0.0f),
                         nullptr);
 
     // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: m_pOkButton->m_HudScale.x=0.375f
@@ -516,40 +516,40 @@ void AboutScreen::NewDraw()
 
     // Credit lines
     if (m_CreditLine0) {
-        m_CreditLine0->SetTranslation(Vec3((float)x0, (float)y0,            0.0f), 0);
-        m_CreditLine0->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine0->SetTranslation(_Vector3<float>((float)x0, (float)y0,            0.0f), 0);
+        m_CreditLine0->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine1) {
-        m_CreditLine1->SetTranslation(Vec3((float)x0, (float)(y0 - 0x14),   0.0f), 0);
-        m_CreditLine1->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine1->SetTranslation(_Vector3<float>((float)x0, (float)(y0 - 0x14),   0.0f), 0);
+        m_CreditLine1->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine2) {
-        m_CreditLine2->SetTranslation(Vec3((float)x0, (float)(y0 - 0x28),   0.0f), 0);
-        m_CreditLine2->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine2->SetTranslation(_Vector3<float>((float)x0, (float)(y0 - 0x28),   0.0f), 0);
+        m_CreditLine2->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine3) {
-        m_CreditLine3->SetTranslation(Vec3((float)x0, (float)(y0 - 0x4b),   0.0f), 0);
-        m_CreditLine3->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine3->SetTranslation(_Vector3<float>((float)x0, (float)(y0 - 0x4b),   0.0f), 0);
+        m_CreditLine3->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine4) {
-        m_CreditLine4->SetTranslation(Vec3((float)x0, (float)(y0 - 0x5f),   0.0f), 0);
-        m_CreditLine4->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine4->SetTranslation(_Vector3<float>((float)x0, (float)(y0 - 0x5f),   0.0f), 0);
+        m_CreditLine4->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
     if (m_CreditLine5) {
-        m_CreditLine5->SetTranslation(Vec3((float)x0, (float)(y0 - 0x73),   0.0f), 0);
-        m_CreditLine5->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_CreditLine5->SetTranslation(_Vector3<float>((float)x0, (float)(y0 - 0x73),   0.0f), 0);
+        m_CreditLine5->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Title box
     if (m_TitleBox) {
-        m_TitleBox->SetTranslation(Vec3((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
-        m_TitleBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_TitleBox->SetTranslation(_Vector3<float>((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
+        m_TitleBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Version box
     if (m_VersionBox) {
-        m_VersionBox->SetTranslation(Vec3((float)(x0 + 5), (float)(y0 + 0x15), 0.0f), 0);
-        m_VersionBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_VersionBox->SetTranslation(_Vector3<float>((float)(x0 + 5), (float)(y0 + 0x15), 0.0f), 0);
+        m_VersionBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 AboutScreen::NewDraw @0x0015a264 (re-analyst):
@@ -594,12 +594,12 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
         yDrawn = yStart - (yStart - BG_Y_REST) * alpha;
 
         if (m_pOFNButton) {
-            m_pOFNButton->pos = Vec3(BG_X + OFN_OFFSET_X, yDrawn + OFN_OFFSET_Y, 0.0f);
+            m_pOFNButton->pos = _Vector3<float>(BG_X + OFN_OFFSET_X, yDrawn + OFN_OFFSET_Y, 0.0f);
         }
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(BG_X, yDrawn, 0.0f));
+        mat.GlobalTranslate44(_Vector3<float>(BG_X, yDrawn, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -615,7 +615,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
             const float ovH = (float)m_TexOFNOverlay->GetHeight();
             mm.GetWorldStack().Reset();
             Matrix44 mOv = Matrix44::MakeScale(ovW + 1.0f, ovH + 1.0f, 1.0f);
-            mOv.GlobalTranslate44(Vec3(
+            mOv.GlobalTranslate44(_Vector3<float>(
                 SENSEI_FRAC * texW - SENSEI_X_OFS,
                 yDrawn + SENSEI_FRAC * texH,
                 0.0f));
@@ -638,7 +638,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
         const float cH = (float)s_TexCredits->GetHeight();
         mm.GetWorldStack().Reset();
         Matrix44 matC = Matrix44::MakeScale(cW + 1.0f, cH + 1.0f, 1.0f);
-        matC.GlobalTranslate44(Vec3(-50.0f, -416.0f + 320.0f * alpha, 0.0f));
+        matC.GlobalTranslate44(_Vector3<float>(-50.0f, -416.0f + 320.0f * alpha, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(matC);
         mm.UploadModelViewOnly();
 
@@ -659,7 +659,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(xDrawn, SENSEI2_Y, 0.0f));
+        mat.GlobalTranslate44(_Vector3<float>(xDrawn, SENSEI2_Y, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -745,7 +745,7 @@ void AboutScreen::CreateCreditsMarquee()
     // Lay out positions: Vec3(-220, 47 - 12*i, 0) per item (i = 0..n-1).
     for (int i = 0; i < (int)m_Marquees.size(); ++i) {
         if (m_Marquees[i]) {
-            m_Marquees[i]->pos = Vec3(-220.0f, 47.0f - 12.0f * (float)i, 0.0f);
+            m_Marquees[i]->pos = _Vector3<float>(-220.0f, 47.0f - 12.0f * (float)i, 0.0f);
         }
     }
 }
@@ -768,14 +768,14 @@ void AboutScreen::DrawMarquee()
     for (std::vector<MarqueeText*>::iterator it = m_Marquees.begin(); it != m_Marquees.end(); ++it) {
         MarqueeText* mt = *it;
         if (!mt || !mt->m_pBox) continue;
-        Vec3 drawPos = mt->pos + Vec3(0.0f, transY, 0.0f);
+        _Vector3<float> drawPos = mt->pos + _Vector3<float>(0.0f, transY, 0.0f);
         mt->m_pBox->SetTranslation(drawPos, 0);
-        mt->m_pBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        mt->m_pBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     if (m_HeadingBox) {
-        m_HeadingBox->SetTranslation(Vec3(-191.0f, transY - 67.0f, 0.0f), 1);
-        m_HeadingBox->Draw(Vec2(1.0f, 1.0f), 90.0f, 1);
+        m_HeadingBox->SetTranslation(_Vector3<float>(-191.0f, transY - 67.0f, 0.0f), 1);
+        m_HeadingBox->Draw(_Vector2<float>(1.0f, 1.0f), 90.0f, 1);
     }
 }
 
@@ -803,7 +803,7 @@ void AboutScreen::QuitGameCallback() {
         //   ActorManager reap before the next screen re-creates its single-slot menu bomb.
         //   Omitting it => constant-velocity drift => race => pool stays full => soft-lock.
         reinterpret_cast<Bomb*>(piece)->m_bMovement = 1;   // Bomb+0x80
-        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->vel = _Vector3<float>(r1 + 5.0f, -r2, 0.0f);
     }
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 }

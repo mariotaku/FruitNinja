@@ -6,8 +6,8 @@
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "render/BakedStringTTF.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdlib>
@@ -105,8 +105,8 @@ static void test_glyphttf_members()
     g.m_UvV0       = 0.2f;
     g.m_UvU1       = 0.3f;
     g.m_UvV1       = 0.4f;
-    g.m_QuadMin    = Vec2(10.0f, 8.0f);
-    g.m_QuadSize   = Vec2(6.0f, 8.0f);
+    g.m_QuadMin    = _Vector2<float>(10.0f, 8.0f);
+    g.m_QuadSize   = _Vector2<float>(6.0f, 8.0f);
     g.m_RotAngle   = 0.0f;
     g.m_Font       = 0;
 
@@ -117,15 +117,15 @@ static void test_glyphttf_members()
     CHECK_FLOAT_NEAR(g.m_QuadSize.x, 6.0f, 1e-6f);
 
     // Whitespace skip: w<1 or h<1
-    g.m_QuadSize = Vec2(0.5f, 8.0f);
+    g.m_QuadSize = _Vector2<float>(0.5f, 8.0f);
     bool skip = (g.m_QuadSize.x < 1.0f || g.m_QuadSize.y < 1.0f);
     CHECK(skip);
 
-    g.m_QuadSize = Vec2(6.0f, 0.5f);
+    g.m_QuadSize = _Vector2<float>(6.0f, 0.5f);
     skip = (g.m_QuadSize.x < 1.0f || g.m_QuadSize.y < 1.0f);
     CHECK(skip);
 
-    g.m_QuadSize = Vec2(6.0f, 8.0f);
+    g.m_QuadSize = _Vector2<float>(6.0f, 8.0f);
     skip = (g.m_QuadSize.x < 1.0f || g.m_QuadSize.y < 1.0f);
     CHECK(!skip);
 

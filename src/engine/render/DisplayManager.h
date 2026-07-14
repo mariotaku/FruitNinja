@@ -3,7 +3,7 @@
 
 #include "render/gl_funcs.h"
 #include "math/Colour.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Matrix44.h"
 #include "core/MortarTypes.h"
 #include "core/Singleton.h"
@@ -30,7 +30,7 @@ public:
     Colour m_ClearColor;                // +0x04
     Colour m_DrawColor;                 // +0x08
     MortarRectangle m_WindowRect;       // +0x0C (16 bytes)
-    Vec3 m_lightDirection;              // +0x1C
+    _Vector3<float> m_lightDirection;              // +0x1C
     Colour m_GlobalAmbience;            // +0x28
     bool m_bRenderingActive;            // +0x2C
     uint8_t m_bSwapPending;             // +0x2D
@@ -72,7 +72,7 @@ public:
     void SetClearColour(const Colour& c);
 
     // Matches original SetLightDirection
-    void SetLightDirection(const Vec3& dir);
+    void SetLightDirection(const _Vector3<float>& dir);
 
     // ASM-spec v1.6.1 Mortar::DisplayManager::SetWindowSize @0x002566e8: param order (top,bottom,left,right); stores l->+0x0c,t->+0x10,r->+0x14,b->+0x18.
     void SetWindowSize(long t, long b, long l, long r);

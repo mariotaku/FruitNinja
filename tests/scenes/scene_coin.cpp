@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
     // --- Spawn: exact call convention of the real crit-slice/fruit-kill
     //     coin drop (Fruit::CollisionResponse @0x001de778, Fruit.cpp:1410-1412).
     const int coinCount = 5;
-    Vec3 spawnPos(0.0f, 0.0f, 0.0f);
+    _Vector3<float> spawnPos(0.0f, 0.0f, 0.0f);
     uint16_t baseAngle = 0;
     int rawSpread = (coinCount + 1) * 8190;
     uint16_t angleSpread = (uint16_t)(rawSpread < 65520 ? rawSpread : 65520);

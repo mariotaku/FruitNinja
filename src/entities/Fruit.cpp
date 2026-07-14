@@ -97,10 +97,10 @@ static bool s_FruitThrowSfxFiredThisFrame = false;
 //   0x2D9EE4 -> kSliceBaseAxis[0] = (1,0,0)   slice axis[0]
 //   0x2D9ED8 -> kSliceBaseAxis[1] = (0,1,0)   slice axis[1]
 //   0x3328AC -> kSliceBaseAxis[2] = (0,0,1)   slice axis[2]
-static const Vec3 kSliceBaseAxis[3] = {
-    Vec3(1.0f, 0.0f, 0.0f),
-    Vec3(0.0f, 1.0f, 0.0f),
-    Vec3(0.0f, 0.0f, 1.0f),
+static const _Vector3<float> kSliceBaseAxis[3] = {
+    _Vector3<float>(1.0f, 0.0f, 0.0f),
+    _Vector3<float>(0.0f, 1.0f, 0.0f),
+    _Vector3<float>(0.0f, 0.0f, 1.0f),
 };
 
 // GetFruitZPosition counter (v1.6.1 GetFruitZPosition @0x001ca61c).
@@ -161,7 +161,7 @@ void RandomStartAngle(Quaternion& out, bool use2D) {
         float ax = rng.RandF(2.0f) - 1.0f;
         float ay = rng.RandF(2.0f) - 1.0f;
         float az = rng.RandF(2.0f) - 1.0f;
-        Vec3 axis(ax, ay, az);
+        _Vector3<float> axis(ax, ay, az);
         axis.Normalise();
         uint32_t angle16 = rng.Rand32(0xff3aU) & 0xffff;
         out = Quaternion::Identity();
@@ -222,7 +222,7 @@ Fruit::~Fruit() {
 // (Re-stamped from stale v1.5.x 0x00176708 -> FruitFactLeaderboard region; re-verify behavior
 //  against v1.6.1 Fruit::Init before re-marking ASM-verified.)
 // v1.6.1 Fruit::Init @0x001e2898 — vtable slot 2. p2=fruitType; p3=scale (nullable).
-void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
+void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/) {
     // v1.6.1 Fruit::Init @0x001e2898: reset per-fruit event lists on pooled reuse (drops stale GPO subscribers so a recycled fruit never fires a delegate bound to a freed object).
     m_OnSliced.Clear();
     m_OnKilled.Clear();
@@ -259,7 +259,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_SliceTimer      = -1.0f;
     m_SliceArcAngle   = 0;
     m_SliceArcImpulse = 0.0f;
-    m_SlicePos        = Vec3(0, 0, 0);
+    m_SlicePos        = _Vector3<float>(0, 0, 0);
     m_pEmitter1    = nullptr;
     m_pEmitter2    = nullptr;
 
@@ -278,9 +278,9 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     // RNG source: binary uses WaveManager-owned PRNG (ASM-spec v1.6.1 Fruit::Init @0x001e2898).
     {
         Math::Random& rng = WaveManager::GetInstance()->GetRandom();
-        m_RotVel1 = Vec3(rng.RandF(11.0f) - 5.5f,
-                         rng.RandF(11.0f) - 5.5f,
-                         rng.RandF(11.0f) - 5.5f);
+        m_RotVel1 = _Vector3<float>(rng.RandF(11.0f) - 5.5f,
+                                    rng.RandF(11.0f) - 5.5f,
+                                    rng.RandF(11.0f) - 5.5f);
     }
     m_RotVel2 = m_RotVel1;
 
@@ -301,18 +301,18 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
             m_Rot2 = m_Rot1;
 
             float rotVelZ = GetRandBetween(3.0f, 5.0f, 0.5f, 0.0f);
-            m_RotVel1 = Vec3(10.0f, 0.0f, rotVelZ);
+            m_RotVel1 = _Vector3<float>(10.0f, 0.0f, rotVelZ);
             m_RotVel2 = m_RotVel1;
         }
     }
 
     // Default gravity — confirmed from v1.6.1 Fruit::Init @0x001e2898: literal -12.0, y-DAT=0.0
-    m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
+    m_Gravity = _Vector3<float>(0.0f, -12.0f, 0.0f);
 
     // Extra accel/jerk term — init to zero.
     // v1.6.1 Fruit::Init @0x001e2898 reads *globalConfigVec3 (GOT 0x001f4328);
     // BSS Vec3 initialised by _GLOBAL__I_Fruit.cpp to (0,0,0).
-    m_AccelTerm = Vec3(0.0f, 0.0f, 0.0f);
+    m_AccelTerm = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // Matches Fruit::SetFruitType @0x001dc054:
     // visualScale = globalScaleVec * FruitInfo[type].scale * VISUAL_SCALE_MULT (0.01)
@@ -327,7 +327,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         // it directly here, separate from the SetFruitType call below.)
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
-        scale = Vec3::One() * fruitScale;
+        scale = _Vector3<float>::One() * fruitScale;
 
         // ASM-spec v1.6.1 Fruit::Init @0x001e2898: calls SetFruitType(this, m_FruitType, scaleVec.x)
         // for m_VisualScale + collision-sphere setup. scaleVec is not supplied at this call site
@@ -404,7 +404,7 @@ void Fruit::SetFruitType(int fruitType, float scaleParam) {
     m_FruitType = (uint8_t)fruitType;
     const FruitInfoData* info = FruitInfo_Get(fruitType);
     float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
-    m_VisualScale = Vec3::One() * fruitScale;
+    m_VisualScale = _Vector3<float>::One() * fruitScale;
     const float fScale   = info ? info->m_Scale          : 25.0f;
     const float fColBase = info ? info->m_CollisionScale : 1.0f;
     const float base = fColBase + COL_RADIUS_FACTOR * fScale;
@@ -414,7 +414,7 @@ void Fruit::SetFruitType(int fruitType, float scaleParam) {
     } else {
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center() = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
         cs->radius = base * scaleParam;
     }
 }
@@ -576,7 +576,7 @@ void Fruit::Update(float dt) {
                     // NOTE: no flags write; relies on CheckHasGoneOffscreen later.
                     m_SpawnDelay = 0.0f;
                     pos.y        = -320.0f;
-                    vel          = Vec3(0.0f, -1.0f, 0.0f);
+                    vel          = _Vector3<float>(0.0f, -1.0f, 0.0f);
                 } else if (cnt != 1) {
                     // Multiplier cascade: pick one of three templates and spawn ONE extra
                     // fruit. Binary (Fruit::Update @0x001df828) calls SpawnFruit(cnt-1, ...)
@@ -615,7 +615,8 @@ void Fruit::Update(float dt) {
         const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_001e0414
         if (m_bBallisticEnable) {
             if (!m_bFrozen) {
-                Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
+                _Vector3<float> step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) *
+                    POS_INTEGRATION_SCALE;
                 vel += m_Gravity * dtScaled;
                 pos += step;
 
@@ -653,7 +654,7 @@ void Fruit::Update(float dt) {
 
         // binary @0x001df890 -- sliced gravity-grow: whole block gated on non-zero gravity
         // (DAT_1dfba0 = Vector3::ZERO, confirmed). Zero-gravity fruits skip both sub-gates.
-        if (m_Gravity != Vec3(0.0f, 0.0f, 0.0f)) {
+        if (m_Gravity != _Vector3<float>(0.0f, 0.0f, 0.0f)) {
             // binary @0x001df8d4 -- normal (non-critical) sliced fruit; gravity magnitude grows.
             // 0.2=DAT_1dfb94, 4.5 @0x1df8fc
             if (m_bCritical == 0) {
@@ -706,20 +707,20 @@ void Fruit::Update(float dt) {
         const FruitInfoData* spinInfo = FruitInfo_Get((long)m_FruitType);
         const bool isSuperFruit = (spinInfo && spinInfo->m_bIsSuperFruit);
         Quaternion* rotSlots[2] = { &m_Rot1, &m_Rot2 };
-        Vec3* velSlots[2] = { &m_RotVel1, &m_RotVel2 };
+        _Vector3<float>* velSlots[2] = {&m_RotVel1, &m_RotVel2};
         for (int idx = 0; idx < 2; ++idx) {
             if (m_bFrozen != 0) break;
             // Super-fruit: recompute axis0 from current m_Rot1 each frame.
             if (isSuperFruit && m_bSliced) {
                 Matrix44 mat = m_Rot1.ToMatrix44();
                 // Matrix44 col-major: col0 = (m[0],m[1],m[2]) = mat * (1,0,0)
-                m_SliceAxes[idx * 3 + 0] = Vec3(mat.m[0], mat.m[1], mat.m[2]);
+                m_SliceAxes[idx * 3 + 0] = _Vector3<float>(mat.m[0], mat.m[1], mat.m[2]);
             }
-            Vec3& rv = *velSlots[idx];
+            _Vector3<float>& rv = *velSlots[idx];
             Quaternion& rot = *rotSlots[idx];
-            Vec3& ax0 = m_SliceAxes[idx * 3 + 0];
-            Vec3& ax1 = m_SliceAxes[idx * 3 + 1];
-            Vec3& ax2 = m_SliceAxes[idx * 3 + 2];
+            _Vector3<float>& ax0 = m_SliceAxes[idx * 3 + 0];
+            _Vector3<float>& ax1 = m_SliceAxes[idx * 3 + 1];
+            _Vector3<float>& ax2 = m_SliceAxes[idx * 3 + 2];
             Quaternion qx, qy, qz;
             qx.CreateFromAxisAngle(ax0.x, ax0.y, ax0.z,
                 (uint32_t)((int)(rv.x * dtNorm * 182.0f) & 0xFFFF));
@@ -861,7 +862,7 @@ void Fruit::PostUpdate(float dt) {
 
 // Internal helper: draw the model once at (drawPos, drawRot, drawScale).
 static void DrawOneModel(Mortar::Model* model,
-                         const Vec3& drawPos,
+                         const _Vector3<float>& drawPos,
                          const Quaternion& drawRot,
                          float s)
 {
@@ -912,7 +913,7 @@ void Fruit::Draw(Renderer& r) {
     // ClearMenuItems when releasing menu fruit during dojo transition.
     if (!m_bSliced || m_bDrawWhole) {
         // Whole fruit — single draw at pos with m_Rot1.
-        Vec3 drawPos(pos.x, pos.y, m_ZPosition);
+        _Vector3<float> drawPos(pos.x, pos.y, m_ZPosition);
         DrawOneModel(fmi->m_Whole.Get(), drawPos, m_Rot1, s);
     } else {
         // Sliced fruit — draw two halves. Matches v1.6.1 Fruit::Draw
@@ -925,8 +926,8 @@ void Fruit::Draw(Renderer& r) {
         Mortar::Model* halfB = fmi->m_HalfB.IsValid()
                              ? fmi->m_HalfB.Get() : fmi->m_Whole.Get();
 
-        Vec3 drawPosA(pos.x,         pos.y,         m_ZPosition);
-        Vec3 drawPosB(m_SecondPos.x, m_SecondPos.y, m_ZPosition);
+        _Vector3<float> drawPosA(pos.x, pos.y, m_ZPosition);
+        _Vector3<float> drawPosB(m_SecondPos.x, m_SecondPos.y, m_ZPosition);
         DrawOneModel(halfA, drawPosA, m_Rot1, s);
         DrawOneModel(halfB, drawPosB, m_Rot2, s);
     }
@@ -1177,12 +1178,12 @@ bool Fruit::CheckHasGoneOffscreen() {
 int Fruit::CollisionResponse(Mortar::Entity* hitter,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
-                              Vec3* bladeVelPtr) {
+                              _Vector3<float>* bladeVelPtr) {
     // Guard: already sliced or slice timer is positive -> double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) {
         return 1;
     }
-    const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
+    const _Vector3<float>& bladeVel = bladeVelPtr ? *bladeVelPtr : _Vector3<float>(0, 0, 0);
 
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     const bool isSpecial  = (info->m_Score == 0x32);
@@ -1335,7 +1336,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //   modelIdx = 0 (normal) or 1 (crit), fruit = this, rateMul = 1.0
     const float sliceAngleDeg = (float)(int16_t)m_SliceArcAngle / -182.0f + 90.0f;
     const float sliceLength   = bladeSpeed * 0.4f;
-    AddSlice(Vec3(sliceAngleDeg, sliceLength, 1.0f), pos.x, pos.y,
+    AddSlice(_Vector3<float>(sliceAngleDeg, sliceLength, 1.0f), pos.x, pos.y,
              isCritical ? 1 : 0, this, pos.z);
 
     // Score, save totals, powerup, combo and achievements are gated exactly as
@@ -1479,7 +1480,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         if (info->m_pPowers && !m_bNoPowerUp
             && (game_work.bM_bPaused == 0 || bombHitWindow)) {
             uint32_t hash = info->m_pPowers->RandomPower();
-            Vec3 localPos = pos;
+            _Vector3<float> localPos = pos;
             // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500 (@0x001ddd9c): purchaseExtra
             // arg is NULL (mov r3,#0x0) -- a slice never passes a touch-pos "extra" value. Passing
             // &localPos here made ActivatePower treat the slice as a purchase (isPurchased=true,
@@ -1573,7 +1574,7 @@ void Fruit::Slice() {
     // Binary: rotate (0,0,1) by current m_Rot1, compare XY direction
     // against m_SliceArcAngle via GetSmallestDelta. If the rotated Z axis
     // points away from the slice direction, flip the halves' angles.
-    Vec3 slicePlane(0, 0, 1);
+    _Vector3<float> slicePlane(0, 0, 1);
     // Approximate: m_Rot1.ToMatrix44() * (0,0,1) -- just extract the
     // third column of the rotation matrix.
     Matrix44 rotMat = m_Rot1.ToMatrix44();
@@ -1628,9 +1629,9 @@ void Fruit::Slice() {
         //   rateMul=1.0, modelIdx=0, fruit=(Fruit*)1 (sentinel, not real ptr)
         const float critBase = (float)(int16_t)m_SliceArcAngle / -182.0f;
         const float critLen  = impulse * 0.4f * 0.7f;
-        AddSlice(Vec3(critBase + 60.0f, critLen, 1.0f), pos.x, pos.y,
+        AddSlice(_Vector3<float>(critBase + 60.0f, critLen, 1.0f), pos.x, pos.y,
                  0, (Fruit*)1, pos.z);
-        AddSlice(Vec3(critBase - 60.0f, critLen, 1.0f), pos.x, pos.y,
+        AddSlice(_Vector3<float>(critBase - 60.0f, critLen, 1.0f), pos.x, pos.y,
                  0, (Fruit*)1, pos.z);
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00176f1e -- stale v1.5.x) -- splatCount = *(int*)(*(GOT+DAT_00177060)),
@@ -1678,7 +1679,7 @@ void Fruit::Slice() {
         const float speed      = (impulse + r * impulse) *
                                  ((float)i * 0.2f + 5.0f);
         const float a          = (float)angle16 * (6.2831853f / 65536.0f);
-        Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
+        _Vector3<float> sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
 
         SplatEntity* s = SplatEntity::GetFree();
         // v1.6.1 Fruit::Slice @0x001dcf5c: a critical slice passes fruitType = m_FruitType + count
@@ -1754,13 +1755,13 @@ void Fruit::Slice() {
 
     const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
     const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
-    Vec3 dirA(sinf(radA), cosf(radA), 0.0f);
-    Vec3 dirB(sinf(radB), cosf(radB), 0.0f);
+    _Vector3<float> dirA(sinf(radA), cosf(radA), 0.0f);
+    _Vector3<float> dirB(sinf(radB), cosf(radB), 0.0f);
 
-    Vec3 halfVelA = dirA * (impulse * sliceFactor) +
-                    vel  * (1.0f - sliceFactor);
-    Vec3 halfVelB = dirB * (impulse * sliceFactor) +
-                    vel  * (1.0f - sliceFactor);
+    _Vector3<float> halfVelA = dirA * (impulse * sliceFactor) +
+        vel * (1.0f - sliceFactor);
+    _Vector3<float> halfVelB = dirB * (impulse * sliceFactor) +
+        vel * (1.0f - sliceFactor);
 
     m_SecondPos = pos;
 
@@ -1778,10 +1779,10 @@ void Fruit::Slice() {
     if (isCritical || info->m_Score == 0x32) {
         const float critRadA = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0x3ffc) * (6.2831853f / 65536.0f);
         const float critRadB = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0xc004) * (6.2831853f / 65536.0f);
-        halfVelA = Vec3((float)(int)(sinf(critRadA) * impulse),
-                        (float)(int)(cosf(critRadA) * impulse), 0.0f) * 1.75f;
-        halfVelB = Vec3((float)(int)(sinf(critRadB) * impulse),
-                        (float)(int)(cosf(critRadB) * impulse), 0.0f) * 1.75f;
+        halfVelA = _Vector3<float>((float)(int)(sinf(critRadA) * impulse),
+                                   (float)(int)(cosf(critRadA) * impulse), 0.0f) * 1.75f;
+        halfVelB = _Vector3<float>((float)(int)(sinf(critRadB) * impulse),
+                                   (float)(int)(cosf(critRadB) * impulse), 0.0f) * 1.75f;
     } else if (!m_bMenuFling) {
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00177444..0x0017744e -- stale v1.5.x) -- only on the plain slice path and
@@ -1826,7 +1827,7 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
     int local_e4 = 0;
 
     for (int idx = 0; idx < 2; ++idx) {
-        Vec3* rv = (idx == 0) ? &m_RotVel1 : &m_RotVel2;
+        _Vector3<float>* rv = (idx == 0) ? &m_RotVel1 : &m_RotVel2;
 
         // Spin magnitude scale from incoming m_RotVel (per half).
         // DAT_001dae2c (2.0/0.5) keyed on m_bCritical @0x165.
@@ -1876,11 +1877,11 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
             // ===== SUPER fruit: spin axes from blade direction =====
             // axis0: perpendicular to blade.
             uint16_t aBlade = (uint16_t)((0x3FC0 - (int)m_SliceArcAngle + 0x3C) & 0xFFFF);
-            m_SliceAxes[idx * 3 + 0] = Vec3(CosIdx(aBlade), SinIdx(aBlade), 0.0f);
+            m_SliceAxes[idx * 3 + 0] = _Vector3<float>(CosIdx(aBlade), SinIdx(aBlade), 0.0f);
 
             // axis1: g_BaseAxisC = (0,0,1), flipped for half0.
             {
-                Vec3 base = kSliceBaseAxis[2];   // (0,0,1) = g_BaseAxisC @0x3328AC
+                _Vector3<float> base = kSliceBaseAxis[2];   // (0,0,1) = g_BaseAxisC @0x3328AC
                 if (sliceDirFlag == 0) base = base * -1.0f;
                 m_SliceAxes[idx * 3 + 1] = base;
             }
@@ -1890,7 +1891,7 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
             {
                 uint16_t bIdx = (uint16_t)((int)((float)local_e4 * 182.0f) & 0xFFFF);
                 uint16_t a2   = (uint16_t)(bIdx - m_SliceArcAngle);
-                m_SliceAxes[idx * 3 + 2] = Vec3(CosIdx(a2), SinIdx(a2), 0.0f);
+                m_SliceAxes[idx * 3 + 2] = _Vector3<float>(CosIdx(a2), SinIdx(a2), 0.0f);
             }
 
             // For half1: flip the m_RotVel components.
@@ -1914,7 +1915,7 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
         }
 
         // Store the per-axis spin triple into m_RotVel slot.
-        *rv = Vec3(angX, angY, angZ);
+        *rv = _Vector3<float>(angX, angY, angZ);
 
         // Build initial m_Rot from the slice arc angle.
         // Binary: three CreateFromAxisAngle calls with angle 0x3FC0 then m_SliceArcAngle.
@@ -1939,7 +1940,7 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
 // NOT a substitution. The sign only appears to be "always the same" on the
 // port when g_Random's boot seed is near-constant across launches (see
 // SystemManager::Init); that is a seed-entropy bug, not a math bug.
-void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
+void Fruit::RotateFacingUp(bool alignToFacing, _Vector3<float> spinVelAxis) {
     // ASM-spec v1.6.1 Fruit::RotateFacingUp @0x001db478 — uses Math::g_Random
     float r    = Math::g_Random.RandF(2.0f);
     float sign = (Math::g_Random.Rand32(2) == 0) ? 1.0f : -1.0f;
@@ -1947,7 +1948,7 @@ void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
 
     for (int i = 0; i < 2; i++) {
         Quaternion* rot    = (i == 0) ? &m_Rot1 : &m_Rot2;
-        Vec3*       rotVel = (i == 0) ? &m_RotVel1 : &m_RotVel2;
+        _Vector3<float>* rotVel = (i == 0) ? &m_RotVel1 : &m_RotVel2;
 
         // Step 1: RandomStartAngle(rot, use2D=true)
         RandomStartAngle(*rot, true);
@@ -2035,7 +2036,7 @@ typedef Mortar::List<SliceEffect>::Node SliceNode;
 
 struct FruitGlobalData {
     Mortar::List<SliceEffect>*              s_slices;              // +0x00 (heap ptr)
-    Vec3                                    s_sliceParams[7];      // +0x04..+0x57 (slice-effect tuning Vec3s; HLE-confirmed floats)
+    _Vector3<float> s_sliceParams[7];      // +0x04..+0x57 (slice-effect tuning Vec3s; HLE-confirmed floats)
     Mortar::SmartPtr<Mortar::Model>         s_sliceModel[4];       // +0x58..+0x67
     Mortar::MemoryPool<SliceNode>*          s_pool;                // +0x68 (heap ptr)
     // +0x6C..+0x8B: NOT FruitGlobalData members -- in the binary these 8 ints are
@@ -2078,7 +2079,7 @@ static FruitGlobalData g_fruitData;
 //   posX/posY/posZ: world position components (split across arg slots)
 //   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
 //   fruit: dedup/clamp sentinel (real Fruit* or 0/1/3)
-void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
+void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
 {
     // Crit SFX: if impulse > 2.5 and 1-in-3 chance, play Air-Whoosh variant.
     // v1.6.1 @0x001dc990 (GOT-relative SFX name resolution).
@@ -2121,7 +2122,7 @@ void AddSlice(Vec3 v, float posX, float posY, int modelIdx, Fruit* fruit, float 
     n->value.m_Timer    = 0.f;
     n->value.m_Impulse  = v.y;
     n->value.m_AngleDeg = v.x;
-    n->value.m_Pos      = Vec3(posX, posY, posZ);
+    n->value.m_Pos      = _Vector3<float>(posX, posY, posZ);
     n->value.m_ModelIdx = modelIdx;
     n->value.m_pFruit   = fruit;
     n->value.m_RateMul  = v.z;
@@ -2169,9 +2170,9 @@ void DrawSlices(float dt, bool pass)
                     if (f < 0) f = 0;
                     if (f > 5) f = 5;
                     float frac = n->value.m_Timer - (float)f;
-                    const Vec3& kA = SLICE_KEYFRAMES[f];
-                    const Vec3& kB = SLICE_KEYFRAMES[f + 1];
-                    Vec3 scale(
+                    const _Vector3<float>& kA = SLICE_KEYFRAMES[f];
+                    const _Vector3<float>& kB = SLICE_KEYFRAMES[f + 1];
+                    _Vector3<float> scale(
                         kA.x + (kB.x - kA.x) * frac,
                         kA.y + (kB.y - kA.y) * frac,
                         kA.z + (kB.z - kA.z) * frac
@@ -2759,7 +2760,7 @@ void Fruit::EnableCollision(bool enable) {
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center() = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
         cs->radius = radius;
     } else {
         delete m_Col;
@@ -2856,9 +2857,10 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
 
 // v1.6.1 Fruit::GetSliceDir @0x001bff08 — unit direction for a slice index, offset by the
 // fruit's blade angle (m_SliceArcAngle, +0xc0). Returns (SinIdx(a), CosIdx(a), 0).
-Vec3 Fruit::GetSliceDir(uint16_t sliceIdx) const {
+_Vector3<float> Fruit::GetSliceDir(uint16_t sliceIdx) const
+{
     uint16_t a = (uint16_t)(sliceIdx + m_SliceArcAngle);
-    return Vec3(SinIdx(a), CosIdx(a), 0.0f);
+    return _Vector3<float>(SinIdx(a), CosIdx(a), 0.0f);
 }
 
 // v1.6.1 Fruit::RemoveTrailParticles @0x001db2a8 — release both trail/juice emitters back to
@@ -2909,7 +2911,7 @@ void Fruit::UpdateBombAvoidance(float dt) {
     while (e) {
         Bomb* bomb = static_cast<Bomb*>(e);
         if (bomb->IsActive() && bomb->m_Col != NULL) {
-            Vec3 diff = bomb->pos - pos;
+            _Vector3<float> diff = bomb->pos - pos;
             if (diff.MagnitudeSqr() < 4900.0f) {   // 4900.0 (70^2); v1.6.1 DAT TODO
                 float dvx = vel.x - bomb->vel.x;
                 float dvy = vel.y - bomb->vel.y;

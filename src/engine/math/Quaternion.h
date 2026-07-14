@@ -1,7 +1,7 @@
 #ifndef MORTAR_QUATERNION_H
 #define MORTAR_QUATERNION_H
 
-#include "Vec3.h"
+#include "_Vector3.h"
 #include "Matrix44.h"
 #include <cmath>
 #include <cstdint>
@@ -31,7 +31,7 @@ struct Quaternion {
     }
 
     // Matches QuatFromAxisAngle used in Fruit::Update
-    static Quaternion FromAxisAngle(const Vec3& axis, float angleRad) {
+    static Quaternion FromAxisAngle(const _Vector3<float>& axis, float angleRad) {
         float half = angleRad * 0.5f;
         float s = sinf(half);
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));

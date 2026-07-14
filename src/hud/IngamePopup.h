@@ -13,7 +13,7 @@
 //   0x11  shop SELECTED badge     -- drawn by ShopListItem::DrawFloatingText
 //   0x00  combo popup (on-demand) -- TODO: created elsewhere, skip this pass
 
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
@@ -34,18 +34,18 @@ public:
     // Draw v1.6.1 IngamePopup::Draw @0x0016d3ec
     // pos = world-space anchor (by value, Vec3 first per binary mangled sig).
     // scale = animation curve supplied by caller (IngamePopup has no Update).
-    void Draw(Vec3 pos, float scale);
+    void Draw(_Vector3<float> pos, float scale);
 
     // +0x00
     std::vector<Mortar::BakedStringBox*> m_TextBoxes;       // +0x00 (12 bytes ARM32)
     // +0x0c
-    std::vector<Vec3>                    m_TextPositions;    // +0x0c (12 bytes ARM32)
+    std::vector<_Vector3<float>>                    m_TextPositions;    // +0x0c (12 bytes ARM32)
     // +0x18
     std::vector<Mortar::SmartPtr<Mortar::Texture>> m_Textures;     // +0x18 (12 bytes ARM32)
     // +0x24
-    std::vector<Vec3>                    m_TexturePositions; // +0x24 (12 bytes ARM32)
+    std::vector<_Vector3<float>>                    m_TexturePositions; // +0x24 (12 bytes ARM32)
     // +0x30
-    std::vector<Vec3>                    m_TextureScales;    // +0x30 (12 bytes ARM32)
+    std::vector<_Vector3<float>>                    m_TextureScales;    // +0x30 (12 bytes ARM32)
     // +0x3c
     int   m_Type;           // +0x3c
     // +0x40

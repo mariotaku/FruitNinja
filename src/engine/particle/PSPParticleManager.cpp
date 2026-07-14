@@ -158,8 +158,8 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
 
     e->m_Timer = 0.0f;
     e->m_bStarted = 1;
-    e->m_Pos = Vec3(0, 0, 0);
-    e->m_Vel = Vec3(0, 0, 0);
+    e->m_Pos = _Vector3<float>(0, 0, 0);
+    e->m_Vel = _Vector3<float>(0, 0, 0);
     e->m_RateScale = 1.0f;
     e->m_SizeBias = 1.0f;
     e->m_SpinScale = 1.0f;

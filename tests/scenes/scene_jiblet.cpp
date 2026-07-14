@@ -62,7 +62,7 @@
 #include "engine/asset/MeshManager.h"
 #include "math/MathUtil.h"
 #include "math/Random.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "util/StringHash.h"
 #include "Game.h"
 #include <cstdio>
@@ -228,13 +228,13 @@ int main(int argc, char* argv[]) {
         snprintf(jb, sizeof(jb), "%s_jiblet", modelName);
         uint32_t jh = StringHash(jb);
 
-        Vec3 origin(0.0f, 0.0f, 0.0f);
+        _Vector3<float> origin(0.0f, 0.0f, 0.0f);
         for (int i = 0; i < JIB_COUNT; ++i) {
             Jiblet* j = static_cast<Jiblet*>(am->Add(5, true));
             if (!j) continue;
             float ang = JibUniform((i + 0.2f) * 45.0f, (i + 0.8f) * 45.0f);
             uint16_t a16 = (uint16_t)((int)((angBase + ang) * 182.0f) & 0xffff);
-            Vec3 dir(CosIdx(a16), SinIdx(a16), 0.0f);
+            _Vector3<float> dir(CosIdx(a16), SinIdx(a16), 0.0f);
             j->Init(fruitType, origin,
                     JibUniform(0.8f, 1.25f),
                     dir * JibUniform(500.0f, 900.0f),

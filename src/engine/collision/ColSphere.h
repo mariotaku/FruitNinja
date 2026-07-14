@@ -18,13 +18,13 @@ public:
     float  radius; // +0x14
 
     // center accessor -- returns the Col-base m_PrimaryPoint (binary reuse; no extra storage)
-    Vec3& center()             { return m_PrimaryPoint; }
-    const Vec3& center() const { return m_PrimaryPoint; }
+    _Vector3<float>& center() { return m_PrimaryPoint; }
+    const _Vector3<float>& center() const { return m_PrimaryPoint; }
 
     // ASM-spec v1.6.1 ColSphere::ColSphere() @ 0x0025cfd0
     ColSphere();
     // ASM-spec v1.6.1 ColSphere::ColSphere(Vec3, float) @ 0x0025d024
-    ColSphere(Vec3 c, float r);
+    ColSphere(_Vector3<float> c, float r);
 
     virtual ~ColSphere() override {}
 
@@ -32,7 +32,7 @@ public:
     virtual int GetType() const override { return TYPE_SPHERE; }
 
     // Binary slot 3 -- double-dispatch by other->GetType()
-    virtual int Collide(Col* other, Vec3* outNormal) override;
+    virtual int Collide(Col* other, _Vector3<float>* outNormal) override;
 
     // Binary slot 4
     virtual void DrawDebug() override;
@@ -40,12 +40,12 @@ public:
     // Port-side intersection helpers (pre-hierarchy port, kept for call sites)
     bool Intersects(const ColSphere& other) const;
     bool IntersectsLine(const ColLine& line) const;
-    bool Contains(const Vec3& p) const;
+    bool Contains(const _Vector3<float>& p) const;
 
     // ASM-verified: 2026-06-26 v1.6.1 ColSphere::ColSphereLine @ 0x0025d114 (asm-inspector) -- sphere-vs-line penetration; returns 1 on hit.
-    static int ColSphereLine(ColSphere*, ColLine*, Vec3*);
+    static int ColSphereLine(ColSphere*, ColLine*, _Vector3<float>*);
     // ASM-spec v1.6.1 ColSphere::ColSphereSphere @ 0x0025d228 -- sphere-vs-sphere penetration; returns 1 on hit.
-    static int ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
+    static int ColSphereSphere(ColSphere*, ColSphere*, _Vector3<float>*);
 };
 
 #ifdef __bada__

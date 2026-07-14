@@ -56,7 +56,7 @@
 #include "entities/ActorManager.h"
 #include "game/GameWork.h"
 #include "hud/HUD.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstdint>
 #include <list>
@@ -108,8 +108,8 @@ int main(int argc, char* argv[]) {
     }
     Fruit* fruit = static_cast<Fruit*>(e);
     fruit->Init(NULL, (long)fruitType, NULL);
-    fruit->pos = Vec3(0.0f, 0.0f, 0.0f);
-    fruit->vel = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    fruit->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);
     fruit->flags &= ~(uint32_t)(0x01 | 0x10);  // clear ENT_INACTIVE | ENT_KILLED
 
     // Real hitter entity: GameInit spawns 16 SlashEntity finger-slots at boot
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     // Real slice path: Fruit::CollisionResponse -> Fruit::FruitWasSlicedEvent()
     // -> SuperFruitControl::SuperFruitSliced (subscribed by LoadContent() during
     // GameInitialise, which already ran as part of h.Init()).
-    Vec3 bladeVel(15.0f, 15.0f, 0.0f);
+    _Vector3<float> bladeVel(15.0f, 15.0f, 0.0f);
     fruit->CollisionResponse(g_pSlashEntities[0], 0, 0, &bladeVel);
 
     std::map<Fruit*, SuperFruitControl*>::iterator it =

@@ -48,7 +48,7 @@
 
 #include "HUDControl3d.h"
 #include "engine/asset/Texture.h"
-#include "engine/math/Vec2.h"
+#include "engine/math/_Vector2.h"
 #include "engine/util/Delegate.h"
 #include "engine/util/SmartPtr.h"
 #include <cstdint>
@@ -62,9 +62,9 @@ class Fruit;
 // Binary @ 0x00150240 (AddPeice)
 struct MenuButtonAddOn {
     HUDControl3d* control;   // +0x00
-    Vec2*         texCoord;  // +0x04 (param_5 from AddPeice; usually NULL)
-    Vec3          offset;    // +0x08 local position relative to parent
-    Vec3          sizeScale; // +0x14 local size multiplier
+    _Vector2<float>* texCoord;  // +0x04 (param_5 from AddPeice; usually NULL)
+    _Vector3<float> offset;    // +0x08 local position relative to parent
+    _Vector3<float> sizeScale; // +0x14 local size multiplier
     // NOTE: offset.y is reused as per-frame angular velocity by UpdatePeices
 };
 
@@ -144,7 +144,7 @@ public:
     float           m_NewIndicatorTimer;   // +0xFC
 
     // +0x100: entity base scale captured on first frame. Init = Vec3(0,0,0).
-    Vec3            m_BaseScale;           // +0x100..+0x10B
+    _Vector3<float> m_BaseScale;           // +0x100..+0x10B
 
     // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
     // std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11 sentinel-only).
@@ -152,7 +152,7 @@ public:
 
     // +0x114: label anchor offset added to GetAdjustedPos() in Draw.
     // v1.6.1 MenuButton::Draw @0x0019c764: anchor = GetWorldPos() + m_DrawOffset.
-    Vec3            m_DrawOffset;          // +0x114..+0x11F
+    _Vector3<float> m_DrawOffset;          // +0x114..+0x11F
 
     // +0x120: white FG label (gradient-tinted). BakedStringTTF alignSigned=-1, effectSize=0.
     // v1.6.1 MenuButton::SetText @0x0019b0ac.
@@ -196,7 +196,7 @@ public:
 
     // +0x13C: target rest scale Vec3 (all 3 floats; Init writes all 3 via stmia).
     // v1.6.1 MenuButton::Init @0x0019b994 / CreateFruit @0x0019b8c8 both write .z.
-    Vec3            m_RestScale;           // +0x13C..+0x147
+    _Vector3<float> m_RestScale;           // +0x13C..+0x147
 
     // +0x148: hit-area presence flag (Init sets from |hitBounds.x|+|hitBounds.y|>0)
     uint8_t         m_bHasHitArea;        // +0x148
@@ -227,7 +227,7 @@ public:
     uint8_t         _pad151[3];            // +0x151..+0x153
 
     // +0x154: shake/backdrop scale factors Vec3; Init = Vec3(1, 0.85, 0.85) (DAT_0019bafc=0.85f)
-    Vec3            m_ShakeScale;          // +0x154..+0x15F
+    _Vector3<float> m_ShakeScale;          // +0x154..+0x15F
 
     // +0x160: label extra alpha (Draw second-pass gate >0). Init=0.
     float           m_LabelExtraAlpha;     // +0x160
@@ -267,9 +267,9 @@ public:
     // 0x0019be50 / 0x0019bff8 char*-text variants -- not yet ported). ALL params
     // by value. param6 is Delegate0<void> -> forwarded to Init as deletedCb
     // (m_DeletedCallback +0xAC); the binary ctor never touches m_RemoveCallback (+0x38).
-    MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, Vec3 spawnPos,
+    MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, _Vector3<float> spawnPos,
                Mortar::Delegate0<void> clickCb,
-               int fruitType, Vec3 hitBounds,
+               int fruitType, _Vector3<float> hitBounds,
                Mortar::Delegate0<void> deletedCb);
 
     ~MenuButton();
@@ -303,8 +303,8 @@ public:
     void Skip() override;
 
     // MenuButton::Init @ 0x0019b994 (5-arg; sets all fields, calls CreateFruit)
-    void Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
-              int fruitType, Vec3 hitBounds,
+    void Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb,
+              int fruitType, _Vector3<float> hitBounds,
               Mortar::Delegate0<void> deletedCb);
 
     // Creates the fruit/bomb entity for m_FruitType>=0 (called from Init tail)
@@ -344,9 +344,9 @@ public:
     bool TouchReleased();
 
     // v1.6.1 MenuButton::AddPeice @0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
-    void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+    void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
                   float rotSpeed, float initialTimer,
-                  Vec3 offset, Vec3 sizeScale,
+                  _Vector3<float> offset, _Vector3<float> sizeScale,
                   Colour tint, int layerFlags);
 
     // v1.6.1 MenuButton::UpdatePeices @0x0019a630: per-addon position/size update

@@ -321,7 +321,7 @@ void SlashEntity::Init(int fingerId) {
 #else
     (void)fingerId;
 #endif
-    Init(static_cast<void*>(nullptr), 0L, static_cast<Vec3*>(nullptr));
+    Init(static_cast<void*>(nullptr), 0L, static_cast<_Vector3<float>*>(nullptr));
     RegisterInputCallbacks();
 }
 
@@ -396,22 +396,22 @@ void SlashEntity::Reset() {
     // Binary @0x1e66c8: re-arm blade direction to the zero vector on every
     // touch-down (ldmia/stmia copies _Vector3::Zero @0x2d9288;
     // DAT_002d928c/002d9290 = 0.0f). Set before the anchor sentinels.
-    m_BladeDir = Vec3(0.0f, 0.0f, 0.0f);
+    m_BladeDir = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // Binary @ 0x1e6688: re-arm the anchor sentinel on every touch-down
     // (do/while i!=3 writes (-65535,-65535,-65535) to +0x70/+0x7c/+0x88).
     // DAT_001e67e0 = 0xc77fff00 = -65535.0f.
     static const float kAnchorSentinel = -65535.0f;
-    m_TailPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
-    m_HeadPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
-    m_PrevHeadPos = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_TailPos     = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_HeadPos     = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_PrevHeadPos = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
 
     // Binary @0x1e671c..0x1e6744: clear the ghost-ring write cursor/count, then
     // fill all 6 m_GhostDirRing entries (stride 0xc) with _Vector3::Zero.
     // Re-arms the #128 directional trail emitter on every new slice.
     m_GhostIndex = 0;
     m_GhostCount = 0;
-    for (int i = 0; i < 6; ++i) m_GhostDirRing[i] = Vec3(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < 6; ++i) m_GhostDirRing[i] = _Vector3<float>(0.0f, 0.0f, 0.0f);
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "Reset[%d]: seed anchors tail=(%.1f,%.1f,%.1f) head=(%.1f,%.1f,%.1f) prev=(%.1f,%.1f,%.1f) pointCount=%d",
              m_FingerId,
@@ -671,7 +671,7 @@ void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
 // Touch ingestion
 // ---------------------------------------------------------------------------
 void SlashEntity::OnTouchActive(float x, float y) {
-    Vec3 newPos(x, y, 0.0f);
+    _Vector3<float> newPos(x, y, 0.0f);
 #if !defined(__bada__)
     // Port specific: cache SDL touch coordinates for splat emission (lacks Bada InputEvent pipeline).
     m_RawTouchPos = newPos;
@@ -681,8 +681,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
                     // (and ModPowerMask repel/attract) used screen center.
 #endif
 
-    const Vec3 lastCenter = m_TailPos;
-    const Vec3 distVec(newPos.x - lastCenter.x, newPos.y - lastCenter.y, 0.0f);
+    const _Vector3<float> lastCenter = m_TailPos;
+    const _Vector3<float> distVec(newPos.x - lastCenter.x, newPos.y - lastCenter.y, 0.0f);
     const float distSq = distVec.x * distVec.x + distVec.y * distVec.y;
 
     // Binary @ 0x1e9f08 (UpdateTouchDown): gate is tail.x <= -65520.0f (DAT_001ea3f8).
@@ -723,17 +723,17 @@ void SlashEntity::OnTouchActive(float x, float y) {
     // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1ea214: m_TrailShiftA = m_PointCount-2 (activity gate, pre-AddPoint).
     m_TrailShiftA = m_PointCount - 2;
 
-    Vec3 dir;
+    _Vector3<float> dir;
     if (isSeed) {
         // Binary LAB_001ea1b4: copy current touch pos into all three anchors.
         m_TailPos     = newPos;
         m_HeadPos     = newPos;
         m_PrevHeadPos = newPos;
         m_PointCount  = 0;
-        m_BladeDir    = Vec3(1.0f, 0.0f, 0.0f); // non-zero seed so AddPoint guard passes
+        m_BladeDir    = _Vector3<float>(1.0f, 0.0f, 0.0f); // non-zero seed so AddPoint guard passes
         // Binary computes seed direction from DAT_001ea41c (global ref vec) - tail.
         // Using (1,0,0) matches binary's "non-degenerate first direction" intent.
-        dir = Vec3(1.0f, 0.0f, 0.0f);
+        dir = _Vector3<float>(1.0f, 0.0f, 0.0f);
 #ifdef FN_DEBUG_TOUCH
         LOG_DEBUG("SLASH", "OnTouchActive[%d]: SEED branch -> anchors=(%.2f,%.2f) pointCount=%d",
                  m_FingerId, x, y, m_PointCount);
@@ -743,7 +743,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1e9f08: AddPoint receives
         // the RAW position-tail vector (magnitude=travel dist), not unit -- drives
         // m_BladeDir/splat/jerk. Unit vector kept separately ONLY for step positions.
-        Vec3 unitDir(distVec.x / dist, distVec.y / dist, 0.0f);
+        _Vector3<float> unitDir(distVec.x / dist, distVec.y / dist, 0.0f);
         dir = distVec; // raw dir passed to AddPoint; magnitude == travel distance
 
         // Binary UpdateTouchDown @0x1e9f08: ramp pressure from headThick -> 1.0 for
@@ -753,8 +753,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // Interpolate intermediate points every POINT_SPACING units.
         float travelled = POINT_SPACING;
         while (travelled < dist) {
-            Vec3 step(lastCenter.x + unitDir.x * travelled,
-                      lastCenter.y + unitDir.y * travelled, 0.0f);
+            _Vector3<float> step(lastCenter.x + unitDir.x * travelled,
+                                 lastCenter.y + unitDir.y * travelled, 0.0f);
             const float pressure = headThick + (travelled / dist) * (1.0f - headThick);
             AddPoint(pressure, &step, &dir);
             travelled += POINT_SPACING;
@@ -847,7 +847,7 @@ void SlashEntity::OnTouchReleased() {
 // Scroll cap: if m_SplitPoint-2 <= m_PointCount, slide buffers down by one pair
 //   and set m_PointCount = m_SplitPoint-4.
 // ---------------------------------------------------------------------------
-void SlashEntity::AddPoint(float pressure, const Vec3* center, Vec3* dir) {
+void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vector3<float>* dir) {
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
     if (!center || !dir) return;
 
@@ -882,10 +882,10 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, Vec3* dir) {
             // dir zero: binary substitutes m_BladeDir for the rest of AddPoint
             // so that downstream m_BladeDir=*dir keeps the previous direction.
             *dir = m_BladeDir;
-            m_GhostDirRing[slot] = Vec3(0.0f, 0.0f, 0.0f);
+            m_GhostDirRing[slot] = _Vector3<float>(0.0f, 0.0f, 0.0f);
         } else if (m_GhostCount == 0) {
             // First stroke point: write zero to ring (binary special case).
-            m_GhostDirRing[slot] = Vec3(0.0f, 0.0f, 0.0f);
+            m_GhostDirRing[slot] = _Vector3<float>(0.0f, 0.0f, 0.0f);
         } else {
             // Normal: copy dir then normalize in-place (binary _Vector3::Normalise @0x00138ce8).
             m_GhostDirRing[slot] = *dir;
@@ -893,7 +893,7 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, Vec3* dir) {
         }
 
         // Average PREVIOUS slots only, excluding the just-written current slot.
-        m_GhostDir = Vec3(0.0f, 0.0f, 0.0f);
+        m_GhostDir = _Vector3<float>(0.0f, 0.0f, 0.0f);
         if (m_GhostCount > 1) {
             for (int i = 1; i < (int)m_GhostCount; ++i) {
                 int prevSlot = (int)(((unsigned int)m_GhostIndex + 18u - (unsigned int)i) % 6u);
@@ -1754,9 +1754,9 @@ void SlashEntity::Update(float dt) {
                         // --- NON-HIT: FRUIT VELOCITY REPULSION/ATTRACTION ---
                         // ModPowerMask bit 0 = repel, bit 1 = attract.
                         // Executed in order: bit 2 (attract) preferred over bit 0 (repel).
-                        Vec3 dirToFruit(fruit->pos.x - pos.x,
-                                        fruit->pos.y - pos.y,
-                                        fruit->pos.z - pos.z);
+                        _Vector3<float> dirToFruit(fruit->pos.x - pos.x,
+                                                   fruit->pos.y - pos.y,
+                                                   fruit->pos.z - pos.z);
                         float dist = dirToFruit.Magnitude();
                         if (dist > 0.001f) dirToFruit = dirToFruit * (1.0f / dist);
 
@@ -1793,7 +1793,7 @@ void SlashEntity::Update(float dt) {
                     if (!bomb->IsActive()) continue;
                     if (bomb->flags & 0x01) continue; // v1.6.1 @0x001e8ce0: skip ENT_INACTIVE (MenuButton grow-in)
 
-                    Vec3 bladeDirCopy = m_BladeDir; // binary saves dir before test
+                    _Vector3<float> bladeDirCopy = m_BladeDir; // binary saves dir before test
                     bool hit = CollideWithEntity(bomb);
 
                     if (hit) {
@@ -1812,9 +1812,9 @@ void SlashEntity::Update(float dt) {
                     } else {
                         // --- NON-HIT: BOMB VELOCITY REPULSION/ATTRACTION ---
                         // ModPowerMask bit 3 = repel, bit 4 = attract.
-                        Vec3 dirToBomb(bomb->pos.x - pos.x,
-                                       bomb->pos.y - pos.y,
-                                       bomb->pos.z - pos.z);
+                        _Vector3<float> dirToBomb(bomb->pos.x - pos.x,
+                                                  bomb->pos.y - pos.y,
+                                                  bomb->pos.z - pos.z);
                         float dist = dirToBomb.Magnitude();
                         if (dist > 0.001f) dirToBomb = dirToBomb * (1.0f / dist);
 
@@ -1955,7 +1955,7 @@ void SlashEntity::Update(float dt) {
                                 const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboFruitTypes[i]);
                                 if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCounter; break; }
                             }
-                            Vec3 coinPos = m_SliceFruitPos;
+                            _Vector3<float> coinPos = m_SliceFruitPos;
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
                             Coin::MakeCoins(bonusCoins, 1,
                                             &coinPos, 0, 0xff3a,
@@ -2065,12 +2065,12 @@ void SlashEntity::Update(float dt) {
         // FruitCamera::TranslatePos(this->pos, inverse=true, useZeroCenter=true).
         // this->pos is the live blade position (Entity +0x10), so splats trail the blade
         // across the multi-frame spawn (NOT frozen at the fruit). Camera = game_work.m_FruitCamera.
-        Vec3 v(m_SliceBladeDir.x * (Math::g_Random.RandF(0.75f) + 0.75f),
-               m_SliceBladeDir.y * (Math::g_Random.RandF(0.75f) + 0.75f),
-               0.0f);
+        _Vector3<float> v(m_SliceBladeDir.x * (Math::g_Random.RandF(0.75f) + 0.75f),
+                          m_SliceBladeDir.y * (Math::g_Random.RandF(0.75f) + 0.75f),
+                          0.0f);
         // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
         FruitCamera* cam = game_work.m_FruitCamera;
-        Vec3 splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
+        _Vector3<float> splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
         // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false).
         //   landImmediately=false is correct here.
         // ASM-spec v1.6.1 trail caller @0x001e9788: mute arg = (FruitInfo+0x330
@@ -2175,7 +2175,7 @@ void SlashEntity::DrawSlice() {
 // Init (3-arg binary form) -- v1.6.1 @ 0x1e7a34
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C65C (re-analyst)
 // ---------------------------------------------------------------------------
-void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
+void SlashEntity::Init(void* /*unused*/, long /*unused*/, _Vector3<float>* /*unused*/) {
     // 1. Allocate ColLine into m_Col (+0x38).
     m_Col = new ColLine();
     // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x0017c68c (re-analyst)
@@ -2200,13 +2200,13 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
 
     // 6. Ghost ring init: zero all 6 Vec3 entries at +0xbc.
     for (int i = 0; i < 6; ++i) {
-        m_GhostDirRing[i] = Vec3(0.0f, 0.0f, 0.0f);
+        m_GhostDirRing[i] = _Vector3<float>(0.0f, 0.0f, 0.0f);
     }
 
     // Ghost index/count at +0x104/+0x108 = 0; ghost-dir at +0x10c = zero.
     m_GhostIndex = 0;
     m_GhostCount = 0;
-    m_GhostDir   = Vec3(0.0f, 0.0f, 0.0f);
+    m_GhostDir   = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // +0x118 = m_ComboTimer seeded to 0.1f (DAT_001e7b98 = 0x3dcccccd).
     // +0xb8 = m_SwipeSoundTimer seeded to 0.0f (DAT_001e7b94 = 0x00000000).
@@ -2285,9 +2285,9 @@ void SlashEntity::InitPoints(long count) {
     // (DAT_001e76e8 = 0xc77fff00 = -65535.0f). The sentinel is tested by
     // UpdateTouchDown: tail.x <= -65520 means "first point of new slash".
     static const float kAnchorSentinel = -65535.0f;
-    m_TailPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
-    m_HeadPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
-    m_PrevHeadPos = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_TailPos     = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_HeadPos     = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_PrevHeadPos = _Vector3<float>(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "InitPoints: seed anchors tail=(%.1f,%.1f,%.1f) head=(%.1f,%.1f,%.1f) prev=(%.1f,%.1f,%.1f) pointCount=%d",
              m_TailPos.x, m_TailPos.y, m_TailPos.z,
@@ -2454,33 +2454,33 @@ bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
     if (!L || !(m_SegLenSq > 0.0f) || !entity) return false;
     Col* eCol = entity->m_Col;
     if (!eCol || game_work.bM_Mode || game_work.retryFlag) return false;
-    Vec3 pen;
+    _Vector3<float> pen;
     if (eCol->GetType() != Col::TYPE_SPHERE) {
         return L->Collide(eCol, &pen) != 0;
     }
     ColSphere* S = static_cast<ColSphere*>(eCol);
     if (ColSphere::ColSphereLine(S, L, &pen) == 0) return false;
     float eR2 = S->radius * S->radius;
-    Vec3 anchor  = L->a();
-    Vec3 eCenter = S->center();
+    _Vector3<float> anchor = L->a();
+    _Vector3<float> eCenter = S->center();
     if ((anchor - eCenter).MagnitudeSqr() < eR2) return true;
-    Vec3 contactBase = pen + eCenter;
-    Vec3 chordOffset(0.0f, 0.0f, 0.0f);
+    _Vector3<float> contactBase = pen + eCenter;
+    _Vector3<float> chordOffset(0.0f, 0.0f, 0.0f);
     if (pen.MagnitudeSqr() < eR2) {
         float half = sqrtf(eR2 - pen.MagnitudeSqr());
-        chordOffset = Vec3::Cross(pen, Vec3(0.0f, 0.0f, 1.0f));
+        chordOffset = _Vector3<float>::Cross(pen, _Vector3<float>(0.0f, 0.0f, 1.0f));
         chordOffset.Normalise();
         chordOffset = chordOffset * (S->radius - half);
     }
-    Vec3 hitA = contactBase + chordOffset;
+    _Vector3<float> hitA = contactBase + chordOffset;
     if ((anchor - hitA).MagnitudeSqr() < m_SegLenSq) return true;
-    Vec3 hitB = contactBase - chordOffset;
+    _Vector3<float> hitB = contactBase - chordOffset;
     return (anchor - hitB).MagnitudeSqr() < m_SegLenSq;
 }
 
 // Binary @ 0x17B3BC -- 1-instruction stub `mov r0,#0; bx lr`.
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
-                                    unsigned long /*mask2*/, Vec3* /*bladeVel*/) { return 0; }
+                                    unsigned long /*mask2*/, _Vector3<float>* /*bladeVel*/) { return 0; }
 
 // v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- non-const Colour* overload; body identical to const overload.
 void SlashEntity::SetModColours(

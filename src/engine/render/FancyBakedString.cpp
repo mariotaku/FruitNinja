@@ -30,8 +30,8 @@ FancyBakedString::~FancyBakedString()
 // Init: zero the six layer ptrs + offset/colour fields (Build head @0x0024b1c8).
 void FancyBakedString::Init()
 {
-    m_ShadowOffset = Vec3(0.0f, 0.0f, 0.0f);
-    m_LineOffset   = Vec3(0.0f, 0.0f, 0.0f);
+    m_ShadowOffset = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    m_LineOffset   = _Vector3<float>(0.0f, 0.0f, 0.0f);
     m_pShadow = 0;
     m_pGlow   = 0;
     m_pMain   = 0;
@@ -101,7 +101,7 @@ void FancyBakedString::Shutdown()
 
 // Draw @0x0024b8e4: rebuild the main layer if needed, then draw all present layers
 // back-to-front sharing the main layer's refRect. Shadow drawn at pos + m_ShadowOffset.
-void FancyBakedString::Draw(const Vec3& pos, Vec2 scale, float tilt, ALIGNMENT_TYPE align)
+void FancyBakedString::Draw(const _Vector3<float>& pos, _Vector2<float> scale, float tilt, ALIGNMENT_TYPE align)
 {
     if (!m_pMain) return;
     if (!m_pMain->m_SurfacesBuilt) m_pMain->FullInternalRebuild();

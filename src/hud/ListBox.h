@@ -54,7 +54,7 @@
 //
 
 #include "HUDControl3d.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
@@ -149,7 +149,7 @@ private:
 
 public:
     // Binary @ 0x00194a74 (C1) / 0x00194d18 (C2)
-    ListBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
+    ListBox(_Vector3<float> pos, _Vector3<float> size, std::vector<std::string>& items,
             std::string* selIter, uint8_t visibleRows,
             uint16_t cellHeightParam, uint16_t cellWidthParam, uint16_t fontScaleParam);
 

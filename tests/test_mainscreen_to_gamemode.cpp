@@ -74,8 +74,8 @@ static void TriggerNewGameSlice(MenuButton* btn) {
     if (!btn || !btn->m_pTrackedFruit) return;
     Fruit* f = btn->m_pTrackedFruit;
     f->m_bSliced   = 1;
-    f->vel         = Vec3(5.0f, 2.0f, 0.0f);
-    f->m_SecondVel = Vec3(-5.0f, -2.0f, 0.0f);
+    f->vel         = _Vector3<float>(5.0f, 2.0f, 0.0f);
+    f->m_SecondVel = _Vector3<float>(-5.0f, -2.0f, 0.0f);
     f->m_bDrawWhole = 1;
     printf("[mainscreen_to_gamemode] TriggerNewGameSlice: btn=%p fruit=%p "
            "m_bSliced set, vel=(5,2,0) secondVel=(-5,-2,0)\n",

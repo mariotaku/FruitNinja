@@ -43,7 +43,7 @@ static ScrollingMenu* MakeSeededMenu(float velY, float pendingVelY) {
     menu->SetWidth(290.0f);
     menu->SetHeight(80.0f);
     menu->SetItemHeight(80.0f);
-    menu->pos = Vec3(0.0f, 0.0f, 0.0f);
+    menu->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     for (int i = 0; i < 3; ++i) {
         ScrollingMenuItem* item = new ScrollingMenuItem();
@@ -51,8 +51,8 @@ static ScrollingMenu* MakeSeededMenu(float velY, float pendingVelY) {
         menu->AddItem(item);
     }
 
-    menu->m_Velocity        = Vec3(0.0f, velY, 0.0f);
-    menu->m_PendingVelocity = Vec3(0.0f, pendingVelY, 0.0f);
+    menu->m_Velocity        = _Vector3<float>(0.0f, velY, 0.0f);
+    menu->m_PendingVelocity = _Vector3<float>(0.0f, pendingVelY, 0.0f);
     menu->m_DragTargetIdx   = -1;
     return menu;
 }

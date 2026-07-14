@@ -258,8 +258,8 @@ static void drawPixelQuad(float x0, float y0, float x1, float y1,
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    mm.GetWorldStack().Scale(Vec3(sw, sh, 1.0f));
-    mm.GetWorldStack().Translate(Vec3(cx, cy, 0.0f));
+    mm.GetWorldStack().Scale(_Vector3<float>(sw, sh, 1.0f));
+    mm.GetWorldStack().Translate(_Vector3<float>(cx, cy, 0.0f));
     mm.UploadModelViewOnly();
 
     Renderer::GetInstance()->DrawQuad(tint, uMin, uMax, vMin, vMax);
@@ -773,8 +773,8 @@ static bool caseG_ColorQuad(FBO& fbo, bool updateGolden) {
     // 64x64 quad centred (same world-matrix setup as drawPixelQuad).
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    mm.GetWorldStack().Scale(Vec3(64.0f, 64.0f, 1.0f));
-    mm.GetWorldStack().Translate(Vec3(32.0f, 32.0f, 0.0f));
+    mm.GetWorldStack().Scale(_Vector3<float>(64.0f, 64.0f, 1.0f));
+    mm.GetWorldStack().Translate(_Vector3<float>(32.0f, 32.0f, 0.0f));
     mm.UploadModelViewOnly();
 
     Renderer::GetInstance()->DrawColorQuad(Colour(0, 128, 255, 255));

@@ -202,7 +202,7 @@ static int RunCriticalFlashScene(fn::TestHarness& h) {
     }
 
     const long criticalFruitType = (long)fruitType + fruitCount;
-    splat->MakeSplat(Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 0.0f),
+    splat->MakeSplat(_Vector3<float>(0.0f, 0.0f, 0.0f), _Vector3<float>(0.0f, 0.0f, 0.0f),
                       /*param3=*/false, /*landImmediately=*/false, criticalFruitType,
                       /*mute=*/false);
 
@@ -358,15 +358,15 @@ int main(int argc, char* argv[]) {
     Fruit* fruit = static_cast<Fruit*>(e);
     fruit->Init(NULL, (long)fruitType, NULL);
 
-    fruit->pos               = Vec3(0.0f, 0.0f, 0.0f);
-    fruit->vel               = Vec3(0.0f, 0.0f, 0.0f);
-    fruit->m_Gravity         = Vec3(0.0f, 0.0f, 0.0f);
+    fruit->pos               = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    fruit->vel               = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    fruit->m_Gravity         = _Vector3<float>(0.0f, 0.0f, 0.0f);
     fruit->m_bBallisticEnable = 0;
     fruit->m_TimeScale       = 1.0f;
     fruit->flags            &= ~(uint32_t)(0x01 | 0x10);
 
     // Trigger slice: blade moving right at speed=60; SLICE_BLADE_SCALE=0.1 -> bladeSpeed=6.
-    Vec3 bladeVel(60.0f, 10.0f, 0.0f);
+    _Vector3<float> bladeVel(60.0f, 10.0f, 0.0f);
     fruit->CollisionResponse(NULL, 0, 0, &bladeVel);
 
     // Tick Update until Slice() fires (timer 0.03 s at 1/60 dt = 2 frames).

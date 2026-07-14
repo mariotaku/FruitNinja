@@ -29,8 +29,8 @@
 #include "render/MatrixStack.h"
 #include "render/gl_funcs.h"
 #include "game/GameWork.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 
 #include <cstdio>
@@ -292,23 +292,23 @@ static void TE_ApplyEffect(Mortar::BakedStringBox* box, int effIdx) {
     case 4:
         // Shadow small: scale=0.5, dark blue, offset=(1,-1), flag=0.
         box->SetColour(Colour(255, 255, 255, 255), 0);
-        box->SetShadow(0.5f, Colour(0, 0, 80, 200), Vec3(1.0f, -1.0f, 0.0f), 0);
+        box->SetShadow(0.5f, Colour(0, 0, 80, 200), _Vector3<float>(1.0f, -1.0f, 0.0f), 0);
         break;
     case 5:
         // Shadow medium: scale=1.0, dark navy, offset=(3,-2), flag=0.
         box->SetColour(Colour(255, 255, 255, 255), 0);
-        box->SetShadow(1.0f, Colour(0, 0, 60, 220), Vec3(3.0f, -2.0f, 0.0f), 0);
+        box->SetShadow(1.0f, Colour(0, 0, 60, 220), _Vector3<float>(3.0f, -2.0f, 0.0f), 0);
         break;
     case 6:
         // Inner glow: scale=2.0, yellow, offset=(0,0), flag=1.
         // flag=1 fires shadow when scale>=0 (vs flag=0 which requires scale>0).
         box->SetColour(Colour(255, 255, 255, 255), 0);
-        box->SetShadow(2.0f, Colour(255, 220, 0, 180), Vec3(0.0f, 0.0f, 0.0f), 1);
+        box->SetShadow(2.0f, Colour(255, 220, 0, 180), _Vector3<float>(0.0f, 0.0f, 0.0f), 1);
         break;
     case 7:
         // Shadow + 2-color gradient combo.
         box->SetGradient(Colour(255, 160, 40, 255), Colour(80, 220, 120, 255), false);
-        box->SetShadow(1.0f, Colour(0, 0, 60, 200), Vec3(2.0f, -2.0f, 0.0f), 0);
+        box->SetShadow(1.0f, Colour(0, 0, 60, 200), _Vector3<float>(2.0f, -2.0f, 0.0f), 0);
         break;
     case 8:
         // Stroke thin w=1, solid cyan outline.
@@ -333,7 +333,7 @@ static void TE_ApplyEffect(Mortar::BakedStringBox* box, int effIdx) {
             Colour(152, 123, 10, 255),
             Colour(255, 253, 88, 255),
             false);
-        box->SetShadow(1.0f, Colour(0, 0, 60, 200), Vec3(2.0f, -2.0f, 0.0f), 0);
+        box->SetShadow(1.0f, Colour(0, 0, 60, 200), _Vector3<float>(2.0f, -2.0f, 0.0f), 0);
         box->SetStroke(2.0f, Colour(0, 0, 0, 255));
         break;
     default:
@@ -424,11 +424,11 @@ static bool TE_RenderCell(
             TE_ApplyClip(&box, desc.clipMode);
         }
 
-        Vec3 pos(textCentreX, textCentreY, 0.0f);
+        _Vector3<float> pos(textCentreX, textCentreY, 0.0f);
         // preShift=1: SetTranslation pre-shifts by (-boxW/2, +boxH/2)
         // so the box is centred on (textCentreX, textCentreY).
         box.SetTranslation(pos, 1);
-        Vec2 sc(1.0f, 1.0f);
+        _Vector2<float> sc(1.0f, 1.0f);
         box.Draw(sc, 0.0f, 1);
     }
 
@@ -443,7 +443,7 @@ static bool TE_RenderCell(
         TE_SetupCellOrtho();
 
         const float scale = 7.0f;
-        Vec3 fbPos((float)TE_CELL_W * 0.5f, (float)TE_CELL_H * 0.5f, 0.0f);
+        _Vector3<float> fbPos((float)TE_CELL_W * 0.5f, (float)TE_CELL_H * 0.5f, 0.0f);
         Colour grey(160, 160, 160, 255);
         bitmapLabel->DrawString(scale, 1.0f, 0.0f, "[no glyphs]", fbPos, grey, 0x3);
         cfbo.ReadRGBA(outPixels);
@@ -462,16 +462,16 @@ static bool TE_RenderCell(
         lblBox.SetColour(Colour(210, 210, 210, 255), 0);
 
         // Centre the label in the strip: pixel (CELL_W/2, LABEL_H/2).
-        Vec3 lblPos((float)(TE_CELL_W / 2), (float)(TE_LABEL_H / 2), 0.0f);
+        _Vector3<float> lblPos((float)(TE_CELL_W / 2), (float)(TE_LABEL_H / 2), 0.0f);
         lblBox.SetTranslation(lblPos, 1);
-        Vec2 lblSc(1.0f, 1.0f);
+        _Vector2<float> lblSc(1.0f, 1.0f);
         lblBox.Draw(lblSc, 0.0f, 1);
 
         cfbo.ReadRGBA(outPixels);
     } else if (bitmapLabel) {
         // Bitmap label fallback.
         const float lblScale = 6.0f;
-        Vec3 lblPos(4.0f, 8.0f, 0.0f);
+        _Vector3<float> lblPos(4.0f, 8.0f, 0.0f);
         Colour lblCol(200, 200, 200, 255);
         bitmapLabel->DrawString(lblScale, 1.0f, 0.0f, desc.caption, lblPos, lblCol, 0x0);
         cfbo.ReadRGBA(outPixels);

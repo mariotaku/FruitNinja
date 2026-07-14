@@ -108,7 +108,7 @@
 
 class UiDropdown : public UiWidget {
 public:
-    UiDropdown(const Vec3& pos, std::vector<std::string>& items, int selected,
+    UiDropdown(const _Vector3<float>& pos, std::vector<std::string>& items, int selected,
                uint8_t visibleRows = 6, float barW = 160.0f, float barH = 28.0f);
     virtual ~UiDropdown();
 
@@ -306,7 +306,7 @@ private:
 
     // Kinetic scroll state (mirrors ScrollingMenu's touch-physics fields).
     float m_ScrollOffset;     // world-Y content shift; >= 0, 0 = list top, +maxScroll = list bottom
-    Vec3  m_TouchAnchorPos;   // finger (x, y, phase) latched at press
+    _Vector3<float> m_TouchAnchorPos;   // finger (x, y, phase) latched at press
     float m_AnchorOffset;     // m_ScrollOffset at press time
     float m_PendingVel;       // decaying drag/fling velocity
     uint8_t m_bDragging;      // 1 once |delta| has exceeded DRAG_THRESHOLD this touch

@@ -85,7 +85,7 @@ void UiWidget::DrawGlyphQuad(Mortar::Texture* tex, float cx, float cy, float w, 
     tex->Set();
 
     Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
-    mat.GlobalTranslate44(Vec3(cx, cy, 0.0f));
+    mat.GlobalTranslate44(_Vector3<float>(cx, cy, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 

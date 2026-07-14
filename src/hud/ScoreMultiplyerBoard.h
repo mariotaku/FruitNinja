@@ -32,7 +32,7 @@ class PowerUp;
 class ScoreMultiplyerBoard : public HUDControl3d {
 public:
     // +0x7c: position snapshot taken at Deactivate; self-animation origin.
-    Vec3 m_BasePosition;
+    _Vector3<float> m_BasePosition;
     // +0x88: owning PowerUp while the x2 window is active; NULL once detached
     // (self-animating payout phase).
     PowerUp* m_pOwner;

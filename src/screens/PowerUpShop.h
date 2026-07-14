@@ -13,7 +13,7 @@
 
 #include "hud/HUDControl3d.h"
 #include "game/PowerUp.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include <cstdint>
 #include <vector>
 
@@ -26,7 +26,7 @@ public:
     std::vector<PowerUp*> m_PurchasablePowerUps;   // +0x7C, 12 bytes
 
     // +0x88
-    std::vector<Vec3> m_SlotLayout;                // +0x88, 12 bytes
+    std::vector<_Vector3<float>> m_SlotLayout;                // +0x88, 12 bytes
 
     // +0x94
     int m_SelectedIndex;                           // +0x94

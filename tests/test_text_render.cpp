@@ -30,8 +30,8 @@
 #include "render/MatrixStack.h"
 #include "render/gl_funcs.h"
 #include "game/GameWork.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 
 #include <cstdio>
@@ -260,7 +260,7 @@ static void TR_ApplyEffect(Mortar::BakedStringBox* box, int effIdx) {
             Colour(255, 253, 88, 255),
             false
         );
-        box->SetShadow(1.0f, Colour(0, 0, 80, 220), Vec3(2.0f, -2.0f, 0.0f), false);
+        box->SetShadow(1.0f, Colour(0, 0, 80, 220), _Vector3<float>(2.0f, -2.0f, 0.0f), false);
         break;
     case 5:
         // Flat white + stroke (single colour, cyan outline).
@@ -340,9 +340,9 @@ static bool TR_RenderCell(
         Mortar::BakedStringBox box(ttfFont, fontSize, boxW, boxH, (Mortar::ALIGNMENT_TYPE)0x0f, 1, 0);
         box.SetText(sampleText);
         TR_ApplyEffect(&box, effIdx);
-        Vec3 pos(textCentreX, textCentreY, 0.0f);
+        _Vector3<float> pos(textCentreX, textCentreY, 0.0f);
         box.SetTranslation(pos, 1);
-        Vec2 sc(1.0f, 1.0f);
+        _Vector2<float> sc(1.0f, 1.0f);
         box.Draw(sc, 0.0f, 1);
     }
 
@@ -360,7 +360,7 @@ static bool TR_RenderCell(
         std::snprintf(noGlyphMsg, sizeof(noGlyphMsg), "[no glyphs:%s]", langCode);
 
         const float scale = 7.0f;
-        Vec3 fallbackPos((float)(CELL_W) * 0.5f, (float)(CELL_H) * 0.5f, 0.0f);
+        _Vector3<float> fallbackPos((float)(CELL_W) * 0.5f, (float)(CELL_H) * 0.5f, 0.0f);
         Colour grey(160, 160, 160, 255);
         // 0x3 = true horizontal centre (bits 0-1), 0x0 = top vertical -> centre flag bits.
         // align=0x03 centres horizontally on pos.x.
@@ -386,9 +386,9 @@ static bool TR_RenderCell(
 
         // SetTranslation flag=1 pre-shifts: m_Pos.x = x - boxW/2, m_Pos.y = y + boxH/2.
         // With center-V and center=1, the ink centre lands on y = LABEL_H/2 = centre of strip.
-        Vec3 lblPos((float)(CELL_W / 2), (float)(LABEL_H / 2), 0.0f);
+        _Vector3<float> lblPos((float)(CELL_W / 2), (float)(LABEL_H / 2), 0.0f);
         lblBox.SetTranslation(lblPos, 1);
-        Vec2 lblSc(1.0f, 1.0f);
+        _Vector2<float> lblSc(1.0f, 1.0f);
         lblBox.Draw(lblSc, 0.0f, 1);
 
         cfbo.ReadRGBA(outPixels);
@@ -398,7 +398,7 @@ static bool TR_RenderCell(
         std::snprintf(label, sizeof(label), "%s:%s", langCode, EFF_NAMES[effIdx]);
 
         const float lblScale = 6.0f;
-        Vec3 lblPos(4.0f, 8.0f, 0.0f);
+        _Vector3<float> lblPos(4.0f, 8.0f, 0.0f);
         Colour lblCol(200, 200, 200, 255);
         labelFont->DrawString(lblScale, 1.0f, 0.0f, label, lblPos, lblCol, 0x0);
 

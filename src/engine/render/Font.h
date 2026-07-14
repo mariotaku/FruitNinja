@@ -5,8 +5,8 @@
 #include "asset/Texture.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Utf8StringIterator.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 #include <vector>
@@ -114,8 +114,8 @@ public:
     // produces 0/0 = NaN inside the divide and corrupts vertical alignment;
     // callers must pass 1.0 (or the binary's exact value) -- never 0.
     void DrawString(float scale, float yLineFactor, float rotZ,
-                    Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
-                    Vec2 maxWH, int alignment, float z,
+                    Mortar::Utf8StringIterator iter, const _Vector3<float>& pos, const Colour& colour,
+                    _Vector2<float> maxWH, int alignment, float z,
                     Mortar::MortarRectangleT<float>* clipRect = nullptr);
 
     // Binary-shape wrapper @ 0x00199aa0.
@@ -148,12 +148,12 @@ public:
     // non-default values). Callers that want strict binary-ABI fidelity
     // should call the binary-shape overload above directly.
     void DrawString(float scale, float yLineFactor, float z,
-                    const char* text, const Vec3& pos,
+                    const char* text, const _Vector3<float>& pos,
                     const Colour& colour, int alignment = 0);
 
     // For compat with old callers that pass scale directly
     void DrawStringSized(float targetSize, float yLineFactor, float z,
-                         const char* text, const Vec3& pos,
+                         const char* text, const _Vector3<float>& pos,
                          const Colour& colour, int alignment = 0) {
         DrawString(targetSize, yLineFactor, z, text, pos, colour, alignment);
     }
@@ -164,10 +164,10 @@ public:
     // maxWH.y). Vertical-align formula: translateY = (-0 - cursorY - yLineFactor)*0.5
     // = (N*yLineFactor)*0.5 -> centres the N-line block on posY.
     void DrawStringWrapped(float scale, float wrapPx, float z,
-                           const char* text, const Vec3& pos,
+                           const char* text, const _Vector3<float>& pos,
                            const Colour& colour, int alignment) {
         Mortar::Utf8StringIterator iter(text);
-        Vec2 maxWH(wrapPx, 0.0f);
+        _Vector2<float> maxWH(wrapPx, 0.0f);
         DrawString(scale, 1.0f, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
     }
 
@@ -208,8 +208,8 @@ public:
     // Binary @ 0x0024c7f0 (v1.6.1; stale 0x00198e44 v1.5.x) -- packed Vec3/Vec2 ABI shape of the full Font_DrawString;
     // forwards to DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,
     // z,clipRect) with yLineFactor pinned to 1.0 (binary @ 0x00199b1c).
-    void DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
-                    Vec2 maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect, float z);
+    void DrawString(Utf8StringIterator iter, _Vector3<float> pos, Colour colour, float scale,
+                    _Vector2<float> maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect, float z);
     // Binary @ 0x0024d6b8 (v1.6.1; stale 0x00199aa0 v1.5.x) -- by-value-arg ABI shape of the binary DrawString wrapper;
     // forwards to DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,
     // maxWHy,rotZ,clip).

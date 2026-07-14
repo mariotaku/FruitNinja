@@ -51,10 +51,10 @@ public:
     float m_Alpha;
 
     // +0x80: size copy of pause_title.tex, used for DrawOrder slide-in math
-    Vec3 m_TitleSize;
+    _Vector3<float> m_TitleSize;
 
     // +0x8c: per-frame cache of Resume button screen-pos (overwritten each Update)
-    Vec3 m_ButtonOriginPos;
+    _Vector3<float> m_ButtonOriginPos;
 
     // +0x98: P1 Resume button (pause_button / play_button swap)
     MenuButton* m_ResumeButton;

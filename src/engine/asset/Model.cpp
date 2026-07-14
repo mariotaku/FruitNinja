@@ -110,7 +110,7 @@ void Model::Draw(const Matrix44& transform) {
         // Matrix44 column-major: m[col*4 + row].
         // Col 2 (z): m[8..11]; col 3 (w): m[12..15].
         Bounds3D b = m_nodes[i]->GetBounds();
-        Vec3 c;
+        _Vector3<float> c;
         c.x = (b.min.x + b.max.x) * 0.5f;
         c.y = (b.min.y + b.max.y) * 0.5f;
         c.z = (b.min.z + b.max.z) * 0.5f;

@@ -62,7 +62,7 @@ public:
     uint8_t  _pad_3E[2];                   // +0x3E..+0x3F
     PSPParticleEmitter* m_pEmitter1;       // +0x40  (was wrongly +0x80)
     PSPParticleEmitter* m_pEmitter2;       // +0x44  (was wrongly +0x84)
-    Vec3     m_SlicePos;                   // +0x48..+0x53  (was wrongly +0x78)
+    _Vector3<float> m_SlicePos;                   // +0x48..+0x53  (was wrongly +0x78)
     uint8_t  _pad_54[12];                  // +0x54..+0x5F  (unused by Init/Update; possible Slice/CollisionResponse temp)
     // +0x60: spin-phase accumulator. Update (sliced path, frozen=0): m_SpinPhase = (int)((float)m_SpinPhase + dtScaled*1000.0f).
     // Binary @0x001e009c reads/writes this field.
@@ -81,22 +81,22 @@ public:
     uint8_t  m_bBallisticEnable;           // +0x70  u8 gate: Update runs gravity arc when !=0; CreateFruit menu-path sets =0
     uint8_t  _pad_71[3];                   // +0x71..+0x73
     float    m_SpawnDelay;                 // +0x74  chuck countdown; Chuck sets; Update decrements -> fires m_OnExpired at <=0
-    Vec3     m_AccelTerm;                  // +0x78..+0x83  extra accel/jerk: Update unsliced pos += m_AccelTerm*dt; damped 0.9x in PostUpdate
+    _Vector3<float> m_AccelTerm;                  // +0x78..+0x83  extra accel/jerk: Update unsliced pos += m_AccelTerm*dt; damped 0.9x in PostUpdate
     int32_t  m_PlayerIdx;                  // +0x84  SetForPlayer writes; Slice/Update read for trail-hash/MakeCritical
     // +0x88: bounce timer for reverse-time un-slice. Update (sliced path): += dtScaled;
     // if (dtScaled<0 && m_SliceBounceTimer<0) un-slice back to whole. Binary @0x001df9d8.
     float    m_SliceBounceTimer;           // +0x88  binary @0x001df9d8
     // +0x8C..+0x97: velocity snapshot written by CollisionResponse on slice;
     // copied back to vel by the reverse-time un-slice path (@0x001df9e8).
-    Vec3     m_SliceVelocity;              // +0x8C  (x=+0x8C, y=+0x90, z=+0x94)
+    _Vector3<float> m_SliceVelocity;              // +0x8C  (x=+0x8C, y=+0x90, z=+0x94)
     float    m_TimeScale;                  // +0x98  Update dt_eff = dt * m_TimeScale; SpawnFruit writes (p_pad+0x5c)
     float    m_ZPosition;                  // +0x9C  depth; CreateFruit sets =150.0f; Update emitter-Z; Slice -> MoveFruitZPositionToBack
-    Vec3     m_Gravity;                    // +0xA0..+0xAB  Update integrates vel += m_Gravity*dt; m_bMenuFling(@+0x164) == m_bExtraScore in binary: boosts gravity grow by 6.5x factor
+    _Vector3<float> m_Gravity;                    // +0xA0..+0xAB  Update integrates vel += m_Gravity*dt; m_bMenuFling(@+0x164) == m_bExtraScore in binary: boosts gravity grow by 6.5x factor
     // +0xAC..+0xB7 -- duplicate of entity scale (+0x28); written by SetFruitType
     // for both slots but never read by Draw/Shadows/AddShadow/KillFruit (all read +0x28).
     // Vestigial write-only cache kept for binary layout fidelity.
     // Do NOT route rendering through this field.
-    Vec3     m_VisualScale;                // +0xAC: vestigial write-only cache; binary @ 0x00176290 stm r8,{r0,r1,r2}; SetFruitType writes 0xAC/B0/B4
+    _Vector3<float> m_VisualScale;                // +0xAC: vestigial write-only cache; binary @ 0x00176290 stm r8,{r0,r1,r2}; SetFruitType writes 0xAC/B0/B4
 
     // --- 0xB8..0x16F region corrected per d3d8647 + fruit-0x60-region.md ---
     // All offsets verified against v1.6.1 binary Fruit ctor (0x1dc4f0), Update (0x1df828),
@@ -109,13 +109,13 @@ public:
     uint16_t m_SliceArcAngle;              // +0xC0  Slice r/w p_pad+0x84; CollisionResponse Atan2Idx
     uint8_t  _pad_C2[2];                   // +0xC2..+0xC3  align
     float    m_SliceArcImpulse;            // +0xC4  Slice p_pad+0x88: base half speed; CollisionResponse SetMagnitude
-    Vec3     m_SecondPos;                  // +0xC8..+0xD3  sliced 2nd-half position (Update/Draw/Check p_pad+0x8c/90/94)
-    Vec3     m_SecondVel;                  // +0xD4..+0xDF  sliced 2nd-half velocity (Update/Slice/Check p_pad+0x98/9c/a0)
+    _Vector3<float> m_SecondPos;                  // +0xC8..+0xD3  sliced 2nd-half position (Update/Draw/Check p_pad+0x8c/90/94)
+    _Vector3<float> m_SecondVel;                  // +0xD4..+0xDF  sliced 2nd-half velocity (Update/Slice/Check p_pad+0x98/9c/a0)
     Quaternion m_Rot1;                     // +0xE0..+0xEF  ctor-built p_pad+0xa4; Update/Draw/Setup half0
     Quaternion m_Rot2;                     // +0xF0..+0xFF  ctor-built p_pad+0xb4; Update/Draw/Setup half1
-    Vec3     m_RotVel1;                    // +0x100..+0x10B  per-half0 spin rates (RotateFacingUp/Update/Setup/CreateFruit)
-    Vec3     m_RotVel2;                    // +0x10C..+0x117  per-half1 spin rates
-    Vec3     m_SliceAxes[6];               // +0x118..+0x15F  [2 halves][3 axes] spin axes 0x48 bytes;
+    _Vector3<float> m_RotVel1;                    // +0x100..+0x10B  per-half0 spin rates (RotateFacingUp/Update/Setup/CreateFruit)
+    _Vector3<float> m_RotVel2;                    // +0x10C..+0x117  per-half1 spin rates
+    _Vector3<float> m_SliceAxes[6];               // +0x118..+0x15F  [2 halves][3 axes] spin axes 0x48 bytes;
                                            //   SetupSliceRotations writes per-half stride 0x24;
                                            //   Update reads this+i*0x24+0x118/+0x124/+0x130
     Mortar::Entity* m_pOwner;              // +0x160  slasher/owner back-ref; ctor=0; CreateFruit sets;
@@ -144,7 +144,7 @@ public:
 
     // Vtable slot 2: Binary @ 0x00176708.
     // p2 = fruitType (0..N-1); p3 = scale Vec3* (nullable, default 1.0); p1 unused.
-    void Init(void* p1, long fruitType, Vec3* scaleOrNull) override;
+    void Init(void* p1, long fruitType, _Vector3<float>* scaleOrNull) override;
     void Update(float dt) override;
     void Draw(Renderer& r) override;
     void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
@@ -153,7 +153,7 @@ public:
     // Returns 1 if already sliced (early-out). Otherwise records slice state,
     // spawns juice emitters, plays SFX, updates score/combo/achievements.
     int CollisionResponse(Mortar::Entity* hitter, unsigned long flagsA, unsigned long flagsB,
-                          Vec3* bladeVelocity) override;
+                          _Vector3<float>* bladeVelocity) override;
 
     // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
     void Deactivate();
@@ -205,7 +205,7 @@ public:
     // random starting orientation and m_RotVel1/m_RotVel2 to axisScale * scalar.
     // When flag=true, additional q_axis * q_up composition is applied to each
     // rotation slot. See Fruit.cpp for full algorithm.
-    void RotateFacingUp(bool flag, Vec3 axisScale);
+    void RotateFacingUp(bool flag, _Vector3<float> axisScale);
 
     // Binary @ 0x001dc054 — set m_FruitType and recalculate visual scale + collision sphere.
     // Called from ShopScreen::SetSelected when the player browses the equipment ring.
@@ -319,7 +319,7 @@ public:
     // Binary @ 0x001bff08 — slice-direction unit vector for a slice index, offset by the
     // fruit's blade angle (m_SliceArcAngle, +0xc0): returns (SinIdx(a), CosIdx(a), 0) where
     // a = sliceIdx + m_SliceArcAngle.
-    Vec3 GetSliceDir(uint16_t sliceIdx) const;
+    _Vector3<float> GetSliceDir(uint16_t sliceIdx) const;
 
     // Binary @ 0x001db2a8 — release both trail/juice emitters (m_pEmitter1/+0x40,
     // m_pEmitter2/+0x44) back to the particle manager and null them. Idempotent.

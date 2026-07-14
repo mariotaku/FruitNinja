@@ -35,7 +35,7 @@ static Mortar::SmartPtr<Mortar::Texture> s_arrow;    // top/bottom arrow (arrow.
 //   m_VisibleHeightPx(+0x98)=visibleHeight*size.y, m_TotalHeightPx(+0x9C)=totalHeight*size.y,
 //   m_TypeId(+0xA0)=5, m_bReverse(+0xA1)=reverse, m_State(+0xA2)=0, m_TouchId(+0xA4)=-1,
 //   m_LayerFlags(+0x34)=0x800.
-VerticalScroller::VerticalScroller(Vec3 inPos, Vec3 inSize,
+VerticalScroller::VerticalScroller(_Vector3<float> inPos, _Vector3<float> inSize,
                                    int32_t minValue, int32_t maxValue,
                                    uint16_t stepSize, int32_t currentValue,
                                    bool reverseDir, uint8_t totalRows,
@@ -128,7 +128,7 @@ void VerticalScroller::Draw(float* hudScaleRaw) {
         s_arrow->Set();
         {
             Matrix44 mat = Matrix44::MakeScale(visPx, arrowSz, 1.0f);
-            Vec3 p = pos;
+            _Vector3<float> p = pos;
             p.y = p.y + arrowSz * -0.5f + totPx * 0.5f;
             mat.GlobalTranslate44(p);
             mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -138,7 +138,7 @@ void VerticalScroller::Draw(float* hudScaleRaw) {
         // --- bottom arrow (U+V flipped) ---
         {
             Matrix44 mat = Matrix44::MakeScale(visPx, arrowSz, 1.0f);
-            Vec3 p = pos;
+            _Vector3<float> p = pos;
             p.y = totPx * -0.5f + pos.y + arrowSz * 0.5f;
             mat.GlobalTranslate44(p);
             mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -154,7 +154,7 @@ void VerticalScroller::Draw(float* hudScaleRaw) {
         Matrix44 mat = Matrix44::MakeScale(visPx, sliderSz, 1.0f);
         float cur = (float)m_CurrentValue;
         float maxV = (float)m_MaxValue;
-        Vec3 p = pos;
+        _Vector3<float> p = pos;
         p.y = arrowSz
             + (cur / maxV) * ((totPx - sliderSz) + arrowSz * -2.0f)
             + sliderSz * 0.5f

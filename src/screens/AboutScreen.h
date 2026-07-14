@@ -68,7 +68,7 @@ class DojoScreen;
 //   +0x00  Vec3                pos         (x=layout, y=scroll accumulator, z=0)
 //   +0x0C  Mortar::BakedStringBox*  m_pBox
 struct MarqueeText {
-    Vec3                       pos;    // +0x00
+    _Vector3<float> pos;    // +0x00
     Mortar::BakedStringBox*    m_pBox; // +0x0C
     MarqueeText() : pos(0.0f, 0.0f, 0.0f), m_pBox(0) {}
 };

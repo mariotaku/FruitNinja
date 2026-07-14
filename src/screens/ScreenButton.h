@@ -23,7 +23,7 @@
 // and push_back into the list (inlined by the compiler).
 //
 
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 #include "util/Delegate.h"
@@ -73,13 +73,13 @@ struct ScreenButton {
     Mortar::Delegate1<void, HUDControl*> m_deletedCb;
 
     // +0x9C: button world position
-    Vec3 m_pos;
+    _Vector3<float> m_pos;
 
     // +0xA8: fruit/badge position (6th param to MenuButton ctor).
     // NOTE: fruitPos.z (+0xB0) doubles as the optional conditional rest-scale
     // multiplier -- the binary has no separate "m_scaleA" field, it just reads
     // this Vec3's z component. ASM v1.6.1 BaseScreen::UpdateButtons @0x00160430.
-    Vec3 m_fruitPos;
+    _Vector3<float> m_fruitPos;
 
     // +0xB4: always-applied scale on m_TargetSize.
     // ASM v1.6.1 BaseScreen::UpdateButtons @0x00160450/0x001604d0.

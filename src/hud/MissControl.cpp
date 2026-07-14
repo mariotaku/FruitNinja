@@ -160,11 +160,11 @@ void MissControl::Init() {
     // Binary reads s_TexCritical->GetWidth() TWICE (not GetHeight) for the
     // default size -- binary-faithful; Make* overwrite size anyway.
     if (s_TexCritical.IsValid()) {
-        size = Vec3((float)(s_TexCritical->GetWidth() >> 1) + 1,
-                    (float)(s_TexCritical->GetWidth() >> 1) + 1,
-                    0.0f);
+        size = _Vector3<float>((float)(s_TexCritical->GetWidth() >> 1) + 1,
+                               (float)(s_TexCritical->GetWidth() >> 1) + 1,
+                               0.0f);
     } else {
-        size = Vec3(0.0f, 0.0f, 0.0f);
+        size = _Vector3<float>(0.0f, 0.0f, 0.0f);
     }
     // ASM-verified v1.6.1 MissControl::Init @0x0019e134: tail-calls vtable slot4 = MissControl::Reset @0x0019df5c (not base Init).
     Reset();
@@ -198,8 +198,9 @@ int MissControl::SetPlayer(int player) {
 // Port specific: mirrors the quad-origin formula from MissControl::Draw
 // (binary @ 0x00151f60..0x00152186) so the F1 boundary tracks the rendered quad.
 // Jitter term is omitted (non-deterministic RandUint; short-lived and cosmetic).
-Vec3 MissControl::GetDrawPos() const {
-    Vec3 p = pos;
+_Vector3<float> MissControl::GetDrawPos() const
+{
+    _Vector3<float> p = pos;
     if (m_LifeTimer <= 0.0f) {
         // Mirrors Draw's lifeTimer<=0 gates (v1.6.1 MissControl::Draw @0x0019f6a4):
         // Draw early-returns (no quad) unless FailureEnabled() && !IsMultiplayer()
@@ -211,9 +212,9 @@ Vec3 MissControl::GetDrawPos() const {
             p.y -= 3.0f * pos.y * pause;
         }
     }
-    return Vec3(p.x + 480.0f * m_HudScale.x,
-                p.y + 320.0f * m_HudScale.y,
-                p.z);
+    return _Vector3<float>(p.x + 480.0f * m_HudScale.x,
+                           p.y + 320.0f * m_HudScale.y,
+                           p.z);
 }
 
 // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150e3c (re-analyst)
@@ -362,7 +363,7 @@ MissControl* MissControl::GetFree() {
 // --- Make* -----------------------------------------------------------------
 
 // ASM-spec v1.6.1 MissControl::MakeCritical @0x0019e810: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then overrides tex/flags/life/pos/size; MakeRare @0x0019e994 identical + m_DragScale=0.5, no SetPlayer.
-void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
+void MissControl::MakeCritical(_Vector3<float> pos, int playerIdx) {
     LOG_INFO("MissControl", "MakeCritical pos=(%.1f,%.1f,%.1f) player=%d this=%p",
              pos.x, pos.y, pos.z, playerIdx, static_cast<void*>(this));
     Init();
@@ -396,7 +397,7 @@ void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
 }
 
 // ASM-spec v1.6.1 MissControl::MakeRare @0x0019e994: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then identical to MakeCritical but uses s_TexRare, sets m_DragScale=0.5 (before HalfScale), and does NOT call SetPlayer.
-void MissControl::MakeRare(Vec3 pos) {
+void MissControl::MakeRare(_Vector3<float> pos) {
     LOG_INFO("MissControl", "MakeRare pos=(%.1f,%.1f,%.1f) this=%p",
              pos.x, pos.y, pos.z, static_cast<void*>(this));
     Init();
@@ -432,7 +433,7 @@ void MissControl::MakeRare(Vec3 pos) {
 // ASM-spec v1.6.1 MissControl::MakeCombo @0x0019e630: calls virtual Init() (vtbl slot2 @0x0019e07c) first, then overrides texture/combo flags/life/pos/size.
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
 // Sets m_bComboActive=1, m_bUseComboSound=1, m_ComboCount=combo, m_LifeTimer=1.81, anim=3, visible=1.
-void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
+void MissControl::MakeCombo(_Vector3<float> pos, int comboCount, int entityType) {
     LOG_INFO("MissControl", "MakeCombo pos=(%.1f,%.1f,%.1f) count=%d entityType=%d this=%p",
              pos.x, pos.y, pos.z, comboCount, entityType, static_cast<void*>(this));
     Init();
@@ -486,7 +487,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
 
 // ASM-spec v1.6.1 MissControl::MakeDisappear @0x0019f338: calls virtual Init() (vtbl slot2 @0x0019e07c) first; two-path form based on whether SmartPtr is valid.
 // Common prefix after Init(): m_DrawColour.a=0xff, then pos.
-void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
+void MissControl::MakeDisappear(_Vector3<float> inPos, int sizeMult,
                                 Mortar::SmartPtr<Mortar::Texture> tex) {
     LOG_INFO("MissControl", "MakeDisappear pos=(%.1f,%.1f,%.1f) sizeMult=%d tex=%d this=%p",
              inPos.x, inPos.y, inPos.z, sizeMult,
@@ -505,7 +506,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         m_bComboActive = 1;
         uint32_t w = (uint32_t)tex->GetWidth();
         uint32_t h = (uint32_t)tex->GetHeight();
-        size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
+        size = _Vector3<float>((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
         // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151e40 (re-analyst v2)
         // Binary: `mov r0,r4; mov r1,r7; blx 0x000f6c30` -- r7 was saved from
         // r2 = param_3 = sizeMult at function entry @ 0x00151db6.
@@ -528,7 +529,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         // from DAT_00151f4c = 0x42780000), 0x00151e7e (Vec3 * scalar -> size).
         // Binary @ 0x00151f5c (GOT offset), 0x00151e64 (load pHudScale).
         {
-            const Vec3& pHudScale = Vec3::One();  // GOT+0x77CC == _Vector3<float>::One
+            const _Vector3<float>& pHudScale = _Vector3<float>::One();  // GOT+0x77CC == _Vector3<float>::One
             size = pHudScale * MISS_DISAPPEAR_SIZE;
         }
         // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151e94 (re-analyst v2)
@@ -537,7 +538,7 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         // Path 2 size is set again after SetPlayer (binary @ 0x00151e9a sets size
         // a second time from the same Vec3*scalar -- identical value).
         {
-            const Vec3& pHudScale = Vec3::One();
+            const _Vector3<float>& pHudScale = _Vector3<float>::One();
             size = pHudScale * MISS_DISAPPEAR_SIZE;
         }
         // Pos clamp using HALF size (binary @ 0x00151f50..0x00151f54 clamps)
@@ -704,7 +705,7 @@ void MissControl::Update(float dt) {
 //                       && fabs(m_PauseAmount) < 1.0     // Zen / MP / settled pause: no X-marks
 //         drawPos.y -= 3.0f * pos.y * fabs(m_PauseAmount)   // no else-branch
 void MissControl::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bFlashing -- those are UV-pickers later in the function, not gates.
@@ -716,7 +717,7 @@ void MissControl::Draw(float* hudScaleRaw) {
     // _Vector3<float>::Zero global (binary @ 0x001f4328, GOT slot 0x73ec).
     // Binary loads Zero.{x,y,z} into stack-local drawPos -- semantically Vec3(0,0,0).
     // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001522c4 (re-analyst)
-    Vec3 drawPos(0.0f, 0.0f, 0.0f);
+    _Vector3<float> drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
     // binary @ 0x00151f94..0x00151fe0: drawPos = Vec3(rx-4, ry-4, 0); --m_FlashTimer
@@ -788,10 +789,10 @@ void MissControl::Draw(float* hudScaleRaw) {
     //   final = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3 componentwise)
     // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00152140 (re-analyst)
     (void)hudScale;  // per-frame hudScale arg is unused for MissControl
-    Vec3 t1 = drawPos + pos;
-    Vec3 anchor(480.0f, 320.0f, 0.0f);
-    Vec3 anchorScaled = anchor * m_HudScale;  // Vec3*Vec3 componentwise -- binary blx 0x001060ec
-    Vec3 final_t = t1 + anchorScaled;
+    _Vector3<float> t1 = drawPos + pos;
+    _Vector3<float> anchor(480.0f, 320.0f, 0.0f);
+    _Vector3<float> anchorScaled = anchor * m_HudScale;  // Vec3*Vec3 componentwise -- binary blx 0x001060ec
+    _Vector3<float> final_t = t1 + anchorScaled;
     mat.GlobalTranslate44(final_t.x, final_t.y, final_t.z);
 
     MatrixManager& mm = MatrixManager::GetInstance();

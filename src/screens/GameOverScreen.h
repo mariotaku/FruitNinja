@@ -45,7 +45,7 @@ public:
 
     int      m_State;                            // +0x8C
     float    m_Timer;                            // +0x90
-    Vec3     m_TitleSize;                        // +0x94  final = (256,64,0)
+    _Vector3<float> m_TitleSize;                        // +0x94  final = (256,64,0)
 
     // +0xA0: written 0 in Initialise, never read across any GameOverScreen
     // function (ctor/Initialise/Update/Release/DrawOrder/PreDrawOrder/dtor).
@@ -69,7 +69,7 @@ public:
     // +0xB8: millisecond circular counter (advanced in Update prologue)
     int          m_AnimTimeMs;                   // +0xB8
 
-    Vec3         m_OffsetPos;                    // +0xBC
+    _Vector3<float> m_OffsetPos;                    // +0xBC
 
     FruitFactControl* m_pFruitFact;              // +0xC8
     FruitFactZenPage*     m_pZenPage;            // +0xCC

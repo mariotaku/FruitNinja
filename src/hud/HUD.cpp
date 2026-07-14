@@ -80,15 +80,15 @@ void HUD::BeginDraw(float dt) {
 //          world matrix between PreDrawOrder and DrawOrder of each control to
 //          guard against leftover transforms (e.g. ShopScreen 481x scale).
 void HUD::Draw(int layerMask) {
-    Vec3 hudScale(scales[0], scales[1], scales[2]);
-    const Vec3 identityScale(1.0f, 1.0f, 1.0f);
+    _Vector3<float> hudScale(scales[0], scales[1], scales[2]);
+    const _Vector3<float> identityScale(1.0f, 1.0f, 1.0f);
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
         if (ctrl->m_Active && (layerMask & ctrl->m_LayerFlags)) {
             // m_bUseHUDScales != 0 (default): receives gameplay-mutable tint window.
             // m_bUseHUDScales == 0: receives identity (1,1,1) — opted out of tint.
-            const Vec3& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
+            const _Vector3<float>& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
             world.Reset();
             ctrl->PreDrawOrder(const_cast<float*>(&scaleVec.x), layerMask);
             world.Reset();

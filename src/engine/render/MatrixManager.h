@@ -4,7 +4,7 @@
 #include "render/MatrixStack.h"
 #include "math/Matrix44.h"
 #include "math/Matrix43.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 
 // Binary MatrixManager: 8500 bytes, polymorphic (v1.6.1 MatrixManager__vtable @0x002d0738, 4 vfn slots).
 // Layout: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
@@ -68,7 +68,7 @@ public:
     // names are (eye, upHint, target) to keep positional parity with the
     // binary call sites (3rd slot is "unused" in binary, "target" here).
     // ASM-spec v1.6.1 MatrixManager::SetupLookAt @0x002572ac: optional out-matrix param (parity with binary).
-    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target, Matrix43* out = 0);
+    void SetupLookAt(const _Vector3<float>& eye, const _Vector3<float>& upHint, const _Vector3<float>& target, Matrix43* out = 0);
 
     // "Upload all" — called by SetupOrtho, SetupLookAt (skipProjection=false)
     void UploadAll();

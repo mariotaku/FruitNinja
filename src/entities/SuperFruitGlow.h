@@ -36,7 +36,7 @@
 //
 
 #include "hud/HUDControl3d.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include <cstdint>

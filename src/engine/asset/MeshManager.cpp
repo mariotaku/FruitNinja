@@ -319,8 +319,8 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
             AsciiString boneName = rl.ReadString();
             bones[i].m_BoneName = boneName;
             if (rl.m_ReadCursor + 24 <= (int32_t)rl.DataSize()) {
-                rl.ReadBytes(&bones[i].m_Bounds.min, sizeof(Vec3));
-                rl.ReadBytes(&bones[i].m_Bounds.max, sizeof(Vec3));
+                rl.ReadBytes(&bones[i].m_Bounds.min, sizeof(_Vector3<float>));
+                rl.ReadBytes(&bones[i].m_Bounds.max, sizeof(_Vector3<float>));
             }
         }
         mesh->SetBones(bones.data(), (unsigned long)boneCount);
@@ -420,9 +420,9 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
             list.SetValue<bool>("IsLit", false);
             // Binary forces alpha on col0 before GetColourRGB: col0 |= 0xff000000.
             col0 |= 0xff000000u;
-            list.SetValue<Vec3>("Ambience",  GetColourRGB(col0));
-            list.SetValue<Vec3>("Diffuse",   GetColourRGB(col1));
-            list.SetValue<Vec3>("Specular",  GetColourRGB(col2));
+            list.SetValue<_Vector3<float>>("Ambience",  GetColourRGB(col0));
+            list.SetValue<_Vector3<float>>("Diffuse",   GetColourRGB(col1));
+            list.SetValue<_Vector3<float>>("Specular",  GetColourRGB(col2));
             list.SetValue<float>("SpecularStrength", specular);
             // DiffuseMap: set texture handle if available.
             if (loadedTexture.IsValid()) {

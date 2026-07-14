@@ -29,7 +29,7 @@
 #include "asset/TextureManager.h"
 #include "math/MathUtil.h"
 #include "math/Random.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "asset/Mesh.h"
@@ -369,7 +369,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
             // 6. SetShadow
             // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90
-            m_pTitleString->SetShadow(2.0f, Colour(0,0,0,255), Vec3(-6.0f,-6.0f,0.0f), false);
+            m_pTitleString->SetShadow(2.0f, Colour(0,0,0,255), _Vector3<float>(-6.0f,-6.0f,0.0f), false);
 
             // 7. SetGradient by mode
             if (gameMode == Mortar::GAME_MODE_ARCADE) {
@@ -396,7 +396,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     }
 
     // 9. m_TitleSize FINAL = (256, 64, 0)
-    m_TitleSize = Vec3(256.0f, 64.0f, 0.0f);
+    m_TitleSize = _Vector3<float>(256.0f, 64.0f, 0.0f);
 
     // 10.
     m_Timer           = 0.0f;
@@ -436,7 +436,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     // 14.
     pos.x = 0.0f; pos.y = 0.0f; pos.z = 0.0f;
-    m_OffsetPos = Vec3(368.0f, 55.0f, 0.0f);
+    m_OffsetPos = _Vector3<float>(368.0f, 55.0f, 0.0f);
     m_StarCount = 0;
 
     // 15. Null page pointers
@@ -468,11 +468,11 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     // 17. Arcade off-screen seed
     if (gameMode == Mortar::GAME_MODE_ARCADE) {
-        pos = Vec3(0.0f, -320.0f, 0.0f);
+        pos = _Vector3<float>(0.0f, -320.0f, 0.0f);
         if (param2 == 1 && param3 <= 0.0f) {
             m_State = STATE_BONUS_PHASE;
             m_Timer = param3 = -0.333f;
-            pos = Vec3(0.0f, -320.0f, 0.0f);
+            pos = _Vector3<float>(0.0f, -320.0f, 0.0f);
         }
     }
 
@@ -803,8 +803,8 @@ void GameOverScreen::CreateRetryButton() {
     if (!game || !game_work.mHud) return;
 
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98
-    Vec3 btnPos(-80.0f, -96.0f, 0.0f);
-    Vec3 globalCenter(0.0f, 0.0f, 0.0f);
+    _Vector3<float> btnPos(-80.0f, -96.0f, 0.0f);
+    _Vector3<float> globalCenter(0.0f, 0.0f, 0.0f);
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98: ring background is
     // game_work.m_RingTex[1] (blue_ring.tex -- plain ring, NO baked text). The label is the
     // TTF drawn by SetText; using retry.tex (which has "RETRY" baked into the art) doubled it.
@@ -864,8 +864,8 @@ void GameOverScreen::CreateQuitButton() {
     if (!game || !game_work.mHud) return;
 
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220
-    Vec3 btnPos(80.0f, -96.0f, 0.0f);
-    Vec3 globalCenter(0.0f, 0.0f, 0.0f);
+    _Vector3<float> btnPos(80.0f, -96.0f, 0.0f);
+    _Vector3<float> globalCenter(0.0f, 0.0f, 0.0f);
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220: ring background is
     // game_work.m_RingTex[16] (red_ring.tex -- plain ring, NO baked text). The label is the
     // TTF drawn by SetText; using quit.tex (which has "QUIT" baked into the art) doubled it.
@@ -916,7 +916,7 @@ void GameOverScreen::QuitCallback() {
     CancelHUDProgressionTimer();
     m_State = STATE_QUIT_WAIT;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+    HitMenuBomb(_Vector3<float>(163.0f, -96.0f, 0.0f));
 }
 
 void GameOverScreen::OnQuitClicked() {
@@ -1058,7 +1058,7 @@ void GameOverScreen::Update(float dt) {
                 SetStateWait();
             }
         }
-        pos = Vec3(0.0f, 0.0f, 0.0f);
+        pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
         break;
     }
 
@@ -1071,7 +1071,7 @@ void GameOverScreen::Update(float dt) {
             if (!m_pBonusScreen) {
                 FindMostOfFruit();
                 m_pBonusScreen = new BonusScreen();
-                m_pBonusScreen->pos = Vec3(0.0f, -20.0f, 0.0f);
+                m_pBonusScreen->pos = _Vector3<float>(0.0f, -20.0f, 0.0f);
                 m_pBonusScreen->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBonusScreen, false);
@@ -1130,7 +1130,7 @@ void GameOverScreen::Update(float dt) {
         // 2) Create FruitFactControl on first entry (LAB_00187220)
         if (m_pFruitFact == 0) {
             m_pFruitFact = new FruitFactControl();
-            m_pFruitFact->pos = Vec3(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f);
+            m_pFruitFact->pos = _Vector3<float>(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f);
             // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80 (0x00187280):
             //   tab/star args -> FruitFactControl +0x80/+0x84 (m_ComboA/m_ComboB).
             m_pFruitFact->m_ComboA = m_TabIndex;      // +0x80
@@ -1407,16 +1407,16 @@ void GameOverScreen::Update(float dt) {
     if ((uint8_t)(gm - 2) < 2 && m_pFruitFact != 0) {
         // Arcade/Zen layout
         float ffX = (1.0f - m_FruitFactAlpha) * 480.0f + 75.0f;
-        m_pFruitFact->SetPos(Vec3(ffX, 53.0f, 0.0f));
+        m_pFruitFact->SetPos(_Vector3<float>(ffX, 53.0f, 0.0f));
     } else {
         // Classic/other layout
         m_OffsetPos.x = m_FruitFactAlpha * -386.0f + 368.0f;
         m_OffsetPos.y = 55.0f;
         m_OffsetPos.z = 0.0f;
         if (m_pFruitFact)
-            m_pFruitFact->SetPos(Vec3(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f));
+            m_pFruitFact->SetPos(_Vector3<float>(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f));
         if (m_pNoticeCtrl)
-            m_pNoticeCtrl->pos = Vec3(0.0f, (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f, -5000.0f);
+            m_pNoticeCtrl->pos = _Vector3<float>(0.0f, (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f, -5000.0f);
     }
 
     // Page-sync loop: copy m_pFruitFact->pos into every registered page
@@ -1430,8 +1430,8 @@ void GameOverScreen::Update(float dt) {
     }
 
     // Slot A8 and B4 slide
-    if (m_pSlotA8) m_pSlotA8->pos = Vec3(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -50.0f, 0.0f);
-    if (m_pSlotB4) m_pSlotB4->pos = Vec3(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -125.0f, 0.0f);
+    if (m_pSlotA8) m_pSlotA8->pos = _Vector3<float>(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -50.0f, 0.0f);
+    if (m_pSlotB4) m_pSlotB4->pos = _Vector3<float>(190.0f + (1.0f - m_FruitFactAlpha) * 120.0f, -125.0f, 0.0f);
 }
 
 #ifndef __bada__
@@ -1478,7 +1478,7 @@ void GameOverScreen::UpdateRealtime(float dtSeconds) {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     // Layer 0x80 path -- highscore label + title-tex quad
     // ASM-verified: 2026-06-26T16:02Z v1.6.1 GameOverScreen::PreDrawOrder @0x00186894..0x00186aac (asm-inspector)
@@ -1497,7 +1497,7 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
             char buf[16];
             snprintf(buf, sizeof(buf), "%d", game_work.m_SaveData->m_highscore);
 
-            const Vec3 daysPos(-163.0f, -96.0f, 0.0f);
+            const _Vector3<float> daysPos(-163.0f, -96.0f, 0.0f);
             // font = game_work numbers font (binary pM_Fonts[2])
             const float scaleArg = m_pRetryBtn->size.x * 0.5f;
             if (game_work.pFontNumbers.IsValid()) {
@@ -1552,7 +1552,7 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     (void)hudScale;
 
     // State 0xe spinner halo -- uses MenuButton::blurry_backing.tex static
@@ -1606,7 +1606,7 @@ void GameOverScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
             MatrixManager& mm = MatrixManager::GetInstance();
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(64.0f, 64.0f, 64.0f);
-            mat.GlobalTranslate44(Vec3(190.0f, -50.0f, 0.0f));
+            mat.GlobalTranslate44(_Vector3<float>(190.0f, -50.0f, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             Mortar::Mesh::DrawTriList(g_StarMesh.verts, 48, false, NULL);
@@ -1620,7 +1620,7 @@ void GameOverScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
         if (m_pTitleString) {
             m_pTitleString->SetTranslation(pos, 1);
             float scale = size.x * (1.0f / 512.0f);  // 0.001953125 = 1/512
-            m_pTitleString->Draw(Vec2(scale, scale), 0.0f, 1);
+            m_pTitleString->Draw(_Vector2<float>(scale, scale), 0.0f, 1);
         }
     }
 

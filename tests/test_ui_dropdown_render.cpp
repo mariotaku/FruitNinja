@@ -20,7 +20,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdint>
@@ -125,7 +125,7 @@ int main(int argc, char* argv[]) {
         const uint8_t visibleRows = 6;
 
         // (a) LEFT, collapsed: selected index > 0, default closed state.
-        UiDropdown ddCollapsed(Vec3(-80.0f, 60.0f, 0.0f), items, 5, visibleRows, barW, barH);
+        UiDropdown ddCollapsed(_Vector3<float>(-80.0f, 60.0f, 0.0f), items, 5, visibleRows, barW, barH);
         ddCollapsed.SetBoxTexture(texBar);
         ddCollapsed.SetCaretTexture(texCaret);
 
@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
         // selected row's position, so both highlights show.
         int midScrollRow = (int)items.size() / 2 - 2;
         if (midScrollRow < 0) midScrollRow = 0;
-        UiDropdown ddOpen(Vec3(70.0f, 100.0f, 0.0f), items, 10, visibleRows, barW, barH);
+        UiDropdown ddOpen(_Vector3<float>(70.0f, 100.0f, 0.0f), items, 10, visibleRows, barW, barH);
         ddOpen.SetBoxTexture(texBar);
         ddOpen.SetCaretTexture(texCaret);
         ddOpen.SetFadeTexture(texFade);

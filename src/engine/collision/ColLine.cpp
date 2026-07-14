@@ -6,12 +6,12 @@
 // v1.6.1 ColLine::ColLine() @0x0025c9d0 -- binary stores b=(1.0,0.0,0.0), a=(0,0,0).
 ColLine::ColLine() : Col(), b(1.0f, 0.0f, 0.0f) {}
 
-ColLine::ColLine(Vec3 start, Vec3 end) : Col(), b(end) {
+ColLine::ColLine(_Vector3<float> start, _Vector3<float> end) : Col(), b(end) {
     m_PrimaryPoint = start;
 }
 
 // Binary slot 3 -- double-dispatch by other->GetType()
-int ColLine::Collide(Col* other, Vec3* outNormal) {
+int ColLine::Collide(Col* other, _Vector3<float>* outNormal) {
     int t = other->GetType();
     int hit = 0;
     // ASM-spec v1.6.1 ColLine::Collide @ 0x0025ccf0: TYPE_SPHERE calls ColSphereLine
@@ -19,7 +19,7 @@ int ColLine::Collide(Col* other, Vec3* outNormal) {
     // and stores outNormal regardless of hit.
     if (t == TYPE_SPHERE) {
         ColSphere* s = static_cast<ColSphere*>(other);
-        Vec3 norm;
+        _Vector3<float> norm;
         hit = ColSphere::ColSphereLine(s, this, &norm);
         // Binary 0x0025cd60-cd7c: calls ColSphereLine(sphere, line, outNormal)
         // directly -- no post-negate (matches ColSphereLine's own hit-only
@@ -32,7 +32,7 @@ int ColLine::Collide(Col* other, Vec3* outNormal) {
         hit = ColLineLine(this, line, outNormal);
     } else if (t == TYPE_AABB) {
         ColAABB* box = static_cast<ColAABB*>(other);
-        Vec3 norm;
+        _Vector3<float> norm;
         hit = box->ColAABBLine(box, this, &norm) ? 1 : 0;
         // Binary 0x0025cd2c-cd5c: calls ColAABBLine(box, line, outNormal) then
         // unconditionally negates the result and stores it (store happens even
@@ -59,10 +59,10 @@ void ColLine::DrawDebug() {
 // only when the squared closest-approach distance is below 1e-5
 // (DAT_0019f700) AND both clamped params lie in [0,1]. The out vector is the
 // along-d1 displacement from the nearer endpoint of segment a.
-int ColLine::ColLineLine(ColLine* a, ColLine* b, Vec3* out) {
-    Vec3 d1 = a->b - a->a();   // a->Direction()
-    Vec3 d2 = b->b - b->a();   // b->Direction()
-    Vec3 r  = a->a() - b->a();
+int ColLine::ColLineLine(ColLine* a, ColLine* b, _Vector3<float>* out) {
+    _Vector3<float> d1 = a->b - a->a();   // a->Direction()
+    _Vector3<float> d2 = b->b - b->a();   // b->Direction()
+    _Vector3<float> r = a->a() - b->a();
 
     float dd1 = d1.Dot(d1);    // s19
     float dd  = d1.Dot(d2);    // s16
@@ -88,12 +88,12 @@ int ColLine::ColLineLine(ColLine* a, ColLine* b, Vec3* out) {
     }
 
     // diff = (a.a + s*d1) - (b.a + t*d2) = closest-on-a minus closest-on-b.
-    Vec3 diff = (r + d1 * s) - d2 * t;
+    _Vector3<float> diff = (r + d1 * s) - d2 * t;
 
     if (diff.MagnitudeSqr() < 1e-5f &&
         s >= 0.0f && s <= 1.0f &&
         t >= 0.0f && t <= 1.0f) {
-        Vec3 v;
+        _Vector3<float> v;
         if (s < 0.5f) {
             v = d1 * s;
         } else {

@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <vector>
 #include <cstring>
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "hud/HUDControl.h"
 #include "engine/util/SmartPtr.h"
@@ -33,7 +33,7 @@ class PSPParticleEmitter;
 
 // ParseVector -- parse "x,y,z" comma-separated string into Vec3.
 // Binary: _Z11ParseVectorPKc v1.6.1
-Vec3 ParseVector(const char* s);
+_Vector3<float> ParseVector(const char* s);
 
 // ParseMaskWords -- v1.6.1 @0x0014f404 (_Z14ParseMaskWordsPKcPmi).
 // Generic helper: comma-splits str, hashes each trimmed token via StringHash,
@@ -49,8 +49,8 @@ class HUDControl3d;
 struct Emmiter {
     uint32_t                          m_NameHash;      // +0x00
     PSPParticleEmitter*               m_pHandle;       // +0x04
-    Vec3                              m_Offset;        // +0x08
-    Vec3                              m_VelocityScale; // +0x14
+    _Vector3<float> m_Offset;        // +0x08
+    _Vector3<float> m_VelocityScale; // +0x14
 
     Emmiter() : m_NameHash(0), m_pHandle(nullptr), m_Offset(0,0,0), m_VelocityScale(1,1,1) {}
     void Parse(TiXmlElement* xml);
@@ -81,10 +81,10 @@ struct EffectImage : public Mortar::ReloadableTexture {
     uint8_t      m_DeferKind;        // +0x0d
     // +0x0e..+0x0f  implicit padding for Vec3 alignment
     // +0x10  Vec3  base position (XML "pos"); Update writes ctrl->pos.
-    Vec3         m_Pos;              // +0x10
+    _Vector3<float> m_Pos;              // +0x10
     // +0x1c  Vec3  anchor offset (XML "anchor"); also used as entry slide-move base.
     //         Binary: Parse @0x001491e4 writes "anchor" here.
-    Vec3         m_Vel;              // +0x1c
+    _Vector3<float> m_Vel;              // +0x1c
     // +0x28  uint32_t  HUD layer/group mask (XML "group"); Activate -> ctrl+0x34.
     uint32_t     m_GroupMask;        // +0x28
     // +0x2c  uint16_t  sine oscillator index; Update += dt*32760*m_Freq @0x00148844.
@@ -103,10 +103,10 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // +0x44  Vec3  entry slide move offset (XML "transitionMoveIn" / "transitionMove").
     //         Applied to ctrl->pos during entrance transition. Default (0,0,0).
     //         v1.6.1 EffectImage::Parse @0x001491e4.
-    Vec3         m_SizeIn;           // +0x44
+    _Vector3<float> m_SizeIn;           // +0x44
     // +0x50  Vec3  exit slide move offset (XML "transitionMoveOut" / "transitionMove").
     //         Applied to ctrl->pos during exit transition. Default (0,0,0).
-    Vec3         m_SizeOut;          // +0x50
+    _Vector3<float> m_SizeOut;          // +0x50
     // +0x5c  float  window start time (XML "timeStart"); Update gate = param_3*m_StartT.
     float        m_StartT;           // +0x5c
     // +0x60  float  window end time (XML "timeEnd"); Update gate = param_3*m_EndT.
@@ -115,7 +115,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
     //         texture and writes (texWidth, texHeight, 0) here. Secondary write: "scale"
     //         attr overrides with explicit (x,y,z). "slowHardwareScale" multiplies into it.
     //         Update @0x00148844 reads m_ColourScale as the base quad size each frame.
-    Vec3         m_ColourScale;      // +0x64
+    _Vector3<float> m_ColourScale;      // +0x64
     // +0x70  Colour  packed RGBA tint (XML "tint").
     Colour       m_Tint;             // +0x70
     // +0x74  uint32_t  transition flag bits. Bit0(1)="scale" (size fades with visibility),
@@ -173,8 +173,8 @@ struct ScreenTint {
     float m_Length;     // +0x04
     float m_StartT;     // +0x08
     float m_FadeIn;     // +0x0C
-    Vec3  m_ColourTo;   // +0x10
-    Vec3  m_ColourFrom; // +0x1C
+    _Vector3<float> m_ColourTo;   // +0x10
+    _Vector3<float> m_ColourFrom; // +0x1C
 
     ScreenTint()
         : m_CurrentT(0.0f), m_Length(0.0f), m_StartT(0.0f), m_FadeIn(0.0f)

@@ -28,7 +28,7 @@ TimeSinkControl::TimeSinkControl()
 {
     // ctor @0x001c19dc: m_HudScale = (0, 0.25, 1.0) -- matches the RELEASE
     // phase's fly-in start pose (see Update()'s hudScaleStart).
-    m_HudScale = Vec3(0.0f, 0.25f, 1.0f);
+    m_HudScale = _Vector3<float>(0.0f, 0.25f, 1.0f);
 }
 
 // ASM-spec v1.6.1 TimeSinkControl::Update @0x001c1b98:
@@ -98,9 +98,9 @@ void TimeSinkControl::Update(float dt) {
             // Placeholder Vec3(0,0,0) below. Cosmetic easing only -- does NOT
             // affect the time award (banked unconditionally at
             // m_TimeElapsed > 1.08f below).
-            const Vec3 T_801(0.0f, 0.0f, 0.0f);
+            const _Vector3<float> T_801(0.0f, 0.0f, 0.0f);
 
-            const Vec3 hudScaleStart(0.0f, 0.25f, 1.0f);
+            const _Vector3<float> hudScaleStart(0.0f, 0.25f, 1.0f);
             m_HudScale = hudScaleStart + (T_801 - hudScaleStart) * it3;
 
             // Function-local static matches the binary's magic-static guard
@@ -113,7 +113,7 @@ void TimeSinkControl::Update(float dt) {
             // TC->size.x (NOT m_HudScale.x) -- ASM @0x001c1e80 reads
             // TimeControl+0x20, which is the inherited HUDControl::size field.
             float targetX = s_TextOffset + tc->size.x * 0.6f;
-            Vec3 posEnd = Vec3(targetX, 0.0f, 0.0f) - tc->pos;
+            _Vector3<float> posEnd = _Vector3<float>(targetX, 0.0f, 0.0f) - tc->pos;
             pos = T_801 + (posEnd - T_801) * it3;
         }
 
@@ -155,7 +155,7 @@ void TimeSinkControl::DrawOrder(float* hudScaleRaw, int /*layerMask*/) {
     // TODO: v1.6.1 DAT_002d92a4 -- DrawOrder clip-rect .y (unmapped .bss
     // global; read from HLE). Placeholder 0.0f below. Cosmetic (word-wrap
     // limit) only.
-    Vec2 maxWH(0.0f, 0.0f);
+    _Vector2<float> maxWH(0.0f, 0.0f);
     font->DrawString(m_AnimScale, 1.0f, 0.0f, iter, GetAdjustedPos(), m_DrawColour,
                       maxWH, 0xF, 0.0f);
 }

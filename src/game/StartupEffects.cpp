@@ -8,7 +8,7 @@
 #include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 #include "debug/Logger.h"
@@ -61,7 +61,7 @@ void DrawStartFade() {
     mm.GetWorldStack().Reset();
     // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: logo scale = Vec3(480,320,0)*scale_mul (grows 1x->2x = the "explode")
     Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W * alpha_factor, (float)FN_SCREEN_H * alpha_factor, 0.0f);
-    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
+    mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 

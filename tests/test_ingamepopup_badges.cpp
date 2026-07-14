@@ -41,7 +41,7 @@
 #include "hud/IngamePopup.h"
 #include "engine/util/StringTable.h"
 #include "game/GameWork.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -91,9 +91,9 @@ static void RenderFrame(SDL_Window* window) {
     IngamePopup* pSel  = GetIngamePopup(0x11);
     IngamePopup* pBest = GetIngamePopup(0x0F);
 
-    if (pNew)  { Vec3 pos( 60.0f, 0.0f, 0.0f); pNew->Draw(pos, 0.8f); }
-    if (pSel)  { Vec3 pos(  0.0f, 0.0f, 0.0f); pSel->Draw(pos, 0.8f); }
-    if (pBest) { Vec3 pos(-60.0f, 0.0f, 0.0f); pBest->Draw(pos, 1.0f); }
+    if (pNew)  { _Vector3<float> pos(60.0f, 0.0f, 0.0f); pNew->Draw(pos, 0.8f); }
+    if (pSel)  { _Vector3<float> pos(0.0f, 0.0f, 0.0f); pSel->Draw(pos, 0.8f); }
+    if (pBest) { _Vector3<float> pos(-60.0f, 0.0f, 0.0f); pBest->Draw(pos, 1.0f); }
 
     SDL_GL_SwapWindow(window);
 }

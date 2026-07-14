@@ -43,7 +43,7 @@
 //
 
 #include "Entity.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "util/SmartPtr.h"
@@ -175,26 +175,26 @@ private:
     QUADCUSTOMVERTEX* m_pRightBuffer;
 
     // +0x64  _Vector3<float>  m_BladeDir  normalised blade direction
-    Vec3 m_BladeDir;
+    _Vector3<float> m_BladeDir;
 
     // +0x70  _Vector3<float>  m_TailPos  oldest visible trail point position
-    Vec3 m_TailPos;
+    _Vector3<float> m_TailPos;
 
     // +0x7c  _Vector3<float>  m_HeadPos  tip (newest) trail point position
-    Vec3 m_HeadPos;
+    _Vector3<float> m_HeadPos;
 
     // +0x88  _Vector3<float>  m_PrevHeadPos  previous frame tip position
-    Vec3 m_PrevHeadPos;
+    _Vector3<float> m_PrevHeadPos;
 
     // +0x94  float  m_SegLenSq  squared segment length (Init: -1.0f)
     float m_SegLenSq;
     // +0x98  float  m_HeadThickScale  head thickness scale
     float m_HeadThickScale;
     // +0x9c  _Vector3<float>  m_SliceBladeDir  blade direction at slice (for splat velocity)
-    Vec3 m_SliceBladeDir;
+    _Vector3<float> m_SliceBladeDir;
 
     // +0xa8  _Vector3<float>  m_SliceFruitPos  position of most recently sliced entity
-    Vec3 m_SliceFruitPos;
+    _Vector3<float> m_SliceFruitPos;
 
     // +0xb4  int32_t  m_SliceFruitType  fruit type of most recently sliced entity
     int m_SliceFruitType;
@@ -203,7 +203,7 @@ private:
     float m_SwipeSoundTimer;
 
     // +0xbc  Vec3[6]  m_GhostDirRing  6-entry ghost direction ring (stride 0xc = 12)
-    Vec3 m_GhostDirRing[6];
+    _Vector3<float> m_GhostDirRing[6];
 
     // +0x104  uint32_t  m_GhostIndex  current ghost ring-buffer write index
     unsigned int m_GhostIndex;
@@ -212,7 +212,7 @@ private:
     unsigned int m_GhostCount;
 
     // +0x10c  _Vector3<float>  m_GhostDir  averaged ghost blade direction
-    Vec3 m_GhostDir;
+    _Vector3<float> m_GhostDir;
 
     // +0x118  float  m_ComboTimer  per-swipe combo window accumulator (fractional seconds)
     //         Reset to 0 on slice; fires at 0.095 to close combo window.
@@ -294,7 +294,7 @@ private:
 
     // Raw touch position from most recent OnTouchActive.
     // Port specific: caches SDL event coordinates; the binary reads from the Bada InputEvent pipeline.
-    Vec3 m_RawTouchPos;
+    _Vector3<float> m_RawTouchPos;
 
     // Port specific: EMA-smoothed |m_BladeDir| (px/sim-tick), updated in
     // Update() alongside the swipe-loop-volume bladeMag calc. Used only by
@@ -338,8 +338,8 @@ public:
     int GetPointCount() const { return m_PointCount; }
 
     // Port specific: debug accessor for blade trail endpoints (used by DebugBladeTrails_Draw).
-    const Vec3& GetTailPos() const { return m_TailPos; }
-    const Vec3& GetHeadPos() const { return m_HeadPos; }
+    const _Vector3<float>& GetTailPos() const { return m_TailPos; }
+    const _Vector3<float>& GetHeadPos() const { return m_HeadPos; }
 
 #ifdef FN_TEST
     // Test-seam: bomb-hit latch (m_BombHitEdge, +0x4c) access. Lets
@@ -382,7 +382,7 @@ private:
     // Updates ghost ring, m_BladeDir, m_AngleIndex, m_Angle.
     // Binary AddPoint @0x001e9918 mutates dir in the zero-dir case (*dir = m_BladeDir), so
     // dir is non-const to match; callers pass a mutable local Vec3.
-    void AddPoint(float pressure, const Vec3* center, Vec3* dir);
+    void AddPoint(float pressure, const _Vector3<float>* center, _Vector3<float>* dir);
 
     // Binary @ 0x1e6914 -- per-frame full geometry re-derivation (miter, UV, alpha,
     // m_Col, head cap). Replaces previous linear-fade approximation.
@@ -447,7 +447,7 @@ public:
 
     // Binary @ 0x17B3BC -- 2-instruction stub `movs r0,#0; bx lr`.
     // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x0017B3BC (re-analyst)
-    int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
+    int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, _Vector3<float>* bladeVel) override;
 
     // DrawSlice -- binary @ 0x1e83b0. Main blade render (two mirrored tri-strips).
     // Called from GameDraw's 16-slot loop, NOT from ActorManager::Draw.
@@ -457,7 +457,7 @@ public:
     // Allocates ColLine (new(0x20)), calls InitPoints(160),
     // inits ghost ring + combo array.
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017C65C (re-analyst)
-    void Init(void* param1, long param2, Vec3* param3) override;
+    void Init(void* param1, long param2, _Vector3<float>* param3) override;
 
     // InitPoints -- v1.6.1 @ 0x1e75d0. Heap-allocates m_pLeftBuffer /
     // m_pRightBuffer (each m_SplitPoint+2 = 162 QUADCUSTOMVERTEX records)

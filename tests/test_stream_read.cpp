@@ -57,7 +57,7 @@ static void test_read_vec3()
     put_float(buf + 8, 3.0f);
 
     unsigned char* cursor = buf;
-    Vec3 v = Mortar::ReadVec3(&cursor);
+    _Vector3<float> v = Mortar::ReadVec3(&cursor);
     CHECK(v.x == 1.0f);
     CHECK(v.y == 2.5f);
     CHECK(v.z == 3.0f);
@@ -140,7 +140,7 @@ static void test_read_float_vec3_sequential()
     CHECK(f == 7.0f);
     CHECK(cursor == buf + 4);
 
-    Vec3 v = Mortar::ReadVec3(&cursor);
+    _Vector3<float> v = Mortar::ReadVec3(&cursor);
     CHECK(v.x == 1.0f);
     CHECK(v.y == 2.0f);
     CHECK(v.z == 3.0f);

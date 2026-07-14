@@ -32,7 +32,7 @@
 //
 
 #include "HUDControl3d.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include <cstdint>
@@ -97,11 +97,11 @@ private:
     int32_t  m_TouchId;
 
     // +0xA8..+0xB3: last sampled touch position (12 bytes, Vec3).
-    Vec3     m_LastTouchPos;
+    _Vector3<float> m_LastTouchPos;
 
 public:
     // Binary @ 0x001c9380 (C1) / 0x001c9284 (C2)
-    VerticalScroller(Vec3 pos, Vec3 size,
+    VerticalScroller(_Vector3<float> pos, _Vector3<float> size,
                      int32_t minValue, int32_t maxValue, uint16_t stepSize,
                      int32_t currentValue, bool reverseDir,
                      uint8_t totalRows, uint16_t visibleHeight, uint16_t totalHeight);

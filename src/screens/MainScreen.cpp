@@ -74,11 +74,11 @@ static Mortar::SmartPtr<Mortar::Texture> m_ninjaTex;
 
 // Button positions (verified from read_memory, docs/screens/main.md)
 // ASM-spec v1.6.1 @0x00196264: NEW GAME pos.x = 24.0f
-static const Vec3 POS_PLAY_BUTTON(24.0f, -66.0f, 0.0f);
-static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
-static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
-static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
-static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
+static const _Vector3<float> POS_PLAY_BUTTON(24.0f, -66.0f, 0.0f);
+static const _Vector3<float> POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
+static const _Vector3<float> POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
+static const _Vector3<float> POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
+static const _Vector3<float> POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // Port specific: no binary counterpart. BOTTOM-left SETTINGS button. +Y is up
 // (sound/music toggles at y=+135.5 are TOP-right), so the bottom edge is
 // negative y; x near the left edge.
@@ -106,10 +106,10 @@ static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // button. Settings mirrors both the size (48) and this exact margin
 // treatment (same corner, same 48 half-size, same +4/-5 margins), landing
 // on the SAME coordinates as the pause button's idle pos: (-212,-141).
-static const Vec3 POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
+static const _Vector3<float> POS_SETTINGS_TOGGLE(-212.0f, -141.0f, 0.0f);
 // buttonOriginPos(64,64,64) * idleResumeScale(0.75) -- see ctor-site note
 // where this formula is derived from PauseScreen's idle resumeScale.
-static const Vec3 kSettingsRestScale(48.0f, 48.0f, 48.0f);
+static const _Vector3<float> kSettingsRestScale(48.0f, 48.0f, 48.0f);
 // Port specific: how far (world units) the settings button slides toward its
 // bottom-left corner as it hides (driven by the ring growFactor, frame-synced
 // with them). Large enough (~55) that the full-size 48px button clears the
@@ -230,10 +230,10 @@ MainScreen::MainScreen(Game& g)
 #endif // !defined(__bada__)
 
     // Set size = (480.0, 138.0, 1.0)
-    size = Vec3(480.0f, 138.0f, 1.0f);
+    size = _Vector3<float>(480.0f, 138.0f, 1.0f);
 
     // Set position = (0.0, (320.0 - size_y) * 0.5, 0.0) = (0.0, 91.0, 0.0)
-    pos = Vec3(0.0f, (320.0f - size.y) * 0.5f, 0.0f);
+    pos = _Vector3<float>(0.0f, (320.0f - size.y) * 0.5f, 0.0f);
 
     // m_BounceY = ninja_text.tex height / 2 + 160.0
     // Binary ctor v1.6.1 MainScreen ctor @0x0019811c: calls ninja_text_tex->GetHeight() (vtable +0x18)
@@ -299,7 +299,7 @@ void MainScreen::Update(float dt) {
         pSoundToggle = new MenuButton();
         pSoundToggle->Init(POS_SOUND_TOGGLE,
             Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
-            Vec3(32.0f, 32.0f, 1.0f), nullptr);
+            _Vector3<float>(32.0f, 32.0f, 1.0f), nullptr);
         game_work.mHud->AddControl(pSoundToggle);
         pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         pSoundToggle->SetSingular();
@@ -308,7 +308,7 @@ void MainScreen::Update(float dt) {
         pMusicToggle = new MenuButton();
         pMusicToggle->Init(POS_MUSIC_TOGGLE,
             Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
-            Vec3(32.0f, 32.0f, 1.0f), nullptr);
+            _Vector3<float>(32.0f, 32.0f, 1.0f), nullptr);
         game_work.mHud->AddControl(pMusicToggle);
         pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         pMusicToggle->SetSingular();
@@ -336,7 +336,7 @@ void MainScreen::Update(float dt) {
         m_pSettingsButton->m_Texture = Mortar::TextureManager::LoadLocalisedTexture("settings_button.tex");
         m_pSettingsButton->Init(POS_SETTINGS_TOGGLE,
             Mortar::Delegate0<void>::Make(this, &MainScreen::SettingsCallback), -1,
-            Vec3(0.0f, 0.0f, 0.0f), nullptr);
+            _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
         m_pSettingsButton->m_RestScale = kSettingsRestScale;
         m_pSettingsButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         game_work.mHud->AddControl(m_pSettingsButton);
@@ -682,7 +682,7 @@ void MainScreen::Update(float dt) {
 
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
-            HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+            HitMenuBomb(_Vector3<float>(163.0f, -96.0f, 0.0f));
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             m_State = STATE_QUIT_BOMB;
         } else if (qs == 3) {
@@ -888,8 +888,8 @@ float MainScreen::GetCameraTransition() const { return game_work.m_PauseAmount; 
 void  MainScreen::SetCameraTransition(float v) { game_work.m_PauseAmount = v; }
 
 // Helper: setup world matrix for a textured quad at given position
-static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
-                            float w, float h, const Vec3& drawPos) {
+static void SetupQuadMatrix(MatrixManager& mm, const _Vector3<float>& hudScale,
+                            float w, float h, const _Vector3<float>& drawPos) {
     (void)hudScale;
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
@@ -900,7 +900,7 @@ static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
 
 // ASM-spec v1.6.1 MainScreen::Draw @0x001993ac
 void MainScreen::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     if (m_State == STATE_CAMERA_FADE) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B) &&
@@ -932,7 +932,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         // (port +0xE0..+0xE8 = m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ).
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
         m_TexFruitText->Set();
-        Vec3 fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
+        _Vector3<float> fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
@@ -945,7 +945,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
     if (m_ninjaTex.IsValid()) {
-        Vec3 ninjaDrawPos(m_BounceVel, m_BounceY, m_BounceZ);
+        _Vector3<float> ninjaDrawPos(m_BounceVel, m_BounceY, m_BounceZ);
         m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
@@ -964,9 +964,9 @@ void MainScreen::Draw(float* hudScaleRaw) {
         m_TexSliceFruit->UnSet();
     }
     if (m_pSliceInstrBox) {
-        Vec3 instrPos = m_LogoPos + Vec3(-4.0f, -4.0f, 0.0f);
+        _Vector3<float> instrPos = m_LogoPos + _Vector3<float>(-4.0f, -4.0f, 0.0f);
         m_pSliceInstrBox->SetTranslation(instrPos, 1);
-        m_pSliceInstrBox->Draw(Vec2(1.0f, 1.0f), 8.0f, 1);
+        m_pSliceInstrBox->Draw(_Vector2<float>(1.0f, 1.0f), 8.0f, 1);
     }
 
     // 5. Loading symbol (v1.6.1 Draw @0x001993ac: states 0x13/0x14 only)
@@ -980,7 +980,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         float csH = (float)m_TexBc->GetHeight();
         float scaleX = csW * 0.5f;
         float scaleY = csH * 0.5f * (csW > 0.0f ? (csH / csW) : 1.0f);
-        Vec3 csPos(0.0f, 7.0f, 0.0f);
+        _Vector3<float> csPos(0.0f, 7.0f, 0.0f);
         m_TexBc->Set();
         SetupQuadMatrix(mm, hudScale, scaleX, scaleY, csPos);
         if (game) game->renderer.DrawQuad(m_DrawColour);
@@ -1084,8 +1084,8 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
 
     // m_LogoPos = (-175, 26, 0) + (-120, -17, 0) * m_Lean * 2.0
     // fruit_text + sliceInstrBox draw position (binary @ 0x00195a58)
-    Vec3 base(-175.0f, 26.0f, 0.0f);
-    Vec3 offset(-120.0f, -17.0f, 0.0f);
+    _Vector3<float> base(-175.0f, 26.0f, 0.0f);
+    _Vector3<float> offset(-120.0f, -17.0f, 0.0f);
     m_LogoPos = base + offset * m_Lean * 2.0f;
 }
 
@@ -1108,7 +1108,7 @@ void MainScreen::DeleteMenuButtons() {
 void MainScreen::Hide() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
-    pos = Vec3(0.0f, 0.0f, 0.0f);
+    pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
     // Port specific: no binary counterpart. m_pSettingsButton is NOT torn down
     // here (an earlier attempt did RemoveButton() here, which nulled the
     // pointer -- but MainScreen::Update keeps running every frame while
@@ -1151,7 +1151,7 @@ void MainScreen::CreateButtons() {
         m_pGameModeButton = new MenuButton();
         m_pGameModeButton->m_Texture = texNewGame;
         m_pGameModeButton->Init(POS_PLAY_BUTTON,
-            Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
+            Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, _Vector3<float>(0,0,0), nullptr);
         if (texNewGame.IsValid()) {
             m_pGameModeButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
             m_pGameModeButton->m_RestScale.y = (float)(texNewGame->GetHeight() + 1);
@@ -1182,7 +1182,7 @@ void MainScreen::CreateButtons() {
         m_pStoreButton->m_Texture = game_work.m_RingTex[8];
         m_pStoreButton->Init(POS_DOJO_BUTTON,
             Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
-            Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
+            Fruit::FruitType("mango", false), _Vector3<float>(0,0,0), nullptr);
         m_pStoreButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         m_pStoreButton->m_RemoveCallback =
             Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
@@ -1219,8 +1219,8 @@ void MainScreen::CreateQuitButton() {
     m_pQuitButton->m_bRespondsToBackKey = 1;
     int fruitCount = FruitInfo_GetCount();
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x0019687c: quit button Init pos = (0,0,0)
-    m_pQuitButton->Init(Vec3(0.0f, 0.0f, 0.0f),
-        Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
+    m_pQuitButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
+        Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, _Vector3<float>(0,0,0), nullptr);
     m_pQuitButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     m_pQuitButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
@@ -1334,7 +1334,7 @@ void MainScreen::QuitGamesCallback() {
         // -(Vector3::UnitY) * 10.0 -- downward accel override (replaces Bomb::Init
         // -12.0 gravity); decelerates the ClearMenuItems upward pop so the bomb
         // falls off-screen. Port previously had +10 (up) -> bomb flew upward forever.
-        bomb->m_AccelForce = Vec3(0.0f, -10.0f, 0.0f);
+        bomb->m_AccelForce = _Vector3<float>(0.0f, -10.0f, 0.0f);
     }
 
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
@@ -1421,7 +1421,7 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
         tx = 0.0f; ty = 7.0f;
     }
 
-    Vec3 drawPos(tx, ty, 0.0f);
+    _Vector3<float> drawPos(tx, ty, 0.0f);
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
     mat.GlobalTranslate44(drawPos);

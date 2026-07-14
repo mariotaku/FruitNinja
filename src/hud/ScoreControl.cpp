@@ -471,7 +471,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             // which keeps multi-digit scores to the right of the watermelon
             // icon. See ASM-verified v1.6.1 Mortar::Font::DrawString @0x0010671c.
             game_work.pFontNumbers->DrawString(scale, 1.0f, 0.0f,
-                buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
+                buf, _Vector3<float>(drawX, drawY, 0.0f), col, 0x0d);
         }
 
         // Section B: per-digit combo overlay.
@@ -526,7 +526,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                     float drawX = m_DrawPosX + cursorX;
                     float drawY = 155.0f;  // hard-coded per binary @ 0x0015914C
                     game_work.pFontMain->DrawString(scale, 1.0f, 0.0f,
-                        label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
+                        label, _Vector3<float>(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
 
                     // binary @ 0x001591b4: cursorX += MeasureString(label) * scale + 5.0
                     cursorX += game_work.pFontMain->MeasureWidth(scale, label) * scale + 5.0f;
@@ -552,7 +552,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
                 game_work.pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
-                    multBuf, Vec3(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
+                    multBuf, _Vector3<float>(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
         }
@@ -590,8 +590,8 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 if (m_pStringBox100) {
                     m_pStringBox100->SetColour(col, 1);
                     m_pStringBox100->SetText(buf);
-                    m_pStringBox100->SetTranslation(Vec3(pos.x - 19.0f, pos.y - 23.8f, 0.0f), 0);
-                    m_pStringBox100->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+                    m_pStringBox100->SetTranslation(_Vector3<float>(pos.x - 19.0f, pos.y - 23.8f, 0.0f), 0);
+                    m_pStringBox100->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
                 }
             }
         }
@@ -605,8 +605,8 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         float xPos = IsMultiplayer()
             ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE)
             : SCORE_ICON_X_SP;
-        m_pScoreBox->SetTranslation(Vec3(xPos, m_DrawPosY + 53.0f, 0.0f), 1);
-        m_pScoreBox->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        m_pScoreBox->SetTranslation(_Vector3<float>(xPos, m_DrawPosY + 53.0f, 0.0f), 1);
+        m_pScoreBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
     // Section E: NEW BEST SCORE banner (type 0x0F IngamePopup)
@@ -622,7 +622,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
 
         IngamePopup* popup = GetIngamePopup(0x0F);
         if (popup) {
-            Vec3 bannerPos(-100.0f, 70.0f, 0.0f);
+            _Vector3<float> bannerPos(-100.0f, 70.0f, 0.0f);
             popup->Draw(bannerPos, animScale);
         }
     }

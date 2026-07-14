@@ -33,7 +33,7 @@
 //
 
 #include "HUDControl3d.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/util/Delegate.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
@@ -84,7 +84,7 @@ private:
     int32_t  m_TouchId;
 
     // +0xAC: live touch position (12 bytes)
-    Vec3     m_TouchPos;
+    _Vector3<float> m_TouchPos;
 
     // +0xB8: fires when m_CurrentValue changes (zero-arg, void return); 36B -> ends 0xDC.
     Mortar::Delegate0<void> m_OnValueChanged;
@@ -98,7 +98,7 @@ public:
     //   writes, same s_box/s_slider reads); NEITHER calls GETSTRING_CAST_0. Earlier
     //   port notes read this C1/C2 pair as two DISTINCT overloads (char* vs
     //   LocalizedString) -- that was a misread; there is only one binary ctor.
-    SliderControl(Vec3 inPos, Vec3 inSize,
+    SliderControl(_Vector3<float> inPos, _Vector3<float> inSize,
                   const char* label,
                   int32_t minValue, int32_t maxValue,
                   uint16_t fontSize, int32_t initialValue);
@@ -107,7 +107,7 @@ public:
     // above). Provided for call-site symmetry with CheckBox's genuine
     // ctor(LocalizedString) (0x00166ab8); resolves via GETSTRING_CAST_0 the same
     // way every other GETSTRING_CAST_0 call site in the codebase does.
-    SliderControl(Vec3 inPos, Vec3 inSize,
+    SliderControl(_Vector3<float> inPos, _Vector3<float> inSize,
                   LocalizedString locLabel,
                   int32_t minValue, int32_t maxValue,
                   uint16_t fontSize, int32_t initialValue);

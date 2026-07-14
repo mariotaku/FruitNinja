@@ -31,7 +31,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include <cstdio>
 #include <vector>
@@ -96,8 +96,8 @@ int main(int argc, char* argv[]) {
         // pos.x axis by 150 (> the 128 quad extent) so they do not overlap.
         // Both default to CHECKED (binary ctor sets m_Checked=1); clear one so the
         // two instances render distinct texture state (grey unchecked vs green checked).
-        CheckBox cbChecked  (Vec3(-75.0f, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "ON");
-        CheckBox cbUnchecked(Vec3( 75.0f, 0.0f, 0.0f), Vec3(1.0f, 1.0f, 1.0f), "OFF");
+        CheckBox cbChecked  (_Vector3<float>(-75.0f, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f), "ON");
+        CheckBox cbUnchecked(_Vector3<float>( 75.0f, 0.0f, 0.0f), _Vector3<float>(1.0f, 1.0f, 1.0f), "OFF");
         cbUnchecked.SetCheckedForTest(false);
 
         if (!cbChecked.IsChecked() || cbUnchecked.IsChecked()) {

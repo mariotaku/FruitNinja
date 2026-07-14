@@ -170,7 +170,7 @@ static void test_reset_zeroes_head_cap_slot() {
     SlashEntity se;
 
     // Binary-faithful Init (allocates ColLine, calls InitPoints(160)).
-    se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+    se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
     // Immediately after Init: buffer[2] must be 0 (InitPoints zeroes all).
     CHECK_NEAR(se.GetVertexY(2), 0.0f, 0.01f);
@@ -227,7 +227,7 @@ static void test_reset_zeroes_both_buffers() {
     printf("  test_reset_zeroes_both_buffers...\n");
 
     SlashEntity se;
-    se.Init(static_cast<void*>(0), 0L, static_cast<Vec3*>(0));
+    se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
     // Drive slice A and populate buffer[2] with non-zero data.
     Touch(se, 0.0f, 100.0f, true);

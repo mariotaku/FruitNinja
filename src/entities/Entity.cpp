@@ -55,7 +55,7 @@ void Entity::HeapDestroy() {
 // Binary @ 0x0019d5fc — base Init: no-op (vtable slot 2).
 // Runtime callers pass (nullptr, 0, &scale). .lvl loader passes header data;
 // FruitNinja never loads .lvl files so that path is dead.
-void Entity::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {}
+void Entity::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 
 // Binary @ 0x0019d5e8 — base Release: dtor m_Col via vtable[1] then null it.
 // Col has a virtual dtor; delete dispatches to the correct subclass dtor.
@@ -80,12 +80,12 @@ void Entity::InRect(ColAABB* /*aabb*/) {}
 int Entity::CollisionResponse(Entity* /*hitter*/,
                                unsigned long /*flagsA*/,
                                unsigned long /*flagsB*/,
-                               Vec3* /*bladeVelocity*/) {
+                               _Vector3<float>* /*bladeVelocity*/) {
     return 0;
 }
 
 // Binary @ 0x0019d608 — slot 10: if m_Col and col, dispatch m_Col->Collide(col, hitPos)
-void Entity::Collide(Entity* /*other*/, Col* col, unsigned long* /*outFlags*/, Vec3* hitPos) {
+void Entity::Collide(Entity* /*other*/, Col* col, unsigned long* /*outFlags*/, _Vector3<float>* hitPos) {
     if (m_Col && col) {
         m_Col->Collide(col, hitPos);
     }

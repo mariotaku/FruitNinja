@@ -29,7 +29,7 @@ DisplayManager::DisplayManager()
     m_WindowRect.top = 0;
     m_WindowRect.right = FN_SCREEN_W;
     m_WindowRect.bottom = FN_SCREEN_H;
-    m_lightDirection = Vec3(0.4f, 0.7f, 0.6f);
+    m_lightDirection = _Vector3<float>(0.4f, 0.7f, 0.6f);
     memset(m_TextureOverloadPrefix, 0, sizeof(m_TextureOverloadPrefix));
     m_ScreenRotationMatrix.Identity();
 }
@@ -122,7 +122,7 @@ void DisplayManager::SetClearColour(const Colour& c) {
     m_ClearColor = c;
 }
 
-void DisplayManager::SetLightDirection(const Vec3& dir) {
+void DisplayManager::SetLightDirection(const _Vector3<float>& dir) {
     m_lightDirection = dir;
 }
 

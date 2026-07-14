@@ -84,8 +84,8 @@ static MenuButton* FindDojoBackBomb(const std::list<HUDControl*>& existingContro
 // with dojoShrink=false, kept local so this test is self-contained.
 static float MeasureHomeBombScale(fn::TestHarness& h) {
     int bombType = FruitInfo_GetCount();
-    Vec3 spawnPos(185.0f, -106.0f, 0.0f);
-    Vec3 hitBounds(0.0f, 0.0f, 0.0f);
+    _Vector3<float> spawnPos(185.0f, -106.0f, 0.0f);
+    _Vector3<float> hitBounds(0.0f, 0.0f, 0.0f);
 
     Mortar::Delegate0<void> clickCb;
     Mortar::Delegate0<void> deleteCb;

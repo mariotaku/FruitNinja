@@ -16,7 +16,7 @@ BombFlash::BombFlash() {
 BombFlash::~BombFlash() {}
 
 // v1.6.1 BombFlash::Init @0x001d4dbc — stub (real init logic not yet ported)
-void BombFlash::Init(void*, long, Vec3*) {}
+void BombFlash::Init(void*, long, _Vector3<float>*) {}
 
 // ASM-verified: 2026-07-04T00:00:00Z v1.6.1 BombFlash::Update @ 0x001d4dd4 (asm-inspector)
 // Quadratic scale-grow + linear fade-in / quadratic fade-out over a 0.6s lifetime;
@@ -24,7 +24,7 @@ void BombFlash::Init(void*, long, Vec3*) {}
 void BombFlash::Update(float dt) {
     m_Timer += dt;
     float t = m_Timer / 0.6f;
-    m_Scale = Vec3(50.0f * t * t + 150.0f, 200.0f * t * t + 100.0f, 0.0f);
+    m_Scale = _Vector3<float>(50.0f * t * t + 150.0f, 200.0f * t * t + 100.0f, 0.0f);
 
     float maxAlpha = (float)(uint8_t)m_Colour0.a;
     float alpha;
@@ -88,7 +88,7 @@ BombFlash* BombFlash::GetFree() {
 }
 
 // v1.6.1 BombFlash::MakeFlash @0x001d5bf0 — stub (not yet ported)
-void BombFlash::MakeFlash(Colour /*col*/, Vec3 /*pos*/, Vec3 /*dir*/,
+void BombFlash::MakeFlash(Colour /*col*/, _Vector3<float> /*pos*/, _Vector3<float> /*dir*/,
                            Mortar::SmartPtr<Mortar::Texture> /*tex*/) {}
 
 // v1.6.1 BombFlash::UpdateActiveFlashes @0x001d4dc4 — DEFUNCT (bx lr).

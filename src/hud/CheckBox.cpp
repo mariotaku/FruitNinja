@@ -26,7 +26,7 @@ Mortar::SmartPtr<Mortar::Texture> CheckBox::s_unchecked;
 // ASM-verified: 2026-07-11T00:00Z v1.6.1 CheckBox::CheckBox(Vec3,Vec3,char const*) @ 0x00166a10 (re-analyst)
 //   Field writes: m_Label(+0x80)=label, m_Checked(+0x7C)=1, Delegate0 ctor on
 //   m_OnToggle(+0x94), size(+0x20), pos(+0x8), m_TouchId(+0x84)=-1, m_LayerFlags(+0x34)=0x80.
-CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
+CheckBox::CheckBox(_Vector3<float> inPos, _Vector3<float> inSize, const char* label)
     : HUDControl3d()
     , m_Checked(1)
     , m_Label(label)
@@ -44,7 +44,7 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
 // ASM-verified: 2026-07-11T00:00Z v1.6.1 CheckBox::CheckBox(Vec3,Vec3,LocalizedString) @ 0x00166ab8 (re-analyst)
 //   Resolves the string-table id via GETSTRING_CAST_0(param_4), then duplicates the
 //   char* ctor body inline with the resolved string as m_Label.
-CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
+CheckBox::CheckBox(_Vector3<float> inPos, _Vector3<float> inSize, LocalizedString loc)
     : HUDControl3d()
     , m_Checked(1)
     , m_Label(GETSTRING_CAST_0(loc))
@@ -140,7 +140,7 @@ void CheckBox::Update(float dt) {
 // HARDCODED -> translate pos -> Mesh::DrawQuadUnCached(White); texture = checked.tex
 // when m_Checked else unchecked.tex.
 void CheckBox::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     // Colour::Yellow (not defined in the port's Colour) = (255,255,0,255).

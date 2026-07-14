@@ -24,8 +24,8 @@
 #include "util/Immutable.h"
 #include "asset/EffectDataTypes.h"
 #include "math/Matrix44.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include <vector>
 #include <algorithm>
 #include <cstring>
@@ -147,8 +147,8 @@ template<> struct EffectDataTypeOf<int>              { static const EffectDataTy
 template<> struct EffectDataTypeOf<float>            { static const EffectDataTypes::Type value = EffectDataTypes::Type_Float; };
 template<> struct EffectDataTypeOf<bool>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Bool; };
 template<> struct EffectDataTypeOf<Matrix44>         { static const EffectDataTypes::Type value = EffectDataTypes::Type_Matrix44; };
-template<> struct EffectDataTypeOf<Vec2>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Vec2; };
-template<> struct EffectDataTypeOf<Vec3>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Vec3; };
+template<> struct EffectDataTypeOf<_Vector2<float>>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Vec2; };
+template<> struct EffectDataTypeOf<_Vector3<float>>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Vec3; };
 template<> struct EffectDataTypeOf<Vec4>             { static const EffectDataTypes::Type value = EffectDataTypes::Type_Vec4; };
 template<> struct EffectDataTypeOf<EffectTexture2D>  { static const EffectDataTypes::Type value = EffectDataTypes::Type_Texture2D; };
 template<> struct EffectDataTypeOf<EffectTexture3D>  { static const EffectDataTypes::Type value = EffectDataTypes::Type_Texture3D; };
@@ -268,8 +268,9 @@ private:
 // y = ((c >> 8) & 0xff) / 255.0f  (G)
 // z = ((c >> 16) & 0xff) / 255.0f (B)
 // Alpha (high byte) is ignored.
-inline Vec3 GetColourRGB(uint32_t c) {
-    return Vec3(
+inline _Vector3<float> GetColourRGB(uint32_t c)
+{
+    return _Vector3<float>(
         static_cast<float>(c & 0xffu) / 255.0f,
         static_cast<float>((c >> 8) & 0xffu) / 255.0f,
         static_cast<float>((c >> 16) & 0xffu) / 255.0f

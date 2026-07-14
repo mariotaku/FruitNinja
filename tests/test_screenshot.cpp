@@ -31,7 +31,7 @@
 #include "game/BonusManager.h"
 #include "game/Bonus.h"
 #include "game/FruitSaveData.h"
-#include "engine/math/Vec3.h"
+#include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Texture.h"
@@ -200,7 +200,7 @@ static int RunBonus(fn::TestHarness& h) {
         return 2;
     }
 
-    bs->pos = Vec3(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
+    bs->pos = _Vector3<float>(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
     // m_LayerFlags = HUD_LAYER_POST_ACTOR is now set by the BonusScreen ctor
     // itself (v1.6.1 BonusScreen::BonusScreen @0x00162d1c); no manual patch
     // needed here anymore.
@@ -709,8 +709,8 @@ static int RunDrawQuad(fn::TestHarness& h) {
             MatrixManager& mm = MatrixManager::GetInstance();
             tex->SetUnCached();
             mm.GetWorldStack().Reset();
-            mm.GetWorldStack().Scale(Vec3(200.0f, 200.0f, 1.0f));
-            mm.GetWorldStack().Translate(Vec3(0.0f, 0.0f, 0.0f));
+            mm.GetWorldStack().Scale(_Vector3<float>(200.0f, 200.0f, 1.0f));
+            mm.GetWorldStack().Translate(_Vector3<float>(0.0f, 0.0f, 0.0f));
             mm.UploadModelViewOnly();
             // Faithful board UV convention: DrawQuadUnCached(colour, uMin, uMax, vMin, vMax).
             // (0,1,0,1) = full texture; mirrors FruitFactClassicFactPage::DrawOrder's board.
@@ -777,7 +777,7 @@ static int RunMesh(fn::TestHarness& h) {
     const float kAppleScale = 0.60f;
 
     // 45-degree Y-axis tilt so the 3D form is visible rather than a flat disc.
-    Quaternion rot = Quaternion::FromAxisAngle(Vec3(0.0f, 1.0f, 0.0f), 0.7854f /* pi/4 */);
+    Quaternion rot = Quaternion::FromAxisAngle(_Vector3<float>(0.0f, 1.0f, 0.0f), 0.7854f /* pi/4 */);
 
     // Replicate DrawOneModel (Fruit.cpp @0x00179216):
     //   mat = MakeScale(s,s,s)
@@ -793,7 +793,7 @@ static int RunMesh(fn::TestHarness& h) {
     // Z = -500 is the initial GetFruitZPosition value (Fruit.cpp s_FruitZCounter init).
     // In ortho this doesn't affect apparent size but puts the fruit within
     // the near/far range [2000, -6000] used by the game camera.
-    world.GlobalTranslate44(Vec3(0.0f, 0.0f, -500.0f));
+    world.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, -500.0f));
 
     for (int i = 0; i < 5; ++i) {
         SDL_Event ev;
@@ -816,9 +816,9 @@ static int RunMesh(fn::TestHarness& h) {
             // Replicate FruitCamera::SetupPerspective (v1.6.1 @0x001810ac):
             //   eye=(0,0,1) target=(0,0,0) up=(0,1,0)
             //   SetupOrtho(160, -160, -240, 240, 2000, -6000)
-            mm.SetupLookAt(Vec3(0.0f, 0.0f, 1.0f),
-                           Vec3(0.0f, 1.0f, 0.0f),
-                           Vec3(0.0f, 0.0f, 0.0f));
+            mm.SetupLookAt(_Vector3<float>(0.0f, 0.0f, 1.0f),
+                           _Vector3<float>(0.0f, 1.0f, 0.0f),
+                           _Vector3<float>(0.0f, 0.0f, 0.0f));
             mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
             // Model::Draw(const Matrix44&) -- same call as DrawOneModel in Fruit.cpp.
             model->Draw(world);

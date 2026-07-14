@@ -39,8 +39,8 @@
 #include "render/MatrixStack.h"
 #include "render/gl_funcs.h"
 #include "game/GameWork.h"
-#include "math/Vec2.h"
-#include "math/Vec3.h"
+#include "math/_Vector2.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 
 #include <cstdio>
@@ -298,8 +298,8 @@ static void FB_RenderCell(
             fbs->ApplyGradientSplit(Colour(255, 255, 255, 255), 0.0f);
         }
 
-        Vec3 pos(textCentreX, textCentreY, 0.0f);
-        fbs->Draw(pos, Vec2(1.0f, 1.0f), 0.0f, Mortar::ALIGN_CENTRE);
+        _Vector3<float> pos(textCentreX, textCentreY, 0.0f);
+        fbs->Draw(pos, _Vector2<float>(1.0f, 1.0f), 0.0f, Mortar::ALIGN_CENTRE);
         delete fbs; // Shutdown() frees the up-to-6 layers
     }
 
@@ -314,12 +314,12 @@ static void FB_RenderCell(
         lblBox.SetText(desc.caption);
         lblBox.SetColour(Colour(210, 210, 210, 255), 0);
 
-        Vec3 lblPos((float)(FB_CELL_W / 2), (float)(FB_LABEL_H / 2), 0.0f);
+        _Vector3<float> lblPos((float)(FB_CELL_W / 2), (float)(FB_LABEL_H / 2), 0.0f);
         lblBox.SetTranslation(lblPos, 1);
-        lblBox.Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+        lblBox.Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     } else if (bitmapLabel) {
         const float lblScale = 5.0f;
-        Vec3 lblPos(4.0f, 7.0f, 0.0f);
+        _Vector3<float> lblPos(4.0f, 7.0f, 0.0f);
         Colour lblCol(200, 200, 200, 255);
         bitmapLabel->DrawString(lblScale, 1.0f, 0.0f, desc.caption, lblPos, lblCol, 0x0);
     }

@@ -34,7 +34,7 @@
 #include "render/BakedStringBox.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
-#include "math/Vec2.h"
+#include "math/_Vector2.h"
 #include "math/Colour.h"
 #include "engine/util/StringTable.h"
 #include <cstdio>
@@ -52,9 +52,9 @@ static const float ALPHA_OUT_DONE      = 0.001f;  // DAT_001389e0
 
 // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: back=(0,0,0) shop=(-55,65,0) about=(35,-74,0)
 // [prior values were stale v1.5.x: back=(185,-106,0) shop=(-18,-15,0) about=(145,42,0)]
-static const Vec3 POS_BACK_BUTTON  (   0.0f,    0.0f, 0.0f);
-static const Vec3 POS_SHOP_BUTTON  ( -55.0f,   65.0f, 0.0f);
-static const Vec3 POS_ABOUT_BUTTON (  35.0f,  -74.0f, 0.0f);
+static const _Vector3<float> POS_BACK_BUTTON(0.0f, 0.0f, 0.0f);
+static const _Vector3<float> POS_SHOP_BUTTON(-55.0f, 65.0f, 0.0f);
+static const _Vector3<float> POS_ABOUT_BUTTON(35.0f, -74.0f, 0.0f);
 
 // Button scale multipliers
 static const float BACK_SCALE  = 0.825f;  // DAT_00138694
@@ -63,7 +63,7 @@ static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 // Background panel position — dojo_sensei at bottom-left area.
 // DAT_001383c4/c8/c0 = (-180, -47, 0).
 // Slides in from left: X -= texWidth * (1 - alpha).
-static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
+static const _Vector3<float> POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 
 // Helpers
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
@@ -122,13 +122,13 @@ DojoScreen::DojoScreen(Game& g)
     // HLE screenshot: FB ("become a fan") is the UPPER button; TW is below.
     {
         BSButton* btn = new BSButton(
-            Vec3(152.0f, 100.0f, 0.0f),
+            _Vector3<float>(152.0f, 100.0f, 0.0f),
             GETSTRING_CAST_0(LSTR_SOCIAL_FACEBOOK),
-            Vec3(1.0f, 1.0f, 1.0f));
+            _Vector3<float>(1.0f, 1.0f, 1.0f));
         btn->Init();
         btn->SetCallback(Mortar::Delegate0<void>::MakeFree(&FacebookPressed));
         btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_fb.tex"), true);
-        btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
+        btn->SetTextOffset(_Vector3<float>(-70.0f, 20.0f, 0.0f));
         if (btn->m_pLabelBox) {
             btn->m_pLabelBox->SetColour(Colour(0xef, 0xf7, 0xff, 0xff), 0);
             // TODO: v1.6.1 DojoScreen::DojoScreen @0x0016bad8 -- verify stroke width (1.0f assumed)
@@ -150,13 +150,13 @@ DojoScreen::DojoScreen(Game& g)
     //   per-frame position (FB idx=0 -> y=100, TW idx=1 -> y=54) on every Update frame.
     {
         BSButton* btn = new BSButton(
-            Vec3(152.0f, 100.0f, 0.0f),
+            _Vector3<float>(152.0f, 100.0f, 0.0f),
             GETSTRING_CAST_0(LSTR_SOCIAL_TWITTER),
-            Vec3(1.0f, 1.0f, 1.0f));
+            _Vector3<float>(1.0f, 1.0f, 1.0f));
         btn->Init();
         btn->SetCallback(Mortar::Delegate0<void>::MakeFree(&TwitterPressed));
         btn->SetTexture(Mortar::TextureManager::LoadLocalisedTexture("join_tw.tex"), true);
-        btn->SetTextOffset(Vec3(-70.0f, 20.0f, 0.0f));
+        btn->SetTextOffset(_Vector3<float>(-70.0f, 20.0f, 0.0f));
         if (btn->m_pLabelBox) {
             btn->m_pLabelBox->SetColour(Colour(0xef, 0xf7, 0xff, 0xff), 0);
             // TODO: v1.6.1 DojoScreen::DojoScreen @0x0016bad8 -- verify stroke width (1.0f assumed)
@@ -296,7 +296,7 @@ void DojoScreen::CreateButtons() {
         m_pBackButton->m_Texture = game_work.m_RingTex[16];
         m_pBackButton->Init(POS_BACK_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
-                            bombFruitType, Vec3(0, 0, 0), nullptr);
+                            bombFruitType, _Vector3<float>(0, 0, 0), nullptr);
         m_pBackButton->m_bRespondsToBackKey = 1;
         m_pBackButton->m_bBackdropActive = 1; // v1.6.1 DojoScreen::CreateButtons @0x0016afe8
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
@@ -330,10 +330,10 @@ void DojoScreen::CreateButtons() {
         m_pShopButton->m_Texture = game_work.m_RingTex[7];
         m_pShopButton->Init(POS_SHOP_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
-                            shopFruitType, Vec3(0, 0, 0), nullptr);
+                            shopFruitType, _Vector3<float>(0, 0, 0), nullptr);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_RestScale=(texW+1,texH+1,1)
         if (m_pShopButton->m_Texture.IsValid()) {
-            m_pShopButton->m_RestScale = Vec3(
+            m_pShopButton->m_RestScale = _Vector3<float>(
                 (float)m_pShopButton->m_Texture->GetWidth() + 1.0f,
                 (float)m_pShopButton->m_Texture->GetHeight() + 1.0f,
                 1.0f);
@@ -371,7 +371,7 @@ void DojoScreen::CreateButtons() {
         m_pAboutButton->m_Texture = game_work.m_RingTex[12];
         m_pAboutButton->Init(POS_ABOUT_BUTTON,
                              Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
-                             aboutFruitType, Vec3(0, 0, 0), nullptr);
+                             aboutFruitType, _Vector3<float>(0, 0, 0), nullptr);
         m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: SetText ring label, gradient [10],[11]
         m_pAboutButton->SetText(
@@ -515,7 +515,7 @@ void DojoScreen::Update(float dt) {
 // Matches DojoScreen::Draw @ 0x0016a004
 // ===================================================================
 void DojoScreen::Draw(float* hudScaleRaw) {
-    const Vec3& hudScale = *reinterpret_cast<const Vec3*>(hudScaleRaw);
+    const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
     (void)hudScale;
     if (m_TransitionAlpha <= 0.0f) return;
 
@@ -529,7 +529,7 @@ void DojoScreen::Draw(float* hudScaleRaw) {
             (float)s_TexSensei->GetHeight() + 1.0f,
             1.0f);
         const float slideX = -(float)s_TexSensei->GetWidth() * (1.0f - m_TransitionAlpha);
-        mat.GlobalTranslate44(Vec3(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
+        mat.GlobalTranslate44(_Vector3<float>(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -545,17 +545,17 @@ void DojoScreen::Draw(float* hudScaleRaw) {
     // Port: use BakedStringBox* overload (no secondary texture). Pass nullptr
     //   to get the anchor back; draw m_pVersionText separately at anchor+(0,5,0).
     {
-        static const Vec3 BORDER_POS(-184.0f, -141.0f, 0.0f);
-        Vec3 titlePos = DrawBorders(
+        static const _Vector3<float> BORDER_POS(-184.0f, -141.0f, 0.0f);
+        _Vector3<float> titlePos = DrawBorders(
             static_cast<Mortar::BakedStringBox*>(nullptr),
             m_TransitionAlpha,
             BORDER_POS);
 
         // Draw "DOJO" version text at title anchor + Vec3(0,5,0).
         if (m_pVersionText) {
-            titlePos += Vec3(0.0f, 5.0f, 0.0f);
+            titlePos += _Vector3<float>(0.0f, 5.0f, 0.0f);
             m_pVersionText->SetTranslation(titlePos, 1);
-            m_pVersionText->Draw(Vec2(1.0f, 1.0f), 0.0f, 1);
+            m_pVersionText->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
         }
     }
 }
@@ -589,7 +589,7 @@ void DojoScreen::PlayCallback() {
         //   ActorManager reap before the next screen re-creates its single-slot menu bomb.
         //   Omitting it => constant-velocity drift => race => pool stays full => soft-lock.
         reinterpret_cast<Bomb*>(piece)->m_bMovement = 1;   // Bomb+0x80
-        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->vel = _Vector3<float>(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -617,7 +617,7 @@ void DojoScreen::ShopCallback() {
         //   ActorManager reap before the next screen re-creates its single-slot menu bomb.
         //   Omitting it => constant-velocity drift => race => pool stays full => soft-lock.
         reinterpret_cast<Bomb*>(piece)->m_bMovement = 1;   // Bomb+0x80
-        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->vel = _Vector3<float>(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -645,7 +645,7 @@ void DojoScreen::AboutCallback() {
         //   ActorManager reap before the next screen re-creates its single-slot menu bomb.
         //   Omitting it => constant-velocity drift => race => pool stays full => soft-lock.
         reinterpret_cast<Bomb*>(piece)->m_bMovement = 1;   // Bomb+0x80
-        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->vel = _Vector3<float>(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -660,11 +660,11 @@ void DojoScreen::UpdateBSButton(BSButton* btn, float /*dt*/, unsigned long idx) 
     // ASM-spec v1.6.1 T_1162 @0x0016a274 + UpdateBSButton @0x0016a2f4:
     //   anchor = (152, 100 - 46*idx, 0); slide = normalize(8,-1,0);
     //   pos = anchor + slide * (1 - m_TransitionAlpha) * 248.
-    Vec3 anchor(152.0f, 100.0f - 46.0f * (float)idx, 0.0f);
-    Vec3 slide(8.0f, -1.0f, 0.0f);
+    _Vector3<float> anchor(152.0f, 100.0f - 46.0f * (float)idx, 0.0f);
+    _Vector3<float> slide(8.0f, -1.0f, 0.0f);
     slide.Normalise();
     float offset = (1.0f - m_TransitionAlpha) * 248.0f;
-    Vec3 pos = anchor + slide * offset;
+    _Vector3<float> pos = anchor + slide * offset;
     btn->SetPosition(pos);
 }
 

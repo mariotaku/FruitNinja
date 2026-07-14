@@ -48,7 +48,7 @@
 //
 
 #include "HUDControl3d.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
@@ -123,7 +123,7 @@ private:
     int32_t  m_TouchIndex;
 
     // +0xB0..+0xBB: captured touch position (12 bytes, Vec3).
-    Vec3     m_TouchPos;
+    _Vector3<float> m_TouchPos;
 
     // Port specific: settable ListBox row-tint theme, cached here (appended
     // after the binary-faithful 0xBC layout) and applied to m_pListBox both
@@ -138,7 +138,7 @@ private:
 
 public:
     // Binary @ 0x001682d4
-    ComboBox(Vec3 pos, Vec3 size, std::vector<std::string>& items,
+    ComboBox(_Vector3<float> pos, _Vector3<float> size, std::vector<std::string>& items,
              uint16_t defaultIdx, const char* comboLabel, uint8_t textFlag,
              uint16_t width, uint16_t textScaleX, uint16_t textScaleY);
 

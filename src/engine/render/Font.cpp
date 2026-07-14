@@ -9,7 +9,7 @@
 #include "render/gl_funcs.h"
 #include "asset/File.h"
 #include "asset/TextureManager.h"
-#include "math/Vec3.h"
+#include "math/_Vector3.h"
 #include "math/Matrix44.h"
 #include "debug/Logger.h"
 #if !defined(__bada__) && !defined(FN_GL_STUB)
@@ -802,7 +802,7 @@ float Font::MeasureString(const char* str) const {
 
 static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
                            Mortar::Utf8StringIterator iter,
-                           const Vec3& pos, const Colour& colour,
+                           const _Vector3<float>& pos, const Colour& colour,
                            int alignment,
                            const Mortar::MortarRectangleT<float>* clipRect)
 {
@@ -1058,8 +1058,8 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
 
 // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00198e44 (asm-inspector)
 void Font::DrawString(float scale, float yLineFactor, float rotZ,
-                      Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
-                      Vec2 maxWH, int alignment, float z,
+                      Mortar::Utf8StringIterator iter, const _Vector3<float>& pos, const Colour& colour,
+                      _Vector2<float> maxWH, int alignment, float z,
                       Mortar::MortarRectangleT<float>* clipRect)
 {
     (void)z;
@@ -1611,8 +1611,8 @@ void Font::DrawString(Mortar::Utf8StringIterator& iter,
                       Mortar::MortarRectangleT<float>* clip)
 {
     if (iter.IsEmpty()) return;
-    Vec3 pos(posX, posY, posZ);
-    Vec2 maxWH(maxWHx, maxWHy);
+    _Vector3<float> pos(posX, posY, posZ);
+    _Vector2<float> maxWH(maxWHx, maxWHy);
     // Binary @ 0x00199b1c: vmov.f32 s1, 0x3f800000 -- yLineFactor pinned to 1.0.
     DrawString(scale, /*yLineFactor=*/1.0f, rotZ,
                iter, pos, colour, maxWH, alignment, /*z=*/0.0f, clip);
@@ -1625,7 +1625,7 @@ void Font::DrawString(Mortar::Utf8StringIterator& iter,
 // is IGNORED -- to pass a non-1.0 value (e.g. ScoreControl's BEST label
 // passing 0.9), call the full Font_DrawString directly.
 void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
-                      const char* text, const Vec3& pos,
+                      const char* text, const _Vector3<float>& pos,
                       const Colour& colour, int alignment)
 {
     if (!text || !*text) return;
@@ -1648,8 +1648,8 @@ void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
 // DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,z,clipRect).
 // The binary's wrapper pins yLineFactor = 1.0 (vmov.f32 s1, 0x3f800000 @
 // 0x00199b1c); this shape originates from that wrapper, so yLineFactor = 1.0.
-void Font::DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
-                      Vec2 maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect,
+void Font::DrawString(Utf8StringIterator iter, _Vector3<float> pos, Colour colour, float scale,
+                      _Vector2<float> maxWH, int alignment, float rotZ, Mortar::MortarRectangleT<float>* clipRect,
                       float z)
 {
     DrawString(scale, /*yLineFactor=*/1.0f, rotZ, iter, pos, colour, maxWH, alignment, z, clipRect);
