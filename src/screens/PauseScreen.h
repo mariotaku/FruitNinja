@@ -153,6 +153,20 @@ public:
     // vtable[10]: Update -- state machine + lazy button creation
     void Update(float dt) override;
 
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Eases m_Alpha and m_ButtonFadeAlpha (the fade-in/out/decay ramps used by
+    // every PauseScreen state) dt-scaled, once per PRESENTED frame (Game::tickRealtimeUi
+    // via HUD::UpdateRealtime), so the pause-overlay fade tracks the display's
+    // actual present rate (60/90/120fps) instead of the fixed 60Hz sim tick. The
+    // STATE MACHINE itself (which state, when to transition, one-shot side effects
+    // like button creation) stays in Update() at 60Hz -- it reads the alpha this
+    // function advances and fires threshold-crossing transitions there, exactly
+    // once per sim tick. See PauseScreen.cpp for the PS_APPROACH_F/PS_DECAY_F
+    // macros shared with the __bada__ path (mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     // vtable[11]: SetToMultiplayerState -- Tier-2; stub
     bool SetToMultiplayerState() override;
 
