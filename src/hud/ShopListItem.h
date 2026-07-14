@@ -97,11 +97,32 @@ public:
 
     // vtable slot 6 (+0x18): Move override
     // v1.6.1 ShopListItem::Move @0x001b54b0:
-    //   1. Sets pos.x/y/z.
-    //   2. Copies pos -> m_IconPos; if m_pIconTex: m_IconPos.x += 95.2f.
-    //   3. When m_LockFlashAlpha > 0: subtract dt, scatter m_IconPos x/y by ±2.5.
-    //   4. Per-frame alpha ramps (m_NewItemAlpha, m_SelectedAlpha, m_CostAlpha).
+    //   1. Sin-jitter bounce (s_ShimmerPhase/s_ShimmerY) when m_bSelected.
+    //   2. Sets pos.x/y/z.
+    //   3. Copies pos -> m_IconPos; if m_pIconTex: m_IconPos.x += 95.2f.
+    //   4. When m_LockFlashAlpha > 0: subtract dt, scatter m_IconPos x/y by ±2.5.
+    //   5. Per-frame alpha ramps (m_NewItemAlpha, m_SelectedAlpha, m_CostAlpha).
+    //      Steps 1/4/5 are __bada__ only -- port carries all time-dependent
+    //      state advances out to AdvanceAnim() below so they aren't
+    //      double-advanced by the port's two Move() call sites
+    //      (ScrollingMenu::Update 60Hz + ScrollingMenu::UpdateRealtime
+    //      per-present). Positioning (2/3, and the m_LockFlashAlpha > 0
+    //      scatter/offset math in step 4) stays in Move -- idempotent, safe
+    //      to repeat. See AdvanceAnim.
     void Move(float x, float y, float z) override;
+
+#ifndef __bada__
+    // Port specific: no binary counterpart. Carries every time-dependent
+    // state advance out of Move -- the sin-jitter bounce (s_ShimmerPhase/
+    // s_ShimmerY, gated by m_bSelected), the m_LockFlashAlpha countdown, and
+    // the m_NewItemAlpha/m_SelectedAlpha/m_CostAlpha linear rate*dt ramps
+    // (rate 5.0/sec) -- so each can be called exactly ONCE per present with
+    // the real per-present dtSeconds, independent of how many times Move()
+    // itself runs (positioning in Move is idempotent and safe to repeat;
+    // these timers are not). Call from ScrollingMenu::UpdateRealtime's
+    // Phase 5 loop only -- NOT from ScrollingMenu::Update's Phase 5.
+    void AdvanceAnim(float dtSeconds) override;
+#endif
 
     // vtable slot 12 (+0x30): Draw() thin dispatcher
     // v1.6.1 ShopListItem::Draw @0x001b5da4:

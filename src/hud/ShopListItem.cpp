@@ -107,7 +107,10 @@ void ShopListItem::Move(float x, float y, float z) {
     Game* g = Game::GetInstance();
     const float dt = g ? game_work.dt : 0.0f;
 
-    // (1) Sin-jitter when selected.
+#ifdef __bada__
+    // (1) Sin-jitter when selected -- binary advances this inline in Move at
+    // its single fixed 60Hz call rate. Byte-identical to the original; do NOT
+    // extract to AdvanceAnim here. Port equivalent: AdvanceAnim() below.
     if (m_bSelected) {
         const float step = dt * 65520.0f;
         float advanced = (float)s_ShimmerPhase + step;
@@ -116,6 +119,7 @@ void ShopListItem::Move(float x, float y, float z) {
         const float sinVal = SinIdx(s_ShimmerPhase);
         s_ShimmerY = (sinVal < 0.0f ? -sinVal : sinVal) * 6.0f;
     }
+#endif
 
     // (2) Copy pos into base.
     pos.x = x;
@@ -131,13 +135,22 @@ void ShopListItem::Move(float x, float y, float z) {
         m_IconPos.x += 35.2f + m_Size.x;  // DAT_0015d474 + m_Size.x = 95.2f
 
         if (m_LockFlashAlpha > 0.0f) {
+#ifdef __bada__
+            // Binary advances this inline in Move at its single fixed 60Hz
+            // call rate. Port equivalent: AdvanceAnim() below.
             m_LockFlashAlpha -= dt;
+#endif
             m_IconPos.x += RandFloat5() - 2.5f;
             m_IconPos.y += RandFloat5() - 2.5f;
         }
     }
 
-    // (4) Per-frame alpha ramps.
+#ifdef __bada__
+    // (4) Per-frame alpha ramps -- binary advances these inline in Move at
+    // its single fixed 60Hz call rate. Byte-identical to the original;
+    // do NOT extract to AdvanceAnim here (that would add a `bl` the binary
+    // does not have). Port equivalent: AdvanceAnim() below, called once per
+    // present from ScrollingMenu::UpdateRealtime instead of from here.
     const float kRate = 5.0f;
 
     if (m_pItemInfo) {
@@ -162,7 +175,68 @@ void ShopListItem::Move(float x, float y, float z) {
         if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
         m_CostAlpha = c;
     }
+#endif
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart. Binary's ShopListItem::Move @
+// 0x001b54b0 advances m_NewItemAlpha/m_SelectedAlpha/m_CostAlpha inline at
+// its single fixed 60Hz call rate. The port calls Move() from BOTH
+// ScrollingMenu::Update() (60Hz) and ScrollingMenu::UpdateRealtime()
+// (per-present) for positioning; advancing the timers inside Move would
+// double-advance them (and the per-present call is refresh-rate dependent,
+// so 120Hz doubles the doubling). AdvanceAnim carries the timer step out of
+// Move and is called exactly once per present, from UpdateRealtime's Phase 5
+// loop, with the real per-present dtSeconds -- these are linear rate*dt
+// ramps (not spring/decay), so real dtSeconds (not dtSeconds*60) reproduces
+// the binary's kRate/sec rate exactly regardless of display refresh rate.
+// ---------------------------------------------------------------------------
+void ShopListItem::AdvanceAnim(float dtSeconds) {
+    const float kRate = 5.0f;
+
+    // Sin-jitter bounce (mirrors Move's __bada__ block above, real dtSeconds).
+    // s_ShimmerPhase/s_ShimmerY are file-static (shared across items) but
+    // gated by m_bSelected, so only the one selected item advances them --
+    // still exactly once per present.
+    if (m_bSelected) {
+        const float step = dtSeconds * 65520.0f;
+        float advanced = (float)s_ShimmerPhase + step;
+        if (advanced < 0.0f) advanced = 0.0f;
+        s_ShimmerPhase = (uint16_t)advanced;
+        const float sinVal = SinIdx(s_ShimmerPhase);
+        s_ShimmerY = (sinVal < 0.0f ? -sinVal : sinVal) * 6.0f;
+    }
+
+    // Lock-flash countdown (mirrors Move's __bada__ block above, real dtSeconds).
+    if (m_LockFlashAlpha > 0.0f) {
+        m_LockFlashAlpha -= dtSeconds;
+    }
+
+    if (m_pItemInfo) {
+        bool isNew = (m_pItemInfo->m_bSeen == 0);
+        float c = m_NewItemAlpha + dtSeconds * (isNew ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_NewItemAlpha = c;
+    }
+
+    {
+        ItemManager* im = ItemManager::GetInstance();
+        bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
+        float c = m_SelectedAlpha + dtSeconds * (equipped ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_SelectedAlpha = c;
+    }
+
+    {
+        bool isCentered = m_pShopScreen
+            && (m_pShopScreen->GetSelectedItem() == this);
+        float c = m_CostAlpha + dtSeconds * (isCentered ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_CostAlpha = c;
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // ShopListItem::Create @ v1.6.1 0x001b27f0

@@ -70,6 +70,8 @@ public:
     // 60Hz -- Phase 6 fires a one-shot click SFX on settle and would re-fire
     // up to 120x/s if run per-present. See ScrollingMenu.cpp for the phase
     // split and the SM_DECAY_F/SM_SPRING_F macros shared with the __bada__ path.
+    // Phase 5 also calls item->AdvanceAnim(dtSeconds) once per present here
+    // (NOT from Update()'s Phase 5) -- see ScrollingMenuItem::AdvanceAnim.
     void UpdateRealtime(float dtSeconds) override;
 #endif
 
