@@ -524,25 +524,23 @@ static uint32_t LerpColourComponents(uint32_t packedA, uint32_t packedB, float t
 // SplitTri @0x00248dd8: geometric CSG split of one triangle (3 verts) against
 // `plane` (N[0..2], d=plane[3]). WATERTIGHT -- every input triangle's full
 // area is always represented in the output, split into an upper (dist>0)
-// and lower (dist<=0) polygon so recolouring only the upper indices leaves
-// a crisp seam with no gaps. SplitMesh @0x0024940c always calls this with
+// and lower (dist<=0) polygon. SplitMesh @0x0024940c always calls this with
 // the cull bool (param_5) == false, so the early-return "drop far-side
 // geometry" behaviour of an older port pass never fires in the binary; that
 // pass's collectOneSide==true drops were the bug (shredded small text into
 // scattered fragments). Backface culling is off for 2D text, so triangle
-// winding is cosmetic -- only full-area coverage + correct per-vertex side
-// colouring matter.
+// winding is cosmetic -- only full-area coverage matters.
 //
 // Vertex selection: posCount = # verts with dist > 1e-07f.
 //
 // No-straddle (posCount==0 or 3): emit tri[0..2] verbatim as one triangle.
-// Index set: add vertex i's index iff dist[i] > 0 (all-positive tris get
-// all 3 indexed for recolour; all-negative get none).
+// No recolour indices are pushed -- these verts are untouched originals,
+// not seam vertices.
 //
 // Straddle (posCount==1 or 2): split into upper/lower polygons covering the
 // full original triangle area, duplicating the two edge-intersection verts
-// so upper and lower each get their own copy (required for a crisp colour
-// edge -- a shared vertex would gradient-blend across the band).
+// (I_a, I_b) so upper and lower each get their own copy (required for a
+// crisp colour edge -- a shared vertex would gradient-blend across the band).
 //   posCount==1 (one vert upper="apex", two lower=o0,o1):
 //     upper = 1 tri {apex, I_a, I_b}
 //     lower = quad {I_a, o0, o1, I_b} as 2 tris: {I_a,o0,o1}, {I_a,o1,I_b}
@@ -556,10 +554,16 @@ static uint32_t LerpColourComponents(uint32_t packedA, uint32_t packedB, float t
 //   pos/uv interpolated, new vert normal=(0,0,1), colour lerped in
 //   component space (LerpColourComponents) -- copied verbatim if endpoints
 //   already match.
-//   Index set: only the UPPER sub-triangles' vertices (upper-side original
-//   verts + the upper copies of I_a/I_b) are indexed for recolour; the
-//   lower sub-triangles' verts (including their own I_a/I_b copies) are
-//   never indexed, so they keep their base/gradient colour.
+//
+// ASM-spec v1.6.1 SplitTri @0x00248dd8: recolor list = seam (edge-intersection)
+// verts only; outer verts keep the TopBottom ramp, GL interpolates -> gradient.
+// Every pushed COPY of I_a/I_b (both the upper-side copies and the lower-side's
+// own copies) is indexed into outIdx -- 5 pushes/indices per crossing triangle
+// (3 in the posCount==1/Block-A arm's lower quad + 2 in the upper tri, or the
+// mirrored count for posCount==2). Original (non-seam) triangle verts --
+// apex/o0/o1/u0/u1 -- are never indexed, in either the straddle or no-straddle
+// case: they keep whatever colour BuildSurfaces/ApplyGradient_TopBottom already
+// wrote, and GL smooth-shades between them and the flat-recoloured seam row.
 // ASM-spec v1.6.1 SplitMesh @0x0024940c / SplitTri @0x00248dd8 (watertight;
 // cull bool always false, winding cosmetic -- 2D text, no backface cull).
 static void SplitTri(const QUADCUSTOMVERTEX tri[3],
@@ -578,7 +582,6 @@ static void SplitTri(const QUADCUSTOMVERTEX tri[3],
     if (posCount == 0 || posCount == 3) {
         for (int i = 0; i < 3; ++i) {
             out.push_back(tri[i]);
-            if (outIdx && dist[i] > 0.0f) outIdx->push_back((int)out.size() - 1);
         }
         return;
     }
@@ -642,71 +645,82 @@ static void SplitTri(const QUADCUSTOMVERTEX tri[3],
 
     if (posCount == 1) {
         // apex (lone) is the sole upper vert; o0=otherA, o1=otherB are lower.
-        // Upper: 1 triangle {apex, I_a, I_b} -- fully indexed.
+        // Upper: 1 triangle {apex, I_a, I_b} -- apex is an original vert (not
+        // indexed); I_a/I_b are seam copies (indexed).
         out.push_back(lone);
-        int iApexUp = (int)out.size() - 1;
         out.push_back(iaBase);
         int iIaUp = (int)out.size() - 1;
         out.push_back(ibBase);
         int iIbUp = (int)out.size() - 1;
         if (outIdx) {
-            outIdx->push_back(iApexUp);
             outIdx->push_back(iIaUp);
             outIdx->push_back(iIbUp);
         }
 
-        // Lower: quad {I_a, o0, o1, I_b} as 2 triangles, own copies of I_a/I_b,
-        // never indexed (keeps base/gradient colour).
+        // Lower: quad {I_a, o0, o1, I_b} as 2 triangles, own copies of I_a/I_b
+        // (seam -- indexed); o0/o1 are original verts (not indexed).
         out.push_back(iaBase);
+        int iIaLo1 = (int)out.size() - 1;
         out.push_back(oA);
         out.push_back(oB);
+        if (outIdx) {
+            outIdx->push_back(iIaLo1);
+        }
 
         out.push_back(iaBase);
+        int iIaLo2 = (int)out.size() - 1;
         out.push_back(oB);
         out.push_back(ibBase);
+        int iIbLo = (int)out.size() - 1;
+        if (outIdx) {
+            outIdx->push_back(iIaLo2);
+            outIdx->push_back(iIbLo);
+        }
         return;
     } else {
         // u0=otherA, u1=otherB are the two upper verts; apex (lone) is lower.
-        // Upper: quad {u0, u1, I_b, I_a} as 2 triangles, own copies of I_a/I_b,
-        // fully indexed.
+        // Upper: quad {u0, u1, I_b, I_a} as 2 triangles, own copies of I_a/I_b
+        // (seam -- indexed); u0/u1 are original verts (not indexed).
         out.push_back(oA);
-        int iU0 = (int)out.size() - 1;
         out.push_back(oB);
-        int iU1 = (int)out.size() - 1;
         out.push_back(ibBase);
         int iIbUp = (int)out.size() - 1;
         if (outIdx) {
-            outIdx->push_back(iU0);
-            outIdx->push_back(iU1);
             outIdx->push_back(iIbUp);
         }
 
         out.push_back(oA);
-        int iU0b = (int)out.size() - 1;
         out.push_back(ibBase);
         int iIbUp2 = (int)out.size() - 1;
         out.push_back(iaBase);
         int iIaUp = (int)out.size() - 1;
         if (outIdx) {
-            outIdx->push_back(iU0b);
             outIdx->push_back(iIbUp2);
             outIdx->push_back(iIaUp);
         }
 
-        // Lower: 1 triangle {apex, I_a, I_b}, own copies, never indexed.
+        // Lower: 1 triangle {apex, I_a, I_b}, own copies. apex is an original
+        // vert (not indexed); I_a/I_b are seam copies (indexed).
         out.push_back(lone);
         out.push_back(iaBase);
+        int iIaLo = (int)out.size() - 1;
         out.push_back(ibBase);
+        int iIbLo = (int)out.size() - 1;
+        if (outIdx) {
+            outIdx->push_back(iIaLo);
+            outIdx->push_back(iIbLo);
+        }
         return;
     }
 }
 
 // BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c: geometric CSG
 // split of every triangle against the horizontal plane y = (rect.top+rect.bottom)*y,
-// then recolour only the kept (upper) verts to c. This replaces a vertex-threshold
-// recolour (no geometry split) with the binary's actual mesh subdivision, so the
-// band edge lands exactly on the split line instead of snapping to whichever
-// tessellation row happens to be nearest.
+// then flat-recolours ONLY the seam (edge-intersection) verts created by the split
+// to c. All other verts (the untouched triangle originals) keep whatever colour
+// they already had (the TopBottom ramp, or a prior split's colour); GL smooth-shades
+// between the flat seam row and those verts, which is what produces the visible
+// gradient band -- there is no per-vertex lerp math in this function at all.
 // ASM-spec v1.6.1 BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c /
 //   SplitMesh @0x0024940c / SplitTri @0x00248dd8.
 void BakedStringTTF_Surface::Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect)

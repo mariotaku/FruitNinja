@@ -112,9 +112,13 @@ struct BakedStringTTF_Surface {
     // Transform_GradientSplit @0x0024954c: geometric CSG split of every triangle
     // against the plane y=(rect.top+rect.bottom)*y (SplitMesh @0x0024940c /
     // SplitTri @0x00248dd8), inserting new verts exactly on the split line, then
-    // recolours only the kept (upper) side to c. Reallocates m_Verts/m_VertCount
-    // in place (vertex count grows by the straddling triangles' extra verts).
-    // Non-virtual -- does not change layout.
+    // flat-recolours the seam (edge-intersection) verts to c. All other verts keep
+    // their pre-split colour (the TopBottom ramp laid down earlier); GL smooth-shades
+    // between the flat seam row and the surrounding ramp verts, producing the
+    // metallic gradient band without any port-side per-vertex lerp.
+    // Reallocates m_Verts/m_VertCount in place (vertex count grows by the
+    // straddling triangles' extra verts). Non-virtual -- does not change layout.
+    // ASM-spec v1.6.1 BakedStringTTF_Surface::Transform_GradientSplit @0x0024954c.
     void Transform_GradientSplit(Colour c, float y, MortarRectangleT<long>& rect);
 
     // Transform_SetAlpha @0x00247cf0: overwrite (not multiply) the alpha byte of every

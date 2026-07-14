@@ -113,6 +113,9 @@ public:
 
     // ApplyMetallicGradient @0x0024abf4: top/bottom base gradient plus two close-set
     // split bands (0.51/0.49) that fake a metallic highlight streak on the main layer.
+    // The gradient look is pure GPU interpolation: each ApplyGradientSplit flat-
+    // recolours only the seam (edge-intersection) verts at its plane; every other
+    // vertex keeps the TopBottom ramp colour, so GL smooth-shades between them.
     // ASM-spec v1.6.1 FancyBakedString::ApplyMetallicGradient @0x0024abf4.
     void ApplyMetallicGradient(Colour c0, Colour c1, Colour c2, Colour c3);
 
