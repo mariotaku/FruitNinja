@@ -112,6 +112,20 @@ public:
     // Matches ShopScreen::Update(float) @ 0x0015e1f4 (387 lines)
     void Update(float dt) override;
 
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Eases m_TransitionAlpha (states 0/2/3/7) dt-scaled, once per PRESENTED
+    // frame (Game::tickRealtimeUi via HUD::UpdateRealtime), so the shop
+    // slide-in/out tracks the display's actual present rate (60/90/120fps)
+    // instead of the fixed 60Hz sim tick. The STATE MACHINE itself (which
+    // state, when to transition, one-shot side effects like button creation)
+    // stays in Update() at 60Hz -- it reads the alpha this function advances
+    // and fires threshold-crossing transitions there, exactly once per sim
+    // tick. See ShopScreen.cpp for the SS_APPROACH/SS_DECAY macros shared
+    // with the __bada__ path (mirrors ScrollingMenu's SM_DECAY_F/SM_SPRING_F).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     // ShopScreen::DrawOrder @ 0x001b4e48 (v1.6.1, vtable slot 9 +0x24)
     // Binary gates BG block on `layerMask == m_LayerFlagsAlt`; ring block on
     // `else if (m_AnimFrame > 0)`. Never writes m_LayerFlags.
