@@ -631,7 +631,15 @@ if (EMSCRIPTEN)
     endif()
 else()
     # Native desktop/webOS entry point.
-    add_executable(fruit-ninja src/mainSDL.cpp)
+    # Port specific: on Windows, compile the .rc resource script into the exe
+    # so it carries an application icon (Explorer / taskbar). Both MSVC (rc.exe)
+    # and MinGW (windres) handle a .rc listed as a source automatically.
+    set(_fn_native_sources src/mainSDL.cpp)
+    if (WIN32)
+        enable_language(RC)
+        list(APPEND _fn_native_sources src/platform/win32/fruit-ninja.rc)
+    endif()
+    add_executable(fruit-ninja ${_fn_native_sources})
     add_dependencies(fruit-ninja fn_asset_staging)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 

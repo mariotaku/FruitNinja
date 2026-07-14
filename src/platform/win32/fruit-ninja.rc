@@ -1,0 +1,7 @@
+// Port specific: Windows executable resource script.
+// Supplies the application icon shown in Explorer / the taskbar for
+// fruit-ninja.exe. Compiled by the MSVC (rc.exe) or MinGW (windres)
+// resource compiler and linked into the exe. No binary counterpart.
+//
+// Icon ID 1 -> the shell uses the lowest-numbered ICON as the app icon.
+1 ICON "fruit-ninja.ico"
