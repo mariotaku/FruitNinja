@@ -99,6 +99,27 @@ static const char* FRUIT_ARCADE  = "banana";
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
 
+// ---------------------------------------------------------------------------
+// Rate-independence macros for the per-present (UpdateRealtime) split of
+// m_TransitionAlpha/m_SecondaryAlpha easing (states 2 and 0xf only -- states
+// 0/1 stay in Update() at 60Hz, see the UpdateRealtime() doc comment for why).
+// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F (see ShopScreen.cpp) and
+// ScrollingMenu's SM_DECAY_F/SM_SPRING_F. Under __bada__ these are unused
+// (Update() keeps the original scalar forms inline, folding g_DebugTimeScale
+// into the rate as `1 - (1-k)*scale` per the existing MainScreen/GameModeScreen
+// convention); under the port, UpdateRealtime() uses the powf dt-scaled forms
+// with the same g_DebugTimeScale fold so f==1 (dtSeconds == 1/60) reproduces
+// one 60Hz tick.
+// ---------------------------------------------------------------------------
+#ifndef __bada__
+    // v += (to - v) * effective_k  (spring towards `to`, g_DebugTimeScale-scaled, dt-scaled)
+    #define GMS_APPROACH_F(v, to, k) \
+        ((v) += ((to) - (v)) * (1.0f - powf(1.0f - ((k) * FN::g_DebugTimeScale), f)))
+    // v *= effective_k  (decay towards zero, g_DebugTimeScale-scaled, dt-scaled)
+    #define GMS_DECAY_F(v, k) \
+        ((v) *= powf(1.0f - (1.0f - (k)) * FN::g_DebugTimeScale, f))
+#endif
+
 // Shared TTF face (gangofchinese.ttf) for BakedStringBox text on the Zen sign plate.
 // DIFFERS: original = *(g_GameData+0x614) shared face; using a file-local lookup
 //   because the port has not extended game_work past 0x608.
@@ -443,24 +464,32 @@ void GameModeScreen::RemoveButtons() {
 void GameModeScreen::Update(float dt) {
     switch (m_State) {
     case 0: {
-        // Transition in — lerp alpha, always advance (binary's
-        // IsTransitionInFinished is a no-op stub returning whatever's in r0)
+        // v1.6.1 GameModeScreen::Update @0x001827d0 state 0: alpha += (1-alpha)*0.15
+        // VISUAL lerp; binary ADVANCE is gated on IsTransitionInFinished (vtable slot16),
+        // NOT on alpha directly. IsTransitionInFinished is a bare-BX-LR stub returning
+        // false in this build (see GameModeScreen::IsTransitionInFinished() in this
+        // file) -- the alpha threshold is the only available advance proxy, so
+        // unlike states 2/0xf this lerp is NOT split into
+        // UpdateRealtime(): the gate that fires CreateControls (a HUD control-list
+        // mutation, forbidden inside UpdateRealtime per rule A) must observe the lerp's
+        // result at the SAME 60Hz cadence it tests it at, so it stays here for both
+        // __bada__ and the port.
         m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
 
-        // In binary, state advances when IsTransitionInFinished() != 0.
-        // Port gates on alpha reaching the threshold.
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
             m_State = 2;
             CreateControls();
             m_ButtonDelay = -1.0f;
+            m_TransitionTimer = -1.0f;
         }
         break;
     }
 
     case 1: {
         // Alternate transition in (from state 9 network recovery).
-        // Port: not reachable, but kept for faithful state machine.
+        // Port: not reachable, but kept for faithful state machine. Same rationale
+        // as state 0 above -- lerp stays here, not split into UpdateRealtime().
         m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_State = 2;
@@ -470,7 +499,11 @@ void GameModeScreen::Update(float dt) {
     }
 
     case 2: {
-        // Idle — lerp alpha to 1.0, lerp secondaryAlpha toward 0, tick delay.
+        // v1.6.1 GameModeScreen::Update @0x001827d0 state 2 (idle): alpha settle-to-1
+        // lerp + m_SecondaryAlpha lerp-to-1 (rate 0.25, clamp +/-0.1) are PURE VISUAL --
+        // moved to UpdateRealtime(). m_ButtonDelay countdown is state-machine/input
+        // logic and stays here at 60Hz.
+#ifdef __bada__
         if (m_TransitionAlpha < ALPHA_IN_DONE) {
             m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
         } else {
@@ -484,6 +517,7 @@ void GameModeScreen::Update(float dt) {
         if (step >  SECONDARY_CLAMP) step =  SECONDARY_CLAMP;
         if (step < -SECONDARY_CLAMP) step = -SECONDARY_CLAMP;
         m_SecondaryAlpha += step;
+#endif
 
         // Tick button delay
         if (m_ButtonDelay > 0.0f) {
@@ -553,8 +587,12 @@ void GameModeScreen::Update(float dt) {
         break;
     }
 
+#ifdef __bada__
     case 0xf: {
-        // Back-out: quicker fade, cross 0.25 → MainScreen SLIDE_IN
+        // Back-out: quicker fade, cross 0.25 -> MainScreen SLIDE_IN.
+        // __bada__ only: port moves this whole body (decay + threshold
+        // crossings) atomically into UpdateRealtime() -- see the case-0xf
+        // comment there for why this must NOT be split between Update/UpdateRealtime.
         float oldAlpha = m_TransitionAlpha;
         const float backDecay = 1.0f - (1.0f - ALPHA_DECAY_BACK) * FN::g_DebugTimeScale;
         m_TransitionAlpha *= backDecay;
@@ -568,6 +606,18 @@ void GameModeScreen::Update(float dt) {
         }
         break;
     }
+#else
+    case 0xf:
+        // DIFFERS: v1.6.1 GameModeScreen::Update @0x001827d0 case 0xf (back-out) body
+        // moved WHOLE to UpdateRealtime() -- decay, m_SecondaryAlpha mirror, and BOTH
+        // threshold crossings (old>0.25&&new<=0.25 -> MainScreen SLIDE_IN; new<0.001 ->
+        // m_bPendingRemoval) must stay atomic in one place (see UpdateRealtime() below).
+        // Splitting the decay from its own threshold checks was the prior bug: the
+        // decay ran dt-scaled per-present while the checks ran at 60Hz against a
+        // value that had already crossed/re-crossed between ticks, so MainScreen's
+        // SLIDE_IN transition was missed and the menu never reappeared.
+        break;
+#endif
 
     default:
         break;
@@ -580,6 +630,87 @@ void GameModeScreen::Update(float dt) {
         if (m_FrameTimer >= 0.0f) m_FrameTimer = 0.0f;   // binary @0x00182d70 vmovpl: clamp to <= 0
     }
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// ShopScreen::UpdateRealtime for the sibling pattern. Advances the per-present
+// (dt-scaled) VISUAL-ONLY parts of m_TransitionAlpha/m_SecondaryAlpha for
+// state 2, and moves the WHOLE state-0xf back-out body here atomically.
+//
+// States 0/1 are deliberately NOT split here: their alpha lerp is the only
+// available proxy for the binary's IsTransitionInFinished gate (a bare-BX-LR
+// stub returning false -- see GameModeScreen::IsTransitionInFinished() in this
+// file), and that gate fires CreateControls(), a HUD control-list mutation forbidden inside
+// UpdateRealtime (rule A -- HUD::UpdateRealtime is iterating the list when it
+// calls this). The lerp and its threshold check must run at the SAME cadence,
+// so both stay in Update() at 60Hz for states 0/1.
+//
+// SAFETY (rule A): this function must ONLY do field writes (alpha,
+// m_SecondaryAlpha, MainScreen.m_State, m_bPendingRemoval). It must NEVER call
+// AddControl/RemoveControl/CreateControls. m_ButtonDelay/input handling
+// (state 2) stays in Update() at 60Hz.
+//
+// State 0xf atomicity (rule B/C -- the actual bug fix): a prior attempt split
+// the *= 0.75 decay into this function while leaving the old>0.25&&new<=0.25
+// and new<0.001 threshold checks in Update() at 60Hz. Because the decay here
+// runs once per PRESENTED frame (could be many ticks between one Update()
+// call, e.g. 90/120Hz displays) while the checks in Update() only ran once
+// per SIM tick, the transient old/new pair the checks needed had already been
+// overwritten by additional decay steps by the time Update() next ran -- the
+// crossing was stepped over and never observed, so MainScreen::m_State was
+// never set to STATE_SLIDE_IN and mode-select's fade-out was never followed
+// by MainScreen reappearing. Fix: compute oldAlpha, decay, and test BOTH
+// crossings against that same before/after pair in ONE place (here).
+// ---------------------------------------------------------------------------
+void GameModeScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    switch (m_State) {
+    case 2:
+        // v1.6.1 GameModeScreen::Update @0x001827d0 state 2 (idle): alpha settle-to-1
+        // lerp + m_SecondaryAlpha lerp-to-1 (rate 0.25, clamp +/-0.1). m_ButtonDelay
+        // countdown stays in Update() (input/state-machine logic, not visual).
+        if (m_TransitionAlpha < ALPHA_IN_DONE) {
+            GMS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_STEP);
+        } else {
+            m_TransitionAlpha = 1.0f;
+        }
+        {
+            float step = (1.0f - m_SecondaryAlpha) * (1.0f - powf(1.0f - SECONDARY_RATE, f));
+            if (step >  SECONDARY_CLAMP) step =  SECONDARY_CLAMP;
+            if (step < -SECONDARY_CLAMP) step = -SECONDARY_CLAMP;
+            m_SecondaryAlpha += step;
+        }
+        break;
+
+    case 0xf: {
+        // v1.6.1 GameModeScreen::Update @0x001827d0 case 0xf (back-out), moved WHOLE
+        // (see the safety-rule comment above the function and rule B/C at the top
+        // of this file's task spec) -- decay, m_SecondaryAlpha mirror, and BOTH
+        // threshold crossings computed from the SAME before/after pair, atomically.
+        float oldAlpha = m_TransitionAlpha;
+        GMS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_BACK);
+        m_SecondaryAlpha = m_TransitionAlpha;
+
+        if (oldAlpha > 0.25f && m_TransitionAlpha <= 0.25f) {
+            if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_SLIDE_IN);
+        }
+        if (m_TransitionAlpha < ALPHA_OUT_DONE) {
+            m_bPendingRemoval = 1;
+        }
+        break;
+    }
+
+    default:
+        // States 3-6 (camera-gated NewGame determinism) and others: no alpha
+        // easing moved here -- they stay entirely in Update() at 60Hz.
+        break;
+    }
+}
+#endif
 
 // ===================================================================
 // Matches GameModeScreen::DrawConnectTexture @ 0x0013f754
