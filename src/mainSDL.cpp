@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include "config.h"
 #include "render/gl_funcs.h"
 #include "Game.h"
 #include "render/Renderer.h"
@@ -34,9 +35,22 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 }
 
 int main(int argc, char* argv[]) {
+    // Port specific: construct the Game singleton and resolve data_dir up
+    // front (mirrors the data_dir assignment at the top of Game::init(),
+    // GameSDL.cpp) so GetSettingsSavePath() -- which reads Game::GetInstance()
+    // -- resolves to the same path SaveSettings() writes to. Without this,
+    // LoadSettings() below would run before any Game exists, GetInstance()
+    // would return nullptr, and settings would silently load from (and only
+    // ever save to) two different paths -- i.e. never actually load.
+    Game game;
+    game.data_dir = FN_DATA_DIR;
+
     // Port specific: load persisted settings. Language, motion mode,
     // sensitivity, and the FPS counter are user-settable via the in-game
-    // Settings UI and persisted through SettingsSave/LoadSettings.
+    // Settings UI and persisted through SettingsSave/LoadSettings. Must run
+    // after data_dir is resolved (above) and before game.init() so
+    // GameInitialise's Localisation::Load step (GameInitialise.cpp) sees the
+    // saved languageFlag rather than the zero-initialised default.
     LoadSettings();
 
     // Port specific: parse launch parameters for debug flags.
@@ -160,7 +174,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    Game game;
     if (!game.init(window, gl)) {
         LOG_ERROR("mainSDL", "Failed to init game");
         return 1;
