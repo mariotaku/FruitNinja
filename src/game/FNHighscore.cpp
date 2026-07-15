@@ -7,6 +7,7 @@
 
 #include <cstring>
 
+// ASM-verified: 2026-07-15T09:12Z v1.6.1 FNHighscore::FNHighscore @ 0x00178d5c (asm-inspector)
 // Binary default ctor @ 0x00178d5c. Zeroes name/extra and fields 0x40..0x50.
 FNHighscore::FNHighscore()
 {

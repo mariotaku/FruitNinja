@@ -37,10 +37,10 @@
 #include "QuadUtil.h"
 
 bool SetupQuad(QUADCUSTOMVERTEX* verts,
-               const _Vector3<float>& centerSize,
+               _Vector3<float> centerSize,
                float clipBottom, float clipTop,
-               const Mortar::MortarRectangleT<float>& rect,
-               const Colour& colour)
+               Mortar::MortarRectangleT<float> rect,
+               Colour colour)
 {
     float naturalTop    = rect.top + centerSize.y * -0.5f;
     float clippedTop    = naturalTop;
