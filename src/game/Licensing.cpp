@@ -22,9 +22,9 @@ void BuyMonsterDash() {
 
 // Defunct: upsell/achievement bookkeeping -- no-op stub; v1.6.1 GotoFruitNinjaPage @0x001cbd5c
 // Binary: calls GotoFruitNinjaPage(1,-1) from GameModeScreen::BuyNow (address TODO, see Licensing.h);
-// GotoFruitNinjaPage(-1.0, 0xd) from FacebookPressed @0x00169f40;
-// GotoFruitNinjaPage(-1.0, 0xc) from TwitterPressed @0x00169f70.
-void GotoFruitNinjaPage(float /*param*/, UPSELL_PLACES /*place*/) {
+// GotoFruitNinjaPage(0xd, -1.0) from FacebookPressed @0x00169f40;
+// GotoFruitNinjaPage(0xc, -1.0) from TwitterPressed @0x00169f70.
+void GotoFruitNinjaPage(UPSELL_PLACES /*place*/, float /*timeoutExt*/) {
 }
 
 // OpenBrowser is implemented in LicensingSDL.cpp (needs SDL_OpenURL; this TU stays portable).

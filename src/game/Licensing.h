@@ -30,10 +30,11 @@ bool IsLicensed();
 void BadaPurchaseApp();
 void BuyAOZ();
 void BuyMonsterDash();
-// v1.6.1 GotoFruitNinjaPage @0x001cbd5c signature: void __cdecl(float param_1, int param_2) --
-// param_1 = timeout-extension seconds (gameLinkTimeOut), param_2 = place/table index.
-// (float, place) order confirmed against the binary's own decompiled prototype.
-void GotoFruitNinjaPage(float param, UPSELL_PLACES place);
+// v1.6.1 GotoFruitNinjaPage @0x001cbd5c signature: void __cdecl(UPSELL_PLACES place, float timeoutExt) --
+// mangled symbol _Z17GotoFruitNinjaPage12UPSELL_PLACESf confirms place first, timeout second.
+// place indexes GotoFruitNinjaPage's local saveTotalWords[]/leaderboards[] tables and is
+// stored to gameLinkOutPlace; timeoutExt sets gameLinkTimeOut (timeoutExt+0.2 if >0, else 0.5).
+void GotoFruitNinjaPage(UPSELL_PLACES place, float timeoutExt);
 // Leaf browser launcher. v1.6.1 OpenBrowser @0x001eee64 builds "url:<url>" and starts
 // the Bada APPCONTROL_BROWSER app-control. SDL implementation lives in LicensingSDL.cpp
 // (this header stays portable).

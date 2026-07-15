@@ -7,8 +7,12 @@
 // Confidence: low (no operator-new witness; layout from ctor disasm only).
 
 #include <cstdint>
+#include "engine/util/SmartPtr.h"
 
 namespace Mortar {
+
+class Texture;
+class Font;
 
 class OpenFeintNewsRenderer {
 public:
@@ -19,7 +23,7 @@ public:
     virtual ~OpenFeintNewsRenderer() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x00190a4c
-    virtual void StartNewsRender(void* /*texture*/, void* /*font*/) {}
+    virtual void StartNewsRender(const Mortar::SmartPtr<Mortar::Texture>& /*texture*/, Mortar::Font* /*font*/) {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub; v1.6.1 binary @ 0x001900d0
     virtual void CancelNewsRender() {}

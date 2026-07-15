@@ -753,7 +753,7 @@ void GameDraw(float dt, bool active) {
 
     GameTaskState* ts = GetTaskState();
     // 1. Camera projection
-    game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, false);
+    game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, false);
 
     // DrawBackground (v1.6.1 @ 0x001ccaf4) — factored from inline to free function.
     DrawBackground();

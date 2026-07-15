@@ -50,17 +50,11 @@ struct FNHighscore {
     // +0x51..+0x53: compiler padding to reach 0x54
     uint8_t  _pad[3];          // 0x51
 
-    // Binary default ctor @ 0x00178d5c
-    FNHighscore() {
-        memset(m_Name,     0, sizeof(m_Name));
-        memset(m_ExtraStr, 0, sizeof(m_ExtraStr));
-        m_NameHash       = 0;
-        m_Score          = 0;
-        m_Rank           = 0;
-        m_UserData       = 0;
-        m_IsCurrentUser  = false;
-        _pad[0] = 0; _pad[1] = 0; _pad[2] = 0;
-    }
+    // Binary default ctor @ 0x00178d5c. Body out-of-line in FNHighscore.cpp so the
+    // compiler emits a standalone C1/C2 symbol to pair against the binary's
+    // out-of-line ctor (an inline-in-header body can get inlined away entirely,
+    // leaving no symbol for asm-verify to match).
+    FNHighscore();
 
     // Binary param ctor @ 0x00137e48
     FNHighscore(const char* name, unsigned long nameHash,

@@ -220,10 +220,9 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
     return (m_CameraMode == 1) ? m_pFollowEntity : 0;
 }
 
-// Non-virtual (0x001810ac) — 4-type ortho dispatch.
+// Non-virtual (0x001ee124) — 4-type ortho dispatch.
 //
-// ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001810ac..0x001813d1 (asm-inspector)
-// ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0019e7a8..0x0019e828 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 v1.6.1 FruitCamera::SetupPerspective @ 0x001ee124 (asm-inspector)
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
