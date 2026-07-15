@@ -10,11 +10,18 @@
 #include "engine/util/StringTable.h"
 #include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
+#include "game/GameWork.h"
 
 // Shared TTF face (same as FruitFactPage.cpp helper; each TU keeps its own
 // file-static SmartPtr so the face stays alive across TU lifetimes).
-// DIFFERS: original = *(g_GameData+0x614); using FontTTFRegistry lookup.
+// v1.6.1: reads game_work.m_pTTFFontMain (GameWork+0x614, the locale face
+//   PreloadFontsTTF @0x0011c1fc sets to arabic.ttf when languageFlag==0x14,
+//   else gangofchinese.ttf). Falls back to a lazily-created gangofchinese.ttf
+//   only if PreloadFontsTTF hasn't run yet.
 static Mortar::FontCacheObjectTTF* GetRewardsTTFFont() {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {

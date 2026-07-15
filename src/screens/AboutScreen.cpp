@@ -122,15 +122,16 @@ const char* GetVersionString()
 
 // -----------------------------------------------------------------------
 // GetAboutTTFFont
-// The binary reads the shared gangofchinese.ttf face from a global slot.
-// Port mirrors the pattern used by FruitFactPage/BSButton: file-static
-// SmartPtr<Font> + FontTTFRegistry lookup.
-// DIFFERS: original = *(g_GameData+0x614) shared face; port uses a
-//   file-local SmartPtr<Font> + FontTTFRegistry because game_work has not
-//   been extended past 0x610 to carry the +0x614 slot.
+// v1.6.1: reads game_work.m_pTTFFontMain (GameWork+0x614, the locale face
+//   PreloadFontsTTF @0x0011c1fc sets to arabic.ttf when languageFlag==0x14,
+//   else gangofchinese.ttf). Falls back to a lazily-created gangofchinese.ttf
+//   only if PreloadFontsTTF hasn't run yet.
 // -----------------------------------------------------------------------
 static Mortar::FontCacheObjectTTF* GetAboutTTFFont()
 {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {

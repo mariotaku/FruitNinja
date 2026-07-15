@@ -120,10 +120,15 @@ static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
         ((v) *= powf(1.0f - (1.0f - (k)) * FN::g_DebugTimeScale, f))
 #endif
 
-// Shared TTF face (gangofchinese.ttf) for BakedStringBox text on the Zen sign plate.
-// DIFFERS: original = *(g_GameData+0x614) shared face; using a file-local lookup
-//   because the port has not extended game_work past 0x608.
+// Shared TTF face for BakedStringBox text on the Zen sign plate.
+// v1.6.1: reads game_work.m_pTTFFontMain (GameWork+0x614, the locale face
+//   PreloadFontsTTF @0x0011c1fc sets to arabic.ttf when languageFlag==0x14,
+//   else gangofchinese.ttf). Falls back to a lazily-created gangofchinese.ttf
+//   only if PreloadFontsTTF hasn't run yet.
 static Mortar::FontCacheObjectTTF* GetGameModeTTFFont() {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {

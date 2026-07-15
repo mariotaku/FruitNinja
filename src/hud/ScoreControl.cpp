@@ -27,11 +27,13 @@
 #include "hud/IngamePopup.h"
 
 // Shared TTF face for BakedStringBox labels in ScoreControl.
-// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext;
-//   using a file-local SmartPtr<Font> + FontTTFRegistry::Lookup because
-//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
-//   v1.6.1 ScoreControl::ScoreControl @0x001ad5fc.
+// v1.6.1 ScoreControl::ScoreControl @0x001ad5fc reads game_work.m_pTTFFontMain
+//   (GameWork+0x614 = locale face; arabic.ttf when languageFlag==0x14, else gangofchinese.ttf).
 static Mortar::FontCacheObjectTTF* GetScoreControlTTFFont() {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
+    // Lazy fallback only if PreloadFontsTTF hasn't run yet.
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {
