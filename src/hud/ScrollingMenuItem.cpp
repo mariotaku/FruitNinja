@@ -46,8 +46,9 @@ ScrollingMenuItem::~ScrollingMenuItem() {
     // m_Delegate destroyed automatically.
 }
 
-void ScrollingMenuItem::Move(float x, float y, float z) {
-    pos.x = x; pos.y = y; pos.z = z;
+// v1.6.1 ScrollingMenuItem::Move @ 0x001af5f8: void Move(_Vector3<float> v) by value.
+void ScrollingMenuItem::Move(_Vector3<float> v) {
+    pos.x = v.x; pos.y = v.y; pos.z = v.z;
 }
 
 void ScrollingMenuItem::SetParent(ScrollingMenu* parent) {

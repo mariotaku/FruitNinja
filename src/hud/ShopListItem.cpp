@@ -103,7 +103,8 @@ ShopListItem::~ShopListItem() {
 // ---------------------------------------------------------------------------
 // ShopListItem::Move @ v1.6.1 0x001b54b0 (vtable slot 6, +0x18)
 // ---------------------------------------------------------------------------
-void ShopListItem::Move(float x, float y, float z) {
+void ShopListItem::Move(_Vector3<float> v) {
+    const float x = v.x, y = v.y, z = v.z;
     Game* g = Game::GetInstance();
     const float dt = g ? game_work.dt : 0.0f;
 

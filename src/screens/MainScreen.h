@@ -309,8 +309,8 @@ private:
     void CancelNews();
     // Binary @ 0x0014ACFC — Defunct: network UI button — no-op stub
     void ClearNetworkButton();
-    // Binary @ 0x0014AD00 — Defunct: leaderboard UI button — no-op stub
-    MainScreen* CreateNormalLeaderboardButton();
+    // Defunct: leaderboard UI button — no-op stub; v1.6.1 MainScreen::CreateNormalLeaderboardButton @0x00195a08
+    int CreateNormalLeaderboardButton(float x);
 
 public:
     // Binary @ 0x0014AC98 — no-op event hook.

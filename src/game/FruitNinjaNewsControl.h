@@ -12,7 +12,11 @@
 #include "engine/asset/Texture.h"
 #include "engine/render/Font.h"
 #include "engine/util/SmartPtr.h"
+#include "engine/math/_Vector3.h"
+#include "engine/core/MortarTypes.h"
 #include <cstdint>
+
+struct InputEvent;
 
 class FruitNinjaNewsControl : public Mortar::OpenFeintNewsRenderer {
 public:
@@ -43,11 +47,17 @@ public:
     // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2030 (returns empty)
     const char* GetNewsString() const;
 
-    // Defunct: online News -- no-op stub (input sinks)
-    void InputSinkDown(unsigned int touchId, float x, float y);
-    void InputSinkReleased(unsigned int touchId, float x, float y);
-    void InputSinkMoveX(unsigned int touchId, float x, float y);
-    void InputSinkMoveY(unsigned int touchId, float x, float y);
+    // Defunct: online News -- no-op stub (input sinks); NOT vtable overrides --
+    // installed as input-callback function pointers via StartNewsRender, not
+    // FruitNinjaNewsControl's own vtable slots.
+    // v1.6.1 FruitNinjaNewsControl::InputSinkDown @0x001a1ce4
+    int InputSinkDown(InputEvent* evt, const _Vector3<float>& pos);
+    // v1.6.1 FruitNinjaNewsControl::InputSinkReleased @0x001a0a40
+    int InputSinkReleased(InputEvent* evt, const _Vector3<float>& pos);
+    // v1.6.1 FruitNinjaNewsControl::InputSinkMoveX @0x001a03b0
+    int InputSinkMoveX(InputEvent* evt, const _Vector3<float>& pos);
+    // v1.6.1 FruitNinjaNewsControl::InputSinkMoveY @0x001a03b8
+    int InputSinkMoveY(InputEvent* evt, const _Vector3<float>& pos);
 
     // Defunct: online News -- no-op stub
     void ModalTouchDown(float x, float y);
@@ -60,14 +70,16 @@ public:
     void TransitionOut();
 
 private:
-    // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2074 helper
-    void ParseUrl(const char* url);
+    // Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::ParseUrl @0x001a0438
+    // startIdx/endIdx index into m_NewsString: scans [startIdx, endIdx) for
+    // [url]...[/url] tags; returns matched end-tag index, 0 if none.
+    int ParseUrl(int startIdx, int endIdx);
 
     // Defunct: online News -- no-op stub
     void ProcessNewsString();
 
-    // Defunct: online News -- no-op stub
-    void DrawLinkButton();
+    // Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::DrawLinkButton @0x001a23cc
+    void DrawLinkButton(Mortar::MortarRectangleT<float>* clipRect);
 
     // Defunct: online News -- no-op stub
     bool IsValidChar(char c);

@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
         //   items[3].m_NewItemAlpha was set to 1.0f by Create() (bSeen=0); stays at 1.0f.
         //   items[4].m_SelectedAlpha starts at 0 (not in ItemManager); decrements slightly.
         for (int i = 0; i < kNumRows; ++i) {
-            items[i].Move(kItemX, kRowY[i], 0.0f);
+            items[i].Move(_Vector3<float>(kItemX, kRowY[i], 0.0f));
         }
 
         // Force SELECTED alpha on row 4 after Move() decremented it.
