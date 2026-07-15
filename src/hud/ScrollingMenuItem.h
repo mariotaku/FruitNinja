@@ -69,6 +69,7 @@
 //
 
 #include "util/Delegate.h"
+#include "engine/math/_Vector3.h"
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
@@ -102,9 +103,11 @@ public:
     virtual void SetWidth(float w) { m_Width = w; }
 
     // vtable +0x18 (slot 6): Move(_Vector3) -- updates item world position
-    // Binary: sets pos.x/y/z from incoming Vec3 argument.
-    // ShopListItem overrides this at 0x0015d1fc.
-    virtual void Move(float x, float y, float z);
+    // Binary @ 0x001af5f8: void Move(_Vector3<float> v) BY VALUE. Body:
+    // pos.x=v.x; pos.y=v.y; pos.z=v.z. Pass-by-value (not const&) so the
+    // mangled name pairs: _ZN17ScrollingMenuItem4MoveE8_Vector3IfE.
+    // ShopListItem overrides this at 0x001b54b0.
+    virtual void Move(_Vector3<float> v);
 
     // vtable +0x1C (slot 7): Remove
     virtual void Remove() {}

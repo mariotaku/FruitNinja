@@ -495,7 +495,7 @@ void ScrollingMenu::Update(float /*dt*/) {
         item->SetOnscreen(onscreen);
 
         // Move: assign world position from layout cursor
-        item->Move(pos.x, curY, pos.z);
+        item->Move(_Vector3<float>(pos.x, curY, pos.z));
 
         // Advance cursor by another halfH for the next iteration (binary
         // subtracts halfH twice per item: once pre-Move, once post-Move).
@@ -666,7 +666,7 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
             onscreen = true;
         item->SetOnscreen(onscreen);
 
-        item->Move(pos.x, curY, pos.z);
+        item->Move(_Vector3<float>(pos.x, curY, pos.z));
 
         // Port specific: no binary counterpart. Advance item per-frame timers
         // (e.g. ShopListItem's NEW-badge bounce, selected/cost fades) exactly

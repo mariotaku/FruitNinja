@@ -109,7 +109,7 @@ public:
     //      per-present). Positioning (2/3, and the m_LockFlashAlpha > 0
     //      scatter/offset math in step 4) stays in Move -- idempotent, safe
     //      to repeat. See AdvanceAnim.
-    void Move(float x, float y, float z) override;
+    void Move(_Vector3<float> v) override;
 
 #ifndef __bada__
     // Port specific: no binary counterpart. Carries every time-dependent

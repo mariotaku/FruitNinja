@@ -52,21 +52,30 @@ const char* FruitNinjaNewsControl::GetNewsString() const {
     return "";
 }
 
-// Defunct: online News -- no-op stub (input sinks)
-void FruitNinjaNewsControl::InputSinkDown(unsigned int touchId, float x, float y) {
-    (void)touchId; (void)x; (void)y;
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::InputSinkDown @0x001a1ce4
+int FruitNinjaNewsControl::InputSinkDown(InputEvent* evt, const _Vector3<float>& pos) {
+    (void)evt;
+    ModalTouchDown(pos.x, pos.y);
+    return 1;
 }
 
-void FruitNinjaNewsControl::InputSinkReleased(unsigned int touchId, float x, float y) {
-    (void)touchId; (void)x; (void)y;
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::InputSinkReleased @0x001a0a40
+int FruitNinjaNewsControl::InputSinkReleased(InputEvent* evt, const _Vector3<float>& pos) {
+    (void)evt;
+    ModalTouchEnded(pos.x, pos.y);
+    return 1;
 }
 
-void FruitNinjaNewsControl::InputSinkMoveX(unsigned int touchId, float x, float y) {
-    (void)touchId; (void)x; (void)y;
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::InputSinkMoveX @0x001a03b0
+int FruitNinjaNewsControl::InputSinkMoveX(InputEvent* evt, const _Vector3<float>& pos) {
+    (void)evt; (void)pos;
+    return 1;
 }
 
-void FruitNinjaNewsControl::InputSinkMoveY(unsigned int touchId, float x, float y) {
-    (void)touchId; (void)x; (void)y;
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::InputSinkMoveY @0x001a03b8
+int FruitNinjaNewsControl::InputSinkMoveY(InputEvent* evt, const _Vector3<float>& pos) {
+    (void)evt; (void)pos;
+    return 1;
 }
 
 // Defunct: online News -- no-op stub
@@ -87,17 +96,19 @@ bool FruitNinjaNewsControl::IsDisplayingNews() const {
 void FruitNinjaNewsControl::TransitionOut() {
 }
 
-// Defunct: online News -- no-op stub
-void FruitNinjaNewsControl::ParseUrl(const char* url) {
-    (void)url;
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::ParseUrl @0x001a0438
+int FruitNinjaNewsControl::ParseUrl(int startIdx, int endIdx) {
+    (void)startIdx; (void)endIdx;
+    return 0;
 }
 
 // Defunct: online News -- no-op stub
 void FruitNinjaNewsControl::ProcessNewsString() {
 }
 
-// Defunct: online News -- no-op stub
-void FruitNinjaNewsControl::DrawLinkButton() {
+// Defunct: online News -- no-op stub; v1.6.1 FruitNinjaNewsControl::DrawLinkButton @0x001a23cc
+void FruitNinjaNewsControl::DrawLinkButton(Mortar::MortarRectangleT<float>* clipRect) {
+    (void)clipRect;
 }
 
 // Defunct: online News -- no-op stub

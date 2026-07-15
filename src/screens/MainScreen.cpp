@@ -1448,10 +1448,9 @@ void MainScreen::ClearNetworkButton() {
     // Defunct: network UI button — no-op stub; v1.6.1 binary @ 0x0014ACFC
 }
 
-// Defunct: leaderboard UI — returns this in binary; v1.6.1 binary @ 0x0014AD00
-MainScreen* MainScreen::CreateNormalLeaderboardButton() {
-    // Defunct: leaderboard UI — no-op stub; v1.6.1 binary @ 0x0014AD00
-    return this;
+int MainScreen::CreateNormalLeaderboardButton(float x) {
+    (void)x;
+    return 0;  // Defunct: online leaderboard UI — no-op stub; v1.6.1 MainScreen::CreateNormalLeaderboardButton @0x00195a08
 }
 
 // Binary @ 0x0014AC98 — empty event hook.
