@@ -249,20 +249,20 @@ void BonusScreen::AwardScores() {
     // (@0x0017320C), which credits the coin wallet. The bonus-board tally must land
     // in the arcade score / high score.
     if (total < 6) {
-        Coin::MakeCoins(total, 6, &base, 0, 0xff3a,
-                         /*target=*/nullptr, "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false,
-                         -0.05f, -0.3f);
+        Coin::MakeCoins(total, 6, base, 0, 0xff3a,
+                         /*target=*/nullptr, -0.05f, -0.3f,
+                         "bonus_star_trail", "bonus_star_impact",
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);
     } else {
-        Coin::MakeCoins(6, 6, &base, 0, 0xff3a,
-                         /*target=*/nullptr, "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false,
-                         -0.05f, -0.3f);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
+        Coin::MakeCoins(6, 6, base, 0, 0xff3a,
+                         /*target=*/nullptr, -0.05f, -0.3f,
+                         "bonus_star_trail", "bonus_star_impact",
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
         total = m_TotalScore;  // re-read (unchanged, just re-fetched -- matches binary)
-        Coin::MakeCoins(total - 6, 6, &base, 0, 0xff3a,
-                         /*target=*/nullptr, "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false,
-                         -0.05f, -0.3f);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
+        Coin::MakeCoins(total - 6, 6, base, 0, 0xff3a,
+                         /*target=*/nullptr, -0.05f, -0.3f,
+                         "bonus_star_trail", "bonus_star_impact",
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
     }
 
     // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- Ghidra's decompile of

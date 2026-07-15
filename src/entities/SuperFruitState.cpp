@@ -13,16 +13,14 @@ void SuperFruitState::Parse(TiXmlElement* elem)
     elem->QueryFloatAttribute("rot",       &m_Spin);
 }
 
-// Binary @ 0x001b9a10: operator_new(0x50) + TiXmlElement::ctor("superFruitState"),
-// SetDoubleAttribute("time", m_Timer), SetAttribute("hits", m_SliceCount),
-// SetDoubleAttribute("sliceTime", m_Lifetime), SetDoubleAttribute("rot", m_Spin),
-// return elem.
-// DIFFERS: binary (TinyXML-1) heap-allocates a standalone TiXmlElement* and returns it;
-// port's tinyxml2 shim requires all elements to be owned by a TiXmlDocument — a
-// doc-independent node cannot be created here without a dangling pointer. Returns null.
-// Save path is deferred (#291); callers must guard on bool(result).
-// v1.6.1 SuperFruitState::WriteToElement @0x001b9a10
-TiXmlElement SuperFruitState::WriteToElement()
+// ASM-verified: v1.6.1 SuperFruitState::WriteToElement @0x001b9a10: operator_new(0x50) +
+// TiXmlElement::ctor("superFruitState"), SetDoubleAttribute("time", m_Timer),
+// SetAttribute("hits", m_SliceCount), SetDoubleAttribute("sliceTime", m_Lifetime),
+// SetDoubleAttribute("rot", m_Spin), return elem (TiXmlElement*, heap-allocated, no param).
+// DIFFERS: original = heap TiXmlElement* (v1.6.1 SuperFruitState::WriteToElement
+// @0x001b9a10); tinyxml2 shim cannot heap-allocate doc-less nodes, returns nullptr;
+// real save path lives in SuperFruitControl::SaveSuperFruitState.
+TiXmlElement* SuperFruitState::WriteToElement()
 {
-    return TiXmlElement();
+    return nullptr;
 }

@@ -127,11 +127,11 @@ public:
     // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
 
-    // v1.6.1 Coin::MakeCoins @0x001d7ec8 — spawn N coins via Mortar::ActorManager::Add(2).
-    // Binary sig (12 params, this excluded):
-    //   (int totalCoins, int coinsPerCoin, Vec3* spawnPos, ushort baseAngle, ushort angleSpread,
-    //    Vec3* target, char* flyFXName, char* collectFXName, Delegate1<void,Coin*> onArrived,
-    //    bool silent, float delayStep, float delayCap)
+    // ASM-spec v1.6.1 Coin::MakeCoins @0x001d7ec8 — spawn N coins via
+    // Mortar::ActorManager::Add(2). Binary demangled sig (this excluded):
+    //   (int totalCoins, int coinsPerCoin, Vec3 spawnPos (BY VALUE), ushort baseAngle,
+    //    ushort angleSpread, Vec3* target, float delayStep, float delayCap,
+    //    char* flyFXName, char* collectFXName, Delegate1<void,Coin*> onArrived, bool silent)
     //   target: homing destination passed through to InitCoin; NULL -> resolved here to
     //   (220,-140,0) (COIN_DEFAULT_TARGET) before the InitCoin call.
     //   delayStep/delayCap exact semantics unconfirmed (labeled s0/s1 in Ghidra decompile);
@@ -143,12 +143,11 @@ public:
     //   when null; both StringHash'd here and the hashes passed to InitCoin.
     //   Per-coin loop: ActorManager::Add(2,true), random angle in baseAngle+/-spread,
     //   up to 10 retries against screen bounds, then InitCoin.
-    static void MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos,
+    static void MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float> spawnPos,
                           uint16_t baseAngle, uint16_t angleSpread,
-                          _Vector3<float>* target,
+                          _Vector3<float>* target, float delayStep, float delayCap,
                           const char* flyFXName, const char* collectFXName,
-                          Mortar::Delegate1<void, Coin*> onArrived, bool silent,
-                          float delayStep, float delayCap);
+                          Mortar::Delegate1<void, Coin*> onArrived, bool silent);
 
     // v1.6.1 @0x001d7a00 (thunk 0x00106eb8) — unconditional sweep of all type-2
     // entities (no IsActive() gate); arrive=true credits via Arrived(), else
