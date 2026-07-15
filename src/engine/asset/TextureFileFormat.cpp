@@ -432,9 +432,10 @@ void Read<TextureInfo::ChannelDescription, 4u>(DataStreamReader& reader,
 
 // ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::PixelFormat&) @0x0026bbc0
 // Composite: Compression(2B) + NumberFormat(2B) + ChannelDescription[4](8B) = 12B.
-// DIFFERS: binary takes TextureInfo::PixelFormat (named sub-fields);
-// port uses Mortar::PixelFormat (opaque data[12]) to avoid changing DataInfo consumers.
-// Access sub-fields by offset via reinterpret_cast.
+// DIFFERS: binary's PixelFormat has named sub-fields; port keeps it an opaque
+// data[12] blob (nested as Mortar::TextureInfo::PixelFormat -- see
+// TextureSource.h -- so this Read overload still mangles against the binary's
+// nested type) and accesses sub-fields by offset via reinterpret_cast.
 void Read(DataStreamReader& reader, PixelFormat& pf) {
     Read(reader, *reinterpret_cast<TextureInfo::Compression*>(pf.data + 0));
     Read(reader, *reinterpret_cast<TextureInfo::NumberFormat*>(pf.data + 2));

@@ -27,7 +27,7 @@
 //   +0x10  bool      m_Error    -- error flag; set on underflow
 //
 // Binary: v1.6.1 DataStreamReader::SetSource @0x00250bdc,
-//         DataStreamReader::DataStreamReader(void const*, unsigned long, Endian::Endianness) @0x00250bf4,
+//         DataStreamReader::DataStreamReader(void const*, unsigned long, Mortar::Endian::Endianness) @0x00250bf4,
 //         DataStreamReader::MakeSubReader @0x00250c08,
 //         DataStreamReader::Read(std::string&) @0x00250c28.
 //         ReadRaw<unsigned long> @0x0022bfc4, ReadBasicType<unsigned long> @0x0022c058.
@@ -46,14 +46,22 @@ class DataStreamReader {
 public:
     // ASM-spec v1.6.1 DataStreamReader::SetSource @0x00250bdc:
     //   m_pStart = m_pCursor = data; m_Size = size; m_Endian = e; m_Error = false.
-    void SetSource(const void* data, unsigned long size, Endian::Endianness e);
+    // Param explicitly ::-qualified: binary mangles this as the GLOBAL Endianness
+    // (N6Endian10EndiannessE), not the Mortar-nested one the ctor uses -- see
+    // util/Endian.h and the ctor decl below. Since Mortar::Endian now also exists
+    // as a real nested namespace, unqualified "Endian::" here would resolve to the
+    // nearer Mortar::Endian and silently flip this symbol's mangling; the leading
+    // "::" pins it to the global one.
+    void SetSource(const void* data, unsigned long size, ::Endian::Endianness e);
 
     // Default ctor: uninitialized state. Used as target for MakeSubReader.
     DataStreamReader();
 
-    // ASM-spec v1.6.1 DataStreamReader(void const*, unsigned long, Endian::Endianness) @0x00250bf4:
-    //   delegates to SetSource.
-    DataStreamReader(const void* data, unsigned long size, Endian::Endianness e);
+    // ASM-spec v1.6.1 DataStreamReader(void const*, unsigned long, Mortar::Endian::Endianness) @0x00250bf4:
+    //   delegates to SetSource. Binary mangles this ctor's 3rd param as the
+    //   Mortar-nested Endianness (NS_6Endian10EndiannessE), unlike SetSource which
+    //   mangles it as the global one (N6Endian10EndiannessE) -- see util/Endian.h.
+    DataStreamReader(const void* data, unsigned long size, Mortar::Endian::Endianness e);
 
     // ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08:
     //   Initialises *this from source.m_pCursor, remaining bytes, source.m_Endian.
@@ -90,7 +98,7 @@ public:
     template<typename T>
     void ReadBasicType(T& out) {
         ReadRaw(out);
-        if (Endian::GetEndian() != (Endian::Endianness)m_Endian) {
+        if (::Endian::GetEndian() != (::Endian::Endianness)m_Endian) {
             uint8_t* b = reinterpret_cast<uint8_t*>(&out);
             size_t i = 0;
             size_t j = sizeof(T) - 1;
@@ -107,7 +115,7 @@ public:
     void*    m_pStart;   // +0x00
     void*    m_pCursor;  // +0x04
     uint32_t m_Size;     // +0x08
-    uint32_t m_Endian;   // +0x0c (Endian::Endianness value stored as uint32_t)
+    uint32_t m_Endian;   // +0x0c (::Endian::Endianness value stored as uint32_t)
     bool     m_Error;    // +0x10
 };
 
