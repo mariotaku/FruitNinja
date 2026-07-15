@@ -39,7 +39,7 @@ struct Bounds3D {
 
 // Forward declarations for defunct/stub types referenced by binary API.
 class DrawEffectContainer;
-class TextureAtlasPage;
+struct TextureAtlasPage; // struct (matches FontInterface.h definition; MSVC mangles the tag)
 
 // SharedPropsInfo -- value-type stored in Mesh::m_GroupsByName.
 // sizeof = 0x1c (28 bytes). Binary: ctor @0x002742c8, AddTextureMap @0x001b1394.

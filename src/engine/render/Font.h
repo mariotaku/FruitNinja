@@ -24,42 +24,52 @@ enum FontAlignment {
     FONT_ALIGN_WRAP   = 0x10
 };
 
+// Binary namespace-scope structs (Mortar::CharTemplate/Page/Kerning), NOT nested in
+// Font. Un-nested to match the binary mangled names of Parse_Char/Parse_Kerning/
+// Parse_Page (e.g. _ZN6Mortar10Parse_CharEPcPNS_12CharTemplateEi -- Mortar::CharTemplate*,
+// not Mortar::Font::CharTemplate*). Font keeps typedef aliases below for back-compat.
+
+// 0x24 bytes per binary (ARM-confirmed at 0x0019a128)
+struct CharTemplate {
+    uint16_t id;
+    uint16_t _pad;
+    float    u0;    // = atlasX  / scaleW
+    float    v0;    // = atlasY  / scaleH
+    float    w;     // = pxW     / lineHeight
+    float    h;     // = pxH     / lineHeight
+    float    xoff;  // = pxXoff  / lineHeight
+    float    yoff;  // = pxYoff  / lineHeight
+    float    xadv;  // = pxXadv  / lineHeight
+    uint8_t  page;
+    uint8_t  _pad2[3];
+};
+
+// 8 bytes per binary
+struct Page {
+    const char*             filename;  // owned (new char[])
+    Mortar::SmartPtr<Mortar::Texture> texture;
+
+    Page() : filename(nullptr) {}
+    ~Page() { delete[] filename; }
+};
+
+// 12 bytes; parsed but unused at runtime (GetKerning stubs to 0)
+struct Kerning {
+    uint32_t first;
+    uint32_t second;
+    float    amount;
+};
+
 // Non-polymorphic: no vtable (binary ctor @ 0x00198534 writes no PTR_/vptr).
 // No base class: binary ctor calls no base-class ctor on this+0.
 // Ref-counted via inline AddRef/Release (non-virtual) for SmartPtr<Font> compat;
 // ref-count stored at m_RefCount (+0x418). Binary total size = 0x438 bytes.
 class Font {
 public:
-    // 0x24 bytes per binary (ARM-confirmed at 0x0019a128)
-    struct CharTemplate {
-        uint16_t id;
-        uint16_t _pad;
-        float    u0;    // = atlasX  / scaleW
-        float    v0;    // = atlasY  / scaleH
-        float    w;     // = pxW     / lineHeight
-        float    h;     // = pxH     / lineHeight
-        float    xoff;  // = pxXoff  / lineHeight
-        float    yoff;  // = pxYoff  / lineHeight
-        float    xadv;  // = pxXadv  / lineHeight
-        uint8_t  page;
-        uint8_t  _pad2[3];
-    };
-
-    // 8 bytes per binary
-    struct Page {
-        const char*             filename;  // owned (new char[])
-        Mortar::SmartPtr<Mortar::Texture> texture;
-
-        Page() : filename(nullptr) {}
-        ~Page() { delete[] filename; }
-    };
-
-    // 12 bytes; parsed but unused at runtime (GetKerning stubs to 0)
-    struct Kerning {
-        uint32_t first;
-        uint32_t second;
-        float    amount;
-    };
+    // Back-compat aliases -- pre-existing call sites use Font::CharTemplate etc.
+    typedef Mortar::CharTemplate CharTemplate;
+    typedef Mortar::Page         Page;
+    typedef Mortar::Kerning      Kerning;
 
     // Binary field layout (0x438 total, base-class-free, non-polymorphic):
     // Binary ctor @ 0x00198534: zeroes m_Glyphs (separate), then loop zeros
@@ -271,17 +281,20 @@ int Get_Next_Value(char* line, char* keyBuf, int* intOut, char** strHeapOut);
 // Parse a "char " .fnt line into a CharTemplate, calling Get_Next_Value in a loop.
 // Stores raw int-as-float values; caller must normalize (divide by scaleW/H, lineHeight).
 // Returns bytes consumed from line.
-int Parse_Char(char* line, Font::CharTemplate* out, int lineLen);
+// Binary mangled: _ZN6Mortar10Parse_CharEPcPNS_12CharTemplateEi -- Mortar::CharTemplate*.
+int Parse_Char(char* line, CharTemplate* out, int lineLen);
 
 // Parse a "page " .fnt line into a Page (zero-inits filename and texture first).
 // Heap-allocates page->filename (truncated at '.' i.e. no extension) via Get_Next_Value.
 // Returns bytes consumed from line.
-int Parse_Page(char* line, Font::Page* out, int lineLen);
+// Binary mangled: _ZN6Mortar10Parse_PageEPcPNS_4PageEi -- Mortar::Page*.
+int Parse_Page(char* line, Page* out, int lineLen);
 
 // Parse a "kerning " .fnt line into a Kerning (zeroes all 12 bytes first).
 // first/second as int, amount as (float)intVal.
 // Returns bytes consumed from line.
-int Parse_Kerning(char* line, Font::Kerning* out, int lineLen);
+// Binary mangled: _ZN6Mortar13Parse_KerningEPcPNS_7KerningEi -- Mortar::Kerning*.
+int Parse_Kerning(char* line, Kerning* out, int lineLen);
 
 } // namespace Mortar
 

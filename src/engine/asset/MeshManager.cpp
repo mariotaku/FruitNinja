@@ -47,20 +47,20 @@ void MeshManager::ReleaseAll() {
 }
 
 // v1.6.1 MeshManager::Load @0x00236874
+// Binary mangled: _ZN6Mortar11MeshManager4LoadERKNS_11AsciiStringE -- takes AsciiString const&.
 // DIFFERS: port caches in m_Models manually; binary caches in ResourceLoader.
 //   v1.6.1 LoadMeshInternal @0x00238644 does NOT touch m_Models (registers loaders +
 //   calls ResourceLoader::Load<Model>). The port's Find+Add here is a port invention.
-Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
-    AsciiString apath(path);
+Mortar::SmartPtr<Model> MeshManager::Load(const AsciiString& path) {
     Mortar::List<Mortar::SmartPtr<Model>>::Node* node = m_Models.Head();
     while (node) {
-        if (node->value.IsValid() && node->value->m_name == apath) {
+        if (node->value.IsValid() && node->value->m_name == path) {
             return node->value;
         }
         node = node->next;
     }
 
-    Mortar::SmartPtr<Model> model = LoadMeshInternal(apath);
+    Mortar::SmartPtr<Model> model = LoadMeshInternal(path);
     if (model.IsValid()) {
         m_Models.Add(model);
     }

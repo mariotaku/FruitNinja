@@ -201,7 +201,7 @@ int Get_Next_Value(char* line, char* keyBuf, int* intOut, char** strHeapOut) {
 // Priority order for key matching (longer names before shorter prefixes):
 //   id -> xadvance -> xoffset -> x -> yoffset -> y -> width -> height -> page
 // Stores RAW pixel values as floats; caller normalises by scaleW/H and lineHeight.
-int Parse_Char(char* line, Font::CharTemplate* out, int lineLen) {
+int Parse_Char(char* line, CharTemplate* out, int lineLen) {
     int pos = 0;
     while (pos < lineLen) {
         char keyBuf[32];
@@ -239,7 +239,7 @@ int Parse_Char(char* line, Font::CharTemplate* out, int lineLen) {
 // ASM-spec v1.6.1 Mortar::Parse_Page @0x0024d744
 // Zero-inits filename (nullptr) and texture (default SmartPtr) before parsing.
 // Only the "file" key is handled; its value is heap-allocated (caller owns).
-int Parse_Page(char* line, Font::Page* out, int lineLen) {
+int Parse_Page(char* line, Page* out, int lineLen) {
     // Binary zero-inits: *(int*)out = 0 (filename=nullptr) and
     // SmartPtr<Texture2D>::SetPtrCast(nullptr) (texture slot = 0).
     out->filename = NULL;
@@ -270,8 +270,8 @@ int Parse_Page(char* line, Font::Page* out, int lineLen) {
 // ASM-spec v1.6.1 Mortar::Parse_Kerning @0x0024c0b0
 // Zeroes all 12 bytes of *out before parsing.
 // first/second: stored as int; amount: stored as (float)intVal.
-int Parse_Kerning(char* line, Font::Kerning* out, int lineLen) {
-    memset(out, 0, sizeof(Font::Kerning));  // binary: zeroes all 12 bytes
+int Parse_Kerning(char* line, Kerning* out, int lineLen) {
+    memset(out, 0, sizeof(Kerning));  // binary: zeroes all 12 bytes
 
     int pos = 0;
     while (pos < lineLen) {

@@ -36,8 +36,11 @@ namespace Mortar {
 
 // Per-page atlas state. Owned by FontInterface (vector of pointers).
 // One instance per allocated atlas page; all pages share the same m_Size.
-// Port specific: matches binary TextureAtlasPage role.
-struct FontAtlasPage {
+// v1.6.1 binary entity: Mortar::TextureAtlasPage (confirmed via
+// BakedStringTTF::FindOrCreateSurface @0x00248b9c mangled signature, which takes
+// TextureAtlasPage* -- same type Mesh.h forward-declares as an opaque atlas pointer
+// for Mesh::DrawTriList/DrawTriStrip/DrawTris). FontAtlasPage is a back-compat alias.
+struct TextureAtlasPage {
     uint8_t* m_Pixels;       // RGBA buffer [pageSize*pageSize*4], calloc'd
     GLuint   m_TextureID;    // GL texture object (0 until EnsureTexture is called)
     int      m_CursorX;
@@ -47,6 +50,9 @@ struct FontAtlasPage {
     int      m_DirtyX0, m_DirtyY0;
     int      m_DirtyX1, m_DirtyY1;
 };
+
+// Back-compat alias -- pre-existing call sites use FontAtlasPage.
+typedef TextureAtlasPage FontAtlasPage;
 
 // One cached glyph entry in the atlas. Carries TWO metric contracts:
 //
