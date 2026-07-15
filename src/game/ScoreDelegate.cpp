@@ -1,5 +1,3 @@
-// Analysed: 2026-05-03T00:00
-
 #include "ScoreDelegate.h"
 #include "ScoreModifier.h"
 #include "PowerUpManager.h"
@@ -16,31 +14,19 @@ int DefaultScoreDelegate(int n) {
     return n;
 }
 
-static int TrampolineCall(int n);
-static ScoreModifier* s_activeMod = nullptr;
+Mortar::Delegate1<int,int> g_ScoreDelegate = Mortar::Delegate1<int,int>::MakeFree(&DefaultScoreDelegate);
 
-ScoreDelegateFn g_ScoreDelegate = &DefaultScoreDelegate;
-
-// ASM-spec v1.6.1 SetScoreDelegate @ 0x0011a440: installs Callee<ScoreModifier> trampoline
-// DIFFERS: original = SetScoreDelegate(Mortar::Delegate1<int,int>) by value (v1.6.1
-//   SetScoreDelegate @0x0011a440), using ScoreModifier* until the Delegate1 subsystem is
-//   ported (#29). ScoreModifier* is the Callee<ScoreModifier> target object the binary
-//   would wrap in a Delegate1 at the call site; signature will not mangle-pair until
-//   Mortar::Delegate1<int,int> exists in the port.
-void SetScoreDelegate(ScoreModifier* m) {
-    s_activeMod  = m;
-    g_ScoreDelegate = &TrampolineCall;
+// ASM-spec v1.6.1 SetScoreDelegate @ 0x0011a440:
+//   if (Delegate1<int,int>::IsNull(&d)) d = Global(DefaultScoreDelegate);
+//   s_scoreDelagate = d;
+void SetScoreDelegate(Mortar::Delegate1<int,int> d) {
+    if (!d) d = Mortar::Delegate1<int,int>::MakeFree(&DefaultScoreDelegate);
+    g_ScoreDelegate = d;
 }
 
-// ASM-spec v1.6.1 SetDefaultScoreDelegate: installs Global<int,int>(&DefaultScoreDelegate) — addr unresolved in v1.6.1 .symtab
+// ASM-spec v1.6.1 SetDefaultScoreDelegate: installs Global<int,int>(&DefaultScoreDelegate) -- addr unresolved in v1.6.1 .symtab
 void SetDefaultScoreDelegate() {
-    s_activeMod  = nullptr;
-    g_ScoreDelegate = &DefaultScoreDelegate;
-}
-
-static int TrampolineCall(int n) {
-    if (s_activeMod) return s_activeMod->DeferPoints(n);
-    return n;
+    g_ScoreDelegate = Mortar::Delegate1<int,int>::MakeFree(&DefaultScoreDelegate);
 }
 
 // AddScoreNomals (identity score delegate, v1.6.1 @0x001adee0) is defined once in
