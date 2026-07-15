@@ -1039,6 +1039,24 @@ fn_add_game_test(test_save_roundtrip test_save_roundtrip.cpp)
 add_test(NAME save_roundtrip COMMAND test_save_roundtrip)
 set_tests_properties(save_roundtrip PROPERTIES TIMEOUT 30)
 
+# Arcade bonus-scoring writer/reader hash-matching + formula invariants.
+# High-fan-in scoring leaf where 3 real bugs hid in one session: AddCombo
+# wrong-key+flat-count, No-Bananas missing per-name AddToTotal, and _drops
+# written on slice (should be _total-only on slice, _drops on the KillFruit
+# drop path). Covers: (1) AddCombo running-sum + best-combo max against the
+# real xml/bonusAwards.xml combo table, under the literal combo_bonus/
+# best_combo hashes; (2) Bonus::IsAchieved/BonusType::GetBest tier gating for
+# combo_bonus and the No-Bananas (frenzy/freeze/scorex2 equals=0) bonus type;
+# (3) ClearTotals wipes m_Totals (per-game) but not m_SessionTotals
+# (lifetime); (4) FruitSaveData-level _total vs _drops writer-key separation
+# (does NOT drive the real Fruit::CollisionResponse -- too heavy for this
+# leaf test, see the CASE 4 gap comment). Pure in-process: constructs a Game
+# + FileSystem_Direct only (mirrors GameInitialise.cpp Step 3) so
+# BonusManager::Init() loads the real bonusAwards.xml; no SDL/GL/audio.
+fn_add_game_test(test_bonus_manager test_bonus_manager.cpp)
+add_test(NAME bonus_manager COMMAND test_bonus_manager)
+set_tests_properties(bonus_manager PROPERTIES TIMEOUT 30)
+
 # AddToCurrentScore clamp regression guard (#222 fix).
 # Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
 # + penalty=-5 -> 0; score 0 + gain=50 -> 50. Uses TestHarness so
