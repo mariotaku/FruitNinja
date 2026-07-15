@@ -92,8 +92,19 @@ int main(int argc, char* argv[]) {
     // Settle 60 frames with multi-pass rendering so all HUD layer passes fire:
     //   0x80 pass: HUD_LAYER_POST_ACTOR (AboutScreen's layer).
     // Also advances m_TransitionAlpha from 0 to ~1 (0.125 lerp; ~17 frames to 0.99).
+    //
+    // m_TransitionAlpha is advanced by UpdateRealtime(dtSeconds) in the port
+    // build (see AboutScreen::UpdateRealtime, #ifndef __bada__) rather than by
+    // the 60Hz Update() -- the real game loop pumps both per presented frame
+    // (Game::run() calls tickRealtimeUi() alongside stepUpdate(), see
+    // GameSDL.cpp). RunComponentHeadlessMultiPass only drives Update(), so
+    // without also calling tickRealtimeUi() here the alpha never advances past
+    // 0 and the screen never leaves state 0. Mirrors the same fix in
+    // test_screen.cpp / test_scrollingmenu_updaterealtime.cpp /
+    // test_ring_texture_lifecycle.cpp.
     for (int i = 0; i < 60; ++i) {
         h.RunComponentHeadlessMultiPass(1);
+        h.game.tickRealtimeUi(1.0f / 60.0f);
     }
 
     int failures = 0;

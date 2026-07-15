@@ -96,6 +96,21 @@ public:
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
 
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Eases m_TransitionAlpha (states 0/2) and scrolls the marquee dt-scaled,
+    // once per PRESENTED frame (Game::tickRealtimeUi via HUD::UpdateRealtime),
+    // so the fade and credits scroll track display refresh instead of the
+    // fixed 60Hz sim tick. Update() (60Hz) still owns the state machine
+    // (which state, when to transition, one-shot side effects like
+    // CreateBackButton/m_pParent->Reset()) -- it reads the alpha this
+    // function advances and fires threshold-crossing transitions there,
+    // exactly once per sim tick. See AboutScreen.cpp for the AS_APPROACH_F/
+    // AS_DECAY_F macros shared with the __bada__ path (mirrors ShopScreen's
+    // SS_APPROACH_F/SS_DECAY_F).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     int GetType() override { return 1; }
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
@@ -137,6 +152,18 @@ private:
     // ASM-spec v1.6.1 AboutScreen ctor @0x0015b764 / CreateCreditsMarquee @0x0015ac0c:
     std::vector<MarqueeText*> m_Marquees;   // +0xC4: scrolling credits list (12B on ARM32)
     float m_EntryDelay;                     // +0xD0: scroll start delay countdown (ctor=3.0f)
+
+#ifndef __bada__
+    // Port specific: bridge field, no binary counterpart. Update() (60Hz)
+    // owns the m_EntryDelay countdown and sets this true the tick m_EntryDelay
+    // first reaches <= 0 (matching the binary's early-return gate); once set,
+    // UpdateRealtime() scrolls the marquee dt-scaled on every subsequent
+    // present. Placed after every offset-asserted field / the last
+    // static_assert below so __bada__ sizeof(AboutScreen) and field layout
+    // are completely unaffected -- this member does not exist at all under
+    // __bada__.
+    bool m_bMarqueeActive;
+#endif
 
 private:
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
