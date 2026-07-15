@@ -196,7 +196,7 @@ static void DrawScene(fn::TestHarness& h, Fruit* fruit, Bomb* bomb) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (game_work.m_FruitCamera)
-        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, true);
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
 
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
