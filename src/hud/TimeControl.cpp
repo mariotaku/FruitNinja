@@ -163,7 +163,10 @@ void TimeControl::Update(float dt) {
             q = (int)m_TimeRemaining;
         } else {
             // ARCADE / MP count-down branch.
-            uint8_t entryColourR = m_DrawColour.r;
+            // Cache the BLUE channel: the low-time flash toggles red(255,100,100)
+            // <-> white(255,255,255), which differ in G/B, NOT R (R is 255 in both).
+            // Binary gates tick-tock on m_DrawColour.m_B @ this+0x5c (@0x001c0a48/0dcc).
+            uint8_t entryColourB = m_DrawColour.b;
 
             if (PowersEnabled()) {
                 PowerUpManager* pum = PowerUpManager::GetInstance();
@@ -221,7 +224,7 @@ void TimeControl::Update(float dt) {
             // s_TickTockToggle ? "Time-tick" : "Time-tock" is correct post-XOR order;
             // first fire after Reset is "Time-tick".
             if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
-                m_DrawColour.r != entryColourR) {
+                m_DrawColour.b != entryColourB) {
                 static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80
                 s_TickTockToggle ^= 1;
                 const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
