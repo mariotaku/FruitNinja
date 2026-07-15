@@ -1430,12 +1430,15 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: two AddToTotal --
             // per-name (m_Name) + per-_total; the per-name total feeds the No-Bananas
             // bonus (frenzy/freeze/scorex2) via GetTotal(StringHash(powerName)).
+            // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: successful slice writes
+            // ONLY m_Name (false) + m_TotalStatKey/_total (trackSession=true). <name>_drops
+            // is written only in KillFruit's drop path (@0x001deba8) -- writing it here
+            // over-counted strawberry_drops on every slice, breaking NOTHING BUT BERRY
+            // (max-strawberry_drops=0) + polluting lifetime _drops.
             if (game_work.m_SaveData) {
                 game_work.m_SaveData->AddToTotal(info->m_Name, info->m_NameHash, 1,
                                          /*trackSession=*/false, false);
                 game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
-                                         /*trackSession=*/true, false);
-                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
                                          /*trackSession=*/true, false);
 
                 // On critical hit, record crit totals.
