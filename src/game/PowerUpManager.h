@@ -15,10 +15,10 @@
 //   dtor (deleting)         0x00118880
 //   GetInstance             0x00118134
 //   SetDefaults             0x00117a80
-//   ClearScoreMultipliers   0x0011a218
+//   ClearScoreMultipliers   0x00114900
 //   Update                  0x001189b4  (wrapper: 0x000f3ccc)
 //   Reset                   0x00142e08  (v1.6.1 verified)
-//   ClearTimedPowers        0x00118904
+//   ClearTimedPowers        0x0014136c
 //   ActivatePower           0x001197c4
 //   ActivateScreenEffect    0x00119760
 //   ClearScreenEffects      0x00117ed8
@@ -64,13 +64,13 @@ public:
     // v1.6.1 PowerUpManager::SetDefaults @0x0013feb8
     void SetDefaults();
 
-    // @ 0x0011a218
+    // v1.6.1 PowerUpManager::ClearScoreMultipliers @0x00114900
     void ClearScoreMultipliers();
 
     // v1.6.1 PowerUpManager::Reset @ 0x00142e08
     void Reset(bool fullReset);
 
-    // @ 0x00118904
+    // v1.6.1 PowerUpManager::ClearTimedPowers @0x0014136c
     void ClearTimedPowers();
 
     // v1.6.1 ActivatePower @0x00142934 — 3-arg form; returns active clone (or nullptr)
