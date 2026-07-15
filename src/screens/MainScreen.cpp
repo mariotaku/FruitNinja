@@ -195,19 +195,19 @@ MainScreen::MainScreen(Game& g)
         m_pFont = Mortar::Font::Create("fonts/verdana.fnt");
     }
 
-    // v1.6.1: Load TTF font for the "SLICE FRUIT TO BEGIN" BakedStringBox.
-    // Binary: FontCacheObjectTTF over "fontstruetype/gangofchinese.ttf" (256x256 atlas).
-    // m_BakedStrSmart (port-only SmartPtr<Font>) holds the font ref for the BakedStringBox.
+    // v1.6.1 MainScreen ctor @0x0019811c: BakedStringBox(..., game_work.m_pTTFFontMain, ...)
+    // for the "SLICE FRUIT TO BEGIN" plate -- reads the shared locale TTF face (GameWork+0x614,
+    // set by PreloadFontsTTF to arabic.ttf when languageFlag==0x14, else gangofchinese.ttf).
     // m_pSliceInstrBox holds the BakedStringBox* (binary +0xe0).
-    // TODO: if the port later adds Arabic language support, swap to "fontstruetype/arabic.ttf".
 #ifndef __bada__
     {
-        m_BakedStrSmart = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
-    }
-    {
-        Mortar::FontCacheObjectTTF* ttf = nullptr;
-        if (m_BakedStrSmart.IsValid()) {
-            ttf = Mortar::FontTTFRegistry::GetInstance().Lookup(m_BakedStrSmart.Get());
+        Mortar::FontCacheObjectTTF* ttf = game_work.m_pTTFFontMain;
+        if (!ttf) {
+            // Lazy fallback only if PreloadFontsTTF hasn't run yet.
+            m_BakedStrSmart = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+            if (m_BakedStrSmart.IsValid()) {
+                ttf = Mortar::FontTTFRegistry::GetInstance().Lookup(m_BakedStrSmart.Get());
+            }
         }
         if (ttf) {
             m_pSliceInstrBox = new Mortar::BakedStringBox(

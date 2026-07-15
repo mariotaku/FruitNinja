@@ -231,7 +231,8 @@ private:
     // float field instead. Functional behaviour of the f0 hold/settle/exit logic is identical.
     float m_MoreGamesF0;
 
-    // Font SmartPtr for the BakedStringBox (binary manages this differently; port convenience).
+    // Lazy fallback font for the plate BakedStringBox, used only if game_work.m_pTTFFontMain
+    // is still null when this ctor runs (PreloadFontsTTF hasn't populated it yet).
     Mortar::SmartPtr<Mortar::Font> m_BakedStrSmart;
 
     // Camera transition lives on game_work.m_PauseAmount (binary single source of truth).

@@ -22,10 +22,14 @@
 #include <list>
 
 // Shared TTF font pointer (mirrors FruitFactPage.cpp GetPageTTFFont()).
-// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext;
-//   using a file-local SmartPtr<Font> + FontTTFRegistry::Lookup because
-//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+// v1.6.1: reads game_work.m_pTTFFontMain (GameWork+0x614, the locale face
+//   PreloadFontsTTF @0x0011c1fc sets to arabic.ttf when languageFlag==0x14,
+//   else gangofchinese.ttf). Falls back to a lazily-created gangofchinese.ttf
+//   only if PreloadFontsTTF hasn't run yet.
 static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {

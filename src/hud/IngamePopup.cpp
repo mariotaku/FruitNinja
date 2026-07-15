@@ -21,11 +21,14 @@
 #include <cstddef>
 #include <vector>
 
-// Shared TTF face for IngamePopup BakedStringBox labels.
-// DIFFERS: original = *(game_work+0x614) shared TTF face (GameContext Font slot not
-//   extended past +0x608 in port); using a file-local SmartPtr<Font> + FontTTFRegistry::Lookup.
-//   v1.6.1 IngamePopup ctor @0x0016dbac.
+// Shared TTF face for IngamePopup BakedStringBox labels (NEW / SELECTED / NEW BEST! / combo).
+// v1.6.1 IngamePopup ctor @0x0016dbac: every BakedStringBox reads game_work.m_pTTFFontMain
+//   (GameWork+0x614 = locale face; arabic.ttf when languageFlag==0x14, else gangofchinese.ttf).
 static Mortar::FontCacheObjectTTF* GetIngamePopupTTFFont() {
+    if (game_work.m_pTTFFontMain) {
+        return game_work.m_pTTFFontMain;
+    }
+    // Lazy fallback only if PreloadFontsTTF hasn't run yet.
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) {

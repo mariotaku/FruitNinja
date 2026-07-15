@@ -72,6 +72,10 @@ static const WarmLabel s_WarmLabels[] = {
     { (LocalizedString)0x3b5,   12.0f }, // GameOverScreen::CreateRetryButton @0x00185f98
     { (LocalizedString)0xed,    12.0f }, // ShopScreen::SetSelected @0x001b24f0 equip (unlocked)
     { (LocalizedString)0x3c7,   12.0f }, // ShopScreen::SetSelected @0x001b24f0 equip (locked)
+    { LSTR_MENU_TEXTURE_13,      9.0f }, // MainScreen ctor @0x0019811c "SLICE FRUIT TO BEGIN" plate
+    { LSTR_GAME_TEXTURE_02,     20.0f }, // IngamePopup ctor @0x0016dbac type 0x0F "NEW BEST!"
+    { LSTR_MENU_TEXTURE_09,     16.0f }, // IngamePopup ctor @0x0016dbac type 0x10 "NEW"
+    { LSTR_MENU_TEXTURE_53,     17.0f }, // IngamePopup ctor @0x0016dbac type 0x11 "SELECTED"
 };
 static const int s_WarmLabelCount = sizeof(s_WarmLabels) / sizeof(s_WarmLabels[0]);
 

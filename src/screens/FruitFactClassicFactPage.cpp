@@ -22,12 +22,16 @@
 #include "engine/render/Utf8StringIterator.h"
 #include "engine/util/StringTable.h"
 #include "asset/TextureManager.h"
+#include "game/GameWork.h"
 
 // Shared TTF font for fact-card BakedStringBox objects.
-// Binary: game_work+0x614 (FontCacheObjectTTF*).
-// DIFFERS: original = game_work+0x614; port caches in a file-local SmartPtr.
-// v1.6.1 FruitFactClassicFactPage::DrawOrder @0x00175250
+// v1.6.1 FruitFactClassicFactPage::DrawOrder @0x00175250: reads
+//   game_work.m_pTTFFontMain (GameWork+0x614, the locale face
+//   PreloadFontsTTF @0x0011c1fc sets to arabic.ttf when languageFlag==0x14,
+//   else gangofchinese.ttf). Falls back to a lazily-created gangofchinese.ttf
+//   only if PreloadFontsTTF hasn't run yet.
 static Mortar::FontCacheObjectTTF* GetClassicFactTTFFont() {
+    if (game_work.m_pTTFFontMain) return game_work.m_pTTFFontMain;
     static Mortar::SmartPtr<Mortar::Font> s_Font =
         Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     if (!s_Font.IsValid()) return 0;
