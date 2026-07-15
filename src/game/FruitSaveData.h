@@ -374,11 +374,12 @@ public:
     // when the mode wasn't played today or yesterday. Called from SaveGame.
     void CheckDatesHaveChanged();
 
-    // ASM-spec v1.6.1 FruitSaveData::PlayedModeToday @0x00152fd8: param is Mortar::GameMode
-    // (enum), not int. Returns true iff gameMode was played today (m_LastPlayedDay[gameMode]
-    // matches GetDaysSince1900()) AND the per-mode "<MODE>_today" total is > 0. No bounds
-    // check on gameMode in the binary -- see FruitSaveData.cpp for detail.
-    bool PlayedModeToday(Mortar::GameMode gameMode);
+    // ASM-spec v1.6.1 FruitSaveData::PlayedModeToday @0x00152fd8: param is the binary's
+    // global GAME_MODE enum (not int). Returns true iff gameMode was played today
+    // (m_LastPlayedDay[gameMode] matches GetDaysSince1900()) AND the per-mode
+    // "<MODE>_today" total is > 0. No bounds check on gameMode in the binary --
+    // see FruitSaveData.cpp for detail.
+    bool PlayedModeToday(GAME_MODE gameMode);
 
     // Network tweak download (defunct online service). No-op.
     static void DownloadTweaks();

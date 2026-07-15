@@ -248,7 +248,7 @@ void PowerUpManager::Reset(bool fullReset) {
     // Zen mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
     if (fullReset) {
         Game* game = Game::GetInstance();
-        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game && game_work.gameMode == GAME_MODE_ARCADE) {
             for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;
@@ -438,7 +438,7 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         bool skip;
         if (!tpl->IsSpecial() && tpl->m_bIsSpecial == 0) {
             skip = false;
-        } else if (gameMode == Mortar::GAME_MODE_ARCADE) {
+        } else if (gameMode == GAME_MODE_ARCADE) {
             skip = false;
         } else {
             skip = true;

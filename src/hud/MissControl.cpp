@@ -1,4 +1,4 @@
-﻿// Analysed: 2026-05-03T00:00
+// Analysed: 2026-05-03T00:00
 #include "MissControl.h"
 #include "particle/PSPParticleManager.h"
 #include "HUD.h"
@@ -454,7 +454,7 @@ void MissControl::MakeCombo(_Vector3<float> pos, int comboCount, int entityType)
     // binary overrides m_ComboCount with (int)(WaveManager::GetSpeed(0) + 0.65f).
     // v1.6.1 MakeCombo @0x0019e630 (AFTER m_ComboCount = comboCount, AFTER texture lookup)
     Game* g = Game::GetInstance();
-    if (g && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (g && game_work.gameMode == GAME_MODE_ARCADE) {
         WaveManager* wm = WaveManager::GetInstance();
         if (wm) m_ComboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }

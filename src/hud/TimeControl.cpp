@@ -49,7 +49,7 @@ TimeControl::TimeControl() {
 bool TimeControl::IsTimedGame() const {
     Game* game = Game::GetInstance();
     if (!game) return false;
-    return game_work.gameMode == Mortar::GAME_MODE_ARCADE || game_work.gameMode == Mortar::GAME_MODE_ZEN;
+    return game_work.gameMode == GAME_MODE_ARCADE || game_work.gameMode == GAME_MODE_ZEN;
 }
 
 void TimeControl::Init() {
@@ -68,7 +68,7 @@ void TimeControl::Reset() {
     m_TimeRemaining = startSecs;
 
     Game* game = Game::GetInstance();
-    bool arcadeOrMP = game && (game_work.gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer());
+    bool arcadeOrMP = game && (game_work.gameMode == GAME_MODE_ARCADE || IsMultiplayer());
     if (arcadeOrMP) {
         m_TimeRemaining = ARCADE_START_TIME;
 
@@ -102,7 +102,7 @@ float TimeControl::GetCountDown() const {
     // v1.6.1 TimeControl::GetCountDown @ 0x001c08e8
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
-    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer())
+    if (game_work.gameMode == GAME_MODE_ARCADE || IsMultiplayer())
         return ARCADE_START_TIME;    // DAT_001c0924 = 60.9
     return m_CountdownStart;
 }

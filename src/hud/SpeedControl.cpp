@@ -144,7 +144,7 @@ void SpeedControl::Update(float dt) {
         // ASM-spec v1.6.1 SpeedControl::Update @0x001b8380: gate also requires
         // game_work.m_PauseAmount == 0.0f (settled/active) -- paused-arcade
         // (mid pause-fade or fully paused) falls through to the else branch below.
-        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE && game_work.m_PauseAmount == 0.0f) {
+        if (game_work.gameMode == GAME_MODE_ARCADE && game_work.m_PauseAmount == 0.0f) {
             float p   = WaveManager::GetInstance()->GetComboBonusProgression(0);
             float c01 = (p - 0.25f) / 0.75f;
             if (c01 < 0.0f) c01 = 0.0f; else if (c01 > 1.0f) c01 = 1.0f;
@@ -171,7 +171,7 @@ void SpeedControl::Update(float dt) {
 
     // Master-volume duck + SoundVolume lerp gated on Arcade mode.
     // Binary writes *(float*)gs == gs->m_MasterVolume directly.
-    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (game_work.gameMode == GAME_MODE_ARCADE) {
         float master = gs->m_MasterVolume;
         if      (master > deltaTarget) { master -= dt; if (master < deltaTarget) master = deltaTarget; }
         else if (master < deltaTarget) { master += dt; if (master > deltaTarget) master = deltaTarget; }

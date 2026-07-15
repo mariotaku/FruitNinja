@@ -1487,7 +1487,7 @@ void SlashEntity::Update(float dt) {
     } else {
         localDt = game_work.dt;
         comboDt = game_work.dt;
-        if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
+        if (game_work.gameMode == GAME_MODE_COMBO) {
             comboDt = game_work.dt * 0.666f;
             PowerUpManager* pum = PowerUpManager::GetInstance();
             if (pum && pum->m_DtMod < 0.9f) {
@@ -1701,7 +1701,7 @@ void SlashEntity::Update(float dt) {
                                 }
                                 // MissControl popup: gated on count>2, non-COMBO mode, not ModPowerMask bit 7
                                 if (m_ComboCounter > 2
-                                    && game_work.gameMode != Mortar::GAME_MODE_COMBO
+                                    && game_work.gameMode != GAME_MODE_COMBO
                                     && (s_ModPowerMask & 0x80u) == 0)
                                 {
                                     bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
@@ -1920,7 +1920,7 @@ void SlashEntity::Update(float dt) {
                     }
                     // (b) Combo body: only if count > 2 AND m_ComboFruitTypes[1] >= 0.
                     if (m_ComboCounter > 2 && m_ComboFruitTypes[1] >= 0) {
-                        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        if (game && game_work.gameMode == GAME_MODE_ARCADE) {
                             LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
                                        m_ComboCounter, (float)m_ComboCounter / 3.0f);
                             WaveManager::GetInstance()->AddSpeed(

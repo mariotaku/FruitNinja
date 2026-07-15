@@ -1,4 +1,4 @@
-﻿// Analysed: 2026-04-30T00:00
+// Analysed: 2026-04-30T00:00
 
 #include "ScoreControl.h"
 #include "game/GameMode.h"
@@ -248,7 +248,7 @@ void ScoreControl::Update(float dt) {
     // m_LastDigitCount against Fruit::s_consecutiveType (g_ComboFruitType), not digitsActive;
     // on mismatch-then-decay-to-zero it captures g_ComboFruitType (read at function entry),
     // not the digit count. digitsActive/g_ComboCount stays the loop bound / m_DigitCount source.
-    if (game_work.gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
+    if (game_work.gameMode == GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
         if (g_ComboFruitType == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
@@ -291,7 +291,7 @@ void ScoreControl::Update(float dt) {
     }
 
     int   mult     = GetScoreMultiplyer(0);
-    float baseRate = (game_work.gameMode == Mortar::GAME_MODE_ARCADE) ? 10.0f : 1.0f;
+    float baseRate = (game_work.gameMode == GAME_MODE_ARCADE) ? 10.0f : 1.0f;
     float correction = (currentScore < 0) ? -0.6f : 0.6f;   // DAT_001588a4/a8
     float catchup  = ((float)currentScore + correction - m_ScoreSmoothed) * 0.1f;  // DAT_001588b0
     float maxStep  = (float)mult * 0.3f * baseRate;          // DAT_001588ac
@@ -306,7 +306,7 @@ void ScoreControl::Update(float dt) {
     if (m_DisplayedScore > prevDisplay) {
         // Binary: bonus-count-up SFX gate (Arcade end-of-game animation only).
         if (s_SfxCooldown <= 0.0f &&
-            game_work.gameMode == Mortar::GAME_MODE_ARCADE &&
+            game_work.gameMode == GAME_MODE_ARCADE &&
             game_work.pGameOverScreen != nullptr &&
             game_work.pGameOverScreen->m_State > 0 &&
             game_work.pGameOverScreen->m_Timer > 0.0f) {
@@ -476,7 +476,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
 
         // Section B: per-digit combo overlay.
         // ASM-verified gate v1.6.1 ScoreControl::PreDraw @0x001ace80: gameMode == 1.
-        if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
+        if (game_work.gameMode == GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo fruit type.
             // ASM-verified v1.6.1 ScoreControl::PreDraw @0x001ad0b8-1ad0e4: reads
             // Fruit::s_consecutiveType (g_ComboFruitType) directly, not m_LastDigitCount.
@@ -545,7 +545,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Earlier port had (m_DrawPosX, m_DrawPosY + 30.0): off by 24+18=42 px
         // horizontally (uses +24 drawPos offset AND wrong sign of -18) and
         // 82 px vertically (sign-flipped 30 vs -52).
-        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game_work.gameMode == GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
             if (mult > 1 && game_work.pFontBlue2.IsValid()) {
                 char multBuf[16];
