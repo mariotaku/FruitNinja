@@ -9,7 +9,7 @@
 //   GotoFruitNinjaPage(-1.0, 0xd); OpenBrowser("http://www.facebook.com/halfbrick");
 // Defunct: GotoFruitNinjaPage achievement bookkeeping -- no-op stub. OpenBrowser is live.
 void FacebookPressed() {
-    GotoFruitNinjaPage(-1.0f, UPSELL_PLACE_FACEBOOK);
+    GotoFruitNinjaPage(UPSELL_PLACE_FACEBOOK, -1.0f);
     OpenBrowser("http://www.facebook.com/halfbrick");
 }
 
@@ -17,7 +17,7 @@ void FacebookPressed() {
 //   GotoFruitNinjaPage(-1.0, 0xc); OpenBrowser("http://www.twitter.com/halfbrick");
 // Defunct: GotoFruitNinjaPage achievement bookkeeping -- no-op stub. OpenBrowser is live.
 void TwitterPressed() {
-    GotoFruitNinjaPage(-1.0f, UPSELL_PLACE_TWITTER);
+    GotoFruitNinjaPage(UPSELL_PLACE_TWITTER, -1.0f);
     OpenBrowser("http://www.twitter.com/halfbrick");
 }
 

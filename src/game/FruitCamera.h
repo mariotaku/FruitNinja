@@ -6,7 +6,7 @@
 //
 // v1.6.1 ground truth: GameInitialise @ 0x1d6c4: `operator_new(0x1a8)`.
 // Only slot 3 (UpdateCamera) is overridden from MortarCamera vtable.
-// FruitCamera::SetupPerspective(perspType, forceUpdate) at 0x001810ac is a
+// FruitCamera::SetupPerspective(perspType, forceUpdate) at 0x001ee124 is a
 // SEPARATE non-virtual method called directly from GameDraw.
 //
 
@@ -19,17 +19,19 @@
 
 struct InputEvent;
 
-// Binary enum from switch in SetupPerspective (0x001810ac).
-// Typo in original binary symbol preserved intentionally.
-enum PERSPECIVE_TYPE {
-    PT_STANDARD    = 0,
-    PT_ROTATED_CW  = 1,
-    PT_ROTATED_CCW = 2,
-    PT_GENERIC     = 3,
-};
-
 class FruitCamera : public Mortar::MortarCamera {
 public:
+    // Binary enum from switch in SetupPerspective @ 0x001ee124 (v1.6.1); nested inside
+    // FruitCamera in the binary (mangles N11FruitCamera15PERSPECIVE_TYPEE) -- must stay
+    // nested here, not global, for SetupPerspective's mangled symbol to pair.
+    // Typo in original binary symbol preserved intentionally.
+    enum PERSPECIVE_TYPE {
+        PT_STANDARD    = 0,
+        PT_ROTATED_CW  = 1,
+        PT_ROTATED_CCW = 2,
+        PT_GENERIC     = 3,
+    };
+
     // +0x12C: entity pointer for follow mode (nullptr = none).
     // v1.6.1 @ +0x12c confirmed.
     Mortar::Entity* m_pFollowEntity;

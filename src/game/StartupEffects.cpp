@@ -39,7 +39,7 @@ void DrawStartFade() {
     // Binary calls FruitCamera::SetupPerspective(camera, 3, 1) to switch to ortho/screen mode.
     // TODO: v1.6.1 DrawStartFade @0x001cd4fc calls SetupPerspective with mode 4 (mov r1,#0x4); port passes PT_GENERIC(3). Mode-4 semantics unresolved -- verify before changing.
     if (game_work.m_FruitCamera) {
-        game_work.m_FruitCamera->SetupPerspective(PT_GENERIC, true);
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_GENERIC, true);
     }
 
     float bright, alpha_factor, rgb_factor;

@@ -7,6 +7,19 @@
 
 #include <cstring>
 
+// Binary default ctor @ 0x00178d5c. Zeroes name/extra and fields 0x40..0x50.
+FNHighscore::FNHighscore()
+{
+    memset(m_Name,     0, sizeof(m_Name));
+    memset(m_ExtraStr, 0, sizeof(m_ExtraStr));
+    m_NameHash       = 0;
+    m_Score          = 0;
+    m_Rank           = 0;
+    m_UserData       = 0;
+    m_IsCurrentUser  = false;
+    _pad[0] = 0; _pad[1] = 0; _pad[2] = 0;
+}
+
 // Binary param ctor @ 0x00137e48.
 // Signature: (char* name, unsigned long nameHash, int rank, int score,
 //              void* userData, char* extraStr)
