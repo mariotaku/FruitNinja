@@ -390,9 +390,14 @@ void PowerUpManager::ActivatePurchase(PowerUp* p) {
 bool PowerUpManager::ActivateScreenEffect(uint32_t hash) {
     std::map<uint32_t, ScreenEffect>::iterator it = m_ScreenEffectPool.find(hash);
     if (it == m_ScreenEffectPool.end()) return false;
-    ScreenEffect copy(it->second);
-    copy.Activate();
-    m_ActiveScreenEffects.push_back(copy);
+    // v1.6.1 @0x00119760: binary constructs on stack, Activate()s, push_back()s,
+    // then lets the temp's dtor run -- and its EffectImage copy-ctor @0x00145bd4
+    // preserves m_pHudCtrl/m_bAddedToHUD, so the list copy stays wired to the live
+    // control. Push the pool copy into the list FIRST, then Activate the element
+    // that actually lives there, so no post-Activate copy re-nulls the control
+    // (fixes blitz_1..6 / arcade screen-effects never appearing).
+    m_ActiveScreenEffects.push_back(it->second);
+    m_ActiveScreenEffects.back().Activate();
     return true;
 }
 

@@ -12,6 +12,7 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Texture.h"
 #include "Game.h"
+#include "engine/util/AsciiString.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -20,7 +21,7 @@
 
 using namespace Mortar;
 
-// Binary @ 0x0011e150 area — check particle hardware flag.
+// v1.6.1 ScreenEffect::Parse @0x00149800 area — check particle hardware flag.
 // Port: always return true (all hardware considered "fast").
 static bool IsFastHardware() {
     Game* g = Game::GetInstance();
@@ -28,26 +29,20 @@ static bool IsFastHardware() {
     return true;
 }
 
-// ---- Emmiter::Parse (binary @ 0x0011e150 child "emmiter" block) ---------------
+// ---- Emmiter::Parse (v1.6.1 Emmiter::Parse @0x00148458) ----------------------
 
 void Emmiter::Parse(TiXmlElement* xml) {
     if (!xml) return;
-    const char* name = xml->Attribute("name");
-    if (name) m_NameHash = StringHash(name);
+    // v1.6.1 Emmiter::Parse @0x00148458: "pos" -> m_Offset(+0x08),
+    //   "anchor" -> m_VelocityScale(+0x14), "particle" -> m_NameHash(+0x00).
+    // ParseVector null-guards internally and yields (0,0,0), matching the
+    // binary's unconditional writes -- call it unconditionally rather than
+    // gating on Attribute() to stay byte-faithful (see screeneffect-frenzy-re.md).
+    m_Offset         = ParseVector(xml->Attribute("pos"));
+    m_VelocityScale  = ParseVector(xml->Attribute("anchor"));
 
-    const char* off = xml->Attribute("offset");
-    if (off) {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        sscanf(off, "%f %f %f", &x, &y, &z);
-        m_Offset = _Vector3<float>(x, y, z);
-    }
-
-    const char* vel = xml->Attribute("velocityScale");
-    if (vel) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(vel, "%f %f %f", &x, &y, &z);
-        m_VelocityScale = _Vector3<float>(x, y, z);
-    }
+    const char* particle = xml->Attribute("particle");
+    if (particle) m_NameHash = StringHash(particle);
 }
 
 // ---- ParseVector: read "x,y,z" (comma-separated) into Vec3 -------------------
@@ -222,6 +217,8 @@ void EffectImage::Parse(TiXmlElement* xml) {
             m_GroupMask = HUD_LAYER_NONE;
         } else if (strcmp(drawOrder, "normal") == 0) {
             m_GroupMask = HUD_LAYER_DEFAULT;
+        } else if (strcmp(drawOrder, "post_post") == 0) {
+            m_GroupMask = HUD_LAYER_FADE_MODAL;
         } else if (strcmp(drawOrder, "post") == 0) {
             m_GroupMask = HUD_LAYER_BUTTONS;
         } else if (strcmp(drawOrder, "before_splats") == 0) {
@@ -266,38 +263,21 @@ void EffectImage::LoadTextures() {
     ReloadableTexture::Load();
 }
 
-// ---- ScreenTint::Parse -------------------------------------------------------
+// ---- ScreenTint::Parse (v1.6.1 ScreenTint::Parse @0x00148324) ----------------
 
 void ScreenTint::Parse(TiXmlElement* xml) {
     if (!xml) return;
 
-    // TODO: "length" attribute not present in current powerUpList.xml; may exist
-    // in older XML versions. Keep read in case binary used it.
-    const char* length = xml->Attribute("length");
-    if (length) m_Length = (float)atof(length);
+    xml->QueryFloatAttribute("timeStart", &m_TimeStart);
+    xml->QueryFloatAttribute("timeEnd",   &m_TimeEnd);
 
-    const char* timeStart = xml->Attribute("timeStart");
-    if (timeStart) m_StartT = (float)atof(timeStart);
+    // "tint" sets BOTH back+hud tint; backTint/hudTint then override independently.
+    ParseFloats(xml->Attribute("tint"), &m_BackTint.x, 3);
+    m_HudTint = m_BackTint;
+    ParseFloats(xml->Attribute("backTint"), &m_BackTint.x, 3);
+    ParseFloats(xml->Attribute("hudTint"),  &m_HudTint.x, 3);
 
-    const char* transitionTime = xml->Attribute("transitionTime");
-    if (transitionTime) m_FadeIn = (float)atof(transitionTime);
-
-    // TODO: "to" / "from" attributes not present in current powerUpList.xml;
-    // XML uses "tint=", "backTint=", "hudTint=" instead. Keep reads for
-    // compatibility with any other XML that may use the older attribute names.
-    const char* to = xml->Attribute("to");
-    if (to) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(to, "%f %f %f", &x, &y, &z);
-        m_ColourTo = _Vector3<float>(x, y, z);
-    }
-
-    const char* from = xml->Attribute("from");
-    if (from) {
-        float x = 1.0f, y = 1.0f, z = 1.0f;
-        sscanf(from, "%f %f %f", &x, &y, &z);
-        m_ColourFrom = _Vector3<float>(x, y, z);
-    }
+    xml->QueryFloatAttribute("transitionTime", &m_TransitionTime);
 }
 
 // ---- SoundEffect::Parse -------------------------------------------------------
@@ -345,11 +325,15 @@ ScreenEffect::ScreenEffect(const ScreenEffect& rhs)
     // Handles in Emmiters are not copied: the clone has its own emitters
     for (size_t i = 0; i < m_Emmiters.size(); ++i)
         m_Emmiters[i].m_pHandle = nullptr;
-    // HUDControl pointers are not copied: the clone adds its own controls
-    for (size_t i = 0; i < m_Images.size(); ++i) {
-        m_Images[i].m_pHudCtrl = nullptr;
-        m_Images[i].m_bAddedToHUD = false;
-    }
+    // v1.6.1 EffectImage::EffectImage(const&) @0x00145bd4: m_pHudCtrl (+0x08) and
+    // m_bAddedToHUD (+0x0c) are copied VERBATIM, not nulled -- PowerUpManager::
+    // ActivateScreenEffect Activate()s a temp then push_back()s it into the live
+    // list; if this copy nulled the control pointer, the surviving list element
+    // would never see the HUD control and ScreenEffect::Update's
+    // `if (!img.m_pHudCtrl) continue;` would skip it forever (blitz_1..6 never
+    // drawing). Ownership is fine to preserve: EffectImage has no dtor and nothing
+    // ever calls delete on m_pHudCtrl directly -- Deactivate() sets
+    // m_bPendingRemoval and lets the HUD self-remove the control.
     // Sound handles are not copied
     for (size_t i = 0; i < m_Sounds.size(); ++i)
         m_Sounds[i].m_VoiceHandle = nullptr;
@@ -377,17 +361,15 @@ ScreenEffect& ScreenEffect::operator=(const ScreenEffect& rhs) {
         m_TotalDuration   = rhs.m_TotalDuration;
         for (size_t i = 0; i < m_Emmiters.size(); ++i)
             m_Emmiters[i].m_pHandle = nullptr;
-        for (size_t i = 0; i < m_Images.size(); ++i) {
-            m_Images[i].m_pHudCtrl    = nullptr;
-            m_Images[i].m_bAddedToHUD = false;
-        }
+        // v1.6.1 EffectImage::EffectImage(const&) @0x00145bd4: m_pHudCtrl/
+        // m_bAddedToHUD copied verbatim -- see copy-ctor comment above.
         for (size_t i = 0; i < m_Sounds.size(); ++i)
             m_Sounds[i].m_VoiceHandle = nullptr;
     }
     return *this;
 }
 
-// ---- ScreenEffect::Parse (binary @ 0x0011e150) --------------------------------
+// ---- ScreenEffect::Parse (v1.6.1 ScreenEffect::Parse @0x00149800) ------------
 
 void ScreenEffect::Parse(TiXmlElement* xml) {
     const char* name = xml->Attribute("name");
@@ -435,14 +417,23 @@ void ScreenEffect::Activate() {
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
 
     // Spawn particle emitters
+    // v1.6.1 ScreenEffect::Activate @0x00148f08
+    static const _Vector3<float> kScreenAnchor(480.0f, 320.0f, 0.0f);
     for (size_t i = 0; i < m_Emmiters.size(); ++i) {
         Emmiter& em = m_Emmiters[i];
         // Only spawn if not already active (m_pHandle == nullptr = not running)
         if (!em.m_pHandle) {
+            // @0x00148f34: EmitterExists gate -- misleadingly named; nonzero means
+            // "template exists, go add it". Skip AddEmitter entirely if it's 0.
+            if (!pm.EmitterExists(em.m_NameHash)) continue;
             pm.AddEmitter(em.m_NameHash, &em.m_pHandle, false);
             if (em.m_pHandle) {
-                em.m_pHandle->m_Pos   = em.m_Offset;
-                em.m_pHandle->m_Vel   = em.m_VelocityScale;
+                // @0x00148f68-b4: single m_Pos write, no m_Vel write here.
+                em.m_pHandle->m_Pos = kScreenAnchor * em.m_VelocityScale + em.m_Offset;
+                // @0x00148fb8-c8: drop a one-shot emitter that already ended.
+                if (PSPParticleManager::EmitterEnds(em.m_pHandle->m_pTemplate)) {
+                    em.m_pHandle = nullptr;
+                }
             }
         }
     }
@@ -453,7 +444,13 @@ void ScreenEffect::Activate() {
 
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
-        if (img.m_bAddedToHUD) continue;
+
+        // v1.6.1 ScreenEffect::Activate @0x00148f08: binary @0x0014900c has NO
+        // entry guard here -- it unconditionally creates a control per image.
+        // The removed `if (img.m_bAddedToHUD) continue;` was a port-invented
+        // gate: EffectImage's default ctor sets m_bAddedToHUD=true, so every
+        // freshly-parsed image skipped this loop entirely and nothing ever
+        // drew. See tmp/asm-verify/screeneffect-pipeline-re.md.
 
         // v1.6.1 ScreenEffect::Activate @0x00148f08: dispatch on m_DeferKind --
         // 1="points" -> ScoreMultiplyerBoard (Arcade x2 deferred-points board);
@@ -476,7 +473,10 @@ void ScreenEffect::Activate() {
         // Size comes from m_ColourScale (= texture dims written by Parse);
         // NOT from m_SizeIn (which is the slide-move offset).
         // v1.6.1 ScreenEffect::Update @0x00148844 writes ctrl->size from m_ColourScale each frame.
-        ctrl->size = img.m_ColourScale;
+        // @0x00149148: activation-frame only -- zero size when transition bit0
+        // ("scale") is set, since Update's first tick computes size from
+        // m_ColourScale*(1-e) anyway; otherwise start at the full texture size.
+        ctrl->size = (img.m_FlagBits & 1u) ? _Vector3<float>(0.0f, 0.0f, 0.0f) : img.m_ColourScale;
         ctrl->m_DrawColour = img.m_Tint;
         // v1.6.1 ScreenEffect::Activate @0x00148f08: for alpha-driven images
         // (m_FlagBits & 2) the binary zeroes the control's alpha byte
@@ -500,15 +500,15 @@ void ScreenEffect::Activate() {
         // out of all HUD::Draw passes).
         ctrl->m_LayerFlags = (int)img.m_GroupMask;
         img.m_pHudCtrl    = ctrl;
-        img.m_bAddedToHUD = true;
         img.m_CurrentVis  = 0.0f;
 
-        if (hud) hud->AddControl(ctrl, false);
-    }
-
-    // Reset tint timers
-    for (size_t i = 0; i < m_Tints.size(); ++i) {
-        m_Tints[i].m_CurrentT = 0.0f;
+        // @0x00149174-94: HUD null -> zero the breadcrumb byte; otherwise
+        // AddControl (binary never writes m_bAddedToHUD=true here).
+        if (hud) {
+            hud->AddControl(ctrl, false);
+        } else {
+            img.m_bAddedToHUD = false;
+        }
     }
 }
 
@@ -619,28 +619,36 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         );
     }
 
-    // Per-tint colour multiply on HUD scales
+    // Per-tint colour multiply on HUD scales (v1.6.1 ScreenEffect::Update @0x00148844 tint tail)
     HUD* hud = game_work.mHud;
     for (size_t i = 0; i < m_Tints.size(); ++i) {
         ScreenTint& t = m_Tints[i];
-        t.m_CurrentT += dt;
 
-        float tval = 0.0f;
-        if (t.m_Length > 0.0f)
-            tval = Clamp(t.m_CurrentT / t.m_Length, 0.0f, 1.0f);
+        if (t.m_TransitionTime <= 0.0f) {
+            t.m_CurrentT = 1.0f;                             // no transition -> instantly full
+        } else if (currentLongest <= t.m_TimeStart * maxTotal) {
+            float fEnd = t.m_TimeEnd * maxTotal;
+            if (currentLongest <= fEnd + t.m_TransitionTime) {
+                // fade-OUT
+                t.m_CurrentT = Clamp((currentLongest - fEnd) / t.m_TransitionTime, 0.0f, 1.0f);
+            } else {
+                // fade-IN
+                t.m_CurrentT = std::min(t.m_CurrentT + dt / t.m_TransitionTime, 1.0f);
+            }
+        } else {
+            t.m_CurrentT = 0.0f;                             // not started
+        }
 
-        float fade = 1.0f;
-        if (t.m_FadeIn > 0.0f)
-            fade = Clamp(t.m_CurrentT / t.m_FadeIn, 0.0f, 1.0f);
-
-        _Vector3<float> col;
-        col.x = Lerp(t.m_ColourFrom.x, t.m_ColourTo.x, tval) * fade;
-        col.y = Lerp(t.m_ColourFrom.y, t.m_ColourTo.y, tval) * fade;
-        col.z = Lerp(t.m_ColourFrom.z, t.m_ColourTo.z, tval) * fade;
-
-        hud->scales[0] *= col.x;
-        hud->scales[1] *= col.y;
-        hud->scales[2] *= col.z;
+        if (hud) {
+            float back[3] = { t.m_BackTint.x, t.m_BackTint.y, t.m_BackTint.z };
+            float fore[3] = { t.m_HudTint.x,  t.m_HudTint.y,  t.m_HudTint.z  };
+            for (int k = 0; k < 3; ++k) {
+                float fb = Clamp((back[k] - 1.0f) * t.m_CurrentT + 1.0f, 0.0f, 1.0f);
+                hud->scales[3 + k] *= fb;                     // WORLD/background tint
+                float fh = Clamp((fore[k] - 1.0f) * t.m_CurrentT + 1.0f, 0.0f, 1.0f);
+                hud->scales[0 + k] *= fh;                     // HUD/foreground tint
+            }
+        }
     }
 
     // v1.6.1 @0x00148d24: when remaining time < 0.8f, halt emitter spawning.
