@@ -48,7 +48,7 @@ void FruitNinjaNewsControl::SetNewsString(const char* str) {
 }
 
 // Defunct: online News -- no-op stub; v1.6.1 binary @ 0x1a2030 (returns empty)
-const char* FruitNinjaNewsControl::GetNewsString() const {
+const char* FruitNinjaNewsControl::GetNewsString() {
     return "";
 }
 

@@ -45,7 +45,7 @@ FNHighscore::FNHighscore(const char* name, unsigned long nameHash,
 // GameSpy/OpenFeint branch (GetPreferredNetworkProvider()==1) is defunct:
 //   LastLoggedInUser() returns nullptr -> falls through to false.
 // Local branch: GetPlayerName(0, buf, 0x1f).
-bool FNHighscore::IsCurrentUser() const
+bool FNHighscore::IsCurrentUser()
 {
     Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
     int provider = nm->GetPreferredNetworkProvider();

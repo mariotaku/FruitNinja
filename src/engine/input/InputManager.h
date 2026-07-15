@@ -66,11 +66,11 @@ public:
 
     // Binary @ 0x00196228 — ParseAction: lookup table of 6 hashes -> flag.
     //   Dead unless config-file parsing enabled.
-    unsigned long ParseAction(unsigned long hash);
+    unsigned long ParseAction(unsigned long hash) const;
 
     // Binary @ 0x0019630c — ParseKey: lookup of 60 key-name hashes -> bitmask.
     //   Dead unless config-file parsing enabled.
-    unsigned long ParseKey(unsigned long hash);
+    unsigned long ParseKey(unsigned long hash) const;
 
     // Binary @ 0x0019683c — RegisterInputCallback: broadcast to devices.
     // NB: 2-param signature — NO actionFlags 3rd param (port previously had
@@ -87,7 +87,9 @@ public:
     void SetSendDownCallbacksEachUpdate(bool v);
 
     // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.
-    static bool ValidCharacter(unsigned char c);
+    // Non-static const instance method to match binary mangled ABI (_ZNK...ValidCharacterEh);
+    // no callers currently invoke it, so the shape change is call-site-free.
+    bool ValidCharacter(unsigned char c) const;
 
     // Port-side: dispatch an InputEvent through all devices.
     // Not a binary method — InputTranslatorSDL drives dispatch here.

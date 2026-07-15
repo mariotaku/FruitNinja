@@ -126,13 +126,13 @@ public:
     // ASM-spec v1.6.1 FruitCamera::TranslatePos @0x001ed840: view<->world;
     // inverse=view->world = RotZ(-m_RollOut)*pos*m_Zoom + (m_LookAt-center);
     // no-op when m_ZoomT<=0.
-    _Vector3<float> TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter) const;
+    _Vector3<float> TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter);
 
     // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
     // Returns true when the view is in its standard (non-zoomed, non-rotated) state.
     // TODO: verify exact predicate against binary; assumed m_ZoomT<=0 (consistent
     //   with TranslatePos no-op gate and the DrawBackground normal-path gate).
-    bool ViewIsNormal() const;
+    bool ViewIsNormal();
 
     // Zoom API. Binary symbols: FruitCamera::Transition @ 0x1bef54 (zoom-in),
     // FruitCamera::TransitionOut @ 0x1bede8 (zoom-out). UpdateCamera @ 0x1edf24 runs the lerp.

@@ -79,7 +79,7 @@ void HUD::BeginDraw(float dt) {
 // DIFFERS: binary leaves matrix discipline to each control. Port resets the
 //          world matrix between PreDrawOrder and DrawOrder of each control to
 //          guard against leftover transforms (e.g. ShopScreen 481x scale).
-void HUD::Draw(int layerMask) {
+void HUD::Draw(long layerMask) {
     _Vector3<float> hudScale(scales[0], scales[1], scales[2]);
     const _Vector3<float> identityScale(1.0f, 1.0f, 1.0f);
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();

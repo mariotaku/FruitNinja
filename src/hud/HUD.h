@@ -47,7 +47,7 @@ public:
     void AddControl(HUDControl* ctrl, bool pushFront = false);
     void RemoveControl(HUDControl* ctrl);
     void BeginDraw(float dt);
-    void Draw(int layerMask);
+    void Draw(long layerMask);
     void Update(float dt);
 #ifndef __bada__
     // Port specific: no binary counterpart. Per-PRESENT UI tick -- walks

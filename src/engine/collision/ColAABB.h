@@ -34,7 +34,7 @@ public:
     virtual ~ColAABB() override {}
 
     // Binary slot 2 -- v1.6.1 ColAABB::GetType @ 0x002769ac
-    virtual int GetType() const override { return TYPE_AABB; }
+    virtual int GetType() override { return TYPE_AABB; }
 
     // Binary slot 3 -- v1.6.1 ColAABB::Collide @ 0x0027674c -- double-dispatch by other->GetType()
     virtual int Collide(Col* other, _Vector3<float>* outNormal) override;

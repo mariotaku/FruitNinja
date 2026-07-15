@@ -8,6 +8,10 @@
 
 namespace Mortar {
 
+// v1.6.1 Mortar::GetDummyAnimList @0x0026eda0 -- internal linkage in the binary
+// (mangled with the Itanium 'L' local-symbol marker); matched here with `static`.
+static Mortar::SmartPtr<AnimationList> GetDummyAnimList();
+
 // ---------------------------------------------------------------------------
 // UpdateBinding<N> bodies -- B-spline evaluator, 6 instantiations (N=0..5).
 //
@@ -257,7 +261,7 @@ bool AnimationState::IsPlaying() const {
 }
 
 // v1.6.1 Mortar::GetDummyAnimList @0x0026eda0 -- Meyers singleton; empty AnimationList shared across all default ctors
-Mortar::SmartPtr<AnimationList> GetDummyAnimList() {
+static Mortar::SmartPtr<AnimationList> GetDummyAnimList() {
     static Mortar::SmartPtr<AnimationList> s_dummy(new AnimationList());
     return s_dummy;
 }

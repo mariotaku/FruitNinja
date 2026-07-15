@@ -126,7 +126,7 @@ void InputManager::OnAxisExtentsChanged() {
 // Table source (strings @ 0x001c25dc/0x001b9730, value table @ 0x001f3ec0):
 //   "pressed"=0x01, "released"=0x04, "down"=0x02, "up"=0x08,
 //   "active"=0x10, "move"=0x20, "dead"=0x40
-unsigned long InputManager::ParseAction(unsigned long hash) {
+unsigned long InputManager::ParseAction(unsigned long hash) const {
     struct ActionEntry { unsigned long nameHash; unsigned long flag; };
     static bool initialised = false;
     static ActionEntry table[7];
@@ -159,7 +159,7 @@ unsigned long InputManager::ParseAction(unsigned long hash) {
 //   TouchAxisX1..16        -> 0x99..0xa8
 //   TouchAxisY1..16        -> 0xa9..0xb8
 //   AccelAxisX/Y/Z         -> 0xb9, 0xba, 0xbb
-unsigned long InputManager::ParseKey(unsigned long hash) {
+unsigned long InputManager::ParseKey(unsigned long hash) const {
     struct KeyEntry { unsigned long nameHash; unsigned long code; };
     static bool initialised = false;
     static KeyEntry table[61];
@@ -238,7 +238,7 @@ void InputManager::SetSendDownCallbacksEachUpdate(bool v) {
 }
 
 // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.
-bool InputManager::ValidCharacter(unsigned char c) {
+bool InputManager::ValidCharacter(unsigned char c) const {
     return (unsigned char)(c - 0x20u) < 0x90u;
 }
 

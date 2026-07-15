@@ -621,7 +621,7 @@ Font::Page* Font::GetPage(unsigned long idx) const {
 // outSlack is unused (binary computes it but callers ignore it).
 // ---------------------------------------------------------------------------
 
-float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const {
+float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) {
     float runX = 0.0f;
     while (!iter.IsEmpty()) {
         uint32_t cp = iter.m_CurrentCodepoint;
@@ -778,7 +778,9 @@ float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
             return width;
         }
     }
-    return GetLineLength(iterIn, 0.0f, nullptr);
+    // GetLineLength has no binary const-qualifier (matches its mangled ABI) and never
+    // mutates Font state; const_cast bridges this const method to that non-const call.
+    return const_cast<Font*>(this)->GetLineLength(iterIn, 0.0f, nullptr);
 }
 
 float Font::MeasureString(const char* str) const {

@@ -279,8 +279,9 @@ private:
     void RemoveButton(MenuButton*& btn);
 
     // v1.6.1 MainScreen::DrawLoadingSymbol @ 0x001154d4
-    // 8-segment radial loading spinner.
-    void DrawLoadingSymbol(const float* hudScale);
+    // 8-segment radial loading spinner. Binary sig takes non-const float* (unused for
+    // writes; port only reads through it, but matches binary ABI for symbol-diff pairing).
+    void DrawLoadingSymbol(float* hudScale);
 
     // Matches MainScreen::ButtonDeleted @ 0x0014acc0.
     void ButtonDeleted(HUDControl* ctrl);

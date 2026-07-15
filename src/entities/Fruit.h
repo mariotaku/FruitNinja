@@ -210,7 +210,7 @@ public:
     // Binary @ 0x001dc054 — set m_FruitType and recalculate visual scale + collision sphere.
     // Called from ShopScreen::SetSelected when the player browses the equipment ring.
     // scaleParam multiplies the collision radius (1.0f at all known call sites).
-    void SetFruitType(int fruitType, float scaleParam);
+    void SetFruitType(long fruitType, float scaleParam);
 
     // v1.6.1 Fruit::FruitType @0x001db6c8. Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and
@@ -319,7 +319,7 @@ public:
     // Binary @ 0x001bff08 — slice-direction unit vector for a slice index, offset by the
     // fruit's blade angle (m_SliceArcAngle, +0xc0): returns (SinIdx(a), CosIdx(a), 0) where
     // a = sliceIdx + m_SliceArcAngle.
-    _Vector3<float> GetSliceDir(uint16_t sliceIdx) const;
+    _Vector3<float> GetSliceDir(uint16_t sliceIdx);
 
     // Binary @ 0x001db2a8 — release both trail/juice emitters (m_pEmitter1/+0x40,
     // m_pEmitter2/+0x44) back to the particle manager and null them. Idempotent.

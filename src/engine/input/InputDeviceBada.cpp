@@ -207,7 +207,7 @@ void InputDeviceBada::SetSendDownCallbacksEachUpdate(bool v) {
 void InputDeviceBada::OnAxisExtentsChanged() {
 }
 
-InputDeviceTypes InputDeviceBada::GetDeviceType() const {
+InputDeviceTypes InputDeviceBada::GetDeviceType() {
     return INPUT_DEVICE_TOUCH;
 }
 

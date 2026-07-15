@@ -59,7 +59,7 @@ public:
     virtual unsigned int GetHash() const { return 0; }
 
     // Vtable slot 6 @0x0022a8d0.
-    virtual const char* Debug_ToString() const { return "Texture"; }
+    virtual const char* Debug_ToString() { return "Texture"; }
 
     // Vtable slot 7 @0x0022a8b4 -- returns UVMesh ID (stub: 0).
     virtual unsigned int GetUVMeshID() const { return 0; }
@@ -222,7 +222,7 @@ public:
     // Vtable slot 5 @0x0022964c -- return hash from source.
     virtual unsigned int GetHash() const;
     // Vtable slot 6 @0x0022a8d0 -- debug string.
-    virtual const char* Debug_ToString() const;
+    virtual const char* Debug_ToString();
     // Vtable slot 7 @0x0022a8b4 -- return UVMesh ID (stub: 0).
     virtual unsigned int GetUVMeshID() const;
 

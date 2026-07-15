@@ -192,9 +192,10 @@ private:
 
     // v1.6.1: AddLine @0x0015aaf0
     // Allocates a BakedStringBox, sets text/colour/clip/updates, wraps in a MarqueeText.
-    // Binary sig: AddLine(char const*, Colour, int) -- 3rd param is int; cast to float
+    // Binary sig: AddLine(char const*, Colour, int) -- Colour passed by value (matches
+    // binary ABI; ABI-identical to const& on ARM32). 3rd param is int; cast to float
     // internally before passing to BakedStringBox ctor (VectorSignedToFloat in binary).
-    void AddLine(const char* text, const Colour& colour, int fontSize);
+    void AddLine(const char* text, Colour colour, int fontSize);
 
     // v1.6.1: DrawMarquee @0x0015a138
     // Draws each m_Marquees item translated by the transition offset, plus the

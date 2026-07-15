@@ -115,7 +115,7 @@ public:
     // Returns pos + Vec3(480, 320, 0) * m_HudScale.
     // Used by MenuButton::Update to re-anchor the held fruit/bomb entity every
     // frame. DAT_00136c88={480,320,0} confirmed.
-    virtual _Vector3<float> GetAdjustedPos() const;
+    virtual _Vector3<float> GetAdjustedPos();
 
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
 

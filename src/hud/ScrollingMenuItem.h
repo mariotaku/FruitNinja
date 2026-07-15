@@ -87,12 +87,12 @@ public:
     // vtable +0x08 (slot 2): GetHeight
     // Binary 0x0013cdf0: returns *(this + 0x24) = m_Height (binary name, ROW PITCH for
     // layout). ShopListItem sets 80.0f; FriendLeaderboardItem sets 47.0f; default 25.0f.
-    virtual float GetHeight() const { return m_Height; }
+    virtual float GetHeight() { return m_Height; }
 
     // vtable +0x0C (slot 3): GetWidth
     // Binary 0x0013cdf8: returns *(this + 0x28) = m_Width (binary name).
     // NOT m_Size.x (+0x18) — those are separate display-size fields.
-    virtual float GetWidth() const { return m_Width; }
+    virtual float GetWidth() { return m_Width; }
 
     // vtable +0x10 (slot 4): SetHeight
     // Binary 0x0013ce00: writes to *(this + 0x24) = m_Height.

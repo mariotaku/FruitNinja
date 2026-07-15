@@ -466,7 +466,7 @@ Mortar::Texture* FruitInfo_GetShadowTex()
 // FRUIT_POWERS::AnyActivePowers -- binary @ 0x00175714
 // Returns true if any power in m_pArray is currently active via PowerUpManager.
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00175714 (re-analyst)
-bool FRUIT_POWERS::AnyActivePowers() const {
+bool FRUIT_POWERS::AnyActivePowers() {
     PowerUpManager* mgr = PowerUpManager::GetInstance();
     if (!mgr) return false;
     for (uint32_t i = 0; i < m_Count; ++i) {
@@ -480,7 +480,7 @@ bool FRUIT_POWERS::AnyActivePowers() const {
 // total weight == m_pArray[m_Count-1].m_CumulativeWeight. Roll in [0, total),
 // return first entry whose cumulative > roll. Falls back to last entry (cannot
 // happen given roll < total, but the binary's loop structure permits it).
-uint32_t FRUIT_POWERS::RandomPower() const {
+uint32_t FRUIT_POWERS::RandomPower() {
     if (m_Count == 0 || m_pArray == nullptr) return 0;
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     uint32_t total = m_pArray[m_Count - 1].m_CumulativeWeight;

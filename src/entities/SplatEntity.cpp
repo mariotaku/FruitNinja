@@ -214,7 +214,7 @@ SplatEntity::~SplatEntity() {}
 // --- Vtable slot 2: Init (binary @ 0x001eb264) ---
 // Binary signature: (SplatEntity*, void*, long, _Vector3*). All args ignored.
 // Binary body: `this[0x70]=-1; this[0x75]=1; bx lr`
-void SplatEntity::Init(void* /*param1*/, long /*param2*/, const _Vector3<float>* /*param3*/) {
+void SplatEntity::Init(void* /*param1*/, long /*param2*/, _Vector3<float>* /*param3*/) {
     m_SplatType = -1;
     m_bAlive    = 1;
 }

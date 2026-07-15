@@ -305,7 +305,7 @@ void BSButton::SetDrawOrder(int order) {
 
 // BSButton::SetCallback
 // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: stores Delegate0 into m_ClickCallback (+0xc0).
-void BSButton::SetCallback(const Mortar::Delegate0<void>& cb) {
+void BSButton::SetCallback(Mortar::Delegate0<void> cb) {
     m_ClickCallback = cb;
 }
 

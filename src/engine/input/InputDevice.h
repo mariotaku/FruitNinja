@@ -109,7 +109,7 @@ public:
     virtual void              SetQueueEventsUntilUpdate(bool v) = 0;
     virtual void              SetSendDownCallbacksEachUpdate(bool v) = 0;
     virtual void              OnAxisExtentsChanged() = 0;
-    virtual InputDeviceTypes  GetDeviceType() const = 0;
+    virtual InputDeviceTypes  GetDeviceType() = 0;
 
     // Port-side dispatch helper: fire all callbacks matching this event.
     // Called by InputManager::DispatchEvent.  Not a binary vtable slot —

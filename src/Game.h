@@ -101,7 +101,7 @@ struct Game : public Mortar::MortarGame {
     void TellGameToStart(int multiplayer) override;         // slot 10; v1.6.1 Game::TellGameToStart @0x001206c8
     void Update(float dt) override;                         // slot 11; TODO: re-verify v1.6.1 Game::Update address (no named symbol)
     void Draw(float dt) override;                           // slot 12; TODO: re-verify v1.6.1 Game::Draw address (no named symbol)
-    void Init(int argc, char** argv) override;              // slot 13; v1.6.1 Game::Init @0x00120374
+    void Init(int argc, const char** argv) override;        // slot 13; v1.6.1 Game::Init @0x00120374
     MortarGame* End() override;                             // slot 14; TODO: re-verify v1.6.1 Game::End address (no named symbol)
     void Paused() override;                                 // slot 15; v1.6.1 Game::Paused @0x001202ec
     void UnPaused() override;                               // slot 16; v1.6.1 Game::UnPaused @0x00120270

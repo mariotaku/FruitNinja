@@ -96,7 +96,7 @@ public:
     virtual void Parse(TiXmlElement* e);
 
     // IsLocked @ 0x0015fa60 — return m_Cost > 0
-    bool IsLocked() const;
+    bool IsLocked();
 };
 
 // -----------------------------------------------------------------------

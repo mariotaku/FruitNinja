@@ -67,13 +67,13 @@ public:
     void SetGlobalAmbience(unsigned long packedRGBA);
 
     // Matches 0x0019dc94
-    MortarRectangle GetWindowSize() const;
+    MortarRectangle GetWindowSize();
 
     // Matches original SetClearColour
-    void SetClearColour(const Colour& c);
+    void SetClearColour(Colour c);
 
     // Matches original SetLightDirection
-    void SetLightDirection(const _Vector3<float>& dir);
+    void SetLightDirection(_Vector3<float> dir);
 
     // ASM-spec v1.6.1 Mortar::DisplayManager::SetWindowSize @0x002566e8: param order (top,bottom,left,right); stores l->+0x0c,t->+0x10,r->+0x14,b->+0x18.
     void SetWindowSize(long t, long b, long l, long r);
@@ -106,11 +106,11 @@ public:
     // Returns window width / height from m_WindowRect. On 480x320 target = 1.5.
     // Binary dispatch is virtual; port uses non-virtual call (DisplayManager vtable
     // extension to slot 17/18 deferred to DisplayManager vtable audit).
-    float GetAspectWvH() const;
+    float GetAspectWvH();
 
     // Binary vtable slot 18: Mortar::DisplayManagerBada::GetAspectHvW @0x25698c
     // Returns window height / width from m_WindowRect. On 480x320 target = 0.667.
-    float GetAspectHvW() const;
+    float GetAspectHvW();
 };
 
 } // namespace Mortar

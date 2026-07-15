@@ -332,7 +332,7 @@ struct COIN_CHANCEINATOR {
     // Binary @ 0x00121778. Walks entries; for each, rolls Rand32(chance)==0 gate.
     // If gate passes and min<max, returns min + Rand32(max-min); else returns min.
     // Returns 0 if no entry passes.
-    int GetCoins() const;
+    int GetCoins();
 };
 
 #ifdef __bada__

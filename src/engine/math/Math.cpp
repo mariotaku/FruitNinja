@@ -8,7 +8,7 @@ namespace Math {
 // Foot-of-perpendicular on the INFINITE line through A,B (not the segment --
 // despite the name there is no t-clamp). Special cases write only x,y; out.z
 // is left untouched (general path writes z=0). Branch order: A.y==B.y first.
-void ClosestPointOnLine(_Vector3<float> A, _Vector3<float> B, _Vector3<float> P, _Vector3<float>& out) {
+void ClosestPointOnLine(_Vector3<float>& A, _Vector3<float>& B, _Vector3<float>& P, _Vector3<float>& out) {
     if (A.y == B.y) {
         out.x = P.x;
         out.y = A.y;
@@ -34,7 +34,7 @@ void ClosestPointOnLine(_Vector3<float> A, _Vector3<float> B, _Vector3<float> P,
 // segment's XY bounding box. On success writes only out.x and out.y -- out.z
 // is intentionally untouched (matches binary). DEAD CODE in shipping binary
 // (no callers).
-bool LineIntersect(_Vector3<float> A1, _Vector3<float> A2, _Vector3<float> B1, _Vector3<float> B2, _Vector3<float>& out) {
+bool LineIntersect(_Vector3<float>& A1, _Vector3<float>& A2, _Vector3<float>& B1, _Vector3<float>& B2, _Vector3<float>& out) {
     float dxA = A2.x - A1.x;
     float dyA = A2.y - A1.y;
     float dxB = B2.x - B1.x;

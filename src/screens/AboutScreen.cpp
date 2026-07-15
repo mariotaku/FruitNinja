@@ -768,7 +768,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
 //   new BakedStringBox(font, fontSize, 350, 20, ...)
 //   SetText(text), SetColour(colour, 1), SetWorldspaceClipping(-240,-46,400,108), Update()
 // -----------------------------------------------------------------------
-void AboutScreen::AddLine(const char* text, const Colour& colour, int fontSize)
+void AboutScreen::AddLine(const char* text, Colour colour, int fontSize)
 {
     Mortar::FontCacheObjectTTF* font = GetAboutTTFFont();
     if (!font) return;

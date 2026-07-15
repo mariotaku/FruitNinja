@@ -45,7 +45,7 @@ public:
     virtual void              SetQueueEventsUntilUpdate(bool v);
     virtual void              SetSendDownCallbacksEachUpdate(bool v);
     virtual void              OnAxisExtentsChanged();
-    virtual InputDeviceTypes  GetDeviceType() const;
+    virtual InputDeviceTypes  GetDeviceType();
 
     // Port-side dispatch (not a binary vtable slot).
     virtual void              DispatchEvent(InputEvent* event);

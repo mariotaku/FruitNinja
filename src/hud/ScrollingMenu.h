@@ -93,16 +93,16 @@ public:
     void RemoveItemImmediate(int index, bool erase);
 
     // Returns count of items in m_Items.
-    int GetNumItems() const;
+    int GetNumItems();
 
     // ScrollingMenu::GetItemClosestToZeroIdx @ 0x00147980
     // Returns m_ClosestIdx (field76_0xbc), closest-to-zero item index.
     // ShopScreen calls this to track selection changes.
-    int GetItemClosestToZeroIdx() const;
+    int GetItemClosestToZeroIdx();
 
     // ScrollingMenu::GetItemClosestToZero @ 0x001479ec
     // Returns pointer to the item at m_ClosestIdx, or nullptr.
-    ScrollingMenuItem* GetItemClosestToZero() const;
+    ScrollingMenuItem* GetItemClosestToZero();
 
     // DestroyList — clears and deletes all items.
     void DestroyList();

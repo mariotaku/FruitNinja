@@ -121,7 +121,7 @@ public:
     // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ebc: direct member writes.
 
     // Stores callback Delegate0 into m_ClickCallback (+0xc0).
-    void SetCallback(const Mortar::Delegate0<void>& cb);
+    void SetCallback(Mortar::Delegate0<void> cb);
 
     // SetTexture  binary @ 0x0015ee34
     // Stores tex into m_Texture2; if updateBounds is true, calls UpdateBoundsToTex().

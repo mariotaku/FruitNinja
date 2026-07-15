@@ -1470,7 +1470,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                         // for super-fruits / power-fruits and gate the blitz-spawn count.
                                         chosenType = po.GetType();
                                         const FruitInfo* fi = (chosenType >= 0) ? FruitInfo_Get(chosenType) : nullptr;
-                                        const FRUIT_POWERS* powers = fi ? fi->m_pPowers : nullptr;
+                                        FRUIT_POWERS* powers = fi ? fi->m_pPowers : nullptr;
                                         bool hasPowers = false;
                                         for (int n = 30; ; --n) {
                                             hasPowers = (powers != nullptr);
@@ -2452,7 +2452,7 @@ void WaveManager::SendWaveSyncPacket()                               {}
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
 
 // Binary @ 0x00121778.
-int COIN_CHANCEINATOR::GetCoins() const {
+int COIN_CHANCEINATOR::GetCoins() {
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     for (int i = 0; i < m_Count; ++i) {
         Entry* e = &m_pEntries[i];

@@ -130,7 +130,8 @@ public:
     // v1.6.1 PauseScreen::GetTime @0x001d00ec
     // Returns 1.0f when fully paused (m_State==6 / PAUSE_STATE_QUIT_EXIT), m_Alpha otherwise.
     // Used by GetPauseAmount() to clamp the global pause blend value to [0,1].
-    float GetTime() const;
+    // Binary sig is non-const (matches ABI for symbol-diff pairing).
+    float GetTime();
 
     // vtable[2]: Init -- forwards to Reset() per binary 0x00153e28
     void Init() override;

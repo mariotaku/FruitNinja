@@ -400,7 +400,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
 // (e.g. black_pineapple: m_Scale=60, m_CollisionScale=-105 -> base=-73.8) specifically so they have
 // NO collision sphere and can't be sliced/equipped. Downstream radius*radius squaring made a stored
 // negative radius test as positive -- that was the port bug (locked items sliceable+equippable).
-void Fruit::SetFruitType(int fruitType, float scaleParam) {
+void Fruit::SetFruitType(long fruitType, float scaleParam) {
     m_FruitType = (uint8_t)fruitType;
     const FruitInfoData* info = FruitInfo_Get(fruitType);
     float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
@@ -2876,7 +2876,7 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
 
 // v1.6.1 Fruit::GetSliceDir @0x001bff08 — unit direction for a slice index, offset by the
 // fruit's blade angle (m_SliceArcAngle, +0xc0). Returns (SinIdx(a), CosIdx(a), 0).
-_Vector3<float> Fruit::GetSliceDir(uint16_t sliceIdx) const
+_Vector3<float> Fruit::GetSliceDir(uint16_t sliceIdx)
 {
     uint16_t a = (uint16_t)(sliceIdx + m_SliceArcAngle);
     return _Vector3<float>(SinIdx(a), CosIdx(a), 0.0f);

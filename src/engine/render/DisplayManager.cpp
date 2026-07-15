@@ -105,7 +105,7 @@ void DisplayManager::SetGlobalAmbience(unsigned long packedRGBA) {
     m_GlobalAmbience.a = (uint8_t)((packedRGBA >> 24) & 0xff);
 }
 
-MortarRectangle DisplayManager::GetWindowSize() const {
+MortarRectangle DisplayManager::GetWindowSize() {
     return m_WindowRect;
 }
 
@@ -120,11 +120,11 @@ void DisplayManager::SetWindowSize(long t, long b, long l, long r, bool) {
     // Defunct: cross-SKU display hook -- no-op stub; v1.6.1 Mortar::DisplayManager::SetWindowSize(long,long,long,long,bool) @0x00256940
 }
 
-void DisplayManager::SetClearColour(const Colour& c) {
+void DisplayManager::SetClearColour(Colour c) {
     m_ClearColor = c;
 }
 
-void DisplayManager::SetLightDirection(const _Vector3<float>& dir) {
+void DisplayManager::SetLightDirection(_Vector3<float> dir) {
     m_lightDirection = dir;
 }
 
@@ -161,14 +161,14 @@ void DisplayManager::Destroy() {}
 
 // ASM-spec v1.6.1 Mortar::DisplayManagerBada::GetAspectWvH @0x25695c (vtable slot 17)
 // Returns (right - left) / (bottom - top) from m_WindowRect. On 480x320 = 1.5.
-float DisplayManager::GetAspectWvH() const {
+float DisplayManager::GetAspectWvH() {
     return static_cast<float>(m_WindowRect.right - m_WindowRect.left) /
            static_cast<float>(m_WindowRect.bottom - m_WindowRect.top);
 }
 
 // ASM-spec v1.6.1 Mortar::DisplayManagerBada::GetAspectHvW @0x25698c (vtable slot 18)
 // Returns (bottom - top) / (right - left) from m_WindowRect. On 480x320 = 0.667.
-float DisplayManager::GetAspectHvW() const {
+float DisplayManager::GetAspectHvW() {
     return static_cast<float>(m_WindowRect.bottom - m_WindowRect.top) /
            static_cast<float>(m_WindowRect.right - m_WindowRect.left);
 }
