@@ -147,9 +147,14 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
 // ---------------------------------------------------------------------------
 // AddCombo -- v1.6.1 BonusManager::AddCombo @0x0012e570
 //
-// Records a combo event (comboLen >= 3) into per-mode save totals.
-// Key strings are inline StringHash literals in the binary:
-//   "combo_bonus" (per-level combo total) and "best_combo" (best combo).
+// ASM-spec v1.6.1 BonusManager::AddCombo @0x0012e570:
+//   combo_bonus += m_ComboTotalsByLevel[clamp(comboLen - 3, 0, size-1)];
+//   best_combo   = max(best_combo, comboLen);
+// Key strings are the exact literals "combo_bonus" / "best_combo" -- NO
+// per-mode suffix (BonusType::Parse hashes these same literals out of
+// bonusAwards.xml's <bonusType total="..."> attribute; a mode-suffixed key
+// here would hash differently and the bonus could never be read back by
+// Bonus::GetBest()/GetBonusTotal()).
 // ---------------------------------------------------------------------------
 void BonusManager::AddCombo(int comboLen) {
     if (comboLen < 3) return;
@@ -157,27 +162,25 @@ void BonusManager::AddCombo(int comboLen) {
     Game* game = Game::GetInstance();
     if (!game || !game_work.m_SaveData) return;
 
-    // Mode name table per binary GetModeName @ 0x0010b15c.
-    static const char* k_ModeNames[4] = { "Classic", "Casino", "Arcade", "Zen" };
-    int mode = (int)game_work.gameMode;
-    if (mode < 0 || mode > 3) mode = 0;
-    const char* modeName = k_ModeNames[mode];
-
-    // TODO: resolve exact format strings from binary DAT_0010def4 / DAT_0010defc.
-    // Likely "CombosTotal-%s" and "BestCombo-%s" with GetModeName() suffix.
-    char keyTotal[64];
-    char keyBest[64];
-    snprintf(keyTotal, sizeof(keyTotal), "CombosTotal-%s", modeName);
-    snprintf(keyBest,  sizeof(keyBest),  "BestCombo-%s",   modeName);
-
     FruitSaveData* sd = game_work.m_SaveData;
-    sd->AddToTotal(keyTotal, StringHash(keyTotal), 1, false, false);
 
-    int existing = sd->GetTotal(keyBest);
-    if (comboLen > existing) {
-        int delta = comboLen - existing;
-        sd->AddToTotal(keyBest, StringHash(keyBest), delta, false, false);
+    static const uint32_t hComboBonus = StringHash("combo_bonus");
+    static const uint32_t hBestCombo  = StringHash("best_combo");
+
+    int amt = 0;
+    if (!m_ComboTotalsByLevel.empty()) {
+        int idx = comboLen - 3;
+        if (idx < 0) idx = 0;
+        int maxIdx = (int)m_ComboTotalsByLevel.size() - 1;
+        if (idx > maxIdx) idx = maxIdx;
+        amt = m_ComboTotalsByLevel[idx];
     }
+    sd->AddToTotal("combo_bonus", hComboBonus, amt, false, false);
+
+    int existing = sd->GetTotal(hBestCombo);
+    int delta = comboLen - existing;
+    if (delta < 0) delta = 0;
+    sd->AddToTotal("best_combo", hBestCombo, delta, false, false);
 }
 
 // ---------------------------------------------------------------------------
