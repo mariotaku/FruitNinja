@@ -29,7 +29,8 @@
 namespace Mortar {
 
 struct GlyphAtlasEntry;
-struct FontAtlasPage;
+struct TextureAtlasPage;
+typedef TextureAtlasPage FontAtlasPage;
 
 // GlyphTTF -- per-baked-glyph state. sizeof 0x44 (=68).
 // v1.6.1 Mortar::GlyphTTF; populated by FetchGlyph @0x0024fa24 from the atlas rec.
@@ -355,7 +356,8 @@ private:
 
     // FindOrCreateSurface @0x00248b9c: linear-scan m_Surfaces for m_PageKey==page,
     // else new BakedStringTTF_Surface(0x48) + push_back.
-    BakedStringTTF_Surface* FindOrCreateSurface(FontAtlasPage* page);
+    // Binary mangled: ...FindOrCreateSurfaceEPNS_16TextureAtlasPageE -- TextureAtlasPage*.
+    BakedStringTTF_Surface* FindOrCreateSurface(TextureAtlasPage* page);
 
     // FinishMesh @0x002480a8: build the surface's 6-vert/glyph tri-list.
     // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1)x(h+1) with local

@@ -1,4 +1,6 @@
 #include "render/DisplayManager.h"
+#include "asset/AlternativeTextureLoader.h"
+#include "asset/Texture.h"
 #include <cstring>
 #include <cstddef>
 // SDL-bound bits live in DisplayManagerSDL.cpp.
@@ -126,9 +128,12 @@ void DisplayManager::SetLightDirection(const _Vector3<float>& dir) {
     m_lightDirection = dir;
 }
 
-void DisplayManager::SetTextureOverloadPrefix(const char* prefix) {
-    strncpy(m_TextureOverloadPrefix, prefix, sizeof(m_TextureOverloadPrefix) - 1);
-    m_TextureOverloadPrefix[sizeof(m_TextureOverloadPrefix) - 1] = '\0';
+// ASM-spec v1.6.1 DisplayManager::SetTextureOverloadPrefix @0x0011eba4
+// Body: AlternativeTextureLoader::Prefix.Set(prefix); Texture::UseAlternativeTextureLoader
+// = (prefix.Length() != 0). Writes the GLOBAL Prefix, not the instance field.
+void DisplayManager::SetTextureOverloadPrefix(const Mortar::AsciiString& prefix) {
+    AlternativeTextureLoader::Prefix.Set(prefix);
+    Texture::UseAlternativeTextureLoader = (prefix.Length() != 0);
 }
 
 // Platform filter/wrap mode lookups (matching DisplayManagerBada tables)

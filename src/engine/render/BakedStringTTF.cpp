@@ -258,7 +258,8 @@ void BakedStringTTF::ApplyFormatting_LeftJustify()
 // FindOrCreateSurface @0x00248b9c: linear-scan m_Surfaces for m_PageKey == page,
 // else allocate a new surface (0x48) and push_back.
 // ASM-spec v1.6.1 BakedStringTTF::FindOrCreateSurface @0x00248b9c.
-BakedStringTTF_Surface* BakedStringTTF::FindOrCreateSurface(FontAtlasPage* page)
+// Binary mangled: ...FindOrCreateSurfaceEPNS_16TextureAtlasPageE -- TextureAtlasPage*.
+BakedStringTTF_Surface* BakedStringTTF::FindOrCreateSurface(TextureAtlasPage* page)
 {
     for (size_t i = 0; i < m_Surfaces.size(); ++i) {
         if (m_Surfaces[i]->m_PageKey == page) return m_Surfaces[i];

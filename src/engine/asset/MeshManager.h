@@ -21,7 +21,10 @@ public:
     static MeshManager* s_instance;
 
     // v1.6.1 Load @0x00236874
-    Mortar::SmartPtr<Model> Load(const char* path);
+    // Binary mangled: _ZN6Mortar11MeshManager4LoadERKNS_11AsciiStringE -- takes
+    // AsciiString const&. AsciiString(const char*) is non-explicit so callers
+    // passing string literals still compile unchanged.
+    Mortar::SmartPtr<Model> Load(const AsciiString& path);
     // v1.6.1 ReleaseAll @0x0023689c -- GOT-thunk tail-call to List<SmartPtr<Model>>::Clear.
     void ReleaseAll();
     void Initialise(int capacity = 32);

@@ -7,6 +7,7 @@
 #include "math/Matrix44.h"
 #include "core/MortarTypes.h"
 #include "core/Singleton.h"
+#include "util/AsciiString.h"
 #include <cstring>
 
 namespace Mortar {
@@ -79,8 +80,12 @@ public:
     // Defunct: cross-SKU display hook -- no-op stub; v1.6.1 Mortar::DisplayManager::SetWindowSize(long,long,long,long,bool) @0x00256940 (body bx lr; bool meaning unknown from this SKU; no v1.6.1 callers)
     void SetWindowSize(long t, long b, long l, long r, bool);
 
-    // Matches 0x0019da58
-    void SetTextureOverloadPrefix(const char* prefix);
+    // v1.6.1 DisplayManager::SetTextureOverloadPrefix @0x0011eba4
+    // Binary mangled: SetTextureOverloadPrefix(AsciiString const&). Body writes the GLOBAL
+    // AlternativeTextureLoader::Prefix (NOT this instance's m_TextureOverloadPrefix field)
+    // plus Texture::UseAlternativeTextureLoader = (prefix.Length() != 0). The instance
+    // field below is kept for layout only; it is never written by this method.
+    void SetTextureOverloadPrefix(const Mortar::AsciiString& prefix);
 
     bool IsRenderingAllowed() const { return true; }
 
