@@ -28,13 +28,15 @@
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 
-// ASM-spec v1.6.1 SetupQuad @ 0x00175ca0
+// ASM-verified: 2026-07-15T09:12Z v1.6.1 SetupQuad @ 0x00175ca0 (asm-inspector)
 // Fills verts[0..3] with TL/TR/BL/BR positions (Y-clipped), normals (0,0,1), UV,
 // and colour. Caller draws the resulting quad via DrawTriStrip/DrawTriList.
+// The three aggregates are passed BY VALUE (binary mangling has no RK), even
+// though GCC 4.4.1 AAPCS lowers _Vector3 via an implicit r1 pointer.
 bool SetupQuad(QUADCUSTOMVERTEX* verts,
-               const _Vector3<float>& centerSize,
+               _Vector3<float> centerSize,
                float clipBottom, float clipTop,
-               const Mortar::MortarRectangleT<float>& rect,
-               const Colour& colour);
+               Mortar::MortarRectangleT<float> rect,
+               Colour colour);
 
 #endif // FN_ENGINE_RENDER_QUADUTIL_H

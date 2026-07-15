@@ -128,7 +128,7 @@ void DisplayManager::SetLightDirection(const _Vector3<float>& dir) {
     m_lightDirection = dir;
 }
 
-// ASM-spec v1.6.1 DisplayManager::SetTextureOverloadPrefix @0x0011eba4
+// ASM-verified: 2026-07-15T09:12Z v1.6.1 Mortar::DisplayManager::SetTextureOverloadPrefix @ 0x0011eba4 (asm-inspector)
 // Body: AlternativeTextureLoader::Prefix.Set(prefix); Texture::UseAlternativeTextureLoader
 // = (prefix.Length() != 0). Writes the GLOBAL Prefix, not the instance field.
 void DisplayManager::SetTextureOverloadPrefix(const Mortar::AsciiString& prefix) {
