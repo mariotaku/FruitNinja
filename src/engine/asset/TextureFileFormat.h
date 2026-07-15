@@ -175,9 +175,9 @@ void Read(DataStreamReader& reader, TextureInfo::NumberFormat& nf);
 void Read(DataStreamReader& reader, TextureInfo::TextureType& tt);
 
 // ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::PixelFormat&) @0x0026bbc0
-// DIFFERS: binary uses TextureInfo::PixelFormat (named sub-fields);
-// port uses Mortar::PixelFormat (opaque blob, same 12-byte layout) to avoid
-// changing DataInfo::pixelFormat's type and all consumers.
+// DIFFERS: binary's PixelFormat has named sub-fields; port keeps it an opaque
+// data[12] blob, same 12-byte layout, nested as Mortar::TextureInfo::PixelFormat
+// (see TextureSource.h) so this overload mangles against the binary's nested type.
 void Read(DataStreamReader& reader, PixelFormat& pf);
 
 // ASM-spec v1.6.1 Read(DataStreamReader&, TextureInfo::DataInfo&) @0x0026bbec

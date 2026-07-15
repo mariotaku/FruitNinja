@@ -33,17 +33,6 @@
 
 namespace Mortar {
 
-// PixelFormat -- opaque 12-byte channel-mapping block.
-// Binary: the full channel-mapping sub-struct has named ChannelMapping[] fields,
-// but the port treats it as an opaque blob (only Tex1/DDS paths need the detail;
-// Tex1 is handled by direct GL format selection; DDS full decode is TODO).
-struct PixelFormat {
-    uint8_t data[12];
-    PixelFormat() {
-        for (int i = 0; i < 12; ++i) data[i] = 0;
-    }
-};
-
 // NumberFormat -- type enum used by TextureInfo::DataInfo at +0x0c.
 // Values inferred from Tex1/Tex2/DDS reader code; only the values used by
 // the port's live paths are named here.
@@ -63,6 +52,18 @@ enum NumberFormat_e {
 // the bottom of this header so existing TextureInfo::Foo uses compile unchanged.
 // ----------------------------------------------------------------------------
 namespace TextureInfo {
+
+// TextureInfo::PixelFormat -- opaque 12-byte channel-mapping block.
+// Binary: Mortar::TextureInfo::PixelFormat (nested). The full channel-mapping
+// sub-struct has named ChannelMapping[] fields in the binary, but the port
+// treats it as an opaque blob (only Tex1/DDS paths need the detail; Tex1 is
+// handled by direct GL format selection; DDS full decode is TODO).
+struct PixelFormat {
+    uint8_t data[12];
+    PixelFormat() {
+        for (int i = 0; i < 12; ++i) data[i] = 0;
+    }
+};
 
 // TextureInfo::ChannelDescription -- 2-byte channel descriptor.
 // Binary v1.6.1 Mortar::TextureInfo::ChannelDescription (2 bytes).
@@ -112,7 +113,7 @@ struct TextureType {
 //   +0x18  u32 apparentWidth   -- apparent pixel width; MissControl reads Texture+0x24 = this field
 //   +0x1c  u32 apparentHeight  -- apparent pixel height; Texture+0x28 = this field
 struct DataInfo {
-    Mortar::PixelFormat pixelFormat; // +0x00
+    PixelFormat pixelFormat; // +0x00 (TextureInfo::PixelFormat -- same namespace, unqualified)
     uint8_t  numberFormat;           // +0x0c
     uint8_t  _pad0d;                 // +0x0d
     uint16_t rawWidth;               // +0x0e  (was: width)
@@ -149,6 +150,12 @@ namespace { struct _DataInfoSizeCheck {
 #endif
 
 } // namespace TextureInfo
+
+// Bridge so existing Mortar::PixelFormat / unqualified PixelFormat uses (inside
+// namespace Mortar) keep compiling unchanged now that the binary-faithful
+// declaration moved to the nested Mortar::TextureInfo::PixelFormat -- see
+// TextureFileFormat.h/.cpp Read(DataStreamReader&, PixelFormat&) @0x0026bbc0.
+typedef TextureInfo::PixelFormat PixelFormat;
 
 // Forward declarations.
 class TextureSourceAutoLock;

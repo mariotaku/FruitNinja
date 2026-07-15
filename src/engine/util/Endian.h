@@ -44,4 +44,26 @@ inline bool IsBigEndian() {
 
 } // namespace Endian
 
+namespace Mortar {
+namespace Endian {
+
+// Mortar::Endian::Endianness -- distinct nested duplicate of ::Endian::Endianness.
+//
+// The v1.6.1 binary has two different mangled spellings for the same enum
+// depending on which TU/declaration a call site saw:
+//   DataStreamReader::SetSource            @0x00250bdc -> N6Endian10EndiannessE       (global-scope Endian)
+//   DataStreamReader::DataStreamReader(...) @0x00250bf4 -> NS_6Endian10EndiannessE     (Mortar::Endian, nested)
+// This is a real ODR/mangling quirk in the original Mortar engine, not a port bug.
+// To pair both symbols' mangled names exactly, the port models both spellings as
+// distinct enum types: the global one (above) for SetSource, and this nested one
+// for the ctor. Values are kept in lockstep with ::Endian::Endianness; convert with
+// a C-style cast at the one call site (the ctor delegating to SetSource).
+enum Endianness {
+    LITTLE = ::Endian::LITTLE,
+    BIG    = ::Endian::BIG
+};
+
+} // namespace Endian
+} // namespace Mortar
+
 #endif  // FN_ENGINE_UTIL_ENDIAN_H

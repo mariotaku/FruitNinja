@@ -52,7 +52,7 @@ static void test_setSource_init() {
 // ---------------------------------------------------------------------------
 static void test_ctor_delegates() {
     static const uint8_t kData[] = { 0x01, 0x02, 0x03 };
-    Mortar::DataStreamReader r(kData, 3, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 3, Mortar::Endian::LITTLE);
     CHECK(r.m_pStart  == (void*)kData);
     CHECK(r.m_pCursor == (void*)kData);
     CHECK(r.m_Size    == 3u);
@@ -66,7 +66,7 @@ static void test_ctor_delegates() {
 // ---------------------------------------------------------------------------
 static void test_readBasicType_u32() {
     static const uint8_t kData[] = { 0x78, 0x56, 0x34, 0x12 };
-    Mortar::DataStreamReader r(kData, 4, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 4, Mortar::Endian::LITTLE);
     uint32_t val = 0;
     r.ReadBasicType<uint32_t>(val);
     CHECK(val == 0x12345678u);
@@ -80,7 +80,7 @@ static void test_readBasicType_u32() {
 // ---------------------------------------------------------------------------
 static void test_readBasicType_u16() {
     static const uint8_t kData[] = { 0x34, 0x12 };
-    Mortar::DataStreamReader r(kData, 2, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 2, Mortar::Endian::LITTLE);
     uint16_t val = 0;
     r.ReadBasicType<uint16_t>(val);
     CHECK(val == 0x1234u);
@@ -95,7 +95,7 @@ static void test_readBasicType_u16() {
 static void test_readBasicType_float() {
     // 3.14f IEEE-754: 0x4048F5C3, LE bytes = C3 F5 48 40
     static const uint8_t kData[] = { 0xC3, 0xF5, 0x48, 0x40 };
-    Mortar::DataStreamReader r(kData, 4, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 4, Mortar::Endian::LITTLE);
     float val = 0.0f;
     r.ReadBasicType<float>(val);
     // Bit-exact reinterpret: must round-trip through memcpy
@@ -114,7 +114,7 @@ static void test_readRaw_vs_readBasicType() {
         0x78, 0x56, 0x34, 0x12,   // first uint32
         0x78, 0x56, 0x34, 0x12    // second uint32 (identical)
     };
-    Mortar::DataStreamReader r(kData, 8, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 8, Mortar::Endian::LITTLE);
 
     uint32_t fromRaw = 0;
     r.ReadRaw<uint32_t>(fromRaw);
@@ -137,7 +137,7 @@ static void test_readString() {
         0x05, 0x00, 0x00, 0x00,   // length = 5 (LE uint32)
         'H', 'e', 'l', 'l', 'o'
     };
-    Mortar::DataStreamReader r(kData, 9, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 9, Mortar::Endian::LITTLE);
     std::string s;
     r.Read(s);
     CHECK(s == "Hello");
@@ -153,7 +153,7 @@ static void test_readString() {
 // ---------------------------------------------------------------------------
 static void test_readString_empty() {
     static const uint8_t kData[] = { 0x00, 0x00, 0x00, 0x00 };
-    Mortar::DataStreamReader r(kData, 4, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 4, Mortar::Endian::LITTLE);
     std::string s = "was_non_empty";
     r.Read(s);
     CHECK(s.empty());
@@ -166,7 +166,7 @@ static void test_readString_empty() {
 // ---------------------------------------------------------------------------
 static void test_underflow_sets_error() {
     static const uint8_t kData[] = { 0xFF, 0xFF };
-    Mortar::DataStreamReader r(kData, 2, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 2, Mortar::Endian::LITTLE);
     uint32_t val = 0xDEADBEEFu;
     r.ReadBasicType<uint32_t>(val);
     CHECK(val == 0u);
@@ -181,7 +181,7 @@ static void test_underflow_sets_error() {
 // ---------------------------------------------------------------------------
 static void test_underflow_u8_at_eof() {
     static const uint8_t kData[] = { 0x42 };
-    Mortar::DataStreamReader r(kData, 1, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 1, Mortar::Endian::LITTLE);
     // Consume the one byte.
     uint8_t v = 0;
     r.ReadRaw<uint8_t>(v);
@@ -204,7 +204,7 @@ static void test_sequential_reads() {
         0x02, 0x00,               // uint16 = 2
         0x03                      // uint8  = 3
     };
-    Mortar::DataStreamReader r(kData, 7, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 7, Mortar::Endian::LITTLE);
 
     uint32_t a = 0;
     r.ReadBasicType<uint32_t>(a);
@@ -233,7 +233,7 @@ static void test_makeSubReader() {
         0x01, 0x00, 0x00, 0x00,   // skip: uint32 = 1
         0x02, 0x00, 0x00, 0x00    // target: uint32 = 2
     };
-    Mortar::DataStreamReader parent(kData, 8, Endian::LITTLE);
+    Mortar::DataStreamReader parent(kData, 8, Mortar::Endian::LITTLE);
 
     // Advance parent past the first uint32.
     uint32_t skip = 0;
@@ -274,7 +274,7 @@ static void test_operator_rightshift_immutable() {
         0x04, 0x00, 0x00, 0x00,   // length = 4
         'T', 'e', 's', 't'
     };
-    Mortar::DataStreamReader r(kData, 8, Endian::LITTLE);
+    Mortar::DataStreamReader r(kData, 8, Mortar::Endian::LITTLE);
     Immutable imm;
     Mortar::operator>>(r, imm);
     CHECK(std::string(imm.c_str()) == "Test");

@@ -11,7 +11,7 @@ namespace Mortar {
 //   str r1, [r0, #0x00]   ; m_pStart = data
 //   stmib r0, {r1, r2}    ; m_pCursor = data, m_Size = size
 //   strb r3(0), [r0, #0x10] ; m_Error = false
-void DataStreamReader::SetSource(const void* data, unsigned long size, Endian::Endianness e) {
+void DataStreamReader::SetSource(const void* data, unsigned long size, ::Endian::Endianness e) {
     m_pStart  = const_cast<void*>(data);
     m_pCursor = const_cast<void*>(data);
     m_Size    = (uint32_t)size;
@@ -22,10 +22,11 @@ void DataStreamReader::SetSource(const void* data, unsigned long size, Endian::E
 DataStreamReader::DataStreamReader()
     : m_pStart(0), m_pCursor(0), m_Size(0), m_Endian(0), m_Error(false) {}
 
-// ASM-spec v1.6.1 DataStreamReader::DataStreamReader(void const*, unsigned long, Endian::Endianness) @0x00250bf4
-// Body: calls SetSource.
-DataStreamReader::DataStreamReader(const void* data, unsigned long size, Endian::Endianness e) {
-    SetSource(data, size, e);
+// ASM-spec v1.6.1 DataStreamReader::DataStreamReader(void const*, unsigned long, Mortar::Endian::Endianness) @0x00250bf4
+// Body: calls SetSource. Param type is the Mortar-nested Endianness (see util/Endian.h);
+// cast down to the global one that SetSource takes -- both share the same LITTLE/BIG values.
+DataStreamReader::DataStreamReader(const void* data, unsigned long size, Mortar::Endian::Endianness e) {
+    SetSource(data, size, (::Endian::Endianness)e);
 }
 
 // ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08
@@ -38,7 +39,7 @@ void DataStreamReader::MakeSubReader(unsigned long sourcePtr) {
     const uint8_t* cursor = (const uint8_t*)source->m_pCursor;
     const uint8_t* end    = (const uint8_t*)source->m_pStart + source->m_Size;
     unsigned long remaining = (end > cursor) ? (unsigned long)(end - cursor) : 0UL;
-    SetSource(cursor, remaining, (Endian::Endianness)source->m_Endian);
+    SetSource(cursor, remaining, (::Endian::Endianness)source->m_Endian);
 }
 
 // ASM-spec v1.6.1 DataStreamReader::Read(std::string&) @0x00250c28
