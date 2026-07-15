@@ -1275,8 +1275,18 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         const float sliceRad = (float)(int16_t)m_SliceArcAngle *
                                (6.2831853f / 65536.0f);
+
+        // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500.
+        // Both emitter hashes are overridden to the "crit_hit"/"crit_hit_stars"
+        // star-burst templates when the slice is a critical hit -- the port
+        // previously always used the fruit's own splat/trail hashes even on crit.
+        static const uint32_t kHashCritHit      = StringHash("crit_hit");
+        static const uint32_t kHashCritHitStars = StringHash("crit_hit_stars");
+        const uint32_t hitHash   = isCritical ? kHashCritHit      : info->m_NameHash;
+        const uint32_t trailHash = isCritical ? kHashCritHitStars : info->m_SlicedHash;
+
         PSPParticleEmitter* eHit = pm.AddEmitter(
-            info->m_NameHash, nullptr, /*persistent=*/false);
+            hitHash, nullptr, /*persistent=*/false);
         if (eHit) {
             eHit->m_Pos     = pos;
             eHit->m_DirCos  =  cosf(sliceRad);   // cos theta
@@ -1291,10 +1301,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // The reap condition (binary @ 0x00115ed8: keep if timer<maxLifetime || maxLifetime<=0
         // && !Ends()) never frees them while Fruit holds the pointer. For most fruits the
         // template does not exist at all -> AddEmitter returns nullptr on hash-miss, safe.
-        m_pEmitter1 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
-        m_pEmitter2 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
+        m_pEmitter1 = pm.AddEmitter(trailHash, nullptr, /*persistent=*/true);
+        m_pEmitter2 = pm.AddEmitter(trailHash, nullptr, /*persistent=*/true);
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
-        if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
+        if (m_pEmitter2) m_pEmitter2->m_Pos = m_SecondPos;
     }
 
     // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500
