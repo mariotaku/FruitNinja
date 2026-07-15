@@ -786,7 +786,7 @@ void SuperFruitControl::ExplodeSuperFruit()
         // flat round-robin pool steals the cursor slot when full).
         SplatEntity* s = SplatEntity::GetFree();
         _Vector3<float> vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
-        s->MakeSplat(hostPos, vel, false, true, (long)hostFruitType, hostMute);
+        s->MakeSplat(hostPos, vel, false, hostMute, (long)hostFruitType);
 
         // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
         float taper = 1.0f - (float)(i - 2) / (float)N;

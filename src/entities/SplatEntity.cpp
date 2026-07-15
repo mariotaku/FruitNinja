@@ -264,10 +264,11 @@ bool SplatEntity::s_RandKillEnabled = true;
 //
 // Bugfix #6: m_ScaleSpawn snapshot added after m_Scale is set.
 //
-// landImmediately (4th param, binary bool arg 2): if true, skip the airborne
-// phase and land the splat instantly. ExplodeSuperFruit path passes true here.
-// ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910
-void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, bool landImmediately, long fruitType, bool mute) {
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 SplatEntity::MakeSplat @ 0x001eb910 (asm-inspector)
+// 5-param binary signature; always spawns airborne (m_SplatType=-1) with the
+// real launch velocity. There is no immediate-landing branch in the binary --
+// splats land via normal Update physics. mute maps to the binary's 4th bool arg.
+void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, bool mute, long fruitType) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
@@ -275,10 +276,8 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
 
     m_bParam3 = param3 ? 1 : 0;
 
-    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910: m_bMuteSfx = caller mute arg
-    //   = (FruitInfo::m_bIsSuperFruit @+0x330 != 0). Super-fruit splats land silent.
-    // TODO: v1.6.1 0x001eb910 -- confirm MakeSplat 4th arg (port landImmediately vs binary
-    //   m_bParam3/long) against ExplodeSuperFruit @0x001bab08 before trusting param order.
+    // m_bMuteSfx = caller mute arg = (FruitInfo::m_bIsSuperFruit @+0x330 != 0).
+    // Super-fruit splats land silent.
     m_bMuteSfx = mute ? 1 : 0;
 
     // Colour selection. Binary reads FruitTypeColour(fruitType) when in
@@ -374,33 +373,6 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
     // Binary @ 0x0017fa1c sets them in Update's landing branch only.
     // Values are stale until landing -- safe because the decay consumer
     // only runs after m_SplatType >= 0 (landed).
-
-    if (landImmediately) {
-        // Binary 6-arg ExplodeSuperFruit path: flag2=1 forces immediate landing.
-        // Reuse the same landing logic from UpdateSplat without a physics tick.
-        int type;
-        if (RandInt(4) == 0) {
-            type = (RandInt(2) == 0) ? 2 : 3;
-        } else {
-            type = (RandInt(6) != 0) ? 0 : 1;
-        }
-        if (m_bParam3 && RandInt(2) == 0) {
-            type = (RandInt(2) == 0) ? 4 : 5;
-        }
-        {
-            const FruitInfo* linfo = FruitInfo_Get(m_FruitType);
-            if (linfo && linfo->m_bOnSide != 0) {
-                type = (RandInt(2) == 0) ? 2 : 3;
-            }
-        }
-        m_SplatType = type;
-        const int idx = (type >= 0 && type < 6) ? type : 0;
-        m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
-        m_Pos.z = UP_LAND_Z;
-        m_Vel   = _Vector3<float>(0.0f, 0.0f, 0.0f);
-        m_Life      = UP_LIFE_BASE  + RandRange(UP_LIFE_RAND);
-        m_DecayRate = UP_DECAY_BASE + RandRange(UP_DECAY_RAND);
-    }
 }
 
 // v1.6.1 SplatEntity::Update @0x001ebee0 (vtable slot 5)

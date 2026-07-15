@@ -125,7 +125,7 @@ static void RenderSplatFrame(SDL_Window* window) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (game_work.m_FruitCamera) {
-        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, true);
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
     }
 
     // Depth state matching GameInit.cpp line 647-648 pre-splat pass:
@@ -203,8 +203,7 @@ static int RunCriticalFlashScene(fn::TestHarness& h) {
 
     const long criticalFruitType = (long)fruitType + fruitCount;
     splat->MakeSplat(_Vector3<float>(0.0f, 0.0f, 0.0f), _Vector3<float>(0.0f, 0.0f, 0.0f),
-                      /*param3=*/false, /*landImmediately=*/false, criticalFruitType,
-                      /*mute=*/false);
+                      /*param3=*/false, /*mute=*/false, criticalFruitType);
 
     if (!splat->m_bAlive) {
         fprintf(stderr, "[scene_fruit_splat --critical] FAIL: MakeSplat suppressed the "

@@ -209,8 +209,9 @@ void Jiblet::Update(float dt) {
             // TODO: v1.6.1 0x1e5330 (Jiblet::Update) -- confirm the drip-loop caller's
             //   mute arg against the binary (unverified; assumed same +0x330 read).
             const FruitInfo* jibInfo = FruitInfo_Get(m_FruitType);
-            s->MakeSplat(sp, sv, false, false, (long)m_FruitType,
-                         /*mute=*/jibInfo != 0 && jibInfo->m_bIsSuperFruit != 0);
+            s->MakeSplat(sp, sv, false,
+                         /*mute=*/jibInfo != 0 && jibInfo->m_bIsSuperFruit != 0,
+                         (long)m_FruitType);
             m_SplatTimer += 1.0f / m_DripRate;
         }
     }
