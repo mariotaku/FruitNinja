@@ -186,7 +186,12 @@ void PowerUp::Parse(TiXmlElement* elem) {
 
 // Step 4: Activate (binary @ 0x00119134)
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
-void PowerUp::Activate(bool showPopup, bool isPurchased, const _Vector3<float>& pos, float* extraParam) {
+// v1.6.1 PowerUp::Activate @0x00141e60 -- Vec3 by value (not const-ref) to match binary ABI
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 PowerUp::Activate @ 0x00141e60..0x00141f9b (asm-inspector)
+//   -- logic/field-offset/call-graph faithful. NOTE two structural (non-logic) DIFFERS:
+//   Vec3 passed HFA-in-VFP vs binary by-hidden-ptr (port _Vector3 trivially-copyable);
+//   ApplyModifier dispatched via port vtable slot 8 (+0x20) vs binary slot 5 (+0x14).
+void PowerUp::Activate(bool showPopup, bool isPurchased, _Vector3<float> pos, float* extraParam) {
     if (showPopup) {
         if (m_Texture2.IsValid()) {
             MissControl* m = MissControl::GetFree();
@@ -441,7 +446,9 @@ PowerUp::PowerUp(PowerUp* src)
 
 // @ 0x00117a44 — returns coin cost if purchaseable, else 0
 // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117a44 (re-analyst)
-int PowerUp::Purchaseable() const {
+// v1.6.1 PowerUp::Purchaseable @0x0013fe74 -- non-const to match binary ABI/mangling
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 PowerUp::Purchaseable @ 0x0013fe74 (asm-inspector)
+int PowerUp::Purchaseable() {
     return m_pPurchaseInfo ? m_pPurchaseInfo->m_Cost : 0;
 }
 

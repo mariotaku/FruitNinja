@@ -126,9 +126,10 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
     // param1: showPopup — display miss control + deduct coins
     // param2: isPurchased — forwarded to ApplyModifier
-    // param3: position — by-value in binary; port uses const& for ergonomics
+    // param3: position — by-value (not const&) to match binary ABI/mangling
     // param4: extraParam — NULL on most calls; non-null when re-loading from save
-    void Activate(bool showPopup, bool isPurchased, const _Vector3<float>& pos, float* extraParam);
+    // v1.6.1 PowerUp::Activate @0x00141e60 -- Vec3 by value (not const-ref) to match binary ABI
+    void Activate(bool showPopup, bool isPurchased, _Vector3<float> pos, float* extraParam);
 
     // @ 0x00117f18 — deactivate, call RemoveModifier on all mods; returns 0
     int Deactivate(bool removeAll);
@@ -156,7 +157,8 @@ public:
     // ASM-spec v1.6.1 PowerUp::IsSpecial @0x00143868: IsTimed() && !m_bIsSpecial && Purchaseable()==0.
     // Despite the name, "special" here means "regular timed banana power" (freeze/frenzy/x2),
     // NOT the "automatic" m_bIsSpecial flag (that's the opposite: zen-mode auto-activated powers).
-    bool IsSpecial() const { return IsTimed() && !m_bIsSpecial && Purchaseable() == 0; }
+    // Non-const: calls the now non-const Purchaseable() (matches binary ABI, see below).
+    bool IsSpecial() { return IsTimed() && !m_bIsSpecial && Purchaseable() == 0; }
 
     // @ 0x0011a1f0
     float GetCurrentTimeProgress() const { return m_LongestRemaining; }
@@ -199,7 +201,8 @@ public:
 
     // @ 0x00117a44 — returns coin cost if purchaseable, else 0
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117a44 (re-analyst)
-    int Purchaseable() const;
+    // v1.6.1 PowerUp::Purchaseable @0x0013fe74 -- non-const to match binary ABI/mangling
+    int Purchaseable();
 
     // @ 0x00117cdc — walk m_ModList, forward to ScoreModifier::DeferPoints on type==2
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117cdc (re-analyst)
