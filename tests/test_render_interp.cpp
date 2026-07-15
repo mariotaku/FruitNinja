@@ -11,7 +11,15 @@
 //   the new occupant has hadPrev==false -- meaning no stale position from the
 //   dead fruit leaks into the new fruit's lerp.
 //
-// Both tests compile to pass/skip when FN_RENDER_INTERP is 0 (the interp code
+// TEST 3: Teleport-safety (Phase 2)
+//   A live fruit's prev snapshot is on-screen; before the next
+//   SnapshotAfterStep its pos.y is force-set to a teleport-magnitude jump
+//   (mimicking Fruit::CheckHasGoneOffscreen's edge-warp). Asserts
+//   ApplyForDraw(alpha) snaps straight to the teleported value (no lerped
+//   streak) instead of interpolating toward the old on-screen position, while
+//   a small in-range motion on the same field still lerps to the midpoint.
+//
+// All tests compile to pass/skip when FN_RENDER_INTERP is 0 (the interp code
 // is entirely absent; gating the test body avoids link errors).
 
 #include "test_harness.h"
@@ -328,6 +336,93 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         }
+    }
+
+    // ============================================================
+    // TEST 3: teleport-safety -- snap instead of lerp past TELEPORT_DIST
+    // ============================================================
+    printf("[render_interp] TEST 3: teleport-safety snap-vs-lerp\n");
+
+    // Grab a live fruit fresh (TEST 2 may have recycled the previous one).
+    Fruit* teleportTarget = nullptr;
+    {
+        std::list<Mortar::Entity*>::iterator it;
+        for (Mortar::Entity* e = am->GetEntityFirst(0, it); e; e = am->GetEntityNext(0, it)) {
+            if (e->IsActive()) { teleportTarget = static_cast<Fruit*>(e); break; }
+        }
+    }
+    if (!teleportTarget) {
+        h.RunHeadless(60);
+        std::list<Mortar::Entity*>::iterator it;
+        for (Mortar::Entity* e = am->GetEntityFirst(0, it); e; e = am->GetEntityNext(0, it)) {
+            if (e->IsActive()) { teleportTarget = static_cast<Fruit*>(e); break; }
+        }
+    }
+    if (!teleportTarget) {
+        printf("[render_interp] WARN: no fruit for teleport test -- TEST 3 trivially passes\n");
+    } else {
+        fn::RenderInterp& interp = fn::RenderInterp::Get();
+
+        // Commit a normal step so prev/cur are both populated with hadPrev=true.
+        h.game.stepUpdate();
+        interp.SnapshotAfterStep();
+        h.game.stepUpdate();
+        interp.SnapshotAfterStep();
+
+        const _Vector3<float> onScreenPos = teleportTarget->pos;
+
+        // --- Sub-case A: teleport jump (> TELEPORT_DIST) must SNAP, not lerp ---
+        const _Vector3<float> teleportedPos(onScreenPos.x, onScreenPos.y - 200.0f, onScreenPos.z);
+        teleportTarget->pos = teleportedPos;   // mimic Fruit::CheckHasGoneOffscreen edge-warp
+        interp.SnapshotAfterStep();            // prev = onScreenPos snapshot, cur = teleportedPos
+
+        interp.ApplyForDraw(0.5f);
+        _Vector3<float> appliedTeleport = teleportTarget->pos;
+        interp.RestoreAfterDraw();
+        _Vector3<float> restoredTeleport = teleportTarget->pos;
+
+        bool snapped     = Vec3Eq(appliedTeleport, teleportedPos);
+        bool restoredOk1 = Vec3Eq(restoredTeleport, teleportedPos);
+
+        if (!snapped || !restoredOk1) {
+            fprintf(stderr,
+                "FAIL: TEST 3a teleport did not snap: applied=(%.3f,%.3f,%.3f) "
+                "expected cur=(%.3f,%.3f,%.3f) restored=(%.3f,%.3f,%.3f)\n",
+                appliedTeleport.x, appliedTeleport.y, appliedTeleport.z,
+                teleportedPos.x, teleportedPos.y, teleportedPos.z,
+                restoredTeleport.x, restoredTeleport.y, restoredTeleport.z);
+            return 1;
+        }
+
+        // --- Sub-case B: small in-range motion (< TELEPORT_DIST) must still LERP ---
+        const _Vector3<float> smallMovePos(teleportedPos.x, teleportedPos.y - 5.0f, teleportedPos.z);
+        teleportTarget->pos = smallMovePos;
+        interp.SnapshotAfterStep();   // prev = teleportedPos snapshot, cur = smallMovePos
+
+        interp.ApplyForDraw(0.5f);
+        _Vector3<float> appliedSmall = teleportTarget->pos;
+        interp.RestoreAfterDraw();
+        _Vector3<float> restoredSmall = teleportTarget->pos;
+
+        _Vector3<float> expectedMid(
+            (teleportedPos.x + smallMovePos.x) * 0.5f,
+            (teleportedPos.y + smallMovePos.y) * 0.5f,
+            (teleportedPos.z + smallMovePos.z) * 0.5f);
+
+        bool lerped      = Vec3Eq(appliedSmall, expectedMid);
+        bool restoredOk2 = Vec3Eq(restoredSmall, smallMovePos);
+
+        if (!lerped || !restoredOk2) {
+            fprintf(stderr,
+                "FAIL: TEST 3b small motion did not lerp: applied=(%.3f,%.3f,%.3f) "
+                "expected mid=(%.3f,%.3f,%.3f) restored=(%.3f,%.3f,%.3f)\n",
+                appliedSmall.x, appliedSmall.y, appliedSmall.z,
+                expectedMid.x, expectedMid.y, expectedMid.z,
+                restoredSmall.x, restoredSmall.y, restoredSmall.z);
+            return 1;
+        }
+
+        printf("[render_interp] TEST 3 PASSED: teleport snapped, small motion lerped\n");
     }
 
     printf("[render_interp] all tests PASSED\n");

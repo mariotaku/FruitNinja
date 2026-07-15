@@ -12,6 +12,8 @@
 
 namespace fn {
 
+const float RenderInterp::TELEPORT_DIST = 60.0f;
+
 // ---------------------------------------------------------------------------
 // Singleton
 // ---------------------------------------------------------------------------
@@ -170,10 +172,10 @@ void RenderInterp::SnapshotAfterStep() {
 void RenderInterp::ApplyFruit(Mortar::Entity* e,
                                const EntitySnap& prev, const EntitySnap& cur, float alpha) {
     Fruit* f       = static_cast<Fruit*>(e);
-    f->pos         = LerpVec3(prev.pos,       cur.pos,       alpha);
+    f->pos         = LerpOrSnapVec3(prev.pos,       cur.pos,       alpha);
     f->scale       = LerpVec3(prev.scale,     cur.scale,     alpha);
     f->m_ZPosition = Lerpf(prev.zPosFruit,    cur.zPosFruit, alpha);
-    f->m_SecondPos = LerpVec3(prev.secondPos, cur.secondPos, alpha);
+    f->m_SecondPos = LerpOrSnapVec3(prev.secondPos, cur.secondPos, alpha);
     f->m_Rot1      = Slerp(prev.rot1, cur.rot1, alpha);
     f->m_Rot2      = Slerp(prev.rot2, cur.rot2, alpha);
 }
@@ -181,7 +183,7 @@ void RenderInterp::ApplyFruit(Mortar::Entity* e,
 void RenderInterp::ApplyBomb(Mortar::Entity* e,
                               const EntitySnap& prev, const EntitySnap& cur, float alpha) {
     Bomb* b       = static_cast<Bomb*>(e);
-    b->pos        = LerpVec3(prev.pos,   cur.pos,   alpha);
+    b->pos        = LerpOrSnapVec3(prev.pos,   cur.pos,   alpha);
     b->scale      = LerpVec3(prev.scale, cur.scale, alpha);
     b->m_ZPosition = Lerpf(prev.zPosBomb, cur.zPosBomb, alpha);
 
@@ -196,7 +198,7 @@ void RenderInterp::ApplyBomb(Mortar::Entity* e,
 
 void RenderInterp::ApplyJiblet(Mortar::Entity* e,
                                 const EntitySnap& prev, const EntitySnap& cur, float alpha) {
-    e->pos = LerpVec3(prev.pos, cur.pos, alpha);
+    e->pos = LerpOrSnapVec3(prev.pos, cur.pos, alpha);
 }
 
 // ---------------------------------------------------------------------------
