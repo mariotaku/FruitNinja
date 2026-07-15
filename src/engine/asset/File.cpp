@@ -97,9 +97,11 @@ bool File::Write(const char* str) {
 
 // Binary @ 0x00251a7c — passes mode+offset directly; no conversion (mode values already match POSIX)
 // IFile::Seek return is discarded (void) per binary; File::Seek returns true if file is open.
+// 3rd arg `false`: binary IFile_Direct::Seek body ignores it; faithful default for the
+// only-known usage (no deeper RE available to determine what File::Seek's caller passes).
 bool File::Seek(FileSeekMode mode, long offset) {
     if (!m_bIsOpen || !m_pIFile) return false;
-    (void)m_pIFile->Seek(static_cast<int>(mode), offset);
+    (void)m_pIFile->Seek(static_cast<unsigned long>(mode), offset, false);
     return true;
 }
 

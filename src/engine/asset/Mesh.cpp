@@ -392,30 +392,32 @@ void Mesh::DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, f
     }
 }
 
-// Binary @ 0x00240e10
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240e10 (re-analyst)
+// Binary @ 0x00240e34
+// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawTriList @ 0x00240e34 (re-analyst)
 void Mesh::DrawTriList(QUADCUSTOMVERTEX const* verts, long count,
-                       bool /*blend*/, DrawEffectContainer* fx) {
-    DrawTris(verts, count, 4 /*GL_TRIANGLES*/, fx != 0, 0);
+                       bool /*blend*/, DrawEffectContainer* fx, TextureAtlasPage* atlas) {
+    DrawTris(verts, count, 4 /*GL_TRIANGLES*/, fx != 0, fx, atlas);
+}
+
+// Binary @ 0x00240e10
+// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawTriStrip @ 0x00240e10 (re-analyst)
+void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
+                        bool /*blend*/, DrawEffectContainer* fx, TextureAtlasPage* atlas) {
+    DrawTris(verts, count, 5 /*GL_TRIANGLE_STRIP*/, fx != 0, fx, atlas);
 }
 
 // Binary @ 0x00240c30
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240c30 (re-analyst)
-void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
-                        bool /*blend*/, DrawEffectContainer* fx) {
-    DrawTris(verts, count, 5 /*GL_TRIANGLE_STRIP*/, fx != 0, 0);
-}
-
-// Binary @ 0x00240e34
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00240e34 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawTris @ 0x00240c30 (re-analyst)
 void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
-                    bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // Port specific: binary @ 0x00240e34 gates GL_BLEND via fixed-function glState<3042>:
+                    bool /*blend*/, DrawEffectContainer* /*fx*/, TextureAtlasPage* /*atlas*/) {
+    // Port specific: binary @ 0x00240c30 gates GL_BLEND via fixed-function glState<3042>:
     //   blend OFF iff (blend == 0 && (renderModeSingleton == null ||
     //                  renderModeSingleton->vtable[0x10]() != 0x20)), else blend ON.
     // Also issues glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE) — both are
     // fixed-function GL1.x state with no GLES2 counterpart. The port's Renderer DrawTriList/
     // DrawTriStrip set up blend + texture-env-equivalent modulation in their shaders.
+    // atlas is only bound/unbound (page->GetTexture()->vtable[0xc]/[0x10]) when fx != NULL;
+    // every port call site passes fx==NULL so that path is dead here — not ported, unreached.
     if (Renderer* r = Renderer::GetInstance()) {
         if (primType == 4)
             r->DrawTriList(const_cast<QUADCUSTOMVERTEX*>(verts), (int)count);
