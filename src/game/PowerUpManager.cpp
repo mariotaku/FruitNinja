@@ -210,7 +210,7 @@ void PowerUpManager::Reset(bool fullReset) {
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
     while (it != m_ActivePowerUps.end()) {
         PowerUp* pwr = *it;
-        if (pwr->IsPurchaseable()) {
+        if (pwr->Purchaseable() != 0) {   // v1.6.1 Reset @0x00142e08: cost!=0, not single= flag
             pwr->Deactivate(true);
             if (fullReset) {
                 ActivatePurchase(pwr);
@@ -270,7 +270,7 @@ void PowerUpManager::ClearTimedPowers() {
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
     while (it != m_ActivePowerUps.end()) {
         PowerUp* pwr = *it;
-        if (!pwr->IsPurchaseable() && pwr->IsTimed()) {
+        if (pwr->Purchaseable() == 0 && pwr->IsTimed()) {   // v1.6.1 ClearTimedPowers @0x0014136c: filter on cost==0, NOT the single= flag
             uint32_t hash = pwr->m_NameHash;
             std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
             if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
