@@ -50,6 +50,25 @@ static const float ALPHA_IN_DONE       = 0.999f;  // DAT_001389dc
 static const float ALPHA_DECAY         = 0.75f;   // geometric decay per frame
 static const float ALPHA_OUT_DONE      = 0.001f;  // DAT_001389e0
 
+// ---------------------------------------------------------------------------
+// Rate-independence macros for m_TransitionAlpha easing (states 0/2/3/4/6).
+// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F pattern (see ShopScreen.cpp):
+// under __bada__ these expand to the ORIGINAL per-60Hz-tick scalar forms
+// (byte-identical to the binary, no powf); under the port the same call sites
+// expand to dt-scaled forms using a local `float f` in scope at each use site
+// (f = clamp(dtSeconds,0,0.1)*60 in UpdateRealtime()) so f==1 exactly
+// reproduces one 60Hz tick's worth of easing.
+// ---------------------------------------------------------------------------
+#ifdef __bada__
+    // v += (to - v) * k  (exponential approach towards `to` by factor k each call)
+    #define DS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (k))
+    // v *= k  (geometric decay towards zero by factor k each call)
+    #define DS_DECAY_F(v, k)         ((v) *= (k))
+#else
+    #define DS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+    #define DS_DECAY_F(v, k)         ((v) *= powf((k), f))
+#endif
+
 // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: back=(0,0,0) shop=(-55,65,0) about=(35,-74,0)
 // [prior values were stale v1.5.x: back=(185,-106,0) shop=(-18,-15,0) about=(145,42,0)]
 static const _Vector3<float> POS_BACK_BUTTON(0.0f, 0.0f, 0.0f);
@@ -387,16 +406,25 @@ void DojoScreen::CreateButtons() {
 
 // ===================================================================
 // Matches DojoScreen::Update @ 0x0016b6a4
+// ASM-verified: 2026-07-15T00:00Z v1.6.1 DojoScreen::Update @ 0x0016b6a4..0x0016b968 (asm-inspector)
 // ===================================================================
 void DojoScreen::Update(float dt) {
-    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the transition
-    //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-    float dtN = dt * 60.0f;
+#ifndef __bada__
+    // DIFFERS: v1.6.1 DojoScreen::Update @0x0016b6a4 eases m_TransitionAlpha per
+    // 60Hz sim tick; port eases it per rendered frame (dt-scaled) so the
+    // transition tracks display refresh. __bada__ keeps the faithful 60Hz path.
+    // The easing itself has already been advanced by UpdateRealtime() (called
+    // once per presented frame via HUD::UpdateRealtime); this 60Hz Update only
+    // reads the current m_TransitionAlpha value to fire the (rate-independent,
+    // threshold-based) state transitions and one-shot side effects below.
+#endif
 
     // ASM-spec v1.6.1 DojoScreen::Update @0x0016b6a4
     BaseScreen::UpdateButtons(dt);
+#ifdef __bada__
     // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580: called every frame.
     UpdateBSButtons(dt);
+#endif
 
     switch (m_State) {
 
@@ -404,9 +432,11 @@ void DojoScreen::Update(float dt) {
     // Binary: alpha lerp only. CreateButtons() is called from Reset(), not here.
     case 0: {
         // Exponential approach: alpha += (1 - alpha) * 0.25
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-in
-        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-        m_TransitionAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
+#ifdef __bada__
+        DS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+#endif
+        // Port: easing already advanced by UpdateRealtime() (per-present, dt-scaled);
+        // this 60Hz tick only reads the current value to fire the state transition.
 
         // Transition to state 1 when fully faded in
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
@@ -435,9 +465,10 @@ void DojoScreen::Update(float dt) {
     case 2:
     case 3:
     case 4: {
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-out
-        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
+#ifdef __bada__
+        DS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
 
         {
             Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -489,9 +520,10 @@ void DojoScreen::Update(float dt) {
 
     // ---- STATE 6: Back/quit → MainScreen ----
     case 6: {
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the quit fade-out
-        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
+#ifdef __bada__
+        DS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
 
         // Binary: if (alpha < 0.001) → mark for removal
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
@@ -510,6 +542,59 @@ void DojoScreen::Update(float dt) {
         break;
     }
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the state-machine split comment above Update(). Advances m_TransitionAlpha
+// per PRESENTED frame (dt-scaled via DS_APPROACH_F/DS_DECAY_F, defined near
+// the top of this file), for whichever of states 0/2/3/4/6 is currently
+// active, and repositions the (defunct, visible-stub) BSButtons via
+// UpdateBSButtons -- a pure-visual slide that reads m_TransitionAlpha only
+// and never changes state. Update() (60Hz) reads the resulting alpha value
+// to fire the (already rate-independent, threshold-based) state transitions
+// and one-shot side effects (entity-clear gate, m_TransitionDelay countdown,
+// AddControl of the child screen, state-6 pending-removal +
+// MainScreen::SetState) -- those stay in Update() exactly like ShopScreen
+// keeps its equivalent one-shot side effects in Update() rather than here.
+//
+// Under __bada__ this function does not exist (see DojoScreen.h); Update()
+// eases m_TransitionAlpha inline per-state and calls UpdateBSButtons
+// directly, byte-identical to the binary.
+//
+// DIFFERS: v1.6.1 DojoScreen::Update @0x0016b6a4 eases m_TransitionAlpha per
+// 60Hz sim tick; port eases it per rendered frame (dt-scaled) so the
+// transition tracks display refresh. __bada__ keeps the faithful 60Hz path.
+// ---------------------------------------------------------------------------
+void DojoScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    // ASM-spec v1.6.1 DojoScreen::UpdateBSButtons @0x0016b580: called every frame.
+    UpdateBSButtons(dtSeconds);
+
+    switch (m_State) {
+    case 0:
+        // Binary: alpha += (1 - alpha) * 0.25
+        DS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+        break;
+    case 2:
+    case 3:
+    case 4:
+        // Binary: alpha *= 0.75
+        DS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+        break;
+    case 6:
+        // Binary: alpha *= 0.75
+        DS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+        break;
+    default:
+        // States 1 (idle) and others: no alpha easing in the binary's Update either.
+        break;
+    }
+}
+#endif
 
 // ===================================================================
 // Matches DojoScreen::Draw @ 0x0016a004

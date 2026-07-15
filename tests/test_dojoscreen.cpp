@@ -146,8 +146,17 @@ int main(int argc, char* argv[]) {
     //   0x40 pass: MenuButton scratch backdrop (MENU_BG)
     //   0x80 pass: ring face + label, BSButton, DojoScreen panel (POST_ACTOR)
     // Also advances m_TransitionAlpha from 0 to ~1 (0.25 lerp; ~17 frames to 0.99).
+    // Port specific: m_TransitionAlpha now eases in DojoScreen::UpdateRealtime
+    // (per-presented-frame, dt-scaled -- see DojoScreen.cpp), not the 60Hz
+    // Update() that RunComponentHeadlessMultiPass drives via HUD::Update.
+    // The real game loop pumps both per presented frame (GameSDL.cpp calls
+    // Game::tickRealtimeUi alongside stepUpdate); without the paired call here
+    // m_TransitionAlpha never advances and the BSButton anchor assertions below
+    // stall at alpha=0. Mirrors the same fix in test_ring_texture_lifecycle.cpp
+    // / test_screen.cpp.
     for (int i = 0; i < 60; ++i) {
         h.RunComponentHeadlessMultiPass(1);
+        h.game.tickRealtimeUi(1.0f / 60.0f);
     }
 
     // Collect controls added by DojoScreen and its Init path.
