@@ -451,15 +451,21 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
             tex = texRefs[tidx].Get();
         }
         if (tex) {
-            GLenum dstFactor = tmpl->m_BlendMode ? (GLenum)tmpl->m_BlendMode
-                                                 : GL_ONE_MINUS_SRC_ALPHA;
+            // DIFFERS: original = port varied glBlendFunc per-template from the
+            // asset's <SourceBlend>/<DestinationBlend> tags (tmpl->m_BlendMode);
+            // binary v1.6.1 ignores those tags. glBlendFunc @0x0010c088 is xref'd
+            // exactly twice, both at init (DisplayManagerBada::Init @0x00256c3c,
+            // GlClientStates::Reset @0x00258050), both = (GL_SRC_ALPHA,
+            // GL_ONE_MINUS_SRC_ALPHA); Mesh::DrawTris only toggles GL_BLEND enable,
+            // never the func, and no glBlendEquation symbol exists at all. So every
+            // particle template -- including the additive "rimhit" contact-flash
+            // template -- draws straight-alpha in the real binary. Per-template
+            // additive blending here washed the flash out under the bright splash.
+            // See tmp/asm-verify/blade-flash-re.md.
             glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, dstFactor);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glBindTexture(GL_TEXTURE_2D, tex->GetTexId());
             if (Renderer* r = Renderer::GetInstance()) {
-                // setBlendFunc=false: the glBlendFunc above (dstFactor may be
-                // additive GL_ONE) must survive the draw -- DrawTriList must not
-                // clobber it with the default alpha blend func.
                 r->DrawTriList(verts.data(), (int)verts.size(), false);
             }
         }
