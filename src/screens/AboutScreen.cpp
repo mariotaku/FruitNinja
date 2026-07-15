@@ -47,6 +47,25 @@ static const float ALPHA_IN_DONE  = 0.9990f;
 static const float ALPHA_DECAY    = 0.75f;
 static const float ALPHA_OUT_DONE = 0.001f;
 
+// ---------------------------------------------------------------------------
+// Rate-independence macros for m_TransitionAlpha easing (states 0/2).
+// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F pattern (see ShopScreen.cpp):
+// under __bada__ these expand to the ORIGINAL per-60Hz-tick scalar forms
+// (byte-identical to the binary, no powf); under the port the same call sites
+// expand to dt-scaled forms using a local `float f` in scope at each use site
+// (f = clamp(dtSeconds,0,0.1)*60 in UpdateRealtime()) so f==1 exactly
+// reproduces one 60Hz tick's worth of easing.
+// ---------------------------------------------------------------------------
+#ifdef __bada__
+    // v += (to - v) * k  (exponential approach towards `to` by factor k each call)
+    #define AS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (k))
+    // v *= k  (geometric decay towards zero by factor k each call)
+    #define AS_DECAY_F(v, k)         ((v) *= (k))
+#else
+    #define AS_APPROACH_F(v, to, k)  ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+    #define AS_DECAY_F(v, k)         ((v) *= powf((k), f))
+#endif
+
 // Back button position  (DAT_0012f300 = 185.0, DAT_0012f304 = -106.0)
 // ASM-verified pos=Vec3::Zero (matches DojoScreen/MainScreen/ShopScreen back-button
 // convention); final screen anchor comes from m_HudScale below, not this Vec3.
@@ -171,6 +190,9 @@ AboutScreen::AboutScreen(DojoScreen* parent)
     , m_CreditLine4(0)
     , m_CreditLine5(0)
     , m_EntryDelay(3.0f)
+#ifndef __bada__
+    , m_bMarqueeActive(false)
+#endif
 {
     LoadContent();
 
@@ -416,13 +438,10 @@ void AboutScreen::CreateBackButton()
 // State machine + marquee scroll.
 // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: after state machine,
 // m_EntryDelay countdown gate then scroll loop per m_Marquees item.
+// ASM-verified: 2026-07-15T01:20Z v1.6.1 AboutScreen::Update @ 0x0015c350..0x0015c913 (asm-inspector)
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float dt)
 {
-    // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the transition
-    //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-    float dtN = dt * 60.0f;
-
     // OFN button creation stub (defunct -- OpenFeint/GameCenter)
     if (s_TexSensei.IsValid() && m_pOFNButton == nullptr) {
         (void)POS_OFN_BUTTON;
@@ -431,10 +450,12 @@ void AboutScreen::Update(float dt)
     switch (m_State) {
 
     case 0: {
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-in
-        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-        m_TransitionAlpha = 1.0f - (1.0f - m_TransitionAlpha) * powf(1.0f - ALPHA_LERP_IN, dtN);
-
+#ifdef __bada__
+        AS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+#endif
+        // Port: easing already advanced by UpdateRealtime() (per-present,
+        // dt-scaled); this 60Hz tick only reads the current value to fire
+        // the (rate-independent, threshold-based) state transition below.
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
             CreateBackButton();
@@ -447,10 +468,10 @@ void AboutScreen::Update(float dt)
         break;
 
     case 2: {
-        // Port specific: dt-normalize the per-frame alpha ease (dtN = dt*60) so the fade-out
-        //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-        m_TransitionAlpha = m_TransitionAlpha * powf(ALPHA_DECAY, dtN);
-
+#ifdef __bada__
+        AS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+#endif
+        // Port: easing already advanced by UpdateRealtime(); read current value.
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             if (m_pParent) {
                 m_pParent->Reset();
@@ -471,6 +492,14 @@ void AboutScreen::Update(float dt)
         return;
     }
 
+#ifndef __bada__
+    // Port specific: bridge flag -- the gate above (m_EntryDelay countdown +
+    // early-return) stays a 60Hz Update decision exactly like the binary;
+    // once passed, latch m_bMarqueeActive so UpdateRealtime() can scroll the
+    // (pure-visual, no side effect) marquee every presented frame instead of
+    // only at 60Hz.
+    m_bMarqueeActive = true;
+#else
     const float count = (float)m_Marquees.size();
     for (std::vector<MarqueeText*>::iterator it = m_Marquees.begin(); it != m_Marquees.end(); ++it) {
         MarqueeText* mt = *it;
@@ -480,7 +509,62 @@ void AboutScreen::Update(float dt)
             mt->pos.y = -50.0f;
         }
     }
+#endif
 }
+
+#ifndef __bada__
+// ---------------------------------------------------------------------------
+// Port specific: no binary counterpart -- see HUDControl::UpdateRealtime and
+// the state-machine split comment above Update(). Advances m_TransitionAlpha
+// per PRESENTED frame (dt-scaled via AS_APPROACH_F/AS_DECAY_F, defined near
+// the top of this file) for whichever of states 0/2 is currently active, and
+// scrolls the marquee (pure-visual, no side effect) once m_bMarqueeActive has
+// been latched by Update()'s m_EntryDelay gate. Update() (60Hz) reads the
+// resulting alpha to fire the (already rate-independent, threshold-based)
+// state transitions and one-shot side effects (CreateBackButton,
+// m_pParent->Reset()) -- those stay in Update() exactly like ShopScreen/
+// DojoScreen keep their state-transition side effects in Update() rather
+// than UpdateRealtime().
+//
+// Under __bada__ this function does not exist (see AboutScreen.h); Update()
+// eases m_TransitionAlpha and scrolls the marquee inline, byte-identical to
+// the binary.
+//
+// DIFFERS: v1.6.1 AboutScreen::Update @0x0015c350 eases m_TransitionAlpha and
+// scrolls the marquee per 60Hz sim tick; port eases/scrolls them per rendered
+// frame (dt-scaled) so both track display refresh. __bada__ keeps the
+// faithful 60Hz path.
+// ---------------------------------------------------------------------------
+void AboutScreen::UpdateRealtime(float dtSeconds) {
+    if (dtSeconds < 0.0f) dtSeconds = 0.0f;
+    if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
+    const float f = dtSeconds * 60.0f;
+
+    switch (m_State) {
+    case 0:
+        AS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
+        break;
+    case 2:
+        AS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
+        break;
+    default:
+        // State 1: no alpha easing in the binary's Update either.
+        break;
+    }
+
+    if (!m_bMarqueeActive) return;
+
+    const float count = (float)m_Marquees.size();
+    for (std::vector<MarqueeText*>::iterator it = m_Marquees.begin(); it != m_Marquees.end(); ++it) {
+        MarqueeText* mt = *it;
+        if (!mt) continue;
+        mt->pos.y += dtSeconds * 25.0f;
+        if (mt->pos.y >= count * 12.0f) {
+            mt->pos.y = -50.0f;
+        }
+    }
+}
+#endif
 
 // -----------------------------------------------------------------------
 // AboutScreen::NewDraw  @ 0x0015a264
