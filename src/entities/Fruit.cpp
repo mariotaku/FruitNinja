@@ -1427,9 +1427,14 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             }
 
             // Per-fruit-name save totals.
+            // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: two AddToTotal --
+            // per-name (m_Name) + per-_total; the per-name total feeds the No-Bananas
+            // bonus (frenzy/freeze/scorex2) via GetTotal(StringHash(powerName)).
             if (game_work.m_SaveData) {
-                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                game_work.m_SaveData->AddToTotal(info->m_Name, info->m_NameHash, 1,
                                          /*trackSession=*/false, false);
+                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                                         /*trackSession=*/true, false);
                 game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
                                          /*trackSession=*/true, false);
 

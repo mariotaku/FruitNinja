@@ -263,7 +263,8 @@ void PowerUpManager::Reset(bool fullReset) {
 
 // @ 0x00118904
 void PowerUpManager::ClearTimedPowers() {
-    m_HighestActiveProgress = 0.001f;    // DAT_001189b0
+    // ASM-spec v1.6.1 PowerUpManager::ClearTimedPowers @0x0014136c: literal 0.0 store.
+    m_HighestActiveProgress = 0.0f;
     m_pActiveSpecial = 0;
 
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
