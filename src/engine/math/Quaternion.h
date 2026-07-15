@@ -6,16 +6,22 @@
 #include <cmath>
 #include <cstdint>
 
-// Matches original Quaternion (16 bytes)
-struct Quaternion {
-    float x, y, z, w;
+// Templated `_Quaternion<T>` matching the binary's class name + ABI.
+// Mangled symbols in FruitNinja.exe reference `8_QuaternionIfE` at global
+// scope (Itanium ABI: name-length 8, name `_Quaternion`, template-arg
+// `<float>`) -- same convention as `_Vector3<T>` / `_Vector2<T>`.
+//
+// Size 16, TRIVIAL (no dtor in the binary). Fields x,y,z,w @ 0/4/8/12.
+template<class T>
+struct _Quaternion {
+    T x, y, z, w;
 
-    Quaternion() : x(0), y(0), z(0), w(1) {}
-    Quaternion(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+    _Quaternion() : x(0), y(0), z(0), w(1) {}
+    _Quaternion(T x, T y, T z, T w) : x(x), y(y), z(z), w(w) {}
 
     // Quaternion multiplication
-    Quaternion operator*(const Quaternion& q) const {
-        return Quaternion(
+    _Quaternion operator*(const _Quaternion& q) const {
+        return _Quaternion(
             w * q.x + x * q.w + y * q.z - z * q.y,
             w * q.y - x * q.z + y * q.w + z * q.x,
             w * q.z + x * q.y - y * q.x + z * q.w,
@@ -23,18 +29,18 @@ struct Quaternion {
         );
     }
 
-    Quaternion normalized() const {
-        float len = sqrtf(x * x + y * y + z * z + w * w);
-        if (len < 1e-8f) return Quaternion();
-        float inv = 1.0f / len;
-        return Quaternion(x * inv, y * inv, z * inv, w * inv);
+    _Quaternion normalized() const {
+        T len = T(std::sqrt((double)(x * x + y * y + z * z + w * w)));
+        if (len < T(1e-8)) return _Quaternion();
+        T inv = T(1) / len;
+        return _Quaternion(x * inv, y * inv, z * inv, w * inv);
     }
 
     // Matches QuatFromAxisAngle used in Fruit::Update
-    static Quaternion FromAxisAngle(const _Vector3<float>& axis, float angleRad) {
-        float half = angleRad * 0.5f;
-        float s = sinf(half);
-        return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));
+    static _Quaternion FromAxisAngle(const _Vector3<T>& axis, T angleRad) {
+        T half = angleRad * T(0.5);
+        T s = T(std::sin((double)half));
+        return _Quaternion(axis.x * s, axis.y * s, axis.z * s, T(std::cos((double)half)));
     }
 
     // ASM-verified: 2026-05-06T00:00 v1.6.1 Matrix33Unit @0x001e3064 / Matrix44Unit @0x001e32cc / Copy33To44 @0x001bf3b8 (asm-inspector)
@@ -55,9 +61,9 @@ struct Quaternion {
     // i.e. transposing the standard Hamilton rotation matrix.
     Matrix44 ToMatrix44() const {
         Matrix44 mat;
-        float xx = x * x, yy = y * y, zz = z * z;
-        float xy = x * y, xz = x * z, yz = y * z;
-        float wx = w * x, wy = w * y, wz = w * z;
+        T xx = x * x, yy = y * y, zz = z * z;
+        T xy = x * y, xz = x * z, yz = y * z;
+        T wx = w * x, wy = w * y, wz = w * z;
 
         mat.m[0]  = 1.0f - 2.0f * (yy + zz);
         mat.m[1]  = 2.0f * (xy - wz);
@@ -75,22 +81,28 @@ struct Quaternion {
         return mat;
     }
 
-    static Quaternion Identity() { return Quaternion(0, 0, 0, 1); }
+    static _Quaternion Identity() { return _Quaternion(0, 0, 0, 1); }
 
     // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017ac68 (asm-inspector)
     // 16-bit angle encoding (0x10000 = 2pi). The axis is NOT normalized by
     // this function -- binary does not normalize, caller is responsible for
     // unit-length axes. Calls SinIdx 3x (one per component) + CosIdx 1x;
     // tail-calls Quaternion_Identity if cos(half)==0 (degenerate angle).
-    void CreateFromAxisAngle(float ax, float ay, float az, uint32_t angle16) {
-        const float rad  = (float)(int32_t)angle16 * (6.2831853f / 65536.0f);
-        const float half = rad * 0.5f;
-        const float s    = sinf(half);
+    void CreateFromAxisAngle(T ax, T ay, T az, uint32_t angle16) {
+        const T rad  = (T)(int32_t)angle16 * (T)(6.2831853f / 65536.0f);
+        const T half = rad * T(0.5);
+        const T s    = T(std::sin((double)half));
         x = ax * s;
         y = ay * s;
         z = az * s;
-        w = cosf(half);
+        w = T(std::cos((double)half));
     }
 };
+
+// The binary's `_Quaternion<float>` instantiation -- the port's sole
+// Quaternion type. Bridge typedef keeps every existing name-based use
+// (Fruit, Jiblet, SuperFruitControl, RenderInterp, tests) compiling
+// unchanged; none depend on offsetof/sizeof, so no call-site edits needed.
+typedef _Quaternion<float> Quaternion;
 
 #endif
