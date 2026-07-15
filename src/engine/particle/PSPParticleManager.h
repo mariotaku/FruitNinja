@@ -72,7 +72,10 @@ struct PSPParticleTemplate {
     int16_t  m_SpinEndMin;         // +0x52
     int16_t  m_SpinStartMax;       // +0x54
     int16_t  m_SpinEndMax;         // +0x56
-    uint16_t m_BlendMode;          // +0x58
+    uint16_t m_BlendMode;          // +0x58 -- parsed from XML, unused by Draw: see
+                                    // DIFFERS note in PSPParticleManager.cpp
+                                    // FlushParticleVerts (binary sets glBlendFunc
+                                    // once at init, never per-template).
     uint16_t _pad5a;               // +0x5A
     // +0x5C
     float    m_AngleMin;           // +0x5C
