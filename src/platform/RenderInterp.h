@@ -14,6 +14,16 @@
 //     the exact sim-step values afterwards so the next Update sees clean state.
 //   - Keyed on Entity* (stable pool pointer) + m_RuntimeID + entityType to
 //     detect pool-slot reuse (prevents teleport-lerp to a dead entity's position).
+//   - Teleport-safety (Phase 2): mid-life edge-warp teleports (a live entity's
+//     position field jumps far in one committed step -- e.g.
+//     Fruit::CheckHasGoneOffscreen warping one sliced half off-screen while
+//     the other half stays live) are NOT caught by the pool-reuse guard above
+//     (same pointer, same runtimeId, still alive). Each interpolated POSITION
+//     field is lerped only when |cur-prev| <= TELEPORT_DIST; above that it
+//     snaps straight to cur. See TELEPORT_DIST's comment for the threshold
+//     derivation. Applies to Fruit::pos, Fruit::m_SecondPos, Bomb::pos, and
+//     Jiblet::pos; rotation/scale/zPos fields are unaffected (the audited
+//     teleport sites only ever move position).
 //
 // Interpolated types and fields:
 //   Fruit (type 0):  pos.xyz, scale.xyz, m_ZPosition(+0x9C),
@@ -108,6 +118,31 @@ private:
         return _Vector3<float>(Lerpf(a.x, b.x, t), Lerpf(a.y, b.y, t), Lerpf(a.z, b.z, t));
     }
     static Quaternion Slerp(const Quaternion& a, const Quaternion& b, float t);
+
+    // Port specific: teleport-safety (Phase 2). Fruit::CheckHasGoneOffscreen
+    // (Fruit.cpp edge-warps, ~1075-1155) snap a sliced half's pos/m_SecondPos
+    // to a screen-far coordinate (jumps of ~110-570 units) as an offscreen-kill
+    // detector; the other half sometimes stays live+onscreen the same frame, so
+    // the warped field survives to the next SnapshotAfterStep and ApplyForDraw
+    // would lerp prev(onscreen) -> cur(warped) into a 1-frame streak. Max
+    // legitimate per-60Hz-step position delta is the fruit launch speed
+    // (WaveManager::SpawnFruit: speed 9.5..11.0 * 1.075 boost =~ 11.8/step,
+    // roughly doubling over a few seconds of sliced-fruit gravity growth --
+    // still well under 30) vs. the smallest teleport jump (~110, the X edge
+    // warp). TELEPORT_DIST=60 sits in that gap: any single-field delta this
+    // large this step can only be a warp, never real motion, so snap straight
+    // to `cur` instead of lerping.
+    static const float TELEPORT_DIST;
+
+    // Per-field snap-or-lerp: |cur-prev| > TELEPORT_DIST -> cur, else lerp.
+    // Position fields only (pos / m_SecondPos / Jiblet pos) -- rotation/scale
+    // are never teleported by the audited call sites.
+    static _Vector3<float> LerpOrSnapVec3(const _Vector3<float>& a, const _Vector3<float>& b, float t)
+    {
+        _Vector3<float> d(b.x - a.x, b.y - a.y, b.z - a.z);
+        if (d.Magnitude() > TELEPORT_DIST) return b;
+        return LerpVec3(a, b, t);
+    }
 };
 
 } // namespace fn
