@@ -2071,11 +2071,11 @@ void SlashEntity::Update(float dt) {
         FruitCamera* cam = game_work.m_FruitCamera;
         _Vector3<float> splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
         // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false).
-        //   landImmediately=false is correct here.
         // ASM-spec v1.6.1 trail caller @0x001e9788: mute arg = (FruitInfo+0x330
         // m_bIsSuperFruit != 0) -- super-fruit splats land silent.
-        s->MakeSplat(splatPos, v, false, false, (long)m_SliceFruitType,
-                     /*mute=*/sliceInfo != 0 && sliceInfo->m_bIsSuperFruit != 0);
+        s->MakeSplat(splatPos, v, false,
+                     /*mute=*/sliceInfo != 0 && sliceInfo->m_bIsSuperFruit != 0,
+                     (long)m_SliceFruitType);
     }
 }
 

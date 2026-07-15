@@ -100,15 +100,15 @@ public:
     // Destructor pair (vtable slots 0 and 1)
     virtual ~SplatEntity();
 
-    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910:
-    //   (Vec3 pos, Vec3 vel, bool param3, bool landImmediately, long fruitType, bool mute)
-    // landImmediately=true forces the splat to skip the airborne phase and land instantly
-    // (ExplodeSuperFruit radial jibs path). param3 biases landing RNG toward large types 4/5.
-    // ASM-spec v1.6.1 SplatEntity::MakeSplat @0x001eb910: m_bMuteSfx = caller mute arg
-    //   = (FruitInfo::m_bIsSuperFruit @+0x330 != 0). Super-fruit splats land silent.
-    // TODO: v1.6.1 0x001eb910 -- confirm MakeSplat 4th arg (port landImmediately vs binary
-    //   m_bParam3/long) against ExplodeSuperFruit @0x001bab08 before trusting param order.
-    void MakeSplat(_Vector3<float> pos, _Vector3<float> vel, bool param3, bool landImmediately, long fruitType, bool mute);
+    // ASM-verified: 2026-07-15T00:00Z v1.6.1 SplatEntity::MakeSplat @ 0x001eb910 (asm-inspector)
+    //   Signature: (Vec3 pos, Vec3 vel, bool param3, bool mute, long fruitType).
+    //   Always spawns AIRBORNE (m_SplatType=-1) with the real launch velocity;
+    //   there is no immediate-landing path in the binary. Splats land via
+    //   normal Update physics (m_Pos.z < -50 threshold). param3 biases the
+    //   landing-type RNG toward large types 4/5 (applied in Update, not here).
+    //   mute = caller's (FruitInfo::m_bIsSuperFruit @+0x330 != 0) -- super-fruit
+    //   splats land silent (m_bMuteSfx).
+    void MakeSplat(_Vector3<float> pos, _Vector3<float> vel, bool param3, bool mute, long fruitType);
 
     // --- Pool API ---
     // Binary: SplatEntity::CreatePool @ 0x001eb490 -- flat round-robin pool
