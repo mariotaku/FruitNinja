@@ -1,4 +1,4 @@
-﻿// GameOverScreen -- binary ctor 0x001882a0, Initialise 0x00187c90, Update 0x00186c80
+// GameOverScreen -- binary ctor 0x001882a0, Initialise 0x00187c90, Update 0x00186c80
 // PreDrawOrder 0x00186894, DrawOrder 0x00186484, Release 0x00185970, dtor 0x00185d40.
 // vtable @ 0x002cd5c0. Size 0x160 (operator new @ 0x001cb788).
 
@@ -334,9 +334,9 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // Binary: Arcade(2)→GOT+0x7390, Zen(3)→GOT+0x74ec, else Classic→GOT+0x761c
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
-        if (gameMode == Mortar::GAME_MODE_ARCADE)
+        if (gameMode == GAME_MODE_ARCADE)
             bgTex = g_ArcadeTimeUpTitleTex;
-        else if (gameMode == Mortar::GAME_MODE_ZEN)
+        else if (gameMode == GAME_MODE_ZEN)
             bgTex = g_TimeUpTitleTex;
         else
             bgTex = g_GameOverTitleTex;
@@ -372,10 +372,10 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             m_pTitleString->SetShadow(2.0f, Colour(0,0,0,255), _Vector3<float>(-6.0f,-6.0f,0.0f), false);
 
             // 7. SetGradient by mode
-            if (gameMode == Mortar::GAME_MODE_ARCADE) {
+            if (gameMode == GAME_MODE_ARCADE) {
                 m_pTitleString->SetGradient(
                     Colour(0xf3, 0xfb, 0, 255), Colour(7, 0x33, 0, 255), false);
-            } else if (gameMode == Mortar::GAME_MODE_ZEN) {
+            } else if (gameMode == GAME_MODE_ZEN) {
                 m_pTitleString->SetGradient(
                     Colour(0xd1, 0x4e, 0x17, 255), Colour(0x78, 0x1a, 0xd, 255), false);
             } else {
@@ -385,7 +385,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             }
 
             // 8. SetText by mode: Classic→0x2db, Arcade&Zen→0x2f9
-            if (gameMode == Mortar::GAME_MODE_CLASSIC) {
+            if (gameMode == GAME_MODE_CLASSIC) {
                 m_pTitleString->SetText(
                     GETSTRING((LocalizedString)0x2db, 0));
             } else {
@@ -416,7 +416,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_pQuitBtn        = 0;   // +0xB0
     m_pSlotB4         = 0;
     m_pRetryBtn       = 0;   // +0xA4
-    m_bIsClassic      = (gameMode == Mortar::GAME_MODE_CLASSIC) ? 1 : 0;
+    m_bIsClassic      = (gameMode == GAME_MODE_CLASSIC) ? 1 : 0;
 
     // 12. Expression randomise
     if (expressionIdx < 1) {
@@ -467,7 +467,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_reserved145 = 1;
 
     // 17. Arcade off-screen seed
-    if (gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (gameMode == GAME_MODE_ARCADE) {
         pos = _Vector3<float>(0.0f, -320.0f, 0.0f);
         if (param2 == 1 && param3 <= 0.0f) {
             m_State = STATE_BONUS_PHASE;
@@ -758,7 +758,7 @@ void GameOverScreen::FindMostOfFruit() {
     for (int i = 0; i < count && i < FRUIT_INFO_MAX; ++i) {
         const FruitInfo* fi = FruitInfo_Get(i);
         if (!fi) continue;
-        if (gameMode == Mortar::GAME_MODE_ARCADE && fi->m_pPowers == 0) continue;
+        if (gameMode == GAME_MODE_ARCADE && fi->m_pPowers == 0) continue;
         candidates[numCandidates++] = i;
     }
 
@@ -1051,7 +1051,7 @@ void GameOverScreen::Update(float dt) {
         }
 
         if (m_Timer > 1.9f) {
-            if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+            if (game_work.gameMode == GAME_MODE_ARCADE) {
                 m_State = STATE_BONUS_PHASE;
                 m_Timer = -0.333f;
             } else {
@@ -1154,7 +1154,7 @@ void GameOverScreen::Update(float dt) {
             // Binary (v1.6.1 GameOverScreen::Update @0x00187220) uses three INDEPENDENT
             // if-checks: gm==3, gm==2, gm==0. COMBO (gm==1) receives no fact page.
             uint8_t gm = game_work.gameMode;
-            if (gm == Mortar::GAME_MODE_ZEN) {
+            if (gm == GAME_MODE_ZEN) {
                 m_pZenPage = new FruitFactZenPage(m_pFruitFact);
                 // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
                 // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
@@ -1164,7 +1164,7 @@ void GameOverScreen::Update(float dt) {
                 m_pFruitFact->RegisterPage(m_pZenPage);
                 m_pZenPage->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
-            } if (gm == Mortar::GAME_MODE_ARCADE) {
+            } if (gm == GAME_MODE_ARCADE) {
                 m_pBonusFactPage = new FruitFactBonusFactPage(m_pFruitFact);
                 // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
                 // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
@@ -1174,7 +1174,7 @@ void GameOverScreen::Update(float dt) {
                 m_pFruitFact->RegisterPage(m_pBonusFactPage);
                 m_pBonusFactPage->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
-            } if (gm == Mortar::GAME_MODE_CLASSIC) {
+            } if (gm == GAME_MODE_CLASSIC) {
                 m_pClassicFactPage = new FruitFactClassicFactPage(m_pFruitFact, 0, 0);
                 // DIFFERS: port adds m_bNoDestructor=1 (and RemoveCallback) for double-free safety;
                 // v1.6.1 GameOverScreen::Update @0x00187220 leaves ctor default (0) / no callback
@@ -1231,13 +1231,13 @@ void GameOverScreen::Update(float dt) {
                     AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, GetCurrentModeHighscore());
 
                     // Defunct: leaderboard score submit -- no-op stub; v1.6.1 GameOverScreen @0x00186c80
-                    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) {
+                    if (game_work.gameMode != GAME_MODE_ARCADE) {
                         // Defunct: RefreshLeaderboard/FNHighscoreList::AddPlayerScore
                         // no-op stubs per online-services-audit
                     }
 
                     // Zen combo star achievement
-                    if (m_pZenPage && game_work.gameMode == Mortar::GAME_MODE_ZEN) {
+                    if (m_pZenPage && game_work.gameMode == GAME_MODE_ZEN) {
                         int comboLevel = (int8_t)m_pZenPage->m_ComboLevel;
                         if (comboLevel >= 0 && comboLevel < 25) {
                             AchievementManager::GetInstance()->UnlockComboStarAchievement(
@@ -1265,7 +1265,7 @@ void GameOverScreen::Update(float dt) {
                         // Defunct: NetworkManager::SetLeaderboardScore -- no-op stub
                     }
 
-                    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                    if (game_work.gameMode == GAME_MODE_ARCADE) {
                         BonusManager::GetInstance()->UnlockPostGameAchievements();
                     }
 

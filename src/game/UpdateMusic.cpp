@@ -1,4 +1,4 @@
-﻿// UpdateMusic — music crossfade state machine
+// UpdateMusic — music crossfade state machine
 // Binary: v1.6.1 UpdateMusic @0x001cc18c (entry; body 0x001cc18c-0x001cc593).
 // NOTE: the inline per-instruction 0x0016a6xx / string-data 0x001bcxxx
 // addresses below are STALE v1.5.1 residue (the function moved to 0x001cxxxx
@@ -191,7 +191,7 @@ void UpdateMusic(float dt) {
     //   AND GetNumEntities(Fruit) != 0  AND GetNumEntities(Bomb) != 0
     // TODO: comment formerly said "Zen/ZenBlitz" -- binary's 0x02 is GAME_MODE_ARCADE.
     // -----------------------------------------------------------------------
-    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {    // 0x0016a726
+    if (game_work.gameMode == GAME_MODE_ARCADE) {    // 0x0016a726
         if (!g_armedArcade) {                            // 0x0016a730
             if (game_work.m_PauseAmount >= 0.0f) {       // 0x0016a742
                 bool skip_arm = false;

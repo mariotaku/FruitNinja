@@ -1,4 +1,4 @@
-﻿#include "Fruit.h"
+#include "Fruit.h"
 #include "SuperFruitControl.h"
 #include "debug/Logger.h"
 #include "game/GameMode.h"
@@ -832,7 +832,7 @@ void Fruit::PostUpdate(float dt) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
         // ASM-spec v1.6.1 Fruit::DrawUpdate @0x001da618 — gate is
         // gameMode == ARCADE (literal cmp #0x2) plus s_ModPowerMask bit 0x20.
-        const bool arcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool arcade = (game_work.gameMode == GAME_MODE_ARCADE);
         const bool strictBounce = arcade && IsArcadeStrictBounceActive();
         if (strictBounce) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
@@ -953,7 +953,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
                 //   else (Zen) -> nothing
                 // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
-                if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                if (game_work.gameMode == GAME_MODE_ARCADE) {
                     // Arcade: tracking only, no life loss, no MissControl spawn.
                     // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8
                     // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
@@ -1460,7 +1460,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
         //                                               slice ever (savefile-wide).
         //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
-        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game_work.gameMode == GAME_MODE_ARCADE) {
             WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
             if (game_work.m_SaveData) {
                 static const uint32_t hFirstFruit = StringHash("first_fruit");

@@ -21,7 +21,7 @@ typedef int (*ScoreDelegateFn)(int);
 extern ScoreDelegateFn g_ScoreDelegate;
 
 // ASM-spec v1.6.1 DefaultScoreDelegate @ 0x0011a23c: applies the PowerUpManager gain/loss
-// multiplier only when game_work.gameMode == Mortar::GAME_MODE_ARCADE; all other modes
+// multiplier only when game_work.gameMode == GAME_MODE_ARCADE; all other modes
 // return n unchanged.
 int DefaultScoreDelegate(int n);
 

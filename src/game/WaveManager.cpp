@@ -1,4 +1,4 @@
-﻿#include "WaveManager.h"
+#include "WaveManager.h"
 #include "game/GlobalProbabilityOveride.h"
 #include "GameMode.h"
 #include "ScoreState.h"
@@ -666,7 +666,7 @@ void WaveManager::Reset(bool fullReset) {
     // popups never render. Binary's resume-from-save path repeats the same
     // gated call (0x00124d12..0x00124d1e); the port already mirrors that one
     // in WaveManager::Load.
-    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (game_work.gameMode == GAME_MODE_ARCADE) {
         PowerUpManager::GetInstance()->LoadTextures();
     }
 
@@ -891,7 +891,7 @@ void WaveManager::Resume() {
             // Binary @ 0x00124b1c (kind==1 overlay restore).
             Bomb* b = static_cast<Bomb*>(e);
             b->m_AccelForce = _Vector3<float>(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
-            if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) b->SetForPlayer(1);
+            if (game_work.gameMode == GAME_MODE_ARCADE) b->SetForPlayer(1);
             // Chuck/SetHit gate: m_Wait > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
             if (es.m_Wait > 0.0f) {
                 if (es.m_BombHitFlag == 0)
@@ -938,7 +938,7 @@ void WaveManager::Resume() {
 
     // 8. Arcade mode (m_GameMode == 2): PowerUpManager::LoadTextures().
     // Binary @ 0x0011840c — iterates m_AllPowerUps and m_ScreenEffectPool.
-    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (game_work.gameMode == GAME_MODE_ARCADE) {
         PowerUpManager::GetInstance()->LoadTextures();
     }
 
@@ -1122,7 +1122,7 @@ void WaveManager::NewGame() {
 //   Cross-compile matches binary instruction-for-instruction: ldrb game_work+0x4 == 2, movne/moveq.
 bool PowersEnabled() {
     // Binary: ldrb game_work+0x4 (1-byte gameMode) == 2 (GAME_MODE_ARCADE); no Game::GetInstance guard.
-    return game_work.gameMode == Mortar::GAME_MODE_ARCADE;
+    return game_work.gameMode == GAME_MODE_ARCADE;
 }
 
 void WaveManager::ResetGlobalDt(float dt) {
@@ -1381,7 +1381,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 
                         int blitzAdvance = 0;
                         bool gateOpen = false;
-                        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        if (game_work.gameMode == GAME_MODE_ARCADE) {
                             float timeRemaining = 0.0f;
                             float countdownStart = 0.0f;
                             if (game_work.mCountDown) {
@@ -1395,7 +1395,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 
                         // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c: blitz state machine
                         // is Arcade-only. Non-Arcade must never advance m_BlitzState/m_NextBlitzTime.
-                        if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) {
+                        if (game_work.gameMode != GAME_MODE_ARCADE) {
                             blitzAdvance = 0;
                         } else if (!gateOpen) {
                             blitzAdvance = 0;
@@ -1620,7 +1620,7 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
     Game* game = Game::GetInstance();
     if (!game) return;
     if (game_work.m_PauseAmount != 0.0f) return;
-    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) return;
+    if (game_work.gameMode != GAME_MODE_ARCADE) return;
 
     // Ease m_ComboSpeed (+0x58) toward target (or 0 if target < 2.9).
     // Binary: divide both ease delta and decay by m_ComboSpeedDivisor (+0x80).
@@ -2170,7 +2170,7 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
             b->MakeFat(false);
 
         Game* game = Game::GetInstance();
-        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE)
+        if (game && game_work.gameMode == GAME_MODE_ARCADE)
             b->SetForPlayer(1);  // arcade single-player
     }
 }

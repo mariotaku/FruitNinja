@@ -602,7 +602,7 @@ void ShopListItem::DrawDescription() {
                     : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;  // 0xD7 (not met)
             } else {
                 bool playedToday = (game_work.m_SaveData != nullptr)
-                    && game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
+                    && game_work.m_SaveData->PlayedModeToday(GAME_MODE_ZEN);
                 conditionMet = playedToday;
                 promptId = playedToday
                     ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY       // 0xCF (met)

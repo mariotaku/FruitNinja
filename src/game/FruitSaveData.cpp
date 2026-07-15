@@ -422,11 +422,11 @@ void FruitSaveData::CheckDatesHaveChanged() {
 // The binary does NOT bounds-check gameMode before indexing m_LastPlayedDay /
 // calling GetModeName -- it indexes/calls unconditionally. The port's
 // `if (gameMode < 0 || gameMode >= 4) return false;` was a port-invented guard
-// with no binary counterpart; since Mortar::GameMode only declares 0..3, the
+// with no binary counterpart; since GAME_MODE only declares 0..3, the
 // compiler proves it tautologically false (-Wtautological-constant-out-of-range-compare)
 // and it is also dead at the port's sole call site (ShopListItem.cpp passes
 // the GAME_MODE_ZEN literal). Removed to match the binary exactly.
-bool FruitSaveData::PlayedModeToday(Mortar::GameMode gameMode) {
+bool FruitSaveData::PlayedModeToday(GAME_MODE gameMode) {
     if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
     char buf[68];
     snprintf(buf, sizeof(buf), "%s_days", k_ModeNames[gameMode]);

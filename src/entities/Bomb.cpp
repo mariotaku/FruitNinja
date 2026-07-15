@@ -1,4 +1,4 @@
-﻿#include "Bomb.h"
+#include "Bomb.h"
 #include "game/GameMode.h"
 #include "network/P2PMessageHandling.h"
 #include "ActorManager.h"
@@ -517,7 +517,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
     Game* game = Game::GetInstance();
 
     if (m_bMenuBombHit == 0 && game != nullptr) {
-        const bool isArcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool isArcade = (game_work.gameMode == GAME_MODE_ARCADE);
 
         if (isArcade) {
             // Arcade path: stat first, then ResetSpeed FIRST, then HitMenuBomb, shake, score, powers
