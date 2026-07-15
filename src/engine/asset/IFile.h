@@ -32,8 +32,10 @@ public:
     virtual bool WriteEncrypted(const void* src, unsigned long n) = 0;
     // Binary @ vtbl+0x18
     virtual bool Write(const void* src, unsigned long n) = 0;
-    // Binary @ vtbl+0x1c — mode: 0=SET, 1=CUR, 2=END (matches FileSeekMode / POSIX)
-    virtual int Seek(int mode, long offset) = 0;
+    // Binary @ vtbl+0x1c @ 0x00255104 — whence: 0=SET, 1=CUR, 2=END (matches FileSeekMode / POSIX).
+    // 3rd param `absolute` is unused in the IFile_Direct body (m_Position set unconditionally
+    // from offset); kept for vtable-slot fidelity, not given invented behavior.
+    virtual int Seek(unsigned long whence, long offset, bool absolute) = 0;
     // Binary @ vtbl+0x20
     virtual unsigned int Tell() = 0;
 

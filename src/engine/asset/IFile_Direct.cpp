@@ -61,14 +61,14 @@ bool IFile_Direct::Write(const void* src, unsigned long n) {
 
 // ASM-verified: 2026-06-29 v1.6.1 IFile_Direct::Seek @ 0x00255104 (re-analyst)
 // Binary @ IFile vtbl+0x1c (IFile_Direct slot 7) @ 0x00255104
-// mode: 0=SEEK_SET, 1=SEEK_CUR, 2=SEEK_END (matches POSIX / FileSeekMode)
+// whence: 0=SEEK_SET, 1=SEEK_CUR, 2=SEEK_END (matches POSIX / FileSeekMode)
 // Returns 1=success / 0=fail (binary formula: (fseekret>1)?0:(1-fseekret))
-int IFile_Direct::Seek(int mode, long offset) {
+int IFile_Direct::Seek(unsigned long whence, long offset, bool /*absolute*/) {
     if (!m_fp) return -1;
     int posixWhence;
-    if (mode == 0)      posixWhence = SEEK_SET;
-    else if (mode == 1) posixWhence = SEEK_CUR;
-    else                posixWhence = SEEK_END;
+    if (whence == 0)      posixWhence = SEEK_SET;
+    else if (whence == 1) posixWhence = SEEK_CUR;
+    else                  posixWhence = SEEK_END;
     int result = fseek(m_fp, offset, posixWhence);
     if (result == 0) {
         long pos = ftell(m_fp);

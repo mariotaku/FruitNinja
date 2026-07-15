@@ -22,7 +22,7 @@ public:
     virtual bool         Read(void* dst, unsigned long n) override;
     virtual bool         WriteEncrypted(const void* src, unsigned long n) override;
     virtual bool         Write(const void* src, unsigned long n) override;
-    virtual int          Seek(int mode, long offset) override;
+    virtual int          Seek(unsigned long whence, long offset, bool absolute) override;
     virtual unsigned int Tell() override;
 
 private:

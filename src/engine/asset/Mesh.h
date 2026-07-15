@@ -39,6 +39,7 @@ struct Bounds3D {
 
 // Forward declarations for defunct/stub types referenced by binary API.
 class DrawEffectContainer;
+class TextureAtlasPage;
 
 // SharedPropsInfo -- value-type stored in Mesh::m_GroupsByName.
 // sizeof = 0x1c (28 bytes). Binary: ctor @0x002742c8, AddTextureMap @0x001b1394.
@@ -260,17 +261,21 @@ public:
     static void DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, float vMax,
                                  DrawEffectContainer* fx);
 
-    // Binary @ 0x00240e10 — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
-    static void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
-                            DrawEffectContainer* fx);
+    // Binary @ 0x00240e34 — forwards to DrawTris with primType=4 (GL_TRIANGLES); outer blend ignored.
+    static void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend = false,
+                            DrawEffectContainer* fx = 0, TextureAtlasPage* atlas = 0);
 
-    // Binary @ 0x00240c30 — forwards to DrawTris with primType=GL_TRIANGLE_STRIP; outer blend ignored.
-    static void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
-                             DrawEffectContainer* fx);
+    // Binary @ 0x00240e10 — forwards to DrawTris with primType=5 (GL_TRIANGLE_STRIP); outer blend ignored.
+    static void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend = false,
+                             DrawEffectContainer* fx = 0, TextureAtlasPage* atlas = 0);
 
-    // Binary @ 0x00240e34 — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
-    static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
-                         DrawEffectContainer* fx);
+    // Binary @ 0x00240c30 — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
+    // 6th param (atlas) is only touched when fx != NULL (bind pre-draw / unbind post-draw via
+    // page->GetTexture()->vtable[0xc]/[0x10]); every port call site passes fx==NULL so that
+    // path is unreached — kept for shape fidelity, not exercised.
+    static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
+                         bool blend = false, DrawEffectContainer* fx = 0,
+                         TextureAtlasPage* atlas = 0);
 
     // vtable slot 6 (+0x18): GenerateBindings(Vector) binary @ 0x0027350c
     // Walks m_GroupsByName rb-tree matching channelName/targetName vs uvwChannelName/opacityChannelName
