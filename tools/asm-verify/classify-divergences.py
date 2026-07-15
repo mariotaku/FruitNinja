@@ -184,6 +184,70 @@ def detect_port_guard(mangled, common, bin_only, port_only, lcs):
     return None
 
 
+COND_BRANCH_RE = re.compile(
+    r"^\s*(beq|bne|blt|ble|bgt|bge|bcs|bcc|bhi|bls|bmi|bpl|bvs|bvc)\w*\s+<SYM>")
+
+
+def _n_cond_branch(lines):
+    """Count conditional branches to a label (skip/continue-shaped control flow),
+    excluding calls (bl/blx render as CALL) and unconditional b."""
+    return sum(1 for l in lines if COND_BRANCH_RE.match(l))
+
+
+def detect_guard_skips_work(mangled, common, bin_only, port_only, lcs):
+    """Port added a conditional-branch GUARD the binary LACKS that SKIPS work with
+    side effects -- an invented early-`continue` / branch-over-a-loop-body (the
+    ScreenEffect::Activate `if (img.m_bAddedToHUD) continue;` that skipped every
+    AddControl, silently disabling all screen effects).
+
+    This is the DANGEROUS twin of detect_port_guard: a benign guard bails early by
+    RETURNING a safe default (materializes -1/0 and pops/returns -- the binary just
+    assumed non-null); a dangerous one branches PAST side-effecting code
+    (calls/stores) without returning, so it drops behaviour that never shows up as
+    a wrong value -- only as "the thing didn't happen". Auto-accepting these (as the
+    old port-guard=LOW did) hides real regressions, so this is HIGH (human review,
+    never auto-accept).
+
+    Tell: the divergence is LOCALIZED to a small net-added guard (1-2 compare-fed
+    conditional branches to a label that the binary lacks), NOT a wholesale rewrite
+    -- a handful of port-only lines, same size bound as detect_port_guard. In a
+    heavily-divergent function (low LCS, dozens of port-only lines) the guard can't
+    be isolated from codegen noise by a per-line diff, so we do NOT fire there (that
+    is what runtime/HLE verification is for) -- firing would flood HIGH with every
+    function whose compiler emitted one extra branch. There must be NO return-default
+    materialization (that is port-guard's LOW case) and the body must have side
+    effects (calls/stores) the branch can skip."""
+    # Localized only: a guard is a few added lines, not a near-rewrite. This is the
+    # key precision knob -- without it the detector fires on ~530 codegen-noisy rows.
+    extra = len(port_only) - len(bin_only)
+    if not (1 <= extra <= 6) or len(port_only) > 10:
+        return None
+    net_added_br = _n_cond_branch(port_only) - _n_cond_branch(bin_only)
+    if not (1 <= net_added_br <= 2):
+        return None
+    blob = "\n".join(port_only)
+    if not re.search(r"\b(cmp|tst|cbz|cbnz)\b", blob):
+        return None
+    # A benign early-return guard materializes a default (-1/0) into the result
+    # register; that is detect_port_guard's (LOW) job, not this one.
+    returns_default = bool(
+        re.search(r"\bmvn\w*\s+GREG,\s*#0\b", blob)
+        or re.search(r"\bmov\w*\s+GREG,\s*#-1\b", blob)
+    )
+    if returns_default:
+        return None
+    # The skipped region must have OBSERVABLE side effects, else dropping it is a
+    # no-op (and likely just a benign short-circuit).
+    body = common + bin_only + port_only
+    has_side_effect = any(
+        CALL_RE.search(l) or mnemonic(l) in ("str", "strb", "strh", "vstr")
+        for l in body
+    )
+    if not has_side_effect:
+        return None
+    return ("guard-skips-work", "HIGH")
+
+
 def detect_got_idiom(mangled, common, bin_only, port_only, lcs):
     """PIC/GOT addressing idiom difference: `add GREG, pc, GREG` or `.word`
     PICOFF lines differing across sides. Position-independent-code relocation
@@ -382,7 +446,10 @@ DETECTORS = [
     detect_static_init,   # benign, structural identity
     detect_sched,         # benign, identical multiset reordered
     detect_std_inline,    # benign, ctor store-run vs CALL
-    detect_port_guard,    # benign(deferred), extra defensive guard
+    detect_guard_skips_work,  # HIGH real bug -- invented guard that SKIPS side
+                              # effects; must run BEFORE port_guard so a dangerous
+                              # loop-continue guard isn't auto-accepted as benign
+    detect_port_guard,    # benign(deferred), extra defensive early-RETURN guard
     detect_got_idiom,     # benign, PIC relocation noise
     detect_addr_form,     # benign, same-value different instruction selection
     detect_wrong_field,   # HIGH real bug -- run before offset/const so a wholesale
@@ -688,6 +755,25 @@ GATE_FIXTURES = {
             "  bx lr",
         ],
     },
+    # ScreenEffect::Activate (the guard-skips-work HIGH case): the port added an
+    # `if (img.m_bAddedToHUD) continue;` bit-test guard the binary lacks (tst #1 +
+    # beq back to the loop head) that branches PAST the per-image AddControl calls,
+    # so no HUD control is ever created and every screen effect is invisible. The
+    # binary has no such guard. NOT a benign return-default bail -> HIGH, not the
+    # auto-accepted LOW port-guard.
+    "_ZN12ScreenEffect8ActivateEv": {
+        "reason": "26.2% LCS (191p vs 183b)",
+        "diff": [
+            "  ldr GREG, [GREG, #12]",
+            "+ ldrb GREG, [GREG, #13]",
+            "+ tst GREG, #1",
+            "+ beq <SYM>",
+            "  CALL <SYM>",
+            "  CALL <SYM>",
+            "  str GREG, [GREG, #16]",
+            "  bx lr",
+        ],
+    },
 }
 
 
@@ -697,6 +783,10 @@ def _gate_clearcombo(cause, lk):
 
 def _gate_critchance(cause, lk):
     return cause == "wrong-offset" and lk in ("HIGH", "MED")
+
+
+def _gate_guard_skips_work(cause, lk):
+    return lk == "HIGH" and cause == "guard-skips-work"
 
 
 def _gate_low_cause(want_cause):
@@ -717,6 +807,7 @@ GATE = [
     # BonusType ctor: mangled is _ZN9BonusTypeC1Ev / C2Ev.
     ("_ZN9BonusTypeC1Ev", "LOW std-inline", _gate_low_cause("std-inline")),
     ("_ZN19PROBABILITY_OVERIDE7GetTypeEv", "LOW port-guard", _gate_low_cause("port-guard")),
+    ("_ZN12ScreenEffect8ActivateEv", "HIGH guard-skips-work", _gate_guard_skips_work),
     ("_ZN4Math22GetUncompressedSizeLZ8EPKv", "LOW (benign)", _gate_low_any),
     ("_ZN10MenuButton12HasNewSymbolEv", "NOT HIGH", _gate_not_high),
     ("_ZN10MenuButton15IsLoadingSymbolEv", "NOT HIGH", _gate_not_high),
