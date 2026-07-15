@@ -357,6 +357,60 @@ bool Touch::IsSlotDown(int slot) const {
     return states1[slot].phase <= 0;
 }
 
+#ifndef __bada__
+// Port specific: task #13 -- per-present live finger position.
+// READ-ONLY ring scan: does NOT advance m_eventHead/m_eventTail, does NOT
+// call ___UpdateInternal, does NOT mutate states1/states2/phase. Touch::Update
+// (the 60Hz sim-tick drain) is the ONLY writer of the ring indices; this
+// function must never race it or double-consume an event.
+//
+// For each slot: default liveX/liveY = currX/currY (sim-tick-fresh baseline).
+// If the slot is active (phase < 1), scan the ring window [m_eventHead,
+// m_eventTail) for the NEWEST TEvnt (highest ring index, i.e. closest to
+// m_eventTail) whose extId matches the slot's extId AND isActive == true;
+// if found, liveX/liveY take that event's x/y instead. This surfaces finger
+// motion that arrived between sim ticks (accumulated in the ring since the
+// last Touch::Update drain) without disturbing the ring for the next
+// DispatchForSimTick.
+void Touch::RefreshLivePos() {
+    for (int slot = 0; slot < MAX_SLOTS; slot++) {
+        TouchState& s = states1[slot];
+        s.liveX = s.currX;
+        s.liveY = s.currY;
+        if (s.phase >= 1) continue;   // not active -- currX/currY baseline stands
+
+        uint32_t extId = s.extId;
+        bool found = false;
+        float foundX = 0.0f, foundY = 0.0f;
+        // Scan newest-to-oldest so the first (isActive) match found is the
+        // most recent sample -- matches "NEWEST" without needing a second pass.
+        for (int i = eventBuffer.m_eventTail - 1; i >= eventBuffer.m_eventHead; i--) {
+            const TEvnt& ev = eventBuffer.memory[i % MAX_EVENTS];
+            if (ev.isActive && ev.extId == extId) {
+                foundX = ev.x;
+                foundY = ev.y;
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            s.liveX = foundX;
+            s.liveY = foundY;
+        }
+    }
+}
+
+// Port specific: task #13. Falls back to currX/currY (already baked into
+// liveX/liveY by RefreshLivePos) when no newer ring sample exists.
+bool Touch::GetLivePos(int slot, float& x, float& y) const {
+    if (slot < 0 || slot >= MAX_SLOTS) return false;
+    const TouchState& s = states1[slot];
+    x = s.liveX;
+    y = s.liveY;
+    return s.phase < 1;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Free functions.
 

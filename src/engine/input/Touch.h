@@ -47,7 +47,10 @@ struct TouchState {
     uint32_t extId;    // +0x10  external pointer id (from SDL FingerID / slot index)
     uint32_t touchId;  // +0x14  internal monotonic id (from nextTouchId)
     int32_t  phase;    // +0x18  -1=just-pressed, 0=held, 1=released/free
-    // total 28 bytes
+    // total 28 bytes (__bada__)
+#if !defined(__bada__)
+    float liveX, liveY;   // Port specific: task #13 -- per-present live finger pos (0 bytes under __bada__)
+#endif
 };
 
 // Binary Mortar::Touch::TEvnt (20 bytes).
@@ -178,6 +181,26 @@ public:
     // by InputDeviceBada::Update; UI widgets use Tier A throughout.
     const TouchState* GetSlot(int slot) const;
     bool IsSlotDown(int slot) const;
+
+#ifndef __bada__
+    // Port specific: task #13 -- per-present (native-refresh-rate) finger
+    // tracking for UI SCROLL only. Touch/EDGE dispatch stays on the 60Hz sim
+    // tick (Touch::Update / DispatchForSimTick); this refreshes a SEPARATE
+    // liveX/liveY per active slot from the ring buffer WITHOUT draining it,
+    // so slicing (which reads InputEvent/m_RawTouchPos, never this) and the
+    // sim-tick dispatch (which drains the ring via Touch::Update) are both
+    // unaffected. Called once per PRESENTED frame from Game::tickRealtimeUi.
+    // See Touch.cpp for the ring-scan algorithm.
+    void RefreshLivePos();
+
+    // Port specific: task #13. Returns the current live position for `slot`
+    // (liveX/liveY, refreshed by RefreshLivePos every present) and whether
+    // the slot is active (phase < 1, same predicate as IsSlotDown). Falls
+    // back to currX/currY (baked into liveX/liveY by RefreshLivePos) when no
+    // newer ring sample exists, so callers get sim-tick-fresh data on
+    // presents where no new touch event arrived.
+    bool GetLivePos(int slot, float& x, float& y) const;
+#endif
 
     // Public fields matching binary layout.
     TouchState states1[MAX_SLOTS];    // +0x000  live polled state  (8*28=224B)

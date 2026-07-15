@@ -1035,7 +1035,15 @@ void SettingsScreen::UpdateScroll(float dt) {
         // Velocity/offset keep coasting/springing below -- a fling release
         // must NOT reset m_ScrollVel.
     } else {
-        // --- Held: disambiguate scroll-vs-widget, then damped-follow ---
+        // --- Held: disambiguate scroll-vs-widget (60Hz) ---
+        // Port specific: task #13 -- the damped-follow m_ScrollVel compute
+        // (Held-branch tail below UiDropdown's formula) moved to
+        // UpdateRealtime() so it recomputes at native present rate via
+        // GetLivePos instead of once per 60Hz tick via ts->currY (see
+        // SettingsScreen::UpdateRealtime). This branch keeps ONLY the
+        // scroll-vs-widget disambiguation (drag distance accumulation +
+        // m_ScrollOwnsTouch latch), which the widget-dispatch gate below
+        // needs at 60Hz.
         const Mortar::TouchState* ts = Mortar::Touch::GetInstance().GetSlot(m_ScrollTouchId);
         float currentX = ts ? ts->currX : m_ScrollAnchorPos.x;
         float currentY = ts ? ts->currY : m_ScrollAnchorPos.y;
@@ -1056,20 +1064,6 @@ void SettingsScreen::UpdateScroll(float dt) {
                 m_ScrollOwnsTouch = 1;
                 m_ScrollDragging = 1;
             }
-        }
-
-        if (m_ScrollOwnsTouch) {
-            // Damped-follow, mirroring UiDropdown's
-            // `(m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR`
-            // with delta UN-negated, exactly like UiDropdown (src/ui/
-            // UiDropdown.cpp ~148: `curYBase = panelTopY + m_ScrollOffset`,
-            // delta = currentY - anchor.y, not negated). An upward drag
-            // (finger moves up, currentY increases, dy>0) gives delta=dy>0,
-            // so m_ScrollY increases -> off=+m_ScrollY increases -> content
-            // shifts up, revealing later rows (FPS COUNTER) -- matching
-            // UiDropdown's finger-up-reveals-later-items model exactly.
-            float delta = dy;
-            m_ScrollVel = (m_ScrollY - (m_AnchorScroll + delta)) * DRAG_DELTA_FACTOR;
         }
     }
 
@@ -1144,6 +1138,22 @@ void SettingsScreen::UpdateRealtime(float dtSeconds) {
         // it; this screen must hand it the tick explicitly.
         if (m_LangDrop) m_LangDrop->UpdateRealtime(dtSeconds);
         return;
+    }
+
+    // --- Held-drag (moved): per-present damped-follow velocity compute ---
+    // Task #13 -- byte-copy of UpdateScroll()'s Held-branch m_ScrollVel
+    // formula (see the comment at that call site), but read at native present
+    // rate via GetLivePos instead of once per 60Hz tick via ts->currY. Gated
+    // to m_ScrollOwnsTouch (the SAME gate UpdateScroll()'s Held branch uses
+    // to decide the scroll, not a sibling widget, owns this drag); if no
+    // touch owns the scroll, m_ScrollVel is left as-is so a release fling
+    // keeps decaying via the integrate step below, untouched.
+    if (m_ScrollTouchId != -1 && m_ScrollOwnsTouch) {
+        float liveX, liveY;
+        if (Mortar::Touch::GetInstance().GetLivePos(m_ScrollTouchId, liveX, liveY)) {
+            float delta = liveY - m_ScrollAnchorPos.y;
+            m_ScrollVel = (m_ScrollY - (m_AnchorScroll + delta)) * DRAG_DELTA_FACTOR;
+        }
     }
 
     // --- Integrate + friction (rate-independent) ---
