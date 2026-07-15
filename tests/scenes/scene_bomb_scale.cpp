@@ -123,7 +123,7 @@ static bool RenderBombFrame(Bomb* homeBomb, Bomb* dojoBomb, Game& game,
 
     // Standard game projection (centered ortho).
     if (game_work.m_FruitCamera)
-        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, true);
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
 
     // 3D entity draw: depth write + test ON, matching GameDraw.
     dm.SetDepthBufferWrite(true);

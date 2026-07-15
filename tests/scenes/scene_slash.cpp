@@ -146,7 +146,7 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
     // Projection: blade uses the same centered ortho as fruits --
     // SetupOrtho(160, -160, -240, 240, 2000, -6000). Blade vertices are
     // in game touch space (-240..+240 x, -160..+160 y); no separate 2D ortho
-    // is needed. GameDraw calls SetupPerspective(PT_STANDARD, false) once at
+    // is needed. GameDraw calls SetupPerspective(FruitCamera::PT_STANDARD, false) once at
     // the top of the frame and DrawSlice inherits that same projection.
     int ww = 0, wh = 0;
     SDL_GL_GetDrawableSize(window, &ww, &wh);
@@ -164,7 +164,7 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
     // The blade vertices injected via touch coords (-192..+192 x, 0 y) are directly
     // in this coordinate space and will appear as a horizontal streak.
     if (game_work.m_FruitCamera)
-        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, true);
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
 
     // Blade trail: depth test OFF (matches GameDraw order for DrawSlice).
     // Binary @ 0x0016b888: SetDepthBuffer(0) before the per-finger DrawSlice loop.
@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
             glClearColor(0.13f, 0.10f, 0.08f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             if (game_work.m_FruitCamera)
-                game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, true);
+                game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
             dm.SetDepthBuffer(false);
             for (int i = 0; i < 16; ++i) {
                 if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
