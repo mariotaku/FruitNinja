@@ -93,7 +93,7 @@ void ScoreMultiplyerBoard::Update(float dt) {
     // (AddScoreNomals) so AddToCurrentScore doesn't re-apply the ARCADE gain
     // multiplier a second time -- m_ScoreValue is already the doubled total.
     if (t > 0.8f && m_PendingCount > 0) {
-        g_ScoreDelegate = &AddScoreNomals;
+        g_ScoreDelegate = Mortar::Delegate1<int,int>::MakeFree(&AddScoreNomals);
         AddToCurrentScore(m_ScoreValue, 0, false, false);
         PowerUpManager::GetInstance()->SetAppropriateScoreCallback();
         m_PendingCount = 0;
@@ -134,7 +134,7 @@ void ScoreMultiplyerBoard::Draw(float* /*hudScaleRaw*/) {
 // mid-payout with points still pending -- banks them immediately.
 void ScoreMultiplyerBoard::Save() {
     if (m_pOwner == 0 && m_PendingCount > 0) {
-        g_ScoreDelegate = &AddScoreNomals;
+        g_ScoreDelegate = Mortar::Delegate1<int,int>::MakeFree(&AddScoreNomals);
         AddToCurrentScore(m_ScoreValue, 0, false, false);
         PowerUpManager::GetInstance()->SetAppropriateScoreCallback();
         m_PendingCount = 0;

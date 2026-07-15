@@ -601,7 +601,7 @@ void PowerUpManager::SetAppropriateScoreCallback() {
             if (mod->GetType() == 2) {
                 ScoreModifier* sm = static_cast<ScoreModifier*>(mod);
                 if (sm->m_bDeferPoints) {
-                    SetScoreDelegate(sm);
+                    SetScoreDelegate(Mortar::Delegate1<int,int>::Make(sm, &ScoreModifier::DeferPoints));
                     return;
                 }
             }

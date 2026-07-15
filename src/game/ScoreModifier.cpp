@@ -47,7 +47,7 @@ void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_bDeferPoints) {
         static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(0);   // clears -1 sentinel
-        SetScoreDelegate(this);           // Callee<ScoreModifier> trampoline (v1.6.1 SetScoreDelegate @ 0x0011a440)
+        SetScoreDelegate(Mortar::Delegate1<int,int>::Make(this, &ScoreModifier::DeferPoints));  // v1.6.1 SetScoreDelegate @ 0x0011a440
     }
     ++m_ApplyCount;
 }
