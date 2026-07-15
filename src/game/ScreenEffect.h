@@ -44,7 +44,7 @@ uint32_t ParseMaskWords(const char* str, unsigned long* wordHashes, int count);
 class PowerUp;
 class HUDControl3d;
 
-// Binary @ 0x0011e150 children: "emmiter" (sic — original spelling preserved)
+// v1.6.1 ScreenEffect::Parse @0x00149800 children: "emmiter" (sic — original spelling preserved)
 // 24 bytes in binary (ARM32 layout).
 struct Emmiter {
     uint32_t                          m_NameHash;      // +0x00
@@ -68,11 +68,23 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // reads each slot; Ghidra's alt guesses (m_FadeIn/m_Hold/m_AlphaStart/...) are
     // the wrong interpretation and were corrected in the Ghidra DB to these names.
 
-    // +0x08  HUDControl*  runtime control ptr; copy-ctor copies, ScreenEffect copy
-    //                     resets to null. Not parsed from XML.
+    // +0x08  HUDControl*  runtime control ptr. v1.6.1 EffectImage::EffectImage(const&)
+    //                     @0x00145bd4 copies this VERBATIM (ScreenEffect's copy-ctor/
+    //                     operator= must NOT null it -- see ScreenEffect.cpp). Not
+    //                     parsed from XML.
     HUDControl*  m_pHudCtrl;         // +0x08
-    // +0x0c  bool  added-to-HUD guard. DIFFERS: binary default ctor sets 1; port
-    //               initialises false (HUD attach happens in Activate either way).
+    // +0x0c  bool  binary +0xc byte. NOT an activation gate -- v1.6.1
+    //               ScreenEffect::Activate @0x00148f08 (disasm @0x0014900c) reads
+    //               m_DeferKind at loop entry and unconditionally creates a HUD
+    //               control per image; it never reads this byte as a skip
+    //               condition. The only observed write is `strbeq r0,[r4,#0xc]`
+    //               (@0x00149184), which zeroes it ONLY when game_work.pM_pHud is
+    //               NULL -- i.e. this is a write-only "HUD was null" breadcrumb,
+    //               not a "already added" flag. A prior port revision added a
+    //               `if (img.m_bAddedToHUD) continue;` guard here that has no
+    //               binary counterpart and silently skipped every image (since
+    //               the ctor default below is true); that guard has been removed
+    //               from Activate. See tmp/asm-verify/screeneffect-pipeline-re.md.
     bool         m_bAddedToHUD;      // +0x0c
     // +0x0d  uint8_t  defer kind: 0=none, 1=points (ScoreMultiplyerBoard / Arcade x2),
     //               2=time (TimeSinkControl / Berry-Blast time-sink). XML
@@ -167,18 +179,20 @@ static_assert(offsetof(EffectImage, m_FlagBits)          == 0x74, "EffectImage::
 static_assert(offsetof(EffectImage, m_bLowEndOnly)       == 0x78, "EffectImage::m_bLowEndOnly @ +0x78");
 #endif
 
-// ~40 bytes
+// 0x28 (40) bytes. v1.6.1 ScreenTint::ScreenTint ctor @0x00149f30, Parse @0x00148324.
 struct ScreenTint {
-    float m_CurrentT;   // +0x00
-    float m_Length;     // +0x04
-    float m_StartT;     // +0x08
-    float m_FadeIn;     // +0x0C
-    _Vector3<float> m_ColourTo;   // +0x10
-    _Vector3<float> m_ColourFrom; // +0x1C
+    float m_CurrentT;       // +0x00  progress accumulator [0..1]; Update writes; lerp factor
+    float m_TransitionTime; // +0x04  XML "transitionTime"; fade rate
+    float m_TimeStart;      // +0x08  XML "timeStart"; default 1.0
+    float m_TimeEnd;        // +0x0c  XML "timeEnd"; default 0.0
+    _Vector3<float> m_BackTint; // +0x10  XML "backTint" (or "tint") -> HUD scales[3..5] (WORLD/background)
+    _Vector3<float> m_HudTint;  // +0x1c  XML "hudTint" (or "tint") -> HUD scales[0..2] (HUD/foreground)
 
+    // v1.6.1 ScreenTint::ScreenTint @0x00149f30: all tint components default
+    // (0,0,0), m_TimeStart=1.0, rest 0.0.
     ScreenTint()
-        : m_CurrentT(0.0f), m_Length(0.0f), m_StartT(0.0f), m_FadeIn(0.0f)
-        , m_ColourTo(1,1,1), m_ColourFrom(1,1,1)
+        : m_CurrentT(0.0f), m_TransitionTime(0.0f), m_TimeStart(1.0f), m_TimeEnd(0.0f)
+        , m_BackTint(0,0,0), m_HudTint(0,0,0)
     {}
 
     void Parse(TiXmlElement* xml);

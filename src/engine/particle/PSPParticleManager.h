@@ -389,6 +389,12 @@ public:
     // Binary @ 0x001148dc
     bool EmitterExists(uint32_t hash);
 
+    // v1.6.1 PSPEmitterTemplate::Ends @0x00114884 -- true if every set has a
+    // finite time window (stopT > 0) or zero continuous rate (i.e. the emitter
+    // is not indefinitely self-sustaining). Takes the raw emitter-template blob
+    // pointer (PSPParticleEmitter::m_pTemplate).
+    static bool EmitterEnds(const uint8_t* eBlob);
+
     // v1.6.1 PSPParticleManager::GetEmitterTemplate @0x0013c044 — variable-stride walk.
     // Returns pointer into m_pEmitterTemplates blob (or null if idx out of range).
     uint8_t* GetEmitterTemplate(int idx);

@@ -327,9 +327,8 @@ static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
     return idx;
 }
 
-// Matches PSPEmitterTemplate::Ends (0x00114884). Returns true if all sets have
-// a finite window (stopT > 0) or zero continuous rate.
-static bool EmitterTemplateEnds(const uint8_t* eBlob) {
+// v1.6.1 PSPEmitterTemplate::Ends @0x00114884
+bool PSPParticleManager::EmitterEnds(const uint8_t* eBlob) {
     if (!eBlob) return true;
     const PSPEmitterBlob* hdr = reinterpret_cast<const PSPEmitterBlob*>(eBlob);
     for (int si = 0; si < (int)hdr->m_NumSets; ++si) {
@@ -403,7 +402,7 @@ void PSPParticleManager::Update(float dt, bool paused) {
         bool keep = true;
         if (eBlob) {
             const PSPEmitterBlob* hdr = reinterpret_cast<const PSPEmitterBlob*>(eBlob);
-            const bool naturallyInfinite = !EmitterTemplateEnds(eBlob);
+            const bool naturallyInfinite = !PSPParticleManager::EmitterEnds(eBlob);
             if (hdr->m_MaxLifetime > 0.0f) {
                 keep = (node->m_Timer < hdr->m_MaxLifetime);
             } else {
