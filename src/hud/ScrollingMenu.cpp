@@ -206,6 +206,7 @@ ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
 // body verbatim (byte-identical ASM) -- no split, no UpdateRealtime, no new
 // members exist there at all.
 // ---------------------------------------------------------------------------
+// ASM-verified: 2026-07-15T02:35Z v1.6.1 ScrollingMenu::Update @ 0x001b03b4 (asm-inspector)
 void ScrollingMenu::Update(float /*dt*/) {
     using namespace Mortar;
 
@@ -368,11 +369,24 @@ void ScrollingMenu::Update(float /*dt*/) {
             if (ts) {
                 float currentY = (float)ts->currY;
                 float anchorY       = m_TouchAnchorPos.y;
-                float anchorScrollY = m_AnchorOffset.y;
 
+#ifdef __bada__
+                float anchorScrollY = m_AnchorOffset.y;
                 m_PendingVelocity.y = (m_Velocity.y -
                                        (anchorScrollY - (currentY - anchorY)))
                                       * DRAG_DELTA_FACTOR;
+#endif
+                // Port specific: task #13 -- the m_PendingVelocity.y compute
+                // above (drag-delta velocity formula) moved to UpdateRealtime
+                // (below), reading GetLivePos(m_TouchId) at native present
+                // rate instead of ts->currY at the fixed 60Hz tick. At THIS
+                // sim-tick moment liveY == currY (the ring was just drained
+                // by Touch::Update), so recomputing it here again would gain
+                // nothing -- only the per-present recompute (on the extra
+                // presents between sim ticks) delivers 120Hz tracking. Do
+                // NOT double-compute: __bada__ keeps the original single-pass
+                // compute verbatim (byte-identical ASM); the port build skips
+                // it here and does it once, in UpdateRealtime.
 
                 // Phase 3B: clear collided item if Slot13 (re-test) returns 0
                 if (m_pCollidedItem) {
@@ -580,6 +594,25 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
     if (dtSeconds < 0.0f) dtSeconds = 0.0f;
     if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
     const float f = dtSeconds * 60.0f;
+
+    // --- Phase 3B (moved): per-present drag-delta velocity compute ---
+    // Task #13 -- byte-copy of Update()'s Phase 3B m_PendingVelocity.y formula
+    // (see the comment at that call site), but read at native present rate via
+    // GetLivePos instead of once per 60Hz tick via ts->currY. Gated to
+    // m_TouchId != -1 (a drag is confirmed/owns the touch) -- the SAME gate
+    // Phase 7 below already uses to know a touch is live; when no touch is
+    // active this no-ops and m_PendingVelocity is left as-is (a release fling
+    // continues decaying via Phase 4 below, untouched).
+    if (m_TouchId != -1) {
+        float liveY, liveX;
+        if (Mortar::Touch::GetInstance().GetLivePos(m_TouchId, liveX, liveY)) {
+            float anchorY       = m_TouchAnchorPos.y;
+            float anchorScrollY = m_AnchorOffset.y;
+            m_PendingVelocity.y = (m_Velocity.y -
+                                   (anchorScrollY - (liveY - anchorY)))
+                                  * DRAG_DELTA_FACTOR;
+        }
+    }
 
     // --- Phase 4: velocity integration + friction (decaying IMPULSE) ---
     // pv *= powf(0.9,f); vel += pv ONCE -- do NOT multiply the add by f,

@@ -231,13 +231,13 @@ void UiDropdown::Update(float dt) {
             m_bDragging = 1;
         }
 
-        // Damped-follow: ease m_ScrollOffset toward the finger-tracked target.
-        // Mirrors ScrollingMenu's `(m_Velocity.y - (m_AnchorOffset.y - delta))
-        // * DRAG_DELTA_FACTOR` with delta negated to match m_ScrollOffset's
-        // sign being the negation of ScrollingMenu's m_Velocity.y (see the
-        // Update() header comment above): target = m_AnchorOffset + delta,
-        // so a positive delta (finger up) pulls m_ScrollOffset UP too.
-        m_PendingVel = (m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR;
+        // Port specific: task #13 -- the damped-follow m_PendingVel compute
+        // (formerly here, reading ts->currY once per 60Hz tick) moved to
+        // UpdateRealtime() so it recomputes at native present rate via
+        // GetLivePos instead. See UpdateRealtime() below; delta/m_DragDist/
+        // m_bDragging/hover detection above and below stay here at 60Hz
+        // (they gate widget disambiguation and touch-release semantics, not
+        // scroll smoothness).
 
         if (!m_bDragging) {
             // Stationary finger: drive hover highlight from the live row.
@@ -286,6 +286,22 @@ void UiDropdown::UpdateRealtime(float dtSeconds) {
     if (dtSeconds < 0.0f) dtSeconds = 0.0f;
     if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
     float f = dtSeconds * 60.0f;
+
+    // --- Held-drag (moved): per-present damped-follow velocity compute ---
+    // Task #13 -- byte-copy of Update()'s Held-branch m_PendingVel formula
+    // (see the comment at that call site), but read at native present rate
+    // via GetLivePos instead of once per 60Hz tick via ts->currY. Gated to
+    // m_TouchId != -1 (the panel is open and a touch is actively held --
+    // Update()'s "Held" branch, the SAME condition that ran this compute
+    // unconditionally at 60Hz; the compute is not further gated by
+    // m_bDragging there, so it isn't here either).
+    if (m_TouchId != -1) {
+        float liveX, liveY;
+        if (Mortar::Touch::GetInstance().GetLivePos(m_TouchId, liveX, liveY)) {
+            float delta = liveY - m_TouchAnchorPos.y;
+            m_PendingVel = (m_ScrollOffset - (m_AnchorOffset + delta)) * DRAG_DELTA_FACTOR;
+        }
+    }
 
     // --- Integrate + friction (rate-independent) ---
     m_PendingVel *= powf(SCROLL_FRICTION, f);

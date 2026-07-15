@@ -620,6 +620,20 @@ target_compile_definitions(test_input_tick_invariant PRIVATE FN_TEST)
 add_test(NAME input_tick_invariant COMMAND test_input_tick_invariant)
 set_tests_properties(input_tick_invariant PROPERTIES TIMEOUT 30)
 
+# Per-present (native 120Hz) UI SCROLL finger-tracking regression guard (task
+# #13). Pins Mortar::Touch::RefreshLivePos()/GetLivePos(): sub-tick
+# FINGERMOTIONs queued without a DispatchForSimTick leave states1[slot].currY
+# stale, RefreshLivePos+GetLivePos surfaces the newest queued ring sample, the
+# ring's m_eventHead/m_eventTail are unchanged by the scan (read-only -- never
+# races/desyncs the 60Hz sim-tick drain), and a following DispatchForSimTick
+# still applies every queued sample in order (determinism). Same harness
+# pattern as test_input_tick_invariant (real InputTranslatorSDL + real Touch,
+# SDL_INIT_EVENTS only -- no GL/audio).
+fn_add_game_test(test_realtime_drag_livepos test_realtime_drag_livepos.cpp)
+target_compile_definitions(test_realtime_drag_livepos PRIVATE FN_TEST)
+add_test(NAME realtime_drag_livepos COMMAND test_realtime_drag_livepos)
+set_tests_properties(realtime_drag_livepos PROPERTIES TIMEOUT 30)
+
 # Press-vs-motion blade gate regression guard (tap-bridge fix).
 # Drives the REAL chain SDL events -> InputTranslatorSDL -> InputManager ->
 # SlashEntity with synthetic event streams (SDL_INIT_EVENTS only; no GL, no

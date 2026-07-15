@@ -15,6 +15,7 @@
 #include "game/WaveManager.h"
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
+#include "engine/input/Touch.h"
 #include "screens/PauseScreen.h"
 #include "engine/core/SystemManager.h"
 #include "asset/TextureManager.h"
@@ -212,6 +213,14 @@ void Game::shutdown() {
 // no-op there instead.
 void Game::tickRealtimeUi(float dtSeconds) {
 #ifndef __bada__
+    // Task #13: refresh per-present live finger positions BEFORE any widget's
+    // UpdateRealtime runs this present, so ScrollingMenu/SettingsScreen/
+    // UiDropdown's drag-delta reads (Mortar::Touch::GetLivePos) see the
+    // newest ring sample for native-refresh-rate (120Hz) scroll tracking.
+    // EDGE/dispatch + slicing stay on the 60Hz sim tick (Touch::Update /
+    // DispatchForSimTick) -- this only refreshes the separate liveX/liveY
+    // shadow fields, read-only against the ring buffer.
+    Mortar::Touch::GetInstance().RefreshLivePos();
     if (game_work.mHud) {
         game_work.mHud->UpdateRealtime(dtSeconds);
     }
