@@ -671,8 +671,9 @@ void SettingsScreen::Init() {
         // once the language selection has changed (see Toggle()'s
         // quit-to-apply-language-change path) -- this ctor arg is just the
         // initial bake, immediately overwritten by the UpdateCloseButtonLabel()
-        // call at the end of Init() below.
-        GETSTRING(LSTR_DJ_BACK_BUTTON, 0),
+        // call at the end of Init() below. Port specific: English literal (this
+        // port-only screen keeps its Quit/Back label English regardless of locale).
+        "BACK",
         _Vector3<float>(1.0f, 1.0f, 1.0f)
     );
     m_pCloseButton->Init();
@@ -1542,8 +1543,10 @@ void SettingsScreen::OnLangChanged() {
 void SettingsScreen::UpdateCloseButtonLabel() {
     if (!m_pCloseButton || !m_pCloseButton->m_pLabelBox) return;
     bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
-    m_pCloseButton->m_pLabelBox->SetText(
-        langChanged ? GETSTRING(LSTR_QUIT, 0) : GETSTRING(LSTR_DJ_BACK_BUTTON, 0));
+    // Port specific: Settings is a port-only screen (no binary counterpart), so its
+    // close-button label stays ENGLISH regardless of locale (user preference; also
+    // sidesteps the localized-font path for these two words).
+    m_pCloseButton->m_pLabelBox->SetText(langChanged ? "QUIT" : "BACK");
 }
 
 // Port specific: m_pCloseButton's click callback -- runs Toggle()'s close
