@@ -102,7 +102,7 @@ void Game::Update(float dt_) { GameTaskUpdate(dt_); }
 void Game::Draw(float dt_) { GameTaskDraw(dt_); }
 
 // slot 13 @ 0x0010dbe4 — GamePreInitialise + SetHardware + GameInitialise + m_bLanguageSet
-void Game::Init(int argc, char** argv) {
+void Game::Init(int argc, const char** argv) {
     // Port specific: CombineCommandLine(argv) not ported; SDL port resolves data
     // path via working directory at launch, not via argv.
     (void)argc; (void)argv;

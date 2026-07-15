@@ -144,7 +144,7 @@ void FruitCamera::UpdateCamera(float dt) {
 // inverse=true:  view->world (rotate by -m_RollOut, multiply by zoom, add lookAt offset)
 // useZeroCenter=true: center = (0,0,0); false: center = (m_Target.x, m_Target.y, 0)
 // Returns pos unchanged when m_ZoomT <= 0 (not zooming).
-_Vector3<float> FruitCamera::TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter) const
+_Vector3<float> FruitCamera::TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter)
 {
     if (m_ZoomT <= 0.0f) return pos;
     _Vector3<float> center = useZeroCenter
@@ -261,7 +261,7 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
 // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
 // Assumed predicate: m_ZoomT<=0.0f (view not zoomed/rotated).
 // Consistent with TranslatePos no-op gate. TODO: verify exact predicate in binary.
-bool FruitCamera::ViewIsNormal() const {
+bool FruitCamera::ViewIsNormal() {
     return m_ZoomT <= 0.0f;
 }
 

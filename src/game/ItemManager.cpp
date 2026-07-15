@@ -195,7 +195,7 @@ void ItemManager::LoadItemData() {
 // -----------------------------------------------------------------------
 // IsEquipped @ 0x0015fa6c (address not re-verified for v1.6.1)
 // -----------------------------------------------------------------------
-int ItemManager::IsEquipped(ItemInfo* item) const {
+int ItemManager::IsEquipped(ItemInfo* item) {
     if (item == nullptr) return 0;
     return (m_DefaultItems[(int)item->m_Type] == item) ? 1 : 0;
 }
@@ -415,7 +415,7 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 // Binary: lookup m_ByHash; gate on m_Cost < 0; UnEquip current slot; SetEquippedItem.
 // ASM-verified: 2026-05-23 v1.6.1 ItemManager::EquipItem @ 0x00139ccc (re-analyst)
 // -----------------------------------------------------------------------
-int ItemManager::EquipItem(unsigned int hash) {
+int ItemManager::EquipItem(unsigned long hash) {
     std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
     if (it == m_ByHash.end()) return 0;
     ItemInfo* item = it->second;

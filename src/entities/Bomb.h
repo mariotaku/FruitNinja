@@ -197,7 +197,7 @@ public:
     // v1.6.1 Bomb::GetWait @0x0010d4cc -- thunk returning the chuck/fuse delay
     // countdown (m_Countdown, +0xA4); the Bomb analogue of Fruit::m_SpawnDelay.
     // Read by SaveGame's <ent> bomb pass to persist the airborne bomb's wait.
-    float GetWait() const;
+    float GetWait();
 
 };
 

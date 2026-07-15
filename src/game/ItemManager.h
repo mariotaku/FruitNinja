@@ -47,7 +47,7 @@ public:
     bool UnlockItem(uint32_t hash);
 
     // IsEquipped @ 0x0015fa6c — returns 1 if item == m_DefaultItems[item->m_Type]
-    int IsEquipped(ItemInfo* item) const;
+    int IsEquipped(ItemInfo* item);
 
     // SetEquippedItem @ v1.6.1 0x00139b1c — sets slot + side effects
     // ASM-spec v1.6.1 ItemManager::SetEquippedItem @0x00139b1c: 1st param is ItemType (enum), not int.
@@ -105,7 +105,7 @@ private:
 public:
     // ---- Additional ItemManager public API (binary missing-symbol set) ----
     // EquipItem @ 0x00103198 — equip item by hash; returns 1 on success.
-    int EquipItem(unsigned int hash);
+    int EquipItem(unsigned long hash);
     // PlayAlternateComboSound @ v1.6.1 0x00139aac — plays combo sound from equipped blade mod.
     // Returns true if an alternate sound was played (suppresses default combo SFX).
     bool PlayAlternateComboSound(int);

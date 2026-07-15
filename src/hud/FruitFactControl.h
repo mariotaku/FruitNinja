@@ -80,7 +80,7 @@ public:
     void Update(float dt) override;  // Binary @ 0x00170eb4
 
     // Binary @ 0x00170814 -- SetPos(_Vector3)
-    void SetPos(const _Vector3<float>& p);
+    void SetPos(_Vector3<float> p);
 
     // Binary @ 0x00170804 -- BeginDrawing: sets m_LayerFlags(+0x34)=0x80 every draw
     void BeginDraw(float dt) override;

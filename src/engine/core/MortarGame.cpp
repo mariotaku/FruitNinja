@@ -85,7 +85,7 @@ void MortarGame::Update(float dt) { (void)dt; }
 void MortarGame::Draw(float dt) { (void)dt; }
 
 // slot 13 @ 0x0018aa20
-void MortarGame::Init(int argc, char** argv) { (void)argc; (void)argv; }
+void MortarGame::Init(int argc, const char** argv) { (void)argc; (void)argv; }
 
 // slot 14 @ 0x0018aa24 — base returns this
 MortarGame* MortarGame::End() { return this; }

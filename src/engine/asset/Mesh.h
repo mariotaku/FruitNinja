@@ -147,7 +147,7 @@ public:
     Matrix44 GetBoneWorldTransform(unsigned long index) const;
 
     // vtable[9]: Matches Mesh::GetGeometryCount (0x001b1678)
-    int GetGeometryCount() const override { return (int)m_Geometries.size(); }
+    int GetGeometryCount() override { return (int)m_Geometries.size(); }
 
     // vtable[3]: Matches Mesh::GetName (0x001b15e0)
     const AsciiString& GetName() const override { return m_Name; }

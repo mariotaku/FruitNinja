@@ -17,7 +17,7 @@ public:
     virtual ~Col() {}
 
     // Binary slot 2 -- pure-virtual; subclasses return TYPE_AABB / SPHERE / LINE
-    virtual int GetType() const = 0;
+    virtual int GetType() = 0;
 
     // Binary slot 3 -- pure-virtual; double-dispatch entry point
     // Returns nonzero on hit; outNormal receives penetration normal pointing AT this from other.

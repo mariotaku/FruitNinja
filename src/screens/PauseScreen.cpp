@@ -1095,7 +1095,7 @@ void PauseScreen::SkipTo() {
 
 // ASM-spec v1.6.1 PauseScreen::GetTime @0x001d00ec
 // Binary asm: ldr r3,[r0,#0xd8]; cmp r3,#6; vldrne s0,[r0,#0x7c]; vmoveq.f32 s0,1.0f; bx lr
-float PauseScreen::GetTime() const {
+float PauseScreen::GetTime() {
     if (m_State == PAUSE_STATE_QUIT_EXIT) return 1.0f;
     return m_Alpha;
 }

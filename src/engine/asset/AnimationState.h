@@ -76,10 +76,6 @@ static_assert(sizeof(AnimBindings::Vector) == 16,
 template<int N>
 void UpdateBinding(float time, AnimBindings::Vector const& v);
 
-// v1.6.1 Mortar::GetDummyAnimList @0x0026eda0 -- Meyers singleton; returns a
-// shared empty AnimationList used by the AnimationState default ctor.
-Mortar::SmartPtr<AnimationList> GetDummyAnimList();
-
 // Mortar::AnimationState -- per-instance playback state for an animation.
 // Binary @ 0x0026f0b4 ctor; vtable @ 0x001ebd00; sizeof 0x40.
 // Field layout (verified against v1.6.1 SetTime @ 0x0026ee84 / RebindAnim @ 0x0026f1ac):

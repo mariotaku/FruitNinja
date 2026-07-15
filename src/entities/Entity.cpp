@@ -35,7 +35,7 @@ Entity::~Entity() {}
 // Binary: Entity::HeapCreate(size_t bytes) @ 0x0019d708.
 // Placement-new a LinkedHeap into a raw operator new(0x24) block.
 // Called from GameInit step 15 with 0x20000 (128 KB).
-void Entity::HeapCreate(unsigned int size) {
+void Entity::HeapCreate(unsigned long size) {
     void* p = ::operator new(sizeof(LinkedHeap));
     s_pEntityHeap    = new(p) LinkedHeap(size);
     s_EntityHeapSize = size;

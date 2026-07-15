@@ -771,15 +771,15 @@ void ScrollingMenu::RemoveItemImmediate(int index, bool erase) {
     }
 }
 
-int ScrollingMenu::GetNumItems() const {
+int ScrollingMenu::GetNumItems() {
     return (int)m_Items.size();
 }
 
-int ScrollingMenu::GetItemClosestToZeroIdx() const {
+int ScrollingMenu::GetItemClosestToZeroIdx() {
     return m_ClosestIdx;
 }
 
-ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
+ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() {
     int idx = GetItemClosestToZeroIdx();
     if (idx < 0 || idx >= (int)m_Items.size()) return nullptr;
     return m_Items[(size_t)idx];

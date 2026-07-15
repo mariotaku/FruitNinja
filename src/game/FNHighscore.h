@@ -65,7 +65,7 @@ struct FNHighscore {
     // NetworkManager::GetPreferredNetworkProvider() == 1 -> GameSpy/OF branch
     //   (defunct: LastLoggedInUser returns nullptr -> returns false).
     // Otherwise -> local device name via NetworkManager::GetPlayerName.
-    bool IsCurrentUser() const;
+    bool IsCurrentUser();
 };
 
 #if defined(__bada__)

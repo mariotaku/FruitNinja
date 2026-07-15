@@ -66,8 +66,9 @@ public:
     ~FancyBakedString();
 
     // FancyBakedStringBuild @0x0024b1c8: per-layer gated construction (see class doc).
+    // mainCol is a non-const ref to match the binary's mangled ABI; read-only inside.
     void FancyBakedStringBuild(FontCacheObjectTTF* font, const char* text, float fontSize,
-                               Colour mainCol, int p5, float circleRadius,
+                               Colour& mainCol, int p5, float circleRadius,
                                float glowSize,   Colour glowCol,
                                float shadowSize, Colour shadowCol,
                                float strokeSize, Colour strokeCol,

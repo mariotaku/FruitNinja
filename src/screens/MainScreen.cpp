@@ -971,7 +971,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
 
     // 5. Loading symbol (v1.6.1 Draw @0x001993ac: states 0x13/0x14 only)
     if (m_State == STATE_LOADING_A || m_State == STATE_LOADING_B) {
-        DrawLoadingSymbol(&hudScale.x);
+        DrawLoadingSymbol(const_cast<float*>(&hudScale.x));
     }
 
     // 6. m_TexBc (comming_soon overlay) — drawn when valid AND m_pGameModeButton exists.
@@ -1347,8 +1347,7 @@ void MainScreen::DrawPostEffects() {
     // TODO: implement -- post-effect overlays (score flash, bonus anim, etc.)
 }
 
-// TODO: confirm v1.6.1 addr for MainScreen::DrawLoadingSymbol (stale ref was 0x0014D1F8, v1.5.x)
-void MainScreen::DrawLoadingSymbol(const float* hudScale) {
+void MainScreen::DrawLoadingSymbol(float* hudScale) {
     if (!s_blurTex.IsValid()) return;
 
     int idx   = (int)m_Field114 & 7;  // DAT_0014D4B8

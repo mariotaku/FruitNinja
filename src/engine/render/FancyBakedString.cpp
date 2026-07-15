@@ -47,7 +47,7 @@ void FancyBakedString::Init()
 // together. p5 -> alignSigned (weight); per-layer size -> effectSize (6th float).
 // circleRadius>0 arcs each created layer.
 void FancyBakedString::FancyBakedStringBuild(FontCacheObjectTTF* font, const char* text, float fontSize,
-                                             Colour mainCol, int p5, float circleRadius,
+                                             Colour& mainCol, int p5, float circleRadius,
                                              float glowSize,   Colour glowCol,
                                              float shadowSize, Colour shadowCol,
                                              float strokeSize, Colour strokeCol,

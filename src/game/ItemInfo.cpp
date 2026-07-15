@@ -78,7 +78,7 @@ void ItemInfo::UnEquip() {}
 void ItemInfo::SetEquipped() {}
 
 // ItemInfo::IsLocked @ 0x0015fa60
-bool ItemInfo::IsLocked() const {
+bool ItemInfo::IsLocked() {
     return m_Cost > 0;
 }
 

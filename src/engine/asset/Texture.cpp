@@ -135,7 +135,7 @@ unsigned int Texture2D_Bada::GetHash() const {
 }
 
 // Vtable slot 6 @0x0022a8d0 -- debug string.
-const char* Texture2D_Bada::Debug_ToString() const {
+const char* Texture2D_Bada::Debug_ToString() {
     return "Texture2D_Bada";
 }
 

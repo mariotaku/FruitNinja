@@ -110,18 +110,18 @@ public:
     // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
     // SDL entry point: InputTranslatorSDL calls this for each touch event.
     // isActive: true=press OR move, false=release (matches binary param 'b').
-    void __UpdateInternal(uint32_t extId, bool isActive, float x, float y, float t);
+    void __UpdateInternal(unsigned long extId, bool isActive, float x, float y, float t);
 
     // Binary @ 0x00195314 -- ___UpdateInternal.
     // Apply event to states2: match by extId or claim free slot (rotating cursor).
     // nextTouchId++ skipping 0 on wrap.
     // isActive: true=press OR move, false=release (matches binary param 'b').
     // Binary @ 0x00195314 -- free slot is extId==0, NOT phase>=1.
-    void ___UpdateInternal(uint32_t extId, bool isActive, float x, float y);
+    void ___UpdateInternal(unsigned long extId, bool isActive, float x, float y);
 
     // Binary @ 0x00195424 -- FindTouch(uint touchId).
     // Linear scan states1; return slot index or -1.
-    int FindTouch(uint32_t touchId);
+    int FindTouch(unsigned long touchId);
 
     // Binary @ 0x001954fc -- GetAnyTouch().
     // First slot with phase < 1; returns touchId or 0.
@@ -134,11 +134,11 @@ public:
     // ASM-spec v1.6.1 Touch::GetTouchPos @0x002429d4: (uint, float&, float&).
     // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
     // Binary leaves *x/*y UNTOUCHED on miss.
-    int GetTouchPos(uint32_t touchId, float& x, float& y);
+    int GetTouchPos(unsigned long touchId, float& x, float& y);
 
     // ASM-spec v1.6.1 Touch::GetTouchDelta @0x00242a20: (uint, float&, float&).
     // Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
-    int GetTouchDelta(uint32_t touchId, float& dx, float& dy);
+    int GetTouchDelta(unsigned long touchId, float& dx, float& dy);
 
     // Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.

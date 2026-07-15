@@ -29,7 +29,7 @@ public:
     virtual ~ColSphere() override {}
 
     // Binary slot 2
-    virtual int GetType() const override { return TYPE_SPHERE; }
+    virtual int GetType() override { return TYPE_SPHERE; }
 
     // Binary slot 3 -- double-dispatch by other->GetType()
     virtual int Collide(Col* other, _Vector3<float>* outNormal) override;

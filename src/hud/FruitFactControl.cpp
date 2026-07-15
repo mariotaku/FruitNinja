@@ -214,7 +214,7 @@ void FruitFactControl::Reset() {
 // SetPos  (Binary @ 0x00170814)
 // ---------------------------------------------------------------------------
 
-void FruitFactControl::SetPos(const _Vector3<float>& p) {
+void FruitFactControl::SetPos(_Vector3<float> p) {
     pos = p;
     // Binary copies pos into each registered page as well
     for (std::vector<FruitFactPage*>::iterator it = m_Pages.begin();

@@ -60,7 +60,7 @@ public:
     virtual void TellGameToStart(int multiplayer);          // slot 10 v1.6.1 Mortar::MortarGame::TellGameToStart @0x0022de8c no-op
     virtual void Update(float dt);                          // slot 11 v1.6.1 Mortar::MortarGame::Update @0x0022de80 no-op
     virtual void Draw(float dt);                            // slot 12 v1.6.1 Mortar::MortarGame::Draw @0x0022de7c no-op
-    virtual void Init(int argc, char** argv);               // slot 13 v1.6.1 Mortar::MortarGame::Init @0x0022de84 no-op
+    virtual void Init(int argc, const char** argv);         // slot 13 v1.6.1 Mortar::MortarGame::Init @0x0022de84 no-op
     virtual MortarGame* End();                              // slot 14 v1.6.1 Mortar::MortarGame::End @0x0022de88 returns this
     virtual void Paused();                                  // slot 15 v1.6.1 Mortar::MortarGame::Paused @0x0022de90 no-op
     virtual void UnPaused();                                // slot 16 v1.6.1 Mortar::MortarGame::UnPaused @0x0022de94 no-op

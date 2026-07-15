@@ -21,7 +21,7 @@ public:
     virtual ~ColLine() override {}
 
     // Binary slot 2
-    virtual int GetType() const override { return TYPE_LINE; }
+    virtual int GetType() override { return TYPE_LINE; }
 
     // Binary slot 3
     virtual int Collide(Col* other, _Vector3<float>* outNormal) override;

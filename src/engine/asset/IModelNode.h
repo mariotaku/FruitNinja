@@ -58,8 +58,8 @@ public:
     // vtable[8]: void BindSkeleton(Skeleton* skeleton)
     virtual void BindSkeleton(Skeleton* skeleton) = 0;
 
-    // vtable[9]: int GetGeometryCount() const
-    virtual int GetGeometryCount() const = 0;
+    // vtable[9]: int GetGeometryCount()
+    virtual int GetGeometryCount() = 0;
 
     // vtable[10]: Mortar::SmartPtr<Geometry> GetGeometry(ulong idx) const
     // Port: omitted from the virtual interface -- nothing dispatches through IModelNode
