@@ -1057,6 +1057,16 @@ fn_add_game_test(test_bonus_manager test_bonus_manager.cpp)
 add_test(NAME bonus_manager COMMAND test_bonus_manager)
 set_tests_properties(bonus_manager PROPERTIES TIMEOUT 30)
 
+# PowerUpManager::ClearTimedPowers / Reset Purchaseable()-vs-IsPurchaseable()
+# predicate regression guard. Bomb-hit ClearTimedPowers must strip active
+# timed cost-0 powers (freeze/frenzy/score x2 -- single="true" but no
+# <purchase_info>) while leaving genuinely purchased (cost>0) powers alone.
+# Pure in-process: Game + FileSystem_Direct only, loads the real
+# xml/poweruplist.xml; no SDL/GL/audio.
+fn_add_game_test(test_powerup test_powerup.cpp)
+add_test(NAME powerup COMMAND test_powerup)
+set_tests_properties(powerup PROPERTIES TIMEOUT 30)
+
 # AddToCurrentScore clamp regression guard (#222 fix).
 # Guards: score 0 + gain=3 -> 3; score 3 + penalty=-10 -> 0 (not -7); score 0
 # + penalty=-5 -> 0; score 0 + gain=50 -> 50. Uses TestHarness so
